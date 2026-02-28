@@ -1,11 +1,11 @@
 package main
 
 import (
-	"fmt"
 	"os"
+
+	"github.com/hpcsc/emod/internal/cli"
 )
 
 func main() {
-	fmt.Println("emod CLI")
-	os.Exit(0)
+	_ = cli.NewApp().Run(os.Args)
 }
