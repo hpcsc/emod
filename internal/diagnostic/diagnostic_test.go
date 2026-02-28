@@ -1,3 +1,5 @@
+//go:build unit
+
 package diagnostic_test
 
 import (
