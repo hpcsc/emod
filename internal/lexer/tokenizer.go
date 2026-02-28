@@ -4,8 +4,8 @@ import (
 	"strings"
 )
 
-// Lexer tokenizes .emod input.
-type Lexer struct {
+// Tokenizer tokenizes .emod input.
+type Tokenizer struct {
 	input  string
 	pos    int
 	line   int
@@ -14,9 +14,9 @@ type Lexer struct {
 	errs   []*Token
 }
 
-// New creates a new lexer for the given input.
-func New(input string) *Lexer {
-	return &Lexer{
+// New creates a new Tokenizer for the given input.
+func New(input string) *Tokenizer {
+	return &Tokenizer{
 		input: input,
 		pos:   0,
 		line:  1,
@@ -24,8 +24,8 @@ func New(input string) *Lexer {
 	}
 }
 
-// Tokenize lexes the entire input and returns all tokens.
-func (l *Lexer) Tokenize() []*Token {
+// Scan lexes the entire input and returns all tokens.
+func (l *Tokenizer) Scan() []*Token {
 	for l.pos < len(l.input) {
 		l.skipWhitespaceAndComments()
 		if l.pos >= len(l.input) {
@@ -36,16 +36,16 @@ func (l *Lexer) Tokenize() []*Token {
 		case l.peek() == '"':
 			l.readString()
 		case l.peek() == '{':
-			l.addToken(TokenOpenBrace, "{")
+			l.addToken(OpenBrace, "{")
 			l.advance()
 		case l.peek() == '}':
-			l.addToken(TokenCloseBrace, "}")
+			l.addToken(CloseBrace, "}")
 			l.advance()
 		case l.peek() == ':':
-			l.addToken(TokenColon, ":")
+			l.addToken(Colon, ":")
 			l.advance()
 		case l.peek() == '-' && l.peekAhead(1) == '>':
-			l.addToken(TokenArrow, "->")
+			l.addToken(Arrow, "->")
 			l.advance()
 			l.advance()
 		case isIdentifierStart(l.peek()):
@@ -56,16 +56,16 @@ func (l *Lexer) Tokenize() []*Token {
 		}
 	}
 
-	l.addToken(TokenEOF, "")
+	l.addToken(EOF, "")
 	return l.tokens
 }
 
 // Errors returns all error tokens encountered.
-func (l *Lexer) Errors() []*Token {
+func (l *Tokenizer) Errors() []*Token {
 	return l.errs
 }
 
-func (l *Lexer) skipWhitespaceAndComments() {
+func (l *Tokenizer) skipWhitespaceAndComments() {
 	for l.pos < len(l.input) {
 		// Skip whitespace
 		if isWhitespace(l.peek()) && l.peek() != '\n' {
@@ -93,7 +93,7 @@ func (l *Lexer) skipWhitespaceAndComments() {
 	}
 }
 
-func (l *Lexer) readString() {
+func (l *Tokenizer) readString() {
 	startLine := l.line
 	startCol := l.column
 	l.advance() // skip opening quote
@@ -110,7 +110,7 @@ func (l *Lexer) readString() {
 
 	if l.pos >= len(l.input) {
 		l.errs = append(l.errs, &Token{
-			Type:   TokenError,
+			Type:   Error,
 			Value:  "unterminated string",
 			Line:   startLine,
 			Column: startCol,
@@ -120,14 +120,14 @@ func (l *Lexer) readString() {
 
 	l.advance() // skip closing quote
 	l.tokens = append(l.tokens, &Token{
-		Type:   TokenString,
+		Type:   String,
 		Value:  sb.String(),
 		Line:   startLine,
 		Column: startCol,
 	})
 }
 
-func (l *Lexer) readIdentifierOrKeyword() {
+func (l *Tokenizer) readIdentifierOrKeyword() {
 	startCol := l.column
 	var sb strings.Builder
 
@@ -137,17 +137,17 @@ func (l *Lexer) readIdentifierOrKeyword() {
 	}
 
 	value := sb.String()
-	tokenType := getKeywordType(value)
-	if tokenType == TokenIdentifier {
+	kind := getKeywordKind(value)
+	if kind == Identifier {
 		l.tokens = append(l.tokens, &Token{
-			Type:   TokenIdentifier,
+			Type:   Identifier,
 			Value:  value,
 			Line:   l.line,
 			Column: startCol,
 		})
 	} else {
 		l.tokens = append(l.tokens, &Token{
-			Type:   tokenType,
+			Type:   kind,
 			Value:  value,
 			Line:   l.line,
 			Column: startCol,
@@ -155,7 +155,7 @@ func (l *Lexer) readIdentifierOrKeyword() {
 	}
 }
 
-func (l *Lexer) addToken(typ TokenType, value string) {
+func (l *Tokenizer) addToken(typ Kind, value string) {
 	l.tokens = append(l.tokens, &Token{
 		Type:   typ,
 		Value:  value,
@@ -164,23 +164,23 @@ func (l *Lexer) addToken(typ TokenType, value string) {
 	})
 }
 
-func (l *Lexer) addError(msg string) {
+func (l *Tokenizer) addError(msg string) {
 	l.errs = append(l.errs, &Token{
-		Type:   TokenError,
+		Type:   Error,
 		Value:  msg,
 		Line:   l.line,
 		Column: l.column,
 	})
 }
 
-func (l *Lexer) peek() byte {
+func (l *Tokenizer) peek() byte {
 	if l.pos >= len(l.input) {
 		return 0
 	}
 	return l.input[l.pos]
 }
 
-func (l *Lexer) peekAhead(n int) byte {
+func (l *Tokenizer) peekAhead(n int) byte {
 	pos := l.pos + n
 	if pos >= len(l.input) {
 		return 0
@@ -188,35 +188,35 @@ func (l *Lexer) peekAhead(n int) byte {
 	return l.input[pos]
 }
 
-func (l *Lexer) advance() {
+func (l *Tokenizer) advance() {
 	if l.pos < len(l.input) {
 		l.pos++
 		l.column++
 	}
 }
 
-func getKeywordType(s string) TokenType {
+func getKeywordKind(s string) Kind {
 	switch s {
 	case "model":
-		return TokenKeywordModel
+		return KeywordModel
 	case "actor":
-		return TokenKeywordActor
+		return KeywordActor
 	case "context":
-		return TokenKeywordContext
+		return KeywordContext
 	case "aggregate":
-		return TokenKeywordAggregate
+		return KeywordAggregate
 	case "slice":
-		return TokenKeywordSlice
+		return KeywordSlice
 	case "command":
-		return TokenKeywordCommand
+		return KeywordCommand
 	case "event":
-		return TokenKeywordEvent
+		return KeywordEvent
 	case "fields":
-		return TokenKeywordFields
+		return KeywordFields
 	case "flow":
-		return TokenKeywordFlow
+		return KeywordFlow
 	default:
-		return TokenIdentifier
+		return Identifier
 	}
 }
 

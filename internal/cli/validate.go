@@ -24,11 +24,11 @@ func RunValidate(path string) error {
 	}
 
 	l := lexer.New(string(source))
-	tokens := l.Tokenize()
+	tokens := l.Scan()
 
-	var diagnostics []*diagnostic.Diagnostic
+	var diagnostics []*diagnostic.Entry
 	for _, errTok := range l.Errors() {
-		diagnostics = append(diagnostics, &diagnostic.Diagnostic{
+		diagnostics = append(diagnostics, &diagnostic.Entry{
 			Filename: path,
 			Line:     errTok.Line,
 			Column:   errTok.Column,

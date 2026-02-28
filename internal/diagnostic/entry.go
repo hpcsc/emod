@@ -2,8 +2,8 @@ package diagnostic
 
 import "fmt"
 
-// Diagnostic represents a parse error or warning.
-type Diagnostic struct {
+// Entry represents a parse error or warning.
+type Entry struct {
 	Filename string
 	Line     int
 	Column   int
@@ -11,6 +11,6 @@ type Diagnostic struct {
 }
 
 // String formats the diagnostic as "filename:line: message".
-func (d Diagnostic) String() string {
+func (d Entry) String() string {
 	return fmt.Sprintf("%s:%d: %s", d.Filename, d.Line, d.Message)
 }

@@ -1,79 +1,79 @@
 package lexer
 
-// TokenType represents the type of a lexical token.
-type TokenType int
+// Kind represents the type of a lexical token.
+type Kind int
 
 const (
 	// Keywords
-	TokenKeywordModel TokenType = iota
-	TokenKeywordActor
-	TokenKeywordContext
-	TokenKeywordAggregate
-	TokenKeywordSlice
-	TokenKeywordCommand
-	TokenKeywordEvent
-	TokenKeywordFields
-	TokenKeywordFlow
+	KeywordModel Kind = iota
+	KeywordActor
+	KeywordContext
+	KeywordAggregate
+	KeywordSlice
+	KeywordCommand
+	KeywordEvent
+	KeywordFields
+	KeywordFlow
 
 	// Literals and identifiers
-	TokenIdentifier
-	TokenString
+	Identifier
+	String
 
 	// Operators and punctuation
-	TokenOpenBrace
-	TokenCloseBrace
-	TokenArrow
-	TokenColon
+	OpenBrace
+	CloseBrace
+	Arrow
+	Colon
 
 	// Special
-	TokenEOF
-	TokenError
+	EOF
+	Error
 )
 
 // Token represents a single lexical token.
 type Token struct {
-	Type   TokenType
+	Type   Kind
 	Value  string
 	Line   int
 	Column int
 }
 
-// String returns a human-readable string for the token type.
-func (t TokenType) String() string {
-	switch t {
-	case TokenKeywordModel:
+// String returns a human-readable string for the token kind.
+func (k Kind) String() string {
+	switch k {
+	case KeywordModel:
 		return "model"
-	case TokenKeywordActor:
+	case KeywordActor:
 		return "actor"
-	case TokenKeywordContext:
+	case KeywordContext:
 		return "context"
-	case TokenKeywordAggregate:
+	case KeywordAggregate:
 		return "aggregate"
-	case TokenKeywordSlice:
+	case KeywordSlice:
 		return "slice"
-	case TokenKeywordCommand:
+	case KeywordCommand:
 		return "command"
-	case TokenKeywordEvent:
+	case KeywordEvent:
 		return "event"
-	case TokenKeywordFields:
+	case KeywordFields:
 		return "fields"
-	case TokenKeywordFlow:
+	case KeywordFlow:
 		return "flow"
-	case TokenIdentifier:
+	case Identifier:
 		return "identifier"
-	case TokenString:
+	case String:
 		return "string"
-	case TokenOpenBrace:
+	case OpenBrace:
 		return "{"
-	case TokenCloseBrace:
+	case CloseBrace:
 		return "}"
-	case TokenArrow:
+	case Arrow:
 		return "->"
-	case TokenColon:
+	case Colon:
 		return ":"
-	case TokenEOF:
+	case EOF:
 		return "EOF"
-	case TokenError:
+	case Error:
 		return "ERROR"
 	default:
 		return "UNKNOWN"

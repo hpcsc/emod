@@ -11,7 +11,7 @@ import (
 
 func TestDiagnosticString(t *testing.T) {
 	t.Run("formats as filename:line: message", func(t *testing.T) {
-		d := &diagnostic.Diagnostic{
+		d := &diagnostic.Entry{
 			Filename: "minimal.emod",
 			Line:     3,
 			Column:   1,
@@ -22,7 +22,7 @@ func TestDiagnosticString(t *testing.T) {
 	})
 
 	t.Run("formats unclosed brace error", func(t *testing.T) {
-		d := &diagnostic.Diagnostic{
+		d := &diagnostic.Entry{
 			Filename: "minimal.emod",
 			Line:     5,
 			Column:   1,

@@ -10,22 +10,22 @@ import (
 
 func TestLexer(t *testing.T) {
 	t.Run("keyword tokens", func(t *testing.T) {
-		keywords := map[string]TokenType{
-			"model":     TokenKeywordModel,
-			"actor":     TokenKeywordActor,
-			"context":   TokenKeywordContext,
-			"aggregate": TokenKeywordAggregate,
-			"slice":     TokenKeywordSlice,
-			"command":   TokenKeywordCommand,
-			"event":     TokenKeywordEvent,
-			"fields":    TokenKeywordFields,
-			"flow":      TokenKeywordFlow,
+		keywords := map[string]Kind{
+			"model":     KeywordModel,
+			"actor":     KeywordActor,
+			"context":   KeywordContext,
+			"aggregate": KeywordAggregate,
+			"slice":     KeywordSlice,
+			"command":   KeywordCommand,
+			"event":     KeywordEvent,
+			"fields":    KeywordFields,
+			"flow":      KeywordFlow,
 		}
 
 		for keyword, expectedType := range keywords {
 			t.Run(keyword, func(t *testing.T) {
 				lexer := New(keyword)
-				tokens := lexer.Tokenize()
+				tokens := lexer.Scan()
 				require.Greater(t, len(tokens), 1)
 				require.Equal(t, expectedType, tokens[0].Type)
 				require.Equal(t, keyword, tokens[0].Value)
@@ -38,8 +38,8 @@ func TestLexer(t *testing.T) {
 		for _, id := range tests {
 			t.Run(id, func(t *testing.T) {
 				lexer := New(id)
-				tokens := lexer.Tokenize()
-				require.Equal(t, TokenIdentifier, tokens[0].Type)
+				tokens := lexer.Scan()
+				require.Equal(t, Identifier, tokens[0].Type)
 				require.Equal(t, id, tokens[0].Value)
 			})
 		}
@@ -59,8 +59,8 @@ func TestLexer(t *testing.T) {
 		for _, test := range tests {
 			t.Run(test.input, func(t *testing.T) {
 				lexer := New(test.input)
-				tokens := lexer.Tokenize()
-				require.Equal(t, TokenString, tokens[0].Type)
+				tokens := lexer.Scan()
+				require.Equal(t, String, tokens[0].Type)
 				require.Equal(t, test.expected, tokens[0].Value)
 			})
 		}
@@ -68,22 +68,22 @@ func TestLexer(t *testing.T) {
 
 	t.Run("braces", func(t *testing.T) {
 		lexer := New("{ }")
-		tokens := lexer.Tokenize()
-		require.Equal(t, TokenOpenBrace, tokens[0].Type)
-		require.Equal(t, TokenCloseBrace, tokens[1].Type)
+		tokens := lexer.Scan()
+		require.Equal(t, OpenBrace, tokens[0].Type)
+		require.Equal(t, CloseBrace, tokens[1].Type)
 	})
 
 	t.Run("arrow operator", func(t *testing.T) {
 		lexer := New("->")
-		tokens := lexer.Tokenize()
-		require.Equal(t, TokenArrow, tokens[0].Type)
+		tokens := lexer.Scan()
+		require.Equal(t, Arrow, tokens[0].Type)
 		require.Equal(t, "->", tokens[0].Value)
 	})
 
 	t.Run("colon", func(t *testing.T) {
 		lexer := New(":")
-		tokens := lexer.Tokenize()
-		require.Equal(t, TokenColon, tokens[0].Type)
+		tokens := lexer.Scan()
+		require.Equal(t, Colon, tokens[0].Type)
 		require.Equal(t, ":", tokens[0].Value)
 	})
 
@@ -94,14 +94,14 @@ model "Test"
 actor "Guest"`
 
 		lexer := New(input)
-		tokens := lexer.Tokenize()
+		tokens := lexer.Scan()
 
 		require.Len(t, tokens, 5)
-		require.Equal(t, TokenKeywordModel, tokens[0].Type)
-		require.Equal(t, TokenString, tokens[1].Type)
+		require.Equal(t, KeywordModel, tokens[0].Type)
+		require.Equal(t, String, tokens[1].Type)
 		require.Equal(t, "Test", tokens[1].Value)
-		require.Equal(t, TokenKeywordActor, tokens[2].Type)
-		require.Equal(t, TokenString, tokens[3].Type)
+		require.Equal(t, KeywordActor, tokens[2].Type)
+		require.Equal(t, String, tokens[3].Type)
 		require.Equal(t, "Guest", tokens[3].Value)
 	})
 
@@ -110,7 +110,7 @@ actor "Guest"`
 actor "Guest"`
 
 		lexer := New(input)
-		tokens := lexer.Tokenize()
+		tokens := lexer.Scan()
 
 		require.Equal(t, 1, tokens[0].Line)
 		require.Equal(t, 1, tokens[0].Column)
@@ -122,55 +122,55 @@ actor "Guest"`
 	t.Run("whitespace handling", func(t *testing.T) {
 		input := "model    \t  \t  \"Test\""
 		lexer := New(input)
-		tokens := lexer.Tokenize()
+		tokens := lexer.Scan()
 
 		require.Len(t, tokens, 3)
-		require.Equal(t, TokenKeywordModel, tokens[0].Type)
-		require.Equal(t, TokenString, tokens[1].Type)
+		require.Equal(t, KeywordModel, tokens[0].Type)
+		require.Equal(t, String, tokens[1].Type)
 	})
 
 	t.Run("EOF token", func(t *testing.T) {
 		lexer := New("model")
-		tokens := lexer.Tokenize()
+		tokens := lexer.Scan()
 
 		require.Greater(t, len(tokens), 0)
-		require.Equal(t, TokenEOF, tokens[len(tokens)-1].Type)
+		require.Equal(t, EOF, tokens[len(tokens)-1].Type)
 	})
 
 	t.Run("unterminated string", func(t *testing.T) {
 		lexer := New(`"unterminated`)
-		lexer.Tokenize()
+		lexer.Scan()
 		errs := lexer.Errors()
 
 		require.Greater(t, len(errs), 0)
-		require.Equal(t, TokenError, errs[0].Type)
+		require.Equal(t, Error, errs[0].Type)
 		require.Equal(t, "unterminated string", errs[0].Value)
 	})
 
 	t.Run("unrecognized character", func(t *testing.T) {
 		lexer := New("model @")
-		lexer.Tokenize()
+		lexer.Scan()
 		errs := lexer.Errors()
 
 		require.Greater(t, len(errs), 0)
-		require.Equal(t, TokenError, errs[0].Type)
+		require.Equal(t, Error, errs[0].Type)
 	})
 
 	t.Run("empty input", func(t *testing.T) {
 		lexer := New("")
-		tokens := lexer.Tokenize()
+		tokens := lexer.Scan()
 
 		require.Len(t, tokens, 1)
-		require.Equal(t, TokenEOF, tokens[0].Type)
+		require.Equal(t, EOF, tokens[0].Type)
 	})
 
 	t.Run("comment only input", func(t *testing.T) {
 		lexer := New(`# Just a comment
 # Another line`)
-		tokens := lexer.Tokenize()
+		tokens := lexer.Scan()
 
 		require.Len(t, tokens, 1)
-		require.Equal(t, TokenEOF, tokens[0].Type)
+		require.Equal(t, EOF, tokens[0].Type)
 	})
 
 	t.Run("complex input", func(t *testing.T) {
@@ -200,7 +200,7 @@ context "Reservations" {
 }`
 
 		lexer := New(input)
-		tokens := lexer.Tokenize()
+		tokens := lexer.Scan()
 
 		require.Len(t, lexer.Errors(), 0)
 
@@ -211,19 +211,19 @@ context "Reservations" {
 		hasArrow := false
 
 		for _, tok := range tokens {
-			if tok.Type == TokenKeywordModel {
+			if tok.Type == KeywordModel {
 				hasModel = true
 			}
-			if tok.Type == TokenKeywordActor {
+			if tok.Type == KeywordActor {
 				hasActor = true
 			}
-			if tok.Type == TokenKeywordContext {
+			if tok.Type == KeywordContext {
 				hasContext = true
 			}
-			if tok.Type == TokenKeywordCommand {
+			if tok.Type == KeywordCommand {
 				hasCommand = true
 			}
-			if tok.Type == TokenArrow {
+			if tok.Type == Arrow {
 				hasArrow = true
 			}
 		}
@@ -233,6 +233,6 @@ context "Reservations" {
 		require.True(t, hasContext)
 		require.True(t, hasCommand)
 		require.True(t, hasArrow)
-		require.Equal(t, TokenEOF, tokens[len(tokens)-1].Type)
+		require.Equal(t, EOF, tokens[len(tokens)-1].Type)
 	})
 }
