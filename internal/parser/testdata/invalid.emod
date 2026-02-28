@@ -1,0 +1,6 @@
+model "Test"
+
+foobar {
+}
+
+context "Unclosed" {

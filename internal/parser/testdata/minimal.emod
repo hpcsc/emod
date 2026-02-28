@@ -1,0 +1,34 @@
+# Hotel Reservation System
+model "Hotel Reservation"
+
+actor "Guest"
+
+context "Reservations" {
+  aggregate "Reservation" {
+    slice "Make Reservation" {
+      command MakeReservation {
+        fields {
+          guestId     string required
+          roomType    string required
+          checkIn     date   required
+          checkOut    date   required
+        }
+      }
+
+      event ReservationMade {
+        fields {
+          reservationId string required
+          guestId       string required
+          roomType      string required
+          checkIn       date   required
+          checkOut      date   required
+          status        string required
+        }
+      }
+
+      flow {
+        command -> event: MakeReservation -> ReservationMade
+      }
+    }
+  }
+}
