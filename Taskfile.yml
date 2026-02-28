@@ -1,6 +1,14 @@
 version: '3'
 
 tasks:
+  build:
+    desc: Build the emod binary
+    cmds:
+      - mkdir -p ./bin
+      - go build -o ./bin/emod ./cmd/emod
+    env:
+      CGO_ENABLED: '0'
+
   test:
     desc: Run all tests
     cmds:
@@ -16,3 +24,11 @@ tasks:
     desc: Run integration tests
     cmds:
       - go test -tags integration ./...
+
+  test:e2e:
+    desc: Run e2e tests in Docker
+    cmds:
+      - docker build -f ./e2e/Dockerfile --build-arg EXECUTABLE=${EXECUTABLE} -t emod-e2e .
+      - docker container run --rm -e EXECUTABLE=${EXECUTABLE} emod-e2e
+    env:
+      EXECUTABLE: ./dist/emod
