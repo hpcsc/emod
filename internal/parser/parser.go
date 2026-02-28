@@ -8,7 +8,6 @@ import (
 	"github.com/hpcsc/emod/internal/lexer"
 )
 
-// Instance consumes a token stream and produces an AST.
 type Instance struct {
 	tokens      []*lexer.Token
 	pos         int
@@ -16,7 +15,6 @@ type Instance struct {
 	filename    string
 }
 
-// New creates a new Instance for the given tokens.
 func New(tokens []*lexer.Token, filename string) *Instance {
 	return &Instance{
 		tokens:   tokens,
@@ -25,7 +23,6 @@ func New(tokens []*lexer.Token, filename string) *Instance {
 	}
 }
 
-// Parse parses the token stream into an AST model.
 func (p *Instance) Parse() (*ast.Model, []*diagnostic.Entry) {
 	model := &ast.Model{}
 

@@ -4,7 +4,6 @@ import (
 	"strings"
 )
 
-// Tokenizer tokenizes .emod input.
 type Tokenizer struct {
 	input  string
 	pos    int
@@ -14,7 +13,6 @@ type Tokenizer struct {
 	errs   []*Token
 }
 
-// New creates a new Tokenizer for the given input.
 func New(input string) *Tokenizer {
 	return &Tokenizer{
 		input: input,
@@ -24,7 +22,6 @@ func New(input string) *Tokenizer {
 	}
 }
 
-// Scan lexes the entire input and returns all tokens.
 func (l *Tokenizer) Scan() []*Token {
 	for l.pos < len(l.input) {
 		l.skipWhitespaceAndComments()
@@ -60,20 +57,17 @@ func (l *Tokenizer) Scan() []*Token {
 	return l.tokens
 }
 
-// Errors returns all error tokens encountered.
 func (l *Tokenizer) Errors() []*Token {
 	return l.errs
 }
 
 func (l *Tokenizer) skipWhitespaceAndComments() {
 	for l.pos < len(l.input) {
-		// Skip whitespace
 		if isWhitespace(l.peek()) && l.peek() != '\n' {
 			l.advance()
 			continue
 		}
 
-		// Skip newlines (but increment line counter)
 		if l.peek() == '\n' {
 			l.advance()
 			l.line++
@@ -81,7 +75,6 @@ func (l *Tokenizer) skipWhitespaceAndComments() {
 			continue
 		}
 
-		// Skip comments
 		if l.peek() == '#' {
 			for l.pos < len(l.input) && l.peek() != '\n' {
 				l.advance()
@@ -96,7 +89,7 @@ func (l *Tokenizer) skipWhitespaceAndComments() {
 func (l *Tokenizer) readString() {
 	startLine := l.line
 	startCol := l.column
-	l.advance() // skip opening quote
+	l.advance()
 
 	var sb strings.Builder
 	for l.pos < len(l.input) && l.peek() != '"' {
@@ -118,7 +111,7 @@ func (l *Tokenizer) readString() {
 		return
 	}
 
-	l.advance() // skip closing quote
+	l.advance()
 	l.tokens = append(l.tokens, &Token{
 		Type:   String,
 		Value:  sb.String(),

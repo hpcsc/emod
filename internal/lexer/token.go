@@ -1,6 +1,5 @@
 package lexer
 
-// Kind represents the type of a lexical token.
 type Kind int
 
 const (
@@ -30,7 +29,6 @@ const (
 	Error
 )
 
-// Token represents a single lexical token.
 type Token struct {
 	Type   Kind
 	Value  string
@@ -38,7 +36,6 @@ type Token struct {
 	Column int
 }
 
-// String returns a human-readable string for the token kind.
 func (k Kind) String() string {
 	switch k {
 	case KeywordModel:
