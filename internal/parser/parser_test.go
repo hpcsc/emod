@@ -278,4 +278,72 @@ context`
 
 		require.Greater(t, len(errs), 0)
 	})
+
+	t.Run("unrecognized keyword includes the keyword and expected alternatives", func(t *testing.T) {
+		input := `foobar { }`
+		lex := lexer.New(input)
+		tokens := lex.Tokenize()
+
+		parser := New(tokens, "test.emod")
+		_, errs := parser.Parse()
+
+		require.NotEmpty(t, errs)
+		require.Equal(t, "test.emod", errs[0].Filename)
+		require.Equal(t, 1, errs[0].Line)
+		require.Contains(t, errs[0].Message, `"foobar"`)
+		require.Contains(t, errs[0].Message, "model")
+		require.Contains(t, errs[0].Message, "actor")
+		require.Contains(t, errs[0].Message, "context")
+	})
+
+	t.Run("unclosed brace reports the block type and opening line", func(t *testing.T) {
+		input := `model "Test"
+context "Foo" {`
+		lex := lexer.New(input)
+		tokens := lex.Tokenize()
+
+		parser := New(tokens, "test.emod")
+		_, errs := parser.Parse()
+
+		require.GreaterOrEqual(t, len(errs), 1)
+		lastErr := errs[len(errs)-1]
+		require.Equal(t, "test.emod", lastErr.Filename)
+		require.Contains(t, lastErr.Message, `"context"`)
+		require.Contains(t, lastErr.Message, "unclosed brace")
+		require.Contains(t, lastErr.Message, "line 2")
+	})
+
+	t.Run("unexpected token after model reports what was found", func(t *testing.T) {
+		input := `model {`
+		lex := lexer.New(input)
+		tokens := lex.Tokenize()
+
+		parser := New(tokens, "test.emod")
+		_, errs := parser.Parse()
+
+		require.GreaterOrEqual(t, len(errs), 1)
+		require.Equal(t, "test.emod", errs[0].Filename)
+		require.Equal(t, 1, errs[0].Line)
+		require.Contains(t, errs[0].Message, `"model"`)
+		require.Contains(t, errs[0].Message, "expected quoted string")
+	})
+
+	t.Run("diagnostics include filename and line number", func(t *testing.T) {
+		input := `model "OK"
+foobar "bad"
+actor
+context "Missing" {
+  unknown_inside`
+		lex := lexer.New(input)
+		tokens := lex.Tokenize()
+
+		parser := New(tokens, "errors.emod")
+		_, errs := parser.Parse()
+
+		for _, e := range errs {
+			require.Equal(t, "errors.emod", e.Filename)
+			require.Greater(t, e.Line, 0)
+			require.NotEmpty(t, e.Message)
+		}
+	})
 }

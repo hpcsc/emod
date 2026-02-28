@@ -50,7 +50,7 @@ func (p *Parser) Parse() (*ast.Model, []*diagnostic.Diagnostic) {
 func (p *Parser) parseModel(model *ast.Model) {
 	p.consume(lexer.TokenKeywordModel, "expected model")
 	if !p.check(lexer.TokenString) {
-		p.error("expected quoted string after model")
+		p.error(fmt.Sprintf("expected quoted string after \"model\", got %q", p.peek().Value))
 		return
 	}
 
@@ -66,7 +66,7 @@ func (p *Parser) parseModel(model *ast.Model) {
 func (p *Parser) parseActor(model *ast.Model) {
 	p.consume(lexer.TokenKeywordActor, "expected actor")
 	if !p.check(lexer.TokenString) {
-		p.error("expected quoted string after actor")
+		p.error(fmt.Sprintf("expected quoted string after \"actor\", got %q", p.peek().Value))
 		return
 	}
 
@@ -85,7 +85,7 @@ func (p *Parser) parseActor(model *ast.Model) {
 func (p *Parser) parseContext(model *ast.Model) {
 	p.consume(lexer.TokenKeywordContext, "expected context")
 	if !p.check(lexer.TokenString) {
-		p.error("expected quoted string after context")
+		p.error(fmt.Sprintf("expected quoted string after \"context\", got %q", p.peek().Value))
 		return
 	}
 
@@ -120,7 +120,7 @@ func (p *Parser) parseContext(model *ast.Model) {
 	}
 
 	if !p.check(lexer.TokenCloseBrace) {
-		p.error(fmt.Sprintf("unclosed brace for context block opened at line %d", context.OpenPos.Line))
+		p.error(fmt.Sprintf("unclosed brace for \"context\" block opened at line %d", context.OpenPos.Line))
 		return
 	}
 	closeTok := p.advance()
@@ -136,7 +136,7 @@ func (p *Parser) parseContext(model *ast.Model) {
 func (p *Parser) parseAggregate(context *ast.Context) {
 	p.consume(lexer.TokenKeywordAggregate, "expected aggregate")
 	if !p.check(lexer.TokenString) {
-		p.error("expected quoted string after aggregate")
+		p.error(fmt.Sprintf("expected quoted string after \"aggregate\", got %q", p.peek().Value))
 		return
 	}
 
@@ -171,7 +171,7 @@ func (p *Parser) parseAggregate(context *ast.Context) {
 	}
 
 	if !p.check(lexer.TokenCloseBrace) {
-		p.error(fmt.Sprintf("unclosed brace for aggregate block opened at line %d", aggregate.OpenPos.Line))
+		p.error(fmt.Sprintf("unclosed brace for \"aggregate\" block opened at line %d", aggregate.OpenPos.Line))
 		return
 	}
 	closeTok := p.advance()
@@ -187,7 +187,7 @@ func (p *Parser) parseAggregate(context *ast.Context) {
 func (p *Parser) parseSlice(aggregate *ast.Aggregate) {
 	p.consume(lexer.TokenKeywordSlice, "expected slice")
 	if !p.check(lexer.TokenString) {
-		p.error("expected quoted string after slice")
+		p.error(fmt.Sprintf("expected quoted string after \"slice\", got %q", p.peek().Value))
 		return
 	}
 
@@ -226,7 +226,7 @@ func (p *Parser) parseSlice(aggregate *ast.Aggregate) {
 	}
 
 	if !p.check(lexer.TokenCloseBrace) {
-		p.error(fmt.Sprintf("unclosed brace for slice block opened at line %d", slice.OpenPos.Line))
+		p.error(fmt.Sprintf("unclosed brace for \"slice\" block opened at line %d", slice.OpenPos.Line))
 		return
 	}
 	closeTok := p.advance()
@@ -277,7 +277,7 @@ func (p *Parser) parseCommand(slice *ast.Slice) {
 	}
 
 	if !p.check(lexer.TokenCloseBrace) {
-		p.error(fmt.Sprintf("unclosed brace for command block opened at line %d", command.OpenPos.Line))
+		p.error(fmt.Sprintf("unclosed brace for \"command\" block opened at line %d", command.OpenPos.Line))
 		return
 	}
 	closeTok := p.advance()
@@ -328,7 +328,7 @@ func (p *Parser) parseEvent(slice *ast.Slice) {
 	}
 
 	if !p.check(lexer.TokenCloseBrace) {
-		p.error(fmt.Sprintf("unclosed brace for event block opened at line %d", event.OpenPos.Line))
+		p.error(fmt.Sprintf("unclosed brace for \"event\" block opened at line %d", event.OpenPos.Line))
 		return
 	}
 	closeTok := p.advance()
@@ -348,7 +348,8 @@ func (p *Parser) parseFields() []*ast.Field {
 		p.error("expected { after fields")
 		return fields
 	}
-	p.advance()
+	openTok := p.advance()
+	openLine := openTok.Line
 
 	for !p.check(lexer.TokenCloseBrace) && !p.isAtEnd() {
 		if p.check(lexer.TokenIdentifier) {
@@ -363,7 +364,7 @@ func (p *Parser) parseFields() []*ast.Field {
 	}
 
 	if !p.check(lexer.TokenCloseBrace) {
-		p.error("unclosed brace for fields block")
+		p.error(fmt.Sprintf("unclosed brace for \"fields\" block opened at line %d", openLine))
 		return fields
 	}
 	p.advance()
@@ -417,38 +418,45 @@ func (p *Parser) parseFlow(slice *ast.Slice) {
 		p.error("expected { after flow")
 		return
 	}
-	p.advance()
+	openTok := p.advance()
+	openLine := openTok.Line
 
 	for !p.check(lexer.TokenCloseBrace) && !p.isAtEnd() {
 		if p.check(lexer.TokenKeywordCommand) {
 			p.advance()
 			if !p.check(lexer.TokenArrow) {
 				p.error("expected -> after command in flow")
+				p.advance()
 				continue
 			}
 			p.advance()
 			if !p.check(lexer.TokenKeywordEvent) {
 				p.error("expected event after -> in flow")
+				p.advance()
 				continue
 			}
 			p.advance()
 			if !p.check(lexer.TokenColon) {
 				p.error("expected : in flow")
+				p.advance()
 				continue
 			}
 			p.advance()
 			if !p.check(lexer.TokenIdentifier) {
 				p.error("expected command identifier after : in flow")
+				p.advance()
 				continue
 			}
 			cmdTok := p.advance()
 			if !p.check(lexer.TokenArrow) {
 				p.error("expected -> between command and event identifiers")
+				p.advance()
 				continue
 			}
 			p.advance()
 			if !p.check(lexer.TokenIdentifier) {
 				p.error("expected event identifier")
+				p.advance()
 				continue
 			}
 			evtTok := p.advance()
@@ -474,14 +482,14 @@ func (p *Parser) parseFlow(slice *ast.Slice) {
 	}
 
 	if !p.check(lexer.TokenCloseBrace) {
-		p.error("unclosed brace for flow block")
+		p.error(fmt.Sprintf("unclosed brace for \"flow\" block opened at line %d", openLine))
 		return
 	}
 	p.advance()
 }
 
 func (p *Parser) peek() *lexer.Token {
-	if p.isAtEnd() {
+	if p.pos >= len(p.tokens) {
 		return &lexer.Token{Type: lexer.TokenEOF}
 	}
 	return p.tokens[p.pos]

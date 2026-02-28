@@ -43,7 +43,7 @@ func RunValidate(path string) error {
 	if len(diagnostics) > 0 {
 		var sb strings.Builder
 		for _, d := range diagnostics {
-			fmt.Fprintf(&sb, "%s:%d: %s\n", d.Filename, d.Line, d.Message)
+			fmt.Fprintln(&sb, d.String())
 		}
 		return errors.New(strings.TrimRight(sb.String(), "\n"))
 	}
