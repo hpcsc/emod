@@ -1,9 +1,10 @@
-package parser
+package parser_test
 
 import (
 	"testing"
 
 	"github.com/hpcsc/emod/internal/lexer"
+	"github.com/hpcsc/emod/internal/parser"
 	"github.com/stretchr/testify/require"
 )
 
@@ -13,8 +14,8 @@ func TestParser(t *testing.T) {
 		lex := lexer.New(input)
 		tokens := lex.Tokenize()
 
-		parser := New(tokens, "test.emod")
-		model, errs := parser.Parse()
+		p := parser.New(tokens, "test.emod")
+		model, errs := p.Parse()
 
 		require.Len(t, errs, 0)
 		require.Equal(t, "Test Model", model.Name)
@@ -26,8 +27,8 @@ actor "Guest"`
 		lex := lexer.New(input)
 		tokens := lex.Tokenize()
 
-		parser := New(tokens, "test.emod")
-		model, errs := parser.Parse()
+		p := parser.New(tokens, "test.emod")
+		model, errs := p.Parse()
 
 		require.Len(t, errs, 0)
 		require.Len(t, model.Actors, 1)
@@ -41,8 +42,8 @@ actor "FrontDesk"`
 		lex := lexer.New(input)
 		tokens := lex.Tokenize()
 
-		parser := New(tokens, "test.emod")
-		model, errs := parser.Parse()
+		p := parser.New(tokens, "test.emod")
+		model, errs := p.Parse()
 
 		require.Len(t, errs, 0)
 		require.Len(t, model.Actors, 2)
@@ -59,8 +60,8 @@ context "Reservations" {
 		lex := lexer.New(input)
 		tokens := lex.Tokenize()
 
-		parser := New(tokens, "test.emod")
-		model, errs := parser.Parse()
+		p := parser.New(tokens, "test.emod")
+		model, errs := p.Parse()
 
 		require.Len(t, errs, 0)
 		require.Len(t, model.Contexts, 1)
@@ -80,8 +81,8 @@ context "Ctx" {
 		lex := lexer.New(input)
 		tokens := lex.Tokenize()
 
-		parser := New(tokens, "test.emod")
-		model, errs := parser.Parse()
+		p := parser.New(tokens, "test.emod")
+		model, errs := p.Parse()
 
 		require.Len(t, errs, 0)
 		require.Len(t, model.Contexts[0].Aggregates[0].Slices, 1)
@@ -103,8 +104,8 @@ context "Ctx" {
 		lex := lexer.New(input)
 		tokens := lex.Tokenize()
 
-		parser := New(tokens, "test.emod")
-		model, errs := parser.Parse()
+		p := parser.New(tokens, "test.emod")
+		model, errs := p.Parse()
 
 		require.Len(t, errs, 0)
 		slice := model.Contexts[0].Aggregates[0].Slices[0]
@@ -127,8 +128,8 @@ context "Ctx" {
 		lex := lexer.New(input)
 		tokens := lex.Tokenize()
 
-		parser := New(tokens, "test.emod")
-		model, errs := parser.Parse()
+		p := parser.New(tokens, "test.emod")
+		model, errs := p.Parse()
 
 		require.Len(t, errs, 0)
 		slice := model.Contexts[0].Aggregates[0].Slices[0]
@@ -153,8 +154,8 @@ context "Ctx" {
 		lex := lexer.New(input)
 		tokens := lex.Tokenize()
 
-		parser := New(tokens, "test.emod")
-		model, errs := parser.Parse()
+		p := parser.New(tokens, "test.emod")
+		model, errs := p.Parse()
 
 		require.Len(t, errs, 0)
 		cmd := model.Contexts[0].Aggregates[0].Slices[0].Commands[0]
@@ -181,8 +182,8 @@ context "Ctx" {
 		lex := lexer.New(input)
 		tokens := lex.Tokenize()
 
-		parser := New(tokens, "test.emod")
-		model, errs := parser.Parse()
+		p := parser.New(tokens, "test.emod")
+		model, errs := p.Parse()
 
 		require.Len(t, errs, 0)
 		slice := model.Contexts[0].Aggregates[0].Slices[0]
@@ -230,8 +231,8 @@ context "Reservations" {
 		lex := lexer.New(input)
 		tokens := lex.Tokenize()
 
-		parser := New(tokens, "test.emod")
-		model, errs := parser.Parse()
+		p := parser.New(tokens, "test.emod")
+		model, errs := p.Parse()
 
 		require.Len(t, errs, 0)
 		require.Equal(t, "Hotel Reservation", model.Name)
@@ -273,8 +274,8 @@ context`
 		lex := lexer.New(input)
 		tokens := lex.Tokenize()
 
-		parser := New(tokens, "test.emod")
-		_, errs := parser.Parse()
+		p := parser.New(tokens, "test.emod")
+		_, errs := p.Parse()
 
 		require.Greater(t, len(errs), 0)
 	})
@@ -284,8 +285,8 @@ context`
 		lex := lexer.New(input)
 		tokens := lex.Tokenize()
 
-		parser := New(tokens, "test.emod")
-		_, errs := parser.Parse()
+		p := parser.New(tokens, "test.emod")
+		_, errs := p.Parse()
 
 		require.NotEmpty(t, errs)
 		require.Equal(t, "test.emod", errs[0].Filename)
@@ -302,8 +303,8 @@ context "Foo" {`
 		lex := lexer.New(input)
 		tokens := lex.Tokenize()
 
-		parser := New(tokens, "test.emod")
-		_, errs := parser.Parse()
+		p := parser.New(tokens, "test.emod")
+		_, errs := p.Parse()
 
 		require.GreaterOrEqual(t, len(errs), 1)
 		lastErr := errs[len(errs)-1]
@@ -318,8 +319,8 @@ context "Foo" {`
 		lex := lexer.New(input)
 		tokens := lex.Tokenize()
 
-		parser := New(tokens, "test.emod")
-		_, errs := parser.Parse()
+		p := parser.New(tokens, "test.emod")
+		_, errs := p.Parse()
 
 		require.GreaterOrEqual(t, len(errs), 1)
 		require.Equal(t, "test.emod", errs[0].Filename)
@@ -337,8 +338,8 @@ context "Missing" {
 		lex := lexer.New(input)
 		tokens := lex.Tokenize()
 
-		parser := New(tokens, "errors.emod")
-		_, errs := parser.Parse()
+		p := parser.New(tokens, "errors.emod")
+		_, errs := p.Parse()
 
 		for _, e := range errs {
 			require.Equal(t, "errors.emod", e.Filename)

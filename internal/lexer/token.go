@@ -38,7 +38,7 @@ type Token struct {
 	Column int
 }
 
-// TypeString returns a human-readable string for the token type.
+// String returns a human-readable string for the token type.
 func (t TokenType) String() string {
 	switch t {
 	case TokenKeywordModel:
