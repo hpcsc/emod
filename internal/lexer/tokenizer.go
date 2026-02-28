@@ -22,7 +22,7 @@ func New(input string) *Tokenizer {
 	}
 }
 
-func (l *Tokenizer) Scan() []*Token {
+func (l *Tokenizer) Scan() ([]*Token, []*Token) {
 	for l.pos < len(l.input) {
 		l.skipWhitespaceAndComments()
 		if l.pos >= len(l.input) {
@@ -54,11 +54,7 @@ func (l *Tokenizer) Scan() []*Token {
 	}
 
 	l.addToken(EOF, "")
-	return l.tokens
-}
-
-func (l *Tokenizer) Errors() []*Token {
-	return l.errs
+	return l.tokens, l.errs
 }
 
 func (l *Tokenizer) skipWhitespaceAndComments() {
