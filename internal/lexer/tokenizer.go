@@ -2,19 +2,22 @@ package lexer
 
 import (
 	"strings"
+
+	"github.com/hpcsc/emod/internal/diagnostic"
 )
 
 type cursor struct {
-	input  string
-	pos    int
-	line   int
-	column int
+	input    string
+	filename string
+	pos      int
+	line     int
+	column   int
 }
 
-func Scan(input string) ([]*Token, []*Token) {
-	c := cursor{input: input, pos: 0, line: 1, column: 1}
+func Scan(input, filename string) ([]*Token, []*diagnostic.Entry) {
+	c := cursor{input: input, filename: filename, pos: 0, line: 1, column: 1}
 	var tokens []*Token
-	var errs []*Token
+	var diags []*diagnostic.Entry
 
 	for c.pos < len(c.input) {
 		c = skipWhitespaceAndComments(c)
@@ -24,10 +27,11 @@ func Scan(input string) ([]*Token, []*Token) {
 
 		switch {
 		case peek(c) == '"':
-			var tok, errTok *Token
-			c, tok, errTok = readString(c)
-			if errTok != nil {
-				errs = append(errs, errTok)
+			var tok *Token
+			var d *diagnostic.Entry
+			c, tok, d = readString(c)
+			if d != nil {
+				diags = append(diags, d)
 			}
 			if tok != nil {
 				tokens = append(tokens, tok)
@@ -49,17 +53,21 @@ func Scan(input string) ([]*Token, []*Token) {
 			c, tok = readIdentifierOrKeyword(c)
 			tokens = append(tokens, tok)
 		default:
-			errs = append(errs, newToken(Error, "unrecognized character: "+string(peek(c)), c))
+			diags = append(diags, newDiag("unrecognized character: "+string(peek(c)), c))
 			c = advance(c)
 		}
 	}
 
 	tokens = append(tokens, newToken(EOF, "", c))
-	return tokens, errs
+	return tokens, diags
 }
 
 func newToken(typ Kind, value string, c cursor) *Token {
 	return &Token{Type: typ, Value: value, Line: c.line, Column: c.column}
+}
+
+func newDiag(msg string, c cursor) *diagnostic.Entry {
+	return &diagnostic.Entry{Filename: c.filename, Line: c.line, Column: c.column, Message: msg}
 }
 
 func skipWhitespaceAndComments(c cursor) cursor {
@@ -88,7 +96,7 @@ func skipWhitespaceAndComments(c cursor) cursor {
 	return c
 }
 
-func readString(c cursor) (cursor, *Token, *Token) {
+func readString(c cursor) (cursor, *Token, *diagnostic.Entry) {
 	startLine := c.line
 	startCol := c.column
 	c = advance(c)
@@ -104,7 +112,9 @@ func readString(c cursor) (cursor, *Token, *Token) {
 	}
 
 	if c.pos >= len(c.input) {
-		return c, nil, &Token{Type: Error, Value: "unterminated string", Line: startLine, Column: startCol}
+		return c, nil, &diagnostic.Entry{
+			Filename: c.filename, Line: startLine, Column: startCol, Message: "unterminated string",
+		}
 	}
 
 	c = advance(c)

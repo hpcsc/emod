@@ -6,7 +6,6 @@ import (
 	"os"
 	"strings"
 
-	"github.com/hpcsc/emod/internal/diagnostic"
 	"github.com/hpcsc/emod/internal/lexer"
 	"github.com/hpcsc/emod/internal/parser"
 )
@@ -23,17 +22,7 @@ func RunValidate(path string) error {
 		return fmt.Errorf("reading %s: %w", path, err)
 	}
 
-	tokens, lexErrs := lexer.Scan(string(source))
-
-	var diagnostics []*diagnostic.Entry
-	for _, errTok := range lexErrs {
-		diagnostics = append(diagnostics, &diagnostic.Entry{
-			Filename: path,
-			Line:     errTok.Line,
-			Column:   errTok.Column,
-			Message:  errTok.Value,
-		})
-	}
+	tokens, diagnostics := lexer.Scan(string(source), path)
 
 	p := parser.New(tokens, path)
 	_, parserDiags := p.Parse()

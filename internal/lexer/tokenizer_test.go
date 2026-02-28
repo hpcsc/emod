@@ -25,8 +25,8 @@ func TestLexer(t *testing.T) {
 
 		for keyword, expectedType := range keywords {
 			t.Run(keyword, func(t *testing.T) {
-				tokens, errs := lexer.Scan(keyword)
-				require.Empty(t, errs)
+				tokens, diags := lexer.Scan(keyword, "test.emod")
+				require.Empty(t, diags)
 				require.Greater(t, len(tokens), 1)
 				require.Equal(t, expectedType, tokens[0].Type)
 				require.Equal(t, keyword, tokens[0].Value)
@@ -38,8 +38,8 @@ func TestLexer(t *testing.T) {
 		tests := []string{"MakeReservation", "string", "required", "date", "foo_bar", "Foo123"}
 		for _, id := range tests {
 			t.Run(id, func(t *testing.T) {
-				tokens, errs := lexer.Scan(id)
-				require.Empty(t, errs)
+				tokens, diags := lexer.Scan(id, "test.emod")
+				require.Empty(t, diags)
 				require.Equal(t, lexer.Identifier, tokens[0].Type)
 				require.Equal(t, id, tokens[0].Value)
 			})
@@ -59,8 +59,8 @@ func TestLexer(t *testing.T) {
 
 		for _, test := range tests {
 			t.Run(test.input, func(t *testing.T) {
-				tokens, errs := lexer.Scan(test.input)
-				require.Empty(t, errs)
+				tokens, diags := lexer.Scan(test.input, "test.emod")
+				require.Empty(t, diags)
 				require.Equal(t, lexer.String, tokens[0].Type)
 				require.Equal(t, test.expected, tokens[0].Value)
 			})
@@ -68,22 +68,22 @@ func TestLexer(t *testing.T) {
 	})
 
 	t.Run("braces", func(t *testing.T) {
-		tokens, errs := lexer.Scan("{ }")
-		require.Empty(t, errs)
+		tokens, diags := lexer.Scan("{ }", "test.emod")
+		require.Empty(t, diags)
 		require.Equal(t, lexer.OpenBrace, tokens[0].Type)
 		require.Equal(t, lexer.CloseBrace, tokens[1].Type)
 	})
 
 	t.Run("arrow operator", func(t *testing.T) {
-		tokens, errs := lexer.Scan("->")
-		require.Empty(t, errs)
+		tokens, diags := lexer.Scan("->", "test.emod")
+		require.Empty(t, diags)
 		require.Equal(t, lexer.Arrow, tokens[0].Type)
 		require.Equal(t, "->", tokens[0].Value)
 	})
 
 	t.Run("colon", func(t *testing.T) {
-		tokens, errs := lexer.Scan(":")
-		require.Empty(t, errs)
+		tokens, diags := lexer.Scan(":", "test.emod")
+		require.Empty(t, diags)
 		require.Equal(t, lexer.Colon, tokens[0].Type)
 		require.Equal(t, ":", tokens[0].Value)
 	})
@@ -94,9 +94,9 @@ model "Test"
   # Another comment
 actor "Guest"`
 
-		tokens, errs := lexer.Scan(input)
+		tokens, diags := lexer.Scan(input, "test.emod")
 
-		require.Empty(t, errs)
+		require.Empty(t, diags)
 		require.Len(t, tokens, 5)
 		require.Equal(t, lexer.KeywordModel, tokens[0].Type)
 		require.Equal(t, lexer.String, tokens[1].Type)
@@ -110,9 +110,9 @@ actor "Guest"`
 		input := `model "Test"
 actor "Guest"`
 
-		tokens, errs := lexer.Scan(input)
+		tokens, diags := lexer.Scan(input, "test.emod")
 
-		require.Empty(t, errs)
+		require.Empty(t, diags)
 		require.Equal(t, 1, tokens[0].Line)
 		require.Equal(t, 1, tokens[0].Column)
 
@@ -122,50 +122,51 @@ actor "Guest"`
 
 	t.Run("whitespace handling", func(t *testing.T) {
 		input := "model    \t  \t  \"Test\""
-		tokens, errs := lexer.Scan(input)
+		tokens, diags := lexer.Scan(input, "test.emod")
 
-		require.Empty(t, errs)
+		require.Empty(t, diags)
 		require.Len(t, tokens, 3)
 		require.Equal(t, lexer.KeywordModel, tokens[0].Type)
 		require.Equal(t, lexer.String, tokens[1].Type)
 	})
 
 	t.Run("EOF token", func(t *testing.T) {
-		tokens, errs := lexer.Scan("model")
+		tokens, diags := lexer.Scan("model", "test.emod")
 
-		require.Empty(t, errs)
+		require.Empty(t, diags)
 		require.Greater(t, len(tokens), 0)
 		require.Equal(t, lexer.EOF, tokens[len(tokens)-1].Type)
 	})
 
 	t.Run("unterminated string", func(t *testing.T) {
-		_, errs := lexer.Scan(`"unterminated`)
+		_, diags := lexer.Scan(`"unterminated`, "test.emod")
 
-		require.Greater(t, len(errs), 0)
-		require.Equal(t, lexer.Error, errs[0].Type)
-		require.Equal(t, "unterminated string", errs[0].Value)
+		require.Len(t, diags, 1)
+		require.Equal(t, "test.emod", diags[0].Filename)
+		require.Equal(t, "unterminated string", diags[0].Message)
 	})
 
 	t.Run("unrecognized character", func(t *testing.T) {
-		_, errs := lexer.Scan("model @")
+		_, diags := lexer.Scan("model @", "test.emod")
 
-		require.Greater(t, len(errs), 0)
-		require.Equal(t, lexer.Error, errs[0].Type)
+		require.Len(t, diags, 1)
+		require.Equal(t, "test.emod", diags[0].Filename)
+		require.Contains(t, diags[0].Message, "unrecognized character")
 	})
 
 	t.Run("empty input", func(t *testing.T) {
-		tokens, errs := lexer.Scan("")
+		tokens, diags := lexer.Scan("", "test.emod")
 
-		require.Empty(t, errs)
+		require.Empty(t, diags)
 		require.Len(t, tokens, 1)
 		require.Equal(t, lexer.EOF, tokens[0].Type)
 	})
 
 	t.Run("comment only input", func(t *testing.T) {
-		tokens, errs := lexer.Scan(`# Just a comment
-# Another line`)
+		tokens, diags := lexer.Scan(`# Just a comment
+# Another line`, "test.emod")
 
-		require.Empty(t, errs)
+		require.Empty(t, diags)
 		require.Len(t, tokens, 1)
 		require.Equal(t, lexer.EOF, tokens[0].Type)
 	})
@@ -196,9 +197,9 @@ context "Reservations" {
   }
 }`
 
-		tokens, errs := lexer.Scan(input)
+		tokens, diags := lexer.Scan(input, "test.emod")
 
-		require.Empty(t, errs)
+		require.Empty(t, diags)
 
 		hasModel := false
 		hasActor := false

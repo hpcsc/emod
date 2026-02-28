@@ -16,8 +16,8 @@ func TestIntegration(t *testing.T) {
 		source, err := os.ReadFile("testdata/minimal.emod")
 		require.NoError(t, err)
 
-		tokens, lexErrs := lexer.Scan(string(source))
-		require.Empty(t, lexErrs)
+		tokens, lexDiags := lexer.Scan(string(source), "testdata/minimal.emod")
+		require.Empty(t, lexDiags)
 
 		p := parser.New(tokens, "testdata/minimal.emod")
 		model, diags := p.Parse()
@@ -62,7 +62,7 @@ func TestIntegration(t *testing.T) {
 		source, err := os.ReadFile("testdata/invalid.emod")
 		require.NoError(t, err)
 
-		tokens, _ := lexer.Scan(string(source))
+		tokens, _ := lexer.Scan(string(source), "testdata/invalid.emod")
 
 		p := parser.New(tokens, "testdata/invalid.emod")
 		_, diags := p.Parse()

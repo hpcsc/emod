@@ -26,7 +26,6 @@ const (
 
 	// Special
 	EOF
-	Error
 )
 
 type Token struct {
@@ -70,8 +69,6 @@ func (k Kind) String() string {
 		return ":"
 	case EOF:
 		return "EOF"
-	case Error:
-		return "ERROR"
 	default:
 		return "UNKNOWN"
 	}
