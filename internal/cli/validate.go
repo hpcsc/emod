@@ -23,8 +23,7 @@ func RunValidate(path string) error {
 		return fmt.Errorf("reading %s: %w", path, err)
 	}
 
-	l := lexer.New(string(source))
-	tokens, lexErrs := l.Scan()
+	tokens, lexErrs := lexer.Scan(string(source))
 
 	var diagnostics []*diagnostic.Entry
 	for _, errTok := range lexErrs {

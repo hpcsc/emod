@@ -25,8 +25,7 @@ func TestLexer(t *testing.T) {
 
 		for keyword, expectedType := range keywords {
 			t.Run(keyword, func(t *testing.T) {
-				l := lexer.New(keyword)
-				tokens, errs := l.Scan()
+				tokens, errs := lexer.Scan(keyword)
 				require.Empty(t, errs)
 				require.Greater(t, len(tokens), 1)
 				require.Equal(t, expectedType, tokens[0].Type)
@@ -39,8 +38,7 @@ func TestLexer(t *testing.T) {
 		tests := []string{"MakeReservation", "string", "required", "date", "foo_bar", "Foo123"}
 		for _, id := range tests {
 			t.Run(id, func(t *testing.T) {
-				l := lexer.New(id)
-				tokens, errs := l.Scan()
+				tokens, errs := lexer.Scan(id)
 				require.Empty(t, errs)
 				require.Equal(t, lexer.Identifier, tokens[0].Type)
 				require.Equal(t, id, tokens[0].Value)
@@ -61,8 +59,7 @@ func TestLexer(t *testing.T) {
 
 		for _, test := range tests {
 			t.Run(test.input, func(t *testing.T) {
-				l := lexer.New(test.input)
-				tokens, errs := l.Scan()
+				tokens, errs := lexer.Scan(test.input)
 				require.Empty(t, errs)
 				require.Equal(t, lexer.String, tokens[0].Type)
 				require.Equal(t, test.expected, tokens[0].Value)
@@ -71,24 +68,21 @@ func TestLexer(t *testing.T) {
 	})
 
 	t.Run("braces", func(t *testing.T) {
-		l := lexer.New("{ }")
-		tokens, errs := l.Scan()
+		tokens, errs := lexer.Scan("{ }")
 		require.Empty(t, errs)
 		require.Equal(t, lexer.OpenBrace, tokens[0].Type)
 		require.Equal(t, lexer.CloseBrace, tokens[1].Type)
 	})
 
 	t.Run("arrow operator", func(t *testing.T) {
-		l := lexer.New("->")
-		tokens, errs := l.Scan()
+		tokens, errs := lexer.Scan("->")
 		require.Empty(t, errs)
 		require.Equal(t, lexer.Arrow, tokens[0].Type)
 		require.Equal(t, "->", tokens[0].Value)
 	})
 
 	t.Run("colon", func(t *testing.T) {
-		l := lexer.New(":")
-		tokens, errs := l.Scan()
+		tokens, errs := lexer.Scan(":")
 		require.Empty(t, errs)
 		require.Equal(t, lexer.Colon, tokens[0].Type)
 		require.Equal(t, ":", tokens[0].Value)
@@ -100,8 +94,7 @@ model "Test"
   # Another comment
 actor "Guest"`
 
-		l := lexer.New(input)
-		tokens, errs := l.Scan()
+		tokens, errs := lexer.Scan(input)
 
 		require.Empty(t, errs)
 		require.Len(t, tokens, 5)
@@ -117,8 +110,7 @@ actor "Guest"`
 		input := `model "Test"
 actor "Guest"`
 
-		l := lexer.New(input)
-		tokens, errs := l.Scan()
+		tokens, errs := lexer.Scan(input)
 
 		require.Empty(t, errs)
 		require.Equal(t, 1, tokens[0].Line)
@@ -130,8 +122,7 @@ actor "Guest"`
 
 	t.Run("whitespace handling", func(t *testing.T) {
 		input := "model    \t  \t  \"Test\""
-		l := lexer.New(input)
-		tokens, errs := l.Scan()
+		tokens, errs := lexer.Scan(input)
 
 		require.Empty(t, errs)
 		require.Len(t, tokens, 3)
@@ -140,8 +131,7 @@ actor "Guest"`
 	})
 
 	t.Run("EOF token", func(t *testing.T) {
-		l := lexer.New("model")
-		tokens, errs := l.Scan()
+		tokens, errs := lexer.Scan("model")
 
 		require.Empty(t, errs)
 		require.Greater(t, len(tokens), 0)
@@ -149,8 +139,7 @@ actor "Guest"`
 	})
 
 	t.Run("unterminated string", func(t *testing.T) {
-		l := lexer.New(`"unterminated`)
-		_, errs := l.Scan()
+		_, errs := lexer.Scan(`"unterminated`)
 
 		require.Greater(t, len(errs), 0)
 		require.Equal(t, lexer.Error, errs[0].Type)
@@ -158,16 +147,14 @@ actor "Guest"`
 	})
 
 	t.Run("unrecognized character", func(t *testing.T) {
-		l := lexer.New("model @")
-		_, errs := l.Scan()
+		_, errs := lexer.Scan("model @")
 
 		require.Greater(t, len(errs), 0)
 		require.Equal(t, lexer.Error, errs[0].Type)
 	})
 
 	t.Run("empty input", func(t *testing.T) {
-		l := lexer.New("")
-		tokens, errs := l.Scan()
+		tokens, errs := lexer.Scan("")
 
 		require.Empty(t, errs)
 		require.Len(t, tokens, 1)
@@ -175,9 +162,8 @@ actor "Guest"`
 	})
 
 	t.Run("comment only input", func(t *testing.T) {
-		l := lexer.New(`# Just a comment
+		tokens, errs := lexer.Scan(`# Just a comment
 # Another line`)
-		tokens, errs := l.Scan()
 
 		require.Empty(t, errs)
 		require.Len(t, tokens, 1)
@@ -210,8 +196,7 @@ context "Reservations" {
   }
 }`
 
-		l := lexer.New(input)
-		tokens, errs := l.Scan()
+		tokens, errs := lexer.Scan(input)
 
 		require.Empty(t, errs)
 

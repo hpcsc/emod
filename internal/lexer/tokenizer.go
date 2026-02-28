@@ -4,184 +4,147 @@ import (
 	"strings"
 )
 
-type Tokenizer struct {
+type cursor struct {
 	input  string
 	pos    int
 	line   int
 	column int
-	tokens []*Token
-	errs   []*Token
 }
 
-func New(input string) *Tokenizer {
-	return &Tokenizer{
-		input: input,
-		pos:   0,
-		line:  1,
-		column: 1,
-	}
-}
+func Scan(input string) ([]*Token, []*Token) {
+	c := cursor{input: input, pos: 0, line: 1, column: 1}
+	var tokens []*Token
+	var errs []*Token
 
-func (l *Tokenizer) Scan() ([]*Token, []*Token) {
-	for l.pos < len(l.input) {
-		l.skipWhitespaceAndComments()
-		if l.pos >= len(l.input) {
+	for c.pos < len(c.input) {
+		c = skipWhitespaceAndComments(c)
+		if c.pos >= len(c.input) {
 			break
 		}
 
 		switch {
-		case l.peek() == '"':
-			l.readString()
-		case l.peek() == '{':
-			l.addToken(OpenBrace, "{")
-			l.advance()
-		case l.peek() == '}':
-			l.addToken(CloseBrace, "}")
-			l.advance()
-		case l.peek() == ':':
-			l.addToken(Colon, ":")
-			l.advance()
-		case l.peek() == '-' && l.peekAhead(1) == '>':
-			l.addToken(Arrow, "->")
-			l.advance()
-			l.advance()
-		case isIdentifierStart(l.peek()):
-			l.readIdentifierOrKeyword()
+		case peek(c) == '"':
+			var tok, errTok *Token
+			c, tok, errTok = readString(c)
+			if errTok != nil {
+				errs = append(errs, errTok)
+			}
+			if tok != nil {
+				tokens = append(tokens, tok)
+			}
+		case peek(c) == '{':
+			tokens = append(tokens, newToken(OpenBrace, "{", c))
+			c = advance(c)
+		case peek(c) == '}':
+			tokens = append(tokens, newToken(CloseBrace, "}", c))
+			c = advance(c)
+		case peek(c) == ':':
+			tokens = append(tokens, newToken(Colon, ":", c))
+			c = advance(c)
+		case peek(c) == '-' && peekAhead(c, 1) == '>':
+			tokens = append(tokens, newToken(Arrow, "->", c))
+			c = advance(advance(c))
+		case isIdentifierStart(peek(c)):
+			var tok *Token
+			c, tok = readIdentifierOrKeyword(c)
+			tokens = append(tokens, tok)
 		default:
-			l.addError("unrecognized character: " + string(l.peek()))
-			l.advance()
+			errs = append(errs, newToken(Error, "unrecognized character: "+string(peek(c)), c))
+			c = advance(c)
 		}
 	}
 
-	l.addToken(EOF, "")
-	return l.tokens, l.errs
+	tokens = append(tokens, newToken(EOF, "", c))
+	return tokens, errs
 }
 
-func (l *Tokenizer) skipWhitespaceAndComments() {
-	for l.pos < len(l.input) {
-		if isWhitespace(l.peek()) && l.peek() != '\n' {
-			l.advance()
+func newToken(typ Kind, value string, c cursor) *Token {
+	return &Token{Type: typ, Value: value, Line: c.line, Column: c.column}
+}
+
+func skipWhitespaceAndComments(c cursor) cursor {
+	for c.pos < len(c.input) {
+		if isWhitespace(peek(c)) && peek(c) != '\n' {
+			c = advance(c)
 			continue
 		}
 
-		if l.peek() == '\n' {
-			l.advance()
-			l.line++
-			l.column = 1
+		if peek(c) == '\n' {
+			c = advance(c)
+			c.line++
+			c.column = 1
 			continue
 		}
 
-		if l.peek() == '#' {
-			for l.pos < len(l.input) && l.peek() != '\n' {
-				l.advance()
+		if peek(c) == '#' {
+			for c.pos < len(c.input) && peek(c) != '\n' {
+				c = advance(c)
 			}
 			continue
 		}
 
 		break
 	}
+	return c
 }
 
-func (l *Tokenizer) readString() {
-	startLine := l.line
-	startCol := l.column
-	l.advance()
+func readString(c cursor) (cursor, *Token, *Token) {
+	startLine := c.line
+	startCol := c.column
+	c = advance(c)
 
 	var sb strings.Builder
-	for l.pos < len(l.input) && l.peek() != '"' {
-		if l.peek() == '\n' {
-			l.line++
-			l.column = 0
+	for c.pos < len(c.input) && peek(c) != '"' {
+		if peek(c) == '\n' {
+			c.line++
+			c.column = 0
 		}
-		sb.WriteByte(l.input[l.pos])
-		l.advance()
+		sb.WriteByte(c.input[c.pos])
+		c = advance(c)
 	}
 
-	if l.pos >= len(l.input) {
-		l.errs = append(l.errs, &Token{
-			Type:   Error,
-			Value:  "unterminated string",
-			Line:   startLine,
-			Column: startCol,
-		})
-		return
+	if c.pos >= len(c.input) {
+		return c, nil, &Token{Type: Error, Value: "unterminated string", Line: startLine, Column: startCol}
 	}
 
-	l.advance()
-	l.tokens = append(l.tokens, &Token{
-		Type:   String,
-		Value:  sb.String(),
-		Line:   startLine,
-		Column: startCol,
-	})
+	c = advance(c)
+	return c, &Token{Type: String, Value: sb.String(), Line: startLine, Column: startCol}, nil
 }
 
-func (l *Tokenizer) readIdentifierOrKeyword() {
-	startCol := l.column
+func readIdentifierOrKeyword(c cursor) (cursor, *Token) {
+	startCol := c.column
 	var sb strings.Builder
 
-	for l.pos < len(l.input) && isIdentifierChar(l.peek()) {
-		sb.WriteByte(l.input[l.pos])
-		l.advance()
+	for c.pos < len(c.input) && isIdentifierChar(peek(c)) {
+		sb.WriteByte(c.input[c.pos])
+		c = advance(c)
 	}
 
 	value := sb.String()
-	kind := getKeywordKind(value)
-	if kind == Identifier {
-		l.tokens = append(l.tokens, &Token{
-			Type:   Identifier,
-			Value:  value,
-			Line:   l.line,
-			Column: startCol,
-		})
-	} else {
-		l.tokens = append(l.tokens, &Token{
-			Type:   kind,
-			Value:  value,
-			Line:   l.line,
-			Column: startCol,
-		})
-	}
+	return c, &Token{Type: getKeywordKind(value), Value: value, Line: c.line, Column: startCol}
 }
 
-func (l *Tokenizer) addToken(typ Kind, value string) {
-	l.tokens = append(l.tokens, &Token{
-		Type:   typ,
-		Value:  value,
-		Line:   l.line,
-		Column: l.column,
-	})
-}
-
-func (l *Tokenizer) addError(msg string) {
-	l.errs = append(l.errs, &Token{
-		Type:   Error,
-		Value:  msg,
-		Line:   l.line,
-		Column: l.column,
-	})
-}
-
-func (l *Tokenizer) peek() byte {
-	if l.pos >= len(l.input) {
+func peek(c cursor) byte {
+	if c.pos >= len(c.input) {
 		return 0
 	}
-	return l.input[l.pos]
+	return c.input[c.pos]
 }
 
-func (l *Tokenizer) peekAhead(n int) byte {
-	pos := l.pos + n
-	if pos >= len(l.input) {
+func peekAhead(c cursor, n int) byte {
+	pos := c.pos + n
+	if pos >= len(c.input) {
 		return 0
 	}
-	return l.input[pos]
+	return c.input[pos]
 }
 
-func (l *Tokenizer) advance() {
-	if l.pos < len(l.input) {
-		l.pos++
-		l.column++
+func advance(c cursor) cursor {
+	if c.pos < len(c.input) {
+		c.pos++
+		c.column++
 	}
+	return c
 }
 
 func getKeywordKind(s string) Kind {

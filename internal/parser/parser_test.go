@@ -13,8 +13,7 @@ import (
 func TestParser(t *testing.T) {
 	t.Run("model declaration", func(t *testing.T) {
 		input := `model "Test Model"`
-		lex := lexer.New(input)
-		tokens, _ := lex.Scan()
+		tokens, _ := lexer.Scan(input)
 
 		p := parser.New(tokens, "test.emod")
 		model, errs := p.Parse()
@@ -26,8 +25,7 @@ func TestParser(t *testing.T) {
 	t.Run("actor declaration", func(t *testing.T) {
 		input := `model "Test"
 actor "Guest"`
-		lex := lexer.New(input)
-		tokens, _ := lex.Scan()
+		tokens, _ := lexer.Scan(input)
 
 		p := parser.New(tokens, "test.emod")
 		model, errs := p.Parse()
@@ -41,8 +39,7 @@ actor "Guest"`
 		input := `model "Test"
 actor "Guest"
 actor "FrontDesk"`
-		lex := lexer.New(input)
-		tokens, _ := lex.Scan()
+		tokens, _ := lexer.Scan(input)
 
 		p := parser.New(tokens, "test.emod")
 		model, errs := p.Parse()
@@ -59,8 +56,7 @@ context "Reservations" {
   aggregate "Reservation" {
   }
 }`
-		lex := lexer.New(input)
-		tokens, _ := lex.Scan()
+		tokens, _ := lexer.Scan(input)
 
 		p := parser.New(tokens, "test.emod")
 		model, errs := p.Parse()
@@ -80,8 +76,7 @@ context "Ctx" {
     }
   }
 }`
-		lex := lexer.New(input)
-		tokens, _ := lex.Scan()
+		tokens, _ := lexer.Scan(input)
 
 		p := parser.New(tokens, "test.emod")
 		model, errs := p.Parse()
@@ -103,8 +98,7 @@ context "Ctx" {
     }
   }
 }`
-		lex := lexer.New(input)
-		tokens, _ := lex.Scan()
+		tokens, _ := lexer.Scan(input)
 
 		p := parser.New(tokens, "test.emod")
 		model, errs := p.Parse()
@@ -127,8 +121,7 @@ context "Ctx" {
     }
   }
 }`
-		lex := lexer.New(input)
-		tokens, _ := lex.Scan()
+		tokens, _ := lexer.Scan(input)
 
 		p := parser.New(tokens, "test.emod")
 		model, errs := p.Parse()
@@ -153,8 +146,7 @@ context "Ctx" {
     }
   }
 }`
-		lex := lexer.New(input)
-		tokens, _ := lex.Scan()
+		tokens, _ := lexer.Scan(input)
 
 		p := parser.New(tokens, "test.emod")
 		model, errs := p.Parse()
@@ -181,8 +173,7 @@ context "Ctx" {
     }
   }
 }`
-		lex := lexer.New(input)
-		tokens, _ := lex.Scan()
+		tokens, _ := lexer.Scan(input)
 
 		p := parser.New(tokens, "test.emod")
 		model, errs := p.Parse()
@@ -230,8 +221,7 @@ context "Reservations" {
   }
 }`
 
-		lex := lexer.New(input)
-		tokens, _ := lex.Scan()
+		tokens, _ := lexer.Scan(input)
 
 		p := parser.New(tokens, "test.emod")
 		model, errs := p.Parse()
@@ -273,8 +263,7 @@ context "Reservations" {
 		input := `unknown_keyword "Test"
 actor
 context`
-		lex := lexer.New(input)
-		tokens, _ := lex.Scan()
+		tokens, _ := lexer.Scan(input)
 
 		p := parser.New(tokens, "test.emod")
 		_, errs := p.Parse()
@@ -284,8 +273,7 @@ context`
 
 	t.Run("unrecognized keyword includes the keyword and expected alternatives", func(t *testing.T) {
 		input := `foobar { }`
-		lex := lexer.New(input)
-		tokens, _ := lex.Scan()
+		tokens, _ := lexer.Scan(input)
 
 		p := parser.New(tokens, "test.emod")
 		_, errs := p.Parse()
@@ -302,8 +290,7 @@ context`
 	t.Run("unclosed brace reports the block type and opening line", func(t *testing.T) {
 		input := `model "Test"
 context "Foo" {`
-		lex := lexer.New(input)
-		tokens, _ := lex.Scan()
+		tokens, _ := lexer.Scan(input)
 
 		p := parser.New(tokens, "test.emod")
 		_, errs := p.Parse()
@@ -318,8 +305,7 @@ context "Foo" {`
 
 	t.Run("unexpected token after model reports what was found", func(t *testing.T) {
 		input := `model {`
-		lex := lexer.New(input)
-		tokens, _ := lex.Scan()
+		tokens, _ := lexer.Scan(input)
 
 		p := parser.New(tokens, "test.emod")
 		_, errs := p.Parse()
@@ -337,8 +323,7 @@ foobar "bad"
 actor
 context "Missing" {
   unknown_inside`
-		lex := lexer.New(input)
-		tokens, _ := lex.Scan()
+		tokens, _ := lexer.Scan(input)
 
 		p := parser.New(tokens, "errors.emod")
 		_, errs := p.Parse()
