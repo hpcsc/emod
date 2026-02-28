@@ -28,11 +28,17 @@ func (p *Instance) Parse() (*ast.Model, []*diagnostic.Entry) {
 
 	for !p.isAtEnd() {
 		if p.check(lexer.KeywordModel) {
-			p.parseModel(model)
+			name, pos := p.parseModel()
+			model.Name = name
+			model.NamePos = pos
 		} else if p.check(lexer.KeywordActor) {
-			p.parseActor(model)
+			if actor := p.parseActor(); actor != nil {
+				model.Actors = append(model.Actors, actor)
+			}
 		} else if p.check(lexer.KeywordContext) {
-			p.parseContext(model)
+			if ctx := p.parseContext(); ctx != nil {
+				model.Contexts = append(model.Contexts, ctx)
+			}
 		} else if p.check(lexer.EOF) {
 			break
 		} else {
@@ -44,72 +50,56 @@ func (p *Instance) Parse() (*ast.Model, []*diagnostic.Entry) {
 	return model, p.diagnostics
 }
 
-func (p *Instance) parseModel(model *ast.Model) {
+func (p *Instance) parseModel() (string, ast.Position) {
 	p.consume(lexer.KeywordModel, "expected model")
 	if !p.check(lexer.String) {
 		p.error(fmt.Sprintf("expected quoted string after \"model\", got %q", p.peek().Value))
-		return
+		return "", ast.Position{}
 	}
 
 	tok := p.advance()
-	model.Name = tok.Value
-	model.NamePos = ast.Position{
-		Filename: p.filename,
-		Line:     tok.Line,
-		Column:   tok.Column,
-	}
+	return tok.Value, p.position(tok)
 }
 
-func (p *Instance) parseActor(model *ast.Model) {
+func (p *Instance) parseActor() *ast.Actor {
 	p.consume(lexer.KeywordActor, "expected actor")
 	if !p.check(lexer.String) {
 		p.error(fmt.Sprintf("expected quoted string after \"actor\", got %q", p.peek().Value))
-		return
+		return nil
 	}
 
 	tok := p.advance()
-	actor := &ast.Actor{
-		Name: tok.Value,
-		NamePos: ast.Position{
-			Filename: p.filename,
-			Line:     tok.Line,
-			Column:   tok.Column,
-		},
+	return &ast.Actor{
+		Name:    tok.Value,
+		NamePos: p.position(tok),
 	}
-	model.Actors = append(model.Actors, actor)
 }
 
-func (p *Instance) parseContext(model *ast.Model) {
+func (p *Instance) parseContext() *ast.Context {
 	p.consume(lexer.KeywordContext, "expected context")
 	if !p.check(lexer.String) {
 		p.error(fmt.Sprintf("expected quoted string after \"context\", got %q", p.peek().Value))
-		return
+		return nil
 	}
 
 	nameTok := p.advance()
 	context := &ast.Context{
-		Name: nameTok.Value,
-		NamePos: ast.Position{
-			Filename: p.filename,
-			Line:     nameTok.Line,
-			Column:   nameTok.Column,
-		},
+		Name:    nameTok.Value,
+		NamePos: p.position(nameTok),
 	}
 
 	if !p.check(lexer.OpenBrace) {
 		p.error("expected { after context name")
-		return
+		return nil
 	}
 	openTok := p.advance()
-	context.OpenPos = ast.Position{
-		Filename: p.filename,
-		Line:     openTok.Line,
-		Column:   openTok.Column,
-	}
+	context.OpenPos = p.position(openTok)
 
 	for !p.check(lexer.CloseBrace) && !p.isAtEnd() {
 		if p.check(lexer.KeywordAggregate) {
-			p.parseAggregate(context)
+			if agg := p.parseAggregate(); agg != nil {
+				context.Aggregates = append(context.Aggregates, agg)
+			}
 		} else {
 			p.error("expected aggregate in context")
 			p.advance()
@@ -118,49 +108,39 @@ func (p *Instance) parseContext(model *ast.Model) {
 
 	if !p.check(lexer.CloseBrace) {
 		p.error(fmt.Sprintf("unclosed brace for \"context\" block opened at line %d", context.OpenPos.Line))
-		return
+		return context
 	}
 	closeTok := p.advance()
-	context.ClosePos = ast.Position{
-		Filename: p.filename,
-		Line:     closeTok.Line,
-		Column:   closeTok.Column,
-	}
+	context.ClosePos = p.position(closeTok)
 
-	model.Contexts = append(model.Contexts, context)
+	return context
 }
 
-func (p *Instance) parseAggregate(context *ast.Context) {
+func (p *Instance) parseAggregate() *ast.Aggregate {
 	p.consume(lexer.KeywordAggregate, "expected aggregate")
 	if !p.check(lexer.String) {
 		p.error(fmt.Sprintf("expected quoted string after \"aggregate\", got %q", p.peek().Value))
-		return
+		return nil
 	}
 
 	nameTok := p.advance()
 	aggregate := &ast.Aggregate{
-		Name: nameTok.Value,
-		NamePos: ast.Position{
-			Filename: p.filename,
-			Line:     nameTok.Line,
-			Column:   nameTok.Column,
-		},
+		Name:    nameTok.Value,
+		NamePos: p.position(nameTok),
 	}
 
 	if !p.check(lexer.OpenBrace) {
 		p.error("expected { after aggregate name")
-		return
+		return nil
 	}
 	openTok := p.advance()
-	aggregate.OpenPos = ast.Position{
-		Filename: p.filename,
-		Line:     openTok.Line,
-		Column:   openTok.Column,
-	}
+	aggregate.OpenPos = p.position(openTok)
 
 	for !p.check(lexer.CloseBrace) && !p.isAtEnd() {
 		if p.check(lexer.KeywordSlice) {
-			p.parseSlice(aggregate)
+			if slice := p.parseSlice(); slice != nil {
+				aggregate.Slices = append(aggregate.Slices, slice)
+			}
 		} else {
 			p.error("expected slice in aggregate")
 			p.advance()
@@ -169,53 +149,45 @@ func (p *Instance) parseAggregate(context *ast.Context) {
 
 	if !p.check(lexer.CloseBrace) {
 		p.error(fmt.Sprintf("unclosed brace for \"aggregate\" block opened at line %d", aggregate.OpenPos.Line))
-		return
+		return aggregate
 	}
 	closeTok := p.advance()
-	aggregate.ClosePos = ast.Position{
-		Filename: p.filename,
-		Line:     closeTok.Line,
-		Column:   closeTok.Column,
-	}
+	aggregate.ClosePos = p.position(closeTok)
 
-	context.Aggregates = append(context.Aggregates, aggregate)
+	return aggregate
 }
 
-func (p *Instance) parseSlice(aggregate *ast.Aggregate) {
+func (p *Instance) parseSlice() *ast.Slice {
 	p.consume(lexer.KeywordSlice, "expected slice")
 	if !p.check(lexer.String) {
 		p.error(fmt.Sprintf("expected quoted string after \"slice\", got %q", p.peek().Value))
-		return
+		return nil
 	}
 
 	nameTok := p.advance()
 	slice := &ast.Slice{
-		Name: nameTok.Value,
-		NamePos: ast.Position{
-			Filename: p.filename,
-			Line:     nameTok.Line,
-			Column:   nameTok.Column,
-		},
+		Name:    nameTok.Value,
+		NamePos: p.position(nameTok),
 	}
 
 	if !p.check(lexer.OpenBrace) {
 		p.error("expected { after slice name")
-		return
+		return nil
 	}
 	openTok := p.advance()
-	slice.OpenPos = ast.Position{
-		Filename: p.filename,
-		Line:     openTok.Line,
-		Column:   openTok.Column,
-	}
+	slice.OpenPos = p.position(openTok)
 
 	for !p.check(lexer.CloseBrace) && !p.isAtEnd() {
 		if p.check(lexer.KeywordCommand) {
-			p.parseCommand(slice)
+			if cmd := p.parseCommand(); cmd != nil {
+				slice.Commands = append(slice.Commands, cmd)
+			}
 		} else if p.check(lexer.KeywordEvent) {
-			p.parseEvent(slice)
+			if evt := p.parseEvent(); evt != nil {
+				slice.Events = append(slice.Events, evt)
+			}
 		} else if p.check(lexer.KeywordFlow) {
-			p.parseFlow(slice)
+			slice.Flows = append(slice.Flows, p.parseFlows()...)
 		} else {
 			p.error("expected command, event, or flow in slice")
 			p.advance()
@@ -224,45 +196,33 @@ func (p *Instance) parseSlice(aggregate *ast.Aggregate) {
 
 	if !p.check(lexer.CloseBrace) {
 		p.error(fmt.Sprintf("unclosed brace for \"slice\" block opened at line %d", slice.OpenPos.Line))
-		return
+		return slice
 	}
 	closeTok := p.advance()
-	slice.ClosePos = ast.Position{
-		Filename: p.filename,
-		Line:     closeTok.Line,
-		Column:   closeTok.Column,
-	}
+	slice.ClosePos = p.position(closeTok)
 
-	aggregate.Slices = append(aggregate.Slices, slice)
+	return slice
 }
 
-func (p *Instance) parseCommand(slice *ast.Slice) {
+func (p *Instance) parseCommand() *ast.Command {
 	p.consume(lexer.KeywordCommand, "expected command")
 	if !p.check(lexer.Identifier) {
 		p.error("expected identifier after command")
-		return
+		return nil
 	}
 
 	nameTok := p.advance()
 	command := &ast.Command{
-		Name: nameTok.Value,
-		NamePos: ast.Position{
-			Filename: p.filename,
-			Line:     nameTok.Line,
-			Column:   nameTok.Column,
-		},
+		Name:    nameTok.Value,
+		NamePos: p.position(nameTok),
 	}
 
 	if !p.check(lexer.OpenBrace) {
 		p.error("expected { after command name")
-		return
+		return nil
 	}
 	openTok := p.advance()
-	command.OpenPos = ast.Position{
-		Filename: p.filename,
-		Line:     openTok.Line,
-		Column:   openTok.Column,
-	}
+	command.OpenPos = p.position(openTok)
 
 	for !p.check(lexer.CloseBrace) && !p.isAtEnd() {
 		if p.check(lexer.KeywordFields) {
@@ -275,45 +235,33 @@ func (p *Instance) parseCommand(slice *ast.Slice) {
 
 	if !p.check(lexer.CloseBrace) {
 		p.error(fmt.Sprintf("unclosed brace for \"command\" block opened at line %d", command.OpenPos.Line))
-		return
+		return command
 	}
 	closeTok := p.advance()
-	command.ClosePos = ast.Position{
-		Filename: p.filename,
-		Line:     closeTok.Line,
-		Column:   closeTok.Column,
-	}
+	command.ClosePos = p.position(closeTok)
 
-	slice.Commands = append(slice.Commands, command)
+	return command
 }
 
-func (p *Instance) parseEvent(slice *ast.Slice) {
+func (p *Instance) parseEvent() *ast.Event {
 	p.consume(lexer.KeywordEvent, "expected event")
 	if !p.check(lexer.Identifier) {
 		p.error("expected identifier after event")
-		return
+		return nil
 	}
 
 	nameTok := p.advance()
 	event := &ast.Event{
-		Name: nameTok.Value,
-		NamePos: ast.Position{
-			Filename: p.filename,
-			Line:     nameTok.Line,
-			Column:   nameTok.Column,
-		},
+		Name:    nameTok.Value,
+		NamePos: p.position(nameTok),
 	}
 
 	if !p.check(lexer.OpenBrace) {
 		p.error("expected { after event name")
-		return
+		return nil
 	}
 	openTok := p.advance()
-	event.OpenPos = ast.Position{
-		Filename: p.filename,
-		Line:     openTok.Line,
-		Column:   openTok.Column,
-	}
+	event.OpenPos = p.position(openTok)
 
 	for !p.check(lexer.CloseBrace) && !p.isAtEnd() {
 		if p.check(lexer.KeywordFields) {
@@ -326,16 +274,12 @@ func (p *Instance) parseEvent(slice *ast.Slice) {
 
 	if !p.check(lexer.CloseBrace) {
 		p.error(fmt.Sprintf("unclosed brace for \"event\" block opened at line %d", event.OpenPos.Line))
-		return
+		return event
 	}
 	closeTok := p.advance()
-	event.ClosePos = ast.Position{
-		Filename: p.filename,
-		Line:     closeTok.Line,
-		Column:   closeTok.Column,
-	}
+	event.ClosePos = p.position(closeTok)
 
-	slice.Events = append(slice.Events, event)
+	return event
 }
 
 func (p *Instance) parseFields() []*ast.Field {
@@ -350,8 +294,7 @@ func (p *Instance) parseFields() []*ast.Field {
 
 	for !p.check(lexer.CloseBrace) && !p.isAtEnd() {
 		if p.check(lexer.Identifier) {
-			field := p.parseField()
-			if field != nil {
+			if field := p.parseField(); field != nil {
 				fields = append(fields, field)
 			}
 		} else {
@@ -376,12 +319,8 @@ func (p *Instance) parseField() *ast.Field {
 
 	nameTok := p.advance()
 	field := &ast.Field{
-		Name: nameTok.Value,
-		NamePos: ast.Position{
-			Filename: p.filename,
-			Line:     nameTok.Line,
-			Column:   nameTok.Column,
-		},
+		Name:    nameTok.Value,
+		NamePos: p.position(nameTok),
 	}
 
 	if !p.check(lexer.Identifier) {
@@ -390,88 +329,32 @@ func (p *Instance) parseField() *ast.Field {
 	}
 	typeTok := p.advance()
 	field.Type = typeTok.Value
-	field.TypePos = ast.Position{
-		Filename: p.filename,
-		Line:     typeTok.Line,
-		Column:   typeTok.Column,
-	}
+	field.TypePos = p.position(typeTok)
 
 	if p.check(lexer.Identifier) {
 		modTok := p.advance()
 		field.Modifier = modTok.Value
-		field.ModPos = ast.Position{
-			Filename: p.filename,
-			Line:     modTok.Line,
-			Column:   modTok.Column,
-		}
+		field.ModPos = p.position(modTok)
 	}
 
 	return field
 }
 
-func (p *Instance) parseFlow(slice *ast.Slice) {
+func (p *Instance) parseFlows() []*ast.Flow {
+	var flows []*ast.Flow
 	p.consume(lexer.KeywordFlow, "expected flow")
 	if !p.check(lexer.OpenBrace) {
 		p.error("expected { after flow")
-		return
+		return flows
 	}
 	openTok := p.advance()
 	openLine := openTok.Line
 
 	for !p.check(lexer.CloseBrace) && !p.isAtEnd() {
 		if p.check(lexer.KeywordCommand) {
-			p.advance()
-			if !p.check(lexer.Arrow) {
-				p.error("expected -> after command in flow")
-				p.advance()
-				continue
+			if flow := p.parseFlowEntry(); flow != nil {
+				flows = append(flows, flow)
 			}
-			p.advance()
-			if !p.check(lexer.KeywordEvent) {
-				p.error("expected event after -> in flow")
-				p.advance()
-				continue
-			}
-			p.advance()
-			if !p.check(lexer.Colon) {
-				p.error("expected : in flow")
-				p.advance()
-				continue
-			}
-			p.advance()
-			if !p.check(lexer.Identifier) {
-				p.error("expected command identifier after : in flow")
-				p.advance()
-				continue
-			}
-			cmdTok := p.advance()
-			if !p.check(lexer.Arrow) {
-				p.error("expected -> between command and event identifiers")
-				p.advance()
-				continue
-			}
-			p.advance()
-			if !p.check(lexer.Identifier) {
-				p.error("expected event identifier")
-				p.advance()
-				continue
-			}
-			evtTok := p.advance()
-			flow := &ast.Flow{
-				CommandName: cmdTok.Value,
-				CommandPos: ast.Position{
-					Filename: p.filename,
-					Line:     cmdTok.Line,
-					Column:   cmdTok.Column,
-				},
-				EventName: evtTok.Value,
-				EventPos: ast.Position{
-					Filename: p.filename,
-					Line:     evtTok.Line,
-					Column:   evtTok.Column,
-				},
-			}
-			slice.Flows = append(slice.Flows, flow)
 		} else {
 			p.error("expected command in flow")
 			p.advance()
@@ -480,9 +363,66 @@ func (p *Instance) parseFlow(slice *ast.Slice) {
 
 	if !p.check(lexer.CloseBrace) {
 		p.error(fmt.Sprintf("unclosed brace for \"flow\" block opened at line %d", openLine))
-		return
+		return flows
 	}
 	p.advance()
+
+	return flows
+}
+
+func (p *Instance) parseFlowEntry() *ast.Flow {
+	p.advance() // consume "command"
+	if !p.check(lexer.Arrow) {
+		p.error("expected -> after command in flow")
+		p.advance()
+		return nil
+	}
+	p.advance()
+	if !p.check(lexer.KeywordEvent) {
+		p.error("expected event after -> in flow")
+		p.advance()
+		return nil
+	}
+	p.advance()
+	if !p.check(lexer.Colon) {
+		p.error("expected : in flow")
+		p.advance()
+		return nil
+	}
+	p.advance()
+	if !p.check(lexer.Identifier) {
+		p.error("expected command identifier after : in flow")
+		p.advance()
+		return nil
+	}
+	cmdTok := p.advance()
+	if !p.check(lexer.Arrow) {
+		p.error("expected -> between command and event identifiers")
+		p.advance()
+		return nil
+	}
+	p.advance()
+	if !p.check(lexer.Identifier) {
+		p.error("expected event identifier")
+		p.advance()
+		return nil
+	}
+	evtTok := p.advance()
+
+	return &ast.Flow{
+		CommandName: cmdTok.Value,
+		CommandPos:  p.position(cmdTok),
+		EventName:   evtTok.Value,
+		EventPos:    p.position(evtTok),
+	}
+}
+
+func (p *Instance) position(tok *lexer.Token) ast.Position {
+	return ast.Position{
+		Filename: p.filename,
+		Line:     tok.Line,
+		Column:   tok.Column,
+	}
 }
 
 func (p *Instance) peek() *lexer.Token {
@@ -521,11 +461,10 @@ func (p *Instance) isAtEnd() bool {
 
 func (p *Instance) error(msg string) {
 	tok := p.peek()
-	diag := &diagnostic.Entry{
+	p.diagnostics = append(p.diagnostics, &diagnostic.Entry{
 		Filename: p.filename,
 		Line:     tok.Line,
 		Column:   tok.Column,
 		Message:  msg,
-	}
-	p.diagnostics = append(p.diagnostics, diag)
+	})
 }
