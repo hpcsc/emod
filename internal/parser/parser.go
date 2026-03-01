@@ -210,10 +210,14 @@ func (p *Instance) parseSlice() *ast.Slice {
 			if evt := p.parseEvent(); evt != nil {
 				slice.Events = append(slice.Events, evt)
 			}
+		} else if p.check(lexer.KeywordTrigger) {
+			if trigger := p.parseTrigger(); trigger != nil {
+				slice.Trigger = trigger
+			}
 		} else if p.check(lexer.KeywordFlow) {
 			slice.Flows = append(slice.Flows, p.parseFlows()...)
 		} else {
-			p.error("expected command, event, or flow in slice")
+			p.error("expected command, event, trigger, or flow in slice")
 			p.advance()
 		}
 	}
@@ -226,6 +230,71 @@ func (p *Instance) parseSlice() *ast.Slice {
 	slice.ClosePos = p.position(closeTok)
 
 	return slice
+}
+
+func (p *Instance) parseTrigger() *ast.Trigger {
+	p.consume(lexer.KeywordTrigger, "expected trigger")
+	if !p.check(lexer.Identifier) {
+		p.error("expected identifier after trigger")
+		return nil
+	}
+
+	kindTok := p.advance()
+	trigger := &ast.Trigger{
+		Kind:    kindTok.Value,
+		KindPos: p.position(kindTok),
+	}
+
+	if !p.check(lexer.String) {
+		p.error("expected quoted string after trigger kind")
+		return nil
+	}
+	nameTok := p.advance()
+	trigger.Name = nameTok.Value
+	trigger.NamePos = p.position(nameTok)
+
+	if !p.check(lexer.OpenBrace) {
+		p.error("expected { after trigger name")
+		return nil
+	}
+	openTok := p.advance()
+	trigger.OpenPos = p.position(openTok)
+
+	for !p.check(lexer.CloseBrace) && !p.isAtEnd() {
+		if p.check(lexer.KeywordActor) {
+			p.advance()
+			if !p.check(lexer.Identifier) {
+				p.error("expected identifier after actor in trigger")
+				p.advance()
+				continue
+			}
+			actorTok := p.advance()
+			trigger.Actor = actorTok.Value
+			trigger.ActorPos = p.position(actorTok)
+		} else if p.check(lexer.KeywordReads) {
+			p.advance()
+			if !p.check(lexer.Identifier) {
+				p.error("expected identifier after reads in trigger")
+				p.advance()
+				continue
+			}
+			readsTok := p.advance()
+			trigger.Reads = readsTok.Value
+			trigger.ReadsPos = p.position(readsTok)
+		} else {
+			p.error(fmt.Sprintf("expected actor or reads in trigger, got %q", p.peek().Value))
+			p.advance()
+		}
+	}
+
+	if !p.check(lexer.CloseBrace) {
+		p.error(fmt.Sprintf("unclosed brace for \"trigger\" block opened at line %d", trigger.OpenPos.Line))
+		return trigger
+	}
+	closeTok := p.advance()
+	trigger.ClosePos = p.position(closeTok)
+
+	return trigger
 }
 
 func (p *Instance) parseCommand() *ast.Command {

@@ -259,6 +259,141 @@ context "Reservations" {
 		require.Equal(t, "ReservationMade", flow.EventName)
 	})
 
+	t.Run("trigger with kind, name, actor, and reads", func(t *testing.T) {
+		input := `model "Test"
+context "Ctx" {
+  aggregate "Agg" {
+    slice "Slice" {
+      trigger UI "Reservation Form" {
+        actor Guest
+        reads AvailableRoomsView
+      }
+    }
+  }
+}`
+		tokens, _ := lexer.Scan(input, "test.emod")
+
+		p := parser.New(tokens, "test.emod")
+		model, errs := p.Parse()
+
+		require.Len(t, errs, 0)
+		slice := model.Contexts[0].Aggregates[0].Slices[0]
+		require.NotNil(t, slice.Trigger)
+		require.Equal(t, "UI", slice.Trigger.Kind)
+		require.Equal(t, "Reservation Form", slice.Trigger.Name)
+		require.Equal(t, "Guest", slice.Trigger.Actor)
+		require.Equal(t, "AvailableRoomsView", slice.Trigger.Reads)
+	})
+
+	t.Run("trigger with only kind and name (empty body)", func(t *testing.T) {
+		input := `model "Test"
+context "Ctx" {
+  aggregate "Agg" {
+    slice "Slice" {
+      trigger UI "Reservation Form" {
+      }
+    }
+  }
+}`
+		tokens, _ := lexer.Scan(input, "test.emod")
+
+		p := parser.New(tokens, "test.emod")
+		model, errs := p.Parse()
+
+		require.Len(t, errs, 0)
+		slice := model.Contexts[0].Aggregates[0].Slices[0]
+		require.NotNil(t, slice.Trigger)
+		require.Equal(t, "UI", slice.Trigger.Kind)
+		require.Equal(t, "Reservation Form", slice.Trigger.Name)
+		require.Equal(t, "", slice.Trigger.Actor)
+		require.Equal(t, "", slice.Trigger.Reads)
+	})
+
+	t.Run("trigger alongside command, event, and flow", func(t *testing.T) {
+		input := `model "Test"
+context "Ctx" {
+  aggregate "Agg" {
+    slice "Slice" {
+      trigger UI "Reservation Form" {
+        actor Guest
+      }
+      command MakeReservation {
+        fields {
+        }
+      }
+      event ReservationMade {
+        fields {
+        }
+      }
+      flow {
+        command -> event: MakeReservation -> ReservationMade
+      }
+    }
+  }
+}`
+		tokens, _ := lexer.Scan(input, "test.emod")
+
+		p := parser.New(tokens, "test.emod")
+		model, errs := p.Parse()
+
+		require.Len(t, errs, 0)
+		slice := model.Contexts[0].Aggregates[0].Slices[0]
+		require.NotNil(t, slice.Trigger)
+		require.Equal(t, "Reservation Form", slice.Trigger.Name)
+		require.Len(t, slice.Commands, 1)
+		require.Equal(t, "MakeReservation", slice.Commands[0].Name)
+		require.Len(t, slice.Events, 1)
+		require.Equal(t, "ReservationMade", slice.Events[0].Name)
+		require.Len(t, slice.Flows, 1)
+		require.Equal(t, "MakeReservation", slice.Flows[0].CommandName)
+	})
+
+	t.Run("trigger with only actor (no reads)", func(t *testing.T) {
+		input := `model "Test"
+context "Ctx" {
+  aggregate "Agg" {
+    slice "Slice" {
+      trigger UI "Name" {
+        actor Guest
+      }
+    }
+  }
+}`
+		tokens, _ := lexer.Scan(input, "test.emod")
+
+		p := parser.New(tokens, "test.emod")
+		model, errs := p.Parse()
+
+		require.Len(t, errs, 0)
+		slice := model.Contexts[0].Aggregates[0].Slices[0]
+		require.NotNil(t, slice.Trigger)
+		require.Equal(t, "Guest", slice.Trigger.Actor)
+		require.Equal(t, "", slice.Trigger.Reads)
+	})
+
+	t.Run("trigger with only reads (no actor)", func(t *testing.T) {
+		input := `model "Test"
+context "Ctx" {
+  aggregate "Agg" {
+    slice "Slice" {
+      trigger UI "Name" {
+        reads SomeView
+      }
+    }
+  }
+}`
+		tokens, _ := lexer.Scan(input, "test.emod")
+
+		p := parser.New(tokens, "test.emod")
+		model, errs := p.Parse()
+
+		require.Len(t, errs, 0)
+		slice := model.Contexts[0].Aggregates[0].Slices[0]
+		require.NotNil(t, slice.Trigger)
+		require.Equal(t, "SomeView", slice.Trigger.Reads)
+		require.Equal(t, "", slice.Trigger.Actor)
+	})
+
 	t.Run("multiple errors collected", func(t *testing.T) {
 		input := `unknown_keyword "Test"
 actor
