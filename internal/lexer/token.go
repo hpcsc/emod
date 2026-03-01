@@ -13,6 +13,14 @@ const (
 	KeywordEvent
 	KeywordFields
 	KeywordFlow
+	KeywordTrigger
+	KeywordView
+	KeywordAutomation
+	KeywordTranslation
+	KeywordSubscribes
+	KeywordTarget
+	KeywordExternalSystem
+	KeywordReads
 
 	// Literals and identifiers
 	Identifier
@@ -21,8 +29,11 @@ const (
 	// Operators and punctuation
 	OpenBrace
 	CloseBrace
+	OpenBracket
+	CloseBracket
 	Arrow
 	Colon
+	Comma
 
 	// Special
 	EOF
@@ -55,6 +66,22 @@ func (k Kind) String() string {
 		return "fields"
 	case KeywordFlow:
 		return "flow"
+	case KeywordTrigger:
+		return "trigger"
+	case KeywordView:
+		return "view"
+	case KeywordAutomation:
+		return "automation"
+	case KeywordTranslation:
+		return "translation"
+	case KeywordSubscribes:
+		return "subscribes"
+	case KeywordTarget:
+		return "target"
+	case KeywordExternalSystem:
+		return "external_system"
+	case KeywordReads:
+		return "reads"
 	case Identifier:
 		return "identifier"
 	case String:
@@ -63,10 +90,16 @@ func (k Kind) String() string {
 		return "{"
 	case CloseBrace:
 		return "}"
+	case OpenBracket:
+		return "["
+	case CloseBracket:
+		return "]"
 	case Arrow:
 		return "->"
 	case Colon:
 		return ":"
+	case Comma:
+		return ","
 	case EOF:
 		return "EOF"
 	default:

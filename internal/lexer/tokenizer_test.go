@@ -12,15 +12,23 @@ import (
 func TestLexer(t *testing.T) {
 	t.Run("keyword tokens", func(t *testing.T) {
 		keywords := map[string]lexer.Kind{
-			"model":     lexer.KeywordModel,
-			"actor":     lexer.KeywordActor,
-			"context":   lexer.KeywordContext,
-			"aggregate": lexer.KeywordAggregate,
-			"slice":     lexer.KeywordSlice,
-			"command":   lexer.KeywordCommand,
-			"event":     lexer.KeywordEvent,
-			"fields":    lexer.KeywordFields,
-			"flow":      lexer.KeywordFlow,
+			"model":           lexer.KeywordModel,
+			"actor":           lexer.KeywordActor,
+			"context":         lexer.KeywordContext,
+			"aggregate":       lexer.KeywordAggregate,
+			"slice":           lexer.KeywordSlice,
+			"command":         lexer.KeywordCommand,
+			"event":           lexer.KeywordEvent,
+			"fields":          lexer.KeywordFields,
+			"flow":            lexer.KeywordFlow,
+			"trigger":         lexer.KeywordTrigger,
+			"view":            lexer.KeywordView,
+			"automation":      lexer.KeywordAutomation,
+			"translation":     lexer.KeywordTranslation,
+			"subscribes":      lexer.KeywordSubscribes,
+			"target":          lexer.KeywordTarget,
+			"external_system": lexer.KeywordExternalSystem,
+			"reads":           lexer.KeywordReads,
 		}
 
 		for keyword, expectedType := range keywords {
@@ -72,6 +80,22 @@ func TestLexer(t *testing.T) {
 		require.Empty(t, diags)
 		require.Equal(t, lexer.OpenBrace, tokens[0].Type)
 		require.Equal(t, lexer.CloseBrace, tokens[1].Type)
+	})
+
+	t.Run("brackets", func(t *testing.T) {
+		tokens, diags := lexer.Scan("[ ]", "test.emod")
+		require.Empty(t, diags)
+		require.Equal(t, lexer.OpenBracket, tokens[0].Type)
+		require.Equal(t, "[", tokens[0].Value)
+		require.Equal(t, lexer.CloseBracket, tokens[1].Type)
+		require.Equal(t, "]", tokens[1].Value)
+	})
+
+	t.Run("comma", func(t *testing.T) {
+		tokens, diags := lexer.Scan(",", "test.emod")
+		require.Empty(t, diags)
+		require.Equal(t, lexer.Comma, tokens[0].Type)
+		require.Equal(t, ",", tokens[0].Value)
 	})
 
 	t.Run("arrow operator", func(t *testing.T) {
@@ -169,6 +193,24 @@ actor "Guest"`
 		require.Empty(t, diags)
 		require.Len(t, tokens, 1)
 		require.Equal(t, lexer.EOF, tokens[0].Type)
+	})
+
+	t.Run("mixed input with new tokens", func(t *testing.T) {
+		input := `subscribes [EventA, EventB]`
+		tokens, diags := lexer.Scan(input, "test.emod")
+		require.Empty(t, diags)
+
+		require.Len(t, tokens, 7)
+		require.Equal(t, lexer.KeywordSubscribes, tokens[0].Type)
+		require.Equal(t, "subscribes", tokens[0].Value)
+		require.Equal(t, lexer.OpenBracket, tokens[1].Type)
+		require.Equal(t, lexer.Identifier, tokens[2].Type)
+		require.Equal(t, "EventA", tokens[2].Value)
+		require.Equal(t, lexer.Comma, tokens[3].Type)
+		require.Equal(t, lexer.Identifier, tokens[4].Type)
+		require.Equal(t, "EventB", tokens[4].Value)
+		require.Equal(t, lexer.CloseBracket, tokens[5].Type)
+		require.Equal(t, lexer.EOF, tokens[6].Type)
 	})
 
 	t.Run("complex input", func(t *testing.T) {
