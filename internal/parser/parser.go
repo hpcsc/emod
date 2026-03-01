@@ -2,52 +2,76 @@ package parser
 
 import (
 	"fmt"
+	"sort"
+	"strings"
 
 	"github.com/hpcsc/emod/internal/ast"
 	"github.com/hpcsc/emod/internal/diagnostic"
 	"github.com/hpcsc/emod/internal/lexer"
 )
 
+type topLevelHandler func(model *ast.Model)
+
 type Instance struct {
 	tokens      []*lexer.Token
 	pos         int
 	diagnostics []*diagnostic.Entry
 	filename    string
+	handlers    map[lexer.Kind]topLevelHandler
 }
 
 func New(tokens []*lexer.Token, filename string) *Instance {
-	return &Instance{
+	p := &Instance{
 		tokens:   tokens,
 		pos:      0,
 		filename: filename,
 	}
+	p.handlers = map[lexer.Kind]topLevelHandler{
+		lexer.KeywordModel: func(model *ast.Model) {
+			name, pos := p.parseModel()
+			model.Name = name
+			model.NamePos = pos
+		},
+		lexer.KeywordActor: func(model *ast.Model) {
+			if actor := p.parseActor(); actor != nil {
+				model.Actors = append(model.Actors, actor)
+			}
+		},
+		lexer.KeywordContext: func(model *ast.Model) {
+			if ctx := p.parseContext(); ctx != nil {
+				model.Contexts = append(model.Contexts, ctx)
+			}
+		},
+	}
+	return p
 }
 
 func (p *Instance) Parse() (*ast.Model, []*diagnostic.Entry) {
 	model := &ast.Model{}
 
 	for !p.isAtEnd() {
-		if p.check(lexer.KeywordModel) {
-			name, pos := p.parseModel()
-			model.Name = name
-			model.NamePos = pos
-		} else if p.check(lexer.KeywordActor) {
-			if actor := p.parseActor(); actor != nil {
-				model.Actors = append(model.Actors, actor)
-			}
-		} else if p.check(lexer.KeywordContext) {
-			if ctx := p.parseContext(); ctx != nil {
-				model.Contexts = append(model.Contexts, ctx)
-			}
-		} else if p.check(lexer.EOF) {
+		if p.check(lexer.EOF) {
 			break
+		}
+
+		if handler, ok := p.handlers[p.peek().Type]; ok {
+			handler(model)
 		} else {
-			p.error(fmt.Sprintf("unrecognized keyword %q; expected one of: model, actor, context", p.peek().Value))
+			p.error(fmt.Sprintf("unrecognized keyword %q; expected one of: %s", p.peek().Value, p.expectedKeywords()))
 			p.advance()
 		}
 	}
 
 	return model, p.diagnostics
+}
+
+func (p *Instance) expectedKeywords() string {
+	names := make([]string, 0, len(p.handlers))
+	for kind := range p.handlers {
+		names = append(names, kind.String())
+	}
+	sort.Strings(names)
+	return strings.Join(names, ", ")
 }
 
 func (p *Instance) parseModel() (string, ast.Position) {
