@@ -35,14 +35,18 @@ type Aggregate struct {
 }
 
 type Slice struct {
-	Name     string
-	NamePos  Position
-	Commands []*Command
-	Events   []*Event
-	Fields   []*Field
-	Flows    []*Flow
-	OpenPos  Position
-	ClosePos Position
+	Name         string
+	NamePos      Position
+	Trigger      *Trigger
+	Commands     []*Command
+	Events       []*Event
+	Fields       []*Field
+	Flows        []*Flow
+	Views        []*View
+	Automations  []*Automation
+	Translations []*Translation
+	OpenPos      Position
+	ClosePos     Position
 }
 
 type Command struct {
@@ -75,4 +79,53 @@ type Flow struct {
 	CommandPos  Position
 	EventName   string
 	EventPos    Position
+}
+
+type Trigger struct {
+	Kind     string
+	KindPos  Position
+	Name     string
+	NamePos  Position
+	Actor    string
+	ActorPos Position
+	Reads    string
+	ReadsPos Position
+	OpenPos  Position
+	ClosePos Position
+}
+
+type View struct {
+	Name       string
+	NamePos    Position
+	Fields     []*Field
+	Subscribes []string
+	OpenPos    Position
+	ClosePos   Position
+}
+
+type Automation struct {
+	Name           string
+	NamePos        Position
+	TriggerEvent      string
+	TriggerEventPos   Position
+	Command           string
+	CommandPos        Position
+	TargetContext     string
+	TargetContextPos  Position
+	OpenPos        Position
+	ClosePos       Position
+}
+
+type Translation struct {
+	Name           string
+	NamePos        Position
+	ExternalSystem string
+	ExternalPos    Position
+	Reads          string
+	ReadsPos       Position
+	Command        string
+	CommandPos     Position
+	Event          *Event
+	OpenPos        Position
+	ClosePos       Position
 }
