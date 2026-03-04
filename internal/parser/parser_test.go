@@ -1111,4 +1111,263 @@ context "Missing" {
 			require.NotEmpty(t, e.Message)
 		}
 	})
+
+	t.Run("automation missing trigger produces error", func(t *testing.T) {
+		input := `model "Test"
+context "Ctx" {
+  aggregate "Agg" {
+    slice "Slice" {
+      automation Reactor {
+        command SomeCmd
+      }
+    }
+  }
+}`
+		tokens, _ := lexer.Scan(input, "test.emod")
+
+		p := parser.New(tokens, "test.emod")
+		_, errs := p.Parse()
+
+		found := false
+		for _, e := range errs {
+			if e.Message == "automation block requires a trigger event" {
+				found = true
+				require.Equal(t, "test.emod", e.Filename)
+				require.Equal(t, 5, e.Line)
+				break
+			}
+		}
+		require.True(t, found, "expected diagnostic 'automation block requires a trigger event', got: %v", errs)
+	})
+
+	t.Run("automation missing command produces error", func(t *testing.T) {
+		input := `model "Test"
+context "Ctx" {
+  aggregate "Agg" {
+    slice "Slice" {
+      automation Reactor {
+        trigger SomeEvent
+      }
+    }
+  }
+}`
+		tokens, _ := lexer.Scan(input, "test.emod")
+
+		p := parser.New(tokens, "test.emod")
+		_, errs := p.Parse()
+
+		found := false
+		for _, e := range errs {
+			if e.Message == "automation block requires a command" {
+				found = true
+				require.Equal(t, "test.emod", e.Filename)
+				require.Equal(t, 5, e.Line)
+				break
+			}
+		}
+		require.True(t, found, "expected diagnostic 'automation block requires a command', got: %v", errs)
+	})
+
+	t.Run("automation missing both trigger and command produces both errors", func(t *testing.T) {
+		input := `model "Test"
+context "Ctx" {
+  aggregate "Agg" {
+    slice "Slice" {
+      automation Reactor {
+      }
+    }
+  }
+}`
+		tokens, _ := lexer.Scan(input, "test.emod")
+
+		p := parser.New(tokens, "test.emod")
+		_, errs := p.Parse()
+
+		foundTrigger := false
+		foundCommand := false
+		for _, e := range errs {
+			if e.Message == "automation block requires a trigger event" {
+				foundTrigger = true
+			}
+			if e.Message == "automation block requires a command" {
+				foundCommand = true
+			}
+		}
+		require.True(t, foundTrigger, "expected diagnostic 'automation block requires a trigger event', got: %v", errs)
+		require.True(t, foundCommand, "expected diagnostic 'automation block requires a command', got: %v", errs)
+	})
+
+	t.Run("translation missing external_system produces error", func(t *testing.T) {
+		input := `model "Test"
+context "Ctx" {
+  aggregate "Agg" {
+    slice "Slice" {
+      translation Foo {
+        reads V
+        command C
+      }
+    }
+  }
+}`
+		tokens, _ := lexer.Scan(input, "test.emod")
+
+		p := parser.New(tokens, "test.emod")
+		_, errs := p.Parse()
+
+		found := false
+		for _, e := range errs {
+			if e.Message == "translation block requires an external_system" {
+				found = true
+				require.Equal(t, "test.emod", e.Filename)
+				require.Equal(t, 5, e.Line)
+				break
+			}
+		}
+		require.True(t, found, "expected diagnostic 'translation block requires an external_system', got: %v", errs)
+	})
+
+	t.Run("translation missing reads produces error", func(t *testing.T) {
+		input := `model "Test"
+context "Ctx" {
+  aggregate "Agg" {
+    slice "Slice" {
+      translation Foo {
+        external_system "API"
+        command C
+      }
+    }
+  }
+}`
+		tokens, _ := lexer.Scan(input, "test.emod")
+
+		p := parser.New(tokens, "test.emod")
+		_, errs := p.Parse()
+
+		found := false
+		for _, e := range errs {
+			if e.Message == "translation block requires a reads view" {
+				found = true
+				require.Equal(t, "test.emod", e.Filename)
+				require.Equal(t, 5, e.Line)
+				break
+			}
+		}
+		require.True(t, found, "expected diagnostic 'translation block requires a reads view', got: %v", errs)
+	})
+
+	t.Run("translation missing command produces error", func(t *testing.T) {
+		input := `model "Test"
+context "Ctx" {
+  aggregate "Agg" {
+    slice "Slice" {
+      translation Foo {
+        external_system "API"
+        reads V
+      }
+    }
+  }
+}`
+		tokens, _ := lexer.Scan(input, "test.emod")
+
+		p := parser.New(tokens, "test.emod")
+		_, errs := p.Parse()
+
+		found := false
+		for _, e := range errs {
+			if e.Message == "translation block requires a command" {
+				found = true
+				require.Equal(t, "test.emod", e.Filename)
+				require.Equal(t, 5, e.Line)
+				break
+			}
+		}
+		require.True(t, found, "expected diagnostic 'translation block requires a command', got: %v", errs)
+	})
+
+	t.Run("translation missing all three required sub-blocks produces all errors", func(t *testing.T) {
+		input := `model "Test"
+context "Ctx" {
+  aggregate "Agg" {
+    slice "Slice" {
+      translation Foo {
+      }
+    }
+  }
+}`
+		tokens, _ := lexer.Scan(input, "test.emod")
+
+		p := parser.New(tokens, "test.emod")
+		_, errs := p.Parse()
+
+		foundExtSys := false
+		foundReads := false
+		foundCommand := false
+		for _, e := range errs {
+			if e.Message == "translation block requires an external_system" {
+				foundExtSys = true
+			}
+			if e.Message == "translation block requires a reads view" {
+				foundReads = true
+			}
+			if e.Message == "translation block requires a command" {
+				foundCommand = true
+			}
+		}
+		require.True(t, foundExtSys, "expected diagnostic 'translation block requires an external_system', got: %v", errs)
+		require.True(t, foundReads, "expected diagnostic 'translation block requires a reads view', got: %v", errs)
+		require.True(t, foundCommand, "expected diagnostic 'translation block requires a command', got: %v", errs)
+	})
+
+	t.Run("view missing both fields and subscribes produces error", func(t *testing.T) {
+		input := `model "Test"
+context "Ctx" {
+  aggregate "Agg" {
+    slice "Slice" {
+      view MyView {
+      }
+    }
+  }
+}`
+		tokens, _ := lexer.Scan(input, "test.emod")
+
+		p := parser.New(tokens, "test.emod")
+		_, errs := p.Parse()
+
+		found := false
+		for _, e := range errs {
+			if e.Message == "view block requires fields or subscribes" {
+				found = true
+				require.Equal(t, "test.emod", e.Filename)
+				require.Equal(t, 5, e.Line)
+				break
+			}
+		}
+		require.True(t, found, "expected diagnostic 'view block requires fields or subscribes', got: %v", errs)
+	})
+
+	t.Run("missing sub-block error references block opening position not closing brace", func(t *testing.T) {
+		input := `model "Test"
+context "Ctx" {
+  aggregate "Agg" {
+    slice "Slice" {
+      automation Reactor {
+      }
+    }
+  }
+}`
+		tokens, _ := lexer.Scan(input, "test.emod")
+
+		p := parser.New(tokens, "test.emod")
+		_, errs := p.Parse()
+
+		found := false
+		for _, e := range errs {
+			if e.Message == "automation block requires a trigger event" {
+				found = true
+				require.Equal(t, 5, e.Line, "error should reference the automation declaration line (5), not the closing brace line")
+				break
+			}
+		}
+		require.True(t, found, "expected diagnostic 'automation block requires a trigger event', got: %v", errs)
+	})
 }

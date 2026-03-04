@@ -425,6 +425,15 @@ func (p *Instance) parseView() *ast.View {
 	closeTok := p.advance()
 	view.ClosePos = p.position(closeTok)
 
+	if len(view.Fields) == 0 && len(view.Subscribes) == 0 {
+		p.diagnostics = append(p.diagnostics, &diagnostic.Entry{
+			Filename: view.NamePos.Filename,
+			Line:     view.NamePos.Line,
+			Column:   view.NamePos.Column,
+			Message:  "view block requires fields or subscribes",
+		})
+	}
+
 	return view
 }
 
@@ -498,6 +507,23 @@ func (p *Instance) parseAutomation() *ast.Automation {
 	closeTok := p.advance()
 	automation.ClosePos = p.position(closeTok)
 
+	if automation.TriggerEvent == "" {
+		p.diagnostics = append(p.diagnostics, &diagnostic.Entry{
+			Filename: automation.NamePos.Filename,
+			Line:     automation.NamePos.Line,
+			Column:   automation.NamePos.Column,
+			Message:  "automation block requires a trigger event",
+		})
+	}
+	if automation.Command == "" {
+		p.diagnostics = append(p.diagnostics, &diagnostic.Entry{
+			Filename: automation.NamePos.Filename,
+			Line:     automation.NamePos.Line,
+			Column:   automation.NamePos.Column,
+			Message:  "automation block requires a command",
+		})
+	}
+
 	return automation
 }
 
@@ -566,6 +592,31 @@ func (p *Instance) parseTranslation() *ast.Translation {
 	}
 	closeTok := p.advance()
 	translation.ClosePos = p.position(closeTok)
+
+	if translation.ExternalSystem == "" {
+		p.diagnostics = append(p.diagnostics, &diagnostic.Entry{
+			Filename: translation.NamePos.Filename,
+			Line:     translation.NamePos.Line,
+			Column:   translation.NamePos.Column,
+			Message:  "translation block requires an external_system",
+		})
+	}
+	if translation.Reads == "" {
+		p.diagnostics = append(p.diagnostics, &diagnostic.Entry{
+			Filename: translation.NamePos.Filename,
+			Line:     translation.NamePos.Line,
+			Column:   translation.NamePos.Column,
+			Message:  "translation block requires a reads view",
+		})
+	}
+	if translation.Command == "" {
+		p.diagnostics = append(p.diagnostics, &diagnostic.Entry{
+			Filename: translation.NamePos.Filename,
+			Line:     translation.NamePos.Line,
+			Column:   translation.NamePos.Column,
+			Message:  "translation block requires a command",
+		})
+	}
 
 	return translation
 }
