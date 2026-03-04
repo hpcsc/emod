@@ -19,6 +19,10 @@ actor "Guest"
 context "Reservations" {
   aggregate "Reservation" {
     slice "Make Reservation" {
+      trigger UI "Reservation Form" {
+        actor Guest
+        reads AvailableRoomsView
+      }
       command MakeReservation {
         fields {
           guestId     string required
@@ -39,6 +43,34 @@ context "Reservations" {
       }
       flow {
         command -> event: MakeReservation -> ReservationMade
+      }
+    }
+    slice "View Reservations" {
+      view ReservationsView {
+        fields {
+          reservationId string required
+          guestId       string required
+          status        string required
+        }
+        subscribes [ReservationMade]
+      }
+    }
+    slice "Auto Confirm Reservation" {
+      automation AutoConfirm {
+        trigger ReservationMade
+        command ConfirmReservation
+      }
+    }
+    slice "Import External Booking" {
+      translation BookingImport {
+        external_system "Booking.com API"
+        reads BookingWebhookView
+        command ImportBooking
+        event BookingImported {
+          fields {
+            bookingId string required
+          }
+        }
       }
     }
   }
