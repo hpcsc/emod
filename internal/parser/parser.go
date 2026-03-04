@@ -216,8 +216,12 @@ func (p *Instance) parseSlice() *ast.Slice {
 			}
 		} else if p.check(lexer.KeywordFlow) {
 			slice.Flows = append(slice.Flows, p.parseFlows()...)
+		} else if p.check(lexer.KeywordView) {
+			if view := p.parseView(); view != nil {
+				slice.Views = append(slice.Views, view)
+			}
 		} else {
-			p.error("expected command, event, trigger, or flow in slice")
+			p.error("expected command, event, trigger, view, or flow in slice")
 			p.advance()
 		}
 	}
@@ -373,6 +377,78 @@ func (p *Instance) parseEvent() *ast.Event {
 	event.ClosePos = p.position(closeTok)
 
 	return event
+}
+
+func (p *Instance) parseView() *ast.View {
+	p.consume(lexer.KeywordView, "expected view")
+	if !p.check(lexer.Identifier) {
+		p.error("expected identifier after view")
+		return nil
+	}
+
+	nameTok := p.advance()
+	view := &ast.View{
+		Name:    nameTok.Value,
+		NamePos: p.position(nameTok),
+	}
+
+	if !p.check(lexer.OpenBrace) {
+		p.error("expected { after view name")
+		return nil
+	}
+	openTok := p.advance()
+	view.OpenPos = p.position(openTok)
+
+	for !p.check(lexer.CloseBrace) && !p.isAtEnd() {
+		if p.check(lexer.KeywordFields) {
+			view.Fields = p.parseFields()
+		} else if p.check(lexer.KeywordSubscribes) {
+			view.Subscribes = p.parseSubscribes()
+		} else {
+			p.error("expected fields or subscribes in view")
+			p.advance()
+		}
+	}
+
+	if !p.check(lexer.CloseBrace) {
+		p.error(fmt.Sprintf("unclosed brace for \"view\" block opened at line %d", view.OpenPos.Line))
+		return view
+	}
+	closeTok := p.advance()
+	view.ClosePos = p.position(closeTok)
+
+	return view
+}
+
+func (p *Instance) parseSubscribes() []string {
+	var names []string
+	p.consume(lexer.KeywordSubscribes, "expected subscribes")
+	if !p.check(lexer.OpenBracket) {
+		p.error("expected [ after subscribes")
+		return names
+	}
+	p.advance()
+
+	for !p.check(lexer.CloseBracket) && !p.isAtEnd() {
+		if !p.check(lexer.Identifier) {
+			p.error("expected identifier in subscribes list")
+			p.advance()
+			continue
+		}
+		names = append(names, p.advance().Value)
+
+		if p.check(lexer.Comma) {
+			p.advance()
+		}
+	}
+
+	if !p.check(lexer.CloseBracket) {
+		p.error("expected ] to close subscribes list")
+		return names
+	}
+	p.advance()
+
+	return names
 }
 
 func (p *Instance) parseFields() []*ast.Field {

@@ -3,6 +3,7 @@
 package parser_test
 
 import (
+	"strings"
 	"testing"
 
 	"github.com/hpcsc/emod/internal/lexer"
@@ -392,6 +393,194 @@ context "Ctx" {
 		require.NotNil(t, slice.Trigger)
 		require.Equal(t, "SomeView", slice.Trigger.Reads)
 		require.Equal(t, "", slice.Trigger.Actor)
+	})
+
+	t.Run("view with fields and subscribes in slice", func(t *testing.T) {
+		input := `model "Test"
+context "Ctx" {
+  aggregate "Agg" {
+    slice "Slice" {
+      view AvailableRoomsView {
+        fields {
+          roomId RoomID
+        }
+        subscribes [RoomReserved, GuestCheckedOut]
+      }
+    }
+  }
+}`
+		tokens, _ := lexer.Scan(input, "test.emod")
+
+		p := parser.New(tokens, "test.emod")
+		model, errs := p.Parse()
+
+		require.Len(t, errs, 0)
+		slice := model.Contexts[0].Aggregates[0].Slices[0]
+		require.Len(t, slice.Views, 1)
+		view := slice.Views[0]
+		require.Equal(t, "AvailableRoomsView", view.Name)
+		require.Len(t, view.Fields, 1)
+		require.Equal(t, "roomId", view.Fields[0].Name)
+		require.Equal(t, "RoomID", view.Fields[0].Type)
+		require.Equal(t, []string{"RoomReserved", "GuestCheckedOut"}, view.Subscribes)
+	})
+
+	t.Run("view with only fields (no subscribes)", func(t *testing.T) {
+		input := `model "Test"
+context "Ctx" {
+  aggregate "Agg" {
+    slice "Slice" {
+      view MyView {
+        fields {
+          id UUID
+        }
+      }
+    }
+  }
+}`
+		tokens, _ := lexer.Scan(input, "test.emod")
+
+		p := parser.New(tokens, "test.emod")
+		model, errs := p.Parse()
+
+		require.Len(t, errs, 0)
+		view := model.Contexts[0].Aggregates[0].Slices[0].Views[0]
+		require.Equal(t, "MyView", view.Name)
+		require.Len(t, view.Fields, 1)
+		require.Equal(t, "id", view.Fields[0].Name)
+		require.Equal(t, "UUID", view.Fields[0].Type)
+		require.Empty(t, view.Subscribes)
+	})
+
+	t.Run("view with only subscribes (no fields)", func(t *testing.T) {
+		input := `model "Test"
+context "Ctx" {
+  aggregate "Agg" {
+    slice "Slice" {
+      view MyView {
+        subscribes [SomeEvent]
+      }
+    }
+  }
+}`
+		tokens, _ := lexer.Scan(input, "test.emod")
+
+		p := parser.New(tokens, "test.emod")
+		model, errs := p.Parse()
+
+		require.Len(t, errs, 0)
+		view := model.Contexts[0].Aggregates[0].Slices[0].Views[0]
+		require.Equal(t, "MyView", view.Name)
+		require.Empty(t, view.Fields)
+		require.Equal(t, []string{"SomeEvent"}, view.Subscribes)
+	})
+
+	t.Run("subscribes with multiple comma-separated identifiers", func(t *testing.T) {
+		input := `model "Test"
+context "Ctx" {
+  aggregate "Agg" {
+    slice "Slice" {
+      view MyView {
+        subscribes [EventA, EventB, EventC]
+      }
+    }
+  }
+}`
+		tokens, _ := lexer.Scan(input, "test.emod")
+
+		p := parser.New(tokens, "test.emod")
+		model, errs := p.Parse()
+
+		require.Len(t, errs, 0)
+		view := model.Contexts[0].Aggregates[0].Slices[0].Views[0]
+		require.Equal(t, []string{"EventA", "EventB", "EventC"}, view.Subscribes)
+	})
+
+	t.Run("subscribes with single identifier (no commas)", func(t *testing.T) {
+		input := `model "Test"
+context "Ctx" {
+  aggregate "Agg" {
+    slice "Slice" {
+      view MyView {
+        subscribes [OnlyEvent]
+      }
+    }
+  }
+}`
+		tokens, _ := lexer.Scan(input, "test.emod")
+
+		p := parser.New(tokens, "test.emod")
+		model, errs := p.Parse()
+
+		require.Len(t, errs, 0)
+		view := model.Contexts[0].Aggregates[0].Slices[0].Views[0]
+		require.Equal(t, []string{"OnlyEvent"}, view.Subscribes)
+	})
+
+	t.Run("view alongside command, event, and flow", func(t *testing.T) {
+		input := `model "Test"
+context "Ctx" {
+  aggregate "Agg" {
+    slice "Slice" {
+      command MakeReservation {
+        fields {
+        }
+      }
+      event ReservationMade {
+        fields {
+        }
+      }
+      flow {
+        command -> event: MakeReservation -> ReservationMade
+      }
+      view AvailableRoomsView {
+        fields {
+          roomId RoomID
+        }
+        subscribes [ReservationMade]
+      }
+    }
+  }
+}`
+		tokens, _ := lexer.Scan(input, "test.emod")
+
+		p := parser.New(tokens, "test.emod")
+		model, errs := p.Parse()
+
+		require.Len(t, errs, 0)
+		slice := model.Contexts[0].Aggregates[0].Slices[0]
+		require.Len(t, slice.Commands, 1)
+		require.Equal(t, "MakeReservation", slice.Commands[0].Name)
+		require.Len(t, slice.Events, 1)
+		require.Equal(t, "ReservationMade", slice.Events[0].Name)
+		require.Len(t, slice.Flows, 1)
+		require.Len(t, slice.Views, 1)
+		require.Equal(t, "AvailableRoomsView", slice.Views[0].Name)
+	})
+
+	t.Run("view missing opening brace produces diagnostic", func(t *testing.T) {
+		input := `model "Test"
+context "Ctx" {
+  aggregate "Agg" {
+    slice "Slice" {
+      view MyView subscribes [Evt]
+    }
+  }
+}`
+		tokens, _ := lexer.Scan(input, "test.emod")
+
+		p := parser.New(tokens, "test.emod")
+		_, errs := p.Parse()
+
+		require.NotEmpty(t, errs)
+		found := false
+		for _, e := range errs {
+			if strings.Contains(e.Message, "{") {
+				found = true
+				break
+			}
+		}
+		require.True(t, found, "expected a diagnostic mentioning '{', got: %v", errs)
 	})
 
 	t.Run("multiple errors collected", func(t *testing.T) {
