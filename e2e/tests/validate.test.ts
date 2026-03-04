@@ -3,12 +3,12 @@ import { launchTerminal } from 'tuistory'
 import { getExecutablePath } from '../testUtils'
 
 describe('emod validate', () => {
-  it('valid file exits cleanly', async () => {
+  it('valid file with all four patterns exits cleanly', async () => {
     const executablePath = getExecutablePath()
 
     const session = await launchTerminal({
       command: 'sh',
-      args: ['-c', `${executablePath} validate internal/parser/testdata/minimal.emod; echo "EXIT:$?"`],
+      args: ['-c', `${executablePath} validate internal/parser/testdata/all_patterns.emod; echo "EXIT:$?"`],
       cols: 120,
       rows: 24,
     })
