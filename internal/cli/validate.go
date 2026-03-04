@@ -8,6 +8,7 @@ import (
 
 	"github.com/hpcsc/emod/internal/lexer"
 	"github.com/hpcsc/emod/internal/parser"
+	"github.com/hpcsc/emod/internal/validator"
 )
 
 // RunValidate reads the file at path, lexes and parses it, and returns an error
@@ -25,8 +26,11 @@ func RunValidate(path string) error {
 	tokens, diagnostics := lexer.Scan(string(source), path)
 
 	p := parser.New(tokens, path)
-	_, parserDiags := p.Parse()
+	model, parserDiags := p.Parse()
 	diagnostics = append(diagnostics, parserDiags...)
+
+	validatorDiags := validator.Validate(model)
+	diagnostics = append(diagnostics, validatorDiags...)
 
 	if len(diagnostics) > 0 {
 		var sb strings.Builder

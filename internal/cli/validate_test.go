@@ -112,6 +112,60 @@ func TestValidate(t *testing.T) {
 		require.Error(t, err)
 		require.Equal(t, "validate requires exactly one file argument", err.Error())
 	})
+
+	t.Run("returns semantic error for automation targeting nonexistent context", func(t *testing.T) {
+		input := `model "Test"
+context "Orders" {
+  aggregate "Order" {
+    slice "Process Order" {
+      automation OrderNotifier {
+        trigger OrderPlaced
+        command NotifyCustomer
+        target context NonExistent
+      }
+    }
+  }
+}
+`
+		path := writeTemp(t, "bad_target.emod", input)
+
+		err := cli.RunValidate(path)
+
+		require.Error(t, err)
+		require.Contains(t, err.Error(), "NonExistent")
+		require.Contains(t, err.Error(), "does not exist")
+	})
+
+	t.Run("returns no error for automation targeting existing context", func(t *testing.T) {
+		input := `model "Test"
+context "Orders" {
+  aggregate "Order" {
+    slice "Notify On Order" {
+      automation OrderNotifier {
+        trigger OrderPlaced
+        command SendNotification
+        target context Notifications
+      }
+    }
+  }
+}
+context "Notifications" {
+  aggregate "Notification" {
+    slice "Send Notification" {
+      automation Sender {
+        trigger NotificationRequested
+        command SendEmail
+      }
+    }
+  }
+}
+`
+		path := writeTemp(t, "valid_target.emod", input)
+
+		err := cli.RunValidate(path)
+
+		require.NoError(t, err)
+	})
 }
 
 func writeTemp(t *testing.T, name, content string) string {
