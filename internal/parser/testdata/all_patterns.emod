@@ -1,0 +1,84 @@
+# Hotel Reservation System — exercises all four slice patterns
+model "Hotel Reservation"
+
+actor "Guest"
+
+context "Reservations" {
+  aggregate "Reservation" {
+
+    # Slice 1: Command Pattern
+    slice "Reserve a Room" {
+      trigger UI "Reservation Form" {
+        actor Guest
+        reads AvailableRoomsView
+      }
+
+      command ReserveRoom {
+        fields {
+          roomId     string required
+          guestName  string required
+          checkIn    date   required
+          checkOut   date   required
+        }
+      }
+
+      event RoomReserved {
+        fields {
+          reservationId string required
+          roomId        string required
+          guestName     string required
+          checkIn       date   required
+          checkOut      date   required
+          reservedAt    timestamp required
+        }
+      }
+
+      flow {
+        command -> event: ReserveRoom -> RoomReserved
+      }
+    }
+
+    # Slice 2: View Pattern
+    slice "View Available Rooms" {
+      view AvailableRoomsView {
+        fields {
+          roomId      string required
+          roomNumber  string required
+          status      string required
+          nextCheckIn date   optional
+        }
+        subscribes [RoomReserved, GuestCheckedOut]
+      }
+    }
+
+    # Slice 3: Automation Pattern
+    slice "Send Confirmation Email" {
+      automation ConfirmationEmailReactor {
+        trigger RoomReserved
+        command SendConfirmationEmail
+        target context Notifications
+      }
+    }
+
+    # Slice 4: Translation Pattern
+    slice "Import External Booking" {
+      translation BookingComImport {
+        external_system "Booking.com API"
+        reads BookingComWebhookView
+        command ImportExternalReservation
+        event ExternalReservationImported {
+          fields {
+            reservationId string required
+            externalRef   string required
+            source        string required
+            roomId        string required
+            guestName     string required
+            checkIn       date   required
+            checkOut      date   required
+          }
+        }
+      }
+    }
+
+  }
+}
