@@ -58,11 +58,15 @@ type Command struct {
 }
 
 type Event struct {
-	Name     string
-	NamePos  Position
-	Fields   []*Field
-	OpenPos  Position
-	ClosePos Position
+	Name            string
+	NamePos         Position
+	Source          string
+	SourcePos       Position
+	ExternalName    string
+	ExternalNamePos Position
+	Fields          []*Field
+	OpenPos         Position
+	ClosePos        Position
 }
 
 type Field struct {
