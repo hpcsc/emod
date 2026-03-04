@@ -1370,4 +1370,146 @@ context "Ctx" {
 		}
 		require.True(t, found, "expected diagnostic 'automation block requires a trigger event', got: %v", errs)
 	})
+
+	t.Run("event with source external and provider name", func(t *testing.T) {
+		input := `model "Test"
+context "Ctx" {
+  aggregate "Agg" {
+    slice "Slice" {
+      event TestEvent {
+        source external "SendGrid Webhook"
+        fields {
+          id string
+        }
+      }
+    }
+  }
+}`
+		tokens, _ := lexer.Scan(input, "test.emod")
+		p := parser.New(tokens, "test.emod")
+		model, errs := p.Parse()
+
+		require.Len(t, errs, 0)
+		evt := model.Contexts[0].Aggregates[0].Slices[0].Events[0]
+		require.Equal(t, "TestEvent", evt.Name)
+		require.Equal(t, "external", evt.Source)
+		require.Equal(t, "SendGrid Webhook", evt.ExternalName)
+		require.Len(t, evt.Fields, 1)
+	})
+
+	t.Run("event without source clause", func(t *testing.T) {
+		input := `model "Test"
+context "Ctx" {
+  aggregate "Agg" {
+    slice "Slice" {
+      event TestEvent {
+        fields {
+          id string
+        }
+      }
+    }
+  }
+}`
+		tokens, _ := lexer.Scan(input, "test.emod")
+		p := parser.New(tokens, "test.emod")
+		model, errs := p.Parse()
+
+		require.Len(t, errs, 0)
+		evt := model.Contexts[0].Aggregates[0].Slices[0].Events[0]
+		require.Equal(t, "TestEvent", evt.Name)
+		require.Equal(t, "", evt.Source)
+		require.Equal(t, "", evt.ExternalName)
+	})
+
+	t.Run("event source before fields", func(t *testing.T) {
+		input := `model "Test"
+context "Ctx" {
+  aggregate "Agg" {
+    slice "Slice" {
+      event TestEvent {
+        source external "X"
+        fields {
+          id string
+        }
+      }
+    }
+  }
+}`
+		tokens, _ := lexer.Scan(input, "test.emod")
+		p := parser.New(tokens, "test.emod")
+		model, errs := p.Parse()
+
+		require.Len(t, errs, 0)
+		evt := model.Contexts[0].Aggregates[0].Slices[0].Events[0]
+		require.Equal(t, "external", evt.Source)
+		require.Equal(t, "X", evt.ExternalName)
+		require.Len(t, evt.Fields, 1)
+	})
+
+	t.Run("event source after fields", func(t *testing.T) {
+		input := `model "Test"
+context "Ctx" {
+  aggregate "Agg" {
+    slice "Slice" {
+      event TestEvent {
+        fields {
+          id string
+        }
+        source external "X"
+      }
+    }
+  }
+}`
+		tokens, _ := lexer.Scan(input, "test.emod")
+		p := parser.New(tokens, "test.emod")
+		model, errs := p.Parse()
+
+		require.Len(t, errs, 0)
+		evt := model.Contexts[0].Aggregates[0].Slices[0].Events[0]
+		require.Equal(t, "external", evt.Source)
+		require.Equal(t, "X", evt.ExternalName)
+		require.Len(t, evt.Fields, 1)
+	})
+
+	t.Run("event source without external keyword", func(t *testing.T) {
+		input := `model "Test"
+context "Ctx" {
+  aggregate "Agg" {
+    slice "Slice" {
+      event TestEvent {
+        source "SendGrid"
+      }
+    }
+  }
+}`
+		tokens, _ := lexer.Scan(input, "test.emod")
+		p := parser.New(tokens, "test.emod")
+		_, errs := p.Parse()
+
+		require.Len(t, errs, 1)
+		require.Equal(t, "expected external after source in event", errs[0].Message)
+	})
+
+	t.Run("event source external without quoted string", func(t *testing.T) {
+		input := `model "Test"
+context "Ctx" {
+  aggregate "Agg" {
+    slice "Slice" {
+      event TestEvent {
+        source external
+      }
+    }
+  }
+}`
+		tokens, _ := lexer.Scan(input, "test.emod")
+		p := parser.New(tokens, "test.emod")
+		model, errs := p.Parse()
+
+		require.Len(t, errs, 1)
+		require.Equal(t, "expected quoted string after source external in event", errs[0].Message)
+
+		event := model.Contexts[0].Aggregates[0].Slices[0].Events[0]
+		require.Equal(t, "external", event.Source)
+		require.Empty(t, event.ExternalName)
+	})
 }

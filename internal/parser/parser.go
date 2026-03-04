@@ -371,8 +371,28 @@ func (p *Instance) parseEvent() *ast.Event {
 	for !p.check(lexer.CloseBrace) && !p.isAtEnd() {
 		if p.check(lexer.KeywordFields) {
 			event.Fields = p.parseFields()
+		} else if p.check(lexer.KeywordSource) {
+			sourceTok := p.advance()
+			event.SourcePos = p.position(sourceTok)
+			if !p.check(lexer.KeywordExternal) {
+				p.error("expected external after source in event")
+				p.advance()
+				continue
+			}
+			p.advance()
+			event.Source = "external"
+			if !p.check(lexer.String) {
+				p.error("expected quoted string after source external in event")
+				if !p.check(lexer.CloseBrace) && !p.check(lexer.KeywordFields) && !p.check(lexer.KeywordSource) {
+					p.advance()
+				}
+				continue
+			}
+			nameTok := p.advance()
+			event.ExternalName = nameTok.Value
+			event.ExternalNamePos = p.position(nameTok)
 		} else {
-			p.error("expected fields in event")
+			p.error("expected fields or source in event")
 			p.advance()
 		}
 	}
