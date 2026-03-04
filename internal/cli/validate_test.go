@@ -56,12 +56,22 @@ context "Reservations" {
       }
     }
     slice "Auto Confirm Reservation" {
+      command ConfirmReservation {
+        fields {
+          reservationId string required
+        }
+      }
       automation AutoConfirm {
         trigger ReservationMade
         command ConfirmReservation
       }
     }
     slice "Import External Booking" {
+      command ImportBooking {
+        fields {
+          bookingRef string required
+        }
+      }
       translation BookingImport {
         external_system "Booking.com API"
         reads BookingWebhookView
@@ -136,10 +146,48 @@ context "Orders" {
 		require.Contains(t, err.Error(), "does not exist")
 	})
 
-	t.Run("returns no error for automation targeting existing context", func(t *testing.T) {
+	t.Run("returns error for automation trigger referencing nonexistent event", func(t *testing.T) {
 		input := `model "Test"
 context "Orders" {
   aggregate "Order" {
+    slice "Process Order" {
+      automation OrderNotifier {
+        trigger NonExistentEvent
+        command NotifyCustomer
+      }
+    }
+  }
+}
+`
+		path := writeTemp(t, "bad_trigger.emod", input)
+
+		err := cli.RunValidate(path)
+
+		require.Error(t, err)
+		require.Contains(t, err.Error(), "NonExistentEvent")
+		require.Contains(t, err.Error(), "does not exist")
+	})
+
+	t.Run("returns no error for valid multi-context model", func(t *testing.T) {
+		input := `model "Multi Context Test"
+
+context "Orders" {
+  aggregate "Order" {
+    slice "Place Order" {
+      command PlaceOrder {
+        fields {
+          orderId string required
+        }
+      }
+      event OrderPlaced {
+        fields {
+          orderId string required
+        }
+      }
+      flow {
+        command -> event: PlaceOrder -> OrderPlaced
+      }
+    }
     slice "Notify On Order" {
       automation OrderNotifier {
         trigger OrderPlaced
@@ -152,6 +200,72 @@ context "Orders" {
 context "Notifications" {
   aggregate "Notification" {
     slice "Send Notification" {
+      command SendNotification {
+        fields {
+          message string required
+        }
+      }
+      event NotificationReceived {
+        source external "Email Provider"
+        fields {
+          notificationId string required
+          receivedAt     timestamp required
+        }
+      }
+    }
+  }
+}
+`
+		path := writeTemp(t, "multi_context.emod", input)
+
+		err := cli.RunValidate(path)
+
+		require.NoError(t, err)
+	})
+
+	t.Run("returns no error for automation targeting existing context", func(t *testing.T) {
+		input := `model "Test"
+context "Orders" {
+  aggregate "Order" {
+    slice "Place Order" {
+      command PlaceOrder {
+        fields {
+          orderId string required
+        }
+      }
+      event OrderPlaced {
+        fields {
+          orderId string required
+        }
+      }
+    }
+    slice "Notify On Order" {
+      automation OrderNotifier {
+        trigger OrderPlaced
+        command SendNotification
+        target context Notifications
+      }
+    }
+  }
+}
+context "Notifications" {
+  aggregate "Notification" {
+    slice "Send Notification" {
+      command SendNotification {
+        fields {
+          message string required
+        }
+      }
+      command SendEmail {
+        fields {
+          to string required
+        }
+      }
+      event NotificationRequested {
+        fields {
+          notificationId string required
+        }
+      }
       automation Sender {
         trigger NotificationRequested
         command SendEmail

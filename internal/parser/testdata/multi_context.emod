@@ -1,0 +1,52 @@
+# Multi-context model with cross-context automation and external source event
+model "Order Management"
+
+context "Orders" {
+  aggregate "Order" {
+    slice "Place Order" {
+      command PlaceOrder {
+        fields {
+          orderId    string required
+          customerId string required
+        }
+      }
+      event OrderPlaced {
+        fields {
+          orderId    string required
+          customerId string required
+          placedAt   timestamp required
+        }
+      }
+      flow {
+        command -> event: PlaceOrder -> OrderPlaced
+      }
+    }
+
+    slice "Notify On Order" {
+      automation OrderNotifier {
+        trigger OrderPlaced
+        command SendNotification
+        target context Notifications
+      }
+    }
+  }
+}
+
+context "Notifications" {
+  aggregate "Notification" {
+    slice "Send Notification" {
+      command SendNotification {
+        fields {
+          message string required
+        }
+      }
+      event NotificationReceived {
+        source external "Email Provider"
+        fields {
+          notificationId string required
+          receivedAt     timestamp required
+        }
+      }
+    }
+  }
+}

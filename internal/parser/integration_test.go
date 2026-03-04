@@ -8,6 +8,7 @@ import (
 
 	"github.com/hpcsc/emod/internal/lexer"
 	"github.com/hpcsc/emod/internal/parser"
+	"github.com/hpcsc/emod/internal/validator"
 	"github.com/stretchr/testify/require"
 )
 
@@ -186,5 +187,53 @@ func TestIntegration(t *testing.T) {
 		require.Equal(t, "required", trans.Event.Fields[0].Modifier)
 		require.Equal(t, "checkOut", trans.Event.Fields[6].Name)
 		require.Equal(t, "date", trans.Event.Fields[6].Type)
+	})
+
+	t.Run("parses and validates multi_context.emod fixture with cross-context automation and external source", func(t *testing.T) {
+		source, err := os.ReadFile("testdata/multi_context.emod")
+		require.NoError(t, err)
+
+		tokens, lexDiags := lexer.Scan(string(source), "testdata/multi_context.emod")
+		require.Empty(t, lexDiags)
+
+		p := parser.New(tokens, "testdata/multi_context.emod")
+		model, parseDiags := p.Parse()
+		require.Empty(t, parseDiags)
+
+		validationDiags := validator.Validate(model)
+		require.Empty(t, validationDiags)
+
+		require.Len(t, model.Contexts, 2)
+		require.Equal(t, "Orders", model.Contexts[0].Name)
+		require.Equal(t, "Notifications", model.Contexts[1].Name)
+
+		ordersCtx := model.Contexts[0]
+		require.Len(t, ordersCtx.Aggregates, 1)
+		require.Len(t, ordersCtx.Aggregates[0].Slices, 2)
+		automationSlice := ordersCtx.Aggregates[0].Slices[1]
+
+		require.Len(t, automationSlice.Automations, 1)
+		auto := automationSlice.Automations[0]
+		require.Equal(t, "OrderNotifier", auto.Name)
+		require.Equal(t, "OrderPlaced", auto.TriggerEvent)
+		require.Equal(t, "SendNotification", auto.Command)
+		require.Equal(t, "Notifications", auto.TargetContext)
+
+		notificationsCtx := model.Contexts[1]
+		require.Len(t, notificationsCtx.Aggregates, 1)
+		notifSlice := notificationsCtx.Aggregates[0].Slices[0]
+
+		require.Len(t, notifSlice.Events, 1)
+		evt := notifSlice.Events[0]
+		require.Equal(t, "NotificationReceived", evt.Name)
+		require.Equal(t, "external", evt.Source)
+		require.Equal(t, "Email Provider", evt.ExternalName)
+		require.Len(t, evt.Fields, 2)
+		require.Equal(t, "notificationId", evt.Fields[0].Name)
+		require.Equal(t, "string", evt.Fields[0].Type)
+		require.Equal(t, "required", evt.Fields[0].Modifier)
+		require.Equal(t, "receivedAt", evt.Fields[1].Name)
+		require.Equal(t, "timestamp", evt.Fields[1].Type)
+		require.Equal(t, "required", evt.Fields[1].Modifier)
 	})
 }

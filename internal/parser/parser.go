@@ -683,7 +683,7 @@ func (p *Instance) parseFields() []*ast.Field {
 	openLine := openTok.Line
 
 	for !p.check(lexer.CloseBrace) && !p.isAtEnd() {
-		if p.check(lexer.Identifier) {
+		if p.checkIdentifierLike() {
 			if field := p.parseField(); field != nil {
 				fields = append(fields, field)
 			}
@@ -703,7 +703,7 @@ func (p *Instance) parseFields() []*ast.Field {
 }
 
 func (p *Instance) parseField() *ast.Field {
-	if !p.check(lexer.Identifier) {
+	if !p.checkIdentifierLike() {
 		return nil
 	}
 
@@ -713,7 +713,7 @@ func (p *Instance) parseField() *ast.Field {
 		NamePos: p.position(nameTok),
 	}
 
-	if !p.check(lexer.Identifier) {
+	if !p.checkIdentifierLike() {
 		p.error("expected field type")
 		return field
 	}
@@ -721,7 +721,7 @@ func (p *Instance) parseField() *ast.Field {
 	field.Type = typeTok.Value
 	field.TypePos = p.position(typeTok)
 
-	if p.check(lexer.Identifier) {
+	if p.checkIdentifierLike() {
 		modTok := p.advance()
 		field.Modifier = modTok.Value
 		field.ModPos = p.position(modTok)
@@ -835,6 +835,16 @@ func (p *Instance) check(typ lexer.Kind) bool {
 		return false
 	}
 	return p.tokens[p.pos].Type == typ
+}
+
+// checkIdentifierLike returns true when the current token is an Identifier or
+// any keyword. Keywords are valid as field names inside fields blocks.
+func (p *Instance) checkIdentifierLike() bool {
+	if p.isAtEnd() {
+		return false
+	}
+	typ := p.tokens[p.pos].Type
+	return typ == lexer.Identifier || typ < lexer.Identifier
 }
 
 func (p *Instance) consume(typ lexer.Kind, msg string) {
