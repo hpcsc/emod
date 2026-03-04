@@ -811,6 +811,231 @@ context "Ctx" {
 		require.True(t, found, "expected a diagnostic mentioning expected keywords, got: %v", errs)
 	})
 
+	t.Run("translation with all fields including inline event", func(t *testing.T) {
+		input := `model "Test"
+context "Ctx" {
+  aggregate "Agg" {
+    slice "Slice" {
+      translation BookingComImport {
+        external_system "Booking.com API"
+        reads BookingComWebhookView
+        command ImportExternalReservation
+        event ExternalReservationImported {
+          fields {
+            bookingRef string required
+            guestName string required
+          }
+        }
+      }
+    }
+  }
+}`
+		tokens, _ := lexer.Scan(input, "test.emod")
+
+		p := parser.New(tokens, "test.emod")
+		model, errs := p.Parse()
+
+		require.Len(t, errs, 0)
+		slice := model.Contexts[0].Aggregates[0].Slices[0]
+		require.Len(t, slice.Translations, 1)
+		tr := slice.Translations[0]
+		require.Equal(t, "BookingComImport", tr.Name)
+		require.Equal(t, "Booking.com API", tr.ExternalSystem)
+		require.Equal(t, "BookingComWebhookView", tr.Reads)
+		require.Equal(t, "ImportExternalReservation", tr.Command)
+		require.NotNil(t, tr.Event)
+		require.Equal(t, "ExternalReservationImported", tr.Event.Name)
+		require.Len(t, tr.Event.Fields, 2)
+		require.Equal(t, "bookingRef", tr.Event.Fields[0].Name)
+		require.Equal(t, "string", tr.Event.Fields[0].Type)
+		require.Equal(t, "required", tr.Event.Fields[0].Modifier)
+		require.Equal(t, "guestName", tr.Event.Fields[1].Name)
+		require.Equal(t, "string", tr.Event.Fields[1].Type)
+		require.Equal(t, "required", tr.Event.Fields[1].Modifier)
+	})
+
+	t.Run("translation without inline event", func(t *testing.T) {
+		input := `model "Test"
+context "Ctx" {
+  aggregate "Agg" {
+    slice "Slice" {
+      translation SimpleImport {
+        external_system "External API"
+        reads WebhookView
+        command DoImport
+      }
+    }
+  }
+}`
+		tokens, _ := lexer.Scan(input, "test.emod")
+
+		p := parser.New(tokens, "test.emod")
+		model, errs := p.Parse()
+
+		require.Len(t, errs, 0)
+		tr := model.Contexts[0].Aggregates[0].Slices[0].Translations[0]
+		require.Equal(t, "SimpleImport", tr.Name)
+		require.Equal(t, "External API", tr.ExternalSystem)
+		require.Equal(t, "WebhookView", tr.Reads)
+		require.Equal(t, "DoImport", tr.Command)
+		require.Nil(t, tr.Event)
+	})
+
+	t.Run("translation is stored in slice Translations field", func(t *testing.T) {
+		input := `model "Test"
+context "Ctx" {
+  aggregate "Agg" {
+    slice "Slice" {
+      translation BookingImport {
+        external_system "Booking API"
+        reads WebhookView
+        command ImportReservation
+      }
+    }
+  }
+}`
+		tokens, _ := lexer.Scan(input, "test.emod")
+
+		p := parser.New(tokens, "test.emod")
+		model, errs := p.Parse()
+
+		require.Len(t, errs, 0)
+		slice := model.Contexts[0].Aggregates[0].Slices[0]
+		require.Len(t, slice.Translations, 1)
+		require.Empty(t, slice.Commands)
+		require.Empty(t, slice.Events)
+		require.Empty(t, slice.Flows)
+		require.Empty(t, slice.Views)
+		require.Empty(t, slice.Automations)
+		require.Nil(t, slice.Trigger)
+	})
+
+	t.Run("translation alongside other slice elements", func(t *testing.T) {
+		input := `model "Test"
+context "Ctx" {
+  aggregate "Agg" {
+    slice "Slice" {
+      command MakeReservation {
+        fields {
+        }
+      }
+      event ReservationMade {
+        fields {
+        }
+      }
+      flow {
+        command -> event: MakeReservation -> ReservationMade
+      }
+      translation BookingImport {
+        external_system "Booking API"
+        reads WebhookView
+        command ImportReservation
+      }
+    }
+  }
+}`
+		tokens, _ := lexer.Scan(input, "test.emod")
+
+		p := parser.New(tokens, "test.emod")
+		model, errs := p.Parse()
+
+		require.Len(t, errs, 0)
+		slice := model.Contexts[0].Aggregates[0].Slices[0]
+		require.Len(t, slice.Commands, 1)
+		require.Len(t, slice.Events, 1)
+		require.Len(t, slice.Flows, 1)
+		require.Len(t, slice.Translations, 1)
+		require.Equal(t, "BookingImport", slice.Translations[0].Name)
+	})
+
+	t.Run("multiple translations in the same slice", func(t *testing.T) {
+		input := `model "Test"
+context "Ctx" {
+  aggregate "Agg" {
+    slice "Slice" {
+      translation BookingImport {
+        external_system "Booking API"
+        reads BookingView
+        command ImportBooking
+      }
+      translation ExpediaImport {
+        external_system "Expedia API"
+        reads ExpediaView
+        command ImportExpedia
+      }
+    }
+  }
+}`
+		tokens, _ := lexer.Scan(input, "test.emod")
+
+		p := parser.New(tokens, "test.emod")
+		model, errs := p.Parse()
+
+		require.Len(t, errs, 0)
+		slice := model.Contexts[0].Aggregates[0].Slices[0]
+		require.Len(t, slice.Translations, 2)
+		require.Equal(t, "BookingImport", slice.Translations[0].Name)
+		require.Equal(t, "Booking API", slice.Translations[0].ExternalSystem)
+		require.Equal(t, "BookingView", slice.Translations[0].Reads)
+		require.Equal(t, "ImportBooking", slice.Translations[0].Command)
+		require.Equal(t, "ExpediaImport", slice.Translations[1].Name)
+		require.Equal(t, "Expedia API", slice.Translations[1].ExternalSystem)
+		require.Equal(t, "ExpediaView", slice.Translations[1].Reads)
+		require.Equal(t, "ImportExpedia", slice.Translations[1].Command)
+	})
+
+	t.Run("translation missing opening brace produces diagnostic", func(t *testing.T) {
+		input := `model "Test"
+context "Ctx" {
+  aggregate "Agg" {
+    slice "Slice" {
+      translation BookingImport external_system "API"
+    }
+  }
+}`
+		tokens, _ := lexer.Scan(input, "test.emod")
+
+		p := parser.New(tokens, "test.emod")
+		_, errs := p.Parse()
+
+		require.NotEmpty(t, errs)
+		found := false
+		for _, e := range errs {
+			if strings.Contains(e.Message, "{") {
+				found = true
+				break
+			}
+		}
+		require.True(t, found, "expected a diagnostic mentioning '{', got: %v", errs)
+	})
+
+	t.Run("unrecognized keyword inside translation body produces diagnostic", func(t *testing.T) {
+		input := `model "Test"
+context "Ctx" {
+  aggregate "Agg" {
+    slice "Slice" {
+      translation BookingImport {
+        unknown_thing foo
+      }
+    }
+  }
+}`
+		tokens, _ := lexer.Scan(input, "test.emod")
+
+		p := parser.New(tokens, "test.emod")
+		_, errs := p.Parse()
+
+		require.NotEmpty(t, errs)
+		found := false
+		for _, e := range errs {
+			if strings.Contains(e.Message, "external_system") && strings.Contains(e.Message, "command") {
+				found = true
+				break
+			}
+		}
+		require.True(t, found, "expected a diagnostic mentioning expected keywords, got: %v", errs)
+	})
+
 	t.Run("multiple errors collected", func(t *testing.T) {
 		input := `unknown_keyword "Test"
 actor

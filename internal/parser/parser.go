@@ -224,8 +224,12 @@ func (p *Instance) parseSlice() *ast.Slice {
 			if automation := p.parseAutomation(); automation != nil {
 				slice.Automations = append(slice.Automations, automation)
 			}
+		} else if p.check(lexer.KeywordTranslation) {
+			if translation := p.parseTranslation(); translation != nil {
+				slice.Translations = append(slice.Translations, translation)
+			}
 		} else {
-			p.error("expected command, event, trigger, view, automation, or flow in slice")
+			p.error("expected command, event, trigger, view, automation, translation, or flow in slice")
 			p.advance()
 		}
 	}
@@ -495,6 +499,75 @@ func (p *Instance) parseAutomation() *ast.Automation {
 	automation.ClosePos = p.position(closeTok)
 
 	return automation
+}
+
+func (p *Instance) parseTranslation() *ast.Translation {
+	p.consume(lexer.KeywordTranslation, "expected translation")
+	if !p.check(lexer.Identifier) {
+		p.error("expected identifier after translation")
+		return nil
+	}
+
+	nameTok := p.advance()
+	translation := &ast.Translation{
+		Name:    nameTok.Value,
+		NamePos: p.position(nameTok),
+	}
+
+	if !p.check(lexer.OpenBrace) {
+		p.error("expected { after translation name")
+		return nil
+	}
+	openTok := p.advance()
+	translation.OpenPos = p.position(openTok)
+
+	for !p.check(lexer.CloseBrace) && !p.isAtEnd() {
+		if p.check(lexer.KeywordExternalSystem) {
+			p.advance()
+			if !p.check(lexer.String) {
+				p.error("expected quoted string after external_system in translation")
+				p.advance()
+				continue
+			}
+			extTok := p.advance()
+			translation.ExternalSystem = extTok.Value
+			translation.ExternalPos = p.position(extTok)
+		} else if p.check(lexer.KeywordReads) {
+			p.advance()
+			if !p.check(lexer.Identifier) {
+				p.error("expected identifier after reads in translation")
+				p.advance()
+				continue
+			}
+			readsTok := p.advance()
+			translation.Reads = readsTok.Value
+			translation.ReadsPos = p.position(readsTok)
+		} else if p.check(lexer.KeywordCommand) {
+			p.advance()
+			if !p.check(lexer.Identifier) {
+				p.error("expected identifier after command in translation")
+				p.advance()
+				continue
+			}
+			cmdTok := p.advance()
+			translation.Command = cmdTok.Value
+			translation.CommandPos = p.position(cmdTok)
+		} else if p.check(lexer.KeywordEvent) {
+			translation.Event = p.parseEvent()
+		} else {
+			p.error(fmt.Sprintf("expected external_system, reads, command, or event in translation, got %q", p.peek().Value))
+			p.advance()
+		}
+	}
+
+	if !p.check(lexer.CloseBrace) {
+		p.error(fmt.Sprintf("unclosed brace for \"translation\" block opened at line %d", translation.OpenPos.Line))
+		return translation
+	}
+	closeTok := p.advance()
+	translation.ClosePos = p.position(closeTok)
+
+	return translation
 }
 
 func (p *Instance) parseSubscribes() []string {
