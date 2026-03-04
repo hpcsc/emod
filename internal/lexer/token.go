@@ -21,6 +21,8 @@ const (
 	KeywordTarget
 	KeywordExternalSystem
 	KeywordReads
+	KeywordSource
+	KeywordExternal
 
 	// Literals and identifiers
 	Identifier
@@ -82,6 +84,10 @@ func (k Kind) String() string {
 		return "external_system"
 	case KeywordReads:
 		return "reads"
+	case KeywordSource:
+		return "source"
+	case KeywordExternal:
+		return "external"
 	case Identifier:
 		return "identifier"
 	case String:

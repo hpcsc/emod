@@ -29,6 +29,8 @@ func TestLexer(t *testing.T) {
 			"target":          lexer.KeywordTarget,
 			"external_system": lexer.KeywordExternalSystem,
 			"reads":           lexer.KeywordReads,
+			"source":          lexer.KeywordSource,
+			"external":        lexer.KeywordExternal,
 		}
 
 		for keyword, expectedType := range keywords {
@@ -43,7 +45,7 @@ func TestLexer(t *testing.T) {
 	})
 
 	t.Run("identifiers", func(t *testing.T) {
-		tests := []string{"MakeReservation", "string", "required", "date", "foo_bar", "Foo123"}
+		tests := []string{"MakeReservation", "string", "required", "date", "foo_bar", "Foo123", "sourced", "externally"}
 		for _, id := range tests {
 			t.Run(id, func(t *testing.T) {
 				tokens, diags := lexer.Scan(id, "test.emod")
@@ -193,6 +195,21 @@ actor "Guest"`
 		require.Empty(t, diags)
 		require.Len(t, tokens, 1)
 		require.Equal(t, lexer.EOF, tokens[0].Type)
+	})
+
+	t.Run("source external with provider string", func(t *testing.T) {
+		input := `source external "Provider"`
+		tokens, diags := lexer.Scan(input, "test.emod")
+		require.Empty(t, diags)
+
+		require.Len(t, tokens, 4)
+		require.Equal(t, lexer.KeywordSource, tokens[0].Type)
+		require.Equal(t, "source", tokens[0].Value)
+		require.Equal(t, lexer.KeywordExternal, tokens[1].Type)
+		require.Equal(t, "external", tokens[1].Value)
+		require.Equal(t, lexer.String, tokens[2].Type)
+		require.Equal(t, "Provider", tokens[2].Value)
+		require.Equal(t, lexer.EOF, tokens[3].Type)
 	})
 
 	t.Run("mixed input with new tokens", func(t *testing.T) {

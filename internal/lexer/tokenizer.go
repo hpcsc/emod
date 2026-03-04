@@ -202,6 +202,10 @@ func getKeywordKind(s string) Kind {
 		return KeywordExternalSystem
 	case "reads":
 		return KeywordReads
+	case "source":
+		return KeywordSource
+	case "external":
+		return KeywordExternal
 	default:
 		return Identifier
 	}
