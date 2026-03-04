@@ -583,6 +583,234 @@ context "Ctx" {
 		require.True(t, found, "expected a diagnostic mentioning '{', got: %v", errs)
 	})
 
+	t.Run("automation with trigger event, command, and target context", func(t *testing.T) {
+		input := `model "Test"
+context "Ctx" {
+  aggregate "Agg" {
+    slice "Slice" {
+      automation ConfirmationEmailReactor {
+        trigger RoomReserved
+        command SendConfirmationEmail
+        target context Notifications
+      }
+    }
+  }
+}`
+		tokens, _ := lexer.Scan(input, "test.emod")
+
+		p := parser.New(tokens, "test.emod")
+		model, errs := p.Parse()
+
+		require.Len(t, errs, 0)
+		slice := model.Contexts[0].Aggregates[0].Slices[0]
+		require.Len(t, slice.Automations, 1)
+		a := slice.Automations[0]
+		require.Equal(t, "ConfirmationEmailReactor", a.Name)
+		require.Equal(t, "RoomReserved", a.TriggerEvent)
+		require.Equal(t, "SendConfirmationEmail", a.Command)
+		require.Equal(t, "Notifications", a.TargetContext)
+	})
+
+	t.Run("automation without target context", func(t *testing.T) {
+		input := `model "Test"
+context "Ctx" {
+  aggregate "Agg" {
+    slice "Slice" {
+      automation Reactor {
+        trigger SomeEvent
+        command SomeCmd
+      }
+    }
+  }
+}`
+		tokens, _ := lexer.Scan(input, "test.emod")
+
+		p := parser.New(tokens, "test.emod")
+		model, errs := p.Parse()
+
+		require.Len(t, errs, 0)
+		a := model.Contexts[0].Aggregates[0].Slices[0].Automations[0]
+		require.Equal(t, "Reactor", a.Name)
+		require.Equal(t, "SomeEvent", a.TriggerEvent)
+		require.Equal(t, "SomeCmd", a.Command)
+		require.Equal(t, "", a.TargetContext)
+	})
+
+	t.Run("automation is stored in slice AST node", func(t *testing.T) {
+		input := `model "Test"
+context "Ctx" {
+  aggregate "Agg" {
+    slice "Slice" {
+      automation Reactor {
+        trigger SomeEvent
+        command SomeCmd
+      }
+    }
+  }
+}`
+		tokens, _ := lexer.Scan(input, "test.emod")
+
+		p := parser.New(tokens, "test.emod")
+		model, errs := p.Parse()
+
+		require.Len(t, errs, 0)
+		slice := model.Contexts[0].Aggregates[0].Slices[0]
+		require.Len(t, slice.Automations, 1)
+		require.Empty(t, slice.Commands)
+		require.Empty(t, slice.Events)
+		require.Empty(t, slice.Flows)
+		require.Empty(t, slice.Views)
+		require.Nil(t, slice.Trigger)
+	})
+
+	t.Run("trigger keyword inside automation is event name, not trigger block", func(t *testing.T) {
+		input := `model "Test"
+context "Ctx" {
+  aggregate "Agg" {
+    slice "Slice" {
+      automation Reactor {
+        trigger SomeEvent
+        command SomeCmd
+      }
+    }
+  }
+}`
+		tokens, _ := lexer.Scan(input, "test.emod")
+
+		p := parser.New(tokens, "test.emod")
+		model, errs := p.Parse()
+
+		require.Len(t, errs, 0)
+		slice := model.Contexts[0].Aggregates[0].Slices[0]
+		require.Nil(t, slice.Trigger, "trigger keyword inside automation should not produce a slice-level Trigger")
+		require.Len(t, slice.Automations, 1)
+		require.Equal(t, "SomeEvent", slice.Automations[0].TriggerEvent)
+	})
+
+	t.Run("automation alongside other slice elements", func(t *testing.T) {
+		input := `model "Test"
+context "Ctx" {
+  aggregate "Agg" {
+    slice "Slice" {
+      command MakeReservation {
+        fields {
+        }
+      }
+      event ReservationMade {
+        fields {
+        }
+      }
+      flow {
+        command -> event: MakeReservation -> ReservationMade
+      }
+      automation Reactor {
+        trigger ReservationMade
+        command SendConfirmation
+      }
+    }
+  }
+}`
+		tokens, _ := lexer.Scan(input, "test.emod")
+
+		p := parser.New(tokens, "test.emod")
+		model, errs := p.Parse()
+
+		require.Len(t, errs, 0)
+		slice := model.Contexts[0].Aggregates[0].Slices[0]
+		require.Len(t, slice.Commands, 1)
+		require.Len(t, slice.Events, 1)
+		require.Len(t, slice.Flows, 1)
+		require.Len(t, slice.Automations, 1)
+		require.Equal(t, "Reactor", slice.Automations[0].Name)
+	})
+
+	t.Run("multiple automations in the same slice", func(t *testing.T) {
+		input := `model "Test"
+context "Ctx" {
+  aggregate "Agg" {
+    slice "Slice" {
+      automation ReactorA {
+        trigger EventA
+        command CmdA
+      }
+      automation ReactorB {
+        trigger EventB
+        command CmdB
+        target context OtherCtx
+      }
+    }
+  }
+}`
+		tokens, _ := lexer.Scan(input, "test.emod")
+
+		p := parser.New(tokens, "test.emod")
+		model, errs := p.Parse()
+
+		require.Len(t, errs, 0)
+		slice := model.Contexts[0].Aggregates[0].Slices[0]
+		require.Len(t, slice.Automations, 2)
+		require.Equal(t, "ReactorA", slice.Automations[0].Name)
+		require.Equal(t, "EventA", slice.Automations[0].TriggerEvent)
+		require.Equal(t, "CmdA", slice.Automations[0].Command)
+		require.Equal(t, "", slice.Automations[0].TargetContext)
+		require.Equal(t, "ReactorB", slice.Automations[1].Name)
+		require.Equal(t, "EventB", slice.Automations[1].TriggerEvent)
+		require.Equal(t, "CmdB", slice.Automations[1].Command)
+		require.Equal(t, "OtherCtx", slice.Automations[1].TargetContext)
+	})
+
+	t.Run("automation missing opening brace produces diagnostic", func(t *testing.T) {
+		input := `model "Test"
+context "Ctx" {
+  aggregate "Agg" {
+    slice "Slice" {
+      automation Reactor trigger SomeEvent
+    }
+  }
+}`
+		tokens, _ := lexer.Scan(input, "test.emod")
+
+		p := parser.New(tokens, "test.emod")
+		_, errs := p.Parse()
+
+		require.NotEmpty(t, errs)
+		found := false
+		for _, e := range errs {
+			if strings.Contains(e.Message, "{") {
+				found = true
+				break
+			}
+		}
+		require.True(t, found, "expected a diagnostic mentioning '{', got: %v", errs)
+	})
+
+	t.Run("automation with unrecognized keyword in body produces diagnostic", func(t *testing.T) {
+		input := `model "Test"
+context "Ctx" {
+  aggregate "Agg" {
+    slice "Slice" {
+      automation Reactor {
+        unknown_thing foo
+      }
+    }
+  }
+}`
+		tokens, _ := lexer.Scan(input, "test.emod")
+
+		p := parser.New(tokens, "test.emod")
+		_, errs := p.Parse()
+
+		require.NotEmpty(t, errs)
+		found := false
+		for _, e := range errs {
+			if strings.Contains(e.Message, "trigger") && strings.Contains(e.Message, "command") {
+				found = true
+				break
+			}
+		}
+		require.True(t, found, "expected a diagnostic mentioning expected keywords, got: %v", errs)
+	})
+
 	t.Run("multiple errors collected", func(t *testing.T) {
 		input := `unknown_keyword "Test"
 actor

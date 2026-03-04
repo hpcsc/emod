@@ -220,8 +220,12 @@ func (p *Instance) parseSlice() *ast.Slice {
 			if view := p.parseView(); view != nil {
 				slice.Views = append(slice.Views, view)
 			}
+		} else if p.check(lexer.KeywordAutomation) {
+			if automation := p.parseAutomation(); automation != nil {
+				slice.Automations = append(slice.Automations, automation)
+			}
 		} else {
-			p.error("expected command, event, trigger, view, or flow in slice")
+			p.error("expected command, event, trigger, view, automation, or flow in slice")
 			p.advance()
 		}
 	}
@@ -418,6 +422,79 @@ func (p *Instance) parseView() *ast.View {
 	view.ClosePos = p.position(closeTok)
 
 	return view
+}
+
+func (p *Instance) parseAutomation() *ast.Automation {
+	p.consume(lexer.KeywordAutomation, "expected automation")
+	if !p.check(lexer.Identifier) {
+		p.error("expected identifier after automation")
+		return nil
+	}
+
+	nameTok := p.advance()
+	automation := &ast.Automation{
+		Name:    nameTok.Value,
+		NamePos: p.position(nameTok),
+	}
+
+	if !p.check(lexer.OpenBrace) {
+		p.error("expected { after automation name")
+		return nil
+	}
+	openTok := p.advance()
+	automation.OpenPos = p.position(openTok)
+
+	for !p.check(lexer.CloseBrace) && !p.isAtEnd() {
+		if p.check(lexer.KeywordTrigger) {
+			p.advance()
+			if !p.check(lexer.Identifier) {
+				p.error("expected identifier after trigger in automation")
+				p.advance()
+				continue
+			}
+			triggerTok := p.advance()
+			automation.TriggerEvent = triggerTok.Value
+			automation.TriggerEventPos = p.position(triggerTok)
+		} else if p.check(lexer.KeywordCommand) {
+			p.advance()
+			if !p.check(lexer.Identifier) {
+				p.error("expected identifier after command in automation")
+				p.advance()
+				continue
+			}
+			cmdTok := p.advance()
+			automation.Command = cmdTok.Value
+			automation.CommandPos = p.position(cmdTok)
+		} else if p.check(lexer.KeywordTarget) {
+			p.advance()
+			if !p.check(lexer.KeywordContext) {
+				p.error("expected context after target in automation")
+				p.advance()
+				continue
+			}
+			p.advance()
+			if !p.check(lexer.Identifier) {
+				p.error("expected identifier after target context in automation")
+				p.advance()
+				continue
+			}
+			ctxTok := p.advance()
+			automation.TargetContext = ctxTok.Value
+			automation.TargetContextPos = p.position(ctxTok)
+		} else {
+			p.error(fmt.Sprintf("expected trigger, command, or target in automation, got %q", p.peek().Value))
+			p.advance()
+		}
+	}
+
+	if !p.check(lexer.CloseBrace) {
+		p.error(fmt.Sprintf("unclosed brace for \"automation\" block opened at line %d", automation.OpenPos.Line))
+		return automation
+	}
+	closeTok := p.advance()
+	automation.ClosePos = p.position(closeTok)
+
+	return automation
 }
 
 func (p *Instance) parseSubscribes() []string {
