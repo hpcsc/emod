@@ -109,6 +109,11 @@ func TestIntegration(t *testing.T) {
 
 		require.Empty(t, diags)
 		require.Equal(t, "Hotel Reservation", model.Name)
+
+		// Comment attachment assertions
+		require.Len(t, model.Comments, 1)
+		require.Equal(t, "# Hotel Reservation System — exercises all four slice patterns", model.Comments[0].Text)
+
 		require.Len(t, model.Actors, 1)
 		require.Equal(t, "Guest", model.Actors[0].Name)
 		require.Len(t, model.Contexts, 2)
@@ -120,6 +125,21 @@ func TestIntegration(t *testing.T) {
 		agg := ctx.Aggregates[0]
 		require.Equal(t, "Reservation", agg.Name)
 		require.Len(t, agg.Slices, 5)
+
+		require.Len(t, agg.Slices[0].Comments, 1)
+		require.Equal(t, "# Slice 1: Command Pattern", agg.Slices[0].Comments[0].Text)
+
+		require.Len(t, agg.Slices[1].Comments, 1)
+		require.Equal(t, "# Slice 2: View Pattern", agg.Slices[1].Comments[0].Text)
+
+		require.Len(t, agg.Slices[2].Comments, 1)
+		require.Equal(t, "# Slice 3: Command Pattern — Check Out", agg.Slices[2].Comments[0].Text)
+
+		require.Len(t, agg.Slices[3].Comments, 1)
+		require.Equal(t, "# Slice 4: Automation Pattern", agg.Slices[3].Comments[0].Text)
+
+		require.Len(t, agg.Slices[4].Comments, 1)
+		require.Equal(t, "# Slice 5: Translation Pattern", agg.Slices[4].Comments[0].Text)
 
 		// Slice 0: Command Pattern — "Reserve a Room"
 		commandSlice := agg.Slices[0]

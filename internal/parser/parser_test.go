@@ -6,10 +6,15 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/google/go-cmp/cmp/cmpopts"
+	"github.com/hpcsc/emod/internal/ast"
 	"github.com/hpcsc/emod/internal/lexer"
 	"github.com/hpcsc/emod/internal/parser"
+	"github.com/hpcsc/emod/internal/test"
 	"github.com/stretchr/testify/require"
 )
+
+var ignoreCommentPositions = cmpopts.IgnoreTypes(ast.Position{})
 
 func TestParser(t *testing.T) {
 	t.Run("model declaration", func(t *testing.T) {
@@ -1511,5 +1516,199 @@ context "Ctx" {
 		event := model.Contexts[0].Aggregates[0].Slices[0].Events[0]
 		require.Equal(t, "external", event.Source)
 		require.Empty(t, event.ExternalName)
+	})
+
+	t.Run("comments before model are attached to Model node", func(t *testing.T) {
+		input := `# Header comment
+model "Test"`
+		tokens, _ := lexer.Scan(input, "test.emod")
+
+		p := parser.New(tokens, "test.emod")
+		model, errs := p.Parse()
+
+		require.Empty(t, errs)
+		require.Equal(t, "Test", model.Name)
+		test.RequireEqual(t, []*ast.Comment{{Text: "# Header comment"}}, model.Comments, ignoreCommentPositions)
+	})
+
+	t.Run("multiple consecutive comments before model are all attached", func(t *testing.T) {
+		input := `# Line 1
+# Line 2
+model "Test"`
+		tokens, _ := lexer.Scan(input, "test.emod")
+
+		p := parser.New(tokens, "test.emod")
+		model, errs := p.Parse()
+
+		require.Empty(t, errs)
+		test.RequireEqual(t, []*ast.Comment{
+			{Text: "# Line 1"},
+			{Text: "# Line 2"},
+		}, model.Comments, ignoreCommentPositions)
+	})
+
+	t.Run("comments before actor are attached to Actor node", func(t *testing.T) {
+		input := `model "Test"
+# Actor comment
+actor "Guest"`
+		tokens, _ := lexer.Scan(input, "test.emod")
+
+		p := parser.New(tokens, "test.emod")
+		model, errs := p.Parse()
+
+		require.Empty(t, errs)
+		require.Equal(t, "Guest", model.Actors[0].Name)
+		test.RequireEqual(t, []*ast.Comment{{Text: "# Actor comment"}}, model.Actors[0].Comments, ignoreCommentPositions)
+	})
+
+	t.Run("comments before context are attached to Context node", func(t *testing.T) {
+		input := `model "Test"
+# Context comment
+context "Reservations" {
+  aggregate "Reservation" {
+  }
+}`
+		tokens, _ := lexer.Scan(input, "test.emod")
+
+		p := parser.New(tokens, "test.emod")
+		model, errs := p.Parse()
+
+		require.Empty(t, errs)
+		require.Equal(t, "Reservations", model.Contexts[0].Name)
+		test.RequireEqual(t, []*ast.Comment{{Text: "# Context comment"}}, model.Contexts[0].Comments, ignoreCommentPositions)
+	})
+
+	t.Run("comments before slice are attached to Slice node", func(t *testing.T) {
+		input := `model "Test"
+context "Ctx" {
+  aggregate "Agg" {
+    # Slice comment
+    slice "My Slice" {
+      command DoThing {
+        fields {
+          id string
+        }
+      }
+      event ThingDone {
+        fields {
+          id string
+        }
+      }
+      flow {
+        command -> event: DoThing -> ThingDone
+      }
+    }
+  }
+}`
+		tokens, _ := lexer.Scan(input, "test.emod")
+
+		p := parser.New(tokens, "test.emod")
+		model, errs := p.Parse()
+
+		require.Empty(t, errs)
+		slice := model.Contexts[0].Aggregates[0].Slices[0]
+		require.Equal(t, "My Slice", slice.Name)
+		test.RequireEqual(t, []*ast.Comment{{Text: "# Slice comment"}}, slice.Comments, ignoreCommentPositions)
+	})
+
+	t.Run("comments before command event view automation translation trigger are attached", func(t *testing.T) {
+		input := `model "Test"
+context "Ctx" {
+  aggregate "Agg" {
+    slice "Slice" {
+      # Command comment
+      command DoThing {
+        fields {
+          id string
+        }
+      }
+      # Event comment
+      event ThingDone {
+        fields {
+          id string
+        }
+      }
+      # Trigger comment
+      trigger UI "Form" {
+        actor Guest
+      }
+      # View comment
+      view MyView {
+        fields {
+          id string
+        }
+      }
+      # Automation comment
+      automation Reactor {
+        trigger ThingDone
+        command DoOther
+      }
+      # Translation comment
+      translation Import {
+        external_system "API"
+        reads WebhookView
+        command DoImport
+      }
+      # Flow comment
+      flow {
+        command -> event: DoThing -> ThingDone
+      }
+    }
+  }
+}`
+		tokens, _ := lexer.Scan(input, "test.emod")
+
+		p := parser.New(tokens, "test.emod")
+		model, errs := p.Parse()
+
+		require.Empty(t, errs)
+		slice := model.Contexts[0].Aggregates[0].Slices[0]
+
+		test.RequireEqual(t, []*ast.Comment{{Text: "# Command comment"}}, slice.Commands[0].Comments, ignoreCommentPositions)
+		test.RequireEqual(t, []*ast.Comment{{Text: "# Event comment"}}, slice.Events[0].Comments, ignoreCommentPositions)
+		test.RequireEqual(t, []*ast.Comment{{Text: "# Trigger comment"}}, slice.Trigger.Comments, ignoreCommentPositions)
+		test.RequireEqual(t, []*ast.Comment{{Text: "# View comment"}}, slice.Views[0].Comments, ignoreCommentPositions)
+		test.RequireEqual(t, []*ast.Comment{{Text: "# Automation comment"}}, slice.Automations[0].Comments, ignoreCommentPositions)
+		test.RequireEqual(t, []*ast.Comment{{Text: "# Translation comment"}}, slice.Translations[0].Comments, ignoreCommentPositions)
+		test.RequireEqual(t, []*ast.Comment{{Text: "# Flow comment"}}, slice.Flows[0].Comments, ignoreCommentPositions)
+	})
+
+	t.Run("comments before aggregate are attached to Aggregate node", func(t *testing.T) {
+		input := `model "Test"
+context "Ctx" {
+  # Aggregate comment
+  aggregate "Agg" {
+  }
+}`
+		tokens, _ := lexer.Scan(input, "test.emod")
+
+		p := parser.New(tokens, "test.emod")
+		model, errs := p.Parse()
+
+		require.Empty(t, errs)
+		require.Equal(t, "Agg", model.Contexts[0].Aggregates[0].Name)
+		test.RequireEqual(t, []*ast.Comment{{Text: "# Aggregate comment"}}, model.Contexts[0].Aggregates[0].Comments, ignoreCommentPositions)
+	})
+
+	t.Run("attached comment carries correct position", func(t *testing.T) {
+		input := `# Header
+model "Test"
+  # Indented actor comment
+actor "Guest"`
+		tokens, _ := lexer.Scan(input, "test.emod")
+
+		p := parser.New(tokens, "test.emod")
+		model, errs := p.Parse()
+
+		require.Empty(t, errs)
+		test.RequireEqual(t, []*ast.Comment{{
+			Text:     "# Header",
+			Position: ast.Position{Filename: "test.emod", Line: 1, Column: 1},
+		}}, model.Comments)
+
+		test.RequireEqual(t, []*ast.Comment{{
+			Text:     "# Indented actor comment",
+			Position: ast.Position{Filename: "test.emod", Line: 3, Column: 3},
+		}}, model.Actors[0].Comments)
 	})
 }

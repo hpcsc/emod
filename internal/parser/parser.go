@@ -18,6 +18,7 @@ type Instance struct {
 	diagnostics []*diagnostic.Entry
 	filename    string
 	handlers    map[lexer.Kind]topLevelHandler
+	pending     []*ast.Comment
 }
 
 func New(tokens []*lexer.Token, filename string) *Instance {
@@ -28,17 +29,23 @@ func New(tokens []*lexer.Token, filename string) *Instance {
 	}
 	p.handlers = map[lexer.Kind]topLevelHandler{
 		lexer.KeywordModel: func(model *ast.Model) {
+			comments := p.takePendingComments()
 			name, pos := p.parseModel()
+			model.Comments = comments
 			model.Name = name
 			model.NamePos = pos
 		},
 		lexer.KeywordActor: func(model *ast.Model) {
+			comments := p.takePendingComments()
 			if actor := p.parseActor(); actor != nil {
+				actor.Comments = comments
 				model.Actors = append(model.Actors, actor)
 			}
 		},
 		lexer.KeywordContext: func(model *ast.Model) {
+			comments := p.takePendingComments()
 			if ctx := p.parseContext(); ctx != nil {
+				ctx.Comments = comments
 				model.Contexts = append(model.Contexts, ctx)
 			}
 		},
@@ -141,6 +148,7 @@ func (p *Instance) parseContext() *ast.Context {
 }
 
 func (p *Instance) parseAggregate() *ast.Aggregate {
+	comments := p.takePendingComments()
 	p.consume(lexer.KeywordAggregate, "expected aggregate")
 	if !p.check(lexer.String) {
 		p.error(fmt.Sprintf("expected quoted string after \"aggregate\", got %q", p.peek().Value))
@@ -149,8 +157,9 @@ func (p *Instance) parseAggregate() *ast.Aggregate {
 
 	nameTok := p.advance()
 	aggregate := &ast.Aggregate{
-		Name:    nameTok.Value,
-		NamePos: p.position(nameTok),
+		Comments: comments,
+		Name:     nameTok.Value,
+		NamePos:  p.position(nameTok),
 	}
 
 	if !p.check(lexer.OpenBrace) {
@@ -182,6 +191,7 @@ func (p *Instance) parseAggregate() *ast.Aggregate {
 }
 
 func (p *Instance) parseSlice() *ast.Slice {
+	comments := p.takePendingComments()
 	p.consume(lexer.KeywordSlice, "expected slice")
 	if !p.check(lexer.String) {
 		p.error(fmt.Sprintf("expected quoted string after \"slice\", got %q", p.peek().Value))
@@ -190,8 +200,9 @@ func (p *Instance) parseSlice() *ast.Slice {
 
 	nameTok := p.advance()
 	slice := &ast.Slice{
-		Name:    nameTok.Value,
-		NamePos: p.position(nameTok),
+		Comments: comments,
+		Name:     nameTok.Value,
+		NamePos:  p.position(nameTok),
 	}
 
 	if !p.check(lexer.OpenBrace) {
@@ -245,6 +256,7 @@ func (p *Instance) parseSlice() *ast.Slice {
 }
 
 func (p *Instance) parseTrigger() *ast.Trigger {
+	comments := p.takePendingComments()
 	p.consume(lexer.KeywordTrigger, "expected trigger")
 	if !p.check(lexer.Identifier) {
 		p.error("expected identifier after trigger")
@@ -253,8 +265,9 @@ func (p *Instance) parseTrigger() *ast.Trigger {
 
 	kindTok := p.advance()
 	trigger := &ast.Trigger{
-		Kind:    kindTok.Value,
-		KindPos: p.position(kindTok),
+		Comments: comments,
+		Kind:     kindTok.Value,
+		KindPos:  p.position(kindTok),
 	}
 
 	if !p.check(lexer.String) {
@@ -310,6 +323,7 @@ func (p *Instance) parseTrigger() *ast.Trigger {
 }
 
 func (p *Instance) parseCommand() *ast.Command {
+	comments := p.takePendingComments()
 	p.consume(lexer.KeywordCommand, "expected command")
 	if !p.check(lexer.Identifier) {
 		p.error("expected identifier after command")
@@ -318,8 +332,9 @@ func (p *Instance) parseCommand() *ast.Command {
 
 	nameTok := p.advance()
 	command := &ast.Command{
-		Name:    nameTok.Value,
-		NamePos: p.position(nameTok),
+		Comments: comments,
+		Name:     nameTok.Value,
+		NamePos:  p.position(nameTok),
 	}
 
 	if !p.check(lexer.OpenBrace) {
@@ -349,6 +364,7 @@ func (p *Instance) parseCommand() *ast.Command {
 }
 
 func (p *Instance) parseEvent() *ast.Event {
+	comments := p.takePendingComments()
 	p.consume(lexer.KeywordEvent, "expected event")
 	if !p.check(lexer.Identifier) {
 		p.error("expected identifier after event")
@@ -357,8 +373,9 @@ func (p *Instance) parseEvent() *ast.Event {
 
 	nameTok := p.advance()
 	event := &ast.Event{
-		Name:    nameTok.Value,
-		NamePos: p.position(nameTok),
+		Comments: comments,
+		Name:     nameTok.Value,
+		NamePos:  p.position(nameTok),
 	}
 
 	if !p.check(lexer.OpenBrace) {
@@ -408,6 +425,7 @@ func (p *Instance) parseEvent() *ast.Event {
 }
 
 func (p *Instance) parseView() *ast.View {
+	comments := p.takePendingComments()
 	p.consume(lexer.KeywordView, "expected view")
 	if !p.check(lexer.Identifier) {
 		p.error("expected identifier after view")
@@ -416,8 +434,9 @@ func (p *Instance) parseView() *ast.View {
 
 	nameTok := p.advance()
 	view := &ast.View{
-		Name:    nameTok.Value,
-		NamePos: p.position(nameTok),
+		Comments: comments,
+		Name:     nameTok.Value,
+		NamePos:  p.position(nameTok),
 	}
 
 	if !p.check(lexer.OpenBrace) {
@@ -458,6 +477,7 @@ func (p *Instance) parseView() *ast.View {
 }
 
 func (p *Instance) parseAutomation() *ast.Automation {
+	comments := p.takePendingComments()
 	p.consume(lexer.KeywordAutomation, "expected automation")
 	if !p.check(lexer.Identifier) {
 		p.error("expected identifier after automation")
@@ -466,8 +486,9 @@ func (p *Instance) parseAutomation() *ast.Automation {
 
 	nameTok := p.advance()
 	automation := &ast.Automation{
-		Name:    nameTok.Value,
-		NamePos: p.position(nameTok),
+		Comments: comments,
+		Name:     nameTok.Value,
+		NamePos:  p.position(nameTok),
 	}
 
 	if !p.check(lexer.OpenBrace) {
@@ -548,6 +569,7 @@ func (p *Instance) parseAutomation() *ast.Automation {
 }
 
 func (p *Instance) parseTranslation() *ast.Translation {
+	comments := p.takePendingComments()
 	p.consume(lexer.KeywordTranslation, "expected translation")
 	if !p.check(lexer.Identifier) {
 		p.error("expected identifier after translation")
@@ -556,8 +578,9 @@ func (p *Instance) parseTranslation() *ast.Translation {
 
 	nameTok := p.advance()
 	translation := &ast.Translation{
-		Name:    nameTok.Value,
-		NamePos: p.position(nameTok),
+		Comments: comments,
+		Name:     nameTok.Value,
+		NamePos:  p.position(nameTok),
 	}
 
 	if !p.check(lexer.OpenBrace) {
@@ -731,6 +754,7 @@ func (p *Instance) parseField() *ast.Field {
 }
 
 func (p *Instance) parseFlows() []*ast.Flow {
+	comments := p.takePendingComments()
 	var flows []*ast.Flow
 	p.consume(lexer.KeywordFlow, "expected flow")
 	if !p.check(lexer.OpenBrace) {
@@ -756,6 +780,12 @@ func (p *Instance) parseFlows() []*ast.Flow {
 		return flows
 	}
 	p.advance()
+
+	if len(flows) > 0 {
+		flows[0].Comments = comments
+	} else {
+		p.pending = comments
+	}
 
 	return flows
 }
@@ -825,8 +855,20 @@ func (p *Instance) peek() *lexer.Token {
 
 func (p *Instance) skipComments() {
 	for p.pos < len(p.tokens) && p.tokens[p.pos].Type == lexer.Comment {
+		tok := p.tokens[p.pos]
+		p.pending = append(p.pending, &ast.Comment{
+			Text:     tok.Value,
+			Position: ast.Position{Filename: p.filename, Line: tok.Line, Column: tok.Column},
+		})
 		p.pos++
 	}
+}
+
+func (p *Instance) takePendingComments() []*ast.Comment {
+	p.skipComments()
+	comments := p.pending
+	p.pending = nil
+	return comments
 }
 
 func (p *Instance) advance() *lexer.Token {
