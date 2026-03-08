@@ -30,11 +30,19 @@ func indent(level int) string {
 	return strings.Repeat("  ", level)
 }
 
+func (w *writer) writeComments(comments []*ast.Comment, level int) {
+	for _, c := range comments {
+		w.line(level, "%s", c.Text)
+	}
+}
+
 func (w *writer) writeModel(model *ast.Model) {
+	w.writeComments(model.Comments, 0)
 	w.line(0, "model %q", model.Name)
 
 	for _, actor := range model.Actors {
 		w.blankLine()
+		w.writeComments(actor.Comments, 0)
 		w.line(0, "actor %q", actor.Name)
 	}
 
@@ -45,6 +53,7 @@ func (w *writer) writeModel(model *ast.Model) {
 }
 
 func (w *writer) writeContext(ctx *ast.Context, level int) {
+	w.writeComments(ctx.Comments, level)
 	w.line(level, "context %q {", ctx.Name)
 	for i, agg := range ctx.Aggregates {
 		if i > 0 {
@@ -56,6 +65,7 @@ func (w *writer) writeContext(ctx *ast.Context, level int) {
 }
 
 func (w *writer) writeAggregate(agg *ast.Aggregate, level int) {
+	w.writeComments(agg.Comments, level)
 	w.line(level, "aggregate %q {", agg.Name)
 	for i, slice := range agg.Slices {
 		if i > 0 {
@@ -67,6 +77,7 @@ func (w *writer) writeAggregate(agg *ast.Aggregate, level int) {
 }
 
 func (w *writer) writeSlice(slice *ast.Slice, level int) {
+	w.writeComments(slice.Comments, level)
 	w.line(level, "slice %q {", slice.Name)
 
 	inner := level + 1
@@ -138,6 +149,7 @@ func (w *writer) writeSlice(slice *ast.Slice, level int) {
 }
 
 func (w *writer) writeTrigger(trigger *ast.Trigger, level int) {
+	w.writeComments(trigger.Comments, level)
 	w.line(level, "trigger %s %q {", trigger.Kind, trigger.Name)
 	if trigger.Actor != "" {
 		w.line(level+1, "actor %s", trigger.Actor)
@@ -149,6 +161,7 @@ func (w *writer) writeTrigger(trigger *ast.Trigger, level int) {
 }
 
 func (w *writer) writeCommand(cmd *ast.Command, level int) {
+	w.writeComments(cmd.Comments, level)
 	w.line(level, "command %s {", cmd.Name)
 	if len(cmd.Fields) > 0 {
 		w.writeFields(cmd.Fields, level+1)
@@ -157,6 +170,7 @@ func (w *writer) writeCommand(cmd *ast.Command, level int) {
 }
 
 func (w *writer) writeEvent(evt *ast.Event, level int) {
+	w.writeComments(evt.Comments, level)
 	w.line(level, "event %s {", evt.Name)
 	if evt.Source == "external" && evt.ExternalName != "" {
 		w.line(level+1, "source external %q", evt.ExternalName)
@@ -196,12 +210,14 @@ func fieldColumnWidths(fields []*ast.Field) (nameWidth, typeWidth int) {
 func (w *writer) writeFlows(flows []*ast.Flow, level int) {
 	w.line(level, "flow {")
 	for _, flow := range flows {
+		w.writeComments(flow.Comments, level+1)
 		w.line(level+1, "command -> event: %s -> %s", flow.CommandName, flow.EventName)
 	}
 	w.line(level, "}")
 }
 
 func (w *writer) writeView(view *ast.View, level int) {
+	w.writeComments(view.Comments, level)
 	w.line(level, "view %s {", view.Name)
 	if len(view.Fields) > 0 {
 		w.writeFields(view.Fields, level+1)
@@ -213,6 +229,7 @@ func (w *writer) writeView(view *ast.View, level int) {
 }
 
 func (w *writer) writeAutomation(auto *ast.Automation, level int) {
+	w.writeComments(auto.Comments, level)
 	w.line(level, "automation %s {", auto.Name)
 	if auto.TriggerEvent != "" {
 		w.line(level+1, "trigger %s", auto.TriggerEvent)
@@ -227,6 +244,7 @@ func (w *writer) writeAutomation(auto *ast.Automation, level int) {
 }
 
 func (w *writer) writeTranslation(trans *ast.Translation, level int) {
+	w.writeComments(trans.Comments, level)
 	w.line(level, "translation %s {", trans.Name)
 	if trans.ExternalSystem != "" {
 		w.line(level+1, "external_system %q", trans.ExternalSystem)

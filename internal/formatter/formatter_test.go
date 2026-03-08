@@ -62,7 +62,11 @@ func TestFormat(t *testing.T) {
 										},
 									},
 									Flows: []*ast.Flow{
-										{CommandName: "MakeReservation", EventName: "ReservationMade"},
+										{
+											Comments:    []*ast.Comment{{Text: "# main flow"}},
+											CommandName: "MakeReservation",
+											EventName:   "ReservationMade",
+										},
 									},
 								},
 							},
@@ -94,6 +98,7 @@ func TestFormat(t *testing.T) {
 			`      }`,
 			``,
 			`      flow {`,
+			`        # main flow`,
 			`        command -> event: MakeReservation -> ReservationMade`,
 			`      }`,
 			`    }`,
@@ -1102,6 +1107,213 @@ func TestFormat(t *testing.T) {
 		}
 
 		test.RequireEqual(t, model, model2, ignorePositionsAndComments)
+	})
+
+	t.Run("single comment before model declaration at root level", func(t *testing.T) {
+		model := &ast.Model{
+			Comments: []*ast.Comment{{Text: "# System description"}},
+			Name:     "Test",
+		}
+
+		result := formatter.Format(model)
+
+		expected := "# System description\nmodel \"Test\"\n"
+		require.Equal(t, expected, result)
+	})
+
+	t.Run("comment before slice at nested indentation level", func(t *testing.T) {
+		model := &ast.Model{
+			Name: "Test",
+			Contexts: []*ast.Context{
+				{
+					Name: "Ctx",
+					Aggregates: []*ast.Aggregate{
+						{
+							Name: "Agg",
+							Slices: []*ast.Slice{
+								{
+									Comments: []*ast.Comment{{Text: "# Important slice"}},
+									Name:     "My Slice",
+									Commands: []*ast.Command{
+										{Name: "Cmd"},
+									},
+								},
+							},
+						},
+					},
+				},
+			},
+		}
+
+		result := formatter.Format(model)
+
+		expected := strings.Join([]string{
+			`model "Test"`,
+			``,
+			`context "Ctx" {`,
+			`  aggregate "Agg" {`,
+			`    # Important slice`,
+			`    slice "My Slice" {`,
+			`      command Cmd {`,
+			`      }`,
+			`    }`,
+			`  }`,
+			`}`,
+			``,
+		}, "\n")
+
+		require.Equal(t, expected, result)
+	})
+
+	t.Run("multiple consecutive comments before a single node", func(t *testing.T) {
+		model := &ast.Model{
+			Name: "Test",
+			Contexts: []*ast.Context{
+				{
+					Name: "Ctx",
+					Aggregates: []*ast.Aggregate{
+						{
+							Name: "Agg",
+							Slices: []*ast.Slice{
+								{
+									Comments: []*ast.Comment{
+										{Text: "# First comment"},
+										{Text: "# Second comment"},
+										{Text: "# Third comment"},
+									},
+									Name: "My Slice",
+									Commands: []*ast.Command{
+										{Name: "Cmd"},
+									},
+								},
+							},
+						},
+					},
+				},
+			},
+		}
+
+		result := formatter.Format(model)
+
+		expected := strings.Join([]string{
+			`model "Test"`,
+			``,
+			`context "Ctx" {`,
+			`  aggregate "Agg" {`,
+			`    # First comment`,
+			`    # Second comment`,
+			`    # Third comment`,
+			`    slice "My Slice" {`,
+			`      command Cmd {`,
+			`      }`,
+			`    }`,
+			`  }`,
+			`}`,
+			``,
+		}, "\n")
+
+		require.Equal(t, expected, result)
+	})
+
+	t.Run("round-trip: formatting all_patterns.emod preserves all comments", func(t *testing.T) {
+		raw, err := os.ReadFile("../../internal/parser/testdata/all_patterns.emod")
+		require.NoError(t, err)
+
+		tokens, scanErrs := lexer.Scan(string(raw), "all_patterns.emod")
+		require.Empty(t, scanErrs)
+		p := parser.New(tokens, "all_patterns.emod")
+		original, parseErrs := p.Parse()
+		require.Empty(t, parseErrs)
+
+		formatted := formatter.Format(original)
+
+		tokens2, scanErrs2 := lexer.Scan(formatted, "all_patterns.emod")
+		require.Empty(t, scanErrs2)
+		p2 := parser.New(tokens2, "all_patterns.emod")
+		reparsed, parseErrs2 := p2.Parse()
+		require.Empty(t, parseErrs2)
+
+		require.Equal(t,
+			"# Hotel Reservation System — exercises all four slice patterns",
+			reparsed.Comments[0].Text,
+		)
+
+		slices := reparsed.Contexts[0].Aggregates[0].Slices
+		require.Equal(t, "# Slice 1: Command Pattern", slices[0].Comments[0].Text)
+		require.Equal(t, "# Slice 2: View Pattern", slices[1].Comments[0].Text)
+		require.Equal(t, "# Slice 3: Command Pattern — Check Out", slices[2].Comments[0].Text)
+		require.Equal(t, "# Slice 4: Automation Pattern", slices[3].Comments[0].Text)
+		require.Equal(t, "# Slice 5: Translation Pattern", slices[4].Comments[0].Text)
+	})
+
+	t.Run("idempotency: format(format(input)) equals format(input)", func(t *testing.T) {
+		raw, err := os.ReadFile("../../internal/parser/testdata/all_patterns.emod")
+		require.NoError(t, err)
+
+		tokens1, scanErrs1 := lexer.Scan(string(raw), "all_patterns.emod")
+		require.Empty(t, scanErrs1)
+		p1 := parser.New(tokens1, "all_patterns.emod")
+		model1, parseErrs1 := p1.Parse()
+		require.Empty(t, parseErrs1)
+
+		firstFormat := formatter.Format(model1)
+
+		tokens2, scanErrs2 := lexer.Scan(firstFormat, "formatted.emod")
+		require.Empty(t, scanErrs2)
+		p2 := parser.New(tokens2, "formatted.emod")
+		model2, parseErrs2 := p2.Parse()
+		require.Empty(t, parseErrs2)
+
+		secondFormat := formatter.Format(model2)
+
+		require.Equal(t, firstFormat, secondFormat,
+			"formatting the already-formatted output should produce identical bytes")
+	})
+
+	t.Run("comment on deeply nested command inside slice", func(t *testing.T) {
+		model := &ast.Model{
+			Name: "Test",
+			Contexts: []*ast.Context{
+				{
+					Name: "Ctx",
+					Aggregates: []*ast.Aggregate{
+						{
+							Name: "Agg",
+							Slices: []*ast.Slice{
+								{
+									Name: "My Slice",
+									Commands: []*ast.Command{
+										{
+											Comments: []*ast.Comment{{Text: "# Command comment"}},
+											Name:     "DoThing",
+										},
+									},
+								},
+							},
+						},
+					},
+				},
+			},
+		}
+
+		result := formatter.Format(model)
+
+		expected := strings.Join([]string{
+			`model "Test"`,
+			``,
+			`context "Ctx" {`,
+			`  aggregate "Agg" {`,
+			`    slice "My Slice" {`,
+			`      # Command comment`,
+			`      command DoThing {`,
+			`      }`,
+			`    }`,
+			`  }`,
+			`}`,
+			``,
+		}, "\n")
+
+		require.Equal(t, expected, result)
 	})
 
 	t.Run("view with fields but no subscribes omits subscribes line", func(t *testing.T) {
