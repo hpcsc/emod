@@ -6,7 +6,13 @@ type Position struct {
 	Column   int
 }
 
+type Comment struct {
+	Text string
+	Position
+}
+
 type Model struct {
+	Comments []*Comment
 	Name     string
 	NamePos  Position
 	Actors   []*Actor
@@ -14,11 +20,13 @@ type Model struct {
 }
 
 type Actor struct {
-	Name    string
+	Comments []*Comment
+	Name     string
 	NamePos Position
 }
 
 type Context struct {
+	Comments   []*Comment
 	Name       string
 	NamePos    Position
 	Aggregates []*Aggregate
@@ -27,6 +35,7 @@ type Context struct {
 }
 
 type Aggregate struct {
+	Comments []*Comment
 	Name     string
 	NamePos  Position
 	Slices   []*Slice
@@ -35,6 +44,7 @@ type Aggregate struct {
 }
 
 type Slice struct {
+	Comments     []*Comment
 	Name         string
 	NamePos      Position
 	Trigger      *Trigger
@@ -50,6 +60,7 @@ type Slice struct {
 }
 
 type Command struct {
+	Comments []*Comment
 	Name     string
 	NamePos  Position
 	Fields   []*Field
@@ -58,6 +69,7 @@ type Command struct {
 }
 
 type Event struct {
+	Comments        []*Comment
 	Name            string
 	NamePos         Position
 	Source          string
@@ -79,6 +91,7 @@ type Field struct {
 }
 
 type Flow struct {
+	Comments    []*Comment
 	CommandName string
 	CommandPos  Position
 	EventName   string
@@ -86,6 +99,7 @@ type Flow struct {
 }
 
 type Trigger struct {
+	Comments []*Comment
 	Kind     string
 	KindPos  Position
 	Name     string
@@ -99,6 +113,7 @@ type Trigger struct {
 }
 
 type View struct {
+	Comments   []*Comment
 	Name       string
 	NamePos    Position
 	Fields     []*Field
@@ -108,6 +123,7 @@ type View struct {
 }
 
 type Automation struct {
+	Comments       []*Comment
 	Name           string
 	NamePos        Position
 	TriggerEvent      string
@@ -121,6 +137,7 @@ type Automation struct {
 }
 
 type Translation struct {
+	Comments       []*Comment
 	Name           string
 	NamePos        Position
 	ExternalSystem string

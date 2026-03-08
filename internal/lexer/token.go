@@ -38,6 +38,7 @@ const (
 	Comma
 
 	// Special
+	Comment
 	EOF
 )
 
@@ -106,6 +107,8 @@ func (k Kind) String() string {
 		return ":"
 	case Comma:
 		return ","
+	case Comment:
+		return "comment"
 	case EOF:
 		return "EOF"
 	default:

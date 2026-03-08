@@ -20,12 +20,16 @@ func Scan(input, filename string) ([]*Token, []*diagnostic.Entry) {
 	var diags []*diagnostic.Entry
 
 	for c.pos < len(c.input) {
-		c = skipWhitespaceAndComments(c)
+		c = skipWhitespace(c)
 		if c.pos >= len(c.input) {
 			break
 		}
 
 		switch {
+		case peek(c) == '#':
+			var tok *Token
+			c, tok = readComment(c)
+			tokens = append(tokens, tok)
 		case peek(c) == '"':
 			var tok *Token
 			var d *diagnostic.Entry
@@ -79,7 +83,7 @@ func newDiag(msg string, c cursor) *diagnostic.Entry {
 	return &diagnostic.Entry{Filename: c.filename, Line: c.line, Column: c.column, Message: msg}
 }
 
-func skipWhitespaceAndComments(c cursor) cursor {
+func skipWhitespace(c cursor) cursor {
 	for c.pos < len(c.input) {
 		if isWhitespace(peek(c)) && peek(c) != '\n' {
 			c = advance(c)
@@ -93,16 +97,21 @@ func skipWhitespaceAndComments(c cursor) cursor {
 			continue
 		}
 
-		if peek(c) == '#' {
-			for c.pos < len(c.input) && peek(c) != '\n' {
-				c = advance(c)
-			}
-			continue
-		}
-
 		break
 	}
 	return c
+}
+
+func readComment(c cursor) (cursor, *Token) {
+	startLine := c.line
+	startCol := c.column
+
+	start := c.pos
+	for c.pos < len(c.input) && peek(c) != '\n' {
+		c = advance(c)
+	}
+
+	return c, &Token{Type: Comment, Value: c.input[start:c.pos], Line: startLine, Column: startCol}
 }
 
 func readString(c cursor) (cursor, *Token, *diagnostic.Entry) {

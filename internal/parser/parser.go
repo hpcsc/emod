@@ -816,10 +816,17 @@ func (p *Instance) position(tok *lexer.Token) ast.Position {
 }
 
 func (p *Instance) peek() *lexer.Token {
+	p.skipComments()
 	if p.pos >= len(p.tokens) {
 		return &lexer.Token{Type: lexer.EOF}
 	}
 	return p.tokens[p.pos]
+}
+
+func (p *Instance) skipComments() {
+	for p.pos < len(p.tokens) && p.tokens[p.pos].Type == lexer.Comment {
+		p.pos++
+	}
 }
 
 func (p *Instance) advance() *lexer.Token {
@@ -856,6 +863,7 @@ func (p *Instance) consume(typ lexer.Kind, msg string) {
 }
 
 func (p *Instance) isAtEnd() bool {
+	p.skipComments()
 	return p.pos >= len(p.tokens) || p.tokens[p.pos].Type == lexer.EOF
 }
 

@@ -123,13 +123,26 @@ actor "Guest"`
 		tokens, diags := lexer.Scan(input, "test.emod")
 
 		require.Empty(t, diags)
-		require.Len(t, tokens, 5)
-		require.Equal(t, lexer.KeywordModel, tokens[0].Type)
-		require.Equal(t, lexer.String, tokens[1].Type)
-		require.Equal(t, "Test", tokens[1].Value)
-		require.Equal(t, lexer.KeywordActor, tokens[2].Type)
-		require.Equal(t, lexer.String, tokens[3].Type)
-		require.Equal(t, "Guest", tokens[3].Value)
+		require.Len(t, tokens, 7)
+
+		require.Equal(t, lexer.Comment, tokens[0].Type)
+		require.Equal(t, "# This is a comment", tokens[0].Value)
+		require.Equal(t, 1, tokens[0].Line)
+		require.Equal(t, 1, tokens[0].Column)
+
+		require.Equal(t, lexer.KeywordModel, tokens[1].Type)
+		require.Equal(t, lexer.String, tokens[2].Type)
+		require.Equal(t, "Test", tokens[2].Value)
+
+		require.Equal(t, lexer.Comment, tokens[3].Type)
+		require.Equal(t, "# Another comment", tokens[3].Value)
+		require.Equal(t, 3, tokens[3].Line)
+		require.Equal(t, 3, tokens[3].Column)
+
+		require.Equal(t, lexer.KeywordActor, tokens[4].Type)
+		require.Equal(t, lexer.String, tokens[5].Type)
+		require.Equal(t, "Guest", tokens[5].Value)
+		require.Equal(t, lexer.EOF, tokens[6].Type)
 	})
 
 	t.Run("position tracking", func(t *testing.T) {
@@ -189,12 +202,22 @@ actor "Guest"`
 	})
 
 	t.Run("comment only input", func(t *testing.T) {
-		tokens, diags := lexer.Scan(`# Just a comment
-# Another line`, "test.emod")
+		tokens, diags := lexer.Scan("# Just a comment\n# Another line", "test.emod")
 
 		require.Empty(t, diags)
-		require.Len(t, tokens, 1)
-		require.Equal(t, lexer.EOF, tokens[0].Type)
+		require.Len(t, tokens, 3)
+
+		require.Equal(t, lexer.Comment, tokens[0].Type)
+		require.Equal(t, "# Just a comment", tokens[0].Value)
+		require.Equal(t, 1, tokens[0].Line)
+		require.Equal(t, 1, tokens[0].Column)
+
+		require.Equal(t, lexer.Comment, tokens[1].Type)
+		require.Equal(t, "# Another line", tokens[1].Value)
+		require.Equal(t, 2, tokens[1].Line)
+		require.Equal(t, 1, tokens[1].Column)
+
+		require.Equal(t, lexer.EOF, tokens[2].Type)
 	})
 
 	t.Run("source external with provider string", func(t *testing.T) {
@@ -265,22 +288,22 @@ context "Reservations" {
 		hasContext := false
 		hasCommand := false
 		hasArrow := false
+		hasComment := false
 
 		for _, tok := range tokens {
-			if tok.Type == lexer.KeywordModel {
+			switch tok.Type {
+			case lexer.KeywordModel:
 				hasModel = true
-			}
-			if tok.Type == lexer.KeywordActor {
+			case lexer.KeywordActor:
 				hasActor = true
-			}
-			if tok.Type == lexer.KeywordContext {
+			case lexer.KeywordContext:
 				hasContext = true
-			}
-			if tok.Type == lexer.KeywordCommand {
+			case lexer.KeywordCommand:
 				hasCommand = true
-			}
-			if tok.Type == lexer.Arrow {
+			case lexer.Arrow:
 				hasArrow = true
+			case lexer.Comment:
+				hasComment = true
 			}
 		}
 
@@ -289,6 +312,44 @@ context "Reservations" {
 		require.True(t, hasContext)
 		require.True(t, hasCommand)
 		require.True(t, hasArrow)
+		require.True(t, hasComment)
+		require.Equal(t, lexer.Comment, tokens[0].Type)
+		require.Equal(t, "# Hotel Reservation System", tokens[0].Value)
 		require.Equal(t, lexer.EOF, tokens[len(tokens)-1].Type)
+	})
+
+	t.Run("comment token value includes hash prefix", func(t *testing.T) {
+		tokens, diags := lexer.Scan("# This is a comment", "test.emod")
+
+		require.Empty(t, diags)
+		require.Len(t, tokens, 2)
+		require.Equal(t, lexer.Comment, tokens[0].Type)
+		require.Equal(t, "# This is a comment", tokens[0].Value)
+		require.Equal(t, lexer.EOF, tokens[1].Type)
+	})
+
+	t.Run("comment token position tracking", func(t *testing.T) {
+		input := "# first comment\n\n  # indented comment"
+
+		tokens, diags := lexer.Scan(input, "test.emod")
+
+		require.Empty(t, diags)
+		require.Len(t, tokens, 3)
+
+		require.Equal(t, lexer.Comment, tokens[0].Type)
+		require.Equal(t, "# first comment", tokens[0].Value)
+		require.Equal(t, 1, tokens[0].Line)
+		require.Equal(t, 1, tokens[0].Column)
+
+		require.Equal(t, lexer.Comment, tokens[1].Type)
+		require.Equal(t, "# indented comment", tokens[1].Value)
+		require.Equal(t, 3, tokens[1].Line)
+		require.Equal(t, 3, tokens[1].Column)
+
+		require.Equal(t, lexer.EOF, tokens[2].Type)
+	})
+
+	t.Run("Comment kind String returns comment", func(t *testing.T) {
+		require.Equal(t, "comment", lexer.Comment.String())
 	})
 }
