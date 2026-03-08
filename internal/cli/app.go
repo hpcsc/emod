@@ -25,6 +25,26 @@ func NewApp() *urfave.App {
 					return nil
 				},
 			},
+			{
+				Name:      "fmt",
+				Usage:     "Format an .emod file",
+				ArgsUsage: "<file>",
+				Flags: []urfave.Flag{
+					&urfave.BoolFlag{
+						Name:  "check",
+						Usage: "Check if the file is already formatted (exit 1 if not)",
+					},
+				},
+				Action: func(c *urfave.Context) error {
+					path := c.Args().First()
+					check := c.Bool("check")
+					if err := RunFmt(path, check); err != nil {
+						fmt.Fprintln(os.Stderr, err)
+						return urfave.Exit("", 1)
+					}
+					return nil
+				},
+			},
 		},
 	}
 }
