@@ -1316,6 +1316,310 @@ func TestFormat(t *testing.T) {
 		require.Equal(t, expected, result)
 	})
 
+	t.Run("zero blank lines between sibling slices are expanded to exactly one", func(t *testing.T) {
+		input := strings.Join([]string{
+			`model "Hotel"`,
+			``,
+			`context "Reservations" {`,
+			`  aggregate "Reservation" {`,
+			`    slice "Make Reservation" {`,
+			`      command MakeReservation {`,
+			`      }`,
+			`    }`,
+			`    slice "Cancel Reservation" {`,
+			`      command CancelReservation {`,
+			`      }`,
+			`    }`,
+			`  }`,
+			`}`,
+			``,
+		}, "\n")
+
+		expected := strings.Join([]string{
+			`model "Hotel"`,
+			``,
+			`context "Reservations" {`,
+			`  aggregate "Reservation" {`,
+			`    slice "Make Reservation" {`,
+			`      command MakeReservation {`,
+			`      }`,
+			`    }`,
+			``,
+			`    slice "Cancel Reservation" {`,
+			`      command CancelReservation {`,
+			`      }`,
+			`    }`,
+			`  }`,
+			`}`,
+			``,
+		}, "\n")
+
+		tokens, scanErrs := lexer.Scan(input, "test.emod")
+		require.Empty(t, scanErrs)
+		p := parser.New(tokens, "test.emod")
+		model, parseErrs := p.Parse()
+		require.Empty(t, parseErrs)
+
+		result := formatter.Format(model)
+
+		require.Equal(t, expected, result)
+	})
+
+	t.Run("excessive blank lines between sibling slices are reduced to exactly one", func(t *testing.T) {
+		input := strings.Join([]string{
+			`model "Hotel"`,
+			``,
+			`context "Reservations" {`,
+			`  aggregate "Reservation" {`,
+			`    slice "Make Reservation" {`,
+			`      command MakeReservation {`,
+			`      }`,
+			`    }`,
+			``,
+			``,
+			``,
+			``,
+			`    slice "Cancel Reservation" {`,
+			`      command CancelReservation {`,
+			`      }`,
+			`    }`,
+			`  }`,
+			`}`,
+			``,
+		}, "\n")
+
+		expected := strings.Join([]string{
+			`model "Hotel"`,
+			``,
+			`context "Reservations" {`,
+			`  aggregate "Reservation" {`,
+			`    slice "Make Reservation" {`,
+			`      command MakeReservation {`,
+			`      }`,
+			`    }`,
+			``,
+			`    slice "Cancel Reservation" {`,
+			`      command CancelReservation {`,
+			`      }`,
+			`    }`,
+			`  }`,
+			`}`,
+			``,
+		}, "\n")
+
+		tokens, scanErrs := lexer.Scan(input, "test.emod")
+		require.Empty(t, scanErrs)
+		p := parser.New(tokens, "test.emod")
+		model, parseErrs := p.Parse()
+		require.Empty(t, parseErrs)
+
+		result := formatter.Format(model)
+
+		require.Equal(t, expected, result)
+	})
+
+	t.Run("no leading blank line before the first slice in an aggregate", func(t *testing.T) {
+		input := strings.Join([]string{
+			`model "Hotel"`,
+			``,
+			`context "Reservations" {`,
+			`  aggregate "Reservation" {`,
+			``,
+			``,
+			`    slice "Make Reservation" {`,
+			`      command MakeReservation {`,
+			`      }`,
+			`    }`,
+			`  }`,
+			`}`,
+			``,
+		}, "\n")
+
+		expected := strings.Join([]string{
+			`model "Hotel"`,
+			``,
+			`context "Reservations" {`,
+			`  aggregate "Reservation" {`,
+			`    slice "Make Reservation" {`,
+			`      command MakeReservation {`,
+			`      }`,
+			`    }`,
+			`  }`,
+			`}`,
+			``,
+		}, "\n")
+
+		tokens, scanErrs := lexer.Scan(input, "test.emod")
+		require.Empty(t, scanErrs)
+		p := parser.New(tokens, "test.emod")
+		model, parseErrs := p.Parse()
+		require.Empty(t, parseErrs)
+
+		result := formatter.Format(model)
+
+		require.Equal(t, expected, result)
+	})
+
+	t.Run("no trailing blank line after the last slice in an aggregate", func(t *testing.T) {
+		input := strings.Join([]string{
+			`model "Hotel"`,
+			``,
+			`context "Reservations" {`,
+			`  aggregate "Reservation" {`,
+			`    slice "Make Reservation" {`,
+			`      command MakeReservation {`,
+			`      }`,
+			`    }`,
+			``,
+			``,
+			`  }`,
+			`}`,
+			``,
+		}, "\n")
+
+		expected := strings.Join([]string{
+			`model "Hotel"`,
+			``,
+			`context "Reservations" {`,
+			`  aggregate "Reservation" {`,
+			`    slice "Make Reservation" {`,
+			`      command MakeReservation {`,
+			`      }`,
+			`    }`,
+			`  }`,
+			`}`,
+			``,
+		}, "\n")
+
+		tokens, scanErrs := lexer.Scan(input, "test.emod")
+		require.Empty(t, scanErrs)
+		p := parser.New(tokens, "test.emod")
+		model, parseErrs := p.Parse()
+		require.Empty(t, parseErrs)
+
+		result := formatter.Format(model)
+
+		require.Equal(t, expected, result)
+	})
+
+	t.Run("zero blank lines between top-level declarations are expanded to exactly one", func(t *testing.T) {
+		input := strings.Join([]string{
+			`model "Hotel"`,
+			`actor "Guest"`,
+			`context "Reservations" {`,
+			`  aggregate "Reservation" {`,
+			`  }`,
+			`}`,
+			`context "Billing" {`,
+			`  aggregate "Invoice" {`,
+			`  }`,
+			`}`,
+			``,
+		}, "\n")
+
+		expected := strings.Join([]string{
+			`model "Hotel"`,
+			``,
+			`actor "Guest"`,
+			``,
+			`context "Reservations" {`,
+			`  aggregate "Reservation" {`,
+			`  }`,
+			`}`,
+			``,
+			`context "Billing" {`,
+			`  aggregate "Invoice" {`,
+			`  }`,
+			`}`,
+			``,
+		}, "\n")
+
+		tokens, scanErrs := lexer.Scan(input, "test.emod")
+		require.Empty(t, scanErrs)
+		p := parser.New(tokens, "test.emod")
+		model, parseErrs := p.Parse()
+		require.Empty(t, parseErrs)
+
+		result := formatter.Format(model)
+
+		require.Equal(t, expected, result)
+	})
+
+	t.Run("excessive blank lines between top-level declarations are reduced to exactly one", func(t *testing.T) {
+		input := strings.Join([]string{
+			`model "Hotel"`,
+			``,
+			``,
+			``,
+			``,
+			`actor "Guest"`,
+			``,
+			``,
+			``,
+			``,
+			`context "Reservations" {`,
+			`  aggregate "Reservation" {`,
+			`  }`,
+			`}`,
+			``,
+		}, "\n")
+
+		expected := strings.Join([]string{
+			`model "Hotel"`,
+			``,
+			`actor "Guest"`,
+			``,
+			`context "Reservations" {`,
+			`  aggregate "Reservation" {`,
+			`  }`,
+			`}`,
+			``,
+		}, "\n")
+
+		tokens, scanErrs := lexer.Scan(input, "test.emod")
+		require.Empty(t, scanErrs)
+		p := parser.New(tokens, "test.emod")
+		model, parseErrs := p.Parse()
+		require.Empty(t, parseErrs)
+
+		result := formatter.Format(model)
+
+		require.Equal(t, expected, result)
+	})
+
+	t.Run("idempotency on already-normalized multi-slice input", func(t *testing.T) {
+		input := strings.Join([]string{
+			`model "Hotel"`,
+			``,
+			`actor "Guest"`,
+			``,
+			`context "Reservations" {`,
+			`  aggregate "Reservation" {`,
+			`    slice "Make Reservation" {`,
+			`      command MakeReservation {`,
+			`      }`,
+			`    }`,
+			``,
+			`    slice "Cancel Reservation" {`,
+			`      command CancelReservation {`,
+			`      }`,
+			`    }`,
+			`  }`,
+			`}`,
+			``,
+		}, "\n")
+
+		tokens, scanErrs := lexer.Scan(input, "test.emod")
+		require.Empty(t, scanErrs)
+		p := parser.New(tokens, "test.emod")
+		model, parseErrs := p.Parse()
+		require.Empty(t, parseErrs)
+
+		result := formatter.Format(model)
+
+		require.Equal(t, input, result)
+	})
+
 	t.Run("view with fields but no subscribes omits subscribes line", func(t *testing.T) {
 		model := &ast.Model{
 			Name: "Test",
