@@ -168,15 +168,29 @@ func (w *writer) writeEvent(evt *ast.Event, level int) {
 }
 
 func (w *writer) writeFields(fields []*ast.Field, level int) {
+	nameWidth, typeWidth := fieldColumnWidths(fields)
+
 	w.line(level, "fields {")
 	for _, f := range fields {
 		if f.Modifier != "" {
-			w.line(level+1, "%s %s %s", f.Name, f.Type, f.Modifier)
+			w.line(level+1, "%-*s %-*s %s", nameWidth, f.Name, typeWidth, f.Type, f.Modifier)
 		} else {
-			w.line(level+1, "%s %s", f.Name, f.Type)
+			w.line(level+1, "%-*s %s", nameWidth, f.Name, f.Type)
 		}
 	}
 	w.line(level, "}")
+}
+
+func fieldColumnWidths(fields []*ast.Field) (nameWidth, typeWidth int) {
+	for _, f := range fields {
+		if len(f.Name) > nameWidth {
+			nameWidth = len(f.Name)
+		}
+		if len(f.Type) > typeWidth {
+			typeWidth = len(f.Type)
+		}
+	}
+	return nameWidth, typeWidth
 }
 
 func (w *writer) writeFlows(flows []*ast.Flow, level int) {

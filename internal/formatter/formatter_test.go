@@ -3,6 +3,7 @@
 package formatter_test
 
 import (
+	"os"
 	"strings"
 	"testing"
 
@@ -81,7 +82,7 @@ func TestFormat(t *testing.T) {
 			`    slice "Make Reservation" {`,
 			`      command MakeReservation {`,
 			`        fields {`,
-			`          guestId string required`,
+			`          guestId  string required`,
 			`          roomType string required`,
 			`        }`,
 			`      }`,
@@ -305,7 +306,7 @@ func TestFormat(t *testing.T) {
 			`        event BookingImported {`,
 			`          fields {`,
 			`            bookingId string required`,
-			`            source string required`,
+			`            source    string required`,
 			`          }`,
 			`        }`,
 			`      }`,
@@ -575,7 +576,7 @@ func TestFormat(t *testing.T) {
 			`      command Cmd {`,
 			`        fields {`,
 			`          name string`,
-			`          age int optional`,
+			`          age  int    optional`,
 			`        }`,
 			`      }`,
 			`    }`,
@@ -787,6 +788,320 @@ func TestFormat(t *testing.T) {
 		}, "\n")
 
 		require.Equal(t, expected, result)
+	})
+
+	t.Run("field names padded to longest name width within a block", func(t *testing.T) {
+		model := &ast.Model{
+			Name: "Test",
+			Contexts: []*ast.Context{
+				{
+					Name: "Ctx",
+					Aggregates: []*ast.Aggregate{
+						{
+							Name: "Agg",
+							Slices: []*ast.Slice{
+								{
+									Name: "S",
+									Commands: []*ast.Command{
+										{
+											Name: "Cmd",
+											Fields: []*ast.Field{
+												{Name: "id", Type: "string", Modifier: "required"},
+												{Name: "guestName", Type: "string", Modifier: "required"},
+											},
+										},
+									},
+								},
+							},
+						},
+					},
+				},
+			},
+		}
+
+		result := formatter.Format(model)
+
+		expected := strings.Join([]string{
+			`model "Test"`,
+			``,
+			`context "Ctx" {`,
+			`  aggregate "Agg" {`,
+			`    slice "S" {`,
+			`      command Cmd {`,
+			`        fields {`,
+			`          id        string required`,
+			`          guestName string required`,
+			`        }`,
+			`      }`,
+			`    }`,
+			`  }`,
+			`}`,
+			``,
+		}, "\n")
+
+		require.Equal(t, expected, result)
+	})
+
+	t.Run("field types padded to longest type width within a block", func(t *testing.T) {
+		model := &ast.Model{
+			Name: "Test",
+			Contexts: []*ast.Context{
+				{
+					Name: "Ctx",
+					Aggregates: []*ast.Aggregate{
+						{
+							Name: "Agg",
+							Slices: []*ast.Slice{
+								{
+									Name: "S",
+									Events: []*ast.Event{
+										{
+											Name: "Evt",
+											Fields: []*ast.Field{
+												{Name: "checkIn", Type: "date", Modifier: "required"},
+												{Name: "created", Type: "timestamp", Modifier: "required"},
+											},
+										},
+									},
+								},
+							},
+						},
+					},
+				},
+			},
+		}
+
+		result := formatter.Format(model)
+
+		expected := strings.Join([]string{
+			`model "Test"`,
+			``,
+			`context "Ctx" {`,
+			`  aggregate "Agg" {`,
+			`    slice "S" {`,
+			`      event Evt {`,
+			`        fields {`,
+			`          checkIn date      required`,
+			`          created timestamp required`,
+			`        }`,
+			`      }`,
+			`    }`,
+			`  }`,
+			`}`,
+			``,
+		}, "\n")
+
+		require.Equal(t, expected, result)
+	})
+
+	t.Run("different fields blocks are aligned independently", func(t *testing.T) {
+		model := &ast.Model{
+			Name: "Test",
+			Contexts: []*ast.Context{
+				{
+					Name: "Ctx",
+					Aggregates: []*ast.Aggregate{
+						{
+							Name: "Agg",
+							Slices: []*ast.Slice{
+								{
+									Name: "S",
+									Commands: []*ast.Command{
+										{
+											Name: "Cmd",
+											Fields: []*ast.Field{
+												{Name: "id", Type: "string", Modifier: "required"},
+												{Name: "name", Type: "string", Modifier: "required"},
+											},
+										},
+									},
+									Events: []*ast.Event{
+										{
+											Name: "Evt",
+											Fields: []*ast.Field{
+												{Name: "reservationId", Type: "string", Modifier: "required"},
+												{Name: "at", Type: "timestamp", Modifier: "required"},
+											},
+										},
+									},
+								},
+							},
+						},
+					},
+				},
+			},
+		}
+
+		result := formatter.Format(model)
+
+		expected := strings.Join([]string{
+			`model "Test"`,
+			``,
+			`context "Ctx" {`,
+			`  aggregate "Agg" {`,
+			`    slice "S" {`,
+			`      command Cmd {`,
+			`        fields {`,
+			`          id   string required`,
+			`          name string required`,
+			`        }`,
+			`      }`,
+			``,
+			`      event Evt {`,
+			`        fields {`,
+			`          reservationId string    required`,
+			`          at            timestamp required`,
+			`        }`,
+			`      }`,
+			`    }`,
+			`  }`,
+			`}`,
+			``,
+		}, "\n")
+
+		require.Equal(t, expected, result)
+	})
+
+	t.Run("single-field block produces no extra padding", func(t *testing.T) {
+		model := &ast.Model{
+			Name: "Test",
+			Contexts: []*ast.Context{
+				{
+					Name: "Ctx",
+					Aggregates: []*ast.Aggregate{
+						{
+							Name: "Agg",
+							Slices: []*ast.Slice{
+								{
+									Name: "S",
+									Commands: []*ast.Command{
+										{
+											Name: "Cmd",
+											Fields: []*ast.Field{
+												{Name: "id", Type: "string", Modifier: "required"},
+											},
+										},
+									},
+								},
+							},
+						},
+					},
+				},
+			},
+		}
+
+		result := formatter.Format(model)
+
+		expected := strings.Join([]string{
+			`model "Test"`,
+			``,
+			`context "Ctx" {`,
+			`  aggregate "Agg" {`,
+			`    slice "S" {`,
+			`      command Cmd {`,
+			`        fields {`,
+			`          id string required`,
+			`        }`,
+			`      }`,
+			`    }`,
+			`  }`,
+			`}`,
+			``,
+		}, "\n")
+
+		require.Equal(t, expected, result)
+	})
+
+	t.Run("mixed modifier and no-modifier fields aligned correctly", func(t *testing.T) {
+		model := &ast.Model{
+			Name: "Test",
+			Contexts: []*ast.Context{
+				{
+					Name: "Ctx",
+					Aggregates: []*ast.Aggregate{
+						{
+							Name: "Agg",
+							Slices: []*ast.Slice{
+								{
+									Name: "S",
+									Commands: []*ast.Command{
+										{
+											Name: "Cmd",
+											Fields: []*ast.Field{
+												{Name: "firstName", Type: "string", Modifier: "required"},
+												{Name: "age", Type: "int"},
+												{Name: "email", Type: "string", Modifier: "optional"},
+											},
+										},
+									},
+								},
+							},
+						},
+					},
+				},
+			},
+		}
+
+		result := formatter.Format(model)
+
+		expected := strings.Join([]string{
+			`model "Test"`,
+			``,
+			`context "Ctx" {`,
+			`  aggregate "Agg" {`,
+			`    slice "S" {`,
+			`      command Cmd {`,
+			`        fields {`,
+			`          firstName string required`,
+			`          age       int`,
+			`          email     string optional`,
+			`        }`,
+			`      }`,
+			`    }`,
+			`  }`,
+			`}`,
+			``,
+		}, "\n")
+
+		require.Equal(t, expected, result)
+	})
+
+	t.Run("round-trip: all_patterns.emod field blocks match fixture alignment", func(t *testing.T) {
+		raw, err := os.ReadFile("../../internal/parser/testdata/all_patterns.emod")
+		require.NoError(t, err)
+		input := string(raw)
+
+		tokens, scanErrs := lexer.Scan(input, "all_patterns.emod")
+		require.Empty(t, scanErrs)
+		p := parser.New(tokens, "all_patterns.emod")
+		model, parseErrs := p.Parse()
+		require.Empty(t, parseErrs)
+
+		formatted := formatter.Format(model)
+
+		tokens2, scanErrs2 := lexer.Scan(formatted, "all_patterns.emod")
+		require.Empty(t, scanErrs2)
+		p2 := parser.New(tokens2, "all_patterns.emod")
+		model2, parseErrs2 := p2.Parse()
+		require.Empty(t, parseErrs2)
+
+		ignorePositionsAndComments := cmp.Options{
+			cmpopts.IgnoreTypes(ast.Position{}),
+			cmpopts.IgnoreFields(ast.Model{}, "Comments"),
+			cmpopts.IgnoreFields(ast.Actor{}, "Comments"),
+			cmpopts.IgnoreFields(ast.Context{}, "Comments"),
+			cmpopts.IgnoreFields(ast.Aggregate{}, "Comments"),
+			cmpopts.IgnoreFields(ast.Slice{}, "Comments"),
+			cmpopts.IgnoreFields(ast.Command{}, "Comments"),
+			cmpopts.IgnoreFields(ast.Event{}, "Comments"),
+			cmpopts.IgnoreFields(ast.Flow{}, "Comments"),
+			cmpopts.IgnoreFields(ast.Trigger{}, "Comments"),
+			cmpopts.IgnoreFields(ast.View{}, "Comments"),
+			cmpopts.IgnoreFields(ast.Automation{}, "Comments"),
+			cmpopts.IgnoreFields(ast.Translation{}, "Comments"),
+		}
+
+		test.RequireEqual(t, model, model2, ignorePositionsAndComments)
 	})
 
 	t.Run("view with fields but no subscribes omits subscribes line", func(t *testing.T) {
