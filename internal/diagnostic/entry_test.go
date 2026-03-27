@@ -31,4 +31,28 @@ func TestDiagnosticString(t *testing.T) {
 
 		require.Equal(t, `minimal.emod:5: unclosed brace for "context" block opened at line 3`, d.String())
 	})
+
+	t.Run("includes rule name in brackets when present", func(t *testing.T) {
+		d := &diagnostic.Entry{
+			Filename: "file.emod",
+			Line:     5,
+			Column:   1,
+			RuleName: "state-obsession",
+			Message:  "message",
+		}
+
+		require.Equal(t, "file.emod:5: [state-obsession] message", d.String())
+	})
+
+	t.Run("produces original format when rule name is empty", func(t *testing.T) {
+		d := &diagnostic.Entry{
+			Filename: "file.emod",
+			Line:     3,
+			Column:   1,
+			Message:  "message",
+		}
+
+		require.Equal(t, "file.emod:3: message", d.String())
+	})
+
 }
