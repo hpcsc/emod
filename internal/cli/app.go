@@ -45,6 +45,19 @@ func NewApp() *urfave.App {
 					return nil
 				},
 			},
+			{
+				Name:      "lint",
+				Usage:     "Lint an .emod file for naming conventions",
+				ArgsUsage: "<file>",
+				Action: func(c *urfave.Context) error {
+					path := c.Args().First()
+					if err := RunLint(path); err != nil {
+						fmt.Fprintln(os.Stderr, err)
+						return urfave.Exit("", 1)
+					}
+					return nil
+				},
+			},
 		},
 	}
 }
