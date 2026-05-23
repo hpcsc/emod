@@ -150,13 +150,21 @@ func NewApp() *urfave.App {
 					return nil
 				},
 			},
-			{
-				Name:      "slices",
-				Usage:     "List all slices in a model with their pattern types",
-				ArgsUsage: "<file>",
-				Action: func(c *urfave.Context) error {
-					path := c.Args().First()
-					if err := RunSlices(path); err != nil {
+		{
+			Name:      "slices",
+			Usage:     "List all slices in a model with their pattern types",
+			ArgsUsage: "<file>",
+			Flags: []urfave.Flag{
+				&urfave.StringFlag{
+					Name:  "format",
+					Usage: "Output format (text|json)",
+					Value: "text",
+				},
+			},
+			Action: func(c *urfave.Context) error {
+				path := c.Args().First()
+				format := c.String("format")
+				if err := RunSlices(path, format); err != nil {
 						var lintErr *LintError
 						if errors.As(err, &lintErr) {
 							if lintErr.Message != "" {

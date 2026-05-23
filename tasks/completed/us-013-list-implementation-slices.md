@@ -1,6 +1,6 @@
 ## Progress
 - [x] Task 1: Register `slices` command and implement text table output
-- [ ] Task 2: Add `--format json` support to `slices` command
+- [x] Task 2: Add `--format json` support to `slices` command
 
 ## Story Reference
 **US-013 — List implementation slices**

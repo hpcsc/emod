@@ -1,6 +1,7 @@
 package cli
 
 import (
+	"encoding/json"
 	"fmt"
 	"os"
 	"strings"
@@ -10,7 +11,21 @@ import (
 	"github.com/hpcsc/emod/internal/parser"
 )
 
-func RunSlices(path string) error {
+type sliceJSONEntry struct {
+	Name        string `json:"name"`
+	Pattern     string `json:"pattern"`
+	Context     string `json:"context"`
+	KeyElements string `json:"keyElements"`
+}
+
+func RunSlices(path, format string) error {
+	if format != "text" && format != "json" {
+		return &LintError{
+			Message:  fmt.Sprintf("unsupported format %q; supported formats: text, json", format),
+			ExitCode: 1,
+		}
+	}
+
 	if path == "" {
 		return &LintError{
 			Message:  "slices requires exactly one file argument",
@@ -44,6 +59,11 @@ func RunSlices(path string) error {
 	}
 
 	entries := collectSliceEntries(model)
+
+	if format == "json" {
+		return formatSlicesJSON(entries)
+	}
+
 	if len(entries) == 0 {
 		fmt.Println("No slices found.")
 		return nil
@@ -89,6 +109,30 @@ func RunSlices(path string) error {
 		fmt.Printf("%-*s  %-*s  %-*s  %s\n", maxSlice, r.sliceName, maxPattern, r.pattern, maxContext, r.ctxName, r.keyElements)
 	}
 
+	return nil
+}
+
+func formatSlicesJSON(entries []sliceEntry) error {
+	jsonEntries := make([]sliceJSONEntry, 0, len(entries))
+	for _, e := range entries {
+		pattern := detectPattern(e.slice)
+		keyElements := keyElementsForPattern(e.slice, pattern)
+		jsonEntries = append(jsonEntries, sliceJSONEntry{
+			Name:        e.slice.Name,
+			Pattern:     pattern,
+			Context:     e.ctxName,
+			KeyElements: keyElements,
+		})
+	}
+
+	out, err := json.Marshal(jsonEntries)
+	if err != nil {
+		return &LintError{
+			Message:  fmt.Sprintf("json encoding: %s", err),
+			ExitCode: 1,
+		}
+	}
+	fmt.Println(string(out))
 	return nil
 }
 
