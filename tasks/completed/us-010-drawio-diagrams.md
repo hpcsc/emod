@@ -2,7 +2,7 @@
 
 ## Progress
 - [x] Task 1: Implement draw.io XML rendering engine in `internal/diagram/`
-- [ ] Task 2: Wire the `diagram` CLI command with `-o` flag support
+- [x] Task 2: Wire the `diagram` CLI command with `-o` flag support
 
 ---
 
