@@ -2,6 +2,8 @@ package export
 
 import (
 	"encoding/json"
+	"fmt"
+	"strings"
 
 	"github.com/hpcsc/emod/internal/ast"
 )
@@ -406,4 +408,371 @@ func convertTranslation(t *ast.Translation) *jsonTranslation {
 		Command:        t.Command,
 		Event:          convertEvent(t.Event),
 	}
+}
+
+// ExportCUE serializes the given AST model to CUE text output.
+// The output conforms to the schema defined in internal/cue/schema.cue.
+func ExportCUE(model *ast.Model) ([]byte, error) {
+	var b strings.Builder
+	w := &cueWriter{b: &b}
+	w.writeModel(model)
+	return []byte(b.String()), nil
+}
+
+// cueWriter writes CUE text output by traversing the AST.
+type cueWriter struct {
+	b     *strings.Builder
+	level int
+}
+
+func (w *cueWriter) line(format string, args ...any) {
+	fmt.Fprintf(w.b, "%s%s\n", strings.Repeat("  ", w.level), fmt.Sprintf(format, args...))
+}
+
+func (w *cueWriter) writeModel(m *ast.Model) {
+	if m == nil {
+		return
+	}
+	w.writeCommentsList("comments", m.Comments)
+	w.line("name: %q", m.Name)
+	if len(m.Actors) > 0 {
+		w.writeActorList("actors", m.Actors)
+	}
+	if len(m.Contexts) > 0 {
+		w.writeContextList("contexts", m.Contexts)
+	}
+}
+
+func (w *cueWriter) writeCommentsList(field string, comments []*ast.Comment) {
+	if len(comments) == 0 {
+		return
+	}
+	w.line("%s: [", field)
+	w.level++
+	for i, c := range comments {
+		if i > 0 {
+			w.line("}, {")
+		} else {
+			w.line("{")
+		}
+		w.level++
+		w.line("text: %q", c.Text)
+		w.level--
+	}
+	w.line("}]")
+	w.level--
+}
+
+func (w *cueWriter) writeActorList(field string, actors []*ast.Actor) {
+	w.line("%s: [", field)
+	w.level++
+	for i, a := range actors {
+		if i > 0 {
+			w.line("}, {")
+		} else {
+			w.line("{")
+		}
+		w.level++
+		w.writeCommentsList("comments", a.Comments)
+		w.line("name: %q", a.Name)
+		w.level--
+	}
+	w.line("}]")
+	w.level--
+}
+
+func (w *cueWriter) writeContextList(field string, contexts []*ast.Context) {
+	w.line("%s: [", field)
+	w.level++
+	for i, c := range contexts {
+		if i > 0 {
+			w.line("}, {")
+		} else {
+			w.line("{")
+		}
+		w.level++
+		w.writeCommentsList("comments", c.Comments)
+		w.line("name: %q", c.Name)
+		if len(c.Aggregates) > 0 {
+			w.writeAggregateList("aggregates", c.Aggregates)
+		}
+		w.level--
+	}
+	w.line("}]")
+	w.level--
+}
+
+func (w *cueWriter) writeAggregateList(field string, aggregates []*ast.Aggregate) {
+	w.line("%s: [", field)
+	w.level++
+	for i, a := range aggregates {
+		if i > 0 {
+			w.line("}, {")
+		} else {
+			w.line("{")
+		}
+		w.level++
+		w.writeCommentsList("comments", a.Comments)
+		w.line("name: %q", a.Name)
+		if len(a.Slices) > 0 {
+			w.writeSliceList("slices", a.Slices)
+		}
+		w.level--
+	}
+	w.line("}]")
+	w.level--
+}
+
+func (w *cueWriter) writeSliceList(field string, slices []*ast.Slice) {
+	w.line("%s: [", field)
+	w.level++
+	for i, s := range slices {
+		if i > 0 {
+			w.line("}, {")
+		} else {
+			w.line("{")
+		}
+		w.level++
+		w.writeCommentsList("comments", s.Comments)
+		w.line("name: %q", s.Name)
+		if s.Trigger != nil {
+			w.writeTrigger("trigger", s.Trigger)
+		}
+		if len(s.Commands) > 0 {
+			w.writeCommandList("commands", s.Commands)
+		}
+		if len(s.Events) > 0 {
+			w.writeEventList("events", s.Events)
+		}
+		if len(s.Fields) > 0 {
+			w.writeFieldList("fields", s.Fields)
+		}
+		if len(s.Flows) > 0 {
+			w.writeFlowList("flows", s.Flows)
+		}
+		if len(s.Views) > 0 {
+			w.writeViewList("views", s.Views)
+		}
+		if len(s.Automations) > 0 {
+			w.writeAutomationList("automations", s.Automations)
+		}
+		if len(s.Translations) > 0 {
+			w.writeTranslationList("translations", s.Translations)
+		}
+		w.level--
+	}
+	w.line("}]")
+	w.level--
+}
+
+func (w *cueWriter) writeTrigger(field string, t *ast.Trigger) {
+	w.line("%s: {", field)
+	w.level++
+	w.writeCommentsList("comments", t.Comments)
+	w.line("kind: %q", t.Kind)
+	w.line("name: %q", t.Name)
+	if t.Actor != "" {
+		w.line("actor: %q", t.Actor)
+	}
+	if t.Reads != "" {
+		w.line("reads: %q", t.Reads)
+	}
+	w.level--
+	w.line("}")
+}
+
+func (w *cueWriter) writeCommandList(field string, commands []*ast.Command) {
+	w.line("%s: [", field)
+	w.level++
+	for i, c := range commands {
+		if i > 0 {
+			w.line("}, {")
+		} else {
+			w.line("{")
+		}
+		w.level++
+		w.writeCommentsList("comments", c.Comments)
+		w.line("name: %q", c.Name)
+		if len(c.Fields) > 0 {
+			w.writeFieldList("fields", c.Fields)
+		}
+		w.level--
+	}
+	w.line("}]")
+	w.level--
+}
+
+func (w *cueWriter) writeEventList(field string, events []*ast.Event) {
+	w.line("%s: [", field)
+	w.level++
+	for i, e := range events {
+		if i > 0 {
+			w.line("}, {")
+		} else {
+			w.line("{")
+		}
+		w.level++
+		w.writeCommentsList("comments", e.Comments)
+		w.line("name: %q", e.Name)
+		if e.Source != "" {
+			w.line("source: %q", e.Source)
+		}
+		if e.ExternalName != "" {
+			w.line("external_name: %q", e.ExternalName)
+		}
+		if len(e.Fields) > 0 {
+			w.writeFieldList("fields", e.Fields)
+		}
+		w.level--
+	}
+	w.line("}]")
+	w.level--
+}
+
+func (w *cueWriter) writeFieldList(field string, fields []*ast.Field) {
+	w.line("%s: [", field)
+	w.level++
+	for i, f := range fields {
+		if i > 0 {
+			w.line("}, {")
+		} else {
+			w.line("{")
+		}
+		w.level++
+		w.line("name: %q", f.Name)
+		w.line("type: %q", f.Type)
+		if f.Modifier != "" {
+			w.line("modifier: %q", f.Modifier)
+		}
+		w.level--
+	}
+	w.line("}]")
+	w.level--
+}
+
+func (w *cueWriter) writeFlowList(field string, flows []*ast.Flow) {
+	w.line("%s: [", field)
+	w.level++
+	for i, f := range flows {
+		if i > 0 {
+			w.line("}, {")
+		} else {
+			w.line("{")
+		}
+		w.level++
+		w.writeCommentsList("comments", f.Comments)
+		w.line("command_name: %q", f.CommandName)
+		w.line("event_name: %q", f.EventName)
+		w.level--
+	}
+	w.line("}]")
+	w.level--
+}
+
+func (w *cueWriter) writeViewList(field string, views []*ast.View) {
+	w.line("%s: [", field)
+	w.level++
+	for i, v := range views {
+		if i > 0 {
+			w.line("}, {")
+		} else {
+			w.line("{")
+		}
+		w.level++
+		w.writeCommentsList("comments", v.Comments)
+		w.line("name: %q", v.Name)
+		if len(v.Fields) > 0 {
+			w.writeFieldList("fields", v.Fields)
+		}
+		if len(v.Subscribes) > 0 {
+			w.line("subscribes: %s", formatStringList(v.Subscribes))
+		}
+		w.level--
+	}
+	w.line("}]")
+	w.level--
+}
+
+func (w *cueWriter) writeAutomationList(field string, automations []*ast.Automation) {
+	w.line("%s: [", field)
+	w.level++
+	for i, a := range automations {
+		if i > 0 {
+			w.line("}, {")
+		} else {
+			w.line("{")
+		}
+		w.level++
+		w.writeCommentsList("comments", a.Comments)
+		w.line("name: %q", a.Name)
+		if a.TriggerEvent != "" {
+			w.line("trigger_event: %q", a.TriggerEvent)
+		}
+		if a.Command != "" {
+			w.line("command: %q", a.Command)
+		}
+		if a.TargetContext != "" {
+			w.line("target_context: %q", a.TargetContext)
+		}
+		w.level--
+	}
+	w.line("}]")
+	w.level--
+}
+
+func (w *cueWriter) writeTranslationList(field string, translations []*ast.Translation) {
+	w.line("%s: [", field)
+	w.level++
+	for i, t := range translations {
+		if i > 0 {
+			w.line("}, {")
+		} else {
+			w.line("{")
+		}
+		w.level++
+		w.writeCommentsList("comments", t.Comments)
+		w.line("name: %q", t.Name)
+		if t.ExternalSystem != "" {
+			w.line("external_system: %q", t.ExternalSystem)
+		}
+		if t.Reads != "" {
+			w.line("reads: %q", t.Reads)
+		}
+		if t.Command != "" {
+			w.line("command: %q", t.Command)
+		}
+		if t.Event != nil {
+			w.writeInlineEvent("event", t.Event)
+		}
+		w.level--
+	}
+	w.line("}]")
+	w.level--
+}
+
+func (w *cueWriter) writeInlineEvent(field string, e *ast.Event) {
+	w.line("%s: {", field)
+	w.level++
+	w.writeCommentsList("comments", e.Comments)
+	w.line("name: %q", e.Name)
+	if e.Source != "" {
+		w.line("source: %q", e.Source)
+	}
+	if e.ExternalName != "" {
+		w.line("external_name: %q", e.ExternalName)
+	}
+	if len(e.Fields) > 0 {
+		w.writeFieldList("fields", e.Fields)
+	}
+	w.level--
+	w.line("}")
+}
+
+// formatStringList formats a []string as a CUE list literal.
+func formatStringList(items []string) string {
+	parts := make([]string, len(items))
+	for i, item := range items {
+		parts[i] = fmt.Sprintf("%q", item)
+	}
+	return "[" + strings.Join(parts, ", ") + "]"
 }

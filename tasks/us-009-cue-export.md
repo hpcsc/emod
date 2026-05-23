@@ -1,6 +1,6 @@
 ## Progress
 - [x] Task 1: Create and bundle the emod CUE schema definition
-- [ ] Task 2: Add ExportCUE function to serialize AST model to CUE text
+- [x] Task 2: Add ExportCUE function to serialize AST model to CUE text
 - [ ] Task 3: Wire `-f cue` format support in the CLI export command
 - [ ] Task 4: Add `emod schema` CLI command to print the bundled CUE schema
 
