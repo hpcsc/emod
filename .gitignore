@@ -2,3 +2,4 @@ settings.local.json
 .idea
 e2e/node_modules/
 /bin
+tasks/.cycles

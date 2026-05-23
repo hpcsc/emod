@@ -2,7 +2,7 @@
 
 ## Progress
 - [x] Task 1: Add structural anti-pattern detection rules (left chair, right chair, clickbait event)
-- [ ] Task 2: Add `--format json` flag and severity-aware exit codes
+- [x] Task 2: Add `--format json` flag and severity-aware exit codes
 
 ## Story Reference
 

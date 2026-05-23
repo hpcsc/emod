@@ -9,6 +9,15 @@ const (
 	Warning Severity = iota
 )
 
+func (s Severity) String() string {
+	switch s {
+	case Warning:
+		return "warning"
+	default:
+		return "error"
+	}
+}
+
 type Entry struct {
 	Filename string
 	Line     int
