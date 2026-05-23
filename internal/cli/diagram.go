@@ -16,9 +16,9 @@ import (
 
 // RunDiagram reads the file at path, lexes and parses it, validates and lints,
 // generates a diagram in the requested format, and writes it.
-// Supported formats: "drawio" (default), "mermaid", and "svg".
+// Supported formats: "drawio" (default), "mermaid", "svg", and "ascii".
 // For drawio and svg: output is written to a file; if outputPath is empty it defaults to .drawio or .svg.
-// For mermaid: output goes to stdout unless outputPath is specified.
+// For mermaid and ascii: output goes to stdout unless outputPath is specified.
 // Errors produce diagnostics on stderr and a non-zero exit code.
 // Lint warnings still produce the diagram but with exit code 1.
 func RunDiagram(path, outputPath, format string) error {
@@ -70,9 +70,9 @@ func RunDiagram(path, outputPath, format string) error {
 	}
 
 	// Validate format
-	if format != "drawio" && format != "mermaid" && format != "svg" {
+	if format != "drawio" && format != "mermaid" && format != "svg" && format != "ascii" {
 		return &LintError{
-			Message:  fmt.Sprintf("unsupported format %q; supported formats: drawio, mermaid, svg", format),
+			Message:  fmt.Sprintf("unsupported format %q; supported formats: drawio, mermaid, svg, ascii", format),
 			ExitCode: 1,
 		}
 	}
@@ -82,6 +82,8 @@ func RunDiagram(path, outputPath, format string) error {
 	switch format {
 	case "mermaid":
 		output, err = diagram.ExportMermaid(model)
+	case "ascii":
+		output, err = diagram.ExportASCII(model)
 	case "svg":
 		output, err = diagram.ExportSVG(model)
 	default:
@@ -94,7 +96,7 @@ func RunDiagram(path, outputPath, format string) error {
 		}
 	}
 
-	if format == "mermaid" && outputPath == "" {
+	if (format == "mermaid" || format == "ascii") && outputPath == "" {
 		fmt.Println(string(output))
 		return lintExit(hasWarnings)
 	}
