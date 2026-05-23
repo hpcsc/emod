@@ -165,10 +165,24 @@ context "Orders" {
 
 		require.Error(t, err)
 		require.Contains(t, err.Error(), "unsupported format")
+		require.Contains(t, err.Error(), "json")
+		require.Contains(t, err.Error(), "cue")
 		var lintErr *cli.LintError
 		if errors.As(err, &lintErr) {
 			require.Equal(t, 1, lintErr.ExitCode)
 		}
+	})
+
+	t.Run("valid file outputs CUE text to stdout with -f cue", func(t *testing.T) {
+		path := writeTemp(t, "valid.emod", validEmod)
+
+		output := captureStdout(t, func() {
+			err := cli.RunExport(path, "cue")
+			require.NoError(t, err)
+		})
+
+		require.Contains(t, output, "Hotel Reservation")
+		require.Contains(t, output, "Guest")
 	})
 
 	t.Run("default format is json and produces valid output", func(t *testing.T) {

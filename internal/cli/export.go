@@ -13,13 +13,13 @@ import (
 )
 
 // RunExport reads the file at path, lexes and parses it, validates and lints,
-// and if clean outputs the full model JSON to stdout. If diagnostics exist,
-// they are written to stderr and a non-zero exit code is returned.
-// The format parameter controls output format — only "json" is supported.
+// and if clean outputs the full model to stdout in the requested format.
+// If diagnostics exist, they are written to stderr and a non-zero exit code is returned.
+// The format parameter controls output format — "json" and "cue" are supported.
 func RunExport(path, format string) error {
-	if format != "json" {
+	if format != "json" && format != "cue" {
 		return &LintError{
-			Message:  fmt.Sprintf("unsupported format %q; supported formats: json", format),
+			Message:  fmt.Sprintf("unsupported format %q; supported formats: json, cue", format),
 			ExitCode: 1,
 		}
 	}
@@ -70,13 +70,19 @@ func RunExport(path, format string) error {
 		}
 	}
 
-	jsonBytes, err := export.ExportJSON(model)
+	var output []byte
+	switch format {
+	case "cue":
+		output, err = export.ExportCUE(model)
+	default:
+		output, err = export.ExportJSON(model)
+	}
 	if err != nil {
 		return &LintError{
 			Message:  fmt.Sprintf("export encoding: %s", err),
 			ExitCode: 1,
 		}
 	}
-	fmt.Println(string(jsonBytes))
+	fmt.Println(string(output))
 	return nil
 }

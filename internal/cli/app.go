@@ -91,12 +91,12 @@ func NewApp() *urfave.App {
 			},
 			{
 				Name:      "export",
-				Usage:     "Export an .emod file as JSON",
+				Usage:     "Export an .emod file as JSON or CUE",
 				ArgsUsage: "<file>",
 				Flags: []urfave.Flag{
 					&urfave.StringFlag{
 						Name:  "format",
-						Usage: "Output format (json)",
+						Usage: "Output format (json|cue)",
 						Value: "json",
 					},
 				},
