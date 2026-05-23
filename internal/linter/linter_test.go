@@ -490,7 +490,419 @@ func TestLint(t *testing.T) {
 		require.Empty(t, diags)
 	})
 
-	t.Run("all five rules fire in a single Lint invocation", func(t *testing.T) {
+	t.Run("left-chair fires for command with 3 or more flows", func(t *testing.T) {
+		model := &ast.Model{
+			Contexts: []*ast.Context{
+				{
+					Name: "Orders",
+					Aggregates: []*ast.Aggregate{
+						{
+							Name: "Order",
+							Slices: []*ast.Slice{
+								{
+									Commands: []*ast.Command{
+										{
+											Name: "PlaceOrder",
+											NamePos: ast.Position{
+												Filename: "orders.emod",
+												Line:     10,
+												Column:   3,
+											},
+										},
+									},
+									Flows: []*ast.Flow{
+										{CommandName: "PlaceOrder"},
+										{CommandName: "PlaceOrder"},
+										{CommandName: "PlaceOrder"},
+									},
+								},
+							},
+						},
+					},
+				},
+			},
+		}
+
+		diags := linter.Lint(model)
+
+		require.Len(t, diags, 1)
+		require.Equal(t, "left-chair", diags[0].RuleName)
+		require.Equal(t, diagnostic.Error, diags[0].Severity)
+		require.Equal(t, "orders.emod", diags[0].Filename)
+		require.Equal(t, 10, diags[0].Line)
+		require.Contains(t, diags[0].Message, "PlaceOrder")
+	})
+
+	t.Run("left-chair not fired for command with 2 flows", func(t *testing.T) {
+		model := &ast.Model{
+			Contexts: []*ast.Context{
+				{
+					Name: "Orders",
+					Aggregates: []*ast.Aggregate{
+						{
+							Name: "Order",
+							Slices: []*ast.Slice{
+								{
+									Commands: []*ast.Command{
+										{
+											Name: "PlaceOrder",
+											NamePos: ast.Position{
+												Filename: "orders.emod",
+												Line:     10,
+											},
+										},
+									},
+									Flows: []*ast.Flow{
+										{CommandName: "PlaceOrder"},
+										{CommandName: "PlaceOrder"},
+									},
+								},
+							},
+						},
+					},
+				},
+			},
+		}
+
+		diags := linter.Lint(model)
+
+		require.Empty(t, diags)
+	})
+
+	t.Run("left-chair not fired for command with 0 flows", func(t *testing.T) {
+		model := &ast.Model{
+			Contexts: []*ast.Context{
+				{
+					Name: "Orders",
+					Aggregates: []*ast.Aggregate{
+						{
+							Name: "Order",
+							Slices: []*ast.Slice{
+								{
+									Commands: []*ast.Command{
+										{
+											Name: "PlaceOrder",
+										},
+									},
+								},
+							},
+						},
+					},
+				},
+			},
+		}
+
+		diags := linter.Lint(model)
+
+		require.Empty(t, diags)
+	})
+
+	t.Run("left-chair counts flows across all slices", func(t *testing.T) {
+		model := &ast.Model{
+			Contexts: []*ast.Context{
+				{
+					Name: "Orders",
+					Aggregates: []*ast.Aggregate{
+						{
+							Name: "Order",
+							Slices: []*ast.Slice{
+								{
+									Commands: []*ast.Command{
+										{
+											Name: "PlaceOrder",
+											NamePos: ast.Position{
+												Filename: "orders.emod",
+												Line:     10,
+											},
+										},
+									},
+									Flows: []*ast.Flow{
+										{CommandName: "PlaceOrder"},
+									},
+								},
+								{
+									Flows: []*ast.Flow{
+										{CommandName: "PlaceOrder"},
+										{CommandName: "PlaceOrder"},
+									},
+								},
+							},
+						},
+					},
+				},
+			},
+		}
+
+		diags := linter.Lint(model)
+
+		require.Len(t, diags, 1)
+		require.Equal(t, "left-chair", diags[0].RuleName)
+	})
+
+	t.Run("god-view fires for view subscribing to 5 or more events", func(t *testing.T) {
+		model := &ast.Model{
+			Contexts: []*ast.Context{
+				{
+					Name: "Orders",
+					Aggregates: []*ast.Aggregate{
+						{
+							Name: "Order",
+							Slices: []*ast.Slice{
+								{
+									Views: []*ast.View{
+										{
+											Name: "OrderSummaryView",
+											NamePos: ast.Position{
+												Filename: "orders.emod",
+												Line:     20,
+												Column:   3,
+											},
+											Subscribes: []string{
+												"Event1", "Event2", "Event3", "Event4", "Event5",
+											},
+										},
+									},
+								},
+							},
+						},
+					},
+				},
+			},
+		}
+
+		diags := linter.Lint(model)
+
+		require.Len(t, diags, 1)
+		require.Equal(t, "god-view", diags[0].RuleName)
+		require.Equal(t, diagnostic.Error, diags[0].Severity)
+		require.Equal(t, "orders.emod", diags[0].Filename)
+		require.Equal(t, 20, diags[0].Line)
+		require.Contains(t, diags[0].Message, "OrderSummaryView")
+	})
+
+	t.Run("god-view not fired for view subscribing to 4 events", func(t *testing.T) {
+		model := &ast.Model{
+			Contexts: []*ast.Context{
+				{
+					Name: "Orders",
+					Aggregates: []*ast.Aggregate{
+						{
+							Name: "Order",
+							Slices: []*ast.Slice{
+								{
+									Views: []*ast.View{
+										{
+											Name: "OrderSummaryView",
+											NamePos: ast.Position{
+												Filename: "orders.emod",
+												Line:     20,
+											},
+											Subscribes: []string{
+												"Event1", "Event2", "Event3", "Event4",
+											},
+										},
+									},
+								},
+							},
+						},
+					},
+				},
+			},
+		}
+
+		diags := linter.Lint(model)
+
+		require.Empty(t, diags)
+	})
+
+	t.Run("god-view not fired for view with no subscribes", func(t *testing.T) {
+		model := &ast.Model{
+			Contexts: []*ast.Context{
+				{
+					Name: "Orders",
+					Aggregates: []*ast.Aggregate{
+						{
+							Name: "Order",
+							Slices: []*ast.Slice{
+								{
+									Views: []*ast.View{
+										{
+											Name: "OrderSummaryView",
+											NamePos: ast.Position{
+												Filename: "orders.emod",
+												Line:     20,
+											},
+										},
+									},
+								},
+							},
+						},
+					},
+				},
+			},
+		}
+
+		diags := linter.Lint(model)
+
+		require.Empty(t, diags)
+	})
+
+	t.Run("clickbait-event fires for event with single ID field", func(t *testing.T) {
+		model := &ast.Model{
+			Contexts: []*ast.Context{
+				{
+					Name: "Orders",
+					Aggregates: []*ast.Aggregate{
+						{
+							Name: "Order",
+							Slices: []*ast.Slice{
+								{
+									Events: []*ast.Event{
+										{
+											Name: "OrderItemSelected",
+											NamePos: ast.Position{
+												Filename: "orders.emod",
+												Line:     30,
+												Column:   3,
+											},
+											Fields: []*ast.Field{
+												{Name: "OrderId"},
+											},
+										},
+									},
+								},
+							},
+						},
+					},
+				},
+			},
+		}
+
+		diags := linter.Lint(model)
+
+		require.Len(t, diags, 1)
+		require.Equal(t, "clickbait-event", diags[0].RuleName)
+		require.Equal(t, diagnostic.Error, diags[0].Severity)
+		require.Equal(t, "orders.emod", diags[0].Filename)
+		require.Equal(t, 30, diags[0].Line)
+		require.Contains(t, diags[0].Message, "OrderItemSelected")
+		require.Contains(t, diags[0].Message, "OrderId")
+	})
+
+	t.Run("clickbait-event not fired for event with single non-ID field", func(t *testing.T) {
+		model := &ast.Model{
+			Contexts: []*ast.Context{
+				{
+					Name: "Orders",
+					Aggregates: []*ast.Aggregate{
+						{
+							Name: "Order",
+							Slices: []*ast.Slice{
+								{
+									Events: []*ast.Event{
+										{
+											Name: "OrderReady",
+											NamePos: ast.Position{
+												Filename: "orders.emod",
+												Line:     30,
+											},
+											Fields: []*ast.Field{
+												{Name: "ReadyTime"},
+											},
+										},
+									},
+								},
+							},
+						},
+					},
+				},
+			},
+		}
+
+		diags := linter.Lint(model)
+
+		require.Empty(t, diags)
+	})
+
+	t.Run("clickbait-event not fired for event with multiple fields including ID", func(t *testing.T) {
+		model := &ast.Model{
+			Contexts: []*ast.Context{
+				{
+					Name: "Orders",
+					Aggregates: []*ast.Aggregate{
+						{
+							Name: "Order",
+							Slices: []*ast.Slice{
+								{
+									Events: []*ast.Event{
+										{
+											Name: "OrderItemSelected",
+											NamePos: ast.Position{
+												Filename: "orders.emod",
+												Line:     30,
+											},
+											Fields: []*ast.Field{
+												{Name: "OrderId"},
+												{Name: "ItemName"},
+											},
+										},
+									},
+								},
+							},
+		},
+					},
+				},
+			},
+		}
+
+		diags := linter.Lint(model)
+
+		require.Empty(t, diags)
+	})
+
+	t.Run("clickbait-event fires for inline event in translation with single ID field", func(t *testing.T) {
+		model := &ast.Model{
+			Contexts: []*ast.Context{
+				{
+					Name: "Orders",
+					Aggregates: []*ast.Aggregate{
+						{
+							Name: "Order",
+							Slices: []*ast.Slice{
+								{
+									Translations: []*ast.Translation{
+										{
+											Name: "ImportOrder",
+											Event: &ast.Event{
+												Name: "OrderImported",
+												NamePos: ast.Position{
+													Filename: "orders.emod",
+													Line:     40,
+													Column:   5,
+												},
+												Fields: []*ast.Field{
+													{Name: "OrderId"},
+												},
+											},
+										},
+									},
+								},
+							},
+						},
+					},
+				},
+			},
+		}
+
+		diags := linter.Lint(model)
+
+		require.Len(t, diags, 1)
+		require.Equal(t, "clickbait-event", diags[0].RuleName)
+		require.Equal(t, "orders.emod", diags[0].Filename)
+		require.Equal(t, 40, diags[0].Line)
+	})
+
+	t.Run("all eight rules fire in a single Lint invocation", func(t *testing.T) {
 		model := &ast.Model{
 			Contexts: []*ast.Context{
 				{
@@ -522,6 +934,16 @@ func TestLint(t *testing.T) {
 												Line:     3,
 											},
 										},
+										{
+											Name: "ItemSelected",
+											NamePos: ast.Position{
+												Filename: "orders.emod",
+												Line:     8,
+											},
+											Fields: []*ast.Field{
+												{Name: "ItemId"},
+											},
+										},
 									},
 									Commands: []*ast.Command{
 										{
@@ -529,6 +951,13 @@ func TestLint(t *testing.T) {
 											NamePos: ast.Position{
 												Filename: "orders.emod",
 												Line:     4,
+											},
+										},
+										{
+											Name: "PlaceOrder",
+											NamePos: ast.Position{
+												Filename: "orders.emod",
+												Line:     6,
 											},
 										},
 									},
@@ -540,6 +969,21 @@ func TestLint(t *testing.T) {
 												Line:     5,
 											},
 										},
+										{
+											Name: "OrderSummaryView",
+											NamePos: ast.Position{
+												Filename: "orders.emod",
+												Line:     7,
+											},
+											Subscribes: []string{
+												"E1", "E2", "E3", "E4", "E5",
+											},
+										},
+									},
+									Flows: []*ast.Flow{
+										{CommandName: "PlaceOrder"},
+										{CommandName: "PlaceOrder"},
+										{CommandName: "PlaceOrder"},
 									},
 								},
 							},
@@ -551,18 +995,31 @@ func TestLint(t *testing.T) {
 
 		diags := linter.Lint(model)
 
-		require.Len(t, diags, 5)
+		require.Len(t, diags, 8)
 
 		ruleNames := make(map[string]bool)
 		for _, d := range diags {
 			ruleNames[d.RuleName] = true
 		}
-		require.Len(t, ruleNames, 5)
+		require.Len(t, ruleNames, 8)
 		require.True(t, ruleNames["state-obsession"])
 		require.True(t, ruleNames["property-sourcing"])
 		require.True(t, ruleNames["command-in-disguise"])
 		require.True(t, ruleNames["command-past-tense"])
 		require.True(t, ruleNames["view-naming"])
+		require.True(t, ruleNames["left-chair"])
+		require.True(t, ruleNames["god-view"])
+		require.True(t, ruleNames["clickbait-event"])
+
+		// Structural rules produce Error severity
+		for _, d := range diags {
+			switch d.RuleName {
+			case "left-chair", "god-view", "clickbait-event":
+				require.Equal(t, diagnostic.Error, d.Severity, "rule %q should have Error severity", d.RuleName)
+			default:
+				require.Equal(t, diagnostic.Warning, d.Severity, "rule %q should have Warning severity", d.RuleName)
+			}
+		}
 
 		linesByRule := make(map[string]int)
 		for _, d := range diags {
@@ -573,5 +1030,8 @@ func TestLint(t *testing.T) {
 		require.Equal(t, 3, linesByRule["command-in-disguise"])
 		require.Equal(t, 4, linesByRule["command-past-tense"])
 		require.Equal(t, 5, linesByRule["view-naming"])
+		require.Equal(t, 6, linesByRule["left-chair"])
+		require.Equal(t, 7, linesByRule["god-view"])
+		require.Equal(t, 8, linesByRule["clickbait-event"])
 	})
 }

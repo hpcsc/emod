@@ -22,6 +22,17 @@ func warning(pos ast.Position, rule, msg string) *diagnostic.Entry {
 	}
 }
 
+func error(pos ast.Position, rule, msg string) *diagnostic.Entry {
+	return &diagnostic.Entry{
+		Filename: pos.Filename,
+		Line:     pos.Line,
+		Column:   pos.Column,
+		Severity: diagnostic.Error,
+		RuleName: rule,
+		Message:  msg,
+	}
+}
+
 func Lint(model *ast.Model) []*diagnostic.Entry {
 	if model == nil {
 		return nil
@@ -29,24 +40,48 @@ func Lint(model *ast.Model) []*diagnostic.Entry {
 
 	var diags []*diagnostic.Entry
 
+	// Build flow count map for left-chair detection
+	flowCount := make(map[string]int)
+	for _, ctx := range model.Contexts {
+		for _, agg := range ctx.Aggregates {
+			for _, slice := range agg.Slices {
+				for _, flow := range slice.Flows {
+					flowCount[flow.CommandName]++
+				}
+			}
+		}
+	}
+
 	for _, ctx := range model.Contexts {
 		for _, agg := range ctx.Aggregates {
 			for _, slice := range agg.Slices {
 				for _, evt := range slice.Events {
 					diags = append(diags, checkEvent(evt, agg.Name)...)
+					if d := checkClickbaitEvent(evt); d != nil {
+						diags = append(diags, d)
+					}
 				}
 				for _, tr := range slice.Translations {
 					if tr.Event != nil {
 						diags = append(diags, checkEvent(tr.Event, agg.Name)...)
+						if d := checkClickbaitEvent(tr.Event); d != nil {
+							diags = append(diags, d)
+						}
 					}
 				}
 				for _, cmd := range slice.Commands {
 					if d := checkCommandPastTense(cmd); d != nil {
 						diags = append(diags, d)
 					}
+					if d := checkLeftChair(cmd, flowCount); d != nil {
+						diags = append(diags, d)
+					}
 				}
 				for _, view := range slice.Views {
 					if d := checkViewNaming(view); d != nil {
+						diags = append(diags, d)
+					}
+					if d := checkGodView(view); d != nil {
 						diags = append(diags, d)
 					}
 				}
@@ -146,6 +181,33 @@ func checkCommandPastTense(cmd *ast.Command) *diagnostic.Entry {
 func checkViewNaming(view *ast.View) *diagnostic.Entry {
 	if !strings.HasSuffix(view.Name, "View") {
 		return warning(view.NamePos, "view-naming", fmt.Sprintf("view %q should end with \"View\" (e.g. %sView)", view.Name, view.Name))
+	}
+	return nil
+}
+
+func checkLeftChair(cmd *ast.Command, flowCount map[string]int) *diagnostic.Entry {
+	if flowCount[cmd.Name] >= 3 {
+		return error(cmd.NamePos, "left-chair", fmt.Sprintf("command %q is referenced by %d flows; consider splitting into specialized commands to reduce coupling", cmd.Name, flowCount[cmd.Name]))
+	}
+	return nil
+}
+
+func checkGodView(view *ast.View) *diagnostic.Entry {
+	if len(view.Subscribes) >= 5 {
+		return error(view.NamePos, "god-view", fmt.Sprintf("view %q subscribes to %d events; consider splitting into smaller focused views", view.Name, len(view.Subscribes)))
+	}
+	return nil
+}
+
+// isIDField returns true if the field name suggests it is an ID reference.
+// In PascalCase/naming conventions, ID fields end with "Id" or "ID".
+func isIDField(name string) bool {
+	return strings.HasSuffix(name, "Id") || strings.HasSuffix(name, "ID")
+}
+
+func checkClickbaitEvent(evt *ast.Event) *diagnostic.Entry {
+	if len(evt.Fields) == 1 && isIDField(evt.Fields[0].Name) {
+		return error(evt.NamePos, "clickbait-event", fmt.Sprintf("event %q has a single ID field %q; consider adding domain-relevant fields or inlining the identifier", evt.Name, evt.Fields[0].Name))
 	}
 	return nil
 }

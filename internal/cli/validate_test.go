@@ -78,7 +78,9 @@ context "Reservations" {
         command ImportBooking
         event BookingImported {
           fields {
-            bookingId string required
+            bookingId   string required
+            hotelName   string required
+            bookingRef  string required
           }
         }
       }
