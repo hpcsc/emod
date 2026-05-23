@@ -3,3 +3,4 @@ settings.local.json
 e2e/node_modules/
 /bin
 tasks/.cycles
+tasks/.checkpoint

@@ -16,7 +16,9 @@ func Validate(model *ast.Model) []*diagnostic.Entry {
 	commandNames := make(map[string]bool)
 	eventNames := make(map[string]bool)
 	commandPositions := make(map[string]ast.Position)
+	eventPositions := make(map[string]ast.Position)
 	flowCmdNames := make(map[string]bool)
+	producedEventNames := make(map[string]bool)
 	for _, ctx := range model.Contexts {
 		contextNames[ctx.Name] = true
 		for _, agg := range ctx.Aggregates {
@@ -27,15 +29,23 @@ func Validate(model *ast.Model) []*diagnostic.Entry {
 				}
 				for _, evt := range slice.Events {
 					eventNames[evt.Name] = true
+					eventPositions[evt.Name] = evt.NamePos
+					if evt.Source != "" {
+						producedEventNames[evt.Name] = true
+					}
 				}
 				for _, tr := range slice.Translations {
 					if tr.Event != nil {
 						eventNames[tr.Event.Name] = true
+						producedEventNames[tr.Event.Name] = true
 					}
 				}
 				for _, f := range slice.Flows {
 					if f.CommandName != "" {
 						flowCmdNames[f.CommandName] = true
+					}
+					if f.EventName != "" {
+						producedEventNames[f.EventName] = true
 					}
 				}
 			}
@@ -119,6 +129,20 @@ func Validate(model *ast.Model) []*diagnostic.Entry {
 				Message:  fmt.Sprintf("command %q is orphaned (no flow references it)", name),
 				Severity: diagnostic.Error,
 				RuleName: "orphan-command",
+			})
+		}
+	}
+
+	// orphan-event: events defined but not produced by any flow, external source, or translation
+	for name, pos := range eventPositions {
+		if !producedEventNames[name] {
+			diags = append(diags, &diagnostic.Entry{
+				Filename: pos.Filename,
+				Line:     pos.Line,
+				Column:   pos.Column,
+				Message:  fmt.Sprintf("event %q is orphaned (no flow, external source, or translation produces it)", name),
+				Severity: diagnostic.Error,
+				RuleName: "orphan-event",
 			})
 		}
 	}

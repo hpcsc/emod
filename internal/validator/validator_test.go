@@ -453,7 +453,7 @@ func TestValidate(t *testing.T) {
 							Slices: []*ast.Slice{
 								{
 									Events: []*ast.Event{
-										{Name: "OrderPlaced"},
+										{Name: "OrderPlaced", Source: "ExternalSystem"},
 									},
 									Automations: []*ast.Automation{
 										{
@@ -735,7 +735,7 @@ func TestValidate(t *testing.T) {
 							Slices: []*ast.Slice{
 								{
 									Events: []*ast.Event{
-										{Name: "OrderPlaced"},
+										{Name: "OrderPlaced", Source: "ExternalSystem"},
 									},
 								},
 							},
@@ -964,5 +964,215 @@ func TestValidate(t *testing.T) {
 		require.Equal(t, 12, diags[0].Line)
 		require.Equal(t, 7, diags[0].Column)
 		require.Equal(t, "orphan-command", diags[0].RuleName)
+	})
+
+	t.Run("event defined with no producer produces orphan diagnostic", func(t *testing.T) {
+		model := &ast.Model{
+			Contexts: []*ast.Context{
+				{
+					Name: "Orders",
+					Aggregates: []*ast.Aggregate{
+						{
+							Slices: []*ast.Slice{
+								{
+									Events: []*ast.Event{
+										{Name: "OrderPlaced", NamePos: ast.Position{Filename: "test.emod", Line: 5, Column: 3}},
+									},
+								},
+							},
+						},
+					},
+				},
+			},
+		}
+
+		diags := validator.Validate(model)
+
+		require.Len(t, diags, 1)
+		require.Equal(t, diagnostic.Error, diags[0].Severity)
+		require.Equal(t, "orphan-event", diags[0].RuleName)
+		require.Contains(t, diags[0].Message, "OrderPlaced")
+		require.Contains(t, diags[0].Message, "orphaned")
+	})
+
+	t.Run("event referenced by flow produces no orphan diagnostic", func(t *testing.T) {
+		model := &ast.Model{
+			Contexts: []*ast.Context{
+				{
+					Name: "Orders",
+					Aggregates: []*ast.Aggregate{
+						{
+							Slices: []*ast.Slice{
+								{
+									Events: []*ast.Event{
+										{Name: "OrderPlaced"},
+									},
+									Flows: []*ast.Flow{
+										{EventName: "OrderPlaced"},
+									},
+								},
+							},
+						},
+					},
+				},
+			},
+		}
+
+		diags := validator.Validate(model)
+
+		require.Empty(t, diags)
+	})
+
+	t.Run("event with external source produces no orphan diagnostic", func(t *testing.T) {
+		model := &ast.Model{
+			Contexts: []*ast.Context{
+				{
+					Name: "Orders",
+					Aggregates: []*ast.Aggregate{
+						{
+							Slices: []*ast.Slice{
+								{
+									Events: []*ast.Event{
+										{Name: "OrderPlaced", Source: "ExternalSystem"},
+									},
+								},
+							},
+						},
+					},
+				},
+			},
+		}
+
+		diags := validator.Validate(model)
+
+		require.Empty(t, diags)
+	})
+
+	t.Run("event inside translation produces no orphan diagnostic", func(t *testing.T) {
+		model := &ast.Model{
+			Contexts: []*ast.Context{
+				{
+					Name: "Bookings",
+					Aggregates: []*ast.Aggregate{
+						{
+							Slices: []*ast.Slice{
+								{
+									Translations: []*ast.Translation{
+										{
+											Name: "ImportBooking",
+											Event: &ast.Event{
+												Name: "BookingImported",
+											},
+										},
+									},
+								},
+							},
+						},
+					},
+				},
+			},
+		}
+
+		diags := validator.Validate(model)
+
+		require.Empty(t, diags)
+	})
+
+	t.Run("orphan event diagnostic includes event definition position", func(t *testing.T) {
+		model := &ast.Model{
+			Contexts: []*ast.Context{
+				{
+					Name: "Orders",
+					Aggregates: []*ast.Aggregate{
+						{
+							Slices: []*ast.Slice{
+								{
+									Events: []*ast.Event{
+										{Name: "OrderPlaced", NamePos: ast.Position{Filename: "orders.emod", Line: 8, Column: 5}},
+									},
+								},
+							},
+						},
+					},
+				},
+			},
+		}
+
+		diags := validator.Validate(model)
+
+		require.Len(t, diags, 1)
+		require.Equal(t, "orders.emod", diags[0].Filename)
+		require.Equal(t, 8, diags[0].Line)
+		require.Equal(t, 5, diags[0].Column)
+		require.Equal(t, "orphan-event", diags[0].RuleName)
+	})
+
+	t.Run("event referenced by flow in different context produces no orphan diagnostic", func(t *testing.T) {
+		model := &ast.Model{
+			Contexts: []*ast.Context{
+				{
+					Name: "Orders",
+					Aggregates: []*ast.Aggregate{
+						{
+							Slices: []*ast.Slice{
+								{
+									Events: []*ast.Event{
+										{Name: "OrderPlaced"},
+									},
+								},
+							},
+						},
+					},
+				},
+				{
+					Name: "Shipping",
+					Aggregates: []*ast.Aggregate{
+						{
+							Slices: []*ast.Slice{
+								{
+									Flows: []*ast.Flow{
+										{EventName: "OrderPlaced"},
+									},
+								},
+							},
+						},
+					},
+				},
+			},
+		}
+
+		diags := validator.Validate(model)
+
+		require.Empty(t, diags)
+	})
+
+	t.Run("multiple orphan events produce multiple orphan diagnostics", func(t *testing.T) {
+		model := &ast.Model{
+			Contexts: []*ast.Context{
+				{
+					Name: "Orders",
+					Aggregates: []*ast.Aggregate{
+						{
+							Slices: []*ast.Slice{
+								{
+									Events: []*ast.Event{
+										{Name: "OrderPlaced", NamePos: ast.Position{Filename: "test.emod", Line: 3, Column: 5}},
+										{Name: "OrderShipped", NamePos: ast.Position{Filename: "test.emod", Line: 7, Column: 5}},
+									},
+								},
+							},
+						},
+					},
+				},
+			},
+		}
+
+		diags := validator.Validate(model)
+
+		require.Len(t, diags, 2)
+		require.Equal(t, "orphan-event", diags[0].RuleName)
+		require.Contains(t, diags[0].Message, "OrderPlaced")
+		require.Equal(t, "orphan-event", diags[1].RuleName)
+		require.Contains(t, diags[1].Message, "OrderShipped")
 	})
 }
