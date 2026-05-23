@@ -48,6 +48,16 @@ func Validate(model *ast.Model) []*diagnostic.Entry {
 						producedEventNames[f.EventName] = true
 					}
 				}
+				for _, auto := range slice.Automations {
+					if auto.Command != "" {
+						flowCmdNames[auto.Command] = true
+					}
+				}
+				for _, tr := range slice.Translations {
+					if tr.Command != "" {
+						flowCmdNames[tr.Command] = true
+					}
+				}
 			}
 		}
 	}
