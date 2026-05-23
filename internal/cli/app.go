@@ -117,6 +117,32 @@ func NewApp() *urfave.App {
 					return nil
 				},
 			},
+			{
+				Name:  "schema",
+				Usage: "Print the bundled CUE schema definition",
+				Flags: []urfave.Flag{
+					&urfave.StringFlag{
+						Name:  "format",
+						Usage: "Output format (cue)",
+						Value: "cue",
+					},
+				},
+				Action: func(c *urfave.Context) error {
+					format := c.String("format")
+					if err := RunSchema(format); err != nil {
+						var lintErr *LintError
+						if errors.As(err, &lintErr) {
+							if lintErr.Message != "" {
+								fmt.Fprintln(os.Stderr, lintErr.Message)
+							}
+							return urfave.Exit("", lintErr.ExitCode)
+						}
+						fmt.Fprintln(os.Stderr, err)
+						return urfave.Exit("", 1)
+					}
+					return nil
+				},
+			},
 		},
 	}
 }
