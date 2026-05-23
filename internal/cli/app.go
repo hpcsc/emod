@@ -89,6 +89,34 @@ func NewApp() *urfave.App {
 					return nil
 				},
 			},
+			{
+				Name:      "export",
+				Usage:     "Export an .emod file as JSON",
+				ArgsUsage: "<file>",
+				Flags: []urfave.Flag{
+					&urfave.StringFlag{
+						Name:  "format",
+						Usage: "Output format (json)",
+						Value: "json",
+					},
+				},
+				Action: func(c *urfave.Context) error {
+					path := c.Args().First()
+					format := c.String("format")
+					if err := RunExport(path, format); err != nil {
+						var lintErr *LintError
+						if errors.As(err, &lintErr) {
+							if lintErr.Message != "" {
+								fmt.Fprintln(os.Stderr, lintErr.Message)
+							}
+							return urfave.Exit("", lintErr.ExitCode)
+						}
+						fmt.Fprintln(os.Stderr, err)
+						return urfave.Exit("", 1)
+					}
+					return nil
+				},
+			},
 		},
 	}
 }
