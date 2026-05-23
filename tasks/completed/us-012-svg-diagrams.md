@@ -1,6 +1,6 @@
 ## Progress
 - [x] Task 1: Implement SVG rendering engine in `internal/diagram/svg.go`
-- [ ] Task 2: Wire SVG format into CLI and add CLI tests
+- [x] Task 2: Wire SVG format into CLI and add CLI tests
 
 ## Story Reference
 

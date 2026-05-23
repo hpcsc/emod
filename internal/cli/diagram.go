@@ -16,8 +16,8 @@ import (
 
 // RunDiagram reads the file at path, lexes and parses it, validates and lints,
 // generates a diagram in the requested format, and writes it.
-// Supported formats: "drawio" (default) and "mermaid".
-// For drawio: output is written to a file; if outputPath is empty it defaults to .drawio.
+// Supported formats: "drawio" (default), "mermaid", and "svg".
+// For drawio and svg: output is written to a file; if outputPath is empty it defaults to .drawio or .svg.
 // For mermaid: output goes to stdout unless outputPath is specified.
 // Errors produce diagnostics on stderr and a non-zero exit code.
 // Lint warnings still produce the diagram but with exit code 1.
@@ -70,9 +70,9 @@ func RunDiagram(path, outputPath, format string) error {
 	}
 
 	// Validate format
-	if format != "drawio" && format != "mermaid" {
+	if format != "drawio" && format != "mermaid" && format != "svg" {
 		return &LintError{
-			Message:  fmt.Sprintf("unsupported format %q; supported formats: drawio, mermaid", format),
+			Message:  fmt.Sprintf("unsupported format %q; supported formats: drawio, mermaid, svg", format),
 			ExitCode: 1,
 		}
 	}
@@ -82,6 +82,8 @@ func RunDiagram(path, outputPath, format string) error {
 	switch format {
 	case "mermaid":
 		output, err = diagram.ExportMermaid(model)
+	case "svg":
+		output, err = diagram.ExportSVG(model)
 	default:
 		output, err = diagram.ExportDrawio(model)
 	}
@@ -98,7 +100,12 @@ func RunDiagram(path, outputPath, format string) error {
 	}
 
 	if outputPath == "" {
-		outputPath = defaultDrawioPath(path)
+		switch format {
+		case "svg":
+			outputPath = defaultSVGPath(path)
+		default:
+			outputPath = defaultDrawioPath(path)
+		}
 	}
 
 	dir := filepath.Dir(outputPath)
@@ -135,4 +142,13 @@ func defaultDrawioPath(path string) string {
 		return path[:len(path)-len(".emod")] + ".drawio"
 	}
 	return path + ".drawio"
+}
+
+// defaultSVGPath replaces the .emod extension with .svg.
+// If the file has no .emod extension, .svg is appended.
+func defaultSVGPath(path string) string {
+	if strings.HasSuffix(path, ".emod") {
+		return path[:len(path)-len(".emod")] + ".svg"
+	}
+	return path + ".svg"
 }

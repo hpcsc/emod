@@ -174,5 +174,121 @@ context "Orders" {
 		require.Contains(t, err.Error(), "unsupported format")
 		require.Contains(t, err.Error(), "drawio")
 		require.Contains(t, err.Error(), "mermaid")
+		require.Contains(t, err.Error(), "svg")
+	})
+
+	t.Run("svg: valid file uses default .svg output path", func(t *testing.T) {
+		path := writeTemp(t, "valid.emod", validEmod)
+		defaultOutput := path[:len(path)-len(".emod")] + ".svg"
+
+		err := cli.RunDiagram(path, "", "svg")
+		require.NoError(t, err)
+
+		_, statErr := os.Stat(defaultOutput)
+		require.NoError(t, statErr, "expected .svg file to exist at default path")
+		_ = os.Remove(defaultOutput)
+	})
+
+	t.Run("svg: valid file uses custom -o output path", func(t *testing.T) {
+		path := writeTemp(t, "valid.emod", validEmod)
+		customOutput := filepath.Join(t.TempDir(), "custom.svg")
+
+		err := cli.RunDiagram(path, customOutput, "svg")
+		require.NoError(t, err)
+
+		_, statErr := os.Stat(customOutput)
+		require.NoError(t, statErr, "expected .svg file to exist at custom path")
+	})
+
+	t.Run("svg: output file is well-formed SVG", func(t *testing.T) {
+		path := writeTemp(t, "valid.emod", validEmod)
+		defaultOutput := path[:len(path)-len(".emod")] + ".svg"
+		defer os.Remove(defaultOutput)
+
+		err := cli.RunDiagram(path, "", "svg")
+		require.NoError(t, err)
+
+		content, err := os.ReadFile(defaultOutput)
+		require.NoError(t, err)
+
+		svg := string(content)
+		require.True(t, strings.HasPrefix(svg, `<svg xmlns="http://www.w3.org/2000/svg"`), "expected SVG declaration")
+		require.Contains(t, svg, "</svg>")
+	})
+
+	t.Run("svg: validation errors produce no .svg file and exit code 2", func(t *testing.T) {
+		path := writeTemp(t, "invalid.emod", invalidEmod)
+		defaultOutput := path[:len(path)-len(".emod")] + ".svg"
+
+		var err error
+		stderr := captureStderr(t, func() {
+			err = cli.RunDiagram(path, "", "svg")
+		})
+
+		require.Error(t, err)
+		var lintErr *cli.LintError
+		if errors.As(err, &lintErr) {
+			require.Equal(t, 2, lintErr.ExitCode)
+		}
+
+		_, statErr := os.Stat(defaultOutput)
+		require.True(t, os.IsNotExist(statErr), "expected no .svg file to be created")
+		require.Contains(t, stderr, path)
+		require.Contains(t, stderr, ":1:")
+	})
+
+	t.Run("svg: lint warnings produce .svg with exit code 1", func(t *testing.T) {
+		input := `model "Test"
+context "Orders" {
+  aggregate "Order" {
+    slice "Update Order" {
+      command PlaceOrder {
+        fields {
+          orderId string required
+          reason  string required
+        }
+      }
+      event OrderUpdated {
+        fields {
+          orderId string required
+          reason  string required
+        }
+      }
+      flow {
+        command -> event: PlaceOrder -> OrderUpdated
+      }
+    }
+  }
+}
+`
+		path := writeTemp(t, "warnings.emod", input)
+		defaultOutput := path[:len(path)-len(".emod")] + ".svg"
+
+		var err error
+		stderr := captureStderr(t, func() {
+			err = cli.RunDiagram(path, "", "svg")
+		})
+
+		require.Error(t, err)
+		var lintErr *cli.LintError
+		if errors.As(err, &lintErr) {
+			require.Equal(t, 1, lintErr.ExitCode)
+		}
+
+		_, statErr := os.Stat(defaultOutput)
+		require.NoError(t, statErr, "expected .svg to be created despite warnings")
+		require.Contains(t, stderr, "state-obsession")
+		_ = os.Remove(defaultOutput)
+	})
+
+	t.Run("svg: custom -o path with nested directories creates the directory", func(t *testing.T) {
+		path := writeTemp(t, "valid.emod", validEmod)
+		customOutput := filepath.Join(t.TempDir(), "nested", "dir", "out.svg")
+
+		err := cli.RunDiagram(path, customOutput, "svg")
+		require.NoError(t, err)
+
+		_, statErr := os.Stat(customOutput)
+		require.NoError(t, statErr, "expected .svg file to be created in nested directory")
 	})
 }
