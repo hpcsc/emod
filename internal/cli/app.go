@@ -119,18 +119,24 @@ func NewApp() *urfave.App {
 			},
 			{
 				Name:      "diagram",
-				Usage:     "Generate a draw.io diagram from an .emod file",
+				Usage:     "Generate a diagram from an .emod file",
 				ArgsUsage: "<file>",
 				Flags: []urfave.Flag{
 					&urfave.StringFlag{
+						Name:  "format",
+						Usage: "Output format (drawio|mermaid)",
+						Value: "drawio",
+					},
+					&urfave.StringFlag{
 						Name:  "o",
-						Usage: "Output path for the .drawio file",
+						Usage: "Output path",
 					},
 				},
 				Action: func(c *urfave.Context) error {
 					path := c.Args().First()
+					format := c.String("format")
 					outputPath := c.String("o")
-					if err := RunDiagram(path, outputPath); err != nil {
+					if err := RunDiagram(path, outputPath, format); err != nil {
 						var lintErr *LintError
 						if errors.As(err, &lintErr) {
 							if lintErr.Message != "" {

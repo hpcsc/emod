@@ -18,7 +18,7 @@ func TestDiagram(t *testing.T) {
 		path := writeTemp(t, "valid.emod", validEmod)
 		defaultOutput := path[:len(path)-len(".emod")] + ".drawio"
 
-		err := cli.RunDiagram(path, "")
+		err := cli.RunDiagram(path, "", "drawio")
 		require.NoError(t, err)
 
 		_, statErr := os.Stat(defaultOutput)
@@ -30,7 +30,7 @@ func TestDiagram(t *testing.T) {
 		path := writeTemp(t, "valid.emod", validEmod)
 		customOutput := filepath.Join(t.TempDir(), "custom.drawio")
 
-		err := cli.RunDiagram(path, customOutput)
+		err := cli.RunDiagram(path, customOutput, "drawio")
 		require.NoError(t, err)
 
 		_, statErr := os.Stat(customOutput)
@@ -43,7 +43,7 @@ func TestDiagram(t *testing.T) {
 
 		var err error
 		stderr := captureStderr(t, func() {
-			err = cli.RunDiagram(path, "")
+			err = cli.RunDiagram(path, "", "drawio")
 		})
 
 		require.Error(t, err)
@@ -87,7 +87,7 @@ context "Orders" {
 
 		var err error
 		stderr := captureStderr(t, func() {
-			err = cli.RunDiagram(path, "")
+			err = cli.RunDiagram(path, "", "drawio")
 		})
 
 		require.Error(t, err)
@@ -103,14 +103,14 @@ context "Orders" {
 	})
 
 	t.Run("missing file argument returns error", func(t *testing.T) {
-		err := cli.RunDiagram("", "")
+		err := cli.RunDiagram("", "", "drawio")
 
 		require.Error(t, err)
 		require.Equal(t, "diagram requires exactly one file argument", err.Error())
 	})
 
 	t.Run("nonexistent file returns error", func(t *testing.T) {
-		err := cli.RunDiagram("/tmp/nonexistent-diagram-file-abc123.emod", "")
+		err := cli.RunDiagram("/tmp/nonexistent-diagram-file-abc123.emod", "", "drawio")
 
 		require.Error(t, err)
 	})
@@ -120,7 +120,7 @@ context "Orders" {
 		defaultOutput := path[:len(path)-len(".emod")] + ".drawio"
 		defer os.Remove(defaultOutput)
 
-		err := cli.RunDiagram(path, "")
+		err := cli.RunDiagram(path, "", "drawio")
 		require.NoError(t, err)
 
 		content, err := os.ReadFile(defaultOutput)
@@ -136,10 +136,43 @@ context "Orders" {
 		path := writeTemp(t, "valid.emod", validEmod)
 		customOutput := filepath.Join(t.TempDir(), "nested", "dir", "out.drawio")
 
-		err := cli.RunDiagram(path, customOutput)
+		err := cli.RunDiagram(path, customOutput, "drawio")
 		require.NoError(t, err)
 
 		_, statErr := os.Stat(customOutput)
 		require.NoError(t, statErr, "expected .drawio file to be created in nested directory")
+	})
+
+	t.Run("mermaid output is printed to stdout and starts with eventmodeling", func(t *testing.T) {
+		path := writeTemp(t, "valid.emod", validEmod)
+
+		output := captureStdout(t, func() {
+			err := cli.RunDiagram(path, "", "mermaid")
+			require.NoError(t, err)
+		})
+
+		require.True(t, strings.HasPrefix(output, "eventmodeling"), "mermaid output should start with eventmodeling")
+	})
+
+	t.Run("mermaid output can be written to a specific file", func(t *testing.T) {
+		path := writeTemp(t, "valid.emod", validEmod)
+		outputPath := filepath.Join(t.TempDir(), "output.mermaid")
+
+		err := cli.RunDiagram(path, outputPath, "mermaid")
+		require.NoError(t, err)
+
+		content, err := os.ReadFile(outputPath)
+		require.NoError(t, err)
+		require.True(t, strings.HasPrefix(string(content), "eventmodeling"))
+	})
+
+	t.Run("unsupported diagram format returns error listing supported formats", func(t *testing.T) {
+		path := writeTemp(t, "valid.emod", validEmod)
+
+		err := cli.RunDiagram(path, "", "bogus")
+		require.Error(t, err)
+		require.Contains(t, err.Error(), "unsupported format")
+		require.Contains(t, err.Error(), "drawio")
+		require.Contains(t, err.Error(), "mermaid")
 	})
 }
