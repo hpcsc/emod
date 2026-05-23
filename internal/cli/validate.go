@@ -1,10 +1,8 @@
 package cli
 
 import (
-	"errors"
 	"fmt"
 	"os"
-	"strings"
 
 	"github.com/hpcsc/emod/internal/lexer"
 	"github.com/hpcsc/emod/internal/linter"
@@ -13,15 +11,30 @@ import (
 )
 
 // RunValidate reads the file at path, lexes and parses it, and returns an error
-// if there are any diagnostics. An empty path is treated as a missing argument.
-func RunValidate(path string) error {
+// if there are any diagnostics. The format parameter controls output: "text"
+// for human-readable diagnostics (default) or "json" for structured output.
+// An empty path is treated as a missing argument.
+func RunValidate(path, format string) error {
+	if format != "text" && format != "json" {
+		return &LintError{
+			Message:  fmt.Sprintf("unsupported format %q; supported formats: text, json", format),
+			ExitCode: 1,
+		}
+	}
+
 	if path == "" {
-		return errors.New("validate requires exactly one file argument")
+		return &LintError{
+			Message:  "validate requires exactly one file argument",
+			ExitCode: 1,
+		}
 	}
 
 	source, err := os.ReadFile(path)
 	if err != nil {
-		return fmt.Errorf("reading %s: %w", path, err)
+		return &LintError{
+			Message:  fmt.Sprintf("reading %s: %s", path, err),
+			ExitCode: 1,
+		}
 	}
 
 	tokens, diagnostics := lexer.Scan(string(source), path)
@@ -36,12 +49,12 @@ func RunValidate(path string) error {
 	lintDiags := linter.Lint(model)
 	diagnostics = append(diagnostics, lintDiags...)
 
+	if format == "json" {
+		return formatJSON(diagnostics)
+	}
+
 	if len(diagnostics) > 0 {
-		var sb strings.Builder
-		for _, d := range diagnostics {
-			fmt.Fprintln(&sb, d.String())
-		}
-		return errors.New(strings.TrimRight(sb.String(), "\n"))
+		return formatText(diagnostics)
 	}
 
 	return nil

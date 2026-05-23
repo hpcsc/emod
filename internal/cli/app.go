@@ -17,9 +17,24 @@ func NewApp() *urfave.App {
 				Name:      "validate",
 				Usage:     "Validate an .emod file",
 				ArgsUsage: "<file>",
+				Flags: []urfave.Flag{
+					&urfave.StringFlag{
+						Name:  "format",
+						Usage: "Output format (text|json)",
+						Value: "text",
+					},
+				},
 				Action: func(c *urfave.Context) error {
 					path := c.Args().First()
-					if err := RunValidate(path); err != nil {
+					format := c.String("format")
+					if err := RunValidate(path, format); err != nil {
+						var lintErr *LintError
+						if errors.As(err, &lintErr) {
+							if lintErr.Message != "" {
+								fmt.Fprintln(os.Stderr, lintErr.Message)
+							}
+							return urfave.Exit("", lintErr.ExitCode)
+						}
 						fmt.Fprintln(os.Stderr, err)
 						return urfave.Exit("", 1)
 					}

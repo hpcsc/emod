@@ -3,6 +3,8 @@
 package cli_test
 
 import (
+	"encoding/json"
+	"errors"
 	"os"
 	"path/filepath"
 	"testing"
@@ -103,7 +105,7 @@ func TestValidate(t *testing.T) {
 	t.Run("returns no error for valid input", func(t *testing.T) {
 		path := writeTemp(t, "valid.emod", validEmod)
 
-		err := cli.RunValidate(path)
+		err := cli.RunValidate(path, "text")
 
 		require.NoError(t, err)
 	})
@@ -111,7 +113,7 @@ func TestValidate(t *testing.T) {
 	t.Run("returns error for invalid input", func(t *testing.T) {
 		path := writeTemp(t, "invalid.emod", invalidEmod)
 
-		err := cli.RunValidate(path)
+		err := cli.RunValidate(path, "text")
 
 		require.Error(t, err)
 		require.Contains(t, err.Error(), path)
@@ -119,13 +121,13 @@ func TestValidate(t *testing.T) {
 	})
 
 	t.Run("returns error for nonexistent file", func(t *testing.T) {
-		err := cli.RunValidate("/tmp/nonexistent-emod-file-abc123.emod")
+		err := cli.RunValidate("/tmp/nonexistent-emod-file-abc123.emod", "text")
 
 		require.Error(t, err)
 	})
 
 	t.Run("returns error when no file argument given", func(t *testing.T) {
-		err := cli.RunValidate("")
+		err := cli.RunValidate("", "text")
 
 		require.Error(t, err)
 		require.Equal(t, "validate requires exactly one file argument", err.Error())
@@ -147,7 +149,7 @@ context "Orders" {
 `
 		path := writeTemp(t, "bad_target.emod", input)
 
-		err := cli.RunValidate(path)
+		err := cli.RunValidate(path, "text")
 
 		require.Error(t, err)
 		require.Contains(t, err.Error(), "NonExistent")
@@ -169,7 +171,7 @@ context "Orders" {
 `
 		path := writeTemp(t, "bad_trigger.emod", input)
 
-		err := cli.RunValidate(path)
+		err := cli.RunValidate(path, "text")
 
 		require.Error(t, err)
 		require.Contains(t, err.Error(), "NonExistentEvent")
@@ -231,7 +233,7 @@ context "Notifications" {
 `
 		path := writeTemp(t, "multi_context.emod", input)
 
-		err := cli.RunValidate(path)
+		err := cli.RunValidate(path, "text")
 
 		require.NoError(t, err)
 	})
@@ -301,7 +303,7 @@ context "Notifications" {
 `
 		path := writeTemp(t, "valid_target.emod", input)
 
-		err := cli.RunValidate(path)
+		err := cli.RunValidate(path, "text")
 
 		require.NoError(t, err)
 	})
@@ -323,7 +325,7 @@ context "Test" {
 `
 		path := writeTemp(t, "lint_only.emod", input)
 
-		err := cli.RunValidate(path)
+		err := cli.RunValidate(path, "text")
 
 		require.Error(t, err)
 		require.Contains(t, err.Error(), "command-past-tense")
@@ -356,7 +358,7 @@ context "Orders" {
 `
 		path := writeTemp(t, "combined.emod", input)
 
-		err := cli.RunValidate(path)
+		err := cli.RunValidate(path, "text")
 
 		require.Error(t, err)
 		// lint warnings
@@ -366,6 +368,187 @@ context "Orders" {
 		// validation errors
 		require.Contains(t, err.Error(), "NonExistent")
 		require.Contains(t, err.Error(), "does not exist")
+	})
+
+	t.Run("json format on clean file outputs empty array", func(t *testing.T) {
+		path := writeTemp(t, "clean.emod", validEmod)
+
+		output := captureStdout(t, func() {
+			err := cli.RunValidate(path, "json")
+			require.NoError(t, err)
+		})
+
+		require.Equal(t, "[]\n", output)
+	})
+
+	t.Run("json format on invalid input outputs structured diagnostics", func(t *testing.T) {
+		path := writeTemp(t, "invalid.emod", invalidEmod)
+
+		output := captureStdout(t, func() {
+			err := cli.RunValidate(path, "json")
+			var lintErr *cli.LintError
+			if errors.As(err, &lintErr) {
+				require.Equal(t, 2, lintErr.ExitCode)
+				require.Equal(t, "", lintErr.Message)
+			} else {
+				require.Error(t, err)
+			}
+		})
+
+		var entries []map[string]interface{}
+		err := json.Unmarshal([]byte(output), &entries)
+		require.NoError(t, err)
+		require.Greater(t, len(entries), 0)
+	})
+
+	t.Run("json entries contain file, line, severity, and message fields", func(t *testing.T) {
+		path := writeTemp(t, "invalid.emod", invalidEmod)
+
+		output := captureStdout(t, func() {
+			_ = cli.RunValidate(path, "json")
+		})
+
+		var entries []map[string]interface{}
+		err := json.Unmarshal([]byte(output), &entries)
+		require.NoError(t, err)
+		require.Greater(t, len(entries), 0)
+
+		entry := entries[0]
+		require.Equal(t, path, entry["file"])
+		require.NotEqual(t, 0, entry["line"])
+		require.NotEmpty(t, entry["severity"])
+		require.NotEmpty(t, entry["message"])
+	})
+
+	t.Run("json format on warning-only file outputs warning severity and exit code 1", func(t *testing.T) {
+		input := `model "Test"
+context "Orders" {
+  aggregate "Order" {
+    slice "Update Order" {
+      command PlaceOrder {
+        fields {
+          orderId string required
+          reason  string required
+        }
+      }
+      event OrderUpdated {
+        fields {
+          orderId string required
+          reason  string required
+        }
+      }
+      flow {
+        command -> event: PlaceOrder -> OrderUpdated
+      }
+    }
+  }
+}
+`
+		path := writeTemp(t, "warnings.emod", input)
+
+		var output string
+		output = captureStdout(t, func() {
+			err := cli.RunValidate(path, "json")
+			var lintErr *cli.LintError
+			if errors.As(err, &lintErr) {
+				require.Equal(t, 1, lintErr.ExitCode)
+				require.Equal(t, "", lintErr.Message)
+			} else {
+				require.Error(t, err)
+			}
+		})
+
+		var entries []map[string]interface{}
+		err := json.Unmarshal([]byte(output), &entries)
+		require.NoError(t, err)
+		require.Len(t, entries, 1)
+		require.Equal(t, "warning", entries[0]["severity"])
+		require.Equal(t, "state-obsession", entries[0]["rule"])
+	})
+
+	t.Run("json format on file with errors outputs error severity and exit code 2", func(t *testing.T) {
+		input := `model "Test"
+context "Orders" {
+  aggregate "Order" {
+    slice "Events" {
+      command PlaceOrder {
+        fields {
+          orderId string required
+        }
+      }
+      event SingleIdEvent {
+        fields {
+          orderId string required
+        }
+      }
+      flow {
+        command -> event: PlaceOrder -> SingleIdEvent
+      }
+    }
+  }
+}
+`
+		path := writeTemp(t, "errors.emod", input)
+
+		var output string
+		output = captureStdout(t, func() {
+			err := cli.RunValidate(path, "json")
+			var lintErr *cli.LintError
+			if errors.As(err, &lintErr) {
+				require.Equal(t, 2, lintErr.ExitCode)
+				require.Equal(t, "", lintErr.Message)
+			} else {
+				require.Error(t, err)
+			}
+		})
+
+		var entries []map[string]interface{}
+		err := json.Unmarshal([]byte(output), &entries)
+		require.NoError(t, err)
+		require.Len(t, entries, 1)
+		require.Equal(t, "error", entries[0]["severity"])
+		require.Equal(t, "clickbait-event", entries[0]["rule"])
+	})
+
+	t.Run("json format reports all file and line fields", func(t *testing.T) {
+		path := writeTemp(t, "invalid.emod", invalidEmod)
+
+		output := captureStdout(t, func() {
+			_ = cli.RunValidate(path, "json")
+		})
+
+		var entries []map[string]interface{}
+		err := json.Unmarshal([]byte(output), &entries)
+		require.NoError(t, err)
+		require.Greater(t, len(entries), 0)
+
+		entry := entries[0]
+		require.Equal(t, path, entry["file"])
+		require.NotEqual(t, 0, entry["line"])
+		require.NotEmpty(t, entry["message"])
+	})
+
+	t.Run("unsupported format returns error", func(t *testing.T) {
+		path := writeTemp(t, "clean.emod", validEmod)
+
+		err := cli.RunValidate(path, "unknown")
+
+		require.Error(t, err)
+		require.Contains(t, err.Error(), "unsupported format")
+		var lintErr *cli.LintError
+		if errors.As(err, &lintErr) {
+			require.Equal(t, 1, lintErr.ExitCode)
+		}
+	})
+
+	t.Run("text format is the default and unchanged for existing behaviors", func(t *testing.T) {
+		path := writeTemp(t, "invalid.emod", invalidEmod)
+
+		err := cli.RunValidate(path, "text")
+
+		require.Error(t, err)
+		require.Contains(t, err.Error(), path)
+		require.Contains(t, err.Error(), ":1:")
 	})
 }
 

@@ -3,8 +3,8 @@
 ## Progress
 - [x] Task 1: Add orphan command completeness check to validator
 - [x] Task 2: Add orphan event completeness check to validator
-- [ ] Task 3: Integrate lint rules into `emod validate`
-- [ ] Task 4: Add `--format json` flag to `emod validate`
+- [x] Task 3: Integrate lint rules into `emod validate`
+- [x] Task 4: Add `--format json` flag to `emod validate`
 
 ---
 
