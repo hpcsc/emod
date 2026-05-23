@@ -7,6 +7,7 @@ import (
 	"strings"
 
 	"github.com/hpcsc/emod/internal/lexer"
+	"github.com/hpcsc/emod/internal/linter"
 	"github.com/hpcsc/emod/internal/parser"
 	"github.com/hpcsc/emod/internal/validator"
 )
@@ -31,6 +32,9 @@ func RunValidate(path string) error {
 
 	validatorDiags := validator.Validate(model)
 	diagnostics = append(diagnostics, validatorDiags...)
+
+	lintDiags := linter.Lint(model)
+	diagnostics = append(diagnostics, lintDiags...)
 
 	if len(diagnostics) > 0 {
 		var sb strings.Builder

@@ -184,12 +184,14 @@ context "Orders" {
     slice "Place Order" {
       command PlaceOrder {
         fields {
-          orderId string required
+          orderId     string required
+          totalAmount string required
         }
       }
       event OrderPlaced {
         fields {
-          orderId string required
+          orderId     string required
+          totalAmount string required
         }
       }
       flow {
@@ -241,12 +243,14 @@ context "Orders" {
     slice "Place Order" {
       command PlaceOrder {
         fields {
-          orderId string required
+          orderId     string required
+          totalAmount string required
         }
       }
       event OrderPlaced {
         fields {
-          orderId string required
+          orderId     string required
+          totalAmount string required
         }
       }
       flow {
@@ -284,6 +288,7 @@ context "Notifications" {
       event NotificationRequested {
         fields {
           notificationId string required
+          message        string required
         }
       }
       automation Sender {
@@ -299,6 +304,68 @@ context "Notifications" {
 		err := cli.RunValidate(path)
 
 		require.NoError(t, err)
+	})
+
+	t.Run("returns error for model with only lint warnings", func(t *testing.T) {
+		input := `model "Test"
+context "Test" {
+  aggregate "Test" {
+    slice "Test" {
+      command OrderPlaced {}
+      event OrderUpdated {}
+      view OrderList {}
+      flow {
+        command -> event: OrderPlaced -> OrderUpdated
+      }
+    }
+  }
+}
+`
+		path := writeTemp(t, "lint_only.emod", input)
+
+		err := cli.RunValidate(path)
+
+		require.Error(t, err)
+		require.Contains(t, err.Error(), "command-past-tense")
+		require.Contains(t, err.Error(), "OrderPlaced")
+		require.Contains(t, err.Error(), "state-obsession")
+		require.Contains(t, err.Error(), "OrderUpdated")
+		require.Contains(t, err.Error(), "view-naming")
+		require.Contains(t, err.Error(), "OrderList")
+	})
+
+	t.Run("returns both lint warnings and validation errors", func(t *testing.T) {
+		input := `model "Test"
+context "Orders" {
+  aggregate "Order" {
+    slice "Process Order" {
+      command OrderPlaced {}
+      event OrderUpdated {}
+      view OrderList {}
+      automation OrderNotifier {
+        trigger OrderPlaced
+        command NotifyCustomer
+        target context NonExistent
+      }
+      flow {
+        command -> event: OrderPlaced -> OrderUpdated
+      }
+    }
+  }
+}
+`
+		path := writeTemp(t, "combined.emod", input)
+
+		err := cli.RunValidate(path)
+
+		require.Error(t, err)
+		// lint warnings
+		require.Contains(t, err.Error(), "command-past-tense")
+		require.Contains(t, err.Error(), "state-obsession")
+		require.Contains(t, err.Error(), "view-naming")
+		// validation errors
+		require.Contains(t, err.Error(), "NonExistent")
+		require.Contains(t, err.Error(), "does not exist")
 	})
 }
 
