@@ -166,6 +166,90 @@ context "Orders" {
 		require.True(t, strings.HasPrefix(string(content), "eventmodeling"))
 	})
 
+	t.Run("ascii output is printed to stdout and starts with Model header", func(t *testing.T) {
+		path := writeTemp(t, "valid.emod", validEmod)
+
+		output := captureStdout(t, func() {
+			err := cli.RunDiagram(path, "", "ascii")
+			require.NoError(t, err)
+		})
+
+		require.True(t, strings.HasPrefix(output, "Model:"), "ascii output should start with Model header")
+		require.Contains(t, output, "=== Slice:")
+		require.Contains(t, output, "->")
+	})
+
+	t.Run("ascii output can be written to a specific file", func(t *testing.T) {
+		path := writeTemp(t, "valid.emod", validEmod)
+		outputPath := filepath.Join(t.TempDir(), "output.ascii")
+
+		err := cli.RunDiagram(path, outputPath, "ascii")
+		require.NoError(t, err)
+
+		content, err := os.ReadFile(outputPath)
+		require.NoError(t, err)
+		require.True(t, strings.HasPrefix(string(content), "Model:"))
+	})
+
+	t.Run("ascii validation errors produce exit code 2", func(t *testing.T) {
+		path := writeTemp(t, "invalid.emod", invalidEmod)
+
+		var err error
+		stderr := captureStderr(t, func() {
+			err = cli.RunDiagram(path, "", "ascii")
+		})
+
+		require.Error(t, err)
+		var lintErr *cli.LintError
+		if errors.As(err, &lintErr) {
+			require.Equal(t, 2, lintErr.ExitCode)
+		}
+
+		require.Contains(t, stderr, path)
+		require.Contains(t, stderr, ":1:")
+	})
+
+	t.Run("ascii lint warnings produce output with exit code 1", func(t *testing.T) {
+		input := `model "Test"
+context "Orders" {
+  aggregate "Order" {
+    slice "Update Order" {
+      command PlaceOrder {
+        fields {
+          orderId string required
+          reason  string required
+        }
+      }
+      event OrderUpdated {
+        fields {
+          orderId string required
+          reason  string required
+        }
+      }
+      flow {
+        command -> event: PlaceOrder -> OrderUpdated
+      }
+    }
+  }
+}
+`
+		path := writeTemp(t, "warnings.emod", input)
+
+		var err error
+		output := captureStdout(t, func() {
+			err = cli.RunDiagram(path, "", "ascii")
+		})
+
+		require.Error(t, err)
+		var lintErr *cli.LintError
+		if errors.As(err, &lintErr) {
+			require.Equal(t, 1, lintErr.ExitCode)
+		}
+
+		require.Contains(t, output, "Model:")
+		require.Contains(t, output, "=== Slice:")
+	})
+
 	t.Run("unsupported diagram format returns error listing supported formats", func(t *testing.T) {
 		path := writeTemp(t, "valid.emod", validEmod)
 
@@ -175,6 +259,7 @@ context "Orders" {
 		require.Contains(t, err.Error(), "drawio")
 		require.Contains(t, err.Error(), "mermaid")
 		require.Contains(t, err.Error(), "svg")
+		require.Contains(t, err.Error(), "ascii")
 	})
 
 	t.Run("svg: valid file uses default .svg output path", func(t *testing.T) {
