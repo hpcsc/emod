@@ -160,16 +160,22 @@ emod is a CLI tool that provides a domain-specific language (`.emod` files) for 
 
 ---
 
-### US-011: Generate Mermaid diagrams
-**Description:** As a model author, I want to generate Mermaid diagram markup from my model so that I can embed event model diagrams in markdown documents and pull requests.
+### US-011: Generate Mermaid diagrams using event modeling syntax
+**Description:** As a model author, I want to generate Mermaid event modeling diagram markup from my model so that I can embed event model diagrams in markdown documents and pull requests.
 
 **Acceptance Criteria:**
-- [ ] `emod diagram reservation.emod -f mermaid` outputs Mermaid markup to stdout
-- [ ] The diagram uses Mermaid's flowchart syntax with styled nodes for events (orange), commands (blue), views (green), and triggers (white)
-- [ ] Each slice is visually grouped using Mermaid subgraphs
-- [ ] Connections between elements match the event modeling flow patterns
-- [ ] The output renders correctly when pasted into a GitHub markdown file
+- [ ] `emod diagram reservation.emod -f mermaid` outputs Mermaid event modeling diagram markup to stdout
+- [ ] The diagram uses Mermaid's native `eventmodeling` diagram type with timeframe definitions (`tf`)
+- [ ] Triggers are rendered as `ui` type (or `pcr` for schedule/processor triggers)
+- [ ] Commands are rendered as `cmd` type in the Command/Read Model swimlane
+- [ ] Events are rendered as `evt` type in the Events swimlane
+- [ ] Views/read models are rendered as `rmo` type in the Command/Read Model swimlane
+- [ ] Automations are rendered as `pcr` (processor) type in the UI/Automation swimlane
+- [ ] Contexts are rendered as Mermaid namespaces using dot notation (e.g., `Orders.CreateOrder`), creating per-context swimlanes
+- [ ] Timeframes use unique sequential numbering across all slices
+- [ ] The output renders correctly when pasted into a markdown file that supports Mermaid v11.15.0+
 - [ ] Output can be written to a file with `-o path/to/output.md`
+- [ ] Default diagram format (`drawio`) is unchanged for backward compatibility
 
 **Depends on:** US-007
 
