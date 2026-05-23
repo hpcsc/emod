@@ -151,6 +151,26 @@ func NewApp() *urfave.App {
 				},
 			},
 			{
+				Name:      "slices",
+				Usage:     "List all slices in a model with their pattern types",
+				ArgsUsage: "<file>",
+				Action: func(c *urfave.Context) error {
+					path := c.Args().First()
+					if err := RunSlices(path); err != nil {
+						var lintErr *LintError
+						if errors.As(err, &lintErr) {
+							if lintErr.Message != "" {
+								fmt.Fprintln(os.Stderr, lintErr.Message)
+							}
+							return urfave.Exit("", lintErr.ExitCode)
+						}
+						fmt.Fprintln(os.Stderr, err)
+						return urfave.Exit("", 1)
+					}
+					return nil
+				},
+			},
+			{
 				Name:  "schema",
 				Usage: "Print the bundled CUE schema definition",
 				Flags: []urfave.Flag{
