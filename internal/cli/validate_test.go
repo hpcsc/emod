@@ -61,6 +61,9 @@ context "Reservations" {
           reservationId string required
         }
       }
+      flow {
+        command -> event: ConfirmReservation -> ReservationMade
+      }
       automation AutoConfirm {
         trigger ReservationMade
         command ConfirmReservation
@@ -71,6 +74,9 @@ context "Reservations" {
         fields {
           bookingRef string required
         }
+      }
+      flow {
+        command -> event: ImportBooking -> BookingImported
       }
       translation BookingImport {
         external_system "Booking.com API"
@@ -207,6 +213,9 @@ context "Notifications" {
           message string required
         }
       }
+      flow {
+        command -> event: SendNotification -> NotificationReceived
+      }
       event NotificationReceived {
         source external "Email Provider"
         fields {
@@ -240,6 +249,9 @@ context "Orders" {
           orderId string required
         }
       }
+      flow {
+        command -> event: PlaceOrder -> OrderPlaced
+      }
     }
     slice "Notify On Order" {
       automation OrderNotifier {
@@ -262,6 +274,12 @@ context "Notifications" {
         fields {
           to string required
         }
+      }
+      flow {
+        command -> event: SendNotification -> NotificationRequested
+      }
+      flow {
+        command -> event: SendEmail -> NotificationRequested
       }
       event NotificationRequested {
         fields {

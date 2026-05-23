@@ -15,12 +15,15 @@ func Validate(model *ast.Model) []*diagnostic.Entry {
 	contextNames := make(map[string]bool, len(model.Contexts))
 	commandNames := make(map[string]bool)
 	eventNames := make(map[string]bool)
+	commandPositions := make(map[string]ast.Position)
+	flowCmdNames := make(map[string]bool)
 	for _, ctx := range model.Contexts {
 		contextNames[ctx.Name] = true
 		for _, agg := range ctx.Aggregates {
 			for _, slice := range agg.Slices {
 				for _, cmd := range slice.Commands {
 					commandNames[cmd.Name] = true
+					commandPositions[cmd.Name] = cmd.NamePos
 				}
 				for _, evt := range slice.Events {
 					eventNames[evt.Name] = true
@@ -28,6 +31,11 @@ func Validate(model *ast.Model) []*diagnostic.Entry {
 				for _, tr := range slice.Translations {
 					if tr.Event != nil {
 						eventNames[tr.Event.Name] = true
+					}
+				}
+				for _, f := range slice.Flows {
+					if f.CommandName != "" {
+						flowCmdNames[f.CommandName] = true
 					}
 				}
 			}
@@ -98,6 +106,20 @@ func Validate(model *ast.Model) []*diagnostic.Entry {
 					}
 				}
 			}
+		}
+	}
+
+	// orphan-command: commands defined but not referenced by any flow
+	for name, pos := range commandPositions {
+		if !flowCmdNames[name] {
+			diags = append(diags, &diagnostic.Entry{
+				Filename: pos.Filename,
+				Line:     pos.Line,
+				Column:   pos.Column,
+				Message:  fmt.Sprintf("command %q is orphaned (no flow references it)", name),
+				Severity: diagnostic.Error,
+				RuleName: "orphan-command",
+			})
 		}
 	}
 

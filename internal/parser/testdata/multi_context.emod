@@ -40,6 +40,9 @@ context "Notifications" {
           message string required
         }
       }
+      flow {
+        command -> event: SendNotification -> NotificationReceived
+      }
       event NotificationReceived {
         source external "Email Provider"
         fields {

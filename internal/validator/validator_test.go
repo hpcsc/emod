@@ -6,6 +6,7 @@ import (
 	"testing"
 
 	"github.com/hpcsc/emod/internal/ast"
+	"github.com/hpcsc/emod/internal/diagnostic"
 	"github.com/hpcsc/emod/internal/validator"
 	"github.com/stretchr/testify/require"
 )
@@ -153,6 +154,9 @@ func TestValidate(t *testing.T) {
 									Commands: []*ast.Command{
 										{Name: "PlaceOrder"},
 									},
+									Flows: []*ast.Flow{
+										{CommandName: "PlaceOrder"},
+									},
 									Automations: []*ast.Automation{
 										{
 											Name:    "AutoConfirm",
@@ -183,6 +187,9 @@ func TestValidate(t *testing.T) {
 								{
 									Commands: []*ast.Command{
 										{Name: "PlaceOrder"},
+									},
+									Flows: []*ast.Flow{
+										{CommandName: "PlaceOrder"},
 									},
 								},
 							},
@@ -868,5 +875,94 @@ func TestValidate(t *testing.T) {
 		require.Len(t, diags, 2)
 		require.Equal(t, `target context "Ghost" does not exist`, diags[0].Message)
 		require.Equal(t, `target context "Phantom" does not exist`, diags[1].Message)
+	})
+
+	t.Run("command defined with no flow reference produces orphan diagnostic", func(t *testing.T) {
+		model := &ast.Model{
+			Contexts: []*ast.Context{
+				{
+					Name: "Orders",
+					Aggregates: []*ast.Aggregate{
+						{
+							Slices: []*ast.Slice{
+								{
+									Commands: []*ast.Command{
+										{Name: "PlaceOrder", NamePos: ast.Position{Filename: "test.emod", Line: 5, Column: 3}},
+									},
+								},
+							},
+						},
+					},
+				},
+			},
+		}
+
+		diags := validator.Validate(model)
+
+		require.Len(t, diags, 1)
+		require.Equal(t, diagnostic.Error, diags[0].Severity)
+		require.Equal(t, "orphan-command", diags[0].RuleName)
+		require.Contains(t, diags[0].Message, "PlaceOrder")
+		require.Contains(t, diags[0].Message, "orphaned")
+		require.Equal(t, "test.emod", diags[0].Filename)
+		require.Equal(t, 5, diags[0].Line)
+		require.Equal(t, 3, diags[0].Column)
+	})
+
+	t.Run("command referenced by flow produces no orphan diagnostic", func(t *testing.T) {
+		model := &ast.Model{
+			Contexts: []*ast.Context{
+				{
+					Name: "Orders",
+					Aggregates: []*ast.Aggregate{
+						{
+							Slices: []*ast.Slice{
+								{
+									Commands: []*ast.Command{
+										{Name: "PlaceOrder"},
+									},
+									Flows: []*ast.Flow{
+										{CommandName: "PlaceOrder"},
+									},
+								},
+							},
+						},
+					},
+				},
+			},
+		}
+
+		diags := validator.Validate(model)
+
+		require.Empty(t, diags)
+	})
+
+	t.Run("orphan command diagnostic includes command definition position", func(t *testing.T) {
+		model := &ast.Model{
+			Contexts: []*ast.Context{
+				{
+					Name: "Orders",
+					Aggregates: []*ast.Aggregate{
+						{
+							Slices: []*ast.Slice{
+								{
+									Commands: []*ast.Command{
+										{Name: "ShipOrder", NamePos: ast.Position{Filename: "orders.emod", Line: 12, Column: 7}},
+									},
+								},
+							},
+						},
+					},
+				},
+			},
+		}
+
+		diags := validator.Validate(model)
+
+		require.Len(t, diags, 1)
+		require.Equal(t, "orders.emod", diags[0].Filename)
+		require.Equal(t, 12, diags[0].Line)
+		require.Equal(t, 7, diags[0].Column)
+		require.Equal(t, "orphan-command", diags[0].RuleName)
 	})
 }
