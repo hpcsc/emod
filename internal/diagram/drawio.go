@@ -274,21 +274,22 @@ func ExportDrawio(model *ast.Model) ([]byte, error) {
 	return []byte(b.String()), nil
 }
 
+type sliceEntry struct {
+	slice   *ast.Slice
+	ctxName string
+}
+
 // collectSlices flattens all slices from the model into a list.
 func collectSlices(model *ast.Model) []sliceEntry {
 	var entries []sliceEntry
 	for _, ctx := range model.Contexts {
 		for _, agg := range ctx.Aggregates {
 			for _, s := range agg.Slices {
-				entries = append(entries, sliceEntry{slice: s})
+				entries = append(entries, sliceEntry{slice: s, ctxName: ctx.Name})
 			}
 		}
 	}
 	return entries
-}
-
-type sliceEntry struct {
-	slice *ast.Slice
 }
 
 // itemLayout computes item width and x position for elements within a slice.
