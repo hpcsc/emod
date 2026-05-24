@@ -2,5 +2,6 @@ settings.local.json
 .idea
 e2e/node_modules/
 /bin
+/dist
 tasks/.cycles
 tasks/.checkpoint

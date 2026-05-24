@@ -1,0 +1,56 @@
+name: On Demand Build
+
+on:
+  workflow_dispatch:
+    inputs:
+      git_ref:
+        description: Git ref to build
+        required: true
+        default: main
+
+jobs:
+
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: ${{ inputs.git_ref }}
+
+      - name: Set up Go
+        uses: actions/setup-go@v6
+        with:
+          go-version-file: 'go.mod'
+
+      - name: Mise install
+        uses: jdx/mise-action@v4
+        with:
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Run release local
+        run: task release:local
+
+      - uses: actions/upload-artifact@v7
+        with:
+          name: darwin-amd64
+          path: dist/emod-darwin-amd64.tar.gz
+
+      - uses: actions/upload-artifact@v7
+        with:
+          name: darwin-arm64
+          path: dist/emod-darwin-arm64.tar.gz
+
+      - uses: actions/upload-artifact@v7
+        with:
+          name: linux-amd64
+          path: dist/emod-linux-amd64.tar.gz
+
+      - uses: actions/upload-artifact@v7
+        with:
+          name: linux-arm64
+          path: dist/emod-linux-arm64.tar.gz
+
+      - uses: actions/upload-artifact@v7
+        with:
+          name: linux-i386
+          path: dist/emod-linux-i386.tar.gz

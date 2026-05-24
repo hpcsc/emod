@@ -1,5 +1,8 @@
 version: '3'
 
+includes:
+  release: Taskfile.release.yml
+
 tasks:
   build:
     desc: Build the emod binary
