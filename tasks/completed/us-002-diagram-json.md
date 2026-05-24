@@ -2,7 +2,7 @@
 
 ## Progress
 - [x] Task 1: Add ExportDiagramJSON and ExportDiagramJSONDiagnostics with tests
-- [ ] Task 2: Wire diagram-json format into CLI export command
+- [x] Task 2: Wire diagram-json format into CLI export command
 
 ## Story Reference
 `user-stories/rate-limiting.md` — **US-002: Export model as diagram-oriented JSON** (inline in decompose request)

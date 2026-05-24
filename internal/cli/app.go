@@ -96,7 +96,7 @@ func NewApp() *urfave.App {
 				Flags: []urfave.Flag{
 					&urfave.StringFlag{
 						Name:  "format",
-						Usage: "Output format (json|cue)",
+						Usage: "Output format (json|cue|diagram-json)",
 						Value: "json",
 					},
 				},

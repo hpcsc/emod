@@ -20,9 +20,9 @@ import (
 // For CUE format, diagnostics are written to stderr with non-zero exit.
 // The format parameter controls output format — "json" and "cue" are supported.
 func RunExport(path, format string) error {
-	if format != "json" && format != "cue" {
+	if format != "json" && format != "cue" && format != "diagram-json" {
 		return &LintError{
-			Message:  fmt.Sprintf("unsupported format %q; supported formats: json, cue", format),
+			Message:  fmt.Sprintf("unsupported format %q; supported formats: json, cue, diagram-json", format),
 			ExitCode: 1,
 		}
 	}
@@ -57,6 +57,8 @@ func RunExport(path, format string) error {
 	switch format {
 	case "json":
 		return handleJSONExport(model, diags)
+	case "diagram-json":
+		return handleDiagramJSONExport(model, diags)
 	default:
 		return handleCUEExport(model, diags)
 	}
@@ -80,6 +82,28 @@ func exitCodeForDiagnostics(diagnostics []*diagnostic.Entry) int {
 // diagnostics included, and returns a LintError with exit code based on severity.
 func handleJSONExport(model *ast.Model, diagnostics []*diagnostic.Entry) error {
 	output, err := export.ExportJSONDiagnostics(model, diagnostics)
+	if err != nil {
+		return &LintError{
+			Message:  fmt.Sprintf("export encoding: %s", err),
+			ExitCode: 1,
+		}
+	}
+	fmt.Println(string(output))
+
+	exitCode := exitCodeForDiagnostics(diagnostics)
+	if exitCode > 0 {
+		return &LintError{
+			Message:  "",
+			ExitCode: exitCode,
+		}
+	}
+	return nil
+}
+
+// handleDiagramJSONExport always outputs a complete diagram JSON document to stdout with
+// diagnostics included, and returns a LintError with exit code based on severity.
+func handleDiagramJSONExport(model *ast.Model, diagnostics []*diagnostic.Entry) error {
+	output, err := export.ExportDiagramJSONDiagnostics(model, diagnostics)
 	if err != nil {
 		return &LintError{
 			Message:  fmt.Sprintf("export encoding: %s", err),

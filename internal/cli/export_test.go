@@ -225,6 +225,7 @@ context "Orders" {
 		require.Contains(t, err.Error(), "unsupported format")
 		require.Contains(t, err.Error(), "json")
 		require.Contains(t, err.Error(), "cue")
+		require.Contains(t, err.Error(), "diagram-json")
 		var lintErr *cli.LintError
 		if errors.As(err, &lintErr) {
 			require.Equal(t, 1, lintErr.ExitCode)
@@ -249,6 +250,74 @@ context "Orders" {
 		require.True(t, hasDiagnostics, "expected diagnostics key in JSON output")
 		_, hasModel := doc["model"]
 		require.True(t, hasModel, "expected model key in JSON output")
+	})
+
+	// --- diagram-json format tests ---
+
+	t.Run("valid file outputs wrapped diagram JSON with empty diagnostics to stdout", func(t *testing.T) {
+		path := writeTemp(t, "valid.emod", validEmod)
+
+		output := captureStdout(t, func() {
+			err := cli.RunExport(path, "diagram-json")
+			require.NoError(t, err)
+		})
+
+		var doc map[string]interface{}
+		err := json.Unmarshal([]byte(output), &doc)
+		require.NoError(t, err)
+
+		diags, ok := doc["diagnostics"].([]interface{})
+		require.True(t, ok, "expected diagnostics in output")
+		require.Empty(t, diags, "expected empty diagnostics for valid file")
+
+		diagram, ok := doc["diagram"].(map[string]interface{})
+		require.True(t, ok, "expected diagram in output")
+		require.Equal(t, "Hotel Reservation", diagram["model_name"])
+
+		nodes, ok := diagram["nodes"].([]interface{})
+		require.True(t, ok, "expected nodes in diagram output")
+		require.NotEmpty(t, nodes, "expected non-empty nodes for valid file")
+
+		edges, ok := diagram["edges"].([]interface{})
+		require.True(t, ok, "expected edges in diagram output")
+		require.NotEmpty(t, edges, "expected non-empty edges for valid file")
+	})
+
+	t.Run("file with validation errors outputs diagram JSON with diagnostics on stdout and empty stderr", func(t *testing.T) {
+		path := writeTemp(t, "invalid.emod", invalidEmod)
+
+		var err error
+		var output string
+		stderr := captureStderr(t, func() {
+			output = captureStdout(t, func() {
+				err = cli.RunExport(path, "diagram-json")
+			})
+		})
+
+		require.Error(t, err)
+		var lintErr *cli.LintError
+		if errors.As(err, &lintErr) {
+			require.Equal(t, "", lintErr.Message)
+			require.Equal(t, 2, lintErr.ExitCode)
+		}
+
+		// stderr should be empty for diagram-json format
+		require.Empty(t, stderr, "diagram-json format should not write diagnostics to stderr")
+
+		// stdout should contain diagnostics wrapper
+		var doc map[string]interface{}
+		err = json.Unmarshal([]byte(output), &doc)
+		require.NoError(t, err)
+
+		diags, ok := doc["diagnostics"].([]interface{})
+		require.True(t, ok, "expected diagnostics in output")
+		require.NotEmpty(t, diags, "expected non-empty diagnostics for invalid file")
+
+		diagram, ok := doc["diagram"].(map[string]interface{})
+		require.True(t, ok, "expected diagram key in output (partial diagram)")
+
+		_, ok = diagram["nodes"].([]interface{})
+		require.True(t, ok, "expected nodes in diagram output")
 	})
 
 	// --- CUE format tests ---
