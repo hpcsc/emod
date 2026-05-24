@@ -67,7 +67,7 @@ func TestExportDrawio(t *testing.T) {
 
 		output := string(raw)
 		require.Contains(t, output, `fillColor=#ffffff`)
-		require.Contains(t, output, `strokeColor=#000000`)
+		require.Contains(t, output, `strokeColor=#333333`)
 		require.Contains(t, output, "SubmitForm")
 		require.Contains(t, output, "(User)")
 	})
@@ -91,8 +91,8 @@ func TestExportDrawio(t *testing.T) {
 		require.NoError(t, err)
 
 		output := string(raw)
-		require.Contains(t, output, `fillColor=#f8cecc`)
-		require.Contains(t, output, `strokeColor=#b85450`)
+		require.Contains(t, output, `fillColor=#ffe6cc`)
+		require.Contains(t, output, `strokeColor=#d79b00`)
 		require.Contains(t, output, "ReservationMade")
 	})
 
@@ -442,7 +442,7 @@ func view(name string) *ast.View {
 }
 
 const (
-	fillEvent    = "#f8cecc"
+	fillEvent    = "#ffe6cc"
 	fillCommand  = "#dae8fc"
 	fillView     = "#d5e8d4"
 	fillTrigger  = "#ffffff"

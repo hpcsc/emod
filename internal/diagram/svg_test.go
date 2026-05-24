@@ -40,7 +40,7 @@ func TestExportSVG(t *testing.T) {
 		require.True(t, validXML(output))
 	})
 
-	t.Run("renders trigger with white fill and black stroke", func(t *testing.T) {
+	t.Run("renders trigger with white fill and stroke", func(t *testing.T) {
 		model := &ast.Model{
 			Name: "Test",
 			Contexts: []*ast.Context{{
@@ -64,7 +64,7 @@ func TestExportSVG(t *testing.T) {
 
 		output := string(raw)
 		require.Contains(t, output, `fill="#ffffff"`)
-		require.Contains(t, output, `stroke="#000000"`)
+		require.Contains(t, output, `stroke="#333333"`)
 		require.Contains(t, output, "SubmitForm")
 		require.Contains(t, output, "(User)")
 	})
@@ -88,8 +88,8 @@ func TestExportSVG(t *testing.T) {
 		require.NoError(t, err)
 
 		output := string(raw)
-		require.Contains(t, output, `fill="#f8cecc"`)
-		require.Contains(t, output, `stroke="#b85450"`)
+		require.Contains(t, output, `fill="#ffe6cc"`)
+		require.Contains(t, output, `stroke="#d79b00"`)
 		require.Contains(t, output, "ReservationMade")
 	})
 
@@ -355,7 +355,7 @@ func TestExportSVG(t *testing.T) {
 		require.True(t, validXML(output))
 
 		// Verify all element types rendered
-		require.Contains(t, output, `fill="#f8cecc"`)
+		require.Contains(t, output, `fill="#ffe6cc"`)
 		require.Contains(t, output, `fill="#dae8fc"`)
 		require.Contains(t, output, `fill="#d5e8d4"`)
 		require.Contains(t, output, `fill="#ffffff"`)
