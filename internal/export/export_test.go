@@ -618,13 +618,595 @@ func TestExportJSON(t *testing.T) {
 		agg := c["aggregates"].([]any)[0].(map[string]any)
 		s := agg["slices"].([]any)[0].(map[string]any)
 
-		require.NotNil(t, s["trigger"])
-		require.Len(t, s["commands"], 1)
-		require.Len(t, s["events"], 1)
-		require.Len(t, s["views"], 1)
-		require.Len(t, s["automations"], 1)
-		require.Len(t, s["flows"], 1)
-	})
+	require.NotNil(t, s["trigger"])
+	require.Len(t, s["commands"], 1)
+	require.Len(t, s["events"], 1)
+	require.Len(t, s["views"], 1)
+	require.Len(t, s["automations"], 1)
+	require.Len(t, s["flows"], 1)
+})
+
+t.Run("includes position for model name", func(t *testing.T) {
+	model := &ast.Model{
+		Name:    "TestModel",
+		NamePos: ast.Position{Filename: "test.cue", Line: 1, Column: 1},
+	}
+
+	raw, err := export.ExportJSON(model)
+	require.NoError(t, err)
+
+	var doc map[string]any
+	err = json.Unmarshal(raw, &doc)
+	require.NoError(t, err)
+
+	pos := doc["position"].(map[string]any)
+	require.Equal(t, "test.cue", pos["filename"])
+	require.Equal(t, float64(1), pos["line"])
+	require.Equal(t, float64(1), pos["column"])
+})
+
+t.Run("includes position for actor name", func(t *testing.T) {
+	model := &ast.Model{
+		Name: "App",
+		Actors: []*ast.Actor{
+			{Name: "Guest", NamePos: ast.Position{Filename: "test.cue", Line: 2, Column: 3}},
+		},
+	}
+
+	raw, err := export.ExportJSON(model)
+	require.NoError(t, err)
+
+	var doc map[string]any
+	err = json.Unmarshal(raw, &doc)
+	require.NoError(t, err)
+
+	actors := doc["actors"].([]any)
+	a := actors[0].(map[string]any)
+	pos := a["position"].(map[string]any)
+	require.Equal(t, "test.cue", pos["filename"])
+	require.Equal(t, float64(2), pos["line"])
+	require.Equal(t, float64(3), pos["column"])
+})
+
+t.Run("includes positions for context name and braces", func(t *testing.T) {
+	model := &ast.Model{
+		Name: "Test",
+		Contexts: []*ast.Context{
+			{
+				Name:      "Ctx",
+				NamePos:   ast.Position{Filename: "test.cue", Line: 5, Column: 1},
+				OpenPos:   ast.Position{Filename: "test.cue", Line: 5, Column: 6},
+				ClosePos:  ast.Position{Filename: "test.cue", Line: 10, Column: 1},
+			},
+		},
+	}
+
+	raw, err := export.ExportJSON(model)
+	require.NoError(t, err)
+
+	var doc map[string]any
+	err = json.Unmarshal(raw, &doc)
+	require.NoError(t, err)
+
+	ctxs := doc["contexts"].([]any)
+	c := ctxs[0].(map[string]any)
+
+	pos := c["position"].(map[string]any)
+	require.Equal(t, float64(5), pos["line"])
+
+	openPos := c["open_position"].(map[string]any)
+	require.Equal(t, float64(5), openPos["line"])
+	require.Equal(t, float64(6), openPos["column"])
+
+	closePos := c["close_position"].(map[string]any)
+	require.Equal(t, float64(10), closePos["line"])
+})
+
+t.Run("includes positions for aggregate name and braces", func(t *testing.T) {
+	model := &ast.Model{
+		Name: "Test",
+		Contexts: []*ast.Context{
+			{
+				Name: "Ctx",
+				Aggregates: []*ast.Aggregate{
+					{
+						Name:     "Agg",
+						NamePos:  ast.Position{Filename: "test.cue", Line: 3, Column: 3},
+						OpenPos:  ast.Position{Filename: "test.cue", Line: 3, Column: 8},
+						ClosePos: ast.Position{Filename: "test.cue", Line: 7, Column: 1},
+					},
+				},
+			},
+		},
+	}
+
+	raw, err := export.ExportJSON(model)
+	require.NoError(t, err)
+
+	var doc map[string]any
+	err = json.Unmarshal(raw, &doc)
+	require.NoError(t, err)
+
+	ctxs := doc["contexts"].([]any)
+	c := ctxs[0].(map[string]any)
+	aggs := c["aggregates"].([]any)
+	agg := aggs[0].(map[string]any)
+
+	require.Equal(t, float64(3), agg["position"].(map[string]any)["line"])
+	require.Equal(t, float64(8), agg["open_position"].(map[string]any)["column"])
+	require.Equal(t, float64(7), agg["close_position"].(map[string]any)["line"])
+})
+
+t.Run("includes positions for slice name and braces", func(t *testing.T) {
+	model := &ast.Model{
+		Name: "Test",
+		Contexts: []*ast.Context{
+			{
+				Name: "Ctx",
+				Aggregates: []*ast.Aggregate{
+					{
+						Name: "Agg",
+						Slices: []*ast.Slice{
+							{
+								Name:     "S",
+								NamePos:  ast.Position{Filename: "test.cue", Line: 4, Column: 5},
+								OpenPos:  ast.Position{Filename: "test.cue", Line: 4, Column: 8},
+								ClosePos: ast.Position{Filename: "test.cue", Line: 8, Column: 3},
+							},
+						},
+					},
+				},
+			},
+		},
+	}
+
+	raw, err := export.ExportJSON(model)
+	require.NoError(t, err)
+
+	var doc map[string]any
+	err = json.Unmarshal(raw, &doc)
+	require.NoError(t, err)
+
+	s := getFirstSlice(doc)
+	require.Equal(t, float64(4), s["position"].(map[string]any)["line"])
+	require.Equal(t, float64(8), s["close_position"].(map[string]any)["line"])
+})
+
+t.Run("includes positions for command name and braces", func(t *testing.T) {
+	model := &ast.Model{
+		Name: "Test",
+		Contexts: []*ast.Context{
+			{
+				Name: "Ctx",
+				Aggregates: []*ast.Aggregate{
+					{
+						Name: "Agg",
+						Slices: []*ast.Slice{
+							{
+								Name: "S",
+								Commands: []*ast.Command{
+									{
+										Name:     "Cmd",
+										NamePos:  ast.Position{Filename: "test.cue", Line: 5, Column: 7},
+										OpenPos:  ast.Position{Filename: "test.cue", Line: 5, Column: 12},
+										ClosePos: ast.Position{Filename: "test.cue", Line: 7, Column: 5},
+									},
+								},
+							},
+						},
+					},
+				},
+			},
+		},
+	}
+
+	raw, err := export.ExportJSON(model)
+	require.NoError(t, err)
+
+	var doc map[string]any
+	err = json.Unmarshal(raw, &doc)
+	require.NoError(t, err)
+
+	s := getFirstSlice(doc)
+	cmds := s["commands"].([]any)
+	cmd := cmds[0].(map[string]any)
+	require.Equal(t, float64(5), cmd["position"].(map[string]any)["line"])
+	require.Equal(t, float64(12), cmd["open_position"].(map[string]any)["column"])
+	require.Equal(t, float64(7), cmd["close_position"].(map[string]any)["line"])
+})
+
+t.Run("includes positions for event name/source/external and braces", func(t *testing.T) {
+	model := &ast.Model{
+		Name: "Test",
+		Contexts: []*ast.Context{
+			{
+				Name: "Ctx",
+				Aggregates: []*ast.Aggregate{
+					{
+						Name: "Agg",
+						Slices: []*ast.Slice{
+							{
+								Name: "S",
+								Events: []*ast.Event{
+									{
+										Name:            "Evt",
+										NamePos:         ast.Position{Filename: "test.cue", Line: 6, Column: 7},
+										Source:          "external",
+										SourcePos:       ast.Position{Filename: "test.cue", Line: 6, Column: 13},
+										ExternalName:    "Provider",
+										ExternalNamePos: ast.Position{Filename: "test.cue", Line: 6, Column: 23},
+										OpenPos:         ast.Position{Filename: "test.cue", Line: 6, Column: 28},
+										ClosePos:        ast.Position{Filename: "test.cue", Line: 8, Column: 5},
+									},
+								},
+							},
+						},
+					},
+				},
+			},
+		},
+	}
+
+	raw, err := export.ExportJSON(model)
+	require.NoError(t, err)
+
+	var doc map[string]any
+	err = json.Unmarshal(raw, &doc)
+	require.NoError(t, err)
+
+	s := getFirstSlice(doc)
+	events := s["events"].([]any)
+	e := events[0].(map[string]any)
+
+	require.Equal(t, float64(6), e["position"].(map[string]any)["line"])
+	require.Equal(t, float64(13), e["source_position"].(map[string]any)["column"])
+	require.Equal(t, float64(23), e["external_name_position"].(map[string]any)["column"])
+	require.Equal(t, float64(28), e["open_position"].(map[string]any)["column"])
+	require.Equal(t, float64(8), e["close_position"].(map[string]any)["line"])
+})
+
+t.Run("includes positions for field name/type/modifier", func(t *testing.T) {
+	model := &ast.Model{
+		Name: "Test",
+		Contexts: []*ast.Context{
+			{
+				Name: "Ctx",
+				Aggregates: []*ast.Aggregate{
+					{
+						Name: "Agg",
+						Slices: []*ast.Slice{
+							{
+								Name: "S",
+								Commands: []*ast.Command{
+									{
+										Name: "Cmd",
+										Fields: []*ast.Field{
+											{
+												Name:     "id",
+												NamePos:  ast.Position{Filename: "test.cue", Line: 7, Column: 9},
+												Type:     "string",
+												TypePos:  ast.Position{Filename: "test.cue", Line: 7, Column: 13},
+												Modifier: "required",
+												ModPos:   ast.Position{Filename: "test.cue", Line: 7, Column: 21},
+											},
+										},
+									},
+								},
+							},
+						},
+					},
+				},
+			},
+		},
+	}
+
+	raw, err := export.ExportJSON(model)
+	require.NoError(t, err)
+
+	var doc map[string]any
+	err = json.Unmarshal(raw, &doc)
+	require.NoError(t, err)
+
+	s := getFirstSlice(doc)
+	cmds := s["commands"].([]any)
+	cmd := cmds[0].(map[string]any)
+	fields := cmd["fields"].([]any)
+	f := fields[0].(map[string]any)
+
+	require.Equal(t, float64(7), f["position"].(map[string]any)["line"])
+	require.Equal(t, float64(13), f["type_position"].(map[string]any)["column"])
+	require.Equal(t, float64(21), f["modifier_position"].(map[string]any)["column"])
+})
+
+t.Run("includes positions for flow command and event", func(t *testing.T) {
+	model := &ast.Model{
+		Name: "Test",
+		Contexts: []*ast.Context{
+			{
+				Name: "Ctx",
+				Aggregates: []*ast.Aggregate{
+					{
+						Name: "Agg",
+						Slices: []*ast.Slice{
+							{
+								Name: "S",
+								Flows: []*ast.Flow{
+									{
+										CommandName: "MakeReservation",
+										CommandPos:  ast.Position{Filename: "test.cue", Line: 9, Column: 11},
+										EventName:   "ReservationMade",
+										EventPos:    ast.Position{Filename: "test.cue", Line: 9, Column: 28},
+									},
+								},
+							},
+						},
+					},
+				},
+			},
+		},
+	}
+
+	raw, err := export.ExportJSON(model)
+	require.NoError(t, err)
+
+	var doc map[string]any
+	err = json.Unmarshal(raw, &doc)
+	require.NoError(t, err)
+
+	s := getFirstSlice(doc)
+	flows := s["flows"].([]any)
+	f := flows[0].(map[string]any)
+	require.Equal(t, float64(11), f["command_position"].(map[string]any)["column"])
+	require.Equal(t, float64(28), f["event_position"].(map[string]any)["column"])
+})
+
+t.Run("includes positions for trigger kind/name/actor/reads and braces", func(t *testing.T) {
+	model := &ast.Model{
+		Name: "Test",
+		Contexts: []*ast.Context{
+			{
+				Name: "Ctx",
+				Aggregates: []*ast.Aggregate{
+					{
+						Name: "Agg",
+						Slices: []*ast.Slice{
+							{
+								Name: "S",
+								Trigger: &ast.Trigger{
+									Kind:         "UI",
+									KindPos:      ast.Position{Filename: "test.cue", Line: 3, Column: 3},
+									Name:         "Form",
+									NamePos:      ast.Position{Filename: "test.cue", Line: 3, Column: 7},
+									Actor:        "Guest",
+									ActorPos:     ast.Position{Filename: "test.cue", Line: 3, Column: 13},
+									Reads:        "MyView",
+									ReadsPos:     ast.Position{Filename: "test.cue", Line: 3, Column: 20},
+									OpenPos:      ast.Position{Filename: "test.cue", Line: 3, Column: 28},
+									ClosePos:     ast.Position{Filename: "test.cue", Line: 5, Column: 3},
+								},
+							},
+						},
+					},
+				},
+			},
+		},
+	}
+
+	raw, err := export.ExportJSON(model)
+	require.NoError(t, err)
+
+	var doc map[string]any
+	err = json.Unmarshal(raw, &doc)
+	require.NoError(t, err)
+
+	s := getFirstSlice(doc)
+	tr := s["trigger"].(map[string]any)
+	require.Equal(t, float64(3), tr["kind_position"].(map[string]any)["column"])
+	require.Equal(t, float64(7), tr["position"].(map[string]any)["column"])
+	require.Equal(t, float64(13), tr["actor_position"].(map[string]any)["column"])
+	require.Equal(t, float64(20), tr["reads_position"].(map[string]any)["column"])
+	require.Equal(t, float64(28), tr["open_position"].(map[string]any)["column"])
+	require.Equal(t, float64(5), tr["close_position"].(map[string]any)["line"])
+})
+
+t.Run("includes positions for view name and braces", func(t *testing.T) {
+	model := &ast.Model{
+		Name: "Test",
+		Contexts: []*ast.Context{
+			{
+				Name: "Ctx",
+				Aggregates: []*ast.Aggregate{
+					{
+						Name: "Agg",
+						Slices: []*ast.Slice{
+							{
+								Name: "S",
+								Views: []*ast.View{
+									{
+										Name:     "MyView",
+										NamePos:  ast.Position{Filename: "test.cue", Line: 4, Column: 5},
+										OpenPos:  ast.Position{Filename: "test.cue", Line: 4, Column: 13},
+										ClosePos: ast.Position{Filename: "test.cue", Line: 6, Column: 3},
+									},
+								},
+							},
+						},
+					},
+				},
+			},
+		},
+	}
+
+	raw, err := export.ExportJSON(model)
+	require.NoError(t, err)
+
+	var doc map[string]any
+	err = json.Unmarshal(raw, &doc)
+	require.NoError(t, err)
+
+	s := getFirstSlice(doc)
+	views := s["views"].([]any)
+	v := views[0].(map[string]any)
+	require.Equal(t, float64(4), v["position"].(map[string]any)["line"])
+	require.Equal(t, float64(6), v["close_position"].(map[string]any)["line"])
+})
+
+t.Run("includes positions for automation name/trigger/command/target and braces", func(t *testing.T) {
+	model := &ast.Model{
+		Name: "Test",
+		Contexts: []*ast.Context{
+			{
+				Name: "Ctx",
+				Aggregates: []*ast.Aggregate{
+					{
+						Name: "Agg",
+						Slices: []*ast.Slice{
+							{
+								Name: "S",
+								Automations: []*ast.Automation{
+									{
+										Name:            "Auto",
+										NamePos:         ast.Position{Filename: "test.cue", Line: 5, Column: 5},
+										TriggerEvent:    "Evt",
+										TriggerEventPos: ast.Position{Filename: "test.cue", Line: 5, Column: 11},
+										Command:         "DoIt",
+										CommandPos:      ast.Position{Filename: "test.cue", Line: 5, Column: 16},
+										TargetContext:   "Other",
+										TargetContextPos: ast.Position{Filename: "test.cue", Line: 5, Column: 22},
+										OpenPos:         ast.Position{Filename: "test.cue", Line: 5, Column: 28},
+										ClosePos:        ast.Position{Filename: "test.cue", Line: 7, Column: 3},
+									},
+								},
+							},
+						},
+					},
+				},
+			},
+		},
+	}
+
+	raw, err := export.ExportJSON(model)
+	require.NoError(t, err)
+
+	var doc map[string]any
+	err = json.Unmarshal(raw, &doc)
+	require.NoError(t, err)
+
+	s := getFirstSlice(doc)
+	autos := s["automations"].([]any)
+	a := autos[0].(map[string]any)
+	require.Equal(t, float64(5), a["position"].(map[string]any)["line"])
+	require.Equal(t, float64(11), a["trigger_event_position"].(map[string]any)["column"])
+	require.Equal(t, float64(16), a["command_position"].(map[string]any)["column"])
+	require.Equal(t, float64(22), a["target_context_position"].(map[string]any)["column"])
+	require.Equal(t, float64(7), a["close_position"].(map[string]any)["line"])
+})
+
+t.Run("includes positions for translation name/external/reads/command and braces with nested event", func(t *testing.T) {
+	model := &ast.Model{
+		Name: "Test",
+		Contexts: []*ast.Context{
+			{
+				Name: "Ctx",
+				Aggregates: []*ast.Aggregate{
+					{
+						Name: "Agg",
+						Slices: []*ast.Slice{
+							{
+								Name: "S",
+								Translations: []*ast.Translation{
+									{
+										Name:           "Import",
+										NamePos:        ast.Position{Filename: "test.cue", Line: 6, Column: 5},
+										ExternalSystem: "API",
+										ExternalPos:    ast.Position{Filename: "test.cue", Line: 6, Column: 13},
+										Reads:    "V",
+										ReadsPos: ast.Position{Filename: "test.cue", Line: 6, Column: 18},
+										Command:        "Do",
+										CommandPos:     ast.Position{Filename: "test.cue", Line: 6, Column: 21},
+										OpenPos:        ast.Position{Filename: "test.cue", Line: 6, Column: 26},
+										ClosePos:       ast.Position{Filename: "test.cue", Line: 9, Column: 3},
+										Event: &ast.Event{
+											Name:    "Done",
+											NamePos: ast.Position{Filename: "test.cue", Line: 7, Column: 7},
+										},
+									},
+								},
+							},
+						},
+					},
+				},
+			},
+		},
+	}
+
+	raw, err := export.ExportJSON(model)
+	require.NoError(t, err)
+
+	var doc map[string]any
+	err = json.Unmarshal(raw, &doc)
+	require.NoError(t, err)
+
+	s := getFirstSlice(doc)
+	trans := s["translations"].([]any)
+	tl := trans[0].(map[string]any)
+	require.Equal(t, float64(6), tl["position"].(map[string]any)["line"])
+	require.Equal(t, float64(13), tl["external_position"].(map[string]any)["column"])
+	require.Equal(t, float64(18), tl["reads_position"].(map[string]any)["column"])
+	require.Equal(t, float64(21), tl["command_position"].(map[string]any)["column"])
+	require.Equal(t, float64(26), tl["open_position"].(map[string]any)["column"])
+	require.Equal(t, float64(9), tl["close_position"].(map[string]any)["line"])
+
+	nestedEvent := tl["event"].(map[string]any)
+	require.Equal(t, float64(7), nestedEvent["position"].(map[string]any)["line"])
+})
+
+t.Run("includes position for comments", func(t *testing.T) {
+	model := &ast.Model{
+		Comments: []*ast.Comment{
+			{Text: "# comment", Position: ast.Position{Filename: "test.cue", Line: 1, Column: 1}},
+		},
+		Name: "Test",
+	}
+
+	raw, err := export.ExportJSON(model)
+	require.NoError(t, err)
+
+	var doc map[string]any
+	err = json.Unmarshal(raw, &doc)
+	require.NoError(t, err)
+
+	comments := doc["comments"].([]any)
+	c := comments[0].(map[string]any)
+	pos := c["position"].(map[string]any)
+	require.Equal(t, "test.cue", pos["filename"])
+	require.Equal(t, float64(1), pos["line"])
+	require.Equal(t, float64(1), pos["column"])
+})
+
+t.Run("zero-value positions are omitted from output", func(t *testing.T) {
+	model := &ast.Model{
+		Name: "NoPos",
+		Actors: []*ast.Actor{
+			{Name: "Guest"},
+		},
+	}
+
+	raw, err := export.ExportJSON(model)
+	require.NoError(t, err)
+
+	var doc map[string]any
+	err = json.Unmarshal(raw, &doc)
+	require.NoError(t, err)
+
+	_, hasModelPos := doc["position"]
+	require.False(t, hasModelPos, "zero-value position should be omitted")
+
+	actors := doc["actors"].([]any)
+	a := actors[0].(map[string]any)
+	_, hasActorPos := a["position"]
+	require.False(t, hasActorPos, "zero-value actor position should be omitted")
+})
 }
 
 // getFirstSlice navigates the parsed JSON document to find the first slice

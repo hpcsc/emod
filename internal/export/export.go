@@ -12,12 +12,21 @@ import (
 // These are separate from AST types to avoid coupling serialization concerns
 // into the domain types.
 
+// jsonPosition represents source position information for JSON output.
+type jsonPosition struct {
+	Filename string `json:"filename,omitempty"`
+	Line     int    `json:"line,omitempty"`
+	Column   int    `json:"column,omitempty"`
+}
+
 type jsonComment struct {
-	Text string `json:"text"`
+	Text     string         `json:"text"`
+	Position *jsonPosition  `json:"position,omitempty"`
 }
 
 type jsonModel struct {
 	Name     string         `json:"name"`
+	Position *jsonPosition  `json:"position,omitempty"`
 	Comments []*jsonComment `json:"comments,omitempty"`
 	Actors   []*jsonActor   `json:"actors,omitempty"`
 	Contexts []*jsonContext `json:"contexts,omitempty"`
@@ -25,90 +34,147 @@ type jsonModel struct {
 
 type jsonActor struct {
 	Name     string         `json:"name"`
+	Position *jsonPosition  `json:"position,omitempty"`
 	Comments []*jsonComment `json:"comments,omitempty"`
 }
 
 type jsonContext struct {
-	Name       string           `json:"name"`
-	Comments   []*jsonComment   `json:"comments,omitempty"`
-	Aggregates []*jsonAggregate `json:"aggregates,omitempty"`
+	Name          string           `json:"name"`
+	Position      *jsonPosition    `json:"position,omitempty"`
+	OpenPosition  *jsonPosition    `json:"open_position,omitempty"`
+	ClosePosition *jsonPosition    `json:"close_position,omitempty"`
+	Comments      []*jsonComment   `json:"comments,omitempty"`
+	Aggregates    []*jsonAggregate `json:"aggregates,omitempty"`
 }
 
 type jsonAggregate struct {
-	Name     string       `json:"name"`
-	Comments []*jsonComment `json:"comments,omitempty"`
-	Slices   []*jsonSlice `json:"slices,omitempty"`
+	Name          string         `json:"name"`
+	Position      *jsonPosition  `json:"position,omitempty"`
+	OpenPosition  *jsonPosition  `json:"open_position,omitempty"`
+	ClosePosition *jsonPosition  `json:"close_position,omitempty"`
+	Comments      []*jsonComment `json:"comments,omitempty"`
+	Slices        []*jsonSlice   `json:"slices,omitempty"`
 }
 
 type jsonSlice struct {
-	Name         string             `json:"name"`
-	Comments     []*jsonComment     `json:"comments,omitempty"`
-	Trigger      *jsonTrigger       `json:"trigger,omitempty"`
-	Commands     []*jsonCommand     `json:"commands,omitempty"`
-	Events       []*jsonEvent       `json:"events,omitempty"`
-	Fields       []*jsonField       `json:"fields,omitempty"`
-	Flows        []*jsonFlow        `json:"flows,omitempty"`
-	Views        []*jsonView        `json:"views,omitempty"`
-	Automations  []*jsonAutomation  `json:"automations,omitempty"`
-	Translations []*jsonTranslation `json:"translations,omitempty"`
+	Name          string              `json:"name"`
+	Position      *jsonPosition       `json:"position,omitempty"`
+	OpenPosition  *jsonPosition       `json:"open_position,omitempty"`
+	ClosePosition *jsonPosition       `json:"close_position,omitempty"`
+	Comments      []*jsonComment      `json:"comments,omitempty"`
+	Trigger       *jsonTrigger        `json:"trigger,omitempty"`
+	Commands      []*jsonCommand      `json:"commands,omitempty"`
+	Events        []*jsonEvent        `json:"events,omitempty"`
+	Fields        []*jsonField        `json:"fields,omitempty"`
+	Flows         []*jsonFlow         `json:"flows,omitempty"`
+	Views         []*jsonView         `json:"views,omitempty"`
+	Automations   []*jsonAutomation   `json:"automations,omitempty"`
+	Translations  []*jsonTranslation  `json:"translations,omitempty"`
 }
 
 type jsonCommand struct {
-	Name     string         `json:"name"`
-	Comments []*jsonComment `json:"comments,omitempty"`
-	Fields   []*jsonField   `json:"fields,omitempty"`
+	Name          string         `json:"name"`
+	Position      *jsonPosition  `json:"position,omitempty"`
+	OpenPosition  *jsonPosition  `json:"open_position,omitempty"`
+	ClosePosition *jsonPosition  `json:"close_position,omitempty"`
+	Comments      []*jsonComment `json:"comments,omitempty"`
+	Fields        []*jsonField   `json:"fields,omitempty"`
 }
 
 type jsonEvent struct {
-	Name         string         `json:"name"`
-	Comments     []*jsonComment `json:"comments,omitempty"`
-	Source       string         `json:"source,omitempty"`
-	ExternalName string         `json:"external_name,omitempty"`
-	Fields       []*jsonField   `json:"fields,omitempty"`
+	Name                 string         `json:"name"`
+	Position             *jsonPosition  `json:"position,omitempty"`
+	SourcePosition       *jsonPosition  `json:"source_position,omitempty"`
+	ExternalNamePosition *jsonPosition  `json:"external_name_position,omitempty"`
+	OpenPosition         *jsonPosition  `json:"open_position,omitempty"`
+	ClosePosition        *jsonPosition  `json:"close_position,omitempty"`
+	Comments             []*jsonComment `json:"comments,omitempty"`
+	Source               string         `json:"source,omitempty"`
+	ExternalName         string         `json:"external_name,omitempty"`
+	Fields               []*jsonField   `json:"fields,omitempty"`
 }
 
 type jsonField struct {
-	Name     string `json:"name"`
-	Type     string `json:"type"`
-	Modifier string `json:"modifier,omitempty"`
+	Name             string        `json:"name"`
+	Position         *jsonPosition `json:"position,omitempty"`
+	TypePosition     *jsonPosition `json:"type_position,omitempty"`
+	ModifierPosition *jsonPosition `json:"modifier_position,omitempty"`
+	Type             string        `json:"type"`
+	Modifier         string        `json:"modifier,omitempty"`
 }
 
 type jsonFlow struct {
-	Comments    []*jsonComment `json:"comments,omitempty"`
-	CommandName string         `json:"command_name"`
-	EventName   string         `json:"event_name"`
+	Comments        []*jsonComment `json:"comments,omitempty"`
+	CommandName     string         `json:"command_name"`
+	CommandPosition *jsonPosition  `json:"command_position,omitempty"`
+	EventName       string         `json:"event_name"`
+	EventPosition   *jsonPosition  `json:"event_position,omitempty"`
 }
 
 type jsonTrigger struct {
-	Comments []*jsonComment `json:"comments,omitempty"`
-	Kind     string         `json:"kind"`
-	Name     string         `json:"name"`
-	Actor    string         `json:"actor,omitempty"`
-	Reads    string         `json:"reads,omitempty"`
+	Comments      []*jsonComment `json:"comments,omitempty"`
+	Kind          string         `json:"kind"`
+	KindPosition  *jsonPosition  `json:"kind_position,omitempty"`
+	Name          string         `json:"name"`
+	Position      *jsonPosition  `json:"position,omitempty"`
+	Actor         string         `json:"actor,omitempty"`
+	ActorPosition *jsonPosition  `json:"actor_position,omitempty"`
+	Reads         string         `json:"reads,omitempty"`
+	ReadsPosition *jsonPosition  `json:"reads_position,omitempty"`
+	OpenPosition  *jsonPosition  `json:"open_position,omitempty"`
+	ClosePosition *jsonPosition  `json:"close_position,omitempty"`
 }
 
 type jsonView struct {
-	Name       string         `json:"name"`
-	Comments   []*jsonComment `json:"comments,omitempty"`
-	Fields     []*jsonField   `json:"fields,omitempty"`
-	Subscribes []string       `json:"subscribes,omitempty"`
+	Name          string         `json:"name"`
+	Position      *jsonPosition  `json:"position,omitempty"`
+	OpenPosition  *jsonPosition  `json:"open_position,omitempty"`
+	ClosePosition *jsonPosition  `json:"close_position,omitempty"`
+	Comments      []*jsonComment `json:"comments,omitempty"`
+	Fields        []*jsonField   `json:"fields,omitempty"`
+	Subscribes    []string       `json:"subscribes,omitempty"`
 }
 
 type jsonAutomation struct {
-	Name          string         `json:"name"`
-	Comments      []*jsonComment `json:"comments,omitempty"`
-	TriggerEvent  string         `json:"trigger_event,omitempty"`
-	Command       string         `json:"command,omitempty"`
-	TargetContext string         `json:"target_context,omitempty"`
+	Name                  string         `json:"name"`
+	Position              *jsonPosition  `json:"position,omitempty"`
+	TriggerEventPosition  *jsonPosition  `json:"trigger_event_position,omitempty"`
+	CommandPosition       *jsonPosition  `json:"command_position,omitempty"`
+	TargetContextPosition *jsonPosition  `json:"target_context_position,omitempty"`
+	OpenPosition          *jsonPosition  `json:"open_position,omitempty"`
+	ClosePosition         *jsonPosition  `json:"close_position,omitempty"`
+	Comments              []*jsonComment `json:"comments,omitempty"`
+	TriggerEvent          string         `json:"trigger_event,omitempty"`
+	Command               string         `json:"command,omitempty"`
+	TargetContext         string         `json:"target_context,omitempty"`
 }
 
 type jsonTranslation struct {
-	Name           string         `json:"name"`
-	Comments       []*jsonComment `json:"comments,omitempty"`
-	ExternalSystem string         `json:"external_system,omitempty"`
-	Reads          string         `json:"reads,omitempty"`
-	Command        string         `json:"command,omitempty"`
-	Event          *jsonEvent     `json:"event,omitempty"`
+	Name               string         `json:"name"`
+	Position           *jsonPosition  `json:"position,omitempty"`
+	ExternalPosition   *jsonPosition  `json:"external_position,omitempty"`
+	ReadsPosition      *jsonPosition  `json:"reads_position,omitempty"`
+	CommandPosition    *jsonPosition  `json:"command_position,omitempty"`
+	OpenPosition       *jsonPosition  `json:"open_position,omitempty"`
+	ClosePosition      *jsonPosition  `json:"close_position,omitempty"`
+	Comments           []*jsonComment `json:"comments,omitempty"`
+	ExternalSystem     string         `json:"external_system,omitempty"`
+	Reads              string         `json:"reads,omitempty"`
+	Command            string         `json:"command,omitempty"`
+	Event              *jsonEvent     `json:"event,omitempty"`
+}
+
+// convertPosition converts an AST Position to a *jsonPosition for serialization.
+// Returns nil for zero-value positions so omitempty excludes them from output.
+func convertPosition(p ast.Position) *jsonPosition {
+	if p == (ast.Position{}) {
+		return nil
+	}
+	return &jsonPosition{
+		Filename: p.Filename,
+		Line:     p.Line,
+		Column:   p.Column,
+	}
 }
 
 // ExportJSON serializes the given AST model to a JSON byte slice.
@@ -123,6 +189,7 @@ func convertModel(m *ast.Model) *jsonModel {
 	}
 	out := &jsonModel{
 		Name:     m.Name,
+		Position: convertPosition(m.NamePos),
 		Comments: convertComments(m.Comments),
 		Actors:   convertActors(m.Actors),
 		Contexts: convertContexts(m.Contexts),
@@ -136,7 +203,10 @@ func convertComments(comments []*ast.Comment) []*jsonComment {
 	}
 	out := make([]*jsonComment, 0, len(comments))
 	for _, c := range comments {
-		out = append(out, &jsonComment{Text: c.Text})
+		out = append(out, &jsonComment{
+			Text:     c.Text,
+			Position: convertPosition(c.Position),
+		})
 	}
 	return out
 }
@@ -158,6 +228,7 @@ func convertActor(a *ast.Actor) *jsonActor {
 	}
 	return &jsonActor{
 		Name:     a.Name,
+		Position: convertPosition(a.NamePos),
 		Comments: convertComments(a.Comments),
 	}
 }
@@ -178,9 +249,12 @@ func convertContext(c *ast.Context) *jsonContext {
 		return nil
 	}
 	return &jsonContext{
-		Name:       c.Name,
-		Comments:   convertComments(c.Comments),
-		Aggregates: convertAggregates(c.Aggregates),
+		Name:          c.Name,
+		Position:      convertPosition(c.NamePos),
+		OpenPosition:  convertPosition(c.OpenPos),
+		ClosePosition: convertPosition(c.ClosePos),
+		Comments:      convertComments(c.Comments),
+		Aggregates:    convertAggregates(c.Aggregates),
 	}
 }
 
@@ -200,9 +274,12 @@ func convertAggregate(a *ast.Aggregate) *jsonAggregate {
 		return nil
 	}
 	return &jsonAggregate{
-		Name:     a.Name,
-		Comments: convertComments(a.Comments),
-		Slices:   convertSlices(a.Slices),
+		Name:          a.Name,
+		Position:      convertPosition(a.NamePos),
+		OpenPosition:  convertPosition(a.OpenPos),
+		ClosePosition: convertPosition(a.ClosePos),
+		Comments:      convertComments(a.Comments),
+		Slices:        convertSlices(a.Slices),
 	}
 }
 
@@ -222,16 +299,19 @@ func convertSlice(s *ast.Slice) *jsonSlice {
 		return nil
 	}
 	return &jsonSlice{
-		Name:         s.Name,
-		Comments:     convertComments(s.Comments),
-		Trigger:      convertTrigger(s.Trigger),
-		Commands:     convertCommands(s.Commands),
-		Events:       convertEvents(s.Events),
-		Fields:       convertFields(s.Fields),
-		Flows:        convertFlows(s.Flows),
-		Views:        convertViews(s.Views),
-		Automations:  convertAutomations(s.Automations),
-		Translations: convertTranslations(s.Translations),
+		Name:          s.Name,
+		Position:      convertPosition(s.NamePos),
+		OpenPosition:  convertPosition(s.OpenPos),
+		ClosePosition: convertPosition(s.ClosePos),
+		Comments:      convertComments(s.Comments),
+		Trigger:       convertTrigger(s.Trigger),
+		Commands:      convertCommands(s.Commands),
+		Events:        convertEvents(s.Events),
+		Fields:        convertFields(s.Fields),
+		Flows:         convertFlows(s.Flows),
+		Views:         convertViews(s.Views),
+		Automations:   convertAutomations(s.Automations),
+		Translations:  convertTranslations(s.Translations),
 	}
 }
 
@@ -251,9 +331,12 @@ func convertCommand(c *ast.Command) *jsonCommand {
 		return nil
 	}
 	return &jsonCommand{
-		Name:     c.Name,
-		Comments: convertComments(c.Comments),
-		Fields:   convertFields(c.Fields),
+		Name:          c.Name,
+		Position:      convertPosition(c.NamePos),
+		OpenPosition:  convertPosition(c.OpenPos),
+		ClosePosition: convertPosition(c.ClosePos),
+		Comments:      convertComments(c.Comments),
+		Fields:        convertFields(c.Fields),
 	}
 }
 
@@ -273,11 +356,16 @@ func convertEvent(e *ast.Event) *jsonEvent {
 		return nil
 	}
 	return &jsonEvent{
-		Name:         e.Name,
-		Comments:     convertComments(e.Comments),
-		Source:       e.Source,
-		ExternalName: e.ExternalName,
-		Fields:       convertFields(e.Fields),
+		Name:                 e.Name,
+		Position:             convertPosition(e.NamePos),
+		SourcePosition:       convertPosition(e.SourcePos),
+		ExternalNamePosition: convertPosition(e.ExternalNamePos),
+		OpenPosition:         convertPosition(e.OpenPos),
+		ClosePosition:        convertPosition(e.ClosePos),
+		Comments:             convertComments(e.Comments),
+		Source:               e.Source,
+		ExternalName:         e.ExternalName,
+		Fields:               convertFields(e.Fields),
 	}
 }
 
@@ -297,9 +385,12 @@ func convertField(f *ast.Field) *jsonField {
 		return nil
 	}
 	return &jsonField{
-		Name:     f.Name,
-		Type:     f.Type,
-		Modifier: f.Modifier,
+		Name:        f.Name,
+		Position:    convertPosition(f.NamePos),
+		TypePosition: convertPosition(f.TypePos),
+		ModifierPosition: convertPosition(f.ModPos),
+		Type:        f.Type,
+		Modifier:    f.Modifier,
 	}
 }
 
@@ -321,7 +412,9 @@ func convertFlow(f *ast.Flow) *jsonFlow {
 	return &jsonFlow{
 		Comments:    convertComments(f.Comments),
 		CommandName: f.CommandName,
-		EventName:   f.EventName,
+		CommandPosition: convertPosition(f.CommandPos),
+		EventName:      f.EventName,
+		EventPosition:  convertPosition(f.EventPos),
 	}
 }
 
@@ -330,11 +423,17 @@ func convertTrigger(t *ast.Trigger) *jsonTrigger {
 		return nil
 	}
 	return &jsonTrigger{
-		Comments: convertComments(t.Comments),
-		Kind:     t.Kind,
-		Name:     t.Name,
-		Actor:    t.Actor,
-		Reads:    t.Reads,
+		Comments:      convertComments(t.Comments),
+		Kind:          t.Kind,
+		KindPosition:  convertPosition(t.KindPos),
+		Name:          t.Name,
+		Position:      convertPosition(t.NamePos),
+		Actor:         t.Actor,
+		ActorPosition: convertPosition(t.ActorPos),
+		Reads:         t.Reads,
+		ReadsPosition: convertPosition(t.ReadsPos),
+		OpenPosition:  convertPosition(t.OpenPos),
+		ClosePosition: convertPosition(t.ClosePos),
 	}
 }
 
@@ -354,10 +453,13 @@ func convertView(v *ast.View) *jsonView {
 		return nil
 	}
 	return &jsonView{
-		Name:       v.Name,
-		Comments:   convertComments(v.Comments),
-		Fields:     convertFields(v.Fields),
-		Subscribes: v.Subscribes,
+		Name:          v.Name,
+		Position:      convertPosition(v.NamePos),
+		OpenPosition:  convertPosition(v.OpenPos),
+		ClosePosition: convertPosition(v.ClosePos),
+		Comments:      convertComments(v.Comments),
+		Fields:        convertFields(v.Fields),
+		Subscribes:    v.Subscribes,
 	}
 }
 
@@ -377,11 +479,17 @@ func convertAutomation(a *ast.Automation) *jsonAutomation {
 		return nil
 	}
 	return &jsonAutomation{
-		Name:          a.Name,
-		Comments:      convertComments(a.Comments),
-		TriggerEvent:  a.TriggerEvent,
-		Command:       a.Command,
-		TargetContext: a.TargetContext,
+		Name:                 a.Name,
+		Position:             convertPosition(a.NamePos),
+		TriggerEventPosition: convertPosition(a.TriggerEventPos),
+		CommandPosition:      convertPosition(a.CommandPos),
+		TargetContextPosition: convertPosition(a.TargetContextPos),
+		OpenPosition:         convertPosition(a.OpenPos),
+		ClosePosition:        convertPosition(a.ClosePos),
+		Comments:             convertComments(a.Comments),
+		TriggerEvent:         a.TriggerEvent,
+		Command:              a.Command,
+		TargetContext:        a.TargetContext,
 	}
 }
 
@@ -401,12 +509,18 @@ func convertTranslation(t *ast.Translation) *jsonTranslation {
 		return nil
 	}
 	return &jsonTranslation{
-		Name:           t.Name,
-		Comments:       convertComments(t.Comments),
-		ExternalSystem: t.ExternalSystem,
-		Reads:          t.Reads,
-		Command:        t.Command,
-		Event:          convertEvent(t.Event),
+		Name:             t.Name,
+		Position:         convertPosition(t.NamePos),
+		ExternalPosition: convertPosition(t.ExternalPos),
+		ReadsPosition:    convertPosition(t.ReadsPos),
+		CommandPosition:  convertPosition(t.CommandPos),
+		OpenPosition:     convertPosition(t.OpenPos),
+		ClosePosition:    convertPosition(t.ClosePos),
+		Comments:         convertComments(t.Comments),
+		ExternalSystem:   t.ExternalSystem,
+		Reads:            t.Reads,
+		Command:          t.Command,
+		Event:            convertEvent(t.Event),
 	}
 }
 
