@@ -582,6 +582,216 @@ func convertTranslation(t *ast.Translation) *jsonTranslation {
 	}
 }
 
+// Diagram JSON intermediate types.
+
+type jsonDiagramDocument struct {
+	ModelName string             `json:"model_name"`
+	Nodes     []*jsonDiagramNode `json:"nodes"`
+	Edges     []*jsonDiagramEdge `json:"edges"`
+}
+
+type jsonDiagramNode struct {
+	ID       string              `json:"id"`
+	Type     string              `json:"type"`
+	Label    string              `json:"label"`
+	ParentID *string             `json:"parentId"`
+	Fields   []*jsonDiagramField `json:"fields,omitempty"`
+}
+
+type jsonDiagramEdge struct {
+	Source string `json:"source"`
+	Target string `json:"target"`
+	Type   string `json:"type"`
+}
+
+type jsonDiagramField struct {
+	Name     string `json:"name"`
+	Type     string `json:"type"`
+	Modifier string `json:"modifier,omitempty"`
+}
+
+// jsonDiagramDiagnosticsWrapper is the top-level envelope for diagram JSON diagnostics output.
+type jsonDiagramDiagnosticsWrapper struct {
+	Diagnostics []*jsonDiagnosticEntry `json:"diagnostics"`
+	Diagram     json.RawMessage        `json:"diagram"`
+}
+
+// ExportDiagramJSON serializes the given AST model to a diagram-oriented JSON byte slice.
+func ExportDiagramJSON(model *ast.Model) ([]byte, error) {
+	j := convertModelToDiagram(model)
+	return json.Marshal(j)
+}
+
+// ExportDiagramJSONDiagnostics wraps the diagram JSON and a diagnostics slice into a structured envelope
+// with top-level diagnostics array and diagram object.
+func ExportDiagramJSONDiagnostics(model *ast.Model, diagnostics []*diagnostic.Entry) ([]byte, error) {
+	diagramJSON, err := ExportDiagramJSON(model)
+	if err != nil {
+		return nil, err
+	}
+
+	wrapper := jsonDiagramDiagnosticsWrapper{
+		Diagnostics: convertDiagnostics(diagnostics),
+		Diagram:     json.RawMessage(diagramJSON),
+	}
+
+	return json.Marshal(wrapper)
+}
+
+// diagramIDGenerator generates deterministic sequential IDs for diagram nodes.
+type diagramIDGenerator struct {
+	counters map[string]int
+}
+
+func newDiagramIDGenerator() *diagramIDGenerator {
+	return &diagramIDGenerator{
+		counters: make(map[string]int),
+	}
+}
+
+func (g *diagramIDGenerator) next(typ string) string {
+	g.counters[typ]++
+	return fmt.Sprintf("%s-%d", typ, g.counters[typ])
+}
+
+func convertModelToDiagram(m *ast.Model) *jsonDiagramDocument {
+	if m == nil {
+		return nil
+	}
+
+	g := newDiagramIDGenerator()
+	doc := &jsonDiagramDocument{
+		ModelName: m.Name,
+		Nodes:     make([]*jsonDiagramNode, 0),
+		Edges:     make([]*jsonDiagramEdge, 0),
+	}
+
+	for _, a := range m.Actors {
+		if a == nil {
+			continue
+		}
+		doc.Nodes = append(doc.Nodes, &jsonDiagramNode{
+			ID:       g.next("actor"),
+			Type:     "actor",
+			Label:    a.Name,
+			ParentID: nil,
+		})
+	}
+
+	for _, c := range m.Contexts {
+		if c == nil {
+			continue
+		}
+		ctxID := g.next("context")
+		doc.Nodes = append(doc.Nodes, &jsonDiagramNode{
+			ID:       ctxID,
+			Type:     "context",
+			Label:    c.Name,
+			ParentID: nil,
+		})
+
+		for _, agg := range c.Aggregates {
+			if agg == nil {
+				continue
+			}
+			aggID := g.next("aggregate")
+			doc.Nodes = append(doc.Nodes, &jsonDiagramNode{
+				ID:       aggID,
+				Type:     "aggregate",
+				Label:    agg.Name,
+				ParentID: &ctxID,
+			})
+
+			for _, s := range agg.Slices {
+				if s == nil {
+					continue
+				}
+				sliceID := g.next("slice")
+				doc.Nodes = append(doc.Nodes, &jsonDiagramNode{
+					ID:       sliceID,
+					Type:     "slice",
+					Label:    s.Name,
+					ParentID: &aggID,
+				})
+
+				cmdIDs := make(map[string]string)
+				evtIDs := make(map[string]string)
+
+				for _, cmd := range s.Commands {
+					if cmd == nil {
+						continue
+					}
+					cmdID := g.next("command")
+					cmdIDs[cmd.Name] = cmdID
+					node := &jsonDiagramNode{
+						ID:       cmdID,
+						Type:     "command",
+						Label:    cmd.Name,
+						ParentID: &sliceID,
+					}
+					if len(cmd.Fields) > 0 {
+						node.Fields = convertFieldsToDiagram(cmd.Fields)
+					}
+					doc.Nodes = append(doc.Nodes, node)
+				}
+
+				for _, evt := range s.Events {
+					if evt == nil {
+						continue
+					}
+					evtID := g.next("event")
+					evtIDs[evt.Name] = evtID
+					node := &jsonDiagramNode{
+						ID:       evtID,
+						Type:     "event",
+						Label:    evt.Name,
+						ParentID: &sliceID,
+					}
+					if len(evt.Fields) > 0 {
+						node.Fields = convertFieldsToDiagram(evt.Fields)
+					}
+					doc.Nodes = append(doc.Nodes, node)
+				}
+
+				for _, f := range s.Flows {
+					if f == nil {
+						continue
+					}
+					if srcID, ok := cmdIDs[f.CommandName]; ok {
+						if tgtID, ok := evtIDs[f.EventName]; ok {
+							doc.Edges = append(doc.Edges, &jsonDiagramEdge{
+								Source: srcID,
+								Target: tgtID,
+								Type:   "flow",
+							})
+						}
+					}
+				}
+			}
+		}
+	}
+
+	return doc
+}
+
+func convertFieldsToDiagram(fields []*ast.Field) []*jsonDiagramField {
+	if fields == nil {
+		return nil
+	}
+	out := make([]*jsonDiagramField, 0, len(fields))
+	for _, f := range fields {
+		if f == nil {
+			continue
+		}
+		out = append(out, &jsonDiagramField{
+			Name:     f.Name,
+			Type:     f.Type,
+			Modifier: f.Modifier,
+		})
+	}
+	return out
+}
+
 // ExportCUE serializes the given AST model to CUE text output.
 // The output conforms to the schema defined in internal/cue/schema.cue.
 func ExportCUE(model *ast.Model) ([]byte, error) {

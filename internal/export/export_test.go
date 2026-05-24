@@ -1401,6 +1401,434 @@ func TestExportJSONDiagnostics(t *testing.T) {
 	})
 }
 
+func TestExportDiagramJSON(t *testing.T) {
+	t.Run("minimal model produces valid JSON with empty arrays", func(t *testing.T) {
+		model := &ast.Model{Name: "TestModel"}
+
+		raw, err := export.ExportDiagramJSON(model)
+		require.NoError(t, err)
+		require.True(t, json.Valid(raw))
+
+		var doc map[string]any
+		err = json.Unmarshal(raw, &doc)
+		require.NoError(t, err)
+		require.Equal(t, "TestModel", doc["model_name"])
+
+		nodes, ok := doc["nodes"].([]any)
+		require.True(t, ok)
+		require.Empty(t, nodes)
+
+		edges, ok := doc["edges"].([]any)
+		require.True(t, ok)
+		require.Empty(t, edges)
+	})
+
+	t.Run("full model with all node types produces correct nodes", func(t *testing.T) {
+		model := &ast.Model{
+			Name: "Full",
+			Actors: []*ast.Actor{
+				{Name: "User"},
+			},
+			Contexts: []*ast.Context{
+				{
+					Name: "Ctx",
+					Aggregates: []*ast.Aggregate{
+						{
+							Name: "Agg",
+							Slices: []*ast.Slice{
+								{
+									Name: "S",
+									Commands: []*ast.Command{
+										{Name: "Cmd"},
+									},
+									Events: []*ast.Event{
+										{Name: "Evt"},
+									},
+								},
+							},
+						},
+					},
+				},
+			},
+		}
+
+		raw, err := export.ExportDiagramJSON(model)
+		require.NoError(t, err)
+
+		var doc map[string]any
+		err = json.Unmarshal(raw, &doc)
+		require.NoError(t, err)
+
+		nodes := doc["nodes"].([]any)
+		require.Len(t, nodes, 6)
+
+		types := make([]string, 0, len(nodes))
+		for _, n := range nodes {
+			types = append(types, n.(map[string]any)["type"].(string))
+		}
+		require.Equal(t, []string{"actor", "context", "aggregate", "slice", "command", "event"}, types)
+	})
+
+	t.Run("parentId chains are correct for hierarchical nodes", func(t *testing.T) {
+		model := &ast.Model{
+			Name: "Test",
+			Actors: []*ast.Actor{
+				{Name: "Guest"},
+			},
+			Contexts: []*ast.Context{
+				{
+					Name: "Ctx",
+					Aggregates: []*ast.Aggregate{
+						{
+							Name: "Agg",
+							Slices: []*ast.Slice{
+								{
+									Name: "S",
+									Commands: []*ast.Command{
+										{Name: "Cmd"},
+									},
+									Events: []*ast.Event{
+										{Name: "Evt"},
+									},
+								},
+							},
+						},
+					},
+				},
+			},
+		}
+
+		raw, err := export.ExportDiagramJSON(model)
+		require.NoError(t, err)
+
+		var doc map[string]any
+		err = json.Unmarshal(raw, &doc)
+		require.NoError(t, err)
+
+		nodes := doc["nodes"].([]any)
+
+		// actor-1 and context-1 should have nil parentId
+		actor := nodes[0].(map[string]any)
+		require.Equal(t, "actor", actor["type"])
+		require.Nil(t, actor["parentId"])
+
+		contextNode := nodes[1].(map[string]any)
+		require.Equal(t, "context", contextNode["type"])
+		require.Nil(t, contextNode["parentId"])
+
+		// aggregate-1 should reference context-1
+		aggregate := nodes[2].(map[string]any)
+		require.Equal(t, "aggregate", aggregate["type"])
+		require.Equal(t, "context-1", aggregate["parentId"])
+
+		// slice-1 should reference aggregate-1
+		sliceNode := nodes[3].(map[string]any)
+		require.Equal(t, "slice", sliceNode["type"])
+		require.Equal(t, "aggregate-1", sliceNode["parentId"])
+
+		// command-1 should reference slice-1
+		command := nodes[4].(map[string]any)
+		require.Equal(t, "command", command["type"])
+		require.Equal(t, "slice-1", command["parentId"])
+
+		// event-1 should reference slice-1
+		event := nodes[5].(map[string]any)
+		require.Equal(t, "event", event["type"])
+		require.Equal(t, "slice-1", event["parentId"])
+	})
+
+	t.Run("edges are created from flows", func(t *testing.T) {
+		model := &ast.Model{
+			Name: "Test",
+			Contexts: []*ast.Context{
+				{
+					Name: "Ctx",
+					Aggregates: []*ast.Aggregate{
+						{
+							Name: "Agg",
+							Slices: []*ast.Slice{
+								{
+									Name: "S",
+									Commands: []*ast.Command{
+										{Name: "MakeReservation"},
+									},
+									Events: []*ast.Event{
+										{Name: "ReservationMade"},
+									},
+									Flows: []*ast.Flow{
+										{
+											CommandName: "MakeReservation",
+											EventName:   "ReservationMade",
+										},
+									},
+								},
+							},
+						},
+					},
+				},
+			},
+		}
+
+		raw, err := export.ExportDiagramJSON(model)
+		require.NoError(t, err)
+
+		var doc map[string]any
+		err = json.Unmarshal(raw, &doc)
+		require.NoError(t, err)
+
+		edges := doc["edges"].([]any)
+		require.Len(t, edges, 1)
+
+		edge := edges[0].(map[string]any)
+		require.Equal(t, "command-1", edge["source"])
+		require.Equal(t, "event-1", edge["target"])
+		require.Equal(t, "flow", edge["type"])
+	})
+
+	t.Run("command and event nodes include fields array", func(t *testing.T) {
+		model := &ast.Model{
+			Name: "Test",
+			Contexts: []*ast.Context{
+				{
+					Name: "Ctx",
+					Aggregates: []*ast.Aggregate{
+						{
+							Name: "Agg",
+							Slices: []*ast.Slice{
+								{
+									Name: "S",
+									Commands: []*ast.Command{
+										{
+											Name: "MakeReservation",
+											Fields: []*ast.Field{
+												{Name: "guestId", Type: "string", Modifier: "required"},
+											},
+										},
+									},
+									Events: []*ast.Event{
+										{
+											Name: "ReservationMade",
+											Fields: []*ast.Field{
+												{Name: "roomId", Type: "string"},
+											},
+										},
+									},
+								},
+							},
+						},
+					},
+				},
+			},
+		}
+
+		raw, err := export.ExportDiagramJSON(model)
+		require.NoError(t, err)
+
+		var doc map[string]any
+		err = json.Unmarshal(raw, &doc)
+		require.NoError(t, err)
+
+		nodes := doc["nodes"].([]any)
+
+		var command, event map[string]any
+		for _, n := range nodes {
+			node := n.(map[string]any)
+			switch node["type"] {
+			case "command":
+				command = node
+			case "event":
+				event = node
+			}
+		}
+		require.NotNil(t, command, "command node should exist")
+		require.NotNil(t, event, "event node should exist")
+
+		cmdFields := command["fields"].([]any)
+		require.Len(t, cmdFields, 1)
+		f0 := cmdFields[0].(map[string]any)
+		require.Equal(t, "guestId", f0["name"])
+		require.Equal(t, "string", f0["type"])
+		require.Equal(t, "required", f0["modifier"])
+
+		evtFields := event["fields"].([]any)
+		require.Len(t, evtFields, 1)
+		f1 := evtFields[0].(map[string]any)
+		require.Equal(t, "roomId", f1["name"])
+		require.Equal(t, "string", f1["type"])
+		_, hasMod := f1["modifier"]
+		require.False(t, hasMod, "empty modifier should be omitted")
+	})
+
+	t.Run("nil model returns null JSON", func(t *testing.T) {
+		raw, err := export.ExportDiagramJSON(nil)
+		require.NoError(t, err)
+		require.Equal(t, "null", string(raw))
+	})
+
+	t.Run("model with empty slices produces correct nodes and edges", func(t *testing.T) {
+		model := &ast.Model{
+			Name: "Empty",
+			Contexts: []*ast.Context{
+				{
+					Name: "Ctx",
+					Aggregates: []*ast.Aggregate{
+						{
+							Name:   "Agg",
+							Slices: []*ast.Slice{},
+						},
+					},
+				},
+			},
+		}
+
+		raw, err := export.ExportDiagramJSON(model)
+		require.NoError(t, err)
+
+		var doc map[string]any
+		err = json.Unmarshal(raw, &doc)
+		require.NoError(t, err)
+
+		nodes := doc["nodes"].([]any)
+		require.Len(t, nodes, 2) // context and aggregate only
+
+		edges := doc["edges"].([]any)
+		require.Empty(t, edges)
+	})
+}
+
+func TestExportDiagramJSONDiagnostics(t *testing.T) {
+	t.Run("empty diagnostics produces empty array with diagram", func(t *testing.T) {
+		model := &ast.Model{Name: "Test"}
+		raw, err := export.ExportDiagramJSONDiagnostics(model, nil)
+		require.NoError(t, err)
+		require.True(t, json.Valid(raw))
+
+		var doc map[string]any
+		err = json.Unmarshal(raw, &doc)
+		require.NoError(t, err)
+
+		diags, ok := doc["diagnostics"].([]any)
+		require.True(t, ok, "diagnostics should be present")
+		require.Empty(t, diags, "nil diagnostics should produce empty array")
+
+		diagram, ok := doc["diagram"].(map[string]any)
+		require.True(t, ok, "diagram should be present")
+		require.Equal(t, "Test", diagram["model_name"])
+	})
+
+	t.Run("single warning diagnostic with rule name", func(t *testing.T) {
+		model := &ast.Model{Name: "Test"}
+		diags := []*diagnostic.Entry{
+			{
+				Filename: "test.cue",
+				Line:     10,
+				Column:   5,
+				Message:  "unused actor",
+				Severity: diagnostic.Warning,
+				RuleName: "unused-actor",
+			},
+		}
+
+		raw, err := export.ExportDiagramJSONDiagnostics(model, diags)
+		require.NoError(t, err)
+
+		var doc map[string]any
+		err = json.Unmarshal(raw, &doc)
+		require.NoError(t, err)
+
+		d := doc["diagnostics"].([]any)[0].(map[string]any)
+		require.Equal(t, "test.cue", d["file"])
+		require.Equal(t, float64(10), d["line"])
+		require.Equal(t, float64(5), d["column"])
+		require.Equal(t, "unused actor", d["message"])
+		require.Equal(t, "warning", d["severity"])
+		require.Equal(t, "unused-actor", d["rule_name"])
+	})
+
+	t.Run("multiple diagnostics with different severities", func(t *testing.T) {
+		model := &ast.Model{Name: "Test"}
+		diags := []*diagnostic.Entry{
+			{
+				Filename: "test.cue",
+				Line:     5,
+				Column:   1,
+				Message:  "syntax error",
+				Severity: diagnostic.Error,
+			},
+			{
+				Filename: "test.cue",
+				Line:     10,
+				Column:   3,
+				Message:  "unused field",
+				Severity: diagnostic.Warning,
+				RuleName: "unused-field",
+			},
+		}
+
+		raw, err := export.ExportDiagramJSONDiagnostics(model, diags)
+		require.NoError(t, err)
+
+		var doc map[string]any
+		err = json.Unmarshal(raw, &doc)
+		require.NoError(t, err)
+
+		diagList := doc["diagnostics"].([]any)
+		require.Len(t, diagList, 2)
+
+		d0 := diagList[0].(map[string]any)
+		require.Equal(t, "syntax error", d0["message"])
+		require.Equal(t, "error", d0["severity"])
+		_, hasRule0 := d0["rule_name"]
+		require.False(t, hasRule0, "diagnostic without rule_name should omit the field")
+
+		d1 := diagList[1].(map[string]any)
+		require.Equal(t, "unused field", d1["message"])
+		require.Equal(t, "warning", d1["severity"])
+		require.Equal(t, "unused-field", d1["rule_name"])
+	})
+
+	t.Run("nil model produces diagram null", func(t *testing.T) {
+		raw, err := export.ExportDiagramJSONDiagnostics(nil, nil)
+		require.NoError(t, err)
+
+		var doc map[string]any
+		err = json.Unmarshal(raw, &doc)
+		require.NoError(t, err)
+
+		diags, ok := doc["diagnostics"].([]any)
+		require.True(t, ok)
+		require.Empty(t, diags)
+
+		require.Nil(t, doc["diagram"], "nil model should produce null diagram")
+	})
+
+	t.Run("diagnostic without rule_name omits rule_name field", func(t *testing.T) {
+		model := &ast.Model{Name: "Test"}
+		diags := []*diagnostic.Entry{
+			{
+				Filename: "test.cue",
+				Line:     1,
+				Column:   1,
+				Message:  "error message",
+				Severity: diagnostic.Error,
+			},
+		}
+
+		raw, err := export.ExportDiagramJSONDiagnostics(model, diags)
+		require.NoError(t, err)
+
+		var doc map[string]any
+		err = json.Unmarshal(raw, &doc)
+		require.NoError(t, err)
+
+		d := doc["diagnostics"].([]any)[0].(map[string]any)
+		require.Equal(t, "error message", d["message"])
+		require.Equal(t, "error", d["severity"])
+		_, hasRule := d["rule_name"]
+		require.False(t, hasRule, "empty rule_name should be omitted")
+	})
+}
+
 // getFirstSlice navigates the parsed JSON document to find the first slice
 // in the first context's first aggregate.
 func getFirstSlice(doc map[string]any) map[string]any {
