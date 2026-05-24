@@ -10,6 +10,7 @@ import (
 	"testing"
 
 	"github.com/hpcsc/emod/internal/ast"
+	"github.com/hpcsc/emod/internal/diagnostic"
 	"github.com/hpcsc/emod/internal/export"
 	"github.com/stretchr/testify/require"
 )
@@ -1207,6 +1208,197 @@ t.Run("zero-value positions are omitted from output", func(t *testing.T) {
 	_, hasActorPos := a["position"]
 	require.False(t, hasActorPos, "zero-value actor position should be omitted")
 })
+}
+
+func TestExportJSONDiagnostics(t *testing.T) {
+	t.Run("empty diagnostics produces diagnostics: []", func(t *testing.T) {
+		model := &ast.Model{Name: "Test"}
+		raw, err := export.ExportJSONDiagnostics(model, nil)
+		require.NoError(t, err)
+		require.True(t, json.Valid(raw))
+
+		var doc map[string]any
+		err = json.Unmarshal(raw, &doc)
+		require.NoError(t, err)
+
+		diags, ok := doc["diagnostics"].([]any)
+		require.True(t, ok, "diagnostics should be present")
+		require.Empty(t, diags, "nil diagnostics should produce empty array")
+
+		modelVal, ok := doc["model"].(map[string]any)
+		require.True(t, ok, "model should be present")
+		require.Equal(t, "Test", modelVal["name"])
+	})
+
+	t.Run("empty diagnostics slice produces diagnostics: []", func(t *testing.T) {
+		model := &ast.Model{Name: "Test"}
+		raw, err := export.ExportJSONDiagnostics(model, []*diagnostic.Entry{})
+		require.NoError(t, err)
+
+		var doc map[string]any
+		err = json.Unmarshal(raw, &doc)
+		require.NoError(t, err)
+
+		diags, ok := doc["diagnostics"].([]any)
+		require.True(t, ok)
+		require.Empty(t, diags)
+	})
+
+	t.Run("single warning diagnostic with rule name", func(t *testing.T) {
+		model := &ast.Model{Name: "Test"}
+		diags := []*diagnostic.Entry{
+			{
+				Filename: "test.cue",
+				Line:     10,
+				Column:   5,
+				Message:  "unused actor",
+				Severity: diagnostic.Warning,
+				RuleName: "unused-actor",
+			},
+		}
+
+		raw, err := export.ExportJSONDiagnostics(model, diags)
+		require.NoError(t, err)
+
+		var doc map[string]any
+		err = json.Unmarshal(raw, &doc)
+		require.NoError(t, err)
+
+		d := doc["diagnostics"].([]any)[0].(map[string]any)
+		require.Equal(t, "test.cue", d["file"])
+		require.Equal(t, float64(10), d["line"])
+		require.Equal(t, float64(5), d["column"])
+		require.Equal(t, "unused actor", d["message"])
+		require.Equal(t, "warning", d["severity"])
+		require.Equal(t, "unused-actor", d["rule_name"])
+	})
+
+	t.Run("multiple diagnostics with different severities", func(t *testing.T) {
+		model := &ast.Model{Name: "Test"}
+		diags := []*diagnostic.Entry{
+			{
+				Filename: "test.cue",
+				Line:     5,
+				Column:   1,
+				Message:  "syntax error",
+				Severity: diagnostic.Error,
+			},
+			{
+				Filename: "test.cue",
+				Line:     10,
+				Column:   3,
+				Message:  "unused field",
+				Severity: diagnostic.Warning,
+				RuleName: "unused-field",
+			},
+		}
+
+		raw, err := export.ExportJSONDiagnostics(model, diags)
+		require.NoError(t, err)
+
+		var doc map[string]any
+		err = json.Unmarshal(raw, &doc)
+		require.NoError(t, err)
+
+		diagList := doc["diagnostics"].([]any)
+		require.Len(t, diagList, 2)
+
+		d0 := diagList[0].(map[string]any)
+		require.Equal(t, "syntax error", d0["message"])
+		require.Equal(t, "error", d0["severity"])
+		_, hasRule0 := d0["rule_name"]
+		require.False(t, hasRule0, "diagnostic without rule_name should omit the field")
+
+		d1 := diagList[1].(map[string]any)
+		require.Equal(t, "unused field", d1["message"])
+		require.Equal(t, "warning", d1["severity"])
+		require.Equal(t, "unused-field", d1["rule_name"])
+	})
+
+	t.Run("nil model produces model: null", func(t *testing.T) {
+		raw, err := export.ExportJSONDiagnostics(nil, nil)
+		require.NoError(t, err)
+
+		var doc map[string]any
+		err = json.Unmarshal(raw, &doc)
+		require.NoError(t, err)
+
+		diags, ok := doc["diagnostics"].([]any)
+		require.True(t, ok)
+		require.Empty(t, diags)
+
+		require.Nil(t, doc["model"], "nil model should produce null")
+	})
+
+	t.Run("full valid model produces diagnostics: [] with complete model", func(t *testing.T) {
+		model := &ast.Model{
+			Name: "Full",
+			Actors: []*ast.Actor{
+				{Name: "User"},
+			},
+			Contexts: []*ast.Context{
+				{
+					Name: "Ctx",
+					Aggregates: []*ast.Aggregate{
+						{Name: "Agg"},
+					},
+				},
+			},
+		}
+
+		raw, err := export.ExportJSONDiagnostics(model, nil)
+		require.NoError(t, err)
+
+		var doc map[string]any
+		err = json.Unmarshal(raw, &doc)
+		require.NoError(t, err)
+
+		diags, ok := doc["diagnostics"].([]any)
+		require.True(t, ok)
+		require.Empty(t, diags)
+
+		modelVal, ok := doc["model"].(map[string]any)
+		require.True(t, ok)
+		require.Equal(t, "Full", modelVal["name"])
+		require.Len(t, modelVal["actors"], 1)
+		require.Len(t, modelVal["contexts"], 1)
+
+		// Verify ExportJSON is unchanged — bare model JSON is still valid
+		bareRaw, err := export.ExportJSON(model)
+		require.NoError(t, err)
+		var bareDoc map[string]any
+		err = json.Unmarshal(bareRaw, &bareDoc)
+		require.NoError(t, err)
+		require.Equal(t, "Full", bareDoc["name"])
+		_, hasDiags := bareDoc["diagnostics"]
+		require.False(t, hasDiags, "ExportJSON should not include diagnostics")
+	})
+
+	t.Run("diagnostic without rule_name omits rule_name field", func(t *testing.T) {
+		model := &ast.Model{Name: "Test"}
+		diags := []*diagnostic.Entry{
+			{
+				Filename: "test.cue",
+				Line:     1,
+				Column:   1,
+				Message:  "error message",
+				Severity: diagnostic.Error,
+			},
+		}
+
+		raw, err := export.ExportJSONDiagnostics(model, diags)
+		require.NoError(t, err)
+
+		var doc map[string]any
+		err = json.Unmarshal(raw, &doc)
+		require.NoError(t, err)
+
+		d := doc["diagnostics"].([]any)[0].(map[string]any)
+		require.Equal(t, "error message", d["message"])
+		require.Equal(t, "error", d["severity"])
+		_, hasRule := d["rule_name"]
+		require.False(t, hasRule, "empty rule_name should be omitted")
+	})
 }
 
 // getFirstSlice navigates the parsed JSON document to find the first slice

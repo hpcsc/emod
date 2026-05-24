@@ -6,6 +6,7 @@ import (
 	"strings"
 
 	"github.com/hpcsc/emod/internal/ast"
+	"github.com/hpcsc/emod/internal/diagnostic"
 )
 
 // JSON intermediate types with struct tags for serialization.
@@ -162,6 +163,63 @@ type jsonTranslation struct {
 	Reads              string         `json:"reads,omitempty"`
 	Command            string         `json:"command,omitempty"`
 	Event              *jsonEvent     `json:"event,omitempty"`
+}
+
+// jsonDiagnosticsWrapper is the top-level envelope for JSON diagnostics output.
+type jsonDiagnosticsWrapper struct {
+	Diagnostics []*jsonDiagnosticEntry `json:"diagnostics"`
+	Model       json.RawMessage        `json:"model"`
+}
+
+// jsonDiagnosticEntry maps a diagnostic.Entry to JSON.
+type jsonDiagnosticEntry struct {
+	File     string `json:"file"`
+	Line     int    `json:"line"`
+	Column   int    `json:"column"`
+	Message  string `json:"message"`
+	Severity string `json:"severity"`
+	RuleName string `json:"rule_name,omitempty"`
+}
+
+// ExportJSONDiagnostics wraps the model JSON and a diagnostics slice into a structured envelope
+// with top-level diagnostics array and model object.
+func ExportJSONDiagnostics(model *ast.Model, diagnostics []*diagnostic.Entry) ([]byte, error) {
+	modelJSON, err := ExportJSON(model)
+	if err != nil {
+		return nil, err
+	}
+
+	wrapper := jsonDiagnosticsWrapper{
+		Diagnostics: convertDiagnostics(diagnostics),
+		Model:       json.RawMessage(modelJSON),
+	}
+
+	return json.Marshal(wrapper)
+}
+
+// convertDiagnostics converts a slice of diagnostic Entries to JSON diagnostic entries.
+// Nil input produces an empty slice (not null) to ensure diagnostics: [] in output.
+func convertDiagnostics(diags []*diagnostic.Entry) []*jsonDiagnosticEntry {
+	if diags == nil {
+		return []*jsonDiagnosticEntry{}
+	}
+
+	out := make([]*jsonDiagnosticEntry, 0, len(diags))
+	for _, d := range diags {
+		out = append(out, convertDiagnostic(d))
+	}
+	return out
+}
+
+func convertDiagnostic(d *diagnostic.Entry) *jsonDiagnosticEntry {
+	return &jsonDiagnosticEntry{
+		File:     d.Filename,
+		Line:     d.Line,
+		Column:   d.Column,
+		Message:  d.Message,
+		Severity: d.Severity.String(),
+		RuleName: d.RuleName,
+	}
 }
 
 // convertPosition converts an AST Position to a *jsonPosition for serialization.
