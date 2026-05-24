@@ -203,7 +203,8 @@ func TestExportASCII(t *testing.T) {
 		require.NoError(t, err)
 
 		output := string(raw)
-		require.Contains(t, output, "[Stripe] -> [Charge] -> (Charged)")
+		require.Contains(t, output, "[Stripe] -> ⚙ Import")
+		require.Contains(t, output, "⚙ Import -> [Charge]")
 	})
 
 	t.Run("view with subscribes lists subscribed events", func(t *testing.T) {
@@ -227,7 +228,8 @@ func TestExportASCII(t *testing.T) {
 		require.NoError(t, err)
 
 		output := string(raw)
-		require.Contains(t, output, "{OrderList} [OrderPlaced, OrderUpdated]")
+		require.Contains(t, output, "(OrderPlaced) -> {OrderList}")
+		require.Contains(t, output, "(OrderUpdated) -> {OrderList}")
 	})
 
 	t.Run("multiple slices renders sequential headers", func(t *testing.T) {
@@ -307,14 +309,16 @@ func TestExportASCII(t *testing.T) {
 		require.Contains(t, output, "[ShipOrder] -> (OrderShipped)")
 
 		// Views with subscribers
-		require.Contains(t, output, "{OrderSummary} [OrderCreated]")
+		require.Contains(t, output, "(OrderCreated) -> {OrderSummary}")
 
 		// Automation
 		require.Contains(t, output, "⚙ InventoryUpdater")
 		require.Contains(t, output, "(OrderCreated) -> ⚙ InventoryUpdater -> [CreateOrder]")
 
 		// Translation
-		require.Contains(t, output, "[Stripe] -> [ValidatePayment] -> (PaymentValidated)")
+		require.Contains(t, output, "[Stripe] -> ⚙ PaymentGW")
+		require.Contains(t, output, "⚙ PaymentGW -> [ValidatePayment]")
+		require.Contains(t, output, "[ValidatePayment] -> (PaymentValidated)")
 	})
 
 	t.Run("output is valid ASCII text", func(t *testing.T) {

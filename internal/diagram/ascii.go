@@ -36,8 +36,14 @@ func ExportASCII(model *ast.Model) ([]byte, error) {
 		fmt.Fprintf(&b, "Model: %s\n\n", model.Name)
 	}
 
+	var prevCtx string
 	for _, entry := range entries {
 		s := entry.slice
+
+		if entry.ctxName != "" && entry.ctxName != prevCtx {
+			fmt.Fprintf(&b, "--- Context: %s ---\n\n", entry.ctxName)
+			prevCtx = entry.ctxName
+		}
 
 		fmt.Fprintf(&b, "=== Slice: %s ===\n", s.Name)
 
@@ -63,10 +69,12 @@ func ExportASCII(model *ast.Model) ([]byte, error) {
 			fmt.Fprintf(&b, "  [%s] -> (%s)\n", flow.CommandName, flow.EventName)
 		}
 
-		// Views
+		// Views with event arrows
 		for _, view := range s.Views {
 			if len(view.Subscribes) > 0 {
-				fmt.Fprintf(&b, "  {%s} [%s]\n", view.Name, strings.Join(view.Subscribes, ", "))
+				for _, sub := range view.Subscribes {
+					fmt.Fprintf(&b, "  (%s) -> {%s}\n", sub, view.Name)
+				}
 			} else {
 				fmt.Fprintf(&b, "  {%s}\n", view.Name)
 			}
@@ -78,14 +86,18 @@ func ExportASCII(model *ast.Model) ([]byte, error) {
 				auto.TriggerEvent, auto.Name, auto.Command)
 		}
 
-		// Translations (system → command → event)
+		// Translations (ext sys -> ⚙ reactor -> command -> event)
 		for _, tr := range s.Translations {
-			evtName := ""
-			if tr.Event != nil {
-				evtName = tr.Event.Name
+			if tr.Reads != "" {
+				fmt.Fprintf(&b, "  {%s} -> [%s]\n", tr.Reads, tr.ExternalSystem)
 			}
-			fmt.Fprintf(&b, "  [%s] -> [%s] -> (%s)\n",
-				tr.ExternalSystem, tr.Command, evtName)
+			fmt.Fprintf(&b, "  [%s] -> ⚙ %s\n", tr.ExternalSystem, tr.Name)
+			if tr.Command != "" {
+				fmt.Fprintf(&b, "  ⚙ %s -> [%s]\n", tr.Name, tr.Command)
+			}
+			if tr.Event != nil && tr.Event.Name != "" && tr.Command != "" {
+				fmt.Fprintf(&b, "  [%s] -> (%s)\n", tr.Command, tr.Event.Name)
+			}
 		}
 
 		fmt.Fprintf(&b, "\n")

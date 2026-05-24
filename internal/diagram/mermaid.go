@@ -77,6 +77,9 @@ func ExportMermaid(model *ast.Model) ([]byte, error) {
 			}
 			b.WriteString(fmt.Sprintf("tf %02d rmo %s\n", nextNum, eid))
 			nextNum++
+			for _, sub := range view.Subscribes {
+				b.WriteString(fmt.Sprintf("%%   subscribes to %s\n", sub))
+			}
 		}
 
 		for _, auto := range s.Automations {
@@ -88,8 +91,28 @@ func ExportMermaid(model *ast.Model) ([]byte, error) {
 			if targetNs != "" {
 				eid = targetNs + "." + eid
 			}
+			label := eid
+			if auto.TriggerEvent != "" && auto.Command != "" {
+				label = fmt.Sprintf("%s (%s → %s)", eid, auto.TriggerEvent, auto.Command)
+			}
+			b.WriteString(fmt.Sprintf("tf %02d pcr %s\n", nextNum, label))
+			nextNum++
+		}
+
+		for _, tr := range s.Translations {
+			eid := tr.Name
+			if ns != "" {
+				eid = ns + "." + eid
+			}
 			b.WriteString(fmt.Sprintf("tf %02d pcr %s\n", nextNum, eid))
 			nextNum++
+			b.WriteString(fmt.Sprintf("%%   pcr -> cmd\n"))
+			if tr.Command != "" && tr.Event != nil && tr.Event.Name != "" {
+				b.WriteString(fmt.Sprintf("%%   cmd %s -> evt %s\n", tr.Command, tr.Event.Name))
+			}
+			if tr.Reads != "" {
+				b.WriteString(fmt.Sprintf("%%   reads %s\n", tr.Reads))
+			}
 		}
 
 		if s.Name != "" {

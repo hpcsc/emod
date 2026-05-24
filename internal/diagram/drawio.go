@@ -11,12 +11,13 @@ import (
 // Layout constants.
 const (
 	marginX    = 40
-	marginY    = 40
+	marginY    = 60
 	sliceWidth = 280
 	boxWidth   = 240
 	boxHeight  = 55
 	sliceGap   = 40
-	laneHeight = 150
+	contextGap  = 70
+	laneHeight = 190
 	laneGap    = 30
 )
 
@@ -32,6 +33,8 @@ const (
 	strokeTrigger = "#000000"
 	fillExternal = "#f5f5f5"
 	strokeExternal = "#666666"
+	fillReactor  = "#e1d5e7"
+	strokeReactor = "#9673a6"
 )
 
 // ExportDrawio converts a parsed AST model into draw.io XML (mxGraph format).
@@ -47,18 +50,54 @@ func ExportDrawio(model *ast.Model) ([]byte, error) {
 		return buildEmptyDiagram(model.Name), nil
 	}
 
-	// Diagram dimensions
-	diagramW := 2*marginX + len(entries)*sliceWidth + (len(entries)-1)*sliceGap
-	triggerLaneY := marginY
-	cmdViewLaneY := triggerLaneY + laneHeight + laneGap
-	eventLaneY := cmdViewLaneY + laneHeight + laneGap
-
 	nextID := 2
 	allocID := func() int {
 		id := nextID
 		nextID++
 		return id
 	}
+
+	xPos := marginX
+	prevCtx := ""
+	var ctxBounds []struct {
+		name string
+		x    int
+		w    int
+	}
+	for i, entry := range entries {
+		if i > 0 {
+			if entry.ctxName != prevCtx {
+				if len(ctxBounds) > 0 {
+					ctxBounds[len(ctxBounds)-1].w = xPos - ctxBounds[len(ctxBounds)-1].x - contextGap
+				}
+				xPos += contextGap
+				ctxBounds = append(ctxBounds, struct {
+					name string
+					x    int
+					w    int
+				}{name: entry.ctxName, x: xPos})
+			} else {
+				xPos += sliceGap
+			}
+		} else {
+			ctxBounds = append(ctxBounds, struct {
+				name string
+				x    int
+				w    int
+			}{name: entry.ctxName, x: xPos})
+		}
+		xPos += sliceWidth
+		prevCtx = entry.ctxName
+	}
+	if len(ctxBounds) > 0 {
+		ctxBounds[len(ctxBounds)-1].w = xPos - ctxBounds[len(ctxBounds)-1].x
+	}
+
+	diagramW := xPos + marginX
+	triggerLaneY := marginY
+	cmdViewLaneY := triggerLaneY + laneHeight + laneGap
+	eventLaneY := cmdViewLaneY + laneHeight + laneGap
+	extLaneY := eventLaneY + laneHeight + laneGap
 
 	// Write document header
 	b.WriteString(xmlProlog(model.Name))
@@ -74,11 +113,23 @@ func ExportDrawio(model *ast.Model) ([]byte, error) {
 	botLaneID := allocID()
 	b.WriteString(swimlaneCell(botLaneID, "Events",
 		marginX, eventLaneY, diagramW-2*marginX, laneHeight))
+	extLaneID := allocID()
+	b.WriteString(swimlaneCell(extLaneID, "External Systems",
+		marginX, extLaneY, diagramW-2*marginX, laneHeight))
 
-	// Center Y within each lane's content area (below 30px label)
+	// Context labels above the swimlanes
+	for _, cb := range ctxBounds {
+		cid := allocID()
+		label := escapeXML(cb.name)
+		st := fmt.Sprintf("rounded=0;whiteSpace=wrap;html=1;fillColor=%s;strokeColor=%s;fontStyle=1;",
+			fillExternal, strokeExternal)
+		b.WriteString(vertexCell(cid, label, cb.x, marginY-30, cb.w-20, 22, st))
+	}
+
 	triggerCenterY := triggerLaneY + 30 + (laneHeight-30-boxHeight)/2
 	midCenterY := cmdViewLaneY + 30 + (laneHeight-30-boxHeight)/2
 	eventCenterY := eventLaneY + 30 + (laneHeight-30-boxHeight)/2
+	extCenterY := extLaneY + 30 + (laneHeight-30-boxHeight)/2
 
 	type namedElem struct {
 		sliceIdx int
@@ -87,19 +138,27 @@ func ExportDrawio(model *ast.Model) ([]byte, error) {
 	}
 	var elems []namedElem
 
-	elemID := func(sliceIdx int, name string) int {
-		for _, e := range elems {
-			if e.sliceIdx == sliceIdx && e.name == name {
-				return e.id
+	// Precompute X position per entry, accounting for context gaps
+	sliceXFor := make(map[int]int)
+	xp := marginX
+	prev := ""
+	for ei, entry := range entries {
+		if ei > 0 {
+			if entry.ctxName != prev {
+				xp += contextGap
+			} else {
+				xp += sliceGap
 			}
 		}
-		return 0
+		sliceXFor[ei] = xp
+		xp += sliceWidth
+		prev = entry.ctxName
 	}
 
 	// Place elements per slice
 	for i, entry := range entries {
 		s := entry.slice
-		sliceX := marginX + i*(sliceWidth+sliceGap)
+		sliceX := sliceXFor[i]
 
 		// --- Trigger (top lane) ---
 		if s.Trigger != nil {
@@ -138,37 +197,70 @@ func ExportDrawio(model *ast.Model) ([]byte, error) {
 			elems = append(elems, namedElem{sliceIdx: i, name: view.Name, id: id})
 		}
 
-		// --- Events (bottom lane) ---
-		numEvts := len(s.Events)
+		// --- Events (bottom lane, including translation events) ---
 		usableW = sliceWidth - 20
-		for ei, evt := range s.Events {
+		totalEvts := len(s.Events)
+		for _, tr := range s.Translations {
+			if tr.Event != nil && tr.Event.Name != "" {
+				totalEvts++
+			}
+		}
+		ei := 0
+		for me, evt := range s.Events {
 			id := allocID()
-			itemW, x := itemLayout(usableW, numEvts, ei, sliceX)
+			itemW, x := itemLayout(usableW, totalEvts, me, sliceX)
 			label := evt.Name
 			if evt.ExternalName != "" {
 				label = fmt.Sprintf("%s\\n[%s]", evt.Name, evt.ExternalName)
 			}
+			ei++
 			st := fmt.Sprintf("rounded=1;whiteSpace=wrap;html=1;fillColor=%s;strokeColor=%s;",
 				fillEvent, strokeEvent)
 			b.WriteString(vertexCell(id, label, x, eventCenterY, itemW, boxHeight, st))
 			elems = append(elems, namedElem{sliceIdx: i, name: evt.Name, id: id})
 		}
+		for _, tr := range s.Translations {
+			if tr.Event != nil && tr.Event.Name != "" {
+				id := allocID()
+				itemW, x := itemLayout(usableW, totalEvts, ei, sliceX)
+				ei++
+				st := fmt.Sprintf("rounded=1;whiteSpace=wrap;html=1;fillColor=%s;strokeColor=%s;",
+					fillEvent, strokeEvent)
+				b.WriteString(vertexCell(id, tr.Event.Name, x, eventCenterY, itemW, boxHeight, st))
+				elems = append(elems, namedElem{sliceIdx: i, name: tr.Event.Name, id: id})
+			}
+		}
 
 		// --- Automations (compact boxes with gear indicator) ---
 		for ai, auto := range s.Automations {
 			id := allocID()
-			autoW := boxWidth / 2
-			autoH := boxHeight / 2
-			x := sliceX + sliceWidth - autoW - 10
-			y := eventLaneY + laneHeight - autoH - 10
-			if ai > 0 {
-				x = sliceX + sliceWidth - (autoW+5)*(ai+1) - 10
-			}
+			autoW := boxWidth
+			autoH := boxHeight * 3 / 4
+			autoPadX := 10
+			autoPadY := 15 + ai*(autoH+5)
+			x := sliceX + autoPadX
+			y := triggerLaneY + laneHeight - autoH - autoPadY
 			label := fmt.Sprintf("⚙ %s", auto.Name)
 			st := fmt.Sprintf("rounded=1;whiteSpace=wrap;html=1;fillColor=%s;strokeColor=%s;",
-				fillEvent, strokeEvent)
-			b.WriteString(vertexCell(id, label, x, y, autoW, autoH, st))
+				fillReactor, strokeReactor)
+			b.WriteString(vertexCell(id, label, x, y, autoW-boxWidth/8, autoH, st))
 			elems = append(elems, namedElem{sliceIdx: i, name: auto.Name, id: id})
+		}
+
+		// --- Translation reactors (in UI/Triggers lane, below automations) ---
+		for ti, tr := range s.Translations {
+			id := allocID()
+			reactorW := boxWidth
+			reactorH := boxHeight * 3 / 4
+			padX := 10
+			padY := 15 + (len(s.Automations)+ti)*(reactorH+5)
+			x := sliceX + padX
+			y := triggerLaneY + laneHeight - reactorH - padY
+			label := fmt.Sprintf("⚙ %s", tr.Name)
+			st := fmt.Sprintf("rounded=1;whiteSpace=wrap;html=1;fillColor=%s;strokeColor=%s;",
+				fillReactor, strokeReactor)
+			b.WriteString(vertexCell(id, label, x, y, reactorW-boxWidth/8, reactorH, st))
+			elems = append(elems, namedElem{sliceIdx: i, name: tr.Name, id: id})
 		}
 
 		// --- External system boxes (Translations) ---
@@ -176,12 +268,10 @@ func ExportDrawio(model *ast.Model) ([]byte, error) {
 			id := allocID()
 			extW := 100
 			extH := 45
-			extX := sliceX + sliceWidth + 10
-			extY := cmdViewLaneY + 10 + ti*(extH+8)
-			if extX+extW > marginX+len(entries)*(sliceWidth+sliceGap) {
-				// Place below the bottom lane if no room to the right
-				extX = sliceX + 10
-				extY = eventLaneY + laneHeight + 5
+			extX := sliceX + (sliceWidth-extW)/2
+			extY := extCenterY - extH/2
+			if ti > 0 {
+				extY += ti * (extH + 8)
 			}
 			st := fmt.Sprintf("rounded=1;whiteSpace=wrap;html=1;fillColor=%s;strokeColor=%s;dashed=1;",
 				fillExternal, strokeExternal)
@@ -193,14 +283,20 @@ func ExportDrawio(model *ast.Model) ([]byte, error) {
 	// --- Connections ---
 	edgeStyle := "edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;"
 
-	for i, entry := range entries {
+	// Global element lookup across all slices (needed for cross-slice references)
+	nameToID := make(map[string]int)
+	for _, e := range elems {
+		nameToID[e.name] = e.id
+	}
+
+	for _, entry := range entries {
 		s := entry.slice
 
 		// trigger -> command
 		if s.Trigger != nil {
-			tid := elemID(i, s.Trigger.Name)
+			tid := nameToID[s.Trigger.Name]
 			for _, cmd := range s.Commands {
-				cid := elemID(i, cmd.Name)
+				cid := nameToID[cmd.Name]
 				if tid > 0 && cid > 0 {
 					b.WriteString(edgeCell(allocID(), edgeStyle, tid, cid))
 				}
@@ -209,36 +305,32 @@ func ExportDrawio(model *ast.Model) ([]byte, error) {
 
 		// command -> event (via Flow entries)
 		for _, flow := range s.Flows {
-			cid := elemID(i, flow.CommandName)
-			eid := elemID(i, flow.EventName)
+			cid := nameToID[flow.CommandName]
+			eid := nameToID[flow.EventName]
 			if cid > 0 && eid > 0 {
 				b.WriteString(edgeCell(allocID(), edgeStyle, cid, eid))
 			}
 		}
 
-		// event -> view (via subscribes)
-		for _, evt := range s.Events {
-			eid := elemID(i, evt.Name)
-			if eid == 0 {
+		// event -> view (via subscribes) — cross-slice lookup
+		for _, view := range s.Views {
+			vid := nameToID[view.Name]
+			if vid == 0 {
 				continue
 			}
-			for _, view := range s.Views {
-				for _, sub := range view.Subscribes {
-					if sub == evt.Name {
-						vid := elemID(i, view.Name)
-						if vid > 0 {
-							b.WriteString(edgeCell(allocID(), edgeStyle, eid, vid))
-						}
-					}
+			for _, sub := range view.Subscribes {
+				eid := nameToID[sub]
+				if eid > 0 {
+					b.WriteString(edgeCell(allocID(), edgeStyle, eid, vid))
 				}
 			}
 		}
 
-		// event -> automation -> command
+		// event -> automation -> command — cross-slice lookup
 		for _, auto := range s.Automations {
-			eid := elemID(i, auto.TriggerEvent)
-			aid := elemID(i, auto.Name)
-			cid := elemID(i, auto.Command)
+			eid := nameToID[auto.TriggerEvent]
+			aid := nameToID[auto.Name]
+			cid := nameToID[auto.Command]
 			if eid > 0 && aid > 0 {
 				b.WriteString(edgeCell(allocID(), edgeStyle, eid, aid))
 			}
@@ -247,22 +339,35 @@ func ExportDrawio(model *ast.Model) ([]byte, error) {
 			}
 		}
 
-		// Translation: command -> external system -> event
+		// Translation: ext sys -> reactor -> command/event
 		for _, tr := range s.Translations {
-			extID := elemID(i, tr.ExternalSystem)
-			if extID == 0 {
+			extID := nameToID[tr.ExternalSystem]
+			reactorID := nameToID[tr.Name]
+			if extID == 0 || reactorID == 0 {
 				continue
 			}
-			if tr.Command != "" {
-				cid := elemID(i, tr.Command)
-				if cid > 0 {
-					b.WriteString(edgeCell(allocID(), edgeStyle, cid, extID))
+			// reads: view -> external system
+			if tr.Reads != "" {
+				vid := nameToID[tr.Reads]
+				if vid > 0 {
+					b.WriteString(edgeCell(allocID(), edgeStyle, vid, extID))
 				}
 			}
-			if tr.Event != nil && tr.Event.Name != "" {
-				eid := elemID(i, tr.Event.Name)
-				if eid > 0 {
-					b.WriteString(edgeCell(allocID(), edgeStyle, extID, eid))
+			// external system -> reactor
+			b.WriteString(edgeCell(allocID(), edgeStyle, extID, reactorID))
+			// reactor -> command
+			if tr.Command != "" {
+				cid := nameToID[tr.Command]
+				if cid > 0 {
+					b.WriteString(edgeCell(allocID(), edgeStyle, reactorID, cid))
+				}
+			}
+			// command -> event (translation implies command emits event)
+			if tr.Command != "" && tr.Event != nil && tr.Event.Name != "" {
+				cid := nameToID[tr.Command]
+				eid := nameToID[tr.Event.Name]
+				if cid > 0 && eid > 0 {
+					b.WriteString(edgeCell(allocID(), edgeStyle, cid, eid))
 				}
 			}
 		}

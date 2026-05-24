@@ -291,7 +291,7 @@ func TestExportSVG(t *testing.T) {
 		require.Contains(t, output, `stroke-dasharray`)
 	})
 
-	t.Run("connects command to external system to event", func(t *testing.T) {
+	t.Run("connects external system through reactor to command and event", func(t *testing.T) {
 		model := &ast.Model{
 			Name: "Test",
 			Contexts: []*ast.Context{{

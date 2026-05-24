@@ -229,10 +229,11 @@ func TestExportMermaid(t *testing.T) {
 		require.Contains(t, output, "tf 05 evt Orders.PaymentValidated")
 		require.Contains(t, output, "tf 06 rmo Orders.OrderSummary")
 		require.Contains(t, output, "tf 07 pcr Orders.InventoryUpdater")
+		require.Contains(t, output, "tf 08 pcr Orders.PaymentGW")
 
 		// Second slice: Ship Order — schedule trigger, command, event
-		require.Contains(t, output, "tf 08 pcr Orders.ShipTimer")
-		require.Contains(t, output, "tf 09 cmd Orders.ShipOrder")
-		require.Contains(t, output, "tf 10 evt Orders.OrderShipped")
+		require.Contains(t, output, "tf 09 pcr Orders.ShipTimer")
+		require.Contains(t, output, "tf 10 cmd Orders.ShipOrder")
+		require.Contains(t, output, "tf 11 evt Orders.OrderShipped")
 	})
 }
