@@ -34,7 +34,9 @@ func captureStderr(t *testing.T, fn func()) string {
 }
 
 func TestExport(t *testing.T) {
-	t.Run("valid file outputs model JSON to stdout", func(t *testing.T) {
+	// --- JSON format tests ---
+
+	t.Run("valid file outputs wrapped JSON with empty diagnostics to stdout", func(t *testing.T) {
 		path := writeTemp(t, "valid.emod", validEmod)
 
 		output := captureStdout(t, func() {
@@ -45,10 +47,17 @@ func TestExport(t *testing.T) {
 		var doc map[string]interface{}
 		err := json.Unmarshal([]byte(output), &doc)
 		require.NoError(t, err)
-		require.Equal(t, "Hotel Reservation", doc["name"])
+
+		diags, ok := doc["diagnostics"].([]interface{})
+		require.True(t, ok, "expected diagnostics in output")
+		require.Empty(t, diags, "expected empty diagnostics for valid file")
+
+		modelVal, ok := doc["model"].(map[string]interface{})
+		require.True(t, ok, "expected model in output")
+		require.Equal(t, "Hotel Reservation", modelVal["name"])
 	})
 
-	t.Run("valid file output includes actors and contexts", func(t *testing.T) {
+	t.Run("valid file wrapped output includes actors and contexts under model key", func(t *testing.T) {
 		path := writeTemp(t, "valid.emod", validEmod)
 
 		output := captureStdout(t, func() {
@@ -60,21 +69,27 @@ func TestExport(t *testing.T) {
 		err := json.Unmarshal([]byte(output), &doc)
 		require.NoError(t, err)
 
-		actors, ok := doc["actors"].([]interface{})
-		require.True(t, ok, "expected actors in output")
+		modelVal, ok := doc["model"].(map[string]interface{})
+		require.True(t, ok, "expected model key in output")
+
+		actors, ok := modelVal["actors"].([]interface{})
+		require.True(t, ok, "expected actors in model output")
 		require.Len(t, actors, 1)
 		require.Equal(t, "Guest", actors[0].(map[string]interface{})["name"])
 
-		_, ok = doc["contexts"].([]interface{})
-		require.True(t, ok, "expected contexts in output")
+		_, ok = modelVal["contexts"].([]interface{})
+		require.True(t, ok, "expected contexts in model output")
 	})
 
-	t.Run("file with validation errors writes diagnostics to stderr", func(t *testing.T) {
+	t.Run("file with validation errors outputs JSON with diagnostics on stdout and empty stderr", func(t *testing.T) {
 		path := writeTemp(t, "invalid.emod", invalidEmod)
 
 		var err error
+		var output string
 		stderr := captureStderr(t, func() {
-			err = cli.RunExport(path, "json")
+			output = captureStdout(t, func() {
+				err = cli.RunExport(path, "json")
+			})
 		})
 
 		require.Error(t, err)
@@ -83,11 +98,24 @@ func TestExport(t *testing.T) {
 			require.Equal(t, "", lintErr.Message)
 			require.Equal(t, 2, lintErr.ExitCode)
 		}
-		require.Contains(t, stderr, path)
-		require.Contains(t, stderr, ":1:")
+
+		// stderr should be empty for JSON format
+		require.Empty(t, stderr, "JSON format should not write diagnostics to stderr")
+
+		// stdout should contain diagnostics wrapper
+		var doc map[string]interface{}
+		err = json.Unmarshal([]byte(output), &doc)
+		require.NoError(t, err)
+
+		diags, ok := doc["diagnostics"].([]interface{})
+		require.True(t, ok, "expected diagnostics in output")
+		require.NotEmpty(t, diags, "expected non-empty diagnostics for invalid file")
+
+		_, ok = doc["model"].(map[string]interface{})
+		require.True(t, ok, "expected model key in output (partial model)")
 	})
 
-	t.Run("file with only lint warnings writes diagnostics to stderr with non-zero exit", func(t *testing.T) {
+	t.Run("file with only lint warnings outputs JSON with diagnostics on stdout and empty stderr", func(t *testing.T) {
 		input := `model "Test"
 context "Orders" {
   aggregate "Order" {
@@ -114,8 +142,11 @@ context "Orders" {
 		path := writeTemp(t, "warnings.emod", input)
 
 		var err error
+		var output string
 		stderr := captureStderr(t, func() {
-			err = cli.RunExport(path, "json")
+			output = captureStdout(t, func() {
+				err = cli.RunExport(path, "json")
+			})
 		})
 
 		require.Error(t, err)
@@ -124,15 +155,29 @@ context "Orders" {
 			require.Equal(t, 1, lintErr.ExitCode)
 			require.Equal(t, "", lintErr.Message)
 		}
-		require.Contains(t, stderr, "state-obsession")
+
+		// stderr should be empty for JSON format
+		require.Empty(t, stderr, "JSON format should not write diagnostics to stderr")
+
+		// stdout should contain diagnostics wrapper
+		var doc map[string]interface{}
+		err = json.Unmarshal([]byte(output), &doc)
+		require.NoError(t, err)
+
+		diags, ok := doc["diagnostics"].([]interface{})
+		require.True(t, ok, "expected diagnostics in output")
+		require.NotEmpty(t, diags, "expected non-empty diagnostics for file with warnings")
 	})
 
-	t.Run("unparseable file writes diagnostics to stderr with non-zero exit", func(t *testing.T) {
+	t.Run("unparseable file outputs JSON with diagnostics on stdout and empty stderr", func(t *testing.T) {
 		path := writeTemp(t, "invalid.emod", invalidEmod)
 
 		var err error
+		var output string
 		stderr := captureStderr(t, func() {
-			err = cli.RunExport(path, "json")
+			output = captureStdout(t, func() {
+				err = cli.RunExport(path, "json")
+			})
 		})
 
 		require.Error(t, err)
@@ -141,8 +186,21 @@ context "Orders" {
 			require.Equal(t, "", lintErr.Message)
 			require.Equal(t, 2, lintErr.ExitCode)
 		}
-		require.Contains(t, stderr, path)
-		require.Contains(t, stderr, ":1:")
+
+		// stderr should be empty for JSON format
+		require.Empty(t, stderr, "JSON format should not write diagnostics to stderr")
+
+		// stdout should contain diagnostics wrapper
+		var doc map[string]interface{}
+		err = json.Unmarshal([]byte(output), &doc)
+		require.NoError(t, err)
+
+		diags, ok := doc["diagnostics"].([]interface{})
+		require.True(t, ok, "expected diagnostics in output")
+		require.NotEmpty(t, diags, "expected non-empty diagnostics for unparseable file")
+
+		_, ok = doc["model"].(map[string]interface{})
+		require.True(t, ok, "expected model key in output (partial model)")
 	})
 
 	t.Run("missing file argument returns error", func(t *testing.T) {
@@ -173,6 +231,28 @@ context "Orders" {
 		}
 	})
 
+	t.Run("default format is json and produces wrapped valid JSON", func(t *testing.T) {
+		path := writeTemp(t, "valid.emod", validEmod)
+
+		output := captureStdout(t, func() {
+			err := cli.RunExport(path, "json")
+			require.NoError(t, err)
+		})
+
+		require.True(t, json.Valid([]byte(output)))
+
+		var doc map[string]interface{}
+		err := json.Unmarshal([]byte(output), &doc)
+		require.NoError(t, err)
+
+		_, hasDiagnostics := doc["diagnostics"]
+		require.True(t, hasDiagnostics, "expected diagnostics key in JSON output")
+		_, hasModel := doc["model"]
+		require.True(t, hasModel, "expected model key in JSON output")
+	})
+
+	// --- CUE format tests ---
+
 	t.Run("valid file outputs CUE text to stdout with -f cue", func(t *testing.T) {
 		path := writeTemp(t, "valid.emod", validEmod)
 
@@ -185,14 +265,41 @@ context "Orders" {
 		require.Contains(t, output, "Guest")
 	})
 
-	t.Run("default format is json and produces valid output", func(t *testing.T) {
-		path := writeTemp(t, "valid.emod", validEmod)
+	t.Run("CUE format with diagnostics writes text to stderr and returns non-zero exit", func(t *testing.T) {
+		path := writeTemp(t, "invalid.emod", invalidEmod)
 
+		var err error
 		output := captureStdout(t, func() {
-			err := cli.RunExport(path, "json")
-			require.NoError(t, err)
+			stderr := captureStderr(t, func() {
+				err = cli.RunExport(path, "cue")
+			})
+			require.Contains(t, stderr, path)
+			require.Contains(t, stderr, ":1:")
 		})
 
-		require.True(t, json.Valid([]byte(output)))
+		// stdout should be empty for CUE format with errors
+		require.Empty(t, output, "CUE format with errors should not write to stdout")
+
+		require.Error(t, err)
+		var lintErr *cli.LintError
+		if errors.As(err, &lintErr) {
+			require.Equal(t, "", lintErr.Message)
+			require.Equal(t, 2, lintErr.ExitCode)
+		}
+	})
+
+	t.Run("CUE format on clean file outputs text to stdout and no stderr", func(t *testing.T) {
+		path := writeTemp(t, "valid.emod", validEmod)
+
+		var stderrText string
+		output := captureStdout(t, func() {
+			stderrText = captureStderr(t, func() {
+				err := cli.RunExport(path, "cue")
+				require.NoError(t, err)
+			})
+		})
+
+		require.Contains(t, output, "Hotel Reservation")
+		require.Empty(t, stderrText, "CUE format on clean file should not write to stderr")
 	})
 }
