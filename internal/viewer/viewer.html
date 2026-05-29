@@ -212,6 +212,18 @@ header .model-name span {
   font-weight: 600;
   color: #555;
 }
+
+/* --- Command/event block hover --- */
+#diagram-canvas .cmd-block:hover rect {
+  fill: #b8cce8 !important;
+}
+#diagram-canvas .evt-block:hover rect {
+  fill: #f5d0b0 !important;
+}
+#diagram-canvas .cmd-block,
+#diagram-canvas .evt-block {
+  cursor: pointer;
+}
 </style>
 </head>
 <body>
@@ -376,33 +388,24 @@ function computeLayout() {
         // Pre-compute command/event positions within slice (for Tasks 3-5)
         var commands = sl.children.filter(function(c) { return c.type === "command"; });
         var events   = sl.children.filter(function(c) { return c.type === "event"; });
-        var padX = 10;
-        var contentW = L.sliceWidth - 2 * padX;
-        var itemsPerRow = Math.max(Math.floor(contentW / (L.boxWidth + 8)), 1);
-        var marginCmd = ((contentW - itemsPerRow * L.boxWidth - (itemsPerRow - 1) * 8) / 2) + padX;
-        var row = 0, col = 0;
+        var blockY = slY + 36;
+        var gap = 10;
 
         commands.forEach(function(cmd) {
-          if (col >= itemsPerRow) { col = 0; row++; }
-          var cx = slY + 36 + row * (L.boxHeight + 10);
+          var bx = xPos + (L.sliceWidth - L.boxWidth) / 2;
           layoutPositions[cmd.id] = {
-            x: xPos + marginCmd + col * (L.boxWidth + 8),
-            y: cx,
-            w: L.boxWidth, h: L.boxHeight,
+            x: bx, y: blockY, w: L.boxWidth, h: L.boxHeight,
             node: cmd,
           };
-          col++;
+          blockY += L.boxHeight + gap;
         });
         events.forEach(function(evt) {
-          if (col >= itemsPerRow) { col = 0; row++; }
-          var cy = slY + 36 + row * (L.boxHeight + 10);
+          var bx = xPos + (L.sliceWidth - L.boxWidth) / 2;
           layoutPositions[evt.id] = {
-            x: xPos + marginCmd + col * (L.boxWidth + 8),
-            y: cy,
-            w: L.boxWidth, h: L.boxHeight,
+            x: bx, y: blockY, w: L.boxWidth, h: L.boxHeight,
             node: evt,
           };
-          col++;
+          blockY += L.boxHeight + gap;
         });
 
         xPos += L.sliceWidth;
@@ -503,6 +506,25 @@ function renderDiagram() {
       });
     });
 
+    html += "</g>\n";
+  });
+
+  // ── Command and Event blocks ──
+  nodes.forEach(function(n) {
+    if (n.type !== "command" && n.type !== "event") return;
+    var np = layoutPositions[n.id];
+    if (!np) return;
+
+    var isCmd = n.type === "command";
+    var fill = isCmd ? "#dae8fc" : "#ffe6cc";
+    var stroke = isCmd ? "#6c8ebf" : "#d79b00";
+    var cls = isCmd ? "cmd-block" : "evt-block";
+
+    html += "<g class=\"" + cls + "\">\n";
+    html += svgRect(np.x, np.y, np.w, np.h, fill, stroke,
+      "rx=\"4\" stroke-width=\"1.5\"");
+    html += svgText(np.x + np.w / 2, np.y + np.h / 2, n.label, 13, stroke,
+      "text-anchor=\"middle\" dominant-baseline=\"middle\"");
     html += "</g>\n";
   });
 
