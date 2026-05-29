@@ -3,7 +3,7 @@
 ## Progress
 - [x] Task 1: Drag command and event nodes with real-time arrow updates
 - [x] Task 2: Drag slice group header to move all slice contents together
-- [ ] Task 3: Add reset layout button
+- [x] Task 3: Add reset layout button
 
 ## Story Reference
 `user-stories/web-diagram-viewer.md` — **US-006: Rearrange diagram elements by dragging**

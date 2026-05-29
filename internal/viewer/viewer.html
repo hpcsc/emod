@@ -138,6 +138,29 @@ header .model-name span {
   background: rgba(255,255,255,0.25);
 }
 
+/* --- Reset layout button --- */
+#reset-layout {
+  background: rgba(255,255,255,0.15);
+  color: #fff;
+  border: 1px solid rgba(255,255,255,0.25);
+  border-radius: 4px;
+  padding: 5px 12px;
+  font-size: 12px;
+  cursor: pointer;
+  transition: background 0.2s;
+  white-space: nowrap;
+}
+#reset-layout:hover {
+  background: rgba(255,255,255,0.25);
+}
+#reset-layout:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+#reset-layout:disabled:hover {
+  background: rgba(255,255,255,0.15);
+}
+
 /* --- Fit-to-view button --- */
 #fit-view {
   background: rgba(255,255,255,0.15);
@@ -560,6 +583,7 @@ header .model-name span {
     <div id="actor-annotations"></div>
   </div>
   <div style="display:flex;align-items:center;gap:12px;">
+    <button id="reset-layout" title="Restore auto-computed layout" disabled>Reset layout</button>
     <button id="fit-view" title="Reset viewport to fit the entire diagram">Fit view</button>
     <button id="minimap-toggle" title="Toggle minimap overview">Minimap</button>
     <div class="model-name">Model: <span id="model-name-display">—</span></div>
@@ -1079,6 +1103,7 @@ function commitDrag(nodeId, dx, dy, origNodeX, origNodeY) {
   if (blockEl) blockEl.removeAttribute("transform");
   // Final arrow update with committed position
   updateArrowsForNode(nodeId, layoutPositions[nodeId]);
+  updateResetLayoutButton();
 }
 
 // ─── Slice drag helpers ────────────────────────────────────────────────
@@ -1114,6 +1139,7 @@ function commitSliceDrag(sliceId, dx, dy) {
     if (!orig) return;
     commitDrag(nodeId, dx, dy, orig.x, orig.y);
   });
+  updateResetLayoutButton();
 }
 
 function fitToView() {
@@ -1248,6 +1274,7 @@ function setModelData(data) {
   document.title = modelName ? modelName + " — Emod Diagram Viewer" : "Emod Diagram Viewer";
   statNodes.textContent = nodes.length;
   statEdges.textContent = edges.length;
+  updateResetLayoutButton();
 }
 
 function clearSVG() {
@@ -1263,8 +1290,26 @@ function togglePanel() {
 
 panelHdr.addEventListener("click", togglePanel);
 
+// ─── Reset layout ──────────────────────────────────────────────────────
+function resetLayout() {
+  nodeOffsets = {};
+  renderDiagram();
+  applyViewport();
+  updateResetLayoutButton();
+}
+
+function updateResetLayoutButton() {
+  var btn = document.getElementById("reset-layout");
+  if (!btn) return;
+  var hasOffsets = Object.keys(nodeOffsets).length > 0;
+  btn.disabled = !hasOffsets;
+}
+
 // ─── Fit-to-view ─────────────────────────────────────────────────────────
 document.getElementById("fit-view").addEventListener("click", fitToView);
+
+// ─── Reset layout button ─────────────────────────────────────────────────
+document.getElementById("reset-layout").addEventListener("click", resetLayout);
 
 // ─── Render ─────────────────────────────────────────────────────────────
 function render() {
@@ -1308,6 +1353,7 @@ function render() {
 
     clearSVG();
     renderDiagram();
+    updateResetLayoutButton();
   })
   .catch(function(err) {
     statusEl.textContent = "✗ " + err.message;
@@ -1929,6 +1975,7 @@ if (typeof INITIAL_DATA !== 'undefined' && INITIAL_DATA !== null) {
   var initData = INITIAL_DATA.diagram || INITIAL_DATA;
   setModelData(initData);
   renderDiagram();
+  updateResetLayoutButton();
 } else {
   sourceInput.placeholder = 'Paste .emod content here';
   panel.classList.remove('collapsed');
