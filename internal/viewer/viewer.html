@@ -395,6 +395,144 @@ header .model-name span {
   font-style: italic;
   font-size: 11px;
 }
+
+/* --- Detail Panel --- */
+#detail-panel {
+  position: fixed;
+  z-index: 1000;
+  background: #fff;
+  border: 1px solid #d0d0d0;
+  border-radius: 8px;
+  box-shadow: 0 4px 20px rgba(0,0,0,0.18);
+  padding: 16px;
+  font-size: 12px;
+  line-height: 1.5;
+  display: none;
+  max-width: 380px;
+  min-width: 240px;
+  top: 80px;
+  right: 24px;
+  max-height: calc(100vh - 120px);
+  overflow-y: auto;
+}
+#detail-panel .dp-header {
+  font-weight: 600;
+  font-size: 14px;
+  color: #2c3e50;
+  padding-bottom: 6px;
+  margin-bottom: 8px;
+  border-bottom: 1px solid #eee;
+  padding-right: 24px;
+}
+#detail-panel .dp-type {
+  font-weight: 400;
+  font-size: 11px;
+  color: #888;
+  text-transform: uppercase;
+  letter-spacing: 0.3px;
+}
+#detail-panel .dp-close {
+  position: absolute;
+  top: 10px;
+  right: 12px;
+  cursor: pointer;
+  font-size: 18px;
+  color: #999;
+  line-height: 1;
+  padding: 2px 6px;
+  border-radius: 3px;
+  user-select: none;
+}
+#detail-panel .dp-close:hover {
+  background: rgba(0,0,0,0.06);
+  color: #333;
+}
+#detail-panel .dp-section {
+  margin-bottom: 10px;
+}
+#detail-panel .dp-section:last-child {
+  margin-bottom: 0;
+}
+#detail-panel .dp-section-title {
+  font-size: 10px;
+  text-transform: uppercase;
+  color: #888;
+  font-weight: 500;
+  letter-spacing: 0.4px;
+  margin-bottom: 4px;
+}
+#detail-panel table {
+  width: 100%;
+  border-collapse: collapse;
+}
+#detail-panel th {
+  text-align: left;
+  font-size: 10px;
+  text-transform: uppercase;
+  color: #888;
+  font-weight: 500;
+  padding: 2px 8px 2px 0;
+  letter-spacing: 0.3px;
+}
+#detail-panel td {
+  padding: 2px 8px 2px 0;
+  white-space: nowrap;
+  vertical-align: top;
+}
+#detail-panel .dp-field-name {
+  font-weight: 500;
+  color: #333;
+}
+#detail-panel .dp-field-type {
+  color: #6c8ebf;
+  font-family: "SF Mono", "Fira Code", Menlo, Consolas, monospace;
+  font-size: 11px;
+}
+#detail-panel .dp-field-modifier {
+  color: #999;
+  font-style: italic;
+  font-size: 11px;
+}
+#detail-panel .dp-source {
+  font-family: "SF Mono", "Fira Code", Menlo, Consolas, monospace;
+  font-size: 11px;
+  color: #888;
+  line-height: 1.6;
+}
+
+/* --- Highlight states --- */
+#diagram-canvas.has-highlights .cmd-block:not(.hl) rect,
+#diagram-canvas.has-highlights .evt-block:not(.hl) rect {
+  opacity: 0.3;
+}
+#diagram-canvas .hl rect {
+  stroke: #3498db !important;
+  stroke-width: 2.5px !important;
+}
+#diagram-canvas .hl.cmd-block rect {
+  fill: #b8cce8 !important;
+}
+#diagram-canvas .hl.evt-block rect {
+  fill: #f5d0b0 !important;
+}
+
+/* --- Flow arrow hover & cursor --- */
+#diagram-canvas .flow-arrow {
+  cursor: pointer;
+}
+#diagram-canvas .flow-arrow:hover {
+  stroke: #3498db !important;
+  stroke-width: 2.5 !important;
+}
+
+/* --- Context/aggregate label cursor --- */
+#diagram-canvas .ctx-label,
+#diagram-canvas .agg-label {
+  cursor: pointer;
+}
+#diagram-canvas .ctx-label:hover {
+  fill: #b0c4d8 !important;
+}
 </style>
 </head>
 <body>
@@ -427,6 +565,11 @@ header .model-name span {
   </svg>
 
   <div id="tooltip"></div>
+
+  <div id="detail-panel">
+    <div class="dp-close" id="dp-close">&times;</div>
+    <div id="dp-content"></div>
+  </div>
 
   <div id="minimap">
     <div id="minimap-handle">Overview</div>
@@ -617,6 +760,13 @@ function computeLayout() {
 
 // ─── Render diagram ────────────────────────────────────────────────────
 function renderDiagram() {
+  // Reset interaction state on re-render
+  selectedNodeId = null;
+  highlighted = {};
+  var dp = document.getElementById("detail-panel");
+  if (dp) dp.style.display = "none";
+  svg.classList.remove("has-highlights");
+
   clearSVG();
 
   var dims = computeLayout();
@@ -642,14 +792,14 @@ function renderDiagram() {
     html += svgRect(cp.x, cp.y, cp.w, L.swimlaneHdr, "#2c3e50", "#2c3e50", "rx=\"8\"");
     // Square off the bottom of the header so it blends into content area
     html += svgRect(cp.x, cp.y + L.swimlaneHdr - 8, cp.w, 8, "#2c3e50", "#2c3e50");
-    html += svgText(cp.x + 16, cp.y + L.swimlaneHdr - 14, ctx.label, 16, "#ffffff", "font-weight=\"bold\"");
+    html += svgText(cp.x + 16, cp.y + L.swimlaneHdr - 14, ctx.label, 16, "#ffffff", "font-weight=\"bold\" class=\"ctx-label\" data-ctx-id=\"" + ctx.id + "\"");
 
     // ── Aggregate sub-header row ──
     if (aggs.length > 0) {
       var aggY = cp.y + L.swimlaneHdr;
       html += svgRect(cp.x, aggY, cp.w, L.aggLabelH, "#e9ecef", "#e9ecef");
       aggs.forEach(function(agg) {
-        html += svgText(cp.x + 16, aggY + L.aggLabelH - 6, agg.label, 13, "#495057", "font-weight=\"600\"");
+        html += svgText(cp.x + 16, aggY + L.aggLabelH - 6, agg.label, 13, "#495057", "font-weight=\"600\" class=\"agg-label\" data-agg-id=\"" + agg.id + "\"");
       });
     }
 
@@ -714,7 +864,7 @@ function renderDiagram() {
 
     arrowData.push({ source: edge.source, target: edge.target, path: d });
 
-    html += "<path d=\"" + d + "\" fill=\"none\" stroke=\"#666666\" stroke-width=\"1.5\" marker-end=\"url(#arrowhead)\" pointer-events=\"none\"/>\n";
+    html += "<path d=\"" + d + "\" fill=\"none\" stroke=\"#666666\" stroke-width=\"1.5\" marker-end=\"url(#arrowhead)\" class=\"flow-arrow\" data-source=\"" + edge.source + "\" data-target=\"" + edge.target + "\" pointer-events=\"stroke\"/>\n";
   });
 
   // Wrap all rendered content in a viewport group (re-created on each render)
@@ -805,6 +955,8 @@ function attachBlockHandlers() {
         if (nodes[i].id === nodeId) { node = nodes[i]; break; }
       }
       if (!node || !node.fields || node.fields.length === 0) return;
+      // Suppress tooltip if this element is currently shown in the detail panel
+      if (nodeId === selectedNodeId) return;
       showTooltip(node, evt);
     });
     block.addEventListener("mousemove", function(evt) {
@@ -1096,7 +1248,7 @@ var panStartOffsetX = 0, panStartOffsetY = 0;
 svg.addEventListener("mousedown", function(evt) {
   if (evt.button !== 0) return;
   // Do not initiate pan when clicking on interactive elements
-  if (evt.target.closest('.cmd-block, .evt-block')) return;
+  if (evt.target.closest('.cmd-block, .evt-block, .flow-arrow, .ctx-label, .agg-label')) return;
 
   panning = true;
   panStartX = evt.clientX;
@@ -1159,7 +1311,7 @@ svg.addEventListener("touchstart", function(evt) {
   if (touchState) return;
 
   if (touches.length === 1) {
-    if (evt.target.closest('.cmd-block, .evt-block')) return;
+    if (evt.target.closest('.cmd-block, .evt-block, .flow-arrow, .ctx-label, .agg-label')) return;
     touchStartPan(touches[0], viewport.offsetX, viewport.offsetY);
     svg.classList.add("panning");
   } else if (touches.length === 2) {
@@ -1352,6 +1504,189 @@ if (typeof INITIAL_DATA !== 'undefined' && INITIAL_DATA !== null) {
   panel.classList.remove('collapsed');
   nameDisplay.textContent = '(no model)';
 }
+
+// ─── Interaction: Detail Panel, Highlighting, Dismiss ───────────────────
+var selectedNodeId = null;   // node id currently shown in detail panel
+var highlighted = {};        // set of highlighted node ids
+
+function findNodeById(id) {
+  for (var i = 0; i < nodes.length; i++) {
+    if (nodes[i].id === id) return nodes[i];
+  }
+  return null;
+}
+
+function getDescendantIds(rootId) {
+  var ids = [rootId];
+  // Direct children
+  nodes.forEach(function(n) {
+    if (n.parentId === rootId) {
+      ids.push(n.id);
+      // Grandchildren
+      nodes.forEach(function(c) {
+        if (c.parentId === n.id) {
+          ids.push(c.id);
+          // Great-grandchildren (commands/events within slices)
+          nodes.forEach(function(gc) {
+            if (gc.parentId === c.id) {
+              ids.push(gc.id);
+            }
+          });
+        }
+      });
+    }
+  });
+  return ids;
+}
+
+// ─── Detail Panel ──────────────────────────────────────────────────────
+function showDetailPanel(node) {
+  var el = document.getElementById("detail-panel");
+  var content = document.getElementById("dp-content");
+  if (!el || !content) return;
+
+  selectedNodeId = node.id;
+  clearHighlights();
+
+  var html = '<div class="dp-header">' + esc(node.label) + ' <span class="dp-type">(' + node.type + ')</span></div>';
+
+  // Fields section
+  if (node.fields && node.fields.length > 0) {
+    html += '<div class="dp-section">';
+    html += '<div class="dp-section-title">Fields</div>';
+    html += '<table><thead><tr><th>Field</th><th>Type</th><th></th></tr></thead><tbody>';
+    node.fields.forEach(function(f) {
+      var mod = f.modifier ? ' <span class="dp-field-modifier">(' + esc(f.modifier) + ')</span>' : '';
+      html += '<tr><td class="dp-field-name">' + esc(f.name) + '</td><td class="dp-field-type">' + esc(f.type) + '</td><td>' + mod + '</td></tr>';
+    });
+    html += '</tbody></table>';
+    html += '</div>';
+  }
+
+  // Source position
+  if (node.position) {
+    html += '<div class="dp-section">';
+    html += '<div class="dp-section-title">Source</div>';
+    html += '<div class="dp-source">' + esc(node.position.filename || '?') + ':' + (node.position.line || '?') + '</div>';
+    html += '</div>';
+  }
+
+  content.innerHTML = html;
+  el.style.display = "block";
+
+  // Suppress tooltip for the selected element
+  hideTooltip();
+}
+
+function hideDetailPanel() {
+  var el = document.getElementById("detail-panel");
+  if (el) el.style.display = "none";
+  selectedNodeId = null;
+  clearHighlights();
+}
+
+// ─── Highlighting ──────────────────────────────────────────────────────
+function clearHighlights() {
+  highlighted = {};
+  svg.querySelectorAll(".hl").forEach(function(el) {
+    el.classList.remove("hl");
+  });
+  svg.classList.remove("has-highlights");
+}
+
+function addHighlight(nodeId) {
+  highlighted[nodeId] = true;
+  var el = svg.querySelector('[data-node-id="' + nodeId + '"]');
+  if (el) el.classList.add("hl");
+  svg.classList.add("has-highlights");
+}
+
+function highlightElements(ids) {
+  clearHighlights();
+  ids.forEach(function(id) { addHighlight(id); });
+}
+
+// ─── Click handling via SVG event delegation ─────────────────────────────
+svg.addEventListener("click", function(evt) {
+  // Ignore panning clicks (dragged, not clicked)
+  if (panning) return;
+
+  var target = evt.target;
+  var interactive = false;
+
+  // ── Context label click: highlight all children ──
+  var ctxLabel = target.closest(".ctx-label");
+  if (ctxLabel) {
+    var ctxId = ctxLabel.getAttribute("data-ctx-id");
+    if (ctxId) {
+      interactive = true;
+      var ids = getDescendantIds(ctxId);
+      if (selectedNodeId) hideDetailPanel();
+      highlightElements(ids);
+    }
+  }
+
+  // ── Aggregate label click: highlight all elements within ──
+  if (!interactive) {
+    var aggLabel = target.closest(".agg-label");
+    if (aggLabel) {
+      var aggId = aggLabel.getAttribute("data-agg-id");
+      if (aggId) {
+        interactive = true;
+        var ids = getDescendantIds(aggId);
+        if (selectedNodeId) hideDetailPanel();
+        highlightElements(ids);
+      }
+    }
+  }
+
+  // ── Flow arrow click: highlight source and target ──
+  if (!interactive) {
+    var arrow = target.closest(".flow-arrow");
+    if (arrow) {
+      interactive = true;
+      var src = arrow.getAttribute("data-source");
+      var tgt = arrow.getAttribute("data-target");
+      if (src && tgt) {
+        if (selectedNodeId) hideDetailPanel();
+        highlightElements([src, tgt]);
+      }
+    }
+  }
+
+  // ── Command/event block click: open detail panel ──
+  if (!interactive) {
+    var block = target.closest(".cmd-block, .evt-block");
+    if (block) {
+      var nodeId = block.getAttribute("data-node-id");
+      if (nodeId) {
+        interactive = true;
+        var node = findNodeById(nodeId);
+        if (node) showDetailPanel(node);
+      }
+    }
+  }
+
+  // ── Background click: close panel and clear highlights ──
+  if (!interactive) {
+    hideDetailPanel();
+    clearHighlights();
+  }
+});
+
+// ── Escape key: close panel and clear highlights ──
+document.addEventListener("keydown", function(evt) {
+  if (evt.key === "Escape") {
+    hideDetailPanel();
+    clearHighlights();
+  }
+});
+
+// ── Close button on detail panel ──
+document.getElementById("dp-close").addEventListener("click", function(evt) {
+  evt.stopPropagation();
+  hideDetailPanel();
+});
 </script>
 </body>
 </html>
