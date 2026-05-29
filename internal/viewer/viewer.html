@@ -225,6 +225,16 @@ header .model-name span {
   cursor: pointer;
 }
 
+/* --- Pan cursor --- */
+#diagram-canvas {
+  cursor: grab;
+}
+#diagram-canvas.panning,
+#diagram-canvas.panning .cmd-block,
+#diagram-canvas.panning .evt-block {
+  cursor: grabbing;
+}
+
 /* --- Actor annotations --- */
 #actor-annotations {
   font-size: 12px;
@@ -810,6 +820,42 @@ svg.addEventListener("wheel", function(evt) {
     applyViewport();
   }
 }, { passive: false });
+
+// ─── Click-and-drag pan ──────────────────────────────────────────────────
+var panning = false;
+var panStartX = 0, panStartY = 0;
+var panStartOffsetX = 0, panStartOffsetY = 0;
+
+svg.addEventListener("mousedown", function(evt) {
+  if (evt.button !== 0) return;
+  // Do not initiate pan when clicking on interactive elements
+  if (evt.target.closest('.cmd-block, .evt-block')) return;
+
+  panning = true;
+  panStartX = evt.clientX;
+  panStartY = evt.clientY;
+  panStartOffsetX = viewport.offsetX;
+  panStartOffsetY = viewport.offsetY;
+  svg.classList.add("panning");
+  evt.preventDefault();
+});
+
+document.addEventListener("mousemove", function(evt) {
+  if (!panning) return;
+
+  viewport.offsetX = panStartOffsetX + (evt.clientX - panStartX);
+  viewport.offsetY = panStartOffsetY + (evt.clientY - panStartY);
+  applyViewport();
+  evt.preventDefault();
+});
+
+document.addEventListener("mouseup", function(evt) {
+  if (!panning) return;
+
+  panning = false;
+  svg.classList.remove("panning");
+  evt.preventDefault();
+});
 
 // ─── Initial load ──────────────────────────────────────────────────────
 // If the server injected INITIAL_DATA, render it; otherwise show empty state.
