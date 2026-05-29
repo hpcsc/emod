@@ -60,6 +60,7 @@ header .model-name span {
   position: relative;
   overflow: hidden;
   background: #fff;
+  touch-action: none;
 }
 
 #canvas-container svg {
@@ -245,6 +246,7 @@ header .model-name span {
 /* --- Pan cursor --- */
 #diagram-canvas {
   cursor: grab;
+  touch-action: none;
 }
 #diagram-canvas.panning,
 #diagram-canvas.panning .cmd-block,
@@ -854,6 +856,7 @@ renderBtn.addEventListener("click", render);
 
 // ─── Mouse wheel zoom (attached once, not inside renderDiagram) ───────
 svg.addEventListener("wheel", function(evt) {
+  if (touchState) return; // suppress wheel during active touch gesture
   evt.preventDefault();
   var dp = screenToDiagram(evt.clientX, evt.clientY);
   var oldZoom = viewport.zoomScale;
@@ -901,6 +904,122 @@ document.addEventListener("mouseup", function(evt) {
   panning = false;
   svg.classList.remove("panning");
   evt.preventDefault();
+});
+
+// ─── Touch event handlers (one-finger pan + two-finger pinch zoom) ────
+var touchState = null; // { mode:"pan"|"pinch", … } or null when idle
+
+function touchStartPan(touch, offsetX, offsetY) {
+  touchState = {
+    mode: "pan",
+    startX: touch.clientX,
+    startY: touch.clientY,
+    startOffsetX: offsetX,
+    startOffsetY: offsetY,
+  };
+}
+
+function touchStartPinch(touches, zoom, offsetX, offsetY) {
+  var t1 = touches[0], t2 = touches[1];
+  var dx = t2.clientX - t1.clientX;
+  var dy = t2.clientY - t1.clientY;
+  touchState = {
+    mode: "pinch",
+    startDist: Math.sqrt(dx * dx + dy * dy),
+    startZoom: zoom,
+    startOffsetX: offsetX,
+    startOffsetY: offsetY,
+  };
+}
+
+svg.addEventListener("touchstart", function(evt) {
+  evt.preventDefault();
+
+  var touches = evt.touches;
+
+  // Already in a gesture — touchmove handles mode transitions
+  if (touchState) return;
+
+  if (touches.length === 1) {
+    if (evt.target.closest('.cmd-block, .evt-block')) return;
+    touchStartPan(touches[0], viewport.offsetX, viewport.offsetY);
+    svg.classList.add("panning");
+  } else if (touches.length === 2) {
+    svg.classList.remove("panning");
+    touchStartPinch(touches, viewport.zoomScale, viewport.offsetX, viewport.offsetY);
+  }
+}, { passive: false });
+
+svg.addEventListener("touchmove", function(evt) {
+  if (!touchState) return;
+  evt.preventDefault();
+
+  var touches = evt.touches;
+
+  if (touchState.mode === "pan") {
+    if (touches.length === 1) {
+      viewport.offsetX = touchState.startOffsetX + (touches[0].clientX - touchState.startX);
+      viewport.offsetY = touchState.startOffsetY + (touches[0].clientY - touchState.startY);
+      applyViewport();
+    } else if (touches.length >= 2) {
+      // Transition from pan to pinch
+      svg.classList.remove("panning");
+      var t1 = touches[0], t2 = touches[1];
+      var dx = t2.clientX - t1.clientX;
+      var dy = t2.clientY - t1.clientY;
+      touchState = {
+        mode: "pinch",
+        startDist: Math.sqrt(dx * dx + dy * dy),
+        startZoom: viewport.zoomScale,
+        startOffsetX: viewport.offsetX,
+        startOffsetY: viewport.offsetY,
+      };
+    }
+  } else if (touchState.mode === "pinch") {
+    if (touches.length >= 2) {
+      var t1 = touches[0], t2 = touches[1];
+      var dx = t2.clientX - t1.clientX;
+      var dy = t2.clientY - t1.clientY;
+      var dist = Math.sqrt(dx * dx + dy * dy);
+      if (touchState.startDist === 0) return;
+      var scale = dist / touchState.startDist;
+      var newZoom = clampZoom(touchState.startZoom * scale);
+
+      var oldZoom = viewport.zoomScale;
+      if (newZoom !== oldZoom) {
+        var midX = (t1.clientX + t2.clientX) / 2;
+        var midY = (t1.clientY + t2.clientY) / 2;
+        var dp = screenToDiagram(midX, midY);
+        viewport.offsetX = dp.x * (oldZoom - newZoom) + viewport.offsetX;
+        viewport.offsetY = dp.y * (oldZoom - newZoom) + viewport.offsetY;
+        viewport.zoomScale = newZoom;
+        applyViewport();
+      }
+    } else if (touches.length === 1) {
+      // Transition from pinch to pan
+      touchStartPan(touches[0], viewport.offsetX, viewport.offsetY);
+      svg.classList.add("panning");
+    }
+  }
+}, { passive: false });
+
+svg.addEventListener("touchend", function(evt) {
+  if (!touchState) return;
+  evt.preventDefault();
+
+  if (evt.touches.length === 0) {
+    touchState = null;
+    svg.classList.remove("panning");
+  } else if (evt.touches.length === 1 && touchState.mode === "pinch") {
+    // One finger remains after pinch — transition to pan
+    touchStartPan(evt.touches[0], viewport.offsetX, viewport.offsetY);
+    svg.classList.add("panning");
+  }
+}, { passive: false });
+
+svg.addEventListener("touchcancel", function(evt) {
+  touchState = null;
+  svg.classList.remove("panning");
 });
 
 // ─── Initial load ──────────────────────────────────────────────────────
