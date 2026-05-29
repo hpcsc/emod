@@ -796,6 +796,21 @@ panelToggle.addEventListener("click", togglePanel);
 // ─── Render button ─────────────────────────────────────────────────────
 renderBtn.addEventListener("click", render);
 
+// ─── Mouse wheel zoom (attached once, not inside renderDiagram) ───────
+svg.addEventListener("wheel", function(evt) {
+  evt.preventDefault();
+  var dp = screenToDiagram(evt.clientX, evt.clientY);
+  var oldZoom = viewport.zoomScale;
+  var newZoom = clampZoom(oldZoom * Math.pow(1.001, -evt.deltaY));
+  if (newZoom !== oldZoom) {
+    // Keep the diagram point under the cursor stationary as zoom changes
+    viewport.offsetX = dp.x * (oldZoom - newZoom) + viewport.offsetX;
+    viewport.offsetY = dp.y * (oldZoom - newZoom) + viewport.offsetY;
+    viewport.zoomScale = newZoom;
+    applyViewport();
+  }
+}, { passive: false });
+
 // ─── Initial load ──────────────────────────────────────────────────────
 // If the server injected INITIAL_DATA, render it; otherwise show empty state.
 if (typeof INITIAL_DATA !== 'undefined' && INITIAL_DATA !== null) {
