@@ -139,7 +139,7 @@ func NewApp() *urfave.App {
 				Action: func(c *urfave.Context) error {
 					path := c.Args().First()
 					if c.Bool("serve") {
-						return RunDiagramServe(path)
+						return RunDiagramServe(path, true)
 					}
 					format := c.String("format")
 					outputPath := c.String("o")

@@ -162,9 +162,10 @@ func defaultSVGPath(path string) string {
 }
 
 // RunDiagramServe parses the file at path (if provided), generates diagram JSON,
-// starts the viewer server with that data, opens the default browser, and blocks
-// until SIGINT/SIGTERM shuts the server down.
-func RunDiagramServe(path string) error {
+// starts the viewer server with that data, and blocks until SIGINT/SIGTERM
+// shuts the server down. If launchBrowser is true, the default browser is opened
+// to the viewer URL.
+func RunDiagramServe(path string, launchBrowser bool) error {
 	var diagramJSON []byte
 
 	if path != "" {
@@ -200,7 +201,9 @@ func RunDiagramServe(path string) error {
 	}
 	defer shutdown()
 
-	openBrowser(addr)
+	if launchBrowser {
+		openBrowser(addr)
+	}
 
 	sigCh := make(chan os.Signal, 1)
 	signal.Notify(sigCh, syscall.SIGINT, syscall.SIGTERM)

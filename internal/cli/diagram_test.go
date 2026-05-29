@@ -401,7 +401,7 @@ context "Orders" {
 
 		errCh := make(chan error, 1)
 		go func() {
-			errCh <- cli.RunDiagramServe(path)
+			errCh <- cli.RunDiagramServe(path, false)
 		}()
 
 		time.Sleep(200 * time.Millisecond)
@@ -452,7 +452,7 @@ context "Orders" {
 
 		errCh := make(chan error, 1)
 		go func() {
-			errCh <- cli.RunDiagramServe("")
+			errCh <- cli.RunDiagramServe("", false)
 		}()
 
 		time.Sleep(200 * time.Millisecond)
@@ -503,7 +503,7 @@ context "Orders" {
 
 		errCh := make(chan error, 1)
 		go func() {
-			errCh <- cli.RunDiagramServe(path)
+			errCh <- cli.RunDiagramServe(path, false)
 		}()
 
 		time.Sleep(200 * time.Millisecond)
