@@ -596,6 +596,7 @@ type jsonDiagramNode struct {
 	Label    string              `json:"label"`
 	ParentID *string             `json:"parentId"`
 	Fields   []*jsonDiagramField `json:"fields,omitempty"`
+	Position *jsonPosition       `json:"position,omitempty"`
 }
 
 type jsonDiagramEdge struct {
@@ -675,6 +676,7 @@ func convertModelToDiagram(m *ast.Model) *jsonDiagramDocument {
 			Type:     "actor",
 			Label:    a.Name,
 			ParentID: nil,
+			Position: convertPosition(a.NamePos),
 		})
 	}
 
@@ -688,6 +690,7 @@ func convertModelToDiagram(m *ast.Model) *jsonDiagramDocument {
 			Type:     "context",
 			Label:    c.Name,
 			ParentID: nil,
+			Position: convertPosition(c.NamePos),
 		})
 
 		for _, agg := range c.Aggregates {
@@ -700,6 +703,7 @@ func convertModelToDiagram(m *ast.Model) *jsonDiagramDocument {
 				Type:     "aggregate",
 				Label:    agg.Name,
 				ParentID: &ctxID,
+				Position: convertPosition(agg.NamePos),
 			})
 
 			for _, s := range agg.Slices {
@@ -712,6 +716,7 @@ func convertModelToDiagram(m *ast.Model) *jsonDiagramDocument {
 					Type:     "slice",
 					Label:    s.Name,
 					ParentID: &aggID,
+					Position: convertPosition(s.NamePos),
 				})
 
 				cmdIDs := make(map[string]string)
@@ -728,6 +733,7 @@ func convertModelToDiagram(m *ast.Model) *jsonDiagramDocument {
 						Type:     "command",
 						Label:    cmd.Name,
 						ParentID: &sliceID,
+						Position: convertPosition(cmd.NamePos),
 					}
 					if len(cmd.Fields) > 0 {
 						node.Fields = convertFieldsToDiagram(cmd.Fields)
@@ -746,6 +752,7 @@ func convertModelToDiagram(m *ast.Model) *jsonDiagramDocument {
 						Type:     "event",
 						Label:    evt.Name,
 						ParentID: &sliceID,
+						Position: convertPosition(evt.NamePos),
 					}
 					if len(evt.Fields) > 0 {
 						node.Fields = convertFieldsToDiagram(evt.Fields)

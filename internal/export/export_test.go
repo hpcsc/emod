@@ -1694,6 +1694,268 @@ func TestExportDiagramJSON(t *testing.T) {
 		edges := doc["edges"].([]any)
 		require.Empty(t, edges)
 	})
+
+	t.Run("includes position for actor node", func(t *testing.T) {
+		model := &ast.Model{
+			Name: "Test",
+			Actors: []*ast.Actor{
+				{Name: "Guest", NamePos: ast.Position{Filename: "test.cue", Line: 2, Column: 3}},
+			},
+		}
+
+		raw, err := export.ExportDiagramJSON(model)
+		require.NoError(t, err)
+
+		var doc map[string]any
+		err = json.Unmarshal(raw, &doc)
+		require.NoError(t, err)
+
+		nodes := doc["nodes"].([]any)
+		require.Len(t, nodes, 1)
+		node := nodes[0].(map[string]any)
+		require.Equal(t, "actor", node["type"])
+
+		pos := node["position"].(map[string]any)
+		require.Equal(t, "test.cue", pos["filename"])
+		require.Equal(t, float64(2), pos["line"])
+		require.Equal(t, float64(3), pos["column"])
+	})
+
+	t.Run("includes position for context node", func(t *testing.T) {
+		model := &ast.Model{
+			Name: "Test",
+			Contexts: []*ast.Context{
+				{
+					Name:    "Ctx",
+					NamePos: ast.Position{Filename: "test.cue", Line: 5, Column: 1},
+				},
+			},
+		}
+
+		raw, err := export.ExportDiagramJSON(model)
+		require.NoError(t, err)
+
+		var doc map[string]any
+		err = json.Unmarshal(raw, &doc)
+		require.NoError(t, err)
+
+		nodes := doc["nodes"].([]any)
+		require.Len(t, nodes, 1)
+		node := nodes[0].(map[string]any)
+		require.Equal(t, "context", node["type"])
+
+		pos := node["position"].(map[string]any)
+		require.Equal(t, "test.cue", pos["filename"])
+		require.Equal(t, float64(5), pos["line"])
+		require.Equal(t, float64(1), pos["column"])
+	})
+
+	t.Run("includes position for aggregate node", func(t *testing.T) {
+		model := &ast.Model{
+			Name: "Test",
+			Contexts: []*ast.Context{
+				{
+					Name: "Ctx",
+					Aggregates: []*ast.Aggregate{
+						{
+							Name:    "Agg",
+							NamePos: ast.Position{Filename: "test.cue", Line: 3, Column: 3},
+						},
+					},
+				},
+			},
+		}
+
+		raw, err := export.ExportDiagramJSON(model)
+		require.NoError(t, err)
+
+		var doc map[string]any
+		err = json.Unmarshal(raw, &doc)
+		require.NoError(t, err)
+
+		nodes := doc["nodes"].([]any)
+		require.Len(t, nodes, 2)
+		agg := nodes[1].(map[string]any)
+		require.Equal(t, "aggregate", agg["type"])
+
+		pos := agg["position"].(map[string]any)
+		require.Equal(t, "test.cue", pos["filename"])
+		require.Equal(t, float64(3), pos["line"])
+		require.Equal(t, float64(3), pos["column"])
+	})
+
+	t.Run("includes position for slice node", func(t *testing.T) {
+		model := &ast.Model{
+			Name: "Test",
+			Contexts: []*ast.Context{
+				{
+					Name: "Ctx",
+					Aggregates: []*ast.Aggregate{
+						{
+							Name: "Agg",
+							Slices: []*ast.Slice{
+								{
+									Name:    "S",
+									NamePos: ast.Position{Filename: "test.cue", Line: 4, Column: 5},
+								},
+							},
+						},
+					},
+				},
+			},
+		}
+
+		raw, err := export.ExportDiagramJSON(model)
+		require.NoError(t, err)
+
+		var doc map[string]any
+		err = json.Unmarshal(raw, &doc)
+		require.NoError(t, err)
+
+		nodes := doc["nodes"].([]any)
+		// context, aggregate, slice
+		require.Len(t, nodes, 3)
+		slice := nodes[2].(map[string]any)
+		require.Equal(t, "slice", slice["type"])
+
+		pos := slice["position"].(map[string]any)
+		require.Equal(t, "test.cue", pos["filename"])
+		require.Equal(t, float64(4), pos["line"])
+		require.Equal(t, float64(5), pos["column"])
+	})
+
+	t.Run("includes position for command node", func(t *testing.T) {
+		model := &ast.Model{
+			Name: "Test",
+			Contexts: []*ast.Context{
+				{
+					Name: "Ctx",
+					Aggregates: []*ast.Aggregate{
+						{
+							Name: "Agg",
+							Slices: []*ast.Slice{
+								{
+									Name: "S",
+									Commands: []*ast.Command{
+										{
+											Name:    "Cmd",
+											NamePos: ast.Position{Filename: "test.cue", Line: 5, Column: 7},
+										},
+									},
+								},
+							},
+						},
+					},
+				},
+			},
+		}
+
+		raw, err := export.ExportDiagramJSON(model)
+		require.NoError(t, err)
+
+		var doc map[string]any
+		err = json.Unmarshal(raw, &doc)
+		require.NoError(t, err)
+
+		nodes := doc["nodes"].([]any)
+		// context, aggregate, slice, command
+		require.Len(t, nodes, 4)
+		cmd := nodes[3].(map[string]any)
+		require.Equal(t, "command", cmd["type"])
+
+		pos := cmd["position"].(map[string]any)
+		require.Equal(t, "test.cue", pos["filename"])
+		require.Equal(t, float64(5), pos["line"])
+		require.Equal(t, float64(7), pos["column"])
+	})
+
+	t.Run("includes position for event node", func(t *testing.T) {
+		model := &ast.Model{
+			Name: "Test",
+			Contexts: []*ast.Context{
+				{
+					Name: "Ctx",
+					Aggregates: []*ast.Aggregate{
+						{
+							Name: "Agg",
+							Slices: []*ast.Slice{
+								{
+									Name: "S",
+									Events: []*ast.Event{
+										{
+											Name:    "Evt",
+											NamePos: ast.Position{Filename: "test.cue", Line: 6, Column: 7},
+										},
+									},
+								},
+							},
+						},
+					},
+				},
+			},
+		}
+
+		raw, err := export.ExportDiagramJSON(model)
+		require.NoError(t, err)
+
+		var doc map[string]any
+		err = json.Unmarshal(raw, &doc)
+		require.NoError(t, err)
+
+		nodes := doc["nodes"].([]any)
+		// context, aggregate, slice, event
+		require.Len(t, nodes, 4)
+		evt := nodes[3].(map[string]any)
+		require.Equal(t, "event", evt["type"])
+
+		pos := evt["position"].(map[string]any)
+		require.Equal(t, "test.cue", pos["filename"])
+		require.Equal(t, float64(6), pos["line"])
+		require.Equal(t, float64(7), pos["column"])
+	})
+
+	t.Run("zero-value position is omitted from diagram nodes", func(t *testing.T) {
+		model := &ast.Model{
+			Name: "Test",
+			Actors: []*ast.Actor{
+				{Name: "Guest"},
+			},
+			Contexts: []*ast.Context{
+				{
+					Name: "Ctx",
+					Aggregates: []*ast.Aggregate{
+						{
+							Name: "Agg",
+							Slices: []*ast.Slice{
+								{
+									Name: "S",
+									Commands: []*ast.Command{
+										{Name: "Cmd"},
+									},
+									Events: []*ast.Event{
+										{Name: "Evt"},
+									},
+								},
+							},
+						},
+					},
+				},
+			},
+		}
+
+		raw, err := export.ExportDiagramJSON(model)
+		require.NoError(t, err)
+
+		var doc map[string]any
+		err = json.Unmarshal(raw, &doc)
+		require.NoError(t, err)
+
+		for _, n := range doc["nodes"].([]any) {
+			node := n.(map[string]any)
+			_, hasPos := node["position"]
+			require.False(t, hasPos, "node %s (%s) should not have position", node["id"], node["type"])
+		}
+	})
 }
 
 func TestExportDiagramJSONDiagnostics(t *testing.T) {
