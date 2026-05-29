@@ -89,6 +89,63 @@ header .model-name span {
   background: #34495e;
 }
 
+/* --- Minimap --- */
+#minimap {
+  position: absolute;
+  bottom: 16px;
+  left: 16px;
+  z-index: 20;
+  background: rgba(255,255,255,0.92);
+  border: 1px solid #ccc;
+  border-radius: 6px;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.12);
+  width: 180px;
+  height: 120px;
+  overflow: hidden;
+  cursor: pointer;
+  user-select: none;
+}
+#minimap.hidden {
+  display: none;
+}
+#minimap svg {
+  display: block;
+  width: 100%;
+  height: 100%;
+}
+#minimap-close {
+  position: absolute;
+  top: 2px;
+  right: 4px;
+  z-index: 1;
+  background: none;
+  border: none;
+  font-size: 13px;
+  color: #888;
+  cursor: pointer;
+  line-height: 1;
+  padding: 2px 4px;
+  border-radius: 3px;
+}
+#minimap-close:hover {
+  background: rgba(0,0,0,0.08);
+  color: #333;
+}
+#minimap-toggle {
+  background: rgba(255,255,255,0.15);
+  color: #fff;
+  border: 1px solid rgba(255,255,255,0.25);
+  border-radius: 4px;
+  padding: 5px 12px;
+  font-size: 12px;
+  cursor: pointer;
+  transition: background 0.2s;
+  white-space: nowrap;
+}
+#minimap-toggle:hover {
+  background: rgba(255,255,255,0.25);
+}
+
 /* --- Fit-to-view button --- */
 #fit-view {
   background: rgba(255,255,255,0.15);
@@ -347,6 +404,7 @@ header .model-name span {
   </div>
   <div style="display:flex;align-items:center;gap:12px;">
     <button id="fit-view" title="Reset viewport to fit the entire diagram">Fit view</button>
+    <button id="minimap-toggle" title="Toggle minimap overview">Minimap</button>
     <div class="model-name">Model: <span id="model-name-display">—</span></div>
   </div>
 </header>
@@ -366,6 +424,11 @@ header .model-name span {
   </svg>
 
   <div id="tooltip"></div>
+
+  <div id="minimap">
+    <svg id="minimap-svg" xmlns="http://www.w3.org/2000/svg"></svg>
+    <button id="minimap-close" title="Close minimap">×</button>
+  </div>
 
   <button id="panel-toggle">☰ Data</button>
 
@@ -425,6 +488,15 @@ const statCanvas = document.getElementById("stat-canvas");
 const panel      = document.getElementById("data-panel");
 const panelHdr   = document.getElementById("data-panel-header");
 const panelToggle = document.getElementById("panel-toggle");
+
+// ─── Minimap DOM references ──────────────────────────────────────────
+const minimap = document.getElementById("minimap");
+const minimapSvg = document.getElementById("minimap-svg");
+const minimapToggle = document.getElementById("minimap-toggle");
+const MINIMAP_W = 180;
+const MINIMAP_H = 120;
+const MINIMAP_PAD = 2;
+let minimapDragging = false;
 
 // ─── SVG helpers ──────────────────────────────────────────────────────
 function esc(str) {
@@ -750,6 +822,7 @@ function applyViewport() {
   if (!vg) return;
   vg.setAttribute("transform",
     "translate(" + viewport.offsetX + ", " + viewport.offsetY + ") scale(" + viewport.zoomScale + ")");
+  updateMinimap();
 }
 
 function screenToDiagram(screenX, screenY) {
@@ -791,6 +864,103 @@ function fitToView() {
   viewport.offsetY = (ch - bbox.height * scale) / 2 - bbox.y * scale;
 
   applyViewport();
+}
+
+// ─── Minimap ────────────────────────────────────────────────────────────
+function getDiagramDims() {
+  var vg = document.getElementById("viewport-group");
+  if (vg) {
+    try {
+      var b = vg.getBBox();
+      if (b.width > 0 && b.height > 0) return { width: b.width, height: b.height };
+    } catch(e) {}
+  }
+  var vb = svg.getAttribute("viewBox");
+  if (vb) {
+    var parts = vb.split(/\s+/).map(Number);
+    if (parts.length === 4 && parts[2] > 0 && parts[3] > 0) {
+      return { width: parts[2], height: parts[3] };
+    }
+  }
+  return null;
+}
+
+function updateMinimap() {
+  if (!minimap || minimap.classList.contains("hidden")) return;
+  if (!minimapSvg) return;
+
+  var dims = getDiagramDims();
+  if (!dims || dims.width <= 0 || dims.height <= 0) {
+    minimapSvg.innerHTML = "";
+    return;
+  }
+
+  var cw = svg.clientWidth;
+  var ch = svg.clientHeight;
+
+  var availableX = MINIMAP_W - MINIMAP_PAD * 2;
+  var availableY = MINIMAP_H - MINIMAP_PAD * 2;
+  var mmScale = Math.min(availableX / dims.width, availableY / dims.height);
+  var mmOffX = (MINIMAP_W - dims.width * mmScale) / 2;
+  var mmOffY = (MINIMAP_H - dims.height * mmScale) / 2;
+
+  var html = "";
+  // Full diagram area
+  html += '<rect class="minimap-bg" x="' + mmOffX + '" y="' + mmOffY +
+    '" width="' + (dims.width * mmScale) + '" height="' + (dims.height * mmScale) +
+    '" fill="#e9ecef" stroke="#adb5bd" stroke-width="0.5" rx="2"/>';
+
+  // Viewport rectangle
+  var vpX = (-viewport.offsetX / viewport.zoomScale) * mmScale + mmOffX;
+  var vpY = (-viewport.offsetY / viewport.zoomScale) * mmScale + mmOffY;
+  var vpW = (cw / viewport.zoomScale) * mmScale;
+  var vpH = (ch / viewport.zoomScale) * mmScale;
+
+  html += '<rect class="minimap-viewport" x="' + vpX + '" y="' + vpY +
+    '" width="' + vpW + '" height="' + vpH +
+    '" fill="rgba(52,152,219,0.15)" stroke="#3498db" stroke-width="1" rx="1"/>';
+
+  minimapSvg.innerHTML = html;
+}
+
+function minimapNavigate(evt) {
+  if (!minimapSvg) return;
+  var mRect = minimapSvg.getBoundingClientRect();
+  var clickX = evt.clientX - mRect.left;
+  var clickY = evt.clientY - mRect.top;
+
+  var dims = getDiagramDims();
+  if (!dims || dims.width <= 0 || dims.height <= 0) return;
+
+  var availableX = MINIMAP_W - MINIMAP_PAD * 2;
+  var availableY = MINIMAP_H - MINIMAP_PAD * 2;
+  var mmScale = Math.min(availableX / dims.width, availableY / dims.height);
+  var mmOffX = (MINIMAP_W - dims.width * mmScale) / 2;
+  var mmOffY = (MINIMAP_H - dims.height * mmScale) / 2;
+
+  var diagramX = (clickX - mmOffX) / mmScale;
+  var diagramY = (clickY - mmOffY) / mmScale;
+
+  var cw = svg.clientWidth;
+  var ch = svg.clientHeight;
+
+  viewport.offsetX = -diagramX * viewport.zoomScale + cw / 2;
+  viewport.offsetY = -diagramY * viewport.zoomScale + ch / 2;
+
+  applyViewport();
+}
+
+function toggleMinimap(show) {
+  if (show === undefined) {
+    minimap.classList.toggle("hidden");
+  } else if (show) {
+    minimap.classList.remove("hidden");
+  } else {
+    minimap.classList.add("hidden");
+  }
+  var isHidden = minimap.classList.contains("hidden");
+  minimapToggle.classList.toggle("active", !isHidden);
+  if (!isHidden) updateMinimap();
 }
 
 // ─── Parse ──────────────────────────────────────────────────────────────
@@ -1020,6 +1190,55 @@ svg.addEventListener("touchend", function(evt) {
 svg.addEventListener("touchcancel", function(evt) {
   touchState = null;
   svg.classList.remove("panning");
+});
+
+// ─── Minimap event listeners ──────────────────────────────────────────
+minimap.addEventListener("mousedown", function(evt) {
+  if (evt.target.closest("#minimap-close, #minimap-toggle")) return;
+  evt.preventDefault();
+  evt.stopPropagation();
+  minimapNavigate(evt);
+  minimapDragging = true;
+});
+
+document.addEventListener("mousemove", function(evt) {
+  if (!minimapDragging) return;
+  minimapNavigate(evt);
+  evt.preventDefault();
+});
+
+document.addEventListener("mouseup", function() {
+  minimapDragging = false;
+});
+
+// Touch support for minimap
+minimap.addEventListener("touchstart", function(evt) {
+  if (evt.target.closest("#minimap-close, #minimap-toggle")) return;
+  evt.preventDefault();
+  evt.stopPropagation();
+  var touch = evt.touches[0];
+  minimapNavigate(touch);
+  minimapDragging = true;
+}, { passive: false });
+
+minimap.addEventListener("touchmove", function(evt) {
+  if (!minimapDragging) return;
+  evt.preventDefault();
+  var touch = evt.touches[0];
+  minimapNavigate(touch);
+}, { passive: false });
+
+minimap.addEventListener("touchend", function() {
+  minimapDragging = false;
+});
+
+document.getElementById("minimap-close").addEventListener("click", function(evt) {
+  evt.stopPropagation();
+  toggleMinimap(false);
+});
+
+minimapToggle.addEventListener("click", function() {
+  toggleMinimap();
 });
 
 // ─── Initial load ──────────────────────────────────────────────────────
