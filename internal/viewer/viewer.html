@@ -378,6 +378,9 @@ let modelName = "";
 let layoutPositions = {}; // nodeId -> {x, y, w, h} for every rendered element
 let arrowData = [];       // computed arrow paths for flow edges (source, target, path d)
 
+// ─── Viewport state ──────────────────────────────────────────────
+let viewport = { offsetX: 0, offsetY: 0, zoomScale: 1 };
+
 // ─── DOM references ────────────────────────────────────────────────────
 const svg        = document.getElementById("diagram-canvas");
 const nameDisplay = document.getElementById("model-name-display");
@@ -610,6 +613,9 @@ function renderDiagram() {
     html += "<path d=\"" + d + "\" fill=\"none\" stroke=\"#666666\" stroke-width=\"1.5\" marker-end=\"url(#arrowhead)\" pointer-events=\"none\"/>\n";
   });
 
+  // Wrap all rendered content in a viewport group (re-created on each render)
+  html = '<g id="viewport-group">\n' + html + '</g>\n';
+
   // Preserve the defs (arrow marker) and insert rendered content
   var defsEl = svg.querySelector("defs");
   svg.innerHTML = html;
@@ -618,6 +624,7 @@ function renderDiagram() {
   // Post-render tasks
   renderActorAnnotations();
   attachBlockHandlers();
+  applyViewport();
 }
 
 // ─── Actor annotations ──────────────────────────────────────────────────
@@ -703,6 +710,32 @@ function attachBlockHandlers() {
       hideTooltip();
     });
   });
+}
+
+// ─── Viewport functions ──────────────────────────────────────────────────
+function applyViewport() {
+  var vg = document.getElementById("viewport-group");
+  if (!vg) return;
+  vg.setAttribute("transform",
+    "translate(" + viewport.offsetX + ", " + viewport.offsetY + ") scale(" + viewport.zoomScale + ")");
+}
+
+function screenToDiagram(screenX, screenY) {
+  var pt = svg.createSVGPoint();
+  pt.x = screenX;
+  pt.y = screenY;
+  // Convert screen coordinates to SVG root coordinates via the inverse CTM
+  var ctm = svg.getScreenCTM().inverse();
+  var svgPt = pt.matrixTransform(ctm);
+  // Apply inverse of the viewport transform to get diagram-space coordinates
+  return {
+    x: (svgPt.x - viewport.offsetX) / viewport.zoomScale,
+    y: (svgPt.y - viewport.offsetY) / viewport.zoomScale,
+  };
+}
+
+function clampZoom(scale) {
+  return Math.min(5.0, Math.max(0.1, scale));
 }
 
 // ─── Parse ──────────────────────────────────────────────────────────────
