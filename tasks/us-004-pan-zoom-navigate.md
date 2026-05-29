@@ -4,7 +4,7 @@
 - [x] Task 1: Add viewport state management and SVG transform mechanism
 - [x] Task 2: Add mouse wheel zoom centered on cursor position
 - [x] Task 3: Add click-and-drag pan on diagram background
-- [ ] Task 4: Add fit-to-view control
+- [x] Task 4: Add fit-to-view control
 - [ ] Task 5: Add pinch-to-zoom for touch devices and trackpads
 - [ ] Task 6: Add minimap showing current viewport position within the full diagram
 

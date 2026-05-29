@@ -88,6 +88,23 @@ header .model-name span {
   background: #34495e;
 }
 
+/* --- Fit-to-view button --- */
+#fit-view {
+  background: rgba(255,255,255,0.15);
+  color: #fff;
+  border: 1px solid rgba(255,255,255,0.25);
+  border-radius: 4px;
+  padding: 5px 12px;
+  font-size: 12px;
+  cursor: pointer;
+  transition: background 0.2s;
+  white-space: nowrap;
+}
+
+#fit-view:hover {
+  background: rgba(255,255,255,0.25);
+}
+
 /* --- Data panel --- */
 #data-panel {
   position: absolute;
@@ -326,7 +343,10 @@ header .model-name span {
     <h1>Emod Diagram Viewer</h1>
     <div id="actor-annotations"></div>
   </div>
-  <div class="model-name">Model: <span id="model-name-display">—</span></div>
+  <div style="display:flex;align-items:center;gap:12px;">
+    <button id="fit-view" title="Reset viewport to fit the entire diagram">Fit view</button>
+    <div class="model-name">Model: <span id="model-name-display">—</span></div>
+  </div>
 </header>
 
 <!-- SVG Canvas -->
@@ -748,6 +768,29 @@ function clampZoom(scale) {
   return Math.min(5.0, Math.max(0.1, scale));
 }
 
+function fitToView() {
+  var vg = document.getElementById("viewport-group");
+  if (!vg) return;
+
+  var bbox = vg.getBBox();
+  if (bbox.width === 0 || bbox.height === 0) return;
+
+  var container = document.getElementById("canvas-container");
+  var cw = container.clientWidth;
+  var ch = container.clientHeight;
+  var padding = 40;
+
+  var scaleX = (cw - padding * 2) / bbox.width;
+  var scaleY = (ch - padding * 2) / bbox.height;
+  var scale = clampZoom(Math.min(scaleX, scaleY));
+
+  viewport.zoomScale = scale;
+  viewport.offsetX = (cw - bbox.width * scale) / 2 - bbox.x * scale;
+  viewport.offsetY = (ch - bbox.height * scale) / 2 - bbox.y * scale;
+
+  applyViewport();
+}
+
 // ─── Parse ──────────────────────────────────────────────────────────────
 function loadData(jsonStr) {
   try {
@@ -802,6 +845,9 @@ function togglePanel() {
 
 panelHdr.addEventListener("click", togglePanel);
 panelToggle.addEventListener("click", togglePanel);
+
+// ─── Fit-to-view ─────────────────────────────────────────────────────────
+document.getElementById("fit-view").addEventListener("click", fitToView);
 
 // ─── Render button ─────────────────────────────────────────────────────
 renderBtn.addEventListener("click", render);
