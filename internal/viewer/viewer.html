@@ -288,10 +288,21 @@ const SAMPLE_DATA = {
   ]
 };
 
+// ─── Layout constants (matching Go diagram renderers) ─────────────────
+const L = {
+  marginX: 40, marginY: 60,
+  sliceWidth: 280, boxWidth: 240, boxHeight: 55,
+  sliceGap: 40, contextGap: 70,
+  laneHeight: 190, laneGap: 30,
+  swimlaneHdr: 44, swimlanePad: 10,
+  swimlaneGap: 20, aggLabelH: 22,
+};
+
 // ─── Module-scoped state ──────────────────────────────────────────────
 let nodes = [];
 let edges = [];
 let modelName = "";
+let layoutPositions = {}; // nodeId -> {x, y, w, h} for every rendered element
 
 // ─── DOM references ────────────────────────────────────────────────────
 const svg        = document.getElementById("diagram-canvas");
@@ -306,10 +317,205 @@ const panel      = document.getElementById("data-panel");
 const panelHdr   = document.getElementById("data-panel-header");
 const panelToggle = document.getElementById("panel-toggle");
 
-// ─── Parse & render ────────────────────────────────────────────────────
+// ─── SVG helpers ──────────────────────────────────────────────────────
+function esc(str) {
+  return String(str).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
+}
+function svgRect(x, y, w, h, fill, stroke, attrs) {
+  const a = attrs ? " " + attrs : "";
+  return `<rect x="${x}" y="${y}" width="${w}" height="${h}" fill="${fill}" stroke="${stroke}"${a}/>\n`;
+}
+function svgText(x, y, text, fontSize, fill, attrs) {
+  const a = attrs ? " " + attrs : "";
+  return `<text x="${x}" y="${y}" font-family="sans-serif" font-size="${fontSize}" fill="${fill}"${a}>${esc(text)}</text>\n`;
+}
+
+// ─── Hierarchy builder ────────────────────────────────────────────────
+// Builds a tree from the flat nodes list. Root nodes have parentId: null.
+function buildTree(nodes) {
+  const byId = {};
+  nodes.forEach(function(n) { byId[n.id] = Object.assign({}, n, {children: []}); });
+  const roots = [];
+  nodes.forEach(function(n) {
+    if (!n.parentId || !byId[n.parentId]) {
+      roots.push(byId[n.id]);
+    } else {
+      byId[n.parentId].children.push(byId[n.id]);
+    }
+  });
+  return { byId: byId, roots: roots };
+}
+
+// ─── Auto-layout algorithm ───────────────────────────────────────────
+// Computes x/y/w/h for every element purely algorithmically.
+// No manual positioning — positions are derived from node counts & constants.
+function computeLayout() {
+  var tree = buildTree(nodes);
+  layoutPositions = {};
+
+  var contexts = tree.roots.filter(function(n) { return n.type === "context"; });
+  var currentY = L.marginY;
+  var maxRight = L.marginX + 800; // minimum usable width
+
+  // First pass: compute positions for every node
+  contexts.forEach(function(ctx) {
+    var aggs = ctx.children.filter(function(n) { return n.type === "aggregate"; });
+    var xPos = L.marginX;
+    var rightEdge = xPos;
+
+    aggs.forEach(function(agg) {
+      var slices = agg.children.filter(function(n) { return n.type === "slice"; });
+
+      slices.forEach(function(sl, si) {
+        var slY = currentY + L.swimlaneHdr + L.aggLabelH;
+        layoutPositions[sl.id] = {
+          x: xPos, y: slY, w: L.sliceWidth, h: L.laneHeight,
+          node: sl,
+        };
+
+        // Pre-compute command/event positions within slice (for Tasks 3-5)
+        var commands = sl.children.filter(function(c) { return c.type === "command"; });
+        var events   = sl.children.filter(function(c) { return c.type === "event"; });
+        var padX = 10;
+        var contentW = L.sliceWidth - 2 * padX;
+        var itemsPerRow = Math.max(Math.floor(contentW / (L.boxWidth + 8)), 1);
+        var marginCmd = ((contentW - itemsPerRow * L.boxWidth - (itemsPerRow - 1) * 8) / 2) + padX;
+        var row = 0, col = 0;
+
+        commands.forEach(function(cmd) {
+          if (col >= itemsPerRow) { col = 0; row++; }
+          var cx = slY + 36 + row * (L.boxHeight + 10);
+          layoutPositions[cmd.id] = {
+            x: xPos + marginCmd + col * (L.boxWidth + 8),
+            y: cx,
+            w: L.boxWidth, h: L.boxHeight,
+            node: cmd,
+          };
+          col++;
+        });
+        events.forEach(function(evt) {
+          if (col >= itemsPerRow) { col = 0; row++; }
+          var cy = slY + 36 + row * (L.boxHeight + 10);
+          layoutPositions[evt.id] = {
+            x: xPos + marginCmd + col * (L.boxWidth + 8),
+            y: cy,
+            w: L.boxWidth, h: L.boxHeight,
+            node: evt,
+          };
+          col++;
+        });
+
+        xPos += L.sliceWidth;
+        if (si < slices.length - 1) xPos += L.sliceGap;
+      });
+
+      layoutPositions[agg.id] = {
+        x: L.marginX, y: currentY + L.swimlaneHdr,
+        w: xPos - L.marginX, h: L.aggLabelH,
+        node: agg,
+      };
+    });
+
+    rightEdge = Math.max(rightEdge, xPos);
+    if (rightEdge > maxRight) maxRight = rightEdge;
+
+    var ctxH = L.swimlaneHdr + L.aggLabelH + L.laneHeight + L.swimlanePad;
+    layoutPositions[ctx.id] = {
+      x: L.marginX, y: currentY,
+      w: rightEdge - L.marginX + L.marginX,
+      h: ctxH,
+      node: ctx,
+    };
+
+    currentY += ctxH + L.swimlaneGap;
+  });
+
+  // Extend all swimlanes to maxRight for uniform width
+  contexts.forEach(function(ctx) {
+    var cp = layoutPositions[ctx.id];
+    if (cp && maxRight > cp.x + cp.w) {
+      cp.w = maxRight - cp.x;
+    }
+  });
+
+  var totalW = maxRight + L.marginX;
+  var totalH = currentY - L.swimlaneGap + L.marginY;
+  return { width: Math.max(totalW, 800), height: Math.max(totalH, 400) };
+}
+
+// ─── Render diagram ────────────────────────────────────────────────────
+function renderDiagram() {
+  clearSVG();
+
+  var dims = computeLayout();
+  svg.setAttribute("viewBox", "0 0 " + dims.width + " " + dims.height);
+  statCanvas.textContent = dims.width + " × " + dims.height;
+
+  var ctxNodes = nodes.filter(function(n) { return n.type === "context"; });
+  var html = "";
+
+  ctxNodes.forEach(function(ctx) {
+    var cp = layoutPositions[ctx.id];
+    if (!cp) return;
+
+    var aggs = nodes.filter(function(n) {
+      return n.type === "aggregate" && n.parentId === ctx.id;
+    });
+
+    // ── Swimlane outer border ──
+    html += "<g class=\"swimlane-" + ctx.id + "\">\n";
+    html += svgRect(cp.x, cp.y, cp.w, cp.h, "#f1f3f5", "#2c3e50", "rx=\"8\" stroke-width=\"2\"");
+
+    // ── Swimlane header bar (context name) ──
+    html += svgRect(cp.x, cp.y, cp.w, L.swimlaneHdr, "#2c3e50", "#2c3e50", "rx=\"8\"");
+    // Square off the bottom of the header so it blends into content area
+    html += svgRect(cp.x, cp.y + L.swimlaneHdr - 8, cp.w, 8, "#2c3e50", "#2c3e50");
+    html += svgText(cp.x + 16, cp.y + L.swimlaneHdr - 14, ctx.label, 16, "#ffffff", "font-weight=\"bold\"");
+
+    // ── Aggregate sub-header row ──
+    if (aggs.length > 0) {
+      var aggY = cp.y + L.swimlaneHdr;
+      html += svgRect(cp.x, aggY, cp.w, L.aggLabelH, "#e9ecef", "#e9ecef");
+      aggs.forEach(function(agg) {
+        html += svgText(cp.x + 16, aggY + L.aggLabelH - 6, agg.label, 13, "#495057", "font-weight=\"600\"");
+      });
+    }
+
+    // ── Slice columns ──
+    aggs.forEach(function(agg) {
+      var slices = nodes.filter(function(n) {
+        return n.type === "slice" && n.parentId === agg.id;
+      });
+      slices.forEach(function(sl) {
+        var sp = layoutPositions[sl.id];
+        if (!sp) return;
+
+        html += "<g class=\"slice-" + sl.id + "\">\n";
+        // Column background with dashed border
+        html += svgRect(sp.x, sp.y, sp.w, sp.h, "#ffffff", "#adb5bd",
+          "rx=\"4\" stroke-width=\"1.5\" stroke-dasharray=\"6,3\"");
+        // Slice header area
+        html += svgRect(sp.x, sp.y, sp.w, 28, "#f8f9fa", "none", "rx=\"4\"");
+        html += svgRect(sp.x, sp.y + 24, sp.w, 4, "#f8f9fa", "none");
+        html += svgText(sp.x + sp.w / 2, sp.y + 18, sl.label, 12, "#495057",
+          "text-anchor=\"middle\" font-weight=\"500\"");
+        html += "</g>\n";
+      });
+    });
+
+    html += "</g>\n";
+  });
+
+  // Preserve the defs (arrow marker) and insert rendered content
+  var defsEl = svg.querySelector("defs");
+  svg.innerHTML = html;
+  if (defsEl) svg.insertBefore(defsEl, svg.firstChild);
+}
+
+// ─── Parse ──────────────────────────────────────────────────────────────
 function loadData(jsonStr) {
   try {
-    const data = JSON.parse(jsonStr);
+    var data = JSON.parse(jsonStr);
 
     if (!data.nodes || !Array.isArray(data.nodes)) {
       throw new Error("Missing required array: nodes");
@@ -321,19 +527,14 @@ function loadData(jsonStr) {
     modelName = data.model_name || "";
     nodes = data.nodes;
     edges = data.edges;
+    layoutPositions = {};
 
-    // Update UI
     nameDisplay.textContent = modelName || "(unnamed)";
     document.title = modelName ? modelName + " — Emod Diagram Viewer" : "Emod Diagram Viewer";
     statNodes.textContent = nodes.length;
     statEdges.textContent = edges.length;
 
-    const vb = svg.getAttribute("viewBox") || "";
-    statCanvas.textContent = vb.replace("0 0 ", "").trim() || "—";
-
-    // Draw an empty state message (no rendering yet — just skeleton)
     clearSVG();
-
     return { success: true };
   } catch (err) {
     return { success: false, error: err.message };
@@ -341,15 +542,15 @@ function loadData(jsonStr) {
 }
 
 function clearSVG() {
-  // Remove all child elements except defs
-  const defs = svg.querySelector("defs");
+  var defs = svg.querySelector("defs");
   svg.innerHTML = "";
   if (defs) svg.appendChild(defs);
 }
 
 function render() {
-  const result = loadData(jsonInput.value);
+  var result = loadData(jsonInput.value);
   if (result.success) {
+    renderDiagram();
     statusEl.textContent = "✓ Rendered";
     statusEl.className = "status success";
   } else {

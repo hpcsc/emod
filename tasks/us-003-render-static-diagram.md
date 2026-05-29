@@ -2,7 +2,7 @@
 
 ## Progress
 - [x] Task 1: Create the HTML viewer skeleton with data loading and SVG canvas
-- [ ] Task 2: Implement auto-layout and render context swimlanes with slice columns
+- [x] Task 2: Implement auto-layout and render context swimlanes with slice columns
 - [ ] Task 3: Render command and event blocks with color coding
 - [ ] Task 4: Render flow connections as directed arrows
 - [ ] Task 5: Display actor annotations and show field details on hover
