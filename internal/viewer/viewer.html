@@ -361,35 +361,6 @@ header .model-name span {
 </div>
 
 <script>
-// ─── Sample diagram data ──────────────────────────────────────────────
-const SAMPLE_DATA = {
-  "model_name": "Hotel Reservation",
-  "nodes": [
-    {"id": "actor-1", "type": "actor", "label": "Guest", "parentId": null},
-    {"id": "context-1", "type": "context", "label": "Reservations", "parentId": null},
-    {"id": "aggregate-1", "type": "aggregate", "label": "Reservation", "parentId": "context-1"},
-    {"id": "slice-1", "type": "slice", "label": "Reserve a Room", "parentId": "aggregate-1"},
-    {"id": "command-1", "type": "command", "label": "ReserveRoom", "parentId": "slice-1", "fields": [{"name": "roomId", "type": "string", "modifier": "required"}, {"name": "guestName", "type": "string", "modifier": "required"}, {"name": "checkIn", "type": "date", "modifier": "required"}, {"name": "checkOut", "type": "date", "modifier": "required"}]},
-    {"id": "event-1", "type": "event", "label": "RoomReserved", "parentId": "slice-1", "fields": [{"name": "reservationId", "type": "string", "modifier": "required"}, {"name": "roomId", "type": "string", "modifier": "required"}, {"name": "guestName", "type": "string", "modifier": "required"}, {"name": "checkIn", "type": "date", "modifier": "required"}, {"name": "checkOut", "type": "date", "modifier": "required"}, {"name": "reservedAt", "type": "timestamp", "modifier": "required"}]},
-    {"id": "slice-2", "type": "slice", "label": "View Available Rooms", "parentId": "aggregate-1"},
-    {"id": "slice-3", "type": "slice", "label": "Check Out Guest", "parentId": "aggregate-1"},
-    {"id": "command-2", "type": "command", "label": "CheckOutGuest", "parentId": "slice-3", "fields": [{"name": "reservationId", "type": "string", "modifier": "required"}]},
-    {"id": "event-2", "type": "event", "label": "GuestCheckedOut", "parentId": "slice-3", "fields": [{"name": "reservationId", "type": "string", "modifier": "required"}, {"name": "roomId", "type": "string", "modifier": "required"}, {"name": "checkedOutAt", "type": "timestamp", "modifier": "required"}]},
-    {"id": "slice-4", "type": "slice", "label": "Send Confirmation Email", "parentId": "aggregate-1"},
-    {"id": "slice-5", "type": "slice", "label": "Import External Booking", "parentId": "aggregate-1"},
-    {"id": "command-3", "type": "command", "label": "ImportExternalReservation", "parentId": "slice-5", "fields": [{"name": "externalRef", "type": "string", "modifier": "required"}, {"name": "roomId", "type": "string", "modifier": "required"}, {"name": "guestName", "type": "string", "modifier": "required"}, {"name": "checkIn", "type": "date", "modifier": "required"}, {"name": "checkOut", "type": "date", "modifier": "required"}]},
-    {"id": "event-3", "type": "event", "label": "ExternalReservationImported", "parentId": "slice-5", "fields": [{"name": "reservationId", "type": "string", "modifier": "required"}, {"name": "externalRef", "type": "string", "modifier": "required"}, {"name": "source", "type": "string", "modifier": "required"}, {"name": "roomId", "type": "string", "modifier": "required"}, {"name": "guestName", "type": "string", "modifier": "required"}, {"name": "checkIn", "type": "date", "modifier": "required"}, {"name": "checkOut", "type": "date", "modifier": "required"}]},
-    {"id": "context-2", "type": "context", "label": "Notifications", "parentId": null},
-    {"id": "aggregate-2", "type": "aggregate", "label": "Notification", "parentId": "context-2"},
-    {"id": "slice-6", "type": "slice", "label": "Send Confirmation", "parentId": "aggregate-2"},
-    {"id": "command-4", "type": "command", "label": "SendConfirmationEmail", "parentId": "slice-6", "fields": [{"name": "reservationId", "type": "string", "modifier": "required"}, {"name": "guestName", "type": "string", "modifier": "required"}, {"name": "email", "type": "string", "modifier": "required"}]}
-  ],
-  "edges": [
-    {"source": "command-1", "target": "event-1", "type": "flow"},
-    {"source": "command-2", "target": "event-2", "type": "flow"}
-  ]
-};
-
 // ─── Layout constants (matching Go diagram renderers) ─────────────────
 const L = {
   marginX: 40, marginY: 60,
@@ -793,9 +764,16 @@ panelToggle.addEventListener("click", togglePanel);
 renderBtn.addEventListener("click", render);
 
 // ─── Initial load ──────────────────────────────────────────────────────
-jsonInput.value = JSON.stringify(SAMPLE_DATA, null, 2);
-loadData(jsonInput.value);
-renderDiagram();
+// If the server injected INITIAL_DATA, render it; otherwise show empty state.
+if (typeof INITIAL_DATA !== 'undefined' && INITIAL_DATA !== null) {
+  jsonInput.value = JSON.stringify(INITIAL_DATA, null, 2);
+  loadData(jsonInput.value);
+  renderDiagram();
+} else {
+  jsonInput.placeholder = 'Paste diagram JSON here or upload a .emod file';
+  panel.classList.remove('collapsed');
+  nameDisplay.textContent = '(no model)';
+}
 </script>
 </body>
 </html>
