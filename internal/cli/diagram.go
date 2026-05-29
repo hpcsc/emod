@@ -3,15 +3,21 @@ package cli
 import (
 	"fmt"
 	"os"
+	"os/exec"
+	"os/signal"
 	"path/filepath"
+	"runtime"
 	"strings"
+	"syscall"
 
 	"github.com/hpcsc/emod/internal/diagnostic"
 	"github.com/hpcsc/emod/internal/diagram"
+	"github.com/hpcsc/emod/internal/export"
 	"github.com/hpcsc/emod/internal/lexer"
 	"github.com/hpcsc/emod/internal/linter"
 	"github.com/hpcsc/emod/internal/parser"
 	"github.com/hpcsc/emod/internal/validator"
+	"github.com/hpcsc/emod/internal/viewer"
 )
 
 // RunDiagram reads the file at path, lexes and parses it, validates and lints,
@@ -153,4 +159,66 @@ func defaultSVGPath(path string) string {
 		return path[:len(path)-len(".emod")] + ".svg"
 	}
 	return path + ".svg"
+}
+
+// RunDiagramServe parses the file at path (if provided), generates diagram JSON,
+// starts the viewer server with that data, opens the default browser, and blocks
+// until SIGINT/SIGTERM shuts the server down.
+func RunDiagramServe(path string) error {
+	var diagramJSON []byte
+
+	if path != "" {
+		source, err := os.ReadFile(path)
+		if err != nil {
+			fmt.Fprintln(os.Stderr, err)
+		} else {
+			tokens, diagnostics := lexer.Scan(string(source), path)
+
+			p := parser.New(tokens, path)
+			model, parserDiags := p.Parse()
+			diagnostics = append(diagnostics, parserDiags...)
+
+			diagnostics = append(diagnostics, validator.Validate(model)...)
+			diagnostics = append(diagnostics, linter.Lint(model)...)
+
+			for _, d := range diagnostics {
+				fmt.Fprintln(os.Stderr, d.String())
+			}
+
+			json, exportErr := export.ExportDiagramJSONDiagnostics(model, diagnostics)
+			if exportErr != nil {
+				fmt.Fprintln(os.Stderr, exportErr)
+			} else {
+				diagramJSON = json
+			}
+		}
+	}
+
+	addr, shutdown, err := viewer.ServeViewer(0, diagramJSON)
+	if err != nil {
+		return err
+	}
+	defer shutdown()
+
+	openBrowser(addr)
+
+	sigCh := make(chan os.Signal, 1)
+	signal.Notify(sigCh, syscall.SIGINT, syscall.SIGTERM)
+	defer signal.Stop(sigCh)
+	<-sigCh
+
+	return nil
+}
+
+func openBrowser(url string) {
+	var cmd string
+	switch runtime.GOOS {
+	case "darwin":
+		cmd = "open"
+	case "linux":
+		cmd = "xdg-open"
+	default:
+		return
+	}
+	exec.Command(cmd, url).Start()
 }

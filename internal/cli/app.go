@@ -131,9 +131,16 @@ func NewApp() *urfave.App {
 						Name:  "o",
 						Usage: "Output path",
 					},
+					&urfave.BoolFlag{
+						Name:  "serve",
+						Usage: "Start viewer server with diagram data",
+					},
 				},
 				Action: func(c *urfave.Context) error {
 					path := c.Args().First()
+					if c.Bool("serve") {
+						return RunDiagramServe(path)
+					}
 					format := c.String("format")
 					outputPath := c.String("o")
 					if err := RunDiagram(path, outputPath, format); err != nil {

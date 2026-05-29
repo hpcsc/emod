@@ -26,7 +26,7 @@ func startAndExtractURL(t *testing.T, diagramJSON []byte) (string, func()) {
 	old := os.Stdout
 	os.Stdout = w
 
-	shutdown, err := viewer.ServeViewer(0, diagramJSON)
+	_, shutdown, err := viewer.ServeViewer(0, diagramJSON)
 	require.NoError(t, err)
 
 	w.Close()

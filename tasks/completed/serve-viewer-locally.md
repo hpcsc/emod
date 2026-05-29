@@ -3,7 +3,7 @@
 ## Progress
 - [x] Task 1: Modify viewer HTML to remove hardcoded sample data and accept server-injected initial data
 - [x] Task 2: Embed viewer HTML and serve it via local HTTP server with graceful shutdown
-- [ ] Task 3: Wire `--serve` flag into the diagram CLI command
+- [x] Task 3: Wire `--serve` flag into the diagram CLI command
 
 ---
 

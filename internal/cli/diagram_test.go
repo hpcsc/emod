@@ -3,11 +3,18 @@
 package cli_test
 
 import (
+	"bytes"
 	"errors"
+	"fmt"
+	"io"
+	"net/http"
 	"os"
 	"path/filepath"
+	"regexp"
 	"strings"
+	"syscall"
 	"testing"
+	"time"
 
 	"github.com/hpcsc/emod/internal/cli"
 	"github.com/stretchr/testify/require"
@@ -375,5 +382,168 @@ context "Orders" {
 
 		_, statErr := os.Stat(customOutput)
 		require.NoError(t, statErr, "expected .svg file to be created in nested directory")
+	})
+
+	// --- Serve flag ---
+
+	t.Run("serve with valid file starts server with diagram data", func(t *testing.T) {
+		path := writeTemp(t, "valid.emod", validEmod)
+
+		rOut, wOut, err := os.Pipe()
+		require.NoError(t, err)
+		oldOut := os.Stdout
+		os.Stdout = wOut
+
+		rErr, wErr, err := os.Pipe()
+		require.NoError(t, err)
+		oldErr := os.Stderr
+		os.Stderr = wErr
+
+		errCh := make(chan error, 1)
+		go func() {
+			errCh <- cli.RunDiagramServe(path)
+		}()
+
+		time.Sleep(200 * time.Millisecond)
+
+		wOut.Close()
+		os.Stdout = oldOut
+		wErr.Close()
+		os.Stderr = oldErr
+
+		var stdout, stderr bytes.Buffer
+		_, _ = io.Copy(&stdout, rOut)
+		_, _ = io.Copy(&stderr, rErr)
+
+		re := regexp.MustCompile(`http://127\.0\.0\.1:(\d+)`)
+		matches := re.FindStringSubmatch(stdout.String())
+		require.Len(t, matches, 2, "stdout should contain viewer URL")
+		require.Contains(t, stdout.String(), "Viewer available at")
+
+		addr := fmt.Sprintf("http://127.0.0.1:%s", matches[1])
+
+		resp, getErr := http.Get(addr)
+		require.NoError(t, getErr)
+		body, readErr := io.ReadAll(resp.Body)
+		require.NoError(t, readErr)
+		resp.Body.Close()
+		require.Equal(t, http.StatusOK, resp.StatusCode)
+		require.Contains(t, string(body), "window.INITIAL_DATA = ")
+
+		// Stderr should be clean for a valid file
+		require.Empty(t, stderr.String())
+
+		// Signal shutdown
+		syscall.Kill(syscall.Getpid(), syscall.SIGINT)
+
+		select {
+		case serveErr := <-errCh:
+			require.NoError(t, serveErr)
+		case <-time.After(2 * time.Second):
+			t.Fatal("server did not shut down within 2s")
+		}
+	})
+
+	t.Run("serve without file starts server without initial data", func(t *testing.T) {
+		rOut, wOut, err := os.Pipe()
+		require.NoError(t, err)
+		oldOut := os.Stdout
+		os.Stdout = wOut
+
+		errCh := make(chan error, 1)
+		go func() {
+			errCh <- cli.RunDiagramServe("")
+		}()
+
+		time.Sleep(200 * time.Millisecond)
+
+		wOut.Close()
+		os.Stdout = oldOut
+
+		var stdout bytes.Buffer
+		_, _ = io.Copy(&stdout, rOut)
+
+		re := regexp.MustCompile(`http://127\.0\.0\.1:(\d+)`)
+		matches := re.FindStringSubmatch(stdout.String())
+		require.Len(t, matches, 2, "stdout should contain viewer URL")
+
+		addr := fmt.Sprintf("http://127.0.0.1:%s", matches[1])
+
+		resp, getErr := http.Get(addr)
+		require.NoError(t, getErr)
+		body, readErr := io.ReadAll(resp.Body)
+		require.NoError(t, readErr)
+		resp.Body.Close()
+		require.Equal(t, http.StatusOK, resp.StatusCode)
+		require.NotContains(t, string(body), "window.INITIAL_DATA")
+
+		// Signal shutdown
+		syscall.Kill(syscall.Getpid(), syscall.SIGINT)
+
+		select {
+		case serveErr := <-errCh:
+			require.NoError(t, serveErr)
+		case <-time.After(2 * time.Second):
+			t.Fatal("server did not shut down within 2s")
+		}
+	})
+
+	t.Run("serve with invalid file prints diagnostics and starts server", func(t *testing.T) {
+		path := writeTemp(t, "invalid.emod", invalidEmod)
+
+		rOut, wOut, err := os.Pipe()
+		require.NoError(t, err)
+		oldOut := os.Stdout
+		os.Stdout = wOut
+
+		rErr, wErr, err := os.Pipe()
+		require.NoError(t, err)
+		oldErr := os.Stderr
+		os.Stderr = wErr
+
+		errCh := make(chan error, 1)
+		go func() {
+			errCh <- cli.RunDiagramServe(path)
+		}()
+
+		time.Sleep(200 * time.Millisecond)
+
+		wOut.Close()
+		os.Stdout = oldOut
+		wErr.Close()
+		os.Stderr = oldErr
+
+		var stdout, stderr bytes.Buffer
+		_, _ = io.Copy(&stdout, rOut)
+		_, _ = io.Copy(&stderr, rErr)
+
+		// Stderr should have diagnostics for invalid file
+		require.Contains(t, stderr.String(), path)
+
+		// Server should still start
+		re := regexp.MustCompile(`http://127\.0\.0\.1:(\d+)`)
+		matches := re.FindStringSubmatch(stdout.String())
+		require.Len(t, matches, 2, "stdout should contain viewer URL despite errors")
+
+		addr := fmt.Sprintf("http://127.0.0.1:%s", matches[1])
+
+		resp, getErr := http.Get(addr)
+		require.NoError(t, getErr)
+		body, readErr := io.ReadAll(resp.Body)
+		require.NoError(t, readErr)
+		resp.Body.Close()
+		require.Equal(t, http.StatusOK, resp.StatusCode)
+		// Even with invalid data, the server should start (window.INITIAL_DATA may or may not be present)
+		require.Contains(t, string(body), "<!DOCTYPE html>")
+
+		// Signal shutdown
+		syscall.Kill(syscall.Getpid(), syscall.SIGINT)
+
+		select {
+		case serveErr := <-errCh:
+			require.NoError(t, serveErr)
+		case <-time.After(2 * time.Second):
+			t.Fatal("server did not shut down within 2s")
+		}
 	})
 }
