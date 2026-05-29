@@ -300,7 +300,11 @@ header .model-name span {
 }
 #diagram-canvas .cmd-block,
 #diagram-canvas .evt-block {
-  cursor: pointer;
+  cursor: grab;
+}
+#diagram-canvas .cmd-block.dragging,
+#diagram-canvas .evt-block.dragging {
+  cursor: grabbing;
 }
 
 /* --- Pan cursor --- */
@@ -620,6 +624,12 @@ let arrowData = [];       // computed arrow paths for flow edges (source, target
 // ─── Viewport state ──────────────────────────────────────────────
 let viewport = { offsetX: 0, offsetY: 0, zoomScale: 1 };
 
+// ─── Node drag state ────────────────────────────────────────────
+var DRAG_THRESHOLD = 5;      // pixels before drag activates
+var dragState = null;         // { nodeId, startDiagramX, startDiagramY, origNodeX, origNodeY, isDragging, startClientX, startClientY } or null
+var nodeOffsets = {};        // nodeId -> {dx, dy} persistent offsets from computed position
+var suppressDetailClick = false; // true when a drag just completed, suppresses click handler
+
 // ─── DOM references ────────────────────────────────────────────────────
 const svg        = document.getElementById("diagram-canvas");
 const nameDisplay = document.getElementById("model-name-display");
@@ -763,6 +773,7 @@ function renderDiagram() {
   // Reset interaction state on re-render
   selectedNodeId = null;
   highlighted = {};
+  dragState = null;
   var dp = document.getElementById("detail-panel");
   if (dp) dp.style.display = "none";
   svg.classList.remove("has-highlights");
@@ -770,6 +781,14 @@ function renderDiagram() {
   clearSVG();
 
   var dims = computeLayout();
+
+  // Apply persistent drag offsets so dragged positions survive re-render
+  for (var id in nodeOffsets) {
+    if (layoutPositions[id]) {
+      layoutPositions[id].x += nodeOffsets[id].dx;
+      layoutPositions[id].y += nodeOffsets[id].dy;
+    }
+  }
   svg.setAttribute("viewBox", "0 0 " + dims.width + " " + dims.height);
   statCanvas.textContent = dims.width + " × " + dims.height;
 
@@ -855,12 +874,7 @@ function renderDiagram() {
     var tgtPos = layoutPositions[edge.target];
     if (!srcPos || !tgtPos) return;
 
-    var srcCx = srcPos.x + srcPos.w / 2;
-    var srcBottom = srcPos.y + srcPos.h;
-    var tgtCx = tgtPos.x + tgtPos.w / 2;
-    var tgtTop = tgtPos.y;
-    var midY = (srcBottom + tgtTop) / 2;
-    var d = "M " + srcCx + "," + srcBottom + " L " + srcCx + "," + midY + " L " + tgtCx + "," + midY + " L " + tgtCx + "," + tgtTop;
+    var d = computeArrowD(srcPos, tgtPos);
 
     arrowData.push({ source: edge.source, target: edge.target, path: d });
 
@@ -995,6 +1009,66 @@ function clampZoom(scale) {
   return Math.min(5.0, Math.max(0.1, scale));
 }
 
+// ─── Node drag helpers ─────────────────────────────────────────────────
+function getConnectedEdges(nodeId) {
+  var result = [];
+  edges.forEach(function(e) {
+    if (e.type === "flow" && (e.source === nodeId || e.target === nodeId)) {
+      result.push(e);
+    }
+  });
+  return result;
+}
+
+function computeArrowD(srcPos, tgtPos) {
+  var srcCx = srcPos.x + srcPos.w / 2;
+  var srcBottom = srcPos.y + srcPos.h;
+  var tgtCx = tgtPos.x + tgtPos.w / 2;
+  var tgtTop = tgtPos.y;
+  var midY = (srcBottom + tgtTop) / 2;
+  return "M " + srcCx + "," + srcBottom + " L " + srcCx + "," + midY + " L " + tgtCx + "," + midY + " L " + tgtCx + "," + tgtTop;
+}
+
+function updateArrowsForNode(nodeId, draggedPos) {
+  var connected = getConnectedEdges(nodeId);
+  connected.forEach(function(edge) {
+    var srcPos = edge.source === nodeId ? draggedPos : layoutPositions[edge.source];
+    var tgtPos = edge.target === nodeId ? draggedPos : layoutPositions[edge.target];
+    if (!srcPos || !tgtPos) return;
+    var d = computeArrowD(srcPos, tgtPos);
+    // Find and update the path element in the DOM
+    var pathEl = svg.querySelector('.flow-arrow[data-source="' + edge.source + '"][data-target="' + edge.target + '"]');
+    if (pathEl) {
+      pathEl.setAttribute("d", d);
+    }
+  });
+}
+
+function updateBlockTransform(nodeId) {
+  var blockEl = svg.querySelector('.cmd-block[data-node-id="' + nodeId + '"], .evt-block[data-node-id="' + nodeId + '"]');
+  if (!blockEl) return;
+  var off = nodeOffsets[nodeId];
+  if (off) {
+    blockEl.setAttribute("transform", "translate(" + off.dx + "," + off.dy + ")");
+  } else {
+    blockEl.removeAttribute("transform");
+  }
+}
+
+// Apply the final offset after drag ends (update layoutPositions + nodeOffsets, clear transform)
+function commitDrag(nodeId, dx, dy, origNodeX, origNodeY) {
+  var newX = origNodeX + dx;
+  var newY = origNodeY + dy;
+  layoutPositions[nodeId].x = newX;
+  layoutPositions[nodeId].y = newY;
+  nodeOffsets[nodeId] = { dx: dx, dy: dy };
+  // Remove the temporary transform — position is now baked into layoutPositions
+  var blockEl = svg.querySelector('.cmd-block[data-node-id="' + nodeId + '"], .evt-block[data-node-id="' + nodeId + '"]');
+  if (blockEl) blockEl.removeAttribute("transform");
+  // Final arrow update with committed position
+  updateArrowsForNode(nodeId, layoutPositions[nodeId]);
+}
+
 function fitToView() {
   var vg = document.getElementById("viewport-group");
   if (!vg) return;
@@ -1121,6 +1195,7 @@ function setModelData(data) {
   nodes = data.nodes || [];
   edges = data.edges || [];
   layoutPositions = {};
+  nodeOffsets = {};
 
   nameDisplay.textContent = modelName || "(unnamed)";
   document.title = modelName ? modelName + " — Emod Diagram Viewer" : "Emod Diagram Viewer";
@@ -1173,6 +1248,7 @@ function render() {
     nodes = data.diagram.nodes;
     edges = data.diagram.edges;
     layoutPositions = {};
+    nodeOffsets = {};
 
     nameDisplay.textContent = modelName || "(unnamed)";
     document.title = modelName ? modelName + " — Emod Diagram Viewer" : "Emod Diagram Viewer";
@@ -1247,8 +1323,31 @@ var panStartOffsetX = 0, panStartOffsetY = 0;
 
 svg.addEventListener("mousedown", function(evt) {
   if (evt.button !== 0) return;
-  // Do not initiate pan when clicking on interactive elements
-  if (evt.target.closest('.cmd-block, .evt-block, .flow-arrow, .ctx-label, .agg-label')) return;
+
+  // Check if we are starting a drag on a command/event block
+  var block = evt.target.closest('.cmd-block, .evt-block');
+  if (block) {
+    var nodeId = block.getAttribute("data-node-id");
+    if (nodeId && layoutPositions[nodeId]) {
+      var dp = screenToDiagram(evt.clientX, evt.clientY);
+      dragState = {
+        nodeId: nodeId,
+        startDiagramX: dp.x,
+        startDiagramY: dp.y,
+        origNodeX: layoutPositions[nodeId].x,
+        origNodeY: layoutPositions[nodeId].y,
+        isDragging: false,
+        startClientX: evt.clientX,
+        startClientY: evt.clientY,
+      };
+      block.classList.add("dragging");
+      evt.preventDefault();
+    }
+    return;
+  }
+
+  // Do not initiate pan when clicking on other interactive elements
+  if (evt.target.closest('.flow-arrow, .ctx-label, .agg-label')) return;
 
   panning = true;
   panStartX = evt.clientX;
@@ -1260,6 +1359,42 @@ svg.addEventListener("mousedown", function(evt) {
 });
 
 document.addEventListener("mousemove", function(evt) {
+  // Handle node dragging
+  if (dragState) {
+    var dp = screenToDiagram(evt.clientX, evt.clientY);
+    var dx = dp.x - dragState.startDiagramX;
+    var dy = dp.y - dragState.startDiagramY;
+
+    if (!dragState.isDragging) {
+      var dist = Math.sqrt(
+        Math.pow(evt.clientX - dragState.startClientX, 2) +
+        Math.pow(evt.clientY - dragState.startClientY, 2)
+      );
+      if (dist >= DRAG_THRESHOLD) {
+        dragState.isDragging = true;
+      } else {
+        return;
+      }
+    }
+
+    // Move the block visually via SVG transform
+    var blockEl = svg.querySelector('.cmd-block[data-node-id="' + dragState.nodeId + '"], .evt-block[data-node-id="' + dragState.nodeId + '"]');
+    if (blockEl) {
+      blockEl.setAttribute("transform", "translate(" + dx + "," + dy + ")");
+    }
+
+    // Update connected arrows using the temporary dragged position
+    updateArrowsForNode(dragState.nodeId, {
+      x: dragState.origNodeX + dx,
+      y: dragState.origNodeY + dy,
+      w: layoutPositions[dragState.nodeId].w,
+      h: layoutPositions[dragState.nodeId].h,
+    });
+
+    evt.preventDefault();
+    return;
+  }
+
   if (!panning) return;
 
   viewport.offsetX = panStartOffsetX + (evt.clientX - panStartX);
@@ -1269,6 +1404,22 @@ document.addEventListener("mousemove", function(evt) {
 });
 
 document.addEventListener("mouseup", function(evt) {
+  if (dragState) {
+    var blockEl = svg.querySelector('.cmd-block[data-node-id="' + dragState.nodeId + '"], .evt-block[data-node-id="' + dragState.nodeId + '"]');
+    if (dragState.isDragging) {
+      // Compute actual drag delta from the last mouse position in diagram space
+      var dp = screenToDiagram(evt.clientX, evt.clientY);
+      var dx = dp.x - dragState.startDiagramX;
+      var dy = dp.y - dragState.startDiagramY;
+      commitDrag(dragState.nodeId, dx, dy, dragState.origNodeX, dragState.origNodeY);
+      suppressDetailClick = true;
+    }
+    if (blockEl) blockEl.classList.remove("dragging");
+    dragState = null;
+    evt.preventDefault();
+    return;
+  }
+
   if (!panning) return;
 
   panning = false;
@@ -1311,7 +1462,29 @@ svg.addEventListener("touchstart", function(evt) {
   if (touchState) return;
 
   if (touches.length === 1) {
-    if (evt.target.closest('.cmd-block, .evt-block, .flow-arrow, .ctx-label, .agg-label')) return;
+    // Check if touching a command/event block → start drag
+    var block = evt.target.closest('.cmd-block, .evt-block');
+    if (block) {
+      var nodeId = block.getAttribute("data-node-id");
+      if (nodeId && layoutPositions[nodeId]) {
+        var touch = touches[0];
+        var dp = screenToDiagram(touch.clientX, touch.clientY);
+        dragState = {
+          nodeId: nodeId,
+          startDiagramX: dp.x,
+          startDiagramY: dp.y,
+          origNodeX: layoutPositions[nodeId].x,
+          origNodeY: layoutPositions[nodeId].y,
+          isDragging: false,
+          startClientX: touch.clientX,
+          startClientY: touch.clientY,
+        };
+        block.classList.add("dragging");
+      }
+      return;
+    }
+
+    if (evt.target.closest('.flow-arrow, .ctx-label, .agg-label')) return;
     touchStartPan(touches[0], viewport.offsetX, viewport.offsetY);
     svg.classList.add("panning");
   } else if (touches.length === 2) {
@@ -1321,6 +1494,44 @@ svg.addEventListener("touchstart", function(evt) {
 }, { passive: false });
 
 svg.addEventListener("touchmove", function(evt) {
+  // Handle node drag before pan/pinch gestures
+  if (dragState) {
+    evt.preventDefault();
+    var touch = evt.touches[0];
+    if (!touch) return;
+
+    var dp = screenToDiagram(touch.clientX, touch.clientY);
+    var dx = dp.x - dragState.startDiagramX;
+    var dy = dp.y - dragState.startDiagramY;
+
+    if (!dragState.isDragging) {
+      var dist = Math.sqrt(
+        Math.pow(touch.clientX - dragState.startClientX, 2) +
+        Math.pow(touch.clientY - dragState.startClientY, 2)
+      );
+      if (dist >= DRAG_THRESHOLD) {
+        dragState.isDragging = true;
+      } else {
+        return;
+      }
+    }
+
+    // Move the block visually via SVG transform
+    var blockEl = svg.querySelector('.cmd-block[data-node-id="' + dragState.nodeId + '"], .evt-block[data-node-id="' + dragState.nodeId + '"]');
+    if (blockEl) {
+      blockEl.setAttribute("transform", "translate(" + dx + "," + dy + ")");
+    }
+
+    // Update connected arrows using the temporary dragged position
+    updateArrowsForNode(dragState.nodeId, {
+      x: dragState.origNodeX + dx,
+      y: dragState.origNodeY + dy,
+      w: layoutPositions[dragState.nodeId].w,
+      h: layoutPositions[dragState.nodeId].h,
+    });
+    return;
+  }
+
   if (!touchState) return;
   evt.preventDefault();
 
@@ -1374,6 +1585,26 @@ svg.addEventListener("touchmove", function(evt) {
 }, { passive: false });
 
 svg.addEventListener("touchend", function(evt) {
+  // Handle node drag finalization
+  if (dragState) {
+    evt.preventDefault();
+    var blockEl = svg.querySelector('.cmd-block[data-node-id="' + dragState.nodeId + '"], .evt-block[data-node-id="' + dragState.nodeId + '"]');
+    if (dragState.isDragging) {
+      // Use the last available touch or start position
+      var touch = evt.changedTouches[0];
+      if (touch) {
+        var dp = screenToDiagram(touch.clientX, touch.clientY);
+        var dx = dp.x - dragState.startDiagramX;
+        var dy = dp.y - dragState.startDiagramY;
+        commitDrag(dragState.nodeId, dx, dy, dragState.origNodeX, dragState.origNodeY);
+        suppressDetailClick = true;
+      }
+    }
+    if (blockEl) blockEl.classList.remove("dragging");
+    dragState = null;
+    return;
+  }
+
   if (!touchState) return;
   evt.preventDefault();
 
@@ -1388,6 +1619,11 @@ svg.addEventListener("touchend", function(evt) {
 }, { passive: false });
 
 svg.addEventListener("touchcancel", function(evt) {
+  if (dragState) {
+    var blockEl = svg.querySelector('.cmd-block[data-node-id="' + dragState.nodeId + '"], .evt-block[data-node-id="' + dragState.nodeId + '"]');
+    if (blockEl) blockEl.classList.remove("dragging");
+    dragState = null;
+  }
   touchState = null;
   svg.classList.remove("panning");
 });
@@ -1608,7 +1844,7 @@ function highlightElements(ids) {
 
 // ─── Click handling via SVG event delegation ─────────────────────────────
 svg.addEventListener("click", function(evt) {
-  // Ignore panning clicks (dragged, not clicked)
+  // Ignore panning clicks (dragged viewport, not clicked)
   if (panning) return;
 
   var target = evt.target;
@@ -1654,8 +1890,8 @@ svg.addEventListener("click", function(evt) {
     }
   }
 
-  // ── Command/event block click: open detail panel ──
-  if (!interactive) {
+  // ── Command/event block click: open detail panel (skip if click was actually a drag) ──
+  if (!interactive && !suppressDetailClick) {
     var block = target.closest(".cmd-block, .evt-block");
     if (block) {
       var nodeId = block.getAttribute("data-node-id");
@@ -1666,6 +1902,8 @@ svg.addEventListener("click", function(evt) {
       }
     }
   }
+  // Reset drag-suppression flag regardless (avoids leaking to subsequent clicks)
+  suppressDetailClick = false;
 
   // ── Background click: close panel and clear highlights ──
   if (!interactive) {
