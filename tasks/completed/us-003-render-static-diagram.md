@@ -5,7 +5,7 @@
 - [x] Task 2: Implement auto-layout and render context swimlanes with slice columns
 - [x] Task 3: Render command and event blocks with color coding
 - [x] Task 4: Render flow connections as directed arrows
-- [ ] Task 5: Display actor annotations and show field details on hover
+- [x] Task 5: Display actor annotations and show field details on hover
 
 ## Story Reference
 `user-stories/web-diagram-viewer.md` — **US-003: Render a static diagram in the browser**

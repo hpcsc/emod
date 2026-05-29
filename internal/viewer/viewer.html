@@ -224,13 +224,98 @@ header .model-name span {
 #diagram-canvas .evt-block {
   cursor: pointer;
 }
+
+/* --- Actor annotations --- */
+#actor-annotations {
+  font-size: 12px;
+  margin-top: 4px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+#actor-annotations .actor-label {
+  color: #b0c4d8;
+  font-size: 11px;
+  margin-right: 2px;
+}
+#actor-annotations .actor-badge {
+  display: inline-block;
+  background: rgba(255,255,255,0.12);
+  color: #ecf0f1;
+  padding: 2px 10px;
+  border-radius: 12px;
+  font-size: 12px;
+  font-weight: 500;
+  letter-spacing: 0.2px;
+}
+
+/* --- Tooltip --- */
+#tooltip {
+  position: fixed;
+  z-index: 1000;
+  background: #fff;
+  border: 1px solid #d0d0d0;
+  border-radius: 6px;
+  box-shadow: 0 4px 16px rgba(0,0,0,0.15);
+  padding: 10px 14px;
+  font-size: 12px;
+  line-height: 1.5;
+  display: none;
+  pointer-events: none;
+  max-width: 340px;
+  min-width: 160px;
+}
+#tooltip .tt-header {
+  font-weight: 600;
+  font-size: 13px;
+  color: #2c3e50;
+  padding-bottom: 4px;
+  margin-bottom: 6px;
+  border-bottom: 1px solid #eee;
+}
+#tooltip table {
+  width: 100%;
+  border-collapse: collapse;
+}
+#tooltip th {
+  text-align: left;
+  font-size: 10px;
+  text-transform: uppercase;
+  color: #888;
+  font-weight: 500;
+  padding: 2px 8px 2px 0;
+  letter-spacing: 0.3px;
+}
+#tooltip td {
+  padding: 2px 8px 2px 0;
+  white-space: nowrap;
+  vertical-align: top;
+}
+#tooltip .tf-name {
+  font-weight: 500;
+  color: #333;
+}
+#tooltip .tf-type {
+  color: #6c8ebf;
+  font-family: "SF Mono", "Fira Code", Menlo, Consolas, monospace;
+  font-size: 11px;
+}
+#tooltip .tf-modifier {
+  color: #999;
+  font-style: italic;
+  font-size: 11px;
+}
 </style>
 </head>
 <body>
 
 <!-- Header -->
 <header>
-  <h1>Emod Diagram Viewer</h1>
+  <div>
+    <h1>Emod Diagram Viewer</h1>
+    <div id="actor-annotations"></div>
+  </div>
   <div class="model-name">Model: <span id="model-name-display">—</span></div>
 </header>
 
@@ -247,6 +332,8 @@ header .model-name span {
     </defs>
     <!-- Diagram elements will be rendered here by the renderer -->
   </svg>
+
+  <div id="tooltip"></div>
 
   <button id="panel-toggle">☰ Data</button>
 
@@ -524,7 +611,7 @@ function renderDiagram() {
     var stroke = isCmd ? "#6c8ebf" : "#d79b00";
     var cls = isCmd ? "cmd-block" : "evt-block";
 
-    html += "<g class=\"" + cls + "\">\n";
+    html += "<g class=\"" + cls + "\" data-node-id=\"" + n.id + "\">\n";
     html += svgRect(np.x, np.y, np.w, np.h, fill, stroke,
       "rx=\"4\" stroke-width=\"1.5\"");
     html += svgText(np.x + np.w / 2, np.y + np.h / 2, n.label, 13, stroke,
@@ -556,6 +643,95 @@ function renderDiagram() {
   var defsEl = svg.querySelector("defs");
   svg.innerHTML = html;
   if (defsEl) svg.insertBefore(defsEl, svg.firstChild);
+
+  // Post-render tasks
+  renderActorAnnotations();
+  attachBlockHandlers();
+}
+
+// ─── Actor annotations ──────────────────────────────────────────────────
+function renderActorAnnotations() {
+  var container = document.getElementById("actor-annotations");
+  if (!container) return;
+  var actors = nodes.filter(function(n) { return n.type === "actor"; });
+  if (actors.length === 0) {
+    container.innerHTML = "";
+    return;
+  }
+  var html = '<span class="actor-label">Actors:</span>';
+  actors.forEach(function(a) {
+    html += '<span class="actor-badge">' + esc(a.label) + '</span>';
+  });
+  container.innerHTML = html;
+}
+
+// ─── Tooltip functions ─────────────────────────────────────────────────
+var tooltipVisible = false;
+
+function showTooltip(node, evt) {
+  var el = document.getElementById("tooltip");
+  if (!el) return;
+
+  var html = '<div class="tt-header">' + esc(node.label) + '</div>';
+  html += '<table><thead><tr><th>Field</th><th>Type</th><th></th></tr></thead><tbody>';
+  (node.fields || []).forEach(function(f) {
+    var mod = f.modifier ? '<span class="tf-modifier">(' + esc(f.modifier) + ')</span>' : '';
+    html += '<tr><td class="tf-name">' + esc(f.name) + '</td><td class="tf-type">' + esc(f.type) + '</td><td>' + mod + '</td></tr>';
+  });
+  html += '</tbody></table>';
+  el.innerHTML = html;
+
+  // Show before measuring position
+  el.style.display = "block";
+  positionTooltip(evt.clientX, evt.clientY);
+  tooltipVisible = true;
+}
+
+function hideTooltip() {
+  var el = document.getElementById("tooltip");
+  if (el) el.style.display = "none";
+  tooltipVisible = false;
+}
+
+function positionTooltip(cx, cy) {
+  var el = document.getElementById("tooltip");
+  if (!el || el.style.display === "none") return;
+  var rect = el.getBoundingClientRect();
+  var x = cx + 14;
+  var y = cy + 14;
+  // Flip left if tooltip overflows right edge
+  if (x + rect.width > window.innerWidth - 8) {
+    x = cx - rect.width - 14;
+  }
+  // Flip above if tooltip overflows bottom edge
+  if (y + rect.height > window.innerHeight - 8) {
+    y = cy - rect.height - 14;
+  }
+  el.style.left = Math.max(4, x) + "px";
+  el.style.top = Math.max(4, y) + "px";
+}
+
+function attachBlockHandlers() {
+  var blocks = svg.querySelectorAll(".cmd-block, .evt-block");
+  blocks.forEach(function(block) {
+    block.addEventListener("mouseenter", function(evt) {
+      var nodeId = this.getAttribute("data-node-id");
+      if (!nodeId) return;
+      // Find the node in our data
+      var node = null;
+      for (var i = 0; i < nodes.length; i++) {
+        if (nodes[i].id === nodeId) { node = nodes[i]; break; }
+      }
+      if (!node || !node.fields || node.fields.length === 0) return;
+      showTooltip(node, evt);
+    });
+    block.addEventListener("mousemove", function(evt) {
+      if (tooltipVisible) positionTooltip(evt.clientX, evt.clientY);
+    });
+    block.addEventListener("mouseleave", function() {
+      hideTooltip();
+    });
+  });
 }
 
 // ─── Parse ──────────────────────────────────────────────────────────────
@@ -619,6 +795,7 @@ renderBtn.addEventListener("click", render);
 // ─── Initial load ──────────────────────────────────────────────────────
 jsonInput.value = JSON.stringify(SAMPLE_DATA, null, 2);
 loadData(jsonInput.value);
+renderDiagram();
 </script>
 </body>
 </html>
