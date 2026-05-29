@@ -69,49 +69,41 @@ header .model-name span {
   height: 100%;
 }
 
-/* --- Panel toggle --- */
-#panel-toggle {
-  position: absolute;
-  bottom: 16px;
-  right: 16px;
-  z-index: 20;
-  background: #2c3e50;
-  color: #fff;
-  border: none;
-  border-radius: 6px;
-  padding: 8px 14px;
-  font-size: 13px;
-  cursor: pointer;
-  transition: background 0.2s;
-}
-
-#panel-toggle:hover {
-  background: #34495e;
-}
-
 /* --- Minimap --- */
 #minimap {
   position: absolute;
-  bottom: 16px;
-  left: 16px;
+  top: 12px;
+  right: 16px;
   z-index: 20;
   background: rgba(255,255,255,0.92);
   border: 1px solid #ccc;
   border-radius: 6px;
   box-shadow: 0 2px 8px rgba(0,0,0,0.12);
   width: 180px;
-  height: 120px;
   overflow: hidden;
-  cursor: pointer;
   user-select: none;
 }
 #minimap.hidden {
   display: none;
 }
+#minimap-handle {
+  padding: 4px 8px;
+  font-size: 11px;
+  font-weight: 600;
+  color: #888;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  background: rgba(0,0,0,0.04);
+  cursor: grab;
+  border-bottom: 1px solid #ddd;
+}
+#minimap-handle:active {
+  cursor: grabbing;
+}
 #minimap svg {
   display: block;
   width: 100%;
-  height: 100%;
+  height: 120px;
 }
 #minimap-close {
   position: absolute;
@@ -203,15 +195,9 @@ header .model-name span {
   letter-spacing: 0.5px;
 }
 
-#data-panel-body {
-  flex: 1 1 auto;
-  padding: 12px 20px 16px;
-  overflow-y: auto;
-}
-
-#data-panel-body textarea {
+#source-input {
   width: 100%;
-  min-height: 120px;
+  min-height: 200px;
   padding: 10px;
   font-family: "SF Mono", "Fira Code", "Fira Mono", Menlo, Consolas, monospace;
   font-size: 12px;
@@ -219,23 +205,17 @@ header .model-name span {
   border: 1px solid #ccc;
   border-radius: 4px;
   resize: vertical;
-  tab-size: 2;
+  box-sizing: border-box;
 }
 
-#data-panel-body textarea:focus {
-  outline: none;
-  border-color: #3498db;
-  box-shadow: 0 0 0 2px rgba(52,152,219,0.2);
-}
-
-#data-panel-actions {
+.data-panel-actions {
   display: flex;
   gap: 8px;
   margin-top: 10px;
   align-items: center;
 }
 
-#data-panel-actions button {
+.data-panel-actions button {
   background: #3498db;
   color: #fff;
   border: none;
@@ -247,21 +227,21 @@ header .model-name span {
   transition: background 0.2s;
 }
 
-#data-panel-actions button:hover {
+.data-panel-actions button:hover {
   background: #2980b9;
 }
 
-#data-panel-actions .status {
+.data-panel-actions .status {
   font-size: 12px;
   color: #888;
   margin-left: 8px;
 }
 
-#data-panel-actions .status.error {
+.data-panel-actions .status.error {
   color: #e74c3c;
 }
 
-#data-panel-actions .status.success {
+.data-panel-actions .status.success {
   color: #27ae60;
 }
 
@@ -426,21 +406,19 @@ header .model-name span {
   <div id="tooltip"></div>
 
   <div id="minimap">
+    <div id="minimap-handle">Overview</div>
     <svg id="minimap-svg" xmlns="http://www.w3.org/2000/svg"></svg>
     <button id="minimap-close" title="Close minimap">×</button>
   </div>
 
-  <button id="panel-toggle">☰ Data</button>
-
-  <!-- Data panel -->
+  <!-- Data panel (toggle via header) -->
   <div id="data-panel" class="collapsed">
     <div id="data-panel-header">
-      <h2>Diagram Data</h2>
-      <span style="font-size:12px;color:#999;">▾</span>
+      <h2>☰ Data</h2>
     </div>
     <div id="data-panel-body">
-      <textarea id="json-input" spellcheck="false"></textarea>
-      <div id="data-panel-actions">
+      <textarea id="source-input" spellcheck="false" placeholder="Paste .emod source content here"></textarea>
+      <div class="data-panel-actions">
         <button id="render-btn">Render</button>
         <span class="status" id="render-status"></span>
       </div>
@@ -479,7 +457,7 @@ let viewport = { offsetX: 0, offsetY: 0, zoomScale: 1 };
 // ─── DOM references ────────────────────────────────────────────────────
 const svg        = document.getElementById("diagram-canvas");
 const nameDisplay = document.getElementById("model-name-display");
-const jsonInput  = document.getElementById("json-input");
+const sourceInput = document.getElementById("source-input");
 const renderBtn  = document.getElementById("render-btn");
 const statusEl   = document.getElementById("render-status");
 const statNodes  = document.getElementById("stat-nodes");
@@ -487,7 +465,6 @@ const statEdges  = document.getElementById("stat-edges");
 const statCanvas = document.getElementById("stat-canvas");
 const panel      = document.getElementById("data-panel");
 const panelHdr   = document.getElementById("data-panel-header");
-const panelToggle = document.getElementById("panel-toggle");
 
 // ─── Minimap DOM references ──────────────────────────────────────────
 const minimap = document.getElementById("minimap");
@@ -496,7 +473,6 @@ const minimapToggle = document.getElementById("minimap-toggle");
 const MINIMAP_W = 180;
 const MINIMAP_H = 120;
 const MINIMAP_PAD = 2;
-let minimapDragging = false;
 
 // ─── SVG helpers ──────────────────────────────────────────────────────
 function esc(str) {
@@ -964,32 +940,16 @@ function toggleMinimap(show) {
 }
 
 // ─── Parse ──────────────────────────────────────────────────────────────
-function loadData(jsonStr) {
-  try {
-    var data = JSON.parse(jsonStr);
+function setModelData(data) {
+  modelName = data.model_name || "";
+  nodes = data.nodes || [];
+  edges = data.edges || [];
+  layoutPositions = {};
 
-    if (!data.nodes || !Array.isArray(data.nodes)) {
-      throw new Error("Missing required array: nodes");
-    }
-    if (!data.edges || !Array.isArray(data.edges)) {
-      throw new Error("Missing required array: edges");
-    }
-
-    modelName = data.model_name || "";
-    nodes = data.nodes;
-    edges = data.edges;
-    layoutPositions = {};
-
-    nameDisplay.textContent = modelName || "(unnamed)";
-    document.title = modelName ? modelName + " — Emod Diagram Viewer" : "Emod Diagram Viewer";
-    statNodes.textContent = nodes.length;
-    statEdges.textContent = edges.length;
-
-    clearSVG();
-    return { success: true };
-  } catch (err) {
-    return { success: false, error: err.message };
-  }
+  nameDisplay.textContent = modelName || "(unnamed)";
+  document.title = modelName ? modelName + " — Emod Diagram Viewer" : "Emod Diagram Viewer";
+  statNodes.textContent = nodes.length;
+  statEdges.textContent = edges.length;
 }
 
 function clearSVG() {
@@ -998,30 +958,65 @@ function clearSVG() {
   if (defs) svg.appendChild(defs);
 }
 
-function render() {
-  var result = loadData(jsonInput.value);
-  if (result.success) {
-    renderDiagram();
-    statusEl.textContent = "✓ Rendered";
-    statusEl.className = "status success";
-  } else {
-    statusEl.textContent = "✗ " + result.error;
-    statusEl.className = "status error";
-  }
-}
-
 // ─── Panel toggle ──────────────────────────────────────────────────────
 function togglePanel() {
   panel.classList.toggle("collapsed");
 }
 
 panelHdr.addEventListener("click", togglePanel);
-panelToggle.addEventListener("click", togglePanel);
 
 // ─── Fit-to-view ─────────────────────────────────────────────────────────
 document.getElementById("fit-view").addEventListener("click", fitToView);
 
-// ─── Render button ─────────────────────────────────────────────────────
+// ─── Render ─────────────────────────────────────────────────────────────
+function render() {
+  var source = sourceInput.value.trim();
+  if (!source) {
+    statusEl.textContent = "✗ Paste some .emod content first";
+    statusEl.className = "status error";
+    return;
+  }
+  statusEl.textContent = "⏳ Parsing...";
+  statusEl.className = "";
+  fetch("/parse", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ source: source }),
+  })
+  .then(function(resp) {
+    if (!resp.ok) {
+      return resp.json().then(function(err) { throw new Error(err.error || "parse failed"); });
+    }
+    return resp.json();
+  })
+  .then(function(data) {
+    if (!data.diagram || !data.diagram.nodes || !data.diagram.edges) {
+      throw new Error("invalid diagram response from server");
+    }
+    modelName = data.diagram.model_name || "";
+    nodes = data.diagram.nodes;
+    edges = data.diagram.edges;
+    layoutPositions = {};
+
+    nameDisplay.textContent = modelName || "(unnamed)";
+    document.title = modelName ? modelName + " — Emod Diagram Viewer" : "Emod Diagram Viewer";
+    statNodes.textContent = nodes.length;
+    statEdges.textContent = edges.length;
+
+    panel.classList.add("collapsed");
+    statusEl.textContent = "✓ Rendered";
+    statusEl.className = "status success";
+
+    clearSVG();
+    renderDiagram();
+  })
+  .catch(function(err) {
+    statusEl.textContent = "✗ " + err.message;
+    statusEl.className = "status error";
+  });
+}
+
+// ─── Render button ───────────────────────────────────────────────────────
 renderBtn.addEventListener("click", render);
 
 // ─── Mouse wheel zoom (attached once, not inside renderDiagram) ───────
@@ -1193,43 +1188,95 @@ svg.addEventListener("touchcancel", function(evt) {
 });
 
 // ─── Minimap event listeners ──────────────────────────────────────────
+var minimapDragPos = false;  // dragging to reposition the minimap itself
+var minimapNavDrag = false;  // dragging on SVG to navigate viewport
+
+var minimapHandle = document.getElementById("minimap-handle");
+
+minimapHandle.addEventListener("mousedown", function(evt) {
+  evt.preventDefault();
+  evt.stopPropagation();
+  minimapDragPos = true;
+  // Read current translate offset (or zero if never moved)
+  var tx = 0, ty = 0;
+  var mat = minimap.style.transform;
+  if (mat && mat.startsWith("translate(")) {
+    var parts = mat.match(/translate\(([\d.-]+)px,\s*([\d.-]+)px\)/);
+    if (parts) { tx = parseFloat(parts[1]); ty = parseFloat(parts[2]); }
+  }
+  minimap.dataset.dragOffX = evt.clientX - tx;
+  minimap.dataset.dragOffY = evt.clientY - ty;
+});
+
 minimap.addEventListener("mousedown", function(evt) {
-  if (evt.target.closest("#minimap-close, #minimap-toggle")) return;
+  if (evt.target.closest("#minimap-close, #minimap-toggle, #minimap-handle")) return;
   evt.preventDefault();
   evt.stopPropagation();
   minimapNavigate(evt);
-  minimapDragging = true;
+  minimapNavDrag = true;
 });
 
 document.addEventListener("mousemove", function(evt) {
-  if (!minimapDragging) return;
-  minimapNavigate(evt);
-  evt.preventDefault();
+  if (minimapDragPos) {
+    var tx = evt.clientX - parseFloat(minimap.dataset.dragOffX);
+    var ty = evt.clientY - parseFloat(minimap.dataset.dragOffY);
+    minimap.style.transform = "translate(" + tx + "px, " + ty + "px)";
+    return;
+  }
+  if (minimapNavDrag) {
+    minimapNavigate(evt);
+    evt.preventDefault();
+  }
 });
 
 document.addEventListener("mouseup", function() {
-  minimapDragging = false;
+  minimapDragPos = false;
+  minimapNavDrag = false;
 });
 
 // Touch support for minimap
+minimapHandle.addEventListener("touchstart", function(evt) {
+  evt.preventDefault();
+  evt.stopPropagation();
+  minimapDragPos = true;
+  var touch = evt.touches[0];
+  var tx = 0, ty = 0;
+  var mat = minimap.style.transform;
+  if (mat && mat.startsWith("translate(")) {
+    var parts = mat.match(/translate\(([\d.-]+)px,\s*([\d.-]+)px\)/);
+    if (parts) { tx = parseFloat(parts[1]); ty = parseFloat(parts[2]); }
+  }
+  minimap.dataset.dragOffX = touch.clientX - tx;
+  minimap.dataset.dragOffY = touch.clientY - ty;
+}, { passive: false });
+
 minimap.addEventListener("touchstart", function(evt) {
-  if (evt.target.closest("#minimap-close, #minimap-toggle")) return;
+  if (evt.target.closest("#minimap-close, #minimap-toggle, #minimap-handle")) return;
   evt.preventDefault();
   evt.stopPropagation();
   var touch = evt.touches[0];
   minimapNavigate(touch);
-  minimapDragging = true;
+  minimapNavDrag = true;
 }, { passive: false });
 
 minimap.addEventListener("touchmove", function(evt) {
-  if (!minimapDragging) return;
-  evt.preventDefault();
-  var touch = evt.touches[0];
-  minimapNavigate(touch);
+  if (minimapDragPos) {
+    var touch = evt.touches[0];
+    var tx = touch.clientX - parseFloat(minimap.dataset.dragOffX);
+    var ty = touch.clientY - parseFloat(minimap.dataset.dragOffY);
+    minimap.style.transform = "translate(" + tx + "px, " + ty + "px)";
+    return;
+  }
+  if (minimapNavDrag) {
+    evt.preventDefault();
+    var touch = evt.touches[0];
+    minimapNavigate(touch);
+  }
 }, { passive: false });
 
 minimap.addEventListener("touchend", function() {
-  minimapDragging = false;
+  minimapDragPos = false;
+  minimapNavDrag = false;
 });
 
 document.getElementById("minimap-close").addEventListener("click", function(evt) {
@@ -1244,11 +1291,11 @@ minimapToggle.addEventListener("click", function() {
 // ─── Initial load ──────────────────────────────────────────────────────
 // If the server injected INITIAL_DATA, render it; otherwise show empty state.
 if (typeof INITIAL_DATA !== 'undefined' && INITIAL_DATA !== null) {
-  jsonInput.value = JSON.stringify(INITIAL_DATA, null, 2);
-  loadData(jsonInput.value);
+  var initData = INITIAL_DATA.diagram || INITIAL_DATA;
+  setModelData(initData);
   renderDiagram();
 } else {
-  jsonInput.placeholder = 'Paste diagram JSON here or upload a .emod file';
+  sourceInput.placeholder = 'Paste .emod content here';
   panel.classList.remove('collapsed');
   nameDisplay.textContent = '(no model)';
 }
