@@ -2,7 +2,7 @@
 
 ## Progress
 - [x] Task 1: Drag command and event nodes with real-time arrow updates
-- [ ] Task 2: Drag slice group header to move all slice contents together
+- [x] Task 2: Drag slice group header to move all slice contents together
 - [ ] Task 3: Add reset layout button
 
 ## Story Reference
