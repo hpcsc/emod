@@ -1,0 +1,377 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Emod Diagram Viewer</title>
+<style>
+/* --- Reset --- */
+*, *::before, *::after {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+html, body {
+  height: 100%;
+  overflow: hidden;
+}
+
+body {
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  background: #f8f9fa;
+  color: #333;
+  display: flex;
+  flex-direction: column;
+}
+
+/* --- Header --- */
+header {
+  flex: 0 0 auto;
+  background: #2c3e50;
+  color: #fff;
+  padding: 12px 24px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  box-shadow: 0 1px 4px rgba(0,0,0,0.15);
+  z-index: 10;
+}
+
+header h1 {
+  font-size: 18px;
+  font-weight: 600;
+  letter-spacing: 0.3px;
+}
+
+header .model-name {
+  font-size: 14px;
+  color: #b0c4d8;
+}
+
+header .model-name span {
+  color: #fff;
+  font-weight: 500;
+}
+
+/* --- Canvas area --- */
+#canvas-container {
+  flex: 1 1 auto;
+  position: relative;
+  overflow: hidden;
+  background: #fff;
+}
+
+#canvas-container svg {
+  display: block;
+  width: 100%;
+  height: 100%;
+}
+
+/* --- Panel toggle --- */
+#panel-toggle {
+  position: absolute;
+  bottom: 16px;
+  right: 16px;
+  z-index: 20;
+  background: #2c3e50;
+  color: #fff;
+  border: none;
+  border-radius: 6px;
+  padding: 8px 14px;
+  font-size: 13px;
+  cursor: pointer;
+  transition: background 0.2s;
+}
+
+#panel-toggle:hover {
+  background: #34495e;
+}
+
+/* --- Data panel --- */
+#data-panel {
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  z-index: 15;
+  background: #fff;
+  border-top: 1px solid #ddd;
+  box-shadow: 0 -2px 10px rgba(0,0,0,0.08);
+  transition: transform 0.25s ease;
+  display: flex;
+  flex-direction: column;
+  max-height: 50%;
+}
+
+#data-panel.collapsed {
+  transform: translateY(calc(100% - 40px));
+}
+
+#data-panel-header {
+  flex: 0 0 auto;
+  padding: 10px 20px;
+  background: #f1f3f5;
+  border-bottom: 1px solid #ddd;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  cursor: pointer;
+  user-select: none;
+}
+
+#data-panel-header h2 {
+  font-size: 13px;
+  font-weight: 600;
+  color: #555;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+#data-panel-body {
+  flex: 1 1 auto;
+  padding: 12px 20px 16px;
+  overflow-y: auto;
+}
+
+#data-panel-body textarea {
+  width: 100%;
+  min-height: 120px;
+  padding: 10px;
+  font-family: "SF Mono", "Fira Code", "Fira Mono", Menlo, Consolas, monospace;
+  font-size: 12px;
+  line-height: 1.5;
+  border: 1px solid #ccc;
+  border-radius: 4px;
+  resize: vertical;
+  tab-size: 2;
+}
+
+#data-panel-body textarea:focus {
+  outline: none;
+  border-color: #3498db;
+  box-shadow: 0 0 0 2px rgba(52,152,219,0.2);
+}
+
+#data-panel-actions {
+  display: flex;
+  gap: 8px;
+  margin-top: 10px;
+  align-items: center;
+}
+
+#data-panel-actions button {
+  background: #3498db;
+  color: #fff;
+  border: none;
+  border-radius: 4px;
+  padding: 7px 16px;
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: background 0.2s;
+}
+
+#data-panel-actions button:hover {
+  background: #2980b9;
+}
+
+#data-panel-actions .status {
+  font-size: 12px;
+  color: #888;
+  margin-left: 8px;
+}
+
+#data-panel-actions .status.error {
+  color: #e74c3c;
+}
+
+#data-panel-actions .status.success {
+  color: #27ae60;
+}
+
+/* --- Stats bar --- */
+#stats {
+  flex: 0 0 auto;
+  padding: 6px 24px;
+  background: #f1f3f5;
+  border-top: 1px solid #e9ecef;
+  font-size: 12px;
+  color: #888;
+  display: flex;
+  gap: 20px;
+}
+
+#stats span {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+
+#stats .stat-value {
+  font-weight: 600;
+  color: #555;
+}
+</style>
+</head>
+<body>
+
+<!-- Header -->
+<header>
+  <h1>Emod Diagram Viewer</h1>
+  <div class="model-name">Model: <span id="model-name-display">—</span></div>
+</header>
+
+<!-- SVG Canvas -->
+<div id="canvas-container">
+  <svg id="diagram-canvas" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 800">
+    <defs>
+      <marker id="arrow" viewBox="0 0 10 10" refX="10" refY="5" markerWidth="6" markerHeight="6" orient="auto">
+        <path d="M 0 0 L 10 5 L 0 10 z" fill="#666666"/>
+      </marker>
+    </defs>
+    <!-- Diagram elements will be rendered here by the renderer -->
+  </svg>
+
+  <button id="panel-toggle">☰ Data</button>
+
+  <!-- Data panel -->
+  <div id="data-panel" class="collapsed">
+    <div id="data-panel-header">
+      <h2>Diagram Data</h2>
+      <span style="font-size:12px;color:#999;">▾</span>
+    </div>
+    <div id="data-panel-body">
+      <textarea id="json-input" spellcheck="false"></textarea>
+      <div id="data-panel-actions">
+        <button id="render-btn">Render</button>
+        <span class="status" id="render-status"></span>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Stats bar -->
+<div id="stats">
+  <span>Nodes: <span class="stat-value" id="stat-nodes">0</span></span>
+  <span>Edges: <span class="stat-value" id="stat-edges">0</span></span>
+  <span>Canvas: <span class="stat-value" id="stat-canvas">—</span></span>
+</div>
+
+<script>
+// ─── Sample diagram data ──────────────────────────────────────────────
+const SAMPLE_DATA = {
+  "model_name": "Hotel Reservation",
+  "nodes": [
+    {"id": "actor-1", "type": "actor", "label": "Guest", "parentId": null},
+    {"id": "context-1", "type": "context", "label": "Reservations", "parentId": null},
+    {"id": "aggregate-1", "type": "aggregate", "label": "Reservation", "parentId": "context-1"},
+    {"id": "slice-1", "type": "slice", "label": "Reserve a Room", "parentId": "aggregate-1"},
+    {"id": "command-1", "type": "command", "label": "ReserveRoom", "parentId": "slice-1", "fields": [{"name": "roomId", "type": "string", "modifier": "required"}, {"name": "guestName", "type": "string", "modifier": "required"}, {"name": "checkIn", "type": "date", "modifier": "required"}, {"name": "checkOut", "type": "date", "modifier": "required"}]},
+    {"id": "event-1", "type": "event", "label": "RoomReserved", "parentId": "slice-1", "fields": [{"name": "reservationId", "type": "string", "modifier": "required"}, {"name": "roomId", "type": "string", "modifier": "required"}, {"name": "guestName", "type": "string", "modifier": "required"}, {"name": "checkIn", "type": "date", "modifier": "required"}, {"name": "checkOut", "type": "date", "modifier": "required"}, {"name": "reservedAt", "type": "timestamp", "modifier": "required"}]},
+    {"id": "slice-2", "type": "slice", "label": "View Available Rooms", "parentId": "aggregate-1"},
+    {"id": "slice-3", "type": "slice", "label": "Check Out Guest", "parentId": "aggregate-1"},
+    {"id": "command-2", "type": "command", "label": "CheckOutGuest", "parentId": "slice-3", "fields": [{"name": "reservationId", "type": "string", "modifier": "required"}]},
+    {"id": "event-2", "type": "event", "label": "GuestCheckedOut", "parentId": "slice-3", "fields": [{"name": "reservationId", "type": "string", "modifier": "required"}, {"name": "roomId", "type": "string", "modifier": "required"}, {"name": "checkedOutAt", "type": "timestamp", "modifier": "required"}]},
+    {"id": "slice-4", "type": "slice", "label": "Send Confirmation Email", "parentId": "aggregate-1"},
+    {"id": "slice-5", "type": "slice", "label": "Import External Booking", "parentId": "aggregate-1"},
+    {"id": "command-3", "type": "command", "label": "ImportExternalReservation", "parentId": "slice-5", "fields": [{"name": "externalRef", "type": "string", "modifier": "required"}, {"name": "roomId", "type": "string", "modifier": "required"}, {"name": "guestName", "type": "string", "modifier": "required"}, {"name": "checkIn", "type": "date", "modifier": "required"}, {"name": "checkOut", "type": "date", "modifier": "required"}]},
+    {"id": "event-3", "type": "event", "label": "ExternalReservationImported", "parentId": "slice-5", "fields": [{"name": "reservationId", "type": "string", "modifier": "required"}, {"name": "externalRef", "type": "string", "modifier": "required"}, {"name": "source", "type": "string", "modifier": "required"}, {"name": "roomId", "type": "string", "modifier": "required"}, {"name": "guestName", "type": "string", "modifier": "required"}, {"name": "checkIn", "type": "date", "modifier": "required"}, {"name": "checkOut", "type": "date", "modifier": "required"}]},
+    {"id": "context-2", "type": "context", "label": "Notifications", "parentId": null},
+    {"id": "aggregate-2", "type": "aggregate", "label": "Notification", "parentId": "context-2"},
+    {"id": "slice-6", "type": "slice", "label": "Send Confirmation", "parentId": "aggregate-2"},
+    {"id": "command-4", "type": "command", "label": "SendConfirmationEmail", "parentId": "slice-6", "fields": [{"name": "reservationId", "type": "string", "modifier": "required"}, {"name": "guestName", "type": "string", "modifier": "required"}, {"name": "email", "type": "string", "modifier": "required"}]}
+  ],
+  "edges": [
+    {"source": "command-1", "target": "event-1", "type": "flow"},
+    {"source": "command-2", "target": "event-2", "type": "flow"}
+  ]
+};
+
+// ─── Module-scoped state ──────────────────────────────────────────────
+let nodes = [];
+let edges = [];
+let modelName = "";
+
+// ─── DOM references ────────────────────────────────────────────────────
+const svg        = document.getElementById("diagram-canvas");
+const nameDisplay = document.getElementById("model-name-display");
+const jsonInput  = document.getElementById("json-input");
+const renderBtn  = document.getElementById("render-btn");
+const statusEl   = document.getElementById("render-status");
+const statNodes  = document.getElementById("stat-nodes");
+const statEdges  = document.getElementById("stat-edges");
+const statCanvas = document.getElementById("stat-canvas");
+const panel      = document.getElementById("data-panel");
+const panelHdr   = document.getElementById("data-panel-header");
+const panelToggle = document.getElementById("panel-toggle");
+
+// ─── Parse & render ────────────────────────────────────────────────────
+function loadData(jsonStr) {
+  try {
+    const data = JSON.parse(jsonStr);
+
+    if (!data.nodes || !Array.isArray(data.nodes)) {
+      throw new Error("Missing required array: nodes");
+    }
+    if (!data.edges || !Array.isArray(data.edges)) {
+      throw new Error("Missing required array: edges");
+    }
+
+    modelName = data.model_name || "";
+    nodes = data.nodes;
+    edges = data.edges;
+
+    // Update UI
+    nameDisplay.textContent = modelName || "(unnamed)";
+    document.title = modelName ? modelName + " — Emod Diagram Viewer" : "Emod Diagram Viewer";
+    statNodes.textContent = nodes.length;
+    statEdges.textContent = edges.length;
+
+    const vb = svg.getAttribute("viewBox") || "";
+    statCanvas.textContent = vb.replace("0 0 ", "").trim() || "—";
+
+    // Draw an empty state message (no rendering yet — just skeleton)
+    clearSVG();
+
+    return { success: true };
+  } catch (err) {
+    return { success: false, error: err.message };
+  }
+}
+
+function clearSVG() {
+  // Remove all child elements except defs
+  const defs = svg.querySelector("defs");
+  svg.innerHTML = "";
+  if (defs) svg.appendChild(defs);
+}
+
+function render() {
+  const result = loadData(jsonInput.value);
+  if (result.success) {
+    statusEl.textContent = "✓ Rendered";
+    statusEl.className = "status success";
+  } else {
+    statusEl.textContent = "✗ " + result.error;
+    statusEl.className = "status error";
+  }
+}
+
+// ─── Panel toggle ──────────────────────────────────────────────────────
+function togglePanel() {
+  panel.classList.toggle("collapsed");
+}
+
+panelHdr.addEventListener("click", togglePanel);
+panelToggle.addEventListener("click", togglePanel);
+
+// ─── Render button ─────────────────────────────────────────────────────
+renderBtn.addEventListener("click", render);
+
+// ─── Initial load ──────────────────────────────────────────────────────
+jsonInput.value = JSON.stringify(SAMPLE_DATA, null, 2);
+loadData(jsonInput.value);
+</script>
+</body>
+</html>
