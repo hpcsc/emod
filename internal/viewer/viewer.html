@@ -195,6 +195,29 @@ header .model-name span {
   letter-spacing: 0.5px;
 }
 
+#data-panel-body {
+  position: relative;
+  padding: 12px;
+  overflow-y: auto;
+  flex: 1 1 auto;
+}
+#data-panel-body.drag-over::after {
+  content: "Drop .emod file here";
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(52,152,219,0.08);
+  border: 2px dashed #3498db;
+  border-radius: 4px;
+  font-size: 15px;
+  font-weight: 600;
+  color: #3498db;
+  z-index: 1;
+  pointer-events: none;
+}
+
 #source-input {
   width: 100%;
   min-height: 200px;
@@ -465,6 +488,7 @@ const statEdges  = document.getElementById("stat-edges");
 const statCanvas = document.getElementById("stat-canvas");
 const panel      = document.getElementById("data-panel");
 const panelHdr   = document.getElementById("data-panel-header");
+const panelBody  = document.getElementById("data-panel-body");
 
 // ─── Minimap DOM references ──────────────────────────────────────────
 const minimap = document.getElementById("minimap");
@@ -1018,6 +1042,35 @@ function render() {
 
 // ─── Render button ───────────────────────────────────────────────────────
 renderBtn.addEventListener("click", render);
+
+// ─── File drag-and-drop ────────────────────────────────────────────────
+panelBody.addEventListener("dragenter", function(evt) {
+  evt.preventDefault();
+  evt.stopPropagation();
+  panelBody.classList.add("drag-over");
+});
+panelBody.addEventListener("dragover", function(evt) {
+  evt.preventDefault();
+  evt.stopPropagation();
+});
+panelBody.addEventListener("dragleave", function(evt) {
+  evt.preventDefault();
+  evt.stopPropagation();
+  panelBody.classList.remove("drag-over");
+});
+panelBody.addEventListener("drop", function(evt) {
+  evt.preventDefault();
+  evt.stopPropagation();
+  panelBody.classList.remove("drag-over");
+  var file = evt.dataTransfer.files[0];
+  if (!file) return;
+  var reader = new FileReader();
+  reader.onload = function(e) {
+    sourceInput.value = e.target.result;
+    render();
+  };
+  reader.readAsText(file);
+});
 
 // ─── Mouse wheel zoom (attached once, not inside renderDiagram) ───────
 svg.addEventListener("wheel", function(evt) {
