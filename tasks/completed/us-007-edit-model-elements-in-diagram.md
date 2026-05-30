@@ -5,7 +5,7 @@
 - [x] Task 2: Add context menu on contexts and aggregates for adding slices
 - [x] Task 3: Add context menu on slices for adding commands, events, and flows
 - [x] Task 4: Add field editing (add, edit, remove) to the detail panel
-- [ ] Task 5: Add node deletion
+- [x] Task 5: Add node deletion
 
 ## Story Reference
 `user-stories/web-diagram-viewer.md` — **US-007: Edit model elements in the diagram**

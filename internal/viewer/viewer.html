@@ -578,6 +578,23 @@ header .model-name span {
   background: rgba(0,0,0,0.06);
   color: #333;
 }
+#detail-panel .dp-delete-btn {
+  cursor: pointer;
+  border: 1px solid #e74c3c;
+  background: transparent;
+  color: #e74c3c;
+  font-size: 12px;
+  font-weight: 500;
+  padding: 6px 16px;
+  border-radius: 4px;
+  display: block;
+  margin: 8px auto;
+  width: fit-content;
+}
+#detail-panel .dp-delete-btn:hover {
+  background: #e74c3c;
+  color: #fff;
+}
 
 /* --- Context Menu --- */
 #ctx-menu {
@@ -2558,7 +2575,11 @@ function showDetailPanel(node) {
   selectedNodeId = node.id;
   clearHighlights();
 
+  var isDeletable = isDeletableNodeType(node.type);
   var html = '<div class="dp-header">' + esc(node.label) + ' <span class="dp-type">(' + node.type + ')</span></div>';
+  if (isDeletable) {
+    html += '<button class="dp-delete-btn" title="Delete node">Delete</button>';
+  }
 
   var isFieldNode = (node.type === 'command' || node.type === 'event');
   var showFields = isFieldNode || (node.fields && node.fields.length > 0);
@@ -2687,6 +2708,15 @@ function showDetailPanel(node) {
     }
   }
 
+  // Delete button handler
+  var delBtn = content.querySelector('.dp-delete-btn');
+  if (delBtn) {
+    delBtn.addEventListener('click', function(evt) {
+      evt.stopPropagation();
+      deleteNode(selectedNodeId);
+    });
+  }
+
   el.style.display = "block";
 
   // Suppress tooltip for the selected element
@@ -2698,6 +2728,36 @@ function hideDetailPanel() {
   if (el) el.style.display = "none";
   selectedNodeId = null;
   clearHighlights();
+}
+
+// ─── Node deletion ─────────────────────────────────────────────────────
+function isDeletableNodeType(type) {
+  return type === "command" || type === "event" || type === "trigger" ||
+         type === "view" || type === "automation" || type === "translation";
+}
+
+function deleteNode(nodeId) {
+  // Remove the node from nodes[]
+  for (var i = 0; i < nodes.length; i++) {
+    if (nodes[i].id === nodeId) {
+      nodes.splice(i, 1);
+      break;
+    }
+  }
+  // Remove all edges connected to the deleted node
+  edges = edges.filter(function(e) {
+    return e.source !== nodeId && e.target !== nodeId;
+  });
+  // Clean up offsets and layout data
+  delete nodeOffsets[nodeId];
+  delete layoutPositions[nodeId];
+  // Update stats
+  statNodes.textContent = nodes.length;
+  statEdges.textContent = edges.length;
+  // Close panel and re-render
+  hideDetailPanel();
+  renderDiagram();
+  updateResetLayoutButton();
 }
 
 // ─── Inline rename via double-click ───────────────────────────────────────
@@ -3166,6 +3226,15 @@ document.addEventListener("keydown", function(evt) {
     } else {
       hideDetailPanel();
       clearHighlights();
+    }
+  } else if (evt.key === "Delete" || evt.key === "Backspace") {
+    // Delete selected block-level node if detail panel is open
+    if (selectedNodeId) {
+      var delNode = findNodeById(selectedNodeId);
+      if (delNode && isDeletableNodeType(delNode.type)) {
+        evt.preventDefault();
+        deleteNode(selectedNodeId);
+      }
     }
   }
 });
