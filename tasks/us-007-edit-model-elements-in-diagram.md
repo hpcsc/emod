@@ -2,7 +2,7 @@
 
 ## Progress
 - [x] Task 1: Add inline rename via double-click on nodes
-- [ ] Task 2: Add context menu on contexts and aggregates for adding slices
+- [x] Task 2: Add context menu on contexts and aggregates for adding slices
 - [ ] Task 3: Add context menu on slices for adding commands, events, and flows
 - [ ] Task 4: Add field editing (add, edit, remove) to the detail panel
 - [ ] Task 5: Add node deletion

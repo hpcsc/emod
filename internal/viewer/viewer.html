@@ -578,6 +578,32 @@ header .model-name span {
   background: rgba(0,0,0,0.06);
   color: #333;
 }
+
+/* --- Context Menu --- */
+#ctx-menu {
+  position: fixed;
+  z-index: 2000;
+  background: #fff;
+  border: 1px solid #d0d0d0;
+  border-radius: 6px;
+  box-shadow: 0 4px 16px rgba(0,0,0,0.15);
+  padding: 4px 0;
+  font-size: 13px;
+  display: none;
+  min-width: 140px;
+  user-select: none;
+}
+#ctx-menu .ctx-menu-item {
+  padding: 8px 16px;
+  cursor: pointer;
+  color: #333;
+  white-space: nowrap;
+}
+#ctx-menu .ctx-menu-item:hover {
+  background: #f1f3f5;
+  color: #2c3e50;
+}
+
 #detail-panel .dp-section {
   margin-bottom: 10px;
 }
@@ -744,6 +770,10 @@ header .model-name span {
     <div id="dp-content"></div>
   </div>
 
+  <div id="ctx-menu">
+    <div class="ctx-menu-item" data-action="add-slice">Add Slice</div>
+  </div>
+
   <div id="minimap">
     <div id="minimap-handle">Overview</div>
     <svg id="minimap-svg" xmlns="http://www.w3.org/2000/svg"></svg>
@@ -831,6 +861,9 @@ var suppressDetailClick = false; // true when a drag just completed, suppresses 
 
 // ─── Inline rename state ────────────────────────────────────────────
 var inlineEditState = null;    // { nodeId, originalLabel, inputEl } or null when idle
+
+// ─── Context menu state ────────────────────────────────────────────
+var ctxMenuState = null;       // { targetAggId } or null when hidden
 
 // ─── DOM references ────────────────────────────────────────────────────
 const svg        = document.getElementById("diagram-canvas");
@@ -1082,19 +1115,39 @@ function renderDiagram() {
     html += svgRect(cp.x, cp.y, cp.w, cp.h, "#f1f3f5", "#2c3e50", "rx=\"8\" stroke-width=\"2\"");
 
     // ── Swimlane header bar (context name) ──
-    html += svgRect(cp.x, cp.y, cp.w, L.swimlaneHdr, "#2c3e50", "#2c3e50", "rx=\"8\"");
+    html += svgRect(cp.x, cp.y, cp.w, L.swimlaneHdr, "#2c3e50", "#2c3e50", "rx=\"8\" class=\"ctx-header\" data-ctx-id=\"" + ctx.id + "\"");
     // Square off the bottom of the header so it blends into content area
-    html += svgRect(cp.x, cp.y + L.swimlaneHdr - 8, cp.w, 8, "#2c3e50", "#2c3e50");
+    html += svgRect(cp.x, cp.y + L.swimlaneHdr - 8, cp.w, 8, "#2c3e50", "#2c3e50", "class=\"ctx-header\" data-ctx-id=\"" + ctx.id + "\"");
     html += svgText(cp.x + 16, cp.y + L.swimlaneHdr - 14, ctx.label, 16, "#ffffff", "font-weight=\"bold\" class=\"ctx-label\" data-ctx-id=\"" + ctx.id + "\"");
 
     // ── Aggregate sub-header row ──
     if (aggs.length > 0) {
       var aggY = cp.y + L.swimlaneHdr;
-      html += svgRect(cp.x, aggY, cp.w, L.aggLabelH, "#e9ecef", "#e9ecef");
+      var aggStartX = cp.x;
+      aggs.forEach(function(agg) {
+        var ap = layoutPositions[agg.id];
+        if (!ap) return;
+        var aggOwnWidth = Math.max(100, ap.w - (aggStartX - cp.x));
+        html += svgRect(aggStartX, aggY, aggOwnWidth, L.aggLabelH, "#e9ecef", "#e9ecef", "class=\"agg-row\" data-agg-id=\"" + agg.id + "\"");
+        aggStartX += aggOwnWidth;
+      });
       aggs.forEach(function(agg) {
         html += svgText(cp.x + 16, aggY + L.aggLabelH - 6, agg.label, 13, "#495057", "font-weight=\"600\" class=\"agg-label\" data-agg-id=\"" + agg.id + "\"");
       });
     }
+
+    // ── Aggregate content area backdrop (for right-click context menu) ──
+    var aggAreaX = cp.x;
+    aggs.forEach(function(agg) {
+      var ap = layoutPositions[agg.id];
+      if (!ap) return;
+      var aggAreaW = Math.max(100, ap.w - (aggAreaX - cp.x));
+      var aggAreaY = cp.y + L.swimlaneHdr + L.aggLabelH;
+      var aggAreaH = (cp.y + cp.h) - aggAreaY;
+      html += svgRect(aggAreaX, aggAreaY, aggAreaW, aggAreaH, "transparent", "none",
+        "class=\"agg-area\" data-agg-id=\"" + agg.id + "\"");
+      aggAreaX += aggAreaW;
+    });
 
     // ── Slice columns ──
     aggs.forEach(function(agg) {
@@ -2729,11 +2782,129 @@ svg.addEventListener("dblclick", function(evt) {
   }
 });
 
-// ── Escape key: cancel inline edit, or close panel and clear highlights ──
+// ── Context menu: right-click on context header, aggregate row, or labels ──
+svg.addEventListener("contextmenu", function(evt) {
+  var target = evt.target;
+
+  // Suppress default menu when clicking inside a slice (slice header or blocks),
+  // otherwise the browser default bubbles up below when we return without preventDefault.
+  var sliceEl = target.closest(".slice-header, .cmd-block, .evt-block, .trg-block, .view-block, .auto-block, .trans-block");
+  if (sliceEl) return;
+
+  // Check aggregate content area (transparent backdrop rects)
+  var aggArea = target.closest(".agg-area");
+  if (aggArea) {
+    var aggId = aggArea.getAttribute("data-agg-id");
+    if (aggId) {
+      evt.preventDefault();
+      showContextMenu(evt.clientX, evt.clientY, aggId);
+      return;
+    }
+  }
+
+  var aggLabel = target.closest(".agg-label");
+  if (aggLabel) {
+    var aggId = aggLabel.getAttribute("data-agg-id");
+    if (aggId) {
+      evt.preventDefault();
+      showContextMenu(evt.clientX, evt.clientY, aggId);
+      return;
+    }
+  }
+
+  var ctxHeader = target.closest(".ctx-header");
+  if (ctxHeader) {
+    var ctxId = ctxHeader.getAttribute("data-ctx-id");
+    if (ctxId) {
+      for (var i = 0; i < nodes.length; i++) {
+        if (nodes[i].type === "aggregate" && nodes[i].parentId === ctxId) {
+          evt.preventDefault();
+          showContextMenu(evt.clientX, evt.clientY, nodes[i].id);
+          return;
+        }
+      }
+    }
+  }
+
+  var ctxLabel = target.closest(".ctx-label");
+  if (ctxLabel) {
+    var ctxId = ctxLabel.getAttribute("data-ctx-id");
+    if (ctxId) {
+      for (var i = 0; i < nodes.length; i++) {
+        if (nodes[i].type === "aggregate" && nodes[i].parentId === ctxId) {
+          evt.preventDefault();
+          showContextMenu(evt.clientX, evt.clientY, nodes[i].id);
+          return;
+        }
+      }
+    }
+  }
+});
+
+function showContextMenu(x, y, aggId) {
+  var el = document.getElementById("ctx-menu");
+  if (!el) return;
+  ctxMenuState = { targetAggId: aggId };
+  el.style.left = x + "px";
+  el.style.top = y + "px";
+  el.style.display = "block";
+}
+
+function hideContextMenu() {
+  var el = document.getElementById("ctx-menu");
+  if (el) el.style.display = "none";
+  ctxMenuState = null;
+}
+
+// ── Context menu actions via event delegation ──
+document.getElementById("ctx-menu").addEventListener("click", function(evt) {
+  var item = evt.target.closest(".ctx-menu-item");
+  if (!item) return;
+  var action = item.getAttribute("data-action");
+
+  if (action === "add-slice") {
+    if (!ctxMenuState) return;
+    var aggId = ctxMenuState.targetAggId;
+
+    // Generate unique ID that does not collide with existing nodes
+    var sliceId;
+    do {
+      sliceId = "_slice_" + Date.now() + "_" + Math.random().toString(36).substr(2, 4);
+    } while (findNodeById(sliceId));
+
+    // Generate label: "new-slice", or "new-slice-N" for subsequent additions
+    var existingSlices = nodes.filter(function(n) {
+      return n.parentId === aggId && n.type === "slice";
+    });
+    var label = existingSlices.length === 0 ? "new-slice" : "new-slice-" + (existingSlices.length + 1);
+
+    nodes.push({
+      id: sliceId,
+      type: "slice",
+      label: label,
+      parentId: aggId,
+    });
+
+    hideContextMenu();
+    renderDiagram();
+  }
+});
+
+// ── Dismiss context menu on outside click ──
+document.addEventListener("click", function(evt) {
+  var menu = document.getElementById("ctx-menu");
+  if (menu && menu.style.display !== "none" && !menu.contains(evt.target)) {
+    hideContextMenu();
+  }
+});
+
+// ── Escape key: cancel inline edit, dismiss context menu, or close panel and clear highlights ──
 document.addEventListener("keydown", function(evt) {
   if (evt.key === "Escape") {
     if (inlineEditState) {
       cancelInlineEdit();
+    } else if (ctxMenuState) {
+      hideContextMenu();
     } else {
       hideDetailPanel();
       clearHighlights();
