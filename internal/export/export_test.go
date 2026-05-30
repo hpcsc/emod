@@ -1438,11 +1438,20 @@ func TestExportDiagramJSON(t *testing.T) {
 							Slices: []*ast.Slice{
 								{
 									Name: "S",
+									Trigger: &ast.Trigger{
+										Kind: "UI", Name: "Form", Actor: "User", Reads: "V",
+									},
 									Commands: []*ast.Command{
 										{Name: "Cmd"},
 									},
 									Events: []*ast.Event{
 										{Name: "Evt"},
+									},
+									Views: []*ast.View{
+										{Name: "MyView", Subscribes: []string{"Evt"}},
+									},
+									Automations: []*ast.Automation{
+										{Name: "Auto", TriggerEvent: "Evt", Command: "DoIt"},
 									},
 								},
 							},
@@ -1460,13 +1469,13 @@ func TestExportDiagramJSON(t *testing.T) {
 		require.NoError(t, err)
 
 		nodes := doc["nodes"].([]any)
-		require.Len(t, nodes, 6)
+		require.Len(t, nodes, 9)
 
 		types := make([]string, 0, len(nodes))
 		for _, n := range nodes {
 			types = append(types, n.(map[string]any)["type"].(string))
 		}
-		require.Equal(t, []string{"actor", "context", "aggregate", "slice", "command", "event"}, types)
+		require.Equal(t, []string{"actor", "context", "aggregate", "slice", "command", "event", "trigger", "view", "automation"}, types)
 	})
 
 	t.Run("parentId chains are correct for hierarchical nodes", func(t *testing.T) {
@@ -1535,6 +1544,283 @@ func TestExportDiagramJSON(t *testing.T) {
 		event := nodes[5].(map[string]any)
 		require.Equal(t, "event", event["type"])
 		require.Equal(t, "slice-1", event["parentId"])
+	})
+
+	t.Run("trigger node with kind/actor/reads", func(t *testing.T) {
+		model := &ast.Model{
+			Name: "Test",
+			Contexts: []*ast.Context{
+				{
+					Name: "Ctx",
+					Aggregates: []*ast.Aggregate{
+						{
+							Name: "Agg",
+							Slices: []*ast.Slice{
+								{
+									Name: "S",
+									Trigger: &ast.Trigger{
+										Kind:  "UI",
+										Name:  "FormSubmit",
+										Actor: "Guest",
+										Reads: "MyView",
+									},
+								},
+							},
+						},
+					},
+				},
+			},
+		}
+
+		raw, err := export.ExportDiagramJSON(model)
+		require.NoError(t, err)
+
+		var doc map[string]any
+		err = json.Unmarshal(raw, &doc)
+		require.NoError(t, err)
+
+		nodes := doc["nodes"].([]any)
+		// context, aggregate, slice, trigger
+		require.Len(t, nodes, 4)
+
+		trigger := nodes[3].(map[string]any)
+		require.Equal(t, "trigger", trigger["type"])
+		require.Equal(t, "slice-1", trigger["parentId"])
+		require.Equal(t, "FormSubmit", trigger["label"])
+		require.Equal(t, "UI", trigger["kind"])
+		require.Equal(t, "Guest", trigger["actor"])
+		require.Equal(t, "MyView", trigger["reads"])
+	})
+
+	t.Run("view node with fields and subscribes", func(t *testing.T) {
+		model := &ast.Model{
+			Name: "Test",
+			Contexts: []*ast.Context{
+				{
+					Name: "Ctx",
+					Aggregates: []*ast.Aggregate{
+						{
+							Name: "Agg",
+							Slices: []*ast.Slice{
+								{
+									Name: "S",
+									Views: []*ast.View{
+										{
+											Name: "RoomsView",
+											Fields: []*ast.Field{
+												{Name: "roomId", Type: "string", Modifier: "required"},
+												{Name: "status", Type: "string", Modifier: "optional"},
+											},
+											Subscribes: []string{"RoomReserved", "GuestCheckedOut"},
+										},
+									},
+								},
+							},
+						},
+					},
+				},
+			},
+		}
+
+		raw, err := export.ExportDiagramJSON(model)
+		require.NoError(t, err)
+
+		var doc map[string]any
+		err = json.Unmarshal(raw, &doc)
+		require.NoError(t, err)
+
+		nodes := doc["nodes"].([]any)
+		// context, aggregate, slice, view
+		require.Len(t, nodes, 4)
+
+		view := nodes[3].(map[string]any)
+		require.Equal(t, "view", view["type"])
+		require.Equal(t, "slice-1", view["parentId"])
+		require.Equal(t, "RoomsView", view["label"])
+
+		fields := view["fields"].([]any)
+		require.Len(t, fields, 2)
+		f0 := fields[0].(map[string]any)
+		require.Equal(t, "roomId", f0["name"])
+		require.Equal(t, "string", f0["type"])
+		require.Equal(t, "required", f0["modifier"])
+		f1 := fields[1].(map[string]any)
+		require.Equal(t, "status", f1["name"])
+		require.Equal(t, "string", f1["type"])
+		require.Equal(t, "optional", f1["modifier"])
+
+		subs := view["subscribes"].([]any)
+		require.Len(t, subs, 2)
+		require.Equal(t, "RoomReserved", subs[0])
+		require.Equal(t, "GuestCheckedOut", subs[1])
+	})
+
+	t.Run("automation node with trigger_event/command/target_context", func(t *testing.T) {
+		model := &ast.Model{
+			Name: "Test",
+			Contexts: []*ast.Context{
+				{
+					Name: "Ctx",
+					Aggregates: []*ast.Aggregate{
+						{
+							Name: "Agg",
+							Slices: []*ast.Slice{
+								{
+									Name: "Notify",
+									Automations: []*ast.Automation{
+										{
+											Name:          "OrderNotifier",
+											TriggerEvent:  "OrderPlaced",
+											Command:       "SendNotification",
+											TargetContext: "Notifications",
+										},
+									},
+								},
+							},
+						},
+					},
+				},
+			},
+		}
+
+		raw, err := export.ExportDiagramJSON(model)
+		require.NoError(t, err)
+
+		var doc map[string]any
+		err = json.Unmarshal(raw, &doc)
+		require.NoError(t, err)
+
+		nodes := doc["nodes"].([]any)
+		// context, aggregate, slice, automation
+		require.Len(t, nodes, 4)
+
+		auto := nodes[3].(map[string]any)
+		require.Equal(t, "automation", auto["type"])
+		require.Equal(t, "slice-1", auto["parentId"])
+		require.Equal(t, "OrderNotifier", auto["label"])
+		require.Equal(t, "OrderPlaced", auto["trigger_event"])
+		require.Equal(t, "SendNotification", auto["command"])
+		require.Equal(t, "Notifications", auto["target_context"])
+	})
+
+	t.Run("translation node with external_system/reads/command and nested event", func(t *testing.T) {
+		model := &ast.Model{
+			Name: "Test",
+			Contexts: []*ast.Context{
+				{
+					Name: "Ctx",
+					Aggregates: []*ast.Aggregate{
+						{
+							Name: "Agg",
+							Slices: []*ast.Slice{
+								{
+									Name: "Import",
+									Translations: []*ast.Translation{
+										{
+											Name:           "BookingImport",
+											ExternalSystem: "Booking.com API",
+											Reads:          "WebhookView",
+											Command:        "ImportBooking",
+											Event: &ast.Event{
+												Name: "BookingImported",
+												Fields: []*ast.Field{
+													{Name: "bookingId", Type: "string", Modifier: "required"},
+												},
+											},
+										},
+									},
+								},
+							},
+						},
+					},
+				},
+			},
+		}
+
+		raw, err := export.ExportDiagramJSON(model)
+		require.NoError(t, err)
+
+		var doc map[string]any
+		err = json.Unmarshal(raw, &doc)
+		require.NoError(t, err)
+
+		nodes := doc["nodes"].([]any)
+		// context, aggregate, slice, translation
+		require.Len(t, nodes, 4)
+
+		trans := nodes[3].(map[string]any)
+		require.Equal(t, "translation", trans["type"])
+		require.Equal(t, "slice-1", trans["parentId"])
+		require.Equal(t, "BookingImport", trans["label"])
+		require.Equal(t, "Booking.com API", trans["external_system"])
+		require.Equal(t, "WebhookView", trans["reads"])
+		require.Equal(t, "ImportBooking", trans["command"])
+
+		nestedEvent := trans["event"].(map[string]any)
+		require.Equal(t, "BookingImported", nestedEvent["name"])
+		fields := nestedEvent["fields"].([]any)
+		require.Len(t, fields, 1)
+		require.Equal(t, "bookingId", fields[0].(map[string]any)["name"])
+	})
+
+	t.Run("new node types have correct parentId chains", func(t *testing.T) {
+		model := &ast.Model{
+			Name: "Test",
+			Contexts: []*ast.Context{
+				{
+					Name: "Ctx",
+					Aggregates: []*ast.Aggregate{
+						{
+							Name: "Agg",
+							Slices: []*ast.Slice{
+								{
+									Name: "S",
+									Trigger: &ast.Trigger{
+										Kind: "UI", Name: "Form", Actor: "User", Reads: "V",
+									},
+									Views: []*ast.View{
+										{Name: "RoomsView"},
+									},
+									Automations: []*ast.Automation{
+										{Name: "Auto"},
+									},
+									Translations: []*ast.Translation{
+										{Name: "Import"},
+									},
+								},
+							},
+						},
+					},
+				},
+			},
+		}
+
+		raw, err := export.ExportDiagramJSON(model)
+		require.NoError(t, err)
+
+		var doc map[string]any
+		err = json.Unmarshal(raw, &doc)
+		require.NoError(t, err)
+
+		nodes := doc["nodes"].([]any)
+		// context, aggregate, slice, trigger, view, automation, translation
+		require.Len(t, nodes, 7)
+
+		// trigger should reference slice-1
+		trigger := findNodeByType(nodes, "trigger")
+		require.Equal(t, "slice-1", trigger["parentId"])
+
+		// view should reference slice-1
+		view := findNodeByType(nodes, "view")
+		require.Equal(t, "slice-1", view["parentId"])
+
+		// automation should reference slice-1
+		auto := findNodeByType(nodes, "automation")
+		require.Equal(t, "slice-1", auto["parentId"])
+
+		// translation should reference slice-1
+		trans := findNodeByType(nodes, "translation")
+		require.Equal(t, "slice-1", trans["parentId"])
 	})
 
 	t.Run("edges are created from flows", func(t *testing.T) {
@@ -2089,6 +2375,17 @@ func TestExportDiagramJSONDiagnostics(t *testing.T) {
 		_, hasRule := d["rule_name"]
 		require.False(t, hasRule, "empty rule_name should be omitted")
 	})
+}
+
+// findNodeByType finds a diagram node by its type field in a nodes array.
+func findNodeByType(nodes []any, typ string) map[string]any {
+	for _, n := range nodes {
+		node := n.(map[string]any)
+		if node["type"] == typ {
+			return node
+		}
+	}
+	return nil
 }
 
 // getFirstSlice navigates the parsed JSON document to find the first slice

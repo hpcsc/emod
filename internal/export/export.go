@@ -597,6 +597,16 @@ type jsonDiagramNode struct {
 	ParentID *string             `json:"parentId"`
 	Fields   []*jsonDiagramField `json:"fields,omitempty"`
 	Position *jsonPosition       `json:"position,omitempty"`
+	// Type-specific metadata for trigger, view, automation, translation
+	Kind           string        `json:"kind,omitempty"`
+	Actor          string        `json:"actor,omitempty"`
+	Reads          string        `json:"reads,omitempty"`
+	Subscribes     []string      `json:"subscribes,omitempty"`
+	TriggerEvent   string        `json:"trigger_event,omitempty"`
+	Command        string        `json:"command,omitempty"`
+	TargetContext  string        `json:"target_context,omitempty"`
+	ExternalSystem string        `json:"external_system,omitempty"`
+	Event          *jsonEvent    `json:"event,omitempty"`
 }
 
 type jsonDiagramEdge struct {
@@ -773,6 +783,77 @@ func convertModelToDiagram(m *ast.Model) *jsonDiagramDocument {
 							})
 						}
 					}
+				}
+
+				// Trigger node (single per slice)
+				if s.Trigger != nil {
+					doc.Nodes = append(doc.Nodes, &jsonDiagramNode{
+						ID:       g.next("trigger"),
+						Type:     "trigger",
+						Label:    s.Trigger.Name,
+						ParentID: &sliceID,
+						Position: convertPosition(s.Trigger.NamePos),
+						Kind:     s.Trigger.Kind,
+						Actor:    s.Trigger.Actor,
+						Reads:    s.Trigger.Reads,
+					})
+				}
+
+				// View nodes
+				for _, v := range s.Views {
+					if v == nil {
+						continue
+					}
+					node := &jsonDiagramNode{
+						ID:         g.next("view"),
+						Type:       "view",
+						Label:      v.Name,
+						ParentID:   &sliceID,
+						Position:   convertPosition(v.NamePos),
+						Subscribes: v.Subscribes,
+					}
+					if len(v.Fields) > 0 {
+						node.Fields = convertFieldsToDiagram(v.Fields)
+					}
+					doc.Nodes = append(doc.Nodes, node)
+				}
+
+				// Automation nodes
+				for _, a := range s.Automations {
+					if a == nil {
+						continue
+					}
+					doc.Nodes = append(doc.Nodes, &jsonDiagramNode{
+						ID:            g.next("auto"),
+						Type:          "automation",
+						Label:         a.Name,
+						ParentID:      &sliceID,
+						Position:      convertPosition(a.NamePos),
+						TriggerEvent:  a.TriggerEvent,
+						Command:       a.Command,
+						TargetContext: a.TargetContext,
+					})
+				}
+
+				// Translation nodes
+				for _, t := range s.Translations {
+					if t == nil {
+						continue
+					}
+					node := &jsonDiagramNode{
+						ID:             g.next("trans"),
+						Type:           "translation",
+						Label:          t.Name,
+						ParentID:       &sliceID,
+						Position:       convertPosition(t.NamePos),
+						ExternalSystem: t.ExternalSystem,
+						Reads:          t.Reads,
+						Command:        t.Command,
+					}
+					if t.Event != nil {
+						node.Event = convertEvent(t.Event)
+					}
+					doc.Nodes = append(doc.Nodes, node)
 				}
 			}
 		}
