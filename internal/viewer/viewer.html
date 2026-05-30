@@ -659,6 +659,63 @@ header .model-name span {
   color: #888;
   line-height: 1.6;
 }
+#detail-panel .dp-field-input {
+  width: 100%;
+  box-sizing: border-box;
+  border: 1px solid #d0d0d0;
+  border-radius: 3px;
+  padding: 2px 4px;
+  font-size: 11px;
+  font-family: inherit;
+  background: #fff;
+}
+#detail-panel .dp-field-input:focus {
+  outline: none;
+  border-color: #3498db;
+  box-shadow: 0 0 0 2px rgba(52,152,219,0.15);
+}
+#detail-panel .dp-field-name-input {
+  font-weight: 500;
+  color: #333;
+}
+#detail-panel .dp-field-type-input {
+  color: #6c8ebf;
+  font-family: "SF Mono", "Fira Code", Menlo, Consolas, monospace;
+}
+#detail-panel .dp-field-modifier-input {
+  color: #999;
+  font-style: italic;
+}
+#detail-panel .dp-field-delete {
+  cursor: pointer;
+  border: none;
+  background: none;
+  color: #bbb;
+  font-size: 16px;
+  line-height: 1;
+  padding: 0 2px;
+  vertical-align: middle;
+}
+#detail-panel .dp-field-delete:hover {
+  color: #e74c3c;
+}
+#detail-panel .dp-add-field {
+  margin-top: 6px;
+  border: 1px dashed #ccc;
+  background: none;
+  color: #888;
+  padding: 3px 10px;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 11px;
+  width: 100%;
+  text-align: center;
+}
+#detail-panel .dp-add-field:hover {
+  border-color: #3498db;
+  color: #3498db;
+  background: rgba(52,152,219,0.04);
+}
 
 /* --- Highlight states --- */
 #diagram-canvas.has-highlights .cmd-block:not(.hl) rect,
@@ -2503,16 +2560,36 @@ function showDetailPanel(node) {
 
   var html = '<div class="dp-header">' + esc(node.label) + ' <span class="dp-type">(' + node.type + ')</span></div>';
 
-  // Fields section (shared by all block types)
-  if (node.fields && node.fields.length > 0) {
+  var isFieldNode = (node.type === 'command' || node.type === 'event');
+  var showFields = isFieldNode || (node.fields && node.fields.length > 0);
+
+  if (showFields) {
     html += '<div class="dp-section">';
     html += '<div class="dp-section-title">Fields</div>';
-    html += '<table><thead><tr><th>Field</th><th>Type</th><th></th></tr></thead><tbody>';
-    node.fields.forEach(function(f) {
-      var mod = f.modifier ? ' <span class="dp-field-modifier">(' + esc(f.modifier) + ')</span>' : '';
-      html += '<tr><td class="dp-field-name">' + esc(f.name) + '</td><td class="dp-field-type">' + esc(f.type) + '</td><td>' + mod + '</td></tr>';
-    });
-    html += '</tbody></table>';
+    var fields = node.fields || [];
+    if (isFieldNode) {
+      html += '<table><thead><tr><th>Field</th><th>Type</th><th>Modifier</th><th></th></tr></thead><tbody>';
+      fields.forEach(function(f, i) {
+        html += '<tr>';
+        html += '<td><input class="dp-field-input dp-field-name-input" value="' + esc(f.name) + '" data-idx="' + i + '" data-field="name"></td>';
+        html += '<td><input class="dp-field-input dp-field-type-input" value="' + esc(f.type) + '" data-idx="' + i + '" data-field="type"></td>';
+        html += '<td><input class="dp-field-input dp-field-modifier-input" value="' + esc(f.modifier || '') + '" data-idx="' + i + '" data-field="modifier"></td>';
+        html += '<td><button class="dp-field-delete" data-idx="' + i + '" title="Delete field">×</button></td>';
+        html += '</tr>';
+      });
+      if (fields.length === 0) {
+        html += '<tr><td colspan="4" style="color:#999;font-style:italic;padding:8px 0;text-align:center;">No fields defined</td></tr>';
+      }
+      html += '</tbody></table>';
+      html += '<button class="dp-add-field">+ Add Field</button>';
+    } else {
+      html += '<table><thead><tr><th>Field</th><th>Type</th><th></th></tr></thead><tbody>';
+      fields.forEach(function(f) {
+        var mod = f.modifier ? ' <span class="dp-field-modifier">(' + esc(f.modifier) + ')</span>' : '';
+        html += '<tr><td class="dp-field-name">' + esc(f.name) + '</td><td class="dp-field-type">' + esc(f.type) + '</td><td>' + mod + '</td></tr>';
+      });
+      html += '</tbody></table>';
+    }
     html += '</div>';
   }
 
@@ -2571,6 +2648,45 @@ function showDetailPanel(node) {
   }
 
   content.innerHTML = html;
+
+  if (isFieldNode) {
+    // Blur handlers for field inputs — updates nodes[] so tooltips stay in sync
+    content.querySelectorAll('.dp-field-input').forEach(function(input) {
+      input.addEventListener('blur', function() {
+        var idx = parseInt(this.dataset.idx);
+        var field = this.dataset.field;
+        var n = findNodeById(selectedNodeId);
+        if (!n || !n.fields || !n.fields[idx]) return;
+        n.fields[idx][field] = this.value;
+      });
+    });
+
+    content.querySelectorAll('.dp-field-delete').forEach(function(btn) {
+      btn.addEventListener('click', function(evt) {
+        evt.stopPropagation();
+        var idx = parseInt(this.dataset.idx);
+        var n = findNodeById(selectedNodeId);
+        if (!n || !n.fields) return;
+        n.fields.splice(idx, 1);
+        renderDiagram();
+        showDetailPanel(n);
+      });
+    });
+
+    var addBtn = content.querySelector('.dp-add-field');
+    if (addBtn) {
+      addBtn.addEventListener('click', function(evt) {
+        evt.stopPropagation();
+        var n = findNodeById(selectedNodeId);
+        if (!n) return;
+        if (!n.fields) n.fields = [];
+        n.fields.push({name: '', type: 'string', modifier: ''});
+        renderDiagram();
+        showDetailPanel(n);
+      });
+    }
+  }
+
   el.style.display = "block";
 
   // Suppress tooltip for the selected element
@@ -2764,8 +2880,15 @@ svg.addEventListener("click", function(evt) {
 
   // ── Background click: close panel and clear highlights ──
   if (!interactive) {
-    hideDetailPanel();
-    clearHighlights();
+    // Don't close the detail panel if an input inside it is currently focused
+    var activeEl = document.activeElement;
+    var panelEl = document.getElementById("detail-panel");
+    var inputFocused = panelEl && panelEl.style.display !== "none" && activeEl &&
+      panelEl.contains(activeEl) && (activeEl.tagName === "INPUT" || activeEl.tagName === "SELECT");
+    if (!inputFocused) {
+      hideDetailPanel();
+      clearHighlights();
+    }
   }
 });
 
@@ -3025,9 +3148,17 @@ document.addEventListener("click", function(evt) {
   }
 });
 
-// ── Escape key: cancel inline edit, dismiss context menu, or close panel and clear highlights ──
+// ── Escape key: blur focused field input, cancel inline edit, dismiss context menu, or close panel ──
 document.addEventListener("keydown", function(evt) {
   if (evt.key === "Escape") {
+    // If a detail panel input is focused, blur it instead of closing panel
+    var activeEl = document.activeElement;
+    var panelEl = document.getElementById("detail-panel");
+    if (panelEl && panelEl.style.display !== "none" && activeEl && panelEl.contains(activeEl) &&
+        (activeEl.tagName === "INPUT" || activeEl.tagName === "SELECT")) {
+      activeEl.blur();
+      return;
+    }
     if (inlineEditState) {
       cancelInlineEdit();
     } else if (ctxMenuState) {
