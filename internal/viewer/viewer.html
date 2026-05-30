@@ -314,19 +314,39 @@ header .model-name span {
   color: #555;
 }
 
-/* --- Command/event block hover --- */
+/* --- Block hover styles --- */
 #diagram-canvas .cmd-block:hover rect {
   fill: #b8cce8 !important;
 }
 #diagram-canvas .evt-block:hover rect {
   fill: #f5d0b0 !important;
 }
+#diagram-canvas .trg-block:hover rect {
+  fill: #d0bdd8 !important;
+}
+#diagram-canvas .view-block:hover rect {
+  fill: #bfd8be !important;
+}
+#diagram-canvas .auto-block:hover rect {
+  fill: #e8b0ac !important;
+}
+#diagram-canvas .trans-block:hover rect {
+  fill: #e0e0e0 !important;
+}
 #diagram-canvas .cmd-block,
-#diagram-canvas .evt-block {
+#diagram-canvas .evt-block,
+#diagram-canvas .trg-block,
+#diagram-canvas .view-block,
+#diagram-canvas .auto-block,
+#diagram-canvas .trans-block {
   cursor: grab;
 }
 #diagram-canvas .cmd-block.dragging,
-#diagram-canvas .evt-block.dragging {
+#diagram-canvas .evt-block.dragging,
+#diagram-canvas .trg-block.dragging,
+#diagram-canvas .view-block.dragging,
+#diagram-canvas .auto-block.dragging,
+#diagram-canvas .trans-block.dragging {
   cursor: grabbing;
 }
 
@@ -337,7 +357,11 @@ header .model-name span {
 }
 #diagram-canvas.panning,
 #diagram-canvas.panning .cmd-block,
-#diagram-canvas.panning .evt-block {
+#diagram-canvas.panning .evt-block,
+#diagram-canvas.panning .trg-block,
+#diagram-canvas.panning .view-block,
+#diagram-canvas.panning .auto-block,
+#diagram-canvas.panning .trans-block {
   cursor: grabbing;
 }
 
@@ -541,7 +565,11 @@ header .model-name span {
 
 /* --- Highlight states --- */
 #diagram-canvas.has-highlights .cmd-block:not(.hl) rect,
-#diagram-canvas.has-highlights .evt-block:not(.hl) rect {
+#diagram-canvas.has-highlights .evt-block:not(.hl) rect,
+#diagram-canvas.has-highlights .trg-block:not(.hl) rect,
+#diagram-canvas.has-highlights .view-block:not(.hl) rect,
+#diagram-canvas.has-highlights .auto-block:not(.hl) rect,
+#diagram-canvas.has-highlights .trans-block:not(.hl) rect {
   opacity: 0.3;
 }
 #diagram-canvas .hl rect {
@@ -553,6 +581,18 @@ header .model-name span {
 }
 #diagram-canvas .hl.evt-block rect {
   fill: #f5d0b0 !important;
+}
+#diagram-canvas .hl.trg-block rect {
+  fill: #d0bdd8 !important;
+}
+#diagram-canvas .hl.view-block rect {
+  fill: #bfd8be !important;
+}
+#diagram-canvas .hl.auto-block rect {
+  fill: #e8b0ac !important;
+}
+#diagram-canvas .hl.trans-block rect {
+  fill: #e0e0e0 !important;
 }
 
 /* --- Flow arrow hover & cursor --- */
@@ -743,12 +783,24 @@ function computeLayout() {
           node: sl,
         };
 
-        // Pre-compute command/event positions within slice (for Tasks 3-5)
+        // Pre-compute block positions within slice (all block types in order)
+        var triggers = sl.children.filter(function(c) { return c.type === "trigger"; });
         var commands = sl.children.filter(function(c) { return c.type === "command"; });
         var events   = sl.children.filter(function(c) { return c.type === "event"; });
+        var views    = sl.children.filter(function(c) { return c.type === "view"; });
+        var automations = sl.children.filter(function(c) { return c.type === "automation"; });
+        var translations = sl.children.filter(function(c) { return c.type === "translation"; });
         var blockY = slY + 36;
         var gap = 10;
 
+        triggers.forEach(function(trg) {
+          var bx = xPos + (L.sliceWidth - L.boxWidth) / 2;
+          layoutPositions[trg.id] = {
+            x: bx, y: blockY, w: L.boxWidth, h: L.boxHeight,
+            node: trg,
+          };
+          blockY += L.boxHeight + gap;
+        });
         commands.forEach(function(cmd) {
           var bx = xPos + (L.sliceWidth - L.boxWidth) / 2;
           layoutPositions[cmd.id] = {
@@ -762,6 +814,30 @@ function computeLayout() {
           layoutPositions[evt.id] = {
             x: bx, y: blockY, w: L.boxWidth, h: L.boxHeight,
             node: evt,
+          };
+          blockY += L.boxHeight + gap;
+        });
+        views.forEach(function(view) {
+          var bx = xPos + (L.sliceWidth - L.boxWidth) / 2;
+          layoutPositions[view.id] = {
+            x: bx, y: blockY, w: L.boxWidth, h: L.boxHeight,
+            node: view,
+          };
+          blockY += L.boxHeight + gap;
+        });
+        automations.forEach(function(auto) {
+          var bx = xPos + (L.sliceWidth - L.boxWidth) / 2;
+          layoutPositions[auto.id] = {
+            x: bx, y: blockY, w: L.boxWidth, h: L.boxHeight,
+            node: auto,
+          };
+          blockY += L.boxHeight + gap;
+        });
+        translations.forEach(function(trans) {
+          var bx = xPos + (L.sliceWidth - L.boxWidth) / 2;
+          layoutPositions[trans.id] = {
+            x: bx, y: blockY, w: L.boxWidth, h: L.boxHeight,
+            node: trans,
           };
           blockY += L.boxHeight + gap;
         });
@@ -883,16 +959,23 @@ function renderDiagram() {
     html += "</g>\n";
   });
 
-  // ── Command and Event blocks ──
+  // ── All block types ──
   nodes.forEach(function(n) {
-    if (n.type !== "command" && n.type !== "event") return;
+    if (n.type !== "command" && n.type !== "event" &&
+        n.type !== "trigger" && n.type !== "view" &&
+        n.type !== "automation" && n.type !== "translation") return;
     var np = layoutPositions[n.id];
     if (!np) return;
 
-    var isCmd = n.type === "command";
-    var fill = isCmd ? "#dae8fc" : "#ffe6cc";
-    var stroke = isCmd ? "#6c8ebf" : "#d79b00";
-    var cls = isCmd ? "cmd-block" : "evt-block";
+    var fill, stroke, cls;
+    switch (n.type) {
+      case "command":     fill = "#dae8fc"; stroke = "#6c8ebf"; cls = "cmd-block"; break;
+      case "event":       fill = "#ffe6cc"; stroke = "#d79b00"; cls = "evt-block"; break;
+      case "trigger":     fill = "#e1d5e7"; stroke = "#9673a6"; cls = "trg-block"; break;
+      case "view":        fill = "#d5e8d4"; stroke = "#82b366"; cls = "view-block"; break;
+      case "automation":  fill = "#f8cecc"; stroke = "#b85450"; cls = "auto-block"; break;
+      case "translation": fill = "#f5f5f5"; stroke = "#666666"; cls = "trans-block"; break;
+    }
 
     html += "<g class=\"" + cls + "\" data-node-id=\"" + n.id + "\">\n";
     html += svgRect(np.x, np.y, np.w, np.h, fill, stroke,
@@ -994,7 +1077,7 @@ function positionTooltip(cx, cy) {
 }
 
 function attachBlockHandlers() {
-  var blocks = svg.querySelectorAll(".cmd-block, .evt-block");
+  var blocks = svg.querySelectorAll(".cmd-block, .evt-block, .trg-block, .view-block, .auto-block, .trans-block");
   blocks.forEach(function(block) {
     block.addEventListener("mouseenter", function(evt) {
       var nodeId = this.getAttribute("data-node-id");
@@ -1081,7 +1164,7 @@ function updateArrowsForNode(nodeId, draggedPos) {
 }
 
 function updateBlockTransform(nodeId) {
-  var blockEl = svg.querySelector('.cmd-block[data-node-id="' + nodeId + '"], .evt-block[data-node-id="' + nodeId + '"]');
+  var blockEl = svg.querySelector('.cmd-block[data-node-id="' + nodeId + '"], .evt-block[data-node-id="' + nodeId + '"], .trg-block[data-node-id="' + nodeId + '"], .view-block[data-node-id="' + nodeId + '"], .auto-block[data-node-id="' + nodeId + '"], .trans-block[data-node-id="' + nodeId + '"]');
   if (!blockEl) return;
   var off = nodeOffsets[nodeId];
   if (off) {
@@ -1100,7 +1183,7 @@ function commitDrag(nodeId, dx, dy, origNodeX, origNodeY) {
   var existing = nodeOffsets[nodeId] || { dx: 0, dy: 0 };
   nodeOffsets[nodeId] = { dx: existing.dx + dx, dy: existing.dy + dy };
   // Update the transform to reflect the cumulative offset so the block stays in place
-  var blockEl = svg.querySelector('.cmd-block[data-node-id="' + nodeId + '"], .evt-block[data-node-id="' + nodeId + '"]');
+  var blockEl = svg.querySelector('.cmd-block[data-node-id="' + nodeId + '"], .evt-block[data-node-id="' + nodeId + '"], .trg-block[data-node-id="' + nodeId + '"], .view-block[data-node-id="' + nodeId + '"], .auto-block[data-node-id="' + nodeId + '"], .trans-block[data-node-id="' + nodeId + '"]');
   if (blockEl) {
     var off = nodeOffsets[nodeId];
     blockEl.setAttribute("transform", "translate(" + off.dx + "," + off.dy + ")");
@@ -1114,7 +1197,7 @@ function commitDrag(nodeId, dx, dy, origNodeX, origNodeY) {
 function getSliceChildNodeIds(sliceId) {
   var ids = [];
   nodes.forEach(function(n) {
-    if (n.parentId === sliceId && (n.type === "command" || n.type === "event")) {
+    if (n.parentId === sliceId && (n.type === "command" || n.type === "event" || n.type === "trigger" || n.type === "view" || n.type === "automation" || n.type === "translation")) {
       ids.push(n.id);
     }
   });
@@ -1422,7 +1505,7 @@ svg.addEventListener("mousedown", function(evt) {
   if (evt.button !== 0) return;
 
   // Check if we are starting a drag on a command/event block
-  var block = evt.target.closest('.cmd-block, .evt-block');
+  var block = evt.target.closest('.cmd-block, .evt-block, .trg-block, .view-block, .auto-block, .trans-block');
   if (block) {
     var nodeId = block.getAttribute("data-node-id");
     if (nodeId && layoutPositions[nodeId]) {
@@ -1468,7 +1551,7 @@ svg.addEventListener("mousedown", function(evt) {
       };
       // Add dragging class to all child blocks and the slice header elements
       childIds.forEach(function(id) {
-        var blockEl = svg.querySelector('.cmd-block[data-node-id="' + id + '"], .evt-block[data-node-id="' + id + '"]');
+        var blockEl = svg.querySelector('.cmd-block[data-node-id="' + id + '"], .evt-block[data-node-id="' + id + '"], .trg-block[data-node-id="' + id + '"], .view-block[data-node-id="' + id + '"], .auto-block[data-node-id="' + id + '"], .trans-block[data-node-id="' + id + '"]');
         if (blockEl) blockEl.classList.add("dragging");
       });
       var headerEls = svg.querySelectorAll('.slice-header[data-slice-id="' + sliceId + '"]');
@@ -1514,7 +1597,7 @@ document.addEventListener("mousemove", function(evt) {
       dragState.nodeIds.forEach(function(nodeId) {
         var orig = dragState.origPositions[nodeId];
         if (!orig) return;
-        var blockEl = svg.querySelector('.cmd-block[data-node-id="' + nodeId + '"], .evt-block[data-node-id="' + nodeId + '"]');
+        var blockEl = svg.querySelector('.cmd-block[data-node-id="' + nodeId + '"], .evt-block[data-node-id="' + nodeId + '"], .trg-block[data-node-id="' + nodeId + '"], .view-block[data-node-id="' + nodeId + '"], .auto-block[data-node-id="' + nodeId + '"], .trans-block[data-node-id="' + nodeId + '"]');
         if (blockEl) {
           var existingOff = nodeOffsets[nodeId] || {dx: 0, dy: 0};
           blockEl.setAttribute("transform", "translate(" + (existingOff.dx + dx) + "," + (existingOff.dy + dy) + ")");
@@ -1524,7 +1607,7 @@ document.addEventListener("mousemove", function(evt) {
       updateArrowsForSlice(dragState.sliceId, dx, dy);
     } else {
       // Single block drag
-      var blockEl = svg.querySelector('.cmd-block[data-node-id="' + dragState.nodeId + '"], .evt-block[data-node-id="' + dragState.nodeId + '"]');
+      var blockEl = svg.querySelector('.cmd-block[data-node-id="' + dragState.nodeId + '"], .evt-block[data-node-id="' + dragState.nodeId + '"], .trg-block[data-node-id="' + dragState.nodeId + '"], .view-block[data-node-id="' + dragState.nodeId + '"], .auto-block[data-node-id="' + dragState.nodeId + '"], .trans-block[data-node-id="' + dragState.nodeId + '"]');
       if (blockEl) {
         var existingOff = nodeOffsets[dragState.nodeId] || {dx: 0, dy: 0};
         blockEl.setAttribute("transform", "translate(" + (existingOff.dx + dx) + "," + (existingOff.dy + dy) + ")");
@@ -1563,7 +1646,7 @@ document.addEventListener("mouseup", function(evt) {
         suppressDetailClick = true;
       }
       dragState.nodeIds.forEach(function(nodeId) {
-        var blockEl = svg.querySelector('.cmd-block[data-node-id="' + nodeId + '"], .evt-block[data-node-id="' + nodeId + '"]');
+        var blockEl = svg.querySelector('.cmd-block[data-node-id="' + nodeId + '"], .evt-block[data-node-id="' + nodeId + '"], .trg-block[data-node-id="' + nodeId + '"], .view-block[data-node-id="' + nodeId + '"], .auto-block[data-node-id="' + nodeId + '"], .trans-block[data-node-id="' + nodeId + '"]');
         if (blockEl) blockEl.classList.remove("dragging");
       });
       headerEls.forEach(function(el) { el.classList.remove("dragging"); });
@@ -1572,7 +1655,7 @@ document.addEventListener("mouseup", function(evt) {
       return;
     }
 
-    var blockEl = svg.querySelector('.cmd-block[data-node-id="' + dragState.nodeId + '"], .evt-block[data-node-id="' + dragState.nodeId + '"]');
+    var blockEl = svg.querySelector('.cmd-block[data-node-id="' + dragState.nodeId + '"], .evt-block[data-node-id="' + dragState.nodeId + '"], .trg-block[data-node-id="' + dragState.nodeId + '"], .view-block[data-node-id="' + dragState.nodeId + '"], .auto-block[data-node-id="' + dragState.nodeId + '"], .trans-block[data-node-id="' + dragState.nodeId + '"]');
     if (dragState.isDragging) {
       // Compute actual drag delta from the last mouse position in diagram space
       var dp = screenToDiagram(evt.clientX, evt.clientY);
@@ -1630,7 +1713,7 @@ svg.addEventListener("touchstart", function(evt) {
 
   if (touches.length === 1) {
     // Check if touching a command/event block → start drag
-    var block = evt.target.closest('.cmd-block, .evt-block');
+    var block = evt.target.closest('.cmd-block, .evt-block, .trg-block, .view-block, .auto-block, .trans-block');
     if (block) {
       var nodeId = block.getAttribute("data-node-id");
       if (nodeId && layoutPositions[nodeId]) {
@@ -1676,7 +1759,7 @@ svg.addEventListener("touchstart", function(evt) {
           startClientY: touch.clientY,
         };
         childIds.forEach(function(id) {
-          var blockEl = svg.querySelector('.cmd-block[data-node-id="' + id + '"], .evt-block[data-node-id="' + id + '"]');
+          var blockEl = svg.querySelector('.cmd-block[data-node-id="' + id + '"], .evt-block[data-node-id="' + id + '"], .trg-block[data-node-id="' + id + '"], .view-block[data-node-id="' + id + '"], .auto-block[data-node-id="' + id + '"], .trans-block[data-node-id="' + id + '"]');
           if (blockEl) blockEl.classList.add("dragging");
         });
         var headerEls = svg.querySelectorAll('.slice-header[data-slice-id="' + sliceId + '"]');
@@ -1722,7 +1805,7 @@ svg.addEventListener("touchmove", function(evt) {
       dragState.nodeIds.forEach(function(nodeId) {
         var orig = dragState.origPositions[nodeId];
         if (!orig) return;
-        var blockEl = svg.querySelector('.cmd-block[data-node-id="' + nodeId + '"], .evt-block[data-node-id="' + nodeId + '"]');
+        var blockEl = svg.querySelector('.cmd-block[data-node-id="' + nodeId + '"], .evt-block[data-node-id="' + nodeId + '"], .trg-block[data-node-id="' + nodeId + '"], .view-block[data-node-id="' + nodeId + '"], .auto-block[data-node-id="' + nodeId + '"], .trans-block[data-node-id="' + nodeId + '"]');
         if (blockEl) {
           var existingOff = nodeOffsets[nodeId] || {dx: 0, dy: 0};
           blockEl.setAttribute("transform", "translate(" + (existingOff.dx + dx) + "," + (existingOff.dy + dy) + ")");
@@ -1732,7 +1815,7 @@ svg.addEventListener("touchmove", function(evt) {
       updateArrowsForSlice(dragState.sliceId, dx, dy);
     } else {
       // Single block drag
-      var blockEl = svg.querySelector('.cmd-block[data-node-id="' + dragState.nodeId + '"], .evt-block[data-node-id="' + dragState.nodeId + '"]');
+      var blockEl = svg.querySelector('.cmd-block[data-node-id="' + dragState.nodeId + '"], .evt-block[data-node-id="' + dragState.nodeId + '"], .trg-block[data-node-id="' + dragState.nodeId + '"], .view-block[data-node-id="' + dragState.nodeId + '"], .auto-block[data-node-id="' + dragState.nodeId + '"], .trans-block[data-node-id="' + dragState.nodeId + '"]');
       if (blockEl) {
         var existingOff = nodeOffsets[dragState.nodeId] || {dx: 0, dy: 0};
         blockEl.setAttribute("transform", "translate(" + (existingOff.dx + dx) + "," + (existingOff.dy + dy) + ")");
@@ -1817,7 +1900,7 @@ svg.addEventListener("touchend", function(evt) {
         }
       }
       dragState.nodeIds.forEach(function(nodeId) {
-        var blockEl = svg.querySelector('.cmd-block[data-node-id="' + nodeId + '"], .evt-block[data-node-id="' + nodeId + '"]');
+        var blockEl = svg.querySelector('.cmd-block[data-node-id="' + nodeId + '"], .evt-block[data-node-id="' + nodeId + '"], .trg-block[data-node-id="' + nodeId + '"], .view-block[data-node-id="' + nodeId + '"], .auto-block[data-node-id="' + nodeId + '"], .trans-block[data-node-id="' + nodeId + '"]');
         if (blockEl) blockEl.classList.remove("dragging");
       });
       headerEls.forEach(function(el) { el.classList.remove("dragging"); });
@@ -1825,7 +1908,7 @@ svg.addEventListener("touchend", function(evt) {
       return;
     }
 
-    var blockEl = svg.querySelector('.cmd-block[data-node-id="' + dragState.nodeId + '"], .evt-block[data-node-id="' + dragState.nodeId + '"]');
+    var blockEl = svg.querySelector('.cmd-block[data-node-id="' + dragState.nodeId + '"], .evt-block[data-node-id="' + dragState.nodeId + '"], .trg-block[data-node-id="' + dragState.nodeId + '"], .view-block[data-node-id="' + dragState.nodeId + '"], .auto-block[data-node-id="' + dragState.nodeId + '"], .trans-block[data-node-id="' + dragState.nodeId + '"]');
     if (dragState.isDragging) {
       // Use the last available touch or start position
       var touch = evt.changedTouches[0];
@@ -1860,13 +1943,13 @@ svg.addEventListener("touchcancel", function(evt) {
     if (dragState.sliceId) {
       var headerEls = svg.querySelectorAll('.slice-header[data-slice-id="' + dragState.sliceId + '"]');
       dragState.nodeIds.forEach(function(nodeId) {
-        var blockEl = svg.querySelector('.cmd-block[data-node-id="' + nodeId + '"], .evt-block[data-node-id="' + nodeId + '"]');
+        var blockEl = svg.querySelector('.cmd-block[data-node-id="' + nodeId + '"], .evt-block[data-node-id="' + nodeId + '"], .trg-block[data-node-id="' + nodeId + '"], .view-block[data-node-id="' + nodeId + '"], .auto-block[data-node-id="' + nodeId + '"], .trans-block[data-node-id="' + nodeId + '"]');
         if (blockEl) blockEl.classList.remove("dragging");
       });
       headerEls.forEach(function(el) { el.classList.remove("dragging"); });
       dragState = null;
     } else {
-      var blockEl = svg.querySelector('.cmd-block[data-node-id="' + dragState.nodeId + '"], .evt-block[data-node-id="' + dragState.nodeId + '"]');
+      var blockEl = svg.querySelector('.cmd-block[data-node-id="' + dragState.nodeId + '"], .evt-block[data-node-id="' + dragState.nodeId + '"], .trg-block[data-node-id="' + dragState.nodeId + '"], .view-block[data-node-id="' + dragState.nodeId + '"], .auto-block[data-node-id="' + dragState.nodeId + '"], .trans-block[data-node-id="' + dragState.nodeId + '"]');
       if (blockEl) blockEl.classList.remove("dragging");
       dragState = null;
     }
@@ -2140,7 +2223,7 @@ svg.addEventListener("click", function(evt) {
 
   // ── Command/event block click: open detail panel (skip if click was actually a drag) ──
   if (!interactive && !suppressDetailClick) {
-    var block = target.closest(".cmd-block, .evt-block");
+    var block = target.closest(".cmd-block, .evt-block, .trg-block, .view-block, .auto-block, .trans-block");
     if (block) {
       var nodeId = block.getAttribute("data-node-id");
       if (nodeId) {
