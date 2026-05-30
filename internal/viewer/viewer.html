@@ -138,6 +138,74 @@ header .model-name span {
   background: rgba(255,255,255,0.25);
 }
 
+#context-toggle {
+  background: rgba(255,255,255,0.15);
+  color: #fff;
+  border: 1px solid rgba(255,255,255,0.25);
+  border-radius: 4px;
+  padding: 5px 12px;
+  font-size: 12px;
+  cursor: pointer;
+  transition: background 0.2s;
+  white-space: nowrap;
+}
+#context-toggle:hover {
+  background: rgba(255,255,255,0.25);
+}
+#context-toggle.active {
+  background: rgba(255,255,255,0.35);
+  border-color: #fff;
+}
+
+#context-panel {
+  position: absolute;
+  top: 4px;
+  left: 4px;
+  width: 220px;
+  max-height: 300px;
+  background: #fff;
+  border: 1px solid #ccc;
+  border-radius: 6px;
+  box-shadow: 0 2px 10px rgba(0,0,0,0.15);
+  z-index: 100;
+  overflow-y: auto;
+  font-size: 13px;
+}
+#context-panel.hidden {
+  display: none;
+}
+#context-panel-header {
+  padding: 8px 12px;
+  font-weight: 600;
+  font-size: 13px;
+  background: #f8f9fa;
+  border-bottom: 1px solid #e9ecef;
+  border-radius: 6px 6px 0 0;
+  cursor: move;
+  user-select: none;
+}
+#context-list {
+  padding: 4px 0;
+}
+.context-item {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 12px;
+  cursor: pointer;
+}
+.context-item:hover {
+  background: #f1f3f5;
+}
+.context-item input[type="checkbox"] {
+  margin: 0;
+  cursor: pointer;
+}
+.context-item label {
+  cursor: pointer;
+  flex: 1;
+}
+
 /* --- Reset layout button --- */
 #reset-layout {
   background: rgba(255,255,255,0.15);
@@ -638,6 +706,7 @@ header .model-name span {
     <button id="reset-layout" title="Restore auto-computed layout" disabled>Reset layout</button>
     <button id="fit-view" title="Reset viewport to fit the entire diagram">Fit view</button>
     <button id="minimap-toggle" title="Toggle minimap overview">Minimap</button>
+    <button id="context-toggle" title="Toggle context visibility panel">Contexts</button>
     <div class="model-name">Model: <span id="model-name-display">—</span></div>
   </div>
 </header>
@@ -679,6 +748,11 @@ header .model-name span {
     <div id="minimap-handle">Overview</div>
     <svg id="minimap-svg" xmlns="http://www.w3.org/2000/svg"></svg>
     <button id="minimap-close" title="Close minimap">×</button>
+  </div>
+
+  <div id="context-panel" class="hidden">
+    <div id="context-panel-header">Contexts</div>
+    <div id="context-list"></div>
   </div>
 
   <!-- Data panel (toggle via header) -->
@@ -743,6 +817,9 @@ let modelName = "";
 let layoutPositions = {}; // nodeId -> {x, y, w, h} for every rendered element
 let arrowData = [];       // computed arrow paths for flow edges (source, target, path d)
 
+// ─── Context visibility ──────────────────────────────────────────
+let hiddenContexts = {};
+
 // ─── Viewport state ──────────────────────────────────────────────
 let viewport = { offsetX: 0, offsetY: 0, zoomScale: 1 };
 
@@ -772,6 +849,10 @@ const minimapToggle = document.getElementById("minimap-toggle");
 const MINIMAP_W = 180;
 const MINIMAP_H = 120;
 const MINIMAP_PAD = 2;
+
+const contextPanel = document.getElementById("context-panel");
+const contextToggle = document.getElementById("context-toggle");
+const contextList = document.getElementById("context-list");
 
 // ─── SVG helpers ──────────────────────────────────────────────────────
 function esc(str) {
@@ -810,6 +891,7 @@ function computeLayout() {
   layoutPositions = {};
 
   var contexts = tree.roots.filter(function(n) { return n.type === "context"; });
+  contexts = contexts.filter(function(ctx) { return !hiddenContexts[ctx.id]; });
   var currentY = L.marginY;
   var maxRight = L.marginX + 800; // minimum usable width
 
@@ -1502,6 +1584,53 @@ function toggleMinimap(show) {
   if (!isHidden) updateMinimap();
 }
 
+// ─── Context visibility panel ───────────────────────────────────────────
+function updateContextList() {
+  var ctxNodes = nodes.filter(function(n) { return n.type === "context"; });
+  if (ctxNodes.length === 0) {
+    contextList.innerHTML = '<div class="context-item" style="color:#999">No contexts</div>';
+    return;
+  }
+  var html = '';
+  ctxNodes.forEach(function(ctx) {
+    var checked = !hiddenContexts[ctx.id];
+    html += '<div class="context-item" data-ctx-id="' + ctx.id + '">';
+    html += '<input type="checkbox" id="ctx-cb-' + ctx.id + '"' + (checked ? ' checked' : '') + '>';
+    html += '<label for="ctx-cb-' + ctx.id + '">' + esc(ctx.label) + '</label>';
+    html += '</div>';
+  });
+  contextList.innerHTML = html;
+
+  // Attach change handlers
+  contextList.querySelectorAll('.context-item input[type="checkbox"]').forEach(function(cb) {
+    cb.addEventListener('change', function() {
+      var item = this.closest('.context-item');
+      var ctxId = item.getAttribute('data-ctx-id');
+      if (this.checked) {
+        delete hiddenContexts[ctxId];
+      } else {
+        hiddenContexts[ctxId] = true;
+      }
+      renderDiagram();
+      // Rebuild context list after re-render to reflect new state
+      updateContextList();
+    });
+  });
+}
+
+function toggleContextPanel(show) {
+  if (show === undefined) {
+    contextPanel.classList.toggle("hidden");
+  } else if (show) {
+    contextPanel.classList.remove("hidden");
+  } else {
+    contextPanel.classList.add("hidden");
+  }
+  var isHidden = contextPanel.classList.contains("hidden");
+  contextToggle.classList.toggle("active", !isHidden);
+  if (!isHidden) updateContextList();
+}
+
 // ─── Parse ──────────────────────────────────────────────────────────────
 function setModelData(data) {
   modelName = data.model_name || "";
@@ -1509,12 +1638,16 @@ function setModelData(data) {
   edges = data.edges || [];
   layoutPositions = {};
   nodeOffsets = {};
+  hiddenContexts = {};
 
   nameDisplay.textContent = modelName || "(unnamed)";
   document.title = modelName ? modelName + " — Emod Diagram Viewer" : "Emod Diagram Viewer";
   statNodes.textContent = nodes.length;
   statEdges.textContent = edges.length;
   updateResetLayoutButton();
+  if (contextPanel && !contextPanel.classList.contains("hidden")) {
+    updateContextList();
+  }
 }
 
 function clearSVG() {
@@ -2133,7 +2266,7 @@ minimapHandle.addEventListener("mousedown", function(evt) {
 });
 
 minimap.addEventListener("mousedown", function(evt) {
-  if (evt.target.closest("#minimap-close, #minimap-toggle, #minimap-handle")) return;
+  if (evt.target.closest("#minimap-close, #minimap-toggle, #minimap-handle, #context-panel, #context-toggle, #context-list")) return;
   evt.preventDefault();
   evt.stopPropagation();
   minimapNavigate(evt);
@@ -2175,7 +2308,7 @@ minimapHandle.addEventListener("touchstart", function(evt) {
 }, { passive: false });
 
 minimap.addEventListener("touchstart", function(evt) {
-  if (evt.target.closest("#minimap-close, #minimap-toggle, #minimap-handle")) return;
+  if (evt.target.closest("#minimap-close, #minimap-toggle, #minimap-handle, #context-panel, #context-toggle, #context-list")) return;
   evt.preventDefault();
   evt.stopPropagation();
   var touch = evt.touches[0];
@@ -2210,6 +2343,10 @@ document.getElementById("minimap-close").addEventListener("click", function(evt)
 
 minimapToggle.addEventListener("click", function() {
   toggleMinimap();
+});
+
+contextToggle.addEventListener("click", function() {
+  toggleContextPanel();
 });
 
 // ─── Initial load ──────────────────────────────────────────────────────
