@@ -2,7 +2,7 @@
 
 ## Progress
 - [x] Task 1: Emit diagram nodes for trigger, view, automation, and translation constructs
-- [ ] Task 2: Emit diagram edges for new cross-slice relationships
+- [x] Task 2: Emit diagram edges for new cross-slice relationships
 - [ ] Task 3: Position and render new block types in the web viewer
 - [ ] Task 4: Add interaction (tooltip, drag, click-detail) for new block types
 - [ ] Task 5: Render and interact with new edge types in the web viewer

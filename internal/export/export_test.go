@@ -1745,10 +1745,10 @@ func TestExportDiagramJSON(t *testing.T) {
 		require.NoError(t, err)
 
 		nodes := doc["nodes"].([]any)
-		// context, aggregate, slice, translation
-		require.Len(t, nodes, 4)
+		// context, aggregate, slice, translation_nested_event, translation
+		require.Len(t, nodes, 5)
 
-		trans := nodes[3].(map[string]any)
+		trans := nodes[4].(map[string]any)
 		require.Equal(t, "translation", trans["type"])
 		require.Equal(t, "slice-1", trans["parentId"])
 		require.Equal(t, "BookingImport", trans["label"])
@@ -1869,6 +1869,479 @@ func TestExportDiagramJSON(t *testing.T) {
 		require.Equal(t, "command-1", edge["source"])
 		require.Equal(t, "event-1", edge["target"])
 		require.Equal(t, "flow", edge["type"])
+	})
+
+	t.Run("trigger_command edges from trigger to each command in same slice", func(t *testing.T) {
+		model := &ast.Model{
+			Name: "Test",
+			Contexts: []*ast.Context{
+				{
+					Name: "Ctx",
+					Aggregates: []*ast.Aggregate{
+						{
+							Name: "Agg",
+							Slices: []*ast.Slice{
+								{
+									Name: "S",
+									Trigger: &ast.Trigger{
+										Kind: "UI", Name: "FormSubmit",
+									},
+									Commands: []*ast.Command{
+										{Name: "MakeReservation"},
+										{Name: "NotifyGuest"},
+									},
+								},
+							},
+						},
+					},
+				},
+			},
+		}
+
+		raw, err := export.ExportDiagramJSON(model)
+		require.NoError(t, err)
+
+		var doc map[string]any
+		err = json.Unmarshal(raw, &doc)
+		require.NoError(t, err)
+
+		edges := doc["edges"].([]any)
+		require.Len(t, edges, 2)
+
+		// Collect edges by target for verification
+		triggerCmdEdges := make([]map[string]any, 0, 2)
+		for _, e := range edges {
+			edge := e.(map[string]any)
+			require.Equal(t, "trigger_command", edge["type"])
+			require.Equal(t, "trigger-1", edge["source"])
+			triggerCmdEdges = append(triggerCmdEdges, edge)
+		}
+
+		targets := make([]string, len(triggerCmdEdges))
+		for i, e := range triggerCmdEdges {
+			targets[i] = e["target"].(string)
+		}
+		require.Contains(t, targets, "command-1")
+		require.Contains(t, targets, "command-2")
+	})
+
+	t.Run("subscription edges from event to subscribing view", func(t *testing.T) {
+		model := &ast.Model{
+			Name: "Test",
+			Contexts: []*ast.Context{
+				{
+					Name: "Ctx",
+					Aggregates: []*ast.Aggregate{
+						{
+							Name: "Agg",
+							Slices: []*ast.Slice{
+								{
+									Name: "S",
+									Events: []*ast.Event{
+										{Name: "ReservationMade"},
+									},
+									Views: []*ast.View{
+										{
+											Name:       "RoomsView",
+											Subscribes: []string{"ReservationMade"},
+										},
+									},
+								},
+							},
+						},
+					},
+				},
+			},
+		}
+
+		raw, err := export.ExportDiagramJSON(model)
+		require.NoError(t, err)
+
+		var doc map[string]any
+		err = json.Unmarshal(raw, &doc)
+		require.NoError(t, err)
+
+		edges := doc["edges"].([]any)
+		require.Len(t, edges, 1)
+
+		edge := edges[0].(map[string]any)
+		require.Equal(t, "event-1", edge["source"])
+		require.Equal(t, "view-1", edge["target"])
+		require.Equal(t, "subscription", edge["type"])
+	})
+
+	t.Run("automation_trigger edges from event to automation", func(t *testing.T) {
+		model := &ast.Model{
+			Name: "Test",
+			Contexts: []*ast.Context{
+				{
+					Name: "Ctx",
+					Aggregates: []*ast.Aggregate{
+						{
+							Name: "Agg",
+							Slices: []*ast.Slice{
+								{
+									Name: "S",
+									Events: []*ast.Event{
+										{Name: "OrderPlaced"},
+									},
+									Automations: []*ast.Automation{
+										{
+											Name:         "OrderNotifier",
+											TriggerEvent: "OrderPlaced",
+										},
+									},
+								},
+							},
+						},
+					},
+				},
+			},
+		}
+
+		raw, err := export.ExportDiagramJSON(model)
+		require.NoError(t, err)
+
+		var doc map[string]any
+		err = json.Unmarshal(raw, &doc)
+		require.NoError(t, err)
+
+		edges := doc["edges"].([]any)
+		require.Len(t, edges, 1)
+
+		edge := edges[0].(map[string]any)
+		require.Equal(t, "event-1", edge["source"])
+		require.Equal(t, "auto-1", edge["target"])
+		require.Equal(t, "automation_trigger", edge["type"])
+	})
+
+	t.Run("automation_command edges from automation to command", func(t *testing.T) {
+		model := &ast.Model{
+			Name: "Test",
+			Contexts: []*ast.Context{
+				{
+					Name: "Ctx",
+					Aggregates: []*ast.Aggregate{
+						{
+							Name: "Agg",
+							Slices: []*ast.Slice{
+								{
+									Name: "S",
+									Commands: []*ast.Command{
+										{Name: "SendNotification"},
+									},
+									Automations: []*ast.Automation{
+										{
+											Name:    "OrderNotifier",
+											Command: "SendNotification",
+										},
+									},
+								},
+							},
+						},
+					},
+				},
+			},
+		}
+
+		raw, err := export.ExportDiagramJSON(model)
+		require.NoError(t, err)
+
+		var doc map[string]any
+		err = json.Unmarshal(raw, &doc)
+		require.NoError(t, err)
+
+		edges := doc["edges"].([]any)
+		require.Len(t, edges, 1)
+
+		edge := edges[0].(map[string]any)
+		require.Equal(t, "auto-1", edge["source"])
+		require.Equal(t, "command-1", edge["target"])
+		require.Equal(t, "automation_command", edge["type"])
+	})
+
+	t.Run("translation_event edges from translation to nested event node", func(t *testing.T) {
+		model := &ast.Model{
+			Name: "Test",
+			Contexts: []*ast.Context{
+				{
+					Name: "Ctx",
+					Aggregates: []*ast.Aggregate{
+						{
+							Name: "Agg",
+							Slices: []*ast.Slice{
+								{
+									Name: "Import",
+									Translations: []*ast.Translation{
+										{
+											Name:           "BookingImport",
+											ExternalSystem: "Booking.com API",
+											Event: &ast.Event{
+												Name: "BookingImported",
+											},
+										},
+									},
+								},
+							},
+						},
+					},
+				},
+			},
+		}
+
+		raw, err := export.ExportDiagramJSON(model)
+		require.NoError(t, err)
+
+		var doc map[string]any
+		err = json.Unmarshal(raw, &doc)
+		require.NoError(t, err)
+
+		edges := doc["edges"].([]any)
+		require.Len(t, edges, 1)
+
+		edge := edges[0].(map[string]any)
+		require.Equal(t, "trans-1", edge["source"])
+		require.Equal(t, "event-1", edge["target"])
+		require.Equal(t, "translation_event", edge["type"])
+	})
+
+	t.Run("cross-slice subscription edge resolves across boundaries", func(t *testing.T) {
+		model := &ast.Model{
+			Name: "Test",
+			Contexts: []*ast.Context{
+				{
+					Name: "Orders",
+					Aggregates: []*ast.Aggregate{
+						{
+							Name: "Order",
+							Slices: []*ast.Slice{
+								{
+									Name: "Place Order",
+									Events: []*ast.Event{
+										{Name: "OrderPlaced"},
+									},
+								},
+							},
+						},
+					},
+				},
+				{
+					Name: "Notifications",
+					Aggregates: []*ast.Aggregate{
+						{
+							Name: "Notification",
+							Slices: []*ast.Slice{
+								{
+									Name: "Show Notifications",
+									Views: []*ast.View{
+										{
+											Name:       "NotificationView",
+											Subscribes: []string{"OrderPlaced"},
+										},
+									},
+								},
+							},
+						},
+					},
+				},
+			},
+		}
+
+		raw, err := export.ExportDiagramJSON(model)
+		require.NoError(t, err)
+
+		var doc map[string]any
+		err = json.Unmarshal(raw, &doc)
+		require.NoError(t, err)
+
+		edges := doc["edges"].([]any)
+		require.Len(t, edges, 1)
+
+		edge := edges[0].(map[string]any)
+		require.Equal(t, "event-1", edge["source"])
+		require.Equal(t, "view-1", edge["target"])
+		require.Equal(t, "subscription", edge["type"])
+	})
+
+	t.Run("cross-slice automation_command resolves across boundaries", func(t *testing.T) {
+		model := &ast.Model{
+			Name: "Test",
+			Contexts: []*ast.Context{
+				{
+					Name: "Orders",
+					Aggregates: []*ast.Aggregate{
+						{
+							Name: "Order",
+							Slices: []*ast.Slice{
+								{
+									Name: "Process Order",
+									Automations: []*ast.Automation{
+										{
+											Name:    "OrderNotifier",
+											Command: "SendNotification",
+										},
+									},
+								},
+							},
+						},
+					},
+				},
+				{
+					Name: "Notifications",
+					Aggregates: []*ast.Aggregate{
+						{
+							Name: "Notification",
+							Slices: []*ast.Slice{
+								{
+									Name: "Send",
+									Commands: []*ast.Command{
+										{Name: "SendNotification"},
+									},
+								},
+							},
+						},
+					},
+				},
+			},
+		}
+
+		raw, err := export.ExportDiagramJSON(model)
+		require.NoError(t, err)
+
+		var doc map[string]any
+		err = json.Unmarshal(raw, &doc)
+		require.NoError(t, err)
+
+		edges := doc["edges"].([]any)
+		require.Len(t, edges, 1)
+
+		edge := edges[0].(map[string]any)
+		require.Equal(t, "auto-1", edge["source"])
+		require.Equal(t, "command-1", edge["target"])
+		require.Equal(t, "automation_command", edge["type"])
+	})
+
+	t.Run("unresolved name references silently skipped", func(t *testing.T) {
+		model := &ast.Model{
+			Name: "Test",
+			Contexts: []*ast.Context{
+				{
+					Name: "Ctx",
+					Aggregates: []*ast.Aggregate{
+						{
+							Name: "Agg",
+							Slices: []*ast.Slice{
+								{
+									Name: "S",
+									Commands: []*ast.Command{
+										{Name: "ExistingCmd"},
+									},
+									Events: []*ast.Event{
+										{Name: "ExistingEvent"},
+									},
+									Flows: []*ast.Flow{
+										{CommandName: "ExistingCmd", EventName: "ExistingEvent"},
+									},
+									Views: []*ast.View{
+										{
+											Name:       "MyView",
+											Subscribes: []string{"NonExistentEvent"},
+										},
+									},
+									Automations: []*ast.Automation{
+										{
+											Name:         "Auto",
+											TriggerEvent: "NonExistentEvent",
+											Command:      "NonExistentCmd",
+										},
+									},
+								},
+							},
+						},
+					},
+				},
+			},
+		}
+
+		raw, err := export.ExportDiagramJSON(model)
+		require.NoError(t, err)
+
+		var doc map[string]any
+		err = json.Unmarshal(raw, &doc)
+		require.NoError(t, err)
+
+		// Only the flow edge should be emitted (command→event)
+		// Subscription references non-existent event → silently skipped
+		// Automation trigger references non-existent event → silently skipped
+		// Automation command references non-existent command → silently skipped
+		edges := doc["edges"].([]any)
+		require.Len(t, edges, 1)
+
+		edge := edges[0].(map[string]any)
+		require.Equal(t, "command-1", edge["source"])
+		require.Equal(t, "event-1", edge["target"])
+		require.Equal(t, "flow", edge["type"])
+	})
+
+	t.Run("two-pass resolution produces all edge types in complex model", func(t *testing.T) {
+		model := &ast.Model{
+			Name: "Full",
+			Contexts: []*ast.Context{
+				{
+					Name: "Ctx",
+					Aggregates: []*ast.Aggregate{
+						{
+							Name: "Agg",
+							Slices: []*ast.Slice{
+								{
+									Name: "S",
+									Trigger: &ast.Trigger{
+										Kind: "UI", Name: "Form", Actor: "User", Reads: "V",
+									},
+									Commands: []*ast.Command{
+										{Name: "Cmd"},
+									},
+									Events: []*ast.Event{
+										{Name: "Evt"},
+									},
+									Views: []*ast.View{
+										{Name: "MyView", Subscribes: []string{"Evt"}},
+									},
+									Automations: []*ast.Automation{
+										{Name: "Auto", TriggerEvent: "Evt", Command: "Cmd"},
+									},
+									Flows: []*ast.Flow{
+										{CommandName: "Cmd", EventName: "Evt"},
+									},
+								},
+							},
+						},
+					},
+				},
+			},
+		}
+
+		raw, err := export.ExportDiagramJSON(model)
+		require.NoError(t, err)
+
+		var doc map[string]any
+		err = json.Unmarshal(raw, &doc)
+		require.NoError(t, err)
+
+		edges := doc["edges"].([]any)
+		// Expected: flow, trigger_command, subscription, automation_trigger, automation_command
+		require.Len(t, edges, 5)
+
+		edgeTypes := make(map[string]bool)
+		for _, e := range edges {
+			edge := e.(map[string]any)
+			edgeTypes[edge["type"].(string)] = true
+		}
+		require.True(t, edgeTypes["flow"], "flow edge should exist")
+		require.True(t, edgeTypes["trigger_command"], "trigger_command edge should exist")
+		require.True(t, edgeTypes["subscription"], "subscription edge should exist")
+		require.True(t, edgeTypes["automation_trigger"], "automation_trigger edge should exist")
+		require.True(t, edgeTypes["automation_command"], "automation_command edge should exist")
 	})
 
 	t.Run("command and event nodes include fields array", func(t *testing.T) {
