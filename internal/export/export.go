@@ -983,28 +983,51 @@ func convertModelToDiagram(m *ast.Model) *jsonDiagramDocument {
 					}
 				}
 
-				// translation_event: translation → nested event node
-				for _, t := range s.Translations {
-					if t == nil {
-						continue
-					}
-					if t.Event == nil || t.Event.Name == "" {
-						continue
-					}
-					srcID, ok := transIDs[t.Name]
-					if !ok {
-						continue
-					}
-					tgtID, ok := evtIDs[t.Event.Name]
-					if !ok {
-						continue
-					}
-					doc.Edges = append(doc.Edges, &jsonDiagramEdge{
-						Source: srcID,
-						Target: tgtID,
-						Type:   "translation_event",
-					})
+			// translation edges:
+			//   reads: view → translation (view reads from the external system)
+			//   translation_command: translation → command (translation triggers a command)
+			for _, t := range s.Translations {
+				if t == nil {
+					continue
 				}
+				srcID, ok := transIDs[t.Name]
+				if !ok {
+					continue
+				}
+
+				// reads: view → translation
+				if t.Reads != "" {
+					if viewID, ok := viewIDs[t.Reads]; ok {
+						doc.Edges = append(doc.Edges, &jsonDiagramEdge{
+							Source: viewID,
+							Target: srcID,
+							Type:   "reads",
+						})
+					}
+				}
+
+				// translation_command: translation → command
+				if t.Command != "" {
+					if cmdID, ok := cmdIDs[t.Command]; ok {
+						doc.Edges = append(doc.Edges, &jsonDiagramEdge{
+							Source: srcID,
+							Target: cmdID,
+							Type:   "translation_command",
+						})
+
+						// implicit flow: command → event (translation implies command emits event)
+						if t.Event != nil && t.Event.Name != "" {
+							if evtID, ok := evtIDs[t.Event.Name]; ok {
+								doc.Edges = append(doc.Edges, &jsonDiagramEdge{
+									Source: cmdID,
+									Target: evtID,
+									Type:   "flow",
+								})
+							}
+						}
+					}
+				}
+			}
 			}
 		}
 	}

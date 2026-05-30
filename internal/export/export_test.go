@@ -2060,7 +2060,7 @@ func TestExportDiagramJSON(t *testing.T) {
 		require.Equal(t, "automation_command", edge["type"])
 	})
 
-	t.Run("translation_event edges from translation to nested event node", func(t *testing.T) {
+	t.Run("reads, translation_command and implicit flow edges from translation", func(t *testing.T) {
 		model := &ast.Model{
 			Name: "Test",
 			Contexts: []*ast.Context{
@@ -2072,10 +2072,19 @@ func TestExportDiagramJSON(t *testing.T) {
 							Slices: []*ast.Slice{
 								{
 									Name: "Import",
+									Views: []*ast.View{
+										{Name: "WebhookView"},
+									},
+									Commands: []*ast.Command{
+										{Name: "ImportBooking"},
+									},
+									// No standalone Events — the translation's nested event creates the event node
 									Translations: []*ast.Translation{
 										{
 											Name:           "BookingImport",
 											ExternalSystem: "Booking.com API",
+											Reads:          "WebhookView",
+											Command:        "ImportBooking",
 											Event: &ast.Event{
 												Name: "BookingImported",
 											},
@@ -2097,12 +2106,32 @@ func TestExportDiagramJSON(t *testing.T) {
 		require.NoError(t, err)
 
 		edges := doc["edges"].([]any)
-		require.Len(t, edges, 1)
+		require.Len(t, edges, 3)
 
-		edge := edges[0].(map[string]any)
-		require.Equal(t, "trans-1", edge["source"])
-		require.Equal(t, "event-1", edge["target"])
-		require.Equal(t, "translation_event", edge["type"])
+		var readsEdge, cmdEdge, flowEdge map[string]any
+		for _, e := range edges {
+			edge := e.(map[string]any)
+			switch edge["type"] {
+			case "reads":
+				readsEdge = edge
+			case "translation_command":
+				cmdEdge = edge
+			case "flow":
+				flowEdge = edge
+			}
+		}
+		require.NotNil(t, readsEdge, "should have a reads edge")
+		require.Equal(t, "view-1", readsEdge["source"])
+		require.Equal(t, "trans-1", readsEdge["target"])
+
+		require.NotNil(t, cmdEdge, "should have a translation_command edge")
+		require.Equal(t, "trans-1", cmdEdge["source"])
+		require.Equal(t, "command-1", cmdEdge["target"])
+
+		require.NotNil(t, flowEdge, "should have an implicit flow edge for command→event")
+		require.Equal(t, "command-1", flowEdge["source"])
+		// Nested event node created by the translation (event-1 in Pass 1 order)
+		require.Equal(t, "event-1", flowEdge["target"])
 	})
 
 	t.Run("cross-slice subscription edge resolves across boundaries", func(t *testing.T) {
