@@ -712,7 +712,29 @@ const L = {
   laneHeight: 190, laneGap: 30,
   swimlaneHdr: 44, swimlanePad: 10,
   swimlaneGap: 20, aggLabelH: 22,
+  sideGap: 12,
 };
+
+var _measureSvg = document.createElementNS("http://www.w3.org/2000/svg", "svg");
+_measureSvg.style.position = "fixed";
+_measureSvg.style.visibility = "hidden";
+_measureSvg.style.pointerEvents = "none";
+_measureSvg.style.width = "0";
+_measureSvg.style.height = "0";
+var _measureText = document.createElementNS("http://www.w3.org/2000/svg", "text");
+_measureText.setAttribute("font-family", "sans-serif");
+_measureText.setAttribute("font-size", "13");
+_measureSvg.appendChild(_measureText);
+document.body.appendChild(_measureSvg);
+var _labelCache = {};
+function labelWidth(label) {
+  var s = label || '';
+  if (_labelCache[s] !== undefined) return _labelCache[s];
+  _measureText.textContent = s;
+  var w = _measureText.getComputedTextLength();
+  _labelCache[s] = w + 16;
+  return w + 16;
+}
 
 // ─── Module-scoped state ──────────────────────────────────────────────
 let nodes = [];
@@ -811,6 +833,26 @@ function computeLayout() {
         var views    = sl.children.filter(function(c) { return c.type === "view"; });
         var automations = sl.children.filter(function(c) { return c.type === "automation"; });
         var translations = sl.children.filter(function(c) { return c.type === "translation"; });
+
+        // Top row: external systems (translations) and reactors (automations), side-by-side
+        var topRowTypes = translations.concat(automations);
+
+        // Dynamic width: longest individual label, plus side-by-side combined widths
+        var allLabelWidths = sl.children.map(function(c) { return labelWidth(c.label); });
+        if (translations.length) {
+          translations.forEach(function(t) { allLabelWidths.push(labelWidth(t.external_system || t.label)); });
+        }
+        if (events.length > 1) {
+          var eSum = events.reduce(function(s, e) { return s + labelWidth(e.label); }, 0);
+          allLabelWidths.push(eSum + 20 + (events.length - 1) * L.sideGap - 40);
+        }
+        if (topRowTypes.length > 1) {
+          var tSum = topRowTypes.reduce(function(s, t) { return s + labelWidth(t.external_system || t.label); }, 0);
+          allLabelWidths.push(tSum + 20 + (topRowTypes.length - 1) * L.sideGap - 40);
+        }
+        var sBoxWidth = Math.max(180, ...allLabelWidths);
+        var sSliceWidth = sBoxWidth + 40;
+
         var blockY = slY + 36;
         var gap = 75;
 
@@ -818,12 +860,12 @@ function computeLayout() {
         var topRowTypes = translations.concat(automations);
         if (topRowTypes.length > 0) {
           var tCount = topRowTypes.length;
-          var tWidth = tCount > 1 ? (L.sliceWidth - 20) / tCount : L.boxWidth;
-          var tStartX = xPos + (L.sliceWidth - tWidth * tCount) / 2;
+          var tItemWidth = tCount > 1 ? (sSliceWidth - 20 - (tCount - 1) * L.sideGap) / tCount : sBoxWidth;
+          var tStartX = xPos + (sSliceWidth - tItemWidth * tCount - (tCount - 1) * L.sideGap) / 2;
           topRowTypes.forEach(function(rt, idx) {
             layoutPositions[rt.id] = {
-              x: tStartX + idx * tWidth, y: blockY,
-              w: tWidth, h: L.boxHeight,
+              x: tStartX + idx * (tItemWidth + L.sideGap), y: blockY,
+              w: tItemWidth, h: L.boxHeight,
               node: rt,
             };
           });
@@ -831,33 +873,39 @@ function computeLayout() {
         }
 
         triggers.forEach(function(trg) {
-          var bx = xPos + (L.sliceWidth - L.boxWidth) / 2;
+          var bx = xPos + (sSliceWidth - sBoxWidth) / 2;
           layoutPositions[trg.id] = {
-            x: bx, y: blockY, w: L.boxWidth, h: L.boxHeight,
+            x: bx, y: blockY, w: sBoxWidth, h: L.boxHeight,
             node: trg,
           };
           blockY += L.boxHeight + gap;
         });
         commands.forEach(function(cmd) {
-          var bx = xPos + (L.sliceWidth - L.boxWidth) / 2;
+          var bx = xPos + (sSliceWidth - sBoxWidth) / 2;
           layoutPositions[cmd.id] = {
-            x: bx, y: blockY, w: L.boxWidth, h: L.boxHeight,
+            x: bx, y: blockY, w: sBoxWidth, h: L.boxHeight,
             node: cmd,
           };
           blockY += L.boxHeight + gap;
         });
-        events.forEach(function(evt) {
-          var bx = xPos + (L.sliceWidth - L.boxWidth) / 2;
-          layoutPositions[evt.id] = {
-            x: bx, y: blockY, w: L.boxWidth, h: L.boxHeight,
-            node: evt,
-          };
+        // Events: side-by-side when multiple
+        if (events.length > 0) {
+          var eCount = events.length;
+          var eItemWidth = eCount > 1 ? (sSliceWidth - 20 - (eCount - 1) * L.sideGap) / eCount : sBoxWidth;
+          var eStartX = xPos + (sSliceWidth - eItemWidth * eCount - (eCount - 1) * L.sideGap) / 2;
+          events.forEach(function(evt, idx) {
+            layoutPositions[evt.id] = {
+              x: eStartX + idx * (eItemWidth + L.sideGap), y: blockY,
+              w: eItemWidth, h: L.boxHeight,
+              node: evt,
+            };
+          });
           blockY += L.boxHeight + gap;
-        });
+        }
         views.forEach(function(view) {
-          var bx = xPos + (L.sliceWidth - L.boxWidth) / 2;
+          var bx = xPos + (sSliceWidth - sBoxWidth) / 2;
           layoutPositions[view.id] = {
-            x: bx, y: blockY, w: L.boxWidth, h: L.boxHeight,
+            x: bx, y: blockY, w: sBoxWidth, h: L.boxHeight,
             node: view,
           };
           blockY += L.boxHeight + gap;
@@ -867,11 +915,11 @@ function computeLayout() {
         var sliceHeight = blockY - slY + gap;
         if (sliceHeight > maxSliceHeight) maxSliceHeight = sliceHeight;
         layoutPositions[sl.id] = {
-          x: xPos, y: slY, w: L.sliceWidth, h: sliceHeight,
+          x: xPos, y: slY, w: sSliceWidth, h: sliceHeight,
           node: sl,
         };
 
-        xPos += L.sliceWidth;
+        xPos += sSliceWidth;
         if (si < slices.length - 1) xPos += L.sliceGap;
       });
 
