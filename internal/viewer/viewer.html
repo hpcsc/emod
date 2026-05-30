@@ -1132,7 +1132,7 @@ function clampZoom(scale) {
 function getConnectedEdges(nodeId) {
   var result = [];
   edges.forEach(function(e) {
-    if (e.type === "flow" && (e.source === nodeId || e.target === nodeId)) {
+    if ((e.type === "flow" || e.type === "trigger_command" || e.type === "subscription" || e.type === "automation_trigger" || e.type === "automation_command" || e.type === "translation_event") && (e.source === nodeId || e.target === nodeId)) {
       result.push(e);
     }
   });
@@ -2117,7 +2117,7 @@ function showDetailPanel(node) {
 
   var html = '<div class="dp-header">' + esc(node.label) + ' <span class="dp-type">(' + node.type + ')</span></div>';
 
-  // Fields section
+  // Fields section (shared by all block types)
   if (node.fields && node.fields.length > 0) {
     html += '<div class="dp-section">';
     html += '<div class="dp-section-title">Fields</div>';
@@ -2126,6 +2126,52 @@ function showDetailPanel(node) {
       var mod = f.modifier ? ' <span class="dp-field-modifier">(' + esc(f.modifier) + ')</span>' : '';
       html += '<tr><td class="dp-field-name">' + esc(f.name) + '</td><td class="dp-field-type">' + esc(f.type) + '</td><td>' + mod + '</td></tr>';
     });
+    html += '</tbody></table>';
+    html += '</div>';
+  }
+
+  // Type-specific metadata sections
+  if (node.type === 'trigger') {
+    html += '<div class="dp-section">';
+    html += '<div class="dp-section-title">Trigger</div>';
+    html += '<table><tbody>';
+    html += '<tr><th>Kind</th><td>' + esc(node.kind || '—') + '</td></tr>';
+    html += '<tr><th>Actor</th><td>' + esc(node.actor || '—') + '</td></tr>';
+    html += '<tr><th>Reads</th><td>' + esc(node.reads || '—') + '</td></tr>';
+    html += '</tbody></table>';
+    html += '</div>';
+  }
+
+  if (node.type === 'view') {
+    if (node.subscribes && node.subscribes.length > 0) {
+      html += '<div class="dp-section">';
+      html += '<div class="dp-section-title">Subscribes To</div>';
+      html += '<div>' + node.subscribes.map(function(s) { return esc(s); }).join(', ') + '</div>';
+      html += '</div>';
+    }
+  }
+
+  if (node.type === 'automation') {
+    html += '<div class="dp-section">';
+    html += '<div class="dp-section-title">Automation</div>';
+    html += '<table><tbody>';
+    html += '<tr><th>Trigger Event</th><td>' + esc(node.trigger_event || '—') + '</td></tr>';
+    html += '<tr><th>Command</th><td>' + esc(node.command || '—') + '</td></tr>';
+    html += '<tr><th>Target Context</th><td>' + esc(node.target_context || '—') + '</td></tr>';
+    html += '</tbody></table>';
+    html += '</div>';
+  }
+
+  if (node.type === 'translation') {
+    html += '<div class="dp-section">';
+    html += '<div class="dp-section-title">Translation</div>';
+    html += '<table><tbody>';
+    html += '<tr><th>External System</th><td>' + esc(node.external_system || '—') + '</td></tr>';
+    html += '<tr><th>Reads</th><td>' + esc(node.reads || '—') + '</td></tr>';
+    html += '<tr><th>Command</th><td>' + esc(node.command || '—') + '</td></tr>';
+    if (node.event) {
+      html += '<tr><th>Event</th><td>' + esc(node.event.name || '—') + '</td></tr>';
+    }
     html += '</tbody></table>';
     html += '</div>';
   }
