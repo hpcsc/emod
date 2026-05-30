@@ -596,10 +596,20 @@ header .model-name span {
 }
 
 /* --- Flow arrow hover & cursor --- */
-#diagram-canvas .flow-arrow {
+#diagram-canvas .flow-arrow,
+#diagram-canvas .sub-arrow,
+#diagram-canvas .auto-trg-arrow,
+#diagram-canvas .auto-cmd-arrow,
+#diagram-canvas .trg-cmd-arrow,
+#diagram-canvas .trans-evt-arrow {
   cursor: pointer;
 }
-#diagram-canvas .flow-arrow:hover {
+#diagram-canvas .flow-arrow:hover,
+#diagram-canvas .sub-arrow:hover,
+#diagram-canvas .auto-trg-arrow:hover,
+#diagram-canvas .auto-cmd-arrow:hover,
+#diagram-canvas .trg-cmd-arrow:hover,
+#diagram-canvas .trans-evt-arrow:hover {
   stroke: #3498db !important;
   stroke-width: 2.5 !important;
 }
@@ -639,6 +649,15 @@ header .model-name span {
       </marker>
       <marker id="arrowhead" markerWidth="10" markerHeight="7" refX="10" refY="3.5" orient="auto">
         <polygon points="0 0, 10 3.5, 0 7" fill="#666"/>
+      </marker>
+      <marker id="arrowhead-green" markerWidth="10" markerHeight="7" refX="10" refY="3.5" orient="auto">
+        <polygon points="0 0, 10 3.5, 0 7" fill="#82b366"/>
+      </marker>
+      <marker id="arrowhead-red" markerWidth="10" markerHeight="7" refX="10" refY="3.5" orient="auto">
+        <polygon points="0 0, 10 3.5, 0 7" fill="#b85450"/>
+      </marker>
+      <marker id="arrowhead-purple" markerWidth="10" markerHeight="7" refX="10" refY="3.5" orient="auto">
+        <polygon points="0 0, 10 3.5, 0 7" fill="#9673a6"/>
       </marker>
     </defs>
     <!-- Diagram elements will be rendered here by the renderer -->
@@ -985,19 +1004,30 @@ function renderDiagram() {
     html += "</g>\n";
   });
 
-  // ── Flow edges (arrows) ──
+  // ── Edges (arrows) ──
   arrowData = [];
+  var edgeConfig = {
+    flow:               { cls: "flow-arrow",      marker: "url(#arrowhead)",        stroke: "#666666", dash: "" },
+    subscription:       { cls: "sub-arrow",       marker: "url(#arrowhead-green)",  stroke: "#82b366", dash: "5,5" },
+    automation_trigger: { cls: "auto-trg-arrow",  marker: "url(#arrowhead-red)",    stroke: "#b85450", dash: "5,5" },
+    automation_command: { cls: "auto-cmd-arrow",  marker: "url(#arrowhead-red)",    stroke: "#b85450", dash: "" },
+    trigger_command:    { cls: "trg-cmd-arrow",   marker: "url(#arrowhead-purple)", stroke: "#9673a6", dash: "" },
+    translation_event:  { cls: "trans-evt-arrow", marker: "url(#arrowhead)",        stroke: "#666666", dash: "" },
+  };
   edges.forEach(function(edge) {
-    if (edge.type !== "flow") return;
+    var cfg = edgeConfig[edge.type];
+    if (!cfg) return;
     var srcPos = layoutPositions[edge.source];
     var tgtPos = layoutPositions[edge.target];
     if (!srcPos || !tgtPos) return;
 
-    var d = computeArrowD(srcPos, tgtPos);
+    var crossBoundary = isCrossBoundary(edge.source, edge.target);
+    var d = computeArrowD(srcPos, tgtPos, crossBoundary);
 
     arrowData.push({ source: edge.source, target: edge.target, path: d });
 
-    html += "<path d=\"" + d + "\" fill=\"none\" stroke=\"#666666\" stroke-width=\"1.5\" marker-end=\"url(#arrowhead)\" class=\"flow-arrow\" data-source=\"" + edge.source + "\" data-target=\"" + edge.target + "\" pointer-events=\"stroke\"/>\n";
+    var dashAttr = cfg.dash ? " stroke-dasharray=\"" + cfg.dash + "\"" : "";
+    html += "<path d=\"" + d + "\" fill=\"none\" stroke=\"" + cfg.stroke + "\" stroke-width=\"1.5\" marker-end=\"" + cfg.marker + "\" class=\"" + cfg.cls + "\" data-source=\"" + edge.source + "\" data-target=\"" + edge.target + "\" pointer-events=\"stroke\"" + dashAttr + "/>\n";
   });
 
   // Wrap all rendered content in a viewport group (re-created on each render)
@@ -1139,13 +1169,51 @@ function getConnectedEdges(nodeId) {
   return result;
 }
 
-function computeArrowD(srcPos, tgtPos) {
-  var srcCx = srcPos.x + srcPos.w / 2;
-  var srcBottom = srcPos.y + srcPos.h;
-  var tgtCx = tgtPos.x + tgtPos.w / 2;
-  var tgtTop = tgtPos.y;
-  var midY = (srcBottom + tgtTop) / 2;
-  return "M " + srcCx + "," + srcBottom + " L " + srcCx + "," + midY + " L " + tgtCx + "," + midY + " L " + tgtCx + "," + tgtTop;
+function isCrossBoundary(srcNodeId, tgtNodeId) {
+  var srcNode = null, tgtNode = null;
+  for (var i = 0; i < nodes.length; i++) {
+    if (nodes[i].id === srcNodeId) srcNode = nodes[i];
+    if (nodes[i].id === tgtNodeId) tgtNode = nodes[i];
+  }
+  return srcNode && tgtNode && srcNode.parentId !== tgtNode.parentId;
+}
+
+function computeArrowD(srcPos, tgtPos, crossBoundary) {
+  if (crossBoundary) {
+    // Manhattan routing: exit source right edge at source Y, go horizontal to
+    // target column X, then vertical to target top-center
+    var srcRight = srcPos.x + srcPos.w;
+    var srcMidY = srcPos.y + srcPos.h / 2;
+    var tgtCx = tgtPos.x + tgtPos.w / 2;
+    var tgtTop = tgtPos.y;
+    // Determine direction: if source is right of target, exit left edge instead
+    if (srcPos.x > tgtPos.x + tgtPos.w) {
+      // Source is to the right of target — exit left edge
+      srcRight = srcPos.x;
+    }
+    return "M " + srcRight + "," + srcMidY + " L " + tgtCx + "," + srcMidY + " L " + tgtCx + "," + tgtTop;
+  } else {
+    // Orthogonal routing within the same slice: down from source bottom,
+    // horizontal across middle, up to target top
+    var srcCx = srcPos.x + srcPos.w / 2;
+    var srcBottom = srcPos.y + srcPos.h;
+    var tgtCx = tgtPos.x + tgtPos.w / 2;
+    var tgtTop = tgtPos.y;
+    var midY = (srcBottom + tgtTop) / 2;
+    return "M " + srcCx + "," + srcBottom + " L " + srcCx + "," + midY + " L " + tgtCx + "," + midY + " L " + tgtCx + "," + tgtTop;
+  }
+}
+
+function arrowClassForType(edgeType) {
+  var clsMap = {
+    flow: "flow-arrow",
+    subscription: "sub-arrow",
+    automation_trigger: "auto-trg-arrow",
+    automation_command: "auto-cmd-arrow",
+    trigger_command: "trg-cmd-arrow",
+    translation_event: "trans-evt-arrow",
+  };
+  return clsMap[edgeType] || "flow-arrow";
 }
 
 function updateArrowsForNode(nodeId, draggedPos) {
@@ -1154,9 +1222,11 @@ function updateArrowsForNode(nodeId, draggedPos) {
     var srcPos = edge.source === nodeId ? draggedPos : layoutPositions[edge.source];
     var tgtPos = edge.target === nodeId ? draggedPos : layoutPositions[edge.target];
     if (!srcPos || !tgtPos) return;
-    var d = computeArrowD(srcPos, tgtPos);
+    var crossBoundary = isCrossBoundary(edge.source, edge.target);
+    var d = computeArrowD(srcPos, tgtPos, crossBoundary);
     // Find and update the path element in the DOM
-    var pathEl = svg.querySelector('.flow-arrow[data-source="' + edge.source + '"][data-target="' + edge.target + '"]');
+    var arrowCls = arrowClassForType(edge.type);
+    var pathEl = svg.querySelector('.' + arrowCls + '[data-source="' + edge.source + '"][data-target="' + edge.target + '"]');
     if (pathEl) {
       pathEl.setAttribute("d", d);
     }
@@ -1562,7 +1632,7 @@ svg.addEventListener("mousedown", function(evt) {
   }
 
   // Do not initiate pan when clicking on other interactive elements
-  if (evt.target.closest('.flow-arrow, .ctx-label, .agg-label')) return;
+  if (evt.target.closest('.flow-arrow, .sub-arrow, .auto-trg-arrow, .auto-cmd-arrow, .trg-cmd-arrow, .trans-evt-arrow, .ctx-label, .agg-label')) return;
 
   panning = true;
   panStartX = evt.clientX;
@@ -1768,7 +1838,7 @@ svg.addEventListener("touchstart", function(evt) {
       return;
     }
 
-    if (evt.target.closest('.flow-arrow, .ctx-label, .agg-label')) return;
+    if (evt.target.closest('.flow-arrow, .sub-arrow, .auto-trg-arrow, .auto-cmd-arrow, .trg-cmd-arrow, .trans-evt-arrow, .ctx-label, .agg-label')) return;
     touchStartPan(touches[0], viewport.offsetX, viewport.offsetY);
     svg.classList.add("panning");
   } else if (touches.length === 2) {
@@ -2253,9 +2323,9 @@ svg.addEventListener("click", function(evt) {
     }
   }
 
-  // ── Flow arrow click: highlight source and target ──
+  // ── Edge arrow click: highlight source and target ──
   if (!interactive) {
-    var arrow = target.closest(".flow-arrow");
+    var arrow = target.closest(".flow-arrow, .sub-arrow, .auto-trg-arrow, .auto-cmd-arrow, .trg-cmd-arrow, .trans-evt-arrow");
     if (arrow) {
       interactive = true;
       var src = arrow.getAttribute("data-source");
