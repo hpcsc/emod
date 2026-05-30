@@ -829,6 +829,9 @@ var dragState = null;         // { nodeId, startDiagramX, startDiagramY, origNod
 var nodeOffsets = {};        // nodeId -> {dx, dy} persistent offsets from computed position
 var suppressDetailClick = false; // true when a drag just completed, suppresses click handler
 
+// ─── Inline rename state ────────────────────────────────────────────
+var inlineEditState = null;    // { nodeId, originalLabel, inputEl } or null when idle
+
 // ─── DOM references ────────────────────────────────────────────────────
 const svg        = document.getElementById("diagram-canvas");
 const nameDisplay = document.getElementById("model-name-display");
@@ -2373,6 +2376,26 @@ function findNodeById(id) {
   return null;
 }
 
+function getNodeElement(nodeId, type) {
+  switch (type) {
+    case "command":
+    case "event":
+    case "trigger":
+    case "view":
+    case "automation":
+    case "translation":
+      return svg.querySelector('[data-node-id="' + nodeId + '"]');
+    case "context":
+      return svg.querySelector('.ctx-label[data-ctx-id="' + nodeId + '"]');
+    case "aggregate":
+      return svg.querySelector('.agg-label[data-agg-id="' + nodeId + '"]');
+    case "slice":
+      return svg.querySelector('.slice-header[data-slice-id="' + nodeId + '"]');
+    default:
+      return null;
+  }
+}
+
 function getDescendantIds(rootId) {
   var ids = [rootId];
   // Direct children
@@ -2488,6 +2511,100 @@ function hideDetailPanel() {
   clearHighlights();
 }
 
+// ─── Inline rename via double-click ───────────────────────────────────────
+function startInlineEdit(nodeId) {
+  var node = findNodeById(nodeId);
+  if (!node) return;
+
+  // Cancel any in-progress edit
+  cancelInlineEdit();
+
+  // Dismiss detail panel and highlights before entering edit mode
+  hideDetailPanel();
+  clearHighlights();
+
+  var el = getNodeElement(nodeId, node.type);
+  if (!el) return;
+
+  var rect = el.getBoundingClientRect();
+
+  var input = document.createElement("input");
+  input.type = "text";
+  input.value = node.label;
+  input.style.position = "fixed";
+  input.style.zIndex = "999";
+  input.style.border = "2px solid #3498db";
+  input.style.borderRadius = "4px";
+  input.style.outline = "none";
+  input.style.background = "#fff";
+  input.style.fontFamily = "sans-serif";
+  input.style.fontSize = "13px";
+  input.style.padding = "2px 6px";
+  input.style.boxSizing = "border-box";
+  input.style.left = Math.max(4, rect.left - 4) + "px";
+  input.style.top = Math.max(4, rect.top - 4) + "px";
+  input.style.width = Math.max(rect.width + 8, 60) + "px";
+
+  var isBlock = (node.type === "command" || node.type === "event" || node.type === "trigger" ||
+                 node.type === "view" || node.type === "automation" || node.type === "translation");
+  if (isBlock) {
+    // For blocks, position the input centered within the node's bounding box
+    var bw = Math.max(rect.width * 0.8, 80);
+    input.style.left = Math.max(4, rect.left + (rect.width - bw) / 2) + "px";
+    input.style.top = Math.max(4, rect.top + (rect.height - 28) / 2) + "px";
+    input.style.width = bw + "px";
+  }
+  input.style.height = "28px";
+
+  inlineEditState = {
+    nodeId: nodeId,
+    originalLabel: node.label,
+    inputEl: input,
+  };
+
+  // ── Enter commits, Escape cancels ──
+  input.addEventListener("keydown", function(evt) {
+    if (evt.key === "Enter") {
+      evt.preventDefault();
+      if (!inlineEditState) return;
+      var newLabel = input.value.trim() || inlineEditState.originalLabel;
+      var n = findNodeById(inlineEditState.nodeId);
+      if (n && newLabel !== n.label) {
+        n.label = newLabel;
+      }
+      document.body.removeChild(input);
+      inlineEditState = null;
+      renderDiagram();
+    } else if (evt.key === "Escape") {
+      evt.preventDefault();
+      cancelInlineEdit();
+    }
+  });
+
+  // ── Blur commits but defers re-render to avoid clashing with in-flight events ──
+  input.addEventListener("blur", function() {
+    if (!inlineEditState) return;
+    var newLabel = input.value.trim() || inlineEditState.originalLabel;
+    var n = findNodeById(inlineEditState.nodeId);
+    if (n && newLabel !== n.label) {
+      n.label = newLabel;
+    }
+    document.body.removeChild(input);
+    inlineEditState = null;
+    setTimeout(renderDiagram, 0);
+  });
+
+  document.body.appendChild(input);
+  input.focus();
+  input.select();
+}
+
+function cancelInlineEdit() {
+  if (!inlineEditState) return;
+  document.body.removeChild(inlineEditState.inputEl);
+  inlineEditState = null;
+}
+
 // ─── Highlighting ──────────────────────────────────────────────────────
 function clearHighlights() {
   highlighted = {};
@@ -2579,11 +2696,48 @@ svg.addEventListener("click", function(evt) {
   }
 });
 
-// ── Escape key: close panel and clear highlights ──
+// ── Double-click: inline rename ──
+svg.addEventListener("dblclick", function(evt) {
+  var target = evt.target;
+
+  // Block double-click (command, event, trigger, view, automation, translation)
+  var block = target.closest(".cmd-block, .evt-block, .trg-block, .view-block, .auto-block, .trans-block");
+  if (block) {
+    var nodeId = block.getAttribute("data-node-id");
+    if (nodeId) { evt.preventDefault(); startInlineEdit(nodeId); return; }
+  }
+
+  // Context label double-click
+  var ctxLabel = target.closest(".ctx-label");
+  if (ctxLabel) {
+    var ctxId = ctxLabel.getAttribute("data-ctx-id");
+    if (ctxId) { evt.preventDefault(); startInlineEdit(ctxId); return; }
+  }
+
+  // Aggregate label double-click
+  var aggLabel = target.closest(".agg-label");
+  if (aggLabel) {
+    var aggId = aggLabel.getAttribute("data-agg-id");
+    if (aggId) { evt.preventDefault(); startInlineEdit(aggId); return; }
+  }
+
+  // Slice header double-click
+  var sliceHeader = target.closest(".slice-header");
+  if (sliceHeader) {
+    var sliceId = sliceHeader.getAttribute("data-slice-id");
+    if (sliceId) { evt.preventDefault(); startInlineEdit(sliceId); return; }
+  }
+});
+
+// ── Escape key: cancel inline edit, or close panel and clear highlights ──
 document.addEventListener("keydown", function(evt) {
   if (evt.key === "Escape") {
-    hideDetailPanel();
-    clearHighlights();
+    if (inlineEditState) {
+      cancelInlineEdit();
+    } else {
+      hideDetailPanel();
+      clearHighlights();
+    }
   }
 });
 
