@@ -1097,10 +1097,14 @@ function commitDrag(nodeId, dx, dy, origNodeX, origNodeY) {
   var newY = origNodeY + dy;
   layoutPositions[nodeId].x = newX;
   layoutPositions[nodeId].y = newY;
-  nodeOffsets[nodeId] = { dx: dx, dy: dy };
-  // Remove the temporary transform — position is now baked into layoutPositions
+  var existing = nodeOffsets[nodeId] || { dx: 0, dy: 0 };
+  nodeOffsets[nodeId] = { dx: existing.dx + dx, dy: existing.dy + dy };
+  // Update the transform to reflect the cumulative offset so the block stays in place
   var blockEl = svg.querySelector('.cmd-block[data-node-id="' + nodeId + '"], .evt-block[data-node-id="' + nodeId + '"]');
-  if (blockEl) blockEl.removeAttribute("transform");
+  if (blockEl) {
+    var off = nodeOffsets[nodeId];
+    blockEl.setAttribute("transform", "translate(" + off.dx + "," + off.dy + ")");
+  }
   // Final arrow update with committed position
   updateArrowsForNode(nodeId, layoutPositions[nodeId]);
   updateResetLayoutButton();
@@ -1512,7 +1516,8 @@ document.addEventListener("mousemove", function(evt) {
         if (!orig) return;
         var blockEl = svg.querySelector('.cmd-block[data-node-id="' + nodeId + '"], .evt-block[data-node-id="' + nodeId + '"]');
         if (blockEl) {
-          blockEl.setAttribute("transform", "translate(" + dx + "," + dy + ")");
+          var existingOff = nodeOffsets[nodeId] || {dx: 0, dy: 0};
+          blockEl.setAttribute("transform", "translate(" + (existingOff.dx + dx) + "," + (existingOff.dy + dy) + ")");
         }
       });
       // Update arrows for all child nodes
@@ -1521,7 +1526,8 @@ document.addEventListener("mousemove", function(evt) {
       // Single block drag
       var blockEl = svg.querySelector('.cmd-block[data-node-id="' + dragState.nodeId + '"], .evt-block[data-node-id="' + dragState.nodeId + '"]');
       if (blockEl) {
-        blockEl.setAttribute("transform", "translate(" + dx + "," + dy + ")");
+        var existingOff = nodeOffsets[dragState.nodeId] || {dx: 0, dy: 0};
+        blockEl.setAttribute("transform", "translate(" + (existingOff.dx + dx) + "," + (existingOff.dy + dy) + ")");
       }
       // Update connected arrows using the temporary dragged position
       updateArrowsForNode(dragState.nodeId, {
@@ -1718,7 +1724,8 @@ svg.addEventListener("touchmove", function(evt) {
         if (!orig) return;
         var blockEl = svg.querySelector('.cmd-block[data-node-id="' + nodeId + '"], .evt-block[data-node-id="' + nodeId + '"]');
         if (blockEl) {
-          blockEl.setAttribute("transform", "translate(" + dx + "," + dy + ")");
+          var existingOff = nodeOffsets[nodeId] || {dx: 0, dy: 0};
+          blockEl.setAttribute("transform", "translate(" + (existingOff.dx + dx) + "," + (existingOff.dy + dy) + ")");
         }
       });
       // Update arrows for all child nodes
@@ -1727,9 +1734,9 @@ svg.addEventListener("touchmove", function(evt) {
       // Single block drag
       var blockEl = svg.querySelector('.cmd-block[data-node-id="' + dragState.nodeId + '"], .evt-block[data-node-id="' + dragState.nodeId + '"]');
       if (blockEl) {
-        blockEl.setAttribute("transform", "translate(" + dx + "," + dy + ")");
+        var existingOff = nodeOffsets[dragState.nodeId] || {dx: 0, dy: 0};
+        blockEl.setAttribute("transform", "translate(" + (existingOff.dx + dx) + "," + (existingOff.dy + dy) + ")");
       }
-
       // Update connected arrows using the temporary dragged position
       updateArrowsForNode(dragState.nodeId, {
         x: dragState.origNodeX + dx,
