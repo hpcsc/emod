@@ -86,6 +86,7 @@ function renderDiagram(s) {
       s.layoutPositions[id].y += s.nodeOffsets[id].dy;
     }
   }
+  s.nodeOffsets = {};
 
   s.dom.svg.setAttribute("viewBox", "0 0 " + result.width + " " + result.height);
   UI.updateStats(s, result);

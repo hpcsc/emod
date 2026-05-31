@@ -1,5 +1,6 @@
 import { L, DRAG_THRESHOLD, arrowClassMap } from './config.js';
 import { Layout } from './layout.js';
+import { Model } from './model.js';
 import { bus } from './bus.js';
 
 function screenToDiagram(svg, viewport, screenX, screenY) {
@@ -103,21 +104,52 @@ function commitDrag(store, nodeId, dx, dy, origNodeX, origNodeY) {
 
 function updateArrowsForSlice(store, sliceId, dx, dy) {
   const childIds = Layout.getSliceChildNodeIds(store.nodes, sliceId);
+  // Build dragged-position lookup for all children of this slice
+  const dragged = {};
+  childIds.forEach(function(id) {
+    const p = store.layoutPositions[id];
+    if (p) dragged[id] = { x: p.x + dx, y: p.y + dy, w: p.w, h: p.h };
+  });
+
+  const svgEl = store.dom.svg;
+  const seen = {};
   childIds.forEach(function(nodeId) {
-    const orig = store.layoutPositions[nodeId];
-    if (!orig) return;
-    const draggedPos = { x: orig.x + dx, y: orig.y + dy, w: orig.w, h: orig.h };
-    updateArrowsForNode(store, nodeId, draggedPos);
+    if (!dragged[nodeId]) return;
+    const connected = getConnectedEdges(store, nodeId);
+    connected.forEach(function(edge) {
+      var key = edge.source + "\x00" + edge.target;
+      if (seen[key]) return;
+      seen[key] = true;
+
+      const srcPos = dragged[edge.source] || store.layoutPositions[edge.source];
+      const tgtPos = dragged[edge.target] || store.layoutPositions[edge.target];
+      if (!srcPos || !tgtPos) return;
+
+      const crossBoundary = Layout.isCrossBoundary(store.nodes, edge.source, edge.target);
+      var edgeIdx = -1;
+      for (var i = 0; i < store.edges.length; i++) { if (store.edges[i] === edge) { edgeIdx = i; break; } }
+      const d = Layout.computeArrowD(srcPos, tgtPos, crossBoundary, edgeIdx);
+      const arrowCls = arrowClassMap[edge.type] || "flow-arrow";
+      const pathEl = svgEl.querySelector('.' + arrowCls + '[data-source="' + edge.source + '"][data-target="' + edge.target + '"]');
+      if (pathEl) {
+        pathEl.setAttribute("d", d);
+      }
+    });
   });
 }
 
-function commitSliceDrag(store, sliceId, dx, dy) {
-  const childIds = Layout.getSliceChildNodeIds(store.nodes, sliceId);
-  childIds.forEach(function(nodeId) {
-    const orig = store.layoutPositions[nodeId];
-    if (!orig) return;
-    commitDrag(store, nodeId, dx, dy, orig.x, orig.y);
-  });
+function tryReorderSliceOnDrop(store, sliceId, dx) {
+  var sl = store.nodeById.get(sliceId);
+  if (!sl) return false;
+  var sp = store.layoutPositions[sliceId];
+  if (!sp || sp.w === 0) return false;
+  if (Math.abs(dx) <= sp.w * 0.3) return false;
+  var direction = dx > 0 ? "right" : "left";
+  var moved = Model.moveSlice(store.nodes, sliceId, direction);
+  if (moved) {
+    bus.emit('data:changed', { store });
+  }
+  return moved;
 }
 
 function initEventListeners(store) {
@@ -173,20 +205,20 @@ function initEventListeners(store) {
             origPositions[id] = { x: store.layoutPositions[id].x, y: store.layoutPositions[id].y };
           }
         });
+        var sliceGroup = svgEl.querySelector('g.slice-' + sliceId);
+        var swimlane = sliceGroup ? sliceGroup.parentNode : null;
         store.interaction.drag = {
           sliceId: sliceId,
           nodeIds: childIds,
           origPositions: origPositions,
+          sliceGroup: sliceGroup,
+          swimlane: swimlane,
           startDiagramX: dp.x,
           startDiagramY: dp.y,
           isDragging: false,
           startClientX: evt.clientX,
           startClientY: evt.clientY,
         };
-        childIds.forEach(function(id) {
-          const blockEl = svgEl.querySelector('.diagram-node[data-node-id="' + id + '"]');
-          if (blockEl) blockEl.classList.add("dragging");
-        });
         const headerEls = svgEl.querySelectorAll('.slice-header[data-slice-id="' + sliceId + '"]');
         headerEls.forEach(function(el) { el.classList.add("dragging"); });
         evt.preventDefault();
@@ -220,12 +252,39 @@ function initEventListeners(store) {
         );
         if (dist >= DRAG_THRESHOLD) {
           drag.isDragging = true;
+          if (drag.sliceId && drag.sliceGroup) {
+            var vg = svgEl.querySelector("#viewport-group");
+            if (vg) vg.appendChild(drag.sliceGroup);
+            drag.sliceGroup.setAttribute("opacity", "0.85");
+            drag.nodeIds.forEach(function(id) {
+              var blockEl = svgEl.querySelector('.diagram-node[data-node-id="' + id + '"]');
+              if (blockEl) {
+                blockEl.classList.add("dragging");
+                if (vg) vg.appendChild(blockEl);
+              }
+            });
+            var seenArrows = {};
+            drag.nodeIds.forEach(function(id) {
+              var connected = getConnectedEdges(store, id);
+              connected.forEach(function(edge) {
+                var key = edge.source + "\x00" + edge.target;
+                if (seenArrows[key]) return;
+                seenArrows[key] = true;
+                var arrowCls = arrowClassMap[edge.type] || "flow-arrow";
+                var pathEl = svgEl.querySelector('.' + arrowCls + '[data-source="' + edge.source + '"][data-target="' + edge.target + '"]');
+                if (pathEl && vg) vg.appendChild(pathEl);
+              });
+            });
+          }
         } else {
           return;
         }
       }
 
       if (drag.sliceId) {
+        if (drag.sliceGroup) {
+          drag.sliceGroup.setAttribute("transform", "translate(" + dx + "," + dy + ")");
+        }
         drag.nodeIds.forEach(function(nodeId) {
           const orig = drag.origPositions[nodeId];
           if (!orig) return;
@@ -272,7 +331,27 @@ function initEventListeners(store) {
           const dp = screenToDiagram(svgEl, store.viewport, evt.clientX, evt.clientY);
           const dx = dp.x - drag.startDiagramX;
           const dy = dp.y - drag.startDiagramY;
-          commitSliceDrag(store, drag.sliceId, dx, dy);
+          if (!tryReorderSliceOnDrop(store, drag.sliceId, dx)) {
+            // Revert children to pre-drag state instead of committing
+            drag.nodeIds.forEach(function(nodeId) {
+              var blockEl = svgEl.querySelector('.diagram-node[data-node-id="' + nodeId + '"]');
+              if (blockEl) {
+                var off = store.nodeOffsets[nodeId];
+                if (off) {
+                  blockEl.setAttribute("transform", "translate(" + off.dx + "," + off.dy + ")");
+                } else {
+                  blockEl.removeAttribute("transform");
+                }
+              }
+              var orig = drag.origPositions[nodeId];
+              if (orig) updateArrowsForNode(store, nodeId, store.layoutPositions[nodeId]);
+            });
+            if (drag.sliceGroup) {
+              drag.sliceGroup.removeAttribute("transform");
+              drag.sliceGroup.removeAttribute("opacity");
+              if (drag.swimlane) drag.swimlane.appendChild(drag.sliceGroup);
+            }
+          }
           store.interaction.suppressDetailClick = true;
         }
         drag.nodeIds.forEach(function(nodeId) {
@@ -348,22 +427,22 @@ function initEventListeners(store) {
               origPositions[id] = { x: store.layoutPositions[id].x, y: store.layoutPositions[id].y };
             }
           });
+          var sliceGroup = svgEl.querySelector('g.slice-' + sliceId);
+          var swimlane = sliceGroup ? sliceGroup.parentNode : null;
+          const headerEls = svgEl.querySelectorAll('.slice-header[data-slice-id="' + sliceId + '"]');
+          headerEls.forEach(function(el) { el.classList.add("dragging"); });
           store.interaction.drag = {
             sliceId: sliceId,
             nodeIds: childIds,
             origPositions: origPositions,
+            sliceGroup: sliceGroup,
+            swimlane: swimlane,
             startDiagramX: dp.x,
             startDiagramY: dp.y,
             isDragging: false,
             startClientX: touch.clientX,
             startClientY: touch.clientY,
           };
-          childIds.forEach(function(id) {
-            const blockEl = svgEl.querySelector('.diagram-node[data-node-id="' + id + '"]');
-            if (blockEl) blockEl.classList.add("dragging");
-          });
-          const headerEls = svgEl.querySelectorAll('.slice-header[data-slice-id="' + sliceId + '"]');
-          headerEls.forEach(function(el) { el.classList.add("dragging"); });
         }
         return;
       }
@@ -410,12 +489,39 @@ function initEventListeners(store) {
         );
         if (dist >= DRAG_THRESHOLD) {
           drag.isDragging = true;
+          if (drag.sliceId && drag.sliceGroup) {
+            var vg = svgEl.querySelector("#viewport-group");
+            if (vg) vg.appendChild(drag.sliceGroup);
+            drag.sliceGroup.setAttribute("opacity", "0.85");
+            drag.nodeIds.forEach(function(id) {
+              var blockEl = svgEl.querySelector('.diagram-node[data-node-id="' + id + '"]');
+              if (blockEl) {
+                blockEl.classList.add("dragging");
+                if (vg) vg.appendChild(blockEl);
+              }
+            });
+            var seenArrows = {};
+            drag.nodeIds.forEach(function(id) {
+              var connected = getConnectedEdges(store, id);
+              connected.forEach(function(edge) {
+                var key = edge.source + "\x00" + edge.target;
+                if (seenArrows[key]) return;
+                seenArrows[key] = true;
+                var arrowCls = arrowClassMap[edge.type] || "flow-arrow";
+                var pathEl = svgEl.querySelector('.' + arrowCls + '[data-source="' + edge.source + '"][data-target="' + edge.target + '"]');
+                if (pathEl && vg) vg.appendChild(pathEl);
+              });
+            });
+          }
         } else {
           return;
         }
       }
 
       if (drag.sliceId) {
+        if (drag.sliceGroup) {
+          drag.sliceGroup.setAttribute("transform", "translate(" + dx + "," + dy + ")");
+        }
         drag.nodeIds.forEach(function(nodeId) {
           const orig = drag.origPositions[nodeId];
           if (!orig) return;
@@ -511,7 +617,26 @@ function initEventListeners(store) {
             const dp = screenToDiagram(svgEl, store.viewport, touch.clientX, touch.clientY);
             const dx = dp.x - drag.startDiagramX;
             const dy = dp.y - drag.startDiagramY;
-            commitSliceDrag(store, drag.sliceId, dx, dy);
+            if (!tryReorderSliceOnDrop(store, drag.sliceId, dx)) {
+              drag.nodeIds.forEach(function(nodeId) {
+                var blockEl = svgEl.querySelector('.diagram-node[data-node-id="' + nodeId + '"]');
+                if (blockEl) {
+                  var off = store.nodeOffsets[nodeId];
+                  if (off) {
+                    blockEl.setAttribute("transform", "translate(" + off.dx + "," + off.dy + ")");
+                  } else {
+                    blockEl.removeAttribute("transform");
+                  }
+                }
+                var orig = drag.origPositions[nodeId];
+                if (orig) updateArrowsForNode(store, nodeId, store.layoutPositions[nodeId]);
+              });
+              if (drag.sliceGroup) {
+                drag.sliceGroup.removeAttribute("transform");
+                drag.sliceGroup.removeAttribute("opacity");
+                if (drag.swimlane) drag.swimlane.appendChild(drag.sliceGroup);
+              }
+            }
             store.interaction.suppressDetailClick = true;
           }
         }
@@ -564,6 +689,35 @@ function initEventListeners(store) {
     if (drag) {
       if (drag.sliceId) {
         const headerEls = svgEl.querySelectorAll('.slice-header[data-slice-id="' + drag.sliceId + '"]');
+        if (drag.isDragging) {
+          const touch = evt.changedTouches[0];
+          if (touch) {
+            const dp = screenToDiagram(svgEl, store.viewport, touch.clientX, touch.clientY);
+            const dx = dp.x - drag.startDiagramX;
+            const dy = dp.y - drag.startDiagramY;
+            if (!tryReorderSliceOnDrop(store, drag.sliceId, dx)) {
+              drag.nodeIds.forEach(function(nodeId) {
+                var blockEl = svgEl.querySelector('.diagram-node[data-node-id="' + nodeId + '"]');
+                if (blockEl) {
+                  var off = store.nodeOffsets[nodeId];
+                  if (off) {
+                    blockEl.setAttribute("transform", "translate(" + off.dx + "," + off.dy + ")");
+                  } else {
+                    blockEl.removeAttribute("transform");
+                  }
+                }
+                var orig = drag.origPositions[nodeId];
+                if (orig) updateArrowsForNode(store, nodeId, store.layoutPositions[nodeId]);
+              });
+              if (drag.sliceGroup) {
+                drag.sliceGroup.removeAttribute("transform");
+                drag.sliceGroup.removeAttribute("opacity");
+                if (drag.swimlane) drag.swimlane.appendChild(drag.sliceGroup);
+              }
+            }
+            store.interaction.suppressDetailClick = true;
+          }
+        }
         drag.nodeIds.forEach(function(nodeId) {
           const blockEl = svgEl.querySelector('.diagram-node[data-node-id="' + nodeId + '"]');
           if (blockEl) blockEl.classList.remove("dragging");
