@@ -1,5 +1,12 @@
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { Model } from './model.js';
+import { parseEmod } from './wasm.js';
+
+vi.mock('./wasm.js', () => ({
+  parseEmod: vi.fn(),
+  ready: Promise.resolve(),
+  isReady: true,
+}));
 
 describe('Model', () => {
   describe('rebuildNodeIndex', () => {
@@ -154,6 +161,79 @@ describe('Model', () => {
 
     it('increments based on count regardless of prefixes', () => {
       expect(Model.generateLabel('evt', [{ id: 'x' }, { id: 'y' }])).toBe('new-evt-3');
+    });
+  });
+
+  describe('sendParse', () => {
+    let store;
+    let statusEl;
+
+    beforeEach(() => {
+      store = { nodeById: new Map(), nodes: [], edges: [] };
+      statusEl = document.createElement('div');
+      vi.clearAllMocks();
+      parseEmod.mockResolvedValue({ diagnostics: [], diagram: { nodes: [], edges: [] } });
+    });
+
+    it('rejects with error and updates status when source is empty', async () => {
+      await expect(Model.sendParse(store, '', statusEl)).rejects.toThrow('no source');
+      expect(statusEl.textContent).toContain('Paste some .emod content first');
+      expect(statusEl.className).toBe('status error');
+    });
+
+    it('calls parseEmod with raw .emod source', async () => {
+      const diagram = { nodes: [{ id: 'n1', type: 'command', label: 'Test' }], edges: [] };
+      const result = { diagnostics: [], diagram };
+      parseEmod.mockResolvedValue(result);
+
+      const value = await Model.sendParse(store, 'context Test {}', statusEl);
+      expect(parseEmod).toHaveBeenCalledWith('context Test {}');
+      expect(value).toEqual(result);
+    });
+
+    it('sets parsing status on status element during WASM parse', async () => {
+      let resolvePromise;
+      parseEmod.mockReturnValue(new Promise(function(resolve) { resolvePromise = resolve; }));
+
+      const promise = Model.sendParse(store, 'context X {}', statusEl);
+      expect(statusEl.textContent).toBe('⏳ Parsing...');
+      expect(statusEl.className).toBe('');
+      resolvePromise({ diagnostics: [], diagram: { nodes: [], edges: [] } });
+      await promise;
+    });
+
+    it('propagates WASM errors', async () => {
+      parseEmod.mockRejectedValue(new Error('syntax error'));
+
+      await expect(Model.sendParse(store, 'context Bad {}', statusEl)).rejects.toThrow('syntax error');
+    });
+
+    it('returns diagram JSON directly when source has nodes array', async () => {
+      const source = JSON.stringify({ nodes: [{ id: 'n1' }], edges: [] });
+      const result = await Model.sendParse(store, source, statusEl);
+      expect(result).toEqual({ diagnostics: [], diagram: { nodes: [{ id: 'n1' }], edges: [] } });
+      expect(parseEmod).not.toHaveBeenCalled();
+    });
+
+    it('returns AST JSON directly when source has model key', async () => {
+      const modelData = { name: 'TestModel', actors: [] };
+      const source = JSON.stringify({ model: modelData });
+      const result = await Model.sendParse(store, source, statusEl);
+      expect(result).toEqual({ diagnostics: [], diagram: { model: modelData } });
+      expect(parseEmod).not.toHaveBeenCalled();
+    });
+
+    it('recognises diagram JSON even when it also has a model key', async () => {
+      const source = JSON.stringify({ nodes: [{ id: 'n1' }], edges: [], model: { name: 'Test' } });
+      const result = await Model.sendParse(store, source, statusEl);
+      expect(result).toEqual({ diagnostics: [], diagram: { nodes: [{ id: 'n1' }], edges: [], model: { name: 'Test' } } });
+      expect(parseEmod).not.toHaveBeenCalled();
+    });
+
+    it('rejects empty after whitespace trimming is not required', async () => {
+      await expect(Model.sendParse(store, '', statusEl)).rejects.toThrow('no source');
+      await expect(Model.sendParse(store, null, statusEl)).rejects.toThrow('no source');
+      await expect(Model.sendParse(store, undefined, statusEl)).rejects.toThrow('no source');
     });
   });
 });

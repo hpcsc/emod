@@ -83,22 +83,28 @@ function sendParse(store, source, statusEl) {
   statusEl.textContent = "⏳ Parsing...";
   statusEl.className = "";
 
-  return fetch("/parse", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ source: source }),
-  })
-  .then(function(resp) {
-    if (!resp.ok) {
-      return resp.json().then(function(err) { throw new Error(err.error || "parse failed"); });
+  // Detect input format: try JSON, check for known shapes
+  var parsed;
+  try {
+    parsed = JSON.parse(source);
+    // Valid JSON — check for well-known formats
+    if (Array.isArray(parsed.nodes)) {
+      // Diagram-oriented JSON — use directly
+      return Promise.resolve({ diagnostics: [], diagram: parsed });
     }
-    return resp.json();
-  })
-  .then(function(data) {
-    if (!data.diagram || !data.diagram.nodes || !data.diagram.edges) {
-      throw new Error("invalid diagram response from server");
+    if (parsed.model) {
+      // Raw AST JSON — use directly
+      return Promise.resolve({ diagnostics: [], diagram: parsed });
     }
-    return data;
+  } catch (e) {
+    // Not valid JSON — treat as raw .emod source below
+  }
+
+  // Raw .emod source — parse via WASM (dynamic import to defer init side effects)
+  return import('./wasm.js').then(function(wasm) {
+    return wasm.ready.then(function() {
+      return wasm.parseEmod(source);
+    });
   });
 }
 
