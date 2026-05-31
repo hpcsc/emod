@@ -65,6 +65,7 @@ bus.on('node:delete', function({ store: s, nodeId }) {
   });
   delete s.nodeOffsets[nodeId];
   delete s.layoutPositions[nodeId];
+  Model.rebuildNodeIndex(s);
   UI.hideDetailPanel(s);
   const hasOffsets = Object.keys(s.nodeOffsets).length > 0;
   if (s.dom.resetLayoutBtn) s.dom.resetLayoutBtn.disabled = !hasOffsets;
@@ -73,6 +74,7 @@ bus.on('node:delete', function({ store: s, nodeId }) {
 
 // ─── Render orchestration ────────────────────────────────────────────
 function renderDiagram(s) {
+  Model.rebuildNodeIndex(s);
   bus.emit('diagram:before-render', { store: s });
 
   const result = Layout.computeLayout(s);
@@ -108,7 +110,6 @@ bus.on('diagram:before-render', function({ store: s }) {
 // ─── After-render subscriber ────────────────────────────────────────
 bus.on('diagram:rendered', function({ store: s }) {
   Interaction.applyViewport(s);
-  UI.attachBlockHandlers(s);
   UI.renderActorAnnotations(s);
 });
 

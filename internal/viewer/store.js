@@ -5,6 +5,7 @@ export function createStore() {
     modelName: '',
     layoutPositions: {},
     arrowData: [],
+    nodeById: new Map(),
     nodeOffsets: {},
     hiddenContexts: {},
     viewport: { offsetX: 0, offsetY: 0, zoomScale: 1 },

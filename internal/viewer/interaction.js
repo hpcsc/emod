@@ -78,7 +78,7 @@ function updateArrowsForNode(store, nodeId, draggedPos) {
 
 function updateBlockTransform(store, nodeId) {
   const svgEl = store.dom.svg;
-  const blockEl = svgEl.querySelector('.cmd-block[data-node-id="' + nodeId + '"], .evt-block[data-node-id="' + nodeId + '"], .trg-block[data-node-id="' + nodeId + '"], .view-block[data-node-id="' + nodeId + '"], .auto-block[data-node-id="' + nodeId + '"], .trans-block[data-node-id="' + nodeId + '"]');
+  const blockEl = svgEl.querySelector('.diagram-node[data-node-id="' + nodeId + '"]');
   if (!blockEl) return;
   const off = store.nodeOffsets[nodeId];
   if (off) {
@@ -140,7 +140,7 @@ function initEventListeners(store) {
   svgEl.addEventListener("mousedown", function(evt) {
     if (evt.button !== 0) return;
 
-    const block = evt.target.closest('.cmd-block, .evt-block, .trg-block, .view-block, .auto-block, .trans-block');
+    const block = evt.target.closest('.diagram-node');
     if (block) {
       const nodeId = block.getAttribute("data-node-id");
       if (nodeId && store.layoutPositions[nodeId]) {
@@ -184,7 +184,7 @@ function initEventListeners(store) {
           startClientY: evt.clientY,
         };
         childIds.forEach(function(id) {
-          const blockEl = svgEl.querySelector('.cmd-block[data-node-id="' + id + '"], .evt-block[data-node-id="' + id + '"], .trg-block[data-node-id="' + id + '"], .view-block[data-node-id="' + id + '"], .auto-block[data-node-id="' + id + '"], .trans-block[data-node-id="' + id + '"]');
+          const blockEl = svgEl.querySelector('.diagram-node[data-node-id="' + id + '"]');
           if (blockEl) blockEl.classList.add("dragging");
         });
         const headerEls = svgEl.querySelectorAll('.slice-header[data-slice-id="' + sliceId + '"]');
@@ -229,7 +229,7 @@ function initEventListeners(store) {
         drag.nodeIds.forEach(function(nodeId) {
           const orig = drag.origPositions[nodeId];
           if (!orig) return;
-          const blockEl = svgEl.querySelector('.cmd-block[data-node-id="' + nodeId + '"], .evt-block[data-node-id="' + nodeId + '"], .trg-block[data-node-id="' + nodeId + '"], .view-block[data-node-id="' + nodeId + '"], .auto-block[data-node-id="' + nodeId + '"], .trans-block[data-node-id="' + nodeId + '"]');
+          const blockEl = svgEl.querySelector('.diagram-node[data-node-id="' + nodeId + '"]');
           if (blockEl) {
             const existingOff = store.nodeOffsets[nodeId] || {dx: 0, dy: 0};
             blockEl.setAttribute("transform", "translate(" + (existingOff.dx + dx) + "," + (existingOff.dy + dy) + ")");
@@ -237,7 +237,7 @@ function initEventListeners(store) {
         });
         updateArrowsForSlice(store, drag.sliceId, dx, dy);
       } else {
-        const blockEl = svgEl.querySelector('.cmd-block[data-node-id="' + drag.nodeId + '"], .evt-block[data-node-id="' + drag.nodeId + '"], .trg-block[data-node-id="' + drag.nodeId + '"], .view-block[data-node-id="' + drag.nodeId + '"], .auto-block[data-node-id="' + drag.nodeId + '"], .trans-block[data-node-id="' + drag.nodeId + '"]');
+        const blockEl = svgEl.querySelector('.diagram-node[data-node-id="' + drag.nodeId + '"]');
         if (blockEl) {
           const existingOff = store.nodeOffsets[drag.nodeId] || {dx: 0, dy: 0};
           blockEl.setAttribute("transform", "translate(" + (existingOff.dx + dx) + "," + (existingOff.dy + dy) + ")");
@@ -276,7 +276,7 @@ function initEventListeners(store) {
           store.interaction.suppressDetailClick = true;
         }
         drag.nodeIds.forEach(function(nodeId) {
-          const blockEl = svgEl.querySelector('.cmd-block[data-node-id="' + nodeId + '"], .evt-block[data-node-id="' + nodeId + '"], .trg-block[data-node-id="' + nodeId + '"], .view-block[data-node-id="' + nodeId + '"], .auto-block[data-node-id="' + nodeId + '"], .trans-block[data-node-id="' + nodeId + '"]');
+          const blockEl = svgEl.querySelector('.diagram-node[data-node-id="' + nodeId + '"]');
           if (blockEl) blockEl.classList.remove("dragging");
         });
         headerEls.forEach(function(el) { el.classList.remove("dragging"); });
@@ -285,7 +285,7 @@ function initEventListeners(store) {
         return;
       }
 
-      const blockEl = svgEl.querySelector('.cmd-block[data-node-id="' + drag.nodeId + '"], .evt-block[data-node-id="' + drag.nodeId + '"], .trg-block[data-node-id="' + drag.nodeId + '"], .view-block[data-node-id="' + drag.nodeId + '"], .auto-block[data-node-id="' + drag.nodeId + '"], .trans-block[data-node-id="' + drag.nodeId + '"]');
+      const blockEl = svgEl.querySelector('.diagram-node[data-node-id="' + drag.nodeId + '"]');
       if (drag.isDragging) {
         const dp = screenToDiagram(svgEl, store.viewport, evt.clientX, evt.clientY);
         const dx = dp.x - drag.startDiagramX;
@@ -314,7 +314,7 @@ function initEventListeners(store) {
     if (store.interaction.touch) return;
 
     if (touches.length === 1) {
-      const block = evt.target.closest('.cmd-block, .evt-block, .trg-block, .view-block, .auto-block, .trans-block');
+      const block = evt.target.closest('.diagram-node');
       if (block) {
         const nodeId = block.getAttribute("data-node-id");
         if (nodeId && store.layoutPositions[nodeId]) {
@@ -359,7 +359,7 @@ function initEventListeners(store) {
             startClientY: touch.clientY,
           };
           childIds.forEach(function(id) {
-            const blockEl = svgEl.querySelector('.cmd-block[data-node-id="' + id + '"], .evt-block[data-node-id="' + id + '"], .trg-block[data-node-id="' + id + '"], .view-block[data-node-id="' + id + '"], .auto-block[data-node-id="' + id + '"], .trans-block[data-node-id="' + id + '"]');
+            const blockEl = svgEl.querySelector('.diagram-node[data-node-id="' + id + '"]');
             if (blockEl) blockEl.classList.add("dragging");
           });
           const headerEls = svgEl.querySelectorAll('.slice-header[data-slice-id="' + sliceId + '"]');
@@ -419,7 +419,7 @@ function initEventListeners(store) {
         drag.nodeIds.forEach(function(nodeId) {
           const orig = drag.origPositions[nodeId];
           if (!orig) return;
-          const blockEl = svgEl.querySelector('.cmd-block[data-node-id="' + nodeId + '"], .evt-block[data-node-id="' + nodeId + '"], .trg-block[data-node-id="' + nodeId + '"], .view-block[data-node-id="' + nodeId + '"], .auto-block[data-node-id="' + nodeId + '"], .trans-block[data-node-id="' + nodeId + '"]');
+          const blockEl = svgEl.querySelector('.diagram-node[data-node-id="' + nodeId + '"]');
           if (blockEl) {
             const existingOff = store.nodeOffsets[nodeId] || {dx: 0, dy: 0};
             blockEl.setAttribute("transform", "translate(" + (existingOff.dx + dx) + "," + (existingOff.dy + dy) + ")");
@@ -427,7 +427,7 @@ function initEventListeners(store) {
         });
         updateArrowsForSlice(store, drag.sliceId, dx, dy);
       } else {
-        const blockEl = svgEl.querySelector('.cmd-block[data-node-id="' + drag.nodeId + '"], .evt-block[data-node-id="' + drag.nodeId + '"], .trg-block[data-node-id="' + drag.nodeId + '"], .view-block[data-node-id="' + drag.nodeId + '"], .auto-block[data-node-id="' + drag.nodeId + '"], .trans-block[data-node-id="' + drag.nodeId + '"]');
+        const blockEl = svgEl.querySelector('.diagram-node[data-node-id="' + drag.nodeId + '"]');
         if (blockEl) {
           const existingOff = store.nodeOffsets[drag.nodeId] || {dx: 0, dy: 0};
           blockEl.setAttribute("transform", "translate(" + (existingOff.dx + dx) + "," + (existingOff.dy + dy) + ")");
@@ -516,7 +516,7 @@ function initEventListeners(store) {
           }
         }
         drag.nodeIds.forEach(function(nodeId) {
-          const blockEl = svgEl.querySelector('.cmd-block[data-node-id="' + nodeId + '"], .evt-block[data-node-id="' + nodeId + '"], .trg-block[data-node-id="' + nodeId + '"], .view-block[data-node-id="' + nodeId + '"], .auto-block[data-node-id="' + nodeId + '"], .trans-block[data-node-id="' + nodeId + '"]');
+          const blockEl = svgEl.querySelector('.diagram-node[data-node-id="' + nodeId + '"]');
           if (blockEl) blockEl.classList.remove("dragging");
         });
         headerEls.forEach(function(el) { el.classList.remove("dragging"); });
@@ -524,7 +524,7 @@ function initEventListeners(store) {
         return;
       }
 
-      const blockEl = svgEl.querySelector('.cmd-block[data-node-id="' + drag.nodeId + '"], .evt-block[data-node-id="' + drag.nodeId + '"], .trg-block[data-node-id="' + drag.nodeId + '"], .view-block[data-node-id="' + drag.nodeId + '"], .auto-block[data-node-id="' + drag.nodeId + '"], .trans-block[data-node-id="' + drag.nodeId + '"]');
+      const blockEl = svgEl.querySelector('.diagram-node[data-node-id="' + drag.nodeId + '"]');
       if (drag.isDragging) {
         const touch = evt.changedTouches[0];
         if (touch) {
@@ -565,13 +565,13 @@ function initEventListeners(store) {
       if (drag.sliceId) {
         const headerEls = svgEl.querySelectorAll('.slice-header[data-slice-id="' + drag.sliceId + '"]');
         drag.nodeIds.forEach(function(nodeId) {
-          const blockEl = svgEl.querySelector('.cmd-block[data-node-id="' + nodeId + '"], .evt-block[data-node-id="' + nodeId + '"], .trg-block[data-node-id="' + nodeId + '"], .view-block[data-node-id="' + nodeId + '"], .auto-block[data-node-id="' + nodeId + '"], .trans-block[data-node-id="' + nodeId + '"]');
+          const blockEl = svgEl.querySelector('.diagram-node[data-node-id="' + nodeId + '"]');
           if (blockEl) blockEl.classList.remove("dragging");
         });
         headerEls.forEach(function(el) { el.classList.remove("dragging"); });
         store.interaction.drag = null;
       } else {
-        const blockEl = svgEl.querySelector('.cmd-block[data-node-id="' + drag.nodeId + '"], .evt-block[data-node-id="' + drag.nodeId + '"], .trg-block[data-node-id="' + drag.nodeId + '"], .view-block[data-node-id="' + drag.nodeId + '"], .auto-block[data-node-id="' + drag.nodeId + '"], .trans-block[data-node-id="' + drag.nodeId + '"]');
+        const blockEl = svgEl.querySelector('.diagram-node[data-node-id="' + drag.nodeId + '"]');
         if (blockEl) blockEl.classList.remove("dragging");
         store.interaction.drag = null;
       }

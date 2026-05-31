@@ -392,20 +392,10 @@ header .model-name span {
 #diagram-canvas .trans-block:hover rect {
   fill: #e0e0e0 !important;
 }
-#diagram-canvas .cmd-block,
-#diagram-canvas .evt-block,
-#diagram-canvas .trg-block,
-#diagram-canvas .view-block,
-#diagram-canvas .auto-block,
-#diagram-canvas .trans-block {
+#diagram-canvas .diagram-node {
   cursor: grab;
 }
-#diagram-canvas .cmd-block.dragging,
-#diagram-canvas .evt-block.dragging,
-#diagram-canvas .trg-block.dragging,
-#diagram-canvas .view-block.dragging,
-#diagram-canvas .auto-block.dragging,
-#diagram-canvas .trans-block.dragging {
+#diagram-canvas .diagram-node.dragging {
   cursor: grabbing;
 }
 
@@ -414,12 +404,7 @@ header .model-name span {
   touch-action: none;
 }
 #diagram-canvas.panning,
-#diagram-canvas.panning .cmd-block,
-#diagram-canvas.panning .evt-block,
-#diagram-canvas.panning .trg-block,
-#diagram-canvas.panning .view-block,
-#diagram-canvas.panning .auto-block,
-#diagram-canvas.panning .trans-block {
+#diagram-canvas.panning .diagram-node {
   cursor: grabbing;
 }
 
@@ -719,12 +704,7 @@ header .model-name span {
   background: rgba(52,152,219,0.04);
 }
 
-#diagram-canvas.has-highlights .cmd-block:not(.hl) rect,
-#diagram-canvas.has-highlights .evt-block:not(.hl) rect,
-#diagram-canvas.has-highlights .trg-block:not(.hl) rect,
-#diagram-canvas.has-highlights .view-block:not(.hl) rect,
-#diagram-canvas.has-highlights .auto-block:not(.hl) rect,
-#diagram-canvas.has-highlights .trans-block:not(.hl) rect {
+#diagram-canvas.has-highlights .diagram-node:not(.hl) rect {
   opacity: 0.3;
 }
 #diagram-canvas .hl rect {

@@ -1,22 +1,19 @@
 import { bus } from './bus.js';
 
+function rebuildNodeIndex(store) {
+  store.nodeById = new Map(store.nodes.map(function(n) { return [n.id, n]; }));
+}
+
 function generateNodeId(prefix, store) {
   let id;
   do {
     id = "_" + prefix + "_" + Date.now() + "_" + Math.random().toString(36).substr(2, 4);
-  } while (findNodeById(store, id));
+  } while (store.nodeById.has(id));
   return id;
 }
 
 function generateLabel(prefix, existing) {
   return existing.length === 0 ? "new-" + prefix : "new-" + prefix + "-" + (existing.length + 1);
-}
-
-function findNodeById(store, id) {
-  for (let i = 0; i < store.nodes.length; i++) {
-    if (store.nodes[i].id === id) return store.nodes[i];
-  }
-  return null;
 }
 
 function setModelData(store, data) {
@@ -27,6 +24,7 @@ function setModelData(store, data) {
   store.nodeOffsets = {};
   store.hiddenContexts = {};
   store.arrowData = [];
+  rebuildNodeIndex(store);
 
   bus.emit('model:updated', { store });
   bus.emit('data:changed', { store });
@@ -61,6 +59,7 @@ function sendParse(store, source, statusEl) {
 }
 
 export const Model = {
+  rebuildNodeIndex,
   generateNodeId,
   generateLabel,
   setModelData,

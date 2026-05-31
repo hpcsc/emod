@@ -1,6 +1,7 @@
 import { MINIMAP_W, MINIMAP_H, MINIMAP_PAD } from './config.js';
 import { Renderer } from './renderer.js';
 import { Layout } from './layout.js';
+import { Interaction } from './interaction.js';
 import { bus } from './bus.js';
 
 // ─── Tooltip ─────────────────────────────────────────────────
@@ -42,30 +43,7 @@ function positionTooltip(store, cx, cy) {
   el.style.top = Math.max(4, y) + "px";
 }
 
-function attachBlockHandlers(store) {
-  const svgEl = store.dom.svg;
-  const blocks = svgEl.querySelectorAll(".cmd-block, .evt-block, .trg-block, .view-block, .auto-block, .trans-block");
-  blocks.forEach(function(block) {
-    block.addEventListener("mouseenter", function(evt) {
-      const nodeId = this.getAttribute("data-node-id");
-      if (!nodeId) return;
-      let node = null;
-      for (let i = 0; i < store.nodes.length; i++) {
-        if (store.nodes[i].id === nodeId) { node = store.nodes[i]; break; }
-      }
-      if (!node || !node.fields || node.fields.length === 0) return;
-      if (nodeId === store.interaction.selectedNodeId) return;
-      showTooltip(store, node, evt);
-    });
-    block.addEventListener("mousemove", function(evt) {
-      const el = store.dom.tooltip;
-      if (el && el.style.display !== "none") positionTooltip(store, evt.clientX, evt.clientY);
-    });
-    block.addEventListener("mouseleave", function() {
-      hideTooltip(store);
-    });
-  });
-}
+let hoveredBlock = null;
 
 // ─── Actor annotations ──────────────────────────────────────────
 function renderActorAnnotations(store) {
@@ -170,7 +148,7 @@ function minimapNavigate(store, evt) {
   store.viewport.offsetX = -diagramX * store.viewport.zoomScale + cw / 2;
   store.viewport.offsetY = -diagramY * store.viewport.zoomScale + ch / 2;
 
-  bus.emit('viewport:changed', { store });
+  Interaction.applyViewport(store);
 }
 
 function toggleMinimap(store, show) {
@@ -243,13 +221,6 @@ function updateStats(store, dims) {
 }
 
 // ─── Detail panel ───────────────────────────────────────────────
-function findNodeById(store, id) {
-  for (let i = 0; i < store.nodes.length; i++) {
-    if (store.nodes[i].id === id) return store.nodes[i];
-  }
-  return null;
-}
-
 function isDeletableNodeType(type) {
   return type === "command" || type === "event" || type === "trigger" ||
          type === "view" || type === "automation" || type === "translation";
@@ -361,7 +332,7 @@ function showDetailPanel(store, node) {
       input.addEventListener('blur', function() {
         const idx = parseInt(this.dataset.idx);
         const field = this.dataset.field;
-        const n = findNodeById(store, store.interaction.selectedNodeId);
+        const n = store.nodeById.get( store.interaction.selectedNodeId);
         if (!n || !n.fields || !n.fields[idx]) return;
         n.fields[idx][field] = this.value;
       });
@@ -371,7 +342,7 @@ function showDetailPanel(store, node) {
       btn.addEventListener('click', function(evt) {
         evt.stopPropagation();
         const idx = parseInt(this.dataset.idx);
-        const n = findNodeById(store, store.interaction.selectedNodeId);
+        const n = store.nodeById.get( store.interaction.selectedNodeId);
         if (!n || !n.fields) return;
         n.fields.splice(idx, 1);
         bus.emit('data:changed', { store });
@@ -382,7 +353,7 @@ function showDetailPanel(store, node) {
     if (addBtn) {
       addBtn.addEventListener('click', function(evt) {
         evt.stopPropagation();
-        const n = findNodeById(store, store.interaction.selectedNodeId);
+        const n = store.nodeById.get( store.interaction.selectedNodeId);
         if (!n) return;
         if (!n.fields) n.fields = [];
         n.fields.push({name: '', type: 'string', modifier: ''});
@@ -397,7 +368,7 @@ function showDetailPanel(store, node) {
       evt.stopPropagation();
       const nodeId = store.interaction.selectedNodeId;
       if (!nodeId) return;
-      const found = findNodeById(store, nodeId);
+      const found = store.nodeById.get( nodeId);
       if (found && isDeletableNodeType(found.type)) {
         bus.emit('node:delete', { store, nodeId });
       }
@@ -439,7 +410,7 @@ function highlightElements(store, ids) {
 
 // ─── Inline rename ─────────────────────────────────────────────
 function startInlineEdit(store, nodeId) {
-  const node = findNodeById(store, nodeId);
+  const node = store.nodeById.get( nodeId);
   if (!node) return;
 
   cancelInlineEdit(store);
@@ -502,7 +473,7 @@ function startInlineEdit(store, nodeId) {
       evt.preventDefault();
       if (!store.interaction.inlineEdit) return;
       const newLabel = input.value.trim() || store.interaction.inlineEdit.originalLabel;
-      const n = findNodeById(store, store.interaction.inlineEdit.nodeId);
+      const n = store.nodeById.get( store.interaction.inlineEdit.nodeId);
       if (n && newLabel !== n.label) {
         n.label = newLabel;
       }
@@ -518,7 +489,7 @@ function startInlineEdit(store, nodeId) {
   input.addEventListener("blur", function() {
     if (!store.interaction.inlineEdit) return;
     const newLabel = input.value.trim() || store.interaction.inlineEdit.originalLabel;
-    const n = findNodeById(store, store.interaction.inlineEdit.nodeId);
+    const n = store.nodeById.get( store.interaction.inlineEdit.nodeId);
     if (n && newLabel !== n.label) {
       n.label = newLabel;
     }
@@ -564,9 +535,35 @@ function hideContextMenu(store) {
   store.interaction.ctxMenu = null;
 }
 
-// ─── SVG event delegation (click, dblclick, contextmenu) ──────
+// ─── SVG event delegation (click, dblclick, contextmenu, tooltip) ─
 function initDelegation(store) {
   const svgEl = store.dom.svg;
+
+  // Tooltip delegation
+  svgEl.addEventListener("pointerover", function(evt) {
+    const block = evt.target.closest(".diagram-node");
+    if (block === hoveredBlock) return;
+    hoveredBlock = block;
+    if (!block) return;
+    const nodeId = block.dataset.nodeId;
+    if (!nodeId) return;
+    const node = store.nodeById.get(nodeId);
+    if (!node || !node.fields || node.fields.length === 0) return;
+    if (nodeId === store.interaction.selectedNodeId) return;
+    showTooltip(store, node, evt);
+  });
+
+  svgEl.addEventListener("pointerout", function(evt) {
+    const block = evt.target.closest(".diagram-node");
+    if (block && (!evt.relatedTarget || !evt.relatedTarget.closest(".diagram-node"))) {
+      hoveredBlock = null;
+      hideTooltip(store);
+    }
+  });
+
+  svgEl.addEventListener("pointermove", function(evt) {
+    if (hoveredBlock) positionTooltip(store, evt.clientX, evt.clientY);
+  });
 
   svgEl.addEventListener("click", function(evt) {
     if (store.interaction.pan) return;
@@ -612,12 +609,12 @@ function initDelegation(store) {
     }
 
     if (!interactive && !store.interaction.suppressDetailClick) {
-      const block = target.closest(".cmd-block, .evt-block, .trg-block, .view-block, .auto-block, .trans-block");
+      const block = target.closest(".diagram-node");
       if (block) {
         const nodeId = block.getAttribute("data-node-id");
         if (nodeId) {
           interactive = true;
-          const node = findNodeById(store, nodeId);
+          const node = store.nodeById.get( nodeId);
           if (node) showDetailPanel(store, node);
         }
       }
@@ -639,7 +636,7 @@ function initDelegation(store) {
   svgEl.addEventListener("dblclick", function(evt) {
     const target = evt.target;
 
-    const block = target.closest(".cmd-block, .evt-block, .trg-block, .view-block, .auto-block, .trans-block");
+    const block = target.closest(".diagram-node");
     if (block) {
       const nodeId = block.getAttribute("data-node-id");
       if (nodeId) { evt.preventDefault(); startInlineEdit(store, nodeId); return; }
@@ -687,7 +684,7 @@ function initDelegation(store) {
       }
     }
 
-    const block = target.closest(".cmd-block, .evt-block, .trg-block, .view-block, .auto-block, .trans-block");
+    const block = target.closest(".diagram-node");
     if (block) return;
 
     const aggArea = target.closest(".agg-area");
@@ -761,7 +758,7 @@ function initKeyboard(store) {
       }
     } else if (evt.key === "Delete" || evt.key === "Backspace") {
       if (store.interaction.selectedNodeId) {
-        const delNode = findNodeById(store, store.interaction.selectedNodeId);
+        const delNode = store.nodeById.get( store.interaction.selectedNodeId);
         if (delNode && isDeletableNodeType(delNode.type)) {
           evt.preventDefault();
           bus.emit('node:delete', { store, nodeId: store.interaction.selectedNodeId });
@@ -775,7 +772,6 @@ export const UI = {
   showTooltip,
   hideTooltip,
   positionTooltip,
-  attachBlockHandlers,
   renderActorAnnotations,
   updateMinimap,
   minimapNavigate,
@@ -783,7 +779,6 @@ export const UI = {
   updateContextList,
   toggleContextPanel,
   updateStats,
-  findNodeById,
   showDetailPanel,
   hideDetailPanel,
   clearHighlights,
