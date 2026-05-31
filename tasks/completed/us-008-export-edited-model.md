@@ -2,7 +2,7 @@
 
 ## Progress
 - [x] Task 1: Create `emod-export.js` module with full .emod serialization and tests
-- [ ] Task 2: Add "Export .emod" button to toolbar with file download wiring
+- [x] Task 2: Add "Export .emod" button to toolbar with file download wiring
 
 ---
 

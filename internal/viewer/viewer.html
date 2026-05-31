@@ -153,6 +153,21 @@ header .model-name span {
   border-color: #fff;
 }
 
+#export-emod {
+  background: rgba(255,255,255,0.15);
+  color: #fff;
+  border: 1px solid rgba(255,255,255,0.25);
+  border-radius: 4px;
+  padding: 5px 12px;
+  font-size: 12px;
+  cursor: pointer;
+  transition: background 0.2s;
+  white-space: nowrap;
+}
+#export-emod:hover {
+  background: rgba(255,255,255,0.25);
+}
+
 #context-panel {
   position: absolute;
   top: 4px;
@@ -771,6 +786,7 @@ header .model-name span {
     <button id="fit-view" title="Reset viewport to fit the entire diagram">Fit view</button>
     <button id="minimap-toggle" title="Toggle minimap overview">Minimap</button>
     <button id="context-toggle" title="Toggle context visibility panel">Contexts</button>
+    <button id="export-emod" title="Export diagram as .emod file">Export .emod</button>
     <div class="model-name">Model: <span id="model-name-display">—</span></div>
   </div>
 </header>

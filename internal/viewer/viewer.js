@@ -5,6 +5,7 @@ import { Interaction } from './interaction.js';
 import { UI } from './ui.js';
 import { Model } from './model.js';
 import { bus } from './bus.js';
+import { Export } from './emod-export.js';
 
 // ─── Create store and wire DOM references ────────────────────────────
 const store = createStore();
@@ -32,6 +33,7 @@ store.dom.ctxMenu = document.getElementById("ctx-menu");
 store.dom.actorAnnotations = document.getElementById("actor-annotations");
 store.dom.resetLayoutBtn = document.getElementById("reset-layout");
 store.dom.fitViewBtn = document.getElementById("fit-view");
+store.dom.exportBtn = document.getElementById("export-emod");
 
 // ─── Event subscriptions ─────────────────────────────────────────────
 bus.on('data:changed', function({ store: s }) {
@@ -182,6 +184,20 @@ function init() {
   // ─── Fit-to-view button ───────────────────────────────────────────
   store.dom.fitViewBtn.addEventListener("click", function() {
     Interaction.fitToView(store);
+  });
+
+  // ─── Export .emod button ─────────────────────────────────────────
+  store.dom.exportBtn.addEventListener("click", function() {
+    var content = Export.exportToEmodString(store);
+    var blob = new Blob([content], { type: "text/plain" });
+    var url = URL.createObjectURL(blob);
+    var a = document.createElement("a");
+    a.href = url;
+    a.download = (store.modelName || "diagram") + ".emod";
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
   });
 
   // ─── Minimap toggle ───────────────────────────────────────────────
