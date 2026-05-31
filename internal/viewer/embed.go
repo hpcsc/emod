@@ -1,8 +1,8 @@
 package viewer
 
 import (
-	_ "embed"
+	"embed"
 )
 
-//go:embed viewer.html
-var ViewerHTML string
+//go:embed viewer.html viewer.js store.js config.js bus.js layout.js renderer.js interaction.js ui.js model.js
+var ViewerFS embed.FS

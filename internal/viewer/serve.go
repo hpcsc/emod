@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"io/fs"
 	"net"
 	"net/http"
 	"os/signal"
@@ -36,7 +37,18 @@ func ServeViewer(port int, diagramJSON []byte) (string, func(), error) {
 	html := buildHTML(diagramJSON)
 
 	mux := http.NewServeMux()
+
+	staticFS, err := fs.Sub(ViewerFS, ".")
+	if err != nil {
+		return "", nil, fmt.Errorf("viewer: fs sub: %w", err)
+	}
+	mux.Handle("/static/", http.StripPrefix("/static/", http.FileServer(http.FS(staticFS))))
+
 	mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/" {
+			http.NotFound(w, r)
+			return
+		}
 		w.Header().Set("Content-Type", "text/html; charset=utf-8")
 		w.WriteHeader(http.StatusOK)
 		w.Write([]byte(html))
@@ -73,13 +85,18 @@ func ServeViewer(port int, diagramJSON []byte) (string, func(), error) {
 }
 
 func buildHTML(diagramJSON []byte) string {
-	if len(diagramJSON) == 0 {
-		return ViewerHTML
+	data, err := ViewerFS.ReadFile("viewer.html")
+	if err != nil {
+		return ""
 	}
-
-	html := strings.TrimSuffix(ViewerHTML, "\n")
-	injection := fmt.Sprintf("\nwindow.INITIAL_DATA = %s;", string(diagramJSON))
-	return strings.Replace(html, "</script>", injection+"</script>", 1)
+	html := string(data)
+	if len(diagramJSON) > 0 {
+		injection := fmt.Sprintf("\nwindow.INITIAL_DATA = %s;", string(diagramJSON))
+		html = strings.Replace(html, "<!--INITIAL_DATA-->", injection, 1)
+	} else {
+		html = strings.Replace(html, "<!--INITIAL_DATA-->", "", 1)
+	}
+	return html
 }
 
 type parseRequest struct {
