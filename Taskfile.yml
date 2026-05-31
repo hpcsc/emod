@@ -6,6 +6,8 @@ includes:
 tasks:
   build:
     desc: Build the emod binary
+    deps:
+      - build:wasm
     cmds:
       - mkdir -p ./bin
       - go build -o ./bin/emod ./cmd/emod
@@ -13,8 +15,9 @@ tasks:
       CGO_ENABLED: '0'
 
   build:wasm:
-    desc: Build the WASM binary for the viewer
+    desc: Build the WASM binary and copy runtime glue for the viewer
     cmds:
+      - cp "$(go env GOROOT)/lib/wasm/wasm_exec.js" ./internal/viewer/
       - go build -o ./internal/viewer/emod.wasm ./cmd/emod-wasm
     env:
       CGO_ENABLED: '0'
