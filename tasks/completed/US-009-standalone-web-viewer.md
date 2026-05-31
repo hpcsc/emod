@@ -7,6 +7,7 @@
 - [x] Task 4: Create WASM loader module for the frontend
 - [x] Task 5: Refactor frontend to use WASM for client-side parsing
 - [x] Task 6: Polish landing page and standalone operation UX
+- [x] Task 7: Set up GitHub Pages deployment for standalone web viewer
 
 ---
 

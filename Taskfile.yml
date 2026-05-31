@@ -33,6 +33,7 @@ tasks:
       - find ./internal/viewer -maxdepth 1 -type f \( -name '*.html' -o -name '*.js' \) ! -name '*.test.js' ! -name 'vitest.config.js' -exec cp {} ./web/ \;
       - cp ./internal/viewer/emod.wasm ./web/
       - cp "$(go env GOROOT)/lib/wasm/wasm_exec.js" ./web/
+      - mv ./web/viewer.html ./web/index.html
 
   test:
     desc: Run all tests
