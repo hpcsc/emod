@@ -144,8 +144,39 @@ function tryReorderSliceOnDrop(store, sliceId, dx) {
   var sp = store.layoutPositions[sliceId];
   if (!sp || sp.w === 0) return false;
   if (Math.abs(dx) <= sp.w * 0.3) return false;
-  var direction = dx > 0 ? "right" : "left";
-  var moved = Model.moveSlice(store.nodes, sliceId, direction);
+
+  var aggId = sl.parentId;
+  var siblings = [];
+  store.nodes.forEach(function(n) {
+    if (n.parentId === aggId && n.type === "slice") {
+      var pos = store.layoutPositions[n.id];
+      if (pos) siblings.push({ id: n.id, x: pos.x, w: pos.w });
+    }
+  });
+  siblings.sort(function(a, b) { return a.x - b.x; });
+  if (siblings.length < 2) return false;
+
+  var currentPos = -1;
+  for (var i = 0; i < siblings.length; i++) {
+    if (siblings[i].id === sliceId) { currentPos = i; break; }
+  }
+  if (currentPos === -1) return false;
+
+  var dropCenter = sp.x + sp.w / 2 + dx;
+
+  var targetPos = siblings.length - 1;
+  for (var p = 0; p < siblings.length - 1; p++) {
+    var thisCenter = siblings[p].x + siblings[p].w / 2;
+    var nextCenter = siblings[p + 1].x + siblings[p + 1].w / 2;
+    if (dropCenter < (thisCenter + nextCenter) / 2) {
+      targetPos = p;
+      break;
+    }
+  }
+
+  if (targetPos === currentPos) return false;
+
+  var moved = Model.moveSlice(store.nodes, sliceId, targetPos);
   if (moved) {
     bus.emit('data:changed', { store });
   }

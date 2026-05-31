@@ -388,7 +388,23 @@ function init() {
 
     if (action === "move-slice-left" || action === "move-slice-right") {
       if (!store.interaction.ctxMenu || !store.interaction.ctxMenu.targetSliceId) return;
-      const moved = Model.moveSlice(store.nodes, store.interaction.ctxMenu.targetSliceId, action === "move-slice-left" ? "left" : "right");
+      const sliceId = store.interaction.ctxMenu.targetSliceId;
+      const sl = store.nodeById.get(sliceId);
+      if (!sl) return;
+      const aggId = sl.parentId;
+      const indices = [];
+      store.nodes.forEach(function(n, idx) {
+        if (n.parentId === aggId && n.type === "slice") indices.push(idx);
+      });
+      let currentPos = -1;
+      for (let i = 0; i < indices.length; i++) {
+        if (store.nodes[indices[i]].id === sliceId) { currentPos = i; break; }
+      }
+      if (currentPos === -1) return;
+      const offset = action === "move-slice-left" ? -1 : 1;
+      const targetPos = currentPos + offset;
+      if (targetPos < 0 || targetPos >= indices.length) return;
+      const moved = Model.moveSlice(store.nodes, sliceId, targetPos);
       if (moved) {
         UI.hideContextMenu(store);
         bus.emit('data:changed', { store });

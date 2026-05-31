@@ -63,9 +63,9 @@ describe('Model', () => {
       ];
     }
 
-    it('moves a slice one position left within the same aggregate', () => {
+    it('moves a slice to position 0 within the same aggregate', () => {
       const nodes = makeNodes();
-      const ok = Model.moveSlice(nodes, 'sl2', 'left');
+      const ok = Model.moveSlice(nodes, 'sl2', 0);
       expect(ok).toBe(true);
       const slices = nodes.filter(function(n) { return n.type === 'slice' && n.parentId === 'agg1'; });
       expect(slices[0].id).toBe('sl2');
@@ -73,9 +73,9 @@ describe('Model', () => {
       expect(slices[2].id).toBe('sl3');
     });
 
-    it('moves a slice one position right within the same aggregate', () => {
+    it('moves a slice to position 2 within the same aggregate', () => {
       const nodes = makeNodes();
-      const ok = Model.moveSlice(nodes, 'sl2', 'right');
+      const ok = Model.moveSlice(nodes, 'sl2', 2);
       expect(ok).toBe(true);
       const slices = nodes.filter(function(n) { return n.type === 'slice' && n.parentId === 'agg1'; });
       expect(slices[0].id).toBe('sl1');
@@ -83,17 +83,35 @@ describe('Model', () => {
       expect(slices[2].id).toBe('sl2');
     });
 
-    it('does nothing when moving first slice left', () => {
+    it('moves a slice multiple positions left', () => {
       const nodes = makeNodes();
-      const ok = Model.moveSlice(nodes, 'sl1', 'left');
+      Model.moveSlice(nodes, 'sl3', 0);
+      const slices = nodes.filter(function(n) { return n.type === 'slice' && n.parentId === 'agg1'; });
+      expect(slices[0].id).toBe('sl3');
+      expect(slices[1].id).toBe('sl1');
+      expect(slices[2].id).toBe('sl2');
+    });
+
+    it('moves a slice multiple positions right', () => {
+      const nodes = makeNodes();
+      Model.moveSlice(nodes, 'sl1', 2);
+      const slices = nodes.filter(function(n) { return n.type === 'slice' && n.parentId === 'agg1'; });
+      expect(slices[0].id).toBe('sl2');
+      expect(slices[1].id).toBe('sl3');
+      expect(slices[2].id).toBe('sl1');
+    });
+
+    it('does nothing when moving first slice left (clamped to 0)', () => {
+      const nodes = makeNodes();
+      const ok = Model.moveSlice(nodes, 'sl1', -1);
       expect(ok).toBe(false);
       const slices = nodes.filter(function(n) { return n.type === 'slice' && n.parentId === 'agg1'; });
       expect(slices[0].id).toBe('sl1');
     });
 
-    it('does nothing when moving last slice right', () => {
+    it('does nothing when moving last slice right (clamped to last)', () => {
       const nodes = makeNodes();
-      const ok = Model.moveSlice(nodes, 'sl3', 'right');
+      const ok = Model.moveSlice(nodes, 'sl3', 99);
       expect(ok).toBe(false);
       const slices = nodes.filter(function(n) { return n.type === 'slice' && n.parentId === 'agg1'; });
       expect(slices[2].id).toBe('sl3');
@@ -101,12 +119,12 @@ describe('Model', () => {
 
     it('returns false for a non-existent slice id', () => {
       const nodes = makeNodes();
-      expect(Model.moveSlice(nodes, 'nonexistent', 'left')).toBe(false);
+      expect(Model.moveSlice(nodes, 'nonexistent', 0)).toBe(false);
     });
 
     it('returns false for a node that is not a slice', () => {
       const nodes = makeNodes();
-      expect(Model.moveSlice(nodes, 'agg1', 'left')).toBe(false);
+      expect(Model.moveSlice(nodes, 'agg1', 0)).toBe(false);
     });
 
     it('only reorders slices within the same aggregate', () => {
@@ -115,7 +133,7 @@ describe('Model', () => {
         { id: 'sl_other', type: 'slice', parentId: 'agg2' },
         { id: 'agg2', type: 'aggregate', parentId: 'ctx1' },
       );
-      Model.moveSlice(nodes, 'sl1', 'right');
+      Model.moveSlice(nodes, 'sl1', 1);
       const agg1Slices = nodes.filter(function(n) { return n.type === 'slice' && n.parentId === 'agg1'; });
       expect(agg1Slices[0].id).toBe('sl2');
       expect(agg1Slices[1].id).toBe('sl1');

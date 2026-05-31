@@ -30,7 +30,7 @@ function setModelData(store, data) {
   bus.emit('data:changed', { store });
 }
 
-function moveSlice(nodes, sliceId, direction) {
+function moveSlice(nodes, sliceId, targetPos) {
   var sliceNode = null;
   for (var i = 0; i < nodes.length; i++) {
     if (nodes[i].id === sliceId) { sliceNode = nodes[i]; break; }
@@ -50,15 +50,27 @@ function moveSlice(nodes, sliceId, direction) {
     if (nodes[sliceIndices[k]].id === sliceId) { currentPos = k; break; }
   }
   if (currentPos === -1) return false;
+  if (targetPos < 0) targetPos = 0;
+  if (targetPos >= sliceIndices.length) targetPos = sliceIndices.length - 1;
+  if (targetPos === currentPos) return false;
 
-  var targetPos = direction === "left" ? currentPos - 1 : currentPos + 1;
-  if (targetPos < 0 || targetPos >= sliceIndices.length) return false;
-
-  var aIdx = sliceIndices[currentPos];
-  var bIdx = sliceIndices[targetPos];
-  var temp = nodes[aIdx];
-  nodes[aIdx] = nodes[bIdx];
-  nodes[bIdx] = temp;
+  if (currentPos < targetPos) {
+    for (var p = currentPos; p < targetPos; p++) {
+      var a = sliceIndices[p];
+      var b = sliceIndices[p + 1];
+      var temp = nodes[a];
+      nodes[a] = nodes[b];
+      nodes[b] = temp;
+    }
+  } else {
+    for (var p = currentPos; p > targetPos; p--) {
+      var a = sliceIndices[p];
+      var b = sliceIndices[p - 1];
+      var temp = nodes[a];
+      nodes[a] = nodes[b];
+      nodes[b] = temp;
+    }
+  }
   return true;
 }
 
