@@ -30,6 +30,38 @@ function setModelData(store, data) {
   bus.emit('data:changed', { store });
 }
 
+function moveSlice(nodes, sliceId, direction) {
+  var sliceNode = null;
+  for (var i = 0; i < nodes.length; i++) {
+    if (nodes[i].id === sliceId) { sliceNode = nodes[i]; break; }
+  }
+  if (!sliceNode || sliceNode.type !== "slice") return false;
+
+  var aggId = sliceNode.parentId;
+  var sliceIndices = [];
+  for (var j = 0; j < nodes.length; j++) {
+    if (nodes[j].parentId === aggId && nodes[j].type === "slice") {
+      sliceIndices.push(j);
+    }
+  }
+
+  var currentPos = -1;
+  for (var k = 0; k < sliceIndices.length; k++) {
+    if (nodes[sliceIndices[k]].id === sliceId) { currentPos = k; break; }
+  }
+  if (currentPos === -1) return false;
+
+  var targetPos = direction === "left" ? currentPos - 1 : currentPos + 1;
+  if (targetPos < 0 || targetPos >= sliceIndices.length) return false;
+
+  var aIdx = sliceIndices[currentPos];
+  var bIdx = sliceIndices[targetPos];
+  var temp = nodes[aIdx];
+  nodes[aIdx] = nodes[bIdx];
+  nodes[bIdx] = temp;
+  return true;
+}
+
 function sendParse(store, source, statusEl) {
   if (!source) {
     statusEl.textContent = "✗ Paste some .emod content first";
@@ -64,4 +96,5 @@ export const Model = {
   generateLabel,
   setModelData,
   sendParse,
+  moveSlice,
 };

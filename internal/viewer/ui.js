@@ -522,6 +522,9 @@ function showContextMenu(store, x, y, aggId, sliceId) {
       '<div class="ctx-menu-item" data-action="add-command">Add Command</div>',
       '<div class="ctx-menu-item" data-action="add-event">Add Event</div>',
       '<div class="ctx-menu-item" data-action="add-flow">Add Flow</div>',
+      '<div class="ctx-menu-divider"></div>',
+      '<div class="ctx-menu-item" data-action="move-slice-left">Move Left</div>',
+      '<div class="ctx-menu-item" data-action="move-slice-right">Move Right</div>',
     ].join('');
   }
   el.style.left = x + "px";

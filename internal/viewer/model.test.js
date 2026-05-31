@@ -52,6 +52,79 @@ describe('Model', () => {
     });
   });
 
+  describe('moveSlice', () => {
+    function makeNodes() {
+      return [
+        { id: 'cmd0', type: 'command', parentId: 'sl1' },
+        { id: 'sl1', type: 'slice', parentId: 'agg1' },
+        { id: 'sl2', type: 'slice', parentId: 'agg1' },
+        { id: 'sl3', type: 'slice', parentId: 'agg1' },
+        { id: 'agg1', type: 'aggregate', parentId: 'ctx1' },
+      ];
+    }
+
+    it('moves a slice one position left within the same aggregate', () => {
+      const nodes = makeNodes();
+      const ok = Model.moveSlice(nodes, 'sl2', 'left');
+      expect(ok).toBe(true);
+      const slices = nodes.filter(function(n) { return n.type === 'slice' && n.parentId === 'agg1'; });
+      expect(slices[0].id).toBe('sl2');
+      expect(slices[1].id).toBe('sl1');
+      expect(slices[2].id).toBe('sl3');
+    });
+
+    it('moves a slice one position right within the same aggregate', () => {
+      const nodes = makeNodes();
+      const ok = Model.moveSlice(nodes, 'sl2', 'right');
+      expect(ok).toBe(true);
+      const slices = nodes.filter(function(n) { return n.type === 'slice' && n.parentId === 'agg1'; });
+      expect(slices[0].id).toBe('sl1');
+      expect(slices[1].id).toBe('sl3');
+      expect(slices[2].id).toBe('sl2');
+    });
+
+    it('does nothing when moving first slice left', () => {
+      const nodes = makeNodes();
+      const ok = Model.moveSlice(nodes, 'sl1', 'left');
+      expect(ok).toBe(false);
+      const slices = nodes.filter(function(n) { return n.type === 'slice' && n.parentId === 'agg1'; });
+      expect(slices[0].id).toBe('sl1');
+    });
+
+    it('does nothing when moving last slice right', () => {
+      const nodes = makeNodes();
+      const ok = Model.moveSlice(nodes, 'sl3', 'right');
+      expect(ok).toBe(false);
+      const slices = nodes.filter(function(n) { return n.type === 'slice' && n.parentId === 'agg1'; });
+      expect(slices[2].id).toBe('sl3');
+    });
+
+    it('returns false for a non-existent slice id', () => {
+      const nodes = makeNodes();
+      expect(Model.moveSlice(nodes, 'nonexistent', 'left')).toBe(false);
+    });
+
+    it('returns false for a node that is not a slice', () => {
+      const nodes = makeNodes();
+      expect(Model.moveSlice(nodes, 'agg1', 'left')).toBe(false);
+    });
+
+    it('only reorders slices within the same aggregate', () => {
+      const nodes = makeNodes();
+      nodes.push(
+        { id: 'sl_other', type: 'slice', parentId: 'agg2' },
+        { id: 'agg2', type: 'aggregate', parentId: 'ctx1' },
+      );
+      Model.moveSlice(nodes, 'sl1', 'right');
+      const agg1Slices = nodes.filter(function(n) { return n.type === 'slice' && n.parentId === 'agg1'; });
+      expect(agg1Slices[0].id).toBe('sl2');
+      expect(agg1Slices[1].id).toBe('sl1');
+      expect(agg1Slices[2].id).toBe('sl3');
+      const agg2Slices = nodes.filter(function(n) { return n.type === 'slice' && n.parentId === 'agg2'; });
+      expect(agg2Slices[0].id).toBe('sl_other');
+    });
+  });
+
   describe('generateLabel', () => {
     it('returns new-prefix when existing list is empty', () => {
       expect(Model.generateLabel('cmd', [])).toBe('new-cmd');

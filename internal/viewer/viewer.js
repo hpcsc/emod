@@ -384,6 +384,16 @@ function init() {
       bus.emit('data:changed', { store });
       return;
     }
+
+    if (action === "move-slice-left" || action === "move-slice-right") {
+      if (!store.interaction.ctxMenu || !store.interaction.ctxMenu.targetSliceId) return;
+      const moved = Model.moveSlice(store.nodes, store.interaction.ctxMenu.targetSliceId, action === "move-slice-left" ? "left" : "right");
+      if (moved) {
+        UI.hideContextMenu(store);
+        bus.emit('data:changed', { store });
+      }
+      return;
+    }
   });
 
   // ─── Dismiss context menu on outside click ──────────────────────
