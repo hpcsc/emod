@@ -17,6 +17,7 @@ tasks:
     cmds:
       - task: test:unit
       - task: test:integration
+      - task: test:viewer
 
   test:unit:
     desc: Run unit tests
@@ -27,6 +28,13 @@ tasks:
     desc: Run integration tests
     cmds:
       - go test -tags integration ./...
+
+  test:viewer:
+    desc: Run viewer JS unit tests
+    dir: internal/viewer
+    cmds:
+      - npm ci
+      - npm test
 
   test:e2e:
     desc: Run e2e tests in Docker
