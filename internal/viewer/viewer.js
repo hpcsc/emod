@@ -6,34 +6,7 @@ import { UI } from './ui.js';
 import { Model } from './model.js';
 import { bus } from './bus.js';
 import { Export } from './emod-export.js';
-
-// ─── Create store and wire DOM references ────────────────────────────
-const store = createStore();
-store.dom.svg = document.getElementById("diagram-canvas");
-store.dom.nameDisplay = document.getElementById("model-name-display");
-store.dom.sourceInput = document.getElementById("source-input");
-store.dom.renderBtn = document.getElementById("render-btn");
-store.dom.statusEl = document.getElementById("render-status");
-store.dom.statNodes = document.getElementById("stat-nodes");
-store.dom.statEdges = document.getElementById("stat-edges");
-store.dom.statCanvas = document.getElementById("stat-canvas");
-store.dom.panel = document.getElementById("data-panel");
-store.dom.panelHdr = document.getElementById("data-panel-header");
-store.dom.panelBody = document.getElementById("data-panel-body");
-store.dom.minimap = document.getElementById("minimap");
-store.dom.minimapSvg = document.getElementById("minimap-svg");
-store.dom.minimapToggle = document.getElementById("minimap-toggle");
-store.dom.contextPanel = document.getElementById("context-panel");
-store.dom.contextToggle = document.getElementById("context-toggle");
-store.dom.contextList = document.getElementById("context-list");
-store.dom.tooltip = document.getElementById("tooltip");
-store.dom.detailPanel = document.getElementById("detail-panel");
-store.dom.dpContent = document.getElementById("dp-content");
-store.dom.ctxMenu = document.getElementById("ctx-menu");
-store.dom.actorAnnotations = document.getElementById("actor-annotations");
-store.dom.resetLayoutBtn = document.getElementById("reset-layout");
-store.dom.fitViewBtn = document.getElementById("fit-view");
-store.dom.exportBtn = document.getElementById("export-emod");
+import { ready, isReady } from './wasm.js';
 
 // ─── Event subscriptions ─────────────────────────────────────────────
 bus.on('data:changed', function({ store: s }) {
@@ -118,6 +91,34 @@ bus.on('diagram:rendered', function({ store: s }) {
 
 // ─── Init ───────────────────────────────────────────────────────────
 function init() {
+  // ─── Create store and wire DOM references ────────────────────────────
+  const store = createStore();
+  store.dom.svg = document.getElementById("diagram-canvas");
+  store.dom.nameDisplay = document.getElementById("model-name-display");
+  store.dom.sourceInput = document.getElementById("source-input");
+  store.dom.renderBtn = document.getElementById("render-btn");
+  store.dom.statusEl = document.getElementById("render-status");
+  store.dom.statNodes = document.getElementById("stat-nodes");
+  store.dom.statEdges = document.getElementById("stat-edges");
+  store.dom.statCanvas = document.getElementById("stat-canvas");
+  store.dom.panel = document.getElementById("data-panel");
+  store.dom.panelHdr = document.getElementById("data-panel-header");
+  store.dom.panelBody = document.getElementById("data-panel-body");
+  store.dom.minimap = document.getElementById("minimap");
+  store.dom.minimapSvg = document.getElementById("minimap-svg");
+  store.dom.minimapToggle = document.getElementById("minimap-toggle");
+  store.dom.contextPanel = document.getElementById("context-panel");
+  store.dom.contextToggle = document.getElementById("context-toggle");
+  store.dom.contextList = document.getElementById("context-list");
+  store.dom.tooltip = document.getElementById("tooltip");
+  store.dom.detailPanel = document.getElementById("detail-panel");
+  store.dom.dpContent = document.getElementById("dp-content");
+  store.dom.ctxMenu = document.getElementById("ctx-menu");
+  store.dom.actorAnnotations = document.getElementById("actor-annotations");
+  store.dom.resetLayoutBtn = document.getElementById("reset-layout");
+  store.dom.fitViewBtn = document.getElementById("fit-view");
+  store.dom.exportBtn = document.getElementById("export-emod");
+
   Interaction.initEventListeners(store);
   UI.initDelegation(store);
   UI.initKeyboard(store);
@@ -161,10 +162,20 @@ function init() {
     store.dom.panelBody.classList.remove("drag-over");
     const file = evt.dataTransfer.files[0];
     if (!file) return;
+    const name = file.name.toLowerCase();
+    if (!name.endsWith('.emod') && !name.endsWith('.json')) {
+      store.dom.statusEl.textContent = '✗ Only .emod and .json files are supported';
+      store.dom.statusEl.className = 'status error';
+      return;
+    }
     const reader = new FileReader();
     reader.onload = function(e) {
       store.dom.sourceInput.value = e.target.result;
       store.dom.renderBtn.click();
+    };
+    reader.onerror = function() {
+      store.dom.statusEl.textContent = '✗ Failed to read file';
+      store.dom.statusEl.className = 'status error';
     };
     reader.readAsText(file);
   });
@@ -448,10 +459,40 @@ function init() {
     const initData = INITIAL_DATA.diagram || INITIAL_DATA;
     Model.setModelData(store, initData);
   } else {
-    store.dom.sourceInput.placeholder = 'Paste .emod content here';
+    store.dom.sourceInput.placeholder = 'Paste .emod source or diagram JSON here';
     store.dom.panel.classList.remove('collapsed');
     store.dom.nameDisplay.textContent = '(no model)';
+
+    const instructions = document.getElementById('landing-instructions');
+    if (instructions) instructions.style.display = 'block';
+
+    if (!isReady) {
+      store.dom.statusEl.textContent = '⏳ Loading parser...';
+      store.dom.statusEl.className = '';
+    }
+
+    ready.then(function() {
+      if (store.dom.statusEl.textContent === '⏳ Loading parser...') {
+        store.dom.statusEl.textContent = '✓ Ready';
+        store.dom.statusEl.className = 'status success';
+        setTimeout(function() {
+          if (store.dom.statusEl.textContent === '✓ Ready') {
+            store.dom.statusEl.textContent = '';
+            store.dom.statusEl.className = 'status';
+          }
+        }, 1500);
+      }
+    }).catch(function(err) {
+      if (store.dom.statusEl.textContent === '⏳ Loading parser...') {
+        store.dom.statusEl.textContent = '✗ ' + (err.message || 'Parser failed to load');
+        store.dom.statusEl.className = 'status error';
+      }
+    });
   }
 }
 
-init();
+export { init };
+
+if (typeof process === 'undefined' || !process.env || !process.env.VITEST) {
+  init();
+}

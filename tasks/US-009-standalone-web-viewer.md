@@ -6,7 +6,7 @@
 - [x] Task 3: Add WASM runtime assets and embed them in the viewer
 - [x] Task 4: Create WASM loader module for the frontend
 - [x] Task 5: Refactor frontend to use WASM for client-side parsing
-- [ ] Task 6: Polish landing page and standalone operation UX
+- [x] Task 6: Polish landing page and standalone operation UX
 
 ---
 

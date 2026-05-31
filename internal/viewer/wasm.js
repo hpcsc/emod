@@ -46,7 +46,7 @@ function parseEmod(source) {
     return Promise.reject(new Error('WASM not ready yet'));
   }
   try {
-    const jsonStr = globalThis.parseEmod(source);
+    const jsonStr = globalThis.parseEmod(JSON.stringify({ source: source }));
     return Promise.resolve(JSON.parse(jsonStr));
   } catch (err) {
     return Promise.reject(err);

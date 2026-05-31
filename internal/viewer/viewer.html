@@ -301,7 +301,7 @@ header .model-name span {
   flex: 1 1 auto;
 }
 #data-panel-body.drag-over::after {
-  content: "Drop .emod file here";
+  content: "Drop .emod or .json file here";
   position: absolute;
   inset: 0;
   display: flex;
@@ -315,6 +315,18 @@ header .model-name span {
   color: #3498db;
   z-index: 1;
   pointer-events: none;
+}
+
+#landing-instructions {
+  margin-bottom: 10px;
+  font-size: 13px;
+  color: #555;
+}
+#landing-instructions p {
+  margin: 0 0 4px 0;
+}
+#landing-instructions strong {
+  color: #2c3e50;
 }
 
 #source-input {
@@ -840,7 +852,10 @@ header .model-name span {
       <h2>☰ Data</h2>
     </div>
     <div id="data-panel-body">
-      <textarea id="source-input" spellcheck="false" placeholder="Paste .emod source content here"></textarea>
+      <div id="landing-instructions" style="display: none;">
+        <p>Drop an <strong>.emod</strong> or <strong>.json</strong> file here, or paste content below.</p>
+      </div>
+      <textarea id="source-input" spellcheck="false" placeholder="Paste .emod source or diagram JSON here"></textarea>
       <div class="data-panel-actions">
         <button id="render-btn">Render</button>
         <span class="status" id="render-status"></span>

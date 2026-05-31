@@ -40,7 +40,7 @@ describe('parseEmod after ready', () => {
     globalThis.parseEmod = vi.fn().mockReturnValue(JSON.stringify(parseResult));
 
     const result = await wasm.parseEmod('test source');
-    expect(globalThis.parseEmod).toHaveBeenCalledWith('test source');
+    expect(globalThis.parseEmod).toHaveBeenCalledWith('{"source":"test source"}');
     expect(result).toEqual(parseResult);
   });
 

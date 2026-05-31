@@ -105,6 +105,14 @@ function sendParse(store, source, statusEl) {
     return wasm.ready.then(function() {
       return wasm.parseEmod(source);
     });
+  }).then(function(data) {
+    if (data.error) {
+      throw new Error(data.error);
+    }
+    if (!data.diagram || !data.diagram.nodes || !data.diagram.edges) {
+      throw new Error('invalid diagram response');
+    }
+    return data;
   });
 }
 
