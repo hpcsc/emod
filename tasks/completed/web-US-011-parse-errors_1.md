@@ -2,8 +2,8 @@
 
 ## Progress
 - [x] Task 1: Add diagnostics storage to store and wire from parse response
-- [ ] Task 2: Render diagnostics panel and error badge in the UI
-- [ ] Task 3: Wire click-to-highlight from diagnostic items to diagram nodes
+- [x] Task 2: Render diagnostics panel and error badge in the UI
+- [x] Task 3: Wire click-to-highlight from diagnostic items to diagram nodes
 
 ---
 

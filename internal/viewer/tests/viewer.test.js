@@ -34,9 +34,9 @@ vi.mock('../static/bus.js', () => ({
 }));
 
 vi.mock('../static/layout.js', () => ({ Layout: {} }));
-vi.mock('../static/renderer.js', () => ({ Renderer: {} }));
+vi.mock('../static/renderer.js', () => ({ Renderer: { esc: function(x) { return String(x); } } }));
 vi.mock('../static/interaction.js', () => ({ Interaction: { initEventListeners: vi.fn() } }));
-vi.mock('../static/ui.js', () => ({ UI: { initDelegation: vi.fn(), initKeyboard: vi.fn(), hideContextMenu: vi.fn(), hideDetailPanel: vi.fn(), updateStats: vi.fn(), updateMinimap: vi.fn(), toggleMinimap: vi.fn(), toggleContextPanel: vi.fn(), minimapNavigate: vi.fn(), updateContextList: vi.fn(), renderActorAnnotations: vi.fn(), updateDiagnosticsPanel: vi.fn(), toggleDiagnosticsPanel: vi.fn(), hideDiagnosticsPanel: vi.fn() } }));
+vi.mock('../static/ui.js', () => ({ UI: { initDelegation: vi.fn(), initKeyboard: vi.fn(), hideContextMenu: vi.fn(), hideDetailPanel: vi.fn(), updateStats: vi.fn(), updateMinimap: vi.fn(), toggleMinimap: vi.fn(), toggleContextPanel: vi.fn(), minimapNavigate: vi.fn(), updateContextList: vi.fn(), renderActorAnnotations: vi.fn(), updateDiagnosticsPanel: vi.fn(), toggleDiagnosticsPanel: vi.fn(), hideDiagnosticsPanel: vi.fn(), initDiagnosticsDelegation: vi.fn() } }));
 vi.mock('../static/model.js', () => ({ Model: { setModelData: vi.fn(), sendParse: vi.fn(() => Promise.resolve({ diagnostics: [], diagram: { nodes: [], edges: [] } })) } }));
 vi.mock('../static/emod-export.js', () => ({ Export: {} }));
 
@@ -305,5 +305,227 @@ describe('viewer drag-and-drop', () => {
 
     expect(sourceInput.value).toBe(jsonContent);
     expect(clicked).toBe(true);
+  });
+});
+
+// ─── Diagnostics click-to-highlight tests ──────────────────────────
+describe('diagnostics click-to-highlight', () => {
+  function setupDiagnosticsTest() {
+    const container = document.createElement('div');
+    container.innerHTML = `
+      <div id="diagnostics-list"></div>
+      <div id="diagnostics-panel"></div>
+      <div id="diagnostics-badge" style="display:none"></div>
+      <svg id="diagram-canvas"></svg>
+    `;
+    document.body.appendChild(container);
+
+    const diagnosticsList = document.getElementById('diagnostics-list');
+    const diagnosticsPanel = document.getElementById('diagnostics-panel');
+    const diagnosticsBadge = document.getElementById('diagnostics-badge');
+    const svg = document.getElementById('diagram-canvas');
+
+    return { container, diagnosticsList, diagnosticsPanel, diagnosticsBadge, svg };
+  }
+
+  it('highlights matching diagram nodes when clicking a diagnostic', async () => {
+    const { container, diagnosticsList, diagnosticsPanel, diagnosticsBadge, svg } = setupDiagnosticsTest();
+
+    const uiModule = await vi.importActual('../static/ui.js');
+    const storeModule = await vi.importActual('../static/store.js');
+    const { UI } = uiModule;
+    const store = storeModule.createStore();
+    store.dom.diagnosticsList = diagnosticsList;
+    store.dom.diagnosticsPanel = diagnosticsPanel;
+    store.dom.diagnosticsBadge = diagnosticsBadge;
+    store.dom.svg = svg;
+
+    // Nodes with position data
+    store.nodes = [
+      { id: 'n1', type: 'command', label: 'Cmd1', position: { filename: 'test.cue', line: 5, column: 3 } },
+      { id: 'n2', type: 'event', label: 'Evt1', position: { filename: 'test.cue', line: 10, column: 3 } },
+    ];
+    store.nodeById = new Map(store.nodes.map(function(n) { return [n.id, n]; }));
+
+    const diagnostics = [
+      { file: 'test.cue', line: 5, message: 'Error on line 5', severity: 'error' },
+    ];
+    store.diagnostics = diagnostics;
+
+    UI.updateDiagnosticsPanel(store, diagnostics);
+    UI.initDiagnosticsDelegation(store);
+
+    const diagItem = diagnosticsList.querySelector('.diag-item');
+    expect(diagItem).not.toBeNull();
+    diagItem.click();
+
+    // n1 should be highlighted
+    expect(store.interaction.highlighted).toEqual({ n1: true });
+    expect(diagItem.classList.contains('not-rendered')).toBe(false);
+    document.body.removeChild(container);
+  });
+
+  it('shows not-rendered indicator when no matching node', async () => {
+    const { container, diagnosticsList, diagnosticsPanel, diagnosticsBadge, svg } = setupDiagnosticsTest();
+
+    const uiModule = await vi.importActual('../static/ui.js');
+    const storeModule = await vi.importActual('../static/store.js');
+    const { UI } = uiModule;
+    const store = storeModule.createStore();
+    store.dom.diagnosticsList = diagnosticsList;
+    store.dom.diagnosticsPanel = diagnosticsPanel;
+    store.dom.diagnosticsBadge = diagnosticsBadge;
+    store.dom.svg = svg;
+
+    // Node with position that won't match
+    store.nodes = [
+      { id: 'n1', type: 'command', label: 'Cmd1', position: { filename: 'other.cue', line: 99, column: 3 } },
+    ];
+    store.nodeById = new Map(store.nodes.map(function(n) { return [n.id, n]; }));
+
+    const diagnostics = [
+      { file: 'test.cue', line: 5, message: 'Unmatched error', severity: 'error' },
+    ];
+    store.diagnostics = diagnostics;
+
+    UI.updateDiagnosticsPanel(store, diagnostics);
+    UI.initDiagnosticsDelegation(store);
+
+    const diagItem = diagnosticsList.querySelector('.diag-item');
+    diagItem.click();
+
+    expect(diagItem.classList.contains('not-rendered')).toBe(true);
+    // Highlights should be empty
+    expect(store.interaction.highlighted).toEqual({});
+    document.body.removeChild(container);
+  });
+
+  it('shows not-rendered for diagnostic without file or line', async () => {
+    const { container, diagnosticsList, diagnosticsPanel, diagnosticsBadge, svg } = setupDiagnosticsTest();
+
+    const uiModule = await vi.importActual('../static/ui.js');
+    const storeModule = await vi.importActual('../static/store.js');
+    const { UI } = uiModule;
+    const store = storeModule.createStore();
+    store.dom.diagnosticsList = diagnosticsList;
+    store.dom.diagnosticsPanel = diagnosticsPanel;
+    store.dom.diagnosticsBadge = diagnosticsBadge;
+    store.dom.svg = svg;
+
+    store.nodes = [
+      { id: 'n1', type: 'command', label: 'Cmd1', position: { filename: 'test.cue', line: 5, column: 3 } },
+    ];
+    store.nodeById = new Map(store.nodes.map(function(n) { return [n.id, n]; }));
+
+    const diagnostics = [
+      { file: '', line: 0, message: 'No location', severity: 'error' },
+    ];
+    store.diagnostics = diagnostics;
+
+    UI.updateDiagnosticsPanel(store, diagnostics);
+    UI.initDiagnosticsDelegation(store);
+
+    const diagItem = diagnosticsList.querySelector('.diag-item');
+    diagItem.click();
+
+    expect(diagItem.classList.contains('not-rendered')).toBe(true);
+    document.body.removeChild(container);
+  });
+
+  it('sequential clicks replace previous highlight', async () => {
+    const { container, diagnosticsList, diagnosticsPanel, diagnosticsBadge, svg } = setupDiagnosticsTest();
+
+    const uiModule = await vi.importActual('../static/ui.js');
+    const storeModule = await vi.importActual('../static/store.js');
+    const { UI } = uiModule;
+    const store = storeModule.createStore();
+    store.dom.diagnosticsList = diagnosticsList;
+    store.dom.diagnosticsPanel = diagnosticsPanel;
+    store.dom.diagnosticsBadge = diagnosticsBadge;
+    store.dom.svg = svg;
+
+    // Add node elements to SVG for highlight to work
+    const n1El = document.createElementNS('http://www.w3.org/2000/svg', 'g');
+    n1El.setAttribute('data-node-id', 'n1');
+    n1El.classList.add('diagram-node');
+    svg.appendChild(n1El);
+    const n2El = document.createElementNS('http://www.w3.org/2000/svg', 'g');
+    n2El.setAttribute('data-node-id', 'n2');
+    n2El.classList.add('diagram-node');
+    svg.appendChild(n2El);
+
+    store.nodes = [
+      { id: 'n1', type: 'command', label: 'Cmd1', position: { filename: 'test.cue', line: 5, column: 3 } },
+      { id: 'n2', type: 'event', label: 'Evt1', position: { filename: 'test.cue', line: 10, column: 3 } },
+    ];
+    store.nodeById = new Map(store.nodes.map(function(n) { return [n.id, n]; }));
+
+    const diagnostics = [
+      { file: 'test.cue', line: 5, message: 'Error 1', severity: 'error' },
+      { file: 'test.cue', line: 10, message: 'Error 2', severity: 'error' },
+    ];
+    store.diagnostics = diagnostics;
+
+    UI.updateDiagnosticsPanel(store, diagnostics);
+    UI.initDiagnosticsDelegation(store);
+
+    const items = diagnosticsList.querySelectorAll('.diag-item');
+    expect(items.length).toBe(2);
+
+    // Click first diagnostic
+    items[0].click();
+    expect(store.interaction.highlighted).toEqual({ n1: true });
+
+    // Click second diagnostic — should replace highlight
+    items[1].click();
+    expect(store.interaction.highlighted).toEqual({ n2: true });
+    expect(n1El.classList.contains('hl')).toBe(false);
+    expect(n2El.classList.contains('hl')).toBe(true);
+
+    document.body.removeChild(container);
+  });
+
+  it('closing diagnostics panel clears highlights', async () => {
+    const { container, diagnosticsList, diagnosticsPanel, diagnosticsBadge, svg } = setupDiagnosticsTest();
+
+    const uiModule = await vi.importActual('../static/ui.js');
+    const storeModule = await vi.importActual('../static/store.js');
+    const { UI } = uiModule;
+    const store = storeModule.createStore();
+    store.dom.diagnosticsList = diagnosticsList;
+    store.dom.diagnosticsPanel = diagnosticsPanel;
+    store.dom.diagnosticsBadge = diagnosticsBadge;
+    store.dom.svg = svg;
+
+    const n1El = document.createElementNS('http://www.w3.org/2000/svg', 'g');
+    n1El.setAttribute('data-node-id', 'n1');
+    n1El.classList.add('diagram-node');
+    svg.appendChild(n1El);
+
+    store.nodes = [
+      { id: 'n1', type: 'command', label: 'Cmd1', position: { filename: 'test.cue', line: 5, column: 3 } },
+    ];
+    store.nodeById = new Map(store.nodes.map(function(n) { return [n.id, n]; }));
+
+    const diagnostics = [
+      { file: 'test.cue', line: 5, message: 'Error', severity: 'error' },
+    ];
+    store.diagnostics = diagnostics;
+
+    UI.updateDiagnosticsPanel(store, diagnostics);
+    UI.initDiagnosticsDelegation(store);
+
+    const diagItem = diagnosticsList.querySelector('.diag-item');
+    diagItem.click();
+
+    // Verify highlight is applied
+    expect(store.interaction.highlighted).toEqual({ n1: true });
+
+    // Close panel
+    UI.hideDiagnosticsPanel(store);
+
+    // Verify highlights cleared
+    expect(store.interaction.highlighted).toEqual({});
+    document.body.removeChild(container);
   });
 });

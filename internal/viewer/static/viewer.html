@@ -277,6 +277,15 @@ header .model-name span {
   color: #333;
   line-height: 1.4;
 }
+.diag-item.not-rendered {
+  font-style: italic;
+  opacity: 0.7;
+}
+.diag-item.not-rendered .diag-location::after {
+  content: " — not rendered";
+  color: #e74c3c;
+  font-style: italic;
+}
 
 #context-panel {
   position: absolute;

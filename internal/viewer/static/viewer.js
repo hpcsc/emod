@@ -130,6 +130,7 @@ function init() {
   Interaction.initEventListeners(store);
   UI.initDelegation(store);
   UI.initKeyboard(store);
+  UI.initDiagnosticsDelegation(store);
 
   // ─── Render button click ──────────────────────────────────────────
   store.dom.renderBtn.addEventListener("click", function() {

@@ -232,10 +232,10 @@ function updateDiagnosticsPanel(store, diagnostics) {
   badgeEl.textContent = diagnostics.length + " error" + (diagnostics.length === 1 ? "" : "s");
 
   let html = "";
-  diagnostics.forEach(function(d) {
+  diagnostics.forEach(function(d, idx) {
     var sev = d.severity || "error";
     var loc = (d.file || "?") + ":" + (d.line || "?");
-    html += '<div class="diag-item">';
+    html += '<div class="diag-item" data-diagnostics-idx="' + idx + '">';
     html += '<span class="diag-severity ' + sev + '">' + Renderer.esc(sev) + '</span>';
     html += '<span class="diag-location">' + Renderer.esc(loc) + '</span>';
     html += '<span class="diag-message">' + Renderer.esc(d.message) + '</span>';
@@ -244,6 +244,56 @@ function updateDiagnosticsPanel(store, diagnostics) {
   listEl.innerHTML = html;
 
   panelEl.classList.remove("hidden");
+}
+
+function handleDiagnosticClick(store, evt) {
+  const item = evt.target.closest('.diag-item');
+  if (!item) return;
+
+  // Reset not-rendered on all items
+  store.dom.diagnosticsList.querySelectorAll('.diag-item.not-rendered').forEach(function(el) {
+    el.classList.remove('not-rendered');
+  });
+
+  const idx = parseInt(item.getAttribute('data-diagnostics-idx'));
+  if (isNaN(idx)) return;
+
+  const diagnostics = store.diagnostics;
+  if (!diagnostics || idx >= diagnostics.length) return;
+
+  const d = diagnostics[idx];
+  const file = d.file;
+  const line = d.line;
+
+  // Can't match without a specific file and line
+  if (!file || !line) {
+    item.classList.add('not-rendered');
+    return;
+  }
+
+  // Find matching nodes by position.filename and position.line
+  const matchingIds = [];
+  for (var i = 0; i < store.nodes.length; i++) {
+    var node = store.nodes[i];
+    if (node.position && node.position.filename === file && node.position.line === line) {
+      matchingIds.push(node.id);
+    }
+  }
+
+  if (matchingIds.length > 0) {
+    if (store.interaction.selectedNodeId) hideDetailPanel(store);
+    highlightElements(store, matchingIds);
+  } else {
+    item.classList.add('not-rendered');
+  }
+}
+
+function initDiagnosticsDelegation(store) {
+  const listEl = store.dom.diagnosticsList;
+  if (!listEl) return;
+  listEl.addEventListener('click', function(evt) {
+    handleDiagnosticClick(store, evt);
+  });
 }
 
 function toggleDiagnosticsPanel(store) {
@@ -260,6 +310,13 @@ function hideDiagnosticsPanel(store) {
   if (!panelEl || !badgeEl) return;
   panelEl.classList.add("hidden");
   badgeEl.classList.remove("active");
+  clearHighlights(store);
+  // Reset not-rendered markers on all items
+  if (store.dom.diagnosticsList) {
+    store.dom.diagnosticsList.querySelectorAll('.diag-item.not-rendered').forEach(function(el) {
+      el.classList.remove('not-rendered');
+    });
+  }
 }
 
 // ─── Stats ──────────────────────────────────────────────────────
@@ -831,6 +888,8 @@ export const UI = {
   updateContextList,
   toggleContextPanel,
   updateDiagnosticsPanel,
+  handleDiagnosticClick,
+  initDiagnosticsDelegation,
   toggleDiagnosticsPanel,
   hideDiagnosticsPanel,
   updateStats,
