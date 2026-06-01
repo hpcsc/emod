@@ -3,40 +3,67 @@ name: CI
 on:
   push: {}
 
-jobs:
+permissions:
+  contents: read
 
+jobs:
   build:
     runs-on: ubuntu-latest
     steps:
     - uses: actions/checkout@v6
-
     - name: Set up Go
       uses: actions/setup-go@v6
       with:
         go-version-file: 'go.mod'
-
     - name: Mise install
       uses: jdx/mise-action@v4
       with:
         github_token: ${{ secrets.GITHUB_TOKEN }}
-
     - name: Build
       run: task build
-
     - name: Run Unit Test
       run: task test:unit
-
     - name: Run Integration Test
       run: task test:integration
-
     - name: Setup Node.js
       uses: actions/setup-node@v4
       with:
         node-version-file: 'internal/viewer/package.json'
-
     - name: Run Viewer JS Tests
       run: task test:viewer
-
     - name: Run E2E Test
       run: task test:e2e
 
+  deploy:
+    if: github.ref == 'refs/heads/main'
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write
+      pages: write
+    concurrency:
+      group: pages
+      cancel-in-progress: true
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - uses: actions/checkout@v6
+      - name: Set up Go
+        uses: actions/setup-go@v6
+        with:
+          go-version-file: 'go.mod'
+      - name: Mise install
+        uses: jdx/mise-action@v4
+        with:
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+      - name: Build standalone site
+        run: task build:web
+      - name: Upload Pages artifact
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: ./web
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4
