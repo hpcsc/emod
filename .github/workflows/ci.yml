@@ -60,6 +60,10 @@ jobs:
           github_token: ${{ secrets.GITHUB_TOKEN }}
       - name: Build standalone site
         run: task build:web
+      - name: Inject build version
+        run: |
+          SHA7="${GITHUB_SHA:0:7}"
+          sed -i "s|<!--BUILD_VERSION-->|<script>document.getElementById('stat-commit').textContent='${SHA7}'</script>|" ./web/index.html
       - name: Upload Pages artifact
         uses: actions/upload-pages-artifact@v3
         with:
