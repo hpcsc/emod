@@ -200,8 +200,92 @@ function initEventListeners(store) {
     }
   }, { passive: false });
 
+  function createPreviewLine() {
+    var line = document.createElementNS("http://www.w3.org/2000/svg", "path");
+    line.setAttribute("fill", "none");
+    line.setAttribute("stroke", "#3498db");
+    line.setAttribute("stroke-width", "2");
+    line.setAttribute("stroke-dasharray", "6,4");
+    line.setAttribute("class", "connect-preview");
+    line.setAttribute("pointer-events", "none");
+    return line;
+  }
+
+  function updatePreviewLine(lineEl, x1, y1, x2, y2) {
+    lineEl.setAttribute("d", "M " + x1 + "," + y1 + " L " + x2 + "," + y2);
+  }
+
+  function removePreviewLine(store) {
+    var prev = svgEl.querySelector(".connect-preview");
+    if (prev) prev.remove();
+  }
+
+  function addPreviewLine(store, x1, y1, x2, y2) {
+    var line = createPreviewLine();
+    updatePreviewLine(line, x1, y1, x2, y2);
+    var vg = svgEl.querySelector("#viewport-group");
+    if (vg) vg.appendChild(line);
+    return line;
+  }
+
   svgEl.addEventListener("mousedown", function(evt) {
     if (evt.button !== 0) return;
+
+    // Check for connection port click
+    var port = evt.target.closest('[data-port]');
+    if (port) {
+      var nodeId = port.getAttribute("data-node-id");
+      var portType = port.getAttribute("data-port");
+      var pos = store.layoutPositions[nodeId];
+      if (nodeId && pos) {
+        var dp = screenToDiagram(svgEl, store.viewport, evt.clientX, evt.clientY);
+        var cx = portType === "out" ? pos.x + pos.w : pos.x;
+        var cy = pos.y + pos.h / 2;
+        store.interaction.connect = {
+          sourceId: nodeId,
+          portType: portType,
+          startX: cx,
+          startY: cy,
+          currentX: dp.x,
+          currentY: dp.y,
+          startClientX: evt.clientX,
+          startClientY: evt.clientY,
+        };
+        var line = addPreviewLine(store, cx, cy, dp.x, dp.y);
+        evt.preventDefault();
+      }
+      return;
+    }
+
+    // Check for arrow handle click (repoint)
+    var handle = evt.target.closest('[data-arrow-handle]');
+    if (handle) {
+      var edgeSource = handle.getAttribute("data-edge-source");
+      var edgeTarget = handle.getAttribute("data-edge-target");
+      var edgeType = handle.getAttribute("data-edge-type");
+      var handleEnd = handle.getAttribute("data-arrow-handle");
+      if (edgeSource && edgeTarget) {
+        var dp = screenToDiagram(svgEl, store.viewport, evt.clientX, evt.clientY);
+        var hx = parseFloat(handle.getAttribute("cx"));
+        var hy = parseFloat(handle.getAttribute("cy"));
+        store.interaction.connect = {
+          repoint: true,
+          edgeSource: edgeSource,
+          edgeTarget: edgeTarget,
+          edgeType: edgeType,
+          handleEnd: handleEnd,
+          startX: hx,
+          startY: hy,
+          currentX: dp.x,
+          currentY: dp.y,
+          startClientX: evt.clientX,
+          startClientY: evt.clientY,
+        };
+        var line = addPreviewLine(store, hx, hy, dp.x, dp.y);
+        evt.preventDefault();
+      }
+      return;
+    }
 
     const block = evt.target.closest('.diagram-node');
     if (block) {
@@ -270,6 +354,19 @@ function initEventListeners(store) {
   });
 
   document.addEventListener("mousemove", function(evt) {
+    const connect = store.interaction.connect;
+    if (connect) {
+      var dp = screenToDiagram(svgEl, store.viewport, evt.clientX, evt.clientY);
+      connect.currentX = dp.x;
+      connect.currentY = dp.y;
+      var preview = svgEl.querySelector(".connect-preview");
+      if (preview) {
+        updatePreviewLine(preview, connect.startX, connect.startY, dp.x, dp.y);
+      }
+      evt.preventDefault();
+      return;
+    }
+
     const drag = store.interaction.drag;
     if (drag) {
       const dp = screenToDiagram(svgEl, store.viewport, evt.clientX, evt.clientY);
@@ -354,6 +451,73 @@ function initEventListeners(store) {
   });
 
   document.addEventListener("mouseup", function(evt) {
+    const connect = store.interaction.connect;
+    if (connect) {
+      removePreviewLine(store);
+      var dist = 0;
+      if (connect.startClientX !== undefined) {
+        dist = Math.sqrt(
+          Math.pow(evt.clientX - connect.startClientX, 2) +
+          Math.pow(evt.clientY - connect.startClientY, 2)
+        );
+      }
+      if (dist >= DRAG_THRESHOLD) {
+        var targetBlock = evt.target.closest('.diagram-node');
+      if (targetBlock) {
+        var targetId = targetBlock.getAttribute("data-node-id");
+        if (targetId) {
+          if (connect.repoint) {
+            // Repointing an arrow end
+            var es = connect.edgeSource;
+            var et = connect.edgeTarget;
+            var changed = false;
+            for (var i = 0; i < store.edges.length; i++) {
+              var e = store.edges[i];
+              if (e.source === es && e.target === et && e.type === connect.edgeType) {
+                if (connect.handleEnd === "source") {
+                  if (targetId !== et) {
+                    e.source = targetId;
+                    changed = true;
+                  }
+                } else {
+                  if (targetId !== es) {
+                    e.target = targetId;
+                    changed = true;
+                  }
+                }
+                break;
+              }
+            }
+            if (changed) {
+              bus.emit('data:changed', { store });
+            }
+          } else {
+            // Creating a new edge
+            if (targetId !== connect.sourceId) {
+              var type = Model.autoDetectEdgeType(store, connect.sourceId, targetId);
+              // Check if edge already exists
+              var exists = false;
+              for (var i = 0; i < store.edges.length; i++) {
+                var e = store.edges[i];
+                if (e.source === connect.sourceId && e.target === targetId) {
+                  exists = true;
+                  break;
+                }
+              }
+              if (!exists) {
+                store.edges.push({ source: connect.sourceId, target: targetId, type: type });
+                bus.emit('data:changed', { store });
+              }
+            }
+          }
+        }
+      }
+      }
+      store.interaction.connect = null;
+      evt.preventDefault();
+      return;
+    }
+
     const drag = store.interaction.drag;
     if (drag) {
       if (drag.sliceId) {
@@ -424,6 +588,63 @@ function initEventListeners(store) {
     if (store.interaction.touch) return;
 
     if (touches.length === 1) {
+      // Check for connection port
+      var port = evt.target.closest('[data-port]');
+      if (port) {
+        var nodeId = port.getAttribute("data-node-id");
+        var portType = port.getAttribute("data-port");
+        var pos = store.layoutPositions[nodeId];
+        if (nodeId && pos) {
+          var touch = touches[0];
+          var dp = screenToDiagram(svgEl, store.viewport, touch.clientX, touch.clientY);
+          var cx = portType === "out" ? pos.x + pos.w : pos.x;
+          var cy = pos.y + pos.h / 2;
+          var t = touches[0];
+          store.interaction.connect = {
+            sourceId: nodeId,
+            portType: portType,
+            startX: cx,
+            startY: cy,
+            currentX: dp.x,
+            currentY: dp.y,
+            startClientX: t.clientX,
+            startClientY: t.clientY,
+          };
+          var line = addPreviewLine(store, cx, cy, dp.x, dp.y);
+        }
+        return;
+      }
+
+      // Check for arrow handle (repoint)
+      var handle = evt.target.closest('[data-arrow-handle]');
+      if (handle) {
+        var edgeSource = handle.getAttribute("data-edge-source");
+        var edgeTarget = handle.getAttribute("data-edge-target");
+        var edgeType = handle.getAttribute("data-edge-type");
+        var handleEnd = handle.getAttribute("data-arrow-handle");
+        if (edgeSource && edgeTarget) {
+          var t = touches[0];
+          var dp = screenToDiagram(svgEl, store.viewport, t.clientX, t.clientY);
+          var hx = parseFloat(handle.getAttribute("cx"));
+          var hy = parseFloat(handle.getAttribute("cy"));
+          store.interaction.connect = {
+            repoint: true,
+            edgeSource: edgeSource,
+            edgeTarget: edgeTarget,
+            edgeType: edgeType,
+            handleEnd: handleEnd,
+            startX: hx,
+            startY: hy,
+            currentX: dp.x,
+            currentY: dp.y,
+            startClientX: t.clientX,
+            startClientY: t.clientY,
+          };
+          var line = addPreviewLine(store, hx, hy, dp.x, dp.y);
+        }
+        return;
+      }
+
       const block = evt.target.closest('.diagram-node');
       if (block) {
         const nodeId = block.getAttribute("data-node-id");
@@ -503,6 +724,21 @@ function initEventListeners(store) {
   }, { passive: false });
 
   svgEl.addEventListener("touchmove", function(evt) {
+    const connect = store.interaction.connect;
+    if (connect) {
+      evt.preventDefault();
+      const touch = evt.touches[0];
+      if (!touch) return;
+      const dp = screenToDiagram(svgEl, store.viewport, touch.clientX, touch.clientY);
+      connect.currentX = dp.x;
+      connect.currentY = dp.y;
+      var preview = svgEl.querySelector(".connect-preview");
+      if (preview) {
+        updatePreviewLine(preview, connect.startX, connect.startY, dp.x, dp.y);
+      }
+      return;
+    }
+
     const drag = store.interaction.drag;
     if (drag) {
       evt.preventDefault();
@@ -637,6 +873,74 @@ function initEventListeners(store) {
   }, { passive: false });
 
   svgEl.addEventListener("touchend", function(evt) {
+    const connect = store.interaction.connect;
+    if (connect) {
+      evt.preventDefault();
+      removePreviewLine(store);
+      var ct = evt.changedTouches[0];
+      if (ct) {
+        var td = 0;
+        if (connect.startClientX !== undefined) {
+          td = Math.sqrt(
+            Math.pow(ct.clientX - connect.startClientX, 2) +
+            Math.pow(ct.clientY - connect.startClientY, 2)
+          );
+        }
+        if (td >= DRAG_THRESHOLD) {
+        var elem = document.elementFromPoint(ct.clientX, ct.clientY);
+        var targetBlock = elem ? elem.closest('.diagram-node') : null;
+        if (targetBlock) {
+          var targetId = targetBlock.getAttribute("data-node-id");
+          if (targetId) {
+            if (connect.repoint) {
+              var es = connect.edgeSource;
+              var et = connect.edgeTarget;
+              var changed = false;
+              for (var i = 0; i < store.edges.length; i++) {
+                var e = store.edges[i];
+                if (e.source === es && e.target === et && e.type === connect.edgeType) {
+                  if (connect.handleEnd === "source") {
+                    if (targetId !== et) {
+                      e.source = targetId;
+                      changed = true;
+                    }
+                  } else {
+                    if (targetId !== es) {
+                      e.target = targetId;
+                      changed = true;
+                    }
+                  }
+                  break;
+                }
+              }
+              if (changed) {
+                bus.emit('data:changed', { store });
+              }
+            } else {
+              if (targetId !== connect.sourceId) {
+                var type = Model.autoDetectEdgeType(store, connect.sourceId, targetId);
+                var exists = false;
+                for (var i = 0; i < store.edges.length; i++) {
+                  var e = store.edges[i];
+                  if (e.source === connect.sourceId && e.target === targetId) {
+                    exists = true;
+                    break;
+                  }
+                }
+                if (!exists) {
+                  store.edges.push({ source: connect.sourceId, target: targetId, type: type });
+                  bus.emit('data:changed', { store });
+                }
+              }
+            }
+          }
+        }
+      }
+      }
+      store.interaction.connect = null;
+      return;
+    }
+
     const drag = store.interaction.drag;
     if (drag) {
       evt.preventDefault();
@@ -716,6 +1020,11 @@ function initEventListeners(store) {
   }, { passive: false });
 
   svgEl.addEventListener("touchcancel", function() {
+    if (store.interaction.connect) {
+      removePreviewLine(store);
+      store.interaction.connect = null;
+    }
+
     const drag = store.interaction.drag;
     if (drag) {
       if (drag.sliceId) {

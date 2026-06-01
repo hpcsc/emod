@@ -186,6 +186,33 @@ function buildSVG(store) {
     blockG.appendChild(svgRect(np.x, np.y, np.w, np.h, fill, stroke,
       "rx=\"4\" stroke-width=\"1.5\""));
 
+    // Connection ports
+    var outPort = document.createElementNS(NS, "circle");
+    outPort.setAttribute("cx", np.x + np.w);
+    outPort.setAttribute("cy", np.y + np.h / 2);
+    outPort.setAttribute("r", "5");
+    outPort.setAttribute("fill", "#3498db");
+    outPort.setAttribute("stroke", "#fff");
+    outPort.setAttribute("stroke-width", "1.5");
+    outPort.setAttribute("class", "node-port port-out");
+    outPort.setAttribute("data-port", "out");
+    outPort.setAttribute("data-node-id", n.id);
+    outPort.setAttribute("cursor", "crosshair");
+    blockG.appendChild(outPort);
+
+    var inPort = document.createElementNS(NS, "circle");
+    inPort.setAttribute("cx", np.x);
+    inPort.setAttribute("cy", np.y + np.h / 2);
+    inPort.setAttribute("r", "5");
+    inPort.setAttribute("fill", "#3498db");
+    inPort.setAttribute("stroke", "#fff");
+    inPort.setAttribute("stroke-width", "1.5");
+    inPort.setAttribute("class", "node-port port-in");
+    inPort.setAttribute("data-port", "in");
+    inPort.setAttribute("data-node-id", n.id);
+    inPort.setAttribute("cursor", "crosshair");
+    blockG.appendChild(inPort);
+
     if (n.type === "translation") {
       if (n.external_system) {
         blockG.appendChild(svgText(np.x + np.w / 2, np.y + 16, n.external_system, 12, stroke,
@@ -220,7 +247,47 @@ function buildSVG(store) {
 
     store.arrowData.push({ source: edge.source, target: edge.target, path: d });
 
-    vg.appendChild(path(d, cfg.cls, cfg.stroke, cfg.marker, cfg.dash, edge.source, edge.target));
+    var pathEl = path(d, cfg.cls, cfg.stroke, cfg.marker, cfg.dash, edge.source, edge.target);
+    vg.appendChild(pathEl);
+
+    // Arrow endpoint handles (for repointing)
+    var eps = Layout.computeArrowEndpoints(srcPos, tgtPos, crossBoundary);
+
+    var edgeId = edge.source + "--" + edge.target;
+
+    var srcHandle = document.createElementNS(NS, "circle");
+    srcHandle.setAttribute("cx", eps.src.x);
+    srcHandle.setAttribute("cy", eps.src.y);
+    srcHandle.setAttribute("r", "6");
+    srcHandle.setAttribute("fill", "transparent");
+    srcHandle.setAttribute("stroke", "transparent");
+    srcHandle.setAttribute("stroke-width", "2");
+    srcHandle.setAttribute("class", "arrow-handle");
+    srcHandle.setAttribute("data-arrow-handle", "source");
+    srcHandle.setAttribute("data-edge-source", edge.source);
+    srcHandle.setAttribute("data-edge-target", edge.target);
+    srcHandle.setAttribute("data-edge-type", edge.type);
+    srcHandle.setAttribute("data-edge-id", edgeId);
+    srcHandle.setAttribute("cursor", "pointer");
+    srcHandle.style.pointerEvents = "all";
+    vg.appendChild(srcHandle);
+
+    var tgtHandle = document.createElementNS(NS, "circle");
+    tgtHandle.setAttribute("cx", eps.tgt.x);
+    tgtHandle.setAttribute("cy", eps.tgt.y);
+    tgtHandle.setAttribute("r", "6");
+    tgtHandle.setAttribute("fill", "transparent");
+    tgtHandle.setAttribute("stroke", "transparent");
+    tgtHandle.setAttribute("stroke-width", "2");
+    tgtHandle.setAttribute("class", "arrow-handle");
+    tgtHandle.setAttribute("data-arrow-handle", "target");
+    tgtHandle.setAttribute("data-edge-source", edge.source);
+    tgtHandle.setAttribute("data-edge-target", edge.target);
+    tgtHandle.setAttribute("data-edge-type", edge.type);
+    tgtHandle.setAttribute("data-edge-id", edgeId);
+    tgtHandle.setAttribute("cursor", "pointer");
+    tgtHandle.style.pointerEvents = "all";
+    vg.appendChild(tgtHandle);
   });
 
   vg.setAttribute("id", "viewport-group");

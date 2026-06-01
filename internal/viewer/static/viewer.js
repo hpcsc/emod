@@ -343,6 +343,17 @@ function init() {
     if (!item) return;
     const action = item.getAttribute("data-action");
 
+    if (action === "delete-arrow") {
+      if (!store.interaction.ctxMenu || !store.interaction.ctxMenu.edgeSource) return;
+      const src = store.interaction.ctxMenu.edgeSource;
+      const tgt = store.interaction.ctxMenu.edgeTarget;
+      Model.removeEdge(store, src, tgt);
+      UI.hideContextMenu(store);
+      UI.hideDetailPanel(store);
+      bus.emit('data:changed', { store });
+      return;
+    }
+
     if (action === "add-slice") {
       if (!store.interaction.ctxMenu || !store.interaction.ctxMenu.targetAggId) return;
       const aggId = store.interaction.ctxMenu.targetAggId;

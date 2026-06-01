@@ -2,6 +2,7 @@ import { MINIMAP_W, MINIMAP_H, MINIMAP_PAD } from './config.js';
 import { Renderer } from './renderer.js';
 import { Layout } from './layout.js';
 import { Interaction } from './interaction.js';
+import { Model } from './model.js';
 import { bus } from './bus.js';
 
 // ─── Tooltip ─────────────────────────────────────────────────
@@ -485,10 +486,53 @@ function showDetailPanel(store, node) {
   hideTooltip(store);
 }
 
+function showEdgeDetail(store) {
+  var edge = store.interaction.selectedEdge;
+  if (!edge) return;
+  var srcNode = store.nodeById.get(edge.source);
+  var tgtNode = store.nodeById.get(edge.target);
+  var el = store.dom.detailPanel;
+  var content = store.dom.dpContent;
+  if (!el || !content) return;
+
+  store.interaction.selectedNodeId = null;
+  clearHighlights(store);
+
+  var srcLabel = srcNode ? Renderer.esc(srcNode.label) : edge.source;
+  var tgtLabel = tgtNode ? Renderer.esc(tgtNode.label) : edge.target;
+
+  var html = '<div class="dp-header">Arrow: ' + Renderer.esc(edge.type) + ' <span class="dp-type">(edge)</span></div>';
+  html += '<table><tbody>';
+  html += '<tr><th>Source</th><td>' + srcLabel + '</td></tr>';
+  html += '<tr><th>Target</th><td>' + tgtLabel + '</td></tr>';
+  html += '<tr><th>Type</th><td>' + Renderer.esc(edge.type) + '</td></tr>';
+  html += '</tbody></table>';
+  html += '<button class="dp-delete-btn" id="dp-delete-edge" title="Delete arrow">Delete arrow</button>';
+  content.innerHTML = html;
+
+  var delBtn = content.querySelector('#dp-delete-edge');
+  if (delBtn) {
+    delBtn.addEventListener('click', function(evt) {
+      evt.stopPropagation();
+      var e = store.interaction.selectedEdge;
+      if (e) {
+        Model.removeEdge(store, e.source, e.target);
+        store.interaction.selectedEdge = null;
+        hideDetailPanel(store);
+        bus.emit('data:changed', { store });
+      }
+    });
+  }
+
+  el.style.display = "block";
+  hideTooltip(store);
+}
+
 function hideDetailPanel(store) {
   const el = store.dom.detailPanel;
   if (el) el.style.display = "none";
   store.interaction.selectedNodeId = null;
+  store.interaction.selectedEdge = null;
   clearHighlights(store);
 }
 
@@ -674,6 +718,34 @@ function initDelegation(store) {
     if (hoveredBlock) positionTooltip(store, evt.clientX, evt.clientY);
   });
 
+  // Arrow handle visibility on hover
+  var arrowHovered = null;
+  svgEl.addEventListener("pointerover", function(evt) {
+    var arrow = evt.target.closest(".flow-arrow, .sub-arrow, .auto-trg-arrow, .auto-cmd-arrow, .trg-cmd-arrow, .reads-arrow, .trans-cmd-arrow");
+    if (arrow) {
+      var src = arrow.getAttribute("data-source");
+      var tgt = arrow.getAttribute("data-target");
+      var edgeId = src + "--" + tgt;
+      if (edgeId !== arrowHovered) {
+        if (arrowHovered) {
+          var prev = svgEl.querySelectorAll('.arrow-handle[data-edge-id="' + arrowHovered + '"]');
+          prev.forEach(function(h) { h.classList.remove("visible"); });
+        }
+        arrowHovered = edgeId;
+        var handles = svgEl.querySelectorAll('.arrow-handle[data-edge-id="' + edgeId + '"]');
+        handles.forEach(function(h) { h.classList.add("visible"); });
+      }
+    } else if (evt.target.closest('.arrow-handle')) {
+      // Already visible via arrow hover
+    } else {
+      if (arrowHovered) {
+        var prev = svgEl.querySelectorAll('.arrow-handle[data-edge-id="' + arrowHovered + '"]');
+        prev.forEach(function(h) { h.classList.remove("visible"); });
+        arrowHovered = null;
+      }
+    }
+  });
+
   svgEl.addEventListener("click", function(evt) {
     if (store.interaction.pan) return;
 
@@ -713,6 +785,15 @@ function initDelegation(store) {
         if (src && tgt) {
           if (store.interaction.selectedNodeId) hideDetailPanel(store);
           highlightElements(store, [src, tgt]);
+          // Find edge type
+          for (let i = 0; i < store.edges.length; i++) {
+            const e = store.edges[i];
+            if (e.source === src && e.target === tgt) {
+              store.interaction.selectedEdge = { source: e.source, target: e.target, type: e.type };
+              break;
+            }
+          }
+          showEdgeDetail(store);
         }
       }
     }
@@ -772,6 +853,25 @@ function initDelegation(store) {
 
   svgEl.addEventListener("contextmenu", function(evt) {
     const target = evt.target;
+
+    // Check for arrow right-click
+    const arrow = target.closest(".flow-arrow, .sub-arrow, .auto-trg-arrow, .auto-cmd-arrow, .trg-cmd-arrow, .reads-arrow, .trans-cmd-arrow");
+    if (arrow) {
+      evt.preventDefault();
+      const src = arrow.getAttribute("data-source");
+      const tgt = arrow.getAttribute("data-target");
+      if (src && tgt) {
+        store.interaction.ctxMenu = { edgeSource: src, edgeTarget: tgt };
+        const el = store.dom.ctxMenu;
+        if (el) {
+          el.innerHTML = '<div class="ctx-menu-item" data-action="delete-arrow">Delete arrow</div>';
+          el.style.left = evt.clientX + "px";
+          el.style.top = evt.clientY + "px";
+          el.style.display = "block";
+        }
+      }
+      return;
+    }
 
     const sliceHeader = target.closest(".slice-header");
     if (sliceHeader) {
@@ -866,7 +966,14 @@ function initKeyboard(store) {
         clearHighlights(store);
       }
     } else if (evt.key === "Delete" || evt.key === "Backspace") {
-      if (store.interaction.selectedNodeId) {
+      if (store.interaction.selectedEdge) {
+        evt.preventDefault();
+        var edge = store.interaction.selectedEdge;
+        Model.removeEdge(store, edge.source, edge.target);
+        store.interaction.selectedEdge = null;
+        hideDetailPanel(store);
+        bus.emit('data:changed', { store });
+      } else if (store.interaction.selectedNodeId) {
         const delNode = store.nodeById.get( store.interaction.selectedNodeId);
         if (delNode && isDeletableNodeType(delNode.type)) {
           evt.preventDefault();
@@ -894,6 +1001,7 @@ export const UI = {
   hideDiagnosticsPanel,
   updateStats,
   showDetailPanel,
+  showEdgeDetail,
   hideDetailPanel,
   clearHighlights,
   addHighlight,

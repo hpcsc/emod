@@ -116,6 +116,41 @@ function sendParse(store, source, statusEl) {
   });
 }
 
+function addEdge(store, source, target, type) {
+  store.edges.push({ source: source, target: target, type: type });
+}
+
+function removeEdge(store, source, target) {
+  var found = -1;
+  for (var i = 0; i < store.edges.length; i++) {
+    var e = store.edges[i];
+    if (e.source === source && e.target === target) {
+      found = i;
+      break;
+    }
+  }
+  if (found !== -1) {
+    store.edges.splice(found, 1);
+  }
+}
+
+function autoDetectEdgeType(store, sourceId, targetId) {
+  var src = store.nodeById.get(sourceId);
+  var tgt = store.nodeById.get(targetId);
+  if (!src || !tgt) return "flow";
+
+  var st = src.type, tt = tgt.type;
+  if (st === "command" && tt === "event") return "flow";
+  if (st === "trigger" && tt === "command") return "trigger_command";
+  if (st === "event" && tt === "automation") return "automation_trigger";
+  if (st === "automation" && tt === "command") return "automation_command";
+  if (st === "translation" && tt === "command") return "translation_command";
+  if (st === "view") return "subscription";
+  if (tt === "command") return "flow";
+  if (st === "command" && tt === "view") return "flow";
+  return "flow";
+}
+
 export const Model = {
   rebuildNodeIndex,
   generateNodeId,
@@ -123,4 +158,7 @@ export const Model = {
   setModelData,
   sendParse,
   moveSlice,
+  addEdge,
+  removeEdge,
+  autoDetectEdgeType,
 };

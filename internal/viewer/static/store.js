@@ -16,9 +16,11 @@ export function createStore() {
       touch: null,
       highlighted: {},
       selectedNodeId: null,
+      selectedEdge: null,
       inlineEdit: null,
       ctxMenu: null,
       suppressDetailClick: false,
+      connect: null,
     },
     dom: {
       svg: null,

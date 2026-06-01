@@ -260,6 +260,35 @@ function computeArrowD(srcPos, tgtPos, crossBoundary, edgeIdx) {
   }
 }
 
+function computeArrowEndpoints(srcPos, tgtPos, crossBoundary) {
+  const gap = 1.5;
+  const arrowLen = 10;
+  const srcCx = srcPos.x + srcPos.w / 2;
+  const srcBottom = srcPos.y + srcPos.h;
+  const srcTop = srcPos.y;
+  const tgtCx = tgtPos.x + tgtPos.w / 2;
+  const tgtTop = tgtPos.y;
+  const tgtBottom = tgtPos.y + tgtPos.h;
+  var srcPoint, tgtPoint;
+
+  if (crossBoundary) {
+    const srcEdgeX = tgtCx > srcCx ? srcPos.x + srcPos.w : srcPos.x;
+    const srcMidY = srcPos.y + srcPos.h / 2;
+    const tgtAttachEdge = srcMidY < tgtPos.y + tgtPos.h / 2 ? tgtTop - gap : tgtBottom + gap;
+    const tgtEnd = tgtAttachEdge + (tgtAttachEdge < srcMidY ? arrowLen : -arrowLen);
+    srcPoint = { x: srcEdgeX, y: srcMidY };
+    tgtPoint = { x: tgtCx, y: tgtEnd };
+  } else {
+    const downward = srcBottom <= tgtTop;
+    const srcY = downward ? srcBottom : srcTop;
+    const tgtEdge = downward ? tgtTop - gap : tgtBottom + gap;
+    const tgtEnd = downward ? tgtEdge - arrowLen : tgtEdge + arrowLen;
+    srcPoint = { x: srcCx, y: srcY };
+    tgtPoint = { x: tgtCx, y: tgtEnd };
+  }
+  return { src: srcPoint, tgt: tgtPoint };
+}
+
 export const Layout = {
   labelWidth,
   buildTree,
@@ -269,4 +298,5 @@ export const Layout = {
   getConnectedEdges,
   getSliceChildNodeIds,
   computeArrowD,
+  computeArrowEndpoints,
 };
