@@ -1,5 +1,6 @@
 export function createStore() {
   return {
+    diagnostics: [],
     nodes: [],
     edges: [],
     modelName: '',

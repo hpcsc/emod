@@ -128,6 +128,8 @@ function init() {
     const source = store.dom.sourceInput.value.trim();
     Model.sendParse(store, source, store.dom.statusEl)
       .then(function(data) {
+        store.diagnostics = data.diagnostics || [];
+        bus.emit('diagnostics:changed', { store, diagnostics: store.diagnostics });
         Model.setModelData(store, data.diagram);
         store.dom.panel.classList.add("collapsed");
         store.dom.statusEl.textContent = "✓ Rendered";

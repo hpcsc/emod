@@ -90,11 +90,11 @@ function sendParse(store, source, statusEl) {
     // Valid JSON — check for well-known formats
     if (Array.isArray(parsed.nodes)) {
       // Diagram-oriented JSON — use directly
-      return Promise.resolve({ diagnostics: [], diagram: parsed });
+      return Promise.resolve({ diagnostics: parsed.diagnostics || [], diagram: parsed });
     }
     if (parsed.model) {
       // Raw AST JSON — use directly
-      return Promise.resolve({ diagnostics: [], diagram: parsed });
+      return Promise.resolve({ diagnostics: parsed.diagnostics || [], diagram: parsed });
     }
   } catch (e) {
     // Not valid JSON — treat as raw .emod source below
