@@ -22,6 +22,7 @@ vi.mock('../static/store.js', () => ({
     interaction: {},
     viewport: {},
     modelName: '',
+    diagnostics: [],
   })),
 }));
 
@@ -35,7 +36,7 @@ vi.mock('../static/bus.js', () => ({
 vi.mock('../static/layout.js', () => ({ Layout: {} }));
 vi.mock('../static/renderer.js', () => ({ Renderer: {} }));
 vi.mock('../static/interaction.js', () => ({ Interaction: { initEventListeners: vi.fn() } }));
-vi.mock('../static/ui.js', () => ({ UI: { initDelegation: vi.fn(), initKeyboard: vi.fn(), hideContextMenu: vi.fn(), hideDetailPanel: vi.fn(), updateStats: vi.fn(), updateMinimap: vi.fn(), toggleMinimap: vi.fn(), toggleContextPanel: vi.fn(), minimapNavigate: vi.fn(), updateContextList: vi.fn(), renderActorAnnotations: vi.fn() } }));
+vi.mock('../static/ui.js', () => ({ UI: { initDelegation: vi.fn(), initKeyboard: vi.fn(), hideContextMenu: vi.fn(), hideDetailPanel: vi.fn(), updateStats: vi.fn(), updateMinimap: vi.fn(), toggleMinimap: vi.fn(), toggleContextPanel: vi.fn(), minimapNavigate: vi.fn(), updateContextList: vi.fn(), renderActorAnnotations: vi.fn(), updateDiagnosticsPanel: vi.fn(), toggleDiagnosticsPanel: vi.fn(), hideDiagnosticsPanel: vi.fn() } }));
 vi.mock('../static/model.js', () => ({ Model: { setModelData: vi.fn(), sendParse: vi.fn(() => Promise.resolve({ diagnostics: [], diagram: { nodes: [], edges: [] } })) } }));
 vi.mock('../static/emod-export.js', () => ({ Export: {} }));
 
@@ -72,6 +73,10 @@ function createRequiredElements() {
     <button id="minimap-close"></button>
     <div id="dp-close"></div>
     <div id="landing-instructions" style="display: none;"></div>
+    <button id="diagnostics-badge" style="display:none"></button>
+    <div id="diagnostics-panel" class="hidden"></div>
+    <button id="diagnostics-close"></button>
+    <div id="diagnostics-list"></div>
   `;
   document.body.appendChild(container);
   return container;
@@ -225,6 +230,58 @@ describe('viewer drag-and-drop', () => {
 
     expect(sourceInput.value).toBe('context Test {}');
     expect(clicked).toBe(true);
+  });
+
+  it('does not show diagnostics badge or panel for valid file with no diagnostics', async () => {
+    globalThis.INITIAL_DATA = null;
+    createRequiredElements();
+    const { init } = await import('../static/viewer.js');
+    init();
+
+    const badge = document.getElementById('diagnostics-badge');
+    const panel = document.getElementById('diagnostics-panel');
+
+    expect(badge.style.display).toBe('none');
+    expect(panel.classList.contains('hidden')).toBe(true);
+  });
+
+  it('wires diagnostics badge click to toggleDiagnosticsPanel', async () => {
+    const uiModule = await import('../static/ui.js');
+    globalThis.INITIAL_DATA = null;
+    createRequiredElements();
+    const { init } = await import('../static/viewer.js');
+    init();
+
+    const badge = document.getElementById('diagnostics-badge');
+    badge.click();
+
+    expect(uiModule.UI.toggleDiagnosticsPanel).toHaveBeenCalledTimes(1);
+  });
+
+  it('wires diagnostics close button to hideDiagnosticsPanel', async () => {
+    const uiModule = await import('../static/ui.js');
+    globalThis.INITIAL_DATA = null;
+    createRequiredElements();
+    const { init } = await import('../static/viewer.js');
+    init();
+
+    const closeBtn = document.getElementById('diagnostics-close');
+    closeBtn.click();
+
+    expect(uiModule.UI.hideDiagnosticsPanel).toHaveBeenCalledTimes(1);
+  });
+
+  it('registers diagnostics:changed bus listener', async () => {
+    const busModule = await import('../static/bus.js');
+    globalThis.INITIAL_DATA = null;
+    createRequiredElements();
+    const { init } = await import('../static/viewer.js');
+    init();
+
+    expect(busModule.bus.on).toHaveBeenCalledWith(
+      'diagnostics:changed',
+      expect.any(Function),
+    );
   });
 
   it('accepts .json file drops and loads content into textarea', async () => {

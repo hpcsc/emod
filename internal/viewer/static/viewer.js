@@ -28,6 +28,10 @@ bus.on('viewport:changed', function({ store: s }) {
   UI.updateMinimap(s);
 });
 
+bus.on('diagnostics:changed', function({ store: s, diagnostics }) {
+  UI.updateDiagnosticsPanel(s, diagnostics);
+});
+
 bus.on('node:delete', function({ store: s, nodeId }) {
   for (let i = 0; i < s.nodes.length; i++) {
     if (s.nodes[i].id === nodeId) {
@@ -118,6 +122,10 @@ function init() {
   store.dom.resetLayoutBtn = document.getElementById("reset-layout");
   store.dom.fitViewBtn = document.getElementById("fit-view");
   store.dom.exportBtn = document.getElementById("export-emod");
+  store.dom.diagnosticsBadge = document.getElementById("diagnostics-badge");
+  store.dom.diagnosticsPanel = document.getElementById("diagnostics-panel");
+  store.dom.diagnosticsList = document.getElementById("diagnostics-list");
+  store.dom.diagnosticsClose = document.getElementById("diagnostics-close");
 
   Interaction.initEventListeners(store);
   UI.initDelegation(store);
@@ -221,6 +229,17 @@ function init() {
   // ─── Context toggle ───────────────────────────────────────────────
   store.dom.contextToggle.addEventListener("click", function() {
     UI.toggleContextPanel(store);
+  });
+
+  // ─── Diagnostics toggle ──────────────────────────────────────────
+  store.dom.diagnosticsBadge.addEventListener("click", function() {
+    UI.toggleDiagnosticsPanel(store);
+  });
+
+  // ─── Diagnostics close ───────────────────────────────────────────
+  store.dom.diagnosticsClose.addEventListener("click", function(evt) {
+    evt.stopPropagation();
+    UI.hideDiagnosticsPanel(store);
   });
 
   // ─── Minimap event listeners ──────────────────────────────────────

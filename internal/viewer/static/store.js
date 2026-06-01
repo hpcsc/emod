@@ -45,6 +45,10 @@ export function createStore() {
       actorAnnotations: null,
       resetLayoutBtn: null,
       fitViewBtn: null,
+      diagnosticsBadge: null,
+      diagnosticsPanel: null,
+      diagnosticsList: null,
+      diagnosticsClose: null,
     },
   };
 }

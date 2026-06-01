@@ -213,6 +213,55 @@ function toggleContextPanel(store, show) {
   if (!isHidden) updateContextList(store);
 }
 
+// ─── Diagnostics panel ──────────────────────────────────────────
+function updateDiagnosticsPanel(store, diagnostics) {
+  const badgeEl = store.dom.diagnosticsBadge;
+  const panelEl = store.dom.diagnosticsPanel;
+  const listEl = store.dom.diagnosticsList;
+  if (!badgeEl || !panelEl || !listEl) return;
+
+  if (!diagnostics || diagnostics.length === 0) {
+    badgeEl.style.display = "none";
+    badgeEl.textContent = "";
+    panelEl.classList.add("hidden");
+    listEl.innerHTML = "";
+    return;
+  }
+
+  badgeEl.style.display = "";
+  badgeEl.textContent = diagnostics.length + " error" + (diagnostics.length === 1 ? "" : "s");
+
+  let html = "";
+  diagnostics.forEach(function(d) {
+    var sev = d.severity || "error";
+    var loc = (d.file || "?") + ":" + (d.line || "?");
+    html += '<div class="diag-item">';
+    html += '<span class="diag-severity ' + sev + '">' + Renderer.esc(sev) + '</span>';
+    html += '<span class="diag-location">' + Renderer.esc(loc) + '</span>';
+    html += '<span class="diag-message">' + Renderer.esc(d.message) + '</span>';
+    html += '</div>';
+  });
+  listEl.innerHTML = html;
+
+  panelEl.classList.remove("hidden");
+}
+
+function toggleDiagnosticsPanel(store) {
+  const panelEl = store.dom.diagnosticsPanel;
+  const badgeEl = store.dom.diagnosticsBadge;
+  if (!panelEl || !badgeEl) return;
+  panelEl.classList.toggle("hidden");
+  badgeEl.classList.toggle("active", !panelEl.classList.contains("hidden"));
+}
+
+function hideDiagnosticsPanel(store) {
+  const panelEl = store.dom.diagnosticsPanel;
+  const badgeEl = store.dom.diagnosticsBadge;
+  if (!panelEl || !badgeEl) return;
+  panelEl.classList.add("hidden");
+  badgeEl.classList.remove("active");
+}
+
 // ─── Stats ──────────────────────────────────────────────────────
 function updateStats(store, dims) {
   if (store.dom.statNodes) store.dom.statNodes.textContent = store.nodes.length;
@@ -781,6 +830,9 @@ export const UI = {
   toggleMinimap,
   updateContextList,
   toggleContextPanel,
+  updateDiagnosticsPanel,
+  toggleDiagnosticsPanel,
+  hideDiagnosticsPanel,
   updateStats,
   showDetailPanel,
   hideDetailPanel,
