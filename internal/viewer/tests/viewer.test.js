@@ -4,12 +4,12 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 let wasmReady = Promise.resolve();
 let wasmIsReady = true;
 
-vi.mock('./wasm.js', () => ({
+vi.mock('../static/wasm.js', () => ({
   get ready() { return wasmReady; },
   get isReady() { return wasmIsReady; },
 }));
 
-vi.mock('./store.js', () => ({
+vi.mock('../static/store.js', () => ({
   createStore: vi.fn(() => ({
     dom: {},
     nodes: [],
@@ -25,19 +25,19 @@ vi.mock('./store.js', () => ({
   })),
 }));
 
-vi.mock('./bus.js', () => ({
+vi.mock('../static/bus.js', () => ({
   bus: {
     on: vi.fn(),
     emit: vi.fn(),
   },
 }));
 
-vi.mock('./layout.js', () => ({ Layout: {} }));
-vi.mock('./renderer.js', () => ({ Renderer: {} }));
-vi.mock('./interaction.js', () => ({ Interaction: { initEventListeners: vi.fn() } }));
-vi.mock('./ui.js', () => ({ UI: { initDelegation: vi.fn(), initKeyboard: vi.fn(), hideContextMenu: vi.fn(), hideDetailPanel: vi.fn(), updateStats: vi.fn(), updateMinimap: vi.fn(), toggleMinimap: vi.fn(), toggleContextPanel: vi.fn(), minimapNavigate: vi.fn(), updateContextList: vi.fn(), renderActorAnnotations: vi.fn() } }));
-vi.mock('./model.js', () => ({ Model: { setModelData: vi.fn(), sendParse: vi.fn(() => Promise.resolve({ diagnostics: [], diagram: { nodes: [], edges: [] } })) } }));
-vi.mock('./emod-export.js', () => ({ Export: {} }));
+vi.mock('../static/layout.js', () => ({ Layout: {} }));
+vi.mock('../static/renderer.js', () => ({ Renderer: {} }));
+vi.mock('../static/interaction.js', () => ({ Interaction: { initEventListeners: vi.fn() } }));
+vi.mock('../static/ui.js', () => ({ UI: { initDelegation: vi.fn(), initKeyboard: vi.fn(), hideContextMenu: vi.fn(), hideDetailPanel: vi.fn(), updateStats: vi.fn(), updateMinimap: vi.fn(), toggleMinimap: vi.fn(), toggleContextPanel: vi.fn(), minimapNavigate: vi.fn(), updateContextList: vi.fn(), renderActorAnnotations: vi.fn() } }));
+vi.mock('../static/model.js', () => ({ Model: { setModelData: vi.fn(), sendParse: vi.fn(() => Promise.resolve({ diagnostics: [], diagram: { nodes: [], edges: [] } })) } }));
+vi.mock('../static/emod-export.js', () => ({ Export: {} }));
 
 // ─── DOM helpers ───────────────────────────────────────────────────
 function createRequiredElements() {
@@ -114,7 +114,7 @@ describe('viewer initial state', () => {
   it('opens data panel and shows landing page when no INITIAL_DATA', async () => {
     globalThis.INITIAL_DATA = null;
     createRequiredElements();
-    const { init } = await import('./viewer.js');
+    const { init } = await import('../static/viewer.js');
     init();
 
     const panel = document.getElementById('data-panel');
@@ -129,10 +129,10 @@ describe('viewer initial state', () => {
   });
 
   it('does not show landing page when INITIAL_DATA is present', async () => {
-    const { Model } = await import('./model.js');
+    const { Model } = await import('../static/model.js');
     globalThis.INITIAL_DATA = { diagram: { nodes: [{ id: 'n1' }], edges: [] } };
     createRequiredElements();
-    const { init } = await import('./viewer.js');
+    const { init } = await import('../static/viewer.js');
     init();
 
     expect(Model.setModelData).toHaveBeenCalledWith(
@@ -155,7 +155,7 @@ describe('viewer WASM loading indicator', () => {
 
     globalThis.INITIAL_DATA = null;
     createRequiredElements();
-    const { init } = await import('./viewer.js');
+    const { init } = await import('../static/viewer.js');
     init();
 
     const statusEl = document.getElementById('render-status');
@@ -171,7 +171,7 @@ describe('viewer WASM loading indicator', () => {
 
     globalThis.INITIAL_DATA = null;
     createRequiredElements();
-    const { init } = await import('./viewer.js');
+    const { init } = await import('../static/viewer.js');
     init();
 
     const statusEl = document.getElementById('render-status');
@@ -190,7 +190,7 @@ describe('viewer drag-and-drop', () => {
   it('rejects unsupported file types with an error', async () => {
     globalThis.INITIAL_DATA = null;
     createRequiredElements();
-    const { init } = await import('./viewer.js');
+    const { init } = await import('../static/viewer.js');
     init();
 
     const panelBody = document.getElementById('data-panel-body');
@@ -207,7 +207,7 @@ describe('viewer drag-and-drop', () => {
   it('accepts .emod file drops and loads content into textarea', async () => {
     globalThis.INITIAL_DATA = null;
     createRequiredElements();
-    const { init } = await import('./viewer.js');
+    const { init } = await import('../static/viewer.js');
     init();
 
     const panelBody = document.getElementById('data-panel-body');
@@ -230,7 +230,7 @@ describe('viewer drag-and-drop', () => {
   it('accepts .json file drops and loads content into textarea', async () => {
     globalThis.INITIAL_DATA = null;
     createRequiredElements();
-    const { init } = await import('./viewer.js');
+    const { init } = await import('../static/viewer.js');
     init();
 
     const panelBody = document.getElementById('data-panel-body');

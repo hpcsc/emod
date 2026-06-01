@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { Layout } from './layout.js';
+import { Layout } from '../static/layout.js';
 
 describe('Layout', () => {
   describe('buildTree', () => {

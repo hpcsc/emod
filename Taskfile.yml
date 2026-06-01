@@ -17,8 +17,9 @@ tasks:
   build:wasm:
     desc: Build the WASM binary and copy runtime glue for the viewer
     cmds:
-      - cp "$(go env GOROOT)/lib/wasm/wasm_exec.js" ./internal/viewer/
-      - go build -o ./internal/viewer/emod.wasm ./cmd/emod-wasm
+      - mkdir -p ./internal/viewer/generated
+      - cp "$(go env GOROOT)/lib/wasm/wasm_exec.js" ./internal/viewer/generated/
+      - go build -o ./internal/viewer/generated/emod.wasm ./cmd/emod-wasm
     env:
       CGO_ENABLED: '0'
       GOOS: 'js'
@@ -29,11 +30,10 @@ tasks:
     deps:
       - build:wasm
     cmds:
-      - mkdir -p ./web
-      - find ./internal/viewer -maxdepth 1 -type f \( -name '*.html' -o -name '*.js' \) ! -name '*.test.js' ! -name 'vitest.config.js' -exec cp {} ./web/ \;
-      - cp ./internal/viewer/emod.wasm ./web/
-      - cp "$(go env GOROOT)/lib/wasm/wasm_exec.js" ./web/
-      - mv ./web/viewer.html ./web/index.html
+      - mkdir -p ./web/generated ./web/static
+      - cp -r ./internal/viewer/static/* ./web/static/
+      - cp ./internal/viewer/generated/* ./web/generated/
+      - mv ./web/static/viewer.html ./web/index.html
 
   test:
     desc: Run all tests
@@ -45,12 +45,12 @@ tasks:
   test:unit:
     desc: Run unit tests
     cmds:
-      - go test -tags unit ./...
+      - go test -tags unit $(go list ./... | grep -v /cmd/emod-wasm)
 
   test:integration:
     desc: Run integration tests
     cmds:
-      - go test -tags integration ./...
+      - go test -tags integration $(go list ./... | grep -v /cmd/emod-wasm)
 
   test:viewer:
     desc: Run viewer JS unit tests

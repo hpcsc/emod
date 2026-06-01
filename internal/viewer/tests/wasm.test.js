@@ -18,7 +18,7 @@ vi.hoisted(() => {
 // use the globals we set above.
 let wasm;
 beforeAll(async () => {
-  wasm = await import('./wasm.js');
+  wasm = await import('../static/wasm.js');
 });
 
 describe('wasm exports', () => {

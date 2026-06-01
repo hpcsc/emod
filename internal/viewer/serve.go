@@ -38,11 +38,16 @@ func ServeViewer(port int, diagramJSON []byte) (string, func(), error) {
 
 	mux := http.NewServeMux()
 
-	staticFS, err := fs.Sub(ViewerFS, ".")
+	staticFS, err := fs.Sub(ViewerFS, "static")
+	if err != nil {
+		return "", nil, fmt.Errorf("viewer: fs sub: %w", err)
+	}
+	generatedFS, err := fs.Sub(ViewerFS, "generated")
 	if err != nil {
 		return "", nil, fmt.Errorf("viewer: fs sub: %w", err)
 	}
 	mux.Handle("/static/", http.StripPrefix("/static/", http.FileServer(http.FS(staticFS))))
+	mux.Handle("/generated/", http.StripPrefix("/generated/", http.FileServer(http.FS(generatedFS))))
 
 	mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path != "/" {
@@ -85,7 +90,7 @@ func ServeViewer(port int, diagramJSON []byte) (string, func(), error) {
 }
 
 func buildHTML(diagramJSON []byte) string {
-	data, err := ViewerFS.ReadFile("viewer.html")
+	data, err := ViewerFS.ReadFile("static/viewer.html")
 	if err != nil {
 		return ""
 	}

@@ -12,7 +12,7 @@ async function init() {
     const go = new Go();
     let inst;
 
-    const response = await fetch('static/emod.wasm');
+    const response = await fetch('generated/emod.wasm');
     if (!response.ok) {
       throw new Error(
         'Failed to fetch WASM: ' + response.status + ' ' + response.statusText

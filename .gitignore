@@ -7,5 +7,4 @@ tasks/.cycles
 tasks/.checkpoint
 node_modules
 /web
-internal/viewer/emod.wasm
-internal/viewer/wasm_exec.js
+internal/viewer/generated/

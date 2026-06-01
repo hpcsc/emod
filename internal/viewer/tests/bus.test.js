@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { bus } from './bus.js';
+import { bus } from '../static/bus.js';
 
 describe('bus', () => {
   describe('on and emit', () => {

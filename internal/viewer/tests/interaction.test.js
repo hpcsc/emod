@@ -1,7 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { Interaction } from './interaction.js';
-import { Layout } from './layout.js';
-import { DRAG_THRESHOLD } from './config.js';
+import { Interaction } from '../static/interaction.js';
+import { Layout } from '../static/layout.js';
+import { DRAG_THRESHOLD } from '../static/config.js';
 
 function makeMockSVGPoint() {
   return { x: 0, y: 0, matrixTransform: function () { return { x: this.x, y: this.y }; } };

@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { Export } from './emod-export.js';
+import { Export } from '../static/emod-export.js';
 
 describe('Export', () => {
   describe('exportToEmodString', () => {
