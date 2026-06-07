@@ -3,6 +3,7 @@
   "displayName": "Emod Language Support",
   "description": "Syntax highlighting for Emod (.emod) files — a domain modeling language",
   "version": "0.1.0",
+  "publisher": "hpcsc",
   "engines": {
     "vscode": "^1.84.0"
   },
