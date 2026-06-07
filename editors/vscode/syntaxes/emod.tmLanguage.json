@@ -1,0 +1,83 @@
+{
+  "$schema": "https://raw.githubusercontent.com/martinring/tmlanguage/master/tmlanguage.json",
+  "scopeName": "source.emod",
+  "fileTypes": ["emod"],
+  "name": "emod",
+  "patterns": [
+    { "include": "#comments" },
+    { "include": "#keyword-entity" },
+    { "include": "#strings" },
+    { "include": "#keywords" },
+    { "include": "#field-modifiers" },
+    { "include": "#field-types" },
+    { "include": "#operators" },
+    { "include": "#punctuation" }
+  ],
+  "repository": {
+    "comments": {
+      "name": "comment.line.number-sign.emod",
+      "match": "#.*$"
+    },
+    "strings": {
+      "name": "string.quoted.double.emod",
+      "match": "\"[^\"]*\""
+    },
+    "keyword-entity": {
+      "patterns": [
+        {
+          "comment": "trigger with source type and quoted entity name",
+          "match": "(?i)\\b(trigger)\\s+([A-Za-z_][A-Za-z0-9_]*)\\s+(\"[^\"]*\")",
+          "captures": {
+            "1": { "name": "keyword.control.emod" },
+            "2": { "name": "entity.name.function.emod" },
+            "3": { "name": "entity.name.function.emod" }
+          }
+        },
+        {
+          "comment": "Keywords followed by quoted entity name",
+          "match": "(?i)\\b(model|actor|context|aggregate|slice)\\s+(\"[^\"]*\")",
+          "captures": {
+            "1": { "name": "keyword.control.emod" },
+            "2": { "name": "entity.name.function.emod" }
+          }
+        },
+        {
+          "comment": "Keywords followed by identifier entity name",
+          "match": "(?i)\\b(command|event|view|automation|translation|trigger)\\s+([A-Za-z_][A-Za-z0-9_]*)",
+          "captures": {
+            "1": { "name": "keyword.control.emod" },
+            "2": { "name": "entity.name.function.emod" }
+          }
+        },
+        {
+          "comment": "target keyword with type and trailing entity name",
+          "match": "(?i)\\b(target)\\s+[A-Za-z_][A-Za-z0-9_]*\\s+([A-Za-z_][A-Za-z0-9_]*)",
+          "captures": {
+            "1": { "name": "keyword.control.emod" },
+            "2": { "name": "entity.name.function.emod" }
+          }
+        }
+      ]
+    },
+    "keywords": {
+      "match": "(?i)\\b(model|actor|context|aggregate|slice|command|event|fields|flow|trigger|view|automation|translation|subscribes|reads|source|external|external_system|target)\\b",
+      "name": "keyword.control.emod"
+    },
+    "field-modifiers": {
+      "match": "\\b(required|optional)\\b",
+      "name": "storage.modifier.emod"
+    },
+    "field-types": {
+      "match": "\\b(string|date|timestamp|int)\\b",
+      "name": "storage.type.emod"
+    },
+    "operators": {
+      "match": "(->|:)",
+      "name": "keyword.operator.emod"
+    },
+    "punctuation": {
+      "match": "[\\{\\}\\[\\],]",
+      "name": "keyword.operator.emod"
+    }
+  }
+}
