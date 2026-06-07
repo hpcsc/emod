@@ -14,7 +14,8 @@
       {
         "id": "emod",
         "aliases": ["emod", "Emod"],
-        "extensions": [".emod"]
+        "extensions": [".emod"],
+        "configuration": "./language-configuration.json"
       }
     ],
     "grammars": [
