@@ -73,3 +73,15 @@ type VersionedTextDocumentIdentifier struct {
 	URI     string `json:"uri"`
 	Version int    `json:"version"`
 }
+
+// TextDocumentContentChangeEvent represents a content change to a text document.
+// For SyncFull, only the Text field is used.
+type TextDocumentContentChangeEvent struct {
+	Text string `json:"text"`
+}
+
+// DidChangeTextDocumentParams represents parameters for the "textDocument/didChange" notification.
+type DidChangeTextDocumentParams struct {
+	TextDocument   VersionedTextDocumentIdentifier     `json:"textDocument"`
+	ContentChanges []TextDocumentContentChangeEvent    `json:"contentChanges"`
+}

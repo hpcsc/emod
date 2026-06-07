@@ -1,0 +1,526 @@
+//go:build unit
+
+package lsp_test
+
+import (
+	"context"
+	"encoding/json"
+	"io"
+	"testing"
+	"time"
+
+	"github.com/hpcsc/emod/internal/lsp"
+	"github.com/stretchr/testify/require"
+)
+
+// serverPair holds the I/O plumbing for a server instance under test.
+type serverPair struct {
+	inWriter  *io.PipeWriter
+	outReader *io.PipeReader
+	done      chan struct{}
+	cancel    context.CancelFunc
+}
+
+// startServer creates a new Server with io.Pipe I/O and starts it in a
+// background goroutine. The server is shut down during test cleanup.
+func startServer(t *testing.T) *serverPair {
+	t.Helper()
+
+	inReader, inWriter := io.Pipe()
+	outReader, outWriter := io.Pipe()
+
+	server := lsp.NewServer(inReader, outWriter)
+	ctx, cancel := context.WithCancel(context.Background())
+
+	done := make(chan struct{})
+	go func() {
+		server.Run(ctx)
+		close(done)
+	}()
+
+	t.Cleanup(func() {
+		cancel()
+		inWriter.Close()
+		outReader.Close()
+		<-done
+	})
+
+	return &serverPair{
+		inWriter:  inWriter,
+		outReader: outReader,
+		done:      done,
+		cancel:    cancel,
+	}
+}
+
+func (p *serverPair) writeMsg(t *testing.T, msg *lsp.Message) {
+	t.Helper()
+	err := lsp.WriteMessage(p.inWriter, msg)
+	require.NoError(t, err)
+}
+
+func (p *serverPair) readMsg(t *testing.T) *lsp.Message {
+	t.Helper()
+	msg, err := lsp.ReadMessage(p.outReader)
+	require.NoError(t, err)
+	return msg
+}
+
+func (p *serverPair) writeInitialize(t *testing.T) int {
+	t.Helper()
+	id := 1
+	p.writeMsg(t, &lsp.Message{
+		JSONRPC: "2.0",
+		ID:      &id,
+		Method:  "initialize",
+		Params:  []byte("{}"),
+	})
+	return id
+}
+
+func (p *serverPair) readInitializeResult(t *testing.T, expectedID int) {
+	t.Helper()
+	resp := p.readMsg(t)
+	require.NotNil(t, resp.ID)
+	require.Equal(t, expectedID, *resp.ID)
+	require.Nil(t, resp.Error)
+	require.NotNil(t, resp.Result)
+
+	var result lsp.InitializeResult
+	err := json.Unmarshal(resp.Result, &result)
+	require.NoError(t, err)
+	require.Equal(t, lsp.SyncFull, result.Capabilities.TextDocumentSync)
+}
+
+// readMsgTimeout attempts to read a message within the given duration.
+// Returns nil if no message arrives before the timeout.
+func readMsgTimeout(r io.Reader, timeout time.Duration) *lsp.Message {
+	ch := make(chan *lsp.Message, 1)
+	go func() {
+		msg, err := lsp.ReadMessage(r)
+		if err == nil {
+			ch <- msg
+		}
+	}()
+	select {
+	case msg := <-ch:
+		return msg
+	case <-time.After(timeout):
+		return nil
+	}
+}
+
+func TestServer(t *testing.T) {
+	t.Run("initialize", func(t *testing.T) {
+		t.Run("returns InitializeResult with textDocumentSync=1", func(t *testing.T) {
+			p := startServer(t)
+			id := p.writeInitialize(t)
+			p.readInitializeResult(t, id)
+		})
+	})
+
+	t.Run("initialized", func(t *testing.T) {
+		t.Run("accepts notification without response", func(t *testing.T) {
+			p := startServer(t)
+
+			// Confirm server is alive by initializing first.
+			p.writeInitialize(t)
+			p.readInitializeResult(t, 1)
+
+			// Send initialized notification (no ID — no response expected).
+			p.writeMsg(t, &lsp.Message{
+				JSONRPC: "2.0",
+				Method:  "initialized",
+			})
+
+			// Verify no output was written in response to the notification.
+			msg := readMsgTimeout(p.outReader, 200*time.Millisecond)
+			require.Nil(t, msg, "expected no response for initialized notification")
+		})
+	})
+
+	t.Run("didOpen", func(t *testing.T) {
+		t.Run("stores document and pushes diagnostics", func(t *testing.T) {
+			p := startServer(t)
+			p.writeInitialize(t)
+			p.readInitializeResult(t, 1)
+
+			uri := "file:///test.emod"
+			content := `model "test"`
+
+			p.writeMsg(t, &lsp.Message{
+				JSONRPC: "2.0",
+				Method:  "textDocument/didOpen",
+				Params: mustMarshal(t, map[string]interface{}{
+					"textDocument": map[string]interface{}{
+						"uri":        uri,
+						"languageId": "emod",
+						"version":    1,
+						"text":       content,
+					},
+				}),
+			})
+
+			// Read the publishDiagnostics notification.
+			notif := p.readMsg(t)
+			require.Equal(t, "textDocument/publishDiagnostics", notif.Method)
+			require.Nil(t, notif.ID)
+
+			var params lsp.PublishDiagnosticsParams
+			err := json.Unmarshal(notif.Params, &params)
+			require.NoError(t, err)
+			require.Equal(t, uri, params.URI)
+			// Well-formed content should produce no diagnostics.
+			require.Empty(t, params.Diagnostics)
+		})
+	})
+
+	t.Run("didChange", func(t *testing.T) {
+		t.Run("updates document and pushes updated diagnostics", func(t *testing.T) {
+			p := startServer(t)
+			p.writeInitialize(t)
+			p.readInitializeResult(t, 1)
+
+			uri := "file:///test.emod"
+
+			// Open with valid content.
+			p.writeMsg(t, &lsp.Message{
+				JSONRPC: "2.0",
+				Method:  "textDocument/didOpen",
+				Params: mustMarshal(t, map[string]interface{}{
+					"textDocument": map[string]interface{}{
+						"uri":        uri,
+						"languageId": "emod",
+						"version":    1,
+						"text":       `model "test"`,
+					},
+				}),
+			})
+			// Consume first diagnostics notification.
+			p.readMsg(t)
+
+			// Change to invalid content.
+			p.writeMsg(t, &lsp.Message{
+				JSONRPC: "2.0",
+				Method:  "textDocument/didChange",
+				Params: mustMarshal(t, map[string]interface{}{
+					"textDocument": map[string]interface{}{
+						"uri":     uri,
+						"version": 2,
+					},
+					"contentChanges": []interface{}{
+						map[string]interface{}{
+							"text": "invalid syntax",
+						},
+					},
+				}),
+			})
+
+			// Read updated diagnostics.
+			notif := p.readMsg(t)
+			require.Equal(t, "textDocument/publishDiagnostics", notif.Method)
+
+			var params lsp.PublishDiagnosticsParams
+			err := json.Unmarshal(notif.Params, &params)
+			require.NoError(t, err)
+			require.Equal(t, uri, params.URI)
+			require.NotEmpty(t, params.Diagnostics, "expected diagnostics for invalid content")
+
+			// All diagnostics from invalid content should be error-severity.
+			for _, d := range params.Diagnostics {
+				require.Equal(t, lsp.SeverityError, d.Severity, "expected error severity for lexer/parser error")
+			}
+		})
+	})
+
+	t.Run("shutdown", func(t *testing.T) {
+		t.Run("sends empty response and stops event loop", func(t *testing.T) {
+			p := startServer(t)
+			p.writeInitialize(t)
+			p.readInitializeResult(t, 1)
+
+			shutdownID := 2
+			p.writeMsg(t, &lsp.Message{
+				JSONRPC: "2.0",
+				ID:      &shutdownID,
+				Method:  "shutdown",
+			})
+
+			resp := p.readMsg(t)
+			require.NotNil(t, resp.ID)
+			require.Equal(t, shutdownID, *resp.ID)
+			require.NotNil(t, resp.Result)
+			require.Equal(t, "{}", string(resp.Result))
+			require.Nil(t, resp.Error)
+
+			// Verify the server loop exited.
+			select {
+			case <-p.done:
+				// server exited as expected
+			case <-time.After(time.Second):
+				t.Fatal("server did not exit after shutdown")
+			}
+		})
+	})
+
+	t.Run("diagnostics", func(t *testing.T) {
+		t.Run("parser errors produce error-severity diagnostics", func(t *testing.T) {
+			p := startServer(t)
+			p.writeInitialize(t)
+			p.readInitializeResult(t, 1)
+
+			uri := "file:///errors.emod"
+
+			p.writeMsg(t, &lsp.Message{
+				JSONRPC: "2.0",
+				Method:  "textDocument/didOpen",
+				Params: mustMarshal(t, map[string]interface{}{
+					"textDocument": map[string]interface{}{
+						"uri":        uri,
+						"languageId": "emod",
+						"version":    1,
+						"text":       "invalid syntax here",
+					},
+				}),
+			})
+
+			notif := p.readMsg(t)
+			require.Equal(t, "textDocument/publishDiagnostics", notif.Method)
+
+			var params lsp.PublishDiagnosticsParams
+			err := json.Unmarshal(notif.Params, &params)
+			require.NoError(t, err)
+			require.Equal(t, uri, params.URI)
+			require.NotEmpty(t, params.Diagnostics)
+
+			for _, d := range params.Diagnostics {
+				require.Equal(t, lsp.SeverityError, d.Severity, "expected error severity for parser errors")
+				require.Equal(t, "emod", d.Source)
+			}
+		})
+
+		t.Run("linter warnings appear as warning-severity diagnostics", func(t *testing.T) {
+			p := startServer(t)
+			p.writeInitialize(t)
+			p.readInitializeResult(t, 1)
+
+			uri := "file:///linter.emod"
+			// A valid model with a view that doesn't end in "View" triggers the
+			// view-naming linter rule (warning).
+			content := `model "test"
+actor "A"
+context "C" {
+  aggregate "Agg" {
+    slice "Sl" {
+      command Cmd {}
+      event Evt {
+        fields {
+          id String
+        }
+      }
+      flow {
+        command -> event: Cmd -> Evt
+      }
+      view Bad {
+        subscribes [Evt]
+      }
+    }
+  }
+}`
+
+			p.writeMsg(t, &lsp.Message{
+				JSONRPC: "2.0",
+				Method:  "textDocument/didOpen",
+				Params: mustMarshal(t, map[string]interface{}{
+					"textDocument": map[string]interface{}{
+						"uri":        uri,
+						"languageId": "emod",
+						"version":    1,
+						"text":       content,
+					},
+				}),
+			})
+
+			notif := p.readMsg(t)
+			require.Equal(t, "textDocument/publishDiagnostics", notif.Method)
+
+			var params lsp.PublishDiagnosticsParams
+			err := json.Unmarshal(notif.Params, &params)
+			require.NoError(t, err)
+			require.Equal(t, uri, params.URI)
+			require.NotEmpty(t, params.Diagnostics,
+				"expected at least the view-naming linter warning")
+
+			// At least one diagnostic should be a linter warning (severity=2).
+			foundWarning := false
+			for _, d := range params.Diagnostics {
+				if d.Severity == lsp.SeverityWarning {
+					foundWarning = true
+					break
+				}
+			}
+			require.True(t, foundWarning, "expected at least one warning-severity diagnostic from linter")
+		})
+
+		t.Run("well-formed document produces empty diagnostics", func(t *testing.T) {
+			p := startServer(t)
+			p.writeInitialize(t)
+			p.readInitializeResult(t, 1)
+
+			uri := "file:///valid.emod"
+
+			p.writeMsg(t, &lsp.Message{
+				JSONRPC: "2.0",
+				Method:  "textDocument/didOpen",
+				Params: mustMarshal(t, map[string]interface{}{
+					"textDocument": map[string]interface{}{
+						"uri":        uri,
+						"languageId": "emod",
+						"version":    1,
+						"text":       `model "valid"`,
+					},
+				}),
+			})
+
+			notif := p.readMsg(t)
+			require.Equal(t, "textDocument/publishDiagnostics", notif.Method)
+
+			var params lsp.PublishDiagnosticsParams
+			err := json.Unmarshal(notif.Params, &params)
+			require.NoError(t, err)
+			require.Equal(t, uri, params.URI)
+			require.Empty(t, params.Diagnostics)
+		})
+	})
+
+	t.Run("unknown method", func(t *testing.T) {
+		t.Run("with ID returns method-not-found error", func(t *testing.T) {
+			p := startServer(t)
+
+			id := 1
+			p.writeMsg(t, &lsp.Message{
+				JSONRPC: "2.0",
+				ID:      &id,
+				Method:  "unknownMethod",
+				Params:  []byte("{}"),
+			})
+
+			resp := p.readMsg(t)
+			require.NotNil(t, resp.ID)
+			require.Equal(t, id, *resp.ID)
+			require.NotNil(t, resp.Error)
+			require.Equal(t, -32601, resp.Error.Code)
+			require.Contains(t, resp.Error.Message, "method not found")
+		})
+
+		t.Run("without ID is silently ignored", func(t *testing.T) {
+			p := startServer(t)
+
+			// First confirm server is alive.
+			p.writeInitialize(t)
+			p.readInitializeResult(t, 1)
+
+			// Send an unknown notification (no ID).
+			p.writeMsg(t, &lsp.Message{
+				JSONRPC: "2.0",
+				Method:  "unknownNotification",
+			})
+
+			// No response expected — verify by timeout.
+			msg := readMsgTimeout(p.outReader, 200*time.Millisecond)
+			require.Nil(t, msg, "expected no response for unknown notification")
+		})
+	})
+
+	t.Run("full LSP session", func(t *testing.T) {
+		t.Run("initialize, initialized, didOpen, didChange, shutdown", func(t *testing.T) {
+			p := startServer(t)
+
+			// 1. Initialize
+			p.writeInitialize(t)
+			p.readInitializeResult(t, 1)
+
+			// 2. Initialized (no response)
+			p.writeMsg(t, &lsp.Message{
+				JSONRPC: "2.0",
+				Method:  "initialized",
+			})
+
+			// 3. didOpen with valid content
+			uri := "file:///session.emod"
+			p.writeMsg(t, &lsp.Message{
+				JSONRPC: "2.0",
+				Method:  "textDocument/didOpen",
+				Params: mustMarshal(t, map[string]interface{}{
+					"textDocument": map[string]interface{}{
+						"uri":        uri,
+						"languageId": "emod",
+						"version":    1,
+						"text":       `model "session"`,
+					},
+				}),
+			})
+
+			diag1 := p.readMsg(t)
+			require.Equal(t, "textDocument/publishDiagnostics", diag1.Method)
+			require.Empty(t, mustUnmarshalDiagnostics(t, diag1.Params).Diagnostics)
+
+			// 4. didChange with invalid content
+			p.writeMsg(t, &lsp.Message{
+				JSONRPC: "2.0",
+				Method:  "textDocument/didChange",
+				Params: mustMarshal(t, map[string]interface{}{
+					"textDocument": map[string]interface{}{
+						"uri":     uri,
+						"version": 2,
+					},
+					"contentChanges": []interface{}{
+						map[string]interface{}{
+							"text": "invalid",
+						},
+					},
+				}),
+			})
+
+			diag2 := p.readMsg(t)
+			require.Equal(t, "textDocument/publishDiagnostics", diag2.Method)
+			require.NotEmpty(t, mustUnmarshalDiagnostics(t, diag2.Params).Diagnostics)
+
+			// 5. Shutdown
+			shutdownID := 2
+			p.writeMsg(t, &lsp.Message{
+				JSONRPC: "2.0",
+				ID:      &shutdownID,
+				Method:  "shutdown",
+			})
+
+			resp := p.readMsg(t)
+			require.NotNil(t, resp.ID)
+			require.Equal(t, shutdownID, *resp.ID)
+			require.Equal(t, "{}", string(resp.Result))
+
+			select {
+			case <-p.done:
+			case <-time.After(time.Second):
+				t.Fatal("server did not exit after shutdown")
+			}
+		})
+	})
+}
+
+// mustMarshal serializes v to JSON and fails the test on error.
+func mustMarshal(t *testing.T, v interface{}) json.RawMessage {
+	t.Helper()
+	data, err := json.Marshal(v)
+	require.NoError(t, err)
+	return data
+}
+
+// mustUnmarshalDiagnostics unmarshals PublishDiagnosticsParams from raw params.
+func mustUnmarshalDiagnostics(t *testing.T, raw json.RawMessage) lsp.PublishDiagnosticsParams {
+	t.Helper()
+	var params lsp.PublishDiagnosticsParams
+	err := json.Unmarshal(raw, &params)
+	require.NoError(t, err)
+	return params
+}

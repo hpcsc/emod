@@ -1,0 +1,187 @@
+package lsp
+
+import (
+	"context"
+	"encoding/json"
+	"io"
+
+	"github.com/hpcsc/emod/internal/lexer"
+	"github.com/hpcsc/emod/internal/linter"
+	"github.com/hpcsc/emod/internal/parser"
+	"github.com/hpcsc/emod/internal/validator"
+)
+
+// Server is an LSP server that reads JSON-RPC messages from an injected io.Reader,
+// dispatches to method handlers, and writes responses/notifications to an injected io.Writer.
+type Server struct {
+	in        io.Reader
+	out       io.Writer
+	documents *DocumentManager
+	shutdown  bool
+}
+
+// NewServer creates a new Server with dependency-injectable I/O.
+func NewServer(in io.Reader, out io.Writer) *Server {
+	return &Server{
+		in:        in,
+		out:       out,
+		documents: NewDocumentManager(),
+	}
+}
+
+// Run starts the message read-dispatch-write loop. It blocks until shutdown
+// completes, the context is cancelled, or a read/write error occurs.
+func (s *Server) Run(ctx context.Context) error {
+	for {
+		if s.shutdown {
+			return nil
+		}
+
+		select {
+		case <-ctx.Done():
+			return ctx.Err()
+		default:
+		}
+
+		msg, err := ReadMessage(s.in)
+		if err != nil {
+			return err
+		}
+
+		if err := s.dispatch(ctx, msg); err != nil {
+			return err
+		}
+	}
+}
+
+func (s *Server) dispatch(ctx context.Context, msg *Message) error {
+	switch msg.Method {
+	case "initialize":
+		return s.handleInitialize(msg)
+	case "initialized":
+		return nil
+	case "textDocument/didOpen":
+		return s.handleDidOpen(msg)
+	case "textDocument/didChange":
+		return s.handleDidChange(msg)
+	case "shutdown":
+		return s.handleShutdown(msg)
+	default:
+		if msg.ID != nil {
+			return s.writeMessage(&Message{
+				JSONRPC: Version,
+				ID:      msg.ID,
+				Error: &ErrorObject{
+					Code:    -32601,
+					Message: "method not found",
+				},
+			})
+		}
+		return nil
+	}
+}
+
+func (s *Server) handleInitialize(msg *Message) error {
+	result := InitializeResult{
+		Capabilities: ServerCapabilities{
+			TextDocumentSync: SyncFull,
+		},
+	}
+
+	resultBytes, err := json.Marshal(result)
+	if err != nil {
+		return err
+	}
+
+	return s.writeMessage(&Message{
+		JSONRPC: Version,
+		ID:      msg.ID,
+		Result:  resultBytes,
+	})
+}
+
+func (s *Server) handleDidOpen(msg *Message) error {
+	var params struct {
+		TextDocument TextDocumentItem `json:"textDocument"`
+	}
+	if err := json.Unmarshal(msg.Params, &params); err != nil {
+		return err
+	}
+
+	uri := params.TextDocument.URI
+	text := params.TextDocument.Text
+
+	s.documents.Open(uri, text)
+	s.pushDiagnostics(uri, text)
+
+	return nil
+}
+
+func (s *Server) handleDidChange(msg *Message) error {
+	var params DidChangeTextDocumentParams
+	if err := json.Unmarshal(msg.Params, &params); err != nil {
+		return err
+	}
+
+	uri := params.TextDocument.URI
+	// For SyncFull, take the text from the last content change event.
+	var text string
+	if len(params.ContentChanges) > 0 {
+		text = params.ContentChanges[len(params.ContentChanges)-1].Text
+	}
+
+	s.documents.Update(uri, text)
+	s.pushDiagnostics(uri, text)
+
+	return nil
+}
+
+func (s *Server) handleShutdown(msg *Message) error {
+	if err := s.writeMessage(&Message{
+		JSONRPC: Version,
+		ID:      msg.ID,
+		Result:  json.RawMessage(`{}`),
+	}); err != nil {
+		return err
+	}
+	s.shutdown = true
+	return nil
+}
+
+// pushDiagnostics runs the lex→parse→validate→lint pipeline on the given text
+// and sends a textDocument/publishDiagnostics notification with the results.
+func (s *Server) pushDiagnostics(uri, text string) {
+	tokens, diags := lexer.Scan(text, uri)
+
+	p := parser.New(tokens, uri)
+	model, parserDiags := p.Parse()
+	diags = append(diags, parserDiags...)
+
+	validatorDiags := validator.Validate(model)
+	diags = append(diags, validatorDiags...)
+
+	lintDiags := linter.Lint(model)
+	diags = append(diags, lintDiags...)
+
+	lspDiags := ConvertDiagnostics(uri, diags)
+
+	params := PublishDiagnosticsParams{
+		URI:         uri,
+		Diagnostics: lspDiags,
+	}
+
+	paramsBytes, err := json.Marshal(params)
+	if err != nil {
+		return
+	}
+
+	_ = s.writeMessage(&Message{
+		JSONRPC: Version,
+		Method:  "textDocument/publishDiagnostics",
+		Params:  paramsBytes,
+	})
+}
+
+func (s *Server) writeMessage(msg *Message) error {
+	return WriteMessage(s.out, msg)
+}
