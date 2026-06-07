@@ -2,7 +2,7 @@
 
 ## Progress
 - [x] Task 1: Create TextMate grammar file with all syntax highlighting rules for `.emod` files
-- [ ] Task 2: Create VS Code extension manifest registering the grammar for `.emod` files
+- [x] Task 2: Create VS Code extension manifest registering the grammar for `.emod` files
 
 ## Story Reference
 

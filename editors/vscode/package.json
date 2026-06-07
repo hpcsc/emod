@@ -1,0 +1,28 @@
+{
+  "name": "emod",
+  "displayName": "Emod Language Support",
+  "description": "Syntax highlighting for Emod (.emod) files — a domain modeling language",
+  "version": "0.1.0",
+  "engines": {
+    "vscode": "^1.84.0"
+  },
+  "categories": [
+    "Programming Languages"
+  ],
+  "contributes": {
+    "languages": [
+      {
+        "id": "emod",
+        "aliases": ["emod", "Emod"],
+        "extensions": [".emod"]
+      }
+    ],
+    "grammars": [
+      {
+        "language": "emod",
+        "scopeName": "source.emod",
+        "path": "./syntaxes/emod.tmLanguage.json"
+      }
+    ]
+  }
+}
