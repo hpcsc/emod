@@ -102,6 +102,37 @@ emod export reservation.emod -f cue   # CUE schema
 emod slices reservation.emod
 ```
 
+## Editor Setup
+
+### VS Code — symlink (recommended)
+
+Link the extension directory directly for auto-reload on edit:
+
+```bash
+ln -sf "$(pwd)/editors/vscode" ~/.vscode/extensions/emod
+```
+
+### VS Code — .vsix package
+
+Build a `.vsix` from `editors/vscode` and install it:
+
+```bash
+npx @vscode/vsce package --cwd editors/vscode
+code --install-extension emod-*.vsix
+```
+
+### JetBrains (GoLand / IntelliJ)
+
+1. Open **Settings → Editor → TextMate Bundles**.
+2. Click **+** and browse to `editors/vscode/`.
+3. Apply the setting — `.emod` files will be highlighted.
+
+Alternatively, symlink the bundle:
+
+```bash
+ln -sf "$(pwd)/editors/vscode" ~/.textmate/bundles/emod
+```
+
 ## Development
 
 ```bash

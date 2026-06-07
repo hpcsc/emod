@@ -2,7 +2,7 @@
 
 ## Progress
 - [x] Task 1: Add `publisher` and `.vscodeignore` to enable `.vsix` packaging
-- [ ] Task 2: Document all three editor installation methods in README
+- [x] Task 2: Document all three editor installation methods in README
 
 ---
 
