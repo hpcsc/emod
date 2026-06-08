@@ -111,11 +111,18 @@ type DefinitionParams struct {
 	Position     Position               `json:"position"`
 }
 
+// ReferenceParams represents parameters for a "textDocument/references" request.
+type ReferenceParams struct {
+	TextDocument TextDocumentIdentifier `json:"textDocument"`
+	Position     Position               `json:"position"`
+}
+
 // ServerCapabilities represents capabilities the server advertises to the client.
 type ServerCapabilities struct {
 	TextDocumentSync           TextDocumentSyncKind `json:"textDocumentSync"`
 	CompletionProvider         *CompletionOptions   `json:"completionProvider,omitempty"`
 	DefinitionProvider         bool                 `json:"definitionProvider,omitempty"`
+	ReferencesProvider         bool                 `json:"referencesProvider,omitempty"`
 	DocumentFormattingProvider bool                 `json:"documentFormattingProvider,omitempty"`
 	HoverProvider              bool                 `json:"hoverProvider,omitempty"`
 }
