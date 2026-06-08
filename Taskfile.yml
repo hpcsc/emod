@@ -14,6 +14,22 @@ tasks:
     env:
       CGO_ENABLED: '0'
 
+  build:vscode:
+    desc: Compile the VS Code extension (TypeScript → out/)
+    dir: editors/vscode
+    cmds:
+      - npm ci
+      - npm run compile
+
+  setup:vscode:
+    desc: Compile and symlink the VS Code extension
+    deps:
+      - build:vscode
+    cmds:
+      - mkdir -p ~/.vscode/extensions
+      - rm -rf ~/.vscode/extensions/hpcsc.emod
+      - ln -sf {{.PWD}}/editors/vscode ~/.vscode/extensions/hpcsc.emod
+
   build:wasm:
     desc: Build the WASM binary and copy runtime glue for the viewer
     cmds:

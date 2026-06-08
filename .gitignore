@@ -8,3 +8,4 @@ tasks/.checkpoint
 node_modules
 /web
 internal/viewer/generated/
+editors/vscode/out

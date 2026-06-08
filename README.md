@@ -104,17 +104,24 @@ emod slices reservation.emod
 
 ## Editor Setup
 
+The `emod` binary must be on your `PATH` for editor integrations to work.
+
+Once set up, you'll get:
+- **Syntax highlighting** — keywords, strings, comments, identifiers
+- **Diagnostics** — parser and validator errors as squiggly underlines
+- **Completion** — context-aware keyword suggestions
+- **Go-to-definition** — jump from references to their definition
+- **Find references** — find all usages of a command, event, or view
+- **Hover** — contextual information on names and keywords
+- **Format on save** — auto-format via `emod fmt`
+
 ### VS Code — symlink (recommended)
 
-Link the extension directory directly for auto-reload on edit:
-
 ```bash
-ln -sf "$(pwd)/editors/vscode" ~/.vscode/extensions/emod
+task setup:vscode
 ```
 
 ### VS Code — .vsix package
-
-Build a `.vsix` from `editors/vscode` and install it:
 
 ```bash
 npx @vscode/vsce package --cwd editors/vscode
@@ -123,14 +130,67 @@ code --install-extension emod-*.vsix
 
 ### JetBrains (GoLand / IntelliJ)
 
-1. Open **Settings → Editor → TextMate Bundles**.
-2. Click **+** and browse to `editors/vscode/`.
-3. Apply the setting — `.emod` files will be highlighted.
+**Syntax highlighting** via TextMate bundle:
 
-Alternatively, symlink the bundle:
+1. Open **Settings → Editor → TextMate Bundles**
+2. Click **+** and browse to `editors/vscode/`
 
-```bash
-ln -sf "$(pwd)/editors/vscode" ~/.textmate/bundles/emod
+**LSP features** via the [LSP4IJ](https://plugins.jetbrains.com/plugin/23257-lsp4ij) plugin:
+
+1. Install the LSP4IJ plugin from the JetBrains Marketplace
+2. Open **Settings → Languages & Frameworks → Language Servers**
+3. Add a new server with command `emod` and argument `lsp`, file type `emod`
+
+### Neovim
+
+Using [nvim-lspconfig](https://github.com/neovim/nvim-lspconfig):
+
+```lua
+vim.api.nvim_create_autocmd('FileType', {
+  pattern = 'emod',
+  callback = function()
+    vim.lsp.start({
+      name = 'emod',
+      cmd = { 'emod', 'lsp' },
+    })
+  end,
+})
+```
+
+### Zed
+
+Add to `~/.zed/settings.json`:
+
+```json
+{
+  "languages": {
+    "EMOD": {
+      "language_servers": ["emod"]
+    }
+  },
+  "lsp": {
+    "emod": {
+      "command": "emod",
+      "args": ["lsp"]
+    }
+  }
+}
+```
+
+### Helix
+
+Add to `languages.toml`:
+
+```toml
+[[language]]
+name = "emod"
+scope = "source.emod"
+file-types = ["emod"]
+language-servers = ["emod"]
+
+[language-server.emod]
+command = "emod"
+args = ["lsp"]
 ```
 
 ## Development
