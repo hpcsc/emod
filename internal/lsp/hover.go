@@ -9,10 +9,40 @@ import (
 	"github.com/hpcsc/emod/internal/parser"
 )
 
+// keywordDescriptions maps EMOD keyword strings to their hover descriptions.
+var keywordDescriptions = map[string]string{
+	"model":           "Declares the domain model name.",
+	"actor":           "Declares an actor in the domain.",
+	"context":         "Defines a bounded context.",
+	"aggregate":       "Defines an aggregate root.",
+	"slice":           "Defines a slice within an aggregate.",
+	"command":         "Defines a command that can be sent to an aggregate.",
+	"event":           "Defines an event that represents a state change.",
+	"fields":          "Defines the fields of an event.",
+	"flow":            "Defines the flow between commands and events.",
+	"trigger":         "Defines a manual trigger for a slice.",
+	"view":            "Defines a read model that subscribes to events.",
+	"automation":      "Defines an automation that triggers on an event and sends a command.",
+	"translation":     "Defines a translation from a view to a command.",
+	"subscribes":      "Defines the events a view subscribes to.",
+	"target":          "Defines the target context for an automation.",
+	"external_system": "Defines an external system for a translation.",
+	"reads":           "Defines the view a trigger or translation reads from.",
+	"source":          "Defines the source for an external system.",
+	"external":        "Declares an external reference.",
+}
+
+// isKeyword returns true for recognized EMOD keyword token kinds.
+func isKeyword(k lexer.Kind) bool {
+	return k >= lexer.KeywordModel && k <= lexer.KeywordExternal
+}
+
 // GetHover returns hover information for the token at the given cursor position.
 // If the cursor is on a command, event, or view definition name, it returns
 // contextual hover text describing the element's parent context and aggregate,
 // plus relevant details.
+// If the cursor is on an EMOD keyword, it returns a brief description.
+// For any unrecognized or non-resolvable token, it returns nil.
 //
 // Positions are 0-based LSP coordinates (line, character).
 func GetHover(text string, line, character int) *Hover {
@@ -47,6 +77,23 @@ func GetHover(text string, line, character int) *Hover {
 				for _, v := range slice.Views {
 					if cursorOnName(cursorLine, cursorChar, v.NamePos, v.Name) {
 						return hoverForView(v, ctx, agg)
+					}
+				}
+			}
+		}
+	}
+
+	// Check for keywords — tokens with no AST definition name.
+	for _, tok := range tokens {
+		if isKeyword(tok.Type) {
+			if cursorOnName(cursorLine, cursorChar, ast.Position{Line: tok.Line, Column: tok.Column}, tok.Value) {
+				if desc, ok := keywordDescriptions[tok.Value]; ok {
+					return &Hover{
+						Contents: MarkupContent{
+							Kind:  Markdown,
+							Value: desc,
+						},
+						Range: nameRange(ast.Position{Line: tok.Line, Column: tok.Column}, tok.Value),
 					}
 				}
 			}

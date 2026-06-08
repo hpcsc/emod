@@ -803,6 +803,7 @@ context "C" {
 			p.readMsg(t)
 
 			hoverID := 2
+			// Cursor at (0, 7) is on the string literal "test", not a keyword or definition.
 			p.writeMsg(t, &lsp.Message{
 				JSONRPC: "2.0",
 				ID:      &hoverID,
@@ -813,7 +814,7 @@ context "C" {
 					},
 					"position": map[string]interface{}{
 						"line":      0,
-						"character": 0,
+						"character": 7,
 					},
 				}),
 			})
@@ -823,6 +824,66 @@ context "C" {
 			require.Equal(t, hoverID, *resp.ID)
 			require.Nil(t, resp.Error)
 			require.Equal(t, "null", string(resp.Result))
+		})
+
+		t.Run("returns keyword hover for open document", func(t *testing.T) {
+			p := startServer(t)
+			p.writeInitialize(t)
+			p.readInitializeResult(t, 1)
+
+			uri := "file:///hover.emod"
+			content := `context "Orders" {
+    aggregate "Sales" {
+        slice "OrderSlice" {
+            automation AutoSubmit {
+            }
+        }
+    }
+}`
+			p.writeMsg(t, &lsp.Message{
+				JSONRPC: "2.0",
+				Method:  "textDocument/didOpen",
+				Params: mustMarshal(t, map[string]interface{}{
+					"textDocument": map[string]interface{}{
+						"uri":        uri,
+						"languageId": "emod",
+						"version":    1,
+						"text":       content,
+					},
+				}),
+			})
+			p.readMsg(t)
+
+			hoverID := 2
+			// Position the cursor on the "automation" keyword.
+			// automation is at line 3, column 12 (0-based).
+			p.writeMsg(t, &lsp.Message{
+				JSONRPC: "2.0",
+				ID:      &hoverID,
+				Method:  "textDocument/hover",
+				Params: mustMarshal(t, map[string]interface{}{
+					"textDocument": map[string]interface{}{
+						"uri": uri,
+					},
+					"position": map[string]interface{}{
+						"line":      3,
+						"character": 12,
+					},
+				}),
+			})
+
+			resp := p.readMsg(t)
+			require.NotNil(t, resp.ID)
+			require.Equal(t, hoverID, *resp.ID)
+			require.Nil(t, resp.Error)
+			require.NotNil(t, resp.Result)
+			require.NotEqual(t, "null", string(resp.Result))
+
+			var hover lsp.Hover
+			err := json.Unmarshal(resp.Result, &hover)
+			require.NoError(t, err)
+			require.Equal(t, lsp.Markdown, hover.Contents.Kind)
+			require.Equal(t, "Defines an automation that triggers on an event and sends a command.", hover.Contents.Value)
 		})
 
 		t.Run("returns error for unknown document URI", func(t *testing.T) {

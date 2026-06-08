@@ -1,7 +1,7 @@
 ## Progress
 - [x] Task 1: Add LSP hover protocol types and server dispatch handler
 - [x] Task 2: Implement hover content for named identifiers
-- [ ] Task 3: Implement hover content for keywords and finalize non-resolvable behavior
+- [x] Task 3: Implement hover content for keywords and finalize non-resolvable behavior
 
 ## Story Reference
 **US-IDE-009: LSP hover information** — As a model author, I want to hover over an identifier and see contextual information so that I can understand where an element is defined and how it fits in the model.

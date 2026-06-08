@@ -96,13 +96,41 @@ func TestGetHover(t *testing.T) {
 		assertHover(t, testDoc, cLine, cChar, "**View** in Orders > Sales")
 	})
 
-	t.Run("cursor on keyword returns nil", func(t *testing.T) {
+	t.Run("cursor on keyword returns description", func(t *testing.T) {
 		line, char := posIn(t, testDoc, "command SubmitOrder", "command")
+		hover := lsp.GetHover(testDoc, line, char)
+		require.NotNil(t, hover, "expected hover for keyword 'command'")
+		require.Equal(t, lsp.Markdown, hover.Contents.Kind)
+		require.Equal(t, "Defines a command that can be sent to an aggregate.", hover.Contents.Value)
+	})
+
+	t.Run("cursor on automation keyword returns description", func(t *testing.T) {
+		// Use a minimal document that contains the automation keyword.
+		doc := `context "C" {
+    aggregate "A" {
+        slice "S" {
+            automation Auto {
+            }
+        }
+    }
+}`
+		line, char := posIn(t, doc, "automation Auto", "automation")
+		hover := lsp.GetHover(doc, line, char)
+		require.NotNil(t, hover, "expected hover for keyword 'automation'")
+		require.Equal(t, lsp.Markdown, hover.Contents.Kind)
+		require.Equal(t, "Defines an automation that triggers on an event and sends a command.", hover.Contents.Value)
+	})
+
+	t.Run("cursor on non-resolvable token returns nil", func(t *testing.T) {
+		// Cursor on the identifier "required" which is a field modifier,
+		// not a resolvable definition name.
+		line, char := posIn(t, testDoc, "id String required", "required")
 		assertNil(t, testDoc, line, char)
 	})
 
 	t.Run("cursor not on any definition returns nil", func(t *testing.T) {
-		assertNil(t, testDoc, 0, 0)
+		// Cursor at (0, 9) is on the string literal "Orders", not a keyword or definition.
+		assertNil(t, testDoc, 0, 9)
 	})
 
 	t.Run("empty document returns nil", func(t *testing.T) {
