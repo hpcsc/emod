@@ -163,6 +163,21 @@ func TestServer(t *testing.T) {
 			require.NoError(t, err)
 			require.True(t, result.Capabilities.DocumentFormattingProvider, "expected DocumentFormattingProvider to be true")
 		})
+
+		t.Run("advertises HoverProvider capability", func(t *testing.T) {
+			p := startServer(t)
+			id := p.writeInitialize(t)
+			resp := p.readMsg(t)
+			require.NotNil(t, resp.ID)
+			require.Equal(t, id, *resp.ID)
+			require.Nil(t, resp.Error)
+			require.NotNil(t, resp.Result)
+
+			var result lsp.InitializeResult
+			err := json.Unmarshal(resp.Result, &result)
+			require.NoError(t, err)
+			require.True(t, result.Capabilities.HoverProvider, "expected HoverProvider to be true")
+		})
 	})
 
 	t.Run("initialized", func(t *testing.T) {
@@ -759,6 +774,81 @@ context "C" {
 			resp := p.readMsg(t)
 			require.NotNil(t, resp.ID)
 			require.Equal(t, defID, *resp.ID)
+			require.NotNil(t, resp.Error)
+			require.Equal(t, -32602, resp.Error.Code)
+			require.Contains(t, resp.Error.Message, "document not found")
+		})
+	})
+
+	t.Run("hover", func(t *testing.T) {
+		t.Run("returns null result for open document", func(t *testing.T) {
+			p := startServer(t)
+			p.writeInitialize(t)
+			p.readInitializeResult(t, 1)
+
+			uri := "file:///hover.emod"
+			content := `model "test"`
+			p.writeMsg(t, &lsp.Message{
+				JSONRPC: "2.0",
+				Method:  "textDocument/didOpen",
+				Params: mustMarshal(t, map[string]interface{}{
+					"textDocument": map[string]interface{}{
+						"uri":        uri,
+						"languageId": "emod",
+						"version":    1,
+						"text":       content,
+					},
+				}),
+			})
+			p.readMsg(t)
+
+			hoverID := 2
+			p.writeMsg(t, &lsp.Message{
+				JSONRPC: "2.0",
+				ID:      &hoverID,
+				Method:  "textDocument/hover",
+				Params: mustMarshal(t, map[string]interface{}{
+					"textDocument": map[string]interface{}{
+						"uri": uri,
+					},
+					"position": map[string]interface{}{
+						"line":      0,
+						"character": 0,
+					},
+				}),
+			})
+
+			resp := p.readMsg(t)
+			require.NotNil(t, resp.ID)
+			require.Equal(t, hoverID, *resp.ID)
+			require.Nil(t, resp.Error)
+			require.Equal(t, "null", string(resp.Result))
+		})
+
+		t.Run("returns error for unknown document URI", func(t *testing.T) {
+			p := startServer(t)
+			p.writeInitialize(t)
+			p.readInitializeResult(t, 1)
+
+			hoverID := 2
+			p.writeMsg(t, &lsp.Message{
+				JSONRPC: "2.0",
+				ID:      &hoverID,
+				Method:  "textDocument/hover",
+				Params: mustMarshal(t, map[string]interface{}{
+					"textDocument": map[string]interface{}{
+						"uri": "file:///unknown.emod",
+					},
+					"position": map[string]interface{}{
+						"line":      0,
+						"character": 0,
+					},
+				}),
+			})
+
+			resp := p.readMsg(t)
+			require.NotNil(t, resp.ID)
+			require.Equal(t, hoverID, *resp.ID)
 			require.NotNil(t, resp.Error)
 			require.Equal(t, -32602, resp.Error.Code)
 			require.Contains(t, resp.Error.Message, "document not found")

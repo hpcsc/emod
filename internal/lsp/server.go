@@ -72,6 +72,8 @@ func (s *Server) dispatch(ctx context.Context, msg *Message) error {
 		return s.handleDefinition(msg)
 	case "textDocument/formatting":
 		return s.handleFormatting(msg)
+	case "textDocument/hover":
+		return s.handleHover(msg)
 	case "shutdown":
 		return s.handleShutdown(msg)
 	default:
@@ -99,6 +101,7 @@ func (s *Server) handleInitialize(msg *Message) error {
 			},
 			DefinitionProvider:         true,
 			DocumentFormattingProvider: true,
+			HoverProvider:              true,
 		},
 	}
 
@@ -223,6 +226,33 @@ func (s *Server) handleDefinition(msg *Message) error {
 		JSONRPC: Version,
 		ID:      msg.ID,
 		Result:  resultBytes,
+	})
+}
+
+func (s *Server) handleHover(msg *Message) error {
+	var params HoverParams
+	if err := json.Unmarshal(msg.Params, &params); err != nil {
+		return err
+	}
+
+	uri := params.TextDocument.URI
+	_, ok := s.documents.GetContent(uri)
+	if !ok {
+		return s.writeMessage(&Message{
+			JSONRPC: Version,
+			ID:      msg.ID,
+			Error: &ErrorObject{
+				Code:    -32602,
+				Message: "document not found: " + uri,
+			},
+		})
+	}
+
+	// No hover content is available yet; return null result.
+	return s.writeMessage(&Message{
+		JSONRPC: Version,
+		ID:      msg.ID,
+		Result:  json.RawMessage(`null`),
 	})
 }
 

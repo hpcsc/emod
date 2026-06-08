@@ -117,6 +117,7 @@ type ServerCapabilities struct {
 	CompletionProvider         *CompletionOptions   `json:"completionProvider,omitempty"`
 	DefinitionProvider         bool                 `json:"definitionProvider,omitempty"`
 	DocumentFormattingProvider bool                 `json:"documentFormattingProvider,omitempty"`
+	HoverProvider              bool                 `json:"hoverProvider,omitempty"`
 }
 
 // InitializeResult is the result returned from the "initialize" request.
@@ -160,6 +161,32 @@ type Location struct {
 type TextEdit struct {
 	Range   Range  `json:"range"`
 	NewText string `json:"newText"`
+}
+
+// MarkupKind represents the kind of markup used in a MarkupContent.
+type MarkupKind string
+
+const (
+	PlainText MarkupKind = "plaintext"
+	Markdown  MarkupKind = "markdown"
+)
+
+// MarkupContent represents human-readable content in a hover response.
+type MarkupContent struct {
+	Kind  MarkupKind `json:"kind"`
+	Value string     `json:"value"`
+}
+
+// Hover represents the result of a hover request.
+type Hover struct {
+	Contents MarkupContent `json:"contents"`
+	Range    *Range        `json:"range,omitempty"`
+}
+
+// HoverParams represents parameters for a "textDocument/hover" request.
+type HoverParams struct {
+	TextDocument TextDocumentIdentifier `json:"textDocument"`
+	Position     Position               `json:"position"`
 }
 
 // DocumentFormattingParams represents parameters for a "textDocument/formatting" request.
