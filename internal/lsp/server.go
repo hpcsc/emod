@@ -236,7 +236,7 @@ func (s *Server) handleHover(msg *Message) error {
 	}
 
 	uri := params.TextDocument.URI
-	_, ok := s.documents.GetContent(uri)
+	doc, ok := s.documents.GetContent(uri)
 	if !ok {
 		return s.writeMessage(&Message{
 			JSONRPC: Version,
@@ -248,11 +248,16 @@ func (s *Server) handleHover(msg *Message) error {
 		})
 	}
 
-	// No hover content is available yet; return null result.
+	hover := GetHover(doc, params.Position.Line, params.Position.Character)
+	resultBytes, err := json.Marshal(hover)
+	if err != nil {
+		return err
+	}
+
 	return s.writeMessage(&Message{
 		JSONRPC: Version,
 		ID:      msg.ID,
-		Result:  json.RawMessage(`null`),
+		Result:  resultBytes,
 	})
 }
 

@@ -1,6 +1,6 @@
 ## Progress
 - [x] Task 1: Add LSP hover protocol types and server dispatch handler
-- [ ] Task 2: Implement hover content for named identifiers
+- [x] Task 2: Implement hover content for named identifiers
 - [ ] Task 3: Implement hover content for keywords and finalize non-resolvable behavior
 
 ## Story Reference
