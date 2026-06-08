@@ -113,9 +113,10 @@ type DefinitionParams struct {
 
 // ServerCapabilities represents capabilities the server advertises to the client.
 type ServerCapabilities struct {
-	TextDocumentSync   TextDocumentSyncKind `json:"textDocumentSync"`
-	CompletionProvider *CompletionOptions   `json:"completionProvider,omitempty"`
-	DefinitionProvider bool                 `json:"definitionProvider,omitempty"`
+	TextDocumentSync           TextDocumentSyncKind `json:"textDocumentSync"`
+	CompletionProvider         *CompletionOptions   `json:"completionProvider,omitempty"`
+	DefinitionProvider         bool                 `json:"definitionProvider,omitempty"`
+	DocumentFormattingProvider bool                 `json:"documentFormattingProvider,omitempty"`
 }
 
 // InitializeResult is the result returned from the "initialize" request.
@@ -153,6 +154,17 @@ type TextDocumentContentChangeEvent struct {
 type Location struct {
 	URI   string `json:"uri"`
 	Range Range  `json:"range"`
+}
+
+// TextEdit represents a text edit operation in a text document.
+type TextEdit struct {
+	Range   Range  `json:"range"`
+	NewText string `json:"newText"`
+}
+
+// DocumentFormattingParams represents parameters for a "textDocument/formatting" request.
+type DocumentFormattingParams struct {
+	TextDocument TextDocumentIdentifier `json:"textDocument"`
 }
 
 // DidChangeTextDocumentParams represents parameters for the "textDocument/didChange" notification.

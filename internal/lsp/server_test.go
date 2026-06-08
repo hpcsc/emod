@@ -148,6 +148,21 @@ func TestServer(t *testing.T) {
 			require.NoError(t, err)
 			require.True(t, result.Capabilities.DefinitionProvider, "expected DefinitionProvider to be true")
 		})
+
+		t.Run("advertises DocumentFormattingProvider capability", func(t *testing.T) {
+			p := startServer(t)
+			id := p.writeInitialize(t)
+			resp := p.readMsg(t)
+			require.NotNil(t, resp.ID)
+			require.Equal(t, id, *resp.ID)
+			require.Nil(t, resp.Error)
+			require.NotNil(t, resp.Result)
+
+			var result lsp.InitializeResult
+			err := json.Unmarshal(resp.Result, &result)
+			require.NoError(t, err)
+			require.True(t, result.Capabilities.DocumentFormattingProvider, "expected DocumentFormattingProvider to be true")
+		})
 	})
 
 	t.Run("initialized", func(t *testing.T) {
@@ -747,6 +762,177 @@ context "C" {
 			require.NotNil(t, resp.Error)
 			require.Equal(t, -32602, resp.Error.Code)
 			require.Contains(t, resp.Error.Message, "document not found")
+		})
+	})
+
+	t.Run("formatting", func(t *testing.T) {
+		t.Run("returns full-document TextEdit with formatted output for valid document", func(t *testing.T) {
+			p := startServer(t)
+			p.writeInitialize(t)
+			p.readInitializeResult(t, 1)
+
+			uri := "file:///format.emod"
+			content := "model \"test\"\n\nactor \"Guest\"\n\ncontext \"Orders\" {\n  aggregate \"Order\" {\n  }\n}\n"
+
+			p.writeMsg(t, &lsp.Message{
+				JSONRPC: "2.0",
+				Method:  "textDocument/didOpen",
+				Params: mustMarshal(t, map[string]interface{}{
+					"textDocument": map[string]interface{}{
+						"uri":        uri,
+						"languageId": "emod",
+						"version":    1,
+						"text":       content,
+					},
+				}),
+			})
+			// Consume diagnostics notification.
+			p.readMsg(t)
+
+			formatID := 2
+			p.writeMsg(t, &lsp.Message{
+				JSONRPC: "2.0",
+				ID:      &formatID,
+				Method:  "textDocument/formatting",
+				Params: mustMarshal(t, map[string]interface{}{
+					"textDocument": map[string]interface{}{
+						"uri": uri,
+					},
+				}),
+			})
+
+			resp := p.readMsg(t)
+			require.NotNil(t, resp.ID)
+			require.Equal(t, formatID, *resp.ID)
+			require.Nil(t, resp.Error)
+			require.NotNil(t, resp.Result)
+
+			var edits []lsp.TextEdit
+			err := json.Unmarshal(resp.Result, &edits)
+			require.NoError(t, err)
+			require.Len(t, edits, 1)
+
+			edit := edits[0]
+			require.Equal(t, 0, edit.Range.Start.Line)
+			require.Equal(t, 0, edit.Range.Start.Character)
+			require.Equal(t, 8, edit.Range.End.Line)
+			require.Equal(t, 0, edit.Range.End.Character)
+			require.Equal(t, content, edit.NewText)
+		})
+
+		t.Run("preserves comments in formatted output", func(t *testing.T) {
+			p := startServer(t)
+			p.writeInitialize(t)
+			p.readInitializeResult(t, 1)
+
+			uri := "file:///comments.emod"
+			content := "# System description\nmodel \"test\"\n"
+
+			p.writeMsg(t, &lsp.Message{
+				JSONRPC: "2.0",
+				Method:  "textDocument/didOpen",
+				Params: mustMarshal(t, map[string]interface{}{
+					"textDocument": map[string]interface{}{
+						"uri":        uri,
+						"languageId": "emod",
+						"version":    1,
+						"text":       content,
+					},
+				}),
+			})
+			p.readMsg(t)
+
+			formatID := 2
+			p.writeMsg(t, &lsp.Message{
+				JSONRPC: "2.0",
+				ID:      &formatID,
+				Method:  "textDocument/formatting",
+				Params: mustMarshal(t, map[string]interface{}{
+					"textDocument": map[string]interface{}{
+						"uri": uri,
+					},
+				}),
+			})
+
+			resp := p.readMsg(t)
+			require.NotNil(t, resp.ID)
+			require.Equal(t, formatID, *resp.ID)
+			require.Nil(t, resp.Error)
+			require.NotNil(t, resp.Result)
+
+			var edits []lsp.TextEdit
+			err := json.Unmarshal(resp.Result, &edits)
+			require.NoError(t, err)
+			require.Len(t, edits, 1)
+			require.Contains(t, edits[0].NewText, "# System description")
+		})
+
+		t.Run("returns error for unknown document URI", func(t *testing.T) {
+			p := startServer(t)
+			p.writeInitialize(t)
+			p.readInitializeResult(t, 1)
+
+			formatID := 2
+			p.writeMsg(t, &lsp.Message{
+				JSONRPC: "2.0",
+				ID:      &formatID,
+				Method:  "textDocument/formatting",
+				Params: mustMarshal(t, map[string]interface{}{
+					"textDocument": map[string]interface{}{
+						"uri": "file:///unknown.emod",
+					},
+				}),
+			})
+
+			resp := p.readMsg(t)
+			require.NotNil(t, resp.ID)
+			require.Equal(t, formatID, *resp.ID)
+			require.NotNil(t, resp.Error)
+			require.Equal(t, -32602, resp.Error.Code)
+			require.Contains(t, resp.Error.Message, "document not found")
+		})
+
+		t.Run("returns empty TextEdit array for syntactically invalid document", func(t *testing.T) {
+			p := startServer(t)
+			p.writeInitialize(t)
+			p.readInitializeResult(t, 1)
+
+			uri := "file:///invalid.emod"
+			content := "invalid syntax here"
+
+			p.writeMsg(t, &lsp.Message{
+				JSONRPC: "2.0",
+				Method:  "textDocument/didOpen",
+				Params: mustMarshal(t, map[string]interface{}{
+					"textDocument": map[string]interface{}{
+						"uri":        uri,
+						"languageId": "emod",
+						"version":    1,
+						"text":       content,
+					},
+				}),
+			})
+			// Consume diagnostics notification.
+			p.readMsg(t)
+
+			formatID := 2
+			p.writeMsg(t, &lsp.Message{
+				JSONRPC: "2.0",
+				ID:      &formatID,
+				Method:  "textDocument/formatting",
+				Params: mustMarshal(t, map[string]interface{}{
+					"textDocument": map[string]interface{}{
+						"uri": uri,
+					},
+				}),
+			})
+
+			resp := p.readMsg(t)
+			require.NotNil(t, resp.ID)
+			require.Equal(t, formatID, *resp.ID)
+			require.Nil(t, resp.Error)
+			require.NotNil(t, resp.Result)
+			require.Equal(t, "[]", string(resp.Result))
 		})
 	})
 

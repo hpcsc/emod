@@ -4,7 +4,9 @@ import (
 	"context"
 	"encoding/json"
 	"io"
+	"strings"
 
+	"github.com/hpcsc/emod/internal/formatter"
 	"github.com/hpcsc/emod/internal/lexer"
 	"github.com/hpcsc/emod/internal/linter"
 	"github.com/hpcsc/emod/internal/parser"
@@ -68,6 +70,8 @@ func (s *Server) dispatch(ctx context.Context, msg *Message) error {
 		return s.handleCompletion(msg)
 	case "textDocument/definition":
 		return s.handleDefinition(msg)
+	case "textDocument/formatting":
+		return s.handleFormatting(msg)
 	case "shutdown":
 		return s.handleShutdown(msg)
 	default:
@@ -89,11 +93,12 @@ func (s *Server) handleInitialize(msg *Message) error {
 	triggerChars := []string{" "}
 	result := InitializeResult{
 		Capabilities: ServerCapabilities{
-			TextDocumentSync:   SyncFull,
-			CompletionProvider: &CompletionOptions{
+			TextDocumentSync:           SyncFull,
+			CompletionProvider:         &CompletionOptions{
 				TriggerCharacters: triggerChars,
 			},
-			DefinitionProvider: true,
+			DefinitionProvider:         true,
+			DocumentFormattingProvider: true,
 		},
 	}
 
@@ -210,6 +215,63 @@ func (s *Server) handleDefinition(msg *Message) error {
 
 	loc := GetDefinition(doc, params.Position.Line, params.Position.Character, uri)
 	resultBytes, err := json.Marshal(loc)
+	if err != nil {
+		return err
+	}
+
+	return s.writeMessage(&Message{
+		JSONRPC: Version,
+		ID:      msg.ID,
+		Result:  resultBytes,
+	})
+}
+
+func (s *Server) handleFormatting(msg *Message) error {
+	var params DocumentFormattingParams
+	if err := json.Unmarshal(msg.Params, &params); err != nil {
+		return err
+	}
+
+	uri := params.TextDocument.URI
+	doc, ok := s.documents.GetContent(uri)
+	if !ok {
+		return s.writeMessage(&Message{
+			JSONRPC: Version,
+			ID:      msg.ID,
+			Error: &ErrorObject{
+				Code:    -32602,
+				Message: "document not found: " + uri,
+			},
+		})
+	}
+
+	// Lex → parse; if either produces errors, return empty TextEdit array.
+	tokens, scanErrs := lexer.Scan(doc, uri)
+	p := parser.New(tokens, uri)
+	model, parseErrs := p.Parse()
+	if len(scanErrs) > 0 || len(parseErrs) > 0 {
+		return s.writeMessage(&Message{
+			JSONRPC: Version,
+			ID:      msg.ID,
+			Result:  json.RawMessage(`[]`),
+		})
+	}
+
+	formatted := formatter.Format(model)
+
+	// Build a full-document range.
+	lines := strings.Split(doc, "\n")
+	lastLine := len(lines) - 1
+	lastLineLength := len(lines[lastLine])
+	edit := TextEdit{
+		Range: Range{
+			Start: Position{Line: 0, Character: 0},
+			End:   Position{Line: lastLine, Character: lastLineLength},
+		},
+		NewText: formatted,
+	}
+
+	resultBytes, err := json.Marshal([]TextEdit{edit})
 	if err != nil {
 		return err
 	}
