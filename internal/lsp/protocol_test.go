@@ -165,4 +165,139 @@ func TestProtocolTypes(t *testing.T) {
 		require.Equal(t, 0, p.Line)
 		require.Equal(t, 0, p.Character)
 	})
+
+	t.Run("completion item kind keyword has value 14", func(t *testing.T) {
+		require.Equal(t, lsp.CompletionItemKind(14), lsp.KeywordCompletion)
+	})
+
+	t.Run("completion item marshals and unmarshals with all fields", func(t *testing.T) {
+		original := lsp.CompletionItem{
+			Label:         "keyword",
+			Kind:          lsp.KeywordCompletion,
+			Detail:        "the keyword keyword",
+			Documentation: "a language keyword",
+		}
+		data, err := json.Marshal(original)
+		require.NoError(t, err)
+		require.JSONEq(t, `{"label":"keyword","kind":14,"detail":"the keyword keyword","documentation":"a language keyword"}`, string(data))
+
+		var decoded lsp.CompletionItem
+		err = json.Unmarshal(data, &decoded)
+		require.NoError(t, err)
+		require.Equal(t, original, decoded)
+	})
+
+	t.Run("completion item omits optional fields when zero", func(t *testing.T) {
+		item := lsp.CompletionItem{Label: "bare"}
+		data, err := json.Marshal(item)
+		require.NoError(t, err)
+		require.JSONEq(t, `{"label":"bare"}`, string(data))
+
+		var decoded lsp.CompletionItem
+		err = json.Unmarshal(data, &decoded)
+		require.NoError(t, err)
+		require.Equal(t, "bare", decoded.Label)
+		require.Equal(t, lsp.CompletionItemKind(0), decoded.Kind)
+		require.Empty(t, decoded.Detail)
+		require.Empty(t, decoded.Documentation)
+	})
+
+	t.Run("completion list marshals and unmarshals", func(t *testing.T) {
+		original := lsp.CompletionList{
+			IsIncomplete: true,
+			Items: []lsp.CompletionItem{
+				{Label: "func", Kind: lsp.FunctionCompletion},
+				{Label: "var", Kind: lsp.VariableCompletion},
+			},
+		}
+		data, err := json.Marshal(original)
+		require.NoError(t, err)
+		require.JSONEq(t, `{"isIncomplete":true,"items":[{"label":"func","kind":3},{"label":"var","kind":6}]}`, string(data))
+
+		var decoded lsp.CompletionList
+		err = json.Unmarshal(data, &decoded)
+		require.NoError(t, err)
+		require.True(t, decoded.IsIncomplete)
+		require.Len(t, decoded.Items, 2)
+		require.Equal(t, "func", decoded.Items[0].Label)
+	})
+
+	t.Run("text document identifier marshals and unmarshals", func(t *testing.T) {
+		original := lsp.TextDocumentIdentifier{URI: "file:///test.emod"}
+		data, err := json.Marshal(original)
+		require.NoError(t, err)
+		require.JSONEq(t, `{"uri":"file:///test.emod"}`, string(data))
+
+		var decoded lsp.TextDocumentIdentifier
+		err = json.Unmarshal(data, &decoded)
+		require.NoError(t, err)
+		require.Equal(t, original, decoded)
+	})
+
+	t.Run("completion params marshals and unmarshals", func(t *testing.T) {
+		original := lsp.CompletionParams{
+			TextDocument: lsp.TextDocumentIdentifier{URI: "file:///test.emod"},
+			Position:     lsp.Position{Line: 3, Character: 10},
+		}
+		data, err := json.Marshal(original)
+		require.NoError(t, err)
+		require.JSONEq(t, `{"textDocument":{"uri":"file:///test.emod"},"position":{"line":3,"character":10}}`, string(data))
+
+		var decoded lsp.CompletionParams
+		err = json.Unmarshal(data, &decoded)
+		require.NoError(t, err)
+		require.Equal(t, "file:///test.emod", decoded.TextDocument.URI)
+		require.Equal(t, 3, decoded.Position.Line)
+		require.Equal(t, 10, decoded.Position.Character)
+	})
+
+	t.Run("completion options marshals and unmarshals with trigger characters", func(t *testing.T) {
+		original := lsp.CompletionOptions{TriggerCharacters: []string{".", ":"}}
+		data, err := json.Marshal(original)
+		require.NoError(t, err)
+		require.JSONEq(t, `{"triggerCharacters":[".",":"]}`, string(data))
+
+		var decoded lsp.CompletionOptions
+		err = json.Unmarshal(data, &decoded)
+		require.NoError(t, err)
+		require.Equal(t, []string{".", ":"}, decoded.TriggerCharacters)
+	})
+
+	t.Run("completion options omits trigger characters when empty", func(t *testing.T) {
+		opts := lsp.CompletionOptions{}
+		data, err := json.Marshal(opts)
+		require.NoError(t, err)
+		require.JSONEq(t, `{}`, string(data))
+	})
+
+	t.Run("initialize result with completion provider", func(t *testing.T) {
+		result := lsp.InitializeResult{
+			Capabilities: lsp.ServerCapabilities{
+				TextDocumentSync: lsp.SyncFull,
+				CompletionProvider: &lsp.CompletionOptions{
+					TriggerCharacters: []string{"."},
+				},
+			},
+		}
+		data, err := json.Marshal(result)
+		require.NoError(t, err)
+		require.JSONEq(t, `{"capabilities":{"textDocumentSync":1,"completionProvider":{"triggerCharacters":["."]}}}`, string(data))
+
+		var decoded lsp.InitializeResult
+		err = json.Unmarshal(data, &decoded)
+		require.NoError(t, err)
+		require.NotNil(t, decoded.Capabilities.CompletionProvider)
+		require.Equal(t, []string{"."}, decoded.Capabilities.CompletionProvider.TriggerCharacters)
+	})
+
+	t.Run("initialize result omits completion provider when nil", func(t *testing.T) {
+		result := lsp.InitializeResult{
+			Capabilities: lsp.ServerCapabilities{
+				TextDocumentSync: lsp.SyncNone,
+			},
+		}
+		data, err := json.Marshal(result)
+		require.NoError(t, err)
+		require.JSONEq(t, `{"capabilities":{"textDocumentSync":0}}`, string(data))
+	})
 }

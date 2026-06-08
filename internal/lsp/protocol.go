@@ -44,9 +44,71 @@ type InitializeParams struct {
 	Capabilities interface{} `json:"capabilities,omitempty"`
 }
 
+// CompletionItemKind represents the kind of a completion item.
+type CompletionItemKind int
+
+const (
+	TextCompletion         CompletionItemKind = 1
+	MethodCompletion       CompletionItemKind = 2
+	FunctionCompletion     CompletionItemKind = 3
+	ConstructorCompletion  CompletionItemKind = 4
+	FieldCompletion        CompletionItemKind = 5
+	VariableCompletion     CompletionItemKind = 6
+	ClassCompletion        CompletionItemKind = 7
+	InterfaceCompletion    CompletionItemKind = 8
+	ModuleCompletion       CompletionItemKind = 9
+	PropertyCompletion     CompletionItemKind = 10
+	UnitCompletion         CompletionItemKind = 11
+	ValueCompletion        CompletionItemKind = 12
+	EnumCompletion         CompletionItemKind = 13
+	KeywordCompletion      CompletionItemKind = 14
+	SnippetCompletion      CompletionItemKind = 15
+	ColorCompletion        CompletionItemKind = 16
+	FileCompletion         CompletionItemKind = 17
+	ReferenceCompletion    CompletionItemKind = 18
+	FolderCompletion       CompletionItemKind = 19
+	EnumMemberCompletion   CompletionItemKind = 20
+	ConstantCompletion     CompletionItemKind = 21
+	StructCompletion       CompletionItemKind = 22
+	EventCompletion        CompletionItemKind = 23
+	OperatorCompletion     CompletionItemKind = 24
+	TypeParameterCompletion CompletionItemKind = 25
+)
+
+// CompletionItem represents a completion item in an LSP completion response.
+type CompletionItem struct {
+	Label         string             `json:"label"`
+	Kind          CompletionItemKind `json:"kind,omitempty"`
+	Detail        string             `json:"detail,omitempty"`
+	Documentation string             `json:"documentation,omitempty"`
+}
+
+// CompletionList represents a list of completion items.
+type CompletionList struct {
+	IsIncomplete bool             `json:"isIncomplete"`
+	Items        []CompletionItem `json:"items"`
+}
+
+// TextDocumentIdentifier identifies a specific text document by URI.
+type TextDocumentIdentifier struct {
+	URI string `json:"uri"`
+}
+
+// CompletionParams represents parameters for a "textDocument/completion" request.
+type CompletionParams struct {
+	TextDocument TextDocumentIdentifier `json:"textDocument"`
+	Position     Position               `json:"position"`
+}
+
+// CompletionOptions represents options for text document completion.
+type CompletionOptions struct {
+	TriggerCharacters []string `json:"triggerCharacters,omitempty"`
+}
+
 // ServerCapabilities represents capabilities the server advertises to the client.
 type ServerCapabilities struct {
-	TextDocumentSync TextDocumentSyncKind `json:"textDocumentSync"`
+	TextDocumentSync   TextDocumentSyncKind `json:"textDocumentSync"`
+	CompletionProvider *CompletionOptions   `json:"completionProvider,omitempty"`
 }
 
 // InitializeResult is the result returned from the "initialize" request.
