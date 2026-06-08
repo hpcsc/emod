@@ -113,13 +113,14 @@ type Trigger struct {
 }
 
 type View struct {
-	Comments   []*Comment
-	Name       string
-	NamePos    Position
-	Fields     []*Field
-	Subscribes []string
-	OpenPos    Position
-	ClosePos   Position
+	Comments      []*Comment
+	Name          string
+	NamePos       Position
+	Fields        []*Field
+	Subscribes    []string
+	SubscribesPos []Position
+	OpenPos       Position
+	ClosePos      Position
 }
 
 type Automation struct {

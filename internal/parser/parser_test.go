@@ -522,6 +522,84 @@ context "Ctx" {
 		require.Equal(t, []string{"OnlyEvent"}, view.Subscribes)
 	})
 
+	t.Run("subscribes positions recorded for each identifier", func(t *testing.T) {
+		input := `model "Test"
+context "Ctx" {
+  aggregate "Agg" {
+    slice "Slice" {
+      view MyView {
+        subscribes [EventA, EventB, EventC]
+      }
+    }
+  }
+}`
+		tokens, _ := lexer.Scan(input, "test.emod")
+
+		p := parser.New(tokens, "test.emod")
+		model, errs := p.Parse()
+
+		require.Len(t, errs, 0)
+		view := model.Contexts[0].Aggregates[0].Slices[0].Views[0]
+		require.Equal(t, []string{"EventA", "EventB", "EventC"}, view.Subscribes)
+		require.Len(t, view.SubscribesPos, 3)
+		require.Equal(t, "test.emod", view.SubscribesPos[0].Filename)
+		require.Equal(t, 6, view.SubscribesPos[0].Line)
+		require.Equal(t, 21, view.SubscribesPos[0].Column)
+		require.Equal(t, "test.emod", view.SubscribesPos[1].Filename)
+		require.Equal(t, 6, view.SubscribesPos[1].Line)
+		require.Equal(t, 29, view.SubscribesPos[1].Column)
+		require.Equal(t, "test.emod", view.SubscribesPos[2].Filename)
+		require.Equal(t, 6, view.SubscribesPos[2].Line)
+		require.Equal(t, 37, view.SubscribesPos[2].Column)
+	})
+
+	t.Run("subscribes positions for single identifier", func(t *testing.T) {
+		input := `model "Test"
+context "Ctx" {
+  aggregate "Agg" {
+    slice "Slice" {
+      view MyView {
+        subscribes [SingleEvent]
+      }
+    }
+  }
+}`
+		tokens, _ := lexer.Scan(input, "test.emod")
+
+		p := parser.New(tokens, "test.emod")
+		model, errs := p.Parse()
+
+		require.Len(t, errs, 0)
+		view := model.Contexts[0].Aggregates[0].Slices[0].Views[0]
+		require.Len(t, view.SubscribesPos, 1)
+		require.Equal(t, "test.emod", view.SubscribesPos[0].Filename)
+		require.Equal(t, 6, view.SubscribesPos[0].Line)
+		require.Equal(t, 21, view.SubscribesPos[0].Column)
+	})
+
+	t.Run("subscribes positions is empty when no subscribes", func(t *testing.T) {
+		input := `model "Test"
+context "Ctx" {
+  aggregate "Agg" {
+    slice "Slice" {
+      view MyView {
+        fields {
+          id string
+        }
+      }
+    }
+  }
+}`
+		tokens, _ := lexer.Scan(input, "test.emod")
+
+		p := parser.New(tokens, "test.emod")
+		model, errs := p.Parse()
+
+		require.Len(t, errs, 0)
+		view := model.Contexts[0].Aggregates[0].Slices[0].Views[0]
+		require.Empty(t, view.SubscribesPos)
+	})
+
 	t.Run("view alongside command, event, and flow", func(t *testing.T) {
 		input := `model "Test"
 context "Ctx" {

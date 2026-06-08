@@ -450,7 +450,7 @@ func (p *Instance) parseView() *ast.View {
 		if p.check(lexer.KeywordFields) {
 			view.Fields = p.parseFields()
 		} else if p.check(lexer.KeywordSubscribes) {
-			view.Subscribes = p.parseSubscribes()
+			view.Subscribes, view.SubscribesPos = p.parseSubscribes()
 		} else {
 			p.error("expected fields or subscribes in view")
 			p.advance()
@@ -664,12 +664,13 @@ func (p *Instance) parseTranslation() *ast.Translation {
 	return translation
 }
 
-func (p *Instance) parseSubscribes() []string {
+func (p *Instance) parseSubscribes() ([]string, []ast.Position) {
 	var names []string
+	var positions []ast.Position
 	p.consume(lexer.KeywordSubscribes, "expected subscribes")
 	if !p.check(lexer.OpenBracket) {
 		p.error("expected [ after subscribes")
-		return names
+		return names, positions
 	}
 	p.advance()
 
@@ -679,7 +680,9 @@ func (p *Instance) parseSubscribes() []string {
 			p.advance()
 			continue
 		}
-		names = append(names, p.advance().Value)
+		tok := p.advance()
+		names = append(names, tok.Value)
+		positions = append(positions, p.position(tok))
 
 		if p.check(lexer.Comma) {
 			p.advance()
@@ -688,11 +691,11 @@ func (p *Instance) parseSubscribes() []string {
 
 	if !p.check(lexer.CloseBracket) {
 		p.error("expected ] to close subscribes list")
-		return names
+		return names, positions
 	}
 	p.advance()
 
-	return names
+	return names, positions
 }
 
 func (p *Instance) parseFields() []*ast.Field {

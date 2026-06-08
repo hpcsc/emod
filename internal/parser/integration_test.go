@@ -15,7 +15,7 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-var ignorePositions = cmpopts.IgnoreTypes(ast.Position{})
+var ignorePositions = cmpopts.IgnoreTypes(ast.Position{}, []ast.Position{})
 
 func TestIntegration(t *testing.T) {
 	t.Run("parses minimal.emod fixture with zero errors and fully populated AST", func(t *testing.T) {
