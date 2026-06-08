@@ -2,8 +2,8 @@
 
 ## Progress
 - [x] Task 1: Add LSP completion protocol types
-- [ ] Task 2: Add completion logic
-- [ ] Task 3: Wire completion handler into LSP server
+- [x] Task 2: Add completion logic
+- [x] Task 3: Wire completion handler into LSP server
 
 ---
 

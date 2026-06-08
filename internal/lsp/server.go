@@ -64,6 +64,8 @@ func (s *Server) dispatch(ctx context.Context, msg *Message) error {
 		return s.handleDidOpen(msg)
 	case "textDocument/didChange":
 		return s.handleDidChange(msg)
+	case "textDocument/completion":
+		return s.handleCompletion(msg)
 	case "shutdown":
 		return s.handleShutdown(msg)
 	default:
@@ -82,9 +84,13 @@ func (s *Server) dispatch(ctx context.Context, msg *Message) error {
 }
 
 func (s *Server) handleInitialize(msg *Message) error {
+	triggerChars := []string{" "}
 	result := InitializeResult{
 		Capabilities: ServerCapabilities{
-			TextDocumentSync: SyncFull,
+			TextDocumentSync:   SyncFull,
+			CompletionProvider: &CompletionOptions{
+				TriggerCharacters: triggerChars,
+			},
 		},
 	}
 
@@ -146,6 +152,38 @@ func (s *Server) handleShutdown(msg *Message) error {
 	}
 	s.shutdown = true
 	return nil
+}
+
+func (s *Server) handleCompletion(msg *Message) error {
+	var params CompletionParams
+	if err := json.Unmarshal(msg.Params, &params); err != nil {
+		return err
+	}
+
+	uri := params.TextDocument.URI
+	doc, ok := s.documents.GetContent(uri)
+	if !ok {
+		return s.writeMessage(&Message{
+			JSONRPC: Version,
+			ID:      msg.ID,
+			Error: &ErrorObject{
+				Code:    -32602,
+				Message: "document not found: " + uri,
+			},
+		})
+	}
+
+	completions := GetCompletions(doc, params.Position.Line, params.Position.Character)
+	resultBytes, err := json.Marshal(completions)
+	if err != nil {
+		return err
+	}
+
+	return s.writeMessage(&Message{
+		JSONRPC: Version,
+		ID:      msg.ID,
+		Result:  resultBytes,
+	})
 }
 
 // pushDiagnostics runs the lex→parse→validate→lint pipeline on the given text

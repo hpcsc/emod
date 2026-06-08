@@ -117,6 +117,22 @@ func TestServer(t *testing.T) {
 			id := p.writeInitialize(t)
 			p.readInitializeResult(t, id)
 		})
+
+		t.Run("advertises CompletionProvider capability", func(t *testing.T) {
+			p := startServer(t)
+			id := p.writeInitialize(t)
+			resp := p.readMsg(t)
+			require.NotNil(t, resp.ID)
+			require.Equal(t, id, *resp.ID)
+			require.Nil(t, resp.Error)
+			require.NotNil(t, resp.Result)
+
+			var result lsp.InitializeResult
+			err := json.Unmarshal(resp.Result, &result)
+			require.NoError(t, err)
+			require.NotNil(t, result.Capabilities.CompletionProvider, "expected CompletionProvider to be advertised")
+			require.Contains(t, result.Capabilities.CompletionProvider.TriggerCharacters, " ")
+		})
 	})
 
 	t.Run("initialized", func(t *testing.T) {
@@ -429,6 +445,147 @@ context "C" {
 			// No response expected — verify by timeout.
 			msg := readMsgTimeout(p.outReader, 200*time.Millisecond)
 			require.Nil(t, msg, "expected no response for unknown notification")
+		})
+	})
+
+	t.Run("completion", func(t *testing.T) {
+		t.Run("returns keyword completions for open document", func(t *testing.T) {
+			p := startServer(t)
+			p.writeInitialize(t)
+			p.readInitializeResult(t, 1)
+
+			uri := "file:///test.emod"
+			p.writeMsg(t, &lsp.Message{
+				JSONRPC: "2.0",
+				Method:  "textDocument/didOpen",
+				Params: mustMarshal(t, map[string]interface{}{
+					"textDocument": map[string]interface{}{
+						"uri":        uri,
+						"languageId": "emod",
+						"version":    1,
+						"text":       `model "test"`,
+					},
+				}),
+			})
+			// Consume diagnostics notification.
+			p.readMsg(t)
+
+			completionID := 2
+			p.writeMsg(t, &lsp.Message{
+				JSONRPC: "2.0",
+				ID:      &completionID,
+				Method:  "textDocument/completion",
+				Params: mustMarshal(t, map[string]interface{}{
+					"textDocument": map[string]interface{}{
+						"uri": uri,
+					},
+					"position": map[string]interface{}{
+						"line":      0,
+						"character": 5,
+					},
+				}),
+			})
+
+			resp := p.readMsg(t)
+			require.NotNil(t, resp.ID)
+			require.Equal(t, completionID, *resp.ID)
+			require.Nil(t, resp.Error)
+			require.NotNil(t, resp.Result)
+
+			var list lsp.CompletionList
+			err := json.Unmarshal(resp.Result, &list)
+			require.NoError(t, err)
+			require.False(t, list.IsIncomplete)
+			require.NotEmpty(t, list.Items)
+			for _, item := range list.Items {
+				require.Equal(t, lsp.KeywordCompletion, item.Kind)
+			}
+		})
+
+		t.Run("returns error for unknown document URI", func(t *testing.T) {
+			p := startServer(t)
+			p.writeInitialize(t)
+			p.readInitializeResult(t, 1)
+
+			completionID := 2
+			p.writeMsg(t, &lsp.Message{
+				JSONRPC: "2.0",
+				ID:      &completionID,
+				Method:  "textDocument/completion",
+				Params: mustMarshal(t, map[string]interface{}{
+					"textDocument": map[string]interface{}{
+						"uri": "file:///unknown.emod",
+					},
+					"position": map[string]interface{}{
+						"line":      0,
+						"character": 0,
+					},
+				}),
+			})
+
+			resp := p.readMsg(t)
+			require.NotNil(t, resp.ID)
+			require.Equal(t, completionID, *resp.ID)
+			require.NotNil(t, resp.Error)
+			require.Contains(t, resp.Error.Message, "document not found")
+		})
+
+		t.Run("gracefully handles partial content at cursor", func(t *testing.T) {
+			p := startServer(t)
+			p.writeInitialize(t)
+			p.readInitializeResult(t, 1)
+
+			uri := "file:///partial.emod"
+			// Open a document with only the beginning of a model declaration.
+			p.writeMsg(t, &lsp.Message{
+				JSONRPC: "2.0",
+				Method:  "textDocument/didOpen",
+				Params: mustMarshal(t, map[string]interface{}{
+					"textDocument": map[string]interface{}{
+						"uri":        uri,
+						"languageId": "emod",
+						"version":    1,
+						"text":       `model `,
+					},
+				}),
+			})
+			// Consume diagnostics notification.
+			p.readMsg(t)
+
+			completionID := 2
+			p.writeMsg(t, &lsp.Message{
+				JSONRPC: "2.0",
+				ID:      &completionID,
+				Method:  "textDocument/completion",
+				Params: mustMarshal(t, map[string]interface{}{
+					"textDocument": map[string]interface{}{
+						"uri": uri,
+					},
+					"position": map[string]interface{}{
+						"line":      0,
+						"character": 6,
+					},
+				}),
+			})
+
+			resp := p.readMsg(t)
+			require.NotNil(t, resp.ID)
+			require.Equal(t, completionID, *resp.ID)
+			require.Nil(t, resp.Error)
+			require.NotNil(t, resp.Result)
+
+			var list lsp.CompletionList
+			err := json.Unmarshal(resp.Result, &list)
+			require.NoError(t, err)
+			require.NotEmpty(t, list.Items)
+			// Partial content should still return top-level keyword completions.
+			labels := make([]string, len(list.Items))
+			for i, item := range list.Items {
+				labels[i] = item.Label
+			}
+			require.Contains(t, labels, "model")
+			require.Contains(t, labels, "actor")
+			require.Contains(t, labels, "context")
 		})
 	})
 
