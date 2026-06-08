@@ -11,12 +11,14 @@ import (
 )
 
 func TestConvertDiagnostics(t *testing.T) {
-	t.Run("converts empty entries list to nil", func(t *testing.T) {
+	t.Run("converts empty entries list to empty slice", func(t *testing.T) {
 		result := lsp.ConvertDiagnostics("file:///test.emod", nil)
-		require.Nil(t, result)
+		require.NotNil(t, result)
+		require.Empty(t, result)
 
 		result = lsp.ConvertDiagnostics("file:///test.emod", []*diagnostic.Entry{})
-		require.Nil(t, result)
+		require.NotNil(t, result)
+		require.Empty(t, result)
 	})
 
 	t.Run("error severity", func(t *testing.T) {

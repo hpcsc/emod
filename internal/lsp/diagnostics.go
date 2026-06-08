@@ -8,7 +8,7 @@ import (
 // It applies position mapping (1-based internal → 0-based LSP) and severity mapping.
 func ConvertDiagnostics(_ string, entries []*diagnostic.Entry) []Diagnostic {
 	if len(entries) == 0 {
-		return nil
+		return []Diagnostic{}
 	}
 
 	result := make([]Diagnostic, 0, len(entries))
