@@ -211,6 +211,17 @@ func NewApp() *urfave.App {
 					return nil
 				},
 			},
+			{
+				Name:  "lsp",
+				Usage: "Start the LSP server (stdin/stdout transport)",
+				Action: func(c *urfave.Context) error {
+					if err := RunLSP(); err != nil {
+						fmt.Fprintln(os.Stderr, err)
+						return urfave.Exit("", 1)
+					}
+					return nil
+				},
+			},
 		},
 	}
 }

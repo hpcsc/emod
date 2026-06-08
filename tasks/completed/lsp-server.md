@@ -3,8 +3,8 @@
 ## Progress
 - [x] Task 1: Add LSP protocol types and JSON-RPC message framing
 - [x] Task 2: Add document manager and diagnostic conversion
-- [ ] Task 3: Build LSP server with diagnostics on file open/change
-- [ ] Task 4: Register `emod lsp` CLI subcommand
+- [x] Task 3: Build LSP server with diagnostics on file open/change
+- [x] Task 4: Register `emod lsp` CLI subcommand
 
 ---
 
