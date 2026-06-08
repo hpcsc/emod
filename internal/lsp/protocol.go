@@ -105,10 +105,17 @@ type CompletionOptions struct {
 	TriggerCharacters []string `json:"triggerCharacters,omitempty"`
 }
 
+// DefinitionParams represents parameters for a "textDocument/definition" request.
+type DefinitionParams struct {
+	TextDocument TextDocumentIdentifier `json:"textDocument"`
+	Position     Position               `json:"position"`
+}
+
 // ServerCapabilities represents capabilities the server advertises to the client.
 type ServerCapabilities struct {
 	TextDocumentSync   TextDocumentSyncKind `json:"textDocumentSync"`
 	CompletionProvider *CompletionOptions   `json:"completionProvider,omitempty"`
+	DefinitionProvider bool                 `json:"definitionProvider,omitempty"`
 }
 
 // InitializeResult is the result returned from the "initialize" request.

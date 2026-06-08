@@ -66,6 +66,8 @@ func (s *Server) dispatch(ctx context.Context, msg *Message) error {
 		return s.handleDidChange(msg)
 	case "textDocument/completion":
 		return s.handleCompletion(msg)
+	case "textDocument/definition":
+		return s.handleDefinition(msg)
 	case "shutdown":
 		return s.handleShutdown(msg)
 	default:
@@ -91,6 +93,7 @@ func (s *Server) handleInitialize(msg *Message) error {
 			CompletionProvider: &CompletionOptions{
 				TriggerCharacters: triggerChars,
 			},
+			DefinitionProvider: true,
 		},
 	}
 
@@ -175,6 +178,38 @@ func (s *Server) handleCompletion(msg *Message) error {
 
 	completions := GetCompletions(doc, params.Position.Line, params.Position.Character)
 	resultBytes, err := json.Marshal(completions)
+	if err != nil {
+		return err
+	}
+
+	return s.writeMessage(&Message{
+		JSONRPC: Version,
+		ID:      msg.ID,
+		Result:  resultBytes,
+	})
+}
+
+func (s *Server) handleDefinition(msg *Message) error {
+	var params DefinitionParams
+	if err := json.Unmarshal(msg.Params, &params); err != nil {
+		return err
+	}
+
+	uri := params.TextDocument.URI
+	doc, ok := s.documents.GetContent(uri)
+	if !ok {
+		return s.writeMessage(&Message{
+			JSONRPC: Version,
+			ID:      msg.ID,
+			Error: &ErrorObject{
+				Code:    -32602,
+				Message: "document not found: " + uri,
+			},
+		})
+	}
+
+	loc := GetDefinition(doc, params.Position.Line, params.Position.Character, uri)
+	resultBytes, err := json.Marshal(loc)
 	if err != nil {
 		return err
 	}
