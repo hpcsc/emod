@@ -1,6 +1,6 @@
 ## Progress
 - [x] Task 1: Add position tracking for subscribes list entries in the parser
-- [ ] Task 2: Implement go-to-definition resolution logic
+- [x] Task 2: Implement go-to-definition resolution logic
 - [ ] Task 3: Wire go-to-definition handler into the LSP server
 
 ---

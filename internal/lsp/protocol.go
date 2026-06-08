@@ -142,6 +142,12 @@ type TextDocumentContentChangeEvent struct {
 	Text string `json:"text"`
 }
 
+// Location represents a location in a text document (as per the LSP spec).
+type Location struct {
+	URI   string `json:"uri"`
+	Range Range  `json:"range"`
+}
+
 // DidChangeTextDocumentParams represents parameters for the "textDocument/didChange" notification.
 type DidChangeTextDocumentParams struct {
 	TextDocument   VersionedTextDocumentIdentifier     `json:"textDocument"`
