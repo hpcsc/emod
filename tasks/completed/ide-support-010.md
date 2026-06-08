@@ -2,7 +2,7 @@
 
 ## Progress
 - [x] Task 1: Add protocol types and implement GetReferences function with unit tests
-- [ ] Task 2: Wire References into the LSP server with integration tests
+- [x] Task 2: Wire References into the LSP server with integration tests
 
 ---
 

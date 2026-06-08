@@ -164,6 +164,21 @@ func TestServer(t *testing.T) {
 			require.True(t, result.Capabilities.DocumentFormattingProvider, "expected DocumentFormattingProvider to be true")
 		})
 
+		t.Run("advertises ReferencesProvider capability", func(t *testing.T) {
+			p := startServer(t)
+			id := p.writeInitialize(t)
+			resp := p.readMsg(t)
+			require.NotNil(t, resp.ID)
+			require.Equal(t, id, *resp.ID)
+			require.Nil(t, resp.Error)
+			require.NotNil(t, resp.Result)
+
+			var result lsp.InitializeResult
+			err := json.Unmarshal(resp.Result, &result)
+			require.NoError(t, err)
+			require.True(t, result.Capabilities.ReferencesProvider, "expected ReferencesProvider to be true")
+		})
+
 		t.Run("advertises HoverProvider capability", func(t *testing.T) {
 			p := startServer(t)
 			id := p.writeInitialize(t)
@@ -774,6 +789,160 @@ context "C" {
 			resp := p.readMsg(t)
 			require.NotNil(t, resp.ID)
 			require.Equal(t, defID, *resp.ID)
+			require.NotNil(t, resp.Error)
+			require.Equal(t, -32602, resp.Error.Code)
+			require.Contains(t, resp.Error.Message, "document not found")
+		})
+	})
+
+	t.Run("references", func(t *testing.T) {
+		t.Run("returns all reference locations for known name in open document", func(t *testing.T) {
+			p := startServer(t)
+			p.writeInitialize(t)
+			p.readInitializeResult(t, 1)
+
+			uri := "file:///test.emod"
+			content := `context "Orders" {
+    aggregate "Sales" {
+        slice "OrderSlice" {
+            command SubmitOrder {
+            }
+            event OrderSubmitted {
+            }
+            view OrderView {
+                subscribes [OrderSubmitted]
+            }
+            automation AutoSubmit {
+                trigger OrderSubmitted
+                command SubmitOrder
+            }
+        }
+    }
+}`
+			p.writeMsg(t, &lsp.Message{
+				JSONRPC: "2.0",
+				Method:  "textDocument/didOpen",
+				Params: mustMarshal(t, map[string]interface{}{
+					"textDocument": map[string]interface{}{
+						"uri":        uri,
+						"languageId": "emod",
+						"version":    1,
+						"text":       content,
+					},
+				}),
+			})
+			// Consume diagnostics notification.
+			p.readMsg(t)
+
+			refID := 2
+			// Cursor on "OrderSubmitted" in event definition: line 5, character 18.
+			p.writeMsg(t, &lsp.Message{
+				JSONRPC: "2.0",
+				ID:      &refID,
+				Method:  "textDocument/references",
+				Params: mustMarshal(t, map[string]interface{}{
+					"textDocument": map[string]interface{}{
+						"uri": uri,
+					},
+					"position": map[string]interface{}{
+						"line":      5,
+						"character": 18,
+					},
+				}),
+			})
+
+			resp := p.readMsg(t)
+			require.NotNil(t, resp.ID)
+			require.Equal(t, refID, *resp.ID)
+			require.Nil(t, resp.Error)
+			require.NotNil(t, resp.Result)
+
+			var locs []lsp.Location
+			err := json.Unmarshal(resp.Result, &locs)
+			require.NoError(t, err)
+			require.NotEmpty(t, locs, "expected at least one reference location")
+			require.Equal(t, uri, locs[0].URI)
+		})
+
+		t.Run("returns null when cursor not on a resolvable name", func(t *testing.T) {
+			p := startServer(t)
+			p.writeInitialize(t)
+			p.readInitializeResult(t, 1)
+
+			uri := "file:///test.emod"
+			content := `context "Orders" {
+    aggregate "Sales" {
+        slice "OrderSlice" {
+            event OrderSubmitted {
+            }
+            view OrderView {
+                subscribes [OrderSubmitted]
+            }
+        }
+    }
+}`
+			p.writeMsg(t, &lsp.Message{
+				JSONRPC: "2.0",
+				Method:  "textDocument/didOpen",
+				Params: mustMarshal(t, map[string]interface{}{
+					"textDocument": map[string]interface{}{
+						"uri":        uri,
+						"languageId": "emod",
+						"version":    1,
+						"text":       content,
+					},
+				}),
+			})
+			p.readMsg(t)
+
+			refID := 2
+			// Cursor on "context" keyword: line 0, character 2.
+			p.writeMsg(t, &lsp.Message{
+				JSONRPC: "2.0",
+				ID:      &refID,
+				Method:  "textDocument/references",
+				Params: mustMarshal(t, map[string]interface{}{
+					"textDocument": map[string]interface{}{
+						"uri": uri,
+					},
+					"position": map[string]interface{}{
+						"line":      0,
+						"character": 2,
+					},
+				}),
+			})
+
+			resp := p.readMsg(t)
+			require.NotNil(t, resp.ID)
+			require.Equal(t, refID, *resp.ID)
+			require.Nil(t, resp.Error)
+			require.Equal(t, "null", string(resp.Result))
+		})
+
+		t.Run("returns error for unknown document URI", func(t *testing.T) {
+			p := startServer(t)
+			p.writeInitialize(t)
+			p.readInitializeResult(t, 1)
+
+			refID := 2
+			p.writeMsg(t, &lsp.Message{
+				JSONRPC: "2.0",
+				ID:      &refID,
+				Method:  "textDocument/references",
+				Params: mustMarshal(t, map[string]interface{}{
+					"textDocument": map[string]interface{}{
+						"uri": "file:///unknown.emod",
+					},
+					"position": map[string]interface{}{
+						"line":      0,
+						"character": 0,
+					},
+				}),
+			})
+
+			resp := p.readMsg(t)
+			require.NotNil(t, resp.ID)
+			require.Equal(t, refID, *resp.ID)
 			require.NotNil(t, resp.Error)
 			require.Equal(t, -32602, resp.Error.Code)
 			require.Contains(t, resp.Error.Message, "document not found")

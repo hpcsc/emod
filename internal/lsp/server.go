@@ -70,6 +70,8 @@ func (s *Server) dispatch(ctx context.Context, msg *Message) error {
 		return s.handleCompletion(msg)
 	case "textDocument/definition":
 		return s.handleDefinition(msg)
+	case "textDocument/references":
+		return s.handleReferences(msg)
 	case "textDocument/formatting":
 		return s.handleFormatting(msg)
 	case "textDocument/hover":
@@ -100,6 +102,7 @@ func (s *Server) handleInitialize(msg *Message) error {
 				TriggerCharacters: triggerChars,
 			},
 			DefinitionProvider:         true,
+			ReferencesProvider:         true,
 			DocumentFormattingProvider: true,
 			HoverProvider:              true,
 		},
@@ -218,6 +221,38 @@ func (s *Server) handleDefinition(msg *Message) error {
 
 	loc := GetDefinition(doc, params.Position.Line, params.Position.Character, uri)
 	resultBytes, err := json.Marshal(loc)
+	if err != nil {
+		return err
+	}
+
+	return s.writeMessage(&Message{
+		JSONRPC: Version,
+		ID:      msg.ID,
+		Result:  resultBytes,
+	})
+}
+
+func (s *Server) handleReferences(msg *Message) error {
+	var params ReferenceParams
+	if err := json.Unmarshal(msg.Params, &params); err != nil {
+		return err
+	}
+
+	uri := params.TextDocument.URI
+	doc, ok := s.documents.GetContent(uri)
+	if !ok {
+		return s.writeMessage(&Message{
+			JSONRPC: Version,
+			ID:      msg.ID,
+			Error: &ErrorObject{
+				Code:    -32602,
+				Message: "document not found: " + uri,
+			},
+		})
+	}
+
+	locs := GetReferences(doc, params.Position.Line, params.Position.Character, uri)
+	resultBytes, err := json.Marshal(locs)
 	if err != nil {
 		return err
 	}
