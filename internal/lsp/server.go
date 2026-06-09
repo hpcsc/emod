@@ -76,6 +76,8 @@ func (s *Server) dispatch(ctx context.Context, msg *Message) error {
 		return s.handleFormatting(msg)
 	case "textDocument/hover":
 		return s.handleHover(msg)
+	case "textDocument/semanticTokens/full":
+		return s.handleSemanticTokensFull(msg)
 	case "shutdown":
 		return s.handleShutdown(msg)
 	default:
@@ -105,6 +107,9 @@ func (s *Server) handleInitialize(msg *Message) error {
 			ReferencesProvider:         true,
 			DocumentFormattingProvider: true,
 			HoverProvider:              true,
+			SemanticTokensProvider: &SemanticTokensProviderOptions{
+				Legend: GetSemanticTokensLegend(),
+			},
 		},
 	}
 
@@ -285,6 +290,38 @@ func (s *Server) handleHover(msg *Message) error {
 
 	hover := GetHover(doc, params.Position.Line, params.Position.Character)
 	resultBytes, err := json.Marshal(hover)
+	if err != nil {
+		return err
+	}
+
+	return s.writeMessage(&Message{
+		JSONRPC: Version,
+		ID:      msg.ID,
+		Result:  resultBytes,
+	})
+}
+
+func (s *Server) handleSemanticTokensFull(msg *Message) error {
+	var params SemanticTokensParams
+	if err := json.Unmarshal(msg.Params, &params); err != nil {
+		return err
+	}
+
+	uri := params.TextDocument.URI
+	doc, ok := s.documents.GetContent(uri)
+	if !ok {
+		return s.writeMessage(&Message{
+			JSONRPC: Version,
+			ID:      msg.ID,
+			Error: &ErrorObject{
+				Code:    -32602,
+				Message: "document not found: " + uri,
+			},
+		})
+	}
+
+	tokens := GetSemanticTokens(doc)
+	resultBytes, err := json.Marshal(tokens)
 	if err != nil {
 		return err
 	}

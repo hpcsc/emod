@@ -2,8 +2,8 @@
 
 ## Progress
 - [x] Task 1: Add LSP protocol types for semantic tokens
-- [ ] Task 2: Implement semantic token computation from AST
-- [ ] Task 3: Wire semantic tokens handler into LSP server
+- [x] Task 2: Implement semantic token computation from AST
+- [x] Task 3: Wire semantic tokens handler into LSP server
 
 ## Story Reference
 **File:** `user-stories/us-ide-011-semantic-tokens.md` (derived from inline description)

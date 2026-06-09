@@ -193,6 +193,25 @@ func TestServer(t *testing.T) {
 			require.NoError(t, err)
 			require.True(t, result.Capabilities.HoverProvider, "expected HoverProvider to be true")
 		})
+
+		t.Run("advertises SemanticTokensProvider capability with legend", func(t *testing.T) {
+			p := startServer(t)
+			id := p.writeInitialize(t)
+			resp := p.readMsg(t)
+			require.NotNil(t, resp.ID)
+			require.Equal(t, id, *resp.ID)
+			require.Nil(t, resp.Error)
+			require.NotNil(t, resp.Result)
+
+			var result lsp.InitializeResult
+			err := json.Unmarshal(resp.Result, &result)
+			require.NoError(t, err)
+			require.NotNil(t, result.Capabilities.SemanticTokensProvider, "expected SemanticTokensProvider to be advertised")
+			require.NotEmpty(t, result.Capabilities.SemanticTokensProvider.Legend.TokenTypes)
+			require.Contains(t, result.Capabilities.SemanticTokensProvider.Legend.TokenTypes, "function")
+			require.Contains(t, result.Capabilities.SemanticTokensProvider.Legend.TokenTypes, "event")
+			require.Contains(t, result.Capabilities.SemanticTokensProvider.Legend.TokenTypes, "class")
+		})
 	})
 
 	t.Run("initialized", func(t *testing.T) {
@@ -1253,6 +1272,136 @@ context "C" {
 			require.Nil(t, resp.Error)
 			require.NotNil(t, resp.Result)
 			require.Equal(t, "[]", string(resp.Result))
+		})
+	})
+
+	t.Run("semanticTokens", func(t *testing.T) {
+		t.Run("returns delta-encoded semantic tokens for known document URI", func(t *testing.T) {
+			p := startServer(t)
+			p.writeInitialize(t)
+			p.readInitializeResult(t, 1)
+
+			uri := "file:///st.emod"
+			content := `context "Orders" {
+    aggregate "Sales" {
+        slice "OrderSlice" {
+            command SubmitOrder {
+            }
+            event OrderSubmitted {
+            }
+        }
+    }
+}
+`
+			p.writeMsg(t, &lsp.Message{
+				JSONRPC: "2.0",
+				Method:  "textDocument/didOpen",
+				Params: mustMarshal(t, map[string]interface{}{
+					"textDocument": map[string]interface{}{
+						"uri":        uri,
+						"languageId": "emod",
+						"version":    1,
+						"text":       content,
+					},
+				}),
+			})
+			// Consume diagnostics notification.
+			p.readMsg(t)
+
+			stID := 2
+			p.writeMsg(t, &lsp.Message{
+				JSONRPC: "2.0",
+				ID:      &stID,
+				Method:  "textDocument/semanticTokens/full",
+				Params: mustMarshal(t, map[string]interface{}{
+					"textDocument": map[string]interface{}{
+						"uri": uri,
+					},
+				}),
+			})
+
+			resp := p.readMsg(t)
+			require.NotNil(t, resp.ID)
+			require.Equal(t, stID, *resp.ID)
+			require.Nil(t, resp.Error)
+			require.NotNil(t, resp.Result)
+
+			var st lsp.SemanticTokens
+			err := json.Unmarshal(resp.Result, &st)
+			require.NoError(t, err)
+			require.NotEmpty(t, st.Data, "expected semantic token data for valid document")
+			// Delta-encoded data comes in groups of 5: deltaLine, deltaChar, length, tokenType, tokenModifiers.
+			require.Equal(t, 0, len(st.Data)%5, "data length must be a multiple of 5")
+		})
+
+		t.Run("returns error for unknown document URI", func(t *testing.T) {
+			p := startServer(t)
+			p.writeInitialize(t)
+			p.readInitializeResult(t, 1)
+
+			stID := 2
+			p.writeMsg(t, &lsp.Message{
+				JSONRPC: "2.0",
+				ID:      &stID,
+				Method:  "textDocument/semanticTokens/full",
+				Params: mustMarshal(t, map[string]interface{}{
+					"textDocument": map[string]interface{}{
+						"uri": "file:///unknown.emod",
+					},
+				}),
+			})
+
+			resp := p.readMsg(t)
+			require.NotNil(t, resp.ID)
+			require.Equal(t, stID, *resp.ID)
+			require.NotNil(t, resp.Error)
+			require.Equal(t, -32602, resp.Error.Code)
+			require.Contains(t, resp.Error.Message, "document not found")
+		})
+
+		t.Run("returns empty data for unparseable document", func(t *testing.T) {
+			p := startServer(t)
+			p.writeInitialize(t)
+			p.readInitializeResult(t, 1)
+
+			uri := "file:///invalid.emod"
+			p.writeMsg(t, &lsp.Message{
+				JSONRPC: "2.0",
+				Method:  "textDocument/didOpen",
+				Params: mustMarshal(t, map[string]interface{}{
+					"textDocument": map[string]interface{}{
+						"uri":        uri,
+						"languageId": "emod",
+						"version":    1,
+						"text":       "this is not valid emod syntax",
+					},
+				}),
+			})
+			// Consume diagnostics notification.
+			p.readMsg(t)
+
+			stID := 2
+			p.writeMsg(t, &lsp.Message{
+				JSONRPC: "2.0",
+				ID:      &stID,
+				Method:  "textDocument/semanticTokens/full",
+				Params: mustMarshal(t, map[string]interface{}{
+					"textDocument": map[string]interface{}{
+						"uri": uri,
+					},
+				}),
+			})
+
+			resp := p.readMsg(t)
+			require.NotNil(t, resp.ID)
+			require.Equal(t, stID, *resp.ID)
+			require.Nil(t, resp.Error)
+			require.NotNil(t, resp.Result)
+
+			var st lsp.SemanticTokens
+			err := json.Unmarshal(resp.Result, &st)
+			require.NoError(t, err)
+			require.Empty(t, st.Data, "expected empty semantic token data for unparseable document")
 		})
 	})
 
