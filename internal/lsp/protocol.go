@@ -48,30 +48,30 @@ type InitializeParams struct {
 type CompletionItemKind int
 
 const (
-	TextCompletion         CompletionItemKind = 1
-	MethodCompletion       CompletionItemKind = 2
-	FunctionCompletion     CompletionItemKind = 3
-	ConstructorCompletion  CompletionItemKind = 4
-	FieldCompletion        CompletionItemKind = 5
-	VariableCompletion     CompletionItemKind = 6
-	ClassCompletion        CompletionItemKind = 7
-	InterfaceCompletion    CompletionItemKind = 8
-	ModuleCompletion       CompletionItemKind = 9
-	PropertyCompletion     CompletionItemKind = 10
-	UnitCompletion         CompletionItemKind = 11
-	ValueCompletion        CompletionItemKind = 12
-	EnumCompletion         CompletionItemKind = 13
-	KeywordCompletion      CompletionItemKind = 14
-	SnippetCompletion      CompletionItemKind = 15
-	ColorCompletion        CompletionItemKind = 16
-	FileCompletion         CompletionItemKind = 17
-	ReferenceCompletion    CompletionItemKind = 18
-	FolderCompletion       CompletionItemKind = 19
-	EnumMemberCompletion   CompletionItemKind = 20
-	ConstantCompletion     CompletionItemKind = 21
-	StructCompletion       CompletionItemKind = 22
-	EventCompletion        CompletionItemKind = 23
-	OperatorCompletion     CompletionItemKind = 24
+	TextCompletion          CompletionItemKind = 1
+	MethodCompletion        CompletionItemKind = 2
+	FunctionCompletion      CompletionItemKind = 3
+	ConstructorCompletion   CompletionItemKind = 4
+	FieldCompletion         CompletionItemKind = 5
+	VariableCompletion      CompletionItemKind = 6
+	ClassCompletion         CompletionItemKind = 7
+	InterfaceCompletion     CompletionItemKind = 8
+	ModuleCompletion        CompletionItemKind = 9
+	PropertyCompletion      CompletionItemKind = 10
+	UnitCompletion          CompletionItemKind = 11
+	ValueCompletion         CompletionItemKind = 12
+	EnumCompletion          CompletionItemKind = 13
+	KeywordCompletion       CompletionItemKind = 14
+	SnippetCompletion       CompletionItemKind = 15
+	ColorCompletion         CompletionItemKind = 16
+	FileCompletion          CompletionItemKind = 17
+	ReferenceCompletion     CompletionItemKind = 18
+	FolderCompletion        CompletionItemKind = 19
+	EnumMemberCompletion    CompletionItemKind = 20
+	ConstantCompletion      CompletionItemKind = 21
+	StructCompletion        CompletionItemKind = 22
+	EventCompletion         CompletionItemKind = 23
+	OperatorCompletion      CompletionItemKind = 24
 	TypeParameterCompletion CompletionItemKind = 25
 )
 
@@ -119,12 +119,13 @@ type ReferenceParams struct {
 
 // ServerCapabilities represents capabilities the server advertises to the client.
 type ServerCapabilities struct {
-	TextDocumentSync           TextDocumentSyncKind `json:"textDocumentSync"`
-	CompletionProvider         *CompletionOptions   `json:"completionProvider,omitempty"`
-	DefinitionProvider         bool                 `json:"definitionProvider,omitempty"`
-	ReferencesProvider         bool                 `json:"referencesProvider,omitempty"`
-	DocumentFormattingProvider bool                 `json:"documentFormattingProvider,omitempty"`
-	HoverProvider              bool                 `json:"hoverProvider,omitempty"`
+	TextDocumentSync           TextDocumentSyncKind           `json:"textDocumentSync"`
+	CompletionProvider         *CompletionOptions             `json:"completionProvider,omitempty"`
+	DefinitionProvider         bool                           `json:"definitionProvider,omitempty"`
+	ReferencesProvider         bool                           `json:"referencesProvider,omitempty"`
+	DocumentFormattingProvider bool                           `json:"documentFormattingProvider,omitempty"`
+	HoverProvider              bool                           `json:"hoverProvider,omitempty"`
+	SemanticTokensProvider     *SemanticTokensProviderOptions `json:"semanticTokensProvider,omitempty"`
 }
 
 // InitializeResult is the result returned from the "initialize" request.
@@ -203,6 +204,39 @@ type DocumentFormattingParams struct {
 
 // DidChangeTextDocumentParams represents parameters for the "textDocument/didChange" notification.
 type DidChangeTextDocumentParams struct {
-	TextDocument   VersionedTextDocumentIdentifier     `json:"textDocument"`
-	ContentChanges []TextDocumentContentChangeEvent    `json:"contentChanges"`
+	TextDocument   VersionedTextDocumentIdentifier  `json:"textDocument"`
+	ContentChanges []TextDocumentContentChangeEvent `json:"contentChanges"`
+}
+
+// SemanticTokenTypes represents the type of a semantic token in the LSP spec.
+type SemanticTokenTypes string
+
+const (
+	TokenTypeFunction  SemanticTokenTypes = "function"
+	TokenTypeEvent     SemanticTokenTypes = "event"
+	TokenTypeClass     SemanticTokenTypes = "class"
+	TokenTypeParameter SemanticTokenTypes = "parameter"
+	TokenTypeNamespace SemanticTokenTypes = "namespace"
+	TokenTypeStruct    SemanticTokenTypes = "struct"
+)
+
+// SemanticTokensLegend defines the token types and modifiers used in semantic tokens.
+type SemanticTokensLegend struct {
+	TokenTypes     []string `json:"tokenTypes"`
+	TokenModifiers []string `json:"tokenModifiers"`
+}
+
+// SemanticTokensParams represents parameters for a "textDocument/semanticTokens/full" request.
+type SemanticTokensParams struct {
+	TextDocument TextDocumentIdentifier `json:"textDocument"`
+}
+
+// SemanticTokens represents the result of a semantic tokens request.
+type SemanticTokens struct {
+	Data []uint `json:"data"`
+}
+
+// SemanticTokensProviderOptions represents options for the semantic tokens provider.
+type SemanticTokensProviderOptions struct {
+	Legend SemanticTokensLegend `json:"legend"`
 }
