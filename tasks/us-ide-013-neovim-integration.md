@@ -2,7 +2,7 @@
 
 ## Progress
 - [x] Task 1: Create textobjects query file for structural selection
-- [ ] Task 2: Create folds and indents query files
+- [x] Task 2: Create folds and indents query files
 - [ ] Task 3: Update README with verified Neovim installation instructions
 
 ## Story Reference
