@@ -141,9 +141,36 @@ code --install-extension emod-*.vsix
 2. Open **Settings → Languages & Frameworks → Language Servers**
 3. Add a new server with command `emod` and argument `lsp`, file type `emod`
 
+### Tree-sitter grammar (Neovim, Zed, Helix)
+
+The tree-sitter grammar at `editors/tree-sitter-emod/` provides syntax highlighting for editors that use tree-sitter (Neovim, Zed, Helix).
+
+Build the parser:
+
+```bash
+cd editors/tree-sitter-emod
+tree-sitter generate
+```
+
 ### Neovim
 
-Using [nvim-lspconfig](https://github.com/neovim/nvim-lspconfig):
+**Syntax highlighting** via [nvim-treesitter](https://github.com/nvim-treesitter/nvim-treesitter):
+
+```lua
+-- Add the emod parser
+local parser_config = require("nvim-treesitter.parsers").get_parser_configs()
+parser_config.emod = {
+  install_info = {
+    url = "~/path/to/emod/editors/tree-sitter-emod",
+    files = { "src/parser.c" },
+  },
+  filetype = "emod",
+}
+
+-- Then run: :TSInstall emod
+```
+
+**LSP integration** via [nvim-lspconfig](https://github.com/neovim/nvim-lspconfig):
 
 ```lua
 vim.api.nvim_create_autocmd('FileType', {
@@ -159,7 +186,13 @@ vim.api.nvim_create_autocmd('FileType', {
 
 ### Zed
 
-Add to `~/.zed/settings.json`:
+**Syntax highlighting** — add the grammar path to `~/.config/zed/languages/emod.scm` (symlink or copy the highlight queries):
+
+```bash
+ln -sf "$(pwd)/editors/tree-sitter-emod/queries/highlights.scm" ~/.config/zed/languages/emod/highlights.scm
+```
+
+**LSP** — add to `~/.zed/settings.json`:
 
 ```json
 {
@@ -179,19 +212,28 @@ Add to `~/.zed/settings.json`:
 
 ### Helix
 
-Add to `languages.toml`:
+**Syntax highlighting** — add to `languages.toml`:
 
 ```toml
+[[grammar]]
+name = "emod"
+source = { path = "/path/to/editors/tree-sitter-emod" }
+
 [[language]]
 name = "emod"
 scope = "source.emod"
 file-types = ["emod"]
 language-servers = ["emod"]
+grammar = "emod"
 
 [language-server.emod]
 command = "emod"
 args = ["lsp"]
 ```
+
+Then run `hx --grammar fetch && hx --grammar build` to compile the parser.
+
+**Highlight queries** are loaded from `editors/tree-sitter-emod/queries/highlights.scm`. Helix expects them at `runtime/queries/emod/highlights.scm` relative to the grammar source — the path above resolves automatically.
 
 ## Development
 
