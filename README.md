@@ -154,10 +154,12 @@ tree-sitter generate
 
 ### Neovim
 
+**Prerequisite:** Build the parser first (see [Tree-sitter grammar](#tree-sitter-grammar-neovim-zed-helix) above).
+
 **Syntax highlighting** via [nvim-treesitter](https://github.com/nvim-treesitter/nvim-treesitter):
 
 ```lua
--- Add the emod parser
+-- Add the emod parser (adjust the url to your local clone path)
 local parser_config = require("nvim-treesitter.parsers").get_parser_configs()
 parser_config.emod = {
   install_info = {
@@ -169,6 +171,27 @@ parser_config.emod = {
 
 -- Then run: :TSInstall emod
 ```
+
+**Structural selection** via [nvim-treesitter-textobjects](https://github.com/nvim-treesitter/nvim-treesitter-textobjects):
+
+```lua
+require("nvim-treesitter.configs").setup({
+  textobjects = {
+    select = {
+      enable = true,
+      lookahead = true,
+      keymaps = {
+        -- Block-level text objects (e.g., "ab" / "ib" for around/inner block)
+        ["ab"] = { query = "@block.outer", desc = "select around block" },
+        ["ib"] = { query = "@block.inner", desc = "select inner block" },
+      },
+    },
+  },
+})
+```
+
+This enables selecting entire structural blocks (slice, fields, command, event,
+etc.) with `vab` (around block) or `vib` (inner block).
 
 **LSP integration** via [nvim-lspconfig](https://github.com/neovim/nvim-lspconfig):
 
@@ -183,6 +206,8 @@ vim.api.nvim_create_autocmd('FileType', {
   end,
 })
 ```
+
+**Verification:** Open an `.emod` file and run `:Inspect` to confirm the tree-sitter parser is active (you should see the language set to `emod` and AST node types highlighted). Test highlighting by checking that keywords, strings, and comments are colored. Test text objects by placing your cursor inside a block and pressing `vib` — the inner content should be selected.
 
 ### Zed
 
