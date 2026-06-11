@@ -3,7 +3,7 @@
 ## Progress
 - [x] Task 1: Initialize tree-sitter project and implement grammar for top-level blocks with lexical tokens
 - [x] Task 2: Implement grammar rules for all slice-content blocks and add corpus tests
-- [ ] Task 3: Create highlight queries for syntax highlighting
+- [x] Task 3: Create highlight queries for syntax highlighting
 
 ## Story Reference
 **US-IDE-012** from `user-stories/ide-support.md` — Tree-sitter grammar for `.emod`
