@@ -1,0 +1,15 @@
+========================
+Empty aggregate definition
+========================
+
+context "C" {
+  aggregate "Item" {}
+}
+
+---
+
+(source_file
+  (context_definition
+    (string)
+    (aggregate_definition
+      (string))))

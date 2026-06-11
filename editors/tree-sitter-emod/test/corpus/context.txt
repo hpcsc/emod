@@ -1,0 +1,27 @@
+========================
+Empty context definition
+========================
+
+context "Inventory" {}
+
+---
+
+(source_file
+  (context_definition
+    (string)))
+
+========================
+Context with aggregate
+========================
+
+context "Inventory" {
+  aggregate "Item" {}
+}
+
+---
+
+(source_file
+  (context_definition
+    (string)
+    (aggregate_definition
+      (string))))

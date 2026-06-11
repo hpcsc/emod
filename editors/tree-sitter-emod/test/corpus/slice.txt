@@ -1,0 +1,147 @@
+========================
+Empty slice definition
+========================
+
+context "C" {
+  aggregate "A" {
+    slice "Core" {}
+  }
+}
+
+---
+
+(source_file
+  (context_definition
+    (string)
+    (aggregate_definition
+      (string)
+      (slice_definition
+        (string)))))
+
+========================
+Slice with command
+========================
+
+context "C" {
+  aggregate "A" {
+    slice "Core" {
+      command PlaceOrder {}
+    }
+  }
+}
+
+---
+
+(source_file
+  (context_definition
+    (string)
+    (aggregate_definition
+      (string)
+      (slice_definition
+        (string)
+        (command_definition
+          (identifier))))))
+
+========================
+Slice with event
+========================
+
+context "C" {
+  aggregate "A" {
+    slice "Core" {
+      event OrderPlaced {}
+    }
+  }
+}
+
+---
+
+(source_file
+  (context_definition
+    (string)
+    (aggregate_definition
+      (string)
+      (slice_definition
+        (string)
+        (event_definition
+          (identifier))))))
+
+========================
+Slice with flow
+========================
+
+context "C" {
+  aggregate "A" {
+    slice "Core" {
+      flow {
+        command -> event: PlaceOrder -> OrderPlaced
+      }
+    }
+  }
+}
+
+---
+
+(source_file
+  (context_definition
+    (string)
+    (aggregate_definition
+      (string)
+      (slice_definition
+        (string)
+        (flow_definition
+          (identifier)
+          (identifier))))))
+
+========================
+Slice with trigger
+========================
+
+context "C" {
+  aggregate "A" {
+    slice "Core" {
+      trigger OnOrder "ERP" {}
+    }
+  }
+}
+
+---
+
+(source_file
+  (context_definition
+    (string)
+    (aggregate_definition
+      (string)
+      (slice_definition
+        (string)
+        (trigger_definition
+          (identifier)
+          (string))))))
+
+========================
+Slice with fields
+========================
+
+context "C" {
+  aggregate "A" {
+    slice "Core" {
+      fields {
+        Name string
+      }
+    }
+  }
+}
+
+---
+
+(source_file
+  (context_definition
+    (string)
+    (aggregate_definition
+      (string)
+      (slice_definition
+        (string)
+        (fields_block
+          (field_line
+            (any_identifier)
+            (any_identifier)))))))

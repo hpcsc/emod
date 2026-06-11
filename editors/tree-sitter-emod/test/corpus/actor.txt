@@ -1,0 +1,11 @@
+========================
+Actor definition
+========================
+
+actor "Customer"
+
+---
+
+(source_file
+  (actor_definition
+    (string)))

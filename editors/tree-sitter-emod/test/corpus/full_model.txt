@@ -1,0 +1,38 @@
+========================
+Full model with all top-level hierarchy
+========================
+
+model "OrderSystem"
+actor "Customer"
+context "Sales" {
+  aggregate "Order" {
+    slice "Core" {
+      command PlaceOrder {}
+      event OrderPlaced {}
+      flow {
+        command -> event: PlaceOrder -> OrderPlaced
+      }
+    }
+  }
+}
+
+---
+
+(source_file
+  (model_definition
+    (string))
+  (actor_definition
+    (string))
+  (context_definition
+    (string)
+    (aggregate_definition
+      (string)
+      (slice_definition
+        (string)
+        (command_definition
+          (identifier))
+        (event_definition
+          (identifier))
+        (flow_definition
+          (identifier)
+          (identifier))))))

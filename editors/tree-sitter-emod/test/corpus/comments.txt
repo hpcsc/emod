@@ -1,0 +1,30 @@
+========================
+Line comments
+========================
+
+# This is a comment
+model "Test"
+
+---
+
+(source_file
+  (comment)
+  (model_definition
+    (string)))
+
+========================
+Comments between definitions
+========================
+
+model "Test"
+# A comment about the actor
+actor "ActorName"
+
+---
+
+(source_file
+  (model_definition
+    (string))
+  (comment)
+  (actor_definition
+    (string)))

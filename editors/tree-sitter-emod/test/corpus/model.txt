@@ -1,0 +1,26 @@
+========================
+Model definition
+========================
+
+model "Inventory"
+
+---
+
+(source_file
+  (model_definition
+    (string)))
+
+========================
+Model with actor
+========================
+
+model "Inventory"
+actor "Customer"
+
+---
+
+(source_file
+  (model_definition
+    (string))
+  (actor_definition
+    (string)))
