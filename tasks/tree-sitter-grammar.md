@@ -2,7 +2,7 @@
 
 ## Progress
 - [x] Task 1: Initialize tree-sitter project and implement grammar for top-level blocks with lexical tokens
-- [ ] Task 2: Implement grammar rules for all slice-content blocks and add corpus tests
+- [x] Task 2: Implement grammar rules for all slice-content blocks and add corpus tests
 - [ ] Task 3: Create highlight queries for syntax highlighting
 
 ## Story Reference

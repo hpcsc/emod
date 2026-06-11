@@ -72,17 +72,19 @@ module.exports = grammar({
       'command',
       $.identifier,
       '{',
-      repeat($.field_line),
+      optional($.fields_block),
       '}',
     ),
 
-    // event Name { fields { ... } }
+    // event Name { fields { ... } source external "..." }
     event_definition: $ => seq(
       'event',
       $.identifier,
-      optional(seq('source', $.identifier, optional(seq('external', $.string)))),
       '{',
-      repeat($.field_line),
+      repeat(choice(
+        $.fields_block,
+        seq('source', 'external', $.string),
+      )),
       '}',
     ),
 
@@ -94,25 +96,26 @@ module.exports = grammar({
       '}',
     ),
 
-    // Field line: name type
-    field_line: $ => seq(
+    // Field line: name type [modifier]
+    // prec.right resolves shift-reduce conflict: prefer shifting the optional modifier
+    // rather than reducing early and treating it as the next field's name.
+    field_line: $ => prec.right(seq(
       $.any_identifier,
       $.any_identifier,
-    ),
+      optional($.any_identifier),
+    )),
 
     // trigger Kind "Name" { actor Id reads Id }
     trigger_definition: $ => seq(
       'trigger',
       $.identifier,
       $.string,
-      optional(seq(
-        '{',
-        repeat(choice(
-          seq('actor', $.any_identifier),
-          seq('reads', $.any_identifier),
-        )),
-        '}',
+      '{',
+      repeat(choice(
+        seq('actor', $.any_identifier),
+        seq('reads', $.any_identifier),
       )),
+      '}',
     ),
 
     // flow { command -> event: CmdName -> EvtName }
@@ -179,7 +182,7 @@ module.exports = grammar({
         seq('external_system', $.string),
         seq('reads', $.any_identifier),
         seq('command', $.any_identifier),
-        seq('event', $.identifier, '{', repeat($.field_line), '}'),
+        $.event_definition,
       )),
       '}',
     ),
