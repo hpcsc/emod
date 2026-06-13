@@ -9,6 +9,20 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
+func TestSeverityString(t *testing.T) {
+	t.Run("info returns info", func(t *testing.T) {
+		require.Equal(t, "info", diagnostic.Info.String())
+	})
+
+	t.Run("warning returns warning", func(t *testing.T) {
+		require.Equal(t, "warning", diagnostic.Warning.String())
+	})
+
+	t.Run("error returns error", func(t *testing.T) {
+		require.Equal(t, "error", diagnostic.Error.String())
+	})
+}
+
 func TestDiagnosticString(t *testing.T) {
 	t.Run("formats as filename:line: message", func(t *testing.T) {
 		d := &diagnostic.Entry{

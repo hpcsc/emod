@@ -11,6 +11,17 @@ import (
 
 var stateObsessionSuffixes = []string{"Updated", "Changed", "Modified"}
 
+func info(pos ast.Position, rule, msg string) *diagnostic.Entry {
+	return &diagnostic.Entry{
+		Filename: pos.Filename,
+		Line:     pos.Line,
+		Column:   pos.Column,
+		Severity: diagnostic.Info,
+		RuleName: rule,
+		Message:  msg,
+	}
+}
+
 func warning(pos ast.Position, rule, msg string) *diagnostic.Entry {
 	return &diagnostic.Entry{
 		Filename: pos.Filename,

@@ -7,10 +7,13 @@ type Severity int
 const (
 	Error   Severity = iota
 	Warning Severity = iota
+	Info    Severity = iota
 )
 
 func (s Severity) String() string {
 	switch s {
+	case Info:
+		return "info"
 	case Warning:
 		return "warning"
 	default:

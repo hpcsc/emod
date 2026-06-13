@@ -1,0 +1,78 @@
+# Test file for US-011 diagnostics feature
+# This file has intentional errors to test partial rendering
+model "Error Diagnostics Test"
+
+actor "Guest"
+
+context "Reservations" {
+  aggregate "Reservation" {
+
+    # Slice 1: Valid — should render fine
+    slice "Reserve a Room" {
+      command ReserveRoom {
+        fields {
+          roomId     string required
+          guestName  string required
+        }
+      }
+
+      event RoomReserved {
+        fields {
+          reservationId string required
+          roomId        string required
+        }
+      }
+
+      flow {
+        command -> event: ReserveRoom -> RoomReserved
+      }
+    }
+
+    # Slice 2: Has a syntax error — missing closing brace on command
+    slice "Check Out" {
+      command CheckOutGuest {
+        fields {
+          reservationId string required
+        }
+      # missing closing brace
+
+      event GuestCheckedOut {
+        fields {
+          reservationId string required
+        }
+      }
+
+      flow {
+        command -> event: CheckOutGuest -> GuestCheckedOut
+      }
+    }
+
+    # Slice 3: Valid slice after error — tests error recovery
+    slice "View Rooms" {
+      view AvailableRoomsView {
+        fields {
+          roomId string required
+        }
+        subscribes [RoomReserved]
+      }
+    }
+
+  }
+}
+
+# Context 2: Has an unknown block type — parser should emit diagnostic
+context "Notifications" {
+  aggregate "Notification" {
+    slice "Send" {
+      command SendEmail {
+        fields {
+          email string required
+        }
+      }
+
+      weird_block unknown_type {
+        stuff
+      }
+    }
+  }
+}
