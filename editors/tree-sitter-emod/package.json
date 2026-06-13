@@ -3,16 +3,47 @@
   "version": "0.1.0",
   "description": "Tree-sitter grammar for EMOD DSL",
   "main": "bindings/node",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/hpcsc/emod.git"
+  },
+  "bugs": {
+    "url": "https://github.com/hpcsc/emod/issues"
+  },
+  "tree-sitter": "grammar.js",
+  "files": [
+    "grammar.js",
+    "binding.gyp",
+    "bindings/node/*",
+    "queries/*",
+    "src/**"
+  ],
   "scripts": {
     "test": "tree-sitter generate && tree-sitter test",
     "generate": "tree-sitter generate",
-    "build": "tree-sitter generate && node-gyp build"
+    "build": "tree-sitter generate && node-gyp build",
+    "install": "node-gyp-build"
   },
   "license": "MIT",
   "dependencies": {
-    "nan": "^2.20.0"
+    "node-addon-api": "^8.3.1",
+    "node-gyp-build": "^4.8.4"
   },
   "devDependencies": {
     "tree-sitter-cli": "^0.25.0"
-  }
+  },
+  "peerDependencies": {
+    "tree-sitter": "^0.25.0"
+  },
+  "peerDependenciesMeta": {
+    "tree-sitter": {
+      "optional": true
+    }
+  },
+  "keywords": [
+    "tree-sitter",
+    "parser",
+    "emod",
+    "dsl"
+  ]
 }
