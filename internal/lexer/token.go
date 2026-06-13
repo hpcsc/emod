@@ -23,6 +23,15 @@ const (
 	KeywordReads
 	KeywordSource
 	KeywordExternal
+	KeywordMode
+	KeywordTags
+	KeywordDecidesOn
+	KeywordWhere
+	KeywordAnd
+	KeywordOr
+	KeywordNot
+	KeywordTag
+	KeywordEvents
 
 	// Literals and identifiers
 	Identifier
@@ -36,6 +45,9 @@ const (
 	Arrow
 	Colon
 	Comma
+	Equals
+	OpenParen
+	CloseParen
 
 	// Special
 	Comment
@@ -89,6 +101,24 @@ func (k Kind) String() string {
 		return "source"
 	case KeywordExternal:
 		return "external"
+	case KeywordMode:
+		return "mode"
+	case KeywordTags:
+		return "tags"
+	case KeywordDecidesOn:
+		return "decides_on"
+	case KeywordWhere:
+		return "where"
+	case KeywordAnd:
+		return "and"
+	case KeywordOr:
+		return "or"
+	case KeywordNot:
+		return "not"
+	case KeywordTag:
+		return "tag"
+	case KeywordEvents:
+		return "events"
 	case Identifier:
 		return "identifier"
 	case String:
@@ -107,6 +137,12 @@ func (k Kind) String() string {
 		return ":"
 	case Comma:
 		return ","
+	case Equals:
+		return "="
+	case OpenParen:
+		return "("
+	case CloseParen:
+		return ")"
 	case Comment:
 		return "comment"
 	case EOF:

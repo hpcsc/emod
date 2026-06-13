@@ -29,6 +29,9 @@ type Context struct {
 	Comments   []*Comment
 	Name       string
 	NamePos    Position
+	Mode       string
+	ModePos    Position
+	Slices     []*Slice
 	Aggregates []*Aggregate
 	OpenPos    Position
 	ClosePos   Position
@@ -60,12 +63,13 @@ type Slice struct {
 }
 
 type Command struct {
-	Comments []*Comment
-	Name     string
-	NamePos  Position
-	Fields   []*Field
-	OpenPos  Position
-	ClosePos Position
+	Comments  []*Comment
+	Name      string
+	NamePos   Position
+	Fields    []*Field
+	DecidesOn *DecidesOnClause
+	OpenPos   Position
+	ClosePos  Position
 }
 
 type Event struct {
@@ -76,6 +80,7 @@ type Event struct {
 	SourcePos       Position
 	ExternalName    string
 	ExternalNamePos Position
+	Tags            []TagEntry
 	Fields          []*Field
 	OpenPos         Position
 	ClosePos        Position
@@ -151,3 +156,60 @@ type Translation struct {
 	OpenPos        Position
 	ClosePos       Position
 }
+
+// TagEntry represents a tag defined on an event.
+type TagEntry struct {
+	Name    string
+	NamePos Position
+}
+
+// DecidesOnClause represents a decides_on condition on a command.
+type DecidesOnClause struct {
+	Comments  []*Comment
+	Predicate PredicateExpr
+	OpenPos   Position
+	ClosePos  Position
+}
+
+// PredicateExpr is an interface for all predicate expression types.
+type PredicateExpr interface {
+	predicateNode()
+}
+
+// TagPredicate represents a tag condition like tag.priority == "high".
+type TagPredicate struct {
+	Field    string
+	FieldPos Position
+	Operator string
+	OpPos    Position
+	Value    string
+	ValuePos Position
+}
+
+func (TagPredicate) predicateNode() {}
+
+// LogicalExpr represents a logical AND/OR combination of two predicates.
+type LogicalExpr struct {
+	Left     PredicateExpr
+	Operator string
+	OpPos    Position
+	Right    PredicateExpr
+}
+
+func (LogicalExpr) predicateNode() {}
+
+// NotExpr represents a negated predicate.
+type NotExpr struct {
+	OpPos Position
+	Expr  PredicateExpr
+}
+
+func (NotExpr) predicateNode() {}
+
+// FieldRef represents a field reference in a predicate (e.g. tag.priority).
+type FieldRef struct {
+	Name    string
+	NamePos Position
+}
+
+func (FieldRef) predicateNode() {}

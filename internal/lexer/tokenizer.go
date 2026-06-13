@@ -55,6 +55,15 @@ func Scan(input, filename string) ([]*Token, []*diagnostic.Entry) {
 		case peek(c) == ',':
 			tokens = append(tokens, newToken(Comma, ",", c))
 			c = advance(c)
+		case peek(c) == '=':
+			tokens = append(tokens, newToken(Equals, "=", c))
+			c = advance(c)
+		case peek(c) == '(':
+			tokens = append(tokens, newToken(OpenParen, "(", c))
+			c = advance(c)
+		case peek(c) == ')':
+			tokens = append(tokens, newToken(CloseParen, ")", c))
+			c = advance(c)
 		case peek(c) == ':':
 			tokens = append(tokens, newToken(Colon, ":", c))
 			c = advance(c)
@@ -215,6 +224,24 @@ func getKeywordKind(s string) Kind {
 		return KeywordSource
 	case "external":
 		return KeywordExternal
+	case "mode":
+		return KeywordMode
+	case "tags":
+		return KeywordTags
+	case "decides_on":
+		return KeywordDecidesOn
+	case "where":
+		return KeywordWhere
+	case "and":
+		return KeywordAnd
+	case "or":
+		return KeywordOr
+	case "not":
+		return KeywordNot
+	case "tag":
+		return KeywordTag
+	case "events":
+		return KeywordEvents
 	default:
 		return Identifier
 	}
