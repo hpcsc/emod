@@ -2,7 +2,7 @@
 
 ## Progress
 - [x] Task 1: Add DCB lexer tokens and AST types
-- [ ] Task 2: Parse context mode and accept slices directly under context
+- [x] Task 2: Parse context mode and accept slices directly under context
 - [ ] Task 3: Parse event tags clause
 - [ ] Task 4: Parse command decides_on clause with predicate expressions
 - [ ] Task 5: Format DCB constructs in formatter output

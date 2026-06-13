@@ -119,6 +119,18 @@ func (p *Instance) parseContext() *ast.Context {
 		NamePos: p.position(nameTok),
 	}
 
+	// Optional mode clause: mode dcb | mode aggregate | mode mixed
+	if p.check(lexer.KeywordMode) {
+		p.advance()
+		if p.checkIdentifierLike() {
+			modeTok := p.advance()
+			context.Mode = modeTok.Value
+			context.ModePos = p.position(modeTok)
+		} else {
+			p.error("expected mode value after 'mode'")
+		}
+	}
+
 	if !p.check(lexer.OpenBrace) {
 		p.error("expected { after context name")
 		return nil
@@ -127,12 +139,17 @@ func (p *Instance) parseContext() *ast.Context {
 	context.OpenPos = p.position(openTok)
 
 	for !p.check(lexer.CloseBrace) && !p.isAtEnd() {
-		if p.check(lexer.KeywordAggregate) {
+		switch {
+		case p.check(lexer.KeywordAggregate):
 			if agg := p.parseAggregate(); agg != nil {
 				context.Aggregates = append(context.Aggregates, agg)
 			}
-		} else {
-			p.error("expected aggregate in context")
+		case p.check(lexer.KeywordSlice):
+			if slice := p.parseSlice(); slice != nil {
+				context.Slices = append(context.Slices, slice)
+			}
+		default:
+			p.error(fmt.Sprintf("expected aggregate or slice in context, got %q", p.peek().Value))
 			p.advance()
 		}
 	}

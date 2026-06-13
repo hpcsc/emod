@@ -74,6 +74,164 @@ context "Reservations" {
 		require.Equal(t, "Reservation", model.Contexts[0].Aggregates[0].Name)
 	})
 
+	t.Run("context without mode clause (backward compatible)", func(t *testing.T) {
+		input := `model "Test"
+context "Reservations" {
+  aggregate "Reservation" {
+  }
+}`
+		tokens, _ := lexer.Scan(input, "test.emod")
+
+		p := parser.New(tokens, "test.emod")
+		model, errs := p.Parse()
+
+		require.Len(t, errs, 0)
+		require.Len(t, model.Contexts, 1)
+		require.Equal(t, "Reservations", model.Contexts[0].Name)
+		require.Empty(t, model.Contexts[0].Mode)
+		require.Len(t, model.Contexts[0].Aggregates, 1)
+	})
+
+	t.Run("context with mode dcb", func(t *testing.T) {
+		input := `model "Test"
+context "Ctx" mode dcb {
+  slice "Slice" {
+  }
+}`
+		tokens, _ := lexer.Scan(input, "test.emod")
+
+		p := parser.New(tokens, "test.emod")
+		model, errs := p.Parse()
+
+		require.Len(t, errs, 0)
+		require.Len(t, model.Contexts, 1)
+		require.Equal(t, "Ctx", model.Contexts[0].Name)
+		require.Equal(t, "dcb", model.Contexts[0].Mode)
+		require.Len(t, model.Contexts[0].Slices, 1)
+		require.Equal(t, "Slice", model.Contexts[0].Slices[0].Name)
+	})
+
+	t.Run("context with mode aggregate", func(t *testing.T) {
+		input := `model "Test"
+context "Ctx" mode aggregate {
+  aggregate "Agg" {
+  }
+}`
+		tokens, _ := lexer.Scan(input, "test.emod")
+
+		p := parser.New(tokens, "test.emod")
+		model, errs := p.Parse()
+
+		require.Len(t, errs, 0)
+		require.Len(t, model.Contexts, 1)
+		require.Equal(t, "Ctx", model.Contexts[0].Name)
+		require.Equal(t, "aggregate", model.Contexts[0].Mode)
+		require.Len(t, model.Contexts[0].Aggregates, 1)
+		require.Equal(t, "Agg", model.Contexts[0].Aggregates[0].Name)
+	})
+
+	t.Run("context with mode mixed", func(t *testing.T) {
+		input := `model "Test"
+context "Ctx" mode mixed {
+  aggregate "Agg" {
+  }
+  slice "Slice" {
+  }
+}`
+		tokens, _ := lexer.Scan(input, "test.emod")
+
+		p := parser.New(tokens, "test.emod")
+		model, errs := p.Parse()
+
+		require.Len(t, errs, 0)
+		require.Len(t, model.Contexts, 1)
+		require.Equal(t, "Ctx", model.Contexts[0].Name)
+		require.Equal(t, "mixed", model.Contexts[0].Mode)
+		require.Len(t, model.Contexts[0].Aggregates, 1)
+		require.Equal(t, "Agg", model.Contexts[0].Aggregates[0].Name)
+		require.Len(t, model.Contexts[0].Slices, 1)
+		require.Equal(t, "Slice", model.Contexts[0].Slices[0].Name)
+	})
+
+	t.Run("context with slice directly (no aggregate)", func(t *testing.T) {
+		input := `model "Test"
+context "Ctx" {
+  slice "Slice" {
+  }
+}`
+		tokens, _ := lexer.Scan(input, "test.emod")
+
+		p := parser.New(tokens, "test.emod")
+		model, errs := p.Parse()
+
+		require.Len(t, errs, 0)
+		require.Len(t, model.Contexts, 1)
+		require.Equal(t, "Ctx", model.Contexts[0].Name)
+		require.Empty(t, model.Contexts[0].Mode)
+		require.Len(t, model.Contexts[0].Slices, 1)
+		require.Equal(t, "Slice", model.Contexts[0].Slices[0].Name)
+		require.Empty(t, model.Contexts[0].Aggregates)
+	})
+
+	t.Run("context with both aggregate and slice", func(t *testing.T) {
+		input := `model "Test"
+context "Ctx" {
+  aggregate "Agg" {
+  }
+  slice "Slice" {
+  }
+}`
+		tokens, _ := lexer.Scan(input, "test.emod")
+
+		p := parser.New(tokens, "test.emod")
+		model, errs := p.Parse()
+
+		require.Len(t, errs, 0)
+		require.Len(t, model.Contexts, 1)
+		require.Equal(t, "Ctx", model.Contexts[0].Name)
+		require.Empty(t, model.Contexts[0].Mode)
+		require.Len(t, model.Contexts[0].Aggregates, 1)
+		require.Equal(t, "Agg", model.Contexts[0].Aggregates[0].Name)
+		require.Len(t, model.Contexts[0].Slices, 1)
+		require.Equal(t, "Slice", model.Contexts[0].Slices[0].Name)
+	})
+
+	t.Run("context with mode dcb and slice with content", func(t *testing.T) {
+		input := `model "Test"
+context "Ctx" mode dcb {
+  slice "Slice" {
+    command DoThing {
+      fields {
+        id string
+      }
+    }
+    event ThingDone {
+      fields {
+        id string
+      }
+    }
+    flow {
+      command -> event: DoThing -> ThingDone
+    }
+  }
+}`
+		tokens, _ := lexer.Scan(input, "test.emod")
+
+		p := parser.New(tokens, "test.emod")
+		model, errs := p.Parse()
+
+		require.Len(t, errs, 0)
+		require.Equal(t, "dcb", model.Contexts[0].Mode)
+		require.Len(t, model.Contexts[0].Slices, 1)
+		slice := model.Contexts[0].Slices[0]
+		require.Equal(t, "Slice", slice.Name)
+		require.Len(t, slice.Commands, 1)
+		require.Equal(t, "DoThing", slice.Commands[0].Name)
+		require.Len(t, slice.Events, 1)
+		require.Equal(t, "ThingDone", slice.Events[0].Name)
+		require.Len(t, slice.Flows, 1)
+	})
+
 	t.Run("aggregate with slice", func(t *testing.T) {
 		input := `model "Test"
 context "Ctx" {
