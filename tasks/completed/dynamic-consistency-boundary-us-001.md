@@ -5,9 +5,9 @@
 - [x] Task 2: Parse context mode and accept slices directly under context
 - [x] Task 3: Parse event tags clause
 - [x] Task 4: Parse command decides_on clause with predicate expressions
-- [ ] Task 5: Format DCB constructs in formatter output
-- [ ] Task 6: Validate DCB cross-references at parse time
-- [ ] Task 7: Add mode-aware linter warnings for DCB vs aggregate constructs
+- [x] Task 5: Format DCB constructs in formatter output
+- [x] Task 6: Validate DCB cross-references at parse time
+- [x] Task 7: Add mode-aware linter warnings for DCB vs aggregate constructs
 
 ## Story Reference
 

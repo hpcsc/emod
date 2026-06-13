@@ -40,7 +40,7 @@ func Lint(model *ast.Model) []*diagnostic.Entry {
 
 	var diags []*diagnostic.Entry
 
-	// Build flow count map for left-chair detection
+	// Build flow count map for left-chair detection across all slices
 	flowCount := make(map[string]int)
 	for _, ctx := range model.Contexts {
 		for _, agg := range ctx.Aggregates {
@@ -50,45 +50,137 @@ func Lint(model *ast.Model) []*diagnostic.Entry {
 				}
 			}
 		}
-	}
-
-	for _, ctx := range model.Contexts {
-		for _, agg := range ctx.Aggregates {
-			for _, slice := range agg.Slices {
-				for _, evt := range slice.Events {
-					diags = append(diags, checkEvent(evt, agg.Name)...)
-					if d := checkClickbaitEvent(evt); d != nil {
-						diags = append(diags, d)
-					}
-				}
-				for _, tr := range slice.Translations {
-					if tr.Event != nil {
-						diags = append(diags, checkEvent(tr.Event, agg.Name)...)
-						if d := checkClickbaitEvent(tr.Event); d != nil {
-							diags = append(diags, d)
-						}
-					}
-				}
-				for _, cmd := range slice.Commands {
-					if d := checkCommandPastTense(cmd); d != nil {
-						diags = append(diags, d)
-					}
-					if d := checkLeftChair(cmd, flowCount); d != nil {
-						diags = append(diags, d)
-					}
-				}
-				for _, view := range slice.Views {
-					if d := checkViewNaming(view); d != nil {
-						diags = append(diags, d)
-					}
-					if d := checkGodView(view); d != nil {
-						diags = append(diags, d)
-					}
-				}
+		for _, slice := range ctx.Slices {
+			for _, flow := range slice.Flows {
+				flowCount[flow.CommandName]++
 			}
 		}
 	}
 
+	for _, ctx := range model.Contexts {
+		// Mode-aware checks
+		if isAggregateMode(ctx.Mode) {
+			diags = append(diags, checkDCBInAggregateMode(ctx)...)
+		} else if isDCBMode(ctx.Mode) {
+			diags = append(diags, checkAggregateInDCBMode(ctx)...)
+		}
+		// Mixed mode: no extra mode warnings
+
+		// Existing checks on aggregate-level slices
+		for _, agg := range ctx.Aggregates {
+			for _, slice := range agg.Slices {
+				diags = append(diags, checkSlice(slice, agg.Name, flowCount)...)
+			}
+		}
+
+		// Existing checks on context-level slices
+		for _, slice := range ctx.Slices {
+			diags = append(diags, checkSlice(slice, "", flowCount)...)
+		}
+	}
+
+	return diags
+}
+
+// checkSlice applies all existing lint checks to a single slice.
+// aggregateName is used for property-sourcing detection; pass "" for context-level slices.
+func checkSlice(slice *ast.Slice, aggregateName string, flowCount map[string]int) []*diagnostic.Entry {
+	var diags []*diagnostic.Entry
+	for _, evt := range slice.Events {
+		diags = append(diags, checkEvent(evt, aggregateName)...)
+		if d := checkClickbaitEvent(evt); d != nil {
+			diags = append(diags, d)
+		}
+	}
+	for _, tr := range slice.Translations {
+		if tr.Event != nil {
+			diags = append(diags, checkEvent(tr.Event, aggregateName)...)
+			if d := checkClickbaitEvent(tr.Event); d != nil {
+				diags = append(diags, d)
+			}
+		}
+	}
+	for _, cmd := range slice.Commands {
+		if d := checkCommandPastTense(cmd); d != nil {
+			diags = append(diags, d)
+		}
+		if d := checkLeftChair(cmd, flowCount); d != nil {
+			diags = append(diags, d)
+		}
+	}
+	for _, view := range slice.Views {
+		if d := checkViewNaming(view); d != nil {
+			diags = append(diags, d)
+		}
+		if d := checkGodView(view); d != nil {
+			diags = append(diags, d)
+		}
+	}
+	return diags
+}
+
+// Mode helpers
+
+func isAggregateMode(mode string) bool {
+	return mode == "" || mode == "aggregate"
+}
+
+func isDCBMode(mode string) bool {
+	return mode == "dcb"
+}
+
+func isMixedMode(mode string) bool {
+	return mode == "mixed"
+}
+
+// checkDCBInAggregateMode warns about DCB constructs found in an aggregate-mode context.
+// DCB-only constructs are: tags on events, decides_on on commands, and slices directly under context.
+func checkDCBInAggregateMode(ctx *ast.Context) []*diagnostic.Entry {
+	var diags []*diagnostic.Entry
+
+	// Check all slices (both aggregate-level and context-level) for DCB constructs
+	allSlices := ctx.Slices
+	for _, agg := range ctx.Aggregates {
+		allSlices = append(allSlices, agg.Slices...)
+	}
+
+	for _, slice := range allSlices {
+		for _, evt := range slice.Events {
+			if len(evt.Tags) > 0 {
+				diags = append(diags, warning(evt.NamePos, "dcb-in-aggregate-mode",
+					fmt.Sprintf("event %q uses DCB-style tags in an aggregate-mode context %q", evt.Name, ctx.Name)))
+			}
+		}
+		for _, tr := range slice.Translations {
+			if tr.Event != nil && len(tr.Event.Tags) > 0 {
+				diags = append(diags, warning(tr.Event.NamePos, "dcb-in-aggregate-mode",
+					fmt.Sprintf("event %q uses DCB-style tags in an aggregate-mode context %q", tr.Event.Name, ctx.Name)))
+			}
+		}
+		for _, cmd := range slice.Commands {
+			if cmd.DecidesOn != nil {
+				diags = append(diags, warning(cmd.NamePos, "dcb-in-aggregate-mode",
+					fmt.Sprintf("command %q uses DCB-style decides_on in an aggregate-mode context %q", cmd.Name, ctx.Name)))
+			}
+		}
+	}
+
+	// Warn for context-level slices themselves being a DCB construct
+	for _, slice := range ctx.Slices {
+		diags = append(diags, warning(slice.NamePos, "dcb-in-aggregate-mode",
+			fmt.Sprintf("slice %q is a DCB-style construct in an aggregate-mode context %q", slice.Name, ctx.Name)))
+	}
+
+	return diags
+}
+
+// checkAggregateInDCBMode warns about aggregate blocks found in a DCB-mode context.
+func checkAggregateInDCBMode(ctx *ast.Context) []*diagnostic.Entry {
+	var diags []*diagnostic.Entry
+	for _, agg := range ctx.Aggregates {
+		diags = append(diags, warning(agg.NamePos, "aggregate-in-dcb-mode",
+			fmt.Sprintf("aggregate block %q is an aggregate-style construct in a DCB-mode context %q", agg.Name, ctx.Name)))
+	}
 	return diags
 }
 
@@ -116,7 +208,11 @@ func checkStateObsession(evt *ast.Event) *diagnostic.Entry {
 
 // Property-sourcing fires when the event name is <AggregateName><Field>Changed.
 // It is checked before state-obsession so the more specific rule wins.
+// When aggregateName is empty (context-level slice), property-sourcing does not apply.
 func checkPropertySourcing(evt *ast.Event, aggregateName string) *diagnostic.Entry {
+	if aggregateName == "" {
+		return nil
+	}
 	if !strings.HasPrefix(evt.Name, aggregateName) || !strings.HasSuffix(evt.Name, "Changed") {
 		return nil
 	}

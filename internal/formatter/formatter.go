@@ -54,12 +54,24 @@ func (w *writer) writeModel(model *ast.Model) {
 
 func (w *writer) writeContext(ctx *ast.Context, level int) {
 	w.writeComments(ctx.Comments, level)
-	w.line(level, "context %q {", ctx.Name)
+	if ctx.Mode != "" {
+		w.line(level, "context %q mode %s {", ctx.Name, ctx.Mode)
+	} else {
+		w.line(level, "context %q {", ctx.Name)
+	}
+	needsBlank := false
 	for i, agg := range ctx.Aggregates {
 		if i > 0 {
 			w.blankLine()
 		}
 		w.writeAggregate(agg, level+1)
+		needsBlank = true
+	}
+	for i, slice := range ctx.Slices {
+		if needsBlank || i > 0 {
+			w.blankLine()
+		}
+		w.writeSlice(slice, level+1)
 	}
 	w.line(level, "}")
 }
@@ -163,15 +175,60 @@ func (w *writer) writeTrigger(trigger *ast.Trigger, level int) {
 func (w *writer) writeCommand(cmd *ast.Command, level int) {
 	w.writeComments(cmd.Comments, level)
 	w.line(level, "command %s {", cmd.Name)
+	if cmd.DecidesOn != nil {
+		w.writeDecidesOn(cmd.DecidesOn, level+1)
+	}
 	if len(cmd.Fields) > 0 {
 		w.writeFields(cmd.Fields, level+1)
 	}
 	w.line(level, "}")
 }
 
+func (w *writer) writeDecidesOn(d *ast.DecidesOnClause, level int) {
+	w.writeComments(d.Comments, level)
+	w.line(level, "decides_on {")
+	if len(d.Events) > 0 {
+		w.line(level+1, "events [%s]", strings.Join(d.Events, ", "))
+	}
+	if d.Predicate != nil {
+		w.line(level+1, "where %s", formatPredicate(d.Predicate))
+	}
+	w.line(level, "}")
+}
+
+func formatPredicate(expr ast.PredicateExpr) string {
+	switch e := expr.(type) {
+	case *ast.TagPredicate:
+		return fmt.Sprintf("tag(%s %s %s)", e.Field, e.Operator, e.Value)
+	case *ast.NotExpr:
+		return fmt.Sprintf("not %s", formatPredicateParen(e.Expr, "not"))
+	case *ast.LogicalExpr:
+		left := formatPredicateParen(e.Left, e.Operator)
+		right := formatPredicateParen(e.Right, e.Operator)
+		return fmt.Sprintf("%s %s %s", left, e.Operator, right)
+	default:
+		return ""
+	}
+}
+
+// formatPredicateParen wraps expr in parens when needed for correct precedence.
+// parentOp is the operator of the parent expression ("and", "or", "not", or "").
+func formatPredicateParen(expr ast.PredicateExpr, parentOp string) string {
+	s := formatPredicate(expr)
+	if logical, ok := expr.(*ast.LogicalExpr); ok {
+		if parentOp == "not" || (parentOp == "and" && logical.Operator == "or") {
+			return "(" + s + ")"
+		}
+	}
+	return s
+}
+
 func (w *writer) writeEvent(evt *ast.Event, level int) {
 	w.writeComments(evt.Comments, level)
 	w.line(level, "event %s {", evt.Name)
+	if len(evt.Tags) > 0 {
+		w.writeTags(evt.Tags, level+1)
+	}
 	if evt.Source == "external" && evt.ExternalName != "" {
 		w.line(level+1, "source external %q", evt.ExternalName)
 	}
@@ -191,6 +248,20 @@ func (w *writer) writeFields(fields []*ast.Field, level int) {
 		} else {
 			w.line(level+1, "%-*s %s", nameWidth, f.Name, f.Type)
 		}
+	}
+	w.line(level, "}")
+}
+
+func (w *writer) writeTags(tags []ast.TagEntry, level int) {
+	maxKey := 0
+	for _, t := range tags {
+		if len(t.Key) > maxKey {
+			maxKey = len(t.Key)
+		}
+	}
+	w.line(level, "tags {")
+	for _, t := range tags {
+		w.line(level+1, "%-*s: %s", maxKey, t.Key, t.FieldRef)
 	}
 	w.line(level, "}")
 }

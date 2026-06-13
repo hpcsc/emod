@@ -1034,4 +1034,500 @@ func TestLint(t *testing.T) {
 		require.Equal(t, 7, linesByRule["god-view"])
 		require.Equal(t, 8, linesByRule["clickbait-event"])
 	})
+
+	t.Run("dcb-in-aggregate-mode warns on event tags in default aggregate mode", func(t *testing.T) {
+		model := &ast.Model{
+			Contexts: []*ast.Context{
+				{
+					Name: "Orders",
+					Aggregates: []*ast.Aggregate{
+						{
+							Name: "Order",
+							Slices: []*ast.Slice{
+								{
+									Events: []*ast.Event{
+										{
+											Name: "OrderPlaced",
+											NamePos: ast.Position{
+												Filename: "orders.emod",
+												Line:     10,
+												Column:   3,
+											},
+											Tags: []ast.TagEntry{
+												{Key: "priority", FieldRef: "OrderId"},
+											},
+										},
+									},
+								},
+							},
+						},
+					},
+				},
+			},
+		}
+
+		diags := linter.Lint(model)
+
+		require.Len(t, diags, 1)
+		require.Equal(t, "dcb-in-aggregate-mode", diags[0].RuleName)
+		require.Equal(t, diagnostic.Warning, diags[0].Severity)
+		require.Equal(t, "orders.emod", diags[0].Filename)
+		require.Equal(t, 10, diags[0].Line)
+		require.Contains(t, diags[0].Message, "OrderPlaced")
+	})
+
+	t.Run("dcb-in-aggregate-mode warns on command decides_on in default aggregate mode", func(t *testing.T) {
+		model := &ast.Model{
+			Contexts: []*ast.Context{
+				{
+					Name: "Orders",
+					Aggregates: []*ast.Aggregate{
+						{
+							Name: "Order",
+							Slices: []*ast.Slice{
+								{
+									Commands: []*ast.Command{
+										{
+											Name: "PlaceOrder",
+											NamePos: ast.Position{
+												Filename: "orders.emod",
+												Line:     10,
+												Column:   3,
+											},
+											DecidesOn: &ast.DecidesOnClause{
+												Events: []string{"OrderPlaced"},
+											},
+										},
+									},
+								},
+							},
+						},
+					},
+				},
+			},
+		}
+
+		diags := linter.Lint(model)
+
+		require.Len(t, diags, 1)
+		require.Equal(t, "dcb-in-aggregate-mode", diags[0].RuleName)
+		require.Equal(t, diagnostic.Warning, diags[0].Severity)
+		require.Equal(t, "orders.emod", diags[0].Filename)
+		require.Equal(t, 10, diags[0].Line)
+		require.Contains(t, diags[0].Message, "PlaceOrder")
+	})
+
+	t.Run("dcb-in-aggregate-mode warns on context-level slices in default aggregate mode", func(t *testing.T) {
+		model := &ast.Model{
+			Contexts: []*ast.Context{
+				{
+					Name: "Orders",
+					Slices: []*ast.Slice{
+						{
+							Name: "ProcessOrder",
+							NamePos: ast.Position{
+								Filename: "orders.emod",
+								Line:     5,
+								Column:   3,
+							},
+						},
+					},
+				},
+			},
+		}
+
+		diags := linter.Lint(model)
+
+		require.Len(t, diags, 1)
+		require.Equal(t, "dcb-in-aggregate-mode", diags[0].RuleName)
+		require.Equal(t, diagnostic.Warning, diags[0].Severity)
+		require.Equal(t, "orders.emod", diags[0].Filename)
+		require.Equal(t, 5, diags[0].Line)
+		require.Contains(t, diags[0].Message, "ProcessOrder")
+	})
+
+	t.Run("dcb-in-aggregate-mode warns with explicit aggregate mode", func(t *testing.T) {
+		model := &ast.Model{
+			Contexts: []*ast.Context{
+				{
+					Name: "Orders",
+					Mode: "aggregate",
+					Aggregates: []*ast.Aggregate{
+						{
+							Name: "Order",
+							Slices: []*ast.Slice{
+								{
+									Events: []*ast.Event{
+										{
+											Name: "OrderPlaced",
+											NamePos: ast.Position{
+												Filename: "orders.emod",
+												Line:     10,
+												Column:   3,
+											},
+											Tags: []ast.TagEntry{
+												{Key: "priority", FieldRef: "OrderId"},
+											},
+										},
+									},
+								},
+							},
+						},
+					},
+				},
+			},
+		}
+
+		diags := linter.Lint(model)
+
+		require.Len(t, diags, 1)
+		require.Equal(t, "dcb-in-aggregate-mode", diags[0].RuleName)
+	})
+
+	t.Run("aggregate-in-dcb-mode warns on aggregate blocks in dcb mode", func(t *testing.T) {
+		model := &ast.Model{
+			Contexts: []*ast.Context{
+				{
+					Name: "Orders",
+					Mode: "dcb",
+					Aggregates: []*ast.Aggregate{
+						{
+							Name: "Order",
+							NamePos: ast.Position{
+								Filename: "orders.emod",
+								Line:     10,
+								Column:   3,
+							},
+						},
+					},
+				},
+			},
+		}
+
+		diags := linter.Lint(model)
+
+		require.Len(t, diags, 1)
+		require.Equal(t, "aggregate-in-dcb-mode", diags[0].RuleName)
+		require.Equal(t, diagnostic.Warning, diags[0].Severity)
+		require.Equal(t, "orders.emod", diags[0].Filename)
+		require.Equal(t, 10, diags[0].Line)
+		require.Contains(t, diags[0].Message, "Order")
+	})
+
+	t.Run("dcb mode without aggregate blocks produces no aggregate-in-dcb-mode warning", func(t *testing.T) {
+		model := &ast.Model{
+			Contexts: []*ast.Context{
+				{
+					Name: "Orders",
+					Mode: "dcb",
+					Slices: []*ast.Slice{
+						{Name: "ProcessOrder"},
+					},
+				},
+			},
+		}
+
+		diags := linter.Lint(model)
+
+		require.Empty(t, diags)
+	})
+
+	t.Run("mixed mode produces no mode warnings for DCB constructs", func(t *testing.T) {
+		model := &ast.Model{
+			Contexts: []*ast.Context{
+				{
+					Name: "Orders",
+					Mode: "mixed",
+					Aggregates: []*ast.Aggregate{
+						{
+							Name: "Order",
+							Slices: []*ast.Slice{
+								{
+									Events: []*ast.Event{
+										{
+											Name: "OrderPlaced",
+											NamePos: ast.Position{
+												Filename: "orders.emod",
+												Line:     10,
+											},
+											Tags: []ast.TagEntry{
+												{Key: "priority", FieldRef: "OrderId"},
+											},
+										},
+									},
+								},
+							},
+						},
+					},
+					Slices: []*ast.Slice{
+						{
+							Name: "ProcessOrder",
+							NamePos: ast.Position{
+								Filename: "orders.emod",
+								Line:     20,
+							},
+						},
+					},
+				},
+			},
+		}
+
+		diags := linter.Lint(model)
+
+		require.Empty(t, diags)
+	})
+
+	t.Run("mixed mode produces no mode warnings for aggregate blocks", func(t *testing.T) {
+		model := &ast.Model{
+			Contexts: []*ast.Context{
+				{
+					Name: "Orders",
+					Mode: "mixed",
+					Aggregates: []*ast.Aggregate{
+						{
+							Name: "Order",
+							Slices: []*ast.Slice{
+								{Name: "ProcessOrder"},
+							},
+						},
+					},
+				},
+			},
+		}
+
+		diags := linter.Lint(model)
+
+		require.Empty(t, diags)
+	})
+
+	t.Run("existing checks apply to context-level slices in dcb mode", func(t *testing.T) {
+		model := &ast.Model{
+			Contexts: []*ast.Context{
+				{
+					Name: "Orders",
+					Mode: "dcb",
+					Slices: []*ast.Slice{
+						{
+							Name: "ProcessOrder",
+							Events: []*ast.Event{
+								{
+									Name: "OrderUpdated",
+									NamePos: ast.Position{
+										Filename: "orders.emod",
+										Line:     10,
+										Column:   5,
+									},
+								},
+								{
+									Name: "OrderStatusChanged",
+									NamePos: ast.Position{
+										Filename: "orders.emod",
+										Line:     11,
+										Column:   5,
+									},
+								},
+								{
+									Name: "PaymentInitiated",
+									NamePos: ast.Position{
+										Filename: "orders.emod",
+										Line:     12,
+										Column:   5,
+									},
+								},
+								{
+									Name: "ItemSelected",
+									NamePos: ast.Position{
+										Filename: "orders.emod",
+										Line:     13,
+										Column:   5,
+									},
+									Fields: []*ast.Field{
+										{Name: "ItemId"},
+									},
+								},
+							},
+							Commands: []*ast.Command{
+								{
+									Name: "ReservationCancelled",
+									NamePos: ast.Position{
+										Filename: "orders.emod",
+										Line:     14,
+										Column:   5,
+									},
+								},
+								{
+									Name: "PlaceOrder",
+									NamePos: ast.Position{
+										Filename: "orders.emod",
+										Line:     15,
+										Column:   5,
+									},
+								},
+							},
+							Views: []*ast.View{
+								{
+									Name: "OrderList",
+									NamePos: ast.Position{
+										Filename: "orders.emod",
+										Line:     16,
+										Column:   5,
+									},
+								},
+								{
+									Name: "OrderSummaryView",
+									NamePos: ast.Position{
+										Filename: "orders.emod",
+										Line:     17,
+										Column:   5,
+									},
+									Subscribes: []string{
+										"E1", "E2", "E3", "E4", "E5",
+									},
+								},
+							},
+							Flows: []*ast.Flow{
+								{CommandName: "PlaceOrder"},
+								{CommandName: "PlaceOrder"},
+								{CommandName: "PlaceOrder"},
+							},
+						},
+					},
+				},
+			},
+		}
+
+		diags := linter.Lint(model)
+
+		ruleNames := make(map[string]bool)
+		for _, d := range diags {
+			ruleNames[d.RuleName] = true
+		}
+		require.True(t, ruleNames["state-obsession"], "state-obsession should fire for context-level slices")
+		require.True(t, ruleNames["command-in-disguise"], "command-in-disguise should fire for context-level slices")
+		require.True(t, ruleNames["clickbait-event"], "clickbait-event should fire for context-level slices")
+		require.True(t, ruleNames["command-past-tense"], "command-past-tense should fire for context-level slices")
+		require.True(t, ruleNames["view-naming"], "view-naming should fire for context-level slices")
+		require.True(t, ruleNames["left-chair"], "left-chair should fire for context-level slices")
+		require.True(t, ruleNames["god-view"], "god-view should fire for context-level slices")
+		// Property-sourcing does not apply to context-level slices (no aggregate name)
+		require.False(t, ruleNames["property-sourcing"], "property-sourcing should NOT fire for context-level slices")
+		require.Equal(t, 7, len(ruleNames), "expected 7 distinct rule names (no property-sourcing for context-level slices)")
+	})
+
+	t.Run("left-chair counts flows from context-level slices", func(t *testing.T) {
+		model := &ast.Model{
+			Contexts: []*ast.Context{
+				{
+					Name: "Orders",
+					Mode: "dcb",
+					Slices: []*ast.Slice{
+						{
+							Name: "FirstSlice",
+							Commands: []*ast.Command{
+								{
+									Name: "PlaceOrder",
+									NamePos: ast.Position{
+										Filename: "orders.emod",
+										Line:     10,
+										Column:   3,
+									},
+								},
+							},
+							Flows: []*ast.Flow{
+								{CommandName: "PlaceOrder"},
+							},
+						},
+						{
+							Name: "SecondSlice",
+							Flows: []*ast.Flow{
+								{CommandName: "PlaceOrder"},
+								{CommandName: "PlaceOrder"},
+							},
+						},
+					},
+				},
+			},
+		}
+
+		diags := linter.Lint(model)
+
+		require.Len(t, diags, 1)
+		require.Equal(t, "left-chair", diags[0].RuleName)
+		require.Contains(t, diags[0].Message, "PlaceOrder")
+	})
+
+	t.Run("tags on events in dcb mode context-level slice do not trigger dcb-in-aggregate-mode", func(t *testing.T) {
+		model := &ast.Model{
+			Contexts: []*ast.Context{
+				{
+					Name: "Orders",
+					Mode: "dcb",
+					Slices: []*ast.Slice{
+						{
+							Name: "ProcessOrder",
+							Events: []*ast.Event{
+								{
+									Name: "OrderPlaced",
+									NamePos: ast.Position{
+										Filename: "orders.emod",
+										Line:     10,
+									},
+									Tags: []ast.TagEntry{
+										{Key: "priority", FieldRef: "OrderId"},
+									},
+								},
+							},
+						},
+					},
+				},
+			},
+		}
+
+		diags := linter.Lint(model)
+
+		// No dcb-in-aggregate-mode warning since mode is dcb, not aggregate
+		// No naming issues either
+		require.Empty(t, diags)
+	})
+
+	t.Run("event tags in inline translations are checked in aggregate mode", func(t *testing.T) {
+		model := &ast.Model{
+			Contexts: []*ast.Context{
+				{
+					Name: "Orders",
+					Aggregates: []*ast.Aggregate{
+						{
+							Name: "Order",
+							Slices: []*ast.Slice{
+								{
+									Translations: []*ast.Translation{
+										{
+											Name: "ImportOrder",
+											Event: &ast.Event{
+												Name: "OrderImported",
+												NamePos: ast.Position{
+													Filename: "orders.emod",
+													Line:     30,
+													Column:   5,
+												},
+												Tags: []ast.TagEntry{
+													{Key: "source", FieldRef: "OrderId"},
+												},
+											},
+										},
+									},
+								},
+							},
+						},
+					},
+				},
+			},
+		}
+
+		diags := linter.Lint(model)
+
+		require.Len(t, diags, 1)
+		require.Equal(t, "dcb-in-aggregate-mode", diags[0].RuleName)
+		require.Contains(t, diags[0].Message, "OrderImported")
+	})
 }

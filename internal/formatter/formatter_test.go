@@ -1669,4 +1669,1119 @@ func TestFormat(t *testing.T) {
 
 		require.Equal(t, expected, result)
 	})
+
+	t.Run("context with mode dcb emits mode clause", func(t *testing.T) {
+		model := &ast.Model{
+			Name: "Test",
+			Contexts: []*ast.Context{
+				{
+					Name: "Ctx",
+					Mode: "dcb",
+					Slices: []*ast.Slice{
+						{Name: "My Slice"},
+					},
+				},
+			},
+		}
+
+		result := formatter.Format(model)
+
+		expected := strings.Join([]string{
+			`model "Test"`,
+			``,
+			`context "Ctx" mode dcb {`,
+			`  slice "My Slice" {`,
+			`  }`,
+			`}`,
+			``,
+		}, "\n")
+		require.Equal(t, expected, result)
+	})
+
+	t.Run("context with mode aggregate emits mode clause", func(t *testing.T) {
+		model := &ast.Model{
+			Name: "Test",
+			Contexts: []*ast.Context{
+				{
+					Name: "Ctx",
+					Mode: "aggregate",
+					Aggregates: []*ast.Aggregate{
+						{Name: "Agg"},
+					},
+				},
+			},
+		}
+
+		result := formatter.Format(model)
+
+		expected := strings.Join([]string{
+			`model "Test"`,
+			``,
+			`context "Ctx" mode aggregate {`,
+			`  aggregate "Agg" {`,
+			`  }`,
+			`}`,
+			``,
+		}, "\n")
+		require.Equal(t, expected, result)
+	})
+
+	t.Run("context with mode mixed emits mode clause with both aggregates and slices", func(t *testing.T) {
+		model := &ast.Model{
+			Name: "Test",
+			Contexts: []*ast.Context{
+				{
+					Name: "Ctx",
+					Mode: "mixed",
+					Aggregates: []*ast.Aggregate{
+						{Name: "Agg"},
+					},
+					Slices: []*ast.Slice{
+						{Name: "Direct Slice"},
+					},
+				},
+			},
+		}
+
+		result := formatter.Format(model)
+
+		expected := strings.Join([]string{
+			`model "Test"`,
+			``,
+			`context "Ctx" mode mixed {`,
+			`  aggregate "Agg" {`,
+			`  }`,
+			``,
+			`  slice "Direct Slice" {`,
+			`  }`,
+			`}`,
+			``,
+		}, "\n")
+		require.Equal(t, expected, result)
+	})
+
+	t.Run("context without mode omits mode clause (backward compatible)", func(t *testing.T) {
+		model := &ast.Model{
+			Name: "Test",
+			Contexts: []*ast.Context{
+				{
+					Name: "Ctx",
+					Aggregates: []*ast.Aggregate{
+						{Name: "Agg"},
+					},
+				},
+			},
+		}
+
+		result := formatter.Format(model)
+
+		expected := strings.Join([]string{
+			`model "Test"`,
+			``,
+			`context "Ctx" {`,
+			`  aggregate "Agg" {`,
+			`  }`,
+			`}`,
+			``,
+		}, "\n")
+		require.Equal(t, expected, result)
+	})
+
+	t.Run("slices directly under context are formatted at context body level", func(t *testing.T) {
+		model := &ast.Model{
+			Name: "Test",
+			Contexts: []*ast.Context{
+				{
+					Name: "Ctx",
+					Mode: "dcb",
+					Slices: []*ast.Slice{
+						{
+							Name: "First Slice",
+							Commands: []*ast.Command{
+								{Name: "DoThing"},
+							},
+						},
+						{
+							Name: "Second Slice",
+							Commands: []*ast.Command{
+								{Name: "DoOther"},
+							},
+						},
+					},
+				},
+			},
+		}
+
+		result := formatter.Format(model)
+
+		expected := strings.Join([]string{
+			`model "Test"`,
+			``,
+			`context "Ctx" mode dcb {`,
+			`  slice "First Slice" {`,
+			`    command DoThing {`,
+			`    }`,
+			`  }`,
+			``,
+			`  slice "Second Slice" {`,
+			`    command DoOther {`,
+			`    }`,
+			`  }`,
+			`}`,
+			``,
+		}, "\n")
+		require.Equal(t, expected, result)
+	})
+
+	t.Run("event with tags block", func(t *testing.T) {
+		model := &ast.Model{
+			Name: "Test",
+			Contexts: []*ast.Context{
+				{
+					Name: "Ctx",
+					Aggregates: []*ast.Aggregate{
+						{
+							Name: "Agg",
+							Slices: []*ast.Slice{
+								{
+									Name: "S",
+									Events: []*ast.Event{
+										{
+											Name: "TestEvent",
+											Tags: []ast.TagEntry{
+												{Key: "priority", FieldRef: "statusCode"},
+											},
+										},
+									},
+								},
+							},
+						},
+					},
+				},
+			},
+		}
+
+		result := formatter.Format(model)
+
+		expected := strings.Join([]string{
+			`model "Test"`,
+			``,
+			`context "Ctx" {`,
+			`  aggregate "Agg" {`,
+			`    slice "S" {`,
+			`      event TestEvent {`,
+			`        tags {`,
+			`          priority: statusCode`,
+			`        }`,
+			`      }`,
+			`    }`,
+			`  }`,
+			`}`,
+			``,
+		}, "\n")
+		require.Equal(t, expected, result)
+	})
+
+	t.Run("event with tags and fields", func(t *testing.T) {
+		model := &ast.Model{
+			Name: "Test",
+			Contexts: []*ast.Context{
+				{
+					Name: "Ctx",
+					Aggregates: []*ast.Aggregate{
+						{
+							Name: "Agg",
+							Slices: []*ast.Slice{
+								{
+									Name: "S",
+									Events: []*ast.Event{
+										{
+											Name: "TestEvent",
+											Tags: []ast.TagEntry{
+												{Key: "priority", FieldRef: "statusCode"},
+											},
+											Fields: []*ast.Field{
+												{Name: "statusCode", Type: "string"},
+											},
+										},
+									},
+								},
+							},
+						},
+					},
+				},
+			},
+		}
+
+		result := formatter.Format(model)
+
+		expected := strings.Join([]string{
+			`model "Test"`,
+			``,
+			`context "Ctx" {`,
+			`  aggregate "Agg" {`,
+			`    slice "S" {`,
+			`      event TestEvent {`,
+			`        tags {`,
+			`          priority: statusCode`,
+			`        }`,
+			`        fields {`,
+			`          statusCode string`,
+			`        }`,
+			`      }`,
+			`    }`,
+			`  }`,
+			`}`,
+			``,
+		}, "\n")
+		require.Equal(t, expected, result)
+	})
+
+	t.Run("event with tags and source external", func(t *testing.T) {
+		model := &ast.Model{
+			Name: "Test",
+			Contexts: []*ast.Context{
+				{
+					Name: "Ctx",
+					Aggregates: []*ast.Aggregate{
+						{
+							Name: "Agg",
+							Slices: []*ast.Slice{
+								{
+									Name: "S",
+									Events: []*ast.Event{
+										{
+											Name:         "WebhookEvent",
+											Source:       "external",
+											ExternalName: "SendGrid",
+											Tags: []ast.TagEntry{
+												{Key: "priority", FieldRef: "statusCode"},
+											},
+											Fields: []*ast.Field{
+												{Name: "statusCode", Type: "string"},
+											},
+										},
+									},
+								},
+							},
+						},
+					},
+				},
+			},
+		}
+
+		result := formatter.Format(model)
+
+		expected := strings.Join([]string{
+			`model "Test"`,
+			``,
+			`context "Ctx" {`,
+			`  aggregate "Agg" {`,
+			`    slice "S" {`,
+			`      event WebhookEvent {`,
+			`        tags {`,
+			`          priority: statusCode`,
+			`        }`,
+			`        source external "SendGrid"`,
+			`        fields {`,
+			`          statusCode string`,
+			`        }`,
+			`      }`,
+			`    }`,
+			`  }`,
+			`}`,
+			``,
+		}, "\n")
+		require.Equal(t, expected, result)
+	})
+
+	t.Run("event with multiple tags aligned correctly", func(t *testing.T) {
+		model := &ast.Model{
+			Name: "Test",
+			Contexts: []*ast.Context{
+				{
+					Name: "Ctx",
+					Aggregates: []*ast.Aggregate{
+						{
+							Name: "Agg",
+							Slices: []*ast.Slice{
+								{
+									Name: "S",
+									Events: []*ast.Event{
+										{
+											Name: "TestEvent",
+											Tags: []ast.TagEntry{
+												{Key: "priority", FieldRef: "statusCode"},
+												{Key: "category", FieldRef: "eventType"},
+											},
+										},
+									},
+								},
+							},
+						},
+					},
+				},
+			},
+		}
+
+		result := formatter.Format(model)
+
+		expected := strings.Join([]string{
+			`model "Test"`,
+			``,
+			`context "Ctx" {`,
+			`  aggregate "Agg" {`,
+			`    slice "S" {`,
+			`      event TestEvent {`,
+			`        tags {`,
+			`          priority: statusCode`,
+			`          category: eventType`,
+			`        }`,
+			`      }`,
+			`    }`,
+			`  }`,
+			`}`,
+			``,
+		}, "\n")
+		require.Equal(t, expected, result)
+	})
+
+	t.Run("command with decides_on block", func(t *testing.T) {
+		model := &ast.Model{
+			Name: "Test",
+			Contexts: []*ast.Context{
+				{
+					Name: "Ctx",
+					Aggregates: []*ast.Aggregate{
+						{
+							Name: "Agg",
+							Slices: []*ast.Slice{
+								{
+									Name: "S",
+									Commands: []*ast.Command{
+										{
+											Name: "DoThing",
+											DecidesOn: &ast.DecidesOnClause{
+												Events:    []string{"ThingDone"},
+												Predicate: &ast.TagPredicate{Field: "priority", Operator: "=", Value: "high"},
+											},
+										},
+									},
+								},
+							},
+						},
+					},
+				},
+			},
+		}
+
+		result := formatter.Format(model)
+
+		expected := strings.Join([]string{
+			`model "Test"`,
+			``,
+			`context "Ctx" {`,
+			`  aggregate "Agg" {`,
+			`    slice "S" {`,
+			`      command DoThing {`,
+			`        decides_on {`,
+			`          events [ThingDone]`,
+			`          where tag(priority = high)`,
+			`        }`,
+			`      }`,
+			`    }`,
+			`  }`,
+			`}`,
+			``,
+		}, "\n")
+		require.Equal(t, expected, result)
+	})
+
+	t.Run("command with decides_on and fields", func(t *testing.T) {
+		model := &ast.Model{
+			Name: "Test",
+			Contexts: []*ast.Context{
+				{
+					Name: "Ctx",
+					Aggregates: []*ast.Aggregate{
+						{
+							Name: "Agg",
+							Slices: []*ast.Slice{
+								{
+									Name: "S",
+									Commands: []*ast.Command{
+										{
+											Name: "DoThing",
+											DecidesOn: &ast.DecidesOnClause{
+												Events:    []string{"ThingDone"},
+												Predicate: &ast.TagPredicate{Field: "priority", Operator: "=", Value: "high"},
+											},
+											Fields: []*ast.Field{
+												{Name: "id", Type: "string", Modifier: "required"},
+											},
+										},
+									},
+								},
+							},
+						},
+					},
+				},
+			},
+		}
+
+		result := formatter.Format(model)
+
+		expected := strings.Join([]string{
+			`model "Test"`,
+			``,
+			`context "Ctx" {`,
+			`  aggregate "Agg" {`,
+			`    slice "S" {`,
+			`      command DoThing {`,
+			`        decides_on {`,
+			`          events [ThingDone]`,
+			`          where tag(priority = high)`,
+			`        }`,
+			`        fields {`,
+			`          id string required`,
+			`        }`,
+			`      }`,
+			`    }`,
+			`  }`,
+			`}`,
+			``,
+		}, "\n")
+		require.Equal(t, expected, result)
+	})
+
+	t.Run("command with decides_on and multiple events", func(t *testing.T) {
+		model := &ast.Model{
+			Name: "Test",
+			Contexts: []*ast.Context{
+				{
+					Name: "Ctx",
+					Aggregates: []*ast.Aggregate{
+						{
+							Name: "Agg",
+							Slices: []*ast.Slice{
+								{
+									Name: "S",
+									Commands: []*ast.Command{
+										{
+											Name: "DoThing",
+											DecidesOn: &ast.DecidesOnClause{
+												Events:    []string{"EventA", "EventB", "EventC"},
+												Predicate: &ast.TagPredicate{Field: "priority", Operator: "=", Value: "high"},
+											},
+										},
+									},
+								},
+							},
+						},
+					},
+				},
+			},
+		}
+
+		result := formatter.Format(model)
+
+		expected := strings.Join([]string{
+			`model "Test"`,
+			``,
+			`context "Ctx" {`,
+			`  aggregate "Agg" {`,
+			`    slice "S" {`,
+			`      command DoThing {`,
+			`        decides_on {`,
+			`          events [EventA, EventB, EventC]`,
+			`          where tag(priority = high)`,
+			`        }`,
+			`      }`,
+			`    }`,
+			`  }`,
+			`}`,
+			``,
+		}, "\n")
+		require.Equal(t, expected, result)
+	})
+
+	t.Run("command with decides_on and compound predicate (and)", func(t *testing.T) {
+		model := &ast.Model{
+			Name: "Test",
+			Contexts: []*ast.Context{
+				{
+					Name: "Ctx",
+					Aggregates: []*ast.Aggregate{
+						{
+							Name: "Agg",
+							Slices: []*ast.Slice{
+								{
+									Name: "S",
+									Commands: []*ast.Command{
+										{
+											Name: "DoThing",
+											DecidesOn: &ast.DecidesOnClause{
+												Events: []string{"ThingDone"},
+												Predicate: &ast.LogicalExpr{
+													Left:     &ast.TagPredicate{Field: "priority", Operator: "=", Value: "high"},
+													Operator: "and",
+													Right:    &ast.TagPredicate{Field: "region", Operator: "=", Value: "us"},
+												},
+											},
+										},
+									},
+								},
+							},
+						},
+					},
+				},
+			},
+		}
+
+		result := formatter.Format(model)
+
+		expected := strings.Join([]string{
+			`model "Test"`,
+			``,
+			`context "Ctx" {`,
+			`  aggregate "Agg" {`,
+			`    slice "S" {`,
+			`      command DoThing {`,
+			`        decides_on {`,
+			`          events [ThingDone]`,
+			`          where tag(priority = high) and tag(region = us)`,
+			`        }`,
+			`      }`,
+			`    }`,
+			`  }`,
+			`}`,
+			``,
+		}, "\n")
+		require.Equal(t, expected, result)
+	})
+
+	t.Run("command with decides_on and compound predicate (or)", func(t *testing.T) {
+		model := &ast.Model{
+			Name: "Test",
+			Contexts: []*ast.Context{
+				{
+					Name: "Ctx",
+					Aggregates: []*ast.Aggregate{
+						{
+							Name: "Agg",
+							Slices: []*ast.Slice{
+								{
+									Name: "S",
+									Commands: []*ast.Command{
+										{
+											Name: "DoThing",
+											DecidesOn: &ast.DecidesOnClause{
+												Events: []string{"ThingDone"},
+												Predicate: &ast.LogicalExpr{
+													Left:     &ast.TagPredicate{Field: "priority", Operator: "=", Value: "high"},
+													Operator: "or",
+													Right:    &ast.TagPredicate{Field: "priority", Operator: "=", Value: "low"},
+												},
+											},
+										},
+									},
+								},
+							},
+						},
+					},
+				},
+			},
+		}
+
+		result := formatter.Format(model)
+
+		expected := strings.Join([]string{
+			`model "Test"`,
+			``,
+			`context "Ctx" {`,
+			`  aggregate "Agg" {`,
+			`    slice "S" {`,
+			`      command DoThing {`,
+			`        decides_on {`,
+			`          events [ThingDone]`,
+			`          where tag(priority = high) or tag(priority = low)`,
+			`        }`,
+			`      }`,
+			`    }`,
+			`  }`,
+			`}`,
+			``,
+		}, "\n")
+		require.Equal(t, expected, result)
+	})
+
+	t.Run("command with decides_on and not predicate", func(t *testing.T) {
+		model := &ast.Model{
+			Name: "Test",
+			Contexts: []*ast.Context{
+				{
+					Name: "Ctx",
+					Aggregates: []*ast.Aggregate{
+						{
+							Name: "Agg",
+							Slices: []*ast.Slice{
+								{
+									Name: "S",
+									Commands: []*ast.Command{
+										{
+											Name: "DoThing",
+											DecidesOn: &ast.DecidesOnClause{
+												Events: []string{"ThingDone"},
+												Predicate: &ast.NotExpr{
+													Expr: &ast.TagPredicate{Field: "priority", Operator: "=", Value: "high"},
+												},
+											},
+										},
+									},
+								},
+							},
+						},
+					},
+				},
+			},
+		}
+
+		result := formatter.Format(model)
+
+		expected := strings.Join([]string{
+			`model "Test"`,
+			``,
+			`context "Ctx" {`,
+			`  aggregate "Agg" {`,
+			`    slice "S" {`,
+			`      command DoThing {`,
+			`        decides_on {`,
+			`          events [ThingDone]`,
+			`          where not tag(priority = high)`,
+			`        }`,
+			`      }`,
+			`    }`,
+			`  }`,
+			`}`,
+			``,
+		}, "\n")
+		require.Equal(t, expected, result)
+	})
+
+	t.Run("command with decides_on and parenthesised sub-expression", func(t *testing.T) {
+		model := &ast.Model{
+			Name: "Test",
+			Contexts: []*ast.Context{
+				{
+					Name: "Ctx",
+					Aggregates: []*ast.Aggregate{
+						{
+							Name: "Agg",
+							Slices: []*ast.Slice{
+								{
+									Name: "S",
+									Commands: []*ast.Command{
+										{
+											Name: "DoThing",
+											DecidesOn: &ast.DecidesOnClause{
+												Events: []string{"ThingDone"},
+												Predicate: &ast.LogicalExpr{
+													Left: &ast.LogicalExpr{
+														Left:     &ast.TagPredicate{Field: "priority", Operator: "=", Value: "high"},
+														Operator: "or",
+														Right:    &ast.TagPredicate{Field: "priority", Operator: "=", Value: "low"},
+													},
+													Operator: "and",
+													Right:    &ast.TagPredicate{Field: "region", Operator: "=", Value: "us"},
+												},
+											},
+										},
+									},
+								},
+							},
+						},
+					},
+				},
+			},
+		}
+
+		result := formatter.Format(model)
+
+		expected := strings.Join([]string{
+			`model "Test"`,
+			``,
+			`context "Ctx" {`,
+			`  aggregate "Agg" {`,
+			`    slice "S" {`,
+			`      command DoThing {`,
+			`        decides_on {`,
+			`          events [ThingDone]`,
+			`          where (tag(priority = high) or tag(priority = low)) and tag(region = us)`,
+			`        }`,
+			`      }`,
+			`    }`,
+			`  }`,
+			`}`,
+			``,
+		}, "\n")
+		require.Equal(t, expected, result)
+	})
+
+	t.Run("command with decides_on and nested parentheses", func(t *testing.T) {
+		model := &ast.Model{
+			Name: "Test",
+			Contexts: []*ast.Context{
+				{
+					Name: "Ctx",
+					Aggregates: []*ast.Aggregate{
+						{
+							Name: "Agg",
+							Slices: []*ast.Slice{
+								{
+									Name: "S",
+									Commands: []*ast.Command{
+										{
+											Name: "DoThing",
+											DecidesOn: &ast.DecidesOnClause{
+												Events: []string{"ThingDone"},
+												Predicate: &ast.LogicalExpr{
+													Left: &ast.TagPredicate{Field: "priority", Operator: "=", Value: "high"},
+													Operator: "and",
+													Right: &ast.LogicalExpr{
+														Left:     &ast.TagPredicate{Field: "region", Operator: "=", Value: "us"},
+														Operator: "or",
+														Right:    &ast.TagPredicate{Field: "tier", Operator: "=", Value: "gold"},
+													},
+												},
+											},
+										},
+									},
+								},
+							},
+						},
+					},
+				},
+			},
+		}
+
+		result := formatter.Format(model)
+
+		expected := strings.Join([]string{
+			`model "Test"`,
+			``,
+			`context "Ctx" {`,
+			`  aggregate "Agg" {`,
+			`    slice "S" {`,
+			`      command DoThing {`,
+			`        decides_on {`,
+			`          events [ThingDone]`,
+			`          where tag(priority = high) and (tag(region = us) or tag(tier = gold))`,
+			`        }`,
+			`      }`,
+			`    }`,
+			`  }`,
+			`}`,
+			``,
+		}, "\n")
+		require.Equal(t, expected, result)
+	})
+
+	t.Run("command with decides_on and not with compound", func(t *testing.T) {
+		model := &ast.Model{
+			Name: "Test",
+			Contexts: []*ast.Context{
+				{
+					Name: "Ctx",
+					Aggregates: []*ast.Aggregate{
+						{
+							Name: "Agg",
+							Slices: []*ast.Slice{
+								{
+									Name: "S",
+									Commands: []*ast.Command{
+										{
+											Name: "DoThing",
+											DecidesOn: &ast.DecidesOnClause{
+												Events: []string{"ThingDone"},
+												Predicate: &ast.NotExpr{
+													Expr: &ast.LogicalExpr{
+														Left:     &ast.TagPredicate{Field: "priority", Operator: "=", Value: "high"},
+														Operator: "or",
+														Right:    &ast.TagPredicate{Field: "priority", Operator: "=", Value: "low"},
+													},
+												},
+											},
+										},
+									},
+								},
+							},
+						},
+					},
+				},
+			},
+		}
+
+		result := formatter.Format(model)
+
+		expected := strings.Join([]string{
+			`model "Test"`,
+			``,
+			`context "Ctx" {`,
+			`  aggregate "Agg" {`,
+			`    slice "S" {`,
+			`      command DoThing {`,
+			`        decides_on {`,
+			`          events [ThingDone]`,
+			`          where not (tag(priority = high) or tag(priority = low))`,
+			`        }`,
+			`      }`,
+			`    }`,
+			`  }`,
+			`}`,
+			``,
+		}, "\n")
+		require.Equal(t, expected, result)
+	})
+
+	t.Run("command with decides_on and double not", func(t *testing.T) {
+		model := &ast.Model{
+			Name: "Test",
+			Contexts: []*ast.Context{
+				{
+					Name: "Ctx",
+					Aggregates: []*ast.Aggregate{
+						{
+							Name: "Agg",
+							Slices: []*ast.Slice{
+								{
+									Name: "S",
+									Commands: []*ast.Command{
+										{
+											Name: "DoThing",
+											DecidesOn: &ast.DecidesOnClause{
+												Events: []string{"ThingDone"},
+												Predicate: &ast.NotExpr{
+													Expr: &ast.NotExpr{
+														Expr: &ast.TagPredicate{Field: "priority", Operator: "=", Value: "high"},
+													},
+												},
+											},
+										},
+									},
+								},
+							},
+						},
+					},
+				},
+			},
+		}
+
+		result := formatter.Format(model)
+
+		expected := strings.Join([]string{
+			`model "Test"`,
+			``,
+			`context "Ctx" {`,
+			`  aggregate "Agg" {`,
+			`    slice "S" {`,
+			`      command DoThing {`,
+			`        decides_on {`,
+			`          events [ThingDone]`,
+			`          where not not tag(priority = high)`,
+			`        }`,
+			`      }`,
+			`    }`,
+			`  }`,
+			`}`,
+			``,
+		}, "\n")
+		require.Equal(t, expected, result)
+	})
+
+	t.Run("existing aggregate-based contexts format identically (no regression)", func(t *testing.T) {
+		model := &ast.Model{
+			Name: "Hotel",
+			Contexts: []*ast.Context{
+				{
+					Name: "Reservations",
+					Aggregates: []*ast.Aggregate{
+						{
+							Name: "Reservation",
+							Slices: []*ast.Slice{
+								{
+									Name: "Make Reservation",
+									Commands: []*ast.Command{
+										{
+											Name: "MakeReservation",
+											Fields: []*ast.Field{
+												{Name: "guestId", Type: "string", Modifier: "required"},
+												{Name: "roomType", Type: "string", Modifier: "required"},
+											},
+										},
+									},
+									Events: []*ast.Event{
+										{
+											Name: "ReservationMade",
+											Fields: []*ast.Field{
+												{Name: "reservationId", Type: "string", Modifier: "required"},
+											},
+										},
+									},
+									Flows: []*ast.Flow{
+										{
+											Comments:    []*ast.Comment{{Text: "# main flow"}},
+											CommandName: "MakeReservation",
+											EventName:   "ReservationMade",
+										},
+									},
+								},
+							},
+						},
+					},
+				},
+			},
+		}
+
+		result := formatter.Format(model)
+
+		// Same expected output as the existing test "formats context with aggregate and slice"
+		expected := strings.Join([]string{
+			`model "Hotel"`,
+			``,
+			`context "Reservations" {`,
+			`  aggregate "Reservation" {`,
+			`    slice "Make Reservation" {`,
+			`      command MakeReservation {`,
+			`        fields {`,
+			`          guestId  string required`,
+			`          roomType string required`,
+			`        }`,
+			`      }`,
+			``,
+			`      event ReservationMade {`,
+			`        fields {`,
+			`          reservationId string required`,
+			`        }`,
+			`      }`,
+			``,
+			`      flow {`,
+			`        # main flow`,
+			`        command -> event: MakeReservation -> ReservationMade`,
+			`      }`,
+			`    }`,
+			`  }`,
+			`}`,
+			``,
+		}, "\n")
+		require.Equal(t, expected, result)
+	})
+
+	t.Run("round-trip: DCB model with mode, direct slices, tags, decides_on", func(t *testing.T) {
+		input := strings.Join([]string{
+			`model "Test"`,
+			``,
+			`context "Ctx" mode dcb {`,
+			`  slice "My Slice" {`,
+			`    command DoThing {`,
+			`      decides_on {`,
+			`        events [ThingDone]`,
+			`        where tag(priority = high)`,
+			`      }`,
+			`      fields {`,
+			`        id string required`,
+			`      }`,
+			`    }`,
+			``,
+			`    event ThingDone {`,
+			`      tags {`,
+			`        priority: statusCode`,
+			`      }`,
+			`      fields {`,
+			`        statusCode string`,
+			`      }`,
+			`    }`,
+			``,
+			`    flow {`,
+			`      command -> event: DoThing -> ThingDone`,
+			`    }`,
+			`  }`,
+			`}`,
+			``,
+		}, "\n")
+
+		tokens1, scanErrs1 := lexer.Scan(input, "test.emod")
+		require.Empty(t, scanErrs1)
+		p1 := parser.New(tokens1, "test.emod")
+		ast1, parseErrs1 := p1.Parse()
+		require.Empty(t, parseErrs1)
+
+		formatted := formatter.Format(ast1)
+
+		tokens2, scanErrs2 := lexer.Scan(formatted, "test.emod")
+		require.Empty(t, scanErrs2)
+		p2 := parser.New(tokens2, "test.emod")
+		ast2, parseErrs2 := p2.Parse()
+		require.Empty(t, parseErrs2)
+
+		ignorePositionsAndComments := cmp.Options{
+			cmpopts.IgnoreTypes(ast.Position{}),
+			cmpopts.IgnoreFields(ast.Model{}, "Comments"),
+			cmpopts.IgnoreFields(ast.Actor{}, "Comments"),
+			cmpopts.IgnoreFields(ast.Context{}, "Comments"),
+			cmpopts.IgnoreFields(ast.Aggregate{}, "Comments"),
+			cmpopts.IgnoreFields(ast.Slice{}, "Comments"),
+			cmpopts.IgnoreFields(ast.Command{}, "Comments"),
+			cmpopts.IgnoreFields(ast.Event{}, "Comments"),
+			cmpopts.IgnoreFields(ast.Flow{}, "Comments"),
+			cmpopts.IgnoreFields(ast.Trigger{}, "Comments"),
+			cmpopts.IgnoreFields(ast.View{}, "Comments"),
+			cmpopts.IgnoreFields(ast.Automation{}, "Comments"),
+			cmpopts.IgnoreFields(ast.Translation{}, "Comments"),
+		}
+
+		test.RequireEqual(t, ast1, ast2, ignorePositionsAndComments)
+	})
+
+	t.Run("idempotency: DCB model format is idempotent", func(t *testing.T) {
+		input := strings.Join([]string{
+			`model "Test"`,
+			``,
+			`context "Ctx" mode dcb {`,
+			`  slice "My Slice" {`,
+			`    command DoThing {`,
+			`      decides_on {`,
+			`        events [ThingDone]`,
+			`        where tag(priority = high)`,
+			`      }`,
+			`    }`,
+			``,
+			`    event ThingDone {`,
+			`      tags {`,
+			`        priority: statusCode`,
+			`      }`,
+			`    }`,
+			`  }`,
+			`}`,
+			``,
+		}, "\n")
+
+		tokens1, scanErrs1 := lexer.Scan(input, "test.emod")
+		require.Empty(t, scanErrs1)
+		p1 := parser.New(tokens1, "test.emod")
+		model1, parseErrs1 := p1.Parse()
+		require.Empty(t, parseErrs1)
+
+		firstFormat := formatter.Format(model1)
+
+		tokens2, scanErrs2 := lexer.Scan(firstFormat, "formatted.emod")
+		require.Empty(t, scanErrs2)
+		p2 := parser.New(tokens2, "formatted.emod")
+		model2, parseErrs2 := p2.Parse()
+		require.Empty(t, parseErrs2)
+
+		secondFormat := formatter.Format(model2)
+
+		require.Equal(t, firstFormat, secondFormat,
+			"formatting the already-formatted DCB output should produce identical bytes")
+	})
 }
