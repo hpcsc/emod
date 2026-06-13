@@ -1712,6 +1712,224 @@ context "Ctx" {
 		require.Len(t, evt.Fields, 1)
 	})
 
+	t.Run("event with tags", func(t *testing.T) {
+		input := `model "Test"
+context "Ctx" {
+  aggregate "Agg" {
+    slice "Slice" {
+      event TestEvent {
+        tags {
+          priority: statusCode
+        }
+      }
+    }
+  }
+}`
+		tokens, _ := lexer.Scan(input, "test.emod")
+		p := parser.New(tokens, "test.emod")
+		model, errs := p.Parse()
+
+		require.Len(t, errs, 0)
+		evt := model.Contexts[0].Aggregates[0].Slices[0].Events[0]
+		require.Equal(t, "TestEvent", evt.Name)
+		require.Len(t, evt.Tags, 1)
+		require.Equal(t, "priority", evt.Tags[0].Key)
+		require.Equal(t, "statusCode", evt.Tags[0].FieldRef)
+	})
+
+	t.Run("event with multiple tags", func(t *testing.T) {
+		input := `model "Test"
+context "Ctx" {
+  aggregate "Agg" {
+    slice "Slice" {
+      event TestEvent {
+        tags {
+          priority: statusCode
+          category: eventType
+        }
+      }
+    }
+  }
+}`
+		tokens, _ := lexer.Scan(input, "test.emod")
+		p := parser.New(tokens, "test.emod")
+		model, errs := p.Parse()
+
+		require.Len(t, errs, 0)
+		evt := model.Contexts[0].Aggregates[0].Slices[0].Events[0]
+		require.Len(t, evt.Tags, 2)
+		require.Equal(t, "priority", evt.Tags[0].Key)
+		require.Equal(t, "statusCode", evt.Tags[0].FieldRef)
+		require.Equal(t, "category", evt.Tags[1].Key)
+		require.Equal(t, "eventType", evt.Tags[1].FieldRef)
+	})
+
+	t.Run("event with tags and fields", func(t *testing.T) {
+		input := `model "Test"
+context "Ctx" {
+  aggregate "Agg" {
+    slice "Slice" {
+      event TestEvent {
+        tags {
+          priority: statusCode
+        }
+        fields {
+          statusCode string
+        }
+      }
+    }
+  }
+}`
+		tokens, _ := lexer.Scan(input, "test.emod")
+		p := parser.New(tokens, "test.emod")
+		model, errs := p.Parse()
+
+		require.Len(t, errs, 0)
+		evt := model.Contexts[0].Aggregates[0].Slices[0].Events[0]
+		require.Len(t, evt.Tags, 1)
+		require.Equal(t, "priority", evt.Tags[0].Key)
+		require.Equal(t, "statusCode", evt.Tags[0].FieldRef)
+		require.Len(t, evt.Fields, 1)
+		require.Equal(t, "statusCode", evt.Fields[0].Name)
+	})
+
+	t.Run("event with tags and source external", func(t *testing.T) {
+		input := `model "Test"
+context "Ctx" {
+  aggregate "Agg" {
+    slice "Slice" {
+      event TestEvent {
+        source external "SendGrid Webhook"
+        tags {
+          priority: statusCode
+        }
+        fields {
+          statusCode string
+        }
+      }
+    }
+  }
+}`
+		tokens, _ := lexer.Scan(input, "test.emod")
+		p := parser.New(tokens, "test.emod")
+		model, errs := p.Parse()
+
+		require.Len(t, errs, 0)
+		evt := model.Contexts[0].Aggregates[0].Slices[0].Events[0]
+		require.Equal(t, "external", evt.Source)
+		require.Equal(t, "SendGrid Webhook", evt.ExternalName)
+		require.Len(t, evt.Tags, 1)
+		require.Equal(t, "priority", evt.Tags[0].Key)
+		require.Equal(t, "statusCode", evt.Tags[0].FieldRef)
+		require.Len(t, evt.Fields, 1)
+	})
+
+	t.Run("event without tags (backward compatible)", func(t *testing.T) {
+		input := `model "Test"
+context "Ctx" {
+  aggregate "Agg" {
+    slice "Slice" {
+      event TestEvent {
+        fields {
+          id string
+        }
+      }
+    }
+  }
+}`
+		tokens, _ := lexer.Scan(input, "test.emod")
+		p := parser.New(tokens, "test.emod")
+		model, errs := p.Parse()
+
+		require.Len(t, errs, 0)
+		evt := model.Contexts[0].Aggregates[0].Slices[0].Events[0]
+		require.Equal(t, "TestEvent", evt.Name)
+		require.Empty(t, evt.Tags)
+		require.Len(t, evt.Fields, 1)
+	})
+
+	t.Run("tags block without opening brace produces diagnostic", func(t *testing.T) {
+		input := `model "Test"
+context "Ctx" {
+  aggregate "Agg" {
+    slice "Slice" {
+      event TestEvent {
+        tags priority: statusCode
+      }
+    }
+  }
+}`
+		tokens, _ := lexer.Scan(input, "test.emod")
+		p := parser.New(tokens, "test.emod")
+		_, errs := p.Parse()
+
+		require.NotEmpty(t, errs)
+		found := false
+		for _, e := range errs {
+			if strings.Contains(e.Message, "{") {
+				found = true
+				break
+			}
+		}
+		require.True(t, found, "expected a diagnostic mentioning '{', got: %v", errs)
+	})
+
+	t.Run("tags block missing colon produces diagnostic", func(t *testing.T) {
+		input := `model "Test"
+context "Ctx" {
+  aggregate "Agg" {
+    slice "Slice" {
+      event TestEvent {
+        tags {
+          priority statusCode
+        }
+      }
+    }
+  }
+}`
+		tokens, _ := lexer.Scan(input, "test.emod")
+		p := parser.New(tokens, "test.emod")
+		_, errs := p.Parse()
+
+		require.NotEmpty(t, errs)
+		found := false
+		for _, e := range errs {
+			if strings.Contains(e.Message, ":") {
+				found = true
+				break
+			}
+		}
+		require.True(t, found, "expected a diagnostic mentioning ':', got: %v", errs)
+	})
+
+	t.Run("tags block missing field reference produces diagnostic", func(t *testing.T) {
+		input := `model "Test"
+context "Ctx" {
+  aggregate "Agg" {
+    slice "Slice" {
+      event TestEvent {
+        tags {
+          priority:
+        }
+      }
+    }
+  }
+}`
+		tokens, _ := lexer.Scan(input, "test.emod")
+		p := parser.New(tokens, "test.emod")
+		_, errs := p.Parse()
+
+		require.NotEmpty(t, errs)
+		found := false
+		for _, e := range errs {
+			if strings.Contains(e.Message, "field reference") {
+				found = true
+				break
+			}
+		}
+		require.True(t, found, "expected a diagnostic mentioning 'field reference', got: %v", errs)
+	})
+
 	t.Run("event source without external keyword", func(t *testing.T) {
 		input := `model "Test"
 context "Ctx" {
@@ -1946,5 +2164,659 @@ actor "Guest"`
 			Text:     "# Indented actor comment",
 			Position: ast.Position{Filename: "test.emod", Line: 3, Column: 3},
 		}}, model.Actors[0].Comments)
+	})
+
+	t.Run("command with decides_on and simple tag predicate", func(t *testing.T) {
+		input := `model "Test"
+context "Ctx" {
+  aggregate "Agg" {
+    slice "Slice" {
+      command DoThing {
+        fields {
+          id string
+        }
+        decides_on {
+          events [ThingDone]
+          where tag(priority = high)
+        }
+      }
+    }
+  }
+}`
+		tokens, _ := lexer.Scan(input, "test.emod")
+		p := parser.New(tokens, "test.emod")
+		model, errs := p.Parse()
+
+		require.Empty(t, errs)
+		cmd := model.Contexts[0].Aggregates[0].Slices[0].Commands[0]
+		require.Equal(t, "DoThing", cmd.Name)
+		require.NotNil(t, cmd.DecidesOn)
+		require.Equal(t, []string{"ThingDone"}, cmd.DecidesOn.Events)
+		require.NotNil(t, cmd.DecidesOn.Predicate)
+
+		pred, ok := cmd.DecidesOn.Predicate.(*ast.TagPredicate)
+		require.True(t, ok, "expected *ast.TagPredicate, got %T", cmd.DecidesOn.Predicate)
+		require.Equal(t, "priority", pred.Field)
+		require.Equal(t, "=", pred.Operator)
+		require.Equal(t, "high", pred.Value)
+	})
+
+	t.Run("command with decides_on and multiple events", func(t *testing.T) {
+		input := `model "Test"
+context "Ctx" {
+  aggregate "Agg" {
+    slice "Slice" {
+      command DoThing {
+        decides_on {
+          events [EventA, EventB, EventC]
+          where tag(priority = high)
+        }
+      }
+    }
+  }
+}`
+		tokens, _ := lexer.Scan(input, "test.emod")
+		p := parser.New(tokens, "test.emod")
+		model, errs := p.Parse()
+
+		require.Empty(t, errs)
+		cmd := model.Contexts[0].Aggregates[0].Slices[0].Commands[0]
+		require.NotNil(t, cmd.DecidesOn)
+		require.Equal(t, []string{"EventA", "EventB", "EventC"}, cmd.DecidesOn.Events)
+	})
+
+	t.Run("command with decides_on and single event (no commas)", func(t *testing.T) {
+		input := `model "Test"
+context "Ctx" {
+  aggregate "Agg" {
+    slice "Slice" {
+      command DoThing {
+        decides_on {
+          events [OnlyEvent]
+          where tag(priority = high)
+        }
+      }
+    }
+  }
+}`
+		tokens, _ := lexer.Scan(input, "test.emod")
+		p := parser.New(tokens, "test.emod")
+		model, errs := p.Parse()
+
+		require.Empty(t, errs)
+		cmd := model.Contexts[0].Aggregates[0].Slices[0].Commands[0]
+		require.Equal(t, []string{"OnlyEvent"}, cmd.DecidesOn.Events)
+	})
+
+	t.Run("command with decides_on with both fields", func(t *testing.T) {
+		input := `model "Test"
+context "Ctx" {
+  aggregate "Agg" {
+    slice "Slice" {
+      command DoThing {
+        fields {
+          id string
+        }
+        decides_on {
+          events [ThingDone]
+          where tag(priority = high)
+        }
+      }
+    }
+  }
+}`
+		tokens, _ := lexer.Scan(input, "test.emod")
+		p := parser.New(tokens, "test.emod")
+		model, errs := p.Parse()
+
+		require.Empty(t, errs)
+		cmd := model.Contexts[0].Aggregates[0].Slices[0].Commands[0]
+		require.NotNil(t, cmd.DecidesOn)
+		require.Len(t, cmd.Fields, 1)
+		require.Equal(t, "id", cmd.Fields[0].Name)
+		require.Equal(t, []string{"ThingDone"}, cmd.DecidesOn.Events)
+	})
+
+	t.Run("command with decides_on and compound predicate (and)", func(t *testing.T) {
+		input := `model "Test"
+context "Ctx" {
+  aggregate "Agg" {
+    slice "Slice" {
+      command DoThing {
+        decides_on {
+          events [ThingDone]
+          where tag(priority = high) and tag(region = us)
+        }
+      }
+    }
+  }
+}`
+		tokens, _ := lexer.Scan(input, "test.emod")
+		p := parser.New(tokens, "test.emod")
+		model, errs := p.Parse()
+
+		require.Empty(t, errs)
+		cmd := model.Contexts[0].Aggregates[0].Slices[0].Commands[0]
+		require.NotNil(t, cmd.DecidesOn)
+
+		logical, ok := cmd.DecidesOn.Predicate.(*ast.LogicalExpr)
+		require.True(t, ok, "expected *ast.LogicalExpr, got %T", cmd.DecidesOn.Predicate)
+		require.Equal(t, "and", logical.Operator)
+
+		left, ok := logical.Left.(*ast.TagPredicate)
+		require.True(t, ok)
+		require.Equal(t, "priority", left.Field)
+		require.Equal(t, "high", left.Value)
+
+		right, ok := logical.Right.(*ast.TagPredicate)
+		require.True(t, ok)
+		require.Equal(t, "region", right.Field)
+		require.Equal(t, "us", right.Value)
+	})
+
+	t.Run("command with decides_on and compound predicate (or)", func(t *testing.T) {
+		input := `model "Test"
+context "Ctx" {
+  aggregate "Agg" {
+    slice "Slice" {
+      command DoThing {
+        decides_on {
+          events [ThingDone]
+          where tag(priority = high) or tag(priority = low)
+        }
+      }
+    }
+  }
+}`
+		tokens, _ := lexer.Scan(input, "test.emod")
+		p := parser.New(tokens, "test.emod")
+		model, errs := p.Parse()
+
+		require.Empty(t, errs)
+		cmd := model.Contexts[0].Aggregates[0].Slices[0].Commands[0]
+
+		logical, ok := cmd.DecidesOn.Predicate.(*ast.LogicalExpr)
+		require.True(t, ok, "expected *ast.LogicalExpr, got %T", cmd.DecidesOn.Predicate)
+		require.Equal(t, "or", logical.Operator)
+	})
+
+	t.Run("command with decides_on and not predicate", func(t *testing.T) {
+		input := `model "Test"
+context "Ctx" {
+  aggregate "Agg" {
+    slice "Slice" {
+      command DoThing {
+        decides_on {
+          events [ThingDone]
+          where not tag(priority = high)
+        }
+      }
+    }
+  }
+}`
+		tokens, _ := lexer.Scan(input, "test.emod")
+		p := parser.New(tokens, "test.emod")
+		model, errs := p.Parse()
+
+		require.Empty(t, errs)
+		cmd := model.Contexts[0].Aggregates[0].Slices[0].Commands[0]
+
+		notExpr, ok := cmd.DecidesOn.Predicate.(*ast.NotExpr)
+		require.True(t, ok, "expected *ast.NotExpr, got %T", cmd.DecidesOn.Predicate)
+
+		_, ok = notExpr.Expr.(*ast.TagPredicate)
+		require.True(t, ok, "expected *ast.TagPredicate inside NotExpr, got %T", notExpr.Expr)
+	})
+
+	t.Run("command with decides_on and double not", func(t *testing.T) {
+		input := `model "Test"
+context "Ctx" {
+  aggregate "Agg" {
+    slice "Slice" {
+      command DoThing {
+        decides_on {
+          events [ThingDone]
+          where not not tag(priority = high)
+        }
+      }
+    }
+  }
+}`
+		tokens, _ := lexer.Scan(input, "test.emod")
+		p := parser.New(tokens, "test.emod")
+		model, errs := p.Parse()
+
+		require.Empty(t, errs)
+		cmd := model.Contexts[0].Aggregates[0].Slices[0].Commands[0]
+
+		outer, ok := cmd.DecidesOn.Predicate.(*ast.NotExpr)
+		require.True(t, ok, "expected outer *ast.NotExpr")
+
+		inner, ok := outer.Expr.(*ast.NotExpr)
+		require.True(t, ok, "expected inner *ast.NotExpr")
+
+		_, ok = inner.Expr.(*ast.TagPredicate)
+		require.True(t, ok, "expected *ast.TagPredicate inside inner NotExpr")
+	})
+
+	t.Run("command with decides_on and parenthesised sub-expression", func(t *testing.T) {
+		input := `model "Test"
+context "Ctx" {
+  aggregate "Agg" {
+    slice "Slice" {
+      command DoThing {
+        decides_on {
+          events [ThingDone]
+          where tag(priority = high) and (tag(region = us) or tag(region = eu))
+        }
+      }
+    }
+  }
+}`
+		tokens, _ := lexer.Scan(input, "test.emod")
+		p := parser.New(tokens, "test.emod")
+		model, errs := p.Parse()
+
+		require.Empty(t, errs)
+		cmd := model.Contexts[0].Aggregates[0].Slices[0].Commands[0]
+
+		outerLogical, ok := cmd.DecidesOn.Predicate.(*ast.LogicalExpr)
+		require.True(t, ok, "expected outer *ast.LogicalExpr")
+		require.Equal(t, "and", outerLogical.Operator)
+
+		innerLogical, ok := outerLogical.Right.(*ast.LogicalExpr)
+		require.True(t, ok, "expected inner *ast.LogicalExpr for parenthesised group")
+		require.Equal(t, "or", innerLogical.Operator)
+	})
+
+	t.Run("command with decides_on and nested parentheses", func(t *testing.T) {
+		input := `model "Test"
+context "Ctx" {
+  aggregate "Agg" {
+    slice "Slice" {
+      command DoThing {
+        decides_on {
+          events [ThingDone]
+          where (tag(priority = high) and tag(region = us)) or tag(status = active)
+        }
+      }
+    }
+  }
+}`
+		tokens, _ := lexer.Scan(input, "test.emod")
+		p := parser.New(tokens, "test.emod")
+		model, errs := p.Parse()
+
+		require.Empty(t, errs)
+		cmd := model.Contexts[0].Aggregates[0].Slices[0].Commands[0]
+
+		outerLogical, ok := cmd.DecidesOn.Predicate.(*ast.LogicalExpr)
+		require.True(t, ok, "expected outer *ast.LogicalExpr")
+		require.Equal(t, "or", outerLogical.Operator)
+
+		innerLogical, ok := outerLogical.Left.(*ast.LogicalExpr)
+		require.True(t, ok, "expected inner *ast.LogicalExpr inside parentheses")
+		require.Equal(t, "and", innerLogical.Operator)
+	})
+
+	t.Run("command without decides_on remains valid (backward compatible)", func(t *testing.T) {
+		input := `model "Test"
+context "Ctx" {
+  aggregate "Agg" {
+    slice "Slice" {
+      command DoThing {
+        fields {
+          id string
+        }
+      }
+    }
+  }
+}`
+		tokens, _ := lexer.Scan(input, "test.emod")
+		p := parser.New(tokens, "test.emod")
+		model, errs := p.Parse()
+
+		require.Empty(t, errs)
+		cmd := model.Contexts[0].Aggregates[0].Slices[0].Commands[0]
+		require.Nil(t, cmd.DecidesOn)
+		require.Len(t, cmd.Fields, 1)
+	})
+
+	t.Run("command with decides_on missing events produces error", func(t *testing.T) {
+		input := `model "Test"
+context "Ctx" {
+  aggregate "Agg" {
+    slice "Slice" {
+      command DoThing {
+        decides_on {
+          where tag(priority = high)
+        }
+      }
+    }
+  }
+}`
+		tokens, _ := lexer.Scan(input, "test.emod")
+		p := parser.New(tokens, "test.emod")
+		_, errs := p.Parse()
+
+		found := false
+		for _, e := range errs {
+			if e.Message == "decides_on block requires an events clause" {
+				found = true
+				require.Equal(t, "test.emod", e.Filename)
+				break
+			}
+		}
+		require.True(t, found, "expected diagnostic 'decides_on block requires an events clause', got: %v", errs)
+	})
+
+	t.Run("command with decides_on missing where produces error", func(t *testing.T) {
+		input := `model "Test"
+context "Ctx" {
+  aggregate "Agg" {
+    slice "Slice" {
+      command DoThing {
+        decides_on {
+          events [ThingDone]
+        }
+      }
+    }
+  }
+}`
+		tokens, _ := lexer.Scan(input, "test.emod")
+		p := parser.New(tokens, "test.emod")
+		_, errs := p.Parse()
+
+		found := false
+		for _, e := range errs {
+			if e.Message == "decides_on block requires a where clause" {
+				found = true
+				require.Equal(t, "test.emod", e.Filename)
+				break
+			}
+		}
+		require.True(t, found, "expected diagnostic 'decides_on block requires a where clause', got: %v", errs)
+	})
+
+	t.Run("command with decides_on missing both events and where produces both errors", func(t *testing.T) {
+		input := `model "Test"
+context "Ctx" {
+  aggregate "Agg" {
+    slice "Slice" {
+      command DoThing {
+        decides_on {
+        }
+      }
+    }
+  }
+}`
+		tokens, _ := lexer.Scan(input, "test.emod")
+		p := parser.New(tokens, "test.emod")
+		_, errs := p.Parse()
+
+		foundEvents := false
+		foundWhere := false
+		for _, e := range errs {
+			if e.Message == "decides_on block requires an events clause" {
+				foundEvents = true
+			}
+			if e.Message == "decides_on block requires a where clause" {
+				foundWhere = true
+			}
+		}
+		require.True(t, foundEvents, "expected 'decides_on block requires an events clause', got: %v", errs)
+		require.True(t, foundWhere, "expected 'decides_on block requires a where clause', got: %v", errs)
+	})
+
+	t.Run("command with decides_on and bad predicate token produces error", func(t *testing.T) {
+		input := `model "Test"
+context "Ctx" {
+  aggregate "Agg" {
+    slice "Slice" {
+      command DoThing {
+        decides_on {
+          events [ThingDone]
+          where badtoken
+        }
+      }
+    }
+  }
+}`
+		tokens, _ := lexer.Scan(input, "test.emod")
+		p := parser.New(tokens, "test.emod")
+		_, errs := p.Parse()
+
+		require.NotEmpty(t, errs)
+		found := false
+		for _, e := range errs {
+			if strings.Contains(e.Message, "tag()") || strings.Contains(e.Message, "(") {
+				found = true
+				break
+			}
+		}
+		require.True(t, found, "expected a diagnostic mentioning 'tag()' or '(', got: %v", errs)
+	})
+
+	t.Run("decides_on error reports correct location", func(t *testing.T) {
+		input := `model "Test"
+context "Ctx" {
+  aggregate "Agg" {
+    slice "Slice" {
+      command DoThing {
+        decides_on {
+        }
+      }
+    }
+  }
+}`
+		tokens, _ := lexer.Scan(input, "test.emod")
+		p := parser.New(tokens, "test.emod")
+		_, errs := p.Parse()
+
+		found := false
+		for _, e := range errs {
+			if e.Message == "decides_on block requires an events clause" {
+				found = true
+				require.Equal(t, 6, e.Line, "error should reference the decides_on block opening line (6)")
+				break
+			}
+		}
+		require.True(t, found, "expected 'decides_on block requires an events clause' diagnostic, got: %v", errs)
+	})
+
+	t.Run("event name positions recorded in decides_on events list", func(t *testing.T) {
+		input := `model "Test"
+context "Ctx" {
+  aggregate "Agg" {
+    slice "Slice" {
+      command DoThing {
+        decides_on {
+          events [EventA, EventB]
+          where tag(priority = high)
+        }
+      }
+    }
+  }
+}`
+		tokens, _ := lexer.Scan(input, "test.emod")
+		p := parser.New(tokens, "test.emod")
+		model, errs := p.Parse()
+
+		require.Empty(t, errs)
+		cmd := model.Contexts[0].Aggregates[0].Slices[0].Commands[0]
+		require.Len(t, cmd.DecidesOn.EventsPos, 2)
+		require.Equal(t, "test.emod", cmd.DecidesOn.EventsPos[0].Filename)
+		require.Equal(t, 7, cmd.DecidesOn.EventsPos[0].Line)
+		require.Equal(t, "test.emod", cmd.DecidesOn.EventsPos[1].Filename)
+		require.Equal(t, 7, cmd.DecidesOn.EventsPos[1].Line)
+	})
+
+	t.Run("decides_on events list missing opening bracket produces error", func(t *testing.T) {
+		input := `model "Test"
+context "Ctx" {
+  aggregate "Agg" {
+    slice "Slice" {
+      command DoThing {
+        decides_on {
+          events ThingDone]
+          where tag(priority = high)
+        }
+      }
+    }
+  }
+}`
+		tokens, _ := lexer.Scan(input, "test.emod")
+		p := parser.New(tokens, "test.emod")
+		_, errs := p.Parse()
+
+		found := false
+		for _, e := range errs {
+			if strings.Contains(e.Message, "[") {
+				found = true
+				break
+			}
+		}
+		require.True(t, found, "expected a diagnostic mentioning '[', got: %v", errs)
+	})
+
+	t.Run("decides_on missing opening brace produces error", func(t *testing.T) {
+		input := `model "Test"
+context "Ctx" {
+  aggregate "Agg" {
+    slice "Slice" {
+      command DoThing {
+        decides_on events [ThingDone] where tag(priority = high)
+      }
+    }
+  }
+}`
+		tokens, _ := lexer.Scan(input, "test.emod")
+		p := parser.New(tokens, "test.emod")
+		_, errs := p.Parse()
+
+		found := false
+		for _, e := range errs {
+			if strings.Contains(e.Message, "{") {
+				found = true
+				break
+			}
+		}
+		require.True(t, found, "expected a diagnostic mentioning '{', got: %v", errs)
+	})
+
+	t.Run("decides_on with unrecognized keyword in body produces diagnostic", func(t *testing.T) {
+		input := `model "Test"
+context "Ctx" {
+  aggregate "Agg" {
+    slice "Slice" {
+      command DoThing {
+        decides_on {
+          unknown_directive
+        }
+      }
+    }
+  }
+}`
+		tokens, _ := lexer.Scan(input, "test.emod")
+		p := parser.New(tokens, "test.emod")
+		_, errs := p.Parse()
+
+		found := false
+		for _, e := range errs {
+			if strings.Contains(e.Message, "events") && strings.Contains(e.Message, "where") {
+				found = true
+				break
+			}
+		}
+		require.True(t, found, "expected a diagnostic mentioning 'events' and 'where', got: %v", errs)
+	})
+
+	t.Run("command with decides_on alongside command, event, and flow in slice", func(t *testing.T) {
+		input := `model "Test"
+context "Ctx" {
+  aggregate "Agg" {
+    slice "Slice" {
+      command DoThing {
+        fields {
+          id string required
+        }
+        decides_on {
+          events [ThingDone]
+          where tag(priority = high)
+        }
+      }
+      event ThingDone {
+        fields {
+          id string required
+          priority string required
+        }
+      }
+      flow {
+        command -> event: DoThing -> ThingDone
+      }
+    }
+  }
+}`
+		tokens, _ := lexer.Scan(input, "test.emod")
+		p := parser.New(tokens, "test.emod")
+		model, errs := p.Parse()
+
+		require.Empty(t, errs)
+		slice := model.Contexts[0].Aggregates[0].Slices[0]
+		require.Len(t, slice.Commands, 1)
+		require.NotNil(t, slice.Commands[0].DecidesOn)
+		require.Len(t, slice.Events, 1)
+		require.Len(t, slice.Flows, 1)
+		require.Equal(t, "ThingDone", slice.Commands[0].DecidesOn.Events[0])
+	})
+
+	t.Run("command with fields before and decides_on after works", func(t *testing.T) {
+		input := `model "Test"
+context "Ctx" {
+  aggregate "Agg" {
+    slice "Slice" {
+      command DoThing {
+        fields {
+          id string
+        }
+        decides_on {
+          events [ThingDone]
+          where tag(priority = high)
+        }
+      }
+    }
+  }
+}`
+		tokens, _ := lexer.Scan(input, "test.emod")
+		p := parser.New(tokens, "test.emod")
+		model, errs := p.Parse()
+
+		require.Empty(t, errs)
+		cmd := model.Contexts[0].Aggregates[0].Slices[0].Commands[0]
+		require.Len(t, cmd.Fields, 1)
+		require.NotNil(t, cmd.DecidesOn)
+	})
+
+	t.Run("decides_on events are parsed in order", func(t *testing.T) {
+		input := `model "Test"
+context "Ctx" {
+  aggregate "Agg" {
+    slice "Slice" {
+      command DoThing {
+        decides_on {
+          events [Alpha, Beta, Gamma]
+          where tag(priority = high)
+        }
+      }
+    }
+  }
+}`
+		tokens, _ := lexer.Scan(input, "test.emod")
+		p := parser.New(tokens, "test.emod")
+		model, errs := p.Parse()
+
+		require.Empty(t, errs)
+		cmd := model.Contexts[0].Aggregates[0].Slices[0].Commands[0]
+		require.Equal(t, []string{"Alpha", "Beta", "Gamma"}, cmd.DecidesOn.Events)
 	})
 }

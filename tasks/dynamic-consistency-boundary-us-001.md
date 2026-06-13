@@ -3,8 +3,8 @@
 ## Progress
 - [x] Task 1: Add DCB lexer tokens and AST types
 - [x] Task 2: Parse context mode and accept slices directly under context
-- [ ] Task 3: Parse event tags clause
-- [ ] Task 4: Parse command decides_on clause with predicate expressions
+- [x] Task 3: Parse event tags clause
+- [x] Task 4: Parse command decides_on clause with predicate expressions
 - [ ] Task 5: Format DCB constructs in formatter output
 - [ ] Task 6: Validate DCB cross-references at parse time
 - [ ] Task 7: Add mode-aware linter warnings for DCB vs aggregate constructs

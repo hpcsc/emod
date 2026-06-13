@@ -157,15 +157,19 @@ type Translation struct {
 	ClosePos       Position
 }
 
-// TagEntry represents a tag defined on an event.
+// TagEntry represents a tag entry defined on an event with key:fieldRef syntax.
 type TagEntry struct {
-	Name    string
-	NamePos Position
+	Key          string
+	KeyPos       Position
+	FieldRef     string
+	FieldRefPos  Position
 }
 
 // DecidesOnClause represents a decides_on condition on a command.
 type DecidesOnClause struct {
 	Comments  []*Comment
+	Events    []string
+	EventsPos []Position
 	Predicate PredicateExpr
 	OpenPos   Position
 	ClosePos  Position
