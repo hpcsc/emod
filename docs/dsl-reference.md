@@ -70,7 +70,7 @@ Multiple actors are allowed. Actors are referenced by triggers (see [Slice Patte
 
 ### `context`
 
-Groups aggregates under a bounded context.
+Groups aggregates (or slices in DCB mode) under a bounded context.
 
 ```
 context "<name>" {
@@ -79,11 +79,26 @@ context "<name>" {
 }
 ```
 
-A model must contain at least one context. Context names are referenced by automations (see [`target context`](#automation-pattern)).
+An optional `mode` clause declares the consistency boundary style:
+
+| Mode | Description |
+|------|-------------|
+| `aggregate` (default) | Slices must live inside an `aggregate` block. Tags, `decides_on`, and direct slices produce lint warnings. |
+| `dcb` | Slices live directly under the context (no `aggregate`). Events use `tags`, commands use `decides_on`. An `aggregate` block produces a lint warning. |
+| `mixed` | Both aggregate-wrapped and direct slices are accepted. DCB constructs (`tags`, `decides_on`) are allowed without warnings. |
+
+```
+context "<name>" mode dcb {
+  slice "<name>" { ... }
+  ...
+}
+```
+
+A model must contain at least one context. Context names are referenced by automations (see [`target context`](#automation-pattern)). See [examples/dcb_model.emod](/examples/dcb_model.emod) for a DCB-mode example.
 
 ### `aggregate`
 
-Groups slices within a context. Represents a consistency boundary.
+Groups slices within a context. Represents a consistency boundary. Not used in `mode dcb` contexts.
 
 ```
 aggregate "<name>" {
@@ -98,15 +113,15 @@ Multiple aggregates per context, multiple slices per aggregate.
 
 ## 4. Slices
 
-A slice is an implementation unit representing a single use case in Event Modeling. All event-modeling primitives live inside slices.
+A slice is an implementation unit representing a single use case in Event Modeling. All event-modeling primitives live inside slices. In aggregate mode, slices are nested inside an `aggregate`. In DCB mode, slices are direct children of the context.
 
 ```
 slice "<name>" {
-  trigger   ...       # 0-1 trigger (Command Pattern)
-  command   ...       # 0+ commands
-  event     ...       # 0+ events
-  view      ...       # 0+ views (View Pattern)
-  automation ...      # 0+ automations (Automation Pattern)
+  trigger     ...     # 0-1 trigger (Command Pattern)
+  command     ...     # 0+ commands
+  event       ...     # 0+ events (may include tags block in DCB/mixed mode)
+  view        ...     # 0+ views (View Pattern)
+  automation  ...     # 0+ automations (Automation Pattern)
   translation ...     # 0+ translations (Translation Pattern)
   flow { ... }       # 0+ command→event wiring
 }
@@ -250,7 +265,68 @@ event <Name> {
 
 ---
 
-## 8. Cross-References
+## 8. Dynamic Consistency Boundaries
+
+DCB mode is additive — aggregate-based models continue to work without changes. DCB constructs are valid in `dcb` and `mixed` modes only.
+
+### Event Tags
+
+Events in a DCB slice declare tags that cross-reference event fields. Tags allow commands to express consistency boundaries over event data.
+
+```
+event <Name> {
+  tags {
+    <key>: <fieldRef>
+    ...
+  }
+  fields { ... }
+}
+```
+
+- **key**: An identifier naming the tag dimension (e.g., `entity`, `category`, `region`).
+- **fieldRef**: A field name declared on this event.
+- Tags are validated at `emod validate`: every `fieldRef` must match a declared field.
+
+### Command decides_on
+
+Commands declare a consistency boundary by listing the event types they depend on and a predicate over tag values.
+
+```
+command <Name> {
+  decides_on {
+    events [<EventName>, ...]
+    where <Predicate>
+  }
+  fields { ... }
+}
+```
+
+- **events**: One or more event names defined elsewhere in the model.
+- **where**: A predicate expression. Optional — if omitted, the command matches any event.
+
+### Predicate Expressions
+
+Predicates filter events by comparing tag values to event fields:
+
+| Expression | Syntax | Example |
+|---|---|---|
+| Tag equality | `tag(<key> = <fieldRef>)` | `tag(entity = customerId)` |
+| Logical AND | `<expr> and <expr>` | `tag(entity = id) and tag(region = country)` |
+| Logical OR | `<expr> or <expr>` | `tag(status = active) or tag(status = trial)` |
+| Negation | `not <expr>` | `not tag(category = premium)` |
+| Grouping | `( <expr> )` | `(tag(a = x) or tag(a = y)) and tag(b = z)` |
+
+The tag key and field reference in each `tag()` term are validated at `emod validate`:
+- The **tag key** must be declared on at least one event listed in `events`.
+- The **field reference** must be a declared field on at least one listed event.
+
+### Example
+
+See [examples/dcb_model.emod](/examples/dcb_model.emod) for a complete DCB-mode model demonstrating tags, `decides_on`, compound predicates, and direct slices.
+
+---
+
+## 9. Cross-References
 
 Names are resolved during validation (`emod validate`). All references use unqualified names.
 
@@ -269,7 +345,7 @@ Validation detects:
 
 ---
 
-## 9. Pipeline
+## 10. Pipeline
 
 The CLI processes `.emod` files through a linear pipeline:
 

@@ -80,6 +80,37 @@ emod fmt reservation.emod          # format in place
 emod fmt --check reservation.emod  # check only (CI)
 ```
 
+### Dynamic Consistency Boundary (DCB) models
+
+For cross-cutting consistency boundaries, use `mode dcb` to define slices directly under a context with tagged events and tag-scoped decision queries:
+
+```emod
+context "Fulfillment" mode dcb {
+  slice "Place Order" {
+    command PlaceOrder { ... }
+    event OrderPlaced {
+      tags { entity: customerId }
+      fields { orderId string required; customerId string required; ... }
+    }
+    flow { command -> event: PlaceOrder -> OrderPlaced }
+  }
+
+  slice "Authorize Payment" {
+    command AuthorizePayment {
+      decides_on {
+        events [OrderPlaced]
+        where tag(entity = customerId)
+      }
+      fields { ... }
+    }
+    event PaymentAuthorized { ... }
+    flow { ... }
+  }
+}
+```
+
+See [examples/dcb_model.emod](/examples/dcb_model.emod) for a complete DCB example.
+
 ### Generate diagrams
 
 ```bash

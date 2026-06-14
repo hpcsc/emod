@@ -1,0 +1,122 @@
+# Order Processing — Dynamic Consistency Boundary model
+# Events carry tags so commands can express cross-cutting consistency
+# boundaries via tag-scoped queries
+model "Order Management"
+
+actor "Customer"
+
+context "Fulfillment" mode dcb {
+  slice "Place Order" {
+    command PlaceOrder {
+      fields {
+        customerId string required
+        orderType  string required
+        total      int    required
+      }
+    }
+
+    event OrderPlaced {
+      tags {
+        entity  : customerId
+        category: orderType
+      }
+      fields {
+        orderId    string    required
+        customerId string    required
+        orderType  string    required
+        total      int       required
+        placedAt   timestamp required
+      }
+    }
+
+    flow {
+      command -> event: PlaceOrder -> OrderPlaced
+    }
+  }
+
+  slice "Authorize Payment" {
+    command AuthorizePayment {
+      decides_on {
+        events [OrderPlaced]
+        where tag(entity = customerId) and tag(category = orderType)
+      }
+      fields {
+        paymentId string required
+        authCode  string required
+      }
+    }
+
+    event PaymentAuthorized {
+      tags {
+        entity  : customerId
+        category: orderType
+      }
+      fields {
+        paymentId  string required
+        orderId    string required
+        customerId string required
+        orderType  string required
+        authCode   string required
+      }
+    }
+
+    flow {
+      command -> event: AuthorizePayment -> PaymentAuthorized
+    }
+  }
+
+  slice "Ship Order" {
+    command ShipOrder {
+      decides_on {
+        events [OrderPlaced]
+        where tag(entity = customerId)
+      }
+      fields {
+        shipmentId string required
+      }
+    }
+
+    event OrderShipped {
+      tags {
+        entity: customerId
+      }
+      fields {
+        shipmentId string required
+        orderId    string required
+        customerId string required
+      }
+    }
+
+    flow {
+      command -> event: ShipOrder -> OrderShipped
+    }
+  }
+
+  slice "Notify Customer" {
+    command SendNotification {
+      decides_on {
+        events [PaymentAuthorized, OrderShipped]
+        where tag(entity = customerId)
+      }
+      fields {
+        message string required
+      }
+    }
+
+    event NotificationSent {
+      tags {
+        entity: customerId
+      }
+      fields {
+        notificationId string required
+        orderId        string required
+        customerId     string required
+        message        string required
+      }
+    }
+
+    flow {
+      command -> event: SendNotification -> NotificationSent
+    }
+  }
+}
