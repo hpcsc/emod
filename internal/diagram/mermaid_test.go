@@ -3,6 +3,7 @@
 package diagram_test
 
 import (
+	"strings"
 	"testing"
 
 	"github.com/hpcsc/emod/internal/ast"
@@ -255,5 +256,230 @@ func TestExportMermaid(t *testing.T) {
 		output := string(raw)
 		require.Contains(t, output, "eventmodeling")
 		require.Contains(t, output, "tf 01 cmd DCBCtx.DirectCmd")
+	})
+
+	// --- Projected style (tag-based) tests ---
+
+	t.Run("aggregate-only context with projected style produces identical output", func(t *testing.T) {
+		model := fullModel()
+		autoRaw, err := diagram.ExportMermaid(model, diagram.StyleAuto)
+		require.NoError(t, err)
+		projRaw, err := diagram.ExportMermaid(model, diagram.StyleProjected)
+		require.NoError(t, err)
+		require.Equal(t, autoRaw, projRaw, "aggregate-only context must produce identical output")
+	})
+
+	t.Run("DCB context with tagged events renders tag sections", func(t *testing.T) {
+		model := &ast.Model{
+			Name: "TagTest",
+			Contexts: []*ast.Context{{
+				Name: "Ctx",
+				Slices: []*ast.Slice{{
+					Name: "S1",
+					Events: []*ast.Event{
+						{Name: "OrderPlaced", Tags: []ast.TagEntry{{Key: "priority"}}},
+						{Name: "OrderShipped", Tags: []ast.TagEntry{{Key: "region"}}},
+					},
+				}},
+			}},
+		}
+
+		raw, err := diagram.ExportMermaid(model, diagram.StyleProjected)
+		require.NoError(t, err)
+
+		output := string(raw)
+		// Should have tag-key section markers
+		require.Contains(t, output, "% Tag: priority")
+		require.Contains(t, output, "% Tag: region")
+		// Should have tag-key namespace prefixes on events
+		require.Contains(t, output, "tf 01 evt priority.OrderPlaced")
+		require.Contains(t, output, "tf 02 evt region.OrderShipped")
+		// Should have the Commands / Triggers section header
+		require.Contains(t, output, "% Commands / Triggers")
+	})
+
+	t.Run("single-tag event appears only in that tag's section", func(t *testing.T) {
+		model := &ast.Model{
+			Name: "SingleTag",
+			Contexts: []*ast.Context{{
+				Name: "Ctx",
+				Slices: []*ast.Slice{{
+					Name: "S1",
+					Events: []*ast.Event{
+						{Name: "OrderPlaced", Tags: []ast.TagEntry{{Key: "priority"}}},
+					},
+				}},
+			}},
+		}
+
+		raw, err := diagram.ExportMermaid(model, diagram.StyleProjected)
+		require.NoError(t, err)
+
+		output := string(raw)
+		// Event appears only with the "priority" tag prefix
+		require.Contains(t, output, "priority.OrderPlaced")
+		// Should not appear with any other tag prefix
+		require.NotContains(t, output, "region.OrderPlaced")
+	})
+
+	t.Run("multi-tag event appears in multiple sections with connector comment", func(t *testing.T) {
+		model := &ast.Model{
+			Name: "MultiTag",
+			Contexts: []*ast.Context{{
+				Name: "Ctx",
+				Slices: []*ast.Slice{{
+					Name: "S1",
+					Events: []*ast.Event{
+						{Name: "OrderPlaced", Tags: []ast.TagEntry{{Key: "priority"}, {Key: "region"}}},
+					},
+				}},
+			}},
+		}
+
+		raw, err := diagram.ExportMermaid(model, diagram.StyleProjected)
+		require.NoError(t, err)
+
+		output := string(raw)
+		// Event appears with both tag prefixes
+		require.Contains(t, output, "tf 01 evt priority.OrderPlaced")
+		require.Contains(t, output, "tf 02 evt region.OrderPlaced")
+		// Connector comment on one of them (priority is first tag, region is second alphabetically)
+		require.Contains(t, output, "%   connector: also in")
+	})
+
+	t.Run("commands and triggers appear in Commands / Triggers section", func(t *testing.T) {
+		model := &ast.Model{
+			Name: "CmdTest",
+			Contexts: []*ast.Context{{
+				Name: "Ctx",
+				Slices: []*ast.Slice{{
+					Name: "S1",
+					Trigger: &ast.Trigger{Kind: "UI", Name: "Submit", Actor: "User"},
+					Commands: []*ast.Command{{Name: "ProcessOrder"}},
+					Events: []*ast.Event{
+						{Name: "OrderPlaced", Tags: []ast.TagEntry{{Key: "priority"}}},
+					},
+				}},
+			}},
+		}
+
+		raw, err := diagram.ExportMermaid(model, diagram.StyleProjected)
+		require.NoError(t, err)
+
+		output := string(raw)
+		// Commands and triggers appear in Commands/Triggers section
+		require.Contains(t, output, "% Commands / Triggers")
+		require.Contains(t, output, "tf 01 ui Ctx.Submit")
+		require.Contains(t, output, "tf 02 cmd Ctx.ProcessOrder")
+		// Event appears in tag section (not in commands section)
+		require.Contains(t, output, "tf 03 evt priority.OrderPlaced")
+	})
+
+	t.Run("DCB context without tags renders everything in general section", func(t *testing.T) {
+		model := &ast.Model{
+			Name: "NoTag",
+			Contexts: []*ast.Context{{
+				Name: "Ctx",
+				Slices: []*ast.Slice{{
+					Name: "S1",
+					Commands: []*ast.Command{{Name: "DoSomething"}},
+					Events:   []*ast.Event{{Name: "SomethingHappened"}},
+				}},
+			}},
+		}
+
+		raw, err := diagram.ExportMermaid(model, diagram.StyleProjected)
+		require.NoError(t, err)
+
+		output := string(raw)
+		// Since there are no tag keys, projected mode is not activated
+		// Output should be same as standard mode
+		require.Contains(t, output, "% Slice: S1")
+		require.Contains(t, output, "tf 01 cmd Ctx.DoSomething")
+		require.Contains(t, output, "tf 02 evt Ctx.SomethingHappened")
+	})
+
+	t.Run("mixed mode shows both aggregate events and tag-grouped events", func(t *testing.T) {
+		model := &ast.Model{
+			Name: "Mixed",
+			Contexts: []*ast.Context{{
+				Name: "Ctx",
+				Aggregates: []*ast.Aggregate{{
+					Name: "Agg",
+					Slices: []*ast.Slice{{
+						Name: "AggSlice",
+						Events: []*ast.Event{{Name: "AggEvent"}},
+					}},
+				}},
+				Slices: []*ast.Slice{{
+					Name: "DCBSlice",
+					Events: []*ast.Event{
+						{Name: "DCBEvent", Tags: []ast.TagEntry{{Key: "dcbTag"}}},
+					},
+				}},
+			}},
+		}
+
+		projRaw, err := diagram.ExportMermaid(model, diagram.StyleProjected)
+		require.NoError(t, err)
+
+		projOut := string(projRaw)
+
+		// Aggregate event appears in general section with context prefix
+		require.Contains(t, projOut, "evt Ctx.AggEvent")
+		// Tag event appears in tag section
+		require.Contains(t, projOut, "% Tag: dcbTag")
+		require.Contains(t, projOut, "evt dcbTag.DCBEvent")
+	})
+
+	t.Run("projected output starts with eventmodeling", func(t *testing.T) {
+		model := &ast.Model{
+			Name: "Validity",
+			Contexts: []*ast.Context{{
+				Name: "Ctx",
+				Slices: []*ast.Slice{{
+					Name: "S1",
+					Events: []*ast.Event{
+						{Name: "EventA", Tags: []ast.TagEntry{{Key: "alpha"}}},
+					},
+				}},
+			}},
+		}
+
+		raw, err := diagram.ExportMermaid(model, diagram.StyleProjected)
+		require.NoError(t, err)
+
+		output := string(raw)
+		require.Contains(t, output, "eventmodeling")
+		require.Contains(t, output, "% Validity")
+		// All timeframe entries use the tf pattern
+		require.Contains(t, output, "tf 01 evt alpha.EventA")
+	})
+
+	t.Run("tag sections are in alphabetical order", func(t *testing.T) {
+		model := &ast.Model{
+			Name: "OrderTest",
+			Contexts: []*ast.Context{{
+				Name: "Ctx",
+				Slices: []*ast.Slice{{
+					Name: "S1",
+					Events: []*ast.Event{
+						{Name: "EventA", Tags: []ast.TagEntry{{Key: "zeta"}, {Key: "alpha"}}},
+						{Name: "EventB", Tags: []ast.TagEntry{{Key: "beta"}}},
+					},
+				}},
+			}},
+		}
+
+		raw, err := diagram.ExportMermaid(model, diagram.StyleProjected)
+		require.NoError(t, err)
+
+		output := string(raw)
+		// alpha section should appear before beta, beta before zeta
+		alphaIdx := strings.Index(output, "% Tag: alpha")
+		betaIdx := strings.Index(output, "% Tag: beta")
+		zetaIdx := strings.Index(output, "% Tag: zeta")
+		require.True(t, alphaIdx < betaIdx, "alpha should come before beta")
+		require.True(t, betaIdx < zetaIdx, "beta should come before zeta")
 	})
 }

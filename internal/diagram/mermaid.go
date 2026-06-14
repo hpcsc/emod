@@ -2,6 +2,7 @@ package diagram
 
 import (
 	"fmt"
+	"sort"
 	"strings"
 
 	"github.com/hpcsc/emod/internal/ast"
@@ -12,7 +13,9 @@ import (
 // with timeframe definitions for triggers, commands, events, views, and automations.
 // Contexts are rendered as namespaces using dot notation, which groups entities into
 // swimlanes per bounded context.
-func ExportMermaid(model *ast.Model, _ Style) ([]byte, error) {
+// When StyleProjected is used with DCB contexts that have tagged events, events are
+// grouped by tag key instead of by aggregate context.
+func ExportMermaid(model *ast.Model, style Style) ([]byte, error) {
 	if model == nil {
 		return []byte{}, nil
 	}
@@ -30,6 +33,29 @@ func ExportMermaid(model *ast.Model, _ Style) ([]byte, error) {
 		return []byte(b.String()), nil
 	}
 
+	// Determine if projected (tag-based) layout should be used
+	hasDCB := false
+	for _, e := range entries {
+		if e.fromDCB {
+			hasDCB = true
+			break
+		}
+	}
+	tagKeys := collectTagKeys(entries)
+	useProjected := style == StyleProjected && hasDCB && len(tagKeys) > 0
+
+	if useProjected {
+		exportMermaidProjected(&b, model.Name, entries, tagKeys)
+	} else {
+		exportMermaidStandard(&b, model.Name, entries)
+	}
+
+	return []byte(b.String()), nil
+}
+
+// exportMermaidStandard renders the standard aggregate-based layout.
+// This is the original layout used for aggregate-mode contexts.
+func exportMermaidStandard(b *strings.Builder, modelName string, entries []sliceEntry) {
 	nextNum := 1
 	for _, entry := range entries {
 		s := entry.slice
@@ -119,6 +145,172 @@ func ExportMermaid(model *ast.Model, _ Style) ([]byte, error) {
 			b.WriteString("\n")
 		}
 	}
+}
 
-	return []byte(b.String()), nil
+// exportMermaidProjected renders the tag-key-based projected layout for DCB contexts.
+// Events are grouped by tag key with one section per unique tag key.
+// Commands, triggers, and untagged events appear in a general cross-cutting section.
+// Multi-tag events appear in each matching tag section with a connector annotation.
+func exportMermaidProjected(b *strings.Builder, modelName string, entries []sliceEntry, tagKeys []string) {
+	// Sort tag keys for deterministic output
+	sort.Strings(tagKeys)
+
+	nextNum := 1
+
+	// --- First pass: non-event elements from all slices ---
+	b.WriteString("%% Commands / Triggers\n")
+	for _, entry := range entries {
+		s := entry.slice
+		ns := entry.ctxName
+
+		if s.Name != "" {
+			b.WriteString(fmt.Sprintf("%% Slice: %s\n", s.Name))
+		}
+
+		// Triggers
+		if s.Trigger != nil {
+			etype := "ui"
+			if s.Trigger.Kind == "Schedule" || s.Trigger.Kind == "Processor" {
+				etype = "pcr"
+			}
+			eid := s.Trigger.Name
+			if ns != "" {
+				eid = ns + "." + eid
+			}
+			b.WriteString(fmt.Sprintf("tf %02d %s %s\n", nextNum, etype, eid))
+			nextNum++
+		}
+
+		// Commands
+		for _, cmd := range s.Commands {
+			eid := cmd.Name
+			if ns != "" {
+				eid = ns + "." + eid
+			}
+			b.WriteString(fmt.Sprintf("tf %02d cmd %s\n", nextNum, eid))
+			nextNum++
+		}
+
+		// Aggregate events (not tag-grouped)
+		if !entry.fromDCB {
+			for _, evt := range s.Events {
+				eid := evt.Name
+				if ns != "" {
+					eid = ns + "." + eid
+				}
+				b.WriteString(fmt.Sprintf("tf %02d evt %s\n", nextNum, eid))
+				nextNum++
+			}
+		}
+
+		// DCB events without tags (appear in general section)
+		if entry.fromDCB {
+			for _, evt := range s.Events {
+				if len(evt.Tags) == 0 {
+					eid := evt.Name
+					if ns != "" {
+						eid = ns + "." + eid
+					}
+					b.WriteString(fmt.Sprintf("tf %02d evt %s\n", nextNum, eid))
+					nextNum++
+				}
+			}
+		}
+
+		// Views
+		for _, view := range s.Views {
+			eid := view.Name
+			if ns != "" {
+				eid = ns + "." + eid
+			}
+			b.WriteString(fmt.Sprintf("tf %02d rmo %s\n", nextNum, eid))
+			nextNum++
+			for _, sub := range view.Subscribes {
+				b.WriteString(fmt.Sprintf("%%   subscribes to %s\n", sub))
+			}
+		}
+
+		// Automations
+		for _, auto := range s.Automations {
+			targetNs := ns
+			if auto.TargetContext != "" {
+				targetNs = auto.TargetContext
+			}
+			eid := auto.Name
+			if targetNs != "" {
+				eid = targetNs + "." + eid
+			}
+			label := eid
+			if auto.TriggerEvent != "" && auto.Command != "" {
+				label = fmt.Sprintf("%s (%s → %s)", eid, auto.TriggerEvent, auto.Command)
+			}
+			b.WriteString(fmt.Sprintf("tf %02d pcr %s\n", nextNum, label))
+			nextNum++
+		}
+
+		// Translations
+		for _, tr := range s.Translations {
+			eid := tr.Name
+			if ns != "" {
+				eid = ns + "." + eid
+			}
+			b.WriteString(fmt.Sprintf("tf %02d pcr %s\n", nextNum, eid))
+			nextNum++
+			b.WriteString(fmt.Sprintf("%%   pcr -> cmd\n"))
+			if tr.Command != "" && tr.Event != nil && tr.Event.Name != "" {
+				b.WriteString(fmt.Sprintf("%%   cmd %s -> evt %s\n", tr.Command, tr.Event.Name))
+			}
+			if tr.Reads != "" {
+				b.WriteString(fmt.Sprintf("%%   reads %s\n", tr.Reads))
+			}
+		}
+
+		if s.Name != "" {
+			b.WriteString("\n")
+		}
+	}
+
+	// --- Second pass: events grouped by tag key ---
+	for _, key := range tagKeys {
+		b.WriteString(fmt.Sprintf("%% Tag: %s\n", key))
+		for _, entry := range entries {
+			s := entry.slice
+			if !entry.fromDCB {
+				continue // aggregate events were rendered in the general section
+			}
+			for _, evt := range s.Events {
+				if !eventHasTag(evt, key) {
+					continue
+				}
+				eid := key + "." + evt.Name
+				b.WriteString(fmt.Sprintf("tf %02d evt %s\n", nextNum, eid))
+				nextNum++
+
+				// Multi-tag annotation
+				if len(evt.Tags) > 1 {
+					var otherTags []string
+					for _, t := range evt.Tags {
+						if t.Key != key {
+							otherTags = append(otherTags, t.Key)
+						}
+					}
+					if len(otherTags) > 0 {
+						sort.Strings(otherTags)
+						b.WriteString(fmt.Sprintf("%%   connector: also in %s\n", strings.Join(otherTags, ", ")))
+					}
+				}
+			}
+		}
+		b.WriteString("\n")
+	}
+}
+
+// eventHasTag reports whether an event has a tag with the given key.
+func eventHasTag(evt *ast.Event, key string) bool {
+	for _, tag := range evt.Tags {
+		if tag.Key == key {
+			return true
+		}
+	}
+	return false
 }
