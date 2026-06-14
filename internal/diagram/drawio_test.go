@@ -13,14 +13,14 @@ import (
 
 func TestExportDrawio(t *testing.T) {
 	t.Run("nil model returns nil error and empty output", func(t *testing.T) {
-		raw, err := diagram.ExportDrawio(nil)
+		raw, err := diagram.ExportDrawio(nil, diagram.StyleAuto)
 		require.NoError(t, err)
 		require.Empty(t, raw)
 	})
 
 	t.Run("empty model (no contexts) returns valid XML with no cells", func(t *testing.T) {
 		model := &ast.Model{Name: "Empty"}
-		raw, err := diagram.ExportDrawio(model)
+		raw, err := diagram.ExportDrawio(model, diagram.StyleAuto)
 		require.NoError(t, err)
 
 		output := string(raw)
@@ -34,7 +34,7 @@ func TestExportDrawio(t *testing.T) {
 
 	t.Run("renders three swimlanes with correct labels", func(t *testing.T) {
 		model := minimalModel("Test", "Slice1")
-		raw, err := diagram.ExportDrawio(model)
+		raw, err := diagram.ExportDrawio(model, diagram.StyleAuto)
 		require.NoError(t, err)
 
 		output := string(raw)
@@ -62,7 +62,7 @@ func TestExportDrawio(t *testing.T) {
 			}},
 		}
 
-		raw, err := diagram.ExportDrawio(model)
+		raw, err := diagram.ExportDrawio(model, diagram.StyleAuto)
 		require.NoError(t, err)
 
 		output := string(raw)
@@ -75,7 +75,7 @@ func TestExportDrawio(t *testing.T) {
 	t.Run("renders command with blue fill", func(t *testing.T) {
 		model := singleSliceModel("Test", "S", command("MakeReservation"))
 
-		raw, err := diagram.ExportDrawio(model)
+		raw, err := diagram.ExportDrawio(model, diagram.StyleAuto)
 		require.NoError(t, err)
 
 		output := string(raw)
@@ -87,7 +87,7 @@ func TestExportDrawio(t *testing.T) {
 	t.Run("renders event with orange fill", func(t *testing.T) {
 		model := singleSliceModel("Test", "S", event("ReservationMade"))
 
-		raw, err := diagram.ExportDrawio(model)
+		raw, err := diagram.ExportDrawio(model, diagram.StyleAuto)
 		require.NoError(t, err)
 
 		output := string(raw)
@@ -99,7 +99,7 @@ func TestExportDrawio(t *testing.T) {
 	t.Run("renders view with green fill", func(t *testing.T) {
 		model := singleSliceModel("Test", "S", view("AvailableRooms"))
 
-		raw, err := diagram.ExportDrawio(model)
+		raw, err := diagram.ExportDrawio(model, diagram.StyleAuto)
 		require.NoError(t, err)
 
 		output := string(raw)
@@ -124,7 +124,7 @@ func TestExportDrawio(t *testing.T) {
 			}},
 		}
 
-		raw, err := diagram.ExportDrawio(model)
+		raw, err := diagram.ExportDrawio(model, diagram.StyleAuto)
 		require.NoError(t, err)
 
 		output := string(raw)
@@ -155,7 +155,7 @@ func TestExportDrawio(t *testing.T) {
 			}},
 		}
 
-		raw, err := diagram.ExportDrawio(model)
+		raw, err := diagram.ExportDrawio(model, diagram.StyleAuto)
 		require.NoError(t, err)
 
 		output := string(raw)
@@ -183,7 +183,7 @@ func TestExportDrawio(t *testing.T) {
 			}},
 		}
 
-		raw, err := diagram.ExportDrawio(model)
+		raw, err := diagram.ExportDrawio(model, diagram.StyleAuto)
 		require.NoError(t, err)
 
 		output := string(raw)
@@ -208,7 +208,7 @@ func TestExportDrawio(t *testing.T) {
 			}},
 		}
 
-		raw, err := diagram.ExportDrawio(model)
+		raw, err := diagram.ExportDrawio(model, diagram.StyleAuto)
 		require.NoError(t, err)
 
 		output := string(raw)
@@ -236,7 +236,7 @@ func TestExportDrawio(t *testing.T) {
 			}},
 		}
 
-		raw, err := diagram.ExportDrawio(model)
+		raw, err := diagram.ExportDrawio(model, diagram.StyleAuto)
 		require.NoError(t, err)
 
 		output := string(raw)
@@ -262,7 +262,7 @@ func TestExportDrawio(t *testing.T) {
 			}},
 		}
 
-		raw, err := diagram.ExportDrawio(model)
+		raw, err := diagram.ExportDrawio(model, diagram.StyleAuto)
 		require.NoError(t, err)
 
 		output := string(raw)
@@ -293,7 +293,7 @@ func TestExportDrawio(t *testing.T) {
 			}},
 		}
 
-		raw, err := diagram.ExportDrawio(model)
+		raw, err := diagram.ExportDrawio(model, diagram.StyleAuto)
 		require.NoError(t, err)
 
 		output := string(raw)
@@ -305,7 +305,7 @@ func TestExportDrawio(t *testing.T) {
 
 	t.Run("output is valid XML", func(t *testing.T) {
 		model := fullModel()
-		raw, err := diagram.ExportDrawio(model)
+		raw, err := diagram.ExportDrawio(model, diagram.StyleAuto)
 		require.NoError(t, err)
 		require.True(t, validXML(string(raw)), "output must be valid XML")
 	})
@@ -314,7 +314,7 @@ func TestExportDrawio(t *testing.T) {
 		model := singleSliceModel("Test", "S",
 			eventWithSource("PaymentReceived", "external", "Stripe"))
 
-		raw, err := diagram.ExportDrawio(model)
+		raw, err := diagram.ExportDrawio(model, diagram.StyleAuto)
 		require.NoError(t, err)
 
 		output := string(raw)
@@ -325,7 +325,7 @@ func TestExportDrawio(t *testing.T) {
 	t.Run("complete model with all element types produces well-formed diagram", func(t *testing.T) {
 		model := fullModel()
 
-		raw, err := diagram.ExportDrawio(model)
+		raw, err := diagram.ExportDrawio(model, diagram.StyleAuto)
 		require.NoError(t, err)
 
 		output := string(raw)
@@ -343,6 +343,58 @@ func TestExportDrawio(t *testing.T) {
 
 		// Verify connections exist
 		require.True(t, hasEdge(output), "complete model should have edges")
+	})
+
+	t.Run("DCB context with direct slices renders content", func(t *testing.T) {
+		model := &ast.Model{
+			Name: "DCBTest",
+			Contexts: []*ast.Context{{
+				Name: "DCBCtx",
+				Slices: []*ast.Slice{{
+					Name: "DirectSlice",
+					Commands: []*ast.Command{{Name: "DirectCmd"}},
+					Events:   []*ast.Event{{Name: "DirectEvt"}},
+					Flows:    []*ast.Flow{{CommandName: "DirectCmd", EventName: "DirectEvt"}},
+				}},
+			}},
+		}
+
+		raw, err := diagram.ExportDrawio(model, diagram.StyleDCB)
+		require.NoError(t, err)
+
+		output := string(raw)
+		require.Contains(t, output, "DirectCmd")
+		require.Contains(t, output, "DirectEvt")
+		require.True(t, validXML(output))
+		require.True(t, hasEdge(output), "DCB context should have edges")
+	})
+
+	t.Run("mixed mode context with both aggregates and direct slices renders all", func(t *testing.T) {
+		model := &ast.Model{
+			Name: "Mixed",
+			Contexts: []*ast.Context{{
+				Name: "Ctx",
+				Aggregates: []*ast.Aggregate{{
+					Name: "Agg",
+					Slices: []*ast.Slice{{
+						Name:     "AggSlice",
+						Commands: []*ast.Command{{Name: "AggCmd"}},
+					}},
+				}},
+				Slices: []*ast.Slice{{
+					Name:     "DirectSlice",
+					Commands: []*ast.Command{{Name: "DirectCmd"}},
+				}},
+			}},
+		}
+
+		raw, err := diagram.ExportDrawio(model, diagram.StyleAuto)
+		require.NoError(t, err)
+
+		output := string(raw)
+		require.Contains(t, output, "AggCmd")
+		require.Contains(t, output, "DirectCmd")
+		require.True(t, validXML(output))
 	})
 }
 

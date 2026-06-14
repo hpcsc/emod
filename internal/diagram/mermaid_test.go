@@ -12,14 +12,14 @@ import (
 
 func TestExportMermaid(t *testing.T) {
 	t.Run("nil model returns empty bytes with no error", func(t *testing.T) {
-		raw, err := diagram.ExportMermaid(nil)
+		raw, err := diagram.ExportMermaid(nil, diagram.StyleAuto)
 		require.NoError(t, err)
 		require.Empty(t, raw)
 	})
 
 	t.Run("empty model (no contexts) returns output starting with eventmodeling and no timeframe entries", func(t *testing.T) {
 		model := &ast.Model{Name: "Empty"}
-		raw, err := diagram.ExportMermaid(model)
+		raw, err := diagram.ExportMermaid(model, diagram.StyleAuto)
 		require.NoError(t, err)
 
 		output := string(raw)
@@ -30,7 +30,7 @@ func TestExportMermaid(t *testing.T) {
 	t.Run("single slice with UI trigger renders as tf NN ui TriggerName", func(t *testing.T) {
 		model := singleSliceModel("Test", "S1",
 			&ast.Trigger{Kind: "UI", Name: "SubmitForm"})
-		raw, err := diagram.ExportMermaid(model)
+		raw, err := diagram.ExportMermaid(model, diagram.StyleAuto)
 		require.NoError(t, err)
 
 		output := string(raw)
@@ -40,7 +40,7 @@ func TestExportMermaid(t *testing.T) {
 	t.Run("single slice with schedule trigger renders as tf NN pcr TriggerName", func(t *testing.T) {
 		model := singleSliceModel("Test", "S1",
 			&ast.Trigger{Kind: "Schedule", Name: "NightlyBatch"})
-		raw, err := diagram.ExportMermaid(model)
+		raw, err := diagram.ExportMermaid(model, diagram.StyleAuto)
 		require.NoError(t, err)
 
 		output := string(raw)
@@ -50,7 +50,7 @@ func TestExportMermaid(t *testing.T) {
 	t.Run("single slice with processor trigger renders as tf NN pcr TriggerName", func(t *testing.T) {
 		model := singleSliceModel("Test", "S1",
 			&ast.Trigger{Kind: "Processor", Name: "FileWatcher"})
-		raw, err := diagram.ExportMermaid(model)
+		raw, err := diagram.ExportMermaid(model, diagram.StyleAuto)
 		require.NoError(t, err)
 
 		output := string(raw)
@@ -59,7 +59,7 @@ func TestExportMermaid(t *testing.T) {
 
 	t.Run("commands render as tf NN cmd CommandName", func(t *testing.T) {
 		model := singleSliceModel("Test", "S1", command("CreateOrder"))
-		raw, err := diagram.ExportMermaid(model)
+		raw, err := diagram.ExportMermaid(model, diagram.StyleAuto)
 		require.NoError(t, err)
 
 		output := string(raw)
@@ -68,7 +68,7 @@ func TestExportMermaid(t *testing.T) {
 
 	t.Run("events render as tf NN evt EventName", func(t *testing.T) {
 		model := singleSliceModel("Test", "S1", event("OrderCreated"))
-		raw, err := diagram.ExportMermaid(model)
+		raw, err := diagram.ExportMermaid(model, diagram.StyleAuto)
 		require.NoError(t, err)
 
 		output := string(raw)
@@ -77,7 +77,7 @@ func TestExportMermaid(t *testing.T) {
 
 	t.Run("views render as tf NN rmo ViewName", func(t *testing.T) {
 		model := singleSliceModel("Test", "S1", view("OrderSummary"))
-		raw, err := diagram.ExportMermaid(model)
+		raw, err := diagram.ExportMermaid(model, diagram.StyleAuto)
 		require.NoError(t, err)
 
 		output := string(raw)
@@ -100,7 +100,7 @@ func TestExportMermaid(t *testing.T) {
 				}},
 			}},
 		}
-		raw, err := diagram.ExportMermaid(model)
+		raw, err := diagram.ExportMermaid(model, diagram.StyleAuto)
 		require.NoError(t, err)
 
 		output := string(raw)
@@ -121,7 +121,7 @@ func TestExportMermaid(t *testing.T) {
 				}},
 			}},
 		}
-		raw, err := diagram.ExportMermaid(model)
+		raw, err := diagram.ExportMermaid(model, diagram.StyleAuto)
 		require.NoError(t, err)
 
 		output := string(raw)
@@ -145,7 +145,7 @@ func TestExportMermaid(t *testing.T) {
 				}},
 			}},
 		}
-		raw, err := diagram.ExportMermaid(model)
+		raw, err := diagram.ExportMermaid(model, diagram.StyleAuto)
 		require.NoError(t, err)
 
 		output := string(raw)
@@ -172,7 +172,7 @@ func TestExportMermaid(t *testing.T) {
 				}},
 			}},
 		}
-		raw, err := diagram.ExportMermaid(model)
+		raw, err := diagram.ExportMermaid(model, diagram.StyleAuto)
 		require.NoError(t, err)
 
 		output := string(raw)
@@ -194,7 +194,7 @@ func TestExportMermaid(t *testing.T) {
 				}},
 			}},
 		}
-		raw, err := diagram.ExportMermaid(model)
+		raw, err := diagram.ExportMermaid(model, diagram.StyleAuto)
 		require.NoError(t, err)
 
 		output := string(raw)
@@ -203,7 +203,7 @@ func TestExportMermaid(t *testing.T) {
 
 	t.Run("slice names appear as comments", func(t *testing.T) {
 		model := minimalModel("Test", "InitOrder")
-		raw, err := diagram.ExportMermaid(model)
+		raw, err := diagram.ExportMermaid(model, diagram.StyleAuto)
 		require.NoError(t, err)
 
 		output := string(raw)
@@ -212,7 +212,7 @@ func TestExportMermaid(t *testing.T) {
 
 	t.Run("complete model with all element types produces well-formed output", func(t *testing.T) {
 		model := fullModel()
-		raw, err := diagram.ExportMermaid(model)
+		raw, err := diagram.ExportMermaid(model, diagram.StyleAuto)
 		require.NoError(t, err)
 
 		output := string(raw)
@@ -235,5 +235,25 @@ func TestExportMermaid(t *testing.T) {
 		require.Contains(t, output, "tf 09 pcr Orders.ShipTimer")
 		require.Contains(t, output, "tf 10 cmd Orders.ShipOrder")
 		require.Contains(t, output, "tf 11 evt Orders.OrderShipped")
+	})
+
+	t.Run("DCB context with direct slices renders timeframe entries", func(t *testing.T) {
+		model := &ast.Model{
+			Name: "DCBTest",
+			Contexts: []*ast.Context{{
+				Name: "DCBCtx",
+				Slices: []*ast.Slice{{
+					Name:     "DirectSlice",
+					Commands: []*ast.Command{{Name: "DirectCmd"}},
+				}},
+			}},
+		}
+
+		raw, err := diagram.ExportMermaid(model, diagram.StyleDCB)
+		require.NoError(t, err)
+
+		output := string(raw)
+		require.Contains(t, output, "eventmodeling")
+		require.Contains(t, output, "tf 01 cmd DCBCtx.DirectCmd")
 	})
 }

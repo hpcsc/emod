@@ -27,7 +27,8 @@ import (
 // For mermaid and ascii: output goes to stdout unless outputPath is specified.
 // Errors produce diagnostics on stderr and a non-zero exit code.
 // Lint warnings still produce the diagram but with exit code 1.
-func RunDiagram(path, outputPath, format string) error {
+// style controls the layout strategy (auto, projected, dcb).
+func RunDiagram(path, outputPath, format string, style diagram.Style) error {
 	if path == "" {
 		return &LintError{
 			Message:  "diagram requires exactly one file argument",
@@ -87,13 +88,13 @@ func RunDiagram(path, outputPath, format string) error {
 	var output []byte
 	switch format {
 	case "mermaid":
-		output, err = diagram.ExportMermaid(model)
+		output, err = diagram.ExportMermaid(model, style)
 	case "ascii":
-		output, err = diagram.ExportASCII(model)
+		output, err = diagram.ExportASCII(model, style)
 	case "svg":
-		output, err = diagram.ExportSVG(model)
+		output, err = diagram.ExportSVG(model, style)
 	default:
-		output, err = diagram.ExportDrawio(model)
+		output, err = diagram.ExportDrawio(model, style)
 	}
 	if err != nil {
 		return &LintError{

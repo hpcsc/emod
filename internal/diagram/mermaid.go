@@ -12,7 +12,7 @@ import (
 // with timeframe definitions for triggers, commands, events, views, and automations.
 // Contexts are rendered as namespaces using dot notation, which groups entities into
 // swimlanes per bounded context.
-func ExportMermaid(model *ast.Model) ([]byte, error) {
+func ExportMermaid(model *ast.Model, _ Style) ([]byte, error) {
 	if model == nil {
 		return []byte{}, nil
 	}

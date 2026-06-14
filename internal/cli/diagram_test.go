@@ -17,6 +17,7 @@ import (
 	"time"
 
 	"github.com/hpcsc/emod/internal/cli"
+	"github.com/hpcsc/emod/internal/diagram"
 	"github.com/stretchr/testify/require"
 )
 
@@ -25,7 +26,7 @@ func TestDiagram(t *testing.T) {
 		path := writeTemp(t, "valid.emod", validEmod)
 		defaultOutput := path[:len(path)-len(".emod")] + ".drawio"
 
-		err := cli.RunDiagram(path, "", "drawio")
+		err := cli.RunDiagram(path, "", "drawio", diagram.StyleAuto)
 		require.NoError(t, err)
 
 		_, statErr := os.Stat(defaultOutput)
@@ -37,7 +38,7 @@ func TestDiagram(t *testing.T) {
 		path := writeTemp(t, "valid.emod", validEmod)
 		customOutput := filepath.Join(t.TempDir(), "custom.drawio")
 
-		err := cli.RunDiagram(path, customOutput, "drawio")
+		err := cli.RunDiagram(path, customOutput, "drawio", diagram.StyleAuto)
 		require.NoError(t, err)
 
 		_, statErr := os.Stat(customOutput)
@@ -50,7 +51,7 @@ func TestDiagram(t *testing.T) {
 
 		var err error
 		stderr := captureStderr(t, func() {
-			err = cli.RunDiagram(path, "", "drawio")
+			err = cli.RunDiagram(path, "", "drawio", diagram.StyleAuto)
 		})
 
 		require.Error(t, err)
@@ -94,7 +95,7 @@ context "Orders" {
 
 		var err error
 		stderr := captureStderr(t, func() {
-			err = cli.RunDiagram(path, "", "drawio")
+			err = cli.RunDiagram(path, "", "drawio", diagram.StyleAuto)
 		})
 
 		require.Error(t, err)
@@ -110,14 +111,14 @@ context "Orders" {
 	})
 
 	t.Run("missing file argument returns error", func(t *testing.T) {
-		err := cli.RunDiagram("", "", "drawio")
+		err := cli.RunDiagram("", "", "drawio", diagram.StyleAuto)
 
 		require.Error(t, err)
 		require.Equal(t, "diagram requires exactly one file argument", err.Error())
 	})
 
 	t.Run("nonexistent file returns error", func(t *testing.T) {
-		err := cli.RunDiagram("/tmp/nonexistent-diagram-file-abc123.emod", "", "drawio")
+		err := cli.RunDiagram("/tmp/nonexistent-diagram-file-abc123.emod", "", "drawio", diagram.StyleAuto)
 
 		require.Error(t, err)
 	})
@@ -127,7 +128,7 @@ context "Orders" {
 		defaultOutput := path[:len(path)-len(".emod")] + ".drawio"
 		defer os.Remove(defaultOutput)
 
-		err := cli.RunDiagram(path, "", "drawio")
+		err := cli.RunDiagram(path, "", "drawio", diagram.StyleAuto)
 		require.NoError(t, err)
 
 		content, err := os.ReadFile(defaultOutput)
@@ -143,7 +144,7 @@ context "Orders" {
 		path := writeTemp(t, "valid.emod", validEmod)
 		customOutput := filepath.Join(t.TempDir(), "nested", "dir", "out.drawio")
 
-		err := cli.RunDiagram(path, customOutput, "drawio")
+		err := cli.RunDiagram(path, customOutput, "drawio", diagram.StyleAuto)
 		require.NoError(t, err)
 
 		_, statErr := os.Stat(customOutput)
@@ -154,7 +155,7 @@ context "Orders" {
 		path := writeTemp(t, "valid.emod", validEmod)
 
 		output := captureStdout(t, func() {
-			err := cli.RunDiagram(path, "", "mermaid")
+			err := cli.RunDiagram(path, "", "mermaid", diagram.StyleAuto)
 			require.NoError(t, err)
 		})
 
@@ -165,7 +166,7 @@ context "Orders" {
 		path := writeTemp(t, "valid.emod", validEmod)
 		outputPath := filepath.Join(t.TempDir(), "output.mermaid")
 
-		err := cli.RunDiagram(path, outputPath, "mermaid")
+		err := cli.RunDiagram(path, outputPath, "mermaid", diagram.StyleAuto)
 		require.NoError(t, err)
 
 		content, err := os.ReadFile(outputPath)
@@ -177,7 +178,7 @@ context "Orders" {
 		path := writeTemp(t, "valid.emod", validEmod)
 
 		output := captureStdout(t, func() {
-			err := cli.RunDiagram(path, "", "ascii")
+			err := cli.RunDiagram(path, "", "ascii", diagram.StyleAuto)
 			require.NoError(t, err)
 		})
 
@@ -190,7 +191,7 @@ context "Orders" {
 		path := writeTemp(t, "valid.emod", validEmod)
 		outputPath := filepath.Join(t.TempDir(), "output.ascii")
 
-		err := cli.RunDiagram(path, outputPath, "ascii")
+		err := cli.RunDiagram(path, outputPath, "ascii", diagram.StyleAuto)
 		require.NoError(t, err)
 
 		content, err := os.ReadFile(outputPath)
@@ -203,7 +204,7 @@ context "Orders" {
 
 		var err error
 		stderr := captureStderr(t, func() {
-			err = cli.RunDiagram(path, "", "ascii")
+			err = cli.RunDiagram(path, "", "ascii", diagram.StyleAuto)
 		})
 
 		require.Error(t, err)
@@ -244,7 +245,7 @@ context "Orders" {
 
 		var err error
 		output := captureStdout(t, func() {
-			err = cli.RunDiagram(path, "", "ascii")
+			err = cli.RunDiagram(path, "", "ascii", diagram.StyleAuto)
 		})
 
 		require.Error(t, err)
@@ -260,7 +261,7 @@ context "Orders" {
 	t.Run("unsupported diagram format returns error listing supported formats", func(t *testing.T) {
 		path := writeTemp(t, "valid.emod", validEmod)
 
-		err := cli.RunDiagram(path, "", "bogus")
+		err := cli.RunDiagram(path, "", "bogus", diagram.StyleAuto)
 		require.Error(t, err)
 		require.Contains(t, err.Error(), "unsupported format")
 		require.Contains(t, err.Error(), "drawio")
@@ -273,7 +274,7 @@ context "Orders" {
 		path := writeTemp(t, "valid.emod", validEmod)
 		defaultOutput := path[:len(path)-len(".emod")] + ".svg"
 
-		err := cli.RunDiagram(path, "", "svg")
+		err := cli.RunDiagram(path, "", "svg", diagram.StyleAuto)
 		require.NoError(t, err)
 
 		_, statErr := os.Stat(defaultOutput)
@@ -285,7 +286,7 @@ context "Orders" {
 		path := writeTemp(t, "valid.emod", validEmod)
 		customOutput := filepath.Join(t.TempDir(), "custom.svg")
 
-		err := cli.RunDiagram(path, customOutput, "svg")
+		err := cli.RunDiagram(path, customOutput, "svg", diagram.StyleAuto)
 		require.NoError(t, err)
 
 		_, statErr := os.Stat(customOutput)
@@ -297,7 +298,7 @@ context "Orders" {
 		defaultOutput := path[:len(path)-len(".emod")] + ".svg"
 		defer os.Remove(defaultOutput)
 
-		err := cli.RunDiagram(path, "", "svg")
+		err := cli.RunDiagram(path, "", "svg", diagram.StyleAuto)
 		require.NoError(t, err)
 
 		content, err := os.ReadFile(defaultOutput)
@@ -314,7 +315,7 @@ context "Orders" {
 
 		var err error
 		stderr := captureStderr(t, func() {
-			err = cli.RunDiagram(path, "", "svg")
+			err = cli.RunDiagram(path, "", "svg", diagram.StyleAuto)
 		})
 
 		require.Error(t, err)
@@ -358,7 +359,7 @@ context "Orders" {
 
 		var err error
 		stderr := captureStderr(t, func() {
-			err = cli.RunDiagram(path, "", "svg")
+			err = cli.RunDiagram(path, "", "svg", diagram.StyleAuto)
 		})
 
 		require.Error(t, err)
@@ -377,7 +378,7 @@ context "Orders" {
 		path := writeTemp(t, "valid.emod", validEmod)
 		customOutput := filepath.Join(t.TempDir(), "nested", "dir", "out.svg")
 
-		err := cli.RunDiagram(path, customOutput, "svg")
+		err := cli.RunDiagram(path, customOutput, "svg", diagram.StyleAuto)
 		require.NoError(t, err)
 
 		_, statErr := os.Stat(customOutput)

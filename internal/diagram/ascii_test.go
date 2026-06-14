@@ -12,14 +12,14 @@ import (
 
 func TestExportASCII(t *testing.T) {
 	t.Run("nil model returns empty bytes with no error", func(t *testing.T) {
-		raw, err := diagram.ExportASCII(nil)
+		raw, err := diagram.ExportASCII(nil, diagram.StyleAuto)
 		require.NoError(t, err)
 		require.Empty(t, raw)
 	})
 
 	t.Run("empty model (no contexts) returns model name only", func(t *testing.T) {
 		model := &ast.Model{Name: "Empty"}
-		raw, err := diagram.ExportASCII(model)
+		raw, err := diagram.ExportASCII(model, diagram.StyleAuto)
 		require.NoError(t, err)
 
 		output := string(raw)
@@ -45,7 +45,7 @@ func TestExportASCII(t *testing.T) {
 			}},
 		}
 
-		raw, err := diagram.ExportASCII(model)
+		raw, err := diagram.ExportASCII(model, diagram.StyleAuto)
 		require.NoError(t, err)
 
 		output := string(raw)
@@ -57,7 +57,7 @@ func TestExportASCII(t *testing.T) {
 		model := singleSliceModel("Test", "S",
 			&ast.Trigger{Kind: "Schedule", Name: "NightlyBatch"})
 
-		raw, err := diagram.ExportASCII(model)
+		raw, err := diagram.ExportASCII(model, diagram.StyleAuto)
 		require.NoError(t, err)
 
 		output := string(raw)
@@ -68,7 +68,7 @@ func TestExportASCII(t *testing.T) {
 	t.Run("renders command as [CommandName]", func(t *testing.T) {
 		model := singleSliceModel("Test", "S", command("CreateOrder"))
 
-		raw, err := diagram.ExportASCII(model)
+		raw, err := diagram.ExportASCII(model, diagram.StyleAuto)
 		require.NoError(t, err)
 
 		output := string(raw)
@@ -78,7 +78,7 @@ func TestExportASCII(t *testing.T) {
 	t.Run("renders event as (EventName)", func(t *testing.T) {
 		model := singleSliceModel("Test", "S", event("OrderCreated"))
 
-		raw, err := diagram.ExportASCII(model)
+		raw, err := diagram.ExportASCII(model, diagram.StyleAuto)
 		require.NoError(t, err)
 
 		output := string(raw)
@@ -88,7 +88,7 @@ func TestExportASCII(t *testing.T) {
 	t.Run("renders view as {ViewName}", func(t *testing.T) {
 		model := singleSliceModel("Test", "S", view("OrderSummary"))
 
-		raw, err := diagram.ExportASCII(model)
+		raw, err := diagram.ExportASCII(model, diagram.StyleAuto)
 		require.NoError(t, err)
 
 		output := string(raw)
@@ -112,7 +112,7 @@ func TestExportASCII(t *testing.T) {
 			}},
 		}
 
-		raw, err := diagram.ExportASCII(model)
+		raw, err := diagram.ExportASCII(model, diagram.StyleAuto)
 		require.NoError(t, err)
 
 		output := string(raw)
@@ -145,7 +145,7 @@ func TestExportASCII(t *testing.T) {
 			}},
 		}
 
-		raw, err := diagram.ExportASCII(model)
+		raw, err := diagram.ExportASCII(model, diagram.StyleAuto)
 		require.NoError(t, err)
 
 		output := string(raw)
@@ -172,7 +172,7 @@ func TestExportASCII(t *testing.T) {
 			}},
 		}
 
-		raw, err := diagram.ExportASCII(model)
+		raw, err := diagram.ExportASCII(model, diagram.StyleAuto)
 		require.NoError(t, err)
 
 		output := string(raw)
@@ -199,7 +199,7 @@ func TestExportASCII(t *testing.T) {
 			}},
 		}
 
-		raw, err := diagram.ExportASCII(model)
+		raw, err := diagram.ExportASCII(model, diagram.StyleAuto)
 		require.NoError(t, err)
 
 		output := string(raw)
@@ -224,7 +224,7 @@ func TestExportASCII(t *testing.T) {
 			}},
 		}
 
-		raw, err := diagram.ExportASCII(model)
+		raw, err := diagram.ExportASCII(model, diagram.StyleAuto)
 		require.NoError(t, err)
 
 		output := string(raw)
@@ -248,7 +248,7 @@ func TestExportASCII(t *testing.T) {
 			}},
 		}
 
-		raw, err := diagram.ExportASCII(model)
+		raw, err := diagram.ExportASCII(model, diagram.StyleAuto)
 		require.NoError(t, err)
 
 		output := string(raw)
@@ -278,7 +278,7 @@ func TestExportASCII(t *testing.T) {
 			}},
 		}
 
-		raw, err := diagram.ExportASCII(model)
+		raw, err := diagram.ExportASCII(model, diagram.StyleAuto)
 		require.NoError(t, err)
 
 		output := string(raw)
@@ -288,7 +288,7 @@ func TestExportASCII(t *testing.T) {
 	t.Run("complete model with all element types produces well-formed output", func(t *testing.T) {
 		model := fullModel()
 
-		raw, err := diagram.ExportASCII(model)
+		raw, err := diagram.ExportASCII(model, diagram.StyleAuto)
 		require.NoError(t, err)
 
 		output := string(raw)
@@ -324,7 +324,7 @@ func TestExportASCII(t *testing.T) {
 	t.Run("output is valid ASCII text", func(t *testing.T) {
 		model := fullModel()
 
-		raw, err := diagram.ExportASCII(model)
+		raw, err := diagram.ExportASCII(model, diagram.StyleAuto)
 		require.NoError(t, err)
 
 		output := string(raw)
@@ -357,11 +357,32 @@ func TestExportASCII(t *testing.T) {
 			}},
 		}
 
-		raw, err := diagram.ExportASCII(model)
+		raw, err := diagram.ExportASCII(model, diagram.StyleAuto)
 		require.NoError(t, err)
 
 		output := string(raw)
 		require.Contains(t, output, "\u2699") // gear character
+	})
+
+	t.Run("DCB context with direct slices renders ASCII content", func(t *testing.T) {
+		model := &ast.Model{
+			Name: "DCBTest",
+			Contexts: []*ast.Context{{
+				Name: "DCBCtx",
+				Slices: []*ast.Slice{{
+					Name:     "DirectSlice",
+					Commands: []*ast.Command{{Name: "DirectCmd"}},
+				}},
+			}},
+		}
+
+		raw, err := diagram.ExportASCII(model, diagram.StyleDCB)
+		require.NoError(t, err)
+
+		output := string(raw)
+		require.Contains(t, output, "Model: DCBTest")
+		require.Contains(t, output, "=== Slice: DirectSlice ===")
+		require.Contains(t, output, "[DirectCmd]")
 	})
 }
 

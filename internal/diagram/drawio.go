@@ -8,6 +8,45 @@ import (
 	"github.com/hpcsc/emod/internal/ast"
 )
 
+// Style represents the layout strategy for diagram generation.
+type Style int
+
+const (
+	// StyleAuto auto-detects the layout based on the context mode.
+	StyleAuto Style = iota
+	// StyleProjected uses the traditional aggregate-projected layout.
+	StyleProjected
+	// StyleDCB uses the direct-context-bound (DCB) slice layout.
+	StyleDCB
+)
+
+// ParseStyle parses a style string into a Style value.
+// Valid values: "auto", "projected", "dcb".
+func ParseStyle(s string) (Style, error) {
+	switch strings.ToLower(s) {
+	case "auto":
+		return StyleAuto, nil
+	case "projected":
+		return StyleProjected, nil
+	case "dcb":
+		return StyleDCB, nil
+	default:
+		return StyleAuto, fmt.Errorf("unsupported style %q: valid values are auto, projected, dcb", s)
+	}
+}
+
+// String returns the string representation of the style.
+func (s Style) String() string {
+	switch s {
+	case StyleProjected:
+		return "projected"
+	case StyleDCB:
+		return "dcb"
+	default:
+		return "auto"
+	}
+}
+
 // Layout constants.
 const (
 	marginX    = 40
@@ -43,7 +82,7 @@ const (
 )
 
 // ExportDrawio converts a parsed AST model into draw.io XML (mxGraph format).
-func ExportDrawio(model *ast.Model) ([]byte, error) {
+func ExportDrawio(model *ast.Model, _ Style) ([]byte, error) {
 	if model == nil {
 		return []byte{}, nil
 	}
@@ -417,6 +456,8 @@ type sliceEntry struct {
 }
 
 // collectSlices flattens all slices from the model into a list.
+// It collects from both ctx.Aggregates[].Slices (traditional aggregate mode)
+// and ctx.Slices (direct DCB mode), preserving order within each context.
 func collectSlices(model *ast.Model) []sliceEntry {
 	var entries []sliceEntry
 	for _, ctx := range model.Contexts {
@@ -424,6 +465,9 @@ func collectSlices(model *ast.Model) []sliceEntry {
 			for _, s := range agg.Slices {
 				entries = append(entries, sliceEntry{slice: s, ctxName: ctx.Name})
 			}
+		}
+		for _, s := range ctx.Slices {
+			entries = append(entries, sliceEntry{slice: s, ctxName: ctx.Name})
 		}
 	}
 	return entries

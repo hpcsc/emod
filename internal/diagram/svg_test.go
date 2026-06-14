@@ -12,14 +12,14 @@ import (
 
 func TestExportSVG(t *testing.T) {
 	t.Run("nil model returns empty bytes with no error", func(t *testing.T) {
-		raw, err := diagram.ExportSVG(nil)
+		raw, err := diagram.ExportSVG(nil, diagram.StyleAuto)
 		require.NoError(t, err)
 		require.Empty(t, raw)
 	})
 
 	t.Run("empty model returns valid SVG with svg root and no diagram content", func(t *testing.T) {
 		model := &ast.Model{Name: "Empty"}
-		raw, err := diagram.ExportSVG(model)
+		raw, err := diagram.ExportSVG(model, diagram.StyleAuto)
 		require.NoError(t, err)
 
 		output := string(raw)
@@ -30,7 +30,7 @@ func TestExportSVG(t *testing.T) {
 
 	t.Run("renders three swimlanes with correct labels", func(t *testing.T) {
 		model := minimalModel("Test", "Slice1")
-		raw, err := diagram.ExportSVG(model)
+		raw, err := diagram.ExportSVG(model, diagram.StyleAuto)
 		require.NoError(t, err)
 
 		output := string(raw)
@@ -59,7 +59,7 @@ func TestExportSVG(t *testing.T) {
 			}},
 		}
 
-		raw, err := diagram.ExportSVG(model)
+		raw, err := diagram.ExportSVG(model, diagram.StyleAuto)
 		require.NoError(t, err)
 
 		output := string(raw)
@@ -72,7 +72,7 @@ func TestExportSVG(t *testing.T) {
 	t.Run("renders command with blue fill and stroke", func(t *testing.T) {
 		model := singleSliceModel("Test", "S", command("MakeReservation"))
 
-		raw, err := diagram.ExportSVG(model)
+		raw, err := diagram.ExportSVG(model, diagram.StyleAuto)
 		require.NoError(t, err)
 
 		output := string(raw)
@@ -84,7 +84,7 @@ func TestExportSVG(t *testing.T) {
 	t.Run("renders event with orange fill and stroke", func(t *testing.T) {
 		model := singleSliceModel("Test", "S", event("ReservationMade"))
 
-		raw, err := diagram.ExportSVG(model)
+		raw, err := diagram.ExportSVG(model, diagram.StyleAuto)
 		require.NoError(t, err)
 
 		output := string(raw)
@@ -96,7 +96,7 @@ func TestExportSVG(t *testing.T) {
 	t.Run("renders view with green fill and stroke", func(t *testing.T) {
 		model := singleSliceModel("Test", "S", view("AvailableRooms"))
 
-		raw, err := diagram.ExportSVG(model)
+		raw, err := diagram.ExportSVG(model, diagram.StyleAuto)
 		require.NoError(t, err)
 
 		output := string(raw)
@@ -121,7 +121,7 @@ func TestExportSVG(t *testing.T) {
 			}},
 		}
 
-		raw, err := diagram.ExportSVG(model)
+		raw, err := diagram.ExportSVG(model, diagram.StyleAuto)
 		require.NoError(t, err)
 
 		output := string(raw)
@@ -147,7 +147,7 @@ func TestExportSVG(t *testing.T) {
 			}},
 		}
 
-		raw, err := diagram.ExportSVG(model)
+		raw, err := diagram.ExportSVG(model, diagram.StyleAuto)
 		require.NoError(t, err)
 
 		output := string(raw)
@@ -173,7 +173,7 @@ func TestExportSVG(t *testing.T) {
 			}},
 		}
 
-		raw, err := diagram.ExportSVG(model)
+		raw, err := diagram.ExportSVG(model, diagram.StyleAuto)
 		require.NoError(t, err)
 
 		output := string(raw)
@@ -198,7 +198,7 @@ func TestExportSVG(t *testing.T) {
 			}},
 		}
 
-		raw, err := diagram.ExportSVG(model)
+		raw, err := diagram.ExportSVG(model, diagram.StyleAuto)
 		require.NoError(t, err)
 
 		output := string(raw)
@@ -226,7 +226,7 @@ func TestExportSVG(t *testing.T) {
 			}},
 		}
 
-		raw, err := diagram.ExportSVG(model)
+		raw, err := diagram.ExportSVG(model, diagram.StyleAuto)
 		require.NoError(t, err)
 
 		output := string(raw)
@@ -251,7 +251,7 @@ func TestExportSVG(t *testing.T) {
 			}},
 		}
 
-		raw, err := diagram.ExportSVG(model)
+		raw, err := diagram.ExportSVG(model, diagram.StyleAuto)
 		require.NoError(t, err)
 
 		output := string(raw)
@@ -281,7 +281,7 @@ func TestExportSVG(t *testing.T) {
 			}},
 		}
 
-		raw, err := diagram.ExportSVG(model)
+		raw, err := diagram.ExportSVG(model, diagram.StyleAuto)
 		require.NoError(t, err)
 
 		output := string(raw)
@@ -313,7 +313,7 @@ func TestExportSVG(t *testing.T) {
 			}},
 		}
 
-		raw, err := diagram.ExportSVG(model)
+		raw, err := diagram.ExportSVG(model, diagram.StyleAuto)
 		require.NoError(t, err)
 
 		output := string(raw)
@@ -325,7 +325,7 @@ func TestExportSVG(t *testing.T) {
 
 	t.Run("output is valid SVG XML", func(t *testing.T) {
 		model := fullModel()
-		raw, err := diagram.ExportSVG(model)
+		raw, err := diagram.ExportSVG(model, diagram.StyleAuto)
 		require.NoError(t, err)
 		require.True(t, validXML(string(raw)), "output must be valid XML")
 	})
@@ -334,7 +334,7 @@ func TestExportSVG(t *testing.T) {
 		model := singleSliceModel("Test", "S",
 			eventWithSource("PaymentReceived", "external", "Stripe"))
 
-		raw, err := diagram.ExportSVG(model)
+		raw, err := diagram.ExportSVG(model, diagram.StyleAuto)
 		require.NoError(t, err)
 
 		output := string(raw)
@@ -345,7 +345,7 @@ func TestExportSVG(t *testing.T) {
 	t.Run("complete model with all element types produces well-formed diagram", func(t *testing.T) {
 		model := fullModel()
 
-		raw, err := diagram.ExportSVG(model)
+		raw, err := diagram.ExportSVG(model, diagram.StyleAuto)
 		require.NoError(t, err)
 
 		output := string(raw)
@@ -363,5 +363,25 @@ func TestExportSVG(t *testing.T) {
 
 		// Verify connections exist
 		require.Contains(t, output, "marker-end")
+	})
+
+	t.Run("DCB context with direct slices renders SVG content", func(t *testing.T) {
+		model := &ast.Model{
+			Name: "DCBTest",
+			Contexts: []*ast.Context{{
+				Name: "DCBCtx",
+				Slices: []*ast.Slice{{
+					Name:     "DirectSlice",
+					Commands: []*ast.Command{{Name: "DirectCmd"}},
+				}},
+			}},
+		}
+
+		raw, err := diagram.ExportSVG(model, diagram.StyleDCB)
+		require.NoError(t, err)
+
+		output := string(raw)
+		require.Contains(t, output, "DirectCmd")
+		require.True(t, validXML(output))
 	})
 }

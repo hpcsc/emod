@@ -9,7 +9,7 @@ import (
 )
 
 // ExportSVG generates a self-contained SVG diagram from a parsed AST model.
-func ExportSVG(model *ast.Model) ([]byte, error) {
+func ExportSVG(model *ast.Model, _ Style) ([]byte, error) {
 	if model == nil {
 		return []byte{}, nil
 	}

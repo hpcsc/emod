@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 
+	"github.com/hpcsc/emod/internal/diagram"
 	urfave "github.com/urfave/cli/v2"
 )
 
@@ -140,21 +141,26 @@ func NewApp() *urfave.App {
 				Name:      "diagram",
 				Usage:     "Generate a diagram from an .emod file",
 				ArgsUsage: "<file>",
-				Flags: []urfave.Flag{
-					&urfave.StringFlag{
-						Name:  "format",
-						Usage: "Output format (drawio|mermaid|svg|ascii)",
-						Value: "drawio",
-					},
-					&urfave.StringFlag{
-						Name:  "o",
-						Usage: "Output path",
-					},
-					&urfave.BoolFlag{
-						Name:  "serve",
-						Usage: "Start viewer server with diagram data",
-					},
+			Flags: []urfave.Flag{
+				&urfave.StringFlag{
+					Name:  "format",
+					Usage: "Output format (drawio|mermaid|svg|ascii)",
+					Value: "drawio",
 				},
+				&urfave.StringFlag{
+					Name:  "style",
+					Usage: "Layout style (projected|dcb|auto); auto detects based on context mode",
+					Value: "auto",
+				},
+				&urfave.StringFlag{
+					Name:  "o",
+					Usage: "Output path",
+				},
+				&urfave.BoolFlag{
+					Name:  "serve",
+					Usage: "Start viewer server with diagram data",
+				},
+			},
 				Action: func(c *urfave.Context) error {
 					path := c.Args().First()
 					if c.Bool("serve") {
@@ -162,7 +168,11 @@ func NewApp() *urfave.App {
 					}
 					format := c.String("format")
 					outputPath := c.String("o")
-					if err := RunDiagram(path, outputPath, format); err != nil {
+					style, err := diagram.ParseStyle(c.String("style"))
+					if err != nil {
+						return urfave.Exit(err.Error(), 1)
+					}
+					if err := RunDiagram(path, outputPath, format, style); err != nil {
 						var lintErr *LintError
 						if errors.As(err, &lintErr) {
 							if lintErr.Message != "" {

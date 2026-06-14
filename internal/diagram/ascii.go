@@ -17,7 +17,7 @@ import (
 //   - Automations as ⚙ Name
 //
 // Flows are rendered with -> arrows between connected elements.
-func ExportASCII(model *ast.Model) ([]byte, error) {
+func ExportASCII(model *ast.Model, _ Style) ([]byte, error) {
 	if model == nil {
 		return []byte{}, nil
 	}
