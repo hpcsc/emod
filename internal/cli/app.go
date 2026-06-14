@@ -71,8 +71,27 @@ func NewApp() *urfave.App {
 						Usage: "Output format (text|json)",
 						Value: "text",
 					},
+					&urfave.StringFlag{
+						Name:  "explain",
+						Usage: "Print a description of a lint rule and exit",
+					},
 				},
 				Action: func(c *urfave.Context) error {
+					if explain := c.String("explain"); explain != "" {
+						if err := RunLintExplain(explain); err != nil {
+							var lintErr *LintError
+							if errors.As(err, &lintErr) {
+								if lintErr.Message != "" {
+									fmt.Fprintln(os.Stderr, lintErr.Message)
+								}
+								return urfave.Exit("", lintErr.ExitCode)
+							}
+							fmt.Fprintln(os.Stderr, err)
+							return urfave.Exit("", 1)
+						}
+						return nil
+					}
+
 					path := c.Args().First()
 					format := c.String("format")
 					if err := RunLint(path, format); err != nil {

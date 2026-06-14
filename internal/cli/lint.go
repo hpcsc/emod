@@ -76,6 +76,18 @@ func formatText(diagnostics []*diagnostic.Entry) error {
 	}
 }
 
+func RunLintExplain(ruleName string) error {
+	desc, ok := linter.RuleDescription(ruleName)
+	if !ok {
+		return &LintError{
+			Message:  fmt.Sprintf("unknown rule %q", ruleName),
+			ExitCode: 1,
+		}
+	}
+	fmt.Println(desc)
+	return nil
+}
+
 func RunLint(path, format string) error {
 	if format != "text" && format != "json" {
 		return &LintError{

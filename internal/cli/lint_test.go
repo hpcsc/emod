@@ -336,3 +336,60 @@ context "Orders" {
 		}
 	})
 }
+
+func TestLintExplain(t *testing.T) {
+	t.Run("known rule prints description and returns no error", func(t *testing.T) {
+		output := captureStdout(t, func() {
+			err := cli.RunLintExplain("state-obsession")
+			require.NoError(t, err)
+		})
+
+		require.Contains(t, output, "generic state-change suffixes")
+		require.Contains(t, output, "OrderUpdated")
+	})
+
+	t.Run("dcb rule prints description and returns no error", func(t *testing.T) {
+		output := captureStdout(t, func() {
+			err := cli.RunLintExplain("dcb/query-too-broad")
+			require.NoError(t, err)
+		})
+
+		require.Contains(t, output, "decides_on")
+	})
+
+	t.Run("unknown rule returns error", func(t *testing.T) {
+		err := cli.RunLintExplain("dcb/nonexistent")
+
+		require.Error(t, err)
+		require.Contains(t, err.Error(), "unknown rule")
+		require.Contains(t, err.Error(), "dcb/nonexistent")
+	})
+
+	t.Run("all rules have descriptions", func(t *testing.T) {
+		rules := []string{
+			"state-obsession",
+			"property-sourcing",
+			"command-in-disguise",
+			"command-past-tense",
+			"view-naming",
+			"left-chair",
+			"god-view",
+			"clickbait-event",
+			"dcb-in-aggregate-mode",
+			"aggregate-in-dcb-mode",
+			"dcb/untagged-event",
+			"dcb/query-too-broad",
+			"dcb/single-tag-everywhere",
+			"dcb/orphan-tag-key",
+		}
+		for _, rule := range rules {
+			t.Run(rule, func(t *testing.T) {
+				output := captureStdout(t, func() {
+					err := cli.RunLintExplain(rule)
+					require.NoError(t, err)
+				})
+				require.NotEmpty(t, output)
+			})
+		}
+	})
+}
