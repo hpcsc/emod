@@ -43,8 +43,11 @@ func ExportMermaid(model *ast.Model, style Style) ([]byte, error) {
 	}
 	tagKeys := collectTagKeys(entries)
 	useProjected := style == StyleProjected && hasDCB && len(tagKeys) > 0
+	useDCB := style == StyleDCB && hasDCB
 
-	if useProjected {
+	if useDCB {
+		exportMermaidDCB(&b, model.Name, entries)
+	} else if useProjected {
 		exportMermaidProjected(&b, model.Name, entries, tagKeys)
 	} else {
 		exportMermaidStandard(&b, model.Name, entries)
@@ -313,4 +316,143 @@ func eventHasTag(evt *ast.Event, key string) bool {
 		}
 	}
 	return false
+}
+
+// exportMermaidDCB renders the query-lens (DCB) layout.
+// All events appear in a single flat timeline with tag badges.
+// Commands show decides_on annotations.
+func exportMermaidDCB(b *strings.Builder, modelName string, entries []sliceEntry) {
+	nextNum := 1
+
+	b.WriteString("%% Commands / Triggers\n")
+	for _, entry := range entries {
+		s := entry.slice
+		ns := entry.ctxName
+
+		if s.Name != "" {
+			b.WriteString(fmt.Sprintf("%% Slice: %s\n", s.Name))
+		}
+
+		// Triggers
+		if s.Trigger != nil {
+			etype := "ui"
+			if s.Trigger.Kind == "Schedule" || s.Trigger.Kind == "Processor" {
+				etype = "pcr"
+			}
+			eid := s.Trigger.Name
+			if ns != "" {
+				eid = ns + "." + eid
+			}
+			b.WriteString(fmt.Sprintf("tf %02d %s %s\n", nextNum, etype, eid))
+			nextNum++
+		}
+
+		// Commands with decides_on annotation
+		for _, cmd := range s.Commands {
+			eid := cmd.Name
+			if ns != "" {
+				eid = ns + "." + eid
+			}
+			b.WriteString(fmt.Sprintf("tf %02d cmd %s\n", nextNum, eid))
+			nextNum++
+			if cmd.DecidesOn != nil {
+				ann := formatDecidesOnAnnotation(cmd.DecidesOn)
+				if ann != "" {
+					b.WriteString(fmt.Sprintf("%%   %s\n", ann))
+				}
+			}
+		}
+
+		// Views
+		for _, view := range s.Views {
+			eid := view.Name
+			if ns != "" {
+				eid = ns + "." + eid
+			}
+			b.WriteString(fmt.Sprintf("tf %02d rmo %s\n", nextNum, eid))
+			nextNum++
+			for _, sub := range view.Subscribes {
+				b.WriteString(fmt.Sprintf("%%   subscribes to %s\n", sub))
+			}
+		}
+
+		// Automations
+		for _, auto := range s.Automations {
+			targetNs := ns
+			if auto.TargetContext != "" {
+				targetNs = auto.TargetContext
+			}
+			eid := auto.Name
+			if targetNs != "" {
+				eid = targetNs + "." + eid
+			}
+			label := eid
+			if auto.TriggerEvent != "" && auto.Command != "" {
+				label = fmt.Sprintf("%s (%s → %s)", eid, auto.TriggerEvent, auto.Command)
+			}
+			b.WriteString(fmt.Sprintf("tf %02d pcr %s\n", nextNum, label))
+			nextNum++
+		}
+
+		// Translations (reactor part)
+		for _, tr := range s.Translations {
+			eid := tr.Name
+			if ns != "" {
+				eid = ns + "." + eid
+			}
+			b.WriteString(fmt.Sprintf("tf %02d pcr %s\n", nextNum, eid))
+			nextNum++
+			b.WriteString(fmt.Sprintf("%%   pcr -> cmd\n"))
+			if tr.Reads != "" {
+				b.WriteString(fmt.Sprintf("%%   reads %s\n", tr.Reads))
+			}
+		}
+
+		if s.Name != "" {
+			b.WriteString("\n")
+		}
+	}
+
+	// --- Events section: flat timeline ---
+	b.WriteString("%% Events\n")
+	for _, entry := range entries {
+		s := entry.slice
+		ns := entry.ctxName
+
+		if s.Name != "" {
+			b.WriteString(fmt.Sprintf("%% Slice: %s\n", s.Name))
+		}
+
+		// Events with tag badges
+		for _, evt := range s.Events {
+			eid := evt.Name
+			if ns != "" {
+				eid = ns + "." + eid
+			}
+			b.WriteString(fmt.Sprintf("tf %02d evt %s\n", nextNum, eid))
+			nextNum++
+			if len(evt.Tags) > 0 {
+				tagText := formatEventTagBadges(evt.Tags)
+				if tagText != "" {
+					b.WriteString(fmt.Sprintf("%%   tags: %s\n", tagText))
+				}
+			}
+		}
+
+		// Translation events
+		for _, tr := range s.Translations {
+			if tr.Event != nil && tr.Event.Name != "" {
+				eid := tr.Event.Name
+				if ns != "" {
+					eid = ns + "." + eid
+				}
+				b.WriteString(fmt.Sprintf("tf %02d evt %s\n", nextNum, eid))
+				nextNum++
+			}
+		}
+
+		if s.Name != "" {
+			b.WriteString("\n")
+		}
+	}
 }

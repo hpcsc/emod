@@ -4,7 +4,7 @@
 - [x] Task 1: Extend collectSlices for DCB and add --style CLI plumbing
 - [x] Task 2: Implement projected swim-lane layout for draw.io
 - [x] Task 3: Implement projected swim-lane layout for Mermaid
-- [ ] Task 4: Implement query-lens view for draw.io and Mermaid
+- [x] Task 4: Implement query-lens view for draw.io and Mermaid
 
 ## Story Reference
 

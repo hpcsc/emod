@@ -483,3 +483,160 @@ func TestExportMermaid(t *testing.T) {
 		require.True(t, betaIdx < zetaIdx, "beta should come before zeta")
 	})
 }
+
+// --- DCB style (query-lens) tests ---
+
+func TestExportMermaidDCB(t *testing.T) {
+	t.Run("DCB context with StyleDCB renders flat events section", func(t *testing.T) {
+		model := &ast.Model{
+			Name: "DCBFlat",
+			Contexts: []*ast.Context{{
+				Name: "Ctx",
+				Slices: []*ast.Slice{{
+					Name: "S1",
+					Events: []*ast.Event{
+						{Name: "EventA", Tags: []ast.TagEntry{{Key: "priority"}}},
+						{Name: "EventB", Tags: []ast.TagEntry{{Key: "region"}}},
+					},
+				}},
+			}},
+		}
+
+		raw, err := diagram.ExportMermaid(model, diagram.StyleDCB)
+		require.NoError(t, err)
+
+		output := string(raw)
+		// Should have a single % Events section (not tag sections)
+		require.Contains(t, output, "% Events")
+		// Should NOT have tag section markers
+		require.NotContains(t, output, "% Tag: priority")
+		require.NotContains(t, output, "% Tag: region")
+		// Should have Commands / Triggers section
+		require.Contains(t, output, "% Commands / Triggers")
+		// Events should not have tag-key namespace prefix
+		require.Contains(t, output, "Ctx.EventA")
+		require.Contains(t, output, "Ctx.EventB")
+	})
+
+	t.Run("command with decides_on shows annotation in DCB mode", func(t *testing.T) {
+		model := &ast.Model{
+			Name: "DecidesOn",
+			Contexts: []*ast.Context{{
+				Name: "Ctx",
+				Slices: []*ast.Slice{{
+					Name: "S1",
+					Commands: []*ast.Command{{
+						Name: "ProcessOrder",
+						DecidesOn: &ast.DecidesOnClause{
+							Events: []string{"OrderProcessed"},
+						},
+					}},
+					Events: []*ast.Event{{Name: "OrderProcessed"}},
+					Flows:  []*ast.Flow{{CommandName: "ProcessOrder", EventName: "OrderProcessed"}},
+				}},
+			}},
+		}
+
+		raw, err := diagram.ExportMermaid(model, diagram.StyleDCB)
+		require.NoError(t, err)
+
+		output := string(raw)
+		// Command should be present with decides_on comment
+		require.Contains(t, output, "Ctx.ProcessOrder")
+		require.Contains(t, output, "decides_on: OrderProcessed")
+	})
+
+	t.Run("event with tags shows tag badges in DCB mode", func(t *testing.T) {
+		model := &ast.Model{
+			Name: "TagBadges",
+			Contexts: []*ast.Context{{
+				Name: "Ctx",
+				Slices: []*ast.Slice{{
+					Name: "S1",
+					Events: []*ast.Event{
+						{Name: "OrderPlaced", Tags: []ast.TagEntry{{Key: "priority", FieldRef: "high"}}},
+					},
+				}},
+			}},
+		}
+
+		raw, err := diagram.ExportMermaid(model, diagram.StyleDCB)
+		require.NoError(t, err)
+
+		output := string(raw)
+		// Event with tags should have tags comment
+		require.Contains(t, output, "Ctx.OrderPlaced")
+		require.Contains(t, output, "tags: [priority: high]")
+	})
+
+	t.Run("non-DCB context with StyleDCB renders without error", func(t *testing.T) {
+		model := fullModel()
+		raw, err := diagram.ExportMermaid(model, diagram.StyleDCB)
+		require.NoError(t, err)
+
+		output := string(raw)
+		require.Contains(t, output, "eventmodeling")
+		require.NotContains(t, output, "% Events")
+	})
+
+	t.Run("DCB mode output starts with eventmodeling", func(t *testing.T) {
+		model := &ast.Model{
+			Name: "DCBTest",
+			Contexts: []*ast.Context{{
+				Name: "Ctx",
+				Slices: []*ast.Slice{{
+					Name: "S1",
+					Events: []*ast.Event{
+						{Name: "EventA", Tags: []ast.TagEntry{{Key: "alpha"}}},
+					},
+				}},
+			}},
+		}
+
+		raw, err := diagram.ExportMermaid(model, diagram.StyleDCB)
+		require.NoError(t, err)
+
+		output := string(raw)
+		require.Contains(t, output, "eventmodeling")
+		require.Contains(t, output, "% DCBTest")
+		require.Contains(t, output, "tf 01 evt Ctx.EventA")
+	})
+
+	t.Run("command with decides_on and predicate shows full annotation", func(t *testing.T) {
+		model := &ast.Model{
+			Name: "PredicateDCB",
+			Contexts: []*ast.Context{{
+				Name: "Ctx",
+				Slices: []*ast.Slice{{
+					Name: "S1",
+					Commands: []*ast.Command{{
+						Name: "PrioritizeOrder",
+						DecidesOn: &ast.DecidesOnClause{
+							Events: []string{"OrderPrioritized", "OrderFlagged"},
+							Predicate: ast.TagPredicate{
+								Field:    "priority",
+								Operator: "==",
+								Value:    "high",
+							},
+						},
+					}},
+					Events: []*ast.Event{
+						{Name: "OrderPrioritized"},
+						{Name: "OrderFlagged"},
+					},
+					Flows: []*ast.Flow{
+						{CommandName: "PrioritizeOrder", EventName: "OrderPrioritized"},
+					},
+				}},
+			}},
+		}
+
+		raw, err := diagram.ExportMermaid(model, diagram.StyleDCB)
+		require.NoError(t, err)
+
+		output := string(raw)
+		require.Contains(t, output, "Ctx.PrioritizeOrder")
+		require.Contains(t, output, "decides_on: OrderPrioritized, OrderFlagged")
+		require.Contains(t, output, "where tag(priority == high)")
+	})
+}

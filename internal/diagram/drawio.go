@@ -107,6 +107,7 @@ func ExportDrawio(model *ast.Model, style Style) ([]byte, error) {
 	}
 	tagKeys := collectTagKeys(entries)
 	useProjected := style == StyleProjected && hasDCB && len(tagKeys) > 0
+	useDCB := style == StyleDCB && hasDCB
 
 	nextID := 2
 	allocID := func() int {
@@ -163,7 +164,18 @@ func ExportDrawio(model *ast.Model, style Style) ([]byte, error) {
 		hasEventsLane bool // whether an "Events" lane is needed for aggregate/untagged events
 	)
 
-	if useProjected {
+	if useDCB {
+		// DCB query-lens layout: shared triggers/commands lane,
+		// then a single flat Events lane (no tag-based grouping)
+		triggerLaneY = marginY
+		cmdViewLaneY = triggerLaneY // same lane
+		nextY := triggerLaneY + laneHeight + laneGap
+		eventLaneY = nextY
+		nextY += laneHeight + laneGap
+		extLaneY = nextY
+		hasEventsLane = true
+		tagLaneYs = nil
+	} else if useProjected {
 		// Projected layout: shared triggers/commands lane,
 		// then tag lanes for each unique tag key
 		triggerLaneY = marginY
@@ -230,7 +242,17 @@ func ExportDrawio(model *ast.Model, style Style) ([]byte, error) {
 	b.WriteString(rootOpen())
 
 	// Write swimlanes
-	if useProjected {
+	if useDCB {
+		topLaneID := allocID()
+		b.WriteString(swimlaneCell(topLaneID, "Triggers / Commands",
+			marginX, triggerLaneY, diagramW-2*marginX, laneHeight))
+		midLaneID := allocID()
+		b.WriteString(swimlaneCell(midLaneID, "Events",
+			marginX, eventLaneY, diagramW-2*marginX, laneHeight))
+		extLaneID := allocID()
+		b.WriteString(swimlaneCell(extLaneID, "External Systems",
+			marginX, extLaneY, diagramW-2*marginX, laneHeight))
+	} else if useProjected {
 		topLaneID := allocID()
 		b.WriteString(swimlaneCell(topLaneID, "Triggers / Commands",
 			marginX, triggerLaneY, diagramW-2*marginX, laneHeight))
@@ -340,9 +362,16 @@ func ExportDrawio(model *ast.Model, style Style) ([]byte, error) {
 		for ci, cmd := range s.Commands {
 			id := allocID()
 			itemW, x := itemLayout(usableW, totalMid, ci, sliceX)
+			label := cmd.Name
+			if useDCB && cmd.DecidesOn != nil {
+				ann := formatDecidesOnAnnotation(cmd.DecidesOn)
+				if ann != "" {
+					label = cmd.Name + "\\n" + ann
+				}
+			}
 			st := fmt.Sprintf("rounded=0;whiteSpace=wrap;html=1;fillColor=%s;strokeColor=%s;fontFamily=Helvetica;",
 				fillCommand, strokeCommand)
-			b.WriteString(vertexCell(id, cmd.Name, x, midCenterY, itemW, boxHeight, st))
+			b.WriteString(vertexCell(id, label, x, midCenterY, itemW, boxHeight, st))
 			elems = append(elems, namedElem{sliceIdx: i, name: cmd.Name, id: id, x: x, y: midCenterY, w: itemW, h: boxHeight})
 		}
 
@@ -372,6 +401,13 @@ func ExportDrawio(model *ast.Model, style Style) ([]byte, error) {
 			label := evt.Name
 			if evt.ExternalName != "" {
 				label = fmt.Sprintf("%s\\n[%s]", evt.Name, evt.ExternalName)
+			}
+			// For DCB mode, add tag badges to the event label
+			if useDCB && len(evt.Tags) > 0 {
+				tagText := formatEventTagBadges(evt.Tags)
+				if tagText != "" {
+					label = fmt.Sprintf("%s\\n%s", label, tagText)
+				}
 			}
 			st := fmt.Sprintf("rounded=0;whiteSpace=wrap;html=1;fillColor=%s;strokeColor=%s;fontFamily=Helvetica;",
 				fillEvent, strokeEvent)
@@ -784,4 +820,54 @@ func escapeXML(s string) string {
 	s = strings.ReplaceAll(s, "\"", "&quot;")
 	s = strings.ReplaceAll(s, "'", "&apos;")
 	return s
+}
+
+// formatDecidesOnAnnotation formats a command's decides_on clause for display.
+func formatDecidesOnAnnotation(d *ast.DecidesOnClause) string {
+	if d == nil || len(d.Events) == 0 {
+		return ""
+	}
+	var sb strings.Builder
+	sb.WriteString("decides_on: ")
+	sb.WriteString(strings.Join(d.Events, ", "))
+	if d.Predicate != nil {
+		sb.WriteString(" where ")
+		sb.WriteString(formatPredicateExpr(d.Predicate))
+	}
+	return sb.String()
+}
+
+// formatPredicateExpr formats a predicate expression for display.
+func formatPredicateExpr(p ast.PredicateExpr) string {
+	if p == nil {
+		return ""
+	}
+	switch expr := p.(type) {
+	case ast.TagPredicate:
+		return fmt.Sprintf("tag(%s %s %s)", expr.Field, expr.Operator, expr.Value)
+	case ast.LogicalExpr:
+		return fmt.Sprintf("(%s %s %s)", formatPredicateExpr(expr.Left), expr.Operator, formatPredicateExpr(expr.Right))
+	case ast.NotExpr:
+		return fmt.Sprintf("not(%s)", formatPredicateExpr(expr.Expr))
+	case ast.FieldRef:
+		return fmt.Sprintf("tag(%s)", expr.Name)
+	default:
+		return ""
+	}
+}
+
+// formatEventTagBadges formats event tags as badge indicators for display.
+func formatEventTagBadges(tags []ast.TagEntry) string {
+	if len(tags) == 0 {
+		return ""
+	}
+	var parts []string
+	for _, tag := range tags {
+		if tag.FieldRef != "" {
+			parts = append(parts, fmt.Sprintf("[%s: %s]", tag.Key, tag.FieldRef))
+		} else {
+			parts = append(parts, fmt.Sprintf("[%s]", tag.Key))
+		}
+	}
+	return strings.Join(parts, " ")
 }

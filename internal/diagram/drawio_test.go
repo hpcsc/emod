@@ -761,3 +761,163 @@ func TestExportDrawioProjected(t *testing.T) {
 		require.True(t, validXML(projOut))
 	})
 }
+
+// --- DCB style (query-lens) tests ---
+
+func TestExportDrawioDCB(t *testing.T) {
+	t.Run("DCB context with StyleDCB renders flat Events lane", func(t *testing.T) {
+		model := &ast.Model{
+			Name: "DCBFlat",
+			Contexts: []*ast.Context{{
+				Name: "Ctx",
+				Slices: []*ast.Slice{{
+					Name: "S1",
+					Events: []*ast.Event{
+						{Name: "EventA", Tags: []ast.TagEntry{{Key: "priority"}}},
+						{Name: "EventB", Tags: []ast.TagEntry{{Key: "region"}}},
+					},
+				}},
+			}},
+		}
+
+		raw, err := diagram.ExportDrawio(model, diagram.StyleDCB)
+		require.NoError(t, err)
+
+		output := string(raw)
+		// Should have a single "Events" lane (not tag lanes)
+		require.Contains(t, output, `value="Events"`)
+		// Should NOT have tag-labeled lanes
+		require.NotContains(t, output, `value="Tag: priority"`)
+		require.NotContains(t, output, `value="Tag: region"`)
+		// Should have Triggers / Commands lane
+		require.Contains(t, output, `value="Triggers / Commands"`)
+		require.True(t, validXML(output))
+	})
+
+	t.Run("command with decides_on shows annotation in DCB mode", func(t *testing.T) {
+		model := &ast.Model{
+			Name: "DecidesOn",
+			Contexts: []*ast.Context{{
+				Name: "Ctx",
+				Slices: []*ast.Slice{{
+					Name: "S1",
+					Commands: []*ast.Command{{
+						Name: "ProcessOrder",
+						DecidesOn: &ast.DecidesOnClause{
+							Events: []string{"OrderProcessed"},
+						},
+					}},
+					Events: []*ast.Event{{Name: "OrderProcessed"}},
+					Flows:  []*ast.Flow{{CommandName: "ProcessOrder", EventName: "OrderProcessed"}},
+				}},
+			}},
+		}
+
+		raw, err := diagram.ExportDrawio(model, diagram.StyleDCB)
+		require.NoError(t, err)
+
+		output := string(raw)
+		// Command label should include decides_on annotation
+		require.Contains(t, output, "ProcessOrder")
+		require.Contains(t, output, "decides_on: OrderProcessed")
+		require.True(t, validXML(output))
+	})
+
+	t.Run("event with tags shows tag badges in DCB mode", func(t *testing.T) {
+		model := &ast.Model{
+			Name: "TagBadges",
+			Contexts: []*ast.Context{{
+				Name: "Ctx",
+				Slices: []*ast.Slice{{
+					Name: "S1",
+					Events: []*ast.Event{
+						{Name: "OrderPlaced", Tags: []ast.TagEntry{{Key: "priority", FieldRef: "high"}}},
+					},
+				}},
+			}},
+		}
+
+		raw, err := diagram.ExportDrawio(model, diagram.StyleDCB)
+		require.NoError(t, err)
+
+		output := string(raw)
+		// Event label should include tag badge
+		require.Contains(t, output, "OrderPlaced")
+		require.Contains(t, output, "[priority: high]")
+		require.True(t, validXML(output))
+	})
+
+	t.Run("non-DCB context with StyleDCB renders without error", func(t *testing.T) {
+		// Pure aggregate context with StyleDCB should produce valid output
+		raw, err := diagram.ExportDrawio(fullModel(), diagram.StyleDCB)
+		require.NoError(t, err)
+		require.True(t, validXML(string(raw)))
+	})
+
+	t.Run("flow arrows remain visible in DCB mode", func(t *testing.T) {
+		model := &ast.Model{
+			Name: "FlowDCB",
+			Contexts: []*ast.Context{{
+				Name: "Ctx",
+				Slices: []*ast.Slice{{
+					Name: "S1",
+					Commands: []*ast.Command{{
+						Name: "ProcessOrder",
+						DecidesOn: &ast.DecidesOnClause{
+							Events: []string{"OrderProcessed"},
+						},
+					}},
+					Events: []*ast.Event{{Name: "OrderProcessed"}},
+					Flows:  []*ast.Flow{{CommandName: "ProcessOrder", EventName: "OrderProcessed"}},
+				}},
+			}},
+		}
+
+		raw, err := diagram.ExportDrawio(model, diagram.StyleDCB)
+		require.NoError(t, err)
+
+		output := string(raw)
+		// Edges should still be present
+		require.True(t, hasEdge(output), "DCB mode should still have flow edges")
+		require.True(t, validXML(output))
+	})
+
+	t.Run("command with decides_on and predicate shows full annotation", func(t *testing.T) {
+		model := &ast.Model{
+			Name: "PredicateDCB",
+			Contexts: []*ast.Context{{
+				Name: "Ctx",
+				Slices: []*ast.Slice{{
+					Name: "S1",
+					Commands: []*ast.Command{{
+						Name: "PrioritizeOrder",
+						DecidesOn: &ast.DecidesOnClause{
+							Events: []string{"OrderPrioritized", "OrderFlagged"},
+							Predicate: ast.TagPredicate{
+								Field:    "priority",
+								Operator: "==",
+								Value:    "high",
+							},
+						},
+					}},
+					Events: []*ast.Event{
+						{Name: "OrderPrioritized"},
+						{Name: "OrderFlagged"},
+					},
+					Flows: []*ast.Flow{
+						{CommandName: "PrioritizeOrder", EventName: "OrderPrioritized"},
+					},
+				}},
+			}},
+		}
+
+		raw, err := diagram.ExportDrawio(model, diagram.StyleDCB)
+		require.NoError(t, err)
+
+		output := string(raw)
+		require.Contains(t, output, "PrioritizeOrder")
+		require.Contains(t, output, "decides_on: OrderPrioritized, OrderFlagged")
+		require.Contains(t, output, "where tag(priority == high)")
+		require.True(t, validXML(output))
+	})
+}
