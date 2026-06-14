@@ -138,28 +138,35 @@ function buildSVG(store) {
       aggAreaX += aggAreaW;
     });
 
+    function renderSlice(sl) {
+      var sp = positions[sl.id];
+      if (!sp) return;
+
+      var sliceG = g("slice-" + sl.id);
+      sliceG.appendChild(svgRect(sp.x, sp.y, sp.w, sp.h, "#ffffff", "#adb5bd",
+        "rx=\"4\" stroke-width=\"1.5\" stroke-dasharray=\"6,3\""));
+      sliceG.appendChild(svgRect(sp.x, sp.y, sp.w, 28, "#f8f9fa", "none",
+        "rx=\"4\" class=\"slice-header\" data-slice-id=\"" + sl.id + "\""));
+      sliceG.appendChild(svgRect(sp.x, sp.y + 24, sp.w, 4, "#f8f9fa", "none",
+        "class=\"slice-header\" data-slice-id=\"" + sl.id + "\""));
+      sliceG.appendChild(svgText(sp.x + sp.w / 2, sp.y + 18, sl.label, 12, "#495057",
+        "text-anchor=\"middle\" font-weight=\"500\" class=\"slice-header\" data-slice-id=\"" + sl.id + "\""));
+      sliceG.appendChild(svgRect(sp.x, sp.y + 28, sp.w, sp.h - 28, "transparent", "none",
+        "class=\"slice-area\" data-slice-id=\"" + sl.id + "\""));
+      swimlane.appendChild(sliceG);
+    }
+
     aggs.forEach(function(agg) {
       var slices = nodes.filter(function(n) {
         return n.type === "slice" && n.parentId === agg.id;
       });
-      slices.forEach(function(sl) {
-        var sp = positions[sl.id];
-        if (!sp) return;
-
-        var sliceG = g("slice-" + sl.id);
-        sliceG.appendChild(svgRect(sp.x, sp.y, sp.w, sp.h, "#ffffff", "#adb5bd",
-          "rx=\"4\" stroke-width=\"1.5\" stroke-dasharray=\"6,3\""));
-        sliceG.appendChild(svgRect(sp.x, sp.y, sp.w, 28, "#f8f9fa", "none",
-          "rx=\"4\" class=\"slice-header\" data-slice-id=\"" + sl.id + "\""));
-        sliceG.appendChild(svgRect(sp.x, sp.y + 24, sp.w, 4, "#f8f9fa", "none",
-          "class=\"slice-header\" data-slice-id=\"" + sl.id + "\""));
-        sliceG.appendChild(svgText(sp.x + sp.w / 2, sp.y + 18, sl.label, 12, "#495057",
-          "text-anchor=\"middle\" font-weight=\"500\" class=\"slice-header\" data-slice-id=\"" + sl.id + "\""));
-        sliceG.appendChild(svgRect(sp.x, sp.y + 28, sp.w, sp.h - 28, "transparent", "none",
-          "class=\"slice-area\" data-slice-id=\"" + sl.id + "\""));
-        swimlane.appendChild(sliceG);
-      });
+      slices.forEach(renderSlice);
     });
+
+    var dcbSlices = nodes.filter(function(n) {
+      return n.type === "slice" && n.parentId === ctx.id;
+    });
+    dcbSlices.forEach(renderSlice);
 
     vg.appendChild(swimlane);
   });

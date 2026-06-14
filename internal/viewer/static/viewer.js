@@ -355,17 +355,20 @@ function init() {
     }
 
     if (action === "add-slice") {
-      if (!store.interaction.ctxMenu || !store.interaction.ctxMenu.targetAggId) return;
+      if (!store.interaction.ctxMenu) return;
       const aggId = store.interaction.ctxMenu.targetAggId;
+      const ctxId = store.interaction.ctxMenu.targetCtxId;
+      const parentId = aggId || ctxId;
+      if (!parentId) return;
       const sliceId = Model.generateNodeId("slice", store);
       const existingSlices = store.nodes.filter(function(n) {
-        return n.parentId === aggId && n.type === "slice";
+        return n.parentId === parentId && n.type === "slice";
       });
       store.nodes.push({
         id: sliceId,
         type: "slice",
         label: Model.generateLabel("slice", existingSlices),
-        parentId: aggId,
+        parentId: parentId,
       });
       UI.hideContextMenu(store);
       bus.emit('data:changed', { store });

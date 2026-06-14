@@ -44,107 +44,112 @@ function computeLayout(store) {
   contexts = contexts.filter(function(ctx) { return !store.hiddenContexts[ctx.id]; });
   let currentY = L.marginY;
   let maxRight = L.marginX + 800;
+  let xPos;
+  let maxSliceHeight;
+
+  function layoutSlice(sl, si, siblings, slY) {
+    const triggers = sl.children.filter(function(c) { return c.type === "trigger"; });
+    const commands = sl.children.filter(function(c) { return c.type === "command"; });
+    const events   = sl.children.filter(function(c) { return c.type === "event"; });
+    const views    = sl.children.filter(function(c) { return c.type === "view"; });
+    const automations = sl.children.filter(function(c) { return c.type === "automation"; });
+    const translations = sl.children.filter(function(c) { return c.type === "translation"; });
+
+    const topRowTypes = translations.concat(automations);
+
+    const allLabelWidths = sl.children.map(function(c) { return labelWidth(c.label); });
+    if (translations.length) {
+      translations.forEach(function(t) { allLabelWidths.push(labelWidth(t.external_system || t.label)); });
+    }
+    if (events.length > 1) {
+      const eSum = events.reduce(function(s, e) { return s + labelWidth(e.label); }, 0);
+      allLabelWidths.push(eSum + 20 + (events.length - 1) * L.sideGap - 40);
+    }
+    if (topRowTypes.length > 1) {
+      const tSum = topRowTypes.reduce(function(s, t) { return s + labelWidth(t.external_system || t.label); }, 0);
+      allLabelWidths.push(tSum + 20 + (topRowTypes.length - 1) * L.sideGap - 40);
+    }
+    const sBoxWidth = Math.max(180, ...allLabelWidths);
+    const sSliceWidth = sBoxWidth + 40;
+
+    let blockY = slY + 36;
+    const gap = 75;
+
+    if (topRowTypes.length > 0) {
+      const tCount = topRowTypes.length;
+      const tItemWidth = tCount > 1 ? (sSliceWidth - 20 - (tCount - 1) * L.sideGap) / tCount : sBoxWidth;
+      const tStartX = xPos + (sSliceWidth - tItemWidth * tCount - (tCount - 1) * L.sideGap) / 2;
+      topRowTypes.forEach(function(rt, idx) {
+        positions[rt.id] = {
+          x: tStartX + idx * (tItemWidth + L.sideGap), y: blockY,
+          w: tItemWidth, h: L.boxHeight,
+          node: rt,
+        };
+      });
+      blockY += L.boxHeight + gap;
+    }
+
+    triggers.forEach(function(trg) {
+      const bx = xPos + (sSliceWidth - sBoxWidth) / 2;
+      positions[trg.id] = {
+        x: bx, y: blockY, w: sBoxWidth, h: L.boxHeight,
+        node: trg,
+      };
+      blockY += L.boxHeight + gap;
+    });
+    commands.forEach(function(cmd) {
+      const bx = xPos + (sSliceWidth - sBoxWidth) / 2;
+      positions[cmd.id] = {
+        x: bx, y: blockY, w: sBoxWidth, h: L.boxHeight,
+        node: cmd,
+      };
+      blockY += L.boxHeight + gap;
+    });
+    if (events.length > 0) {
+      const eCount = events.length;
+      const eItemWidth = eCount > 1 ? (sSliceWidth - 20 - (eCount - 1) * L.sideGap) / eCount : sBoxWidth;
+      const eStartX = xPos + (sSliceWidth - eItemWidth * eCount - (eCount - 1) * L.sideGap) / 2;
+      events.forEach(function(evt, idx) {
+        positions[evt.id] = {
+          x: eStartX + idx * (eItemWidth + L.sideGap), y: blockY,
+          w: eItemWidth, h: L.boxHeight,
+          node: evt,
+        };
+      });
+      blockY += L.boxHeight + gap;
+    }
+    views.forEach(function(view) {
+      const bx = xPos + (sSliceWidth - sBoxWidth) / 2;
+      positions[view.id] = {
+        x: bx, y: blockY, w: sBoxWidth, h: L.boxHeight,
+        node: view,
+      };
+      blockY += L.boxHeight + gap;
+    });
+
+    const sliceHeight = blockY - slY + gap;
+    if (sliceHeight > maxSliceHeight) maxSliceHeight = sliceHeight;
+    positions[sl.id] = {
+      x: xPos, y: slY, w: sSliceWidth, h: sliceHeight,
+      node: sl,
+    };
+
+    xPos += sSliceWidth;
+    if (si < siblings.length - 1) xPos += L.sliceGap;
+  }
 
   contexts.forEach(function(ctx) {
     const aggs = ctx.children.filter(function(n) { return n.type === "aggregate"; });
-    let xPos = L.marginX;
+    const dirSlices = ctx.children.filter(function(n) { return n.type === "slice"; });
+    xPos = L.marginX;
     let rightEdge = xPos;
-    let maxSliceHeight = 0;
+    maxSliceHeight = 0;
 
     aggs.forEach(function(agg) {
       const slices = agg.children.filter(function(n) { return n.type === "slice"; });
 
       slices.forEach(function(sl, si) {
-        const slY = currentY + L.swimlaneHdr + L.aggLabelH;
-
-        const triggers = sl.children.filter(function(c) { return c.type === "trigger"; });
-        const commands = sl.children.filter(function(c) { return c.type === "command"; });
-        const events   = sl.children.filter(function(c) { return c.type === "event"; });
-        const views    = sl.children.filter(function(c) { return c.type === "view"; });
-        const automations = sl.children.filter(function(c) { return c.type === "automation"; });
-        const translations = sl.children.filter(function(c) { return c.type === "translation"; });
-
-        const topRowTypes = translations.concat(automations);
-
-        const allLabelWidths = sl.children.map(function(c) { return labelWidth(c.label); });
-        if (translations.length) {
-          translations.forEach(function(t) { allLabelWidths.push(labelWidth(t.external_system || t.label)); });
-        }
-        if (events.length > 1) {
-          const eSum = events.reduce(function(s, e) { return s + labelWidth(e.label); }, 0);
-          allLabelWidths.push(eSum + 20 + (events.length - 1) * L.sideGap - 40);
-        }
-        if (topRowTypes.length > 1) {
-          const tSum = topRowTypes.reduce(function(s, t) { return s + labelWidth(t.external_system || t.label); }, 0);
-          allLabelWidths.push(tSum + 20 + (topRowTypes.length - 1) * L.sideGap - 40);
-        }
-        const sBoxWidth = Math.max(180, ...allLabelWidths);
-        const sSliceWidth = sBoxWidth + 40;
-
-        let blockY = slY + 36;
-        const gap = 75;
-
-        if (topRowTypes.length > 0) {
-          const tCount = topRowTypes.length;
-          const tItemWidth = tCount > 1 ? (sSliceWidth - 20 - (tCount - 1) * L.sideGap) / tCount : sBoxWidth;
-          const tStartX = xPos + (sSliceWidth - tItemWidth * tCount - (tCount - 1) * L.sideGap) / 2;
-          topRowTypes.forEach(function(rt, idx) {
-            positions[rt.id] = {
-              x: tStartX + idx * (tItemWidth + L.sideGap), y: blockY,
-              w: tItemWidth, h: L.boxHeight,
-              node: rt,
-            };
-          });
-          blockY += L.boxHeight + gap;
-        }
-
-        triggers.forEach(function(trg) {
-          const bx = xPos + (sSliceWidth - sBoxWidth) / 2;
-          positions[trg.id] = {
-            x: bx, y: blockY, w: sBoxWidth, h: L.boxHeight,
-            node: trg,
-          };
-          blockY += L.boxHeight + gap;
-        });
-        commands.forEach(function(cmd) {
-          const bx = xPos + (sSliceWidth - sBoxWidth) / 2;
-          positions[cmd.id] = {
-            x: bx, y: blockY, w: sBoxWidth, h: L.boxHeight,
-            node: cmd,
-          };
-          blockY += L.boxHeight + gap;
-        });
-        if (events.length > 0) {
-          const eCount = events.length;
-          const eItemWidth = eCount > 1 ? (sSliceWidth - 20 - (eCount - 1) * L.sideGap) / eCount : sBoxWidth;
-          const eStartX = xPos + (sSliceWidth - eItemWidth * eCount - (eCount - 1) * L.sideGap) / 2;
-          events.forEach(function(evt, idx) {
-            positions[evt.id] = {
-              x: eStartX + idx * (eItemWidth + L.sideGap), y: blockY,
-              w: eItemWidth, h: L.boxHeight,
-              node: evt,
-            };
-          });
-          blockY += L.boxHeight + gap;
-        }
-        views.forEach(function(view) {
-          const bx = xPos + (sSliceWidth - sBoxWidth) / 2;
-          positions[view.id] = {
-            x: bx, y: blockY, w: sBoxWidth, h: L.boxHeight,
-            node: view,
-          };
-          blockY += L.boxHeight + gap;
-        });
-
-        const sliceHeight = blockY - slY + gap;
-        if (sliceHeight > maxSliceHeight) maxSliceHeight = sliceHeight;
-        positions[sl.id] = {
-          x: xPos, y: slY, w: sSliceWidth, h: sliceHeight,
-          node: sl,
-        };
-
-        xPos += sSliceWidth;
-        if (si < slices.length - 1) xPos += L.sliceGap;
+        layoutSlice(sl, si, slices, currentY + L.swimlaneHdr + L.aggLabelH);
       });
 
       positions[agg.id] = {
@@ -154,10 +159,15 @@ function computeLayout(store) {
       };
     });
 
+    dirSlices.forEach(function(sl, si) {
+      layoutSlice(sl, si, dirSlices, currentY + L.swimlaneHdr);
+    });
+
     rightEdge = Math.max(rightEdge, xPos);
     if (rightEdge > maxRight) maxRight = rightEdge;
 
-    const ctxH = L.swimlaneHdr + L.aggLabelH + maxSliceHeight + L.swimlanePad;
+    const hasAggs = aggs.length > 0;
+    const ctxH = L.swimlaneHdr + (hasAggs ? L.aggLabelH : 0) + maxSliceHeight + L.swimlanePad;
     positions[ctx.id] = {
       x: L.marginX, y: currentY,
       w: rightEdge - L.marginX + L.marginX,

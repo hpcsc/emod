@@ -660,11 +660,16 @@ function cancelInlineEdit(store) {
 }
 
 // ─── Context menu ──────────────────────────────────────────────
-function showContextMenu(store, x, y, aggId, sliceId) {
+function showContextMenu(store, x, y, aggOrCtxId, sliceId) {
   const el = store.dom.ctxMenu;
   if (!el) return;
-  if (aggId) {
-    store.interaction.ctxMenu = { targetAggId: aggId };
+  if (aggOrCtxId) {
+    const node = store.nodeById.get(aggOrCtxId);
+    if (node && node.type === "context") {
+      store.interaction.ctxMenu = { targetCtxId: aggOrCtxId };
+    } else {
+      store.interaction.ctxMenu = { targetAggId: aggOrCtxId };
+    }
     el.innerHTML = '<div class="ctx-menu-item" data-action="add-slice">Add Slice</div>';
   } else if (sliceId) {
     store.interaction.ctxMenu = { targetSliceId: sliceId };
@@ -920,13 +925,16 @@ function initDelegation(store) {
     if (ctxHeader) {
       const ctxId = ctxHeader.getAttribute("data-ctx-id");
       if (ctxId) {
+        let aggId = null;
         for (let i = 0; i < store.nodes.length; i++) {
           if (store.nodes[i].type === "aggregate" && store.nodes[i].parentId === ctxId) {
-            evt.preventDefault();
-            showContextMenu(store, evt.clientX, evt.clientY, store.nodes[i].id);
-            return;
+            aggId = store.nodes[i].id;
+            break;
           }
         }
+        evt.preventDefault();
+        showContextMenu(store, evt.clientX, evt.clientY, aggId || ctxId);
+        return;
       }
     }
 
@@ -934,13 +942,16 @@ function initDelegation(store) {
     if (ctxLabel) {
       const ctxId = ctxLabel.getAttribute("data-ctx-id");
       if (ctxId) {
+        let aggId = null;
         for (let i = 0; i < store.nodes.length; i++) {
           if (store.nodes[i].type === "aggregate" && store.nodes[i].parentId === ctxId) {
-            evt.preventDefault();
-            showContextMenu(store, evt.clientX, evt.clientY, store.nodes[i].id);
-            return;
+            aggId = store.nodes[i].id;
+            break;
           }
         }
+        evt.preventDefault();
+        showContextMenu(store, evt.clientX, evt.clientY, aggId || ctxId);
+        return;
       }
     }
   });
