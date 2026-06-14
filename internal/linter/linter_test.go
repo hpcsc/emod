@@ -1818,6 +1818,15 @@ func TestLint(t *testing.T) {
 										},
 									},
 								},
+								{
+									Name: "CancelOrder",
+									DecidesOn: &ast.DecidesOnClause{
+										Events: []string{"E1"},
+										Predicate: &ast.TagPredicate{
+											Field: "region", Operator: "=", Value: "us",
+										},
+									},
+								},
 							},
 						},
 					},
@@ -2090,6 +2099,15 @@ func TestLint(t *testing.T) {
 												},
 											},
 										},
+										{
+											Name: "CancelOrder",
+											DecidesOn: &ast.DecidesOnClause{
+												Events: []string{"E1"},
+												Predicate: &ast.TagPredicate{
+													Field: "region", Operator: "=", Value: "us",
+												},
+											},
+										},
 									},
 								},
 							},
@@ -2103,5 +2121,518 @@ func TestLint(t *testing.T) {
 
 		require.Len(t, diags, 1)
 		require.Equal(t, "dcb/query-too-broad", diags[0].RuleName)
+	})
+
+	t.Run("dcb/single-tag-everywhere fires when all commands use same tag key in dcb mode", func(t *testing.T) {
+		model := &ast.Model{
+			Contexts: []*ast.Context{
+				{
+					Name: "Orders",
+					NamePos: ast.Position{
+						Filename: "orders.emod",
+						Line:     1,
+						Column:   1,
+					},
+					Mode: "dcb",
+					Slices: []*ast.Slice{
+						{
+							Name: "ProcessOrder",
+							Commands: []*ast.Command{
+								{
+									Name: "PlaceOrder",
+									DecidesOn: &ast.DecidesOnClause{
+										Events: []string{"OrderPlaced"},
+										Predicate: &ast.TagPredicate{
+											Field: "priority",
+										},
+									},
+								},
+								{
+									Name: "CancelOrder",
+									DecidesOn: &ast.DecidesOnClause{
+										Events: []string{"OrderPlaced"},
+										Predicate: &ast.TagPredicate{
+											Field: "priority",
+										},
+									},
+								},
+							},
+						},
+					},
+				},
+			},
+		}
+
+		diags := linter.Lint(model)
+
+		require.Len(t, diags, 1)
+		require.Equal(t, "dcb/single-tag-everywhere", diags[0].RuleName)
+		require.Equal(t, diagnostic.Info, diags[0].Severity)
+		require.Equal(t, "orders.emod", diags[0].Filename)
+		require.Equal(t, 1, diags[0].Line)
+		require.Contains(t, diags[0].Message, "Orders")
+		require.Contains(t, diags[0].Message, "priority")
+	})
+
+	t.Run("dcb/single-tag-everywhere does not fire when commands use different tag keys in dcb mode", func(t *testing.T) {
+		model := &ast.Model{
+			Contexts: []*ast.Context{
+				{
+					Name: "Orders",
+					NamePos: ast.Position{
+						Filename: "orders.emod",
+						Line:     1,
+					},
+					Mode: "dcb",
+					Slices: []*ast.Slice{
+						{
+							Name: "ProcessOrder",
+							Commands: []*ast.Command{
+								{
+									Name: "PlaceOrder",
+									DecidesOn: &ast.DecidesOnClause{
+										Events: []string{"OrderPlaced"},
+										Predicate: &ast.TagPredicate{
+											Field: "priority",
+										},
+									},
+								},
+								{
+									Name: "CancelOrder",
+									DecidesOn: &ast.DecidesOnClause{
+										Events: []string{"OrderPlaced"},
+										Predicate: &ast.TagPredicate{
+											Field: "region",
+										},
+									},
+								},
+							},
+						},
+					},
+				},
+			},
+		}
+
+		diags := linter.Lint(model)
+
+		var found bool
+		for _, d := range diags {
+			if d.RuleName == "dcb/single-tag-everywhere" {
+				found = true
+			}
+		}
+		require.False(t, found, "dcb/single-tag-everywhere should not fire with multiple tag keys")
+	})
+
+	t.Run("dcb/single-tag-everywhere does not fire when there are no commands", func(t *testing.T) {
+		model := &ast.Model{
+			Contexts: []*ast.Context{
+				{
+					Name: "Orders",
+					NamePos: ast.Position{
+						Filename: "orders.emod",
+						Line:     1,
+					},
+					Mode: "dcb",
+					Slices: []*ast.Slice{
+						{
+							Name: "ProcessOrder",
+						},
+					},
+				},
+			},
+		}
+
+		diags := linter.Lint(model)
+
+		var found bool
+		for _, d := range diags {
+			if d.RuleName == "dcb/single-tag-everywhere" {
+				found = true
+			}
+		}
+		require.False(t, found, "dcb/single-tag-everywhere should not fire with no commands")
+	})
+
+	t.Run("dcb/single-tag-everywhere does not fire in aggregate mode", func(t *testing.T) {
+		model := &ast.Model{
+			Contexts: []*ast.Context{
+				{
+					Name: "Orders",
+					NamePos: ast.Position{
+						Filename: "orders.emod",
+						Line:     1,
+					},
+					Aggregates: []*ast.Aggregate{
+						{
+							Name: "Order",
+							Slices: []*ast.Slice{
+								{
+									Name: "ProcessOrder",
+									Commands: []*ast.Command{
+										{
+											Name: "PlaceOrder",
+											DecidesOn: &ast.DecidesOnClause{
+												Events: []string{"OrderPlaced"},
+												Predicate: &ast.TagPredicate{
+													Field: "priority",
+												},
+											},
+										},
+									},
+								},
+							},
+						},
+					},
+				},
+			},
+		}
+
+		diags := linter.Lint(model)
+
+		var found bool
+		for _, d := range diags {
+			if d.RuleName == "dcb/single-tag-everywhere" {
+				found = true
+			}
+		}
+		require.False(t, found, "dcb/single-tag-everywhere should not fire in aggregate mode")
+	})
+
+	t.Run("dcb/single-tag-everywhere fires in mixed mode with single tag key", func(t *testing.T) {
+		model := &ast.Model{
+			Contexts: []*ast.Context{
+				{
+					Name: "Orders",
+					NamePos: ast.Position{
+						Filename: "orders.emod",
+						Line:     1,
+						Column:   1,
+					},
+					Mode: "mixed",
+					Slices: []*ast.Slice{
+						{
+							Name: "ProcessOrder",
+							Commands: []*ast.Command{
+								{
+									Name: "PlaceOrder",
+									DecidesOn: &ast.DecidesOnClause{
+										Events: []string{"OrderPlaced"},
+										Predicate: &ast.TagPredicate{
+											Field: "priority",
+										},
+									},
+								},
+							},
+						},
+					},
+				},
+			},
+		}
+
+		diags := linter.Lint(model)
+
+		require.Len(t, diags, 1)
+		require.Equal(t, "dcb/single-tag-everywhere", diags[0].RuleName)
+		require.Equal(t, diagnostic.Info, diags[0].Severity)
+		require.Contains(t, diags[0].Message, "Orders")
+		require.Contains(t, diags[0].Message, "priority")
+		require.Contains(t, diags[0].Message, "mixed")
+	})
+
+	t.Run("dcb/single-tag-everywhere does not fire when no command has decides_on", func(t *testing.T) {
+		model := &ast.Model{
+			Contexts: []*ast.Context{
+				{
+					Name: "Orders",
+					NamePos: ast.Position{
+						Filename: "orders.emod",
+						Line:     1,
+					},
+					Mode: "dcb",
+					Slices: []*ast.Slice{
+						{
+							Name: "ProcessOrder",
+							Commands: []*ast.Command{
+								{Name: "PlaceOrder"},
+								{Name: "CancelOrder"},
+							},
+						},
+					},
+				},
+			},
+		}
+
+		diags := linter.Lint(model)
+
+		var found bool
+		for _, d := range diags {
+			if d.RuleName == "dcb/single-tag-everywhere" {
+				found = true
+			}
+		}
+		require.False(t, found, "dcb/single-tag-everywhere should not fire with no decides_on")
+	})
+
+	t.Run("dcb/single-tag-everywhere fires for single command with single tag key", func(t *testing.T) {
+		model := &ast.Model{
+			Contexts: []*ast.Context{
+				{
+					Name: "Orders",
+					NamePos: ast.Position{
+						Filename: "orders.emod",
+						Line:     1,
+						Column:   1,
+					},
+					Mode: "dcb",
+					Slices: []*ast.Slice{
+						{
+							Name: "ProcessOrder",
+							Commands: []*ast.Command{
+								{
+									Name: "PlaceOrder",
+									DecidesOn: &ast.DecidesOnClause{
+										Events: []string{"OrderPlaced"},
+										Predicate: &ast.TagPredicate{
+											Field: "priority",
+										},
+									},
+								},
+							},
+						},
+					},
+				},
+			},
+		}
+
+		diags := linter.Lint(model)
+
+		require.Len(t, diags, 1)
+		require.Equal(t, "dcb/single-tag-everywhere", diags[0].RuleName)
+	})
+
+	t.Run("dcb/single-tag-everywhere fires with nested LogicalExpr using same tag key", func(t *testing.T) {
+		model := &ast.Model{
+			Contexts: []*ast.Context{
+				{
+					Name: "Orders",
+					NamePos: ast.Position{
+						Filename: "orders.emod",
+						Line:     1,
+						Column:   1,
+					},
+					Mode: "dcb",
+					Slices: []*ast.Slice{
+						{
+							Name: "ProcessOrder",
+							Commands: []*ast.Command{
+								{
+									Name: "PlaceOrder",
+									DecidesOn: &ast.DecidesOnClause{
+										Events: []string{"OrderPlaced"},
+										Predicate: &ast.LogicalExpr{
+											Left: &ast.TagPredicate{
+												Field: "priority", Operator: "=", Value: "high",
+											},
+											Operator: "and",
+											Right: &ast.TagPredicate{
+												Field: "priority", Operator: "!=", Value: "low",
+											},
+										},
+									},
+								},
+							},
+						},
+					},
+				},
+			},
+		}
+
+		diags := linter.Lint(model)
+
+		require.Len(t, diags, 1)
+		require.Equal(t, "dcb/single-tag-everywhere", diags[0].RuleName)
+	})
+
+	t.Run("dcb/single-tag-everywhere does not fire with nested LogicalExpr using different tag keys", func(t *testing.T) {
+		model := &ast.Model{
+			Contexts: []*ast.Context{
+				{
+					Name: "Orders",
+					NamePos: ast.Position{
+						Filename: "orders.emod",
+						Line:     1,
+					},
+					Mode: "dcb",
+					Slices: []*ast.Slice{
+						{
+							Name: "ProcessOrder",
+							Commands: []*ast.Command{
+								{
+									Name: "PlaceOrder",
+									DecidesOn: &ast.DecidesOnClause{
+										Events: []string{"OrderPlaced"},
+										Predicate: &ast.LogicalExpr{
+											Left: &ast.TagPredicate{
+												Field: "priority", Operator: "=", Value: "high",
+											},
+											Operator: "and",
+											Right: &ast.TagPredicate{
+												Field: "region", Operator: "=", Value: "us",
+											},
+										},
+									},
+								},
+							},
+						},
+					},
+				},
+			},
+		}
+
+		diags := linter.Lint(model)
+
+		var found bool
+		for _, d := range diags {
+			if d.RuleName == "dcb/single-tag-everywhere" {
+				found = true
+			}
+		}
+		require.False(t, found, "dcb/single-tag-everywhere should not fire with different tag keys in nested expr")
+	})
+
+	t.Run("dcb/single-tag-everywhere collects keys across all slices including aggregate-level", func(t *testing.T) {
+		model := &ast.Model{
+			Contexts: []*ast.Context{
+				{
+					Name: "Orders",
+					NamePos: ast.Position{
+						Filename: "orders.emod",
+						Line:     1,
+						Column:   1,
+					},
+					Mode: "mixed",
+					Aggregates: []*ast.Aggregate{
+						{
+							Name: "Order",
+							Slices: []*ast.Slice{
+								{
+									Name: "SliceInAggregate",
+									Commands: []*ast.Command{
+										{
+											Name: "PlaceOrder",
+											DecidesOn: &ast.DecidesOnClause{
+												Events: []string{"OrderPlaced"},
+												Predicate: &ast.TagPredicate{
+													Field: "priority",
+												},
+											},
+										},
+									},
+								},
+							},
+						},
+					},
+					Slices: []*ast.Slice{
+						{
+							Name: "SliceAtContextLevel",
+							Commands: []*ast.Command{
+								{
+									Name: "CancelOrder",
+									DecidesOn: &ast.DecidesOnClause{
+										Events: []string{"OrderCancelled"},
+										Predicate: &ast.TagPredicate{
+											Field: "priority",
+										},
+									},
+								},
+							},
+						},
+					},
+				},
+			},
+		}
+
+		diags := linter.Lint(model)
+
+		require.Len(t, diags, 1)
+		require.Equal(t, "dcb/single-tag-everywhere", diags[0].RuleName)
+	})
+
+	t.Run("dcb/single-tag-everywhere fires with NotExpr using single tag key", func(t *testing.T) {
+		model := &ast.Model{
+			Contexts: []*ast.Context{
+				{
+					Name: "Orders",
+					NamePos: ast.Position{
+						Filename: "orders.emod",
+						Line:     1,
+						Column:   1,
+					},
+					Mode: "dcb",
+					Slices: []*ast.Slice{
+						{
+							Name: "ProcessOrder",
+							Commands: []*ast.Command{
+								{
+									Name: "PlaceOrder",
+									DecidesOn: &ast.DecidesOnClause{
+										Events: []string{"OrderPlaced"},
+										Predicate: &ast.NotExpr{
+											Expr: &ast.TagPredicate{
+												Field: "priority", Operator: "=", Value: "low",
+											},
+										},
+									},
+								},
+							},
+						},
+					},
+				},
+			},
+		}
+
+		diags := linter.Lint(model)
+
+		require.Len(t, diags, 1)
+		require.Equal(t, "dcb/single-tag-everywhere", diags[0].RuleName)
+	})
+
+	t.Run("dcb/single-tag-everywhere does not fire for commands with nil predicate", func(t *testing.T) {
+		model := &ast.Model{
+			Contexts: []*ast.Context{
+				{
+					Name: "Orders",
+					NamePos: ast.Position{
+						Filename: "orders.emod",
+						Line:     1,
+					},
+					Mode: "dcb",
+					Slices: []*ast.Slice{
+						{
+							Name: "ProcessOrder",
+							Commands: []*ast.Command{
+								{
+									Name: "PlaceOrder",
+									DecidesOn: &ast.DecidesOnClause{
+										Events: []string{"OrderPlaced"},
+									},
+								},
+							},
+						},
+					},
+				},
+			},
+		}
+
+		diags := linter.Lint(model)
+
+		var found bool
+		for _, d := range diags {
+			if d.RuleName == "dcb/single-tag-everywhere" {
+				found = true
+			}
+		}
+		require.False(t, found, "dcb/single-tag-everywhere should not fire with nil predicate")
 	})
 }

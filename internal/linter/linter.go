@@ -87,6 +87,11 @@ func Lint(model *ast.Model) []*diagnostic.Entry {
 			diags = append(diags, checkQueryTooBroad(ctx)...)
 		}
 
+		// DCB and mixed modes: check for single tag key across all decides_on predicates
+		if isDCBMode(ctx.Mode) || isMixedMode(ctx.Mode) {
+			diags = append(diags, checkSingleTagEverywhere(ctx)...)
+		}
+
 		// Existing checks on aggregate-level slices
 		for _, agg := range ctx.Aggregates {
 			for _, slice := range agg.Slices {
@@ -231,6 +236,63 @@ func checkUntaggedEvents(ctx *ast.Context) []*diagnostic.Entry {
 	}
 
 	return diags
+}
+
+// checkSingleTagEverywhere fires an info diagnostic when all commands in a DCB or
+// mixed-mode context use only one distinct tag key across their decides_on predicates.
+// Using many tag keys is an indicator of healthy domain diversity; a single key suggests
+// the tag dimension is not being used to express different routing concerns.
+func checkSingleTagEverywhere(ctx *ast.Context) []*diagnostic.Entry {
+	var diags []*diagnostic.Entry
+
+	allSlices := ctx.Slices
+	for _, agg := range ctx.Aggregates {
+		allSlices = append(allSlices, agg.Slices...)
+	}
+
+	tagKeys := make(map[string]bool)
+	for _, slice := range allSlices {
+		for _, cmd := range slice.Commands {
+			if cmd.DecidesOn == nil || cmd.DecidesOn.Predicate == nil {
+				continue
+			}
+			keys := collectPredicateTagKeys(cmd.DecidesOn.Predicate)
+			for _, k := range keys {
+				tagKeys[k] = true
+			}
+		}
+	}
+
+	if len(tagKeys) == 1 {
+		var key string
+		for k := range tagKeys {
+			key = k
+		}
+		diags = append(diags, info(ctx.NamePos, "dcb/single-tag-everywhere",
+			fmt.Sprintf("context %q uses only tag key %q across all decides_on predicates in %s mode", ctx.Name, key, ctx.Mode)))
+	}
+
+	return diags
+}
+
+// collectPredicateTagKeys recursively walks a predicate expression tree and
+// returns all tag key field names referenced in TagPredicate nodes.
+func collectPredicateTagKeys(pred ast.PredicateExpr) []string {
+	if pred == nil {
+		return nil
+	}
+	switch p := pred.(type) {
+	case *ast.TagPredicate:
+		return []string{p.Field}
+	case *ast.LogicalExpr:
+		var keys []string
+		keys = append(keys, collectPredicateTagKeys(p.Left)...)
+		keys = append(keys, collectPredicateTagKeys(p.Right)...)
+		return keys
+	case *ast.NotExpr:
+		return collectPredicateTagKeys(p.Expr)
+	}
+	return nil
 }
 
 // checkQueryTooBroad warns when a command's decides_on references more than 5 event types
