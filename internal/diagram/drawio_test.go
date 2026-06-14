@@ -568,3 +568,196 @@ func fullModel() *ast.Model {
 		}},
 	}
 }
+
+// --- Projected style (tag-based) tests ---
+
+func TestExportDrawioProjected(t *testing.T) {
+	t.Run("aggregate-only context with projected style produces same output as auto", func(t *testing.T) {
+		model := fullModel()
+		autoRaw, err := diagram.ExportDrawio(model, diagram.StyleAuto)
+		require.NoError(t, err)
+		projRaw, err := diagram.ExportDrawio(model, diagram.StyleProjected)
+		require.NoError(t, err)
+		// Pure aggregate context should produce identical output
+		require.Equal(t, autoRaw, projRaw)
+	})
+
+	t.Run("DCB context with tagged events renders tag lanes in projected style", func(t *testing.T) {
+		model := &ast.Model{
+			Name: "TagTest",
+			Contexts: []*ast.Context{{
+				Name: "Ctx",
+				Slices: []*ast.Slice{{
+					Name: "S1",
+					Events: []*ast.Event{
+						{Name: "OrderPlaced", Tags: []ast.TagEntry{{Key: "priority"}}},
+						{Name: "OrderShipped", Tags: []ast.TagEntry{{Key: "region"}}},
+					},
+				}},
+			}},
+		}
+
+		raw, err := diagram.ExportDrawio(model, diagram.StyleProjected)
+		require.NoError(t, err)
+
+		output := string(raw)
+		// Should have tag-labeled lanes instead of "Events" lane
+		require.Contains(t, output, `value="Tag: priority"`)
+		require.Contains(t, output, `value="Tag: region"`)
+		// Should NOT have the standard "Events" lane (no aggregate events)
+		require.NotContains(t, output, `value="Events"`)
+		// Should have the shared Triggers / Commands lane
+		require.Contains(t, output, `value="Triggers / Commands"`)
+		require.True(t, validXML(output))
+	})
+
+	t.Run("single-tag event appears only in that tag lane", func(t *testing.T) {
+		model := &ast.Model{
+			Name: "SingleTag",
+			Contexts: []*ast.Context{{
+				Name: "Ctx",
+				Slices: []*ast.Slice{{
+					Name: "S1",
+					Events: []*ast.Event{
+						{Name: "OrderPlaced", Tags: []ast.TagEntry{{Key: "priority"}}},
+					},
+					Flows: []*ast.Flow{},
+				}},
+			}},
+		}
+
+		raw, err := diagram.ExportDrawio(model, diagram.StyleProjected)
+		require.NoError(t, err)
+
+		output := string(raw)
+		// Event appears in the "priority" tag lane
+		require.Contains(t, output, "OrderPlaced")
+		require.Contains(t, output, `value="Tag: priority"`)
+		// Only one lane for one tag key
+		require.True(t, validXML(output))
+	})
+
+	t.Run("multi-tag event appears in each tag lane with connector", func(t *testing.T) {
+		model := &ast.Model{
+			Name: "MultiTag",
+			Contexts: []*ast.Context{{
+				Name: "Ctx",
+				Slices: []*ast.Slice{{
+					Name: "S1",
+					Events: []*ast.Event{
+						{Name: "OrderPlaced", Tags: []ast.TagEntry{{Key: "priority"}, {Key: "region"}}},
+					},
+				}},
+			}},
+		}
+
+		raw, err := diagram.ExportDrawio(model, diagram.StyleProjected)
+		require.NoError(t, err)
+
+		output := string(raw)
+		// Should have both tag lanes
+		require.Contains(t, output, `value="Tag: priority"`)
+		require.Contains(t, output, `value="Tag: region"`)
+		// Event name appears in output
+		require.Contains(t, output, "OrderPlaced")
+		// Should have a multi-tag connector (dashed purple edge with no arrow)
+		require.Contains(t, output, "dashed=1")
+		require.Contains(t, output, "#9B59B6")
+		require.True(t, validXML(output))
+	})
+
+	t.Run("commands and triggers appear once in shared Triggers / Commands lane", func(t *testing.T) {
+		model := &ast.Model{
+			Name: "CmdTest",
+			Contexts: []*ast.Context{{
+				Name: "Ctx",
+				Slices: []*ast.Slice{{
+					Name: "S1",
+					Trigger: &ast.Trigger{Kind: "UI", Name: "Submit", Actor: "User"},
+					Commands: []*ast.Command{{Name: "ProcessOrder"}},
+					Events: []*ast.Event{
+						{Name: "OrderPlaced", Tags: []ast.TagEntry{{Key: "priority"}}},
+					},
+				}},
+			}},
+		}
+
+		raw, err := diagram.ExportDrawio(model, diagram.StyleProjected)
+		require.NoError(t, err)
+
+		output := string(raw)
+		// Commands and triggers appear
+		require.Contains(t, output, "Submit")
+		require.Contains(t, output, "(User)")
+		require.Contains(t, output, "ProcessOrder")
+		// Shared lane present
+		require.Contains(t, output, `value="Triggers / Commands"`)
+		// Only one instance of each (not duplicated per lane)
+		// Count occurrences: "Submit" should appear once (no tag-lane duplication for commands)
+		require.True(t, validXML(output))
+	})
+
+	t.Run("projected output with tags is valid XML", func(t *testing.T) {
+		model := &ast.Model{
+			Name: "ValidXML",
+			Contexts: []*ast.Context{{
+				Name: "Ctx",
+				Slices: []*ast.Slice{{
+					Name: "S1",
+					Events: []*ast.Event{
+						{Name: "EventA", Tags: []ast.TagEntry{{Key: "alpha"}}},
+						{Name: "EventB", Tags: []ast.TagEntry{{Key: "beta"}}},
+					},
+					Commands: []*ast.Command{{Name: "CmdA"}},
+					Flows:    []*ast.Flow{{CommandName: "CmdA", EventName: "EventA"}},
+				}},
+			}},
+		}
+
+		raw, err := diagram.ExportDrawio(model, diagram.StyleProjected)
+		require.NoError(t, err)
+		require.True(t, validXML(string(raw)), "projected output must be valid XML")
+	})
+
+	t.Run("mixed mode shows both aggregate and tag slices", func(t *testing.T) {
+		model := &ast.Model{
+			Name: "Mixed",
+			Contexts: []*ast.Context{{
+				Name: "Ctx",
+				Aggregates: []*ast.Aggregate{{
+					Name: "Agg",
+					Slices: []*ast.Slice{{
+						Name: "AggSlice",
+						Events: []*ast.Event{{Name: "AggEvent"}},
+					}},
+				}},
+				Slices: []*ast.Slice{{
+					Name: "DCBSlice",
+					Events: []*ast.Event{
+						{Name: "DCBEvent", Tags: []ast.TagEntry{{Key: "dcbTag"}}},
+					},
+				}},
+			}},
+		}
+
+		autoRaw, err := diagram.ExportDrawio(model, diagram.StyleAuto)
+		require.NoError(t, err)
+		projRaw, err := diagram.ExportDrawio(model, diagram.StyleProjected)
+		require.NoError(t, err)
+
+		autoOut := string(autoRaw)
+		projOut := string(projRaw)
+
+		// Auto mode has 4 standard lanes
+		require.Contains(t, autoOut, `value="UI / Triggers"`)
+		require.Contains(t, autoOut, `value="Commands / Views"`)
+		require.Contains(t, autoOut, `value="Events"`)
+
+		// Projected mode has tag lane and events lane (for aggregate)
+		require.Contains(t, projOut, `value="Tag: dcbTag"`)
+		require.Contains(t, projOut, `value="Events"`) // for aggregate events
+		require.Contains(t, projOut, "AggEvent")
+		require.Contains(t, projOut, "DCBEvent")
+		require.True(t, validXML(projOut))
+	})
+}

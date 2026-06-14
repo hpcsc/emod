@@ -3,6 +3,7 @@ package diagram
 
 import (
 	"fmt"
+	"sort"
 	"strings"
 
 	"github.com/hpcsc/emod/internal/ast"
@@ -82,7 +83,7 @@ const (
 )
 
 // ExportDrawio converts a parsed AST model into draw.io XML (mxGraph format).
-func ExportDrawio(model *ast.Model, _ Style) ([]byte, error) {
+func ExportDrawio(model *ast.Model, style Style) ([]byte, error) {
 	if model == nil {
 		return []byte{}, nil
 	}
@@ -93,6 +94,19 @@ func ExportDrawio(model *ast.Model, _ Style) ([]byte, error) {
 	if len(entries) == 0 {
 		return buildEmptyDiagram(model.Name), nil
 	}
+
+	// Determine if projected (tag-based) layout should be used
+	hasDCB := false
+	hasAggEvents := false
+	for _, e := range entries {
+		if e.fromDCB {
+			hasDCB = true
+		} else if len(e.slice.Events) > 0 {
+			hasAggEvents = true
+		}
+	}
+	tagKeys := collectTagKeys(entries)
+	useProjected := style == StyleProjected && hasDCB && len(tagKeys) > 0
 
 	nextID := 2
 	allocID := func() int {
@@ -138,28 +152,115 @@ func ExportDrawio(model *ast.Model, _ Style) ([]byte, error) {
 	}
 
 	diagramW := xPos + marginX
-	triggerLaneY := marginY
-	cmdViewLaneY := triggerLaneY + laneHeight + laneGap
-	eventLaneY := cmdViewLaneY + laneHeight + laneGap
-	extLaneY := eventLaneY + laneHeight + laneGap
+
+	// --- Calculate swim lane positions ---
+	var (
+		triggerLaneY int
+		cmdViewLaneY int
+		eventLaneY   int
+		extLaneY     int
+		tagLaneYs    []int  // one Y per tag key in tagKeys
+		hasEventsLane bool // whether an "Events" lane is needed for aggregate/untagged events
+	)
+
+	if useProjected {
+		// Projected layout: shared triggers/commands lane,
+		// then tag lanes for each unique tag key
+		triggerLaneY = marginY
+		cmdViewLaneY = triggerLaneY // same lane
+		nextY := triggerLaneY + laneHeight + laneGap
+
+		// Check if we need an Events lane for:
+		// - aggregate events, or
+		// - untagged DCB events, or
+		// - translation events (from any slice)
+		hasEventsLane = hasAggEvents
+		if !hasEventsLane {
+			for _, e := range entries {
+				if e.fromDCB {
+					for _, evt := range e.slice.Events {
+						if len(evt.Tags) == 0 {
+							hasEventsLane = true
+							break
+						}
+					}
+					if !hasEventsLane && hasTranslationEvents(e.slice) {
+						hasEventsLane = true
+					}
+				}
+				if hasEventsLane {
+					break
+				}
+			}
+		}
+		if !hasEventsLane {
+			for _, e := range entries {
+				if hasTranslationEvents(e.slice) {
+					hasEventsLane = true
+					break
+				}
+			}
+		}
+
+		if hasEventsLane {
+			eventLaneY = nextY
+			nextY += laneHeight + laneGap
+		} else {
+			eventLaneY = 0
+		}
+
+		tagLaneYs = make([]int, len(tagKeys))
+		for i := range tagKeys {
+			tagLaneYs[i] = nextY
+			nextY += laneHeight + laneGap
+		}
+		extLaneY = nextY
+	} else {
+		// Standard 4-lane layout
+		triggerLaneY = marginY
+		cmdViewLaneY = triggerLaneY + laneHeight + laneGap
+		eventLaneY = cmdViewLaneY + laneHeight + laneGap
+		extLaneY = eventLaneY + laneHeight + laneGap
+		hasEventsLane = true
+		tagLaneYs = nil
+	}
 
 	// Write document header
 	b.WriteString(xmlProlog(model.Name))
 	b.WriteString(rootOpen())
 
-	// Write three swimlanes
-	topLaneID := allocID()
-	b.WriteString(swimlaneCell(topLaneID, "UI / Triggers",
-		marginX, triggerLaneY, diagramW-2*marginX, laneHeight))
-	midLaneID := allocID()
-	b.WriteString(swimlaneCell(midLaneID, "Commands / Views",
-		marginX, cmdViewLaneY, diagramW-2*marginX, laneHeight))
-	botLaneID := allocID()
-	b.WriteString(swimlaneCell(botLaneID, "Events",
-		marginX, eventLaneY, diagramW-2*marginX, laneHeight))
-	extLaneID := allocID()
-	b.WriteString(swimlaneCell(extLaneID, "External Systems",
-		marginX, extLaneY, diagramW-2*marginX, laneHeight))
+	// Write swimlanes
+	if useProjected {
+		topLaneID := allocID()
+		b.WriteString(swimlaneCell(topLaneID, "Triggers / Commands",
+			marginX, triggerLaneY, diagramW-2*marginX, laneHeight))
+		if hasEventsLane {
+			midLaneID := allocID()
+			b.WriteString(swimlaneCell(midLaneID, "Events",
+				marginX, eventLaneY, diagramW-2*marginX, laneHeight))
+		}
+		for ti, key := range tagKeys {
+			tid := allocID()
+			b.WriteString(swimlaneCell(tid, "Tag: "+key,
+				marginX, tagLaneYs[ti], diagramW-2*marginX, laneHeight))
+		}
+		extLaneID := allocID()
+		b.WriteString(swimlaneCell(extLaneID, "External Systems",
+			marginX, extLaneY, diagramW-2*marginX, laneHeight))
+	} else {
+		topLaneID := allocID()
+		b.WriteString(swimlaneCell(topLaneID, "UI / Triggers",
+			marginX, triggerLaneY, diagramW-2*marginX, laneHeight))
+		midLaneID := allocID()
+		b.WriteString(swimlaneCell(midLaneID, "Commands / Views",
+			marginX, cmdViewLaneY, diagramW-2*marginX, laneHeight))
+		botLaneID := allocID()
+		b.WriteString(swimlaneCell(botLaneID, "Events",
+			marginX, eventLaneY, diagramW-2*marginX, laneHeight))
+		extLaneID := allocID()
+		b.WriteString(swimlaneCell(extLaneID, "External Systems",
+			marginX, extLaneY, diagramW-2*marginX, laneHeight))
+	}
 
 	// Context labels above the swimlanes
 	for _, cb := range ctxBounds {
@@ -172,7 +273,14 @@ func ExportDrawio(model *ast.Model, _ Style) ([]byte, error) {
 
 	triggerCenterY := triggerLaneY + 30 + (laneHeight-30-boxHeight)/2
 	midCenterY := cmdViewLaneY + 30 + (laneHeight-30-boxHeight)/2
-	eventCenterY := eventLaneY + 30 + (laneHeight-30-boxHeight)/2
+	var eventCenterY int
+	if hasEventsLane {
+		eventCenterY = eventLaneY + 30 + (laneHeight-30-boxHeight)/2
+	}
+	var tagCenterYs []int
+	for _, ty := range tagLaneYs {
+		tagCenterYs = append(tagCenterYs, ty+30+(laneHeight-30-boxHeight)/2)
+	}
 	extCenterY := extLaneY + 30 + (laneHeight-30-boxHeight)/2
 
 	type namedElem struct {
@@ -200,12 +308,19 @@ func ExportDrawio(model *ast.Model, _ Style) ([]byte, error) {
 		prev = entry.ctxName
 	}
 
+	// Multi-tag event tracking for connectors
+	type multiTagEntry struct {
+		name    string
+		cellIDs []int // cell IDs of representations across lanes
+	}
+	var multiTagEvents []multiTagEntry
+
 	// Place elements per slice
 	for i, entry := range entries {
 		s := entry.slice
 		sliceX := sliceXFor[i]
 
-		// --- Trigger (top lane) ---
+		// --- Trigger (triggers/commands lane in projected, top lane in standard) ---
 		if s.Trigger != nil {
 			id := allocID()
 			x := sliceX + (sliceWidth-boxWidth)/2
@@ -242,7 +357,9 @@ func ExportDrawio(model *ast.Model, _ Style) ([]byte, error) {
 			elems = append(elems, namedElem{sliceIdx: i, name: view.Name, id: id, x: x, y: midCenterY, w: itemW, h: boxHeight})
 		}
 
-		// --- Events (bottom lane, including translation events) ---
+		// --- Events ---
+		// In projected style, DCB events go to tag lanes; aggregate events go to Events lane.
+		// In standard style, all events go to the Events lane.
 		usableW = sliceWidth - 20
 		totalEvts := len(s.Events)
 		for _, tr := range s.Translations {
@@ -251,18 +368,55 @@ func ExportDrawio(model *ast.Model, _ Style) ([]byte, error) {
 			}
 		}
 		ei := 0
-		for me, evt := range s.Events {
-			id := allocID()
-			itemW, x := itemLayout(usableW, totalEvts, me, sliceX)
+		for _, evt := range s.Events {
 			label := evt.Name
 			if evt.ExternalName != "" {
 				label = fmt.Sprintf("%s\\n[%s]", evt.Name, evt.ExternalName)
 			}
-			ei++
 			st := fmt.Sprintf("rounded=0;whiteSpace=wrap;html=1;fillColor=%s;strokeColor=%s;fontFamily=Helvetica;",
 				fillEvent, strokeEvent)
-			b.WriteString(vertexCell(id, label, x, eventCenterY, itemW, boxHeight, st))
-			elems = append(elems, namedElem{sliceIdx: i, name: evt.Name, id: id, x: x, y: eventCenterY, w: itemW, h: boxHeight})
+
+			if useProjected && entry.fromDCB && len(evt.Tags) > 0 {
+				// DCB event with tags: place in each matching tag lane
+				// Compute position once, reuse across all matching lanes
+				itemW, itemX := itemLayout(usableW, totalEvts, ei, sliceX)
+				ei++
+				var placedIDs []int
+				for ti, key := range tagKeys {
+					hasTag := false
+					for _, tag := range evt.Tags {
+						if tag.Key == key {
+							hasTag = true
+							break
+						}
+					}
+					if !hasTag {
+						continue
+					}
+					id := allocID()
+					b.WriteString(vertexCell(id, label, itemX, tagCenterYs[ti], itemW, boxHeight, st))
+					elems = append(elems, namedElem{sliceIdx: i, name: evt.Name, id: id, x: itemX, y: tagCenterYs[ti], w: itemW, h: boxHeight})
+					placedIDs = append(placedIDs, id)
+				}
+				if len(placedIDs) > 1 {
+					// Track for multi-tag connector
+					multiTagEvents = append(multiTagEvents, multiTagEntry{name: evt.Name, cellIDs: placedIDs})
+				}
+			} else if useProjected && entry.fromDCB && len(evt.Tags) == 0 && hasEventsLane {
+				// DCB event without tags: place in Events lane
+				id := allocID()
+				itemW, x := itemLayout(usableW, totalEvts, ei, sliceX)
+				ei++
+				b.WriteString(vertexCell(id, label, x, eventCenterY, itemW, boxHeight, st))
+				elems = append(elems, namedElem{sliceIdx: i, name: evt.Name, id: id, x: x, y: eventCenterY, w: itemW, h: boxHeight})
+			} else {
+				// Standard placement: Events lane (for aggregate entries, or when not projected)
+				id := allocID()
+				itemW, x := itemLayout(usableW, totalEvts, ei, sliceX)
+				ei++
+				b.WriteString(vertexCell(id, label, x, eventCenterY, itemW, boxHeight, st))
+				elems = append(elems, namedElem{sliceIdx: i, name: evt.Name, id: id, x: x, y: eventCenterY, w: itemW, h: boxHeight})
+			}
 		}
 		for _, tr := range s.Translations {
 			if tr.Event != nil && tr.Event.Name != "" {
@@ -333,9 +487,42 @@ func ExportDrawio(model *ast.Model, _ Style) ([]byte, error) {
 	extStyle := "edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;fontFamily=Helvetica;strokeColor=" + strokeExternal + ";dashed=1;endArrow=classic;fontSize=10;"
 
 	// Global element lookup across all slices (needed for cross-slice references)
+	// For multi-tag events, only the first representation is stored in nameToElem
+	// so that standard connections (command->event, event->view, etc.) use a single target.
 	nameToElem := make(map[string]*namedElem)
 	for _, e := range elems {
-		nameToElem[e.name] = &e
+		if _, exists := nameToElem[e.name]; !exists {
+			nameToElem[e.name] = &e
+		}
+	}
+
+	// Multi-tag connectors: link representations of the same event across tag lanes
+	if len(multiTagEvents) > 0 {
+		multiTagStyle := "edgeStyle=orthogonalEdgeStyle;html=1;fontFamily=Helvetica;strokeColor=#9B59B6;dashed=1;fontSize=10;endArrow=none;curved=1;"
+		for _, mte := range multiTagEvents {
+			for j := 1; j < len(mte.cellIDs); j++ {
+				// Find the namedElem for each representation to compute waypoints
+				var srcElem, tgtElem *namedElem
+				for k := range elems {
+					if elems[k].id == mte.cellIDs[0] {
+						srcElem = &elems[k]
+					}
+					if elems[k].id == mte.cellIDs[j] {
+						tgtElem = &elems[k]
+					}
+				}
+				if srcElem != nil && tgtElem != nil {
+					rightX := srcElem.x + srcElem.w + waypointMargin
+					midY := srcElem.y + srcElem.h/2
+					tgtMidY := tgtElem.y + tgtElem.h/2
+					points := [][2]int{
+						{rightX, midY},
+						{rightX, tgtMidY},
+					}
+					b.WriteString(edgeCellWaypoints(allocID(), multiTagStyle, srcElem.id, tgtElem.id, points))
+				}
+			}
+		}
 	}
 
 	for _, entry := range entries {
@@ -453,6 +640,7 @@ func ExportDrawio(model *ast.Model, _ Style) ([]byte, error) {
 type sliceEntry struct {
 	slice   *ast.Slice
 	ctxName string
+	fromDCB bool // true if slice comes from a direct (DCB) context
 }
 
 // collectSlices flattens all slices from the model into a list.
@@ -463,14 +651,48 @@ func collectSlices(model *ast.Model) []sliceEntry {
 	for _, ctx := range model.Contexts {
 		for _, agg := range ctx.Aggregates {
 			for _, s := range agg.Slices {
-				entries = append(entries, sliceEntry{slice: s, ctxName: ctx.Name})
+				entries = append(entries, sliceEntry{slice: s, ctxName: ctx.Name, fromDCB: false})
 			}
 		}
 		for _, s := range ctx.Slices {
-			entries = append(entries, sliceEntry{slice: s, ctxName: ctx.Name})
+			entries = append(entries, sliceEntry{slice: s, ctxName: ctx.Name, fromDCB: true})
 		}
 	}
 	return entries
+}
+
+// collectTagKeys returns unique tag keys across all DCB events, sorted alphabetically.
+func collectTagKeys(entries []sliceEntry) []string {
+	keySet := make(map[string]struct{})
+	for _, e := range entries {
+		if !e.fromDCB {
+			continue
+		}
+		for _, evt := range e.slice.Events {
+			for _, tag := range evt.Tags {
+				keySet[tag.Key] = struct{}{}
+			}
+		}
+	}
+	if len(keySet) == 0 {
+		return nil
+	}
+	keys := make([]string, 0, len(keySet))
+	for k := range keySet {
+		keys = append(keys, k)
+	}
+	sort.Strings(keys)
+	return keys
+}
+
+// hasTranslationEvents reports whether a slice has translation events.
+func hasTranslationEvents(s *ast.Slice) bool {
+	for _, tr := range s.Translations {
+		if tr.Event != nil && tr.Event.Name != "" {
+			return true
+		}
+	}
+	return false
 }
 
 // itemLayout computes item width and x position for elements within a slice.
