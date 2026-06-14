@@ -92,6 +92,11 @@ func Lint(model *ast.Model) []*diagnostic.Entry {
 			diags = append(diags, checkSingleTagEverywhere(ctx)...)
 		}
 
+		// DCB and mixed modes: check for orphan tag keys (declared on events but never referenced in predicates)
+		if isDCBMode(ctx.Mode) || isMixedMode(ctx.Mode) {
+			diags = append(diags, checkOrphanTagKeys(ctx)...)
+		}
+
 		// Existing checks on aggregate-level slices
 		for _, agg := range ctx.Aggregates {
 			for _, slice := range agg.Slices {
@@ -270,6 +275,73 @@ func checkSingleTagEverywhere(ctx *ast.Context) []*diagnostic.Entry {
 		}
 		diags = append(diags, info(ctx.NamePos, "dcb/single-tag-everywhere",
 			fmt.Sprintf("context %q uses only tag key %q across all decides_on predicates in %s mode", ctx.Name, key, ctx.Mode)))
+	}
+
+	return diags
+}
+
+// checkOrphanTagKeys warns when a tag key declared on events is never referenced
+// in any command's decides_on predicate in a DCB or mixed-mode context.
+// Each orphan key produces its own diagnostic pointing at the first event that declares it.
+func checkOrphanTagKeys(ctx *ast.Context) []*diagnostic.Entry {
+	var diags []*diagnostic.Entry
+
+	allSlices := ctx.Slices
+	for _, agg := range ctx.Aggregates {
+		allSlices = append(allSlices, agg.Slices...)
+	}
+
+	// Collect all tag keys declared on events, tracking the first event for each key
+	eventTagKeys := make(map[string]bool)
+	firstEventForKey := make(map[string]ast.Position)
+
+	for _, slice := range allSlices {
+		for _, evt := range slice.Events {
+			for _, tag := range evt.Tags {
+				if !eventTagKeys[tag.Key] {
+					eventTagKeys[tag.Key] = true
+					firstEventForKey[tag.Key] = evt.NamePos
+				}
+			}
+		}
+		for _, tr := range slice.Translations {
+			if tr.Event != nil {
+				for _, tag := range tr.Event.Tags {
+					if !eventTagKeys[tag.Key] {
+						eventTagKeys[tag.Key] = true
+						firstEventForKey[tag.Key] = tr.Event.NamePos
+					}
+				}
+			}
+		}
+	}
+
+	// If no events have tags, nothing to check
+	if len(eventTagKeys) == 0 {
+		return nil
+	}
+
+	// Collect all tag keys referenced in commands' decides_on predicates
+	predicateTagKeys := make(map[string]bool)
+	for _, slice := range allSlices {
+		for _, cmd := range slice.Commands {
+			if cmd.DecidesOn == nil || cmd.DecidesOn.Predicate == nil {
+				continue
+			}
+			keys := collectPredicateTagKeys(cmd.DecidesOn.Predicate)
+			for _, k := range keys {
+				predicateTagKeys[k] = true
+			}
+		}
+	}
+
+	// Find orphan keys — declared on events but never referenced in predicates
+	for key := range eventTagKeys {
+		if !predicateTagKeys[key] {
+			pos := firstEventForKey[key]
+			diags = append(diags, warning(pos, "dcb/orphan-tag-key",
+				fmt.Sprintf("tag key %q declared on events is never referenced in any command's decides_on predicate in %s-mode context %q", key, ctx.Mode, ctx.Name)))
+		}
 	}
 
 	return diags

@@ -5,7 +5,7 @@
 - [x] Task 2: Implement `dcb/untagged-event` lint rule
 - [x] Task 3: Implement `dcb/query-too-broad` lint rule
 - [x] Task 4: Implement `dcb/single-tag-everywhere` lint rule
-- [ ] Task 5: Implement `dcb/orphan-tag-key` lint rule
+- [x] Task 5: Implement `dcb/orphan-tag-key` lint rule
 - [ ] Task 6: Add `--explain` flag to the lint CLI command
 
 ## Story Reference

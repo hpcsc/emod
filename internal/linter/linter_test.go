@@ -1252,6 +1252,27 @@ func TestLint(t *testing.T) {
 											},
 											Tags: []ast.TagEntry{
 												{Key: "priority", FieldRef: "OrderId"},
+												{Key: "region", FieldRef: "WarehouseId"},
+											},
+										},
+									},
+									Commands: []*ast.Command{
+										{
+											Name: "PlaceOrder",
+											DecidesOn: &ast.DecidesOnClause{
+												Events: []string{"OrderPlaced"},
+												Predicate: &ast.TagPredicate{
+													Field: "priority", Operator: "=", Value: "high",
+												},
+											},
+										},
+										{
+											Name: "ShipOrder",
+											DecidesOn: &ast.DecidesOnClause{
+												Events: []string{"OrderPlaced"},
+												Predicate: &ast.TagPredicate{
+													Field: "region", Operator: "=", Value: "us",
+												},
 											},
 										},
 									},
@@ -1352,6 +1373,7 @@ func TestLint(t *testing.T) {
 									},
 									Tags: []ast.TagEntry{
 										{Key: "type", FieldRef: "ItemId"},
+										{Key: "category", FieldRef: "ItemCategory"},
 									},
 									Fields: []*ast.Field{
 										{Name: "ItemId"},
@@ -1373,6 +1395,26 @@ func TestLint(t *testing.T) {
 										Filename: "orders.emod",
 										Line:     15,
 										Column:   5,
+									},
+									DecidesOn: &ast.DecidesOnClause{
+										Events: []string{"OrderUpdated", "OrderStatusChanged", "PaymentInitiated", "ItemSelected"},
+										Predicate: &ast.TagPredicate{
+											Field: "type", Operator: "=", Value: "standard",
+										},
+									},
+								},
+								{
+									Name: "CategorizeItem",
+									NamePos: ast.Position{
+										Filename: "orders.emod",
+										Line:     16,
+										Column:   5,
+									},
+									DecidesOn: &ast.DecidesOnClause{
+										Events: []string{"ItemSelected"},
+										Predicate: &ast.TagPredicate{
+											Field: "category", Operator: "=", Value: "premium",
+										},
 									},
 								},
 							},
@@ -1486,6 +1528,27 @@ func TestLint(t *testing.T) {
 									},
 									Tags: []ast.TagEntry{
 										{Key: "priority", FieldRef: "OrderId"},
+										{Key: "region", FieldRef: "WarehouseId"},
+									},
+								},
+							},
+							Commands: []*ast.Command{
+								{
+									Name: "PlaceOrder",
+									DecidesOn: &ast.DecidesOnClause{
+										Events: []string{"OrderPlaced"},
+										Predicate: &ast.TagPredicate{
+											Field: "priority", Operator: "=", Value: "high",
+										},
+									},
+								},
+								{
+									Name: "ShipOrder",
+									DecidesOn: &ast.DecidesOnClause{
+										Events: []string{"OrderPlaced"},
+										Predicate: &ast.TagPredicate{
+											Field: "region", Operator: "=", Value: "us",
+										},
 									},
 								},
 							},
@@ -1630,6 +1693,27 @@ func TestLint(t *testing.T) {
 									},
 									Tags: []ast.TagEntry{
 										{Key: "priority", FieldRef: "OrderId"},
+										{Key: "region", FieldRef: "WarehouseId"},
+									},
+								},
+							},
+							Commands: []*ast.Command{
+								{
+									Name: "PlaceOrder",
+									DecidesOn: &ast.DecidesOnClause{
+										Events: []string{"OrderPlaced"},
+										Predicate: &ast.TagPredicate{
+											Field: "priority", Operator: "=", Value: "high",
+										},
+									},
+								},
+								{
+									Name: "ShipOrder",
+									DecidesOn: &ast.DecidesOnClause{
+										Events: []string{"OrderPlaced"},
+										Predicate: &ast.TagPredicate{
+											Field: "region", Operator: "=", Value: "us",
+										},
 									},
 								},
 							},
@@ -2634,5 +2718,589 @@ func TestLint(t *testing.T) {
 			}
 		}
 		require.False(t, found, "dcb/single-tag-everywhere should not fire with nil predicate")
+	})
+
+	t.Run("orphan-tag-key fires for tag key declared on events but not used in any predicate in dcb mode", func(t *testing.T) {
+		model := &ast.Model{
+			Contexts: []*ast.Context{
+				{
+					Name: "Orders",
+					Mode: "dcb",
+					Slices: []*ast.Slice{
+						{
+							Name: "ProcessOrder",
+							Events: []*ast.Event{
+								{
+									Name: "OrderPlaced",
+									NamePos: ast.Position{
+										Filename: "orders.emod",
+										Line:     10,
+										Column:   3,
+									},
+									Tags: []ast.TagEntry{
+										{Key: "priority", FieldRef: "OrderId"},
+										{Key: "region", FieldRef: "WarehouseId"},
+										{Key: "source", FieldRef: "Channel"},
+									},
+								},
+							},
+							Commands: []*ast.Command{
+								{
+									Name: "PlaceOrder",
+									DecidesOn: &ast.DecidesOnClause{
+										Events: []string{"OrderPlaced"},
+										Predicate: &ast.TagPredicate{
+											Field: "priority", Operator: "=", Value: "high",
+										},
+									},
+								},
+								{
+									Name: "CancelOrder",
+									DecidesOn: &ast.DecidesOnClause{
+										Events: []string{"OrderPlaced"},
+										Predicate: &ast.TagPredicate{
+											Field: "source", Operator: "=", Value: "web",
+										},
+									},
+								},
+							},
+						},
+					},
+				},
+			},
+		}
+
+		diags := linter.Lint(model)
+
+		var orphanDiags []*diagnostic.Entry
+		for _, d := range diags {
+			if d.RuleName == "dcb/orphan-tag-key" {
+				orphanDiags = append(orphanDiags, d)
+			}
+		}
+		require.Len(t, orphanDiags, 1)
+		require.Equal(t, diagnostic.Warning, orphanDiags[0].Severity)
+		require.Equal(t, "orders.emod", orphanDiags[0].Filename)
+		require.Equal(t, 10, orphanDiags[0].Line)
+		require.Contains(t, orphanDiags[0].Message, "region")
+		require.Contains(t, orphanDiags[0].Message, "Orders")
+	})
+
+	t.Run("orphan-tag-key does not fire when all tag keys are used in predicates", func(t *testing.T) {
+		model := &ast.Model{
+			Contexts: []*ast.Context{
+				{
+					Name: "Orders",
+					Mode: "dcb",
+					Slices: []*ast.Slice{
+						{
+							Name: "ProcessOrder",
+							Events: []*ast.Event{
+								{
+									Name: "OrderPlaced",
+									NamePos: ast.Position{
+										Filename: "orders.emod",
+										Line:     10,
+									},
+									Tags: []ast.TagEntry{
+										{Key: "priority", FieldRef: "OrderId"},
+										{Key: "region", FieldRef: "WarehouseId"},
+									},
+								},
+							},
+							Commands: []*ast.Command{
+								{
+									Name: "PlaceOrder",
+									DecidesOn: &ast.DecidesOnClause{
+										Events: []string{"OrderPlaced"},
+										Predicate: &ast.TagPredicate{
+											Field: "priority", Operator: "=", Value: "high",
+										},
+									},
+								},
+								{
+									Name: "ShipOrder",
+									DecidesOn: &ast.DecidesOnClause{
+										Events: []string{"OrderPlaced"},
+										Predicate: &ast.TagPredicate{
+											Field: "region", Operator: "=", Value: "us",
+										},
+									},
+								},
+							},
+						},
+					},
+				},
+			},
+		}
+
+		diags := linter.Lint(model)
+
+		var found bool
+		for _, d := range diags {
+			if d.RuleName == "dcb/orphan-tag-key" {
+				found = true
+			}
+		}
+		require.False(t, found, "dcb/orphan-tag-key should not fire when all tag keys are used in predicates")
+	})
+
+	t.Run("multiple orphan keys each produce separate diagnostics", func(t *testing.T) {
+		model := &ast.Model{
+			Contexts: []*ast.Context{
+				{
+					Name: "Orders",
+					Mode: "dcb",
+					Slices: []*ast.Slice{
+						{
+							Name: "ProcessOrder",
+							Events: []*ast.Event{
+								{
+									Name: "OrderPlaced",
+									NamePos: ast.Position{
+										Filename: "orders.emod",
+										Line:     10,
+										Column:   3,
+									},
+									Tags: []ast.TagEntry{
+										{Key: "priority", FieldRef: "OrderId"},
+										{Key: "region", FieldRef: "WarehouseId"},
+										{Key: "source", FieldRef: "Channel"},
+									},
+								},
+							},
+							Commands: []*ast.Command{
+								{
+									Name: "PlaceOrder",
+									DecidesOn: &ast.DecidesOnClause{
+										Events: []string{"OrderPlaced"},
+										Predicate: &ast.TagPredicate{
+											Field: "priority", Operator: "=", Value: "high",
+										},
+									},
+								},
+							},
+						},
+					},
+				},
+			},
+		}
+
+		diags := linter.Lint(model)
+
+		orphanCount := 0
+		for _, d := range diags {
+			if d.RuleName == "dcb/orphan-tag-key" {
+				orphanCount++
+			}
+		}
+		require.Equal(t, 2, orphanCount, "expected 2 orphan tag key diagnostics (region, source)")
+	})
+
+	t.Run("orphan-tag-key does not fire in aggregate mode", func(t *testing.T) {
+		model := &ast.Model{
+			Contexts: []*ast.Context{
+				{
+					Name: "Orders",
+					Aggregates: []*ast.Aggregate{
+						{
+							Name: "Order",
+							Slices: []*ast.Slice{
+								{
+									Name: "ProcessOrder",
+									Events: []*ast.Event{
+										{
+											Name: "OrderPlaced",
+											NamePos: ast.Position{
+												Filename: "orders.emod",
+												Line:     10,
+											},
+											Tags: []ast.TagEntry{
+												{Key: "priority", FieldRef: "OrderId"},
+											},
+										},
+									},
+								},
+							},
+						},
+					},
+				},
+			},
+		}
+
+		diags := linter.Lint(model)
+
+		var found bool
+		for _, d := range diags {
+			if d.RuleName == "dcb/orphan-tag-key" {
+				found = true
+			}
+		}
+		require.False(t, found, "dcb/orphan-tag-key should not fire in aggregate mode")
+	})
+
+	t.Run("orphan-tag-key fires in mixed mode", func(t *testing.T) {
+		model := &ast.Model{
+			Contexts: []*ast.Context{
+				{
+					Name: "Orders",
+					Mode: "mixed",
+					Slices: []*ast.Slice{
+						{
+							Name: "ProcessOrder",
+							Events: []*ast.Event{
+								{
+									Name: "OrderPlaced",
+									NamePos: ast.Position{
+										Filename: "orders.emod",
+										Line:     10,
+										Column:   3,
+									},
+									Tags: []ast.TagEntry{
+										{Key: "priority", FieldRef: "OrderId"},
+										{Key: "region", FieldRef: "WarehouseId"},
+										{Key: "source", FieldRef: "Channel"},
+									},
+								},
+							},
+							Commands: []*ast.Command{
+								{
+									Name: "PlaceOrder",
+									DecidesOn: &ast.DecidesOnClause{
+										Events: []string{"OrderPlaced"},
+										Predicate: &ast.TagPredicate{
+											Field: "priority", Operator: "=", Value: "high",
+										},
+									},
+								},
+								{
+									Name: "CancelOrder",
+									DecidesOn: &ast.DecidesOnClause{
+										Events: []string{"OrderPlaced"},
+										Predicate: &ast.TagPredicate{
+											Field: "source", Operator: "=", Value: "web",
+										},
+									},
+								},
+							},
+						},
+					},
+				},
+			},
+		}
+
+		diags := linter.Lint(model)
+
+		var orphanDiags []*diagnostic.Entry
+		for _, d := range diags {
+			if d.RuleName == "dcb/orphan-tag-key" {
+				orphanDiags = append(orphanDiags, d)
+			}
+		}
+		require.Len(t, orphanDiags, 1)
+		require.Contains(t, orphanDiags[0].Message, "mixed")
+		require.Contains(t, orphanDiags[0].Message, "region")
+	})
+
+	t.Run("orphan-tag-key points at the first event that declares the orphan key", func(t *testing.T) {
+		model := &ast.Model{
+			Contexts: []*ast.Context{
+				{
+					Name: "Orders",
+					Mode: "dcb",
+					Slices: []*ast.Slice{
+						{
+							Name: "ProcessOrder",
+							Events: []*ast.Event{
+								{
+									Name: "OrderPlaced",
+									NamePos: ast.Position{
+										Filename: "orders.emod",
+										Line:     10,
+										Column:   3,
+									},
+									Tags: []ast.TagEntry{
+										{Key: "region", FieldRef: "WarehouseId"},
+									},
+								},
+								{
+									Name: "OrderShipped",
+									NamePos: ast.Position{
+										Filename: "orders.emod",
+										Line:     20,
+										Column:   3,
+									},
+									Tags: []ast.TagEntry{
+										{Key: "region", FieldRef: "WarehouseId"},
+									},
+								},
+							},
+						},
+					},
+				},
+			},
+		}
+
+		diags := linter.Lint(model)
+
+		require.Len(t, diags, 1)
+		require.Equal(t, "dcb/orphan-tag-key", diags[0].RuleName)
+		require.Equal(t, 10, diags[0].Line, "diagnostic should point at the first event that declares the orphan key")
+	})
+
+	t.Run("orphan-tag-key detects orphan key from inline event in translation", func(t *testing.T) {
+		model := &ast.Model{
+			Contexts: []*ast.Context{
+				{
+					Name: "Orders",
+					Mode: "dcb",
+					Slices: []*ast.Slice{
+						{
+							Name: "ProcessOrder",
+							Events: []*ast.Event{
+								{
+									Name: "OrderPlaced",
+									NamePos: ast.Position{
+										Filename: "orders.emod",
+										Line:     10,
+									},
+									Tags: []ast.TagEntry{
+										{Key: "priority", FieldRef: "OrderId"},
+									},
+								},
+							},
+							Translations: []*ast.Translation{
+								{
+									Name: "ImportOrder",
+									Event: &ast.Event{
+										Name: "OrderImported",
+										NamePos: ast.Position{
+											Filename: "orders.emod",
+											Line:     15,
+											Column:   5,
+										},
+										Tags: []ast.TagEntry{
+											{Key: "source", FieldRef: "OrderId"},
+										},
+									},
+								},
+							},
+							Commands: []*ast.Command{
+								{
+									Name: "ProcessImport",
+									DecidesOn: &ast.DecidesOnClause{
+										Events: []string{"OrderImported"},
+										Predicate: &ast.TagPredicate{
+											Field: "priority", Operator: "=", Value: "high",
+										},
+									},
+								},
+							},
+						},
+					},
+				},
+			},
+		}
+
+		diags := linter.Lint(model)
+
+		var orphanDiags []*diagnostic.Entry
+		for _, d := range diags {
+			if d.RuleName == "dcb/orphan-tag-key" {
+				orphanDiags = append(orphanDiags, d)
+			}
+		}
+		require.Len(t, orphanDiags, 1)
+		require.Equal(t, 15, orphanDiags[0].Line)
+		require.Contains(t, orphanDiags[0].Message, "source")
+	})
+
+	t.Run("orphan-tag-key handles events with no tags", func(t *testing.T) {
+		model := &ast.Model{
+			Contexts: []*ast.Context{
+				{
+					Name: "Orders",
+					Mode: "dcb",
+					Slices: []*ast.Slice{
+						{
+							Name: "ProcessOrder",
+							Events: []*ast.Event{
+								{
+									Name: "OrderPlaced",
+									NamePos: ast.Position{
+										Filename: "orders.emod",
+										Line:     10,
+									},
+								},
+							},
+						},
+					},
+				},
+			},
+		}
+
+		diags := linter.Lint(model)
+
+		var found bool
+		for _, d := range diags {
+			if d.RuleName == "dcb/orphan-tag-key" {
+				found = true
+			}
+		}
+		require.False(t, found, "dcb/orphan-tag-key should not fire when there are no tags")
+	})
+
+	t.Run("orphan-tag-key collects predicate keys from NotExpr", func(t *testing.T) {
+		model := &ast.Model{
+			Contexts: []*ast.Context{
+				{
+					Name: "Orders",
+					Mode: "dcb",
+					Slices: []*ast.Slice{
+						{
+							Name: "ProcessOrder",
+							Events: []*ast.Event{
+								{
+									Name: "OrderPlaced",
+									NamePos: ast.Position{
+										Filename: "orders.emod",
+										Line:     10,
+									},
+									Tags: []ast.TagEntry{
+										{Key: "priority", FieldRef: "OrderId"},
+										{Key: "region", FieldRef: "WarehouseId"},
+										{Key: "source", FieldRef: "Channel"},
+									},
+								},
+							},
+							Commands: []*ast.Command{
+								{
+									Name: "PlaceOrder",
+									DecidesOn: &ast.DecidesOnClause{
+										Events: []string{"OrderPlaced"},
+										Predicate: &ast.NotExpr{
+											Expr: &ast.TagPredicate{
+												Field: "priority", Operator: "=", Value: "low",
+											},
+										},
+									},
+								},
+								{
+									Name: "CancelOrder",
+									DecidesOn: &ast.DecidesOnClause{
+										Events: []string{"OrderPlaced"},
+										Predicate: &ast.TagPredicate{
+											Field: "source", Operator: "=", Value: "web",
+										},
+									},
+								},
+							},
+						},
+					},
+				},
+			},
+		}
+
+		diags := linter.Lint(model)
+
+		var orphanDiags []*diagnostic.Entry
+		for _, d := range diags {
+			if d.RuleName == "dcb/orphan-tag-key" {
+				orphanDiags = append(orphanDiags, d)
+			}
+		}
+		require.Len(t, orphanDiags, 1)
+		require.Contains(t, orphanDiags[0].Message, "region")
+	})
+
+	t.Run("orphan-tag-key collects predicate keys from LogicalExpr", func(t *testing.T) {
+		model := &ast.Model{
+			Contexts: []*ast.Context{
+				{
+					Name: "Orders",
+					Mode: "dcb",
+					Slices: []*ast.Slice{
+						{
+							Name: "ProcessOrder",
+							Events: []*ast.Event{
+								{
+									Name: "OrderPlaced",
+									NamePos: ast.Position{
+										Filename: "orders.emod",
+										Line:     10,
+									},
+									Tags: []ast.TagEntry{
+										{Key: "priority", FieldRef: "OrderId"},
+										{Key: "region", FieldRef: "WarehouseId"},
+										{Key: "source", FieldRef: "Channel"},
+									},
+								},
+							},
+							Commands: []*ast.Command{
+								{
+									Name: "PlaceOrder",
+									DecidesOn: &ast.DecidesOnClause{
+										Events: []string{"OrderPlaced"},
+										Predicate: &ast.LogicalExpr{
+											Left: &ast.TagPredicate{
+												Field: "priority", Operator: "=", Value: "high",
+											},
+											Operator: "and",
+											Right: &ast.TagPredicate{
+												Field: "region", Operator: "=", Value: "us",
+											},
+										},
+									},
+								},
+							},
+						},
+					},
+				},
+			},
+		}
+
+		diags := linter.Lint(model)
+
+		require.Len(t, diags, 1)
+		require.Equal(t, "dcb/orphan-tag-key", diags[0].RuleName)
+		require.Contains(t, diags[0].Message, "source")
+	})
+
+	t.Run("orphan-tag-key fires when there are no commands with decides_on", func(t *testing.T) {
+		model := &ast.Model{
+			Contexts: []*ast.Context{
+				{
+					Name: "Orders",
+					Mode: "dcb",
+					Slices: []*ast.Slice{
+						{
+							Name: "ProcessOrder",
+							Events: []*ast.Event{
+								{
+									Name: "OrderPlaced",
+									NamePos: ast.Position{
+										Filename: "orders.emod",
+										Line:     10,
+										Column:   3,
+									},
+									Tags: []ast.TagEntry{
+										{Key: "priority", FieldRef: "OrderId"},
+									},
+								},
+							},
+							Commands: []*ast.Command{
+								{Name: "PlaceOrder"},
+							},
+						},
+					},
+				},
+			},
+		}
+
+		diags := linter.Lint(model)
+
+		require.Len(t, diags, 1)
+		require.Equal(t, "dcb/orphan-tag-key", diags[0].RuleName)
+		require.Contains(t, diags[0].Message, "priority")
 	})
 }
