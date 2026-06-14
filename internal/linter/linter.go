@@ -77,6 +77,11 @@ func Lint(model *ast.Model) []*diagnostic.Entry {
 		}
 		// Mixed mode: no extra mode warnings
 
+		// DCB and mixed modes require tags on all events
+		if isDCBMode(ctx.Mode) || isMixedMode(ctx.Mode) {
+			diags = append(diags, checkUntaggedEvents(ctx)...)
+		}
+
 		// Existing checks on aggregate-level slices
 		for _, agg := range ctx.Aggregates {
 			for _, slice := range agg.Slices {
@@ -192,6 +197,34 @@ func checkAggregateInDCBMode(ctx *ast.Context) []*diagnostic.Entry {
 		diags = append(diags, warning(agg.NamePos, "aggregate-in-dcb-mode",
 			fmt.Sprintf("aggregate block %q is an aggregate-style construct in a DCB-mode context %q", agg.Name, ctx.Name)))
 	}
+	return diags
+}
+
+// checkUntaggedEvents fires when an event in a DCB or mixed-mode context lacks tags.
+// Tags are required in these modes because the routing infrastructure relies on them.
+func checkUntaggedEvents(ctx *ast.Context) []*diagnostic.Entry {
+	var diags []*diagnostic.Entry
+
+	allSlices := ctx.Slices
+	for _, agg := range ctx.Aggregates {
+		allSlices = append(allSlices, agg.Slices...)
+	}
+
+	for _, slice := range allSlices {
+		for _, evt := range slice.Events {
+			if len(evt.Tags) == 0 {
+				diags = append(diags, error(evt.NamePos, "dcb/untagged-event",
+					fmt.Sprintf("event %q is missing tags in %s-mode context %q", evt.Name, ctx.Mode, ctx.Name)))
+			}
+		}
+		for _, tr := range slice.Translations {
+			if tr.Event != nil && len(tr.Event.Tags) == 0 {
+				diags = append(diags, error(tr.Event.NamePos, "dcb/untagged-event",
+					fmt.Sprintf("event %q is missing tags in %s-mode context %q", tr.Event.Name, ctx.Mode, ctx.Name)))
+			}
+		}
+	}
+
 	return diags
 }
 

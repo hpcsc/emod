@@ -1317,6 +1317,9 @@ func TestLint(t *testing.T) {
 										Line:     10,
 										Column:   5,
 									},
+									Tags: []ast.TagEntry{
+										{Key: "type", FieldRef: "OrderId"},
+									},
 								},
 								{
 									Name: "OrderStatusChanged",
@@ -1324,6 +1327,9 @@ func TestLint(t *testing.T) {
 										Filename: "orders.emod",
 										Line:     11,
 										Column:   5,
+									},
+									Tags: []ast.TagEntry{
+										{Key: "type", FieldRef: "OrderId"},
 									},
 								},
 								{
@@ -1333,6 +1339,9 @@ func TestLint(t *testing.T) {
 										Line:     12,
 										Column:   5,
 									},
+									Tags: []ast.TagEntry{
+										{Key: "type", FieldRef: "OrderId"},
+									},
 								},
 								{
 									Name: "ItemSelected",
@@ -1340,6 +1349,9 @@ func TestLint(t *testing.T) {
 										Filename: "orders.emod",
 										Line:     13,
 										Column:   5,
+									},
+									Tags: []ast.TagEntry{
+										{Key: "type", FieldRef: "ItemId"},
 									},
 									Fields: []*ast.Field{
 										{Name: "ItemId"},
@@ -1529,5 +1541,256 @@ func TestLint(t *testing.T) {
 		require.Len(t, diags, 1)
 		require.Equal(t, "dcb-in-aggregate-mode", diags[0].RuleName)
 		require.Contains(t, diags[0].Message, "OrderImported")
+	})
+
+	t.Run("untagged-event fires for event without tags in dcb mode", func(t *testing.T) {
+		model := &ast.Model{
+			Contexts: []*ast.Context{
+				{
+					Name: "Orders",
+					Mode: "dcb",
+					Slices: []*ast.Slice{
+						{
+							Name: "ProcessOrder",
+							Events: []*ast.Event{
+								{
+									Name: "OrderPlaced",
+									NamePos: ast.Position{
+										Filename: "orders.emod",
+										Line:     10,
+										Column:   3,
+									},
+								},
+							},
+						},
+					},
+				},
+			},
+		}
+
+		diags := linter.Lint(model)
+
+		require.Len(t, diags, 1)
+		require.Equal(t, "dcb/untagged-event", diags[0].RuleName)
+		require.Equal(t, diagnostic.Error, diags[0].Severity)
+		require.Equal(t, "orders.emod", diags[0].Filename)
+		require.Equal(t, 10, diags[0].Line)
+		require.Contains(t, diags[0].Message, "OrderPlaced")
+	})
+
+	t.Run("untagged-event fires for event without tags in mixed mode", func(t *testing.T) {
+		model := &ast.Model{
+			Contexts: []*ast.Context{
+				{
+					Name: "Orders",
+					Mode: "mixed",
+					Slices: []*ast.Slice{
+						{
+							Name: "ProcessOrder",
+							Events: []*ast.Event{
+								{
+									Name: "OrderPlaced",
+									NamePos: ast.Position{
+										Filename: "orders.emod",
+										Line:     10,
+										Column:   3,
+									},
+								},
+							},
+						},
+					},
+				},
+			},
+		}
+
+		diags := linter.Lint(model)
+
+		require.Len(t, diags, 1)
+		require.Equal(t, "dcb/untagged-event", diags[0].RuleName)
+		require.Equal(t, diagnostic.Error, diags[0].Severity)
+		require.Equal(t, "orders.emod", diags[0].Filename)
+		require.Equal(t, 10, diags[0].Line)
+	})
+
+	t.Run("untagged-event does not fire for event with tags in dcb mode", func(t *testing.T) {
+		model := &ast.Model{
+			Contexts: []*ast.Context{
+				{
+					Name: "Orders",
+					Mode: "dcb",
+					Slices: []*ast.Slice{
+						{
+							Name: "ProcessOrder",
+							Events: []*ast.Event{
+								{
+									Name: "OrderPlaced",
+									NamePos: ast.Position{
+										Filename: "orders.emod",
+										Line:     10,
+									},
+									Tags: []ast.TagEntry{
+										{Key: "priority", FieldRef: "OrderId"},
+									},
+								},
+							},
+						},
+					},
+				},
+			},
+		}
+
+		diags := linter.Lint(model)
+
+		require.Empty(t, diags)
+	})
+
+	t.Run("untagged-event fires for inline event in translation without tags in dcb mode", func(t *testing.T) {
+		model := &ast.Model{
+			Contexts: []*ast.Context{
+				{
+					Name: "Orders",
+					Mode: "dcb",
+					Slices: []*ast.Slice{
+						{
+							Name: "ProcessOrder",
+							Translations: []*ast.Translation{
+								{
+									Name: "ImportOrder",
+									Event: &ast.Event{
+										Name: "OrderImported",
+										NamePos: ast.Position{
+											Filename: "orders.emod",
+											Line:     20,
+											Column:   5,
+										},
+									},
+								},
+							},
+						},
+					},
+				},
+			},
+		}
+
+		diags := linter.Lint(model)
+
+		require.Len(t, diags, 1)
+		require.Equal(t, "dcb/untagged-event", diags[0].RuleName)
+		require.Equal(t, "orders.emod", diags[0].Filename)
+		require.Equal(t, 20, diags[0].Line)
+		require.Contains(t, diags[0].Message, "OrderImported")
+	})
+
+	t.Run("untagged-event does not fire in default aggregate mode", func(t *testing.T) {
+		model := &ast.Model{
+			Contexts: []*ast.Context{
+				{
+					Name: "Orders",
+					Aggregates: []*ast.Aggregate{
+						{
+							Name: "Order",
+							Slices: []*ast.Slice{
+								{
+									Events: []*ast.Event{
+										{
+											Name: "OrderPlaced",
+											NamePos: ast.Position{
+												Filename: "orders.emod",
+												Line:     10,
+											},
+										},
+									},
+								},
+							},
+						},
+					},
+				},
+			},
+		}
+
+		diags := linter.Lint(model)
+
+		// Should get zero dcb/untagged-event diagnostics (but may get other rule hits)
+		for _, d := range diags {
+			require.NotEqual(t, "dcb/untagged-event", d.RuleName)
+		}
+		require.Empty(t, diags)
+	})
+
+	t.Run("untagged-event does not fire in explicit aggregate mode", func(t *testing.T) {
+		model := &ast.Model{
+			Contexts: []*ast.Context{
+				{
+					Name: "Orders",
+					Mode: "aggregate",
+					Aggregates: []*ast.Aggregate{
+						{
+							Name: "Order",
+							Slices: []*ast.Slice{
+								{
+									Events: []*ast.Event{
+										{
+											Name: "OrderPlaced",
+											NamePos: ast.Position{
+												Filename: "orders.emod",
+												Line:     10,
+											},
+										},
+									},
+								},
+							},
+						},
+					},
+				},
+			},
+		}
+
+		diags := linter.Lint(model)
+
+		for _, d := range diags {
+			require.NotEqual(t, "dcb/untagged-event", d.RuleName)
+		}
+		require.Empty(t, diags)
+	})
+
+	t.Run("untagged-event fires for multiple untagged events in dcb mode", func(t *testing.T) {
+		model := &ast.Model{
+			Contexts: []*ast.Context{
+				{
+					Name: "Orders",
+					Mode: "dcb",
+					Slices: []*ast.Slice{
+						{
+							Name: "ProcessOrder",
+							Events: []*ast.Event{
+								{
+									Name: "OrderPlaced",
+									NamePos: ast.Position{
+										Filename: "orders.emod",
+										Line:     10,
+									},
+								},
+								{
+									Name: "OrderConfirmed",
+									NamePos: ast.Position{
+										Filename: "orders.emod",
+										Line:     11,
+									},
+								},
+							},
+						},
+					},
+				},
+			},
+		}
+
+		diags := linter.Lint(model)
+
+		require.Len(t, diags, 2)
+		for _, d := range diags {
+			require.Equal(t, "dcb/untagged-event", d.RuleName)
+		}
+		require.Equal(t, 10, diags[0].Line)
+		require.Equal(t, 11, diags[1].Line)
 	})
 }
