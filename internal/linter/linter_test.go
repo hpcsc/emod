@@ -1793,4 +1793,315 @@ func TestLint(t *testing.T) {
 		require.Equal(t, 10, diags[0].Line)
 		require.Equal(t, 11, diags[1].Line)
 	})
+
+	t.Run("dcb/query-too-broad fires for 6+ events in dcb mode", func(t *testing.T) {
+		model := &ast.Model{
+			Contexts: []*ast.Context{
+				{
+					Name: "Orders",
+					Mode: "dcb",
+					Slices: []*ast.Slice{
+						{
+							Name: "ProcessOrder",
+							Commands: []*ast.Command{
+								{
+									Name: "PlaceOrder",
+									NamePos: ast.Position{
+										Filename: "orders.emod",
+										Line:     10,
+										Column:   3,
+									},
+									DecidesOn: &ast.DecidesOnClause{
+										Events: []string{"E1", "E2", "E3", "E4", "E5", "E6"},
+										Predicate: &ast.TagPredicate{
+											Field: "type", Operator: "=", Value: "standard",
+										},
+									},
+								},
+							},
+						},
+					},
+				},
+			},
+		}
+
+		diags := linter.Lint(model)
+
+		require.Len(t, diags, 1)
+		require.Equal(t, "dcb/query-too-broad", diags[0].RuleName)
+		require.Equal(t, diagnostic.Warning, diags[0].Severity)
+		require.Equal(t, "orders.emod", diags[0].Filename)
+		require.Equal(t, 10, diags[0].Line)
+		require.Contains(t, diags[0].Message, "PlaceOrder")
+		require.Contains(t, diags[0].Message, "6")
+	})
+
+	t.Run("dcb/query-too-broad does not fire for exactly 5 events in dcb mode", func(t *testing.T) {
+		model := &ast.Model{
+			Contexts: []*ast.Context{
+				{
+					Name: "Orders",
+					Mode: "dcb",
+					Slices: []*ast.Slice{
+						{
+							Name: "ProcessOrder",
+							Commands: []*ast.Command{
+								{
+									Name: "PlaceOrder",
+									NamePos: ast.Position{
+										Filename: "orders.emod",
+										Line:     10,
+									},
+									DecidesOn: &ast.DecidesOnClause{
+										Events: []string{"E1", "E2", "E3", "E4", "E5"},
+										Predicate: &ast.TagPredicate{
+											Field: "type", Operator: "=", Value: "standard",
+										},
+									},
+								},
+							},
+						},
+					},
+				},
+			},
+		}
+
+		diags := linter.Lint(model)
+
+		var found bool
+		for _, d := range diags {
+			if d.RuleName == "dcb/query-too-broad" {
+				found = true
+			}
+		}
+		require.False(t, found, "dcb/query-too-broad should not fire for 5 events")
+	})
+
+	t.Run("dcb/query-too-broad fires for nil predicate in dcb mode", func(t *testing.T) {
+		model := &ast.Model{
+			Contexts: []*ast.Context{
+				{
+					Name: "Orders",
+					Mode: "dcb",
+					Slices: []*ast.Slice{
+						{
+							Name: "ProcessOrder",
+							Commands: []*ast.Command{
+								{
+									Name: "PlaceOrder",
+									NamePos: ast.Position{
+										Filename: "orders.emod",
+										Line:     10,
+										Column:   3,
+									},
+									DecidesOn: &ast.DecidesOnClause{
+										Events: []string{"E1", "E2"},
+									},
+								},
+							},
+						},
+					},
+				},
+			},
+		}
+
+		diags := linter.Lint(model)
+
+		require.Len(t, diags, 1)
+		require.Equal(t, "dcb/query-too-broad", diags[0].RuleName)
+		require.Equal(t, diagnostic.Warning, diags[0].Severity)
+		require.Contains(t, diags[0].Message, "PlaceOrder")
+		require.Contains(t, diags[0].Message, "no where clause")
+	})
+
+	t.Run("dcb/query-too-broad does not fire for tag predicate in dcb mode", func(t *testing.T) {
+		model := &ast.Model{
+			Contexts: []*ast.Context{
+				{
+					Name: "Orders",
+					Mode: "dcb",
+					Slices: []*ast.Slice{
+						{
+							Name: "ProcessOrder",
+							Commands: []*ast.Command{
+								{
+									Name: "PlaceOrder",
+									NamePos: ast.Position{
+										Filename: "orders.emod",
+										Line:     10,
+									},
+									DecidesOn: &ast.DecidesOnClause{
+										Events: []string{"E1", "E2"},
+										Predicate: &ast.TagPredicate{
+											Field: "type", Operator: "=", Value: "standard",
+										},
+									},
+								},
+							},
+						},
+					},
+				},
+			},
+		}
+
+		diags := linter.Lint(model)
+
+		var found bool
+		for _, d := range diags {
+			if d.RuleName == "dcb/query-too-broad" {
+				found = true
+			}
+		}
+		require.False(t, found, "dcb/query-too-broad should not fire with valid tag predicate")
+	})
+
+	t.Run("dcb/query-too-broad does not fire in aggregate mode", func(t *testing.T) {
+		model := &ast.Model{
+			Contexts: []*ast.Context{
+				{
+					Name: "Orders",
+					Aggregates: []*ast.Aggregate{
+						{
+							Name: "Order",
+							Slices: []*ast.Slice{
+								{
+									Name: "ProcessOrder",
+									Commands: []*ast.Command{
+										{
+											Name: "PlaceOrder",
+											NamePos: ast.Position{
+												Filename: "orders.emod",
+												Line:     10,
+											},
+											DecidesOn: &ast.DecidesOnClause{
+												Events: []string{"E1", "E2", "E3", "E4", "E5", "E6"},
+											},
+										},
+									},
+								},
+							},
+						},
+					},
+				},
+			},
+		}
+
+		diags := linter.Lint(model)
+
+		for _, d := range diags {
+			require.NotEqual(t, "dcb/query-too-broad", d.RuleName)
+		}
+	})
+
+	t.Run("dcb/query-too-broad fires in mixed mode", func(t *testing.T) {
+		model := &ast.Model{
+			Contexts: []*ast.Context{
+				{
+					Name: "Orders",
+					Mode: "mixed",
+					Slices: []*ast.Slice{
+						{
+							Name: "ProcessOrder",
+							Commands: []*ast.Command{
+								{
+									Name: "PlaceOrder",
+									NamePos: ast.Position{
+										Filename: "orders.emod",
+										Line:     10,
+										Column:   3,
+									},
+									DecidesOn: &ast.DecidesOnClause{
+										Events: []string{"E1", "E2", "E3", "E4", "E5", "E6"},
+									},
+								},
+							},
+						},
+					},
+				},
+			},
+		}
+
+		diags := linter.Lint(model)
+
+		require.Len(t, diags, 1)
+		require.Equal(t, "dcb/query-too-broad", diags[0].RuleName)
+		require.Equal(t, diagnostic.Warning, diags[0].Severity)
+		require.Contains(t, diags[0].Message, "PlaceOrder")
+	})
+
+	t.Run("dcb/query-too-broad does not fire for command without decides_on", func(t *testing.T) {
+		model := &ast.Model{
+			Contexts: []*ast.Context{
+				{
+					Name: "Orders",
+					Mode: "dcb",
+					Slices: []*ast.Slice{
+						{
+							Name: "ProcessOrder",
+							Commands: []*ast.Command{
+								{
+									Name: "PlaceOrder",
+									NamePos: ast.Position{
+										Filename: "orders.emod",
+										Line:     10,
+									},
+								},
+							},
+						},
+					},
+				},
+			},
+		}
+
+		diags := linter.Lint(model)
+
+		var found bool
+		for _, d := range diags {
+			if d.RuleName == "dcb/query-too-broad" {
+				found = true
+			}
+		}
+		require.False(t, found, "dcb/query-too-broad should not fire for command without decides_on")
+	})
+
+	t.Run("dcb/query-too-broad fires for command in aggregate-level slice in mixed mode", func(t *testing.T) {
+		model := &ast.Model{
+			Contexts: []*ast.Context{
+				{
+					Name: "Orders",
+					Mode: "mixed",
+					Aggregates: []*ast.Aggregate{
+						{
+							Name: "Order",
+							Slices: []*ast.Slice{
+								{
+									Commands: []*ast.Command{
+										{
+											Name: "PlaceOrder",
+											NamePos: ast.Position{
+												Filename: "orders.emod",
+												Line:     10,
+												Column:   3,
+											},
+											DecidesOn: &ast.DecidesOnClause{
+												Events: []string{"E1", "E2", "E3", "E4", "E5", "E6"},
+												Predicate: &ast.TagPredicate{
+													Field: "type", Operator: "=", Value: "standard",
+												},
+											},
+										},
+									},
+								},
+							},
+						},
+					},
+				},
+			},
+		}
+
+		diags := linter.Lint(model)
+
+		require.Len(t, diags, 1)
+		require.Equal(t, "dcb/query-too-broad", diags[0].RuleName)
+	})
 }

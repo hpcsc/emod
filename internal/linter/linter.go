@@ -82,6 +82,11 @@ func Lint(model *ast.Model) []*diagnostic.Entry {
 			diags = append(diags, checkUntaggedEvents(ctx)...)
 		}
 
+		// DCB and mixed modes: check for broad queries on decides_on
+		if isDCBMode(ctx.Mode) || isMixedMode(ctx.Mode) {
+			diags = append(diags, checkQueryTooBroad(ctx)...)
+		}
+
 		// Existing checks on aggregate-level slices
 		for _, agg := range ctx.Aggregates {
 			for _, slice := range agg.Slices {
@@ -225,6 +230,37 @@ func checkUntaggedEvents(ctx *ast.Context) []*diagnostic.Entry {
 		}
 	}
 
+	return diags
+}
+
+// checkQueryTooBroad warns when a command's decides_on references more than 5 event types
+// or has no predicate (missing where clause). This rule only fires in DCB and mixed modes.
+func checkQueryTooBroad(ctx *ast.Context) []*diagnostic.Entry {
+	var diags []*diagnostic.Entry
+
+	allSlices := ctx.Slices
+	for _, agg := range ctx.Aggregates {
+		allSlices = append(allSlices, agg.Slices...)
+	}
+
+	for _, slice := range allSlices {
+		for _, cmd := range slice.Commands {
+			if cmd.DecidesOn == nil {
+				continue
+			}
+			if len(cmd.DecidesOn.Events) > 5 || cmd.DecidesOn.Predicate == nil {
+				var reasons []string
+				if len(cmd.DecidesOn.Events) > 5 {
+					reasons = append(reasons, fmt.Sprintf("references %d event types", len(cmd.DecidesOn.Events)))
+				}
+				if cmd.DecidesOn.Predicate == nil {
+					reasons = append(reasons, "has no where clause")
+				}
+				msg := fmt.Sprintf("command %q has a broad query: %s", cmd.Name, strings.Join(reasons, " and "))
+				diags = append(diags, warning(cmd.NamePos, "dcb/query-too-broad", msg))
+			}
+		}
+	}
 	return diags
 }
 

@@ -3,7 +3,7 @@
 ## Progress
 - [x] Task 1: Add `Info` severity to the diagnostic package
 - [x] Task 2: Implement `dcb/untagged-event` lint rule
-- [ ] Task 3: Implement `dcb/query-too-broad` lint rule
+- [x] Task 3: Implement `dcb/query-too-broad` lint rule
 - [ ] Task 4: Implement `dcb/single-tag-everywhere` lint rule
 - [ ] Task 5: Implement `dcb/orphan-tag-key` lint rule
 - [ ] Task 6: Add `--explain` flag to the lint CLI command
