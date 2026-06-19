@@ -2,7 +2,7 @@
 
 ## Progress
 - [x] Task 1: Define the `llm.Model` port
-- [ ] Task 2: Extract the deterministic correctness oracle
+- [x] Task 2: Extract the deterministic correctness oracle
 - [ ] Task 3: Add a mock `llm.Model` for network-free tests
 - [ ] Task 4: Add the Bedrock-backed `llm.Model` adapter
 - [ ] Task 5: Add the single AI configuration block

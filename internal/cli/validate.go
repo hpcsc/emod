@@ -4,16 +4,13 @@ import (
 	"fmt"
 	"os"
 
-	"github.com/hpcsc/emod/internal/lexer"
-	"github.com/hpcsc/emod/internal/linter"
-	"github.com/hpcsc/emod/internal/parser"
-	"github.com/hpcsc/emod/internal/validator"
+	"github.com/hpcsc/emod/internal/oracle"
 )
 
-// RunValidate reads the file at path, lexes and parses it, and returns an error
-// if there are any diagnostics. The format parameter controls output: "text"
-// for human-readable diagnostics (default) or "json" for structured output.
-// An empty path is treated as a missing argument.
+// RunValidate reads the file at path, runs the correctness oracle over its
+// contents, and returns an error if there are any diagnostics. The format
+// parameter controls output: "text" for human-readable diagnostics (default)
+// or "json" for structured output. An empty path is treated as a missing argument.
 func RunValidate(path, format string) error {
 	if format != "text" && format != "json" {
 		return &LintError{
@@ -37,17 +34,7 @@ func RunValidate(path, format string) error {
 		}
 	}
 
-	tokens, diagnostics := lexer.Scan(string(source), path)
-
-	p := parser.New(tokens, path)
-	model, parserDiags := p.Parse()
-	diagnostics = append(diagnostics, parserDiags...)
-
-	validatorDiags := validator.Validate(model)
-	diagnostics = append(diagnostics, validatorDiags...)
-
-	lintDiags := linter.Lint(model)
-	diagnostics = append(diagnostics, lintDiags...)
+	diagnostics := oracle.Check(string(source), path)
 
 	if format == "json" {
 		return formatJSON(diagnostics)
