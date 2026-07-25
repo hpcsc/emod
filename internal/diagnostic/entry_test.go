@@ -9,64 +9,50 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-func TestSeverityString(t *testing.T) {
-	t.Run("info returns info", func(t *testing.T) {
-		require.Equal(t, "info", diagnostic.Info.String())
+func TestEntry(t *testing.T) {
+	t.Run("severity", func(t *testing.T) {
+		t.Run("each level reports the name tools match on", func(t *testing.T) {
+			require.Equal(t, "info", diagnostic.Info.String())
+			require.Equal(t, "warning", diagnostic.Warning.String())
+			require.Equal(t, "error", diagnostic.Error.String())
+		})
 	})
 
-	t.Run("warning returns warning", func(t *testing.T) {
-		require.Equal(t, "warning", diagnostic.Warning.String())
+	t.Run("string", func(t *testing.T) {
+		t.Run("reads as filename:line: message", func(t *testing.T) {
+			d := &diagnostic.Entry{
+				Filename: "minimal.emod",
+				Line:     3,
+				Column:   1,
+				Message:  `unrecognized keyword "foobar"; expected one of: model, actor, context`,
+			}
+
+			require.Equal(t,
+				`minimal.emod:3: unrecognized keyword "foobar"; expected one of: model, actor, context`,
+				d.String())
+		})
+
+		t.Run("names the rule in brackets when one produced the entry", func(t *testing.T) {
+			d := &diagnostic.Entry{
+				Filename: "file.emod",
+				Line:     5,
+				Column:   1,
+				RuleName: "state-obsession",
+				Message:  "message",
+			}
+
+			require.Equal(t, "file.emod:5: [state-obsession] message", d.String())
+		})
+
+		t.Run("omits the brackets when no rule produced the entry", func(t *testing.T) {
+			d := &diagnostic.Entry{
+				Filename: "file.emod",
+				Line:     3,
+				Column:   1,
+				Message:  "message",
+			}
+
+			require.Equal(t, "file.emod:3: message", d.String())
+		})
 	})
-
-	t.Run("error returns error", func(t *testing.T) {
-		require.Equal(t, "error", diagnostic.Error.String())
-	})
-}
-
-func TestDiagnosticString(t *testing.T) {
-	t.Run("formats as filename:line: message", func(t *testing.T) {
-		d := &diagnostic.Entry{
-			Filename: "minimal.emod",
-			Line:     3,
-			Column:   1,
-			Message:  `unrecognized keyword "foobar"; expected one of: model, actor, context`,
-		}
-
-		require.Equal(t, `minimal.emod:3: unrecognized keyword "foobar"; expected one of: model, actor, context`, d.String())
-	})
-
-	t.Run("formats unclosed brace error", func(t *testing.T) {
-		d := &diagnostic.Entry{
-			Filename: "minimal.emod",
-			Line:     5,
-			Column:   1,
-			Message:  `unclosed brace for "context" block opened at line 3`,
-		}
-
-		require.Equal(t, `minimal.emod:5: unclosed brace for "context" block opened at line 3`, d.String())
-	})
-
-	t.Run("includes rule name in brackets when present", func(t *testing.T) {
-		d := &diagnostic.Entry{
-			Filename: "file.emod",
-			Line:     5,
-			Column:   1,
-			RuleName: "state-obsession",
-			Message:  "message",
-		}
-
-		require.Equal(t, "file.emod:5: [state-obsession] message", d.String())
-	})
-
-	t.Run("produces original format when rule name is empty", func(t *testing.T) {
-		d := &diagnostic.Entry{
-			Filename: "file.emod",
-			Line:     3,
-			Column:   1,
-			Message:  "message",
-		}
-
-		require.Equal(t, "file.emod:3: message", d.String())
-	})
-
 }

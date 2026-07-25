@@ -3,6 +3,7 @@
 package diagram_test
 
 import (
+	"strings"
 	"testing"
 
 	"github.com/hpcsc/emod/internal/diagram"
@@ -10,53 +11,48 @@ import (
 )
 
 func TestStyle(t *testing.T) {
-	t.Run("ParseStyle returns StyleAuto for auto", func(t *testing.T) {
-		s, err := diagram.ParseStyle("auto")
-		require.NoError(t, err)
-		require.Equal(t, diagram.StyleAuto, s)
+	styles := map[string]diagram.Style{
+		"auto":      diagram.StyleAuto,
+		"projected": diagram.StyleProjected,
+		"dcb":       diagram.StyleDCB,
+	}
+
+	t.Run("parse", func(t *testing.T) {
+		t.Run("accepts every style name the CLI documents", func(t *testing.T) {
+			for name, want := range styles {
+				got, err := diagram.ParseStyle(name)
+
+				require.NoError(t, err, "parsing %q", name)
+				require.Equal(t, want, got, "parsing %q", name)
+			}
+		})
+
+		t.Run("ignores case", func(t *testing.T) {
+			for _, name := range []string{"AUTO", "Projected", "DCB"} {
+				lowered, err := diagram.ParseStyle(name)
+
+				require.NoError(t, err, "parsing %q", name)
+				require.Equal(t, styles[strings.ToLower(name)], lowered, "parsing %q", name)
+			}
+		})
+
+		t.Run("rejects an unknown style", func(t *testing.T) {
+			_, err := diagram.ParseStyle("invalid")
+
+			require.Error(t, err)
+			require.Contains(t, err.Error(), "unsupported style")
+		})
 	})
 
-	t.Run("ParseStyle returns StyleProjected for projected", func(t *testing.T) {
-		s, err := diagram.ParseStyle("projected")
-		require.NoError(t, err)
-		require.Equal(t, diagram.StyleProjected, s)
-	})
+	t.Run("string", func(t *testing.T) {
+		t.Run("round-trips back through parse", func(t *testing.T) {
+			for name, style := range styles {
+				require.Equal(t, name, style.String())
 
-	t.Run("ParseStyle returns StyleDCB for dcb", func(t *testing.T) {
-		s, err := diagram.ParseStyle("dcb")
-		require.NoError(t, err)
-		require.Equal(t, diagram.StyleDCB, s)
-	})
-
-	t.Run("ParseStyle is case-insensitive", func(t *testing.T) {
-		s, err := diagram.ParseStyle("AUTO")
-		require.NoError(t, err)
-		require.Equal(t, diagram.StyleAuto, s)
-
-		s, err = diagram.ParseStyle("Projected")
-		require.NoError(t, err)
-		require.Equal(t, diagram.StyleProjected, s)
-
-		s, err = diagram.ParseStyle("DCB")
-		require.NoError(t, err)
-		require.Equal(t, diagram.StyleDCB, s)
-	})
-
-	t.Run("ParseStyle returns error for invalid value", func(t *testing.T) {
-		_, err := diagram.ParseStyle("invalid")
-		require.Error(t, err)
-		require.Contains(t, err.Error(), "unsupported style")
-	})
-
-	t.Run("StyleAuto.String returns auto", func(t *testing.T) {
-		require.Equal(t, "auto", diagram.StyleAuto.String())
-	})
-
-	t.Run("StyleProjected.String returns projected", func(t *testing.T) {
-		require.Equal(t, "projected", diagram.StyleProjected.String())
-	})
-
-	t.Run("StyleDCB.String returns dcb", func(t *testing.T) {
-		require.Equal(t, "dcb", diagram.StyleDCB.String())
+				parsed, err := diagram.ParseStyle(style.String())
+				require.NoError(t, err)
+				require.Equal(t, style, parsed)
+			}
+		})
 	})
 }

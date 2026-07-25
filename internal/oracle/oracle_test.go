@@ -8,60 +8,15 @@ import (
 
 	"github.com/hpcsc/emod/internal/diagnostic"
 	"github.com/hpcsc/emod/internal/oracle"
+	"github.com/hpcsc/emod/internal/test"
 	"github.com/stretchr/testify/require"
 )
 
-const validEmod = `# Hotel Reservation System
-model "Hotel Reservation"
-
-actor "Guest"
-
-context "Reservations" {
-  aggregate "Reservation" {
-    slice "Make Reservation" {
-      trigger UI "Reservation Form" {
-        actor Guest
-        reads AvailableRoomsView
-      }
-      command MakeReservation {
-        fields {
-          guestId     string required
-          roomType    string required
-          checkIn     date   required
-          checkOut    date   required
-        }
-      }
-      event ReservationMade {
-        fields {
-          reservationId string required
-          guestId       string required
-          roomType      string required
-          checkIn       date   required
-          checkOut      date   required
-          status        string required
-        }
-      }
-      flow {
-        command -> event: MakeReservation -> ReservationMade
-      }
-    }
-    slice "View Reservations" {
-      view ReservationsView {
-        fields {
-          reservationId string required
-          guestId       string required
-          status        string required
-        }
-        subscribes [ReservationMade]
-      }
-    }
-  }
-}
-`
-
-const invalidEmod = `foobar {
-}
-`
+// Check runs the whole pipeline, so it uses the pipeline-wide fixtures.
+const (
+	validEmod   = test.HotelReservation
+	invalidEmod = test.Unparseable
+)
 
 func TestCheck(t *testing.T) {
 	t.Run("clean input", func(t *testing.T) {
@@ -185,11 +140,9 @@ context "Orders" {
 			require.NotNil(t, found, "expected the validator diagnostic for the missing context")
 			require.Contains(t, found.Message, "NonExistent")
 			require.Contains(t, found.Message, "does not exist")
-			require.True(t,
-				hasRule(diagnostics, "command-past-tense") ||
-					hasRule(diagnostics, "state-obsession") ||
-					hasRule(diagnostics, "view-naming"),
-				"expected at least one linter diagnostic")
+			for _, rule := range []string{"command-past-tense", "state-obsession", "view-naming"} {
+				require.True(t, hasRule(diagnostics, rule), "expected %s alongside the validator error", rule)
+			}
 		})
 	})
 

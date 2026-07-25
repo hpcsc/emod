@@ -4,6 +4,7 @@ package cli_test
 
 import (
 	"os"
+	"path/filepath"
 	"testing"
 
 	"github.com/hpcsc/emod/internal/cli"
@@ -80,15 +81,16 @@ func TestFmt(t *testing.T) {
 	t.Run("returns error when no file argument given", func(t *testing.T) {
 		err := cli.RunFmt("", false)
 
-		require.Error(t, err)
-		require.Equal(t, "fmt requires exactly one file argument", err.Error())
+		require.ErrorIs(t, err, cli.ErrMissingFileArgument)
 	})
 
-	t.Run("returns error for nonexistent file", func(t *testing.T) {
-		dir := t.TempDir()
-		err := cli.RunFmt(dir+"/nonexistent.emod", false)
+	t.Run("returns error naming the file when it does not exist", func(t *testing.T) {
+		missing := filepath.Join(t.TempDir(), "nonexistent.emod")
+
+		err := cli.RunFmt(missing, false)
 
 		require.Error(t, err)
+		require.Contains(t, err.Error(), missing)
 	})
 
 	t.Run("returns error and does not modify file with parse errors", func(t *testing.T) {

@@ -11,14 +11,9 @@ import (
 )
 
 func TestConvertDiagnostics(t *testing.T) {
-	t.Run("converts empty entries list to empty slice", func(t *testing.T) {
-		result := lsp.ConvertDiagnostics("file:///test.emod", nil)
-		require.NotNil(t, result)
-		require.Empty(t, result)
-
-		result = lsp.ConvertDiagnostics("file:///test.emod", []*diagnostic.Entry{})
-		require.NotNil(t, result)
-		require.Empty(t, result)
+	t.Run("no entries convert to an empty list, not null, so the client clears its diagnostics", func(t *testing.T) {
+		require.Equal(t, []lsp.Diagnostic{}, lsp.ConvertDiagnostics("file:///test.emod", nil))
+		require.Equal(t, []lsp.Diagnostic{}, lsp.ConvertDiagnostics("file:///test.emod", []*diagnostic.Entry{}))
 	})
 
 	t.Run("error severity", func(t *testing.T) {

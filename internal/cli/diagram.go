@@ -1,6 +1,7 @@
 package cli
 
 import (
+	"context"
 	"fmt"
 	"os"
 	"os/exec"
@@ -33,6 +34,7 @@ func RunDiagram(path, outputPath, format string, style diagram.Style) error {
 		return &LintError{
 			Message:  "diagram requires exactly one file argument",
 			ExitCode: 1,
+			Cause:    ErrMissingFileArgument,
 		}
 	}
 
@@ -81,6 +83,7 @@ func RunDiagram(path, outputPath, format string, style diagram.Style) error {
 		return &LintError{
 			Message:  fmt.Sprintf("unsupported format %q; supported formats: drawio, mermaid, svg, ascii", format),
 			ExitCode: 1,
+			Cause:    ErrUnsupportedFormat,
 		}
 	}
 
@@ -139,7 +142,7 @@ func RunDiagram(path, outputPath, format string, style diagram.Style) error {
 
 func lintExit(hasWarnings bool) error {
 	if hasWarnings {
-		return &LintError{"", 1}
+		return &LintError{Message: "", ExitCode: 1}
 	}
 	return nil
 }
@@ -163,10 +166,10 @@ func defaultSVGPath(path string) string {
 }
 
 // RunDiagramServe parses the file at path (if provided), generates diagram JSON,
-// starts the viewer server with that data, and blocks until SIGINT/SIGTERM
-// shuts the server down. If launchBrowser is true, the default browser is opened
-// to the viewer URL.
-func RunDiagramServe(path string, launchBrowser bool) error {
+// starts the viewer server with that data, and blocks until SIGINT/SIGTERM or a
+// cancelled ctx shuts the server down. If launchBrowser is true, the default
+// browser is opened to the viewer URL.
+func RunDiagramServe(ctx context.Context, path string, launchBrowser bool) error {
 	var diagramJSON []byte
 
 	if path != "" {
@@ -206,10 +209,9 @@ func RunDiagramServe(path string, launchBrowser bool) error {
 		openBrowser(addr)
 	}
 
-	sigCh := make(chan os.Signal, 1)
-	signal.Notify(sigCh, syscall.SIGINT, syscall.SIGTERM)
-	defer signal.Stop(sigCh)
-	<-sigCh
+	sigCtx, stopSignals := signal.NotifyContext(ctx, syscall.SIGINT, syscall.SIGTERM)
+	defer stopSignals()
+	<-sigCtx.Done()
 
 	return nil
 }

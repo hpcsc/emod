@@ -141,30 +141,30 @@ func NewApp() *urfave.App {
 				Name:      "diagram",
 				Usage:     "Generate a diagram from an .emod file",
 				ArgsUsage: "<file>",
-			Flags: []urfave.Flag{
-				&urfave.StringFlag{
-					Name:  "format",
-					Usage: "Output format (drawio|mermaid|svg|ascii)",
-					Value: "drawio",
+				Flags: []urfave.Flag{
+					&urfave.StringFlag{
+						Name:  "format",
+						Usage: "Output format (drawio|mermaid|svg|ascii)",
+						Value: "drawio",
+					},
+					&urfave.StringFlag{
+						Name:  "style",
+						Usage: "Layout style (projected|dcb|auto); auto detects based on context mode",
+						Value: "auto",
+					},
+					&urfave.StringFlag{
+						Name:  "o",
+						Usage: "Output path",
+					},
+					&urfave.BoolFlag{
+						Name:  "serve",
+						Usage: "Start viewer server with diagram data",
+					},
 				},
-				&urfave.StringFlag{
-					Name:  "style",
-					Usage: "Layout style (projected|dcb|auto); auto detects based on context mode",
-					Value: "auto",
-				},
-				&urfave.StringFlag{
-					Name:  "o",
-					Usage: "Output path",
-				},
-				&urfave.BoolFlag{
-					Name:  "serve",
-					Usage: "Start viewer server with diagram data",
-				},
-			},
 				Action: func(c *urfave.Context) error {
 					path := c.Args().First()
 					if c.Bool("serve") {
-						return RunDiagramServe(path, true)
+						return RunDiagramServe(c.Context, path, true)
 					}
 					format := c.String("format")
 					outputPath := c.String("o")
@@ -186,21 +186,21 @@ func NewApp() *urfave.App {
 					return nil
 				},
 			},
-		{
-			Name:      "slices",
-			Usage:     "List all slices in a model with their pattern types",
-			ArgsUsage: "<file>",
-			Flags: []urfave.Flag{
-				&urfave.StringFlag{
-					Name:  "format",
-					Usage: "Output format (text|json)",
-					Value: "text",
+			{
+				Name:      "slices",
+				Usage:     "List all slices in a model with their pattern types",
+				ArgsUsage: "<file>",
+				Flags: []urfave.Flag{
+					&urfave.StringFlag{
+						Name:  "format",
+						Usage: "Output format (text|json)",
+						Value: "text",
+					},
 				},
-			},
-			Action: func(c *urfave.Context) error {
-				path := c.Args().First()
-				format := c.String("format")
-				if err := RunSlices(path, format); err != nil {
+				Action: func(c *urfave.Context) error {
+					path := c.Args().First()
+					format := c.String("format")
+					if err := RunSlices(path, format); err != nil {
 						var lintErr *LintError
 						if errors.As(err, &lintErr) {
 							if lintErr.Message != "" {

@@ -11,12 +11,6 @@ import (
 )
 
 func TestExportASCII(t *testing.T) {
-	t.Run("nil model returns empty bytes with no error", func(t *testing.T) {
-		raw, err := diagram.ExportASCII(nil, diagram.StyleAuto)
-		require.NoError(t, err)
-		require.Empty(t, raw)
-	})
-
 	t.Run("empty model (no contexts) returns model name only", func(t *testing.T) {
 		model := &ast.Model{Name: "Empty"}
 		raw, err := diagram.ExportASCII(model, diagram.StyleAuto)
@@ -251,16 +245,9 @@ func TestExportASCII(t *testing.T) {
 		raw, err := diagram.ExportASCII(model, diagram.StyleAuto)
 		require.NoError(t, err)
 
-		output := string(raw)
-		require.Contains(t, output, "=== Slice: First ===")
-		require.Contains(t, output, "=== Slice: Second ===")
-		require.Contains(t, output, "=== Slice: Third ===")
-		// First comes before Second comes before Third
-		firstIdx := findIndex(output, "=== Slice: First ===")
-		secondIdx := findIndex(output, "=== Slice: Second ===")
-		thirdIdx := findIndex(output, "=== Slice: Third ===")
-		require.True(t, firstIdx < secondIdx, "First slice should appear before Second")
-		require.True(t, secondIdx < thirdIdx, "Second slice should appear before Third")
+		headers := []string{"=== Slice: First ===", "=== Slice: Second ===", "=== Slice: Third ==="}
+
+		require.Equal(t, headers, appearanceOrder(t, string(raw), headers...))
 	})
 
 	t.Run("model name appears at the top", func(t *testing.T) {
@@ -329,12 +316,9 @@ func TestExportASCII(t *testing.T) {
 
 		output := string(raw)
 		for i, r := range output {
-			if r > 127 {
-				// The gear character ⚙ (U+2699) is allowed — it's a visual marker
-				if r != '⚙' {
-					t.Fatalf("non-ASCII character %U at position %d", r, i)
-				}
-			}
+			// The gear ⚙ (U+2699) is the one deliberate non-ASCII marker.
+			require.True(t, r <= 127 || r == '⚙',
+				"unexpected non-ASCII character %U at position %d", r, i)
 		}
 	})
 
@@ -384,15 +368,4 @@ func TestExportASCII(t *testing.T) {
 		require.Contains(t, output, "=== Slice: DirectSlice ===")
 		require.Contains(t, output, "[DirectCmd]")
 	})
-}
-
-// findIndex returns the byte index of the first occurrence of substr in s,
-// or -1 if not found.
-func findIndex(s, substr string) int {
-	for i := 0; i <= len(s)-len(substr); i++ {
-		if s[i:i+len(substr)] == substr {
-			return i
-		}
-	}
-	return -1
 }

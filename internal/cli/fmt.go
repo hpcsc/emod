@@ -13,7 +13,7 @@ import (
 
 func RunFmt(path string, check bool) error {
 	if path == "" {
-		return errors.New("fmt requires exactly one file argument")
+		return fmt.Errorf("fmt %w", ErrMissingFileArgument)
 	}
 
 	source, err := os.ReadFile(path)

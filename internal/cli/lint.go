@@ -2,6 +2,7 @@ package cli
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"os"
 	"strings"
@@ -12,13 +13,26 @@ import (
 	"github.com/hpcsc/emod/internal/parser"
 )
 
+// Commands report these conditions so callers can branch on the cause rather
+// than on the wording of the message shown to the user.
+var (
+	ErrMissingFileArgument = errors.New("requires exactly one file argument")
+	ErrUnsupportedFormat   = errors.New("unsupported format")
+	ErrUnknownRule         = errors.New("unknown rule")
+)
+
 type LintError struct {
 	Message  string
 	ExitCode int
+	Cause    error
 }
 
 func (e *LintError) Error() string {
 	return e.Message
+}
+
+func (e *LintError) Unwrap() error {
+	return e.Cause
 }
 
 type jsonEntry struct {
@@ -82,6 +96,7 @@ func RunLintExplain(ruleName string) error {
 		return &LintError{
 			Message:  fmt.Sprintf("unknown rule %q", ruleName),
 			ExitCode: 1,
+			Cause:    ErrUnknownRule,
 		}
 	}
 	fmt.Println(desc)
@@ -93,6 +108,7 @@ func RunLint(path, format string) error {
 		return &LintError{
 			Message:  fmt.Sprintf("unsupported format %q; supported formats: text, json", format),
 			ExitCode: 1,
+			Cause:    ErrUnsupportedFormat,
 		}
 	}
 
@@ -100,6 +116,7 @@ func RunLint(path, format string) error {
 		return &LintError{
 			Message:  "lint requires exactly one file argument",
 			ExitCode: 1,
+			Cause:    ErrMissingFileArgument,
 		}
 	}
 

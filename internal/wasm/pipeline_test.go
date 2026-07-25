@@ -10,83 +10,7 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-func TestExtractSource(t *testing.T) {
-	t.Run("valid input returns source", func(t *testing.T) {
-		source, err := wasm.ExtractSource(`{"source": "model MyModel"}`)
-		require.NoError(t, err)
-		require.Equal(t, "model MyModel", source)
-	})
-
-	t.Run("malformed JSON returns error", func(t *testing.T) {
-		_, err := wasm.ExtractSource(`not json`)
-		require.Error(t, err)
-		require.Contains(t, err.Error(), "invalid JSON")
-	})
-
-	t.Run("missing source field returns error", func(t *testing.T) {
-		_, err := wasm.ExtractSource(`{}`)
-		require.Error(t, err)
-		require.Contains(t, err.Error(), "missing source field")
-	})
-
-	t.Run("empty source returns error", func(t *testing.T) {
-		_, err := wasm.ExtractSource(`{"source": ""}`)
-		require.Error(t, err)
-		require.Contains(t, err.Error(), "missing source field")
-	})
-}
-
-func TestRunPipelineExportDiagram(t *testing.T) {
-	t.Run("valid source returns diagram diagnostics wrapper", func(t *testing.T) {
-		result, err := wasm.RunPipelineExportDiagram("model MyModel")
-		require.NoError(t, err)
-		require.NotEmpty(t, result)
-
-		var wrapper struct {
-			Diagnostics []json.RawMessage `json:"diagnostics"`
-			Diagram     json.RawMessage   `json:"diagram"`
-		}
-		err = json.Unmarshal(result, &wrapper)
-		require.NoError(t, err, "result must be valid JSON")
-		require.NotNil(t, wrapper.Diagnostics, "diagnostics field must be present")
-		require.NotNil(t, wrapper.Diagram, "diagram field must be present")
-	})
-
-	t.Run("empty source returns valid envelope", func(t *testing.T) {
-		result, err := wasm.RunPipelineExportDiagram("")
-		require.NoError(t, err)
-		require.NotEmpty(t, result)
-
-		var wrapped struct {
-			Diagnostics []json.RawMessage `json:"diagnostics"`
-			Diagram     json.RawMessage   `json:"diagram"`
-		}
-		err = json.Unmarshal(result, &wrapped)
-		require.NoError(t, err)
-		require.NotNil(t, wrapped.Diagnostics)
-	})
-}
-
-func TestRunPipelineExportJSON(t *testing.T) {
-	t.Run("valid source returns model diagnostics wrapper", func(t *testing.T) {
-		result, err := wasm.RunPipelineExportJSON("model MyModel")
-		require.NoError(t, err)
-		require.NotEmpty(t, result)
-
-		var wrapper struct {
-			Diagnostics []json.RawMessage `json:"diagnostics"`
-			Model       json.RawMessage   `json:"model"`
-		}
-		err = json.Unmarshal(result, &wrapper)
-		require.NoError(t, err, "result must be valid JSON")
-		require.NotNil(t, wrapper.Diagnostics, "diagnostics field must be present")
-		require.NotNil(t, wrapper.Model, "model field must be present")
-	})
-}
-
-func TestExportEmod(t *testing.T) {
-	t.Run("diagram JSON round-trips back to the source it was parsed from", func(t *testing.T) {
-		source := `model "Billing"
+const billingModel = `model "Billing"
 
 context "Payments" {
   aggregate "Payment" {
@@ -110,62 +34,201 @@ context "Payments" {
   }
 }
 `
-		parsed, err := wasm.RunPipelineExportDiagram(source)
-		require.NoError(t, err)
 
-		var envelope struct {
-			Diagram json.RawMessage `json:"diagram"`
-		}
-		require.NoError(t, json.Unmarshal(parsed, &envelope))
+func TestPipeline(t *testing.T) {
+	t.Run("extract source", func(t *testing.T) {
+		t.Run("returns the source field", func(t *testing.T) {
+			source, err := wasm.ExtractSource(`{"source": "model MyModel"}`)
 
-		result, err := wasm.ExportEmod(string(envelope.Diagram))
-		require.NoError(t, err)
-		require.Equal(t, source, string(result))
+			require.NoError(t, err)
+			require.Equal(t, "model MyModel", source)
+		})
+
+		t.Run("malformed JSON returns error", func(t *testing.T) {
+			_, err := wasm.ExtractSource(`not json`)
+
+			require.Error(t, err)
+			require.Contains(t, err.Error(), "invalid JSON")
+		})
+
+		t.Run("a missing or empty source field returns error", func(t *testing.T) {
+			for _, input := range []string{`{}`, `{"source": ""}`} {
+				_, err := wasm.ExtractSource(input)
+
+				require.Error(t, err, "input %s", input)
+				require.Contains(t, err.Error(), "missing source field")
+			}
+		})
 	})
 
-	t.Run("malformed diagram JSON returns error", func(t *testing.T) {
-		_, err := wasm.ExportEmod(`not json`)
-		require.Error(t, err)
-		require.Contains(t, err.Error(), "invalid diagram JSON")
+	t.Run("export diagram", func(t *testing.T) {
+		t.Run("returns the model's nodes and edges with no diagnostics", func(t *testing.T) {
+			result, err := wasm.RunPipelineExportDiagram(billingModel)
+			require.NoError(t, err)
+
+			envelope := decodeDiagramEnvelope(t, result)
+
+			require.Empty(t, envelope.Diagnostics)
+			require.Equal(t, "Billing", envelope.Diagram.ModelName)
+			require.Equal(t, []string{"TakePayment", "PaymentTaken"},
+				labelsOfType(envelope.Diagram.Nodes, "command", "event"))
+			require.Equal(t, []edge{{Source: "command-1", Target: "event-1", Type: "flow"}},
+				envelope.Diagram.Edges)
+		})
+
+		t.Run("reports diagnostics for unparseable source and still returns an envelope", func(t *testing.T) {
+			result, err := wasm.RunPipelineExportDiagram("foobar {\n}\n")
+			require.NoError(t, err)
+
+			envelope := decodeDiagramEnvelope(t, result)
+
+			require.NotEmpty(t, envelope.Diagnostics, "an unparseable model must report why")
+			require.Contains(t, envelope.Diagnostics[0].Message, "foobar")
+		})
+
+		t.Run("empty source yields an envelope with no nodes", func(t *testing.T) {
+			result, err := wasm.RunPipelineExportDiagram("")
+			require.NoError(t, err)
+
+			envelope := decodeDiagramEnvelope(t, result)
+
+			require.Empty(t, envelope.Diagram.Nodes)
+		})
+	})
+
+	t.Run("export model json", func(t *testing.T) {
+		t.Run("returns the parsed model with no diagnostics", func(t *testing.T) {
+			result, err := wasm.RunPipelineExportJSON(billingModel)
+			require.NoError(t, err)
+
+			var envelope struct {
+				Diagnostics []diagnostic `json:"diagnostics"`
+				Model       struct {
+					Name string `json:"name"`
+				} `json:"model"`
+			}
+			require.NoError(t, json.Unmarshal(result, &envelope))
+
+			require.Empty(t, envelope.Diagnostics)
+			require.Equal(t, "Billing", envelope.Model.Name)
+		})
+	})
+
+	t.Run("export emod", func(t *testing.T) {
+		t.Run("diagram JSON round-trips back to the source it was parsed from", func(t *testing.T) {
+			parsed, err := wasm.RunPipelineExportDiagram(billingModel)
+			require.NoError(t, err)
+
+			var envelope struct {
+				Diagram json.RawMessage `json:"diagram"`
+			}
+			require.NoError(t, json.Unmarshal(parsed, &envelope))
+
+			result, err := wasm.ExportEmod(string(envelope.Diagram))
+			require.NoError(t, err)
+
+			require.Equal(t, billingModel, string(result))
+		})
+
+		t.Run("malformed diagram JSON returns error", func(t *testing.T) {
+			_, err := wasm.ExportEmod(`not json`)
+
+			require.Error(t, err)
+			require.Contains(t, err.Error(), "invalid diagram JSON")
+		})
+	})
+
+	t.Run("export emod as json", func(t *testing.T) {
+		t.Run("wraps the formatted source in an emod field", func(t *testing.T) {
+			parsed := decodeEmodEnvelope(t, wasm.ExportEmodJSON(`{"model_name":"Billing","nodes":[],"edges":[]}`))
+
+			require.Empty(t, parsed.Error)
+			require.Equal(t, "model \"Billing\"\n", parsed.Emod)
+		})
+
+		t.Run("reports a failure in an error field instead of an emod field", func(t *testing.T) {
+			parsed := decodeEmodEnvelope(t, wasm.ExportEmodJSON(`not json`))
+
+			require.Empty(t, parsed.Emod)
+			require.Contains(t, parsed.Error, "invalid diagram JSON")
+		})
+	})
+
+	t.Run("error json", func(t *testing.T) {
+		t.Run("carries the message in an error field", func(t *testing.T) {
+			var parsed struct {
+				Error string `json:"error"`
+			}
+			require.NoError(t, json.Unmarshal([]byte(wasm.ErrorJSON("something went wrong")), &parsed))
+
+			require.Equal(t, "something went wrong", parsed.Error)
+		})
 	})
 }
 
-func TestExportEmodJSON(t *testing.T) {
-	t.Run("wraps formatted text in an emod field", func(t *testing.T) {
-		diagram := `{"model_name":"Billing","nodes":[],"edges":[]}`
-
-		var parsed struct {
-			Emod  string `json:"emod"`
-			Error string `json:"error"`
-		}
-		require.NoError(t, json.Unmarshal([]byte(wasm.ExportEmodJSON(diagram)), &parsed))
-
-		require.Empty(t, parsed.Error)
-		require.Equal(t, "model \"Billing\"\n", parsed.Emod)
-	})
-
-	t.Run("reports a failure in an error field instead of an emod field", func(t *testing.T) {
-		var parsed struct {
-			Emod  string `json:"emod"`
-			Error string `json:"error"`
-		}
-		require.NoError(t, json.Unmarshal([]byte(wasm.ExportEmodJSON(`not json`)), &parsed))
-
-		require.Empty(t, parsed.Emod)
-		require.Contains(t, parsed.Error, "invalid diagram JSON")
-	})
+type diagnostic struct {
+	Message  string `json:"message"`
+	Severity string `json:"severity"`
 }
 
-func TestErrorJSON(t *testing.T) {
-	t.Run("returns JSON with error field", func(t *testing.T) {
-		result := wasm.ErrorJSON("something went wrong")
-		require.NotEmpty(t, result)
+type node struct {
+	ID    string `json:"id"`
+	Type  string `json:"type"`
+	Label string `json:"label"`
+}
 
-		var parsed struct {
-			Error string `json:"error"`
+type edge struct {
+	Source string `json:"source"`
+	Target string `json:"target"`
+	Type   string `json:"type"`
+}
+
+type diagramEnvelope struct {
+	Diagnostics []diagnostic `json:"diagnostics"`
+	Diagram     struct {
+		ModelName string `json:"model_name"`
+		Nodes     []node `json:"nodes"`
+		Edges     []edge `json:"edges"`
+	} `json:"diagram"`
+}
+
+func decodeDiagramEnvelope(t *testing.T, raw []byte) diagramEnvelope {
+	t.Helper()
+
+	var envelope diagramEnvelope
+	require.NoError(t, json.Unmarshal(raw, &envelope), "pipeline must return valid JSON")
+
+	return envelope
+}
+
+func decodeEmodEnvelope(t *testing.T, raw string) struct {
+	Emod  string `json:"emod"`
+	Error string `json:"error"`
+} {
+	t.Helper()
+
+	var parsed struct {
+		Emod  string `json:"emod"`
+		Error string `json:"error"`
+	}
+	require.NoError(t, json.Unmarshal([]byte(raw), &parsed))
+
+	return parsed
+}
+
+// labelsOfType returns the labels of nodes matching any of the given types, in
+// document order.
+func labelsOfType(nodes []node, types ...string) []string {
+	wanted := make(map[string]bool, len(types))
+	for _, t := range types {
+		wanted[t] = true
+	}
+
+	var labels []string
+	for _, n := range nodes {
+		if wanted[n.Type] {
+			labels = append(labels, n.Label)
 		}
-		err := json.Unmarshal([]byte(result), &parsed)
-		require.NoError(t, err, "must be valid JSON")
-		require.Equal(t, "something went wrong", parsed.Error)
-	})
+	}
+	return labels
 }

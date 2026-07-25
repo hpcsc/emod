@@ -3,16 +3,15 @@
 package cli_test
 
 import (
-	"bytes"
+	"context"
 	"errors"
-	"fmt"
 	"io"
 	"net/http"
 	"os"
 	"path/filepath"
 	"regexp"
 	"strings"
-	"syscall"
+	"sync"
 	"testing"
 	"time"
 
@@ -56,9 +55,8 @@ func TestDiagram(t *testing.T) {
 
 		require.Error(t, err)
 		var lintErr *cli.LintError
-		if errors.As(err, &lintErr) {
-			require.Equal(t, 2, lintErr.ExitCode)
-		}
+		require.True(t, errors.As(err, &lintErr))
+		require.Equal(t, 2, lintErr.ExitCode)
 
 		_, statErr := os.Stat(defaultOutput)
 		require.True(t, os.IsNotExist(statErr), "expected no .drawio file to be created")
@@ -100,9 +98,8 @@ context "Orders" {
 
 		require.Error(t, err)
 		var lintErr *cli.LintError
-		if errors.As(err, &lintErr) {
-			require.Equal(t, 1, lintErr.ExitCode)
-		}
+		require.True(t, errors.As(err, &lintErr))
+		require.Equal(t, 1, lintErr.ExitCode)
 
 		_, statErr := os.Stat(defaultOutput)
 		require.NoError(t, statErr, "expected .drawio to be created despite warnings")
@@ -113,14 +110,16 @@ context "Orders" {
 	t.Run("missing file argument returns error", func(t *testing.T) {
 		err := cli.RunDiagram("", "", "drawio", diagram.StyleAuto)
 
-		require.Error(t, err)
-		require.Equal(t, "diagram requires exactly one file argument", err.Error())
+		require.ErrorIs(t, err, cli.ErrMissingFileArgument)
 	})
 
-	t.Run("nonexistent file returns error", func(t *testing.T) {
-		err := cli.RunDiagram("/tmp/nonexistent-diagram-file-abc123.emod", "", "drawio", diagram.StyleAuto)
+	t.Run("nonexistent file returns error naming the file", func(t *testing.T) {
+		missing := filepath.Join(t.TempDir(), "nonexistent.emod")
+
+		err := cli.RunDiagram(missing, "", "drawio", diagram.StyleAuto)
 
 		require.Error(t, err)
+		require.Contains(t, err.Error(), missing)
 	})
 
 	t.Run("output file is well-formed draw.io XML", func(t *testing.T) {
@@ -209,9 +208,8 @@ context "Orders" {
 
 		require.Error(t, err)
 		var lintErr *cli.LintError
-		if errors.As(err, &lintErr) {
-			require.Equal(t, 2, lintErr.ExitCode)
-		}
+		require.True(t, errors.As(err, &lintErr))
+		require.Equal(t, 2, lintErr.ExitCode)
 
 		require.Contains(t, stderr, path)
 		require.Contains(t, stderr, ":1:")
@@ -250,9 +248,8 @@ context "Orders" {
 
 		require.Error(t, err)
 		var lintErr *cli.LintError
-		if errors.As(err, &lintErr) {
-			require.Equal(t, 1, lintErr.ExitCode)
-		}
+		require.True(t, errors.As(err, &lintErr))
+		require.Equal(t, 1, lintErr.ExitCode)
 
 		require.Contains(t, output, "Model:")
 		require.Contains(t, output, "=== Slice:")
@@ -262,8 +259,7 @@ context "Orders" {
 		path := writeTemp(t, "valid.emod", validEmod)
 
 		err := cli.RunDiagram(path, "", "bogus", diagram.StyleAuto)
-		require.Error(t, err)
-		require.Contains(t, err.Error(), "unsupported format")
+		require.ErrorIs(t, err, cli.ErrUnsupportedFormat)
 		require.Contains(t, err.Error(), "drawio")
 		require.Contains(t, err.Error(), "mermaid")
 		require.Contains(t, err.Error(), "svg")
@@ -320,9 +316,8 @@ context "Orders" {
 
 		require.Error(t, err)
 		var lintErr *cli.LintError
-		if errors.As(err, &lintErr) {
-			require.Equal(t, 2, lintErr.ExitCode)
-		}
+		require.True(t, errors.As(err, &lintErr))
+		require.Equal(t, 2, lintErr.ExitCode)
 
 		_, statErr := os.Stat(defaultOutput)
 		require.True(t, os.IsNotExist(statErr), "expected no .svg file to be created")
@@ -364,9 +359,8 @@ context "Orders" {
 
 		require.Error(t, err)
 		var lintErr *cli.LintError
-		if errors.As(err, &lintErr) {
-			require.Equal(t, 1, lintErr.ExitCode)
-		}
+		require.True(t, errors.As(err, &lintErr))
+		require.Equal(t, 1, lintErr.ExitCode)
 
 		_, statErr := os.Stat(defaultOutput)
 		require.NoError(t, statErr, "expected .svg to be created despite warnings")
@@ -384,167 +378,149 @@ context "Orders" {
 		_, statErr := os.Stat(customOutput)
 		require.NoError(t, statErr, "expected .svg file to be created in nested directory")
 	})
+	t.Run("serve", func(t *testing.T) {
+		t.Run("serves the parsed model as initial viewer data", func(t *testing.T) {
+			path := writeTemp(t, "valid.emod", validEmod)
 
-	// --- Serve flag ---
+			addr, output := startDiagramServe(t, path)
 
-	t.Run("serve with valid file starts server with diagram data", func(t *testing.T) {
-		path := writeTemp(t, "valid.emod", validEmod)
+			body := getBody(t, addr)
+			require.Contains(t, body, "window.INITIAL_DATA = ")
+			require.Contains(t, body, "Hotel Reservation")
+			require.Empty(t, output.stderr(), "a valid file should produce no diagnostics")
+		})
 
-		rOut, wOut, err := os.Pipe()
-		require.NoError(t, err)
-		oldOut := os.Stdout
-		os.Stdout = wOut
+		t.Run("serves the viewer without initial data when no file is given", func(t *testing.T) {
+			addr, _ := startDiagramServe(t, "")
 
-		rErr, wErr, err := os.Pipe()
-		require.NoError(t, err)
-		oldErr := os.Stderr
-		os.Stderr = wErr
+			body := getBody(t, addr)
+			require.Contains(t, body, "<!DOCTYPE html>")
+			require.NotContains(t, body, "window.INITIAL_DATA")
+		})
 
-		errCh := make(chan error, 1)
-		go func() {
-			errCh <- cli.RunDiagramServe(path, false)
-		}()
+		t.Run("reports diagnostics on stderr and still serves the viewer", func(t *testing.T) {
+			path := writeTemp(t, "invalid.emod", invalidEmod)
 
-		time.Sleep(200 * time.Millisecond)
+			addr, output := startDiagramServe(t, path)
 
-		wOut.Close()
-		os.Stdout = oldOut
-		wErr.Close()
-		os.Stderr = oldErr
+			require.Contains(t, output.stderr(), path)
+			require.Contains(t, output.stderr(), ":1:")
+			require.Contains(t, getBody(t, addr), "<!DOCTYPE html>")
+		})
+	})
+}
 
-		var stdout, stderr bytes.Buffer
-		_, _ = io.Copy(&stdout, rOut)
-		_, _ = io.Copy(&stderr, rErr)
+var viewerURL = regexp.MustCompile(`http://127\.0\.0\.1:\d+`)
 
-		re := regexp.MustCompile(`http://127\.0\.0\.1:(\d+)`)
-		matches := re.FindStringSubmatch(stdout.String())
-		require.Len(t, matches, 2, "stdout should contain viewer URL")
-		require.Contains(t, stdout.String(), "Viewer available at")
+// capturedStreams accumulates what a still-running command writes to the
+// standard streams, so tests can read a snapshot before it exits.
+type capturedStreams struct {
+	mu  sync.Mutex
+	out strings.Builder
+	err strings.Builder
+}
 
-		addr := fmt.Sprintf("http://127.0.0.1:%s", matches[1])
+func (c *capturedStreams) stdout() string {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	return c.out.String()
+}
 
-		resp, getErr := http.Get(addr)
-		require.NoError(t, getErr)
-		body, readErr := io.ReadAll(resp.Body)
-		require.NoError(t, readErr)
-		resp.Body.Close()
-		require.Equal(t, http.StatusOK, resp.StatusCode)
-		require.Contains(t, string(body), "window.INITIAL_DATA = ")
+func (c *capturedStreams) stderr() string {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	return c.err.String()
+}
 
-		// Stderr should be clean for a valid file
-		require.Empty(t, stderr.String())
+func (c *capturedStreams) write(dst *strings.Builder, p []byte) (int, error) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	return dst.Write(p)
+}
 
-		// Signal shutdown
-		syscall.Kill(syscall.Getpid(), syscall.SIGINT)
+type streamWriter struct {
+	captured *capturedStreams
+	dst      *strings.Builder
+}
 
+func (w streamWriter) Write(p []byte) (int, error) { return w.captured.write(w.dst, p) }
+
+// startDiagramServe runs the serve command in the background, waits for the
+// viewer URL it prints, and cancels it during cleanup. Readiness comes from the
+// command's own output rather than a fixed delay.
+func startDiagramServe(t *testing.T, path string) (string, *capturedStreams) {
+	t.Helper()
+
+	captured := &capturedStreams{}
+	restore := redirectStdStreams(t, captured)
+
+	ctx, cancel := context.WithCancel(context.Background())
+	done := make(chan error, 1)
+	go func() { done <- cli.RunDiagramServe(ctx, path, false) }()
+
+	t.Cleanup(func() {
+		cancel()
 		select {
-		case serveErr := <-errCh:
-			require.NoError(t, serveErr)
-		case <-time.After(2 * time.Second):
-			t.Fatal("server did not shut down within 2s")
+		case err := <-done:
+			require.NoError(t, err)
+		case <-time.After(5 * time.Second):
+			t.Error("serve did not shut down within 5s of cancellation")
 		}
+		restore()
 	})
 
-	t.Run("serve without file starts server without initial data", func(t *testing.T) {
-		rOut, wOut, err := os.Pipe()
-		require.NoError(t, err)
-		oldOut := os.Stdout
-		os.Stdout = wOut
+	require.Eventually(t, func() bool {
+		return viewerURL.MatchString(captured.stdout())
+	}, 5*time.Second, 5*time.Millisecond, "serve never printed a viewer URL")
 
-		errCh := make(chan error, 1)
-		go func() {
-			errCh <- cli.RunDiagramServe("", false)
-		}()
+	stdout := captured.stdout()
+	require.Contains(t, stdout, "Viewer available at")
 
-		time.Sleep(200 * time.Millisecond)
+	return viewerURL.FindString(stdout), captured
+}
 
-		wOut.Close()
-		os.Stdout = oldOut
+// redirectStdStreams points os.Stdout/os.Stderr at captured until the returned
+// function restores them and the drain goroutines finish.
+func redirectStdStreams(t *testing.T, captured *capturedStreams) func() {
+	t.Helper()
 
-		var stdout bytes.Buffer
-		_, _ = io.Copy(&stdout, rOut)
+	outR, outW, err := os.Pipe()
+	require.NoError(t, err)
+	errR, errW, err := os.Pipe()
+	require.NoError(t, err)
 
-		re := regexp.MustCompile(`http://127\.0\.0\.1:(\d+)`)
-		matches := re.FindStringSubmatch(stdout.String())
-		require.Len(t, matches, 2, "stdout should contain viewer URL")
+	oldOut, oldErr := os.Stdout, os.Stderr
+	os.Stdout, os.Stderr = outW, errW
 
-		addr := fmt.Sprintf("http://127.0.0.1:%s", matches[1])
+	var drained sync.WaitGroup
+	drained.Add(2)
+	go func() {
+		defer drained.Done()
+		io.Copy(streamWriter{captured, &captured.out}, outR)
+	}()
+	go func() {
+		defer drained.Done()
+		io.Copy(streamWriter{captured, &captured.err}, errR)
+	}()
 
-		resp, getErr := http.Get(addr)
-		require.NoError(t, getErr)
-		body, readErr := io.ReadAll(resp.Body)
-		require.NoError(t, readErr)
-		resp.Body.Close()
-		require.Equal(t, http.StatusOK, resp.StatusCode)
-		require.NotContains(t, string(body), "window.INITIAL_DATA")
+	return func() {
+		os.Stdout, os.Stderr = oldOut, oldErr
+		outW.Close()
+		errW.Close()
+		drained.Wait()
+	}
+}
 
-		// Signal shutdown
-		syscall.Kill(syscall.Getpid(), syscall.SIGINT)
+func getBody(t *testing.T, addr string) string {
+	t.Helper()
 
-		select {
-		case serveErr := <-errCh:
-			require.NoError(t, serveErr)
-		case <-time.After(2 * time.Second):
-			t.Fatal("server did not shut down within 2s")
-		}
-	})
+	resp, err := http.Get(addr)
+	require.NoError(t, err)
+	defer resp.Body.Close()
 
-	t.Run("serve with invalid file prints diagnostics and starts server", func(t *testing.T) {
-		path := writeTemp(t, "invalid.emod", invalidEmod)
+	require.Equal(t, http.StatusOK, resp.StatusCode)
+	body, err := io.ReadAll(resp.Body)
+	require.NoError(t, err)
 
-		rOut, wOut, err := os.Pipe()
-		require.NoError(t, err)
-		oldOut := os.Stdout
-		os.Stdout = wOut
-
-		rErr, wErr, err := os.Pipe()
-		require.NoError(t, err)
-		oldErr := os.Stderr
-		os.Stderr = wErr
-
-		errCh := make(chan error, 1)
-		go func() {
-			errCh <- cli.RunDiagramServe(path, false)
-		}()
-
-		time.Sleep(200 * time.Millisecond)
-
-		wOut.Close()
-		os.Stdout = oldOut
-		wErr.Close()
-		os.Stderr = oldErr
-
-		var stdout, stderr bytes.Buffer
-		_, _ = io.Copy(&stdout, rOut)
-		_, _ = io.Copy(&stderr, rErr)
-
-		// Stderr should have diagnostics for invalid file
-		require.Contains(t, stderr.String(), path)
-
-		// Server should still start
-		re := regexp.MustCompile(`http://127\.0\.0\.1:(\d+)`)
-		matches := re.FindStringSubmatch(stdout.String())
-		require.Len(t, matches, 2, "stdout should contain viewer URL despite errors")
-
-		addr := fmt.Sprintf("http://127.0.0.1:%s", matches[1])
-
-		resp, getErr := http.Get(addr)
-		require.NoError(t, getErr)
-		body, readErr := io.ReadAll(resp.Body)
-		require.NoError(t, readErr)
-		resp.Body.Close()
-		require.Equal(t, http.StatusOK, resp.StatusCode)
-		// Even with invalid data, the server should start (window.INITIAL_DATA may or may not be present)
-		require.Contains(t, string(body), "<!DOCTYPE html>")
-
-		// Signal shutdown
-		syscall.Kill(syscall.Getpid(), syscall.SIGINT)
-
-		select {
-		case serveErr := <-errCh:
-			require.NoError(t, serveErr)
-		case <-time.After(2 * time.Second):
-			t.Fatal("server did not shut down within 2s")
-		}
-	})
+	return string(body)
 }

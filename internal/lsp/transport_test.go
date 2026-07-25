@@ -4,6 +4,7 @@ package lsp_test
 
 import (
 	"bytes"
+	"io"
 	"strings"
 	"testing"
 
@@ -94,7 +95,7 @@ func TestTransport(t *testing.T) {
 		r := strings.NewReader(input)
 
 		_, err := lsp.ReadMessage(r)
-		require.Error(t, err)
+		require.ErrorIs(t, err, io.ErrUnexpectedEOF)
 	})
 
 	t.Run("write message with Content-Length header", func(t *testing.T) {

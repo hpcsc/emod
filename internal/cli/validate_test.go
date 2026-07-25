@@ -10,96 +10,15 @@ import (
 	"testing"
 
 	"github.com/hpcsc/emod/internal/cli"
+	"github.com/hpcsc/emod/internal/test"
 	"github.com/stretchr/testify/require"
 )
 
-const validEmod = `# Hotel Reservation System
-model "Hotel Reservation"
-
-actor "Guest"
-
-context "Reservations" {
-  aggregate "Reservation" {
-    slice "Make Reservation" {
-      trigger UI "Reservation Form" {
-        actor Guest
-        reads AvailableRoomsView
-      }
-      command MakeReservation {
-        fields {
-          guestId     string required
-          roomType    string required
-          checkIn     date   required
-          checkOut    date   required
-        }
-      }
-      event ReservationMade {
-        fields {
-          reservationId string required
-          guestId       string required
-          roomType      string required
-          checkIn       date   required
-          checkOut      date   required
-          status        string required
-        }
-      }
-      flow {
-        command -> event: MakeReservation -> ReservationMade
-      }
-    }
-    slice "View Reservations" {
-      view ReservationsView {
-        fields {
-          reservationId string required
-          guestId       string required
-          status        string required
-        }
-        subscribes [ReservationMade]
-      }
-    }
-    slice "Auto Confirm Reservation" {
-      command ConfirmReservation {
-        fields {
-          reservationId string required
-        }
-      }
-      flow {
-        command -> event: ConfirmReservation -> ReservationMade
-      }
-      automation AutoConfirm {
-        trigger ReservationMade
-        command ConfirmReservation
-      }
-    }
-    slice "Import External Booking" {
-      command ImportBooking {
-        fields {
-          bookingRef string required
-        }
-      }
-      flow {
-        command -> event: ImportBooking -> BookingImported
-      }
-      translation BookingImport {
-        external_system "Booking.com API"
-        reads BookingWebhookView
-        command ImportBooking
-        event BookingImported {
-          fields {
-            bookingId   string required
-            hotelName   string required
-            bookingRef  string required
-          }
-        }
-      }
-    }
-  }
-}
-`
-
-const invalidEmod = `foobar {
-}
-`
+// The cli tests drive whole commands, so they share the pipeline-wide fixtures.
+const (
+	validEmod   = test.HotelReservation
+	invalidEmod = test.Unparseable
+)
 
 func TestValidate(t *testing.T) {
 	t.Run("returns no error for valid input", func(t *testing.T) {
@@ -120,17 +39,19 @@ func TestValidate(t *testing.T) {
 		require.Contains(t, err.Error(), ":1:")
 	})
 
-	t.Run("returns error for nonexistent file", func(t *testing.T) {
-		err := cli.RunValidate("/tmp/nonexistent-emod-file-abc123.emod", "text")
+	t.Run("returns error naming the file when it does not exist", func(t *testing.T) {
+		missing := filepath.Join(t.TempDir(), "nonexistent.emod")
+
+		err := cli.RunValidate(missing, "text")
 
 		require.Error(t, err)
+		require.Contains(t, err.Error(), missing)
 	})
 
 	t.Run("returns error when no file argument given", func(t *testing.T) {
 		err := cli.RunValidate("", "text")
 
-		require.Error(t, err)
-		require.Equal(t, "validate requires exactly one file argument", err.Error())
+		require.ErrorIs(t, err, cli.ErrMissingFileArgument)
 	})
 
 	t.Run("returns semantic error for automation targeting nonexistent context", func(t *testing.T) {
@@ -387,12 +308,9 @@ context "Orders" {
 		output := captureStdout(t, func() {
 			err := cli.RunValidate(path, "json")
 			var lintErr *cli.LintError
-			if errors.As(err, &lintErr) {
-				require.Equal(t, 2, lintErr.ExitCode)
-				require.Equal(t, "", lintErr.Message)
-			} else {
-				require.Error(t, err)
-			}
+			require.True(t, errors.As(err, &lintErr))
+			require.Equal(t, 2, lintErr.ExitCode)
+			require.Equal(t, "", lintErr.Message)
 		})
 
 		var entries []map[string]interface{}
@@ -450,12 +368,9 @@ context "Orders" {
 		output = captureStdout(t, func() {
 			err := cli.RunValidate(path, "json")
 			var lintErr *cli.LintError
-			if errors.As(err, &lintErr) {
-				require.Equal(t, 1, lintErr.ExitCode)
-				require.Equal(t, "", lintErr.Message)
-			} else {
-				require.Error(t, err)
-			}
+			require.True(t, errors.As(err, &lintErr))
+			require.Equal(t, 1, lintErr.ExitCode)
+			require.Equal(t, "", lintErr.Message)
 		})
 
 		var entries []map[string]interface{}
@@ -494,12 +409,9 @@ context "Orders" {
 		output = captureStdout(t, func() {
 			err := cli.RunValidate(path, "json")
 			var lintErr *cli.LintError
-			if errors.As(err, &lintErr) {
-				require.Equal(t, 2, lintErr.ExitCode)
-				require.Equal(t, "", lintErr.Message)
-			} else {
-				require.Error(t, err)
-			}
+			require.True(t, errors.As(err, &lintErr))
+			require.Equal(t, 2, lintErr.ExitCode)
+			require.Equal(t, "", lintErr.Message)
 		})
 
 		var entries []map[string]interface{}
@@ -533,12 +445,10 @@ context "Orders" {
 
 		err := cli.RunValidate(path, "unknown")
 
-		require.Error(t, err)
-		require.Contains(t, err.Error(), "unsupported format")
+		require.ErrorIs(t, err, cli.ErrUnsupportedFormat)
 		var lintErr *cli.LintError
-		if errors.As(err, &lintErr) {
-			require.Equal(t, 1, lintErr.ExitCode)
-		}
+		require.True(t, errors.As(err, &lintErr))
+		require.Equal(t, 1, lintErr.ExitCode)
 	})
 
 	t.Run("text format is the default and unchanged for existing behaviors", func(t *testing.T) {

@@ -24,6 +24,7 @@ func RunExport(path, format string) error {
 		return &LintError{
 			Message:  fmt.Sprintf("unsupported format %q; supported formats: json, cue, diagram-json", format),
 			ExitCode: 1,
+			Cause:    ErrUnsupportedFormat,
 		}
 	}
 
@@ -31,6 +32,7 @@ func RunExport(path, format string) error {
 		return &LintError{
 			Message:  "export requires exactly one file argument",
 			ExitCode: 1,
+			Cause:    ErrMissingFileArgument,
 		}
 	}
 
@@ -145,5 +147,3 @@ func handleCUEExport(model *ast.Model, diagnostics []*diagnostic.Entry) error {
 	fmt.Println(string(output))
 	return nil
 }
-
-

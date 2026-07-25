@@ -8,6 +8,7 @@ import (
 	"errors"
 	"io"
 	"os"
+	"path/filepath"
 	"testing"
 
 	"github.com/hpcsc/emod/internal/cli"
@@ -94,10 +95,9 @@ func TestExport(t *testing.T) {
 
 		require.Error(t, err)
 		var lintErr *cli.LintError
-		if errors.As(err, &lintErr) {
-			require.Equal(t, "", lintErr.Message)
-			require.Equal(t, 2, lintErr.ExitCode)
-		}
+		require.True(t, errors.As(err, &lintErr))
+		require.Equal(t, "", lintErr.Message)
+		require.Equal(t, 2, lintErr.ExitCode)
 
 		// stderr should be empty for JSON format
 		require.Empty(t, stderr, "JSON format should not write diagnostics to stderr")
@@ -151,10 +151,9 @@ context "Orders" {
 
 		require.Error(t, err)
 		var lintErr *cli.LintError
-		if errors.As(err, &lintErr) {
-			require.Equal(t, 1, lintErr.ExitCode)
-			require.Equal(t, "", lintErr.Message)
-		}
+		require.True(t, errors.As(err, &lintErr))
+		require.Equal(t, 1, lintErr.ExitCode)
+		require.Equal(t, "", lintErr.Message)
 
 		// stderr should be empty for JSON format
 		require.Empty(t, stderr, "JSON format should not write diagnostics to stderr")
@@ -182,10 +181,9 @@ context "Orders" {
 
 		require.Error(t, err)
 		var lintErr *cli.LintError
-		if errors.As(err, &lintErr) {
-			require.Equal(t, "", lintErr.Message)
-			require.Equal(t, 2, lintErr.ExitCode)
-		}
+		require.True(t, errors.As(err, &lintErr))
+		require.Equal(t, "", lintErr.Message)
+		require.Equal(t, 2, lintErr.ExitCode)
 
 		// stderr should be empty for JSON format
 		require.Empty(t, stderr, "JSON format should not write diagnostics to stderr")
@@ -206,14 +204,16 @@ context "Orders" {
 	t.Run("missing file argument returns error", func(t *testing.T) {
 		err := cli.RunExport("", "json")
 
-		require.Error(t, err)
-		require.Equal(t, "export requires exactly one file argument", err.Error())
+		require.ErrorIs(t, err, cli.ErrMissingFileArgument)
 	})
 
-	t.Run("nonexistent file returns error", func(t *testing.T) {
-		err := cli.RunExport("/tmp/nonexistent-export-file-abc123.emod", "json")
+	t.Run("nonexistent file returns error naming the file", func(t *testing.T) {
+		missing := filepath.Join(t.TempDir(), "nonexistent.emod")
+
+		err := cli.RunExport(missing, "json")
 
 		require.Error(t, err)
+		require.Contains(t, err.Error(), missing)
 	})
 
 	t.Run("unsupported format returns error", func(t *testing.T) {
@@ -221,15 +221,13 @@ context "Orders" {
 
 		err := cli.RunExport(path, "text")
 
-		require.Error(t, err)
-		require.Contains(t, err.Error(), "unsupported format")
+		require.ErrorIs(t, err, cli.ErrUnsupportedFormat)
 		require.Contains(t, err.Error(), "json")
 		require.Contains(t, err.Error(), "cue")
 		require.Contains(t, err.Error(), "diagram-json")
 		var lintErr *cli.LintError
-		if errors.As(err, &lintErr) {
-			require.Equal(t, 1, lintErr.ExitCode)
-		}
+		require.True(t, errors.As(err, &lintErr))
+		require.Equal(t, 1, lintErr.ExitCode)
 	})
 
 	t.Run("default format is json and produces wrapped valid JSON", func(t *testing.T) {
@@ -296,10 +294,9 @@ context "Orders" {
 
 		require.Error(t, err)
 		var lintErr *cli.LintError
-		if errors.As(err, &lintErr) {
-			require.Equal(t, "", lintErr.Message)
-			require.Equal(t, 2, lintErr.ExitCode)
-		}
+		require.True(t, errors.As(err, &lintErr))
+		require.Equal(t, "", lintErr.Message)
+		require.Equal(t, 2, lintErr.ExitCode)
 
 		// stderr should be empty for diagram-json format
 		require.Empty(t, stderr, "diagram-json format should not write diagnostics to stderr")
@@ -351,10 +348,9 @@ context "Orders" {
 
 		require.Error(t, err)
 		var lintErr *cli.LintError
-		if errors.As(err, &lintErr) {
-			require.Equal(t, "", lintErr.Message)
-			require.Equal(t, 2, lintErr.ExitCode)
-		}
+		require.True(t, errors.As(err, &lintErr))
+		require.Equal(t, "", lintErr.Message)
+		require.Equal(t, 2, lintErr.ExitCode)
 	})
 
 	t.Run("CUE format on clean file outputs text to stdout and no stderr", func(t *testing.T) {

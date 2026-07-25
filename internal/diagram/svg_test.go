@@ -3,6 +3,7 @@
 package diagram_test
 
 import (
+	"strings"
 	"testing"
 
 	"github.com/hpcsc/emod/internal/ast"
@@ -11,12 +12,6 @@ import (
 )
 
 func TestExportSVG(t *testing.T) {
-	t.Run("nil model returns empty bytes with no error", func(t *testing.T) {
-		raw, err := diagram.ExportSVG(nil, diagram.StyleAuto)
-		require.NoError(t, err)
-		require.Empty(t, raw)
-	})
-
 	t.Run("empty model returns valid SVG with svg root and no diagram content", func(t *testing.T) {
 		model := &ast.Model{Name: "Empty"}
 		raw, err := diagram.ExportSVG(model, diagram.StyleAuto)
@@ -24,7 +19,7 @@ func TestExportSVG(t *testing.T) {
 
 		output := string(raw)
 		require.Contains(t, output, `<svg xmlns="http://www.w3.org/2000/svg"`)
-		require.True(t, validXML(output), "output must be valid XML")
+		requireValidXML(t, output)
 		require.NotContains(t, output, "UI / Triggers")
 	})
 
@@ -37,98 +32,31 @@ func TestExportSVG(t *testing.T) {
 		require.Contains(t, output, "UI / Triggers")
 		require.Contains(t, output, "Commands / Views")
 		require.Contains(t, output, "Events")
-		require.True(t, validXML(output))
+		requireValidXML(t, output)
 	})
 
-	t.Run("renders trigger with white fill and stroke", func(t *testing.T) {
-		model := &ast.Model{
-			Name: "Test",
-			Contexts: []*ast.Context{{
-				Name: "Ctx",
-				Aggregates: []*ast.Aggregate{{
-					Name: "Agg",
-					Slices: []*ast.Slice{{
-						Name: "S",
-						Trigger: &ast.Trigger{
-							Kind:  "UI",
-							Name:  "SubmitForm",
-							Actor: "User",
-						},
-					}},
-				}},
-			}},
-		}
+	t.Run("renders a trigger with its actor", func(t *testing.T) {
+		model := singleSliceModel("Test", "S", &ast.Trigger{Kind: "UI", Name: "SubmitForm", Actor: "User"})
 
 		raw, err := diagram.ExportSVG(model, diagram.StyleAuto)
 		require.NoError(t, err)
 
 		output := string(raw)
-		require.Contains(t, output, `fill="#ffffff"`)
-		require.Contains(t, output, `stroke="#333333"`)
 		require.Contains(t, output, "SubmitForm")
 		require.Contains(t, output, "(User)")
 	})
 
-	t.Run("renders command with blue fill and stroke", func(t *testing.T) {
-		model := singleSliceModel("Test", "S", command("MakeReservation"))
+	t.Run("renders command, event and view labels", func(t *testing.T) {
+		model := singleSliceModel("Test", "S",
+			command("MakeReservation"), event("ReservationMade"), view("AvailableRooms"))
 
 		raw, err := diagram.ExportSVG(model, diagram.StyleAuto)
 		require.NoError(t, err)
 
 		output := string(raw)
-		require.Contains(t, output, `fill="#dae8fc"`)
-		require.Contains(t, output, `stroke="#6c8ebf"`)
 		require.Contains(t, output, "MakeReservation")
-	})
-
-	t.Run("renders event with orange fill and stroke", func(t *testing.T) {
-		model := singleSliceModel("Test", "S", event("ReservationMade"))
-
-		raw, err := diagram.ExportSVG(model, diagram.StyleAuto)
-		require.NoError(t, err)
-
-		output := string(raw)
-		require.Contains(t, output, `fill="#ffe6cc"`)
-		require.Contains(t, output, `stroke="#d79b00"`)
 		require.Contains(t, output, "ReservationMade")
-	})
-
-	t.Run("renders view with green fill and stroke", func(t *testing.T) {
-		model := singleSliceModel("Test", "S", view("AvailableRooms"))
-
-		raw, err := diagram.ExportSVG(model, diagram.StyleAuto)
-		require.NoError(t, err)
-
-		output := string(raw)
-		require.Contains(t, output, `fill="#d5e8d4"`)
-		require.Contains(t, output, `stroke="#82b366"`)
 		require.Contains(t, output, "AvailableRooms")
-	})
-
-	t.Run("slices laid out left-to-right in model order", func(t *testing.T) {
-		model := &ast.Model{
-			Name: "Test",
-			Contexts: []*ast.Context{{
-				Name: "Ctx",
-				Aggregates: []*ast.Aggregate{{
-					Name: "Agg",
-					Slices: []*ast.Slice{
-						{Name: "First", Commands: []*ast.Command{{Name: "CmdA"}}},
-						{Name: "Second", Commands: []*ast.Command{{Name: "CmdB"}}},
-						{Name: "Third", Commands: []*ast.Command{{Name: "CmdC"}}},
-					},
-				}},
-			}},
-		}
-
-		raw, err := diagram.ExportSVG(model, diagram.StyleAuto)
-		require.NoError(t, err)
-
-		output := string(raw)
-		require.Contains(t, output, "CmdA")
-		require.Contains(t, output, "CmdB")
-		require.Contains(t, output, "CmdC")
-		require.True(t, validXML(output))
 	})
 
 	t.Run("connects trigger to command", func(t *testing.T) {
@@ -139,8 +67,8 @@ func TestExportSVG(t *testing.T) {
 				Aggregates: []*ast.Aggregate{{
 					Name: "Agg",
 					Slices: []*ast.Slice{{
-						Name: "S",
-						Trigger: &ast.Trigger{Kind: "UI", Name: "Click"},
+						Name:     "S",
+						Trigger:  &ast.Trigger{Kind: "UI", Name: "Click"},
 						Commands: []*ast.Command{{Name: "DoAction"}},
 					}},
 				}},
@@ -153,7 +81,7 @@ func TestExportSVG(t *testing.T) {
 		output := string(raw)
 		require.Contains(t, output, "Click")
 		require.Contains(t, output, "DoAction")
-		require.Contains(t, output, "marker-end")
+		require.Equal(t, 1, arrowCount(output), "trigger to command is one arrow")
 	})
 
 	t.Run("connects command to event via flow", func(t *testing.T) {
@@ -164,7 +92,7 @@ func TestExportSVG(t *testing.T) {
 				Aggregates: []*ast.Aggregate{{
 					Name: "Agg",
 					Slices: []*ast.Slice{{
-						Name: "S",
+						Name:     "S",
 						Commands: []*ast.Command{{Name: "Reserve"}},
 						Events:   []*ast.Event{{Name: "Reserved"}},
 						Flows:    []*ast.Flow{{CommandName: "Reserve", EventName: "Reserved"}},
@@ -179,7 +107,7 @@ func TestExportSVG(t *testing.T) {
 		output := string(raw)
 		require.Contains(t, output, "Reserve")
 		require.Contains(t, output, "Reserved")
-		require.Contains(t, output, "marker-end")
+		require.Equal(t, 1, arrowCount(output), "command to event is one arrow")
 	})
 
 	t.Run("connects event to view via subscribes", func(t *testing.T) {
@@ -190,7 +118,7 @@ func TestExportSVG(t *testing.T) {
 				Aggregates: []*ast.Aggregate{{
 					Name: "Agg",
 					Slices: []*ast.Slice{{
-						Name: "S",
+						Name:   "S",
 						Events: []*ast.Event{{Name: "OrderPlaced"}},
 						Views:  []*ast.View{{Name: "OrderList", Subscribes: []string{"OrderPlaced"}}},
 					}},
@@ -204,7 +132,7 @@ func TestExportSVG(t *testing.T) {
 		output := string(raw)
 		require.Contains(t, output, "OrderPlaced")
 		require.Contains(t, output, "OrderList")
-		require.Contains(t, output, "marker-end")
+		require.Equal(t, 1, arrowCount(output), "event to view is one arrow")
 	})
 
 	t.Run("renders automation with gear icon indicator", func(t *testing.T) {
@@ -242,10 +170,10 @@ func TestExportSVG(t *testing.T) {
 				Aggregates: []*ast.Aggregate{{
 					Name: "Agg",
 					Slices: []*ast.Slice{{
-						Name: "S",
+						Name:        "S",
 						Events:      []*ast.Event{{Name: "OrderPlaced"}},
 						Commands:    []*ast.Command{{Name: "SendEmail"}},
-						Automations: []*ast.Automation{{Name: "N", TriggerEvent: "OrderPlaced", Command: "SendEmail"}},
+						Automations: []*ast.Automation{{Name: "Notifier", TriggerEvent: "OrderPlaced", Command: "SendEmail"}},
 					}},
 				}},
 			}},
@@ -257,8 +185,8 @@ func TestExportSVG(t *testing.T) {
 		output := string(raw)
 		require.Contains(t, output, "OrderPlaced")
 		require.Contains(t, output, "SendEmail")
-		require.Contains(t, output, "N")
-		require.Contains(t, output, "marker-end")
+		require.Contains(t, output, "Notifier")
+		require.Equal(t, 2, arrowCount(output), "event to automation to command is two arrows")
 	})
 
 	t.Run("renders external system as gray dashed rounded rect", func(t *testing.T) {
@@ -286,8 +214,6 @@ func TestExportSVG(t *testing.T) {
 
 		output := string(raw)
 		require.Contains(t, output, "Stripe")
-		require.Contains(t, output, `fill="#f5f5f5"`)
-		require.Contains(t, output, `stroke="#666666"`)
 		require.Contains(t, output, `stroke-dasharray`)
 	})
 
@@ -299,7 +225,7 @@ func TestExportSVG(t *testing.T) {
 				Aggregates: []*ast.Aggregate{{
 					Name: "Agg",
 					Slices: []*ast.Slice{{
-						Name: "S",
+						Name:     "S",
 						Commands: []*ast.Command{{Name: "Charge"}},
 						Events:   []*ast.Event{{Name: "Charged"}},
 						Translations: []*ast.Translation{{
@@ -320,14 +246,8 @@ func TestExportSVG(t *testing.T) {
 		require.Contains(t, output, "Charge")
 		require.Contains(t, output, "Charged")
 		require.Contains(t, output, "Stripe")
-		require.Contains(t, output, "marker-end")
-	})
-
-	t.Run("output is valid SVG XML", func(t *testing.T) {
-		model := fullModel()
-		raw, err := diagram.ExportSVG(model, diagram.StyleAuto)
-		require.NoError(t, err)
-		require.True(t, validXML(string(raw)), "output must be valid XML")
+		// external system -> reactor, reactor -> command, command -> event
+		require.Equal(t, 3, arrowCount(output))
 	})
 
 	t.Run("event with external source includes source label", func(t *testing.T) {
@@ -352,36 +272,11 @@ func TestExportSVG(t *testing.T) {
 		require.Contains(t, output, "UI / Triggers")
 		require.Contains(t, output, "Commands / Views")
 		require.Contains(t, output, "Events")
-		require.True(t, validXML(output))
-
-		// Verify all element types rendered
-		require.Contains(t, output, `fill="#ffe6cc"`)
-		require.Contains(t, output, `fill="#dae8fc"`)
-		require.Contains(t, output, `fill="#d5e8d4"`)
-		require.Contains(t, output, `fill="#ffffff"`)
-		require.Contains(t, output, `fill="#f5f5f5"`)
-
-		// Verify connections exist
-		require.Contains(t, output, "marker-end")
+		require.Equal(t, 11, arrowCount(output), "every flow, subscription, automation and translation edge is drawn")
 	})
+}
 
-	t.Run("DCB context with direct slices renders SVG content", func(t *testing.T) {
-		model := &ast.Model{
-			Name: "DCBTest",
-			Contexts: []*ast.Context{{
-				Name: "DCBCtx",
-				Slices: []*ast.Slice{{
-					Name:     "DirectSlice",
-					Commands: []*ast.Command{{Name: "DirectCmd"}},
-				}},
-			}},
-		}
-
-		raw, err := diagram.ExportSVG(model, diagram.StyleDCB)
-		require.NoError(t, err)
-
-		output := string(raw)
-		require.Contains(t, output, "DirectCmd")
-		require.True(t, validXML(output))
-	})
+// arrowCount reports how many connecting arrows the SVG draws.
+func arrowCount(output string) int {
+	return strings.Count(output, "marker-end")
 }

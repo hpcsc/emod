@@ -78,7 +78,7 @@ func (p *serverPair) writeInitialize(t *testing.T) int {
 	return id
 }
 
-func (p *serverPair) readInitializeResult(t *testing.T, expectedID int) {
+func (p *serverPair) readInitializeResult(t *testing.T, expectedID int) lsp.InitializeResult {
 	t.Helper()
 	resp := p.readMsg(t)
 	require.NotNil(t, resp.ID)
@@ -87,9 +87,10 @@ func (p *serverPair) readInitializeResult(t *testing.T, expectedID int) {
 	require.NotNil(t, resp.Result)
 
 	var result lsp.InitializeResult
-	err := json.Unmarshal(resp.Result, &result)
-	require.NoError(t, err)
+	require.NoError(t, json.Unmarshal(resp.Result, &result))
 	require.Equal(t, lsp.SyncFull, result.Capabilities.TextDocumentSync)
+
+	return result
 }
 
 // readMsgTimeout attempts to read a message within the given duration.
@@ -112,105 +113,25 @@ func readMsgTimeout(r io.Reader, timeout time.Duration) *lsp.Message {
 
 func TestServer(t *testing.T) {
 	t.Run("initialize", func(t *testing.T) {
-		t.Run("returns InitializeResult with textDocumentSync=1", func(t *testing.T) {
+		t.Run("advertises every capability the server implements", func(t *testing.T) {
 			p := startServer(t)
 			id := p.writeInitialize(t)
-			p.readInitializeResult(t, id)
-		})
 
-		t.Run("advertises CompletionProvider capability", func(t *testing.T) {
-			p := startServer(t)
-			id := p.writeInitialize(t)
-			resp := p.readMsg(t)
-			require.NotNil(t, resp.ID)
-			require.Equal(t, id, *resp.ID)
-			require.Nil(t, resp.Error)
-			require.NotNil(t, resp.Result)
+			result := p.readInitializeResult(t, id)
 
-			var result lsp.InitializeResult
-			err := json.Unmarshal(resp.Result, &result)
-			require.NoError(t, err)
-			require.NotNil(t, result.Capabilities.CompletionProvider, "expected CompletionProvider to be advertised")
-			require.Contains(t, result.Capabilities.CompletionProvider.TriggerCharacters, " ")
-		})
-
-		t.Run("advertises DefinitionProvider capability", func(t *testing.T) {
-			p := startServer(t)
-			id := p.writeInitialize(t)
-			resp := p.readMsg(t)
-			require.NotNil(t, resp.ID)
-			require.Equal(t, id, *resp.ID)
-			require.Nil(t, resp.Error)
-			require.NotNil(t, resp.Result)
-
-			var result lsp.InitializeResult
-			err := json.Unmarshal(resp.Result, &result)
-			require.NoError(t, err)
-			require.True(t, result.Capabilities.DefinitionProvider, "expected DefinitionProvider to be true")
-		})
-
-		t.Run("advertises DocumentFormattingProvider capability", func(t *testing.T) {
-			p := startServer(t)
-			id := p.writeInitialize(t)
-			resp := p.readMsg(t)
-			require.NotNil(t, resp.ID)
-			require.Equal(t, id, *resp.ID)
-			require.Nil(t, resp.Error)
-			require.NotNil(t, resp.Result)
-
-			var result lsp.InitializeResult
-			err := json.Unmarshal(resp.Result, &result)
-			require.NoError(t, err)
-			require.True(t, result.Capabilities.DocumentFormattingProvider, "expected DocumentFormattingProvider to be true")
-		})
-
-		t.Run("advertises ReferencesProvider capability", func(t *testing.T) {
-			p := startServer(t)
-			id := p.writeInitialize(t)
-			resp := p.readMsg(t)
-			require.NotNil(t, resp.ID)
-			require.Equal(t, id, *resp.ID)
-			require.Nil(t, resp.Error)
-			require.NotNil(t, resp.Result)
-
-			var result lsp.InitializeResult
-			err := json.Unmarshal(resp.Result, &result)
-			require.NoError(t, err)
-			require.True(t, result.Capabilities.ReferencesProvider, "expected ReferencesProvider to be true")
-		})
-
-		t.Run("advertises HoverProvider capability", func(t *testing.T) {
-			p := startServer(t)
-			id := p.writeInitialize(t)
-			resp := p.readMsg(t)
-			require.NotNil(t, resp.ID)
-			require.Equal(t, id, *resp.ID)
-			require.Nil(t, resp.Error)
-			require.NotNil(t, resp.Result)
-
-			var result lsp.InitializeResult
-			err := json.Unmarshal(resp.Result, &result)
-			require.NoError(t, err)
-			require.True(t, result.Capabilities.HoverProvider, "expected HoverProvider to be true")
-		})
-
-		t.Run("advertises SemanticTokensProvider capability with legend", func(t *testing.T) {
-			p := startServer(t)
-			id := p.writeInitialize(t)
-			resp := p.readMsg(t)
-			require.NotNil(t, resp.ID)
-			require.Equal(t, id, *resp.ID)
-			require.Nil(t, resp.Error)
-			require.NotNil(t, resp.Result)
-
-			var result lsp.InitializeResult
-			err := json.Unmarshal(resp.Result, &result)
-			require.NoError(t, err)
-			require.NotNil(t, result.Capabilities.SemanticTokensProvider, "expected SemanticTokensProvider to be advertised")
-			require.NotEmpty(t, result.Capabilities.SemanticTokensProvider.Legend.TokenTypes)
-			require.Contains(t, result.Capabilities.SemanticTokensProvider.Legend.TokenTypes, "function")
-			require.Contains(t, result.Capabilities.SemanticTokensProvider.Legend.TokenTypes, "event")
-			require.Contains(t, result.Capabilities.SemanticTokensProvider.Legend.TokenTypes, "class")
+			// Each capability advertised here is exercised end-to-end by the
+			// request groups below; the client only sends what it sees.
+			require.Equal(t, lsp.ServerCapabilities{
+				TextDocumentSync:           lsp.SyncFull,
+				CompletionProvider:         &lsp.CompletionOptions{TriggerCharacters: []string{" "}},
+				DefinitionProvider:         true,
+				ReferencesProvider:         true,
+				DocumentFormattingProvider: true,
+				HoverProvider:              true,
+				SemanticTokensProvider: &lsp.SemanticTokensProviderOptions{
+					Legend: lsp.GetSemanticTokensLegend(),
+				},
+			}, result.Capabilities)
 		})
 	})
 
@@ -351,9 +272,8 @@ func TestServer(t *testing.T) {
 			// Verify the server loop exited.
 			select {
 			case <-p.done:
-				// server exited as expected
 			case <-time.After(time.Second):
-				t.Fatal("server did not exit after shutdown")
+				require.Fail(t, "server did not exit after shutdown")
 			}
 		})
 	})
@@ -1475,7 +1395,7 @@ context "C" {
 			select {
 			case <-p.done:
 			case <-time.After(time.Second):
-				t.Fatal("server did not exit after shutdown")
+				require.Fail(t, "server did not exit after shutdown")
 			}
 		})
 	})

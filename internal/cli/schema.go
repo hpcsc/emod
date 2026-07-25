@@ -13,6 +13,7 @@ func RunSchema(format string) error {
 		return &LintError{
 			Message:  fmt.Sprintf("unsupported format %q; supported format: cue", format),
 			ExitCode: 1,
+			Cause:    ErrUnsupportedFormat,
 		}
 	}
 

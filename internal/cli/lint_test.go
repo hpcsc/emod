@@ -8,11 +8,127 @@ import (
 	"errors"
 	"io"
 	"os"
+	"path/filepath"
 	"testing"
 
 	"github.com/hpcsc/emod/internal/cli"
 	"github.com/stretchr/testify/require"
 )
+
+// singleTagDCBEmod uses one tag key across every decides_on predicate, which
+// the dcb/single-tag-everywhere rule reports at info severity — the only rule
+// that produces info diagnostics.
+const singleTagDCBEmod = `model "Orders"
+
+context "Fulfillment" mode dcb {
+  slice "Place Order" {
+    command PlaceOrder {
+      fields {
+        customerId string required
+        total      int    required
+      }
+    }
+
+    event OrderPlaced {
+      tags {
+        entity: customerId
+      }
+      fields {
+        orderId    string required
+        customerId string required
+        total      int    required
+      }
+    }
+
+    flow {
+      command -> event: PlaceOrder -> OrderPlaced
+    }
+  }
+
+  slice "Authorize Payment" {
+    command AuthorizePayment {
+      decides_on {
+        events [OrderPlaced]
+        where tag(entity = customerId)
+      }
+      fields {
+        authCode string required
+      }
+    }
+
+    event PaymentAuthorized {
+      tags {
+        entity: customerId
+      }
+      fields {
+        paymentId  string required
+        customerId string required
+        authCode   string required
+      }
+    }
+
+    flow {
+      command -> event: AuthorizePayment -> PaymentAuthorized
+    }
+  }
+}
+`
+
+// singleTagWithClickbaitEmod adds a single-ID event to the same model, so the
+// info diagnostic above is joined by a clickbait-event error.
+const singleTagWithClickbaitEmod = `model "Orders"
+
+context "Fulfillment" mode dcb {
+  slice "Place Order" {
+    command PlaceOrder {
+      fields {
+        customerId string required
+        total      int    required
+      }
+    }
+
+    event OrderPlaced {
+      tags {
+        entity: customerId
+      }
+      fields {
+        orderId    string required
+        customerId string required
+        total      int    required
+      }
+    }
+
+    flow {
+      command -> event: PlaceOrder -> OrderPlaced
+    }
+  }
+
+  slice "Authorize Payment" {
+    command AuthorizePayment {
+      decides_on {
+        events [OrderPlaced]
+        where tag(entity = customerId)
+      }
+      fields {
+        authCode string required
+      }
+    }
+
+    event PaymentAuthorized {
+      tags {
+        entity: customerId
+      }
+      fields {
+        paymentId string required
+      }
+    }
+
+    flow {
+      command -> event: AuthorizePayment -> PaymentAuthorized
+    }
+  }
+}
+`
 
 func captureStdout(t *testing.T, fn func()) string {
 	t.Helper()
@@ -75,14 +191,16 @@ context "Orders" {
 	t.Run("missing file argument returns error", func(t *testing.T) {
 		err := cli.RunLint("", "text")
 
-		require.Error(t, err)
-		require.Equal(t, "lint requires exactly one file argument", err.Error())
+		require.ErrorIs(t, err, cli.ErrMissingFileArgument)
 	})
 
-	t.Run("nonexistent file returns error", func(t *testing.T) {
-		err := cli.RunLint("/tmp/nonexistent-emod-lint-file-abc123.emod", "text")
+	t.Run("nonexistent file returns error naming the file", func(t *testing.T) {
+		missing := filepath.Join(t.TempDir(), "nonexistent.emod")
+
+		err := cli.RunLint(missing, "text")
 
 		require.Error(t, err)
+		require.Contains(t, err.Error(), missing)
 	})
 
 	t.Run("unparseable file returns error with file path and line number", func(t *testing.T) {
@@ -160,12 +278,9 @@ context "Orders" {
 		output = captureStdout(t, func() {
 			err := cli.RunLint(path, "json")
 			var lintErr *cli.LintError
-			if errors.As(err, &lintErr) {
-				require.Equal(t, 1, lintErr.ExitCode)
-				require.Equal(t, "", lintErr.Message)
-			} else {
-				require.Error(t, err)
-			}
+			require.True(t, errors.As(err, &lintErr))
+			require.Equal(t, 1, lintErr.ExitCode)
+			require.Empty(t, lintErr.Message, "json output carries the diagnostics; the error only carries the exit code")
 		})
 
 		var entries []map[string]interface{}
@@ -196,12 +311,9 @@ context "Orders" {
 		output = captureStdout(t, func() {
 			err := cli.RunLint(path, "json")
 			var lintErr *cli.LintError
-			if errors.As(err, &lintErr) {
-				require.Equal(t, 2, lintErr.ExitCode)
-				require.Equal(t, "", lintErr.Message)
-			} else {
-				require.Error(t, err)
-			}
+			require.True(t, errors.As(err, &lintErr))
+			require.Equal(t, 2, lintErr.ExitCode)
+			require.Empty(t, lintErr.Message, "json output carries the diagnostics; the error only carries the exit code")
 		})
 
 		var entries []map[string]interface{}
@@ -237,12 +349,9 @@ context "Orders" {
 		output = captureStdout(t, func() {
 			err := cli.RunLint(path, "json")
 			var lintErr *cli.LintError
-			if errors.As(err, &lintErr) {
-				require.Equal(t, 2, lintErr.ExitCode)
-				require.Equal(t, "", lintErr.Message)
-			} else {
-				require.Error(t, err)
-			}
+			require.True(t, errors.As(err, &lintErr))
+			require.Equal(t, 2, lintErr.ExitCode)
+			require.Empty(t, lintErr.Message, "json output carries the diagnostics; the error only carries the exit code")
 		})
 
 		var entries []map[string]interface{}
@@ -296,44 +405,70 @@ context "Orders" {
 		require.NotEmpty(t, entry["message"])
 	})
 
-	t.Run("text format is the default and unchanged", func(t *testing.T) {
-		input := `model "Test"
-context "Orders" {
-  aggregate "Order" {
-    slice "Update Order" {
-      command UpdateOrder {
-        fields {
-          orderId string required
-        }
-      }
-      event OrderUpdated {
-        fields {
-          orderId string required
-        }
-      }
-    }
-  }
-}
-`
-		path := writeTemp(t, "default.emod", input)
-
-		errText := cli.RunLint(path, "text")
-		errDefault := cli.RunLint(path, "text")
-
-		require.Equal(t, errDefault.Error(), errText.Error())
-	})
-
 	t.Run("invalid format returns error", func(t *testing.T) {
 		path := writeTemp(t, "clean.emod", validEmod)
 
 		err := cli.RunLint(path, "unknown")
 
-		require.Error(t, err)
-		require.Contains(t, err.Error(), "unsupported format")
+		require.ErrorIs(t, err, cli.ErrUnsupportedFormat)
 		var lintErr *cli.LintError
-		if errors.As(err, &lintErr) {
+		require.True(t, errors.As(err, &lintErr))
+		require.Equal(t, 1, lintErr.ExitCode)
+	})
+
+	t.Run("info severity", func(t *testing.T) {
+		t.Run("json output reports info severity and exits 1", func(t *testing.T) {
+			path := writeTemp(t, "single_tag.emod", singleTagDCBEmod)
+
+			var err error
+			output := captureStdout(t, func() {
+				err = cli.RunLint(path, "json")
+			})
+
+			var lintErr *cli.LintError
+			require.True(t, errors.As(err, &lintErr))
 			require.Equal(t, 1, lintErr.ExitCode)
-		}
+
+			var entries []map[string]interface{}
+			require.NoError(t, json.Unmarshal([]byte(output), &entries))
+			require.Len(t, entries, 1)
+			require.Equal(t, "info", entries[0]["severity"])
+			require.Equal(t, "dcb/single-tag-everywhere", entries[0]["rule"])
+			require.Equal(t, path, entries[0]["file"])
+			require.Equal(t, float64(3), entries[0]["line"])
+			require.Contains(t, entries[0]["message"], "entity")
+		})
+
+		t.Run("an error alongside info entries raises the exit code to 2", func(t *testing.T) {
+			path := writeTemp(t, "info_and_error.emod", singleTagWithClickbaitEmod)
+
+			var err error
+			output := captureStdout(t, func() {
+				err = cli.RunLint(path, "json")
+			})
+
+			var lintErr *cli.LintError
+			require.True(t, errors.As(err, &lintErr))
+			require.Equal(t, 2, lintErr.ExitCode)
+
+			var entries []map[string]interface{}
+			require.NoError(t, json.Unmarshal([]byte(output), &entries))
+			severities := make([]any, 0, len(entries))
+			for _, e := range entries {
+				severities = append(severities, e["severity"])
+			}
+			require.Equal(t, []any{"info", "error"}, severities)
+		})
+
+		t.Run("text output formats info entries like other severities", func(t *testing.T) {
+			path := writeTemp(t, "single_tag.emod", singleTagDCBEmod)
+
+			err := cli.RunLint(path, "text")
+
+			require.Error(t, err)
+			require.Contains(t, err.Error(), path+":3:")
+			require.Contains(t, err.Error(), "[dcb/single-tag-everywhere]")
+		})
 	})
 }
 

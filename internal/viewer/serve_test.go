@@ -3,12 +3,8 @@
 package viewer_test
 
 import (
-	"bytes"
-	"fmt"
 	"io"
 	"net/http"
-	"os"
-	"regexp"
 	"testing"
 	"time"
 
@@ -16,122 +12,118 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-const readyWait = 80 * time.Millisecond
+const (
+	readyTimeout = 5 * time.Second
+	readyPoll    = 5 * time.Millisecond
+)
 
-func startAndExtractURL(t *testing.T, diagramJSON []byte) (string, func()) {
+// startViewer serves diagramJSON and returns the URL once the server answers,
+// shutting it down during cleanup.
+func startViewer(t *testing.T, diagramJSON []byte) string {
 	t.Helper()
 
-	r, w, err := os.Pipe()
+	addr, shutdown, err := viewer.ServeViewer(0, diagramJSON)
 	require.NoError(t, err)
-	old := os.Stdout
-	os.Stdout = w
+	t.Cleanup(shutdown)
 
-	_, shutdown, err := viewer.ServeViewer(0, diagramJSON)
+	require.Eventually(t, func() bool {
+		resp, err := http.Get(addr)
+		if err != nil {
+			return false
+		}
+		resp.Body.Close()
+		return true
+	}, readyTimeout, readyPoll, "viewer did not start answering at %s", addr)
+
+	return addr
+}
+
+func get(t *testing.T, url string) *http.Response {
+	t.Helper()
+
+	resp, err := http.Get(url)
+	require.NoError(t, err)
+	t.Cleanup(func() { resp.Body.Close() })
+
+	return resp
+}
+
+func body(t *testing.T, resp *http.Response) string {
+	t.Helper()
+
+	raw, err := io.ReadAll(resp.Body)
 	require.NoError(t, err)
 
-	w.Close()
-	os.Stdout = old
-
-	var buf bytes.Buffer
-	_, err = io.Copy(&buf, r)
-	require.NoError(t, err)
-	output := buf.String()
-
-	re := regexp.MustCompile(`http://127\.0\.0\.1:(\d+)`)
-	matches := re.FindStringSubmatch(output)
-	require.Len(t, matches, 2, "stdout should contain viewer URL")
-	require.Contains(t, output, "Viewer available at")
-
-	addr := fmt.Sprintf("http://127.0.0.1:%s", matches[1])
-	return addr, shutdown
+	return string(raw)
 }
 
 func TestServeViewer(t *testing.T) {
-	t.Run("serves viewer HTML at root URL", func(t *testing.T) {
-		addr, shutdown := startAndExtractURL(t, nil)
-		defer shutdown()
+	t.Run("serving", func(t *testing.T) {
+		t.Run("returns the viewer page as HTML at the root URL", func(t *testing.T) {
+			addr := startViewer(t, nil)
 
-		time.Sleep(readyWait)
+			resp := get(t, addr)
 
-		resp, err := http.Get(addr)
-		require.NoError(t, err)
-		defer resp.Body.Close()
+			require.Equal(t, http.StatusOK, resp.StatusCode)
+			require.Equal(t, "text/html; charset=utf-8", resp.Header.Get("Content-Type"))
+			require.Contains(t, body(t, resp), "Emod Diagram Viewer")
+		})
 
-		require.Equal(t, http.StatusOK, resp.StatusCode)
-		require.Equal(t, "text/html; charset=utf-8", resp.Header.Get("Content-Type"))
+		t.Run("listens on loopback only and reports that address", func(t *testing.T) {
+			addr, shutdown, err := viewer.ServeViewer(0, nil)
+			require.NoError(t, err)
+			t.Cleanup(shutdown)
 
-		body, err := io.ReadAll(resp.Body)
-		require.NoError(t, err)
-		require.Contains(t, string(body), "<!DOCTYPE html>")
-		require.Contains(t, string(body), "Emod Diagram Viewer")
-		require.NotContains(t, string(body), "window.INITIAL_DATA")
+			// addr comes from the listener, so a wildcard bind (0.0.0.0) shows up here.
+			require.Regexp(t, `^http://127\.0\.0\.1:\d+$`, addr)
+		})
 	})
 
-	t.Run("injects diagram JSON when provided", func(t *testing.T) {
-		diagramJSON := []byte(`{"nodes":[],"edges":[]}`)
-		addr, shutdown := startAndExtractURL(t, diagramJSON)
-		defer shutdown()
+	t.Run("initial data", func(t *testing.T) {
+		t.Run("injects the diagram JSON for the viewer to load", func(t *testing.T) {
+			diagramJSON := []byte(`{"nodes":[],"edges":[]}`)
 
-		time.Sleep(readyWait)
+			addr := startViewer(t, diagramJSON)
 
-		resp, err := http.Get(addr)
-		require.NoError(t, err)
-		defer resp.Body.Close()
+			require.Contains(t, body(t, get(t, addr)),
+				`window.INITIAL_DATA = {"nodes":[],"edges":[]};`)
+		})
 
-		body, err := io.ReadAll(resp.Body)
-		require.NoError(t, err)
-		require.Contains(t, string(body), "window.INITIAL_DATA = ")
-		require.Contains(t, string(body), `{"nodes":[],"edges":[]}`)
+		t.Run("omits the injection when no diagram JSON is given", func(t *testing.T) {
+			addr := startViewer(t, nil)
+
+			require.NotContains(t, body(t, get(t, addr)), "window.INITIAL_DATA")
+		})
+
+		t.Run("omits the injection for empty diagram JSON", func(t *testing.T) {
+			addr := startViewer(t, []byte{})
+
+			pageBody := body(t, get(t, addr))
+			require.Contains(t, pageBody, "<!DOCTYPE html>")
+			require.NotContains(t, pageBody, "window.INITIAL_DATA")
+		})
 	})
 
-	t.Run("serves HTML unchanged when diagram JSON is empty", func(t *testing.T) {
-		addr, shutdown := startAndExtractURL(t, []byte{})
-		defer shutdown()
+	t.Run("shutdown", func(t *testing.T) {
+		t.Run("stops answering requests once shut down", func(t *testing.T) {
+			addr, shutdown, err := viewer.ServeViewer(0, nil)
+			require.NoError(t, err)
 
-		time.Sleep(readyWait)
+			require.Eventually(t, func() bool {
+				resp, err := http.Get(addr)
+				if err != nil {
+					return false
+				}
+				resp.Body.Close()
+				return true
+			}, readyTimeout, readyPoll, "viewer never started")
 
-		resp, err := http.Get(addr)
-		require.NoError(t, err)
-		defer resp.Body.Close()
+			shutdown()
 
-		body, err := io.ReadAll(resp.Body)
-		require.NoError(t, err)
-		require.Contains(t, string(body), "<!DOCTYPE html>")
-		require.NotContains(t, string(body), "window.INITIAL_DATA")
-	})
-
-	t.Run("listens only on 127.0.0.1", func(t *testing.T) {
-		addr, shutdown := startAndExtractURL(t, nil)
-		defer shutdown()
-
-		time.Sleep(readyWait)
-
-		// Verify it works via localhost (matches what's printed)
-		resp, err := http.Get(addr)
-		require.NoError(t, err)
-		resp.Body.Close()
-
-		// The address itself is 127.0.0.1 — verify by checking the URL format
-		require.Contains(t, addr, "127.0.0.1")
-		require.NotContains(t, addr, "0.0.0.0")
-	})
-
-	t.Run("programmatic shutdown stops the server", func(t *testing.T) {
-		addr, shutdown := startAndExtractURL(t, nil)
-
-		time.Sleep(readyWait)
-
-		// Server should be up
-		resp, err := http.Get(addr)
-		require.NoError(t, err)
-		resp.Body.Close()
-
-		// Shut down and wait for it to complete
-		shutdown()
-		time.Sleep(100 * time.Millisecond)
-
-		// Server should be down now
-		_, err = http.Get(addr)
-		require.Error(t, err)
+			require.Eventually(t, func() bool {
+				_, err := http.Get(addr)
+				return err != nil
+			}, readyTimeout, readyPoll, "viewer kept answering after shutdown")
+		})
 	})
 }

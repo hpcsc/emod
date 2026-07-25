@@ -35,13 +35,11 @@ func TestSchema(t *testing.T) {
 	t.Run("unsupported format returns LintError", func(t *testing.T) {
 		err := cli.RunSchema("json")
 
-		require.Error(t, err)
-		require.Contains(t, err.Error(), "unsupported format")
+		require.ErrorIs(t, err, cli.ErrUnsupportedFormat)
 		require.Contains(t, err.Error(), "cue")
 
 		var lintErr *cli.LintError
-		if errors.As(err, &lintErr) {
-			require.Equal(t, 1, lintErr.ExitCode)
-		}
+		require.True(t, errors.As(err, &lintErr))
+		require.Equal(t, 1, lintErr.ExitCode)
 	})
 }

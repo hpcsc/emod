@@ -16,6 +16,7 @@ func RunValidate(path, format string) error {
 		return &LintError{
 			Message:  fmt.Sprintf("unsupported format %q; supported formats: text, json", format),
 			ExitCode: 1,
+			Cause:    ErrUnsupportedFormat,
 		}
 	}
 
@@ -23,6 +24,7 @@ func RunValidate(path, format string) error {
 		return &LintError{
 			Message:  "validate requires exactly one file argument",
 			ExitCode: 1,
+			Cause:    ErrMissingFileArgument,
 		}
 	}
 

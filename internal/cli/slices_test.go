@@ -185,8 +185,7 @@ context "Orders" {
 	t.Run("fails for missing file argument", func(t *testing.T) {
 		err := cli.RunSlices("", "text")
 
-		require.Error(t, err)
-		require.Equal(t, "slices requires exactly one file argument", err.Error())
+		require.ErrorIs(t, err, cli.ErrMissingFileArgument)
 		var lintErr *cli.LintError
 		require.True(t, errors.As(err, &lintErr))
 		require.Equal(t, 1, lintErr.ExitCode)
@@ -207,8 +206,7 @@ context "Orders" {
 
 		err := cli.RunSlices(path, "xml")
 
-		require.Error(t, err)
-		require.Contains(t, err.Error(), "unsupported format")
+		require.ErrorIs(t, err, cli.ErrUnsupportedFormat)
 		require.Contains(t, err.Error(), "text")
 		require.Contains(t, err.Error(), "json")
 		var lintErr *cli.LintError
