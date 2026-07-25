@@ -128,6 +128,32 @@ context "Payments" {
 	})
 }
 
+func TestExportEmodJSON(t *testing.T) {
+	t.Run("wraps formatted text in an emod field", func(t *testing.T) {
+		diagram := `{"model_name":"Billing","nodes":[],"edges":[]}`
+
+		var parsed struct {
+			Emod  string `json:"emod"`
+			Error string `json:"error"`
+		}
+		require.NoError(t, json.Unmarshal([]byte(wasm.ExportEmodJSON(diagram)), &parsed))
+
+		require.Empty(t, parsed.Error)
+		require.Equal(t, "model \"Billing\"\n", parsed.Emod)
+	})
+
+	t.Run("reports a failure in an error field instead of an emod field", func(t *testing.T) {
+		var parsed struct {
+			Emod  string `json:"emod"`
+			Error string `json:"error"`
+		}
+		require.NoError(t, json.Unmarshal([]byte(wasm.ExportEmodJSON(`not json`)), &parsed))
+
+		require.Empty(t, parsed.Emod)
+		require.Contains(t, parsed.Error, "invalid diagram JSON")
+	})
+}
+
 func TestErrorJSON(t *testing.T) {
 	t.Run("returns JSON with error field", func(t *testing.T) {
 		result := wasm.ErrorJSON("something went wrong")
