@@ -2901,6 +2901,18 @@ func getFirstSlice(doc map[string]any) map[string]any {
 	return slices[0].(map[string]any)
 }
 
+// lookupCue returns the cue binary to shell out to, skipping the test when the
+// tool is not installed. The subtests that use it check generated CUE against
+// the real schema, which needs the actual compiler rather than a stand-in.
+func lookupCue(t *testing.T) string {
+	t.Helper()
+	cueBin, err := exec.LookPath("cue")
+	if err != nil {
+		t.Skip("cue not installed; skipping schema conformance check")
+	}
+	return cueBin
+}
+
 func TestExportCUE(t *testing.T) {
 	t.Run("exports minimal model with name only", func(t *testing.T) {
 		model := &ast.Model{Name: "TestModel"}
@@ -3214,9 +3226,7 @@ func TestExportCUE(t *testing.T) {
 	})
 
 	t.Run("output passes cue vet against schema", func(t *testing.T) {
-		if _, err := exec.LookPath("cue"); err != nil {
-			t.Skip("cue tool not available in PATH — using explicit path")
-		}
+		cueBin := lookupCue(t)
 
 		model := buildFullModel()
 
@@ -3236,7 +3246,6 @@ func TestExportCUE(t *testing.T) {
 		err = os.WriteFile(exportPath, cueOutput, 0644)
 		require.NoError(t, err)
 
-		cueBin := "/Users/davidnguyen/.local/share/mise/installs/cue/0.14.2/cue"
 		cmd := exec.Command(cueBin, "vet", schemaPath, exportPath)
 		output, err := cmd.CombinedOutput()
 		if err != nil {
@@ -3245,9 +3254,7 @@ func TestExportCUE(t *testing.T) {
 	})
 
 	t.Run("round-trip fidelity via cue export", func(t *testing.T) {
-		if _, err := exec.LookPath("cue"); err != nil {
-			t.Skip("cue tool not available in PATH — using explicit path")
-		}
+		cueBin := lookupCue(t)
 
 		model := buildFullModel()
 
@@ -3275,7 +3282,6 @@ func TestExportCUE(t *testing.T) {
 		err = os.WriteFile(filepath.Join(dir, "schema.cue"), schemaData, 0644)
 		require.NoError(t, err)
 
-		cueBin := "/Users/davidnguyen/.local/share/mise/installs/cue/0.14.2/cue"
 		cmd := exec.Command(cueBin, "export", exportPath, "--out", "json")
 		cueJSONRaw, err := cmd.CombinedOutput()
 		if err != nil {
