@@ -16,7 +16,18 @@ export default defineConfig({
     trace: 'retain-on-failure',
   },
   projects: [
-    { name: 'chromium', use: { ...devices['Desktop Chrome'] } },
+    {
+      name: 'chromium',
+      use: { ...devices['Desktop Chrome'] },
+      testIgnore: /touch\.spec\.js/,
+    },
+    {
+      // Touch emulation is opt-in, and enabling it globally would change how
+      // the pointer specs are dispatched, so the gestures get their own project.
+      name: 'chromium-touch',
+      use: { ...devices['Desktop Chrome'], hasTouch: true },
+      testMatch: /touch\.spec\.js/,
+    },
   ],
   webServer: {
     command: 'node server.mjs',
