@@ -7,6 +7,7 @@ export const L = {
   swimlaneGap: 20, aggLabelH: 22,
   sideGap: 12,
   slicePad: 20, sliceHdrH: 28, sliceTopPad: 36,
+  arrowHitWidth: 16,
 };
 
 export const DRAG_THRESHOLD = 5;

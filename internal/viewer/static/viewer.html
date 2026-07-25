@@ -892,22 +892,12 @@ header .model-name span {
   fill: #e0e0e0 !important;
 }
 
-#diagram-canvas .flow-arrow,
-#diagram-canvas .sub-arrow,
-#diagram-canvas .auto-trg-arrow,
-#diagram-canvas .auto-cmd-arrow,
-#diagram-canvas .trg-cmd-arrow,
-#diagram-canvas .reads-arrow,
-#diagram-canvas .trans-cmd-arrow {
+#diagram-canvas .arrow-hit {
   cursor: pointer;
 }
-#diagram-canvas .flow-arrow:hover,
-#diagram-canvas .sub-arrow:hover,
-#diagram-canvas .auto-trg-arrow:hover,
-#diagram-canvas .auto-cmd-arrow:hover,
-#diagram-canvas .trg-cmd-arrow:hover,
-#diagram-canvas .reads-arrow:hover,
-#diagram-canvas .trans-cmd-arrow:hover {
+/* The hit path and the arrow it stands for sit in different layers, so the
+   highlight cannot hang off :hover — ui.js sets this class instead. */
+#diagram-canvas .arrow.arrow-hover {
   stroke: #3498db !important;
   stroke-width: 2.5 !important;
 }

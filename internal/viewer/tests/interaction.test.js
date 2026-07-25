@@ -98,12 +98,20 @@ function setupSliceAndNodes(store, sliceWidth) {
   vg.appendChild(makeNodeEl('cmd1', 'cmd-block', 30, 110, 100, 55));
   vg.appendChild(makeNodeEl('evt1', 'evt-block', 160, 110, 100, 55));
 
-  var arrow = document.createElementNS('http://www.w3.org/2000/svg', 'path');
-  arrow.setAttribute('class', 'flow-arrow');
-  arrow.setAttribute('data-source', 'cmd1');
-  arrow.setAttribute('data-target', 'evt1');
-  arrow.setAttribute('d', 'M80 165 L210 165');
-  vg.appendChild(arrow);
+  // The renderer draws each arrow twice — a wide invisible path to aim at and
+  // the visible one — both keyed by edge id, so the fixture must do the same.
+  function makeArrowEl(cls, d) {
+    var p = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+    p.setAttribute('class', cls);
+    p.setAttribute('data-source', 'cmd1');
+    p.setAttribute('data-target', 'evt1');
+    p.setAttribute('data-edge-id', 'cmd1--evt1');
+    p.setAttribute('d', d);
+    return p;
+  }
+
+  vg.appendChild(makeArrowEl('arrow-hit', 'M80 165 L210 165'));
+  vg.appendChild(makeArrowEl('flow-arrow arrow', 'M80 165 L210 165'));
 }
 
 function fire(el, type, opts) {

@@ -67,18 +67,38 @@ function g(cls) {
   return el;
 }
 
-function path(d, cls, stroke, marker, dash, source, target) {
+function path(d, cls, stroke, marker, dash, source, target, edgeId) {
   var el = document.createElementNS(NS, "path");
   el.setAttribute("d", d);
   el.setAttribute("fill", "none");
   el.setAttribute("stroke", stroke);
   el.setAttribute("stroke-width", "1.5");
   el.setAttribute("marker-end", marker);
-  el.setAttribute("class", cls);
+  el.setAttribute("class", cls + " arrow");
   el.setAttribute("data-source", source);
   el.setAttribute("data-target", target);
-  el.setAttribute("pointer-events", "stroke");
+  el.setAttribute("data-edge-id", edgeId);
+  // Every pointer test goes through the matching .arrow-hit path instead, so a
+  // 1.5px stroke drawn over a block can no longer swallow a click meant for it.
+  el.setAttribute("pointer-events", "none");
   if (dash) el.setAttribute("stroke-dasharray", dash);
+  return el;
+}
+
+// A 1.5px stroke is far too thin to aim at, so each arrow gets a transparent
+// stroke wide enough to hit comfortably. It sits under the blocks, which keeps
+// a block clickable where an arrow crosses it.
+function arrowHitPath(d, source, target, edgeId) {
+  var el = document.createElementNS(NS, "path");
+  el.setAttribute("d", d);
+  el.setAttribute("fill", "none");
+  el.setAttribute("stroke", "transparent");
+  el.setAttribute("stroke-width", String(L.arrowHitWidth));
+  el.setAttribute("class", "arrow-hit");
+  el.setAttribute("data-source", source);
+  el.setAttribute("data-target", target);
+  el.setAttribute("data-edge-id", edgeId);
+  el.setAttribute("pointer-events", "stroke");
   return el;
 }
 
@@ -178,6 +198,10 @@ function buildSVG(store) {
     vg.appendChild(swimlane);
   });
 
+  // Appended before the blocks so the arrows' hit areas paint underneath them.
+  var hitLayer = g("arrow-hits");
+  vg.appendChild(hitLayer);
+
   nodes.forEach(function(n) {
     if (n.type !== "command" && n.type !== "event" &&
         n.type !== "trigger" && n.type !== "view" &&
@@ -261,13 +285,13 @@ function buildSVG(store) {
 
     store.arrowData.push({ source: edge.source, target: edge.target, path: d });
 
-    var pathEl = path(d, cfg.cls, cfg.stroke, cfg.marker, cfg.dash, edge.source, edge.target);
-    vg.appendChild(pathEl);
+    var edgeId = edge.source + "--" + edge.target;
+
+    hitLayer.appendChild(arrowHitPath(d, edge.source, edge.target, edgeId));
+    vg.appendChild(path(d, cfg.cls, cfg.stroke, cfg.marker, cfg.dash, edge.source, edge.target, edgeId));
 
     // Arrow endpoint handles (for repointing)
     var eps = Layout.computeArrowEndpoints(srcPos, tgtPos, crossBoundary);
-
-    var edgeId = edge.source + "--" + edge.target;
 
     var srcHandle = document.createElementNS(NS, "circle");
     srcHandle.setAttribute("cx", eps.src.x);

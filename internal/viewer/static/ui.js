@@ -673,29 +673,32 @@ function initDelegation(store) {
 
   // Arrow handle visibility on hover
   var arrowHovered = null;
+
+  function setArrowHovered(store, edgeId) {
+    if (edgeId === arrowHovered) return;
+    var svg = store.dom.svg;
+    if (arrowHovered) {
+      svg.querySelectorAll('[data-edge-id="' + arrowHovered + '"]').forEach(function(el) {
+        el.classList.remove("visible", "arrow-hover");
+      });
+    }
+    arrowHovered = edgeId;
+    if (!edgeId) return;
+    svg.querySelectorAll('.arrow-handle[data-edge-id="' + edgeId + '"]').forEach(function(h) {
+      h.classList.add("visible");
+    });
+    var arrowEl = svg.querySelector('path.arrow[data-edge-id="' + edgeId + '"]');
+    if (arrowEl) arrowEl.classList.add("arrow-hover");
+  }
+
   svgEl.addEventListener("pointerover", function(evt) {
-    var arrow = evt.target.closest(".flow-arrow, .sub-arrow, .auto-trg-arrow, .auto-cmd-arrow, .trg-cmd-arrow, .reads-arrow, .trans-cmd-arrow");
+    var arrow = evt.target.closest(".arrow-hit");
     if (arrow) {
-      var src = arrow.getAttribute("data-source");
-      var tgt = arrow.getAttribute("data-target");
-      var edgeId = src + "--" + tgt;
-      if (edgeId !== arrowHovered) {
-        if (arrowHovered) {
-          var prev = svgEl.querySelectorAll('.arrow-handle[data-edge-id="' + arrowHovered + '"]');
-          prev.forEach(function(h) { h.classList.remove("visible"); });
-        }
-        arrowHovered = edgeId;
-        var handles = svgEl.querySelectorAll('.arrow-handle[data-edge-id="' + edgeId + '"]');
-        handles.forEach(function(h) { h.classList.add("visible"); });
-      }
+      setArrowHovered(store, arrow.getAttribute("data-edge-id"));
     } else if (evt.target.closest('.arrow-handle')) {
       // Already visible via arrow hover
     } else {
-      if (arrowHovered) {
-        var prev = svgEl.querySelectorAll('.arrow-handle[data-edge-id="' + arrowHovered + '"]');
-        prev.forEach(function(h) { h.classList.remove("visible"); });
-        arrowHovered = null;
-      }
+      setArrowHovered(store, null);
     }
   });
 
@@ -730,7 +733,7 @@ function initDelegation(store) {
     }
 
     if (!interactive) {
-      const arrow = target.closest(".flow-arrow, .sub-arrow, .auto-trg-arrow, .auto-cmd-arrow, .trg-cmd-arrow, .reads-arrow, .trans-cmd-arrow");
+      const arrow = target.closest(".arrow-hit");
       if (arrow) {
         interactive = true;
         const src = arrow.getAttribute("data-source");
@@ -808,7 +811,7 @@ function initDelegation(store) {
     const target = evt.target;
 
     // Check for arrow right-click
-    const arrow = target.closest(".flow-arrow, .sub-arrow, .auto-trg-arrow, .auto-cmd-arrow, .trg-cmd-arrow, .reads-arrow, .trans-cmd-arrow");
+    const arrow = target.closest(".arrow-hit");
     if (arrow) {
       evt.preventDefault();
       const src = arrow.getAttribute("data-source");
