@@ -1176,6 +1176,42 @@ func TestValidate(t *testing.T) {
 		require.Contains(t, diags[1].Message, "OrderShipped")
 	})
 
+	t.Run("orphan diagnostics follow declaration order, not name order", func(t *testing.T) {
+		// Declared last-to-first alphabetically, so a name-ordered
+		// implementation would report these the other way round.
+		model := &ast.Model{
+			Contexts: []*ast.Context{
+				{
+					Name: "Orders",
+					Aggregates: []*ast.Aggregate{
+						{
+							Slices: []*ast.Slice{
+								{
+									Events: []*ast.Event{
+										{Name: "Zulu", NamePos: ast.Position{Filename: "test.emod", Line: 3, Column: 5}},
+										{Name: "Alpha", NamePos: ast.Position{Filename: "test.emod", Line: 7, Column: 5}},
+										{Name: "Mike", NamePos: ast.Position{Filename: "test.emod", Line: 11, Column: 5}},
+									},
+								},
+							},
+						},
+					},
+				},
+			},
+		}
+
+		messages := make([]string, 0, 3)
+		for _, d := range validator.Validate(model) {
+			messages = append(messages, d.Message)
+		}
+
+		require.Equal(t, []string{
+			`event "Zulu" is orphaned (no flow, external source, or translation produces it)`,
+			`event "Alpha" is orphaned (no flow, external source, or translation produces it)`,
+			`event "Mike" is orphaned (no flow, external source, or translation produces it)`,
+		}, messages)
+	})
+
 	// ── DCB: tag field reference validation ──────────────────────────────
 
 	t.Run("tag entry with valid fieldRef produces no diagnostics", func(t *testing.T) {

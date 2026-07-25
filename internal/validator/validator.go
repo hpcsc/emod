@@ -1,7 +1,9 @@
 package validator
 
 import (
+	"cmp"
 	"fmt"
+	"slices"
 
 	"github.com/hpcsc/emod/internal/ast"
 	"github.com/hpcsc/emod/internal/diagnostic"
@@ -77,34 +79,61 @@ func Validate(model *ast.Model) []*diagnostic.Entry {
 	}
 
 	// orphan-command: commands defined but not referenced by any flow
-	for name, pos := range commandPositions {
-		if !flowCmdNames[name] {
-			diags = append(diags, &diagnostic.Entry{
-				Filename: pos.Filename,
-				Line:     pos.Line,
-				Column:   pos.Column,
-				Message:  fmt.Sprintf("command %q is orphaned (no flow references it)", name),
-				Severity: diagnostic.Error,
-				RuleName: "orphan-command",
-			})
-		}
+	for _, name := range orphanNames(commandPositions, flowCmdNames) {
+		pos := commandPositions[name]
+		diags = append(diags, &diagnostic.Entry{
+			Filename: pos.Filename,
+			Line:     pos.Line,
+			Column:   pos.Column,
+			Message:  fmt.Sprintf("command %q is orphaned (no flow references it)", name),
+			Severity: diagnostic.Error,
+			RuleName: "orphan-command",
+		})
 	}
 
 	// orphan-event: events defined but not produced by any flow, external source, or translation
-	for name, pos := range eventPositions {
-		if !producedEventNames[name] {
-			diags = append(diags, &diagnostic.Entry{
-				Filename: pos.Filename,
-				Line:     pos.Line,
-				Column:   pos.Column,
-				Message:  fmt.Sprintf("event %q is orphaned (no flow, external source, or translation produces it)", name),
-				Severity: diagnostic.Error,
-				RuleName: "orphan-event",
-			})
-		}
+	for _, name := range orphanNames(eventPositions, producedEventNames) {
+		pos := eventPositions[name]
+		diags = append(diags, &diagnostic.Entry{
+			Filename: pos.Filename,
+			Line:     pos.Line,
+			Column:   pos.Column,
+			Message:  fmt.Sprintf("event %q is orphaned (no flow, external source, or translation produces it)", name),
+			Severity: diagnostic.Error,
+			RuleName: "orphan-event",
+		})
 	}
 
 	return diags
+}
+
+// orphanNames returns the names in positions that referenced does not cover,
+// ordered by where they are declared. Ranging over the map directly would emit
+// diagnostics in Go's randomised map order, so the same file would report the
+// same problems in a different order on every run.
+func orphanNames(positions map[string]ast.Position, referenced map[string]bool) []string {
+	names := make([]string, 0, len(positions))
+	for name := range positions {
+		if !referenced[name] {
+			names = append(names, name)
+		}
+	}
+
+	slices.SortFunc(names, func(a, b string) int {
+		pa, pb := positions[a], positions[b]
+		if c := cmp.Compare(pa.Filename, pb.Filename); c != 0 {
+			return c
+		}
+		if c := cmp.Compare(pa.Line, pb.Line); c != 0 {
+			return c
+		}
+		if c := cmp.Compare(pa.Column, pb.Column); c != 0 {
+			return c
+		}
+		return cmp.Compare(a, b)
+	})
+
+	return names
 }
 
 // collectNames gathers all names and per-event metadata from a single slice.
