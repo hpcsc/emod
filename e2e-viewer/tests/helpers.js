@@ -1,6 +1,10 @@
 import { expect } from '@playwright/test';
 
+// Canonical formatting, verified with `emod fmt --check`. Export tests assert
+// the viewer reproduces this byte for byte, so it must stay canonical.
 export const SAMPLE = `model "Billing"
+
+actor "Customer"
 
 context "Payments" {
   aggregate "Payment" {
@@ -67,7 +71,38 @@ export async function exportEmod(page) {
 
 // centreOf returns viewport coordinates of an element's centre, for driving
 // the mouse at real on-screen positions.
-export async function centreOf(page, selector) {
-  const box = await page.locator(selector).boundingBox();
+export async function centreOf(locator) {
+  const box = await locator.boundingBox();
   return { x: box.x + box.width / 2, y: box.y + box.height / 2 };
+}
+
+// Anything the mousedown handler treats specially before it falls through to
+// starting a pan.
+const NOT_BACKGROUND = '.diagram-node, .slice-header, [data-port], [data-arrow-handle], ' +
+  '.flow-arrow, .sub-arrow, .auto-trg-arrow, .auto-cmd-arrow, .trg-cmd-arrow, ' +
+  '.reads-arrow, .trans-cmd-arrow, .ctx-label, .agg-label';
+
+// emptyCanvasPoint finds a spot that really does pan the diagram: inside the
+// canvas, not on a node or arrow, and not under an overlay such as the data
+// panel or minimap. Scanning beats hardcoded coordinates, which silently start
+// hitting something else the moment the fixture or layout changes.
+export async function emptyCanvasPoint(page) {
+  const point = await page.evaluate((notBackground) => {
+    const svg = document.getElementById('diagram-canvas');
+    const box = svg.getBoundingClientRect();
+    for (let ny = 0.85; ny > 0.05; ny -= 0.05) {
+      for (let nx = 0.95; nx > 0.05; nx -= 0.05) {
+        const x = box.left + box.width * nx;
+        const y = box.top + box.height * ny;
+        const el = document.elementFromPoint(x, y);
+        if (!el || !svg.contains(el)) continue;
+        if (el.closest(notBackground)) continue;
+        return { x: Math.round(x), y: Math.round(y) };
+      }
+    }
+    return null;
+  }, NOT_BACKGROUND);
+
+  if (!point) throw new Error('no empty canvas point found — the diagram fills the viewport');
+  return point;
 }

@@ -31,6 +31,8 @@ jobs:
         node-version-file: 'internal/viewer/package.json'
     - name: Run Viewer JS Tests
       run: task test:viewer
+    - name: Run Viewer Browser E2E Test
+      run: task test:e2e:viewer
     - name: Run E2E Test
       run: task test:e2e
 

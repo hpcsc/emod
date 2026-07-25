@@ -75,6 +75,16 @@ tasks:
       - npm ci
       - npm test
 
+  test:e2e:viewer:
+    desc: Run viewer browser e2e tests against the static web bundle
+    deps:
+      - build:web
+    dir: e2e-viewer
+    cmds:
+      - npm ci
+      - npx playwright install --with-deps chromium
+      - npx playwright test
+
   test:e2e:
     desc: Run e2e tests in Docker
     cmds:
