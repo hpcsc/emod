@@ -38,6 +38,7 @@ vi.mock('../static/renderer.js', () => ({ Renderer: { esc: function(x) { return 
 vi.mock('../static/interaction.js', () => ({ Interaction: { initEventListeners: vi.fn() } }));
 vi.mock('../static/ui.js', () => ({ UI: { initDelegation: vi.fn(), initKeyboard: vi.fn(), hideContextMenu: vi.fn(), hideDetailPanel: vi.fn(), updateStats: vi.fn(), toggleContextPanel: vi.fn(), updateContextList: vi.fn(), renderActorAnnotations: vi.fn(), updateDiagnosticsPanel: vi.fn(), toggleDiagnosticsPanel: vi.fn(), hideDiagnosticsPanel: vi.fn(), initDiagnosticsDelegation: vi.fn() } }));
 vi.mock('../static/minimap.js', () => ({ Minimap: { initMinimap: vi.fn() } }));
+vi.mock('../static/ctx-actions.js', () => ({ CtxActions: { apply: vi.fn(() => false) } }));
 vi.mock('../static/model.js', () => ({ Model: { setModelData: vi.fn(), sendParse: vi.fn(() => Promise.resolve({ diagnostics: [], diagram: { nodes: [], edges: [] } })) } }));
 vi.mock('../static/emod-export.js', () => ({ Export: {} }));
 

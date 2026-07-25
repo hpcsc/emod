@@ -4,6 +4,7 @@ import { Renderer } from './renderer.js';
 import { Interaction } from './interaction.js';
 import { UI } from './ui.js';
 import { Minimap } from './minimap.js';
+import { CtxActions } from './ctx-actions.js';
 import { Model } from './model.js';
 import { bus } from './bus.js';
 import { Export } from './emod-export.js';
@@ -246,137 +247,13 @@ function init() {
     if (!item) return;
     const action = item.getAttribute("data-action");
 
-    if (action === "delete-arrow") {
-      if (!store.interaction.ctxMenu || !store.interaction.ctxMenu.edgeSource) return;
-      const src = store.interaction.ctxMenu.edgeSource;
-      const tgt = store.interaction.ctxMenu.edgeTarget;
-      Model.removeEdge(store, src, tgt);
-      UI.hideContextMenu(store);
-      UI.hideDetailPanel(store);
-      bus.emit('data:changed', { store });
-      return;
-    }
+    if (!CtxActions.apply(store, action)) return;
 
-    if (action === "add-slice") {
-      if (!store.interaction.ctxMenu) return;
-      const aggId = store.interaction.ctxMenu.targetAggId;
-      const ctxId = store.interaction.ctxMenu.targetCtxId;
-      const parentId = aggId || ctxId;
-      if (!parentId) return;
-      const sliceId = Model.generateNodeId("slice", store);
-      const existingSlices = store.nodes.filter(function(n) {
-        return n.parentId === parentId && n.type === "slice";
-      });
-      store.nodes.push({
-        id: sliceId,
-        type: "slice",
-        label: Model.generateLabel("slice", existingSlices),
-        parentId: parentId,
-      });
-      UI.hideContextMenu(store);
-      bus.emit('data:changed', { store });
-      return;
-    }
-
-    if (action === "add-command") {
-      if (!store.interaction.ctxMenu || !store.interaction.ctxMenu.targetSliceId) return;
-      const sliceId = store.interaction.ctxMenu.targetSliceId;
-      const cmdId = Model.generateNodeId("cmd", store);
-      const existingCmds = store.nodes.filter(function(n) {
-        return n.parentId === sliceId && n.type === "command";
-      });
-      store.nodes.push({
-        id: cmdId,
-        type: "command",
-        label: Model.generateLabel("command", existingCmds),
-        parentId: sliceId,
-      });
-      UI.hideContextMenu(store);
-      bus.emit('data:changed', { store });
-      return;
-    }
-
-    if (action === "add-event") {
-      if (!store.interaction.ctxMenu || !store.interaction.ctxMenu.targetSliceId) return;
-      const sliceId = store.interaction.ctxMenu.targetSliceId;
-      const evtId = Model.generateNodeId("evt", store);
-      const existingEvts = store.nodes.filter(function(n) {
-        return n.parentId === sliceId && n.type === "event";
-      });
-      store.nodes.push({
-        id: evtId,
-        type: "event",
-        label: Model.generateLabel("event", existingEvts),
-        parentId: sliceId,
-      });
-      UI.hideContextMenu(store);
-      bus.emit('data:changed', { store });
-      return;
-    }
-
-    if (action === "add-flow") {
-      if (!store.interaction.ctxMenu || !store.interaction.ctxMenu.targetSliceId) return;
-      const sliceId = store.interaction.ctxMenu.targetSliceId;
-      const cmds = store.nodes.filter(function(n) {
-        return n.parentId === sliceId && n.type === "command";
-      });
-      const evtId = Model.generateNodeId("evt", store);
-      const existingEvts = store.nodes.filter(function(n) {
-        return n.parentId === sliceId && n.type === "event";
-      });
-      store.nodes.push({
-        id: evtId,
-        type: "event",
-        label: Model.generateLabel("event", existingEvts),
-        parentId: sliceId,
-      });
-      let sourceId;
-      if (cmds.length > 0) {
-        sourceId = cmds[cmds.length - 1].id;
-      } else {
-        sourceId = Model.generateNodeId("cmd", store);
-        store.nodes.push({
-          id: sourceId,
-          type: "command",
-          label: "new-command",
-          parentId: sliceId,
-        });
-      }
-      store.edges.push({
-        source: sourceId,
-        target: evtId,
-        type: "flow",
-      });
-      UI.hideContextMenu(store);
-      bus.emit('data:changed', { store });
-      return;
-    }
-
-    if (action === "move-slice-left" || action === "move-slice-right") {
-      if (!store.interaction.ctxMenu || !store.interaction.ctxMenu.targetSliceId) return;
-      const sliceId = store.interaction.ctxMenu.targetSliceId;
-      const sl = store.nodeById.get(sliceId);
-      if (!sl) return;
-      const aggId = sl.parentId;
-      const indices = [];
-      store.nodes.forEach(function(n, idx) {
-        if (n.parentId === aggId && n.type === "slice") indices.push(idx);
-      });
-      let currentPos = -1;
-      for (let i = 0; i < indices.length; i++) {
-        if (store.nodes[indices[i]].id === sliceId) { currentPos = i; break; }
-      }
-      if (currentPos === -1) return;
-      const offset = action === "move-slice-left" ? -1 : 1;
-      const targetPos = currentPos + offset;
-      if (targetPos < 0 || targetPos >= indices.length) return;
-      const moved = Model.moveSlice(store.nodes, sliceId, targetPos);
-      if (moved) {
-        UI.hideContextMenu(store);
-        bus.emit('data:changed', { store });
-      }
-      return;
-    }
+    UI.hideContextMenu(store);
+    // A deleted edge may still be the one the detail panel is showing, and
+    // re-rendering alone does not clear the selection behind it.
+    if (action === "delete-arrow") UI.hideDetailPanel(store);
+    bus.emit('data:changed', { store });
   });
 
   // ─── Dismiss context menu on outside click ──────────────────────
