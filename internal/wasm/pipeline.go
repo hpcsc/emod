@@ -10,6 +10,8 @@ import (
 	"github.com/hpcsc/emod/internal/ast"
 	"github.com/hpcsc/emod/internal/diagnostic"
 	"github.com/hpcsc/emod/internal/export"
+	"github.com/hpcsc/emod/internal/formatter"
+	"github.com/hpcsc/emod/internal/importer"
 	"github.com/hpcsc/emod/internal/lexer"
 	"github.com/hpcsc/emod/internal/linter"
 	"github.com/hpcsc/emod/internal/parser"
@@ -62,6 +64,24 @@ func RunPipelineExportDiagram(source string) ([]byte, error) {
 // in the model JSON diagnostics envelope { diagnostics, model }.
 func RunPipelineExportJSON(source string) ([]byte, error) {
 	return runPipeline(source, export.ExportJSONDiagnostics)
+}
+
+// ExportEmod converts a diagram JSON document — the {model_name, nodes, edges}
+// shape the viewer holds and edits — into formatted .emod text, so the viewer's
+// export button and `emod fmt` share one writer.
+func ExportEmod(diagramJSON string) (result []byte, err error) {
+	defer func() {
+		if r := recover(); r != nil {
+			err = fmt.Errorf("export panic: %v", r)
+		}
+	}()
+
+	model, err := importer.ImportDiagram([]byte(diagramJSON))
+	if err != nil {
+		return nil, err
+	}
+
+	return []byte(formatter.Format(model)), nil
 }
 
 // ErrorJSON returns a JSON error string in the form {"error": "..."}.

@@ -82,6 +82,52 @@ func TestRunPipelineExportJSON(t *testing.T) {
 	})
 }
 
+func TestExportEmod(t *testing.T) {
+	t.Run("diagram JSON round-trips back to the source it was parsed from", func(t *testing.T) {
+		source := `model "Billing"
+
+context "Payments" {
+  aggregate "Payment" {
+    slice "Take Payment" {
+      command TakePayment {
+        fields {
+          amount int required
+        }
+      }
+
+      event PaymentTaken {
+        fields {
+          amount int required
+        }
+      }
+
+      flow {
+        command -> event: TakePayment -> PaymentTaken
+      }
+    }
+  }
+}
+`
+		parsed, err := wasm.RunPipelineExportDiagram(source)
+		require.NoError(t, err)
+
+		var envelope struct {
+			Diagram json.RawMessage `json:"diagram"`
+		}
+		require.NoError(t, json.Unmarshal(parsed, &envelope))
+
+		result, err := wasm.ExportEmod(string(envelope.Diagram))
+		require.NoError(t, err)
+		require.Equal(t, source, string(result))
+	})
+
+	t.Run("malformed diagram JSON returns error", func(t *testing.T) {
+		_, err := wasm.ExportEmod(`not json`)
+		require.Error(t, err)
+		require.Contains(t, err.Error(), "invalid diagram JSON")
+	})
+}
+
 func TestErrorJSON(t *testing.T) {
 	t.Run("returns JSON with error field", func(t *testing.T) {
 		result := wasm.ErrorJSON("something went wrong")
