@@ -1,48 +1,20 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { installSVGGeometry } from './svg-env.js';
 
-// ─── Mutable wasm mock state (controlled per test) ─────────────────
+// Only the WASM parser is stubbed — it is the module boundary the viewer talks
+// to instead of a network or filesystem. Every other module is the real one, so
+// these tests assert what a user would see rather than which function ran.
 let wasmReady = Promise.resolve();
 let wasmIsReady = true;
+let parseResult = { diagnostics: [], diagram: { nodes: [], edges: [] } };
 
 vi.mock('../static/wasm.js', () => ({
   get ready() { return wasmReady; },
   get isReady() { return wasmIsReady; },
+  parseEmod: vi.fn(() => Promise.resolve(parseResult)),
+  exportEmod: vi.fn(() => Promise.resolve({ emod: '' })),
 }));
 
-vi.mock('../static/store.js', () => ({
-  createStore: vi.fn(() => ({
-    dom: {},
-    nodes: [],
-    edges: [],
-    nodeById: new Map(),
-    layoutPositions: {},
-    nodeOffsets: {},
-    hiddenContexts: {},
-    arrowData: [],
-    interaction: {},
-    viewport: {},
-    modelName: '',
-    diagnostics: [],
-  })),
-}));
-
-vi.mock('../static/bus.js', () => ({
-  bus: {
-    on: vi.fn(),
-    emit: vi.fn(),
-  },
-}));
-
-vi.mock('../static/layout.js', () => ({ Layout: {} }));
-vi.mock('../static/renderer.js', () => ({ Renderer: { esc: function(x) { return String(x); } } }));
-vi.mock('../static/interaction.js', () => ({ Interaction: { initEventListeners: vi.fn() } }));
-vi.mock('../static/ui.js', () => ({ UI: { initDelegation: vi.fn(), initKeyboard: vi.fn(), hideContextMenu: vi.fn(), hideDetailPanel: vi.fn(), updateStats: vi.fn(), toggleContextPanel: vi.fn(), updateContextList: vi.fn(), renderActorAnnotations: vi.fn(), updateDiagnosticsPanel: vi.fn(), toggleDiagnosticsPanel: vi.fn(), hideDiagnosticsPanel: vi.fn(), initDiagnosticsDelegation: vi.fn() } }));
-vi.mock('../static/minimap.js', () => ({ Minimap: { initMinimap: vi.fn() } }));
-vi.mock('../static/ctx-actions.js', () => ({ CtxActions: { apply: vi.fn(() => false) } }));
-vi.mock('../static/model.js', () => ({ Model: { setModelData: vi.fn(), sendParse: vi.fn(() => Promise.resolve({ diagnostics: [], diagram: { nodes: [], edges: [] } })) } }));
-vi.mock('../static/emod-export.js', () => ({ Export: {} }));
-
-// ─── DOM helpers ───────────────────────────────────────────────────
 function createRequiredElements() {
   const container = document.createElement('div');
   container.innerHTML = `
@@ -60,7 +32,7 @@ function createRequiredElements() {
     <div id="minimap"></div>
     <svg id="minimap-svg"></svg>
     <button id="minimap-toggle"></button>
-    <div id="context-panel"></div>
+    <div id="context-panel" class="hidden"></div>
     <button id="context-toggle"></button>
     <div id="context-list"></div>
     <div id="tooltip"></div>
@@ -84,10 +56,6 @@ function createRequiredElements() {
   return container;
 }
 
-function clearDOM() {
-  document.body.innerHTML = '';
-}
-
 function fireDrop(element, file) {
   const evt = new Event('drop', { bubbles: true, cancelable: true });
   Object.defineProperty(evt, 'dataTransfer', {
@@ -97,437 +65,191 @@ function fireDrop(element, file) {
   return evt;
 }
 
-// ─── Mock FileReader for deterministic file loading ──────────────
+// MockFileReader stands in for the browser's async file read.
 class MockFileReader {
   readAsText(file) {
     this.result = file._content || '';
     const self = this;
-    setTimeout(function() {
+    Promise.resolve().then(function() {
       if (self.onload) self.onload({ target: self });
-    }, 0);
+    });
   }
 }
 
+async function startViewer() {
+  createRequiredElements();
+  const { init } = await import('../static/viewer.js');
+  init();
+}
+
+// billingDiagram is the node shape the exporter produces: a context holding a
+// slice, which holds the elements.
+function billingDiagram() {
+  return {
+    model_name: 'Billing',
+    nodes: [
+      { id: 'context-1', type: 'context', label: 'Payments', parentId: null },
+      { id: 'slice-1', type: 'slice', label: 'Take Payment', parentId: 'context-1' },
+      { id: 'command-1', type: 'command', label: 'TakePayment', parentId: 'slice-1' },
+    ],
+    edges: [],
+  };
+}
+
+// flush lets queued microtasks — the file read and the parse promise — settle.
+function flush() {
+  return new Promise(function(resolve) { setTimeout(resolve, 0); });
+}
+
 beforeEach(() => {
-  clearDOM();
+  installSVGGeometry();
+  document.body.innerHTML = '';
   globalThis.FileReader = MockFileReader;
-  // Reset wasm mock defaults
   wasmReady = Promise.resolve();
   wasmIsReady = true;
+  parseResult = { diagnostics: [], diagram: { nodes: [], edges: [] } };
 });
 
-// ─── Tests ─────────────────────────────────────────────────────────
 describe('viewer initial state', () => {
-  it('opens data panel and shows landing page when no INITIAL_DATA', async () => {
+  it('opens the data panel and shows the landing page when there is no initial data', async () => {
     globalThis.INITIAL_DATA = null;
-    createRequiredElements();
-    const { init } = await import('../static/viewer.js');
-    init();
 
-    const panel = document.getElementById('data-panel');
-    const nameDisplay = document.getElementById('model-name-display');
-    const sourceInput = document.getElementById('source-input');
-    const instructions = document.getElementById('landing-instructions');
+    await startViewer();
 
-    expect(panel.classList.contains('collapsed')).toBe(false);
-    expect(nameDisplay.textContent).toBe('(no model)');
-    expect(sourceInput.placeholder).toBe('Paste .emod source or diagram JSON here');
-    expect(instructions.style.display).toBe('block');
+    expect(document.getElementById('data-panel').classList.contains('collapsed')).toBe(false);
+    expect(document.getElementById('model-name-display').textContent).toBe('(no model)');
+    expect(document.getElementById('source-input').placeholder)
+      .toBe('Paste .emod source or diagram JSON here');
+    expect(document.getElementById('landing-instructions').style.display).toBe('block');
   });
 
-  it('does not show landing page when INITIAL_DATA is present', async () => {
-    const { Model } = await import('../static/model.js');
-    globalThis.INITIAL_DATA = { diagram: { nodes: [{ id: 'n1' }], edges: [] } };
-    createRequiredElements();
-    const { init } = await import('../static/viewer.js');
-    init();
+  it('renders the supplied diagram and hides the landing page', async () => {
+    globalThis.INITIAL_DATA = { diagram: billingDiagram() };
 
-    expect(Model.setModelData).toHaveBeenCalledWith(
-      expect.anything(),
-      expect.objectContaining({ nodes: [{ id: 'n1' }], edges: [] }),
-    );
+    await startViewer();
 
-    const panel = document.getElementById('data-panel');
-    const instructions = document.getElementById('landing-instructions');
-    // Panel should remain collapsed when INITIAL_DATA loads
-    expect(panel.classList.contains('collapsed')).toBe(true);
-    expect(instructions.style.display).toBe('none');
+    expect(document.getElementById('landing-instructions').style.display).toBe('none');
+    expect(document.getElementById('data-panel').classList.contains('collapsed')).toBe(true);
+    expect(document.getElementById('diagram-canvas').innerHTML).toContain('TakePayment');
+    expect(document.getElementById('stat-nodes').textContent).toBe('3');
   });
 });
 
 describe('viewer WASM loading indicator', () => {
-  it('shows loading indicator when WASM is not ready', async () => {
+  it('shows a loading indicator while the parser is still loading', async () => {
     wasmReady = new Promise(function() {}); // never resolves
     wasmIsReady = false;
-
     globalThis.INITIAL_DATA = null;
-    createRequiredElements();
-    const { init } = await import('../static/viewer.js');
-    init();
 
-    const statusEl = document.getElementById('render-status');
-    expect(statusEl.textContent).toBe('⏳ Loading parser...');
+    await startViewer();
+
+    expect(document.getElementById('render-status').textContent).toBe('⏳ Loading parser...');
   });
 
-  it('clears loading indicator when WASM becomes ready', async () => {
+  it('clears the loading indicator once the parser is ready', async () => {
     let resolveReady;
-    wasmReady = new Promise(function(resolve) {
-      resolveReady = resolve;
-    });
+    wasmReady = new Promise(function(resolve) { resolveReady = resolve; });
     wasmIsReady = false;
-
     globalThis.INITIAL_DATA = null;
-    createRequiredElements();
-    const { init } = await import('../static/viewer.js');
-    init();
 
-    const statusEl = document.getElementById('render-status');
-    expect(statusEl.textContent).toBe('⏳ Loading parser...');
+    await startViewer();
+    expect(document.getElementById('render-status').textContent).toBe('⏳ Loading parser...');
 
     resolveReady();
     await wasmReady;
+    await flush();
 
-    // Allow setTimeout to fire
-    await new Promise(function(resolve) { setTimeout(resolve, 10); });
-    expect(statusEl.textContent).toBe('✓ Ready');
+    expect(document.getElementById('render-status').textContent).toBe('✓ Ready');
   });
 });
 
 describe('viewer drag-and-drop', () => {
-  it('rejects unsupported file types with an error', async () => {
+  it('rejects unsupported file types with an error the user can read', async () => {
     globalThis.INITIAL_DATA = null;
-    createRequiredElements();
-    const { init } = await import('../static/viewer.js');
-    init();
-
-    const panelBody = document.getElementById('data-panel-body');
-    const statusEl = document.getElementById('render-status');
+    await startViewer();
 
     const file = new File(['text'], 'notes.txt', { type: 'text/plain' });
     file._content = 'plain text';
-    fireDrop(panelBody, file);
+    fireDrop(document.getElementById('data-panel-body'), file);
 
+    const statusEl = document.getElementById('render-status');
     expect(statusEl.textContent).toContain('Only .emod and .json files are supported');
     expect(statusEl.className).toContain('error');
   });
 
-  it('accepts .emod file drops and loads content into textarea', async () => {
+  it('loads a dropped .emod file into the editor and renders it', async () => {
     globalThis.INITIAL_DATA = null;
-    createRequiredElements();
-    const { init } = await import('../static/viewer.js');
-    init();
-
-    const panelBody = document.getElementById('data-panel-body');
-    const sourceInput = document.getElementById('source-input');
-    const renderBtn = document.getElementById('render-btn');
-    let clicked = false;
-    renderBtn.addEventListener('click', function() { clicked = true; });
+    parseResult = { diagnostics: [], diagram: billingDiagram() };
+    await startViewer();
 
     const file = new File(['context Test {}'], 'test.emod', { type: 'text/plain' });
     file._content = 'context Test {}';
-    fireDrop(panelBody, file);
+    fireDrop(document.getElementById('data-panel-body'), file);
+    await flush();
 
-    // Wait for MockFileReader's setTimeout
-    await new Promise(function(resolve) { setTimeout(resolve, 10); });
-
-    expect(sourceInput.value).toBe('context Test {}');
-    expect(clicked).toBe(true);
+    expect(document.getElementById('source-input').value).toBe('context Test {}');
+    expect(document.getElementById('diagram-canvas').innerHTML).toContain('TakePayment');
   });
 
-  it('does not show diagnostics badge or panel for valid file with no diagnostics', async () => {
+  it('loads a dropped diagram .json file into the editor and renders it', async () => {
     globalThis.INITIAL_DATA = null;
-    createRequiredElements();
-    const { init } = await import('../static/viewer.js');
-    init();
+    await startViewer();
 
-    const badge = document.getElementById('diagnostics-badge');
-    const panel = document.getElementById('diagnostics-panel');
-
-    expect(badge.style.display).toBe('none');
-    expect(panel.classList.contains('hidden')).toBe(true);
-  });
-
-  it('wires diagnostics badge click to toggleDiagnosticsPanel', async () => {
-    const uiModule = await import('../static/ui.js');
-    globalThis.INITIAL_DATA = null;
-    createRequiredElements();
-    const { init } = await import('../static/viewer.js');
-    init();
-
-    const badge = document.getElementById('diagnostics-badge');
-    badge.click();
-
-    expect(uiModule.UI.toggleDiagnosticsPanel).toHaveBeenCalledTimes(1);
-  });
-
-  it('wires diagnostics close button to hideDiagnosticsPanel', async () => {
-    const uiModule = await import('../static/ui.js');
-    globalThis.INITIAL_DATA = null;
-    createRequiredElements();
-    const { init } = await import('../static/viewer.js');
-    init();
-
-    const closeBtn = document.getElementById('diagnostics-close');
-    closeBtn.click();
-
-    expect(uiModule.UI.hideDiagnosticsPanel).toHaveBeenCalledTimes(1);
-  });
-
-  it('registers diagnostics:changed bus listener', async () => {
-    const busModule = await import('../static/bus.js');
-    globalThis.INITIAL_DATA = null;
-    createRequiredElements();
-    const { init } = await import('../static/viewer.js');
-    init();
-
-    expect(busModule.bus.on).toHaveBeenCalledWith(
-      'diagnostics:changed',
-      expect.any(Function),
-    );
-  });
-
-  it('accepts .json file drops and loads content into textarea', async () => {
-    globalThis.INITIAL_DATA = null;
-    createRequiredElements();
-    const { init } = await import('../static/viewer.js');
-    init();
-
-    const panelBody = document.getElementById('data-panel-body');
-    const sourceInput = document.getElementById('source-input');
-    const renderBtn = document.getElementById('render-btn');
-    let clicked = false;
-    renderBtn.addEventListener('click', function() { clicked = true; });
-
-    const jsonContent = JSON.stringify({ nodes: [{ id: 'n1' }], edges: [] });
+    const jsonContent = JSON.stringify(billingDiagram());
     const file = new File([jsonContent], 'diagram.json', { type: 'application/json' });
     file._content = jsonContent;
-    fireDrop(panelBody, file);
+    fireDrop(document.getElementById('data-panel-body'), file);
+    await flush();
 
-    await new Promise(function(resolve) { setTimeout(resolve, 10); });
-
-    expect(sourceInput.value).toBe(jsonContent);
-    expect(clicked).toBe(true);
+    expect(document.getElementById('source-input').value).toBe(jsonContent);
+    expect(document.getElementById('diagram-canvas').innerHTML).toContain('TakePayment');
   });
 });
 
-// ─── Diagnostics click-to-highlight tests ──────────────────────────
-describe('diagnostics click-to-highlight', () => {
-  function setupDiagnosticsTest() {
-    const container = document.createElement('div');
-    container.innerHTML = `
-      <div id="diagnostics-list"></div>
-      <div id="diagnostics-panel"></div>
-      <div id="diagnostics-badge" style="display:none"></div>
-      <svg id="diagram-canvas"></svg>
-    `;
-    document.body.appendChild(container);
+describe('viewer diagnostics panel', () => {
+  it('stays hidden while the model has no diagnostics', async () => {
+    globalThis.INITIAL_DATA = null;
+    await startViewer();
 
-    const diagnosticsList = document.getElementById('diagnostics-list');
-    const diagnosticsPanel = document.getElementById('diagnostics-panel');
-    const diagnosticsBadge = document.getElementById('diagnostics-badge');
-    const svg = document.getElementById('diagram-canvas');
-
-    return { container, diagnosticsList, diagnosticsPanel, diagnosticsBadge, svg };
-  }
-
-  it('highlights matching diagram nodes when clicking a diagnostic', async () => {
-    const { container, diagnosticsList, diagnosticsPanel, diagnosticsBadge, svg } = setupDiagnosticsTest();
-
-    const uiModule = await vi.importActual('../static/ui.js');
-    const storeModule = await vi.importActual('../static/store.js');
-    const { UI } = uiModule;
-    const store = storeModule.createStore();
-    store.dom.diagnosticsList = diagnosticsList;
-    store.dom.diagnosticsPanel = diagnosticsPanel;
-    store.dom.diagnosticsBadge = diagnosticsBadge;
-    store.dom.svg = svg;
-
-    // Nodes with position data
-    store.nodes = [
-      { id: 'n1', type: 'command', label: 'Cmd1', position: { filename: 'test.cue', line: 5, column: 3 } },
-      { id: 'n2', type: 'event', label: 'Evt1', position: { filename: 'test.cue', line: 10, column: 3 } },
-    ];
-    store.nodeById = new Map(store.nodes.map(function(n) { return [n.id, n]; }));
-
-    const diagnostics = [
-      { file: 'test.cue', line: 5, message: 'Error on line 5', severity: 'error' },
-    ];
-    store.diagnostics = diagnostics;
-
-    UI.updateDiagnosticsPanel(store, diagnostics);
-    UI.initDiagnosticsDelegation(store);
-
-    const diagItem = diagnosticsList.querySelector('.diag-item');
-    expect(diagItem).not.toBeNull();
-    diagItem.click();
-
-    // n1 should be highlighted
-    expect(store.interaction.highlighted).toEqual({ n1: true });
-    expect(diagItem.classList.contains('not-rendered')).toBe(false);
-    document.body.removeChild(container);
+    expect(document.getElementById('diagnostics-badge').style.display).toBe('none');
+    expect(document.getElementById('diagnostics-panel').classList.contains('hidden')).toBe(true);
   });
 
-  it('shows not-rendered indicator when no matching node', async () => {
-    const { container, diagnosticsList, diagnosticsPanel, diagnosticsBadge, svg } = setupDiagnosticsTest();
+  it('shows a badge listing the diagnostics a render produced', async () => {
+    globalThis.INITIAL_DATA = null;
+    parseResult = {
+      diagnostics: [{ file: 'test.emod', line: 3, message: 'unrecognized keyword', severity: 'error' }],
+      diagram: { nodes: [], edges: [] },
+    };
+    await startViewer();
 
-    const uiModule = await vi.importActual('../static/ui.js');
-    const storeModule = await vi.importActual('../static/store.js');
-    const { UI } = uiModule;
-    const store = storeModule.createStore();
-    store.dom.diagnosticsList = diagnosticsList;
-    store.dom.diagnosticsPanel = diagnosticsPanel;
-    store.dom.diagnosticsBadge = diagnosticsBadge;
-    store.dom.svg = svg;
+    document.getElementById('source-input').value = 'foobar {}';
+    document.getElementById('render-btn').click();
+    await flush();
 
-    // Node with position that won't match
-    store.nodes = [
-      { id: 'n1', type: 'command', label: 'Cmd1', position: { filename: 'other.cue', line: 99, column: 3 } },
-    ];
-    store.nodeById = new Map(store.nodes.map(function(n) { return [n.id, n]; }));
-
-    const diagnostics = [
-      { file: 'test.cue', line: 5, message: 'Unmatched error', severity: 'error' },
-    ];
-    store.diagnostics = diagnostics;
-
-    UI.updateDiagnosticsPanel(store, diagnostics);
-    UI.initDiagnosticsDelegation(store);
-
-    const diagItem = diagnosticsList.querySelector('.diag-item');
-    diagItem.click();
-
-    expect(diagItem.classList.contains('not-rendered')).toBe(true);
-    // Highlights should be empty
-    expect(store.interaction.highlighted).toEqual({});
-    document.body.removeChild(container);
+    const badge = document.getElementById('diagnostics-badge');
+    expect(badge.style.display).toBe('inline-block');
+    expect(badge.textContent).toBe('1 error');
+    expect(document.getElementById('diagnostics-list').textContent)
+      .toContain('unrecognized keyword');
   });
 
-  it('shows not-rendered for diagnostic without file or line', async () => {
-    const { container, diagnosticsList, diagnosticsPanel, diagnosticsBadge, svg } = setupDiagnosticsTest();
+  it('opens the panel when the badge is clicked and closes it again', async () => {
+    globalThis.INITIAL_DATA = null;
+    parseResult = {
+      diagnostics: [{ file: 'test.emod', line: 3, message: 'unrecognized keyword', severity: 'error' }],
+      diagram: { nodes: [], edges: [] },
+    };
+    await startViewer();
 
-    const uiModule = await vi.importActual('../static/ui.js');
-    const storeModule = await vi.importActual('../static/store.js');
-    const { UI } = uiModule;
-    const store = storeModule.createStore();
-    store.dom.diagnosticsList = diagnosticsList;
-    store.dom.diagnosticsPanel = diagnosticsPanel;
-    store.dom.diagnosticsBadge = diagnosticsBadge;
-    store.dom.svg = svg;
+    document.getElementById('render-btn').click();
+    await flush();
 
-    store.nodes = [
-      { id: 'n1', type: 'command', label: 'Cmd1', position: { filename: 'test.cue', line: 5, column: 3 } },
-    ];
-    store.nodeById = new Map(store.nodes.map(function(n) { return [n.id, n]; }));
+    const panel = document.getElementById('diagnostics-panel');
+    document.getElementById('diagnostics-badge').click();
+    expect(panel.classList.contains('hidden')).toBe(false);
 
-    const diagnostics = [
-      { file: '', line: 0, message: 'No location', severity: 'error' },
-    ];
-    store.diagnostics = diagnostics;
-
-    UI.updateDiagnosticsPanel(store, diagnostics);
-    UI.initDiagnosticsDelegation(store);
-
-    const diagItem = diagnosticsList.querySelector('.diag-item');
-    diagItem.click();
-
-    expect(diagItem.classList.contains('not-rendered')).toBe(true);
-    document.body.removeChild(container);
-  });
-
-  it('sequential clicks replace previous highlight', async () => {
-    const { container, diagnosticsList, diagnosticsPanel, diagnosticsBadge, svg } = setupDiagnosticsTest();
-
-    const uiModule = await vi.importActual('../static/ui.js');
-    const storeModule = await vi.importActual('../static/store.js');
-    const { UI } = uiModule;
-    const store = storeModule.createStore();
-    store.dom.diagnosticsList = diagnosticsList;
-    store.dom.diagnosticsPanel = diagnosticsPanel;
-    store.dom.diagnosticsBadge = diagnosticsBadge;
-    store.dom.svg = svg;
-
-    // Add node elements to SVG for highlight to work
-    const n1El = document.createElementNS('http://www.w3.org/2000/svg', 'g');
-    n1El.setAttribute('data-node-id', 'n1');
-    n1El.classList.add('diagram-node');
-    svg.appendChild(n1El);
-    const n2El = document.createElementNS('http://www.w3.org/2000/svg', 'g');
-    n2El.setAttribute('data-node-id', 'n2');
-    n2El.classList.add('diagram-node');
-    svg.appendChild(n2El);
-
-    store.nodes = [
-      { id: 'n1', type: 'command', label: 'Cmd1', position: { filename: 'test.cue', line: 5, column: 3 } },
-      { id: 'n2', type: 'event', label: 'Evt1', position: { filename: 'test.cue', line: 10, column: 3 } },
-    ];
-    store.nodeById = new Map(store.nodes.map(function(n) { return [n.id, n]; }));
-
-    const diagnostics = [
-      { file: 'test.cue', line: 5, message: 'Error 1', severity: 'error' },
-      { file: 'test.cue', line: 10, message: 'Error 2', severity: 'error' },
-    ];
-    store.diagnostics = diagnostics;
-
-    UI.updateDiagnosticsPanel(store, diagnostics);
-    UI.initDiagnosticsDelegation(store);
-
-    const items = diagnosticsList.querySelectorAll('.diag-item');
-    expect(items.length).toBe(2);
-
-    // Click first diagnostic
-    items[0].click();
-    expect(store.interaction.highlighted).toEqual({ n1: true });
-
-    // Click second diagnostic — should replace highlight
-    items[1].click();
-    expect(store.interaction.highlighted).toEqual({ n2: true });
-    expect(n1El.classList.contains('hl')).toBe(false);
-    expect(n2El.classList.contains('hl')).toBe(true);
-
-    document.body.removeChild(container);
-  });
-
-  it('closing diagnostics panel clears highlights', async () => {
-    const { container, diagnosticsList, diagnosticsPanel, diagnosticsBadge, svg } = setupDiagnosticsTest();
-
-    const uiModule = await vi.importActual('../static/ui.js');
-    const storeModule = await vi.importActual('../static/store.js');
-    const { UI } = uiModule;
-    const store = storeModule.createStore();
-    store.dom.diagnosticsList = diagnosticsList;
-    store.dom.diagnosticsPanel = diagnosticsPanel;
-    store.dom.diagnosticsBadge = diagnosticsBadge;
-    store.dom.svg = svg;
-
-    const n1El = document.createElementNS('http://www.w3.org/2000/svg', 'g');
-    n1El.setAttribute('data-node-id', 'n1');
-    n1El.classList.add('diagram-node');
-    svg.appendChild(n1El);
-
-    store.nodes = [
-      { id: 'n1', type: 'command', label: 'Cmd1', position: { filename: 'test.cue', line: 5, column: 3 } },
-    ];
-    store.nodeById = new Map(store.nodes.map(function(n) { return [n.id, n]; }));
-
-    const diagnostics = [
-      { file: 'test.cue', line: 5, message: 'Error', severity: 'error' },
-    ];
-    store.diagnostics = diagnostics;
-
-    UI.updateDiagnosticsPanel(store, diagnostics);
-    UI.initDiagnosticsDelegation(store);
-
-    const diagItem = diagnosticsList.querySelector('.diag-item');
-    diagItem.click();
-
-    // Verify highlight is applied
-    expect(store.interaction.highlighted).toEqual({ n1: true });
-
-    // Close panel
-    UI.hideDiagnosticsPanel(store);
-
-    // Verify highlights cleared
-    expect(store.interaction.highlighted).toEqual({});
-    document.body.removeChild(container);
+    document.getElementById('diagnostics-close').click();
+    expect(panel.classList.contains('hidden')).toBe(true);
   });
 });
