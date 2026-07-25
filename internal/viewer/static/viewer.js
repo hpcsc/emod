@@ -3,6 +3,7 @@ import { Layout } from './layout.js';
 import { Renderer } from './renderer.js';
 import { Interaction } from './interaction.js';
 import { UI } from './ui.js';
+import { Minimap } from './minimap.js';
 import { Model } from './model.js';
 import { bus } from './bus.js';
 import { Export } from './emod-export.js';
@@ -22,10 +23,6 @@ bus.on('model:updated', function({ store: s }) {
   if (s.dom.contextPanel && !s.dom.contextPanel.classList.contains("hidden")) {
     UI.updateContextList(s);
   }
-});
-
-bus.on('viewport:changed', function({ store: s }) {
-  UI.updateMinimap(s);
 });
 
 bus.on('diagnostics:changed', function({ store: s, diagnostics }) {
@@ -131,6 +128,7 @@ function init() {
   UI.initDelegation(store);
   UI.initKeyboard(store);
   UI.initDiagnosticsDelegation(store);
+  Minimap.initMinimap(store);
 
   // ─── Render button click ──────────────────────────────────────────
   store.dom.renderBtn.addEventListener("click", function() {
@@ -226,11 +224,6 @@ function init() {
     });
   });
 
-  // ─── Minimap toggle ───────────────────────────────────────────────
-  store.dom.minimapToggle.addEventListener("click", function() {
-    UI.toggleMinimap(store);
-  });
-
   // ─── Context toggle ───────────────────────────────────────────────
   store.dom.contextToggle.addEventListener("click", function() {
     UI.toggleContextPanel(store);
@@ -245,100 +238,6 @@ function init() {
   store.dom.diagnosticsClose.addEventListener("click", function(evt) {
     evt.stopPropagation();
     UI.hideDiagnosticsPanel(store);
-  });
-
-  // ─── Minimap event listeners ──────────────────────────────────────
-  let minimapDragPos = false;
-  let minimapNavDrag = false;
-  const minimapHandle = document.getElementById("minimap-handle");
-
-  minimapHandle.addEventListener("mousedown", function(evt) {
-    evt.preventDefault();
-    evt.stopPropagation();
-    minimapDragPos = true;
-    let tx = 0, ty = 0;
-    const mat = store.dom.minimap.style.transform;
-    if (mat && mat.startsWith("translate(")) {
-      const parts = mat.match(/translate\(([\d.-]+)px,\s*([\d.-]+)px\)/);
-      if (parts) { tx = parseFloat(parts[1]); ty = parseFloat(parts[2]); }
-    }
-    store.dom.minimap.dataset.dragOffX = evt.clientX - tx;
-    store.dom.minimap.dataset.dragOffY = evt.clientY - ty;
-  });
-
-  store.dom.minimap.addEventListener("mousedown", function(evt) {
-    if (evt.target.closest("#minimap-close, #minimap-toggle, #minimap-handle, #context-panel, #context-toggle, #context-list")) return;
-    evt.preventDefault();
-    evt.stopPropagation();
-    UI.minimapNavigate(store, evt);
-    minimapNavDrag = true;
-  });
-
-  document.addEventListener("mousemove", function(evt) {
-    if (minimapDragPos) {
-      const tx = evt.clientX - parseFloat(store.dom.minimap.dataset.dragOffX);
-      const ty = evt.clientY - parseFloat(store.dom.minimap.dataset.dragOffY);
-      store.dom.minimap.style.transform = "translate(" + tx + "px, " + ty + "px)";
-      return;
-    }
-    if (minimapNavDrag) {
-      UI.minimapNavigate(store, evt);
-      evt.preventDefault();
-    }
-  });
-
-  document.addEventListener("mouseup", function() {
-    minimapDragPos = false;
-    minimapNavDrag = false;
-  });
-
-  minimapHandle.addEventListener("touchstart", function(evt) {
-    evt.preventDefault();
-    evt.stopPropagation();
-    minimapDragPos = true;
-    const touch = evt.touches[0];
-    let tx = 0, ty = 0;
-    const mat = store.dom.minimap.style.transform;
-    if (mat && mat.startsWith("translate(")) {
-      const parts = mat.match(/translate\(([\d.-]+)px,\s*([\d.-]+)px\)/);
-      if (parts) { tx = parseFloat(parts[1]); ty = parseFloat(parts[2]); }
-    }
-    store.dom.minimap.dataset.dragOffX = touch.clientX - tx;
-    store.dom.minimap.dataset.dragOffY = touch.clientY - ty;
-  }, { passive: false });
-
-  store.dom.minimap.addEventListener("touchstart", function(evt) {
-    if (evt.target.closest("#minimap-close, #minimap-toggle, #minimap-handle, #context-panel, #context-toggle, #context-list")) return;
-    evt.preventDefault();
-    evt.stopPropagation();
-    const touch = evt.touches[0];
-    UI.minimapNavigate(store, touch);
-    minimapNavDrag = true;
-  }, { passive: false });
-
-  store.dom.minimap.addEventListener("touchmove", function(evt) {
-    if (minimapDragPos) {
-      const touch = evt.touches[0];
-      const tx = touch.clientX - parseFloat(store.dom.minimap.dataset.dragOffX);
-      const ty = touch.clientY - parseFloat(store.dom.minimap.dataset.dragOffY);
-      store.dom.minimap.style.transform = "translate(" + tx + "px, " + ty + "px)";
-      return;
-    }
-    if (minimapNavDrag) {
-      evt.preventDefault();
-      const touch = evt.touches[0];
-      UI.minimapNavigate(store, touch);
-    }
-  }, { passive: false });
-
-  store.dom.minimap.addEventListener("touchend", function() {
-    minimapDragPos = false;
-    minimapNavDrag = false;
-  });
-
-  document.getElementById("minimap-close").addEventListener("click", function(evt) {
-    evt.stopPropagation();
-    UI.toggleMinimap(store, false);
   });
 
   // ─── Context menu item clicks ────────────────────────────────────

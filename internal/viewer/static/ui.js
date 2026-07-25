@@ -1,7 +1,5 @@
-import { MINIMAP_W, MINIMAP_H, MINIMAP_PAD } from './config.js';
 import { Renderer } from './renderer.js';
 import { Layout } from './layout.js';
-import { Interaction } from './interaction.js';
 import { Model } from './model.js';
 import { bus } from './bus.js';
 
@@ -60,111 +58,6 @@ function renderActorAnnotations(store) {
     html += '<span class="actor-badge">' + Renderer.esc(a.label) + '</span>';
   });
   container.innerHTML = html;
-}
-
-// ─── Minimap ────────────────────────────────────────────────────
-function getDiagramDims(store) {
-  const svgEl = store.dom.svg;
-  const vg = svgEl.querySelector("#viewport-group");
-  if (vg) {
-    try {
-      const b = vg.getBBox();
-      if (b.width > 0 && b.height > 0) return { width: b.width, height: b.height };
-    } catch(e) {}
-  }
-  const vb = svgEl.getAttribute("viewBox");
-  if (vb) {
-    const parts = vb.split(/\s+/).map(Number);
-    if (parts.length === 4 && parts[2] > 0 && parts[3] > 0) {
-      return { width: parts[2], height: parts[3] };
-    }
-  }
-  return null;
-}
-
-function updateMinimap(store) {
-  const minimapEl = store.dom.minimap;
-  const minimapSvgEl = store.dom.minimapSvg;
-  if (!minimapEl || minimapEl.classList.contains("hidden")) return;
-  if (!minimapSvgEl) return;
-
-  const dims = getDiagramDims(store);
-  if (!dims || dims.width <= 0 || dims.height <= 0) {
-    minimapSvgEl.innerHTML = "";
-    return;
-  }
-
-  const svgEl = store.dom.svg;
-  const cw = svgEl.clientWidth;
-  const ch = svgEl.clientHeight;
-
-  const availableX = MINIMAP_W - MINIMAP_PAD * 2;
-  const availableY = MINIMAP_H - MINIMAP_PAD * 2;
-  const mmScale = Math.min(availableX / dims.width, availableY / dims.height);
-  const mmOffX = (MINIMAP_W - dims.width * mmScale) / 2;
-  const mmOffY = (MINIMAP_H - dims.height * mmScale) / 2;
-
-  let html = "";
-  html += '<rect class="minimap-bg" x="' + mmOffX + '" y="' + mmOffY +
-    '" width="' + (dims.width * mmScale) + '" height="' + (dims.height * mmScale) +
-    '" fill="#e9ecef" stroke="#adb5bd" stroke-width="0.5" rx="2"/>';
-
-  const vpX = (-store.viewport.offsetX / store.viewport.zoomScale) * mmScale + mmOffX;
-  const vpY = (-store.viewport.offsetY / store.viewport.zoomScale) * mmScale + mmOffY;
-  const vpW = (cw / store.viewport.zoomScale) * mmScale;
-  const vpH = (ch / store.viewport.zoomScale) * mmScale;
-
-  html += '<rect class="minimap-viewport" x="' + vpX + '" y="' + vpY +
-    '" width="' + vpW + '" height="' + vpH +
-    '" fill="rgba(52,152,219,0.15)" stroke="#3498db" stroke-width="1" rx="1"/>';
-
-  minimapSvgEl.innerHTML = html;
-}
-
-function minimapNavigate(store, evt) {
-  const minimapSvgEl = store.dom.minimapSvg;
-  if (!minimapSvgEl) return;
-  const mRect = minimapSvgEl.getBoundingClientRect();
-  const clientX = evt.clientX !== undefined ? evt.clientX : evt.pageX;
-  const clientY = evt.clientY !== undefined ? evt.clientY : evt.pageY;
-  const clickX = clientX - mRect.left;
-  const clickY = clientY - mRect.top;
-
-  const dims = getDiagramDims(store);
-  if (!dims || dims.width <= 0 || dims.height <= 0) return;
-
-  const availableX = MINIMAP_W - MINIMAP_PAD * 2;
-  const availableY = MINIMAP_H - MINIMAP_PAD * 2;
-  const mmScale = Math.min(availableX / dims.width, availableY / dims.height);
-  const mmOffX = (MINIMAP_W - dims.width * mmScale) / 2;
-  const mmOffY = (MINIMAP_H - dims.height * mmScale) / 2;
-
-  const diagramX = (clickX - mmOffX) / mmScale;
-  const diagramY = (clickY - mmOffY) / mmScale;
-
-  const svgEl = store.dom.svg;
-  const cw = svgEl.clientWidth;
-  const ch = svgEl.clientHeight;
-
-  store.viewport.offsetX = -diagramX * store.viewport.zoomScale + cw / 2;
-  store.viewport.offsetY = -diagramY * store.viewport.zoomScale + ch / 2;
-
-  Interaction.applyViewport(store);
-}
-
-function toggleMinimap(store, show) {
-  const minimapEl = store.dom.minimap;
-  const minimapToggleEl = store.dom.minimapToggle;
-  if (show === undefined) {
-    minimapEl.classList.toggle("hidden");
-  } else if (show) {
-    minimapEl.classList.remove("hidden");
-  } else {
-    minimapEl.classList.add("hidden");
-  }
-  const isHidden = minimapEl.classList.contains("hidden");
-  minimapToggleEl.classList.toggle("active", !isHidden);
-  if (!isHidden) updateMinimap(store);
 }
 
 // ─── Context panel ──────────────────────────────────────────────
@@ -1000,9 +893,6 @@ export const UI = {
   hideTooltip,
   positionTooltip,
   renderActorAnnotations,
-  updateMinimap,
-  minimapNavigate,
-  toggleMinimap,
   updateContextList,
   toggleContextPanel,
   updateDiagnosticsPanel,
