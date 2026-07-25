@@ -29,6 +29,8 @@ jobs:
       uses: actions/setup-node@v4
       with:
         node-version-file: 'internal/viewer/package.json'
+    - name: Run Grammar Tests
+      run: task test:grammar
     - name: Run Viewer JS Tests
       run: task test:viewer
     - name: Run Viewer Browser E2E Test

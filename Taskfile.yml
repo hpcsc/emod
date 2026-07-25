@@ -57,6 +57,7 @@ tasks:
       - task: test:unit
       - task: test:integration
       - task: test:viewer
+      - task: test:grammar
 
   test:unit:
     desc: Run unit tests
@@ -74,6 +75,13 @@ tasks:
     cmds:
       - npm ci
       - npm test
+
+  test:grammar:
+    desc: Run the tree-sitter grammar corpus tests
+    dir: editors/tree-sitter-emod
+    cmds:
+      - tree-sitter generate
+      - tree-sitter test
 
   test:e2e:viewer:
     desc: Run viewer browser e2e tests against the static web bundle
