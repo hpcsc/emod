@@ -346,8 +346,10 @@ func ExportSVG(model *ast.Model, _ Style) ([]byte, error) {
 					b.WriteString(svgArrowPath(reactorCx, reactorCy, ccx, ccy))
 				}
 			}
-			// command -> event (translation implies command emits event)
-			if tr.Command != "" && tr.Event != nil && tr.Event.Name != "" {
+			// command -> event (translation implies command emits event, unless a
+			// flow already declares it and has drawn the arrow above)
+			if tr.Command != "" && tr.Event != nil && tr.Event.Name != "" &&
+				!declaresFlow(s, tr.Command, tr.Event.Name) {
 				cPos, cok := nameToPos[tr.Command]
 				ePos, eok := nameToPos[tr.Event.Name]
 				if cok && eok {

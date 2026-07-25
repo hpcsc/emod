@@ -95,7 +95,10 @@ func ExportASCII(model *ast.Model, _ Style) ([]byte, error) {
 			if tr.Command != "" {
 				fmt.Fprintf(&b, "  ⚙ %s -> [%s]\n", tr.Name, tr.Command)
 			}
-			if tr.Event != nil && tr.Event.Name != "" && tr.Command != "" {
+			// The flow loop above already printed this chain when the model
+			// declares it explicitly.
+			if tr.Event != nil && tr.Event.Name != "" && tr.Command != "" &&
+				!declaresFlow(s, tr.Command, tr.Event.Name) {
 				fmt.Fprintf(&b, "  [%s] -> (%s)\n", tr.Command, tr.Event.Name)
 			}
 		}

@@ -656,8 +656,10 @@ func ExportDrawio(model *ast.Model, style Style) ([]byte, error) {
 				}
 			}
 
-			// command -> event (translation implies command emits event)
-			if tr.Command != "" && tr.Event != nil && tr.Event.Name != "" {
+			// command -> event (translation implies command emits event, unless a
+			// flow already declares it and has drawn the arrow above)
+			if tr.Command != "" && tr.Event != nil && tr.Event.Name != "" &&
+				!declaresFlow(s, tr.Command, tr.Event.Name) {
 				c := nameToElem[tr.Command]
 				e := nameToElem[tr.Event.Name]
 				if c != nil && e != nil {
