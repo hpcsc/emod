@@ -76,6 +76,41 @@ export async function centreOf(locator) {
   return { x: box.x + box.width / 2, y: box.y + box.height / 2 };
 }
 
+// dropPointIn returns a spot inside a node that is off its centre line.
+//
+// Arrows are appended after the nodes, so they are painted on top, and their
+// stroke swallows a drop aimed at a node the arrow happens to cross — which is
+// exactly what a vertical command-to-event arrow does to the node's centre. A
+// test releasing there proves nothing about the drop, only about the arrow.
+export async function dropPointIn(locator) {
+  const box = await locator.boundingBox();
+  return { x: box.x + box.width * 0.8, y: box.y + box.height * 0.5 };
+}
+
+// portOf locates a node's connection port. The ports render at opacity 0 until
+// the node is hovered, which leaves them hit-testable throughout — only display
+// and visibility take an element out of the running.
+export async function portOf(page, nodeId, which) {
+  const node = page.locator(`.diagram-node[data-node-id="${nodeId}"]`);
+  await node.hover();
+  return centreOf(page.locator(`[data-port="${which}"][data-node-id="${nodeId}"]`));
+}
+
+// handleOf locates one end of an arrow's repoint handles.
+export function handleOf(page, source, target, end) {
+  return page.locator(
+    `[data-arrow-handle="${end}"][data-edge-source="${source}"][data-edge-target="${target}"]`);
+}
+
+// dragBetween presses at one point, moves in steps so the drag threshold is
+// crossed and the preview line updates, then releases at the other.
+export async function dragBetween(page, from, to, steps = 8) {
+  await page.mouse.move(from.x, from.y);
+  await page.mouse.down();
+  await page.mouse.move(to.x, to.y, { steps });
+  await page.mouse.up();
+}
+
 // Anything the mousedown handler treats specially before it falls through to
 // starting a pan.
 const NOT_BACKGROUND = '.diagram-node, .slice-header, [data-port], [data-arrow-handle], ' +
