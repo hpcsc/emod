@@ -22,8 +22,9 @@ beforeAll(async () => {
 });
 
 describe('wasm exports', () => {
-  it('exports parseEmod, ready, and isReady', () => {
+  it('exports parseEmod, exportEmod, ready, and isReady', () => {
     expect(wasm).toHaveProperty('parseEmod');
+    expect(wasm).toHaveProperty('exportEmod');
     expect(wasm).toHaveProperty('ready');
     expect(wasm).toHaveProperty('isReady');
   });
@@ -41,6 +42,12 @@ describe('wasm exports', () => {
 describe('parseEmod', () => {
   it('rejects with descriptive error when WASM not ready yet', async () => {
     await expect(wasm.parseEmod('test')).rejects.toThrow('WASM not ready yet');
+  });
+});
+
+describe('exportEmod', () => {
+  it('rejects with descriptive error when WASM not ready yet', async () => {
+    await expect(wasm.exportEmod({ nodes: [], edges: [] })).rejects.toThrow('WASM not ready yet');
   });
 });
 

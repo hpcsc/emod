@@ -210,16 +210,20 @@ function init() {
 
   // ─── Export .emod button ─────────────────────────────────────────
   store.dom.exportBtn.addEventListener("click", function() {
-    var content = Export.exportToEmodString(store);
-    var blob = new Blob([content], { type: "text/plain" });
-    var url = URL.createObjectURL(blob);
-    var a = document.createElement("a");
-    a.href = url;
-    a.download = (store.modelName || "diagram") + ".emod";
-    document.body.appendChild(a);
-    a.click();
-    document.body.removeChild(a);
-    URL.revokeObjectURL(url);
+    Export.exportToEmodString(store).then(function(content) {
+      var blob = new Blob([content], { type: "text/plain" });
+      var url = URL.createObjectURL(blob);
+      var a = document.createElement("a");
+      a.href = url;
+      a.download = (store.modelName || "diagram") + ".emod";
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+    }).catch(function(err) {
+      store.dom.statusEl.textContent = "✗ " + err.message;
+      store.dom.statusEl.className = "status error";
+    });
   });
 
   // ─── Minimap toggle ───────────────────────────────────────────────

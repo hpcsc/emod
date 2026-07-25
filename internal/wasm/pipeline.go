@@ -84,6 +84,23 @@ func ExportEmod(diagramJSON string) (result []byte, err error) {
 	return []byte(formatter.Format(model)), nil
 }
 
+// ExportEmodJSON wraps ExportEmod in a {"emod": "..."} envelope, mirroring the
+// {"error": "..."} shape ErrorJSON produces, so a JS caller can tell the two
+// apart without guessing at the payload.
+func ExportEmodJSON(diagramJSON string) string {
+	result, err := ExportEmod(diagramJSON)
+	if err != nil {
+		return ErrorJSON(err.Error())
+	}
+
+	b, err := json.Marshal(map[string]string{"emod": string(result)})
+	if err != nil {
+		return ErrorJSON(err.Error())
+	}
+
+	return string(b)
+}
+
 // ErrorJSON returns a JSON error string in the form {"error": "..."}.
 func ErrorJSON(msg string) string {
 	b, _ := json.Marshal(map[string]string{"error": msg})

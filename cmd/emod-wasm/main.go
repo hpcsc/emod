@@ -30,12 +30,7 @@ func jsExportEmod(this js.Value, args []js.Value) any {
 		return wasm.ErrorJSON("expected 1 argument")
 	}
 
-	result, err := wasm.ExportEmod(args[0].String())
-	if err != nil {
-		return wasm.ErrorJSON(err.Error())
-	}
-
-	return string(result)
+	return wasm.ExportEmodJSON(args[0].String())
 }
 
 func jsHandle(args []js.Value, pipeline func(string) ([]byte, error)) any {

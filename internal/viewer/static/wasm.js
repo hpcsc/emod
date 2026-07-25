@@ -53,4 +53,19 @@ function parseEmod(source) {
   }
 }
 
-export { parseEmod, ready, isReady };
+function exportEmod(diagram) {
+  if (!isReady) {
+    return Promise.reject(new Error('WASM not ready yet'));
+  }
+  try {
+    const result = JSON.parse(globalThis.exportEmod(JSON.stringify(diagram)));
+    if (result.error) {
+      return Promise.reject(new Error(result.error));
+    }
+    return Promise.resolve(result.emod);
+  } catch (err) {
+    return Promise.reject(err);
+  }
+}
+
+export { parseEmod, exportEmod, ready, isReady };
