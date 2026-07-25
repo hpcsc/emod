@@ -20,6 +20,26 @@ function twoAggregates() {
   ];
 }
 
+// Two contexts of different widths. Every swimlane is drawn as wide as the
+// widest, so ctxNarrow is the one that gets stretched.
+function narrowAndWideContexts() {
+  return [
+    { id: 'ctxWide', type: 'context', label: 'Wide' },
+    { id: 'aggWide', type: 'aggregate', label: 'Spread', parentId: 'ctxWide' },
+    { id: 'wide1', type: 'slice', label: 'One', parentId: 'aggWide' },
+    { id: 'cmdW1', type: 'command', label: 'CmdOne', parentId: 'wide1' },
+    { id: 'wide2', type: 'slice', label: 'Two', parentId: 'aggWide' },
+    { id: 'cmdW2', type: 'command', label: 'CmdTwo', parentId: 'wide2' },
+    { id: 'wide3', type: 'slice', label: 'Three', parentId: 'aggWide' },
+    { id: 'cmdW3', type: 'command', label: 'CmdThree', parentId: 'wide3' },
+
+    { id: 'ctxNarrow', type: 'context', label: 'Narrow' },
+    { id: 'aggNarrow', type: 'aggregate', label: 'Single', parentId: 'ctxNarrow' },
+    { id: 'narrow1', type: 'slice', label: 'Only', parentId: 'aggNarrow' },
+    { id: 'cmdN1', type: 'command', label: 'CmdOnly', parentId: 'narrow1' },
+  ];
+}
+
 function createStore(nodes, hiddenNodes) {
   return {
     nodes: nodes,
@@ -79,6 +99,36 @@ describe('Renderer.buildSVG', () => {
       const painted = [...svg.querySelectorAll('.agg-row, .agg-label')]
         .map((el) => el.getAttribute('class'));
       expect(painted).toEqual(['agg-row', 'agg-row', 'agg-label', 'agg-label']);
+    });
+
+    it('stretches the last row to the swimlane edge when the context is widened', () => {
+      const { svg, positions } = render(narrowAndWideContexts());
+
+      // ctxNarrow gets widened to match ctxWide, so its band has to follow.
+      const row = rowFor(svg, 'aggNarrow');
+      const ctx = positions.ctxNarrow;
+      expect(numeric(row, 'x') + numeric(row, 'width')).toBe(ctx.x + ctx.w);
+    });
+
+    it('stretches the row hit area along with the row', () => {
+      const { svg, positions } = render(narrowAndWideContexts());
+
+      const area = svg.querySelector('.agg-area[data-agg-id="aggNarrow"]');
+      const ctx = positions.ctxNarrow;
+      expect(numeric(area, 'x') + numeric(area, 'width')).toBe(ctx.x + ctx.w);
+    });
+
+    it('leaves the trailing space unclaimed when the context holds slices of its own', () => {
+      const nodes = narrowAndWideContexts().concat([
+        { id: 'loose', type: 'slice', label: 'Loose slice', parentId: 'ctxNarrow' },
+        { id: 'cmdLoose', type: 'command', label: 'Loose', parentId: 'loose' },
+      ]);
+
+      const { svg, positions } = render(nodes);
+
+      const row = rowFor(svg, 'aggNarrow');
+      const ctx = positions.ctxNarrow;
+      expect(numeric(row, 'x') + numeric(row, 'width')).toBeLessThan(ctx.x + ctx.w);
     });
 
     it('skips an aggregate the layout left out', () => {

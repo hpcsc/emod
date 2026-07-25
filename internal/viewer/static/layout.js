@@ -202,8 +202,28 @@ function computeLayout(store) {
 
   contexts.forEach(function(ctx) {
     const cp = positions[ctx.id];
-    if (cp && maxRight > cp.x + cp.w) {
+    if (!cp) return;
+    if (maxRight > cp.x + cp.w) {
       cp.w = maxRight - cp.x;
+    }
+
+    // Every swimlane is widened to the widest one, and the aggregate rows tile
+    // that swimlane left to right, so without stretching the last row too the
+    // band stops short of the context it is meant to fill. A context holding
+    // slices of its own is left alone: that trailing space is not in any
+    // aggregate, so no row should claim it.
+    const hasDirectSlices = ctx.children.some(function(n) {
+      return n.type === "slice" && positions[n.id];
+    });
+    if (hasDirectSlices) return;
+
+    const aggs = ctx.children.filter(function(n) {
+      return n.type === "aggregate" && positions[n.id];
+    });
+    const lastAgg = aggs[aggs.length - 1];
+    if (lastAgg) {
+      const ap = positions[lastAgg.id];
+      ap.w = Math.max(ap.w, cp.x + cp.w - ap.x);
     }
   });
 
