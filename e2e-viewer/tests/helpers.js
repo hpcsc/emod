@@ -33,6 +33,43 @@ context "Payments" {
 }
 `;
 
+// A second slice holding a view, for the edge types that need one. Also
+// canonical — `emod fmt --check` passes on it.
+export const SAMPLE_WITH_VIEW = `model "Billing"
+
+actor "Customer"
+
+context "Payments" {
+  aggregate "Payment" {
+    slice "Take Payment" {
+      command TakePayment {
+        fields {
+          amount int required
+        }
+      }
+
+      event PaymentTaken {
+        fields {
+          amount int required
+        }
+      }
+
+      flow {
+        command -> event: TakePayment -> PaymentTaken
+      }
+    }
+
+    slice "Payment History" {
+      view PaymentsView {
+        fields {
+          amount int required
+        }
+      }
+    }
+  }
+}
+`;
+
 // open loads the viewer and waits for the WASM parser to report ready, so a
 // test never races the module fetch.
 export async function open(page) {

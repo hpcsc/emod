@@ -19,6 +19,23 @@ function clampZoom(scale) {
   return Math.min(5.0, Math.max(0.1, scale));
 }
 
+// nodeAtPoint finds the node under a screen point, looking past whatever is
+// drawn over it. Arrows are appended after the nodes and so paint on top of
+// them, and a command-to-event arrow runs straight through the middle of the
+// node below it — taking only the topmost element means a connection dropped on
+// a node's centre lands on that arrow and is thrown away.
+function nodeAtPoint(x, y) {
+  var stack = document.elementsFromPoint
+    ? document.elementsFromPoint(x, y)
+    : [document.elementFromPoint(x, y)];
+  for (var i = 0; i < stack.length; i++) {
+    var el = stack[i];
+    var block = el && el.closest ? el.closest('.diagram-node') : null;
+    if (block) return block;
+  }
+  return null;
+}
+
 function applyViewport(store) {
   const vg = store.dom.svg.querySelector("#viewport-group");
   if (!vg) return;
@@ -462,7 +479,7 @@ function initEventListeners(store) {
         );
       }
       if (dist >= DRAG_THRESHOLD) {
-        var targetBlock = evt.target.closest('.diagram-node');
+        var targetBlock = nodeAtPoint(evt.clientX, evt.clientY);
       if (targetBlock) {
         var targetId = targetBlock.getAttribute("data-node-id");
         if (targetId) {
@@ -887,8 +904,7 @@ function initEventListeners(store) {
           );
         }
         if (td >= DRAG_THRESHOLD) {
-        var elem = document.elementFromPoint(ct.clientX, ct.clientY);
-        var targetBlock = elem ? elem.closest('.diagram-node') : null;
+        var targetBlock = nodeAtPoint(ct.clientX, ct.clientY);
         if (targetBlock) {
           var targetId = targetBlock.getAttribute("data-node-id");
           if (targetId) {
