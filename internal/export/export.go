@@ -597,16 +597,18 @@ type jsonDiagramNode struct {
 	ParentID *string             `json:"parentId"`
 	Fields   []*jsonDiagramField `json:"fields,omitempty"`
 	Position *jsonPosition       `json:"position,omitempty"`
-	// Type-specific metadata for trigger, view, automation, translation
-	Kind           string        `json:"kind,omitempty"`
-	Actor          string        `json:"actor,omitempty"`
-	Reads          string        `json:"reads,omitempty"`
-	Subscribes     []string      `json:"subscribes,omitempty"`
-	TriggerEvent   string        `json:"trigger_event,omitempty"`
-	Command        string        `json:"command,omitempty"`
-	TargetContext  string        `json:"target_context,omitempty"`
-	ExternalSystem string        `json:"external_system,omitempty"`
-	Event          *jsonEvent    `json:"event,omitempty"`
+	// Type-specific metadata for trigger, event, view, automation, translation
+	Kind           string     `json:"kind,omitempty"`
+	Actor          string     `json:"actor,omitempty"`
+	Reads          string     `json:"reads,omitempty"`
+	Subscribes     []string   `json:"subscribes,omitempty"`
+	TriggerEvent   string     `json:"trigger_event,omitempty"`
+	Command        string     `json:"command,omitempty"`
+	TargetContext  string     `json:"target_context,omitempty"`
+	ExternalSystem string     `json:"external_system,omitempty"`
+	Source         string     `json:"source,omitempty"`
+	ExternalName   string     `json:"external_name,omitempty"`
+	Event          *jsonEvent `json:"event,omitempty"`
 }
 
 type jsonDiagramEdge struct {
@@ -700,11 +702,13 @@ func collectSliceNodes(
 		evtID := g.next("event")
 		evtIDs[evt.Name] = evtID
 		node := &jsonDiagramNode{
-			ID:       evtID,
-			Type:     "event",
-			Label:    evt.Name,
-			ParentID: &sliceID,
-			Position: convertPosition(evt.NamePos),
+			ID:           evtID,
+			Type:         "event",
+			Label:        evt.Name,
+			ParentID:     &sliceID,
+			Position:     convertPosition(evt.NamePos),
+			Source:       evt.Source,
+			ExternalName: evt.ExternalName,
 		}
 		if len(evt.Fields) > 0 {
 			node.Fields = convertFieldsToDiagram(evt.Fields)
@@ -792,11 +796,13 @@ func collectSliceNodes(
 			evtID := g.next("event")
 			evtIDs[t.Event.Name] = evtID
 			evtNode := &jsonDiagramNode{
-				ID:       evtID,
-				Type:     "event",
-				Label:    t.Event.Name,
-				ParentID: &sliceID,
-				Position: convertPosition(t.Event.NamePos),
+				ID:           evtID,
+				Type:         "event",
+				Label:        t.Event.Name,
+				ParentID:     &sliceID,
+				Position:     convertPosition(t.Event.NamePos),
+				Source:       t.Event.Source,
+				ExternalName: t.Event.ExternalName,
 			}
 			if len(t.Event.Fields) > 0 {
 				evtNode.Fields = convertFieldsToDiagram(t.Event.Fields)
