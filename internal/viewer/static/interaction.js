@@ -19,6 +19,20 @@ function clampZoom(scale) {
   return Math.min(5.0, Math.max(0.1, scale));
 }
 
+// The viewport offset is in the SVG's own units, but a pointer delta is in
+// screen pixels, and the viewBox scales the diagram to fit its element — so on
+// a wide diagram one pixel of pointer travel is several units, and a pan that
+// used the raw delta crawled. Converting through the matrix every other gesture
+// already goes through keeps the diagram under the cursor at any size.
+function panDelta(svg, viewport, fromX, fromY, toX, toY) {
+  const from = screenToDiagram(svg, viewport, fromX, fromY);
+  const to = screenToDiagram(svg, viewport, toX, toY);
+  return {
+    dx: (to.x - from.x) * viewport.zoomScale,
+    dy: (to.y - from.y) * viewport.zoomScale,
+  };
+}
+
 // nodeAtPoint finds the node under a screen point, looking past whatever is
 // drawn over it. Arrows are appended after the nodes and so paint on top of
 // them, and a command-to-event arrow runs straight through the middle of the
@@ -605,8 +619,9 @@ function initEventListeners(store) {
     const pan = store.interaction.pan;
     if (!pan) return;
 
-    store.viewport.offsetX = pan.startOffsetX + (evt.clientX - pan.startX);
-    store.viewport.offsetY = pan.startOffsetY + (evt.clientY - pan.startY);
+    const moved = panDelta(svgEl, store.viewport, pan.startX, pan.startY, evt.clientX, evt.clientY);
+    store.viewport.offsetX = pan.startOffsetX + moved.dx;
+    store.viewport.offsetY = pan.startOffsetY + moved.dy;
     applyViewport(store);
     evt.preventDefault();
   });
@@ -888,8 +903,10 @@ function initEventListeners(store) {
 
     if (touch.mode === "pan") {
       if (touches.length === 1) {
-        store.viewport.offsetX = touch.startOffsetX + (touches[0].clientX - touch.startX);
-        store.viewport.offsetY = touch.startOffsetY + (touches[0].clientY - touch.startY);
+        const moved = panDelta(svgEl, store.viewport,
+          touch.startX, touch.startY, touches[0].clientX, touches[0].clientY);
+        store.viewport.offsetX = touch.startOffsetX + moved.dx;
+        store.viewport.offsetY = touch.startOffsetY + moved.dy;
         applyViewport(store);
       } else if (touches.length >= 2) {
         svgEl.classList.remove("panning");

@@ -1,21 +1,22 @@
 import { test, expect } from '@playwright/test';
-import { open, render, viewport, emptyCanvasPoint, centreOf, exportEmod, SAMPLE } from './helpers.js';
+import { open, render, viewport, emptyCanvasPoint, centreOf, exportEmod, diagramScreenPos, SAMPLE } from './helpers.js';
 import { touchInput, spread } from './touch-input.js';
 
 test.describe('single-finger pan', () => {
   test('drags the diagram by exactly the finger delta', async ({ page }) => {
     await open(page);
     await render(page, SAMPLE);
-    const before = await viewport(page);
+    const before = await diagramScreenPos(page);
+    const beforeZoom = (await viewport(page)).scale;
     const bg = await emptyCanvasPoint(page);
     const touch = await touchInput(page);
 
     await touch.drag(bg, { x: bg.x + 110, y: bg.y + 70 });
 
-    const after = await viewport(page);
-    expect(after.x).toBeCloseTo(before.x + 110, 1);
-    expect(after.y).toBeCloseTo(before.y + 70, 1);
-    expect(after.scale).toBeCloseTo(before.scale, 5);
+    const after = await diagramScreenPos(page);
+    expect(after.x - before.x).toBeCloseTo(110, 0);
+    expect(after.y - before.y).toBeCloseTo(70, 0);
+    expect((await viewport(page)).scale).toBeCloseTo(beforeZoom, 5);
   });
 
   test('leaves the diagram alone once the finger lifts', async ({ page }) => {
@@ -132,6 +133,7 @@ test.describe('switching between pan and pinch mid-gesture', () => {
     await open(page);
     await render(page, SAMPLE);
     const before = await viewport(page);
+    const beforeScreen = await diagramScreenPos(page);
     const bg = await emptyCanvasPoint(page);
     const anchor = { x: bg.x + 30, y: bg.y };
     const touch = await touchInput(page);
@@ -139,6 +141,7 @@ test.describe('switching between pan and pinch mid-gesture', () => {
     await touch.press([bg]);
     await touch.move([anchor]);
     const panned = await viewport(page);
+    const pannedScreen = await diagramScreenPos(page);
 
     await touch.press([{ x: anchor.x + 100, y: anchor.y }]);
     await touch.move(spread(anchor, 100));
@@ -146,7 +149,7 @@ test.describe('switching between pan and pinch mid-gesture', () => {
     await touch.release();
 
     const after = await viewport(page);
-    expect(panned.x).toBeCloseTo(before.x + 30, 1);
+    expect(pannedScreen.x - beforeScreen.x).toBeCloseTo(30, 0);
     expect(panned.scale).toBeCloseTo(before.scale, 5);
     expect(after.scale).toBeCloseTo(before.scale * 3, 2);
   });
@@ -161,6 +164,7 @@ test.describe('switching between pan and pinch mid-gesture', () => {
     await touch.move(spread(bg, 100));
     await touch.move(spread(bg, 200));
     const zoomed = await viewport(page);
+    const zoomedScreen = await diagramScreenPos(page);
 
     // Lift one finger; the other takes over as a pan.
     await touch.lift(1);
@@ -169,8 +173,9 @@ test.describe('switching between pan and pinch mid-gesture', () => {
     await touch.release();
 
     const after = await viewport(page);
+    const afterScreen = await diagramScreenPos(page);
     expect(after.scale).toBeCloseTo(zoomed.scale, 5);
-    expect(after.x).toBeCloseTo(zoomed.x + 60, 1);
-    expect(after.y).toBeCloseTo(zoomed.y + 25, 1);
+    expect(afterScreen.x - zoomedScreen.x).toBeCloseTo(60, 0);
+    expect(afterScreen.y - zoomedScreen.y).toBeCloseTo(25, 0);
   });
 });

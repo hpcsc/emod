@@ -33,6 +33,25 @@ context "Payments" {
 }
 `;
 
+// Far wider than the canvas, so the viewBox squeezes several diagram units into
+// each screen pixel. That is the case where a pan measured in raw pointer
+// pixels visibly lags the cursor, and it only shows up at this width.
+export const WIDE = (function () {
+  const slices = [];
+  for (let i = 0; i < 12; i++) {
+    slices.push(
+      `    slice "Step ${i}" {\n` +
+      `      command Cmd${i} {\n` +
+      '        fields {\n' +
+      '          amount int required\n' +
+      '        }\n' +
+      '      }\n' +
+      '    }');
+  }
+  return 'model "Wide"\n\ncontext "Ctx" {\n  aggregate "Agg" {\n' +
+    slices.join('\n\n') + '\n  }\n}\n';
+})();
+
 // A second slice holding a view, for the edge types that need one. Also
 // canonical — `emod fmt --check` passes on it.
 export const SAMPLE_WITH_VIEW = `model "Billing"
@@ -84,6 +103,15 @@ export async function render(page, source) {
   await page.locator('#render-btn').click();
   await expect(page.locator('#render-status')).toHaveText('✓ Rendered');
   await expect(page.locator('#viewport-group')).toBeAttached();
+}
+
+// diagramScreenPos reports where the diagram actually sits on screen, read off
+// a node's box. Panning is asserted through this rather than through the
+// viewport offset: that offset is in the SVG's own units, so comparing it to a
+// pixel delta passes even when the diagram visibly lags the pointer.
+export async function diagramScreenPos(page) {
+  const box = await page.locator('.diagram-node').first().boundingBox();
+  return { x: box.x, y: box.y };
 }
 
 // viewport reads back the transform the viewer applies to the diagram group.

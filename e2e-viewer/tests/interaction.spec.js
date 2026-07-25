@@ -1,8 +1,44 @@
 import { test, expect } from '@playwright/test';
-import { open, render, viewport, emptyCanvasPoint, centreOf, SAMPLE } from './helpers.js';
+import { open, render, viewport, emptyCanvasPoint, centreOf, SAMPLE, WIDE } from './helpers.js';
 
 test.describe('panning', () => {
-  test('drags the diagram by exactly the pointer delta', async ({ page }) => {
+  // Asserted on screen rather than on the viewport offset: the offset is in the
+  // SVG's own units, so comparing it to a pixel delta passes even when the
+  // diagram visibly lags the cursor.
+  test('moves the diagram on screen by exactly the pointer delta', async ({ page }) => {
+    await open(page);
+    await render(page, SAMPLE);
+    const node = page.locator('.diagram-node').first();
+    const before = await node.boundingBox();
+    const bg = await emptyCanvasPoint(page);
+
+    await page.mouse.move(bg.x, bg.y);
+    await page.mouse.down();
+    await page.mouse.move(bg.x + 120, bg.y + 45, { steps: 5 });
+    await page.mouse.up();
+
+    const after = await node.boundingBox();
+    expect(after.x - before.x).toBeCloseTo(120, 0);
+    expect(after.y - before.y).toBeCloseTo(45, 0);
+  });
+
+  test('keeps pace with the cursor on a diagram far wider than the canvas', async ({ page }) => {
+    await open(page);
+    await render(page, WIDE);
+    const node = page.locator('.diagram-node').first();
+    const before = await node.boundingBox();
+    const bg = await emptyCanvasPoint(page);
+
+    await page.mouse.move(bg.x, bg.y);
+    await page.mouse.down();
+    await page.mouse.move(bg.x + 200, bg.y, { steps: 5 });
+    await page.mouse.up();
+
+    const after = await node.boundingBox();
+    expect(after.x - before.x).toBeCloseTo(200, 0);
+  });
+
+  test('leaves the zoom alone', async ({ page }) => {
     await open(page);
     await render(page, SAMPLE);
     const before = await viewport(page);
@@ -13,10 +49,7 @@ test.describe('panning', () => {
     await page.mouse.move(bg.x + 120, bg.y + 45, { steps: 5 });
     await page.mouse.up();
 
-    const after = await viewport(page);
-    expect(after.x).toBeCloseTo(before.x + 120, 1);
-    expect(after.y).toBeCloseTo(before.y + 45, 1);
-    expect(after.scale).toBeCloseTo(before.scale, 5);
+    expect((await viewport(page)).scale).toBeCloseTo(before.scale, 5);
   });
 
   test('leaves the diagram where the pan ended', async ({ page }) => {
