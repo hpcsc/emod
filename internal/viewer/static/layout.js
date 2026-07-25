@@ -72,7 +72,7 @@ function computeLayout(store) {
     const sBoxWidth = Math.max(180, ...allLabelWidths);
     const sSliceWidth = sBoxWidth + 40;
 
-    let blockY = slY + 36;
+    let blockY = slY + L.sliceTopPad;
     const gap = 75;
 
     if (topRowTypes.length > 0) {
@@ -127,14 +127,36 @@ function computeLayout(store) {
       blockY += L.boxHeight + gap;
     });
 
-    const sliceHeight = blockY - slY + gap;
+    // The stacked layout above is the slice's minimum size. Dragging a block
+    // towards the bottom-right pushes those edges out; minW/minH are what the
+    // box shrinks back to once the block returns, and interaction.js needs
+    // them to resize the slice live without re-running the whole layout.
+    const minW = sSliceWidth;
+    const minH = blockY - slY + gap;
+    let boxRight = xPos + minW;
+    let boxBottom = slY + minH;
+
+    sl.children.forEach(function(c) {
+      const p = positions[c.id];
+      if (!p) return;
+      const off = store.nodeOffsets[c.id];
+      if (off) {
+        p.x += off.dx;
+        p.y += off.dy;
+      }
+      boxRight = Math.max(boxRight, p.x + p.w + L.slicePad);
+      boxBottom = Math.max(boxBottom, p.y + p.h + L.slicePad);
+    });
+
+    const sliceHeight = boxBottom - slY;
     if (sliceHeight > maxSliceHeight) maxSliceHeight = sliceHeight;
     positions[sl.id] = {
-      x: xPos, y: slY, w: sSliceWidth, h: sliceHeight,
+      x: xPos, y: slY, w: boxRight - xPos, h: sliceHeight,
+      minW: minW, minH: minH,
       node: sl,
     };
 
-    xPos += sSliceWidth;
+    xPos = boxRight;
     if (si < siblings.length - 1) xPos += L.sliceGap;
   }
 

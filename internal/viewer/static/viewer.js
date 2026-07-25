@@ -57,14 +57,6 @@ function renderDiagram(s) {
   const result = Layout.computeLayout(s);
   s.layoutPositions = result.positions;
 
-  for (const id in s.nodeOffsets) {
-    if (s.layoutPositions[id]) {
-      s.layoutPositions[id].x += s.nodeOffsets[id].dx;
-      s.layoutPositions[id].y += s.nodeOffsets[id].dy;
-    }
-  }
-  s.nodeOffsets = {};
-
   s.dom.svg.setAttribute("viewBox", "0 0 " + result.width + " " + result.height);
   UI.updateStats(s, result);
 

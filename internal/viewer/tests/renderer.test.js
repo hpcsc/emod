@@ -20,8 +20,18 @@ function twoAggregates() {
   ];
 }
 
+function createStore(nodes, hiddenNodes) {
+  return {
+    nodes: nodes,
+    edges: [],
+    hiddenNodes: hiddenNodes || {},
+    nodeOffsets: {},
+    layoutPositions: {},
+  };
+}
+
 function render(nodes) {
-  const store = { nodes: nodes, edges: [], hiddenNodes: {}, layoutPositions: {} };
+  const store = createStore(nodes);
   store.layoutPositions = Layout.computeLayout(store).positions;
   return { svg: Renderer.buildSVG(store), positions: store.layoutPositions };
 }
@@ -72,8 +82,7 @@ describe('Renderer.buildSVG', () => {
     });
 
     it('skips an aggregate the layout left out', () => {
-      const nodes = twoAggregates();
-      const store = { nodes: nodes, edges: [], hiddenNodes: { agg1: true }, layoutPositions: {} };
+      const store = createStore(twoAggregates(), { agg1: true });
       store.layoutPositions = Layout.computeLayout(store).positions;
 
       const svg = Renderer.buildSVG(store);

@@ -197,7 +197,7 @@ describe('Interaction', function () {
   });
 
   describe('revert on no-reorder drop', function () {
-    it('restores children transform to pre-drag nodeOffsets after revert', function () {
+    it('leaves no transform on a child that carries a drag offset', function () {
       setupSliceAndNodes(store);
       store.nodeOffsets.cmd1 = { dx: 5, dy: 3 };
       Interaction.initEventListeners(store);
@@ -207,8 +207,10 @@ describe('Interaction', function () {
       fire(document, 'mousemove', { clientX: 110, clientY: 105 });
       fire(document, 'mouseup', { clientX: 110, clientY: 105 });
 
+      // The offset is already part of the position the layout drew the block
+      // at, so re-applying it as a transform would move the block twice.
       var cmdEl = store.dom.svg.querySelector('.diagram-node[data-node-id="cmd1"]');
-      expect(cmdEl.getAttribute('transform')).toBe('translate(5,3)');
+      expect(cmdEl.getAttribute('transform')).toBeNull();
     });
 
     it('removes transform from children with no existing offsets after revert', function () {

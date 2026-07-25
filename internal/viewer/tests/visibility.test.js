@@ -36,6 +36,7 @@ function createStore(nodes) {
     nodes: nodes || modelNodes(),
     edges: [],
     hiddenNodes: {},
+    nodeOffsets: {},
     dom: { visibilityPanel: panel, visibilityToggle: toggle, visibilityTree: tree },
   };
 }

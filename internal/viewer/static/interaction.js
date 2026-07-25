@@ -94,29 +94,120 @@ function updateArrowsForNode(store, nodeId, draggedPos) {
   });
 }
 
-function updateBlockTransform(store, nodeId) {
-  const svgEl = store.dom.svg;
-  const blockEl = svgEl.querySelector('.diagram-node[data-node-id="' + nodeId + '"]');
-  if (!blockEl) return;
-  const off = store.nodeOffsets[nodeId];
-  if (off) {
-    blockEl.setAttribute("transform", "translate(" + off.dx + "," + off.dy + ")");
-  } else {
-    blockEl.removeAttribute("transform");
-  }
+// A block stays inside its slice on the top and left edges. The other two
+// edges need no clamp: the slice grows to whatever the block reaches, so it
+// cannot be dragged out through them.
+function clampIntoSlice(store, nodeId, x, y) {
+  const node = store.nodeById.get(nodeId);
+  const sp = node && store.layoutPositions[node.parentId];
+  if (!sp) return { x: x, y: y };
+  return {
+    x: Math.max(sp.x + L.slicePad, x),
+    y: Math.max(sp.y + L.sliceTopPad, y),
+  };
 }
 
-function commitDrag(store, nodeId, dx, dy, origNodeX, origNodeY) {
-  const newX = origNodeX + dx;
-  const newY = origNodeY + dy;
-  store.layoutPositions[nodeId].x = newX;
-  store.layoutPositions[nodeId].y = newY;
+// The box the slice needs in order to hold its blocks, with movingId taken to
+// be at target rather than at its laid-out position.
+function sliceBoxFor(store, sliceId, movingId, target) {
+  const sp = store.layoutPositions[sliceId];
+  if (!sp) return null;
+  let right = sp.x + (sp.minW || sp.w);
+  let bottom = sp.y + (sp.minH || sp.h);
+  Layout.getSliceChildNodeIds(store.nodes, sliceId).forEach(function(id) {
+    const p = store.layoutPositions[id];
+    if (!p) return;
+    const x = id === movingId ? target.x : p.x;
+    const y = id === movingId ? target.y : p.y;
+    right = Math.max(right, x + p.w + L.slicePad);
+    bottom = Math.max(bottom, y + p.h + L.slicePad);
+  });
+  return { w: right - sp.x, h: bottom - sp.y };
+}
+
+// Resizing the drawn rects keeps the slice wrapped around the block while the
+// pointer is down. Siblings stay put until the drop re-runs the layout, so the
+// diagram does not reshuffle under the cursor.
+function resizeSliceParts(store, sliceId, w, h) {
+  const svgEl = store.dom.svg;
+  const sp = store.layoutPositions[sliceId];
+  const box = svgEl.querySelector('.slice-box[data-slice-id="' + sliceId + '"]');
+  if (box) {
+    box.setAttribute("width", w);
+    box.setAttribute("height", h);
+  }
+  svgEl.querySelectorAll('rect.slice-header[data-slice-id="' + sliceId + '"]').forEach(function(el) {
+    el.setAttribute("width", w);
+  });
+  const area = svgEl.querySelector('.slice-area[data-slice-id="' + sliceId + '"]');
+  if (area) {
+    area.setAttribute("width", w);
+    area.setAttribute("height", Math.max(0, h - L.sliceHdrH));
+  }
+  const label = svgEl.querySelector('text.slice-header[data-slice-id="' + sliceId + '"]');
+  if (label && sp) label.setAttribute("x", sp.x + w / 2);
+}
+
+function dragNodeTo(store, drag, dx, dy) {
+  const base = store.layoutPositions[drag.nodeId];
+  if (!base) return;
+  const target = clampIntoSlice(store, drag.nodeId, base.x + dx, base.y + dy);
+
+  const blockEl = store.dom.svg.querySelector('.diagram-node[data-node-id="' + drag.nodeId + '"]');
+  if (blockEl) {
+    blockEl.setAttribute("transform",
+      "translate(" + (target.x - base.x) + "," + (target.y - base.y) + ")");
+  }
+  updateArrowsForNode(store, drag.nodeId, { x: target.x, y: target.y, w: base.w, h: base.h });
+
+  const node = store.nodeById.get(drag.nodeId);
+  const box = node && sliceBoxFor(store, node.parentId, drag.nodeId, target);
+  if (box) resizeSliceParts(store, node.parentId, box.w, box.h);
+}
+
+function commitDrag(store, nodeId, dx, dy) {
+  const base = store.layoutPositions[nodeId];
+  if (!base) return;
+  const target = clampIntoSlice(store, nodeId, base.x + dx, base.y + dy);
   const existing = store.nodeOffsets[nodeId] || { dx: 0, dy: 0 };
-  store.nodeOffsets[nodeId] = { dx: existing.dx + dx, dy: existing.dy + dy };
-  updateBlockTransform(store, nodeId);
-  updateArrowsForNode(store, nodeId, store.layoutPositions[nodeId]);
+  store.nodeOffsets[nodeId] = {
+    dx: existing.dx + (target.x - base.x),
+    dy: existing.dy + (target.y - base.y),
+  };
   const btn = store.dom.resetLayoutBtn;
   if (btn) btn.disabled = false;
+  // Re-render rather than patching: the offset resizes the slice, which
+  // reflows every slice to its right and the swimlane around them.
+  bus.emit('data:changed', { store });
+}
+
+function dragSliceTo(store, drag, dx, dy) {
+  const svgEl = store.dom.svg;
+  if (drag.sliceGroup) {
+    drag.sliceGroup.setAttribute("transform", "translate(" + dx + "," + dy + ")");
+  }
+  drag.nodeIds.forEach(function(nodeId) {
+    if (!drag.origPositions[nodeId]) return;
+    const blockEl = svgEl.querySelector('.diagram-node[data-node-id="' + nodeId + '"]');
+    if (blockEl) blockEl.setAttribute("transform", "translate(" + dx + "," + dy + ")");
+  });
+  updateArrowsForSlice(store, drag.sliceId, dx, dy);
+}
+
+function revertSliceDrag(store, drag) {
+  const svgEl = store.dom.svg;
+  drag.nodeIds.forEach(function(nodeId) {
+    const blockEl = svgEl.querySelector('.diagram-node[data-node-id="' + nodeId + '"]');
+    if (blockEl) blockEl.removeAttribute("transform");
+    if (drag.origPositions[nodeId]) {
+      updateArrowsForNode(store, nodeId, store.layoutPositions[nodeId]);
+    }
+  });
+  if (drag.sliceGroup) {
+    drag.sliceGroup.removeAttribute("transform");
+    drag.sliceGroup.removeAttribute("opacity");
+    if (drag.swimlane) drag.swimlane.appendChild(drag.sliceGroup);
+  }
 }
 
 function updateArrowsForSlice(store, sliceId, dx, dy) {
@@ -313,8 +404,6 @@ function initEventListeners(store) {
           nodeId: nodeId,
           startDiagramX: dp.x,
           startDiagramY: dp.y,
-          origNodeX: store.layoutPositions[nodeId].x,
-          origNodeY: store.layoutPositions[nodeId].y,
           isDragging: false,
           startClientX: evt.clientX,
           startClientY: evt.clientY,
@@ -427,31 +516,9 @@ function initEventListeners(store) {
       }
 
       if (drag.sliceId) {
-        if (drag.sliceGroup) {
-          drag.sliceGroup.setAttribute("transform", "translate(" + dx + "," + dy + ")");
-        }
-        drag.nodeIds.forEach(function(nodeId) {
-          const orig = drag.origPositions[nodeId];
-          if (!orig) return;
-          const blockEl = svgEl.querySelector('.diagram-node[data-node-id="' + nodeId + '"]');
-          if (blockEl) {
-            const existingOff = store.nodeOffsets[nodeId] || {dx: 0, dy: 0};
-            blockEl.setAttribute("transform", "translate(" + (existingOff.dx + dx) + "," + (existingOff.dy + dy) + ")");
-          }
-        });
-        updateArrowsForSlice(store, drag.sliceId, dx, dy);
+        dragSliceTo(store, drag, dx, dy);
       } else {
-        const blockEl = svgEl.querySelector('.diagram-node[data-node-id="' + drag.nodeId + '"]');
-        if (blockEl) {
-          const existingOff = store.nodeOffsets[drag.nodeId] || {dx: 0, dy: 0};
-          blockEl.setAttribute("transform", "translate(" + (existingOff.dx + dx) + "," + (existingOff.dy + dy) + ")");
-        }
-        updateArrowsForNode(store, drag.nodeId, {
-          x: drag.origNodeX + dx,
-          y: drag.origNodeY + dy,
-          w: store.layoutPositions[drag.nodeId].w,
-          h: store.layoutPositions[drag.nodeId].h,
-        });
+        dragNodeTo(store, drag, dx, dy);
       }
 
       evt.preventDefault();
@@ -544,25 +611,7 @@ function initEventListeners(store) {
           const dx = dp.x - drag.startDiagramX;
           const dy = dp.y - drag.startDiagramY;
           if (!tryReorderSliceOnDrop(store, drag.sliceId, dx)) {
-            // Revert children to pre-drag state instead of committing
-            drag.nodeIds.forEach(function(nodeId) {
-              var blockEl = svgEl.querySelector('.diagram-node[data-node-id="' + nodeId + '"]');
-              if (blockEl) {
-                var off = store.nodeOffsets[nodeId];
-                if (off) {
-                  blockEl.setAttribute("transform", "translate(" + off.dx + "," + off.dy + ")");
-                } else {
-                  blockEl.removeAttribute("transform");
-                }
-              }
-              var orig = drag.origPositions[nodeId];
-              if (orig) updateArrowsForNode(store, nodeId, store.layoutPositions[nodeId]);
-            });
-            if (drag.sliceGroup) {
-              drag.sliceGroup.removeAttribute("transform");
-              drag.sliceGroup.removeAttribute("opacity");
-              if (drag.swimlane) drag.swimlane.appendChild(drag.sliceGroup);
-            }
+            revertSliceDrag(store, drag);
           }
           store.interaction.suppressDetailClick = true;
         }
@@ -581,7 +630,7 @@ function initEventListeners(store) {
         const dp = screenToDiagram(svgEl, store.viewport, evt.clientX, evt.clientY);
         const dx = dp.x - drag.startDiagramX;
         const dy = dp.y - drag.startDiagramY;
-        commitDrag(store, drag.nodeId, dx, dy, drag.origNodeX, drag.origNodeY);
+        commitDrag(store, drag.nodeId, dx, dy);
         store.interaction.suppressDetailClick = true;
       }
       if (blockEl) blockEl.classList.remove("dragging");
@@ -672,8 +721,6 @@ function initEventListeners(store) {
             nodeId: nodeId,
             startDiagramX: dp.x,
             startDiagramY: dp.y,
-            origNodeX: store.layoutPositions[nodeId].x,
-            origNodeY: store.layoutPositions[nodeId].y,
             isDragging: false,
             startClientX: touch.clientX,
             startClientY: touch.clientY,
@@ -803,31 +850,9 @@ function initEventListeners(store) {
       }
 
       if (drag.sliceId) {
-        if (drag.sliceGroup) {
-          drag.sliceGroup.setAttribute("transform", "translate(" + dx + "," + dy + ")");
-        }
-        drag.nodeIds.forEach(function(nodeId) {
-          const orig = drag.origPositions[nodeId];
-          if (!orig) return;
-          const blockEl = svgEl.querySelector('.diagram-node[data-node-id="' + nodeId + '"]');
-          if (blockEl) {
-            const existingOff = store.nodeOffsets[nodeId] || {dx: 0, dy: 0};
-            blockEl.setAttribute("transform", "translate(" + (existingOff.dx + dx) + "," + (existingOff.dy + dy) + ")");
-          }
-        });
-        updateArrowsForSlice(store, drag.sliceId, dx, dy);
+        dragSliceTo(store, drag, dx, dy);
       } else {
-        const blockEl = svgEl.querySelector('.diagram-node[data-node-id="' + drag.nodeId + '"]');
-        if (blockEl) {
-          const existingOff = store.nodeOffsets[drag.nodeId] || {dx: 0, dy: 0};
-          blockEl.setAttribute("transform", "translate(" + (existingOff.dx + dx) + "," + (existingOff.dy + dy) + ")");
-        }
-        updateArrowsForNode(store, drag.nodeId, {
-          x: drag.origNodeX + dx,
-          y: drag.origNodeY + dy,
-          w: store.layoutPositions[drag.nodeId].w,
-          h: store.layoutPositions[drag.nodeId].h,
-        });
+        dragNodeTo(store, drag, dx, dy);
       }
       return;
     }
@@ -969,24 +994,7 @@ function initEventListeners(store) {
             const dx = dp.x - drag.startDiagramX;
             const dy = dp.y - drag.startDiagramY;
             if (!tryReorderSliceOnDrop(store, drag.sliceId, dx)) {
-              drag.nodeIds.forEach(function(nodeId) {
-                var blockEl = svgEl.querySelector('.diagram-node[data-node-id="' + nodeId + '"]');
-                if (blockEl) {
-                  var off = store.nodeOffsets[nodeId];
-                  if (off) {
-                    blockEl.setAttribute("transform", "translate(" + off.dx + "," + off.dy + ")");
-                  } else {
-                    blockEl.removeAttribute("transform");
-                  }
-                }
-                var orig = drag.origPositions[nodeId];
-                if (orig) updateArrowsForNode(store, nodeId, store.layoutPositions[nodeId]);
-              });
-              if (drag.sliceGroup) {
-                drag.sliceGroup.removeAttribute("transform");
-                drag.sliceGroup.removeAttribute("opacity");
-                if (drag.swimlane) drag.swimlane.appendChild(drag.sliceGroup);
-              }
+              revertSliceDrag(store, drag);
             }
             store.interaction.suppressDetailClick = true;
           }
@@ -1007,7 +1015,7 @@ function initEventListeners(store) {
           const dp = screenToDiagram(svgEl, store.viewport, touch.clientX, touch.clientY);
           const dx = dp.x - drag.startDiagramX;
           const dy = dp.y - drag.startDiagramY;
-          commitDrag(store, drag.nodeId, dx, dy, drag.origNodeX, drag.origNodeY);
+          commitDrag(store, drag.nodeId, dx, dy);
           store.interaction.suppressDetailClick = true;
         }
       }
@@ -1052,24 +1060,7 @@ function initEventListeners(store) {
             const dx = dp.x - drag.startDiagramX;
             const dy = dp.y - drag.startDiagramY;
             if (!tryReorderSliceOnDrop(store, drag.sliceId, dx)) {
-              drag.nodeIds.forEach(function(nodeId) {
-                var blockEl = svgEl.querySelector('.diagram-node[data-node-id="' + nodeId + '"]');
-                if (blockEl) {
-                  var off = store.nodeOffsets[nodeId];
-                  if (off) {
-                    blockEl.setAttribute("transform", "translate(" + off.dx + "," + off.dy + ")");
-                  } else {
-                    blockEl.removeAttribute("transform");
-                  }
-                }
-                var orig = drag.origPositions[nodeId];
-                if (orig) updateArrowsForNode(store, nodeId, store.layoutPositions[nodeId]);
-              });
-              if (drag.sliceGroup) {
-                drag.sliceGroup.removeAttribute("transform");
-                drag.sliceGroup.removeAttribute("opacity");
-                if (drag.swimlane) drag.swimlane.appendChild(drag.sliceGroup);
-              }
+              revertSliceDrag(store, drag);
             }
             store.interaction.suppressDetailClick = true;
           }

@@ -151,7 +151,7 @@ function buildSVG(store) {
 
       var sliceG = g("slice-" + sl.id);
       sliceG.appendChild(svgRect(sp.x, sp.y, sp.w, sp.h, "#ffffff", "#adb5bd",
-        "rx=\"4\" stroke-width=\"1.5\" stroke-dasharray=\"6,3\""));
+        "rx=\"4\" stroke-width=\"1.5\" stroke-dasharray=\"6,3\" class=\"slice-box\" data-slice-id=\"" + sl.id + "\""));
       sliceG.appendChild(svgRect(sp.x, sp.y, sp.w, 28, "#f8f9fa", "none",
         "rx=\"4\" class=\"slice-header\" data-slice-id=\"" + sl.id + "\""));
       sliceG.appendChild(svgRect(sp.x, sp.y + 24, sp.w, 4, "#f8f9fa", "none",
