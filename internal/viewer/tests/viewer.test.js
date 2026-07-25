@@ -32,9 +32,9 @@ function createRequiredElements() {
     <div id="minimap"></div>
     <svg id="minimap-svg"></svg>
     <button id="minimap-toggle"></button>
-    <div id="context-panel" class="hidden"></div>
-    <button id="context-toggle"></button>
-    <div id="context-list"></div>
+    <div id="visibility-panel" class="hidden"></div>
+    <button id="visibility-toggle"></button>
+    <div id="visibility-tree"></div>
     <div id="tooltip"></div>
     <div id="detail-panel"></div>
     <div id="dp-content"></div>

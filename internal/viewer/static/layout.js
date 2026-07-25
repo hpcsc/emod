@@ -41,7 +41,7 @@ function computeLayout(store) {
   const positions = {};
 
   let contexts = tree.roots.filter(function(n) { return n.type === "context"; });
-  contexts = contexts.filter(function(ctx) { return !store.hiddenContexts[ctx.id]; });
+  contexts = contexts.filter(function(ctx) { return !store.hiddenNodes[ctx.id]; });
   let currentY = L.marginY;
   let maxRight = L.marginX + 800;
   let xPos;
@@ -139,14 +139,14 @@ function computeLayout(store) {
   }
 
   contexts.forEach(function(ctx) {
-    const aggs = ctx.children.filter(function(n) { return n.type === "aggregate"; });
-    const dirSlices = ctx.children.filter(function(n) { return n.type === "slice"; });
+    const aggs = ctx.children.filter(function(n) { return n.type === "aggregate" && !store.hiddenNodes[n.id]; });
+    const dirSlices = ctx.children.filter(function(n) { return n.type === "slice" && !store.hiddenNodes[n.id]; });
     xPos = L.marginX;
     let rightEdge = xPos;
     maxSliceHeight = 0;
 
     aggs.forEach(function(agg) {
-      const slices = agg.children.filter(function(n) { return n.type === "slice"; });
+      const slices = agg.children.filter(function(n) { return n.type === "slice" && !store.hiddenNodes[n.id]; });
 
       slices.forEach(function(sl, si) {
         layoutSlice(sl, si, slices, currentY + L.swimlaneHdr + L.aggLabelH);

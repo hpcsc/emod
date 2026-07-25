@@ -60,41 +60,93 @@ function renderActorAnnotations(store) {
   container.innerHTML = html;
 }
 
-// ─── Context panel ──────────────────────────────────────────────
-function updateContextList(store) {
-  if (!store.dom.contextList) return;
-  const ctxNodes = store.nodes.filter(function(n) { return n.type === "context"; });
-  if (ctxNodes.length === 0) {
-    store.dom.contextList.innerHTML = '<div class="context-item" style="color:#999">No contexts</div>';
+// ─── Visibility panel ───────────────────────────────────────────
+const VISIBILITY_TYPES = { context: true, aggregate: true, slice: true };
+
+function buildVisibilityTree(nodes) {
+  const childrenOf = {};
+  nodes.forEach(function(n) {
+    if (!VISIBILITY_TYPES[n.type] || !n.parentId) return;
+    (childrenOf[n.parentId] = childrenOf[n.parentId] || []).push(n);
+  });
+
+  const rows = [];
+  const descendantsOf = {};
+  const parentOf = {};
+
+  function walk(node, depth) {
+    rows.push({ node: node, depth: depth });
+    const ids = [];
+    (childrenOf[node.id] || []).forEach(function(child) {
+      parentOf[child.id] = node.id;
+      walk(child, depth + 1);
+      ids.push(child.id);
+      Array.prototype.push.apply(ids, descendantsOf[child.id]);
+    });
+    descendantsOf[node.id] = ids;
+  }
+
+  nodes.forEach(function(n) { if (n.type === "context") walk(n, 0); });
+
+  function ancestorsOf(id) {
+    const ids = [];
+    let cur = parentOf[id];
+    while (cur) {
+      ids.push(cur);
+      cur = parentOf[cur];
+    }
+    return ids;
+  }
+
+  return { rows: rows, descendantsOf: descendantsOf, ancestorsOf: ancestorsOf };
+}
+
+function updateVisibilityTree(store) {
+  const treeEl = store.dom.visibilityTree;
+  if (!treeEl) return;
+  const tree = buildVisibilityTree(store.nodes);
+  if (tree.rows.length === 0) {
+    treeEl.innerHTML = '<div class="visibility-item" style="color:#999">No contexts</div>';
     return;
   }
+
   let html = '';
-  ctxNodes.forEach(function(ctx) {
-    const checked = !store.hiddenContexts[ctx.id];
-    html += '<div class="context-item" data-ctx-id="' + ctx.id + '">';
-    html += '<input type="checkbox" id="ctx-cb-' + ctx.id + '"' + (checked ? ' checked' : '') + '>';
-    html += '<label for="ctx-cb-' + ctx.id + '">' + Renderer.esc(ctx.label) + '</label>';
+  tree.rows.forEach(function(row) {
+    const id = row.node.id;
+    html += '<div class="visibility-item vis-' + row.node.type + '" data-node-id="' + id + '"';
+    html += ' style="padding-left:' + (12 + row.depth * 16) + 'px">';
+    html += '<input type="checkbox" id="vis-cb-' + id + '"' + (store.hiddenNodes[id] ? '' : ' checked') + '>';
+    html += '<label for="vis-cb-' + id + '">' + Renderer.esc(row.node.label) + '</label>';
     html += '</div>';
   });
-  store.dom.contextList.innerHTML = html;
+  treeEl.innerHTML = html;
 
-  store.dom.contextList.querySelectorAll('.context-item input[type="checkbox"]').forEach(function(cb) {
+  treeEl.querySelectorAll('.visibility-item input[type="checkbox"]').forEach(function(cb) {
+    const id = cb.closest('.visibility-item').getAttribute('data-node-id');
+    const descendants = tree.descendantsOf[id] || [];
+    const hiddenDescendants = descendants.filter(function(d) { return store.hiddenNodes[d]; });
+
+    // A property, not an attribute — checked already covers "all visible", so
+    // this is the only way to show a context whose slices are partly hidden.
+    cb.indeterminate = !store.hiddenNodes[id] && hiddenDescendants.length > 0;
+
     cb.addEventListener('change', function() {
-      const item = this.closest('.context-item');
-      const ctxId = item.getAttribute('data-ctx-id');
       if (this.checked) {
-        delete store.hiddenContexts[ctxId];
+        [id].concat(descendants, tree.ancestorsOf(id)).forEach(function(n) {
+          delete store.hiddenNodes[n];
+        });
       } else {
-        store.hiddenContexts[ctxId] = true;
+        [id].concat(descendants).forEach(function(n) { store.hiddenNodes[n] = true; });
       }
       bus.emit('data:changed', { store });
+      updateVisibilityTree(store);
     });
   });
 }
 
-function toggleContextPanel(store, show) {
-  const panelEl = store.dom.contextPanel;
-  const toggleEl = store.dom.contextToggle;
+function toggleVisibilityPanel(store, show) {
+  const panelEl = store.dom.visibilityPanel;
+  const toggleEl = store.dom.visibilityToggle;
   if (show === undefined) {
     panelEl.classList.toggle("hidden");
   } else if (show) {
@@ -104,7 +156,7 @@ function toggleContextPanel(store, show) {
   }
   const isHidden = panelEl.classList.contains("hidden");
   toggleEl.classList.toggle("active", !isHidden);
-  if (!isHidden) updateContextList(store);
+  if (!isHidden) updateVisibilityTree(store);
 }
 
 // ─── Diagnostics panel ──────────────────────────────────────────
@@ -896,8 +948,8 @@ export const UI = {
   hideTooltip,
   positionTooltip,
   renderActorAnnotations,
-  updateContextList,
-  toggleContextPanel,
+  updateVisibilityTree,
+  toggleVisibilityPanel,
   updateDiagnosticsPanel,
   handleDiagnosticClick,
   initDiagnosticsDelegation,

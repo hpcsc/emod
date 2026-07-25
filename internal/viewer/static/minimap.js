@@ -110,7 +110,7 @@ function toggleMinimap(store, show) {
   if (!isHidden) updateMinimap(store);
 }
 
-const IGNORED_TARGETS = "#minimap-close, #minimap-toggle, #minimap-handle, #context-panel, #context-toggle, #context-list";
+const IGNORED_TARGETS = "#minimap-close, #minimap-toggle, #minimap-handle, #visibility-panel, #visibility-toggle, #visibility-tree";
 
 function readTranslate(el) {
   const mat = el.style.transform;

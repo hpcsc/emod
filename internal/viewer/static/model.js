@@ -22,7 +22,7 @@ function setModelData(store, data) {
   store.edges = data.edges || [];
   store.layoutPositions = {};
   store.nodeOffsets = {};
-  store.hiddenContexts = {};
+  store.hiddenNodes = {};
   store.arrowData = [];
   rebuildNodeIndex(store);
 

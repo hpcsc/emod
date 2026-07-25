@@ -21,8 +21,8 @@ bus.on('model:updated', function({ store: s }) {
   UI.updateStats(s);
   const btn = s.dom.resetLayoutBtn;
   if (btn) btn.disabled = true;
-  if (s.dom.contextPanel && !s.dom.contextPanel.classList.contains("hidden")) {
-    UI.updateContextList(s);
+  if (s.dom.visibilityPanel && !s.dom.visibilityPanel.classList.contains("hidden")) {
+    UI.updateVisibilityTree(s);
   }
 });
 
@@ -109,9 +109,9 @@ function init() {
   store.dom.minimap = document.getElementById("minimap");
   store.dom.minimapSvg = document.getElementById("minimap-svg");
   store.dom.minimapToggle = document.getElementById("minimap-toggle");
-  store.dom.contextPanel = document.getElementById("context-panel");
-  store.dom.contextToggle = document.getElementById("context-toggle");
-  store.dom.contextList = document.getElementById("context-list");
+  store.dom.visibilityPanel = document.getElementById("visibility-panel");
+  store.dom.visibilityToggle = document.getElementById("visibility-toggle");
+  store.dom.visibilityTree = document.getElementById("visibility-tree");
   store.dom.tooltip = document.getElementById("tooltip");
   store.dom.detailPanel = document.getElementById("detail-panel");
   store.dom.dpContent = document.getElementById("dp-content");
@@ -225,9 +225,9 @@ function init() {
     });
   });
 
-  // ─── Context toggle ───────────────────────────────────────────────
-  store.dom.contextToggle.addEventListener("click", function() {
-    UI.toggleContextPanel(store);
+  // ─── Visibility toggle ────────────────────────────────────────────
+  store.dom.visibilityToggle.addEventListener("click", function() {
+    UI.toggleVisibilityPanel(store);
   });
 
   // ─── Diagnostics toggle ──────────────────────────────────────────
