@@ -122,7 +122,10 @@ function updateDiagnosticsPanel(store, diagnostics) {
     return;
   }
 
-  badgeEl.style.display = "";
+  // An explicit value, not "", because the stylesheet's own rule for the badge
+  // is display:none — clearing the inline style just falls back to that and
+  // the badge stays invisible.
+  badgeEl.style.display = "inline-block";
   badgeEl.textContent = diagnostics.length + " error" + (diagnostics.length === 1 ? "" : "s");
 
   let html = "";

@@ -1,0 +1,13 @@
+{
+  "name": "emod-e2e-viewer",
+  "version": "0.1.0",
+  "description": "Browser E2E tests for the emod viewer",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "test": "playwright test"
+  },
+  "devDependencies": {
+    "@playwright/test": "^1.49.1"
+  }
+}
