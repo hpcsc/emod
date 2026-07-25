@@ -236,4 +236,46 @@ describe('Model', () => {
       await expect(Model.sendParse(store, undefined, statusEl)).rejects.toThrow('no source');
     });
   });
+
+  describe('autoDetectEdgeType', () => {
+    function storeWith(types) {
+      const nodes = Object.entries(types).map(([id, type]) => ({ id, type }));
+      return { nodes, nodeById: new Map(nodes.map((n) => [n.id, n])) };
+    }
+
+    // The direction each type runs in has to match what the exporter writes,
+    // or the importer drops the edge when the diagram is written back out.
+    const cases = [
+      ['command', 'event', 'flow'],
+      ['trigger', 'command', 'trigger_command'],
+      ['event', 'view', 'subscription'],
+      ['event', 'automation', 'automation_trigger'],
+      ['automation', 'command', 'automation_command'],
+      ['view', 'translation', 'reads'],
+      ['translation', 'command', 'translation_command'],
+    ];
+
+    for (const [from, to, expected] of cases) {
+      it(`types a ${from} to ${to} arrow as ${expected}`, () => {
+        const store = storeWith({ a: from, b: to });
+        expect(Model.autoDetectEdgeType(store, 'a', 'b')).toBe(expected);
+      });
+    }
+
+    it('does not treat a view to event arrow as a subscription', () => {
+      const store = storeWith({ a: 'view', b: 'event' });
+      expect(Model.autoDetectEdgeType(store, 'a', 'b')).not.toBe('subscription');
+    });
+
+    it('falls back to flow for a pairing with no defined direction', () => {
+      const store = storeWith({ a: 'event', b: 'command' });
+      expect(Model.autoDetectEdgeType(store, 'a', 'b')).toBe('flow');
+    });
+
+    it('falls back to flow when an endpoint is not in the model', () => {
+      const store = storeWith({ a: 'command' });
+      expect(Model.autoDetectEdgeType(store, 'a', 'gone')).toBe('flow');
+      expect(Model.autoDetectEdgeType(store, 'gone', 'a')).toBe('flow');
+    });
+  });
 });
