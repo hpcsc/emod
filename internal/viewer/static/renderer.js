@@ -111,18 +111,25 @@ function buildSVG(store) {
 
     if (aggs.length > 0) {
       var aggY = cp.y + L.swimlaneHdr;
-      var aggStartX = cp.x;
+      var aggRowX = cp.x;
+      var aggRows = [];
       aggs.forEach(function(agg) {
         var ap = positions[agg.id];
         if (!ap) return;
-        var aggOwnWidth = Math.max(100, ap.w - (aggStartX - cp.x));
-        swimlane.appendChild(svgRect(aggStartX, aggY, aggOwnWidth, L.aggLabelH, "#e9ecef", "#e9ecef",
-          "class=\"agg-row\" data-agg-id=\"" + agg.id + "\""));
-        aggStartX += aggOwnWidth;
+        var aggOwnWidth = Math.max(100, ap.w - (aggRowX - cp.x));
+        aggRows.push({ agg: agg, x: aggRowX, w: aggOwnWidth });
+        aggRowX += aggOwnWidth;
       });
-      aggs.forEach(function(agg) {
-        swimlane.appendChild(svgText(cp.x + 16, aggY + L.aggLabelH - 6, agg.label, 13, "#495057",
-          "font-weight=\"600\" class=\"agg-label\" data-agg-id=\"" + agg.id + "\""));
+      aggRows.forEach(function(row) {
+        swimlane.appendChild(svgRect(row.x, aggY, row.w, L.aggLabelH, "#e9ecef", "#e9ecef",
+          "class=\"agg-row\" data-agg-id=\"" + row.agg.id + "\""));
+      });
+      // Every row rect goes down before any label, because a narrow aggregate
+      // is floored at 100px wide and the next row then starts partway through
+      // its neighbour's label, painting over the text.
+      aggRows.forEach(function(row) {
+        swimlane.appendChild(svgText(row.x + 16, aggY + L.aggLabelH - 6, row.agg.label, 13, "#495057",
+          "font-weight=\"600\" class=\"agg-label\" data-agg-id=\"" + row.agg.id + "\""));
       });
     }
 
