@@ -5,7 +5,7 @@
 - [x] Task 2: Reject an unsupported version with a single diagnostic
 - [x] Task 3: Insert `emod 1` when formatting
 - [x] Task 4: Accept the version header in the tree-sitter grammar
-- [ ] Task 5: Document the version header in the DSL reference
+- [x] Task 5: Document the version header in the DSL reference
 
 ---
 
@@ -315,14 +315,14 @@ editors that rely on it keep working now that `emod fmt` pins every file it touc
 reading the grammar or the proposal.
 
 **Acceptance Criteria:**
-- [ ] `docs/dsl-reference.md` gains a version-header section with a syntax block and a worked example
+- [x] `docs/dsl-reference.md` gains a version-header section with a syntax block and a worked example
       showing `emod 1` above `model "..."`
-- [ ] The section states that absence means version 1, that `emod fmt` inserts the header, and what the
+- [x] The section states that absence means version 1, that `emod fmt` inserts the header, and what the
       unsupported-version diagnostic reports (declared version and supported version)
-- [ ] The Kubernetes-style rule is stated: additive grammar changes (new optional keywords) do not bump
+- [x] The Kubernetes-style rule is stated: additive grammar changes (new optional keywords) do not bump
       the version; breaking changes do
-- [ ] Surrounding section numbering and cross-references stay coherent
-- [ ] No lint rule is documented — `version/missing-header` remains deferred
+- [x] Surrounding section numbering and cross-references stay coherent
+- [x] No lint rule is documented — `version/missing-header` remains deferred
 
 **Affected Files/Modules:**
 - `docs/dsl-reference.md` — new section alongside "General Syntax" / "Top-Level Constructs"

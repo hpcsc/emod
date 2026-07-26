@@ -42,7 +42,34 @@ Curly braces `{ }` define hierarchical scopes. Square brackets `[ ]` delimit com
 
 ---
 
-## 2. Top-Level Constructs
+## 2. Version Header
+
+A file may open with a version directive on its own line, before `model`. It pins the file to a revision of the grammar.
+
+```
+emod <n>
+```
+
+The version is a single integer.
+
+```emod
+emod 1
+model "Hotel Reservation"
+```
+
+- **Absence means version 1:** a file with no header parses exactly as one declaring `emod 1`.
+- **`emod fmt` inserts the header** as the first line, so formatted files are always pinned. A declared version is preserved; a file without a header is pinned to the version the tool supports.
+- **An unsupported version is rejected by the parser**, so the diagnostic reports the declared version and the supported version on line 1 instead of a parse failure deep in the file:
+
+  ```
+  reservation.emod:1: unsupported version 2: this tool supports emod version 1
+  ```
+
+Version numbers follow the Kubernetes convention: additive grammar changes, such as new optional keywords, do not bump the version; breaking changes do. Adopting new optional syntax therefore never requires touching the header.
+
+---
+
+## 3. Top-Level Constructs
 
 ### `model`
 
@@ -66,7 +93,7 @@ Multiple actors are allowed. Actors are referenced by triggers (see [Slice Patte
 
 ---
 
-## 3. Bounded Contexts
+## 4. Bounded Contexts
 
 ### `context`
 
@@ -111,7 +138,7 @@ Multiple aggregates per context, multiple slices per aggregate.
 
 ---
 
-## 4. Slices
+## 5. Slices
 
 A slice is an implementation unit representing a single use case in Event Modeling. All event-modeling primitives live inside slices. In aggregate mode, slices are nested inside an `aggregate`. In DCB mode, slices are direct children of the context.
 
@@ -127,11 +154,11 @@ slice "<name>" {
 }
 ```
 
-Every slice must contain at least one element. See [Slice Patterns](#5-slice-patterns) for valid combinations.
+Every slice must contain at least one element. See [Slice Patterns](#6-slice-patterns) for valid combinations.
 
 ---
 
-## 5. Slice Patterns
+## 6. Slice Patterns
 
 The DSL supports four Event Modeling slice patterns. Each pattern prescribes which blocks appear together.
 
@@ -160,7 +187,7 @@ slice "<name>" {
 }
 ```
 
-`flow` wires the command to the event (see [Flows](#6-flows)). `trigger` is optional — a slice may define a command directly without a trigger.
+`flow` wires the command to the event (see [Flows](#7-flows)). `trigger` is optional — a slice may define a command directly without a trigger.
 
 ### View Pattern
 
@@ -175,7 +202,7 @@ slice "<name>" {
 }
 ```
 
-`subscribes` references event names defined elsewhere in the model (see [Cross-References](#7-cross-references)).
+`subscribes` references event names defined elsewhere in the model (see [Cross-References](#10-cross-references)).
 
 ### Automation Pattern
 
@@ -222,7 +249,7 @@ slice "<name>" {
 
 ---
 
-## 6. Flows
+## 7. Flows
 
 `flow` declares a causal relationship: a command produces an event.
 
@@ -236,7 +263,7 @@ The `->` arrow is a required operator. Multiple flow entries may appear in one `
 
 ---
 
-## 7. Fields
+## 8. Fields
 
 Commands, events, and views contain structured field definitions.
 
@@ -265,7 +292,7 @@ event <Name> {
 
 ---
 
-## 8. Dynamic Consistency Boundaries
+## 9. Dynamic Consistency Boundaries
 
 DCB mode is additive — aggregate-based models continue to work without changes. DCB constructs are valid in `dcb` and `mixed` modes only.
 
@@ -326,7 +353,7 @@ See [examples/dcb_model.emod](/examples/dcb_model.emod) for a complete DCB-mode 
 
 ---
 
-## 9. Cross-References
+## 10. Cross-References
 
 Names are resolved during validation (`emod validate`). All references use unqualified names.
 
@@ -334,7 +361,7 @@ Names are resolved during validation (`emod validate`). All references use unqua
 |---|---|---|
 | `context "<name>"` | `automation { target context <Name> }` | [`automation`](#automation-pattern) |
 | `event <Name>` | `subscribes [<Name>]`, `flow`, `automation { trigger <Name> }`, `automation { command <Name> }`, `translation { event <Name> }`, `translation { command <Name> }` | [`view`](#view-pattern), [`automation`](#automation-pattern), [`translation`](#translation-pattern) |
-| `command <Name>` | `flow`, `automation { command <Name> }`, `translation { command <Name> }` | [`flow`](#6-flows), [`automation`](#automation-pattern), [`translation`](#translation-pattern) |
+| `command <Name>` | `flow`, `automation { command <Name> }`, `translation { command <Name> }` | [`flow`](#7-flows), [`automation`](#automation-pattern), [`translation`](#translation-pattern) |
 | `view <Name>` | `trigger { reads <Name> }`, `translation { reads <Name> }` | [`command` pattern](#command-pattern), [`translation`](#translation-pattern) |
 | `actor "<name>"` | `trigger { actor <Name> }` | [`command` pattern](#command-pattern) |
 
@@ -345,7 +372,7 @@ Validation detects:
 
 ---
 
-## 10. Pipeline
+## 11. Pipeline
 
 The CLI processes `.emod` files through a linear pipeline:
 
