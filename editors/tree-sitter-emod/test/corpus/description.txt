@@ -1,0 +1,329 @@
+========================
+Context with description
+========================
+
+context "Sales" {
+  description "Everything the sales team owns"
+  aggregate "Order" {}
+}
+
+---
+
+(source_file
+  (context_definition
+    (string)
+    (description
+      (string))
+    (aggregate_definition
+      (string))))
+
+========================
+Aggregate with description
+========================
+
+context "C" {
+  aggregate "Order" {
+    description "The lifecycle of a single order"
+  }
+}
+
+---
+
+(source_file
+  (context_definition
+    (string)
+    (aggregate_definition
+      (string)
+      (description
+        (string)))))
+
+========================
+Slice with description
+========================
+
+context "C" {
+  aggregate "A" {
+    slice "Core" {
+      description "Placing an order"
+    }
+  }
+}
+
+---
+
+(source_file
+  (context_definition
+    (string)
+    (aggregate_definition
+      (string)
+      (slice_definition
+        (string)
+        (description
+          (string))))))
+
+========================
+Command with description
+========================
+
+context "C" {
+  aggregate "A" {
+    slice "Core" {
+      command PlaceOrder {
+        description "Submits an order for fulfilment"
+      }
+    }
+  }
+}
+
+---
+
+(source_file
+  (context_definition
+    (string)
+    (aggregate_definition
+      (string)
+      (slice_definition
+        (string)
+        (command_definition
+          (identifier)
+          (description
+            (string)))))))
+
+========================
+Event with description
+========================
+
+context "C" {
+  aggregate "A" {
+    slice "Core" {
+      event OrderPlaced {
+        description "An order was accepted"
+      }
+    }
+  }
+}
+
+---
+
+(source_file
+  (context_definition
+    (string)
+    (aggregate_definition
+      (string)
+      (slice_definition
+        (string)
+        (event_definition
+          (identifier)
+          (description
+            (string)))))))
+
+========================
+View with description
+========================
+
+context "C" {
+  aggregate "A" {
+    slice "Core" {
+      view ActiveOrders {
+        description "Orders that are still open"
+      }
+    }
+  }
+}
+
+---
+
+(source_file
+  (context_definition
+    (string)
+    (aggregate_definition
+      (string)
+      (slice_definition
+        (string)
+        (view_definition
+          (identifier)
+          (description
+            (string)))))))
+
+========================
+Automation with description
+========================
+
+context "C" {
+  aggregate "A" {
+    slice "Core" {
+      automation SendEmail {
+        description "Emails the customer once the order lands"
+      }
+    }
+  }
+}
+
+---
+
+(source_file
+  (context_definition
+    (string)
+    (aggregate_definition
+      (string)
+      (slice_definition
+        (string)
+        (automation_definition
+          (identifier)
+          (description
+            (string)))))))
+
+========================
+Translation with description around a described event
+========================
+
+context "C" {
+  aggregate "A" {
+    slice "Core" {
+      translation BookingImport {
+        description "Turns supplier webhooks into bookings"
+        external_system "Booking.com"
+        event BookingImported {
+          description "A supplier booking arrived"
+        }
+      }
+    }
+  }
+}
+
+---
+
+(source_file
+  (context_definition
+    (string)
+    (aggregate_definition
+      (string)
+      (slice_definition
+        (string)
+        (translation_definition
+          (identifier)
+          (description
+            (string))
+          (string)
+          (event_definition
+            (identifier)
+            (description
+              (string))))))))
+
+========================
+Trigger with description
+========================
+
+context "C" {
+  aggregate "A" {
+    slice "Core" {
+      trigger UI "Booking form" {
+        description "The form a guest fills in"
+        actor Guest
+      }
+    }
+  }
+}
+
+---
+
+(source_file
+  (context_definition
+    (string)
+    (aggregate_definition
+      (string)
+      (slice_definition
+        (string)
+        (trigger_definition
+          (identifier)
+          (string)
+          (description
+            (string))
+          (any_identifier))))))
+
+========================
+Description after the aggregate it describes
+========================
+
+context "Sales" {
+  aggregate "Order" {}
+  description "Everything the sales team owns"
+}
+
+---
+
+(source_file
+  (context_definition
+    (string)
+    (aggregate_definition
+      (string))
+    (description
+      (string))))
+
+========================
+Description after fields and subscribes in a view
+========================
+
+context "C" {
+  aggregate "A" {
+    slice "Core" {
+      view ActiveOrders {
+        fields {
+          orderId string required
+        }
+        subscribes [OrderPlaced]
+        description "Orders that are still open"
+      }
+    }
+  }
+}
+
+---
+
+(source_file
+  (context_definition
+    (string)
+    (aggregate_definition
+      (string)
+      (slice_definition
+        (string)
+        (view_definition
+          (identifier)
+          (fields_block
+            (field_line
+              (any_identifier)
+              (any_identifier)
+              (any_identifier)))
+          (subscribes_block
+            (any_identifier))
+          (description
+            (string)))))))
+
+========================
+Field named description inside a fields block
+========================
+
+context "C" {
+  aggregate "A" {
+    slice "Core" {
+      fields {
+        description string required
+      }
+    }
+  }
+}
+
+---
+
+(source_file
+  (context_definition
+    (string)
+    (aggregate_definition
+      (string)
+      (slice_definition
+        (string)
+        (fields_block
+          (field_line
+            (any_identifier)
+            (any_identifier)
+            (any_identifier)))))))

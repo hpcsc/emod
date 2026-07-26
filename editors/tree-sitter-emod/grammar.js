@@ -1,3 +1,9 @@
+const buildDescribedBlock = ($, ...items) => seq(
+  '{',
+  repeat(choice($.description, ...items)),
+  '}',
+);
+
 module.exports = grammar({
   name: 'emod',
 
@@ -29,15 +35,22 @@ module.exports = grammar({
       $.context_definition,
     ),
 
-    // model "name"
+    // model "name" [{ ... }]
     model_definition: $ => seq(
       'model',
       $.string,
+      optional(buildDescribedBlock($)),
     ),
 
-    // actor "name"
+    // actor "name" [{ ... }]
     actor_definition: $ => seq(
       'actor',
+      $.string,
+      optional(buildDescribedBlock($)),
+    ),
+
+    description: $ => seq(
+      'description',
       $.string,
     ),
 
@@ -45,27 +58,21 @@ module.exports = grammar({
     context_definition: $ => seq(
       'context',
       $.string,
-      '{',
-      repeat($.aggregate_definition),
-      '}',
+      buildDescribedBlock($, $.aggregate_definition),
     ),
 
     // aggregate "name" { slice "name" { ... } }
     aggregate_definition: $ => seq(
       'aggregate',
       $.string,
-      '{',
-      repeat($.slice_definition),
-      '}',
+      buildDescribedBlock($, $.slice_definition),
     ),
 
     // slice "name" { ... }
     slice_definition: $ => seq(
       'slice',
       $.string,
-      '{',
-      repeat($._slice_item),
-      '}',
+      buildDescribedBlock($, $._slice_item),
     ),
 
     // === Inside slice ===
@@ -84,21 +91,18 @@ module.exports = grammar({
     command_definition: $ => seq(
       'command',
       $.identifier,
-      '{',
-      optional($.fields_block),
-      '}',
+      buildDescribedBlock($, $.fields_block),
     ),
 
     // event Name { fields { ... } source external "..." }
     event_definition: $ => seq(
       'event',
       $.identifier,
-      '{',
-      repeat(choice(
+      buildDescribedBlock(
+        $,
         $.fields_block,
         seq('source', 'external', $.string),
-      )),
-      '}',
+      ),
     ),
 
     // fields { name type [modifier] ... }
@@ -123,12 +127,11 @@ module.exports = grammar({
       'trigger',
       $.identifier,
       $.string,
-      '{',
-      repeat(choice(
+      buildDescribedBlock(
+        $,
         seq('actor', $.any_identifier),
         seq('reads', $.any_identifier),
-      )),
-      '}',
+      ),
     ),
 
     // flow { command -> event: CmdName -> EvtName }
@@ -154,12 +157,7 @@ module.exports = grammar({
     view_definition: $ => seq(
       'view',
       $.identifier,
-      '{',
-      repeat(choice(
-        $.fields_block,
-        $.subscribes_block,
-      )),
-      '}',
+      buildDescribedBlock($, $.fields_block, $.subscribes_block),
     ),
 
     // subscribes [Event, Event]
@@ -177,27 +175,25 @@ module.exports = grammar({
     automation_definition: $ => seq(
       'automation',
       $.identifier,
-      '{',
-      repeat(choice(
+      buildDescribedBlock(
+        $,
         seq('trigger', $.any_identifier),
         seq('command', $.any_identifier),
         seq('target', 'context', $.any_identifier),
-      )),
-      '}',
+      ),
     ),
 
     // translation Name { external_system "Name" reads View command Cmd event Name { ... } }
     translation_definition: $ => seq(
       'translation',
       $.identifier,
-      '{',
-      repeat(choice(
+      buildDescribedBlock(
+        $,
         seq('external_system', $.string),
         seq('reads', $.any_identifier),
         seq('command', $.any_identifier),
         $.event_definition,
-      )),
-      '}',
+      ),
     ),
 
     // === Lexical rules ===

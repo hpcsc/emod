@@ -24,3 +24,31 @@ actor "Customer"
     (string))
   (actor_definition
     (string)))
+
+========================
+Model with a described block
+========================
+
+model "Inventory" {
+  description "Stock levels across every warehouse"
+}
+
+---
+
+(source_file
+  (model_definition
+    (string)
+    (description
+      (string))))
+
+========================
+Model with an empty block
+========================
+
+model "Inventory" {}
+
+---
+
+(source_file
+  (model_definition
+    (string)))

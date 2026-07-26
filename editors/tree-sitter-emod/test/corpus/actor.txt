@@ -9,3 +9,31 @@ actor "Customer"
 (source_file
   (actor_definition
     (string)))
+
+========================
+Actor with a described block
+========================
+
+actor "Customer" {
+  description "Someone who books a room"
+}
+
+---
+
+(source_file
+  (actor_definition
+    (string)
+    (description
+      (string))))
+
+========================
+Actor with an empty block
+========================
+
+actor "Customer" {}
+
+---
+
+(source_file
+  (actor_definition
+    (string)))
