@@ -74,17 +74,20 @@ func exporters() []exporter {
 }
 
 var (
-	drawioCellFill = regexp.MustCompile(`value="([^"]*)"[^>]*fillColor=(#[0-9a-fA-F]{6})`)
-	svgRectFill    = regexp.MustCompile(`<rect[^>]*\bfill="(#[0-9a-fA-F]{6})"`)
+	drawioStyleFill = regexp.MustCompile(`fillColor=(#[0-9a-fA-F]{6})`)
+	svgRectFill     = regexp.MustCompile(`<rect[^>]*\bfill="(#[0-9a-fA-F]{6})"`)
 )
 
-// drawioFillOfLabel returns the fill of the cell whose label contains label.
+// drawioFillOfLabel returns the fill of the shape whose label contains label.
 func drawioFillOfLabel(t *testing.T, output, label string) string {
 	t.Helper()
 
-	for _, m := range drawioCellFill.FindAllStringSubmatch(output, -1) {
-		if strings.Contains(m[1], label) {
-			return strings.ToLower(m[2])
+	for _, shape := range drawioShapes(t, output) {
+		if !strings.Contains(shape.label, label) {
+			continue
+		}
+		if m := drawioStyleFill.FindStringSubmatch(shape.style); m != nil {
+			return strings.ToLower(m[1])
 		}
 	}
 
@@ -295,16 +298,18 @@ func TestExporterPalette(t *testing.T) {
 }
 
 // paletteModel holds one element of every coloured kind, each with a distinct
-// label so a test can ask for its fill.
+// label so a test can ask for its fill. Every element is described, so asking
+// for a shape by its label goes through whatever a format does with prose.
 func paletteModel() *ast.Model {
 	model := singleSliceModel("Palette", "S",
-		&ast.Trigger{Kind: "UI", Name: "Form"},
-		command("Cmd"),
-		event("Evt"),
-		view("Rmo"),
+		&ast.Trigger{Kind: "UI", Name: "Form", Description: "Where the order is placed"},
+		&ast.Command{Name: "Cmd", Description: "Asks for the order to be placed"},
+		&ast.Event{Name: "Evt", Description: "The order was placed"},
+		&ast.View{Name: "Rmo", Description: "Every order placed so far"},
 	)
 	model.Contexts[0].Aggregates[0].Slices[0].Translations = []*ast.Translation{{
 		Name:           "Import",
+		Description:    "Restates a payment provider callback in our own language",
 		ExternalSystem: "Stripe",
 		Command:        "Cmd",
 		Event:          &ast.Event{Name: "Evt"},
@@ -463,6 +468,122 @@ var fullModelLabels = []string{
 	"OrderSummary",
 	"InventoryUpdater",
 	"PaymentGW",
+}
+
+// describedModel carries a distinct description on every construct that accepts
+// one — including the aggregate and the slices, which no format draws a shape
+// for — so a test can tell whose prose reached which shape. Its context mixes an
+// aggregate with a directly declared slice, so each layout style has work to do.
+func describedModel() *ast.Model {
+	return &ast.Model{
+		Name:        "Described",
+		Description: "How the hotel takes and imports room bookings",
+		Actors: []*ast.Actor{
+			{Name: "Guest", Description: "A person booking a room, not always the one staying in it"},
+		},
+		Contexts: []*ast.Context{{
+			Name:        "Bookings",
+			Description: "Everything the hotel knows about a stay before the guest arrives",
+			Aggregates: []*ast.Aggregate{{
+				Name:        "Booking",
+				Description: "One guest holding one room over one date range",
+				Slices: []*ast.Slice{{
+					Name:        "Hold a room",
+					Description: "A guest books a room from the public site",
+					Trigger: &ast.Trigger{
+						Kind:        "UI",
+						Name:        "BookingForm",
+						Actor:       "Guest",
+						Description: "The booking form on the public site",
+					},
+					Commands: []*ast.Command{{
+						Name:        "HoldRoom",
+						Description: "Ask the hotel to hold a room over a date range",
+					}},
+					Events: []*ast.Event{{
+						Name:        "RoomHeld",
+						Description: "A room is held for a guest",
+					}},
+					Views: []*ast.View{{
+						Name:        "StayList",
+						Description: "Every booking with the stage it has reached",
+						Subscribes:  []string{"RoomHeld"},
+					}},
+					Flows: []*ast.Flow{{CommandName: "HoldRoom", EventName: "RoomHeld"}},
+					Automations: []*ast.Automation{{
+						Name:         "AutoConfirm",
+						Description:  "Confirms every booking the moment it is made",
+						TriggerEvent: "RoomHeld",
+						Command:      "HoldRoom",
+					}},
+					Translations: []*ast.Translation{{
+						Name:           "PartnerWebhook",
+						Description:    "Restates a partner webhook in the hotel's own language",
+						ExternalSystem: "PartnerAPI",
+						Command:        "HoldRoom",
+						Event: &ast.Event{
+							Name:        "PartnerBookingReceived",
+							Description: "A partner site reported a booking",
+						},
+					}},
+				}},
+			}},
+			Slices: []*ast.Slice{{
+				Name:        "Settle the stay",
+				Description: "The guest pays on the morning they leave",
+				Events: []*ast.Event{{
+					Name:        "StaySettled",
+					Description: "The guest has paid for the whole stay",
+					Tags:        []ast.TagEntry{{Key: "stay", FieldRef: "stayId"}},
+				}},
+			}},
+		}},
+	}
+}
+
+// withoutDescriptions strips the prose out of a model in place, so a test can
+// compare a described model's diagram against the one it draws without prose.
+func withoutDescriptions(model *ast.Model) *ast.Model {
+	model.Description = ""
+	for _, actor := range model.Actors {
+		actor.Description = ""
+	}
+	for _, ctx := range model.Contexts {
+		ctx.Description = ""
+		for _, agg := range ctx.Aggregates {
+			agg.Description = ""
+			undescribeSlices(agg.Slices)
+		}
+		undescribeSlices(ctx.Slices)
+	}
+	return model
+}
+
+func undescribeSlices(slices []*ast.Slice) {
+	for _, s := range slices {
+		s.Description = ""
+		if s.Trigger != nil {
+			s.Trigger.Description = ""
+		}
+		for _, cmd := range s.Commands {
+			cmd.Description = ""
+		}
+		for _, evt := range s.Events {
+			evt.Description = ""
+		}
+		for _, v := range s.Views {
+			v.Description = ""
+		}
+		for _, auto := range s.Automations {
+			auto.Description = ""
+		}
+		for _, tr := range s.Translations {
+			tr.Description = ""
+			if tr.Event != nil {
+				tr.Event.Description = ""
+			}
+		}
+	}
 }
 
 func fullModel() *ast.Model {

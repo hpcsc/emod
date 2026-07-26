@@ -16,43 +16,10 @@ func ExportSVG(model *ast.Model, _ Style) ([]byte, error) {
 
 	entries := collectSlices(model)
 
-	xPos := marginX
-	prevCtx := ""
-	var ctxBounds []struct {
-		name string
-		x    int
-		w    int
-	}
-	for i, entry := range entries {
-		if i > 0 {
-			if entry.ctxName != prevCtx {
-				if len(ctxBounds) > 0 {
-					ctxBounds[len(ctxBounds)-1].w = xPos - ctxBounds[len(ctxBounds)-1].x - contextGap
-				}
-				xPos += contextGap
-				ctxBounds = append(ctxBounds, struct {
-					name string
-					x    int
-					w    int
-				}{name: entry.ctxName, x: xPos})
-			} else {
-				xPos += sliceGap
-			}
-		} else {
-			ctxBounds = append(ctxBounds, struct {
-				name string
-				x    int
-				w    int
-			}{name: entry.ctxName, x: xPos})
-		}
-		xPos += sliceWidth
-		prevCtx = entry.ctxName
-	}
-	if len(ctxBounds) > 0 {
-		ctxBounds[len(ctxBounds)-1].w = xPos - ctxBounds[len(ctxBounds)-1].x
-	}
+	sliceXs := sliceXPositions(entries)
+	ctxBounds := contextBounds(entries, sliceXs)
 
-	diagramW := xPos + marginX + 120
+	diagramW := layoutWidth(sliceXs) + marginX + 120
 	diagramH := 2*marginY + 4*laneHeight + 3*laneGap
 
 	var b strings.Builder
@@ -92,32 +59,16 @@ func ExportSVG(model *ast.Model, _ Style) ([]byte, error) {
 	extCenterY := extLaneY + 30 + (laneHeight-30-boxHeight)/2
 
 	type svgElem struct {
-		sliceIdx int
-		name     string
+		sliceIdx   int
+		name       string
 		x, y, w, h int
 	}
 	var elems []svgElem
 
-	sliceXFor := make(map[int]int)
-	xp := marginX
-	prev := ""
-	for ei, entry := range entries {
-		if ei > 0 {
-			if entry.ctxName != prev {
-				xp += contextGap
-			} else {
-				xp += sliceGap
-			}
-		}
-		sliceXFor[ei] = xp
-		xp += sliceWidth
-		prev = entry.ctxName
-	}
-
 	// Place elements per slice
 	for i, entry := range entries {
 		s := entry.slice
-		sliceX := sliceXFor[i]
+		sliceX := sliceXs[i]
 
 		// --- Trigger (top lane) ---
 		if s.Trigger != nil {

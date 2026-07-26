@@ -3,6 +3,10 @@
 package diagram_test
 
 import (
+	"encoding/xml"
+	"errors"
+	"fmt"
+	"io"
 	"regexp"
 	"strings"
 	"testing"
@@ -660,14 +664,228 @@ func TestExportDrawio(t *testing.T) {
 			requireValidXML(t, output)
 		})
 	})
+
+	t.Run("descriptions", func(t *testing.T) {
+		styles := []struct {
+			name  string
+			style diagram.Style
+		}{
+			{name: "auto style", style: diagram.StyleAuto},
+			{name: "projected style", style: diagram.StyleProjected},
+			{name: "dcb style", style: diagram.StyleDCB},
+		}
+
+		for _, s := range styles {
+			t.Run(s.name, func(t *testing.T) {
+				t.Run("hovering a shape shows the description of the construct it was drawn for", func(t *testing.T) {
+					raw, err := diagram.ExportDrawio(describedModel(), s.style)
+					require.NoError(t, err)
+
+					output := string(raw)
+					requireValidXML(t, output)
+
+					// An external system holds no prose of its own, so its box shows
+					// the description of the translation that names it, as the
+					// reactor box does.
+					expected := map[string]string{
+						"Bookings":               "Everything the hotel knows about a stay before the guest arrives",
+						"BookingForm":            "The booking form on the public site",
+						"HoldRoom":               "Ask the hotel to hold a room over a date range",
+						"RoomHeld":               "A room is held for a guest",
+						"StayList":               "Every booking with the stage it has reached",
+						"StaySettled":            "The guest has paid for the whole stay",
+						"AutoConfirm":            "Confirms every booking the moment it is made",
+						"PartnerBookingReceived": "A partner site reported a booking",
+						"PartnerWebhook":         "Restates a partner webhook in the hotel's own language",
+						"PartnerAPI":             "Restates a partner webhook in the hotel's own language",
+					}
+
+					shown := make(map[string]string, len(expected))
+					for label := range expected {
+						shown[label] = drawioTooltipOf(t, output, label)
+					}
+
+					require.Equal(t, expected, shown)
+				})
+
+				t.Run("describing a model leaves the picture itself untouched", func(t *testing.T) {
+					described, err := diagram.ExportDrawio(describedModel(), s.style)
+					require.NoError(t, err)
+					plain, err := diagram.ExportDrawio(withoutDescriptions(describedModel()), s.style)
+					require.NoError(t, err)
+
+					require.Equal(t, drawioShapes(t, string(plain)), withoutTooltips(drawioShapes(t, string(described))),
+						"prose must not add, move or repaint a shape")
+					require.Equal(t, drawioConnections(t, string(plain)), drawioConnections(t, string(described)),
+						"prose must not disturb the arrows between shapes")
+					require.NotContains(t, string(plain), "tooltip",
+						"a model that describes nothing is written exactly as it was before tooltips existed")
+				})
+			})
+		}
+
+		t.Run("a description written with markup characters reads back as written", func(t *testing.T) {
+			prose := `Rooms held < 24h & marked "urgent"`
+			model := describedModel()
+			model.Contexts[0].Description = prose
+			model.Contexts[0].Aggregates[0].Slices[0].Commands[0].Description = prose
+
+			raw, err := diagram.ExportDrawio(model, diagram.StyleAuto)
+			require.NoError(t, err)
+
+			output := string(raw)
+			requireValidXML(t, output)
+			require.Equal(t, prose, drawioTooltipOf(t, output, "Bookings"))
+			require.Equal(t, prose, drawioTooltipOf(t, output, "HoldRoom"))
+		})
+
+		t.Run("an event drawn in two tag lanes says the same thing in both", func(t *testing.T) {
+			model := &ast.Model{
+				Name: "Tagged",
+				Contexts: []*ast.Context{{
+					Name: "Bookings",
+					Slices: []*ast.Slice{{
+						Name: "Settle the stay",
+						Events: []*ast.Event{{
+							Name:        "StaySettled",
+							Description: "The guest has paid for the whole stay",
+							Tags: []ast.TagEntry{
+								{Key: "stay", FieldRef: "stayId"},
+								{Key: "guest", FieldRef: "guestId"},
+							},
+						}},
+					}},
+				}},
+			}
+
+			raw, err := diagram.ExportDrawio(model, diagram.StyleProjected)
+			require.NoError(t, err)
+
+			require.Equal(t,
+				[]string{"The guest has paid for the whole stay", "The guest has paid for the whole stay"},
+				drawioTooltipsOf(t, string(raw), "StaySettled"))
+		})
+	})
 }
 
 // --- drawio helpers ---
 
-var (
-	drawioVertex = regexp.MustCompile(`<mxCell id="(\d+)" value="([^"]*)"[^>]*vertex="1"`)
-	drawioEdge   = regexp.MustCompile(`<mxCell id="\d+"[^>]*edge="1"[^>]*source="(\d+)" target="(\d+)"`)
-)
+var drawioEdge = regexp.MustCompile(`<mxCell id="\d+"[^>]*edge="1"[^>]*source="(\d+)" target="(\d+)"`)
+
+// drawioShape is a box the diagram draws, as draw.io reads it back: what it is
+// called, what it says when hovered, and how it is painted and placed.
+type drawioShape struct {
+	id       string
+	label    string
+	tooltip  string
+	style    string
+	geometry string
+}
+
+// drawioShapes returns the diagram's boxes in document order, decoded through an
+// XML parser so a test sees the text draw.io shows rather than its escaped form.
+func drawioShapes(t *testing.T, output string) []drawioShape {
+	t.Helper()
+
+	attr := func(element xml.StartElement, name string) string {
+		for _, a := range element.Attr {
+			if a.Name.Local == name {
+				return a.Value
+			}
+		}
+		return ""
+	}
+
+	var (
+		shapes   []drawioShape
+		wrapper  *drawioShape
+		inVertex bool
+	)
+
+	decoder := xml.NewDecoder(strings.NewReader(output))
+	for {
+		token, err := decoder.Token()
+		if errors.Is(err, io.EOF) {
+			break
+		}
+		require.NoError(t, err, "output must be well-formed XML")
+
+		switch element := token.(type) {
+		case xml.StartElement:
+			switch element.Name.Local {
+			case "object":
+				wrapper = &drawioShape{
+					id:      attr(element, "id"),
+					label:   attr(element, "label"),
+					tooltip: attr(element, "tooltip"),
+				}
+			case "mxCell":
+				inVertex = attr(element, "vertex") == "1"
+				if !inVertex {
+					continue
+				}
+				shape := drawioShape{
+					id:    attr(element, "id"),
+					label: attr(element, "value"),
+					style: attr(element, "style"),
+				}
+				if wrapper != nil {
+					shape.id, shape.label, shape.tooltip = wrapper.id, wrapper.label, wrapper.tooltip
+				}
+				shapes = append(shapes, shape)
+			case "mxGeometry":
+				if !inVertex {
+					continue
+				}
+				shapes[len(shapes)-1].geometry = fmt.Sprintf("%s,%s %sx%s",
+					attr(element, "x"), attr(element, "y"), attr(element, "width"), attr(element, "height"))
+			}
+		case xml.EndElement:
+			switch element.Name.Local {
+			case "mxCell":
+				inVertex = false
+			case "object":
+				wrapper = nil
+			}
+		}
+	}
+
+	return shapes
+}
+
+// drawioTooltipsOf returns what every shape whose label contains label says when
+// hovered, failing when the diagram draws no such shape.
+func drawioTooltipsOf(t *testing.T, output, label string) []string {
+	t.Helper()
+
+	var tooltips []string
+	for _, shape := range drawioShapes(t, output) {
+		if strings.Contains(shape.label, label) {
+			tooltips = append(tooltips, shape.tooltip)
+		}
+	}
+	require.NotEmpty(t, tooltips, "no drawio shape labelled %q in output", label)
+
+	return tooltips
+}
+
+func drawioTooltipOf(t *testing.T, output, label string) string {
+	t.Helper()
+
+	tooltips := drawioTooltipsOf(t, output, label)
+	require.Len(t, tooltips, 1, "expected one shape labelled %q", label)
+
+	return tooltips[0]
+}
+
+func withoutTooltips(shapes []drawioShape) []drawioShape {
+	stripped := make([]drawioShape, len(shapes))
+	for i, shape := range shapes {
+		shape.tooltip = ""
+		stripped[i] = shape
+	}
+	return stripped
+}
 
 // drawioConnections returns the diagram's edges as "source label -> target label"
 // pairs, so a test can name the connection it expects instead of only asserting
@@ -676,8 +894,8 @@ func drawioConnections(t *testing.T, output string) []string {
 	t.Helper()
 
 	labels := map[string]string{}
-	for _, m := range drawioVertex.FindAllStringSubmatch(output, -1) {
-		labels[m[1]] = m[2]
+	for _, shape := range drawioShapes(t, output) {
+		labels[shape.id] = shape.label
 	}
 
 	var connections []string

@@ -65,21 +65,35 @@ const (
 
 // Color constants for element types.
 const (
-	fillEvent       = "#ffe6cc"
-	strokeEvent     = "#d79b00"
-	fillCommand     = "#dae8fc"
-	strokeCommand   = "#6c8ebf"
-	fillView        = "#d5e8d4"
-	strokeView      = "#82b366"
-	fillTrigger     = "#ffffff"
-	strokeTrigger   = "#333333"
-	fillExternal    = "#f5f5f5"
-	strokeExternal  = "#666666"
-	fillReactor     = "#e1d5e7"
-	strokeReactor   = "#9673a6"
-	strokePurpleUp  = "#9B59B6"
-	strokeGreenUp   = "#82b366"
-	strokeStandard  = "#333333"
+	fillEvent      = "#ffe6cc"
+	strokeEvent    = "#d79b00"
+	fillCommand    = "#dae8fc"
+	strokeCommand  = "#6c8ebf"
+	fillView       = "#d5e8d4"
+	strokeView     = "#82b366"
+	fillTrigger    = "#ffffff"
+	strokeTrigger  = "#333333"
+	fillExternal   = "#f5f5f5"
+	strokeExternal = "#666666"
+	fillReactor    = "#e1d5e7"
+	strokeReactor  = "#9673a6"
+	strokePurpleUp = "#9B59B6"
+	strokeGreenUp  = "#82b366"
+	strokeStandard = "#333333"
+)
+
+// mxGraph styles for the box drawn per element type.
+const (
+	boxBase = "rounded=0;whiteSpace=wrap;html=1;"
+	boxFont = "fontFamily=Helvetica;"
+
+	styleContextLabel   = boxBase + "fillColor=" + fillExternal + ";strokeColor=" + strokeExternal + ";fontStyle=1;"
+	styleTrigger        = boxBase + "fillColor=" + fillTrigger + ";strokeColor=" + strokeTrigger + ";" + boxFont
+	styleCommand        = boxBase + "fillColor=" + fillCommand + ";strokeColor=" + strokeCommand + ";" + boxFont
+	styleView           = boxBase + "fillColor=" + fillView + ";strokeColor=" + strokeView + ";" + boxFont
+	styleEvent          = boxBase + "fillColor=" + fillEvent + ";strokeColor=" + strokeEvent + ";" + boxFont
+	styleReactor        = boxBase + "fillColor=" + fillReactor + ";strokeColor=" + strokeReactor + ";" + boxFont
+	styleExternalSystem = boxBase + "fillColor=" + fillExternal + ";strokeColor=" + strokeExternal + ";dashed=1;" + boxFont
 )
 
 // ExportDrawio converts a parsed AST model into draw.io XML (mxGraph format).
@@ -116,52 +130,18 @@ func ExportDrawio(model *ast.Model, style Style) ([]byte, error) {
 		return id
 	}
 
-	xPos := marginX
-	prevCtx := ""
-	var ctxBounds []struct {
-		name string
-		x    int
-		w    int
-	}
-	for i, entry := range entries {
-		if i > 0 {
-			if entry.ctxName != prevCtx {
-				if len(ctxBounds) > 0 {
-					ctxBounds[len(ctxBounds)-1].w = xPos - ctxBounds[len(ctxBounds)-1].x - contextGap
-				}
-				xPos += contextGap
-				ctxBounds = append(ctxBounds, struct {
-					name string
-					x    int
-					w    int
-				}{name: entry.ctxName, x: xPos})
-			} else {
-				xPos += sliceGap
-			}
-		} else {
-			ctxBounds = append(ctxBounds, struct {
-				name string
-				x    int
-				w    int
-			}{name: entry.ctxName, x: xPos})
-		}
-		xPos += sliceWidth
-		prevCtx = entry.ctxName
-	}
-	if len(ctxBounds) > 0 {
-		ctxBounds[len(ctxBounds)-1].w = xPos - ctxBounds[len(ctxBounds)-1].x
-	}
-
-	diagramW := xPos + marginX
+	sliceXs := sliceXPositions(entries)
+	ctxBounds := contextBounds(entries, sliceXs)
+	diagramW := layoutWidth(sliceXs) + marginX
 
 	// --- Calculate swim lane positions ---
 	var (
-		triggerLaneY int
-		cmdViewLaneY int
-		eventLaneY   int
-		extLaneY     int
-		tagLaneYs    []int  // one Y per tag key in tagKeys
-		hasEventsLane bool // whether an "Events" lane is needed for aggregate/untagged events
+		triggerLaneY  int
+		cmdViewLaneY  int
+		eventLaneY    int
+		extLaneY      int
+		tagLaneYs     []int // one Y per tag key in tagKeys
+		hasEventsLane bool  // whether an "Events" lane is needed for aggregate/untagged events
 	)
 
 	if useDCB {
@@ -288,9 +268,7 @@ func ExportDrawio(model *ast.Model, style Style) ([]byte, error) {
 	for _, cb := range ctxBounds {
 		cid := allocID()
 		label := escapeXML(cb.name)
-		st := fmt.Sprintf("rounded=0;whiteSpace=wrap;html=1;fillColor=%s;strokeColor=%s;fontStyle=1;",
-			fillExternal, strokeExternal)
-		b.WriteString(vertexCell(cid, label, cb.x, marginY-30, cb.w-20, 22, st))
+		b.WriteString(vertexCell(cid, label, cb.description, cb.x, marginY-30, cb.w-20, 22, styleContextLabel))
 	}
 
 	triggerCenterY := triggerLaneY + 30 + (laneHeight-30-boxHeight)/2
@@ -313,23 +291,6 @@ func ExportDrawio(model *ast.Model, style Style) ([]byte, error) {
 	}
 	var elems []namedElem
 
-	// Precompute X position per entry, accounting for context gaps
-	sliceXFor := make(map[int]int)
-	xp := marginX
-	prev := ""
-	for ei, entry := range entries {
-		if ei > 0 {
-			if entry.ctxName != prev {
-				xp += contextGap
-			} else {
-				xp += sliceGap
-			}
-		}
-		sliceXFor[ei] = xp
-		xp += sliceWidth
-		prev = entry.ctxName
-	}
-
 	// Multi-tag event tracking for connectors
 	type multiTagEntry struct {
 		name    string
@@ -340,7 +301,7 @@ func ExportDrawio(model *ast.Model, style Style) ([]byte, error) {
 	// Place elements per slice
 	for i, entry := range entries {
 		s := entry.slice
-		sliceX := sliceXFor[i]
+		sliceX := sliceXs[i]
 
 		// --- Trigger (triggers/commands lane in projected, top lane in standard) ---
 		if s.Trigger != nil {
@@ -350,9 +311,7 @@ func ExportDrawio(model *ast.Model, style Style) ([]byte, error) {
 			if s.Trigger.Actor != "" {
 				label = fmt.Sprintf("%s (%s)", s.Trigger.Name, s.Trigger.Actor)
 			}
-			st := fmt.Sprintf("rounded=0;whiteSpace=wrap;html=1;fillColor=%s;strokeColor=%s;fontFamily=Helvetica;",
-				fillTrigger, strokeTrigger)
-			b.WriteString(vertexCell(id, label, x, triggerCenterY, boxWidth, boxHeight, st))
+			b.WriteString(vertexCell(id, label, s.Trigger.Description, x, triggerCenterY, boxWidth, boxHeight, styleTrigger))
 			elems = append(elems, namedElem{sliceIdx: i, name: s.Trigger.Name, id: id, x: x, y: triggerCenterY, w: boxWidth, h: boxHeight})
 		}
 
@@ -369,9 +328,7 @@ func ExportDrawio(model *ast.Model, style Style) ([]byte, error) {
 					label = cmd.Name + "\\n" + ann
 				}
 			}
-			st := fmt.Sprintf("rounded=0;whiteSpace=wrap;html=1;fillColor=%s;strokeColor=%s;fontFamily=Helvetica;",
-				fillCommand, strokeCommand)
-			b.WriteString(vertexCell(id, label, x, midCenterY, itemW, boxHeight, st))
+			b.WriteString(vertexCell(id, label, cmd.Description, x, midCenterY, itemW, boxHeight, styleCommand))
 			elems = append(elems, namedElem{sliceIdx: i, name: cmd.Name, id: id, x: x, y: midCenterY, w: itemW, h: boxHeight})
 		}
 
@@ -380,9 +337,7 @@ func ExportDrawio(model *ast.Model, style Style) ([]byte, error) {
 			id := allocID()
 			idx := len(s.Commands) + vi
 			itemW, x := itemLayout(usableW, totalMid, idx, sliceX)
-			st := fmt.Sprintf("rounded=0;whiteSpace=wrap;html=1;fillColor=%s;strokeColor=%s;fontFamily=Helvetica;",
-				fillView, strokeView)
-			b.WriteString(vertexCell(id, view.Name, x, midCenterY, itemW, boxHeight, st))
+			b.WriteString(vertexCell(id, view.Name, view.Description, x, midCenterY, itemW, boxHeight, styleView))
 			elems = append(elems, namedElem{sliceIdx: i, name: view.Name, id: id, x: x, y: midCenterY, w: itemW, h: boxHeight})
 		}
 
@@ -409,9 +364,6 @@ func ExportDrawio(model *ast.Model, style Style) ([]byte, error) {
 					label = fmt.Sprintf("%s\\n%s", label, tagText)
 				}
 			}
-			st := fmt.Sprintf("rounded=0;whiteSpace=wrap;html=1;fillColor=%s;strokeColor=%s;fontFamily=Helvetica;",
-				fillEvent, strokeEvent)
-
 			if useProjected && entry.fromDCB && len(evt.Tags) > 0 {
 				// DCB event with tags: place in each matching tag lane
 				// Compute position once, reuse across all matching lanes
@@ -419,18 +371,11 @@ func ExportDrawio(model *ast.Model, style Style) ([]byte, error) {
 				ei++
 				var placedIDs []int
 				for ti, key := range tagKeys {
-					hasTag := false
-					for _, tag := range evt.Tags {
-						if tag.Key == key {
-							hasTag = true
-							break
-						}
-					}
-					if !hasTag {
+					if !eventHasTag(evt, key) {
 						continue
 					}
 					id := allocID()
-					b.WriteString(vertexCell(id, label, itemX, tagCenterYs[ti], itemW, boxHeight, st))
+					b.WriteString(vertexCell(id, label, evt.Description, itemX, tagCenterYs[ti], itemW, boxHeight, styleEvent))
 					elems = append(elems, namedElem{sliceIdx: i, name: evt.Name, id: id, x: itemX, y: tagCenterYs[ti], w: itemW, h: boxHeight})
 					placedIDs = append(placedIDs, id)
 				}
@@ -438,19 +383,11 @@ func ExportDrawio(model *ast.Model, style Style) ([]byte, error) {
 					// Track for multi-tag connector
 					multiTagEvents = append(multiTagEvents, multiTagEntry{name: evt.Name, cellIDs: placedIDs})
 				}
-			} else if useProjected && entry.fromDCB && len(evt.Tags) == 0 && hasEventsLane {
-				// DCB event without tags: place in Events lane
-				id := allocID()
-				itemW, x := itemLayout(usableW, totalEvts, ei, sliceX)
-				ei++
-				b.WriteString(vertexCell(id, label, x, eventCenterY, itemW, boxHeight, st))
-				elems = append(elems, namedElem{sliceIdx: i, name: evt.Name, id: id, x: x, y: eventCenterY, w: itemW, h: boxHeight})
 			} else {
-				// Standard placement: Events lane (for aggregate entries, or when not projected)
 				id := allocID()
 				itemW, x := itemLayout(usableW, totalEvts, ei, sliceX)
 				ei++
-				b.WriteString(vertexCell(id, label, x, eventCenterY, itemW, boxHeight, st))
+				b.WriteString(vertexCell(id, label, evt.Description, x, eventCenterY, itemW, boxHeight, styleEvent))
 				elems = append(elems, namedElem{sliceIdx: i, name: evt.Name, id: id, x: x, y: eventCenterY, w: itemW, h: boxHeight})
 			}
 		}
@@ -459,9 +396,7 @@ func ExportDrawio(model *ast.Model, style Style) ([]byte, error) {
 				id := allocID()
 				itemW, x := itemLayout(usableW, totalEvts, ei, sliceX)
 				ei++
-				st := fmt.Sprintf("rounded=0;whiteSpace=wrap;html=1;fillColor=%s;strokeColor=%s;fontFamily=Helvetica;",
-					fillEvent, strokeEvent)
-				b.WriteString(vertexCell(id, tr.Event.Name, x, eventCenterY, itemW, boxHeight, st))
+				b.WriteString(vertexCell(id, tr.Event.Name, tr.Event.Description, x, eventCenterY, itemW, boxHeight, styleEvent))
 				elems = append(elems, namedElem{sliceIdx: i, name: tr.Event.Name, id: id, x: x, y: eventCenterY, w: itemW, h: boxHeight})
 			}
 		}
@@ -476,9 +411,7 @@ func ExportDrawio(model *ast.Model, style Style) ([]byte, error) {
 			x := sliceX + autoPadX
 			y := triggerLaneY + laneHeight - autoH - autoPadY
 			label := fmt.Sprintf("⚙ %s", auto.Name)
-			st := fmt.Sprintf("rounded=0;whiteSpace=wrap;html=1;fillColor=%s;strokeColor=%s;fontFamily=Helvetica;",
-				fillReactor, strokeReactor)
-			b.WriteString(vertexCell(id, label, x, y, autoW-boxWidth/8, autoH, st))
+			b.WriteString(vertexCell(id, label, auto.Description, x, y, autoW-boxWidth/8, autoH, styleReactor))
 			elems = append(elems, namedElem{sliceIdx: i, name: auto.Name, id: id, x: x, y: y, w: autoW - boxWidth/8, h: autoH})
 		}
 
@@ -492,9 +425,7 @@ func ExportDrawio(model *ast.Model, style Style) ([]byte, error) {
 			x := sliceX + padX
 			y := triggerLaneY + laneHeight - reactorH - padY
 			label := fmt.Sprintf("⚙ %s", tr.Name)
-			st := fmt.Sprintf("rounded=0;whiteSpace=wrap;html=1;fillColor=%s;strokeColor=%s;fontFamily=Helvetica;",
-				fillReactor, strokeReactor)
-			b.WriteString(vertexCell(id, label, x, y, reactorW-boxWidth/8, reactorH, st))
+			b.WriteString(vertexCell(id, label, tr.Description, x, y, reactorW-boxWidth/8, reactorH, styleReactor))
 			elems = append(elems, namedElem{sliceIdx: i, name: tr.Name, id: id, x: x, y: y, w: reactorW - boxWidth/8, h: reactorH})
 		}
 
@@ -508,9 +439,9 @@ func ExportDrawio(model *ast.Model, style Style) ([]byte, error) {
 			if ti > 0 {
 				extY += ti * (extH + 8)
 			}
-			st := fmt.Sprintf("rounded=0;whiteSpace=wrap;html=1;fillColor=%s;strokeColor=%s;dashed=1;fontFamily=Helvetica;",
-				fillExternal, strokeExternal)
-			b.WriteString(vertexCell(id, tr.ExternalSystem, extX, extY, extW, extH, st))
+			// An external system is only ever named by a translation and holds no
+			// prose of its own, so its box shows what that translation says.
+			b.WriteString(vertexCell(id, tr.ExternalSystem, tr.Description, extX, extY, extW, extH, styleExternalSystem))
 			elems = append(elems, namedElem{sliceIdx: i, name: tr.ExternalSystem, id: id, x: extX, y: extY, w: extW, h: extH})
 		}
 	}
@@ -676,9 +607,10 @@ func ExportDrawio(model *ast.Model, style Style) ([]byte, error) {
 }
 
 type sliceEntry struct {
-	slice   *ast.Slice
-	ctxName string
-	fromDCB bool // true if slice comes from a direct (DCB) context
+	slice          *ast.Slice
+	ctxName        string
+	ctxDescription string
+	fromDCB        bool // true if slice comes from a direct (DCB) context
 }
 
 // collectSlices flattens all slices from the model into a list.
@@ -689,14 +621,74 @@ func collectSlices(model *ast.Model) []sliceEntry {
 	for _, ctx := range model.Contexts {
 		for _, agg := range ctx.Aggregates {
 			for _, s := range agg.Slices {
-				entries = append(entries, sliceEntry{slice: s, ctxName: ctx.Name, fromDCB: false})
+				entries = append(entries, sliceEntry{slice: s, ctxName: ctx.Name, ctxDescription: ctx.Description, fromDCB: false})
 			}
 		}
 		for _, s := range ctx.Slices {
-			entries = append(entries, sliceEntry{slice: s, ctxName: ctx.Name, fromDCB: true})
+			entries = append(entries, sliceEntry{slice: s, ctxName: ctx.Name, ctxDescription: ctx.Description, fromDCB: true})
 		}
 	}
 	return entries
+}
+
+// sliceXPositions returns the x each slice is drawn at, left to right, with a
+// wider gap wherever one context gives way to the next.
+func sliceXPositions(entries []sliceEntry) []int {
+	positions := make([]int, len(entries))
+	x := marginX
+
+	for i, entry := range entries {
+		if i > 0 {
+			if entry.ctxName == entries[i-1].ctxName {
+				x += sliceGap
+			} else {
+				x += contextGap
+			}
+		}
+		positions[i] = x
+		x += sliceWidth
+	}
+
+	return positions
+}
+
+// contextBound is the horizontal band a context occupies, spanning the slices
+// declared in it.
+type contextBound struct {
+	name        string
+	description string
+	x           int
+	w           int
+}
+
+// contextBounds returns one band per context, laid over the slices at the given
+// positions. A band stops short of the gap separating it from the next context;
+// only the last one runs to the right edge of the layout.
+func contextBounds(entries []sliceEntry, sliceXs []int) []contextBound {
+	var bounds []contextBound
+
+	for i, entry := range entries {
+		if i > 0 && entry.ctxName == entries[i-1].ctxName {
+			continue
+		}
+		if len(bounds) > 0 {
+			bounds[len(bounds)-1].w = sliceXs[i-1] + sliceWidth - contextGap - bounds[len(bounds)-1].x
+		}
+		bounds = append(bounds, contextBound{name: entry.ctxName, description: entry.ctxDescription, x: sliceXs[i]})
+	}
+	if len(bounds) > 0 {
+		bounds[len(bounds)-1].w = layoutWidth(sliceXs) - bounds[len(bounds)-1].x
+	}
+
+	return bounds
+}
+
+// layoutWidth returns the x the rightmost slice ends at.
+func layoutWidth(sliceXs []int) int {
+	if len(sliceXs) == 0 {
+		return marginX
+	}
+	return sliceXs[len(sliceXs)-1] + sliceWidth
 }
 
 // collectTagKeys returns unique tag keys across all DCB events, sorted alphabetically.
@@ -789,10 +781,23 @@ func swimlaneCell(id int, label string, x, y, w, h int) string {
 		`        </mxCell>`+"\n", id, label, style, x, y, w, h)
 }
 
-func vertexCell(id int, value string, x, y, w, h int, style string) string {
-	return fmt.Sprintf(`        <mxCell id="%d" value="%s" style="%s" vertex="1" parent="1">`+"\n"+
-		`          <mxGeometry x="%d" y="%d" width="%d" height="%d" as="geometry" />`+"\n"+
-		`        </mxCell>`+"\n", id, escapeXML(value), style, x, y, w, h)
+// draw.io reads a tooltip only off an <object> wrapping the mxCell. A box with
+// nothing to say stays a bare mxCell: wrapping those too would rewrite the
+// diagram of every model that carries no prose.
+func vertexCell(id int, value, tooltip string, x, y, w, h int, style string) string {
+	geometry := fmt.Sprintf(`<mxGeometry x="%d" y="%d" width="%d" height="%d" as="geometry" />`, x, y, w, h)
+
+	if tooltip == "" {
+		return fmt.Sprintf(`        <mxCell id="%d" value="%s" style="%s" vertex="1" parent="1">`+"\n"+
+			`          %s`+"\n"+
+			`        </mxCell>`+"\n", id, escapeXML(value), style, geometry)
+	}
+
+	return fmt.Sprintf(`        <object label="%s" tooltip="%s" id="%d">`+"\n"+
+		`          <mxCell style="%s" vertex="1" parent="1">`+"\n"+
+		`            %s`+"\n"+
+		`          </mxCell>`+"\n"+
+		`        </object>`+"\n", escapeXML(value), escapeXML(tooltip), id, style, geometry)
 }
 
 func edgeCell(id int, style string, source, target int) string {
