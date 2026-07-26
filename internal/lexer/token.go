@@ -33,6 +33,7 @@ const (
 	KeywordTag
 	KeywordEvents
 	KeywordEmod
+	KeywordDescription
 
 	// Literals and identifiers
 	Identifier
@@ -86,6 +87,7 @@ var keywords = map[string]Kind{
 	"tag":             KeywordTag,
 	"events":          KeywordEvents,
 	"emod":            KeywordEmod,
+	"description":     KeywordDescription,
 }
 
 var keywordNames = invertKeywords()

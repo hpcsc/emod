@@ -25,6 +25,12 @@ func TestCheck(t *testing.T) {
 
 			require.Empty(t, diagnostics)
 		})
+
+		t.Run("returns an empty diagnostic list for a model that describes every construct", func(t *testing.T) {
+			diagnostics := oracle.Check(test.DescribedHotelReservation, "described.emod")
+
+			require.Empty(t, diagnostics)
+		})
 	})
 
 	t.Run("unparseable input", func(t *testing.T) {

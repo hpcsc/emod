@@ -32,6 +32,7 @@ func TestLexer(t *testing.T) {
 			"source":          lexer.KeywordSource,
 			"external":        lexer.KeywordExternal,
 			"emod":            lexer.KeywordEmod,
+			"description":     lexer.KeywordDescription,
 		}
 
 		for keyword, expectedType := range keywords {

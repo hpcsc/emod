@@ -221,27 +221,31 @@ emod
 			require.Equal(t, "Test", model.Name)
 		})
 
-		t.Run("emod is usable as a field name", func(t *testing.T) {
-			input := `model "Test"
+		t.Run("keywords are usable as field names", func(t *testing.T) {
+			for _, keyword := range []string{"emod", "description"} {
+				t.Run(keyword, func(t *testing.T) {
+					input := fmt.Sprintf(`model "Test"
 context "Ctx" {
   aggregate "Agg" {
     slice "Slice" {
       command DoThing {
         fields {
-          emod string required
+          %s string required
         }
       }
     }
   }
-}`
-			tokens, _ := lexer.Scan(input, "test.emod")
+}`, keyword)
+					tokens, _ := lexer.Scan(input, "test.emod")
 
-			model, diags := parser.New(tokens, "test.emod").Parse()
+					model, diags := parser.New(tokens, "test.emod").Parse()
 
-			require.Empty(t, diags)
-			test.RequireEqual(t, []*ast.Field{
-				{Name: "emod", Type: "string", Modifier: "required"},
-			}, model.Contexts[0].Aggregates[0].Slices[0].Commands[0].Fields, ignoreCommentPositions)
+					require.Empty(t, diags)
+					test.RequireEqual(t, []*ast.Field{
+						{Name: keyword, Type: "string", Modifier: "required"},
+					}, model.Contexts[0].Aggregates[0].Slices[0].Commands[0].Fields, ignoreCommentPositions)
+				})
+			}
 		})
 
 		t.Run("an integer outside the header is rejected", func(t *testing.T) {
@@ -2260,6 +2264,692 @@ context "Ctx" {
 		})
 	})
 
+	t.Run("descriptions", func(t *testing.T) {
+		t.Run("a block construct carries the description written inside it", func(t *testing.T) {
+			tests := []struct {
+				construct string
+				input     string
+				want      string
+				described func(*ast.Model) (string, ast.Position)
+			}{
+				{
+					construct: "context",
+					input: `model "Test"
+context "Reservations" {
+  description "Everything the hotel knows about a stay"
+  aggregate "Reservation" {
+    slice "Make Reservation" {
+    }
+  }
+}`,
+					want: "Everything the hotel knows about a stay",
+					described: func(m *ast.Model) (string, ast.Position) {
+						return m.Contexts[0].Description, m.Contexts[0].DescriptionPos
+					},
+				},
+				{
+					construct: "aggregate",
+					input: `model "Test"
+context "Reservations" {
+  aggregate "Reservation" {
+    slice "Make Reservation" {
+    }
+    description "One guest holding one room"
+  }
+}`,
+					want: "One guest holding one room",
+					described: func(m *ast.Model) (string, ast.Position) {
+						agg := m.Contexts[0].Aggregates[0]
+						return agg.Description, agg.DescriptionPos
+					},
+				},
+				{
+					construct: "slice",
+					input: `model "Test"
+context "Reservations" {
+  aggregate "Reservation" {
+    slice "Make Reservation" {
+      description "A guest books a room from the public site"
+      command MakeReservation {
+      }
+    }
+  }
+}`,
+					want: "A guest books a room from the public site",
+					described: func(m *ast.Model) (string, ast.Position) {
+						slice := m.Contexts[0].Aggregates[0].Slices[0]
+						return slice.Description, slice.DescriptionPos
+					},
+				},
+				{
+					construct: "trigger",
+					input: `model "Test"
+context "Reservations" {
+  aggregate "Reservation" {
+    slice "Make Reservation" {
+      trigger UI "Reservation Form" {
+        actor Guest
+        description "The booking form on the public site"
+      }
+    }
+  }
+}`,
+					want: "The booking form on the public site",
+					described: func(m *ast.Model) (string, ast.Position) {
+						trigger := m.Contexts[0].Aggregates[0].Slices[0].Trigger
+						return trigger.Description, trigger.DescriptionPos
+					},
+				},
+				{
+					construct: "command",
+					input: `model "Test"
+context "Reservations" {
+  aggregate "Reservation" {
+    slice "Make Reservation" {
+      command MakeReservation {
+        description "Ask the hotel to hold a room"
+        fields {
+          guestId string required
+        }
+      }
+    }
+  }
+}`,
+					want: "Ask the hotel to hold a room",
+					described: func(m *ast.Model) (string, ast.Position) {
+						cmd := m.Contexts[0].Aggregates[0].Slices[0].Commands[0]
+						return cmd.Description, cmd.DescriptionPos
+					},
+				},
+				{
+					construct: "event",
+					input: `model "Test"
+context "Reservations" {
+  aggregate "Reservation" {
+    slice "Make Reservation" {
+      event ReservationMade {
+        fields {
+          reservationId string required
+        }
+        description "A room is held for a guest"
+      }
+    }
+  }
+}`,
+					want: "A room is held for a guest",
+					described: func(m *ast.Model) (string, ast.Position) {
+						evt := m.Contexts[0].Aggregates[0].Slices[0].Events[0]
+						return evt.Description, evt.DescriptionPos
+					},
+				},
+				{
+					construct: "view",
+					input: `model "Test"
+context "Reservations" {
+  aggregate "Reservation" {
+    slice "View Reservations" {
+      view ReservationsView {
+        description "Every reservation with the stage it reached"
+        subscribes [ReservationMade]
+      }
+    }
+  }
+}`,
+					want: "Every reservation with the stage it reached",
+					described: func(m *ast.Model) (string, ast.Position) {
+						view := m.Contexts[0].Aggregates[0].Slices[0].Views[0]
+						return view.Description, view.DescriptionPos
+					},
+				},
+				{
+					construct: "automation",
+					input: `model "Test"
+context "Reservations" {
+  aggregate "Reservation" {
+    slice "Auto Confirm" {
+      automation AutoConfirm {
+        trigger ReservationMade
+        command ConfirmReservation
+        description "Confirms a reservation the moment it is made"
+      }
+    }
+  }
+}`,
+					want: "Confirms a reservation the moment it is made",
+					described: func(m *ast.Model) (string, ast.Position) {
+						automation := m.Contexts[0].Aggregates[0].Slices[0].Automations[0]
+						return automation.Description, automation.DescriptionPos
+					},
+				},
+				{
+					construct: "translation",
+					input: `model "Test"
+context "Reservations" {
+  aggregate "Reservation" {
+    slice "Import Booking" {
+      translation BookingImport {
+        description "Restates a partner webhook in our own language"
+        external_system "Booking.com API"
+        reads BookingWebhookView
+        command ImportBooking
+        event BookingImported {
+        }
+      }
+    }
+  }
+}`,
+					want: "Restates a partner webhook in our own language",
+					described: func(m *ast.Model) (string, ast.Position) {
+						translation := m.Contexts[0].Aggregates[0].Slices[0].Translations[0]
+						return translation.Description, translation.DescriptionPos
+					},
+				},
+				{
+					construct: "event nested in a translation",
+					input: `model "Test"
+context "Reservations" {
+  aggregate "Reservation" {
+    slice "Import Booking" {
+      translation BookingImport {
+        external_system "Booking.com API"
+        reads BookingWebhookView
+        command ImportBooking
+        event BookingImported {
+          fields {
+            bookingId string required
+          }
+          description "A partner site reported a booking"
+        }
+      }
+    }
+  }
+}`,
+					want: "A partner site reported a booking",
+					described: func(m *ast.Model) (string, ast.Position) {
+						evt := m.Contexts[0].Aggregates[0].Slices[0].Translations[0].Event
+						return evt.Description, evt.DescriptionPos
+					},
+				},
+			}
+
+			for _, tc := range tests {
+				t.Run(tc.construct, func(t *testing.T) {
+					entry := fmt.Sprintf("description %q", tc.want)
+					tokens, lexDiags := lexer.Scan(tc.input, "test.emod")
+					require.Empty(t, lexDiags)
+
+					model, diags := parser.New(tokens, "test.emod").Parse()
+
+					require.Empty(t, diags)
+					description, pos := tc.described(model)
+					require.Equal(t, tc.want, description)
+					line, column := positionOf(t, tc.input, entry, strconv.Quote(tc.want))
+					require.Equal(t, ast.Position{Filename: "test.emod", Line: line, Column: column}, pos)
+				})
+			}
+		})
+
+		t.Run("a description that is not a quoted string is reported once and the block still parses", func(t *testing.T) {
+			tests := []struct {
+				construct string
+				offending string
+				input     string
+				remaining func(*testing.T, *ast.Model)
+			}{
+				{
+					construct: "context",
+					offending: "Reservations",
+					input: `model "Test"
+context "Reservations" {
+  description Reservations
+  aggregate "Reservation" {
+    slice "Make Reservation" {
+    }
+  }
+}`,
+					remaining: func(t *testing.T, m *ast.Model) {
+						require.Len(t, m.Contexts[0].Aggregates, 1)
+						require.NotZero(t, m.Contexts[0].ClosePos.Line)
+					},
+				},
+				{
+					construct: "aggregate",
+					offending: "42",
+					input: `model "Test"
+context "Reservations" {
+  aggregate "Reservation" {
+    description 42
+    slice "Make Reservation" {
+    }
+  }
+}`,
+					remaining: func(t *testing.T, m *ast.Model) {
+						agg := m.Contexts[0].Aggregates[0]
+						require.Len(t, agg.Slices, 1)
+						require.NotZero(t, agg.ClosePos.Line)
+					},
+				},
+				{
+					construct: "slice",
+					offending: "command",
+					input: `model "Test"
+context "Reservations" {
+  aggregate "Reservation" {
+    slice "Make Reservation" {
+      description command
+      command MakeReservation {
+      }
+    }
+  }
+}`,
+					remaining: func(t *testing.T, m *ast.Model) {
+						slice := m.Contexts[0].Aggregates[0].Slices[0]
+						require.Len(t, slice.Commands, 1)
+						require.NotZero(t, slice.ClosePos.Line)
+					},
+				},
+				{
+					construct: "trigger",
+					offending: "Form",
+					input: `model "Test"
+context "Reservations" {
+  aggregate "Reservation" {
+    slice "Make Reservation" {
+      trigger UI "Reservation Form" {
+        description Form
+        actor Guest
+        reads AvailableRoomsView
+      }
+    }
+  }
+}`,
+					remaining: func(t *testing.T, m *ast.Model) {
+						trigger := m.Contexts[0].Aggregates[0].Slices[0].Trigger
+						require.Equal(t, "Guest", trigger.Actor)
+						require.Equal(t, "AvailableRoomsView", trigger.Reads)
+						require.NotZero(t, trigger.ClosePos.Line)
+					},
+				},
+				{
+					construct: "command",
+					offending: "7",
+					input: `model "Test"
+context "Reservations" {
+  aggregate "Reservation" {
+    slice "Make Reservation" {
+      command MakeReservation {
+        description 7
+        fields {
+          guestId string required
+        }
+      }
+    }
+  }
+}`,
+					remaining: func(t *testing.T, m *ast.Model) {
+						cmd := m.Contexts[0].Aggregates[0].Slices[0].Commands[0]
+						test.RequireEqual(t, []*ast.Field{
+							{Name: "guestId", Type: "string", Modifier: "required"},
+						}, cmd.Fields, ignoreCommentPositions)
+						require.NotZero(t, cmd.ClosePos.Line)
+					},
+				},
+				{
+					construct: "event",
+					offending: "source",
+					input: `model "Test"
+context "Reservations" {
+  aggregate "Reservation" {
+    slice "Make Reservation" {
+      event ReservationMade {
+        description source
+        fields {
+          reservationId string required
+        }
+      }
+    }
+  }
+}`,
+					remaining: func(t *testing.T, m *ast.Model) {
+						evt := m.Contexts[0].Aggregates[0].Slices[0].Events[0]
+						test.RequireEqual(t, []*ast.Field{
+							{Name: "reservationId", Type: "string", Modifier: "required"},
+						}, evt.Fields, ignoreCommentPositions)
+						require.NotZero(t, evt.ClosePos.Line)
+					},
+				},
+				{
+					construct: "view",
+					offending: "ReservationsView",
+					input: `model "Test"
+context "Reservations" {
+  aggregate "Reservation" {
+    slice "View Reservations" {
+      view ReservationsView {
+        description ReservationsView
+        subscribes [ReservationMade]
+      }
+    }
+  }
+}`,
+					remaining: func(t *testing.T, m *ast.Model) {
+						view := m.Contexts[0].Aggregates[0].Slices[0].Views[0]
+						require.Equal(t, []string{"ReservationMade"}, view.Subscribes)
+						require.NotZero(t, view.ClosePos.Line)
+					},
+				},
+				{
+					construct: "automation",
+					offending: "0",
+					input: `model "Test"
+context "Reservations" {
+  aggregate "Reservation" {
+    slice "Auto Confirm" {
+      automation AutoConfirm {
+        description 0
+        trigger ReservationMade
+        command ConfirmReservation
+      }
+    }
+  }
+}`,
+					remaining: func(t *testing.T, m *ast.Model) {
+						automation := m.Contexts[0].Aggregates[0].Slices[0].Automations[0]
+						require.Equal(t, "ReservationMade", automation.TriggerEvent)
+						require.Equal(t, "ConfirmReservation", automation.Command)
+						require.NotZero(t, automation.ClosePos.Line)
+					},
+				},
+				{
+					construct: "translation",
+					offending: "external",
+					input: `model "Test"
+context "Reservations" {
+  aggregate "Reservation" {
+    slice "Import Booking" {
+      translation BookingImport {
+        description external
+        external_system "Booking.com API"
+        reads BookingWebhookView
+        command ImportBooking
+      }
+    }
+  }
+}`,
+					remaining: func(t *testing.T, m *ast.Model) {
+						translation := m.Contexts[0].Aggregates[0].Slices[0].Translations[0]
+						require.Equal(t, "Booking.com API", translation.ExternalSystem)
+						require.Equal(t, "BookingWebhookView", translation.Reads)
+						require.Equal(t, "ImportBooking", translation.Command)
+						require.NotZero(t, translation.ClosePos.Line)
+					},
+				},
+			}
+
+			for _, tc := range tests {
+				t.Run(tc.construct, func(t *testing.T) {
+					entry := "description " + tc.offending
+					tokens, lexDiags := lexer.Scan(tc.input, "test.emod")
+					require.Empty(t, lexDiags)
+
+					model, diags := parser.New(tokens, "test.emod").Parse()
+
+					require.Len(t, diags, 1)
+					require.Contains(t, diags[0].Message, tc.construct)
+					require.Contains(t, diags[0].Message, strconv.Quote(tc.offending))
+					line, column := positionOf(t, tc.input, entry, tc.offending)
+					require.Equal(t, line, diags[0].Line)
+					require.Equal(t, column, diags[0].Column)
+					require.Equal(t, "test.emod", diags[0].Filename)
+					tc.remaining(t, model)
+				})
+			}
+		})
+
+		t.Run("an unquoted multi-word description is reported once and the block still parses", func(t *testing.T) {
+			tests := []struct {
+				construct string
+				prose     string
+				input     string
+				remaining func(*testing.T, *ast.Model)
+			}{
+				{
+					construct: "slice",
+					prose:     "A guest books a room",
+					input: `model "Test"
+context "Reservations" {
+  aggregate "Reservation" {
+    slice "Make Reservation" {
+      description A guest books a room
+      command MakeReservation {
+      }
+    }
+  }
+}`,
+					remaining: func(t *testing.T, m *ast.Model) {
+						slice := m.Contexts[0].Aggregates[0].Slices[0]
+						require.Len(t, slice.Commands, 1)
+						require.Equal(t, "MakeReservation", slice.Commands[0].Name)
+						require.NotZero(t, slice.ClosePos.Line)
+					},
+				},
+				{
+					construct: "context",
+					prose:     "A guest books a room",
+					input: `model "Test"
+context "Reservations" {
+  description A guest books a room
+  aggregate "Reservation" {
+    slice "Make Reservation" {
+    }
+  }
+}`,
+					remaining: func(t *testing.T, m *ast.Model) {
+						context := m.Contexts[0]
+						require.Len(t, context.Aggregates, 1)
+						require.Equal(t, "Reservation", context.Aggregates[0].Name)
+						require.NotZero(t, context.ClosePos.Line)
+					},
+				},
+			}
+
+			for _, tc := range tests {
+				t.Run(tc.construct, func(t *testing.T) {
+					firstWord := strings.Fields(tc.prose)[0]
+					tokens, lexDiags := lexer.Scan(tc.input, "test.emod")
+					require.Empty(t, lexDiags)
+
+					model, diags := parser.New(tokens, "test.emod").Parse()
+
+					require.Len(t, diags, 1)
+					require.Contains(t, diags[0].Message, tc.construct)
+					require.Contains(t, diags[0].Message, strconv.Quote(firstWord))
+					line, column := positionOf(t, tc.input, "description "+tc.prose, firstWord)
+					require.Equal(t, line, diags[0].Line)
+					require.Equal(t, column, diags[0].Column)
+					tc.remaining(t, model)
+				})
+			}
+		})
+
+		t.Run("an unrecognised entry offers description among the block's valid entries", func(t *testing.T) {
+			tests := []struct {
+				construct string
+				input     string
+			}{
+				{
+					construct: "context",
+					input: `model "Test"
+context "Reservations" {
+  descripton
+}`,
+				},
+				{
+					construct: "aggregate",
+					input: `model "Test"
+context "Reservations" {
+  aggregate "Reservation" {
+    descripton
+  }
+}`,
+				},
+				{
+					construct: "slice",
+					input: `model "Test"
+context "Reservations" {
+  aggregate "Reservation" {
+    slice "Make Reservation" {
+      descripton
+    }
+  }
+}`,
+				},
+				{
+					construct: "trigger",
+					input: `model "Test"
+context "Reservations" {
+  aggregate "Reservation" {
+    slice "Make Reservation" {
+      trigger UI "Reservation Form" {
+        descripton
+      }
+    }
+  }
+}`,
+				},
+				{
+					construct: "command",
+					input: `model "Test"
+context "Reservations" {
+  aggregate "Reservation" {
+    slice "Make Reservation" {
+      command MakeReservation {
+        descripton
+      }
+    }
+  }
+}`,
+				},
+				{
+					construct: "event",
+					input: `model "Test"
+context "Reservations" {
+  aggregate "Reservation" {
+    slice "Make Reservation" {
+      event ReservationMade {
+        descripton
+      }
+    }
+  }
+}`,
+				},
+				{
+					construct: "view",
+					input: `model "Test"
+context "Reservations" {
+  aggregate "Reservation" {
+    slice "View Reservations" {
+      view ReservationsView {
+        descripton
+      }
+    }
+  }
+}`,
+				},
+				{
+					construct: "automation",
+					input: `model "Test"
+context "Reservations" {
+  aggregate "Reservation" {
+    slice "Auto Confirm" {
+      automation AutoConfirm {
+        descripton
+      }
+    }
+  }
+}`,
+				},
+				{
+					construct: "translation",
+					input: `model "Test"
+context "Reservations" {
+  aggregate "Reservation" {
+    slice "Import Booking" {
+      translation BookingImport {
+        descripton
+      }
+    }
+  }
+}`,
+				},
+			}
+
+			for _, tc := range tests {
+				t.Run(tc.construct, func(t *testing.T) {
+					tokens, lexDiags := lexer.Scan(tc.input, "test.emod")
+					require.Empty(t, lexDiags)
+
+					_, diags := parser.New(tokens, "test.emod").Parse()
+
+					require.NotEmpty(t, diags)
+					require.Contains(t, diags[0].Message, "description")
+					require.Contains(t, diags[0].Message, tc.construct)
+				})
+			}
+		})
+
+		t.Run("a description with no value at the end of a block leaves the block closed", func(t *testing.T) {
+			input := `model "Test"
+context "Reservations" {
+  aggregate "Reservation" {
+    slice "View Reservations" {
+      view ReservationsView {
+        subscribes [ReservationMade]
+        description
+      }
+      view CancellationsView {
+        subscribes [ReservationCancelled]
+      }
+    }
+  }
+}`
+			tokens, lexDiags := lexer.Scan(input, "test.emod")
+			require.Empty(t, lexDiags)
+
+			model, diags := parser.New(tokens, "test.emod").Parse()
+
+			require.Len(t, diags, 1)
+			require.Contains(t, diags[0].Message, "view")
+			views := model.Contexts[0].Aggregates[0].Slices[0].Views
+			require.Len(t, views, 2)
+			require.Equal(t, "ReservationsView", views[0].Name)
+			require.NotZero(t, views[0].ClosePos.Line)
+			require.Equal(t, "CancellationsView", views[1].Name)
+			require.Equal(t, []string{"ReservationCancelled"}, views[1].Subscribes)
+		})
+
+		t.Run("the shared described model describes every construct that accepts one", func(t *testing.T) {
+			tokens, lexDiags := lexer.Scan(test.DescribedHotelReservation, "described.emod")
+			require.Empty(t, lexDiags)
+
+			model, diags := parser.New(tokens, "described.emod").Parse()
+
+			require.Empty(t, diags)
+			var kinds, undescribed []string
+			for _, construct := range describableConstructs(model) {
+				kinds = append(kinds, construct.kind)
+				if construct.description == "" {
+					undescribed = append(undescribed, fmt.Sprintf("%s %q", construct.kind, construct.name))
+				}
+			}
+			require.Empty(t, undescribed)
+			require.Subset(t, kinds, []string{
+				"context", "aggregate", "slice", "trigger",
+				"command", "event", "view", "automation", "translation",
+			})
+		})
+	})
+
 	t.Run("comments", func(t *testing.T) {
 		t.Run("comments before model are attached to Model node", func(t *testing.T) {
 			input := `# Header comment
@@ -3111,4 +3801,70 @@ context "Ctx" {
 			require.Equal(t, []string{"Alpha", "Beta", "Gamma"}, cmd.DecidesOn.Events)
 		})
 	})
+}
+
+func positionOf(t *testing.T, source, entry, token string) (line, column int) {
+	t.Helper()
+	for index, text := range strings.Split(source, "\n") {
+		if strings.Contains(text, entry) {
+			return index + 1, strings.Index(text, token) + 1
+		}
+	}
+	require.FailNowf(t, "entry not found in source", "%q", entry)
+	return 0, 0
+}
+
+type describableConstruct struct {
+	kind        string
+	name        string
+	description string
+}
+
+func describableConstructs(model *ast.Model) []describableConstruct {
+	var found []describableConstruct
+	add := func(kind, name, description string) {
+		found = append(found, describableConstruct{kind: kind, name: name, description: description})
+	}
+	addEvent := func(evt *ast.Event) {
+		add("event", evt.Name, evt.Description)
+	}
+	addSlice := func(slice *ast.Slice) {
+		add("slice", slice.Name, slice.Description)
+		if slice.Trigger != nil {
+			add("trigger", slice.Trigger.Name, slice.Trigger.Description)
+		}
+		for _, cmd := range slice.Commands {
+			add("command", cmd.Name, cmd.Description)
+		}
+		for _, evt := range slice.Events {
+			addEvent(evt)
+		}
+		for _, view := range slice.Views {
+			add("view", view.Name, view.Description)
+		}
+		for _, automation := range slice.Automations {
+			add("automation", automation.Name, automation.Description)
+		}
+		for _, translation := range slice.Translations {
+			add("translation", translation.Name, translation.Description)
+			if translation.Event != nil {
+				addEvent(translation.Event)
+			}
+		}
+	}
+
+	for _, context := range model.Contexts {
+		add("context", context.Name, context.Description)
+		for _, slice := range context.Slices {
+			addSlice(slice)
+		}
+		for _, aggregate := range context.Aggregates {
+			add("aggregate", aggregate.Name, aggregate.Description)
+			for _, slice := range aggregate.Slices {
+				addSlice(slice)
+			}
+		}
+	}
+
+	return found
 }
