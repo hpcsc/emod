@@ -26,8 +26,26 @@ func (w *writer) blankLine() {
 	w.b.WriteString("\n")
 }
 
+func (w *writer) blankLineBetweenBlocks() func() {
+	first := true
+	return func() {
+		if !first {
+			w.blankLine()
+		}
+		first = false
+	}
+}
+
 func indent(level int) string {
 	return strings.Repeat("  ", level)
+}
+
+// quoted renders text as an emod string literal, which runs verbatim from one
+// quote to the next: the language has no escape sequences. %q would escape a
+// backslash or tab that the lexer then reads back as the escape sequence itself,
+// so the text would grow on every format run.
+func quoted(text string) string {
+	return `"` + text + `"`
 }
 
 func (w *writer) writeComments(comments []*ast.Comment, level int) {
@@ -36,15 +54,32 @@ func (w *writer) writeComments(comments []*ast.Comment, level int) {
 	}
 }
 
+func (w *writer) writeDescription(description string, level int) {
+	if description == "" {
+		return
+	}
+	w.line(level, "description %s", quoted(description))
+}
+
+func (w *writer) writeDeclaration(keyword, name, description string) {
+	if description == "" {
+		w.line(0, "%s %s", keyword, quoted(name))
+		return
+	}
+	w.line(0, "%s %s {", keyword, quoted(name))
+	w.writeDescription(description, 1)
+	w.line(0, "}")
+}
+
 func (w *writer) writeModel(model *ast.Model) {
 	w.line(0, "emod %d", pinnedVersion(model))
 	w.writeComments(model.Comments, 0)
-	w.line(0, "model %q", model.Name)
+	w.writeDeclaration("model", model.Name, model.Description)
 
 	for _, actor := range model.Actors {
 		w.blankLine()
 		w.writeComments(actor.Comments, 0)
-		w.line(0, "actor %q", actor.Name)
+		w.writeDeclaration("actor", actor.Name, actor.Description)
 	}
 
 	for _, ctx := range model.Contexts {
@@ -63,22 +98,19 @@ func pinnedVersion(model *ast.Model) int {
 func (w *writer) writeContext(ctx *ast.Context, level int) {
 	w.writeComments(ctx.Comments, level)
 	if ctx.Mode != "" {
-		w.line(level, "context %q mode %s {", ctx.Name, ctx.Mode)
+		w.line(level, "context %s mode %s {", quoted(ctx.Name), ctx.Mode)
 	} else {
-		w.line(level, "context %q {", ctx.Name)
+		w.line(level, "context %s {", quoted(ctx.Name))
 	}
-	needsBlank := false
-	for i, agg := range ctx.Aggregates {
-		if i > 0 {
-			w.blankLine()
-		}
+	w.writeDescription(ctx.Description, level+1)
+
+	separate := w.blankLineBetweenBlocks()
+	for _, agg := range ctx.Aggregates {
+		separate()
 		w.writeAggregate(agg, level+1)
-		needsBlank = true
 	}
-	for i, slice := range ctx.Slices {
-		if needsBlank || i > 0 {
-			w.blankLine()
-		}
+	for _, slice := range ctx.Slices {
+		separate()
 		w.writeSlice(slice, level+1)
 	}
 	w.line(level, "}")
@@ -86,11 +118,12 @@ func (w *writer) writeContext(ctx *ast.Context, level int) {
 
 func (w *writer) writeAggregate(agg *ast.Aggregate, level int) {
 	w.writeComments(agg.Comments, level)
-	w.line(level, "aggregate %q {", agg.Name)
-	for i, slice := range agg.Slices {
-		if i > 0 {
-			w.blankLine()
-		}
+	w.line(level, "aggregate %s {", quoted(agg.Name))
+	w.writeDescription(agg.Description, level+1)
+
+	separate := w.blankLineBetweenBlocks()
+	for _, slice := range agg.Slices {
+		separate()
 		w.writeSlice(slice, level+1)
 	}
 	w.line(level, "}")
@@ -98,70 +131,45 @@ func (w *writer) writeAggregate(agg *ast.Aggregate, level int) {
 
 func (w *writer) writeSlice(slice *ast.Slice, level int) {
 	w.writeComments(slice.Comments, level)
-	w.line(level, "slice %q {", slice.Name)
+	w.line(level, "slice %s {", quoted(slice.Name))
 
 	inner := level + 1
-	needsBlank := false
+	w.writeDescription(slice.Description, inner)
+
+	separate := w.blankLineBetweenBlocks()
 
 	if slice.Trigger != nil {
+		separate()
 		w.writeTrigger(slice.Trigger, inner)
-		needsBlank = true
 	}
 
-	if len(slice.Commands) > 0 {
-		for i, cmd := range slice.Commands {
-			if needsBlank || i > 0 {
-				w.blankLine()
-			}
-			w.writeCommand(cmd, inner)
-			needsBlank = true
-		}
+	for _, cmd := range slice.Commands {
+		separate()
+		w.writeCommand(cmd, inner)
 	}
 
-	if len(slice.Events) > 0 {
-		for i, evt := range slice.Events {
-			if needsBlank || i > 0 {
-				w.blankLine()
-			}
-			w.writeEvent(evt, inner)
-			needsBlank = true
-		}
+	for _, evt := range slice.Events {
+		separate()
+		w.writeEvent(evt, inner)
 	}
 
-	if len(slice.Views) > 0 {
-		for i, view := range slice.Views {
-			if needsBlank || i > 0 {
-				w.blankLine()
-			}
-			w.writeView(view, inner)
-			needsBlank = true
-		}
+	for _, view := range slice.Views {
+		separate()
+		w.writeView(view, inner)
 	}
 
-	if len(slice.Automations) > 0 {
-		for i, auto := range slice.Automations {
-			if needsBlank || i > 0 {
-				w.blankLine()
-			}
-			w.writeAutomation(auto, inner)
-			needsBlank = true
-		}
+	for _, auto := range slice.Automations {
+		separate()
+		w.writeAutomation(auto, inner)
 	}
 
-	if len(slice.Translations) > 0 {
-		for i, trans := range slice.Translations {
-			if needsBlank || i > 0 {
-				w.blankLine()
-			}
-			w.writeTranslation(trans, inner)
-			needsBlank = true
-		}
+	for _, trans := range slice.Translations {
+		separate()
+		w.writeTranslation(trans, inner)
 	}
 
 	if len(slice.Flows) > 0 {
-		if needsBlank {
-			w.blankLine()
-		}
+		separate()
 		w.writeFlows(slice.Flows, inner)
 	}
 
@@ -170,7 +178,8 @@ func (w *writer) writeSlice(slice *ast.Slice, level int) {
 
 func (w *writer) writeTrigger(trigger *ast.Trigger, level int) {
 	w.writeComments(trigger.Comments, level)
-	w.line(level, "trigger %s %q {", trigger.Kind, trigger.Name)
+	w.line(level, "trigger %s %s {", trigger.Kind, quoted(trigger.Name))
+	w.writeDescription(trigger.Description, level+1)
 	if trigger.Actor != "" {
 		w.line(level+1, "actor %s", trigger.Actor)
 	}
@@ -183,6 +192,7 @@ func (w *writer) writeTrigger(trigger *ast.Trigger, level int) {
 func (w *writer) writeCommand(cmd *ast.Command, level int) {
 	w.writeComments(cmd.Comments, level)
 	w.line(level, "command %s {", cmd.Name)
+	w.writeDescription(cmd.Description, level+1)
 	if cmd.DecidesOn != nil {
 		w.writeDecidesOn(cmd.DecidesOn, level+1)
 	}
@@ -234,11 +244,12 @@ func formatPredicateParen(expr ast.PredicateExpr, parentOp string) string {
 func (w *writer) writeEvent(evt *ast.Event, level int) {
 	w.writeComments(evt.Comments, level)
 	w.line(level, "event %s {", evt.Name)
+	w.writeDescription(evt.Description, level+1)
 	if len(evt.Tags) > 0 {
 		w.writeTags(evt.Tags, level+1)
 	}
 	if evt.Source == "external" && evt.ExternalName != "" {
-		w.line(level+1, "source external %q", evt.ExternalName)
+		w.line(level+1, "source external %s", quoted(evt.ExternalName))
 	}
 	if len(evt.Fields) > 0 {
 		w.writeFields(evt.Fields, level+1)
@@ -298,6 +309,7 @@ func (w *writer) writeFlows(flows []*ast.Flow, level int) {
 func (w *writer) writeView(view *ast.View, level int) {
 	w.writeComments(view.Comments, level)
 	w.line(level, "view %s {", view.Name)
+	w.writeDescription(view.Description, level+1)
 	if len(view.Fields) > 0 {
 		w.writeFields(view.Fields, level+1)
 	}
@@ -310,6 +322,7 @@ func (w *writer) writeView(view *ast.View, level int) {
 func (w *writer) writeAutomation(auto *ast.Automation, level int) {
 	w.writeComments(auto.Comments, level)
 	w.line(level, "automation %s {", auto.Name)
+	w.writeDescription(auto.Description, level+1)
 	if auto.TriggerEvent != "" {
 		w.line(level+1, "trigger %s", auto.TriggerEvent)
 	}
@@ -325,8 +338,9 @@ func (w *writer) writeAutomation(auto *ast.Automation, level int) {
 func (w *writer) writeTranslation(trans *ast.Translation, level int) {
 	w.writeComments(trans.Comments, level)
 	w.line(level, "translation %s {", trans.Name)
+	w.writeDescription(trans.Description, level+1)
 	if trans.ExternalSystem != "" {
-		w.line(level+1, "external_system %q", trans.ExternalSystem)
+		w.line(level+1, "external_system %s", quoted(trans.ExternalSystem))
 	}
 	if trans.Reads != "" {
 		w.line(level+1, "reads %s", trans.Reads)

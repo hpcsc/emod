@@ -43,6 +43,35 @@ func TestFormat(t *testing.T) {
 			require.Equal(t, expected, result)
 		})
 
+		t.Run("a described model or actor takes the block form while an undescribed actor stays on one line", func(t *testing.T) {
+			model := &ast.Model{
+				Name:        "Hotel Reservation",
+				Description: "How the hotel takes and confirms room bookings",
+				Actors: []*ast.Actor{
+					{Name: "Guest", Description: "A person booking a room"},
+					{Name: "Clerk"},
+				},
+			}
+
+			result := formatter.Format(model)
+
+			expected := strings.Join([]string{
+				`emod 1`,
+				`model "Hotel Reservation" {`,
+				`  description "How the hotel takes and confirms room bookings"`,
+				`}`,
+				``,
+				`actor "Guest" {`,
+				`  description "A person booking a room"`,
+				`}`,
+				``,
+				`actor "Clerk"`,
+				``,
+			}, "\n")
+
+			require.Equal(t, expected, result)
+		})
+
 		t.Run("formats context with aggregate and slice containing command, event, flow", func(t *testing.T) {
 			model := &ast.Model{
 				Name: "Hotel",
@@ -434,6 +463,48 @@ func TestFormat(t *testing.T) {
 			test.RequireEqual(t, original, reparsed, ignoreFormatterNormalizations)
 			require.True(t, reparsed.VersionDeclared, "formatted output should pin the version")
 		})
+
+		t.Run("round-trip: a description on every construct survives formatting", func(t *testing.T) {
+			original := parseModel(t, test.DescribedHotelReservation, "described.emod")
+
+			reparsed := parseModel(t, formatter.Format(original), "described.emod")
+
+			test.RequireEqual(t, original, reparsed, ignoreFormatterNormalizations)
+		})
+
+		t.Run("round-trip: a description survives text that quoting could mangle", func(t *testing.T) {
+			for _, testCase := range []struct {
+				hazard      string
+				description string
+			}{
+				{"backslash", `Runs on the clerk's laptop under C:\hotel\rates`},
+				{"tab", "Two columns:\troom then rate"},
+				{"newline", "Two lines:\nroom then rate"},
+				{"percent", "Takes a 10% deposit up front"},
+			} {
+				t.Run(testCase.hazard, func(t *testing.T) {
+					source := "model \"Hotel\" {\n  description \"" + testCase.description + "\"\n}\n"
+
+					original := parseModel(t, source, "described.emod")
+					formatted := formatter.Format(original)
+					reparsed := parseModel(t, formatted, "described.emod")
+
+					require.Equal(t, testCase.description, reparsed.Description)
+					require.Equal(t, formatted, formatter.Format(reparsed),
+						"a second format run should not re-encode the description")
+				})
+			}
+		})
+
+		t.Run("idempotency: format(format(described input)) equals format(described input)", func(t *testing.T) {
+			original := parseModel(t, test.DescribedHotelReservation, "described.emod")
+
+			firstFormat := formatter.Format(original)
+			secondFormat := formatter.Format(parseModel(t, firstFormat, "formatted.emod"))
+
+			require.Equal(t, firstFormat, secondFormat,
+				"formatting the already-formatted output should produce identical bytes")
+		})
 	})
 
 	t.Run("blank lines and ordering", func(t *testing.T) {
@@ -592,40 +663,90 @@ func TestFormat(t *testing.T) {
 			require.Equal(t, expected, result)
 		})
 
-		t.Run("element ordering inside slice follows canonical order", func(t *testing.T) {
+		t.Run("canonical order puts description first inside every block and slice elements in pattern order", func(t *testing.T) {
 			model := &ast.Model{
 				Name: "Test",
 				Contexts: []*ast.Context{
 					{
-						Name: "Ctx",
+						Name:        "Ctx",
+						Description: "Where things get done",
+						Mode:        "mixed",
 						Aggregates: []*ast.Aggregate{
 							{
-								Name: "Agg",
+								Name:        "Agg",
+								Description: "One thing and its history",
 								Slices: []*ast.Slice{
 									{
-										Name: "Full Slice",
+										Name:        "Full Slice",
+										Description: "A user does the thing",
 										Trigger: &ast.Trigger{
-											Kind:  "UI",
-											Name:  "Form",
-											Actor: "User",
+											Kind:        "UI",
+											Name:        "Form",
+											Description: "The form the user fills in",
+											Actor:       "User",
+											Reads:       "ThingView",
 										},
 										Commands: []*ast.Command{
-											{Name: "DoThing"},
+											{
+												Name:        "DoThing",
+												Description: "Ask for the thing to be done",
+												DecidesOn: &ast.DecidesOnClause{
+													Events:    []string{"ThingDone"},
+													Predicate: &ast.TagPredicate{Field: "thing", Operator: "=", Value: "thingId"},
+												},
+												Fields: []*ast.Field{
+													{Name: "thingId", Type: "string", Modifier: "required"},
+												},
+											},
 										},
 										Events: []*ast.Event{
-											{Name: "ThingDone"},
+											{
+												Name:        "ThingDone",
+												Description: "The thing was done",
+												Tags: []ast.TagEntry{
+													{Key: "thing", FieldRef: "thingId"},
+												},
+												Fields: []*ast.Field{
+													{Name: "thingId", Type: "string", Modifier: "required"},
+												},
+											},
 										},
 										Views: []*ast.View{
 											{
-												Name:       "ThingView",
+												Name:        "ThingView",
+												Description: "Every thing and whether it is done",
+												Fields: []*ast.Field{
+													{Name: "thingId", Type: "string", Modifier: "required"},
+												},
 												Subscribes: []string{"ThingDone"},
 											},
 										},
 										Automations: []*ast.Automation{
 											{
-												Name:         "Reactor",
-												TriggerEvent: "ThingDone",
-												Command:      "Notify",
+												Name:          "Reactor",
+												Description:   "Notifies whoever asked once the thing is done",
+												TriggerEvent:  "ThingDone",
+												Command:       "Notify",
+												TargetContext: "Notifications",
+											},
+										},
+										Translations: []*ast.Translation{
+											{
+												Name:           "Importer",
+												Description:    "Restates a partner report as a thing",
+												ExternalSystem: "Partner",
+												Reads:          "ThingView",
+												Command:        "DoThing",
+												Event: &ast.Event{
+													Name:        "ThingImported",
+													Description: "A partner reported a thing",
+													Tags: []ast.TagEntry{
+														{Key: "thing", FieldRef: "thingId"},
+													},
+													Fields: []*ast.Field{
+														{Name: "thingId", Type: "string", Modifier: "required"},
+													},
+												},
 											},
 										},
 										Flows: []*ast.Flow{
@@ -646,13 +767,26 @@ func TestFormat(t *testing.T) {
 			eventIdx := strings.Index(result, "event ThingDone")
 			viewIdx := strings.Index(result, "view ThingView")
 			automationIdx := strings.Index(result, "automation Reactor")
+			translationIdx := strings.Index(result, "translation Importer")
 			flowIdx := strings.Index(result, "flow {")
 
 			require.Greater(t, commandIdx, triggerIdx, "command should come after trigger")
 			require.Greater(t, eventIdx, commandIdx, "event should come after command")
 			require.Greater(t, viewIdx, eventIdx, "view should come after event")
 			require.Greater(t, automationIdx, viewIdx, "automation should come after view")
-			require.Greater(t, flowIdx, automationIdx, "flow should come after automation")
+			require.Greater(t, translationIdx, automationIdx, "translation should come after automation")
+			require.Greater(t, flowIdx, translationIdx, "flow should come after translation")
+
+			require.Equal(t, `description "Where things get done"`, lineAfter(t, result, `context "Ctx" mode mixed {`))
+			require.Equal(t, `description "One thing and its history"`, lineAfter(t, result, `aggregate "Agg" {`))
+			require.Equal(t, `description "A user does the thing"`, lineAfter(t, result, `slice "Full Slice" {`))
+			require.Equal(t, `description "The form the user fills in"`, lineAfter(t, result, `trigger UI "Form" {`))
+			require.Equal(t, `description "Ask for the thing to be done"`, lineAfter(t, result, `command DoThing {`))
+			require.Equal(t, `description "The thing was done"`, lineAfter(t, result, `event ThingDone {`))
+			require.Equal(t, `description "Every thing and whether it is done"`, lineAfter(t, result, `view ThingView {`))
+			require.Equal(t, `description "Notifies whoever asked once the thing is done"`, lineAfter(t, result, `automation Reactor {`))
+			require.Equal(t, `description "Restates a partner report as a thing"`, lineAfter(t, result, `translation Importer {`))
+			require.Equal(t, `description "A partner reported a thing"`, lineAfter(t, result, `event ThingImported {`))
 		})
 
 		t.Run("event with source external but empty provider omits source line", func(t *testing.T) {
@@ -2736,6 +2870,20 @@ func parseFixture(t *testing.T, filename string) *ast.Model {
 	require.NoError(t, err)
 
 	return parseModel(t, string(source), filename)
+}
+
+func lineAfter(t *testing.T, formatted, blockHeader string) string {
+	t.Helper()
+
+	lines := strings.Split(formatted, "\n")
+	for i, line := range lines {
+		if strings.TrimSpace(line) == blockHeader && i+1 < len(lines) {
+			return strings.TrimSpace(lines[i+1])
+		}
+	}
+
+	require.FailNowf(t, "block header not found in formatted output", "%q in:\n%s", blockHeader, formatted)
+	return ""
 }
 
 var ignoreFormatterNormalizations = cmp.Options{

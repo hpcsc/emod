@@ -92,9 +92,13 @@ context "Reservations" {
 // every construct that accepts one, so packages that carry descriptions through
 // the pipeline share one model.
 const DescribedHotelReservation = `# Hotel Reservation System
-model "Hotel Reservation"
+model "Hotel Reservation" {
+  description "How the hotel takes, confirms and imports room bookings"
+}
 
-actor "Guest"
+actor "Guest" {
+  description "A person booking a room, not necessarily the one staying in it"
+}
 
 context "Reservations" {
   description "Everything the hotel knows about a stay before the guest arrives"
@@ -108,7 +112,7 @@ context "Reservations" {
         reads AvailableRoomsView
       }
       command MakeReservation {
-        description "Ask the hotel to hold a room for a date range"
+        description "Ask the hotel to hold a room for a date range, 10% deposit taken up front"
         fields {
           guestId     string required
           roomType    string required

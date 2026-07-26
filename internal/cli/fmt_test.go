@@ -46,6 +46,46 @@ context "Reservations" {
 
 const formattedEmod = "emod 1\n" + emodWithoutVersionHeader
 
+const describedFormattedEmod = `emod 1
+model "Hotel Reservation" {
+  description "How the hotel takes and confirms room bookings"
+}
+
+actor "Guest" {
+  description "A person booking a room"
+}
+
+context "Reservations" {
+  description "Everything the hotel knows about a stay before the guest arrives"
+  aggregate "Reservation" {
+    description "One guest holding one room over one date range"
+    slice "Make Reservation" {
+      description "A guest books a room from the public site"
+      command MakeReservation {
+        description "Ask the hotel to hold a room for a date range"
+        fields {
+          guestId  string required
+          roomType string required
+        }
+      }
+
+      event ReservationMade {
+        description "A room is held for a guest"
+        fields {
+          reservationId string required
+          guestId       string required
+          roomType      string required
+        }
+      }
+
+      flow {
+        command -> event: MakeReservation -> ReservationMade
+      }
+    }
+  }
+}
+`
+
 const unformattedEmod = `model "Hotel Reservation"
 actor "Guest"
 context "Reservations" {
@@ -164,6 +204,17 @@ func TestFmt(t *testing.T) {
 		afterBytes, readErr := os.ReadFile(path)
 		require.NoError(t, readErr)
 		require.Equal(t, formattedEmod, string(afterBytes), "check mode should not modify the file")
+	})
+
+	t.Run("check mode returns nil when a file using descriptions is already formatted", func(t *testing.T) {
+		path := writeTemp(t, "described.emod", describedFormattedEmod)
+
+		err := cli.RunFmt(path, true)
+
+		require.NoError(t, err)
+		afterBytes, readErr := os.ReadFile(path)
+		require.NoError(t, readErr)
+		require.Equal(t, describedFormattedEmod, string(afterBytes), "check mode should not modify the file")
 	})
 
 	t.Run("check mode returns error when a file is canonical apart from a missing version header", func(t *testing.T) {

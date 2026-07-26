@@ -3,7 +3,7 @@
 ## Progress
 - [x] Task 1: Carry a `description` attribute on the nine block constructs
 - [x] Task 2: Give `actor` and `model` an optional block form holding a description
-- [ ] Task 3: Preserve descriptions through `emod fmt`
+- [x] Task 3: Preserve descriptions through `emod fmt`
 - [ ] Task 4: Carry descriptions through the JSON and CUE exports and the embedded schema
 - [ ] Task 5: Attach descriptions as draw.io tooltips
 - [ ] Task 6: Attach descriptions as SVG `<title>` elements
