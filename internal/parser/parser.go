@@ -34,27 +34,9 @@ func New(tokens []*lexer.Token, filename string) *Instance {
 		filename: filename,
 	}
 	p.handlers = map[lexer.Kind]topLevelHandler{
-		lexer.KeywordModel: func(model *ast.Model) {
-			comments := p.takePendingComments()
-			name, pos := p.parseModel()
-			model.Comments = comments
-			model.Name = name
-			model.NamePos = pos
-		},
-		lexer.KeywordActor: func(model *ast.Model) {
-			comments := p.takePendingComments()
-			if actor := p.parseActor(); actor != nil {
-				actor.Comments = comments
-				model.Actors = append(model.Actors, actor)
-			}
-		},
-		lexer.KeywordContext: func(model *ast.Model) {
-			comments := p.takePendingComments()
-			if ctx := p.parseContext(); ctx != nil {
-				ctx.Comments = comments
-				model.Contexts = append(model.Contexts, ctx)
-			}
-		},
+		lexer.KeywordModel:   p.parseModelInto,
+		lexer.KeywordActor:   p.parseActorInto,
+		lexer.KeywordContext: p.parseContextInto,
 	}
 	return p
 }
@@ -152,29 +134,87 @@ func (p *Instance) expectedKeywords() string {
 	return strings.Join(names, ", ")
 }
 
-func (p *Instance) parseModel() (string, ast.Position) {
-	p.consume(lexer.KeywordModel, "expected model")
-	if !p.check(lexer.String) {
-		p.error(fmt.Sprintf("expected quoted string after \"model\", got %q", p.peek().Value))
-		return "", ast.Position{}
+func (p *Instance) parseModelInto(model *ast.Model) {
+	model.Comments = p.takePendingComments()
+	decl := p.parseDeclaration(lexer.KeywordModel)
+	if decl == nil {
+		return
 	}
 
-	tok := p.advance()
-	return tok.Value, p.position(tok)
+	model.Name, model.NamePos = decl.name, decl.namePos
+	model.Description, model.DescriptionPos = decl.description, decl.descriptionPos
+	model.OpenPos, model.ClosePos = decl.openPos, decl.closePos
 }
 
-func (p *Instance) parseActor() *ast.Actor {
-	p.consume(lexer.KeywordActor, "expected actor")
+func (p *Instance) parseActorInto(model *ast.Model) {
+	comments := p.takePendingComments()
+	decl := p.parseDeclaration(lexer.KeywordActor)
+	if decl == nil {
+		return
+	}
+
+	model.Actors = append(model.Actors, &ast.Actor{
+		Comments:       comments,
+		Name:           decl.name,
+		NamePos:        decl.namePos,
+		Description:    decl.description,
+		DescriptionPos: decl.descriptionPos,
+		OpenPos:        decl.openPos,
+		ClosePos:       decl.closePos,
+	})
+}
+
+func (p *Instance) parseContextInto(model *ast.Model) {
+	comments := p.takePendingComments()
+	if context := p.parseContext(); context != nil {
+		context.Comments = comments
+		model.Contexts = append(model.Contexts, context)
+	}
+}
+
+type declaration struct {
+	name           string
+	namePos        ast.Position
+	description    string
+	descriptionPos ast.Position
+	openPos        ast.Position
+	closePos       ast.Position
+}
+
+func (p *Instance) parseDeclaration(keyword lexer.Kind) *declaration {
+	construct := keyword.String()
+	p.consume(keyword, "expected "+construct)
 	if !p.check(lexer.String) {
-		p.error(fmt.Sprintf("expected quoted string after \"actor\", got %q", p.peek().Value))
+		p.error(fmt.Sprintf("expected quoted string after %q, got %q", construct, p.peek().Value))
 		return nil
 	}
 
-	tok := p.advance()
-	return &ast.Actor{
-		Name:    tok.Value,
-		NamePos: p.position(tok),
+	nameTok := p.advance()
+	decl := &declaration{name: nameTok.Value, namePos: p.position(nameTok)}
+
+	if !p.check(lexer.OpenBrace) {
+		return decl
 	}
+	openTok := p.advance()
+	decl.openPos = p.position(openTok)
+
+	for !p.check(lexer.CloseBrace) && !p.isAtEnd() {
+		if p.check(lexer.KeywordDescription) {
+			p.parseDescriptionInto(construct, &decl.description, &decl.descriptionPos)
+		} else {
+			p.error(fmt.Sprintf("expected description in %s, got %q", construct, p.peek().Value))
+			p.advance()
+		}
+	}
+
+	if !p.check(lexer.CloseBrace) {
+		p.error(fmt.Sprintf("unclosed brace for %q block opened at line %d", construct, decl.openPos.Line))
+		return decl
+	}
+	closeTok := p.advance()
+	decl.closePos = p.position(closeTok)
+
+	return decl
 }
 
 func (p *Instance) parseContext() *ast.Context {

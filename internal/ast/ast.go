@@ -20,14 +20,22 @@ type Model struct {
 	VersionDeclared bool
 	Name            string
 	NamePos         Position
+	Description     string
+	DescriptionPos  Position
 	Actors          []*Actor
 	Contexts        []*Context
+	OpenPos         Position
+	ClosePos        Position
 }
 
 type Actor struct {
-	Comments []*Comment
-	Name     string
-	NamePos  Position
+	Comments       []*Comment
+	Name           string
+	NamePos        Position
+	Description    string
+	DescriptionPos Position
+	OpenPos        Position
+	ClosePos       Position
 }
 
 type Context struct {

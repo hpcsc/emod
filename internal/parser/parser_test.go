@@ -316,19 +316,224 @@ actor "Guest"`
 			require.Equal(t, "Guest", model.Actors[0].Name)
 		})
 
-		t.Run("multiple actors", func(t *testing.T) {
-			input := `model "Test"
+		t.Run("an empty block leaves the declaration's description empty", func(t *testing.T) {
+			tests := []struct {
+				construct string
+				input     string
+				want      *ast.Model
+			}{
+				{
+					construct: "model",
+					input: `model "Test Model" {
+}`,
+					want: &ast.Model{Version: 1, Name: "Test Model"},
+				},
+				{
+					construct: "actor",
+					input: `model "Test"
+actor "Guest" {
+}`,
+					want: &ast.Model{Version: 1, Name: "Test", Actors: []*ast.Actor{{Name: "Guest"}}},
+				},
+			}
+
+			for _, tc := range tests {
+				t.Run(tc.construct, func(t *testing.T) {
+					tokens, lexDiags := lexer.Scan(tc.input, "test.emod")
+					require.Empty(t, lexDiags)
+
+					model, diags := parser.New(tokens, "test.emod").Parse()
+
+					require.Empty(t, diags)
+					test.RequireEqual(t, tc.want, model, ignoreCommentPositions)
+				})
+			}
+		})
+
+		t.Run("a block records where it opened and where it closed", func(t *testing.T) {
+			tests := []struct {
+				construct string
+				input     string
+				braces    func(*ast.Model) (ast.Position, ast.Position)
+			}{
+				{
+					construct: "model",
+					input: `model "Test" {
+  description "How the hotel takes bookings"
+}`,
+					braces: func(m *ast.Model) (ast.Position, ast.Position) {
+						return m.OpenPos, m.ClosePos
+					},
+				},
+				{
+					construct: "actor",
+					input: `model "Test"
+actor "Guest" {
+  description "Someone who books a room"
+}`,
+					braces: func(m *ast.Model) (ast.Position, ast.Position) {
+						return m.Actors[0].OpenPos, m.Actors[0].ClosePos
+					},
+				},
+			}
+
+			for _, tc := range tests {
+				t.Run(tc.construct, func(t *testing.T) {
+					tokens, lexDiags := lexer.Scan(tc.input, "test.emod")
+					require.Empty(t, lexDiags)
+
+					model, diags := parser.New(tokens, "test.emod").Parse()
+
+					require.Empty(t, diags)
+					openLine, openColumn := positionOf(t, tc.input, "{", "{")
+					closeLine, closeColumn := positionOf(t, tc.input, "}", "}")
+					openPos, closePos := tc.braces(model)
+					require.Equal(t, ast.Position{Filename: "test.emod", Line: openLine, Column: openColumn}, openPos)
+					require.Equal(t, ast.Position{Filename: "test.emod", Line: closeLine, Column: closeColumn}, closePos)
+				})
+			}
+		})
+
+		t.Run("an entry other than description is reported once and the block still closes", func(t *testing.T) {
+			const offending = "descripton"
+			tests := []struct {
+				construct string
+				input     string
+				want      *ast.Model
+			}{
+				{
+					construct: "model",
+					input: `model "Test" {
+  descripton
+}
+context "Reservations" {
+}`,
+					want: &ast.Model{
+						Version:  1,
+						Name:     "Test",
+						Contexts: []*ast.Context{{Name: "Reservations"}},
+					},
+				},
+				{
+					construct: "actor",
+					input: `model "Test"
+actor "Guest" {
+  descripton
+}
+context "Reservations" {
+}`,
+					want: &ast.Model{
+						Version:  1,
+						Name:     "Test",
+						Actors:   []*ast.Actor{{Name: "Guest"}},
+						Contexts: []*ast.Context{{Name: "Reservations"}},
+					},
+				},
+			}
+
+			for _, tc := range tests {
+				t.Run(tc.construct, func(t *testing.T) {
+					tokens, lexDiags := lexer.Scan(tc.input, "test.emod")
+					require.Empty(t, lexDiags)
+
+					model, diags := parser.New(tokens, "test.emod").Parse()
+
+					require.Len(t, diags, 1)
+					require.Contains(t, diags[0].Message, tc.construct)
+					require.Contains(t, diags[0].Message, strconv.Quote(offending))
+					test.RequireEqual(t, tc.want, model, ignoreCommentPositions)
+				})
+			}
+		})
+
+		t.Run("a block whose brace is never closed names the construct and the line it opened on", func(t *testing.T) {
+			tests := []struct {
+				construct string
+				input     string
+			}{
+				{
+					construct: "model",
+					input:     `model "Test" {`,
+				},
+				{
+					construct: "actor",
+					input: `model "Test"
+actor "Guest" {`,
+				},
+			}
+
+			for _, tc := range tests {
+				t.Run(tc.construct, func(t *testing.T) {
+					tokens, lexDiags := lexer.Scan(tc.input, "test.emod")
+					require.Empty(t, lexDiags)
+
+					_, diags := parser.New(tokens, "test.emod").Parse()
+
+					require.Len(t, diags, 1)
+					openLine, _ := positionOf(t, tc.input, tc.construct+" ", "{")
+					require.Equal(t, fmt.Sprintf("unclosed brace for %q block opened at line %d", tc.construct, openLine), diags[0].Message)
+				})
+			}
+		})
+
+		t.Run("a single-line actor leaves the declaration below it to be parsed in its own right", func(t *testing.T) {
+			tests := []struct {
+				following string
+				input     string
+				want      *ast.Model
+			}{
+				{
+					following: "another actor",
+					input: `model "Test"
 actor "Guest"
-actor "FrontDesk"`
-			tokens, _ := lexer.Scan(input, "test.emod")
+actor "FrontDesk"`,
+					want: &ast.Model{
+						Version: 1,
+						Name:    "Test",
+						Actors:  []*ast.Actor{{Name: "Guest"}, {Name: "FrontDesk"}},
+					},
+				},
+				{
+					following: "a context",
+					input: `model "Test"
+actor "Guest"
+context "Reservations" {
+  aggregate "Reservation" {
+  }
+}`,
+					want: &ast.Model{
+						Version: 1,
+						Name:    "Test",
+						Actors:  []*ast.Actor{{Name: "Guest"}},
+						Contexts: []*ast.Context{{
+							Name:       "Reservations",
+							Aggregates: []*ast.Aggregate{{Name: "Reservation"}},
+						}},
+					},
+				},
+				{
+					following: "a model",
+					input: `actor "Guest"
+model "Test"`,
+					want: &ast.Model{
+						Version: 1,
+						Name:    "Test",
+						Actors:  []*ast.Actor{{Name: "Guest"}},
+					},
+				},
+			}
 
-			p := parser.New(tokens, "test.emod")
-			model, errs := p.Parse()
+			for _, tc := range tests {
+				t.Run(tc.following, func(t *testing.T) {
+					tokens, lexDiags := lexer.Scan(tc.input, "test.emod")
+					require.Empty(t, lexDiags)
 
-			require.Len(t, errs, 0)
-			require.Len(t, model.Actors, 2)
-			require.Equal(t, "Guest", model.Actors[0].Name)
-			require.Equal(t, "FrontDesk", model.Actors[1].Name)
+					model, diags := parser.New(tokens, "test.emod").Parse()
+
+					require.Empty(t, diags)
+					test.RequireEqual(t, tc.want, model, ignoreCommentPositions)
+				})
+			}
 		})
 	})
 
@@ -2272,6 +2477,27 @@ context "Ctx" {
 				want      string
 				described func(*ast.Model) (string, ast.Position)
 			}{
+				{
+					construct: "model",
+					input: `model "Hotel Reservation" {
+  description "How the hotel takes and keeps bookings"
+}`,
+					want: "How the hotel takes and keeps bookings",
+					described: func(m *ast.Model) (string, ast.Position) {
+						return m.Description, m.DescriptionPos
+					},
+				},
+				{
+					construct: "actor",
+					input: `model "Test"
+actor "Guest" {
+  description "Someone who books a room and stays in it"
+}`,
+					want: "Someone who books a room and stays in it",
+					described: func(m *ast.Model) (string, ast.Position) {
+						return m.Actors[0].Description, m.Actors[0].DescriptionPos
+					},
+				},
 				{
 					construct: "context",
 					input: `model "Test"
