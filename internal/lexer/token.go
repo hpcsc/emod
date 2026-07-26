@@ -32,10 +32,12 @@ const (
 	KeywordNot
 	KeywordTag
 	KeywordEvents
+	KeywordEmod
 
 	// Literals and identifiers
 	Identifier
 	String
+	Integer
 
 	// Operators and punctuation
 	OpenBrace
@@ -54,6 +56,48 @@ const (
 	EOF
 )
 
+var keywords = map[string]Kind{
+	"model":           KeywordModel,
+	"actor":           KeywordActor,
+	"context":         KeywordContext,
+	"aggregate":       KeywordAggregate,
+	"slice":           KeywordSlice,
+	"command":         KeywordCommand,
+	"event":           KeywordEvent,
+	"fields":          KeywordFields,
+	"flow":            KeywordFlow,
+	"trigger":         KeywordTrigger,
+	"view":            KeywordView,
+	"automation":      KeywordAutomation,
+	"translation":     KeywordTranslation,
+	"subscribes":      KeywordSubscribes,
+	"target":          KeywordTarget,
+	"external_system": KeywordExternalSystem,
+	"reads":           KeywordReads,
+	"source":          KeywordSource,
+	"external":        KeywordExternal,
+	"mode":            KeywordMode,
+	"tags":            KeywordTags,
+	"decides_on":      KeywordDecidesOn,
+	"where":           KeywordWhere,
+	"and":             KeywordAnd,
+	"or":              KeywordOr,
+	"not":             KeywordNot,
+	"tag":             KeywordTag,
+	"events":          KeywordEvents,
+	"emod":            KeywordEmod,
+}
+
+var keywordNames = invertKeywords()
+
+func invertKeywords() map[Kind]string {
+	names := make(map[Kind]string, len(keywords))
+	for keyword, kind := range keywords {
+		names[kind] = keyword
+	}
+	return names
+}
+
 type Token struct {
 	Type   Kind
 	Value  string
@@ -62,67 +106,17 @@ type Token struct {
 }
 
 func (k Kind) String() string {
+	if keyword, ok := keywordNames[k]; ok {
+		return keyword
+	}
+
 	switch k {
-	case KeywordModel:
-		return "model"
-	case KeywordActor:
-		return "actor"
-	case KeywordContext:
-		return "context"
-	case KeywordAggregate:
-		return "aggregate"
-	case KeywordSlice:
-		return "slice"
-	case KeywordCommand:
-		return "command"
-	case KeywordEvent:
-		return "event"
-	case KeywordFields:
-		return "fields"
-	case KeywordFlow:
-		return "flow"
-	case KeywordTrigger:
-		return "trigger"
-	case KeywordView:
-		return "view"
-	case KeywordAutomation:
-		return "automation"
-	case KeywordTranslation:
-		return "translation"
-	case KeywordSubscribes:
-		return "subscribes"
-	case KeywordTarget:
-		return "target"
-	case KeywordExternalSystem:
-		return "external_system"
-	case KeywordReads:
-		return "reads"
-	case KeywordSource:
-		return "source"
-	case KeywordExternal:
-		return "external"
-	case KeywordMode:
-		return "mode"
-	case KeywordTags:
-		return "tags"
-	case KeywordDecidesOn:
-		return "decides_on"
-	case KeywordWhere:
-		return "where"
-	case KeywordAnd:
-		return "and"
-	case KeywordOr:
-		return "or"
-	case KeywordNot:
-		return "not"
-	case KeywordTag:
-		return "tag"
-	case KeywordEvents:
-		return "events"
 	case Identifier:
 		return "identifier"
 	case String:
 		return "string"
+	case Integer:
+		return "integer"
 	case OpenBrace:
 		return "{"
 	case CloseBrace:

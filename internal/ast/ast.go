@@ -12,11 +12,13 @@ type Comment struct {
 }
 
 type Model struct {
-	Comments []*Comment
-	Name     string
-	NamePos  Position
-	Actors   []*Actor
-	Contexts []*Context
+	Comments        []*Comment
+	Version         int
+	VersionDeclared bool
+	Name            string
+	NamePos         Position
+	Actors          []*Actor
+	Contexts        []*Context
 }
 
 type Actor struct {

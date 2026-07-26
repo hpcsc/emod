@@ -31,6 +31,7 @@ func TestLexer(t *testing.T) {
 			"reads":           lexer.KeywordReads,
 			"source":          lexer.KeywordSource,
 			"external":        lexer.KeywordExternal,
+			"emod":            lexer.KeywordEmod,
 		}
 
 		for keyword, expectedType := range keywords {
@@ -75,6 +76,19 @@ func TestLexer(t *testing.T) {
 				require.Equal(t, test.expected, tokens[0].Value)
 			})
 		}
+	})
+
+	t.Run("integers", func(t *testing.T) {
+		tokens, diags := lexer.Scan("emod 123", "test.emod")
+
+		require.Empty(t, diags)
+		require.Len(t, tokens, 3)
+		require.Equal(t, lexer.KeywordEmod, tokens[0].Type)
+		require.Equal(t, lexer.Integer, tokens[1].Type)
+		require.Equal(t, "123", tokens[1].Value)
+		require.Equal(t, 1, tokens[1].Line)
+		require.Equal(t, 6, tokens[1].Column)
+		require.Equal(t, lexer.EOF, tokens[2].Type)
 	})
 
 	t.Run("braces", func(t *testing.T) {

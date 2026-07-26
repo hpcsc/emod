@@ -17,6 +17,247 @@ import (
 var ignoreCommentPositions = cmpopts.IgnoreTypes(ast.Position{})
 
 func TestParser(t *testing.T) {
+	t.Run("version header", func(t *testing.T) {
+		t.Run("declaring version 1 leaves the rest of the model untouched", func(t *testing.T) {
+			bareTokens, bareLexDiags := lexer.Scan(test.HotelReservation, "test.emod")
+			pinnedTokens, pinnedLexDiags := lexer.Scan("emod 1\n"+test.HotelReservation, "test.emod")
+			require.Empty(t, bareLexDiags)
+			require.Empty(t, pinnedLexDiags)
+
+			bare, bareDiags := parser.New(bareTokens, "test.emod").Parse()
+			pinned, pinnedDiags := parser.New(pinnedTokens, "test.emod").Parse()
+
+			require.Empty(t, bareDiags)
+			require.Empty(t, pinnedDiags)
+			require.Equal(t, 1, bare.Version)
+			require.Equal(t, 1, pinned.Version)
+			test.RequireEqual(t, bare, pinned, ignoreCommentPositions, cmpopts.IgnoreFields(ast.Model{}, "VersionDeclared"))
+		})
+
+		t.Run("a declared version is recorded as declared", func(t *testing.T) {
+			tests := []struct {
+				name    string
+				input   string
+				version int
+			}{
+				{
+					name: "the version a header-less file already implies",
+					input: `emod 1
+model "Test"`,
+					version: 1,
+				},
+				{
+					name: "a version other than the implied one",
+					input: `emod 2
+model "Test"`,
+					version: 2,
+				},
+			}
+
+			for _, tc := range tests {
+				t.Run(tc.name, func(t *testing.T) {
+					tokens, _ := lexer.Scan(tc.input, "test.emod")
+
+					model, diags := parser.New(tokens, "test.emod").Parse()
+
+					require.Empty(t, diags)
+					require.Equal(t, tc.version, model.Version)
+					require.True(t, model.VersionDeclared)
+					require.Equal(t, "Test", model.Name)
+				})
+			}
+		})
+
+		t.Run("a file without a header is version 1 but undeclared", func(t *testing.T) {
+			input := `model "Test"`
+			tokens, _ := lexer.Scan(input, "test.emod")
+
+			model, diags := parser.New(tokens, "test.emod").Parse()
+
+			require.Empty(t, diags)
+			require.Equal(t, 1, model.Version)
+			require.False(t, model.VersionDeclared)
+		})
+
+		t.Run("comments above the header stay attached to the model", func(t *testing.T) {
+			input := `# Hotel Reservation System
+# Second line of the preamble
+emod 1
+model "Test"`
+			tokens, _ := lexer.Scan(input, "test.emod")
+
+			model, diags := parser.New(tokens, "test.emod").Parse()
+
+			require.Empty(t, diags)
+			require.Equal(t, 1, model.Version)
+			require.True(t, model.VersionDeclared)
+			require.Equal(t, "Test", model.Name)
+			test.RequireEqual(t, []*ast.Comment{
+				{Text: "# Hotel Reservation System"},
+				{Text: "# Second line of the preamble"},
+			}, model.Comments, ignoreCommentPositions)
+		})
+
+		t.Run("a malformed header is rejected and the declaration below it still parses", func(t *testing.T) {
+			tests := []struct {
+				name  string
+				input string
+			}{
+				{
+					name: "nothing follows the keyword",
+					input: `emod
+model "Test"`,
+				},
+				{
+					name: "an identifier follows the keyword",
+					input: `emod x
+model "Test"`,
+				},
+				{
+					name: "a quoted string follows the keyword",
+					input: `emod "1"
+model "Test"`,
+				},
+				{
+					name: "a version number too large to represent",
+					input: `emod 99999999999999999999
+model "Test"`,
+				},
+				{
+					name:  "the model declaration follows the keyword on the same line",
+					input: `emod model "Test"`,
+				},
+			}
+
+			for _, tc := range tests {
+				t.Run(tc.name, func(t *testing.T) {
+					tokens, _ := lexer.Scan(tc.input, "versions.emod")
+
+					model, diags := parser.New(tokens, "versions.emod").Parse()
+
+					require.Len(t, diags, 1)
+					require.Equal(t, "versions.emod", diags[0].Filename)
+					require.Equal(t, 1, diags[0].Line)
+					require.Greater(t, diags[0].Column, 0)
+					require.Contains(t, diags[0].Message, "version header")
+					require.Equal(t, "Test", model.Name)
+					require.False(t, model.VersionDeclared)
+				})
+			}
+		})
+
+		t.Run("a version number on the line below the keyword does not form a header", func(t *testing.T) {
+			input := `emod
+2
+model "Test"`
+			tokens, _ := lexer.Scan(input, "versions.emod")
+
+			model, diags := parser.New(tokens, "versions.emod").Parse()
+
+			require.Equal(t, 1, model.Version)
+			require.False(t, model.VersionDeclared)
+			require.Equal(t, "Test", model.Name)
+			require.Len(t, diags, 2)
+			require.Equal(t, 1, diags[0].Line)
+			require.Contains(t, diags[0].Message, "version header")
+			require.Equal(t, 2, diags[1].Line)
+		})
+
+		t.Run("header after the model declaration is reported as misplaced", func(t *testing.T) {
+			input := `model "Test"
+emod 2`
+			tokens, _ := lexer.Scan(input, "test.emod")
+
+			model, diags := parser.New(tokens, "test.emod").Parse()
+
+			require.Len(t, diags, 1)
+			require.Equal(t, 2, diags[0].Line)
+			require.Contains(t, diags[0].Message, "version header")
+			require.NotContains(t, diags[0].Message, "unrecognized keyword")
+			require.Equal(t, "Test", model.Name)
+		})
+
+		t.Run("a version number below a misplaced header is reported in its own right", func(t *testing.T) {
+			input := `model "Test"
+emod
+2`
+			tokens, _ := lexer.Scan(input, "test.emod")
+
+			model, diags := parser.New(tokens, "test.emod").Parse()
+
+			require.Len(t, diags, 2)
+			require.Equal(t, 2, diags[0].Line)
+			require.Contains(t, diags[0].Message, "version header")
+			require.Equal(t, 3, diags[1].Line)
+			require.Equal(t, "Test", model.Name)
+		})
+
+		t.Run("emod is usable as a field name", func(t *testing.T) {
+			input := `model "Test"
+context "Ctx" {
+  aggregate "Agg" {
+    slice "Slice" {
+      command DoThing {
+        fields {
+          emod string required
+        }
+      }
+    }
+  }
+}`
+			tokens, _ := lexer.Scan(input, "test.emod")
+
+			model, diags := parser.New(tokens, "test.emod").Parse()
+
+			require.Empty(t, diags)
+			test.RequireEqual(t, []*ast.Field{
+				{Name: "emod", Type: "string", Modifier: "required"},
+			}, model.Contexts[0].Aggregates[0].Slices[0].Commands[0].Fields, ignoreCommentPositions)
+		})
+
+		t.Run("an integer outside the header is rejected", func(t *testing.T) {
+			tests := []struct {
+				name  string
+				input string
+				line  int
+			}{
+				{
+					name: "at top level",
+					input: `model "Test"
+2`,
+					line: 2,
+				},
+				{
+					name: "in field type position",
+					input: `model "Test"
+context "Ctx" {
+  aggregate "Agg" {
+    slice "Slice" {
+      command DoThing {
+        fields {
+          count 1
+        }
+      }
+    }
+  }
+}`,
+					line: 7,
+				},
+			}
+
+			for _, tc := range tests {
+				t.Run(tc.name, func(t *testing.T) {
+					tokens, _ := lexer.Scan(tc.input, "test.emod")
+
+					_, diags := parser.New(tokens, "test.emod").Parse()
+
+					require.NotEmpty(t, diags)
+					require.Equal(t, tc.line, diags[0].Line)
+				})
+			}
+		})
+	})
+
 	t.Run("model and actors", func(t *testing.T) {
 		t.Run("model declaration", func(t *testing.T) {
 			input := `model "Test Model"`

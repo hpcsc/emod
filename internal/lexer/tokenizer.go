@@ -74,6 +74,10 @@ func Scan(input, filename string) ([]*Token, []*diagnostic.Entry) {
 			var tok *Token
 			c, tok = readIdentifierOrKeyword(c)
 			tokens = append(tokens, tok)
+		case isDigit(peek(c)):
+			var tok *Token
+			c, tok = readInteger(c)
+			tokens = append(tokens, tok)
 		default:
 			diags = append(diags, newDiag("unrecognized character: "+string(peek(c)), c))
 			c = advance(c)
@@ -158,7 +162,18 @@ func readIdentifierOrKeyword(c cursor) (cursor, *Token) {
 	}
 
 	value := sb.String()
-	return c, &Token{Type: getKeywordKind(value), Value: value, Line: c.line, Column: startCol}
+	return c, &Token{Type: keywordOrIdentifier(value), Value: value, Line: c.line, Column: startCol}
+}
+
+func readInteger(c cursor) (cursor, *Token) {
+	startCol := c.column
+
+	start := c.pos
+	for c.pos < len(c.input) && isDigit(peek(c)) {
+		c = advance(c)
+	}
+
+	return c, &Token{Type: Integer, Value: c.input[start:c.pos], Line: c.line, Column: startCol}
 }
 
 func peek(c cursor) byte {
@@ -184,67 +199,11 @@ func advance(c cursor) cursor {
 	return c
 }
 
-func getKeywordKind(s string) Kind {
-	switch s {
-	case "model":
-		return KeywordModel
-	case "actor":
-		return KeywordActor
-	case "context":
-		return KeywordContext
-	case "aggregate":
-		return KeywordAggregate
-	case "slice":
-		return KeywordSlice
-	case "command":
-		return KeywordCommand
-	case "event":
-		return KeywordEvent
-	case "fields":
-		return KeywordFields
-	case "flow":
-		return KeywordFlow
-	case "trigger":
-		return KeywordTrigger
-	case "view":
-		return KeywordView
-	case "automation":
-		return KeywordAutomation
-	case "translation":
-		return KeywordTranslation
-	case "subscribes":
-		return KeywordSubscribes
-	case "target":
-		return KeywordTarget
-	case "external_system":
-		return KeywordExternalSystem
-	case "reads":
-		return KeywordReads
-	case "source":
-		return KeywordSource
-	case "external":
-		return KeywordExternal
-	case "mode":
-		return KeywordMode
-	case "tags":
-		return KeywordTags
-	case "decides_on":
-		return KeywordDecidesOn
-	case "where":
-		return KeywordWhere
-	case "and":
-		return KeywordAnd
-	case "or":
-		return KeywordOr
-	case "not":
-		return KeywordNot
-	case "tag":
-		return KeywordTag
-	case "events":
-		return KeywordEvents
-	default:
-		return Identifier
+func keywordOrIdentifier(word string) Kind {
+	if kind, ok := keywords[word]; ok {
+		return kind
 	}
+	return Identifier
 }
 
 func isIdentifierStart(ch byte) bool {
@@ -252,7 +211,11 @@ func isIdentifierStart(ch byte) bool {
 }
 
 func isIdentifierChar(ch byte) bool {
-	return isIdentifierStart(ch) || (ch >= '0' && ch <= '9')
+	return isIdentifierStart(ch) || isDigit(ch)
+}
+
+func isDigit(ch byte) bool {
+	return ch >= '0' && ch <= '9'
 }
 
 func isWhitespace(ch byte) bool {

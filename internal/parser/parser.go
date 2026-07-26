@@ -3,11 +3,17 @@ package parser
 import (
 	"fmt"
 	"sort"
+	"strconv"
 	"strings"
 
 	"github.com/hpcsc/emod/internal/ast"
 	"github.com/hpcsc/emod/internal/diagnostic"
 	"github.com/hpcsc/emod/internal/lexer"
+)
+
+const (
+	impliedVersion         = 1
+	expectedVersionInteger = `invalid version header: expected an integer after "emod"`
 )
 
 type topLevelHandler func(model *ast.Model)
@@ -54,11 +60,17 @@ func New(tokens []*lexer.Token, filename string) *Instance {
 }
 
 func (p *Instance) Parse() (*ast.Model, []*diagnostic.Entry) {
-	model := &ast.Model{}
+	version, declared := p.parseVersionHeader()
+	model := &ast.Model{Version: version, VersionDeclared: declared}
 
 	for !p.isAtEnd() {
 		if p.check(lexer.EOF) {
 			break
+		}
+
+		if p.check(lexer.KeywordEmod) {
+			p.reportMisplacedVersionHeader()
+			continue
 		}
 
 		if handler, ok := p.handlers[p.peek().Type]; ok {
@@ -70,6 +82,44 @@ func (p *Instance) Parse() (*ast.Model, []*diagnostic.Entry) {
 	}
 
 	return model, p.diagnostics
+}
+
+func (p *Instance) parseVersionHeader() (version int, declared bool) {
+	if !p.check(lexer.KeywordEmod) {
+		return impliedVersion, false
+	}
+
+	keywordTok := p.advance()
+	if !p.checkSameLineAs(keywordTok) {
+		p.errorAt(keywordTok, expectedVersionInteger)
+		return impliedVersion, false
+	}
+
+	if !p.check(lexer.Integer) {
+		offending := p.peek()
+		p.errorAt(keywordTok, fmt.Sprintf("%s, got %q", expectedVersionInteger, offending.Value))
+		if _, startsTopLevelDeclaration := p.handlers[offending.Type]; !startsTopLevelDeclaration {
+			p.advance()
+		}
+		return impliedVersion, false
+	}
+
+	versionTok := p.advance()
+	version, err := strconv.Atoi(versionTok.Value)
+	if err != nil {
+		p.errorAt(versionTok, fmt.Sprintf("invalid version header: version %q is out of range", versionTok.Value))
+		return impliedVersion, false
+	}
+
+	return version, true
+}
+
+func (p *Instance) reportMisplacedVersionHeader() {
+	keywordTok := p.advance()
+	p.errorAt(keywordTok, `misplaced version header: "emod" must appear before the "model" declaration`)
+	if p.checkSameLineAs(keywordTok) && p.check(lexer.Integer) {
+		p.advance()
+	}
 }
 
 func (p *Instance) expectedKeywords() string {
@@ -1205,6 +1255,10 @@ func (p *Instance) check(typ lexer.Kind) bool {
 	return p.tokens[p.pos].Type == typ
 }
 
+func (p *Instance) checkSameLineAs(tok *lexer.Token) bool {
+	return !p.isAtEnd() && p.peek().Line == tok.Line
+}
+
 // checkIdentifierLike returns true when the current token is an Identifier or
 // any keyword. Keywords are valid as field names inside fields blocks.
 func (p *Instance) checkIdentifierLike() bool {
@@ -1242,7 +1296,10 @@ func (p *Instance) isAtEnd() bool {
 }
 
 func (p *Instance) error(msg string) {
-	tok := p.peek()
+	p.errorAt(p.peek(), msg)
+}
+
+func (p *Instance) errorAt(tok *lexer.Token, msg string) {
 	p.diagnostics = append(p.diagnostics, &diagnostic.Entry{
 		Filename: p.filename,
 		Line:     tok.Line,
