@@ -10,11 +10,24 @@ module.exports = grammar({
 
   rules: {
     // === Top-level ===
-    source_file: $ => repeat(choice(
+    source_file: $ => seq(
+      optional($.version_header),
+      repeat($._declaration),
+    ),
+
+    // The separator lives inside the keyword token and the digits are
+    // immediate: relax either half and `extras` skips the newline, so a bare
+    // `emod` pairs up with a number on the next line to form a header.
+    version_header: $ => seq(
+      alias(token(seq('emod', /[ \t]+/)), 'emod'),
+      alias(token.immediate(/[0-9]+/), $.integer),
+    ),
+
+    _declaration: $ => choice(
       $.model_definition,
       $.actor_definition,
       $.context_definition,
-    )),
+    ),
 
     // model "name"
     model_definition: $ => seq(

@@ -1,0 +1,96 @@
+========================
+Version header before model
+========================
+
+emod 1
+model "Inventory"
+
+---
+
+(source_file
+  (version_header
+    (integer))
+  (model_definition
+    (string)))
+
+========================
+Version header naming an unsupported version
+========================
+
+emod 42
+model "Inventory"
+
+---
+
+(source_file
+  (version_header
+    (integer))
+  (model_definition
+    (string)))
+
+========================
+Field named emod inside a fields block
+========================
+
+context "C" {
+  aggregate "A" {
+    slice "Core" {
+      fields {
+        emod string required
+      }
+    }
+  }
+}
+
+---
+
+(source_file
+  (context_definition
+    (string)
+    (aggregate_definition
+      (string)
+      (slice_definition
+        (string)
+        (fields_block
+          (field_line
+            (any_identifier)
+            (any_identifier)
+            (any_identifier)))))))
+
+========================
+Version header after a declaration
+:error
+========================
+
+model "Inventory"
+emod 1
+
+---
+
+(ERROR)
+
+========================
+Version header split over two lines
+:error
+========================
+
+emod
+1
+model "Inventory"
+
+---
+
+(ERROR)
+
+========================
+Version header interrupted by a comment
+:error
+========================
+
+emod # comment
+1
+model "Inventory"
+
+---
+
+(ERROR)
