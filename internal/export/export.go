@@ -21,26 +21,29 @@ type jsonPosition struct {
 }
 
 type jsonComment struct {
-	Text     string         `json:"text"`
-	Position *jsonPosition  `json:"position,omitempty"`
+	Text     string        `json:"text"`
+	Position *jsonPosition `json:"position,omitempty"`
 }
 
 type jsonModel struct {
-	Name     string         `json:"name"`
-	Position *jsonPosition  `json:"position,omitempty"`
-	Comments []*jsonComment `json:"comments,omitempty"`
-	Actors   []*jsonActor   `json:"actors,omitempty"`
-	Contexts []*jsonContext `json:"contexts,omitempty"`
+	Name        string         `json:"name"`
+	Description string         `json:"description,omitempty"`
+	Position    *jsonPosition  `json:"position,omitempty"`
+	Comments    []*jsonComment `json:"comments,omitempty"`
+	Actors      []*jsonActor   `json:"actors,omitempty"`
+	Contexts    []*jsonContext `json:"contexts,omitempty"`
 }
 
 type jsonActor struct {
-	Name     string         `json:"name"`
-	Position *jsonPosition  `json:"position,omitempty"`
-	Comments []*jsonComment `json:"comments,omitempty"`
+	Name        string         `json:"name"`
+	Description string         `json:"description,omitempty"`
+	Position    *jsonPosition  `json:"position,omitempty"`
+	Comments    []*jsonComment `json:"comments,omitempty"`
 }
 
 type jsonContext struct {
 	Name          string           `json:"name"`
+	Description   string           `json:"description,omitempty"`
 	Position      *jsonPosition    `json:"position,omitempty"`
 	OpenPosition  *jsonPosition    `json:"open_position,omitempty"`
 	ClosePosition *jsonPosition    `json:"close_position,omitempty"`
@@ -50,6 +53,7 @@ type jsonContext struct {
 
 type jsonAggregate struct {
 	Name          string         `json:"name"`
+	Description   string         `json:"description,omitempty"`
 	Position      *jsonPosition  `json:"position,omitempty"`
 	OpenPosition  *jsonPosition  `json:"open_position,omitempty"`
 	ClosePosition *jsonPosition  `json:"close_position,omitempty"`
@@ -58,23 +62,25 @@ type jsonAggregate struct {
 }
 
 type jsonSlice struct {
-	Name          string              `json:"name"`
-	Position      *jsonPosition       `json:"position,omitempty"`
-	OpenPosition  *jsonPosition       `json:"open_position,omitempty"`
-	ClosePosition *jsonPosition       `json:"close_position,omitempty"`
-	Comments      []*jsonComment      `json:"comments,omitempty"`
-	Trigger       *jsonTrigger        `json:"trigger,omitempty"`
-	Commands      []*jsonCommand      `json:"commands,omitempty"`
-	Events        []*jsonEvent        `json:"events,omitempty"`
-	Fields        []*jsonField        `json:"fields,omitempty"`
-	Flows         []*jsonFlow         `json:"flows,omitempty"`
-	Views         []*jsonView         `json:"views,omitempty"`
-	Automations   []*jsonAutomation   `json:"automations,omitempty"`
-	Translations  []*jsonTranslation  `json:"translations,omitempty"`
+	Name          string             `json:"name"`
+	Description   string             `json:"description,omitempty"`
+	Position      *jsonPosition      `json:"position,omitempty"`
+	OpenPosition  *jsonPosition      `json:"open_position,omitempty"`
+	ClosePosition *jsonPosition      `json:"close_position,omitempty"`
+	Comments      []*jsonComment     `json:"comments,omitempty"`
+	Trigger       *jsonTrigger       `json:"trigger,omitempty"`
+	Commands      []*jsonCommand     `json:"commands,omitempty"`
+	Events        []*jsonEvent       `json:"events,omitempty"`
+	Fields        []*jsonField       `json:"fields,omitempty"`
+	Flows         []*jsonFlow        `json:"flows,omitempty"`
+	Views         []*jsonView        `json:"views,omitempty"`
+	Automations   []*jsonAutomation  `json:"automations,omitempty"`
+	Translations  []*jsonTranslation `json:"translations,omitempty"`
 }
 
 type jsonCommand struct {
 	Name          string         `json:"name"`
+	Description   string         `json:"description,omitempty"`
 	Position      *jsonPosition  `json:"position,omitempty"`
 	OpenPosition  *jsonPosition  `json:"open_position,omitempty"`
 	ClosePosition *jsonPosition  `json:"close_position,omitempty"`
@@ -84,6 +90,7 @@ type jsonCommand struct {
 
 type jsonEvent struct {
 	Name                 string         `json:"name"`
+	Description          string         `json:"description,omitempty"`
 	Position             *jsonPosition  `json:"position,omitempty"`
 	SourcePosition       *jsonPosition  `json:"source_position,omitempty"`
 	ExternalNamePosition *jsonPosition  `json:"external_name_position,omitempty"`
@@ -117,6 +124,7 @@ type jsonTrigger struct {
 	Kind          string         `json:"kind"`
 	KindPosition  *jsonPosition  `json:"kind_position,omitempty"`
 	Name          string         `json:"name"`
+	Description   string         `json:"description,omitempty"`
 	Position      *jsonPosition  `json:"position,omitempty"`
 	Actor         string         `json:"actor,omitempty"`
 	ActorPosition *jsonPosition  `json:"actor_position,omitempty"`
@@ -128,6 +136,7 @@ type jsonTrigger struct {
 
 type jsonView struct {
 	Name          string         `json:"name"`
+	Description   string         `json:"description,omitempty"`
 	Position      *jsonPosition  `json:"position,omitempty"`
 	OpenPosition  *jsonPosition  `json:"open_position,omitempty"`
 	ClosePosition *jsonPosition  `json:"close_position,omitempty"`
@@ -138,6 +147,7 @@ type jsonView struct {
 
 type jsonAutomation struct {
 	Name                  string         `json:"name"`
+	Description           string         `json:"description,omitempty"`
 	Position              *jsonPosition  `json:"position,omitempty"`
 	TriggerEventPosition  *jsonPosition  `json:"trigger_event_position,omitempty"`
 	CommandPosition       *jsonPosition  `json:"command_position,omitempty"`
@@ -151,18 +161,19 @@ type jsonAutomation struct {
 }
 
 type jsonTranslation struct {
-	Name               string         `json:"name"`
-	Position           *jsonPosition  `json:"position,omitempty"`
-	ExternalPosition   *jsonPosition  `json:"external_position,omitempty"`
-	ReadsPosition      *jsonPosition  `json:"reads_position,omitempty"`
-	CommandPosition    *jsonPosition  `json:"command_position,omitempty"`
-	OpenPosition       *jsonPosition  `json:"open_position,omitempty"`
-	ClosePosition      *jsonPosition  `json:"close_position,omitempty"`
-	Comments           []*jsonComment `json:"comments,omitempty"`
-	ExternalSystem     string         `json:"external_system,omitempty"`
-	Reads              string         `json:"reads,omitempty"`
-	Command            string         `json:"command,omitempty"`
-	Event              *jsonEvent     `json:"event,omitempty"`
+	Name             string         `json:"name"`
+	Description      string         `json:"description,omitempty"`
+	Position         *jsonPosition  `json:"position,omitempty"`
+	ExternalPosition *jsonPosition  `json:"external_position,omitempty"`
+	ReadsPosition    *jsonPosition  `json:"reads_position,omitempty"`
+	CommandPosition  *jsonPosition  `json:"command_position,omitempty"`
+	OpenPosition     *jsonPosition  `json:"open_position,omitempty"`
+	ClosePosition    *jsonPosition  `json:"close_position,omitempty"`
+	Comments         []*jsonComment `json:"comments,omitempty"`
+	ExternalSystem   string         `json:"external_system,omitempty"`
+	Reads            string         `json:"reads,omitempty"`
+	Command          string         `json:"command,omitempty"`
+	Event            *jsonEvent     `json:"event,omitempty"`
 }
 
 // jsonDiagnosticsWrapper is the top-level envelope for JSON diagnostics output.
@@ -246,11 +257,12 @@ func convertModel(m *ast.Model) *jsonModel {
 		return nil
 	}
 	out := &jsonModel{
-		Name:     m.Name,
-		Position: convertPosition(m.NamePos),
-		Comments: convertComments(m.Comments),
-		Actors:   convertActors(m.Actors),
-		Contexts: convertContexts(m.Contexts),
+		Name:        m.Name,
+		Description: m.Description,
+		Position:    convertPosition(m.NamePos),
+		Comments:    convertComments(m.Comments),
+		Actors:      convertActors(m.Actors),
+		Contexts:    convertContexts(m.Contexts),
 	}
 	return out
 }
@@ -285,9 +297,10 @@ func convertActor(a *ast.Actor) *jsonActor {
 		return nil
 	}
 	return &jsonActor{
-		Name:     a.Name,
-		Position: convertPosition(a.NamePos),
-		Comments: convertComments(a.Comments),
+		Name:        a.Name,
+		Description: a.Description,
+		Position:    convertPosition(a.NamePos),
+		Comments:    convertComments(a.Comments),
 	}
 }
 
@@ -308,6 +321,7 @@ func convertContext(c *ast.Context) *jsonContext {
 	}
 	return &jsonContext{
 		Name:          c.Name,
+		Description:   c.Description,
 		Position:      convertPosition(c.NamePos),
 		OpenPosition:  convertPosition(c.OpenPos),
 		ClosePosition: convertPosition(c.ClosePos),
@@ -333,6 +347,7 @@ func convertAggregate(a *ast.Aggregate) *jsonAggregate {
 	}
 	return &jsonAggregate{
 		Name:          a.Name,
+		Description:   a.Description,
 		Position:      convertPosition(a.NamePos),
 		OpenPosition:  convertPosition(a.OpenPos),
 		ClosePosition: convertPosition(a.ClosePos),
@@ -358,6 +373,7 @@ func convertSlice(s *ast.Slice) *jsonSlice {
 	}
 	return &jsonSlice{
 		Name:          s.Name,
+		Description:   s.Description,
 		Position:      convertPosition(s.NamePos),
 		OpenPosition:  convertPosition(s.OpenPos),
 		ClosePosition: convertPosition(s.ClosePos),
@@ -390,6 +406,7 @@ func convertCommand(c *ast.Command) *jsonCommand {
 	}
 	return &jsonCommand{
 		Name:          c.Name,
+		Description:   c.Description,
 		Position:      convertPosition(c.NamePos),
 		OpenPosition:  convertPosition(c.OpenPos),
 		ClosePosition: convertPosition(c.ClosePos),
@@ -415,6 +432,7 @@ func convertEvent(e *ast.Event) *jsonEvent {
 	}
 	return &jsonEvent{
 		Name:                 e.Name,
+		Description:          e.Description,
 		Position:             convertPosition(e.NamePos),
 		SourcePosition:       convertPosition(e.SourcePos),
 		ExternalNamePosition: convertPosition(e.ExternalNamePos),
@@ -443,12 +461,12 @@ func convertField(f *ast.Field) *jsonField {
 		return nil
 	}
 	return &jsonField{
-		Name:        f.Name,
-		Position:    convertPosition(f.NamePos),
-		TypePosition: convertPosition(f.TypePos),
+		Name:             f.Name,
+		Position:         convertPosition(f.NamePos),
+		TypePosition:     convertPosition(f.TypePos),
 		ModifierPosition: convertPosition(f.ModPos),
-		Type:        f.Type,
-		Modifier:    f.Modifier,
+		Type:             f.Type,
+		Modifier:         f.Modifier,
 	}
 }
 
@@ -468,11 +486,11 @@ func convertFlow(f *ast.Flow) *jsonFlow {
 		return nil
 	}
 	return &jsonFlow{
-		Comments:    convertComments(f.Comments),
-		CommandName: f.CommandName,
+		Comments:        convertComments(f.Comments),
+		CommandName:     f.CommandName,
 		CommandPosition: convertPosition(f.CommandPos),
-		EventName:      f.EventName,
-		EventPosition:  convertPosition(f.EventPos),
+		EventName:       f.EventName,
+		EventPosition:   convertPosition(f.EventPos),
 	}
 }
 
@@ -485,6 +503,7 @@ func convertTrigger(t *ast.Trigger) *jsonTrigger {
 		Kind:          t.Kind,
 		KindPosition:  convertPosition(t.KindPos),
 		Name:          t.Name,
+		Description:   t.Description,
 		Position:      convertPosition(t.NamePos),
 		Actor:         t.Actor,
 		ActorPosition: convertPosition(t.ActorPos),
@@ -512,6 +531,7 @@ func convertView(v *ast.View) *jsonView {
 	}
 	return &jsonView{
 		Name:          v.Name,
+		Description:   v.Description,
 		Position:      convertPosition(v.NamePos),
 		OpenPosition:  convertPosition(v.OpenPos),
 		ClosePosition: convertPosition(v.ClosePos),
@@ -537,17 +557,18 @@ func convertAutomation(a *ast.Automation) *jsonAutomation {
 		return nil
 	}
 	return &jsonAutomation{
-		Name:                 a.Name,
-		Position:             convertPosition(a.NamePos),
-		TriggerEventPosition: convertPosition(a.TriggerEventPos),
-		CommandPosition:      convertPosition(a.CommandPos),
+		Name:                  a.Name,
+		Description:           a.Description,
+		Position:              convertPosition(a.NamePos),
+		TriggerEventPosition:  convertPosition(a.TriggerEventPos),
+		CommandPosition:       convertPosition(a.CommandPos),
 		TargetContextPosition: convertPosition(a.TargetContextPos),
-		OpenPosition:         convertPosition(a.OpenPos),
-		ClosePosition:        convertPosition(a.ClosePos),
-		Comments:             convertComments(a.Comments),
-		TriggerEvent:         a.TriggerEvent,
-		Command:              a.Command,
-		TargetContext:        a.TargetContext,
+		OpenPosition:          convertPosition(a.OpenPos),
+		ClosePosition:         convertPosition(a.ClosePos),
+		Comments:              convertComments(a.Comments),
+		TriggerEvent:          a.TriggerEvent,
+		Command:               a.Command,
+		TargetContext:         a.TargetContext,
 	}
 }
 
@@ -568,6 +589,7 @@ func convertTranslation(t *ast.Translation) *jsonTranslation {
 	}
 	return &jsonTranslation{
 		Name:             t.Name,
+		Description:      t.Description,
 		Position:         convertPosition(t.NamePos),
 		ExternalPosition: convertPosition(t.ExternalPos),
 		ReadsPosition:    convertPosition(t.ReadsPos),
@@ -598,17 +620,17 @@ type jsonDiagramNode struct {
 	Fields   []*jsonDiagramField `json:"fields,omitempty"`
 	Position *jsonPosition       `json:"position,omitempty"`
 	// Type-specific metadata for trigger, event, view, automation, translation
-	Kind           string     `json:"kind,omitempty"`
-	Actor          string     `json:"actor,omitempty"`
-	Reads          string     `json:"reads,omitempty"`
-	Subscribes     []string   `json:"subscribes,omitempty"`
-	TriggerEvent   string     `json:"trigger_event,omitempty"`
-	Command        string     `json:"command,omitempty"`
-	TargetContext  string     `json:"target_context,omitempty"`
-	ExternalSystem string     `json:"external_system,omitempty"`
-	Source         string     `json:"source,omitempty"`
-	ExternalName   string     `json:"external_name,omitempty"`
-	Event          *jsonEvent `json:"event,omitempty"`
+	Kind           string            `json:"kind,omitempty"`
+	Actor          string            `json:"actor,omitempty"`
+	Reads          string            `json:"reads,omitempty"`
+	Subscribes     []string          `json:"subscribes,omitempty"`
+	TriggerEvent   string            `json:"trigger_event,omitempty"`
+	Command        string            `json:"command,omitempty"`
+	TargetContext  string            `json:"target_context,omitempty"`
+	ExternalSystem string            `json:"external_system,omitempty"`
+	Source         string            `json:"source,omitempty"`
+	ExternalName   string            `json:"external_name,omitempty"`
+	Event          *jsonDiagramEvent `json:"event,omitempty"`
 }
 
 type jsonDiagramEdge struct {
@@ -621,6 +643,19 @@ type jsonDiagramField struct {
 	Name     string `json:"name"`
 	Type     string `json:"type"`
 	Modifier string `json:"modifier,omitempty"`
+}
+
+type jsonDiagramEvent struct {
+	Name                 string         `json:"name"`
+	Position             *jsonPosition  `json:"position,omitempty"`
+	SourcePosition       *jsonPosition  `json:"source_position,omitempty"`
+	ExternalNamePosition *jsonPosition  `json:"external_name_position,omitempty"`
+	OpenPosition         *jsonPosition  `json:"open_position,omitempty"`
+	ClosePosition        *jsonPosition  `json:"close_position,omitempty"`
+	Comments             []*jsonComment `json:"comments,omitempty"`
+	Source               string         `json:"source,omitempty"`
+	ExternalName         string         `json:"external_name,omitempty"`
+	Fields               []*jsonField   `json:"fields,omitempty"`
 }
 
 // jsonDiagramDiagnosticsWrapper is the top-level envelope for diagram JSON diagnostics output.
@@ -790,7 +825,7 @@ func collectSliceNodes(
 			Command:        t.Command,
 		}
 		if t.Event != nil {
-			node.Event = convertEvent(t.Event)
+			node.Event = convertEventToDiagram(t.Event)
 
 			// Create a standalone event node for the translation_event edge target
 			evtID := g.next("event")
@@ -1067,6 +1102,24 @@ func convertModelToDiagram(m *ast.Model) *jsonDiagramDocument {
 	return doc
 }
 
+func convertEventToDiagram(e *ast.Event) *jsonDiagramEvent {
+	if e == nil {
+		return nil
+	}
+	return &jsonDiagramEvent{
+		Name:                 e.Name,
+		Position:             convertPosition(e.NamePos),
+		SourcePosition:       convertPosition(e.SourcePos),
+		ExternalNamePosition: convertPosition(e.ExternalNamePos),
+		OpenPosition:         convertPosition(e.OpenPos),
+		ClosePosition:        convertPosition(e.ClosePos),
+		Comments:             convertComments(e.Comments),
+		Source:               e.Source,
+		ExternalName:         e.ExternalName,
+		Fields:               convertFields(e.Fields),
+	}
+}
+
 func convertFieldsToDiagram(fields []*ast.Field) []*jsonDiagramField {
 	if fields == nil {
 		return nil
@@ -1104,343 +1157,160 @@ func (w *cueWriter) line(format string, args ...any) {
 	fmt.Fprintf(w.b, "%s%s\n", strings.Repeat("  ", w.level), fmt.Sprintf(format, args...))
 }
 
+func (w *cueWriter) lineIfSet(field, value string) {
+	if value == "" {
+		return
+	}
+	w.line("%s: %q", field, value)
+}
+
+func (w *cueWriter) writeObject(field string, writeBody func()) {
+	w.line("%s: {", field)
+	w.level++
+	writeBody()
+	w.level--
+	w.line("}")
+}
+
+func writeCUEList[T any](w *cueWriter, field string, items []T, writeItem func(T)) {
+	if len(items) == 0 {
+		return
+	}
+	w.line("%s: [", field)
+	w.level++
+	for i, item := range items {
+		if i > 0 {
+			w.line("}, {")
+		} else {
+			w.line("{")
+		}
+		w.level++
+		writeItem(item)
+		w.level--
+	}
+	w.line("}]")
+	w.level--
+}
+
+func (w *cueWriter) writeComments(comments []*ast.Comment) {
+	writeCUEList(w, "comments", comments, func(c *ast.Comment) {
+		w.line("text: %q", c.Text)
+	})
+}
+
 func (w *cueWriter) writeModel(m *ast.Model) {
 	if m == nil {
 		return
 	}
-	w.writeCommentsList("comments", m.Comments)
+	w.writeComments(m.Comments)
 	w.line("name: %q", m.Name)
-	if len(m.Actors) > 0 {
-		w.writeActorList("actors", m.Actors)
-	}
-	if len(m.Contexts) > 0 {
-		w.writeContextList("contexts", m.Contexts)
-	}
+	w.lineIfSet("description", m.Description)
+	writeCUEList(w, "actors", m.Actors, w.writeActor)
+	writeCUEList(w, "contexts", m.Contexts, w.writeContext)
 }
 
-func (w *cueWriter) writeCommentsList(field string, comments []*ast.Comment) {
-	if len(comments) == 0 {
-		return
-	}
-	w.line("%s: [", field)
-	w.level++
-	for i, c := range comments {
-		if i > 0 {
-			w.line("}, {")
-		} else {
-			w.line("{")
-		}
-		w.level++
-		w.line("text: %q", c.Text)
-		w.level--
-	}
-	w.line("}]")
-	w.level--
+func (w *cueWriter) writeActor(a *ast.Actor) {
+	w.writeComments(a.Comments)
+	w.line("name: %q", a.Name)
+	w.lineIfSet("description", a.Description)
 }
 
-func (w *cueWriter) writeActorList(field string, actors []*ast.Actor) {
-	w.line("%s: [", field)
-	w.level++
-	for i, a := range actors {
-		if i > 0 {
-			w.line("}, {")
-		} else {
-			w.line("{")
-		}
-		w.level++
-		w.writeCommentsList("comments", a.Comments)
-		w.line("name: %q", a.Name)
-		w.level--
-	}
-	w.line("}]")
-	w.level--
+func (w *cueWriter) writeContext(c *ast.Context) {
+	w.writeComments(c.Comments)
+	w.line("name: %q", c.Name)
+	w.lineIfSet("description", c.Description)
+	writeCUEList(w, "aggregates", c.Aggregates, w.writeAggregate)
 }
 
-func (w *cueWriter) writeContextList(field string, contexts []*ast.Context) {
-	w.line("%s: [", field)
-	w.level++
-	for i, c := range contexts {
-		if i > 0 {
-			w.line("}, {")
-		} else {
-			w.line("{")
-		}
-		w.level++
-		w.writeCommentsList("comments", c.Comments)
-		w.line("name: %q", c.Name)
-		if len(c.Aggregates) > 0 {
-			w.writeAggregateList("aggregates", c.Aggregates)
-		}
-		w.level--
-	}
-	w.line("}]")
-	w.level--
+func (w *cueWriter) writeAggregate(a *ast.Aggregate) {
+	w.writeComments(a.Comments)
+	w.line("name: %q", a.Name)
+	w.lineIfSet("description", a.Description)
+	writeCUEList(w, "slices", a.Slices, w.writeSlice)
 }
 
-func (w *cueWriter) writeAggregateList(field string, aggregates []*ast.Aggregate) {
-	w.line("%s: [", field)
-	w.level++
-	for i, a := range aggregates {
-		if i > 0 {
-			w.line("}, {")
-		} else {
-			w.line("{")
-		}
-		w.level++
-		w.writeCommentsList("comments", a.Comments)
-		w.line("name: %q", a.Name)
-		if len(a.Slices) > 0 {
-			w.writeSliceList("slices", a.Slices)
-		}
-		w.level--
+func (w *cueWriter) writeSlice(s *ast.Slice) {
+	w.writeComments(s.Comments)
+	w.line("name: %q", s.Name)
+	w.lineIfSet("description", s.Description)
+	if s.Trigger != nil {
+		w.writeObject("trigger", func() { w.writeTrigger(s.Trigger) })
 	}
-	w.line("}]")
-	w.level--
+	writeCUEList(w, "commands", s.Commands, w.writeCommand)
+	writeCUEList(w, "events", s.Events, w.writeEvent)
+	writeCUEList(w, "fields", s.Fields, w.writeField)
+	writeCUEList(w, "flows", s.Flows, w.writeFlow)
+	writeCUEList(w, "views", s.Views, w.writeView)
+	writeCUEList(w, "automations", s.Automations, w.writeAutomation)
+	writeCUEList(w, "translations", s.Translations, w.writeTranslation)
 }
 
-func (w *cueWriter) writeSliceList(field string, slices []*ast.Slice) {
-	w.line("%s: [", field)
-	w.level++
-	for i, s := range slices {
-		if i > 0 {
-			w.line("}, {")
-		} else {
-			w.line("{")
-		}
-		w.level++
-		w.writeCommentsList("comments", s.Comments)
-		w.line("name: %q", s.Name)
-		if s.Trigger != nil {
-			w.writeTrigger("trigger", s.Trigger)
-		}
-		if len(s.Commands) > 0 {
-			w.writeCommandList("commands", s.Commands)
-		}
-		if len(s.Events) > 0 {
-			w.writeEventList("events", s.Events)
-		}
-		if len(s.Fields) > 0 {
-			w.writeFieldList("fields", s.Fields)
-		}
-		if len(s.Flows) > 0 {
-			w.writeFlowList("flows", s.Flows)
-		}
-		if len(s.Views) > 0 {
-			w.writeViewList("views", s.Views)
-		}
-		if len(s.Automations) > 0 {
-			w.writeAutomationList("automations", s.Automations)
-		}
-		if len(s.Translations) > 0 {
-			w.writeTranslationList("translations", s.Translations)
-		}
-		w.level--
-	}
-	w.line("}]")
-	w.level--
-}
-
-func (w *cueWriter) writeTrigger(field string, t *ast.Trigger) {
-	w.line("%s: {", field)
-	w.level++
-	w.writeCommentsList("comments", t.Comments)
+func (w *cueWriter) writeTrigger(t *ast.Trigger) {
+	w.writeComments(t.Comments)
 	w.line("kind: %q", t.Kind)
 	w.line("name: %q", t.Name)
-	if t.Actor != "" {
-		w.line("actor: %q", t.Actor)
-	}
-	if t.Reads != "" {
-		w.line("reads: %q", t.Reads)
-	}
-	w.level--
-	w.line("}")
+	w.lineIfSet("description", t.Description)
+	w.lineIfSet("actor", t.Actor)
+	w.lineIfSet("reads", t.Reads)
 }
 
-func (w *cueWriter) writeCommandList(field string, commands []*ast.Command) {
-	w.line("%s: [", field)
-	w.level++
-	for i, c := range commands {
-		if i > 0 {
-			w.line("}, {")
-		} else {
-			w.line("{")
-		}
-		w.level++
-		w.writeCommentsList("comments", c.Comments)
-		w.line("name: %q", c.Name)
-		if len(c.Fields) > 0 {
-			w.writeFieldList("fields", c.Fields)
-		}
-		w.level--
-	}
-	w.line("}]")
-	w.level--
+func (w *cueWriter) writeCommand(c *ast.Command) {
+	w.writeComments(c.Comments)
+	w.line("name: %q", c.Name)
+	w.lineIfSet("description", c.Description)
+	writeCUEList(w, "fields", c.Fields, w.writeField)
 }
 
-func (w *cueWriter) writeEventList(field string, events []*ast.Event) {
-	w.line("%s: [", field)
-	w.level++
-	for i, e := range events {
-		if i > 0 {
-			w.line("}, {")
-		} else {
-			w.line("{")
-		}
-		w.level++
-		w.writeCommentsList("comments", e.Comments)
-		w.line("name: %q", e.Name)
-		if e.Source != "" {
-			w.line("source: %q", e.Source)
-		}
-		if e.ExternalName != "" {
-			w.line("external_name: %q", e.ExternalName)
-		}
-		if len(e.Fields) > 0 {
-			w.writeFieldList("fields", e.Fields)
-		}
-		w.level--
-	}
-	w.line("}]")
-	w.level--
-}
-
-func (w *cueWriter) writeFieldList(field string, fields []*ast.Field) {
-	w.line("%s: [", field)
-	w.level++
-	for i, f := range fields {
-		if i > 0 {
-			w.line("}, {")
-		} else {
-			w.line("{")
-		}
-		w.level++
-		w.line("name: %q", f.Name)
-		w.line("type: %q", f.Type)
-		if f.Modifier != "" {
-			w.line("modifier: %q", f.Modifier)
-		}
-		w.level--
-	}
-	w.line("}]")
-	w.level--
-}
-
-func (w *cueWriter) writeFlowList(field string, flows []*ast.Flow) {
-	w.line("%s: [", field)
-	w.level++
-	for i, f := range flows {
-		if i > 0 {
-			w.line("}, {")
-		} else {
-			w.line("{")
-		}
-		w.level++
-		w.writeCommentsList("comments", f.Comments)
-		w.line("command_name: %q", f.CommandName)
-		w.line("event_name: %q", f.EventName)
-		w.level--
-	}
-	w.line("}]")
-	w.level--
-}
-
-func (w *cueWriter) writeViewList(field string, views []*ast.View) {
-	w.line("%s: [", field)
-	w.level++
-	for i, v := range views {
-		if i > 0 {
-			w.line("}, {")
-		} else {
-			w.line("{")
-		}
-		w.level++
-		w.writeCommentsList("comments", v.Comments)
-		w.line("name: %q", v.Name)
-		if len(v.Fields) > 0 {
-			w.writeFieldList("fields", v.Fields)
-		}
-		if len(v.Subscribes) > 0 {
-			w.line("subscribes: %s", formatStringList(v.Subscribes))
-		}
-		w.level--
-	}
-	w.line("}]")
-	w.level--
-}
-
-func (w *cueWriter) writeAutomationList(field string, automations []*ast.Automation) {
-	w.line("%s: [", field)
-	w.level++
-	for i, a := range automations {
-		if i > 0 {
-			w.line("}, {")
-		} else {
-			w.line("{")
-		}
-		w.level++
-		w.writeCommentsList("comments", a.Comments)
-		w.line("name: %q", a.Name)
-		if a.TriggerEvent != "" {
-			w.line("trigger_event: %q", a.TriggerEvent)
-		}
-		if a.Command != "" {
-			w.line("command: %q", a.Command)
-		}
-		if a.TargetContext != "" {
-			w.line("target_context: %q", a.TargetContext)
-		}
-		w.level--
-	}
-	w.line("}]")
-	w.level--
-}
-
-func (w *cueWriter) writeTranslationList(field string, translations []*ast.Translation) {
-	w.line("%s: [", field)
-	w.level++
-	for i, t := range translations {
-		if i > 0 {
-			w.line("}, {")
-		} else {
-			w.line("{")
-		}
-		w.level++
-		w.writeCommentsList("comments", t.Comments)
-		w.line("name: %q", t.Name)
-		if t.ExternalSystem != "" {
-			w.line("external_system: %q", t.ExternalSystem)
-		}
-		if t.Reads != "" {
-			w.line("reads: %q", t.Reads)
-		}
-		if t.Command != "" {
-			w.line("command: %q", t.Command)
-		}
-		if t.Event != nil {
-			w.writeInlineEvent("event", t.Event)
-		}
-		w.level--
-	}
-	w.line("}]")
-	w.level--
-}
-
-func (w *cueWriter) writeInlineEvent(field string, e *ast.Event) {
-	w.line("%s: {", field)
-	w.level++
-	w.writeCommentsList("comments", e.Comments)
+func (w *cueWriter) writeEvent(e *ast.Event) {
+	w.writeComments(e.Comments)
 	w.line("name: %q", e.Name)
-	if e.Source != "" {
-		w.line("source: %q", e.Source)
+	w.lineIfSet("description", e.Description)
+	w.lineIfSet("source", e.Source)
+	w.lineIfSet("external_name", e.ExternalName)
+	writeCUEList(w, "fields", e.Fields, w.writeField)
+}
+
+func (w *cueWriter) writeField(f *ast.Field) {
+	w.line("name: %q", f.Name)
+	w.line("type: %q", f.Type)
+	w.lineIfSet("modifier", f.Modifier)
+}
+
+func (w *cueWriter) writeFlow(f *ast.Flow) {
+	w.writeComments(f.Comments)
+	w.line("command_name: %q", f.CommandName)
+	w.line("event_name: %q", f.EventName)
+}
+
+func (w *cueWriter) writeView(v *ast.View) {
+	w.writeComments(v.Comments)
+	w.line("name: %q", v.Name)
+	w.lineIfSet("description", v.Description)
+	writeCUEList(w, "fields", v.Fields, w.writeField)
+	if len(v.Subscribes) > 0 {
+		w.line("subscribes: %s", formatStringList(v.Subscribes))
 	}
-	if e.ExternalName != "" {
-		w.line("external_name: %q", e.ExternalName)
+}
+
+func (w *cueWriter) writeAutomation(a *ast.Automation) {
+	w.writeComments(a.Comments)
+	w.line("name: %q", a.Name)
+	w.lineIfSet("description", a.Description)
+	w.lineIfSet("trigger_event", a.TriggerEvent)
+	w.lineIfSet("command", a.Command)
+	w.lineIfSet("target_context", a.TargetContext)
+}
+
+func (w *cueWriter) writeTranslation(t *ast.Translation) {
+	w.writeComments(t.Comments)
+	w.line("name: %q", t.Name)
+	w.lineIfSet("description", t.Description)
+	w.lineIfSet("external_system", t.ExternalSystem)
+	w.lineIfSet("reads", t.Reads)
+	w.lineIfSet("command", t.Command)
+	if t.Event != nil {
+		w.writeObject("event", func() { w.writeEvent(t.Event) })
 	}
-	if len(e.Fields) > 0 {
-		w.writeFieldList("fields", e.Fields)
-	}
-	w.level--
-	w.line("}")
 }
 
 // formatStringList formats a []string as a CUE list literal.

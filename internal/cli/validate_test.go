@@ -17,8 +17,9 @@ import (
 
 // The cli tests drive whole commands, so they share the pipeline-wide fixtures.
 const (
-	validEmod   = test.HotelReservation
-	invalidEmod = test.Unparseable
+	validEmod     = test.HotelReservation
+	describedEmod = test.DescribedHotelReservation
+	invalidEmod   = test.Unparseable
 )
 
 func TestValidate(t *testing.T) {

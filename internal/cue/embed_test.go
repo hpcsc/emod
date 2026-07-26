@@ -89,6 +89,15 @@ func TestSchema(t *testing.T) {
 		require.Contains(t, string(output), "name")
 	})
 
+	t.Run("rejects a description that is not prose", func(t *testing.T) {
+		cueBin := requireCue(t)
+
+		output, err := vetAgainstModel(t, cueBin, `{"name":"Full","description":42}`)
+
+		require.Error(t, err, "schema accepted a numeric description")
+		require.Contains(t, string(output), "description")
+	})
+
 	t.Run("rejects a command field that has no type", func(t *testing.T) {
 		cueBin := requireCue(t)
 
@@ -117,41 +126,56 @@ func TestSchema(t *testing.T) {
 const fullModelJSON = `{
   "comments": [{"text": "# Full model"}],
   "name": "Full",
-  "actors": [{"name": "Guest"}],
+  "description": "How the hotel takes and imports bookings",
+  "actors": [{"name": "Guest", "description": "A person booking a room"}],
   "contexts": [{
     "name": "Reservations",
+    "description": "What the hotel knows before the guest arrives",
     "aggregates": [{
       "name": "Reservation",
+      "description": "One guest holding one room",
       "slices": [{
         "name": "Make Reservation",
-        "trigger": {"kind": "UI", "name": "Form", "actor": "Guest", "reads": "RoomsView"},
+        "description": "A guest books a room",
+        "trigger": {
+          "kind": "UI",
+          "name": "Form",
+          "description": "The booking form on the public site",
+          "actor": "Guest",
+          "reads": "RoomsView"
+        },
         "commands": [{
           "name": "MakeReservation",
+          "description": "Ask the hotel to hold a room",
           "fields": [{"name":"guestId","type":"string","modifier":"required"}]
         }],
         "events": [{
           "name": "ReservationMade",
+          "description": "A room is held for a guest",
           "source": "external",
           "external_name": "Stripe",
           "fields": [{"name": "reservationId", "type": "int", "modifier": "optional"}]
         }],
         "views": [{
           "name": "RoomsView",
+          "description": "Every room with the stage it has reached",
           "fields": [{"name": "roomId", "type": "string", "modifier": "required"}],
           "subscribes": ["ReservationMade"]
         }],
         "automations": [{
           "name": "Notifier",
+          "description": "Tells the guest their room is held",
           "trigger_event": "ReservationMade",
           "command": "SendEmail",
           "target_context": "Notifications"
         }],
         "translations": [{
           "name": "BookingImport",
+          "description": "Restates a partner webhook in the hotel's language",
           "external_system": "Booking.com",
           "reads": "RoomsView",
           "command": "MakeReservation",
-          "event": {"name": "BookingImported"}
+          "event": {"name": "BookingImported", "description": "A partner reported a booking"}
         }],
         "flows": [{"command_name":"MakeReservation","event_name":"ReservationMade"}]
       }]

@@ -12,6 +12,9 @@ import (
 	"github.com/hpcsc/emod/internal/ast"
 	"github.com/hpcsc/emod/internal/diagnostic"
 	"github.com/hpcsc/emod/internal/export"
+	"github.com/hpcsc/emod/internal/lexer"
+	"github.com/hpcsc/emod/internal/parser"
+	"github.com/hpcsc/emod/internal/test"
 	"github.com/stretchr/testify/require"
 )
 
@@ -156,7 +159,7 @@ func TestExport(t *testing.T) {
 			err = json.Unmarshal(raw, &doc)
 			require.NoError(t, err)
 
-			s := getFirstSlice(doc)
+			s := firstSliceOf(t, doc)
 			tr := s["trigger"].(map[string]any)
 			require.Equal(t, "UI", tr["kind"])
 			require.Equal(t, "Form", tr["name"])
@@ -201,7 +204,7 @@ func TestExport(t *testing.T) {
 			err = json.Unmarshal(raw, &doc)
 			require.NoError(t, err)
 
-			s := getFirstSlice(doc)
+			s := firstSliceOf(t, doc)
 			events := s["events"].([]any)
 			e := events[0].(map[string]any)
 			require.Equal(t, "PaymentReceived", e["name"])
@@ -246,7 +249,7 @@ func TestExport(t *testing.T) {
 			err = json.Unmarshal(raw, &doc)
 			require.NoError(t, err)
 
-			s := getFirstSlice(doc)
+			s := firstSliceOf(t, doc)
 			views := s["views"].([]any)
 			v := views[0].(map[string]any)
 			require.Equal(t, "RoomsView", v["name"])
@@ -305,7 +308,7 @@ func TestExport(t *testing.T) {
 			err = json.Unmarshal(raw, &doc)
 			require.NoError(t, err)
 
-			s := getFirstSlice(doc)
+			s := firstSliceOf(t, doc)
 			autos := s["automations"].([]any)
 			a := autos[0].(map[string]any)
 			require.Equal(t, "OrderNotifier", a["name"])
@@ -355,7 +358,7 @@ func TestExport(t *testing.T) {
 			err = json.Unmarshal(raw, &doc)
 			require.NoError(t, err)
 
-			s := getFirstSlice(doc)
+			s := firstSliceOf(t, doc)
 			trans := s["translations"].([]any)
 			tl := trans[0].(map[string]any)
 			require.Equal(t, "BookingImport", tl["name"])
@@ -403,7 +406,7 @@ func TestExport(t *testing.T) {
 			err = json.Unmarshal(raw, &doc)
 			require.NoError(t, err)
 
-			s := getFirstSlice(doc)
+			s := firstSliceOf(t, doc)
 			flows := s["flows"].([]any)
 			f := flows[0].(map[string]any)
 			require.Equal(t, "MakeReservation", f["command_name"])
@@ -446,7 +449,7 @@ func TestExport(t *testing.T) {
 			err = json.Unmarshal(raw, &doc)
 			require.NoError(t, err)
 
-			s := getFirstSlice(doc)
+			s := firstSliceOf(t, doc)
 			cmd := s["commands"].([]any)[0].(map[string]any)
 			fields := cmd["fields"].([]any)
 
@@ -542,7 +545,7 @@ func TestExport(t *testing.T) {
 			require.Len(t, modelComments, 1)
 			require.Equal(t, "# System model", modelComments[0].(map[string]any)["text"])
 
-			s := getFirstSlice(doc)
+			s := firstSliceOf(t, doc)
 			sliceComments := s["comments"].([]any)
 			require.Len(t, sliceComments, 1)
 			require.Equal(t, "# Slice comment", sliceComments[0].(map[string]any)["text"])
@@ -769,7 +772,7 @@ func TestExport(t *testing.T) {
 			err = json.Unmarshal(raw, &doc)
 			require.NoError(t, err)
 
-			s := getFirstSlice(doc)
+			s := firstSliceOf(t, doc)
 			require.Equal(t, float64(4), s["position"].(map[string]any)["line"])
 			require.Equal(t, float64(8), s["close_position"].(map[string]any)["line"])
 		})
@@ -809,7 +812,7 @@ func TestExport(t *testing.T) {
 			err = json.Unmarshal(raw, &doc)
 			require.NoError(t, err)
 
-			s := getFirstSlice(doc)
+			s := firstSliceOf(t, doc)
 			cmds := s["commands"].([]any)
 			cmd := cmds[0].(map[string]any)
 			require.Equal(t, float64(5), cmd["position"].(map[string]any)["line"])
@@ -856,7 +859,7 @@ func TestExport(t *testing.T) {
 			err = json.Unmarshal(raw, &doc)
 			require.NoError(t, err)
 
-			s := getFirstSlice(doc)
+			s := firstSliceOf(t, doc)
 			events := s["events"].([]any)
 			e := events[0].(map[string]any)
 
@@ -909,7 +912,7 @@ func TestExport(t *testing.T) {
 			err = json.Unmarshal(raw, &doc)
 			require.NoError(t, err)
 
-			s := getFirstSlice(doc)
+			s := firstSliceOf(t, doc)
 			cmds := s["commands"].([]any)
 			cmd := cmds[0].(map[string]any)
 			fields := cmd["fields"].([]any)
@@ -955,7 +958,7 @@ func TestExport(t *testing.T) {
 			err = json.Unmarshal(raw, &doc)
 			require.NoError(t, err)
 
-			s := getFirstSlice(doc)
+			s := firstSliceOf(t, doc)
 			flows := s["flows"].([]any)
 			f := flows[0].(map[string]any)
 			require.Equal(t, float64(11), f["command_position"].(map[string]any)["column"])
@@ -1001,7 +1004,7 @@ func TestExport(t *testing.T) {
 			err = json.Unmarshal(raw, &doc)
 			require.NoError(t, err)
 
-			s := getFirstSlice(doc)
+			s := firstSliceOf(t, doc)
 			tr := s["trigger"].(map[string]any)
 			require.Equal(t, float64(3), tr["kind_position"].(map[string]any)["column"])
 			require.Equal(t, float64(7), tr["position"].(map[string]any)["column"])
@@ -1046,7 +1049,7 @@ func TestExport(t *testing.T) {
 			err = json.Unmarshal(raw, &doc)
 			require.NoError(t, err)
 
-			s := getFirstSlice(doc)
+			s := firstSliceOf(t, doc)
 			views := s["views"].([]any)
 			v := views[0].(map[string]any)
 			require.Equal(t, float64(4), v["position"].(map[string]any)["line"])
@@ -1094,7 +1097,7 @@ func TestExport(t *testing.T) {
 			err = json.Unmarshal(raw, &doc)
 			require.NoError(t, err)
 
-			s := getFirstSlice(doc)
+			s := firstSliceOf(t, doc)
 			autos := s["automations"].([]any)
 			a := autos[0].(map[string]any)
 			require.Equal(t, float64(5), a["position"].(map[string]any)["line"])
@@ -1149,7 +1152,7 @@ func TestExport(t *testing.T) {
 			err = json.Unmarshal(raw, &doc)
 			require.NoError(t, err)
 
-			s := getFirstSlice(doc)
+			s := firstSliceOf(t, doc)
 			trans := s["translations"].([]any)
 			tl := trans[0].(map[string]any)
 			require.Equal(t, float64(6), tl["position"].(map[string]any)["line"])
@@ -1208,6 +1211,53 @@ func TestExport(t *testing.T) {
 			a := actors[0].(map[string]any)
 			_, hasActorPos := a["position"]
 			require.False(t, hasActorPos, "zero-value actor position should be omitted")
+		})
+
+		t.Run("carries the description of every construct that accepts one", func(t *testing.T) {
+			raw, err := export.ExportJSON(buildFullModel())
+			require.NoError(t, err)
+
+			var doc map[string]any
+			require.NoError(t, json.Unmarshal(raw, &doc))
+
+			require.Equal(t, map[string]any{
+				"model":             "How the whole system earns its keep",
+				"actor":             "The person the system serves",
+				"context":           "The language boundary the model lives inside",
+				"aggregate":         "The thing decisions are made about",
+				"slice":             "One decision and everything it needs",
+				"trigger":           "Where the decision starts",
+				"command":           "The request the actor makes",
+				"event":             "The fact the decision leaves behind",
+				"view":              "What the actor reads before deciding",
+				"automation":        "The decision nobody has to make by hand",
+				"translation":       "How a partner's words become ours",
+				"translation event": "The fact a partner reported",
+			}, descriptionsByConstruct(t, doc))
+		})
+
+		t.Run("omits the description key entirely for a model that describes nothing", func(t *testing.T) {
+			raw, err := export.ExportJSON(hotelReservationModel(t))
+			require.NoError(t, err)
+
+			var doc map[string]any
+			require.NoError(t, json.Unmarshal(raw, &doc))
+
+			require.Empty(t, descriptionsAnywhere(doc),
+				"an undescribed model must not carry the key, not even empty-valued")
+		})
+
+		t.Run("keeps a description's exact text", func(t *testing.T) {
+			raw, err := export.ExportJSON(awkwardlyDescribedModel())
+			require.NoError(t, err)
+			require.True(t, json.Valid(raw))
+
+			var doc map[string]any
+			require.NoError(t, json.Unmarshal(raw, &doc))
+
+			event := firstSliceOf(t, doc)["events"].([]any)[0].(map[string]any)
+			require.Equal(t, awkwardDescription, doc["description"])
+			require.Equal(t, awkwardDescription, event["description"])
 		})
 	})
 
@@ -2745,6 +2795,17 @@ func TestExport(t *testing.T) {
 				require.False(t, hasPos, "node %s (%s) should not have position", node["id"], node["type"])
 			}
 		})
+
+		t.Run("a described model still produces a document free of prose", func(t *testing.T) {
+			raw, err := export.ExportDiagramJSON(buildFullModel())
+			require.NoError(t, err)
+
+			var doc map[string]any
+			require.NoError(t, json.Unmarshal(raw, &doc))
+
+			require.Empty(t, descriptionsAnywhere(doc),
+				"the diagram document is nodes and edges; descriptions belong to the model export")
+		})
 	})
 
 	t.Run("diagram json with diagnostics", func(t *testing.T) {
@@ -2925,6 +2986,14 @@ func TestExport(t *testing.T) {
 
 			require.NotContains(t, string(raw), `modifier: ""`)
 			require.Contains(t, string(raw), `modifier: "optional"`)
+		})
+
+		t.Run("descriptions are omitted when a model describes nothing", func(t *testing.T) {
+			raw, err := export.ExportCUE(hotelReservationModel(t))
+			require.NoError(t, err)
+
+			require.NotContains(t, string(raw), "description",
+				"an undescribed model must not carry the key, not even empty-valued")
 		})
 
 		// The exported CUE is only useful if the cue tool can read it back, so the
@@ -3183,6 +3252,16 @@ func TestExport(t *testing.T) {
 				}}, slice["flows"])
 			})
 
+			t.Run("keeps a description's exact text", func(t *testing.T) {
+				cueBin := lookupCue(t)
+
+				doc := exportedCUEDoc(t, cueBin, awkwardlyDescribedModel())
+
+				event := firstSliceOf(t, doc)["events"].([]any)[0].(map[string]any)
+				require.Equal(t, awkwardDescription, doc["description"])
+				require.Equal(t, awkwardDescription, event["description"])
+			})
+
 			t.Run("keeps comments attached to the element they document", func(t *testing.T) {
 				cueBin := lookupCue(t)
 				model := &ast.Model{
@@ -3268,17 +3347,6 @@ func findNodeByType(nodes []any, typ string) map[string]any {
 	return nil
 }
 
-// getFirstSlice navigates the parsed JSON document to find the first slice
-// in the first context's first aggregate.
-func getFirstSlice(doc map[string]any) map[string]any {
-	ctxs := doc["contexts"].([]any)
-	c := ctxs[0].(map[string]any)
-	aggs := c["aggregates"].([]any)
-	agg := aggs[0].(map[string]any)
-	slices := agg["slices"].([]any)
-	return slices[0].(map[string]any)
-}
-
 // lookupCue returns the cue binary to shell out to, skipping the test when the
 // tool is not installed. The subtests that use it check generated CUE against
 // the real schema, which needs the actual compiler rather than a stand-in.
@@ -3319,57 +3387,92 @@ func cueExportJSON(t *testing.T, cueBin string, cueSource []byte) []byte {
 	return out
 }
 
-// firstSliceOf returns the first slice of the first aggregate of the first
-// context in an exported document.
+func firstOf(t *testing.T, parent map[string]any, field string) map[string]any {
+	t.Helper()
+
+	items, ok := parent[field].([]any)
+	require.True(t, ok && len(items) > 0, "no %s in %v", field, parent)
+
+	return items[0].(map[string]any)
+}
+
 func firstSliceOf(t *testing.T, doc map[string]any) map[string]any {
 	t.Helper()
 
-	contexts, ok := doc["contexts"].([]any)
-	require.True(t, ok && len(contexts) > 0, "document has no contexts: %v", doc)
+	context := firstOf(t, doc, "contexts")
+	aggregate := firstOf(t, context, "aggregates")
 
-	aggregates, ok := contexts[0].(map[string]any)["aggregates"].([]any)
-	require.True(t, ok && len(aggregates) > 0, "context has no aggregates")
-
-	slices, ok := aggregates[0].(map[string]any)["slices"].([]any)
-	require.True(t, ok && len(slices) > 0, "aggregate has no slices")
-
-	return slices[0].(map[string]any)
+	return firstOf(t, aggregate, "slices")
 }
 
-// buildFullModel returns a model with all node types populated.
+// buildFullModel returns a model with all node types populated, each carrying a
+// distinct description so a description filed under the wrong construct shows up
+// as a mismatch rather than passing unnoticed.
 func buildFullModel() *ast.Model {
 	return &ast.Model{
-		Name: "Full",
+		Name:        "Full",
+		Description: "How the whole system earns its keep",
 		Actors: []*ast.Actor{
-			{Name: "User"},
+			{Name: "User", Description: "The person the system serves"},
 		},
 		Contexts: []*ast.Context{
 			{
-				Name: "Ctx",
+				Name:        "Ctx",
+				Description: "The language boundary the model lives inside",
 				Aggregates: []*ast.Aggregate{
 					{
-						Name: "Agg",
+						Name:        "Agg",
+						Description: "The thing decisions are made about",
 						Slices: []*ast.Slice{
 							{
-								Name: "S",
+								Name:        "S",
+								Description: "One decision and everything it needs",
 								Trigger: &ast.Trigger{
 									Kind: "UI", Name: "Form", Actor: "User", Reads: "V",
+									Description: "Where the decision starts",
 								},
 								Commands: []*ast.Command{
-									{Name: "Cmd", Fields: []*ast.Field{{Name: "id", Type: "string"}}},
+									{
+										Name:        "Cmd",
+										Description: "The request the actor makes",
+										Fields:      []*ast.Field{{Name: "id", Type: "string"}},
+									},
 								},
 								Events: []*ast.Event{
 									{
 										Name:         "Evt",
+										Description:  "The fact the decision leaves behind",
 										Source:       "external",
 										ExternalName: "Provider",
 									},
 								},
 								Views: []*ast.View{
-									{Name: "MyView", Subscribes: []string{"Evt"}},
+									{
+										Name:        "MyView",
+										Description: "What the actor reads before deciding",
+										Subscribes:  []string{"Evt"},
+									},
 								},
 								Automations: []*ast.Automation{
-									{Name: "Auto", TriggerEvent: "Evt", Command: "DoIt"},
+									{
+										Name:         "Auto",
+										Description:  "The decision nobody has to make by hand",
+										TriggerEvent: "Evt",
+										Command:      "DoIt",
+									},
+								},
+								Translations: []*ast.Translation{
+									{
+										Name:           "Trans",
+										Description:    "How a partner's words become ours",
+										ExternalSystem: "Partner API",
+										Reads:          "MyView",
+										Command:        "Cmd",
+										Event: &ast.Event{
+											Name:        "PartnerEvt",
+											Description: "The fact a partner reported",
+										},
+									},
 								},
 								Flows: []*ast.Flow{
 									{CommandName: "Cmd", EventName: "Evt"},
@@ -3381,4 +3484,84 @@ func buildFullModel() *ast.Model {
 			},
 		},
 	}
+}
+
+// awkwardDescription mixes the characters both formats have to escape with text
+// outside ASCII.
+const awkwardDescription = `Guest said "hold it" \ paid 50% — café`
+
+func awkwardlyDescribedModel() *ast.Model {
+	return &ast.Model{
+		Name:        "Awkward",
+		Description: awkwardDescription,
+		Contexts: []*ast.Context{{
+			Name: "Ctx",
+			Aggregates: []*ast.Aggregate{{
+				Name: "Agg",
+				Slices: []*ast.Slice{{
+					Name: "S",
+					Events: []*ast.Event{{
+						Name:        "Evt",
+						Description: awkwardDescription,
+					}},
+				}},
+			}},
+		}},
+	}
+}
+
+// hotelReservationModel parses the source fixture the whole pipeline shares, so
+// the description-free baseline cannot drift from the models authors write.
+func hotelReservationModel(t *testing.T) *ast.Model {
+	t.Helper()
+
+	tokens, scanErrs := lexer.Scan(test.HotelReservation, "hotel.emod")
+	require.Empty(t, scanErrs)
+
+	model, parseErrs := parser.New(tokens, "hotel.emod").Parse()
+	require.Empty(t, parseErrs)
+
+	return model
+}
+
+func descriptionsByConstruct(t *testing.T, doc map[string]any) map[string]any {
+	t.Helper()
+
+	context := firstOf(t, doc, "contexts")
+	aggregate := firstOf(t, context, "aggregates")
+	slice := firstOf(t, aggregate, "slices")
+	translation := firstOf(t, slice, "translations")
+
+	return map[string]any{
+		"model":             doc["description"],
+		"actor":             firstOf(t, doc, "actors")["description"],
+		"context":           context["description"],
+		"aggregate":         aggregate["description"],
+		"slice":             slice["description"],
+		"trigger":           slice["trigger"].(map[string]any)["description"],
+		"command":           firstOf(t, slice, "commands")["description"],
+		"event":             firstOf(t, slice, "events")["description"],
+		"view":              firstOf(t, slice, "views")["description"],
+		"automation":        firstOf(t, slice, "automations")["description"],
+		"translation":       translation["description"],
+		"translation event": translation["event"].(map[string]any)["description"],
+	}
+}
+
+func descriptionsAnywhere(node any) []any {
+	var found []any
+	switch n := node.(type) {
+	case map[string]any:
+		if description, ok := n["description"]; ok {
+			found = append(found, description)
+		}
+		for _, child := range n {
+			found = append(found, descriptionsAnywhere(child)...)
+		}
+	case []any:
+		for _, child := range n {
+			found = append(found, descriptionsAnywhere(child)...)
+		}
+	}
+	return found
 }

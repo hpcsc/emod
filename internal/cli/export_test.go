@@ -82,6 +82,44 @@ func TestExport(t *testing.T) {
 		require.True(t, ok, "expected contexts in model output")
 	})
 
+	t.Run("described file's descriptions reach the model object of the JSON envelope", func(t *testing.T) {
+		path := writeTemp(t, "described.emod", describedEmod)
+
+		output := captureStdout(t, func() {
+			err := cli.RunExport(path, "json")
+			require.NoError(t, err)
+		})
+
+		var doc map[string]interface{}
+		require.NoError(t, json.Unmarshal([]byte(output), &doc))
+
+		require.Len(t, doc, 2, "envelope should carry diagnostics and model only")
+		require.Empty(t, doc["diagnostics"])
+
+		modelVal := doc["model"].(map[string]interface{})
+		actor := modelVal["actors"].([]interface{})[0].(map[string]interface{})
+		context := modelVal["contexts"].([]interface{})[0].(map[string]interface{})
+		aggregate := context["aggregates"].([]interface{})[0].(map[string]interface{})
+		slice := aggregate["slices"].([]interface{})[0].(map[string]interface{})
+		command := slice["commands"].([]interface{})[0].(map[string]interface{})
+
+		require.Equal(t, map[string]interface{}{
+			"model":     "How the hotel takes, confirms and imports room bookings",
+			"actor":     "A person booking a room, not necessarily the one staying in it",
+			"context":   "Everything the hotel knows about a stay before the guest arrives",
+			"aggregate": "One guest holding one room over one date range",
+			"slice":     "A guest books a room from the public site",
+			"command":   "Ask the hotel to hold a room for a date range, 10% deposit taken up front",
+		}, map[string]interface{}{
+			"model":     modelVal["description"],
+			"actor":     actor["description"],
+			"context":   context["description"],
+			"aggregate": aggregate["description"],
+			"slice":     slice["description"],
+			"command":   command["description"],
+		})
+	})
+
 	t.Run("file with validation errors outputs JSON with diagnostics on stdout and empty stderr", func(t *testing.T) {
 		path := writeTemp(t, "invalid.emod", invalidEmod)
 

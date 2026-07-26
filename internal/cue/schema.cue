@@ -7,31 +7,34 @@
 }
 
 #Field: {
-	name:     string
-	type:     string
+	name:      string
+	type:      string
 	modifier?: string // "required" or "optional"; omitted when empty
 }
 
 #Trigger: {
-	comments?: [...#Comment]
-	kind:     string
-	name:     string
-	actor?:   string
-	reads?:   string
+	comments?:    [...#Comment]
+	kind:         string
+	name:         string
+	description?: string
+	actor?:       string
+	reads?:       string
 }
 
 #Command: {
-	comments?: [...#Comment]
-	name:     string
-	fields?:  [...#Field]
+	comments?:    [...#Comment]
+	name:         string
+	description?: string
+	fields?:      [...#Field]
 }
 
 #Event: {
 	comments?:      [...#Comment]
-	name:          string
-	source?:       string
+	name:           string
+	description?:   string
+	source?:        string
 	external_name?: string
-	fields?:       [...#Field]
+	fields?:        [...#Field]
 }
 
 #Flow: {
@@ -41,15 +44,17 @@
 }
 
 #View: {
-	comments?:   [...#Comment]
-	name:       string
-	fields?:    [...#Field]
-	subscribes?: [...string]
+	comments?:    [...#Comment]
+	name:         string
+	description?: string
+	fields?:      [...#Field]
+	subscribes?:  [...string]
 }
 
 #Automation: {
 	comments?:       [...#Comment]
-	name:           string
+	name:            string
+	description?:    string
 	trigger_event?:  string
 	command?:        string
 	target_context?: string
@@ -57,16 +62,18 @@
 
 #Translation: {
 	comments?:        [...#Comment]
-	name:            string
+	name:             string
+	description?:     string
 	external_system?: string
-	reads?:          string
+	reads?:           string
 	command?:         string
 	event?:           #Event
 }
 
 #Slice: {
-	comments?:      [...#Comment]
+	comments?:     [...#Comment]
 	name:          string
+	description?:  string
 	trigger?:      #Trigger
 	commands?:     [...#Command]
 	events?:       [...#Event]
@@ -78,25 +85,29 @@
 }
 
 #Aggregate: {
-	comments?: [...#Comment]
-	name:     string
-	slices?:  [...#Slice]
+	comments?:    [...#Comment]
+	name:         string
+	description?: string
+	slices?:      [...#Slice]
 }
 
 #Context: {
-	comments?:   [...#Comment]
-	name:       string
-	aggregates?: [...#Aggregate]
+	comments?:    [...#Comment]
+	name:         string
+	description?: string
+	aggregates?:  [...#Aggregate]
 }
 
 #Actor: {
-	comments?: [...#Comment]
-	name:     string
+	comments?:    [...#Comment]
+	name:         string
+	description?: string
 }
 
 #Model: {
-	comments?:  [...#Comment]
-	name:      string
-	actors?:   [...#Actor]
-	contexts?: [...#Context]
+	comments?:    [...#Comment]
+	name:         string
+	description?: string
+	actors?:      [...#Actor]
+	contexts?:    [...#Context]
 }
