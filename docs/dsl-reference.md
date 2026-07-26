@@ -30,7 +30,7 @@ event  OrderPlaced       # OrderPlaced is an identifier
 
 ### Strings
 
-Double-quoted values used for human-readable names (`model`, `actor`, `slice`, `trigger`, `external_system`, `source external`).
+Double-quoted values used for human-readable names (`model`, `actor`, `slice`, `trigger`, `external_system`, `source external`) and for `description` text.
 
 ```emod
 model "Hotel Reservation"
@@ -77,9 +77,13 @@ Required root declaration. Names the system being modeled.
 
 ```
 model "<name>"
+
+model "<name>" {
+  description "<text>"
+}
 ```
 
-Exactly one per file. No braces — it is a single-line declaration. See [examples/all_patterns.emod](/examples/all_patterns.emod).
+Exactly one per file. The block form carries a [description](#10-descriptions) and accepts no other entry; an empty block is allowed. See [examples/all_patterns.emod](/examples/all_patterns.emod).
 
 ### `actor`
 
@@ -87,9 +91,13 @@ Declares a persona or external system that interacts with the model. Appears at 
 
 ```
 actor "<name>"
+
+actor "<name>" {
+  description "<text>"
+}
 ```
 
-Multiple actors are allowed. Actors are referenced by triggers (see [Slice Patterns → Command](#command-pattern)).
+Multiple actors are allowed. Actors are referenced by triggers (see [Slice Patterns → Command](#command-pattern)). The block form carries a [description](#10-descriptions) and accepts no other entry; an empty block is allowed.
 
 ---
 
@@ -202,7 +210,7 @@ slice "<name>" {
 }
 ```
 
-`subscribes` references event names defined elsewhere in the model (see [Cross-References](#10-cross-references)).
+`subscribes` references event names defined elsewhere in the model (see [Cross-References](#11-cross-references)).
 
 ### Automation Pattern
 
@@ -353,7 +361,72 @@ See [examples/dcb_model.emod](/examples/dcb_model.emod) for a complete DCB-mode 
 
 ---
 
-## 10. Cross-References
+## 10. Descriptions
+
+Any construct that has a block may carry a `description`: prose explaining what the construct is for.
+
+```
+description "<text>"
+```
+
+`context`, `aggregate`, `slice`, `trigger`, `command`, `event`, `view`, `automation` and `translation` accept it, including the `event` nested inside a `translation`. `model` and `actor` accept it in their block form (see [Top-Level Constructs](#3-top-level-constructs)).
+
+```emod
+emod 1
+model "Hotel Reservation" {
+  description "Room inventory, bookings and check-out."
+}
+
+actor "Guest" {
+  description "A person who books and stays in a room."
+}
+
+context "Reservations" {
+  description "Owns the booking lifecycle."
+  aggregate "Reservation" {
+    description "One booking, from request to check-out."
+    slice "Reserve a Room" {
+      description "A guest holds a room for a date range."
+      trigger UI "Reservation Form" {
+        description "The public booking form."
+        actor Guest
+      }
+
+      command ReserveRoom {
+        description "Holds a room for the requested dates."
+        fields {
+          roomId    string required
+          guestName string required
+        }
+      }
+
+      event RoomReserved {
+        description "A room is held for a guest."
+        fields {
+          reservationId string required
+          roomId        string required
+        }
+      }
+
+      flow {
+        command -> event: ReserveRoom -> RoomReserved
+      }
+    }
+  }
+}
+```
+
+- **A description is documentation, not structure:** it is optional on every construct, nothing in the model refers to it, and no validation or lint rule reads it.
+- **`description` is not a reserved word:** `fields { description string required }` still declares an ordinary field named `description`.
+- **Position inside the block is free:** the parser accepts `description` before or after the construct's other entries.
+- **`emod fmt` moves it to the first line of the block**, ahead of the pattern-specific attributes and `fields`. A `model` or `actor` that carries a description is formatted in its block form.
+- **Exports carry the text:** `emod export --format json` and `emod export --format cue` emit a `description` key on the model, on each actor and on each described construct; the key is absent where no description was written. The bundled schema printed by `emod schema` declares it as an optional key on every definition that accepts one.
+- **Diagrams surface it on the shape:** `emod diagram --format drawio` attaches the description to the construct's shape as a tooltip, and `emod diagram --format svg` emits it as a `<title>` element inside the shape, which browsers show on hover.
+- **A construct without a shape reaches the exports only:** `model`, `actor`, `aggregate` and `slice` own no shape in either renderer. The `mermaid` and `ascii` formats carry no descriptions at all.
+
+---
+
+## 11. Cross-References
 
 Names are resolved during validation (`emod validate`). All references use unqualified names.
 
@@ -372,7 +445,7 @@ Validation detects:
 
 ---
 
-## 11. Pipeline
+## 12. Pipeline
 
 The CLI processes `.emod` files through a linear pipeline:
 

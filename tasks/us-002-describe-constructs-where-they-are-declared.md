@@ -8,7 +8,7 @@
 - [x] Task 5: Attach descriptions as draw.io tooltips
 - [x] Task 6: Attach descriptions as SVG `<title>` elements
 - [x] Task 7: Accept `description` and the new block forms in the tree-sitter grammar
-- [ ] Task 8: Document `description` in the DSL reference
+- [x] Task 8: Document `description` in the DSL reference
 
 ---
 
