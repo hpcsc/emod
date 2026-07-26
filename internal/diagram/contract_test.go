@@ -55,7 +55,7 @@ func exporters() []exporter {
 		{
 			name:              "svg",
 			fillOfLabel:       svgFillOfLabel,
-			countConnections:  func(output string) int { return strings.Count(output, "marker-end") },
+			countConnections:  arrowCount,
 			export:            diagram.ExportSVG,
 			requireWellFormed: requireValidXML,
 		},
@@ -266,13 +266,27 @@ func TestExporterPalette(t *testing.T) {
 
 		t.Run(e.name, func(t *testing.T) {
 			t.Run("follows the sticky-note colour convention", func(t *testing.T) {
-				output := e.run(t, paletteModel(), diagram.StyleAuto)
+				models := []struct {
+					name  string
+					model func() *ast.Model
+				}{
+					{name: "when every element is described", model: paletteModel},
+					{name: "when the model describes nothing", model: func() *ast.Model {
+						return withoutDescriptions(paletteModel())
+					}},
+				}
 
-				require.Equal(t, "orange", colorFamily(t, e.fillOfLabel(t, output, "Evt")))
-				require.Equal(t, "blue", colorFamily(t, e.fillOfLabel(t, output, "Cmd")))
-				require.Equal(t, "green", colorFamily(t, e.fillOfLabel(t, output, "Rmo")))
-				require.Equal(t, "white", colorFamily(t, e.fillOfLabel(t, output, "Form")))
-				require.Equal(t, "grey", colorFamily(t, e.fillOfLabel(t, output, "Stripe")))
+				for _, m := range models {
+					t.Run(m.name, func(t *testing.T) {
+						output := e.run(t, m.model(), diagram.StyleAuto)
+
+						require.Equal(t, "orange", colorFamily(t, e.fillOfLabel(t, output, "Evt")))
+						require.Equal(t, "blue", colorFamily(t, e.fillOfLabel(t, output, "Cmd")))
+						require.Equal(t, "green", colorFamily(t, e.fillOfLabel(t, output, "Rmo")))
+						require.Equal(t, "white", colorFamily(t, e.fillOfLabel(t, output, "Form")))
+						require.Equal(t, "grey", colorFamily(t, e.fillOfLabel(t, output, "Stripe")))
+					})
+				}
 			})
 
 			t.Run("gives each element type a distinguishable fill", func(t *testing.T) {
@@ -539,6 +553,37 @@ func describedModel() *ast.Model {
 			}},
 		}},
 	}
+}
+
+// describedModelTooltips pairs each shape describedModel draws, named by its
+// label, with the prose that shape shows when hovered. An external system holds
+// no prose of its own, so its box shows the description of the translation that
+// names it, as the reactor box does.
+var describedModelTooltips = map[string]string{
+	"Bookings":               "Everything the hotel knows about a stay before the guest arrives",
+	"BookingForm":            "The booking form on the public site",
+	"HoldRoom":               "Ask the hotel to hold a room over a date range",
+	"RoomHeld":               "A room is held for a guest",
+	"StayList":               "Every booking with the stage it has reached",
+	"StaySettled":            "The guest has paid for the whole stay",
+	"AutoConfirm":            "Confirms every booking the moment it is made",
+	"PartnerBookingReceived": "A partner site reported a booking",
+	"PartnerWebhook":         "Restates a partner webhook in the hotel's own language",
+	"PartnerAPI":             "Restates a partner webhook in the hotel's own language",
+}
+
+// requireEveryDescriptionShown asserts that every shape describedModel draws
+// shows the description of the construct it was drawn for, read back through
+// the format's own tooltipOf.
+func requireEveryDescriptionShown(t *testing.T, output string, tooltipOf func(t *testing.T, output, label string) string) {
+	t.Helper()
+
+	shown := make(map[string]string, len(describedModelTooltips))
+	for label := range describedModelTooltips {
+		shown[label] = tooltipOf(t, output, label)
+	}
+
+	require.Equal(t, describedModelTooltips, shown)
 }
 
 // withoutDescriptions strips the prose out of a model in place, so a test can

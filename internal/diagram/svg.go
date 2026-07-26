@@ -38,17 +38,17 @@ func ExportSVG(model *ast.Model, _ Style) ([]byte, error) {
 
 	// Swimlanes
 	laneW := diagramW - 2*marginX
-	b.WriteString(svgRect(marginX, triggerLaneY, laneW, laneHeight, "#ffffff", "#000000", 5))
+	b.WriteString(svgRect(marginX, triggerLaneY, laneW, laneHeight, "#ffffff", "#000000", 5, ""))
 	b.WriteString(svgLaneLabel(marginX+10, triggerLaneY+20, "UI / Triggers"))
-	b.WriteString(svgRect(marginX, cmdViewLaneY, laneW, laneHeight, "#ffffff", "#000000", 5))
+	b.WriteString(svgRect(marginX, cmdViewLaneY, laneW, laneHeight, "#ffffff", "#000000", 5, ""))
 	b.WriteString(svgLaneLabel(marginX+10, cmdViewLaneY+20, "Commands / Views"))
-	b.WriteString(svgRect(marginX, eventLaneY, laneW, laneHeight, "#ffffff", "#000000", 5))
+	b.WriteString(svgRect(marginX, eventLaneY, laneW, laneHeight, "#ffffff", "#000000", 5, ""))
 	b.WriteString(svgLaneLabel(marginX+10, eventLaneY+20, "Events"))
-	b.WriteString(svgRect(marginX, extLaneY, laneW, laneHeight, "#ffffff", "#000000", 5))
+	b.WriteString(svgRect(marginX, extLaneY, laneW, laneHeight, "#ffffff", "#000000", 5, ""))
 	b.WriteString(svgLaneLabel(marginX+10, extLaneY+20, "External Systems"))
 
 	for _, cb := range ctxBounds {
-		b.WriteString(svgRect(cb.x, marginY-30, cb.w-20, 22, fillExternal, strokeExternal, 0))
+		b.WriteString(svgRect(cb.x, marginY-30, cb.w-20, 22, fillExternal, strokeExternal, 0, cb.description))
 		b.WriteString(svgText(cb.x+(cb.w-20)/2, marginY-19, cb.name, 12, strokeExternal))
 	}
 
@@ -78,7 +78,7 @@ func ExportSVG(model *ast.Model, _ Style) ([]byte, error) {
 			if s.Trigger.Actor != "" {
 				label = fmt.Sprintf("%s (%s)", s.Trigger.Name, s.Trigger.Actor)
 			}
-			b.WriteString(svgRoundedRect(x, y, boxWidth, boxHeight, fillTrigger, strokeTrigger, 5))
+			b.WriteString(svgRoundedRect(x, y, boxWidth, boxHeight, fillTrigger, strokeTrigger, 5, s.Trigger.Description))
 			b.WriteString(svgText(x+boxWidth/2, y+boxHeight/2, label, 12, strokeTrigger))
 			elems = append(elems, svgElem{
 				sliceIdx: i, name: s.Trigger.Name,
@@ -91,7 +91,7 @@ func ExportSVG(model *ast.Model, _ Style) ([]byte, error) {
 		usableW := sliceWidth - 20
 		for ci, cmd := range s.Commands {
 			itemW, x := itemLayout(usableW, totalMid, ci, sliceX)
-			b.WriteString(svgRoundedRect(x, midCenterY, itemW, boxHeight, fillCommand, strokeCommand, 5))
+			b.WriteString(svgRoundedRect(x, midCenterY, itemW, boxHeight, fillCommand, strokeCommand, 5, cmd.Description))
 			b.WriteString(svgText(x+itemW/2, midCenterY+boxHeight/2, cmd.Name, 12, strokeCommand))
 			elems = append(elems, svgElem{
 				sliceIdx: i, name: cmd.Name,
@@ -103,7 +103,7 @@ func ExportSVG(model *ast.Model, _ Style) ([]byte, error) {
 		for vi, view := range s.Views {
 			idx := len(s.Commands) + vi
 			itemW, x := itemLayout(usableW, totalMid, idx, sliceX)
-			b.WriteString(svgRoundedRect(x, midCenterY, itemW, boxHeight, fillView, strokeView, 5))
+			b.WriteString(svgRoundedRect(x, midCenterY, itemW, boxHeight, fillView, strokeView, 5, view.Description))
 			b.WriteString(svgText(x+itemW/2, midCenterY+boxHeight/2, view.Name, 12, strokeView))
 			elems = append(elems, svgElem{
 				sliceIdx: i, name: view.Name,
@@ -126,7 +126,7 @@ func ExportSVG(model *ast.Model, _ Style) ([]byte, error) {
 				label = fmt.Sprintf("%s\n[%s]", evt.Name, evt.ExternalName)
 			}
 			ei++
-			b.WriteString(svgRoundedRect(x, eventCenterY, itemW, boxHeight, fillEvent, strokeEvent, 5))
+			b.WriteString(svgRoundedRect(x, eventCenterY, itemW, boxHeight, fillEvent, strokeEvent, 5, evt.Description))
 			b.WriteString(svgMultilineText(x+itemW/2, eventCenterY+boxHeight/2, label, 11, strokeEvent))
 			elems = append(elems, svgElem{
 				sliceIdx: i, name: evt.Name,
@@ -137,7 +137,7 @@ func ExportSVG(model *ast.Model, _ Style) ([]byte, error) {
 			if tr.Event != nil && tr.Event.Name != "" {
 				itemW, x := itemLayout(usableW, totalEvts, ei, sliceX)
 				ei++
-				b.WriteString(svgRoundedRect(x, eventCenterY, itemW, boxHeight, fillEvent, strokeEvent, 5))
+				b.WriteString(svgRoundedRect(x, eventCenterY, itemW, boxHeight, fillEvent, strokeEvent, 5, tr.Event.Description))
 				b.WriteString(svgText(x+itemW/2, eventCenterY+boxHeight/2, tr.Event.Name, 11, strokeEvent))
 				elems = append(elems, svgElem{
 					sliceIdx: i, name: tr.Event.Name,
@@ -155,7 +155,7 @@ func ExportSVG(model *ast.Model, _ Style) ([]byte, error) {
 			x := sliceX + autoPadX
 			y := triggerLaneY + laneHeight - autoH - autoPadY
 			label := fmt.Sprintf("\u2699 %s", auto.Name)
-			b.WriteString(svgRoundedRect(x, y, autoW-boxWidth/8, autoH, fillReactor, strokeReactor, 3))
+			b.WriteString(svgRoundedRect(x, y, autoW-boxWidth/8, autoH, fillReactor, strokeReactor, 3, auto.Description))
 			b.WriteString(svgMultilineText(x+(autoW-boxWidth/8)/2, y+autoH/2, label, 10, strokeReactor))
 			elems = append(elems, svgElem{
 				sliceIdx: i, name: auto.Name,
@@ -172,7 +172,7 @@ func ExportSVG(model *ast.Model, _ Style) ([]byte, error) {
 			x := sliceX + padX
 			y := triggerLaneY + laneHeight - reactorH - padY
 			label := fmt.Sprintf("\u2699 %s", tr.Name)
-			b.WriteString(svgRoundedRect(x, y, reactorW-boxWidth/8, reactorH, fillReactor, strokeReactor, 3))
+			b.WriteString(svgRoundedRect(x, y, reactorW-boxWidth/8, reactorH, fillReactor, strokeReactor, 3, tr.Description))
 			b.WriteString(svgMultilineText(x+(reactorW-boxWidth/8)/2, y+reactorH/2, label, 10, strokeReactor))
 			elems = append(elems, svgElem{
 				sliceIdx: i, name: tr.Name,
@@ -189,7 +189,7 @@ func ExportSVG(model *ast.Model, _ Style) ([]byte, error) {
 			if ti > 0 {
 				extY += ti * (extH + 8)
 			}
-			b.WriteString(svgDashedRoundedRect(extX, extY, extW, extH, fillExternal, strokeExternal, 5))
+			b.WriteString(svgDashedRoundedRect(extX, extY, extW, extH, fillExternal, strokeExternal, 5, tr.Description))
 			b.WriteString(svgText(extX+extW/2, extY+extH/2, tr.ExternalSystem, 11, strokeExternal))
 			elems = append(elems, svgElem{
 				sliceIdx: i, name: tr.ExternalSystem,
@@ -331,18 +331,33 @@ func svgDefs() string {
 `
 }
 
-func svgRect(x, y, w, h int, fill, stroke string, rx int) string {
-	return fmt.Sprintf(`<rect x="%d" y="%d" width="%d" height="%d" fill="%s" stroke="%s" rx="%d"/>`+"\n",
+func svgRect(x, y, w, h int, fill, stroke string, rx int, description string) string {
+	return svgRectElement(svgRectAttributes(x, y, w, h, fill, stroke, rx), description)
+}
+
+func svgRoundedRect(x, y, w, h int, fill, stroke string, rx int, description string) string {
+	return svgRect(x, y, w, h, fill, stroke, rx, description)
+}
+
+func svgDashedRoundedRect(x, y, w, h int, fill, stroke string, rx int, description string) string {
+	return svgRectElement(svgRectAttributes(x, y, w, h, fill, stroke, rx)+` stroke-dasharray="5,3"`, description)
+}
+
+func svgRectAttributes(x, y, w, h int, fill, stroke string, rx int) string {
+	return fmt.Sprintf(`x="%d" y="%d" width="%d" height="%d" fill="%s" stroke="%s" rx="%d"`,
 		x, y, w, h, fill, stroke, rx)
 }
 
-func svgRoundedRect(x, y, w, h int, fill, stroke string, rx int) string {
-	return svgRect(x, y, w, h, fill, stroke, rx)
-}
+// A browser shows a description as a tooltip only when the <title> holding it is
+// nested inside the shape, which a self-closing rect has no room for. A shape
+// with nothing to say stays self-closing: opening those too would rewrite the
+// diagram of every model that carries no prose.
+func svgRectElement(attributes, description string) string {
+	if description == "" {
+		return fmt.Sprintf("<rect %s/>\n", attributes)
+	}
 
-func svgDashedRoundedRect(x, y, w, h int, fill, stroke string, rx int) string {
-	return fmt.Sprintf(`<rect x="%d" y="%d" width="%d" height="%d" fill="%s" stroke="%s" rx="%d" stroke-dasharray="5,3"/>`+"\n",
-		x, y, w, h, fill, stroke, rx)
+	return fmt.Sprintf("<rect %s>\n<title>%s</title>\n</rect>\n", attributes, escapeXML(description))
 }
 
 func svgLaneLabel(x, y int, text string) string {

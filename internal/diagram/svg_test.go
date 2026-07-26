@@ -3,6 +3,9 @@
 package diagram_test
 
 import (
+	"encoding/xml"
+	"errors"
+	"io"
 	"strings"
 	"testing"
 
@@ -274,9 +277,155 @@ func TestExportSVG(t *testing.T) {
 		require.Contains(t, output, "Events")
 		require.Equal(t, 11, arrowCount(output), "every flow, subscription, automation and translation edge is drawn")
 	})
+
+	t.Run("descriptions", func(t *testing.T) {
+		t.Run("hovering a shape shows the description of the construct it was drawn for", func(t *testing.T) {
+			raw, err := diagram.ExportSVG(describedModel(), diagram.StyleAuto)
+			require.NoError(t, err)
+
+			output := string(raw)
+			requireValidXML(t, output)
+			requireEveryDescriptionShown(t, output, svgTooltipOf)
+		})
+
+		t.Run("describing a model leaves the picture itself untouched", func(t *testing.T) {
+			described, err := diagram.ExportSVG(describedModel(), diagram.StyleAuto)
+			require.NoError(t, err)
+			plain, err := diagram.ExportSVG(withoutDescriptions(describedModel()), diagram.StyleAuto)
+			require.NoError(t, err)
+
+			require.Equal(t, svgPicture(t, string(plain)), svgPicture(t, string(described)),
+				"prose must not add, move or repaint a shape, nor disturb the arrows between shapes")
+			require.NotContains(t, string(plain), "<title",
+				"a model that describes nothing is written exactly as it was before shapes could be titled")
+		})
+
+		t.Run("a description written with markup characters reads back as written", func(t *testing.T) {
+			prose := `Rooms held < 24h & marked "urgent"`
+			model := describedModel()
+			model.Contexts[0].Description = prose
+			model.Contexts[0].Aggregates[0].Slices[0].Commands[0].Description = prose
+
+			raw, err := diagram.ExportSVG(model, diagram.StyleAuto)
+			require.NoError(t, err)
+
+			output := string(raw)
+			requireValidXML(t, output)
+			require.Equal(t, prose, svgTooltipOf(t, output, "Bookings"))
+			require.Equal(t, prose, svgTooltipOf(t, output, "HoldRoom"))
+		})
+	})
 }
 
-// arrowCount reports how many connecting arrows the SVG draws.
+// --- svg helpers ---
+
 func arrowCount(output string) int {
-	return strings.Count(output, "marker-end")
+	return len(svgArrows(output))
+}
+
+// svgArrows returns the arrows the diagram draws between its boxes.
+func svgArrows(output string) []string {
+	var arrows []string
+	for _, line := range strings.Split(output, "\n") {
+		if strings.Contains(line, "marker-end") {
+			arrows = append(arrows, line)
+		}
+	}
+
+	return arrows
+}
+
+type svgShape struct {
+	attributes string
+	label      string
+	tooltip    string
+}
+
+// svgShapes returns the diagram's boxes in document order, decoded through an
+// XML parser so a test sees the text a reader sees rather than its escaped form.
+// A browser shows only the title nested inside the box being hovered, so a title
+// written anywhere else belongs to no box here either; labels are drawn as text
+// siblings, so those attach to the nearest box before them.
+func svgShapes(t *testing.T, output string) []svgShape {
+	t.Helper()
+
+	var (
+		shapes []svgShape
+		inRect bool
+		text   strings.Builder
+	)
+
+	decoder := xml.NewDecoder(strings.NewReader(output))
+	for {
+		token, err := decoder.Token()
+		if errors.Is(err, io.EOF) {
+			break
+		}
+		require.NoError(t, err, "output must be well-formed XML")
+
+		switch element := token.(type) {
+		case xml.StartElement:
+			switch element.Name.Local {
+			case "rect":
+				shapes = append(shapes, svgShape{attributes: svgAttributes(element)})
+				inRect = true
+			case "title", "text":
+				text.Reset()
+			}
+		case xml.CharData:
+			text.Write(element)
+		case xml.EndElement:
+			switch element.Name.Local {
+			case "rect":
+				inRect = false
+			case "title":
+				if inRect {
+					shapes[len(shapes)-1].tooltip = text.String()
+				}
+			case "text":
+				if len(shapes) > 0 {
+					shapes[len(shapes)-1].label = text.String()
+				}
+			}
+		}
+	}
+
+	return shapes
+}
+
+func svgAttributes(element xml.StartElement) string {
+	pairs := make([]string, 0, len(element.Attr))
+	for _, a := range element.Attr {
+		pairs = append(pairs, a.Name.Local+"="+a.Value)
+	}
+	return strings.Join(pairs, " ")
+}
+
+func svgTooltipOf(t *testing.T, output, label string) string {
+	t.Helper()
+
+	var tooltips []string
+	for _, shape := range svgShapes(t, output) {
+		if strings.Contains(shape.label, label) {
+			tooltips = append(tooltips, shape.tooltip)
+		}
+	}
+	require.Len(t, tooltips, 1, "expected one svg shape labelled %q", label)
+
+	return tooltips[0]
+}
+
+// svgPicture returns everything the diagram draws — every box with the text on
+// it, how it is painted and where it sits, then the arrows between them —
+// leaving out what a box only says when hovered, so a described diagram can be
+// compared with the one the same model draws without prose.
+func svgPicture(t *testing.T, output string) []string {
+	t.Helper()
+
+	var drawn []string
+	for _, shape := range svgShapes(t, output) {
+		drawn = append(drawn, shape.attributes+" "+shape.label)
+	}
+
+	return append(drawn, svgArrows(output)...)
 }

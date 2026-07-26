@@ -683,29 +683,7 @@ func TestExportDrawio(t *testing.T) {
 
 					output := string(raw)
 					requireValidXML(t, output)
-
-					// An external system holds no prose of its own, so its box shows
-					// the description of the translation that names it, as the
-					// reactor box does.
-					expected := map[string]string{
-						"Bookings":               "Everything the hotel knows about a stay before the guest arrives",
-						"BookingForm":            "The booking form on the public site",
-						"HoldRoom":               "Ask the hotel to hold a room over a date range",
-						"RoomHeld":               "A room is held for a guest",
-						"StayList":               "Every booking with the stage it has reached",
-						"StaySettled":            "The guest has paid for the whole stay",
-						"AutoConfirm":            "Confirms every booking the moment it is made",
-						"PartnerBookingReceived": "A partner site reported a booking",
-						"PartnerWebhook":         "Restates a partner webhook in the hotel's own language",
-						"PartnerAPI":             "Restates a partner webhook in the hotel's own language",
-					}
-
-					shown := make(map[string]string, len(expected))
-					for label := range expected {
-						shown[label] = drawioTooltipOf(t, output, label)
-					}
-
-					require.Equal(t, expected, shown)
+					requireEveryDescriptionShown(t, output, drawioTooltipOf)
 				})
 
 				t.Run("describing a model leaves the picture itself untouched", func(t *testing.T) {
