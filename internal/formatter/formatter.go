@@ -37,6 +37,7 @@ func (w *writer) writeComments(comments []*ast.Comment, level int) {
 }
 
 func (w *writer) writeModel(model *ast.Model) {
+	w.line(0, "emod %d", pinnedVersion(model))
 	w.writeComments(model.Comments, 0)
 	w.line(0, "model %q", model.Name)
 
@@ -50,6 +51,13 @@ func (w *writer) writeModel(model *ast.Model) {
 		w.blankLine()
 		w.writeContext(ctx, 0)
 	}
+}
+
+func pinnedVersion(model *ast.Model) int {
+	if model.VersionDeclared {
+		return model.Version
+	}
+	return ast.SupportedVersion
 }
 
 func (w *writer) writeContext(ctx *ast.Context, level int) {

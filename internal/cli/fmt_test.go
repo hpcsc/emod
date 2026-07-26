@@ -11,7 +11,7 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-const formattedEmod = `model "Hotel Reservation"
+const emodWithoutVersionHeader = `model "Hotel Reservation"
 
 actor "Guest"
 
@@ -43,6 +43,8 @@ context "Reservations" {
   }
 }
 `
+
+const formattedEmod = "emod 1\n" + emodWithoutVersionHeader
 
 const unformattedEmod = `model "Hotel Reservation"
 actor "Guest"
@@ -110,7 +112,7 @@ func TestFmt(t *testing.T) {
 	})
 
 	t.Run("returns error and does not modify a file declaring an unsupported version", func(t *testing.T) {
-		source := "emod 2\n" + formattedEmod
+		source := "emod 2\n" + emodWithoutVersionHeader
 		path := writeTemp(t, "unsupported.emod", source)
 
 		err := cli.RunFmt(path, false)
@@ -162,6 +164,19 @@ func TestFmt(t *testing.T) {
 		afterBytes, readErr := os.ReadFile(path)
 		require.NoError(t, readErr)
 		require.Equal(t, formattedEmod, string(afterBytes), "check mode should not modify the file")
+	})
+
+	t.Run("check mode returns error when a file is canonical apart from a missing version header", func(t *testing.T) {
+		path := writeTemp(t, "headerless.emod", emodWithoutVersionHeader)
+
+		err := cli.RunFmt(path, true)
+
+		require.Error(t, err)
+		require.Contains(t, err.Error(), path)
+
+		afterBytes, readErr := os.ReadFile(path)
+		require.NoError(t, readErr)
+		require.Equal(t, emodWithoutVersionHeader, string(afterBytes), "check mode should not modify the file")
 	})
 
 	t.Run("check mode returns error when file needs formatting", func(t *testing.T) {

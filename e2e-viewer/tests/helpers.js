@@ -2,7 +2,8 @@ import { expect } from '@playwright/test';
 
 // Canonical formatting, verified with `emod fmt --check`. Export tests assert
 // the viewer reproduces this byte for byte, so it must stay canonical.
-export const SAMPLE = `model "Billing"
+export const SAMPLE = `emod 1
+model "Billing"
 
 actor "Customer"
 
@@ -48,13 +49,14 @@ export const WIDE = (function () {
       '      }\n' +
       '    }');
   }
-  return 'model "Wide"\n\ncontext "Ctx" {\n  aggregate "Agg" {\n' +
+  return 'emod 1\nmodel "Wide"\n\ncontext "Ctx" {\n  aggregate "Agg" {\n' +
     slices.join('\n\n') + '\n  }\n}\n';
 })();
 
 // A second slice holding a view, for the edge types that need one. Also
 // canonical — `emod fmt --check` passes on it.
-export const SAMPLE_WITH_VIEW = `model "Billing"
+export const SAMPLE_WITH_VIEW = `emod 1
+model "Billing"
 
 actor "Customer"
 

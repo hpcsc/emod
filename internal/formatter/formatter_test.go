@@ -18,6 +18,16 @@ import (
 )
 
 func TestFormat(t *testing.T) {
+	t.Run("version header", func(t *testing.T) {
+		t.Run("a version the model declared is preserved instead of being moved to the supported version", func(t *testing.T) {
+			model := &ast.Model{Version: 7, VersionDeclared: true, Name: "Hotel Reservation"}
+
+			result := formatter.Format(model)
+
+			require.Equal(t, "emod 7\nmodel \"Hotel Reservation\"\n", result)
+		})
+	})
+
 	t.Run("element formatting", func(t *testing.T) {
 		t.Run("formats model and actor declarations", func(t *testing.T) {
 			model := &ast.Model{
@@ -29,7 +39,7 @@ func TestFormat(t *testing.T) {
 
 			result := formatter.Format(model)
 
-			expected := "model \"Test\"\n\nactor \"Guest\"\n"
+			expected := "emod 1\nmodel \"Test\"\n\nactor \"Guest\"\n"
 			require.Equal(t, expected, result)
 		})
 
@@ -80,6 +90,7 @@ func TestFormat(t *testing.T) {
 			result := formatter.Format(model)
 
 			expected := strings.Join([]string{
+				`emod 1`,
 				`model "Hotel"`,
 				``,
 				`context "Reservations" {`,
@@ -140,6 +151,7 @@ func TestFormat(t *testing.T) {
 			result := formatter.Format(model)
 
 			expected := strings.Join([]string{
+				`emod 1`,
 				`model "Test"`,
 				``,
 				`context "Ctx" {`,
@@ -191,6 +203,7 @@ func TestFormat(t *testing.T) {
 			result := formatter.Format(model)
 
 			expected := strings.Join([]string{
+				`emod 1`,
 				`model "Test"`,
 				``,
 				`context "Ctx" {`,
@@ -243,6 +256,7 @@ func TestFormat(t *testing.T) {
 			result := formatter.Format(model)
 
 			expected := strings.Join([]string{
+				`emod 1`,
 				`model "Test"`,
 				``,
 				`context "Ctx" {`,
@@ -300,6 +314,7 @@ func TestFormat(t *testing.T) {
 			result := formatter.Format(model)
 
 			expected := strings.Join([]string{
+				`emod 1`,
 				`model "Test"`,
 				``,
 				`context "Ctx" {`,
@@ -358,6 +373,7 @@ func TestFormat(t *testing.T) {
 			result := formatter.Format(model)
 
 			expected := strings.Join([]string{
+				`emod 1`,
 				`model "Test"`,
 				``,
 				`context "Ctx" {`,
@@ -411,37 +427,12 @@ func TestFormat(t *testing.T) {
 				``,
 			}, "\n")
 
-			tokens1, scanErrs1 := lexer.Scan(input, "test.emod")
-			require.Empty(t, scanErrs1)
-			p1 := parser.New(tokens1, "test.emod")
-			ast1, parseErrs1 := p1.Parse()
-			require.Empty(t, parseErrs1)
+			original := parseModel(t, input, "test.emod")
 
-			formatted := formatter.Format(ast1)
+			reparsed := parseModel(t, formatter.Format(original), "test.emod")
 
-			tokens2, scanErrs2 := lexer.Scan(formatted, "test.emod")
-			require.Empty(t, scanErrs2)
-			p2 := parser.New(tokens2, "test.emod")
-			ast2, parseErrs2 := p2.Parse()
-			require.Empty(t, parseErrs2)
-
-			ignorePositionsAndComments := cmp.Options{
-				cmpopts.IgnoreTypes(ast.Position{}),
-				cmpopts.IgnoreFields(ast.Model{}, "Comments"),
-				cmpopts.IgnoreFields(ast.Actor{}, "Comments"),
-				cmpopts.IgnoreFields(ast.Context{}, "Comments"),
-				cmpopts.IgnoreFields(ast.Aggregate{}, "Comments"),
-				cmpopts.IgnoreFields(ast.Slice{}, "Comments"),
-				cmpopts.IgnoreFields(ast.Command{}, "Comments"),
-				cmpopts.IgnoreFields(ast.Event{}, "Comments"),
-				cmpopts.IgnoreFields(ast.Flow{}, "Comments"),
-				cmpopts.IgnoreFields(ast.Trigger{}, "Comments"),
-				cmpopts.IgnoreFields(ast.View{}, "Comments"),
-				cmpopts.IgnoreFields(ast.Automation{}, "Comments"),
-				cmpopts.IgnoreFields(ast.Translation{}, "Comments"),
-			}
-
-			test.RequireEqual(t, ast1, ast2, ignorePositionsAndComments)
+			test.RequireEqual(t, original, reparsed, ignoreFormatterNormalizations)
+			require.True(t, reparsed.VersionDeclared, "formatted output should pin the version")
 		})
 	})
 
@@ -478,6 +469,7 @@ func TestFormat(t *testing.T) {
 			result := formatter.Format(model)
 
 			expected := strings.Join([]string{
+				`emod 1`,
 				`model "Test"`,
 				``,
 				`context "Ctx" {`,
@@ -525,6 +517,7 @@ func TestFormat(t *testing.T) {
 			result := formatter.Format(model)
 
 			expected := strings.Join([]string{
+				`emod 1`,
 				`model "Test"`,
 				``,
 				`actor "Guest"`,
@@ -578,6 +571,7 @@ func TestFormat(t *testing.T) {
 			result := formatter.Format(model)
 
 			expected := strings.Join([]string{
+				`emod 1`,
 				`model "Test"`,
 				``,
 				`context "Ctx" {`,
@@ -693,6 +687,7 @@ func TestFormat(t *testing.T) {
 			result := formatter.Format(model)
 
 			expected := strings.Join([]string{
+				`emod 1`,
 				`model "Test"`,
 				``,
 				`context "Ctx" {`,
@@ -738,6 +733,7 @@ func TestFormat(t *testing.T) {
 			result := formatter.Format(model)
 
 			expected := strings.Join([]string{
+				`emod 1`,
 				`model "Test"`,
 				``,
 				`context "Ctx" {`,
@@ -783,6 +779,7 @@ func TestFormat(t *testing.T) {
 			result := formatter.Format(model)
 
 			expected := strings.Join([]string{
+				`emod 1`,
 				`model "Test"`,
 				``,
 				`context "Ctx" {`,
@@ -834,6 +831,7 @@ func TestFormat(t *testing.T) {
 			result := formatter.Format(model)
 
 			expected := strings.Join([]string{
+				`emod 1`,
 				`model "Test"`,
 				``,
 				`context "Ctx" {`,
@@ -886,6 +884,7 @@ func TestFormat(t *testing.T) {
 			result := formatter.Format(model)
 
 			expected := strings.Join([]string{
+				`emod 1`,
 				`model "Test"`,
 				``,
 				`context "Ctx" {`,
@@ -947,6 +946,7 @@ func TestFormat(t *testing.T) {
 			result := formatter.Format(model)
 
 			expected := strings.Join([]string{
+				`emod 1`,
 				`model "Test"`,
 				``,
 				`context "Ctx" {`,
@@ -1005,6 +1005,7 @@ func TestFormat(t *testing.T) {
 			result := formatter.Format(model)
 
 			expected := strings.Join([]string{
+				`emod 1`,
 				`model "Test"`,
 				``,
 				`context "Ctx" {`,
@@ -1057,6 +1058,7 @@ func TestFormat(t *testing.T) {
 			result := formatter.Format(model)
 
 			expected := strings.Join([]string{
+				`emod 1`,
 				`model "Test"`,
 				``,
 				`context "Ctx" {`,
@@ -1079,41 +1081,11 @@ func TestFormat(t *testing.T) {
 		})
 
 		t.Run("round-trip: all_patterns.emod field blocks match fixture alignment", func(t *testing.T) {
-			raw, err := os.ReadFile("../../internal/parser/testdata/all_patterns.emod")
-			require.NoError(t, err)
-			input := string(raw)
+			original := parseFixture(t, "all_patterns.emod")
 
-			tokens, scanErrs := lexer.Scan(input, "all_patterns.emod")
-			require.Empty(t, scanErrs)
-			p := parser.New(tokens, "all_patterns.emod")
-			model, parseErrs := p.Parse()
-			require.Empty(t, parseErrs)
+			reparsed := parseModel(t, formatter.Format(original), "all_patterns.emod")
 
-			formatted := formatter.Format(model)
-
-			tokens2, scanErrs2 := lexer.Scan(formatted, "all_patterns.emod")
-			require.Empty(t, scanErrs2)
-			p2 := parser.New(tokens2, "all_patterns.emod")
-			model2, parseErrs2 := p2.Parse()
-			require.Empty(t, parseErrs2)
-
-			ignorePositionsAndComments := cmp.Options{
-				cmpopts.IgnoreTypes(ast.Position{}),
-				cmpopts.IgnoreFields(ast.Model{}, "Comments"),
-				cmpopts.IgnoreFields(ast.Actor{}, "Comments"),
-				cmpopts.IgnoreFields(ast.Context{}, "Comments"),
-				cmpopts.IgnoreFields(ast.Aggregate{}, "Comments"),
-				cmpopts.IgnoreFields(ast.Slice{}, "Comments"),
-				cmpopts.IgnoreFields(ast.Command{}, "Comments"),
-				cmpopts.IgnoreFields(ast.Event{}, "Comments"),
-				cmpopts.IgnoreFields(ast.Flow{}, "Comments"),
-				cmpopts.IgnoreFields(ast.Trigger{}, "Comments"),
-				cmpopts.IgnoreFields(ast.View{}, "Comments"),
-				cmpopts.IgnoreFields(ast.Automation{}, "Comments"),
-				cmpopts.IgnoreFields(ast.Translation{}, "Comments"),
-			}
-
-			test.RequireEqual(t, model, model2, ignorePositionsAndComments)
+			test.RequireEqual(t, original, reparsed, ignoreFormatterNormalizations)
 		})
 	})
 
@@ -1126,7 +1098,7 @@ func TestFormat(t *testing.T) {
 
 			result := formatter.Format(model)
 
-			expected := "# System description\nmodel \"Test\"\n"
+			expected := "emod 1\n# System description\nmodel \"Test\"\n"
 			require.Equal(t, expected, result)
 		})
 
@@ -1157,6 +1129,7 @@ func TestFormat(t *testing.T) {
 			result := formatter.Format(model)
 
 			expected := strings.Join([]string{
+				`emod 1`,
 				`model "Test"`,
 				``,
 				`context "Ctx" {`,
@@ -1205,6 +1178,7 @@ func TestFormat(t *testing.T) {
 			result := formatter.Format(model)
 
 			expected := strings.Join([]string{
+				`emod 1`,
 				`model "Test"`,
 				``,
 				`context "Ctx" {`,
@@ -1225,22 +1199,9 @@ func TestFormat(t *testing.T) {
 		})
 
 		t.Run("round-trip: formatting all_patterns.emod preserves all comments", func(t *testing.T) {
-			raw, err := os.ReadFile("../../internal/parser/testdata/all_patterns.emod")
-			require.NoError(t, err)
+			original := parseFixture(t, "all_patterns.emod")
 
-			tokens, scanErrs := lexer.Scan(string(raw), "all_patterns.emod")
-			require.Empty(t, scanErrs)
-			p := parser.New(tokens, "all_patterns.emod")
-			original, parseErrs := p.Parse()
-			require.Empty(t, parseErrs)
-
-			formatted := formatter.Format(original)
-
-			tokens2, scanErrs2 := lexer.Scan(formatted, "all_patterns.emod")
-			require.Empty(t, scanErrs2)
-			p2 := parser.New(tokens2, "all_patterns.emod")
-			reparsed, parseErrs2 := p2.Parse()
-			require.Empty(t, parseErrs2)
+			reparsed := parseModel(t, formatter.Format(original), "all_patterns.emod")
 
 			require.Equal(t,
 				"# Hotel Reservation System — exercises all four slice patterns",
@@ -1256,24 +1217,10 @@ func TestFormat(t *testing.T) {
 		})
 
 		t.Run("idempotency: format(format(input)) equals format(input)", func(t *testing.T) {
-			raw, err := os.ReadFile("../../internal/parser/testdata/all_patterns.emod")
-			require.NoError(t, err)
+			original := parseFixture(t, "all_patterns.emod")
 
-			tokens1, scanErrs1 := lexer.Scan(string(raw), "all_patterns.emod")
-			require.Empty(t, scanErrs1)
-			p1 := parser.New(tokens1, "all_patterns.emod")
-			model1, parseErrs1 := p1.Parse()
-			require.Empty(t, parseErrs1)
-
-			firstFormat := formatter.Format(model1)
-
-			tokens2, scanErrs2 := lexer.Scan(firstFormat, "formatted.emod")
-			require.Empty(t, scanErrs2)
-			p2 := parser.New(tokens2, "formatted.emod")
-			model2, parseErrs2 := p2.Parse()
-			require.Empty(t, parseErrs2)
-
-			secondFormat := formatter.Format(model2)
+			firstFormat := formatter.Format(original)
+			secondFormat := formatter.Format(parseModel(t, firstFormat, "formatted.emod"))
 
 			require.Equal(t, firstFormat, secondFormat,
 				"formatting the already-formatted output should produce identical bytes")
@@ -1308,6 +1255,7 @@ func TestFormat(t *testing.T) {
 			result := formatter.Format(model)
 
 			expected := strings.Join([]string{
+				`emod 1`,
 				`model "Test"`,
 				``,
 				`context "Ctx" {`,
@@ -1347,6 +1295,7 @@ func TestFormat(t *testing.T) {
 			}, "\n")
 
 			expected := strings.Join([]string{
+				`emod 1`,
 				`model "Hotel"`,
 				``,
 				`context "Reservations" {`,
@@ -1365,11 +1314,7 @@ func TestFormat(t *testing.T) {
 				``,
 			}, "\n")
 
-			tokens, scanErrs := lexer.Scan(input, "test.emod")
-			require.Empty(t, scanErrs)
-			p := parser.New(tokens, "test.emod")
-			model, parseErrs := p.Parse()
-			require.Empty(t, parseErrs)
+			model := parseModel(t, input, "test.emod")
 
 			result := formatter.Format(model)
 
@@ -1400,6 +1345,7 @@ func TestFormat(t *testing.T) {
 			}, "\n")
 
 			expected := strings.Join([]string{
+				`emod 1`,
 				`model "Hotel"`,
 				``,
 				`context "Reservations" {`,
@@ -1418,11 +1364,7 @@ func TestFormat(t *testing.T) {
 				``,
 			}, "\n")
 
-			tokens, scanErrs := lexer.Scan(input, "test.emod")
-			require.Empty(t, scanErrs)
-			p := parser.New(tokens, "test.emod")
-			model, parseErrs := p.Parse()
-			require.Empty(t, parseErrs)
+			model := parseModel(t, input, "test.emod")
 
 			result := formatter.Format(model)
 
@@ -1447,6 +1389,7 @@ func TestFormat(t *testing.T) {
 			}, "\n")
 
 			expected := strings.Join([]string{
+				`emod 1`,
 				`model "Hotel"`,
 				``,
 				`context "Reservations" {`,
@@ -1460,11 +1403,7 @@ func TestFormat(t *testing.T) {
 				``,
 			}, "\n")
 
-			tokens, scanErrs := lexer.Scan(input, "test.emod")
-			require.Empty(t, scanErrs)
-			p := parser.New(tokens, "test.emod")
-			model, parseErrs := p.Parse()
-			require.Empty(t, parseErrs)
+			model := parseModel(t, input, "test.emod")
 
 			result := formatter.Format(model)
 
@@ -1489,6 +1428,7 @@ func TestFormat(t *testing.T) {
 			}, "\n")
 
 			expected := strings.Join([]string{
+				`emod 1`,
 				`model "Hotel"`,
 				``,
 				`context "Reservations" {`,
@@ -1502,11 +1442,7 @@ func TestFormat(t *testing.T) {
 				``,
 			}, "\n")
 
-			tokens, scanErrs := lexer.Scan(input, "test.emod")
-			require.Empty(t, scanErrs)
-			p := parser.New(tokens, "test.emod")
-			model, parseErrs := p.Parse()
-			require.Empty(t, parseErrs)
+			model := parseModel(t, input, "test.emod")
 
 			result := formatter.Format(model)
 
@@ -1529,6 +1465,7 @@ func TestFormat(t *testing.T) {
 			}, "\n")
 
 			expected := strings.Join([]string{
+				`emod 1`,
 				`model "Hotel"`,
 				``,
 				`actor "Guest"`,
@@ -1545,11 +1482,7 @@ func TestFormat(t *testing.T) {
 				``,
 			}, "\n")
 
-			tokens, scanErrs := lexer.Scan(input, "test.emod")
-			require.Empty(t, scanErrs)
-			p := parser.New(tokens, "test.emod")
-			model, parseErrs := p.Parse()
-			require.Empty(t, parseErrs)
+			model := parseModel(t, input, "test.emod")
 
 			result := formatter.Format(model)
 
@@ -1576,6 +1509,7 @@ func TestFormat(t *testing.T) {
 			}, "\n")
 
 			expected := strings.Join([]string{
+				`emod 1`,
 				`model "Hotel"`,
 				``,
 				`actor "Guest"`,
@@ -1587,11 +1521,7 @@ func TestFormat(t *testing.T) {
 				``,
 			}, "\n")
 
-			tokens, scanErrs := lexer.Scan(input, "test.emod")
-			require.Empty(t, scanErrs)
-			p := parser.New(tokens, "test.emod")
-			model, parseErrs := p.Parse()
-			require.Empty(t, parseErrs)
+			model := parseModel(t, input, "test.emod")
 
 			result := formatter.Format(model)
 
@@ -1600,6 +1530,7 @@ func TestFormat(t *testing.T) {
 
 		t.Run("idempotency on already-normalized multi-slice input", func(t *testing.T) {
 			input := strings.Join([]string{
+				`emod 1`,
 				`model "Hotel"`,
 				``,
 				`actor "Guest"`,
@@ -1620,11 +1551,7 @@ func TestFormat(t *testing.T) {
 				``,
 			}, "\n")
 
-			tokens, scanErrs := lexer.Scan(input, "test.emod")
-			require.Empty(t, scanErrs)
-			p := parser.New(tokens, "test.emod")
-			model, parseErrs := p.Parse()
-			require.Empty(t, parseErrs)
+			model := parseModel(t, input, "test.emod")
 
 			result := formatter.Format(model)
 
@@ -1664,6 +1591,7 @@ func TestFormat(t *testing.T) {
 			result := formatter.Format(model)
 
 			expected := strings.Join([]string{
+				`emod 1`,
 				`model "Test"`,
 				``,
 				`context "Ctx" {`,
@@ -1700,6 +1628,7 @@ func TestFormat(t *testing.T) {
 			result := formatter.Format(model)
 
 			expected := strings.Join([]string{
+				`emod 1`,
 				`model "Test"`,
 				``,
 				`context "Ctx" mode dcb {`,
@@ -1728,6 +1657,7 @@ func TestFormat(t *testing.T) {
 			result := formatter.Format(model)
 
 			expected := strings.Join([]string{
+				`emod 1`,
 				`model "Test"`,
 				``,
 				`context "Ctx" mode aggregate {`,
@@ -1759,6 +1689,7 @@ func TestFormat(t *testing.T) {
 			result := formatter.Format(model)
 
 			expected := strings.Join([]string{
+				`emod 1`,
 				`model "Test"`,
 				``,
 				`context "Ctx" mode mixed {`,
@@ -1789,6 +1720,7 @@ func TestFormat(t *testing.T) {
 			result := formatter.Format(model)
 
 			expected := strings.Join([]string{
+				`emod 1`,
 				`model "Test"`,
 				``,
 				`context "Ctx" {`,
@@ -1828,6 +1760,7 @@ func TestFormat(t *testing.T) {
 			result := formatter.Format(model)
 
 			expected := strings.Join([]string{
+				`emod 1`,
 				`model "Test"`,
 				``,
 				`context "Ctx" mode dcb {`,
@@ -1879,6 +1812,7 @@ func TestFormat(t *testing.T) {
 			result := formatter.Format(model)
 
 			expected := strings.Join([]string{
+				`emod 1`,
 				`model "Test"`,
 				``,
 				`context "Ctx" {`,
@@ -1931,6 +1865,7 @@ func TestFormat(t *testing.T) {
 			result := formatter.Format(model)
 
 			expected := strings.Join([]string{
+				`emod 1`,
 				`model "Test"`,
 				``,
 				`context "Ctx" {`,
@@ -1988,6 +1923,7 @@ func TestFormat(t *testing.T) {
 			result := formatter.Format(model)
 
 			expected := strings.Join([]string{
+				`emod 1`,
 				`model "Test"`,
 				``,
 				`context "Ctx" {`,
@@ -2042,6 +1978,7 @@ func TestFormat(t *testing.T) {
 			result := formatter.Format(model)
 
 			expected := strings.Join([]string{
+				`emod 1`,
 				`model "Test"`,
 				``,
 				`context "Ctx" {`,
@@ -2095,6 +2032,7 @@ func TestFormat(t *testing.T) {
 			result := formatter.Format(model)
 
 			expected := strings.Join([]string{
+				`emod 1`,
 				`model "Test"`,
 				``,
 				`context "Ctx" {`,
@@ -2149,6 +2087,7 @@ func TestFormat(t *testing.T) {
 			result := formatter.Format(model)
 
 			expected := strings.Join([]string{
+				`emod 1`,
 				`model "Test"`,
 				``,
 				`context "Ctx" {`,
@@ -2203,6 +2142,7 @@ func TestFormat(t *testing.T) {
 			result := formatter.Format(model)
 
 			expected := strings.Join([]string{
+				`emod 1`,
 				`model "Test"`,
 				``,
 				`context "Ctx" {`,
@@ -2258,6 +2198,7 @@ func TestFormat(t *testing.T) {
 			result := formatter.Format(model)
 
 			expected := strings.Join([]string{
+				`emod 1`,
 				`model "Test"`,
 				``,
 				`context "Ctx" {`,
@@ -2313,6 +2254,7 @@ func TestFormat(t *testing.T) {
 			result := formatter.Format(model)
 
 			expected := strings.Join([]string{
+				`emod 1`,
 				`model "Test"`,
 				``,
 				`context "Ctx" {`,
@@ -2366,6 +2308,7 @@ func TestFormat(t *testing.T) {
 			result := formatter.Format(model)
 
 			expected := strings.Join([]string{
+				`emod 1`,
 				`model "Test"`,
 				``,
 				`context "Ctx" {`,
@@ -2425,6 +2368,7 @@ func TestFormat(t *testing.T) {
 			result := formatter.Format(model)
 
 			expected := strings.Join([]string{
+				`emod 1`,
 				`model "Test"`,
 				``,
 				`context "Ctx" {`,
@@ -2484,6 +2428,7 @@ func TestFormat(t *testing.T) {
 			result := formatter.Format(model)
 
 			expected := strings.Join([]string{
+				`emod 1`,
 				`model "Test"`,
 				``,
 				`context "Ctx" {`,
@@ -2541,6 +2486,7 @@ func TestFormat(t *testing.T) {
 			result := formatter.Format(model)
 
 			expected := strings.Join([]string{
+				`emod 1`,
 				`model "Test"`,
 				``,
 				`context "Ctx" {`,
@@ -2596,6 +2542,7 @@ func TestFormat(t *testing.T) {
 			result := formatter.Format(model)
 
 			expected := strings.Join([]string{
+				`emod 1`,
 				`model "Test"`,
 				``,
 				`context "Ctx" {`,
@@ -2665,6 +2612,7 @@ func TestFormat(t *testing.T) {
 
 			// Same expected output as the existing test "formats context with aggregate and slice"
 			expected := strings.Join([]string{
+				`emod 1`,
 				`model "Hotel"`,
 				``,
 				`context "Reservations" {`,
@@ -2728,37 +2676,11 @@ func TestFormat(t *testing.T) {
 				``,
 			}, "\n")
 
-			tokens1, scanErrs1 := lexer.Scan(input, "test.emod")
-			require.Empty(t, scanErrs1)
-			p1 := parser.New(tokens1, "test.emod")
-			ast1, parseErrs1 := p1.Parse()
-			require.Empty(t, parseErrs1)
+			original := parseModel(t, input, "test.emod")
 
-			formatted := formatter.Format(ast1)
+			reparsed := parseModel(t, formatter.Format(original), "test.emod")
 
-			tokens2, scanErrs2 := lexer.Scan(formatted, "test.emod")
-			require.Empty(t, scanErrs2)
-			p2 := parser.New(tokens2, "test.emod")
-			ast2, parseErrs2 := p2.Parse()
-			require.Empty(t, parseErrs2)
-
-			ignorePositionsAndComments := cmp.Options{
-				cmpopts.IgnoreTypes(ast.Position{}),
-				cmpopts.IgnoreFields(ast.Model{}, "Comments"),
-				cmpopts.IgnoreFields(ast.Actor{}, "Comments"),
-				cmpopts.IgnoreFields(ast.Context{}, "Comments"),
-				cmpopts.IgnoreFields(ast.Aggregate{}, "Comments"),
-				cmpopts.IgnoreFields(ast.Slice{}, "Comments"),
-				cmpopts.IgnoreFields(ast.Command{}, "Comments"),
-				cmpopts.IgnoreFields(ast.Event{}, "Comments"),
-				cmpopts.IgnoreFields(ast.Flow{}, "Comments"),
-				cmpopts.IgnoreFields(ast.Trigger{}, "Comments"),
-				cmpopts.IgnoreFields(ast.View{}, "Comments"),
-				cmpopts.IgnoreFields(ast.Automation{}, "Comments"),
-				cmpopts.IgnoreFields(ast.Translation{}, "Comments"),
-			}
-
-			test.RequireEqual(t, ast1, ast2, ignorePositionsAndComments)
+			test.RequireEqual(t, original, reparsed, ignoreFormatterNormalizations)
 		})
 
 		t.Run("idempotency: DCB model format is idempotent", func(t *testing.T) {
@@ -2784,24 +2706,50 @@ func TestFormat(t *testing.T) {
 				``,
 			}, "\n")
 
-			tokens1, scanErrs1 := lexer.Scan(input, "test.emod")
-			require.Empty(t, scanErrs1)
-			p1 := parser.New(tokens1, "test.emod")
-			model1, parseErrs1 := p1.Parse()
-			require.Empty(t, parseErrs1)
+			original := parseModel(t, input, "test.emod")
 
-			firstFormat := formatter.Format(model1)
-
-			tokens2, scanErrs2 := lexer.Scan(firstFormat, "formatted.emod")
-			require.Empty(t, scanErrs2)
-			p2 := parser.New(tokens2, "formatted.emod")
-			model2, parseErrs2 := p2.Parse()
-			require.Empty(t, parseErrs2)
-
-			secondFormat := formatter.Format(model2)
+			firstFormat := formatter.Format(original)
+			secondFormat := formatter.Format(parseModel(t, firstFormat, "formatted.emod"))
 
 			require.Equal(t, firstFormat, secondFormat,
 				"formatting the already-formatted DCB output should produce identical bytes")
 		})
 	})
+}
+
+func parseModel(t *testing.T, source, filename string) *ast.Model {
+	t.Helper()
+
+	tokens, scanErrs := lexer.Scan(source, filename)
+	require.Empty(t, scanErrs)
+
+	model, parseErrs := parser.New(tokens, filename).Parse()
+	require.Empty(t, parseErrs)
+
+	return model
+}
+
+func parseFixture(t *testing.T, filename string) *ast.Model {
+	t.Helper()
+
+	source, err := os.ReadFile("../parser/testdata/" + filename)
+	require.NoError(t, err)
+
+	return parseModel(t, string(source), filename)
+}
+
+var ignoreFormatterNormalizations = cmp.Options{
+	cmpopts.IgnoreTypes(ast.Position{}),
+	cmpopts.IgnoreFields(ast.Model{}, "Comments", "VersionDeclared"),
+	cmpopts.IgnoreFields(ast.Actor{}, "Comments"),
+	cmpopts.IgnoreFields(ast.Context{}, "Comments"),
+	cmpopts.IgnoreFields(ast.Aggregate{}, "Comments"),
+	cmpopts.IgnoreFields(ast.Slice{}, "Comments"),
+	cmpopts.IgnoreFields(ast.Command{}, "Comments"),
+	cmpopts.IgnoreFields(ast.Event{}, "Comments"),
+	cmpopts.IgnoreFields(ast.Flow{}, "Comments"),
+	cmpopts.IgnoreFields(ast.Trigger{}, "Comments"),
+	cmpopts.IgnoreFields(ast.View{}, "Comments"),
+	cmpopts.IgnoreFields(ast.Automation{}, "Comments"),
+	cmpopts.IgnoreFields(ast.Translation{}, "Comments"),
 }

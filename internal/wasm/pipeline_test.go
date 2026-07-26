@@ -10,7 +10,8 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-const billingModel = `model "Billing"
+const billingModel = `emod 1
+model "Billing"
 
 context "Payments" {
   aggregate "Payment" {
@@ -143,7 +144,7 @@ func TestPipeline(t *testing.T) {
 			parsed := decodeEmodEnvelope(t, wasm.ExportEmodJSON(`{"model_name":"Billing","nodes":[],"edges":[]}`))
 
 			require.Empty(t, parsed.Error)
-			require.Equal(t, "model \"Billing\"\n", parsed.Emod)
+			require.Equal(t, "emod 1\nmodel \"Billing\"\n", parsed.Emod)
 		})
 
 		t.Run("reports a failure in an error field instead of an emod field", func(t *testing.T) {

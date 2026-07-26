@@ -1031,7 +1031,7 @@ context "C" {
 			p.readInitializeResult(t, 1)
 
 			uri := "file:///format.emod"
-			content := "model \"test\"\n\nactor \"Guest\"\n\ncontext \"Orders\" {\n  aggregate \"Order\" {\n  }\n}\n"
+			content := "emod 1\nmodel \"test\"\n\nactor \"Guest\"\n\ncontext \"Orders\" {\n  aggregate \"Order\" {\n  }\n}\n"
 
 			p.writeMsg(t, &lsp.Message{
 				JSONRPC: "2.0",
@@ -1069,14 +1069,14 @@ context "C" {
 			var edits []lsp.TextEdit
 			err := json.Unmarshal(resp.Result, &edits)
 			require.NoError(t, err)
-			require.Len(t, edits, 1)
 
-			edit := edits[0]
-			require.Equal(t, 0, edit.Range.Start.Line)
-			require.Equal(t, 0, edit.Range.Start.Character)
-			require.Equal(t, 8, edit.Range.End.Line)
-			require.Equal(t, 0, edit.Range.End.Character)
-			require.Equal(t, content, edit.NewText)
+			require.Equal(t, []lsp.TextEdit{{
+				Range: lsp.Range{
+					Start: lsp.Position{Line: 0, Character: 0},
+					End:   lsp.Position{Line: 9, Character: 0},
+				},
+				NewText: content,
+			}}, edits)
 		})
 
 		t.Run("preserves comments in formatted output", func(t *testing.T) {

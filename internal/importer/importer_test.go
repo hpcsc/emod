@@ -61,7 +61,8 @@ func TestImportDiagram(t *testing.T) {
 		})
 
 		t.Run("preserves slices declared directly under a context", func(t *testing.T) {
-			source := `model "M"
+			source := `emod 1
+model "M"
 
 context "C" {
   slice "Direct" {
@@ -87,7 +88,8 @@ context "C" {
 		})
 
 		t.Run("preserves a translation without duplicating its nested event", func(t *testing.T) {
-			source := `model "M"
+			source := `emod 1
+model "M"
 
 context "C" {
   aggregate "A" {
@@ -115,7 +117,8 @@ context "C" {
 		})
 
 		t.Run("preserves external event sources", func(t *testing.T) {
-			source := `model "M"
+			source := `emod 1
+model "M"
 
 context "C" {
   aggregate "A" {
