@@ -3170,6 +3170,7 @@ context "Reservations" {
 			}
 			require.Empty(t, undescribed)
 			require.Subset(t, kinds, []string{
+				"model", "actor",
 				"context", "aggregate", "slice", "trigger",
 				"command", "event", "view", "automation", "translation",
 			})
@@ -4077,6 +4078,11 @@ func describableConstructs(model *ast.Model) []describableConstruct {
 				addEvent(translation.Event)
 			}
 		}
+	}
+
+	add("model", model.Name, model.Description)
+	for _, actor := range model.Actors {
+		add("actor", actor.Name, actor.Description)
 	}
 
 	for _, context := range model.Contexts {
