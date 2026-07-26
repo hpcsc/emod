@@ -1,5 +1,8 @@
 package ast
 
+// SupportedVersion is the version of the emod language this tool understands.
+const SupportedVersion = 1
+
 type Position struct {
 	Filename string
 	Line     int

@@ -50,6 +50,43 @@ func TestCheck(t *testing.T) {
 		})
 	})
 
+	t.Run("unsupported version", func(t *testing.T) {
+		t.Run("reports the version error alone, leaving the validator and linter silent", func(t *testing.T) {
+			const source = `model "Test"
+context "Orders" {
+  aggregate "Order" {
+    slice "Process Order" {
+      command OrderPlaced {}
+      event OrderUpdated {}
+      view OrderList {}
+      automation OrderNotifier {
+        trigger OrderPlaced
+        command NotifyCustomer
+        target context NonExistent
+      }
+      flow {
+        command -> event: OrderPlaced -> OrderUpdated
+      }
+    }
+  }
+}
+`
+
+			rejected := oracle.Check("emod 2\n"+source, "unsupported.emod")
+			supported := oracle.Check("emod 1\n"+source, "supported.emod")
+
+			require.NotNil(t, findMentioning(supported, "NonExistent"), "the same source under a supported version reports the missing context")
+			for _, rule := range []string{"command-past-tense", "state-obsession", "view-naming"} {
+				require.True(t, hasRule(supported, rule), "the same source under a supported version reports %s", rule)
+			}
+
+			require.Len(t, rejected, 1)
+			require.Equal(t, 1, rejected[0].Line)
+			require.Equal(t, diagnostic.Error, rejected[0].Severity)
+			require.Empty(t, rejected[0].RuleName)
+		})
+	})
+
 	t.Run("validator faults", func(t *testing.T) {
 		t.Run("surface when a parseable model targets a nonexistent context", func(t *testing.T) {
 			input := `model "Test"
@@ -68,15 +105,8 @@ context "Orders" {
 
 			diagnostics := oracle.Check(input, "bad_target.emod")
 
-			var found *diagnostic.Entry
-			for _, d := range diagnostics {
-				if strings.Contains(d.Message, "NonExistent") {
-					found = d
-					break
-				}
-			}
+			found := findMentioning(diagnostics, "NonExistent")
 			require.NotNil(t, found, "expected a validator diagnostic mentioning the missing context")
-			require.Contains(t, found.Message, "NonExistent")
 			require.Contains(t, found.Message, "does not exist")
 		})
 	})
@@ -130,15 +160,8 @@ context "Orders" {
 
 			diagnostics := oracle.Check(input, "combined.emod")
 
-			var found *diagnostic.Entry
-			for _, d := range diagnostics {
-				if strings.Contains(d.Message, "NonExistent") {
-					found = d
-					break
-				}
-			}
+			found := findMentioning(diagnostics, "NonExistent")
 			require.NotNil(t, found, "expected the validator diagnostic for the missing context")
-			require.Contains(t, found.Message, "NonExistent")
 			require.Contains(t, found.Message, "does not exist")
 			for _, rule := range []string{"command-past-tense", "state-obsession", "view-naming"} {
 				require.True(t, hasRule(diagnostics, rule), "expected %s alongside the validator error", rule)
@@ -172,24 +195,31 @@ context "Orders" {
 
 			diagnostics := oracle.Check(input, "errors.emod")
 
-			var found *diagnostic.Entry
-			for _, d := range diagnostics {
-				if d.RuleName == "clickbait-event" {
-					found = d
-					break
-				}
-			}
+			found := findRule(diagnostics, "clickbait-event")
 			require.NotNil(t, found, "expected a clickbait-event diagnostic")
 			require.Equal(t, diagnostic.Error, found.Severity)
 		})
 	})
 }
 
-func hasRule(diagnostics []*diagnostic.Entry, ruleName string) bool {
+func findMentioning(diagnostics []*diagnostic.Entry, text string) *diagnostic.Entry {
 	for _, d := range diagnostics {
-		if d.RuleName == ruleName {
-			return true
+		if strings.Contains(d.Message, text) {
+			return d
 		}
 	}
-	return false
+	return nil
+}
+
+func findRule(diagnostics []*diagnostic.Entry, ruleName string) *diagnostic.Entry {
+	for _, d := range diagnostics {
+		if d.RuleName == ruleName {
+			return d
+		}
+	}
+	return nil
+}
+
+func hasRule(diagnostics []*diagnostic.Entry, ruleName string) bool {
+	return findRule(diagnostics, ruleName) != nil
 }

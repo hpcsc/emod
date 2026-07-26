@@ -60,8 +60,13 @@ func New(tokens []*lexer.Token, filename string) *Instance {
 }
 
 func (p *Instance) Parse() (*ast.Model, []*diagnostic.Entry) {
-	version, declared := p.parseVersionHeader()
-	model := &ast.Model{Version: version, VersionDeclared: declared}
+	header := p.parseVersionHeader()
+	model := &ast.Model{Version: header.version, VersionDeclared: header.declared}
+
+	if header.declaresUnsupportedVersion() {
+		p.reportUnsupportedVersion(header)
+		return model, p.diagnostics
+	}
 
 	for !p.isAtEnd() {
 		if p.check(lexer.EOF) {
@@ -84,15 +89,27 @@ func (p *Instance) Parse() (*ast.Model, []*diagnostic.Entry) {
 	return model, p.diagnostics
 }
 
-func (p *Instance) parseVersionHeader() (version int, declared bool) {
+type versionHeader struct {
+	version  int
+	declared bool
+	keyword  *lexer.Token
+}
+
+func (h versionHeader) declaresUnsupportedVersion() bool {
+	return h.declared && h.version != ast.SupportedVersion
+}
+
+func (p *Instance) parseVersionHeader() versionHeader {
+	implied := versionHeader{version: impliedVersion}
+
 	if !p.check(lexer.KeywordEmod) {
-		return impliedVersion, false
+		return implied
 	}
 
 	keywordTok := p.advance()
 	if !p.checkSameLineAs(keywordTok) {
 		p.errorAt(keywordTok, expectedVersionInteger)
-		return impliedVersion, false
+		return implied
 	}
 
 	if !p.check(lexer.Integer) {
@@ -101,17 +118,21 @@ func (p *Instance) parseVersionHeader() (version int, declared bool) {
 		if _, startsTopLevelDeclaration := p.handlers[offending.Type]; !startsTopLevelDeclaration {
 			p.advance()
 		}
-		return impliedVersion, false
+		return implied
 	}
 
 	versionTok := p.advance()
 	version, err := strconv.Atoi(versionTok.Value)
 	if err != nil {
 		p.errorAt(versionTok, fmt.Sprintf("invalid version header: version %q is out of range", versionTok.Value))
-		return impliedVersion, false
+		return implied
 	}
 
-	return version, true
+	return versionHeader{version: version, declared: true, keyword: keywordTok}
+}
+
+func (p *Instance) reportUnsupportedVersion(header versionHeader) {
+	p.errorAt(header.keyword, fmt.Sprintf("unsupported version %d: this tool supports emod version %d", header.version, ast.SupportedVersion))
 }
 
 func (p *Instance) reportMisplacedVersionHeader() {

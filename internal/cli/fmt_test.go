@@ -109,6 +109,21 @@ func TestFmt(t *testing.T) {
 		require.Equal(t, originalBytes, afterBytes, "file should not be modified when there are parse errors")
 	})
 
+	t.Run("returns error and does not modify a file declaring an unsupported version", func(t *testing.T) {
+		source := "emod 2\n" + formattedEmod
+		path := writeTemp(t, "unsupported.emod", source)
+
+		err := cli.RunFmt(path, false)
+
+		require.Error(t, err)
+		require.Contains(t, err.Error(), path)
+		require.Contains(t, err.Error(), ":1:")
+
+		afterBytes, readErr := os.ReadFile(path)
+		require.NoError(t, readErr)
+		require.Equal(t, source, string(afterBytes))
+	})
+
 	t.Run("rewrites file in-place with formatted content", func(t *testing.T) {
 		path := writeTemp(t, "messy.emod", unformattedEmod)
 

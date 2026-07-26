@@ -3,11 +3,14 @@
 package parser_test
 
 import (
+	"fmt"
+	"strconv"
 	"strings"
 	"testing"
 
 	"github.com/google/go-cmp/cmp/cmpopts"
 	"github.com/hpcsc/emod/internal/ast"
+	"github.com/hpcsc/emod/internal/diagnostic"
 	"github.com/hpcsc/emod/internal/lexer"
 	"github.com/hpcsc/emod/internal/parser"
 	"github.com/hpcsc/emod/internal/test"
@@ -35,37 +38,63 @@ func TestParser(t *testing.T) {
 		})
 
 		t.Run("a declared version is recorded as declared", func(t *testing.T) {
+			input := `emod 1
+model "Test"`
+			tokens, _ := lexer.Scan(input, "test.emod")
+
+			model, diags := parser.New(tokens, "test.emod").Parse()
+
+			require.Empty(t, diags)
+			require.Equal(t, 1, model.Version)
+			require.True(t, model.VersionDeclared)
+			require.Equal(t, "Test", model.Name)
+		})
+
+		t.Run("a declared version the tool does not support is rejected", func(t *testing.T) {
 			tests := []struct {
-				name    string
-				input   string
-				version int
+				name     string
+				declared int
 			}{
-				{
-					name: "the version a header-less file already implies",
-					input: `emod 1
-model "Test"`,
-					version: 1,
-				},
-				{
-					name: "a version other than the implied one",
-					input: `emod 2
-model "Test"`,
-					version: 2,
-				},
+				{name: "a version below the supported one", declared: 0},
+				{name: "a version above the supported one", declared: 2},
 			}
 
 			for _, tc := range tests {
 				t.Run(tc.name, func(t *testing.T) {
-					tokens, _ := lexer.Scan(tc.input, "test.emod")
+					input := fmt.Sprintf("emod %d\n%s", tc.declared, test.HotelReservation)
+					tokens, lexDiags := lexer.Scan(input, "versions.emod")
+					require.Empty(t, lexDiags)
 
-					model, diags := parser.New(tokens, "test.emod").Parse()
+					_, diags := parser.New(tokens, "versions.emod").Parse()
 
-					require.Empty(t, diags)
-					require.Equal(t, tc.version, model.Version)
-					require.True(t, model.VersionDeclared)
-					require.Equal(t, "Test", model.Name)
+					require.Len(t, diags, 1)
+					require.Equal(t, "versions.emod", diags[0].Filename)
+					require.Equal(t, 1, diags[0].Line)
+					require.Equal(t, diagnostic.Error, diags[0].Severity)
+					require.Empty(t, diags[0].RuleName)
+					require.Contains(t, diags[0].Message, strconv.Itoa(tc.declared))
+					require.Contains(t, diags[0].Message, strconv.Itoa(ast.SupportedVersion))
 				})
 			}
+		})
+
+		t.Run("a rejected version stops the parse before anything below the header is read", func(t *testing.T) {
+			const brokenBelowHeader = `model "Test"
+foobar {
+}
+`
+			rejectedTokens, _ := lexer.Scan("emod 2\n"+brokenBelowHeader, "versions.emod")
+			acceptedTokens, _ := lexer.Scan("emod 1\n"+brokenBelowHeader, "versions.emod")
+
+			_, rejectedDiags := parser.New(rejectedTokens, "versions.emod").Parse()
+			_, acceptedDiags := parser.New(acceptedTokens, "versions.emod").Parse()
+
+			require.NotEmpty(t, acceptedDiags, "the same grammar under a supported version reports the breakage below the header")
+			for _, d := range acceptedDiags {
+				require.Greater(t, d.Line, 1)
+			}
+			require.Len(t, rejectedDiags, 1)
+			require.Equal(t, 1, rejectedDiags[0].Line)
 		})
 
 		t.Run("a file without a header is version 1 but undeclared", func(t *testing.T) {

@@ -2,7 +2,7 @@
 
 ## Progress
 - [x] Task 1: Parse the optional `emod <n>` version header
-- [ ] Task 2: Reject an unsupported version with a single diagnostic
+- [x] Task 2: Reject an unsupported version with a single diagnostic
 - [ ] Task 3: Insert `emod 1` when formatting
 - [ ] Task 4: Accept the version header in the tree-sitter grammar
 - [ ] Task 5: Document the version header in the DSL reference

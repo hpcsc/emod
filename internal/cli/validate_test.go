@@ -7,6 +7,7 @@ import (
 	"errors"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"github.com/hpcsc/emod/internal/cli"
@@ -289,6 +290,41 @@ context "Orders" {
 		// validation errors
 		require.Contains(t, err.Error(), "NonExistent")
 		require.Contains(t, err.Error(), "does not exist")
+	})
+
+	t.Run("rejects a file declaring an unsupported version", func(t *testing.T) {
+		const unsupportedVersionEmod = "emod 2\n" + validEmod
+
+		t.Run("text output is the version diagnostic and nothing else", func(t *testing.T) {
+			path := writeTemp(t, "unsupported.emod", unsupportedVersionEmod)
+
+			err := cli.RunValidate(path, "text")
+
+			var lintErr *cli.LintError
+			require.True(t, errors.As(err, &lintErr))
+			require.NotZero(t, lintErr.ExitCode)
+			require.Len(t, strings.Split(err.Error(), "\n"), 1)
+			require.Contains(t, err.Error(), path)
+			require.Contains(t, err.Error(), ":1:")
+		})
+
+		t.Run("json output is a single entry at error severity", func(t *testing.T) {
+			path := writeTemp(t, "unsupported.emod", unsupportedVersionEmod)
+
+			output := captureStdout(t, func() {
+				err := cli.RunValidate(path, "json")
+				var lintErr *cli.LintError
+				require.True(t, errors.As(err, &lintErr))
+				require.Equal(t, 2, lintErr.ExitCode)
+			})
+
+			var entries []map[string]interface{}
+			require.NoError(t, json.Unmarshal([]byte(output), &entries))
+			require.Len(t, entries, 1)
+			require.Equal(t, path, entries[0]["file"])
+			require.Equal(t, float64(1), entries[0]["line"])
+			require.Equal(t, "error", entries[0]["severity"])
+		})
 	})
 
 	t.Run("json format on clean file outputs empty array", func(t *testing.T) {
