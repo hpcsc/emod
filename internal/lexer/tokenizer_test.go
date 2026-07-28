@@ -47,7 +47,7 @@ func TestLexer(t *testing.T) {
 	})
 
 	t.Run("identifiers", func(t *testing.T) {
-		tests := []string{"MakeReservation", "string", "required", "date", "foo_bar", "Foo123", "sourced", "externally"}
+		tests := []string{"MakeReservation", "string", "required", "date", "foo_bar", "Foo123", "sourced", "externally", "zebra", "Zone"}
 		for _, id := range tests {
 			t.Run(id, func(t *testing.T) {
 				tokens, diags := lexer.Scan(id, "test.emod")
@@ -77,19 +77,54 @@ func TestLexer(t *testing.T) {
 				require.Equal(t, test.expected, tokens[0].Value)
 			})
 		}
+
+		t.Run("a string spanning two lines keeps its newline and moves the line counter on", func(t *testing.T) {
+			input := `model "Hotel
+Reservation"
+actor "Guest"`
+
+			tokens, diags := lexer.Scan(input, "test.emod")
+
+			require.Empty(t, diags)
+			require.Equal(t, lexer.String, tokens[1].Type)
+			require.Equal(t, "Hotel\nReservation", tokens[1].Value)
+			require.Equal(t, 1, tokens[1].Line)
+			require.Equal(t, lexer.KeywordActor, tokens[2].Type)
+			require.Equal(t, 3, tokens[2].Line)
+		})
 	})
 
 	t.Run("integers", func(t *testing.T) {
-		tokens, diags := lexer.Scan("emod 123", "test.emod")
+		t.Run("records the value and position of a trailing integer", func(t *testing.T) {
+			tokens, diags := lexer.Scan("emod 123", "test.emod")
 
-		require.Empty(t, diags)
-		require.Len(t, tokens, 3)
-		require.Equal(t, lexer.KeywordEmod, tokens[0].Type)
-		require.Equal(t, lexer.Integer, tokens[1].Type)
-		require.Equal(t, "123", tokens[1].Value)
-		require.Equal(t, 1, tokens[1].Line)
-		require.Equal(t, 6, tokens[1].Column)
-		require.Equal(t, lexer.EOF, tokens[2].Type)
+			require.Empty(t, diags)
+			require.Len(t, tokens, 3)
+			require.Equal(t, lexer.KeywordEmod, tokens[0].Type)
+			require.Equal(t, lexer.Integer, tokens[1].Type)
+			require.Equal(t, "123", tokens[1].Value)
+			require.Equal(t, 1, tokens[1].Line)
+			require.Equal(t, 6, tokens[1].Column)
+			require.Equal(t, lexer.EOF, tokens[2].Type)
+		})
+
+		t.Run("an integer ends at the first non-digit", func(t *testing.T) {
+			tokens, diags := lexer.Scan("emod 123\nmodel", "test.emod")
+
+			require.Empty(t, diags)
+			require.Len(t, tokens, 4)
+			require.Equal(t, lexer.Integer, tokens[1].Type)
+			require.Equal(t, "123", tokens[1].Value)
+			require.Equal(t, lexer.KeywordModel, tokens[2].Type)
+		})
+
+		t.Run("digits at both ends of the range are accepted", func(t *testing.T) {
+			tokens, diags := lexer.Scan("emod 90", "test.emod")
+
+			require.Empty(t, diags)
+			require.Equal(t, lexer.Integer, tokens[1].Type)
+			require.Equal(t, "90", tokens[1].Value)
+		})
 	})
 
 	t.Run("braces", func(t *testing.T) {
@@ -127,6 +162,22 @@ func TestLexer(t *testing.T) {
 		require.Empty(t, diags)
 		require.Equal(t, lexer.Colon, tokens[0].Type)
 		require.Equal(t, ":", tokens[0].Value)
+	})
+
+	t.Run("equals", func(t *testing.T) {
+		tokens, diags := lexer.Scan("=", "test.emod")
+		require.Empty(t, diags)
+		require.Equal(t, lexer.Equals, tokens[0].Type)
+		require.Equal(t, "=", tokens[0].Value)
+	})
+
+	t.Run("parentheses", func(t *testing.T) {
+		tokens, diags := lexer.Scan("( )", "test.emod")
+		require.Empty(t, diags)
+		require.Equal(t, lexer.OpenParen, tokens[0].Type)
+		require.Equal(t, "(", tokens[0].Value)
+		require.Equal(t, lexer.CloseParen, tokens[1].Type)
+		require.Equal(t, ")", tokens[1].Value)
 	})
 
 	t.Run("comments", func(t *testing.T) {
@@ -175,13 +226,23 @@ actor "Guest"`
 	})
 
 	t.Run("whitespace handling", func(t *testing.T) {
-		input := "model    \t  \t  \"Test\""
-		tokens, diags := lexer.Scan(input, "test.emod")
+		t.Run("runs of spaces and tabs between tokens are skipped", func(t *testing.T) {
+			tokens, diags := lexer.Scan("model    \t  \t  \"Test\"", "test.emod")
 
-		require.Empty(t, diags)
-		require.Len(t, tokens, 3)
-		require.Equal(t, lexer.KeywordModel, tokens[0].Type)
-		require.Equal(t, lexer.String, tokens[1].Type)
+			require.Empty(t, diags)
+			require.Len(t, tokens, 3)
+			require.Equal(t, lexer.KeywordModel, tokens[0].Type)
+			require.Equal(t, lexer.String, tokens[1].Type)
+		})
+
+		t.Run("input ending in whitespace scans cleanly to EOF", func(t *testing.T) {
+			tokens, diags := lexer.Scan("model \t\n", "test.emod")
+
+			require.Empty(t, diags)
+			require.Len(t, tokens, 2)
+			require.Equal(t, lexer.KeywordModel, tokens[0].Type)
+			require.Equal(t, lexer.EOF, tokens[1].Type)
+		})
 	})
 
 	t.Run("EOF token", func(t *testing.T) {
@@ -201,11 +262,21 @@ actor "Guest"`
 	})
 
 	t.Run("unrecognized character", func(t *testing.T) {
-		_, diags := lexer.Scan("model @", "test.emod")
+		t.Run("a character outside the alphabet is reported", func(t *testing.T) {
+			_, diags := lexer.Scan("model @", "test.emod")
 
-		require.Len(t, diags, 1)
-		require.Equal(t, "test.emod", diags[0].Filename)
-		require.Contains(t, diags[0].Message, "unrecognized character")
+			require.Len(t, diags, 1)
+			require.Equal(t, "test.emod", diags[0].Filename)
+			require.Contains(t, diags[0].Message, "unrecognized character")
+		})
+
+		t.Run("a dash that does not begin an arrow is reported, not fatal", func(t *testing.T) {
+			_, diags := lexer.Scan("-", "test.emod")
+
+			require.Len(t, diags, 1)
+			require.Equal(t, "test.emod", diags[0].Filename)
+			require.Contains(t, diags[0].Message, "unrecognized character")
+		})
 	})
 
 	t.Run("empty input", func(t *testing.T) {
