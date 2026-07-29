@@ -222,21 +222,12 @@ emod
 		})
 
 		t.Run("keywords are usable as field names", func(t *testing.T) {
-			for _, keyword := range []string{"emod", "description"} {
+			keywords := lexer.Keywords()
+			require.NotEmpty(t, keywords)
+
+			for _, keyword := range keywords {
 				t.Run(keyword, func(t *testing.T) {
-					input := fmt.Sprintf(`model "Test"
-context "Ctx" {
-  aggregate "Agg" {
-    slice "Slice" {
-      command DoThing {
-        fields {
-          %s string required
-        }
-      }
-    }
-  }
-}`, keyword)
-					tokens, _ := lexer.Scan(input, "test.emod")
+					tokens, _ := lexer.Scan(modelWithField(keyword, "string", "required"), "test.emod")
 
 					model, diags := parser.New(tokens, "test.emod").Parse()
 
@@ -246,6 +237,43 @@ context "Ctx" {
 					}, model.Contexts[0].Aggregates[0].Slices[0].Commands[0].Fields, ignoreASTPositions)
 				})
 			}
+		})
+
+		t.Run("keywords are usable as field name, type and modifier at once", func(t *testing.T) {
+			keywords := lexer.Keywords()
+			require.NotEmpty(t, keywords)
+
+			for _, keyword := range keywords {
+				t.Run(keyword, func(t *testing.T) {
+					tokens, _ := lexer.Scan(modelWithField(keyword, keyword, keyword), "test.emod")
+
+					model, diags := parser.New(tokens, "test.emod").Parse()
+
+					require.Empty(t, diags)
+					test.RequireEqual(t, []*ast.Field{
+						{Name: keyword, Type: keyword, Modifier: keyword},
+					}, model.Contexts[0].Aggregates[0].Slices[0].Commands[0].Fields, ignoreASTPositions)
+				})
+			}
+		})
+
+		t.Run("a keyword in construct name position is rejected", func(t *testing.T) {
+			input := `model "Test"
+context "Ctx" {
+  aggregate "Agg" {
+    slice "Slice" {
+      command source { }
+    }
+  }
+}`
+			tokens, _ := lexer.Scan(input, "test.emod")
+
+			model, diags := parser.New(tokens, "test.emod").Parse()
+
+			require.NotEmpty(t, diags)
+			require.Equal(t, 5, diags[0].Line)
+			require.Contains(t, diags[0].Message, "expected identifier after command")
+			require.Empty(t, model.Contexts[0].Aggregates[0].Slices[0].Commands)
 		})
 
 		t.Run("an integer outside the header is rejected", func(t *testing.T) {
@@ -4115,6 +4143,21 @@ context "Ctx" {
 			require.Equal(t, []string{"Alpha", "Beta", "Gamma"}, cmd.DecidesOn.Events)
 		})
 	})
+}
+
+func modelWithField(name, fieldType, modifier string) string {
+	return fmt.Sprintf(`model "Test"
+context "Ctx" {
+  aggregate "Agg" {
+    slice "Slice" {
+      command DoThing {
+        fields {
+          %s %s %s
+        }
+      }
+    }
+  }
+}`, name, fieldType, modifier)
 }
 
 func positionOf(t *testing.T, source, entry, token string) (line, column int) {

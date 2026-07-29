@@ -1352,14 +1352,12 @@ func (p *Instance) checkSameLineAs(tok *lexer.Token) bool {
 	return !p.isAtEnd() && p.peek().Line == tok.Line
 }
 
-// checkIdentifierLike returns true when the current token is an Identifier or
-// any keyword. Keywords are valid as field names inside fields blocks.
 func (p *Instance) checkIdentifierLike() bool {
 	if p.isAtEnd() {
 		return false
 	}
 	typ := p.tokens[p.pos].Type
-	return typ == lexer.Identifier || typ < lexer.Identifier
+	return typ == lexer.Identifier || typ.IsKeyword()
 }
 
 func (p *Instance) checkIdentifierLikeSameLineAs(tok *lexer.Token) bool {

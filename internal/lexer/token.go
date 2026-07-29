@@ -1,5 +1,10 @@
 package lexer
 
+import (
+	"maps"
+	"slices"
+)
+
 type Kind int
 
 const (
@@ -100,11 +105,20 @@ func invertKeywords() map[Kind]string {
 	return names
 }
 
+func Keywords() []string {
+	return slices.Sorted(maps.Keys(keywords))
+}
+
 type Token struct {
 	Type   Kind
 	Value  string
 	Line   int
 	Column int
+}
+
+func (k Kind) IsKeyword() bool {
+	_, ok := keywordNames[k]
+	return ok
 }
 
 func (k Kind) String() string {

@@ -3,10 +3,12 @@
 package oracle_test
 
 import (
+	"fmt"
 	"strings"
 	"testing"
 
 	"github.com/hpcsc/emod/internal/diagnostic"
+	"github.com/hpcsc/emod/internal/lexer"
 	"github.com/hpcsc/emod/internal/oracle"
 	"github.com/hpcsc/emod/internal/test"
 	"github.com/stretchr/testify/require"
@@ -30,6 +32,15 @@ func TestCheck(t *testing.T) {
 			diagnostics := oracle.Check(test.DescribedHotelReservation, "described.emod")
 
 			require.Empty(t, diagnostics)
+		})
+
+		t.Run("reports no errors for a model naming a field after every keyword", func(t *testing.T) {
+			keywords := lexer.Keywords()
+			require.NotEmpty(t, keywords)
+
+			diagnostics := oracle.Check(modelWithFieldPerKeyword(keywords), "keywords.emod")
+
+			require.Empty(t, errorsIn(diagnostics))
 		})
 	})
 
@@ -206,6 +217,44 @@ context "Orders" {
 			require.Equal(t, diagnostic.Error, found.Severity)
 		})
 	})
+}
+
+func modelWithFieldPerKeyword(keywords []string) string {
+	var fields strings.Builder
+	for _, keyword := range keywords {
+		fmt.Fprintf(&fields, "          %s string required\n", keyword)
+	}
+
+	return fmt.Sprintf(`model "Keyword Fields"
+
+context "Ctx" {
+  aggregate "Agg" {
+    slice "Slice" {
+      command DoThing {
+        fields {
+%s        }
+      }
+      event ThingDone {
+        fields {
+%s        }
+      }
+      flow {
+        command -> event: DoThing -> ThingDone
+      }
+    }
+  }
+}
+`, fields.String(), fields.String())
+}
+
+func errorsIn(diagnostics []*diagnostic.Entry) []*diagnostic.Entry {
+	var errors []*diagnostic.Entry
+	for _, d := range diagnostics {
+		if d.Severity == diagnostic.Error {
+			errors = append(errors, d)
+		}
+	}
+	return errors
 }
 
 func findMentioning(diagnostics []*diagnostic.Entry, text string) *diagnostic.Entry {

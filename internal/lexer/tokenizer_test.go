@@ -11,37 +11,18 @@ import (
 
 func TestLexer(t *testing.T) {
 	t.Run("keyword tokens", func(t *testing.T) {
-		keywords := map[string]lexer.Kind{
-			"model":           lexer.KeywordModel,
-			"actor":           lexer.KeywordActor,
-			"context":         lexer.KeywordContext,
-			"aggregate":       lexer.KeywordAggregate,
-			"slice":           lexer.KeywordSlice,
-			"command":         lexer.KeywordCommand,
-			"event":           lexer.KeywordEvent,
-			"fields":          lexer.KeywordFields,
-			"flow":            lexer.KeywordFlow,
-			"trigger":         lexer.KeywordTrigger,
-			"view":            lexer.KeywordView,
-			"automation":      lexer.KeywordAutomation,
-			"translation":     lexer.KeywordTranslation,
-			"subscribes":      lexer.KeywordSubscribes,
-			"target":          lexer.KeywordTarget,
-			"external_system": lexer.KeywordExternalSystem,
-			"reads":           lexer.KeywordReads,
-			"source":          lexer.KeywordSource,
-			"external":        lexer.KeywordExternal,
-			"emod":            lexer.KeywordEmod,
-			"description":     lexer.KeywordDescription,
-		}
+		keywords := lexer.Keywords()
+		require.NotEmpty(t, keywords)
 
-		for keyword, expectedType := range keywords {
+		for _, keyword := range keywords {
 			t.Run(keyword, func(t *testing.T) {
 				tokens, diags := lexer.Scan(keyword, "test.emod")
+
 				require.Empty(t, diags)
-				require.Greater(t, len(tokens), 1)
-				require.Equal(t, expectedType, tokens[0].Type)
+				require.Len(t, tokens, 2)
+				require.NotEqual(t, lexer.Identifier, tokens[0].Type)
 				require.Equal(t, keyword, tokens[0].Value)
+				require.Equal(t, keyword, tokens[0].Type.String())
 			})
 		}
 	})
