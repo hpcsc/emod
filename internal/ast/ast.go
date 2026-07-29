@@ -58,9 +58,18 @@ type Aggregate struct {
 	NamePos        Position
 	Description    string
 	DescriptionPos Position
+	Invariants     []*Invariant
 	Slices         []*Slice
 	OpenPos        Position
 	ClosePos       Position
+}
+
+type Invariant struct {
+	Comments     []*Comment
+	Name         string
+	NamePos      Position
+	Statement    string
+	StatementPos Position
 }
 
 type Slice struct {

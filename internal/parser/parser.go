@@ -302,12 +302,16 @@ func (p *Instance) parseAggregate() *ast.Aggregate {
 	for !p.check(lexer.CloseBrace) && !p.isAtEnd() {
 		if p.check(lexer.KeywordDescription) {
 			p.parseDescriptionInto("aggregate", &aggregate.Description, &aggregate.DescriptionPos)
+		} else if p.check(lexer.KeywordInvariant) {
+			if invariant := p.parseInvariant(); invariant != nil {
+				aggregate.Invariants = append(aggregate.Invariants, invariant)
+			}
 		} else if p.check(lexer.KeywordSlice) {
 			if slice := p.parseSlice(); slice != nil {
 				aggregate.Slices = append(aggregate.Slices, slice)
 			}
 		} else {
-			p.error("expected description or slice in aggregate")
+			p.error("expected description, invariant or slice in aggregate")
 			p.advance()
 		}
 	}
@@ -320,6 +324,33 @@ func (p *Instance) parseAggregate() *ast.Aggregate {
 	aggregate.ClosePos = p.position(closeTok)
 
 	return aggregate
+}
+
+func (p *Instance) parseInvariant() *ast.Invariant {
+	comments := p.takePendingComments()
+	keywordTok := p.advance()
+
+	if !p.checkIdentifierLikeSameLineAs(keywordTok) {
+		p.errorAt(keywordTok, "expected identifier after invariant")
+		p.skipRestOfLineOrBlockEnd(keywordTok)
+		return nil
+	}
+	nameTok := p.advance()
+
+	if !p.checkSameLineAs(keywordTok) || !p.check(lexer.String) {
+		p.errorAt(keywordTok, "expected quoted statement after invariant name")
+		p.skipRestOfLineOrBlockEnd(keywordTok)
+		return nil
+	}
+	statementTok := p.advance()
+
+	return &ast.Invariant{
+		Comments:     comments,
+		Name:         nameTok.Value,
+		NamePos:      p.position(nameTok),
+		Statement:    statementTok.Value,
+		StatementPos: p.position(statementTok),
+	}
 }
 
 func (p *Instance) parseSlice() *ast.Slice {
@@ -1128,7 +1159,7 @@ func (p *Instance) parseField() *ast.Field {
 
 	if !p.checkIdentifierLikeSameLineAs(nameTok) {
 		p.errorAt(nameTok, "expected field type")
-		p.skipRestOfLine(nameTok)
+		p.skipRestOfLineOrBlockEnd(nameTok)
 		return field
 	}
 	typeTok := p.advance()
@@ -1291,7 +1322,7 @@ func (p *Instance) parseDescriptionInto(construct string, description *string, p
 	if !p.check(lexer.String) {
 		offending := p.peek()
 		p.errorAt(offending, fmt.Sprintf("expected quoted string after description in %s, got %q", construct, offending.Value))
-		p.skipRestOfLine(keywordTok)
+		p.skipRestOfLineOrBlockEnd(keywordTok)
 		return
 	}
 
@@ -1372,7 +1403,7 @@ func (p *Instance) consume(typ lexer.Kind, msg string) {
 	p.advance()
 }
 
-func (p *Instance) skipRestOfLine(tok *lexer.Token) {
+func (p *Instance) skipRestOfLineOrBlockEnd(tok *lexer.Token) {
 	for p.checkSameLineAs(tok) && !p.check(lexer.CloseBrace) {
 		p.advance()
 	}

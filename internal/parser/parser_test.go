@@ -759,6 +759,161 @@ context "Ctx" {
 			require.Len(t, model.Contexts[0].Aggregates[0].Slices, 1)
 			require.Equal(t, "Slice", model.Contexts[0].Aggregates[0].Slices[0].Name)
 		})
+
+		t.Run("invariants are recorded in declaration order wherever they sit in the aggregate block", func(t *testing.T) {
+			input := `model "Test"
+context "Reservations" {
+  aggregate "Reservation" {
+    description "A booking of a room for a stay"
+    invariant NoDoubleBooking "A room is held by at most one reservation per night"
+    slice "Make Reservation" {
+    }
+    invariant WithinCapacity "A reservation never seats more guests than the room holds"
+  }
+}`
+			tokens, lexDiags := lexer.Scan(input, "test.emod")
+			require.Empty(t, lexDiags)
+
+			model, diags := parser.New(tokens, "test.emod").Parse()
+
+			require.Empty(t, diags)
+			aggregate := model.Contexts[0].Aggregates[0]
+			require.Equal(t, "A booking of a room for a stay", aggregate.Description)
+			require.Len(t, aggregate.Slices, 1)
+			require.Equal(t, "Make Reservation", aggregate.Slices[0].Name)
+			test.RequireEqual(t, []*ast.Invariant{
+				{
+					Name:         "NoDoubleBooking",
+					NamePos:      astPositionOf(t, "test.emod", input, "invariant NoDoubleBooking", "NoDoubleBooking"),
+					Statement:    "A room is held by at most one reservation per night",
+					StatementPos: astPositionOf(t, "test.emod", input, "invariant NoDoubleBooking", `"A room is held`),
+				},
+				{
+					Name:         "WithinCapacity",
+					NamePos:      astPositionOf(t, "test.emod", input, "invariant WithinCapacity", "WithinCapacity"),
+					Statement:    "A reservation never seats more guests than the room holds",
+					StatementPos: astPositionOf(t, "test.emod", input, "invariant WithinCapacity", `"A reservation never`),
+				},
+			}, aggregate.Invariants)
+		})
+
+		t.Run("a malformed invariant is reported at its keyword and the entry below it still parses", func(t *testing.T) {
+			tests := []struct {
+				malformed    string
+				entry        string
+				wantMessages []string
+			}{
+				{
+					malformed:    "an identifier with no statement",
+					entry:        `    invariant NoDoubleBooking`,
+					wantMessages: []string{"expected quoted statement after invariant name"},
+				},
+				{
+					malformed:    "neither an identifier nor a statement",
+					entry:        `    invariant`,
+					wantMessages: []string{"expected identifier after invariant"},
+				},
+				{
+					malformed:    "a statement written without quotes",
+					entry:        `    invariant NoDoubleBooking A room is held by at most one reservation per night`,
+					wantMessages: []string{"expected quoted statement after invariant name"},
+				},
+				{
+					malformed:    "a quoted name where an identifier belongs",
+					entry:        `    invariant "NoDoubleBooking" "A room is held by at most one reservation per night"`,
+					wantMessages: []string{"expected identifier after invariant"},
+				},
+				{
+					malformed: "a statement written on the line below the name",
+					entry: `    invariant NoDoubleBooking
+    "A room is held by at most one reservation per night"`,
+					wantMessages: []string{
+						"expected quoted statement after invariant name",
+						"expected description, invariant or slice in aggregate",
+					},
+				},
+			}
+
+			for _, tc := range tests {
+				t.Run(tc.malformed, func(t *testing.T) {
+					input := fmt.Sprintf(`model "Test"
+context "Reservations" {
+  aggregate "Reservation" {
+%s
+    invariant WithinCapacity "A reservation never seats more guests than the room holds"
+    slice "Make Reservation" {
+    }
+  }
+}`, tc.entry)
+					tokens, lexDiags := lexer.Scan(input, "test.emod")
+					require.Empty(t, lexDiags)
+
+					model, diags := parser.New(tokens, "test.emod").Parse()
+
+					var messages []string
+					for _, diag := range diags {
+						messages = append(messages, diag.Message)
+					}
+					require.Equal(t, tc.wantMessages, messages)
+					line, column := positionOf(t, input, "invariant", "invariant")
+					require.Equal(t, line, diags[0].Line)
+					require.Equal(t, column, diags[0].Column)
+					require.Equal(t, "test.emod", diags[0].Filename)
+
+					aggregate := model.Contexts[0].Aggregates[0]
+					test.RequireEqual(t, []*ast.Invariant{{
+						Name:      "WithinCapacity",
+						Statement: "A reservation never seats more guests than the room holds",
+					}}, aggregate.Invariants, ignoreASTPositions)
+					require.Len(t, aggregate.Slices, 1)
+					require.Equal(t, "Make Reservation", aggregate.Slices[0].Name)
+				})
+			}
+		})
+
+		t.Run("an invariant with no statement ahead of the closing brace leaves the aggregate closed", func(t *testing.T) {
+			input := `model "Test"
+context "Reservations" {
+  aggregate "Reservation" {
+    slice "Make Reservation" {
+    }
+    invariant NoDoubleBooking }
+}`
+			tokens, lexDiags := lexer.Scan(input, "test.emod")
+			require.Empty(t, lexDiags)
+
+			model, diags := parser.New(tokens, "test.emod").Parse()
+
+			require.Len(t, diags, 1)
+			require.Equal(t, "expected quoted statement after invariant name", diags[0].Message)
+			aggregate := model.Contexts[0].Aggregates[0]
+			require.Empty(t, aggregate.Invariants)
+			require.Len(t, aggregate.Slices, 1)
+			require.Equal(t, "Make Reservation", aggregate.Slices[0].Name)
+			require.Equal(t, astPositionOf(t, "test.emod", input, "invariant NoDoubleBooking", "}"), aggregate.ClosePos)
+			require.NotZero(t, model.Contexts[0].ClosePos.Line)
+		})
+
+		t.Run("keywords are usable as invariant names", func(t *testing.T) {
+			const statement = "A room is held by at most one reservation per night"
+			keywords := lexer.Keywords()
+			require.NotEmpty(t, keywords)
+
+			for _, keyword := range keywords {
+				t.Run(keyword, func(t *testing.T) {
+					tokens, lexDiags := lexer.Scan(modelWithInvariant(keyword, statement), "test.emod")
+					require.Empty(t, lexDiags)
+
+					model, diags := parser.New(tokens, "test.emod").Parse()
+
+					require.Empty(t, diags)
+					test.RequireEqual(t, []*ast.Invariant{{
+						Name:      keyword,
+						Statement: statement,
+					}}, model.Contexts[0].Aggregates[0].Invariants, ignoreASTPositions)
+				})
+			}
+		})
 	})
 
 	t.Run("commands, events and flows", func(t *testing.T) {
@@ -3115,8 +3270,9 @@ context "Reservations" {
 
 		t.Run("an unrecognised entry offers description among the block's valid entries", func(t *testing.T) {
 			tests := []struct {
-				construct string
-				input     string
+				construct  string
+				alsoOffers []string
+				input      string
 			}{
 				{
 					construct: "context",
@@ -3126,7 +3282,8 @@ context "Reservations" {
 }`,
 				},
 				{
-					construct: "aggregate",
+					construct:  "aggregate",
+					alsoOffers: []string{"invariant"},
 					input: `model "Test"
 context "Reservations" {
   aggregate "Reservation" {
@@ -3235,6 +3392,9 @@ context "Reservations" {
 					require.NotEmpty(t, diags)
 					require.Contains(t, diags[0].Message, "description")
 					require.Contains(t, diags[0].Message, tc.construct)
+					for _, entry := range tc.alsoOffers {
+						require.Contains(t, diags[0].Message, entry)
+					}
 				})
 			}
 		})
@@ -3463,6 +3623,31 @@ context "Ctx" {
 			require.Empty(t, errs)
 			require.Equal(t, "Agg", model.Contexts[0].Aggregates[0].Name)
 			test.RequireEqual(t, []*ast.Comment{{Text: "# Aggregate comment"}}, model.Contexts[0].Aggregates[0].Comments, ignoreASTPositions)
+		})
+
+		t.Run("comments before an invariant are attached to the Invariant node", func(t *testing.T) {
+			input := `model "Test"
+context "Ctx" {
+  aggregate "Agg" {
+    invariant NoDoubleBooking "A room is held by at most one reservation per night"
+    # Capacity comment
+    invariant WithinCapacity "A reservation never seats more guests than the room holds"
+    slice "Slice" {
+    }
+  }
+}`
+			tokens, _ := lexer.Scan(input, "test.emod")
+
+			p := parser.New(tokens, "test.emod")
+			model, errs := p.Parse()
+
+			require.Empty(t, errs)
+			aggregate := model.Contexts[0].Aggregates[0]
+			require.Empty(t, aggregate.Comments)
+			require.Len(t, aggregate.Invariants, 2)
+			require.Empty(t, aggregate.Invariants[0].Comments)
+			test.RequireEqual(t, []*ast.Comment{{Text: "# Capacity comment"}}, aggregate.Invariants[1].Comments, ignoreASTPositions)
+			require.Empty(t, aggregate.Slices[0].Comments)
 		})
 
 		t.Run("attached comment carries correct position", func(t *testing.T) {
@@ -4160,6 +4345,15 @@ context "Ctx" {
 }`, name, fieldType, modifier)
 }
 
+func modelWithInvariant(name, statement string) string {
+	return fmt.Sprintf(`model "Test"
+context "Reservations" {
+  aggregate "Reservation" {
+    invariant %s "%s"
+  }
+}`, name, statement)
+}
+
 func positionOf(t *testing.T, source, entry, token string) (line, column int) {
 	t.Helper()
 	for index, text := range strings.Split(source, "\n") {
@@ -4169,6 +4363,12 @@ func positionOf(t *testing.T, source, entry, token string) (line, column int) {
 	}
 	require.FailNowf(t, "entry not found in source", "%q", entry)
 	return 0, 0
+}
+
+func astPositionOf(t *testing.T, filename, source, entry, token string) ast.Position {
+	t.Helper()
+	line, column := positionOf(t, source, entry, token)
+	return ast.Position{Filename: filename, Line: line, Column: column}
 }
 
 type describableConstruct struct {
