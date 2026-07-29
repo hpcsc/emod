@@ -120,6 +120,31 @@ func TestExport(t *testing.T) {
 		})
 	})
 
+	t.Run("a file naming its fields after keywords exports those names with no diagnostics", func(t *testing.T) {
+		path := writeTemp(t, "keyword-fields.emod", keywordFieldEmod)
+
+		output := captureStdout(t, func() {
+			err := cli.RunExport(path, "json")
+			require.NoError(t, err)
+		})
+
+		var doc map[string]interface{}
+		require.NoError(t, json.Unmarshal([]byte(output), &doc))
+		require.Empty(t, doc["diagnostics"])
+
+		modelVal := doc["model"].(map[string]interface{})
+		context := modelVal["contexts"].([]interface{})[0].(map[string]interface{})
+		aggregate := context["aggregates"].([]interface{})[0].(map[string]interface{})
+		slice := aggregate["slices"].([]interface{})[0].(map[string]interface{})
+		command := slice["commands"].([]interface{})[0].(map[string]interface{})
+
+		var names []string
+		for _, field := range command["fields"].([]interface{}) {
+			names = append(names, field.(map[string]interface{})["name"].(string))
+		}
+		require.Equal(t, []string{"model", "source", "where", "and", "not", "fields", "description"}, names)
+	})
+
 	t.Run("file with validation errors outputs JSON with diagnostics on stdout and empty stderr", func(t *testing.T) {
 		path := writeTemp(t, "invalid.emod", invalidEmod)
 
@@ -404,5 +429,22 @@ context "Orders" {
 
 		require.Contains(t, output, "Hotel Reservation")
 		require.Empty(t, stderrText, "CUE format on clean file should not write to stderr")
+	})
+
+	t.Run("CUE format on a file naming its fields after keywords prints those names and no stderr", func(t *testing.T) {
+		path := writeTemp(t, "keyword-fields.emod", keywordFieldEmod)
+
+		var stderrText string
+		output := captureStdout(t, func() {
+			stderrText = captureStderr(t, func() {
+				err := cli.RunExport(path, "cue")
+				require.NoError(t, err)
+			})
+		})
+
+		for _, name := range []string{"model", "source", "where", "and", "not", "fields", "events", "tag", "emod", "description"} {
+			require.Contains(t, output, `name: "`+name+`"`)
+		}
+		require.Empty(t, stderrText, "a model whose fields are named after keywords is legal, so nothing is reported")
 	})
 }

@@ -7,6 +7,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"github.com/hpcsc/emod/internal/ast"
@@ -1258,6 +1259,16 @@ func TestExport(t *testing.T) {
 			event := firstSliceOf(t, doc)["events"].([]any)[0].(map[string]any)
 			require.Equal(t, awkwardDescription, doc["description"])
 			require.Equal(t, awkwardDescription, event["description"])
+		})
+
+		t.Run("keeps a field named after a keyword under the name it was declared with", func(t *testing.T) {
+			raw, err := export.ExportJSON(keywordFieldModel(t))
+			require.NoError(t, err)
+
+			var doc map[string]any
+			require.NoError(t, json.Unmarshal(raw, &doc))
+
+			require.Equal(t, keywordFieldsByOwner, fieldsByOwner(doc))
 		})
 	})
 
@@ -2806,6 +2817,23 @@ func TestExport(t *testing.T) {
 			require.Empty(t, descriptionsAnywhere(doc),
 				"the diagram document is nodes and edges; descriptions belong to the model export")
 		})
+
+		t.Run("fields named after keywords reach the node field lists and nothing else", func(t *testing.T) {
+			keywordNamed := diagramDocOf(t, keywordFieldModel(t))
+			ordinaryNamed := diagramDocOf(t, test.WithOrdinaryFieldNames(keywordFieldModel(t)))
+
+			require.Equal(t, keywordFieldsByOwner, diagramFieldsByLabel(keywordNamed))
+
+			translation := findNodeByType(keywordNamed["nodes"].([]any), "translation")
+			nestedEvent := translation["event"].(map[string]any)
+			require.Equal(t, keywordFieldsByOwner["VendorSearchImported"],
+				fieldSpecs(nestedEvent["fields"].([]any)))
+
+			require.NotEqual(t, diagramFieldsByLabel(keywordNamed), diagramFieldsByLabel(ordinaryNamed),
+				"the twin has to be named differently, or the comparison below says nothing")
+			require.Equal(t, withoutFieldLists(ordinaryNamed), withoutFieldLists(keywordNamed),
+				"a field name belongs to the field list it was declared in; no id, label, edge or metadata is drawn from it")
+		})
 	})
 
 	t.Run("diagram json with diagnostics", func(t *testing.T) {
@@ -3294,44 +3322,24 @@ func TestExport(t *testing.T) {
 		})
 
 		t.Run("output conforms to the schema's Model definition", func(t *testing.T) {
-			cueBin := lookupCue(t)
+			requireConformsToSchema(t, lookupCue(t), buildFullModel())
+		})
 
-			cueOutput, err := export.ExportCUE(buildFullModel())
-			require.NoError(t, err)
-
-			dir := t.TempDir()
-			schemaPath := filepath.Join(dir, "schema.cue")
-			schemaData, err := os.ReadFile("../cue/schema.cue")
-			require.NoError(t, err, "failed to read schema.cue — test must run from internal/export directory")
-			require.NoError(t, os.WriteFile(schemaPath, schemaData, 0644))
-
-			// The export has to be handed to cue as data for -d to unify it with
-			// #Model; vetting two CUE files only checks that both parse.
-			modelPath := filepath.Join(dir, "model.json")
-			require.NoError(t, os.WriteFile(modelPath, cueExportJSON(t, cueBin, cueOutput), 0644))
-
-			output, err := exec.Command(cueBin, "vet", "-d", "#Model", schemaPath, modelPath).CombinedOutput()
-			require.NoError(t, err, "cue vet failed: %s\nCUE export:\n%s", output, cueOutput)
+		t.Run("a model whose fields are named after keywords conforms to the schema's Model definition", func(t *testing.T) {
+			requireConformsToSchema(t, lookupCue(t), keywordFieldModel(t))
 		})
 
 		t.Run("CUE and JSON exports describe the same model", func(t *testing.T) {
+			requireBothFormatsAgree(t, lookupCue(t), buildFullModel())
+		})
+
+		t.Run("CUE and JSON exports agree on fields named after keywords", func(t *testing.T) {
 			cueBin := lookupCue(t)
 
-			model := buildFullModel()
+			requireBothFormatsAgree(t, cueBin, keywordFieldModel(t))
 
-			jsonRaw, err := export.ExportJSON(model)
-			require.NoError(t, err)
-
-			var fromJSON map[string]any
-			require.NoError(t, json.Unmarshal(jsonRaw, &fromJSON))
-
-			cueRaw, err := export.ExportCUE(model)
-			require.NoError(t, err)
-
-			var fromCUE map[string]any
-			require.NoError(t, json.Unmarshal(cueExportJSON(t, cueBin, cueRaw), &fromCUE))
-
-			require.Equal(t, fromJSON, fromCUE)
+			doc := exportedCUEDoc(t, cueBin, keywordFieldModel(t))
+			require.Equal(t, keywordFieldsByOwner, fieldsByOwner(doc))
 		})
 	})
 }
@@ -3515,13 +3523,213 @@ func awkwardlyDescribedModel() *ast.Model {
 func hotelReservationModel(t *testing.T) *ast.Model {
 	t.Helper()
 
-	tokens, scanErrs := lexer.Scan(test.HotelReservation, "hotel.emod")
+	return parsedFixture(t, test.HotelReservation, "hotel.emod")
+}
+
+func keywordFieldModel(t *testing.T) *ast.Model {
+	t.Helper()
+
+	return parsedFixture(t, test.KeywordFieldSearchCatalog, "keyword-fields.emod")
+}
+
+func parsedFixture(t *testing.T, source, filename string) *ast.Model {
+	t.Helper()
+
+	tokens, scanErrs := lexer.Scan(source, filename)
 	require.Empty(t, scanErrs)
 
-	model, parseErrs := parser.New(tokens, "hotel.emod").Parse()
+	model, parseErrs := parser.New(tokens, filename).Parse()
 	require.Empty(t, parseErrs)
 
 	return model
+}
+
+// keywordFieldsByOwner transcribes what test.KeywordFieldSearchCatalog declares,
+// so an export is read back against the source an author wrote rather than
+// against another export of it.
+var keywordFieldsByOwner = map[string][]map[string]any{
+	"DefineSavedSearch": {
+		{"name": "model", "type": "string", "modifier": "required"},
+		{"name": "source", "type": "string", "modifier": "required"},
+		{"name": "where", "type": "string", "modifier": "required"},
+		{"name": "and", "type": "string"},
+		{"name": "not", "type": "string"},
+		{"name": "fields", "type": "string", "modifier": "required"},
+		{"name": "description", "type": "string", "modifier": "optional"},
+	},
+	"SavedSearchDefined": {
+		{"name": "searchId", "type": "string", "modifier": "required"},
+		{"name": "model", "type": "string", "modifier": "required"},
+		{"name": "source", "type": "string", "modifier": "required"},
+		{"name": "where", "type": "string", "modifier": "required"},
+		{"name": "events", "type": "string", "modifier": "required"},
+		{"name": "tag", "type": "string", "modifier": "required"},
+		{"name": "emod", "type": "string"},
+		{"name": "description", "type": "string", "modifier": "required"},
+		{"name": "definedAt", "type": "date", "modifier": "required"},
+	},
+	"SavedSearchesView": {
+		{"name": "searchId", "type": "string", "modifier": "required"},
+		{"name": "description", "type": "string", "modifier": "required"},
+		{"name": "tag", "type": "string", "modifier": "required"},
+		{"name": "model", "type": "string"},
+		{"name": "where", "type": "string", "modifier": "required"},
+		{"name": "matches", "type": "int", "modifier": "required"},
+	},
+	"ShareSavedSearch": {
+		{"name": "searchId", "type": "string", "modifier": "required"},
+		{"name": "tag", "type": "string", "modifier": "required"},
+	},
+	"ImportVendorSearch": {
+		{"name": "source", "type": "string", "modifier": "required"},
+	},
+	"VendorSearchImported": {
+		{"name": "vendorSearchId", "type": "string", "modifier": "required"},
+		{"name": "source", "type": "string", "modifier": "required"},
+		{"name": "emod", "type": "string", "modifier": "required"},
+		{"name": "where", "type": "string", "modifier": "required"},
+		{"name": "tag", "type": "string"},
+		{"name": "model", "type": "string", "modifier": "required"},
+	},
+}
+
+// fieldSpecs drops the positions off exported fields, leaving the name, type
+// and modifier an author wrote.
+func fieldSpecs(fields []any) []map[string]any {
+	out := make([]map[string]any, 0, len(fields))
+	for _, raw := range fields {
+		field := raw.(map[string]any)
+		spec := map[string]any{"name": field["name"], "type": field["type"]}
+		if modifier, ok := field["modifier"]; ok {
+			spec["modifier"] = modifier
+		}
+		out = append(out, spec)
+	}
+	return out
+}
+
+func fieldsByOwner(doc map[string]any) map[string][]map[string]any {
+	return fieldListsKeyedBy(doc, "name")
+}
+
+func diagramFieldsByLabel(doc map[string]any) map[string][]map[string]any {
+	return fieldListsKeyedBy(doc, "label")
+}
+
+// fieldListsKeyedBy collects every field list a decoded document holds, filed
+// under the given key of the object declaring it. Searching the whole document
+// rather than the paths fields are expected on lets a list that surfaces
+// somewhere new show up as an unexpected entry.
+func fieldListsKeyedBy(doc map[string]any, key string) map[string][]map[string]any {
+	byOwner := make(map[string][]map[string]any)
+	eachObject(doc, func(object map[string]any) {
+		fields, declaresFields := object["fields"].([]any)
+		owner, named := object[key].(string)
+		if declaresFields && named {
+			byOwner[owner] = fieldSpecs(fields)
+		}
+	})
+	return byOwner
+}
+
+func eachObject(node any, visit func(map[string]any)) {
+	switch n := node.(type) {
+	case map[string]any:
+		visit(n)
+		for _, child := range n {
+			eachObject(child, visit)
+		}
+	case []any:
+		for _, child := range n {
+			eachObject(child, visit)
+		}
+	}
+}
+
+func withoutFieldLists(node any) any {
+	return withoutKeys(node, func(key string) bool { return key == "fields" })
+}
+
+func withoutPositions(node any) any {
+	return withoutKeys(node, func(key string) bool {
+		return key == "position" || strings.HasSuffix(key, "_position")
+	})
+}
+
+func withoutKeys(node any, drop func(key string) bool) any {
+	switch n := node.(type) {
+	case map[string]any:
+		out := make(map[string]any, len(n))
+		for key, child := range n {
+			if drop(key) {
+				continue
+			}
+			out[key] = withoutKeys(child, drop)
+		}
+		return out
+	case []any:
+		out := make([]any, len(n))
+		for i, child := range n {
+			out[i] = withoutKeys(child, drop)
+		}
+		return out
+	}
+	return node
+}
+
+func diagramDocOf(t *testing.T, model *ast.Model) map[string]any {
+	t.Helper()
+
+	raw, err := export.ExportDiagramJSON(model)
+	require.NoError(t, err)
+
+	var doc map[string]any
+	require.NoError(t, json.Unmarshal(raw, &doc))
+
+	return doc
+}
+
+func requireConformsToSchema(t *testing.T, cueBin string, model *ast.Model) {
+	t.Helper()
+
+	cueOutput, err := export.ExportCUE(model)
+	require.NoError(t, err)
+
+	dir := t.TempDir()
+	schemaPath := filepath.Join(dir, "schema.cue")
+	schemaData, err := os.ReadFile("../cue/schema.cue")
+	require.NoError(t, err, "failed to read schema.cue — test must run from internal/export directory")
+	require.NoError(t, os.WriteFile(schemaPath, schemaData, 0644))
+
+	// The export has to be handed to cue as data for -d to unify it with
+	// #Model; vetting two CUE files only checks that both parse.
+	modelPath := filepath.Join(dir, "model.json")
+	require.NoError(t, os.WriteFile(modelPath, cueExportJSON(t, cueBin, cueOutput), 0644))
+
+	output, err := exec.Command(cueBin, "vet", "-d", "#Model", schemaPath, modelPath).CombinedOutput()
+	require.NoError(t, err, "cue vet failed: %s\nCUE export:\n%s", output, cueOutput)
+}
+
+// requireBothFormatsAgree decodes a model's two exports and requires that they
+// describe the same model. Source positions are left out of the comparison
+// because schema.cue has no place for them, so only the JSON export carries
+// them; everything else has to match key for key.
+func requireBothFormatsAgree(t *testing.T, cueBin string, model *ast.Model) {
+	t.Helper()
+
+	jsonRaw, err := export.ExportJSON(model)
+	require.NoError(t, err)
+
+	var fromJSON map[string]any
+	require.NoError(t, json.Unmarshal(jsonRaw, &fromJSON))
+
+	cueRaw, err := export.ExportCUE(model)
+	require.NoError(t, err)
+
+	var fromCUE map[string]any
+	require.NoError(t, json.Unmarshal(cueExportJSON(t, cueBin, cueRaw), &fromCUE))
+
+	require.Equal(t, withoutPositions(fromJSON), fromCUE)
 }
 
 func descriptionsByConstruct(t *testing.T, doc map[string]any) map[string]any {
@@ -3550,18 +3758,10 @@ func descriptionsByConstruct(t *testing.T, doc map[string]any) map[string]any {
 
 func descriptionsAnywhere(node any) []any {
 	var found []any
-	switch n := node.(type) {
-	case map[string]any:
-		if description, ok := n["description"]; ok {
+	eachObject(node, func(object map[string]any) {
+		if description, ok := object["description"]; ok {
 			found = append(found, description)
 		}
-		for _, child := range n {
-			found = append(found, descriptionsAnywhere(child)...)
-		}
-	case []any:
-		for _, child := range n {
-			found = append(found, descriptionsAnywhere(child)...)
-		}
-	}
+	})
 	return found
 }

@@ -14,6 +14,9 @@ import (
 
 	"github.com/hpcsc/emod/internal/ast"
 	"github.com/hpcsc/emod/internal/diagram"
+	"github.com/hpcsc/emod/internal/lexer"
+	"github.com/hpcsc/emod/internal/parser"
+	"github.com/hpcsc/emod/internal/test"
 	"github.com/stretchr/testify/require"
 )
 
@@ -191,6 +194,16 @@ func TestExporterContract(t *testing.T) {
 
 				e.requireWellFormed(t, output)
 				require.Contains(t, output, "Cmd")
+			})
+
+			t.Run("naming fields after keywords leaves the picture untouched", func(t *testing.T) {
+				keywordNamed := keywordFieldModel(t)
+				ordinaryNamed := test.WithOrdinaryFieldNames(keywordFieldModel(t))
+
+				require.NotEqual(t, keywordNamed, ordinaryNamed,
+					"the twin has to be named differently, or the comparison below says nothing")
+				require.Equal(t, e.run(t, ordinaryNamed, diagram.StyleAuto), e.run(t, keywordNamed, diagram.StyleAuto),
+					"a diagram shows elements and arrows, not field lists, so renaming every field cannot move it")
 			})
 		})
 	}
@@ -422,6 +435,20 @@ func unique(values []string) []string {
 }
 
 // --- model builders shared by every exporter's tests ---
+
+// keywordFieldModel parses the source fixture whose fields are named after DSL
+// keywords, so the model under test cannot drift from what an author may write.
+func keywordFieldModel(t *testing.T) *ast.Model {
+	t.Helper()
+
+	tokens, scanErrs := lexer.Scan(test.KeywordFieldSearchCatalog, "keyword-fields.emod")
+	require.Empty(t, scanErrs)
+
+	model, parseErrs := parser.New(tokens, "keyword-fields.emod").Parse()
+	require.Empty(t, parseErrs)
+
+	return model
+}
 
 func minimalModel(name, sliceName string) *ast.Model {
 	return &ast.Model{

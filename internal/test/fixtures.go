@@ -1,5 +1,11 @@
 package test
 
+import (
+	"fmt"
+
+	"github.com/hpcsc/emod/internal/ast"
+)
+
 // HotelReservation exercises all four slice patterns — command, view,
 // automation and translation — and is valid input for every stage of the
 // pipeline. Packages that need "a realistic model" share this one so a change
@@ -295,6 +301,53 @@ context "Discovery" {
   }
 }
 `
+
+// WithOrdinaryFieldNames renames every field of model in place so that no name
+// spells a DSL keyword, giving KeywordFieldSearchCatalog a twin that differs
+// from it in nothing but the naming of its fields. Renaming the parsed model
+// rather than its source keeps every recorded position identical, so a
+// comparison between the two answers only the naming question.
+func WithOrdinaryFieldNames(model *ast.Model) *ast.Model {
+	if model == nil {
+		return nil
+	}
+	for i, field := range declaredFields(model) {
+		field.Name = fmt.Sprintf("attribute%d", i+1)
+	}
+	return model
+}
+
+func declaredFields(model *ast.Model) []*ast.Field {
+	var fields []*ast.Field
+	for _, ctx := range model.Contexts {
+		for _, agg := range ctx.Aggregates {
+			fields = append(fields, fieldsOfSlices(agg.Slices)...)
+		}
+		fields = append(fields, fieldsOfSlices(ctx.Slices)...)
+	}
+	return fields
+}
+
+func fieldsOfSlices(slices []*ast.Slice) []*ast.Field {
+	var fields []*ast.Field
+	for _, s := range slices {
+		for _, cmd := range s.Commands {
+			fields = append(fields, cmd.Fields...)
+		}
+		for _, evt := range s.Events {
+			fields = append(fields, evt.Fields...)
+		}
+		for _, v := range s.Views {
+			fields = append(fields, v.Fields...)
+		}
+		for _, tr := range s.Translations {
+			if tr.Event != nil {
+				fields = append(fields, tr.Event.Fields...)
+			}
+		}
+	}
+	return fields
+}
 
 // Unparseable starts with a keyword the language does not define, so the lexer
 // and parser report on line 1.
