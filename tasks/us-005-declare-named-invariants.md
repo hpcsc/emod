@@ -5,7 +5,7 @@
 - [x] Task 2: Declare the same invariants directly on a context
 - [x] Task 3: Preserve invariants through `emod fmt`
 - [x] Task 4: Reject two invariants sharing a name in one scope
-- [ ] Task 5: List invariants under their aggregate or context in `emod glossary`
+- [x] Task 5: List invariants under their aggregate or context in `emod glossary`
 - [ ] Task 6: Carry invariants through the JSON and CUE exports and the embedded schema
 - [ ] Task 7: Accept invariant entries in the tree-sitter grammar
 - [ ] Task 8: Document invariants in the DSL reference

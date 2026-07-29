@@ -141,6 +141,75 @@ A person booking a room, not necessarily the one staying in it
 #### PaymentAuthorized
 `, output)
 		})
+
+		t.Run("lists every invariant beneath the aggregate or the context that declares it", func(t *testing.T) {
+			path := writeTemp(t, "invariants.emod", invariantEmod)
+
+			output := captureStdout(t, func() {
+				require.NoError(t, cli.RunGlossary(path, "markdown"))
+			})
+
+			require.Equal(t, `# Library Lending
+
+## Lending
+
+### Loan
+
+#### Invariants
+
+##### OneCopyPerLoan
+
+A loan covers exactly one copy of one title
+
+##### FiveCopiesPerMember
+
+A member holds at most five copies at one time
+
+### Commands
+
+#### BorrowCopy
+
+### Events
+
+#### CopyBorrowed
+
+### Views
+
+#### MemberLoansView
+
+### Actors
+
+#### Member
+
+## Reading Room
+
+### Invariants
+
+#### OneReaderPerDesk
+
+A desk seats at most one reader at any moment
+
+#### OneDeskPerReader
+
+A reader holds at most one desk for the length of a session
+
+#### DeskFreeAtClosing
+
+No desk stays claimed past the closing hour
+
+### Commands
+
+#### ClaimDesk
+
+#### ReleaseDesk
+
+### Events
+
+#### DeskClaimed
+
+#### DeskReleased
+`, output)
+		})
 	})
 
 	t.Run("json", func(t *testing.T) {
@@ -219,6 +288,65 @@ A person booking a room, not necessarily the one staying in it
 						map[string]any{"name": "Guest", "description": ""},
 					},
 				}},
+			}, doc)
+		})
+
+		t.Run("carries every invariant under the aggregate or the context that declares it", func(t *testing.T) {
+			path := writeTemp(t, "invariants.emod", invariantEmod)
+
+			output := captureStdout(t, func() {
+				require.NoError(t, cli.RunGlossary(path, "json"))
+			})
+
+			var doc map[string]any
+			require.NoError(t, json.Unmarshal([]byte(output), &doc))
+
+			require.Equal(t, map[string]any{
+				"name":        "Library Lending",
+				"description": "",
+				"contexts": []any{
+					map[string]any{
+						"name":        "Lending",
+						"description": "",
+						"aggregates": []any{map[string]any{
+							"name":        "Loan",
+							"description": "",
+							"invariants": []any{
+								map[string]any{"name": "OneCopyPerLoan", "description": "A loan covers exactly one copy of one title"},
+								map[string]any{"name": "FiveCopiesPerMember", "description": "A member holds at most five copies at one time"},
+							},
+						}},
+						"commands": []any{
+							map[string]any{"name": "BorrowCopy", "description": ""},
+						},
+						"events": []any{
+							map[string]any{"name": "CopyBorrowed", "description": ""},
+						},
+						"views": []any{
+							map[string]any{"name": "MemberLoansView", "description": ""},
+						},
+						"actors": []any{
+							map[string]any{"name": "Member", "description": ""},
+						},
+					},
+					map[string]any{
+						"name":        "Reading Room",
+						"description": "",
+						"invariants": []any{
+							map[string]any{"name": "OneReaderPerDesk", "description": "A desk seats at most one reader at any moment"},
+							map[string]any{"name": "OneDeskPerReader", "description": "A reader holds at most one desk for the length of a session"},
+							map[string]any{"name": "DeskFreeAtClosing", "description": "No desk stays claimed past the closing hour"},
+						},
+						"commands": []any{
+							map[string]any{"name": "ClaimDesk", "description": ""},
+							map[string]any{"name": "ReleaseDesk", "description": ""},
+						},
+						"events": []any{
+							map[string]any{"name": "DeskClaimed", "description": ""},
+							map[string]any{"name": "DeskReleased", "description": ""},
+						},
+					},
+				},
 			}, doc)
 		})
 	})

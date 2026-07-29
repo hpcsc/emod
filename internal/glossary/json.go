@@ -7,8 +7,9 @@ import (
 )
 
 // RenderJSON writes the same vocabulary as RenderMarkdown as one JSON document:
-// the model, the actors no trigger references, and each context with its
-// aggregates, commands, events, views and actors in declaration order.
+// the model, the actors no trigger references, and each context with its own
+// invariants, its aggregates each carrying the invariants it declares, and its
+// commands, events, views and actors in declaration order.
 func RenderJSON(model *ast.Model) ([]byte, error) {
 	if model == nil {
 		return []byte{}, nil

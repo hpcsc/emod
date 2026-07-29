@@ -12,11 +12,17 @@ type document struct {
 
 type contextSection struct {
 	term
-	Aggregates []term `json:"aggregates,omitempty"`
-	Commands   []term `json:"commands,omitempty"`
-	Events     []term `json:"events,omitempty"`
-	Views      []term `json:"views,omitempty"`
-	Actors     []term `json:"actors,omitempty"`
+	Invariants []term             `json:"invariants,omitempty"`
+	Aggregates []aggregateSection `json:"aggregates,omitempty"`
+	Commands   []term             `json:"commands,omitempty"`
+	Events     []term             `json:"events,omitempty"`
+	Views      []term             `json:"views,omitempty"`
+	Actors     []term             `json:"actors,omitempty"`
+}
+
+type aggregateSection struct {
+	term
+	Invariants []term `json:"invariants,omitempty"`
 }
 
 type term struct {
@@ -28,26 +34,28 @@ type term struct {
 }
 
 func newDocument(model *ast.Model) document {
-	descriptions := actorDescriptions(model.Actors)
-
-	doc := document{
-		term:   term{Name: model.Name, Description: model.Description},
-		Actors: unreferencedActorTerms(model),
+	return document{
+		term:     term{Name: model.Name, Description: model.Description},
+		Actors:   unreferencedActorTerms(model),
+		Contexts: contextSections(model.Contexts, actorDescriptions(model.Actors)),
 	}
+}
 
-	for _, ctx := range model.Contexts {
+func contextSections(contexts []*ast.Context, descriptions map[string]string) []contextSection {
+	var sections []contextSection
+	for _, ctx := range contexts {
 		slices := allSlicesIn(ctx)
-		doc.Contexts = append(doc.Contexts, contextSection{
+		sections = append(sections, contextSection{
 			term:       term{Name: ctx.Name, Description: ctx.Description},
-			Aggregates: aggregateTerms(ctx.Aggregates),
+			Invariants: invariantTerms(ctx.Invariants),
+			Aggregates: aggregateSections(ctx.Aggregates),
 			Commands:   commandTerms(slices),
 			Events:     eventTerms(slices),
 			Views:      viewTerms(slices),
 			Actors:     actorTerms(triggerActorNames(slices), descriptions),
 		})
 	}
-
-	return doc
+	return sections
 }
 
 func allSlicesIn(ctx *ast.Context) []*ast.Slice {
@@ -58,10 +66,21 @@ func allSlicesIn(ctx *ast.Context) []*ast.Slice {
 	return append(slices, ctx.Slices...)
 }
 
-func aggregateTerms(aggregates []*ast.Aggregate) []term {
-	terms := make([]term, 0, len(aggregates))
+func aggregateSections(aggregates []*ast.Aggregate) []aggregateSection {
+	var sections []aggregateSection
 	for _, agg := range aggregates {
-		terms = append(terms, term{Name: agg.Name, Description: agg.Description})
+		sections = append(sections, aggregateSection{
+			term:       term{Name: agg.Name, Description: agg.Description},
+			Invariants: invariantTerms(agg.Invariants),
+		})
+	}
+	return sections
+}
+
+func invariantTerms(invariants []*ast.Invariant) []term {
+	var terms []term
+	for _, invariant := range invariants {
+		terms = append(terms, term{Name: invariant.Name, Description: invariant.Statement})
 	}
 	return terms
 }

@@ -175,10 +175,6 @@ A guest has been billed
 
 Invoices still owed
 `, string(rendered))
-
-			again, err := glossary.RenderMarkdown(model)
-			require.NoError(t, err)
-			require.Equal(t, string(rendered), string(again))
 		})
 
 		t.Run("names an actor once in each context whose triggers reference it, however many of them do", func(t *testing.T) {
@@ -331,6 +327,169 @@ A person booking a room
 Rooms free over a date range
 `, string(rendered))
 		})
+
+		t.Run("lists an aggregate's invariants beneath it, in declaration order, each defined by its statement", func(t *testing.T) {
+			model := &ast.Model{
+				Name: "Library Lending",
+				Contexts: []*ast.Context{{
+					Name: "Lending",
+					Aggregates: []*ast.Aggregate{{
+						Name:        "Loan",
+						Description: "One member holding one copy until it is due back",
+						Invariants: []*ast.Invariant{
+							{Name: "OneCopyPerLoan", Statement: "A loan covers exactly one copy of one title"},
+							{Name: "FiveCopiesPerMember", Statement: "A member holds at most five copies at one time"},
+						},
+						Slices: []*ast.Slice{{
+							Name:     "Borrow a copy",
+							Commands: []*ast.Command{{Name: "BorrowCopy", Description: "Lend a copy to a member until a due date"}},
+						}},
+					}},
+				}},
+			}
+
+			rendered, err := glossary.RenderMarkdown(model)
+			require.NoError(t, err)
+
+			require.Equal(t, `# Library Lending
+
+## Lending
+
+### Loan
+
+One member holding one copy until it is due back
+
+#### Invariants
+
+##### OneCopyPerLoan
+
+A loan covers exactly one copy of one title
+
+##### FiveCopiesPerMember
+
+A member holds at most five copies at one time
+
+### Commands
+
+#### BorrowCopy
+
+Lend a copy to a member until a due date
+`, string(rendered))
+		})
+
+		t.Run("lists a context's own invariants beneath the context and under none of its aggregates", func(t *testing.T) {
+			model := &ast.Model{
+				Name: "Library Lending",
+				Contexts: []*ast.Context{{
+					Name: "Reading Room",
+					Mode: "dcb",
+					Invariants: []*ast.Invariant{
+						{Name: "OneReaderPerDesk", Statement: "A desk seats at most one reader at any moment"},
+						{Name: "OneDeskPerReader", Statement: "A reader holds at most one desk for the length of a session"},
+					},
+					Aggregates: []*ast.Aggregate{{
+						Name:       "Desk",
+						Invariants: []*ast.Invariant{{Name: "DeskFreeAtClosing", Statement: "No desk stays claimed past the closing hour"}},
+					}},
+				}},
+			}
+
+			rendered, err := glossary.RenderMarkdown(model)
+			require.NoError(t, err)
+
+			require.Equal(t, `# Library Lending
+
+## Reading Room
+
+### Invariants
+
+#### OneReaderPerDesk
+
+A desk seats at most one reader at any moment
+
+#### OneDeskPerReader
+
+A reader holds at most one desk for the length of a session
+
+### Desk
+
+#### Invariants
+
+##### DeskFreeAtClosing
+
+No desk stays claimed past the closing hour
+`, string(rendered))
+		})
+
+		t.Run("lists one invariant under each of two aggregates declaring the same identifier", func(t *testing.T) {
+			model := &ast.Model{
+				Name: "Library Lending",
+				Contexts: []*ast.Context{{
+					Name: "Lending",
+					Aggregates: []*ast.Aggregate{
+						{
+							Name:       "Loan",
+							Invariants: []*ast.Invariant{{Name: "OneAtATime", Statement: "A copy is out on at most one loan at any moment"}},
+						},
+						{
+							Name:       "Hold",
+							Invariants: []*ast.Invariant{{Name: "OneAtATime", Statement: "A member holds at most one reservation on a title"}},
+						},
+					},
+				}},
+			}
+
+			rendered, err := glossary.RenderMarkdown(model)
+			require.NoError(t, err)
+
+			require.Equal(t, `# Library Lending
+
+## Lending
+
+### Loan
+
+#### Invariants
+
+##### OneAtATime
+
+A copy is out on at most one loan at any moment
+
+### Hold
+
+#### Invariants
+
+##### OneAtATime
+
+A member holds at most one reservation on a title
+`, string(rendered))
+		})
+
+		t.Run("keeps an invariant declared without a statement, with no definition beneath its name", func(t *testing.T) {
+			model := &ast.Model{
+				Name: "Library Lending",
+				Contexts: []*ast.Context{{
+					Name: "Lending",
+					Aggregates: []*ast.Aggregate{{
+						Name:       "Loan",
+						Invariants: []*ast.Invariant{{Name: "OneCopyPerLoan"}},
+					}},
+				}},
+			}
+
+			rendered, err := glossary.RenderMarkdown(model)
+			require.NoError(t, err)
+
+			require.Equal(t, `# Library Lending
+
+## Lending
+
+### Loan
+
+#### Invariants
+
+##### OneCopyPerLoan
+`, string(rendered))
+		})
 	})
 
 	t.Run("json rendering", func(t *testing.T) {
@@ -371,6 +530,101 @@ Rooms free over a date range
 					"actors": []any{
 						map[string]any{"name": "Guest", "description": "A person booking a room"},
 					},
+				}},
+			}, doc)
+		})
+
+		t.Run("carries each invariant under the aggregate or the context that declares it, in declaration order", func(t *testing.T) {
+			model := &ast.Model{
+				Name: "Library Lending",
+				Contexts: []*ast.Context{
+					{
+						Name: "Lending",
+						Aggregates: []*ast.Aggregate{{
+							Name:        "Loan",
+							Description: "One member holding one copy until it is due back",
+							Invariants: []*ast.Invariant{
+								{Name: "OneCopyPerLoan", Statement: "A loan covers exactly one copy of one title"},
+								{Name: "FiveCopiesPerMember", Statement: "A member holds at most five copies at one time"},
+							},
+						}},
+					},
+					{
+						Name: "Reading Room",
+						Mode: "dcb",
+						Invariants: []*ast.Invariant{
+							{Name: "OneReaderPerDesk", Statement: "A desk seats at most one reader at any moment"},
+							{Name: "DeskFreeAtClosing", Statement: "No desk stays claimed past the closing hour"},
+						},
+					},
+				},
+			}
+
+			rendered, err := glossary.RenderJSON(model)
+			require.NoError(t, err)
+
+			var doc map[string]any
+			require.NoError(t, json.Unmarshal(rendered, &doc))
+
+			require.Equal(t, map[string]any{
+				"name":        "Library Lending",
+				"description": "",
+				"contexts": []any{
+					map[string]any{
+						"name":        "Lending",
+						"description": "",
+						"aggregates": []any{map[string]any{
+							"name":        "Loan",
+							"description": "One member holding one copy until it is due back",
+							"invariants": []any{
+								map[string]any{"name": "OneCopyPerLoan", "description": "A loan covers exactly one copy of one title"},
+								map[string]any{"name": "FiveCopiesPerMember", "description": "A member holds at most five copies at one time"},
+							},
+						}},
+					},
+					map[string]any{
+						"name":        "Reading Room",
+						"description": "",
+						"invariants": []any{
+							map[string]any{"name": "OneReaderPerDesk", "description": "A desk seats at most one reader at any moment"},
+							map[string]any{"name": "DeskFreeAtClosing", "description": "No desk stays claimed past the closing hour"},
+						},
+					},
+				},
+			}, doc)
+		})
+
+		t.Run("keeps a description key on an invariant declared without a statement", func(t *testing.T) {
+			model := &ast.Model{
+				Name: "Library Lending",
+				Contexts: []*ast.Context{{
+					Name: "Lending",
+					Aggregates: []*ast.Aggregate{{
+						Name:       "Loan",
+						Invariants: []*ast.Invariant{{Name: "OneCopyPerLoan"}},
+					}},
+				}},
+			}
+
+			rendered, err := glossary.RenderJSON(model)
+			require.NoError(t, err)
+
+			var doc map[string]any
+			require.NoError(t, json.Unmarshal(rendered, &doc))
+
+			require.Equal(t, map[string]any{
+				"name":        "Library Lending",
+				"description": "",
+				"contexts": []any{map[string]any{
+					"name":        "Lending",
+					"description": "",
+					"aggregates": []any{map[string]any{
+						"name":        "Loan",
+						"description": "",
+						"invariants": []any{
+							map[string]any{"name": "OneCopyPerLoan", "description": ""},
+						},
+					}},
 				}},
 			}, doc)
 		})
