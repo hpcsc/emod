@@ -3,12 +3,8 @@ package cli
 import (
 	"encoding/json"
 	"fmt"
-	"os"
-	"strings"
 
 	"github.com/hpcsc/emod/internal/ast"
-	"github.com/hpcsc/emod/internal/lexer"
-	"github.com/hpcsc/emod/internal/parser"
 )
 
 type sliceJSONEntry struct {
@@ -27,37 +23,9 @@ func RunSlices(path, format string) error {
 		}
 	}
 
-	if path == "" {
-		return &LintError{
-			Message:  "slices requires exactly one file argument",
-			ExitCode: 1,
-			Cause:    ErrMissingFileArgument,
-		}
-	}
-
-	source, err := os.ReadFile(path)
+	model, err := parseModelFile("slices", path)
 	if err != nil {
-		return &LintError{
-			Message:  fmt.Sprintf("reading %s: %s", path, err),
-			ExitCode: 1,
-		}
-	}
-
-	tokens, diagnostics := lexer.Scan(string(source), path)
-
-	p := parser.New(tokens, path)
-	model, parserDiags := p.Parse()
-	diagnostics = append(diagnostics, parserDiags...)
-
-	if len(diagnostics) > 0 {
-		var sb strings.Builder
-		for _, d := range diagnostics {
-			fmt.Fprintln(&sb, d.String())
-		}
-		return &LintError{
-			Message:  strings.TrimRight(sb.String(), "\n"),
-			ExitCode: 1,
-		}
+		return err
 	}
 
 	entries := collectSliceEntries(model)

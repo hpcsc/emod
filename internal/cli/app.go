@@ -9,6 +9,23 @@ import (
 	urfave "github.com/urfave/cli/v2"
 )
 
+func reportExitError(err error) error {
+	if err == nil {
+		return nil
+	}
+
+	var lintErr *LintError
+	if errors.As(err, &lintErr) {
+		if lintErr.Message != "" {
+			fmt.Fprintln(os.Stderr, lintErr.Message)
+		}
+		return urfave.Exit("", lintErr.ExitCode)
+	}
+
+	fmt.Fprintln(os.Stderr, err)
+	return urfave.Exit("", 1)
+}
+
 func NewApp() *urfave.App {
 	return &urfave.App{
 		Name:  "emod",
@@ -28,18 +45,7 @@ func NewApp() *urfave.App {
 				Action: func(c *urfave.Context) error {
 					path := c.Args().First()
 					format := c.String("format")
-					if err := RunValidate(path, format); err != nil {
-						var lintErr *LintError
-						if errors.As(err, &lintErr) {
-							if lintErr.Message != "" {
-								fmt.Fprintln(os.Stderr, lintErr.Message)
-							}
-							return urfave.Exit("", lintErr.ExitCode)
-						}
-						fmt.Fprintln(os.Stderr, err)
-						return urfave.Exit("", 1)
-					}
-					return nil
+					return reportExitError(RunValidate(path, format))
 				},
 			},
 			{
@@ -79,34 +85,12 @@ func NewApp() *urfave.App {
 				},
 				Action: func(c *urfave.Context) error {
 					if explain := c.String("explain"); explain != "" {
-						if err := RunLintExplain(explain); err != nil {
-							var lintErr *LintError
-							if errors.As(err, &lintErr) {
-								if lintErr.Message != "" {
-									fmt.Fprintln(os.Stderr, lintErr.Message)
-								}
-								return urfave.Exit("", lintErr.ExitCode)
-							}
-							fmt.Fprintln(os.Stderr, err)
-							return urfave.Exit("", 1)
-						}
-						return nil
+						return reportExitError(RunLintExplain(explain))
 					}
 
 					path := c.Args().First()
 					format := c.String("format")
-					if err := RunLint(path, format); err != nil {
-						var lintErr *LintError
-						if errors.As(err, &lintErr) {
-							if lintErr.Message != "" {
-								fmt.Fprintln(os.Stderr, lintErr.Message)
-							}
-							return urfave.Exit("", lintErr.ExitCode)
-						}
-						fmt.Fprintln(os.Stderr, err)
-						return urfave.Exit("", 1)
-					}
-					return nil
+					return reportExitError(RunLint(path, format))
 				},
 			},
 			{
@@ -123,18 +107,7 @@ func NewApp() *urfave.App {
 				Action: func(c *urfave.Context) error {
 					path := c.Args().First()
 					format := c.String("format")
-					if err := RunExport(path, format); err != nil {
-						var lintErr *LintError
-						if errors.As(err, &lintErr) {
-							if lintErr.Message != "" {
-								fmt.Fprintln(os.Stderr, lintErr.Message)
-							}
-							return urfave.Exit("", lintErr.ExitCode)
-						}
-						fmt.Fprintln(os.Stderr, err)
-						return urfave.Exit("", 1)
-					}
-					return nil
+					return reportExitError(RunExport(path, format))
 				},
 			},
 			{
@@ -172,18 +145,7 @@ func NewApp() *urfave.App {
 					if err != nil {
 						return urfave.Exit(err.Error(), 1)
 					}
-					if err := RunDiagram(path, outputPath, format, style); err != nil {
-						var lintErr *LintError
-						if errors.As(err, &lintErr) {
-							if lintErr.Message != "" {
-								fmt.Fprintln(os.Stderr, lintErr.Message)
-							}
-							return urfave.Exit("", lintErr.ExitCode)
-						}
-						fmt.Fprintln(os.Stderr, err)
-						return urfave.Exit("", 1)
-					}
-					return nil
+					return reportExitError(RunDiagram(path, outputPath, format, style))
 				},
 			},
 			{
@@ -200,18 +162,24 @@ func NewApp() *urfave.App {
 				Action: func(c *urfave.Context) error {
 					path := c.Args().First()
 					format := c.String("format")
-					if err := RunSlices(path, format); err != nil {
-						var lintErr *LintError
-						if errors.As(err, &lintErr) {
-							if lintErr.Message != "" {
-								fmt.Fprintln(os.Stderr, lintErr.Message)
-							}
-							return urfave.Exit("", lintErr.ExitCode)
-						}
-						fmt.Fprintln(os.Stderr, err)
-						return urfave.Exit("", 1)
-					}
-					return nil
+					return reportExitError(RunSlices(path, format))
+				},
+			},
+			{
+				Name:      "glossary",
+				Usage:     "Render a glossary of the terms a model defines",
+				ArgsUsage: "<file>",
+				Flags: []urfave.Flag{
+					&urfave.StringFlag{
+						Name:    "format",
+						Aliases: []string{"f"},
+						Usage:   "Output format (markdown)",
+						Value:   "markdown",
+					},
+				},
+				Action: func(c *urfave.Context) error {
+					path, format := glossaryPathAndFormat(c.Args().Slice(), c.String("format"))
+					return reportExitError(RunGlossary(path, format))
 				},
 			},
 			{
@@ -226,18 +194,7 @@ func NewApp() *urfave.App {
 				},
 				Action: func(c *urfave.Context) error {
 					format := c.String("format")
-					if err := RunSchema(format); err != nil {
-						var lintErr *LintError
-						if errors.As(err, &lintErr) {
-							if lintErr.Message != "" {
-								fmt.Fprintln(os.Stderr, lintErr.Message)
-							}
-							return urfave.Exit("", lintErr.ExitCode)
-						}
-						fmt.Fprintln(os.Stderr, err)
-						return urfave.Exit("", 1)
-					}
-					return nil
+					return reportExitError(RunSchema(format))
 				},
 			},
 			{
