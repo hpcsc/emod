@@ -6,7 +6,7 @@
 - [x] Task 3: Keep keyword-named fields intact through `emod validate` and `emod fmt`
 - [x] Task 4: Carry keyword-named fields through the JSON, CUE and diagram-JSON exports and the renderers
 - [x] Task 5: Cover every keyword as a field name in the tree-sitter corpus
-- [ ] Task 6: Document that any keyword may be used as a field name
+- [x] Task 6: Document that any keyword may be used as a field name
 
 ---
 

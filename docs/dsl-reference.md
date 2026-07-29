@@ -281,11 +281,48 @@ fields {
 }
 ```
 
-- **name**: PascalCase identifier.
+- **name**: Any identifier, including any word the DSL uses as a keyword. The examples in this document use lowerCamelCase.
 - **type**: Any identifier (`string`, `date`, `timestamp`, `int`, domain types like `RoomID`, etc.).
 - **modifier** (optional): `required` (default behavior) or `optional`.
 
 The formatter alignment pads the name and type columns.
+
+### Keywords as Field Names
+
+The DSL has no reserved words. A keyword carries its meaning only in the position that expects it. Every keyword is therefore usable as a field name, as a type and as a modifier. A model whose domain has a `source`, a `description` or a `tags` attribute names the field after it:
+
+```emod
+emod 1
+model "Hotel Reservation"
+
+context "Reservations" {
+  aggregate "Reservation" {
+    slice "Reserve a Room" {
+      command ReserveRoom {
+        fields {
+          roomId      string required
+          source      string required
+          description string required
+        }
+      }
+
+      event RoomReserved {
+        fields {
+          reservationId string required
+          tags          string required
+        }
+      }
+
+      flow {
+        command -> event: ReserveRoom -> RoomReserved
+      }
+    }
+  }
+}
+```
+
+- **A new keyword never invalidates an existing field name:** a new keyword is an additive grammar change (see [Version Header](#2-version-header)). A field named after a word that the DSL later takes as a keyword keeps its name and its meaning.
+- **The guarantee covers fields, not construct names:** the name of a command, event, view, automation or translation must be an identifier that is not a keyword. `command source { }` is rejected with `expected identifier after command`.
 
 ### External Source Events
 
@@ -417,7 +454,7 @@ context "Reservations" {
 ```
 
 - **A description is documentation, not structure:** it is optional on every construct, nothing in the model refers to it, and no validation or lint rule reads it.
-- **`description` is not a reserved word:** `fields { description string required }` still declares an ordinary field named `description`.
+- **`description` is not a reserved word:** `fields { description string required }` still declares an ordinary field named `description`. The same holds for every keyword (see [Fields](#8-fields)).
 - **Position inside the block is free:** the parser accepts `description` before or after the construct's other entries.
 - **`emod fmt` moves it to the first line of the block**, ahead of the pattern-specific attributes and `fields`. A `model` or `actor` that carries a description is formatted in its block form.
 - **Exports carry the text:** `emod export --format json` and `emod export --format cue` emit a `description` key on the model, on each actor and on each described construct; the key is absent where no description was written. The bundled schema printed by `emod schema` declares it as an optional key on every definition that accepts one.
