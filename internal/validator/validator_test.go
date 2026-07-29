@@ -883,6 +883,347 @@ func TestValidate(t *testing.T) {
 		})
 	})
 
+	t.Run("spec references", func(t *testing.T) {
+		t.Run("an event a given names but no construct declares is reported on that reference", func(t *testing.T) {
+			model := &ast.Model{
+				Contexts: []*ast.Context{
+					{
+						Name: "Lending",
+						Aggregates: []*ast.Aggregate{
+							{
+								Name: "Loan",
+								Slices: []*ast.Slice{
+									{
+										Name:     "Borrow Copy",
+										Commands: []*ast.Command{{Name: "BorrowCopy"}},
+										Events:   []*ast.Event{{Name: "CopyBorrowed"}},
+										Flows:    []*ast.Flow{{CommandName: "BorrowCopy", EventName: "CopyBorrowed"}},
+										Specs: []*ast.Spec{
+											{
+												Name: "borrows a copy the member returned",
+												Given: []*ast.SpecElement{
+													{Name: "CopyRetruned", NamePos: ast.Position{Filename: "lending.emod", Line: 12, Column: 16}},
+												},
+												When: &ast.SpecElement{Name: "BorrowCopy", NamePos: ast.Position{Filename: "lending.emod", Line: 13, Column: 14}},
+												Then: &ast.ThenEvents{Events: []*ast.SpecElement{
+													{Name: "CopyBorrowed", NamePos: ast.Position{Filename: "lending.emod", Line: 14, Column: 15}},
+												}},
+											},
+										},
+									},
+								},
+							},
+						},
+					},
+				},
+			}
+
+			diags := validator.Validate(model)
+
+			require.Equal(t, []*diagnostic.Entry{
+				{
+					Filename: "lending.emod",
+					Line:     12,
+					Column:   16,
+					Severity: diagnostic.Error,
+					Message:  `event "CopyRetruned" does not exist`,
+				},
+			}, diags)
+		})
+
+		t.Run("an event a then names but no construct declares is reported on that reference", func(t *testing.T) {
+			model := &ast.Model{
+				Contexts: []*ast.Context{
+					{
+						Name: "Lending",
+						Aggregates: []*ast.Aggregate{
+							{
+								Name: "Loan",
+								Slices: []*ast.Slice{
+									{
+										Name:     "Borrow Copy",
+										Commands: []*ast.Command{{Name: "BorrowCopy"}},
+										Events:   []*ast.Event{{Name: "CopyBorrowed"}},
+										Flows:    []*ast.Flow{{CommandName: "BorrowCopy", EventName: "CopyBorrowed"}},
+										Specs: []*ast.Spec{
+											{
+												Name: "borrows a copy no one holds",
+												When: &ast.SpecElement{Name: "BorrowCopy", NamePos: ast.Position{Filename: "lending.emod", Line: 12, Column: 14}},
+												Then: &ast.ThenEvents{Events: []*ast.SpecElement{
+													{Name: "CopyBorrwed", NamePos: ast.Position{Filename: "lending.emod", Line: 13, Column: 15}},
+												}},
+											},
+										},
+									},
+								},
+							},
+						},
+					},
+				},
+			}
+
+			diags := validator.Validate(model)
+
+			require.Len(t, diags, 1)
+			require.Equal(t, `lending.emod:13: event "CopyBorrwed" does not exist`, diags[0].String())
+		})
+
+		t.Run("a command a when names but no construct declares is reported as a missing command", func(t *testing.T) {
+			model := &ast.Model{
+				Contexts: []*ast.Context{
+					{
+						Name: "Lending",
+						Aggregates: []*ast.Aggregate{
+							{
+								Name: "Loan",
+								Slices: []*ast.Slice{
+									{
+										Name:     "Borrow Copy",
+										Commands: []*ast.Command{{Name: "BorrowCopy"}},
+										Events:   []*ast.Event{{Name: "CopyBorrowed"}},
+										Flows:    []*ast.Flow{{CommandName: "BorrowCopy", EventName: "CopyBorrowed"}},
+										Specs: []*ast.Spec{
+											{
+												Name: "borrows a copy no one holds",
+												When: &ast.SpecElement{Name: "BorowCopy", NamePos: ast.Position{Filename: "lending.emod", Line: 12, Column: 14}},
+												Then: &ast.ThenEvents{Events: []*ast.SpecElement{
+													{Name: "CopyBorrowed", NamePos: ast.Position{Filename: "lending.emod", Line: 13, Column: 15}},
+												}},
+											},
+										},
+									},
+								},
+							},
+						},
+					},
+				},
+			}
+
+			diags := validator.Validate(model)
+
+			require.Len(t, diags, 1)
+			require.Equal(t, `lending.emod:12: command "BorowCopy" does not exist`, diags[0].String())
+		})
+
+		t.Run("a when naming an event the model declares is reported on nothing", func(t *testing.T) {
+			model := &ast.Model{
+				Contexts: []*ast.Context{
+					{
+						Name: "Reservations",
+						Aggregates: []*ast.Aggregate{
+							{
+								Name: "Reservation",
+								Slices: []*ast.Slice{
+									{
+										Name:     "Reserve a Room",
+										Commands: []*ast.Command{{Name: "ReserveRoom"}},
+										Events:   []*ast.Event{{Name: "RoomReserved"}},
+										Flows:    []*ast.Flow{{CommandName: "ReserveRoom", EventName: "RoomReserved"}},
+									},
+									{
+										Name:     "Send Confirmation Email",
+										Commands: []*ast.Command{{Name: "SendConfirmationEmail"}},
+										Automations: []*ast.Automation{
+											{Name: "ConfirmationMailer", TriggerEvent: "RoomReserved", Command: "SendConfirmationEmail"},
+										},
+										Specs: []*ast.Spec{
+											{
+												Name: "emails the guest once the room is reserved",
+												When: &ast.SpecElement{Name: "RoomReserved", NamePos: ast.Position{Filename: "hotel.emod", Line: 18, Column: 12}},
+											},
+										},
+									},
+								},
+							},
+						},
+					},
+				},
+			}
+
+			diags := validator.Validate(model)
+
+			require.Empty(t, diags)
+		})
+
+		t.Run("references resolve against declarations anywhere in the model", func(t *testing.T) {
+			model := &ast.Model{
+				Contexts: []*ast.Context{
+					{
+						Name: "Lending",
+						Aggregates: []*ast.Aggregate{
+							{
+								Name: "Loan",
+								Slices: []*ast.Slice{
+									{
+										Name: "Borrow Copy",
+										Specs: []*ast.Spec{
+											{
+												Name: "borrows an imported copy the member returned",
+												Given: []*ast.SpecElement{
+													{Name: "CopyImported"},
+													{Name: "CopyReturned"},
+												},
+												When: &ast.SpecElement{Name: "BorrowCopy"},
+												Then: &ast.ThenEvents{Events: []*ast.SpecElement{{Name: "CopyBorrowed"}}},
+											},
+										},
+									},
+								},
+							},
+						},
+					},
+					{
+						Name: "Circulation",
+						Slices: []*ast.Slice{
+							{
+								Name: "Circulate Copies",
+								Commands: []*ast.Command{
+									{Name: "BorrowCopy"},
+									{Name: "ReturnCopy"},
+								},
+								Events: []*ast.Event{
+									{Name: "CopyBorrowed"},
+									{Name: "CopyReturned"},
+								},
+								Flows: []*ast.Flow{
+									{CommandName: "BorrowCopy", EventName: "CopyBorrowed"},
+									{CommandName: "ReturnCopy", EventName: "CopyReturned"},
+								},
+							},
+						},
+					},
+					{
+						Name: "Catalog",
+						Slices: []*ast.Slice{
+							{
+								Name: "Import Catalog",
+								Translations: []*ast.Translation{
+									{Name: "ImportCopy", Event: &ast.Event{Name: "CopyImported"}},
+								},
+							},
+						},
+					},
+				},
+			}
+
+			diags := validator.Validate(model)
+
+			require.Empty(t, diags)
+		})
+
+		t.Run("a spec part naming nothing to resolve is reported on nothing", func(t *testing.T) {
+			model := &ast.Model{
+				Contexts: []*ast.Context{
+					{
+						Name:       "Reading Room",
+						Mode:       "dcb",
+						Invariants: []*ast.Invariant{{Name: "OneReaderPerDesk"}},
+						Slices: []*ast.Slice{
+							{
+								Name:     "Claim Desk",
+								Commands: []*ast.Command{{Name: "ClaimDesk"}},
+								Events:   []*ast.Event{{Name: "DeskClaimed"}},
+								Flows:    []*ast.Flow{{CommandName: "ClaimDesk", EventName: "DeskClaimed"}},
+								Specs: []*ast.Spec{
+									{
+										Name:  "seats a reader at a free desk",
+										Given: []*ast.SpecElement{},
+									},
+									{
+										Name:  "refuses a desk another reader is seated at",
+										Given: []*ast.SpecElement{{Name: "DeskClaimed"}},
+										When:  &ast.SpecElement{Name: "ClaimDesk"},
+										Then:  &ast.ThenRejected{InvariantName: "OneReaderPerDesk"},
+									},
+								},
+							},
+						},
+					},
+				},
+			}
+
+			diags := validator.Validate(model)
+
+			require.Empty(t, diags)
+		})
+
+		t.Run("undefined references are reported once each in declaration order on every run", func(t *testing.T) {
+			model := &ast.Model{
+				Contexts: []*ast.Context{
+					{
+						Name: "Lending",
+						Aggregates: []*ast.Aggregate{
+							{
+								Name: "Loan",
+								Slices: []*ast.Slice{
+									{
+										Name:     "Borrow Copy",
+										Commands: []*ast.Command{{Name: "BorrowCopy"}},
+										Events:   []*ast.Event{{Name: "CopyBorrowed"}},
+										Flows:    []*ast.Flow{{CommandName: "BorrowCopy", EventName: "CopyBorrowed"}},
+										Specs: []*ast.Spec{
+											{
+												Name: "borrows a copy the member returned",
+												Given: []*ast.SpecElement{
+													{Name: "CopyRetruned", NamePos: ast.Position{Filename: "lending.emod", Line: 10, Column: 16}},
+												},
+												When: &ast.SpecElement{Name: "BorowCopy", NamePos: ast.Position{Filename: "lending.emod", Line: 11, Column: 14}},
+												Then: &ast.ThenEvents{Events: []*ast.SpecElement{
+													{Name: "CopyBorrwed", NamePos: ast.Position{Filename: "lending.emod", Line: 12, Column: 15}},
+												}},
+											},
+										},
+									},
+									{
+										Name:     "Return Copy",
+										Commands: []*ast.Command{{Name: "ReturnCopy"}},
+										Events:   []*ast.Event{{Name: "CopyReturned"}},
+										Flows:    []*ast.Flow{{CommandName: "ReturnCopy", EventName: "CopyReturned"}},
+										Specs: []*ast.Spec{
+											// This spec states its outcome before the command that
+											// produces it, the order internal/test's lending model
+											// uses, so the report cannot follow the order the AST
+											// happens to hold the parts in.
+											{
+												Name: "returns a copy the member holds",
+												Given: []*ast.SpecElement{
+													{Name: "CopyBorrowed", NamePos: ast.Position{Filename: "lending.emod", Line: 24, Column: 16}},
+												},
+												Then: &ast.ThenEvents{Events: []*ast.SpecElement{
+													{Name: "CopyRetrned", NamePos: ast.Position{Filename: "lending.emod", Line: 25, Column: 15}},
+												}},
+												When: &ast.SpecElement{Name: "ReturnCpy", NamePos: ast.Position{Filename: "lending.emod", Line: 26, Column: 14}},
+											},
+										},
+									},
+								},
+							},
+						},
+					},
+				},
+			}
+
+			runs := make([][]string, 0, 3)
+			for range 3 {
+				reported := make([]string, 0, 5)
+				for _, d := range validator.Validate(model) {
+					reported = append(reported, d.String())
+				}
+				runs = append(runs, reported)
+			}
+
+			require.Equal(t, []string{
+				`lending.emod:10: event "CopyRetruned" does not exist`,
+				`lending.emod:11: command "BorowCopy" does not exist`,
+				`lending.emod:12: event "CopyBorrwed" does not exist`,
+				`lending.emod:25: event "CopyRetrned" does not exist`,
+				`lending.emod:26: command "ReturnCpy" does not exist`,
+			}, runs[0])
+			require.Equal(t, runs[0], runs[1])
+			require.Equal(t, runs[0], runs[2])
+		})
+	})
+
 	t.Run("orphan commands and events", func(t *testing.T) {
 		t.Run("command defined with no flow reference produces orphan diagnostic", func(t *testing.T) {
 			model := &ast.Model{

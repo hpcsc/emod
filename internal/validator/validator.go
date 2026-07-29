@@ -123,6 +123,13 @@ func (i *modelIndex) collectEventShape(evt *ast.Event) {
 	}
 }
 
+// A spec's `when` names the command a command slice exercises, but the
+// triggering event of an automation slice, so a name declared as either kind
+// resolves; whether the kind suits the slice's pattern is a separate rule.
+func (i *modelIndex) declaresCommandOrEvent(name string) bool {
+	return i.commandNames[name] || i.eventNames[name]
+}
+
 func anyEventDeclares(events []string, byEvent map[string][]string, name string) bool {
 	for _, evt := range events {
 		if slices.Contains(byEvent[evt], name) {
@@ -263,8 +270,51 @@ func referenceDiagnostics(slice *ast.Slice, index *modelIndex) []*diagnostic.Ent
 			diags = append(diags, errorAt(f.EventPos, "event %q does not exist", f.EventName))
 		}
 	}
+	for _, spec := range slice.Specs {
+		diags = append(diags, specDiagnostics(spec, index)...)
+	}
 
 	return diags
+}
+
+type undeclaredSpecReference struct {
+	element *ast.SpecElement
+	kind    string
+}
+
+// The references are sorted because a spec's parts are written in any order and
+// the AST holds each of them in a field of its own, which loses which part the
+// author wrote first.
+func specDiagnostics(spec *ast.Spec, index *modelIndex) []*diagnostic.Entry {
+	undeclared := undeclaredSpecEvents(spec.Given, index)
+	if ref := spec.When; ref != nil && !index.declaresCommandOrEvent(ref.Name) {
+		undeclared = append(undeclared, undeclaredSpecReference{element: ref, kind: "command"})
+	}
+	if outcome, ok := spec.Then.(*ast.ThenEvents); ok {
+		undeclared = append(undeclared, undeclaredSpecEvents(outcome.Events, index)...)
+	}
+
+	slices.SortStableFunc(undeclared, func(a, b undeclaredSpecReference) int {
+		return comparePositions(a.element.NamePos, b.element.NamePos)
+	})
+
+	diags := make([]*diagnostic.Entry, 0, len(undeclared))
+	for _, ref := range undeclared {
+		diags = append(diags, errorAt(ref.element.NamePos, "%s %q does not exist", ref.kind, ref.element.Name))
+	}
+
+	return diags
+}
+
+func undeclaredSpecEvents(refs []*ast.SpecElement, index *modelIndex) []undeclaredSpecReference {
+	var undeclared []undeclaredSpecReference
+	for _, ref := range refs {
+		if !index.eventNames[ref.Name] {
+			undeclared = append(undeclared, undeclaredSpecReference{element: ref, kind: "event"})
+		}
+	}
+
+	return undeclared
 }
 
 func tagFieldRefDiagnostics(slice *ast.Slice, index *modelIndex) []*diagnostic.Entry {

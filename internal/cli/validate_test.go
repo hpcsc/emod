@@ -140,6 +140,46 @@ context "Lending" {
 		require.Contains(t, err.Error(), `invariant "OneCopyPerLoan" is already declared in aggregate "Loan"`)
 	})
 
+	t.Run("returns error naming the event a spec misspells", func(t *testing.T) {
+		input := `model "Library Lending"
+context "Lending" {
+  aggregate "Loan" {
+    slice "Borrow Copy" {
+      command BorrowCopy {
+        fields {
+          memberId string required
+          copyId   string required
+        }
+      }
+      event CopyBorrowed {
+        fields {
+          loanId   string required
+          memberId string required
+          copyId   string required
+        }
+      }
+      spec "borrows a copy the member returned" {
+        given [CopyBorroed]
+        when BorrowCopy
+        then [CopyBorrowed]
+      }
+      flow {
+        command -> event: BorrowCopy -> CopyBorrowed
+      }
+    }
+  }
+}
+`
+		path := writeTemp(t, "misspelled_spec_event.emod", input)
+
+		err := cli.RunValidate(path, "text")
+
+		var lintErr *cli.LintError
+		require.True(t, errors.As(err, &lintErr))
+		require.Equal(t, 1, lintErr.ExitCode)
+		require.Contains(t, err.Error(), `event "CopyBorroed" does not exist`)
+	})
+
 	t.Run("returns no error for valid multi-context model", func(t *testing.T) {
 		input := `model "Multi Context Test"
 
