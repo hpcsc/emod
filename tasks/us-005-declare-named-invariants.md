@@ -8,7 +8,7 @@
 - [x] Task 5: List invariants under their aggregate or context in `emod glossary`
 - [x] Task 6: Carry invariants through the JSON and CUE exports and the embedded schema
 - [x] Task 7: Accept invariant entries in the tree-sitter grammar
-- [ ] Task 8: Document invariants in the DSL reference
+- [x] Task 8: Document invariants in the DSL reference
 
 ---
 

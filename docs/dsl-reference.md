@@ -21,7 +21,7 @@ model "My System"
 
 ### Identifiers
 
-Unquoted PascalCase tokens used for names of commands, events, views, automations, translations, actors, and references.
+Unquoted PascalCase tokens used for names of commands, events, views, automations, translations, actors, invariants, and references.
 
 ```emod
 command PlaceOrder       # PlaceOrder is an identifier
@@ -143,6 +143,112 @@ aggregate "<name>" {
 ```
 
 Multiple aggregates per context, multiple slices per aggregate.
+
+### `invariant`
+
+Declares a business rule the enclosing scope keeps true. An invariant is an identifier and a quoted prose statement of the rule, written on one line.
+
+```
+invariant <Name> "<statement>"
+```
+
+In aggregate mode an invariant is declared on the `aggregate` whose consistency boundary keeps it:
+
+```
+aggregate "<name>" {
+  invariant <Name> "<statement>"
+  slice "<name>" { ... }
+}
+```
+
+A `mode dcb` context has no aggregate, so its invariants are declared directly on the context:
+
+```
+context "<name>" mode dcb {
+  invariant <Name> "<statement>"
+  slice "<name>" { ... }
+}
+```
+
+Any number per block, in any position among the block's other entries.
+
+```emod
+emod 1
+model "Library Lending"
+
+context "Lending" {
+  aggregate "Loan" {
+    invariant OneCopyPerLoan "A loan covers exactly one copy of one title"
+    invariant FiveCopiesPerMember "A member holds at most five copies at one time"
+    slice "Borrow a Copy" {
+      command BorrowCopy {
+        fields {
+          memberId string required
+          copyId   string required
+        }
+      }
+
+      event CopyBorrowed {
+        fields {
+          loanId   string required
+          memberId string required
+          copyId   string required
+        }
+      }
+
+      flow {
+        command -> event: BorrowCopy -> CopyBorrowed
+      }
+    }
+  }
+}
+
+context "Reading Room" mode dcb {
+  invariant OneReaderPerDesk "A desk seats at most one reader at any moment"
+  invariant OneDeskPerReader "A reader holds at most one desk for the length of a session"
+  slice "Claim Desk" {
+    command ClaimDesk {
+      decides_on {
+        events [DeskClaimed]
+        where tag(desk = deskId) and tag(reader = memberId)
+      }
+      fields {
+        memberId string required
+        deskId   string required
+      }
+    }
+
+    event DeskClaimed {
+      tags {
+        desk  : deskId
+        reader: memberId
+      }
+      fields {
+        sessionId string required
+        deskId    string required
+        memberId  string required
+      }
+    }
+
+    flow {
+      command -> event: ClaimDesk -> DeskClaimed
+    }
+  }
+}
+```
+
+- **A name is declared once per scope:** two invariants sharing a name in one scope is a validation error, reported on the second declaration:
+
+  ```
+  lending.emod:7: invariant "OneCopyPerLoan" is already declared in aggregate "Loan"
+  ```
+
+- **An aggregate and its context are separate scopes**, as are two sibling aggregates. The same identifier may be declared in each, and neither declaration hides the other.
+- **An invariant nothing references is not an error:** no construct refers to an invariant, and neither `emod validate` nor `emod lint` reports one for going unmentioned.
+- **`emod fmt` writes them at the top of the block**, after the `description` line and ahead of the block's aggregates and slices, one per line, with the statement written verbatim.
+- **The glossary lists them under the scope that declares them:** `emod glossary` puts an "Invariants" group under each aggregate and each context declaring one, in declaration order, with the statement standing as the definition. `emod glossary --format json` carries the same grouping, pairing each name with a `description` key holding the statement.
+- **Exports carry them:** `emod export --format json` and `emod export --format cue` emit an `invariants` list of `name` and `statement` on every aggregate and context that declares one; the key is absent where none was written. The bundled schema printed by `emod schema` declares it as an optional key on both definitions.
+- **No diagram renders them:** a diagram shows elements and the arrows between them, so the drawio, SVG, mermaid and ASCII renderings of a model are identical whether or not it declares invariants.
 
 ---
 
@@ -481,6 +587,7 @@ Validation detects:
 - Missing target contexts, commands, events, or views.
 - **Orphan commands**: defined but never referenced by any flow, automation, or translation.
 - **Orphan events**: defined but never produced by any flow, external source, or translation.
+- **Redeclared invariants**: one name declared twice in a single scope (see [Bounded Contexts](#4-bounded-contexts)).
 
 ---
 
