@@ -46,6 +46,7 @@ type Context struct {
 	DescriptionPos Position
 	Mode           string
 	ModePos        Position
+	Invariants     []*Invariant
 	Slices         []*Slice
 	Aggregates     []*Aggregate
 	OpenPos        Position

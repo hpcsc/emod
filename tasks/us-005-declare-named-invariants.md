@@ -2,7 +2,7 @@
 
 ## Progress
 - [x] Task 1: Declare named invariants on an aggregate
-- [ ] Task 2: Declare the same invariants directly on a context
+- [x] Task 2: Declare the same invariants directly on a context
 - [ ] Task 3: Preserve invariants through `emod fmt`
 - [ ] Task 4: Reject two invariants sharing a name in one scope
 - [ ] Task 5: List invariants under their aggregate or context in `emod glossary`

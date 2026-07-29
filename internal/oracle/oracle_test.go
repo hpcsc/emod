@@ -48,6 +48,57 @@ func TestCheck(t *testing.T) {
 
 			require.Empty(t, errorsIn(diagnostics))
 		})
+
+		t.Run("returns an empty diagnostic list for a model declaring invariants on an aggregate and on a context", func(t *testing.T) {
+			diagnostics := oracle.Check(test.InvariantLibraryLending, "invariants.emod")
+
+			require.Empty(t, diagnostics)
+		})
+
+		t.Run("reports nothing about an invariant a context declares outside dcb mode", func(t *testing.T) {
+			tests := []struct {
+				mode   string
+				clause string
+			}{
+				{mode: "mode aggregate", clause: " mode aggregate"},
+				{mode: "no mode clause", clause: ""},
+			}
+
+			for _, tc := range tests {
+				t.Run(tc.mode, func(t *testing.T) {
+					source := fmt.Sprintf(`model "Library Lending"
+
+context "Lending"%s {
+  invariant FiveCopiesPerMember "A member holds at most five copies at one time"
+  aggregate "Loan" {
+    slice "Borrow Copy" {
+      command BorrowCopy {
+        fields {
+          memberId string required
+          copyId   string required
+        }
+      }
+      event CopyBorrowed {
+        fields {
+          loanId   string required
+          memberId string required
+          copyId   string required
+        }
+      }
+      flow {
+        command -> event: BorrowCopy -> CopyBorrowed
+      }
+    }
+  }
+}
+`, tc.clause)
+
+					diagnostics := oracle.Check(source, "lending.emod")
+
+					require.Empty(t, diagnostics)
+				})
+			}
+		})
 	})
 
 	t.Run("unparseable input", func(t *testing.T) {

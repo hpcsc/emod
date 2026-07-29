@@ -302,6 +302,114 @@ context "Discovery" {
 }
 `
 
+// InvariantLibraryLending declares invariants in both homes the language gives
+// them — on an aggregate, and directly on a DCB-mode context, which has no
+// aggregate to hold them — so packages that carry invariants through the
+// pipeline share one model. Each block puts an invariant ahead of a later
+// entry on purpose: write them all last and nothing here would catch a
+// declaration running on into what follows it.
+const InvariantLibraryLending = `# Lending a library's copies, and seating its readers
+model "Library Lending"
+
+actor "Member"
+
+context "Lending" {
+  aggregate "Loan" {
+    invariant OneCopyPerLoan "A loan covers exactly one copy of one title"
+    slice "Borrow Copy" {
+      trigger UI "Lending Desk" {
+        actor Member
+        reads AvailableCopiesView
+      }
+      command BorrowCopy {
+        fields {
+          memberId string required
+          copyId   string required
+          dueOn    date   required
+        }
+      }
+      event CopyBorrowed {
+        fields {
+          loanId   string required
+          memberId string required
+          copyId   string required
+          dueOn    date   required
+        }
+      }
+      flow {
+        command -> event: BorrowCopy -> CopyBorrowed
+      }
+    }
+    invariant FiveCopiesPerMember "A member holds at most five copies at one time"
+    slice "Review Member Loans" {
+      view MemberLoansView {
+        fields {
+          loanId   string required
+          memberId string required
+          dueOn    date   required
+        }
+        subscribes [CopyBorrowed]
+      }
+    }
+  }
+}
+
+context "Reading Room" mode dcb {
+  invariant OneReaderPerDesk "A desk seats at most one reader at any moment"
+  invariant OneDeskPerReader "A reader holds at most one desk for the length of a session"
+  slice "Claim Desk" {
+    command ClaimDesk {
+      fields {
+        memberId string required
+        deskId   string required
+      }
+    }
+    event DeskClaimed {
+      tags {
+        desk  : deskId
+        reader: memberId
+      }
+      fields {
+        sessionId string    required
+        deskId    string    required
+        memberId  string    required
+        claimedAt timestamp required
+      }
+    }
+    flow {
+      command -> event: ClaimDesk -> DeskClaimed
+    }
+  }
+  invariant DeskFreeAtClosing "No desk stays claimed past the closing hour"
+  slice "Release Desk" {
+    command ReleaseDesk {
+      decides_on {
+        events [DeskClaimed]
+        where tag(desk = deskId) and tag(reader = memberId)
+      }
+      fields {
+        sessionId string required
+      }
+    }
+    event DeskReleased {
+      tags {
+        desk  : deskId
+        reader: memberId
+      }
+      fields {
+        sessionId  string    required
+        deskId     string    required
+        memberId   string    required
+        releasedAt timestamp required
+      }
+    }
+    flow {
+      command -> event: ReleaseDesk -> DeskReleased
+    }
+  }
+}
+`
+
 // WithOrdinaryFieldNames renames every field of model in place so that no name
 // spells a DSL keyword, giving KeywordFieldSearchCatalog a twin that differs
 // from it in nothing but the naming of its fields. Renaming the parsed model

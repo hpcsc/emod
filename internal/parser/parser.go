@@ -253,6 +253,10 @@ func (p *Instance) parseContext() *ast.Context {
 		switch {
 		case p.check(lexer.KeywordDescription):
 			p.parseDescriptionInto("context", &context.Description, &context.DescriptionPos)
+		case p.check(lexer.KeywordInvariant):
+			if invariant := p.parseInvariant(); invariant != nil {
+				context.Invariants = append(context.Invariants, invariant)
+			}
 		case p.check(lexer.KeywordAggregate):
 			if agg := p.parseAggregate(); agg != nil {
 				context.Aggregates = append(context.Aggregates, agg)
@@ -262,7 +266,7 @@ func (p *Instance) parseContext() *ast.Context {
 				context.Slices = append(context.Slices, slice)
 			}
 		default:
-			p.error(fmt.Sprintf("expected description, aggregate or slice in context, got %q", p.peek().Value))
+			p.error(fmt.Sprintf("expected description, invariant, aggregate or slice in context, got %q", p.peek().Value))
 			p.advance()
 		}
 	}

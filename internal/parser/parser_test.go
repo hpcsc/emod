@@ -782,18 +782,8 @@ context "Reservations" {
 			require.Len(t, aggregate.Slices, 1)
 			require.Equal(t, "Make Reservation", aggregate.Slices[0].Name)
 			test.RequireEqual(t, []*ast.Invariant{
-				{
-					Name:         "NoDoubleBooking",
-					NamePos:      astPositionOf(t, "test.emod", input, "invariant NoDoubleBooking", "NoDoubleBooking"),
-					Statement:    "A room is held by at most one reservation per night",
-					StatementPos: astPositionOf(t, "test.emod", input, "invariant NoDoubleBooking", `"A room is held`),
-				},
-				{
-					Name:         "WithinCapacity",
-					NamePos:      astPositionOf(t, "test.emod", input, "invariant WithinCapacity", "WithinCapacity"),
-					Statement:    "A reservation never seats more guests than the room holds",
-					StatementPos: astPositionOf(t, "test.emod", input, "invariant WithinCapacity", `"A reservation never`),
-				},
+				declaredInvariant(t, "test.emod", input, "NoDoubleBooking", "A room is held by at most one reservation per night"),
+				declaredInvariant(t, "test.emod", input, "WithinCapacity", "A reservation never seats more guests than the room holds"),
 			}, aggregate.Invariants)
 		})
 
@@ -913,6 +903,122 @@ context "Reservations" {
 					}}, model.Contexts[0].Aggregates[0].Invariants, ignoreASTPositions)
 				})
 			}
+		})
+
+		t.Run("a context records its own invariants in declaration order whatever its mode", func(t *testing.T) {
+			tests := []struct {
+				mode   string
+				clause string
+			}{
+				{mode: "mode dcb", clause: " mode dcb"},
+				{mode: "mode aggregate", clause: " mode aggregate"},
+				{mode: "no mode clause", clause: ""},
+			}
+
+			for _, tc := range tests {
+				t.Run(tc.mode, func(t *testing.T) {
+					input := fmt.Sprintf(`model "Test"
+context "Reading Room"%s {
+  invariant OneReaderPerDesk "A desk seats at most one reader at any moment"
+  invariant OneDeskPerReader "A reader holds at most one desk for the length of a session"
+  slice "Claim Desk" {
+  }
+}`, tc.clause)
+					tokens, lexDiags := lexer.Scan(input, "test.emod")
+					require.Empty(t, lexDiags)
+
+					model, diags := parser.New(tokens, "test.emod").Parse()
+
+					require.Empty(t, diags)
+					context := model.Contexts[0]
+					test.RequireEqual(t, []*ast.Invariant{
+						declaredInvariant(t, "test.emod", input, "OneReaderPerDesk", "A desk seats at most one reader at any moment"),
+						declaredInvariant(t, "test.emod", input, "OneDeskPerReader", "A reader holds at most one desk for the length of a session"),
+					}, context.Invariants)
+					require.Len(t, context.Slices, 1)
+					require.Equal(t, "Claim Desk", context.Slices[0].Name)
+				})
+			}
+		})
+
+		t.Run("an aggregate's invariants and its enclosing context's invariants stay in their own homes", func(t *testing.T) {
+			input := `model "Test"
+context "Lending" {
+  invariant BorrowingLimit "A member holds at most five copies at one time"
+  aggregate "Loan" {
+    invariant BorrowingLimit "A loan is refused once the member already holds five copies"
+    slice "Borrow Copy" {
+    }
+  }
+}`
+			tokens, lexDiags := lexer.Scan(input, "test.emod")
+			require.Empty(t, lexDiags)
+
+			model, diags := parser.New(tokens, "test.emod").Parse()
+
+			require.Empty(t, diags)
+			context := model.Contexts[0]
+			test.RequireEqual(t, []*ast.Invariant{{
+				Name:      "BorrowingLimit",
+				Statement: "A member holds at most five copies at one time",
+			}}, context.Invariants, ignoreASTPositions)
+			test.RequireEqual(t, []*ast.Invariant{{
+				Name:      "BorrowingLimit",
+				Statement: "A loan is refused once the member already holds five copies",
+			}}, context.Aggregates[0].Invariants, ignoreASTPositions)
+		})
+
+		t.Run("a context-level invariant with no statement is reported once and the entry below it still parses", func(t *testing.T) {
+			input := `model "Test"
+context "Reading Room" mode dcb {
+  invariant OneReaderPerDesk
+  invariant OneDeskPerReader "A reader holds at most one desk for the length of a session"
+  slice "Claim Desk" {
+  }
+}`
+			tokens, lexDiags := lexer.Scan(input, "test.emod")
+			require.Empty(t, lexDiags)
+
+			model, diags := parser.New(tokens, "test.emod").Parse()
+
+			require.Len(t, diags, 1)
+			require.Equal(t, "expected quoted statement after invariant name", diags[0].Message)
+			line, column := positionOf(t, input, "invariant OneReaderPerDesk", "invariant")
+			require.Equal(t, line, diags[0].Line)
+			require.Equal(t, column, diags[0].Column)
+
+			context := model.Contexts[0]
+			test.RequireEqual(t, []*ast.Invariant{{
+				Name:      "OneDeskPerReader",
+				Statement: "A reader holds at most one desk for the length of a session",
+			}}, context.Invariants, ignoreASTPositions)
+			require.Len(t, context.Slices, 1)
+			require.Equal(t, "Claim Desk", context.Slices[0].Name)
+		})
+
+		t.Run("the shared invariant model declares invariants in both homes, each ahead of a later entry", func(t *testing.T) {
+			tokens, lexDiags := lexer.Scan(test.InvariantLibraryLending, "invariants.emod")
+			require.Empty(t, lexDiags)
+
+			model, diags := parser.New(tokens, "invariants.emod").Parse()
+
+			require.Empty(t, diags)
+			var contextsDeclaring, aggregatesDeclaring int
+			for _, context := range model.Contexts {
+				if len(context.Invariants) > 0 {
+					contextsDeclaring++
+					requireAnInvariantAheadOfALaterSlice(t, "context "+context.Name, context.Invariants, context.Slices)
+				}
+				for _, aggregate := range context.Aggregates {
+					if len(aggregate.Invariants) > 0 {
+						aggregatesDeclaring++
+						requireAnInvariantAheadOfALaterSlice(t, "aggregate "+aggregate.Name, aggregate.Invariants, aggregate.Slices)
+					}
+				}
+			}
+
+			require.NotZero(t, aggregatesDeclaring, "no aggregate declares an invariant")
+			require.NotZero(t, contextsDeclaring, "no context declares an invariant of its own")
 		})
 	})
 
@@ -3275,7 +3381,8 @@ context "Reservations" {
 				input      string
 			}{
 				{
-					construct: "context",
+					construct:  "context",
+					alsoOffers: []string{"invariant"},
 					input: `model "Test"
 context "Reservations" {
   descripton
@@ -4352,6 +4459,32 @@ context "Reservations" {
     invariant %s "%s"
   }
 }`, name, statement)
+}
+
+func declaredInvariant(t *testing.T, filename, source, name, statement string) *ast.Invariant {
+	t.Helper()
+	entry := "invariant " + name
+	return &ast.Invariant{
+		Name:         name,
+		NamePos:      astPositionOf(t, filename, source, entry, name),
+		Statement:    statement,
+		StatementPos: astPositionOf(t, filename, source, entry, `"`+statement+`"`),
+	}
+}
+
+func requireAnInvariantAheadOfALaterSlice(t *testing.T, block string, invariants []*ast.Invariant, slices []*ast.Slice) {
+	t.Helper()
+	lastSliceLine := 0
+	for _, slice := range slices {
+		lastSliceLine = max(lastSliceLine, slice.NamePos.Line)
+	}
+
+	for _, invariant := range invariants {
+		if invariant.NamePos.Line < lastSliceLine {
+			return
+		}
+	}
+	require.Fail(t, "no invariant runs into a later entry", "every invariant of %s is written after its last slice", block)
 }
 
 func positionOf(t *testing.T, source, entry, token string) (line, column int) {
