@@ -22,7 +22,7 @@ func runCommandLine(t *testing.T, args ...string) error {
 
 func TestGlossary(t *testing.T) {
 	t.Run("markdown", func(t *testing.T) {
-		t.Run("names the model, its context and its aggregate with empty definitions when the model describes none of them", func(t *testing.T) {
+		t.Run("names every term of a model that describes none of them, each with an empty definition", func(t *testing.T) {
 			path := writeTemp(t, "undescribed.emod", validEmod)
 
 			output := captureStdout(t, func() {
@@ -34,10 +34,32 @@ func TestGlossary(t *testing.T) {
 ## Reservations
 
 ### Reservation
+
+### Commands
+
+#### MakeReservation
+
+#### ConfirmReservation
+
+#### ImportBooking
+
+### Events
+
+#### ReservationMade
+
+#### BookingImported
+
+### Views
+
+#### ReservationsView
+
+### Actors
+
+#### Guest
 `, output)
 		})
 
-		t.Run("pairs the model, its context and its aggregate with the descriptions the model declares", func(t *testing.T) {
+		t.Run("pairs every term with the description the model declares for it", func(t *testing.T) {
 			path := writeTemp(t, "described.emod", describedEmod)
 
 			output := captureStdout(t, func() {
@@ -55,6 +77,67 @@ Everything the hotel knows about a stay before the guest arrives
 ### Reservation
 
 One guest holding one room over one date range
+
+### Commands
+
+#### MakeReservation
+
+Ask the hotel to hold a room for a date range, 10% deposit taken up front
+
+#### ConfirmReservation
+
+Turn a held room into a confirmed stay
+
+#### ImportBooking
+
+Record a booking taken by a partner site
+
+### Events
+
+#### ReservationMade
+
+A room is held for a guest
+
+#### BookingImported
+
+A partner site reported a booking
+
+### Views
+
+#### ReservationsView
+
+Every reservation with the stage it has reached
+
+### Actors
+
+#### Guest
+
+A person booking a room, not necessarily the one staying in it
+`, output)
+		})
+
+		t.Run("lists the terms of a dcb context whose slices hang off the context itself", func(t *testing.T) {
+			path := writeTemp(t, "dcb.emod", singleTagDCBEmod)
+
+			output := captureStdout(t, func() {
+				require.NoError(t, cli.RunGlossary(path, "markdown"))
+			})
+
+			require.Equal(t, `# Orders
+
+## Fulfillment
+
+### Commands
+
+#### PlaceOrder
+
+#### AuthorizePayment
+
+### Events
+
+#### OrderPlaced
+
+#### PaymentAuthorized
 `, output)
 		})
 	})
