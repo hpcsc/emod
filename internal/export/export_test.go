@@ -13,8 +13,6 @@ import (
 	"github.com/hpcsc/emod/internal/ast"
 	"github.com/hpcsc/emod/internal/diagnostic"
 	"github.com/hpcsc/emod/internal/export"
-	"github.com/hpcsc/emod/internal/lexer"
-	"github.com/hpcsc/emod/internal/parser"
 	"github.com/hpcsc/emod/internal/test"
 	"github.com/stretchr/testify/require"
 )
@@ -517,6 +515,13 @@ func TestExport(t *testing.T) {
 						Aggregates: []*ast.Aggregate{
 							{
 								Name: "Agg",
+								Invariants: []*ast.Invariant{
+									{
+										Comments:  []*ast.Comment{{Text: "# Invariant comment"}},
+										Name:      "OneThingPerAgg",
+										Statement: "An aggregate holds one thing",
+									},
+								},
 								Slices: []*ast.Slice{
 									{
 										Name:     "S",
@@ -545,6 +550,10 @@ func TestExport(t *testing.T) {
 			modelComments := doc["comments"].([]any)
 			require.Len(t, modelComments, 1)
 			require.Equal(t, "# System model", modelComments[0].(map[string]any)["text"])
+
+			aggregate := firstOf(t, firstOf(t, doc, "contexts"), "aggregates")
+			invariant := firstOf(t, aggregate, "invariants")
+			require.Equal(t, []any{map[string]any{"text": "# Invariant comment"}}, invariant["comments"])
 
 			s := firstSliceOf(t, doc)
 			sliceComments := s["comments"].([]any)
@@ -1238,7 +1247,7 @@ func TestExport(t *testing.T) {
 		})
 
 		t.Run("omits the description key entirely for a model that describes nothing", func(t *testing.T) {
-			raw, err := export.ExportJSON(hotelReservationModel(t))
+			raw, err := export.ExportJSON(test.HotelReservationModel(t))
 			require.NoError(t, err)
 
 			var doc map[string]any
@@ -1262,13 +1271,17 @@ func TestExport(t *testing.T) {
 		})
 
 		t.Run("keeps a field named after a keyword under the name it was declared with", func(t *testing.T) {
-			raw, err := export.ExportJSON(keywordFieldModel(t))
+			raw, err := export.ExportJSON(test.KeywordFieldSearchCatalogModel(t))
 			require.NoError(t, err)
 
 			var doc map[string]any
 			require.NoError(t, json.Unmarshal(raw, &doc))
 
 			require.Equal(t, keywordFieldsByOwner, fieldsByOwner(doc))
+		})
+
+		t.Run("files every invariant under the scope that declared it, in declaration order", func(t *testing.T) {
+			require.Equal(t, libraryLendingInvariants, invariantsByOwner(modelDocOf(t, test.InvariantLibraryLendingModel(t))))
 		})
 	})
 
@@ -2819,8 +2832,8 @@ func TestExport(t *testing.T) {
 		})
 
 		t.Run("fields named after keywords reach the node field lists and nothing else", func(t *testing.T) {
-			keywordNamed := diagramDocOf(t, keywordFieldModel(t))
-			ordinaryNamed := diagramDocOf(t, test.WithOrdinaryFieldNames(keywordFieldModel(t)))
+			keywordNamed := diagramDocOf(t, test.KeywordFieldSearchCatalogModel(t))
+			ordinaryNamed := diagramDocOf(t, test.WithOrdinaryFieldNames(test.KeywordFieldSearchCatalogModel(t)))
 
 			require.Equal(t, keywordFieldsByOwner, diagramFieldsByLabel(keywordNamed))
 
@@ -2833,6 +2846,15 @@ func TestExport(t *testing.T) {
 				"the twin has to be named differently, or the comparison below says nothing")
 			require.Equal(t, withoutFieldLists(ordinaryNamed), withoutFieldLists(keywordNamed),
 				"a field name belongs to the field list it was declared in; no id, label, edge or metadata is drawn from it")
+		})
+
+		t.Run("a model declaring invariants still produces a document free of them", func(t *testing.T) {
+			model := test.InvariantLibraryLendingModel(t)
+
+			require.ElementsMatch(t, libraryLendingInvariantText(), invariantTextAnywhere(modelDocOf(t, model)),
+				"the search has to find invariants where they do belong, or finding none below says nothing")
+			require.Empty(t, invariantTextAnywhere(diagramDocOf(t, model)),
+				"the diagram document is nodes and edges; an invariant is neither")
 		})
 	})
 
@@ -3017,7 +3039,7 @@ func TestExport(t *testing.T) {
 		})
 
 		t.Run("descriptions are omitted when a model describes nothing", func(t *testing.T) {
-			raw, err := export.ExportCUE(hotelReservationModel(t))
+			raw, err := export.ExportCUE(test.HotelReservationModel(t))
 			require.NoError(t, err)
 
 			require.NotContains(t, string(raw), "description",
@@ -3299,6 +3321,11 @@ func TestExport(t *testing.T) {
 						Name: "Ctx",
 						Aggregates: []*ast.Aggregate{{
 							Name: "Agg",
+							Invariants: []*ast.Invariant{{
+								Comments:  []*ast.Comment{{Text: "# Invariant comment"}},
+								Name:      "OneThingPerAgg",
+								Statement: "An aggregate holds one thing",
+							}},
 							Slices: []*ast.Slice{{
 								Name:     "S",
 								Comments: []*ast.Comment{{Text: "# Slice comment"}},
@@ -3312,9 +3339,12 @@ func TestExport(t *testing.T) {
 				}
 
 				doc := exportedCUEDoc(t, cueBin, model)
+				aggregate := firstOf(t, firstOf(t, doc, "contexts"), "aggregates")
 				slice := firstSliceOf(t, doc)
 
 				require.Equal(t, []any{map[string]any{"text": "# System model"}}, doc["comments"])
+				require.Equal(t, []any{map[string]any{"text": "# Invariant comment"}},
+					firstOf(t, aggregate, "invariants")["comments"])
 				require.Equal(t, []any{map[string]any{"text": "# Slice comment"}}, slice["comments"])
 				require.Equal(t, []any{map[string]any{"text": "# Cmd comment"}},
 					slice["commands"].([]any)[0].(map[string]any)["comments"])
@@ -3326,7 +3356,11 @@ func TestExport(t *testing.T) {
 		})
 
 		t.Run("a model whose fields are named after keywords conforms to the schema's Model definition", func(t *testing.T) {
-			requireConformsToSchema(t, lookupCue(t), keywordFieldModel(t))
+			requireConformsToSchema(t, lookupCue(t), test.KeywordFieldSearchCatalogModel(t))
+		})
+
+		t.Run("a model declaring invariants conforms to the schema's Model definition", func(t *testing.T) {
+			requireConformsToSchema(t, lookupCue(t), test.InvariantLibraryLendingModel(t))
 		})
 
 		t.Run("CUE and JSON exports describe the same model", func(t *testing.T) {
@@ -3336,10 +3370,14 @@ func TestExport(t *testing.T) {
 		t.Run("CUE and JSON exports agree on fields named after keywords", func(t *testing.T) {
 			cueBin := lookupCue(t)
 
-			requireBothFormatsAgree(t, cueBin, keywordFieldModel(t))
+			requireBothFormatsAgree(t, cueBin, test.KeywordFieldSearchCatalogModel(t))
 
-			doc := exportedCUEDoc(t, cueBin, keywordFieldModel(t))
+			doc := exportedCUEDoc(t, cueBin, test.KeywordFieldSearchCatalogModel(t))
 			require.Equal(t, keywordFieldsByOwner, fieldsByOwner(doc))
+		})
+
+		t.Run("CUE and JSON exports agree on the invariants a model declares", func(t *testing.T) {
+			requireBothFormatsAgree(t, lookupCue(t), test.InvariantLibraryLendingModel(t))
 		})
 	})
 }
@@ -3518,32 +3556,6 @@ func awkwardlyDescribedModel() *ast.Model {
 	}
 }
 
-// hotelReservationModel parses the source fixture the whole pipeline shares, so
-// the description-free baseline cannot drift from the models authors write.
-func hotelReservationModel(t *testing.T) *ast.Model {
-	t.Helper()
-
-	return parsedFixture(t, test.HotelReservation, "hotel.emod")
-}
-
-func keywordFieldModel(t *testing.T) *ast.Model {
-	t.Helper()
-
-	return parsedFixture(t, test.KeywordFieldSearchCatalog, "keyword-fields.emod")
-}
-
-func parsedFixture(t *testing.T, source, filename string) *ast.Model {
-	t.Helper()
-
-	tokens, scanErrs := lexer.Scan(source, filename)
-	require.Empty(t, scanErrs)
-
-	model, parseErrs := parser.New(tokens, filename).Parse()
-	require.Empty(t, parseErrs)
-
-	return model
-}
-
 // keywordFieldsByOwner transcribes what test.KeywordFieldSearchCatalog declares,
 // so an export is read back against the source an author wrote rather than
 // against another export of it.
@@ -3593,41 +3605,118 @@ var keywordFieldsByOwner = map[string][]map[string]any{
 	},
 }
 
-// fieldSpecs drops the positions off exported fields, leaving the name, type
+// libraryLendingInvariants transcribes what test.InvariantLibraryLending
+// declares, so an export is read back against the source an author wrote rather
+// than against another export of it. Only the two scopes that declare an
+// invariant appear: the plain context above the aggregate declares none, and
+// must therefore inherit none.
+var libraryLendingInvariants = map[string][]map[string]any{
+	"Loan": {
+		{"name": "OneCopyPerLoan", "statement": "A loan covers exactly one copy of one title"},
+		{"name": "FiveCopiesPerMember", "statement": "A member holds at most five copies at one time"},
+	},
+	"Reading Room": {
+		{"name": "OneReaderPerDesk", "statement": "A desk seats at most one reader at any moment"},
+		{"name": "OneDeskPerReader", "statement": "A reader holds at most one desk for the length of a session"},
+		{"name": "DeskFreeAtClosing", "statement": "No desk stays claimed past the closing hour"},
+	},
+}
+
+func libraryLendingInvariantText() []string {
+	var text []string
+	for _, invariants := range libraryLendingInvariants {
+		for _, invariant := range invariants {
+			text = append(text, invariant["name"].(string), invariant["statement"].(string))
+		}
+	}
+	return text
+}
+
+func invariantsByOwner(doc map[string]any) map[string][]map[string]any {
+	return listsKeyedBy(doc, "invariants", "name", func(invariant map[string]any) map[string]any {
+		return invariant
+	})
+}
+
+func invariantTextAnywhere(doc map[string]any) []string {
+	declared := make(map[string]bool)
+	for _, text := range libraryLendingInvariantText() {
+		declared[text] = true
+	}
+
+	var found []string
+	for _, text := range stringsAnywhere(doc) {
+		if declared[text] {
+			found = append(found, text)
+		}
+	}
+	return found
+}
+
+// stringsAnywhere returns every string a decoded document spells, key as well as
+// value, so a search over it cannot miss text the exporter filed under a name
+// the search did not think to look for.
+func stringsAnywhere(node any) []string {
+	var found []string
+	switch n := node.(type) {
+	case map[string]any:
+		for key, child := range n {
+			found = append(found, key)
+			found = append(found, stringsAnywhere(child)...)
+		}
+	case []any:
+		for _, child := range n {
+			found = append(found, stringsAnywhere(child)...)
+		}
+	case string:
+		found = append(found, n)
+	}
+	return found
+}
+
+// fieldSpec drops the positions off an exported field, leaving the name, type
 // and modifier an author wrote.
+func fieldSpec(field map[string]any) map[string]any {
+	spec := map[string]any{"name": field["name"], "type": field["type"]}
+	if modifier, ok := field["modifier"]; ok {
+		spec["modifier"] = modifier
+	}
+	return spec
+}
+
 func fieldSpecs(fields []any) []map[string]any {
 	out := make([]map[string]any, 0, len(fields))
-	for _, raw := range fields {
-		field := raw.(map[string]any)
-		spec := map[string]any{"name": field["name"], "type": field["type"]}
-		if modifier, ok := field["modifier"]; ok {
-			spec["modifier"] = modifier
-		}
-		out = append(out, spec)
+	for _, field := range fields {
+		out = append(out, fieldSpec(field.(map[string]any)))
 	}
 	return out
 }
 
 func fieldsByOwner(doc map[string]any) map[string][]map[string]any {
-	return fieldListsKeyedBy(doc, "name")
+	return listsKeyedBy(doc, "fields", "name", fieldSpec)
 }
 
 func diagramFieldsByLabel(doc map[string]any) map[string][]map[string]any {
-	return fieldListsKeyedBy(doc, "label")
+	return listsKeyedBy(doc, "fields", "label", fieldSpec)
 }
 
-// fieldListsKeyedBy collects every field list a decoded document holds, filed
-// under the given key of the object declaring it. Searching the whole document
-// rather than the paths fields are expected on lets a list that surfaces
+// listsKeyedBy collects every list a decoded document holds under listKey, filed
+// under the ownerKey of the object declaring it. Searching the whole document
+// rather than the paths the list is expected on lets one that surfaces
 // somewhere new show up as an unexpected entry.
-func fieldListsKeyedBy(doc map[string]any, key string) map[string][]map[string]any {
+func listsKeyedBy(doc map[string]any, listKey, ownerKey string, entryOf func(map[string]any) map[string]any) map[string][]map[string]any {
 	byOwner := make(map[string][]map[string]any)
 	eachObject(doc, func(object map[string]any) {
-		fields, declaresFields := object["fields"].([]any)
-		owner, named := object[key].(string)
-		if declaresFields && named {
-			byOwner[owner] = fieldSpecs(fields)
+		list, declaresList := object[listKey].([]any)
+		owner, named := object[ownerKey].(string)
+		if !declaresList || !named {
+			return
 		}
+		entries := make([]map[string]any, 0, len(list))
+		for _, entry := range list {
+			entries = append(entries, entryOf(entry.(map[string]any)))
+		}
+		byOwner[owner] = entries
 	})
 	return byOwner
 }
@@ -3681,6 +3770,18 @@ func diagramDocOf(t *testing.T, model *ast.Model) map[string]any {
 	t.Helper()
 
 	raw, err := export.ExportDiagramJSON(model)
+	require.NoError(t, err)
+
+	var doc map[string]any
+	require.NoError(t, json.Unmarshal(raw, &doc))
+
+	return doc
+}
+
+func modelDocOf(t *testing.T, model *ast.Model) map[string]any {
+	t.Helper()
+
+	raw, err := export.ExportJSON(model)
 	require.NoError(t, err)
 
 	var doc map[string]any

@@ -14,8 +14,6 @@ import (
 
 	"github.com/hpcsc/emod/internal/ast"
 	"github.com/hpcsc/emod/internal/diagram"
-	"github.com/hpcsc/emod/internal/lexer"
-	"github.com/hpcsc/emod/internal/parser"
 	"github.com/hpcsc/emod/internal/test"
 	"github.com/stretchr/testify/require"
 )
@@ -197,13 +195,27 @@ func TestExporterContract(t *testing.T) {
 			})
 
 			t.Run("naming fields after keywords leaves the picture untouched", func(t *testing.T) {
-				keywordNamed := keywordFieldModel(t)
-				ordinaryNamed := test.WithOrdinaryFieldNames(keywordFieldModel(t))
+				keywordNamed := test.KeywordFieldSearchCatalogModel(t)
+				ordinaryNamed := test.WithOrdinaryFieldNames(test.KeywordFieldSearchCatalogModel(t))
 
 				require.NotEqual(t, keywordNamed, ordinaryNamed,
 					"the twin has to be named differently, or the comparison below says nothing")
 				require.Equal(t, e.run(t, ordinaryNamed, diagram.StyleAuto), e.run(t, keywordNamed, diagram.StyleAuto),
 					"a diagram shows elements and arrows, not field lists, so renaming every field cannot move it")
+			})
+
+			t.Run("declaring invariants leaves the picture untouched", func(t *testing.T) {
+				constrained := test.InvariantLibraryLendingModel(t)
+				unconstrained := withoutInvariants(constrained)
+
+				require.NotEqual(t, constrained, unconstrained,
+					"the twin has to declare no invariants, or the comparison below says nothing")
+				require.Equal(t, libraryLendingInvariantNames, invariantNamesOf(constrained))
+				require.Empty(t, invariantNamesOf(unconstrained),
+					"the twin has to lose the invariants of both homes, or the comparison below is answered by whichever home it kept")
+
+				require.Equal(t, e.run(t, unconstrained, diagram.StyleAuto), e.run(t, constrained, diagram.StyleAuto),
+					"a diagram shows elements and arrows, not the rules they keep, so declaring an invariant cannot move it")
 			})
 		})
 	}
@@ -436,20 +448,6 @@ func unique(values []string) []string {
 
 // --- model builders shared by every exporter's tests ---
 
-// keywordFieldModel parses the source fixture whose fields are named after DSL
-// keywords, so the model under test cannot drift from what an author may write.
-func keywordFieldModel(t *testing.T) *ast.Model {
-	t.Helper()
-
-	tokens, scanErrs := lexer.Scan(test.KeywordFieldSearchCatalog, "keyword-fields.emod")
-	require.Empty(t, scanErrs)
-
-	model, parseErrs := parser.New(tokens, "keyword-fields.emod").Parse()
-	require.Empty(t, parseErrs)
-
-	return model
-}
-
 func minimalModel(name, sliceName string) *ast.Model {
 	return &ast.Model{
 		Name: name,
@@ -656,6 +654,56 @@ func undescribeSlices(slices []*ast.Slice) {
 			}
 		}
 	}
+}
+
+// libraryLendingInvariantNames transcribes every identifier
+// test.InvariantLibraryLending declares, both homes together, so a walk that
+// reaches only one of them reads back short.
+var libraryLendingInvariantNames = []string{
+	"OneCopyPerLoan",
+	"FiveCopiesPerMember",
+	"OneReaderPerDesk",
+	"OneDeskPerReader",
+	"DeskFreeAtClosing",
+}
+
+func invariantNamesOf(model *ast.Model) []string {
+	var names []string
+	for _, invariant := range declaredInvariants(model) {
+		names = append(names, invariant.Name)
+	}
+	return names
+}
+
+func declaredInvariants(model *ast.Model) []*ast.Invariant {
+	var invariants []*ast.Invariant
+	for _, ctx := range model.Contexts {
+		for _, agg := range ctx.Aggregates {
+			invariants = append(invariants, agg.Invariants...)
+		}
+		invariants = append(invariants, ctx.Invariants...)
+	}
+	return invariants
+}
+
+// withoutInvariants returns a copy of model declaring no invariant in either
+// home. Stripping in place would leave the caller comparing a model with
+// itself.
+func withoutInvariants(model *ast.Model) *ast.Model {
+	unconstrained := *model
+	unconstrained.Contexts = nil
+	for _, ctx := range model.Contexts {
+		freeContext := *ctx
+		freeContext.Invariants = nil
+		freeContext.Aggregates = nil
+		for _, agg := range ctx.Aggregates {
+			freeAggregate := *agg
+			freeAggregate.Invariants = nil
+			freeContext.Aggregates = append(freeContext.Aggregates, &freeAggregate)
+		}
+		unconstrained.Contexts = append(unconstrained.Contexts, &freeContext)
+	}
+	return &unconstrained
 }
 
 func fullModel() *ast.Model {

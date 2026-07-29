@@ -131,9 +131,18 @@ const fullModelJSON = `{
   "contexts": [{
     "name": "Reservations",
     "description": "What the hotel knows before the guest arrives",
+    "invariants": [{
+      "comments": [{"text": "# The hotel never double-books"}],
+      "name": "OneGuestPerRoom",
+      "statement": "A room holds at most one guest for any night"
+    }],
     "aggregates": [{
       "name": "Reservation",
       "description": "One guest holding one room",
+      "invariants": [{
+        "name": "OneRoomPerReservation",
+        "statement": "A reservation covers exactly one room"
+      }],
       "slices": [{
         "name": "Make Reservation",
         "description": "A guest books a room",

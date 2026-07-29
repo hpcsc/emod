@@ -48,17 +48,25 @@ type jsonContext struct {
 	OpenPosition  *jsonPosition    `json:"open_position,omitempty"`
 	ClosePosition *jsonPosition    `json:"close_position,omitempty"`
 	Comments      []*jsonComment   `json:"comments,omitempty"`
+	Invariants    []*jsonInvariant `json:"invariants,omitempty"`
 	Aggregates    []*jsonAggregate `json:"aggregates,omitempty"`
 }
 
 type jsonAggregate struct {
-	Name          string         `json:"name"`
-	Description   string         `json:"description,omitempty"`
-	Position      *jsonPosition  `json:"position,omitempty"`
-	OpenPosition  *jsonPosition  `json:"open_position,omitempty"`
-	ClosePosition *jsonPosition  `json:"close_position,omitempty"`
-	Comments      []*jsonComment `json:"comments,omitempty"`
-	Slices        []*jsonSlice   `json:"slices,omitempty"`
+	Name          string           `json:"name"`
+	Description   string           `json:"description,omitempty"`
+	Position      *jsonPosition    `json:"position,omitempty"`
+	OpenPosition  *jsonPosition    `json:"open_position,omitempty"`
+	ClosePosition *jsonPosition    `json:"close_position,omitempty"`
+	Comments      []*jsonComment   `json:"comments,omitempty"`
+	Invariants    []*jsonInvariant `json:"invariants,omitempty"`
+	Slices        []*jsonSlice     `json:"slices,omitempty"`
+}
+
+type jsonInvariant struct {
+	Comments  []*jsonComment `json:"comments,omitempty"`
+	Name      string         `json:"name"`
+	Statement string         `json:"statement"`
 }
 
 type jsonSlice struct {
@@ -326,8 +334,24 @@ func convertContext(c *ast.Context) *jsonContext {
 		OpenPosition:  convertPosition(c.OpenPos),
 		ClosePosition: convertPosition(c.ClosePos),
 		Comments:      convertComments(c.Comments),
+		Invariants:    convertInvariants(c.Invariants),
 		Aggregates:    convertAggregates(c.Aggregates),
 	}
+}
+
+func convertInvariants(invariants []*ast.Invariant) []*jsonInvariant {
+	if invariants == nil {
+		return nil
+	}
+	out := make([]*jsonInvariant, 0, len(invariants))
+	for _, inv := range invariants {
+		out = append(out, &jsonInvariant{
+			Comments:  convertComments(inv.Comments),
+			Name:      inv.Name,
+			Statement: inv.Statement,
+		})
+	}
+	return out
 }
 
 func convertAggregates(aggs []*ast.Aggregate) []*jsonAggregate {
@@ -352,6 +376,7 @@ func convertAggregate(a *ast.Aggregate) *jsonAggregate {
 		OpenPosition:  convertPosition(a.OpenPos),
 		ClosePosition: convertPosition(a.ClosePos),
 		Comments:      convertComments(a.Comments),
+		Invariants:    convertInvariants(a.Invariants),
 		Slices:        convertSlices(a.Slices),
 	}
 }
@@ -1219,6 +1244,7 @@ func (w *cueWriter) writeContext(c *ast.Context) {
 	w.writeComments(c.Comments)
 	w.line("name: %q", c.Name)
 	w.lineIfSet("description", c.Description)
+	writeCUEList(w, "invariants", c.Invariants, w.writeInvariant)
 	writeCUEList(w, "aggregates", c.Aggregates, w.writeAggregate)
 }
 
@@ -1226,7 +1252,14 @@ func (w *cueWriter) writeAggregate(a *ast.Aggregate) {
 	w.writeComments(a.Comments)
 	w.line("name: %q", a.Name)
 	w.lineIfSet("description", a.Description)
+	writeCUEList(w, "invariants", a.Invariants, w.writeInvariant)
 	writeCUEList(w, "slices", a.Slices, w.writeSlice)
+}
+
+func (w *cueWriter) writeInvariant(inv *ast.Invariant) {
+	w.writeComments(inv.Comments)
+	w.line("name: %q", inv.Name)
+	w.line("statement: %q", inv.Statement)
 }
 
 func (w *cueWriter) writeSlice(s *ast.Slice) {

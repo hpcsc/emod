@@ -84,10 +84,17 @@
 	translations?: [...#Translation]
 }
 
+#Invariant: {
+	comments?: [...#Comment]
+	name:      string
+	statement: string
+}
+
 #Aggregate: {
 	comments?:    [...#Comment]
 	name:         string
 	description?: string
+	invariants?:  [...#Invariant]
 	slices?:      [...#Slice]
 }
 
@@ -95,6 +102,7 @@
 	comments?:    [...#Comment]
 	name:         string
 	description?: string
+	invariants?:  [...#Invariant]
 	aggregates?:  [...#Aggregate]
 }
 
