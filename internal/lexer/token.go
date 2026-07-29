@@ -40,6 +40,10 @@ const (
 	KeywordEmod
 	KeywordDescription
 	KeywordInvariant
+	KeywordSpec
+	KeywordGiven
+	KeywordWhen
+	KeywordThen
 
 	// Literals and identifiers
 	Identifier
@@ -95,6 +99,10 @@ var keywords = map[string]Kind{
 	"emod":            KeywordEmod,
 	"description":     KeywordDescription,
 	"invariant":       KeywordInvariant,
+	"spec":            KeywordSpec,
+	"given":           KeywordGiven,
+	"when":            KeywordWhen,
+	"then":            KeywordThen,
 }
 
 var keywordNames = invertKeywords()

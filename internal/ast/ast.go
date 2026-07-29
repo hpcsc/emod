@@ -87,9 +87,36 @@ type Slice struct {
 	Views          []*View
 	Automations    []*Automation
 	Translations   []*Translation
+	Specs          []*Spec
 	OpenPos        Position
 	ClosePos       Position
 }
+
+type Spec struct {
+	Comments []*Comment
+	Name     string
+	NamePos  Position
+	Given    []*SpecElement
+	When     *SpecElement
+	Then     ThenClause
+	OpenPos  Position
+	ClosePos Position
+}
+
+type SpecElement struct {
+	Name    string
+	NamePos Position
+}
+
+type ThenClause interface {
+	thenNode()
+}
+
+type ThenEvents struct {
+	Events []*SpecElement
+}
+
+func (*ThenEvents) thenNode() {}
 
 type Command struct {
 	Comments       []*Comment

@@ -1020,6 +1020,177 @@ context "Reading Room" mode dcb {
 			require.NotZero(t, aggregatesDeclaring, "no aggregate declares an invariant")
 			require.NotZero(t, contextsDeclaring, "no context declares an invariant of its own")
 		})
+
+		t.Run("a slice records every spec it declares, in order, with its given history, when command and then events", func(t *testing.T) {
+			input := `model "Library Lending"
+context "Lending" {
+  aggregate "Loan" {
+    slice "Borrow a Copy" {
+      spec "borrows a free copy" {
+        given []
+        when BorrowCopy
+        then [CopyBorrowed]
+      }
+      spec "renews an active loan" {
+        given [CopyBorrowed, CopyReturned]
+        when RenewLoan
+        then [LoanRenewed, RenewalRecorded]
+      }
+    }
+  }
+}`
+			tokens, lexDiags := lexer.Scan(input, "test.emod")
+			require.Empty(t, lexDiags)
+
+			model, diags := parser.New(tokens, "test.emod").Parse()
+
+			require.Empty(t, diags)
+			slice := model.Contexts[0].Aggregates[0].Slices[0]
+			test.RequireEqual(t, []*ast.Spec{
+				declaredSpec(t, "test.emod", input, "borrows a free copy", nil, "BorrowCopy", []string{"CopyBorrowed"}),
+				declaredSpec(t, "test.emod", input, "renews an active loan", []string{"CopyBorrowed", "CopyReturned"}, "RenewLoan", []string{"LoanRenewed", "RenewalRecorded"}),
+			}, slice.Specs, cmpopts.IgnoreFields(ast.Spec{}, "OpenPos", "ClosePos"))
+			for _, spec := range slice.Specs {
+				require.NotZero(t, spec.OpenPos.Line, spec.Name)
+				require.NotZero(t, spec.ClosePos.Line, spec.Name)
+			}
+		})
+
+		t.Run("differently arranged spellings of one spec parse to the same block", func(t *testing.T) {
+			tests := []struct {
+				name      string
+				canonical string
+				variant   string
+				wantGiven []string
+			}{
+				{
+					name: "an omitted given history reads as the empty one",
+					canonical: `given []
+        when BorrowCopy
+        then [CopyBorrowed]`,
+					variant: `when BorrowCopy
+        then [CopyBorrowed]`,
+				},
+				{
+					name: "when written ahead of given",
+					canonical: `given [CopyReturned]
+        when BorrowCopy
+        then [CopyBorrowed]`,
+					variant: `when BorrowCopy
+        given [CopyReturned]
+        then [CopyBorrowed]`,
+					wantGiven: []string{"CopyReturned"},
+				},
+				{
+					name: "an entry written twice keeps the value written last",
+					canonical: `given [CopyReturned]
+        when BorrowCopy
+        then [CopyBorrowed]`,
+					variant: `given [CopyBorrowed]
+        given [CopyReturned]
+        when RenewLoan
+        when BorrowCopy
+        then [CopyBorrowed]`,
+					wantGiven: []string{"CopyReturned"},
+				},
+				{
+					name: "an entry whose value sits on the line below its keyword",
+					canonical: `given [CopyReturned]
+        when BorrowCopy
+        then [CopyBorrowed]`,
+					variant: `given
+          [CopyReturned]
+        when
+          BorrowCopy
+        then
+          [CopyBorrowed]`,
+					wantGiven: []string{"CopyReturned"},
+				},
+				{
+					name: "a list broken across lines between its brackets",
+					canonical: `given [CopyBorrowed, CopyReturned]
+        when BorrowCopy
+        then [CopyBorrowed]`,
+					variant: `given [
+          CopyBorrowed,
+          CopyReturned,
+        ]
+        when BorrowCopy
+        then [CopyBorrowed]`,
+					wantGiven: []string{"CopyBorrowed", "CopyReturned"},
+				},
+			}
+
+			for _, tc := range tests {
+				t.Run(tc.name, func(t *testing.T) {
+					canonicalTokens, canonicalLexDiags := lexer.Scan(modelWithSpecEntries(tc.canonical), "test.emod")
+					variantTokens, variantLexDiags := lexer.Scan(modelWithSpecEntries(tc.variant), "test.emod")
+					require.Empty(t, canonicalLexDiags)
+					require.Empty(t, variantLexDiags)
+
+					canonical, canonicalDiags := parser.New(canonicalTokens, "test.emod").Parse()
+					variant, variantDiags := parser.New(variantTokens, "test.emod").Parse()
+
+					require.Empty(t, canonicalDiags)
+					require.Empty(t, variantDiags)
+					canonicalSpec := canonical.Contexts[0].Aggregates[0].Slices[0].Specs[0]
+					variantSpec := variant.Contexts[0].Aggregates[0].Slices[0].Specs[0]
+					require.Equal(t, tc.wantGiven, specElementNames(canonicalSpec.Given))
+					require.Equal(t, tc.wantGiven, specElementNames(variantSpec.Given))
+					test.RequireEqual(t, canonicalSpec, variantSpec, ignoreASTPositions)
+				})
+			}
+		})
+
+		t.Run("a spec declared among a slice's other entries leaves those entries intact", func(t *testing.T) {
+			input := `model "Library Lending"
+context "Lending" {
+  aggregate "Loan" {
+    slice "Borrow a Copy" {
+      command BorrowCopy {
+        fields {
+          copyId string required
+        }
+      }
+      spec "borrows a free copy" {
+        given []
+        when BorrowCopy
+        then [CopyBorrowed]
+      }
+      event CopyBorrowed {
+        fields {
+          copyId string required
+        }
+      }
+      flow {
+        command -> event: BorrowCopy -> CopyBorrowed
+      }
+      spec "borrows a returned copy" {
+        given [CopyBorrowed, CopyReturned]
+        when BorrowCopy
+        then [CopyBorrowed]
+      }
+    }
+  }
+}`
+			tokens, lexDiags := lexer.Scan(input, "test.emod")
+			require.Empty(t, lexDiags)
+
+			model, diags := parser.New(tokens, "test.emod").Parse()
+
+			require.Empty(t, diags)
+			slice := model.Contexts[0].Aggregates[0].Slices[0]
+			require.Len(t, slice.Commands, 1)
+			require.Equal(t, "BorrowCopy", slice.Commands[0].Name)
+			require.Len(t, slice.Events, 1)
+			require.Equal(t, "CopyBorrowed", slice.Events[0].Name)
+			test.RequireEqual(t, []*ast.Flow{{CommandName: "BorrowCopy", EventName: "CopyBorrowed"}}, slice.Flows, ignoreASTPositions)
+			var specNames []string
+			for _, spec := range slice.Specs {
+				specNames = append(specNames, spec.Name)
+			}
+			require.Equal(t, []string{"borrows a free copy", "borrows a returned copy"}, specNames)
+		})
 	})
 
 	t.Run("commands, events and flows", func(t *testing.T) {
@@ -2223,6 +2394,141 @@ context "Ctx" {
 			require.Equal(t, "ReservationMade", slice.Events[0].Name)
 		})
 
+		t.Run("a malformed spec entry is reported once and the entry below it still parses", func(t *testing.T) {
+			tests := []struct {
+				name    string
+				entry   string
+				keyword string
+			}{
+				{
+					name:    "a when entry naming no command",
+					entry:   "when",
+					keyword: "when",
+				},
+				{
+					name:    "a given entry whose history is not a list",
+					entry:   "given CopyReturned",
+					keyword: "given",
+				},
+			}
+
+			for _, tc := range tests {
+				t.Run(tc.name, func(t *testing.T) {
+					input := fmt.Sprintf(`model "Test"
+context "Lending" {
+  aggregate "Loan" {
+    slice "Borrow a Copy" {
+      spec "borrows a free copy" {
+        %s
+        then [CopyBorrowed]
+      }
+    }
+  }
+}`, tc.entry)
+					tokens, lexDiags := lexer.Scan(input, "test.emod")
+					require.Empty(t, lexDiags)
+
+					model, diags := parser.New(tokens, "test.emod").Parse()
+
+					require.Len(t, diags, 1)
+					require.Contains(t, diags[0].Message, "spec")
+					line, column := positionOf(t, input, tc.entry, tc.keyword)
+					require.Equal(t, line, diags[0].Line)
+					require.Equal(t, column, diags[0].Column)
+
+					specs := model.Contexts[0].Aggregates[0].Slices[0].Specs
+					require.Len(t, specs, 1)
+					require.Nil(t, specs[0].When)
+					require.Empty(t, specs[0].Given)
+					require.Equal(t, []string{"CopyBorrowed"}, thenEventNames(t, specs[0].Then))
+				})
+			}
+		})
+
+		t.Run("an unclosed given list is reported once and the enclosing blocks still close", func(t *testing.T) {
+			tests := []struct {
+				name     string
+				entries  string
+				wantWhen string
+				wantThen []string
+			}{
+				{
+					name:    "with the spec's closing brace on the next line",
+					entries: `given [CopyReturned`,
+				},
+				{
+					name: "with further entries below the truncated list",
+					entries: `given [CopyReturned
+        when BorrowCopy
+        then [CopyBorrowed]`,
+					wantWhen: "BorrowCopy",
+					wantThen: []string{"CopyBorrowed"},
+				},
+			}
+
+			for _, tc := range tests {
+				t.Run(tc.name, func(t *testing.T) {
+					input := fmt.Sprintf(`model "Test"
+context "Lending" {
+  aggregate "Loan" {
+    slice "Borrow a Copy" {
+      command BorrowCopy {
+        fields {
+          copyId string required
+        }
+      }
+      spec "borrows a returned copy" {
+        %s
+      }
+    }
+  }
+}`, tc.entries)
+					tokens, lexDiags := lexer.Scan(input, "test.emod")
+					require.Empty(t, lexDiags)
+
+					model, diags := parser.New(tokens, "test.emod").Parse()
+
+					require.Len(t, diags, 1)
+					require.Contains(t, diags[0].Message, "given")
+					require.Contains(t, diags[0].Message, "]")
+					slice := model.Contexts[0].Aggregates[0].Slices[0]
+					require.Len(t, slice.Commands, 1)
+					require.Equal(t, "BorrowCopy", slice.Commands[0].Name)
+					require.Len(t, slice.Specs, 1)
+					spec := slice.Specs[0]
+					require.Equal(t, "borrows a returned copy", spec.Name)
+					require.Equal(t, tc.wantWhen, specElementName(spec.When))
+					require.Equal(t, tc.wantThen, thenEventNames(t, spec.Then))
+					require.NotZero(t, spec.ClosePos.Line)
+					require.NotZero(t, slice.ClosePos.Line)
+					require.NotZero(t, model.Contexts[0].ClosePos.Line)
+				})
+			}
+		})
+
+		t.Run("an unrecognised entry inside a spec names the entries a spec accepts", func(t *testing.T) {
+			input := `model "Test"
+context "Lending" {
+  aggregate "Loan" {
+    slice "Borrow a Copy" {
+      spec "borrows a free copy" {
+        gievn
+      }
+    }
+  }
+}`
+			tokens, lexDiags := lexer.Scan(input, "test.emod")
+			require.Empty(t, lexDiags)
+
+			_, diags := parser.New(tokens, "test.emod").Parse()
+
+			require.Len(t, diags, 1)
+			require.Contains(t, diags[0].Message, "spec")
+			for _, entry := range []string{"given", "when", "then"} {
+				require.Contains(t, diags[0].Message, entry)
+			}
+		})
+
 		t.Run("automation missing trigger produces error", func(t *testing.T) {
 			input := `model "Test"
 context "Ctx" {
@@ -3399,7 +3705,8 @@ context "Reservations" {
 }`,
 				},
 				{
-					construct: "slice",
+					construct:  "slice",
+					alsoOffers: []string{"spec"},
 					input: `model "Test"
 context "Reservations" {
   aggregate "Reservation" {
@@ -3695,6 +4002,12 @@ context "Ctx" {
       flow {
         command -> event: DoThing -> ThingDone
       }
+      # Spec comment
+      spec "does the thing" {
+        given []
+        when DoThing
+        then [ThingDone]
+      }
     }
   }
 }`
@@ -3713,6 +4026,7 @@ context "Ctx" {
 			test.RequireEqual(t, []*ast.Comment{{Text: "# Automation comment"}}, slice.Automations[0].Comments, ignoreASTPositions)
 			test.RequireEqual(t, []*ast.Comment{{Text: "# Translation comment"}}, slice.Translations[0].Comments, ignoreASTPositions)
 			test.RequireEqual(t, []*ast.Comment{{Text: "# Flow comment"}}, slice.Flows[0].Comments, ignoreASTPositions)
+			test.RequireEqual(t, []*ast.Comment{{Text: "# Spec comment"}}, slice.Specs[0].Comments, ignoreASTPositions)
 		})
 
 		t.Run("comments before aggregate are attached to Aggregate node", func(t *testing.T) {
@@ -4459,6 +4773,68 @@ context "Reservations" {
     invariant %s "%s"
   }
 }`, name, statement)
+}
+
+func modelWithSpecEntries(entries string) string {
+	return fmt.Sprintf(`model "Library Lending"
+context "Lending" {
+  aggregate "Loan" {
+    slice "Borrow a Copy" {
+      spec "borrows a copy" {
+        %s
+      }
+    }
+  }
+}`, entries)
+}
+
+func declaredSpec(t *testing.T, filename, source, name string, given []string, when string, then []string) *ast.Spec {
+	t.Helper()
+	spec := &ast.Spec{
+		Name:    name,
+		NamePos: astPositionOf(t, filename, source, `spec "`+name+`"`, `"`+name+`"`),
+		Given:   declaredSpecElements(t, filename, source, "given", given),
+		Then:    &ast.ThenEvents{Events: declaredSpecElements(t, filename, source, "then", then)},
+	}
+	if when != "" {
+		spec.When = &ast.SpecElement{Name: when, NamePos: astPositionOf(t, filename, source, "when "+when, when)}
+	}
+	return spec
+}
+
+func declaredSpecElements(t *testing.T, filename, source, keyword string, names []string) []*ast.SpecElement {
+	t.Helper()
+	entry := fmt.Sprintf("%s [%s]", keyword, strings.Join(names, ", "))
+	var elements []*ast.SpecElement
+	for _, name := range names {
+		elements = append(elements, &ast.SpecElement{Name: name, NamePos: astPositionOf(t, filename, source, entry, name)})
+	}
+	return elements
+}
+
+func specElementName(element *ast.SpecElement) string {
+	if element == nil {
+		return ""
+	}
+	return element.Name
+}
+
+func specElementNames(elements []*ast.SpecElement) []string {
+	var names []string
+	for _, element := range elements {
+		names = append(names, element.Name)
+	}
+	return names
+}
+
+func thenEventNames(t *testing.T, outcome ast.ThenClause) []string {
+	t.Helper()
+	if outcome == nil {
+		return nil
+	}
+	events, ok := outcome.(*ast.ThenEvents)
+	require.True(t, ok, "outcome %T is not an event list", outcome)
+	return specElementNames(events.Events)
 }
 
 func declaredInvariant(t *testing.T, filename, source, name, statement string) *ast.Invariant {

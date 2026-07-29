@@ -408,8 +408,12 @@ func (p *Instance) parseSlice() *ast.Slice {
 			if translation := p.parseTranslation(); translation != nil {
 				slice.Translations = append(slice.Translations, translation)
 			}
+		} else if p.check(lexer.KeywordSpec) {
+			if spec := p.parseSpec(); spec != nil {
+				slice.Specs = append(slice.Specs, spec)
+			}
 		} else {
-			p.error("expected description, command, event, trigger, view, automation, translation, or flow in slice")
+			p.error("expected description, command, event, trigger, view, automation, translation, spec, or flow in slice")
 			p.advance()
 		}
 	}
@@ -422,6 +426,100 @@ func (p *Instance) parseSlice() *ast.Slice {
 	slice.ClosePos = p.position(closeTok)
 
 	return slice
+}
+
+func (p *Instance) parseSpec() *ast.Spec {
+	comments := p.takePendingComments()
+	p.consume(lexer.KeywordSpec, "expected spec")
+	if !p.check(lexer.String) {
+		p.error(fmt.Sprintf("expected quoted string after \"spec\", got %q", p.peek().Value))
+		return nil
+	}
+
+	nameTok := p.advance()
+	spec := &ast.Spec{
+		Comments: comments,
+		Name:     nameTok.Value,
+		NamePos:  p.position(nameTok),
+	}
+
+	if !p.check(lexer.OpenBrace) {
+		p.error("expected { after spec name")
+		return nil
+	}
+	openTok := p.advance()
+	spec.OpenPos = p.position(openTok)
+
+	for !p.check(lexer.CloseBrace) && !p.isAtEnd() {
+		if p.check(lexer.KeywordGiven) {
+			if history, ok := p.parseSpecEventList(); ok {
+				spec.Given = history
+			}
+		} else if p.check(lexer.KeywordWhen) {
+			if command := p.parseSpecCommand(); command != nil {
+				spec.When = command
+			}
+		} else if p.check(lexer.KeywordThen) {
+			if events, ok := p.parseSpecEventList(); ok {
+				spec.Then = &ast.ThenEvents{Events: events}
+			}
+		} else {
+			p.error("expected given, when or then in spec")
+			p.advance()
+		}
+	}
+
+	if !p.check(lexer.CloseBrace) {
+		p.error(fmt.Sprintf("unclosed brace for \"spec\" block opened at line %d", spec.OpenPos.Line))
+		return spec
+	}
+	closeTok := p.advance()
+	spec.ClosePos = p.position(closeTok)
+
+	return spec
+}
+
+func (p *Instance) parseSpecCommand() *ast.SpecElement {
+	keywordTok := p.advance()
+	if !p.check(lexer.Identifier) {
+		p.errorAt(keywordTok, "expected command identifier after when in spec")
+		p.skipRestOfLineOrBlockEnd(keywordTok)
+		return nil
+	}
+
+	nameTok := p.advance()
+
+	return &ast.SpecElement{Name: nameTok.Value, NamePos: p.position(nameTok)}
+}
+
+func (p *Instance) parseSpecEventList() ([]*ast.SpecElement, bool) {
+	keywordTok := p.advance()
+	entry := keywordTok.Value
+	if !p.check(lexer.OpenBracket) {
+		p.errorAt(keywordTok, fmt.Sprintf("expected [ after %s in spec", entry))
+		p.skipRestOfLineOrBlockEnd(keywordTok)
+		return nil, false
+	}
+	p.advance()
+
+	identifiers := p.parseIdentifiersUntil(p.atSpecEventListEnd, fmt.Sprintf("expected event identifier in %s list of spec", entry))
+
+	if !p.check(lexer.CloseBracket) {
+		p.errorAt(keywordTok, fmt.Sprintf("expected ] to close %s list of spec", entry))
+		return nil, false
+	}
+	p.advance()
+
+	var events []*ast.SpecElement
+	for _, tok := range identifiers {
+		events = append(events, &ast.SpecElement{Name: tok.Value, NamePos: p.position(tok)})
+	}
+
+	return events, true
+}
+
+func (p *Instance) atSpecEventListEnd() bool {
+	return p.isAtEnd() || p.checkAny(lexer.CloseBracket, lexer.CloseBrace, lexer.KeywordGiven, lexer.KeywordWhen, lexer.KeywordThen)
 }
 
 func (p *Instance) parseTrigger() *ast.Trigger {
@@ -555,7 +653,7 @@ func (p *Instance) parseDecidesOn() *ast.DecidesOnClause {
 
 	for !p.check(lexer.CloseBrace) && !p.isAtEnd() {
 		if p.check(lexer.KeywordEvents) {
-			clause.Events, clause.EventsPos = p.parseDecidesOnEvents()
+			clause.Events, clause.EventsPos = p.parseIdentifierList(lexer.KeywordEvents)
 		} else if p.check(lexer.KeywordWhere) {
 			clause.Predicate = p.parsePredicate()
 		} else {
@@ -591,38 +689,52 @@ func (p *Instance) parseDecidesOn() *ast.DecidesOnClause {
 	return clause
 }
 
-func (p *Instance) parseDecidesOnEvents() ([]string, []ast.Position) {
+func (p *Instance) parseIdentifierList(keyword lexer.Kind) ([]string, []ast.Position) {
+	entry := keyword.String()
+	p.consume(keyword, "expected "+entry)
+	if !p.check(lexer.OpenBracket) {
+		p.error("expected [ after " + entry)
+		return nil, nil
+	}
+	p.advance()
+
+	identifiers := p.parseIdentifiersUntil(
+		func() bool { return p.check(lexer.CloseBracket) || p.isAtEnd() },
+		"expected identifier in "+entry+" list",
+	)
+
 	var names []string
 	var positions []ast.Position
-	p.consume(lexer.KeywordEvents, "expected events")
-	if !p.check(lexer.OpenBracket) {
-		p.error("expected [ after events")
+	for _, tok := range identifiers {
+		names = append(names, tok.Value)
+		positions = append(positions, p.position(tok))
+	}
+
+	if !p.check(lexer.CloseBracket) {
+		p.error("expected ] to close " + entry + " list")
 		return names, positions
 	}
 	p.advance()
 
-	for !p.check(lexer.CloseBracket) && !p.isAtEnd() {
+	return names, positions
+}
+
+func (p *Instance) parseIdentifiersUntil(atEnd func() bool, invalidItemMsg string) []*lexer.Token {
+	var identifiers []*lexer.Token
+	for !atEnd() {
 		if !p.check(lexer.Identifier) {
-			p.error("expected identifier in events list")
+			p.error(invalidItemMsg)
 			p.advance()
 			continue
 		}
-		tok := p.advance()
-		names = append(names, tok.Value)
-		positions = append(positions, p.position(tok))
+		identifiers = append(identifiers, p.advance())
 
 		if p.check(lexer.Comma) {
 			p.advance()
 		}
 	}
 
-	if !p.check(lexer.CloseBracket) {
-		p.error("expected ] to close events list")
-		return names, positions
-	}
-	p.advance()
-
-	return names, positions
+	return identifiers
 }
 
 func (p *Instance) parsePredicate() ast.PredicateExpr {
@@ -868,7 +980,7 @@ func (p *Instance) parseView() *ast.View {
 		} else if p.check(lexer.KeywordFields) {
 			view.Fields = p.parseFields()
 		} else if p.check(lexer.KeywordSubscribes) {
-			view.Subscribes, view.SubscribesPos = p.parseSubscribes()
+			view.Subscribes, view.SubscribesPos = p.parseIdentifierList(lexer.KeywordSubscribes)
 		} else {
 			p.error("expected description, fields or subscribes in view")
 			p.advance()
@@ -1084,40 +1196,6 @@ func (p *Instance) parseTranslation() *ast.Translation {
 	}
 
 	return translation
-}
-
-func (p *Instance) parseSubscribes() ([]string, []ast.Position) {
-	var names []string
-	var positions []ast.Position
-	p.consume(lexer.KeywordSubscribes, "expected subscribes")
-	if !p.check(lexer.OpenBracket) {
-		p.error("expected [ after subscribes")
-		return names, positions
-	}
-	p.advance()
-
-	for !p.check(lexer.CloseBracket) && !p.isAtEnd() {
-		if !p.check(lexer.Identifier) {
-			p.error("expected identifier in subscribes list")
-			p.advance()
-			continue
-		}
-		tok := p.advance()
-		names = append(names, tok.Value)
-		positions = append(positions, p.position(tok))
-
-		if p.check(lexer.Comma) {
-			p.advance()
-		}
-	}
-
-	if !p.check(lexer.CloseBracket) {
-		p.error("expected ] to close subscribes list")
-		return names, positions
-	}
-	p.advance()
-
-	return names, positions
 }
 
 func (p *Instance) parseFields() []*ast.Field {
@@ -1383,6 +1461,15 @@ func (p *Instance) check(typ lexer.Kind) bool {
 	return p.tokens[p.pos].Type == typ
 }
 
+func (p *Instance) checkAny(types ...lexer.Kind) bool {
+	for _, typ := range types {
+		if p.check(typ) {
+			return true
+		}
+	}
+	return false
+}
+
 func (p *Instance) checkSameLineAs(tok *lexer.Token) bool {
 	return !p.isAtEnd() && p.peek().Line == tok.Line
 }
@@ -1416,12 +1503,7 @@ func (p *Instance) skipRestOfLineOrBlockEnd(tok *lexer.Token) {
 // skipTo advances tokens until one of the given types is found, or the end
 // of input is reached. Used for error recovery.
 func (p *Instance) skipTo(types ...lexer.Kind) {
-	for !p.isAtEnd() {
-		for _, typ := range types {
-			if p.check(typ) {
-				return
-			}
-		}
+	for !p.isAtEnd() && !p.checkAny(types...) {
 		p.advance()
 	}
 }
