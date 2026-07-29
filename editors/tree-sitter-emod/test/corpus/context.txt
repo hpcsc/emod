@@ -25,3 +25,20 @@ context "Inventory" {
     (string)
     (aggregate_definition
       (string))))
+
+========================
+Context with an invariant of its own
+========================
+
+context "Reading Room" {
+  invariant OneReaderPerDesk "A desk seats at most one reader at any moment"
+}
+
+---
+
+(source_file
+  (context_definition
+    (string)
+    (invariant
+      (any_identifier)
+      (string))))

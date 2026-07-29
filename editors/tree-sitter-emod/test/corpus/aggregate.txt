@@ -13,3 +13,52 @@ context "C" {
     (string)
     (aggregate_definition
       (string))))
+
+========================
+Aggregate with an invariant before a slice and another after it
+========================
+
+context "Lending" {
+  aggregate "Loan" {
+    invariant OneCopyPerLoan "A loan covers exactly one copy of one title"
+    slice "Borrow Copy" {}
+    invariant FiveCopiesPerMember "A member holds at most five copies at one time"
+  }
+}
+
+---
+
+(source_file
+  (context_definition
+    (string)
+    (aggregate_definition
+      (string)
+      (invariant
+        (any_identifier)
+        (string))
+      (slice_definition
+        (string))
+      (invariant
+        (any_identifier)
+        (string)))))
+
+========================
+Invariant named after a keyword
+========================
+
+context "Lending" {
+  aggregate "Loan" {
+    invariant description "A loan states why the copy left the shelf"
+  }
+}
+
+---
+
+(source_file
+  (context_definition
+    (string)
+    (aggregate_definition
+      (string)
+      (invariant
+        (any_identifier)
+        (string)))))

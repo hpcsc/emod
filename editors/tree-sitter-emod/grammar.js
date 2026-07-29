@@ -54,18 +54,24 @@ module.exports = grammar({
       $.string,
     ),
 
+    invariant: $ => seq(
+      'invariant',
+      $.any_identifier,
+      $.string,
+    ),
+
     // context "name" { aggregate "name" { ... } }
     context_definition: $ => seq(
       'context',
       $.string,
-      buildDescribedBlock($, $.aggregate_definition),
+      buildDescribedBlock($, $.invariant, $.aggregate_definition),
     ),
 
     // aggregate "name" { slice "name" { ... } }
     aggregate_definition: $ => seq(
       'aggregate',
       $.string,
-      buildDescribedBlock($, $.slice_definition),
+      buildDescribedBlock($, $.invariant, $.slice_definition),
     ),
 
     // slice "name" { ... }

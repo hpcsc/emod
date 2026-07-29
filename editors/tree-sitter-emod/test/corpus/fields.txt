@@ -36,6 +36,7 @@ context "C" {
         events string required
         emod string required
         description string required
+        invariant string required
       }
     }
   }
@@ -51,6 +52,10 @@ context "C" {
       (slice_definition
         (string)
         (fields_block
+          (field_line
+            (any_identifier)
+            (any_identifier)
+            (any_identifier))
           (field_line
             (any_identifier)
             (any_identifier)
