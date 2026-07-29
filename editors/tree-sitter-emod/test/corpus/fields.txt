@@ -1,0 +1,173 @@
+========================
+Field named after every keyword inside a fields block
+========================
+
+context "C" {
+  aggregate "A" {
+    slice "Core" {
+      fields {
+        model string required
+        actor string required
+        context string required
+        aggregate string required
+        slice string required
+        command string required
+        event string required
+        fields string required
+        flow string required
+        trigger string required
+        view string required
+        automation string required
+        translation string required
+        subscribes string required
+        target string required
+        external_system string required
+        reads string required
+        source string required
+        external string required
+        mode string required
+        tags string required
+        decides_on string required
+        where string required
+        and string required
+        or string required
+        not string required
+        tag string required
+        events string required
+        emod string required
+        description string required
+      }
+    }
+  }
+}
+
+---
+
+(source_file
+  (context_definition
+    (string)
+    (aggregate_definition
+      (string)
+      (slice_definition
+        (string)
+        (fields_block
+          (field_line
+            (any_identifier)
+            (any_identifier)
+            (any_identifier))
+          (field_line
+            (any_identifier)
+            (any_identifier)
+            (any_identifier))
+          (field_line
+            (any_identifier)
+            (any_identifier)
+            (any_identifier))
+          (field_line
+            (any_identifier)
+            (any_identifier)
+            (any_identifier))
+          (field_line
+            (any_identifier)
+            (any_identifier)
+            (any_identifier))
+          (field_line
+            (any_identifier)
+            (any_identifier)
+            (any_identifier))
+          (field_line
+            (any_identifier)
+            (any_identifier)
+            (any_identifier))
+          (field_line
+            (any_identifier)
+            (any_identifier)
+            (any_identifier))
+          (field_line
+            (any_identifier)
+            (any_identifier)
+            (any_identifier))
+          (field_line
+            (any_identifier)
+            (any_identifier)
+            (any_identifier))
+          (field_line
+            (any_identifier)
+            (any_identifier)
+            (any_identifier))
+          (field_line
+            (any_identifier)
+            (any_identifier)
+            (any_identifier))
+          (field_line
+            (any_identifier)
+            (any_identifier)
+            (any_identifier))
+          (field_line
+            (any_identifier)
+            (any_identifier)
+            (any_identifier))
+          (field_line
+            (any_identifier)
+            (any_identifier)
+            (any_identifier))
+          (field_line
+            (any_identifier)
+            (any_identifier)
+            (any_identifier))
+          (field_line
+            (any_identifier)
+            (any_identifier)
+            (any_identifier))
+          (field_line
+            (any_identifier)
+            (any_identifier)
+            (any_identifier))
+          (field_line
+            (any_identifier)
+            (any_identifier)
+            (any_identifier))
+          (field_line
+            (any_identifier)
+            (any_identifier)
+            (any_identifier))
+          (field_line
+            (any_identifier)
+            (any_identifier)
+            (any_identifier))
+          (field_line
+            (any_identifier)
+            (any_identifier)
+            (any_identifier))
+          (field_line
+            (any_identifier)
+            (any_identifier)
+            (any_identifier))
+          (field_line
+            (any_identifier)
+            (any_identifier)
+            (any_identifier))
+          (field_line
+            (any_identifier)
+            (any_identifier)
+            (any_identifier))
+          (field_line
+            (any_identifier)
+            (any_identifier)
+            (any_identifier))
+          (field_line
+            (any_identifier)
+            (any_identifier)
+            (any_identifier))
+          (field_line
+            (any_identifier)
+            (any_identifier)
+            (any_identifier))
+          (field_line
+            (any_identifier)
+            (any_identifier)
+            (any_identifier))
+          (field_line
+            (any_identifier)
+            (any_identifier)
+            (any_identifier)))))))
