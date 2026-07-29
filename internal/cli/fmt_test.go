@@ -115,6 +115,23 @@ context "Reservations" {
 }
 `
 
+const modifierlessFormattedEmod = `emod 1
+model "Hotel Reservation"
+
+context "Reservations" {
+  aggregate "Reservation" {
+    slice "Make Reservation" {
+      command MakeReservation {
+        fields {
+          roomType string
+          guestId  string required
+        }
+      }
+    }
+  }
+}
+`
+
 const unparsableEmod = `foobar {
 }
 `
@@ -137,18 +154,13 @@ func TestFmt(t *testing.T) {
 
 	t.Run("returns error and does not modify file with parse errors", func(t *testing.T) {
 		path := writeTemp(t, "broken.emod", unparsableEmod)
-		originalBytes, readErr := os.ReadFile(path)
-		require.NoError(t, readErr)
 
 		err := cli.RunFmt(path, false)
 
 		require.Error(t, err)
 		require.Contains(t, err.Error(), path)
 		require.Contains(t, err.Error(), ":1:")
-
-		afterBytes, readErr := os.ReadFile(path)
-		require.NoError(t, readErr)
-		require.Equal(t, originalBytes, afterBytes, "file should not be modified when there are parse errors")
+		require.Equal(t, unparsableEmod, readFile(t, path), "file should not be modified when there are parse errors")
 	})
 
 	t.Run("returns error and does not modify a file declaring an unsupported version", func(t *testing.T) {
@@ -160,10 +172,7 @@ func TestFmt(t *testing.T) {
 		require.Error(t, err)
 		require.Contains(t, err.Error(), path)
 		require.Contains(t, err.Error(), ":1:")
-
-		afterBytes, readErr := os.ReadFile(path)
-		require.NoError(t, readErr)
-		require.Equal(t, source, string(afterBytes))
+		require.Equal(t, source, readFile(t, path))
 	})
 
 	t.Run("rewrites file in-place with formatted content", func(t *testing.T) {
@@ -172,9 +181,7 @@ func TestFmt(t *testing.T) {
 		err := cli.RunFmt(path, false)
 
 		require.NoError(t, err)
-		afterBytes, readErr := os.ReadFile(path)
-		require.NoError(t, readErr)
-		require.Equal(t, formattedEmod, string(afterBytes))
+		require.Equal(t, formattedEmod, readFile(t, path))
 	})
 
 	t.Run("produces no changes when file is already formatted", func(t *testing.T) {
@@ -186,13 +193,24 @@ func TestFmt(t *testing.T) {
 		err := cli.RunFmt(path, false)
 
 		require.NoError(t, err)
-		afterBytes, readErr := os.ReadFile(path)
-		require.NoError(t, readErr)
-		require.Equal(t, formattedEmod, string(afterBytes))
+		require.Equal(t, formattedEmod, readFile(t, path))
 
 		infoAfter, statErr := os.Stat(path)
 		require.NoError(t, statErr)
 		require.Equal(t, modTimeBefore, infoAfter.ModTime(), "file should not be rewritten when already formatted")
+	})
+
+	t.Run("leaves a formatted file whose field has no modifier untouched on every run", func(t *testing.T) {
+		path := writeTemp(t, "modifierless.emod", modifierlessFormattedEmod)
+
+		require.NoError(t, cli.RunFmt(path, false))
+		require.Equal(t, modifierlessFormattedEmod, readFile(t, path))
+
+		require.NoError(t, cli.RunFmt(path, false))
+		require.Equal(t, modifierlessFormattedEmod, readFile(t, path), "a second run should not change the file")
+
+		require.NoError(t, cli.RunFmt(path, true), "check mode should report nothing to change")
+		require.Equal(t, modifierlessFormattedEmod, readFile(t, path))
 	})
 
 	t.Run("check mode returns nil when file is already formatted", func(t *testing.T) {
@@ -201,9 +219,7 @@ func TestFmt(t *testing.T) {
 		err := cli.RunFmt(path, true)
 
 		require.NoError(t, err)
-		afterBytes, readErr := os.ReadFile(path)
-		require.NoError(t, readErr)
-		require.Equal(t, formattedEmod, string(afterBytes), "check mode should not modify the file")
+		require.Equal(t, formattedEmod, readFile(t, path), "check mode should not modify the file")
 	})
 
 	t.Run("check mode returns nil when a file using descriptions is already formatted", func(t *testing.T) {
@@ -212,9 +228,7 @@ func TestFmt(t *testing.T) {
 		err := cli.RunFmt(path, true)
 
 		require.NoError(t, err)
-		afterBytes, readErr := os.ReadFile(path)
-		require.NoError(t, readErr)
-		require.Equal(t, describedFormattedEmod, string(afterBytes), "check mode should not modify the file")
+		require.Equal(t, describedFormattedEmod, readFile(t, path), "check mode should not modify the file")
 	})
 
 	t.Run("check mode returns error when a file is canonical apart from a missing version header", func(t *testing.T) {
@@ -224,10 +238,7 @@ func TestFmt(t *testing.T) {
 
 		require.Error(t, err)
 		require.Contains(t, err.Error(), path)
-
-		afterBytes, readErr := os.ReadFile(path)
-		require.NoError(t, readErr)
-		require.Equal(t, emodWithoutVersionHeader, string(afterBytes), "check mode should not modify the file")
+		require.Equal(t, emodWithoutVersionHeader, readFile(t, path), "check mode should not modify the file")
 	})
 
 	t.Run("check mode returns error when file needs formatting", func(t *testing.T) {
@@ -237,9 +248,15 @@ func TestFmt(t *testing.T) {
 
 		require.Error(t, err)
 		require.Contains(t, err.Error(), path)
-
-		afterBytes, readErr := os.ReadFile(path)
-		require.NoError(t, readErr)
-		require.Equal(t, unformattedEmod, string(afterBytes), "check mode should not modify the file")
+		require.Equal(t, unformattedEmod, readFile(t, path), "check mode should not modify the file")
 	})
+}
+
+func readFile(t *testing.T, path string) string {
+	t.Helper()
+
+	content, err := os.ReadFile(path)
+	require.NoError(t, err)
+
+	return string(content)
 }

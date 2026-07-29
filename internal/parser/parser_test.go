@@ -17,7 +17,7 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-var ignoreCommentPositions = cmpopts.IgnoreTypes(ast.Position{})
+var ignoreASTPositions = cmpopts.IgnoreTypes(ast.Position{})
 
 func TestParser(t *testing.T) {
 	t.Run("version header", func(t *testing.T) {
@@ -34,7 +34,7 @@ func TestParser(t *testing.T) {
 			require.Empty(t, pinnedDiags)
 			require.Equal(t, 1, bare.Version)
 			require.Equal(t, 1, pinned.Version)
-			test.RequireEqual(t, bare, pinned, ignoreCommentPositions, cmpopts.IgnoreFields(ast.Model{}, "VersionDeclared"))
+			test.RequireEqual(t, bare, pinned, ignoreASTPositions, cmpopts.IgnoreFields(ast.Model{}, "VersionDeclared"))
 		})
 
 		t.Run("a declared version is recorded as declared", func(t *testing.T) {
@@ -124,7 +124,7 @@ model "Test"`
 			test.RequireEqual(t, []*ast.Comment{
 				{Text: "# Hotel Reservation System"},
 				{Text: "# Second line of the preamble"},
-			}, model.Comments, ignoreCommentPositions)
+			}, model.Comments, ignoreASTPositions)
 		})
 
 		t.Run("a malformed header is rejected and the declaration below it still parses", func(t *testing.T) {
@@ -243,7 +243,7 @@ context "Ctx" {
 					require.Empty(t, diags)
 					test.RequireEqual(t, []*ast.Field{
 						{Name: keyword, Type: "string", Modifier: "required"},
-					}, model.Contexts[0].Aggregates[0].Slices[0].Commands[0].Fields, ignoreCommentPositions)
+					}, model.Contexts[0].Aggregates[0].Slices[0].Commands[0].Fields, ignoreASTPositions)
 				})
 			}
 		})
@@ -345,7 +345,7 @@ actor "Guest" {
 					model, diags := parser.New(tokens, "test.emod").Parse()
 
 					require.Empty(t, diags)
-					test.RequireEqual(t, tc.want, model, ignoreCommentPositions)
+					test.RequireEqual(t, tc.want, model, ignoreASTPositions)
 				})
 			}
 		})
@@ -441,7 +441,7 @@ context "Reservations" {
 					require.Len(t, diags, 1)
 					require.Contains(t, diags[0].Message, tc.construct)
 					require.Contains(t, diags[0].Message, strconv.Quote(offending))
-					test.RequireEqual(t, tc.want, model, ignoreCommentPositions)
+					test.RequireEqual(t, tc.want, model, ignoreASTPositions)
 				})
 			}
 		})
@@ -531,7 +531,7 @@ model "Test"`,
 					model, diags := parser.New(tokens, "test.emod").Parse()
 
 					require.Empty(t, diags)
-					test.RequireEqual(t, tc.want, model, ignoreCommentPositions)
+					test.RequireEqual(t, tc.want, model, ignoreASTPositions)
 				})
 			}
 		})
@@ -808,6 +808,54 @@ context "Ctx" {
 			require.Equal(t, "fieldTwo", cmd.Fields[1].Name)
 			require.Equal(t, "int", cmd.Fields[1].Type)
 			require.Equal(t, "optional", cmd.Fields[1].Modifier)
+		})
+
+		t.Run("a field without a modifier does not absorb the next line's field name", func(t *testing.T) {
+			input := `model "Test"
+context "Ctx" {
+  aggregate "Agg" {
+    slice "Slice" {
+      command TestCommand {
+        fields {
+          roomType string
+          guestId string required
+        }
+      }
+    }
+  }
+}`
+			tokens, _ := lexer.Scan(input, "test.emod")
+
+			model, diags := parser.New(tokens, "test.emod").Parse()
+
+			require.Empty(t, diags)
+			cmd := model.Contexts[0].Aggregates[0].Slices[0].Commands[0]
+			test.RequireEqual(t, []*ast.Field{
+				{Name: "roomType", Type: "string"},
+				{Name: "guestId", Type: "string", Modifier: "required"},
+			}, cmd.Fields, ignoreASTPositions)
+		})
+
+		t.Run("a field written entirely on one line keeps its modifier", func(t *testing.T) {
+			input := `model "Test"
+context "Ctx" {
+  aggregate "Agg" {
+    slice "Slice" {
+      command TestCommand {
+        fields { guestId string required }
+      }
+    }
+  }
+}`
+			tokens, _ := lexer.Scan(input, "test.emod")
+
+			model, diags := parser.New(tokens, "test.emod").Parse()
+
+			require.Empty(t, diags)
+			cmd := model.Contexts[0].Aggregates[0].Slices[0].Commands[0]
+			test.RequireEqual(t, []*ast.Field{
+				{Name: "guestId", Type: "string", Modifier: "required"},
+			}, cmd.Fields, ignoreASTPositions)
 		})
 
 		t.Run("flow in slice", func(t *testing.T) {
@@ -1847,6 +1895,45 @@ context "Missing" {
 			}
 		})
 
+		t.Run("a field name alone on its line is reported once and the block still closes", func(t *testing.T) {
+			input := `model "Test"
+context "Ctx" {
+  aggregate "Agg" {
+    slice "Slice" {
+      command TestCommand {
+        fields {
+          guestId
+          roomType string required
+        }
+      }
+
+      event ReservationMade {
+        fields {
+          reservationId string required
+        }
+      }
+    }
+  }
+}`
+			tokens, _ := lexer.Scan(input, "test.emod")
+
+			model, diags := parser.New(tokens, "test.emod").Parse()
+
+			incompleteLine, _ := positionOf(t, input, "guestId", "guestId")
+			require.Len(t, diags, 1)
+			require.Equal(t, "test.emod", diags[0].Filename)
+			require.Equal(t, incompleteLine, diags[0].Line)
+			require.Contains(t, diags[0].Message, "field type")
+
+			slice := model.Contexts[0].Aggregates[0].Slices[0]
+			test.RequireEqual(t, []*ast.Field{
+				{Name: "guestId"},
+				{Name: "roomType", Type: "string", Modifier: "required"},
+			}, slice.Commands[0].Fields, ignoreASTPositions)
+			require.Len(t, slice.Events, 1)
+			require.Equal(t, "ReservationMade", slice.Events[0].Name)
+		})
+
 		t.Run("automation missing trigger produces error", func(t *testing.T) {
 			input := `model "Test"
 context "Ctx" {
@@ -2816,7 +2903,7 @@ context "Reservations" {
 						cmd := m.Contexts[0].Aggregates[0].Slices[0].Commands[0]
 						test.RequireEqual(t, []*ast.Field{
 							{Name: "guestId", Type: "string", Modifier: "required"},
-						}, cmd.Fields, ignoreCommentPositions)
+						}, cmd.Fields, ignoreASTPositions)
 						require.NotZero(t, cmd.ClosePos.Line)
 					},
 				},
@@ -2840,7 +2927,7 @@ context "Reservations" {
 						evt := m.Contexts[0].Aggregates[0].Slices[0].Events[0]
 						test.RequireEqual(t, []*ast.Field{
 							{Name: "reservationId", Type: "string", Modifier: "required"},
-						}, evt.Fields, ignoreCommentPositions)
+						}, evt.Fields, ignoreASTPositions)
 						require.NotZero(t, evt.ClosePos.Line)
 					},
 				},
@@ -3188,7 +3275,7 @@ model "Test"`
 
 			require.Empty(t, errs)
 			require.Equal(t, "Test", model.Name)
-			test.RequireEqual(t, []*ast.Comment{{Text: "# Header comment"}}, model.Comments, ignoreCommentPositions)
+			test.RequireEqual(t, []*ast.Comment{{Text: "# Header comment"}}, model.Comments, ignoreASTPositions)
 		})
 
 		t.Run("multiple consecutive comments before model are all attached", func(t *testing.T) {
@@ -3204,7 +3291,7 @@ model "Test"`
 			test.RequireEqual(t, []*ast.Comment{
 				{Text: "# Line 1"},
 				{Text: "# Line 2"},
-			}, model.Comments, ignoreCommentPositions)
+			}, model.Comments, ignoreASTPositions)
 		})
 
 		t.Run("comments before actor are attached to Actor node", func(t *testing.T) {
@@ -3218,7 +3305,7 @@ actor "Guest"`
 
 			require.Empty(t, errs)
 			require.Equal(t, "Guest", model.Actors[0].Name)
-			test.RequireEqual(t, []*ast.Comment{{Text: "# Actor comment"}}, model.Actors[0].Comments, ignoreCommentPositions)
+			test.RequireEqual(t, []*ast.Comment{{Text: "# Actor comment"}}, model.Actors[0].Comments, ignoreASTPositions)
 		})
 
 		t.Run("comments before context are attached to Context node", func(t *testing.T) {
@@ -3235,7 +3322,7 @@ context "Reservations" {
 
 			require.Empty(t, errs)
 			require.Equal(t, "Reservations", model.Contexts[0].Name)
-			test.RequireEqual(t, []*ast.Comment{{Text: "# Context comment"}}, model.Contexts[0].Comments, ignoreCommentPositions)
+			test.RequireEqual(t, []*ast.Comment{{Text: "# Context comment"}}, model.Contexts[0].Comments, ignoreASTPositions)
 		})
 
 		t.Run("comments before slice are attached to Slice node", func(t *testing.T) {
@@ -3268,7 +3355,7 @@ context "Ctx" {
 			require.Empty(t, errs)
 			slice := model.Contexts[0].Aggregates[0].Slices[0]
 			require.Equal(t, "My Slice", slice.Name)
-			test.RequireEqual(t, []*ast.Comment{{Text: "# Slice comment"}}, slice.Comments, ignoreCommentPositions)
+			test.RequireEqual(t, []*ast.Comment{{Text: "# Slice comment"}}, slice.Comments, ignoreASTPositions)
 		})
 
 		t.Run("comments before command event view automation translation trigger are attached", func(t *testing.T) {
@@ -3324,13 +3411,13 @@ context "Ctx" {
 			require.Empty(t, errs)
 			slice := model.Contexts[0].Aggregates[0].Slices[0]
 
-			test.RequireEqual(t, []*ast.Comment{{Text: "# Command comment"}}, slice.Commands[0].Comments, ignoreCommentPositions)
-			test.RequireEqual(t, []*ast.Comment{{Text: "# Event comment"}}, slice.Events[0].Comments, ignoreCommentPositions)
-			test.RequireEqual(t, []*ast.Comment{{Text: "# Trigger comment"}}, slice.Trigger.Comments, ignoreCommentPositions)
-			test.RequireEqual(t, []*ast.Comment{{Text: "# View comment"}}, slice.Views[0].Comments, ignoreCommentPositions)
-			test.RequireEqual(t, []*ast.Comment{{Text: "# Automation comment"}}, slice.Automations[0].Comments, ignoreCommentPositions)
-			test.RequireEqual(t, []*ast.Comment{{Text: "# Translation comment"}}, slice.Translations[0].Comments, ignoreCommentPositions)
-			test.RequireEqual(t, []*ast.Comment{{Text: "# Flow comment"}}, slice.Flows[0].Comments, ignoreCommentPositions)
+			test.RequireEqual(t, []*ast.Comment{{Text: "# Command comment"}}, slice.Commands[0].Comments, ignoreASTPositions)
+			test.RequireEqual(t, []*ast.Comment{{Text: "# Event comment"}}, slice.Events[0].Comments, ignoreASTPositions)
+			test.RequireEqual(t, []*ast.Comment{{Text: "# Trigger comment"}}, slice.Trigger.Comments, ignoreASTPositions)
+			test.RequireEqual(t, []*ast.Comment{{Text: "# View comment"}}, slice.Views[0].Comments, ignoreASTPositions)
+			test.RequireEqual(t, []*ast.Comment{{Text: "# Automation comment"}}, slice.Automations[0].Comments, ignoreASTPositions)
+			test.RequireEqual(t, []*ast.Comment{{Text: "# Translation comment"}}, slice.Translations[0].Comments, ignoreASTPositions)
+			test.RequireEqual(t, []*ast.Comment{{Text: "# Flow comment"}}, slice.Flows[0].Comments, ignoreASTPositions)
 		})
 
 		t.Run("comments before aggregate are attached to Aggregate node", func(t *testing.T) {
@@ -3347,7 +3434,7 @@ context "Ctx" {
 
 			require.Empty(t, errs)
 			require.Equal(t, "Agg", model.Contexts[0].Aggregates[0].Name)
-			test.RequireEqual(t, []*ast.Comment{{Text: "# Aggregate comment"}}, model.Contexts[0].Aggregates[0].Comments, ignoreCommentPositions)
+			test.RequireEqual(t, []*ast.Comment{{Text: "# Aggregate comment"}}, model.Contexts[0].Aggregates[0].Comments, ignoreASTPositions)
 		})
 
 		t.Run("attached comment carries correct position", func(t *testing.T) {

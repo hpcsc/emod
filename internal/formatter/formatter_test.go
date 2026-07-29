@@ -464,6 +464,38 @@ func TestFormat(t *testing.T) {
 			require.True(t, reparsed.VersionDeclared, "formatted output should pin the version")
 		})
 
+		t.Run("round-trip: a field without a modifier survives formatting", func(t *testing.T) {
+			input := strings.Join([]string{
+				`model "Hotel Reservation"`,
+				``,
+				`context "Reservations" {`,
+				`  aggregate "Reservation" {`,
+				`    slice "Make Reservation" {`,
+				`      command MakeReservation {`,
+				`        fields {`,
+				`          roomType string`,
+				`          guestId string required`,
+				`        }`,
+				`      }`,
+				`    }`,
+				`  }`,
+				`}`,
+				``,
+			}, "\n")
+
+			original := parseModel(t, input, "test.emod")
+			firstFormat := formatter.Format(original)
+			reparsed := parseModel(t, firstFormat, "formatted.emod")
+
+			test.RequireEqual(t, original, reparsed, ignoreFormatterNormalizations)
+			test.RequireEqual(t, []*ast.Field{
+				{Name: "roomType", Type: "string"},
+				{Name: "guestId", Type: "string", Modifier: "required"},
+			}, reparsed.Contexts[0].Aggregates[0].Slices[0].Commands[0].Fields, ignoreFormatterNormalizations)
+			require.Equal(t, firstFormat, formatter.Format(reparsed),
+				"a second format run should produce identical bytes")
+		})
+
 		t.Run("round-trip: a description on every construct survives formatting", func(t *testing.T) {
 			original := parseModel(t, test.DescribedHotelReservation, "described.emod")
 

@@ -1126,15 +1126,16 @@ func (p *Instance) parseField() *ast.Field {
 		NamePos: p.position(nameTok),
 	}
 
-	if !p.checkIdentifierLike() {
-		p.error("expected field type")
+	if !p.checkIdentifierLikeSameLineAs(nameTok) {
+		p.errorAt(nameTok, "expected field type")
+		p.skipRestOfLine(nameTok)
 		return field
 	}
 	typeTok := p.advance()
 	field.Type = typeTok.Value
 	field.TypePos = p.position(typeTok)
 
-	if p.checkIdentifierLike() {
+	if p.checkIdentifierLikeSameLineAs(nameTok) {
 		modTok := p.advance()
 		field.Modifier = modTok.Value
 		field.ModPos = p.position(modTok)
@@ -1290,9 +1291,7 @@ func (p *Instance) parseDescriptionInto(construct string, description *string, p
 	if !p.check(lexer.String) {
 		offending := p.peek()
 		p.errorAt(offending, fmt.Sprintf("expected quoted string after description in %s, got %q", construct, offending.Value))
-		for p.checkSameLineAs(keywordTok) && !p.check(lexer.CloseBrace) {
-			p.advance()
-		}
+		p.skipRestOfLine(keywordTok)
 		return
 	}
 
@@ -1363,12 +1362,22 @@ func (p *Instance) checkIdentifierLike() bool {
 	return typ == lexer.Identifier || typ < lexer.Identifier
 }
 
+func (p *Instance) checkIdentifierLikeSameLineAs(tok *lexer.Token) bool {
+	return p.checkSameLineAs(tok) && p.checkIdentifierLike()
+}
+
 func (p *Instance) consume(typ lexer.Kind, msg string) {
 	if !p.check(typ) {
 		p.error(msg)
 		return
 	}
 	p.advance()
+}
+
+func (p *Instance) skipRestOfLine(tok *lexer.Token) {
+	for p.checkSameLineAs(tok) && !p.check(lexer.CloseBrace) {
+		p.advance()
+	}
 }
 
 // skipTo advances tokens until one of the given types is found, or the end
