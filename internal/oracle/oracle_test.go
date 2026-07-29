@@ -34,6 +34,12 @@ func TestCheck(t *testing.T) {
 			require.Empty(t, diagnostics)
 		})
 
+		t.Run("returns an empty diagnostic list for a model naming its fields after keywords", func(t *testing.T) {
+			diagnostics := oracle.Check(test.KeywordFieldSearchCatalog, "keyword-fields.emod")
+
+			require.Empty(t, diagnostics)
+		})
+
 		t.Run("reports no errors for a model naming a field after every keyword", func(t *testing.T) {
 			keywords := lexer.Keywords()
 			require.NotEmpty(t, keywords)

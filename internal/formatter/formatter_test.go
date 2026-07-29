@@ -496,6 +496,17 @@ func TestFormat(t *testing.T) {
 				"a second format run should produce identical bytes")
 		})
 
+		t.Run("round-trip: fields named after keywords survive formatting", func(t *testing.T) {
+			original := parseModel(t, test.KeywordFieldSearchCatalog, "keyword-fields.emod")
+
+			firstFormat := formatter.Format(original)
+			reparsed := parseModel(t, firstFormat, "formatted.emod")
+
+			test.RequireEqual(t, original, reparsed, ignoreFormatterNormalizations)
+			require.Equal(t, firstFormat, formatter.Format(reparsed),
+				"a second format run should produce identical bytes")
+		})
+
 		t.Run("round-trip: a description on every construct survives formatting", func(t *testing.T) {
 			original := parseModel(t, test.DescribedHotelReservation, "described.emod")
 
@@ -1244,6 +1255,49 @@ func TestFormat(t *testing.T) {
 			}, "\n")
 
 			require.Equal(t, expected, result)
+		})
+
+		t.Run("a field named after a keyword keeps its own line with the columns padded", func(t *testing.T) {
+			formatted := formatter.Format(parseModel(t, test.KeywordFieldSearchCatalog, "keyword-fields.emod"))
+
+			require.True(t, strings.HasPrefix(formatted, "emod 1\n"), "formatted output should open with the version header")
+
+			requireFieldsBlockAfter(t, formatted, "command DefineSavedSearch {",
+				`        fields {`,
+				`          model       string required`,
+				`          source      string required`,
+				`          where       string required`,
+				`          and         string`,
+				`          not         string`,
+				`          fields      string required`,
+				`          description string optional`,
+				`        }`,
+			)
+
+			requireFieldsBlockAfter(t, formatted, "event SavedSearchDefined {",
+				`        fields {`,
+				`          searchId    string required`,
+				`          model       string required`,
+				`          source      string required`,
+				`          where       string required`,
+				`          events      string required`,
+				`          tag         string required`,
+				`          emod        string`,
+				`          description string required`,
+				`          definedAt   date   required`,
+				`        }`,
+			)
+
+			requireFieldsBlockAfter(t, formatted, "view SavedSearchesView {",
+				`        fields {`,
+				`          searchId    string required`,
+				`          description string required`,
+				`          tag         string required`,
+				`          model       string`,
+				`          where       string required`,
+				`          matches     int    required`,
+				`        }`,
+			)
 		})
 
 		t.Run("round-trip: all_patterns.emod field blocks match fixture alignment", func(t *testing.T) {
@@ -2908,14 +2962,35 @@ func lineAfter(t *testing.T, formatted, blockHeader string) string {
 	t.Helper()
 
 	lines := strings.Split(formatted, "\n")
-	for i, line := range lines {
-		if strings.TrimSpace(line) == blockHeader && i+1 < len(lines) {
-			return strings.TrimSpace(lines[i+1])
+	header := indexOfLine(t, lines, 0, blockHeader)
+	require.Less(t, header+1, len(lines), "nothing follows %q in:\n%s", blockHeader, formatted)
+
+	return strings.TrimSpace(lines[header+1])
+}
+
+func requireFieldsBlockAfter(t *testing.T, formatted, blockHeader string, expected ...string) {
+	t.Helper()
+
+	lines := strings.Split(formatted, "\n")
+	header := indexOfLine(t, lines, 0, blockHeader)
+	start := indexOfLine(t, lines, header+1, "fields {")
+	end := indexOfLine(t, lines, start+1, "}")
+
+	require.Equal(t, strings.Join(expected, "\n"), strings.Join(lines[start:end+1], "\n"))
+}
+
+func indexOfLine(t *testing.T, lines []string, from int, text string) int {
+	t.Helper()
+
+	for i := from; i < len(lines); i++ {
+		if strings.TrimSpace(lines[i]) == text {
+			return i
 		}
 	}
 
-	require.FailNowf(t, "block header not found in formatted output", "%q in:\n%s", blockHeader, formatted)
-	return ""
+	require.FailNowf(t, "line not found in formatted output", "%q at or after line %d in:\n%s",
+		text, from+1, strings.Join(lines, "\n"))
+	return -1
 }
 
 var ignoreFormatterNormalizations = cmp.Options{

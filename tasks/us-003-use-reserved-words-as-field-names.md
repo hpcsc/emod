@@ -3,7 +3,7 @@
 ## Progress
 - [x] Task 1: End a field declaration at the end of its line
 - [x] Task 2: Accept every keyword the lexer knows in field-name position
-- [ ] Task 3: Keep keyword-named fields intact through `emod validate` and `emod fmt`
+- [x] Task 3: Keep keyword-named fields intact through `emod validate` and `emod fmt`
 - [ ] Task 4: Carry keyword-named fields through the JSON, CUE and diagram-JSON exports and the renderers
 - [ ] Task 5: Cover every keyword as a field name in the tree-sitter corpus
 - [ ] Task 6: Document that any keyword may be used as a field name

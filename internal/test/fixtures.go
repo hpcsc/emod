@@ -194,6 +194,108 @@ context "Reservations" {
 }
 `
 
+// KeywordFieldSearchCatalog names its fields after DSL keywords, so packages
+// that must keep keywords usable as identifiers share one model. Fields
+// carrying no modifier sit mid-block ahead of a further field on purpose: give
+// every field a modifier and nothing here would catch the two running together
+// onto one line.
+const KeywordFieldSearchCatalog = `# Saved searches over a catalogue of emod models
+model "Model Search Catalog"
+
+actor "Analyst"
+
+context "Discovery" {
+  aggregate "Saved Search" {
+    slice "Define Saved Search" {
+      trigger UI "Search Builder" {
+        actor Analyst
+        reads SavedSearchesView
+      }
+      command DefineSavedSearch {
+        fields {
+          model       string required
+          source      string required
+          where       string required
+          and         string
+          not         string
+          fields      string required
+          description string optional
+        }
+      }
+      event SavedSearchDefined {
+        fields {
+          searchId    string required
+          model       string required
+          source      string required
+          where       string required
+          events      string required
+          tag         string required
+          emod        string
+          description string required
+          definedAt   date   required
+        }
+      }
+      flow {
+        command -> event: DefineSavedSearch -> SavedSearchDefined
+      }
+    }
+    slice "Browse Saved Searches" {
+      view SavedSearchesView {
+        fields {
+          searchId    string required
+          description string required
+          tag         string required
+          model       string
+          where       string required
+          matches     int    required
+        }
+        subscribes [SavedSearchDefined]
+      }
+    }
+    slice "Auto Share Saved Search" {
+      command ShareSavedSearch {
+        fields {
+          searchId string required
+          tag      string required
+        }
+      }
+      flow {
+        command -> event: ShareSavedSearch -> SavedSearchDefined
+      }
+      automation AutoShare {
+        trigger SavedSearchDefined
+        command ShareSavedSearch
+      }
+    }
+    slice "Import Vendor Search" {
+      command ImportVendorSearch {
+        fields {
+          source string required
+        }
+      }
+      flow {
+        command -> event: ImportVendorSearch -> VendorSearchImported
+      }
+      translation VendorSearchImport {
+        external_system "Metabase API"
+        reads VendorSearchWebhookView
+        command ImportVendorSearch
+        event VendorSearchImported {
+          fields {
+            vendorSearchId string required
+            source         string required
+            emod           string required
+            where          string required
+            tag            string
+            model          string required
+          }
+        }
+      }
+    }
+  }
+}
+`
+
 // Unparseable starts with a keyword the language does not define, so the lexer
 // and parser report on line 1.
 const Unparseable = `foobar {

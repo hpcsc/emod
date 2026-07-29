@@ -17,9 +17,10 @@ import (
 
 // The cli tests drive whole commands, so they share the pipeline-wide fixtures.
 const (
-	validEmod     = test.HotelReservation
-	describedEmod = test.DescribedHotelReservation
-	invalidEmod   = test.Unparseable
+	validEmod        = test.HotelReservation
+	describedEmod    = test.DescribedHotelReservation
+	keywordFieldEmod = test.KeywordFieldSearchCatalog
+	invalidEmod      = test.Unparseable
 )
 
 func TestValidate(t *testing.T) {
@@ -330,6 +331,17 @@ context "Orders" {
 
 	t.Run("json format on clean file outputs empty array", func(t *testing.T) {
 		path := writeTemp(t, "clean.emod", validEmod)
+
+		output := captureStdout(t, func() {
+			err := cli.RunValidate(path, "json")
+			require.NoError(t, err)
+		})
+
+		require.Equal(t, "[]\n", output)
+	})
+
+	t.Run("json format on a file naming its fields after keywords outputs empty array", func(t *testing.T) {
+		path := writeTemp(t, "keyword-fields.emod", keywordFieldEmod)
 
 		output := captureStdout(t, func() {
 			err := cli.RunValidate(path, "json")

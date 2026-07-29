@@ -132,6 +132,114 @@ context "Reservations" {
 }
 `
 
+const keywordFieldFormattedEmod = `emod 1
+# Saved searches over a catalogue of emod models
+model "Model Search Catalog"
+
+actor "Analyst"
+
+context "Discovery" {
+  aggregate "Saved Search" {
+    slice "Define Saved Search" {
+      trigger UI "Search Builder" {
+        actor Analyst
+        reads SavedSearchesView
+      }
+
+      command DefineSavedSearch {
+        fields {
+          model       string required
+          source      string required
+          where       string required
+          and         string
+          not         string
+          fields      string required
+          description string optional
+        }
+      }
+
+      event SavedSearchDefined {
+        fields {
+          searchId    string required
+          model       string required
+          source      string required
+          where       string required
+          events      string required
+          tag         string required
+          emod        string
+          description string required
+          definedAt   date   required
+        }
+      }
+
+      flow {
+        command -> event: DefineSavedSearch -> SavedSearchDefined
+      }
+    }
+
+    slice "Browse Saved Searches" {
+      view SavedSearchesView {
+        fields {
+          searchId    string required
+          description string required
+          tag         string required
+          model       string
+          where       string required
+          matches     int    required
+        }
+        subscribes [SavedSearchDefined]
+      }
+    }
+
+    slice "Auto Share Saved Search" {
+      command ShareSavedSearch {
+        fields {
+          searchId string required
+          tag      string required
+        }
+      }
+
+      automation AutoShare {
+        trigger SavedSearchDefined
+        command ShareSavedSearch
+      }
+
+      flow {
+        command -> event: ShareSavedSearch -> SavedSearchDefined
+      }
+    }
+
+    slice "Import Vendor Search" {
+      command ImportVendorSearch {
+        fields {
+          source string required
+        }
+      }
+
+      translation VendorSearchImport {
+        external_system "Metabase API"
+        reads VendorSearchWebhookView
+        command ImportVendorSearch
+        event VendorSearchImported {
+          fields {
+            vendorSearchId string required
+            source         string required
+            emod           string required
+            where          string required
+            tag            string
+            model          string required
+          }
+        }
+      }
+
+      flow {
+        command -> event: ImportVendorSearch -> VendorSearchImported
+      }
+    }
+  }
+}
+`
+
 const unparsableEmod = `foobar {
 }
 `
@@ -203,14 +311,13 @@ func TestFmt(t *testing.T) {
 	t.Run("leaves a formatted file whose field has no modifier untouched on every run", func(t *testing.T) {
 		path := writeTemp(t, "modifierless.emod", modifierlessFormattedEmod)
 
-		require.NoError(t, cli.RunFmt(path, false))
-		require.Equal(t, modifierlessFormattedEmod, readFile(t, path))
+		requireFmtSettlesOn(t, path, modifierlessFormattedEmod)
+	})
 
-		require.NoError(t, cli.RunFmt(path, false))
-		require.Equal(t, modifierlessFormattedEmod, readFile(t, path), "a second run should not change the file")
+	t.Run("keeps every keyword-named field on its own line and settles after one run", func(t *testing.T) {
+		path := writeTemp(t, "keyword-fields.emod", keywordFieldEmod)
 
-		require.NoError(t, cli.RunFmt(path, true), "check mode should report nothing to change")
-		require.Equal(t, modifierlessFormattedEmod, readFile(t, path))
+		requireFmtSettlesOn(t, path, keywordFieldFormattedEmod)
 	})
 
 	t.Run("check mode returns nil when file is already formatted", func(t *testing.T) {
@@ -250,6 +357,19 @@ func TestFmt(t *testing.T) {
 		require.Contains(t, err.Error(), path)
 		require.Equal(t, unformattedEmod, readFile(t, path), "check mode should not modify the file")
 	})
+}
+
+func requireFmtSettlesOn(t *testing.T, path, formatted string) {
+	t.Helper()
+
+	require.NoError(t, cli.RunFmt(path, false))
+	require.Equal(t, formatted, readFile(t, path))
+
+	require.NoError(t, cli.RunFmt(path, false))
+	require.Equal(t, formatted, readFile(t, path), "a second run should not change the file")
+
+	require.NoError(t, cli.RunFmt(path, true), "check mode should report nothing to change")
+	require.Equal(t, formatted, readFile(t, path))
 }
 
 func readFile(t *testing.T, path string) string {
