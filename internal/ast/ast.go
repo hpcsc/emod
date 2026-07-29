@@ -118,6 +118,13 @@ type ThenEvents struct {
 
 func (*ThenEvents) thenNode() {}
 
+type ThenRejected struct {
+	InvariantName string
+	InvariantPos  Position
+}
+
+func (*ThenRejected) thenNode() {}
+
 type Command struct {
 	Comments       []*Comment
 	Name           string

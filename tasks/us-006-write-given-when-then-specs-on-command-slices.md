@@ -2,7 +2,7 @@
 
 ## Progress
 - [x] Task 1: Parse `spec` blocks with `given`, `when` and a `then` event list
-- [ ] Task 2: Parse `then rejected <invariantName>` and share a spec-carrying fixture
+- [x] Task 2: Parse `then rejected <invariantName>` and share a spec-carrying fixture
 - [ ] Task 3: Reject spec references to events and commands the model does not define
 - [ ] Task 4: Resolve `then rejected` against the enclosing aggregate or DCB context
 - [ ] Task 5: Preserve specs through `emod fmt`

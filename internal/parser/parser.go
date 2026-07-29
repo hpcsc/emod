@@ -451,19 +451,23 @@ func (p *Instance) parseSpec() *ast.Spec {
 	spec.OpenPos = p.position(openTok)
 
 	for !p.check(lexer.CloseBrace) && !p.isAtEnd() {
-		if p.check(lexer.KeywordGiven) {
-			if history, ok := p.parseSpecEventList(); ok {
+		switch entryTok := p.peek(); entryTok.Type {
+		case lexer.KeywordGiven:
+			p.advance()
+			if history, ok := p.parseSpecEventList(entryTok); ok {
 				spec.Given = history
 			}
-		} else if p.check(lexer.KeywordWhen) {
-			if command := p.parseSpecCommand(); command != nil {
+		case lexer.KeywordWhen:
+			p.advance()
+			if command := p.parseSpecCommand(entryTok); command != nil {
 				spec.When = command
 			}
-		} else if p.check(lexer.KeywordThen) {
-			if events, ok := p.parseSpecEventList(); ok {
-				spec.Then = &ast.ThenEvents{Events: events}
+		case lexer.KeywordThen:
+			p.advance()
+			if outcome := p.parseSpecOutcome(entryTok); outcome != nil {
+				spec.Then = outcome
 			}
-		} else {
+		default:
 			p.error("expected given, when or then in spec")
 			p.advance()
 		}
@@ -479,8 +483,7 @@ func (p *Instance) parseSpec() *ast.Spec {
 	return spec
 }
 
-func (p *Instance) parseSpecCommand() *ast.SpecElement {
-	keywordTok := p.advance()
+func (p *Instance) parseSpecCommand(keywordTok *lexer.Token) *ast.SpecElement {
 	if !p.check(lexer.Identifier) {
 		p.errorAt(keywordTok, "expected command identifier after when in spec")
 		p.skipRestOfLineOrBlockEnd(keywordTok)
@@ -492,8 +495,31 @@ func (p *Instance) parseSpecCommand() *ast.SpecElement {
 	return &ast.SpecElement{Name: nameTok.Value, NamePos: p.position(nameTok)}
 }
 
-func (p *Instance) parseSpecEventList() ([]*ast.SpecElement, bool) {
-	keywordTok := p.advance()
+func (p *Instance) parseSpecOutcome(keywordTok *lexer.Token) ast.ThenClause {
+	switch {
+	case p.check(lexer.OpenBracket):
+		events, ok := p.parseSpecEventList(keywordTok)
+		if !ok {
+			return nil
+		}
+		return &ast.ThenEvents{Events: events}
+	case p.check(lexer.KeywordRejected):
+		rejectedTok := p.advance()
+		if !p.checkIdentifierLikeSameLineAs(rejectedTok) {
+			p.errorAt(keywordTok, "expected invariant name after rejected in spec")
+			p.skipRestOfLineOrBlockEnd(rejectedTok)
+			return nil
+		}
+		nameTok := p.advance()
+		return &ast.ThenRejected{InvariantName: nameTok.Value, InvariantPos: p.position(nameTok)}
+	default:
+		p.errorAt(keywordTok, "expected an event list or rejected after then in spec")
+		p.skipRestOfLineOrBlockEnd(keywordTok)
+		return nil
+	}
+}
+
+func (p *Instance) parseSpecEventList(keywordTok *lexer.Token) ([]*ast.SpecElement, bool) {
 	entry := keywordTok.Value
 	if !p.check(lexer.OpenBracket) {
 		p.errorAt(keywordTok, fmt.Sprintf("expected [ after %s in spec", entry))

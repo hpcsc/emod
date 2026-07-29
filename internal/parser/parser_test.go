@@ -1191,6 +1191,80 @@ context "Lending" {
 			}
 			require.Equal(t, []string{"borrows a free copy", "borrows a returned copy"}, specNames)
 		})
+
+		t.Run("a spec whose then names a rejected invariant states a different outcome from one listing events", func(t *testing.T) {
+			input := `model "Library Lending"
+context "Lending" {
+  aggregate "Loan" {
+    invariant OneCopyPerLoan "A loan covers exactly one copy of one title"
+    slice "Borrow a Copy" {
+      spec "borrows a free copy" {
+        given []
+        when BorrowCopy
+        then [CopyBorrowed]
+      }
+      spec "refuses a copy already on loan" {
+        given [CopyBorrowed]
+        when BorrowCopy
+        then rejected OneCopyPerLoan
+      }
+    }
+  }
+}`
+			tokens, lexDiags := lexer.Scan(input, "test.emod")
+			require.Empty(t, lexDiags)
+
+			model, diags := parser.New(tokens, "test.emod").Parse()
+
+			require.Empty(t, diags)
+			specs := model.Contexts[0].Aggregates[0].Slices[0].Specs
+			require.Len(t, specs, 2)
+			require.Equal(t, []string{"events", "rejection"}, []string{outcomeKind(specs[0].Then), outcomeKind(specs[1].Then)})
+			test.RequireEqual(t, &ast.ThenRejected{
+				InvariantName: "OneCopyPerLoan",
+				InvariantPos:  astPositionOf(t, "test.emod", input, "then rejected OneCopyPerLoan", "OneCopyPerLoan"),
+			}, specs[1].Then)
+		})
+
+		t.Run("an invariant name spelling a keyword is accepted after rejected", func(t *testing.T) {
+			keywords := lexer.Keywords()
+			require.NotEmpty(t, keywords)
+
+			for _, keyword := range keywords {
+				t.Run(keyword, func(t *testing.T) {
+					entries := `when BorrowCopy
+        then rejected ` + keyword
+					tokens, lexDiags := lexer.Scan(modelWithSpecEntries(entries), "test.emod")
+					require.Empty(t, lexDiags)
+
+					model, diags := parser.New(tokens, "test.emod").Parse()
+
+					require.Empty(t, diags)
+					spec := model.Contexts[0].Aggregates[0].Slices[0].Specs[0]
+					test.RequireEqual(t, &ast.ThenRejected{InvariantName: keyword}, spec.Then, ignoreASTPositions)
+				})
+			}
+		})
+
+		t.Run("the shared spec model states both outcomes in both slice homes, each optional part exercised mid-block", func(t *testing.T) {
+			model := test.SpecLibraryLendingModel(t)
+
+			var aggregateRejections, dcbContextRejections int
+			for _, context := range model.Contexts {
+				rejections := requireRejectionsDeclaredBy(t, fmt.Sprintf("context %q", context.Name), context.Invariants, context.Slices)
+				if context.Mode == "dcb" {
+					dcbContextRejections += rejections
+				}
+				for _, aggregate := range context.Aggregates {
+					aggregateRejections += requireRejectionsDeclaredBy(t, fmt.Sprintf("aggregate %q", aggregate.Name), aggregate.Invariants, aggregate.Slices)
+				}
+			}
+
+			require.NotZero(t, aggregateRejections, "no slice nested in an aggregate states a rejection")
+			require.NotZero(t, dcbContextRejections, "no slice declared on a dcb context states a rejection")
+			requireSpecCoverage(t, test.SpecLibraryLending, declaredSpecs(model))
+			requireASpecAheadOfALaterEntry(t, model)
+		})
 	})
 
 	t.Run("commands, events and flows", func(t *testing.T) {
@@ -2396,19 +2470,33 @@ context "Ctx" {
 
 		t.Run("a malformed spec entry is reported once and the entry below it still parses", func(t *testing.T) {
 			tests := []struct {
-				name    string
-				entry   string
-				keyword string
+				name      string
+				entry     string
+				keyword   string
+				nextEntry string
+				wantWhen  string
+				wantThen  []string
 			}{
 				{
-					name:    "a when entry naming no command",
-					entry:   "when",
-					keyword: "when",
+					name:      "a when entry naming no command",
+					entry:     "when",
+					keyword:   "when",
+					nextEntry: "then [CopyBorrowed]",
+					wantThen:  []string{"CopyBorrowed"},
 				},
 				{
-					name:    "a given entry whose history is not a list",
-					entry:   "given CopyReturned",
-					keyword: "given",
+					name:      "a given entry whose history is not a list",
+					entry:     "given CopyReturned",
+					keyword:   "given",
+					nextEntry: "then [CopyBorrowed]",
+					wantThen:  []string{"CopyBorrowed"},
+				},
+				{
+					name:      "a rejection naming no invariant",
+					entry:     "then rejected",
+					keyword:   "then",
+					nextEntry: "when BorrowCopy",
+					wantWhen:  "BorrowCopy",
 				},
 			}
 
@@ -2420,11 +2508,11 @@ context "Lending" {
     slice "Borrow a Copy" {
       spec "borrows a free copy" {
         %s
-        then [CopyBorrowed]
+        %s
       }
     }
   }
-}`, tc.entry)
+}`, tc.entry, tc.nextEntry)
 					tokens, lexDiags := lexer.Scan(input, "test.emod")
 					require.Empty(t, lexDiags)
 
@@ -2438,11 +2526,53 @@ context "Lending" {
 
 					specs := model.Contexts[0].Aggregates[0].Slices[0].Specs
 					require.Len(t, specs, 1)
-					require.Nil(t, specs[0].When)
+					require.Equal(t, tc.wantWhen, specElementName(specs[0].When))
 					require.Empty(t, specs[0].Given)
-					require.Equal(t, []string{"CopyBorrowed"}, thenEventNames(t, specs[0].Then))
+					require.Equal(t, tc.wantThen, thenEventNames(t, specs[0].Then))
 				})
 			}
+		})
+
+		t.Run("a then stating neither outcome names both of them and the spec block still closes", func(t *testing.T) {
+			input := `model "Test"
+context "Lending" {
+  aggregate "Loan" {
+    slice "Borrow a Copy" {
+      command BorrowCopy {
+        fields {
+          copyId string required
+        }
+      }
+      spec "borrows a free copy" {
+        given []
+        when BorrowCopy
+        then CopyBorrowed
+      }
+    }
+  }
+}`
+			tokens, lexDiags := lexer.Scan(input, "test.emod")
+			require.Empty(t, lexDiags)
+
+			model, diags := parser.New(tokens, "test.emod").Parse()
+
+			require.Len(t, diags, 1)
+			line, column := positionOf(t, input, "then CopyBorrowed", "then")
+			require.Equal(t, line, diags[0].Line)
+			require.Equal(t, column, diags[0].Column)
+			require.Contains(t, diags[0].Message, "spec")
+			require.Contains(t, diags[0].Message, "event list")
+			require.Contains(t, diags[0].Message, "rejected")
+
+			slice := model.Contexts[0].Aggregates[0].Slices[0]
+			require.Len(t, slice.Commands, 1)
+			require.Equal(t, "BorrowCopy", slice.Commands[0].Name)
+			require.Len(t, slice.Specs, 1)
+			require.Nil(t, slice.Specs[0].Then)
+			require.Equal(t, "BorrowCopy", specElementName(slice.Specs[0].When))
+			require.NotZero(t, slice.Specs[0].ClosePos.Line)
+			require.NotZero(t, slice.ClosePos.Line)
+			require.NotZero(t, model.Contexts[0].ClosePos.Line)
 		})
 
 		t.Run("an unclosed given list is reported once and the enclosing blocks still close", func(t *testing.T) {
@@ -4835,6 +4965,142 @@ func thenEventNames(t *testing.T, outcome ast.ThenClause) []string {
 	events, ok := outcome.(*ast.ThenEvents)
 	require.True(t, ok, "outcome %T is not an event list", outcome)
 	return specElementNames(events.Events)
+}
+
+func invariantNames(invariants []*ast.Invariant) []string {
+	var names []string
+	for _, invariant := range invariants {
+		names = append(names, invariant.Name)
+	}
+	return names
+}
+
+func rejectedInvariantNames(specs []*ast.Spec) []string {
+	var names []string
+	for _, spec := range specs {
+		if rejection, ok := spec.Then.(*ast.ThenRejected); ok {
+			names = append(names, rejection.InvariantName)
+		}
+	}
+	return names
+}
+
+func requireRejectionsDeclaredBy(t *testing.T, owner string, invariants []*ast.Invariant, slices []*ast.Slice) int {
+	t.Helper()
+	declared := invariantNames(invariants)
+	rejections := 0
+	for _, slice := range slices {
+		for _, name := range rejectedInvariantNames(slice.Specs) {
+			require.Contains(t, declared, name, "%s declares no invariant %s", owner, name)
+			rejections++
+		}
+	}
+	return rejections
+}
+
+func outcomeKind(outcome ast.ThenClause) string {
+	switch outcome.(type) {
+	case *ast.ThenEvents:
+		return "events"
+	case *ast.ThenRejected:
+		return "rejection"
+	default:
+		return fmt.Sprintf("%T", outcome)
+	}
+}
+
+func outcomeLine(outcome ast.ThenClause) int {
+	switch then := outcome.(type) {
+	case *ast.ThenEvents:
+		if len(then.Events) == 0 {
+			return 0
+		}
+		return then.Events[0].NamePos.Line
+	case *ast.ThenRejected:
+		return then.InvariantPos.Line
+	default:
+		return 0
+	}
+}
+
+// requireSpecCoverage reads the given history back off the fixture's own source
+// as well as off the parsed model, because a spec written with an empty list and
+// one written with no given entry at all leave the same parsed spec behind.
+func requireSpecCoverage(t *testing.T, source string, specs []*ast.Spec) {
+	t.Helper()
+	var multiEventGiven, emptyGivenList, omittedGiven, eventListOutcome, rejectionOutcome, thenAboveWhen bool
+	for _, spec := range specs {
+		multiEventGiven = multiEventGiven || len(spec.Given) > 1
+		eventListOutcome = eventListOutcome || outcomeKind(spec.Then) == "events"
+		rejectionOutcome = rejectionOutcome || outcomeKind(spec.Then) == "rejection"
+		if spec.When != nil && outcomeLine(spec.Then) > 0 {
+			thenAboveWhen = thenAboveWhen || outcomeLine(spec.Then) < spec.When.NamePos.Line
+		}
+
+		var givenEntries int
+		for _, line := range specSourceLines(t, source, spec) {
+			entry := strings.TrimSpace(line)
+			if !strings.HasPrefix(entry, "given") {
+				continue
+			}
+			givenEntries++
+			emptyGivenList = emptyGivenList || entry == "given []"
+		}
+		omittedGiven = omittedGiven || givenEntries == 0
+	}
+
+	require.True(t, multiEventGiven, "no spec gives a history of more than one event")
+	require.True(t, emptyGivenList, "no spec writes its empty given history as []")
+	require.True(t, omittedGiven, "no spec omits its given history")
+	require.True(t, eventListOutcome, "no spec states the events its command appends")
+	require.True(t, rejectionOutcome, "no spec states a rejection")
+	require.True(t, thenAboveWhen, "no spec writes its then above its when")
+}
+
+func specSourceLines(t *testing.T, source string, spec *ast.Spec) []string {
+	t.Helper()
+	lines := strings.Split(source, "\n")
+	require.Less(t, spec.OpenPos.Line, spec.ClosePos.Line, spec.Name)
+	require.LessOrEqual(t, spec.ClosePos.Line, len(lines), spec.Name)
+	return lines[spec.OpenPos.Line : spec.ClosePos.Line-1]
+}
+
+func requireASpecAheadOfALaterEntry(t *testing.T, model *ast.Model) {
+	t.Helper()
+	for _, slice := range declaredSlices(model) {
+		lastEntryLine := 0
+		for _, evt := range slice.Events {
+			lastEntryLine = max(lastEntryLine, evt.NamePos.Line)
+		}
+		for _, flow := range slice.Flows {
+			lastEntryLine = max(lastEntryLine, flow.CommandPos.Line)
+		}
+		for _, spec := range slice.Specs {
+			if spec.ClosePos.Line < lastEntryLine {
+				return
+			}
+		}
+	}
+	require.Fail(t, "no spec runs into a later entry", "every spec is written after the last entry of its slice")
+}
+
+func declaredSpecs(model *ast.Model) []*ast.Spec {
+	var specs []*ast.Spec
+	for _, slice := range declaredSlices(model) {
+		specs = append(specs, slice.Specs...)
+	}
+	return specs
+}
+
+func declaredSlices(model *ast.Model) []*ast.Slice {
+	var slices []*ast.Slice
+	for _, context := range model.Contexts {
+		slices = append(slices, context.Slices...)
+		for _, aggregate := range context.Aggregates {
+			slices = append(slices, aggregate.Slices...)
+		}
+	}
+	return slices
 }
 
 func declaredInvariant(t *testing.T, filename, source, name, statement string) *ast.Invariant {

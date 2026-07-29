@@ -55,6 +55,12 @@ func TestCheck(t *testing.T) {
 			require.Empty(t, diagnostics)
 		})
 
+		t.Run("returns an empty diagnostic list for a model stating specs in an aggregate slice and on a context slice", func(t *testing.T) {
+			diagnostics := oracle.Check(test.SpecLibraryLending, "specs.emod")
+
+			require.Empty(t, diagnostics)
+		})
+
 		t.Run("reports nothing about an invariant a context declares outside dcb mode", func(t *testing.T) {
 			tests := []struct {
 				mode   string

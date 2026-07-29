@@ -410,6 +410,164 @@ context "Reading Room" mode dcb {
 }
 `
 
+// SpecLibraryLending states the scenarios its slices must satisfy in both homes
+// a slice has — nested in an aggregate, and directly on a DCB-mode context —
+// and with both outcomes a spec's then accepts, so packages that carry specs
+// through the pipeline share one model. A spec block sits mid-block ahead of a
+// further entry on purpose, and one spec omits its given history entirely:
+// write them all last and nothing here would catch a block running on into what
+// follows it.
+const SpecLibraryLending = `# Lending a library's copies and seating its readers, with the scenarios each slice must satisfy
+model "Library Lending"
+
+actor "Member"
+
+context "Lending" {
+  aggregate "Loan" {
+    invariant OneCopyPerLoan "A loan covers exactly one copy of one title"
+    slice "Borrow Copy" {
+      trigger UI "Lending Desk" {
+        actor Member
+        reads AvailableCopiesView
+      }
+      command BorrowCopy {
+        fields {
+          memberId string required
+          copyId   string required
+          dueOn    date   required
+        }
+      }
+      spec "borrows a copy no one holds" {
+        when BorrowCopy
+        then [CopyBorrowed]
+      }
+      spec "borrows a copy the member before returned" {
+        given [CopyBorrowed, CopyReturned]
+        when BorrowCopy
+        then [CopyBorrowed]
+      }
+      event CopyBorrowed {
+        fields {
+          loanId   string required
+          memberId string required
+          copyId   string required
+          dueOn    date   required
+        }
+      }
+      spec "refuses a copy already on loan" {
+        given [CopyBorrowed]
+        when BorrowCopy
+        then rejected OneCopyPerLoan
+      }
+      flow {
+        command -> event: BorrowCopy -> CopyBorrowed
+      }
+    }
+    slice "Return Copy" {
+      command ReturnCopy {
+        fields {
+          loanId string required
+          copyId string required
+        }
+      }
+      event CopyReturned {
+        fields {
+          loanId     string    required
+          copyId     string    required
+          returnedAt timestamp required
+        }
+      }
+      spec "returns a copy the member holds" {
+        given [CopyBorrowed]
+        then [CopyReturned]
+        when ReturnCopy
+      }
+      flow {
+        command -> event: ReturnCopy -> CopyReturned
+      }
+    }
+    slice "Review Member Loans" {
+      view MemberLoansView {
+        fields {
+          loanId   string required
+          memberId string required
+          dueOn    date   required
+        }
+        subscribes [CopyBorrowed]
+      }
+    }
+  }
+}
+
+context "Reading Room" mode dcb {
+  invariant OneReaderPerDesk "A desk seats at most one reader at any moment"
+  slice "Claim Desk" {
+    command ClaimDesk {
+      fields {
+        memberId string required
+        deskId   string required
+      }
+    }
+    spec "seats a reader at a free desk" {
+      given []
+      when ClaimDesk
+      then [DeskClaimed]
+    }
+    event DeskClaimed {
+      tags {
+        desk  : deskId
+        reader: memberId
+      }
+      fields {
+        sessionId string    required
+        deskId    string    required
+        memberId  string    required
+        claimedAt timestamp required
+      }
+    }
+    spec "refuses a desk another reader is seated at" {
+      given [DeskClaimed]
+      when ClaimDesk
+      then rejected OneReaderPerDesk
+    }
+    flow {
+      command -> event: ClaimDesk -> DeskClaimed
+    }
+  }
+  slice "Release Desk" {
+    command ReleaseDesk {
+      decides_on {
+        events [DeskClaimed]
+        where tag(desk = deskId) and tag(reader = memberId)
+      }
+      fields {
+        sessionId string required
+      }
+    }
+    event DeskReleased {
+      tags {
+        desk  : deskId
+        reader: memberId
+      }
+      fields {
+        sessionId  string    required
+        deskId     string    required
+        memberId   string    required
+        releasedAt timestamp required
+      }
+    }
+    spec "frees the desk its reader is seated at" {
+      given [DeskClaimed]
+      when ReleaseDesk
+      then [DeskReleased]
+    }
+    flow {
+      command -> event: ReleaseDesk -> DeskReleased
+    }
+  }
+}
+`
+
 // WithOrdinaryFieldNames renames every field of model in place so that no name
 // spells a DSL keyword, giving KeywordFieldSearchCatalog a twin that differs
 // from it in nothing but the naming of its fields. Renaming the parsed model
