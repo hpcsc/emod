@@ -1220,6 +1220,201 @@ func TestValidate(t *testing.T) {
 		})
 	})
 
+	t.Run("duplicate invariant declarations", func(t *testing.T) {
+		t.Run("an identifier declared twice in one aggregate is reported on the redeclaration", func(t *testing.T) {
+			model := &ast.Model{
+				Contexts: []*ast.Context{
+					{
+						Name: "Lending",
+						Aggregates: []*ast.Aggregate{
+							{
+								Name: "Loan",
+								Invariants: []*ast.Invariant{
+									{Name: "OneCopyPerLoan", NamePos: ast.Position{Filename: "lending.emod", Line: 4, Column: 5}},
+									{Name: "OneCopyPerLoan", NamePos: ast.Position{Filename: "lending.emod", Line: 9, Column: 5}},
+								},
+							},
+						},
+					},
+				},
+			}
+
+			diags := validator.Validate(model)
+
+			require.Len(t, diags, 1)
+			require.Equal(t, diagnostic.Error, diags[0].Severity)
+			require.Contains(t, diags[0].Message, "OneCopyPerLoan")
+			require.Contains(t, diags[0].Message, "Loan")
+			require.Equal(t, "lending.emod", diags[0].Filename)
+			require.Equal(t, 9, diags[0].Line)
+			require.Equal(t, 5, diags[0].Column)
+		})
+
+		t.Run("an identifier declared twice on one context is reported on the redeclaration", func(t *testing.T) {
+			model := &ast.Model{
+				Contexts: []*ast.Context{
+					{
+						Name: "Reading Room",
+						Mode: "dcb",
+						Invariants: []*ast.Invariant{
+							{Name: "OneReaderPerDesk", NamePos: ast.Position{Filename: "reading.emod", Line: 3, Column: 3}},
+							{Name: "OneReaderPerDesk", NamePos: ast.Position{Filename: "reading.emod", Line: 11, Column: 3}},
+						},
+					},
+				},
+			}
+
+			diags := validator.Validate(model)
+
+			require.Len(t, diags, 1)
+			require.Equal(t, diagnostic.Error, diags[0].Severity)
+			require.Contains(t, diags[0].Message, "OneReaderPerDesk")
+			require.Contains(t, diags[0].Message, "Reading Room")
+			require.Equal(t, "reading.emod", diags[0].Filename)
+			require.Equal(t, 11, diags[0].Line)
+			require.Equal(t, 3, diags[0].Column)
+		})
+
+		t.Run("sibling aggregates may each declare the same identifier", func(t *testing.T) {
+			model := &ast.Model{
+				Contexts: []*ast.Context{
+					{
+						Name: "Lending",
+						Aggregates: []*ast.Aggregate{
+							{
+								Name: "Loan",
+								Invariants: []*ast.Invariant{
+									{Name: "OneAtATime", NamePos: ast.Position{Filename: "lending.emod", Line: 4, Column: 5}},
+								},
+							},
+							{
+								Name: "Reservation",
+								Invariants: []*ast.Invariant{
+									{Name: "OneAtATime", NamePos: ast.Position{Filename: "lending.emod", Line: 10, Column: 5}},
+								},
+							},
+						},
+					},
+				},
+			}
+
+			diags := validator.Validate(model)
+
+			require.Empty(t, diags)
+		})
+
+		t.Run("an aggregate and its enclosing context may each declare the same identifier", func(t *testing.T) {
+			model := &ast.Model{
+				Contexts: []*ast.Context{
+					{
+						Name: "Lending",
+						Invariants: []*ast.Invariant{
+							{Name: "OneAtATime", NamePos: ast.Position{Filename: "lending.emod", Line: 3, Column: 3}},
+						},
+						Aggregates: []*ast.Aggregate{
+							{
+								Name: "Loan",
+								Invariants: []*ast.Invariant{
+									{Name: "OneAtATime", NamePos: ast.Position{Filename: "lending.emod", Line: 6, Column: 5}},
+								},
+							},
+						},
+					},
+				},
+			}
+
+			diags := validator.Validate(model)
+
+			require.Empty(t, diags)
+		})
+
+		t.Run("three declarations of one identifier are reported once per redeclaration", func(t *testing.T) {
+			model := &ast.Model{
+				Contexts: []*ast.Context{
+					{
+						Name: "Lending",
+						Aggregates: []*ast.Aggregate{
+							{
+								Name: "Loan",
+								Invariants: []*ast.Invariant{
+									{Name: "OneCopyPerLoan", NamePos: ast.Position{Filename: "lending.emod", Line: 4, Column: 5}},
+									{Name: "OneCopyPerLoan", NamePos: ast.Position{Filename: "lending.emod", Line: 8, Column: 5}},
+									{Name: "OneCopyPerLoan", NamePos: ast.Position{Filename: "lending.emod", Line: 12, Column: 5}},
+								},
+							},
+						},
+					},
+				},
+			}
+
+			diags := validator.Validate(model)
+
+			require.Len(t, diags, 2)
+			require.Equal(t, 8, diags[0].Line)
+			require.Equal(t, 12, diags[1].Line)
+		})
+
+		t.Run("duplicates across scopes follow declaration order on every run", func(t *testing.T) {
+			// "Lending" declares its own invariants after its aggregate and
+			// "Billing" declares its own before, so neither walking a context
+			// ahead of its aggregates nor the reverse yields source order.
+			model := &ast.Model{
+				Contexts: []*ast.Context{
+					{
+						Name: "Lending",
+						Aggregates: []*ast.Aggregate{
+							{
+								Name: "Loan",
+								Invariants: []*ast.Invariant{
+									{Name: "Zulu", NamePos: ast.Position{Filename: "shelf.emod", Line: 5, Column: 5}},
+									{Name: "Zulu", NamePos: ast.Position{Filename: "shelf.emod", Line: 12, Column: 5}},
+								},
+							},
+						},
+						Invariants: []*ast.Invariant{
+							{Name: "Yankee", NamePos: ast.Position{Filename: "shelf.emod", Line: 20, Column: 3}},
+							{Name: "Yankee", NamePos: ast.Position{Filename: "shelf.emod", Line: 30, Column: 3}},
+						},
+					},
+					{
+						Name: "Billing",
+						Invariants: []*ast.Invariant{
+							{Name: "Bravo", NamePos: ast.Position{Filename: "shelf.emod", Line: 40, Column: 3}},
+							{Name: "Bravo", NamePos: ast.Position{Filename: "shelf.emod", Line: 50, Column: 3}},
+						},
+						Aggregates: []*ast.Aggregate{
+							{
+								Name: "Invoice",
+								Invariants: []*ast.Invariant{
+									{Name: "Alpha", NamePos: ast.Position{Filename: "shelf.emod", Line: 60, Column: 5}},
+									{Name: "Alpha", NamePos: ast.Position{Filename: "shelf.emod", Line: 70, Column: 5}},
+								},
+							},
+						},
+					},
+				},
+			}
+
+			runs := make([][]string, 0, 3)
+			for range 3 {
+				reported := make([]string, 0, 4)
+				for _, d := range validator.Validate(model) {
+					reported = append(reported, d.String())
+				}
+				runs = append(runs, reported)
+			}
+
+			require.Equal(t, []string{
+				`shelf.emod:12: invariant "Zulu" is already declared in aggregate "Loan"`,
+				`shelf.emod:30: invariant "Yankee" is already declared in context "Lending"`,
+				`shelf.emod:50: invariant "Bravo" is already declared in context "Billing"`,
+				`shelf.emod:70: invariant "Alpha" is already declared in aggregate "Invoice"`,
+			}, runs[0])
+			require.Equal(t, runs[0], runs[1])
+			require.Equal(t, runs[0], runs[2])
+		})
+	})
+
 	// ── DCB: tag field reference validation ──────────────────────────────
 
 	t.Run("tag field references", func(t *testing.T) {

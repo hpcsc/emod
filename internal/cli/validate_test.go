@@ -103,6 +103,43 @@ context "Orders" {
 		require.Contains(t, err.Error(), "does not exist")
 	})
 
+	t.Run("returns error naming the invariant an aggregate declares twice", func(t *testing.T) {
+		input := `model "Library Lending"
+context "Lending" {
+  aggregate "Loan" {
+    invariant OneCopyPerLoan "A loan covers exactly one copy of one title"
+    invariant OneCopyPerLoan "A loan is settled once"
+    slice "Borrow Copy" {
+      command BorrowCopy {
+        fields {
+          memberId string required
+          copyId   string required
+        }
+      }
+      event CopyBorrowed {
+        fields {
+          loanId   string required
+          memberId string required
+          copyId   string required
+        }
+      }
+      flow {
+        command -> event: BorrowCopy -> CopyBorrowed
+      }
+    }
+  }
+}
+`
+		path := writeTemp(t, "duplicate_invariant.emod", input)
+
+		err := cli.RunValidate(path, "text")
+
+		var lintErr *cli.LintError
+		require.True(t, errors.As(err, &lintErr))
+		require.Equal(t, 1, lintErr.ExitCode)
+		require.Contains(t, err.Error(), `invariant "OneCopyPerLoan" is already declared in aggregate "Loan"`)
+	})
+
 	t.Run("returns no error for valid multi-context model", func(t *testing.T) {
 		input := `model "Multi Context Test"
 
