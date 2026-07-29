@@ -180,6 +180,47 @@ context "Lending" {
 		require.Contains(t, err.Error(), `event "CopyBorroed" does not exist`)
 	})
 
+	t.Run("returns error naming the invariant a spec rejects from outside the declaring scope", func(t *testing.T) {
+		input := `model "Library Lending"
+context "Lending" {
+  invariant FiveCopiesPerMember "A member holds at most five copies at one time"
+  aggregate "Loan" {
+    slice "Borrow Copy" {
+      command BorrowCopy {
+        fields {
+          memberId string required
+          copyId   string required
+        }
+      }
+      event CopyBorrowed {
+        fields {
+          loanId   string required
+          memberId string required
+          copyId   string required
+        }
+      }
+      spec "refuses a member who already holds five copies" {
+        given [CopyBorrowed]
+        when BorrowCopy
+        then rejected FiveCopiesPerMember
+      }
+      flow {
+        command -> event: BorrowCopy -> CopyBorrowed
+      }
+    }
+  }
+}
+`
+		path := writeTemp(t, "rejected_out_of_scope.emod", input)
+
+		err := cli.RunValidate(path, "text")
+
+		var lintErr *cli.LintError
+		require.True(t, errors.As(err, &lintErr))
+		require.Equal(t, 1, lintErr.ExitCode)
+		require.Contains(t, err.Error(), `invariant "FiveCopiesPerMember" is not declared in aggregate "Loan"`)
+	})
+
 	t.Run("returns no error for valid multi-context model", func(t *testing.T) {
 		input := `model "Multi Context Test"
 

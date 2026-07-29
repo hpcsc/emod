@@ -1205,11 +1205,7 @@ func TestValidate(t *testing.T) {
 
 			runs := make([][]string, 0, 3)
 			for range 3 {
-				reported := make([]string, 0, 5)
-				for _, d := range validator.Validate(model) {
-					reported = append(reported, d.String())
-				}
-				runs = append(runs, reported)
+				runs = append(runs, reportedLines(validator.Validate(model)))
 			}
 
 			require.Equal(t, []string{
@@ -1221,6 +1217,358 @@ func TestValidate(t *testing.T) {
 			}, runs[0])
 			require.Equal(t, runs[0], runs[1])
 			require.Equal(t, runs[0], runs[2])
+		})
+
+		t.Run("rejected invariant resolution", func(t *testing.T) {
+			t.Run("a rejection resolves against the invariants of the scope that owns the slice", func(t *testing.T) {
+				model := &ast.Model{
+					Contexts: []*ast.Context{
+						{
+							Name: "Lending",
+							Aggregates: []*ast.Aggregate{
+								{
+									Name:       "Loan",
+									Invariants: []*ast.Invariant{{Name: "OneCopyPerLoan"}},
+									Slices: []*ast.Slice{
+										{
+											Name:     "Borrow Copy",
+											Commands: []*ast.Command{{Name: "BorrowCopy"}},
+											Events:   []*ast.Event{{Name: "CopyBorrowed"}},
+											Flows:    []*ast.Flow{{CommandName: "BorrowCopy", EventName: "CopyBorrowed"}},
+											Specs: []*ast.Spec{
+												{
+													Name:  "refuses a copy already on loan",
+													Given: []*ast.SpecElement{{Name: "CopyBorrowed"}},
+													When:  &ast.SpecElement{Name: "BorrowCopy"},
+													Then:  &ast.ThenRejected{InvariantName: "OneCopyPerLoan"},
+												},
+											},
+										},
+									},
+								},
+							},
+						},
+						{
+							Name:       "Reading Room",
+							Mode:       "dcb",
+							Invariants: []*ast.Invariant{{Name: "OneReaderPerDesk"}},
+							Slices: []*ast.Slice{
+								{
+									Name:     "Claim Desk",
+									Commands: []*ast.Command{{Name: "ClaimDesk"}},
+									Events:   []*ast.Event{{Name: "DeskClaimed"}},
+									Flows:    []*ast.Flow{{CommandName: "ClaimDesk", EventName: "DeskClaimed"}},
+									Specs: []*ast.Spec{
+										{
+											Name:  "refuses a desk another reader is seated at",
+											Given: []*ast.SpecElement{{Name: "DeskClaimed"}},
+											When:  &ast.SpecElement{Name: "ClaimDesk"},
+											Then:  &ast.ThenRejected{InvariantName: "OneReaderPerDesk"},
+										},
+									},
+								},
+							},
+						},
+					},
+				}
+
+				diags := validator.Validate(model)
+
+				require.Empty(t, diags)
+			})
+
+			t.Run("a rejection naming an invariant no scope declares is reported on the reference", func(t *testing.T) {
+				model := &ast.Model{
+					Contexts: []*ast.Context{
+						{
+							Name: "Lending",
+							Aggregates: []*ast.Aggregate{
+								{
+									Name:       "Loan",
+									Invariants: []*ast.Invariant{{Name: "OneCopyPerLoan"}},
+									Slices: []*ast.Slice{
+										{
+											Name:     "Borrow Copy",
+											Commands: []*ast.Command{{Name: "BorrowCopy"}},
+											Events:   []*ast.Event{{Name: "CopyBorrowed"}},
+											Flows:    []*ast.Flow{{CommandName: "BorrowCopy", EventName: "CopyBorrowed"}},
+											Specs: []*ast.Spec{
+												{
+													Name:  "refuses a copy already on loan",
+													Given: []*ast.SpecElement{{Name: "CopyBorrowed"}},
+													When:  &ast.SpecElement{Name: "BorrowCopy"},
+													Then: &ast.ThenRejected{
+														InvariantName: "OneCopyPerLon",
+														InvariantPos:  ast.Position{Filename: "lending.emod", Line: 18, Column: 21},
+													},
+												},
+											},
+										},
+									},
+								},
+							},
+						},
+					},
+				}
+
+				diags := validator.Validate(model)
+
+				require.Equal(t, []*diagnostic.Entry{
+					{
+						Filename: "lending.emod",
+						Line:     18,
+						Column:   21,
+						Severity: diagnostic.Error,
+						Message:  `invariant "OneCopyPerLon" is not declared in aggregate "Loan"`,
+					},
+				}, diags)
+			})
+
+			t.Run("an invariant declared only on a sibling aggregate does not resolve", func(t *testing.T) {
+				model := &ast.Model{
+					Contexts: []*ast.Context{
+						{
+							Name: "Lending",
+							Aggregates: []*ast.Aggregate{
+								{
+									Name: "Loan",
+									Slices: []*ast.Slice{
+										{
+											Name:     "Borrow Copy",
+											Commands: []*ast.Command{{Name: "BorrowCopy"}},
+											Events:   []*ast.Event{{Name: "CopyBorrowed"}},
+											Flows:    []*ast.Flow{{CommandName: "BorrowCopy", EventName: "CopyBorrowed"}},
+											Specs: []*ast.Spec{
+												{
+													Name:  "refuses a copy already on loan",
+													Given: []*ast.SpecElement{{Name: "CopyBorrowed"}},
+													When:  &ast.SpecElement{Name: "BorrowCopy"},
+													Then: &ast.ThenRejected{
+														InvariantName: "OneHoldPerCopy",
+														InvariantPos:  ast.Position{Filename: "lending.emod", Line: 15, Column: 21},
+													},
+												},
+											},
+										},
+									},
+								},
+								{
+									Name:       "Reservation",
+									Invariants: []*ast.Invariant{{Name: "OneHoldPerCopy"}},
+									Slices: []*ast.Slice{
+										{
+											Name:     "Hold Copy",
+											Commands: []*ast.Command{{Name: "HoldCopy"}},
+											Events:   []*ast.Event{{Name: "CopyHeld"}},
+											Flows:    []*ast.Flow{{CommandName: "HoldCopy", EventName: "CopyHeld"}},
+										},
+									},
+								},
+							},
+						},
+					},
+				}
+
+				diags := validator.Validate(model)
+
+				require.Len(t, diags, 1)
+				require.Equal(t, `lending.emod:15: invariant "OneHoldPerCopy" is not declared in aggregate "Loan"`, diags[0].String())
+			})
+
+			t.Run("an aggregate and its enclosing context are separate scopes in both directions", func(t *testing.T) {
+				model := &ast.Model{
+					Contexts: []*ast.Context{
+						{
+							Name:       "Lending",
+							Invariants: []*ast.Invariant{{Name: "FiveCopiesPerMember"}},
+							Aggregates: []*ast.Aggregate{
+								{
+									Name:       "Loan",
+									Invariants: []*ast.Invariant{{Name: "OneCopyPerLoan"}},
+									Slices: []*ast.Slice{
+										{
+											Name:     "Borrow Copy",
+											Commands: []*ast.Command{{Name: "BorrowCopy"}},
+											Events:   []*ast.Event{{Name: "CopyBorrowed"}},
+											Flows:    []*ast.Flow{{CommandName: "BorrowCopy", EventName: "CopyBorrowed"}},
+											Specs: []*ast.Spec{
+												{
+													Name:  "refuses a member holding five copies",
+													Given: []*ast.SpecElement{{Name: "CopyBorrowed"}},
+													When:  &ast.SpecElement{Name: "BorrowCopy"},
+													Then: &ast.ThenRejected{
+														InvariantName: "FiveCopiesPerMember",
+														InvariantPos:  ast.Position{Filename: "lending.emod", Line: 16, Column: 21},
+													},
+												},
+											},
+										},
+									},
+								},
+							},
+							Slices: []*ast.Slice{
+								{
+									Name:     "Waive Fine",
+									Commands: []*ast.Command{{Name: "WaiveFine"}},
+									Events:   []*ast.Event{{Name: "FineWaived"}},
+									Flows:    []*ast.Flow{{CommandName: "WaiveFine", EventName: "FineWaived"}},
+									Specs: []*ast.Spec{
+										{
+											Name: "refuses a waiver on a copy still on loan",
+											When: &ast.SpecElement{Name: "WaiveFine"},
+											Then: &ast.ThenRejected{
+												InvariantName: "OneCopyPerLoan",
+												InvariantPos:  ast.Position{Filename: "lending.emod", Line: 30, Column: 19},
+											},
+										},
+									},
+								},
+							},
+						},
+					},
+				}
+
+				diags := validator.Validate(model)
+
+				require.Equal(t, []string{
+					`lending.emod:16: invariant "FiveCopiesPerMember" is not declared in aggregate "Loan"`,
+					`lending.emod:30: invariant "OneCopyPerLoan" is not declared in context "Lending"`,
+				}, reportedLines(diags))
+			})
+
+			t.Run("two scopes declaring one invariant name each resolve their own rejections", func(t *testing.T) {
+				model := &ast.Model{
+					Contexts: []*ast.Context{
+						{
+							Name: "Lending",
+							Aggregates: []*ast.Aggregate{
+								{
+									Name:       "Loan",
+									Invariants: []*ast.Invariant{{Name: "OneAtATime"}},
+									Slices: []*ast.Slice{
+										{
+											Name:     "Borrow Copy",
+											Commands: []*ast.Command{{Name: "BorrowCopy"}},
+											Events:   []*ast.Event{{Name: "CopyBorrowed"}},
+											Flows:    []*ast.Flow{{CommandName: "BorrowCopy", EventName: "CopyBorrowed"}},
+											Specs: []*ast.Spec{
+												{
+													Name:  "refuses a copy already on loan",
+													Given: []*ast.SpecElement{{Name: "CopyBorrowed"}},
+													When:  &ast.SpecElement{Name: "BorrowCopy"},
+													Then:  &ast.ThenRejected{InvariantName: "OneAtATime"},
+												},
+											},
+										},
+									},
+								},
+								{
+									Name:       "Reservation",
+									Invariants: []*ast.Invariant{{Name: "OneAtATime"}},
+									Slices: []*ast.Slice{
+										{
+											Name:     "Hold Copy",
+											Commands: []*ast.Command{{Name: "HoldCopy"}},
+											Events:   []*ast.Event{{Name: "CopyHeld"}},
+											Flows:    []*ast.Flow{{CommandName: "HoldCopy", EventName: "CopyHeld"}},
+											Specs: []*ast.Spec{
+												{
+													Name:  "refuses a second hold on one copy",
+													Given: []*ast.SpecElement{{Name: "CopyHeld"}},
+													When:  &ast.SpecElement{Name: "HoldCopy"},
+													Then:  &ast.ThenRejected{InvariantName: "OneAtATime"},
+												},
+											},
+										},
+									},
+								},
+							},
+						},
+					},
+				}
+
+				diags := validator.Validate(model)
+
+				require.Empty(t, diags)
+			})
+
+			t.Run("unresolved rejections follow declaration order across both slice homes", func(t *testing.T) {
+				// "Lending" states one of its own slices ahead of its aggregate's and
+				// one after, so neither walking a context ahead of its aggregates nor
+				// the reverse yields source order.
+				model := &ast.Model{
+					Contexts: []*ast.Context{
+						{
+							Name:       "Lending",
+							Invariants: []*ast.Invariant{{Name: "FiveCopiesPerMember"}},
+							Aggregates: []*ast.Aggregate{
+								{
+									Name:       "Loan",
+									Invariants: []*ast.Invariant{{Name: "OneCopyPerLoan"}},
+									Slices: []*ast.Slice{
+										{
+											Name:     "Borrow Copy",
+											Commands: []*ast.Command{{Name: "BorrowCopy"}},
+											Events:   []*ast.Event{{Name: "CopyBorrowed"}},
+											Flows:    []*ast.Flow{{CommandName: "BorrowCopy", EventName: "CopyBorrowed"}},
+											Specs: []*ast.Spec{
+												{
+													Name: "refuses a copy already on loan",
+													When: &ast.SpecElement{Name: "BorrowCopy"},
+													Then: &ast.ThenRejected{
+														InvariantName: "OneCopyPerLon",
+														InvariantPos:  ast.Position{Filename: "shelf.emod", Line: 40, Column: 21},
+													},
+												},
+											},
+										},
+									},
+								},
+							},
+							Slices: []*ast.Slice{
+								{
+									Name:     "Waive Fine",
+									Commands: []*ast.Command{{Name: "WaiveFine"}},
+									Events:   []*ast.Event{{Name: "FineWaived"}},
+									Flows:    []*ast.Flow{{CommandName: "WaiveFine", EventName: "FineWaived"}},
+									Specs: []*ast.Spec{
+										{
+											Name: "refuses a waiver above the member's allowance",
+											When: &ast.SpecElement{Name: "WaiveFine"},
+											Then: &ast.ThenRejected{
+												InvariantName: "FiveCopiesPerMemer",
+												InvariantPos:  ast.Position{Filename: "shelf.emod", Line: 14, Column: 19},
+											},
+										},
+									},
+								},
+								{
+									Name:     "Renew Loan",
+									Commands: []*ast.Command{{Name: "RenewLoan"}},
+									Events:   []*ast.Event{{Name: "LoanRenewed"}},
+									Flows:    []*ast.Flow{{CommandName: "RenewLoan", EventName: "LoanRenewed"}},
+									Specs: []*ast.Spec{
+										{
+											Name: "refuses a renewal another member is waiting on",
+											When: &ast.SpecElement{Name: "RenewLoan"},
+											Then: &ast.ThenRejected{
+												InvariantName: "NoQueueSkipping",
+												InvariantPos:  ast.Position{Filename: "shelf.emod", Line: 70, Column: 19},
+											},
+										},
+									},
+								},
+							},
+						},
+					},
+				}
+
+				require.Equal(t, []string{
+					`shelf.emod:14: invariant "FiveCopiesPerMemer" is not declared in context "Lending"`,
+					`shelf.emod:40: invariant "OneCopyPerLon" is not declared in aggregate "Loan"`,
+					`shelf.emod:70: invariant "NoQueueSkipping" is not declared in context "Lending"`,
+				}, reportedLines(validator.Validate(model)))
+			})
 		})
 	})
 
@@ -1738,11 +2086,7 @@ func TestValidate(t *testing.T) {
 
 			runs := make([][]string, 0, 3)
 			for range 3 {
-				reported := make([]string, 0, 4)
-				for _, d := range validator.Validate(model) {
-					reported = append(reported, d.String())
-				}
-				runs = append(runs, reported)
+				runs = append(runs, reportedLines(validator.Validate(model)))
 			}
 
 			require.Equal(t, []string{
@@ -2559,4 +2903,13 @@ func TestValidate(t *testing.T) {
 			require.Empty(t, diags)
 		})
 	})
+}
+
+func reportedLines(diags []*diagnostic.Entry) []string {
+	lines := make([]string, 0, len(diags))
+	for _, d := range diags {
+		lines = append(lines, d.String())
+	}
+
+	return lines
 }
