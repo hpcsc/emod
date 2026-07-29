@@ -4,7 +4,7 @@
 - [x] Task 1: Render a markdown glossary of the model, its contexts and their aggregates
 - [x] Task 2: List each context's commands, events, views and actors in the glossary
 - [x] Task 3: Emit the same glossary as structured JSON under `-f json`
-- [ ] Task 4: Document `emod glossary` in the README and the DSL reference
+- [x] Task 4: Document `emod glossary` in the README and the DSL reference
 
 ---
 

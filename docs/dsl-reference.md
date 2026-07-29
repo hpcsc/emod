@@ -459,7 +459,9 @@ context "Reservations" {
 - **`emod fmt` moves it to the first line of the block**, ahead of the pattern-specific attributes and `fields`. A `model` or `actor` that carries a description is formatted in its block form.
 - **Exports carry the text:** `emod export --format json` and `emod export --format cue` emit a `description` key on the model, on each actor and on each described construct; the key is absent where no description was written. The bundled schema printed by `emod schema` declares it as an optional key on every definition that accepts one.
 - **Diagrams surface it on the shape:** `emod diagram --format drawio` attaches the description to the construct's shape as a tooltip, and `emod diagram --format svg` emits it as a `<title>` element inside the shape, which browsers show on hover.
-- **A construct without a shape reaches the exports only:** `model`, `actor`, `aggregate` and `slice` own no shape in either renderer. The `mermaid` and `ascii` formats carry no descriptions at all.
+- **A construct without a shape stays off the diagrams:** `model`, `actor`, `aggregate` and `slice` own no shape in either renderer. The `mermaid` and `ascii` formats carry no descriptions at all.
+- **The glossary reads it as the definition:** `emod glossary` prints the description beneath the name it defines — the model, every actor, and each context with its aggregates and the commands, events and views its slices declare. `emod glossary --format json` pairs every name with a `description` key that stays present even where no description was written.
+- **A construct that defines no term stays out of the glossary:** `slice`, `trigger`, `automation` and `translation` contribute no term of their own in either format, so their descriptions do not reach it.
 
 ---
 

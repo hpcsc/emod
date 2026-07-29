@@ -133,6 +133,13 @@ emod export reservation.emod -f cue   # CUE schema
 emod slices reservation.emod
 ```
 
+### Render a glossary
+
+```bash
+emod glossary reservation.emod          # markdown (default)
+emod glossary reservation.emod -f json  # JSON
+```
+
 ## Editor Setup
 
 The `emod` binary must be on your `PATH` for editor integrations to work.
