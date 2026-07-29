@@ -484,27 +484,21 @@ func TestFormat(t *testing.T) {
 			}, "\n")
 
 			original := parseModel(t, input, "test.emod")
-			firstFormat := formatter.Format(original)
-			reparsed := parseModel(t, firstFormat, "formatted.emod")
+			reparsed := requireStableFormat(t, original)
 
 			test.RequireEqual(t, original, reparsed, ignoreFormatterNormalizations)
 			test.RequireEqual(t, []*ast.Field{
 				{Name: "roomType", Type: "string"},
 				{Name: "guestId", Type: "string", Modifier: "required"},
 			}, reparsed.Contexts[0].Aggregates[0].Slices[0].Commands[0].Fields, ignoreFormatterNormalizations)
-			require.Equal(t, firstFormat, formatter.Format(reparsed),
-				"a second format run should produce identical bytes")
 		})
 
 		t.Run("round-trip: fields named after keywords survive formatting", func(t *testing.T) {
 			original := parseModel(t, test.KeywordFieldSearchCatalog, "keyword-fields.emod")
 
-			firstFormat := formatter.Format(original)
-			reparsed := parseModel(t, firstFormat, "formatted.emod")
+			reparsed := requireStableFormat(t, original)
 
 			test.RequireEqual(t, original, reparsed, ignoreFormatterNormalizations)
-			require.Equal(t, firstFormat, formatter.Format(reparsed),
-				"a second format run should produce identical bytes")
 		})
 
 		t.Run("round-trip: a description on every construct survives formatting", func(t *testing.T) {
@@ -528,25 +522,84 @@ func TestFormat(t *testing.T) {
 				t.Run(testCase.hazard, func(t *testing.T) {
 					source := "model \"Hotel\" {\n  description \"" + testCase.description + "\"\n}\n"
 
-					original := parseModel(t, source, "described.emod")
-					formatted := formatter.Format(original)
-					reparsed := parseModel(t, formatted, "described.emod")
+					reparsed := requireStableFormat(t, parseModel(t, source, "described.emod"))
 
 					require.Equal(t, testCase.description, reparsed.Description)
-					require.Equal(t, formatted, formatter.Format(reparsed),
-						"a second format run should not re-encode the description")
 				})
 			}
 		})
 
+		t.Run("round-trip: invariants declared on an aggregate and on a dcb context survive formatting", func(t *testing.T) {
+			original := parseModel(t, test.InvariantLibraryLending, "library-lending.emod")
+
+			reparsed := requireStableFormat(t, original)
+
+			test.RequireEqual(t, original, reparsed, ignoreFormatterNormalizations)
+			test.RequireEqual(t, []*ast.Invariant{
+				{Name: "OneCopyPerLoan", Statement: "A loan covers exactly one copy of one title"},
+				{Name: "FiveCopiesPerMember", Statement: "A member holds at most five copies at one time"},
+			}, reparsed.Contexts[0].Aggregates[0].Invariants, ignoreFormatterNormalizations)
+			test.RequireEqual(t, []*ast.Invariant{
+				{Name: "OneReaderPerDesk", Statement: "A desk seats at most one reader at any moment"},
+				{Name: "OneDeskPerReader", Statement: "A reader holds at most one desk for the length of a session"},
+				{Name: "DeskFreeAtClosing", Statement: "No desk stays claimed past the closing hour"},
+			}, reparsed.Contexts[1].Invariants, ignoreFormatterNormalizations)
+		})
+
+		t.Run("round-trip: an invariant statement survives text that quoting could mangle", func(t *testing.T) {
+			for _, testCase := range []struct {
+				hazard    string
+				statement string
+			}{
+				{"backslash", `The shelf map lives in C:\library\stacks`},
+				{"tab", "Two columns:\tcopy then due date"},
+				{"newline", "Two lines:\ncopy then due date"},
+				{"percent", "At most 10% of the stock is on loan at once"},
+				{"non-ascii", "A member holds ≤5 copies"},
+			} {
+				t.Run(testCase.hazard, func(t *testing.T) {
+					source := strings.Join([]string{
+						`model "Library Lending"`,
+						``,
+						`context "Lending" {`,
+						`  aggregate "Loan" {`,
+						`    invariant CopyLimit "` + testCase.statement + `"`,
+						`  }`,
+						`}`,
+						``,
+					}, "\n")
+
+					reparsed := requireStableFormat(t, parseModel(t, source, "library-lending.emod"))
+
+					require.Equal(t, testCase.statement,
+						reparsed.Contexts[0].Aggregates[0].Invariants[0].Statement)
+				})
+			}
+		})
+
+		t.Run("round-trip: an invariant named but not yet written down is still written back", func(t *testing.T) {
+			source := strings.Join([]string{
+				`model "Library Lending"`,
+				``,
+				`context "Lending" {`,
+				`  aggregate "Loan" {`,
+				`    invariant OneCopyPerLoan "A loan covers exactly one copy of one title"`,
+				`    invariant OverdueFine ""`,
+				`  }`,
+				`}`,
+				``,
+			}, "\n")
+
+			reparsed := requireStableFormat(t, parseModel(t, source, "library-lending.emod"))
+
+			test.RequireEqual(t, []*ast.Invariant{
+				{Name: "OneCopyPerLoan", Statement: "A loan covers exactly one copy of one title"},
+				{Name: "OverdueFine", Statement: ""},
+			}, reparsed.Contexts[0].Aggregates[0].Invariants, ignoreFormatterNormalizations)
+		})
+
 		t.Run("idempotency: format(format(described input)) equals format(described input)", func(t *testing.T) {
-			original := parseModel(t, test.DescribedHotelReservation, "described.emod")
-
-			firstFormat := formatter.Format(original)
-			secondFormat := formatter.Format(parseModel(t, firstFormat, "formatted.emod"))
-
-			require.Equal(t, firstFormat, secondFormat,
-				"formatting the already-formatted output should produce identical bytes")
+			requireStableFormat(t, parseModel(t, test.DescribedHotelReservation, "described.emod"))
 		})
 	})
 
@@ -830,6 +883,42 @@ func TestFormat(t *testing.T) {
 			require.Equal(t, `description "Notifies whoever asked once the thing is done"`, lineAfter(t, result, `automation Reactor {`))
 			require.Equal(t, `description "Restates a partner report as a thing"`, lineAfter(t, result, `translation Importer {`))
 			require.Equal(t, `description "A partner reported a thing"`, lineAfter(t, result, `event ThingImported {`))
+		})
+
+		t.Run("canonical order gathers invariants after the description and ahead of the first aggregate or slice", func(t *testing.T) {
+			input := strings.Join([]string{
+				`model "Library Lending"`,
+				``,
+				`context "Lending" {`,
+				`  description "How the library lends its copies"`,
+				`  aggregate "Loan" {`,
+				`    description "One member holding one copy over one loan period"`,
+				`    slice "Borrow Copy" {`,
+				`    }`,
+				`    invariant OneCopyPerLoan "A loan covers exactly one copy of one title"`,
+				`    invariant FiveCopiesPerMember "A member holds at most five copies at one time"`,
+				`  }`,
+				`  invariant EveryLoanHasABorrower "Every loan names the member who holds it"`,
+				`  invariant CopiesReturnToTheShelf "A returned copy is back on the shelf the same day"`,
+				`}`,
+				``,
+			}, "\n")
+
+			result := formatter.Format(parseModel(t, input, "library-lending.emod"))
+
+			require.Equal(t, `invariant EveryLoanHasABorrower "Every loan names the member who holds it"`,
+				lineAfter(t, result, `description "How the library lends its copies"`))
+			require.Equal(t, `invariant CopiesReturnToTheShelf "A returned copy is back on the shelf the same day"`,
+				lineAfter(t, result, `invariant EveryLoanHasABorrower "Every loan names the member who holds it"`))
+			require.Equal(t, `aggregate "Loan" {`,
+				lineAfter(t, result, `invariant CopiesReturnToTheShelf "A returned copy is back on the shelf the same day"`))
+
+			require.Equal(t, `invariant OneCopyPerLoan "A loan covers exactly one copy of one title"`,
+				lineAfter(t, result, `description "One member holding one copy over one loan period"`))
+			require.Equal(t, `invariant FiveCopiesPerMember "A member holds at most five copies at one time"`,
+				lineAfter(t, result, `invariant OneCopyPerLoan "A loan covers exactly one copy of one title"`))
+			require.Equal(t, `slice "Borrow Copy" {`,
+				lineAfter(t, result, `invariant FiveCopiesPerMember "A member holds at most five copies at one time"`))
 		})
 
 		t.Run("event with source external but empty provider omits source line", func(t *testing.T) {
@@ -1437,13 +1526,42 @@ func TestFormat(t *testing.T) {
 		})
 
 		t.Run("idempotency: format(format(input)) equals format(input)", func(t *testing.T) {
-			original := parseFixture(t, "all_patterns.emod")
+			requireStableFormat(t, parseFixture(t, "all_patterns.emod"))
+		})
 
-			firstFormat := formatter.Format(original)
-			secondFormat := formatter.Format(parseModel(t, firstFormat, "formatted.emod"))
+		t.Run("comment above an invariant stays directly above it at the invariant's indentation", func(t *testing.T) {
+			input := strings.Join([]string{
+				`model "Library Lending"`,
+				``,
+				`context "Lending" {`,
+				`  aggregate "Loan" {`,
+				`    # A shelf at a time would let a member empty a series`,
+				`    invariant OneCopyPerLoan "A loan covers exactly one copy of one title"`,
+				`    slice "Borrow Copy" {`,
+				`    }`,
+				`  }`,
+				`}`,
+				``,
+			}, "\n")
 
-			require.Equal(t, firstFormat, secondFormat,
-				"formatting the already-formatted output should produce identical bytes")
+			result := formatter.Format(parseModel(t, input, "library-lending.emod"))
+
+			expected := strings.Join([]string{
+				`emod 1`,
+				`model "Library Lending"`,
+				``,
+				`context "Lending" {`,
+				`  aggregate "Loan" {`,
+				`    # A shelf at a time would let a member empty a series`,
+				`    invariant OneCopyPerLoan "A loan covers exactly one copy of one title"`,
+				`    slice "Borrow Copy" {`,
+				`    }`,
+				`  }`,
+				`}`,
+				``,
+			}, "\n")
+
+			require.Equal(t, expected, result)
 		})
 
 		t.Run("comment on deeply nested command inside slice", func(t *testing.T) {
@@ -2926,13 +3044,7 @@ func TestFormat(t *testing.T) {
 				``,
 			}, "\n")
 
-			original := parseModel(t, input, "test.emod")
-
-			firstFormat := formatter.Format(original)
-			secondFormat := formatter.Format(parseModel(t, firstFormat, "formatted.emod"))
-
-			require.Equal(t, firstFormat, secondFormat,
-				"formatting the already-formatted DCB output should produce identical bytes")
+			requireStableFormat(t, parseModel(t, input, "test.emod"))
 		})
 	})
 }
@@ -2956,6 +3068,18 @@ func parseFixture(t *testing.T, filename string) *ast.Model {
 	require.NoError(t, err)
 
 	return parseModel(t, string(source), filename)
+}
+
+func requireStableFormat(t *testing.T, model *ast.Model) *ast.Model {
+	t.Helper()
+
+	formatted := formatter.Format(model)
+	reparsed := parseModel(t, formatted, "formatted.emod")
+
+	require.Equal(t, formatted, formatter.Format(reparsed),
+		"formatting the already-formatted output should produce identical bytes")
+
+	return reparsed
 }
 
 func lineAfter(t *testing.T, formatted, blockHeader string) string {

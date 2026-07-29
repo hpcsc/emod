@@ -320,6 +320,25 @@ func TestFmt(t *testing.T) {
 		requireFmtSettlesOn(t, path, keywordFieldFormattedEmod)
 	})
 
+	t.Run("keeps every declared invariant and settles after one run", func(t *testing.T) {
+		path := writeTemp(t, "library-lending.emod", invariantEmod)
+
+		require.NoError(t, cli.RunFmt(path, false))
+
+		formatted := readFile(t, path)
+		for _, declaration := range []string{
+			`invariant OneCopyPerLoan "A loan covers exactly one copy of one title"`,
+			`invariant FiveCopiesPerMember "A member holds at most five copies at one time"`,
+			`invariant OneReaderPerDesk "A desk seats at most one reader at any moment"`,
+			`invariant OneDeskPerReader "A reader holds at most one desk for the length of a session"`,
+			`invariant DeskFreeAtClosing "No desk stays claimed past the closing hour"`,
+		} {
+			require.Contains(t, formatted, declaration)
+		}
+
+		requireFmtSettlesOn(t, path, formatted)
+	})
+
 	t.Run("check mode returns nil when file is already formatted", func(t *testing.T) {
 		path := writeTemp(t, "clean.emod", formattedEmod)
 

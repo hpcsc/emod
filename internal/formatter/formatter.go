@@ -61,6 +61,13 @@ func (w *writer) writeDescription(description string, level int) {
 	w.line(level, "description %s", quoted(description))
 }
 
+func (w *writer) writeInvariants(invariants []*ast.Invariant, level int) {
+	for _, invariant := range invariants {
+		w.writeComments(invariant.Comments, level)
+		w.line(level, "invariant %s %s", invariant.Name, quoted(invariant.Statement))
+	}
+}
+
 func (w *writer) writeDeclaration(keyword, name, description string) {
 	if description == "" {
 		w.line(0, "%s %s", keyword, quoted(name))
@@ -103,6 +110,7 @@ func (w *writer) writeContext(ctx *ast.Context, level int) {
 		w.line(level, "context %s {", quoted(ctx.Name))
 	}
 	w.writeDescription(ctx.Description, level+1)
+	w.writeInvariants(ctx.Invariants, level+1)
 
 	separate := w.blankLineBetweenBlocks()
 	for _, agg := range ctx.Aggregates {
@@ -120,6 +128,7 @@ func (w *writer) writeAggregate(agg *ast.Aggregate, level int) {
 	w.writeComments(agg.Comments, level)
 	w.line(level, "aggregate %s {", quoted(agg.Name))
 	w.writeDescription(agg.Description, level+1)
+	w.writeInvariants(agg.Invariants, level+1)
 
 	separate := w.blankLineBetweenBlocks()
 	for _, slice := range agg.Slices {

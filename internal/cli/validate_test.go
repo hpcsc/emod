@@ -20,6 +20,7 @@ const (
 	validEmod        = test.HotelReservation
 	describedEmod    = test.DescribedHotelReservation
 	keywordFieldEmod = test.KeywordFieldSearchCatalog
+	invariantEmod    = test.InvariantLibraryLending
 	invalidEmod      = test.Unparseable
 )
 
