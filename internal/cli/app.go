@@ -173,7 +173,7 @@ func NewApp() *urfave.App {
 					&urfave.StringFlag{
 						Name:    "format",
 						Aliases: []string{"f"},
-						Usage:   "Output format (markdown)",
+						Usage:   "Output format (markdown, json)",
 						Value:   "markdown",
 					},
 				},

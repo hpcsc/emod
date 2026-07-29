@@ -8,9 +8,9 @@ import (
 )
 
 func RunGlossary(path, format string) error {
-	if format != "markdown" {
+	if format != "markdown" && format != "json" {
 		return &LintError{
-			Message:  fmt.Sprintf("unsupported format %q; supported formats: markdown", format),
+			Message:  fmt.Sprintf("unsupported format %q; supported formats: markdown, json", format),
 			ExitCode: 1,
 			Cause:    ErrUnsupportedFormat,
 		}
@@ -21,7 +21,12 @@ func RunGlossary(path, format string) error {
 		return err
 	}
 
-	rendered, err := glossary.RenderMarkdown(model)
+	render := glossary.RenderMarkdown
+	if format == "json" {
+		render = glossary.RenderJSON
+	}
+
+	rendered, err := render(model)
 	if err != nil {
 		return &LintError{
 			Message:  fmt.Sprintf("rendering glossary: %s", err),

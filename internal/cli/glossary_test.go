@@ -3,6 +3,7 @@
 package cli_test
 
 import (
+	"encoding/json"
 	"errors"
 	"testing"
 
@@ -142,6 +143,86 @@ A person booking a room, not necessarily the one staying in it
 		})
 	})
 
+	t.Run("json", func(t *testing.T) {
+		t.Run("pairs every term with the description the model declares for it, ordered as the markdown lists them", func(t *testing.T) {
+			path := writeTemp(t, "described.emod", describedEmod)
+
+			var err error
+			stdout := captureStdout(t, func() {
+				err = runCommandLine(t, "emod", "glossary", path, "-f", "json")
+			})
+			require.NoError(t, err)
+
+			var doc map[string]any
+			require.NoError(t, json.Unmarshal([]byte(stdout), &doc))
+
+			require.Equal(t, map[string]any{
+				"name":        "Hotel Reservation",
+				"description": "How the hotel takes, confirms and imports room bookings",
+				"contexts": []any{map[string]any{
+					"name":        "Reservations",
+					"description": "Everything the hotel knows about a stay before the guest arrives",
+					"aggregates": []any{
+						map[string]any{"name": "Reservation", "description": "One guest holding one room over one date range"},
+					},
+					"commands": []any{
+						map[string]any{"name": "MakeReservation", "description": "Ask the hotel to hold a room for a date range, 10% deposit taken up front"},
+						map[string]any{"name": "ConfirmReservation", "description": "Turn a held room into a confirmed stay"},
+						map[string]any{"name": "ImportBooking", "description": "Record a booking taken by a partner site"},
+					},
+					"events": []any{
+						map[string]any{"name": "ReservationMade", "description": "A room is held for a guest"},
+						map[string]any{"name": "BookingImported", "description": "A partner site reported a booking"},
+					},
+					"views": []any{
+						map[string]any{"name": "ReservationsView", "description": "Every reservation with the stage it has reached"},
+					},
+					"actors": []any{
+						map[string]any{"name": "Guest", "description": "A person booking a room, not necessarily the one staying in it"},
+					},
+				}},
+			}, doc)
+		})
+
+		t.Run("keeps a description key on every term of a model that describes none of them", func(t *testing.T) {
+			path := writeTemp(t, "undescribed.emod", validEmod)
+
+			output := captureStdout(t, func() {
+				require.NoError(t, cli.RunGlossary(path, "json"))
+			})
+
+			var doc map[string]any
+			require.NoError(t, json.Unmarshal([]byte(output), &doc))
+
+			require.Equal(t, map[string]any{
+				"name":        "Hotel Reservation",
+				"description": "",
+				"contexts": []any{map[string]any{
+					"name":        "Reservations",
+					"description": "",
+					"aggregates": []any{
+						map[string]any{"name": "Reservation", "description": ""},
+					},
+					"commands": []any{
+						map[string]any{"name": "MakeReservation", "description": ""},
+						map[string]any{"name": "ConfirmReservation", "description": ""},
+						map[string]any{"name": "ImportBooking", "description": ""},
+					},
+					"events": []any{
+						map[string]any{"name": "ReservationMade", "description": ""},
+						map[string]any{"name": "BookingImported", "description": ""},
+					},
+					"views": []any{
+						map[string]any{"name": "ReservationsView", "description": ""},
+					},
+					"actors": []any{
+						map[string]any{"name": "Guest", "description": ""},
+					},
+				}},
+			}, doc)
+		})
+	})
+
 	t.Run("rejected input", func(t *testing.T) {
 		t.Run("missing file argument names the cause callers branch on", func(t *testing.T) {
 			err := cli.RunGlossary("", "markdown")
@@ -190,6 +271,7 @@ A person booking a room, not necessarily the one staying in it
 
 			require.ErrorIs(t, err, cli.ErrUnsupportedFormat)
 			require.Contains(t, err.Error(), "markdown")
+			require.Contains(t, err.Error(), "json")
 			var lintErr *cli.LintError
 			require.True(t, errors.As(err, &lintErr))
 			require.Equal(t, 1, lintErr.ExitCode)

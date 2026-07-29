@@ -3,6 +3,7 @@
 package glossary_test
 
 import (
+	"encoding/json"
 	"testing"
 
 	"github.com/hpcsc/emod/internal/ast"
@@ -329,6 +330,49 @@ A person booking a room
 
 Rooms free over a date range
 `, string(rendered))
+		})
+	})
+
+	t.Run("json rendering", func(t *testing.T) {
+		t.Run("carries an actor no trigger references at model level and the referenced one under its context", func(t *testing.T) {
+			model := &ast.Model{
+				Name: "Hotel Operations",
+				Actors: []*ast.Actor{
+					{Name: "Guest", Description: "A person booking a room"},
+					{Name: "Auditor", Description: "Reviews the books once a quarter and never touches a screen"},
+				},
+				Contexts: []*ast.Context{{
+					Name: "Reservations",
+					Aggregates: []*ast.Aggregate{{
+						Name:   "Booking",
+						Slices: []*ast.Slice{{Name: "Hold a room", Trigger: &ast.Trigger{Kind: "UI", Name: "Booking Form", Actor: "Guest"}}},
+					}},
+				}},
+			}
+
+			rendered, err := glossary.RenderJSON(model)
+			require.NoError(t, err)
+
+			var doc map[string]any
+			require.NoError(t, json.Unmarshal(rendered, &doc))
+
+			require.Equal(t, map[string]any{
+				"name":        "Hotel Operations",
+				"description": "",
+				"actors": []any{
+					map[string]any{"name": "Auditor", "description": "Reviews the books once a quarter and never touches a screen"},
+				},
+				"contexts": []any{map[string]any{
+					"name":        "Reservations",
+					"description": "",
+					"aggregates": []any{
+						map[string]any{"name": "Booking", "description": ""},
+					},
+					"actors": []any{
+						map[string]any{"name": "Guest", "description": "A person booking a room"},
+					},
+				}},
+			}, doc)
 		})
 	})
 }
