@@ -3,7 +3,7 @@
 Which story in each in-progress story file is delivered. Files under
 `user-stories/completed/` are finished in full and are not tracked here.
 
-**7 of 160 delivered.**
+**11 of 171 delivered.**
 
 ## [emod-desktop.md](./emod-desktop.md) — 0/16
 
@@ -24,28 +24,47 @@ Which story in each in-progress story file is delivered. Files under
 - [ ] US-015: Download a desktop build without building it
 - [ ] US-016: Run the desktop app on Windows
 
-## [specs-and-metadata.md](./specs-and-metadata.md) — 2/18
+## [specs-and-metadata.md](./specs-and-metadata.md) — 6/18
 
-Delivered on `main`: the `emod <n>` version header and `description` on every construct.
+Delivered on `main`: the `emod <n>` version header, `description` on every construct, keywords
+usable as field names, `emod glossary`, named invariants on aggregates and DCB contexts, and
+Given-When-Then specs on command slices.
 
 - [x] US-001: Pin files to a DSL version
 - [x] US-002: Describe constructs where they are declared
-- [ ] US-003: Use reserved words as field names
-- [ ] US-004: Generate a glossary from the model
-- [ ] US-005: Declare named invariants
-- [ ] US-006: Write Given-When-Then specs on command slices
+- [x] US-003: Use reserved words as field names
+- [x] US-004: Generate a glossary from the model
+- [x] US-005: Declare named invariants
+- [x] US-006: Write Given-When-Then specs on command slices
 - [ ] US-007: Write specs for view, automation, and translation slices
 - [ ] US-008: Lint spec coverage and boundary assumptions
 - [ ] US-009: Show rejection paths on the timeline
 - [ ] US-010: State example payloads in specs
 - [ ] US-011: Value-aware boundary checking in DCB mode
 - [ ] US-012: Bind model events to wire-level types
-- [ ] US-013: Trigger automations after elapsed time
+- [ ] US-013: Fire automations after elapsed time
 - [ ] US-014: Format the new constructs consistently
 - [ ] US-015: Navigate and complete the new constructs in the editor
 - [ ] US-016: Render specs on diagrams
 - [ ] US-017: Highlight the new syntax in editors
 - [ ] US-018: Learn the new constructs from examples and the reference
+
+## [triggers-and-automations.md](./triggers-and-automations.md) — 0/11
+
+US-002 through US-004 change the grammar that `specs-and-metadata.md` US-007 and US-013 build on,
+so they land first.
+
+- [ ] US-001: Declare the view an automation reads
+- [ ] US-002: Name an automation's activation event with `on`
+- [ ] US-003: Activate an automation on a schedule
+- [ ] US-004: Drop the trigger kind slot
+- [ ] US-005: Draw the view a trigger or automation reads
+- [ ] US-006: Read the top lane as human-only
+- [ ] US-007: One palette for element types
+- [ ] US-008: Flag automations with no todo list
+- [ ] US-009: Complete and navigate automations in the editor
+- [ ] US-010: Highlight the realigned syntax
+- [ ] US-011: Learn the realignment from examples and the reference
 
 ## [00-llm-foundation.md](./ai/00-llm-foundation.md) — 5/10
 
