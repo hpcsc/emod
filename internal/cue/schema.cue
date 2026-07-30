@@ -56,6 +56,7 @@
 	name:            string
 	description?:    string
 	trigger_event?:  string
+	reads?:          string
 	command?:        string
 	target_context?: string
 }

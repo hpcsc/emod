@@ -175,6 +175,7 @@ const fullModelJSON = `{
           "name": "Notifier",
           "description": "Tells the guest their room is held",
           "trigger_event": "ReservationMade",
+          "reads": "RoomsView",
           "command": "SendEmail",
           "target_context": "Notifications"
         }],

@@ -160,12 +160,14 @@ type jsonAutomation struct {
 	Description           string         `json:"description,omitempty"`
 	Position              *jsonPosition  `json:"position,omitempty"`
 	TriggerEventPosition  *jsonPosition  `json:"trigger_event_position,omitempty"`
+	ReadsPosition         *jsonPosition  `json:"reads_position,omitempty"`
 	CommandPosition       *jsonPosition  `json:"command_position,omitempty"`
 	TargetContextPosition *jsonPosition  `json:"target_context_position,omitempty"`
 	OpenPosition          *jsonPosition  `json:"open_position,omitempty"`
 	ClosePosition         *jsonPosition  `json:"close_position,omitempty"`
 	Comments              []*jsonComment `json:"comments,omitempty"`
 	TriggerEvent          string         `json:"trigger_event,omitempty"`
+	Reads                 string         `json:"reads,omitempty"`
 	Command               string         `json:"command,omitempty"`
 	TargetContext         string         `json:"target_context,omitempty"`
 }
@@ -602,12 +604,14 @@ func convertAutomation(a *ast.Automation) *jsonAutomation {
 		Description:           a.Description,
 		Position:              convertPosition(a.NamePos),
 		TriggerEventPosition:  convertPosition(a.TriggerEventPos),
+		ReadsPosition:         convertPosition(a.ReadsPos),
 		CommandPosition:       convertPosition(a.CommandPos),
 		TargetContextPosition: convertPosition(a.TargetContextPos),
 		OpenPosition:          convertPosition(a.OpenPos),
 		ClosePosition:         convertPosition(a.ClosePos),
 		Comments:              convertComments(a.Comments),
 		TriggerEvent:          a.TriggerEvent,
+		Reads:                 a.Reads,
 		Command:               a.Command,
 		TargetContext:         a.TargetContext,
 	}
@@ -1365,6 +1369,7 @@ func (w *cueWriter) writeAutomation(a *ast.Automation) {
 	w.line("name: %q", a.Name)
 	w.lineIfSet("description", a.Description)
 	w.lineIfSet("trigger_event", a.TriggerEvent)
+	w.lineIfSet("reads", a.Reads)
 	w.lineIfSet("command", a.Command)
 	w.lineIfSet("target_context", a.TargetContext)
 }

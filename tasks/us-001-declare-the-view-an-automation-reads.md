@@ -6,7 +6,7 @@
 - [x] Task 3: Accept an automation's `reads` in the tree-sitter grammar
 - [x] Task 4: Share a fixture whose automations read views
 - [x] Task 5: Emit `reads` from `emod fmt` at a fixed position in the automation block
-- [ ] Task 6: Carry automation `reads` into JSON, CUE and the embedded schema
+- [x] Task 6: Carry automation `reads` into JSON, CUE and the embedded schema
 - [ ] Task 7: Carry automation `reads` through the diagram document and back
 - [ ] Task 8: Show the view an automation reads in the viewer's details panel
 

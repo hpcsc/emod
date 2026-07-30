@@ -3,6 +3,7 @@
 package export_test
 
 import (
+	"bytes"
 	"encoding/json"
 	"os"
 	"os/exec"
@@ -1076,7 +1077,7 @@ func TestExport(t *testing.T) {
 			require.Equal(t, float64(6), v["close_position"].(map[string]any)["line"])
 		})
 
-		t.Run("includes positions for automation name/trigger/command/target and braces", func(t *testing.T) {
+		t.Run("includes positions for automation name/trigger/reads/command/target and braces", func(t *testing.T) {
 			model := &ast.Model{
 				Name: "Test",
 				Contexts: []*ast.Context{
@@ -1094,6 +1095,8 @@ func TestExport(t *testing.T) {
 												NamePos:          ast.Position{Filename: "test.cue", Line: 5, Column: 5},
 												TriggerEvent:     "Evt",
 												TriggerEventPos:  ast.Position{Filename: "test.cue", Line: 5, Column: 11},
+												Reads:            "MyView",
+												ReadsPos:         ast.Position{Filename: "test.cue", Line: 5, Column: 14},
 												Command:          "DoIt",
 												CommandPos:       ast.Position{Filename: "test.cue", Line: 5, Column: 16},
 												TargetContext:    "Other",
@@ -1122,6 +1125,8 @@ func TestExport(t *testing.T) {
 			a := autos[0].(map[string]any)
 			require.Equal(t, float64(5), a["position"].(map[string]any)["line"])
 			require.Equal(t, float64(11), a["trigger_event_position"].(map[string]any)["column"])
+			require.Equal(t, "MyView", a["reads"])
+			require.Equal(t, float64(14), a["reads_position"].(map[string]any)["column"])
 			require.Equal(t, float64(16), a["command_position"].(map[string]any)["column"])
 			require.Equal(t, float64(22), a["target_context_position"].(map[string]any)["column"])
 			require.Equal(t, float64(7), a["close_position"].(map[string]any)["line"])
@@ -1184,6 +1189,48 @@ func TestExport(t *testing.T) {
 
 			nestedEvent := tl["event"].(map[string]any)
 			require.Equal(t, float64(7), nestedEvent["position"].(map[string]any)["line"])
+		})
+
+		t.Run("files the view an automation reads under the same key order a translation's is filed under", func(t *testing.T) {
+			at := func(column int) ast.Position {
+				return ast.Position{Filename: "test.emod", Line: 5, Column: column}
+			}
+			model := &ast.Model{
+				Name: "Test",
+				Contexts: []*ast.Context{{
+					Name: "Ctx",
+					Slices: []*ast.Slice{{
+						Name: "S",
+						Automations: []*ast.Automation{{
+							Name: "Auto", NamePos: at(5),
+							TriggerEvent: "Evt", TriggerEventPos: at(11),
+							Reads: "MyView", ReadsPos: at(14),
+							Command: "DoIt", CommandPos: at(16),
+						}},
+						Translations: []*ast.Translation{{
+							Name: "Import", NamePos: at(5),
+							ExternalSystem: "API", ExternalPos: at(13),
+							Reads: "MyView", ReadsPos: at(18),
+							Command: "DoIt", CommandPos: at(21),
+						}},
+					}},
+				}},
+			}
+
+			raw, err := export.ExportJSON(model)
+			require.NoError(t, err)
+
+			keyOrder := emittedKeyOrder(t, raw)
+			require.Equal(t, []string{
+				"name", "position",
+				"trigger_event_position", "reads_position", "command_position",
+				"trigger_event", "reads", "command",
+			}, keyOrder["Auto"])
+			require.Equal(t, []string{
+				"name", "position",
+				"external_position", "reads_position", "command_position",
+				"external_system", "reads", "command",
+			}, keyOrder["Import"])
 		})
 
 		t.Run("includes position for comments", func(t *testing.T) {
@@ -3126,6 +3173,31 @@ func TestExport(t *testing.T) {
 				"an undescribed model must not carry the key, not even empty-valued")
 		})
 
+		t.Run("states the view an automation reads between the event that activates it and the command", func(t *testing.T) {
+			model := &ast.Model{
+				Name: "Lending",
+				Contexts: []*ast.Context{{
+					Name: "Lending",
+					Slices: []*ast.Slice{{
+						Name: "Chase Overdue Copy",
+						Automations: []*ast.Automation{{
+							Name:         "RecallOverdueCopy",
+							TriggerEvent: "CopyBorrowed",
+							Reads:        "MemberLoansView",
+							Command:      "RecallCopy",
+						}},
+					}},
+				}},
+			}
+
+			raw, err := export.ExportCUE(model)
+			require.NoError(t, err)
+
+			require.Regexp(t,
+				`trigger_event: "CopyBorrowed"\n\s+reads: "MemberLoansView"\n\s+command: "RecallCopy"`,
+				string(raw))
+		})
+
 		// The exported CUE is only useful if the cue tool can read it back, so the
 		// structural assertions below decode it with the real compiler instead of
 		// matching text fragments, which pass wherever a fragment happens to sit.
@@ -3455,6 +3527,10 @@ func TestExport(t *testing.T) {
 			requireConformsToSchema(t, lookupCue(t), test.SpecLibraryLendingModel(t))
 		})
 
+		t.Run("a model whose automations read views conforms to the schema's Model definition", func(t *testing.T) {
+			requireConformsToSchema(t, lookupCue(t), test.AutomationReadsLibraryLendingModel(t))
+		})
+
 		t.Run("CUE and JSON exports describe the same model", func(t *testing.T) {
 			requireBothFormatsAgree(t, lookupCue(t), buildFullModel())
 		})
@@ -3474,6 +3550,91 @@ func TestExport(t *testing.T) {
 
 		t.Run("CUE and JSON exports agree on the specs a model states", func(t *testing.T) {
 			requireBothFormatsAgree(t, lookupCue(t), test.SpecLibraryLendingModel(t))
+		})
+
+		t.Run("CUE and JSON exports agree on the view each automation reads", func(t *testing.T) {
+			cueBin := lookupCue(t)
+			reading := test.AutomationReadsLibraryLendingModel(t)
+
+			requireBothFormatsAgree(t, cueBin, reading)
+
+			docs := exportedDocs(t, cueBin, reading)
+			for format, doc := range docs {
+				require.Equal(t, libraryLendingAutomationReads, automationReadsByOwner(doc), "%s export", format)
+			}
+			require.ElementsMatch(t, namesCarrying(libraryLendingAutomationReads, "reads"),
+				positionedAutomationReads(docs[jsonFormat]),
+				"the automation that reads no view is filed no position to read it from either")
+		})
+
+		t.Run("an automation reading no view reaches neither export, while its slice's trigger still reads one", func(t *testing.T) {
+			cueBin := lookupCue(t)
+			reading := test.AutomationReadsLibraryLendingModel(t)
+			unread := test.WithoutAutomationReads(reading)
+
+			require.Equal(t, test.AutomationReadsLibraryLendingViewNames, test.DeclaredAutomationReads(reading),
+				"the model has to read a view in both slice homes, or the comparisons below say nothing")
+			require.Empty(t, test.DeclaredAutomationReads(unread),
+				"the twin has to lose the reads of both slice homes, or a home it kept answers the comparisons below")
+
+			requireBothFormatsAgree(t, cueBin, unread)
+
+			readingNoView := automationsReadingNoView(libraryLendingAutomationReads)
+			readingTrigger := map[string]string{"Borrow Copy": "AvailableCopiesView"}
+			docs := exportedDocs(t, cueBin, unread)
+			for format, doc := range docs {
+				require.Equal(t, readingNoView, automationReadsByOwner(doc), "%s export", format)
+				require.Equal(t, readingTrigger, triggerReadsByOwner(doc), "%s export", format)
+			}
+			require.Empty(t, positionedAutomationReads(docs[jsonFormat]))
+		})
+
+		t.Run("an automation reading no view leaves the translation beside it still reading one", func(t *testing.T) {
+			cueBin := lookupCue(t)
+			owner := "Chase Overdue Copy"
+			reading := &ast.Model{
+				Name: "Lending",
+				Contexts: []*ast.Context{{
+					Name: "Lending",
+					Slices: []*ast.Slice{{
+						Name: owner,
+						Automations: []*ast.Automation{{
+							Name:         "RecallOverdueCopy",
+							TriggerEvent: "CopyBorrowed",
+							Reads:        "MemberLoansView",
+							Command:      "RecallCopy",
+						}},
+						Translations: []*ast.Translation{{
+							Name:           "AcknowledgeOverdueNotice",
+							ExternalSystem: "NoticeGateway",
+							Reads:          "MemberLoansView",
+							Command:        "CloseOverdueNotice",
+						}},
+					}},
+				}},
+			}
+			unread := test.WithoutAutomationReads(reading)
+
+			require.Equal(t, []string{"MemberLoansView"}, test.DeclaredAutomationReads(reading))
+			require.Empty(t, test.DeclaredAutomationReads(unread),
+				"the twin has to lose what its automation reads, or the comparisons below say nothing")
+
+			readingTranslation := map[string][]map[string]any{
+				owner: {{"name": "AcknowledgeOverdueNotice", "reads": "MemberLoansView"}},
+			}
+			requireReadsOf := func(model *ast.Model, automations map[string][]map[string]any) {
+				for format, doc := range exportedDocs(t, cueBin, model) {
+					require.Equal(t, automations, automationReadsByOwner(doc), "%s export", format)
+					require.Equal(t, readingTranslation, translationReadsByOwner(doc), "%s export", format)
+				}
+			}
+
+			requireReadsOf(reading, map[string][]map[string]any{
+				owner: {{"name": "RecallOverdueCopy", "reads": "MemberLoansView"}},
+			})
+			requireReadsOf(unread, map[string][]map[string]any{
+				owner: {{"name": "RecallOverdueCopy"}},
+			})
 		})
 	})
 }
@@ -3787,6 +3948,41 @@ var libraryLendingSpecs = map[string][]map[string]any{
 	},
 }
 
+// libraryLendingAutomationReads transcribes the view every automation of
+// test.AutomationReadsLibraryLending reads, filed under the slice that declares
+// the automation, so an export is read back against the source an author wrote
+// rather than against another export of it. Both homes a slice has appear —
+// "Chase Overdue Copy" sits in an aggregate, "Close Reading Room" is declared
+// directly on a DCB context — the slices declaring no automation are absent so a
+// reads cannot be inherited by a sibling, and the automation reading no view
+// carries no reads at all rather than an empty one.
+var libraryLendingAutomationReads = map[string][]map[string]any{
+	"Chase Overdue Copy": {
+		{"name": "RemindOnDueDate"},
+		{"name": "RecallOverdueCopy", "reads": "MemberLoansView"},
+	},
+	"Close Reading Room": {
+		{"name": "FreeDeskAtClosing", "reads": "DeskOccupancyView"},
+		{"name": "RemindReaderOfLoans", "reads": "MemberLoansView"},
+	},
+}
+
+// automationsReadingNoView keeps every automation a transcription names and drops
+// the view each reads, which is what test.WithoutAutomationReads leaves of the
+// model. An export that dropped an automation along with its reads reads back
+// short against this rather than agreeing with it.
+func automationsReadingNoView(byOwner map[string][]map[string]any) map[string][]map[string]any {
+	unread := make(map[string][]map[string]any, len(byOwner))
+	for owner, automations := range byOwner {
+		named := make([]map[string]any, 0, len(automations))
+		for _, automation := range automations {
+			named = append(named, map[string]any{"name": automation["name"]})
+		}
+		unread[owner] = named
+	}
+	return unread
+}
+
 // libraryLendingSpecText returns every string that reaching a spec of
 // test.SpecLibraryLending puts in a document: the name each is written under and
 // the invariant each rejection names, listed once because the two invariants are
@@ -3905,6 +4101,65 @@ func diagramFieldsByLabel(doc map[string]any) map[string][]map[string]any {
 	return listsKeyedBy(doc, "fields", "label", fieldSpec)
 }
 
+// readSpec keeps an exported object's name and the view it reads, leaving out
+// what activates it, the command and every position, so the same read-back runs
+// over both exports: only the JSON one carries positions.
+func readSpec(object map[string]any) map[string]any {
+	spec := map[string]any{"name": object["name"]}
+	if reads, ok := object["reads"]; ok {
+		spec["reads"] = reads
+	}
+	return spec
+}
+
+func automationReadsByOwner(doc map[string]any) map[string][]map[string]any {
+	return listsKeyedBy(doc, "automations", "name", readSpec)
+}
+
+func translationReadsByOwner(doc map[string]any) map[string][]map[string]any {
+	return listsKeyedBy(doc, "translations", "name", readSpec)
+}
+
+// positionedAutomationReads names the automations a decoded document filed the
+// position of a view name for. Only the JSON export carries positions, so a
+// read-back over the CUE document finds none however the export was written.
+func positionedAutomationReads(doc map[string]any) []string {
+	return namesCarrying(listsKeyedBy(doc, "automations", "name", wholeObject), "reads_position")
+}
+
+// namesCarrying names every object filed under byOwner that carries key, so one
+// count runs over a hand-transcribed map and over a decoded document alike.
+func namesCarrying(byOwner map[string][]map[string]any, key string) []string {
+	var named []string
+	for _, objects := range byOwner {
+		for _, object := range objects {
+			if _, carries := object[key]; carries {
+				named = append(named, object["name"].(string))
+			}
+		}
+	}
+	return named
+}
+
+// triggerReadsByOwner names the view the trigger of each slice reads, filed under
+// the slice. What a trigger reads and what an automation reads are separate keys
+// on separate objects, so a change reaching the wrong one shows up here as a
+// slice that lost what its trigger reads.
+func triggerReadsByOwner(doc map[string]any) map[string]string {
+	byOwner := make(map[string]string)
+	eachObject(doc, func(object map[string]any) {
+		trigger, declaresTrigger := object["trigger"].(map[string]any)
+		owner, named := object["name"].(string)
+		if !declaresTrigger || !named {
+			return
+		}
+		if reads, readsAView := trigger["reads"].(string); readsAView {
+			byOwner[owner] = reads
+		}
+	})
+	return byOwner
+}
+
 // listsKeyedBy collects every list a decoded document holds under listKey, filed
 // under the ownerKey of the object declaring it. Searching the whole document
 // rather than the paths the list is expected on lets one that surfaces
@@ -3938,6 +4193,82 @@ func eachObject(node any, visit func(map[string]any)) {
 			eachObject(child, visit)
 		}
 	}
+}
+
+// emittedKeyOrder lists the keys of every named object a raw JSON export holds,
+// in the order the writer emitted them, filed under the name the object carries.
+// Decoding into a map loses that order, so the raw bytes are the only place a
+// reader of an exported file sees whether a construct files its keys where the
+// constructs beside it file theirs.
+func emittedKeyOrder(t *testing.T, raw []byte) map[string][]string {
+	t.Helper()
+
+	reader := &keyOrderReader{
+		t:          t,
+		decoder:    json.NewDecoder(bytes.NewReader(raw)),
+		keysByName: make(map[string][]string),
+	}
+	reader.readValue()
+
+	return reader.keysByName
+}
+
+type keyOrderReader struct {
+	t          *testing.T
+	decoder    *json.Decoder
+	keysByName map[string][]string
+}
+
+// readValue reads one JSON value, returning it when it is a scalar and nil when
+// it opens an object or an array, so a caller can recognise the name an object
+// carries without mistaking a nested one for it.
+func (r *keyOrderReader) readValue() any {
+	r.t.Helper()
+
+	token := r.readToken()
+	delimiter, opensNode := token.(json.Delim)
+	if !opensNode {
+		return token
+	}
+
+	if delimiter == '{' {
+		r.readObject()
+	} else {
+		for r.decoder.More() {
+			r.readValue()
+		}
+	}
+	r.readToken()
+
+	return nil
+}
+
+func (r *keyOrderReader) readObject() {
+	r.t.Helper()
+
+	var keys []string
+	var name string
+	for r.decoder.More() {
+		key := r.readToken().(string)
+		keys = append(keys, key)
+
+		if text, isText := r.readValue().(string); isText && key == "name" {
+			name = text
+		}
+	}
+
+	if name != "" {
+		r.keysByName[name] = keys
+	}
+}
+
+func (r *keyOrderReader) readToken() json.Token {
+	r.t.Helper()
+
+	token, err := r.decoder.Token()
+	require.NoError(r.t, err)
+
+	return token
 }
 
 func withoutFieldLists(node any) any {
@@ -3995,6 +4326,22 @@ func modelDocOf(t *testing.T, model *ast.Model) map[string]any {
 	return doc
 }
 
+const (
+	cueFormat  = "cue"
+	jsonFormat = "json"
+)
+
+// exportedDocs decodes both exports of model, filed under the format each was
+// written in, so one read-back runs over both and names the format it failed on.
+func exportedDocs(t *testing.T, cueBin string, model *ast.Model) map[string]map[string]any {
+	t.Helper()
+
+	return map[string]map[string]any{
+		cueFormat:  exportedCUEDoc(t, cueBin, model),
+		jsonFormat: modelDocOf(t, model),
+	}
+}
+
 func requireConformsToSchema(t *testing.T, cueBin string, model *ast.Model) {
 	t.Helper()
 
@@ -4023,19 +4370,9 @@ func requireConformsToSchema(t *testing.T, cueBin string, model *ast.Model) {
 func requireBothFormatsAgree(t *testing.T, cueBin string, model *ast.Model) {
 	t.Helper()
 
-	jsonRaw, err := export.ExportJSON(model)
-	require.NoError(t, err)
+	docs := exportedDocs(t, cueBin, model)
 
-	var fromJSON map[string]any
-	require.NoError(t, json.Unmarshal(jsonRaw, &fromJSON))
-
-	cueRaw, err := export.ExportCUE(model)
-	require.NoError(t, err)
-
-	var fromCUE map[string]any
-	require.NoError(t, json.Unmarshal(cueExportJSON(t, cueBin, cueRaw), &fromCUE))
-
-	require.Equal(t, withoutPositions(fromJSON), fromCUE)
+	require.Equal(t, withoutPositions(docs[jsonFormat]), docs[cueFormat])
 }
 
 func descriptionsByConstruct(t *testing.T, doc map[string]any) map[string]any {
