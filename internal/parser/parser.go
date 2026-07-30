@@ -1057,6 +1057,8 @@ func (p *Instance) parseAutomation() *ast.Automation {
 	for !p.check(lexer.CloseBrace) && !p.isAtEnd() {
 		if p.check(lexer.KeywordDescription) {
 			p.parseDescriptionInto("automation", &automation.Description, &automation.DescriptionPos)
+		} else if p.check(lexer.KeywordOn) {
+			p.parseIdentifierEntryInto("automation", &automation.TriggerEvent, &automation.TriggerEventPos)
 		} else if p.check(lexer.KeywordTrigger) {
 			p.advance()
 			if !p.check(lexer.Identifier) {
@@ -1068,15 +1070,7 @@ func (p *Instance) parseAutomation() *ast.Automation {
 			automation.TriggerEvent = triggerTok.Value
 			automation.TriggerEventPos = p.position(triggerTok)
 		} else if p.check(lexer.KeywordReads) {
-			keywordTok := p.advance()
-			if !p.check(lexer.Identifier) {
-				p.errorAt(keywordTok, "expected identifier after reads in automation")
-				p.skipRestOfLineOrBlockEnd(keywordTok)
-				continue
-			}
-			readsTok := p.advance()
-			automation.Reads = readsTok.Value
-			automation.ReadsPos = p.position(readsTok)
+			p.parseIdentifierEntryInto("automation", &automation.Reads, &automation.ReadsPos)
 		} else if p.check(lexer.KeywordCommand) {
 			p.advance()
 			if !p.check(lexer.Identifier) {
@@ -1104,7 +1098,7 @@ func (p *Instance) parseAutomation() *ast.Automation {
 			automation.TargetContext = ctxTok.Value
 			automation.TargetContextPos = p.position(ctxTok)
 		} else {
-			p.error(fmt.Sprintf("expected description, trigger, reads, command, or target in automation, got %q", p.peek().Value))
+			p.error(fmt.Sprintf("expected description, on, trigger, reads, command, or target in automation, got %q", p.peek().Value))
 			p.advance()
 		}
 	}
@@ -1446,6 +1440,18 @@ func (p *Instance) parseDescriptionInto(construct string, description *string, p
 
 	tok := p.advance()
 	*description, *position = tok.Value, p.position(tok)
+}
+
+func (p *Instance) parseIdentifierEntryInto(construct string, name *string, position *ast.Position) {
+	keywordTok := p.advance()
+	if !p.check(lexer.Identifier) {
+		p.errorAt(keywordTok, fmt.Sprintf("expected identifier after %s in %s", keywordTok.Value, construct))
+		p.skipRestOfLineOrBlockEnd(keywordTok)
+		return
+	}
+
+	tok := p.advance()
+	*name, *position = tok.Value, p.position(tok)
 }
 
 func (p *Instance) position(tok *lexer.Token) ast.Position {

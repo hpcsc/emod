@@ -1949,6 +1949,141 @@ context "Ctx" {
 			require.Equal(t, "", a.TargetContext)
 		})
 
+		t.Run("automation activating on an event records the event name and where it is written", func(t *testing.T) {
+			tests := []struct {
+				name    string
+				entries string
+			}{
+				{
+					name: "as the first entry of the block",
+					entries: `        on RoomReserved
+        command SendConfirmationEmail
+        target context Notifications`,
+				},
+				{
+					name: "between the command and the target context",
+					entries: `        command SendConfirmationEmail
+        on RoomReserved
+        target context Notifications`,
+				},
+				{
+					name: "after the target context",
+					entries: `        command SendConfirmationEmail
+        target context Notifications
+        on RoomReserved`,
+				},
+			}
+
+			for _, tc := range tests {
+				t.Run(tc.name, func(t *testing.T) {
+					input := fmt.Sprintf(`model "Test"
+context "Ctx" {
+  aggregate "Agg" {
+    slice "Slice" {
+      automation ConfirmationEmailReactor {
+%s
+      }
+    }
+  }
+}`, tc.entries)
+					tokens, lexDiags := lexer.Scan(input, "test.emod")
+					require.Empty(t, lexDiags)
+
+					model, diags := parser.New(tokens, "test.emod").Parse()
+
+					require.Empty(t, diags)
+					automation := model.Contexts[0].Aggregates[0].Slices[0].Automations[0]
+					require.Equal(t, "RoomReserved", automation.TriggerEvent)
+					require.Equal(t, astPositionOf(t, "test.emod", input, "on RoomReserved", "RoomReserved"), automation.TriggerEventPos)
+				})
+			}
+		})
+
+		t.Run("the activation event written last wins whichever spelling is used", func(t *testing.T) {
+			tests := []struct {
+				name      string
+				entries   string
+				wantEvent string
+				wantEntry string
+			}{
+				{
+					name: "on after trigger",
+					entries: `        trigger RoomReserved
+        on RoomReleased`,
+					wantEvent: "RoomReleased",
+					wantEntry: "on RoomReleased",
+				},
+				{
+					name: "trigger after on",
+					entries: `        on RoomReleased
+        trigger RoomReserved`,
+					wantEvent: "RoomReserved",
+					wantEntry: "trigger RoomReserved",
+				},
+				{
+					name: "on twice",
+					entries: `        on RoomReserved
+        on RoomReleased`,
+					wantEvent: "RoomReleased",
+					wantEntry: "on RoomReleased",
+				},
+			}
+
+			for _, tc := range tests {
+				t.Run(tc.name, func(t *testing.T) {
+					input := fmt.Sprintf(`model "Test"
+context "Ctx" {
+  aggregate "Agg" {
+    slice "Slice" {
+      automation ConfirmationEmailReactor {
+%s
+        command SendConfirmationEmail
+      }
+    }
+  }
+}`, tc.entries)
+					tokens, lexDiags := lexer.Scan(input, "test.emod")
+					require.Empty(t, lexDiags)
+
+					model, diags := parser.New(tokens, "test.emod").Parse()
+
+					require.Empty(t, diags)
+					automation := model.Contexts[0].Aggregates[0].Slices[0].Automations[0]
+					require.Equal(t, tc.wantEvent, automation.TriggerEvent)
+					require.Equal(t, astPositionOf(t, "test.emod", input, tc.wantEntry, tc.wantEvent), automation.TriggerEventPos)
+				})
+			}
+		})
+
+		t.Run("an event whose name differs from a keyword only in case is still an event name", func(t *testing.T) {
+			input := `model "Test"
+context "Ctx" {
+  aggregate "Agg" {
+    slice "Slice" {
+      event On {
+        fields {
+          reservationId string required
+        }
+      }
+      automation ConfirmationEmailReactor {
+        on On
+        command SendConfirmationEmail
+      }
+    }
+  }
+}`
+			tokens, lexDiags := lexer.Scan(input, "test.emod")
+			require.Empty(t, lexDiags)
+
+			model, diags := parser.New(tokens, "test.emod").Parse()
+
+			require.Empty(t, diags)
+			slice := model.Contexts[0].Aggregates[0].Slices[0]
+			require.Equal(t, "On", slice.Events[0].Name)
+			require.Equal(t, "On", slice.Automations[0].TriggerEvent)
+			require.Equal(t, astPositionOf(t, "test.emod", input, "on On", "On"), slice.Automations[0].TriggerEventPos)
+		})
+
 		t.Run("automation reading a view records the view name and where it is written", func(t *testing.T) {
 			tests := []struct {
 				name    string
@@ -2768,45 +2903,62 @@ context "Lending" {
 			}
 		})
 
-		t.Run("a reads entry naming no view is reported once and the entry below it still parses", func(t *testing.T) {
-			input := `model "Test"
+		t.Run("an automation entry naming nothing is reported once and the entry below it still parses", func(t *testing.T) {
+			tests := []struct {
+				name    string
+				keyword string
+				entry   string
+			}{
+				{name: "reads with nothing after it", keyword: "reads", entry: "        reads"},
+				{name: "on with nothing after it", keyword: "on", entry: "        on"},
+				{name: "on naming a quoted string", keyword: "on", entry: `        on "RoomReserved"`},
+			}
+
+			for _, tc := range tests {
+				t.Run(tc.name, func(t *testing.T) {
+					input := fmt.Sprintf(`model "Test"
 context "Ctx" {
   aggregate "Agg" {
     slice "Slice" {
       automation ConfirmationEmailReactor {
         trigger RoomReserved
-        reads
+%s
         command SendConfirmationEmail
       }
     }
   }
-}`
-			tokens, lexDiags := lexer.Scan(input, "test.emod")
-			require.Empty(t, lexDiags)
+}`, tc.entry)
+					tokens, lexDiags := lexer.Scan(input, "test.emod")
+					require.Empty(t, lexDiags)
 
-			model, diags := parser.New(tokens, "test.emod").Parse()
+					model, diags := parser.New(tokens, "test.emod").Parse()
 
-			require.Len(t, diags, 1)
-			require.Contains(t, diags[0].Message, "reads")
-			require.Contains(t, diags[0].Message, "automation")
-			line, column := positionOf(t, input, "reads", "reads")
-			require.Equal(t, line, diags[0].Line)
-			require.Equal(t, column, diags[0].Column)
+					require.Len(t, diags, 1)
+					require.Regexp(t, `\b`+tc.keyword+`\b`, diags[0].Message)
+					require.Contains(t, diags[0].Message, "automation")
+					line, column := positionOf(t, input, tc.entry, tc.keyword)
+					require.Equal(t, line, diags[0].Line)
+					require.Equal(t, column, diags[0].Column)
 
-			automation := model.Contexts[0].Aggregates[0].Slices[0].Automations[0]
-			require.Equal(t, "", automation.Reads)
-			require.Equal(t, "SendConfirmationEmail", automation.Command)
+					automation := model.Contexts[0].Aggregates[0].Slices[0].Automations[0]
+					require.Equal(t, "RoomReserved", automation.TriggerEvent)
+					require.Equal(t, "", automation.Reads)
+					require.Equal(t, "SendConfirmationEmail", automation.Command)
+				})
+			}
 		})
 
-		t.Run("a reads entry naming no view as the last entry still closes the automation and its slice", func(t *testing.T) {
-			input := `model "Test"
+		t.Run("an automation entry naming nothing as the last entry still closes the automation and its slice", func(t *testing.T) {
+			for _, keyword := range []string{"reads", "on"} {
+				t.Run(keyword+" with nothing after it", func(t *testing.T) {
+					input := fmt.Sprintf(`model "Test"
 context "Ctx" {
   aggregate "Agg" {
     slice "Slice" {
       automation ConfirmationEmailReactor {
         trigger RoomReserved
         command SendConfirmationEmail
-        reads
+        %s
       }
       automation ReminderReactor {
         trigger RoomReserved
@@ -2814,19 +2966,21 @@ context "Ctx" {
       }
     }
   }
-}`
-			tokens, lexDiags := lexer.Scan(input, "test.emod")
-			require.Empty(t, lexDiags)
+}`, keyword)
+					tokens, lexDiags := lexer.Scan(input, "test.emod")
+					require.Empty(t, lexDiags)
 
-			model, diags := parser.New(tokens, "test.emod").Parse()
+					model, diags := parser.New(tokens, "test.emod").Parse()
 
-			require.Len(t, diags, 1)
-			slice := model.Contexts[0].Aggregates[0].Slices[0]
-			require.Len(t, slice.Automations, 2)
-			require.NotZero(t, slice.Automations[0].ClosePos.Line)
-			require.Equal(t, "ReminderReactor", slice.Automations[1].Name)
-			require.NotZero(t, slice.ClosePos.Line)
-			require.NotZero(t, model.Contexts[0].ClosePos.Line)
+					require.Len(t, diags, 1)
+					slice := model.Contexts[0].Aggregates[0].Slices[0]
+					require.Len(t, slice.Automations, 2)
+					require.NotZero(t, slice.Automations[0].ClosePos.Line)
+					require.Equal(t, "ReminderReactor", slice.Automations[1].Name)
+					require.NotZero(t, slice.ClosePos.Line)
+					require.NotZero(t, model.Contexts[0].ClosePos.Line)
+				})
+			}
 		})
 
 		t.Run("an unrecognised entry inside an automation names the entries an automation accepts", func(t *testing.T) {
@@ -2849,8 +3003,8 @@ context "Ctx" {
 
 			require.Len(t, diags, 1)
 			require.Contains(t, diags[0].Message, "automation")
-			for _, entry := range []string{"description", "trigger", "reads", "command", "target"} {
-				require.Contains(t, diags[0].Message, entry)
+			for _, entry := range []string{"description", "on", "trigger", "reads", "command", "target"} {
+				require.Regexp(t, `\b`+entry+`\b`, diags[0].Message)
 			}
 		})
 
