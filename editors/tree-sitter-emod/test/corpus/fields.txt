@@ -42,6 +42,7 @@ context "C" {
         when string required
         then string required
         rejected string required
+        on string required
       }
     }
   }
@@ -57,6 +58,10 @@ context "C" {
       (slice_definition
         (string)
         (fields_block
+          (field_line
+            (any_identifier)
+            (any_identifier)
+            (any_identifier))
           (field_line
             (any_identifier)
             (any_identifier)

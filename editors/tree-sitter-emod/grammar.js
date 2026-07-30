@@ -220,6 +220,7 @@ module.exports = grammar({
       $.identifier,
       buildDescribedBlock(
         $,
+        seq('on', $.any_identifier),
         seq('trigger', $.any_identifier),
         seq('reads', $.any_identifier),
         seq('command', $.any_identifier),

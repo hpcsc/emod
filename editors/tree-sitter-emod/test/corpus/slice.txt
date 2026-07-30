@@ -353,6 +353,72 @@ context "C" {
           (any_identifier))))))
 
 ========================
+Slice with automation activated with on
+========================
+
+context "C" {
+  aggregate "A" {
+    slice "Core" {
+      automation SendEmail {
+        on OrderPlaced
+        reads AvailableRoomsView
+        command SendConfirmation
+        target context Notifications
+      }
+    }
+  }
+}
+
+---
+
+(source_file
+  (context_definition
+    (string)
+    (aggregate_definition
+      (string)
+      (slice_definition
+        (string)
+        (automation_definition
+          (identifier)
+          (any_identifier)
+          (any_identifier)
+          (any_identifier)
+          (any_identifier))))))
+
+========================
+Slice with automation declaring on last
+========================
+
+context "C" {
+  aggregate "A" {
+    slice "Core" {
+      automation SendEmail {
+        reads AvailableRoomsView
+        command SendConfirmation
+        target context Notifications
+        on OrderPlaced
+      }
+    }
+  }
+}
+
+---
+
+(source_file
+  (context_definition
+    (string)
+    (aggregate_definition
+      (string)
+      (slice_definition
+        (string)
+        (automation_definition
+          (identifier)
+          (any_identifier)
+          (any_identifier)
+          (any_identifier)
+          (any_identifier))))))
+
+========================
 Slice with translation
 ========================
 

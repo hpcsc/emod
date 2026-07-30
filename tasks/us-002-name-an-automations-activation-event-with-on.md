@@ -2,7 +2,7 @@
 
 ## Progress
 - [x] Task 1: Accept `on <EventName>` as an automation's activation event
-- [ ] Task 2: Accept `on` inside an automation in the tree-sitter grammar
+- [x] Task 2: Accept `on` inside an automation in the tree-sitter grammar
 - [ ] Task 3: Rename the activation-event field to `OnEvent` across the Go tree
 - [ ] Task 4: Emit `on` from `emod fmt`
 - [ ] Task 5: Reject `trigger <EventName>` inside an automation and move every model to `on`
