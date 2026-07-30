@@ -64,7 +64,7 @@ module.exports = grammar({
     context_definition: $ => seq(
       'context',
       $.string,
-      buildDescribedBlock($, $.invariant, $.aggregate_definition),
+      buildDescribedBlock($, $.invariant, $.aggregate_definition, $.slice_definition),
     ),
 
     // aggregate "name" { slice "name" { ... } }
@@ -91,6 +91,43 @@ module.exports = grammar({
       $.automation_definition,
       $.translation_definition,
       $.fields_block,
+      $.spec_definition,
+    ),
+
+    // spec "name" { given [...] when Cmd then [...] | then rejected Name }
+    spec_definition: $ => seq(
+      'spec',
+      $.string,
+      '{',
+      repeat(choice($.spec_given, $.spec_when, $.spec_then)),
+      '}',
+    ),
+
+    spec_given: $ => seq(
+      'given',
+      $.spec_event_list,
+    ),
+
+    spec_when: $ => seq(
+      'when',
+      $.any_identifier,
+    ),
+
+    spec_then: $ => seq(
+      'then',
+      choice(
+        $.spec_event_list,
+        seq('rejected', $.any_identifier),
+      ),
+    ),
+
+    spec_event_list: $ => seq(
+      '[',
+      optional(seq(
+        $.any_identifier,
+        repeat(seq(',', $.any_identifier)),
+      )),
+      ']',
     ),
 
     // command Name { fields { ... } }

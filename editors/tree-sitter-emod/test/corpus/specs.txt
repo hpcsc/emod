@@ -1,0 +1,228 @@
+========================
+Two spec blocks in one slice
+========================
+
+context "Lending" {
+  aggregate "Loan" {
+    slice "Borrow a Copy" {
+      spec "borrows a free copy" {
+        given []
+        when BorrowCopy
+        then [CopyBorrowed]
+      }
+      spec "rejects a second borrow" {
+        given [CopyBorrowed]
+        when BorrowCopy
+        then rejected OneCopyPerLoan
+      }
+    }
+  }
+}
+
+---
+
+(source_file
+  (context_definition
+    (string)
+    (aggregate_definition
+      (string)
+      (slice_definition
+        (string)
+        (spec_definition
+          (string)
+          (spec_given
+            (spec_event_list))
+          (spec_when
+            (any_identifier))
+          (spec_then
+            (spec_event_list
+              (any_identifier))))
+        (spec_definition
+          (string)
+          (spec_given
+            (spec_event_list
+              (any_identifier)))
+          (spec_when
+            (any_identifier))
+          (spec_then
+            (any_identifier)))))))
+
+========================
+A spec before and after a flow
+========================
+
+context "Lending" {
+  aggregate "Loan" {
+    slice "Borrow a Copy" {
+      spec "before the flow" {
+        when BorrowCopy
+        then [CopyBorrowed]
+      }
+      flow {
+        command -> event: BorrowCopy -> CopyBorrowed
+      }
+      spec "after the flow" {
+        when BorrowCopy
+        then [CopyBorrowed]
+      }
+    }
+  }
+}
+
+---
+
+(source_file
+  (context_definition
+    (string)
+    (aggregate_definition
+      (string)
+      (slice_definition
+        (string)
+        (spec_definition
+          (string)
+          (spec_when
+            (any_identifier))
+          (spec_then
+            (spec_event_list
+              (any_identifier))))
+        (flow_definition
+          (identifier)
+          (identifier))
+        (spec_definition
+          (string)
+          (spec_when
+            (any_identifier))
+          (spec_then
+            (spec_event_list
+              (any_identifier))))))))
+
+========================
+Given with several events, empty, and omitted
+========================
+
+context "Lending" {
+  aggregate "Loan" {
+    slice "Borrow a Copy" {
+      spec "several events" {
+        given [CopyBorrowed, CopyReturned, LoanRenewed]
+        when BorrowCopy
+        then [CopyBorrowed]
+      }
+      spec "empty history" {
+        given []
+        when BorrowCopy
+        then [CopyBorrowed]
+      }
+      spec "no given at all" {
+        when BorrowCopy
+        then [CopyBorrowed]
+      }
+    }
+  }
+}
+
+---
+
+(source_file
+  (context_definition
+    (string)
+    (aggregate_definition
+      (string)
+      (slice_definition
+        (string)
+        (spec_definition
+          (string)
+          (spec_given
+            (spec_event_list
+              (any_identifier)
+              (any_identifier)
+              (any_identifier)))
+          (spec_when
+            (any_identifier))
+          (spec_then
+            (spec_event_list
+              (any_identifier))))
+        (spec_definition
+          (string)
+          (spec_given
+            (spec_event_list))
+          (spec_when
+            (any_identifier))
+          (spec_then
+            (spec_event_list
+              (any_identifier))))
+        (spec_definition
+          (string)
+          (spec_when
+            (any_identifier))
+          (spec_then
+            (spec_event_list
+              (any_identifier))))))))
+
+========================
+Spec entries written out of canonical order
+========================
+
+context "Lending" {
+  aggregate "Loan" {
+    slice "Borrow a Copy" {
+      spec "reordered" {
+        then [CopyBorrowed]
+        when BorrowCopy
+        given [CopyReturned]
+      }
+    }
+  }
+}
+
+---
+
+(source_file
+  (context_definition
+    (string)
+    (aggregate_definition
+      (string)
+      (slice_definition
+        (string)
+        (spec_definition
+          (string)
+          (spec_then
+            (spec_event_list
+              (any_identifier)))
+          (spec_when
+            (any_identifier))
+          (spec_given
+            (spec_event_list
+              (any_identifier))))))))
+
+========================
+Spec block in a DCB context slice
+========================
+
+context "Fulfillment" {
+  slice "Ship an Order" {
+    spec "ships a paid order" {
+      given [OrderPaid]
+      when ShipOrder
+      then [OrderShipped]
+    }
+  }
+}
+
+---
+
+(source_file
+  (context_definition
+    (string)
+    (slice_definition
+      (string)
+      (spec_definition
+        (string)
+        (spec_given
+          (spec_event_list
+            (any_identifier)))
+        (spec_when
+          (any_identifier))
+        (spec_then
+          (spec_event_list
+            (any_identifier)))))))
