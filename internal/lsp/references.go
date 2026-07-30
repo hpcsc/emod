@@ -104,9 +104,9 @@ func GetReferences(text string, line, character int, uri string) []Location {
 
 					// Automation references
 					for _, auto := range slice.Automations {
-						if cursorOnName(cursorLine, cursorChar, auto.TriggerEventPos, auto.TriggerEvent) {
-							if _, ok := eventDefs[auto.TriggerEvent]; ok {
-								targetName = auto.TriggerEvent
+						if cursorOnName(cursorLine, cursorChar, auto.OnEventPos, auto.OnEvent) {
+							if _, ok := eventDefs[auto.OnEvent]; ok {
+								targetName = auto.OnEvent
 								targetType = "event"
 							}
 						}
@@ -216,8 +216,8 @@ func GetReferences(text string, line, character int, uri string) []Location {
 
 				// Automation references
 				for _, auto := range slice.Automations {
-					if targetType == "event" && auto.TriggerEvent == targetName {
-						locations = append(locations, *locationFor(uri, auto.TriggerEventPos, auto.TriggerEvent))
+					if targetType == "event" && auto.OnEvent == targetName {
+						locations = append(locations, *locationFor(uri, auto.OnEventPos, auto.OnEvent))
 					}
 					if targetType == "command" && auto.Command == targetName {
 						locations = append(locations, *locationFor(uri, auto.CommandPos, auto.Command))

@@ -83,7 +83,7 @@ func ExportASCII(model *ast.Model, _ Style) ([]byte, error) {
 		// Automations (event → ⚙ → command)
 		for _, auto := range s.Automations {
 			fmt.Fprintf(&b, "  (%s) -> ⚙ %s -> [%s]\n",
-				auto.TriggerEvent, auto.Name, auto.Command)
+				auto.OnEvent, auto.Name, auto.Command)
 		}
 
 		// Translations (ext sys -> ⚙ reactor -> command -> event)
@@ -152,7 +152,7 @@ func standaloneEvents(s *ast.Slice) []*ast.Event {
 		}
 	}
 	for _, a := range s.Automations {
-		flowEvts[a.TriggerEvent] = true
+		flowEvts[a.OnEvent] = true
 	}
 
 	var result []*ast.Event

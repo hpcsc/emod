@@ -578,10 +578,10 @@ func describedModel() *ast.Model {
 					}},
 					Flows: []*ast.Flow{{CommandName: "HoldRoom", EventName: "RoomHeld"}},
 					Automations: []*ast.Automation{{
-						Name:         "AutoConfirm",
-						Description:  "Confirms every booking the moment it is made",
-						TriggerEvent: "RoomHeld",
-						Command:      "HoldRoom",
+						Name:        "AutoConfirm",
+						Description: "Confirms every booking the moment it is made",
+						OnEvent:     "RoomHeld",
+						Command:     "HoldRoom",
 					}},
 					Translations: []*ast.Translation{{
 						Name:           "PartnerWebhook",
@@ -766,9 +766,9 @@ func fullModel() *ast.Model {
 						},
 						Automations: []*ast.Automation{
 							{
-								Name:         "InventoryUpdater",
-								TriggerEvent: "OrderCreated",
-								Command:      "CreateOrder",
+								Name:    "InventoryUpdater",
+								OnEvent: "OrderCreated",
+								Command: "CreateOrder",
 							},
 						},
 						Translations: []*ast.Translation{

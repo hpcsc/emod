@@ -1058,7 +1058,7 @@ func (p *Instance) parseAutomation() *ast.Automation {
 		if p.check(lexer.KeywordDescription) {
 			p.parseDescriptionInto("automation", &automation.Description, &automation.DescriptionPos)
 		} else if p.check(lexer.KeywordOn) {
-			p.parseIdentifierEntryInto("automation", &automation.TriggerEvent, &automation.TriggerEventPos)
+			p.parseIdentifierEntryInto("automation", &automation.OnEvent, &automation.OnEventPos)
 		} else if p.check(lexer.KeywordTrigger) {
 			p.advance()
 			if !p.check(lexer.Identifier) {
@@ -1067,8 +1067,8 @@ func (p *Instance) parseAutomation() *ast.Automation {
 				continue
 			}
 			triggerTok := p.advance()
-			automation.TriggerEvent = triggerTok.Value
-			automation.TriggerEventPos = p.position(triggerTok)
+			automation.OnEvent = triggerTok.Value
+			automation.OnEventPos = p.position(triggerTok)
 		} else if p.check(lexer.KeywordReads) {
 			p.parseIdentifierEntryInto("automation", &automation.Reads, &automation.ReadsPos)
 		} else if p.check(lexer.KeywordCommand) {
@@ -1110,7 +1110,7 @@ func (p *Instance) parseAutomation() *ast.Automation {
 	closeTok := p.advance()
 	automation.ClosePos = p.position(closeTok)
 
-	if automation.TriggerEvent == "" {
+	if automation.OnEvent == "" {
 		p.diagnostics = append(p.diagnostics, &diagnostic.Entry{
 			Filename: automation.NamePos.Filename,
 			Line:     automation.NamePos.Line,

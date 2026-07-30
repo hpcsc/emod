@@ -121,8 +121,8 @@ func exportMermaidStandard(b *strings.Builder, modelName string, entries []slice
 				eid = targetNs + "." + eid
 			}
 			label := eid
-			if auto.TriggerEvent != "" && auto.Command != "" {
-				label = fmt.Sprintf("%s (%s → %s)", eid, auto.TriggerEvent, auto.Command)
+			if auto.OnEvent != "" && auto.Command != "" {
+				label = fmt.Sprintf("%s (%s → %s)", eid, auto.OnEvent, auto.Command)
 			}
 			b.WriteString(fmt.Sprintf("tf %02d pcr %s\n", nextNum, label))
 			nextNum++
@@ -244,8 +244,8 @@ func exportMermaidProjected(b *strings.Builder, modelName string, entries []slic
 				eid = targetNs + "." + eid
 			}
 			label := eid
-			if auto.TriggerEvent != "" && auto.Command != "" {
-				label = fmt.Sprintf("%s (%s → %s)", eid, auto.TriggerEvent, auto.Command)
+			if auto.OnEvent != "" && auto.Command != "" {
+				label = fmt.Sprintf("%s (%s → %s)", eid, auto.OnEvent, auto.Command)
 			}
 			b.WriteString(fmt.Sprintf("tf %02d pcr %s\n", nextNum, label))
 			nextNum++
@@ -387,8 +387,8 @@ func exportMermaidDCB(b *strings.Builder, modelName string, entries []sliceEntry
 				eid = targetNs + "." + eid
 			}
 			label := eid
-			if auto.TriggerEvent != "" && auto.Command != "" {
-				label = fmt.Sprintf("%s (%s → %s)", eid, auto.TriggerEvent, auto.Command)
+			if auto.OnEvent != "" && auto.Command != "" {
+				label = fmt.Sprintf("%s (%s → %s)", eid, auto.OnEvent, auto.Command)
 			}
 			b.WriteString(fmt.Sprintf("tf %02d pcr %s\n", nextNum, label))
 			nextNum++

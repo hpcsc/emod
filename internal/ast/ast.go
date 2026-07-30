@@ -205,8 +205,8 @@ type Automation struct {
 	NamePos          Position
 	Description      string
 	DescriptionPos   Position
-	TriggerEvent     string
-	TriggerEventPos  Position
+	OnEvent          string
+	OnEventPos       Position
 	Reads            string
 	ReadsPos         Position
 	Command          string

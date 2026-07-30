@@ -254,7 +254,7 @@ func ExportSVG(model *ast.Model, _ Style) ([]byte, error) {
 
 		// event -> automation -> command — cross-slice lookup
 		for _, auto := range s.Automations {
-			ePos, eok := nameToPos[auto.TriggerEvent]
+			ePos, eok := nameToPos[auto.OnEvent]
 			aPos, aok := nameToPos[auto.Name]
 			cPos, cok := nameToPos[auto.Command]
 			if eok && aok {

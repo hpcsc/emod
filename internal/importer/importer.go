@@ -32,7 +32,7 @@ type diagramNode struct {
 	Actor          string          `json:"actor,omitempty"`
 	Reads          string          `json:"reads,omitempty"`
 	Subscribes     []string        `json:"subscribes,omitempty"`
-	TriggerEvent   string          `json:"trigger_event,omitempty"`
+	OnEvent        string          `json:"trigger_event,omitempty"`
 	Command        string          `json:"command,omitempty"`
 	TargetContext  string          `json:"target_context,omitempty"`
 	ExternalSystem string          `json:"external_system,omitempty"`
@@ -206,7 +206,7 @@ func (b *builder) buildSlice(n *diagramNode) *ast.Slice {
 	for _, a := range b.children(n.ID, "automation") {
 		auto := &ast.Automation{
 			Name:          a.Label,
-			TriggerEvent:  a.TriggerEvent,
+			OnEvent:       a.OnEvent,
 			Reads:         a.Reads,
 			Command:       a.Command,
 			TargetContext: a.TargetContext,
@@ -268,8 +268,8 @@ func (b *builder) foldEdges(edges []*diagramEdge) {
 				view.Subscribes = appendMissing(view.Subscribes, src.Label)
 			}
 		case "automation_trigger":
-			if auto, ok := b.byNode[tgt.ID].(*ast.Automation); ok && auto.TriggerEvent == "" {
-				auto.TriggerEvent = src.Label
+			if auto, ok := b.byNode[tgt.ID].(*ast.Automation); ok && auto.OnEvent == "" {
+				auto.OnEvent = src.Label
 			}
 		case "automation_command":
 			if auto, ok := b.byNode[src.ID].(*ast.Automation); ok && auto.Command == "" {

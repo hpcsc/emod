@@ -71,9 +71,9 @@ func GetDefinition(text string, line, character int, uri string) *Location {
 
 				// 2. Automation references
 				for _, auto := range slice.Automations {
-					if cursorOnName(cursorLine, cursorChar, auto.TriggerEventPos, auto.TriggerEvent) {
-						if defPos, ok := eventDefs[auto.TriggerEvent]; ok {
-							return locationFor(uri, defPos, auto.TriggerEvent)
+					if cursorOnName(cursorLine, cursorChar, auto.OnEventPos, auto.OnEvent) {
+						if defPos, ok := eventDefs[auto.OnEvent]; ok {
+							return locationFor(uri, defPos, auto.OnEvent)
 						}
 					}
 					if cursorOnName(cursorLine, cursorChar, auto.CommandPos, auto.Command) {

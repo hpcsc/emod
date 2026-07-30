@@ -157,9 +157,9 @@ func TestExportASCII(t *testing.T) {
 					Slices: []*ast.Slice{{
 						Name: "S",
 						Automations: []*ast.Automation{{
-							Name:         "Notifier",
-							TriggerEvent: "OrderPlaced",
-							Command:      "SendEmail",
+							Name:    "Notifier",
+							OnEvent: "OrderPlaced",
+							Command: "SendEmail",
 						}},
 					}},
 				}},
@@ -332,9 +332,9 @@ func TestExportASCII(t *testing.T) {
 					Slices: []*ast.Slice{{
 						Name: "S",
 						Automations: []*ast.Automation{{
-							Name:         "N",
-							TriggerEvent: "OrderPlaced",
-							Command:      "SendEmail",
+							Name:    "N",
+							OnEvent: "OrderPlaced",
+							Command: "SendEmail",
 						}},
 					}},
 				}},

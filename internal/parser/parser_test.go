@@ -1919,7 +1919,7 @@ context "Ctx" {
 			require.Len(t, slice.Automations, 1)
 			a := slice.Automations[0]
 			require.Equal(t, "ConfirmationEmailReactor", a.Name)
-			require.Equal(t, "RoomReserved", a.TriggerEvent)
+			require.Equal(t, "RoomReserved", a.OnEvent)
 			require.Equal(t, "SendConfirmationEmail", a.Command)
 			require.Equal(t, "Notifications", a.TargetContext)
 		})
@@ -1944,7 +1944,7 @@ context "Ctx" {
 			require.Len(t, errs, 0)
 			a := model.Contexts[0].Aggregates[0].Slices[0].Automations[0]
 			require.Equal(t, "Reactor", a.Name)
-			require.Equal(t, "SomeEvent", a.TriggerEvent)
+			require.Equal(t, "SomeEvent", a.OnEvent)
 			require.Equal(t, "SomeCmd", a.Command)
 			require.Equal(t, "", a.TargetContext)
 		})
@@ -1993,8 +1993,8 @@ context "Ctx" {
 
 					require.Empty(t, diags)
 					automation := model.Contexts[0].Aggregates[0].Slices[0].Automations[0]
-					require.Equal(t, "RoomReserved", automation.TriggerEvent)
-					require.Equal(t, astPositionOf(t, "test.emod", input, "on RoomReserved", "RoomReserved"), automation.TriggerEventPos)
+					require.Equal(t, "RoomReserved", automation.OnEvent)
+					require.Equal(t, astPositionOf(t, "test.emod", input, "on RoomReserved", "RoomReserved"), automation.OnEventPos)
 				})
 			}
 		})
@@ -2049,8 +2049,8 @@ context "Ctx" {
 
 					require.Empty(t, diags)
 					automation := model.Contexts[0].Aggregates[0].Slices[0].Automations[0]
-					require.Equal(t, tc.wantEvent, automation.TriggerEvent)
-					require.Equal(t, astPositionOf(t, "test.emod", input, tc.wantEntry, tc.wantEvent), automation.TriggerEventPos)
+					require.Equal(t, tc.wantEvent, automation.OnEvent)
+					require.Equal(t, astPositionOf(t, "test.emod", input, tc.wantEntry, tc.wantEvent), automation.OnEventPos)
 				})
 			}
 		})
@@ -2080,8 +2080,8 @@ context "Ctx" {
 			require.Empty(t, diags)
 			slice := model.Contexts[0].Aggregates[0].Slices[0]
 			require.Equal(t, "On", slice.Events[0].Name)
-			require.Equal(t, "On", slice.Automations[0].TriggerEvent)
-			require.Equal(t, astPositionOf(t, "test.emod", input, "on On", "On"), slice.Automations[0].TriggerEventPos)
+			require.Equal(t, "On", slice.Automations[0].OnEvent)
+			require.Equal(t, astPositionOf(t, "test.emod", input, "on On", "On"), slice.Automations[0].OnEventPos)
 		})
 
 		t.Run("automation reading a view records the view name and where it is written", func(t *testing.T) {
@@ -2241,7 +2241,7 @@ context "Ctx" {
 			slice := model.Contexts[0].Aggregates[0].Slices[0]
 			require.Nil(t, slice.Trigger, "trigger keyword inside automation should not produce a slice-level Trigger")
 			require.Len(t, slice.Automations, 1)
-			require.Equal(t, "SomeEvent", slice.Automations[0].TriggerEvent)
+			require.Equal(t, "SomeEvent", slice.Automations[0].OnEvent)
 		})
 
 		t.Run("automation alongside other slice elements", func(t *testing.T) {
@@ -2307,11 +2307,11 @@ context "Ctx" {
 			slice := model.Contexts[0].Aggregates[0].Slices[0]
 			require.Len(t, slice.Automations, 2)
 			require.Equal(t, "ReactorA", slice.Automations[0].Name)
-			require.Equal(t, "EventA", slice.Automations[0].TriggerEvent)
+			require.Equal(t, "EventA", slice.Automations[0].OnEvent)
 			require.Equal(t, "CmdA", slice.Automations[0].Command)
 			require.Equal(t, "", slice.Automations[0].TargetContext)
 			require.Equal(t, "ReactorB", slice.Automations[1].Name)
-			require.Equal(t, "EventB", slice.Automations[1].TriggerEvent)
+			require.Equal(t, "EventB", slice.Automations[1].OnEvent)
 			require.Equal(t, "CmdB", slice.Automations[1].Command)
 			require.Equal(t, "OtherCtx", slice.Automations[1].TargetContext)
 		})
@@ -2941,7 +2941,7 @@ context "Ctx" {
 					require.Equal(t, column, diags[0].Column)
 
 					automation := model.Contexts[0].Aggregates[0].Slices[0].Automations[0]
-					require.Equal(t, "RoomReserved", automation.TriggerEvent)
+					require.Equal(t, "RoomReserved", automation.OnEvent)
 					require.Equal(t, "", automation.Reads)
 					require.Equal(t, "SendConfirmationEmail", automation.Command)
 				})
@@ -4042,7 +4042,7 @@ context "Reservations" {
 }`,
 					remaining: func(t *testing.T, m *ast.Model) {
 						automation := m.Contexts[0].Aggregates[0].Slices[0].Automations[0]
-						require.Equal(t, "ReservationMade", automation.TriggerEvent)
+						require.Equal(t, "ReservationMade", automation.OnEvent)
 						require.Equal(t, "ConfirmReservation", automation.Command)
 						require.NotZero(t, automation.ClosePos.Line)
 					},

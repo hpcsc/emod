@@ -270,7 +270,7 @@ func TestFormat(t *testing.T) {
 										Automations: []*ast.Automation{
 											{
 												Name:          "OrderNotifier",
-												TriggerEvent:  "OrderPlaced",
+												OnEvent:       "OrderPlaced",
 												Command:       "SendNotification",
 												TargetContext: "Notifications",
 											},
@@ -321,7 +321,7 @@ func TestFormat(t *testing.T) {
 										Automations: []*ast.Automation{
 											{
 												Name:          "OrderNotifier",
-												TriggerEvent:  "OrderPlaced",
+												OnEvent:       "OrderPlaced",
 												Reads:         "OpenOrdersView",
 												Command:       "SendNotification",
 												TargetContext: "Notifications",
@@ -1099,7 +1099,7 @@ func TestFormat(t *testing.T) {
 											{
 												Name:          "Reactor",
 												Description:   "Notifies whoever asked once the thing is done",
-												TriggerEvent:  "ThingDone",
+												OnEvent:       "ThingDone",
 												Command:       "Notify",
 												TargetContext: "Notifications",
 											},

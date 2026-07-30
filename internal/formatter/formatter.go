@@ -341,8 +341,8 @@ func (w *writer) writeAutomation(auto *ast.Automation, level int) {
 	w.writeComments(auto.Comments, level)
 	w.line(level, "automation %s {", auto.Name)
 	w.writeDescription(auto.Description, level+1)
-	if auto.TriggerEvent != "" {
-		w.line(level+1, "trigger %s", auto.TriggerEvent)
+	if auto.OnEvent != "" {
+		w.line(level+1, "trigger %s", auto.OnEvent)
 	}
 	if auto.Reads != "" {
 		w.line(level+1, "reads %s", auto.Reads)

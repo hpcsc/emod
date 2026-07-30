@@ -159,9 +159,9 @@ func TestExportDrawio(t *testing.T) {
 						Slices: []*ast.Slice{{
 							Name: "S",
 							Automations: []*ast.Automation{{
-								Name:         "Notifier",
-								TriggerEvent: "OrderPlaced",
-								Command:      "SendEmail",
+								Name:    "Notifier",
+								OnEvent: "OrderPlaced",
+								Command: "SendEmail",
 							}},
 						}},
 					}},
@@ -188,7 +188,7 @@ func TestExportDrawio(t *testing.T) {
 							Name:        "S",
 							Events:      []*ast.Event{{Name: "OrderPlaced"}},
 							Commands:    []*ast.Command{{Name: "SendEmail"}},
-							Automations: []*ast.Automation{{Name: "Notifier", TriggerEvent: "OrderPlaced", Command: "SendEmail"}},
+							Automations: []*ast.Automation{{Name: "Notifier", OnEvent: "OrderPlaced", Command: "SendEmail"}},
 						}},
 					}},
 				}},

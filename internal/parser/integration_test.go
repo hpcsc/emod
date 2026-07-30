@@ -234,7 +234,7 @@ func TestIntegration(t *testing.T) {
 		require.Len(t, automationSlice.Automations, 1)
 		test.RequireEqual(t, &ast.Automation{
 			Name:          "ConfirmationEmailReactor",
-			TriggerEvent:  "RoomReserved",
+			OnEvent:       "RoomReserved",
 			Command:       "SendConfirmationEmail",
 			TargetContext: "Notifications",
 		}, automationSlice.Automations[0], ignorePositions)
@@ -321,7 +321,7 @@ func TestIntegration(t *testing.T) {
 		require.Len(t, automationSlice.Automations, 1)
 		test.RequireEqual(t, &ast.Automation{
 			Name:          "OrderNotifier",
-			TriggerEvent:  "OrderPlaced",
+			OnEvent:       "OrderPlaced",
 			Command:       "SendNotification",
 			TargetContext: "Notifications",
 		}, automationSlice.Automations[0], ignorePositions)

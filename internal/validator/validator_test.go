@@ -462,8 +462,8 @@ func TestValidate(t *testing.T) {
 										},
 										Automations: []*ast.Automation{
 											{
-												Name:         "NotifyOnOrder",
-												TriggerEvent: "OrderPlaced",
+												Name:    "NotifyOnOrder",
+												OnEvent: "OrderPlaced",
 											},
 										},
 									},
@@ -490,8 +490,8 @@ func TestValidate(t *testing.T) {
 									{
 										Automations: []*ast.Automation{
 											{
-												Name:         "ShipOrder",
-												TriggerEvent: "OrderShipped",
+												Name:    "ShipOrder",
+												OnEvent: "OrderShipped",
 											},
 										},
 									},
@@ -508,7 +508,7 @@ func TestValidate(t *testing.T) {
 			require.Equal(t, `event "OrderShipped" does not exist`, diags[0].Message)
 		})
 
-		t.Run("automation trigger diagnostic includes position from TriggerEventPos", func(t *testing.T) {
+		t.Run("automation trigger diagnostic includes position from OnEventPos", func(t *testing.T) {
 			model := &ast.Model{
 				Contexts: []*ast.Context{
 					{
@@ -519,9 +519,9 @@ func TestValidate(t *testing.T) {
 									{
 										Automations: []*ast.Automation{
 											{
-												Name:         "ShipOrder",
-												TriggerEvent: "OrderShipped",
-												TriggerEventPos: ast.Position{
+												Name:    "ShipOrder",
+												OnEvent: "OrderShipped",
+												OnEventPos: ast.Position{
 													Filename: "test.emod",
 													Line:     8,
 													Column:   17,
@@ -555,8 +555,8 @@ func TestValidate(t *testing.T) {
 									{
 										Automations: []*ast.Automation{
 											{
-												Name:         "AutoConfirm",
-												TriggerEvent: "",
+												Name:    "AutoConfirm",
+												OnEvent: "",
 											},
 										},
 									},
@@ -755,8 +755,8 @@ func TestValidate(t *testing.T) {
 									{
 										Automations: []*ast.Automation{
 											{
-												Name:         "ShipOnOrder",
-												TriggerEvent: "OrderPlaced",
+												Name:    "ShipOnOrder",
+												OnEvent: "OrderPlaced",
 											},
 										},
 									},
@@ -791,8 +791,8 @@ func TestValidate(t *testing.T) {
 										},
 										Automations: []*ast.Automation{
 											{
-												Name:         "ProcessBooking",
-												TriggerEvent: "BookingImported",
+												Name:    "ProcessBooking",
+												OnEvent: "BookingImported",
 											},
 										},
 									},
@@ -1224,7 +1224,7 @@ func TestValidate(t *testing.T) {
 										Name:     "Send Confirmation Email",
 										Commands: []*ast.Command{{Name: "SendConfirmationEmail"}},
 										Automations: []*ast.Automation{
-											{Name: "ConfirmationMailer", TriggerEvent: "RoomReserved", Command: "SendConfirmationEmail"},
+											{Name: "ConfirmationMailer", OnEvent: "RoomReserved", Command: "SendConfirmationEmail"},
 										},
 										Specs: []*ast.Spec{
 											{

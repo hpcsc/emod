@@ -538,7 +538,7 @@ func ExportDrawio(model *ast.Model, style Style) ([]byte, error) {
 
 		// event -> automation -> command
 		for _, auto := range s.Automations {
-			e := nameToElem[auto.TriggerEvent]
+			e := nameToElem[auto.OnEvent]
 			a := nameToElem[auto.Name]
 			c := nameToElem[auto.Command]
 

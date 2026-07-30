@@ -159,14 +159,14 @@ type jsonAutomation struct {
 	Name                  string         `json:"name"`
 	Description           string         `json:"description,omitempty"`
 	Position              *jsonPosition  `json:"position,omitempty"`
-	TriggerEventPosition  *jsonPosition  `json:"trigger_event_position,omitempty"`
+	OnEventPosition       *jsonPosition  `json:"trigger_event_position,omitempty"`
 	ReadsPosition         *jsonPosition  `json:"reads_position,omitempty"`
 	CommandPosition       *jsonPosition  `json:"command_position,omitempty"`
 	TargetContextPosition *jsonPosition  `json:"target_context_position,omitempty"`
 	OpenPosition          *jsonPosition  `json:"open_position,omitempty"`
 	ClosePosition         *jsonPosition  `json:"close_position,omitempty"`
 	Comments              []*jsonComment `json:"comments,omitempty"`
-	TriggerEvent          string         `json:"trigger_event,omitempty"`
+	OnEvent               string         `json:"trigger_event,omitempty"`
 	Reads                 string         `json:"reads,omitempty"`
 	Command               string         `json:"command,omitempty"`
 	TargetContext         string         `json:"target_context,omitempty"`
@@ -603,14 +603,14 @@ func convertAutomation(a *ast.Automation) *jsonAutomation {
 		Name:                  a.Name,
 		Description:           a.Description,
 		Position:              convertPosition(a.NamePos),
-		TriggerEventPosition:  convertPosition(a.TriggerEventPos),
+		OnEventPosition:       convertPosition(a.OnEventPos),
 		ReadsPosition:         convertPosition(a.ReadsPos),
 		CommandPosition:       convertPosition(a.CommandPos),
 		TargetContextPosition: convertPosition(a.TargetContextPos),
 		OpenPosition:          convertPosition(a.OpenPos),
 		ClosePosition:         convertPosition(a.ClosePos),
 		Comments:              convertComments(a.Comments),
-		TriggerEvent:          a.TriggerEvent,
+		OnEvent:               a.OnEvent,
 		Reads:                 a.Reads,
 		Command:               a.Command,
 		TargetContext:         a.TargetContext,
@@ -662,7 +662,7 @@ type jsonDiagramNode struct {
 	Actor          string            `json:"actor,omitempty"`
 	Reads          string            `json:"reads,omitempty"`
 	Subscribes     []string          `json:"subscribes,omitempty"`
-	TriggerEvent   string            `json:"trigger_event,omitempty"`
+	OnEvent        string            `json:"trigger_event,omitempty"`
 	Command        string            `json:"command,omitempty"`
 	TargetContext  string            `json:"target_context,omitempty"`
 	ExternalSystem string            `json:"external_system,omitempty"`
@@ -839,7 +839,7 @@ func collectSliceNodes(
 			Label:         a.Name,
 			ParentID:      &sliceID,
 			Position:      convertPosition(a.NamePos),
-			TriggerEvent:  a.TriggerEvent,
+			OnEvent:       a.OnEvent,
 			Reads:         a.Reads,
 			Command:       a.Command,
 			TargetContext: a.TargetContext,
@@ -1074,8 +1074,8 @@ func convertModelToDiagram(m *ast.Model) *jsonDiagramDocument {
 					continue
 				}
 
-				if a.TriggerEvent != "" {
-					if srcID, ok := evtIDs[a.TriggerEvent]; ok {
+				if a.OnEvent != "" {
+					if srcID, ok := evtIDs[a.OnEvent]; ok {
 						doc.Edges = append(doc.Edges, &jsonDiagramEdge{
 							Source: srcID,
 							Target: autoID,
@@ -1369,7 +1369,7 @@ func (w *cueWriter) writeAutomation(a *ast.Automation) {
 	w.writeComments(a.Comments)
 	w.line("name: %q", a.Name)
 	w.lineIfSet("description", a.Description)
-	w.lineIfSet("trigger_event", a.TriggerEvent)
+	w.lineIfSet("trigger_event", a.OnEvent)
 	w.lineIfSet("reads", a.Reads)
 	w.lineIfSet("command", a.Command)
 	w.lineIfSet("target_context", a.TargetContext)

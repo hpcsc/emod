@@ -288,7 +288,7 @@ func TestExport(t *testing.T) {
 										Automations: []*ast.Automation{
 											{
 												Name:          "OrderNotifier",
-												TriggerEvent:  "OrderPlaced",
+												OnEvent:       "OrderPlaced",
 												Command:       "SendNotification",
 												TargetContext: "Notifications",
 											},
@@ -615,7 +615,7 @@ func TestExport(t *testing.T) {
 											{Name: "MyView", Subscribes: []string{"Evt"}},
 										},
 										Automations: []*ast.Automation{
-											{Name: "Auto", TriggerEvent: "Evt", Command: "DoIt"},
+											{Name: "Auto", OnEvent: "Evt", Command: "DoIt"},
 										},
 										Flows: []*ast.Flow{
 											{CommandName: "Cmd", EventName: "Evt"},
@@ -1093,8 +1093,8 @@ func TestExport(t *testing.T) {
 											{
 												Name:             "Auto",
 												NamePos:          ast.Position{Filename: "test.cue", Line: 5, Column: 5},
-												TriggerEvent:     "Evt",
-												TriggerEventPos:  ast.Position{Filename: "test.cue", Line: 5, Column: 11},
+												OnEvent:          "Evt",
+												OnEventPos:       ast.Position{Filename: "test.cue", Line: 5, Column: 11},
 												Reads:            "MyView",
 												ReadsPos:         ast.Position{Filename: "test.cue", Line: 5, Column: 14},
 												Command:          "DoIt",
@@ -1203,7 +1203,7 @@ func TestExport(t *testing.T) {
 						Name: "S",
 						Automations: []*ast.Automation{{
 							Name: "Auto", NamePos: at(5),
-							TriggerEvent: "Evt", TriggerEventPos: at(11),
+							OnEvent: "Evt", OnEventPos: at(11),
 							Reads: "MyView", ReadsPos: at(14),
 							Command: "DoIt", CommandPos: at(16),
 						}},
@@ -1638,7 +1638,7 @@ func TestExport(t *testing.T) {
 											{Name: "MyView", Subscribes: []string{"Evt"}},
 										},
 										Automations: []*ast.Automation{
-											{Name: "Auto", TriggerEvent: "Evt", Command: "DoIt"},
+											{Name: "Auto", OnEvent: "Evt", Command: "DoIt"},
 										},
 									},
 								},
@@ -1857,7 +1857,7 @@ func TestExport(t *testing.T) {
 										Automations: []*ast.Automation{
 											{
 												Name:          "OrderNotifier",
-												TriggerEvent:  "OrderPlaced",
+												OnEvent:       "OrderPlaced",
 												Reads:         "PendingOrdersView",
 												Command:       "SendNotification",
 												TargetContext: "Notifications",
@@ -2176,8 +2176,8 @@ func TestExport(t *testing.T) {
 										},
 										Automations: []*ast.Automation{
 											{
-												Name:         "OrderNotifier",
-												TriggerEvent: "OrderPlaced",
+												Name:    "OrderNotifier",
+												OnEvent: "OrderPlaced",
 											},
 										},
 									},
@@ -2468,9 +2468,9 @@ func TestExport(t *testing.T) {
 										},
 										Automations: []*ast.Automation{
 											{
-												Name:         "Auto",
-												TriggerEvent: "NonExistentEvent",
-												Command:      "NonExistentCmd",
+												Name:    "Auto",
+												OnEvent: "NonExistentEvent",
+												Command: "NonExistentCmd",
 											},
 										},
 									},
@@ -2526,7 +2526,7 @@ func TestExport(t *testing.T) {
 											{Name: "MyView", Subscribes: []string{"Evt"}},
 										},
 										Automations: []*ast.Automation{
-											{Name: "Auto", TriggerEvent: "Evt", Command: "Cmd"},
+											{Name: "Auto", OnEvent: "Evt", Command: "Cmd"},
 										},
 										Flows: []*ast.Flow{
 											{CommandName: "Cmd", EventName: "Evt"},
@@ -3201,10 +3201,10 @@ func TestExport(t *testing.T) {
 					Slices: []*ast.Slice{{
 						Name: "Chase Overdue Copy",
 						Automations: []*ast.Automation{{
-							Name:         "RecallOverdueCopy",
-							TriggerEvent: "CopyBorrowed",
-							Reads:        "MemberLoansView",
-							Command:      "RecallCopy",
+							Name:    "RecallOverdueCopy",
+							OnEvent: "CopyBorrowed",
+							Reads:   "MemberLoansView",
+							Command: "RecallCopy",
 						}},
 					}},
 				}},
@@ -3385,7 +3385,7 @@ func TestExport(t *testing.T) {
 								Name: "Notify",
 								Automations: []*ast.Automation{{
 									Name:          "OrderNotifier",
-									TriggerEvent:  "OrderPlaced",
+									OnEvent:       "OrderPlaced",
 									Command:       "SendNotification",
 									TargetContext: "Notifications",
 								}},
@@ -3619,10 +3619,10 @@ func TestExport(t *testing.T) {
 					Slices: []*ast.Slice{{
 						Name: owner,
 						Automations: []*ast.Automation{{
-							Name:         "RecallOverdueCopy",
-							TriggerEvent: "CopyBorrowed",
-							Reads:        "MemberLoansView",
-							Command:      "RecallCopy",
+							Name:    "RecallOverdueCopy",
+							OnEvent: "CopyBorrowed",
+							Reads:   "MemberLoansView",
+							Command: "RecallCopy",
 						}},
 						Translations: []*ast.Translation{{
 							Name:           "AcknowledgeOverdueNotice",
@@ -3789,10 +3789,10 @@ func buildFullModel() *ast.Model {
 								},
 								Automations: []*ast.Automation{
 									{
-										Name:         "Auto",
-										Description:  "The decision nobody has to make by hand",
-										TriggerEvent: "Evt",
-										Command:      "DoIt",
+										Name:        "Auto",
+										Description: "The decision nobody has to make by hand",
+										OnEvent:     "Evt",
+										Command:     "DoIt",
 									},
 								},
 								Translations: []*ast.Translation{

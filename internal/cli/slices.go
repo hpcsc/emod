@@ -171,7 +171,7 @@ func keyElementsForPattern(s *ast.Slice, pattern string) string {
 	case "automation":
 		if len(s.Automations) > 0 {
 			auto := s.Automations[0]
-			return fmt.Sprintf("%s, %s", auto.TriggerEvent, auto.Command)
+			return fmt.Sprintf("%s, %s", auto.OnEvent, auto.Command)
 		}
 		return ""
 	case "translation":
