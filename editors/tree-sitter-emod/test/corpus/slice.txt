@@ -287,6 +287,72 @@ context "C" {
           (any_identifier))))))
 
 ========================
+Slice with automation containing reads
+========================
+
+context "C" {
+  aggregate "A" {
+    slice "Core" {
+      automation SendEmail {
+        trigger OrderPlaced
+        reads AvailableRoomsView
+        command SendConfirmation
+        target context Notifications
+      }
+    }
+  }
+}
+
+---
+
+(source_file
+  (context_definition
+    (string)
+    (aggregate_definition
+      (string)
+      (slice_definition
+        (string)
+        (automation_definition
+          (identifier)
+          (any_identifier)
+          (any_identifier)
+          (any_identifier)
+          (any_identifier))))))
+
+========================
+Slice with automation declaring reads first
+========================
+
+context "C" {
+  aggregate "A" {
+    slice "Core" {
+      automation SendEmail {
+        reads AvailableRoomsView
+        trigger OrderPlaced
+        command SendConfirmation
+        target context Notifications
+      }
+    }
+  }
+}
+
+---
+
+(source_file
+  (context_definition
+    (string)
+    (aggregate_definition
+      (string)
+      (slice_definition
+        (string)
+        (automation_definition
+          (identifier)
+          (any_identifier)
+          (any_identifier)
+          (any_identifier)
+          (any_identifier))))))
+
+========================
 Slice with translation
 ========================
 
