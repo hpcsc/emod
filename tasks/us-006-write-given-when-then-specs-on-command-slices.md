@@ -8,7 +8,7 @@
 - [x] Task 5: Preserve specs through `emod fmt`
 - [x] Task 6: Carry specs through the JSON and CUE exports and the embedded schema
 - [x] Task 7: Accept spec blocks in the tree-sitter grammar
-- [ ] Task 8: Document specs in the DSL reference
+- [x] Task 8: Document specs in the DSL reference
 
 ---
 

@@ -265,6 +265,7 @@ slice "<name>" {
   automation  ...     # 0+ automations (Automation Pattern)
   translation ...     # 0+ translations (Translation Pattern)
   flow { ... }       # 0+ command→event wiring
+  spec "<name>" { ... }  # 0+ Given-When-Then specs
 }
 ```
 
@@ -360,6 +361,54 @@ slice "<name>" {
 ```
 
 `external_system`, `reads`, `command`, and `event` are required.
+
+### `spec`
+
+A `spec` states expected behaviour as Given-When-Then, next to the structure it describes. A slice may hold any number of specs, in any position among its other entries.
+
+```
+slice "Borrow a Copy" {
+  command BorrowCopy { fields { copyId string required } }
+  event CopyBorrowed { fields { copyId string required } }
+
+  spec "borrows a free copy" {
+    given []
+    when BorrowCopy
+    then [CopyBorrowed]
+  }
+}
+```
+
+`given` is the history the command decides against, as an ordered event list. `given []` and omitting `given` entirely mean the same empty history:
+
+```
+spec "borrows a free copy" {
+  when BorrowCopy
+  then [CopyBorrowed]
+}
+```
+
+`when` names the command under test. `then` states the outcome, in one of two shapes. A bracketed event list is the success outcome — the events appended, in order:
+
+```
+then [CopyBorrowed, LoanOpened]
+```
+
+`then rejected <invariantName>` is the failure outcome: the command is refused and nothing is appended. The name refers to a declared [`invariant`](#invariant), so a rejection is a checkable reference to a stated rule rather than free text:
+
+```
+spec "rejects a second borrow" {
+  given [CopyBorrowed]
+  when BorrowCopy
+  then rejected OneCopyPerLoan
+}
+```
+
+**Name resolution.** Every event in `given` and in a `then` list, and the command in `when`, must be defined somewhere in the model. A `rejected` name must be declared on the enclosing aggregate or, for a slice declared directly on a context, on that context — an aggregate and its context are separate scopes, so a name declared one level up does not resolve.
+
+Specs are carried through `emod fmt`, the JSON and CUE exports, and the embedded schema.
+
+The spec shapes for view, automation, and translation slices — `then view <Name>` and `then command <Name>` — are not part of the language yet.
 
 ---
 
@@ -578,16 +627,19 @@ Names are resolved during validation (`emod validate`). All references use unqua
 | Declaration | Referenced By | Context |
 |---|---|---|
 | `context "<name>"` | `automation { target context <Name> }` | [`automation`](#automation-pattern) |
-| `event <Name>` | `subscribes [<Name>]`, `flow`, `automation { trigger <Name> }`, `automation { command <Name> }`, `translation { event <Name> }`, `translation { command <Name> }` | [`view`](#view-pattern), [`automation`](#automation-pattern), [`translation`](#translation-pattern) |
-| `command <Name>` | `flow`, `automation { command <Name> }`, `translation { command <Name> }` | [`flow`](#7-flows), [`automation`](#automation-pattern), [`translation`](#translation-pattern) |
+| `event <Name>` | `subscribes [<Name>]`, `flow`, `automation { trigger <Name> }`, `automation { command <Name> }`, `translation { event <Name> }`, `translation { command <Name> }`, `spec { given [<Name>] }`, `spec { then [<Name>] }` | [`view`](#view-pattern), [`automation`](#automation-pattern), [`translation`](#translation-pattern), [`spec`](#spec) |
+| `command <Name>` | `flow`, `automation { command <Name> }`, `translation { command <Name> }`, `spec { when <Name> }` | [`flow`](#7-flows), [`automation`](#automation-pattern), [`translation`](#translation-pattern), [`spec`](#spec) |
 | `view <Name>` | `trigger { reads <Name> }`, `translation { reads <Name> }` | [`command` pattern](#command-pattern), [`translation`](#translation-pattern) |
 | `actor "<name>"` | `trigger { actor <Name> }` | [`command` pattern](#command-pattern) |
+| `invariant <name>` | `spec { then rejected <name> }` | [`spec`](#spec) |
 
 Validation detects:
 - Missing target contexts, commands, events, or views.
 - **Orphan commands**: defined but never referenced by any flow, automation, or translation.
 - **Orphan events**: defined but never produced by any flow, external source, or translation.
 - **Redeclared invariants**: one name declared twice in a single scope (see [Bounded Contexts](#4-bounded-contexts)).
+- **Undefined spec references**: an event in `given` or `then`, or a command in `when`, that the model does not define — reported as `event "<Name>" does not exist` or `command "<Name>" does not exist`.
+- **Unresolved rejections**: a `then rejected <name>` whose invariant is not declared in the enclosing scope — reported as `invariant "<name>" is not declared in <scope> "<Name>"`.
 
 ---
 
