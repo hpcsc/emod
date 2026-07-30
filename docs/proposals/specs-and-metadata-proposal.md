@@ -10,7 +10,7 @@ An `.emod` file describes structure: which commands exist, which events they pro
 - **No descriptions.** Constructs carry only a name. LSP hover, diagrams, and any future glossary have nothing to show beyond the identifier.
 - **No version marker.** Files do not declare which revision of the grammar they target. The first breaking grammar change will fail on old files with a parse error instead of a clear versioning message.
 - **No bridge to the wire.** Model events have no link to the event types actually published (CloudEvents types, schema registry subjects), so JSON/CUE exports stop at the model boundary.
-- **No time-driven behaviour.** Automations react to events only. "Release the hold 24 hours after `RoomHeld`" cannot be expressed.
+- **No relative time-driven behaviour.** An automation activates on an event or on an absolute schedule, but not a fixed delay after an occurrence. "Release the hold 24 hours after `RoomHeld`" cannot be expressed.
 
 ESDM (esdm.io) addresses most of these in its YAML-based DSL: a Given-When-Then extension, named invariants, `description` on every kind, Kubernetes-style `apiVersion` pinning, CloudEvents type annotations, and process-manager timers. Emlang (emlang-project.github.io), another YAML-based Event Modeling DSL, supplies two further ideas: error outcomes drawn on the timeline as first-class elements, and Given-When-Then tests that carry example payload data. This proposal adopts the ideas, not the syntax: each lands as an addition to the existing `.emod` grammar.
 
@@ -22,7 +22,7 @@ ESDM (esdm.io) addresses most of these in its YAML-based DSL: a Given-When-Then 
 - Add `description` to model constructs and generate a glossary from them.
 - Pin files to a DSL version with a one-line header.
 - Annotate events with their wire-level type.
-- Trigger automations on elapsed time relative to an event.
+- Fire automations on elapsed time relative to an event, completing the absolute schedules the grammar already carries.
 - Keep every existing `.emod` file valid and unchanged in meaning.
 
 ## Non-Goals
@@ -30,7 +30,7 @@ ESDM (esdm.io) addresses most of these in its YAML-based DSL: a Given-When-Then 
 - **Executing specs.** Specs are model artifacts. Exporting test skeletons is a later, separate feature; running them against an implementation is out of scope entirely.
 - **Adopting ESDM's file layout.** YAML, one-artifact-per-file, and `scope` back-references are not adopted. The nested single-file grammar stays.
 - **Structural DDD kinds.** No `entity`, `value-object`, `domain-service`, or `subdomain` constructs. emod models the Event Modeling timeline, not the object model.
-- **Process-manager construct.** Event Modeling decomposes process managers into the view plus automation pattern, which the DSL already expresses. Only the timer trigger is adopted.
+- **Process-manager construct.** Event Modeling decomposes process managers into a view plus an automation that reads it, which the DSL expresses directly. Only the elapsed-time clause is adopted.
 - **Context-mapping relationship types.** Labelling cross-context relationships (ACL, conformist, customer-supplier) is deferred until diagram grouping gives the labels somewhere useful to appear.
 
 ---
@@ -164,8 +164,11 @@ The four slice patterns each get a spec shape, following ESDM's four feature var
 |---|---|---|---|
 | Command | event history | command | events or `rejected <invariant>` |
 | View | event history | (omitted) | `view <ViewName>` |
-| Automation | event history | event (the automation's trigger) | `command <CommandName>` |
+| Automation, event-driven | event history | event (the automation's `on` event) | `command <CommandName>` |
+| Automation, schedule-driven | event history | (omitted) | `command <CommandName>` |
 | Translation | event history | command | events |
+
+A schedule-driven automation has no event for `when` to name — the `every` expression is the activation — so its spec omits `when`, the same shape a view slice takes. It reads: given this history, the next firing issues this command.
 
 View and automation examples:
 
@@ -182,10 +185,19 @@ slice "View Available Rooms" {
 slice "Send Confirmation Email" {
   automation ConfirmationEmailReactor { ... }
 
-  spec "reservation triggers a confirmation" {
+  spec "a reservation sends a confirmation" {
     given []
     when  RoomReserved
     then  command SendConfirmationEmail
+  }
+}
+
+slice "Expire Stale Holds" {
+  automation StaleHoldExpirer { ... }
+
+  spec "an unconfirmed hold is expired" {
+    given [RoomHeld]
+    then  command ExpireHold
   }
 }
 ```
@@ -223,7 +235,7 @@ A names-only spec remains valid; payloads are additive per element reference.
 ### Validation
 
 - Every event in `given` and `then` must be defined in the model.
-- `when` must name a command (or event, for automation specs) defined in the model.
+- `when` must name a command (or, for an event-driven automation spec, an event) defined in the model. It is omitted for view slices and for schedule-driven automations, which have no activating event to name.
 - `rejected <name>` must resolve to an invariant on the enclosing aggregate or DCB context.
 - The `then` shape must match the slice pattern (a `view` outcome inside a command-pattern slice is an error).
 - Payload field names must exist on the referenced construct's `fields` declaration.
@@ -284,14 +296,15 @@ event RoomReserved {
 - `emod export -f json` and `-f cue` emit the wire type, which is the point: exports become usable as input to schema registries and code generation.
 - `emod validate` errors on two events sharing the same wire type.
 
-## 7. Timer Triggers for Automations
+## 7. Elapsed-Time Automations
 
-An automation's trigger accepts an optional `after` clause:
+An automation's `on` clause accepts an optional `after` suffix:
 
 ```emod
 slice "Release Expired Hold" {
   automation ExpiredHoldReleaser {
-    trigger RoomHeld after "24h"
+    on      RoomHeld after "24h"
+    reads   UnreleasedHolds
     command ReleaseHold
   }
 }
@@ -301,9 +314,12 @@ Reading: 24 hours after each `RoomHeld` occurrence, issue `ReleaseHold`.
 
 - The duration is a string in Go duration syntax (`"30m"`, `"24h"`, `"72h"`).
 - Without `after`, behaviour is unchanged: the automation reacts immediately.
-- Diagrams render timed automations with a clock badge and the duration on the trigger edge.
+- `after` attaches to `on` only. An automation activated by `every` is already on an absolute schedule, so `every "0 2 * * *" after "24h"` has no reading and is a validation error.
+- Diagrams carry the duration on the `event -> automation` edge. The clock badge on the automation box belongs to `every`, so a relative delay and a wall-clock schedule stay visually distinct.
 
-How the timer is implemented (durable scheduling, delivery guarantees, idempotency) is a runtime concern and stays out of the model, the same line the DCB proposal drew for append-condition checking. Cron-style standalone schedules (`every day at 03:00`) are deferred (see Open Questions).
+`after` is the relative half of automation timing and `every` is the absolute half. The two never combine, and the distinction is worth keeping sharp: `after` is anchored to an occurrence and fires once per occurrence, while `every` is anchored to the clock and fires whether or not anything happened.
+
+How the timer is implemented (durable scheduling, delivery guarantees, idempotency) is a runtime concern and stays out of the model, the same line the DCB proposal drew for append-condition checking.
 
 ---
 
@@ -366,7 +382,7 @@ Extensions to existing nodes:
 - `Slice`: `Specs []*Spec`, `Rejections []*RejectionFlow`.
 - `Aggregate`, `Context`: `Invariants []*Invariant`.
 - `Event`: `WireType string`, `WireTypePos Position`.
-- `Automation`: `TriggerAfter string`, `TriggerAfterPos Position`.
+- `Automation`: `After string`, `AfterPos Position` — the delay qualifying `OnEvent`.
 - `Description string` and `DescPos Position` on `Model`, `Actor`, `Context`, `Aggregate`, `Slice`, `Command`, `Event`, `View`, `Automation`, `Translation`, `Trigger`.
 
 ### Lexer (`internal/lexer`)
@@ -409,7 +425,7 @@ Covered per feature above. All new lint rules respect the existing severity and 
 - Specs render as an optional GWT card under the slice (`--specs` flag; off by default to keep diagrams stable).
 - Rejection edges render dashed, ending in a rejection badge whose tooltip/`<title>` carries the invariant's prose.
 - Descriptions become tooltips (draw.io) and `<title>` elements (SVG).
-- Timed automations get a clock badge.
+- An `after` delay renders on the `event -> automation` edge; the clock badge on the automation box stays reserved for `every`.
 
 ---
 
@@ -430,7 +446,7 @@ context "Reservations" {
     invariant roomNotDoubleBooked "A room has at most one active reservation for any date range."
 
     slice "Reserve a Room" {
-      trigger UI "Reservation Form" {
+      trigger "Reservation Form" {
         actor Guest
         reads AvailableRoomsView
       }
@@ -475,9 +491,80 @@ context "Reservations" {
       }
     }
 
+    slice "Hold a Room" {
+      command HoldRoom {
+        description "Guest reserves a room provisionally, pending confirmation."
+        fields {
+          roomId    string required
+          guestName string required
+        }
+      }
+
+      event RoomHeld {
+        type "com.acme.reservations.room-held"
+        fields {
+          holdId string    required
+          roomId string    required
+          heldAt timestamp required
+        }
+      }
+
+      flow {
+        command -> event: HoldRoom -> RoomHeld
+      }
+    }
+
+    slice "Release Hold" {
+      command ReleaseHold {
+        fields { holdId string required }
+      }
+
+      event HoldReleased {
+        type "com.acme.reservations.hold-released"
+        fields {
+          holdId     string    required
+          roomId     string    required
+          releasedAt timestamp required
+        }
+      }
+
+      flow {
+        command -> event: ReleaseHold -> HoldReleased
+      }
+    }
+
+    slice "Available Rooms" {
+      view AvailableRoomsView {
+        description "Rooms bookable right now — neither held nor reserved."
+        fields {
+          roomId string required
+          status string required
+        }
+        subscribes [RoomHeld, RoomReserved, HoldReleased]
+      }
+
+      spec "a held room is not available" {
+        given [RoomHeld { roomId: "204" }]
+        then  view AvailableRoomsView
+      }
+    }
+
+    slice "Unreleased Holds" {
+      view UnreleasedHolds {
+        description "Holds still outstanding — the work the expirer has left to do."
+        fields {
+          holdId string    required
+          roomId string    required
+          heldAt timestamp required
+        }
+        subscribes [RoomHeld, RoomReserved, HoldReleased]
+      }
+    }
+
     slice "Release Expired Hold" {
       automation ExpiredHoldReleaser {
-        trigger RoomHeld after "24h"
+        on      RoomHeld after "24h"
+        reads   UnreleasedHolds
         command ReleaseHold
       }
 
@@ -490,6 +577,10 @@ context "Reservations" {
   }
 }
 ```
+
+Every name resolves inside the example: `AvailableRoomsView` and `UnreleasedHolds` are declared as views, `RoomHeld` and `HoldReleased` as events, `ReleaseHold` as a command, and `roomNotDoubleBooked` as an invariant on the enclosing aggregate.
+
+Two things the shape of the example is meant to show. `UnreleasedHolds` subscribes to `HoldReleased`, so the event the automation ultimately causes is what removes the row it acted on — the todo list closes its own loop rather than growing forever. And each slice stays single-pattern, which is what keeps the "`then` shape must match the slice pattern" rule decidable: the automation lives alone in its slice rather than sharing one with the command it issues.
 
 ---
 
@@ -509,7 +600,7 @@ The `Number` token, payload grammar, type checking against field declarations, f
 
 ### Phase 4: Wire Types and Timers
 
-`type` on events with export support and uniqueness validation. `after` on automation triggers with diagram badge.
+`type` on events with export support and uniqueness validation. `after` on an automation's `on` clause, with the duration on the trigger edge and the `every` exclusion enforced.
 
 ### Phase 5: Tooling and Docs
 
@@ -525,5 +616,5 @@ LSP hover/completion/references for the new constructs. `--specs` diagram flag. 
 - **`description` versus doc comments.** `#` comments are already preserved in the AST, so a `## doc comment` convention was the alternative. The explicit attribute wins on discoverability, formatter canonicalisation, and export fidelity, at the cost of some ceremony. Revisit only if authors consistently reach for comments instead.
 - **Keyword collisions.** Every new keyword is a word modellers might use as a field name. The keyword-as-field-name fix removes the worst of it, but names like a view called `Given` remain awkward. The lexer stays context-free; the parser absorbs the ambiguity.
 - **Timer semantics stop at the model.** `after "24h"` says nothing about clock skew, missed timers, or redelivery. That is intentional, but teams may ask the model to say more (ESDM records `deliveryGuarantee` and `idempotency`). Hold the line: those are implementation properties, not model properties.
-- **Cron-style schedules.** `trigger every "..."` for calendar-driven automations (nightly reconciliation) is a plausible follow-up to `after`. Deferred until a concrete model needs it, to avoid designing a schedule syntax speculatively.
+- **Two timing notations to keep apart.** `after` and `every` answer different questions — one delays from an occurrence, the other fires on the clock — and a reader who conflates them will misread a diagram. The mutual exclusion and the split between edge label and box badge exist to keep them legible; if authors still confuse them, the fallback is naming the badge rather than relying on position alone.
 - **Version header adoption.** Old files without the header stay valid forever under the "absence means 1" rule, so adoption is driven entirely by `emod fmt`. If a version 2 ever ships, unformatted files are the risk surface; a lint info rule (`version/missing-header`) can nudge without nagging.

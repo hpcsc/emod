@@ -14,7 +14,7 @@ Stories are listed in recommended implementation order, following the proposal's
 - Every construct can carry a description, and `emod glossary` renders the ubiquitous language from them
 - Files declare the DSL version they target, so a future breaking grammar change fails with a clear message instead of a parse error
 - Exports carry wire-level event types, making them usable as schema-registry and code-generation input
-- Time-driven behaviour ("release the hold 24 hours after `RoomHeld`") is expressible on automations
+- Relative time-driven behaviour ("release the hold 24 hours after `RoomHeld`") is expressible on automations, completing the absolute schedules the grammar already carries
 - Every existing `.emod` file remains valid and unchanged in meaning
 
 ## User Stories
@@ -46,10 +46,10 @@ Stories are listed in recommended implementation order, following the proposal's
 
 **Acceptance Criteria:**
 - [ ] A `fields` block accepts each new keyword (`type`, `description`, `spec`, `given`, `when`, `then`, `rejected`, `invariant`, `after`, `emod`) as a field name
-- [ ] Words that were already reserved (e.g. `events`, `source`) are also accepted in field-name position
+- [ ] Words that were already reserved (e.g. `events`, `source`, `on`, `every`, `wireframe`) are also accepted in field-name position
 - [ ] Such fields behave like any other field in validation, formatting, exports, and diagrams
 
-**Context:** `fields { type string required }` is a plausible declaration in existing models. Adding `type` and `description` as keywords must not break it — the fix is general, so every current and future keyword gets the same courtesy.
+**Context:** `fields { type string required }` is a plausible declaration in existing models. Adding `type` and `description` as keywords must not break it — the fix is general, so every current and future keyword gets the same courtesy, including ones added by later grammar work.
 
 ### US-004: Generate a glossary from the model
 **Description:** As a team member, I want `emod glossary` to render the ubiquitous language from the model so that the whole team shares one vocabulary that cannot drift from the source.
@@ -94,7 +94,8 @@ Stories are listed in recommended implementation order, following the proposal's
 
 **Acceptance Criteria:**
 - [ ] In a view slice, a spec omits `when` and concludes with `then view <ViewName>`
-- [ ] In an automation slice, `when` names the automation's triggering event and the spec concludes with `then command <CommandName>`
+- [ ] In an event-driven automation slice, `when` names the automation's `on` event and the spec concludes with `then command <CommandName>`
+- [ ] In a schedule-driven automation slice, a spec omits `when` — the `every` expression is the activation, and there is no event to name — and concludes with `then command <CommandName>`, read as: given this history, the next firing issues this command
 - [ ] In a translation slice, a spec takes the given/when/then-events form
 - [ ] The named view or command outcome must resolve to a construct defined in the model
 - [ ] A `then` shape that does not match the slice pattern (e.g. a `view` outcome inside a command slice) is a validation error
@@ -165,16 +166,17 @@ Stories are listed in recommended implementation order, following the proposal's
 - [ ] `wire/type-format` (info) nudges toward reverse-DNS kebab-case (the CloudEvents convention) without enforcing it
 - [ ] Events without a wire type validate and export exactly as before
 
-### US-013: Trigger automations after elapsed time
+### US-013: Fire automations after elapsed time
 **Description:** As a model author, I want an automation to fire a fixed duration after an event so that time-driven behaviour like "release the hold 24 hours after `RoomHeld`" is expressible in the model.
 
 **Acceptance Criteria:**
-- [ ] An automation's trigger accepts an optional `after "<duration>"` clause, read as: the duration after each trigger-event occurrence, issue the command
+- [ ] An automation's `on` clause accepts an optional `after "<duration>"` suffix, read as: the duration after each `on` event occurrence, issue the command
 - [ ] The duration is a string in Go duration syntax (`"30m"`, `"24h"`, `"72h"`); a value that does not parse as a duration is a validation error with location
 - [ ] Without `after`, behaviour is unchanged: the automation reacts immediately
-- [ ] Diagrams render timed automations with a clock badge and the duration on the trigger edge
+- [ ] `after` on a schedule-driven automation is a validation error — `every` is already absolute, so `every "0 2 * * *" after "24h"` has no reading
+- [ ] Diagrams carry the duration on the `event -> automation` edge; the clock badge on the automation box stays reserved for the `every` expression, so a relative delay and a wall-clock schedule read differently
 
-**Context:** How the timer is implemented — durable scheduling, delivery guarantees, idempotency — is a runtime concern and stays out of the model, the same line the DCB proposal drew for append-condition checking.
+**Context:** `after` is the relative half of automation timing — `every` covers the absolute half and is a precondition for this story. The two never combine. How the timer is implemented — durable scheduling, delivery guarantees, idempotency — is a runtime concern and stays out of the model, the same line the DCB proposal drew for append-condition checking.
 
 ### US-014: Format the new constructs consistently
 **Description:** As a model author, I want `emod fmt` to canonicalise all the new syntax so that team models stay uniform without style debates.
@@ -236,18 +238,18 @@ Stories are listed in recommended implementation order, following the proposal's
 - Executing specs against an implementation, or exporting test skeletons (a later, separate feature)
 - Adopting ESDM's file layout: YAML, one-artifact-per-file, and `scope` back-references — the nested single-file grammar stays
 - Structural DDD kinds (`entity`, `value-object`, `domain-service`, `subdomain`)
-- A process-manager construct — Event Modeling decomposes it into view plus automation, which the DSL already expresses; only the timer trigger is adopted
+- A process-manager construct — Event Modeling decomposes it into a view plus an automation that reads it, which the DSL expresses directly; only the elapsed-time clause is adopted
 - Context-mapping relationship labels (ACL, conformist, customer-supplier), deferred until diagram grouping gives them somewhere to appear
 - Expected view-state payloads on `then view` outcomes — modeling rows and collections is a much larger literal grammar, deferred until scalar payloads prove themselves
 - Variable binding in specs (`let`) — payload linkage is by repetition of the same value
 - Field-level descriptions
-- Cron-style standalone schedules (`every day at 03:00`)
 - A spec include mechanism (`specs "reservation_specs.emod"`) — watch real usage first
 - Modeling timer runtime properties (delivery guarantees, idempotency, clock skew)
 
 ## Open Questions
 
 - Duplicate invariant names in the same scope: the proposal is silent; US-005 assumes a validation error. Confirm this is the intended behaviour.
+- Should a schedule-driven automation's spec assert the contents of the todo-list view it reads, rather than only the `given` events that project into it? Assumed not, since view-state payloads are already a non-goal — but a scheduled automation is the one case where the view's contents are the entire precondition.
 - Should the `version/missing-header` lint rule (info) ship with US-001, or wait until a version 2 exists? Assumed deferred, since `emod fmt` already drives adoption.
 - Should `emod glossary` also show wire types alongside events? Assumed not, until a consumer asks for it.
 - Scope assumption: these stories cover the full proposal, sequenced by its five implementation phases. If only Phases 1–2 are in scope for now, US-010 through US-018 can be parked without affecting the earlier stories.
