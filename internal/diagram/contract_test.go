@@ -217,6 +217,20 @@ func TestExporterContract(t *testing.T) {
 				require.Equal(t, e.run(t, unconstrained, diagram.StyleAuto), e.run(t, constrained, diagram.StyleAuto),
 					"a diagram shows elements and arrows, not the rules they keep, so declaring an invariant cannot move it")
 			})
+
+			t.Run("stating specs leaves the picture untouched", func(t *testing.T) {
+				stated := test.SpecLibraryLendingModel(t)
+				unstated := test.WithoutSpecs(stated)
+
+				require.NotEqual(t, stated, unstated,
+					"the twin has to state no spec, or the comparison below says nothing")
+				require.Equal(t, test.SpecLibraryLendingSpecNames, test.DeclaredSpecNames(stated))
+				require.Empty(t, test.DeclaredSpecNames(unstated),
+					"the twin has to lose the specs of both slice homes, or the comparison below is answered by whichever home it kept")
+
+				require.Equal(t, e.run(t, unstated, diagram.StyleAuto), e.run(t, stated, diagram.StyleAuto),
+					"a diagram shows elements and arrows, not the scenarios they must satisfy, so stating a spec cannot move it")
+			})
 		})
 	}
 }

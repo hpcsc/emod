@@ -6,7 +6,7 @@
 - [x] Task 3: Reject spec references to events and commands the model does not define
 - [x] Task 4: Resolve `then rejected` against the enclosing aggregate or DCB context
 - [x] Task 5: Preserve specs through `emod fmt`
-- [ ] Task 6: Carry specs through the JSON and CUE exports and the embedded schema
+- [x] Task 6: Carry specs through the JSON and CUE exports and the embedded schema
 - [ ] Task 7: Accept spec blocks in the tree-sitter grammar
 - [ ] Task 8: Document specs in the DSL reference
 

@@ -8,6 +8,7 @@ import (
 
 	"github.com/hpcsc/emod/internal/ast"
 	"github.com/hpcsc/emod/internal/glossary"
+	"github.com/hpcsc/emod/internal/test"
 	"github.com/stretchr/testify/require"
 )
 
@@ -36,9 +37,6 @@ func TestGlossary(t *testing.T) {
 				},
 			}
 
-			rendered, err := glossary.RenderMarkdown(model)
-			require.NoError(t, err)
-
 			require.Equal(t, `# Hotel Operations
 
 How the hotel runs a stay end to end
@@ -62,7 +60,7 @@ Turning a completed stay into money
 ### Invoice
 
 What a guest owes for one stay
-`, string(rendered))
+`, renderedMarkdown(t, model))
 		})
 
 		t.Run("lists under each context the commands, events and views its own slices declare, in declaration order", func(t *testing.T) {
@@ -107,9 +105,6 @@ What a guest owes for one stay
 					},
 				},
 			}
-
-			rendered, err := glossary.RenderMarkdown(model)
-			require.NoError(t, err)
 
 			require.Equal(t, `# Hotel Operations
 
@@ -174,7 +169,7 @@ A guest has been billed
 #### UnpaidInvoicesView
 
 Invoices still owed
-`, string(rendered))
+`, renderedMarkdown(t, model))
 		})
 
 		t.Run("names an actor once in each context whose triggers reference it, however many of them do", func(t *testing.T) {
@@ -202,9 +197,6 @@ Invoices still owed
 				},
 			}
 
-			rendered, err := glossary.RenderMarkdown(model)
-			require.NoError(t, err)
-
 			require.Equal(t, `# Hotel Operations
 
 ## Reservations
@@ -226,7 +218,7 @@ A person booking a room, not necessarily the one staying in it
 #### Guest
 
 A person booking a room, not necessarily the one staying in it
-`, string(rendered))
+`, renderedMarkdown(t, model))
 		})
 
 		t.Run("keeps a declared actor no trigger references, with the description declared for it", func(t *testing.T) {
@@ -245,9 +237,6 @@ A person booking a room, not necessarily the one staying in it
 				}},
 			}
 
-			rendered, err := glossary.RenderMarkdown(model)
-			require.NoError(t, err)
-
 			require.Equal(t, `# Hotel Operations
 
 ## Actors
@@ -265,7 +254,7 @@ Reviews the books once a quarter and never touches a screen
 #### Guest
 
 A person booking a room
-`, string(rendered))
+`, renderedMarkdown(t, model))
 		})
 
 		t.Run("keeps an actor a trigger names though the model never declares it, with an empty definition", func(t *testing.T) {
@@ -280,9 +269,6 @@ A person booking a room
 				}},
 			}
 
-			rendered, err := glossary.RenderMarkdown(model)
-			require.NoError(t, err)
-
 			require.Equal(t, `# Hotel Operations
 
 ## Reservations
@@ -292,7 +278,7 @@ A person booking a room
 ### Actors
 
 #### Concierge
-`, string(rendered))
+`, renderedMarkdown(t, model))
 		})
 
 		t.Run("takes no actor from a trigger that names none", func(t *testing.T) {
@@ -311,9 +297,6 @@ A person booking a room
 				}},
 			}
 
-			rendered, err := glossary.RenderMarkdown(model)
-			require.NoError(t, err)
-
 			require.Equal(t, `# Hotel Operations
 
 ## Reservations
@@ -325,7 +308,7 @@ A person booking a room
 #### AvailableRoomsView
 
 Rooms free over a date range
-`, string(rendered))
+`, renderedMarkdown(t, model))
 		})
 
 		t.Run("lists an aggregate's invariants beneath it, in declaration order, each defined by its statement", func(t *testing.T) {
@@ -347,9 +330,6 @@ Rooms free over a date range
 					}},
 				}},
 			}
-
-			rendered, err := glossary.RenderMarkdown(model)
-			require.NoError(t, err)
 
 			require.Equal(t, `# Library Lending
 
@@ -374,7 +354,7 @@ A member holds at most five copies at one time
 #### BorrowCopy
 
 Lend a copy to a member until a due date
-`, string(rendered))
+`, renderedMarkdown(t, model))
 		})
 
 		t.Run("lists a context's own invariants beneath the context and under none of its aggregates", func(t *testing.T) {
@@ -393,9 +373,6 @@ Lend a copy to a member until a due date
 					}},
 				}},
 			}
-
-			rendered, err := glossary.RenderMarkdown(model)
-			require.NoError(t, err)
 
 			require.Equal(t, `# Library Lending
 
@@ -418,7 +395,7 @@ A reader holds at most one desk for the length of a session
 ##### DeskFreeAtClosing
 
 No desk stays claimed past the closing hour
-`, string(rendered))
+`, renderedMarkdown(t, model))
 		})
 
 		t.Run("lists one invariant under each of two aggregates declaring the same identifier", func(t *testing.T) {
@@ -439,9 +416,6 @@ No desk stays claimed past the closing hour
 				}},
 			}
 
-			rendered, err := glossary.RenderMarkdown(model)
-			require.NoError(t, err)
-
 			require.Equal(t, `# Library Lending
 
 ## Lending
@@ -461,7 +435,7 @@ A copy is out on at most one loan at any moment
 ##### OneAtATime
 
 A member holds at most one reservation on a title
-`, string(rendered))
+`, renderedMarkdown(t, model))
 		})
 
 		t.Run("keeps an invariant declared without a statement, with no definition beneath its name", func(t *testing.T) {
@@ -476,9 +450,6 @@ A member holds at most one reservation on a title
 				}},
 			}
 
-			rendered, err := glossary.RenderMarkdown(model)
-			require.NoError(t, err)
-
 			require.Equal(t, `# Library Lending
 
 ## Lending
@@ -488,7 +459,7 @@ A member holds at most one reservation on a title
 #### Invariants
 
 ##### OneCopyPerLoan
-`, string(rendered))
+`, renderedMarkdown(t, model))
 		})
 	})
 
@@ -509,12 +480,6 @@ A member holds at most one reservation on a title
 				}},
 			}
 
-			rendered, err := glossary.RenderJSON(model)
-			require.NoError(t, err)
-
-			var doc map[string]any
-			require.NoError(t, json.Unmarshal(rendered, &doc))
-
 			require.Equal(t, map[string]any{
 				"name":        "Hotel Operations",
 				"description": "",
@@ -531,7 +496,7 @@ A member holds at most one reservation on a title
 						map[string]any{"name": "Guest", "description": "A person booking a room"},
 					},
 				}},
-			}, doc)
+			}, renderedJSONDoc(t, model))
 		})
 
 		t.Run("carries each invariant under the aggregate or the context that declares it, in declaration order", func(t *testing.T) {
@@ -560,12 +525,6 @@ A member holds at most one reservation on a title
 				},
 			}
 
-			rendered, err := glossary.RenderJSON(model)
-			require.NoError(t, err)
-
-			var doc map[string]any
-			require.NoError(t, json.Unmarshal(rendered, &doc))
-
 			require.Equal(t, map[string]any{
 				"name":        "Library Lending",
 				"description": "",
@@ -591,7 +550,7 @@ A member holds at most one reservation on a title
 						},
 					},
 				},
-			}, doc)
+			}, renderedJSONDoc(t, model))
 		})
 
 		t.Run("keeps a description key on an invariant declared without a statement", func(t *testing.T) {
@@ -605,12 +564,6 @@ A member holds at most one reservation on a title
 					}},
 				}},
 			}
-
-			rendered, err := glossary.RenderJSON(model)
-			require.NoError(t, err)
-
-			var doc map[string]any
-			require.NoError(t, json.Unmarshal(rendered, &doc))
 
 			require.Equal(t, map[string]any{
 				"name":        "Library Lending",
@@ -626,7 +579,50 @@ A member holds at most one reservation on a title
 						},
 					}},
 				}},
-			}, doc)
+			}, renderedJSONDoc(t, model))
 		})
 	})
+
+	t.Run("stating specs leaves both renderings untouched", func(t *testing.T) {
+		stated := test.SpecLibraryLendingModel(t)
+		unstated := test.WithoutSpecs(stated)
+
+		require.NotEqual(t, stated, unstated,
+			"the twin has to state no spec, or the comparisons below say nothing")
+		require.Equal(t, test.SpecLibraryLendingSpecNames, test.DeclaredSpecNames(stated))
+		require.Empty(t, test.DeclaredSpecNames(unstated),
+			"the twin has to lose the specs of both slice homes, or the comparisons below are answered by whichever home it kept")
+
+		require.Equal(t, renderedMarkdown(t, unstated), renderedMarkdown(t, stated),
+			"a glossary defines the terms of a ubiquitous language, and a scenario is not one of them")
+		require.Equal(t, renderedJSON(t, unstated), renderedJSON(t, stated),
+			"a glossary defines the terms of a ubiquitous language, and a scenario is not one of them")
+	})
+}
+
+func renderedMarkdown(t *testing.T, model *ast.Model) string {
+	t.Helper()
+
+	rendered, err := glossary.RenderMarkdown(model)
+	require.NoError(t, err)
+
+	return string(rendered)
+}
+
+func renderedJSON(t *testing.T, model *ast.Model) string {
+	t.Helper()
+
+	rendered, err := glossary.RenderJSON(model)
+	require.NoError(t, err)
+
+	return string(rendered)
+}
+
+func renderedJSONDoc(t *testing.T, model *ast.Model) map[string]any {
+	t.Helper()
+
+	var doc map[string]any
+	require.NoError(t, json.Unmarshal([]byte(renderedJSON(t, model)), &doc))
+
+	return doc
 }

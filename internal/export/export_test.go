@@ -532,6 +532,14 @@ func TestExport(t *testing.T) {
 												Name:     "DoThing",
 											},
 										},
+										Specs: []*ast.Spec{
+											{
+												Comments: []*ast.Comment{{Text: "# Spec comment"}},
+												Name:     "does the thing nobody has done yet",
+												When:     &ast.SpecElement{Name: "DoThing"},
+												Then:     &ast.ThenEvents{Events: []*ast.SpecElement{{Name: "ThingDone"}}},
+											},
+										},
 									},
 								},
 							},
@@ -564,6 +572,8 @@ func TestExport(t *testing.T) {
 			cmdComments := cmd["comments"].([]any)
 			require.Len(t, cmdComments, 1)
 			require.Equal(t, "# Cmd comment", cmdComments[0].(map[string]any)["text"])
+
+			require.Equal(t, []any{map[string]any{"text": "# Spec comment"}}, firstOf(t, s, "specs")["comments"])
 		})
 
 		t.Run("nil model returns null-JSON", func(t *testing.T) {
@@ -1282,6 +1292,61 @@ func TestExport(t *testing.T) {
 
 		t.Run("files every invariant under the scope that declared it, in declaration order", func(t *testing.T) {
 			require.Equal(t, libraryLendingInvariants, invariantsByOwner(modelDocOf(t, test.InvariantLibraryLendingModel(t))))
+		})
+
+		t.Run("files a slice under the aggregate or the context that declares it, in declaration order", func(t *testing.T) {
+			require.Equal(t, map[string][]string{
+				"Loan":         {"Borrow Copy", "Return Copy", "Review Member Loans"},
+				"Reading Room": {"Claim Desk", "Release Desk"},
+			}, sliceNamesByOwner(modelDocOf(t, test.SpecLibraryLendingModel(t))))
+		})
+
+		t.Run("files every spec under the slice that states it, in declaration order", func(t *testing.T) {
+			require.Equal(t, libraryLendingSpecs, specsByOwner(modelDocOf(t, test.SpecLibraryLendingModel(t))))
+		})
+
+		t.Run("includes positions for spec name/when/rejected and braces", func(t *testing.T) {
+			model := &ast.Model{
+				Name: "Test",
+				Contexts: []*ast.Context{{
+					Name: "Ctx",
+					Aggregates: []*ast.Aggregate{{
+						Name: "Agg",
+						Slices: []*ast.Slice{{
+							Name: "S",
+							Specs: []*ast.Spec{{
+								Name:    "refuses a copy already on loan",
+								NamePos: ast.Position{Filename: "test.emod", Line: 6, Column: 7},
+								OpenPos: ast.Position{Filename: "test.emod", Line: 6, Column: 41},
+								When: &ast.SpecElement{
+									Name:    "BorrowCopy",
+									NamePos: ast.Position{Filename: "test.emod", Line: 7, Column: 14},
+								},
+								Then: &ast.ThenRejected{
+									InvariantName: "OneCopyPerLoan",
+									InvariantPos:  ast.Position{Filename: "test.emod", Line: 8, Column: 23},
+								},
+								ClosePos: ast.Position{Filename: "test.emod", Line: 9, Column: 7},
+							}},
+						}},
+					}},
+				}},
+			}
+
+			spec := firstOf(t, firstSliceOf(t, modelDocOf(t, model)), "specs")
+
+			require.Equal(t, map[string]any{
+				"name":           "refuses a copy already on loan",
+				"position":       map[string]any{"filename": "test.emod", "line": float64(6), "column": float64(7)},
+				"open_position":  map[string]any{"filename": "test.emod", "line": float64(6), "column": float64(41)},
+				"when":           "BorrowCopy",
+				"when_position":  map[string]any{"filename": "test.emod", "line": float64(7), "column": float64(14)},
+				"close_position": map[string]any{"filename": "test.emod", "line": float64(9), "column": float64(7)},
+				"then": map[string]any{
+					"rejected":          "OneCopyPerLoan",
+					"rejected_position": map[string]any{"filename": "test.emod", "line": float64(8), "column": float64(23)},
+				},
+			}, spec)
 		})
 	})
 
@@ -2856,6 +2921,21 @@ func TestExport(t *testing.T) {
 			require.Empty(t, invariantTextAnywhere(diagramDocOf(t, model)),
 				"the diagram document is nodes and edges; an invariant is neither")
 		})
+
+		t.Run("a model stating specs still produces a document free of them", func(t *testing.T) {
+			stated := test.SpecLibraryLendingModel(t)
+			unstated := test.WithoutSpecs(stated)
+
+			require.Empty(t, test.DeclaredSpecNames(unstated),
+				"the twin has to lose the specs of both slice homes, or the last comparison below is answered by whichever home it kept")
+			require.ElementsMatch(t, libraryLendingSpecText(), specTextAnywhere(modelDocOf(t, stated)),
+				"the search has to find spec text where it does belong, or finding none below says nothing")
+
+			require.Empty(t, specTextAnywhere(diagramDocOf(t, stated)),
+				"the diagram document is nodes and edges; a scenario is neither")
+			require.Equal(t, diagramDocOf(t, unstated), diagramDocOf(t, stated),
+				"nor does an event a spec names in its given or then history reach a node or an edge of its own")
+		})
 	})
 
 	t.Run("diagram json with diagnostics", func(t *testing.T) {
@@ -3333,6 +3413,12 @@ func TestExport(t *testing.T) {
 									Comments: []*ast.Comment{{Text: "# Cmd comment"}},
 									Name:     "DoThing",
 								}},
+								Specs: []*ast.Spec{{
+									Comments: []*ast.Comment{{Text: "# Spec comment"}},
+									Name:     "does the thing nobody has done yet",
+									When:     &ast.SpecElement{Name: "DoThing"},
+									Then:     &ast.ThenEvents{Events: []*ast.SpecElement{{Name: "ThingDone"}}},
+								}},
 							}},
 						}},
 					}},
@@ -3348,6 +3434,8 @@ func TestExport(t *testing.T) {
 				require.Equal(t, []any{map[string]any{"text": "# Slice comment"}}, slice["comments"])
 				require.Equal(t, []any{map[string]any{"text": "# Cmd comment"}},
 					slice["commands"].([]any)[0].(map[string]any)["comments"])
+				require.Equal(t, []any{map[string]any{"text": "# Spec comment"}},
+					firstOf(t, slice, "specs")["comments"])
 			})
 		})
 
@@ -3361,6 +3449,10 @@ func TestExport(t *testing.T) {
 
 		t.Run("a model declaring invariants conforms to the schema's Model definition", func(t *testing.T) {
 			requireConformsToSchema(t, lookupCue(t), test.InvariantLibraryLendingModel(t))
+		})
+
+		t.Run("a model stating specs conforms to the schema's Model definition", func(t *testing.T) {
+			requireConformsToSchema(t, lookupCue(t), test.SpecLibraryLendingModel(t))
 		})
 
 		t.Run("CUE and JSON exports describe the same model", func(t *testing.T) {
@@ -3378,6 +3470,10 @@ func TestExport(t *testing.T) {
 
 		t.Run("CUE and JSON exports agree on the invariants a model declares", func(t *testing.T) {
 			requireBothFormatsAgree(t, lookupCue(t), test.InvariantLibraryLendingModel(t))
+		})
+
+		t.Run("CUE and JSON exports agree on the specs a model states", func(t *testing.T) {
+			requireBothFormatsAgree(t, lookupCue(t), test.SpecLibraryLendingModel(t))
 		})
 	})
 }
@@ -3632,25 +3728,134 @@ func libraryLendingInvariantText() []string {
 	return text
 }
 
+// libraryLendingSpecs transcribes the scenarios test.SpecLibraryLending states,
+// filed under the slice that states each, so an export is read back against the
+// source an author wrote rather than against another export of it. Both homes a
+// slice has appear — "Borrow Copy" and "Return Copy" sit in an aggregate,
+// "Claim Desk" and "Release Desk" are declared directly on a DCB context — and
+// the one slice that states no scenario is absent, so a spec cannot be inherited
+// by a sibling. The two specs that state no history spell it the same way: one
+// was written with no given at all, the other with an empty given list.
+var libraryLendingSpecs = map[string][]map[string]any{
+	"Borrow Copy": {
+		{
+			"name": "borrows a copy no one holds",
+			"when": "BorrowCopy",
+			"then": map[string]any{"events": []any{"CopyBorrowed"}},
+		},
+		{
+			"name":  "borrows a copy the member before returned",
+			"given": []any{"CopyBorrowed", "CopyReturned"},
+			"when":  "BorrowCopy",
+			"then":  map[string]any{"events": []any{"CopyBorrowed"}},
+		},
+		{
+			"name":  "refuses a copy already on loan",
+			"given": []any{"CopyBorrowed"},
+			"when":  "BorrowCopy",
+			"then":  map[string]any{"rejected": "OneCopyPerLoan"},
+		},
+	},
+	"Return Copy": {
+		{
+			"name":  "returns a copy the member holds",
+			"given": []any{"CopyBorrowed"},
+			"when":  "ReturnCopy",
+			"then":  map[string]any{"events": []any{"CopyReturned"}},
+		},
+	},
+	"Claim Desk": {
+		{
+			"name": "seats a reader at a free desk",
+			"when": "ClaimDesk",
+			"then": map[string]any{"events": []any{"DeskClaimed"}},
+		},
+		{
+			"name":  "refuses a desk another reader is seated at",
+			"given": []any{"DeskClaimed"},
+			"when":  "ClaimDesk",
+			"then":  map[string]any{"rejected": "OneReaderPerDesk"},
+		},
+	},
+	"Release Desk": {
+		{
+			"name":  "frees the desk its reader is seated at",
+			"given": []any{"DeskClaimed"},
+			"when":  "ReleaseDesk",
+			"then":  map[string]any{"events": []any{"DeskReleased"}},
+		},
+	},
+}
+
+// libraryLendingSpecText returns every string that reaching a spec of
+// test.SpecLibraryLending puts in a document: the name each is written under and
+// the invariant each rejection names, listed once because the two invariants are
+// also declared as invariants and what the search answers is whether the text is
+// there at all. The events a given or then history names are left out: a slice
+// declares those in their own right, so finding one proves nothing.
+func libraryLendingSpecText() []string {
+	var text []string
+	for _, specs := range libraryLendingSpecs {
+		for _, spec := range specs {
+			text = append(text, spec["name"].(string))
+			if rejected, ok := spec["then"].(map[string]any)["rejected"].(string); ok {
+				text = append(text, rejected)
+			}
+		}
+	}
+	return text
+}
+
+func sliceNamesByOwner(doc map[string]any) map[string][]string {
+	return listsKeyedBy(doc, "slices", "name", objectName)
+}
+
+func specsByOwner(doc map[string]any) map[string][]map[string]any {
+	return listsKeyedBy(doc, "specs", "name", objectWithoutPositions)
+}
+
+func specTextAnywhere(doc map[string]any) []string {
+	return textAnywhere(doc, libraryLendingSpecText())
+}
+
 func invariantsByOwner(doc map[string]any) map[string][]map[string]any {
-	return listsKeyedBy(doc, "invariants", "name", func(invariant map[string]any) map[string]any {
-		return invariant
-	})
+	return listsKeyedBy(doc, "invariants", "name", wholeObject)
 }
 
 func invariantTextAnywhere(doc map[string]any) []string {
-	declared := make(map[string]bool)
-	for _, text := range libraryLendingInvariantText() {
-		declared[text] = true
+	return textAnywhere(doc, libraryLendingInvariantText())
+}
+
+// textAnywhere reports which of wanted a decoded document spells, at any key and
+// any depth, naming each at most once however many places spell it: the
+// invariant a rejection names is also declared as an invariant, and what the
+// search answers is whether the text is there at all.
+func textAnywhere(doc map[string]any, wanted []string) []string {
+	unfound := make(map[string]bool)
+	for _, text := range wanted {
+		unfound[text] = true
 	}
 
 	var found []string
 	for _, text := range stringsAnywhere(doc) {
-		if declared[text] {
+		if unfound[text] {
 			found = append(found, text)
+			unfound[text] = false
 		}
 	}
 	return found
+}
+
+func wholeObject(object map[string]any) map[string]any {
+	return object
+}
+
+func objectName(object map[string]any) string {
+	return object["name"].(string)
+}
+
+func objectWithoutPositions(object map[string]any) map[string]any {
+	return withoutPositions(object).(map[string]any)
 }
 
 // stringsAnywhere returns every string a decoded document spells, key as well as
@@ -3704,15 +3909,15 @@ func diagramFieldsByLabel(doc map[string]any) map[string][]map[string]any {
 // under the ownerKey of the object declaring it. Searching the whole document
 // rather than the paths the list is expected on lets one that surfaces
 // somewhere new show up as an unexpected entry.
-func listsKeyedBy(doc map[string]any, listKey, ownerKey string, entryOf func(map[string]any) map[string]any) map[string][]map[string]any {
-	byOwner := make(map[string][]map[string]any)
+func listsKeyedBy[T any](doc map[string]any, listKey, ownerKey string, entryOf func(map[string]any) T) map[string][]T {
+	byOwner := make(map[string][]T)
 	eachObject(doc, func(object map[string]any) {
 		list, declaresList := object[listKey].([]any)
 		owner, named := object[ownerKey].(string)
 		if !declaresList || !named {
 			return
 		}
-		entries := make([]map[string]any, 0, len(list))
+		entries := make([]T, 0, len(list))
 		for _, entry := range list {
 			entries = append(entries, entryOf(entry.(map[string]any)))
 		}

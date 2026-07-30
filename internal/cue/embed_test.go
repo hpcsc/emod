@@ -186,7 +186,18 @@ const fullModelJSON = `{
           "command": "MakeReservation",
           "event": {"name": "BookingImported", "description": "A partner reported a booking"}
         }],
-        "flows": [{"command_name":"MakeReservation","event_name":"ReservationMade"}]
+        "flows": [{"command_name":"MakeReservation","event_name":"ReservationMade"}],
+        "specs": [{
+          "comments": [{"text": "# The room has to be free"}],
+          "name": "holds a room no guest holds",
+          "when": "MakeReservation",
+          "then": {"events": ["ReservationMade"]}
+        }, {
+          "name": "refuses a room another guest holds",
+          "given": ["ReservationMade"],
+          "when": "MakeReservation",
+          "then": {"rejected": "OneRoomPerReservation"}
+        }]
       }]
     }]
   }]

@@ -50,6 +50,7 @@ type jsonContext struct {
 	Comments      []*jsonComment   `json:"comments,omitempty"`
 	Invariants    []*jsonInvariant `json:"invariants,omitempty"`
 	Aggregates    []*jsonAggregate `json:"aggregates,omitempty"`
+	Slices        []*jsonSlice     `json:"slices,omitempty"`
 }
 
 type jsonAggregate struct {
@@ -84,6 +85,7 @@ type jsonSlice struct {
 	Views         []*jsonView        `json:"views,omitempty"`
 	Automations   []*jsonAutomation  `json:"automations,omitempty"`
 	Translations  []*jsonTranslation `json:"translations,omitempty"`
+	Specs         []*jsonSpec        `json:"specs,omitempty"`
 }
 
 type jsonCommand struct {
@@ -184,6 +186,24 @@ type jsonTranslation struct {
 	Event            *jsonEvent     `json:"event,omitempty"`
 }
 
+type jsonSpec struct {
+	Name          string           `json:"name"`
+	Position      *jsonPosition    `json:"position,omitempty"`
+	WhenPosition  *jsonPosition    `json:"when_position,omitempty"`
+	OpenPosition  *jsonPosition    `json:"open_position,omitempty"`
+	ClosePosition *jsonPosition    `json:"close_position,omitempty"`
+	Comments      []*jsonComment   `json:"comments,omitempty"`
+	Given         []string         `json:"given,omitempty"`
+	When          string           `json:"when,omitempty"`
+	Then          *jsonSpecOutcome `json:"then,omitempty"`
+}
+
+type jsonSpecOutcome struct {
+	RejectedPosition *jsonPosition `json:"rejected_position,omitempty"`
+	Events           []string      `json:"events,omitempty"`
+	Rejected         string        `json:"rejected,omitempty"`
+}
+
 // jsonDiagnosticsWrapper is the top-level envelope for JSON diagnostics output.
 type jsonDiagnosticsWrapper struct {
 	Diagnostics []*jsonDiagnosticEntry `json:"diagnostics"`
@@ -260,6 +280,17 @@ func ExportJSON(model *ast.Model) ([]byte, error) {
 	return json.Marshal(j)
 }
 
+func convertList[T, U any](items []T, convert func(T) U) []U {
+	if items == nil {
+		return nil
+	}
+	out := make([]U, 0, len(items))
+	for _, item := range items {
+		out = append(out, convert(item))
+	}
+	return out
+}
+
 func convertModel(m *ast.Model) *jsonModel {
 	if m == nil {
 		return nil
@@ -276,28 +307,18 @@ func convertModel(m *ast.Model) *jsonModel {
 }
 
 func convertComments(comments []*ast.Comment) []*jsonComment {
-	if comments == nil {
-		return nil
+	return convertList(comments, convertComment)
+}
+
+func convertComment(c *ast.Comment) *jsonComment {
+	return &jsonComment{
+		Text:     c.Text,
+		Position: convertPosition(c.Position),
 	}
-	out := make([]*jsonComment, 0, len(comments))
-	for _, c := range comments {
-		out = append(out, &jsonComment{
-			Text:     c.Text,
-			Position: convertPosition(c.Position),
-		})
-	}
-	return out
 }
 
 func convertActors(actors []*ast.Actor) []*jsonActor {
-	if actors == nil {
-		return nil
-	}
-	out := make([]*jsonActor, 0, len(actors))
-	for _, a := range actors {
-		out = append(out, convertActor(a))
-	}
-	return out
+	return convertList(actors, convertActor)
 }
 
 func convertActor(a *ast.Actor) *jsonActor {
@@ -313,14 +334,7 @@ func convertActor(a *ast.Actor) *jsonActor {
 }
 
 func convertContexts(ctxs []*ast.Context) []*jsonContext {
-	if ctxs == nil {
-		return nil
-	}
-	out := make([]*jsonContext, 0, len(ctxs))
-	for _, c := range ctxs {
-		out = append(out, convertContext(c))
-	}
-	return out
+	return convertList(ctxs, convertContext)
 }
 
 func convertContext(c *ast.Context) *jsonContext {
@@ -336,33 +350,24 @@ func convertContext(c *ast.Context) *jsonContext {
 		Comments:      convertComments(c.Comments),
 		Invariants:    convertInvariants(c.Invariants),
 		Aggregates:    convertAggregates(c.Aggregates),
+		Slices:        convertSlices(c.Slices),
 	}
 }
 
 func convertInvariants(invariants []*ast.Invariant) []*jsonInvariant {
-	if invariants == nil {
-		return nil
+	return convertList(invariants, convertInvariant)
+}
+
+func convertInvariant(inv *ast.Invariant) *jsonInvariant {
+	return &jsonInvariant{
+		Comments:  convertComments(inv.Comments),
+		Name:      inv.Name,
+		Statement: inv.Statement,
 	}
-	out := make([]*jsonInvariant, 0, len(invariants))
-	for _, inv := range invariants {
-		out = append(out, &jsonInvariant{
-			Comments:  convertComments(inv.Comments),
-			Name:      inv.Name,
-			Statement: inv.Statement,
-		})
-	}
-	return out
 }
 
 func convertAggregates(aggs []*ast.Aggregate) []*jsonAggregate {
-	if aggs == nil {
-		return nil
-	}
-	out := make([]*jsonAggregate, 0, len(aggs))
-	for _, a := range aggs {
-		out = append(out, convertAggregate(a))
-	}
-	return out
+	return convertList(aggs, convertAggregate)
 }
 
 func convertAggregate(a *ast.Aggregate) *jsonAggregate {
@@ -382,14 +387,7 @@ func convertAggregate(a *ast.Aggregate) *jsonAggregate {
 }
 
 func convertSlices(slices []*ast.Slice) []*jsonSlice {
-	if slices == nil {
-		return nil
-	}
-	out := make([]*jsonSlice, 0, len(slices))
-	for _, s := range slices {
-		out = append(out, convertSlice(s))
-	}
-	return out
+	return convertList(slices, convertSlice)
 }
 
 func convertSlice(s *ast.Slice) *jsonSlice {
@@ -411,18 +409,71 @@ func convertSlice(s *ast.Slice) *jsonSlice {
 		Views:         convertViews(s.Views),
 		Automations:   convertAutomations(s.Automations),
 		Translations:  convertTranslations(s.Translations),
+		Specs:         convertSpecs(s.Specs),
 	}
 }
 
-func convertCommands(cmds []*ast.Command) []*jsonCommand {
-	if cmds == nil {
+func convertSpecs(specs []*ast.Spec) []*jsonSpec {
+	return convertList(specs, convertSpec)
+}
+
+func convertSpec(s *ast.Spec) *jsonSpec {
+	if s == nil {
 		return nil
 	}
-	out := make([]*jsonCommand, 0, len(cmds))
-	for _, c := range cmds {
-		out = append(out, convertCommand(c))
+	return &jsonSpec{
+		Name:          s.Name,
+		Position:      convertPosition(s.NamePos),
+		WhenPosition:  specElementPosition(s.When),
+		OpenPosition:  convertPosition(s.OpenPos),
+		ClosePosition: convertPosition(s.ClosePos),
+		Comments:      convertComments(s.Comments),
+		Given:         specElementNames(s.Given),
+		When:          specElementName(s.When),
+		Then:          convertSpecOutcome(s.Then),
 	}
-	return out
+}
+
+func convertSpecOutcome(then ast.ThenClause) *jsonSpecOutcome {
+	switch t := then.(type) {
+	case *ast.ThenEvents:
+		return &jsonSpecOutcome{Events: specElementNames(t.Events)}
+	case *ast.ThenRejected:
+		return &jsonSpecOutcome{
+			RejectedPosition: convertPosition(t.InvariantPos),
+			Rejected:         t.InvariantName,
+		}
+	}
+	return nil
+}
+
+func specElementNames(elements []*ast.SpecElement) []string {
+	if len(elements) == 0 {
+		return nil
+	}
+	names := make([]string, 0, len(elements))
+	for _, element := range elements {
+		names = append(names, element.Name)
+	}
+	return names
+}
+
+func specElementName(element *ast.SpecElement) string {
+	if element == nil {
+		return ""
+	}
+	return element.Name
+}
+
+func specElementPosition(element *ast.SpecElement) *jsonPosition {
+	if element == nil {
+		return nil
+	}
+	return convertPosition(element.NamePos)
+}
+
+func convertCommands(cmds []*ast.Command) []*jsonCommand {
+	return convertList(cmds, convertCommand)
 }
 
 func convertCommand(c *ast.Command) *jsonCommand {
@@ -441,14 +492,7 @@ func convertCommand(c *ast.Command) *jsonCommand {
 }
 
 func convertEvents(events []*ast.Event) []*jsonEvent {
-	if events == nil {
-		return nil
-	}
-	out := make([]*jsonEvent, 0, len(events))
-	for _, e := range events {
-		out = append(out, convertEvent(e))
-	}
-	return out
+	return convertList(events, convertEvent)
 }
 
 func convertEvent(e *ast.Event) *jsonEvent {
@@ -471,14 +515,7 @@ func convertEvent(e *ast.Event) *jsonEvent {
 }
 
 func convertFields(fields []*ast.Field) []*jsonField {
-	if fields == nil {
-		return nil
-	}
-	out := make([]*jsonField, 0, len(fields))
-	for _, f := range fields {
-		out = append(out, convertField(f))
-	}
-	return out
+	return convertList(fields, convertField)
 }
 
 func convertField(f *ast.Field) *jsonField {
@@ -496,14 +533,7 @@ func convertField(f *ast.Field) *jsonField {
 }
 
 func convertFlows(flows []*ast.Flow) []*jsonFlow {
-	if flows == nil {
-		return nil
-	}
-	out := make([]*jsonFlow, 0, len(flows))
-	for _, f := range flows {
-		out = append(out, convertFlow(f))
-	}
-	return out
+	return convertList(flows, convertFlow)
 }
 
 func convertFlow(f *ast.Flow) *jsonFlow {
@@ -540,14 +570,7 @@ func convertTrigger(t *ast.Trigger) *jsonTrigger {
 }
 
 func convertViews(views []*ast.View) []*jsonView {
-	if views == nil {
-		return nil
-	}
-	out := make([]*jsonView, 0, len(views))
-	for _, v := range views {
-		out = append(out, convertView(v))
-	}
-	return out
+	return convertList(views, convertView)
 }
 
 func convertView(v *ast.View) *jsonView {
@@ -567,14 +590,7 @@ func convertView(v *ast.View) *jsonView {
 }
 
 func convertAutomations(autos []*ast.Automation) []*jsonAutomation {
-	if autos == nil {
-		return nil
-	}
-	out := make([]*jsonAutomation, 0, len(autos))
-	for _, a := range autos {
-		out = append(out, convertAutomation(a))
-	}
-	return out
+	return convertList(autos, convertAutomation)
 }
 
 func convertAutomation(a *ast.Automation) *jsonAutomation {
@@ -598,14 +614,7 @@ func convertAutomation(a *ast.Automation) *jsonAutomation {
 }
 
 func convertTranslations(trans []*ast.Translation) []*jsonTranslation {
-	if trans == nil {
-		return nil
-	}
-	out := make([]*jsonTranslation, 0, len(trans))
-	for _, t := range trans {
-		out = append(out, convertTranslation(t))
-	}
-	return out
+	return convertList(trans, convertTranslation)
 }
 
 func convertTranslation(t *ast.Translation) *jsonTranslation {
@@ -1189,6 +1198,13 @@ func (w *cueWriter) lineIfSet(field, value string) {
 	w.line("%s: %q", field, value)
 }
 
+func (w *cueWriter) listIfSet(field string, items []string) {
+	if len(items) == 0 {
+		return
+	}
+	w.line("%s: %s", field, formatStringList(items))
+}
+
 func (w *cueWriter) writeObject(field string, writeBody func()) {
 	w.line("%s: {", field)
 	w.level++
@@ -1246,6 +1262,7 @@ func (w *cueWriter) writeContext(c *ast.Context) {
 	w.lineIfSet("description", c.Description)
 	writeCUEList(w, "invariants", c.Invariants, w.writeInvariant)
 	writeCUEList(w, "aggregates", c.Aggregates, w.writeAggregate)
+	writeCUEList(w, "slices", c.Slices, w.writeSlice)
 }
 
 func (w *cueWriter) writeAggregate(a *ast.Aggregate) {
@@ -1276,6 +1293,26 @@ func (w *cueWriter) writeSlice(s *ast.Slice) {
 	writeCUEList(w, "views", s.Views, w.writeView)
 	writeCUEList(w, "automations", s.Automations, w.writeAutomation)
 	writeCUEList(w, "translations", s.Translations, w.writeTranslation)
+	writeCUEList(w, "specs", s.Specs, w.writeSpec)
+}
+
+func (w *cueWriter) writeSpec(s *ast.Spec) {
+	w.writeComments(s.Comments)
+	w.line("name: %q", s.Name)
+	w.listIfSet("given", specElementNames(s.Given))
+	w.lineIfSet("when", specElementName(s.When))
+	if s.Then != nil {
+		w.writeObject("then", func() { w.writeSpecOutcome(s.Then) })
+	}
+}
+
+func (w *cueWriter) writeSpecOutcome(then ast.ThenClause) {
+	switch t := then.(type) {
+	case *ast.ThenEvents:
+		w.listIfSet("events", specElementNames(t.Events))
+	case *ast.ThenRejected:
+		w.lineIfSet("rejected", t.InvariantName)
+	}
 }
 
 func (w *cueWriter) writeTrigger(t *ast.Trigger) {
@@ -1320,9 +1357,7 @@ func (w *cueWriter) writeView(v *ast.View) {
 	w.line("name: %q", v.Name)
 	w.lineIfSet("description", v.Description)
 	writeCUEList(w, "fields", v.Fields, w.writeField)
-	if len(v.Subscribes) > 0 {
-		w.line("subscribes: %s", formatStringList(v.Subscribes))
-	}
+	w.listIfSet("subscribes", v.Subscribes)
 }
 
 func (w *cueWriter) writeAutomation(a *ast.Automation) {

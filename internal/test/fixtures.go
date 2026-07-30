@@ -568,6 +568,20 @@ context "Reading Room" mode dcb {
 }
 `
 
+// SpecLibraryLendingSpecNames transcribes the name of every scenario
+// SpecLibraryLending states, both slice homes together and in declaration order,
+// so a walk or a strip that reaches only one of the homes reads back short
+// against it.
+var SpecLibraryLendingSpecNames = []string{
+	"borrows a copy no one holds",
+	"borrows a copy the member before returned",
+	"refuses a copy already on loan",
+	"returns a copy the member holds",
+	"seats a reader at a free desk",
+	"refuses a desk another reader is seated at",
+	"frees the desk its reader is seated at",
+}
+
 // WithOrdinaryFieldNames renames every field of model in place so that no name
 // spells a DSL keyword, giving KeywordFieldSearchCatalog a twin that differs
 // from it in nothing but the naming of its fields. Renaming the parsed model
@@ -583,15 +597,69 @@ func WithOrdinaryFieldNames(model *ast.Model) *ast.Model {
 	return model
 }
 
-func declaredFields(model *ast.Model) []*ast.Field {
-	var fields []*ast.Field
+// WithoutSpecs returns a copy of model whose slices state no spec, in both homes
+// a slice has — nested in an aggregate and declared directly on a context. The
+// original keeps every spec it was written with, so a caller comparing the two
+// is not comparing a model with itself.
+func WithoutSpecs(model *ast.Model) *ast.Model {
+	if model == nil {
+		return nil
+	}
+	unstated := *model
+	unstated.Contexts = nil
+	for _, ctx := range model.Contexts {
+		bareContext := *ctx
+		bareContext.Aggregates = nil
+		bareContext.Slices = slicesWithoutSpecs(ctx.Slices)
+		for _, agg := range ctx.Aggregates {
+			bareAggregate := *agg
+			bareAggregate.Slices = slicesWithoutSpecs(agg.Slices)
+			bareContext.Aggregates = append(bareContext.Aggregates, &bareAggregate)
+		}
+		unstated.Contexts = append(unstated.Contexts, &bareContext)
+	}
+	return &unstated
+}
+
+// slicesWithoutSpecs leaves a nil list nil rather than preallocating an empty
+// one: an empty list differs from the original all by itself, which is enough to
+// satisfy a caller's "the twin differs" guard with no spec stripped at all.
+func slicesWithoutSpecs(slices []*ast.Slice) []*ast.Slice {
+	var bare []*ast.Slice
+	for _, s := range slices {
+		bareSlice := *s
+		bareSlice.Specs = nil
+		bare = append(bare, &bareSlice)
+	}
+	return bare
+}
+
+// DeclaredSpecNames names every spec model states, both slice homes together and
+// in declaration order, so a caller pairing it with a transcribed list reads back
+// short when a strip or a walk reaches only one of the homes.
+func DeclaredSpecNames(model *ast.Model) []string {
+	var names []string
+	for _, s := range declaredSlices(model) {
+		for _, spec := range s.Specs {
+			names = append(names, spec.Name)
+		}
+	}
+	return names
+}
+
+func declaredSlices(model *ast.Model) []*ast.Slice {
+	var slices []*ast.Slice
 	for _, ctx := range model.Contexts {
 		for _, agg := range ctx.Aggregates {
-			fields = append(fields, fieldsOfSlices(agg.Slices)...)
+			slices = append(slices, agg.Slices...)
 		}
-		fields = append(fields, fieldsOfSlices(ctx.Slices)...)
+		slices = append(slices, ctx.Slices...)
 	}
-	return fields
+	return slices
+}
+
+func declaredFields(model *ast.Model) []*ast.Field {
+	return fieldsOfSlices(declaredSlices(model))
 }
 
 func fieldsOfSlices(slices []*ast.Slice) []*ast.Field {

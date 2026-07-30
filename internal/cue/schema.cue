@@ -70,6 +70,19 @@
 	event?:           #Event
 }
 
+#SpecOutcome: {
+	events?:   [...string]
+	rejected?: string
+}
+
+#Spec: {
+	comments?: [...#Comment]
+	name:      string
+	given?:    [...string]
+	when?:     string
+	then?:     #SpecOutcome
+}
+
 #Slice: {
 	comments?:     [...#Comment]
 	name:          string
@@ -82,6 +95,7 @@
 	views?:        [...#View]
 	automations?:  [...#Automation]
 	translations?: [...#Translation]
+	specs?:        [...#Spec]
 }
 
 #Invariant: {
@@ -104,6 +118,7 @@
 	description?: string
 	invariants?:  [...#Invariant]
 	aggregates?:  [...#Aggregate]
+	slices?:      [...#Slice]
 }
 
 #Actor: {
