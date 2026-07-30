@@ -21,6 +21,7 @@ const (
 	describedEmod    = test.DescribedHotelReservation
 	keywordFieldEmod = test.KeywordFieldSearchCatalog
 	invariantEmod    = test.InvariantLibraryLending
+	specEmod         = test.SpecLibraryLending
 	invalidEmod      = test.Unparseable
 )
 

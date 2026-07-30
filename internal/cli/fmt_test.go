@@ -240,6 +240,176 @@ context "Discovery" {
 }
 `
 
+const specFormattedEmod = `emod 1
+# Lending a library's copies and seating its readers, with the scenarios each slice must satisfy
+model "Library Lending"
+
+actor "Member"
+
+context "Lending" {
+  aggregate "Loan" {
+    invariant OneCopyPerLoan "A loan covers exactly one copy of one title"
+    slice "Borrow Copy" {
+      trigger UI "Lending Desk" {
+        actor Member
+        reads AvailableCopiesView
+      }
+
+      command BorrowCopy {
+        fields {
+          memberId string required
+          copyId   string required
+          dueOn    date   required
+        }
+      }
+
+      event CopyBorrowed {
+        fields {
+          loanId   string required
+          memberId string required
+          copyId   string required
+          dueOn    date   required
+        }
+      }
+
+      flow {
+        command -> event: BorrowCopy -> CopyBorrowed
+      }
+
+      spec "borrows a copy no one holds" {
+        when BorrowCopy
+        then [CopyBorrowed]
+      }
+
+      spec "borrows a copy the member before returned" {
+        given [CopyBorrowed, CopyReturned]
+        when BorrowCopy
+        then [CopyBorrowed]
+      }
+
+      spec "refuses a copy already on loan" {
+        given [CopyBorrowed]
+        when BorrowCopy
+        then rejected OneCopyPerLoan
+      }
+    }
+
+    slice "Return Copy" {
+      command ReturnCopy {
+        fields {
+          loanId string required
+          copyId string required
+        }
+      }
+
+      event CopyReturned {
+        fields {
+          loanId     string    required
+          copyId     string    required
+          returnedAt timestamp required
+        }
+      }
+
+      flow {
+        command -> event: ReturnCopy -> CopyReturned
+      }
+
+      spec "returns a copy the member holds" {
+        given [CopyBorrowed]
+        when ReturnCopy
+        then [CopyReturned]
+      }
+    }
+
+    slice "Review Member Loans" {
+      view MemberLoansView {
+        fields {
+          loanId   string required
+          memberId string required
+          dueOn    date   required
+        }
+        subscribes [CopyBorrowed]
+      }
+    }
+  }
+}
+
+context "Reading Room" mode dcb {
+  invariant OneReaderPerDesk "A desk seats at most one reader at any moment"
+  slice "Claim Desk" {
+    command ClaimDesk {
+      fields {
+        memberId string required
+        deskId   string required
+      }
+    }
+
+    event DeskClaimed {
+      tags {
+        desk  : deskId
+        reader: memberId
+      }
+      fields {
+        sessionId string    required
+        deskId    string    required
+        memberId  string    required
+        claimedAt timestamp required
+      }
+    }
+
+    flow {
+      command -> event: ClaimDesk -> DeskClaimed
+    }
+
+    spec "seats a reader at a free desk" {
+      when ClaimDesk
+      then [DeskClaimed]
+    }
+
+    spec "refuses a desk another reader is seated at" {
+      given [DeskClaimed]
+      when ClaimDesk
+      then rejected OneReaderPerDesk
+    }
+  }
+
+  slice "Release Desk" {
+    command ReleaseDesk {
+      decides_on {
+        events [DeskClaimed]
+        where tag(desk = deskId) and tag(reader = memberId)
+      }
+      fields {
+        sessionId string required
+      }
+    }
+
+    event DeskReleased {
+      tags {
+        desk  : deskId
+        reader: memberId
+      }
+      fields {
+        sessionId  string    required
+        deskId     string    required
+        memberId   string    required
+        releasedAt timestamp required
+      }
+    }
+
+    flow {
+      command -> event: ReleaseDesk -> DeskReleased
+    }
+
+    spec "frees the desk its reader is seated at" {
+      given [DeskClaimed]
+      when ReleaseDesk
+      then [DeskReleased]
+    }
+  }
+}
+`
+
 const unparsableEmod = `foobar {
 }
 `
@@ -337,6 +507,12 @@ func TestFmt(t *testing.T) {
 		}
 
 		requireFmtSettlesOn(t, path, formatted)
+	})
+
+	t.Run("keeps every declared spec and settles after one run", func(t *testing.T) {
+		path := writeTemp(t, "specs.emod", specEmod)
+
+		requireFmtSettlesOn(t, path, specFormattedEmod)
 	})
 
 	t.Run("check mode returns nil when file is already formatted", func(t *testing.T) {

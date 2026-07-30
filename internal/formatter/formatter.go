@@ -48,6 +48,10 @@ func quoted(text string) string {
 	return `"` + text + `"`
 }
 
+func bracketed(names []string) string {
+	return "[" + strings.Join(names, ", ") + "]"
+}
+
 func (w *writer) writeComments(comments []*ast.Comment, level int) {
 	for _, c := range comments {
 		w.line(level, "%s", c.Text)
@@ -182,6 +186,11 @@ func (w *writer) writeSlice(slice *ast.Slice, level int) {
 		w.writeFlows(slice.Flows, inner)
 	}
 
+	for _, spec := range slice.Specs {
+		separate()
+		w.writeSpec(spec, inner)
+	}
+
 	w.line(level, "}")
 }
 
@@ -215,7 +224,7 @@ func (w *writer) writeDecidesOn(d *ast.DecidesOnClause, level int) {
 	w.writeComments(d.Comments, level)
 	w.line(level, "decides_on {")
 	if len(d.Events) > 0 {
-		w.line(level+1, "events [%s]", strings.Join(d.Events, ", "))
+		w.line(level+1, "events %s", bracketed(d.Events))
 	}
 	if d.Predicate != nil {
 		w.line(level+1, "where %s", formatPredicate(d.Predicate))
@@ -323,7 +332,7 @@ func (w *writer) writeView(view *ast.View, level int) {
 		w.writeFields(view.Fields, level+1)
 	}
 	if len(view.Subscribes) > 0 {
-		w.line(level+1, "subscribes [%s]", strings.Join(view.Subscribes, ", "))
+		w.line(level+1, "subscribes %s", bracketed(view.Subscribes))
 	}
 	w.line(level, "}")
 }
@@ -361,4 +370,41 @@ func (w *writer) writeTranslation(trans *ast.Translation, level int) {
 		w.writeEvent(trans.Event, level+1)
 	}
 	w.line(level, "}")
+}
+
+func (w *writer) writeSpec(spec *ast.Spec, level int) {
+	w.writeComments(spec.Comments, level)
+	w.line(level, "spec %s {", quoted(spec.Name))
+	if len(spec.Given) > 0 {
+		w.line(level+1, "given %s", bracketed(specElementNames(spec.Given)))
+	}
+	if spec.When != nil {
+		w.line(level+1, "when %s", spec.When.Name)
+	}
+	if outcome := formatOutcome(spec.Then); outcome != "" {
+		w.line(level+1, "then %s", outcome)
+	}
+	w.line(level, "}")
+}
+
+func formatOutcome(then ast.ThenClause) string {
+	switch t := then.(type) {
+	case *ast.ThenEvents:
+		return bracketed(specElementNames(t.Events))
+	case *ast.ThenRejected:
+		if t.InvariantName == "" {
+			return ""
+		}
+		return fmt.Sprintf("rejected %s", t.InvariantName)
+	default:
+		return ""
+	}
+}
+
+func specElementNames(elements []*ast.SpecElement) []string {
+	names := make([]string, 0, len(elements))
+	for _, element := range elements {
+		names = append(names, element.Name)
+	}
+	return names
 }

@@ -4,6 +4,7 @@ package formatter_test
 
 import (
 	"os"
+	"slices"
 	"strings"
 	"testing"
 
@@ -596,6 +597,145 @@ func TestFormat(t *testing.T) {
 				{Name: "OneCopyPerLoan", Statement: "A loan covers exactly one copy of one title"},
 				{Name: "OverdueFine", Statement: ""},
 			}, reparsed.Contexts[0].Aggregates[0].Invariants, ignoreFormatterNormalizations)
+		})
+
+		t.Run("round-trip: specs declared in an aggregate slice and on a dcb context slice survive formatting", func(t *testing.T) {
+			original := parseModel(t, test.SpecLibraryLending, "specs.emod")
+
+			reparsed := requireStableFormat(t, original)
+
+			test.RequireEqual(t, original, reparsed, ignoreFormatterNormalizations)
+			test.RequireEqual(t, []*ast.Spec{
+				{
+					Name: "borrows a copy no one holds",
+					When: &ast.SpecElement{Name: "BorrowCopy"},
+					Then: &ast.ThenEvents{Events: []*ast.SpecElement{{Name: "CopyBorrowed"}}},
+				},
+				{
+					Name:  "borrows a copy the member before returned",
+					Given: []*ast.SpecElement{{Name: "CopyBorrowed"}, {Name: "CopyReturned"}},
+					When:  &ast.SpecElement{Name: "BorrowCopy"},
+					Then:  &ast.ThenEvents{Events: []*ast.SpecElement{{Name: "CopyBorrowed"}}},
+				},
+				{
+					Name:  "refuses a copy already on loan",
+					Given: []*ast.SpecElement{{Name: "CopyBorrowed"}},
+					When:  &ast.SpecElement{Name: "BorrowCopy"},
+					Then:  &ast.ThenRejected{InvariantName: "OneCopyPerLoan"},
+				},
+			}, reparsed.Contexts[0].Aggregates[0].Slices[0].Specs, ignoreFormatterNormalizations)
+		})
+
+		t.Run("round-trip: an empty given history is written by leaving the given line out, however it was spelled", func(t *testing.T) {
+			expected := strings.Join([]string{
+				`emod 1`,
+				`model "Reading Room"`,
+				``,
+				`context "Reading Room" mode dcb {`,
+				`  slice "Claim Desk" {`,
+				`    spec "seats a reader at a free desk" {`,
+				`      when ClaimDesk`,
+				`      then [DeskClaimed]`,
+				`    }`,
+				`  }`,
+				`}`,
+				``,
+			}, "\n")
+
+			for _, testCase := range []struct {
+				spelling   string
+				givenLines []string
+			}{
+				{"an empty given list", []string{`      given []`}},
+				{"no given entry at all", nil},
+			} {
+				t.Run(testCase.spelling, func(t *testing.T) {
+					source := strings.Join(slices.Concat(
+						[]string{
+							`model "Reading Room"`,
+							``,
+							`context "Reading Room" mode dcb {`,
+							`  slice "Claim Desk" {`,
+							`    spec "seats a reader at a free desk" {`,
+						},
+						testCase.givenLines,
+						[]string{
+							`      when ClaimDesk`,
+							`      then [DeskClaimed]`,
+							`    }`,
+							`  }`,
+							`}`,
+							``,
+						},
+					), "\n")
+					model := parseModel(t, source, "specs.emod")
+
+					require.Equal(t, expected, formatter.Format(model))
+					requireStableFormat(t, model)
+				})
+			}
+		})
+
+		t.Run("round-trip: a spec name survives text that quoting could mangle", func(t *testing.T) {
+			for _, testCase := range []struct {
+				hazard string
+				name   string
+			}{
+				{"backslash", `borrows the copy shelved under C:\library\stacks`},
+				{"tab", "two columns:\tcopy then due date"},
+				{"newline", "two lines:\ncopy then due date"},
+				{"percent", "borrows the last 10% of the stock"},
+				{"non-ascii", "borrows while the member holds ≤5 copies"},
+			} {
+				t.Run(testCase.hazard, func(t *testing.T) {
+					source := strings.Join([]string{
+						`model "Library Lending"`,
+						``,
+						`context "Lending" {`,
+						`  aggregate "Loan" {`,
+						`    slice "Borrow Copy" {`,
+						`      spec "` + testCase.name + `" {`,
+						`        when BorrowCopy`,
+						`        then [CopyBorrowed]`,
+						`      }`,
+						`    }`,
+						`  }`,
+						`}`,
+						``,
+					}, "\n")
+
+					reparsed := requireStableFormat(t, parseModel(t, source, "specs.emod"))
+
+					require.Equal(t, testCase.name,
+						reparsed.Contexts[0].Aggregates[0].Slices[0].Specs[0].Name)
+				})
+			}
+		})
+
+		t.Run("round-trip: a spec named but with no command or outcome yet is still written back", func(t *testing.T) {
+			source := strings.Join([]string{
+				`model "Library Lending"`,
+				``,
+				`context "Lending" {`,
+				`  aggregate "Loan" {`,
+				`    slice "Borrow Copy" {`,
+				`      spec "borrows a copy no one holds" {`,
+				`      }`,
+				`      spec "refuses a copy already on loan" {`,
+				`        when BorrowCopy`,
+				`      }`,
+				`    }`,
+				`  }`,
+				`}`,
+				``,
+			}, "\n")
+
+			reparsed := requireStableFormat(t, parseModel(t, source, "specs.emod"))
+
+			test.RequireEqual(t, []*ast.Spec{
+				{Name: "borrows a copy no one holds"},
+				{Name: "refuses a copy already on loan", When: &ast.SpecElement{Name: "BorrowCopy"}},
+			}, reparsed.Contexts[0].Aggregates[0].Slices[0].Specs, ignoreFormatterNormalizations)
 		})
 
 		t.Run("idempotency: format(format(described input)) equals format(described input)", func(t *testing.T) {
@@ -1555,6 +1695,47 @@ func TestFormat(t *testing.T) {
 				`    # A shelf at a time would let a member empty a series`,
 				`    invariant OneCopyPerLoan "A loan covers exactly one copy of one title"`,
 				`    slice "Borrow Copy" {`,
+				`    }`,
+				`  }`,
+				`}`,
+				``,
+			}, "\n")
+
+			require.Equal(t, expected, result)
+		})
+
+		t.Run("comment above a spec stays directly above it at the spec's indentation", func(t *testing.T) {
+			input := strings.Join([]string{
+				`model "Library Lending"`,
+				``,
+				`context "Lending" {`,
+				`  aggregate "Loan" {`,
+				`    slice "Borrow Copy" {`,
+				`      # The desk clerk walks new starters through this one`,
+				`      spec "borrows a copy no one holds" {`,
+				`        when BorrowCopy`,
+				`        then [CopyBorrowed]`,
+				`      }`,
+				`    }`,
+				`  }`,
+				`}`,
+				``,
+			}, "\n")
+
+			result := formatter.Format(parseModel(t, input, "specs.emod"))
+
+			expected := strings.Join([]string{
+				`emod 1`,
+				`model "Library Lending"`,
+				``,
+				`context "Lending" {`,
+				`  aggregate "Loan" {`,
+				`    slice "Borrow Copy" {`,
+				`      # The desk clerk walks new starters through this one`,
+				`      spec "borrows a copy no one holds" {`,
+				`        when BorrowCopy`,
+				`        then [CopyBorrowed]`,
+				`      }`,
 				`    }`,
 				`  }`,
 				`}`,
@@ -2898,6 +3079,118 @@ func TestFormat(t *testing.T) {
 				``,
 			}, "\n")
 			require.Equal(t, expected, result)
+		})
+	})
+
+	t.Run("specs", func(t *testing.T) {
+		t.Run("every spec block sits after the slice's other entries, in the order it was declared", func(t *testing.T) {
+			input := strings.Join([]string{
+				`model "Library Lending"`,
+				``,
+				`context "Lending" {`,
+				`  aggregate "Loan" {`,
+				`    slice "Borrow Copy" {`,
+				`      spec "borrows a copy no one holds" {`,
+				`        when BorrowCopy`,
+				`        then [CopyBorrowed]`,
+				`      }`,
+				`      command BorrowCopy {`,
+				`      }`,
+				`      spec "refuses a copy already on loan" {`,
+				`        given [CopyBorrowed]`,
+				`        when BorrowCopy`,
+				`        then rejected OneCopyPerLoan`,
+				`      }`,
+				`      event CopyBorrowed {`,
+				`      }`,
+				`      flow {`,
+				`        command -> event: BorrowCopy -> CopyBorrowed`,
+				`      }`,
+				`    }`,
+				`  }`,
+				`}`,
+				``,
+			}, "\n")
+
+			result := formatter.Format(parseModel(t, input, "specs.emod"))
+
+			expected := strings.Join([]string{
+				`emod 1`,
+				`model "Library Lending"`,
+				``,
+				`context "Lending" {`,
+				`  aggregate "Loan" {`,
+				`    slice "Borrow Copy" {`,
+				`      command BorrowCopy {`,
+				`      }`,
+				``,
+				`      event CopyBorrowed {`,
+				`      }`,
+				``,
+				`      flow {`,
+				`        command -> event: BorrowCopy -> CopyBorrowed`,
+				`      }`,
+				``,
+				`      spec "borrows a copy no one holds" {`,
+				`        when BorrowCopy`,
+				`        then [CopyBorrowed]`,
+				`      }`,
+				``,
+				`      spec "refuses a copy already on loan" {`,
+				`        given [CopyBorrowed]`,
+				`        when BorrowCopy`,
+				`        then rejected OneCopyPerLoan`,
+				`      }`,
+				`    }`,
+				`  }`,
+				`}`,
+				``,
+			}, "\n")
+
+			require.Equal(t, expected, result)
+		})
+
+		t.Run("a spec whose entries are written out of order is emitted as given, when, then", func(t *testing.T) {
+			input := strings.Join([]string{
+				`model "Library Lending"`,
+				``,
+				`context "Lending" {`,
+				`  aggregate "Loan" {`,
+				`    slice "Return Copy" {`,
+				`      spec "returns a copy the member holds" {`,
+				`        given [CopyBorrowed]`,
+				`        then [CopyReturned]`,
+				`        when ReturnCopy`,
+				`      }`,
+				`    }`,
+				`  }`,
+				`}`,
+				``,
+			}, "\n")
+			original := parseModel(t, input, "specs.emod")
+
+			result := formatter.Format(original)
+
+			expected := strings.Join([]string{
+				`emod 1`,
+				`model "Library Lending"`,
+				``,
+				`context "Lending" {`,
+				`  aggregate "Loan" {`,
+				`    slice "Return Copy" {`,
+				`      spec "returns a copy the member holds" {`,
+				`        given [CopyBorrowed]`,
+				`        when ReturnCopy`,
+				`        then [CopyReturned]`,
+				`      }`,
+				`    }`,
+				`  }`,
+				`}`,
+				``,
+			}, "\n")
+
+			require.Equal(t, expected, result)
+			test.RequireEqual(t, original, parseModel(t, result, "formatted.emod"), ignoreFormatterNormalizations)
 		})
 	})
 
