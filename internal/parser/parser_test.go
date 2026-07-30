@@ -1949,6 +1949,115 @@ context "Ctx" {
 			require.Equal(t, "", a.TargetContext)
 		})
 
+		t.Run("automation reading a view records the view name and where it is written", func(t *testing.T) {
+			tests := []struct {
+				name    string
+				entries string
+			}{
+				{
+					name: "between the activation event and the command",
+					entries: `        trigger RoomReserved
+        reads PendingConfirmationsView
+        command SendConfirmationEmail`,
+				},
+				{
+					name: "as the first entry of the block",
+					entries: `        reads PendingConfirmationsView
+        trigger RoomReserved
+        command SendConfirmationEmail`,
+				},
+				{
+					name: "after the target context",
+					entries: `        trigger RoomReserved
+        command SendConfirmationEmail
+        target context Notifications
+        reads PendingConfirmationsView`,
+				},
+			}
+
+			for _, tc := range tests {
+				t.Run(tc.name, func(t *testing.T) {
+					input := fmt.Sprintf(`model "Test"
+context "Ctx" {
+  aggregate "Agg" {
+    slice "Slice" {
+      automation ConfirmationEmailReactor {
+%s
+      }
+    }
+  }
+}`, tc.entries)
+					tokens, lexDiags := lexer.Scan(input, "test.emod")
+					require.Empty(t, lexDiags)
+
+					model, diags := parser.New(tokens, "test.emod").Parse()
+
+					require.Empty(t, diags)
+					automation := model.Contexts[0].Aggregates[0].Slices[0].Automations[0]
+					require.Equal(t, "PendingConfirmationsView", automation.Reads)
+					require.Equal(t, astPositionOf(t, "test.emod", input, "reads PendingConfirmationsView", "PendingConfirmationsView"), automation.ReadsPos)
+				})
+			}
+		})
+
+		t.Run("automation declaring reads twice keeps the view named last", func(t *testing.T) {
+			input := `model "Test"
+context "Ctx" {
+  aggregate "Agg" {
+    slice "Slice" {
+      automation ConfirmationEmailReactor {
+        trigger RoomReserved
+        reads StaleConfirmationsView
+        reads PendingConfirmationsView
+        command SendConfirmationEmail
+      }
+    }
+  }
+}`
+			tokens, lexDiags := lexer.Scan(input, "test.emod")
+			require.Empty(t, lexDiags)
+
+			model, diags := parser.New(tokens, "test.emod").Parse()
+
+			require.Empty(t, diags)
+			automation := model.Contexts[0].Aggregates[0].Slices[0].Automations[0]
+			require.Equal(t, "PendingConfirmationsView", automation.Reads)
+			require.Equal(t, astPositionOf(t, "test.emod", input, "reads PendingConfirmationsView", "PendingConfirmationsView"), automation.ReadsPos)
+		})
+
+		t.Run("a view read by one automation is not read by a sibling that omits reads", func(t *testing.T) {
+			input := `model "Test"
+context "Ctx" {
+  aggregate "Agg" {
+    slice "Slice" {
+      automation ConfirmationEmailReactor {
+        trigger RoomReserved
+        reads PendingConfirmationsView
+        command SendConfirmationEmail
+      }
+      automation AuditTrailReactor {
+        trigger RoomReserved
+        command RecordReservationAudit
+      }
+    }
+  }
+}`
+			tokens, lexDiags := lexer.Scan(input, "test.emod")
+			require.Empty(t, lexDiags)
+
+			model, diags := parser.New(tokens, "test.emod").Parse()
+
+			require.Empty(t, diags)
+			readsByAutomation := map[string]string{}
+			for _, automation := range model.Contexts[0].Aggregates[0].Slices[0].Automations {
+				readsByAutomation[automation.Name] = automation.Reads
+			}
+			require.Equal(t, map[string]string{
+				"ConfirmationEmailReactor": "PendingConfirmationsView",
+				"AuditTrailReactor":        "",
+			}, readsByAutomation)
+		})
+
 		t.Run("automation is stored in slice AST node", func(t *testing.T) {
 			input := `model "Test"
 context "Ctx" {
@@ -2655,6 +2764,92 @@ context "Lending" {
 			require.Len(t, diags, 1)
 			require.Contains(t, diags[0].Message, "spec")
 			for _, entry := range []string{"given", "when", "then"} {
+				require.Contains(t, diags[0].Message, entry)
+			}
+		})
+
+		t.Run("a reads entry naming no view is reported once and the entry below it still parses", func(t *testing.T) {
+			input := `model "Test"
+context "Ctx" {
+  aggregate "Agg" {
+    slice "Slice" {
+      automation ConfirmationEmailReactor {
+        trigger RoomReserved
+        reads
+        command SendConfirmationEmail
+      }
+    }
+  }
+}`
+			tokens, lexDiags := lexer.Scan(input, "test.emod")
+			require.Empty(t, lexDiags)
+
+			model, diags := parser.New(tokens, "test.emod").Parse()
+
+			require.Len(t, diags, 1)
+			require.Contains(t, diags[0].Message, "reads")
+			require.Contains(t, diags[0].Message, "automation")
+			line, column := positionOf(t, input, "reads", "reads")
+			require.Equal(t, line, diags[0].Line)
+			require.Equal(t, column, diags[0].Column)
+
+			automation := model.Contexts[0].Aggregates[0].Slices[0].Automations[0]
+			require.Equal(t, "", automation.Reads)
+			require.Equal(t, "SendConfirmationEmail", automation.Command)
+		})
+
+		t.Run("a reads entry naming no view as the last entry still closes the automation and its slice", func(t *testing.T) {
+			input := `model "Test"
+context "Ctx" {
+  aggregate "Agg" {
+    slice "Slice" {
+      automation ConfirmationEmailReactor {
+        trigger RoomReserved
+        command SendConfirmationEmail
+        reads
+      }
+      automation ReminderReactor {
+        trigger RoomReserved
+        command SendReminder
+      }
+    }
+  }
+}`
+			tokens, lexDiags := lexer.Scan(input, "test.emod")
+			require.Empty(t, lexDiags)
+
+			model, diags := parser.New(tokens, "test.emod").Parse()
+
+			require.Len(t, diags, 1)
+			slice := model.Contexts[0].Aggregates[0].Slices[0]
+			require.Len(t, slice.Automations, 2)
+			require.NotZero(t, slice.Automations[0].ClosePos.Line)
+			require.Equal(t, "ReminderReactor", slice.Automations[1].Name)
+			require.NotZero(t, slice.ClosePos.Line)
+			require.NotZero(t, model.Contexts[0].ClosePos.Line)
+		})
+
+		t.Run("an unrecognised entry inside an automation names the entries an automation accepts", func(t *testing.T) {
+			input := `model "Test"
+context "Ctx" {
+  aggregate "Agg" {
+    slice "Slice" {
+      automation ConfirmationEmailReactor {
+        trigger RoomReserved
+        command SendConfirmationEmail
+        raeds
+      }
+    }
+  }
+}`
+			tokens, lexDiags := lexer.Scan(input, "test.emod")
+			require.Empty(t, lexDiags)
+
+			_, diags := parser.New(tokens, "test.emod").Parse()
+
+			require.Len(t, diags, 1)
+			require.Contains(t, diags[0].Message, "automation")
+			for _, entry := range []string{"description", "trigger", "reads", "command", "target"} {
 				require.Contains(t, diags[0].Message, entry)
 			}
 		})

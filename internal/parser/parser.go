@@ -1067,6 +1067,16 @@ func (p *Instance) parseAutomation() *ast.Automation {
 			triggerTok := p.advance()
 			automation.TriggerEvent = triggerTok.Value
 			automation.TriggerEventPos = p.position(triggerTok)
+		} else if p.check(lexer.KeywordReads) {
+			keywordTok := p.advance()
+			if !p.check(lexer.Identifier) {
+				p.errorAt(keywordTok, "expected identifier after reads in automation")
+				p.skipRestOfLineOrBlockEnd(keywordTok)
+				continue
+			}
+			readsTok := p.advance()
+			automation.Reads = readsTok.Value
+			automation.ReadsPos = p.position(readsTok)
 		} else if p.check(lexer.KeywordCommand) {
 			p.advance()
 			if !p.check(lexer.Identifier) {
@@ -1094,7 +1104,7 @@ func (p *Instance) parseAutomation() *ast.Automation {
 			automation.TargetContext = ctxTok.Value
 			automation.TargetContextPos = p.position(ctxTok)
 		} else {
-			p.error(fmt.Sprintf("expected description, trigger, command, or target in automation, got %q", p.peek().Value))
+			p.error(fmt.Sprintf("expected description, trigger, reads, command, or target in automation, got %q", p.peek().Value))
 			p.advance()
 		}
 	}

@@ -207,6 +207,8 @@ type Automation struct {
 	DescriptionPos   Position
 	TriggerEvent     string
 	TriggerEventPos  Position
+	Reads            string
+	ReadsPos         Position
 	Command          string
 	CommandPos       Position
 	TargetContext    string
