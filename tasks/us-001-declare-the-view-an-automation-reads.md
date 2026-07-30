@@ -5,9 +5,10 @@
 - [x] Task 2: Reject an automation `reads` that names no declared view
 - [x] Task 3: Accept an automation's `reads` in the tree-sitter grammar
 - [x] Task 4: Share a fixture whose automations read views
-- [ ] Task 5: Emit `reads` from `emod fmt` at a fixed position in the automation block
+- [x] Task 5: Emit `reads` from `emod fmt` at a fixed position in the automation block
 - [ ] Task 6: Carry automation `reads` into JSON, CUE and the embedded schema
-- [ ] Task 7: Keep automation `reads` across the viewer round trip
+- [ ] Task 7: Carry automation `reads` through the diagram document and back
+- [ ] Task 8: Show the view an automation reads in the viewer's details panel
 
 ---
 
@@ -35,7 +36,7 @@ no severity configuration (US-008); LSP hover, completion, go-to-definition and 
 an automation's `reads` (US-009); VS Code and tree-sitter *highlighting* queries (US-010);
 `examples/*.emod`, `docs/dsl-reference.md` and `README.md` (US-011).
 
-**Consequences of that boundary, decided.** Three shapes the story does not spell out:
+**Consequences of that boundary, decided.** Four shapes the story does not spell out:
 
 1. *A `reads` entry is accepted in any automation, in any position within the block.* Every block body
    in this repo is an unbounded loop with no arity restriction, and the tree-sitter grammar mirrors
@@ -49,6 +50,18 @@ an automation's `reads` (US-009); VS Code and tree-sitter *highlighting* queries
 3. *No `reads` edge is added to the diagram JSON document.* The importer therefore reads the value
    from node metadata only. US-005 owns the edge in both directions, and the diagram differential
    Task 4 adds is the receipt that this story did not start it.
+4. *The featured fixture's viewer round trip is measured on the automation, not in formatted bytes.*
+   The diagram JSON document has no field for a context's `mode`, an event's `tags` or a command's
+   `decides_on` — `jsonDiagramNode` (`internal/export/export.go:649-668`) and `convertModelToDiagram`
+   (`:885`) carry none of them, and `internal/importer` decodes none of them — which is why the
+   existing round-trip group runs on `all_patterns.emod`, `multi_context.emod` and small non-dcb
+   sources rather than on a featured fixture. `test.AutomationReadsLibraryLending` puts its second
+   slice home on a `mode dcb` context with tagged events and a `decides_on`, so its formatted round
+   trip comes back without those three constructs however well `reads` survives (verified:
+   `context "Reading Room" mode dcb` returns as `context "Reading Room"`, both `tags` blocks and the
+   `decides_on` gone). Carrying them through the diagram document belongs to no story in this
+   feature. The fixture's receipt is therefore `test.DeclaredAutomationReads` read off the imported
+   model, and the byte-level receipt rides on a non-dcb source that already round-trips.
 
 **Overarching constraint:** an automation without `reads` validates, formats and exports exactly as
 before. That is load-bearing in five places — no existing golden in `internal/formatter`,
@@ -448,31 +461,37 @@ receipt that this story stopped at the file and left the picture to US-005.
 ### Task 5: Emit `reads` from `emod fmt` at a fixed position in the automation block
 
 **Behavior:** `emod fmt` writes an automation's `reads` entry at one fixed position in the block —
-after the activation event and ahead of the command, matching where a translation's `reads` sits —
-whatever position it was written in. Formatting the same model twice produces identical bytes, and a
-parse → format → reparse cycle recovers the value rather than dropping it. An automation with no
-`reads` formats to exactly the bytes it formats to today.
+after the activation event and ahead of the command, where a translation's `reads` sits — whatever
+position it was written in. A parse → format → reparse cycle recovers the value rather than dropping
+it, and formatting the formatter's own output produces identical bytes. An automation with no `reads`
+formats to exactly the bytes it formats to today.
 
 **Acceptance Criteria:**
-- [ ] Formatting an automation that declares `reads` emits the entry on its own line, indented with
-      the block's other entries, between the activation event and the command
-- [ ] An automation whose source writes `reads` first, and one that writes it after `target context`,
-      format to identical bytes
-- [ ] Formatting the formatter's own output produces byte-identical bytes on the second pass
-- [ ] Parsing the fixture from Task 4, formatting it, and reparsing yields a model whose automation
-      `reads` values equal the transcribed list from Task 4 — the guard that the formatter did not
-      silently delete an entry it has not heard of
-- [ ] Formatting `test.HotelReservation`, `test.DescribedHotelReservation`,
-      `test.KeywordFieldSearchCatalog`, `test.InvariantLibraryLending` and `test.SpecLibraryLending`
-      produces the bytes it produces before this task, with no expected constant in
-      `internal/formatter/formatter_test.go` or `internal/cli/fmt_test.go` edited
-- [ ] The formatter's expected output in any new subtest is a canonical form written out in the test,
-      not the input fixture re-indented
+- [ ] Formatting an automation that declares `reads` puts the entry on its own line at the block's
+      indent, between the activation event line and the command line, asserted against a whole
+      expected output in the `"element formatting"` group
+- [ ] Two sources for the same model — one writing `reads` as the block's first entry, one writing it
+      after `target context` — format to the same bytes, and that expected byte string is written out
+      in the test rather than being either input re-indented
+- [ ] Formatting `test.AutomationReadsLibraryLendingModel(t)` and reparsing the output yields a model
+      whose `test.DeclaredAutomationReads` equals `test.AutomationReadsLibraryLendingViewNames`, and
+      formatting that output again produces identical bytes
+- [ ] The same parse → format → reparse over `test.WithoutAutomationReads` of that model reads back
+      no automation `reads` at all, while the trigger's `reads AvailableCopiesView` line still
+      appears in the twin's formatted output — the entry is written from the automation, not from
+      whatever else in the slice happens to carry one
+- [ ] The fixture's formatted output and its twin's differ (`require.NotEqual`), and the two agree
+      once every `reads` line is dropped from both — the receipt that this task moved no other line
+      of a two-hundred-line model
+- [ ] `"formats automation block"` (`internal/formatter/formatter_test.go:258-306`), whose model
+      declares no `reads`, passes unedited, and so does every canonical `*FormattedEmod` constant in
+      `internal/cli/fmt_test.go`
 
 **Affected Files/Modules:**
 - `internal/formatter/formatter.go` — `writeAutomation` (`:340-354`)
-- `internal/formatter/formatter_test.go` — subtests in `"element formatting"` (`:32`) and a
-  per-fixture leaf in `"round-trip through the parser"` (`:428`, beside `:497` and `:505`)
+- `internal/formatter/formatter_test.go` — a subtest in `"element formatting"` (`:32`, beside
+  `"formats automation block"` at `:258`) and a leaf in `"round-trip through the parser"` (`:428`,
+  beside `:497` and `:505`)
 
 **Patterns to Follow:**
 - The line to emit and where it sits: `writeTranslation` (`internal/formatter/formatter.go:356-373`)
@@ -481,7 +500,17 @@ parse → format → reparse cycle recovers the value rather than dropping it. A
   `tasks/learnings.md` "A new block entry goes after `description` and ahead of nested blocks, in
   every writer", including why the formatter is the writer that hurts to forget
 - The parse → format → reparse comparison against the original model is the guard, not idempotence
-  and not an existing golden: `internal/formatter/formatter_test.go:428-503`
+  and not an existing golden: `internal/formatter/formatter_test.go:428-503`, and
+  `requireStableFormat` (`:3366-3376`) is the helper that pairs the reparse with the second-pass
+  byte comparison
+- The twin plus its two guards: `test.WithoutAutomationReads` and `test.DeclaredAutomationReads`
+  (`internal/test/fixtures.go:789-805`, `:850-866`) — `tasks/learnings.md` "`require.NotEqual` on a
+  stripped twin is satisfiable without stripping anything" and "A differential receipt must first
+  prove the twin actually differs"
+- A criterion phrased "exactly as before" has to be proved against input that exercises the new
+  handling: the fixture's `RemindOnDueDate` sits mid-block with no `reads` ahead of an automation
+  that has one — `tasks/learnings.md` "Exercise an omitted optional part mid-block, never as the last
+  entry"
 - Every expected string starts with `emod <n>` — `tasks/learnings.md` "Formatter output always begins
   with `emod N`"
 - A fmt golden is never the input re-indented — `tasks/learnings.md` "`emod fmt` canonicalises order,
@@ -492,7 +521,7 @@ parse → format → reparse cycle recovers the value rather than dropping it. A
 helpers.
 
 **Verification:** `mise exec -- go test -tags unit ./internal/formatter/... ./internal/cli/...`;
-`go run ./cmd/emod fmt --check examples/all_patterns.emod` behaves as before.
+`mise exec -- go test -tags unit ./...`.
 
 **Depends on:** 1, 4
 
@@ -506,35 +535,41 @@ it and `cue vet -d '#Model'` accepts a document that has it. A model whose autom
 `reads` produces byte-identical output in both formats.
 
 **Acceptance Criteria:**
-- [ ] The JSON export of the Task 4 fixture carries every automation `reads` value, keyed the way the
-      trigger and translation documents key theirs, together with the position of the view name; the
-      key order inside the automation object matches its `json*` siblings rather than the schema's
+- [ ] The JSON export of `test.AutomationReadsLibraryLendingModel(t)` carries every automation `reads`
+      value, keyed the way the trigger and translation documents key theirs, together with the
+      position of the view name; both new fields sit where `jsonTranslation`'s do — the position after
+      the activation event's position, the value after the activation event — so the emitted object's
+      key order matches its `json*` siblings rather than the schema's
 - [ ] The CUE export of the same fixture carries the same values, emitted after the activation event
       and ahead of the command
-- [ ] `#Automation` in `internal/cue/schema.cue` declares the key as optional, and `emod schema`
-      prints it
-- [ ] `internal/cue/embed_test.go`'s `fullModelJSON` (`:126`) gives its automation the key, so the
-      "accepts a model using every element the language offers" subtest (`:66`) exercises it, and
-      removing the key from the schema makes a subtest fail
-- [ ] A leaf in `"output conforms to the schema's Model definition"`
-      (`internal/export/export_test.go:3442-3456`) runs `cue vet -d '#Model'` over the Task 4
-      fixture's export and passes
-- [ ] A leaf in `"CUE and JSON exports describe the same model"` (`:3458-3477`) requires the two
-      exports of the Task 4 fixture equal, and a further assertion reads the `reads` values back out
-      of the decoded document and compares them to the transcribed list from Task 4 — so a list
-      neither writer emits cannot agree trivially
-- [ ] The JSON and CUE exports of `test.HotelReservation` are byte-identical to what they were before
-      this task, with no existing expected constant in `internal/export/export_test.go` edited
-- [ ] The diagram JSON document is not changed by this task, and the existing subtest that walks it
-      still passes unedited
+- [ ] `#Automation` in `internal/cue/schema.cue` declares the key as optional, and
+      `mise exec -- go run ./cmd/emod schema` prints it
+- [ ] `internal/cue/embed_test.go`'s `fullModelJSON` (`:174-179`) gives its automation the key, so
+      "accepts a model using every element the language offers" (`:66`) exercises it, and deleting
+      the key from `#Automation` makes that subtest fail
+- [ ] A leaf beside `"output conforms to the schema's Model definition"`
+      (`internal/export/export_test.go:3441-3456`) runs `cue vet -d '#Model'` over the fixture's CUE
+      export and passes
+- [ ] A leaf beside `"CUE and JSON exports describe the same model"` (`:3458-3477`) requires the
+      fixture's two exports equal, and a further assertion reads the `reads` values back out of the
+      decoded document, keyed by the slice that owns each automation, against a map transcribed by
+      hand in the test — so a value neither writer emits cannot agree trivially
+- [ ] The same read-back over `test.WithoutAutomationReads` of that model finds no automation `reads`
+      anywhere in either document, while the trigger's and the translation's `reads` are still
+      present in both — the differential that pins this task to the automation
+- [ ] No existing expected constant in `internal/export/export_test.go` is edited, so the JSON and
+      CUE exports of every model with no automation `reads` are unchanged
+- [ ] The diagram JSON document is not changed by this task: the automation node still carries
+      `trigger_event`, `command` and `target_context` only, and every subtest in `"diagram json"`
+      (`:1544`) passes unedited
 
 **Affected Files/Modules:**
 - `internal/export/export.go` — `jsonAutomation` (`:158-171`), `convertAutomation` (`:596-614`),
   `cueWriter.writeAutomation` (`:1363-1370`)
 - `internal/cue/schema.cue` — `#Automation` (`:54-61`)
-- `internal/cue/embed_test.go` — `fullModelJSON` (`:126`)
+- `internal/cue/embed_test.go` — `fullModelJSON` (`:126`, its automation at `:174-179`)
 - `internal/export/export_test.go` — leaves in the `"model json"` (`:21`), `"cue"` (`:3074`), schema
-  conformance (`:3442`) and export-parity (`:3458`) groups
+  conformance (`:3441`) and export-parity (`:3458`) groups
 
 **Patterns to Follow:**
 - Field, key name and struct ordering: `jsonTranslation` (`internal/export/export.go:173-187`) and
@@ -544,11 +579,17 @@ it and `cue vet -d '#Model'` accepts a document that has it. A model whose autom
 - CUE emission: `cueWriter.writeTranslation` (`internal/export/export.go:1372-1382`) using
   `lineIfSet`
 - All three surfaces land together — `tasks/learnings.md` "A new exported field must land in JSON, CUE
-  and `schema.cue` in the same change"
+  and `schema.cue` in the same change". `#Automation` is a closed definition, so `cue vet -d '#Model'`
+  rejects the key until the schema declares it
 - The two coupled guards cannot see a value neither writer emits, so read the values back out of the
-  decoded document against a hand-transcribed list: `listsKeyedBy`
-  (`internal/export/export_test.go:3912`) and `tasks/learnings.md` "The two export guards cannot see a
-  list neither writer emits"
+  decoded document against a hand-transcribed map: `listsKeyedBy`
+  (`internal/export/export_test.go:3912-3927`) with `keywordFieldsByOwner` as the transcribed-constant
+  precedent — `tasks/learnings.md` "The two export guards cannot see a list neither writer emits".
+  Note that `requireBothFormatsAgree` (`:4023-4039`) strips positions before comparing, so the
+  position key is only observable in the JSON document
+- The twin and its guards: `test.WithoutAutomationReads` and `test.DeclaredAutomationReads`
+  (`internal/test/fixtures.go:789-805`, `:850-866`) — `tasks/learnings.md` "`require.NotEqual` on a
+  stripped twin is satisfiable without stripping anything"
 - Do not merge `jsonDiagramEvent` back into `jsonEvent`, and do not touch the diagram document here —
   `tasks/learnings.md` "A new exported field must land in JSON, CUE and `schema.cue` in the same
   change" records why the diagram document is deliberately forked
@@ -562,72 +603,133 @@ it and `cue vet -d '#Model'` accepts a document that has it. A model whose autom
 **Testable:** Yes — through `export.ExportJSON`, `export.ExportCUE` and `cue.Schema`, all exported.
 
 **Verification:** `mise exec -- go test -tags unit ./internal/export/... ./internal/cue/...`;
-`go run ./cmd/emod schema` prints the key.
+`mise exec -- go run ./cmd/emod schema` prints the key.
 
 **Depends on:** 1, 4
 
 ---
 
-### Task 7: Keep automation `reads` across the viewer round trip
+### Task 7: Carry automation `reads` through the diagram document and back
 
-**Behavior:** the diagram JSON document carries an automation's `reads` value as node metadata, the
-importer reads it back onto the automation, and the viewer's details panel shows it beside the
-automation's other entries. A model exported to diagram JSON, loaded and re-exported through the
-viewer's path, comes back with its `reads` values intact. No `reads` edge is drawn for an automation —
-that is US-005's.
+**Behavior:** the diagram JSON document carries an automation's `reads` value as node metadata and
+`importer.ImportDiagram` reads it back onto the automation it builds, so a model exported for the
+viewer and re-imported keeps the view each automation reads. No `reads` edge is drawn for an
+automation and none is folded back onto one — US-005 owns the edge in both directions.
 
 **Acceptance Criteria:**
-- [ ] The automation node in `export.ExportDiagramJSON`'s output carries the `reads` value under the
-      same key the trigger and translation nodes use
-- [ ] `importer.ImportDiagram` sets the value back onto the automation it builds
-- [ ] Parsing the Task 4 fixture, exporting to diagram JSON, re-importing and formatting reproduces
-      the formatted source of the original model with comments stripped — the round trip in
-      `internal/importer/importer_test.go:38-138` extended with a leaf for this fixture
-- [ ] An automation with no `reads` round-trips to an automation with no `reads`, and the existing
-      round-trip leaves in `internal/importer/importer_test.go` pass unedited
-- [ ] The edge list `export.ExportDiagramJSON` produces for the Task 4 fixture contains no `reads`
-      edge whose target is an automation, and a viewer-drawn view→automation edge is not folded into a
-      `reads` entry — both stay US-005's, and the subtest says so in its failure message
-- [ ] `internal/viewer/static/ui.js` prints a `Reads` row in the automation section of the details
-      panel, matching the trigger (`:337`) and translation (`:367`) rows
-- [ ] `mise exec -- task test:viewer` passes
+- [ ] The automation node in `export.ExportDiagramJSON`'s output carries the view name under the same
+      key the trigger and translation nodes use, asserted beside `"automation node with
+      trigger_event/command/target_context"` (`internal/export/export_test.go:1798-1843`)
+- [ ] Exporting `test.AutomationReadsLibraryLendingModel(t)` to diagram JSON and importing the result
+      yields a model whose `test.DeclaredAutomationReads` equals
+      `test.AutomationReadsLibraryLendingViewNames` — both slice homes, including the automation whose
+      view another context declares
+- [ ] The same export → import over `test.WithoutAutomationReads` of that model reads back no
+      automation `reads`, while the model it was copied from still carries all three, so the pair
+      cannot be answered by a builder that hardcodes or drops the value
+- [ ] A leaf in `"round trip"` (`internal/importer/importer_test.go:38`) over a hand-written non-dcb
+      source — already in canonical formatted form, declaring a view in one slice and, in a sibling
+      slice, one automation that reads it beside one that reads nothing — formats back to the
+      identical bytes after the export → import path. Verified precondition: that shape already
+      round-trips byte for byte, failing on the absent `reads` line alone, so the leaf fails for
+      exactly one reason before this task
+- [ ] The featured fixture is not used for a byte-level round trip, for the reason recorded as
+      decision 4 in the Story Reference, and the five existing round-trip leaves (`:39`, `:52`,
+      `:63`, `:90`, `:119`) pass unedited
+- [ ] The edge list `export.ExportDiagramJSON` produces for the fixture contains no `reads` edge whose
+      target is an automation node, and `foldEdges` still folds a `reads` edge onto a translation
+      only; both assertions name US-005 in their failure message, so the next story reads them as a
+      boundary rather than a regression
+- [ ] No file under `internal/viewer` is changed by this task — `git status --porcelain
+      internal/viewer` lists nothing — since node objects pass through `model.js` and
+      `emod-export.js` untouched and `internal/wasm/pipeline.go:60` and `:79` are the two halves the
+      viewer calls
 
 **Affected Files/Modules:**
 - `internal/export/export.go` — the automation diagram node (`:825-842`)
 - `internal/importer/importer.go` — the automation branch of `buildSlice` (`:206-215`)
-- `internal/importer/importer_test.go` — a leaf in `"round trip"` (`:38`)
-- `internal/export/export_test.go` — a leaf in `"diagram json"` (`:1544`)
-- `internal/viewer/static/ui.js` — the automation section of the details panel (`:350-359`)
+- `internal/importer/importer_test.go` — leaves in `"round trip"` (`:38`) and `"edges"` (`:140`)
+- `internal/export/export_test.go` — leaves in `"diagram json"` (`:1544`)
 
 **Patterns to Follow:**
 - Node metadata: the trigger node (`internal/export/export.go:788-802`) and the translation node
-  (`:844-882`) both set the shared `Reads` field on `jsonDiagramNode` (`:649-668`); no new struct field
-  is needed
+  (`:844-882`) both set the shared `Reads` field on `jsonDiagramNode` (`:649-668`); no new struct
+  field is needed, and `diagramNode` (`internal/importer/importer.go:25-42`) already decodes the key
 - Importer side: the trigger (`internal/importer/importer.go:166-173`) and translation (`:217-234`)
   branches of `buildSlice`
-- The round-trip assertion shape, including why comments are stripped from the baseline:
-  `importFrom` and `"reproduces the formatted source for every documented pattern"`
-  (`internal/importer/importer_test.go:26-50`)
-- Details-panel row: the trigger and translation sections of `internal/viewer/static/ui.js`
-  (`:331-340`, `:361-375`)
+- The byte-level leaf shape, and why a hand-written source rather than a fixture:
+  `"preserves slices declared directly under a context"` (`internal/importer/importer_test.go:63-88`)
+  and `"preserves a translation without duplicating its nested event"` (`:90-117`), both comparing
+  `formatter.Format(importFrom(t, source))` against the source itself; `importFrom` (`:26-34`) is the
+  export → import path the viewer uses
+- The diagram-document differentials that prove a value reached one surface and not another:
+  `"a model stating specs still produces a document free of them"`
+  (`internal/export/export_test.go:2925-2939`)
 - Leave `foldEdges` (`internal/importer/importer.go:251-287`) and the automation edge block
   (`internal/export/export.go:1062-1091`) alone — US-005 owns the edge in both directions
 - Name an input that would make each assertion fail before writing it — `tasks/learnings.md` "An
   assertion whose expected value comes from the code under test is the recurring review finding"
 
-**Testable:** Yes — through `export.ExportDiagramJSON` and `importer.ImportDiagram`, both exported,
-plus the viewer's vitest suite for the panel row.
+**Testable:** Yes — through `export.ExportDiagramJSON` and `importer.ImportDiagram`, both exported.
 
 **Verification:** `mise exec -- go test -tags unit ./internal/export/... ./internal/importer/...`;
-`mise exec -- task test:viewer`.
+`mise exec -- go test -tags unit ./...`.
 
 **Depends on:** 1, 4, 5
 
 ---
 
+### Task 8: Show the view an automation reads in the viewer's details panel
+
+**Behavior:** selecting an automation in the viewer shows the view it reads in the automation section
+of the details panel, beside the activation event, the command and the target context, and shows the
+same placeholder the other rows use when the automation reads nothing.
+
+**Acceptance Criteria:**
+- [ ] The automation section of the details panel shows a `Reads` row carrying the node's view name,
+      in the row shape the trigger (`internal/viewer/static/ui.js:337`) and translation (`:367`)
+      sections use, and the row sits between the activation event and the command
+- [ ] An automation node carrying no view name shows the same em-dash placeholder the section's other
+      rows show, rather than an empty cell or a missing row
+- [ ] The view name is escaped on the way into the panel, the way every other row's value is
+- [ ] The rows already in the section — activation event, command, target context — still show what
+      they showed, so the assertion covers the whole section rather than the new row alone
+- [ ] The panel test drives `UI.showDetailPanel` through the exported `UI` object with a store the
+      test builds, and passes under `mise exec -- task test:viewer`
+
+**Affected Files/Modules:**
+- `internal/viewer/static/ui.js` — the automation section of `showDetailPanel` (`:351-360`)
+- `internal/viewer/tests/` — a new `*.test.js` file for the details panel; no test covers
+  `showDetailPanel` today
+
+**Patterns to Follow:**
+- The row to add: the trigger section (`internal/viewer/static/ui.js:331-340`) and the translation
+  section (`:362-376`), both of which read the same `reads` key off the node object
+- The test harness: `internal/viewer/tests/visibility.test.js:1-41` — `installSVGGeometry()` from
+  `tests/svg-env.js`, the dynamic `await import('../static/ui.js')`, and a `createStore` helper that
+  builds the DOM elements the function under test reaches for. `showDetailPanel` reads
+  `store.dom.detailPanel`, `store.dom.dpContent` and `store.dom.svg`, and writes
+  `store.interaction.selectedNodeId`
+- Assert what the panel shows, not how the HTML is built — the caller here is the person reading the
+  panel (`~/.config/ai/guidelines/testing/caller-patterns.md`, the UI pattern: assert visible
+  content, never markup structure)
+- The node object is what the viewer receives from `export.ExportDiagramJSON`, so the test's node
+  literal spells the same keys that document uses (`internal/export/export.go:649-668`)
+- No Go change: this task edits `ui.js` and adds one test file. The exporter's key is Task 7's
+
+**Testable:** Yes — through the exported `UI.showDetailPanel`, under vitest's jsdom environment
+(`internal/viewer/vitest.config.js`).
+
+**Verification:** `mise exec -- task test:viewer`; `git status --porcelain` lists changes under
+`internal/viewer` only.
+
+**Depends on:** 7
+
+---
+
 ## Summary
 
-**Seven tasks.**
+**Eight tasks.**
 
 **Ordering rationale — dependency-first, then blast radius.** Task 1 puts the entry into the language,
 because nothing else can be written or read until the parser records it. Task 2 makes the name mean
@@ -637,8 +739,9 @@ accepts, so closing the gap it opens is the next thing to do. Task 4 lands the s
 fixture and its twin, which every remaining task needs as its featured model, and pays the diagram
 byte-identical receipt while the diagram code is still untouched. Tasks 5 and 6 are the two writer
 families, ordered formatter-first because the formatter is the one that silently *deletes* an entry it
-has not heard of. Task 7 comes last because its round trip is measured in formatted bytes and so needs
-Task 5 in place.
+has not heard of. Task 7 needs Task 5 in place, because its byte-level receipt is measured in
+formatted bytes. Task 8 is the one JavaScript slice, and it comes after Task 7 because the value it
+displays is the one the exporter starts emitting there.
 
 **Story acceptance criteria coverage:**
 
@@ -648,7 +751,7 @@ Task 5 in place.
 | The name must resolve to a view declared anywhere in the model; an unresolved name is a validation error naming the view and its location | 2 |
 | `emod fmt` emits `reads` at a fixed position within the automation block, so repeated formatting is stable | 5 |
 | `emod export -f json` and `-f cue` carry the value | 6 |
-| A model exported, edited in the viewer, and re-imported keeps its `reads` value | 7 |
+| A model exported, edited in the viewer, and re-imported keeps its `reads` value | 7, with 8 showing it in the details panel |
 | An automation without `reads` validates, formats and exports exactly as before | 1, 2, 4, 5, 6, 7 — each task carries the criterion for its own surface, and Task 4 is the differential receipt |
 
 **Nothing deferred from this story's criteria.** Deliberately left to later stories in the feature, and

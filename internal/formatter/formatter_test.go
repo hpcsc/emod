@@ -306,6 +306,123 @@ func TestFormat(t *testing.T) {
 			require.Equal(t, expected, result)
 		})
 
+		t.Run("formats an automation that reads a view between its trigger and its command", func(t *testing.T) {
+			model := &ast.Model{
+				Name: "Test",
+				Contexts: []*ast.Context{
+					{
+						Name: "Ctx",
+						Aggregates: []*ast.Aggregate{
+							{
+								Name: "Agg",
+								Slices: []*ast.Slice{
+									{
+										Name: "Notify",
+										Automations: []*ast.Automation{
+											{
+												Name:          "OrderNotifier",
+												TriggerEvent:  "OrderPlaced",
+												Reads:         "OpenOrdersView",
+												Command:       "SendNotification",
+												TargetContext: "Notifications",
+											},
+										},
+									},
+								},
+							},
+						},
+					},
+				},
+			}
+
+			result := formatter.Format(model)
+
+			expected := strings.Join([]string{
+				`emod 1`,
+				`model "Test"`,
+				``,
+				`context "Ctx" {`,
+				`  aggregate "Agg" {`,
+				`    slice "Notify" {`,
+				`      automation OrderNotifier {`,
+				`        trigger OrderPlaced`,
+				`        reads OpenOrdersView`,
+				`        command SendNotification`,
+				`        target context Notifications`,
+				`      }`,
+				`    }`,
+				`  }`,
+				`}`,
+				``,
+			}, "\n")
+
+			require.Equal(t, expected, result)
+		})
+
+		t.Run("the view an automation reads is written in one place wherever the source put it", func(t *testing.T) {
+			expected := strings.Join([]string{
+				`emod 1`,
+				`model "Order Fulfilment"`,
+				``,
+				`context "Fulfilment" {`,
+				`  aggregate "Shipment" {`,
+				`    slice "Notify Customer" {`,
+				`      automation OrderNotifier {`,
+				`        trigger OrderPlaced`,
+				`        reads OpenOrdersView`,
+				`        command SendNotification`,
+				`        target context Notifications`,
+				`      }`,
+				`    }`,
+				`  }`,
+				`}`,
+				``,
+			}, "\n")
+
+			for _, testCase := range []struct {
+				placement string
+				body      []string
+			}{
+				{"as the block's first entry", []string{
+					`        reads OpenOrdersView`,
+					`        trigger OrderPlaced`,
+					`        command SendNotification`,
+					`        target context Notifications`,
+				}},
+				{"after target context", []string{
+					`        trigger OrderPlaced`,
+					`        command SendNotification`,
+					`        target context Notifications`,
+					`        reads OpenOrdersView`,
+				}},
+			} {
+				t.Run(testCase.placement, func(t *testing.T) {
+					source := strings.Join(slices.Concat(
+						[]string{
+							`model "Order Fulfilment"`,
+							``,
+							`context "Fulfilment" {`,
+							`  aggregate "Shipment" {`,
+							`    slice "Notify Customer" {`,
+							`      automation OrderNotifier {`,
+						},
+						testCase.body,
+						[]string{
+							`      }`,
+							`    }`,
+							`  }`,
+							`}`,
+							``,
+						},
+					), "\n")
+
+					result := formatter.Format(parseModel(t, source, "automation-reads.emod"))
+
+					require.Equal(t, expected, result)
+				})
+			}
+		})
+
 		t.Run("formats translation block with nested event", func(t *testing.T) {
 			model := &ast.Model{
 				Name: "Test",
@@ -736,6 +853,27 @@ func TestFormat(t *testing.T) {
 				{Name: "borrows a copy no one holds"},
 				{Name: "refuses a copy already on loan", When: &ast.SpecElement{Name: "BorrowCopy"}},
 			}, reparsed.Contexts[0].Aggregates[0].Slices[0].Specs, ignoreFormatterNormalizations)
+		})
+
+		t.Run("round-trip: the view an automation reads survives formatting in both slice homes", func(t *testing.T) {
+			reading := test.AutomationReadsLibraryLendingModel(t)
+			unread := test.WithoutAutomationReads(reading)
+
+			reparsed := requireStableFormat(t, reading)
+			reparsedTwin := requireStableFormat(t, unread)
+
+			test.RequireEqual(t, reading, reparsed, ignoreFormatterNormalizations)
+			require.Equal(t, test.AutomationReadsLibraryLendingViewNames, test.DeclaredAutomationReads(reparsed))
+			require.Empty(t, test.DeclaredAutomationReads(reparsedTwin),
+				"the twin declares no automation reads, so formatting it may not invent one")
+
+			formatted, formattedTwin := formatter.Format(reading), formatter.Format(unread)
+			require.Contains(t, formattedTwin, "reads AvailableCopiesView",
+				"what a trigger reads is not an automation's, so the twin keeps it")
+			require.NotEqual(t, formatted, formattedTwin,
+				"the twin has to read no view, or the comparison below says nothing")
+			require.Equal(t, withoutReadsLines(formatted), withoutReadsLines(formattedTwin),
+				"naming the view an automation reads moves no other line of the model")
 		})
 
 		t.Run("idempotency: format(format(described input)) equals format(described input)", func(t *testing.T) {
@@ -3373,6 +3511,14 @@ func requireStableFormat(t *testing.T, model *ast.Model) *ast.Model {
 		"formatting the already-formatted output should produce identical bytes")
 
 	return reparsed
+}
+
+func withoutReadsLines(formatted string) string {
+	kept := slices.DeleteFunc(strings.Split(formatted, "\n"), func(line string) bool {
+		return strings.HasPrefix(strings.TrimSpace(line), "reads ")
+	})
+
+	return strings.Join(kept, "\n")
 }
 
 func lineAfter(t *testing.T, formatted, blockHeader string) string {

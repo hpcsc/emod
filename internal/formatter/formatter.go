@@ -344,6 +344,9 @@ func (w *writer) writeAutomation(auto *ast.Automation, level int) {
 	if auto.TriggerEvent != "" {
 		w.line(level+1, "trigger %s", auto.TriggerEvent)
 	}
+	if auto.Reads != "" {
+		w.line(level+1, "reads %s", auto.Reads)
+	}
 	if auto.Command != "" {
 		w.line(level+1, "command %s", auto.Command)
 	}
