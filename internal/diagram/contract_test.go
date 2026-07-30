@@ -231,6 +231,20 @@ func TestExporterContract(t *testing.T) {
 				require.Equal(t, e.run(t, unstated, diagram.StyleAuto), e.run(t, stated, diagram.StyleAuto),
 					"a diagram shows elements and arrows, not the scenarios they must satisfy, so stating a spec cannot move it")
 			})
+
+			t.Run("declaring the view an automation reads leaves the picture untouched", func(t *testing.T) {
+				reading := test.AutomationReadsLibraryLendingModel(t)
+				unread := test.WithoutAutomationReads(reading)
+
+				require.NotEqual(t, reading, unread,
+					"the twin has to read no view, or the comparison below says nothing")
+				require.Equal(t, test.AutomationReadsLibraryLendingViewNames, test.DeclaredAutomationReads(reading))
+				require.Empty(t, test.DeclaredAutomationReads(unread),
+					"the twin has to lose the reads of both slice homes, or the comparison below is answered by whichever home it kept")
+
+				require.Equal(t, e.run(t, unread, diagram.StyleAuto), e.run(t, reading, diagram.StyleAuto),
+					"US-005 is where an automation gains an edge to the view it reads; until then naming that view cannot move the picture")
+			})
 		})
 	}
 }

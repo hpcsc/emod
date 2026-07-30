@@ -568,6 +568,173 @@ context "Reading Room" mode dcb {
 }
 `
 
+// AutomationReadsLibraryLending names the view its automations read in both
+// homes a slice has — nested in an aggregate, and declared directly on a
+// DCB-mode context — and one of them reads a view another context declares, so
+// packages that carry an automation's reads through the pipeline share one
+// model. One automation leaves its reads out ahead of a further automation on
+// purpose: write the omission last and nothing here would catch an automation
+// running on into what follows it.
+const AutomationReadsLibraryLending = `# Lending a library's copies and seating its readers, with the views its automations consult
+model "Library Lending"
+
+actor "Member"
+
+context "Lending" {
+  aggregate "Loan" {
+    slice "Borrow Copy" {
+      trigger UI "Lending Desk" {
+        actor Member
+        reads AvailableCopiesView
+      }
+      command BorrowCopy {
+        fields {
+          memberId string required
+          copyId   string required
+          dueOn    date   required
+        }
+      }
+      event CopyBorrowed {
+        fields {
+          loanId   string required
+          memberId string required
+          copyId   string required
+          dueOn    date   required
+        }
+      }
+      flow {
+        command -> event: BorrowCopy -> CopyBorrowed
+      }
+    }
+    slice "Review Member Loans" {
+      view MemberLoansView {
+        fields {
+          loanId   string required
+          memberId string required
+          dueOn    date   required
+        }
+        subscribes [CopyBorrowed]
+      }
+    }
+    slice "Chase Overdue Copy" {
+      command RemindMember {
+        fields {
+          loanId   string required
+          memberId string required
+        }
+      }
+      command RecallCopy {
+        fields {
+          loanId string required
+          copyId string required
+        }
+      }
+      event MemberReminded {
+        fields {
+          loanId     string    required
+          memberId   string    required
+          remindedAt timestamp required
+        }
+      }
+      event CopyRecalled {
+        fields {
+          loanId     string    required
+          copyId     string    required
+          recalledAt timestamp required
+        }
+      }
+      automation RemindOnDueDate {
+        trigger CopyBorrowed
+        command RemindMember
+      }
+      automation RecallOverdueCopy {
+        trigger CopyBorrowed
+        reads MemberLoansView
+        command RecallCopy
+      }
+      flow {
+        command -> event: RemindMember -> MemberReminded
+        command -> event: RecallCopy -> CopyRecalled
+      }
+    }
+  }
+}
+
+context "Reading Room" mode dcb {
+  slice "Claim Desk" {
+    command ClaimDesk {
+      fields {
+        memberId string required
+        deskId   string required
+      }
+    }
+    event DeskClaimed {
+      tags {
+        desk  : deskId
+        reader: memberId
+      }
+      fields {
+        sessionId string    required
+        deskId    string    required
+        memberId  string    required
+        claimedAt timestamp required
+      }
+    }
+    flow {
+      command -> event: ClaimDesk -> DeskClaimed
+    }
+  }
+  slice "Release Desk" {
+    command ReleaseDesk {
+      decides_on {
+        events [DeskClaimed]
+        where tag(desk = deskId) and tag(reader = memberId)
+      }
+      fields {
+        sessionId string required
+      }
+    }
+    event DeskReleased {
+      tags {
+        desk  : deskId
+        reader: memberId
+      }
+      fields {
+        sessionId  string    required
+        deskId     string    required
+        memberId   string    required
+        releasedAt timestamp required
+      }
+    }
+    flow {
+      command -> event: ReleaseDesk -> DeskReleased
+    }
+  }
+  slice "Browse Desk Occupancy" {
+    view DeskOccupancyView {
+      fields {
+        deskId    string    required
+        memberId  string    required
+        claimedAt timestamp required
+      }
+      subscribes [DeskClaimed, DeskReleased]
+    }
+  }
+  slice "Close Reading Room" {
+    automation FreeDeskAtClosing {
+      trigger DeskClaimed
+      reads DeskOccupancyView
+      command ReleaseDesk
+    }
+    automation RemindReaderOfLoans {
+      trigger DeskReleased
+      reads MemberLoansView
+      command RemindMember
+    }
+  }
+}
+`
+
 // SpecLibraryLendingSpecNames transcribes the name of every scenario
 // SpecLibraryLending states, both slice homes together and in declaration order,
 // so a walk or a strip that reaches only one of the homes reads back short
@@ -580,6 +747,18 @@ var SpecLibraryLendingSpecNames = []string{
 	"seats a reader at a free desk",
 	"refuses a desk another reader is seated at",
 	"frees the desk its reader is seated at",
+}
+
+// AutomationReadsLibraryLendingViewNames transcribes the view every automation
+// of AutomationReadsLibraryLending reads, both slice homes together and in
+// declaration order, so a walk or a strip that reaches only one of the homes
+// reads back short against it. The automation that reads no view contributes
+// nothing, and the view a trigger reads is not an automation's, so the list is
+// shorter than either count.
+var AutomationReadsLibraryLendingViewNames = []string{
+	"MemberLoansView",
+	"DeskOccupancyView",
+	"MemberLoansView",
 }
 
 // WithOrdinaryFieldNames renames every field of model in place so that no name
@@ -602,36 +781,57 @@ func WithOrdinaryFieldNames(model *ast.Model) *ast.Model {
 // original keeps every spec it was written with, so a caller comparing the two
 // is not comparing a model with itself.
 func WithoutSpecs(model *ast.Model) *ast.Model {
+	return copyWithEditedSlices(model, func(s *ast.Slice) {
+		s.Specs = nil
+	})
+}
+
+// WithoutAutomationReads returns a copy of model whose automations name no view
+// they read, in both homes a slice has — nested in an aggregate and declared
+// directly on a context. The original keeps every view it was written reading,
+// so a caller comparing the two is not comparing a model with itself. What a
+// trigger and a translation read is left alone: only an automation's reads is
+// the subject of the comparison.
+func WithoutAutomationReads(model *ast.Model) *ast.Model {
+	return copyWithEditedSlices(model, func(s *ast.Slice) {
+		s.Automations = editedCopies(s.Automations, func(auto *ast.Automation) {
+			auto.Reads = ""
+			auto.ReadsPos = ast.Position{}
+		})
+	})
+}
+
+// copyWithEditedSlices hands edit a copy of every slice in both homes — nested in
+// an aggregate and declared directly on a context. A copied slice still points at
+// the original's commands, events, views and automations, so an edit reaching
+// inside one of those has to copy it too or it writes through to the model this
+// was called with.
+func copyWithEditedSlices(model *ast.Model, edit func(*ast.Slice)) *ast.Model {
 	if model == nil {
 		return nil
 	}
-	unstated := *model
-	unstated.Contexts = nil
-	for _, ctx := range model.Contexts {
-		bareContext := *ctx
-		bareContext.Aggregates = nil
-		bareContext.Slices = slicesWithoutSpecs(ctx.Slices)
-		for _, agg := range ctx.Aggregates {
-			bareAggregate := *agg
-			bareAggregate.Slices = slicesWithoutSpecs(agg.Slices)
-			bareContext.Aggregates = append(bareContext.Aggregates, &bareAggregate)
-		}
-		unstated.Contexts = append(unstated.Contexts, &bareContext)
-	}
-	return &unstated
+	copied := *model
+	copied.Contexts = editedCopies(model.Contexts, func(ctx *ast.Context) {
+		ctx.Slices = editedCopies(ctx.Slices, edit)
+		ctx.Aggregates = editedCopies(ctx.Aggregates, func(agg *ast.Aggregate) {
+			agg.Slices = editedCopies(agg.Slices, edit)
+		})
+	})
+	return &copied
 }
 
-// slicesWithoutSpecs leaves a nil list nil rather than preallocating an empty
-// one: an empty list differs from the original all by itself, which is enough to
-// satisfy a caller's "the twin differs" guard with no spec stripped at all.
-func slicesWithoutSpecs(slices []*ast.Slice) []*ast.Slice {
-	var bare []*ast.Slice
-	for _, s := range slices {
-		bareSlice := *s
-		bareSlice.Specs = nil
-		bare = append(bare, &bareSlice)
+// editedCopies applies edit to a copy of every item and leaves a nil list nil
+// rather than preallocating an empty one: an empty list differs from the original
+// all by itself, which is enough to satisfy a caller's "the twin differs" guard
+// with nothing edited at all.
+func editedCopies[T any](items []*T, edit func(*T)) []*T {
+	var copies []*T
+	for _, item := range items {
+		edited := *item
+		edit(&edited)
+		copies = append(copies, &edited)
 	}
-	return bare
+	return copies
 }
 
 // DeclaredSpecNames names every spec model states, both slice homes together and
@@ -645,6 +845,23 @@ func DeclaredSpecNames(model *ast.Model) []string {
 		}
 	}
 	return names
+}
+
+// DeclaredAutomationReads names the view every automation of model reads, both
+// slice homes together and in declaration order, so a caller pairing it with a
+// transcribed list reads back short when a strip or a walk reaches only one of
+// the homes.
+func DeclaredAutomationReads(model *ast.Model) []string {
+	var views []string
+	for _, s := range declaredSlices(model) {
+		for _, auto := range s.Automations {
+			if auto.Reads == "" {
+				continue
+			}
+			views = append(views, auto.Reads)
+		}
+	}
+	return views
 }
 
 func declaredSlices(model *ast.Model) []*ast.Slice {
