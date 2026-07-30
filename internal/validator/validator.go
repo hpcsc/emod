@@ -41,6 +41,7 @@ type modelIndex struct {
 	contextNames       map[string]bool
 	commandNames       map[string]bool
 	eventNames         map[string]bool
+	viewNames          map[string]bool
 	commandPositions   map[string]ast.Position
 	eventPositions     map[string]ast.Position
 	referencedCommands map[string]bool
@@ -54,6 +55,7 @@ func newModelIndex(model *ast.Model) *modelIndex {
 		contextNames:       make(map[string]bool, len(model.Contexts)),
 		commandNames:       make(map[string]bool),
 		eventNames:         make(map[string]bool),
+		viewNames:          make(map[string]bool),
 		commandPositions:   make(map[string]ast.Position),
 		eventPositions:     make(map[string]ast.Position),
 		referencedCommands: make(map[string]bool),
@@ -89,6 +91,9 @@ func (i *modelIndex) collect(slice *ast.Slice) {
 			i.producedEvents[evt.Name] = true
 		}
 		i.collectEventShape(evt)
+	}
+	for _, v := range slice.Views {
+		i.viewNames[v.Name] = true
 	}
 	for _, tr := range slice.Translations {
 		if tr.Event != nil {
@@ -294,38 +299,37 @@ func scopedInvariantDiagnostics(found []scopedInvariant, messageFormat string) [
 func referenceDiagnostics(slice *ast.Slice, index *modelIndex) []*diagnostic.Entry {
 	var diags []*diagnostic.Entry
 	for _, auto := range slice.Automations {
-		if auto.TargetContext != "" && !index.contextNames[auto.TargetContext] {
-			diags = append(diags, errorAt(auto.TargetContextPos, "target context %q does not exist", auto.TargetContext))
-		}
-		if auto.Command != "" && !index.commandNames[auto.Command] {
-			diags = append(diags, errorAt(auto.CommandPos, "command %q does not exist", auto.Command))
-		}
-		if auto.TriggerEvent != "" && !index.eventNames[auto.TriggerEvent] {
-			diags = append(diags, errorAt(auto.TriggerEventPos, "event %q does not exist", auto.TriggerEvent))
-		}
+		diags = appendUndeclaredRef(diags, "target context", auto.TargetContext, auto.TargetContextPos, index.contextNames)
+		diags = appendUndeclaredRef(diags, "command", auto.Command, auto.CommandPos, index.commandNames)
+		diags = appendUndeclaredRef(diags, "event", auto.TriggerEvent, auto.TriggerEventPos, index.eventNames)
+		// A trigger's and a translation's `reads` stay unchecked on purpose:
+		// existing models name views in them that no slice declares.
+		diags = appendUndeclaredRef(diags, "view", auto.Reads, auto.ReadsPos, index.viewNames)
 	}
 	for _, tr := range slice.Translations {
-		if tr.Command != "" && !index.commandNames[tr.Command] {
-			diags = append(diags, errorAt(tr.CommandPos, "command %q does not exist", tr.Command))
-		}
+		diags = appendUndeclaredRef(diags, "command", tr.Command, tr.CommandPos, index.commandNames)
 	}
 	for _, v := range slice.Views {
 		for _, sub := range v.Subscribes {
-			if sub != "" && !index.eventNames[sub] {
-				diags = append(diags, errorAt(v.NamePos, "event %q does not exist", sub))
-			}
+			diags = appendUndeclaredRef(diags, "event", sub, v.NamePos, index.eventNames)
 		}
 	}
 	for _, f := range slice.Flows {
-		if f.EventName != "" && !index.eventNames[f.EventName] {
-			diags = append(diags, errorAt(f.EventPos, "event %q does not exist", f.EventName))
-		}
+		diags = appendUndeclaredRef(diags, "event", f.EventName, f.EventPos, index.eventNames)
 	}
 	for _, spec := range slice.Specs {
 		diags = append(diags, specDiagnostics(spec, index)...)
 	}
 
 	return diags
+}
+
+func appendUndeclaredRef(diags []*diagnostic.Entry, kind, name string, pos ast.Position, declared map[string]bool) []*diagnostic.Entry {
+	if name == "" || declared[name] {
+		return diags
+	}
+
+	return append(diags, errorAt(pos, "%s %q does not exist", kind, name))
 }
 
 type undeclaredSpecReference struct {

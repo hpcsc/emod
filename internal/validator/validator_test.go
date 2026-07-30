@@ -883,6 +883,206 @@ func TestValidate(t *testing.T) {
 		})
 	})
 
+	t.Run("view references", func(t *testing.T) {
+		t.Run("a read resolves against a view declared in another context and in another aggregate", func(t *testing.T) {
+			model := &ast.Model{
+				Contexts: []*ast.Context{
+					{
+						Name: "Availability",
+						Mode: "dcb",
+						Slices: []*ast.Slice{
+							{
+								Name:  "Room Availability",
+								Views: []*ast.View{{Name: "RoomAvailabilityView"}},
+							},
+						},
+					},
+					{
+						Name: "Reservations",
+						Aggregates: []*ast.Aggregate{
+							{
+								Name: "Reservation",
+								Slices: []*ast.Slice{
+									{
+										Name:  "Reservation History",
+										Views: []*ast.View{{Name: "ReservationHistoryView"}},
+									},
+								},
+							},
+							{
+								Name: "Confirmation",
+								Slices: []*ast.Slice{
+									{
+										Name: "Confirm Reservation",
+										Automations: []*ast.Automation{
+											{Name: "ConfirmOnPayment", Reads: "RoomAvailabilityView"},
+											{Name: "ExpireStaleHolds", Reads: "ReservationHistoryView"},
+										},
+									},
+								},
+							},
+						},
+					},
+				},
+			}
+
+			diags := validator.Validate(model)
+
+			require.Empty(t, diags)
+		})
+
+		t.Run("a view no slice declares is reported on the reads entry, not on the automation name", func(t *testing.T) {
+			model := &ast.Model{
+				Contexts: []*ast.Context{
+					{
+						Name: "Reservations",
+						Aggregates: []*ast.Aggregate{
+							{
+								Name: "Reservation",
+								Slices: []*ast.Slice{
+									{
+										Name:  "Confirm Reservation",
+										Views: []*ast.View{{Name: "ReservationsView"}},
+										Automations: []*ast.Automation{
+											{
+												Name:     "AutoConfirm",
+												NamePos:  ast.Position{Filename: "reservations.emod", Line: 9, Column: 18},
+												Reads:    "PendingConfirmationsView",
+												ReadsPos: ast.Position{Filename: "reservations.emod", Line: 11, Column: 15},
+											},
+										},
+									},
+								},
+							},
+						},
+					},
+				},
+			}
+
+			diags := validator.Validate(model)
+
+			require.Len(t, diags, 1)
+			require.Equal(t, `reservations.emod:11: view "PendingConfirmationsView" does not exist`, diags[0].String())
+			require.Equal(t, 15, diags[0].Column)
+			require.Equal(t, diagnostic.Error, diags[0].Severity)
+			require.Empty(t, diags[0].RuleName)
+		})
+
+		t.Run("an automation on a context's own slice is checked like one inside an aggregate", func(t *testing.T) {
+			model := &ast.Model{
+				Contexts: []*ast.Context{
+					{
+						Name: "Availability",
+						Mode: "dcb",
+						Slices: []*ast.Slice{
+							{
+								Name: "Release Held Rooms",
+								Automations: []*ast.Automation{
+									{
+										Name:     "ReleaseHeldRooms",
+										Reads:    "ExpiringHoldsView",
+										ReadsPos: ast.Position{Filename: "availability.emod", Line: 7, Column: 15},
+									},
+								},
+							},
+						},
+					},
+					{
+						Name: "Reservations",
+						Aggregates: []*ast.Aggregate{
+							{
+								Name: "Reservation",
+								Slices: []*ast.Slice{
+									{
+										Name:  "View Reservations",
+										Views: []*ast.View{{Name: "ReservationsView"}},
+									},
+								},
+							},
+						},
+					},
+				},
+			}
+
+			diags := validator.Validate(model)
+
+			require.Len(t, diags, 1)
+			require.Equal(t, `availability.emod:7: view "ExpiringHoldsView" does not exist`, diags[0].String())
+		})
+
+		t.Run("an automation without a reads entry produces no diagnostic while its sibling reading an undeclared view is reported", func(t *testing.T) {
+			model := &ast.Model{
+				Contexts: []*ast.Context{
+					{
+						Name: "Reservations",
+						Aggregates: []*ast.Aggregate{
+							{
+								Name: "Reservation",
+								Slices: []*ast.Slice{
+									{
+										Name: "Confirm Reservation",
+										Automations: []*ast.Automation{
+											{
+												Name:    "AutoConfirm",
+												NamePos: ast.Position{Filename: "reservations.emod", Line: 6, Column: 18},
+											},
+											{
+												Name:     "ExpireStaleHolds",
+												NamePos:  ast.Position{Filename: "reservations.emod", Line: 10, Column: 18},
+												Reads:    "ExpiringHoldsView",
+												ReadsPos: ast.Position{Filename: "reservations.emod", Line: 11, Column: 15},
+											},
+										},
+									},
+								},
+							},
+						},
+					},
+				},
+			}
+
+			diags := validator.Validate(model)
+
+			require.Len(t, diags, 1)
+			require.Equal(t, `reservations.emod:11: view "ExpiringHoldsView" does not exist`, diags[0].String())
+		})
+
+		t.Run("a name declared only as an event does not resolve as a view", func(t *testing.T) {
+			model := &ast.Model{
+				Contexts: []*ast.Context{
+					{
+						Name: "Reservations",
+						Aggregates: []*ast.Aggregate{
+							{
+								Name: "Reservation",
+								Slices: []*ast.Slice{
+									{
+										Name:     "Confirm Reservation",
+										Commands: []*ast.Command{{Name: "ConfirmReservation"}},
+										Events:   []*ast.Event{{Name: "ReservationMade"}},
+										Flows:    []*ast.Flow{{CommandName: "ConfirmReservation", EventName: "ReservationMade"}},
+										Automations: []*ast.Automation{
+											{
+												Name:     "AutoConfirm",
+												Reads:    "ReservationMade",
+												ReadsPos: ast.Position{Filename: "reservations.emod", Line: 14, Column: 15},
+											},
+										},
+									},
+								},
+							},
+						},
+					},
+				},
+			}
+
+			diags := validator.Validate(model)
+
+			require.Len(t, diags, 1)
+			require.Equal(t, `reservations.emod:14: view "ReservationMade" does not exist`, diags[0].String())
+		})
+	})
+
 	t.Run("spec references", func(t *testing.T) {
 		t.Run("an event a given names but no construct declares is reported on that reference", func(t *testing.T) {
 			model := &ast.Model{

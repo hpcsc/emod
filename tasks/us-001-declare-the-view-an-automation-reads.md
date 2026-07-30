@@ -2,7 +2,7 @@
 
 ## Progress
 - [x] Task 1: Parse `reads` inside an automation block
-- [ ] Task 2: Reject an automation `reads` that names no declared view
+- [x] Task 2: Reject an automation `reads` that names no declared view
 - [ ] Task 3: Accept an automation's `reads` in the tree-sitter grammar
 - [ ] Task 4: Share a fixture whose automations read views
 - [ ] Task 5: Emit `reads` from `emod fmt` at a fixed position in the automation block
