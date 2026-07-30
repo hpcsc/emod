@@ -1842,7 +1842,7 @@ func TestExport(t *testing.T) {
 			require.Equal(t, "GuestCheckedOut", subs[1])
 		})
 
-		t.Run("automation node with trigger_event/command/target_context", func(t *testing.T) {
+		t.Run("automation node with trigger_event/reads/command/target_context", func(t *testing.T) {
 			model := &ast.Model{
 				Name: "Test",
 				Contexts: []*ast.Context{
@@ -1858,6 +1858,7 @@ func TestExport(t *testing.T) {
 											{
 												Name:          "OrderNotifier",
 												TriggerEvent:  "OrderPlaced",
+												Reads:         "PendingOrdersView",
 												Command:       "SendNotification",
 												TargetContext: "Notifications",
 											},
@@ -1886,6 +1887,7 @@ func TestExport(t *testing.T) {
 			require.Equal(t, "slice-1", auto["parentId"])
 			require.Equal(t, "OrderNotifier", auto["label"])
 			require.Equal(t, "OrderPlaced", auto["trigger_event"])
+			require.Equal(t, "PendingOrdersView", auto["reads"])
 			require.Equal(t, "SendNotification", auto["command"])
 			require.Equal(t, "Notifications", auto["target_context"])
 		})
@@ -2983,6 +2985,24 @@ func TestExport(t *testing.T) {
 			require.Equal(t, diagramDocOf(t, unstated), diagramDocOf(t, stated),
 				"nor does an event a spec names in its given or then history reach a node or an edge of its own")
 		})
+
+		t.Run("the view an automation reads reaches its node and no edge of its own", func(t *testing.T) {
+			reading := test.AutomationReadsLibraryLendingModel(t)
+			unread := test.WithoutAutomationReads(reading)
+
+			require.Equal(t, test.AutomationReadsLibraryLendingViewNames, test.DeclaredAutomationReads(reading),
+				"the model has to keep reading a view in both slice homes once the twin is taken, or the comparisons below run over a copy of itself")
+			require.Empty(t, test.DeclaredAutomationReads(unread),
+				"the twin has to lose the reads of both slice homes, or whichever home it kept answers the comparisons below")
+
+			readingDoc := diagramDocOf(t, reading)
+			unreadDoc := diagramDocOf(t, unread)
+
+			require.Equal(t, test.AutomationReadsLibraryLendingViewNames, diagramAutomationReads(readingDoc))
+			require.Empty(t, diagramAutomationReads(unreadDoc))
+			require.Equal(t, unreadDoc["edges"], readingDoc["edges"],
+				"US-005 owns the view→automation edge; one drawn here is that story arriving early, not a regression")
+		})
 	})
 
 	t.Run("diagram json with diagnostics", func(t *testing.T) {
@@ -3641,13 +3661,24 @@ func TestExport(t *testing.T) {
 
 // findNodeByType finds a diagram node by its type field in a nodes array.
 func findNodeByType(nodes []any, typ string) map[string]any {
+	matched := nodesOfType(nodes, typ)
+	if len(matched) == 0 {
+		return nil
+	}
+	return matched[0]
+}
+
+// nodesOfType keeps the diagram nodes of one type, in the order the exporter
+// emitted them.
+func nodesOfType(nodes []any, typ string) []map[string]any {
+	var matched []map[string]any
 	for _, n := range nodes {
 		node := n.(map[string]any)
 		if node["type"] == typ {
-			return node
+			matched = append(matched, node)
 		}
 	}
-	return nil
+	return matched
 }
 
 // lookupCue returns the cue binary to shell out to, skipping the test when the
@@ -4118,6 +4149,20 @@ func automationReadsByOwner(doc map[string]any) map[string][]map[string]any {
 
 func translationReadsByOwner(doc map[string]any) map[string][]map[string]any {
 	return listsKeyedBy(doc, "translations", "name", readSpec)
+}
+
+// diagramAutomationReads names the view every automation node of a decoded
+// diagram document reads, in the order the nodes were emitted — which follows
+// declaration order across both slice homes, so a walk reaching only one of them
+// reads back short.
+func diagramAutomationReads(doc map[string]any) []string {
+	var views []string
+	for _, node := range nodesOfType(doc["nodes"].([]any), "automation") {
+		if reads, readsAView := node["reads"].(string); readsAView {
+			views = append(views, reads)
+		}
+	}
+	return views
 }
 
 // positionedAutomationReads names the automations a decoded document filed the

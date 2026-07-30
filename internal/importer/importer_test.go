@@ -12,6 +12,7 @@ import (
 	"github.com/hpcsc/emod/internal/importer"
 	"github.com/hpcsc/emod/internal/lexer"
 	"github.com/hpcsc/emod/internal/parser"
+	"github.com/hpcsc/emod/internal/test"
 	"github.com/stretchr/testify/require"
 )
 
@@ -23,11 +24,16 @@ func parseModel(t *testing.T, source string) *ast.Model {
 	return model
 }
 
-// importFrom runs source through the export→import path the viewer uses:
-// .emod text becomes diagram JSON, the diagram JSON becomes an AST again.
 func importFrom(t *testing.T, source string) *ast.Model {
 	t.Helper()
-	diagramJSON, err := export.ExportDiagramJSON(parseModel(t, source))
+	return importExported(t, parseModel(t, source))
+}
+
+// importExported runs model through the export→import path the viewer uses:
+// the model becomes diagram JSON, the diagram JSON becomes an AST again.
+func importExported(t *testing.T, model *ast.Model) *ast.Model {
+	t.Helper()
+	diagramJSON, err := export.ExportDiagramJSON(model)
 	require.NoError(t, err)
 	imported, err := importer.ImportDiagram(diagramJSON)
 	require.NoError(t, err)
@@ -116,6 +122,58 @@ context "C" {
 			require.Equal(t, source, formatter.Format(importFrom(t, source)))
 		})
 
+		t.Run("preserves the view an automation reads, leaving the one beside it reading nothing", func(t *testing.T) {
+			source := `emod 1
+model "M"
+
+context "C" {
+  aggregate "A" {
+    slice "Review Member Loans" {
+      view MemberLoansView {
+        fields {
+          loanId string required
+        }
+      }
+    }
+
+    slice "Chase Overdue Copy" {
+      command RecallCopy {
+        fields {
+          loanId string required
+        }
+      }
+
+      automation RecallOverdueCopy {
+        trigger CopyBorrowed
+        reads MemberLoansView
+        command RecallCopy
+      }
+
+      automation RemindMember {
+        trigger CopyBorrowed
+        command RecallCopy
+      }
+    }
+  }
+}
+`
+			require.Equal(t, source, formatter.Format(importFrom(t, source)))
+		})
+
+		t.Run("keeps the view every automation reads, from both slice homes", func(t *testing.T) {
+			reading := test.AutomationReadsLibraryLendingModel(t)
+			unread := test.WithoutAutomationReads(reading)
+
+			require.Equal(t, test.AutomationReadsLibraryLendingViewNames, test.DeclaredAutomationReads(reading),
+				"the model has to keep reading a view in both slice homes once the twin is taken, or the comparisons below run over a copy of itself")
+			require.Empty(t, test.DeclaredAutomationReads(unread),
+				"the twin has to lose the reads of both slice homes, or whichever home it kept answers the comparisons below")
+
+			require.Equal(t, test.AutomationReadsLibraryLendingViewNames,
+				test.DeclaredAutomationReads(importExported(t, reading)))
+			require.Empty(t, test.DeclaredAutomationReads(importExported(t, unread)))
+		})
+
 		t.Run("preserves external event sources", func(t *testing.T) {
 			source := `emod 1
 model "M"
@@ -174,6 +232,31 @@ context "C" {
 			require.NoError(t, err)
 
 			require.Equal(t, []string{"ThingDone"}, model.Contexts[0].Slices[0].Views[0].Subscribes)
+		})
+
+		t.Run("a reads edge drawn in the viewer becomes a translation's reads and not an automation's", func(t *testing.T) {
+			diagram := `{
+              "model_name": "M",
+              "nodes": [
+                {"id": "context-1", "type": "context", "label": "C", "parentId": null},
+                {"id": "slice-1", "type": "slice", "label": "S", "parentId": "context-1"},
+                {"id": "view-1", "type": "view", "label": "MemberLoansView", "parentId": "slice-1"},
+                {"id": "auto-1", "type": "automation", "label": "RecallOverdueCopy", "parentId": "slice-1"},
+                {"id": "trans-1", "type": "translation", "label": "AcknowledgeOverdueNotice", "parentId": "slice-1"}
+              ],
+              "edges": [
+                {"source": "view-1", "target": "auto-1", "type": "reads"},
+                {"source": "view-1", "target": "trans-1", "type": "reads"}
+              ]
+            }`
+
+			model, err := importer.ImportDiagram([]byte(diagram))
+			require.NoError(t, err)
+
+			slice := model.Contexts[0].Slices[0]
+			require.Equal(t, "MemberLoansView", slice.Translations[0].Reads)
+			require.Empty(t, slice.Automations[0].Reads,
+				"US-005 owns the view→automation edge; folding one back here is that story arriving early, not a regression")
 		})
 
 		t.Run("an edge already recorded in node metadata is not duplicated", func(t *testing.T) {

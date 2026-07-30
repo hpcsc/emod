@@ -207,6 +207,7 @@ func (b *builder) buildSlice(n *diagramNode) *ast.Slice {
 		auto := &ast.Automation{
 			Name:          a.Label,
 			TriggerEvent:  a.TriggerEvent,
+			Reads:         a.Reads,
 			Command:       a.Command,
 			TargetContext: a.TargetContext,
 		}

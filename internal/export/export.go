@@ -840,6 +840,7 @@ func collectSliceNodes(
 			ParentID:      &sliceID,
 			Position:      convertPosition(a.NamePos),
 			TriggerEvent:  a.TriggerEvent,
+			Reads:         a.Reads,
 			Command:       a.Command,
 			TargetContext: a.TargetContext,
 		})
