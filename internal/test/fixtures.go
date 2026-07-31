@@ -761,6 +761,18 @@ var AutomationReadsLibraryLendingViewNames = []string{
 	"MemberLoansView",
 }
 
+// AutomationReadsLibraryLendingActivationEvents transcribes the event every
+// automation of AutomationReadsLibraryLending activates on, both slice homes
+// together and in declaration order, so a walk or a rewrite that drops one reads
+// back short against it. Every automation names one, so the list is as long as
+// the automation count and longer than the views above.
+var AutomationReadsLibraryLendingActivationEvents = []string{
+	"CopyBorrowed",
+	"CopyBorrowed",
+	"DeskClaimed",
+	"DeskReleased",
+}
+
 // WithOrdinaryFieldNames renames every field of model in place so that no name
 // spells a DSL keyword, giving KeywordFieldSearchCatalog a twin that differs
 // from it in nothing but the naming of its fields. Renaming the parsed model
@@ -852,16 +864,30 @@ func DeclaredSpecNames(model *ast.Model) []string {
 // transcribed list reads back short when a strip or a walk reaches only one of
 // the homes.
 func DeclaredAutomationReads(model *ast.Model) []string {
-	var views []string
+	return declaredAutomationEntries(model, func(auto *ast.Automation) string { return auto.Reads })
+}
+
+// DeclaredActivationEvents names the event every automation of model activates
+// on, both slice homes together and in declaration order, so a caller pairing it
+// with a transcribed list reads back short when an entry goes missing or a walk
+// reaches only one of the homes.
+func DeclaredActivationEvents(model *ast.Model) []string {
+	return declaredAutomationEntries(model, func(auto *ast.Automation) string { return auto.OnEvent })
+}
+
+// declaredAutomationEntries leaves out the automations stating no entry, so a
+// list read back against a transcribed one counts what the model says rather
+// than how many automations it declares.
+func declaredAutomationEntries(model *ast.Model, entry func(*ast.Automation) string) []string {
+	var entries []string
 	for _, s := range declaredSlices(model) {
 		for _, auto := range s.Automations {
-			if auto.Reads == "" {
-				continue
+			if stated := entry(auto); stated != "" {
+				entries = append(entries, stated)
 			}
-			views = append(views, auto.Reads)
 		}
 	}
-	return views
+	return entries
 }
 
 func declaredSlices(model *ast.Model) []*ast.Slice {

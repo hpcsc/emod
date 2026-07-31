@@ -22,6 +22,13 @@ func (w *writer) line(level int, format string, args ...any) {
 	fmt.Fprintf(w.b, "%s%s\n", indent(level), fmt.Sprintf(format, args...))
 }
 
+func (w *writer) lineIfSet(level int, format, value string) {
+	if value == "" {
+		return
+	}
+	w.line(level, format, value)
+}
+
 func (w *writer) blankLine() {
 	w.b.WriteString("\n")
 }
@@ -198,12 +205,8 @@ func (w *writer) writeTrigger(trigger *ast.Trigger, level int) {
 	w.writeComments(trigger.Comments, level)
 	w.line(level, "trigger %s %s {", trigger.Kind, quoted(trigger.Name))
 	w.writeDescription(trigger.Description, level+1)
-	if trigger.Actor != "" {
-		w.line(level+1, "actor %s", trigger.Actor)
-	}
-	if trigger.Reads != "" {
-		w.line(level+1, "reads %s", trigger.Reads)
-	}
+	w.lineIfSet(level+1, "actor %s", trigger.Actor)
+	w.lineIfSet(level+1, "reads %s", trigger.Reads)
 	w.line(level, "}")
 }
 
@@ -341,18 +344,10 @@ func (w *writer) writeAutomation(auto *ast.Automation, level int) {
 	w.writeComments(auto.Comments, level)
 	w.line(level, "automation %s {", auto.Name)
 	w.writeDescription(auto.Description, level+1)
-	if auto.OnEvent != "" {
-		w.line(level+1, "trigger %s", auto.OnEvent)
-	}
-	if auto.Reads != "" {
-		w.line(level+1, "reads %s", auto.Reads)
-	}
-	if auto.Command != "" {
-		w.line(level+1, "command %s", auto.Command)
-	}
-	if auto.TargetContext != "" {
-		w.line(level+1, "target context %s", auto.TargetContext)
-	}
+	w.lineIfSet(level+1, "on %s", auto.OnEvent)
+	w.lineIfSet(level+1, "reads %s", auto.Reads)
+	w.lineIfSet(level+1, "command %s", auto.Command)
+	w.lineIfSet(level+1, "target context %s", auto.TargetContext)
 	w.line(level, "}")
 }
 
@@ -363,12 +358,8 @@ func (w *writer) writeTranslation(trans *ast.Translation, level int) {
 	if trans.ExternalSystem != "" {
 		w.line(level+1, "external_system %s", quoted(trans.ExternalSystem))
 	}
-	if trans.Reads != "" {
-		w.line(level+1, "reads %s", trans.Reads)
-	}
-	if trans.Command != "" {
-		w.line(level+1, "command %s", trans.Command)
-	}
+	w.lineIfSet(level+1, "reads %s", trans.Reads)
+	w.lineIfSet(level+1, "command %s", trans.Command)
 	if trans.Event != nil {
 		w.writeEvent(trans.Event, level+1)
 	}

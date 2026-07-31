@@ -293,7 +293,7 @@ func TestFormat(t *testing.T) {
 				`  aggregate "Agg" {`,
 				`    slice "Notify" {`,
 				`      automation OrderNotifier {`,
-				`        trigger OrderPlaced`,
+				`        on OrderPlaced`,
 				`        command SendNotification`,
 				`        target context Notifications`,
 				`      }`,
@@ -306,7 +306,7 @@ func TestFormat(t *testing.T) {
 			require.Equal(t, expected, result)
 		})
 
-		t.Run("formats an automation that reads a view between its trigger and its command", func(t *testing.T) {
+		t.Run("formats an automation that reads a view between its activation event and its command", func(t *testing.T) {
 			model := &ast.Model{
 				Name: "Test",
 				Contexts: []*ast.Context{
@@ -345,7 +345,7 @@ func TestFormat(t *testing.T) {
 				`  aggregate "Agg" {`,
 				`    slice "Notify" {`,
 				`      automation OrderNotifier {`,
-				`        trigger OrderPlaced`,
+				`        on OrderPlaced`,
 				`        reads OpenOrdersView`,
 				`        command SendNotification`,
 				`        target context Notifications`,
@@ -368,7 +368,7 @@ func TestFormat(t *testing.T) {
 				`  aggregate "Shipment" {`,
 				`    slice "Notify Customer" {`,
 				`      automation OrderNotifier {`,
-				`        trigger OrderPlaced`,
+				`        on OrderPlaced`,
 				`        reads OpenOrdersView`,
 				`        command SendNotification`,
 				`        target context Notifications`,
@@ -397,26 +397,53 @@ func TestFormat(t *testing.T) {
 				}},
 			} {
 				t.Run(testCase.placement, func(t *testing.T) {
-					source := strings.Join(slices.Concat(
-						[]string{
-							`model "Order Fulfilment"`,
-							``,
-							`context "Fulfilment" {`,
-							`  aggregate "Shipment" {`,
-							`    slice "Notify Customer" {`,
-							`      automation OrderNotifier {`,
-						},
-						testCase.body,
-						[]string{
-							`      }`,
-							`    }`,
-							`  }`,
-							`}`,
-							``,
-						},
-					), "\n")
+					source := orderNotifierSource(testCase.body...)
 
 					result := formatter.Format(parseModel(t, source, "automation-reads.emod"))
+
+					require.Equal(t, expected, result)
+				})
+			}
+		})
+
+		t.Run("an automation's activation event is written as on, between its description and the view it reads", func(t *testing.T) {
+			expected := strings.Join([]string{
+				`emod 1`,
+				`model "Order Fulfilment"`,
+				``,
+				`context "Fulfilment" {`,
+				`  aggregate "Shipment" {`,
+				`    slice "Notify Customer" {`,
+				`      automation OrderNotifier {`,
+				`        description "Tells the customer their parcel has left the depot"`,
+				`        on OrderPlaced`,
+				`        reads OpenOrdersView`,
+				`        command SendNotification`,
+				`        target context Notifications`,
+				`      }`,
+				`    }`,
+				`  }`,
+				`}`,
+				``,
+			}, "\n")
+
+			for _, testCase := range []struct {
+				spelling       string
+				activationLine string
+			}{
+				{"the source spells it trigger", `        trigger OrderPlaced`},
+				{"the source spells it on", `        on OrderPlaced`},
+			} {
+				t.Run(testCase.spelling, func(t *testing.T) {
+					source := orderNotifierSource(
+						`        description "Tells the customer their parcel has left the depot"`,
+						testCase.activationLine,
+						`        reads OpenOrdersView`,
+						`        command SendNotification`,
+						`        target context Notifications`,
+					)
+
+					result := formatter.Format(parseModel(t, source, "automation-activation.emod"))
 
 					require.Equal(t, expected, result)
 				})
@@ -855,7 +882,7 @@ func TestFormat(t *testing.T) {
 			}, reparsed.Contexts[0].Aggregates[0].Slices[0].Specs, ignoreFormatterNormalizations)
 		})
 
-		t.Run("round-trip: the view an automation reads survives formatting in both slice homes", func(t *testing.T) {
+		t.Run("round-trip: the view an automation reads and the event it activates on survive formatting in both slice homes", func(t *testing.T) {
 			reading := test.AutomationReadsLibraryLendingModel(t)
 			unread := test.WithoutAutomationReads(reading)
 
@@ -864,6 +891,7 @@ func TestFormat(t *testing.T) {
 
 			test.RequireEqual(t, reading, reparsed, ignoreFormatterNormalizations)
 			require.Equal(t, test.AutomationReadsLibraryLendingViewNames, test.DeclaredAutomationReads(reparsed))
+			require.Equal(t, test.AutomationReadsLibraryLendingActivationEvents, test.DeclaredActivationEvents(reparsed))
 			require.Empty(t, test.DeclaredAutomationReads(reparsedTwin),
 				"the twin declares no automation reads, so formatting it may not invent one")
 
@@ -874,6 +902,26 @@ func TestFormat(t *testing.T) {
 				"the twin has to read no view, or the comparison below says nothing")
 			require.Equal(t, withoutReadsLines(formatted), withoutReadsLines(formattedTwin),
 				"naming the view an automation reads moves no other line of the model")
+		})
+
+		t.Run("round-trip: a whole shared model survives formatting, the event each automation activates on included", func(t *testing.T) {
+			for _, testCase := range []struct {
+				shape            string
+				parse            func(*testing.T) *ast.Model
+				activationEvents []string
+			}{
+				{"specs stated in an aggregate slice and in a dcb context slice", test.SpecLibraryLendingModel, nil},
+				{"an automation among all four slice patterns", test.HotelReservationModel, []string{"ReservationMade"}},
+			} {
+				t.Run(testCase.shape, func(t *testing.T) {
+					original := testCase.parse(t)
+
+					reparsed := requireStableFormat(t, original)
+
+					test.RequireEqual(t, original, reparsed, ignoreFormatterNormalizations)
+					require.Equal(t, testCase.activationEvents, test.DeclaredActivationEvents(reparsed))
+				})
+			}
 		})
 
 		t.Run("idempotency: format(format(described input)) equals format(described input)", func(t *testing.T) {
@@ -3499,6 +3547,27 @@ func parseFixture(t *testing.T, filename string) *ast.Model {
 	require.NoError(t, err)
 
 	return parseModel(t, string(source), filename)
+}
+
+func orderNotifierSource(automationBody ...string) string {
+	return strings.Join(slices.Concat(
+		[]string{
+			`model "Order Fulfilment"`,
+			``,
+			`context "Fulfilment" {`,
+			`  aggregate "Shipment" {`,
+			`    slice "Notify Customer" {`,
+			`      automation OrderNotifier {`,
+		},
+		automationBody,
+		[]string{
+			`      }`,
+			`    }`,
+			`  }`,
+			`}`,
+			``,
+		},
+	), "\n")
 }
 
 func requireStableFormat(t *testing.T, model *ast.Model) *ast.Model {

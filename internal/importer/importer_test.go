@@ -144,13 +144,13 @@ context "C" {
       }
 
       automation RecallOverdueCopy {
-        trigger CopyBorrowed
+        on CopyBorrowed
         reads MemberLoansView
         command RecallCopy
       }
 
       automation RemindMember {
-        trigger CopyBorrowed
+        on CopyBorrowed
         command RecallCopy
       }
     }

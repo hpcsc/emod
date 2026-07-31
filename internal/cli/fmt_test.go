@@ -200,7 +200,7 @@ context "Discovery" {
       }
 
       automation AutoShare {
-        trigger SavedSearchDefined
+        on SavedSearchDefined
         command ShareSavedSearch
       }
 
