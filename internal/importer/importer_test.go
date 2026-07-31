@@ -3,6 +3,7 @@
 package importer_test
 
 import (
+	"fmt"
 	"os"
 	"testing"
 
@@ -35,9 +36,14 @@ func importExported(t *testing.T, model *ast.Model) *ast.Model {
 	t.Helper()
 	diagramJSON, err := export.ExportDiagramJSON(model)
 	require.NoError(t, err)
-	imported, err := importer.ImportDiagram(diagramJSON)
+	return importDiagram(t, string(diagramJSON))
+}
+
+func importDiagram(t *testing.T, document string) *ast.Model {
+	t.Helper()
+	model, err := importer.ImportDiagram([]byte(document))
 	require.NoError(t, err)
-	return imported
+	return model
 }
 
 func TestImportDiagram(t *testing.T) {
@@ -160,17 +166,21 @@ context "C" {
 			require.Equal(t, source, formatter.Format(importFrom(t, source)))
 		})
 
-		t.Run("keeps the view every automation reads, from both slice homes", func(t *testing.T) {
+		t.Run("keeps the view every automation reads and the event each activates on, from both slice homes", func(t *testing.T) {
 			reading := test.AutomationReadsLibraryLendingModel(t)
 			unread := test.WithoutAutomationReads(reading)
 
 			require.Equal(t, test.AutomationReadsLibraryLendingViewNames, test.DeclaredAutomationReads(reading),
 				"the model has to keep reading a view in both slice homes once the twin is taken, or the comparisons below run over a copy of itself")
+			require.Equal(t, test.AutomationReadsLibraryLendingActivationEvents, test.DeclaredActivationEvents(reading),
+				"the model has to activate on an event in both slice homes, or the comparisons below run over a copy of itself")
 			require.Empty(t, test.DeclaredAutomationReads(unread),
 				"the twin has to lose the reads of both slice homes, or whichever home it kept answers the comparisons below")
 
-			require.Equal(t, test.AutomationReadsLibraryLendingViewNames,
-				test.DeclaredAutomationReads(importExported(t, reading)))
+			imported := importExported(t, reading)
+
+			require.Equal(t, test.AutomationReadsLibraryLendingViewNames, test.DeclaredAutomationReads(imported))
+			require.Equal(t, test.AutomationReadsLibraryLendingActivationEvents, test.DeclaredActivationEvents(imported))
 			require.Empty(t, test.DeclaredAutomationReads(importExported(t, unread)))
 		})
 
@@ -195,6 +205,30 @@ context "C" {
 		})
 	})
 
+	t.Run("node metadata", func(t *testing.T) {
+		t.Run("an automation activates on the event stated under on_event and on none stated under trigger_event", func(t *testing.T) {
+			documentKeying := func(activationEventKey string) string {
+				return fmt.Sprintf(`{
+              "model_name": "M",
+              "nodes": [
+                {"id": "context-1", "type": "context", "label": "C", "parentId": null},
+                {"id": "slice-1", "type": "slice", "label": "S", "parentId": "context-1"},
+                {"id": "auto-1", "type": "automation", "label": "RecallOverdueCopy", "parentId": "slice-1",
+                 %q: "CopyBorrowed"}
+              ],
+              "edges": []
+            }`, activationEventKey)
+			}
+
+			keyedOnEvent := importDiagram(t, documentKeying("on_event"))
+			require.Equal(t, "CopyBorrowed", keyedOnEvent.Contexts[0].Slices[0].Automations[0].OnEvent)
+
+			keyedTriggerEvent := importDiagram(t, documentKeying("trigger_event"))
+			require.Empty(t, keyedTriggerEvent.Contexts[0].Slices[0].Automations[0].OnEvent,
+				"a document keyed by anything but on_event states no activation event, or the assertion above passes on a reader that takes both")
+		})
+	})
+
 	t.Run("edges", func(t *testing.T) {
 		t.Run("a flow edge drawn in the viewer becomes a flow entry", func(t *testing.T) {
 			diagram := `{
@@ -208,8 +242,7 @@ context "C" {
               "edges": [{"source": "command-1", "target": "event-1", "type": "flow"}]
             }`
 
-			model, err := importer.ImportDiagram([]byte(diagram))
-			require.NoError(t, err)
+			model := importDiagram(t, diagram)
 
 			require.Equal(t,
 				[]*ast.Flow{{CommandName: "DoThing", EventName: "ThingDone"}},
@@ -228,10 +261,26 @@ context "C" {
               "edges": [{"source": "event-1", "target": "view-1", "type": "subscription"}]
             }`
 
-			model, err := importer.ImportDiagram([]byte(diagram))
-			require.NoError(t, err)
+			model := importDiagram(t, diagram)
 
 			require.Equal(t, []string{"ThingDone"}, model.Contexts[0].Slices[0].Views[0].Subscribes)
+		})
+
+		t.Run("an event to automation edge drawn in the viewer becomes the automation's activation event", func(t *testing.T) {
+			diagram := `{
+              "model_name": "M",
+              "nodes": [
+                {"id": "context-1", "type": "context", "label": "C", "parentId": null},
+                {"id": "slice-1", "type": "slice", "label": "S", "parentId": "context-1"},
+                {"id": "event-1", "type": "event", "label": "CopyBorrowed", "parentId": "slice-1"},
+                {"id": "auto-1", "type": "automation", "label": "RecallOverdueCopy", "parentId": "slice-1"}
+              ],
+              "edges": [{"source": "event-1", "target": "auto-1", "type": "automation_trigger"}]
+            }`
+
+			model := importDiagram(t, diagram)
+
+			require.Equal(t, "CopyBorrowed", model.Contexts[0].Slices[0].Automations[0].OnEvent)
 		})
 
 		t.Run("a reads edge drawn in the viewer becomes a translation's reads and not an automation's", func(t *testing.T) {
@@ -250,8 +299,7 @@ context "C" {
               ]
             }`
 
-			model, err := importer.ImportDiagram([]byte(diagram))
-			require.NoError(t, err)
+			model := importDiagram(t, diagram)
 
 			slice := model.Contexts[0].Slices[0]
 			require.Equal(t, "MemberLoansView", slice.Translations[0].Reads)
@@ -272,8 +320,7 @@ context "C" {
               "edges": [{"source": "event-1", "target": "view-1", "type": "subscription"}]
             }`
 
-			model, err := importer.ImportDiagram([]byte(diagram))
-			require.NoError(t, err)
+			model := importDiagram(t, diagram)
 
 			require.Equal(t, []string{"ThingDone"}, model.Contexts[0].Slices[0].Views[0].Subscribes)
 		})
@@ -289,8 +336,7 @@ context "C" {
               "edges": [{"source": "command-1", "target": "event-gone", "type": "flow"}]
             }`
 
-			model, err := importer.ImportDiagram([]byte(diagram))
-			require.NoError(t, err)
+			model := importDiagram(t, diagram)
 
 			require.Empty(t, model.Contexts[0].Slices[0].Flows)
 		})
@@ -308,8 +354,7 @@ context "C" {
               "edges": [{"source": "command-1", "target": "event-1", "type": "flow"}]
             }`
 
-			model, err := importer.ImportDiagram([]byte(diagram))
-			require.NoError(t, err)
+			model := importDiagram(t, diagram)
 
 			require.Empty(t, model.Contexts[0].Slices[0].Flows)
 			require.Empty(t, model.Contexts[0].Slices[1].Flows)
@@ -335,16 +380,14 @@ context "C" {
               "edges": []
             }`
 
-			model, err := importer.ImportDiagram([]byte(diagram))
-			require.NoError(t, err)
+			model := importDiagram(t, diagram)
 
 			require.Equal(t, "UI", model.Contexts[0].Slices[0].Trigger.Kind)
 		})
 
 		t.Run("an empty document yields a model with no contexts", func(t *testing.T) {
-			model, err := importer.ImportDiagram([]byte(`{"model_name":"Empty","nodes":[],"edges":[]}`))
+			model := importDiagram(t, `{"model_name":"Empty","nodes":[],"edges":[]}`)
 
-			require.NoError(t, err)
 			require.Equal(t, &ast.Model{Name: "Empty"}, model)
 		})
 	})

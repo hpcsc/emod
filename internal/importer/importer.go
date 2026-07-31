@@ -32,7 +32,7 @@ type diagramNode struct {
 	Actor          string          `json:"actor,omitempty"`
 	Reads          string          `json:"reads,omitempty"`
 	Subscribes     []string        `json:"subscribes,omitempty"`
-	OnEvent        string          `json:"trigger_event,omitempty"`
+	OnEvent        string          `json:"on_event,omitempty"`
 	Command        string          `json:"command,omitempty"`
 	TargetContext  string          `json:"target_context,omitempty"`
 	ExternalSystem string          `json:"external_system,omitempty"`

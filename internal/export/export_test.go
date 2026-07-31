@@ -1842,7 +1842,7 @@ func TestExport(t *testing.T) {
 			require.Equal(t, "GuestCheckedOut", subs[1])
 		})
 
-		t.Run("automation node with trigger_event/reads/command/target_context", func(t *testing.T) {
+		t.Run("automation node with on_event/reads/command/target_context", func(t *testing.T) {
 			model := &ast.Model{
 				Name: "Test",
 				Contexts: []*ast.Context{
@@ -1886,7 +1886,7 @@ func TestExport(t *testing.T) {
 			require.Equal(t, "automation", auto["type"])
 			require.Equal(t, "slice-1", auto["parentId"])
 			require.Equal(t, "OrderNotifier", auto["label"])
-			require.Equal(t, "OrderPlaced", auto["trigger_event"])
+			require.Equal(t, "OrderPlaced", auto["on_event"])
 			require.Equal(t, "PendingOrdersView", auto["reads"])
 			require.Equal(t, "SendNotification", auto["command"])
 			require.Equal(t, "Notifications", auto["target_context"])
