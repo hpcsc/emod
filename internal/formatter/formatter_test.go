@@ -876,7 +876,7 @@ func TestFormat(t *testing.T) {
 				parse            func(*testing.T) *ast.Model
 				activationEvents []string
 			}{
-				{"specs stated in an aggregate slice and in a dcb context slice", test.SpecLibraryLendingModel, nil},
+				{"automations in both slice homes, reading views across contexts", test.AutomationReadsLibraryLendingModel, test.AutomationReadsLibraryLendingActivationEvents},
 				{"an automation among all four slice patterns", test.HotelReservationModel, []string{"ReservationMade"}},
 			} {
 				t.Run(testCase.shape, func(t *testing.T) {
