@@ -3,7 +3,10 @@ package validator
 import (
 	"cmp"
 	"fmt"
+	"regexp"
 	"slices"
+	"strings"
+	"time"
 
 	"github.com/hpcsc/emod/internal/ast"
 	"github.com/hpcsc/emod/internal/diagnostic"
@@ -26,6 +29,7 @@ func Validate(model *ast.Model) []*diagnostic.Entry {
 	for _, slice := range index.slices {
 		diags = append(diags, decidesOnDiagnostics(slice, index)...)
 	}
+	diags = append(diags, scheduleExpressionDiagnostics(index.slices)...)
 	diags = append(diags, redeclaredInvariantDiagnostics(model)...)
 	diags = append(diags, unresolvedRejectionDiagnostics(model)...)
 	diags = append(diags, orphanDiagnostics(index.commandPositions, index.referencedCommands,
@@ -199,6 +203,16 @@ func comparePositions(a, b ast.Position) int {
 	return cmp.Compare(a.Column, b.Column)
 }
 
+func sortInDeclarationOrder(diags []*diagnostic.Entry) {
+	position := func(d *diagnostic.Entry) ast.Position {
+		return ast.Position{Filename: d.Filename, Line: d.Line, Column: d.Column}
+	}
+
+	slices.SortStableFunc(diags, func(a, b *diagnostic.Entry) int {
+		return comparePositions(position(a), position(b))
+	})
+}
+
 type invariantScope struct {
 	kind       string
 	name       string
@@ -284,14 +298,11 @@ func unresolvedRejectionDiagnostics(model *ast.Model) []*diagnostic.Entry {
 // slices in collections separate from its aggregates', which loses whether they
 // were written before or after them.
 func scopedInvariantDiagnostics(found []scopedInvariant, messageFormat string) []*diagnostic.Entry {
-	slices.SortStableFunc(found, func(a, b scopedInvariant) int {
-		return comparePositions(a.pos, b.pos)
-	})
-
 	diags := make([]*diagnostic.Entry, 0, len(found))
 	for _, f := range found {
 		diags = append(diags, errorAt(f.pos, messageFormat, f.name, f.scope.kind, f.scope.name))
 	}
+	sortInDeclarationOrder(diags)
 
 	return diags
 }
@@ -349,14 +360,11 @@ func specDiagnostics(spec *ast.Spec, index *modelIndex) []*diagnostic.Entry {
 		undeclared = append(undeclared, undeclaredSpecEvents(outcome.Events, index)...)
 	}
 
-	slices.SortStableFunc(undeclared, func(a, b undeclaredSpecReference) int {
-		return comparePositions(a.element.NamePos, b.element.NamePos)
-	})
-
 	diags := make([]*diagnostic.Entry, 0, len(undeclared))
 	for _, ref := range undeclared {
 		diags = append(diags, errorAt(ref.element.NamePos, "%s %q does not exist", ref.kind, ref.element.Name))
 	}
+	sortInDeclarationOrder(diags)
 
 	return diags
 }
@@ -370,6 +378,61 @@ func undeclaredSpecEvents(refs []*ast.SpecElement, index *modelIndex) []undeclar
 	}
 
 	return undeclared
+}
+
+// The findings are sorted because a slice hangs off an aggregate or off a
+// `mode dcb` context directly, and the two collections lose which of them was
+// written first.
+func scheduleExpressionDiagnostics(modelSlices []*ast.Slice) []*diagnostic.Entry {
+	var diags []*diagnostic.Entry
+	for _, slice := range modelSlices {
+		for _, auto := range slice.Automations {
+			if auto.Schedule == "" || isWellFormedSchedule(auto.Schedule) {
+				continue
+			}
+			diags = append(diags, errorAt(auto.SchedulePos,
+				"schedule expression %q is neither a Go duration nor a five-field cron expression", auto.Schedule))
+		}
+	}
+	sortInDeclarationOrder(diags)
+
+	return diags
+}
+
+// Only the shape is judged: a value the field's position does not allow — a
+// minute of 99, a weekday spelled XYZ — is the scheduler's to reject, not the
+// model's.
+func isWellFormedSchedule(expression string) bool {
+	return isGoDuration(expression) || isCronExpression(expression)
+}
+
+func isGoDuration(expression string) bool {
+	_, err := time.ParseDuration(expression)
+
+	return err == nil
+}
+
+const (
+	cronFieldCount   = 5
+	cronNumberOrName = `(?:\d+|[A-Za-z]{3})`
+	cronFieldTerm    = `(?:\*|` + cronNumberOrName + `)(?:-` + cronNumberOrName + `)?(?:/\d+)?`
+)
+
+var cronFieldPattern = regexp.MustCompile(`^` + cronFieldTerm + `(?:,` + cronFieldTerm + `)*$`)
+
+func isCronExpression(expression string) bool {
+	fields := strings.Fields(expression)
+	if len(fields) != cronFieldCount {
+		return false
+	}
+
+	for _, field := range fields {
+		if !cronFieldPattern.MatchString(field) {
+			return false
+		}
+	}
+
+	return true
 }
 
 func tagFieldRefDiagnostics(slice *ast.Slice, index *modelIndex) []*diagnostic.Entry {

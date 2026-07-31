@@ -104,6 +104,43 @@ context "Orders" {
 		require.Contains(t, err.Error(), "does not exist")
 	})
 
+	t.Run("returns error naming the schedule expression of neither accepted form", func(t *testing.T) {
+		input := `model "Reservations"
+context "Reservations" {
+  aggregate "Reservation" {
+    slice "Expire Stale Holds" {
+      command ExpireHold {
+        fields {
+          holdId string required
+        }
+      }
+      event HoldExpired {
+        fields {
+          holdId    string    required
+          expiredAt timestamp required
+        }
+      }
+      automation StaleHoldExpirer {
+        every "nightly"
+        command ExpireHold
+      }
+      flow {
+        command -> event: ExpireHold -> HoldExpired
+      }
+    }
+  }
+}
+`
+		path := writeTemp(t, "malformed_schedule.emod", input)
+
+		err := cli.RunValidate(path, "text")
+
+		var lintErr *cli.LintError
+		require.True(t, errors.As(err, &lintErr))
+		require.Equal(t, 1, lintErr.ExitCode)
+		require.Contains(t, err.Error(), `schedule expression "nightly" is neither a Go duration nor a five-field cron expression`)
+	})
+
 	t.Run("returns error naming the invariant an aggregate declares twice", func(t *testing.T) {
 		input := `model "Library Lending"
 context "Lending" {

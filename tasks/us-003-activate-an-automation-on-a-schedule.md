@@ -4,7 +4,7 @@
 - [x] Task 1: Parse `every "<expr>"` and require exactly one activation form
 - [x] Task 2: Emit `every` from `emod fmt`
 - [x] Task 3: Accept `every` inside an automation in the tree-sitter grammar
-- [ ] Task 4: Reject an `every` expression that is neither a duration nor a five-field cron
+- [x] Task 4: Reject an `every` expression that is neither a duration nor a five-field cron
 - [ ] Task 5: Share a fixture whose automations activate on a schedule
 - [ ] Task 6: Carry the schedule into the JSON, CUE and embedded schema exports
 - [ ] Task 7: Carry the schedule through the diagram document and back

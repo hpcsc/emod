@@ -3,6 +3,7 @@
 package validator_test
 
 import (
+	"fmt"
 	"testing"
 
 	"github.com/hpcsc/emod/internal/ast"
@@ -1080,6 +1081,184 @@ func TestValidate(t *testing.T) {
 
 			require.Len(t, diags, 1)
 			require.Equal(t, `reservations.emod:14: view "ReservationMade" does not exist`, diags[0].String())
+		})
+	})
+
+	t.Run("schedule expressions", func(t *testing.T) {
+		const companionRejected = `reservations.emod:12: schedule expression "nightly" is neither a Go duration nor a five-field cron expression`
+
+		t.Run("a fixed interval stated as a Go duration is accepted", func(t *testing.T) {
+			for _, expression := range []string{"5m", "1h", "1h30m"} {
+				t.Run(expression, func(t *testing.T) {
+					require.Empty(t, validator.Validate(modelSchedulingEvery(expression)))
+					require.Equal(t, []string{companionRejected},
+						reportedLines(validator.Validate(modelSchedulingEvery(expression, "nightly"))))
+				})
+			}
+		})
+
+		t.Run("a wall-clock schedule stated as a five-field cron expression is accepted", func(t *testing.T) {
+			for _, expression := range []string{"0 2 * * *", "*/15 * * * *", "0 0 1,15 * 1-5", "0 9 * * MON-FRI", "0 0 1 jan *"} {
+				t.Run(expression, func(t *testing.T) {
+					require.Empty(t, validator.Validate(modelSchedulingEvery(expression)))
+					require.Equal(t, []string{companionRejected},
+						reportedLines(validator.Validate(modelSchedulingEvery(expression, "nightly"))))
+				})
+			}
+		})
+
+		t.Run("a cron field outside the range its position allows is left to the scheduler", func(t *testing.T) {
+			require.Empty(t, validator.Validate(modelSchedulingEvery("99 * * * *")))
+			require.Equal(t, []string{companionRejected},
+				reportedLines(validator.Validate(modelSchedulingEvery("99 * * * *", "nightly"))))
+		})
+
+		t.Run("an expression of neither form is reported on the every entry, not on the automation name", func(t *testing.T) {
+			model := &ast.Model{
+				Contexts: []*ast.Context{
+					{
+						Name: "Reservations",
+						Aggregates: []*ast.Aggregate{
+							{
+								Name: "Reservation",
+								Slices: []*ast.Slice{
+									{
+										Name: "Expire Stale Holds",
+										Automations: []*ast.Automation{
+											{
+												Name:        "StaleHoldExpirer",
+												NamePos:     ast.Position{Filename: "reservations.emod", Line: 6, Column: 18},
+												Schedule:    "nightly",
+												SchedulePos: ast.Position{Filename: "reservations.emod", Line: 7, Column: 15},
+											},
+										},
+									},
+								},
+							},
+						},
+					},
+				},
+			}
+
+			diags := validator.Validate(model)
+
+			require.Equal(t, []string{
+				`reservations.emod:7: schedule expression "nightly" is neither a Go duration nor a five-field cron expression`,
+			}, reportedLines(diags))
+			require.Equal(t, 15, diags[0].Column)
+			require.Equal(t, diagnostic.Error, diags[0].Severity)
+			require.Empty(t, diags[0].RuleName)
+		})
+
+		t.Run("a cron expression of any length other than five fields is reported", func(t *testing.T) {
+			for _, tc := range []struct {
+				expression string
+				reported   string
+			}{
+				{
+					expression: "0 2 * *",
+					reported:   `reservations.emod:7: schedule expression "0 2 * *" is neither a Go duration nor a five-field cron expression`,
+				},
+				{
+					expression: "0 2 * * * *",
+					reported:   `reservations.emod:7: schedule expression "0 2 * * * *" is neither a Go duration nor a five-field cron expression`,
+				},
+			} {
+				t.Run(tc.expression, func(t *testing.T) {
+					require.Equal(t, []string{tc.reported},
+						reportedLines(validator.Validate(modelSchedulingEvery(tc.expression))))
+				})
+			}
+		})
+
+		t.Run("an expression of neither form is reported while the duration beside it is not", func(t *testing.T) {
+			model := modelSchedulingEvery("5 minutes", "5m")
+
+			require.Equal(t, []string{
+				`reservations.emod:7: schedule expression "5 minutes" is neither a Go duration nor a five-field cron expression`,
+			}, reportedLines(validator.Validate(model)))
+		})
+
+		t.Run("an automation activated by an event states no expression to reject", func(t *testing.T) {
+			model := &ast.Model{
+				Contexts: []*ast.Context{
+					{
+						Name: "Reservations",
+						Aggregates: []*ast.Aggregate{
+							{
+								Name: "Reservation",
+								Slices: []*ast.Slice{
+									{
+										Name:   "Expire Stale Holds",
+										Events: []*ast.Event{{Name: "HoldPlaced", Source: "external"}},
+										Automations: []*ast.Automation{
+											{
+												Name:       "HoldConfirmer",
+												OnEvent:    "HoldPlaced",
+												OnEventPos: ast.Position{Filename: "reservations.emod", Line: 7, Column: 12},
+											},
+											{
+												Name:        "StaleHoldExpirer",
+												Schedule:    "nightly",
+												SchedulePos: ast.Position{Filename: "reservations.emod", Line: 12, Column: 15},
+											},
+										},
+									},
+								},
+							},
+						},
+					},
+				},
+			}
+
+			require.Equal(t, []string{companionRejected}, reportedLines(validator.Validate(model)))
+		})
+
+		t.Run("expressions in both slice homes are reported in declaration order", func(t *testing.T) {
+			// A context's own slices are walked ahead of its aggregates', so
+			// findings left in collection order come out reversed here.
+			model := &ast.Model{
+				Contexts: []*ast.Context{
+					{
+						Name: "Availability",
+						Mode: "dcb",
+						Aggregates: []*ast.Aggregate{
+							{
+								Name: "Hold",
+								Slices: []*ast.Slice{
+									{
+										Name: "Expire Stale Holds",
+										Automations: []*ast.Automation{
+											{
+												Name:        "StaleHoldExpirer",
+												Schedule:    "nightly",
+												SchedulePos: ast.Position{Filename: "availability.emod", Line: 12, Column: 15},
+											},
+										},
+									},
+								},
+							},
+						},
+						Slices: []*ast.Slice{
+							{
+								Name: "Release Held Rooms",
+								Automations: []*ast.Automation{
+									{
+										Name:        "HeldRoomReleaser",
+										Schedule:    "0 2 * *",
+										SchedulePos: ast.Position{Filename: "availability.emod", Line: 30, Column: 15},
+									},
+								},
+							},
+						},
+					},
+				},
+			}
+
+			require.Equal(t, []string{
+				`availability.emod:12: schedule expression "nightly" is neither a Go duration nor a five-field cron expression`,
+				`availability.emod:30: schedule expression "0 2 * *" is neither a Go duration nor a five-field cron expression`,
+			}, reportedLines(validator.Validate(model)))
 		})
 	})
 
@@ -3103,6 +3282,40 @@ func TestValidate(t *testing.T) {
 			require.Empty(t, diags)
 		})
 	})
+}
+
+// modelSchedulingEvery gives each expression an automation of its own, five
+// lines apart, so a reported line says which expression it is about.
+func modelSchedulingEvery(expressions ...string) *ast.Model {
+	automations := make([]*ast.Automation, 0, len(expressions))
+	for i, expression := range expressions {
+		line := 7 + i*5
+		automations = append(automations, &ast.Automation{
+			Name:        fmt.Sprintf("Processor%d", i+1),
+			NamePos:     ast.Position{Filename: "reservations.emod", Line: line - 1, Column: 18},
+			Schedule:    expression,
+			SchedulePos: ast.Position{Filename: "reservations.emod", Line: line, Column: 15},
+		})
+	}
+
+	return &ast.Model{
+		Contexts: []*ast.Context{
+			{
+				Name: "Reservations",
+				Aggregates: []*ast.Aggregate{
+					{
+						Name: "Reservation",
+						Slices: []*ast.Slice{
+							{
+								Name:        "Expire Stale Holds",
+								Automations: automations,
+							},
+						},
+					},
+				},
+			},
+		},
+	}
 }
 
 func reportedLines(diags []*diagnostic.Entry) []string {
