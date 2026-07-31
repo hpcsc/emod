@@ -1897,18 +1897,9 @@ context "Ctx" {
 
 	t.Run("automations", func(t *testing.T) {
 		t.Run("automation with activation event, command, and target context", func(t *testing.T) {
-			input := `model "Test"
-context "Ctx" {
-  aggregate "Agg" {
-    slice "Slice" {
-      automation ConfirmationEmailReactor {
-        on RoomReserved
+			input := modelWithAutomation("ConfirmationEmailReactor", `        on RoomReserved
         command SendConfirmationEmail
-        target context Notifications
-      }
-    }
-  }
-}`
+        target context Notifications`)
 			tokens, _ := lexer.Scan(input, "test.emod")
 
 			p := parser.New(tokens, "test.emod")
@@ -1925,17 +1916,8 @@ context "Ctx" {
 		})
 
 		t.Run("automation without target context", func(t *testing.T) {
-			input := `model "Test"
-context "Ctx" {
-  aggregate "Agg" {
-    slice "Slice" {
-      automation Reactor {
-        on SomeEvent
-        command SomeCmd
-      }
-    }
-  }
-}`
+			input := modelWithAutomation("Reactor", `        on SomeEvent
+        command SomeCmd`)
 			tokens, _ := lexer.Scan(input, "test.emod")
 
 			p := parser.New(tokens, "test.emod")
@@ -1976,16 +1958,7 @@ context "Ctx" {
 
 			for _, tc := range tests {
 				t.Run(tc.name, func(t *testing.T) {
-					input := fmt.Sprintf(`model "Test"
-context "Ctx" {
-  aggregate "Agg" {
-    slice "Slice" {
-      automation ConfirmationEmailReactor {
-%s
-      }
-    }
-  }
-}`, tc.entries)
+					input := modelWithAutomation("ConfirmationEmailReactor", tc.entries)
 					tokens, lexDiags := lexer.Scan(input, "test.emod")
 					require.Empty(t, lexDiags)
 
@@ -2000,18 +1973,9 @@ context "Ctx" {
 		})
 
 		t.Run("automation declaring on twice keeps the event named last", func(t *testing.T) {
-			input := `model "Test"
-context "Ctx" {
-  aggregate "Agg" {
-    slice "Slice" {
-      automation ConfirmationEmailReactor {
-        on RoomReserved
+			input := modelWithAutomation("ConfirmationEmailReactor", `        on RoomReserved
         on RoomReleased
-        command SendConfirmationEmail
-      }
-    }
-  }
-}`
+        command SendConfirmationEmail`)
 			tokens, lexDiags := lexer.Scan(input, "test.emod")
 			require.Empty(t, lexDiags)
 
@@ -2023,19 +1987,69 @@ context "Ctx" {
 			require.Equal(t, astPositionOf(t, "test.emod", input, "on RoomReleased", "RoomReleased"), automation.OnEventPos)
 		})
 
-		t.Run("an event whose name differs from a keyword only in case is still an event name", func(t *testing.T) {
+		t.Run("automation activating on a schedule records the expression and where it is written", func(t *testing.T) {
+			tests := []struct {
+				name    string
+				entries string
+			}{
+				{
+					name: "as the first entry of the block",
+					entries: `        every "0 2 * * *"
+        command SendConfirmationEmail
+        target context Notifications`,
+				},
+				{
+					name: "after the target context",
+					entries: `        command SendConfirmationEmail
+        target context Notifications
+        every "0 2 * * *"`,
+				},
+			}
+
+			for _, tc := range tests {
+				t.Run(tc.name, func(t *testing.T) {
+					input := modelWithAutomation("NightlyExpirySweep", tc.entries)
+					tokens, lexDiags := lexer.Scan(input, "test.emod")
+					require.Empty(t, lexDiags)
+
+					model, diags := parser.New(tokens, "test.emod").Parse()
+
+					require.Empty(t, diags)
+					automation := model.Contexts[0].Aggregates[0].Slices[0].Automations[0]
+					require.Equal(t, "0 2 * * *", automation.Schedule)
+					require.Equal(t, astPositionOf(t, "test.emod", input, `every "0 2 * * *"`, `"0 2 * * *"`), automation.SchedulePos)
+					require.Equal(t, "", automation.OnEvent)
+				})
+			}
+		})
+
+		t.Run("automation declaring every twice keeps the schedule written last", func(t *testing.T) {
+			input := modelWithAutomation("NightlyExpirySweep", `        every "0 2 * * *"
+        every "5m"
+        command ExpireHold`)
+			tokens, lexDiags := lexer.Scan(input, "test.emod")
+			require.Empty(t, lexDiags)
+
+			model, diags := parser.New(tokens, "test.emod").Parse()
+
+			require.Empty(t, diags)
+			automation := model.Contexts[0].Aggregates[0].Slices[0].Automations[0]
+			require.Equal(t, "5m", automation.Schedule)
+			require.Equal(t, astPositionOf(t, "test.emod", input, `every "5m"`, `"5m"`), automation.SchedulePos)
+		})
+
+		t.Run("an automation activating on a schedule sits beside one activating on an event", func(t *testing.T) {
 			input := `model "Test"
 context "Ctx" {
   aggregate "Agg" {
     slice "Slice" {
-      event On {
-        fields {
-          reservationId string required
-        }
-      }
       automation ConfirmationEmailReactor {
-        on On
+        on RoomReserved
         command SendConfirmationEmail
+      }
+      automation HoldSweeper {
+        every "5m"
+        command ExpireHold
       }
     }
   }
@@ -2046,10 +2060,51 @@ context "Ctx" {
 			model, diags := parser.New(tokens, "test.emod").Parse()
 
 			require.Empty(t, diags)
-			slice := model.Contexts[0].Aggregates[0].Slices[0]
-			require.Equal(t, "On", slice.Events[0].Name)
-			require.Equal(t, "On", slice.Automations[0].OnEvent)
-			require.Equal(t, astPositionOf(t, "test.emod", input, "on On", "On"), slice.Automations[0].OnEventPos)
+			type activation struct {
+				onEvent  string
+				schedule string
+			}
+			declared := map[string]activation{}
+			for _, automation := range model.Contexts[0].Aggregates[0].Slices[0].Automations {
+				declared[automation.Name] = activation{onEvent: automation.OnEvent, schedule: automation.Schedule}
+			}
+			require.Equal(t, map[string]activation{
+				"ConfirmationEmailReactor": {onEvent: "RoomReserved"},
+				"HoldSweeper":              {schedule: "5m"},
+			}, declared)
+		})
+
+		t.Run("an event whose name differs from a keyword only in case is still an event name", func(t *testing.T) {
+			for _, name := range []string{"On", "Every"} {
+				t.Run(name, func(t *testing.T) {
+					input := fmt.Sprintf(`model "Test"
+context "Ctx" {
+  aggregate "Agg" {
+    slice "Slice" {
+      event %[1]s {
+        fields {
+          reservationId string required
+        }
+      }
+      automation ConfirmationEmailReactor {
+        on %[1]s
+        command SendConfirmationEmail
+      }
+    }
+  }
+}`, name)
+					tokens, lexDiags := lexer.Scan(input, "test.emod")
+					require.Empty(t, lexDiags)
+
+					model, diags := parser.New(tokens, "test.emod").Parse()
+
+					require.Empty(t, diags)
+					slice := model.Contexts[0].Aggregates[0].Slices[0]
+					require.Equal(t, name, slice.Events[0].Name)
+					require.Equal(t, name, slice.Automations[0].OnEvent)
+					require.Equal(t, astPositionOf(t, "test.emod", input, "on "+name, name), slice.Automations[0].OnEventPos)
+				})
+			}
 		})
 
 		t.Run("automation reading a view records the view name and where it is written", func(t *testing.T) {
@@ -2080,16 +2135,7 @@ context "Ctx" {
 
 			for _, tc := range tests {
 				t.Run(tc.name, func(t *testing.T) {
-					input := fmt.Sprintf(`model "Test"
-context "Ctx" {
-  aggregate "Agg" {
-    slice "Slice" {
-      automation ConfirmationEmailReactor {
-%s
-      }
-    }
-  }
-}`, tc.entries)
+					input := modelWithAutomation("ConfirmationEmailReactor", tc.entries)
 					tokens, lexDiags := lexer.Scan(input, "test.emod")
 					require.Empty(t, lexDiags)
 
@@ -2104,19 +2150,10 @@ context "Ctx" {
 		})
 
 		t.Run("automation declaring reads twice keeps the view named last", func(t *testing.T) {
-			input := `model "Test"
-context "Ctx" {
-  aggregate "Agg" {
-    slice "Slice" {
-      automation ConfirmationEmailReactor {
-        on RoomReserved
+			input := modelWithAutomation("ConfirmationEmailReactor", `        on RoomReserved
         reads StaleConfirmationsView
         reads PendingConfirmationsView
-        command SendConfirmationEmail
-      }
-    }
-  }
-}`
+        command SendConfirmationEmail`)
 			tokens, lexDiags := lexer.Scan(input, "test.emod")
 			require.Empty(t, lexDiags)
 
@@ -2162,17 +2199,8 @@ context "Ctx" {
 		})
 
 		t.Run("automation is stored in slice AST node", func(t *testing.T) {
-			input := `model "Test"
-context "Ctx" {
-  aggregate "Agg" {
-    slice "Slice" {
-      automation Reactor {
-        on SomeEvent
-        command SomeCmd
-      }
-    }
-  }
-}`
+			input := modelWithAutomation("Reactor", `        on SomeEvent
+        command SomeCmd`)
 			tokens, _ := lexer.Scan(input, "test.emod")
 
 			p := parser.New(tokens, "test.emod")
@@ -2319,16 +2347,7 @@ context "Ctx" {
 		})
 
 		t.Run("automation with unrecognized keyword in body produces diagnostic", func(t *testing.T) {
-			input := `model "Test"
-context "Ctx" {
-  aggregate "Agg" {
-    slice "Slice" {
-      automation Reactor {
-        unknown_thing foo
-      }
-    }
-  }
-}`
+			input := modelWithAutomation("Reactor", `        unknown_thing foo`)
 			tokens, _ := lexer.Scan(input, "test.emod")
 
 			p := parser.New(tokens, "test.emod")
@@ -2882,29 +2901,22 @@ context "Lending" {
 
 		t.Run("an automation entry naming nothing is reported once and the entry below it still parses", func(t *testing.T) {
 			tests := []struct {
-				name    string
-				keyword string
-				entry   string
+				name       string
+				keyword    string
+				entry      string
+				reportedAt string
 			}{
-				{name: "reads with nothing after it", keyword: "reads", entry: "        reads"},
-				{name: "on with nothing after it", keyword: "on", entry: "        on"},
-				{name: "on naming a quoted string", keyword: "on", entry: `        on "RoomReserved"`},
+				{name: "reads with nothing after it", keyword: "reads", entry: "        reads", reportedAt: "reads"},
+				{name: "on with nothing after it", keyword: "on", entry: "        on", reportedAt: "on"},
+				{name: "on naming a quoted string", keyword: "on", entry: `        on "RoomReserved"`, reportedAt: "on"},
+				{name: "every naming a bare identifier", keyword: "every", entry: "        every nightly", reportedAt: "nightly"},
 			}
 
 			for _, tc := range tests {
 				t.Run(tc.name, func(t *testing.T) {
-					input := fmt.Sprintf(`model "Test"
-context "Ctx" {
-  aggregate "Agg" {
-    slice "Slice" {
-      automation ConfirmationEmailReactor {
-%s
+					input := modelWithAutomation("ConfirmationEmailReactor", tc.entry+`
         on RoomReserved
-        command SendConfirmationEmail
-      }
-    }
-  }
-}`, tc.entry)
+        command SendConfirmationEmail`)
 					tokens, lexDiags := lexer.Scan(input, "test.emod")
 					require.Empty(t, lexDiags)
 
@@ -2913,20 +2925,21 @@ context "Ctx" {
 					require.Len(t, diags, 1)
 					require.Regexp(t, `\b`+tc.keyword+`\b`, diags[0].Message)
 					require.Contains(t, diags[0].Message, "automation")
-					line, column := positionOf(t, input, tc.entry, tc.keyword)
+					line, column := positionOf(t, input, tc.entry, tc.reportedAt)
 					require.Equal(t, line, diags[0].Line)
 					require.Equal(t, column, diags[0].Column)
 
 					automation := model.Contexts[0].Aggregates[0].Slices[0].Automations[0]
 					require.Equal(t, "RoomReserved", automation.OnEvent)
 					require.Equal(t, "", automation.Reads)
+					require.Equal(t, "", automation.Schedule)
 					require.Equal(t, "SendConfirmationEmail", automation.Command)
 				})
 			}
 		})
 
 		t.Run("an automation entry naming nothing as the last entry still closes the automation and its slice", func(t *testing.T) {
-			for _, keyword := range []string{"reads", "on"} {
+			for _, keyword := range []string{"reads", "on", "every"} {
 				t.Run(keyword+" with nothing after it", func(t *testing.T) {
 					input := fmt.Sprintf(`model "Test"
 context "Ctx" {
@@ -2961,20 +2974,11 @@ context "Ctx" {
 		})
 
 		t.Run("a trigger entry inside an automation is rejected once and the entries below it still parse", func(t *testing.T) {
-			input := `model "Test"
-context "Ctx" {
-  aggregate "Agg" {
-    slice "Slice" {
-      automation ConfirmationEmailReactor {
-        on RoomReserved
+			input := modelWithAutomation("ConfirmationEmailReactor", `        on RoomReserved
         trigger RoomReleased
         reads PendingConfirmationsView
         command SendConfirmationEmail
-        target context Notifications
-      }
-    }
-  }
-}`
+        target context Notifications`)
 			tokens, lexDiags := lexer.Scan(input, "test.emod")
 			require.Empty(t, lexDiags)
 
@@ -3026,7 +3030,7 @@ context "Ctx" {
 				diags[0].String())
 			declaredLine, _ := positionOf(t, input, "automation ConfirmationEmailReactor", "ConfirmationEmailReactor")
 			require.Equal(t,
-				fmt.Sprintf("test.emod:%d: automation block requires an activation event declared with on", declaredLine),
+				fmt.Sprintf("test.emod:%d: automation block requires either an on event or an every schedule", declaredLine),
 				diags[1].String())
 
 			slice := model.Contexts[0].Aggregates[0].Slices[0]
@@ -3041,18 +3045,9 @@ context "Ctx" {
 		})
 
 		t.Run("an unrecognised entry inside an automation names the entries an automation accepts", func(t *testing.T) {
-			input := `model "Test"
-context "Ctx" {
-  aggregate "Agg" {
-    slice "Slice" {
-      automation ConfirmationEmailReactor {
-        on RoomReserved
+			input := modelWithAutomation("ConfirmationEmailReactor", `        on RoomReserved
         command SendConfirmationEmail
-        raeds
-      }
-    }
-  }
-}`
+        raeds`)
 			tokens, lexDiags := lexer.Scan(input, "test.emod")
 			require.Empty(t, lexDiags)
 
@@ -3060,51 +3055,59 @@ context "Ctx" {
 
 			require.Len(t, diags, 1)
 			require.Contains(t, diags[0].Message, "automation")
-			for _, entry := range []string{"description", "on", "reads", "command", "target"} {
+			for _, entry := range []string{"description", "on", "every", "reads", "command", "target"} {
 				require.Regexp(t, `\b`+entry+`\b`, diags[0].Message)
 			}
 			require.NotRegexp(t, `\btrigger\b`, diags[0].Message)
 		})
 
-		t.Run("automation missing activation event produces error", func(t *testing.T) {
-			input := `model "Test"
-context "Ctx" {
-  aggregate "Agg" {
-    slice "Slice" {
-      automation Reactor {
-        command SomeCmd
-      }
-    }
-  }
-}`
-			tokens, _ := lexer.Scan(input, "test.emod")
-
-			p := parser.New(tokens, "test.emod")
-			_, errs := p.Parse()
-
-			found := false
-			for _, e := range errs {
-				if e.Message == "automation block requires an activation event declared with on" {
-					found = true
-					require.Equal(t, "test.emod", e.Filename)
-					require.Equal(t, 5, e.Line)
-					break
-				}
+		t.Run("an automation not declaring exactly one activation form is reported once at its name naming both", func(t *testing.T) {
+			tests := []struct {
+				name         string
+				entries      string
+				wantOnEvent  string
+				wantSchedule string
+			}{
+				{
+					name:    "declaring neither an activation event nor a schedule",
+					entries: `        command SendConfirmationEmail`,
+				},
+				{
+					name: "declaring both an activation event and a schedule",
+					entries: `        on RoomReserved
+        every "5m"
+        command SendConfirmationEmail`,
+					wantOnEvent:  "RoomReserved",
+					wantSchedule: "5m",
+				},
 			}
-			require.True(t, found, "expected diagnostic 'automation block requires an activation event declared with on', got: %v", errs)
+
+			for _, tc := range tests {
+				t.Run(tc.name, func(t *testing.T) {
+					input := modelWithAutomation("ConfirmationEmailReactor", tc.entries)
+					tokens, lexDiags := lexer.Scan(input, "test.emod")
+					require.Empty(t, lexDiags)
+
+					model, diags := parser.New(tokens, "test.emod").Parse()
+
+					require.Len(t, diags, 1)
+					require.Equal(t, "test.emod", diags[0].Filename)
+					line, column := positionOf(t, input, "automation ConfirmationEmailReactor", "ConfirmationEmailReactor")
+					require.Equal(t, line, diags[0].Line)
+					require.Equal(t, column, diags[0].Column)
+					require.Regexp(t, `\bon\b`, diags[0].Message)
+					require.Regexp(t, `\bevery\b`, diags[0].Message)
+
+					automation := model.Contexts[0].Aggregates[0].Slices[0].Automations[0]
+					require.Equal(t, tc.wantOnEvent, automation.OnEvent)
+					require.Equal(t, tc.wantSchedule, automation.Schedule)
+					require.Equal(t, "SendConfirmationEmail", automation.Command)
+				})
+			}
 		})
 
 		t.Run("automation missing command produces error", func(t *testing.T) {
-			input := `model "Test"
-context "Ctx" {
-  aggregate "Agg" {
-    slice "Slice" {
-      automation Reactor {
-        on SomeEvent
-      }
-    }
-  }
-}`
+			input := modelWithAutomation("Reactor", `        on SomeEvent`)
 			tokens, _ := lexer.Scan(input, "test.emod")
 
 			p := parser.New(tokens, "test.emod")
@@ -3140,14 +3143,14 @@ context "Ctx" {
 			foundActivation := false
 			foundCommand := false
 			for _, e := range errs {
-				if e.Message == "automation block requires an activation event declared with on" {
+				if e.Message == "automation block requires either an on event or an every schedule" {
 					foundActivation = true
 				}
 				if e.Message == "automation block requires a command" {
 					foundCommand = true
 				}
 			}
-			require.True(t, foundActivation, "expected diagnostic 'automation block requires an activation event declared with on', got: %v", errs)
+			require.True(t, foundActivation, "expected diagnostic 'automation block requires either an on event or an every schedule', got: %v", errs)
 			require.True(t, foundCommand, "expected diagnostic 'automation block requires a command', got: %v", errs)
 		})
 
@@ -3316,13 +3319,13 @@ context "Ctx" {
 
 			found := false
 			for _, e := range errs {
-				if e.Message == "automation block requires an activation event declared with on" {
+				if e.Message == "automation block requires either an on event or an every schedule" {
 					found = true
 					require.Equal(t, 5, e.Line, "error should reference the automation declaration line (5), not the closing brace line")
 					break
 				}
 			}
-			require.True(t, found, "expected diagnostic 'automation block requires an activation event declared with on', got: %v", errs)
+			require.True(t, found, "expected diagnostic 'automation block requires either an on event or an every schedule', got: %v", errs)
 		})
 
 		t.Run("event with source external and provider name", func(t *testing.T) {
@@ -5301,6 +5304,19 @@ context "Ctx" {
     }
   }
 }`, name, fieldType, modifier)
+}
+
+func modelWithAutomation(name, entries string) string {
+	return fmt.Sprintf(`model "Test"
+context "Ctx" {
+  aggregate "Agg" {
+    slice "Slice" {
+      automation %s {
+%s
+      }
+    }
+  }
+}`, name, entries)
 }
 
 func modelWithInvariant(name, statement string) string {

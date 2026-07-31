@@ -46,6 +46,7 @@ const (
 	KeywordThen
 	KeywordRejected
 	KeywordOn
+	KeywordEvery
 
 	// Literals and identifiers
 	Identifier
@@ -107,6 +108,7 @@ var keywords = map[string]Kind{
 	"then":            KeywordThen,
 	"rejected":        KeywordRejected,
 	"on":              KeywordOn,
+	"every":           KeywordEvery,
 }
 
 var keywordNames = invertKeywords()

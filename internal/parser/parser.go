@@ -200,7 +200,7 @@ func (p *Instance) parseDeclaration(keyword lexer.Kind) *declaration {
 
 	for !p.check(lexer.CloseBrace) && !p.isAtEnd() {
 		if p.check(lexer.KeywordDescription) {
-			p.parseDescriptionInto(construct, &decl.description, &decl.descriptionPos)
+			p.parseQuotedEntryInto(construct, &decl.description, &decl.descriptionPos)
 		} else {
 			p.error(fmt.Sprintf("expected description in %s, got %q", construct, p.peek().Value))
 			p.advance()
@@ -252,7 +252,7 @@ func (p *Instance) parseContext() *ast.Context {
 	for !p.check(lexer.CloseBrace) && !p.isAtEnd() {
 		switch {
 		case p.check(lexer.KeywordDescription):
-			p.parseDescriptionInto("context", &context.Description, &context.DescriptionPos)
+			p.parseQuotedEntryInto("context", &context.Description, &context.DescriptionPos)
 		case p.check(lexer.KeywordInvariant):
 			if invariant := p.parseInvariant(); invariant != nil {
 				context.Invariants = append(context.Invariants, invariant)
@@ -305,7 +305,7 @@ func (p *Instance) parseAggregate() *ast.Aggregate {
 
 	for !p.check(lexer.CloseBrace) && !p.isAtEnd() {
 		if p.check(lexer.KeywordDescription) {
-			p.parseDescriptionInto("aggregate", &aggregate.Description, &aggregate.DescriptionPos)
+			p.parseQuotedEntryInto("aggregate", &aggregate.Description, &aggregate.DescriptionPos)
 		} else if p.check(lexer.KeywordInvariant) {
 			if invariant := p.parseInvariant(); invariant != nil {
 				aggregate.Invariants = append(aggregate.Invariants, invariant)
@@ -381,7 +381,7 @@ func (p *Instance) parseSlice() *ast.Slice {
 
 	for !p.check(lexer.CloseBrace) && !p.isAtEnd() {
 		if p.check(lexer.KeywordDescription) {
-			p.parseDescriptionInto("slice", &slice.Description, &slice.DescriptionPos)
+			p.parseQuotedEntryInto("slice", &slice.Description, &slice.DescriptionPos)
 		} else if p.check(lexer.KeywordCommand) {
 			if cmd := p.parseCommand(); cmd != nil {
 				slice.Commands = append(slice.Commands, cmd)
@@ -580,7 +580,7 @@ func (p *Instance) parseTrigger() *ast.Trigger {
 
 	for !p.check(lexer.CloseBrace) && !p.isAtEnd() {
 		if p.check(lexer.KeywordDescription) {
-			p.parseDescriptionInto("trigger", &trigger.Description, &trigger.DescriptionPos)
+			p.parseQuotedEntryInto("trigger", &trigger.Description, &trigger.DescriptionPos)
 		} else if p.check(lexer.KeywordActor) {
 			p.advance()
 			if !p.check(lexer.Identifier) {
@@ -641,7 +641,7 @@ func (p *Instance) parseCommand() *ast.Command {
 
 	for !p.check(lexer.CloseBrace) && !p.isAtEnd() {
 		if p.check(lexer.KeywordDescription) {
-			p.parseDescriptionInto("command", &command.Description, &command.DescriptionPos)
+			p.parseQuotedEntryInto("command", &command.Description, &command.DescriptionPos)
 		} else if p.check(lexer.KeywordFields) {
 			command.Fields = p.parseFields()
 		} else if p.check(lexer.KeywordDecidesOn) {
@@ -927,7 +927,7 @@ func (p *Instance) parseEvent() *ast.Event {
 
 	for !p.check(lexer.CloseBrace) && !p.isAtEnd() {
 		if p.check(lexer.KeywordDescription) {
-			p.parseDescriptionInto("event", &event.Description, &event.DescriptionPos)
+			p.parseQuotedEntryInto("event", &event.Description, &event.DescriptionPos)
 		} else if p.check(lexer.KeywordFields) {
 			event.Fields = p.parseFields()
 		} else if p.check(lexer.KeywordSource) {
@@ -992,7 +992,7 @@ func (p *Instance) parseView() *ast.View {
 
 	for !p.check(lexer.CloseBrace) && !p.isAtEnd() {
 		if p.check(lexer.KeywordDescription) {
-			p.parseDescriptionInto("view", &view.Description, &view.DescriptionPos)
+			p.parseQuotedEntryInto("view", &view.Description, &view.DescriptionPos)
 		} else if p.check(lexer.KeywordFields) {
 			view.Fields = p.parseFields()
 		} else if p.check(lexer.KeywordSubscribes) {
@@ -1050,8 +1050,11 @@ func (p *Instance) parseAutomation() *ast.Automation {
 	closeTok := p.advance()
 	automation.ClosePos = p.position(closeTok)
 
-	if automation.OnEvent == "" {
-		p.errorAtPosition(automation.NamePos, "automation block requires an activation event declared with on")
+	switch {
+	case automation.OnEvent != "" && automation.Schedule != "":
+		p.errorAtPosition(automation.NamePos, "automation block cannot declare both on and every")
+	case automation.OnEvent == "" && automation.Schedule == "":
+		p.errorAtPosition(automation.NamePos, "automation block requires either an on event or an every schedule")
 	}
 	if automation.Command == "" {
 		p.errorAtPosition(automation.NamePos, "automation block requires a command")
@@ -1063,9 +1066,11 @@ func (p *Instance) parseAutomation() *ast.Automation {
 func (p *Instance) parseAutomationEntry(automation *ast.Automation) {
 	switch p.peek().Type {
 	case lexer.KeywordDescription:
-		p.parseDescriptionInto("automation", &automation.Description, &automation.DescriptionPos)
+		p.parseQuotedEntryInto("automation", &automation.Description, &automation.DescriptionPos)
 	case lexer.KeywordOn:
 		p.parseIdentifierEntryInto("automation", &automation.OnEvent, &automation.OnEventPos)
+	case lexer.KeywordEvery:
+		p.parseQuotedEntryInto("automation", &automation.Schedule, &automation.SchedulePos)
 	case lexer.KeywordTrigger:
 		triggerTok := p.advance()
 		p.errorAt(triggerTok, "trigger is not an automation entry: name the activation event with on")
@@ -1099,7 +1104,7 @@ func (p *Instance) parseAutomationEntry(automation *ast.Automation) {
 		automation.TargetContext = ctxTok.Value
 		automation.TargetContextPos = p.position(ctxTok)
 	default:
-		p.error(fmt.Sprintf("expected description, on, reads, command, or target in automation, got %q", p.peek().Value))
+		p.error(fmt.Sprintf("expected description, on, every, reads, command, or target in automation, got %q", p.peek().Value))
 		p.advance()
 	}
 }
@@ -1128,7 +1133,7 @@ func (p *Instance) parseTranslation() *ast.Translation {
 
 	for !p.check(lexer.CloseBrace) && !p.isAtEnd() {
 		if p.check(lexer.KeywordDescription) {
-			p.parseDescriptionInto("translation", &translation.Description, &translation.DescriptionPos)
+			p.parseQuotedEntryInto("translation", &translation.Description, &translation.DescriptionPos)
 		} else if p.check(lexer.KeywordExternalSystem) {
 			p.advance()
 			if !p.check(lexer.String) {
@@ -1388,17 +1393,17 @@ func (p *Instance) parseFlowEntry() *ast.Flow {
 	}
 }
 
-func (p *Instance) parseDescriptionInto(construct string, description *string, position *ast.Position) {
+func (p *Instance) parseQuotedEntryInto(construct string, value *string, position *ast.Position) {
 	keywordTok := p.advance()
 	if !p.check(lexer.String) {
 		offending := p.peek()
-		p.errorAt(offending, fmt.Sprintf("expected quoted string after description in %s, got %q", construct, offending.Value))
+		p.errorAt(offending, fmt.Sprintf("expected quoted string after %s in %s, got %q", keywordTok.Value, construct, offending.Value))
 		p.skipRestOfLineOrBlockEnd(keywordTok)
 		return
 	}
 
 	tok := p.advance()
-	*description, *position = tok.Value, p.position(tok)
+	*value, *position = tok.Value, p.position(tok)
 }
 
 func (p *Instance) parseIdentifierEntryInto(construct string, name *string, position *ast.Position) {
