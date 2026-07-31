@@ -312,7 +312,7 @@ func TestExport(t *testing.T) {
 			autos := s["automations"].([]any)
 			a := autos[0].(map[string]any)
 			require.Equal(t, "OrderNotifier", a["name"])
-			require.Equal(t, "OrderPlaced", a["trigger_event"])
+			require.Equal(t, "OrderPlaced", a["on_event"])
 			require.Equal(t, "SendNotification", a["command"])
 			require.Equal(t, "Notifications", a["target_context"])
 		})
@@ -1077,7 +1077,7 @@ func TestExport(t *testing.T) {
 			require.Equal(t, float64(6), v["close_position"].(map[string]any)["line"])
 		})
 
-		t.Run("includes positions for automation name/trigger/reads/command/target and braces", func(t *testing.T) {
+		t.Run("includes positions for automation name/activation event/reads/command/target and braces", func(t *testing.T) {
 			model := &ast.Model{
 				Name: "Test",
 				Contexts: []*ast.Context{
@@ -1124,7 +1124,7 @@ func TestExport(t *testing.T) {
 			autos := s["automations"].([]any)
 			a := autos[0].(map[string]any)
 			require.Equal(t, float64(5), a["position"].(map[string]any)["line"])
-			require.Equal(t, float64(11), a["trigger_event_position"].(map[string]any)["column"])
+			require.Equal(t, float64(11), a["on_event_position"].(map[string]any)["column"])
 			require.Equal(t, "MyView", a["reads"])
 			require.Equal(t, float64(14), a["reads_position"].(map[string]any)["column"])
 			require.Equal(t, float64(16), a["command_position"].(map[string]any)["column"])
@@ -1223,8 +1223,8 @@ func TestExport(t *testing.T) {
 			keyOrder := emittedKeyOrder(t, raw)
 			require.Equal(t, []string{
 				"name", "position",
-				"trigger_event_position", "reads_position", "command_position",
-				"trigger_event", "reads", "command",
+				"on_event_position", "reads_position", "command_position",
+				"on_event", "reads", "command",
 			}, keyOrder["Auto"])
 			require.Equal(t, []string{
 				"name", "position",
@@ -3193,7 +3193,7 @@ func TestExport(t *testing.T) {
 				"an undescribed model must not carry the key, not even empty-valued")
 		})
 
-		t.Run("states the view an automation reads between the event that activates it and the command", func(t *testing.T) {
+		t.Run("states the event an automation activates on after its description and ahead of the view it reads and the command", func(t *testing.T) {
 			model := &ast.Model{
 				Name: "Lending",
 				Contexts: []*ast.Context{{
@@ -3201,10 +3201,11 @@ func TestExport(t *testing.T) {
 					Slices: []*ast.Slice{{
 						Name: "Chase Overdue Copy",
 						Automations: []*ast.Automation{{
-							Name:    "RecallOverdueCopy",
-							OnEvent: "CopyBorrowed",
-							Reads:   "MemberLoansView",
-							Command: "RecallCopy",
+							Name:        "RecallOverdueCopy",
+							Description: "Recalls a copy a waiting member asked for",
+							OnEvent:     "CopyBorrowed",
+							Reads:       "MemberLoansView",
+							Command:     "RecallCopy",
 						}},
 					}},
 				}},
@@ -3214,7 +3215,7 @@ func TestExport(t *testing.T) {
 			require.NoError(t, err)
 
 			require.Regexp(t,
-				`trigger_event: "CopyBorrowed"\n\s+reads: "MemberLoansView"\n\s+command: "RecallCopy"`,
+				`description: "Recalls a copy a waiting member asked for"\n\s+on_event: "CopyBorrowed"\n\s+reads: "MemberLoansView"\n\s+command: "RecallCopy"`,
 				string(raw))
 		})
 
@@ -3373,7 +3374,7 @@ func TestExport(t *testing.T) {
 				}}, slice["views"])
 			})
 
-			t.Run("keeps an automation's trigger, command and target context", func(t *testing.T) {
+			t.Run("keeps an automation's activation event, command and target context", func(t *testing.T) {
 				cueBin := lookupCue(t)
 				model := &ast.Model{
 					Name: "Test",
@@ -3398,7 +3399,7 @@ func TestExport(t *testing.T) {
 
 				require.Equal(t, []any{map[string]any{
 					"name":           "OrderNotifier",
-					"trigger_event":  "OrderPlaced",
+					"on_event":       "OrderPlaced",
 					"command":        "SendNotification",
 					"target_context": "Notifications",
 				}}, slice["automations"])
@@ -3585,6 +3586,20 @@ func TestExport(t *testing.T) {
 			require.ElementsMatch(t, namesCarrying(libraryLendingAutomationReads, "reads"),
 				positionedAutomationReads(docs[jsonFormat]),
 				"the automation that reads no view is filed no position to read it from either")
+		})
+
+		t.Run("CUE and JSON exports agree on the event each automation activates on", func(t *testing.T) {
+			cueBin := lookupCue(t)
+			activated := test.AutomationReadsLibraryLendingModel(t)
+
+			require.Equal(t, test.AutomationReadsLibraryLendingActivationEvents,
+				test.DeclaredActivationEvents(activated),
+				"the model has to activate on an event in both slice homes, or the comparisons below say nothing")
+
+			for format, doc := range exportedDocs(t, cueBin, activated) {
+				require.Equal(t, test.AutomationReadsLibraryLendingActivationEvents,
+					exportedActivationEvents(doc), "%s export", format)
+			}
 		})
 
 		t.Run("an automation reading no view reaches neither export, while its slice's trigger still reads one", func(t *testing.T) {
@@ -4156,13 +4171,60 @@ func translationReadsByOwner(doc map[string]any) map[string][]map[string]any {
 // declaration order across both slice homes, so a walk reaching only one of them
 // reads back short.
 func diagramAutomationReads(doc map[string]any) []string {
-	var views []string
-	for _, node := range nodesOfType(doc["nodes"].([]any), "automation") {
-		if reads, readsAView := node["reads"].(string); readsAView {
-			views = append(views, reads)
+	return statedUnder(nodesOfType(doc["nodes"].([]any), "automation"), "reads")
+}
+
+// exportedActivationEvents names the event every automation of a decoded model
+// document activates on, in declaration order across both slice homes, so a
+// rewrite that drops one or reaches only one of the homes reads back short.
+func exportedActivationEvents(doc map[string]any) []string {
+	return statedUnder(exportedAutomations(doc), "on_event")
+}
+
+func exportedAutomations(doc map[string]any) []map[string]any {
+	var automations []map[string]any
+	for _, slice := range exportedSlices(doc) {
+		automations = append(automations, objectsUnder(slice, "automations")...)
+	}
+	return automations
+}
+
+// exportedSlices returns the slices of a decoded model document in the order the
+// writer emitted them: those an aggregate holds ahead of those the context
+// declares directly. Walking the document by key would visit them in map order,
+// which says nothing about declaration order.
+func exportedSlices(doc map[string]any) []map[string]any {
+	var slices []map[string]any
+	for _, context := range objectsUnder(doc, "contexts") {
+		for _, aggregate := range objectsUnder(context, "aggregates") {
+			slices = append(slices, objectsUnder(aggregate, "slices")...)
+		}
+		slices = append(slices, objectsUnder(context, "slices")...)
+	}
+	return slices
+}
+
+// statedUnder leaves out the objects stating nothing under key, so a list read
+// back against a transcribed one counts what the document says rather than how
+// many objects it holds.
+func statedUnder(objects []map[string]any, key string) []string {
+	var stated []string
+	for _, object := range objects {
+		if value, states := object[key].(string); states {
+			stated = append(stated, value)
 		}
 	}
-	return views
+	return stated
+}
+
+func objectsUnder(parent map[string]any, key string) []map[string]any {
+	items, _ := parent[key].([]any)
+
+	var objects []map[string]any
+	for _, item := range items {
+		objects = append(objects, item.(map[string]any))
+	}
+	return objects
 }
 
 // positionedAutomationReads names the automations a decoded document filed the

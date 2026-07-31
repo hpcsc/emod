@@ -159,14 +159,14 @@ type jsonAutomation struct {
 	Name                  string         `json:"name"`
 	Description           string         `json:"description,omitempty"`
 	Position              *jsonPosition  `json:"position,omitempty"`
-	OnEventPosition       *jsonPosition  `json:"trigger_event_position,omitempty"`
+	OnEventPosition       *jsonPosition  `json:"on_event_position,omitempty"`
 	ReadsPosition         *jsonPosition  `json:"reads_position,omitempty"`
 	CommandPosition       *jsonPosition  `json:"command_position,omitempty"`
 	TargetContextPosition *jsonPosition  `json:"target_context_position,omitempty"`
 	OpenPosition          *jsonPosition  `json:"open_position,omitempty"`
 	ClosePosition         *jsonPosition  `json:"close_position,omitempty"`
 	Comments              []*jsonComment `json:"comments,omitempty"`
-	OnEvent               string         `json:"trigger_event,omitempty"`
+	OnEvent               string         `json:"on_event,omitempty"`
 	Reads                 string         `json:"reads,omitempty"`
 	Command               string         `json:"command,omitempty"`
 	TargetContext         string         `json:"target_context,omitempty"`
@@ -1369,7 +1369,7 @@ func (w *cueWriter) writeAutomation(a *ast.Automation) {
 	w.writeComments(a.Comments)
 	w.line("name: %q", a.Name)
 	w.lineIfSet("description", a.Description)
-	w.lineIfSet("trigger_event", a.OnEvent)
+	w.lineIfSet("on_event", a.OnEvent)
 	w.lineIfSet("reads", a.Reads)
 	w.lineIfSet("command", a.Command)
 	w.lineIfSet("target_context", a.TargetContext)
