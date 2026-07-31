@@ -410,6 +410,71 @@ context "Reading Room" mode dcb {
 }
 `
 
+const scheduledAutomationEmod = `model "Order Fulfilment"
+
+context "Fulfilment" {
+  aggregate "Shipment" {
+    slice "Sweep Expired Holds" {
+      command ReleaseExpiredHolds {
+        fields {
+          holdId string required
+        }
+      }
+
+      event ExpiredHoldsReleased {
+        fields {
+          holdId string required
+          releasedAt timestamp required
+        }
+      }
+
+      automation NightlyExpirySweep {
+        description "Releases the holds nobody paid for overnight"
+        command ReleaseExpiredHolds
+            every "0 2 * * *"
+      }
+
+      flow {
+        command -> event: ReleaseExpiredHolds -> ExpiredHoldsReleased
+      }
+    }
+  }
+}
+`
+
+const scheduledAutomationFormattedEmod = `emod 1
+model "Order Fulfilment"
+
+context "Fulfilment" {
+  aggregate "Shipment" {
+    slice "Sweep Expired Holds" {
+      command ReleaseExpiredHolds {
+        fields {
+          holdId string required
+        }
+      }
+
+      event ExpiredHoldsReleased {
+        fields {
+          holdId     string    required
+          releasedAt timestamp required
+        }
+      }
+
+      automation NightlyExpirySweep {
+        description "Releases the holds nobody paid for overnight"
+        every "0 2 * * *"
+        command ReleaseExpiredHolds
+      }
+
+      flow {
+        command -> event: ReleaseExpiredHolds -> ExpiredHoldsReleased
+      }
+    }
+  }
+}
+`
+
 const unparsableEmod = `foobar {
 }
 `
@@ -513,6 +578,12 @@ func TestFmt(t *testing.T) {
 		path := writeTemp(t, "specs.emod", specEmod)
 
 		requireFmtSettlesOn(t, path, specFormattedEmod)
+	})
+
+	t.Run("moves an automation's schedule to its canonical line and settles after one run", func(t *testing.T) {
+		path := writeTemp(t, "scheduled-automation.emod", scheduledAutomationEmod)
+
+		requireFmtSettlesOn(t, path, scheduledAutomationFormattedEmod)
 	})
 
 	t.Run("check mode returns nil when file is already formatted", func(t *testing.T) {

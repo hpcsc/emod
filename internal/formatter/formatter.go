@@ -29,6 +29,13 @@ func (w *writer) lineIfSet(level int, format, value string) {
 	w.line(level, format, value)
 }
 
+func (w *writer) quotedLineIfSet(level int, format, value string) {
+	if value == "" {
+		return
+	}
+	w.line(level, format, quoted(value))
+}
+
 func (w *writer) blankLine() {
 	w.b.WriteString("\n")
 }
@@ -66,10 +73,7 @@ func (w *writer) writeComments(comments []*ast.Comment, level int) {
 }
 
 func (w *writer) writeDescription(description string, level int) {
-	if description == "" {
-		return
-	}
-	w.line(level, "description %s", quoted(description))
+	w.quotedLineIfSet(level, "description %s", description)
 }
 
 func (w *writer) writeInvariants(invariants []*ast.Invariant, level int) {
@@ -345,6 +349,7 @@ func (w *writer) writeAutomation(auto *ast.Automation, level int) {
 	w.line(level, "automation %s {", auto.Name)
 	w.writeDescription(auto.Description, level+1)
 	w.lineIfSet(level+1, "on %s", auto.OnEvent)
+	w.quotedLineIfSet(level+1, "every %s", auto.Schedule)
 	w.lineIfSet(level+1, "reads %s", auto.Reads)
 	w.lineIfSet(level+1, "command %s", auto.Command)
 	w.lineIfSet(level+1, "target context %s", auto.TargetContext)
@@ -355,9 +360,7 @@ func (w *writer) writeTranslation(trans *ast.Translation, level int) {
 	w.writeComments(trans.Comments, level)
 	w.line(level, "translation %s {", trans.Name)
 	w.writeDescription(trans.Description, level+1)
-	if trans.ExternalSystem != "" {
-		w.line(level+1, "external_system %s", quoted(trans.ExternalSystem))
-	}
+	w.quotedLineIfSet(level+1, "external_system %s", trans.ExternalSystem)
 	w.lineIfSet(level+1, "reads %s", trans.Reads)
 	w.lineIfSet(level+1, "command %s", trans.Command)
 	if trans.Event != nil {

@@ -416,6 +416,62 @@ func TestFormat(t *testing.T) {
 			}
 		})
 
+		t.Run("a schedule is written under the description of the automation declaring it and invented for no sibling", func(t *testing.T) {
+			source := expirySweepSliceSource(
+				`      automation NightlyExpirySweep {`,
+				`        description "Releases the holds nobody paid for overnight"`,
+				`        reads ExpiringHoldsView`,
+				`        command ReleaseExpiredHolds`,
+				`        target context Inventory`,
+				`            every "0 2 * * *"`,
+				`      }`,
+				``,
+				`      automation LedgerSync {`,
+				`        command SyncLedger`,
+				`        every "15m"`,
+				`      }`,
+				``,
+				`      automation OrderNotifier {`,
+				`        on OrderPlaced`,
+				`        command SendNotification`,
+				`      }`,
+			)
+
+			result := formatter.Format(parseModel(t, source, "scheduled-automation.emod"))
+
+			expected := strings.Join([]string{
+				`emod 1`,
+				`model "Order Fulfilment"`,
+				``,
+				`context "Fulfilment" {`,
+				`  aggregate "Shipment" {`,
+				`    slice "Sweep Expired Holds" {`,
+				`      automation NightlyExpirySweep {`,
+				`        description "Releases the holds nobody paid for overnight"`,
+				`        every "0 2 * * *"`,
+				`        reads ExpiringHoldsView`,
+				`        command ReleaseExpiredHolds`,
+				`        target context Inventory`,
+				`      }`,
+				``,
+				`      automation LedgerSync {`,
+				`        every "15m"`,
+				`        command SyncLedger`,
+				`      }`,
+				``,
+				`      automation OrderNotifier {`,
+				`        on OrderPlaced`,
+				`        command SendNotification`,
+				`      }`,
+				`    }`,
+				`  }`,
+				`}`,
+				``,
+			}, "\n")
+
+			require.Equal(t, expected, result)
+		})
+
 		t.Run("formats translation block with nested event", func(t *testing.T) {
 			model := &ast.Model{
 				Name: "Test",
@@ -886,6 +942,70 @@ func TestFormat(t *testing.T) {
 
 					test.RequireEqual(t, original, reparsed, ignoreFormatterNormalizations)
 					require.Equal(t, testCase.activationEvents, test.DeclaredActivationEvents(reparsed))
+				})
+			}
+		})
+
+		t.Run("round-trip: the schedule one automation runs on and the event its sibling activates on both survive formatting", func(t *testing.T) {
+			source := expirySweepSliceSource(
+				`      automation NightlyExpirySweep {`,
+				`        description "Releases the holds nobody paid for overnight"`,
+				`        every "0 2 * * *"`,
+				`        reads ExpiringHoldsView`,
+				`        command ReleaseExpiredHolds`,
+				`        target context Inventory`,
+				`      }`,
+				``,
+				`      automation OrderNotifier {`,
+				`        on OrderPlaced`,
+				`        command SendNotification`,
+				`      }`,
+			)
+			original := parseModel(t, source, "scheduled-automation.emod")
+
+			reparsed := requireStableFormat(t, original)
+
+			test.RequireEqual(t, original, reparsed, ignoreFormatterNormalizations)
+			test.RequireEqual(t, []*ast.Automation{
+				{
+					Name:          "NightlyExpirySweep",
+					Description:   "Releases the holds nobody paid for overnight",
+					Schedule:      "0 2 * * *",
+					Reads:         "ExpiringHoldsView",
+					Command:       "ReleaseExpiredHolds",
+					TargetContext: "Inventory",
+				},
+				{
+					Name:    "OrderNotifier",
+					OnEvent: "OrderPlaced",
+					Command: "SendNotification",
+				},
+			}, reparsed.Contexts[0].Aggregates[0].Slices[0].Automations, ignoreFormatterNormalizations)
+		})
+
+		t.Run("round-trip: a schedule survives text that quoting could mangle", func(t *testing.T) {
+			for _, testCase := range []struct {
+				hazard     string
+				expression string
+			}{
+				{"backslash", `0 2 * * * per C:\ops\nightly`},
+				{"tab", "0 2 * * *\tnightly sweep"},
+				{"newline", "0 2 * * *\nnightly sweep"},
+				{"percent", "0 2 * * * while under 10% load"},
+				{"non-ascii", "0 2 * * * ≤ once a night"},
+			} {
+				t.Run(testCase.hazard, func(t *testing.T) {
+					source := expirySweepSliceSource(
+						`      automation NightlyExpirySweep {`,
+						`        every "`+testCase.expression+`"`,
+						`        command ReleaseExpiredHolds`,
+						`      }`,
+					)
+
+					reparsed := requireStableFormat(t, parseModel(t, source, "scheduled-automation.emod"))
+
+					require.Equal(t, testCase.expression,
+						reparsed.Contexts[0].Aggregates[0].Slices[0].Automations[0].Schedule)
 				})
 			}
 		})
@@ -3516,18 +3636,28 @@ func parseFixture(t *testing.T, filename string) *ast.Model {
 }
 
 func orderNotifierSource(automationBody ...string) string {
+	return fulfilmentSliceSource("Notify Customer", slices.Concat(
+		[]string{`      automation OrderNotifier {`},
+		automationBody,
+		[]string{`      }`},
+	))
+}
+
+func expirySweepSliceSource(sliceBody ...string) string {
+	return fulfilmentSliceSource("Sweep Expired Holds", sliceBody)
+}
+
+func fulfilmentSliceSource(sliceName string, sliceBody []string) string {
 	return strings.Join(slices.Concat(
 		[]string{
 			`model "Order Fulfilment"`,
 			``,
 			`context "Fulfilment" {`,
 			`  aggregate "Shipment" {`,
-			`    slice "Notify Customer" {`,
-			`      automation OrderNotifier {`,
+			`    slice "` + sliceName + `" {`,
 		},
-		automationBody,
+		sliceBody,
 		[]string{
-			`      }`,
 			`    }`,
 			`  }`,
 			`}`,
