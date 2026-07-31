@@ -1191,7 +1191,7 @@ func TestExport(t *testing.T) {
 			require.Equal(t, float64(7), nestedEvent["position"].(map[string]any)["line"])
 		})
 
-		t.Run("files the view an automation reads under the same key order a translation's is filed under", func(t *testing.T) {
+		t.Run("files an automation's schedule and the view it reads in the key order a translation files its entries in", func(t *testing.T) {
 			at := func(column int) ast.Position {
 				return ast.Position{Filename: "test.emod", Line: 5, Column: column}
 			}
@@ -1201,9 +1201,13 @@ func TestExport(t *testing.T) {
 					Name: "Ctx",
 					Slices: []*ast.Slice{{
 						Name: "S",
+						// The parser rejects an automation stating both an activation
+						// event and a schedule, but records both, so one object here
+						// puts both keys into the single order read back below.
 						Automations: []*ast.Automation{{
 							Name: "Auto", NamePos: at(5),
 							OnEvent: "Evt", OnEventPos: at(11),
+							Schedule: "0 9 * * *", SchedulePos: at(13),
 							Reads: "MyView", ReadsPos: at(14),
 							Command: "DoIt", CommandPos: at(16),
 						}},
@@ -1223,8 +1227,8 @@ func TestExport(t *testing.T) {
 			keyOrder := emittedKeyOrder(t, raw)
 			require.Equal(t, []string{
 				"name", "position",
-				"on_event_position", "reads_position", "command_position",
-				"on_event", "reads", "command",
+				"on_event_position", "every_position", "reads_position", "command_position",
+				"on_event", "every", "reads", "command",
 			}, keyOrder["Auto"])
 			require.Equal(t, []string{
 				"name", "position",
@@ -3552,6 +3556,10 @@ func TestExport(t *testing.T) {
 			requireConformsToSchema(t, lookupCue(t), test.AutomationReadsLibraryLendingModel(t))
 		})
 
+		t.Run("a model whose automations run on a schedule conforms to the schema's Model definition", func(t *testing.T) {
+			requireConformsToSchema(t, lookupCue(t), test.AutomationScheduleLibraryLendingModel(t))
+		})
+
 		t.Run("CUE and JSON exports describe the same model", func(t *testing.T) {
 			requireBothFormatsAgree(t, lookupCue(t), buildFullModel())
 		})
@@ -3599,6 +3607,45 @@ func TestExport(t *testing.T) {
 			for format, doc := range exportedDocs(t, cueBin, activated) {
 				require.Equal(t, test.AutomationReadsLibraryLendingActivationEvents,
 					exportedActivationEvents(doc), "%s export", format)
+			}
+		})
+
+		t.Run("CUE and JSON exports agree on the schedule each automation runs on and on the events the rest activate on", func(t *testing.T) {
+			cueBin := lookupCue(t)
+			scheduled := test.AutomationScheduleLibraryLendingModel(t)
+
+			require.Equal(t, test.AutomationScheduleLibraryLendingSchedules,
+				test.DeclaredSchedules(scheduled),
+				"the model has to run on a schedule in both slice homes, or the comparisons below say nothing")
+
+			requireBothFormatsAgree(t, cueBin, scheduled)
+
+			for format, doc := range exportedDocs(t, cueBin, scheduled) {
+				require.Equal(t, test.AutomationScheduleLibraryLendingSchedules,
+					exportedSchedules(doc), "%s export", format)
+				require.Equal(t, test.AutomationScheduleLibraryLendingActivationEvents,
+					exportedActivationEvents(doc), "%s export", format)
+			}
+		})
+
+		t.Run("the schedule keys reach neither export of a model whose automations activate on events instead", func(t *testing.T) {
+			cueBin := lookupCue(t)
+			scheduled := test.AutomationScheduleLibraryLendingModel(t)
+			activated := test.AutomationReadsLibraryLendingModel(t)
+
+			require.Equal(t, test.AutomationScheduleLibraryLendingSchedules, test.DeclaredSchedules(scheduled),
+				"the scheduled model has to state a cadence, or finding the keys nowhere proves nothing")
+			require.Empty(t, test.DeclaredSchedules(activated),
+				"the model read back for absence must state no cadence of its own")
+
+			scheduleKeys := []string{"every", "every_position"}
+			scheduledDocs := exportedDocs(t, cueBin, scheduled)
+			require.ElementsMatch(t, scheduleKeys, textAnywhere(scheduledDocs[jsonFormat], scheduleKeys))
+			require.Equal(t, []string{"every"}, textAnywhere(scheduledDocs[cueFormat], scheduleKeys),
+				"the CUE export carries no positions, so the value key is the only one there to find")
+
+			for format, doc := range exportedDocs(t, cueBin, activated) {
+				require.Empty(t, textAnywhere(doc, scheduleKeys), "%s export", format)
 			}
 		})
 
@@ -4179,6 +4226,13 @@ func diagramAutomationReads(doc map[string]any) []string {
 // rewrite that drops one or reaches only one of the homes reads back short.
 func exportedActivationEvents(doc map[string]any) []string {
 	return statedUnder(exportedAutomations(doc), "on_event")
+}
+
+// exportedSchedules names the cadence every automation of a decoded model
+// document runs on, in declaration order across both slice homes, so a writer
+// that drops one or reaches only one of the homes reads back short.
+func exportedSchedules(doc map[string]any) []string {
+	return statedUnder(exportedAutomations(doc), "every")
 }
 
 func exportedAutomations(doc map[string]any) []map[string]any {

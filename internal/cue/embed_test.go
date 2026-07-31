@@ -120,6 +120,17 @@ func TestSchema(t *testing.T) {
 		require.Contains(t, string(output), "trigger_event")
 	})
 
+	t.Run("rejects an automation whose schedule is stated under a key the schema does not declare", func(t *testing.T) {
+		cueBin := requireCue(t)
+
+		output, err := vetAgainstModel(t, cueBin, strings.Replace(fullModelJSON,
+			`"every": "0 2 * * *"`,
+			`"schedule": "0 2 * * *"`, 1))
+
+		require.Error(t, err, "schema accepted an automation keyed schedule")
+		require.Contains(t, string(output), "schedule")
+	})
+
 	t.Run("rejects a flow that names only one side", func(t *testing.T) {
 		cueBin := requireCue(t)
 
@@ -189,6 +200,12 @@ const fullModelJSON = `{
           "reads": "RoomsView",
           "command": "SendEmail",
           "target_context": "Notifications"
+        }, {
+          "name": "NightlyRelease",
+          "description": "Frees the rooms nobody claimed overnight",
+          "every": "0 2 * * *",
+          "reads": "RoomsView",
+          "command": "ReleaseRoom"
         }],
         "translations": [{
           "name": "BookingImport",

@@ -160,6 +160,7 @@ type jsonAutomation struct {
 	Description           string         `json:"description,omitempty"`
 	Position              *jsonPosition  `json:"position,omitempty"`
 	OnEventPosition       *jsonPosition  `json:"on_event_position,omitempty"`
+	SchedulePosition      *jsonPosition  `json:"every_position,omitempty"`
 	ReadsPosition         *jsonPosition  `json:"reads_position,omitempty"`
 	CommandPosition       *jsonPosition  `json:"command_position,omitempty"`
 	TargetContextPosition *jsonPosition  `json:"target_context_position,omitempty"`
@@ -167,6 +168,7 @@ type jsonAutomation struct {
 	ClosePosition         *jsonPosition  `json:"close_position,omitempty"`
 	Comments              []*jsonComment `json:"comments,omitempty"`
 	OnEvent               string         `json:"on_event,omitempty"`
+	Schedule              string         `json:"every,omitempty"`
 	Reads                 string         `json:"reads,omitempty"`
 	Command               string         `json:"command,omitempty"`
 	TargetContext         string         `json:"target_context,omitempty"`
@@ -604,6 +606,7 @@ func convertAutomation(a *ast.Automation) *jsonAutomation {
 		Description:           a.Description,
 		Position:              convertPosition(a.NamePos),
 		OnEventPosition:       convertPosition(a.OnEventPos),
+		SchedulePosition:      convertPosition(a.SchedulePos),
 		ReadsPosition:         convertPosition(a.ReadsPos),
 		CommandPosition:       convertPosition(a.CommandPos),
 		TargetContextPosition: convertPosition(a.TargetContextPos),
@@ -611,6 +614,7 @@ func convertAutomation(a *ast.Automation) *jsonAutomation {
 		ClosePosition:         convertPosition(a.ClosePos),
 		Comments:              convertComments(a.Comments),
 		OnEvent:               a.OnEvent,
+		Schedule:              a.Schedule,
 		Reads:                 a.Reads,
 		Command:               a.Command,
 		TargetContext:         a.TargetContext,
@@ -1370,6 +1374,7 @@ func (w *cueWriter) writeAutomation(a *ast.Automation) {
 	w.line("name: %q", a.Name)
 	w.lineIfSet("description", a.Description)
 	w.lineIfSet("on_event", a.OnEvent)
+	w.lineIfSet("every", a.Schedule)
 	w.lineIfSet("reads", a.Reads)
 	w.lineIfSet("command", a.Command)
 	w.lineIfSet("target_context", a.TargetContext)

@@ -56,6 +56,7 @@
 	name:            string
 	description?:    string
 	on_event?:       string
+	every?:          string
 	reads?:          string
 	command?:        string
 	target_context?: string
