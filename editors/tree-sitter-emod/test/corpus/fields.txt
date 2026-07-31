@@ -1,5 +1,5 @@
 ========================
-Field named after every keyword inside a fields block
+Field named after each keyword inside a fields block
 ========================
 
 context "C" {
@@ -43,6 +43,7 @@ context "C" {
         then string required
         rejected string required
         on string required
+        every string required
       }
     }
   }
@@ -58,6 +59,10 @@ context "C" {
       (slice_definition
         (string)
         (fields_block
+          (field_line
+            (any_identifier)
+            (any_identifier)
+            (any_identifier))
           (field_line
             (any_identifier)
             (any_identifier)
