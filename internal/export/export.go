@@ -667,6 +667,7 @@ type jsonDiagramNode struct {
 	Reads          string            `json:"reads,omitempty"`
 	Subscribes     []string          `json:"subscribes,omitempty"`
 	OnEvent        string            `json:"on_event,omitempty"`
+	Schedule       string            `json:"every,omitempty"`
 	Command        string            `json:"command,omitempty"`
 	TargetContext  string            `json:"target_context,omitempty"`
 	ExternalSystem string            `json:"external_system,omitempty"`
@@ -844,6 +845,7 @@ func collectSliceNodes(
 			ParentID:      &sliceID,
 			Position:      convertPosition(a.NamePos),
 			OnEvent:       a.OnEvent,
+			Schedule:      a.Schedule,
 			Reads:         a.Reads,
 			Command:       a.Command,
 			TargetContext: a.TargetContext,

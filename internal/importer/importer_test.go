@@ -8,6 +8,7 @@ import (
 	"testing"
 
 	"github.com/hpcsc/emod/internal/ast"
+	"github.com/hpcsc/emod/internal/diagnostic"
 	"github.com/hpcsc/emod/internal/export"
 	"github.com/hpcsc/emod/internal/formatter"
 	"github.com/hpcsc/emod/internal/importer"
@@ -44,6 +45,30 @@ func importDiagram(t *testing.T, document string) *ast.Model {
 	model, err := importer.ImportDiagram([]byte(document))
 	require.NoError(t, err)
 	return model
+}
+
+func savedTextDiagnostics(model *ast.Model) []*diagnostic.Entry {
+	tokens, scanDiags := lexer.Scan(formatter.Format(model), "saved.emod")
+	_, parseDiags := parser.New(tokens, "saved.emod").Parse()
+	return append(scanDiags, parseDiags...)
+}
+
+// automationNodeKeying binds the label and the value of a document's single
+// automation node once, so the pair of documents a caller renders from it
+// differs in nothing but the key the reader is asked for.
+func automationNodeKeying(label, value string) func(key string) string {
+	return func(key string) string {
+		return fmt.Sprintf(`{
+      "model_name": "M",
+      "nodes": [
+        {"id": "context-1", "type": "context", "label": "C", "parentId": null},
+        {"id": "slice-1", "type": "slice", "label": "S", "parentId": "context-1"},
+        {"id": "auto-1", "type": "automation", "label": %q, "parentId": "slice-1",
+         %q: %q}
+      ],
+      "edges": []
+    }`, label, key, value)
+	}
 }
 
 func TestImportDiagram(t *testing.T) {
@@ -166,6 +191,63 @@ context "C" {
 			require.Equal(t, source, formatter.Format(importFrom(t, source)))
 		})
 
+		t.Run("preserves the cadence a scheduled automation runs on, beside the event the automation under it activates on", func(t *testing.T) {
+			source := `emod 1
+model "M"
+
+context "C" {
+  aggregate "A" {
+    slice "Chase Overdue Copy" {
+      command RemindMember {
+        fields {
+          loanId string required
+        }
+      }
+
+      event MemberReminded {
+        fields {
+          loanId string required
+        }
+      }
+
+      automation RemindMemberEachMorning {
+        every "0 9 * * *"
+        command RemindMember
+      }
+
+      automation RecallOnSecondReminder {
+        on MemberReminded
+        command RemindMember
+      }
+
+      flow {
+        command -> event: RemindMember -> MemberReminded
+      }
+    }
+  }
+}
+`
+			require.Equal(t, source, formatter.Format(importFrom(t, source)))
+		})
+
+		t.Run("keeps the cadence every scheduled automation runs on and the event the rest activate on, from both slice homes", func(t *testing.T) {
+			scheduled := test.AutomationScheduleLibraryLendingModel(t)
+
+			require.Equal(t, test.AutomationScheduleLibraryLendingSchedules, test.DeclaredSchedules(scheduled),
+				"the model has to run on a schedule in both slice homes, or the comparisons below run over a copy of itself")
+			require.Equal(t, test.AutomationScheduleLibraryLendingActivationEvents, test.DeclaredActivationEvents(scheduled),
+				"the model has to activate on an event beside those cadences, or the comparisons below say nothing about the two forms travelling together")
+
+			imported := importExported(t, scheduled)
+
+			require.Equal(t, test.AutomationScheduleLibraryLendingSchedules, test.DeclaredSchedules(imported))
+			require.Equal(t, test.AutomationScheduleLibraryLendingActivationEvents, test.DeclaredActivationEvents(imported))
+
+			carried := test.AutomationScheduleLibraryLendingModel(t)
+			stripWhatDiagramJSONDrops(carried)
+			require.Equal(t, formatter.Format(carried), formatter.Format(imported))
+		})
+
 		t.Run("keeps the view every automation reads and the event each activates on, from both slice homes", func(t *testing.T) {
 			reading := test.AutomationReadsLibraryLendingModel(t)
 			unread := test.WithoutAutomationReads(reading)
@@ -207,18 +289,7 @@ context "C" {
 
 	t.Run("node metadata", func(t *testing.T) {
 		t.Run("an automation activates on the event stated under on_event and on none stated under trigger_event", func(t *testing.T) {
-			documentKeying := func(activationEventKey string) string {
-				return fmt.Sprintf(`{
-              "model_name": "M",
-              "nodes": [
-                {"id": "context-1", "type": "context", "label": "C", "parentId": null},
-                {"id": "slice-1", "type": "slice", "label": "S", "parentId": "context-1"},
-                {"id": "auto-1", "type": "automation", "label": "RecallOverdueCopy", "parentId": "slice-1",
-                 %q: "CopyBorrowed"}
-              ],
-              "edges": []
-            }`, activationEventKey)
-			}
+			documentKeying := automationNodeKeying("RecallOverdueCopy", "CopyBorrowed")
 
 			keyedOnEvent := importDiagram(t, documentKeying("on_event"))
 			require.Equal(t, "CopyBorrowed", keyedOnEvent.Contexts[0].Slices[0].Automations[0].OnEvent)
@@ -226,6 +297,17 @@ context "C" {
 			keyedTriggerEvent := importDiagram(t, documentKeying("trigger_event"))
 			require.Empty(t, keyedTriggerEvent.Contexts[0].Slices[0].Automations[0].OnEvent,
 				"a document keyed by anything but on_event states no activation event, or the assertion above passes on a reader that takes both")
+		})
+
+		t.Run("an automation runs on the cadence stated under every and on none stated under schedule", func(t *testing.T) {
+			documentKeying := automationNodeKeying("SweepOverdueLoans", "15m")
+
+			keyedEvery := importDiagram(t, documentKeying("every"))
+			require.Equal(t, "15m", keyedEvery.Contexts[0].Slices[0].Automations[0].Schedule)
+
+			keyedSchedule := importDiagram(t, documentKeying("schedule"))
+			require.Empty(t, keyedSchedule.Contexts[0].Slices[0].Automations[0].Schedule,
+				"a document keyed by anything but every states no cadence, or the assertion above passes on a reader that takes both")
 		})
 	})
 
@@ -281,6 +363,30 @@ context "C" {
 			model := importDiagram(t, diagram)
 
 			require.Equal(t, "CopyBorrowed", model.Contexts[0].Slices[0].Automations[0].OnEvent)
+		})
+
+		t.Run("an event to automation edge drawn onto a scheduled automation leaves it on its cadence and unactivated", func(t *testing.T) {
+			diagram := `{
+              "model_name": "M",
+              "nodes": [
+                {"id": "context-1", "type": "context", "label": "C", "parentId": null},
+                {"id": "slice-1", "type": "slice", "label": "S", "parentId": "context-1"},
+                {"id": "event-1", "type": "event", "label": "CopyBorrowed", "parentId": "slice-1"},
+                {"id": "command-1", "type": "command", "label": "RecallCopy", "parentId": "slice-1"},
+                {"id": "auto-1", "type": "automation", "label": "SweepOverdueLoans", "parentId": "slice-1",
+                 "every": "15m", "command": "RecallCopy"}
+              ],
+              "edges": [{"source": "event-1", "target": "auto-1", "type": "automation_trigger"}]
+            }`
+
+			model := importDiagram(t, diagram)
+
+			require.Equal(t,
+				&ast.Automation{Name: "SweepOverdueLoans", Schedule: "15m", Command: "RecallCopy"},
+				model.Contexts[0].Slices[0].Automations[0])
+
+			require.Empty(t, savedTextDiagnostics(model),
+				"an automation stating a cadence and an activation event together is text emod rejects")
 		})
 
 		t.Run("a reads edge drawn in the viewer becomes a translation's reads and not an automation's", func(t *testing.T) {
@@ -393,6 +499,47 @@ context "C" {
 	})
 }
 
+// stripWhatDiagramJSONDrops removes what ImportDiagram states a diagram document
+// does not carry — comments, context modes, event tags and decides_on clauses —
+// so what remains is the most a round trip through that document can reproduce.
+func stripWhatDiagramJSONDrops(model *ast.Model) {
+	stripComments(model)
+	for _, c := range model.Contexts {
+		c.Mode = ""
+	}
+	forEachSlice(model, stripSliceDecisionMetadata)
+}
+
+// forEachSlice visits both homes a slice has — nested in an aggregate and
+// declared directly on a context — so a strip reaching only one of them leaves
+// the other stating what a round trip cannot reproduce.
+func forEachSlice(model *ast.Model, visit func(*ast.Slice)) {
+	for _, c := range model.Contexts {
+		for _, agg := range c.Aggregates {
+			for _, s := range agg.Slices {
+				visit(s)
+			}
+		}
+		for _, s := range c.Slices {
+			visit(s)
+		}
+	}
+}
+
+func stripSliceDecisionMetadata(s *ast.Slice) {
+	for _, c := range s.Commands {
+		c.DecidesOn = nil
+	}
+	for _, e := range s.Events {
+		e.Tags = nil
+	}
+	for _, tr := range s.Translations {
+		if tr.Event != nil {
+			tr.Event.Tags = nil
+		}
+	}
+}
+
 func stripComments(model *ast.Model) {
 	model.Comments = nil
 	for _, a := range model.Actors {
@@ -402,14 +549,9 @@ func stripComments(model *ast.Model) {
 		c.Comments = nil
 		for _, agg := range c.Aggregates {
 			agg.Comments = nil
-			for _, s := range agg.Slices {
-				stripSliceComments(s)
-			}
-		}
-		for _, s := range c.Slices {
-			stripSliceComments(s)
 		}
 	}
+	forEachSlice(model, stripSliceComments)
 }
 
 func stripSliceComments(s *ast.Slice) {

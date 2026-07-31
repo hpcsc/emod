@@ -3007,6 +3007,28 @@ func TestExport(t *testing.T) {
 			require.Equal(t, unreadDoc["edges"], readingDoc["edges"],
 				"US-005 owns the view→automation edge; one drawn here is that story arriving early, not a regression")
 		})
+
+		t.Run("the cadence a scheduled automation runs on reaches its node, beside the event the rest activate on", func(t *testing.T) {
+			scheduled := test.AutomationScheduleLibraryLendingModel(t)
+
+			require.Equal(t, test.AutomationScheduleLibraryLendingSchedules, test.DeclaredSchedules(scheduled),
+				"the model has to run on a schedule in both slice homes, or the read-back below runs over a copy of itself")
+
+			doc := diagramDocOf(t, scheduled)
+
+			require.Equal(t, test.AutomationScheduleLibraryLendingSchedules, diagramSchedules(doc))
+			require.Equal(t, test.AutomationScheduleLibraryLendingActivationEvents, diagramActivationEvents(doc))
+		})
+
+		t.Run("a scheduled automation draws no activation edge, while the automations activating on an event still draw one", func(t *testing.T) {
+			doc := diagramDocOf(t, test.AutomationScheduleLibraryLendingModel(t))
+
+			require.Equal(t, test.AutomationScheduleLibraryLendingSchedules, diagramSchedules(doc),
+				"the document has to hold the scheduled automations, or one holding none answers the comparison below")
+
+			require.Equal(t, []string{"RecallOnSecondReminder", "RemindReaderOfLoans"}, activationEdgeTargets(doc),
+				"an activation edge needs a source node, and a cadence is not one")
+		})
 	})
 
 	t.Run("diagram json with diagnostics", func(t *testing.T) {
@@ -4213,12 +4235,47 @@ func translationReadsByOwner(doc map[string]any) map[string][]map[string]any {
 	return listsKeyedBy(doc, "translations", "name", readSpec)
 }
 
-// diagramAutomationReads names the view every automation node of a decoded
-// diagram document reads, in the order the nodes were emitted — which follows
-// declaration order across both slice homes, so a walk reaching only one of them
-// reads back short.
+// diagramAutomations keeps the automation nodes of a decoded diagram document,
+// in the order the nodes were emitted — which follows declaration order across
+// both slice homes, so a walk reaching only one of them reads back short.
+func diagramAutomations(doc map[string]any) []map[string]any {
+	return nodesOfType(doc["nodes"].([]any), "automation")
+}
+
 func diagramAutomationReads(doc map[string]any) []string {
-	return statedUnder(nodesOfType(doc["nodes"].([]any), "automation"), "reads")
+	return statedUnder(diagramAutomations(doc), "reads")
+}
+
+func diagramSchedules(doc map[string]any) []string {
+	return statedUnder(diagramAutomations(doc), "every")
+}
+
+func diagramActivationEvents(doc map[string]any) []string {
+	return statedUnder(diagramAutomations(doc), "on_event")
+}
+
+// activationEdgeTargets names the automation each automation_trigger edge of a
+// decoded diagram document points at, in the order the edges were emitted, so an
+// automation the model gives no activating event shows up as a name the list
+// should not hold.
+func activationEdgeTargets(doc map[string]any) []string {
+	labels := nodeLabelsByID(doc)
+
+	var targets []string
+	for _, edge := range objectsUnder(doc, "edges") {
+		if edge["type"] == "automation_trigger" {
+			targets = append(targets, labels[edge["target"].(string)])
+		}
+	}
+	return targets
+}
+
+func nodeLabelsByID(doc map[string]any) map[string]string {
+	labels := make(map[string]string)
+	for _, node := range objectsUnder(doc, "nodes") {
+		labels[node["id"].(string)] = node["label"].(string)
+	}
+	return labels
 }
 
 // exportedActivationEvents names the event every automation of a decoded model

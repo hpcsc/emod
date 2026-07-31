@@ -33,6 +33,7 @@ type diagramNode struct {
 	Reads          string          `json:"reads,omitempty"`
 	Subscribes     []string        `json:"subscribes,omitempty"`
 	OnEvent        string          `json:"on_event,omitempty"`
+	Schedule       string          `json:"every,omitempty"`
 	Command        string          `json:"command,omitempty"`
 	TargetContext  string          `json:"target_context,omitempty"`
 	ExternalSystem string          `json:"external_system,omitempty"`
@@ -207,6 +208,7 @@ func (b *builder) buildSlice(n *diagramNode) *ast.Slice {
 		auto := &ast.Automation{
 			Name:          a.Label,
 			OnEvent:       a.OnEvent,
+			Schedule:      a.Schedule,
 			Reads:         a.Reads,
 			Command:       a.Command,
 			TargetContext: a.TargetContext,
@@ -268,7 +270,10 @@ func (b *builder) foldEdges(edges []*diagramEdge) {
 				view.Subscribes = appendMissing(view.Subscribes, src.Label)
 			}
 		case "automation_trigger":
-			if auto, ok := b.byNode[tgt.ID].(*ast.Automation); ok && auto.OnEvent == "" {
+			// An automation states either an activation event or a schedule, never
+			// both, so an edge drawn onto a scheduled one would produce text the
+			// parser rejects.
+			if auto, ok := b.byNode[tgt.ID].(*ast.Automation); ok && auto.OnEvent == "" && auto.Schedule == "" {
 				auto.OnEvent = src.Label
 			}
 		case "automation_command":

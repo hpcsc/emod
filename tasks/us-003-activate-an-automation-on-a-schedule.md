@@ -7,7 +7,7 @@
 - [x] Task 4: Reject an `every` expression that is neither a duration nor a five-field cron
 - [x] Task 5: Share a fixture whose automations activate on a schedule
 - [x] Task 6: Carry the schedule into the JSON, CUE and embedded schema exports
-- [ ] Task 7: Carry the schedule through the diagram document and back
+- [x] Task 7: Carry the schedule through the diagram document and back
 - [ ] Task 8: Draw a clock badge on a scheduled automation in SVG and draw.io
 - [ ] Task 9: Name the cadence in Mermaid, ASCII and `emod slices`
 - [ ] Task 10: Show a scheduled automation's cadence in the viewer
