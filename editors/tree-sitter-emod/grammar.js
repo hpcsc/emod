@@ -214,14 +214,13 @@ module.exports = grammar({
       ']',
     ),
 
-    // automation Name { trigger Event reads View command Cmd target context Name }
+    // automation Name { on Event reads View command Cmd target context Name }
     automation_definition: $ => seq(
       'automation',
       $.identifier,
       buildDescribedBlock(
         $,
         seq('on', $.any_identifier),
-        seq('trigger', $.any_identifier),
         seq('reads', $.any_identifier),
         seq('command', $.any_identifier),
         seq('target', 'context', $.any_identifier),

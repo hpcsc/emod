@@ -64,7 +64,7 @@ context "Reservations" {
         command -> event: ConfirmReservation -> ReservationMade
       }
       automation AutoConfirm {
-        trigger ReservationMade
+        on ReservationMade
         command ConfirmReservation
       }
     }
@@ -166,7 +166,7 @@ context "Reservations" {
       }
       automation AutoConfirm {
         description "Confirms every reservation the moment it is made"
-        trigger ReservationMade
+        on ReservationMade
         command ConfirmReservation
       }
     }
@@ -269,7 +269,7 @@ context "Discovery" {
         command -> event: ShareSavedSearch -> SavedSearchDefined
       }
       automation AutoShare {
-        trigger SavedSearchDefined
+        on SavedSearchDefined
         command ShareSavedSearch
       }
     }
@@ -644,11 +644,11 @@ context "Lending" {
         }
       }
       automation RemindOnDueDate {
-        trigger CopyBorrowed
+        on CopyBorrowed
         command RemindMember
       }
       automation RecallOverdueCopy {
-        trigger CopyBorrowed
+        on CopyBorrowed
         reads MemberLoansView
         command RecallCopy
       }
@@ -722,12 +722,12 @@ context "Reading Room" mode dcb {
   }
   slice "Close Reading Room" {
     automation FreeDeskAtClosing {
-      trigger DeskClaimed
+      on DeskClaimed
       reads DeskOccupancyView
       command ReleaseDesk
     }
     automation RemindReaderOfLoans {
-      trigger DeskReleased
+      on DeskReleased
       reads MemberLoansView
       command RemindMember
     }

@@ -696,20 +696,10 @@ func (p *Instance) parseDecidesOn() *ast.DecidesOnClause {
 	clause.ClosePos = p.position(closeTok)
 
 	if len(clause.Events) == 0 {
-		p.diagnostics = append(p.diagnostics, &diagnostic.Entry{
-			Filename: clause.OpenPos.Filename,
-			Line:     clause.OpenPos.Line,
-			Column:   clause.OpenPos.Column,
-			Message:  "decides_on block requires an events clause",
-		})
+		p.errorAtPosition(clause.OpenPos, "decides_on block requires an events clause")
 	}
 	if clause.Predicate == nil {
-		p.diagnostics = append(p.diagnostics, &diagnostic.Entry{
-			Filename: clause.OpenPos.Filename,
-			Line:     clause.OpenPos.Line,
-			Column:   clause.OpenPos.Column,
-			Message:  "decides_on block requires a where clause",
-		})
+		p.errorAtPosition(clause.OpenPos, "decides_on block requires a where clause")
 	}
 
 	return clause
@@ -1021,12 +1011,7 @@ func (p *Instance) parseView() *ast.View {
 	view.ClosePos = p.position(closeTok)
 
 	if len(view.Fields) == 0 && len(view.Subscribes) == 0 {
-		p.diagnostics = append(p.diagnostics, &diagnostic.Entry{
-			Filename: view.NamePos.Filename,
-			Line:     view.NamePos.Line,
-			Column:   view.NamePos.Column,
-			Message:  "view block requires fields or subscribes",
-		})
+		p.errorAtPosition(view.NamePos, "view block requires fields or subscribes")
 	}
 
 	return view
@@ -1055,52 +1040,7 @@ func (p *Instance) parseAutomation() *ast.Automation {
 	automation.OpenPos = p.position(openTok)
 
 	for !p.check(lexer.CloseBrace) && !p.isAtEnd() {
-		if p.check(lexer.KeywordDescription) {
-			p.parseDescriptionInto("automation", &automation.Description, &automation.DescriptionPos)
-		} else if p.check(lexer.KeywordOn) {
-			p.parseIdentifierEntryInto("automation", &automation.OnEvent, &automation.OnEventPos)
-		} else if p.check(lexer.KeywordTrigger) {
-			p.advance()
-			if !p.check(lexer.Identifier) {
-				p.error("expected identifier after trigger in automation")
-				p.advance()
-				continue
-			}
-			triggerTok := p.advance()
-			automation.OnEvent = triggerTok.Value
-			automation.OnEventPos = p.position(triggerTok)
-		} else if p.check(lexer.KeywordReads) {
-			p.parseIdentifierEntryInto("automation", &automation.Reads, &automation.ReadsPos)
-		} else if p.check(lexer.KeywordCommand) {
-			p.advance()
-			if !p.check(lexer.Identifier) {
-				p.error("expected identifier after command in automation")
-				p.advance()
-				continue
-			}
-			cmdTok := p.advance()
-			automation.Command = cmdTok.Value
-			automation.CommandPos = p.position(cmdTok)
-		} else if p.check(lexer.KeywordTarget) {
-			p.advance()
-			if !p.check(lexer.KeywordContext) {
-				p.error("expected context after target in automation")
-				p.advance()
-				continue
-			}
-			p.advance()
-			if !p.check(lexer.Identifier) {
-				p.error("expected identifier after target context in automation")
-				p.advance()
-				continue
-			}
-			ctxTok := p.advance()
-			automation.TargetContext = ctxTok.Value
-			automation.TargetContextPos = p.position(ctxTok)
-		} else {
-			p.error(fmt.Sprintf("expected description, on, trigger, reads, command, or target in automation, got %q", p.peek().Value))
-			p.advance()
-		}
+		p.parseAutomationEntry(automation)
 	}
 
 	if !p.check(lexer.CloseBrace) {
@@ -1111,23 +1051,57 @@ func (p *Instance) parseAutomation() *ast.Automation {
 	automation.ClosePos = p.position(closeTok)
 
 	if automation.OnEvent == "" {
-		p.diagnostics = append(p.diagnostics, &diagnostic.Entry{
-			Filename: automation.NamePos.Filename,
-			Line:     automation.NamePos.Line,
-			Column:   automation.NamePos.Column,
-			Message:  "automation block requires a trigger event",
-		})
+		p.errorAtPosition(automation.NamePos, "automation block requires an activation event declared with on")
 	}
 	if automation.Command == "" {
-		p.diagnostics = append(p.diagnostics, &diagnostic.Entry{
-			Filename: automation.NamePos.Filename,
-			Line:     automation.NamePos.Line,
-			Column:   automation.NamePos.Column,
-			Message:  "automation block requires a command",
-		})
+		p.errorAtPosition(automation.NamePos, "automation block requires a command")
 	}
 
 	return automation
+}
+
+func (p *Instance) parseAutomationEntry(automation *ast.Automation) {
+	switch p.peek().Type {
+	case lexer.KeywordDescription:
+		p.parseDescriptionInto("automation", &automation.Description, &automation.DescriptionPos)
+	case lexer.KeywordOn:
+		p.parseIdentifierEntryInto("automation", &automation.OnEvent, &automation.OnEventPos)
+	case lexer.KeywordTrigger:
+		triggerTok := p.advance()
+		p.errorAt(triggerTok, "trigger is not an automation entry: name the activation event with on")
+		p.skipRestOfLineOrBlockEnd(triggerTok)
+	case lexer.KeywordReads:
+		p.parseIdentifierEntryInto("automation", &automation.Reads, &automation.ReadsPos)
+	case lexer.KeywordCommand:
+		p.advance()
+		if !p.check(lexer.Identifier) {
+			p.error("expected identifier after command in automation")
+			p.advance()
+			return
+		}
+		cmdTok := p.advance()
+		automation.Command = cmdTok.Value
+		automation.CommandPos = p.position(cmdTok)
+	case lexer.KeywordTarget:
+		p.advance()
+		if !p.check(lexer.KeywordContext) {
+			p.error("expected context after target in automation")
+			p.advance()
+			return
+		}
+		p.advance()
+		if !p.check(lexer.Identifier) {
+			p.error("expected identifier after target context in automation")
+			p.advance()
+			return
+		}
+		ctxTok := p.advance()
+		automation.TargetContext = ctxTok.Value
+		automation.TargetContextPos = p.position(ctxTok)
+	default:
+		p.error(fmt.Sprintf("expected description, on, reads, command, or target in automation, got %q", p.peek().Value))
+		p.advance()
+	}
 }
 
 func (p *Instance) parseTranslation() *ast.Translation {
@@ -1201,28 +1175,13 @@ func (p *Instance) parseTranslation() *ast.Translation {
 	translation.ClosePos = p.position(closeTok)
 
 	if translation.ExternalSystem == "" {
-		p.diagnostics = append(p.diagnostics, &diagnostic.Entry{
-			Filename: translation.NamePos.Filename,
-			Line:     translation.NamePos.Line,
-			Column:   translation.NamePos.Column,
-			Message:  "translation block requires an external_system",
-		})
+		p.errorAtPosition(translation.NamePos, "translation block requires an external_system")
 	}
 	if translation.Reads == "" {
-		p.diagnostics = append(p.diagnostics, &diagnostic.Entry{
-			Filename: translation.NamePos.Filename,
-			Line:     translation.NamePos.Line,
-			Column:   translation.NamePos.Column,
-			Message:  "translation block requires a reads view",
-		})
+		p.errorAtPosition(translation.NamePos, "translation block requires a reads view")
 	}
 	if translation.Command == "" {
-		p.diagnostics = append(p.diagnostics, &diagnostic.Entry{
-			Filename: translation.NamePos.Filename,
-			Line:     translation.NamePos.Line,
-			Column:   translation.NamePos.Column,
-			Message:  "translation block requires a command",
-		})
+		p.errorAtPosition(translation.NamePos, "translation block requires a command")
 	}
 
 	return translation
@@ -1560,10 +1519,14 @@ func (p *Instance) error(msg string) {
 }
 
 func (p *Instance) errorAt(tok *lexer.Token, msg string) {
+	p.errorAtPosition(p.position(tok), msg)
+}
+
+func (p *Instance) errorAtPosition(pos ast.Position, msg string) {
 	p.diagnostics = append(p.diagnostics, &diagnostic.Entry{
-		Filename: p.filename,
-		Line:     tok.Line,
-		Column:   tok.Column,
+		Filename: pos.Filename,
+		Line:     pos.Line,
+		Column:   pos.Column,
 		Message:  msg,
 	})
 }

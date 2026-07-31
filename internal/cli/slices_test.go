@@ -87,7 +87,7 @@ context "Orders" {
         }
       }
       automation AutoProcess {
-        trigger OrderPlaced
+        on OrderPlaced
         command ProcessOrder
       }
       translation ExtIntegration {

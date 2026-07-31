@@ -146,7 +146,7 @@ context "Orders" {
       event OrderUpdated {}
       view OrderList {}
       automation OrderNotifier {
-        trigger OrderPlaced
+        on OrderPlaced
         command NotifyCustomer
         target context NonExistent
       }
@@ -180,7 +180,7 @@ context "Orders" {
   aggregate "Order" {
     slice "Process Order" {
       automation OrderNotifier {
-        trigger OrderPlaced
+        on OrderPlaced
         command NotifyCustomer
         target context NonExistent
       }
@@ -232,7 +232,7 @@ context "Orders" {
       event OrderUpdated {}
       view OrderList {}
       automation OrderNotifier {
-        trigger OrderPlaced
+        on OrderPlaced
         command NotifyCustomer
         target context NonExistent
       }

@@ -25,7 +25,7 @@ func TestGetDefinition(t *testing.T) {
                 subscribes [OrderSubmitted]
             }
             automation AutoSubmit {
-                trigger OrderSubmitted
+                on OrderSubmitted
                 command SubmitOrder
                 target context Orders
             }
@@ -100,9 +100,9 @@ func TestGetDefinition(t *testing.T) {
 		assertDef(t, testDoc, cLine, cChar, dLine, dChar, "OrderSubmitted")
 	})
 
-	t.Run("event reference in automation trigger", func(t *testing.T) {
+	t.Run("event reference in automation activation event", func(t *testing.T) {
 		cLine, cChar := posIn(t, testDoc,
-			"automation AutoSubmit {\n                trigger OrderSubmitted",
+			"automation AutoSubmit {\n                on OrderSubmitted",
 			"OrderSubmitted")
 		dLine, dChar := posIn(t, testDoc, "event OrderSubmitted", "OrderSubmitted")
 		assertDef(t, testDoc, cLine, cChar, dLine, dChar, "OrderSubmitted")
@@ -110,7 +110,7 @@ func TestGetDefinition(t *testing.T) {
 
 	t.Run("command reference in automation command", func(t *testing.T) {
 		cLine, cChar := posIn(t, testDoc,
-			"trigger OrderSubmitted\n                command SubmitOrder",
+			"on OrderSubmitted\n                command SubmitOrder",
 			"SubmitOrder")
 		dLine, dChar := posIn(t, testDoc, "command SubmitOrder", "SubmitOrder")
 		assertDef(t, testDoc, cLine, cChar, dLine, dChar, "SubmitOrder")

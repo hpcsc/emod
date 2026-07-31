@@ -22,7 +22,7 @@ func TestGetReferences(t *testing.T) {
                 subscribes [OrderSubmitted]
             }
             automation AutoSubmit {
-                trigger OrderSubmitted
+                on OrderSubmitted
                 command SubmitOrder
                 target context Orders
             }
@@ -101,7 +101,7 @@ func TestGetReferences(t *testing.T) {
 			requireLocation(t, locs, sLine, sChar, "OrderSubmitted")
 
 			tLine, tChar := posIn(t, testDoc,
-				"automation AutoSubmit {\n                trigger OrderSubmitted", "OrderSubmitted")
+				"automation AutoSubmit {\n                on OrderSubmitted", "OrderSubmitted")
 			requireLocation(t, locs, tLine, tChar, "OrderSubmitted")
 
 			flowLine := "command -> event : SubmitOrder -> OrderSubmitted"
@@ -115,9 +115,9 @@ func TestGetReferences(t *testing.T) {
 			require.Len(t, locs, 4)
 		})
 
-		t.Run("cursor on event reference in automation trigger returns all event references", func(t *testing.T) {
+		t.Run("cursor on event reference in an automation activation event returns all event references", func(t *testing.T) {
 			cLine, cChar := posIn(t, testDoc,
-				"automation AutoSubmit {\n                trigger OrderSubmitted", "OrderSubmitted")
+				"automation AutoSubmit {\n                on OrderSubmitted", "OrderSubmitted")
 			locs := lsp.GetReferences(testDoc, cLine, cChar, uri)
 			require.Len(t, locs, 4)
 		})
@@ -140,7 +140,7 @@ func TestGetReferences(t *testing.T) {
 			requireLocation(t, locs, dLine, dChar, "SubmitOrder")
 
 			aLine, aChar := posIn(t, testDoc,
-				"trigger OrderSubmitted\n                command SubmitOrder", "SubmitOrder")
+				"on OrderSubmitted\n                command SubmitOrder", "SubmitOrder")
 			requireLocation(t, locs, aLine, aChar, "SubmitOrder")
 
 			trLine, trChar := posIn(t, testDoc,
@@ -157,7 +157,7 @@ func TestGetReferences(t *testing.T) {
 
 		t.Run("cursor on command in automation returns all command references", func(t *testing.T) {
 			cLine, cChar := posIn(t, testDoc,
-				"trigger OrderSubmitted\n                command SubmitOrder", "SubmitOrder")
+				"on OrderSubmitted\n                command SubmitOrder", "SubmitOrder")
 			locs := lsp.GetReferences(testDoc, cLine, cChar, uri)
 			require.Len(t, locs, 4)
 		})

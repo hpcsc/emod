@@ -24,7 +24,7 @@ context "Orders" {
 
     slice "Notify On Order" {
       automation OrderNotifier {
-        trigger OrderPlaced
+        on OrderPlaced
         command SendNotification
         target context Notifications
       }

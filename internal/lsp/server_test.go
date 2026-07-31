@@ -752,7 +752,7 @@ context "C" {
                 subscribes [OrderSubmitted]
             }
             automation AutoSubmit {
-                trigger OrderSubmitted
+                on OrderSubmitted
                 command SubmitOrder
             }
         }

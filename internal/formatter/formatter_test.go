@@ -359,54 +359,7 @@ func TestFormat(t *testing.T) {
 			require.Equal(t, expected, result)
 		})
 
-		t.Run("the view an automation reads is written in one place wherever the source put it", func(t *testing.T) {
-			expected := strings.Join([]string{
-				`emod 1`,
-				`model "Order Fulfilment"`,
-				``,
-				`context "Fulfilment" {`,
-				`  aggregate "Shipment" {`,
-				`    slice "Notify Customer" {`,
-				`      automation OrderNotifier {`,
-				`        on OrderPlaced`,
-				`        reads OpenOrdersView`,
-				`        command SendNotification`,
-				`        target context Notifications`,
-				`      }`,
-				`    }`,
-				`  }`,
-				`}`,
-				``,
-			}, "\n")
-
-			for _, testCase := range []struct {
-				placement string
-				body      []string
-			}{
-				{"as the block's first entry", []string{
-					`        reads OpenOrdersView`,
-					`        trigger OrderPlaced`,
-					`        command SendNotification`,
-					`        target context Notifications`,
-				}},
-				{"after target context", []string{
-					`        trigger OrderPlaced`,
-					`        command SendNotification`,
-					`        target context Notifications`,
-					`        reads OpenOrdersView`,
-				}},
-			} {
-				t.Run(testCase.placement, func(t *testing.T) {
-					source := orderNotifierSource(testCase.body...)
-
-					result := formatter.Format(parseModel(t, source, "automation-reads.emod"))
-
-					require.Equal(t, expected, result)
-				})
-			}
-		})
-
-		t.Run("an automation's activation event is written as on, between its description and the view it reads", func(t *testing.T) {
+		t.Run("an automation's entries are written in canonical order wherever the source put them", func(t *testing.T) {
 			expected := strings.Join([]string{
 				`emod 1`,
 				`model "Order Fulfilment"`,
@@ -428,22 +381,35 @@ func TestFormat(t *testing.T) {
 			}, "\n")
 
 			for _, testCase := range []struct {
-				spelling       string
-				activationLine string
+				placement string
+				body      []string
 			}{
-				{"the source spells it trigger", `        trigger OrderPlaced`},
-				{"the source spells it on", `        on OrderPlaced`},
+				{"the view it reads is written as the block's first entry", []string{
+					`        reads OpenOrdersView`,
+					`        description "Tells the customer their parcel has left the depot"`,
+					`        on OrderPlaced`,
+					`        command SendNotification`,
+					`        target context Notifications`,
+				}},
+				{"the view it reads is written after target context", []string{
+					`        description "Tells the customer their parcel has left the depot"`,
+					`        on OrderPlaced`,
+					`        command SendNotification`,
+					`        target context Notifications`,
+					`        reads OpenOrdersView`,
+				}},
+				{"its description is written last", []string{
+					`        on OrderPlaced`,
+					`        reads OpenOrdersView`,
+					`        command SendNotification`,
+					`        target context Notifications`,
+					`        description "Tells the customer their parcel has left the depot"`,
+				}},
 			} {
-				t.Run(testCase.spelling, func(t *testing.T) {
-					source := orderNotifierSource(
-						`        description "Tells the customer their parcel has left the depot"`,
-						testCase.activationLine,
-						`        reads OpenOrdersView`,
-						`        command SendNotification`,
-						`        target context Notifications`,
-					)
+				t.Run(testCase.placement, func(t *testing.T) {
+					source := orderNotifierSource(testCase.body...)
 
-					result := formatter.Format(parseModel(t, source, "automation-activation.emod"))
+					result := formatter.Format(parseModel(t, source, "automation-entries.emod"))
 
 					require.Equal(t, expected, result)
 				})

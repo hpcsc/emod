@@ -75,7 +75,7 @@ context "Reservations" {
     # Slice 4: Automation Pattern
     slice "Send Confirmation Email" {
       automation ConfirmationEmailReactor {
-        trigger RoomReserved
+        on RoomReserved
         command SendConfirmationEmail
         target context Notifications
       }

@@ -1896,13 +1896,13 @@ context "Ctx" {
 	})
 
 	t.Run("automations", func(t *testing.T) {
-		t.Run("automation with trigger event, command, and target context", func(t *testing.T) {
+		t.Run("automation with activation event, command, and target context", func(t *testing.T) {
 			input := `model "Test"
 context "Ctx" {
   aggregate "Agg" {
     slice "Slice" {
       automation ConfirmationEmailReactor {
-        trigger RoomReserved
+        on RoomReserved
         command SendConfirmationEmail
         target context Notifications
       }
@@ -1930,7 +1930,7 @@ context "Ctx" {
   aggregate "Agg" {
     slice "Slice" {
       automation Reactor {
-        trigger SomeEvent
+        on SomeEvent
         command SomeCmd
       }
     }
@@ -1999,60 +1999,28 @@ context "Ctx" {
 			}
 		})
 
-		t.Run("the activation event written last wins whichever spelling is used", func(t *testing.T) {
-			tests := []struct {
-				name      string
-				entries   string
-				wantEvent string
-				wantEntry string
-			}{
-				{
-					name: "on after trigger",
-					entries: `        trigger RoomReserved
-        on RoomReleased`,
-					wantEvent: "RoomReleased",
-					wantEntry: "on RoomReleased",
-				},
-				{
-					name: "trigger after on",
-					entries: `        on RoomReleased
-        trigger RoomReserved`,
-					wantEvent: "RoomReserved",
-					wantEntry: "trigger RoomReserved",
-				},
-				{
-					name: "on twice",
-					entries: `        on RoomReserved
-        on RoomReleased`,
-					wantEvent: "RoomReleased",
-					wantEntry: "on RoomReleased",
-				},
-			}
-
-			for _, tc := range tests {
-				t.Run(tc.name, func(t *testing.T) {
-					input := fmt.Sprintf(`model "Test"
+		t.Run("automation declaring on twice keeps the event named last", func(t *testing.T) {
+			input := `model "Test"
 context "Ctx" {
   aggregate "Agg" {
     slice "Slice" {
       automation ConfirmationEmailReactor {
-%s
+        on RoomReserved
+        on RoomReleased
         command SendConfirmationEmail
       }
     }
   }
-}`, tc.entries)
-					tokens, lexDiags := lexer.Scan(input, "test.emod")
-					require.Empty(t, lexDiags)
+}`
+			tokens, lexDiags := lexer.Scan(input, "test.emod")
+			require.Empty(t, lexDiags)
 
-					model, diags := parser.New(tokens, "test.emod").Parse()
+			model, diags := parser.New(tokens, "test.emod").Parse()
 
-					require.Empty(t, diags)
-					automation := model.Contexts[0].Aggregates[0].Slices[0].Automations[0]
-					require.Equal(t, tc.wantEvent, automation.OnEvent)
-					require.Equal(t, astPositionOf(t, "test.emod", input, tc.wantEntry, tc.wantEvent), automation.OnEventPos)
-				})
-			}
+			require.Empty(t, diags)
+			automation := model.Contexts[0].Aggregates[0].Slices[0].Automations[0]
+			require.Equal(t, "RoomReleased", automation.OnEvent)
+			require.Equal(t, astPositionOf(t, "test.emod", input, "on RoomReleased", "RoomReleased"), automation.OnEventPos)
 		})
 
 		t.Run("an event whose name differs from a keyword only in case is still an event name", func(t *testing.T) {
@@ -2091,19 +2059,19 @@ context "Ctx" {
 			}{
 				{
 					name: "between the activation event and the command",
-					entries: `        trigger RoomReserved
+					entries: `        on RoomReserved
         reads PendingConfirmationsView
         command SendConfirmationEmail`,
 				},
 				{
 					name: "as the first entry of the block",
 					entries: `        reads PendingConfirmationsView
-        trigger RoomReserved
+        on RoomReserved
         command SendConfirmationEmail`,
 				},
 				{
 					name: "after the target context",
-					entries: `        trigger RoomReserved
+					entries: `        on RoomReserved
         command SendConfirmationEmail
         target context Notifications
         reads PendingConfirmationsView`,
@@ -2141,7 +2109,7 @@ context "Ctx" {
   aggregate "Agg" {
     slice "Slice" {
       automation ConfirmationEmailReactor {
-        trigger RoomReserved
+        on RoomReserved
         reads StaleConfirmationsView
         reads PendingConfirmationsView
         command SendConfirmationEmail
@@ -2166,12 +2134,12 @@ context "Ctx" {
   aggregate "Agg" {
     slice "Slice" {
       automation ConfirmationEmailReactor {
-        trigger RoomReserved
+        on RoomReserved
         reads PendingConfirmationsView
         command SendConfirmationEmail
       }
       automation AuditTrailReactor {
-        trigger RoomReserved
+        on RoomReserved
         command RecordReservationAudit
       }
     }
@@ -2199,7 +2167,7 @@ context "Ctx" {
   aggregate "Agg" {
     slice "Slice" {
       automation Reactor {
-        trigger SomeEvent
+        on SomeEvent
         command SomeCmd
       }
     }
@@ -2220,28 +2188,37 @@ context "Ctx" {
 			require.Nil(t, slice.Trigger)
 		})
 
-		t.Run("trigger keyword inside automation is event name, not trigger block", func(t *testing.T) {
+		t.Run("a slice-level trigger block and an automation activating on an event are kept apart", func(t *testing.T) {
 			input := `model "Test"
 context "Ctx" {
   aggregate "Agg" {
     slice "Slice" {
-      automation Reactor {
-        trigger SomeEvent
-        command SomeCmd
+      trigger UI "Reservation Form" {
+        actor Guest
+        reads AvailableRoomsView
+      }
+      automation ConfirmationEmailReactor {
+        on RoomReserved
+        command SendConfirmationEmail
       }
     }
   }
 }`
-			tokens, _ := lexer.Scan(input, "test.emod")
+			tokens, lexDiags := lexer.Scan(input, "test.emod")
+			require.Empty(t, lexDiags)
 
-			p := parser.New(tokens, "test.emod")
-			model, errs := p.Parse()
+			model, diags := parser.New(tokens, "test.emod").Parse()
 
-			require.Len(t, errs, 0)
+			require.Empty(t, diags)
 			slice := model.Contexts[0].Aggregates[0].Slices[0]
-			require.Nil(t, slice.Trigger, "trigger keyword inside automation should not produce a slice-level Trigger")
+			require.NotNil(t, slice.Trigger)
+			require.Equal(t, "UI", slice.Trigger.Kind)
+			require.Equal(t, "Reservation Form", slice.Trigger.Name)
+			require.Equal(t, "Guest", slice.Trigger.Actor)
+			require.Equal(t, "AvailableRoomsView", slice.Trigger.Reads)
 			require.Len(t, slice.Automations, 1)
-			require.Equal(t, "SomeEvent", slice.Automations[0].OnEvent)
+			require.Equal(t, "RoomReserved", slice.Automations[0].OnEvent)
+			require.Equal(t, "", slice.Automations[0].Reads)
 		})
 
 		t.Run("automation alongside other slice elements", func(t *testing.T) {
@@ -2261,7 +2238,7 @@ context "Ctx" {
         command -> event: MakeReservation -> ReservationMade
       }
       automation Reactor {
-        trigger ReservationMade
+        on ReservationMade
         command SendConfirmation
       }
     }
@@ -2287,11 +2264,11 @@ context "Ctx" {
   aggregate "Agg" {
     slice "Slice" {
       automation ReactorA {
-        trigger EventA
+        on EventA
         command CmdA
       }
       automation ReactorB {
-        trigger EventB
+        on EventB
         command CmdB
         target context OtherCtx
       }
@@ -2321,7 +2298,7 @@ context "Ctx" {
 context "Ctx" {
   aggregate "Agg" {
     slice "Slice" {
-      automation Reactor trigger SomeEvent
+      automation Reactor on SomeEvent
     }
   }
 }`
@@ -2360,12 +2337,12 @@ context "Ctx" {
 			require.NotEmpty(t, errs)
 			found := false
 			for _, e := range errs {
-				if strings.Contains(e.Message, "trigger") && strings.Contains(e.Message, "command") {
+				if strings.Contains(e.Message, `"unknown_thing"`) {
 					found = true
 					break
 				}
 			}
-			require.True(t, found, "expected a diagnostic mentioning expected keywords, got: %v", errs)
+			require.True(t, found, "expected a diagnostic naming the unrecognised entry, got: %v", errs)
 		})
 	})
 
@@ -2921,8 +2898,8 @@ context "Ctx" {
   aggregate "Agg" {
     slice "Slice" {
       automation ConfirmationEmailReactor {
-        trigger RoomReserved
 %s
+        on RoomReserved
         command SendConfirmationEmail
       }
     }
@@ -2956,12 +2933,12 @@ context "Ctx" {
   aggregate "Agg" {
     slice "Slice" {
       automation ConfirmationEmailReactor {
-        trigger RoomReserved
+        on RoomReserved
         command SendConfirmationEmail
         %s
       }
       automation ReminderReactor {
-        trigger RoomReserved
+        on RoomReserved
         command SendReminder
       }
     }
@@ -2983,13 +2960,93 @@ context "Ctx" {
 			}
 		})
 
+		t.Run("a trigger entry inside an automation is rejected once and the entries below it still parse", func(t *testing.T) {
+			input := `model "Test"
+context "Ctx" {
+  aggregate "Agg" {
+    slice "Slice" {
+      automation ConfirmationEmailReactor {
+        on RoomReserved
+        trigger RoomReleased
+        reads PendingConfirmationsView
+        command SendConfirmationEmail
+        target context Notifications
+      }
+    }
+  }
+}`
+			tokens, lexDiags := lexer.Scan(input, "test.emod")
+			require.Empty(t, lexDiags)
+
+			model, diags := parser.New(tokens, "test.emod").Parse()
+
+			require.Len(t, diags, 1)
+			line, column := positionOf(t, input, "trigger RoomReleased", "trigger")
+			require.Equal(t,
+				fmt.Sprintf("test.emod:%d: trigger is not an automation entry: name the activation event with on", line),
+				diags[0].String())
+			require.Equal(t, column, diags[0].Column)
+
+			slice := model.Contexts[0].Aggregates[0].Slices[0]
+			automation := slice.Automations[0]
+			require.Equal(t, "RoomReserved", automation.OnEvent)
+			require.Equal(t, "PendingConfirmationsView", automation.Reads)
+			require.Equal(t, "SendConfirmationEmail", automation.Command)
+			require.Equal(t, "Notifications", automation.TargetContext)
+			require.NotZero(t, automation.ClosePos.Line)
+			require.NotZero(t, slice.ClosePos.Line)
+			require.NotZero(t, model.Contexts[0].ClosePos.Line)
+		})
+
+		t.Run("an automation whose only activation entry is a trigger is left without one and its sibling still parses", func(t *testing.T) {
+			input := `model "Test"
+context "Ctx" {
+  aggregate "Agg" {
+    slice "Slice" {
+      automation ConfirmationEmailReactor {
+        command SendConfirmationEmail
+        trigger RoomReserved
+      }
+      automation ReminderReactor {
+        on RoomReserved
+        command SendReminder
+      }
+    }
+  }
+}`
+			tokens, lexDiags := lexer.Scan(input, "test.emod")
+			require.Empty(t, lexDiags)
+
+			model, diags := parser.New(tokens, "test.emod").Parse()
+
+			require.Len(t, diags, 2)
+			rejectedLine, _ := positionOf(t, input, "trigger RoomReserved", "trigger")
+			require.Equal(t,
+				fmt.Sprintf("test.emod:%d: trigger is not an automation entry: name the activation event with on", rejectedLine),
+				diags[0].String())
+			declaredLine, _ := positionOf(t, input, "automation ConfirmationEmailReactor", "ConfirmationEmailReactor")
+			require.Equal(t,
+				fmt.Sprintf("test.emod:%d: automation block requires an activation event declared with on", declaredLine),
+				diags[1].String())
+
+			slice := model.Contexts[0].Aggregates[0].Slices[0]
+			require.Len(t, slice.Automations, 2)
+			require.Equal(t, "", slice.Automations[0].OnEvent)
+			require.Equal(t, "SendConfirmationEmail", slice.Automations[0].Command)
+			require.NotZero(t, slice.Automations[0].ClosePos.Line)
+			require.Equal(t, "ReminderReactor", slice.Automations[1].Name)
+			require.Equal(t, "RoomReserved", slice.Automations[1].OnEvent)
+			require.NotZero(t, slice.ClosePos.Line)
+			require.NotZero(t, model.Contexts[0].ClosePos.Line)
+		})
+
 		t.Run("an unrecognised entry inside an automation names the entries an automation accepts", func(t *testing.T) {
 			input := `model "Test"
 context "Ctx" {
   aggregate "Agg" {
     slice "Slice" {
       automation ConfirmationEmailReactor {
-        trigger RoomReserved
+        on RoomReserved
         command SendConfirmationEmail
         raeds
       }
@@ -3003,12 +3060,13 @@ context "Ctx" {
 
 			require.Len(t, diags, 1)
 			require.Contains(t, diags[0].Message, "automation")
-			for _, entry := range []string{"description", "on", "trigger", "reads", "command", "target"} {
+			for _, entry := range []string{"description", "on", "reads", "command", "target"} {
 				require.Regexp(t, `\b`+entry+`\b`, diags[0].Message)
 			}
+			require.NotRegexp(t, `\btrigger\b`, diags[0].Message)
 		})
 
-		t.Run("automation missing trigger produces error", func(t *testing.T) {
+		t.Run("automation missing activation event produces error", func(t *testing.T) {
 			input := `model "Test"
 context "Ctx" {
   aggregate "Agg" {
@@ -3026,14 +3084,14 @@ context "Ctx" {
 
 			found := false
 			for _, e := range errs {
-				if e.Message == "automation block requires a trigger event" {
+				if e.Message == "automation block requires an activation event declared with on" {
 					found = true
 					require.Equal(t, "test.emod", e.Filename)
 					require.Equal(t, 5, e.Line)
 					break
 				}
 			}
-			require.True(t, found, "expected diagnostic 'automation block requires a trigger event', got: %v", errs)
+			require.True(t, found, "expected diagnostic 'automation block requires an activation event declared with on', got: %v", errs)
 		})
 
 		t.Run("automation missing command produces error", func(t *testing.T) {
@@ -3042,7 +3100,7 @@ context "Ctx" {
   aggregate "Agg" {
     slice "Slice" {
       automation Reactor {
-        trigger SomeEvent
+        on SomeEvent
       }
     }
   }
@@ -3064,7 +3122,7 @@ context "Ctx" {
 			require.True(t, found, "expected diagnostic 'automation block requires a command', got: %v", errs)
 		})
 
-		t.Run("automation missing both trigger and command produces both errors", func(t *testing.T) {
+		t.Run("automation missing both activation event and command produces both errors", func(t *testing.T) {
 			input := `model "Test"
 context "Ctx" {
   aggregate "Agg" {
@@ -3079,17 +3137,17 @@ context "Ctx" {
 			p := parser.New(tokens, "test.emod")
 			_, errs := p.Parse()
 
-			foundTrigger := false
+			foundActivation := false
 			foundCommand := false
 			for _, e := range errs {
-				if e.Message == "automation block requires a trigger event" {
-					foundTrigger = true
+				if e.Message == "automation block requires an activation event declared with on" {
+					foundActivation = true
 				}
 				if e.Message == "automation block requires a command" {
 					foundCommand = true
 				}
 			}
-			require.True(t, foundTrigger, "expected diagnostic 'automation block requires a trigger event', got: %v", errs)
+			require.True(t, foundActivation, "expected diagnostic 'automation block requires an activation event declared with on', got: %v", errs)
 			require.True(t, foundCommand, "expected diagnostic 'automation block requires a command', got: %v", errs)
 		})
 
@@ -3258,13 +3316,13 @@ context "Ctx" {
 
 			found := false
 			for _, e := range errs {
-				if e.Message == "automation block requires a trigger event" {
+				if e.Message == "automation block requires an activation event declared with on" {
 					found = true
 					require.Equal(t, 5, e.Line, "error should reference the automation declaration line (5), not the closing brace line")
 					break
 				}
 			}
-			require.True(t, found, "expected diagnostic 'automation block requires a trigger event', got: %v", errs)
+			require.True(t, found, "expected diagnostic 'automation block requires an activation event declared with on', got: %v", errs)
 		})
 
 		t.Run("event with source external and provider name", func(t *testing.T) {
@@ -3795,7 +3853,7 @@ context "Reservations" {
   aggregate "Reservation" {
     slice "Auto Confirm" {
       automation AutoConfirm {
-        trigger ReservationMade
+        on ReservationMade
         command ConfirmReservation
         description "Confirms a reservation the moment it is made"
       }
@@ -4034,7 +4092,7 @@ context "Reservations" {
     slice "Auto Confirm" {
       automation AutoConfirm {
         description 0
-        trigger ReservationMade
+        on ReservationMade
         command ConfirmReservation
       }
     }
@@ -4468,7 +4526,7 @@ context "Ctx" {
       }
       # Automation comment
       automation Reactor {
-        trigger ThingDone
+        on ThingDone
         command DoOther
       }
       # Translation comment

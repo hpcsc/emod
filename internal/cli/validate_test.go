@@ -65,7 +65,7 @@ context "Orders" {
   aggregate "Order" {
     slice "Process Order" {
       automation OrderNotifier {
-        trigger OrderPlaced
+        on OrderPlaced
         command NotifyCustomer
         target context NonExistent
       }
@@ -82,20 +82,20 @@ context "Orders" {
 		require.Contains(t, err.Error(), "does not exist")
 	})
 
-	t.Run("returns error for automation trigger referencing nonexistent event", func(t *testing.T) {
+	t.Run("returns error for automation activation event referencing nonexistent event", func(t *testing.T) {
 		input := `model "Test"
 context "Orders" {
   aggregate "Order" {
     slice "Process Order" {
       automation OrderNotifier {
-        trigger NonExistentEvent
+        on NonExistentEvent
         command NotifyCustomer
       }
     }
   }
 }
 `
-		path := writeTemp(t, "bad_trigger.emod", input)
+		path := writeTemp(t, "bad_activation_event.emod", input)
 
 		err := cli.RunValidate(path, "text")
 
@@ -246,7 +246,7 @@ context "Orders" {
     }
     slice "Notify On Order" {
       automation OrderNotifier {
-        trigger OrderPlaced
+        on OrderPlaced
         command SendNotification
         target context Notifications
       }
@@ -305,7 +305,7 @@ context "Orders" {
     }
     slice "Notify On Order" {
       automation OrderNotifier {
-        trigger OrderPlaced
+        on OrderPlaced
         command SendNotification
         target context Notifications
       }
@@ -338,7 +338,7 @@ context "Notifications" {
         }
       }
       automation Sender {
-        trigger NotificationRequested
+        on NotificationRequested
         command SendEmail
       }
     }
@@ -389,7 +389,7 @@ context "Orders" {
       event OrderUpdated {}
       view OrderList {}
       automation OrderNotifier {
-        trigger OrderPlaced
+        on OrderPlaced
         command NotifyCustomer
         target context NonExistent
       }
