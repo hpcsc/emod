@@ -352,7 +352,7 @@ function showDetailPanel(store, node) {
     html += '<div class="dp-section">';
     html += '<div class="dp-section-title">Automation</div>';
     html += '<table><tbody>';
-    html += '<tr><th>Trigger Event</th><td>' + Renderer.esc(node.trigger_event || '—') + '</td></tr>';
+    html += '<tr><th>On Event</th><td>' + Renderer.esc(node.on_event || '—') + '</td></tr>';
     html += '<tr><th>Reads</th><td>' + Renderer.esc(node.reads || '—') + '</td></tr>';
     html += '<tr><th>Command</th><td>' + Renderer.esc(node.command || '—') + '</td></tr>';
     html += '<tr><th>Target Context</th><td>' + Renderer.esc(node.target_context || '—') + '</td></tr>';

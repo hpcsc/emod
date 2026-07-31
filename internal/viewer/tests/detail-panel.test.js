@@ -42,7 +42,7 @@ describe('detail panel for an automation', () => {
     const store = createStore();
 
     UI.showDetailPanel(store, automationNode({
-      trigger_event: 'InvoiceOverdue',
+      on_event: 'InvoiceOverdue',
       reads: 'OutstandingInvoices',
       command: 'ChaseInvoice',
       target_context: 'Collections',
@@ -50,7 +50,7 @@ describe('detail panel for an automation', () => {
 
     expect(store.dom.dpContent.textContent).toContain('Automation');
     expect(shownRows(store)).toEqual([
-      { label: 'Trigger Event', value: 'InvoiceOverdue' },
+      { label: 'On Event', value: 'InvoiceOverdue' },
       { label: 'Reads', value: 'OutstandingInvoices' },
       { label: 'Command', value: 'ChaseInvoice' },
       { label: 'Target Context', value: 'Collections' },
@@ -63,20 +63,30 @@ describe('detail panel for an automation', () => {
     UI.showDetailPanel(store, automationNode());
 
     expect(shownRows(store)).toEqual([
-      { label: 'Trigger Event', value: '—' },
+      { label: 'On Event', value: '—' },
       { label: 'Reads', value: '—' },
       { label: 'Command', value: '—' },
       { label: 'Target Context', value: '—' },
     ]);
   });
 
-  it('shows a view name containing markup as text', () => {
+  it.each([
+    { label: 'On Event', key: 'on_event', value: 'Invoice<b>&</b>Overdue' },
+    { label: 'Reads', key: 'reads', value: 'Invoices<b>&</b>Payments' },
+  ])('shows the $label value containing markup as text', ({ label, key, value }) => {
     const store = createStore();
-    const reads = 'Invoices<b>&</b>Payments';
 
-    UI.showDetailPanel(store, automationNode({ reads }));
+    UI.showDetailPanel(store, automationNode({ [key]: value }));
 
-    expect(shownRows(store)).toContainEqual({ label: 'Reads', value: reads });
+    expect(shownRows(store)).toContainEqual({ label, value });
     expect(store.dom.dpContent.querySelector('b')).toBeNull();
+  });
+
+  it('shows no activation event for a node stating it under the retired key', () => {
+    const store = createStore();
+
+    UI.showDetailPanel(store, automationNode({ trigger_event: 'InvoiceOverdue' }));
+
+    expect(shownRows(store)).toContainEqual({ label: 'On Event', value: '—' });
   });
 });

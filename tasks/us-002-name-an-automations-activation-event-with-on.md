@@ -8,7 +8,7 @@
 - [x] Task 5: Reject `trigger <EventName>` inside an automation and move every model to `on`
 - [x] Task 6: Name the activation event `on_event` in the JSON, CUE and embedded schema exports
 - [x] Task 7: Name the activation event `on_event` in the diagram document and read it back
-- [ ] Task 8: Show an automation's activation event as `On Event` in the viewer's details panel
+- [x] Task 8: Show an automation's activation event as `On Event` in the viewer's details panel
 
 ---
 
