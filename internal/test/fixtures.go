@@ -735,6 +735,182 @@ context "Reading Room" mode dcb {
 }
 `
 
+// AutomationScheduleLibraryLending runs automations on a schedule in both homes
+// a slice has — nested in an aggregate, and declared directly on a DCB-mode
+// context — stating a duration in one automation and a cron expression in
+// another within each home, beside automations that name an activation event
+// instead, so packages that carry a schedule through the pipeline share one
+// model. An automation stating an event and no schedule sits mid-block ahead of
+// a further automation on purpose: write the omission last and nothing here
+// would catch an automation running on into what follows it.
+const AutomationScheduleLibraryLending = `# Lending a library's copies and seating its readers, with the cadences its automations run on
+model "Library Lending"
+
+actor "Member"
+
+context "Lending" {
+  aggregate "Loan" {
+    slice "Borrow Copy" {
+      trigger UI "Lending Desk" {
+        actor Member
+        reads AvailableCopiesView
+      }
+      command BorrowCopy {
+        fields {
+          memberId string required
+          copyId   string required
+          dueOn    date   required
+        }
+      }
+      event CopyBorrowed {
+        fields {
+          loanId   string required
+          memberId string required
+          copyId   string required
+          dueOn    date   required
+        }
+      }
+      flow {
+        command -> event: BorrowCopy -> CopyBorrowed
+      }
+    }
+    slice "Review Member Loans" {
+      view MemberLoansView {
+        fields {
+          loanId   string required
+          memberId string required
+          dueOn    date   required
+        }
+        subscribes [CopyBorrowed]
+      }
+    }
+    slice "Chase Overdue Copy" {
+      command RemindMember {
+        fields {
+          loanId   string required
+          memberId string required
+        }
+      }
+      command RecallCopy {
+        fields {
+          loanId string required
+          copyId string required
+        }
+      }
+      event MemberReminded {
+        fields {
+          loanId     string    required
+          memberId   string    required
+          remindedAt timestamp required
+        }
+      }
+      event CopyRecalled {
+        fields {
+          loanId     string    required
+          copyId     string    required
+          recalledAt timestamp required
+        }
+      }
+      automation RemindMemberEachMorning {
+        every "0 9 * * *"
+        reads MemberLoansView
+        command RemindMember
+      }
+      automation RecallOnSecondReminder {
+        on MemberReminded
+        command RecallCopy
+      }
+      automation SweepOverdueLoans {
+        every "15m"
+        command RecallCopy
+      }
+      flow {
+        command -> event: RemindMember -> MemberReminded
+        command -> event: RecallCopy -> CopyRecalled
+      }
+    }
+  }
+}
+
+context "Reading Room" mode dcb {
+  slice "Claim Desk" {
+    command ClaimDesk {
+      fields {
+        memberId string required
+        deskId   string required
+      }
+    }
+    event DeskClaimed {
+      tags {
+        desk  : deskId
+        reader: memberId
+      }
+      fields {
+        sessionId string    required
+        deskId    string    required
+        memberId  string    required
+        claimedAt timestamp required
+      }
+    }
+    flow {
+      command -> event: ClaimDesk -> DeskClaimed
+    }
+  }
+  slice "Release Desk" {
+    command ReleaseDesk {
+      decides_on {
+        events [DeskClaimed]
+        where tag(desk = deskId) and tag(reader = memberId)
+      }
+      fields {
+        sessionId string required
+      }
+    }
+    event DeskReleased {
+      tags {
+        desk  : deskId
+        reader: memberId
+      }
+      fields {
+        sessionId  string    required
+        deskId     string    required
+        memberId   string    required
+        releasedAt timestamp required
+      }
+    }
+    flow {
+      command -> event: ReleaseDesk -> DeskReleased
+    }
+  }
+  slice "Browse Desk Occupancy" {
+    view DeskOccupancyView {
+      fields {
+        deskId    string    required
+        memberId  string    required
+        claimedAt timestamp required
+      }
+      subscribes [DeskClaimed, DeskReleased]
+    }
+  }
+  slice "Close Reading Room" {
+    automation CloseDesksAtNight {
+      every "0 22 * * *"
+      reads DeskOccupancyView
+      command ReleaseDesk
+    }
+    automation RemindReaderOfLoans {
+      on DeskReleased
+      reads MemberLoansView
+      command RemindMember
+    }
+    automation SweepIdleDesks {
+      every "45m"
+      command ReleaseDesk
+    }
+  }
+}
+`
+
 // SpecLibraryLendingSpecNames transcribes the name of every scenario
 // SpecLibraryLending states, both slice homes together and in declaration order,
 // so a walk or a strip that reaches only one of the homes reads back short
@@ -770,6 +946,28 @@ var AutomationReadsLibraryLendingActivationEvents = []string{
 	"CopyBorrowed",
 	"CopyBorrowed",
 	"DeskClaimed",
+	"DeskReleased",
+}
+
+// AutomationScheduleLibraryLendingSchedules transcribes the cadence every
+// automation of AutomationScheduleLibraryLending runs on, both slice homes
+// together and in declaration order, so a walk or a rewrite that reaches only
+// one of the homes reads back short against it. The automations naming an
+// activation event instead contribute nothing, so the list is shorter than the
+// automation count.
+var AutomationScheduleLibraryLendingSchedules = []string{
+	"0 9 * * *",
+	"15m",
+	"0 22 * * *",
+	"45m",
+}
+
+// AutomationScheduleLibraryLendingActivationEvents transcribes the event the
+// automations of AutomationScheduleLibraryLending that state one activate on,
+// both slice homes together and in declaration order, so the same fixture is
+// read back for both forms an automation has of stating when it runs.
+var AutomationScheduleLibraryLendingActivationEvents = []string{
+	"MemberReminded",
 	"DeskReleased",
 }
 
@@ -873,6 +1071,14 @@ func DeclaredAutomationReads(model *ast.Model) []string {
 // reaches only one of the homes.
 func DeclaredActivationEvents(model *ast.Model) []string {
 	return declaredAutomationEntries(model, func(auto *ast.Automation) string { return auto.OnEvent })
+}
+
+// DeclaredSchedules names the cadence every automation of model runs on, both
+// slice homes together and in declaration order, so a caller pairing it with a
+// transcribed list reads back short when an entry goes missing or a walk reaches
+// only one of the homes.
+func DeclaredSchedules(model *ast.Model) []string {
+	return declaredAutomationEntries(model, func(auto *ast.Automation) string { return auto.Schedule })
 }
 
 // declaredAutomationEntries leaves out the automations stating no entry, so a

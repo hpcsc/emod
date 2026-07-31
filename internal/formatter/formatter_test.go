@@ -926,14 +926,29 @@ func TestFormat(t *testing.T) {
 				"naming the view an automation reads moves no other line of the model")
 		})
 
-		t.Run("round-trip: a whole shared model survives formatting, the event each automation activates on included", func(t *testing.T) {
+		t.Run("round-trip: a whole shared model survives formatting, the schedule or event each automation activates on included", func(t *testing.T) {
 			for _, testCase := range []struct {
 				shape            string
 				parse            func(*testing.T) *ast.Model
 				activationEvents []string
+				schedules        []string
 			}{
-				{"automations in both slice homes, reading views across contexts", test.AutomationReadsLibraryLendingModel, test.AutomationReadsLibraryLendingActivationEvents},
-				{"an automation among all four slice patterns", test.HotelReservationModel, []string{"ReservationMade"}},
+				{
+					shape:            "automations in both slice homes, reading views across contexts",
+					parse:            test.AutomationReadsLibraryLendingModel,
+					activationEvents: test.AutomationReadsLibraryLendingActivationEvents,
+				},
+				{
+					shape:            "an automation among all four slice patterns",
+					parse:            test.HotelReservationModel,
+					activationEvents: []string{"ReservationMade"},
+				},
+				{
+					shape:            "automations run on a schedule in both slice homes, beside automations activated by an event",
+					parse:            test.AutomationScheduleLibraryLendingModel,
+					activationEvents: test.AutomationScheduleLibraryLendingActivationEvents,
+					schedules:        test.AutomationScheduleLibraryLendingSchedules,
+				},
 			} {
 				t.Run(testCase.shape, func(t *testing.T) {
 					original := testCase.parse(t)
@@ -942,6 +957,7 @@ func TestFormat(t *testing.T) {
 
 					test.RequireEqual(t, original, reparsed, ignoreFormatterNormalizations)
 					require.Equal(t, testCase.activationEvents, test.DeclaredActivationEvents(reparsed))
+					require.Equal(t, testCase.schedules, test.DeclaredSchedules(reparsed))
 				})
 			}
 		})
