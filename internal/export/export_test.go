@@ -1132,6 +1132,46 @@ func TestExport(t *testing.T) {
 			require.Equal(t, float64(7), a["close_position"].(map[string]any)["line"])
 		})
 
+		t.Run("includes the position of a scheduled automation's every entry", func(t *testing.T) {
+			model := &ast.Model{
+				Name: "Test",
+				Contexts: []*ast.Context{{
+					Name: "Ctx",
+					Aggregates: []*ast.Aggregate{{
+						Name: "Agg",
+						Slices: []*ast.Slice{{
+							Name: "S",
+							Automations: []*ast.Automation{{
+								Name:        "Auto",
+								NamePos:     ast.Position{Filename: "test.emod", Line: 5, Column: 5},
+								Schedule:    "0 9 * * *",
+								SchedulePos: ast.Position{Filename: "test.emod", Line: 6, Column: 13},
+								Command:     "DoIt",
+								CommandPos:  ast.Position{Filename: "test.emod", Line: 7, Column: 16},
+							}},
+						}},
+					}},
+				}},
+			}
+
+			raw, err := export.ExportJSON(model)
+			require.NoError(t, err)
+
+			var doc map[string]any
+			err = json.Unmarshal(raw, &doc)
+			require.NoError(t, err)
+
+			s := firstSliceOf(t, doc)
+			autos := s["automations"].([]any)
+			a := autos[0].(map[string]any)
+			require.Equal(t, "0 9 * * *", a["every"])
+			require.Equal(t, map[string]any{
+				"filename": "test.emod",
+				"line":     float64(6),
+				"column":   float64(13),
+			}, a["every_position"])
+		})
+
 		t.Run("includes positions for translation name/external/reads/command and braces with nested event", func(t *testing.T) {
 			model := &ast.Model{
 				Name: "Test",
