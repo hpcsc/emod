@@ -12,6 +12,44 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
+// automationCadenceEmod holds, under one aggregate so the listing reaches both,
+// a slice whose automation runs on a cadence beside one whose automation names
+// the event it activates on.
+const automationCadenceEmod = `model "Library Lending"
+
+context "Lending" {
+  aggregate "Loan" {
+    slice "Sweep Overdue Loans" {
+      command RecallCopy {
+        fields {
+          loanId string required
+        }
+      }
+      automation SweepOverdueLoans {
+        every "15m"
+        command RecallCopy
+      }
+    }
+    slice "Chase Overdue Copy" {
+      command RemindMember {
+        fields {
+          loanId string required
+        }
+      }
+      event CopyBorrowed {
+        fields {
+          loanId string required
+        }
+      }
+      automation RemindOnDueDate {
+        on CopyBorrowed
+        command RemindMember
+      }
+    }
+  }
+}
+`
+
 func TestSlices(t *testing.T) {
 	t.Run("text format", func(t *testing.T) {
 		t.Run("prints table for valid file with all pattern types", func(t *testing.T) {
@@ -64,6 +102,21 @@ func TestSlices(t *testing.T) {
 			require.Contains(t, sliceLines[1], "View Reservations")
 			require.Contains(t, sliceLines[2], "Auto Confirm Reservation")
 			require.Contains(t, sliceLines[3], "Import External Booking")
+		})
+
+		t.Run("names the cadence of a scheduled automation and the event of an event-activated one", func(t *testing.T) {
+			path := writeTemp(t, "cadence.emod", automationCadenceEmod)
+
+			output := captureStdout(t, func() {
+				err := cli.RunSlices(path, "text")
+				require.NoError(t, err)
+			})
+
+			require.Contains(t, output, `every "15m", RecallCopy`)
+			require.Contains(t, output, "CopyBorrowed, RemindMember")
+			for _, line := range strings.Split(output, "\n") {
+				require.NotContains(t, line, "  , ", "a row must not open its key elements with a comma")
+			}
 		})
 
 		t.Run("pattern detection prefers most specific match", func(t *testing.T) {

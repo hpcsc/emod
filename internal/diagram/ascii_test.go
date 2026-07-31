@@ -3,12 +3,37 @@
 package diagram_test
 
 import (
+	"strings"
 	"testing"
 
 	"github.com/hpcsc/emod/internal/ast"
 	"github.com/hpcsc/emod/internal/diagram"
+	"github.com/hpcsc/emod/internal/test"
 	"github.com/stretchr/testify/require"
 )
+
+// libraryLendingAutomationChains is the chain drawn for each automation of
+// test.AutomationScheduleLibraryLending, both slice homes together and in
+// declaration order: the ones running on a cadence start from it where the ones
+// activating on an event start from that event.
+var libraryLendingAutomationChains = []string{
+	`every "0 9 * * *" -> ⚙ RemindMemberEachMorning -> [RemindMember]`,
+	`(MemberReminded) -> ⚙ RecallOnSecondReminder -> [RecallCopy]`,
+	`every "15m" -> ⚙ SweepOverdueLoans -> [RecallCopy]`,
+	`every "0 22 * * *" -> ⚙ CloseDesksAtNight -> [ReleaseDesk]`,
+	`(DeskReleased) -> ⚙ RemindReaderOfLoans -> [RemindMember]`,
+	`every "45m" -> ⚙ SweepIdleDesks -> [ReleaseDesk]`,
+}
+
+func reactorChains(output string) []string {
+	var chains []string
+	for _, line := range strings.Split(output, "\n") {
+		if strings.Contains(line, "⚙") {
+			chains = append(chains, strings.TrimSpace(line))
+		}
+	}
+	return chains
+}
 
 func TestExportASCII(t *testing.T) {
 	t.Run("empty model (no contexts) returns model name only", func(t *testing.T) {
@@ -173,6 +198,26 @@ func TestExportASCII(t *testing.T) {
 		require.Contains(t, output, "(OrderPlaced) -> ⚙ Notifier -> [SendEmail]")
 	})
 
+	t.Run("chains a scheduled automation from its cadence where an event-activated one starts from its event", func(t *testing.T) {
+		raw, err := diagram.ExportASCII(test.AutomationScheduleLibraryLendingModel(t), diagram.StyleAuto)
+		require.NoError(t, err)
+
+		output := string(raw)
+		require.Equal(t, libraryLendingAutomationChains, reactorChains(output))
+		require.NotContains(t, output, "()", "a chain must not start from an empty source")
+	})
+
+	t.Run("lists an event nothing references beside a scheduled automation", func(t *testing.T) {
+		model := singleSliceModel("Library Lending", "Chase Overdue Copy",
+			command("RecallCopy"), event("CopyRecalled"),
+			&ast.Automation{Name: "SweepOverdueLoans", Schedule: "15m", Command: "RecallCopy"})
+
+		raw, err := diagram.ExportASCII(model, diagram.StyleAuto)
+		require.NoError(t, err)
+
+		require.Contains(t, string(raw), "\n  (CopyRecalled)\n")
+	})
+
 	t.Run("renders translation as system to command to event chain", func(t *testing.T) {
 		model := &ast.Model{
 			Name: "Test",
@@ -309,16 +354,26 @@ func TestExportASCII(t *testing.T) {
 	})
 
 	t.Run("output is valid ASCII text", func(t *testing.T) {
-		model := fullModel()
+		models := []struct {
+			name  string
+			model func(t *testing.T) *ast.Model
+		}{
+			{name: "every element type", model: func(*testing.T) *ast.Model { return fullModel() }},
+			{name: "automations running on a cadence", model: test.AutomationScheduleLibraryLendingModel},
+		}
 
-		raw, err := diagram.ExportASCII(model, diagram.StyleAuto)
-		require.NoError(t, err)
+		for _, m := range models {
+			t.Run(m.name, func(t *testing.T) {
+				raw, err := diagram.ExportASCII(m.model(t), diagram.StyleAuto)
+				require.NoError(t, err)
 
-		output := string(raw)
-		for i, r := range output {
-			// The gear ⚙ (U+2699) is the one deliberate non-ASCII marker.
-			require.True(t, r <= 127 || r == '⚙',
-				"unexpected non-ASCII character %U at position %d", r, i)
+				output := string(raw)
+				for i, r := range output {
+					// The gear ⚙ (U+2699) is the one deliberate non-ASCII marker.
+					require.True(t, r <= 127 || r == '⚙',
+						"unexpected non-ASCII character %U at position %d", r, i)
+				}
+			})
 		}
 	})
 

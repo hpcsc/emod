@@ -425,14 +425,10 @@ func TestExporterAutomationSchedule(t *testing.T) {
 }
 
 func sweepingModel(sweep *ast.Automation) *ast.Model {
-	model := singleSliceModel("Lending", "Chase Overdue Copy",
-		command("RemindMember"), command("RecallCopy"), event("CopyBorrowed"))
-	slice := model.Contexts[0].Aggregates[0].Slices[0]
-	slice.Automations = []*ast.Automation{
-		{Name: "RemindOnDueDate", OnEvent: "CopyBorrowed", Command: "RemindMember"},
-		sweep,
-	}
-	return model
+	return singleSliceModel("Lending", "Chase Overdue Copy",
+		command("RemindMember"), command("RecallCopy"), event("CopyBorrowed"),
+		&ast.Automation{Name: "RemindOnDueDate", OnEvent: "CopyBorrowed", Command: "RemindMember"},
+		sweep)
 }
 
 func scheduleShown(label string) string {
@@ -659,6 +655,8 @@ func singleSliceModel(modelName, sliceName string, opts ...any) *ast.Model {
 			s.Views = append(s.Views, v)
 		case *ast.Trigger:
 			s.Trigger = v
+		case *ast.Automation:
+			s.Automations = append(s.Automations, v)
 		}
 	}
 	return m

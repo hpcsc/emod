@@ -56,6 +56,14 @@ func ExportMermaid(model *ast.Model, style Style) ([]byte, error) {
 	return []byte(b.String()), nil
 }
 
+func namespaced(ns, name string) string {
+	if ns == "" {
+		return name
+	}
+
+	return ns + "." + name
+}
+
 // exportMermaidStandard renders the standard aggregate-based layout.
 // This is the original layout used for aggregate-mode contexts.
 func exportMermaidStandard(b *strings.Builder, modelName string, entries []sliceEntry) {
@@ -73,37 +81,25 @@ func exportMermaidStandard(b *strings.Builder, modelName string, entries []slice
 			if s.Trigger.Kind == "Schedule" || s.Trigger.Kind == "Processor" {
 				etype = "pcr"
 			}
-			eid := s.Trigger.Name
-			if ns != "" {
-				eid = ns + "." + eid
-			}
+			eid := namespaced(ns, s.Trigger.Name)
 			b.WriteString(fmt.Sprintf("tf %02d %s %s\n", nextNum, etype, eid))
 			nextNum++
 		}
 
 		for _, cmd := range s.Commands {
-			eid := cmd.Name
-			if ns != "" {
-				eid = ns + "." + eid
-			}
+			eid := namespaced(ns, cmd.Name)
 			b.WriteString(fmt.Sprintf("tf %02d cmd %s\n", nextNum, eid))
 			nextNum++
 		}
 
 		for _, evt := range s.Events {
-			eid := evt.Name
-			if ns != "" {
-				eid = ns + "." + eid
-			}
+			eid := namespaced(ns, evt.Name)
 			b.WriteString(fmt.Sprintf("tf %02d evt %s\n", nextNum, eid))
 			nextNum++
 		}
 
 		for _, view := range s.Views {
-			eid := view.Name
-			if ns != "" {
-				eid = ns + "." + eid
-			}
+			eid := namespaced(ns, view.Name)
 			b.WriteString(fmt.Sprintf("tf %02d rmo %s\n", nextNum, eid))
 			nextNum++
 			for _, sub := range view.Subscribes {
@@ -112,27 +108,12 @@ func exportMermaidStandard(b *strings.Builder, modelName string, entries []slice
 		}
 
 		for _, auto := range s.Automations {
-			targetNs := ns
-			if auto.TargetContext != "" {
-				targetNs = auto.TargetContext
-			}
-			eid := auto.Name
-			if targetNs != "" {
-				eid = targetNs + "." + eid
-			}
-			label := eid
-			if auto.OnEvent != "" && auto.Command != "" {
-				label = fmt.Sprintf("%s (%s → %s)", eid, auto.OnEvent, auto.Command)
-			}
-			b.WriteString(fmt.Sprintf("tf %02d pcr %s\n", nextNum, label))
+			b.WriteString(fmt.Sprintf("tf %02d pcr %s\n", nextNum, mermaidAutomationLabel(auto, ns)))
 			nextNum++
 		}
 
 		for _, tr := range s.Translations {
-			eid := tr.Name
-			if ns != "" {
-				eid = ns + "." + eid
-			}
+			eid := namespaced(ns, tr.Name)
 			b.WriteString(fmt.Sprintf("tf %02d pcr %s\n", nextNum, eid))
 			nextNum++
 			b.WriteString(fmt.Sprintf("%%   pcr -> cmd\n"))
@@ -148,6 +129,24 @@ func exportMermaidStandard(b *strings.Builder, modelName string, entries []slice
 			b.WriteString("\n")
 		}
 	}
+}
+
+func mermaidAutomationLabel(auto *ast.Automation, ctxName string) string {
+	ns := ctxName
+	if auto.TargetContext != "" {
+		ns = auto.TargetContext
+	}
+	eid := namespaced(ns, auto.Name)
+
+	activation := auto.OnEvent
+	if auto.Schedule != "" {
+		activation = cadenceLabel(auto.Schedule)
+	}
+	if activation == "" || auto.Command == "" {
+		return eid
+	}
+
+	return fmt.Sprintf("%s (%s → %s)", eid, activation, auto.Command)
 }
 
 // exportMermaidProjected renders the tag-key-based projected layout for DCB contexts.
@@ -176,20 +175,14 @@ func exportMermaidProjected(b *strings.Builder, modelName string, entries []slic
 			if s.Trigger.Kind == "Schedule" || s.Trigger.Kind == "Processor" {
 				etype = "pcr"
 			}
-			eid := s.Trigger.Name
-			if ns != "" {
-				eid = ns + "." + eid
-			}
+			eid := namespaced(ns, s.Trigger.Name)
 			b.WriteString(fmt.Sprintf("tf %02d %s %s\n", nextNum, etype, eid))
 			nextNum++
 		}
 
 		// Commands
 		for _, cmd := range s.Commands {
-			eid := cmd.Name
-			if ns != "" {
-				eid = ns + "." + eid
-			}
+			eid := namespaced(ns, cmd.Name)
 			b.WriteString(fmt.Sprintf("tf %02d cmd %s\n", nextNum, eid))
 			nextNum++
 		}
@@ -197,10 +190,7 @@ func exportMermaidProjected(b *strings.Builder, modelName string, entries []slic
 		// Aggregate events (not tag-grouped)
 		if !entry.fromDCB {
 			for _, evt := range s.Events {
-				eid := evt.Name
-				if ns != "" {
-					eid = ns + "." + eid
-				}
+				eid := namespaced(ns, evt.Name)
 				b.WriteString(fmt.Sprintf("tf %02d evt %s\n", nextNum, eid))
 				nextNum++
 			}
@@ -210,10 +200,7 @@ func exportMermaidProjected(b *strings.Builder, modelName string, entries []slic
 		if entry.fromDCB {
 			for _, evt := range s.Events {
 				if len(evt.Tags) == 0 {
-					eid := evt.Name
-					if ns != "" {
-						eid = ns + "." + eid
-					}
+					eid := namespaced(ns, evt.Name)
 					b.WriteString(fmt.Sprintf("tf %02d evt %s\n", nextNum, eid))
 					nextNum++
 				}
@@ -222,10 +209,7 @@ func exportMermaidProjected(b *strings.Builder, modelName string, entries []slic
 
 		// Views
 		for _, view := range s.Views {
-			eid := view.Name
-			if ns != "" {
-				eid = ns + "." + eid
-			}
+			eid := namespaced(ns, view.Name)
 			b.WriteString(fmt.Sprintf("tf %02d rmo %s\n", nextNum, eid))
 			nextNum++
 			for _, sub := range view.Subscribes {
@@ -235,28 +219,13 @@ func exportMermaidProjected(b *strings.Builder, modelName string, entries []slic
 
 		// Automations
 		for _, auto := range s.Automations {
-			targetNs := ns
-			if auto.TargetContext != "" {
-				targetNs = auto.TargetContext
-			}
-			eid := auto.Name
-			if targetNs != "" {
-				eid = targetNs + "." + eid
-			}
-			label := eid
-			if auto.OnEvent != "" && auto.Command != "" {
-				label = fmt.Sprintf("%s (%s → %s)", eid, auto.OnEvent, auto.Command)
-			}
-			b.WriteString(fmt.Sprintf("tf %02d pcr %s\n", nextNum, label))
+			b.WriteString(fmt.Sprintf("tf %02d pcr %s\n", nextNum, mermaidAutomationLabel(auto, ns)))
 			nextNum++
 		}
 
 		// Translations
 		for _, tr := range s.Translations {
-			eid := tr.Name
-			if ns != "" {
-				eid = ns + "." + eid
-			}
+			eid := namespaced(ns, tr.Name)
 			b.WriteString(fmt.Sprintf("tf %02d pcr %s\n", nextNum, eid))
 			nextNum++
 			b.WriteString(fmt.Sprintf("%%   pcr -> cmd\n"))
@@ -339,20 +308,14 @@ func exportMermaidDCB(b *strings.Builder, modelName string, entries []sliceEntry
 			if s.Trigger.Kind == "Schedule" || s.Trigger.Kind == "Processor" {
 				etype = "pcr"
 			}
-			eid := s.Trigger.Name
-			if ns != "" {
-				eid = ns + "." + eid
-			}
+			eid := namespaced(ns, s.Trigger.Name)
 			b.WriteString(fmt.Sprintf("tf %02d %s %s\n", nextNum, etype, eid))
 			nextNum++
 		}
 
 		// Commands with decides_on annotation
 		for _, cmd := range s.Commands {
-			eid := cmd.Name
-			if ns != "" {
-				eid = ns + "." + eid
-			}
+			eid := namespaced(ns, cmd.Name)
 			b.WriteString(fmt.Sprintf("tf %02d cmd %s\n", nextNum, eid))
 			nextNum++
 			if cmd.DecidesOn != nil {
@@ -365,10 +328,7 @@ func exportMermaidDCB(b *strings.Builder, modelName string, entries []sliceEntry
 
 		// Views
 		for _, view := range s.Views {
-			eid := view.Name
-			if ns != "" {
-				eid = ns + "." + eid
-			}
+			eid := namespaced(ns, view.Name)
 			b.WriteString(fmt.Sprintf("tf %02d rmo %s\n", nextNum, eid))
 			nextNum++
 			for _, sub := range view.Subscribes {
@@ -378,28 +338,13 @@ func exportMermaidDCB(b *strings.Builder, modelName string, entries []sliceEntry
 
 		// Automations
 		for _, auto := range s.Automations {
-			targetNs := ns
-			if auto.TargetContext != "" {
-				targetNs = auto.TargetContext
-			}
-			eid := auto.Name
-			if targetNs != "" {
-				eid = targetNs + "." + eid
-			}
-			label := eid
-			if auto.OnEvent != "" && auto.Command != "" {
-				label = fmt.Sprintf("%s (%s → %s)", eid, auto.OnEvent, auto.Command)
-			}
-			b.WriteString(fmt.Sprintf("tf %02d pcr %s\n", nextNum, label))
+			b.WriteString(fmt.Sprintf("tf %02d pcr %s\n", nextNum, mermaidAutomationLabel(auto, ns)))
 			nextNum++
 		}
 
 		// Translations (reactor part)
 		for _, tr := range s.Translations {
-			eid := tr.Name
-			if ns != "" {
-				eid = ns + "." + eid
-			}
+			eid := namespaced(ns, tr.Name)
 			b.WriteString(fmt.Sprintf("tf %02d pcr %s\n", nextNum, eid))
 			nextNum++
 			b.WriteString(fmt.Sprintf("%%   pcr -> cmd\n"))
@@ -425,10 +370,7 @@ func exportMermaidDCB(b *strings.Builder, modelName string, entries []sliceEntry
 
 		// Events with tag badges
 		for _, evt := range s.Events {
-			eid := evt.Name
-			if ns != "" {
-				eid = ns + "." + eid
-			}
+			eid := namespaced(ns, evt.Name)
 			b.WriteString(fmt.Sprintf("tf %02d evt %s\n", nextNum, eid))
 			nextNum++
 			if len(evt.Tags) > 0 {
@@ -442,10 +384,7 @@ func exportMermaidDCB(b *strings.Builder, modelName string, entries []sliceEntry
 		// Translation events
 		for _, tr := range s.Translations {
 			if tr.Event != nil && tr.Event.Name != "" {
-				eid := tr.Event.Name
-				if ns != "" {
-					eid = ns + "." + eid
-				}
+				eid := namespaced(ns, tr.Event.Name)
 				b.WriteString(fmt.Sprintf("tf %02d evt %s\n", nextNum, eid))
 				nextNum++
 			}

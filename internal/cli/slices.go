@@ -142,6 +142,13 @@ func detectPattern(s *ast.Slice) string {
 	return "unknown"
 }
 
+func automationActivation(auto *ast.Automation) string {
+	if auto.Schedule != "" {
+		return `every "` + auto.Schedule + `"`
+	}
+	return auto.OnEvent
+}
+
 func keyElementsForPattern(s *ast.Slice, pattern string) string {
 	switch pattern {
 	case "command":
@@ -171,7 +178,7 @@ func keyElementsForPattern(s *ast.Slice, pattern string) string {
 	case "automation":
 		if len(s.Automations) > 0 {
 			auto := s.Automations[0]
-			return fmt.Sprintf("%s, %s", auto.OnEvent, auto.Command)
+			return fmt.Sprintf("%s, %s", automationActivation(auto), auto.Command)
 		}
 		return ""
 	case "translation":

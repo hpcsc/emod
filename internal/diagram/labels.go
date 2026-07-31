@@ -11,6 +11,10 @@ func reactorLabel(name string) string {
 	return gearMarking + " " + name
 }
 
+func cadenceLabel(schedule string) string {
+	return `every "` + schedule + `"`
+}
+
 func automationLabel(auto *ast.Automation, lineBreak string) string {
 	label := reactorLabel(auto.Name)
 	if auto.Schedule == "" {

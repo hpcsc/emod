@@ -3,12 +3,41 @@
 package diagram_test
 
 import (
+	"strings"
 	"testing"
 
 	"github.com/hpcsc/emod/internal/ast"
 	"github.com/hpcsc/emod/internal/diagram"
+	"github.com/hpcsc/emod/internal/test"
 	"github.com/stretchr/testify/require"
 )
+
+// libraryLendingProcessorTimeframes is the processor line every style writes for
+// each automation of test.AutomationScheduleLibraryLending, both slice homes
+// together and in declaration order: the ones running on a cadence name it where
+// the ones activating on an event name that event.
+var libraryLendingProcessorTimeframes = []string{
+	`pcr Lending.RemindMemberEachMorning (every "0 9 * * *" → RemindMember)`,
+	`pcr Lending.RecallOnSecondReminder (MemberReminded → RecallCopy)`,
+	`pcr Lending.SweepOverdueLoans (every "15m" → RecallCopy)`,
+	`pcr Reading Room.CloseDesksAtNight (every "0 22 * * *" → ReleaseDesk)`,
+	`pcr Reading Room.RemindReaderOfLoans (DeskReleased → RemindMember)`,
+	`pcr Reading Room.SweepIdleDesks (every "45m" → ReleaseDesk)`,
+}
+
+// processorTimeframes drops each entry's sequence number: the styles number the
+// same entries differently, and no expectation here is about the numbering.
+func processorTimeframes(output string) []string {
+	var entries []string
+	for _, line := range strings.Split(output, "\n") {
+		parts := strings.SplitN(line, " ", 3)
+		if len(parts) < 3 || parts[0] != "tf" || !strings.HasPrefix(parts[2], "pcr ") {
+			continue
+		}
+		entries = append(entries, parts[2])
+	}
+	return entries
+}
 
 func TestExportMermaid(t *testing.T) {
 	t.Run("auto and projected styles", func(t *testing.T) {
@@ -145,6 +174,23 @@ func TestExportMermaid(t *testing.T) {
 
 			output := string(raw)
 			require.Contains(t, output, "tf 01 pcr Billing.Notifier")
+		})
+
+		t.Run("a scheduled automation names its cadence where an event-activated one names its event", func(t *testing.T) {
+			for _, style := range []struct {
+				name  string
+				style diagram.Style
+			}{
+				{name: "auto", style: diagram.StyleAuto},
+				{name: "projected", style: diagram.StyleProjected},
+			} {
+				t.Run(style.name, func(t *testing.T) {
+					raw, err := diagram.ExportMermaid(test.AutomationScheduleLibraryLendingModel(t), style.style)
+					require.NoError(t, err)
+
+					require.Equal(t, libraryLendingProcessorTimeframes, processorTimeframes(string(raw)))
+				})
+			}
 		})
 
 		t.Run("sequential numbering increments across all slices", func(t *testing.T) {
@@ -476,6 +522,13 @@ func TestExportMermaid(t *testing.T) {
 	})
 
 	t.Run("dcb style", func(t *testing.T) {
+		t.Run("a scheduled automation names its cadence where an event-activated one names its event", func(t *testing.T) {
+			raw, err := diagram.ExportMermaid(test.AutomationScheduleLibraryLendingModel(t), diagram.StyleDCB)
+			require.NoError(t, err)
+
+			require.Equal(t, libraryLendingProcessorTimeframes, processorTimeframes(string(raw)))
+		})
+
 		t.Run("DCB context with StyleDCB renders flat events section", func(t *testing.T) {
 			model := &ast.Model{
 				Name: "DCBFlat",

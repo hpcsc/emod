@@ -15,6 +15,7 @@ import (
 //   - Views as {Name}
 //   - Triggers as <<Kind: Name>>
 //   - Automations as ⚙ Name
+//   - Cadences as every "Expression"
 //
 // Flows are rendered with -> arrows between connected elements.
 func ExportASCII(model *ast.Model, _ Style) ([]byte, error) {
@@ -80,10 +81,10 @@ func ExportASCII(model *ast.Model, _ Style) ([]byte, error) {
 			}
 		}
 
-		// Automations (event → ⚙ → command)
+		// Automations (activation → ⚙ → command)
 		for _, auto := range s.Automations {
-			fmt.Fprintf(&b, "  (%s) -> ⚙ %s -> [%s]\n",
-				auto.OnEvent, auto.Name, auto.Command)
+			fmt.Fprintf(&b, "  %s -> ⚙ %s -> [%s]\n",
+				activationMarking(auto), auto.Name, auto.Command)
 		}
 
 		// Translations (ext sys -> ⚙ reactor -> command -> event)
@@ -116,6 +117,14 @@ func formatTrigger(t *ast.Trigger) string {
 	}
 	label += ">>"
 	return label
+}
+
+func activationMarking(auto *ast.Automation) string {
+	if auto.Schedule != "" {
+		return cadenceLabel(auto.Schedule)
+	}
+
+	return fmt.Sprintf("(%s)", auto.OnEvent)
 }
 
 func standaloneCommands(s *ast.Slice) []*ast.Command {
