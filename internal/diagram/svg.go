@@ -154,7 +154,7 @@ func ExportSVG(model *ast.Model, _ Style) ([]byte, error) {
 			autoPadY := 15 + ai*(autoH+5)
 			x := sliceX + autoPadX
 			y := triggerLaneY + laneHeight - autoH - autoPadY
-			label := fmt.Sprintf("\u2699 %s", auto.Name)
+			label := automationLabel(auto, "\n")
 			b.WriteString(svgRoundedRect(x, y, autoW-boxWidth/8, autoH, fillReactor, strokeReactor, 3, auto.Description))
 			b.WriteString(svgMultilineText(x+(autoW-boxWidth/8)/2, y+autoH/2, label, 10, strokeReactor))
 			elems = append(elems, svgElem{
@@ -171,7 +171,7 @@ func ExportSVG(model *ast.Model, _ Style) ([]byte, error) {
 			padY := 15 + (len(s.Automations)+ti)*(reactorH+5)
 			x := sliceX + padX
 			y := triggerLaneY + laneHeight - reactorH - padY
-			label := fmt.Sprintf("\u2699 %s", tr.Name)
+			label := reactorLabel(tr.Name)
 			b.WriteString(svgRoundedRect(x, y, reactorW-boxWidth/8, reactorH, fillReactor, strokeReactor, 3, tr.Description))
 			b.WriteString(svgMultilineText(x+(reactorW-boxWidth/8)/2, y+reactorH/2, label, 10, strokeReactor))
 			elems = append(elems, svgElem{

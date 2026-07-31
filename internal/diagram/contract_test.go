@@ -29,9 +29,19 @@ type exporter struct {
 	fillOfLabel func(t *testing.T, output, label string) string
 	// countConnections reports how many connections the output draws; nil for
 	// formats that describe elements without drawing arrows between them.
-	countConnections  func(output string) int
+	countConnections func(output string) int
+	// boxes returns the boxes the output draws, in document order; nil for the
+	// text formats, which draw none.
+	boxes             func(t *testing.T, output string) []diagramBox
 	export            func(*ast.Model, diagram.Style) ([]byte, error)
 	requireWellFormed func(t *testing.T, output string)
+}
+
+type diagramBox struct {
+	label string
+	// appearance is where the box sits, how big it is and how it is painted, in
+	// the format's own spelling.
+	appearance string
 }
 
 func requireValidXML(t *testing.T, output string) {
@@ -50,6 +60,7 @@ func exporters() []exporter {
 			name:              "drawio",
 			fillOfLabel:       drawioFillOfLabel,
 			countConnections:  func(output string) int { return strings.Count(output, `edge="1"`) },
+			boxes:             drawioBoxes,
 			export:            diagram.ExportDrawio,
 			requireWellFormed: requireValidXML,
 		},
@@ -57,6 +68,7 @@ func exporters() []exporter {
 			name:              "svg",
 			fillOfLabel:       svgFillOfLabel,
 			countConnections:  arrowCount,
+			boxes:             svgBoxes,
 			export:            diagram.ExportSVG,
 			requireWellFormed: requireValidXML,
 		},
@@ -124,6 +136,20 @@ func (e exporter) run(t *testing.T, model *ast.Model, style diagram.Style) strin
 	require.NoError(t, err)
 
 	return string(raw)
+}
+
+func (e exporter) boxLabelled(t *testing.T, output, name string) diagramBox {
+	t.Helper()
+
+	var matched []diagramBox
+	for _, box := range e.boxes(t, output) {
+		if strings.Contains(box.label, name) {
+			matched = append(matched, box)
+		}
+	}
+	require.Len(t, matched, 1, "expected one box labelled %q", name)
+
+	return matched[0]
 }
 
 func TestExporterContract(t *testing.T) {
@@ -306,6 +332,135 @@ func translationModel(declareFlow bool) *ast.Model {
 		slice.Flows = []*ast.Flow{{CommandName: "Charge", EventName: "Charged"}}
 	}
 	return model
+}
+
+const (
+	gearMarking  = "⚙"
+	clockMarking = "⏱"
+)
+
+// scheduledLibraryLendingAutomations names the automations of
+// test.AutomationScheduleLibraryLending that run on a cadence, both slice homes
+// together and in declaration order, so each name lines up with the cadence
+// transcribed at the same place in
+// test.AutomationScheduleLibraryLendingSchedules.
+var scheduledLibraryLendingAutomations = []string{
+	"RemindMemberEachMorning",
+	"SweepOverdueLoans",
+	"CloseDesksAtNight",
+	"SweepIdleDesks",
+}
+
+// eventActivatedLibraryLendingAutomations names the automations of that same
+// fixture that state an activation event instead of a cadence.
+var eventActivatedLibraryLendingAutomations = []string{
+	"RecallOnSecondReminder",
+	"RemindReaderOfLoans",
+}
+
+// TestExporterAutomationSchedule covers the cadence a scheduled automation's
+// box shows. The text formats draw no box to show one on, so they sit it out.
+func TestExporterAutomationSchedule(t *testing.T) {
+	for _, e := range exporters() {
+		if e.boxes == nil {
+			continue
+		}
+
+		t.Run(e.name, func(t *testing.T) {
+			t.Run("a scheduled automation is drawn with its own cadence beside the gear and its name", func(t *testing.T) {
+				output := e.run(t, test.AutomationScheduleLibraryLendingModel(t), diagram.StyleAuto)
+
+				e.requireWellFormed(t, output)
+				var shown []string
+				for _, name := range scheduledLibraryLendingAutomations {
+					label := e.boxLabelled(t, output, name).label
+					require.Contains(t, label, gearMarking, "a cadence joins the marking the box already carried")
+					shown = append(shown, scheduleShown(label))
+				}
+
+				require.Equal(t, test.AutomationScheduleLibraryLendingSchedules, shown,
+					"each box shows the cadence its own automation runs on")
+			})
+
+			t.Run("an automation stating an activation event is drawn with no clock and no cadence", func(t *testing.T) {
+				mixed := e.run(t, test.AutomationScheduleLibraryLendingModel(t), diagram.StyleAuto)
+
+				for _, name := range scheduledLibraryLendingAutomations {
+					require.Contains(t, e.boxLabelled(t, mixed, name).label, clockMarking,
+						"the scheduled automations of this same rendering have to be marked, or the silence below says nothing")
+				}
+
+				for _, name := range eventActivatedLibraryLendingAutomations {
+					label := e.boxLabelled(t, mixed, name).label
+
+					require.NotContains(t, label, clockMarking)
+					for _, cadence := range test.AutomationScheduleLibraryLendingSchedules {
+						require.NotContains(t, label, cadence, "the cadence of a neighbouring automation must not leak onto this box")
+					}
+				}
+
+				unscheduled := e.run(t, test.AutomationReadsLibraryLendingModel(t), diagram.StyleAuto)
+
+				require.NotContains(t, unscheduled, clockMarking,
+					"a model whose automations state no cadence is drawn exactly as it was before cadences could be drawn")
+			})
+
+			t.Run("adding a schedule to one automation moves, resizes and repaints no box", func(t *testing.T) {
+				const sweep = "SweepOverdueCopies"
+				plain := e.run(t, sweepingModel(&ast.Automation{Name: sweep, OnEvent: "CopyBorrowed", Command: "RecallCopy"}), diagram.StyleAuto)
+				scheduled := e.run(t, sweepingModel(&ast.Automation{Name: sweep, Schedule: "15m", Command: "RecallCopy"}), diagram.StyleAuto)
+
+				require.Equal(t, "15m", scheduleShown(e.boxLabelled(t, scheduled, sweep).label),
+					"the twin has to be drawn with the cadence, or the comparison below says nothing")
+				require.Empty(t, scheduleShown(e.boxLabelled(t, plain, sweep).label))
+
+				plainBoxes, scheduledBoxes := e.boxes(t, plain), e.boxes(t, scheduled)
+				require.Equal(t, appearancesOf(plainBoxes), appearancesOf(scheduledBoxes),
+					"a cadence must not move, resize or repaint a box")
+				require.Equal(t, labelsExcept(plainBoxes, sweep), labelsExcept(scheduledBoxes, sweep),
+					"a cadence belongs to the box of the automation running on it and to no other")
+			})
+		})
+	}
+}
+
+func sweepingModel(sweep *ast.Automation) *ast.Model {
+	model := singleSliceModel("Lending", "Chase Overdue Copy",
+		command("RemindMember"), command("RecallCopy"), event("CopyBorrowed"))
+	slice := model.Contexts[0].Aggregates[0].Slices[0]
+	slice.Automations = []*ast.Automation{
+		{Name: "RemindOnDueDate", OnEvent: "CopyBorrowed", Command: "RemindMember"},
+		sweep,
+	}
+	return model
+}
+
+func scheduleShown(label string) string {
+	_, cadence, marked := strings.Cut(label, clockMarking)
+	if !marked {
+		return ""
+	}
+
+	return strings.TrimSpace(cadence)
+}
+
+func appearancesOf(boxes []diagramBox) []string {
+	var appearances []string
+	for _, box := range boxes {
+		appearances = append(appearances, box.appearance)
+	}
+	return appearances
+}
+
+func labelsExcept(boxes []diagramBox, name string) []string {
+	var labels []string
+	for _, box := range boxes {
+		if strings.Contains(box.label, name) {
+			continue
+		}
+		labels = append(labels, box.label)
+	}
+	return labels
 }
 
 // TestExporterPalette pins the event-modeling sticky-note convention — orange

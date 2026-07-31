@@ -831,6 +831,17 @@ func drawioShapes(t *testing.T, output string) []drawioShape {
 	return shapes
 }
 
+func drawioBoxes(t *testing.T, output string) []diagramBox {
+	t.Helper()
+
+	var boxes []diagramBox
+	for _, shape := range drawioShapes(t, output) {
+		boxes = append(boxes, diagramBox{label: shape.label, appearance: shape.geometry + " " + shape.style})
+	}
+
+	return boxes
+}
+
 // drawioTooltipsOf returns what every shape whose label contains label says when
 // hovered, failing when the diagram draws no such shape.
 func drawioTooltipsOf(t *testing.T, output, label string) []string {

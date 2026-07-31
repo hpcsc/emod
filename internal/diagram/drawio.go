@@ -410,7 +410,7 @@ func ExportDrawio(model *ast.Model, style Style) ([]byte, error) {
 			autoPadY := 15 + ai*(autoH+5)
 			x := sliceX + autoPadX
 			y := triggerLaneY + laneHeight - autoH - autoPadY
-			label := fmt.Sprintf("⚙ %s", auto.Name)
+			label := automationLabel(auto, "\\n")
 			b.WriteString(vertexCell(id, label, auto.Description, x, y, autoW-boxWidth/8, autoH, styleReactor))
 			elems = append(elems, namedElem{sliceIdx: i, name: auto.Name, id: id, x: x, y: y, w: autoW - boxWidth/8, h: autoH})
 		}
@@ -424,7 +424,7 @@ func ExportDrawio(model *ast.Model, style Style) ([]byte, error) {
 			padY := 15 + (len(s.Automations)+ti)*(reactorH+5)
 			x := sliceX + padX
 			y := triggerLaneY + laneHeight - reactorH - padY
-			label := fmt.Sprintf("⚙ %s", tr.Name)
+			label := reactorLabel(tr.Name)
 			b.WriteString(vertexCell(id, label, tr.Description, x, y, reactorW-boxWidth/8, reactorH, styleReactor))
 			elems = append(elems, namedElem{sliceIdx: i, name: tr.Name, id: id, x: x, y: y, w: reactorW - boxWidth/8, h: reactorH})
 		}

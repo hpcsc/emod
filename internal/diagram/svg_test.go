@@ -393,6 +393,17 @@ func svgShapes(t *testing.T, output string) []svgShape {
 	return shapes
 }
 
+func svgBoxes(t *testing.T, output string) []diagramBox {
+	t.Helper()
+
+	var boxes []diagramBox
+	for _, shape := range svgShapes(t, output) {
+		boxes = append(boxes, diagramBox{label: shape.label, appearance: shape.attributes})
+	}
+
+	return boxes
+}
+
 func svgAttributes(element xml.StartElement) string {
 	pairs := make([]string, 0, len(element.Attr))
 	for _, a := range element.Attr {
@@ -423,8 +434,8 @@ func svgPicture(t *testing.T, output string) []string {
 	t.Helper()
 
 	var drawn []string
-	for _, shape := range svgShapes(t, output) {
-		drawn = append(drawn, shape.attributes+" "+shape.label)
+	for _, box := range svgBoxes(t, output) {
+		drawn = append(drawn, box.appearance+" "+box.label)
 	}
 
 	return append(drawn, svgArrows(output)...)
