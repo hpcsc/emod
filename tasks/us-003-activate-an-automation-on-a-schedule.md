@@ -10,7 +10,7 @@
 - [x] Task 7: Carry the schedule through the diagram document and back
 - [x] Task 8: Draw a clock badge on a scheduled automation in SVG and draw.io
 - [x] Task 9: Name the cadence in Mermaid, ASCII and `emod slices`
-- [ ] Task 10: Show a scheduled automation's cadence in the viewer
+- [x] Task 10: Show a scheduled automation's cadence in the viewer
 
 ---
 

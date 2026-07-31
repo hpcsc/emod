@@ -2,6 +2,7 @@ import { L, edgeConfig, arrowClassMap } from './config.js';
 import { Layout } from './layout.js';
 
 var NS = "http://www.w3.org/2000/svg";
+var clockMarking = "⏱";
 
 function esc(str) {
   return String(str).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
@@ -38,6 +39,17 @@ function svgText(x, y, text, fontSize, fill, attrs) {
   setAttrs(el, attrs);
   el.textContent = text;
   return el;
+}
+
+function svgTitle(text) {
+  var el = document.createElementNS(NS, "title");
+  el.textContent = text;
+  return el;
+}
+
+function centeredText(x, y, text, fontSize, fill) {
+  return svgText(x, y, text, fontSize, fill,
+    "text-anchor=\"middle\" dominant-baseline=\"middle\"");
 }
 
 function arrowClassForType(edgeType) {
@@ -100,6 +112,35 @@ function arrowHitPath(d, source, target, edgeId) {
   el.setAttribute("data-edge-id", edgeId);
   el.setAttribute("pointer-events", "stroke");
   return el;
+}
+
+function appendBlockLabels(blockG, node, pos, stroke) {
+  var midX = pos.x + pos.w / 2;
+  var midY = pos.y + pos.h / 2;
+
+  if (node.type === "translation") {
+    if (node.external_system) {
+      blockG.appendChild(centeredText(midX, pos.y + 16, node.external_system, 12, stroke));
+      blockG.appendChild(centeredText(midX, pos.y + 32, node.label, 10, stroke));
+    } else {
+      blockG.appendChild(centeredText(midX, pos.y + 18, node.label, 12, stroke));
+    }
+    if (node.reads) {
+      blockG.appendChild(centeredText(midX, pos.y + 46, "Reads: " + node.reads, 9, stroke));
+    }
+    return;
+  }
+
+  if (node.type === "automation" && node.every) {
+    // A group's tooltip is its first <title> child, and it carries the cadence a
+    // second time so a cron expression wider than the box stays readable on hover.
+    blockG.insertBefore(svgTitle(node.every), blockG.firstChild);
+    blockG.appendChild(centeredText(midX, midY - 9, node.label, 13, stroke));
+    blockG.appendChild(centeredText(midX, midY + 11, clockMarking + " " + node.every, 10, stroke));
+    return;
+  }
+
+  blockG.appendChild(centeredText(midX, midY, node.label, 13, stroke));
 }
 
 function buildSVG(store) {
@@ -251,24 +292,7 @@ function buildSVG(store) {
     inPort.setAttribute("cursor", "crosshair");
     blockG.appendChild(inPort);
 
-    if (n.type === "translation") {
-      if (n.external_system) {
-        blockG.appendChild(svgText(np.x + np.w / 2, np.y + 16, n.external_system, 12, stroke,
-          "text-anchor=\"middle\" dominant-baseline=\"middle\""));
-        blockG.appendChild(svgText(np.x + np.w / 2, np.y + 32, n.label, 10, stroke,
-          "text-anchor=\"middle\" dominant-baseline=\"middle\""));
-      } else {
-        blockG.appendChild(svgText(np.x + np.w / 2, np.y + 18, n.label, 12, stroke,
-          "text-anchor=\"middle\" dominant-baseline=\"middle\""));
-      }
-      if (n.reads) {
-        blockG.appendChild(svgText(np.x + np.w / 2, np.y + 46, "Reads: " + n.reads, 9, stroke,
-          "text-anchor=\"middle\" dominant-baseline=\"middle\""));
-      }
-    } else {
-      blockG.appendChild(svgText(np.x + np.w / 2, np.y + np.h / 2, n.label, 13, stroke,
-        "text-anchor=\"middle\" dominant-baseline=\"middle\""));
-    }
+    appendBlockLabels(blockG, n, np, stroke);
     vg.appendChild(blockG);
   });
 

@@ -40,6 +40,28 @@ function narrowAndWideContexts() {
   ];
 }
 
+const clockMarking = '⏱';
+const cronExpression = '0 9 * * 1-5';
+const cadenceBadge = clockMarking + ' ' + cronExpression;
+const automationFill = '#fff2cc';
+
+// An automation woken by a clock beside one woken by an event and a command, all
+// in one slice, so a single render draws the marked case, the unmarked case and
+// a neighbouring box the cadence has to leave alone.
+function pairedAutomations(schedule) {
+  const scheduled = { id: 'autoScheduled', type: 'automation', label: 'SweepArrears', parentId: 'sl1' };
+  if (schedule) scheduled.every = schedule;
+
+  return [
+    { id: 'ctx1', type: 'context', label: 'Collections' },
+    { id: 'agg1', type: 'aggregate', label: 'Arrangement', parentId: 'ctx1' },
+    { id: 'sl1', type: 'slice', label: 'Chase arrears', parentId: 'agg1' },
+    scheduled,
+    { id: 'autoOnEvent', type: 'automation', label: 'ChaseOverdue', parentId: 'sl1', on_event: 'InvoiceOverdue' },
+    { id: 'cmd1', type: 'command', label: 'ChaseInvoice', parentId: 'sl1' },
+  ];
+}
+
 function createStore(nodes, hiddenNodes) {
   return {
     nodes: nodes,
@@ -62,6 +84,43 @@ function labelFor(svg, aggId) {
 
 function rowFor(svg, aggId) {
   return svg.querySelector('.agg-row[data-agg-id="' + aggId + '"]');
+}
+
+function nodeGroup(svg, nodeId) {
+  return svg.querySelector('.diagram-node[data-node-id="' + nodeId + '"]');
+}
+
+// Reading the <text> elements keeps the badge drawn on the box apart from the
+// tooltip: the group's textContent folds its <title> in with the drawn labels.
+function drawnLabels(group) {
+  return [...group.querySelectorAll('text')];
+}
+
+function drawnText(group) {
+  return drawnLabels(group).map((el) => el.textContent);
+}
+
+function tooltipOf(group) {
+  const title = group.querySelector('title');
+  return title ? title.textContent : null;
+}
+
+function badgeIn(group) {
+  return drawnLabels(group).find((el) => el.textContent.includes(clockMarking));
+}
+
+function drawnBoxes(svg) {
+  const entries = [...svg.querySelectorAll('.diagram-node')].map((group) => {
+    const box = group.querySelector('rect');
+    return [group.getAttribute('data-node-id'), {
+      x: box.getAttribute('x'),
+      y: box.getAttribute('y'),
+      width: box.getAttribute('width'),
+      height: box.getAttribute('height'),
+      fill: box.getAttribute('fill'),
+    }];
+  });
+  return Object.fromEntries(entries);
 }
 
 const numeric = (el, attr) => Number(el.getAttribute(attr));
@@ -140,6 +199,38 @@ describe('Renderer.buildSVG', () => {
       expect(rowFor(svg, 'agg1')).toBeNull();
       expect(labelFor(svg, 'agg1')).toBeNull();
       expect(rowFor(svg, 'agg2')).not.toBeNull();
+    });
+  });
+
+  describe('automation cadence', () => {
+    it('draws the clock badge and its tooltip on the scheduled automation only', () => {
+      const { svg } = render(pairedAutomations(cronExpression));
+
+      const scheduled = nodeGroup(svg, 'autoScheduled');
+      expect(drawnText(scheduled)).toContain('SweepArrears');
+      expect(drawnText(scheduled)).toContain(cadenceBadge);
+      expect(tooltipOf(scheduled)).toBe(cronExpression);
+
+      const eventActivated = nodeGroup(svg, 'autoOnEvent');
+      expect(drawnText(eventActivated)).toEqual(['ChaseOverdue']);
+      expect(tooltipOf(eventActivated)).toBeNull();
+    });
+
+    it('fits the cadence inside a box it neither moves, resizes nor repaints', () => {
+      const eventActivated = render(pairedAutomations());
+      const scheduled = render(pairedAutomations(cronExpression));
+
+      const boxes = drawnBoxes(scheduled.svg);
+      const box = boxes.autoScheduled;
+      const badge = badgeIn(nodeGroup(scheduled.svg, 'autoScheduled'));
+
+      expect(badge.textContent).toBe(cadenceBadge);
+      expect(numeric(badge, 'y')).toBeGreaterThan(Number(box.y));
+      expect(numeric(badge, 'y')).toBeLessThan(Number(box.y) + Number(box.height));
+
+      expect(box.fill).toBe(automationFill);
+      expect(box.height).toBe(boxes.cmd1.height);
+      expect(boxes).toEqual(drawnBoxes(eventActivated.svg));
     });
   });
 });

@@ -38,24 +38,41 @@ beforeEach(() => {
 });
 
 describe('detail panel for an automation', () => {
-  it('shows the activation event, the view it reads, the command it issues and the target context', () => {
-    const store = createStore();
+  it.each([
+    {
+      activation: 'an event',
+      attrs: { on_event: 'InvoiceOverdue' },
+      activationRows: [
+        { label: 'On Event', value: 'InvoiceOverdue' },
+        { label: 'Every', value: '—' },
+      ],
+    },
+    {
+      activation: 'a schedule',
+      attrs: { every: '0 9 * * 1-5' },
+      activationRows: [
+        { label: 'On Event', value: '—' },
+        { label: 'Every', value: '0 9 * * 1-5' },
+      ],
+    },
+  ])('shows how an automation activated by $activation wakes up, the view it reads, the command it issues and the target context',
+    ({ attrs, activationRows }) => {
+      const store = createStore();
 
-    UI.showDetailPanel(store, automationNode({
-      on_event: 'InvoiceOverdue',
-      reads: 'OutstandingInvoices',
-      command: 'ChaseInvoice',
-      target_context: 'Collections',
-    }));
+      UI.showDetailPanel(store, automationNode({
+        reads: 'OutstandingInvoices',
+        command: 'ChaseInvoice',
+        target_context: 'Collections',
+        ...attrs,
+      }));
 
-    expect(store.dom.dpContent.textContent).toContain('Automation');
-    expect(shownRows(store)).toEqual([
-      { label: 'On Event', value: 'InvoiceOverdue' },
-      { label: 'Reads', value: 'OutstandingInvoices' },
-      { label: 'Command', value: 'ChaseInvoice' },
-      { label: 'Target Context', value: 'Collections' },
-    ]);
-  });
+      expect(store.dom.dpContent.textContent).toContain('Automation');
+      expect(shownRows(store)).toEqual(activationRows.concat([
+        { label: 'Reads', value: 'OutstandingInvoices' },
+        { label: 'Command', value: 'ChaseInvoice' },
+        { label: 'Target Context', value: 'Collections' },
+      ]));
+    });
 
   it('shows a placeholder for every attribute the automation leaves undeclared', () => {
     const store = createStore();
@@ -64,6 +81,7 @@ describe('detail panel for an automation', () => {
 
     expect(shownRows(store)).toEqual([
       { label: 'On Event', value: '—' },
+      { label: 'Every', value: '—' },
       { label: 'Reads', value: '—' },
       { label: 'Command', value: '—' },
       { label: 'Target Context', value: '—' },
@@ -73,6 +91,7 @@ describe('detail panel for an automation', () => {
   it.each([
     { label: 'On Event', key: 'on_event', value: 'Invoice<b>&</b>Overdue' },
     { label: 'Reads', key: 'reads', value: 'Invoices<b>&</b>Payments' },
+    { label: 'Every', key: 'every', value: '0 9 * * <b>&</b>' },
   ])('shows the $label value containing markup as text', ({ label, key, value }) => {
     const store = createStore();
 
@@ -82,11 +101,14 @@ describe('detail panel for an automation', () => {
     expect(store.dom.dpContent.querySelector('b')).toBeNull();
   });
 
-  it('shows no activation event for a node stating it under the retired key', () => {
+  it.each([
+    { label: 'On Event', key: 'trigger_event', value: 'InvoiceOverdue' },
+    { label: 'Every', key: 'schedule', value: '0 9 * * 1-5' },
+  ])('shows no $label for a node stating it under a key the exporter never writes', ({ label, key, value }) => {
     const store = createStore();
 
-    UI.showDetailPanel(store, automationNode({ trigger_event: 'InvoiceOverdue' }));
+    UI.showDetailPanel(store, automationNode({ [key]: value }));
 
-    expect(shownRows(store)).toContainEqual({ label: 'On Event', value: '—' });
+    expect(shownRows(store)).toContainEqual({ label, value: '—' });
   });
 });
