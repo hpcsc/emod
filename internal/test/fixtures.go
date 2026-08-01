@@ -735,6 +735,204 @@ context "Reading Room" mode dcb {
 }
 `
 
+// TriggerReadsLibraryLending names the view its triggers read in both homes a
+// slice has — nested in an aggregate, and declared directly on a DCB-mode
+// context — and every view named is one the model itself declares, one of them
+// from another slice and one from another context, so packages that resolve a
+// trigger's reads to the view it opens on share one model. A trigger and an
+// automation each leave their reads out ahead of further declarations on
+// purpose: write the omission last and nothing here would catch a declaration
+// running on into what follows it.
+const TriggerReadsLibraryLending = `# Lending a library's copies and seating its readers, with the views its triggers open on
+model "Library Lending"
+
+actor "Member"
+actor "Librarian"
+
+context "Lending" {
+  aggregate "Loan" {
+    slice "Borrow Copy" {
+      trigger "Lending Desk" {
+        actor Member
+        reads MemberLoansView
+      }
+      command BorrowCopy {
+        fields {
+          memberId string required
+          copyId   string required
+          dueOn    date   required
+        }
+      }
+      event CopyBorrowed {
+        fields {
+          loanId   string required
+          memberId string required
+          copyId   string required
+          dueOn    date   required
+        }
+      }
+      flow {
+        command -> event: BorrowCopy -> CopyBorrowed
+      }
+    }
+    slice "Review Member Loans" {
+      view MemberLoansView {
+        fields {
+          loanId   string required
+          memberId string required
+          dueOn    date   required
+        }
+        subscribes [CopyBorrowed]
+      }
+    }
+    slice "Return Copy" {
+      trigger "Returns Counter" {
+        actor Member
+      }
+      command ReturnCopy {
+        fields {
+          loanId string required
+          copyId string required
+        }
+      }
+      event CopyReturned {
+        fields {
+          loanId     string    required
+          copyId     string    required
+          returnedAt timestamp required
+        }
+      }
+      flow {
+        command -> event: ReturnCopy -> CopyReturned
+      }
+    }
+    slice "Chase Overdue Copy" {
+      trigger "Overdue Report" {
+        actor Librarian
+        reads DeskOccupancyView
+      }
+      command RemindMember {
+        fields {
+          loanId   string required
+          memberId string required
+        }
+      }
+      command RecallCopy {
+        fields {
+          loanId string required
+          copyId string required
+        }
+      }
+      event MemberReminded {
+        fields {
+          loanId     string    required
+          memberId   string    required
+          remindedAt timestamp required
+        }
+      }
+      event CopyRecalled {
+        fields {
+          loanId     string    required
+          copyId     string    required
+          recalledAt timestamp required
+        }
+      }
+      automation RemindOnDueDate {
+        on CopyBorrowed
+        command RemindMember
+      }
+      automation RecallOverdueCopy {
+        on CopyBorrowed
+        reads MemberLoansView
+        command RecallCopy
+      }
+      flow {
+        command -> event: RemindMember -> MemberReminded
+        command -> event: RecallCopy -> CopyRecalled
+      }
+    }
+  }
+}
+
+context "Reading Room" mode dcb {
+  slice "Claim Desk" {
+    trigger "Desk Kiosk" {
+      actor Member
+      reads DeskOccupancyView
+    }
+    command ClaimDesk {
+      fields {
+        memberId string required
+        deskId   string required
+      }
+    }
+    event DeskClaimed {
+      tags {
+        desk  : deskId
+        reader: memberId
+      }
+      fields {
+        sessionId string    required
+        deskId    string    required
+        memberId  string    required
+        claimedAt timestamp required
+      }
+    }
+    flow {
+      command -> event: ClaimDesk -> DeskClaimed
+    }
+  }
+  slice "Release Desk" {
+    command ReleaseDesk {
+      decides_on {
+        events [DeskClaimed]
+        where tag(desk = deskId) and tag(reader = memberId)
+      }
+      fields {
+        sessionId string required
+      }
+    }
+    event DeskReleased {
+      tags {
+        desk  : deskId
+        reader: memberId
+      }
+      fields {
+        sessionId  string    required
+        deskId     string    required
+        memberId   string    required
+        releasedAt timestamp required
+      }
+    }
+    flow {
+      command -> event: ReleaseDesk -> DeskReleased
+    }
+  }
+  slice "Browse Desk Occupancy" {
+    view DeskOccupancyView {
+      fields {
+        deskId    string    required
+        memberId  string    required
+        claimedAt timestamp required
+      }
+      subscribes [DeskClaimed, DeskReleased]
+    }
+  }
+  slice "Close Reading Room" {
+    automation FreeDeskAtClosing {
+      on DeskClaimed
+      reads DeskOccupancyView
+      command ReleaseDesk
+    }
+    automation RemindReaderOfLoans {
+      on DeskReleased
+      reads MemberLoansView
+      command RemindMember
+    }
+  }
+}
+`
+
 // AutomationScheduleLibraryLending runs automations on a schedule in both homes
 // a slice has — nested in an aggregate, and declared directly on a DCB-mode
 // context — stating a duration in one automation and a cron expression in
@@ -949,6 +1147,28 @@ var AutomationReadsLibraryLendingActivationEvents = []string{
 	"DeskReleased",
 }
 
+// TriggerReadsLibraryLendingTriggerViewNames transcribes the view every trigger
+// of TriggerReadsLibraryLending reads, both slice homes together and in
+// declaration order, so a walk or a strip that reaches only one of the homes
+// reads back short against it. The trigger that reads no view contributes
+// nothing, and neither does a slice carrying no trigger, so the list is shorter
+// than either count.
+var TriggerReadsLibraryLendingTriggerViewNames = []string{
+	"MemberLoansView",
+	"DeskOccupancyView",
+	"DeskOccupancyView",
+}
+
+// TriggerReadsLibraryLendingAutomationViewNames transcribes the view every
+// automation of TriggerReadsLibraryLending reads, both slice homes together and
+// in declaration order, so the same fixture answers for both constructs that
+// name a view they read and a strip reaching the wrong one reads back short.
+var TriggerReadsLibraryLendingAutomationViewNames = []string{
+	"MemberLoansView",
+	"DeskOccupancyView",
+	"MemberLoansView",
+}
+
 // AutomationScheduleLibraryLendingSchedules transcribes the cadence every
 // automation of AutomationScheduleLibraryLending runs on, both slice homes
 // together and in declaration order, so a walk or a rewrite that reaches only
@@ -1011,6 +1231,21 @@ func WithoutAutomationReads(model *ast.Model) *ast.Model {
 	})
 }
 
+// WithoutTriggerReads returns a copy of model whose triggers name no view they
+// read, in both homes a slice has — nested in an aggregate and declared directly
+// on a context. The original keeps every view it was written reading, so a
+// caller comparing the two is not comparing a model with itself. What an
+// automation and a translation read is left alone: only a trigger's reads is the
+// subject of the comparison.
+func WithoutTriggerReads(model *ast.Model) *ast.Model {
+	return copyWithEditedSlices(model, func(s *ast.Slice) {
+		s.Trigger = editedCopy(s.Trigger, func(trigger *ast.Trigger) {
+			trigger.Reads = ""
+			trigger.ReadsPos = ast.Position{}
+		})
+	})
+}
+
 // copyWithEditedSlices hands edit a copy of every slice in both homes — nested in
 // an aggregate and declared directly on a context. A copied slice still points at
 // the original's commands, events, views and automations, so an edit reaching
@@ -1037,11 +1272,22 @@ func copyWithEditedSlices(model *ast.Model, edit func(*ast.Slice)) *ast.Model {
 func editedCopies[T any](items []*T, edit func(*T)) []*T {
 	var copies []*T
 	for _, item := range items {
-		edited := *item
-		edit(&edited)
-		copies = append(copies, &edited)
+		copies = append(copies, editedCopy(item, edit))
 	}
 	return copies
+}
+
+// editedCopy edits a copy rather than the item it was handed, because a slice
+// holds its trigger as a single pointer into the model the caller passed:
+// clearing that trigger where it sits leaves the twin and the original reading
+// alike.
+func editedCopy[T any](item *T, edit func(*T)) *T {
+	if item == nil {
+		return nil
+	}
+	edited := *item
+	edit(&edited)
+	return &edited
 }
 
 // DeclaredSpecNames names every spec model states, both slice homes together and
@@ -1063,6 +1309,22 @@ func DeclaredSpecNames(model *ast.Model) []string {
 // the homes.
 func DeclaredAutomationReads(model *ast.Model) []string {
 	return declaredAutomationEntries(model, func(auto *ast.Automation) string { return auto.Reads })
+}
+
+// DeclaredTriggerReads names the view every trigger of model reads, both slice
+// homes together and in declaration order, so a caller pairing it with a
+// transcribed list reads back short when a strip or a walk reaches only one of
+// the homes. A slice with no trigger and a trigger naming no view contribute
+// nothing, so the list counts what the model says rather than how many slices it
+// declares.
+func DeclaredTriggerReads(model *ast.Model) []string {
+	var reads []string
+	for _, s := range declaredSlices(model) {
+		if s.Trigger != nil && s.Trigger.Reads != "" {
+			reads = append(reads, s.Trigger.Reads)
+		}
+	}
+	return reads
 }
 
 // DeclaredActivationEvents names the event every automation of model activates

@@ -1034,28 +1034,42 @@ func TestFormat(t *testing.T) {
 				"naming the view an automation reads moves no other line of the model")
 		})
 
-		t.Run("round-trip: a whole shared model survives formatting, the schedule or event each automation activates on included", func(t *testing.T) {
+		t.Run("round-trip: a whole shared model survives formatting, the views its triggers and automations read and the schedule or event each automation activates on included", func(t *testing.T) {
 			for _, testCase := range []struct {
 				shape            string
 				parse            func(*testing.T) *ast.Model
 				activationEvents []string
 				schedules        []string
+				triggerReads     []string
+				automationReads  []string
 			}{
 				{
 					shape:            "automations in both slice homes, reading views across contexts",
 					parse:            test.AutomationReadsLibraryLendingModel,
 					activationEvents: test.AutomationReadsLibraryLendingActivationEvents,
+					triggerReads:     []string{"AvailableCopiesView"},
+					automationReads:  test.AutomationReadsLibraryLendingViewNames,
 				},
 				{
 					shape:            "an automation among all four slice patterns",
 					parse:            test.HotelReservationModel,
 					activationEvents: []string{"ReservationMade"},
+					triggerReads:     []string{"AvailableRoomsView"},
 				},
 				{
 					shape:            "automations run on a schedule in both slice homes, beside automations activated by an event",
 					parse:            test.AutomationScheduleLibraryLendingModel,
 					activationEvents: test.AutomationScheduleLibraryLendingActivationEvents,
 					schedules:        test.AutomationScheduleLibraryLendingSchedules,
+					triggerReads:     []string{"AvailableCopiesView"},
+					automationReads:  []string{"MemberLoansView", "DeskOccupancyView", "MemberLoansView"},
+				},
+				{
+					shape:            "triggers in both slice homes, reading views the model declares in another slice and in another context",
+					parse:            test.TriggerReadsLibraryLendingModel,
+					activationEvents: []string{"CopyBorrowed", "CopyBorrowed", "DeskClaimed", "DeskReleased"},
+					triggerReads:     test.TriggerReadsLibraryLendingTriggerViewNames,
+					automationReads:  test.TriggerReadsLibraryLendingAutomationViewNames,
 				},
 			} {
 				t.Run(testCase.shape, func(t *testing.T) {
@@ -1066,6 +1080,48 @@ func TestFormat(t *testing.T) {
 					test.RequireEqual(t, original, reparsed, ignoreFormatterNormalizations)
 					require.Equal(t, testCase.activationEvents, test.DeclaredActivationEvents(reparsed))
 					require.Equal(t, testCase.schedules, test.DeclaredSchedules(reparsed))
+					require.Equal(t, testCase.triggerReads, test.DeclaredTriggerReads(reparsed))
+					require.Equal(t, testCase.automationReads, test.DeclaredAutomationReads(reparsed))
+				})
+			}
+		})
+
+		t.Run("round-trip: a reads twin clears the construct it names in both slice homes and leaves the model it was handed whole", func(t *testing.T) {
+			for _, testCase := range []struct {
+				construct          string
+				twin               func(*ast.Model) *ast.Model
+				clearedReads       func(*ast.Model) []string
+				untouchedReads     func(*ast.Model) []string
+				untouchedViewNames []string
+			}{
+				{
+					construct:          "triggers",
+					twin:               test.WithoutTriggerReads,
+					clearedReads:       test.DeclaredTriggerReads,
+					untouchedReads:     test.DeclaredAutomationReads,
+					untouchedViewNames: test.TriggerReadsLibraryLendingAutomationViewNames,
+				},
+				{
+					construct:          "automations",
+					twin:               test.WithoutAutomationReads,
+					clearedReads:       test.DeclaredAutomationReads,
+					untouchedReads:     test.DeclaredTriggerReads,
+					untouchedViewNames: test.TriggerReadsLibraryLendingTriggerViewNames,
+				},
+			} {
+				t.Run(testCase.construct, func(t *testing.T) {
+					require.NotEmpty(t, testCase.untouchedViewNames,
+						"a twin leaving the other construct alone says nothing unless that construct reads something")
+					reading := test.TriggerReadsLibraryLendingModel(t)
+
+					twin := testCase.twin(reading)
+
+					require.Empty(t, testCase.clearedReads(twin))
+					require.Equal(t, testCase.untouchedViewNames, testCase.untouchedReads(twin))
+					require.Equal(t, test.TriggerReadsLibraryLendingTriggerViewNames, test.DeclaredTriggerReads(reading))
+					require.Equal(t, test.TriggerReadsLibraryLendingAutomationViewNames, test.DeclaredAutomationReads(reading))
+					require.Empty(t, testCase.clearedReads(requireStableFormat(t, twin)),
+						"the twin reads no view, so formatting it may not invent one")
 				})
 			}
 		})

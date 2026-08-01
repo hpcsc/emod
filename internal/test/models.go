@@ -40,6 +40,12 @@ func AutomationReadsLibraryLendingModel(t *testing.T) *ast.Model {
 	return parseFixture(t, AutomationReadsLibraryLending, "automation-reads.emod")
 }
 
+func TriggerReadsLibraryLendingModel(t *testing.T) *ast.Model {
+	t.Helper()
+
+	return parseFixture(t, TriggerReadsLibraryLending, "trigger-reads.emod")
+}
+
 func AutomationScheduleLibraryLendingModel(t *testing.T) *ast.Model {
 	t.Helper()
 

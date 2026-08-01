@@ -1,7 +1,7 @@
 # US-005: Draw the view a trigger or automation reads
 
 ## Progress
-- [ ] Task 1: Share a fixture whose triggers read the views they open on
+- [x] Task 1: Share a fixture whose triggers read the views they open on
 - [ ] Task 2: Draw a `reads` edge from a view to a trigger and to an automation in the diagram document
 - [ ] Task 3: Fold a viewer-drawn `reads` edge onto a trigger and an automation
 - [ ] Task 4: Draw the `reads` edge to a trigger and an automation in SVG and draw.io
