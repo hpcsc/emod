@@ -525,6 +525,35 @@ context "C" {
           (any_identifier))))))
 
 ========================
+Slice with kindless trigger containing actor and reads
+========================
+
+context "C" {
+  aggregate "A" {
+    slice "Core" {
+      trigger "Form" {
+        actor Guest
+        reads AvailableRoomsView
+      }
+    }
+  }
+}
+
+---
+
+(source_file
+  (context_definition
+    (string)
+    (aggregate_definition
+      (string)
+      (slice_definition
+        (string)
+        (trigger_definition
+          (string)
+          (any_identifier)
+          (any_identifier))))))
+
+========================
 Slice with fields block including modifiers
 ========================
 

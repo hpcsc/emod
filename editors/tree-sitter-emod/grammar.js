@@ -165,10 +165,10 @@ module.exports = grammar({
       optional($.any_identifier),
     )),
 
-    // trigger Kind "Name" { actor Id reads Id }
+    // trigger "Name" { actor Id reads Id }
     trigger_definition: $ => seq(
       'trigger',
-      $.identifier,
+      optional($.identifier),
       $.string,
       buildDescribedBlock(
         $,

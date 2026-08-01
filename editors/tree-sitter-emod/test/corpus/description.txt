@@ -242,6 +242,36 @@ context "C" {
           (any_identifier))))))
 
 ========================
+Kindless trigger with description
+========================
+
+context "C" {
+  aggregate "A" {
+    slice "Core" {
+      trigger "Booking form" {
+        description "The form a guest fills in"
+        actor Guest
+      }
+    }
+  }
+}
+
+---
+
+(source_file
+  (context_definition
+    (string)
+    (aggregate_definition
+      (string)
+      (slice_definition
+        (string)
+        (trigger_definition
+          (string)
+          (description
+            (string))
+          (any_identifier))))))
+
+========================
 Description after the aggregate it describes
 ========================
 
