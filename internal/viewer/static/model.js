@@ -145,6 +145,8 @@ var EDGE_TYPE_BY_ENDS = {
   "event>automation": "automation_trigger",
   "automation>command": "automation_command",
   "view>translation": "reads",
+  "view>trigger": "reads",
+  "view>automation": "reads",
   "translation>command": "translation_command",
 };
 

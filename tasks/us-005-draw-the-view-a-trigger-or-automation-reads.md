@@ -5,7 +5,7 @@
 - [x] Task 2: Draw a `reads` edge from a view to a trigger and to an automation in the diagram document
 - [x] Task 3: Fold a viewer-drawn `reads` edge onto a trigger and an automation
 - [x] Task 4: Draw the `reads` edge to a trigger and an automation in SVG and draw.io
-- [ ] Task 5: Type a view-to-trigger and view-to-automation arrow as `reads` in the viewer
+- [x] Task 5: Type a view-to-trigger and view-to-automation arrow as `reads` in the viewer
 
 ---
 

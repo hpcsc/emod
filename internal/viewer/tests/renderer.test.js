@@ -62,6 +62,49 @@ function pairedAutomations(schedule) {
   ];
 }
 
+const viewLabel = 'ArrearsView';
+
+// One view read by a trigger, an automation and a translation in the same
+// slice. Each reader carries the read on itself as well, so a render can tell
+// an arrow drawn from the edge list apart from one drawn off block metadata.
+function viewReadThreeWays() {
+  return [
+    { id: 'ctx1', type: 'context', label: 'Collections' },
+    { id: 'agg1', type: 'aggregate', label: 'Arrangement', parentId: 'ctx1' },
+    { id: 'sl1', type: 'slice', label: 'Chase arrears', parentId: 'agg1' },
+    { id: 'trg1', type: 'trigger', label: 'NightlySweep', parentId: 'sl1', reads: viewLabel },
+    { id: 'auto1', type: 'automation', label: 'ChaseOverdue', parentId: 'sl1', reads: viewLabel },
+    { id: 'trans1', type: 'translation', label: 'PushToDialler', parentId: 'sl1', reads: viewLabel },
+    { id: 'view1', type: 'view', label: viewLabel, parentId: 'sl1' },
+  ];
+}
+
+function readsEdgesOutOfView() {
+  return [
+    { source: 'view1', target: 'trg1', type: 'reads' },
+    { source: 'view1', target: 'auto1', type: 'reads' },
+    { source: 'view1', target: 'trans1', type: 'reads' },
+  ];
+}
+
+function arrowBetween(svg, sourceId, targetId) {
+  return svg.querySelector('.arrow[data-source="' + sourceId + '"][data-target="' + targetId + '"]');
+}
+
+function appearanceOf(arrow) {
+  return {
+    cls: arrow.getAttribute('class'),
+    stroke: arrow.getAttribute('stroke'),
+    marker: arrow.getAttribute('marker-end'),
+    dash: arrow.getAttribute('stroke-dasharray'),
+  };
+}
+
+function drawnArrowEnds(svg) {
+  return [...svg.querySelectorAll('.arrow')]
+    .map((el) => el.getAttribute('data-source') + '>' + el.getAttribute('data-target'));
+}
+
 // The sides a block can be connected from, each described independently of the
 // renderer: the midpoint of the side, and the unit vector pointing away from
 // the block. Ports are asserted against these rather than against the layout
@@ -103,18 +146,18 @@ function hitAreaOf(port) {
   };
 }
 
-function createStore(nodes, hiddenNodes) {
+function createStore(nodes, { edges = [], hiddenNodes = {} } = {}) {
   return {
     nodes: nodes,
-    edges: [],
-    hiddenNodes: hiddenNodes || {},
+    edges: edges,
+    hiddenNodes: hiddenNodes,
     nodeOffsets: {},
     layoutPositions: {},
   };
 }
 
-function render(nodes) {
-  const store = createStore(nodes);
+function render(nodes, edges) {
+  const store = createStore(nodes, { edges });
   store.layoutPositions = Layout.computeLayout(store).positions;
   return { svg: Renderer.buildSVG(store), positions: store.layoutPositions };
 }
@@ -232,7 +275,7 @@ describe('Renderer.buildSVG', () => {
     });
 
     it('skips an aggregate the layout left out', () => {
-      const store = createStore(twoAggregates(), { agg1: true });
+      const store = createStore(twoAggregates(), { hiddenNodes: { agg1: true } });
       store.layoutPositions = Layout.computeLayout(store).positions;
 
       const svg = Renderer.buildSVG(store);
@@ -272,6 +315,33 @@ describe('Renderer.buildSVG', () => {
       expect(box.fill).toBe(automationFill);
       expect(box.height).toBe(boxes.cmd1.height);
       expect(boxes).toEqual(drawnBoxes(eventActivated.svg));
+    });
+  });
+
+  describe('read arrows', () => {
+    it.each([
+      { reader: 'trigger', id: 'trg1' },
+      { reader: 'automation', id: 'auto1' },
+    ])('draws the arrow onto the $reader the way it draws the one onto the translation beside it', ({ id }) => {
+      const { svg } = render(viewReadThreeWays(), readsEdgesOutOfView());
+
+      const translation = arrowBetween(svg, 'view1', 'trans1');
+      const reader = arrowBetween(svg, 'view1', id);
+
+      const readerAppearance = appearanceOf(reader);
+      expect(readerAppearance).toEqual(appearanceOf(translation));
+      expect(readerAppearance.dash).toBeNull();
+      expect(reader.getAttribute('d')).not.toBe(translation.getAttribute('d'));
+    });
+
+    it('draws an arrow only where an edge joins the two blocks, not where a block names the view it reads', () => {
+      const nodes = viewReadThreeWays();
+
+      const connected = render(nodes, readsEdgesOutOfView());
+      const unconnected = render(nodes, []);
+
+      expect(drawnArrowEnds(connected.svg)).toEqual(['view1>trg1', 'view1>auto1', 'view1>trans1']);
+      expect(drawnArrowEnds(unconnected.svg)).toEqual([]);
     });
   });
 

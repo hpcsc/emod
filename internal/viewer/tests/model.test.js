@@ -252,6 +252,8 @@ describe('Model', () => {
       ['event', 'automation', 'automation_trigger'],
       ['automation', 'command', 'automation_command'],
       ['view', 'translation', 'reads'],
+      ['view', 'trigger', 'reads'],
+      ['view', 'automation', 'reads'],
       ['translation', 'command', 'translation_command'],
     ];
 
@@ -262,10 +264,15 @@ describe('Model', () => {
       });
     }
 
-    it('does not treat a view to event arrow as a subscription', () => {
-      const store = storeWith({ a: 'view', b: 'event' });
-      expect(Model.autoDetectEdgeType(store, 'a', 'b')).not.toBe('subscription');
-    });
+    it.each([
+      ['view', 'event', 'subscription'],
+      ['trigger', 'view', 'reads'],
+      ['automation', 'view', 'reads'],
+    ])('does not type a %s to %s arrow as %s, the direction the exporter never writes',
+      (from, to, type) => {
+        const store = storeWith({ a: from, b: to });
+        expect(Model.autoDetectEdgeType(store, 'a', 'b')).not.toBe(type);
+      });
 
     it('falls back to flow for a pairing with no defined direction', () => {
       const store = storeWith({ a: 'event', b: 'command' });
