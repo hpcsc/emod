@@ -15,6 +15,7 @@ import (
 	"github.com/hpcsc/emod/internal/lexer"
 	"github.com/hpcsc/emod/internal/parser"
 	"github.com/hpcsc/emod/internal/test"
+	"github.com/hpcsc/emod/internal/validator"
 	"github.com/stretchr/testify/require"
 )
 
@@ -47,10 +48,22 @@ func importDiagram(t *testing.T, document string) *ast.Model {
 	return model
 }
 
-func savedTextDiagnostics(model *ast.Model) []*diagnostic.Entry {
+// parseSaved reads back the text a save writes for model, so what the two
+// helpers below report on is the file the next open would see.
+func parseSaved(model *ast.Model) (*ast.Model, []*diagnostic.Entry) {
 	tokens, scanDiags := lexer.Scan(formatter.Format(model), "saved.emod")
-	_, parseDiags := parser.New(tokens, "saved.emod").Parse()
-	return append(scanDiags, parseDiags...)
+	saved, parseDiags := parser.New(tokens, "saved.emod").Parse()
+	return saved, append(scanDiags, parseDiags...)
+}
+
+func savedTextDiagnostics(model *ast.Model) []*diagnostic.Entry {
+	_, diagnostics := parseSaved(model)
+	return diagnostics
+}
+
+func savedModelDiagnostics(model *ast.Model) []*diagnostic.Entry {
+	saved, _ := parseSaved(model)
+	return validator.Validate(saved)
 }
 
 // automationNodeKeying binds the label and the value of a document's single
@@ -266,6 +279,87 @@ context "C" {
 			require.Empty(t, test.DeclaredAutomationReads(importExported(t, unread)))
 		})
 
+		t.Run("keeps the view every trigger and every automation reads, from both slice homes and across contexts", func(t *testing.T) {
+			reading := test.TriggerReadsLibraryLendingModel(t)
+			unreadTriggers := test.WithoutTriggerReads(reading)
+			unreadAutomations := test.WithoutAutomationReads(reading)
+
+			require.Equal(t, test.TriggerReadsLibraryLendingTriggerViewNames, test.DeclaredTriggerReads(reading),
+				"the model has to keep its triggers reading a view in both slice homes once the twins are taken, or the comparisons below run over a copy of itself")
+			require.Equal(t, test.TriggerReadsLibraryLendingAutomationViewNames, test.DeclaredAutomationReads(reading),
+				"the model has to keep its automations reading a view in both slice homes once the twins are taken, or the comparisons below run over a copy of itself")
+			require.Empty(t, test.DeclaredTriggerReads(unreadTriggers),
+				"the trigger twin has to lose the reads of both slice homes, or whichever home it kept answers the comparison below")
+			require.Empty(t, test.DeclaredAutomationReads(unreadAutomations),
+				"the automation twin has to lose the reads of both slice homes, or whichever home it kept answers the comparison below")
+
+			imported := importExported(t, reading)
+
+			require.Equal(t, test.TriggerReadsLibraryLendingTriggerViewNames, test.DeclaredTriggerReads(imported))
+			require.Equal(t, test.TriggerReadsLibraryLendingAutomationViewNames, test.DeclaredAutomationReads(imported))
+			require.Empty(t, test.DeclaredTriggerReads(importExported(t, unreadTriggers)))
+			require.Empty(t, test.DeclaredAutomationReads(importExported(t, unreadAutomations)))
+
+			carried := test.TriggerReadsLibraryLendingModel(t)
+			stripWhatDiagramJSONDrops(carried)
+			require.Equal(t, formatter.Format(carried), formatter.Format(imported))
+		})
+
+		t.Run("preserves the view a trigger and an automation read from a sibling slice, leaving the pair beside them reading nothing", func(t *testing.T) {
+			source := `emod 1
+model "M"
+
+context "C" {
+  aggregate "A" {
+    slice "Review Member Loans" {
+      view MemberLoansView {
+        fields {
+          loanId string required
+        }
+      }
+    }
+
+    slice "Chase Overdue Copy" {
+      trigger "Overdue Report" {
+        actor Librarian
+        reads MemberLoansView
+      }
+
+      command RecallCopy {
+        fields {
+          loanId string required
+        }
+      }
+
+      automation RecallOverdueCopy {
+        on CopyBorrowed
+        reads MemberLoansView
+        command RecallCopy
+      }
+    }
+
+    slice "Return Copy" {
+      trigger "Returns Counter" {
+        actor Member
+      }
+
+      command ReturnCopy {
+        fields {
+          loanId string required
+        }
+      }
+
+      automation RemindMember {
+        on CopyBorrowed
+        command ReturnCopy
+      }
+    }
+  }
+}
+`
+			require.Equal(t, source, formatter.Format(importFrom(t, source)))
+		})
+
 		t.Run("preserves a trigger's name, actor and reads through the viewer save path", func(t *testing.T) {
 			source := `emod 1
 model "M"
@@ -434,17 +528,19 @@ context "C" {
 				"an automation stating a cadence and an activation event together is text emod rejects")
 		})
 
-		t.Run("a reads edge drawn in the viewer becomes a translation's reads and not an automation's", func(t *testing.T) {
+		t.Run("a reads edge drawn in the viewer becomes the reads of the trigger, the automation and the translation it points at", func(t *testing.T) {
 			diagram := `{
               "model_name": "M",
               "nodes": [
                 {"id": "context-1", "type": "context", "label": "C", "parentId": null},
                 {"id": "slice-1", "type": "slice", "label": "S", "parentId": "context-1"},
                 {"id": "view-1", "type": "view", "label": "MemberLoansView", "parentId": "slice-1"},
+                {"id": "trigger-1", "type": "trigger", "label": "Overdue Report", "parentId": "slice-1"},
                 {"id": "auto-1", "type": "automation", "label": "RecallOverdueCopy", "parentId": "slice-1"},
                 {"id": "trans-1", "type": "translation", "label": "AcknowledgeOverdueNotice", "parentId": "slice-1"}
               ],
               "edges": [
+                {"source": "view-1", "target": "trigger-1", "type": "reads"},
                 {"source": "view-1", "target": "auto-1", "type": "reads"},
                 {"source": "view-1", "target": "trans-1", "type": "reads"}
               ]
@@ -453,9 +549,71 @@ context "C" {
 			model := importDiagram(t, diagram)
 
 			slice := model.Contexts[0].Slices[0]
+			require.Equal(t, "MemberLoansView", slice.Trigger.Reads)
+			require.Equal(t, "MemberLoansView", slice.Automations[0].Reads)
 			require.Equal(t, "MemberLoansView", slice.Translations[0].Reads)
-			require.Empty(t, slice.Automations[0].Reads,
-				"US-005 owns the view→automation edge; folding one back here is that story arriving early, not a regression")
+		})
+
+		t.Run("a reads edge naming another view leaves the trigger and the automation reading the one their node recorded", func(t *testing.T) {
+			diagram := `{
+              "model_name": "M",
+              "nodes": [
+                {"id": "context-1", "type": "context", "label": "C", "parentId": null},
+                {"id": "slice-1", "type": "slice", "label": "S", "parentId": "context-1"},
+                {"id": "view-1", "type": "view", "label": "MemberLoansView", "parentId": "slice-1"},
+                {"id": "view-2", "type": "view", "label": "DeskOccupancyView", "parentId": "slice-1"},
+                {"id": "trigger-1", "type": "trigger", "label": "Overdue Report", "parentId": "slice-1",
+                 "reads": "MemberLoansView"},
+                {"id": "auto-1", "type": "automation", "label": "RecallOverdueCopy", "parentId": "slice-1",
+                 "reads": "MemberLoansView"}
+              ],
+              "edges": [
+                {"source": "view-2", "target": "trigger-1", "type": "reads"},
+                {"source": "view-2", "target": "auto-1", "type": "reads"}
+              ]
+            }`
+
+			model := importDiagram(t, diagram)
+
+			slice := model.Contexts[0].Slices[0]
+			require.Equal(t, "MemberLoansView", slice.Trigger.Reads)
+			require.Equal(t, "MemberLoansView", slice.Automations[0].Reads)
+		})
+
+		t.Run("a reads edge dragged off the view onto a command or an event leaves the trigger and the automation reading nothing", func(t *testing.T) {
+			diagram := `{
+              "model_name": "M",
+              "nodes": [
+                {"id": "context-1", "type": "context", "label": "C", "parentId": null},
+                {"id": "slice-1", "type": "slice", "label": "Chase Overdue Copy", "parentId": "context-1"},
+                {"id": "view-1", "type": "view", "label": "MemberLoansView", "parentId": "slice-1"},
+                {"id": "command-1", "type": "command", "label": "RecallCopy", "parentId": "slice-1"},
+                {"id": "event-1", "type": "event", "label": "CopyRecalled", "parentId": "slice-1"},
+                {"id": "trigger-1", "type": "trigger", "label": "Overdue Report", "parentId": "slice-1"},
+                {"id": "auto-1", "type": "automation", "label": "RecallOverdueCopy", "parentId": "slice-1"},
+                {"id": "slice-2", "type": "slice", "label": "Borrow Copy", "parentId": "context-1"},
+                {"id": "trigger-2", "type": "trigger", "label": "Lending Desk", "parentId": "slice-2"},
+                {"id": "auto-2", "type": "automation", "label": "RemindOnDueDate", "parentId": "slice-2"}
+              ],
+              "edges": [
+                {"source": "command-1", "target": "event-1", "type": "flow"},
+                {"source": "event-1", "target": "trigger-1", "type": "reads"},
+                {"source": "command-1", "target": "auto-1", "type": "reads"},
+                {"source": "view-1", "target": "trigger-2", "type": "reads"},
+                {"source": "view-1", "target": "auto-2", "type": "reads"}
+              ]
+            }`
+
+			model := importDiagram(t, diagram)
+
+			repointed, drawnFromTheView := model.Contexts[0].Slices[0], model.Contexts[0].Slices[1]
+			require.Equal(t, "MemberLoansView", drawnFromTheView.Trigger.Reads)
+			require.Equal(t, "MemberLoansView", drawnFromTheView.Automations[0].Reads)
+			require.Empty(t, repointed.Trigger.Reads)
+			require.Empty(t, repointed.Automations[0].Reads)
+
+			require.Empty(t, savedModelDiagnostics(model),
+				"an automation reading a command rather than a view is text emod validate rejects")
 		})
 
 		t.Run("an edge already recorded in node metadata is not duplicated", func(t *testing.T) {

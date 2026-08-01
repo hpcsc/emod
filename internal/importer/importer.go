@@ -275,11 +275,33 @@ func (b *builder) foldEdges(edges []*diagramEdge) {
 				trans.Command = tgt.Label
 			}
 		case "reads":
-			if trans, ok := b.byNode[tgt.ID].(*ast.Translation); ok && trans.Reads == "" {
-				trans.Reads = src.Label
-			}
+			b.foldReads(src, tgt)
 		}
 	}
+}
+
+func (b *builder) foldReads(src, tgt *diagramNode) {
+	switch reader := b.byNode[tgt.ID].(type) {
+	case *ast.Trigger:
+		reader.Reads = readsDrawnFromView(reader.Reads, src)
+	case *ast.Automation:
+		reader.Reads = readsDrawnFromView(reader.Reads, src)
+	case *ast.Translation:
+		if reader.Reads == "" {
+			reader.Reads = src.Label
+		}
+	}
+}
+
+// readsDrawnFromView takes the source node's label only when that node is a
+// view. An edge dragged off the view keeps its "reads" type, so without the
+// check the element would come back reading a command or an event name — which
+// for an automation is a view reference the validator resolves and rejects.
+func readsDrawnFromView(recorded string, src *diagramNode) string {
+	if recorded != "" || src.Type != "view" {
+		return recorded
+	}
+	return src.Label
 }
 
 func (b *builder) foldFlow(src, tgt *diagramNode) {
