@@ -6,7 +6,7 @@
 - [x] Task 3: Emit the kindless form from `emod fmt` and migrate every emod source in the repository
 - [x] Task 4: Drop the kind from the Mermaid timeframe and the ASCII trigger label
 - [ ] Task 5: Drop `kind` and `kind_position` from the JSON, CUE and embedded schema exports
-- [ ] Task 6: Drop `kind` from the diagram node, the importer and the viewer's details panel
+- [x] Task 6: Drop `kind` from the diagram node, the importer and the viewer's details panel
 - [ ] Task 7: Reject `trigger <Kind> "<name>"` with a message naming its replacement
 - [ ] Task 8: Remove the kind from the tree-sitter grammar and migrate the corpus
 - [ ] Task 9: Delete `ast.Trigger.Kind` and `KindPos`

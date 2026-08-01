@@ -571,11 +571,19 @@ func (p *Instance) parseTrigger() *ast.Trigger {
 		kindTok := p.advance()
 		trigger.Kind = kindTok.Value
 		trigger.KindPos = p.position(kindTok)
+		p.errorAt(kindTok, retiredTriggerKindMessage(kindTok.Value))
 	}
 
 	if !p.check(lexer.String) {
-		p.error("expected quoted string after trigger kind")
-		return nil
+		p.errorAt(p.peek(), "expected quoted name after trigger")
+		if p.check(lexer.OpenBrace) {
+			p.advance()
+			p.skipTo(lexer.CloseBrace)
+			if p.check(lexer.CloseBrace) {
+				p.advance()
+			}
+		}
+		return trigger
 	}
 	nameTok := p.advance()
 	trigger.Name = nameTok.Value
@@ -583,7 +591,7 @@ func (p *Instance) parseTrigger() *ast.Trigger {
 
 	if !p.check(lexer.OpenBrace) {
 		p.error("expected { after trigger name")
-		return nil
+		return trigger
 	}
 	openTok := p.advance()
 	trigger.OpenPos = p.position(openTok)
@@ -625,6 +633,13 @@ func (p *Instance) parseTrigger() *ast.Trigger {
 	trigger.ClosePos = p.position(closeTok)
 
 	return trigger
+}
+
+func retiredTriggerKindMessage(kind string) string {
+	if kind == "Schedule" || kind == "Processor" {
+		return fmt.Sprintf("trigger %s is no longer supported: use an automation with every", kind)
+	}
+	return fmt.Sprintf("trigger %s is no longer supported: drop the word %s", kind, kind)
 }
 
 func (p *Instance) parseCommand() *ast.Command {

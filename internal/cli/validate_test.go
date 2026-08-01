@@ -44,6 +44,28 @@ func TestValidate(t *testing.T) {
 		require.Contains(t, err.Error(), ":1:")
 	})
 
+	t.Run("returns error naming retired trigger kind replacement", func(t *testing.T) {
+		input := `model "Test"
+context "Ctx" {
+  aggregate "Agg" {
+    slice "Slice" {
+      trigger Schedule "Nightly Sweep" {
+        reads PendingExpiries
+      }
+    }
+  }
+}
+`
+		path := writeTemp(t, "retired_trigger_kind.emod", input)
+
+		err := cli.RunValidate(path, "text")
+
+		require.Error(t, err)
+		require.Contains(t, err.Error(), "Schedule")
+		require.Contains(t, err.Error(), "automation")
+		require.Regexp(t, `\bevery\b`, err.Error())
+	})
+
 	t.Run("returns error naming the file when it does not exist", func(t *testing.T) {
 		missing := filepath.Join(t.TempDir(), "nonexistent.emod")
 

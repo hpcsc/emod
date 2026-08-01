@@ -1491,60 +1491,12 @@ context "Reservations" {
 	})
 
 	t.Run("triggers", func(t *testing.T) {
-		t.Run("trigger with kinded spelling parses name, actor, and reads", func(t *testing.T) {
-			input := `model "Test"
-context "Ctx" {
-  aggregate "Agg" {
-    slice "Slice" {
-      trigger UI "Reservation Form" {
-        actor Guest
-        reads AvailableRoomsView
-      }
-    }
-  }
-}`
-			tokens, _ := lexer.Scan(input, "test.emod")
-
-			p := parser.New(tokens, "test.emod")
-			model, errs := p.Parse()
-
-			require.Len(t, errs, 0)
-			slice := model.Contexts[0].Aggregates[0].Slices[0]
-			require.NotNil(t, slice.Trigger)
-			require.Equal(t, "Reservation Form", slice.Trigger.Name)
-			require.Equal(t, "Guest", slice.Trigger.Actor)
-			require.Equal(t, "AvailableRoomsView", slice.Trigger.Reads)
-		})
-
-		t.Run("trigger with kinded spelling and empty body parses name", func(t *testing.T) {
-			input := `model "Test"
-context "Ctx" {
-  aggregate "Agg" {
-    slice "Slice" {
-      trigger UI "Reservation Form" {
-      }
-    }
-  }
-}`
-			tokens, _ := lexer.Scan(input, "test.emod")
-
-			p := parser.New(tokens, "test.emod")
-			model, errs := p.Parse()
-
-			require.Len(t, errs, 0)
-			slice := model.Contexts[0].Aggregates[0].Slices[0]
-			require.NotNil(t, slice.Trigger)
-			require.Equal(t, "Reservation Form", slice.Trigger.Name)
-			require.Equal(t, "", slice.Trigger.Actor)
-			require.Equal(t, "", slice.Trigger.Reads)
-		})
-
 		t.Run("trigger alongside command, event, and flow", func(t *testing.T) {
 			input := `model "Test"
 context "Ctx" {
   aggregate "Agg" {
     slice "Slice" {
-      trigger UI "Reservation Form" {
+      trigger "Reservation Form" {
         actor Guest
       }
       command MakeReservation {
@@ -1583,7 +1535,7 @@ context "Ctx" {
 context "Ctx" {
   aggregate "Agg" {
     slice "Slice" {
-      trigger UI "Name" {
+      trigger "Name" {
         actor Guest
       }
     }
@@ -1606,7 +1558,7 @@ context "Ctx" {
 context "Ctx" {
   aggregate "Agg" {
     slice "Slice" {
-      trigger UI "Name" {
+      trigger "Name" {
         reads SomeView
       }
     }
@@ -1624,7 +1576,7 @@ context "Ctx" {
 			require.Equal(t, "", slice.Trigger.Actor)
 		})
 
-		t.Run("kindless trigger with name, actor and reads", func(t *testing.T) {
+		t.Run("trigger with name, actor, and reads records its position", func(t *testing.T) {
 			input := `model "Test"
 context "Ctx" {
   aggregate "Agg" {
@@ -1650,7 +1602,7 @@ context "Ctx" {
 			require.Equal(t, "AvailableRoomsView", slice.Trigger.Reads)
 		})
 
-		t.Run("kindless trigger with description", func(t *testing.T) {
+		t.Run("trigger with description", func(t *testing.T) {
 			input := `model "Test"
 context "Ctx" {
   aggregate "Agg" {
@@ -1677,7 +1629,7 @@ context "Ctx" {
 			require.Equal(t, "AvailableRoomsView", slice.Trigger.Reads)
 		})
 
-		t.Run("kindless trigger with empty body", func(t *testing.T) {
+		t.Run("trigger with empty body leaves actor and reads empty", func(t *testing.T) {
 			input := `model "Test"
 context "Ctx" {
   aggregate "Agg" {
@@ -1700,7 +1652,7 @@ context "Ctx" {
 			require.Equal(t, "", slice.Trigger.Reads)
 		})
 
-		t.Run("kindless trigger reports single diagnostic when name is missing", func(t *testing.T) {
+		t.Run("trigger reports single diagnostic when name is missing", func(t *testing.T) {
 			input := `model "Test"
 context "Ctx" {
   aggregate "Agg" {
@@ -2316,7 +2268,7 @@ context "Ctx" {
 context "Ctx" {
   aggregate "Agg" {
     slice "Slice" {
-      trigger UI "Reservation Form" {
+      trigger "Reservation Form" {
         actor Guest
         reads AvailableRoomsView
       }
@@ -3447,6 +3399,181 @@ context "Ctx" {
 			require.Equal(t, "SendGrid Webhook", evt.ExternalName)
 			require.Len(t, evt.Fields, 1)
 		})
+
+		t.Run("retired trigger kind reports replacement message and recovers", func(t *testing.T) {
+			t.Run("UI kind tells the author to drop the word", func(t *testing.T) {
+				input := `model "Test"
+context "Ctx" {
+  aggregate "Agg" {
+    slice "Slice" {
+      trigger UI "Reservation Form" {
+        actor Guest
+        reads AvailableRoomsView
+      }
+    }
+  }
+}`
+				tokens, _ := lexer.Scan(input, "test.emod")
+				model, diags := parser.New(tokens, "test.emod").Parse()
+
+				require.Len(t, diags, 1)
+				line, column := positionOf(t, input, "trigger UI", "UI")
+				require.Equal(t, line, diags[0].Line)
+				require.Equal(t, column, diags[0].Column)
+				require.Contains(t, diags[0].Message, "UI")
+				require.Contains(t, diags[0].Message, "drop")
+
+				trigger := model.Contexts[0].Aggregates[0].Slices[0].Trigger
+				require.NotNil(t, trigger)
+				require.Equal(t, "Reservation Form", trigger.Name)
+				require.Equal(t, "Guest", trigger.Actor)
+				require.Equal(t, "AvailableRoomsView", trigger.Reads)
+				require.NotZero(t, trigger.ClosePos.Line)
+				require.NotZero(t, model.Contexts[0].Aggregates[0].Slices[0].ClosePos.Line)
+				require.NotZero(t, model.Contexts[0].ClosePos.Line)
+			})
+
+			t.Run("Schedule kind tells the author to use an automation with every", func(t *testing.T) {
+				input := `model "Test"
+context "Ctx" {
+  aggregate "Agg" {
+    slice "Slice" {
+      trigger Schedule "Nightly Sweep" {
+        reads PendingExpiries
+      }
+    }
+  }
+}`
+				tokens, _ := lexer.Scan(input, "test.emod")
+				model, diags := parser.New(tokens, "test.emod").Parse()
+
+				require.Len(t, diags, 1)
+				require.Contains(t, diags[0].Message, "Schedule")
+				require.Contains(t, diags[0].Message, "automation")
+				require.Regexp(t, `\bevery\b`, diags[0].Message)
+
+				trigger := model.Contexts[0].Aggregates[0].Slices[0].Trigger
+				require.NotNil(t, trigger)
+				require.Equal(t, "Nightly Sweep", trigger.Name)
+				require.Equal(t, "PendingExpiries", trigger.Reads)
+				require.NotZero(t, trigger.ClosePos.Line)
+				require.NotZero(t, model.Contexts[0].Aggregates[0].Slices[0].ClosePos.Line)
+				require.NotZero(t, model.Contexts[0].ClosePos.Line)
+			})
+
+			t.Run("Processor kind tells the author to use an automation with every", func(t *testing.T) {
+				input := `model "Test"
+context "Ctx" {
+  aggregate "Agg" {
+    slice "Slice" {
+      trigger Processor "Hold Sweeper" {
+        reads PendingExpiries
+      }
+    }
+  }
+}`
+				tokens, _ := lexer.Scan(input, "test.emod")
+				model, diags := parser.New(tokens, "test.emod").Parse()
+
+				require.Len(t, diags, 1)
+				require.Contains(t, diags[0].Message, "Processor")
+				require.Contains(t, diags[0].Message, "automation")
+				require.Regexp(t, `\bevery\b`, diags[0].Message)
+
+				trigger := model.Contexts[0].Aggregates[0].Slices[0].Trigger
+				require.NotNil(t, trigger)
+				require.Equal(t, "Hold Sweeper", trigger.Name)
+				require.Equal(t, "PendingExpiries", trigger.Reads)
+				require.NotZero(t, trigger.ClosePos.Line)
+				require.NotZero(t, model.Contexts[0].Aggregates[0].Slices[0].ClosePos.Line)
+				require.NotZero(t, model.Contexts[0].ClosePos.Line)
+			})
+
+			t.Run("arbitrary word tells the author to drop the word", func(t *testing.T) {
+				input := `model "Test"
+context "Ctx" {
+  aggregate "Agg" {
+    slice "Slice" {
+      trigger OnOrder "ERP" {
+      }
+    }
+  }
+}`
+				tokens, _ := lexer.Scan(input, "test.emod")
+				model, diags := parser.New(tokens, "test.emod").Parse()
+
+				require.Len(t, diags, 1)
+				require.Contains(t, diags[0].Message, "OnOrder")
+				require.Contains(t, diags[0].Message, "drop")
+
+				trigger := model.Contexts[0].Aggregates[0].Slices[0].Trigger
+				require.NotNil(t, trigger)
+				require.Equal(t, "ERP", trigger.Name)
+				require.NotZero(t, trigger.ClosePos.Line)
+				require.NotZero(t, model.Contexts[0].Aggregates[0].Slices[0].ClosePos.Line)
+				require.NotZero(t, model.Contexts[0].ClosePos.Line)
+			})
+
+			t.Run("kind with no quoted name reports both diagnostics and the slice keeps parsing", func(t *testing.T) {
+				input := `model "Test"
+context "Ctx" {
+  aggregate "Agg" {
+    slice "Slice" {
+      trigger UI {
+        actor Guest
+      }
+      command DoThing {
+        fields {
+        }
+      }
+    }
+  }
+}`
+				tokens, _ := lexer.Scan(input, "test.emod")
+				model, diags := parser.New(tokens, "test.emod").Parse()
+
+				require.Len(t, diags, 2)
+				line, column := positionOf(t, input, "trigger UI", "UI")
+				require.Equal(t, line, diags[0].Line)
+				require.Equal(t, column, diags[0].Column)
+				require.Contains(t, diags[0].Message, "UI")
+
+				require.Contains(t, diags[1].Message, "quoted name after trigger")
+
+				slice := model.Contexts[0].Aggregates[0].Slices[0]
+				require.Len(t, slice.Commands, 1)
+				require.Equal(t, "DoThing", slice.Commands[0].Name)
+				require.NotZero(t, slice.ClosePos.Line)
+				require.NotZero(t, model.Contexts[0].ClosePos.Line)
+			})
+
+			t.Run("kindless trigger parses cleanly next to a rejected trigger", func(t *testing.T) {
+				input := `model "Test"
+context "Ctx" {
+  aggregate "Agg" {
+    slice "Bad" {
+      trigger UI "Old Form" {
+      }
+    }
+    slice "Good" {
+      trigger "New Form" {
+        actor Guest
+      }
+    }
+  }
+}`
+				tokens, _ := lexer.Scan(input, "test.emod")
+				model, diags := parser.New(tokens, "test.emod").Parse()
+
+				require.Len(t, diags, 1)
+				require.Contains(t, diags[0].Message, "UI")
+
+				trigger := model.Contexts[0].Aggregates[0].Slices[1].Trigger
+				require.NotNil(t, trigger)
+				require.Equal(t, "New Form", trigger.Name)
+				require.Equal(t, "Guest", trigger.Actor)
+			})
+		})
 	})
 
 	t.Run("event sources and tags", func(t *testing.T) {
@@ -3869,7 +3996,7 @@ context "Reservations" {
 context "Reservations" {
   aggregate "Reservation" {
     slice "Make Reservation" {
-      trigger UI "Reservation Form" {
+      trigger "Reservation Form" {
         actor Guest
         description "The booking form on the public site"
       }
@@ -4097,7 +4224,7 @@ context "Reservations" {
 context "Reservations" {
   aggregate "Reservation" {
     slice "Make Reservation" {
-      trigger UI "Reservation Form" {
+      trigger "Reservation Form" {
         description Form
         actor Guest
         reads AvailableRoomsView
@@ -4356,7 +4483,7 @@ context "Reservations" {
 context "Reservations" {
   aggregate "Reservation" {
     slice "Make Reservation" {
-      trigger UI "Reservation Form" {
+      trigger "Reservation Form" {
         descripton
       }
     }
@@ -4612,7 +4739,7 @@ context "Ctx" {
         }
       }
       # Trigger comment
-      trigger UI "Form" {
+      trigger "Form" {
         actor Guest
       }
       # View comment

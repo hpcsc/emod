@@ -1374,7 +1374,6 @@ func TestFormat(t *testing.T) {
 										Name:        "Full Slice",
 										Description: "A user does the thing",
 										Trigger: &ast.Trigger{
-											Kind:        "UI",
 											Name:        "Form",
 											Description: "The form the user fills in",
 											Actor:       "User",
@@ -1456,7 +1455,7 @@ func TestFormat(t *testing.T) {
 
 			result := formatter.Format(model)
 
-			triggerIdx := strings.Index(result, "trigger UI")
+			triggerIdx := strings.Index(result, `trigger "Form"`)
 			commandIdx := strings.Index(result, "command DoThing")
 			eventIdx := strings.Index(result, "event ThingDone")
 			viewIdx := strings.Index(result, "view ThingView")
