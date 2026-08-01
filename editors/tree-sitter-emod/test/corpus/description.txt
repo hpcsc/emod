@@ -217,7 +217,7 @@ Trigger with description
 context "C" {
   aggregate "A" {
     slice "Core" {
-      trigger UI "Booking form" {
+      trigger "Booking form" {
         description "The form a guest fills in"
         actor Guest
       }
@@ -235,7 +235,6 @@ context "C" {
       (slice_definition
         (string)
         (trigger_definition
-          (identifier)
           (string)
           (description
             (string))

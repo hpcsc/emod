@@ -100,7 +100,7 @@ Slice with trigger
 context "C" {
   aggregate "A" {
     slice "Core" {
-      trigger OnOrder "ERP" {}
+      trigger "ERP" {}
     }
   }
 }
@@ -115,7 +115,6 @@ context "C" {
       (slice_definition
         (string)
         (trigger_definition
-          (identifier)
           (string))))))
 
 ========================
@@ -501,7 +500,7 @@ Slice with trigger containing actor and reads
 context "C" {
   aggregate "A" {
     slice "Core" {
-      trigger UI "Form" {
+      trigger "Form" {
         actor Guest
         reads AvailableRoomsView
       }
@@ -519,7 +518,6 @@ context "C" {
       (slice_definition
         (string)
         (trigger_definition
-          (identifier)
           (string)
           (any_identifier)
           (any_identifier))))))
@@ -552,6 +550,32 @@ context "C" {
           (string)
           (any_identifier)
           (any_identifier))))))
+
+========================
+Slice with trigger kind rejected
+========================
+
+context "C" {
+  aggregate "A" {
+    slice "Core" {
+      trigger OnOrder "ERP" {}
+    }
+  }
+}
+
+---
+
+(source_file
+  (context_definition
+    (string)
+    (aggregate_definition
+      (string)
+      (slice_definition
+        (string)
+        (trigger_definition
+          (ERROR
+            (identifier))
+          (string))))))
 
 ========================
 Slice with fields block including modifiers

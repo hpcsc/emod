@@ -56,8 +56,7 @@
 (automation_definition (identifier) @function)
 (translation_definition (identifier) @function)
 
-; Trigger kind identifier and quoted name (both are entity names)
-(trigger_definition (identifier) @function)
+; Trigger quoted name (entity name)
 (trigger_definition (string) @function)
 
 ; --- Field types ---

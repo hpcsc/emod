@@ -168,7 +168,6 @@ module.exports = grammar({
     // trigger "Name" { actor Id reads Id }
     trigger_definition: $ => seq(
       'trigger',
-      optional($.identifier),
       $.string,
       buildDescribedBlock(
         $,

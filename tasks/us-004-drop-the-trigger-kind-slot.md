@@ -7,8 +7,8 @@
 - [x] Task 4: Drop the kind from the Mermaid timeframe and the ASCII trigger label
 - [ ] Task 5: Drop `kind` and `kind_position` from the JSON, CUE and embedded schema exports
 - [x] Task 6: Drop `kind` from the diagram node, the importer and the viewer's details panel
-- [ ] Task 7: Reject `trigger <Kind> "<name>"` with a message naming its replacement
-- [ ] Task 8: Remove the kind from the tree-sitter grammar and migrate the corpus
+- [x] Task 7: Reject `trigger <Kind> "<name>"` with a message naming its replacement
+- [x] Task 8: Remove the kind from the tree-sitter grammar and migrate the corpus
 - [ ] Task 9: Delete `ast.Trigger.Kind` and `KindPos`
 
 ---
@@ -709,12 +709,13 @@ corpus case documents a spelling the language rejects.
 - [ ] `mise exec -- task test:grammar` passes, run through `mise exec --` so the repo-pinned tree-sitter
       CLI resolves
 - [ ] `git check-ignore editors/tree-sitter-emod/src` succeeds, and the only files this task changes
-      under `editors/tree-sitter-emod` are `grammar.js` and files under `test/corpus/`
+      under `editors/tree-sitter-emod` are `grammar.js`, `queries/highlights.scm` and files under `test/corpus/`
 
 **Affected Files/Modules:**
 - `editors/tree-sitter-emod/grammar.js` — `trigger_definition` (`:168-178`)
 - `editors/tree-sitter-emod/test/corpus/slice.txt` (`:97-119`, `:498-525`)
 - `editors/tree-sitter-emod/test/corpus/description.txt` (`:214-242`)
+- `editors/tree-sitter-emod/queries/highlights.scm` — delete the now-impossible `(trigger_definition (identifier) @function)` pattern at `:60`
 
 **Patterns to Follow:**
 - `tasks/learnings.md` "The tree-sitter grammar must never be stricter than the Go parser" — which is
