@@ -1845,7 +1845,7 @@ func TestExport(t *testing.T) {
 			require.Equal(t, "slice-1", event["parentId"])
 		})
 
-		t.Run("trigger node with kind/actor/reads", func(t *testing.T) {
+		t.Run("trigger node carries actor and reads and no kind", func(t *testing.T) {
 			model := &ast.Model{
 				Name: "Test",
 				Contexts: []*ast.Context{
@@ -1858,7 +1858,6 @@ func TestExport(t *testing.T) {
 									{
 										Name: "S",
 										Trigger: &ast.Trigger{
-											Kind:  "UI",
 											Name:  "FormSubmit",
 											Actor: "Guest",
 											Reads: "MyView",
@@ -1886,9 +1885,10 @@ func TestExport(t *testing.T) {
 			require.Equal(t, "trigger", trigger["type"])
 			require.Equal(t, "slice-1", trigger["parentId"])
 			require.Equal(t, "FormSubmit", trigger["label"])
-			require.Equal(t, "UI", trigger["kind"])
 			require.Equal(t, "Guest", trigger["actor"])
 			require.Equal(t, "MyView", trigger["reads"])
+			_, hasKind := trigger["kind"]
+			require.False(t, hasKind, "diagram trigger node must not carry kind")
 		})
 
 		t.Run("view node with fields and subscribes", func(t *testing.T) {

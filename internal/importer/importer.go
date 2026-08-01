@@ -12,10 +12,6 @@ import (
 	"github.com/hpcsc/emod/internal/ast"
 )
 
-// defaultTriggerKind is used when a trigger node carries no kind, so that the
-// formatted output stays parseable instead of emitting `trigger  "name"`.
-const defaultTriggerKind = "UI"
-
 type diagramDocument struct {
 	ModelName string         `json:"model_name"`
 	Nodes     []*diagramNode `json:"nodes"`
@@ -28,7 +24,6 @@ type diagramNode struct {
 	Label          string          `json:"label"`
 	ParentID       *string         `json:"parentId"`
 	Fields         []*diagramField `json:"fields,omitempty"`
-	Kind           string          `json:"kind,omitempty"`
 	Actor          string          `json:"actor,omitempty"`
 	Reads          string          `json:"reads,omitempty"`
 	Subscribes     []string        `json:"subscribes,omitempty"`
@@ -160,12 +155,7 @@ func (b *builder) buildSlice(n *diagramNode) *ast.Slice {
 
 	if triggers := b.children(n.ID, "trigger"); len(triggers) > 0 {
 		t := triggers[0]
-		kind := t.Kind
-		if kind == "" {
-			kind = defaultTriggerKind
-		}
 		slice.Trigger = &ast.Trigger{
-			Kind:  kind,
 			Name:  t.Label,
 			Actor: t.Actor,
 			Reads: t.Reads,

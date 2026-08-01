@@ -266,6 +266,51 @@ context "C" {
 			require.Empty(t, test.DeclaredAutomationReads(importExported(t, unread)))
 		})
 
+		t.Run("preserves a trigger's name, actor and reads through the viewer save path", func(t *testing.T) {
+			source := `emod 1
+model "M"
+
+context "C" {
+  aggregate "A" {
+    slice "S" {
+      trigger "Reservation Form" {
+        actor Guest
+        reads AvailableRoomsView
+      }
+    }
+  }
+}
+`
+			require.Equal(t, source, formatter.Format(importFrom(t, source)))
+		})
+
+		t.Run("ignores a stale kind key on a trigger node", func(t *testing.T) {
+			withoutKind := `{
+              "model_name": "M",
+              "nodes": [
+                {"id": "context-1", "type": "context", "label": "C", "parentId": null},
+                {"id": "slice-1", "type": "slice", "label": "S", "parentId": "context-1"},
+                {"id": "trigger-1", "type": "trigger", "label": "Form", "parentId": "slice-1",
+                 "actor": "Guest", "reads": "MyView"}
+              ],
+              "edges": []
+            }`
+			withKind := `{
+              "model_name": "M",
+              "nodes": [
+                {"id": "context-1", "type": "context", "label": "C", "parentId": null},
+                {"id": "slice-1", "type": "slice", "label": "S", "parentId": "context-1"},
+                {"id": "trigger-1", "type": "trigger", "label": "Form", "parentId": "slice-1",
+                 "kind": "UI", "actor": "Guest", "reads": "MyView"}
+              ],
+              "edges": []
+            }`
+
+			a := importDiagram(t, withoutKind)
+			b := importDiagram(t, withKind)
+			require.Equal(t, a.Contexts[0].Slices[0].Trigger, b.Contexts[0].Slices[0].Trigger)
+		})
+
 		t.Run("preserves external event sources", func(t *testing.T) {
 			source := `emod 1
 model "M"
@@ -475,7 +520,7 @@ context "C" {
 			require.Contains(t, err.Error(), "invalid diagram JSON")
 		})
 
-		t.Run("a trigger with no kind falls back to a parseable one", func(t *testing.T) {
+		t.Run("a trigger node without kind formats to a parseable kindless header", func(t *testing.T) {
 			diagram := `{
               "model_name": "M",
               "nodes": [
@@ -487,8 +532,10 @@ context "C" {
             }`
 
 			model := importDiagram(t, diagram)
+			formatted := formatter.Format(model)
 
-			require.Equal(t, "UI", model.Contexts[0].Slices[0].Trigger.Kind)
+			require.Contains(t, formatted, "trigger \"Form\" {")
+			require.Empty(t, savedTextDiagnostics(model))
 		})
 
 		t.Run("an empty document yields a model with no contexts", func(t *testing.T) {

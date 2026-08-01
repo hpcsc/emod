@@ -332,7 +332,6 @@ function showDetailPanel(store, node) {
     html += '<div class="dp-section">';
     html += '<div class="dp-section-title">Trigger</div>';
     html += '<table><tbody>';
-    html += '<tr><th>Kind</th><td>' + Renderer.esc(node.kind || '—') + '</td></tr>';
     html += '<tr><th>Actor</th><td>' + Renderer.esc(node.actor || '—') + '</td></tr>';
     html += '<tr><th>Reads</th><td>' + Renderer.esc(node.reads || '—') + '</td></tr>';
     html += '</tbody></table>';

@@ -26,6 +26,13 @@ function automationNode(attrs = {}) {
   );
 }
 
+function triggerNode(attrs = {}) {
+  return Object.assign(
+    { id: 'trg1', type: 'trigger', label: 'Reservation Form' },
+    attrs,
+  );
+}
+
 function shownRows(store) {
   return [...store.dom.dpContent.querySelectorAll('tr')].map((row) => ({
     label: row.querySelector('th').textContent,
@@ -110,5 +117,55 @@ describe('detail panel for an automation', () => {
     UI.showDetailPanel(store, automationNode({ [key]: value }));
 
     expect(shownRows(store)).toContainEqual({ label, value: '—' });
+  });
+});
+
+describe('detail panel for a trigger', () => {
+  it('shows the actor and the reads the node states', () => {
+    const store = createStore();
+
+    UI.showDetailPanel(store, triggerNode({ actor: 'Guest', reads: 'AvailableRoomsView' }));
+
+    expect(store.dom.dpContent.textContent).toContain('Trigger');
+    expect(shownRows(store)).toEqual([
+      { label: 'Actor', value: 'Guest' },
+      { label: 'Reads', value: 'AvailableRoomsView' },
+    ]);
+  });
+
+  it('shows an em-dash placeholder for actor and reads the node does not state', () => {
+    const store = createStore();
+
+    UI.showDetailPanel(store, triggerNode());
+
+    expect(shownRows(store)).toEqual([
+      { label: 'Actor', value: '—' },
+      { label: 'Reads', value: '—' },
+    ]);
+  });
+
+  it('renders a stale kind the same as a missing kind, with no orphaned Kind row', () => {
+    const withoutKind = createStore();
+    UI.showDetailPanel(withoutKind, triggerNode());
+    const withKind = createStore();
+    UI.showDetailPanel(withKind, triggerNode({ kind: 'UI' }));
+
+    expect(shownRows(withoutKind)).toEqual(shownRows(withKind));
+    expect(shownRows(withKind)).toEqual([
+      { label: 'Actor', value: '—' },
+      { label: 'Reads', value: '—' },
+    ]);
+  });
+
+  it.each([
+    { label: 'Actor', key: 'actor', value: 'Guest<b>&</b>Actor' },
+    { label: 'Reads', key: 'reads', value: 'Available<b>&</b>RoomsView' },
+  ])('shows the $label value containing markup as text', ({ label, key, value }) => {
+    const store = createStore();
+
+    UI.showDetailPanel(store, triggerNode({ [key]: value }));
+
+    expect(shownRows(store)).toContainEqual({ label, value });
+    expect(store.dom.dpContent.querySelector('b')).toBeNull();
   });
 });

@@ -658,7 +658,6 @@ type jsonDiagramNode struct {
 	Fields   []*jsonDiagramField `json:"fields,omitempty"`
 	Position *jsonPosition       `json:"position,omitempty"`
 	// Type-specific metadata for trigger, event, view, automation, translation
-	Kind           string            `json:"kind,omitempty"`
 	Actor          string            `json:"actor,omitempty"`
 	Reads          string            `json:"reads,omitempty"`
 	Subscribes     []string          `json:"subscribes,omitempty"`
@@ -800,7 +799,6 @@ func collectSliceNodes(
 			Label:    s.Trigger.Name,
 			ParentID: &sliceID,
 			Position: convertPosition(s.Trigger.NamePos),
-			Kind:     s.Trigger.Kind,
 			Actor:    s.Trigger.Actor,
 			Reads:    s.Trigger.Reads,
 		})
