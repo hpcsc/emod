@@ -1,4 +1,4 @@
-import { L } from './config.js';
+import { L, PORT_DIRECTIONS } from './config.js';
 
 const _measureSvg = document.createElementNS("http://www.w3.org/2000/svg", "svg");
 _measureSvg.style.position = "fixed";
@@ -341,8 +341,20 @@ function computeArrowEndpoints(srcPos, tgtPos, crossBoundary) {
   return { src: srcPoint, tgt: tgtPoint };
 }
 
+// Where a named port sits on a block: the midpoint of that side.
+function portAnchor(pos, direction) {
+  let dir = null;
+  PORT_DIRECTIONS.forEach(function(d) { if (d.name === direction) dir = d; });
+  if (!dir) return null;
+  return {
+    x: pos.x + pos.w / 2 + dir.dx * pos.w / 2,
+    y: pos.y + pos.h / 2 + dir.dy * pos.h / 2,
+  };
+}
+
 export const Layout = {
   labelWidth,
+  portAnchor,
   buildTree,
   computeLayout,
   isCrossBoundary,

@@ -190,13 +190,23 @@ test.describe('fit to view', () => {
 });
 
 test.describe('node selection', () => {
-  test('opens the detail panel for the clicked node', async ({ page }) => {
+  test('opens the field editor from the node context menu', async ({ page }) => {
     await open(page);
     await render(page, SAMPLE);
 
-    const node = page.locator('.diagram-node[data-node-id]').first();
-    await node.click();
+    await page.locator('.diagram-node[data-node-id="command-1"]').click({ button: 'right' });
+    await page.locator('.ctx-menu-item[data-action="open-field-editor"]').click();
 
     await expect(page.locator('#detail-panel')).toBeVisible();
+    await expect(page.locator('#dp-content')).toContainText('TakePayment');
+  });
+
+  test('leaves the field editor closed when the node is clicked', async ({ page }) => {
+    await open(page);
+    await render(page, SAMPLE);
+
+    await page.locator('.diagram-node[data-node-id="command-1"]').click();
+
+    await expect(page.locator('#detail-panel')).toBeHidden();
   });
 });

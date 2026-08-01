@@ -62,6 +62,47 @@ function pairedAutomations(schedule) {
   ];
 }
 
+// The sides a block can be connected from, each described independently of the
+// renderer: the midpoint of the side, and the unit vector pointing away from
+// the block. Ports are asserted against these rather than against the layout
+// constants they are built from.
+const SIDES = {
+  top:    (box) => ({ anchor: { x: box.x + box.w / 2, y: box.y },         out: { x: 0,  y: -1 } }),
+  right:  (box) => ({ anchor: { x: box.x + box.w, y: box.y + box.h / 2 }, out: { x: 1,  y: 0  } }),
+  bottom: (box) => ({ anchor: { x: box.x + box.w / 2, y: box.y + box.h }, out: { x: 0,  y: 1  } }),
+  left:   (box) => ({ anchor: { x: box.x, y: box.y + box.h / 2 },         out: { x: -1, y: 0  } }),
+};
+
+// How far a point sits beyond the edge the port is on. Negative is inside the
+// block, positive is out in the gap around it.
+function reachBeyondEdge(point, side) {
+  return (point.x - side.anchor.x) * side.out.x + (point.y - side.anchor.y) * side.out.y;
+}
+
+// How far a point sits from the middle of the edge, measured along the edge.
+function offsetAlongEdge(point, side) {
+  return Math.abs((point.x - side.anchor.x) * side.out.y - (point.y - side.anchor.y) * side.out.x);
+}
+
+function portOf(group, direction) {
+  return group.querySelector('[data-port="' + direction + '"]');
+}
+
+function arrowheadCorners(port) {
+  return port.querySelector('.port-head').getAttribute('d')
+    .match(/-?[\d.]+,-?[\d.]+/g)
+    .map((pair) => pair.split(','))
+    .map(([x, y]) => ({ x: Number(x), y: Number(y) }));
+}
+
+function hitAreaOf(port) {
+  const circle = port.querySelector('.port-hit');
+  return {
+    centre: { x: numeric(circle, 'cx'), y: numeric(circle, 'cy') },
+    radius: numeric(circle, 'r'),
+  };
+}
+
 function createStore(nodes, hiddenNodes) {
   return {
     nodes: nodes,
@@ -232,5 +273,60 @@ describe('Renderer.buildSVG', () => {
       expect(box.height).toBe(boxes.cmd1.height);
       expect(boxes).toEqual(drawnBoxes(eventActivated.svg));
     });
+  });
+
+  describe('connection ports', () => {
+    it('offers a port on every side of every block, each naming the block it starts from', () => {
+      const { svg } = render(twoAggregates());
+
+      [...svg.querySelectorAll('.diagram-node')].forEach((group) => {
+        const ports = [...group.querySelectorAll('[data-port]')];
+        expect(ports.map((p) => p.getAttribute('data-port')))
+          .toEqual(['top', 'right', 'bottom', 'left']);
+        ports.forEach((port) => {
+          expect(port.getAttribute('data-node-id')).toBe(group.getAttribute('data-node-id'));
+        });
+      });
+    });
+
+    it.each(['top', 'right', 'bottom', 'left'])(
+      'draws the %s port as an arrowhead aimed away from the side it sits on', (direction) => {
+        const { svg, positions } = render(twoAggregates());
+        const side = SIDES[direction](positions.cmd1);
+
+        const corners = arrowheadCorners(portOf(nodeGroup(svg, 'cmd1'), direction));
+        const reaches = corners.map((c) => reachBeyondEdge(c, side));
+
+        // The tip is the corner furthest out, and the two behind it sit either
+        // side of the centre line — an arrowhead rather than a blunt tab.
+        const [left, tip, right] = corners;
+        expect(reaches[1]).toBeGreaterThan(Math.max(reaches[0], reaches[2]));
+        expect(offsetAlongEdge(tip, side)).toBeCloseTo(0);
+        expect(offsetAlongEdge(left, side)).toBeCloseTo(offsetAlongEdge(right, side));
+        expect(offsetAlongEdge(left, side)).toBeGreaterThan(0);
+        reaches.forEach((reach) => expect(reach).toBeGreaterThan(0));
+      });
+
+    it.each(['top', 'right', 'bottom', 'left'])(
+      'gives the %s port a hit area around the arrowhead, not over the block it belongs to', (direction) => {
+        const { svg, positions } = render(twoAggregates());
+        const side = SIDES[direction](positions.cmd1);
+
+        const port = portOf(nodeGroup(svg, 'cmd1'), direction);
+        const hit = hitAreaOf(port);
+        const tip = arrowheadCorners(port)[1];
+
+        // Wider than the 5px dot it replaces, so the port can be grabbed
+        // without landing on the arrowhead exactly.
+        expect(hit.radius).toBeGreaterThan(5);
+        expect(offsetAlongEdge(hit.centre, side)).toBeCloseTo(0);
+        expect(reachBeyondEdge(hit.centre, side)).toBeGreaterThan(0);
+
+        // Dragging a block starts anywhere on it, so the hit area has to stay
+        // out in the gap: it may graze the edge but never reach the label.
+        expect(reachBeyondEdge(hit.centre, side) - hit.radius).toBeGreaterThan(-2);
+        expect(reachBeyondEdge(hit.centre, side) + hit.radius)
+          .toBeGreaterThan(reachBeyondEdge(tip, side));
+      });
   });
 });

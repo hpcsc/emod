@@ -34,7 +34,6 @@ function createMinimalStore() {
       drag: null,
       pan: null,
       touch: null,
-      suppressDetailClick: false,
     },
     dom: { svg: svg, resetLayoutBtn: null },
   };
@@ -112,6 +111,16 @@ function setupSliceAndNodes(store, sliceWidth) {
 
   vg.appendChild(makeArrowEl('arrow-hit', 'M80 165 L210 165'));
   vg.appendChild(makeArrowEl('flow-arrow arrow', 'M80 165 L210 165'));
+}
+
+// The renderer wraps each port in a group carrying the side it sits on; only
+// those two attributes matter to the interaction code.
+function addPort(store, nodeId, direction) {
+  var port = document.createElementNS('http://www.w3.org/2000/svg', 'g');
+  port.setAttribute('data-port', direction);
+  port.setAttribute('data-node-id', nodeId);
+  store.dom.svg.querySelector('.diagram-node[data-node-id="' + nodeId + '"]').appendChild(port);
+  return port;
 }
 
 function fire(el, type, opts) {
@@ -302,6 +311,30 @@ describe('Interaction', function () {
       // The key is no crash and clean state.
       var cmdEl = store.dom.svg.querySelector('.diagram-node[data-node-id="cmd1"]');
       expect(cmdEl.classList.contains('dragging')).toBe(false);
+    });
+  });
+
+  describe('drawing a connection from a port', function () {
+    // cmd1 is laid out at x 30, y 110, 100 wide and 55 tall.
+    it.each([
+      { direction: 'top',    startsAt: '80,110' },
+      { direction: 'right',  startsAt: '130,137.5' },
+      { direction: 'bottom', startsAt: '80,165' },
+      { direction: 'left',   startsAt: '30,137.5' },
+    ])('anchors the preview line to the middle of the $direction side', function (opts) {
+      setupSliceAndNodes(store);
+      Interaction.initEventListeners(store);
+      var port = addPort(store, 'cmd1', opts.direction);
+
+      fire(port, 'mousedown', { clientX: 300, clientY: 400, button: 0 });
+
+      var preview = store.dom.svg.querySelector('.connect-preview');
+      expect(preview.getAttribute('d')).toBe('M ' + opts.startsAt + ' L 300,400');
+
+      // Release where the press landed. The document listener this test
+      // installs outlives the test, and a gesture left open would go on to
+      // settle itself against the next one's fixture.
+      fire(document, 'mouseup', { clientX: 300, clientY: 400 });
     });
   });
 

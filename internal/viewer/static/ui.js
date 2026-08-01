@@ -610,19 +610,25 @@ function cancelInlineEdit(store) {
 }
 
 // ─── Context menu ──────────────────────────────────────────────
-function showContextMenu(store, x, y, aggOrCtxId, sliceId) {
+// target names what the menu was opened over: one of { nodeId }, { aggOrCtxId }
+// or { sliceId }. Each kind gets its own items and records its own id, which is
+// what the action then applies to.
+function showContextMenu(store, x, y, target) {
   const el = store.dom.ctxMenu;
   if (!el) return;
-  if (aggOrCtxId) {
-    const node = store.nodeById.get(aggOrCtxId);
+  if (target.nodeId) {
+    store.interaction.ctxMenu = { targetNodeId: target.nodeId };
+    el.innerHTML = '<div class="ctx-menu-item" data-action="open-field-editor">Open field editor</div>';
+  } else if (target.aggOrCtxId) {
+    const node = store.nodeById.get(target.aggOrCtxId);
     if (node && node.type === "context") {
-      store.interaction.ctxMenu = { targetCtxId: aggOrCtxId };
+      store.interaction.ctxMenu = { targetCtxId: target.aggOrCtxId };
     } else {
-      store.interaction.ctxMenu = { targetAggId: aggOrCtxId };
+      store.interaction.ctxMenu = { targetAggId: target.aggOrCtxId };
     }
     el.innerHTML = '<div class="ctx-menu-item" data-action="add-slice">Add Slice</div>';
-  } else if (sliceId) {
-    store.interaction.ctxMenu = { targetSliceId: sliceId };
+  } else if (target.sliceId) {
+    store.interaction.ctxMenu = { targetSliceId: target.sliceId };
     el.innerHTML = [
       '<div class="ctx-menu-item" data-action="add-command">Add Command</div>',
       '<div class="ctx-menu-item" data-action="add-event">Add Event</div>',
@@ -697,8 +703,10 @@ function initDelegation(store) {
     var arrow = evt.target.closest(".arrow-hit");
     if (arrow) {
       setArrowHovered(store, arrow.getAttribute("data-edge-id"));
-    } else if (evt.target.closest('.arrow-handle')) {
-      // Already visible via arrow hover
+    } else if (evt.target.closest('.arrow-handle, [data-port]')) {
+      // Neither the handles nor the connection port they are drawn over may put
+      // the arrow away: a handle is only grabbable while it is showing, and the
+      // port covers the last few pixels before the pointer reaches it.
     } else {
       setArrowHovered(store, null);
     }
@@ -756,18 +764,10 @@ function initDelegation(store) {
       }
     }
 
-    if (!interactive && !store.interaction.suppressDetailClick) {
-      const block = target.closest(".diagram-node");
-      if (block) {
-        const nodeId = block.getAttribute("data-node-id");
-        if (nodeId) {
-          interactive = true;
-          const node = store.nodeById.get( nodeId);
-          if (node) showDetailPanel(store, node);
-        }
-      }
-    }
-    store.interaction.suppressDetailClick = false;
+    // A left click on a block does nothing — the field editor opens from the
+    // block's context menu now. The click is still counted as landing on
+    // something, so clicking a block does not dismiss a panel being edited.
+    if (!interactive && target.closest(".diagram-node")) interactive = true;
 
     if (!interactive) {
       const activeEl = document.activeElement;
@@ -836,7 +836,7 @@ function initDelegation(store) {
       const sliceId = sliceHeader.getAttribute("data-slice-id");
       if (sliceId) {
         evt.preventDefault();
-        showContextMenu(store, evt.clientX, evt.clientY, null, sliceId);
+        showContextMenu(store, evt.clientX, evt.clientY, { sliceId: sliceId });
         return;
       }
     }
@@ -846,20 +846,27 @@ function initDelegation(store) {
       const sliceId = sliceArea.getAttribute("data-slice-id");
       if (sliceId) {
         evt.preventDefault();
-        showContextMenu(store, evt.clientX, evt.clientY, null, sliceId);
+        showContextMenu(store, evt.clientX, evt.clientY, { sliceId: sliceId });
         return;
       }
     }
 
     const block = target.closest(".diagram-node");
-    if (block) return;
+    if (block) {
+      const nodeId = block.getAttribute("data-node-id");
+      if (nodeId) {
+        evt.preventDefault();
+        showContextMenu(store, evt.clientX, evt.clientY, { nodeId: nodeId });
+      }
+      return;
+    }
 
     const aggArea = target.closest(".agg-area");
     if (aggArea) {
       const aggId = aggArea.getAttribute("data-agg-id");
       if (aggId) {
         evt.preventDefault();
-        showContextMenu(store, evt.clientX, evt.clientY, aggId);
+        showContextMenu(store, evt.clientX, evt.clientY, { aggOrCtxId: aggId });
         return;
       }
     }
@@ -869,7 +876,7 @@ function initDelegation(store) {
       const aggId = aggLabel.getAttribute("data-agg-id");
       if (aggId) {
         evt.preventDefault();
-        showContextMenu(store, evt.clientX, evt.clientY, aggId);
+        showContextMenu(store, evt.clientX, evt.clientY, { aggOrCtxId: aggId });
         return;
       }
     }
@@ -886,7 +893,7 @@ function initDelegation(store) {
           }
         }
         evt.preventDefault();
-        showContextMenu(store, evt.clientX, evt.clientY, aggId || ctxId);
+        showContextMenu(store, evt.clientX, evt.clientY, { aggOrCtxId: aggId || ctxId });
         return;
       }
     }
@@ -903,7 +910,7 @@ function initDelegation(store) {
           }
         }
         evt.preventDefault();
-        showContextMenu(store, evt.clientX, evt.clientY, aggId || ctxId);
+        showContextMenu(store, evt.clientX, evt.clientY, { aggOrCtxId: aggId || ctxId });
         return;
       }
     }

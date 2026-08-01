@@ -239,6 +239,16 @@ function init() {
     if (!item) return;
     const action = item.getAttribute("data-action");
 
+    // Opening the editor changes nothing in the model, so it never reaches
+    // CtxActions — which reports whether the diagram needs re-rendering.
+    if (action === "open-field-editor") {
+      const menu = store.interaction.ctxMenu;
+      const node = menu && store.nodeById.get(menu.targetNodeId);
+      UI.hideContextMenu(store);
+      if (node) UI.showDetailPanel(store, node);
+      return;
+    }
+
     if (!CtxActions.apply(store, action)) return;
 
     UI.hideContextMenu(store);

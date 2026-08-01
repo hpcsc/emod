@@ -1,6 +1,6 @@
 import { test, expect } from '@playwright/test';
 import {
-  open, render, exportEmod, centreOf, dropPointIn, portOf, handleOf, dragBetween,
+  open, render, exportEmod, centreOf, dropPointIn, portOf, grabPointFor, dragBetween,
   SAMPLE, SAMPLE_WITH_VIEW,
 } from './helpers.js';
 
@@ -20,7 +20,7 @@ test.describe('drawing an edge from a port', () => {
     await render(page, SAMPLE);
     const added = await addSecondEvent(page);
 
-    await dragBetween(page, await portOf(page, 'command-1', 'out'), await dropPointIn(added));
+    await dragBetween(page, await portOf(page, 'command-1', 'right'), await dropPointIn(added));
 
     expect(await exportEmod(page)).toContain('command -> event: TakePayment -> new-event-2');
   });
@@ -30,7 +30,7 @@ test.describe('drawing an edge from a port', () => {
     await render(page, SAMPLE);
     const added = await addSecondEvent(page);
 
-    await dragBetween(page, await portOf(page, 'command-1', 'out'), await dropPointIn(added));
+    await dragBetween(page, await portOf(page, 'command-1', 'right'), await dropPointIn(added));
 
     expect(await exportEmod(page)).toContain('command -> event: TakePayment -> PaymentTaken');
   });
@@ -39,7 +39,7 @@ test.describe('drawing an edge from a port', () => {
     await open(page);
     await render(page, SAMPLE);
     const before = await exportEmod(page);
-    const port = await portOf(page, 'command-1', 'out');
+    const port = await portOf(page, 'command-1', 'right');
 
     await dragBetween(page, port, { x: port.x + 40, y: port.y + 260 });
 
@@ -50,7 +50,7 @@ test.describe('drawing an edge from a port', () => {
     await open(page);
     await render(page, SAMPLE);
     const before = await exportEmod(page);
-    const port = await portOf(page, 'command-1', 'out');
+    const port = await portOf(page, 'command-1', 'right');
 
     await page.mouse.move(port.x, port.y);
     await page.mouse.down();
@@ -66,7 +66,7 @@ test.describe('drawing an edge from a port', () => {
 
     await dragBetween(
       page,
-      await portOf(page, 'command-1', 'out'),
+      await portOf(page, 'command-1', 'right'),
       await dropPointIn(page.locator('.diagram-node[data-node-id="command-1"]')));
 
     expect(await exportEmod(page)).toBe(before);
@@ -79,7 +79,7 @@ test.describe('drawing an edge from a port', () => {
 
     await dragBetween(
       page,
-      await portOf(page, 'command-1', 'out'),
+      await portOf(page, 'command-1', 'right'),
       await dropPointIn(page.locator('.diagram-node[data-node-id="event-1"]')));
 
     expect(await exportEmod(page)).toBe(before);
@@ -91,18 +91,32 @@ test.describe('drawing an edge from a port', () => {
 
     await dragBetween(
       page,
-      await portOf(page, 'event-1', 'out'),
+      await portOf(page, 'event-1', 'right'),
       await dropPointIn(page.locator('.diagram-node[data-node-id="view-1"]')));
 
     expect(await exportEmod(page)).toContain('subscribes [PaymentTaken]');
   });
+
+  // A block carries a port on each side so the arrow can be started from
+  // whichever one faces the block being connected to.
+  for (const side of ['top', 'right', 'bottom', 'left']) {
+    test(`starts from the port on the ${side} of the block`, async ({ page }) => {
+      await open(page);
+      await render(page, SAMPLE);
+      const added = await addSecondEvent(page);
+
+      await dragBetween(page, await portOf(page, 'command-1', side), await dropPointIn(added));
+
+      expect(await exportEmod(page)).toContain('command -> event: TakePayment -> new-event-2');
+    });
+  }
 
   test('leaves no preview line behind after the drag', async ({ page }) => {
     await open(page);
     await render(page, SAMPLE);
     const added = await addSecondEvent(page);
 
-    await dragBetween(page, await portOf(page, 'command-1', 'out'), await dropPointIn(added));
+    await dragBetween(page, await portOf(page, 'command-1', 'right'), await dropPointIn(added));
 
     await expect(page.locator('.connect-preview')).toHaveCount(0);
   });
@@ -114,8 +128,8 @@ test.describe('repointing an arrow', () => {
     await render(page, SAMPLE);
     const added = await addSecondEvent(page);
 
-    const handle = handleOf(page, 'command-1', 'event-1', 'target');
-    await dragBetween(page, await centreOf(handle), await dropPointIn(added));
+    const grab = await grabPointFor(page, 'command-1', 'event-1', 'target');
+    await dragBetween(page, grab, await dropPointIn(added));
 
     const exported = await exportEmod(page);
     expect(exported).toContain('command -> event: TakePayment -> new-event-2');
@@ -135,8 +149,8 @@ test.describe('repointing an arrow', () => {
     await render(page, SAMPLE);
     const added = await addSecondCommand(page);
 
-    const handle = handleOf(page, 'command-1', 'event-1', 'source');
-    await dragBetween(page, await centreOf(handle), await dropPointIn(added));
+    const grab = await grabPointFor(page, 'command-1', 'event-1', 'source');
+    await dragBetween(page, grab, await dropPointIn(added));
 
     const exported = await exportEmod(page);
     expect(exported).toContain('command -> event: new-command-2 -> PaymentTaken');
@@ -151,8 +165,8 @@ test.describe('repointing an arrow', () => {
     await render(page, SAMPLE);
     const added = await addSecondCommand(page);
 
-    const handle = handleOf(page, 'command-1', 'event-1', 'source');
-    await dragBetween(page, await centreOf(handle), await centreOf(added));
+    const grab = await grabPointFor(page, 'command-1', 'event-1', 'source');
+    await dragBetween(page, grab, await centreOf(added));
 
     expect(await exportEmod(page)).toContain('command -> event: new-command-2 -> PaymentTaken');
   });
@@ -162,10 +176,9 @@ test.describe('repointing an arrow', () => {
     await render(page, SAMPLE);
     const before = await exportEmod(page);
 
-    const handle = handleOf(page, 'command-1', 'event-1', 'target');
     await dragBetween(
       page,
-      await centreOf(handle),
+      await grabPointFor(page, 'command-1', 'event-1', 'target'),
       await dropPointIn(page.locator('.diagram-node[data-node-id="command-1"]')));
 
     expect(await exportEmod(page)).toBe(before);
@@ -176,8 +189,7 @@ test.describe('repointing an arrow', () => {
     await render(page, SAMPLE);
     const before = await exportEmod(page);
 
-    const handle = handleOf(page, 'command-1', 'event-1', 'target');
-    const from = await centreOf(handle);
+    const from = await grabPointFor(page, 'command-1', 'event-1', 'target');
     await dragBetween(page, from, { x: from.x + 60, y: from.y + 240 });
 
     expect(await exportEmod(page)).toBe(before);

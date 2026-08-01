@@ -154,9 +154,10 @@ export async function dropPointIn(locator) {
   return { x: box.x + box.width * 0.8, y: box.y + box.height * 0.5 };
 }
 
-// portOf locates a node's connection port. The ports render at opacity 0 until
-// the node is hovered, which leaves them hit-testable throughout — only display
-// and visibility take an element out of the running.
+// portOf locates the connection port on one side of a node — 'top', 'right',
+// 'bottom' or 'left'. The ports render at opacity 0 until the node is hovered,
+// which leaves them hit-testable throughout — only display and visibility take
+// an element out of the running.
 export async function portOf(page, nodeId, which) {
   const node = page.locator(`.diagram-node[data-node-id="${nodeId}"]`);
   await node.hover();
@@ -167,6 +168,34 @@ export async function portOf(page, nodeId, which) {
 export function handleOf(page, source, target, end) {
   return page.locator(
     `[data-arrow-handle="${end}"][data-edge-source="${source}"][data-edge-target="${target}"]`);
+}
+
+// grabPointFor reveals an arrow's repoint handles by hovering the arrow, then
+// returns where to press to take hold of one end. The hover is what a user does
+// to see the handles, and what makes them take the pointer: an arrow ends on a
+// block's connection port, and a handle that is not showing leaves the port to
+// take the press.
+export async function grabPointFor(page, source, target, end) {
+  // Walk the arrow for a spot where it is the thing under the pointer. Its own
+  // hit path cannot be hovered through Playwright — a straight arrow is zero
+  // pixels wide, which reads as an invisible element — and the obvious middle
+  // is sometimes covered by a block the arrow passes behind.
+  const onArrow = await page.evaluate((edgeId) => {
+    const hit = document.querySelector(`.arrow-hit[data-edge-id="${edgeId}"]`);
+    const ctm = hit.getScreenCTM();
+    const length = hit.getTotalLength();
+    for (let along = 0.05; along < 1; along += 0.05) {
+      const p = hit.getPointAtLength(length * along);
+      const point = { x: ctm.a * p.x + ctm.c * p.y + ctm.e, y: ctm.b * p.x + ctm.d * p.y + ctm.f };
+      if (document.elementFromPoint(point.x, point.y) === hit) return point;
+    }
+    return null;
+  }, `${source}--${target}`);
+
+  if (!onArrow) throw new Error(`the ${source} → ${target} arrow is covered along its whole length`);
+
+  await page.mouse.move(onArrow.x, onArrow.y);
+  return centreOf(handleOf(page, source, target, end));
 }
 
 // dragBetween presses at one point, moves in steps so the drag threshold is

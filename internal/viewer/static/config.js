@@ -8,7 +8,18 @@ export const L = {
   sideGap: 12,
   slicePad: 20, sliceHdrH: 28, sliceTopPad: 36,
   arrowHitWidth: 16,
+  portGap: 4, portLen: 12, portHalf: 6, portHitR: 11,
 };
+
+// The sides a connection can be drawn from, each with the unit vector pointing
+// out of the block. Rendering shapes the arrowhead along it and the interaction
+// code reads the same list back, so a port that renders can always be grabbed.
+export const PORT_DIRECTIONS = [
+  { name: "top",    dx: 0,  dy: -1 },
+  { name: "right",  dx: 1,  dy: 0  },
+  { name: "bottom", dx: 0,  dy: 1  },
+  { name: "left",   dx: -1, dy: 0  },
+];
 
 export const DRAG_THRESHOLD = 5;
 

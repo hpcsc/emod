@@ -920,15 +920,34 @@ header .model-name span {
 #diagram-canvas .node-port:hover {
   opacity: 1 !important;
 }
+#diagram-canvas .node-port .port-head {
+  transition: fill 0.12s;
+}
+#diagram-canvas .node-port:hover .port-head {
+  fill: #217dbb;
+}
+/* A repoint handle sits exactly where its arrow meets a block, which is also
+   where that block's connection port is. The handle is painted over the port,
+   so it only takes the pointer once hovering the arrow has revealed it —
+   otherwise an invisible handle would swallow every press meant for the port
+   under it. Without hover there is nothing to reveal them, so on touch the
+   handles stay live and keep the port's spot. */
 #diagram-canvas .arrow-handle {
   opacity: 0;
+  pointer-events: none;
   transition: opacity 0.12s;
 }
 #diagram-canvas .arrow-handle.visible {
   opacity: 1;
+  pointer-events: all;
   fill: #3498db;
   stroke: #fff;
   stroke-width: 2;
+}
+@media (hover: none) {
+  #diagram-canvas .arrow-handle {
+    pointer-events: all;
+  }
 }
 </style>
 </head>

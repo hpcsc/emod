@@ -7,6 +7,7 @@ const { createStore } = await import('../static/store.js');
 const { Layout } = await import('../static/layout.js');
 const { Renderer } = await import('../static/renderer.js');
 const { Interaction } = await import('../static/interaction.js');
+const { UI } = await import('../static/ui.js');
 const { bus } = await import('../static/bus.js');
 const { L, DRAG_THRESHOLD } = await import('../static/config.js');
 
@@ -137,6 +138,53 @@ describe('aiming at an arrow', () => {
     it('takes the pointer events the drawn arrow gives up', () => {
       expect(drawnArrow().getAttribute('pointer-events')).toBe('none');
       expect(hitPath().getAttribute('pointer-events')).toBe('stroke');
+    });
+  });
+
+  // Both ends of an arrow land where a block draws a connection port, and the
+  // handles are painted over those ports. They only take the pointer while
+  // they are showing, so when they show decides whether an arrow end can be
+  // grabbed at all — and whether the port underneath can.
+  describe('showing the repoint handles', () => {
+    function hover(el) {
+      el.dispatchEvent(new MouseEvent('pointerover', { bubbles: true }));
+    }
+
+    function showingEnds() {
+      return [...store.dom.svg.querySelectorAll('.arrow-handle[data-edge-id="cmd1--evt1"]')]
+        .filter((el) => el.classList.contains('visible')).length;
+    }
+
+    function partOf(nodeId, selector) {
+      return store.dom.svg.querySelector('.diagram-node[data-node-id="' + nodeId + '"] ' + selector);
+    }
+
+    beforeEach(() => {
+      UI.initDelegation(store);
+    });
+
+    it('shows both ends once the arrow is hovered', () => {
+      hover(hitPath());
+
+      expect(showingEnds()).toBe(2);
+    });
+
+    it('keeps them out while the pointer crosses the port the arrow ends on', () => {
+      hover(hitPath());
+
+      hover(partOf('evt1', '[data-port="top"]'));
+
+      // The port covers the last stretch of the approach. Putting the handles
+      // away there would switch them off just as the pointer reached them.
+      expect(showingEnds()).toBe(2);
+    });
+
+    it('puts them away when the pointer moves onto the block itself', () => {
+      hover(hitPath());
+
+      hover(partOf('evt1', 'rect'));
+
+      expect(showingEnds()).toBe(0);
     });
   });
 

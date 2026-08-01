@@ -430,23 +430,20 @@ function initEventListeners(store) {
     var port = evt.target.closest('[data-port]');
     if (port) {
       var nodeId = port.getAttribute("data-node-id");
-      var portType = port.getAttribute("data-port");
       var pos = store.layoutPositions[nodeId];
-      if (nodeId && pos) {
+      var start = pos && Layout.portAnchor(pos, port.getAttribute("data-port"));
+      if (nodeId && start) {
         var dp = screenToDiagram(svgEl, store.viewport, evt.clientX, evt.clientY);
-        var cx = portType === "out" ? pos.x + pos.w : pos.x;
-        var cy = pos.y + pos.h / 2;
         store.interaction.connect = {
           sourceId: nodeId,
-          portType: portType,
-          startX: cx,
-          startY: cy,
+          startX: start.x,
+          startY: start.y,
           currentX: dp.x,
           currentY: dp.y,
           startClientX: evt.clientX,
           startClientY: evt.clientY,
         };
-        var line = addPreviewLine(store, cx, cy, dp.x, dp.y);
+        addPreviewLine(store, start.x, start.y, dp.x, dp.y);
         evt.preventDefault();
       }
       return;
@@ -647,7 +644,6 @@ function initEventListeners(store) {
           if (!tryReorderSliceOnDrop(store, drag.sliceId, dx)) {
             revertSliceDrag(store, drag);
           }
-          store.interaction.suppressDetailClick = true;
         }
         drag.nodeIds.forEach(function(nodeId) {
           const blockEl = svgEl.querySelector('.diagram-node[data-node-id="' + nodeId + '"]');
@@ -665,7 +661,6 @@ function initEventListeners(store) {
         const dx = dp.x - drag.startDiagramX;
         const dy = dp.y - drag.startDiagramY;
         commitDrag(store, drag.nodeId, dx, dy);
-        store.interaction.suppressDetailClick = true;
       }
       if (blockEl) blockEl.classList.remove("dragging");
       store.interaction.drag = null;
@@ -692,25 +687,21 @@ function initEventListeners(store) {
       var port = evt.target.closest('[data-port]');
       if (port) {
         var nodeId = port.getAttribute("data-node-id");
-        var portType = port.getAttribute("data-port");
         var pos = store.layoutPositions[nodeId];
-        if (nodeId && pos) {
-          var touch = touches[0];
-          var dp = screenToDiagram(svgEl, store.viewport, touch.clientX, touch.clientY);
-          var cx = portType === "out" ? pos.x + pos.w : pos.x;
-          var cy = pos.y + pos.h / 2;
+        var start = pos && Layout.portAnchor(pos, port.getAttribute("data-port"));
+        if (nodeId && start) {
           var t = touches[0];
+          var dp = screenToDiagram(svgEl, store.viewport, t.clientX, t.clientY);
           store.interaction.connect = {
             sourceId: nodeId,
-            portType: portType,
-            startX: cx,
-            startY: cy,
+            startX: start.x,
+            startY: start.y,
             currentX: dp.x,
             currentY: dp.y,
             startClientX: t.clientX,
             startClientY: t.clientY,
           };
-          var line = addPreviewLine(store, cx, cy, dp.x, dp.y);
+          addPreviewLine(store, start.x, start.y, dp.x, dp.y);
         }
         return;
       }
@@ -979,7 +970,6 @@ function initEventListeners(store) {
             if (!tryReorderSliceOnDrop(store, drag.sliceId, dx)) {
               revertSliceDrag(store, drag);
             }
-            store.interaction.suppressDetailClick = true;
           }
         }
         drag.nodeIds.forEach(function(nodeId) {
@@ -999,7 +989,6 @@ function initEventListeners(store) {
           const dx = dp.x - drag.startDiagramX;
           const dy = dp.y - drag.startDiagramY;
           commitDrag(store, drag.nodeId, dx, dy);
-          store.interaction.suppressDetailClick = true;
         }
       }
       if (blockEl) blockEl.classList.remove("dragging");
@@ -1045,7 +1034,6 @@ function initEventListeners(store) {
             if (!tryReorderSliceOnDrop(store, drag.sliceId, dx)) {
               revertSliceDrag(store, drag);
             }
-            store.interaction.suppressDetailClick = true;
           }
         }
         drag.nodeIds.forEach(function(nodeId) {

@@ -65,6 +65,25 @@ function fireDrop(element, file) {
   return evt;
 }
 
+function fireMouse(element, type) {
+  element.dispatchEvent(new MouseEvent(type, { bubbles: true, cancelable: true }));
+}
+
+function blockFor(nodeId) {
+  return document.querySelector('.diagram-node[data-node-id="' + nodeId + '"]');
+}
+
+function menuItemFor(action) {
+  return document.querySelector('#ctx-menu .ctx-menu-item[data-action="' + action + '"]');
+}
+
+function fieldEditor() {
+  return {
+    open: document.getElementById('detail-panel').style.display === 'block',
+    text: document.getElementById('dp-content').textContent,
+  };
+}
+
 // MockFileReader stands in for the browser's async file read.
 class MockFileReader {
   readAsText(file) {
@@ -203,6 +222,57 @@ describe('viewer drag-and-drop', () => {
 
     expect(document.getElementById('source-input').value).toBe(jsonContent);
     expect(document.getElementById('diagram-canvas').innerHTML).toContain('TakePayment');
+  });
+});
+
+describe('viewer field editor', () => {
+  async function showBillingDiagram() {
+    globalThis.INITIAL_DATA = { diagram: billingDiagram() };
+    await startViewer();
+  }
+
+  function openFieldEditorFor(nodeId) {
+    fireMouse(blockFor(nodeId), 'contextmenu');
+    menuItemFor('open-field-editor').click();
+  }
+
+  it('stays shut when a block is left-clicked', async () => {
+    await showBillingDiagram();
+
+    fireMouse(blockFor('command-1'), 'click');
+
+    expect(fieldEditor()).toEqual({ open: false, text: '' });
+  });
+
+  it('opens on the block the context menu was raised over', async () => {
+    await showBillingDiagram();
+
+    fireMouse(blockFor('command-1'), 'contextmenu');
+    expect(menuItemFor('open-field-editor').textContent).toBe('Open field editor');
+
+    menuItemFor('open-field-editor').click();
+
+    expect(fieldEditor().open).toBe(true);
+    expect(fieldEditor().text).toContain('TakePayment');
+    expect(document.getElementById('ctx-menu').style.display).toBe('none');
+  });
+
+  it('survives a left click on the block it is editing', async () => {
+    await showBillingDiagram();
+    openFieldEditorFor('command-1');
+
+    fireMouse(blockFor('command-1'), 'click');
+
+    expect(fieldEditor().open).toBe(true);
+  });
+
+  it('closes when the click lands on the canvas instead of a block', async () => {
+    await showBillingDiagram();
+    openFieldEditorFor('command-1');
+
+    fireMouse(document.getElementById('diagram-canvas'), 'click');
+
+    expect(fieldEditor().open).toBe(false);
   });
 });
 

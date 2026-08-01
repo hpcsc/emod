@@ -1,4 +1,4 @@
-import { L, edgeConfig, arrowClassMap } from './config.js';
+import { L, edgeConfig, arrowClassMap, PORT_DIRECTIONS } from './config.js';
 import { Layout } from './layout.js';
 
 var NS = "http://www.w3.org/2000/svg";
@@ -112,6 +112,48 @@ function arrowHitPath(d, source, target, edgeId) {
   el.setAttribute("data-edge-id", edgeId);
   el.setAttribute("pointer-events", "stroke");
   return el;
+}
+
+// A port is what you grab to draw a connection, so it is drawn as an arrowhead
+// aimed out of the block rather than as a dot: it reads as "drag from here" and
+// gives the pointer a target several times the area of the old 5px circle. The
+// hit circle is centred on the arrowhead rather than on the block's edge — a
+// circle wide enough to aim at from the block's inside would take the middle of
+// each edge away from the drag that moves the block.
+function connectPort(nodeId, dir, pos) {
+  var anchor = Layout.portAnchor(pos, dir.name);
+  var alongX = -dir.dy, alongY = dir.dx;
+  var baseX = anchor.x + dir.dx * L.portGap;
+  var baseY = anchor.y + dir.dy * L.portGap;
+  var tipX = anchor.x + dir.dx * (L.portGap + L.portLen);
+  var tipY = anchor.y + dir.dy * (L.portGap + L.portLen);
+
+  var portG = g("node-port port-" + dir.name);
+  portG.setAttribute("data-port", dir.name);
+  portG.setAttribute("data-node-id", nodeId);
+  portG.setAttribute("cursor", "crosshair");
+
+  var hit = document.createElementNS(NS, "circle");
+  hit.setAttribute("cx", (baseX + tipX) / 2);
+  hit.setAttribute("cy", (baseY + tipY) / 2);
+  hit.setAttribute("r", String(L.portHitR));
+  hit.setAttribute("fill", "transparent");
+  hit.setAttribute("class", "port-hit");
+  portG.appendChild(hit);
+
+  var head = document.createElementNS(NS, "path");
+  head.setAttribute("d",
+    "M " + (baseX + alongX * L.portHalf) + "," + (baseY + alongY * L.portHalf) +
+    " L " + tipX + "," + tipY +
+    " L " + (baseX - alongX * L.portHalf) + "," + (baseY - alongY * L.portHalf) + " Z");
+  head.setAttribute("fill", "#3498db");
+  head.setAttribute("stroke", "#ffffff");
+  head.setAttribute("stroke-width", "1.5");
+  head.setAttribute("stroke-linejoin", "round");
+  head.setAttribute("class", "port-head");
+  portG.appendChild(head);
+
+  return portG;
 }
 
 function appendBlockLabels(blockG, node, pos, stroke) {
@@ -265,32 +307,9 @@ function buildSVG(store) {
     blockG.appendChild(svgRect(np.x, np.y, np.w, np.h, fill, stroke,
       "rx=\"4\" stroke-width=\"1.5\""));
 
-    // Connection ports
-    var outPort = document.createElementNS(NS, "circle");
-    outPort.setAttribute("cx", np.x + np.w);
-    outPort.setAttribute("cy", np.y + np.h / 2);
-    outPort.setAttribute("r", "5");
-    outPort.setAttribute("fill", "#3498db");
-    outPort.setAttribute("stroke", "#fff");
-    outPort.setAttribute("stroke-width", "1.5");
-    outPort.setAttribute("class", "node-port port-out");
-    outPort.setAttribute("data-port", "out");
-    outPort.setAttribute("data-node-id", n.id);
-    outPort.setAttribute("cursor", "crosshair");
-    blockG.appendChild(outPort);
-
-    var inPort = document.createElementNS(NS, "circle");
-    inPort.setAttribute("cx", np.x);
-    inPort.setAttribute("cy", np.y + np.h / 2);
-    inPort.setAttribute("r", "5");
-    inPort.setAttribute("fill", "#3498db");
-    inPort.setAttribute("stroke", "#fff");
-    inPort.setAttribute("stroke-width", "1.5");
-    inPort.setAttribute("class", "node-port port-in");
-    inPort.setAttribute("data-port", "in");
-    inPort.setAttribute("data-node-id", n.id);
-    inPort.setAttribute("cursor", "crosshair");
-    blockG.appendChild(inPort);
+    PORT_DIRECTIONS.forEach(function(dir) {
+      blockG.appendChild(connectPort(n.id, dir, np));
+    });
 
     appendBlockLabels(blockG, n, np, stroke);
     vg.appendChild(blockG);
@@ -331,7 +350,6 @@ function buildSVG(store) {
     srcHandle.setAttribute("data-edge-type", edge.type);
     srcHandle.setAttribute("data-edge-id", edgeId);
     srcHandle.setAttribute("cursor", "pointer");
-    srcHandle.style.pointerEvents = "all";
     vg.appendChild(srcHandle);
 
     var tgtHandle = document.createElementNS(NS, "circle");
@@ -348,7 +366,6 @@ function buildSVG(store) {
     tgtHandle.setAttribute("data-edge-type", edge.type);
     tgtHandle.setAttribute("data-edge-id", edgeId);
     tgtHandle.setAttribute("cursor", "pointer");
-    tgtHandle.style.pointerEvents = "all";
     vg.appendChild(tgtHandle);
   });
 

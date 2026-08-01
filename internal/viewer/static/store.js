@@ -19,7 +19,6 @@ export function createStore() {
       selectedEdge: null,
       inlineEdit: null,
       ctxMenu: null,
-      suppressDetailClick: false,
       connect: null,
     },
     dom: {
