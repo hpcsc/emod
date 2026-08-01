@@ -551,16 +551,26 @@ func (p *Instance) atSpecEventListEnd() bool {
 func (p *Instance) parseTrigger() *ast.Trigger {
 	comments := p.takePendingComments()
 	p.consume(lexer.KeywordTrigger, "expected trigger")
-	if !p.check(lexer.Identifier) {
-		p.error("expected identifier after trigger")
+	if !p.check(lexer.Identifier) && !p.check(lexer.String) {
+		p.errorAt(p.peek(), "expected quoted name after trigger")
+		if p.check(lexer.OpenBrace) {
+			p.advance()
+			p.skipTo(lexer.CloseBrace)
+			if p.check(lexer.CloseBrace) {
+				p.advance()
+			}
+		}
 		return nil
 	}
 
-	kindTok := p.advance()
 	trigger := &ast.Trigger{
 		Comments: comments,
-		Kind:     kindTok.Value,
-		KindPos:  p.position(kindTok),
+	}
+
+	if p.check(lexer.Identifier) {
+		kindTok := p.advance()
+		trigger.Kind = kindTok.Value
+		trigger.KindPos = p.position(kindTok)
 	}
 
 	if !p.check(lexer.String) {

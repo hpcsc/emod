@@ -1625,6 +1625,106 @@ context "Ctx" {
 			require.Equal(t, "SomeView", slice.Trigger.Reads)
 			require.Equal(t, "", slice.Trigger.Actor)
 		})
+
+		t.Run("kindless trigger with name, actor and reads", func(t *testing.T) {
+			input := `model "Test"
+context "Ctx" {
+  aggregate "Agg" {
+    slice "Slice" {
+      trigger "Reservation Form" {
+        actor Guest
+        reads AvailableRoomsView
+      }
+    }
+  }
+}`
+			tokens, _ := lexer.Scan(input, "test.emod")
+
+			p := parser.New(tokens, "test.emod")
+			model, errs := p.Parse()
+
+			require.Len(t, errs, 0)
+			slice := model.Contexts[0].Aggregates[0].Slices[0]
+			require.NotNil(t, slice.Trigger)
+			require.Equal(t, "", slice.Trigger.Kind)
+			require.Equal(t, "Reservation Form", slice.Trigger.Name)
+			require.Equal(t, ast.Position{Filename: "test.emod", Line: 5, Column: 15}, slice.Trigger.NamePos)
+			require.Equal(t, "Guest", slice.Trigger.Actor)
+			require.Equal(t, "AvailableRoomsView", slice.Trigger.Reads)
+		})
+
+		t.Run("kindless trigger with description", func(t *testing.T) {
+			input := `model "Test"
+context "Ctx" {
+  aggregate "Agg" {
+    slice "Slice" {
+      trigger "Reservation Form" {
+        description "The booking form on the public site"
+        actor Guest
+        reads AvailableRoomsView
+      }
+    }
+  }
+}`
+			tokens, _ := lexer.Scan(input, "test.emod")
+
+			p := parser.New(tokens, "test.emod")
+			model, errs := p.Parse()
+
+			require.Len(t, errs, 0)
+			slice := model.Contexts[0].Aggregates[0].Slices[0]
+			require.NotNil(t, slice.Trigger)
+			require.Equal(t, "", slice.Trigger.Kind)
+			require.Equal(t, "Reservation Form", slice.Trigger.Name)
+			require.Equal(t, "The booking form on the public site", slice.Trigger.Description)
+			require.Equal(t, "Guest", slice.Trigger.Actor)
+			require.Equal(t, "AvailableRoomsView", slice.Trigger.Reads)
+		})
+
+		t.Run("kindless trigger with empty body", func(t *testing.T) {
+			input := `model "Test"
+context "Ctx" {
+  aggregate "Agg" {
+    slice "Slice" {
+      trigger "Reservation Form" {
+      }
+    }
+  }
+}`
+			tokens, _ := lexer.Scan(input, "test.emod")
+
+			p := parser.New(tokens, "test.emod")
+			model, errs := p.Parse()
+
+			require.Len(t, errs, 0)
+			slice := model.Contexts[0].Aggregates[0].Slices[0]
+			require.NotNil(t, slice.Trigger)
+			require.Equal(t, "", slice.Trigger.Kind)
+			require.Equal(t, "Reservation Form", slice.Trigger.Name)
+			require.Equal(t, "", slice.Trigger.Actor)
+			require.Equal(t, "", slice.Trigger.Reads)
+		})
+
+		t.Run("kindless trigger reports single diagnostic when name is missing", func(t *testing.T) {
+			input := `model "Test"
+context "Ctx" {
+  aggregate "Agg" {
+    slice "Slice" {
+      trigger { }
+    }
+  }
+}`
+			tokens, _ := lexer.Scan(input, "test.emod")
+
+			p := parser.New(tokens, "test.emod")
+			_, errs := p.Parse()
+
+			require.Len(t, errs, 1)
+			require.Contains(t, errs[0].Message, "quoted name after trigger")
+			require.Equal(t, "test.emod", errs[0].Filename)
+			require.Equal(t, 5, errs[0].Line)
+			require.Equal(t, 15, errs[0].Column)
+		})
 	})
 
 	t.Run("views", func(t *testing.T) {

@@ -200,6 +200,116 @@ func TestFormat(t *testing.T) {
 			require.Equal(t, expected, result)
 		})
 
+		t.Run("formats kindless trigger block", func(t *testing.T) {
+			model := &ast.Model{
+				Name: "Test",
+				Contexts: []*ast.Context{
+					{
+						Name: "Ctx",
+						Aggregates: []*ast.Aggregate{
+							{
+								Name: "Agg",
+								Slices: []*ast.Slice{
+									{
+										Name: "Kindless",
+										Trigger: &ast.Trigger{
+											Name:  "Kindless Form",
+											Actor: "Guest",
+											Reads: "MyView",
+										},
+									},
+								},
+							},
+						},
+					},
+				},
+			}
+
+			result := formatter.Format(model)
+
+			expected := strings.Join([]string{
+				`emod 1`,
+				`model "Test"`,
+				``,
+				`context "Ctx" {`,
+				`  aggregate "Agg" {`,
+				`    slice "Kindless" {`,
+				`      trigger "Kindless Form" {`,
+				`        actor Guest`,
+				`        reads MyView`,
+				`      }`,
+				`    }`,
+				`  }`,
+				`}`,
+				``,
+			}, "\n")
+
+			require.Equal(t, expected, result)
+		})
+
+		t.Run("formats both kindless and kinded triggers with one space between keyword and name", func(t *testing.T) {
+			model := &ast.Model{
+				Name: "Test",
+				Contexts: []*ast.Context{
+					{
+						Name: "Ctx",
+						Aggregates: []*ast.Aggregate{
+							{
+								Name: "Agg",
+								Slices: []*ast.Slice{
+									{
+										Name: "Kindless",
+										Trigger: &ast.Trigger{
+											Name:  "Kindless Form",
+											Actor: "Guest",
+											Reads: "KindlessView",
+										},
+									},
+									{
+										Name: "Kinded",
+										Trigger: &ast.Trigger{
+											Kind:  "UI",
+											Name:  "Kinded Form",
+											Actor: "Guest",
+											Reads: "KindedView",
+										},
+									},
+								},
+							},
+						},
+					},
+				},
+			}
+
+			result := formatter.Format(model)
+
+			expected := strings.Join([]string{
+				`emod 1`,
+				`model "Test"`,
+				``,
+				`context "Ctx" {`,
+				`  aggregate "Agg" {`,
+				`    slice "Kindless" {`,
+				`      trigger "Kindless Form" {`,
+				`        actor Guest`,
+				`        reads KindlessView`,
+				`      }`,
+				`    }`,
+				``,
+				`    slice "Kinded" {`,
+				`      trigger UI "Kinded Form" {`,
+				`        actor Guest`,
+				`        reads KindedView`,
+				`      }`,
+				`    }`,
+				`  }`,
+				`}`,
+				``,
+			}, "\n")
+
+			require.Equal(t, expected, result)
+		})
+
 		t.Run("formats view with fields and subscribes", func(t *testing.T) {
 			model := &ast.Model{
 				Name: "Test",
@@ -1024,6 +1134,32 @@ func TestFormat(t *testing.T) {
 						reparsed.Contexts[0].Aggregates[0].Slices[0].Automations[0].Schedule)
 				})
 			}
+		})
+
+		t.Run("round-trip: a kindless trigger survives formatting", func(t *testing.T) {
+			source := strings.Join([]string{
+				`model "Test"`,
+				``,
+				`context "Ctx" {`,
+				`  aggregate "Agg" {`,
+				`    slice "Slice" {`,
+				`      trigger "Reservation Form" {`,
+				`        description "The booking form on the public site"`,
+				`        actor Guest`,
+				`        reads AvailableRoomsView`,
+				`      }`,
+				`    }`,
+				`  }`,
+				`}`,
+				``,
+			}, "\n")
+
+			original := parseModel(t, source, "test.emod")
+
+			reparsed := parseModel(t, formatter.Format(original), "test.emod")
+
+			test.RequireEqual(t, original, reparsed, ignoreFormatterNormalizations)
+			require.True(t, reparsed.VersionDeclared, "formatted output should pin the version")
 		})
 
 		t.Run("idempotency: format(format(described input)) equals format(described input)", func(t *testing.T) {
