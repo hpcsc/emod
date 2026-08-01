@@ -6,6 +6,8 @@ import (
 	"encoding/xml"
 	"errors"
 	"io"
+	"regexp"
+	"strconv"
 	"strings"
 	"testing"
 
@@ -337,8 +339,10 @@ func svgArrows(output string) []string {
 
 type svgShape struct {
 	attributes string
-	label      string
-	tooltip    string
+	// centre is the point an arrow drawn to or from this box meets it at.
+	centre  [2]int
+	label   string
+	tooltip string
 }
 
 // svgShapes returns the diagram's boxes in document order, decoded through an
@@ -367,7 +371,7 @@ func svgShapes(t *testing.T, output string) []svgShape {
 		case xml.StartElement:
 			switch element.Name.Local {
 			case "rect":
-				shapes = append(shapes, svgShape{attributes: svgAttributes(element)})
+				shapes = append(shapes, svgShape{attributes: svgAttributes(element), centre: svgRectCentre(t, element)})
 				inRect = true
 			case "title", "text":
 				text.Reset()
@@ -402,6 +406,76 @@ func svgBoxes(t *testing.T, output string) []diagramBox {
 	}
 
 	return boxes
+}
+
+func svgRectCentre(t *testing.T, element xml.StartElement) [2]int {
+	t.Helper()
+
+	measure := func(name string) int {
+		for _, a := range element.Attr {
+			if a.Name.Local != name {
+				continue
+			}
+			value, err := strconv.Atoi(a.Value)
+			require.NoError(t, err, "a box's %s must be a whole number", name)
+			return value
+		}
+		require.Fail(t, "a box is drawn with no "+name)
+		return 0
+	}
+
+	return [2]int{measure("x") + measure("width")/2, measure("y") + measure("height")/2}
+}
+
+var (
+	svgPathData  = regexp.MustCompile(`\sd="([^"]*)"`)
+	svgPathPoint = regexp.MustCompile(`(-?\d+),(-?\d+)`)
+)
+
+// svgConnections returns the arrows the diagram draws, each named by the boxes
+// its two ends meet and carrying how it is painted, so a test can say which
+// boxes an arrow runs between instead of restating its coordinates.
+func svgConnections(t *testing.T, output string) []diagramConnection {
+	t.Helper()
+
+	labelled := make(map[[2]int]string)
+	for _, shape := range svgShapes(t, output) {
+		labelled[shape.centre] = shape.label
+	}
+
+	boxAt := func(point [2]int) string {
+		label, drawn := labelled[point]
+		require.True(t, drawn, "an arrow meets %v, where the diagram draws no box", point)
+		return label
+	}
+
+	var connections []diagramConnection
+	for _, arrow := range svgArrows(output) {
+		path := svgPathData.FindStringSubmatch(arrow)
+		require.NotNil(t, path, "an arrow carries no path: %s", arrow)
+
+		points := svgPathPoint.FindAllStringSubmatch(path[1], -1)
+		require.NotEmpty(t, points, "an arrow's path names no point: %s", arrow)
+
+		connections = append(connections, diagramConnection{
+			source: boxAt(svgPoint(t, points[0])),
+			target: boxAt(svgPoint(t, points[len(points)-1])),
+			paint:  strings.TrimSpace(svgPathData.ReplaceAllString(arrow, "")),
+		})
+	}
+
+	return connections
+}
+
+func svgPoint(t *testing.T, point []string) [2]int {
+	t.Helper()
+
+	x, err := strconv.Atoi(point[1])
+	require.NoError(t, err, "an arrow's path names %q, which is no point", point[0])
+	y, err := strconv.Atoi(point[2])
+	require.NoError(t, err, "an arrow's path names %q, which is no point", point[0])
+
+	return [2]int{x, y}
 }
 
 func svgAttributes(element xml.StartElement) string {

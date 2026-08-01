@@ -58,12 +58,9 @@ func ExportSVG(model *ast.Model, _ Style) ([]byte, error) {
 	eventCenterY := eventLaneY + 30 + (laneHeight-30-boxHeight)/2
 	extCenterY := extLaneY + 30 + (laneHeight-30-boxHeight)/2
 
-	type svgElem struct {
-		sliceIdx   int
-		name       string
-		x, y, w, h int
-	}
-	var elems []svgElem
+	// Where the box drawn for each name ended up. One map across every slice, so
+	// a connection can reach a box another slice drew.
+	nameToBox := make(map[string]svgBox)
 
 	// Place elements per slice
 	for i, entry := range entries {
@@ -80,10 +77,7 @@ func ExportSVG(model *ast.Model, _ Style) ([]byte, error) {
 			}
 			b.WriteString(svgRoundedRect(x, y, boxWidth, boxHeight, fillTrigger, strokeTrigger, 5, s.Trigger.Description))
 			b.WriteString(svgText(x+boxWidth/2, y+boxHeight/2, label, 12, strokeTrigger))
-			elems = append(elems, svgElem{
-				sliceIdx: i, name: s.Trigger.Name,
-				x: x, y: y, w: boxWidth, h: boxHeight,
-			})
+			nameToBox[s.Trigger.Name] = svgBox{x: x, y: y, w: boxWidth, h: boxHeight}
 		}
 
 		// --- Commands (middle lane) ---
@@ -93,10 +87,7 @@ func ExportSVG(model *ast.Model, _ Style) ([]byte, error) {
 			itemW, x := itemLayout(usableW, totalMid, ci, sliceX)
 			b.WriteString(svgRoundedRect(x, midCenterY, itemW, boxHeight, fillCommand, strokeCommand, 5, cmd.Description))
 			b.WriteString(svgText(x+itemW/2, midCenterY+boxHeight/2, cmd.Name, 12, strokeCommand))
-			elems = append(elems, svgElem{
-				sliceIdx: i, name: cmd.Name,
-				x: x, y: midCenterY, w: itemW, h: boxHeight,
-			})
+			nameToBox[cmd.Name] = svgBox{x: x, y: midCenterY, w: itemW, h: boxHeight}
 		}
 
 		// --- Views (middle lane) ---
@@ -105,10 +96,7 @@ func ExportSVG(model *ast.Model, _ Style) ([]byte, error) {
 			itemW, x := itemLayout(usableW, totalMid, idx, sliceX)
 			b.WriteString(svgRoundedRect(x, midCenterY, itemW, boxHeight, fillView, strokeView, 5, view.Description))
 			b.WriteString(svgText(x+itemW/2, midCenterY+boxHeight/2, view.Name, 12, strokeView))
-			elems = append(elems, svgElem{
-				sliceIdx: i, name: view.Name,
-				x: x, y: midCenterY, w: itemW, h: boxHeight,
-			})
+			nameToBox[view.Name] = svgBox{x: x, y: midCenterY, w: itemW, h: boxHeight}
 		}
 
 		// --- Events (bottom lane, including translation events) ---
@@ -128,10 +116,7 @@ func ExportSVG(model *ast.Model, _ Style) ([]byte, error) {
 			ei++
 			b.WriteString(svgRoundedRect(x, eventCenterY, itemW, boxHeight, fillEvent, strokeEvent, 5, evt.Description))
 			b.WriteString(svgMultilineText(x+itemW/2, eventCenterY+boxHeight/2, label, 11, strokeEvent))
-			elems = append(elems, svgElem{
-				sliceIdx: i, name: evt.Name,
-				x: x, y: eventCenterY, w: itemW, h: boxHeight,
-			})
+			nameToBox[evt.Name] = svgBox{x: x, y: eventCenterY, w: itemW, h: boxHeight}
 		}
 		for _, tr := range s.Translations {
 			if tr.Event != nil && tr.Event.Name != "" {
@@ -139,10 +124,7 @@ func ExportSVG(model *ast.Model, _ Style) ([]byte, error) {
 				ei++
 				b.WriteString(svgRoundedRect(x, eventCenterY, itemW, boxHeight, fillEvent, strokeEvent, 5, tr.Event.Description))
 				b.WriteString(svgText(x+itemW/2, eventCenterY+boxHeight/2, tr.Event.Name, 11, strokeEvent))
-				elems = append(elems, svgElem{
-					sliceIdx: i, name: tr.Event.Name,
-					x: x, y: eventCenterY, w: itemW, h: boxHeight,
-				})
+				nameToBox[tr.Event.Name] = svgBox{x: x, y: eventCenterY, w: itemW, h: boxHeight}
 			}
 		}
 
@@ -157,10 +139,7 @@ func ExportSVG(model *ast.Model, _ Style) ([]byte, error) {
 			label := automationLabel(auto, "\n")
 			b.WriteString(svgRoundedRect(x, y, autoW-boxWidth/8, autoH, fillReactor, strokeReactor, 3, auto.Description))
 			b.WriteString(svgMultilineText(x+(autoW-boxWidth/8)/2, y+autoH/2, label, 10, strokeReactor))
-			elems = append(elems, svgElem{
-				sliceIdx: i, name: auto.Name,
-				x: x, y: y, w: autoW - boxWidth/8, h: autoH,
-			})
+			nameToBox[auto.Name] = svgBox{x: x, y: y, w: autoW - boxWidth/8, h: autoH}
 		}
 
 		// --- Translation reactors (in UI/Triggers lane, below automations) ---
@@ -174,10 +153,7 @@ func ExportSVG(model *ast.Model, _ Style) ([]byte, error) {
 			label := reactorLabel(tr.Name)
 			b.WriteString(svgRoundedRect(x, y, reactorW-boxWidth/8, reactorH, fillReactor, strokeReactor, 3, tr.Description))
 			b.WriteString(svgMultilineText(x+(reactorW-boxWidth/8)/2, y+reactorH/2, label, 10, strokeReactor))
-			elems = append(elems, svgElem{
-				sliceIdx: i, name: tr.Name,
-				x: x, y: y, w: reactorW - boxWidth/8, h: reactorH,
-			})
+			nameToBox[tr.Name] = svgBox{x: x, y: y, w: reactorW - boxWidth/8, h: reactorH}
 		}
 
 		// --- External system boxes (Translations) ---
@@ -191,20 +167,22 @@ func ExportSVG(model *ast.Model, _ Style) ([]byte, error) {
 			}
 			b.WriteString(svgDashedRoundedRect(extX, extY, extW, extH, fillExternal, strokeExternal, 5, tr.Description))
 			b.WriteString(svgText(extX+extW/2, extY+extH/2, tr.ExternalSystem, 11, strokeExternal))
-			elems = append(elems, svgElem{
-				sliceIdx: i, name: tr.ExternalSystem,
-				x: extX, y: extY, w: extW, h: extH,
-			})
+			nameToBox[tr.ExternalSystem] = svgBox{x: extX, y: extY, w: extW, h: extH}
 		}
 	}
 
 	// --- Connections ---
 
-	// Global element lookup across all slices (needed for cross-slice references)
-	type elemPosInfo struct{ x, y, w, h int }
-	nameToPos := make(map[string]elemPosInfo)
-	for _, e := range elems {
-		nameToPos[e.name] = elemPosInfo{x: e.x, y: e.y, w: e.w, h: e.h}
+	readsArrow := func(reads string, reader svgBox) string {
+		if reads == "" {
+			return ""
+		}
+		view, declared := nameToBox[reads]
+		if !declared {
+			return ""
+		}
+
+		return svgArrowBetween(view, reader)
 	}
 
 	for _, entry := range entries {
@@ -212,14 +190,11 @@ func ExportSVG(model *ast.Model, _ Style) ([]byte, error) {
 
 		// trigger -> command
 		if s.Trigger != nil {
-			tPos, tok := nameToPos[s.Trigger.Name]
-			if tok {
-				tcx, tcy := tPos.x+tPos.w/2, tPos.y+tPos.h/2
+			if trigger, drawn := nameToBox[s.Trigger.Name]; drawn {
+				b.WriteString(readsArrow(s.Trigger.Reads, trigger))
 				for _, cmd := range s.Commands {
-					cPos, cok := nameToPos[cmd.Name]
-					if cok {
-						ccx, ccy := cPos.x+cPos.w/2, cPos.y+cPos.h/2
-						b.WriteString(svgArrowPath(tcx, tcy, ccx, ccy))
+					if command, drawn := nameToBox[cmd.Name]; drawn {
+						b.WriteString(svgArrowBetween(trigger, command))
 					}
 				}
 			}
@@ -227,86 +202,64 @@ func ExportSVG(model *ast.Model, _ Style) ([]byte, error) {
 
 		// command -> event (via Flow entries)
 		for _, flow := range s.Flows {
-			cPos, cok := nameToPos[flow.CommandName]
-			ePos, eok := nameToPos[flow.EventName]
-			if cok && eok {
-				ccx, ccy := cPos.x+cPos.w/2, cPos.y+cPos.h/2
-				ecx, ecy := ePos.x+ePos.w/2, ePos.y+ePos.h/2
-				b.WriteString(svgArrowPath(ccx, ccy, ecx, ecy))
+			command, commandDrawn := nameToBox[flow.CommandName]
+			evt, eventDrawn := nameToBox[flow.EventName]
+			if commandDrawn && eventDrawn {
+				b.WriteString(svgArrowBetween(command, evt))
 			}
 		}
 
 		// event -> view (via subscribes) — cross-slice lookup
 		for _, view := range s.Views {
-			vPos, vok := nameToPos[view.Name]
-			if !vok {
+			viewBox, drawn := nameToBox[view.Name]
+			if !drawn {
 				continue
 			}
-			vcx, vcy := vPos.x+vPos.w/2, vPos.y+vPos.h/2
 			for _, sub := range view.Subscribes {
-				ePos, eok := nameToPos[sub]
-				if eok {
-					ecx, ecy := ePos.x+ePos.w/2, ePos.y+ePos.h/2
-					b.WriteString(svgArrowPath(ecx, ecy, vcx, vcy))
+				if evt, drawn := nameToBox[sub]; drawn {
+					b.WriteString(svgArrowBetween(evt, viewBox))
 				}
 			}
 		}
 
 		// event -> automation -> command — cross-slice lookup
 		for _, auto := range s.Automations {
-			ePos, eok := nameToPos[auto.OnEvent]
-			aPos, aok := nameToPos[auto.Name]
-			cPos, cok := nameToPos[auto.Command]
-			if eok && aok {
-				ecx, ecy := ePos.x+ePos.w/2, ePos.y+ePos.h/2
-				acx, acy := aPos.x+aPos.w/2, aPos.y+aPos.h/2
-				b.WriteString(svgArrowPath(ecx, ecy, acx, acy))
+			automation, drawn := nameToBox[auto.Name]
+			if !drawn {
+				continue
 			}
-			if aok && cok {
-				acx, acy := aPos.x+aPos.w/2, aPos.y+aPos.h/2
-				ccx, ccy := cPos.x+cPos.w/2, cPos.y+cPos.h/2
-				b.WriteString(svgArrowPath(acx, acy, ccx, ccy))
+			b.WriteString(readsArrow(auto.Reads, automation))
+			if evt, drawn := nameToBox[auto.OnEvent]; drawn {
+				b.WriteString(svgArrowBetween(evt, automation))
+			}
+			if command, drawn := nameToBox[auto.Command]; drawn {
+				b.WriteString(svgArrowBetween(automation, command))
 			}
 		}
 
 		// Translation: ext sys -> reactor -> command/event
 		for _, tr := range s.Translations {
-			extPos, extOK := nameToPos[tr.ExternalSystem]
-			reactorPos, reactorOK := nameToPos[tr.Name]
-			if !extOK || !reactorOK {
+			externalSystem, externalDrawn := nameToBox[tr.ExternalSystem]
+			reactor, reactorDrawn := nameToBox[tr.Name]
+			if !externalDrawn || !reactorDrawn {
 				continue
 			}
-			extCx, extCy := extPos.x+extPos.w/2, extPos.y+extPos.h/2
-			reactorCx, reactorCy := reactorPos.x+reactorPos.w/2, reactorPos.y+reactorPos.h/2
 
-			// reads: view -> external system
-			if tr.Reads != "" {
-				vPos, vok := nameToPos[tr.Reads]
-				if vok {
-					vcx, vcy := vPos.x+vPos.w/2, vPos.y+vPos.h/2
-					b.WriteString(svgArrowPath(vcx, vcy, extCx, extCy))
-				}
-			}
-			// external system -> reactor
-			b.WriteString(svgArrowPath(extCx, extCy, reactorCx, reactorCy))
-			// reactor -> command
+			b.WriteString(readsArrow(tr.Reads, externalSystem))
+			b.WriteString(svgArrowBetween(externalSystem, reactor))
 			if tr.Command != "" {
-				cPos, cok := nameToPos[tr.Command]
-				if cok {
-					ccx, ccy := cPos.x+cPos.w/2, cPos.y+cPos.h/2
-					b.WriteString(svgArrowPath(reactorCx, reactorCy, ccx, ccy))
+				if command, drawn := nameToBox[tr.Command]; drawn {
+					b.WriteString(svgArrowBetween(reactor, command))
 				}
 			}
 			// command -> event (translation implies command emits event, unless a
 			// flow already declares it and has drawn the arrow above)
 			if tr.Command != "" && tr.Event != nil && tr.Event.Name != "" &&
 				!declaresFlow(s, tr.Command, tr.Event.Name) {
-				cPos, cok := nameToPos[tr.Command]
-				ePos, eok := nameToPos[tr.Event.Name]
-				if cok && eok {
-					ccx, ccy := cPos.x+cPos.w/2, cPos.y+cPos.h/2
-					ecx, ecy := ePos.x+ePos.w/2, ePos.y+ePos.h/2
-					b.WriteString(svgArrowPath(ccx, ccy, ecx, ecy))
+				command, commandDrawn := nameToBox[tr.Command]
+				evt, eventDrawn := nameToBox[tr.Event.Name]
+				if commandDrawn && eventDrawn {
+					b.WriteString(svgArrowBetween(command, evt))
 				}
 			}
 		}
@@ -392,6 +345,16 @@ func svgMultilineText(x, y int, text string, fontSize int, color string) string 
 	}
 	b.WriteString("</text>\n")
 	return b.String()
+}
+
+// svgBox is where a shape was drawn: the corner it starts at, and how far it
+// runs from there.
+type svgBox struct {
+	x, y, w, h int
+}
+
+func svgArrowBetween(from, to svgBox) string {
+	return svgArrowPath(from.x+from.w/2, from.y+from.h/2, to.x+to.w/2, to.y+to.h/2)
 }
 
 func svgArrowPath(sx, sy, tx, ty int) string {

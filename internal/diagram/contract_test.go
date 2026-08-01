@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"math"
 	"regexp"
+	"slices"
 	"sort"
 	"strconv"
 	"strings"
@@ -32,7 +33,10 @@ type exporter struct {
 	countConnections func(output string) int
 	// boxes returns the boxes the output draws, in document order; nil for the
 	// text formats, which draw none.
-	boxes             func(t *testing.T, output string) []diagramBox
+	boxes func(t *testing.T, output string) []diagramBox
+	// connections returns the arrows the output draws between its boxes, in
+	// document order; nil for the text formats, which draw none.
+	connections       func(t *testing.T, output string) []diagramConnection
 	export            func(*ast.Model, diagram.Style) ([]byte, error)
 	requireWellFormed func(t *testing.T, output string)
 }
@@ -42,6 +46,15 @@ type diagramBox struct {
 	// appearance is where the box sits, how big it is and how it is painted, in
 	// the format's own spelling.
 	appearance string
+}
+
+// diagramConnection is an arrow the output draws, named by the boxes at its two
+// ends rather than by where those boxes sit.
+type diagramConnection struct {
+	source string
+	target string
+	// paint is how the arrow is drawn, in the format's own spelling.
+	paint string
 }
 
 func requireValidXML(t *testing.T, output string) {
@@ -61,6 +74,7 @@ func exporters() []exporter {
 			fillOfLabel:       drawioFillOfLabel,
 			countConnections:  func(output string) int { return strings.Count(output, `edge="1"`) },
 			boxes:             drawioBoxes,
+			connections:       drawioEdges,
 			export:            diagram.ExportDrawio,
 			requireWellFormed: requireValidXML,
 		},
@@ -69,6 +83,7 @@ func exporters() []exporter {
 			fillOfLabel:       svgFillOfLabel,
 			countConnections:  arrowCount,
 			boxes:             svgBoxes,
+			connections:       svgConnections,
 			export:            diagram.ExportSVG,
 			requireWellFormed: requireValidXML,
 		},
@@ -257,20 +272,6 @@ func TestExporterContract(t *testing.T) {
 				require.Equal(t, e.run(t, unstated, diagram.StyleAuto), e.run(t, stated, diagram.StyleAuto),
 					"a diagram shows elements and arrows, not the scenarios they must satisfy, so stating a spec cannot move it")
 			})
-
-			t.Run("declaring the view an automation reads leaves the picture untouched", func(t *testing.T) {
-				reading := test.AutomationReadsLibraryLendingModel(t)
-				unread := test.WithoutAutomationReads(reading)
-
-				require.NotEqual(t, reading, unread,
-					"the twin has to read no view, or the comparison below says nothing")
-				require.Equal(t, test.AutomationReadsLibraryLendingViewNames, test.DeclaredAutomationReads(reading))
-				require.Empty(t, test.DeclaredAutomationReads(unread),
-					"the twin has to lose the reads of both slice homes, or the comparison below is answered by whichever home it kept")
-
-				require.Equal(t, e.run(t, unread, diagram.StyleAuto), e.run(t, reading, diagram.StyleAuto),
-					"US-005 is where an automation gains an edge to the view it reads; until then naming that view cannot move the picture")
-			})
 		})
 	}
 }
@@ -332,6 +333,316 @@ func translationModel(declareFlow bool) *ast.Model {
 		slice.Flows = []*ast.Flow{{CommandName: "Charge", EventName: "Charged"}}
 	}
 	return model
+}
+
+// readsLibraryLendingViews names every view test.TriggerReadsLibraryLending
+// declares, so an arrow into a trigger or an automation can be told apart from
+// the one an automation is also drawn from the event that activates it.
+var readsLibraryLendingViews = []string{"MemberLoansView", "DeskOccupancyView"}
+
+// triggerReadsLibraryLendingTriggers names every trigger
+// test.TriggerReadsLibraryLending declares, both slice homes together and in
+// declaration order, so the views read back off the picture line up with
+// test.TriggerReadsLibraryLendingTriggerViewNames and the trigger that reads
+// nothing contributes nothing.
+var triggerReadsLibraryLendingTriggers = []string{
+	"Lending Desk",
+	"Returns Counter",
+	"Overdue Report",
+	"Desk Kiosk",
+}
+
+// triggerReadsLibraryLendingAutomations does the same for that fixture's
+// automations, lining up with
+// test.TriggerReadsLibraryLendingAutomationViewNames.
+var triggerReadsLibraryLendingAutomations = []string{
+	"RemindOnDueDate",
+	"RecallOverdueCopy",
+	"FreeDeskAtClosing",
+	"RemindReaderOfLoans",
+}
+
+// TestExporterReadsEdges covers the arrow a trigger and an automation are drawn
+// from the view they read. Only the formats that draw boxes have an arrow for a
+// reads to become, and the text formats are here to show the picture they draw
+// does not move.
+func TestExporterReadsEdges(t *testing.T) {
+	for _, e := range exporters() {
+		t.Run(e.name, func(t *testing.T) {
+			if e.connections == nil {
+				t.Run("renders a model whose triggers and automations read views exactly as one whose read none", func(t *testing.T) {
+					reading := test.TriggerReadsLibraryLendingModel(t)
+					unreadTriggers := test.WithoutTriggerReads(reading)
+					unreadAutomations := test.WithoutAutomationReads(reading)
+
+					require.Equal(t, test.TriggerReadsLibraryLendingTriggerViewNames, test.DeclaredTriggerReads(reading))
+					require.Equal(t, test.TriggerReadsLibraryLendingAutomationViewNames, test.DeclaredAutomationReads(reading))
+					require.Empty(t, test.DeclaredTriggerReads(unreadTriggers),
+						"the twin has to lose the reads of both slice homes, or the comparison below is answered by whichever home it kept")
+					require.Empty(t, test.DeclaredAutomationReads(unreadAutomations),
+						"the twin has to lose the reads of both slice homes, or the comparison below is answered by whichever home it kept")
+
+					output := e.run(t, reading, diagram.StyleAuto)
+
+					require.Equal(t, output, e.run(t, unreadTriggers, diagram.StyleAuto),
+						"a format that draws no boxes has no arrow for the view a trigger reads to become")
+					require.Equal(t, output, e.run(t, unreadAutomations, diagram.StyleAuto),
+						"a format that draws no boxes has no arrow for the view an automation reads to become")
+				})
+
+				return
+			}
+
+			for _, twin := range readsTwins() {
+				t.Run("the "+twin.construct+" reading a declared view is drawn an arrow from that view", func(t *testing.T) {
+					reading := readsModel()
+					unread := twin.strip(reading)
+
+					require.Equal(t, []string{"MemberLoansView"}, twin.declared(reading))
+					require.Empty(t, twin.declared(unread),
+						"the twin has to read no view, or the differential below says nothing")
+
+					full, stripped := e.run(t, reading, diagram.StyleAuto), e.run(t, unread, diagram.StyleAuto)
+					drawn := e.connections(t, full)
+
+					e.requireWellFormed(t, full)
+					require.ElementsMatch(t, append(e.connections(t, stripped), diagramConnection{
+						source: e.boxLabelled(t, full, "MemberLoansView").label,
+						target: e.boxLabelled(t, full, twin.reader).label,
+						paint:  paintOfArrow(t, drawn, "MemberLoansView", "LoanRegistry"),
+					}), drawn,
+						"the picture gains one arrow, from the view to the "+twin.construct+", painted as the arrow to the view the translation reads already was, and keeps every arrow it drew before")
+					require.NotContains(t, paintOfArrow(t, drawn, "MemberLoansView", twin.reader), "dash",
+						"an arrow to a reader is not drawn with the dashed treatment an external system gets")
+				})
+			}
+
+			t.Run("a reads naming a view no slice declares, and a reads left out, are drawn no arrow", func(t *testing.T) {
+				output := e.run(t, mixedReadsModel(), diagram.StyleAuto)
+
+				e.requireWellFormed(t, output)
+				drawn := e.connections(t, output)
+
+				require.Equal(t, map[string][]string{
+					"Desk Kiosk":        {"DeskOccupancyView"},
+					"FreeDeskAtClosing": {"DeskOccupancyView"},
+					"Booking Page":      nil,
+					"ExpireReservation": nil,
+					"Closing Bell":      nil,
+					"SweepIdleDesks":    nil,
+				}, sourcesIntoEach(drawn, []string{
+					"Desk Kiosk", "FreeDeskAtClosing",
+					"Booking Page", "ExpireReservation",
+					"Closing Bell", "SweepIdleDesks",
+				}))
+				require.Len(t, drawn, 2,
+					"the picture draws an arrow for the two reads that name a declared view and for nothing else")
+			})
+
+			t.Run("draws one arrow per view the fixture's triggers and its automations read", func(t *testing.T) {
+				output := e.run(t, test.TriggerReadsLibraryLendingModel(t), diagram.StyleAuto)
+
+				e.requireWellFormed(t, output)
+				drawn := e.connections(t, output)
+
+				require.Equal(t, test.TriggerReadsLibraryLendingTriggerViewNames,
+					viewsRead(drawn, triggerReadsLibraryLendingTriggers, readsLibraryLendingViews))
+				require.Equal(t, test.TriggerReadsLibraryLendingAutomationViewNames,
+					viewsRead(drawn, triggerReadsLibraryLendingAutomations, readsLibraryLendingViews),
+					"the automation reading a view another context declares is drawn its arrow too")
+			})
+
+			for _, twin := range readsTwins() {
+				t.Run("clearing every "+twin.construct+"'s reads draws the same boxes with one arrow fewer per view", func(t *testing.T) {
+					reading := test.TriggerReadsLibraryLendingModel(t)
+					unread := twin.strip(reading)
+
+					require.Equal(t, twin.declaredViews, twin.declared(reading))
+					require.Empty(t, twin.declared(unread),
+						"the twin has to lose the reads of both slice homes, or the comparison below is answered by whichever home it kept")
+					require.Equal(t, twin.keptViews, twin.kept(unread),
+						"the twin has to keep what the other construct reads, or the comparison below is answered by the arrows that construct lost instead")
+
+					full, stripped := e.run(t, reading, diagram.StyleAuto), e.run(t, unread, diagram.StyleAuto)
+
+					require.Equal(t, e.boxes(t, stripped), e.boxes(t, full),
+						"an arrow to a reader must not add, move, resize or repaint a box")
+					require.Len(t, e.connections(t, stripped), len(e.connections(t, full))-len(twin.declaredViews),
+						"the twin loses one arrow per view it stopped reading and disturbs no other")
+				})
+			}
+
+			t.Run("a trigger whose reads names a view no slice declares is drawn no arrow beside an automation whose does not", func(t *testing.T) {
+				reading := test.AutomationReadsLibraryLendingModel(t)
+
+				require.Equal(t, []string{"AvailableCopiesView"}, test.DeclaredTriggerReads(reading),
+					"its trigger has to name a view no slice declares, or the silence below says nothing")
+				require.Equal(t, test.AutomationReadsLibraryLendingViewNames, test.DeclaredAutomationReads(reading))
+
+				output := e.run(t, reading, diagram.StyleAuto)
+
+				e.requireWellFormed(t, output)
+				drawn := e.connections(t, output)
+				require.Empty(t, sourcesInto(drawn, "Lending Desk"))
+				require.ElementsMatch(t, []string{"CopyBorrowed", "MemberLoansView"},
+					sourcesInto(drawn, "RecallOverdueCopy"),
+					"the automation beside it reads a view the model does declare, so its arrow is drawn")
+			})
+		})
+	}
+}
+
+// readsTwin pairs a construct that reads a view with the twin that reads none —
+// of readsModel, where the box it labels is the only one to gain an arrow, and
+// of test.TriggerReadsLibraryLending, where the other construct goes on reading
+// what it read.
+type readsTwin struct {
+	construct string
+	// reader labels the box readsModel draws for this construct.
+	reader        string
+	strip         func(*ast.Model) *ast.Model
+	declared      func(*ast.Model) []string
+	kept          func(*ast.Model) []string
+	declaredViews []string
+	keptViews     []string
+}
+
+func readsTwins() []readsTwin {
+	return []readsTwin{
+		{
+			construct:     "trigger",
+			reader:        "Lending Desk",
+			strip:         test.WithoutTriggerReads,
+			declared:      test.DeclaredTriggerReads,
+			kept:          test.DeclaredAutomationReads,
+			declaredViews: test.TriggerReadsLibraryLendingTriggerViewNames,
+			keptViews:     test.TriggerReadsLibraryLendingAutomationViewNames,
+		},
+		{
+			construct:     "automation",
+			reader:        "RecallOverdueCopy",
+			strip:         test.WithoutAutomationReads,
+			declared:      test.DeclaredAutomationReads,
+			kept:          test.DeclaredTriggerReads,
+			declaredViews: test.TriggerReadsLibraryLendingAutomationViewNames,
+			keptViews:     test.TriggerReadsLibraryLendingTriggerViewNames,
+		},
+	}
+}
+
+// readsModel gives a trigger and an automation the view another slice declares,
+// beside a translation reading that same view, so the arrow each reader gains
+// can be compared against the one the translation was already drawn.
+func readsModel() *ast.Model {
+	model := singleSliceModel("Lending", "Borrow Copy",
+		&ast.Trigger{Name: "Lending Desk", Actor: "Member", Reads: "MemberLoansView"},
+		command("BorrowCopy"), event("CopyBorrowed"))
+	aggregate := model.Contexts[0].Aggregates[0]
+	aggregate.Slices[0].Translations = []*ast.Translation{{
+		Name:           "PartnerImport",
+		ExternalSystem: "LoanRegistry",
+		Reads:          "MemberLoansView",
+		Command:        "BorrowCopy",
+	}}
+	aggregate.Slices = append(aggregate.Slices,
+		&ast.Slice{
+			Name:  "Review Member Loans",
+			Views: []*ast.View{{Name: "MemberLoansView", Subscribes: []string{"CopyBorrowed"}}},
+		},
+		&ast.Slice{
+			Name:     "Chase Overdue Copy",
+			Commands: []*ast.Command{command("RecallCopy")},
+			Automations: []*ast.Automation{{
+				Name:    "RecallOverdueCopy",
+				OnEvent: "CopyBorrowed",
+				Reads:   "MemberLoansView",
+				Command: "RecallCopy",
+			}},
+		})
+
+	return model
+}
+
+// mixedReadsModel puts a trigger and an automation reading a declared view
+// beside a trigger and an automation naming a view no slice declares, and a
+// trigger and an automation reading nothing, so one picture shows the arrow and
+// its absence together. None of the six is drawn any other arrow, so an arrow
+// reaching one of them could only be the view it reads.
+func mixedReadsModel() *ast.Model {
+	model := singleSliceModel("Reading Room", "Browse Desk Occupancy", view("DeskOccupancyView"))
+	aggregate := model.Contexts[0].Aggregates[0]
+	aggregate.Slices = append(aggregate.Slices,
+		&ast.Slice{
+			Name:        "Claim Desk",
+			Trigger:     &ast.Trigger{Name: "Desk Kiosk", Reads: "DeskOccupancyView"},
+			Automations: []*ast.Automation{{Name: "FreeDeskAtClosing", Reads: "DeskOccupancyView"}},
+		},
+		&ast.Slice{
+			Name:        "Reserve Desk",
+			Trigger:     &ast.Trigger{Name: "Booking Page", Reads: "DeskWaitlistView"},
+			Automations: []*ast.Automation{{Name: "ExpireReservation", Reads: "DeskWaitlistView"}},
+		},
+		&ast.Slice{
+			Name:        "Close Reading Room",
+			Trigger:     &ast.Trigger{Name: "Closing Bell"},
+			Automations: []*ast.Automation{{Name: "SweepIdleDesks"}},
+		})
+
+	return model
+}
+
+// sourcesInto names every box the picture draws an arrow from into the box
+// labelled name.
+func sourcesInto(connections []diagramConnection, name string) []string {
+	var sources []string
+	for _, connection := range connections {
+		if strings.Contains(connection.target, name) {
+			sources = append(sources, connection.source)
+		}
+	}
+
+	return sources
+}
+
+func sourcesIntoEach(connections []diagramConnection, names []string) map[string][]string {
+	sources := make(map[string][]string, len(names))
+	for _, name := range names {
+		sources[name] = sourcesInto(connections, name)
+	}
+
+	return sources
+}
+
+// viewsRead names the views the picture draws an arrow from into each of the
+// named boxes, in the order the boxes are named. An automation is also drawn an
+// arrow from the event that activates it, so only an arrow out of one of views
+// counts as a read.
+func viewsRead(connections []diagramConnection, names, views []string) []string {
+	var read []string
+	for _, name := range names {
+		for _, source := range sourcesInto(connections, name) {
+			if slices.Contains(views, source) {
+				read = append(read, source)
+			}
+		}
+	}
+
+	return read
+}
+
+// paintOfArrow returns how the one arrow between the two named boxes is painted.
+func paintOfArrow(t *testing.T, connections []diagramConnection, source, target string) string {
+	t.Helper()
+
+	var painted []string
+	for _, connection := range connections {
+		if strings.Contains(connection.source, source) && strings.Contains(connection.target, target) {
+			painted = append(painted, connection.paint)
+		}
+	}
+	require.Len(t, painted, 1, "expected one arrow from %q to %q", source, target)
+
+	return painted[0]
 }
 
 const (

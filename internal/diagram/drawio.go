@@ -284,7 +284,6 @@ func ExportDrawio(model *ast.Model, style Style) ([]byte, error) {
 	extCenterY := extLaneY + 30 + (laneHeight-30-boxHeight)/2
 
 	type namedElem struct {
-		sliceIdx   int
 		name       string
 		id         int
 		x, y, w, h int
@@ -312,7 +311,7 @@ func ExportDrawio(model *ast.Model, style Style) ([]byte, error) {
 				label = fmt.Sprintf("%s (%s)", s.Trigger.Name, s.Trigger.Actor)
 			}
 			b.WriteString(vertexCell(id, label, s.Trigger.Description, x, triggerCenterY, boxWidth, boxHeight, styleTrigger))
-			elems = append(elems, namedElem{sliceIdx: i, name: s.Trigger.Name, id: id, x: x, y: triggerCenterY, w: boxWidth, h: boxHeight})
+			elems = append(elems, namedElem{name: s.Trigger.Name, id: id, x: x, y: triggerCenterY, w: boxWidth, h: boxHeight})
 		}
 
 		// --- Commands (middle lane) ---
@@ -329,7 +328,7 @@ func ExportDrawio(model *ast.Model, style Style) ([]byte, error) {
 				}
 			}
 			b.WriteString(vertexCell(id, label, cmd.Description, x, midCenterY, itemW, boxHeight, styleCommand))
-			elems = append(elems, namedElem{sliceIdx: i, name: cmd.Name, id: id, x: x, y: midCenterY, w: itemW, h: boxHeight})
+			elems = append(elems, namedElem{name: cmd.Name, id: id, x: x, y: midCenterY, w: itemW, h: boxHeight})
 		}
 
 		// --- Views (middle lane) ---
@@ -338,7 +337,7 @@ func ExportDrawio(model *ast.Model, style Style) ([]byte, error) {
 			idx := len(s.Commands) + vi
 			itemW, x := itemLayout(usableW, totalMid, idx, sliceX)
 			b.WriteString(vertexCell(id, view.Name, view.Description, x, midCenterY, itemW, boxHeight, styleView))
-			elems = append(elems, namedElem{sliceIdx: i, name: view.Name, id: id, x: x, y: midCenterY, w: itemW, h: boxHeight})
+			elems = append(elems, namedElem{name: view.Name, id: id, x: x, y: midCenterY, w: itemW, h: boxHeight})
 		}
 
 		// --- Events ---
@@ -376,7 +375,7 @@ func ExportDrawio(model *ast.Model, style Style) ([]byte, error) {
 					}
 					id := allocID()
 					b.WriteString(vertexCell(id, label, evt.Description, itemX, tagCenterYs[ti], itemW, boxHeight, styleEvent))
-					elems = append(elems, namedElem{sliceIdx: i, name: evt.Name, id: id, x: itemX, y: tagCenterYs[ti], w: itemW, h: boxHeight})
+					elems = append(elems, namedElem{name: evt.Name, id: id, x: itemX, y: tagCenterYs[ti], w: itemW, h: boxHeight})
 					placedIDs = append(placedIDs, id)
 				}
 				if len(placedIDs) > 1 {
@@ -388,7 +387,7 @@ func ExportDrawio(model *ast.Model, style Style) ([]byte, error) {
 				itemW, x := itemLayout(usableW, totalEvts, ei, sliceX)
 				ei++
 				b.WriteString(vertexCell(id, label, evt.Description, x, eventCenterY, itemW, boxHeight, styleEvent))
-				elems = append(elems, namedElem{sliceIdx: i, name: evt.Name, id: id, x: x, y: eventCenterY, w: itemW, h: boxHeight})
+				elems = append(elems, namedElem{name: evt.Name, id: id, x: x, y: eventCenterY, w: itemW, h: boxHeight})
 			}
 		}
 		for _, tr := range s.Translations {
@@ -397,7 +396,7 @@ func ExportDrawio(model *ast.Model, style Style) ([]byte, error) {
 				itemW, x := itemLayout(usableW, totalEvts, ei, sliceX)
 				ei++
 				b.WriteString(vertexCell(id, tr.Event.Name, tr.Event.Description, x, eventCenterY, itemW, boxHeight, styleEvent))
-				elems = append(elems, namedElem{sliceIdx: i, name: tr.Event.Name, id: id, x: x, y: eventCenterY, w: itemW, h: boxHeight})
+				elems = append(elems, namedElem{name: tr.Event.Name, id: id, x: x, y: eventCenterY, w: itemW, h: boxHeight})
 			}
 		}
 
@@ -412,7 +411,7 @@ func ExportDrawio(model *ast.Model, style Style) ([]byte, error) {
 			y := triggerLaneY + laneHeight - autoH - autoPadY
 			label := automationLabel(auto, "\\n")
 			b.WriteString(vertexCell(id, label, auto.Description, x, y, autoW-boxWidth/8, autoH, styleReactor))
-			elems = append(elems, namedElem{sliceIdx: i, name: auto.Name, id: id, x: x, y: y, w: autoW - boxWidth/8, h: autoH})
+			elems = append(elems, namedElem{name: auto.Name, id: id, x: x, y: y, w: autoW - boxWidth/8, h: autoH})
 		}
 
 		// --- Translation reactors (in UI/Triggers lane, below automations) ---
@@ -426,7 +425,7 @@ func ExportDrawio(model *ast.Model, style Style) ([]byte, error) {
 			y := triggerLaneY + laneHeight - reactorH - padY
 			label := reactorLabel(tr.Name)
 			b.WriteString(vertexCell(id, label, tr.Description, x, y, reactorW-boxWidth/8, reactorH, styleReactor))
-			elems = append(elems, namedElem{sliceIdx: i, name: tr.Name, id: id, x: x, y: y, w: reactorW - boxWidth/8, h: reactorH})
+			elems = append(elems, namedElem{name: tr.Name, id: id, x: x, y: y, w: reactorW - boxWidth/8, h: reactorH})
 		}
 
 		// --- External system boxes (Translations) ---
@@ -442,7 +441,7 @@ func ExportDrawio(model *ast.Model, style Style) ([]byte, error) {
 			// An external system is only ever named by a translation and holds no
 			// prose of its own, so its box shows what that translation says.
 			b.WriteString(vertexCell(id, tr.ExternalSystem, tr.Description, extX, extY, extW, extH, styleExternalSystem))
-			elems = append(elems, namedElem{sliceIdx: i, name: tr.ExternalSystem, id: id, x: extX, y: extY, w: extW, h: extH})
+			elems = append(elems, namedElem{name: tr.ExternalSystem, id: id, x: extX, y: extY, w: extW, h: extH})
 		}
 	}
 
@@ -461,6 +460,20 @@ func ExportDrawio(model *ast.Model, style Style) ([]byte, error) {
 		if _, exists := nameToElem[e.name]; !exists {
 			nameToElem[e.name] = &e
 		}
+	}
+
+	// The id is allocated only once the edge is certain to be drawn: hoisting it
+	// would renumber every later edge of a model naming a view no slice declares.
+	readsEdge := func(reads string, reader *namedElem) string {
+		if reads == "" || reader == nil {
+			return ""
+		}
+		view := nameToElem[reads]
+		if view == nil {
+			return ""
+		}
+
+		return edgeCell(allocID(), standardStyle, view.id, reader.id)
 	}
 
 	// Multi-tag connectors: link representations of the same event across tag lanes
@@ -498,6 +511,7 @@ func ExportDrawio(model *ast.Model, style Style) ([]byte, error) {
 		// trigger -> command (downward, standard)
 		if s.Trigger != nil {
 			tid := nameToElem[s.Trigger.Name]
+			b.WriteString(readsEdge(s.Trigger.Reads, tid))
 			for _, cmd := range s.Commands {
 				c := nameToElem[cmd.Name]
 				if tid != nil && c != nil {
@@ -542,6 +556,8 @@ func ExportDrawio(model *ast.Model, style Style) ([]byte, error) {
 			a := nameToElem[auto.Name]
 			c := nameToElem[auto.Command]
 
+			b.WriteString(readsEdge(auto.Reads, a))
+
 			// event -> automation (upward, purple curved)
 			if e != nil && a != nil {
 				rightX := e.x + e.w + waypointMargin
@@ -568,13 +584,7 @@ func ExportDrawio(model *ast.Model, style Style) ([]byte, error) {
 				continue
 			}
 
-			// reads: view -> external system (downward, standard)
-			if tr.Reads != "" {
-				v := nameToElem[tr.Reads]
-				if v != nil {
-					b.WriteString(edgeCell(allocID(), standardStyle, v.id, extE.id))
-				}
-			}
+			b.WriteString(readsEdge(tr.Reads, extE))
 
 			// external system -> reactor (upward, dashed gray)
 			b.WriteString(edgeCell(allocID(), extStyle, extE.id, rE.id))

@@ -747,7 +747,7 @@ func TestExportDrawio(t *testing.T) {
 
 // --- drawio helpers ---
 
-var drawioEdge = regexp.MustCompile(`<mxCell id="\d+"[^>]*edge="1"[^>]*source="(\d+)" target="(\d+)"`)
+var drawioEdge = regexp.MustCompile(`<mxCell id="\d+" style="([^"]*)" edge="1"[^>]*source="(\d+)" target="(\d+)"`)
 
 // drawioShape is a box the diagram draws, as draw.io reads it back: what it is
 // called, what it says when hovered, and how it is painted and placed.
@@ -875,10 +875,10 @@ func withoutTooltips(shapes []drawioShape) []drawioShape {
 	return stripped
 }
 
-// drawioConnections returns the diagram's edges as "source label -> target label"
-// pairs, so a test can name the connection it expects instead of only asserting
-// that some edge exists.
-func drawioConnections(t *testing.T, output string) []string {
+// drawioEdges returns the diagram's edges, each named by the boxes whose cells
+// it references and carrying the style it is drawn with, so a test can say which
+// boxes an edge runs between instead of restating cell ids.
+func drawioEdges(t *testing.T, output string) []diagramConnection {
 	t.Helper()
 
 	labels := map[string]string{}
@@ -886,13 +886,29 @@ func drawioConnections(t *testing.T, output string) []string {
 		labels[shape.id] = shape.label
 	}
 
-	var connections []string
+	boxOf := func(id string) string {
+		label, drawn := labels[id]
+		require.True(t, drawn, "edge references cell %s, which the diagram draws no box for", id)
+		return label
+	}
+
+	var edges []diagramConnection
 	for _, m := range drawioEdge.FindAllStringSubmatch(output, -1) {
-		source, ok := labels[m[1]]
-		require.True(t, ok, "edge references unknown source cell %s", m[1])
-		target, ok := labels[m[2]]
-		require.True(t, ok, "edge references unknown target cell %s", m[2])
-		connections = append(connections, source+" -> "+target)
+		edges = append(edges, diagramConnection{source: boxOf(m[2]), target: boxOf(m[3]), paint: m[1]})
+	}
+
+	return edges
+}
+
+// drawioConnections returns the diagram's edges as "source label -> target label"
+// pairs, so a test can name the connection it expects instead of only asserting
+// that some edge exists.
+func drawioConnections(t *testing.T, output string) []string {
+	t.Helper()
+
+	var connections []string
+	for _, edge := range drawioEdges(t, output) {
+		connections = append(connections, edge.source+" -> "+edge.target)
 	}
 
 	return connections
