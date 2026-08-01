@@ -77,12 +77,8 @@ func exportMermaidStandard(b *strings.Builder, modelName string, entries []slice
 		}
 
 		if s.Trigger != nil {
-			etype := "ui"
-			if s.Trigger.Kind == "Schedule" || s.Trigger.Kind == "Processor" {
-				etype = "pcr"
-			}
 			eid := namespaced(ns, s.Trigger.Name)
-			b.WriteString(fmt.Sprintf("tf %02d %s %s\n", nextNum, etype, eid))
+			b.WriteString(fmt.Sprintf("tf %02d ui %s\n", nextNum, eid))
 			nextNum++
 		}
 
@@ -171,12 +167,8 @@ func exportMermaidProjected(b *strings.Builder, modelName string, entries []slic
 
 		// Triggers
 		if s.Trigger != nil {
-			etype := "ui"
-			if s.Trigger.Kind == "Schedule" || s.Trigger.Kind == "Processor" {
-				etype = "pcr"
-			}
 			eid := namespaced(ns, s.Trigger.Name)
-			b.WriteString(fmt.Sprintf("tf %02d %s %s\n", nextNum, etype, eid))
+			b.WriteString(fmt.Sprintf("tf %02d ui %s\n", nextNum, eid))
 			nextNum++
 		}
 
@@ -304,12 +296,8 @@ func exportMermaidDCB(b *strings.Builder, modelName string, entries []sliceEntry
 
 		// Triggers
 		if s.Trigger != nil {
-			etype := "ui"
-			if s.Trigger.Kind == "Schedule" || s.Trigger.Kind == "Processor" {
-				etype = "pcr"
-			}
 			eid := namespaced(ns, s.Trigger.Name)
-			b.WriteString(fmt.Sprintf("tf %02d %s %s\n", nextNum, etype, eid))
+			b.WriteString(fmt.Sprintf("tf %02d ui %s\n", nextNum, eid))
 			nextNum++
 		}
 

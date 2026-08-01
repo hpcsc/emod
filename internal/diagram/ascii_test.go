@@ -45,7 +45,7 @@ func TestExportASCII(t *testing.T) {
 		require.Contains(t, output, "Model: Empty")
 	})
 
-	t.Run("renders trigger with kind, name, and actor", func(t *testing.T) {
+	t.Run("renders trigger with name and actor, dropping any kind", func(t *testing.T) {
 		model := &ast.Model{
 			Name: "Test",
 			Contexts: []*ast.Context{{
@@ -68,11 +68,11 @@ func TestExportASCII(t *testing.T) {
 		require.NoError(t, err)
 
 		output := string(raw)
-		require.Contains(t, output, "<<UI: SubmitForm")
-		require.Contains(t, output, "(User)")
+		require.Contains(t, output, "<<SubmitForm (User)>>")
+		require.NotContains(t, output, "UI:")
 	})
 
-	t.Run("renders trigger without actor when actor is empty", func(t *testing.T) {
+	t.Run("renders trigger with name only when actor is empty", func(t *testing.T) {
 		model := singleSliceModel("Test", "S",
 			&ast.Trigger{Kind: "Schedule", Name: "NightlyBatch"})
 
@@ -80,8 +80,45 @@ func TestExportASCII(t *testing.T) {
 		require.NoError(t, err)
 
 		output := string(raw)
-		require.Contains(t, output, "<<Schedule: NightlyBatch>>")
+		require.Contains(t, output, "<<NightlyBatch>>")
+		require.NotContains(t, output, "Schedule:")
+		require.NotContains(t, output, "<<:")
 		require.NotContains(t, output, "NightlyBatch (")
+	})
+
+	t.Run("trigger labels omit kind whether or not one is stated", func(t *testing.T) {
+		model := &ast.Model{
+			Name: "Test",
+			Contexts: []*ast.Context{{
+				Name: "Ctx",
+				Aggregates: []*ast.Aggregate{{
+					Name: "Agg",
+					Slices: []*ast.Slice{
+						{
+							Name: "S1",
+							Trigger: &ast.Trigger{
+								Kind:  "UI",
+								Name:  "SubmitForm",
+								Actor: "User",
+							},
+						},
+						{
+							Name:    "S2",
+							Trigger: &ast.Trigger{Name: "HeadlessBatch"},
+						},
+					},
+				}},
+			}},
+		}
+
+		raw, err := diagram.ExportASCII(model, diagram.StyleAuto)
+		require.NoError(t, err)
+
+		output := string(raw)
+		require.Contains(t, output, "<<SubmitForm (User)>>")
+		require.Contains(t, output, "<<HeadlessBatch>>")
+		require.NotContains(t, output, "UI:")
+		require.NotContains(t, output, "<<:")
 	})
 
 	t.Run("renders command as [CommandName]", func(t *testing.T) {
@@ -168,7 +205,7 @@ func TestExportASCII(t *testing.T) {
 		require.NoError(t, err)
 
 		output := string(raw)
-		require.Contains(t, output, "<<UI: Click>>")
+		require.Contains(t, output, "<<Click>>")
 		require.Contains(t, output, "[DoAction] -> (ActionDone)")
 	})
 
@@ -332,8 +369,8 @@ func TestExportASCII(t *testing.T) {
 		require.Contains(t, output, "=== Slice: Ship Order ===")
 
 		// Triggers
-		require.Contains(t, output, "<<UI: PlaceOrderForm (Customer)>>")
-		require.Contains(t, output, "<<Schedule: ShipTimer>>")
+		require.Contains(t, output, "<<PlaceOrderForm (Customer)>>")
+		require.Contains(t, output, "<<ShipTimer>>")
 
 		// Flow chains
 		require.Contains(t, output, "[CreateOrder] -> (OrderCreated)")
