@@ -1025,17 +1025,19 @@ func convertModelToDiagram(m *ast.Model) *jsonDiagramDocument {
 				}
 			}
 
-			// trigger_command: trigger → each command within the same slice
 			if s.Trigger != nil {
-				srcID, ok := triggerIDs[s.Trigger.Name]
+				triggerID, ok := triggerIDs[s.Trigger.Name]
 				if ok {
+					appendReadsEdge(doc, viewIDs, s.Trigger.Reads, triggerID)
+
+					// trigger_command: trigger → each command within the same slice
 					for _, cmd := range s.Commands {
 						if cmd == nil {
 							continue
 						}
 						if tgtID, ok := cmdIDs[cmd.Name]; ok {
 							doc.Edges = append(doc.Edges, &jsonDiagramEdge{
-								Source: srcID,
+								Source: triggerID,
 								Target: tgtID,
 								Type:   "trigger_command",
 							})
@@ -1084,6 +1086,8 @@ func convertModelToDiagram(m *ast.Model) *jsonDiagramDocument {
 					}
 				}
 
+				appendReadsEdge(doc, viewIDs, a.Reads, autoID)
+
 				if a.Command != "" {
 					if tgtID, ok := cmdIDs[a.Command]; ok {
 						doc.Edges = append(doc.Edges, &jsonDiagramEdge{
@@ -1100,25 +1104,17 @@ func convertModelToDiagram(m *ast.Model) *jsonDiagramDocument {
 				if t == nil {
 					continue
 				}
-				srcID, ok := transIDs[t.Name]
+				transID, ok := transIDs[t.Name]
 				if !ok {
 					continue
 				}
 
-				if t.Reads != "" {
-					if viewID, ok := viewIDs[t.Reads]; ok {
-						doc.Edges = append(doc.Edges, &jsonDiagramEdge{
-							Source: viewID,
-							Target: srcID,
-							Type:   "reads",
-						})
-					}
-				}
+				appendReadsEdge(doc, viewIDs, t.Reads, transID)
 
 				if t.Command != "" {
 					if cmdID, ok := cmdIDs[t.Command]; ok {
 						doc.Edges = append(doc.Edges, &jsonDiagramEdge{
-							Source: srcID,
+							Source: transID,
 							Target: cmdID,
 							Type:   "translation_command",
 						})
@@ -1139,6 +1135,23 @@ func convertModelToDiagram(m *ast.Model) *jsonDiagramDocument {
 	}
 
 	return doc
+}
+
+// appendReadsEdge skips a view name no slice declares: an edge onto an id no node
+// carries is a document the viewer cannot draw.
+func appendReadsEdge(doc *jsonDiagramDocument, viewIDs map[string]string, reads, readerID string) {
+	if reads == "" {
+		return
+	}
+	viewID, declared := viewIDs[reads]
+	if !declared {
+		return
+	}
+	doc.Edges = append(doc.Edges, &jsonDiagramEdge{
+		Source: viewID,
+		Target: readerID,
+		Type:   "reads",
+	})
 }
 
 func convertEventToDiagram(e *ast.Event) *jsonDiagramEvent {

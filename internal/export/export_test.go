@@ -2435,6 +2435,57 @@ func TestExport(t *testing.T) {
 			require.Equal(t, "event-1", flowEdge["target"])
 		})
 
+		t.Run("draws a reads edge from a view to the trigger and to the automation that read it, and none for a name no slice declares", func(t *testing.T) {
+			model := &ast.Model{
+				Name: "Test",
+				Contexts: []*ast.Context{
+					{
+						Name: "Lending",
+						Aggregates: []*ast.Aggregate{
+							{
+								Name: "Loan",
+								Slices: []*ast.Slice{
+									{
+										Name:  "Review Member Loans",
+										Views: []*ast.View{{Name: "MemberLoansView"}},
+									},
+									{
+										Name:    "Borrow Copy",
+										Trigger: &ast.Trigger{Name: "Lending Desk", Reads: "MemberLoansView"},
+										Automations: []*ast.Automation{
+											{Name: "RecallOverdueCopy", Reads: "MemberLoansView"},
+										},
+									},
+									{
+										Name:    "Return Copy",
+										Trigger: &ast.Trigger{Name: "Returns Counter", Reads: "AvailableCopiesView"},
+										Automations: []*ast.Automation{
+											{Name: "ChaseOverdueCopy", Reads: "AvailableCopiesView"},
+										},
+									},
+									{
+										Name:    "Renew Loan",
+										Trigger: &ast.Trigger{Name: "Renewal Desk"},
+										Automations: []*ast.Automation{
+											{Name: "RenewQuietly"},
+										},
+									},
+								},
+							},
+						},
+					},
+				},
+			}
+
+			doc := diagramDocOf(t, model)
+
+			require.ElementsMatch(t, []map[string]any{
+				{"source": "view-1", "target": "trigger-1", "type": "reads"},
+				{"source": "view-1", "target": "auto-1", "type": "reads"},
+			}, objectsUnder(doc, "edges"),
+				"MemberLoansView is the only view declared, so the trigger and the automation of Borrow Copy are the only two ends a wire can reach; AvailableCopiesView resolves to no node, and Renew Loan reads nothing")
+		})
+
 		t.Run("cross-slice subscription edge resolves across boundaries", func(t *testing.T) {
 			model := &ast.Model{
 				Name: "Test",
@@ -3098,7 +3149,7 @@ func TestExport(t *testing.T) {
 				"nor does an event a spec names in its given or then history reach a node or an edge of its own")
 		})
 
-		t.Run("the view an automation reads reaches its node and no edge of its own", func(t *testing.T) {
+		t.Run("the view an automation reads reaches its node and draws an edge of its own, while a name no slice declares draws none", func(t *testing.T) {
 			reading := test.AutomationReadsLibraryLendingModel(t)
 			unread := test.WithoutAutomationReads(reading)
 
@@ -3112,8 +3163,48 @@ func TestExport(t *testing.T) {
 
 			require.Equal(t, test.AutomationReadsLibraryLendingViewNames, diagramAutomationReads(readingDoc))
 			require.Empty(t, diagramAutomationReads(unreadDoc))
-			require.Equal(t, unreadDoc["edges"], readingDoc["edges"],
-				"US-005 owns the view→automation edge; one drawn here is that story arriving early, not a regression")
+
+			require.Equal(t, test.AutomationReadsLibraryLendingViewNames, viewsReadBy(readingDoc, "automation"))
+			require.Empty(t, viewsReadBy(unreadDoc, "automation"))
+			require.Empty(t, viewsReadBy(readingDoc, "trigger"),
+				"the trigger of this model reads AvailableCopiesView, which no slice declares")
+		})
+
+		t.Run("every view a trigger or an automation reads draws its edge, across both slice homes and across a context boundary", func(t *testing.T) {
+			doc := diagramDocOf(t, test.TriggerReadsLibraryLendingModel(t))
+
+			require.Equal(t, test.TriggerReadsLibraryLendingTriggerViewNames, viewsReadBy(doc, "trigger"),
+				`the trigger "Overdue Report" reads a view the other context declares, so a lookup scoped to the slice or the context reads back short`)
+			require.Equal(t, test.TriggerReadsLibraryLendingAutomationViewNames, viewsReadBy(doc, "automation"),
+				"and the automation RemindReaderOfLoans reads one back across that boundary the other way")
+		})
+
+		t.Run("each twin loses the reads edges of its own construct and keeps every other wire", func(t *testing.T) {
+			reading := test.TriggerReadsLibraryLendingModel(t)
+			unreadTriggers := test.WithoutTriggerReads(reading)
+			unreadAutomations := test.WithoutAutomationReads(reading)
+
+			require.Equal(t, test.TriggerReadsLibraryLendingTriggerViewNames, test.DeclaredTriggerReads(reading),
+				"the model has to keep reading a view from both constructs once the twins are taken, or the comparisons below run over copies of itself")
+			require.Equal(t, test.TriggerReadsLibraryLendingAutomationViewNames, test.DeclaredAutomationReads(reading))
+			require.Empty(t, test.DeclaredTriggerReads(unreadTriggers),
+				"each twin has to lose what its own construct reads in both slice homes, or whichever home it kept answers the comparisons below")
+			require.Empty(t, test.DeclaredAutomationReads(unreadAutomations))
+			require.Equal(t, test.TriggerReadsLibraryLendingAutomationViewNames, test.DeclaredAutomationReads(unreadTriggers),
+				"and to leave the other construct reading, or the differential says nothing about which field the edge is drawn from")
+			require.Equal(t, test.TriggerReadsLibraryLendingTriggerViewNames, test.DeclaredTriggerReads(unreadAutomations))
+
+			readingDoc := diagramDocOf(t, reading)
+			triggerlessDoc := diagramDocOf(t, unreadTriggers)
+			automationlessDoc := diagramDocOf(t, unreadAutomations)
+
+			require.Empty(t, viewsReadBy(triggerlessDoc, "trigger"))
+			require.Equal(t, test.TriggerReadsLibraryLendingAutomationViewNames, viewsReadBy(triggerlessDoc, "automation"))
+			require.Empty(t, viewsReadBy(automationlessDoc, "automation"))
+			require.Equal(t, test.TriggerReadsLibraryLendingTriggerViewNames, viewsReadBy(automationlessDoc, "trigger"))
+
+			require.Equal(t, edgesExcept(readingDoc, "reads"), edgesExcept(triggerlessDoc, "reads"))
+			require.Equal(t, edgesExcept(readingDoc, "reads"), edgesExcept(automationlessDoc, "reads"))
 		})
 
 		t.Run("the cadence a scheduled automation runs on reaches its node, beside the event the rest activate on", func(t *testing.T) {
@@ -4436,12 +4527,52 @@ func activationEdgeTargets(doc map[string]any) []string {
 	return targets
 }
 
+// viewsReadBy names the view each reads edge of a decoded diagram document is
+// drawn from, keeping the edges that point at a node of nodeType, in the order the
+// edges were emitted — which follows declaration order across both slice homes,
+// so a walk reaching only one of them reads back short. Both endpoints are
+// resolved through the document's own node list, so an edge naming an id no node
+// carries reads back as a view with no name.
+func viewsReadBy(doc map[string]any, nodeType string) []string {
+	labels := nodeLabelsByID(doc)
+	types := nodeTypesByID(doc)
+
+	var views []string
+	for _, edge := range objectsUnder(doc, "edges") {
+		if edge["type"] == "reads" && types[edge["target"].(string)] == nodeType {
+			views = append(views, labels[edge["source"].(string)])
+		}
+	}
+	return views
+}
+
+// edgesExcept keeps every edge of a decoded diagram document that is not of
+// edgeType, so a comparison across a twin answers what became of the wires the
+// twin was not meant to touch.
+func edgesExcept(doc map[string]any, edgeType string) []map[string]any {
+	var kept []map[string]any
+	for _, edge := range objectsUnder(doc, "edges") {
+		if edge["type"] != edgeType {
+			kept = append(kept, edge)
+		}
+	}
+	return kept
+}
+
 func nodeLabelsByID(doc map[string]any) map[string]string {
 	labels := make(map[string]string)
 	for _, node := range objectsUnder(doc, "nodes") {
 		labels[node["id"].(string)] = node["label"].(string)
 	}
 	return labels
+}
+
+func nodeTypesByID(doc map[string]any) map[string]string {
+	types := make(map[string]string)
+	for _, node := range objectsUnder(doc, "nodes") {
+		types[node["id"].(string)] = node["type"].(string)
+	}
+	return types
 }
 
 // exportedActivationEvents names the event every automation of a decoded model
