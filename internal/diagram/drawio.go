@@ -60,6 +60,11 @@ const (
 	laneHeight = 190
 	laneGap    = 30
 
+	laneHeaderHeight = 30
+
+	reactorHeight = boxHeight * 3 / 4
+	reactorGap    = 6
+
 	waypointMargin = 40
 )
 
@@ -271,17 +276,17 @@ func ExportDrawio(model *ast.Model, style Style) ([]byte, error) {
 		b.WriteString(vertexCell(cid, label, cb.description, cb.x, marginY-30, cb.w-20, 22, styleContextLabel))
 	}
 
-	triggerCenterY := triggerLaneY + 30 + (laneHeight-30-boxHeight)/2
-	midCenterY := cmdViewLaneY + 30 + (laneHeight-30-boxHeight)/2
-	var eventCenterY int
+	triggerRowY := laneRowY(triggerLaneY)
+	cmdViewRowY := laneRowY(cmdViewLaneY)
+	var eventRowY int
 	if hasEventsLane {
-		eventCenterY = eventLaneY + 30 + (laneHeight-30-boxHeight)/2
+		eventRowY = laneRowY(eventLaneY)
 	}
-	var tagCenterYs []int
+	var tagRowYs []int
 	for _, ty := range tagLaneYs {
-		tagCenterYs = append(tagCenterYs, ty+30+(laneHeight-30-boxHeight)/2)
+		tagRowYs = append(tagRowYs, laneRowY(ty))
 	}
-	extCenterY := extLaneY + 30 + (laneHeight-30-boxHeight)/2
+	extRowY := laneRowY(extLaneY)
 
 	type namedElem struct {
 		name       string
@@ -310,8 +315,8 @@ func ExportDrawio(model *ast.Model, style Style) ([]byte, error) {
 			if s.Trigger.Actor != "" {
 				label = fmt.Sprintf("%s (%s)", s.Trigger.Name, s.Trigger.Actor)
 			}
-			b.WriteString(vertexCell(id, label, s.Trigger.Description, x, triggerCenterY, boxWidth, boxHeight, styleTrigger))
-			elems = append(elems, namedElem{name: s.Trigger.Name, id: id, x: x, y: triggerCenterY, w: boxWidth, h: boxHeight})
+			b.WriteString(vertexCell(id, label, s.Trigger.Description, x, triggerRowY, boxWidth, boxHeight, styleTrigger))
+			elems = append(elems, namedElem{name: s.Trigger.Name, id: id, x: x, y: triggerRowY, w: boxWidth, h: boxHeight})
 		}
 
 		// --- Commands (middle lane) ---
@@ -327,8 +332,8 @@ func ExportDrawio(model *ast.Model, style Style) ([]byte, error) {
 					label = cmd.Name + "\\n" + ann
 				}
 			}
-			b.WriteString(vertexCell(id, label, cmd.Description, x, midCenterY, itemW, boxHeight, styleCommand))
-			elems = append(elems, namedElem{name: cmd.Name, id: id, x: x, y: midCenterY, w: itemW, h: boxHeight})
+			b.WriteString(vertexCell(id, label, cmd.Description, x, cmdViewRowY, itemW, boxHeight, styleCommand))
+			elems = append(elems, namedElem{name: cmd.Name, id: id, x: x, y: cmdViewRowY, w: itemW, h: boxHeight})
 		}
 
 		// --- Views (middle lane) ---
@@ -336,8 +341,8 @@ func ExportDrawio(model *ast.Model, style Style) ([]byte, error) {
 			id := allocID()
 			idx := len(s.Commands) + vi
 			itemW, x := itemLayout(usableW, totalMid, idx, sliceX)
-			b.WriteString(vertexCell(id, view.Name, view.Description, x, midCenterY, itemW, boxHeight, styleView))
-			elems = append(elems, namedElem{name: view.Name, id: id, x: x, y: midCenterY, w: itemW, h: boxHeight})
+			b.WriteString(vertexCell(id, view.Name, view.Description, x, cmdViewRowY, itemW, boxHeight, styleView))
+			elems = append(elems, namedElem{name: view.Name, id: id, x: x, y: cmdViewRowY, w: itemW, h: boxHeight})
 		}
 
 		// --- Events ---
@@ -374,8 +379,8 @@ func ExportDrawio(model *ast.Model, style Style) ([]byte, error) {
 						continue
 					}
 					id := allocID()
-					b.WriteString(vertexCell(id, label, evt.Description, itemX, tagCenterYs[ti], itemW, boxHeight, styleEvent))
-					elems = append(elems, namedElem{name: evt.Name, id: id, x: itemX, y: tagCenterYs[ti], w: itemW, h: boxHeight})
+					b.WriteString(vertexCell(id, label, evt.Description, itemX, tagRowYs[ti], itemW, boxHeight, styleEvent))
+					elems = append(elems, namedElem{name: evt.Name, id: id, x: itemX, y: tagRowYs[ti], w: itemW, h: boxHeight})
 					placedIDs = append(placedIDs, id)
 				}
 				if len(placedIDs) > 1 {
@@ -386,8 +391,8 @@ func ExportDrawio(model *ast.Model, style Style) ([]byte, error) {
 				id := allocID()
 				itemW, x := itemLayout(usableW, totalEvts, ei, sliceX)
 				ei++
-				b.WriteString(vertexCell(id, label, evt.Description, x, eventCenterY, itemW, boxHeight, styleEvent))
-				elems = append(elems, namedElem{name: evt.Name, id: id, x: x, y: eventCenterY, w: itemW, h: boxHeight})
+				b.WriteString(vertexCell(id, label, evt.Description, x, eventRowY, itemW, boxHeight, styleEvent))
+				elems = append(elems, namedElem{name: evt.Name, id: id, x: x, y: eventRowY, w: itemW, h: boxHeight})
 			}
 		}
 		for _, tr := range s.Translations {
@@ -395,37 +400,16 @@ func ExportDrawio(model *ast.Model, style Style) ([]byte, error) {
 				id := allocID()
 				itemW, x := itemLayout(usableW, totalEvts, ei, sliceX)
 				ei++
-				b.WriteString(vertexCell(id, tr.Event.Name, tr.Event.Description, x, eventCenterY, itemW, boxHeight, styleEvent))
-				elems = append(elems, namedElem{name: tr.Event.Name, id: id, x: x, y: eventCenterY, w: itemW, h: boxHeight})
+				b.WriteString(vertexCell(id, tr.Event.Name, tr.Event.Description, x, eventRowY, itemW, boxHeight, styleEvent))
+				elems = append(elems, namedElem{name: tr.Event.Name, id: id, x: x, y: eventRowY, w: itemW, h: boxHeight})
 			}
 		}
 
-		// --- Automations (compact boxes with gear indicator) ---
-		for ai, auto := range s.Automations {
+		// --- Automations and translation reactors (middle lane) ---
+		for _, reactor := range reactorBoxes(s, cmdViewLaneY, sliceX, "\\n") {
 			id := allocID()
-			autoW := boxWidth
-			autoH := boxHeight * 3 / 4
-			autoPadX := 10
-			autoPadY := 15 + ai*(autoH+5)
-			x := sliceX + autoPadX
-			y := triggerLaneY + laneHeight - autoH - autoPadY
-			label := automationLabel(auto, "\\n")
-			b.WriteString(vertexCell(id, label, auto.Description, x, y, autoW-boxWidth/8, autoH, styleReactor))
-			elems = append(elems, namedElem{name: auto.Name, id: id, x: x, y: y, w: autoW - boxWidth/8, h: autoH})
-		}
-
-		// --- Translation reactors (in UI/Triggers lane, below automations) ---
-		for ti, tr := range s.Translations {
-			id := allocID()
-			reactorW := boxWidth
-			reactorH := boxHeight * 3 / 4
-			padX := 10
-			padY := 15 + (len(s.Automations)+ti)*(reactorH+5)
-			x := sliceX + padX
-			y := triggerLaneY + laneHeight - reactorH - padY
-			label := reactorLabel(tr.Name)
-			b.WriteString(vertexCell(id, label, tr.Description, x, y, reactorW-boxWidth/8, reactorH, styleReactor))
-			elems = append(elems, namedElem{name: tr.Name, id: id, x: x, y: y, w: reactorW - boxWidth/8, h: reactorH})
+			b.WriteString(vertexCell(id, reactor.label, reactor.description, reactor.x, reactor.y, reactor.w, reactor.h, styleReactor))
+			elems = append(elems, namedElem{name: reactor.name, id: id, x: reactor.x, y: reactor.y, w: reactor.w, h: reactor.h})
 		}
 
 		// --- External system boxes (Translations) ---
@@ -434,7 +418,7 @@ func ExportDrawio(model *ast.Model, style Style) ([]byte, error) {
 			extW := 100
 			extH := 45
 			extX := sliceX + (sliceWidth-extW)/2
-			extY := extCenterY - extH/2
+			extY := extRowY - extH/2
 			if ti > 0 {
 				extY += ti * (extH + 8)
 			}
@@ -733,6 +717,51 @@ func hasTranslationEvents(s *ast.Slice) bool {
 		}
 	}
 	return false
+}
+
+// laneRowY is where a lane's row of boxes starts: centred in what the lane has
+// left below the strip carrying its own label.
+func laneRowY(laneY int) int {
+	return laneY + laneHeaderHeight + (laneHeight-laneHeaderHeight-boxHeight)/2
+}
+
+// reactorBox is the box drawn for an automation or for a translation reactor,
+// which the picture draws alike.
+type reactorBox struct {
+	name        string
+	label       string
+	description string
+	x, y, w, h  int
+}
+
+// reactorBoxes returns the box drawn for each of a slice's automations and then
+// for each of its translation reactors: a row of their own under the commands
+// and views they wire to, sharing that lane and laid out across the slice the
+// way that row is. lineBreak is how the format drawing them starts a new line.
+func reactorBoxes(s *ast.Slice, cmdViewLaneY, sliceX int, lineBreak string) []reactorBox {
+	boxes := make([]reactorBox, 0, len(s.Automations)+len(s.Translations))
+	for _, auto := range s.Automations {
+		boxes = append(boxes, reactorBox{
+			name:        auto.Name,
+			label:       automationLabel(auto, lineBreak),
+			description: auto.Description,
+		})
+	}
+	for _, tr := range s.Translations {
+		boxes = append(boxes, reactorBox{
+			name:        tr.Name,
+			label:       reactorLabel(tr.Name),
+			description: tr.Description,
+		})
+	}
+
+	rowY := laneRowY(cmdViewLaneY) + boxHeight + reactorGap
+	for i := range boxes {
+		boxes[i].w, boxes[i].x = itemLayout(sliceWidth-20, len(boxes), i, sliceX)
+		boxes[i].y, boxes[i].h = rowY, reactorHeight
+	}
+
+	return boxes
 }
 
 // itemLayout computes item width and x position for elements within a slice.

@@ -52,11 +52,10 @@ func ExportSVG(model *ast.Model, _ Style) ([]byte, error) {
 		b.WriteString(svgText(cb.x+(cb.w-20)/2, marginY-19, cb.name, 12, strokeExternal))
 	}
 
-	// Center Y within each lane's content area (below 30px label area)
-	triggerCenterY := triggerLaneY + 30 + (laneHeight-30-boxHeight)/2
-	midCenterY := cmdViewLaneY + 30 + (laneHeight-30-boxHeight)/2
-	eventCenterY := eventLaneY + 30 + (laneHeight-30-boxHeight)/2
-	extCenterY := extLaneY + 30 + (laneHeight-30-boxHeight)/2
+	triggerRowY := laneRowY(triggerLaneY)
+	cmdViewRowY := laneRowY(cmdViewLaneY)
+	eventRowY := laneRowY(eventLaneY)
+	extRowY := laneRowY(extLaneY)
 
 	// Where the box drawn for each name ended up. One map across every slice, so
 	// a connection can reach a box another slice drew.
@@ -70,7 +69,7 @@ func ExportSVG(model *ast.Model, _ Style) ([]byte, error) {
 		// --- Trigger (top lane) ---
 		if s.Trigger != nil {
 			x := sliceX + (sliceWidth-boxWidth)/2
-			y := triggerCenterY
+			y := triggerRowY
 			label := s.Trigger.Name
 			if s.Trigger.Actor != "" {
 				label = fmt.Sprintf("%s (%s)", s.Trigger.Name, s.Trigger.Actor)
@@ -85,18 +84,18 @@ func ExportSVG(model *ast.Model, _ Style) ([]byte, error) {
 		usableW := sliceWidth - 20
 		for ci, cmd := range s.Commands {
 			itemW, x := itemLayout(usableW, totalMid, ci, sliceX)
-			b.WriteString(svgRoundedRect(x, midCenterY, itemW, boxHeight, fillCommand, strokeCommand, 5, cmd.Description))
-			b.WriteString(svgText(x+itemW/2, midCenterY+boxHeight/2, cmd.Name, 12, strokeCommand))
-			nameToBox[cmd.Name] = svgBox{x: x, y: midCenterY, w: itemW, h: boxHeight}
+			b.WriteString(svgRoundedRect(x, cmdViewRowY, itemW, boxHeight, fillCommand, strokeCommand, 5, cmd.Description))
+			b.WriteString(svgText(x+itemW/2, cmdViewRowY+boxHeight/2, cmd.Name, 12, strokeCommand))
+			nameToBox[cmd.Name] = svgBox{x: x, y: cmdViewRowY, w: itemW, h: boxHeight}
 		}
 
 		// --- Views (middle lane) ---
 		for vi, view := range s.Views {
 			idx := len(s.Commands) + vi
 			itemW, x := itemLayout(usableW, totalMid, idx, sliceX)
-			b.WriteString(svgRoundedRect(x, midCenterY, itemW, boxHeight, fillView, strokeView, 5, view.Description))
-			b.WriteString(svgText(x+itemW/2, midCenterY+boxHeight/2, view.Name, 12, strokeView))
-			nameToBox[view.Name] = svgBox{x: x, y: midCenterY, w: itemW, h: boxHeight}
+			b.WriteString(svgRoundedRect(x, cmdViewRowY, itemW, boxHeight, fillView, strokeView, 5, view.Description))
+			b.WriteString(svgText(x+itemW/2, cmdViewRowY+boxHeight/2, view.Name, 12, strokeView))
+			nameToBox[view.Name] = svgBox{x: x, y: cmdViewRowY, w: itemW, h: boxHeight}
 		}
 
 		// --- Events (bottom lane, including translation events) ---
@@ -114,46 +113,25 @@ func ExportSVG(model *ast.Model, _ Style) ([]byte, error) {
 				label = fmt.Sprintf("%s\n[%s]", evt.Name, evt.ExternalName)
 			}
 			ei++
-			b.WriteString(svgRoundedRect(x, eventCenterY, itemW, boxHeight, fillEvent, strokeEvent, 5, evt.Description))
-			b.WriteString(svgMultilineText(x+itemW/2, eventCenterY+boxHeight/2, label, 11, strokeEvent))
-			nameToBox[evt.Name] = svgBox{x: x, y: eventCenterY, w: itemW, h: boxHeight}
+			b.WriteString(svgRoundedRect(x, eventRowY, itemW, boxHeight, fillEvent, strokeEvent, 5, evt.Description))
+			b.WriteString(svgMultilineText(x+itemW/2, eventRowY+boxHeight/2, label, 11, strokeEvent))
+			nameToBox[evt.Name] = svgBox{x: x, y: eventRowY, w: itemW, h: boxHeight}
 		}
 		for _, tr := range s.Translations {
 			if tr.Event != nil && tr.Event.Name != "" {
 				itemW, x := itemLayout(usableW, totalEvts, ei, sliceX)
 				ei++
-				b.WriteString(svgRoundedRect(x, eventCenterY, itemW, boxHeight, fillEvent, strokeEvent, 5, tr.Event.Description))
-				b.WriteString(svgText(x+itemW/2, eventCenterY+boxHeight/2, tr.Event.Name, 11, strokeEvent))
-				nameToBox[tr.Event.Name] = svgBox{x: x, y: eventCenterY, w: itemW, h: boxHeight}
+				b.WriteString(svgRoundedRect(x, eventRowY, itemW, boxHeight, fillEvent, strokeEvent, 5, tr.Event.Description))
+				b.WriteString(svgText(x+itemW/2, eventRowY+boxHeight/2, tr.Event.Name, 11, strokeEvent))
+				nameToBox[tr.Event.Name] = svgBox{x: x, y: eventRowY, w: itemW, h: boxHeight}
 			}
 		}
 
-		// --- Automations (compact boxes with gear indicator) ---
-		for ai, auto := range s.Automations {
-			autoW := boxWidth
-			autoH := boxHeight * 3 / 4
-			autoPadX := 10
-			autoPadY := 15 + ai*(autoH+5)
-			x := sliceX + autoPadX
-			y := triggerLaneY + laneHeight - autoH - autoPadY
-			label := automationLabel(auto, "\n")
-			b.WriteString(svgRoundedRect(x, y, autoW-boxWidth/8, autoH, fillReactor, strokeReactor, 3, auto.Description))
-			b.WriteString(svgMultilineText(x+(autoW-boxWidth/8)/2, y+autoH/2, label, 10, strokeReactor))
-			nameToBox[auto.Name] = svgBox{x: x, y: y, w: autoW - boxWidth/8, h: autoH}
-		}
-
-		// --- Translation reactors (in UI/Triggers lane, below automations) ---
-		for ti, tr := range s.Translations {
-			reactorW := boxWidth
-			reactorH := boxHeight * 3 / 4
-			padX := 10
-			padY := 15 + (len(s.Automations)+ti)*(reactorH+5)
-			x := sliceX + padX
-			y := triggerLaneY + laneHeight - reactorH - padY
-			label := reactorLabel(tr.Name)
-			b.WriteString(svgRoundedRect(x, y, reactorW-boxWidth/8, reactorH, fillReactor, strokeReactor, 3, tr.Description))
-			b.WriteString(svgMultilineText(x+(reactorW-boxWidth/8)/2, y+reactorH/2, label, 10, strokeReactor))
-			nameToBox[tr.Name] = svgBox{x: x, y: y, w: reactorW - boxWidth/8, h: reactorH}
+		// --- Automations and translation reactors (middle lane) ---
+		for _, reactor := range reactorBoxes(s, cmdViewLaneY, sliceX, "\n") {
+			b.WriteString(svgRoundedRect(reactor.x, reactor.y, reactor.w, reactor.h, fillReactor, strokeReactor, 3, reactor.description))
+			b.WriteString(svgMultilineText(reactor.x+reactor.w/2, reactor.y+reactor.h/2, reactor.label, 10, strokeReactor))
+			nameToBox[reactor.name] = svgBox{x: reactor.x, y: reactor.y, w: reactor.w, h: reactor.h}
 		}
 
 		// --- External system boxes (Translations) ---
@@ -161,7 +139,7 @@ func ExportSVG(model *ast.Model, _ Style) ([]byte, error) {
 			extW := 100
 			extH := 45
 			extX := sliceX + (sliceWidth-extW)/2
-			extY := extCenterY - extH/2
+			extY := extRowY - extH/2
 			if ti > 0 {
 				extY += ti * (extH + 8)
 			}

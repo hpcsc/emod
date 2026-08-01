@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"io"
 	"regexp"
+	"strconv"
 	"strings"
 	"testing"
 
@@ -316,6 +317,11 @@ func TestExportDrawio(t *testing.T) {
 	})
 
 	t.Run("projected style", func(t *testing.T) {
+		t.Run("automations and reactors share the triggers and commands lane without sitting on a box in it", func(t *testing.T) {
+			requireReactorsClearOfSharedLane(t, diagram.StyleProjected,
+				[]string{"Triggers / Commands", "Events", "Tag: loan", "External Systems"})
+		})
+
 		t.Run("aggregate-only context with projected style produces same output as auto", func(t *testing.T) {
 			model := fullModel()
 			autoRaw, err := diagram.ExportDrawio(model, diagram.StyleAuto)
@@ -507,6 +513,11 @@ func TestExportDrawio(t *testing.T) {
 	})
 
 	t.Run("dcb style", func(t *testing.T) {
+		t.Run("automations and reactors share the triggers and commands lane without sitting on a box in it", func(t *testing.T) {
+			requireReactorsClearOfSharedLane(t, diagram.StyleDCB,
+				[]string{"Triggers / Commands", "Events", "External Systems"})
+		})
+
 		t.Run("DCB context with StyleDCB renders flat Events lane", func(t *testing.T) {
 			model := &ast.Model{
 				Name: "DCBFlat",
@@ -745,6 +756,68 @@ func TestExportDrawio(t *testing.T) {
 	})
 }
 
+// dcbReactorLabels labels the box drawn for each automation and each translation
+// reactor sharedLaneModel declares.
+var dcbReactorLabels = []string{
+	gearMarking + " RemindOnDueDate",
+	gearMarking + " RecallOverdueCopy",
+	gearMarking + " PartnerImport",
+}
+
+// dcbElementLabels labels every box sharedLaneModel's own elements are drawn.
+var dcbElementLabels = append([]string{
+	"Lending Desk (Member)", "BorrowCopy", "ChargeFee", "MemberLoansView",
+	"CopyBorrowed", "PartnerLoanReceived", "LoanRegistry",
+}, dcbReactorLabels...)
+
+// sharedLaneModel declares, directly under a DCB context, everything the one
+// lane that holds triggers, commands, views, automations and reactors together
+// has to make room for.
+func sharedLaneModel() *ast.Model {
+	return &ast.Model{
+		Name: "Lending",
+		Contexts: []*ast.Context{{
+			Name: "Lending",
+			Slices: []*ast.Slice{{
+				Name:     "Borrow Copy",
+				Trigger:  &ast.Trigger{Name: "Lending Desk", Actor: "Member"},
+				Commands: []*ast.Command{{Name: "BorrowCopy"}, {Name: "ChargeFee"}},
+				Views:    []*ast.View{{Name: "MemberLoansView", Subscribes: []string{"CopyBorrowed"}}},
+				Events: []*ast.Event{
+					{Name: "CopyBorrowed", Tags: []ast.TagEntry{{Key: "loan", FieldRef: "loanId"}}},
+				},
+				Flows: []*ast.Flow{{CommandName: "BorrowCopy", EventName: "CopyBorrowed"}},
+				Automations: []*ast.Automation{
+					{Name: "RemindOnDueDate", OnEvent: "CopyBorrowed", Command: "ChargeFee"},
+					{Name: "RecallOverdueCopy", OnEvent: "CopyBorrowed", Reads: "MemberLoansView", Command: "BorrowCopy"},
+				},
+				Translations: []*ast.Translation{{
+					Name:           "PartnerImport",
+					ExternalSystem: "LoanRegistry",
+					Command:        "BorrowCopy",
+					Event:          &ast.Event{Name: "PartnerLoanReceived"},
+				}},
+			}},
+		}},
+	}
+}
+
+func requireReactorsClearOfSharedLane(t *testing.T, style diagram.Style, laneLabels []string) {
+	t.Helper()
+
+	raw, err := diagram.ExportDrawio(sharedLaneModel(), style)
+	require.NoError(t, err)
+
+	output := string(raw)
+	requireValidXML(t, output)
+	require.Equal(t, laneLabels, drawioLaneLabels(t, output),
+		"a layout whose triggers and commands already share a lane draws the lanes it drew before")
+
+	rects := rectsLabelled(t, drawioBoxes(t, output), dcbElementLabels)
+	require.Empty(t, boxesDrawnOver(rects, dcbReactorLabels),
+		"an automation or reactor sharing its lane with the commands is still drawn clear of every box in it")
+}
+
 // --- drawio helpers ---
 
 var drawioEdge = regexp.MustCompile(`<mxCell id="\d+" style="([^"]*)" edge="1"[^>]*source="(\d+)" target="(\d+)"`)
@@ -757,6 +830,7 @@ type drawioShape struct {
 	tooltip  string
 	style    string
 	geometry string
+	rect     boxRect
 }
 
 // drawioShapes returns the diagram's boxes in document order, decoded through an
@@ -816,6 +890,12 @@ func drawioShapes(t *testing.T, output string) []drawioShape {
 				}
 				shapes[len(shapes)-1].geometry = fmt.Sprintf("%s,%s %sx%s",
 					attr(element, "x"), attr(element, "y"), attr(element, "width"), attr(element, "height"))
+				shapes[len(shapes)-1].rect = boxRect{
+					x: drawioMeasure(t, attr(element, "x")),
+					y: drawioMeasure(t, attr(element, "y")),
+					w: drawioMeasure(t, attr(element, "width")),
+					h: drawioMeasure(t, attr(element, "height")),
+				}
 			}
 		case xml.EndElement:
 			switch element.Name.Local {
@@ -830,15 +910,43 @@ func drawioShapes(t *testing.T, output string) []drawioShape {
 	return shapes
 }
 
+func drawioMeasure(t *testing.T, value string) int {
+	t.Helper()
+
+	measure, err := strconv.Atoi(value)
+	require.NoError(t, err, "a box's geometry must be whole numbers, got %q", value)
+
+	return measure
+}
+
 func drawioBoxes(t *testing.T, output string) []diagramBox {
 	t.Helper()
 
 	var boxes []diagramBox
 	for _, shape := range drawioShapes(t, output) {
-		boxes = append(boxes, diagramBox{label: shape.label, appearance: shape.geometry + " " + shape.style})
+		boxes = append(boxes, diagramBox{
+			label:      shape.label,
+			appearance: shape.geometry + " " + shape.style,
+			rect:       shape.rect,
+		})
 	}
 
 	return boxes
+}
+
+// drawioLaneLabels names the swimlanes the diagram draws, in the order it draws
+// them.
+func drawioLaneLabels(t *testing.T, output string) []string {
+	t.Helper()
+
+	var labels []string
+	for _, shape := range drawioShapes(t, output) {
+		if strings.HasPrefix(shape.style, "swimlane;") {
+			labels = append(labels, shape.label)
+		}
+	}
+
+	return labels
 }
 
 // drawioTooltipsOf returns what every shape whose label contains label says when

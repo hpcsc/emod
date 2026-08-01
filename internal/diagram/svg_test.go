@@ -339,10 +339,9 @@ func svgArrows(output string) []string {
 
 type svgShape struct {
 	attributes string
-	// centre is the point an arrow drawn to or from this box meets it at.
-	centre  [2]int
-	label   string
-	tooltip string
+	rect       boxRect
+	label      string
+	tooltip    string
 }
 
 // svgShapes returns the diagram's boxes in document order, decoded through an
@@ -371,7 +370,7 @@ func svgShapes(t *testing.T, output string) []svgShape {
 		case xml.StartElement:
 			switch element.Name.Local {
 			case "rect":
-				shapes = append(shapes, svgShape{attributes: svgAttributes(element), centre: svgRectCentre(t, element)})
+				shapes = append(shapes, svgShape{attributes: svgAttributes(element), rect: svgRectOf(t, element)})
 				inRect = true
 			case "title", "text":
 				text.Reset()
@@ -402,13 +401,13 @@ func svgBoxes(t *testing.T, output string) []diagramBox {
 
 	var boxes []diagramBox
 	for _, shape := range svgShapes(t, output) {
-		boxes = append(boxes, diagramBox{label: shape.label, appearance: shape.attributes})
+		boxes = append(boxes, diagramBox{label: shape.label, appearance: shape.attributes, rect: shape.rect})
 	}
 
 	return boxes
 }
 
-func svgRectCentre(t *testing.T, element xml.StartElement) [2]int {
+func svgRectOf(t *testing.T, element xml.StartElement) boxRect {
 	t.Helper()
 
 	measure := func(name string) int {
@@ -424,7 +423,7 @@ func svgRectCentre(t *testing.T, element xml.StartElement) [2]int {
 		return 0
 	}
 
-	return [2]int{measure("x") + measure("width")/2, measure("y") + measure("height")/2}
+	return boxRect{x: measure("x"), y: measure("y"), w: measure("width"), h: measure("height")}
 }
 
 var (
@@ -440,7 +439,7 @@ func svgConnections(t *testing.T, output string) []diagramConnection {
 
 	labelled := make(map[[2]int]string)
 	for _, shape := range svgShapes(t, output) {
-		labelled[shape.centre] = shape.label
+		labelled[shape.rect.centre()] = shape.label
 	}
 
 	boxAt := func(point [2]int) string {

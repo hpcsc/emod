@@ -5,6 +5,7 @@ package diagram_test
 import (
 	"encoding/xml"
 	"fmt"
+	"maps"
 	"math"
 	"regexp"
 	"slices"
@@ -46,6 +47,30 @@ type diagramBox struct {
 	// appearance is where the box sits, how big it is and how it is painted, in
 	// the format's own spelling.
 	appearance string
+	rect       boxRect
+}
+
+// boxRect is where a box was drawn: the corner it starts at, and how far it runs
+// from there.
+type boxRect struct {
+	x, y, w, h int
+}
+
+// centre is the point an arrow drawn to or from a box meets it at.
+func (r boxRect) centre() [2]int {
+	return [2]int{r.x + r.w/2, r.y + r.h/2}
+}
+
+func (r boxRect) overlaps(other boxRect) bool {
+	return r.x < other.x+other.w && other.x < r.x+r.w &&
+		r.y < other.y+other.h && other.y < r.y+r.h
+}
+
+// within reports whether the box is drawn inside container without touching any
+// of its edges, which is how a container itself reads back as outside itself.
+func (r boxRect) within(container boxRect) bool {
+	return r.x > container.x && r.y > container.y &&
+		r.x+r.w < container.x+container.w && r.y+r.h < container.y+container.h
 }
 
 // diagramConnection is an arrow the output draws, named by the boxes at its two
@@ -156,8 +181,14 @@ func (e exporter) run(t *testing.T, model *ast.Model, style diagram.Style) strin
 func (e exporter) boxLabelled(t *testing.T, output, name string) diagramBox {
 	t.Helper()
 
+	return boxLabelled(t, e.boxes(t, output), name)
+}
+
+func boxLabelled(t *testing.T, boxes []diagramBox, name string) diagramBox {
+	t.Helper()
+
 	var matched []diagramBox
-	for _, box := range e.boxes(t, output) {
+	for _, box := range boxes {
 		if strings.Contains(box.label, name) {
 			matched = append(matched, box)
 		}
@@ -165,6 +196,105 @@ func (e exporter) boxLabelled(t *testing.T, output, name string) diagramBox {
 	require.Len(t, matched, 1, "expected one box labelled %q", name)
 
 	return matched[0]
+}
+
+// rectsLabelled returns where the box each name reaches was drawn.
+func rectsLabelled(t *testing.T, boxes []diagramBox, names []string) map[string]boxRect {
+	t.Helper()
+
+	rects := make(map[string]boxRect, len(names))
+	for _, name := range names {
+		rects[name] = boxLabelled(t, boxes, name).rect
+	}
+
+	return rects
+}
+
+// boxesDrawnOver names, for each of the named boxes, every box the picture draws
+// it on top of, so a failure says which two boxes collided.
+func boxesDrawnOver(rects map[string]boxRect, names []string) []string {
+	drawn := slices.Sorted(maps.Keys(rects))
+
+	var collisions []string
+	for _, name := range names {
+		for _, other := range drawn {
+			if other == name || !rects[name].overlaps(rects[other]) {
+				continue
+			}
+			collisions = append(collisions, name+" over "+other)
+		}
+	}
+
+	return collisions
+}
+
+// gearedBoxes returns the boxes drawn for a model's automations and translation
+// reactors, which the picture tells apart from every other box by the gear.
+func gearedBoxes(boxes []diagramBox) []diagramBox {
+	var geared []diagramBox
+	for _, box := range boxes {
+		if strings.Contains(box.label, gearMarking) {
+			geared = append(geared, box)
+		}
+	}
+
+	return geared
+}
+
+func labelsOf(boxes []diagramBox) []string {
+	var labels []string
+	for _, box := range boxes {
+		labels = append(labels, box.label)
+	}
+
+	return labels
+}
+
+// labelsWithin names the boxes drawn wholly inside container.
+func labelsWithin(boxes []diagramBox, container boxRect) []string {
+	var labels []string
+	for _, box := range boxes {
+		if box.rect.within(container) {
+			labels = append(labels, box.label)
+		}
+	}
+
+	return labels
+}
+
+// labelsBelow names the boxes drawn no higher than y.
+func labelsBelow(boxes []diagramBox, y int) []string {
+	var labels []string
+	for _, box := range boxes {
+		if box.rect.y >= y {
+			labels = append(labels, box.label)
+		}
+	}
+
+	return labels
+}
+
+// lowestEdge is the bottom of the lowest of the given boxes.
+func lowestEdge(rects map[string]boxRect) int {
+	var bottom int
+	for _, rect := range rects {
+		bottom = max(bottom, rect.y+rect.h)
+	}
+
+	return bottom
+}
+
+// edgesTouching returns the arrows the picture draws with one of the named boxes
+// at either end, as "source -> target".
+func edgesTouching(connections []diagramConnection, names []string) []string {
+	var touching []string
+	for _, connection := range connections {
+		if slices.Contains(names, connection.source) || slices.Contains(names, connection.target) {
+			touching = append(touching, connection.source+" -> "+connection.target)
+		}
+	}
+
+	return touching
 }
 
 func TestExporterContract(t *testing.T) {
@@ -735,6 +865,224 @@ func TestExporterAutomationSchedule(t *testing.T) {
 	}
 }
 
+// reactiveModelReactors labels the box drawn for each automation and each
+// translation reactor reactiveModel declares, both slices together and in the
+// order the picture draws them.
+var reactiveModelReactors = []string{
+	gearMarking + " NotifyWarehouse",
+	gearMarking + " ChargeCard",
+	gearMarking + " PaymentGateway",
+	gearMarking + " BookPickup",
+	gearMarking + " ArchiveOrder",
+	gearMarking + " LabelFeed",
+}
+
+// reactiveModelAutomations labels the boxes of its automations alone — what a
+// twin of it declaring no translation still draws.
+var reactiveModelAutomations = []string{
+	gearMarking + " NotifyWarehouse",
+	gearMarking + " ChargeCard",
+	gearMarking + " BookPickup",
+	gearMarking + " ArchiveOrder",
+}
+
+// reactiveModelCommands labels the boxes on the row the reactive boxes have to
+// find room beside.
+var reactiveModelCommands = []string{
+	"PlaceOrder", "ReserveStock", "OrderStatusView",
+	"ShipOrder", "PrintLabel", "ShipmentBoardView",
+}
+
+// reactiveModelElements labels every box reactiveModel's own elements are drawn,
+// leaving out the lanes and context bands they sit in.
+var reactiveModelElements = slices.Concat(reactiveModelCommands, reactiveModelReactors, []string{
+	"Order Form (Customer)", "OrderPlaced", "PaymentSettled", "Stripe",
+	"Dispatch Desk", "OrderShipped", "LabelPrinted", "DHL",
+})
+
+// reactiveModelReactorEdges names every arrow reactiveModel's picture draws with
+// an automation or a translation reactor at either end: the event that activates
+// each automation, the view one of them reads, the command each issues, and the
+// external system each translation restates.
+var reactiveModelReactorEdges = []string{
+	"OrderPlaced -> " + gearMarking + " NotifyWarehouse",
+	gearMarking + " NotifyWarehouse -> ReserveStock",
+	"OrderPlaced -> " + gearMarking + " ChargeCard",
+	"OrderStatusView -> " + gearMarking + " ChargeCard",
+	gearMarking + " ChargeCard -> PlaceOrder",
+	"Stripe -> " + gearMarking + " PaymentGateway",
+	gearMarking + " PaymentGateway -> PlaceOrder",
+	"OrderShipped -> " + gearMarking + " BookPickup",
+	gearMarking + " BookPickup -> ShipOrder",
+	"OrderShipped -> " + gearMarking + " ArchiveOrder",
+	gearMarking + " ArchiveOrder -> PrintLabel",
+	"DHL -> " + gearMarking + " LabelFeed",
+	gearMarking + " LabelFeed -> PrintLabel",
+}
+
+// reactiveModel gives two adjacent slices everything the command and view lane
+// has to hold at once — a trigger, two commands, a view, an event, two
+// automations and a translation each — so the reactive boxes have to find room
+// beside the commands of their own slice and stay out of the neighbouring one.
+func reactiveModel() *ast.Model {
+	return &ast.Model{
+		Name: "Orders",
+		Contexts: []*ast.Context{{
+			Name: "Orders",
+			Aggregates: []*ast.Aggregate{{
+				Name: "Order",
+				Slices: []*ast.Slice{
+					{
+						Name:     "Place Order",
+						Trigger:  &ast.Trigger{Name: "Order Form", Actor: "Customer"},
+						Commands: []*ast.Command{command("PlaceOrder"), command("ReserveStock")},
+						Events:   []*ast.Event{event("OrderPlaced")},
+						Views:    []*ast.View{{Name: "OrderStatusView", Subscribes: []string{"OrderPlaced"}}},
+						Flows:    []*ast.Flow{{CommandName: "PlaceOrder", EventName: "OrderPlaced"}},
+						Automations: []*ast.Automation{
+							{Name: "NotifyWarehouse", OnEvent: "OrderPlaced", Command: "ReserveStock"},
+							{Name: "ChargeCard", OnEvent: "OrderPlaced", Reads: "OrderStatusView", Command: "PlaceOrder"},
+						},
+						Translations: []*ast.Translation{{
+							Name:           "PaymentGateway",
+							ExternalSystem: "Stripe",
+							Command:        "PlaceOrder",
+							Event:          &ast.Event{Name: "PaymentSettled"},
+						}},
+					},
+					{
+						Name:     "Ship Order",
+						Trigger:  &ast.Trigger{Name: "Dispatch Desk"},
+						Commands: []*ast.Command{command("ShipOrder"), command("PrintLabel")},
+						Events:   []*ast.Event{event("OrderShipped")},
+						Views:    []*ast.View{{Name: "ShipmentBoardView", Subscribes: []string{"OrderShipped"}}},
+						Flows:    []*ast.Flow{{CommandName: "ShipOrder", EventName: "OrderShipped"}},
+						Automations: []*ast.Automation{
+							{Name: "BookPickup", OnEvent: "OrderShipped", Command: "ShipOrder"},
+							{Name: "ArchiveOrder", OnEvent: "OrderShipped", Command: "PrintLabel"},
+						},
+						Translations: []*ast.Translation{{
+							Name:           "LabelFeed",
+							ExternalSystem: "DHL",
+							Command:        "PrintLabel",
+							Event:          &ast.Event{Name: "LabelPrinted"},
+						}},
+					},
+				},
+			}},
+		}},
+	}
+}
+
+// withoutTranslations strips every translation out of a model in place, taking
+// the event and the external system each one names with it.
+func withoutTranslations(model *ast.Model) *ast.Model {
+	forEachSlice(model, func(s *ast.Slice) { s.Translations = nil })
+	return model
+}
+
+// withoutAutomations strips every automation out of a model in place, leaving
+// every other element where it was declared.
+func withoutAutomations(model *ast.Model) *ast.Model {
+	forEachSlice(model, func(s *ast.Slice) { s.Automations = nil })
+	return model
+}
+
+// forEachSlice visits both homes a slice has — nested in an aggregate and
+// declared directly on a context — so a strip reaching only one of them leaves
+// the other home answering the comparison the strip was made for.
+func forEachSlice(model *ast.Model, visit func(*ast.Slice)) {
+	for _, ctx := range model.Contexts {
+		for _, agg := range ctx.Aggregates {
+			for _, s := range agg.Slices {
+				visit(s)
+			}
+		}
+		for _, s := range ctx.Slices {
+			visit(s)
+		}
+	}
+}
+
+// TestExporterReactorPlacement covers where the box for an automation and for a
+// translation reactor is drawn. Both belong beside the commands and views they
+// wire to rather than in the lane a person reads as the way into the system, and
+// a lane only stays readable while no box is drawn over another. The text
+// formats draw no boxes and sit it out.
+func TestExporterReactorPlacement(t *testing.T) {
+	for _, e := range exporters() {
+		if e.boxes == nil {
+			continue
+		}
+
+		t.Run(e.name, func(t *testing.T) {
+			t.Run("every automation and translation reactor is drawn in the command and view lane", func(t *testing.T) {
+				output := e.run(t, reactiveModel(), diagram.StyleAuto)
+
+				e.requireWellFormed(t, output)
+				boxes := e.boxes(t, output)
+				geared := gearedBoxes(boxes)
+				lane := boxLabelled(t, boxes, "Commands / Views").rect
+
+				require.Equal(t, reactiveModelReactors, labelsOf(geared),
+					"every automation and every translation reactor is drawn one box, marked with the gear")
+				require.Equal(t, reactiveModelReactors, labelsWithin(geared, lane),
+					"each of those boxes lies wholly inside the command and view lane")
+				require.Equal(t, reactiveModelReactors,
+					labelsBelow(geared, lowestEdge(rectsLabelled(t, boxes, reactiveModelCommands))),
+					"and below the commands and views it wires to, clear of the strip carrying the lane's name")
+			})
+
+			t.Run("no box is drawn over another", func(t *testing.T) {
+				output := e.run(t, reactiveModel(), diagram.StyleAuto)
+
+				e.requireWellFormed(t, output)
+				rects := rectsLabelled(t, e.boxes(t, output), reactiveModelElements)
+
+				require.Empty(t, boxesDrawnOver(rects, reactiveModelElements),
+					"a box drawn under another is a label nobody can read")
+			})
+
+			t.Run("the top lane holds nothing but the triggers", func(t *testing.T) {
+				output := e.run(t, reactiveModel(), diagram.StyleAuto)
+
+				e.requireWellFormed(t, output)
+				boxes := e.boxes(t, output)
+
+				require.Equal(t, []string{"Order Form (Customer)", "Dispatch Desk"},
+					labelsWithin(boxes, boxLabelled(t, boxes, "UI / Triggers").rect),
+					"the lane holding what a person touches holds the two triggers and nothing else")
+			})
+
+			t.Run("every arrow into and out of a reactor still joins the same two boxes", func(t *testing.T) {
+				output := e.run(t, reactiveModel(), diagram.StyleAuto)
+
+				e.requireWellFormed(t, output)
+
+				require.ElementsMatch(t, reactiveModelReactorEdges,
+					edgesTouching(e.connections(t, output), reactiveModelReactors))
+			})
+
+			t.Run("declaring an automation leaves every box drawn around it where it was", func(t *testing.T) {
+				featured := e.run(t, withoutTranslations(reactiveModel()), diagram.StyleAuto)
+				stripped := e.run(t, withoutAutomations(withoutTranslations(reactiveModel())), diagram.StyleAuto)
+
+				e.requireWellFormed(t, featured)
+				e.requireWellFormed(t, stripped)
+				featuredBoxes, strippedBoxes := e.boxes(t, featured), e.boxes(t, stripped)
+
+				require.Equal(t, reactiveModelAutomations, labelsOf(gearedBoxes(featuredBoxes)),
+					"the twin compared from has to draw every automation, or the comparison below is two identical pictures agreeing")
+				require.Empty(t, gearedBoxes(strippedBoxes),
+					"and the twin compared against has to draw none")
+
+				require.Equal(t, strippedBoxes, boxesExcept(featuredBoxes, reactiveModelAutomations),
+					"room for an automation must not be made by moving, resizing or repainting the boxes around it")
+			})
+		})
+	}
+}
+
 func sweepingModel(sweep *ast.Automation) *ast.Model {
 	return singleSliceModel("Lending", "Chase Overdue Copy",
 		command("RemindMember"), command("RecallCopy"), event("CopyBorrowed"),
@@ -768,6 +1116,20 @@ func labelsExcept(boxes []diagramBox, name string) []string {
 		labels = append(labels, box.label)
 	}
 	return labels
+}
+
+// boxesExcept returns the boxes the picture draws for everything but the named
+// ones, in the order it drew them.
+func boxesExcept(boxes []diagramBox, names []string) []diagramBox {
+	var kept []diagramBox
+	for _, box := range boxes {
+		if slices.Contains(names, box.label) {
+			continue
+		}
+		kept = append(kept, box)
+	}
+
+	return kept
 }
 
 // TestExporterPalette pins the event-modeling sticky-note convention — orange
@@ -1113,36 +1475,34 @@ func withoutDescriptions(model *ast.Model) *ast.Model {
 		ctx.Description = ""
 		for _, agg := range ctx.Aggregates {
 			agg.Description = ""
-			undescribeSlices(agg.Slices)
 		}
-		undescribeSlices(ctx.Slices)
 	}
+	forEachSlice(model, undescribeSlice)
+
 	return model
 }
 
-func undescribeSlices(slices []*ast.Slice) {
-	for _, s := range slices {
-		s.Description = ""
-		if s.Trigger != nil {
-			s.Trigger.Description = ""
-		}
-		for _, cmd := range s.Commands {
-			cmd.Description = ""
-		}
-		for _, evt := range s.Events {
-			evt.Description = ""
-		}
-		for _, v := range s.Views {
-			v.Description = ""
-		}
-		for _, auto := range s.Automations {
-			auto.Description = ""
-		}
-		for _, tr := range s.Translations {
-			tr.Description = ""
-			if tr.Event != nil {
-				tr.Event.Description = ""
-			}
+func undescribeSlice(s *ast.Slice) {
+	s.Description = ""
+	if s.Trigger != nil {
+		s.Trigger.Description = ""
+	}
+	for _, cmd := range s.Commands {
+		cmd.Description = ""
+	}
+	for _, evt := range s.Events {
+		evt.Description = ""
+	}
+	for _, v := range s.Views {
+		v.Description = ""
+	}
+	for _, auto := range s.Automations {
+		auto.Description = ""
+	}
+	for _, tr := range s.Translations {
+		tr.Description = ""
+		if tr.Event != nil {
+			tr.Event.Description = ""
 		}
 	}
 }
