@@ -4,7 +4,7 @@
 - [x] Task 1: Parse a trigger whose quoted name follows the keyword directly
 - [x] Task 2: Accept the kindless trigger in the tree-sitter grammar
 - [x] Task 3: Emit the kindless form from `emod fmt` and migrate every emod source in the repository
-- [ ] Task 4: Drop the kind from the Mermaid timeframe and the ASCII trigger label
+- [x] Task 4: Drop the kind from the Mermaid timeframe and the ASCII trigger label
 - [ ] Task 5: Drop `kind` and `kind_position` from the JSON, CUE and embedded schema exports
 - [ ] Task 6: Drop `kind` from the diagram node, the importer and the viewer's details panel
 - [ ] Task 7: Reject `trigger <Kind> "<name>"` with a message naming its replacement

@@ -448,3 +448,67 @@ context "Orders" {
 		require.Empty(t, stderrText, "a model whose fields are named after keywords is legal, so nothing is reported")
 	})
 }
+
+func TestExportAllPatterns(t *testing.T) {
+	path := "../../examples/all_patterns.emod"
+
+	t.Run("json export includes the trigger under its slice with actor and reads", func(t *testing.T) {
+		output := captureStdout(t, func() {
+			err := cli.RunExport(path, "json")
+			require.NoError(t, err)
+		})
+
+		var doc map[string]any
+		require.NoError(t, json.Unmarshal([]byte(output), &doc))
+		require.Empty(t, doc["diagnostics"])
+
+		reserveSlice := findSliceByName(t, doc["model"].(map[string]any), "Reserve a Room")
+		trigger := reserveSlice["trigger"].(map[string]any)
+		require.Equal(t, "Reservation Form", trigger["name"])
+		require.Equal(t, "Guest", trigger["actor"])
+		require.Equal(t, "AvailableRoomsView", trigger["reads"])
+		_, hasKind := trigger["kind"]
+		require.False(t, hasKind, "exported trigger must not carry kind")
+		_, hasKindPosition := trigger["kind_position"]
+		require.False(t, hasKindPosition, "exported trigger must not carry kind_position")
+	})
+
+	t.Run("cue export includes the trigger under its slice with actor and reads", func(t *testing.T) {
+		var stderrText string
+		output := captureStdout(t, func() {
+			stderrText = captureStderr(t, func() {
+				err := cli.RunExport(path, "cue")
+				require.NoError(t, err)
+			})
+		})
+
+		require.Empty(t, stderrText, "a clean file should not write to stderr")
+		require.Contains(t, output, `trigger: {`)
+		require.Contains(t, output, `name: "Reservation Form"`)
+		require.Contains(t, output, `actor: "Guest"`)
+		require.Contains(t, output, `reads: "AvailableRoomsView"`)
+		require.NotContains(t, output, "kind: ", "exported CUE trigger must not carry kind")
+	})
+}
+
+func findSliceByName(t *testing.T, model map[string]any, name string) map[string]any {
+	t.Helper()
+
+	contexts := model["contexts"].([]any)
+	for _, c := range contexts {
+		context := c.(map[string]any)
+		aggregates := context["aggregates"].([]any)
+		for _, a := range aggregates {
+			aggregate := a.(map[string]any)
+			slices := aggregate["slices"].([]any)
+			for _, s := range slices {
+				slice := s.(map[string]any)
+				if slice["name"] == name {
+					return slice
+				}
+			}
+		}
+	}
+	t.Fatalf("slice %q not found", name)
+	return nil
+}

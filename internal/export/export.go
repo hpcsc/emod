@@ -131,8 +131,6 @@ type jsonFlow struct {
 
 type jsonTrigger struct {
 	Comments      []*jsonComment `json:"comments,omitempty"`
-	Kind          string         `json:"kind"`
-	KindPosition  *jsonPosition  `json:"kind_position,omitempty"`
 	Name          string         `json:"name"`
 	Description   string         `json:"description,omitempty"`
 	Position      *jsonPosition  `json:"position,omitempty"`
@@ -559,8 +557,6 @@ func convertTrigger(t *ast.Trigger) *jsonTrigger {
 	}
 	return &jsonTrigger{
 		Comments:      convertComments(t.Comments),
-		Kind:          t.Kind,
-		KindPosition:  convertPosition(t.KindPos),
 		Name:          t.Name,
 		Description:   t.Description,
 		Position:      convertPosition(t.NamePos),
@@ -1328,7 +1324,6 @@ func (w *cueWriter) writeSpecOutcome(then ast.ThenClause) {
 
 func (w *cueWriter) writeTrigger(t *ast.Trigger) {
 	w.writeComments(t.Comments)
-	w.line("kind: %q", t.Kind)
 	w.line("name: %q", t.Name)
 	w.lineIfSet("description", t.Description)
 	w.lineIfSet("actor", t.Actor)

@@ -14,6 +14,8 @@ import (
 	"github.com/hpcsc/emod/internal/ast"
 	"github.com/hpcsc/emod/internal/diagnostic"
 	"github.com/hpcsc/emod/internal/export"
+	"github.com/hpcsc/emod/internal/lexer"
+	"github.com/hpcsc/emod/internal/parser"
 	"github.com/hpcsc/emod/internal/test"
 	"github.com/stretchr/testify/require"
 )
@@ -139,7 +141,6 @@ func TestExport(t *testing.T) {
 									{
 										Name: "My Slice",
 										Trigger: &ast.Trigger{
-											Kind:  "UI",
 											Name:  "Form",
 											Actor: "Guest",
 											Reads: "MyView",
@@ -161,7 +162,10 @@ func TestExport(t *testing.T) {
 
 			s := firstSliceOf(t, doc)
 			tr := s["trigger"].(map[string]any)
-			require.Equal(t, "UI", tr["kind"])
+			_, hasKind := tr["kind"]
+			require.False(t, hasKind, "trigger export must not carry a kind")
+			_, hasKindPosition := tr["kind_position"]
+			require.False(t, hasKindPosition, "trigger export must not carry a kind_position")
 			require.Equal(t, "Form", tr["name"])
 			require.Equal(t, "Guest", tr["actor"])
 			require.Equal(t, "MyView", tr["reads"])
@@ -986,7 +990,7 @@ func TestExport(t *testing.T) {
 			require.Equal(t, float64(28), f["event_position"].(map[string]any)["column"])
 		})
 
-		t.Run("includes positions for trigger kind/name/actor/reads and braces", func(t *testing.T) {
+		t.Run("includes positions for trigger name/actor/reads and braces", func(t *testing.T) {
 			model := &ast.Model{
 				Name: "Test",
 				Contexts: []*ast.Context{
@@ -999,8 +1003,6 @@ func TestExport(t *testing.T) {
 									{
 										Name: "S",
 										Trigger: &ast.Trigger{
-											Kind:     "UI",
-											KindPos:  ast.Position{Filename: "test.cue", Line: 3, Column: 3},
 											Name:     "Form",
 											NamePos:  ast.Position{Filename: "test.cue", Line: 3, Column: 7},
 											Actor:    "Guest",
@@ -1027,12 +1029,78 @@ func TestExport(t *testing.T) {
 
 			s := firstSliceOf(t, doc)
 			tr := s["trigger"].(map[string]any)
-			require.Equal(t, float64(3), tr["kind_position"].(map[string]any)["column"])
+			_, hasKindPosition := tr["kind_position"]
+			require.False(t, hasKindPosition, "trigger export must not carry a kind_position")
 			require.Equal(t, float64(7), tr["position"].(map[string]any)["column"])
 			require.Equal(t, float64(13), tr["actor_position"].(map[string]any)["column"])
 			require.Equal(t, float64(20), tr["reads_position"].(map[string]any)["column"])
 			require.Equal(t, float64(28), tr["open_position"].(map[string]any)["column"])
 			require.Equal(t, float64(5), tr["close_position"].(map[string]any)["line"])
+		})
+
+		t.Run("keeps trigger key order beside the sibling automation", func(t *testing.T) {
+			model := &ast.Model{
+				Name: "Test",
+				Contexts: []*ast.Context{
+					{
+						Name: "Ctx",
+						Aggregates: []*ast.Aggregate{
+							{
+								Name: "Agg",
+								Slices: []*ast.Slice{
+									{
+										Name: "S",
+										Trigger: &ast.Trigger{
+											Comments:    []*ast.Comment{{Text: "# trigger comment"}},
+											Name:        "Form",
+											NamePos:     ast.Position{Filename: "test.cue", Line: 3, Column: 7},
+											Description: "Where the decision starts",
+											Actor:       "Guest",
+											ActorPos:    ast.Position{Filename: "test.cue", Line: 4, Column: 5},
+											Reads:       "MyView",
+											ReadsPos:    ast.Position{Filename: "test.cue", Line: 5, Column: 7},
+											OpenPos:     ast.Position{Filename: "test.cue", Line: 3, Column: 28},
+											ClosePos:    ast.Position{Filename: "test.cue", Line: 6, Column: 3},
+										},
+										Automations: []*ast.Automation{
+											{
+												Name:        "Auto",
+												NamePos:     ast.Position{Filename: "test.cue", Line: 8, Column: 5},
+												Description: "The decision nobody has to make by hand",
+												OnEvent:     "Evt",
+												OnEventPos:  ast.Position{Filename: "test.cue", Line: 9, Column: 9},
+												Reads:       "MyView",
+												ReadsPos:    ast.Position{Filename: "test.cue", Line: 10, Column: 11},
+												Command:     "DoIt",
+												CommandPos:  ast.Position{Filename: "test.cue", Line: 11, Column: 13},
+												OpenPos:     ast.Position{Filename: "test.cue", Line: 8, Column: 28},
+												ClosePos:    ast.Position{Filename: "test.cue", Line: 12, Column: 3},
+												Comments:    []*ast.Comment{{Text: "# automation comment"}},
+											},
+										},
+									},
+								},
+							},
+						},
+					},
+				},
+			}
+
+			raw, err := export.ExportJSON(model)
+			require.NoError(t, err)
+
+			keyOrder := emittedKeyOrder(t, raw)
+			require.Equal(t, []string{
+				"comments", "name", "description", "position",
+				"actor", "actor_position", "reads", "reads_position",
+				"open_position", "close_position",
+			}, keyOrder["Form"], "trigger key order must stay as today")
+			require.Equal(t, []string{
+				"name", "description", "position",
+				"on_event_position", "reads_position", "command_position",
+				"open_position", "close_position", "comments",
+				"on_event", "reads", "command",
+			}, keyOrder["Auto"], "automation key order must stay as today")
 		})
 
 		t.Run("includes positions for view name and braces", func(t *testing.T) {
@@ -3363,7 +3431,6 @@ func TestExport(t *testing.T) {
 				slice := firstSliceOf(t, exportedCUEDoc(t, cueBin, model))
 
 				require.Equal(t, map[string]any{
-					"kind":  "UI",
 					"name":  "Form",
 					"actor": "Guest",
 					"reads": "MyView",
@@ -3781,6 +3848,66 @@ func TestExport(t *testing.T) {
 			})
 		})
 	})
+
+	t.Run("examples/all_patterns.emod", func(t *testing.T) {
+		t.Run("exports to JSON and CUE with the trigger under its slice", func(t *testing.T) {
+			cueBin := lookupCue(t)
+
+			source, err := os.ReadFile("../../examples/all_patterns.emod")
+			require.NoError(t, err)
+
+			tokens, lexDiags := lexer.Scan(string(source), "examples/all_patterns.emod")
+			require.Empty(t, lexDiags)
+
+			model, parseDiags := parser.New(tokens, "examples/all_patterns.emod").Parse()
+			require.Empty(t, parseDiags)
+
+			jsonRaw, err := export.ExportJSON(model)
+			require.NoError(t, err)
+
+			var jsonDoc map[string]any
+			require.NoError(t, json.Unmarshal(jsonRaw, &jsonDoc))
+
+			reserveSlice := sliceNamed(t, jsonDoc, "Reserve a Room")
+			require.NotNil(t, reserveSlice)
+			trigger := reserveSlice["trigger"].(map[string]any)
+			require.Equal(t, "Reservation Form", trigger["name"])
+			require.Equal(t, "Guest", trigger["actor"])
+			require.Equal(t, "AvailableRoomsView", trigger["reads"])
+			_, hasKind := trigger["kind"]
+			require.False(t, hasKind, "exported trigger must not carry kind")
+			_, hasKindPosition := trigger["kind_position"]
+			require.False(t, hasKindPosition, "exported trigger must not carry kind_position")
+
+			cueRaw, err := export.ExportCUE(model)
+			require.NoError(t, err)
+
+			cueDoc := exportedCUEDoc(t, cueBin, model)
+			reserveSliceCUE := sliceNamed(t, cueDoc, "Reserve a Room")
+			require.NotNil(t, reserveSliceCUE)
+			triggerCUE := reserveSliceCUE["trigger"].(map[string]any)
+			require.Equal(t, "Reservation Form", triggerCUE["name"])
+			require.Equal(t, "Guest", triggerCUE["actor"])
+			require.Equal(t, "AvailableRoomsView", triggerCUE["reads"])
+			require.NotContains(t, string(cueRaw), "kind: ", "exported CUE trigger must not carry kind")
+		})
+	})
+}
+
+// sliceNamed returns the slice with the given name from a decoded model document.
+func sliceNamed(t *testing.T, doc map[string]any, name string) map[string]any {
+	t.Helper()
+
+	for _, context := range objectsUnder(doc, "contexts") {
+		for _, aggregate := range objectsUnder(context, "aggregates") {
+			for _, slice := range objectsUnder(aggregate, "slices") {
+				if slice["name"] == name {
+					return slice
+				}
+			}
+		}
+	}
+	return nil
 }
 
 // findNodeByType finds a diagram node by its type field in a nodes array.
@@ -3886,7 +4013,7 @@ func buildFullModel() *ast.Model {
 								Name:        "S",
 								Description: "One decision and everything it needs",
 								Trigger: &ast.Trigger{
-									Kind: "UI", Name: "Form", Actor: "User", Reads: "V",
+									Name: "Form", Actor: "User", Reads: "V",
 									Description: "Where the decision starts",
 								},
 								Commands: []*ast.Command{

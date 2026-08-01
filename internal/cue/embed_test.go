@@ -120,6 +120,20 @@ func TestSchema(t *testing.T) {
 		require.Contains(t, string(output), "trigger_event")
 	})
 
+	t.Run("rejects a trigger that still states the retired kind key", func(t *testing.T) {
+		cueBin := requireCue(t)
+
+		output, err := vetAgainstModel(t, cueBin, strings.Replace(fullModelJSON,
+			`"trigger": {
+          "name": "Form"`,
+			`"trigger": {
+          "kind": "UI",
+          "name": "Form"`, 1))
+
+		require.Error(t, err, "schema accepted a trigger keyed kind")
+		require.Contains(t, string(output), "kind")
+	})
+
 	t.Run("rejects an automation whose schedule is stated under a key the schema does not declare", func(t *testing.T) {
 		cueBin := requireCue(t)
 
@@ -169,7 +183,6 @@ const fullModelJSON = `{
         "name": "Make Reservation",
         "description": "A guest books a room",
         "trigger": {
-          "kind": "UI",
           "name": "Form",
           "description": "The booking form on the public site",
           "actor": "Guest",

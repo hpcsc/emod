@@ -14,7 +14,6 @@
 
 #Trigger: {
 	comments?:    [...#Comment]
-	kind:         string
 	name:         string
 	description?: string
 	actor?:       string
