@@ -141,7 +141,7 @@ actor "Analyst"
 context "Discovery" {
   aggregate "Saved Search" {
     slice "Define Saved Search" {
-      trigger UI "Search Builder" {
+      trigger "Search Builder" {
         actor Analyst
         reads SavedSearchesView
       }
@@ -250,7 +250,7 @@ context "Lending" {
   aggregate "Loan" {
     invariant OneCopyPerLoan "A loan covers exactly one copy of one title"
     slice "Borrow Copy" {
-      trigger UI "Lending Desk" {
+      trigger "Lending Desk" {
         actor Member
         reads AvailableCopiesView
       }

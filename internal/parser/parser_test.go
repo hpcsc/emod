@@ -1491,7 +1491,7 @@ context "Reservations" {
 	})
 
 	t.Run("triggers", func(t *testing.T) {
-		t.Run("trigger with kind, name, actor, and reads", func(t *testing.T) {
+		t.Run("trigger with kinded spelling parses name, actor, and reads", func(t *testing.T) {
 			input := `model "Test"
 context "Ctx" {
   aggregate "Agg" {
@@ -1511,13 +1511,12 @@ context "Ctx" {
 			require.Len(t, errs, 0)
 			slice := model.Contexts[0].Aggregates[0].Slices[0]
 			require.NotNil(t, slice.Trigger)
-			require.Equal(t, "UI", slice.Trigger.Kind)
 			require.Equal(t, "Reservation Form", slice.Trigger.Name)
 			require.Equal(t, "Guest", slice.Trigger.Actor)
 			require.Equal(t, "AvailableRoomsView", slice.Trigger.Reads)
 		})
 
-		t.Run("trigger with only kind and name (empty body)", func(t *testing.T) {
+		t.Run("trigger with kinded spelling and empty body parses name", func(t *testing.T) {
 			input := `model "Test"
 context "Ctx" {
   aggregate "Agg" {
@@ -1535,7 +1534,6 @@ context "Ctx" {
 			require.Len(t, errs, 0)
 			slice := model.Contexts[0].Aggregates[0].Slices[0]
 			require.NotNil(t, slice.Trigger)
-			require.Equal(t, "UI", slice.Trigger.Kind)
 			require.Equal(t, "Reservation Form", slice.Trigger.Name)
 			require.Equal(t, "", slice.Trigger.Actor)
 			require.Equal(t, "", slice.Trigger.Reads)
@@ -1646,7 +1644,6 @@ context "Ctx" {
 			require.Len(t, errs, 0)
 			slice := model.Contexts[0].Aggregates[0].Slices[0]
 			require.NotNil(t, slice.Trigger)
-			require.Equal(t, "", slice.Trigger.Kind)
 			require.Equal(t, "Reservation Form", slice.Trigger.Name)
 			require.Equal(t, ast.Position{Filename: "test.emod", Line: 5, Column: 15}, slice.Trigger.NamePos)
 			require.Equal(t, "Guest", slice.Trigger.Actor)
@@ -1674,7 +1671,6 @@ context "Ctx" {
 			require.Len(t, errs, 0)
 			slice := model.Contexts[0].Aggregates[0].Slices[0]
 			require.NotNil(t, slice.Trigger)
-			require.Equal(t, "", slice.Trigger.Kind)
 			require.Equal(t, "Reservation Form", slice.Trigger.Name)
 			require.Equal(t, "The booking form on the public site", slice.Trigger.Description)
 			require.Equal(t, "Guest", slice.Trigger.Actor)
@@ -1699,7 +1695,6 @@ context "Ctx" {
 			require.Len(t, errs, 0)
 			slice := model.Contexts[0].Aggregates[0].Slices[0]
 			require.NotNil(t, slice.Trigger)
-			require.Equal(t, "", slice.Trigger.Kind)
 			require.Equal(t, "Reservation Form", slice.Trigger.Name)
 			require.Equal(t, "", slice.Trigger.Actor)
 			require.Equal(t, "", slice.Trigger.Reads)
@@ -2340,7 +2335,6 @@ context "Ctx" {
 			require.Empty(t, diags)
 			slice := model.Contexts[0].Aggregates[0].Slices[0]
 			require.NotNil(t, slice.Trigger)
-			require.Equal(t, "UI", slice.Trigger.Kind)
 			require.Equal(t, "Reservation Form", slice.Trigger.Name)
 			require.Equal(t, "Guest", slice.Trigger.Actor)
 			require.Equal(t, "AvailableRoomsView", slice.Trigger.Reads)

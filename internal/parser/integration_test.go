@@ -147,7 +147,6 @@ func TestIntegration(t *testing.T) {
 
 		require.NotNil(t, commandSlice.Trigger)
 		test.RequireEqual(t, &ast.Trigger{
-			Kind:  "UI",
 			Name:  "Reservation Form",
 			Actor: "Guest",
 			Reads: "AvailableRoomsView",

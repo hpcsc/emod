@@ -207,11 +207,7 @@ func (w *writer) writeSlice(slice *ast.Slice, level int) {
 
 func (w *writer) writeTrigger(trigger *ast.Trigger, level int) {
 	w.writeComments(trigger.Comments, level)
-	if trigger.Kind == "" {
-		w.line(level, "trigger %s {", quoted(trigger.Name))
-	} else {
-		w.line(level, "trigger %s %s {", trigger.Kind, quoted(trigger.Name))
-	}
+	w.line(level, "trigger %s {", quoted(trigger.Name))
 	w.writeDescription(trigger.Description, level+1)
 	w.lineIfSet(level+1, "actor %s", trigger.Actor)
 	w.lineIfSet(level+1, "reads %s", trigger.Reads)

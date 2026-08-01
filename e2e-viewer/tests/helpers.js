@@ -10,7 +10,7 @@ actor "Customer"
 context "Payments" {
   aggregate "Payment" {
     slice "Take Payment" {
-      trigger UI "Checkout Form" {
+      trigger "Checkout Form" {
         actor Customer
       }
 

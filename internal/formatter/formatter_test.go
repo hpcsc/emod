@@ -187,7 +187,7 @@ func TestFormat(t *testing.T) {
 				`context "Ctx" {`,
 				`  aggregate "Agg" {`,
 				`    slice "My Slice" {`,
-				`      trigger UI "Form" {`,
+				`      trigger "Form" {`,
 				`        actor Guest`,
 				`        reads MyView`,
 				`      }`,
@@ -297,7 +297,7 @@ func TestFormat(t *testing.T) {
 				`    }`,
 				``,
 				`    slice "Kinded" {`,
-				`      trigger UI "Kinded Form" {`,
+				`      trigger "Kinded Form" {`,
 				`        actor Guest`,
 				`        reads KindedView`,
 				`      }`,
@@ -1162,6 +1162,40 @@ func TestFormat(t *testing.T) {
 			require.True(t, reparsed.VersionDeclared, "formatted output should pin the version")
 		})
 
+		t.Run("round-trip: a trigger name survives text that quoting could mangle", func(t *testing.T) {
+			for _, testCase := range []struct {
+				hazard string
+				name   string
+			}{
+				{"backslash", `C:\hotel\rates`},
+				{"tab", "Two columns:\troom then rate"},
+				{"percent", "Form with 10% deposit"},
+				{"non-ascii", "Form with ≤ deposit"},
+			} {
+				t.Run(testCase.hazard, func(t *testing.T) {
+					source := strings.Join([]string{
+						`model "Test"`,
+						``,
+						`context "Ctx" {`,
+						`  aggregate "Agg" {`,
+						`    slice "Slice" {`,
+						`      trigger "` + testCase.name + `" {`,
+						`        actor Guest`,
+						`      }`,
+						`    }`,
+						`  }`,
+						`}`,
+						``,
+					}, "\n")
+
+					original := parseModel(t, source, "test.emod")
+					reparsed := requireStableFormat(t, original)
+
+					require.Equal(t, testCase.name, reparsed.Contexts[0].Aggregates[0].Slices[0].Trigger.Name)
+				})
+			}
+		})
+
 		t.Run("idempotency: format(format(described input)) equals format(described input)", func(t *testing.T) {
 			requireStableFormat(t, parseModel(t, test.DescribedHotelReservation, "described.emod"))
 		})
@@ -1440,7 +1474,7 @@ func TestFormat(t *testing.T) {
 			require.Equal(t, `description "Where things get done"`, lineAfter(t, result, `context "Ctx" mode mixed {`))
 			require.Equal(t, `description "One thing and its history"`, lineAfter(t, result, `aggregate "Agg" {`))
 			require.Equal(t, `description "A user does the thing"`, lineAfter(t, result, `slice "Full Slice" {`))
-			require.Equal(t, `description "The form the user fills in"`, lineAfter(t, result, `trigger UI "Form" {`))
+			require.Equal(t, `description "The form the user fills in"`, lineAfter(t, result, `trigger "Form" {`))
 			require.Equal(t, `description "Ask for the thing to be done"`, lineAfter(t, result, `command DoThing {`))
 			require.Equal(t, `description "The thing was done"`, lineAfter(t, result, `event ThingDone {`))
 			require.Equal(t, `description "Every thing and whether it is done"`, lineAfter(t, result, `view ThingView {`))
@@ -3883,7 +3917,7 @@ var ignoreFormatterNormalizations = cmp.Options{
 	cmpopts.IgnoreFields(ast.Command{}, "Comments"),
 	cmpopts.IgnoreFields(ast.Event{}, "Comments"),
 	cmpopts.IgnoreFields(ast.Flow{}, "Comments"),
-	cmpopts.IgnoreFields(ast.Trigger{}, "Comments"),
+	cmpopts.IgnoreFields(ast.Trigger{}, "Comments", "Kind", "KindPos"),
 	cmpopts.IgnoreFields(ast.View{}, "Comments"),
 	cmpopts.IgnoreFields(ast.Automation{}, "Comments"),
 	cmpopts.IgnoreFields(ast.Translation{}, "Comments"),

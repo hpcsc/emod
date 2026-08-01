@@ -34,7 +34,7 @@ func TestGetDefinition(t *testing.T) {
                 reads OrderView
                 command SubmitOrder
             }
-            trigger manual "MyTrigger" {
+            trigger "MyTrigger" {
                 actor user
                 reads OrderView
             }
@@ -145,7 +145,7 @@ func TestGetDefinition(t *testing.T) {
 
 	t.Run("view reference in trigger reads", func(t *testing.T) {
 		cLine, cChar := posIn(t, testDoc,
-			"trigger manual \"MyTrigger\" {\n                actor user\n                reads OrderView",
+			"trigger \"MyTrigger\" {\n                actor user\n                reads OrderView",
 			"OrderView")
 		dLine, dChar := posIn(t, testDoc, "view OrderView", "OrderView")
 		assertDef(t, testDoc, cLine, cChar, dLine, dChar, "OrderView")

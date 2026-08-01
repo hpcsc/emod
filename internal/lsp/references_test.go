@@ -31,7 +31,7 @@ func TestGetReferences(t *testing.T) {
                 reads OrderView
                 command SubmitOrder
             }
-            trigger manual "MyTrigger" {
+            trigger "MyTrigger" {
                 actor user
                 reads OrderView
             }
@@ -193,7 +193,7 @@ func TestGetReferences(t *testing.T) {
 			requireLocation(t, locs, trLine, trChar, "OrderView")
 
 			triggerReadsLine, triggerReadsChar := posIn(t, testDoc,
-				"trigger manual \"MyTrigger\" {\n                actor user\n                reads OrderView", "OrderView")
+				"trigger \"MyTrigger\" {\n                actor user\n                reads OrderView", "OrderView")
 			requireLocation(t, locs, triggerReadsLine, triggerReadsChar, "OrderView")
 		})
 
@@ -205,7 +205,7 @@ func TestGetReferences(t *testing.T) {
 
 		t.Run("cursor on view in trigger reads returns all view references", func(t *testing.T) {
 			cLine, cChar := posIn(t, testDoc,
-				"trigger manual \"MyTrigger\" {\n                actor user\n                reads OrderView", "OrderView")
+				"trigger \"MyTrigger\" {\n                actor user\n                reads OrderView", "OrderView")
 			locs := lsp.GetReferences(testDoc, cLine, cChar, uri)
 			require.Len(t, locs, 3)
 		})

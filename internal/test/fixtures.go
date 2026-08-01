@@ -18,7 +18,7 @@ actor "Guest"
 context "Reservations" {
   aggregate "Reservation" {
     slice "Make Reservation" {
-      trigger UI "Reservation Form" {
+      trigger "Reservation Form" {
         actor Guest
         reads AvailableRoomsView
       }
@@ -112,7 +112,7 @@ context "Reservations" {
     description "One guest holding one room over one date range"
     slice "Make Reservation" {
       description "A guest books a room from the public site"
-      trigger UI "Reservation Form" {
+      trigger "Reservation Form" {
         description "The booking form on the public site"
         actor Guest
         reads AvailableRoomsView
@@ -213,7 +213,7 @@ actor "Analyst"
 context "Discovery" {
   aggregate "Saved Search" {
     slice "Define Saved Search" {
-      trigger UI "Search Builder" {
+      trigger "Search Builder" {
         actor Analyst
         reads SavedSearchesView
       }
@@ -317,7 +317,7 @@ context "Lending" {
   aggregate "Loan" {
     invariant OneCopyPerLoan "A loan covers exactly one copy of one title"
     slice "Borrow Copy" {
-      trigger UI "Lending Desk" {
+      trigger "Lending Desk" {
         actor Member
         reads AvailableCopiesView
       }
@@ -426,7 +426,7 @@ context "Lending" {
   aggregate "Loan" {
     invariant OneCopyPerLoan "A loan covers exactly one copy of one title"
     slice "Borrow Copy" {
-      trigger UI "Lending Desk" {
+      trigger "Lending Desk" {
         actor Member
         reads AvailableCopiesView
       }
@@ -583,7 +583,7 @@ actor "Member"
 context "Lending" {
   aggregate "Loan" {
     slice "Borrow Copy" {
-      trigger UI "Lending Desk" {
+      trigger "Lending Desk" {
         actor Member
         reads AvailableCopiesView
       }
@@ -751,7 +751,7 @@ actor "Member"
 context "Lending" {
   aggregate "Loan" {
     slice "Borrow Copy" {
-      trigger UI "Lending Desk" {
+      trigger "Lending Desk" {
         actor Member
         reads AvailableCopiesView
       }
