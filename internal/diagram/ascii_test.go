@@ -55,7 +55,6 @@ func TestExportASCII(t *testing.T) {
 					Slices: []*ast.Slice{{
 						Name: "S",
 						Trigger: &ast.Trigger{
-							Kind:  "UI",
 							Name:  "SubmitForm",
 							Actor: "User",
 						},
@@ -74,7 +73,7 @@ func TestExportASCII(t *testing.T) {
 
 	t.Run("renders trigger with name only when actor is empty", func(t *testing.T) {
 		model := singleSliceModel("Test", "S",
-			&ast.Trigger{Kind: "Schedule", Name: "NightlyBatch"})
+			&ast.Trigger{Name: "NightlyBatch"})
 
 		raw, err := diagram.ExportASCII(model, diagram.StyleAuto)
 		require.NoError(t, err)
@@ -97,7 +96,6 @@ func TestExportASCII(t *testing.T) {
 						{
 							Name: "S1",
 							Trigger: &ast.Trigger{
-								Kind:  "UI",
 								Name:  "SubmitForm",
 								Actor: "User",
 							},
@@ -186,7 +184,7 @@ func TestExportASCII(t *testing.T) {
 					Name: "Agg",
 					Slices: []*ast.Slice{{
 						Name:    "S",
-						Trigger: &ast.Trigger{Kind: "UI", Name: "Click"},
+						Trigger: &ast.Trigger{Name: "Click"},
 						Commands: []*ast.Command{
 							{Name: "DoAction"},
 						},

@@ -182,8 +182,8 @@ Invoices still owed
 						Aggregates: []*ast.Aggregate{{
 							Name: "Booking",
 							Slices: []*ast.Slice{
-								{Name: "Hold a room", Trigger: &ast.Trigger{Kind: "UI", Name: "Booking Form", Actor: "Guest"}},
-								{Name: "Cancel a hold", Trigger: &ast.Trigger{Kind: "UI", Name: "Cancellation Form", Actor: "Guest"}},
+								{Name: "Hold a room", Trigger: &ast.Trigger{Name: "Booking Form", Actor: "Guest"}},
+								{Name: "Cancel a hold", Trigger: &ast.Trigger{Name: "Cancellation Form", Actor: "Guest"}},
 							},
 						}},
 					},
@@ -191,7 +191,7 @@ Invoices still owed
 						Name: "Billing",
 						Aggregates: []*ast.Aggregate{{
 							Name:   "Invoice",
-							Slices: []*ast.Slice{{Name: "Pay an invoice", Trigger: &ast.Trigger{Kind: "UI", Name: "Payment Form", Actor: "Guest"}}},
+							Slices: []*ast.Slice{{Name: "Pay an invoice", Trigger: &ast.Trigger{Name: "Payment Form", Actor: "Guest"}}},
 						}},
 					},
 				},
@@ -232,7 +232,7 @@ A person booking a room, not necessarily the one staying in it
 					Name: "Reservations",
 					Aggregates: []*ast.Aggregate{{
 						Name:   "Booking",
-						Slices: []*ast.Slice{{Name: "Hold a room", Trigger: &ast.Trigger{Kind: "UI", Name: "Booking Form", Actor: "Guest"}}},
+						Slices: []*ast.Slice{{Name: "Hold a room", Trigger: &ast.Trigger{Name: "Booking Form", Actor: "Guest"}}},
 					}},
 				}},
 			}
@@ -264,7 +264,7 @@ A person booking a room
 					Name: "Reservations",
 					Aggregates: []*ast.Aggregate{{
 						Name:   "Booking",
-						Slices: []*ast.Slice{{Name: "Hold a room", Trigger: &ast.Trigger{Kind: "UI", Name: "Booking Form", Actor: "Concierge"}}},
+						Slices: []*ast.Slice{{Name: "Hold a room", Trigger: &ast.Trigger{Name: "Booking Form", Actor: "Concierge"}}},
 					}},
 				}},
 			}
@@ -290,7 +290,7 @@ A person booking a room
 						Name: "Booking",
 						Slices: []*ast.Slice{{
 							Name:    "Browse availability",
-							Trigger: &ast.Trigger{Kind: "UI", Name: "Availability Screen", Reads: "AvailableRoomsView"},
+							Trigger: &ast.Trigger{Name: "Availability Screen", Reads: "AvailableRoomsView"},
 							Views:   []*ast.View{{Name: "AvailableRoomsView", Description: "Rooms free over a date range"}},
 						}},
 					}},
@@ -475,7 +475,7 @@ A member holds at most one reservation on a title
 					Name: "Reservations",
 					Aggregates: []*ast.Aggregate{{
 						Name:   "Booking",
-						Slices: []*ast.Slice{{Name: "Hold a room", Trigger: &ast.Trigger{Kind: "UI", Name: "Booking Form", Actor: "Guest"}}},
+						Slices: []*ast.Slice{{Name: "Hold a room", Trigger: &ast.Trigger{Name: "Booking Form", Actor: "Guest"}}},
 					}},
 				}},
 			}

@@ -603,7 +603,7 @@ func TestExport(t *testing.T) {
 									{
 										Name: "S",
 										Trigger: &ast.Trigger{
-											Kind: "UI", Name: "Form", Actor: "User", Reads: "V",
+											Name: "Form", Actor: "User", Reads: "V",
 										},
 										Commands: []*ast.Command{
 											{Name: "Cmd", Fields: []*ast.Field{{Name: "id", Type: "string"}}},
@@ -1738,7 +1738,7 @@ func TestExport(t *testing.T) {
 									{
 										Name: "S",
 										Trigger: &ast.Trigger{
-											Kind: "UI", Name: "Form", Actor: "User", Reads: "V",
+											Name: "Form", Actor: "User", Reads: "V",
 										},
 										Commands: []*ast.Command{
 											{Name: "Cmd"},
@@ -2077,7 +2077,7 @@ func TestExport(t *testing.T) {
 									{
 										Name: "S",
 										Trigger: &ast.Trigger{
-											Kind: "UI", Name: "Form", Actor: "User", Reads: "V",
+											Name: "Form", Actor: "User", Reads: "V",
 										},
 										Views: []*ast.View{
 											{Name: "RoomsView"},
@@ -2185,7 +2185,7 @@ func TestExport(t *testing.T) {
 									{
 										Name: "S",
 										Trigger: &ast.Trigger{
-											Kind: "UI", Name: "FormSubmit",
+											Name: "FormSubmit",
 										},
 										Commands: []*ast.Command{
 											{Name: "MakeReservation"},
@@ -2626,7 +2626,7 @@ func TestExport(t *testing.T) {
 									{
 										Name: "S",
 										Trigger: &ast.Trigger{
-											Kind: "UI", Name: "Form", Actor: "User", Reads: "V",
+											Name: "Form", Actor: "User", Reads: "V",
 										},
 										Commands: []*ast.Command{
 											{Name: "Cmd"},
@@ -3418,7 +3418,6 @@ func TestExport(t *testing.T) {
 							Slices: []*ast.Slice{{
 								Name: "My Slice",
 								Trigger: &ast.Trigger{
-									Kind:  "UI",
 									Name:  "Form",
 									Actor: "Guest",
 									Reads: "MyView",

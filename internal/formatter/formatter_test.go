@@ -165,7 +165,6 @@ func TestFormat(t *testing.T) {
 									{
 										Name: "My Slice",
 										Trigger: &ast.Trigger{
-											Kind:  "UI",
 											Name:  "Form",
 											Actor: "Guest",
 											Reads: "MyView",
@@ -247,7 +246,7 @@ func TestFormat(t *testing.T) {
 			require.Equal(t, expected, result)
 		})
 
-		t.Run("formats both kindless and kinded triggers with one space between keyword and name", func(t *testing.T) {
+		t.Run("formats two triggers with one space between keyword and name", func(t *testing.T) {
 			model := &ast.Model{
 				Name: "Test",
 				Contexts: []*ast.Context{
@@ -268,7 +267,6 @@ func TestFormat(t *testing.T) {
 									{
 										Name: "Kinded",
 										Trigger: &ast.Trigger{
-											Kind:  "UI",
 											Name:  "Kinded Form",
 											Actor: "Guest",
 											Reads: "KindedView",
@@ -3916,7 +3914,7 @@ var ignoreFormatterNormalizations = cmp.Options{
 	cmpopts.IgnoreFields(ast.Command{}, "Comments"),
 	cmpopts.IgnoreFields(ast.Event{}, "Comments"),
 	cmpopts.IgnoreFields(ast.Flow{}, "Comments"),
-	cmpopts.IgnoreFields(ast.Trigger{}, "Comments", "Kind", "KindPos"),
+	cmpopts.IgnoreFields(ast.Trigger{}, "Comments"),
 	cmpopts.IgnoreFields(ast.View{}, "Comments"),
 	cmpopts.IgnoreFields(ast.Automation{}, "Comments"),
 	cmpopts.IgnoreFields(ast.Translation{}, "Comments"),

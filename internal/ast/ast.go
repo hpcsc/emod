@@ -172,8 +172,6 @@ type Flow struct {
 
 type Trigger struct {
 	Comments       []*Comment
-	Kind           string
-	KindPos        Position
 	Name           string
 	NamePos        Position
 	Description    string

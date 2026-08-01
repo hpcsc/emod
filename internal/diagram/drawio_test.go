@@ -52,7 +52,6 @@ func TestExportDrawio(t *testing.T) {
 						Slices: []*ast.Slice{{
 							Name: "S",
 							Trigger: &ast.Trigger{
-								Kind:  "UI",
 								Name:  "SubmitForm",
 								Actor: "User",
 							},
@@ -91,7 +90,7 @@ func TestExportDrawio(t *testing.T) {
 						Name: "Agg",
 						Slices: []*ast.Slice{{
 							Name:     "S",
-							Trigger:  &ast.Trigger{Kind: "UI", Name: "Click"},
+							Trigger:  &ast.Trigger{Name: "Click"},
 							Commands: []*ast.Command{{Name: "DoAction"}},
 						}},
 					}},
@@ -418,7 +417,7 @@ func TestExportDrawio(t *testing.T) {
 					Name: "Ctx",
 					Slices: []*ast.Slice{{
 						Name:     "S1",
-						Trigger:  &ast.Trigger{Kind: "UI", Name: "Submit", Actor: "User"},
+						Trigger:  &ast.Trigger{Name: "Submit", Actor: "User"},
 						Commands: []*ast.Command{{Name: "ProcessOrder"}},
 						Events: []*ast.Event{
 							{Name: "OrderPlaced", Tags: []ast.TagEntry{{Key: "priority"}}},

@@ -39,7 +39,7 @@ func TestExportSVG(t *testing.T) {
 	})
 
 	t.Run("renders a trigger with its actor", func(t *testing.T) {
-		model := singleSliceModel("Test", "S", &ast.Trigger{Kind: "UI", Name: "SubmitForm", Actor: "User"})
+		model := singleSliceModel("Test", "S", &ast.Trigger{Name: "SubmitForm", Actor: "User"})
 
 		raw, err := diagram.ExportSVG(model, diagram.StyleAuto)
 		require.NoError(t, err)
@@ -71,7 +71,7 @@ func TestExportSVG(t *testing.T) {
 					Name: "Agg",
 					Slices: []*ast.Slice{{
 						Name:     "S",
-						Trigger:  &ast.Trigger{Kind: "UI", Name: "Click"},
+						Trigger:  &ast.Trigger{Name: "Click"},
 						Commands: []*ast.Command{{Name: "DoAction"}},
 					}},
 				}},

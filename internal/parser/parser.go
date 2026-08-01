@@ -569,8 +569,6 @@ func (p *Instance) parseTrigger() *ast.Trigger {
 
 	if p.check(lexer.Identifier) {
 		kindTok := p.advance()
-		trigger.Kind = kindTok.Value
-		trigger.KindPos = p.position(kindTok)
 		p.errorAt(kindTok, retiredTriggerKindMessage(kindTok.Value))
 	}
 

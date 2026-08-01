@@ -520,7 +520,7 @@ func TestExporterPalette(t *testing.T) {
 // for a shape by its label goes through whatever a format does with prose.
 func paletteModel() *ast.Model {
 	model := singleSliceModel("Palette", "S",
-		&ast.Trigger{Kind: "UI", Name: "Form", Description: "Where the order is placed"},
+		&ast.Trigger{Name: "Form", Description: "Where the order is placed"},
 		&ast.Command{Name: "Cmd", Description: "Asks for the order to be placed"},
 		&ast.Event{Name: "Evt", Description: "The order was placed"},
 		&ast.View{Name: "Rmo", Description: "Every order placed so far"},
@@ -711,7 +711,6 @@ func describedModel() *ast.Model {
 					Name:        "Hold a room",
 					Description: "A guest books a room from the public site",
 					Trigger: &ast.Trigger{
-						Kind:        "UI",
 						Name:        "BookingForm",
 						Actor:       "Guest",
 						Description: "The booking form on the public site",
@@ -898,7 +897,6 @@ func fullModel() *ast.Model {
 					{
 						Name: "Create Order",
 						Trigger: &ast.Trigger{
-							Kind:  "UI",
 							Name:  "PlaceOrderForm",
 							Actor: "Customer",
 						},
@@ -936,7 +934,6 @@ func fullModel() *ast.Model {
 					{
 						Name: "Ship Order",
 						Trigger: &ast.Trigger{
-							Kind: "Schedule",
 							Name: "ShipTimer",
 						},
 						Commands: []*ast.Command{

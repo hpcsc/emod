@@ -61,11 +61,11 @@ func TestExportMermaid(t *testing.T) {
 						Slices: []*ast.Slice{
 							{
 								Name:    "UI",
-								Trigger: &ast.Trigger{Kind: "UI", Name: "SubmitForm"},
+								Trigger: &ast.Trigger{Name: "SubmitForm"},
 							},
 							{
 								Name:    "Scheduled",
-								Trigger: &ast.Trigger{Kind: "Schedule", Name: "NightlyBatch"},
+								Trigger: &ast.Trigger{Name: "NightlyBatch"},
 								Automations: []*ast.Automation{{
 									Name:    "AutoNotifier",
 									OnEvent: "OrderPlaced",
@@ -74,7 +74,7 @@ func TestExportMermaid(t *testing.T) {
 							},
 							{
 								Name:    "Processed",
-								Trigger: &ast.Trigger{Kind: "Processor", Name: "FileWatcher"},
+								Trigger: &ast.Trigger{Name: "FileWatcher"},
 							},
 						},
 					}},
@@ -406,7 +406,7 @@ func TestExportMermaid(t *testing.T) {
 					Name: "Ctx",
 					Slices: []*ast.Slice{{
 						Name:     "S1",
-						Trigger:  &ast.Trigger{Kind: "UI", Name: "Submit", Actor: "User"},
+						Trigger:  &ast.Trigger{Name: "Submit", Actor: "User"},
 						Commands: []*ast.Command{{Name: "ProcessOrder"}},
 						Events: []*ast.Event{
 							{Name: "OrderPlaced", Tags: []ast.TagEntry{{Key: "priority"}}},
