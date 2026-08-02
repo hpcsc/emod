@@ -297,8 +297,8 @@ the expression is parsed and held, and Task 2 is what stops `emod fmt` from drop
 
 **Testable:** Yes — through `lexer.Scan`, `parser.Parse` and `oracle.Check`, all exported.
 
-**Verification:** `mise exec -- go test -tags unit ./internal/lexer/... ./internal/parser/...
-./internal/oracle/...`; `mise exec -- go build ./...`.
+**Verification:** `go test -tags unit ./internal/lexer/... ./internal/parser/...
+./internal/oracle/...`; `go build ./...`.
 
 **Depends on:** None
 
@@ -353,7 +353,7 @@ and repeated formatting is stable. An automation stating `on` keeps the output i
 
 **Testable:** Yes — through `formatter.Format` and `cli.RunFmt`.
 
-**Verification:** `mise exec -- go test -tags unit ./internal/formatter/... ./internal/cli/...`.
+**Verification:** `go test -tags unit ./internal/formatter/... ./internal/cli/...`.
 
 **Depends on:** 1
 
@@ -465,7 +465,7 @@ expression are not range-checked, because the model states a cadence that nothin
 
 **Testable:** Yes — through `validator.Validate` and `cli.RunValidate`.
 
-**Verification:** `mise exec -- go test -tags unit ./internal/validator/... ./internal/cli/...`.
+**Verification:** `go test -tags unit ./internal/validator/... ./internal/cli/...`.
 
 **Depends on:** 1
 
@@ -526,7 +526,7 @@ format round-trip with every schedule intact.
 
 **Testable:** Yes — through `oracle.Check`, `formatter.Format` and the exported getters.
 
-**Verification:** `mise exec -- go test -tags unit ./internal/test/... ./internal/oracle/...
+**Verification:** `go test -tags unit ./internal/test/... ./internal/oracle/...
 ./internal/formatter/...`.
 
 **Depends on:** 2, 4
@@ -580,7 +580,7 @@ automation that states an activation event instead exports exactly what it expor
 
 **Testable:** Yes — through `export.ExportJSON`, `export.ExportCUE` and `cue vet`.
 
-**Verification:** `mise exec -- go test -tags unit ./internal/export/... ./internal/cue/...`.
+**Verification:** `go test -tags unit ./internal/export/... ./internal/cue/...`.
 
 **Depends on:** 5
 
@@ -627,7 +627,7 @@ source node.
 
 **Testable:** Yes — through `export.ExportDiagramJSON` and `importer.ImportDiagram`.
 
-**Verification:** `mise exec -- go test -tags unit ./internal/export/... ./internal/importer/...`.
+**Verification:** `go test -tags unit ./internal/export/... ./internal/importer/...`.
 
 **Depends on:** 6
 
@@ -677,7 +677,7 @@ by an event is drawn exactly as it is today, in the same place, at the same size
 
 **Testable:** Yes — through `diagram.ExportSVG` and `diagram.ExportDrawio`.
 
-**Verification:** `mise exec -- go test -tags unit ./internal/diagram/...`.
+**Verification:** `go test -tags unit ./internal/diagram/...`.
 
 **Depends on:** 5
 
@@ -730,7 +730,7 @@ cadence and the command rather than a row starting with a comma.
 
 **Testable:** Yes — through `diagram.ExportMermaid`, `diagram.ExportASCII` and `cli.RunSlices`.
 
-**Verification:** `mise exec -- go test -tags unit ./internal/diagram/... ./internal/cli/...`.
+**Verification:** `go test -tags unit ./internal/diagram/... ./internal/cli/...`.
 
 **Depends on:** 8
 

@@ -297,8 +297,8 @@ to be, so the new spelling survives `emod fmt` from the first commit.
 
 **Testable:** Yes — through `parser.Parse`, `formatter.Format` and `oracle.Check`.
 
-**Verification:** `mise exec -- go test -tags unit ./internal/parser/... ./internal/formatter/...
-./internal/oracle/...`; `mise exec -- go build ./...`.
+**Verification:** `go test -tags unit ./internal/parser/... ./internal/formatter/...
+./internal/oracle/...`; `go build ./...`.
 
 **Depends on:** None
 
@@ -424,8 +424,8 @@ the tree spells it any more.
 
 **Testable:** Yes — through `formatter.Format`, `cli.RunFmt`, `cli.RunValidate` and `oracle.Check`.
 
-**Verification:** `mise exec -- go test -tags unit ./...`;
-`mise exec -- go run ./cmd/emod validate examples/all_patterns.emod`;
+**Verification:** `go test -tags unit ./...`;
+`go run ./cmd/emod validate examples/all_patterns.emod`;
 `rg -n 'trigger[ \t]+[A-Za-z_][A-Za-z0-9_]*[ \t]+"' -g '*.go' -g '*.js' -g '*.emod' -g '!editors/**'`
 returns nothing — the grammar's example comment at `editors/tree-sitter-emod/grammar.js:168` and the
 three corpus cases are Task 8's.
@@ -485,7 +485,7 @@ keep the `pcr` element type they already emit, and every other renderer is untou
 
 **Testable:** Yes — through `diagram.ExportMermaid` and `diagram.ExportASCII`.
 
-**Verification:** `mise exec -- go test -tags unit ./internal/diagram/...`.
+**Verification:** `go test -tags unit ./internal/diagram/...`.
 
 **Depends on:** None
 
@@ -544,7 +544,7 @@ a trigger emits keeps its value and its position in the object.
 
 **Testable:** Yes — through `export.ExportJSON`, `export.ExportCUE` and `cue vet`.
 
-**Verification:** `mise exec -- go test -tags unit ./internal/export/... ./internal/cue/...`.
+**Verification:** `go test -tags unit ./internal/export/... ./internal/cue/...`.
 
 **Depends on:** None
 
@@ -613,7 +613,7 @@ and reads.
 
 **Testable:** Yes — through `export.ExportDiagramJSON`, `importer.ImportDiagram` and the vitest harness.
 
-**Verification:** `mise exec -- go test -tags unit ./internal/export/... ./internal/importer/...`;
+**Verification:** `go test -tags unit ./internal/export/... ./internal/importer/...`;
 `mise exec -- task test:viewer`.
 
 **Depends on:** 5
@@ -655,7 +655,7 @@ parse and one bad line yields one diagnostic.
 - [ ] `cli.RunValidate` on a file spelling `trigger Schedule "..."` returns an error whose message names
       the offending word and the automation-with-`every` replacement — the same distinguishing content
       as the parser test one layer down, not just a path and a line number
-- [ ] `mise exec -- go test -tags unit ./...` passes with no source in the repository migrated by this
+- [ ] `go test -tags unit ./...` passes with no source in the repository migrated by this
       task: Task 3 already moved every one
 
 **Affected Files/Modules:**
@@ -683,8 +683,8 @@ parse and one bad line yields one diagnostic.
 
 **Testable:** Yes — through `parser.Parse` and `cli.RunValidate`.
 
-**Verification:** `mise exec -- go test -tags unit ./...`;
-`mise exec -- go run ./cmd/emod validate examples/all_patterns.emod` exits 0.
+**Verification:** `go test -tags unit ./...`;
+`go run ./cmd/emod validate examples/all_patterns.emod` exits 0.
 
 **Depends on:** 3, 4, 5, 6
 
@@ -756,13 +756,13 @@ has had no producer since Task 7 and no reader since Task 6.
 
 **Acceptance Criteria:**
 - [ ] `ast.Trigger` (`internal/ast/ast.go:173-187`) declares neither `Kind` nor `KindPos`, and
-      `mise exec -- go build ./...` succeeds
+      `go build ./...` succeeds
 - [ ] No file in the repository names a trigger's kind field: the struct literals in
       `internal/parser/integration_test.go`, `internal/formatter/formatter_test.go`,
       `internal/glossary/glossary_test.go`, `internal/export/export_test.go`, `internal/importer/
       importer_test.go` and the five files under `internal/diagram` are all updated, and the compiler is
       what proves the list complete
-- [ ] `mise exec -- go test -tags unit ./...` and `mise exec -- go test -tags integration ./...` pass
+- [ ] `go test -tags unit ./...` and `go test -tags integration ./...` pass
 - [ ] `git diff` moves no expected constant, golden, canonical `*FormattedEmod` string or `.emod` file
       in this task: every literal edited is a field on an input, never a byte of expected output
 - [ ] `emod fmt`, `emod validate`, `emod export`, `emod export -f cue`, `emod diagram` in each of its
@@ -793,8 +793,8 @@ has had no producer since Task 7 and no reader since Task 6.
 **Testable:** No — the field has no producer and no reader by this point, so there is no observable
 behaviour to assert; the compiler and the unchanged output of every command are the verification.
 
-**Verification:** `mise exec -- go build ./...`; `mise exec -- go test -tags unit ./...`;
-`mise exec -- go test -tags integration ./...`; `mise exec -- task test:viewer`;
+**Verification:** `go build ./...`; `go test -tags unit ./...`;
+`go test -tags integration ./...`; `mise exec -- task test:viewer`;
 `rg -n 'KindPos|Trigger\{[^}]*Kind' -g '*.go'` returns nothing.
 
 **Depends on:** 4, 5, 6, 7

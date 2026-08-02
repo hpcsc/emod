@@ -282,8 +282,8 @@ modifier.
 
 **Testable:** Yes — through `lexer.Scan`, `parser.Parse` and `oracle.Check`, all exported.
 
-**Verification:** `mise exec -- go test -tags unit ./internal/lexer/... ./internal/parser/...
-./internal/oracle/...`; `mise exec -- go build ./...`.
+**Verification:** `go test -tags unit ./internal/lexer/... ./internal/parser/...
+./internal/oracle/...`; `go build ./...`.
 
 **Depends on:** None
 
@@ -360,7 +360,7 @@ documents and the importer produce the same bytes they produced before. The wire
       `internal/viewer/static/ui.js:355` are all unchanged by this task
 - [ ] Every file this task changes is a `.go` file: no `.emod` source, no `.cue` file, no `.js` file
       and no golden or expected-output constant is edited
-- [ ] `mise exec -- go test -tags unit ./...` and `mise exec -- go test -tags integration ./...` pass
+- [ ] `go test -tags unit ./...` and `go test -tags integration ./...` pass
       with no expected value in `internal/formatter`, `internal/export`, `internal/cue`,
       `internal/diagram`, `internal/importer`, `internal/glossary`, `internal/cli` or `internal/lsp`
       edited — only the identifier references in those packages' tests move
@@ -387,7 +387,7 @@ documents and the importer produce the same bytes they produced before. The wire
 **Testable:** No — the rename has no observable behaviour of its own; the existing suites, passing with
 no expected value edited, are what prove nothing moved.
 
-**Verification:** `mise exec -- go build ./...`; `mise exec -- go test -tags unit ./...`;
+**Verification:** `go build ./...`; `go test -tags unit ./...`;
 `mise exec -- task test:viewer`; `git status --porcelain` lists `.go` files only.
 
 **Depends on:** 1
@@ -445,8 +445,8 @@ own output produces identical bytes.
 **Testable:** Yes — through `formatter.Format`, `parser.Parse`, the exported `internal/test` model
 helpers and `cli.RunFmt`.
 
-**Verification:** `mise exec -- go test -tags unit ./internal/formatter/... ./internal/cli/...`;
-`mise exec -- go test -tags unit ./...`.
+**Verification:** `go test -tags unit ./internal/formatter/... ./internal/cli/...`;
+`go test -tags unit ./...`.
 
 **Depends on:** 1, 3
 
@@ -486,7 +486,7 @@ an optional actor and an optional `reads`.
       CLI, LSP, oracle and importer tests. No automation body anywhere in the tree still spells
       `trigger`; every remaining `trigger` line is a slice-level block carrying a kind and a quoted name
 - [ ] `oracle.Check` returns no diagnostics for all six `internal/test` fixtures, and
-      `mise exec -- go run ./cmd/emod validate <path>` exits 0 for every file under `examples/` except
+      `go run ./cmd/emod validate <path>` exits 0 for every file under `examples/` except
       `examples/error_diagnostics_test.emod`, whose deliberate errors are unchanged
 - [ ] `examples/all_patterns.emod` differs on exactly one line — its automation's activation entry
       (`:78`) — and no other file under `examples/` is changed
@@ -532,8 +532,8 @@ an optional actor and an optional `reads`.
 **Testable:** Yes — through `lexer.Scan`, `parser.Parse`, `oracle.Check` and the `emod validate` CLI
 path.
 
-**Verification:** `mise exec -- go test -tags unit ./...`; `mise exec -- go test -tags integration
-./...`; `mise exec -- task test:grammar`; `mise exec -- go run ./cmd/emod validate` over each file
+**Verification:** `go test -tags unit ./...`; `go test -tags integration
+./...`; `mise exec -- task test:grammar`; `go run ./cmd/emod validate` over each file
 under `examples/` and `internal/parser/testdata/`.
 
 **Depends on:** 1, 2, 4
@@ -566,7 +566,7 @@ the old name. The value and its position are the ones the parser recorded.
       transcribed by hand, in declaration order across both slice homes, alongside a read-back helper
       over a parsed model; a subtest decodes the fixture's JSON export and its CUE export and requires
       both to carry exactly that list, so a value neither writer emits cannot agree trivially
-- [ ] `mise exec -- go run ./cmd/emod schema` prints `on_event` and does not print `trigger_event`
+- [ ] `go run ./cmd/emod schema` prints `on_event` and does not print `trigger_event`
 - [ ] The diagram JSON document is untouched by this task — its automation node still carries
       `trigger_event`, and every subtest in `"diagram json"` (`internal/export/export_test.go:1544`)
       passes unedited
@@ -604,8 +604,8 @@ the old name. The value and its position are the ones the parser recorded.
 **Testable:** Yes — through `export.ExportJSON`, `export.ExportCUE` and the embedded schema, all
 exported.
 
-**Verification:** `mise exec -- go test -tags unit ./internal/export/... ./internal/cue/...
-./internal/test/...`; `mise exec -- go run ./cmd/emod schema`.
+**Verification:** `go test -tags unit ./internal/export/... ./internal/cue/...
+./internal/test/...`; `go run ./cmd/emod schema`.
 
 **Depends on:** 3
 
@@ -662,8 +662,8 @@ keeps its type name and still sets the activation event of an automation drawn w
 
 **Testable:** Yes — through `export.ExportDiagramJSON` and `importer.ImportDiagram`, both exported.
 
-**Verification:** `mise exec -- go test -tags unit ./internal/export/... ./internal/importer/...`;
-`mise exec -- go test -tags unit ./...`.
+**Verification:** `go test -tags unit ./internal/export/... ./internal/importer/...`;
+`go test -tags unit ./...`.
 
 **Depends on:** 3, 6
 

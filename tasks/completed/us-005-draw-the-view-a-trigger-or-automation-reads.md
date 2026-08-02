@@ -329,8 +329,8 @@ else intact, and a getter reads the values back off a parsed model.
 **Testable:** Yes — through `oracle.Check`, `formatter.Format` and the exported `internal/test`
 getters.
 
-**Verification:** `mise exec -- go test -tags unit ./internal/test/... ./internal/oracle/...
-./internal/formatter/...`; `mise exec -- go test -tags unit ./...` shows no other package needing an
+**Verification:** `go test -tags unit ./internal/test/... ./internal/oracle/...
+./internal/formatter/...`; `go test -tags unit ./...` shows no other package needing an
 edit.
 
 **Depends on:** None
@@ -408,7 +408,7 @@ a name no slice declares, contributes no edge and its node is unchanged.
 
 **Testable:** Yes — through `export.ExportDiagramJSON`.
 
-**Verification:** `mise exec -- go test -tags unit ./internal/export/...`; `mise exec -- go test -tags
+**Verification:** `go test -tags unit ./internal/export/...`; `go test -tags
 unit ./...`.
 
 **Depends on:** 1
@@ -480,8 +480,8 @@ a view is ignored rather than written through as a view name.
 **Testable:** Yes — through `importer.ImportDiagram`, `export.ExportDiagramJSON` and
 `formatter.Format`.
 
-**Verification:** `mise exec -- go test -tags unit ./internal/importer/... ./internal/export/...`;
-`mise exec -- go test -tags unit ./...`.
+**Verification:** `go test -tags unit ./internal/importer/... ./internal/export/...`;
+`go test -tags unit ./...`.
 
 **Depends on:** 2
 
@@ -560,7 +560,7 @@ one fewer arrow. Mermaid and ASCII are unchanged.
 
 **Testable:** Yes — through `diagram.ExportSVG` and `diagram.ExportDrawio`.
 
-**Verification:** `mise exec -- go test -tags unit ./internal/diagram/...`.
+**Verification:** `go test -tags unit ./internal/diagram/...`.
 
 **Depends on:** 1
 

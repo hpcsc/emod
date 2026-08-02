@@ -261,7 +261,7 @@ examples stay executable artefacts rather than prose that happens to look like e
       because `emod fmt` is not run over the file
 - [ ] `git diff` is empty for `internal/parser/testdata/all_patterns.emod` and for both other files
       under `examples/`
-- [ ] `mise exec -- go test -tags unit ./...` passes, with no expected constant edited anywhere: no Go
+- [ ] `go test -tags unit ./...` passes, with no expected constant edited anywhere: no Go
       test reads `examples/` today except the one this task adds
 
 **Affected Files/Modules:**
@@ -288,8 +288,8 @@ examples stay executable artefacts rather than prose that happens to look like e
 
 **Testable:** Yes — through `cli.RunValidate`, exported.
 
-**Verification:** `mise exec -- go test -tags unit ./internal/cli/...`;
-`mise exec -- go run ./cmd/emod validate examples/all_patterns.emod` exits 0;
+**Verification:** `go test -tags unit ./internal/cli/...`;
+`go run ./cmd/emod validate examples/all_patterns.emod` exits 0;
 `mise exec -- git diff --stat` lists two files.
 
 **Depends on:** None (assumes US-004 has landed — see the boundary above)
@@ -352,7 +352,7 @@ arrives in Task 4, which cannot land earlier because the README quick-start it a
 parse until Task 4 fixes it.
 
 **Verification:** extract the ` ```emod ` block starting at `docs/dsl-reference.md:566` and confirm
-`mise exec -- go run ./cmd/emod validate` exits 0 on it;
+`go run ./cmd/emod validate` exits 0 on it;
 `rg -n '^## [0-9]+\.' docs/dsl-reference.md` lists the same twelve headings as before;
 `rg -n '^### (Command|Automation) Pattern' docs/dsl-reference.md` lists both.
 
@@ -473,8 +473,8 @@ from the language since the language last changed acquires the check that would 
 
 **Testable:** Yes — through `oracle.Check`, exported, over text this test reads from the two documents.
 
-**Verification:** `mise exec -- go test -tags unit ./internal/oracle/...`; extracting the quick-start to
-a file and running `mise exec -- go run ./cmd/emod validate` on it exits 0.
+**Verification:** `go test -tags unit ./internal/oracle/...`; extracting the quick-start to
+a file and running `go run ./cmd/emod validate` on it exits 0.
 
 **Depends on:** 3
 
@@ -509,9 +509,9 @@ an archived record of the world before it.
       `10-conversational-viewer-editing.md:256-257` still shows one activation event being replaced by
       another, and `01-nl-to-model-generation.md:99` still names the constructs a generator must cover
 - [ ] Any hit in a `.go`, `.js` or grammar-corpus file means US-004 is incomplete; each is corrected
-      with the same one-line respelling US-004 would have made, and `mise exec -- go test -tags unit
+      with the same one-line respelling US-004 would have made, and `go test -tags unit
       ./...` and `mise exec -- task test:grammar` both pass afterwards
-- [ ] `mise exec -- go test -tags unit ./internal/cli/... ./internal/oracle/...` passes, so the two
+- [ ] `go test -tags unit ./internal/cli/... ./internal/oracle/...` passes, so the two
       guards from Tasks 1 and 4 still hold over the swept tree
 - [ ] No file under `tasks/completed/`, and no line of `tasks/learnings.md`, is edited: an archived
       record of a run is not a document that shows syntax
@@ -541,7 +541,7 @@ expected residue. The executable half of it is already carried by Tasks 1 and 4:
 reaching an example or a fenced model fails those guards at the parser.
 
 **Verification:** the two searches above return only the listed files;
-`mise exec -- go test -tags unit ./...` passes; `mise exec -- git status --porcelain` lists no file
+`go test -tags unit ./...` passes; `git status --porcelain` lists no file
 under `tasks/`.
 
 **Depends on:** 1, 2, 3, 4

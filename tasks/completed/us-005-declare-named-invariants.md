@@ -232,7 +232,7 @@ map, it is simultaneously usable as a field name, a field type and a field modif
 
 **Testable:** Yes — through `lexer.Scan` + `parser.Parse` and `oracle.Check`, all exported.
 
-**Verification:** `mise exec -- go test -tags unit ./internal/lexer/... ./internal/parser/...
+**Verification:** `go test -tags unit ./internal/lexer/... ./internal/parser/...
 ./internal/oracle/...`; `go build ./...`.
 
 **Depends on:** None
@@ -291,7 +291,7 @@ and left to the linter to judge. A shared fixture carrying invariants in both ho
 
 **Testable:** Yes — through `parser.Parse` and `oracle.Check` over the new fixture.
 
-**Verification:** `mise exec -- go test -tags unit ./internal/...`;
+**Verification:** `go test -tags unit ./internal/...`;
 `go run ./cmd/emod validate` over a temporary file holding the new fixture, expecting exit 0.
 
 **Depends on:** Task 1
@@ -339,7 +339,7 @@ A model that declares no invariant formats to exactly the bytes it formatted to 
 
 **Testable:** Yes — through `formatter.Format` and `cli.RunFmt`.
 
-**Verification:** `mise exec -- go test -tags unit ./internal/formatter/... ./internal/cli/...`;
+**Verification:** `go test -tags unit ./internal/formatter/... ./internal/cli/...`;
 `go run ./cmd/emod fmt` over a temporary file holding the Task 2 fixture, then again over the result.
 
 **Depends on:** Task 2
@@ -393,7 +393,7 @@ invariant that nothing in the model references stays silent — no error, no war
 
 **Testable:** Yes — through `validator.Validate`, `oracle.Check` and `cli.RunValidate`.
 
-**Verification:** `mise exec -- go test -tags unit ./internal/validator/... ./internal/cli/...
+**Verification:** `go test -tags unit ./internal/validator/... ./internal/cli/...
 ./internal/oracle/...`; `go run ./cmd/emod validate` over a temporary file declaring one identifier
 twice, expecting exit 1 and the identifier in the message.
 
@@ -452,7 +452,7 @@ it. A model that declares none renders exactly as it renders today.
 
 **Testable:** Yes — through `glossary.RenderMarkdown`, `glossary.RenderJSON` and `cli.RunGlossary`.
 
-**Verification:** `mise exec -- go test -tags unit ./internal/glossary/... ./internal/cli/...`;
+**Verification:** `go test -tags unit ./internal/glossary/... ./internal/cli/...`;
 `go run ./cmd/emod glossary <fixture file>` and the same with `-f json` piped through `jq .`.
 
 **Depends on:** Task 2
@@ -513,7 +513,7 @@ byte-identically to before.
 **Testable:** Yes — through `export.ExportJSON`, `export.ExportCUE`, `export.ExportDiagramJSON`,
 `cli.RunSchema` and the four `diagram.Export*` renderers.
 
-**Verification:** `mise exec -- go test -tags unit ./internal/export/... ./internal/diagram/...
+**Verification:** `go test -tags unit ./internal/export/... ./internal/diagram/...
 ./internal/cli/...`; `go run ./cmd/emod export --format cue <fixture file>` and
 `go run ./cmd/emod schema`.
 

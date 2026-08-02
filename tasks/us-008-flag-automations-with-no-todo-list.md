@@ -430,7 +430,7 @@ and an automation that declares a view produces nothing.
 **Testable:** Yes — through `linter.Lint`, `linter.RuleDescription`, `oracle.Check`, `cli.RunLint`,
 `cli.RunLintExplain` and `cli.RunValidate`, all exported.
 
-**Verification:** `mise exec -- go test -tags unit ./internal/linter/... ./internal/cli/...
+**Verification:** `go test -tags unit ./internal/linter/... ./internal/cli/...
 ./internal/oracle/...`; `mise exec -- task test:unit`; `mise exec -- task test:integration`.
 
 **Depends on:** 1, 2

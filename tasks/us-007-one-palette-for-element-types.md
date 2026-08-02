@@ -280,7 +280,7 @@ exactly as it does now.
 
 **Testable:** Yes — through `diagram.ExportSVG` and `diagram.ExportDrawio`.
 
-**Verification:** `mise exec -- go test -tags unit ./internal/diagram/...`; `mise exec -- go build ./...`.
+**Verification:** `go test -tags unit ./internal/diagram/...`; `go build ./...`.
 
 **Depends on:** None
 
@@ -409,7 +409,7 @@ palette, and the test that guards it enumerates all six rather than sampling fou
 
 **Testable:** Yes — through `diagram.ExportSVG` and `diagram.ExportDrawio`.
 
-**Verification:** `mise exec -- go test -tags unit ./internal/diagram/...`.
+**Verification:** `go test -tags unit ./internal/diagram/...`.
 
 **Depends on:** None
 
@@ -495,7 +495,7 @@ what the exporters emit and against the viewer's own file, not against a value r
       rather than comparing an empty set and passing
 - [ ] The six fills the table names are pairwise distinct and fall in six distinct families under
       `colorFamily`, and so do the six strokes
-- [ ] The test lives in `internal/diagram` and runs under `mise exec -- go test -tags unit
+- [ ] The test lives in `internal/diagram` and runs under `go test -tags unit
       ./internal/diagram/...`, so `task test:unit` — which CI runs — covers it; it does not depend on
       `task test:viewer`, which is a separate target
 - [ ] `git status --porcelain -- internal/viewer` is empty: this task reads the viewer's table and
@@ -525,7 +525,7 @@ what the exporters emit and against the viewer's own file, not against a value r
 
 **Testable:** Yes — through `diagram.ExportSVG`, `diagram.ExportDrawio` and the viewer's table on disk.
 
-**Verification:** `mise exec -- go test -tags unit ./internal/diagram/...`.
+**Verification:** `go test -tags unit ./internal/diagram/...`.
 
 **Depends on:** 3, 4
 
@@ -575,7 +575,7 @@ table and what the exporters emit ever disagree.
 
 **Testable:** Yes — through `diagram.ExportSVG`, `diagram.ExportDrawio` and the reference on disk.
 
-**Verification:** `mise exec -- go test -tags unit ./internal/diagram/...`.
+**Verification:** `go test -tags unit ./internal/diagram/...`.
 
 **Depends on:** 1, 2, 5
 

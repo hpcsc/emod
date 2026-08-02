@@ -270,7 +270,7 @@ following line. The message the parser reports for an unrecognised entry inside 
 
 **Testable:** Yes — through `lexer.Scan` + `parser.Parse` and `oracle.Check`, all exported.
 
-**Verification:** `mise exec -- go test -tags unit ./internal/ast/... ./internal/parser/...
+**Verification:** `go test -tags unit ./internal/ast/... ./internal/parser/...
 ./internal/oracle/...`; `go build ./...`.
 
 **Depends on:** None
@@ -329,7 +329,7 @@ directly on a `mode dcb` context. A trigger's `reads` and a translation's `reads
 
 **Testable:** Yes — through `validator.Validate` and `oracle.Check`, both exported.
 
-**Verification:** `mise exec -- go test -tags unit ./internal/validator/... ./internal/oracle/...`;
+**Verification:** `go test -tags unit ./internal/validator/... ./internal/oracle/...`;
 `go run ./cmd/emod validate examples/all_patterns.emod` and the other files under `examples/` exit 0.
 
 **Depends on:** 1
@@ -451,8 +451,8 @@ receipt that this story stopped at the file and left the picture to US-005.
 **Testable:** Yes — through `oracle.Check`, the exported `internal/test` helpers, and the exported
 `diagram.Export*` renderers.
 
-**Verification:** `mise exec -- go test -tags unit ./internal/oracle/... ./internal/diagram/...
-./internal/test/...`; `mise exec -- go test -tags unit ./...` shows no other package needing an edit.
+**Verification:** `go test -tags unit ./internal/oracle/... ./internal/diagram/...
+./internal/test/...`; `go test -tags unit ./...` shows no other package needing an edit.
 
 **Depends on:** 1, 2
 
@@ -520,8 +520,8 @@ formats to exactly the bytes it formats to today.
 **Testable:** Yes — through `formatter.Format`, `parser.Parse` and the exported `internal/test`
 helpers.
 
-**Verification:** `mise exec -- go test -tags unit ./internal/formatter/... ./internal/cli/...`;
-`mise exec -- go test -tags unit ./...`.
+**Verification:** `go test -tags unit ./internal/formatter/... ./internal/cli/...`;
+`go test -tags unit ./...`.
 
 **Depends on:** 1, 4
 
@@ -543,7 +543,7 @@ it and `cue vet -d '#Model'` accepts a document that has it. A model whose autom
 - [ ] The CUE export of the same fixture carries the same values, emitted after the activation event
       and ahead of the command
 - [ ] `#Automation` in `internal/cue/schema.cue` declares the key as optional, and
-      `mise exec -- go run ./cmd/emod schema` prints it
+      `go run ./cmd/emod schema` prints it
 - [ ] `internal/cue/embed_test.go`'s `fullModelJSON` (`:174-179`) gives its automation the key, so
       "accepts a model using every element the language offers" (`:66`) exercises it, and deleting
       the key from `#Automation` makes that subtest fail
@@ -602,8 +602,8 @@ it and `cue vet -d '#Model'` accepts a document that has it. A model whose autom
 
 **Testable:** Yes — through `export.ExportJSON`, `export.ExportCUE` and `cue.Schema`, all exported.
 
-**Verification:** `mise exec -- go test -tags unit ./internal/export/... ./internal/cue/...`;
-`mise exec -- go run ./cmd/emod schema` prints the key.
+**Verification:** `go test -tags unit ./internal/export/... ./internal/cue/...`;
+`go run ./cmd/emod schema` prints the key.
 
 **Depends on:** 1, 4
 
@@ -672,8 +672,8 @@ automation and none is folded back onto one — US-005 owns the edge in both dir
 
 **Testable:** Yes — through `export.ExportDiagramJSON` and `importer.ImportDiagram`, both exported.
 
-**Verification:** `mise exec -- go test -tags unit ./internal/export/... ./internal/importer/...`;
-`mise exec -- go test -tags unit ./...`.
+**Verification:** `go test -tags unit ./internal/export/... ./internal/importer/...`;
+`go test -tags unit ./...`.
 
 **Depends on:** 1, 4, 5
 

@@ -159,7 +159,7 @@ relative to the file argument; `markdown` is the default and the only value this
 **Testable:** Yes — through `cli.RunGlossary`, the exported renderer, and `cli.NewApp().Run` for the
 flag-position criteria.
 
-**Verification:** `mise exec -- go test -tags unit ./internal/glossary/... ./internal/cli/...`;
+**Verification:** `go test -tags unit ./internal/glossary/... ./internal/cli/...`;
 `go build ./...`; `go run ./cmd/emod glossary examples/all_patterns.emod`.
 
 **Depends on:** None
@@ -215,7 +215,7 @@ declares but no trigger references still appears in the glossary, so no declared
 
 **Testable:** Yes — through the exported renderer and `cli.RunGlossary`.
 
-**Verification:** `mise exec -- go test -tags unit ./internal/glossary/... ./internal/cli/...`;
+**Verification:** `go test -tags unit ./internal/glossary/... ./internal/cli/...`;
 `go run ./cmd/emod glossary examples/dcb_model.emod`.
 
 **Depends on:** Task 1
@@ -260,7 +260,7 @@ an explicit empty description in the JSON rather than an omitted key, so a consu
 
 **Testable:** Yes — through the exported renderer, `cli.RunGlossary` and `cli.NewApp().Run`.
 
-**Verification:** `mise exec -- go test -tags unit ./internal/glossary/... ./internal/cli/...`;
+**Verification:** `go test -tags unit ./internal/glossary/... ./internal/cli/...`;
 `go run ./cmd/emod glossary examples/all_patterns.emod -f json | jq .`
 
 **Depends on:** Task 2

@@ -287,7 +287,7 @@ same two boxes. Nothing but a trigger is drawn in the top lane.
 
 **Testable:** Yes — through `diagram.ExportSVG` and `diagram.ExportDrawio`.
 
-**Verification:** `mise exec -- go test -tags unit ./internal/diagram/...`; `mise exec -- go build ./...`.
+**Verification:** `go test -tags unit ./internal/diagram/...`; `go build ./...`.
 
 **Depends on:** None
 
@@ -330,7 +330,7 @@ draw.io write "Wireframes" where they wrote "UI / Triggers"; every other lane la
 
 **Testable:** Yes — through `diagram.ExportSVG` and `diagram.ExportDrawio`.
 
-**Verification:** `mise exec -- go test -tags unit ./internal/diagram/...`.
+**Verification:** `go test -tags unit ./internal/diagram/...`.
 
 **Depends on:** 1
 
@@ -450,7 +450,7 @@ Mermaid's layouts, with nothing about a trigger able to send it to the processor
 
 **Testable:** Yes — through `diagram.ExportMermaid`.
 
-**Verification:** `mise exec -- go test -tags unit ./internal/diagram/...`.
+**Verification:** `go test -tags unit ./internal/diagram/...`.
 
 **Depends on:** None
 

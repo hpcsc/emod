@@ -262,7 +262,7 @@ aggregate's slice resolves exactly as it does today.
 **Testable:** Yes — through `lsp.GetHover`, `lsp.GetDefinition`, `lsp.GetReferences` and
 `lsp.GetSemanticTokens`, all exported.
 
-**Verification:** `mise exec -- go test -tags unit ./internal/lsp/...`; `mise exec -- go build ./...`.
+**Verification:** `go test -tags unit ./internal/lsp/...`; `go build ./...`.
 
 **Depends on:** None
 
@@ -332,7 +332,7 @@ its current syntax. A keyword's eligibility for hover comes from the lexer, so a
 
 **Testable:** Yes — through `lsp.GetHover` and the server's `textDocument/hover` handler.
 
-**Verification:** `mise exec -- go test -tags unit ./internal/lsp/...`.
+**Verification:** `go test -tags unit ./internal/lsp/...`.
 
 **Depends on:** 1
 
@@ -387,7 +387,7 @@ later cursor in the block back to the top-level list.
 
 **Testable:** Yes — through `lsp.GetCompletions` and the server's `textDocument/completion` handler.
 
-**Verification:** `mise exec -- go test -tags unit ./internal/lsp/...`.
+**Verification:** `go test -tags unit ./internal/lsp/...`.
 
 **Depends on:** None
 
@@ -454,7 +454,7 @@ cleanly, because the line being typed is itself incomplete.
 
 **Testable:** Yes — through `lsp.GetCompletions` and the server's `textDocument/completion` handler.
 
-**Verification:** `mise exec -- go test -tags unit ./internal/lsp/...`.
+**Verification:** `go test -tags unit ./internal/lsp/...`.
 
 **Depends on:** 1, 3
 
@@ -509,7 +509,7 @@ keep navigating as they do today, so all three jumps the story asks for work fro
 
 **Testable:** Yes — through `lsp.GetDefinition` and the server's `textDocument/definition` handler.
 
-**Verification:** `mise exec -- go test -tags unit ./internal/lsp/...`.
+**Verification:** `go test -tags unit ./internal/lsp/...`.
 
 **Depends on:** 1
 
@@ -568,7 +568,7 @@ cursor on any one of those references. A command's and an event's references are
 
 **Testable:** Yes — through `lsp.GetReferences` and the server's `textDocument/references` handler.
 
-**Verification:** `mise exec -- go test -tags unit ./internal/lsp/...`.
+**Verification:** `go test -tags unit ./internal/lsp/...`.
 
 **Depends on:** 1
 

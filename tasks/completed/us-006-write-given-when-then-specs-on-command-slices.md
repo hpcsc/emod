@@ -281,7 +281,7 @@ simultaneously usable as field names, field types and field modifiers.
 
 **Testable:** Yes — through `lexer.Scan` + `parser.Parse` and `oracle.Check`, all exported.
 
-**Verification:** `mise exec -- go test -tags unit ./internal/lexer/... ./internal/parser/...
+**Verification:** `go test -tags unit ./internal/lexer/... ./internal/parser/...
 ./internal/oracle/...`; `go build ./...`.
 
 **Depends on:** None
@@ -353,7 +353,7 @@ asserts against one model.
 
 **Testable:** Yes — through `parser.Parse` and `oracle.Check` over the new fixture.
 
-**Verification:** `mise exec -- go test -tags unit ./internal/...`; `go run ./cmd/emod validate` over
+**Verification:** `go test -tags unit ./internal/...`; `go run ./cmd/emod validate` over
 a temporary file holding the new fixture, expecting exit 0.
 
 **Depends on:** Task 1
@@ -412,7 +412,7 @@ automations already follow.
 
 **Testable:** Yes — through `validator.Validate`, `oracle.Check` and `cli.RunValidate`.
 
-**Verification:** `mise exec -- go test -tags unit ./internal/validator/... ./internal/cli/...
+**Verification:** `go test -tags unit ./internal/validator/... ./internal/cli/...
 ./internal/oracle/...`; `go run ./cmd/emod validate` over a temporary file whose spec names a
 misspelled event, expecting exit 1 and the misspelled name in the message.
 
@@ -474,7 +474,7 @@ redeclaration.
 
 **Testable:** Yes — through `validator.Validate`, `oracle.Check` and `cli.RunValidate`.
 
-**Verification:** `mise exec -- go test -tags unit ./internal/validator/... ./internal/cli/...
+**Verification:** `go test -tags unit ./internal/validator/... ./internal/cli/...
 ./internal/oracle/...`; `go run ./cmd/emod validate` over a temporary file whose `rejected` names an
 invariant declared one scope up, expecting exit 1.
 
@@ -538,7 +538,7 @@ to the same text. A model that declares no spec formats to exactly the bytes it 
 
 **Testable:** Yes — through `formatter.Format` and `cli.RunFmt`.
 
-**Verification:** `mise exec -- go test -tags unit ./internal/formatter/... ./internal/cli/...`;
+**Verification:** `go test -tags unit ./internal/formatter/... ./internal/cli/...`;
 `go run ./cmd/emod fmt` over a temporary file holding the Task 2 fixture, then again over the result.
 
 **Depends on:** Task 2
@@ -614,7 +614,7 @@ byte-identically to before.
 `cli.RunSchema`, the four `diagram.Export*` renderers and `glossary.RenderMarkdown` /
 `glossary.RenderJSON`.
 
-**Verification:** `mise exec -- go test -tags unit ./internal/export/... ./internal/diagram/...
+**Verification:** `go test -tags unit ./internal/export/... ./internal/diagram/...
 ./internal/glossary/... ./internal/cli/...`; `go run ./cmd/emod export --format cue <fixture file>`
 and `go run ./cmd/emod schema`.
 
