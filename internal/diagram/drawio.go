@@ -70,21 +70,23 @@ const (
 
 // Color constants for element types.
 const (
-	fillEvent      = "#ffe6cc"
-	strokeEvent    = "#d79b00"
-	fillCommand    = "#dae8fc"
-	strokeCommand  = "#6c8ebf"
-	fillView       = "#d5e8d4"
-	strokeView     = "#82b366"
-	fillTrigger    = "#ffffff"
-	strokeTrigger  = "#333333"
-	fillExternal   = "#f5f5f5"
-	strokeExternal = "#666666"
-	fillReactor    = "#e1d5e7"
-	strokeReactor  = "#9673a6"
-	strokePurpleUp = "#9B59B6"
-	strokeGreenUp  = "#82b366"
-	strokeStandard = "#333333"
+	fillEvent        = "#ffe6cc"
+	strokeEvent      = "#d79b00"
+	fillCommand      = "#dae8fc"
+	strokeCommand    = "#6c8ebf"
+	fillView         = "#d5e8d4"
+	strokeView       = "#82b366"
+	fillTrigger      = "#ffffff"
+	strokeTrigger    = "#333333"
+	fillExternal     = "#f5f5f5"
+	strokeExternal   = "#666666"
+	fillAutomation   = "#e1d5e7"
+	strokeAutomation = "#9673a6"
+	fillTranslation  = "#f5f5f5"
+	strokeTranslation= "#666666"
+	strokePurpleUp   = "#9B59B6"
+	strokeGreenUp    = "#82b366"
+	strokeStandard   = "#333333"
 )
 
 // mxGraph styles for the box drawn per element type.
@@ -97,7 +99,8 @@ const (
 	styleCommand        = boxBase + "fillColor=" + fillCommand + ";strokeColor=" + strokeCommand + ";" + boxFont
 	styleView           = boxBase + "fillColor=" + fillView + ";strokeColor=" + strokeView + ";" + boxFont
 	styleEvent          = boxBase + "fillColor=" + fillEvent + ";strokeColor=" + strokeEvent + ";" + boxFont
-	styleReactor        = boxBase + "fillColor=" + fillReactor + ";strokeColor=" + strokeReactor + ";" + boxFont
+	styleAutomation     = boxBase + "fillColor=" + fillAutomation + ";strokeColor=" + strokeAutomation + ";" + boxFont
+	styleTranslation    = boxBase + "fillColor=" + fillTranslation + ";strokeColor=" + strokeTranslation + ";" + boxFont
 	styleExternalSystem = boxBase + "fillColor=" + fillExternal + ";strokeColor=" + strokeExternal + ";dashed=1;" + boxFont
 )
 
@@ -291,12 +294,14 @@ func ExportDrawio(model *ast.Model, style Style) ([]byte, error) {
 		// --- Trigger (triggers/commands lane in projected, top lane in standard) ---
 		if s.Trigger != nil {
 			id := allocID()
+			framingID := allocID()
 			x := sliceX + (sliceWidth-boxWidth)/2
 			label := s.Trigger.Name
 			if s.Trigger.Actor != "" {
 				label = fmt.Sprintf("%s (%s)", s.Trigger.Name, s.Trigger.Actor)
 			}
 			b.WriteString(vertexCell(id, label, s.Trigger.Description, x, triggerRowY, boxWidth, boxHeight, styleTrigger))
+			b.WriteString(triggerFramingCell(framingID, id, x, triggerRowY, boxWidth, boxHeight, strokeTrigger))
 			elems = append(elems, namedElem{name: s.Trigger.Name, id: id, x: x, y: triggerRowY, w: boxWidth, h: boxHeight})
 		}
 
@@ -389,7 +394,11 @@ func ExportDrawio(model *ast.Model, style Style) ([]byte, error) {
 		// --- Automations and translation reactors (middle lane) ---
 		for _, reactor := range reactorBoxes(s, cmdViewLaneY, sliceX, "\\n") {
 			id := allocID()
-			b.WriteString(vertexCell(id, reactor.label, reactor.description, reactor.x, reactor.y, reactor.w, reactor.h, styleReactor))
+			style := styleTranslation
+			if reactor.isAutomation {
+				style = styleAutomation
+			}
+			b.WriteString(vertexCell(id, reactor.label, reactor.description, reactor.x, reactor.y, reactor.w, reactor.h, style))
 			elems = append(elems, namedElem{name: reactor.name, id: id, x: reactor.x, y: reactor.y, w: reactor.w, h: reactor.h})
 		}
 
@@ -706,13 +715,13 @@ func laneRowY(laneY int) int {
 	return laneY + laneHeaderHeight + (laneHeight-laneHeaderHeight-boxHeight)/2
 }
 
-// reactorBox is the box drawn for an automation or for a translation reactor,
-// which the picture draws alike.
+// reactorBox is the box drawn for an automation or for a translation reactor.
 type reactorBox struct {
-	name        string
-	label       string
-	description string
-	x, y, w, h  int
+	name         string
+	label        string
+	description  string
+	isAutomation bool
+	x, y, w, h   int
 }
 
 // reactorBoxes returns the box drawn for each of a slice's automations and then
@@ -722,18 +731,10 @@ type reactorBox struct {
 func reactorBoxes(s *ast.Slice, cmdViewLaneY, sliceX int, lineBreak string) []reactorBox {
 	boxes := make([]reactorBox, 0, len(s.Automations)+len(s.Translations))
 	for _, auto := range s.Automations {
-		boxes = append(boxes, reactorBox{
-			name:        auto.Name,
-			label:       automationLabel(auto, lineBreak),
-			description: auto.Description,
-		})
+		boxes = append(boxes, automationBox(auto, lineBreak))
 	}
 	for _, tr := range s.Translations {
-		boxes = append(boxes, reactorBox{
-			name:        tr.Name,
-			label:       reactorLabel(tr.Name),
-			description: tr.Description,
-		})
+		boxes = append(boxes, translationBox(tr))
 	}
 
 	rowY := laneRowY(cmdViewLaneY) + boxHeight + reactorGap
@@ -743,6 +744,25 @@ func reactorBoxes(s *ast.Slice, cmdViewLaneY, sliceX int, lineBreak string) []re
 	}
 
 	return boxes
+}
+
+// automationBox returns the reactor box for an automation.
+func automationBox(auto *ast.Automation, lineBreak string) reactorBox {
+	return reactorBox{
+		name:         auto.Name,
+		label:        automationLabel(auto, lineBreak),
+		description:  auto.Description,
+		isAutomation: true,
+	}
+}
+
+// translationBox returns the reactor box for a translation reactor.
+func translationBox(tr *ast.Translation) reactorBox {
+	return reactorBox{
+		name:        tr.Name,
+		label:       reactorLabel(tr.Name),
+		description: tr.Description,
+	}
 }
 
 // itemLayout computes item width and x position for elements within a slice.
@@ -818,6 +838,23 @@ func vertexCell(id int, value, tooltip string, x, y, w, h int, style string) str
 		`            %s`+"\n"+
 		`          </mxCell>`+"\n"+
 		`        </object>`+"\n", escapeXML(value), escapeXML(tooltip), id, style, geometry)
+}
+
+// triggerFramingCell draws the screen framing that distinguishes a trigger box
+// from a plain rectangle in draw.io: a small header bar inside the top edge of
+// the parent trigger cell.
+func triggerFramingCell(id, parentID, x, y, w, h int, stroke string) string {
+	const headerMargin = 8
+	const headerTop = 6
+	const headerHeight = 6
+
+	style := "rounded=0;whiteSpace=wrap;html=1;fillColor=" + stroke + ";strokeColor=" + stroke + ";"
+	geometry := fmt.Sprintf(`<mxGeometry x="%d" y="%d" width="%d" height="%d" as="geometry" />`,
+		x+headerMargin, y+headerTop, w-2*headerMargin, headerHeight)
+
+	return fmt.Sprintf(`        <mxCell id="%d" value="" style="%s" vertex="1" parent="%d">`+"\n"+
+		`          %s`+"\n"+
+		`        </mxCell>`+"\n", id, style, parentID, geometry)
 }
 
 func edgeCell(id int, style string, source, target int) string {

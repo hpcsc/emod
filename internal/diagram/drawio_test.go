@@ -829,6 +829,7 @@ var drawioEdge = regexp.MustCompile(`<mxCell id="\d+" style="([^"]*)" edge="1"[^
 // called, what it says when hovered, and how it is painted and placed.
 type drawioShape struct {
 	id       string
+	parentID string
 	label    string
 	tooltip  string
 	style    string
@@ -879,9 +880,10 @@ func drawioShapes(t *testing.T, output string) []drawioShape {
 					continue
 				}
 				shape := drawioShape{
-					id:    attr(element, "id"),
-					label: attr(element, "value"),
-					style: attr(element, "style"),
+					id:       attr(element, "id"),
+					parentID: attr(element, "parent"),
+					label:    attr(element, "value"),
+					style:    attr(element, "style"),
 				}
 				if wrapper != nil {
 					shape.id, shape.label, shape.tooltip = wrapper.id, wrapper.label, wrapper.tooltip

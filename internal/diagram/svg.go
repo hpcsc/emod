@@ -69,9 +69,9 @@ func ExportSVG(model *ast.Model, _ Style) ([]byte, error) {
 			if s.Trigger.Actor != "" {
 				label = fmt.Sprintf("%s (%s)", s.Trigger.Name, s.Trigger.Actor)
 			}
-			b.WriteString(svgRoundedRect(x, y, boxWidth, boxHeight, fillTrigger, strokeTrigger, 5, s.Trigger.Description))
-			b.WriteString(svgText(x+boxWidth/2, y+boxHeight/2, label, 12, strokeTrigger))
-			nameToBox[s.Trigger.Name] = svgBox{x: x, y: y, w: boxWidth, h: boxHeight}
+		b.WriteString(svgTriggerRect(x, y, boxWidth, boxHeight, fillTrigger, strokeTrigger, 5, s.Trigger.Description))
+		b.WriteString(svgText(x+boxWidth/2, y+boxHeight/2, label, 12, strokeTrigger))
+		nameToBox[s.Trigger.Name] = svgBox{x: x, y: y, w: boxWidth, h: boxHeight}
 		}
 
 		// --- Commands (middle lane) ---
@@ -124,8 +124,12 @@ func ExportSVG(model *ast.Model, _ Style) ([]byte, error) {
 
 		// --- Automations and translation reactors (middle lane) ---
 		for _, reactor := range reactorBoxes(s, cmdViewLaneY, sliceX, "\n") {
-			b.WriteString(svgRoundedRect(reactor.x, reactor.y, reactor.w, reactor.h, fillReactor, strokeReactor, 3, reactor.description))
-			b.WriteString(svgMultilineText(reactor.x+reactor.w/2, reactor.y+reactor.h/2, reactor.label, 10, strokeReactor))
+			fill, stroke := fillTranslation, strokeTranslation
+			if reactor.isAutomation {
+				fill, stroke = fillAutomation, strokeAutomation
+			}
+			b.WriteString(svgRoundedRect(reactor.x, reactor.y, reactor.w, reactor.h, fill, stroke, 3, reactor.description))
+			b.WriteString(svgMultilineText(reactor.x+reactor.w/2, reactor.y+reactor.h/2, reactor.label, 10, stroke))
 			nameToBox[reactor.name] = svgBox{x: reactor.x, y: reactor.y, w: reactor.w, h: reactor.h}
 		}
 
@@ -263,6 +267,19 @@ func svgRect(x, y, w, h int, fill, stroke string, rx int, description string) st
 
 func svgRoundedRect(x, y, w, h int, fill, stroke string, rx int, description string) string {
 	return svgRect(x, y, w, h, fill, stroke, rx, description)
+}
+
+// svgTriggerRect draws a trigger box as a screen: a small header bar inside the
+// top edge, then the main rounded rectangle. The header is drawn first so the
+// text label that follows attaches to the main rect, not to the framing.
+func svgTriggerRect(x, y, w, h int, fill, stroke string, rx int, description string) string {
+	const headerMargin = 8
+	const headerTop = 6
+	const headerHeight = 6
+
+	header := svgRectElement(svgRectAttributes(x+headerMargin, y+headerTop, w-2*headerMargin, headerHeight, stroke, stroke, 0), "")
+	box := svgRectElement(svgRectAttributes(x, y, w, h, fill, stroke, rx), description)
+	return header + box
 }
 
 func svgDashedRoundedRect(x, y, w, h int, fill, stroke string, rx int, description string) string {
