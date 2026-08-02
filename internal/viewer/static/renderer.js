@@ -1,4 +1,4 @@
-import { L, edgeConfig, arrowClassMap, PORT_DIRECTIONS } from './config.js';
+import { L, nodePalette, edgeConfig, arrowClassMap, PORT_DIRECTIONS } from './config.js';
 import { Layout } from './layout.js';
 
 var NS = "http://www.w3.org/2000/svg";
@@ -292,20 +292,26 @@ function buildSVG(store) {
     var np = positions[n.id];
     if (!np) return;
 
-    var fill, stroke, cls;
-    switch (n.type) {
-      case "command":     fill = "#dae8fc"; stroke = "#6c8ebf"; cls = "cmd-block"; break;
-      case "event":       fill = "#ffe6cc"; stroke = "#d79b00"; cls = "evt-block"; break;
-      case "trigger":     fill = "#e1d5e7"; stroke = "#9673a6"; cls = "trg-block"; break;
-      case "view":        fill = "#d5e8d4"; stroke = "#82b366"; cls = "view-block"; break;
-      case "automation":  fill = "#fff2cc"; stroke = "#d6b656"; cls = "auto-block"; break;
-      case "translation": fill = "#f5f5f5"; stroke = "#666666"; cls = "trans-block"; break;
+    var palette = nodePalette[n.type];
+    if (!palette) {
+      return;
     }
+    var fill = palette.fill;
+    var stroke = palette.stroke;
+    var cls = n.type + '-block';
 
     var blockG = g(cls + " diagram-node");
     blockG.setAttribute("data-node-id", n.id);
     blockG.appendChild(svgRect(np.x, np.y, np.w, np.h, fill, stroke,
       "rx=\"4\" stroke-width=\"1.5\""));
+
+    if (n.type === "trigger") {
+      // A trigger is drawn as a screen: a small header bar inside the top edge
+      // of the box, matching the Go renderers. The main rect stays first so
+      // drawnBoxes(svg) keeps reading the box itself.
+      blockG.appendChild(svgRect(np.x + 8, np.y + 6, np.w - 16, 6, stroke, stroke,
+        "rx=\"0\" stroke-width=\"1\""));
+    }
 
     PORT_DIRECTIONS.forEach(function(dir) {
       blockG.appendChild(connectPort(n.id, dir, np));

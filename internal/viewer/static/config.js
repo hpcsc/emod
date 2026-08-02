@@ -27,6 +27,15 @@ export const MINIMAP_W = 180;
 export const MINIMAP_H = 120;
 export const MINIMAP_PAD = 2;
 
+export const nodePalette = {
+  trigger:     { fill: '#ffffff', stroke: '#333333', hoverFill: '#e0e0e0', highlightFill: '#f0f0f0' },
+  command:     { fill: '#dae8fc', stroke: '#6c8ebf', hoverFill: '#b8cce8', highlightFill: '#d4e4f7' },
+  event:       { fill: '#ffe6cc', stroke: '#d79b00', hoverFill: '#f5d0b0', highlightFill: '#ffe5c2' },
+  view:        { fill: '#d5e8d4', stroke: '#82b366', hoverFill: '#bfd8be', highlightFill: '#d2e6d1' },
+  automation:  { fill: '#e1d5e7', stroke: '#9673a6', hoverFill: '#c0b0cc', highlightFill: '#d5c8da' },
+  translation: { fill: '#f5f5f5', stroke: '#666666', hoverFill: '#d0d0d0', highlightFill: '#e0e0e0' },
+};
+
 export const edgeConfig = {
   flow:               { cls: "flow-arrow",      marker: "url(#arrowhead)",         stroke: "#666666", dash: "" },
   subscription:       { cls: "sub-arrow",       marker: "url(#arrowhead-green)",   stroke: "#82b366", dash: "5,5" },

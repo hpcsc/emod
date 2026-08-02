@@ -1,10 +1,39 @@
 import { describe, it, expect, beforeEach } from 'vitest';
+import { readFileSync } from 'fs';
+import { resolve } from 'path';
 import { installSVGGeometry } from './svg-env.js';
 
 installSVGGeometry();
 
 const { Renderer } = await import('../static/renderer.js');
 const { Layout } = await import('../static/layout.js');
+const { nodePalette } = await import('../static/config.js');
+
+const viewerHtml = readFileSync(resolve(__dirname, '../static/viewer.html'), 'utf-8');
+
+const classForType = {
+  trigger: 'trg',
+  command: 'cmd',
+  event: 'evt',
+  view: 'view',
+  automation: 'auto',
+  translation: 'trans',
+};
+
+// Extracts the fill declaration for a selector from the embedded CSS.
+function cssFill(selector) {
+  const styleMatch = viewerHtml.match(/<style[^>]*>([\s\S]*?)<\/style>/i);
+  expect(styleMatch).not.toBeNull();
+  const css = styleMatch[1];
+  const re = new RegExp(
+    selector.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') +
+    '\\s*\\{[^}]*\\bfill\\s*:\\s*(#[0-9a-fA-F]{6})',
+    'i'
+  );
+  const m = css.match(re);
+  expect(m).not.toBeNull();
+  return m[1].toLowerCase();
+}
 
 // Two aggregates side by side in one context, each with a slice, so the
 // swimlane has to place two labelled aggregate rows on the same line.
@@ -43,7 +72,7 @@ function narrowAndWideContexts() {
 const clockMarking = '⏱';
 const cronExpression = '0 9 * * 1-5';
 const cadenceBadge = clockMarking + ' ' + cronExpression;
-const automationFill = '#fff2cc';
+const automationFill = '#e1d5e7';
 
 // An automation woken by a clock beside one woken by an event and a command, all
 // in one slice, so a single render draws the marked case, the unmarked case and
@@ -76,6 +105,22 @@ function viewReadThreeWays() {
     { id: 'auto1', type: 'automation', label: 'ChaseOverdue', parentId: 'sl1', reads: viewLabel },
     { id: 'trans1', type: 'translation', label: 'PushToDialler', parentId: 'sl1', reads: viewLabel },
     { id: 'view1', type: 'view', label: viewLabel, parentId: 'sl1' },
+  ];
+}
+
+// One of each node type, so a single render can show the trigger's screen framing
+// beside the other five shapes.
+function allElementTypes() {
+  return [
+    { id: 'ctx1', type: 'context', label: 'Palette' },
+    { id: 'agg1', type: 'aggregate', label: 'Agg', parentId: 'ctx1' },
+    { id: 'sl1', type: 'slice', label: 'S', parentId: 'agg1' },
+    { id: 'trg1', type: 'trigger', label: 'Form', parentId: 'sl1' },
+    { id: 'cmd1', type: 'command', label: 'Cmd', parentId: 'sl1' },
+    { id: 'evt1', type: 'event', label: 'Evt', parentId: 'sl1' },
+    { id: 'view1', type: 'view', label: 'Rmo', parentId: 'sl1' },
+    { id: 'auto1', type: 'automation', label: 'Auto', parentId: 'sl1' },
+    { id: 'trans1', type: 'translation', label: 'Trans', parentId: 'sl1', external_system: 'Stripe' },
   ];
 }
 
@@ -286,6 +331,71 @@ describe('Renderer.buildSVG', () => {
     });
   });
 
+  describe('trigger screen framing', () => {
+    it('draws a second rect inside the trigger box and no other node type', () => {
+      const { svg } = render(allElementTypes());
+
+      const trigger = nodeGroup(svg, 'trg1');
+      const triggerRects = trigger.querySelectorAll('rect');
+      expect(triggerRects.length).toBe(2);
+
+      const main = triggerRects[0];
+      const framing = triggerRects[1];
+      const mainX = Number(main.getAttribute('x'));
+      const mainY = Number(main.getAttribute('y'));
+      const mainW = Number(main.getAttribute('width'));
+      const mainH = Number(main.getAttribute('height'));
+
+      expect(Number(framing.getAttribute('x'))).toBeGreaterThan(mainX);
+      expect(Number(framing.getAttribute('y'))).toBeGreaterThan(mainY);
+      expect(Number(framing.getAttribute('x')) + Number(framing.getAttribute('width')))
+        .toBeLessThan(mainX + mainW);
+      expect(Number(framing.getAttribute('y')) + Number(framing.getAttribute('height')))
+        .toBeLessThan(mainY + mainH);
+
+      for (const id of ['cmd1', 'evt1', 'view1', 'auto1', 'trans1']) {
+        const group = nodeGroup(svg, id);
+        expect(group.querySelectorAll('rect').length).toBe(1);
+      }
+    });
+
+    it('keeps the main rect as the first rect so drawnBoxes still reports the box', () => {
+      const { svg } = render(allElementTypes());
+
+      const triggerGroup = nodeGroup(svg, 'trg1');
+      const first = triggerGroup.querySelector('rect');
+      expect(first.getAttribute('width')).not.toBe('0');
+      expect(first.getAttribute('height')).not.toBe('0');
+
+      const boxes = drawnBoxes(svg);
+      expect(boxes.trg1.width).toBe(first.getAttribute('width'));
+      expect(boxes.trg1.height).toBe(first.getAttribute('height'));
+    });
+
+    it('leaves the trigger label as the only text in the group', () => {
+      const { svg } = render(allElementTypes());
+
+      const trigger = nodeGroup(svg, 'trg1');
+      expect(drawnText(trigger)).toEqual(['Form']);
+    });
+
+    it('is still the only node with a second rect after every fill is normalised', () => {
+      const { svg } = render(allElementTypes());
+      const svgEl = svg;
+      svgEl.querySelectorAll('rect').forEach((rect) => {
+        rect.setAttribute('fill', '#888888');
+      });
+
+      const trigger = nodeGroup(svgEl, 'trg1');
+      expect(trigger.querySelectorAll('rect').length).toBe(2);
+
+      for (const id of ['cmd1', 'evt1', 'view1', 'auto1', 'trans1']) {
+        const group = nodeGroup(svgEl, id);
+        expect(group.querySelectorAll('rect').length).toBe(1);
+      }
+    });
+  });
+
   describe('automation cadence', () => {
     it('draws the clock badge and its tooltip on the scheduled automation only', () => {
       const { svg } = render(pairedAutomations(cronExpression));
@@ -398,5 +508,55 @@ describe('Renderer.buildSVG', () => {
         expect(reachBeyondEdge(hit.centre, side) + hit.radius)
           .toBeGreaterThan(reachBeyondEdge(tip, side));
       });
+  });
+
+  describe('palette table', () => {
+    it('paints every node type from nodePalette and keeps all six fills distinct', () => {
+      const { svg } = render(allElementTypes());
+      const boxes = drawnBoxes(svg);
+      const fills = Object.values(boxes).map((box) => box.fill);
+      const paletteFills = Object.values(nodePalette).map((p) => p.fill);
+      expect(new Set(fills).size).toBe(paletteFills.length);
+      for (const fill of paletteFills) {
+        expect(fills).toContain(fill);
+      }
+    });
+
+    it('uses no node fill or stroke literals outside the palette table in renderer.js', () => {
+      const rendererSource = readFileSync(resolve(__dirname, '../static/renderer.js'), 'utf-8');
+      // The node loop is the only place that should pick a fill or stroke by
+      // node type; it must read from nodePalette instead of spelling a hex.
+      const nodeLoop = rendererSource.substring(
+        rendererSource.indexOf('nodes.forEach'),
+        rendererSource.indexOf('store.arrowData'),
+      );
+      const hex = /#([0-9a-fA-F]{6})/g;
+      const literals = [...nodeLoop.matchAll(hex)].map((m) => m[0].toLowerCase());
+      const paletteValues = new Set(Object.values(nodePalette).flatMap((p) => [
+        p.fill, p.stroke, p.hoverFill, p.highlightFill,
+      ]));
+      for (const literal of literals) {
+        expect(paletteValues).toContain(literal);
+      }
+    });
+
+    it('declares hover fills in the stylesheet that match the palette', () => {
+      for (const [type, palette] of Object.entries(nodePalette)) {
+        expect(cssFill(`#diagram-canvas .${classForType[type]}-block:hover rect`)).toBe(palette.hoverFill);
+      }
+    });
+
+    it('declares highlight fills in the stylesheet that match the palette', () => {
+      for (const [type, palette] of Object.entries(nodePalette)) {
+        expect(cssFill(`#diagram-canvas .hl.${classForType[type]}-block rect`)).toBe(palette.highlightFill);
+      }
+    });
+
+    it('keeps hover and highlight fills pairwise distinct', () => {
+      const hoverFills = Object.values(nodePalette).map((p) => p.hoverFill);
+      const highlightFills = Object.values(nodePalette).map((p) => p.highlightFill);
+      expect(new Set(hoverFills).size).toBe(hoverFills.length);
+      expect(new Set(highlightFills).size).toBe(highlightFills.length);
+    });
   });
 });
