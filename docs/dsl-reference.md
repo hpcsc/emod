@@ -660,3 +660,17 @@ The CLI processes `.emod` files through a linear pipeline:
 
 Each stage preserves source position (file, line, column) for error reporting.
 
+## 13. Diagram Palette
+
+All diagram renderers use the same palette for element types. The SVG, draw.io, and web viewer renderers all draw the same element type with the same fill and stroke, and the DSL reference itself is the source of truth for those values.
+
+| Element     | Fill      | Stroke    | Notes                                   |
+|-------------|-----------|-----------|-----------------------------------------|
+| Trigger     | #ffffff   | #333333   | Drawn as a screen/monitor shape.        |
+| Command     | #dae8fc   | #6c8ebf   | Blue sticky note.                       |
+| Event       | #ffe6cc   | #d79b00   | Orange sticky note.                     |
+| View        | #d5e8d4   | #82b366   | Green sticky note.                      |
+| Automation  | #e1d5e7   | #9673a6   | Purple processor.                       |
+| Translation | #f5f5f5   | #666666   | Grey integration.                       |
+
+
