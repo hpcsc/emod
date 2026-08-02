@@ -3,7 +3,7 @@
 ## Progress
 - [x] Task 1: Draw automations and translation reactors in the command and view lane
 - [x] Task 2: Label the top lane "Wireframes"
-- [ ] Task 3: Stack automations and translations below the trigger row in the viewer
+- [x] Task 3: Stack automations and translations below the trigger row in the viewer
 - [ ] Task 4: Emit the UI timeframe for a trigger and the processor timeframe for an automation
 
 ---

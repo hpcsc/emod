@@ -1,25 +1,25 @@
 import { L, PORT_DIRECTIONS } from './config.js';
 
-const _measureSvg = document.createElementNS("http://www.w3.org/2000/svg", "svg");
-_measureSvg.style.position = "fixed";
-_measureSvg.style.visibility = "hidden";
-_measureSvg.style.pointerEvents = "none";
-_measureSvg.style.width = "0";
-_measureSvg.style.height = "0";
-const _measureText = document.createElementNS("http://www.w3.org/2000/svg", "text");
-_measureText.setAttribute("font-family", "sans-serif");
-_measureText.setAttribute("font-size", "13");
-_measureSvg.appendChild(_measureText);
-document.body.appendChild(_measureSvg);
-const _labelCache = {};
+const measureSvg = document.createElementNS("http://www.w3.org/2000/svg", "svg");
+measureSvg.style.position = "fixed";
+measureSvg.style.visibility = "hidden";
+measureSvg.style.pointerEvents = "none";
+measureSvg.style.width = "0";
+measureSvg.style.height = "0";
+const measureText = document.createElementNS("http://www.w3.org/2000/svg", "text");
+measureText.setAttribute("font-family", "sans-serif");
+measureText.setAttribute("font-size", "13");
+measureSvg.appendChild(measureText);
+document.body.appendChild(measureSvg);
+const labelWidthCache = {};
 
 function labelWidth(label) {
   const s = label || '';
-  if (_labelCache[s] !== undefined) return _labelCache[s];
-  _measureText.textContent = s;
-  const w = _measureText.getComputedTextLength();
-  _labelCache[s] = w + 16;
-  return w + 16;
+  if (labelWidthCache[s] !== undefined) return labelWidthCache[s];
+  measureText.textContent = s;
+  const width = measureText.getComputedTextLength() + 16;
+  labelWidthCache[s] = width;
+  return width;
 }
 
 function buildTree(nodes) {
@@ -36,38 +36,46 @@ function buildTree(nodes) {
   return { byId: byId, roots: roots };
 }
 
+function childrenOfType(children, type) {
+  return children.filter(function(c) { return c.type === type; });
+}
+
+function processorLabel(node) {
+  return node.external_system || node.label;
+}
+
+function rowSpanWidth(itemWidths) {
+  const total = itemWidths.reduce(function(sum, w) { return sum + w; }, 0);
+  return total + 20 + (itemWidths.length - 1) * L.sideGap - 40;
+}
+
 function computeLayout(store) {
   const tree = buildTree(store.nodes);
   const positions = {};
 
-  let contexts = tree.roots.filter(function(n) { return n.type === "context"; });
-  contexts = contexts.filter(function(ctx) { return !store.hiddenNodes[ctx.id]; });
+  const contexts = tree.roots.filter(function(n) {
+    return n.type === "context" && !store.hiddenNodes[n.id];
+  });
   let currentY = L.marginY;
   let maxRight = L.marginX + 800;
   let xPos;
   let maxSliceHeight;
 
   function layoutSlice(sl, si, siblings, slY) {
-    const triggers = sl.children.filter(function(c) { return c.type === "trigger"; });
-    const commands = sl.children.filter(function(c) { return c.type === "command"; });
-    const events   = sl.children.filter(function(c) { return c.type === "event"; });
-    const views    = sl.children.filter(function(c) { return c.type === "view"; });
-    const automations = sl.children.filter(function(c) { return c.type === "automation"; });
-    const translations = sl.children.filter(function(c) { return c.type === "translation"; });
-
-    const topRowTypes = translations.concat(automations);
+    const triggers = childrenOfType(sl.children, "trigger");
+    const commands = childrenOfType(sl.children, "command");
+    const events = childrenOfType(sl.children, "event");
+    const views = childrenOfType(sl.children, "view");
+    const translations = childrenOfType(sl.children, "translation");
+    const processors = translations.concat(childrenOfType(sl.children, "automation"));
 
     const allLabelWidths = sl.children.map(function(c) { return labelWidth(c.label); });
-    if (translations.length) {
-      translations.forEach(function(t) { allLabelWidths.push(labelWidth(t.external_system || t.label)); });
-    }
+    translations.forEach(function(t) { allLabelWidths.push(labelWidth(processorLabel(t))); });
     if (events.length > 1) {
-      const eSum = events.reduce(function(s, e) { return s + labelWidth(e.label); }, 0);
-      allLabelWidths.push(eSum + 20 + (events.length - 1) * L.sideGap - 40);
+      allLabelWidths.push(rowSpanWidth(events.map(function(e) { return labelWidth(e.label); })));
     }
-    if (topRowTypes.length > 1) {
-      const tSum = topRowTypes.reduce(function(s, t) { return s + labelWidth(t.external_system || t.label); }, 0);
-      allLabelWidths.push(tSum + 20 + (topRowTypes.length - 1) * L.sideGap - 40);
+    if (processors.length > 1) {
+      allLabelWidths.push(rowSpanWidth(processors.map(function(p) { return labelWidth(processorLabel(p)); })));
     }
     const sBoxWidth = Math.max(180, ...allLabelWidths);
     const sSliceWidth = sBoxWidth + 40;
@@ -75,71 +83,57 @@ function computeLayout(store) {
     let blockY = slY + L.sliceTopPad;
     const gap = 75;
 
-    if (topRowTypes.length > 0) {
-      const tCount = topRowTypes.length;
-      const tItemWidth = tCount > 1 ? (sSliceWidth - 20 - (tCount - 1) * L.sideGap) / tCount : sBoxWidth;
-      const tStartX = xPos + (sSliceWidth - tItemWidth * tCount - (tCount - 1) * L.sideGap) / 2;
-      topRowTypes.forEach(function(rt, idx) {
-        positions[rt.id] = {
-          x: tStartX + idx * (tItemWidth + L.sideGap), y: blockY,
-          w: tItemWidth, h: L.boxHeight,
-          node: rt,
+    function placeColumn(items) {
+      items.forEach(function(item) {
+        positions[item.id] = {
+          x: xPos + (sSliceWidth - sBoxWidth) / 2, y: blockY, w: sBoxWidth, h: L.boxHeight,
+          node: item,
+        };
+        blockY += L.boxHeight + gap;
+      });
+    }
+
+    function placeRow(items) {
+      if (!items.length) return;
+      const count = items.length;
+      const itemWidth = count > 1 ? (sSliceWidth - 20 - (count - 1) * L.sideGap) / count : sBoxWidth;
+      const startX = xPos + (sSliceWidth - itemWidth * count - (count - 1) * L.sideGap) / 2;
+      items.forEach(function(item, idx) {
+        positions[item.id] = {
+          x: startX + idx * (itemWidth + L.sideGap), y: blockY,
+          w: itemWidth, h: L.boxHeight,
+          node: item,
         };
       });
       blockY += L.boxHeight + gap;
     }
 
-    triggers.forEach(function(trg) {
-      const bx = xPos + (sSliceWidth - sBoxWidth) / 2;
-      positions[trg.id] = {
-        x: bx, y: blockY, w: sBoxWidth, h: L.boxHeight,
-        node: trg,
-      };
-      blockY += L.boxHeight + gap;
-    });
-    commands.forEach(function(cmd) {
-      const bx = xPos + (sSliceWidth - sBoxWidth) / 2;
-      positions[cmd.id] = {
-        x: bx, y: blockY, w: sBoxWidth, h: L.boxHeight,
-        node: cmd,
-      };
-      blockY += L.boxHeight + gap;
-    });
-    if (events.length > 0) {
-      const eCount = events.length;
-      const eItemWidth = eCount > 1 ? (sSliceWidth - 20 - (eCount - 1) * L.sideGap) / eCount : sBoxWidth;
-      const eStartX = xPos + (sSliceWidth - eItemWidth * eCount - (eCount - 1) * L.sideGap) / 2;
-      events.forEach(function(evt, idx) {
-        positions[evt.id] = {
-          x: eStartX + idx * (eItemWidth + L.sideGap), y: blockY,
-          w: eItemWidth, h: L.boxHeight,
-          node: evt,
-        };
-      });
-      blockY += L.boxHeight + gap;
-    }
-    views.forEach(function(view) {
-      const bx = xPos + (sSliceWidth - sBoxWidth) / 2;
-      positions[view.id] = {
-        x: bx, y: blockY, w: sBoxWidth, h: L.boxHeight,
-        node: view,
-      };
-      blockY += L.boxHeight + gap;
+    placeColumn(triggers);
+    placeRow(processors);
+    placeColumn(commands);
+    placeRow(events);
+    placeColumn(views);
+
+    const childBoxes = [];
+    sl.children.forEach(function(c) {
+      const p = positions[c.id];
+      if (p) childBoxes.push(p);
     });
 
     // The stacked layout above is the slice's minimum size. Dragging a block
     // towards the bottom-right pushes those edges out; minW/minH are what the
     // box shrinks back to once the block returns, and interaction.js needs
     // them to resize the slice live without re-running the whole layout.
-    const minW = sSliceWidth;
+    let minW = sSliceWidth;
+    childBoxes.forEach(function(p) {
+      minW = Math.max(minW, p.x + p.w + L.slicePad - xPos);
+    });
     const minH = blockY - slY + gap;
     let boxRight = xPos + minW;
     let boxBottom = slY + minH;
 
-    sl.children.forEach(function(c) {
-      const p = positions[c.id];
-      if (!p) return;
-      const off = store.nodeOffsets[c.id];
+    childBoxes.forEach(function(p) {
+      const off = store.nodeOffsets[p.node.id];
       if (off) {
         p.x += off.dx;
         p.y += off.dy;
