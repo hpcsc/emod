@@ -226,47 +226,28 @@ func ExportDrawio(model *ast.Model, style Style) ([]byte, error) {
 	b.WriteString(xmlProlog(model.Name))
 	b.WriteString(rootOpen())
 
-	// Write swimlanes
+	lane := func(label string, y int) string {
+		return swimlaneCell(allocID(), label, marginX, y, diagramW-2*marginX, laneHeight)
+	}
+
 	if useDCB {
-		topLaneID := allocID()
-		b.WriteString(swimlaneCell(topLaneID, "Triggers / Commands",
-			marginX, triggerLaneY, diagramW-2*marginX, laneHeight))
-		midLaneID := allocID()
-		b.WriteString(swimlaneCell(midLaneID, "Events",
-			marginX, eventLaneY, diagramW-2*marginX, laneHeight))
-		extLaneID := allocID()
-		b.WriteString(swimlaneCell(extLaneID, "External Systems",
-			marginX, extLaneY, diagramW-2*marginX, laneHeight))
+		b.WriteString(lane("Triggers / Commands", triggerLaneY))
+		b.WriteString(lane("Events", eventLaneY))
+		b.WriteString(lane("External Systems", extLaneY))
 	} else if useProjected {
-		topLaneID := allocID()
-		b.WriteString(swimlaneCell(topLaneID, "Triggers / Commands",
-			marginX, triggerLaneY, diagramW-2*marginX, laneHeight))
+		b.WriteString(lane("Triggers / Commands", triggerLaneY))
 		if hasEventsLane {
-			midLaneID := allocID()
-			b.WriteString(swimlaneCell(midLaneID, "Events",
-				marginX, eventLaneY, diagramW-2*marginX, laneHeight))
+			b.WriteString(lane("Events", eventLaneY))
 		}
 		for ti, key := range tagKeys {
-			tid := allocID()
-			b.WriteString(swimlaneCell(tid, "Tag: "+key,
-				marginX, tagLaneYs[ti], diagramW-2*marginX, laneHeight))
+			b.WriteString(lane("Tag: "+key, tagLaneYs[ti]))
 		}
-		extLaneID := allocID()
-		b.WriteString(swimlaneCell(extLaneID, "External Systems",
-			marginX, extLaneY, diagramW-2*marginX, laneHeight))
+		b.WriteString(lane("External Systems", extLaneY))
 	} else {
-		topLaneID := allocID()
-		b.WriteString(swimlaneCell(topLaneID, "UI / Triggers",
-			marginX, triggerLaneY, diagramW-2*marginX, laneHeight))
-		midLaneID := allocID()
-		b.WriteString(swimlaneCell(midLaneID, "Commands / Views",
-			marginX, cmdViewLaneY, diagramW-2*marginX, laneHeight))
-		botLaneID := allocID()
-		b.WriteString(swimlaneCell(botLaneID, "Events",
-			marginX, eventLaneY, diagramW-2*marginX, laneHeight))
-		extLaneID := allocID()
-		b.WriteString(swimlaneCell(extLaneID, "External Systems",
-			marginX, extLaneY, diagramW-2*marginX, laneHeight))
+		b.WriteString(lane("Wireframes", triggerLaneY))
+		b.WriteString(lane("Commands / Views", cmdViewLaneY))
+		b.WriteString(lane("Events", eventLaneY))
+		b.WriteString(lane("External Systems", extLaneY))
 	}
 
 	// Context labels above the swimlanes

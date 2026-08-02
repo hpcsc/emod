@@ -36,16 +36,11 @@ func ExportSVG(model *ast.Model, _ Style) ([]byte, error) {
 	eventLaneY := cmdViewLaneY + laneHeight + laneGap
 	extLaneY := eventLaneY + laneHeight + laneGap
 
-	// Swimlanes
 	laneW := diagramW - 2*marginX
-	b.WriteString(svgRect(marginX, triggerLaneY, laneW, laneHeight, "#ffffff", "#000000", 5, ""))
-	b.WriteString(svgLaneLabel(marginX+10, triggerLaneY+20, "UI / Triggers"))
-	b.WriteString(svgRect(marginX, cmdViewLaneY, laneW, laneHeight, "#ffffff", "#000000", 5, ""))
-	b.WriteString(svgLaneLabel(marginX+10, cmdViewLaneY+20, "Commands / Views"))
-	b.WriteString(svgRect(marginX, eventLaneY, laneW, laneHeight, "#ffffff", "#000000", 5, ""))
-	b.WriteString(svgLaneLabel(marginX+10, eventLaneY+20, "Events"))
-	b.WriteString(svgRect(marginX, extLaneY, laneW, laneHeight, "#ffffff", "#000000", 5, ""))
-	b.WriteString(svgLaneLabel(marginX+10, extLaneY+20, "External Systems"))
+	b.WriteString(svgLane(triggerLaneY, laneW, "Wireframes"))
+	b.WriteString(svgLane(cmdViewLaneY, laneW, "Commands / Views"))
+	b.WriteString(svgLane(eventLaneY, laneW, "Events"))
+	b.WriteString(svgLane(extLaneY, laneW, "External Systems"))
 
 	for _, cb := range ctxBounds {
 		b.WriteString(svgRect(cb.x, marginY-30, cb.w-20, 22, fillExternal, strokeExternal, 0, cb.description))
@@ -289,6 +284,11 @@ func svgRectElement(attributes, description string) string {
 	}
 
 	return fmt.Sprintf("<rect %s>\n<title>%s</title>\n</rect>\n", attributes, escapeXML(description))
+}
+
+func svgLane(y, w int, label string) string {
+	return svgRect(marginX, y, w, laneHeight, "#ffffff", "#000000", 5, "") +
+		svgLaneLabel(marginX+10, y+20, label)
 }
 
 func svgLaneLabel(x, y int, text string) string {

@@ -25,19 +25,21 @@ func TestExportSVG(t *testing.T) {
 		output := string(raw)
 		require.Contains(t, output, `<svg xmlns="http://www.w3.org/2000/svg"`)
 		requireValidXML(t, output)
-		require.NotContains(t, output, "UI / Triggers")
+		require.NotContains(t, output, "Wireframes")
 	})
 
-	t.Run("renders three swimlanes with correct labels", func(t *testing.T) {
+	t.Run("names the lane a person enters through for the wireframes it holds", func(t *testing.T) {
 		model := minimalModel("Test", "Slice1")
 		raw, err := diagram.ExportSVG(model, diagram.StyleAuto)
 		require.NoError(t, err)
 
 		output := string(raw)
-		require.Contains(t, output, "UI / Triggers")
-		require.Contains(t, output, "Commands / Views")
-		require.Contains(t, output, "Events")
 		requireValidXML(t, output)
+		require.Equal(t,
+			[]string{"Wireframes", "Commands / Views", "Events", "External Systems"},
+			svgLaneLabels(t, output),
+			"only the lane holding what a person touches is renamed; the lanes below it keep their names")
+		require.NotContains(t, output, "UI / Triggers")
 	})
 
 	t.Run("renders a trigger with its actor", func(t *testing.T) {
@@ -274,7 +276,7 @@ func TestExportSVG(t *testing.T) {
 		require.NoError(t, err)
 
 		output := string(raw)
-		require.Contains(t, output, "UI / Triggers")
+		require.Contains(t, output, "Wireframes")
 		require.Contains(t, output, "Commands / Views")
 		require.Contains(t, output, "Events")
 		require.Equal(t, 11, arrowCount(output), "every flow, subscription, automation and translation edge is drawn")
@@ -405,6 +407,29 @@ func svgBoxes(t *testing.T, output string) []diagramBox {
 	}
 
 	return boxes
+}
+
+// svgLaneLabels names the swimlanes the diagram draws, in the order it draws
+// them. A lane is the only shape drawn as a band across the whole picture, so
+// the widest shapes are the lanes and nothing else is.
+func svgLaneLabels(t *testing.T, output string) []string {
+	t.Helper()
+
+	shapes := svgShapes(t, output)
+
+	var widest int
+	for _, shape := range shapes {
+		widest = max(widest, shape.rect.w)
+	}
+
+	var labels []string
+	for _, shape := range shapes {
+		if shape.rect.w == widest {
+			labels = append(labels, shape.label)
+		}
+	}
+
+	return labels
 }
 
 func svgRectOf(t *testing.T, element xml.StartElement) boxRect {

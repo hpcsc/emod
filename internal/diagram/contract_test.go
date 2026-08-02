@@ -1050,7 +1050,7 @@ func TestExporterReactorPlacement(t *testing.T) {
 				boxes := e.boxes(t, output)
 
 				require.Equal(t, []string{"Order Form (Customer)", "Dispatch Desk"},
-					labelsWithin(boxes, boxLabelled(t, boxes, "UI / Triggers").rect),
+					labelsWithin(boxes, boxLabelled(t, boxes, "Wireframes").rect),
 					"the lane holding what a person touches holds the two triggers and nothing else")
 			})
 

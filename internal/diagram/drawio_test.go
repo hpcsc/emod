@@ -32,15 +32,18 @@ func TestExportDrawio(t *testing.T) {
 				"an empty diagram holds only the two root cells")
 		})
 
-		t.Run("renders three swimlanes with correct labels", func(t *testing.T) {
+		t.Run("names the lane a person enters through for the wireframes it holds", func(t *testing.T) {
 			model := minimalModel("Test", "Slice1")
 			raw, err := diagram.ExportDrawio(model, diagram.StyleAuto)
 			require.NoError(t, err)
 
 			output := string(raw)
-			require.Contains(t, output, `value="UI / Triggers"`)
-			require.Contains(t, output, `value="Commands / Views"`)
-			require.Contains(t, output, `value="Events"`)
+			requireValidXML(t, output)
+			require.Equal(t,
+				[]string{"Wireframes", "Commands / Views", "Events", "External Systems"},
+				drawioLaneLabels(t, output),
+				"only the lane holding what a person touches is renamed; the lanes below it keep their names")
+			require.NotContains(t, output, "UI / Triggers")
 		})
 
 		t.Run("renders a trigger with its kind and actor", func(t *testing.T) {
@@ -249,7 +252,7 @@ func TestExportDrawio(t *testing.T) {
 			require.NoError(t, err)
 
 			output := string(raw)
-			require.Contains(t, output, `value="UI / Triggers"`)
+			require.Contains(t, output, `value="Wireframes"`)
 			require.Contains(t, output, `value="Commands / Views"`)
 			require.Contains(t, output, `value="Events"`)
 			require.ElementsMatch(t, []string{
@@ -499,7 +502,7 @@ func TestExportDrawio(t *testing.T) {
 			projOut := string(projRaw)
 
 			// Auto mode has 4 standard lanes
-			require.Contains(t, autoOut, `value="UI / Triggers"`)
+			require.Contains(t, autoOut, `value="Wireframes"`)
 			require.Contains(t, autoOut, `value="Commands / Views"`)
 			require.Contains(t, autoOut, `value="Events"`)
 
