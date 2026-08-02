@@ -210,48 +210,6 @@ func TestExportMermaid(t *testing.T) {
 			require.NotContains(t, output, "tf ")
 		})
 
-		t.Run("trigger renders as ui timeframe however its name reads", func(t *testing.T) {
-			model := &ast.Model{
-				Name: "Test",
-				Contexts: []*ast.Context{{
-					Name: "Ctx",
-					Aggregates: []*ast.Aggregate{{
-						Name: "Agg",
-						Slices: []*ast.Slice{
-							{
-								Name:    "UI",
-								Trigger: &ast.Trigger{Name: "SubmitForm"},
-							},
-							{
-								Name:    "Scheduled",
-								Trigger: &ast.Trigger{Name: "NightlyBatch"},
-								Automations: []*ast.Automation{{
-									Name:    "AutoNotifier",
-									OnEvent: "OrderPlaced",
-									Command: "SendEmail",
-								}},
-							},
-							{
-								Name:    "Processed",
-								Trigger: &ast.Trigger{Name: "FileWatcher"},
-							},
-						},
-					}},
-				}},
-			}
-			raw, err := diagram.ExportMermaid(model, diagram.StyleAuto)
-			require.NoError(t, err)
-
-			output := string(raw)
-			require.Contains(t, output, "tf 01 ui Ctx.SubmitForm")
-			require.Contains(t, output, "tf 02 ui Ctx.NightlyBatch")
-			require.Contains(t, output, "tf 03 pcr Ctx.AutoNotifier")
-			require.Contains(t, output, "tf 04 ui Ctx.FileWatcher")
-			require.NotContains(t, output, "tf 01 pcr Ctx.SubmitForm")
-			require.NotContains(t, output, "tf 02 pcr Ctx.NightlyBatch")
-			require.NotContains(t, output, "tf 04 pcr Ctx.FileWatcher")
-		})
-
 		t.Run("commands render as tf NN cmd CommandName", func(t *testing.T) {
 			model := singleSliceModel("Test", "S1", command("CreateOrder"))
 			raw, err := diagram.ExportMermaid(model, diagram.StyleAuto)

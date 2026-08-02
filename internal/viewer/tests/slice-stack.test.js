@@ -73,6 +73,10 @@ function stepsDown(positions, ids) {
   return ids.slice(1).map((id, i) => positions[id].y - positions[ids[i]].y);
 }
 
+function idsByY(positions, ids) {
+  return [...ids].sort((a, b) => positions[a].y - positions[b].y);
+}
+
 function drawnBoxes(svg) {
   const entries = [...svg.querySelectorAll('.diagram-node')].map((group) => {
     const box = group.querySelector('rect');
@@ -187,10 +191,12 @@ describe('a slice stacked top to bottom', () => {
   });
 
   describe('declaring neither an automation nor a translation', () => {
-    it('stacks the trigger, command, event and view evenly, leaving no band where the row would sit', () => {
-      const plain = stepsDown(layOut(sliceWithoutProcessors()), ['trg1', 'cmd1', 'evt1', 'view1']);
+    it('stacks the trigger, then the command, then the event, then the view, leaving no band where the row would sit', () => {
+      const positions = layOut(sliceWithoutProcessors());
+      const plain = stepsDown(positions, ['trg1', 'cmd1', 'evt1', 'view1']);
       const withRow = stepsDown(layOut(sliceOfEveryType()), ['trg1', 'auto1', 'cmd1']);
 
+      expect(idsByY(positions, ['view1', 'evt1', 'cmd1', 'trg1'])).toEqual(['trg1', 'cmd1', 'evt1', 'view1']);
       expect(plain[0]).toBe(plain[1]);
       expect(plain[1]).toBe(plain[2]);
       expect(withRow).toEqual([plain[0], plain[0]]);
