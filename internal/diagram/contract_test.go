@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"maps"
 	"math"
+	"os"
 	"regexp"
 	"slices"
 	"sort"
@@ -29,6 +30,9 @@ type exporter struct {
 	// fillOfLabel returns the fill colour of the shape drawn for a label; nil
 	// for the text formats, which have no colours.
 	fillOfLabel func(t *testing.T, output, label string) string
+	// strokeOfLabel returns the stroke colour of the shape drawn for a label; nil
+	// for the text formats, which have no colours.
+	strokeOfLabel func(t *testing.T, output, label string) string
 	// countConnections reports how many connections the output draws; nil for
 	// formats that describe elements without drawing arrows between them.
 	countConnections func(output string) int
@@ -97,6 +101,7 @@ func exporters() []exporter {
 		{
 			name:              "drawio",
 			fillOfLabel:       drawioFillOfLabel,
+			strokeOfLabel:     drawioStrokeOfLabel,
 			countConnections:  func(output string) int { return strings.Count(output, `edge="1"`) },
 			boxes:             drawioBoxes,
 			connections:       drawioEdges,
@@ -106,6 +111,7 @@ func exporters() []exporter {
 		{
 			name:              "svg",
 			fillOfLabel:       svgFillOfLabel,
+			strokeOfLabel:     svgStrokeOfLabel,
 			countConnections:  arrowCount,
 			boxes:             svgBoxes,
 			connections:       svgConnections,
@@ -127,8 +133,10 @@ func exporters() []exporter {
 }
 
 var (
-	drawioStyleFill = regexp.MustCompile(`fillColor=(#[0-9a-fA-F]{6})`)
-	svgRectFill     = regexp.MustCompile(`<rect[^>]*\bfill="(#[0-9a-fA-F]{6})"`)
+	drawioStyleFill   = regexp.MustCompile(`fillColor=(#[0-9a-fA-F]{6})`)
+	drawioStyleStroke = regexp.MustCompile(`strokeColor=(#[0-9a-fA-F]{6})`)
+	svgRectFill       = regexp.MustCompile(`<rect[^>]*\bfill="(#[0-9a-fA-F]{6})"`)
+	svgRectStroke     = regexp.MustCompile(`<rect[^>]*\bstroke="(#[0-9a-fA-F]{6})"`)
 )
 
 // drawioFillOfLabel returns the fill of the shape whose label contains label.
@@ -148,6 +156,23 @@ func drawioFillOfLabel(t *testing.T, output, label string) string {
 	return ""
 }
 
+// drawioStrokeOfLabel returns the stroke of the shape whose label contains label.
+func drawioStrokeOfLabel(t *testing.T, output, label string) string {
+	t.Helper()
+
+	for _, shape := range drawioShapes(t, output) {
+		if !strings.Contains(shape.label, label) {
+			continue
+		}
+		if m := drawioStyleStroke.FindStringSubmatch(shape.style); m != nil {
+			return strings.ToLower(m[1])
+		}
+	}
+
+	require.Fail(t, fmt.Sprintf("no drawio cell labelled %q in output", label))
+	return ""
+}
+
 // svgFillOfLabel returns the fill of the rect drawn immediately before the text
 // element carrying label — the shape that label sits inside.
 func svgFillOfLabel(t *testing.T, output, label string) string {
@@ -155,11 +180,32 @@ func svgFillOfLabel(t *testing.T, output, label string) string {
 
 	lines := strings.Split(output, "\n")
 	for i, line := range lines {
-		if !strings.Contains(line, "<text") || !strings.Contains(line, ">"+label+"<") {
+		if !strings.Contains(line, "<text") || !strings.Contains(line, label) {
 			continue
 		}
 		for j := i - 1; j >= 0; j-- {
 			if m := svgRectFill.FindStringSubmatch(lines[j]); m != nil {
+				return strings.ToLower(m[1])
+			}
+		}
+	}
+
+	require.Fail(t, fmt.Sprintf("no svg shape labelled %q in output", label))
+	return ""
+}
+
+// svgStrokeOfLabel returns the stroke of the rect drawn immediately before the text
+// element carrying label — the shape that label sits inside.
+func svgStrokeOfLabel(t *testing.T, output, label string) string {
+	t.Helper()
+
+	lines := strings.Split(output, "\n")
+	for i, line := range lines {
+		if !strings.Contains(line, "<text") || !strings.Contains(line, label) {
+			continue
+		}
+		for j := i - 1; j >= 0; j-- {
+			if m := svgRectStroke.FindStringSubmatch(lines[j]); m != nil {
 				return strings.ToLower(m[1])
 			}
 		}
@@ -250,13 +296,16 @@ func labelsOf(boxes []diagramBox) []string {
 	return labels
 }
 
-// labelsWithin names the boxes drawn wholly inside container.
+// labelsWithin names the boxes drawn wholly inside container. Decorative boxes
+// with no label are skipped, because a framing element is not a box a reader
+// names.
 func labelsWithin(boxes []diagramBox, container boxRect) []string {
 	var labels []string
 	for _, box := range boxes {
-		if box.rect.within(container) {
-			labels = append(labels, box.label)
+		if box.label == "" || !box.rect.within(container) {
+			continue
 		}
+		labels = append(labels, box.label)
 	}
 
 	return labels
@@ -1132,9 +1181,268 @@ func boxesExcept(boxes []diagramBox, names []string) []diagramBox {
 	return kept
 }
 
+// triggerScreenFraming returns the framing rectangle drawn inside a trigger box
+// for the two formats that draw shapes, and a boolean that is true only when the
+// box labelled label actually carries a screen framing. In SVG the framing is the
+// label-less rect inside the main rect; in draw.io it is the child cell whose
+// parent is the trigger cell.
+func triggerScreenFraming(t *testing.T, e exporter, output, label string) (boxRect, bool) {
+	t.Helper()
+
+	switch e.name {
+	case "svg":
+		shapes := svgShapes(t, output)
+		var main svgShape
+		for _, shape := range shapes {
+			if shape.label == label {
+				main = shape
+				break
+			}
+		}
+		require.NotEmpty(t, main.label, "expected a trigger shape labelled %q", label)
+		for _, shape := range shapes {
+			if shape.label == "" && shape.rect.within(main.rect) {
+				return shape.rect, true
+			}
+		}
+		return boxRect{}, false
+
+	case "drawio":
+		shapes := drawioShapes(t, output)
+		var trigger drawioShape
+		for _, shape := range shapes {
+			if shape.label == label {
+				trigger = shape
+				break
+			}
+		}
+		require.NotEmpty(t, trigger.id, "expected a drawio cell labelled %q", label)
+		for _, shape := range shapes {
+			if shape.parentID == trigger.id && shape.rect.within(trigger.rect) {
+				return shape.rect, true
+			}
+		}
+		return boxRect{}, false
+
+	default:
+		require.Fail(t, "trigger screen framing not supported for %q", e.name)
+	}
+
+	return boxRect{}, false
+}
+
+// TestExporterTriggerScreen checks that a trigger is drawn as a screen rather
+// than as a plain rounded rectangle, so it can be told from a sticky note without
+// reading its colour.
+func TestExporterTriggerScreen(t *testing.T) {
+	for _, e := range exporters() {
+		if e.fillOfLabel == nil {
+			continue
+		}
+
+		t.Run(e.name, func(t *testing.T) {
+			t.Run("draws a screen framing on the trigger and no other element type", func(t *testing.T) {
+				output := e.run(t, paletteModel(), diagram.StyleAuto)
+
+				triggerRect := e.boxLabelled(t, output, "Form").rect
+				framing, ok := triggerScreenFraming(t, e, output, "Form")
+				require.True(t, ok, "expected the trigger to carry a screen framing")
+
+				require.True(t, framing.within(triggerRect),
+					"the trigger's framing must lie inside the trigger box")
+				require.NotEmpty(t, framing.h,
+					"the trigger's framing must have a positive height")
+
+				for _, other := range []string{"Cmd", "Evt", "Rmo", "Stripe"} {
+					_, ok := triggerScreenFraming(t, e, output, other)
+					require.False(t, ok, "element type %q must not carry trigger screen framing", other)
+				}
+			})
+
+			t.Run("keeps the trigger's box the same position and size", func(t *testing.T) {
+				output := e.run(t, paletteModel(), diagram.StyleAuto)
+
+				trigger := e.boxLabelled(t, output, "Form")
+				require.Equal(t, boxRect{x: 60, y: 142, w: 240, h: 55}, trigger.rect,
+					"the trigger box must keep the same position and size as it had without the framing")
+			})
+
+			t.Run("is still distinguishable when every fill is normalised to one colour", func(t *testing.T) {
+				output := e.run(t, paletteModel(), diagram.StyleAuto)
+				if e.name == "svg" {
+					output = regexp.MustCompile(`fill="#[0-9a-fA-F]{6}"`).ReplaceAllString(output, `fill="#888888"`)
+				} else {
+					output = regexp.MustCompile(`fillColor=#[0-9a-fA-F]{6}`).ReplaceAllString(output, `fillColor=#888888`)
+				}
+
+				// Normalising must not break the structural distinction: the trigger
+				// still has a framing and no other element type does.
+				_, ok := triggerScreenFraming(t, e, output, "Form")
+				require.True(t, ok, "the trigger must still have a framing after colour normalisation")
+				for _, other := range []string{"Cmd", "Evt", "Rmo", "Stripe"} {
+					_, ok := triggerScreenFraming(t, e, output, other)
+					require.False(t, ok, "element type %q must not be mistaken for a trigger by framing", other)
+				}
+			})
+
+			t.Run("keeps the trigger tooltip and fill on the trigger's own shape", func(t *testing.T) {
+				output := e.run(t, paletteModel(), diagram.StyleAuto)
+
+				if e.name == "svg" {
+					require.Equal(t, "Where the order is placed", svgTooltipOf(t, output, "Form"))
+				} else {
+					require.Equal(t, "Where the order is placed", drawioTooltipOf(t, output, "Form"))
+				}
+				require.Equal(t, "#ffffff", e.fillOfLabel(t, output, "Form"))
+			})
+		})
+	}
+}
+
+// viewerNodePalette parses the node palette declared in the viewer's config.js
+// and returns, for each element type, the fill and stroke the viewer paints it
+// with. The map keys are the node type names used in the viewer.
+func viewerNodePalette(t *testing.T) map[string]struct{ fill, stroke string } {
+	t.Helper()
+
+	raw, err := os.ReadFile("../viewer/static/config.js")
+	require.NoError(t, err)
+	content := string(raw)
+
+	require.Contains(t, content, "nodePalette", "the viewer must declare a nodePalette table")
+
+	start := strings.Index(content, "nodePalette")
+	require.NotEqual(t, -1, start, "nodePalette not found in config.js")
+	block := content[start:]
+	end := strings.Index(block, "};")
+	require.NotEqual(t, -1, end, "nodePalette block does not end with }; in config.js")
+	block = block[:end+2]
+
+	entryRe := regexp.MustCompile(`(?m)^\s*(\w+):\s*\{\s*fill:\s*['"]?(#[0-9a-fA-F]{6})['"]?\s*,\s*stroke:\s*['"]?(#[0-9a-fA-F]{6})['"]?`)
+	matches := entryRe.FindAllStringSubmatch(block, -1)
+	require.Len(t, matches, 6, "nodePalette must list exactly six element types, got %d", len(matches))
+
+	palette := make(map[string]struct{ fill, stroke string }, len(matches))
+	for _, m := range matches {
+		palette[m[1]] = struct{ fill, stroke string }{
+			fill:   strings.ToLower(m[2]),
+			stroke: strings.ToLower(m[3]),
+		}
+	}
+
+	return palette
+}
+
+// viewerTypeToModelLabel maps the viewer's node type names to the labels
+// paletteModel gives each element type.
+var viewerTypeToModelLabel = map[string]string{
+	"trigger":     "Form",
+	"command":     "Cmd",
+	"event":       "Evt",
+	"view":        "Rmo",
+	"automation":  "Auto",
+	"translation": "Import",
+}
+
+// dslReferencePalette parses the diagram palette table from the DSL reference
+// docs and returns a map from element type to the documented fill and stroke.
+func dslReferencePalette(t *testing.T) map[string]struct{ fill, stroke string } {
+	t.Helper()
+
+	raw, err := os.ReadFile("../../docs/dsl-reference.md")
+	require.NoError(t, err)
+	content := string(raw)
+
+	start := strings.Index(content, "## 13. Diagram Palette")
+	require.NotEqual(t, -1, start, "docs/dsl-reference.md must contain a 'Diagram Palette' section")
+
+	block := content[start:]
+	end := strings.Index(block, "## 14.")
+	if end == -1 {
+		end = len(block)
+	} else {
+		end = strings.LastIndex(block[:end], "\n|")
+		if end == -1 {
+			end = len(block)
+		}
+	}
+	block = block[:end]
+
+	rowRe := regexp.MustCompile(`\|\s*(Trigger|Command|Event|View|Automation|Translation)\s*\|\s*(#[0-9a-fA-F]{6})\s*\|\s*(#[0-9a-fA-F]{6})\s*\|`)
+	matches := rowRe.FindAllStringSubmatch(block, -1)
+	require.Len(t, matches, 6, "palette table must list exactly six element types, got %d", len(matches))
+
+	palette := make(map[string]struct{ fill, stroke string }, len(matches))
+	for _, m := range matches {
+		palette[strings.ToLower(m[1])] = struct{ fill, stroke string }{
+			fill:   strings.ToLower(m[2]),
+			stroke: strings.ToLower(m[3]),
+		}
+	}
+
+	return palette
+}
+
+// TestExporterPalettePinsViewer checks that the two Go renderers emit the same
+// fill and stroke per element type that the viewer's own palette table names.
+func TestExporterPalettePinsViewer(t *testing.T) {
+	viewerPalette := viewerNodePalette(t)
+
+	for _, e := range exporters() {
+		if e.fillOfLabel == nil || e.strokeOfLabel == nil {
+			continue
+		}
+
+		t.Run(e.name, func(t *testing.T) {
+			output := e.run(t, paletteModel(), diagram.StyleAuto)
+
+			for viewerType, modelLabel := range viewerTypeToModelLabel {
+				viewerEntry, ok := viewerPalette[viewerType]
+				require.True(t, ok, "viewer palette missing entry for %q", viewerType)
+
+				require.Equal(t, viewerEntry.fill, e.fillOfLabel(t, output, modelLabel),
+					"fill for %q disagrees between %s and the viewer palette", viewerType, e.name)
+				require.Equal(t, viewerEntry.stroke, e.strokeOfLabel(t, output, modelLabel),
+					"stroke for %q disagrees between %s and the viewer palette", viewerType, e.name)
+			}
+		})
+	}
+}
+
+// TestExporterPaletteMatchesReference checks that the documented palette in the
+// DSL reference is the same palette used by the viewer and the Go renderers.
+func TestExporterPaletteMatchesReference(t *testing.T) {
+	viewerPalette := viewerNodePalette(t)
+	referencePalette := dslReferencePalette(t)
+
+	require.Equal(t, viewerPalette, referencePalette,
+		"viewer palette must match the palette documented in dsl-reference.md")
+
+	for _, e := range exporters() {
+		if e.fillOfLabel == nil || e.strokeOfLabel == nil {
+			continue
+		}
+
+		t.Run(e.name, func(t *testing.T) {
+			output := e.run(t, paletteModel(), diagram.StyleAuto)
+
+			for viewerType, modelLabel := range viewerTypeToModelLabel {
+				refEntry, ok := referencePalette[viewerType]
+				require.True(t, ok, "reference palette missing entry for %q", viewerType)
+
+				require.Equal(t, refEntry.fill, e.fillOfLabel(t, output, modelLabel),
+					"fill for %q disagrees between %s and dsl-reference.md", viewerType, e.name)
+				require.Equal(t, refEntry.stroke, e.strokeOfLabel(t, output, modelLabel),
+					"stroke for %q disagrees between %s and dsl-reference.md", viewerType, e.name)
+			}
+		})
+	}
+}
+
 // TestExporterPalette pins the event-modeling sticky-note convention — orange
-// events, blue commands, green read models, white triggers, grey external
-// systems — without pinning the exact palette values, which are free to change.
+// events, blue commands, green read models, white triggers, purple automations,
+// grey translations — without pinning the exact palette values, which are free to
+// change.
 func TestExporterPalette(t *testing.T) {
 	for _, e := range exporters() {
 		if e.fillOfLabel == nil {
@@ -1161,6 +1469,8 @@ func TestExporterPalette(t *testing.T) {
 						require.Equal(t, "blue", colorFamily(t, e.fillOfLabel(t, output, "Cmd")))
 						require.Equal(t, "green", colorFamily(t, e.fillOfLabel(t, output, "Rmo")))
 						require.Equal(t, "white", colorFamily(t, e.fillOfLabel(t, output, "Form")))
+						require.Equal(t, "purple", colorFamily(t, e.fillOfLabel(t, output, "Auto")))
+						require.Equal(t, "grey", colorFamily(t, e.fillOfLabel(t, output, "Import")))
 						require.Equal(t, "grey", colorFamily(t, e.fillOfLabel(t, output, "Stripe")))
 					})
 				}
@@ -1173,16 +1483,61 @@ func TestExporterPalette(t *testing.T) {
 					e.fillOfLabel(t, output, "Evt"),
 					e.fillOfLabel(t, output, "Cmd"),
 					e.fillOfLabel(t, output, "Rmo"),
-					e.fillOfLabel(t, output, "Stripe"),
+					e.fillOfLabel(t, output, "Form"),
+					e.fillOfLabel(t, output, "Auto"),
+					e.fillOfLabel(t, output, "Import"),
 				}
 
 				require.Len(t, unique(fills), len(fills), "each element type needs its own fill")
 			})
 
-			t.Run("draws an external system with a dashed outline", func(t *testing.T) {
+			t.Run("gives each element type a distinguishable stroke", func(t *testing.T) {
+				output := e.run(t, paletteModel(), diagram.StyleAuto)
+
+				strokes := []string{
+					e.strokeOfLabel(t, output, "Evt"),
+					e.strokeOfLabel(t, output, "Cmd"),
+					e.strokeOfLabel(t, output, "Rmo"),
+					e.strokeOfLabel(t, output, "Form"),
+					e.strokeOfLabel(t, output, "Auto"),
+					e.strokeOfLabel(t, output, "Import"),
+				}
+
+				require.Len(t, unique(strokes), len(strokes), "each element type needs its own stroke")
+			})
+
+			t.Run("fills fall in six distinct colour families", func(t *testing.T) {
+				output := e.run(t, paletteModel(), diagram.StyleAuto)
+
+				families := []string{
+					colorFamily(t, e.fillOfLabel(t, output, "Evt")),
+					colorFamily(t, e.fillOfLabel(t, output, "Cmd")),
+					colorFamily(t, e.fillOfLabel(t, output, "Rmo")),
+					colorFamily(t, e.fillOfLabel(t, output, "Form")),
+					colorFamily(t, e.fillOfLabel(t, output, "Auto")),
+					colorFamily(t, e.fillOfLabel(t, output, "Import")),
+				}
+
+				require.Len(t, unique(families), len(families), "near-identical hues must not masquerade as distinct fills")
+			})
+
+			t.Run("automation and translation reactor fills differ", func(t *testing.T) {
+				output := e.run(t, paletteModel(), diagram.StyleAuto)
+
+				require.NotEqual(t,
+					e.fillOfLabel(t, output, "Auto"),
+					e.fillOfLabel(t, output, "Import"),
+					"the automation and the translation reactor must not share a fill")
+			})
+
+			t.Run("draws an external system with a dashed outline while the translation reactor beside it is not", func(t *testing.T) {
 				output := e.run(t, paletteModel(), diagram.StyleAuto)
 
 				require.Contains(t, output, "dash", "an external system is drawn dashed")
+
+				importBox := e.boxLabelled(t, output, "Import")
+				require.NotContains(t, importBox.appearance, "dash",
+					"the translation reactor is not the external system and keeps a solid outline")
 			})
 		})
 	}
@@ -1197,6 +1552,7 @@ func paletteModel() *ast.Model {
 		&ast.Command{Name: "Cmd", Description: "Asks for the order to be placed"},
 		&ast.Event{Name: "Evt", Description: "The order was placed"},
 		&ast.View{Name: "Rmo", Description: "Every order placed so far"},
+		&ast.Automation{Name: "Auto", Description: "Reacts to the order being placed", OnEvent: "Evt", Command: "Cmd"},
 	)
 	model.Contexts[0].Aggregates[0].Slices[0].Translations = []*ast.Translation{{
 		Name:           "Import",
