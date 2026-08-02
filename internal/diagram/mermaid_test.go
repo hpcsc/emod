@@ -3,6 +3,7 @@
 package diagram_test
 
 import (
+	"strconv"
 	"strings"
 	"testing"
 
@@ -25,18 +26,176 @@ var libraryLendingProcessorTimeframes = []string{
 	`pcr Reading Room.SweepIdleDesks (every "45m" → ReleaseDesk)`,
 }
 
-// processorTimeframes drops each entry's sequence number: the styles number the
-// same entries differently, and no expectation here is about the numbering.
-func processorTimeframes(output string) []string {
-	var entries []string
+// timeframeSlotAssignments is the timeframe each of timeframeSlotModel's
+// non-event elements is written into, every style alike, both slice homes
+// together and in declaration order: a trigger belongs to the timeframe a
+// person acts in and an automation or a translation reactor to the processor's.
+var timeframeSlotAssignments = []string{
+	`ui Lending.Lending Desk`,
+	`cmd Lending.BorrowCopy`,
+	`rmo Lending.MemberLoansView`,
+	`pcr Lending.RemindOnDueDate (CopyBorrowed → RemindMember)`,
+	`pcr Lending.PartnerImport`,
+	`ui Lending.ReturnsBinWatcher`,
+	`cmd Lending.ReturnCopy`,
+	`ui Lending.NightlySweep`,
+	`cmd Lending.RecallCopy`,
+	`pcr Lending.SweepOverdueLoans (every "15m" → RecallCopy)`,
+}
+
+// timeframeSlotModel declares a trigger in each home a slice has — one named
+// for the screen it is, one named as a schedule and one named as a background
+// watcher — beside the automation and the translation reactor that share the
+// processor timeframe with each other. Its directly declared slice tags an
+// event, without which the DCB and the projected style both fall back to the
+// standard layout and answer nothing about themselves.
+func timeframeSlotModel() *ast.Model {
+	return &ast.Model{
+		Name: "Library Lending",
+		Contexts: []*ast.Context{{
+			Name: "Lending",
+			Aggregates: []*ast.Aggregate{{
+				Name: "Loan",
+				Slices: []*ast.Slice{
+					{
+						Name:     "Borrow Copy",
+						Trigger:  &ast.Trigger{Name: "Lending Desk", Actor: "Member"},
+						Commands: []*ast.Command{command("BorrowCopy")},
+						Events:   []*ast.Event{event("CopyBorrowed")},
+						Views:    []*ast.View{{Name: "MemberLoansView", Subscribes: []string{"CopyBorrowed"}}},
+						Automations: []*ast.Automation{{
+							Name:    "RemindOnDueDate",
+							OnEvent: "CopyBorrowed",
+							Command: "RemindMember",
+						}},
+						Translations: []*ast.Translation{{
+							Name:           "PartnerImport",
+							ExternalSystem: "LoanRegistry",
+							Command:        "BorrowCopy",
+							Event:          &ast.Event{Name: "PartnerLoanReceived"},
+						}},
+					},
+					{
+						Name:     "Empty The Returns Bin",
+						Trigger:  &ast.Trigger{Name: "ReturnsBinWatcher"},
+						Commands: []*ast.Command{command("ReturnCopy")},
+					},
+				},
+			}},
+			Slices: []*ast.Slice{{
+				Name:     "Sweep Overdue Loans",
+				Trigger:  &ast.Trigger{Name: "NightlySweep"},
+				Commands: []*ast.Command{command("RecallCopy")},
+				Events: []*ast.Event{
+					{Name: "CopyRecalled", Tags: []ast.TagEntry{{Key: "loan", FieldRef: "loanId"}}},
+				},
+				Automations: []*ast.Automation{{
+					Name:     "SweepOverdueLoans",
+					Schedule: "15m",
+					Command:  "RecallCopy",
+				}},
+			}},
+		}},
+	}
+}
+
+// timeframeEntry is one tf line split into the number the style gave it and the
+// slot it wrote: the timeframe letter together with the element that letter
+// places.
+type timeframeEntry struct {
+	number int
+	slot   string
+}
+
+func timeframeEntries(t *testing.T, output string) []timeframeEntry {
+	t.Helper()
+
+	var entries []timeframeEntry
 	for _, line := range strings.Split(output, "\n") {
 		parts := strings.SplitN(line, " ", 3)
-		if len(parts) < 3 || parts[0] != "tf" || !strings.HasPrefix(parts[2], "pcr ") {
+		if len(parts) < 3 || parts[0] != "tf" {
 			continue
 		}
-		entries = append(entries, parts[2])
+
+		number, err := strconv.Atoi(parts[1])
+		require.NoError(t, err, "timeframe entry %q must carry a number", line)
+		entries = append(entries, timeframeEntry{number: number, slot: parts[2]})
 	}
+
 	return entries
+}
+
+// timeframeSlots returns the slot of every entry keep accepts, dropping the
+// sequence numbers: the styles number the same entries differently, and no
+// expectation reading slots back is about the numbering.
+func timeframeSlots(t *testing.T, output string, keep func(slot string) bool) []string {
+	t.Helper()
+
+	var slots []string
+	for _, entry := range timeframeEntries(t, output) {
+		if keep(entry.slot) {
+			slots = append(slots, entry.slot)
+		}
+	}
+
+	return slots
+}
+
+// nonEventTimeframes keeps every slot but the events': each style places events
+// in a section of its own, and no expectation here is about where.
+func nonEventTimeframes(t *testing.T, output string) []string {
+	return timeframeSlots(t, output, func(slot string) bool {
+		return !strings.HasPrefix(slot, "evt ")
+	})
+}
+
+func eventTimeframes(t *testing.T, output string) []string {
+	return timeframeSlots(t, output, func(slot string) bool {
+		return strings.HasPrefix(slot, "evt ")
+	})
+}
+
+func processorTimeframes(t *testing.T, output string) []string {
+	return timeframeSlots(t, output, func(slot string) bool {
+		return strings.HasPrefix(slot, "pcr ")
+	})
+}
+
+// renderTimeframeSlotModel renders timeframeSlotModel in the given style, having
+// first read back the events to see that this style laid them out its own way.
+// The DCB and the projected style fall back to the standard layout for a model
+// they find nothing of their own to lay out, and a fallback would leave the
+// standard layout answering for the style named here.
+func renderTimeframeSlotModel(t *testing.T, style diagram.Style, events []string) string {
+	t.Helper()
+
+	raw, err := diagram.ExportMermaid(timeframeSlotModel(), style)
+	require.NoError(t, err)
+
+	output := string(raw)
+	require.Equal(t, events, eventTimeframes(t, output))
+
+	return output
+}
+
+func timeframeNumbers(t *testing.T, output string) []int {
+	t.Helper()
+
+	var numbers []int
+	for _, entry := range timeframeEntries(t, output) {
+		numbers = append(numbers, entry.number)
+	}
+
+	return numbers
+}
+
+func countingFromOne(count int) []int {
+	var numbers []int
+	for n := 1; n <= count; n++ {
+		numbers = append(numbers, n)
+	}
+
+	return numbers
 }
 
 func TestExportMermaid(t *testing.T) {
@@ -51,7 +210,7 @@ func TestExportMermaid(t *testing.T) {
 			require.NotContains(t, output, "tf ")
 		})
 
-		t.Run("trigger renders as ui timeframe regardless of stated kind", func(t *testing.T) {
+		t.Run("trigger renders as ui timeframe however its name reads", func(t *testing.T) {
 			model := &ast.Model{
 				Name: "Test",
 				Contexts: []*ast.Context{{
@@ -200,7 +359,7 @@ func TestExportMermaid(t *testing.T) {
 					raw, err := diagram.ExportMermaid(test.AutomationScheduleLibraryLendingModel(t), style.style)
 					require.NoError(t, err)
 
-					require.Equal(t, libraryLendingProcessorTimeframes, processorTimeframes(string(raw)))
+					require.Equal(t, libraryLendingProcessorTimeframes, processorTimeframes(t, string(raw)))
 				})
 			}
 		})
@@ -538,7 +697,7 @@ func TestExportMermaid(t *testing.T) {
 			raw, err := diagram.ExportMermaid(test.AutomationScheduleLibraryLendingModel(t), diagram.StyleDCB)
 			require.NoError(t, err)
 
-			require.Equal(t, libraryLendingProcessorTimeframes, processorTimeframes(string(raw)))
+			require.Equal(t, libraryLendingProcessorTimeframes, processorTimeframes(t, string(raw)))
 		})
 
 		t.Run("DCB context with StyleDCB renders flat events section", func(t *testing.T) {
@@ -693,5 +852,48 @@ func TestExportMermaid(t *testing.T) {
 			require.Contains(t, output, "decides_on: OrderPrioritized, OrderFlagged")
 			require.Contains(t, output, "where tag(priority == high)")
 		})
+	})
+
+	t.Run("every style", func(t *testing.T) {
+		for _, style := range []struct {
+			name  string
+			style diagram.Style
+			// events is where this style writes timeframeSlotModel's events, and
+			// no two styles write them alike: the standard layout leaves each
+			// event in the slice declaring it, the DCB layout gathers them all
+			// into a section of their own and is the only style to give the
+			// event a translation nests a line, and the projected layout files a
+			// tagged event under its tag key instead.
+			events []string
+		}{
+			{name: "standard", style: diagram.StyleAuto, events: []string{
+				"evt Lending.CopyBorrowed",
+				"evt Lending.CopyRecalled",
+			}},
+			{name: "dcb", style: diagram.StyleDCB, events: []string{
+				"evt Lending.CopyBorrowed",
+				"evt Lending.PartnerLoanReceived",
+				"evt Lending.CopyRecalled",
+			}},
+			{name: "projected", style: diagram.StyleProjected, events: []string{
+				"evt Lending.CopyBorrowed",
+				"evt loan.CopyRecalled",
+			}},
+		} {
+			t.Run(style.name, func(t *testing.T) {
+				t.Run("a trigger takes the ui timeframe whatever its name reads, and an automation and a translation the pcr timeframe", func(t *testing.T) {
+					output := renderTimeframeSlotModel(t, style.style, style.events)
+
+					require.Equal(t, timeframeSlotAssignments, nonEventTimeframes(t, output))
+				})
+
+				t.Run("timeframe numbers run unbroken from one", func(t *testing.T) {
+					output := renderTimeframeSlotModel(t, style.style, style.events)
+
+					require.Equal(t, countingFromOne(len(timeframeSlotAssignments)+len(style.events)), timeframeNumbers(t, output),
+						"a repeated number draws two elements in the same place, a gap leaves a hole, and a short sequence is an element that lost its line")
+				})
+			})
+		}
 	})
 }
