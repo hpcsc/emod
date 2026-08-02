@@ -1,12 +1,12 @@
 # US-007: One palette for element types
 
 ## Progress
-- [ ] Task 1: Draw a trigger as a screen in SVG and draw.io
-- [ ] Task 2: Draw a trigger as a screen in the viewer
-- [ ] Task 3: Give an automation and a translation their own fills in SVG and draw.io
-- [ ] Task 4: Paint the viewer's nodes from one palette table
-- [ ] Task 5: Pin SVG, draw.io and the viewer to one palette
-- [ ] Task 6: Document the palette in the DSL reference and pin it to the exporters
+- [x] Task 1: Draw a trigger as a screen in SVG and draw.io
+- [x] Task 2: Draw a trigger as a screen in the viewer
+- [x] Task 3: Give an automation and a translation their own fills in SVG and draw.io
+- [x] Task 4: Paint the viewer's nodes from one palette table
+- [x] Task 5: Pin SVG, draw.io and the viewer to one palette
+- [x] Task 6: Document the palette in the DSL reference and pin it to the exporters
 
 ---
 
