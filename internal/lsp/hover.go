@@ -7,7 +7,6 @@ import (
 	"github.com/hpcsc/emod/internal/ast"
 )
 
-// keywordDescriptions maps EMOD keyword strings to their hover descriptions.
 var keywordDescriptions = map[string]string{
 	"model":           "Declares the domain model name.",
 	"actor":           "Declares an actor in the domain.",
@@ -18,14 +17,16 @@ var keywordDescriptions = map[string]string{
 	"event":           "Defines an event that represents a state change.",
 	"fields":          "Defines the fields of an event.",
 	"flow":            "Defines the flow between commands and events.",
-	"trigger":         "Defines a manual trigger for a slice.",
+	"trigger":         "Defines a trigger, the Command pattern's human entry point into a slice: the actor who acts and the view they read.",
 	"view":            "Defines a read model that subscribes to events.",
-	"automation":      "Defines an automation that triggers on an event and sends a command.",
+	"automation":      "Defines an automation, the reactive processor of the Automation pattern: activated by an on event or an every schedule, optionally reads a view, and sends a command.",
+	"on":              "Names the event whose occurrence activates the automation.",
+	"every":           `Sets the schedule that activates the automation: a duration such as "5m", or a five-field cron expression such as "0 2 * * *".`,
 	"translation":     "Defines a translation from a view to a command.",
 	"subscribes":      "Defines the events a view subscribes to.",
 	"target":          "Defines the target context for an automation.",
 	"external_system": "Defines an external system for a translation.",
-	"reads":           "Defines the view a trigger or translation reads from.",
+	"reads":           "Defines the view a trigger, automation or translation reads from.",
 	"source":          "Defines the source for an external system.",
 	"external":        "Declares an external reference.",
 }

@@ -2,11 +2,10 @@
 
 ## Progress
 - [x] Task 1: See both homes a slice has from every LSP walker
-- [ ] Task 2: Describe `on`, `every` and `reads`, and name the pattern `trigger` and `automation` belong to
+- [x] Task 2: Describe `on`, `every` and `reads`, and name the pattern `trigger` and `automation` belong to
 - [ ] Task 3: Offer an automation's entries inside an automation block
 - [ ] Task 4: Offer event names after `on` and view names after `reads`
-- [ ] Task 5: Jump from an automation's `reads` to the view it names
-- [ ] Task 6: List the automations that read a view among its references
+- [ ] Task 5: Resolve an automation's `reads` to the view it names, both ways
 
 ---
 
@@ -27,15 +26,14 @@ hover for `trigger` and `automation` naming the Event Modeling pattern each belo
 automation-body keyword completion list; event-name completion after `on` and view-name completion
 after `reads`; go-to-definition from an automation's `reads`; find-references on a view listing the
 automations that read it. Carried along because the story's criteria cannot be honestly met without
-them: the `isKeyword` ordinal range in `internal/lsp/hover.go:37`, which today makes `on` and `every`
-invisible to hover no matter what the description map says (verified: `GetHover` returns nil on both);
-the `pendingKeyword` latch in `resolveContext` (`internal/lsp/completer.go:46`), which drops the cursor
+them: the one-home slice walks in the LSP files, which make every feature in this story blind to a
+`mode dcb` context's own slices, together with the ordinal-range keyword eligibility test that made
+`on` and `every` invisible to hover whatever the description map said (both Task 1's); and the
+`pendingKeyword` latch in `resolveContext` (`internal/lsp/completer.go:46`), which drops the cursor
 back to the top-level list for the rest of a block after any line beginning with `command` or `event`
-(verified: a cursor inside `automation … { on … / command … / ⟨here⟩ }` returns `model actor context`);
-and the one-home slice walks in all four LSP files, which make every feature in this story blind to a
-`mode dcb` context's own slices.
+(verified: a cursor inside `automation … { on … / command … / ⟨here⟩ }` returns `model actor context`).
 
-**Out of scope:** dropping the trigger kind slot (US-004); the `reads` edge (US-005); lane placement
+**Out of scope:** the `reads` edge (US-005); lane placement
 (US-006); the palette (US-007); the `automation/missing-todo-list` rule (US-008) — this story adds no
 diagnostic and no `RuleName`; the VS Code TextMate alternation
 (`editors/vscode/syntaxes/emod.tmLanguage.json:63`) and `editors/tree-sitter-emod/queries/*.scm`
@@ -44,16 +42,17 @@ diagnostic and no `RuleName`; the VS Code TextMate alternation
 
 **Consequences of that boundary, decided.** Nine shapes the story does not spell out:
 
-1. *The hover text for `trigger` describes the element's role, never its syntax.* US-004 removes the
-   kind slot, so hover text naming `UI`, `Schedule` or `Processor`, or spelling the header as
-   `trigger <Kind> "<name>"`, would be wrong one story later. `trigger` is the human entry point of the
-   Command pattern (`docs/dsl-reference.md:280`), and that is what the text says. Task 2 pins the
-   absence of the three kind words so the collision cannot land silently.
+1. *The hover text for `trigger` describes the element's role, never its syntax.* The language has no
+   kind slot — `ast.Trigger` (`internal/ast/ast.go:173-185`) carries none and the parser expects a
+   quoted name straight after the keyword (`internal/parser/parser.go:553-591`) — while
+   `docs/dsl-reference.md:286` still spells the header `trigger <Kind> "<name>"`. Hover text copied
+   from the reference would therefore describe a shape `emod validate` rejects. `trigger` is the human
+   entry point of the Command pattern, and that is what the text says. Task 2 pins the absence of the
+   three kind words so the stale spelling cannot leak in.
 2. *No task authors a new `trigger` declaration.* The two LSP test documents that need one already
-   spell `trigger manual "MyTrigger"` (`internal/lsp/definition_test.go:37`,
-   `internal/lsp/references_test.go:34`); Tasks 5 and 6 extend those documents' *automations* and leave
-   the trigger lines exactly as they are, so US-004 migrates two occurrences it was already going to
-   migrate rather than four. `internal/test/fixtures.go` is likewise read, never edited.
+   spell `trigger "MyTrigger"` (`internal/lsp/definition_test.go:38`,
+   `internal/lsp/references_test.go:35`); Task 5 extends those documents' *automations* and leaves the
+   trigger lines exactly as they are. `internal/test/fixtures.go` is likewise read, never edited.
 3. *Do not write hover or completion text from `docs/dsl-reference.md`.* `tasks/learnings.md` records
    that the reference's Automation Pattern skeleton (`:322-340`) still documents the retired
    `trigger <EventName>` spelling and says "`trigger` and `command` are required" — a shape
@@ -71,7 +70,7 @@ diagnostic and no `RuleName`; the VS Code TextMate alternation
    there must still see field types. Gating on "not `ctxFields`" is one rule that covers the collision
    while keeping `reads` working in all three blocks that spell it — automation, trigger and
    translation. Gating each keyword on its own block instead would need `resolveContext` to learn the
-   trigger and translation bodies, which US-004 and the proposal both change.
+   trigger and translation bodies, which the proposal (`:227`) changes.
 7. *A value list needs whitespace between the keyword and the cursor.* `on|` is a half-typed keyword and
    completes from the block's keyword list, which the client filters down; `on |` is a value position
    and completes event names. Without the rule, typing `o`, `n` would replace the keyword list with
@@ -90,44 +89,58 @@ named `reads` does the same today — and making it position-aware is a differen
 this story is asked for. Task 2 pins the behaviour so it reads as decided rather than discovered.
 Likewise, `keywordDescriptions` gains entries for `on` and `every` only: `description`, `invariant`,
 `spec`, `given`, `when`, `then`, `rejected`, `mode`, `tags`, `decides_on`, `where`, `and`, `or`, `not`,
-`tag`, `events` and `emod` stay undescribed, and Task 2's fix to the eligibility test is what makes
-describing any of them a one-line change later rather than a silent no-op. And a cursor inside a
-`trigger`, `view` or `translation` block still returns the top-level list, as it does today — Task 3
-teaches `resolveContext` the automation body alone, because US-004 rewrites the trigger header and the
-proposal (`:227`) adds an entry to its body.
+`tag`, `events` and `emod` stay undescribed, and Task 2 pins one of them — `mode` — as still returning
+nil, so the map is what decides and describing any of the others stays a one-line change. And a cursor
+inside a `trigger`, `view` or `translation` block still returns the top-level list, as it does today —
+Task 3 teaches `resolveContext` the automation body alone, because the proposal (`:227`) adds an entry
+to a trigger's body that a later story owns.
 
 **Learnings folded in** from `tasks/learnings.md`: keyword surfaces fan out past the lexer and parser,
-and `isKeyword` is an ordinal range that silently excludes every `Kind` appended after
-`KeywordExternal` — the load-bearing one for this story; ask the lexer which keywords exist and never
-range over `Kind`; assert a short keyword with a `\b`-bounded `require.Regexp`, since `on` hides inside
-`automatiOn`, `descriptiOn` and `cOntext`; a slice has two homes and every LSP walker still walks one;
-de-duplicate before a fan-out edit and land the de-duplication with proof; name an extracted helper
-after the contract its callers rely on; prefer a single structural assertion over a contains-loop; an
-assertion whose expected value comes from the code under test cannot fail; a second `require.Contains`
-on one message is often shadowed by the first; acceptance criteria describe the working tree, and a
-commit-message receipt is the commit author's obligation, never a criterion; `docs/dsl-reference.md` is
-the one keyword surface no test reaches and still documents the retired automation `trigger` spelling.
+so ask the lexer which keywords exist and never range over `Kind`; assert a short keyword with a
+`\b`-bounded `require.Regexp`, since `on` hides inside `automatiOn`, `descriptiOn` and `cOntext`; a
+slice has two homes; prefer a single structural assertion over a contains-loop, and delete the
+narrower `Contains` leaf the new whole-list assertion subsumes rather than keeping both; an assertion
+whose expected value comes from the code under test cannot fail; a second `require.Contains` on one
+message is often shadowed by the first; a task's change-set assertion must name every file its own
+patterns require it to change; acceptance criteria describe the working tree, and a commit-message
+receipt is the commit author's obligation, never a criterion; `docs/dsl-reference.md` is the one
+keyword surface no test reaches and still documents both the retired automation `trigger` spelling and
+the retired trigger kind slot.
 
 ---
 
 ## Codebase Context
 
-**Lexer.** `internal/lexer/token.go` declares `Kind` in one iota block (`:9-63`) with `KeywordOn` and
-`KeywordEvery` appended last (`:48-49`), well past `KeywordExternal` (`:30`). `Keywords()` returns the
-spellings sorted from the `keywords` map and `Kind.IsKeyword()` is a lookup in the `keywordNames`
-inversion — the correct eligibility test, already exported and already used by
-`Instance.checkIdentifierLike`.
+**Lexer.** `internal/lexer/token.go` declares `Kind` in one iota block with `KeywordOn` and
+`KeywordEvery` appended last, and spells them in the `keywords` map (`:110-111`). `Keywords()` returns
+the spellings sorted from that map and `Kind.IsKeyword()` is a lookup in the `keywordNames` inversion —
+the eligibility test the LSP already asks.
 
-**Hover** (`internal/lsp/hover.go`). `keywordDescriptions` (`:13-33`) maps nineteen spellings to text;
-`trigger` (`:23`) reads "Defines a manual trigger for a slice", `automation` (`:25`) reads "Defines an
-automation that triggers on an event and sends a command", `reads` (`:30`) reads "Defines the view a
+**The shared model walk** (`internal/lsp/model.go`). `parseModel` (`:9`) scans and parses, keeping the
+model and discarding the diagnostics. `scopedSlices` (`:23-36`) yields every slice as a `scopedSlice` —
+the slice, its context, and its aggregate where it has one, `nil` for a slice a `mode dcb` context
+declares directly — an aggregate's slices first, then the slices the context declares directly, in
+declaration order. `newDeclaredNames` (`:57-81`) returns four *maps* from name to declaration position,
+keyed `commandName`, `eventName`, `viewName`, `contextName`; being maps they carry no order.
+`referencesIn` (`:95-130`) returns the ordered `[]nameRef` of every site that names something rather
+than declaring it, and it is where each reference kind is stated once: per scoped slice, a view's
+`subscribes` entries (`:104-110`), then each automation's `on`, `command` and `target context`
+(`:111-115`), then each translation's `reads` and `command`, then a trigger's `reads`, then the flow
+entries. An automation's `reads` is the one reference site the list omits, though `ast.Automation`
+carries `Reads`/`ReadsPos` (`internal/ast/ast.go:210-211`) — verified: go-to-definition on it returns
+nil, and find-references on a view an automation reads lists the trigger and the translation only.
+
+**Hover** (`internal/lsp/hover.go`). `keywordDescriptions` (`:11-31`) maps nineteen spellings to text;
+`trigger` (`:21`) reads "Defines a manual trigger for a slice", `automation` (`:23`) reads "Defines an
+automation that triggers on an event and sends a command", `reads` (`:28`) reads "Defines the view a
 trigger or translation reads from" — none of the three mentions a schedule, a view an automation reads,
-or a pattern. `isKeyword` (`:37`) is `k >= lexer.KeywordModel && k <= lexer.KeywordExternal`. `GetHover`
-(`:48`) walks `ctx.Aggregates` → `agg.Slices` only (`:64-84`), returning contextual hover for a command,
-event or view definition name, then falls through to a token scan for keywords (`:87-101`).
-`hoverForCommand`/`hoverForEvent`/`hoverForView` (`:106`, `:117`, `:139`) all interpolate
-`ctx.Name` and `agg.Name`. The old automation string is spelled in exactly two places outside
-`hover.go`: `internal/lsp/hover_test.go:121` and `internal/lsp/server_test.go:994`.
+or a pattern, and `on` and `every` have no entry at all. Eligibility is `tok.Type.IsKeyword()` (`:74`),
+so a keyword the lexer knows becomes answerable the moment the map describes it, and an undescribed
+keyword such as `mode` returns nil. `GetHover` (`:41`) walks `scopedSlices` for a command, event or view
+definition name (`:53-69`), then falls through to the token scan (`:72-80`); `declaredIn` (`:85`) builds
+the `<Context> > <Aggregate>` scope string, dropping the second segment where there is no aggregate. The
+automation description is spelled in exactly two places outside `hover.go`:
+`internal/lsp/hover_test.go:177` and `internal/lsp/server_test.go:994`.
 
 **Completion** (`internal/lsp/completer.go`). `GetCompletions` (`:10`) never parses — `resolveContext`
 (`:33`) is a line scanner over brace counts, `findBlockKeyword` (`:97`) recognises six spellings
@@ -144,46 +157,48 @@ translation body all complete top-level keywords today. Verified on the current 
 server advertises `" "` as a completion trigger character (`internal/lsp/server.go:99`), so a request
 fires the moment an author types the space after `on`.
 
-**Definition** (`internal/lsp/definition.go`). `GetDefinition` (`:14`) builds four name→position maps
-from `ctx.Aggregates` → `agg.Slices` (`:32-47`), then checks five reference kinds in order: view
-`subscribes` (`:60`), automation `on`/`command`/`target context` (`:73-89`), translation
-`reads`/`command` (`:92`), trigger `reads` (`:106`) and flow command/event (`:115`). An automation's
-`reads` is absent from both halves — verified: the cursor on it returns nil. `cursorOnName` (`:136`) and
-`locationFor` (`:148`) are the shared helpers, `nameRange` (`hover.go:159`) their hover counterpart.
+**Definition** (`internal/lsp/definition.go`). Thirty-one lines: `GetDefinition` (`:8`) parses, builds
+`newDeclaredNames`, and returns the first `referencesIn` entry the cursor sits on (`:21-28`) whose name
+the model declares. It names no construct itself — every reference kind it can navigate from is one
+`referencesIn` states. `locationFor` (`position.go`) is the shared location builder and `at.onName` the
+only hit test; it returns false for an empty name, so a construct that omits an entry needs no guard.
 
-**References** (`internal/lsp/references.go`). `GetReferences` (`:14`) has three walks, all one-home:
-the definition maps (`:31-45`), the cursor-on-reference resolution (`:84-177`) and the collection
-(`:203-255`). The collection covers `subscribes`, automation `on` and `command`, translation `reads` and
-`command`, trigger `reads`, and flow command/event. An automation's `reads` appears in neither the
-resolution nor the collection — verified: find-references on a view read by both an automation and a
-trigger returns the declaration and the trigger only.
+**References** (`internal/lsp/references.go`). Sixty-six lines over the same two helpers.
+`GetReferences` (`:14`) resolves the cursor through `targetAt` (`:47`) — which checks the declarations
+of the three `referenceTargetKinds` (`:7`) first, then the `referencesIn` entries — and then emits the
+declaration followed by every `referencesIn` entry of the same kind and name, in list order (`:32-40`).
+A site added to `referencesIn` therefore reaches the cursor resolution and the listing together.
 
-**Semantic tokens** (`internal/lsp/semantictokens.go`). `GetSemanticTokens` (`:67`) walks
-`ctx.Aggregates` → `agg.Slices` (`:81-134`); commands, events, views, actors, contexts and aggregates
-get token types, and a command declared directly on a `mode dcb` context gets none.
+**Semantic tokens** (`internal/lsp/semantictokens.go`). `GetSemanticTokens` walks `scopedSlices`;
+events get `TokenTypeEvent` (`:115`) and views `TokenTypeClass` (`:118`), the two types
+`tokenTypeIndex` (`:9`) maps to legend indices 1 and 2.
 
-**Both-homes precedents.** `newModelIndex` (`internal/validator/validator.go:71-76`), `allSlicesIn`
+**Both-homes precedents.** `newModelIndex` (`internal/validator/validator.go:57`), `allSlicesIn`
 (`internal/glossary/glossary.go:61-67`), `declaredSlices` (`internal/test/fixtures.go`) and
-`exportedSlices` (`internal/export/export_test.go`) all visit both. The last three agree on order —
-an aggregate's slices first, then the slices a `mode dcb` context declares directly — and every
-hand-transcribed expectation in the repo is written in that order.
+`exportedSlices` (`internal/export/export_test.go`) all visit both homes and agree with `scopedSlices`
+on order — an aggregate's slices first, then the slices a `mode dcb` context declares directly — so a
+hand-transcribed expectation reads the same in every package.
 
 **LSP tests.** All `_test.go` files in `internal/lsp` are `//go:build unit`, package `lsp_test`, one
 umbrella `Test<Function>` per file with a `const testDoc` and a `posIn` helper that resolves a substring
-to 0-based coordinates. `internal/lsp/server_test.go` (`:114`) is the over-the-wire umbrella with a
-`t.Run` group per LSP method — `completion` (`:450`), `definition` (`:591`), `references` (`:737`),
-`hover` (`:891`). `requireLocation` (`references_test.go:74`) is a find-in-list check that cannot see a
-missing or extra entry. No LSP test imports `internal/test` today.
+to 0-based coordinates *within the first occurrence of a container substring*. `internal/lsp/server_test.go`
+(`:114`) is the over-the-wire umbrella with a `t.Run` group per LSP method — `completion` (`:450`),
+`definition` (`:591`), `references` (`:737`), `hover` (`:891`). In `references_test.go`,
+`requireLocation` (`:75`) is a find-in-list check that cannot see a missing or extra entry, and
+`locationOf` (`:94`) builds the whole `lsp.Location` a named reference should be reported as — the
+builder the whole-list `require.Equal` leaves use.
 
 **Shared fixtures this story reads.** `test.AutomationReadsLibraryLending`
-(`internal/test/fixtures.go:578`) is the model with the shape every task needs: `MemberLoansView`
-declared in an aggregate's slice (`:610`) and read by an automation in that aggregate (`:652`) *and* by
-an automation in the `mode dcb` context "Reading Room" (`:731`); `DeskOccupancyView` declared directly
-on that DCB context (`:714`) and read by an automation there (`:726`); `DeskClaimed` declared in a DCB
-slice, subscribed by `DeskOccupancyView` and named by an automation's `on`; and a trigger reading
-`AvailableCopiesView`, a name the model never declares — the unresolved-reference case.
-`test.AutomationScheduleLibraryLending` (`:746`) is the same shape with schedules.
-`internal/test/models.go` holds the parsing accessors.
+(`internal/test/fixtures.go:578`) is the model with the shape every task needs. `MemberLoansView` is
+declared in the "Review Member Loans" slice of the aggregate "Loan" (`:610`) and read twice: by
+`RecallOverdueCopy` (`:650`), an automation in another slice of the same aggregate, and by
+`RemindReaderOfLoans` (`:729`), an automation in a slice the `mode dcb` context "Reading Room" declares
+directly — a read that crosses contexts. `DeskOccupancyView` is declared directly on that DCB context
+(`:714`) and read by `FreeDeskAtClosing` (`:724`) in another of its own slices. `DeskClaimed` is
+declared in a DCB slice, subscribed by `DeskOccupancyView` and named by an automation's `on`; the
+trigger "Lending Desk" (`:588`) reads `AvailableCopiesView`, a name the model never declares — the
+unresolved-reference case. `test.AutomationScheduleLibraryLending` (`:944`) is the same shape with
+schedules. `internal/test/models.go` holds the parsing accessors.
 
 **Not touched, deliberately.** `internal/lexer`, `internal/parser`, `internal/ast`,
 `internal/formatter`, `internal/validator`, `internal/linter`, `internal/export`, `internal/importer`,
@@ -273,8 +288,7 @@ aggregate's slice resolves exactly as it does today.
 **Behavior:** hovering `on` or `every` inside an automation describes what each declares, and hovering
 `reads` describes the view an automation, trigger or translation consults. Hovering `trigger` or
 `automation` names the Event Modeling pattern the element belongs to, describing its role rather than
-its current syntax. A keyword's eligibility for hover comes from the lexer, so a keyword declared after
-`KeywordExternal` is no longer invisible.
+its current syntax.
 
 **Acceptance Criteria:**
 - [ ] Hovering `on` in `automation <Name> { on <Event> … }` returns markdown describing the event that
@@ -287,48 +301,50 @@ its current syntax. A keyword's eligibility for hover comes from the lexer, so a
       `require.Regexp`, since `on` occurs inside `automation`, `description` and `context`
 - [ ] The `automation` hover text no longer states that an automation triggers on an event and sends a
       command as its only shape — the two sites spelling the current string
-      (`internal/lsp/hover_test.go:121`, `internal/lsp/server_test.go:994`) move to the new wording, and
-      `rg 'triggers on an event and sends a command' --glob '!docs/**'` returns nothing
+      (`internal/lsp/hover_test.go:177`, `internal/lsp/server_test.go:994`) move to the new wording, and
+      `rg 'triggers on an event and sends a command' --glob '!docs/**' --glob '!tasks/**'` returns
+      nothing
 - [ ] The `trigger` hover text names the Command pattern and describes the element as the human entry
       point into a slice
 - [ ] The `trigger` hover text contains none of `UI`, `Schedule` or `Processor`, and describes no header
-      shape with a kind between the keyword and the name — US-004 removes that slot, and hover must not
-      have to move with it
+      shape with a kind between the keyword and the name — the language has no such slot, though
+      `docs/dsl-reference.md:286` still prints one
 - [ ] The `reads` hover text names automations alongside triggers and translations
-- [ ] Hovering `model` still returns its current description, unedited, and hovering a token that is
-      neither a described keyword nor a definition name still returns nil — the widened eligibility test
-      does not start answering for undescribed keywords
-- [ ] `rg 'KeywordModel|KeywordExternal' internal/lsp` returns nothing: the eligibility test is
-      `lexer.Kind.IsKeyword()`, not an ordinal comparison, so the next keyword appended to
-      `internal/lexer/token.go` is eligible on the day the lexer learns it
-- [ ] A `fields` block declaring a field named `every` hovers that field's name as the `every` keyword —
-      the behaviour a field named `reads` already has, asserted so the shared spelling is a stated
-      decision rather than an accident
+- [ ] Hovering `model` still returns its current description, unedited, and hovering `mode` — a keyword
+      the lexer knows (`internal/lexer/token.go:93`) and this task leaves undescribed — still returns
+      nil, asserted beside a described keyword so "answers for what it describes" and "stays silent
+      otherwise" are proved together
+- [ ] A `fields` block declaring a field named `every` hovers that field's name as the `every` keyword,
+      returning the same markdown as the `every` entry of an automation in the same document — the
+      behaviour a field named `reads` already has, asserted so the shared spelling is a stated decision
+      rather than an accident
 - [ ] Over the wire, `textDocument/hover` at a position on `on` and at a position on `every` in an open
       document returns the same markdown as the direct call, added to the `hover` group in
       `internal/lsp/server_test.go` (`:891`)
 
 **Affected Files/Modules:**
-- `internal/lsp/hover.go` — `keywordDescriptions` (`:13-33`) and `isKeyword` (`:37`)
-- `internal/lsp/hover_test.go` — the keyword group, and the expectation at `:121`
+- `internal/lsp/hover.go` — `keywordDescriptions` (`:11-31`) alone; the eligibility test at `:74` is
+  already `tok.Type.IsKeyword()`, so a described keyword the lexer knows is answerable without touching
+  `GetHover`
+- `internal/lsp/hover_test.go` — the keyword leaves (`:155`, `:163`) and the expectation at `:177`
 - `internal/lsp/server_test.go` — the `hover` group (`:891`) and the expectation at `:994`
 
 **Patterns to Follow:**
 - `tasks/learnings.md` "Keyword surfaces fan out past the lexer, parser and tree-sitter grammar" — this
-  task is the LSP half of that fan-out, and the `isKeyword` ordinal range it names is the reason `on`
-  and `every` have no hover today
-- `tasks/learnings.md` "Ask the lexer which keywords exist; never restate the set and never range over
-  `Kind`" — `lexer.Kind.IsKeyword()` (`internal/lexer/token.go`) is the replacement it names
+  task is the LSP half of that fan-out; `keywordDescriptions` is the only surface left in `hover.go`
+  that decides whether a keyword answers
 - `tasks/learnings.md` "Assert a short keyword in a diagnostic with a `\b`-bounded `require.Regexp`" —
   the same hazard applies to asserting hover prose
 - `tasks/learnings.md` "A second `require.Contains` on one message is often shadowed by the first" —
   before adding a needle to a string that already has one, check it is not inside the earlier needle
 - `docs/dsl-reference.md:276-350` is the authority for the four pattern names (Command, View,
   Automation, Translation) and for `trigger` belonging to the Command pattern; its Automation Pattern
-  *skeleton* (`:322-340`) is stale and must not be copied — `tasks/learnings.md` records that it still
-  documents the rejected `trigger <EventName>` spelling
+  *skeleton* (`:322-340`) and its trigger header (`:286`) are stale and must not be copied — the
+  skeleton still spells the rejected `trigger <EventName>` entry and the header a kind slot the parser
+  no longer accepts
 - `writeAutomation` (`internal/formatter/formatter.go:347-357`) and `parseAutomationEntry`
-  (`internal/parser/parser.go`) are what an automation actually accepts
+  (`internal/parser/parser.go:1089`) are what an automation actually accepts; the two schedule forms
+  `every` takes are in `docs/proposals/triggers-and-automations-proposal.md:105`
 
 **Testable:** Yes — through `lsp.GetHover` and the server's `textDocument/hover` handler.
 
@@ -360,8 +376,8 @@ later cursor in the block back to the top-level list.
       `translation`, `flow`, and `git diff` moves no existing expectation in
       `internal/lsp/completer_test.go` — every change to that file is an added subtest
 - [ ] A cursor inside a `trigger`, `view` or `translation` block still returns the top-level list,
-      asserted so the asymmetry is a recorded decision: US-004 rewrites the trigger header and the
-      proposal adds an entry to its body
+      asserted beside the automation-body leaf so the asymmetry is a recorded decision rather than an
+      oversight — the proposal (`:227`) adds an entry to a trigger's body that a later story owns
 - [ ] Over the wire, `textDocument/completion` at a position inside an automation body of an open
       document returns those five labels, added to the `completion` group in
       `internal/lsp/server_test.go` (`:450`)
@@ -380,7 +396,7 @@ later cursor in the block back to the top-level list.
 - `tasks/learnings.md` "Name an extracted helper after the contract its callers rely on" — if the latch
   is replaced rather than patched, the replacement's postcondition (what a braceless keyword line means
   for the *next* line) is the thing to name
-- `parseAutomationEntry` (`internal/parser/parser.go`) is the authority for which entries an automation
+- `parseAutomationEntry` (`internal/parser/parser.go:1089`) is the authority for which entries an automation
   accepts; the block imposes no order and no arity beyond the exactly-one-of rule over `on` and `every`,
   and completion imposes none either — both appear in the list
 - Value completion after a keyword is Task 4's; this task changes only which keyword list is chosen
@@ -407,8 +423,8 @@ cleanly, because the line being typed is itself incomplete.
       `require.Equal` against the full ordered label slice
 - [ ] With the cursor after `reads ` on an entry line of an automation body, the returned items are the
       view names the model declares, each with `lsp.ClassCompletion` kind — the kinds match what
-      `GetSemanticTokens` already assigns events and views
-      (`internal/lsp/semantictokens.go:57-63`), so one construct does not read as two things
+      `GetSemanticTokens` already assigns events (`internal/lsp/semantictokens.go:115`) and views
+      (`:118`), so one construct does not read as two things
 - [ ] The same view list is returned with the cursor after `reads ` inside a `trigger` block and inside
       a `translation` block — every block that spells `reads` names a view
 - [ ] For a document carrying a `mode dcb` context, the view list contains both a view declared in an
@@ -436,19 +452,19 @@ cleanly, because the line being typed is itself incomplete.
 - `internal/lsp/server_test.go` — the `completion` group (`:450`)
 
 **Patterns to Follow:**
-- The parse-then-walk opening every other LSP entry point uses — `lexer.Scan` then `parser.New(...)`
-  then `Parse`, keeping the model and discarding the diagnostics (`internal/lsp/hover.go:53-58`,
-  `definition.go:19-24`, `references.go:19-24`, `semantictokens.go:72-77`); the parser is error-tolerant
-  and returns a model for a half-written document
-- Task 1's slice walk supplies the names from both homes; a fresh nested loop here would re-fork the
-  shape that task removed
+- `parseModel` (`internal/lsp/model.go:9`) is the one parse-then-walk opening every other LSP entry
+  point uses (`hover.go:46`, `definition.go:13`, `references.go:19`, `semantictokens.go`); the parser is
+  error-tolerant and returns a model for a half-written document
+- `scopedSlices` (`internal/lsp/model.go:23-36`) supplies the names from both homes in declaration
+  order; a fresh nested loop here would re-fork the shape it already carries. `newDeclaredNames`
+  (`:57-81`) cannot serve this criterion — it returns maps, and a map has no order to assert against
 - `tasks/learnings.md` "An assertion whose expected value comes from the code under test is the
   recurring review finding" — write the expected name list by hand from the test document, never by
   walking the parsed model in the test
 - `tasks/learnings.md` "Prefer a single structural assertion" — one `require.Equal` on the ordered label
   slice covers length, contents and order together
-- `CompletionItemKind` values are in `internal/lsp/protocol.go:47-76`; `tokenTypeIndex`
-  (`internal/lsp/semantictokens.go:11`) is where events and views already have a type each
+- `CompletionItemKind` values are in `internal/lsp/protocol.go:48-76` — `ClassCompletion` (`:57`),
+  `KeywordCompletion` (`:64`), `EventCompletion` (`:73`)
 - The server already advertises `" "` as a trigger character (`internal/lsp/server.go:99`), so no
   capability changes
 
@@ -460,115 +476,105 @@ cleanly, because the line being typed is itself incomplete.
 
 ---
 
-### Task 5: Jump from an automation's `reads` to the view it names
+### Task 5: Resolve an automation's `reads` to the view it names, both ways
 
-**Behavior:** go-to-definition on the view name in an automation's `reads` entry navigates to that
-view's declaration, wherever in the model it is declared. The automation's `on` event and its `command`
-keep navigating as they do today, so all three jumps the story asks for work from one automation block.
+**Behavior:** an automation's `reads` entry becomes a reference site like every other one the model
+states, so go-to-definition on the view name navigates to that view's declaration wherever in the model
+it is declared, and find-references on a view returns the automations that read it alongside the
+triggers and translations that do — with the cursor on the declaration or on any one of those
+references. The automation's `on` event and its `command` keep navigating and keep listing as they do
+today, and a command's and an event's references are unchanged.
 
 **Acceptance Criteria:**
-- [ ] The cursor on the view name in an automation's `reads` entry returns the location of that view's
-      declaration, with the range starting at the declaration's name and ending at name start plus name
-      length
+- [ ] Go-to-definition with the cursor on the view name in an automation's `reads` entry returns the
+      location of that view's declaration, with the range starting at the declaration's name and ending
+      at name start plus name length
 - [ ] The cursor on the same automation's `on` event and on its `command` return their declarations —
       asserted in the same subtest group as the `reads` jump, so the story's three jumps are proved
       together rather than two of them assumed
-- [ ] The jump resolves a view declared in a different aggregate from the automation, and a view
-      declared directly on a `mode dcb` context while the automation sits in an aggregate's slice —
-      both asserted on `test.AutomationReadsLibraryLendingModel`'s source, which declares exactly those
-      two shapes
-- [ ] An automation whose `reads` names a view the model does not declare returns nil, matching what a
-      trigger reading an undeclared view already does
+- [ ] The jump resolves each shape `test.AutomationReadsLibraryLending` declares, asserted on its
+      source: `RecallOverdueCopy` reading `MemberLoansView`, declared in another slice of the same
+      aggregate; `RemindReaderOfLoans`, in a slice the `mode dcb` context declares directly, reading
+      that same view across the context boundary; and `FreeDeskAtClosing` reading `DeskOccupancyView`,
+      declared directly on that context
+- [ ] An automation whose `reads` names a view the model does not declare returns nil from
+      go-to-definition, and an automation whose `reads` resolves returns a location — both asserted on
+      one document carrying the two automations, so the nil is not satisfiable by resolving nothing
 - [ ] The cursor on the `reads` keyword itself, rather than on the value, returns nil — navigation is
-      from the reference, not the entry
-- [ ] The automation in `internal/lsp/definition_test.go`'s `testDoc` (`:26-30`) gains a `reads` entry
-      naming the view that document already declares; the `trigger manual "MyTrigger"` block (`:36`) is
-      left exactly as written and no added assertion mentions a trigger kind, so US-004 migrates what it
-      was already going to migrate
-- [ ] Every existing subtest in `internal/lsp/definition_test.go` passes with its expectations unedited
-      apart from coordinates shifted by the added line, and the `definition` group in
-      `internal/lsp/server_test.go` (`:591`) still passes
-
-**Affected Files/Modules:**
-- `internal/lsp/definition.go` — the automation branch of the reference walk (`:73-89`), which handles
-  `on`, `command` and `target context` and not `reads`
-- `internal/lsp/definition_test.go` — `testDoc` (`:17`) and the automation group
-
-**Patterns to Follow:**
-- The translation branch immediately below (`internal/lsp/definition.go:92-103`) already resolves a
-  `reads` value against the view map and is the line-for-line shape; the trigger branch (`:106-112`) is
-  its single-valued sibling
-- Task 1's slice walk is what makes the view map cover both homes; the branch itself resolves against
-  that map
-- `cursorOnName` (`internal/lsp/definition.go:136`) is the only hit test, and it returns false for an
-  empty name, so an automation with no `reads` needs no extra guard
-- `tasks/learnings.md` "Only an automation's `reads` resolves; a trigger's and a translation's must stay
-  unchecked" is about the *validator*, not navigation — the LSP resolves all three and returns nil for
-  an unresolved name, which is why the undeclared-view criterion above is a nil and not a diagnostic
-- No `.emod` file, fixture or example is edited; `internal/test/fixtures.go` is read
-
-**Testable:** Yes — through `lsp.GetDefinition` and the server's `textDocument/definition` handler.
-
-**Verification:** `go test -tags unit ./internal/lsp/...`.
-
-**Depends on:** 1
-
----
-
-### Task 6: List the automations that read a view among its references
-
-**Behavior:** find-references on a view returns every place the model reads it — the automations, the
-triggers and the translations — together with its declaration, and the same list comes back with the
-cursor on any one of those references. A command's and an event's references are unchanged.
-
-**Acceptance Criteria:**
-- [ ] Find-references with the cursor on a view's declaration name returns the declaration, every
-      automation `reads` naming it, every trigger `reads` naming it and every translation `reads` naming
-      it — asserted with one `require.Equal` against the full expected location list in walk order, not
-      with the find-in-list `requireLocation` helper, which cannot see a missing or an extra entry
+      from the reference, not from the entry
+- [ ] Find-references with the cursor on a view's declaration name returns, in one `require.Equal`
+      against the full ordered list, the declaration followed by every site naming it in the order
+      `referencesIn` (`internal/lsp/model.go:95-130`) yields — within a slice, the automations' `reads`
+      before the translations' `reads` before the trigger's `reads`; across slices, an aggregate's
+      slices before the slices a `mode dcb` context declares directly
 - [ ] Find-references with the cursor on an automation's `reads` value returns that same full list, so
-      the reference resolves both ways
-- [ ] On `test.AutomationReadsLibraryLendingModel`'s source, references to the view declared in an
-      aggregate's slice and read by an automation in that aggregate *and* by an automation in the
-      `mode dcb` context list both automations; references to the view declared directly on that context
-      list the automation there
-- [ ] A view that nothing reads returns its declaration alone
-- [ ] References on a command still return the declaration, the flow entry, the automation `command` and
-      the translation `command`; references on an event still return the declaration, the `subscribes`
-      entry and the automation `on` — `git diff` moves no existing expectation in
-      `internal/lsp/references_test.go`, and every change to that file is an added subtest or a
-      coordinate shifted by an added line
-- [ ] The automation in `internal/lsp/references_test.go`'s `testDoc` (`:22-26`) gains a `reads` entry
-      naming the view that document already declares and that its trigger already reads, so one document
-      carries an automation and a trigger reading the same view; the `trigger manual "MyTrigger"` block
-      (`:31`) is left exactly as written and no added assertion mentions a trigger kind
-- [ ] The `references` group in `internal/lsp/server_test.go` (`:737`) gains a leaf returning the
-      locations for a view read by an automation over the wire
+      the reference resolves in both directions
+- [ ] On `test.AutomationReadsLibraryLending`'s source, references to `MemberLoansView` return its
+      declaration, `RecallOverdueCopy`'s `reads` and `RemindReaderOfLoans`'s `reads`; references to
+      `DeskOccupancyView` return its declaration and `FreeDeskAtClosing`'s `reads`
+- [ ] On one document declaring two views, one read by an automation and one read by nothing, the first
+      returns its declaration plus the automation's `reads` and the second returns its declaration
+      alone — asserted in the same leaf, so "lists what reads it" and "lists nothing else" are proved
+      against the same walk
+- [ ] The `views` group of `internal/lsp/references_test.go` calls `requireLocation` nowhere: the
+      declaration-cursor leaf that asserts the full list subsumes the find-in-list leaf it replaces, and
+      the replaced leaf is gone rather than kept beside it
+- [ ] References on a command still return the declaration, the flow entry, the automation `command`
+      and the translation `command`, and references on an event still return the declaration, the
+      `subscribes` entry, the automation `on` and the flow entry — `git diff` shows no edit to the
+      asserted counts or locations of the `events` and `commands` groups
+- [ ] The production change is confined to `referencesIn` in `internal/lsp/model.go`: `git diff` shows
+      no edit to `internal/lsp/definition.go` or `internal/lsp/references.go`, both of which read the
+      list it returns
+- [ ] The automations in `internal/lsp/definition_test.go`'s `testDoc` (`:28-32`) and
+      `internal/lsp/references_test.go`'s `testDoc` (`:25-29`) each gain a `reads` entry naming the view
+      the document already declares, so one document carries an automation, a translation and a trigger
+      reading the same view; the `trigger "MyTrigger"` blocks (`:38`, `:35`) are left exactly as written
+- [ ] Every other subtest in `internal/lsp/definition_test.go` and `internal/lsp/references_test.go`
+      passes with its cursor still landing on the entry its name claims, the translation-`reads` leaves
+      included — `posIn` resolves the *first* occurrence of its container, and an added automation
+      `reads OrderView` line precedes the translation's
+- [ ] The `references` group in `internal/lsp/server_test.go` (`:737`) gains a leaf returning, over the
+      wire, the locations for a view an automation reads, and the `definition` group (`:591`) still
+      passes
 
 **Affected Files/Modules:**
-- `internal/lsp/references.go` — the automation branch of the cursor-on-reference resolution
-  (`:106-119`) and of the collection walk (`:218-225`), neither of which reads `Automation.Reads`
-- `internal/lsp/references_test.go` — `testDoc` (`:14`), the view group, and `requireLocation` (`:70`),
-  which the new leaves do not use
+- `internal/lsp/model.go` — the automation loop in `referencesIn` (`:111-115`), which states `on`,
+  `command` and `target context` and not `reads`
+- `internal/lsp/definition_test.go` — `testDoc` (`:18`), the automation leaves, and the
+  translation-`reads` leaf (`:133-137`) whose container needs re-anchoring
+- `internal/lsp/references_test.go` — `testDoc` (`:15`), the `views` group (`:255-284`), and
+  `locationOf` (`:94`), which the new whole-list leaves use in place of `requireLocation`
 - `internal/lsp/server_test.go` — the `references` group (`:737`)
 
 **Patterns to Follow:**
-- The translation branch in both walks (`internal/lsp/references.go:126-139`, `:228-235`) already
-  resolves and collects a `reads` value for a view target and is the shape for both halves; the trigger
-  branch (`:146-153`, `:238-242`) is its single-valued sibling
-- Task 1's slice walk is what makes the collection reach both homes; the branches themselves only add
-  the automation's `reads`
-- `tasks/learnings.md` "Prefer a single structural assertion" and "An assertion whose expected value
-  comes from the code under test is the recurring review finding" — the expected location list is
-  written from the test document by hand, and the whole list is compared at once
-- The resolution walk's `break` structure after each reference kind (`:101`, `:121`, `:141`, `:155`)
-  fixes where a new check goes; adding one inside the automation branch keeps the existing short-circuit
-- Drawing a `reads` edge in the diagram outputs is US-005's; this task adds no edge and no exporter
-  change
+- The translation entries in the same loop (`internal/lsp/model.go:116-119`) already state a `reads`
+  value as a `viewName` reference and are the line-for-line shape; the trigger's (`:120-122`) is its
+  single-valued sibling. `GetDefinition` iterates the returned list and `GetReferences` uses it for both
+  `targetAt` and the listing, so one statement serves both features — no branch is added to either file
+- The entry sits in the automation loop where `emod fmt` writes it, after `on` and before `command`
+  (`writeAutomation`, `internal/formatter/formatter.go:347-357`), so the list reads in the order an
+  author sees the block
+- `add` carries no empty-name guard because `at.onName` returns false for an empty name and a target
+  name is never empty — the same reason the sibling entries need none
+- `tasks/learnings.md` "Prefer a single structural assertion" and "Strengthening a test to a
+  whole-sequence `require.Equal` means deleting the subtest it subsumes" — the whole-list leaf replaces
+  the `Len` + `requireLocation` leaf for the same cursor rather than joining it; fold any input flavour
+  only the old leaf carried into the new document
+- `tasks/learnings.md` "An assertion whose expected value comes from the code under test is the
+  recurring review finding" — the expected location list is transcribed from the test document by hand
+  through `locationOf`, never gathered from the parsed model
+- `tasks/learnings.md` "Only an automation's `reads` resolves; a trigger's and a translation's must stay
+  unchecked" is about the *validator*, not navigation — the LSP resolves all three and returns nil for
+  an unresolved name, which is why the undeclared-view criterion above is a nil and not a diagnostic
+- `test.AutomationReadsLibraryLending` (`internal/test/fixtures.go:578`) is read as input; no `.emod`
+  file, fixture, golden or corpus case is edited, and drawing a `reads` edge in the diagram outputs is
+  US-005's
 
-**Testable:** Yes — through `lsp.GetReferences` and the server's `textDocument/references` handler.
+**Testable:** Yes — through `lsp.GetDefinition`, `lsp.GetReferences` and the server's
+`textDocument/definition` and `textDocument/references` handlers.
 
-**Verification:** `go test -tags unit ./internal/lsp/...`.
+**Verification:** `go test -tags unit ./internal/lsp/...`; `go build ./...`.
 
 **Depends on:** 1
 
@@ -576,17 +582,22 @@ cursor on any one of those references. A command's and an event's references are
 
 ## Summary
 
-**Six tasks**, ordered dependency-first and, within that, by how much of the story each unblocks.
+**Five tasks**, ordered dependency-first and, within that, by how much of the story each unblocks.
 
-Task 1 comes first because three of the five features that follow add a walk over the model, and adding
-them onto the one-home loops that exist today would fork that shape three more times — the exact
-duplication `tasks/learnings.md` records as already live in all four LSP files. It is also the only task
-that changes an existing output shape (hover text for a construct with no aggregate), so it lands alone.
-Tasks 2 and 3 are independent of each other and of everything after them: Task 2 owns `hover.go`, Task 3
-owns the keyword half of `completer.go`. Task 4 follows Task 3 because it edits the same file and needs
-the automation-body determination to exist before it can decide that a value position sits inside one,
-and follows Task 1 because its name lists must reach both slice homes. Tasks 5 and 6 are independent of
-each other — one file each — and both rest on Task 1's walk.
+Task 1 comes first because every feature that follows reads the model, and adding those reads onto the
+one-home loops that stood in each LSP file would fork that shape three more times. It is also the only
+task that changes an existing output shape (hover text for a construct with no aggregate), so it lands
+alone; it leaves behind `internal/lsp/model.go`, where the parse, the slice walk, the declaration maps
+and the reference list are each stated once, and every task after it edits one statement in that file
+or none at all.
+
+Tasks 2 and 3 are independent of each other and of everything after them: Task 2 owns `hover.go`, Task
+3 owns the keyword half of `completer.go`. Task 4 follows Task 3 because it edits the same file and
+needs the automation-body determination to exist before it can decide that a value position sits inside
+one, and follows Task 1 because its name lists must reach both slice homes and must come out in
+declaration order, which only `scopedSlices` gives. Task 5 rests on Task 1 alone and is the smallest
+production change in the story — a single reference statement, which `GetDefinition` and
+`GetReferences` both read — carrying the navigation and the listing assertions the story asks for.
 
 **Story criteria coverage:**
 
@@ -597,21 +608,27 @@ each other — one file each — and both rest on Task 1's walk.
 | Hovering `on`, `every` or `reads` describes what each does | 2 |
 | Hovering `trigger` or `automation` states which Event Modeling pattern the element belongs to | 2 |
 | Go-to-definition from an automation's `on` event, its `reads` view, and its `command` | 5 (`reads` added; `on` and `command` pinned) |
-| Find-references on a view lists the automations and triggers that read it | 6 |
+| Find-references on a view lists the automations and triggers that read it | 5 |
 
-Carried along, not stated by the story: the both-homes slice walk (1), without which every criterion
-above is silently false inside a `mode dcb` context; the `isKeyword` ordinal range (2), which is why
-`on` and `every` have no hover today whatever the description map says; and the `pendingKeyword` latch
+Carried along, not stated by the story: the both-homes slice walk and the lexer-backed keyword
+eligibility test (1), without which every criterion above is silently false inside a `mode dcb` context
+and `on` and `every` have no hover whatever the description map says; and the `pendingKeyword` latch
 (3), which is why a cursor below an automation's `command` line completes top-level keywords.
 
-**Flagged for US-004.** Task 2's hover text for `trigger` describes the element's role and is pinned
-against naming `UI`, `Schedule` or `Processor` or describing a kind slot, so the two stories do not
-collide. Tasks 5 and 6 extend the automations of the two LSP test documents and leave their
-`trigger manual "MyTrigger"` headers untouched, so this story adds no new occurrence of the kind slot
-for US-004 to migrate. No other task writes a trigger declaration.
+**One reference statement, two features.** An automation's `reads` is missing from exactly one place —
+the automation loop of `referencesIn` — and both go-to-definition and find-references read that list,
+so the jump and the listing arrive together and cannot be split across two tasks or two files. Task 5
+therefore owns both, and its criteria assert the definition jumps and the whole reference list against
+the order `referencesIn` yields rather than against any per-file collection order.
+
+**Trigger declarations.** Task 2's hover text for `trigger` describes the element's role and is pinned
+against naming `UI`, `Schedule` or `Processor` or describing a kind slot — the language has none, and
+`docs/dsl-reference.md:286` still prints one. Task 5 extends the automations of the two LSP test
+documents and leaves their `trigger "MyTrigger"` headers untouched. No task writes a new trigger
+declaration.
 
 **Deferred to later stories in the feature:** the `reads` edge (US-005), lane placement (US-006), the
 palette (US-007), the `automation/missing-todo-list` rule (US-008), the VS Code TextMate alternation and
 the tree-sitter highlight queries (US-010), and `docs/dsl-reference.md` — whose Automation Pattern
-skeleton still documents the retired `trigger <EventName>` spelling — along with `README.md` and
-`examples/` (US-011).
+skeleton still documents the retired `trigger <EventName>` spelling and whose Command Pattern skeleton
+still documents the retired trigger kind slot — along with `README.md` and `examples/` (US-011).

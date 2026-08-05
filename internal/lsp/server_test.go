@@ -943,7 +943,13 @@ context "C" {
 			content := `context "Orders" {
     aggregate "Sales" {
         slice "OrderSlice" {
-            automation AutoSubmit {
+            automation ShipOnSubmit {
+                on OrderSubmitted
+                command ShipOrder
+            }
+            automation SweepStaleOrders {
+                every "5m"
+                command ExpireOrder
             }
         }
     }
@@ -962,36 +968,64 @@ context "C" {
 			})
 			p.readMsg(t)
 
-			hoverID := 2
-			// Position the cursor on the "automation" keyword.
-			// automation is at line 3, column 12 (0-based).
-			p.writeMsg(t, &lsp.Message{
-				JSONRPC: "2.0",
-				ID:      &hoverID,
-				Method:  "textDocument/hover",
-				Params: mustMarshal(t, map[string]interface{}{
-					"textDocument": map[string]interface{}{
-						"uri": uri,
-					},
-					"position": map[string]interface{}{
-						"line":      3,
-						"character": 12,
-					},
-				}),
-			})
+			for i, tc := range []struct {
+				keyword   string
+				line      int
+				character int
+				expected  string
+			}{
+				{
+					keyword:   "automation",
+					line:      3,
+					character: 12,
+					expected:  "Defines an automation, the reactive processor of the Automation pattern: activated by an on event or an every schedule, optionally reads a view, and sends a command.",
+				},
+				{
+					keyword:   "on",
+					line:      4,
+					character: 16,
+					expected:  "Names the event whose occurrence activates the automation.",
+				},
+				{
+					keyword:   "every",
+					line:      8,
+					character: 16,
+					expected:  `Sets the schedule that activates the automation: a duration such as "5m", or a five-field cron expression such as "0 2 * * *".`,
+				},
+			} {
+				hoverID := 2 + i
+				p.writeMsg(t, &lsp.Message{
+					JSONRPC: "2.0",
+					ID:      &hoverID,
+					Method:  "textDocument/hover",
+					Params: mustMarshal(t, map[string]interface{}{
+						"textDocument": map[string]interface{}{
+							"uri": uri,
+						},
+						"position": map[string]interface{}{
+							"line":      tc.line,
+							"character": tc.character,
+						},
+					}),
+				})
 
-			resp := p.readMsg(t)
-			require.NotNil(t, resp.ID)
-			require.Equal(t, hoverID, *resp.ID)
-			require.Nil(t, resp.Error)
-			require.NotNil(t, resp.Result)
-			require.NotEqual(t, "null", string(resp.Result))
+				resp := p.readMsg(t)
+				require.NotNil(t, resp.ID)
+				require.Equal(t, hoverID, *resp.ID)
+				require.Nil(t, resp.Error)
+				require.NotNil(t, resp.Result)
+				require.NotEqual(t, "null", string(resp.Result), "hover on %s", tc.keyword)
 
-			var hover lsp.Hover
-			err := json.Unmarshal(resp.Result, &hover)
-			require.NoError(t, err)
-			require.Equal(t, lsp.Markdown, hover.Contents.Kind)
-			require.Equal(t, "Defines an automation that triggers on an event and sends a command.", hover.Contents.Value)
+				var hover lsp.Hover
+				err := json.Unmarshal(resp.Result, &hover)
+				require.NoError(t, err)
+				require.Equal(t, lsp.Markdown, hover.Contents.Kind)
+				require.Equal(t, tc.expected, hover.Contents.Value, "hover on %s", tc.keyword)
+
+				direct := lsp.GetHover(content, tc.line, tc.character)
+				require.NotNil(t, direct, "direct hover on %s", tc.keyword)
+				require.Equal(t, direct.Contents.Value, hover.Contents.Value, "hover on %s", tc.keyword)
+			}
 		})
 
 		t.Run("returns error for unknown document URI", func(t *testing.T) {

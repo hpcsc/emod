@@ -35,6 +35,29 @@ func TestGetHover(t *testing.T) {
 }
 `
 
+	const automationDoc = `context "Warehouse" {
+    aggregate "Hold" {
+        slice "Expire Holds" {
+            event HoldSwept {
+                fields {
+                    every string required
+                }
+            }
+            automation ReleaseOnPickup {
+                on ItemPickedUp
+                command ReleaseHold
+            }
+            automation SweepStaleHolds {
+                every "0 * * * *"
+                reads PendingExpiries
+                command ExpireHold
+            }
+        }
+    }
+}`
+
+	const everyDescription = `Sets the schedule that activates the automation: a duration such as "5m", or a five-field cron expression such as "0 2 * * *".`
+
 	posIn := func(t *testing.T, doc, container, substr string) (int, int) {
 		t.Helper()
 		cIdx := strings.Index(doc, container)
@@ -58,12 +81,13 @@ func TestGetHover(t *testing.T) {
 		return line, col
 	}
 
-	assertHover := func(t *testing.T, doc string, cLine, cChar int, expectedContent string) {
+	assertHover := func(t *testing.T, doc string, cLine, cChar int, expectedContent string) string {
 		t.Helper()
 		hover := lsp.GetHover(doc, cLine, cChar)
 		require.NotNil(t, hover, "expected hover for cursor at (%d,%d)", cLine, cChar)
 		require.Equal(t, lsp.Markdown, hover.Contents.Kind)
 		require.Equal(t, expectedContent, hover.Contents.Value)
+		return hover.Contents.Value
 	}
 
 	assertNil := func(t *testing.T, doc string, cLine, cChar int) {
@@ -154,27 +178,86 @@ func TestGetHover(t *testing.T) {
 
 	t.Run("cursor on keyword returns description", func(t *testing.T) {
 		line, char := posIn(t, testDoc, "command SubmitOrder", "command")
-		hover := lsp.GetHover(testDoc, line, char)
-		require.NotNil(t, hover, "expected hover for keyword 'command'")
-		require.Equal(t, lsp.Markdown, hover.Contents.Kind)
-		require.Equal(t, "Defines a command that can be sent to an aggregate.", hover.Contents.Value)
+		assertHover(t, testDoc, line, char, "Defines a command that can be sent to an aggregate.")
 	})
 
-	t.Run("cursor on automation keyword returns description", func(t *testing.T) {
-		// Use a minimal document that contains the automation keyword.
-		doc := `context "C" {
-    aggregate "A" {
-        slice "S" {
-            automation Auto {
+	t.Run("on and every each describe how the automation they sit in is activated", func(t *testing.T) {
+		onLine, onChar := posIn(t, automationDoc, "automation ReleaseOnPickup", "on ItemPickedUp")
+		assertHover(t, automationDoc, onLine, onChar, "Names the event whose occurrence activates the automation.")
+
+		everyLine, everyChar := posIn(t, automationDoc, "automation SweepStaleHolds", `every "0 * * * *"`)
+		assertHover(t, automationDoc, everyLine, everyChar, everyDescription)
+	})
+
+	t.Run("automation names its pattern, both activation forms and the view it reads", func(t *testing.T) {
+		line, char := posIn(t, automationDoc, "automation SweepStaleHolds", "automation")
+		content := assertHover(
+			t, automationDoc, line, char,
+			"Defines an automation, the reactive processor of the Automation pattern: activated by an on event or an every schedule, optionally reads a view, and sends a command.",
+		)
+
+		require.Contains(t, content, "Automation pattern")
+		require.Regexp(t, `\bon\b`, content)
+		require.Regexp(t, `\bevery\b`, content)
+		require.Contains(t, content, "reads a view")
+	})
+
+	t.Run("trigger names the Command pattern and no kind between the keyword and the name", func(t *testing.T) {
+		doc := `context "Warehouse" {
+    aggregate "Hold" {
+        slice "Place Hold" {
+            trigger "Hold Desk" {
+                actor Member
+                reads AvailableCopiesView
+            }
+            command PlaceHold {
             }
         }
     }
 }`
-		line, char := posIn(t, doc, "automation Auto", "automation")
-		hover := lsp.GetHover(doc, line, char)
-		require.NotNil(t, hover, "expected hover for keyword 'automation'")
-		require.Equal(t, lsp.Markdown, hover.Contents.Kind)
-		require.Equal(t, "Defines an automation that triggers on an event and sends a command.", hover.Contents.Value)
+		line, char := posIn(t, doc, `trigger "Hold Desk"`, "trigger")
+		content := assertHover(
+			t, doc, line, char,
+			"Defines a trigger, the Command pattern's human entry point into a slice: the actor who acts and the view they read.",
+		)
+
+		require.Contains(t, content, "Command pattern")
+		for _, retiredKind := range []string{"UI", "Schedule", "Processor"} {
+			require.NotContains(t, content, retiredKind)
+		}
+	})
+
+	t.Run("reads names every block that accepts it", func(t *testing.T) {
+		line, char := posIn(t, automationDoc, "reads PendingExpiries", "reads")
+		content := assertHover(
+			t, automationDoc, line, char,
+			"Defines the view a trigger, automation or translation reads from.",
+		)
+
+		for _, block := range []string{"trigger", "automation", "translation"} {
+			require.Regexp(t, `\b`+block+`\b`, content)
+		}
+	})
+
+	t.Run("answers for a described keyword and stays silent for one it does not describe", func(t *testing.T) {
+		doc := `model "Library Lending"
+
+context "Reading Room" mode dcb {
+}`
+
+		modelLine, modelChar := posIn(t, doc, `model "Library Lending"`, "model")
+		assertHover(t, doc, modelLine, modelChar, "Declares the domain model name.")
+
+		modeLine, modeChar := posIn(t, doc, "mode dcb", "mode")
+		assertNil(t, doc, modeLine, modeChar)
+	})
+
+	t.Run("a field named every hovers as the every keyword", func(t *testing.T) {
+		fieldLine, fieldChar := posIn(t, automationDoc, "fields {", "every string required")
+		assertHover(t, automationDoc, fieldLine, fieldChar, everyDescription)
+
+		scheduleLine, scheduleChar := posIn(t, automationDoc, "automation SweepStaleHolds", `every "0 * * * *"`)
+		assertHover(t, automationDoc, scheduleLine, scheduleChar, everyDescription)
 	})
 
 	t.Run("cursor on non-resolvable token returns nil", func(t *testing.T) {
