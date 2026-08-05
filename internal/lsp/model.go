@@ -139,6 +139,7 @@ func referencesIn(model *ast.Model) []nameRef {
 		}
 		for _, auto := range slice.Automations {
 			add(eventName, auto.OnEvent, auto.OnEventPos)
+			add(viewName, auto.Reads, auto.ReadsPos)
 			add(commandName, auto.Command, auto.CommandPos)
 			add(contextName, auto.TargetContext, auto.TargetContextPos)
 		}

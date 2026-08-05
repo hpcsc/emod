@@ -24,6 +24,7 @@ func TestGetReferences(t *testing.T) {
             }
             automation AutoSubmit {
                 on OrderSubmitted
+                reads OrderView
                 command SubmitOrder
                 target context Orders
             }
@@ -44,31 +45,6 @@ func TestGetReferences(t *testing.T) {
 }
 `
 	uri := "file:///test.emod"
-
-	// posIn returns 0-based (line, character) of substr within the first
-	// occurrence of container in doc.
-	posIn := func(t *testing.T, doc, container, substr string) (int, int) {
-		t.Helper()
-		cIdx := strings.Index(doc, container)
-		require.GreaterOrEqual(t, cIdx, 0, "container %q not found", container)
-		rel := strings.Index(doc[cIdx:], substr)
-		require.GreaterOrEqual(t, rel, 0, "substr %q not found in container %q", substr, container)
-		abs := cIdx + rel
-		line := 0
-		col := 0
-		for i, ch := range doc {
-			if i == abs {
-				break
-			}
-			if ch == '\n' {
-				line++
-				col = 0
-			} else {
-				col++
-			}
-		}
-		return line, col
-	}
 
 	// requireLocation checks that locs contains a Location matching the expected
 	// line, character, and name. The range end is char+len(name).
@@ -168,12 +144,10 @@ func TestGetReferences(t *testing.T) {
 			dLine, dChar := posIn(t, testDoc, "command SubmitOrder", "SubmitOrder")
 			requireLocation(t, locs, dLine, dChar, "SubmitOrder")
 
-			aLine, aChar := posIn(t, testDoc,
-				"on OrderSubmitted\n                command SubmitOrder", "SubmitOrder")
+			aLine, aChar := posIn(t, testDoc, "automation AutoSubmit", "SubmitOrder")
 			requireLocation(t, locs, aLine, aChar, "SubmitOrder")
 
-			trLine, trChar := posIn(t, testDoc,
-				"external_system \"ERP\"\n                reads OrderView\n                command SubmitOrder", "SubmitOrder")
+			trLine, trChar := posIn(t, testDoc, "translation TransOrder", "SubmitOrder")
 			requireLocation(t, locs, trLine, trChar, "SubmitOrder")
 
 			flowLine := "command -> event : SubmitOrder -> OrderSubmitted"
@@ -228,15 +202,13 @@ func TestGetReferences(t *testing.T) {
 		})
 
 		t.Run("cursor on command in automation returns all command references", func(t *testing.T) {
-			cLine, cChar := posIn(t, testDoc,
-				"on OrderSubmitted\n                command SubmitOrder", "SubmitOrder")
+			cLine, cChar := posIn(t, testDoc, "automation AutoSubmit", "SubmitOrder")
 			locs := lsp.GetReferences(testDoc, cLine, cChar, uri)
 			require.Len(t, locs, 4)
 		})
 
 		t.Run("cursor on command in translation returns all command references", func(t *testing.T) {
-			cLine, cChar := posIn(t, testDoc,
-				"external_system \"ERP\"\n                reads OrderView\n                command SubmitOrder", "SubmitOrder")
+			cLine, cChar := posIn(t, testDoc, "translation TransOrder", "SubmitOrder")
 			locs := lsp.GetReferences(testDoc, cLine, cChar, uri)
 			require.Len(t, locs, 4)
 		})
@@ -253,33 +225,85 @@ func TestGetReferences(t *testing.T) {
 	})
 
 	t.Run("views", func(t *testing.T) {
-		t.Run("cursor on view definition name returns all view references", func(t *testing.T) {
+		orderViewSites := func(t *testing.T) []lsp.Location {
+			t.Helper()
+			return []lsp.Location{
+				locationOf(t, testDoc, "view OrderView", "OrderView"),
+				locationOf(t, testDoc, "automation AutoSubmit", "OrderView"),
+				locationOf(t, testDoc, "translation TransOrder", "OrderView"),
+				locationOf(t, testDoc, "trigger \"MyTrigger\"", "OrderView"),
+			}
+		}
+
+		t.Run("cursor on view definition name returns the declaration and every site reading it", func(t *testing.T) {
 			cLine, cChar := posIn(t, testDoc, "view OrderView", "OrderView")
 			locs := lsp.GetReferences(testDoc, cLine, cChar, uri)
-			require.Len(t, locs, 3)
 
-			dLine, dChar := posIn(t, testDoc, "view OrderView", "OrderView")
-			requireLocation(t, locs, dLine, dChar, "OrderView")
+			require.Equal(t, orderViewSites(t), locs)
+		})
 
-			trLine, trChar := posIn(t, testDoc, "reads OrderView", "OrderView")
-			requireLocation(t, locs, trLine, trChar, "OrderView")
+		t.Run("cursor on view in automation reads returns all view references", func(t *testing.T) {
+			cLine, cChar := posIn(t, testDoc, "automation AutoSubmit", "OrderView")
+			locs := lsp.GetReferences(testDoc, cLine, cChar, uri)
 
-			triggerReadsLine, triggerReadsChar := posIn(t, testDoc,
-				"trigger \"MyTrigger\" {\n                actor user\n                reads OrderView", "OrderView")
-			requireLocation(t, locs, triggerReadsLine, triggerReadsChar, "OrderView")
+			require.Equal(t, orderViewSites(t), locs)
 		})
 
 		t.Run("cursor on view in translation reads returns all view references", func(t *testing.T) {
-			cLine, cChar := posIn(t, testDoc, "reads OrderView", "OrderView")
+			cLine, cChar := posIn(t, testDoc, "translation TransOrder", "OrderView")
 			locs := lsp.GetReferences(testDoc, cLine, cChar, uri)
-			require.Len(t, locs, 3)
+			require.Len(t, locs, 4)
 		})
 
 		t.Run("cursor on view in trigger reads returns all view references", func(t *testing.T) {
-			cLine, cChar := posIn(t, testDoc,
-				"trigger \"MyTrigger\" {\n                actor user\n                reads OrderView", "OrderView")
+			cLine, cChar := posIn(t, testDoc, "trigger \"MyTrigger\"", "OrderView")
 			locs := lsp.GetReferences(testDoc, cLine, cChar, uri)
-			require.Len(t, locs, 3)
+			require.Len(t, locs, 4)
+		})
+
+		t.Run("cursor on a view declaration lists the automations reading it across slice and context boundaries", func(t *testing.T) {
+			doc := test.AutomationReadsLibraryLending
+
+			mLine, mChar := posIn(t, doc, "view MemberLoansView", "MemberLoansView")
+			require.Equal(t, []lsp.Location{
+				locationOf(t, doc, "view MemberLoansView", "MemberLoansView"),
+				locationOf(t, doc, "automation RecallOverdueCopy", "MemberLoansView"),
+				locationOf(t, doc, "automation RemindReaderOfLoans", "MemberLoansView"),
+			}, lsp.GetReferences(doc, mLine, mChar, uri))
+
+			dLine, dChar := posIn(t, doc, "view DeskOccupancyView", "DeskOccupancyView")
+			require.Equal(t, []lsp.Location{
+				locationOf(t, doc, "view DeskOccupancyView", "DeskOccupancyView"),
+				locationOf(t, doc, "automation FreeDeskAtClosing", "DeskOccupancyView"),
+			}, lsp.GetReferences(doc, dLine, dChar, uri))
+		})
+
+		t.Run("cursor on a view no automation reads returns its declaration alone", func(t *testing.T) {
+			const doc = `context "Orders" {
+    aggregate "Sales" {
+        slice "Fulfilment" {
+            view PickListView {
+            }
+            view ArchiveView {
+            }
+            automation PickOnPayment {
+                reads PickListView
+            }
+        }
+    }
+}
+`
+
+			rLine, rChar := posIn(t, doc, "view PickListView", "PickListView")
+			require.Equal(t, []lsp.Location{
+				locationOf(t, doc, "view PickListView", "PickListView"),
+				locationOf(t, doc, "automation PickOnPayment", "PickListView"),
+			}, lsp.GetReferences(doc, rLine, rChar, uri))
+
+			uLine, uChar := posIn(t, doc, "view ArchiveView", "ArchiveView")
+			require.Equal(t, []lsp.Location{
+				locationOf(t, doc, "view ArchiveView", "ArchiveView"),
+			}, lsp.GetReferences(doc, uLine, uChar, uri))
 		})
 	})
 

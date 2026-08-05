@@ -27,6 +27,7 @@ func TestGetDefinition(t *testing.T) {
             }
             automation AutoSubmit {
                 on OrderSubmitted
+                reads OrderView
                 command SubmitOrder
                 target context Orders
             }
@@ -48,32 +49,6 @@ func TestGetDefinition(t *testing.T) {
 `
 
 	uri := "file:///test.emod"
-
-	// posIn returns 0-based (line, character) of substr within the first
-	// occurrence of container in doc. container must be found in doc,
-	// and substr must be found within container.
-	posIn := func(t *testing.T, doc, container, substr string) (int, int) {
-		t.Helper()
-		cIdx := strings.Index(doc, container)
-		require.GreaterOrEqual(t, cIdx, 0, "container %q not found", container)
-		rel := strings.Index(doc[cIdx:], substr)
-		require.GreaterOrEqual(t, rel, 0, "substr %q not found in container %q", substr, container)
-		abs := cIdx + rel
-		line := 0
-		col := 0
-		for i, ch := range doc {
-			if i == abs {
-				break
-			}
-			if ch == '\n' {
-				line++
-				col = 0
-			} else {
-				col++
-			}
-		}
-		return line, col
-	}
 
 	// assertDef checks that GetDefinition returns a Location pointing
 	// to the definition name at the given expected position.
@@ -101,20 +76,24 @@ func TestGetDefinition(t *testing.T) {
 		assertDef(t, testDoc, cLine, cChar, dLine, dChar, "OrderSubmitted")
 	})
 
-	t.Run("event reference in automation activation event", func(t *testing.T) {
-		cLine, cChar := posIn(t, testDoc,
-			"automation AutoSubmit {\n                on OrderSubmitted",
-			"OrderSubmitted")
-		dLine, dChar := posIn(t, testDoc, "event OrderSubmitted", "OrderSubmitted")
-		assertDef(t, testDoc, cLine, cChar, dLine, dChar, "OrderSubmitted")
-	})
+	t.Run("every name an automation block names resolves to its declaration", func(t *testing.T) {
+		t.Run("event reference in automation activation event", func(t *testing.T) {
+			cLine, cChar := posIn(t, testDoc, "automation AutoSubmit", "OrderSubmitted")
+			dLine, dChar := posIn(t, testDoc, "event OrderSubmitted", "OrderSubmitted")
+			assertDef(t, testDoc, cLine, cChar, dLine, dChar, "OrderSubmitted")
+		})
 
-	t.Run("command reference in automation command", func(t *testing.T) {
-		cLine, cChar := posIn(t, testDoc,
-			"on OrderSubmitted\n                command SubmitOrder",
-			"SubmitOrder")
-		dLine, dChar := posIn(t, testDoc, "command SubmitOrder", "SubmitOrder")
-		assertDef(t, testDoc, cLine, cChar, dLine, dChar, "SubmitOrder")
+		t.Run("view reference in automation reads", func(t *testing.T) {
+			cLine, cChar := posIn(t, testDoc, "automation AutoSubmit", "OrderView")
+			dLine, dChar := posIn(t, testDoc, "view OrderView", "OrderView")
+			assertDef(t, testDoc, cLine, cChar, dLine, dChar, "OrderView")
+		})
+
+		t.Run("command reference in automation command", func(t *testing.T) {
+			cLine, cChar := posIn(t, testDoc, "automation AutoSubmit", "SubmitOrder")
+			dLine, dChar := posIn(t, testDoc, "command SubmitOrder", "SubmitOrder")
+			assertDef(t, testDoc, cLine, cChar, dLine, dChar, "SubmitOrder")
+		})
 	})
 
 	t.Run("context reference in automation target context", func(t *testing.T) {
@@ -131,23 +110,19 @@ func TestGetDefinition(t *testing.T) {
 	})
 
 	t.Run("view reference in translation reads", func(t *testing.T) {
-		cLine, cChar := posIn(t, testDoc, "reads OrderView", "OrderView")
+		cLine, cChar := posIn(t, testDoc, "translation TransOrder", "OrderView")
 		dLine, dChar := posIn(t, testDoc, "view OrderView", "OrderView")
 		assertDef(t, testDoc, cLine, cChar, dLine, dChar, "OrderView")
 	})
 
 	t.Run("command reference in translation command", func(t *testing.T) {
-		cLine, cChar := posIn(t, testDoc,
-			"external_system \"ERP\"\n                reads OrderView\n                command SubmitOrder",
-			"SubmitOrder")
+		cLine, cChar := posIn(t, testDoc, "translation TransOrder", "SubmitOrder")
 		dLine, dChar := posIn(t, testDoc, "command SubmitOrder", "SubmitOrder")
 		assertDef(t, testDoc, cLine, cChar, dLine, dChar, "SubmitOrder")
 	})
 
 	t.Run("view reference in trigger reads", func(t *testing.T) {
-		cLine, cChar := posIn(t, testDoc,
-			"trigger \"MyTrigger\" {\n                actor user\n                reads OrderView",
-			"OrderView")
+		cLine, cChar := posIn(t, testDoc, "trigger \"MyTrigger\"", "OrderView")
 		dLine, dChar := posIn(t, testDoc, "view OrderView", "OrderView")
 		assertDef(t, testDoc, cLine, cChar, dLine, dChar, "OrderView")
 	})
@@ -189,6 +164,71 @@ func TestGetDefinition(t *testing.T) {
 			cLine, cChar := posIn(t, doc, "automation FreeDeskAtClosing", "ReleaseDesk")
 			dLine, dChar := posIn(t, doc, "command ReleaseDesk {", "ReleaseDesk")
 			assertDef(t, doc, cLine, cChar, dLine, dChar, "ReleaseDesk")
+		})
+	})
+
+	t.Run("an automation's reads resolves wherever the model declares the view", func(t *testing.T) {
+		doc := test.AutomationReadsLibraryLending
+
+		for _, tc := range []struct {
+			name       string
+			automation string
+			view       string
+		}{
+			{
+				name:       "view declared by a sibling slice of the same aggregate",
+				automation: "automation RecallOverdueCopy",
+				view:       "MemberLoansView",
+			},
+			{
+				name:       "view declared by another context, read from a slice a mode dcb context declares directly",
+				automation: "automation RemindReaderOfLoans",
+				view:       "MemberLoansView",
+			},
+			{
+				name:       "view declared by the same mode dcb context",
+				automation: "automation FreeDeskAtClosing",
+				view:       "DeskOccupancyView",
+			},
+		} {
+			t.Run(tc.name, func(t *testing.T) {
+				cLine, cChar := posIn(t, doc, tc.automation, tc.view)
+				dLine, dChar := posIn(t, doc, "view "+tc.view, tc.view)
+				assertDef(t, doc, cLine, cChar, dLine, dChar, tc.view)
+			})
+		}
+	})
+
+	t.Run("automation reads naming no declared view returns nil", func(t *testing.T) {
+		doc := `context "Ctx" {
+    aggregate "Agg" {
+        slice "Slc" {
+            view KnownView {
+            }
+            automation ReadUnresolved {
+                reads NonExistentView
+            }
+            automation ReadResolved {
+                reads KnownView
+            }
+        }
+    }
+}`
+
+		t.Run("undeclared view name", func(t *testing.T) {
+			line, char := posIn(t, doc, "automation ReadUnresolved", "NonExistentView")
+			assertNil(t, doc, line, char)
+		})
+
+		t.Run("declared view name in the sibling automation", func(t *testing.T) {
+			cLine, cChar := posIn(t, doc, "automation ReadResolved", "KnownView")
+			dLine, dChar := posIn(t, doc, "view KnownView", "KnownView")
+			assertDef(t, doc, cLine, cChar, dLine, dChar, "KnownView")
+		})
+
+		t.Run("cursor on the reads keyword rather than the view name", func(t *testing.T) {
+			line, char := posIn(t, doc, "automation ReadResolved", "reads")
+			assertNil(t, doc, line, char)
 		})
 	})
 

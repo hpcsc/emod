@@ -3,38 +3,12 @@
 package lsp_test
 
 import (
-	"strings"
 	"testing"
 
 	"github.com/hpcsc/emod/internal/lsp"
 	"github.com/hpcsc/emod/internal/test"
 	"github.com/stretchr/testify/require"
 )
-
-// posIn finds the 0-based line and character position of substr within a
-// container string inside doc. It is used to locate expected token positions.
-func posIn(t *testing.T, doc, container, substr string) (int, int) {
-	t.Helper()
-	cIdx := strings.Index(doc, container)
-	require.GreaterOrEqual(t, cIdx, 0, "container %q not found", container)
-	rel := strings.Index(doc[cIdx:], substr)
-	require.GreaterOrEqual(t, rel, 0, "substr %q not found in container %q", substr, container)
-	abs := cIdx + rel
-	line := 0
-	col := 0
-	for i, ch := range doc {
-		if i == abs {
-			break
-		}
-		if ch == '\n' {
-			line++
-			col = 0
-		} else {
-			col++
-		}
-	}
-	return line, col
-}
 
 // decodeTokens decodes delta-encoded semantic token data into a human-readable
 // slice of (line, character, length, tokenTypeIndex) tuples for assertions.

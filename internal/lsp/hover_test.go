@@ -3,7 +3,6 @@
 package lsp_test
 
 import (
-	"strings"
 	"testing"
 
 	"github.com/hpcsc/emod/internal/lsp"
@@ -57,29 +56,6 @@ func TestGetHover(t *testing.T) {
 }`
 
 	const everyDescription = `Sets the schedule that activates the automation: a duration such as "5m", or a five-field cron expression such as "0 2 * * *".`
-
-	posIn := func(t *testing.T, doc, container, substr string) (int, int) {
-		t.Helper()
-		cIdx := strings.Index(doc, container)
-		require.GreaterOrEqual(t, cIdx, 0, "container %q not found", container)
-		rel := strings.Index(doc[cIdx:], substr)
-		require.GreaterOrEqual(t, rel, 0, "substr %q not found in container %q", substr, container)
-		abs := cIdx + rel
-		line := 0
-		col := 0
-		for i, ch := range doc {
-			if i == abs {
-				break
-			}
-			if ch == '\n' {
-				line++
-				col = 0
-			} else {
-				col++
-			}
-		}
-		return line, col
-	}
 
 	assertHover := func(t *testing.T, doc string, cLine, cChar int, expectedContent string) string {
 		t.Helper()

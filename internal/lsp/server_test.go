@@ -717,6 +717,74 @@ context "C" {
 			require.Equal(t, uri, locs[0].URI)
 		})
 
+		t.Run("returns the declaration and the automation reading it for a view name", func(t *testing.T) {
+			p := startServer(t)
+			p.writeInitialize(t)
+			p.readInitializeResult(t, 1)
+
+			uri := "file:///test.emod"
+			content := `context "Orders" {
+    aggregate "Sales" {
+        slice "OrderSlice" {
+            command SubmitOrder {
+            }
+            event OrderSubmitted {
+            }
+            view OrderView {
+                subscribes [OrderSubmitted]
+            }
+            automation AutoSubmit {
+                on OrderSubmitted
+                reads OrderView
+                command SubmitOrder
+            }
+        }
+    }
+}`
+			p.openDocument(t, uri, content)
+
+			refID := 2
+			// Cursor on "OrderView" in the view declaration: line 7, character 17.
+			p.writeMsg(t, &lsp.Message{
+				JSONRPC: "2.0",
+				ID:      &refID,
+				Method:  "textDocument/references",
+				Params: mustMarshal(t, map[string]interface{}{
+					"textDocument": map[string]interface{}{
+						"uri": uri,
+					},
+					"position": map[string]interface{}{
+						"line":      7,
+						"character": 17,
+					},
+				}),
+			})
+
+			resp := p.readMsg(t)
+			require.NotNil(t, resp.ID)
+			require.Equal(t, refID, *resp.ID)
+			require.Nil(t, resp.Error)
+
+			var locs []lsp.Location
+			require.NoError(t, json.Unmarshal(resp.Result, &locs))
+			require.Equal(t, []lsp.Location{
+				{
+					URI: uri,
+					Range: lsp.Range{
+						Start: lsp.Position{Line: 7, Character: 17},
+						End:   lsp.Position{Line: 7, Character: 26},
+					},
+				},
+				{
+					URI: uri,
+					Range: lsp.Range{
+						Start: lsp.Position{Line: 12, Character: 22},
+						End:   lsp.Position{Line: 12, Character: 31},
+					},
+				},
+			}, locs)
+		})
+
 		t.Run("returns null when cursor not on a resolvable name", func(t *testing.T) {
 			p := startServer(t)
 			p.writeInitialize(t)

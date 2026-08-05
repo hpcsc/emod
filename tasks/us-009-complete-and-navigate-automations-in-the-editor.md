@@ -5,7 +5,7 @@
 - [x] Task 2: Describe `on`, `every` and `reads`, and name the pattern `trigger` and `automation` belong to
 - [x] Task 3: Offer an automation's entries inside an automation block
 - [x] Task 4: Offer event names after `on` and view names after `reads`
-- [ ] Task 5: Resolve an automation's `reads` to the view it names, both ways
+- [x] Task 5: Resolve an automation's `reads` to the view it names, both ways
 
 ---
 
