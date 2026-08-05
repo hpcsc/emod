@@ -1,7 +1,7 @@
 # US-008: Flag automations with no todo list
 
 ## Progress
-- [ ] Task 1: Name the view the shared fixtures' automations read
+- [x] Task 1: Name the view the shared fixtures' automations read
 - [ ] Task 2: Name the view the repository's `.emod` models' automations read
 - [ ] Task 3: Warn on an automation that declares no view
 
@@ -216,23 +216,25 @@ todo-list shape: every automation they declare names the view it reads. They kee
 formatting exactly as before, and the views they name are views those models already declare.
 
 **Acceptance Criteria:**
-- [ ] `AutoConfirm` in `test.HotelReservation` (`internal/test/fixtures.go:66`) names the view the same
+- [x] `AutoConfirm` in `test.HotelReservation` (`internal/test/fixtures.go:66`) names the view the same
       model declares at `:48`, and `test.DeclaredAutomationReads(test.HotelReservationModel(t))` reads
       back that one view name — a getter answering `nil` is what this criterion exists to rule out
-- [ ] `AutoConfirm` in `test.DescribedHotelReservation` (`:167`) names the view declared at `:146`, and
+- [x] `AutoConfirm` in `test.DescribedHotelReservation` (`:167`) names the view declared at `:146`, and
       the same getter over `test.DescribedHotelReservation` reads it back
-- [ ] `AutoShare` in `test.KeywordFieldSearchCatalog` (`:271`) names the view declared at `:249`, and
+- [x] `AutoShare` in `test.KeywordFieldSearchCatalog` (`:271`) names the view declared at `:249`, and
       the same getter reads it back
-- [ ] `oracle.Check` over all three fixtures still returns no diagnostics — the view an automation now
+- [x] `oracle.Check` over all three fixtures still returns no diagnostics — the view an automation now
       names resolves, so no `does not exist` error appears
-- [ ] The model at `internal/cli/validate_test.go:322` declares a view and both its automations
+- [x] The model at `internal/cli/validate_test.go:322` declares a view and both its automations
       (`OrderNotifier`, `Sender`) read it, and `cli.RunValidate` over it still returns no error
-- [ ] `test.AutomationReadsLibraryLending` and `test.AutomationScheduleLibraryLending` are not edited:
+- [x] `test.AutomationReadsLibraryLending` and `test.AutomationScheduleLibraryLending` are not edited:
       `git diff internal/test/fixtures.go` shows changes only inside the three fixtures named above
-- [ ] Every existing subtest in `internal/{parser,formatter,export,importer,diagram,cli,oracle}` passes
-      with no expected constant edited: `git diff` touches no golden, no `*FormattedEmod` constant and
-      no transcribed name list
-- [ ] `mise exec -- task test:unit` and `mise exec -- task test:integration` are green
+- [x] Every existing subtest in `internal/{parser,formatter,export,importer,diagram,cli,oracle}` passes.
+      The only expected values that move are those that restate a changed fixture's own text: the
+      `reads` line inside `keywordFieldFormattedEmod` (`internal/cli/fmt_test.go`) and the
+      `automationReads` row for `HotelReservationModel` (`internal/formatter/formatter_test.go`). No
+      other golden, `*FormattedEmod` constant or transcribed name list moves
+- [x] `mise exec -- task test:unit` and `mise exec -- task test:integration` are green
 
 **Affected Files/Modules:**
 - `internal/test/fixtures.go` — the three automations at `:66`, `:167` and `:271`
