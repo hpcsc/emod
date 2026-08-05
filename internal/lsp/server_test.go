@@ -93,6 +93,61 @@ func (p *serverPair) readInitializeResult(t *testing.T, expectedID int) lsp.Init
 	return result
 }
 
+func (p *serverPair) openDocument(t *testing.T, uri, text string) lsp.PublishDiagnosticsParams {
+	t.Helper()
+	p.writeMsg(t, &lsp.Message{
+		JSONRPC: "2.0",
+		Method:  "textDocument/didOpen",
+		Params: mustMarshal(t, map[string]interface{}{
+			"textDocument": map[string]interface{}{
+				"uri":        uri,
+				"languageId": "emod",
+				"version":    1,
+				"text":       text,
+			},
+		}),
+	})
+
+	notif := p.readMsg(t)
+	require.Equal(t, "textDocument/publishDiagnostics", notif.Method)
+
+	return mustUnmarshalDiagnostics(t, notif.Params)
+}
+
+func (p *serverPair) writeCompletion(t *testing.T, uri string, line, character int) int {
+	t.Helper()
+	id := 2
+	p.writeMsg(t, &lsp.Message{
+		JSONRPC: "2.0",
+		ID:      &id,
+		Method:  "textDocument/completion",
+		Params: mustMarshal(t, map[string]interface{}{
+			"textDocument": map[string]interface{}{
+				"uri": uri,
+			},
+			"position": map[string]interface{}{
+				"line":      line,
+				"character": character,
+			},
+		}),
+	})
+	return id
+}
+
+func (p *serverPair) readCompletionResult(t *testing.T, expectedID int) lsp.CompletionList {
+	t.Helper()
+	resp := p.readMsg(t)
+	require.NotNil(t, resp.ID)
+	require.Equal(t, expectedID, *resp.ID)
+	require.Nil(t, resp.Error)
+	require.NotNil(t, resp.Result)
+
+	var list lsp.CompletionList
+	require.NoError(t, json.Unmarshal(resp.Result, &list))
+
+	return list
+}
+
 // readMsgTimeout attempts to read a message within the given duration.
 // Returns nil if no message arrives before the timeout.
 func readMsgTimeout(r io.Reader, timeout time.Duration) *lsp.Message {
@@ -199,21 +254,7 @@ func TestServer(t *testing.T) {
 
 			uri := "file:///test.emod"
 
-			// Open with valid content.
-			p.writeMsg(t, &lsp.Message{
-				JSONRPC: "2.0",
-				Method:  "textDocument/didOpen",
-				Params: mustMarshal(t, map[string]interface{}{
-					"textDocument": map[string]interface{}{
-						"uri":        uri,
-						"languageId": "emod",
-						"version":    1,
-						"text":       `model "test"`,
-					},
-				}),
-			})
-			// Consume first diagnostics notification.
-			p.readMsg(t)
+			p.openDocument(t, uri, `model "test"`)
 
 			// Change to invalid content.
 			p.writeMsg(t, &lsp.Message{
@@ -286,25 +327,7 @@ func TestServer(t *testing.T) {
 
 			uri := "file:///errors.emod"
 
-			p.writeMsg(t, &lsp.Message{
-				JSONRPC: "2.0",
-				Method:  "textDocument/didOpen",
-				Params: mustMarshal(t, map[string]interface{}{
-					"textDocument": map[string]interface{}{
-						"uri":        uri,
-						"languageId": "emod",
-						"version":    1,
-						"text":       "invalid syntax here",
-					},
-				}),
-			})
-
-			notif := p.readMsg(t)
-			require.Equal(t, "textDocument/publishDiagnostics", notif.Method)
-
-			var params lsp.PublishDiagnosticsParams
-			err := json.Unmarshal(notif.Params, &params)
-			require.NoError(t, err)
+			params := p.openDocument(t, uri, "invalid syntax here")
 			require.Equal(t, uri, params.URI)
 			require.NotEmpty(t, params.Diagnostics)
 
@@ -343,25 +366,7 @@ context "C" {
   }
 }`
 
-			p.writeMsg(t, &lsp.Message{
-				JSONRPC: "2.0",
-				Method:  "textDocument/didOpen",
-				Params: mustMarshal(t, map[string]interface{}{
-					"textDocument": map[string]interface{}{
-						"uri":        uri,
-						"languageId": "emod",
-						"version":    1,
-						"text":       content,
-					},
-				}),
-			})
-
-			notif := p.readMsg(t)
-			require.Equal(t, "textDocument/publishDiagnostics", notif.Method)
-
-			var params lsp.PublishDiagnosticsParams
-			err := json.Unmarshal(notif.Params, &params)
-			require.NoError(t, err)
+			params := p.openDocument(t, uri, content)
 			require.Equal(t, uri, params.URI)
 			require.NotEmpty(t, params.Diagnostics,
 				"expected at least the view-naming linter warning")
@@ -384,25 +389,7 @@ context "C" {
 
 			uri := "file:///valid.emod"
 
-			p.writeMsg(t, &lsp.Message{
-				JSONRPC: "2.0",
-				Method:  "textDocument/didOpen",
-				Params: mustMarshal(t, map[string]interface{}{
-					"textDocument": map[string]interface{}{
-						"uri":        uri,
-						"languageId": "emod",
-						"version":    1,
-						"text":       `model "valid"`,
-					},
-				}),
-			})
-
-			notif := p.readMsg(t)
-			require.Equal(t, "textDocument/publishDiagnostics", notif.Method)
-
-			var params lsp.PublishDiagnosticsParams
-			err := json.Unmarshal(notif.Params, &params)
-			require.NoError(t, err)
+			params := p.openDocument(t, uri, `model "valid"`)
 			require.Equal(t, uri, params.URI)
 			require.Empty(t, params.Diagnostics)
 		})
@@ -454,46 +441,12 @@ context "C" {
 			p.readInitializeResult(t, 1)
 
 			uri := "file:///test.emod"
-			p.writeMsg(t, &lsp.Message{
-				JSONRPC: "2.0",
-				Method:  "textDocument/didOpen",
-				Params: mustMarshal(t, map[string]interface{}{
-					"textDocument": map[string]interface{}{
-						"uri":        uri,
-						"languageId": "emod",
-						"version":    1,
-						"text":       `model "test"`,
-					},
-				}),
-			})
-			// Consume diagnostics notification.
-			p.readMsg(t)
+			p.openDocument(t, uri, `model "test"`)
 
-			completionID := 2
-			p.writeMsg(t, &lsp.Message{
-				JSONRPC: "2.0",
-				ID:      &completionID,
-				Method:  "textDocument/completion",
-				Params: mustMarshal(t, map[string]interface{}{
-					"textDocument": map[string]interface{}{
-						"uri": uri,
-					},
-					"position": map[string]interface{}{
-						"line":      0,
-						"character": 5,
-					},
-				}),
-			})
+			completionID := p.writeCompletion(t, uri, 0, 5)
 
-			resp := p.readMsg(t)
-			require.NotNil(t, resp.ID)
-			require.Equal(t, completionID, *resp.ID)
-			require.Nil(t, resp.Error)
-			require.NotNil(t, resp.Result)
+			list := p.readCompletionResult(t, completionID)
 
-			var list lsp.CompletionList
-			err := json.Unmarshal(resp.Result, &list)
-			require.NoError(t, err)
 			require.False(t, list.IsIncomplete)
 			require.NotEmpty(t, list.Items)
 			for _, item := range list.Items {
@@ -501,26 +454,35 @@ context "C" {
 			}
 		})
 
+		t.Run("returns automation entries for a position inside an automation block", func(t *testing.T) {
+			p := startServer(t)
+			p.writeInitialize(t)
+			p.readInitializeResult(t, 1)
+
+			uri := "file:///automation.emod"
+			p.openDocument(t, uri, `context Ctx {
+	aggregate Agg {
+		slice Slc {
+			automation Auto {
+
+			}
+		}
+	}
+}`)
+
+			completionID := p.writeCompletion(t, uri, 4, 4)
+
+			list := p.readCompletionResult(t, completionID)
+
+			require.Equal(t, []string{"on", "every", "reads", "command", "target context"}, extractLabels(list.Items))
+		})
+
 		t.Run("returns error for unknown document URI", func(t *testing.T) {
 			p := startServer(t)
 			p.writeInitialize(t)
 			p.readInitializeResult(t, 1)
 
-			completionID := 2
-			p.writeMsg(t, &lsp.Message{
-				JSONRPC: "2.0",
-				ID:      &completionID,
-				Method:  "textDocument/completion",
-				Params: mustMarshal(t, map[string]interface{}{
-					"textDocument": map[string]interface{}{
-						"uri": "file:///unknown.emod",
-					},
-					"position": map[string]interface{}{
-						"line":      0,
-						"character": 0,
-					},
-				}),
-			})
+			completionID := p.writeCompletion(t, "file:///unknown.emod", 0, 0)
 
 			resp := p.readMsg(t)
 			require.NotNil(t, resp.ID)
@@ -535,53 +497,14 @@ context "C" {
 			p.readInitializeResult(t, 1)
 
 			uri := "file:///partial.emod"
-			// Open a document with only the beginning of a model declaration.
-			p.writeMsg(t, &lsp.Message{
-				JSONRPC: "2.0",
-				Method:  "textDocument/didOpen",
-				Params: mustMarshal(t, map[string]interface{}{
-					"textDocument": map[string]interface{}{
-						"uri":        uri,
-						"languageId": "emod",
-						"version":    1,
-						"text":       `model `,
-					},
-				}),
-			})
-			// Consume diagnostics notification.
-			p.readMsg(t)
+			p.openDocument(t, uri, `model `)
 
-			completionID := 2
-			p.writeMsg(t, &lsp.Message{
-				JSONRPC: "2.0",
-				ID:      &completionID,
-				Method:  "textDocument/completion",
-				Params: mustMarshal(t, map[string]interface{}{
-					"textDocument": map[string]interface{}{
-						"uri": uri,
-					},
-					"position": map[string]interface{}{
-						"line":      0,
-						"character": 6,
-					},
-				}),
-			})
+			completionID := p.writeCompletion(t, uri, 0, 6)
 
-			resp := p.readMsg(t)
-			require.NotNil(t, resp.ID)
-			require.Equal(t, completionID, *resp.ID)
-			require.Nil(t, resp.Error)
-			require.NotNil(t, resp.Result)
+			list := p.readCompletionResult(t, completionID)
 
-			var list lsp.CompletionList
-			err := json.Unmarshal(resp.Result, &list)
-			require.NoError(t, err)
 			require.NotEmpty(t, list.Items)
-			// Partial content should still return top-level keyword completions.
-			labels := make([]string, len(list.Items))
-			for i, item := range list.Items {
-				labels[i] = item.Label
-			}
+			labels := extractLabels(list.Items)
 			require.Contains(t, labels, "model")
 			require.Contains(t, labels, "actor")
 			require.Contains(t, labels, "context")
@@ -607,20 +530,7 @@ context "C" {
         }
     }
 }`
-			p.writeMsg(t, &lsp.Message{
-				JSONRPC: "2.0",
-				Method:  "textDocument/didOpen",
-				Params: mustMarshal(t, map[string]interface{}{
-					"textDocument": map[string]interface{}{
-						"uri":        uri,
-						"languageId": "emod",
-						"version":    1,
-						"text":       content,
-					},
-				}),
-			})
-			// Consume diagnostics notification.
-			p.readMsg(t)
+			p.openDocument(t, uri, content)
 
 			defID := 2
 			// Position is on "OrderSubmitted" in the subscribes line.
@@ -666,19 +576,7 @@ context "C" {
 
 			uri := "file:///test.emod"
 			content := `model "test"`
-			p.writeMsg(t, &lsp.Message{
-				JSONRPC: "2.0",
-				Method:  "textDocument/didOpen",
-				Params: mustMarshal(t, map[string]interface{}{
-					"textDocument": map[string]interface{}{
-						"uri":        uri,
-						"languageId": "emod",
-						"version":    1,
-						"text":       content,
-					},
-				}),
-			})
-			p.readMsg(t)
+			p.openDocument(t, uri, content)
 
 			defID := 2
 			p.writeMsg(t, &lsp.Message{
@@ -758,20 +656,7 @@ context "C" {
         }
     }
 }`
-			p.writeMsg(t, &lsp.Message{
-				JSONRPC: "2.0",
-				Method:  "textDocument/didOpen",
-				Params: mustMarshal(t, map[string]interface{}{
-					"textDocument": map[string]interface{}{
-						"uri":        uri,
-						"languageId": "emod",
-						"version":    1,
-						"text":       content,
-					},
-				}),
-			})
-			// Consume diagnostics notification.
-			p.readMsg(t)
+			p.openDocument(t, uri, content)
 
 			refID := 2
 			// Cursor on "OrderSubmitted" in event definition: line 5, character 18.
@@ -820,19 +705,7 @@ context "C" {
         }
     }
 }`
-			p.writeMsg(t, &lsp.Message{
-				JSONRPC: "2.0",
-				Method:  "textDocument/didOpen",
-				Params: mustMarshal(t, map[string]interface{}{
-					"textDocument": map[string]interface{}{
-						"uri":        uri,
-						"languageId": "emod",
-						"version":    1,
-						"text":       content,
-					},
-				}),
-			})
-			p.readMsg(t)
+			p.openDocument(t, uri, content)
 
 			refID := 2
 			// Cursor on "context" keyword: line 0, character 2.
@@ -896,19 +769,7 @@ context "C" {
 
 			uri := "file:///hover.emod"
 			content := `model "test"`
-			p.writeMsg(t, &lsp.Message{
-				JSONRPC: "2.0",
-				Method:  "textDocument/didOpen",
-				Params: mustMarshal(t, map[string]interface{}{
-					"textDocument": map[string]interface{}{
-						"uri":        uri,
-						"languageId": "emod",
-						"version":    1,
-						"text":       content,
-					},
-				}),
-			})
-			p.readMsg(t)
+			p.openDocument(t, uri, content)
 
 			hoverID := 2
 			// Cursor at (0, 7) is on the string literal "test", not a keyword or definition.
@@ -954,19 +815,7 @@ context "C" {
         }
     }
 }`
-			p.writeMsg(t, &lsp.Message{
-				JSONRPC: "2.0",
-				Method:  "textDocument/didOpen",
-				Params: mustMarshal(t, map[string]interface{}{
-					"textDocument": map[string]interface{}{
-						"uri":        uri,
-						"languageId": "emod",
-						"version":    1,
-						"text":       content,
-					},
-				}),
-			})
-			p.readMsg(t)
+			p.openDocument(t, uri, content)
 
 			for i, tc := range []struct {
 				keyword   string
@@ -1067,20 +916,7 @@ context "C" {
 			uri := "file:///format.emod"
 			content := "emod 1\nmodel \"test\"\n\nactor \"Guest\"\n\ncontext \"Orders\" {\n  aggregate \"Order\" {\n  }\n}\n"
 
-			p.writeMsg(t, &lsp.Message{
-				JSONRPC: "2.0",
-				Method:  "textDocument/didOpen",
-				Params: mustMarshal(t, map[string]interface{}{
-					"textDocument": map[string]interface{}{
-						"uri":        uri,
-						"languageId": "emod",
-						"version":    1,
-						"text":       content,
-					},
-				}),
-			})
-			// Consume diagnostics notification.
-			p.readMsg(t)
+			p.openDocument(t, uri, content)
 
 			formatID := 2
 			p.writeMsg(t, &lsp.Message{
@@ -1121,19 +957,7 @@ context "C" {
 			uri := "file:///comments.emod"
 			content := "# System description\nmodel \"test\"\n"
 
-			p.writeMsg(t, &lsp.Message{
-				JSONRPC: "2.0",
-				Method:  "textDocument/didOpen",
-				Params: mustMarshal(t, map[string]interface{}{
-					"textDocument": map[string]interface{}{
-						"uri":        uri,
-						"languageId": "emod",
-						"version":    1,
-						"text":       content,
-					},
-				}),
-			})
-			p.readMsg(t)
+			p.openDocument(t, uri, content)
 
 			formatID := 2
 			p.writeMsg(t, &lsp.Message{
@@ -1193,20 +1017,7 @@ context "C" {
 			uri := "file:///invalid.emod"
 			content := "invalid syntax here"
 
-			p.writeMsg(t, &lsp.Message{
-				JSONRPC: "2.0",
-				Method:  "textDocument/didOpen",
-				Params: mustMarshal(t, map[string]interface{}{
-					"textDocument": map[string]interface{}{
-						"uri":        uri,
-						"languageId": "emod",
-						"version":    1,
-						"text":       content,
-					},
-				}),
-			})
-			// Consume diagnostics notification.
-			p.readMsg(t)
+			p.openDocument(t, uri, content)
 
 			formatID := 2
 			p.writeMsg(t, &lsp.Message{
@@ -1247,20 +1058,7 @@ context "C" {
     }
 }
 `
-			p.writeMsg(t, &lsp.Message{
-				JSONRPC: "2.0",
-				Method:  "textDocument/didOpen",
-				Params: mustMarshal(t, map[string]interface{}{
-					"textDocument": map[string]interface{}{
-						"uri":        uri,
-						"languageId": "emod",
-						"version":    1,
-						"text":       content,
-					},
-				}),
-			})
-			// Consume diagnostics notification.
-			p.readMsg(t)
+			p.openDocument(t, uri, content)
 
 			stID := 2
 			p.writeMsg(t, &lsp.Message{
@@ -1319,20 +1117,7 @@ context "C" {
 			p.readInitializeResult(t, 1)
 
 			uri := "file:///invalid.emod"
-			p.writeMsg(t, &lsp.Message{
-				JSONRPC: "2.0",
-				Method:  "textDocument/didOpen",
-				Params: mustMarshal(t, map[string]interface{}{
-					"textDocument": map[string]interface{}{
-						"uri":        uri,
-						"languageId": "emod",
-						"version":    1,
-						"text":       "this is not valid emod syntax",
-					},
-				}),
-			})
-			// Consume diagnostics notification.
-			p.readMsg(t)
+			p.openDocument(t, uri, "this is not valid emod syntax")
 
 			stID := 2
 			p.writeMsg(t, &lsp.Message{

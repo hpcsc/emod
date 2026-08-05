@@ -19,101 +19,106 @@ func GetCompletions(text string, line, character int) CompletionList {
 type blockContext int
 
 const (
-	ctxUnknown   blockContext = iota
+	ctxUnknown blockContext = iota
 	ctxContext
 	ctxAggregate
 	ctxSlice
 	ctxCommand
 	ctxEvent
+	ctxAutomation
 	ctxFields
 )
 
-// resolveContext scans the document text up to the cursor position and determines
-// which block context the cursor falls into by tracking brace nesting and keywords.
 func resolveContext(text string, line, character int) blockContext {
-	if text == "" {
-		return ctxUnknown
-	}
-
 	lines := strings.Split(text, "\n")
 	if line >= len(lines) {
 		line = len(lines) - 1
 	}
 
-	stack := []blockContext{}
-	// pendingKeyword tracks a keyword whose opening brace hasn't been reached yet
-	// (e.g. keyword on one line, { on the next)
-	pendingKeyword := ctxUnknown
-
+	var scanner blockScanner
 	for i := 0; i <= line; i++ {
-		l := lines[i]
-		kw := findBlockKeyword(l)
-
-		opens := strings.Count(l, "{")
-		closes := strings.Count(l, "}")
-
-		if kw != ctxUnknown {
-			if opens > 0 {
-				stack = append(stack, kw)
-				for j := 1; j < opens; j++ {
-					stack = append(stack, ctxUnknown)
-				}
-			} else {
-				pendingKeyword = kw
-			}
-		} else if pendingKeyword != ctxUnknown && opens > 0 {
-			stack = append(stack, pendingKeyword)
-			pendingKeyword = ctxUnknown
-			for j := 1; j < opens; j++ {
-				stack = append(stack, ctxUnknown)
-			}
-		} else if opens > 0 {
-			// Anonymous opening brace (e.g. "model {" or standalone "{")
-			for j := 0; j < opens; j++ {
-				stack = append(stack, ctxUnknown)
-			}
-		}
-
-		if closes > 0 {
-			pops := closes
-			if pops > len(stack) {
-				pops = len(stack)
-			}
-			stack = stack[:len(stack)-pops]
-		}
+		scanner.consume(lines[i])
 	}
-
-	// Cursor is on a keyword line before its opening brace — still in parent context
-	if pendingKeyword != ctxUnknown {
-		return ctxUnknown
-	}
-
-	if len(stack) > 0 {
-		return stack[len(stack)-1]
-	}
-	return ctxUnknown
+	return scanner.innermost()
 }
 
-func findBlockKeyword(line string) blockContext {
-	trimmed := strings.TrimSpace(line)
-	if trimmed == "" {
-		return ctxUnknown
+type blockScanner struct {
+	blocks               []blockContext
+	keywordAwaitingBrace blockContext
+}
+
+func (s *blockScanner) consume(line string) {
+	code := codeOutsideStringsAndComments(line)
+	keyword := findBlockKeyword(code)
+	opens := strings.Count(code, "{")
+
+	switch {
+	case opens > 0:
+		opener := keyword
+		if opener == ctxUnknown {
+			opener = s.keywordAwaitingBrace
+		}
+		s.blocks = append(s.blocks, opener)
+		for i := 1; i < opens; i++ {
+			s.blocks = append(s.blocks, ctxUnknown)
+		}
+		s.keywordAwaitingBrace = ctxUnknown
+	case code != "":
+		// A keyword holds its claim on an opening brace only until the next line that
+		// carries code, so `command Ship` inside an automation stays a reference to a
+		// command rather than opening a command block for the rest of the body.
+		s.keywordAwaitingBrace = keyword
 	}
 
-	if idx := strings.Index(trimmed, "//"); idx >= 0 {
-		trimmed = strings.TrimSpace(trimmed[:idx])
+	s.closeBlocks(strings.Count(code, "}"))
+}
+
+func (s *blockScanner) closeBlocks(braces int) {
+	if braces > len(s.blocks) {
+		braces = len(s.blocks)
 	}
-	if trimmed == "" {
+	s.blocks = s.blocks[:len(s.blocks)-braces]
+}
+
+func (s *blockScanner) innermost() blockContext {
+	if len(s.blocks) == 0 {
 		return ctxUnknown
 	}
+	return s.blocks[len(s.blocks)-1]
+}
 
-	fields := strings.Fields(trimmed)
+// A string literal's contents are not code: a `#` inside one starts no comment and a
+// brace inside one delimits no block. The quotes themselves stay, so a line holding
+// only a string still reads as carrying code.
+func codeOutsideStringsAndComments(line string) string {
+	var code strings.Builder
+	inString := false
+	for i := 0; i < len(line); i++ {
+		switch ch := line[i]; {
+		case inString:
+			if ch == '"' {
+				inString = false
+				code.WriteByte(ch)
+			}
+		case ch == '"':
+			inString = true
+			code.WriteByte(ch)
+		case ch == '#', ch == '/' && i+1 < len(line) && line[i+1] == '/':
+			return strings.TrimSpace(code.String())
+		default:
+			code.WriteByte(ch)
+		}
+	}
+	return strings.TrimSpace(code.String())
+}
+
+func findBlockKeyword(code string) blockContext {
+	fields := strings.Fields(code)
 	if len(fields) == 0 {
 		return ctxUnknown
 	}
-	keyword := fields[0]
 
-	switch keyword {
+	switch fields[0] {
 	case "context":
 		return ctxContext
 	case "aggregate":
@@ -124,6 +129,8 @@ func findBlockKeyword(line string) blockContext {
 		return ctxCommand
 	case "event":
 		return ctxEvent
+	case "automation":
+		return ctxAutomation
 	case "fields":
 		return ctxFields
 	}
@@ -131,22 +138,7 @@ func findBlockKeyword(line string) blockContext {
 }
 
 func completionsFor(ctx blockContext) []CompletionItem {
-	var labels []string
-	switch ctx {
-	case ctxUnknown:
-		labels = []string{"model", "actor", "context"}
-	case ctxContext:
-		labels = []string{"aggregate"}
-	case ctxAggregate:
-		labels = []string{"slice"}
-	case ctxSlice:
-		labels = []string{"command", "event", "trigger", "view", "automation", "translation", "flow"}
-	case ctxCommand, ctxEvent:
-		labels = []string{"fields"}
-	case ctxFields:
-		labels = []string{"string", "date", "timestamp", "int", "required", "optional"}
-	}
-
+	labels := labelsFor(ctx)
 	items := make([]CompletionItem, len(labels))
 	for i, label := range labels {
 		items[i] = CompletionItem{
@@ -155,4 +147,24 @@ func completionsFor(ctx blockContext) []CompletionItem {
 		}
 	}
 	return items
+}
+
+func labelsFor(ctx blockContext) []string {
+	switch ctx {
+	case ctxUnknown:
+		return []string{"model", "actor", "context"}
+	case ctxContext:
+		return []string{"aggregate"}
+	case ctxAggregate:
+		return []string{"slice"}
+	case ctxSlice:
+		return []string{"command", "event", "trigger", "view", "automation", "translation", "flow"}
+	case ctxCommand, ctxEvent:
+		return []string{"fields"}
+	case ctxAutomation:
+		return []string{"on", "every", "reads", "command", "target context"}
+	case ctxFields:
+		return []string{"string", "date", "timestamp", "int", "required", "optional"}
+	}
+	return nil
 }

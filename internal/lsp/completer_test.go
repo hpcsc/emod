@@ -43,6 +43,14 @@ func TestGetCompletions(t *testing.T) {
 			result := lsp.GetCompletions(doc, 1, 1)
 			require.Equal(t, []string{"aggregate"}, extractLabels(result.Items))
 		})
+
+		t.Run("opening brace separated from the keyword by lines carrying no code still opens the block", func(t *testing.T) {
+			for _, separator := range []string{"", "  ", "  # a note"} {
+				doc := "context MyContext\n" + separator + "\n{\n}"
+				result := lsp.GetCompletions(doc, 2, 1)
+				require.Equal(t, []string{"aggregate"}, extractLabels(result.Items), "separator %q", separator)
+			}
+		})
 	})
 
 	t.Run("aggregate block", func(t *testing.T) {
@@ -69,6 +77,81 @@ func TestGetCompletions(t *testing.T) {
 			result := lsp.GetCompletions(doc, 3, 4)
 			require.Equal(t, []string{"command", "event", "trigger", "view", "automation", "translation", "flow"}, extractLabels(result.Items))
 		})
+	})
+
+	t.Run("automation block", func(t *testing.T) {
+		automationEntries := []string{"on", "every", "reads", "command", "target context"}
+
+		t.Run("inside automation block returns the entries an automation accepts", func(t *testing.T) {
+			doc := `context Ctx {
+	aggregate Agg {
+		slice Slc {
+			automation Auto {
+				// cursor here
+			}
+		}
+	}
+}`
+			result := lsp.GetCompletions(doc, 4, 5)
+			require.Equal(t, automationEntries, extractLabels(result.Items))
+			for _, item := range result.Items {
+				require.Equal(t, lsp.KeywordCompletion, item.Kind, "item %q should be KeywordCompletion", item.Label)
+			}
+		})
+
+		t.Run("below a braceless command reference still returns automation entries", func(t *testing.T) {
+			doc := `context Ctx {
+	aggregate Agg {
+		slice Slc {
+			automation Auto {
+				on OrderPlaced
+				command ShipOrder
+				// cursor here
+			}
+		}
+	}
+}`
+			result := lsp.GetCompletions(doc, 6, 5)
+			require.Equal(t, automationEntries, extractLabels(result.Items))
+		})
+
+		t.Run("after a closed automation block returns the enclosing slice keywords", func(t *testing.T) {
+			doc := `context Ctx {
+	aggregate Agg {
+		slice Slc {
+			automation Auto {
+				on OrderPlaced
+				command ShipOrder
+			}
+			// cursor here
+		}
+	}
+}`
+			result := lsp.GetCompletions(doc, 7, 4)
+			require.Equal(t, []string{"command", "event", "trigger", "view", "automation", "translation", "flow"}, extractLabels(result.Items))
+		})
+
+		// Sibling slice blocks own no entry list yet, so they fall through to the top
+		// level keywords rather than borrowing the automation entries.
+		for _, keyword := range []string{"trigger", "view", "translation"} {
+			t.Run("inside a "+keyword+" block beside an automation returns the top level keywords", func(t *testing.T) {
+				doc := `context Ctx {
+	aggregate Agg {
+		slice Slc {
+			automation Auto {
+				on OrderPlaced
+				command ShipOrder
+			}
+			` + keyword + ` Sibling {
+				// cursor here
+			}
+		}
+	}
+}`
+				result := lsp.GetCompletions(doc, 8, 5)
+				require.Equal(t, []string{"model", "actor", "context"}, extractLabels(result.Items))
+			})
+		}
 	})
 
 	t.Run("command block", func(t *testing.T) {
@@ -128,6 +211,23 @@ func TestGetCompletions(t *testing.T) {
 }`
 			result := lsp.GetCompletions(doc, 2, 3)
 			require.Equal(t, []string{"string", "date", "timestamp", "int", "required", "optional"}, extractLabels(result.Items))
+		})
+	})
+
+	t.Run("quoted strings", func(t *testing.T) {
+		t.Run("string contents neither start a comment nor open or close a block", func(t *testing.T) {
+			for _, description := range []string{"plain text", "a # b", "a { b", "a } b", "a // b"} {
+				doc := `context Ctx {
+	aggregate Agg {
+		slice Slc {
+			view V { description "` + description + `" }
+		}
+		// cursor here
+	}
+}`
+				result := lsp.GetCompletions(doc, 5, 2)
+				require.Equal(t, []string{"slice"}, extractLabels(result.Items), "description %q", description)
+			}
 		})
 	})
 
