@@ -2,7 +2,7 @@
 
 ## Progress
 - [x] Task 1: Name the view the shared fixtures' automations read
-- [ ] Task 2: Name the view the repository's `.emod` models' automations read
+- [x] Task 2: Name the view the repository's `.emod` models' automations read
 - [ ] Task 3: Warn on an automation that declares no view
 
 ---

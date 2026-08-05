@@ -23,8 +23,18 @@ context "Orders" {
     }
 
     slice "Notify On Order" {
+      view PendingNotificationsView {
+        fields {
+          orderId    string    required
+          customerId string    required
+          placedAt   timestamp required
+        }
+        subscribes [OrderPlaced]
+      }
+
       automation OrderNotifier {
         on OrderPlaced
+        reads PendingNotificationsView
         command SendNotification
         target context Notifications
       }

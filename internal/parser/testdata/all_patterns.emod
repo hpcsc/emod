@@ -74,8 +74,18 @@ context "Reservations" {
 
     # Slice 4: Automation Pattern
     slice "Send Confirmation Email" {
+      view PendingConfirmationsView {
+        fields {
+          reservationId string    required
+          guestName     string    required
+          reservedAt    timestamp required
+        }
+        subscribes [RoomReserved]
+      }
+
       automation ConfirmationEmailReactor {
         on RoomReserved
+        reads PendingConfirmationsView
         command SendConfirmationEmail
         target context Notifications
       }

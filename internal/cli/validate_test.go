@@ -34,6 +34,22 @@ func TestValidate(t *testing.T) {
 		require.NoError(t, err)
 	})
 
+	t.Run("returns no error for each model the repository ships as valid", func(t *testing.T) {
+		for _, shipped := range []string{
+			"examples/all_patterns.emod",
+			"examples/dcb_model.emod",
+			"internal/parser/testdata/all_patterns.emod",
+			"internal/parser/testdata/minimal.emod",
+			"internal/parser/testdata/multi_context.emod",
+		} {
+			t.Run(shipped, func(t *testing.T) {
+				err := cli.RunValidate(filepath.Join("../..", shipped), "text")
+
+				require.NoError(t, err)
+			})
+		}
+	})
+
 	t.Run("returns error for invalid input", func(t *testing.T) {
 		path := writeTemp(t, "invalid.emod", invalidEmod)
 

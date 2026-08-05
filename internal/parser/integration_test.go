@@ -19,16 +19,8 @@ var ignorePositions = cmpopts.IgnoreTypes(ast.Position{}, []ast.Position{})
 
 func TestIntegration(t *testing.T) {
 	t.Run("parses minimal.emod fixture with zero errors and fully populated AST", func(t *testing.T) {
-		source, err := os.ReadFile("testdata/minimal.emod")
-		require.NoError(t, err)
+		model := parseWithoutDiagnostics(t, "testdata/minimal.emod")
 
-		tokens, lexDiags := lexer.Scan(string(source), "testdata/minimal.emod")
-		require.Empty(t, lexDiags)
-
-		p := parser.New(tokens, "testdata/minimal.emod")
-		model, diags := p.Parse()
-
-		require.Empty(t, diags)
 		require.Equal(t, "Hotel Reservation", model.Name)
 		require.Len(t, model.Actors, 1)
 		require.Equal(t, "Guest", model.Actors[0].Name)
@@ -98,16 +90,8 @@ func TestIntegration(t *testing.T) {
 	})
 
 	t.Run("parses all_patterns.emod fixture with zero errors and all four patterns populated", func(t *testing.T) {
-		source, err := os.ReadFile("testdata/all_patterns.emod")
-		require.NoError(t, err)
+		model := parseWithoutDiagnostics(t, "testdata/all_patterns.emod")
 
-		tokens, lexDiags := lexer.Scan(string(source), "testdata/all_patterns.emod")
-		require.Empty(t, lexDiags)
-
-		p := parser.New(tokens, "testdata/all_patterns.emod")
-		model, diags := p.Parse()
-
-		require.Empty(t, diags)
 		require.Equal(t, "Hotel Reservation", model.Name)
 
 		// Comment attachment assertions
@@ -230,10 +214,22 @@ func TestIntegration(t *testing.T) {
 		automationSlice := agg.Slices[3]
 		require.Equal(t, "Send Confirmation Email", automationSlice.Name)
 
+		require.Len(t, automationSlice.Views, 1)
+		test.RequireEqual(t, &ast.View{
+			Name: "PendingConfirmationsView",
+			Fields: []*ast.Field{
+				{Name: "reservationId", Type: "string", Modifier: "required"},
+				{Name: "guestName", Type: "string", Modifier: "required"},
+				{Name: "reservedAt", Type: "timestamp", Modifier: "required"},
+			},
+			Subscribes: []string{"RoomReserved"},
+		}, automationSlice.Views[0], ignorePositions)
+
 		require.Len(t, automationSlice.Automations, 1)
 		test.RequireEqual(t, &ast.Automation{
 			Name:          "ConfirmationEmailReactor",
 			OnEvent:       "RoomReserved",
+			Reads:         "PendingConfirmationsView",
 			Command:       "SendConfirmationEmail",
 			TargetContext: "Notifications",
 		}, automationSlice.Automations[0], ignorePositions)
@@ -295,15 +291,7 @@ func TestIntegration(t *testing.T) {
 	})
 
 	t.Run("parses and validates multi_context.emod fixture with cross-context automation and external source", func(t *testing.T) {
-		source, err := os.ReadFile("testdata/multi_context.emod")
-		require.NoError(t, err)
-
-		tokens, lexDiags := lexer.Scan(string(source), "testdata/multi_context.emod")
-		require.Empty(t, lexDiags)
-
-		p := parser.New(tokens, "testdata/multi_context.emod")
-		model, parseDiags := p.Parse()
-		require.Empty(t, parseDiags)
+		model := parseWithoutDiagnostics(t, "testdata/multi_context.emod")
 
 		validationDiags := validator.Validate(model)
 		require.Empty(t, validationDiags)
@@ -321,6 +309,7 @@ func TestIntegration(t *testing.T) {
 		test.RequireEqual(t, &ast.Automation{
 			Name:          "OrderNotifier",
 			OnEvent:       "OrderPlaced",
+			Reads:         "PendingNotificationsView",
 			Command:       "SendNotification",
 			TargetContext: "Notifications",
 		}, automationSlice.Automations[0], ignorePositions)
@@ -340,4 +329,19 @@ func TestIntegration(t *testing.T) {
 			},
 		}, notifSlice.Events[0], ignorePositions)
 	})
+}
+
+func parseWithoutDiagnostics(t *testing.T, path string) *ast.Model {
+	t.Helper()
+
+	source, err := os.ReadFile(path)
+	require.NoError(t, err)
+
+	tokens, lexDiags := lexer.Scan(string(source), path)
+	require.Empty(t, lexDiags)
+
+	model, parseDiags := parser.New(tokens, path).Parse()
+	require.Empty(t, parseDiags)
+
+	return model
 }
