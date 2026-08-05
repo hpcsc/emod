@@ -52,6 +52,46 @@ const (
 	contextName
 )
 
+type nameDecl struct {
+	kind nameKind
+	name string
+	pos  ast.Position
+}
+
+func declarationsIn(model *ast.Model) []nameDecl {
+	var decls []nameDecl
+	add := func(kind nameKind, name string, pos ast.Position) {
+		decls = append(decls, nameDecl{kind: kind, name: name, pos: pos})
+	}
+
+	for _, ctx := range model.Contexts {
+		add(contextName, ctx.Name, ctx.NamePos)
+	}
+	for _, scoped := range scopedSlices(model) {
+		for _, cmd := range scoped.slice.Commands {
+			add(commandName, cmd.Name, cmd.NamePos)
+		}
+		for _, evt := range scoped.slice.Events {
+			add(eventName, evt.Name, evt.NamePos)
+		}
+		for _, v := range scoped.slice.Views {
+			add(viewName, v.Name, v.NamePos)
+		}
+	}
+
+	return decls
+}
+
+func declaredNamesInOrder(model *ast.Model, kind nameKind) []string {
+	var names []string
+	for _, decl := range declarationsIn(model) {
+		if decl.kind == kind {
+			names = append(names, decl.name)
+		}
+	}
+	return names
+}
+
 type declaredNames map[nameKind]map[string]ast.Position
 
 func newDeclaredNames(model *ast.Model) declaredNames {
@@ -62,19 +102,8 @@ func newDeclaredNames(model *ast.Model) declaredNames {
 		contextName: {},
 	}
 
-	for _, ctx := range model.Contexts {
-		declared[contextName][ctx.Name] = ctx.NamePos
-	}
-	for _, scoped := range scopedSlices(model) {
-		for _, cmd := range scoped.slice.Commands {
-			declared[commandName][cmd.Name] = cmd.NamePos
-		}
-		for _, evt := range scoped.slice.Events {
-			declared[eventName][evt.Name] = evt.NamePos
-		}
-		for _, v := range scoped.slice.Views {
-			declared[viewName][v.Name] = v.NamePos
-		}
+	for _, decl := range declarationsIn(model) {
+		declared[decl.kind][decl.name] = decl.pos
 	}
 
 	return declared

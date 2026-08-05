@@ -4,16 +4,26 @@ import (
 	"strings"
 )
 
-// GetCompletions returns context-appropriate keyword completions based on cursor position.
-// It examines the document text to determine which block the cursor falls into,
-// then returns the keywords that are valid in that context.
+// GetCompletions returns the completions available at the cursor. Where the
+// cursor sits in the value position of an entry naming something the model
+// declares, those names are offered; everywhere else it is the keywords the
+// enclosing block accepts.
+//
+// Positions are 0-based LSP coordinates (line, character).
 func GetCompletions(text string, line, character int) CompletionList {
-	ctx := resolveContext(text, line, character)
-	items := completionsFor(ctx)
 	return CompletionList{
 		IsIncomplete: false,
-		Items:        items,
+		Items:        completionsAt(text, line, character),
 	}
+}
+
+func completionsAt(text string, line, character int) []CompletionItem {
+	lines := strings.Split(text, "\n")
+	block := enclosingBlock(lines, line)
+	if slot, ok := valueSlotBefore(linePrefix(lines, line, character), block); ok {
+		return valueCompletions(text, slot)
+	}
+	return keywordCompletions(block)
 }
 
 type blockContext int
@@ -29,8 +39,7 @@ const (
 	ctxFields
 )
 
-func resolveContext(text string, line, character int) blockContext {
-	lines := strings.Split(text, "\n")
+func enclosingBlock(lines []string, line int) blockContext {
 	if line >= len(lines) {
 		line = len(lines) - 1
 	}
@@ -137,20 +146,76 @@ func findBlockKeyword(code string) blockContext {
 	return ctxUnknown
 }
 
-func completionsFor(ctx blockContext) []CompletionItem {
-	labels := labelsFor(ctx)
+func linePrefix(lines []string, line, character int) string {
+	if line < 0 || line >= len(lines) {
+		return ""
+	}
+	current := lines[line]
+	if character > len(current) {
+		character = len(current)
+	}
+	if character < 0 {
+		character = 0
+	}
+	return current[:character]
+}
+
+type valueSlot struct {
+	nameKind nameKind
+	itemKind CompletionItemKind
+}
+
+// The item kinds are the ones GetSemanticTokens gives the same names, so a name
+// an editor paints as an event does not complete as something else.
+var valueSlots = map[string]valueSlot{
+	"on":    {nameKind: eventName, itemKind: EventCompletion},
+	"reads": {nameKind: viewName, itemKind: ClassCompletion},
+}
+
+func valueSlotBefore(prefix string, block blockContext) (valueSlot, bool) {
+	// Keywords stay legal as field names, types and modifiers, so `id reads required`
+	// is a field line and names no view.
+	if block == ctxFields {
+		return valueSlot{}, false
+	}
+
+	typed := strings.Fields(codeOutsideStringsAndComments(prefix))
+	// The word the cursor still touches is half-typed rather than finished, so
+	// `on` completes from the keyword list while `on ` opens the value slot.
+	if len(typed) > 0 && strings.HasSuffix(prefix, typed[len(typed)-1]) {
+		typed = typed[:len(typed)-1]
+	}
+
+	for i := len(typed) - 1; i >= 0; i-- {
+		if slot, ok := valueSlots[typed[i]]; ok {
+			return slot, true
+		}
+	}
+	return valueSlot{}, false
+}
+
+func valueCompletions(text string, slot valueSlot) []CompletionItem {
+	model, _ := parseModel(text, "")
+	if model == nil {
+		return []CompletionItem{}
+	}
+	return completionItems(declaredNamesInOrder(model, slot.nameKind), slot.itemKind)
+}
+
+func keywordCompletions(block blockContext) []CompletionItem {
+	return completionItems(keywordsFor(block), KeywordCompletion)
+}
+
+func completionItems(labels []string, kind CompletionItemKind) []CompletionItem {
 	items := make([]CompletionItem, len(labels))
 	for i, label := range labels {
-		items[i] = CompletionItem{
-			Label: label,
-			Kind:  KeywordCompletion,
-		}
+		items[i] = CompletionItem{Label: label, Kind: kind}
 	}
 	return items
 }
 
-func labelsFor(ctx blockContext) []string {
-	switch ctx {
+func keywordsFor(block blockContext) []string {
+	switch block {
 	case ctxUnknown:
 		return []string{"model", "actor", "context"}
 	case ctxContext:

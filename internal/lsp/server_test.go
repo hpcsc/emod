@@ -477,6 +477,35 @@ context "C" {
 			require.Equal(t, []string{"on", "every", "reads", "command", "target context"}, extractLabels(list.Items))
 		})
 
+		t.Run("returns the open document's event names for a position after an automation's on", func(t *testing.T) {
+			p := startServer(t)
+			p.writeInitialize(t)
+			p.readInitializeResult(t, 1)
+
+			uri := "file:///values.emod"
+			p.openDocument(t, uri, `context "Lending" {
+	aggregate "Loan" {
+		slice "Borrow Copy" {
+			event CopyBorrowed {
+			}
+			event CopyReturned {
+			}
+			automation RemindOnDueDate {
+				on CopyBorrowed
+				command RemindMember
+			}
+		}
+	}
+}`)
+
+			completionID := p.writeCompletion(t, uri, 8, 7)
+
+			list := p.readCompletionResult(t, completionID)
+
+			require.Equal(t, []string{"CopyBorrowed", "CopyReturned"}, extractLabels(list.Items))
+			requireItemKinds(t, list.Items, lsp.EventCompletion)
+		})
+
 		t.Run("returns error for unknown document URI", func(t *testing.T) {
 			p := startServer(t)
 			p.writeInitialize(t)
