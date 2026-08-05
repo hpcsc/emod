@@ -769,7 +769,7 @@ func TestFormat(t *testing.T) {
 		})
 
 		t.Run("round-trip: fields named after keywords survive formatting", func(t *testing.T) {
-			original := parseModel(t, test.KeywordFieldSearchCatalog, "keyword-fields.emod")
+			original := test.KeywordFieldSearchCatalogModel(t)
 
 			reparsed := requireStableFormat(t, original)
 
@@ -777,7 +777,7 @@ func TestFormat(t *testing.T) {
 		})
 
 		t.Run("round-trip: a description on every construct survives formatting", func(t *testing.T) {
-			original := parseModel(t, test.DescribedHotelReservation, "described.emod")
+			original := test.DescribedHotelReservationModel(t)
 
 			reparsed := parseModel(t, formatter.Format(original), "described.emod")
 
@@ -1055,6 +1055,7 @@ func TestFormat(t *testing.T) {
 					parse:            test.HotelReservationModel,
 					activationEvents: []string{"ReservationMade"},
 					triggerReads:     []string{"AvailableRoomsView"},
+					automationReads:  []string{"ReservationsView"},
 				},
 				{
 					shape:            "automations run on a schedule in both slice homes, beside automations activated by an event",
@@ -1251,7 +1252,7 @@ func TestFormat(t *testing.T) {
 		})
 
 		t.Run("idempotency: format(format(described input)) equals format(described input)", func(t *testing.T) {
-			requireStableFormat(t, parseModel(t, test.DescribedHotelReservation, "described.emod"))
+			requireStableFormat(t, test.DescribedHotelReservationModel(t))
 		})
 	})
 
@@ -1998,7 +1999,7 @@ func TestFormat(t *testing.T) {
 		})
 
 		t.Run("a field named after a keyword keeps its own line with the columns padded", func(t *testing.T) {
-			formatted := formatter.Format(parseModel(t, test.KeywordFieldSearchCatalog, "keyword-fields.emod"))
+			formatted := formatter.Format(test.KeywordFieldSearchCatalogModel(t))
 
 			require.True(t, strings.HasPrefix(formatted, "emod 1\n"), "formatted output should open with the version header")
 

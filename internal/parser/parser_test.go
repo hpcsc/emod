@@ -2245,6 +2245,36 @@ context "Ctx" {
 			}, readsByAutomation)
 		})
 
+		t.Run("the shared models that stand for a valid model name the view their automation reads", func(t *testing.T) {
+			tests := []struct {
+				name  string
+				parse func(*testing.T) *ast.Model
+				reads []string
+			}{
+				{
+					name:  "all four slice patterns in one model",
+					parse: test.HotelReservationModel,
+					reads: []string{"ReservationsView"},
+				},
+				{
+					name:  "the same shape with a description on every construct",
+					parse: test.DescribedHotelReservationModel,
+					reads: []string{"ReservationsView"},
+				},
+				{
+					name:  "fields named after keywords",
+					parse: test.KeywordFieldSearchCatalogModel,
+					reads: []string{"SavedSearchesView"},
+				},
+			}
+
+			for _, tc := range tests {
+				t.Run(tc.name, func(t *testing.T) {
+					require.Equal(t, tc.reads, test.DeclaredAutomationReads(tc.parse(t)))
+				})
+			}
+		})
+
 		t.Run("automation is stored in slice AST node", func(t *testing.T) {
 			input := modelWithAutomation("Reactor", `        on SomeEvent
         command SomeCmd`)
@@ -4605,12 +4635,8 @@ context "Reservations" {
 		})
 
 		t.Run("the shared described model describes every construct that accepts one", func(t *testing.T) {
-			tokens, lexDiags := lexer.Scan(test.DescribedHotelReservation, "described.emod")
-			require.Empty(t, lexDiags)
+			model := test.DescribedHotelReservationModel(t)
 
-			model, diags := parser.New(tokens, "described.emod").Parse()
-
-			require.Empty(t, diags)
 			var kinds, undescribed []string
 			for _, construct := range describableConstructs(model) {
 				kinds = append(kinds, construct.kind)

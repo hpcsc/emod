@@ -16,6 +16,12 @@ func HotelReservationModel(t *testing.T) *ast.Model {
 	return parseFixture(t, HotelReservation, "hotel.emod")
 }
 
+func DescribedHotelReservationModel(t *testing.T) *ast.Model {
+	t.Helper()
+
+	return parseFixture(t, DescribedHotelReservation, "described.emod")
+}
+
 func KeywordFieldSearchCatalogModel(t *testing.T) *ast.Model {
 	t.Helper()
 

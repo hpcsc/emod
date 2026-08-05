@@ -65,6 +65,7 @@ context "Reservations" {
       }
       automation AutoConfirm {
         on ReservationMade
+        reads ReservationsView
         command ConfirmReservation
       }
     }
@@ -167,6 +168,7 @@ context "Reservations" {
       automation AutoConfirm {
         description "Confirms every reservation the moment it is made"
         on ReservationMade
+        reads ReservationsView
         command ConfirmReservation
       }
     }
@@ -270,6 +272,7 @@ context "Discovery" {
       }
       automation AutoShare {
         on SavedSearchDefined
+        reads SavedSearchesView
         command ShareSavedSearch
       }
     }

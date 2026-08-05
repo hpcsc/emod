@@ -201,6 +201,7 @@ context "Discovery" {
 
       automation AutoShare {
         on SavedSearchDefined
+        reads SavedSearchesView
         command ShareSavedSearch
       }
 

@@ -362,9 +362,19 @@ context "Orders" {
         command -> event: PlaceOrder -> OrderPlaced
       }
     }
+    slice "Browse Orders" {
+      view PlacedOrdersView {
+        fields {
+          orderId     string required
+          totalAmount string required
+        }
+        subscribes [OrderPlaced]
+      }
+    }
     slice "Notify On Order" {
       automation OrderNotifier {
         on OrderPlaced
+        reads PlacedOrdersView
         command SendNotification
         target context Notifications
       }
@@ -398,6 +408,7 @@ context "Notifications" {
       }
       automation Sender {
         on NotificationRequested
+        reads PlacedOrdersView
         command SendEmail
       }
     }
