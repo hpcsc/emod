@@ -7,6 +7,7 @@ import (
 	"testing"
 
 	"github.com/hpcsc/emod/internal/lsp"
+	"github.com/hpcsc/emod/internal/test"
 	"github.com/stretchr/testify/require"
 )
 
@@ -88,6 +89,20 @@ func TestGetReferences(t *testing.T) {
 			expectedLine, expectedChar, expectedName, len(locs))
 	}
 
+	// locationOf builds the Location a reference at the given name inside
+	// container should be reported as.
+	locationOf := func(t *testing.T, doc, container, name string) lsp.Location {
+		t.Helper()
+		line, char := posIn(t, doc, container, name)
+		return lsp.Location{
+			URI: uri,
+			Range: lsp.Range{
+				Start: lsp.Position{Line: line, Character: char},
+				End:   lsp.Position{Line: line, Character: char + len(name)},
+			},
+		}
+	}
+
 	t.Run("events", func(t *testing.T) {
 		t.Run("cursor on event definition name returns all event references", func(t *testing.T) {
 			cLine, cChar := posIn(t, testDoc, "event OrderSubmitted", "OrderSubmitted")
@@ -107,6 +122,20 @@ func TestGetReferences(t *testing.T) {
 			flowLine := "command -> event : SubmitOrder -> OrderSubmitted"
 			fLine, fChar := posIn(t, testDoc, flowLine, "OrderSubmitted")
 			requireLocation(t, locs, fLine, fChar, "OrderSubmitted")
+		})
+
+		t.Run("cursor on an event declared on a mode dcb context returns every site naming it", func(t *testing.T) {
+			doc := test.AutomationReadsLibraryLending
+
+			cLine, cChar := posIn(t, doc, "event DeskReleased", "DeskReleased")
+			locs := lsp.GetReferences(doc, cLine, cChar, uri)
+
+			require.Equal(t, []lsp.Location{
+				locationOf(t, doc, "event DeskReleased", "DeskReleased"),
+				locationOf(t, doc, "command -> event: ReleaseDesk -> DeskReleased", "DeskReleased"),
+				locationOf(t, doc, "subscribes [DeskClaimed, DeskReleased]", "DeskReleased"),
+				locationOf(t, doc, "automation RemindReaderOfLoans", "DeskReleased"),
+			}, locs)
 		})
 
 		t.Run("cursor on event reference in subscribes returns all event references", func(t *testing.T) {
@@ -153,6 +182,49 @@ func TestGetReferences(t *testing.T) {
 			fLine, fChar := posIn(t, testDoc, flowLine, flowLine[colonIdx:])
 			fChar += 2 // skip ": " to point to 'S' of SubmitOrder
 			requireLocation(t, locs, fLine, fChar, "SubmitOrder")
+		})
+
+		t.Run("cursor on a command an aggregate declares and a mode dcb context names returns both sites", func(t *testing.T) {
+			doc := test.AutomationReadsLibraryLending
+
+			cLine, cChar := posIn(t, doc, "command RemindMember {", "RemindMember")
+			locs := lsp.GetReferences(doc, cLine, cChar, uri)
+
+			require.Equal(t, []lsp.Location{
+				locationOf(t, doc, "command RemindMember {", "RemindMember"),
+				locationOf(t, doc, "automation RemindOnDueDate", "RemindMember"),
+				locationOf(t, doc, "command -> event: RemindMember -> MemberReminded", "RemindMember"),
+				locationOf(t, doc, "automation RemindReaderOfLoans", "RemindMember"),
+			}, locs)
+		})
+
+		t.Run("sites in a context's own slices follow the sites in its aggregates", func(t *testing.T) {
+			const doc = `context "Reading Room" mode dcb {
+    aggregate "Desk" {
+        slice "Claim Desk" {
+            command ClaimDesk {
+            }
+            automation ClaimOnArrival {
+                command ClaimDesk
+            }
+        }
+    }
+    slice "Close Reading Room" {
+        automation ClaimAtOpening {
+            command ClaimDesk
+        }
+    }
+}
+`
+
+			cLine, cChar := posIn(t, doc, "command ClaimDesk {", "ClaimDesk")
+			locs := lsp.GetReferences(doc, cLine, cChar, uri)
+
+			require.Equal(t, []lsp.Location{
+				locationOf(t, doc, "command ClaimDesk {", "ClaimDesk"),
+				locationOf(t, doc, "automation ClaimOnArrival", "ClaimDesk"),
+				locationOf(t, doc, "automation ClaimAtOpening", "ClaimDesk"),
+			}, locs)
 		})
 
 		t.Run("cursor on command in automation returns all command references", func(t *testing.T) {

@@ -5,8 +5,6 @@ import (
 	"strings"
 
 	"github.com/hpcsc/emod/internal/ast"
-	"github.com/hpcsc/emod/internal/lexer"
-	"github.com/hpcsc/emod/internal/parser"
 )
 
 // keywordDescriptions maps EMOD keyword strings to their hover descriptions.
@@ -32,15 +30,10 @@ var keywordDescriptions = map[string]string{
 	"external":        "Declares an external reference.",
 }
 
-// isKeyword returns true for recognized EMOD keyword token kinds.
-func isKeyword(k lexer.Kind) bool {
-	return k >= lexer.KeywordModel && k <= lexer.KeywordExternal
-}
-
 // GetHover returns hover information for the token at the given cursor position.
 // If the cursor is on a command, event, or view definition name, it returns
-// contextual hover text describing the element's parent context and aggregate,
-// plus relevant details.
+// contextual hover text describing the context the element was declared in, the
+// aggregate where it has one, plus relevant details.
 // If the cursor is on an EMOD keyword, it returns a brief description.
 // For any unrecognized or non-resolvable token, it returns nil.
 //
@@ -50,124 +43,97 @@ func GetHover(text string, line, character int) *Hover {
 		return nil
 	}
 
-	tokens, _ := lexer.Scan(text, "")
-	p := parser.New(tokens, "")
-	model, _ := p.Parse()
+	model, tokens := parseModel(text, "")
 	if model == nil {
 		return nil
 	}
 
-	// Convert cursor from 0-based LSP to 1-based AST coordinates.
-	cursorLine := line + 1
-	cursorChar := character + 1
+	at := cursorAt(line, character)
 
-	for _, ctx := range model.Contexts {
-		for _, agg := range ctx.Aggregates {
-			for _, slice := range agg.Slices {
-				for _, cmd := range slice.Commands {
-					if cursorOnName(cursorLine, cursorChar, cmd.NamePos, cmd.Name) {
-						return hoverForCommand(cmd, ctx, agg)
-					}
-				}
-				for _, evt := range slice.Events {
-					if cursorOnName(cursorLine, cursorChar, evt.NamePos, evt.Name) {
-						return hoverForEvent(evt, ctx, agg)
-					}
-				}
-				for _, v := range slice.Views {
-					if cursorOnName(cursorLine, cursorChar, v.NamePos, v.Name) {
-						return hoverForView(v, ctx, agg)
-					}
-				}
+	for _, scoped := range scopedSlices(model) {
+		for _, cmd := range scoped.slice.Commands {
+			if at.onName(cmd.NamePos, cmd.Name) {
+				return hoverForCommand(cmd, declaredIn(scoped))
+			}
+		}
+		for _, evt := range scoped.slice.Events {
+			if at.onName(evt.NamePos, evt.Name) {
+				return hoverForEvent(evt, declaredIn(scoped))
+			}
+		}
+		for _, v := range scoped.slice.Views {
+			if at.onName(v.NamePos, v.Name) {
+				return hoverForView(v, declaredIn(scoped))
 			}
 		}
 	}
 
 	// Check for keywords — tokens with no AST definition name.
 	for _, tok := range tokens {
-		if isKeyword(tok.Type) {
-			if cursorOnName(cursorLine, cursorChar, ast.Position{Line: tok.Line, Column: tok.Column}, tok.Value) {
-				if desc, ok := keywordDescriptions[tok.Value]; ok {
-					return &Hover{
-						Contents: MarkupContent{
-							Kind:  Markdown,
-							Value: desc,
-						},
-						Range: nameRange(ast.Position{Line: tok.Line, Column: tok.Column}, tok.Value),
-					}
-				}
-			}
+		pos := ast.Position{Line: tok.Line, Column: tok.Column}
+		if !tok.Type.IsKeyword() || !at.onName(pos, tok.Value) {
+			continue
+		}
+		if desc, ok := keywordDescriptions[tok.Value]; ok {
+			return hoverAt(desc, pos, tok.Value)
 		}
 	}
 
 	return nil
 }
 
-func hoverForCommand(cmd *ast.Command, ctx *ast.Context, agg *ast.Aggregate) *Hover {
-	content := fmt.Sprintf("**Command** in %s > %s", ctx.Name, agg.Name)
+func declaredIn(scoped scopedSlice) string {
+	if scoped.aggregate == nil {
+		return scoped.context.Name
+	}
+	return fmt.Sprintf("%s > %s", scoped.context.Name, scoped.aggregate.Name)
+}
+
+func hoverForCommand(cmd *ast.Command, scope string) *Hover {
+	return hoverAt(fmt.Sprintf("**Command** in %s", scope), cmd.NamePos, cmd.Name)
+}
+
+func hoverForEvent(evt *ast.Event, scope string) *Hover {
+	content := fmt.Sprintf("**Event** in %s", scope) + bulletList("Fields", fieldDescriptions(evt.Fields))
+	return hoverAt(content, evt.NamePos, evt.Name)
+}
+
+func hoverForView(v *ast.View, scope string) *Hover {
+	content := fmt.Sprintf("**View** in %s", scope) + bulletList("Subscribes", v.Subscribes)
+	return hoverAt(content, v.NamePos, v.Name)
+}
+
+func hoverAt(content string, pos ast.Position, name string) *Hover {
 	return &Hover{
 		Contents: MarkupContent{
 			Kind:  Markdown,
 			Value: content,
 		},
-		Range: nameRange(cmd.NamePos, cmd.Name),
+		Range: nameRange(pos, name),
 	}
 }
 
-func hoverForEvent(evt *ast.Event, ctx *ast.Context, agg *ast.Aggregate) *Hover {
-	var b strings.Builder
-	fmt.Fprintf(&b, "**Event** in %s > %s", ctx.Name, agg.Name)
-	if len(evt.Fields) > 0 {
-		b.WriteString("\n\n**Fields:**")
-		for _, f := range evt.Fields {
-			if f.Modifier != "" {
-				fmt.Fprintf(&b, "\n- %s %s %s", f.Name, f.Type, f.Modifier)
-			} else {
-				fmt.Fprintf(&b, "\n- %s %s", f.Name, f.Type)
-			}
+func fieldDescriptions(fields []*ast.Field) []string {
+	var descriptions []string
+	for _, f := range fields {
+		if f.Modifier != "" {
+			descriptions = append(descriptions, fmt.Sprintf("%s %s %s", f.Name, f.Type, f.Modifier))
+			continue
 		}
+		descriptions = append(descriptions, fmt.Sprintf("%s %s", f.Name, f.Type))
 	}
-	return &Hover{
-		Contents: MarkupContent{
-			Kind:  Markdown,
-			Value: b.String(),
-		},
-		Range: nameRange(evt.NamePos, evt.Name),
-	}
+	return descriptions
 }
 
-func hoverForView(v *ast.View, ctx *ast.Context, agg *ast.Aggregate) *Hover {
+func bulletList(title string, items []string) string {
+	if len(items) == 0 {
+		return ""
+	}
+
 	var b strings.Builder
-	fmt.Fprintf(&b, "**View** in %s > %s", ctx.Name, agg.Name)
-	if len(v.Subscribes) > 0 {
-		b.WriteString("\n\n**Subscribes:**")
-		for _, sub := range v.Subscribes {
-			fmt.Fprintf(&b, "\n- %s", sub)
-		}
+	fmt.Fprintf(&b, "\n\n**%s:**", title)
+	for _, item := range items {
+		fmt.Fprintf(&b, "\n- %s", item)
 	}
-	return &Hover{
-		Contents: MarkupContent{
-			Kind:  Markdown,
-			Value: b.String(),
-		},
-		Range: nameRange(v.NamePos, v.Name),
-	}
-}
-
-// nameRange builds an LSP Range for the given name position,
-// converting from 1-based AST coordinates to 0-based LSP coordinates.
-func nameRange(pos ast.Position, name string) *Range {
-	if name == "" {
-		return nil
-	}
-	return &Range{
-		Start: Position{
-			Line:      pos.Line - 1,
-			Character: pos.Column - 1,
-		},
-		End: Position{
-			Line:      pos.Line - 1,
-			Character: pos.Column - 1 + len(name),
-		},
-	}
+	return b.String()
 }

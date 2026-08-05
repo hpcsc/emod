@@ -3,8 +3,7 @@ package lsp
 import (
 	"sort"
 
-	"github.com/hpcsc/emod/internal/lexer"
-	"github.com/hpcsc/emod/internal/parser"
+	"github.com/hpcsc/emod/internal/ast"
 )
 
 // tokenTypeIndex returns the legend index for a given semantic token type.
@@ -51,6 +50,30 @@ type tokenEntry struct {
 	typeIndex uint
 }
 
+type tokenEntries []tokenEntry
+
+func (e *tokenEntries) addIdentifier(pos ast.Position, name string, t SemanticTokenTypes) {
+	e.add(pos.Line-1, pos.Column-1, name, t)
+}
+
+// addQuoted adds a name written in double quotes, whose position points at the
+// opening quote rather than at the first character of the name.
+func (e *tokenEntries) addQuoted(pos ast.Position, name string, t SemanticTokenTypes) {
+	e.add(pos.Line-1, pos.Column, name, t)
+}
+
+func (e *tokenEntries) add(line, character int, name string, t SemanticTokenTypes) {
+	if name == "" {
+		return
+	}
+	*e = append(*e, tokenEntry{
+		line:      line,
+		character: character,
+		length:    len(name),
+		typeIndex: tokenTypeIndex(t),
+	})
+}
+
 // GetSemanticTokens parses an emod document and returns delta-encoded semantic
 // token data mapping named identifiers to their token types.
 //
@@ -69,80 +92,35 @@ func GetSemanticTokens(doc string) *SemanticTokens {
 		return &SemanticTokens{Data: []uint{}}
 	}
 
-	tokens, _ := lexer.Scan(doc, "")
-	p := parser.New(tokens, "")
-	model, _ := p.Parse()
+	model, _ := parseModel(doc, "")
 	if model == nil {
 		return &SemanticTokens{Data: []uint{}}
 	}
 
-	var entries []tokenEntry
+	var entries tokenEntries
 
 	for _, ctx := range model.Contexts {
-		if ctx.Name != "" {
-			// Context name is a quoted string — shift column past the opening quote.
-			entries = append(entries, tokenEntry{
-				line:      ctx.NamePos.Line - 1,
-				character: ctx.NamePos.Column, // Column points to '"', skip to name content
-				length:    len(ctx.Name),
-				typeIndex: tokenTypeIndex(TokenTypeNamespace),
-			})
+		entries.addQuoted(ctx.NamePos, ctx.Name, TokenTypeNamespace)
+	}
+
+	for _, agg := range declaredAggregates(model) {
+		entries.addQuoted(agg.NamePos, agg.Name, TokenTypeStruct)
+	}
+
+	for _, scoped := range scopedSlices(model) {
+		for _, cmd := range scoped.slice.Commands {
+			entries.addIdentifier(cmd.NamePos, cmd.Name, TokenTypeFunction)
 		}
-		for _, agg := range ctx.Aggregates {
-			if agg.Name != "" {
-				// Aggregate name is a quoted string — shift column past the opening quote.
-				entries = append(entries, tokenEntry{
-					line:      agg.NamePos.Line - 1,
-					character: agg.NamePos.Column, // Column points to '"', skip to name content
-					length:    len(agg.Name),
-					typeIndex: tokenTypeIndex(TokenTypeStruct),
-				})
-			}
-			for _, slice := range agg.Slices {
-				for _, cmd := range slice.Commands {
-					if cmd.Name != "" {
-						entries = append(entries, tokenEntry{
-							line:      cmd.NamePos.Line - 1,
-							character: cmd.NamePos.Column - 1,
-							length:    len(cmd.Name),
-							typeIndex: tokenTypeIndex(TokenTypeFunction),
-						})
-					}
-				}
-				for _, evt := range slice.Events {
-					if evt.Name != "" {
-						entries = append(entries, tokenEntry{
-							line:      evt.NamePos.Line - 1,
-							character: evt.NamePos.Column - 1,
-							length:    len(evt.Name),
-							typeIndex: tokenTypeIndex(TokenTypeEvent),
-						})
-					}
-				}
-				for _, v := range slice.Views {
-					if v.Name != "" {
-						entries = append(entries, tokenEntry{
-							line:      v.NamePos.Line - 1,
-							character: v.NamePos.Column - 1,
-							length:    len(v.Name),
-							typeIndex: tokenTypeIndex(TokenTypeClass),
-						})
-					}
-				}
-			}
+		for _, evt := range scoped.slice.Events {
+			entries.addIdentifier(evt.NamePos, evt.Name, TokenTypeEvent)
+		}
+		for _, v := range scoped.slice.Views {
+			entries.addIdentifier(v.NamePos, v.Name, TokenTypeClass)
 		}
 	}
 
 	for _, actor := range model.Actors {
-		if actor.Name != "" {
-			// Actor name is a quoted string — shift column past the opening quote.
-			entries = append(entries, tokenEntry{
-				line:      actor.NamePos.Line - 1,
-				character: actor.NamePos.Column, // Column points to '"', skip to name content
-				length:    len(actor.Name),
-				typeIndex: tokenTypeIndex(TokenTypeParameter),
-			})
-		}
+		entries.addQuoted(actor.NamePos, actor.Name, TokenTypeParameter)
 	}
 
 	if len(entries) == 0 {

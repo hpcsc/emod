@@ -7,6 +7,7 @@ import (
 	"testing"
 
 	"github.com/hpcsc/emod/internal/lsp"
+	"github.com/hpcsc/emod/internal/test"
 	"github.com/stretchr/testify/require"
 )
 
@@ -173,6 +174,22 @@ func TestGetDefinition(t *testing.T) {
 		cChar += 3 // skip "-> " to point to 'O' of OrderSubmitted
 		dLine, dChar := posIn(t, testDoc, "event OrderSubmitted", "OrderSubmitted")
 		assertDef(t, testDoc, cLine, cChar, dLine, dChar, "OrderSubmitted")
+	})
+
+	t.Run("reference in a mode dcb context's own slice resolves to a sibling slice's declaration", func(t *testing.T) {
+		doc := test.AutomationReadsLibraryLending
+
+		t.Run("subscribes entry naming an event", func(t *testing.T) {
+			cLine, cChar := posIn(t, doc, "subscribes [DeskClaimed, DeskReleased]", "DeskClaimed")
+			dLine, dChar := posIn(t, doc, "event DeskClaimed", "DeskClaimed")
+			assertDef(t, doc, cLine, cChar, dLine, dChar, "DeskClaimed")
+		})
+
+		t.Run("automation naming a command", func(t *testing.T) {
+			cLine, cChar := posIn(t, doc, "automation FreeDeskAtClosing", "ReleaseDesk")
+			dLine, dChar := posIn(t, doc, "command ReleaseDesk {", "ReleaseDesk")
+			assertDef(t, doc, cLine, cChar, dLine, dChar, "ReleaseDesk")
+		})
 	})
 
 	t.Run("cursor not on a known reference returns nil", func(t *testing.T) {

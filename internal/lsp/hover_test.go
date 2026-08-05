@@ -7,6 +7,7 @@ import (
 	"testing"
 
 	"github.com/hpcsc/emod/internal/lsp"
+	"github.com/hpcsc/emod/internal/test"
 	"github.com/stretchr/testify/require"
 )
 
@@ -94,6 +95,61 @@ func TestGetHover(t *testing.T) {
 	t.Run("view without subscriptions omits subscribes section", func(t *testing.T) {
 		cLine, cChar := posIn(t, testDoc, "view NoSubscribeView", "NoSubscribeView")
 		assertHover(t, testDoc, cLine, cChar, "**View** in Orders > Sales")
+	})
+
+	t.Run("names the context alone for a slice hanging off a dcb context, and the aggregate too where there is one", func(t *testing.T) {
+		doc := test.AutomationReadsLibraryLending
+
+		for _, tc := range []struct {
+			container string
+			name      string
+			expected  string
+		}{
+			{
+				container: "command ClaimDesk",
+				name:      "ClaimDesk",
+				expected:  "**Command** in Reading Room",
+			},
+			{
+				container: "event DeskClaimed",
+				name:      "DeskClaimed",
+				expected: "**Event** in Reading Room\n\n**Fields:**" +
+					"\n- sessionId string required" +
+					"\n- deskId string required" +
+					"\n- memberId string required" +
+					"\n- claimedAt timestamp required",
+			},
+			{
+				container: "view DeskOccupancyView",
+				name:      "DeskOccupancyView",
+				expected:  "**View** in Reading Room\n\n**Subscribes:**\n- DeskClaimed\n- DeskReleased",
+			},
+			{
+				container: "command BorrowCopy",
+				name:      "BorrowCopy",
+				expected:  "**Command** in Lending > Loan",
+			},
+			{
+				container: "event CopyBorrowed",
+				name:      "CopyBorrowed",
+				expected: "**Event** in Lending > Loan\n\n**Fields:**" +
+					"\n- loanId string required" +
+					"\n- memberId string required" +
+					"\n- copyId string required" +
+					"\n- dueOn date required",
+			},
+			{
+				container: "view MemberLoansView",
+				name:      "MemberLoansView",
+				expected:  "**View** in Lending > Loan\n\n**Subscribes:**\n- CopyBorrowed",
+			},
+		} {
+			cLine, cChar := posIn(t, doc, tc.container, tc.name)
+			hover := lsp.GetHover(doc, cLine, cChar)
+			require.NotNil(t, hover, "expected hover on %s", tc.name)
+			require.Equal(t, lsp.Markdown, hover.Contents.Kind)
+			require.Equal(t, tc.expected, hover.Contents.Value, "hover on %s", tc.name)
+		}
 	})
 
 	t.Run("cursor on keyword returns description", func(t *testing.T) {

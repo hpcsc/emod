@@ -1,7 +1,7 @@
 # US-009: Complete and navigate automations in the editor
 
 ## Progress
-- [ ] Task 1: See both homes a slice has from every LSP walker
+- [x] Task 1: See both homes a slice has from every LSP walker
 - [ ] Task 2: Describe `on`, `every` and `reads`, and name the pattern `trigger` and `automation` belong to
 - [ ] Task 3: Offer an automation's entries inside an automation block
 - [ ] Task 4: Offer event names after `on` and view names after `reads`

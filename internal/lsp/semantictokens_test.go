@@ -7,6 +7,7 @@ import (
 	"testing"
 
 	"github.com/hpcsc/emod/internal/lsp"
+	"github.com/hpcsc/emod/internal/test"
 	"github.com/stretchr/testify/require"
 )
 
@@ -209,6 +210,18 @@ func TestGetSemanticTokens(t *testing.T) {
 			}
 		}
 		require.True(t, found, "Sales token not found in semantic tokens")
+	})
+
+	t.Run("names declared on a mode dcb context are coloured alongside those in an aggregate", func(t *testing.T) {
+		doc := test.AutomationReadsLibraryLending
+		result := lsp.GetSemanticTokens(doc)
+		tokens := decodeTokens(result.Data)
+
+		require.Len(t, tokens, 16,
+			"one token per declared actor, context, aggregate, command, event and view — 11 in the aggregate's slices and above, 5 on the dcb context")
+
+		line, char := posIn(t, doc, "view DeskOccupancyView", "DeskOccupancyView")
+		assertToken(t, tokens, 15, line, char, len("DeskOccupancyView"), legendTokenType(lsp.TokenTypeClass))
 	})
 
 	t.Run("delta-encodes multiple identifiers on same line", func(t *testing.T) {
