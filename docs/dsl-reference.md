@@ -277,13 +277,15 @@ Every slice must contain at least one element. See [Slice Patterns](#6-slice-pat
 
 The DSL supports four Event Modeling slice patterns. Each pattern prescribes which blocks appear together.
 
+The two elements that start a chain belong to different chains. A `trigger` is the human entry point of the command chain: something outside the system — a person at a screen, a form, a call taken by an agent — initiates the slice. An `automation` is the processor of the automation chain: the system initiates the slice itself, with nobody at a screen. Neither stands in for the other, and a slice that needs both declares both.
+
 ### Command Pattern
 
 A user or system action drives a command that produces an event.
 
 ```
 slice "<name>" {
-  trigger <Kind> "<name>" {
+  trigger "<name>" {
     actor <ActorName>
     reads <ViewName>
   }
@@ -321,23 +323,32 @@ slice "<name>" {
 
 ### Automation Pattern
 
-An event triggers a reactive processor that issues a command, possibly in a different context.
+A processor woken by an event or by a schedule reads its outstanding work and issues a command, possibly in a different context.
 
 ```
 slice "<name>" {
   automation <Name> {
-    trigger <EventName>
+    on <EventName>       # activation — exactly one of on and every
+    every "<expr>"       # activation — exactly one of on and every
+    reads <ViewName>
     command <CommandName>
     target context <ContextName>
   }
 }
 ```
 
-- `trigger`: the event that activates this automation.
-- `command`: the command the automation issues.
+- `on`: the event whose arrival wakes the processor. The name must be an event declared in the model.
+- `every`: the schedule on which the processor wakes instead. The quoted expression is either a Go duration (`"5m"`, `"1h"`) for a fixed interval or a five-field cron expression (`"0 2 * * *"`) for a wall-clock schedule. Only the shape is checked; an expression that is neither is a validation error naming both forms:
+
+  ```
+  reservation.emod:34: schedule expression "nightly" is neither a Go duration nor a five-field cron expression
+  ```
+
+- `reads`: the todo list — the view holding the work the processor has left to do. Optional. The name must resolve to a view declared **anywhere in the model** — in any slice, under any aggregate or context — and `emod validate` reports one that resolves to nothing. That resolution is what separates an automation's `reads` from a trigger's and a translation's, which are recorded and left unchecked.
+- `command`: the command the automation issues. Required.
 - `target context`: a context name (cross-reference, validated at `emod validate`).
 
-`trigger` and `command` are required.
+An automation states **exactly one** of `on` and `every`: declaring neither is an error, and declaring both is an error. Requiring the choice makes the wake-up explicit, so the model says whether the processor is woken by the event that adds to its todo list or polls on a cadence — two designs with different failure modes.
 
 ### Translation Pattern
 
@@ -579,7 +590,7 @@ context "Reservations" {
     description "One booking, from request to check-out."
     slice "Reserve a Room" {
       description "A guest holds a room for a date range."
-      trigger UI "Reservation Form" {
+      trigger "Reservation Form" {
         description "The public booking form."
         actor Guest
       }
