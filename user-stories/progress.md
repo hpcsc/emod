@@ -3,7 +3,7 @@
 Which story in each in-progress story file is delivered. Files under
 `user-stories/completed/` are finished in full and are not tracked here.
 
-**21 of 171 delivered.**
+**22 of 171 delivered.**
 
 ## [emod-desktop.md](./emod-desktop.md) — 0/16
 
@@ -49,15 +49,14 @@ Given-When-Then specs on command slices.
 - [ ] US-017: Highlight the new syntax in editors
 - [ ] US-018: Learn the new constructs from examples and the reference
 
-## [triggers-and-automations.md](./triggers-and-automations.md) — 10/11
+## [triggers-and-automations.md](./triggers-and-automations.md) — 11/11
 
-Delivered on `main`: `reads` on an automation, `on` and `every` as its two activation forms, the
-trigger without a kind slot, the `reads` edge and the human-only top lane on diagrams, one palette
-across the renderers, the `automation/missing-todo-list` rule, editor completion and navigation for
-automations, and highlighting for the realigned syntax. The grammar `specs-and-metadata.md` US-007
-and US-013 build on is in place.
-
-Breakdown in flight at `tasks/us-011-learn-the-realignment-from-examples-and-the-reference.md`.
+Delivered in full. The language side: `reads` on an automation, `on` and `every` as its two
+activation forms, and the trigger without a kind slot — the grammar `specs-and-metadata.md` US-007
+and US-013 build on. The surfaces around it: the `reads` edge and the human-only top lane on
+diagrams, one palette across the renderers, the `automation/missing-todo-list` rule, editor
+completion, navigation and highlighting, and the examples, reference and README teaching the
+realigned forms under a test that runs every one of them through `emod validate`.
 
 - [x] US-001: Declare the view an automation reads
 - [x] US-002: Name an automation's activation event with `on`
@@ -69,7 +68,7 @@ Breakdown in flight at `tasks/us-011-learn-the-realignment-from-examples-and-the
 - [x] US-008: Flag automations with no todo list
 - [x] US-009: Complete and navigate automations in the editor
 - [x] US-010: Highlight the realigned syntax
-- [ ] US-011: Learn the realignment from examples and the reference
+- [x] US-011: Learn the realignment from examples and the reference
 
 ## [00-llm-foundation.md](./ai/00-llm-foundation.md) — 5/10
 
