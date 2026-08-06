@@ -33,12 +33,14 @@
   },
   "scripts": {
     "compile": "tsc -p ./tsconfig.json",
-    "watch": "tsc -watch -p ./tsconfig.json"
+    "watch": "tsc -watch -p ./tsconfig.json",
+    "test": "node test/scope-assertions.test.js"
   },
   "devDependencies": {
     "typescript": "^5.4.0",
     "@types/vscode": "^1.84.0",
     "@types/node": "^20.0.0",
-    "vscode-languageclient": "^9.0.1"
+    "vscode-languageclient": "^9.0.1",
+    "vscode-tmgrammar-test": "^0.1.3"
   }
 }

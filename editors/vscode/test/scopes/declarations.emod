@@ -1,0 +1,49 @@
+# SYNTAX TEST "source.emod"
+
+model "Order Management" {
+# <----- keyword.control.emod
+#     ^^^^^^^^^^^^^^^^^^ entity.name.function.emod - string.quoted.double.emod
+  actor "Customer" {}
+# ^^^^^ keyword.control.emod
+#       ^^^^^^^^^^ entity.name.function.emod - string.quoted.double.emod
+}
+
+context "Ordering" {
+# <------- keyword.control.emod
+#       ^^^^^^^^^^ entity.name.function.emod - string.quoted.double.emod
+  aggregate "Order" {
+# ^^^^^^^^^ keyword.control.emod
+#           ^^^^^^^ entity.name.function.emod - string.quoted.double.emod
+    slice "Placement" {
+#   ^^^^^ keyword.control.emod
+#         ^^^^^^^^^^^ entity.name.function.emod - string.quoted.double.emod
+      command PlaceOrder {}
+#     ^^^^^^^ keyword.control.emod
+#             ^^^^^^^^^^ entity.name.function.emod
+      event OrderPlaced {}
+#     ^^^^^ keyword.control.emod
+#           ^^^^^^^^^^^ entity.name.function.emod
+      view OrderSummary {}
+#     ^^^^ keyword.control.emod
+#          ^^^^^^^^^^^^ entity.name.function.emod
+      automation NotifyCustomer {
+#     ^^^^^^^^^^ keyword.control.emod
+#                ^^^^^^^^^^^^^^ entity.name.function.emod
+        reads OrderSummary
+#       ^^^^^ keyword.control.emod
+#             ^^^^^^^^^^^^ - entity.name.function.emod
+        target context Notifications
+#       ^^^^^^ keyword.control.emod
+#                      ^^^^^^^^^^^^^ entity.name.function.emod
+      }
+      translation ImportOrder {}
+#     ^^^^^^^^^^^ keyword.control.emod
+#                 ^^^^^^^^^^^ entity.name.function.emod
+      trigger "Review orders" {
+        actor Customer
+#       ^^^^^ keyword.control.emod
+#             ^^^^^^^^ - entity.name.function.emod
+      }
+    }
+  }
+}

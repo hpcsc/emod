@@ -1,0 +1,17 @@
+# SYNTAX TEST "source.emod"
+
+model "Order Management" {
+  description "Orders and their fulfilment."
+#             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ string.quoted.double.emod - entity.name.function.emod
+}
+
+translation ImportOrder {
+  external_system "Legacy"
+# ^^^^^^^^^^^^^^^ keyword.control.emod
+#                 ^^^^^^^^ string.quoted.double.emod - entity.name.function.emod
+}
+
+automation ArchiveOrders {
+  every "0 9 * * *"
+#       ^^^^^^^^^^^ string.quoted.double.emod - entity.name.function.emod
+}

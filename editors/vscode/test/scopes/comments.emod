@@ -1,0 +1,11 @@
+# SYNTAX TEST "source.emod"
+
+# Orders live in a context, but this line is prose.
+# <- comment.line.number-sign.emod
+#                  ^^^^^^^ comment.line.number-sign.emod - keyword.control.emod
+#                                            ^^^^^^ comment.line.number-sign.emod
+
+  command PlaceOrder # a note that trails the declaration it follows
+# ^^^^^^^ keyword.control.emod - comment.line.number-sign.emod
+#         ^^^^^^^^^^ entity.name.function.emod - comment.line.number-sign.emod
+#                    ^^^^^^ comment.line.number-sign.emod

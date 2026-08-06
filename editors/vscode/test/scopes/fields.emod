@@ -1,0 +1,22 @@
+# SYNTAX TEST "source.emod"
+
+command PlaceOrder {
+  fields {
+# ^^^^^^ keyword.control.emod
+    orderId string required
+#   ^^^^^^^ - keyword.control.emod entity.name.function.emod storage.type.emod storage.modifier.emod
+#           ^^^^^^ storage.type.emod
+#                  ^^^^^^^^ storage.modifier.emod - storage.type.emod
+# A field may be named after a keyword. The assertions below record what the
+# grammar produces for such a line today - a field name painted as though it
+# opened a declaration, and its type painted as the declared name - not what
+# it ought to produce.
+    command string required
+#   ^^^^^^^ keyword.control.emod
+#           ^^^^^^ entity.name.function.emod - storage.type.emod
+#                  ^^^^^^^^ storage.modifier.emod
+    quantity int
+#   ^^^^^^^^ - keyword.control.emod entity.name.function.emod storage.type.emod storage.modifier.emod
+#            ^^^ storage.type.emod
+  }
+}
