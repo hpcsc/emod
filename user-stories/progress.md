@@ -3,7 +3,7 @@
 Which story in each in-progress story file is delivered. Files under
 `user-stories/completed/` are finished in full and are not tracked here.
 
-**11 of 171 delivered.**
+**21 of 171 delivered.**
 
 ## [emod-desktop.md](./emod-desktop.md) — 0/16
 
@@ -49,21 +49,26 @@ Given-When-Then specs on command slices.
 - [ ] US-017: Highlight the new syntax in editors
 - [ ] US-018: Learn the new constructs from examples and the reference
 
-## [triggers-and-automations.md](./triggers-and-automations.md) — 0/11
+## [triggers-and-automations.md](./triggers-and-automations.md) — 10/11
 
-US-002 through US-004 change the grammar that `specs-and-metadata.md` US-007 and US-013 build on,
-so they land first.
+Delivered on `main`: `reads` on an automation, `on` and `every` as its two activation forms, the
+trigger without a kind slot, the `reads` edge and the human-only top lane on diagrams, one palette
+across the renderers, the `automation/missing-todo-list` rule, editor completion and navigation for
+automations, and highlighting for the realigned syntax. The grammar `specs-and-metadata.md` US-007
+and US-013 build on is in place.
 
-- [ ] US-001: Declare the view an automation reads
-- [ ] US-002: Name an automation's activation event with `on`
-- [ ] US-003: Activate an automation on a schedule
-- [ ] US-004: Drop the trigger kind slot
-- [ ] US-005: Draw the view a trigger or automation reads
-- [ ] US-006: Read the top lane as human-only
-- [ ] US-007: One palette for element types
-- [ ] US-008: Flag automations with no todo list
-- [ ] US-009: Complete and navigate automations in the editor
-- [ ] US-010: Highlight the realigned syntax
+Breakdown in flight at `tasks/us-011-learn-the-realignment-from-examples-and-the-reference.md`.
+
+- [x] US-001: Declare the view an automation reads
+- [x] US-002: Name an automation's activation event with `on`
+- [x] US-003: Activate an automation on a schedule
+- [x] US-004: Drop the trigger kind slot
+- [x] US-005: Draw the view a trigger or automation reads
+- [x] US-006: Read the top lane as human-only
+- [x] US-007: One palette for element types
+- [x] US-008: Flag automations with no todo list
+- [x] US-009: Complete and navigate automations in the editor
+- [x] US-010: Highlight the realigned syntax
 - [ ] US-011: Learn the realignment from examples and the reference
 
 ## [00-llm-foundation.md](./ai/00-llm-foundation.md) — 5/10
