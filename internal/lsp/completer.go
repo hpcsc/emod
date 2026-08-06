@@ -36,6 +36,8 @@ const (
 	ctxCommand
 	ctxEvent
 	ctxAutomation
+	ctxDecidesOn
+	ctxTags
 	ctxFields
 )
 
@@ -140,6 +142,10 @@ func findBlockKeyword(code string) blockContext {
 		return ctxEvent
 	case "automation":
 		return ctxAutomation
+	case "decides_on":
+		return ctxDecidesOn
+	case "tags":
+		return ctxTags
 	case "fields":
 		return ctxFields
 	}
@@ -219,15 +225,24 @@ func keywordsFor(block blockContext) []string {
 	case ctxUnknown:
 		return []string{"model", "actor", "context"}
 	case ctxContext:
-		return []string{"aggregate"}
+		return []string{"aggregate", "slice", "invariant"}
 	case ctxAggregate:
-		return []string{"slice"}
+		return []string{"slice", "invariant"}
 	case ctxSlice:
 		return []string{"command", "event", "trigger", "view", "automation", "translation", "flow"}
-	case ctxCommand, ctxEvent:
-		return []string{"fields"}
+	case ctxCommand:
+		return []string{"fields", "decides_on"}
+	case ctxEvent:
+		return []string{"fields", "tags"}
 	case ctxAutomation:
 		return []string{"on", "every", "reads", "command", "target context"}
+	case ctxDecidesOn:
+		return []string{"events", "where"}
+	case ctxTags:
+		// A tag entry is `key: fieldRef`, both of them free identifiers, so the
+		// block accepts no keyword of its own. Without an arm here the scanner
+		// reads the body as unknown and offers the top-level list instead.
+		return nil
 	case ctxFields:
 		return []string{"string", "date", "timestamp", "int", "required", "optional"}
 	}

@@ -29,6 +29,23 @@ var keywordDescriptions = map[string]string{
 	"reads":           "Defines the view a trigger, automation or translation reads from.",
 	"source":          "Defines the source for an external system.",
 	"external":        "Declares an external reference.",
+	"emod":            "Declares the emod language version the file is written in.",
+	"description":     "Attaches a human-readable description to the enclosing declaration.",
+	"invariant":       "Declares a named business rule the enclosing context or aggregate must uphold.",
+	"spec":            "Defines a given/when/then scenario a slice must satisfy.",
+	"given":           "Lists the events that have already occurred when a spec's scenario starts.",
+	"when":            "Names the command or event a spec exercises.",
+	"then":            "States a spec's outcome: the events produced, or a rejection.",
+	"rejected":        "States that a spec's command is rejected by the named invariant.",
+	"mode":            `Sets a context's modeling mode: "aggregate", "dcb", or "mixed".`,
+	"tags":            "Defines the tag entries on an event, each mapping a tag key to a field.",
+	"tag":             "References a tag key in a decides_on predicate, as tag(key = field).",
+	"decides_on":      "Defines the events and predicate a command's decision is based on (DCB mode).",
+	"events":          "Lists the event types a decides_on clause reads.",
+	"where":           "Filters a decides_on clause with a tag predicate.",
+	"and":             "Combines two decides_on predicates; both must hold.",
+	"or":              "Combines two decides_on predicates; either may hold.",
+	"not":             "Negates a decides_on predicate.",
 }
 
 // GetHover returns hover information for the token at the given cursor position.

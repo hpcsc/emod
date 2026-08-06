@@ -34,39 +34,39 @@ func TestGetCompletions(t *testing.T) {
 	})
 
 	t.Run("context block", func(t *testing.T) {
-		t.Run("inside context block returns aggregate", func(t *testing.T) {
+		t.Run("inside context block returns aggregate, slice and invariant", func(t *testing.T) {
 			doc := `context MyContext {
 	// cursor here
 }`
 			result := lsp.GetCompletions(doc, 1, 2)
-			require.Equal(t, []string{"aggregate"}, extractLabels(result.Items))
+			require.Equal(t, []string{"aggregate", "slice", "invariant"}, extractLabels(result.Items))
 		})
 
 		t.Run("context block with opening brace on next line still works", func(t *testing.T) {
 			doc := "context MyContext\n{\n}"
 			// cursor inside the block
 			result := lsp.GetCompletions(doc, 1, 1)
-			require.Equal(t, []string{"aggregate"}, extractLabels(result.Items))
+			require.Equal(t, []string{"aggregate", "slice", "invariant"}, extractLabels(result.Items))
 		})
 
 		t.Run("opening brace separated from the keyword by lines carrying no code still opens the block", func(t *testing.T) {
 			for _, separator := range []string{"", "  ", "  # a note"} {
 				doc := "context MyContext\n" + separator + "\n{\n}"
 				result := lsp.GetCompletions(doc, 2, 1)
-				require.Equal(t, []string{"aggregate"}, extractLabels(result.Items), "separator %q", separator)
+				require.Equal(t, []string{"aggregate", "slice", "invariant"}, extractLabels(result.Items), "separator %q", separator)
 			}
 		})
 	})
 
 	t.Run("aggregate block", func(t *testing.T) {
-		t.Run("inside aggregate block returns slice", func(t *testing.T) {
+		t.Run("inside aggregate block returns slice and invariant", func(t *testing.T) {
 			doc := `context Ctx {
 	aggregate Agg {
 		// cursor here
 	}
 }`
 			result := lsp.GetCompletions(doc, 2, 3)
-			require.Equal(t, []string{"slice"}, extractLabels(result.Items))
+			require.Equal(t, []string{"slice", "invariant"}, extractLabels(result.Items))
 		})
 	})
 
@@ -156,7 +156,7 @@ func TestGetCompletions(t *testing.T) {
 	})
 
 	t.Run("command block", func(t *testing.T) {
-		t.Run("inside command block returns fields", func(t *testing.T) {
+		t.Run("inside command block returns fields and decides_on", func(t *testing.T) {
 			doc := `context Ctx {
 	aggregate Agg {
 		slice Slc {
@@ -167,12 +167,12 @@ func TestGetCompletions(t *testing.T) {
 	}
 }`
 			result := lsp.GetCompletions(doc, 4, 5)
-			require.Equal(t, []string{"fields"}, extractLabels(result.Items))
+			require.Equal(t, []string{"fields", "decides_on"}, extractLabels(result.Items))
 		})
 	})
 
 	t.Run("event block", func(t *testing.T) {
-		t.Run("inside event block returns fields", func(t *testing.T) {
+		t.Run("inside event block returns fields and tags", func(t *testing.T) {
 			doc := `context Ctx {
 	aggregate Agg {
 		slice Slc {
@@ -183,7 +183,7 @@ func TestGetCompletions(t *testing.T) {
 	}
 }`
 			result := lsp.GetCompletions(doc, 4, 5)
-			require.Equal(t, []string{"fields"}, extractLabels(result.Items))
+			require.Equal(t, []string{"fields", "tags"}, extractLabels(result.Items))
 		})
 	})
 
@@ -432,7 +432,7 @@ func TestGetCompletions(t *testing.T) {
 	}
 }`
 				result := lsp.GetCompletions(doc, 5, 2)
-				require.Equal(t, []string{"slice"}, extractLabels(result.Items), "description %q", description)
+				require.Equal(t, []string{"slice", "invariant"}, extractLabels(result.Items), "description %q", description)
 			}
 		})
 	})

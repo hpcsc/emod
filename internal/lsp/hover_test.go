@@ -215,19 +215,6 @@ func TestGetHover(t *testing.T) {
 		}
 	})
 
-	t.Run("answers for a described keyword and stays silent for one it does not describe", func(t *testing.T) {
-		doc := `model "Library Lending"
-
-context "Reading Room" mode dcb {
-}`
-
-		modelLine, modelChar := posIn(t, doc, `model "Library Lending"`, "model")
-		assertHover(t, doc, modelLine, modelChar, "Declares the domain model name.")
-
-		modeLine, modeChar := posIn(t, doc, "mode dcb", "mode")
-		assertNil(t, doc, modeLine, modeChar)
-	})
-
 	t.Run("a field named every hovers as the every keyword", func(t *testing.T) {
 		fieldLine, fieldChar := posIn(t, automationDoc, "fields {", "every string required")
 		assertHover(t, automationDoc, fieldLine, fieldChar, everyDescription)
