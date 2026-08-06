@@ -25,12 +25,12 @@ Create `reservation.emod`:
 ```emod
 model "Hotel Reservation"
 
-actor Guest
+actor "Guest"
 
-context Reservations {
-  aggregate Reservation {
+context "Reservations" {
+  aggregate "Reservation" {
     slice "Reserve a Room" {
-      trigger UI "Reservation Form" {
+      trigger "Reservation Form" {
         actor Guest
         reads AvailableRoomsView
       }
@@ -55,6 +55,49 @@ context Reservations {
 
       flow {
         command -> event: ReserveRoom -> RoomReserved
+      }
+    }
+
+    slice "View Available Rooms" {
+      view AvailableRoomsView {
+        fields {
+          roomId     string required
+          roomNumber string required
+          status     string required
+        }
+        subscribes [RoomReserved]
+      }
+    }
+
+    slice "Send Confirmation Email" {
+      view PendingConfirmationsView {
+        fields {
+          reservationId string    required
+          guestName     string    required
+          reservedAt    timestamp required
+        }
+        subscribes [RoomReserved]
+      }
+
+      automation ConfirmationEmailReactor {
+        on RoomReserved
+        reads PendingConfirmationsView
+        command SendConfirmationEmail
+        target context Notifications
+      }
+    }
+  }
+}
+
+context "Notifications" {
+  aggregate "Notification" {
+    slice "Send Confirmation" {
+      command SendConfirmationEmail {
+        fields {
+          reservationId string required
+          guestName     string required
+          email         string required
+        }
       }
     }
   }
@@ -84,7 +127,7 @@ emod fmt --check reservation.emod  # check only (CI)
 
 For cross-cutting consistency boundaries, use `mode dcb` to define slices directly under a context with tagged events and tag-scoped decision queries:
 
-```emod
+```
 context "Fulfillment" mode dcb {
   slice "Place Order" {
     command PlaceOrder { ... }

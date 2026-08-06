@@ -23,7 +23,7 @@ model "My System"
 
 Unquoted PascalCase tokens used for names of commands, events, views, automations, translations, actors, invariants, and references.
 
-```emod
+```
 command PlaceOrder       # PlaceOrder is an identifier
 event  OrderPlaced       # OrderPlaced is an identifier
 ```

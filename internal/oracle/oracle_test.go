@@ -4,6 +4,8 @@ package oracle_test
 
 import (
 	"fmt"
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 
@@ -105,6 +107,25 @@ context "Lending"%s {
 				})
 			}
 		})
+	})
+
+	t.Run("documented models", func(t *testing.T) {
+		for _, document := range []string{"README.md", "docs/dsl-reference.md"} {
+			t.Run(document, func(t *testing.T) {
+				blocks := emodBlocksIn(t, document)
+				require.NotEmpty(t, blocks, "%s fences no emod block", document)
+
+				for _, block := range blocks {
+					t.Run(fmt.Sprintf("reports nothing about the model at line %d", block.line), func(t *testing.T) {
+						origin := fmt.Sprintf("%s:%d", document, block.line)
+
+						diagnostics := oracle.Check(block.source, origin)
+
+						require.Empty(t, reportedLines(diagnostics))
+					})
+				}
+			})
+		}
 	})
 
 	t.Run("automations reading no view", func(t *testing.T) {
@@ -336,6 +357,46 @@ context "Ctx" {
   }
 }
 `, fields.String(), fields.String())
+}
+
+const (
+	repositoryRoot = "../.."
+	markdownFence  = "```"
+	emodFence      = markdownFence + "emod"
+)
+
+type emodBlock struct {
+	line   int
+	source string
+}
+
+func emodBlocksIn(t *testing.T, document string) []emodBlock {
+	t.Helper()
+
+	content, err := os.ReadFile(filepath.Join(repositoryRoot, document))
+	require.NoError(t, err)
+
+	lines := strings.Split(string(content), "\n")
+
+	var blocks []emodBlock
+	for opening := 0; opening < len(lines); opening++ {
+		if strings.TrimSpace(lines[opening]) != emodFence {
+			continue
+		}
+
+		closing := opening + 1
+		for closing < len(lines) && !strings.HasPrefix(strings.TrimSpace(lines[closing]), markdownFence) {
+			closing++
+		}
+
+		blocks = append(blocks, emodBlock{
+			line:   opening + 1,
+			source: strings.Join(lines[opening+1:closing], "\n") + "\n",
+		})
+		opening = closing
+	}
+
+	return blocks
 }
 
 func reportedLines(diagnostics []*diagnostic.Entry) []string {
