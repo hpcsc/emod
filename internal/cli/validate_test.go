@@ -319,9 +319,19 @@ context "Orders" {
         command -> event: PlaceOrder -> OrderPlaced
       }
     }
+    slice "Browse Orders" {
+      view PlacedOrdersView {
+        fields {
+          orderId     string required
+          totalAmount string required
+        }
+        subscribes [OrderPlaced]
+      }
+    }
     slice "Notify On Order" {
       automation OrderNotifier {
         on OrderPlaced
+        reads PlacedOrdersView
         command SendNotification
         target context Notifications
       }
@@ -446,6 +456,10 @@ context "Test" {
       command OrderPlaced {}
       event OrderUpdated {}
       view OrderList {}
+      automation OrderNotifier {
+        on OrderUpdated
+        command OrderPlaced
+      }
       flow {
         command -> event: OrderPlaced -> OrderUpdated
       }
@@ -464,6 +478,8 @@ context "Test" {
 		require.Contains(t, err.Error(), "OrderUpdated")
 		require.Contains(t, err.Error(), "view-naming")
 		require.Contains(t, err.Error(), "OrderList")
+		require.Contains(t, err.Error(), "automation/missing-todo-list")
+		require.Contains(t, err.Error(), "OrderNotifier")
 	})
 
 	t.Run("returns both lint warnings and validation errors", func(t *testing.T) {

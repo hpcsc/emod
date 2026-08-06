@@ -147,6 +147,11 @@ func checkSlice(slice *ast.Slice, aggregateName string, flowCount map[string]int
 			diags = append(diags, d)
 		}
 	}
+	for _, auto := range slice.Automations {
+		if d := checkMissingTodoList(auto); d != nil {
+			diags = append(diags, d)
+		}
+	}
 	return diags
 }
 
@@ -500,6 +505,20 @@ func checkLeftChair(cmd *ast.Command, flowCount map[string]int) *diagnostic.Entr
 		return error(cmd.NamePos, "left-chair", fmt.Sprintf("command %q is referenced by %d flows; consider splitting into specialized commands to reduce coupling", cmd.Name, flowCount[cmd.Name]))
 	}
 	return nil
+}
+
+func checkMissingTodoList(auto *ast.Automation) *diagnostic.Entry {
+	if auto.Reads != "" {
+		return nil
+	}
+
+	consequence := "nothing in the model shows what work is outstanding"
+	if auto.Schedule != "" {
+		consequence = "the model does not state what the processor acts on"
+	}
+
+	return warning(auto.NamePos, "automation/missing-todo-list",
+		fmt.Sprintf("automation %q reads no view, so %s; project a view of pending work and read it", auto.Name, consequence))
 }
 
 func checkGodView(view *ast.View) *diagnostic.Entry {

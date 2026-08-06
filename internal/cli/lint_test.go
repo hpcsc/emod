@@ -130,6 +130,56 @@ context "Fulfillment" mode dcb {
 }
 `
 
+// automationWithoutViewEmod wires an automation straight from an event to a
+// command, which automation/missing-todo-list reports and no other rule does.
+const automationWithoutViewEmod = `model "Lending"
+
+context "Lending" {
+  aggregate "Loan" {
+    slice "Borrow Copy" {
+      command BorrowCopy {
+        fields {
+          memberId string required
+          copyId   string required
+        }
+      }
+      event CopyBorrowed {
+        fields {
+          loanId   string required
+          memberId string required
+          copyId   string required
+        }
+      }
+      flow {
+        command -> event: BorrowCopy -> CopyBorrowed
+      }
+    }
+    slice "Chase Overdue Copy" {
+      command RemindMember {
+        fields {
+          loanId   string required
+          memberId string required
+        }
+      }
+      event MemberReminded {
+        fields {
+          loanId     string    required
+          memberId   string    required
+          remindedAt timestamp required
+        }
+      }
+      automation RemindOnDueDate {
+        on CopyBorrowed
+        command RemindMember
+      }
+      flow {
+        command -> event: RemindMember -> MemberReminded
+      }
+    }
+  }
+}
+`
+
 func captureStdout(t *testing.T, fn func()) string {
 	t.Helper()
 	old := os.Stdout
@@ -470,6 +520,41 @@ context "Orders" {
 			require.Contains(t, err.Error(), "[dcb/single-tag-everywhere]")
 		})
 	})
+
+	t.Run("automation reading no view", func(t *testing.T) {
+		t.Run("json output reports the rule at warning severity and exits 1", func(t *testing.T) {
+			path := writeTemp(t, "no_todo_list.emod", automationWithoutViewEmod)
+
+			var err error
+			output := captureStdout(t, func() {
+				err = cli.RunLint(path, "json")
+			})
+
+			var lintErr *cli.LintError
+			require.True(t, errors.As(err, &lintErr))
+			require.Equal(t, 1, lintErr.ExitCode)
+
+			var entries []map[string]interface{}
+			require.NoError(t, json.Unmarshal([]byte(output), &entries))
+			require.Len(t, entries, 1)
+			require.Equal(t, "warning", entries[0]["severity"])
+			require.Equal(t, "automation/missing-todo-list", entries[0]["rule"])
+			require.Equal(t, path, entries[0]["file"])
+			require.Equal(t, float64(37), entries[0]["line"])
+			require.Contains(t, entries[0]["message"], "RemindOnDueDate")
+		})
+
+		t.Run("text output names the rule, the automation and the line it is declared on", func(t *testing.T) {
+			path := writeTemp(t, "no_todo_list.emod", automationWithoutViewEmod)
+
+			err := cli.RunLint(path, "text")
+
+			var lintErr *cli.LintError
+			require.True(t, errors.As(err, &lintErr))
+			require.Equal(t, 1, lintErr.ExitCode)
+			require.Equal(t, path+`:37: [automation/missing-todo-list] automation "RemindOnDueDate" reads no view, so nothing in the model shows what work is outstanding; project a view of pending work and read it`, err.Error())
+		})
+	})
 }
 
 func TestLintExplain(t *testing.T) {
@@ -490,6 +575,16 @@ func TestLintExplain(t *testing.T) {
 		})
 
 		require.Contains(t, output, "decides_on")
+	})
+
+	t.Run("automation rule prints description and returns no error", func(t *testing.T) {
+		output := captureStdout(t, func() {
+			err := cli.RunLintExplain("automation/missing-todo-list")
+			require.NoError(t, err)
+		})
+
+		require.Contains(t, output, "todo list")
+		require.Regexp(t, `\breads\b`, output)
 	})
 
 	t.Run("unknown rule returns error", func(t *testing.T) {
@@ -516,6 +611,7 @@ func TestLintExplain(t *testing.T) {
 			"dcb/query-too-broad",
 			"dcb/single-tag-everywhere",
 			"dcb/orphan-tag-key",
+			"automation/missing-todo-list",
 		}
 		for _, rule := range rules {
 			t.Run(rule, func(t *testing.T) {

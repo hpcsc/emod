@@ -3323,4 +3323,284 @@ func TestLint(t *testing.T) {
 			require.Contains(t, diags[0].Message, "priority")
 		})
 	})
+
+	t.Run("automation/missing-todo-list", func(t *testing.T) {
+		t.Run("an automation activated by an event and reading no view is reported at its name", func(t *testing.T) {
+			model := &ast.Model{
+				Contexts: []*ast.Context{
+					{
+						Name: "Reservations",
+						Aggregates: []*ast.Aggregate{
+							{
+								Name: "Reservation",
+								Slices: []*ast.Slice{
+									{
+										Name: "Auto Confirm Reservation",
+										Automations: []*ast.Automation{
+											{
+												Name: "AutoConfirm",
+												NamePos: ast.Position{
+													Filename: "hotel.emod",
+													Line:     42,
+													Column:   18,
+												},
+												OnEvent: "ReservationMade",
+												Command: "ConfirmReservation",
+											},
+										},
+									},
+								},
+							},
+						},
+					},
+				},
+			}
+
+			diags := linter.Lint(model)
+
+			require.Equal(t, []*diagnostic.Entry{
+				{
+					Filename: "hotel.emod",
+					Line:     42,
+					Column:   18,
+					Severity: diagnostic.Warning,
+					RuleName: "automation/missing-todo-list",
+					Message:  `automation "AutoConfirm" reads no view, so nothing in the model shows what work is outstanding; project a view of pending work and read it`,
+				},
+			}, diags)
+		})
+
+		t.Run("the message names what the automation's activation clause leaves unrepresented", func(t *testing.T) {
+			const eventActivated = `automation "SweepOverdueLoans" reads no view, so nothing in the model shows what work is outstanding; project a view of pending work and read it`
+			const scheduled = `automation "SweepOverdueLoans" reads no view, so the model does not state what the processor acts on; project a view of pending work and read it`
+
+			tests := []struct {
+				name     string
+				onEvent  string
+				schedule string
+				expected string
+			}{
+				{
+					name:     "a schedule alone says the model does not state what the processor acts on",
+					schedule: "15m",
+					expected: scheduled,
+				},
+				{
+					name:     "neither clause reads as an event-activated automation",
+					expected: eventActivated,
+				},
+				{
+					name:     "both clauses together read as a scheduled automation",
+					onEvent:  "MemberReminded",
+					schedule: "15m",
+					expected: scheduled,
+				},
+			}
+
+			for _, tc := range tests {
+				t.Run(tc.name, func(t *testing.T) {
+					model := &ast.Model{
+						Contexts: []*ast.Context{
+							{
+								Name: "Lending",
+								Aggregates: []*ast.Aggregate{
+									{
+										Name: "Loan",
+										Slices: []*ast.Slice{
+											{
+												Name: "Chase Overdue Copy",
+												Automations: []*ast.Automation{
+													{
+														Name: "SweepOverdueLoans",
+														NamePos: ast.Position{
+															Filename: "lending.emod",
+															Line:     78,
+															Column:   18,
+														},
+														OnEvent:  tc.onEvent,
+														Schedule: tc.schedule,
+														Command:  "RecallCopy",
+													},
+												},
+											},
+										},
+									},
+								},
+							},
+						},
+					}
+
+					diags := linter.Lint(model)
+
+					require.Equal(t, []*diagnostic.Entry{
+						{
+							Filename: "lending.emod",
+							Line:     78,
+							Column:   18,
+							Severity: diagnostic.Warning,
+							RuleName: "automation/missing-todo-list",
+							Message:  tc.expected,
+						},
+					}, diags)
+				})
+			}
+		})
+
+		t.Run("an automation naming a view is silent, and so are a trigger and a translation naming none", func(t *testing.T) {
+			model := &ast.Model{
+				Contexts: []*ast.Context{
+					{
+						Name: "Lending",
+						Aggregates: []*ast.Aggregate{
+							{
+								Name: "Loan",
+								Slices: []*ast.Slice{
+									{
+										Name: "Chase Overdue Copy",
+										Trigger: &ast.Trigger{
+											Name: "Overdue Report",
+											NamePos: ast.Position{
+												Filename: "lending.emod",
+												Line:     10,
+												Column:   7,
+											},
+											Actor: "Librarian",
+										},
+										Views: []*ast.View{
+											{
+												Name: "PendingRemindersView",
+												NamePos: ast.Position{
+													Filename: "lending.emod",
+													Line:     14,
+													Column:   7,
+												},
+												Subscribes: []string{"CopyBorrowed"},
+											},
+										},
+										Automations: []*ast.Automation{
+											{
+												Name: "RecallOverdueCopy",
+												NamePos: ast.Position{
+													Filename: "lending.emod",
+													Line:     22,
+													Column:   18,
+												},
+												OnEvent: "CopyBorrowed",
+												Reads:   "PendingRemindersView",
+												Command: "RecallCopy",
+											},
+											{
+												Name: "RemindOnDueDate",
+												NamePos: ast.Position{
+													Filename: "lending.emod",
+													Line:     28,
+													Column:   18,
+												},
+												OnEvent: "CopyBorrowed",
+												Command: "RemindMember",
+											},
+										},
+										Translations: []*ast.Translation{
+											{
+												Name: "ImportLoan",
+												NamePos: ast.Position{
+													Filename: "lending.emod",
+													Line:     34,
+													Column:   19,
+												},
+												ExternalSystem: "Legacy Catalogue",
+												Command:        "BorrowCopy",
+											},
+										},
+									},
+								},
+							},
+						},
+					},
+				},
+			}
+
+			diags := linter.Lint(model)
+
+			require.Equal(t, []*diagnostic.Entry{
+				{
+					Filename: "lending.emod",
+					Line:     28,
+					Column:   18,
+					Severity: diagnostic.Warning,
+					RuleName: "automation/missing-todo-list",
+					Message:  `automation "RemindOnDueDate" reads no view, so nothing in the model shows what work is outstanding; project a view of pending work and read it`,
+				},
+			}, diags)
+		})
+
+		t.Run("an automation in an aggregate's slice and one on a context's own slice are both reported, in declaration order", func(t *testing.T) {
+			model := &ast.Model{
+				Contexts: []*ast.Context{
+					{
+						Name: "Lending",
+						Aggregates: []*ast.Aggregate{
+							{
+								Name: "Loan",
+								Slices: []*ast.Slice{
+									{
+										Name: "Chase Overdue Copy",
+										Automations: []*ast.Automation{
+											{
+												Name: "RemindOnDueDate",
+												NamePos: ast.Position{
+													Filename: "lending.emod",
+													Line:     30,
+													Column:   18,
+												},
+												OnEvent: "CopyBorrowed",
+												Command: "RemindMember",
+											},
+										},
+									},
+								},
+							},
+						},
+					},
+					{
+						Name: "Reading Room",
+						Mode: "dcb",
+						Slices: []*ast.Slice{
+							{
+								Name: "Close Reading Room",
+								Automations: []*ast.Automation{
+									{
+										Name: "SweepIdleDesks",
+										NamePos: ast.Position{
+											Filename: "lending.emod",
+											Line:     61,
+											Column:   16,
+										},
+										Schedule: "45m",
+										Command:  "ReleaseDesk",
+									},
+								},
+							},
+						},
+					},
+				},
+			}
+
+			diags := linter.Lint(model)
+
+			require.Equal(t, []string{
+				`lending.emod:30: [automation/missing-todo-list] automation "RemindOnDueDate" reads no view, so nothing in the model shows what work is outstanding; project a view of pending work and read it`,
+				`lending.emod:61: [automation/missing-todo-list] automation "SweepIdleDesks" reads no view, so the model does not state what the processor acts on; project a view of pending work and read it`,
+			}, reportedLines(diags))
+		})
+	})
+}
+
+func reportedLines(diags []*diagnostic.Entry) []string {
+	lines := make([]string, 0, len(diags))
+	for _, d := range diags {
+		lines = append(lines, d.String())
+	}
+
+	return lines
 }

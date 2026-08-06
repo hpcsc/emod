@@ -61,24 +61,6 @@ func TestCheck(t *testing.T) {
 			require.Empty(t, diagnostics)
 		})
 
-		t.Run("returns an empty diagnostic list for a model whose automations read views in an aggregate slice, on a context slice and across a context boundary", func(t *testing.T) {
-			diagnostics := oracle.Check(test.AutomationReadsLibraryLending, "automation-reads.emod")
-
-			require.Empty(t, diagnostics)
-		})
-
-		t.Run("returns an empty diagnostic list for a model whose triggers read views declared in another slice and in another context", func(t *testing.T) {
-			diagnostics := oracle.Check(test.TriggerReadsLibraryLending, "trigger-reads.emod")
-
-			require.Empty(t, diagnostics)
-		})
-
-		t.Run("returns an empty diagnostic list for a model whose automations run on a schedule in an aggregate slice and on a context slice", func(t *testing.T) {
-			diagnostics := oracle.Check(test.AutomationScheduleLibraryLending, "automation-schedule.emod")
-
-			require.Empty(t, diagnostics)
-		})
-
 		t.Run("reports nothing about an invariant a context declares outside dcb mode", func(t *testing.T) {
 			tests := []struct {
 				mode   string
@@ -122,6 +104,34 @@ context "Lending"%s {
 					require.Empty(t, diagnostics)
 				})
 			}
+		})
+	})
+
+	t.Run("automations reading no view", func(t *testing.T) {
+		t.Run("names the one automation a model of reading automations leaves without a view", func(t *testing.T) {
+			diagnostics := oracle.Check(test.AutomationReadsLibraryLending, "automation-reads.emod")
+
+			require.Equal(t, []string{
+				`automation-reads.emod:69: [automation/missing-todo-list] automation "RemindOnDueDate" reads no view, so nothing in the model shows what work is outstanding; project a view of pending work and read it`,
+			}, reportedLines(diagnostics))
+		})
+
+		t.Run("names the one automation a model of reading triggers leaves without a view", func(t *testing.T) {
+			diagnostics := oracle.Check(test.TriggerReadsLibraryLending, "trigger-reads.emod")
+
+			require.Equal(t, []string{
+				`trigger-reads.emod:95: [automation/missing-todo-list] automation "RemindOnDueDate" reads no view, so nothing in the model shows what work is outstanding; project a view of pending work and read it`,
+			}, reportedLines(diagnostics))
+		})
+
+		t.Run("names every automation a model of scheduled automations leaves without a view, in both slice homes", func(t *testing.T) {
+			diagnostics := oracle.Check(test.AutomationScheduleLibraryLending, "automation-schedule.emod")
+
+			require.Equal(t, []string{
+				`automation-schedule.emod:74: [automation/missing-todo-list] automation "RecallOnSecondReminder" reads no view, so nothing in the model shows what work is outstanding; project a view of pending work and read it`,
+				`automation-schedule.emod:78: [automation/missing-todo-list] automation "SweepOverdueLoans" reads no view, so the model does not state what the processor acts on; project a view of pending work and read it`,
+				`automation-schedule.emod:161: [automation/missing-todo-list] automation "SweepIdleDesks" reads no view, so the model does not state what the processor acts on; project a view of pending work and read it`,
+			}, reportedLines(diagnostics))
 		})
 	})
 
@@ -326,6 +336,15 @@ context "Ctx" {
   }
 }
 `, fields.String(), fields.String())
+}
+
+func reportedLines(diagnostics []*diagnostic.Entry) []string {
+	lines := make([]string, 0, len(diagnostics))
+	for _, d := range diagnostics {
+		lines = append(lines, d.String())
+	}
+
+	return lines
 }
 
 func errorsIn(diagnostics []*diagnostic.Entry) []*diagnostic.Entry {
