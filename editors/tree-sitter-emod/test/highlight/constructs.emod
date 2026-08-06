@@ -1,0 +1,64 @@
+# Marker lines name the highlight capture expected at the marked column of the
+# nearest source line above. An assertion only discriminates while another
+# highlighted token follows it on the same line; with none, the runner scans on
+# into later lines and accepts a capture found there. The trailing comments
+# below are that guard: drop one and its assertion passes on any capture.
+
+model "Order Management" {
+# <- keyword
+#     ^ function
+  # Fulfilment is modelled in the Ordering context.
+# ^ comment
+  description "Orders and their fulfilment." # prose, not an entity name
+#             ^ string
+}
+
+actor "Customer" {}
+#     ^ function
+
+context "Ordering" {
+# <- keyword
+#       ^ function
+  aggregate "Order" {
+#           ^ function
+    slice "Placement" {
+#         ^ function
+      command PlaceOrder {
+#             ^ function
+        fields {
+#       ^ keyword
+          orderId string required # required is a modifier, not a second type
+#                 ^ type
+#                        ^ type.qualifier
+        }
+      }
+
+      event OrderPlaced {}
+#           ^ function
+
+      view OrderSummary {}
+#          ^ function
+
+      trigger "Review orders" {
+#     ^ keyword
+#             ^ function
+        actor Customer
+        reads OrderSummary
+      }
+
+      automation NotifyCustomer {
+#                ^ function
+        on OrderPlaced
+        reads OrderSummary
+        command PlaceOrder
+      }
+
+      translation ImportOrder {
+#                 ^ function
+        external_system "Legacy" # names a foreign system, not a declaration
+#                       ^ string
+        event ImportedOrder {}
+      }
+    }
+  }
+}

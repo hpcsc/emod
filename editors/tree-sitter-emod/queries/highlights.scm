@@ -41,13 +41,14 @@
 
 ; --- Entity names (mapped to @function) ---
 
-; Quoted entity names after model / actor / context / aggregate / slice
+; Quoted entity names after model / actor / context / aggregate / slice / trigger
 ; (overrides the generic (string) @string for these positions)
 (model_definition (string) @function)
 (actor_definition (string) @function)
 (context_definition (string) @function)
 (aggregate_definition (string) @function)
 (slice_definition (string) @function)
+(trigger_definition (string) @function)
 
 ; Identifier entity names after command / event / view / automation / translation
 (command_definition (identifier) @function)
@@ -55,9 +56,6 @@
 (view_definition (identifier) @function)
 (automation_definition (identifier) @function)
 (translation_definition (identifier) @function)
-
-; Trigger quoted name (entity name)
-(trigger_definition (string) @function)
 
 ; --- Field types ---
 (field_line
