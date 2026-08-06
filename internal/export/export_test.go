@@ -2435,6 +2435,48 @@ func TestExport(t *testing.T) {
 			require.Equal(t, "event-1", flowEdge["target"])
 		})
 
+		t.Run("declaring the flow a translation implies does not add a second flow edge", func(t *testing.T) {
+			translationModel := func(declareFlow bool) *ast.Model {
+				slice := &ast.Slice{
+					Name:     "Take Payment",
+					Commands: []*ast.Command{{Name: "Charge"}},
+					Translations: []*ast.Translation{{
+						Name:           "StripeWebhook",
+						ExternalSystem: "Stripe",
+						Command:        "Charge",
+						Event:          &ast.Event{Name: "Charged"},
+					}},
+				}
+				if declareFlow {
+					slice.Flows = []*ast.Flow{{CommandName: "Charge", EventName: "Charged"}}
+				}
+				return &ast.Model{
+					Name: "Test",
+					Contexts: []*ast.Context{{
+						Name: "Payments",
+						Aggregates: []*ast.Aggregate{{
+							Name:   "Payment",
+							Slices: []*ast.Slice{slice},
+						}},
+					}},
+				}
+			}
+
+			edgesOf := func(m *ast.Model) []any {
+				raw, err := export.ExportDiagramJSON(m)
+				require.NoError(t, err)
+				var doc map[string]any
+				require.NoError(t, json.Unmarshal(raw, &doc))
+				return doc["edges"].([]any)
+			}
+
+			implied := edgesOf(translationModel(false))
+			declared := edgesOf(translationModel(true))
+
+			require.ElementsMatch(t, implied, declared,
+				"spelling the flow out must not add a second edge for the same pair")
+		})
+
 		t.Run("draws a reads edge from a view to the trigger and to the automation that read it, and none for a name no slice declares", func(t *testing.T) {
 			model := &ast.Model{
 				Name: "Test",
