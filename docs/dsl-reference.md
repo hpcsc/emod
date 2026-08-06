@@ -30,7 +30,7 @@ event  OrderPlaced       # OrderPlaced is an identifier
 
 ### Strings
 
-Double-quoted values used for human-readable names (`model`, `actor`, `slice`, `trigger`, `external_system`, `source external`) and for `description` text.
+Double-quoted values. Most carry a human-readable name (`model`, `actor`, `slice`, `trigger`, `external_system`, `source external`) or prose (`description` text, an `invariant`'s statement); an automation's `every` schedule expression instead carries a machine-read value — a Go duration or a cron expression.
 
 ```emod
 model "Hotel Reservation"
@@ -433,7 +433,7 @@ flow {
 }
 ```
 
-The `->` arrow is a required operator. Multiple flow entries may appear in one `flow { }` block. Flow declaration is optional for patterns where the wiring is implicit (automation already shows the trigger→command link; translation shows the command→event link via the nested event).
+The `->` arrow is a required operator. Multiple flow entries may appear in one `flow { }` block. Flow declaration is optional for patterns where the wiring is implicit: an automation shows the activation→command link through its `on` event or its `every` schedule, and a translation shows the command→event link through its nested event.
 
 ---
 
@@ -633,16 +633,18 @@ context "Reservations" {
 
 ## 11. Cross-References
 
-Names are resolved during validation (`emod validate`). All references use unqualified names.
+All references use unqualified names. `emod validate` resolves them, except for two of the three spellings of `reads`.
 
 | Declaration | Referenced By | Context |
 |---|---|---|
 | `context "<name>"` | `automation { target context <Name> }` | [`automation`](#automation-pattern) |
-| `event <Name>` | `subscribes [<Name>]`, `flow`, `automation { trigger <Name> }`, `automation { command <Name> }`, `translation { event <Name> }`, `translation { command <Name> }`, `spec { given [<Name>] }`, `spec { then [<Name>] }` | [`view`](#view-pattern), [`automation`](#automation-pattern), [`translation`](#translation-pattern), [`spec`](#spec) |
+| `event <Name>` | `subscribes [<Name>]`, `flow`, `automation { on <Name> }`, `automation { command <Name> }`, `translation { event <Name> }`, `translation { command <Name> }`, `spec { given [<Name>] }`, `spec { then [<Name>] }` | [`view`](#view-pattern), [`automation`](#automation-pattern), [`translation`](#translation-pattern), [`spec`](#spec) |
 | `command <Name>` | `flow`, `automation { command <Name> }`, `translation { command <Name> }`, `spec { when <Name> }` | [`flow`](#7-flows), [`automation`](#automation-pattern), [`translation`](#translation-pattern), [`spec`](#spec) |
-| `view <Name>` | `trigger { reads <Name> }`, `translation { reads <Name> }` | [`command` pattern](#command-pattern), [`translation`](#translation-pattern) |
+| `view <Name>` | `automation { reads <Name> }`, `trigger { reads <Name> }`, `translation { reads <Name> }` | [`automation`](#automation-pattern), [`command` pattern](#command-pattern), [`translation`](#translation-pattern) |
 | `actor "<name>"` | `trigger { actor <Name> }` | [`command` pattern](#command-pattern) |
 | `invariant <name>` | `spec { then rejected <name> }` | [`spec`](#spec) |
+
+Of the three constructs that spell `reads`, only an automation's is resolved: `emod validate` reports a name that matches no view in the model (see [`automation`](#automation-pattern)). A trigger's `reads` and a translation's are recorded and left unchecked, so either may name a view no slice declares.
 
 Validation detects:
 - Missing target contexts, commands, events, or views.
