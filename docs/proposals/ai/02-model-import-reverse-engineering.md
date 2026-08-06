@@ -161,7 +161,7 @@ The system prompt encodes the mapping rules and emod house style (drawn from
 | event shared across handlers, tagged by multiple keys | `mode dcb` + `tags` + `decides_on` | When no single owner fits. |
 | command class / handler input | `command` (imperative) | Keep the source name if already imperative. |
 | domain event | `event` (past tense) | Keep the source name; the linter will flag bad ones. |
-| handler: on event → dispatch command | `automation` (`trigger`/`command`/`target context`) | Cross-context → set `target context`. |
+| handler: on event → dispatch command | `automation` (`on`/`command`/`target context`) | Cross-context → set `target context`. |
 | projection / read model | `view` with `subscribes [...]` | Recover subscriptions from handled event types. |
 | outbound integration / webhook | `translation` with `external_system` | External event gets `source external "..."`. |
 | event → command edge within a context | `flow { command -> event }` | One flow per produced event. |
@@ -324,7 +324,7 @@ context "Billing" {
 
     slice "Charge on invoice issued" {
       automation DunningReactor {
-        trigger InvoiceIssued
+        on InvoiceIssued
         command ChargeCustomer
         target context Payments
       }

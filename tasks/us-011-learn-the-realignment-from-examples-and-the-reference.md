@@ -5,7 +5,7 @@
 - [x] Task 2: Document the kindless trigger and the realigned automation in the reference's pattern sections
 - [x] Task 3: Correct the reference's cross-references and remaining activation prose
 - [x] Task 4: Put the new forms in the README quick-start and validate every fenced model
-- [ ] Task 5: Sweep the repository for removed spellings
+- [x] Task 5: Sweep the repository for removed spellings
 
 ---
 

@@ -336,7 +336,7 @@ assistant (draft 1) → calls emod_validate
     context Orders {
       aggregate Order { stream "Order-{orderId}" }
       slice "Place Order" {
-        trigger UI "Order Form" { actor Customer }
+        trigger "Order Form" { actor Customer }
         command PlaceOrder { aggregate Order
           fields { orderId OrderID required } }
         event OrderUpdated { aggregate Order

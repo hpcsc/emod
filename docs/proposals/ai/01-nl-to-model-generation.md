@@ -94,9 +94,9 @@ prompt (embedded via `go:embed`, kept beside the generator) carries:
 
 - The concrete grammar surface — `model`, `actor`, `context` (`mode aggregate|dcb|mixed`),
   `aggregate` + `stream`, `slice`, `command`, `event` (`fields`, `tags`),
-  `view` (`subscribes [...]`), `automation` (`trigger`/`command`/`target context`),
+  `view` (`subscribes [...]`), `automation` (`on`/`every`/`reads`/`command`/`target context`),
   `translation` (`external_system`), `flow` (`command -> event: X -> Y`),
-  `trigger UI`/`trigger Automation`, and the DCB `decides_on { events [...] where tag(...) }`.
+  `trigger "<name>"` (`actor`/`reads`), and the DCB `decides_on { events [...] where tag(...) }`.
 - The idioms encoded as **rules to obey, phrased as the linter sees them**: events
   are past-tense business facts (not `...Updated`/`...Changed`/`...Initiated`),
   commands are imperative, views end in `View` and subscribe to fewer than five
@@ -285,7 +285,7 @@ actor "Agent"
 context "InboundEmail" {
   aggregate "EmailConversation" {
     slice "Receive inbound message" {
-      trigger Automation "InboxRoute" {
+      trigger "InboxRoute" {
         actor Customer
       }
 
@@ -325,7 +325,7 @@ context "InboundEmail" {
       }
 
       automation Identify {
-        trigger InboundMessageReceived
+        on InboundMessageReceived
         command IdentifyCustomer
         target context InboundEmail
       }
@@ -351,7 +351,7 @@ context "InboundEmail" {
       }
 
       automation Classify {
-        trigger CustomerIdentified
+        on CustomerIdentified
         command ClassifyMessage
         target context InboundEmail
       }

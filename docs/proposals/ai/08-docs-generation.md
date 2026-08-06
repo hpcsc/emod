@@ -141,7 +141,7 @@ and the structure disagree, say so rather than invent a reconciliation.*
 The generator also reuses `emod slices` (`internal/cli/slices.go`) for the
 per-slice **pattern label** — `command`, `view`, `automation`, `translation` —
 which `detectPattern` already computes. Telling the model "this slice is an
-*automation* pattern: trigger event → command → target context" anchors the prose
+*automation* pattern: `on` event → command → target context" anchors the prose
 in emod's own vocabulary rather than letting the model improvise structure names.
 
 ### Document structure
@@ -350,9 +350,9 @@ from the export, are: the slice comment `# Standard auto-reply for an identified
 non-escalated message.`; the command `EmailConversationInitiateReply`; the event
 `EmailConversationReplyInitiated`; the flow
 `EmailConversationInitiateReply -> EmailConversationReplyInitiated`; and the
-automation `EmailConversationComposeReply` (`trigger
-EmailConversationClassified`, `command EmailConversationInitiateReply`, `target
-context InboundEmail`). `emod slices` labels the slice pattern `automation`.
+automation `EmailConversationComposeReply` (`on EmailConversationClassified`,
+`command EmailConversationInitiateReply`, `target context InboundEmail`).
+`emod slices` labels the slice pattern `automation`.
 
 The generated narrative section (style `narrative`) reads roughly:
 

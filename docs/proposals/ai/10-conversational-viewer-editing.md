@@ -246,22 +246,22 @@ You:  rename EmailConversationCustomerIdentificationDeferred to something
       an analyst would understand
 
 emod: I'll rename it to EmailConversationCustomerUnidentified and update the
-      three references (the flow, the compose-identification-ask automation
-      trigger, and the EmailDecisionsTopicView subscription).
+      three references (the flow, the compose-identification-ask automation's
+      activation event, and the EmailDecisionsTopicView subscription).
 
       [diff]
       - event EmailConversationCustomerIdentificationDeferred {
       + event EmailConversationCustomerUnidentified {
       ...
-      - trigger EmailConversationCustomerIdentificationDeferred
-      + trigger EmailConversationCustomerUnidentified
+      - on EmailConversationCustomerIdentificationDeferred
+      + on EmailConversationCustomerUnidentified
       ...
       subscribes [..., EmailConversationCustomerUnidentified]
 
       ✓ parses, validates, lints clean        [ Accept ]  [ Reject ]
 ```
 
-Because the rename touches an event referenced by an `automation` trigger
+Because the rename touches an event referenced by an `automation`'s `on` clause
 (`EmailConversationComposeIdentificationAsk`), a flow edge, and a `view`'s
 `subscribes` list, a single-node inline rename in the current viewer would *not*
 catch all three — the validator would then flag dangling references. The repair loop

@@ -102,8 +102,8 @@ Given/When/Then *shape* from the AST (`internal/ast`), no model required:
     clause (`ast.DecidesOnClause.Events`) and its `where tag(...)` predicate.
   - In an aggregate-mode model, by walking the **upstream automation chain**: the
     `Classify message` command is triggered by `automation EmailConversationClassify`
-    whose `trigger` is `EmailConversationCustomerIdentified`, which is the THEN of
-    the `Identify customer` slice, whose trigger chains back to
+    whose `on` event is `EmailConversationCustomerIdentified`, which is the THEN of
+    the `Identify customer` slice, which itself chains back to
     `EmailConversationInboundReceived`. The GIVEN is that transitive set of prior
     events. emod can compute this from the automation/flow graph it already builds.
 
@@ -316,7 +316,7 @@ slice "Classify message" {
   }
 
   automation EmailConversationClassify {
-    trigger EmailConversationCustomerIdentified
+    on EmailConversationCustomerIdentified
     command EmailConversationRecordClassification
     target context InboundEmail
   }
