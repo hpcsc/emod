@@ -1,0 +1,48 @@
+# SYNTAX TEST "source.emod"
+
+# A keyword stays a legal field name, field type and field modifier, so none of
+# the three positions may read as a keyword.
+command RecordReminder {
+  fields {
+    on string required
+#   ^^ - keyword.control.emod entity.name.function.emod
+#      ^^^^^^ storage.type.emod
+#             ^^^^^^^^ storage.modifier.emod
+    every string required
+#   ^^^^^ - keyword.control.emod entity.name.function.emod
+#         ^^^^^^ storage.type.emod
+#                ^^^^^^^^ storage.modifier.emod
+    notified on required
+#   ^^^^^^^^ - keyword.control.emod
+#            ^^ - keyword.control.emod entity.name.function.emod
+#               ^^^^^^^^ storage.modifier.emod
+    scheduled every required
+#   ^^^^^^^^^ - keyword.control.emod
+#             ^^^^^ - keyword.control.emod entity.name.function.emod
+#                   ^^^^^^^^ storage.modifier.emod
+    flagged string on
+#   ^^^^^^^ - keyword.control.emod
+#           ^^^^^^ storage.type.emod
+#                  ^^ - keyword.control.emod entity.name.function.emod
+    repeats string every
+#   ^^^^^^^ - keyword.control.emod
+#           ^^^^^^ storage.type.emod
+#                  ^^^^^ - keyword.control.emod entity.name.function.emod
+# The modifier is optional, so the two-token form is the same field line with
+# nothing after the type to mark the name as a field name.
+    on int
+#   ^^ - keyword.control.emod entity.name.function.emod
+#      ^^^ storage.type.emod
+    every int
+#   ^^^^^ - keyword.control.emod entity.name.function.emod
+#         ^^^ storage.type.emod
+# A type may be any identifier, so the type of a two-token line carries no
+# spelling that separates it from an event name.
+    on RoomID
+#   ^^ - keyword.control.emod entity.name.function.emod
+#      ^^^^^^ - keyword.control.emod entity.name.function.emod
+    every RoomID
+#   ^^^^^ - keyword.control.emod entity.name.function.emod
+#         ^^^^^^ - keyword.control.emod entity.name.function.emod
+  }
+}

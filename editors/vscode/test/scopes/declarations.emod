@@ -23,12 +23,22 @@ context "Ordering" {
       event OrderPlaced {}
 #     ^^^^^ keyword.control.emod
 #           ^^^^^^^^^^^ entity.name.function.emod
+# Not a typo: keyword lookup is case-sensitive, so On and Every are legal event names.
+      event On {}
+#     ^^^^^ keyword.control.emod
+#           ^^ entity.name.function.emod - keyword.control.emod
+      event Every {}
+#     ^^^^^ keyword.control.emod
+#           ^^^^^ entity.name.function.emod - keyword.control.emod
       view OrderSummary {}
 #     ^^^^ keyword.control.emod
 #          ^^^^^^^^^^^^ entity.name.function.emod
       automation NotifyCustomer {
 #     ^^^^^^^^^^ keyword.control.emod
 #                ^^^^^^^^^^^^^^ entity.name.function.emod
+        on OrderPlaced
+#       ^^ keyword.control.emod
+#          ^^^^^^^^^^^ entity.name.function.emod - keyword.control.emod
         reads OrderSummary
 #       ^^^^^ keyword.control.emod
 #             ^^^^^^^^^^^^ - entity.name.function.emod

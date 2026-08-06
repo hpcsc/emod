@@ -17,6 +17,10 @@ function readAssertions(name) {
   return fs.readFileSync(path.join(extensionRoot, assertionPath(name)), 'utf8')
 }
 
+function readGrammar() {
+  return fs.readFileSync(grammarPath, 'utf8')
+}
+
 function escapeForRegExp(text) {
   return text.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
 }
@@ -42,9 +46,21 @@ function writeScratchFile(t, name, contents) {
 }
 
 function grammarWithScopeRenamed({ from, to }) {
-  const grammar = fs.readFileSync(grammarPath, 'utf8')
+  const grammar = readGrammar()
   assert.ok(grammar.includes(`"${from}"`), `the grammar no longer names ${from}`)
   return grammar.replace(`"${from}"`, `"${to}"`)
+}
+
+function grammarWithFlatKeywordsExtended(words) {
+  const grammar = JSON.parse(readGrammar())
+  const alternation = grammar.repository.keywords.match
+  const closingWordBoundary = /\)\\b$/
+  assert.ok(
+    closingWordBoundary.test(alternation),
+    `the flat keyword rule is no longer a word alternation: ${alternation}`,
+  )
+  grammar.repository.keywords.match = alternation.replace(closingWordBoundary, `|${words.join('|')})\\b`)
+  return JSON.stringify(grammar)
 }
 
 function assertionsWithScopeRenamed(name, { below, from, to }) {
@@ -75,10 +91,15 @@ function extensionConfigFor(t, grammar) {
   return config
 }
 
-function assertReportsMismatch({ status, output }, { file, sourceLine, required, produced }) {
+function assertReportsMismatch({ status, output }, { file, sourceLine, required, prohibited, produced }) {
   assert.notEqual(status, 0, output)
   assert.match(output, new RegExp(`${escapeForRegExp(file)}:\\d+:\\d+:\\d+`))
-  const named = [sourceLine, `missing required scopes: ${required}`, `actual: source.emod ${produced}`]
+  const named = [
+    sourceLine,
+    required && `missing required scopes: ${required}`,
+    prohibited && `prohibited scopes: ${prohibited}`,
+    `actual: source.emod ${produced}`,
+  ].filter(Boolean)
   for (const fragment of named) {
     assert.ok(output.includes(fragment), `the failure report does not name "${fragment}":\n${output}`)
   }
@@ -103,6 +124,20 @@ describe('emod TextMate scope assertions', () => {
       sourceLine: 'orderId string required',
       required: 'storage.type.emod',
       produced: 'variable.other.emod',
+    })
+  })
+
+  test('a grammar that colours the activation keywords by word alone paints a field named after one', (t) => {
+    const config = extensionConfigFor(t, grammarWithFlatKeywordsExtended(['on', 'every']))
+    const keywordFieldAssertions = assertionPath('unreserved-keywords.emod')
+
+    const run = runScopeTest('--config', config, keywordFieldAssertions)
+
+    assertReportsMismatch(run, {
+      file: keywordFieldAssertions,
+      sourceLine: 'on string required',
+      prohibited: 'keyword.control.emod',
+      produced: 'keyword.control.emod',
     })
   })
 

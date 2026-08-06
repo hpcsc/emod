@@ -5,13 +5,10 @@
   "name": "emod",
   "patterns": [
     { "include": "#comments" },
+    { "include": "#fields-block" },
     { "include": "#keyword-entity" },
-    { "include": "#strings" },
-    { "include": "#keywords" },
-    { "include": "#field-modifiers" },
-    { "include": "#field-types" },
-    { "include": "#operators" },
-    { "include": "#punctuation" }
+    { "include": "#activations" },
+    { "include": "#standalone-tokens" }
   ],
   "repository": {
     "comments": {
@@ -21,6 +18,23 @@
     "strings": {
       "name": "string.quoted.double.emod",
       "match": "\"[^\"]*\""
+    },
+    "fields-block": {
+      "comment": "A field name, type and modifier are all free identifiers, so an activation is unreadable from one field line alone; the block boundary is what tells the two apart.",
+      "begin": "(?i)\\b(fields)\\b\\s*(\\{)?",
+      "beginCaptures": {
+        "1": { "name": "keyword.control.emod" },
+        "2": { "name": "keyword.operator.emod" }
+      },
+      "end": "\\}",
+      "endCaptures": {
+        "0": { "name": "keyword.operator.emod" }
+      },
+      "patterns": [
+        { "include": "#comments" },
+        { "include": "#keyword-entity" },
+        { "include": "#standalone-tokens" }
+      ]
     },
     "keyword-entity": {
       "patterns": [
@@ -48,6 +62,34 @@
             "2": { "name": "entity.name.function.emod" }
           }
         }
+      ]
+    },
+    "activations": {
+      "comment": "Deliberately case-sensitive, unlike the rules above: the lexer's keyword lookup is too, so On and Every are legal entity names.",
+      "patterns": [
+        {
+          "comment": "Event-driven activation and the event it names",
+          "match": "\\b(on)\\s+([A-Za-z_][A-Za-z0-9_]*)\\b",
+          "captures": {
+            "1": { "name": "keyword.control.emod" },
+            "2": { "name": "entity.name.function.emod" }
+          }
+        },
+        {
+          "comment": "Schedule-driven activation; the schedule itself stays a string literal",
+          "match": "\\bevery(?=\\s+\")",
+          "name": "keyword.control.emod"
+        }
+      ]
+    },
+    "standalone-tokens": {
+      "patterns": [
+        { "include": "#strings" },
+        { "include": "#keywords" },
+        { "include": "#field-modifiers" },
+        { "include": "#field-types" },
+        { "include": "#operators" },
+        { "include": "#punctuation" }
       ]
     },
     "keywords": {

@@ -13,5 +13,6 @@ translation ImportOrder {
 
 automation ArchiveOrders {
   every "0 9 * * *"
+# ^^^^^ keyword.control.emod
 #       ^^^^^^^^^^^ string.quoted.double.emod - entity.name.function.emod
 }

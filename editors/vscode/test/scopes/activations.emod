@@ -1,0 +1,17 @@
+# SYNTAX TEST "source.emod"
+
+# Outside a fields block the parser is newline-insensitive, so an automation
+# collapsed onto one line reads exactly as the block form does.
+automation NotifyCustomer { on OrderPlaced reads OrderSummary command SendNotification }
+#                           ^^ keyword.control.emod
+#                              ^^^^^^^^^^^ entity.name.function.emod - keyword.control.emod
+#                                          ^^^^^ keyword.control.emod
+#                                                ^^^^^^^^^^^^ - entity.name.function.emod
+#                                                             ^^^^^^^ keyword.control.emod
+#                                                                     ^^^^^^^^^^^^^^^^ entity.name.function.emod
+
+automation DailyDigest { every "0 9 * * *" command SendDigest }
+#                        ^^^^^ keyword.control.emod
+#                              ^^^^^^^^^^^ string.quoted.double.emod - entity.name.function.emod
+#                                          ^^^^^^^ keyword.control.emod
+#                                                  ^^^^^^^^^^ entity.name.function.emod
