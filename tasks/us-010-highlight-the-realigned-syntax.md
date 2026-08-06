@@ -5,7 +5,7 @@
 - [x] Task 2: Highlight `on` and `every` as keywords, and a field named after either as a field name
 - [x] Task 3: Pin folding, indentation and text-object captures over the realigned blocks
 - [x] Task 4: Give the VS Code grammar an executable scope test
-- [ ] Task 5: Highlight the kindless trigger's quoted name in VS Code
+- [x] Task 5: Highlight the kindless trigger's quoted name in VS Code
 - [ ] Task 6: Highlight `on` and `every` in VS Code only where their own operand follows
 
 ---

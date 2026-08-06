@@ -40,6 +40,8 @@ context "Ordering" {
 #     ^^^^^^^^^^^ keyword.control.emod
 #                 ^^^^^^^^^^^ entity.name.function.emod
       trigger "Review orders" {
+#     ^^^^^^^ keyword.control.emod
+#             ^^^^^^^^^^^^^^^ entity.name.function.emod - string.quoted.double.emod
         actor Customer
 #       ^^^^^ keyword.control.emod
 #             ^^^^^^^^ - entity.name.function.emod
@@ -47,3 +49,7 @@ context "Ordering" {
     }
   }
 }
+
+# Not a stray line: a half-typed declaration is the case under test.
+trigger
+# <------- keyword.control.emod

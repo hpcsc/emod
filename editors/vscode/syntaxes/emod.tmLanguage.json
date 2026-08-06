@@ -25,17 +25,8 @@
     "keyword-entity": {
       "patterns": [
         {
-          "comment": "trigger with source type and quoted entity name",
-          "match": "(?i)\\b(trigger)\\s+([A-Za-z_][A-Za-z0-9_]*)\\s+(\"[^\"]*\")",
-          "captures": {
-            "1": { "name": "keyword.control.emod" },
-            "2": { "name": "entity.name.function.emod" },
-            "3": { "name": "entity.name.function.emod" }
-          }
-        },
-        {
           "comment": "Keywords followed by quoted entity name",
-          "match": "(?i)\\b(model|actor|context|aggregate|slice)\\s+(\"[^\"]*\")",
+          "match": "(?i)\\b(model|actor|context|aggregate|slice|trigger)\\s+(\"[^\"]*\")",
           "captures": {
             "1": { "name": "keyword.control.emod" },
             "2": { "name": "entity.name.function.emod" }
@@ -43,7 +34,7 @@
         },
         {
           "comment": "Keywords followed by identifier entity name",
-          "match": "(?i)\\b(command|event|view|automation|translation|trigger)\\s+([A-Za-z_][A-Za-z0-9_]*)",
+          "match": "(?i)\\b(command|event|view|automation|translation)\\s+([A-Za-z_][A-Za-z0-9_]*)",
           "captures": {
             "1": { "name": "keyword.control.emod" },
             "2": { "name": "entity.name.function.emod" }
