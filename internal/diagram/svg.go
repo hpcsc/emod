@@ -69,9 +69,9 @@ func ExportSVG(model *ast.Model, _ Style) ([]byte, error) {
 			if s.Trigger.Actor != "" {
 				label = fmt.Sprintf("%s (%s)", s.Trigger.Name, s.Trigger.Actor)
 			}
-		b.WriteString(svgTriggerRect(x, y, boxWidth, boxHeight, fillTrigger, strokeTrigger, 5, s.Trigger.Description))
-		b.WriteString(svgText(x+boxWidth/2, y+boxHeight/2, label, 12, strokeTrigger))
-		nameToBox[s.Trigger.Name] = svgBox{x: x, y: y, w: boxWidth, h: boxHeight}
+			b.WriteString(svgTriggerRect(x, y, boxWidth, boxHeight, fillTrigger, strokeTrigger, 5, s.Trigger.Description))
+			b.WriteString(svgText(x+boxWidth/2, y+boxHeight/2, label, 12, strokeTrigger))
+			nameToBox[s.Trigger.Name] = svgBox{x: x, y: y, w: boxWidth, h: boxHeight}
 		}
 
 		// --- Commands (middle lane) ---
@@ -162,81 +162,33 @@ func ExportSVG(model *ast.Model, _ Style) ([]byte, error) {
 		return svgArrowBetween(view, reader)
 	}
 
+	// A translation's reads arrow is drawn into the external system box
+	// fronting its reactor, not the reactor itself.
+	reactorExternal := make(map[string]string)
 	for _, entry := range entries {
-		s := entry.slice
+		for _, tr := range entry.slice.Translations {
+			reactorExternal[tr.Name] = tr.ExternalSystem
+		}
+	}
 
-		// trigger -> command
-		if s.Trigger != nil {
-			if trigger, drawn := nameToBox[s.Trigger.Name]; drawn {
-				b.WriteString(readsArrow(s.Trigger.Reads, trigger))
-				for _, cmd := range s.Commands {
-					if command, drawn := nameToBox[cmd.Name]; drawn {
-						b.WriteString(svgArrowBetween(trigger, command))
-					}
+	for _, entry := range entries {
+		for _, edge := range SliceEdges(entry.slice) {
+			switch edge.Kind {
+			case EdgeTriggerReads, EdgeAutomationReads:
+				if reader, drawn := nameToBox[edge.To]; drawn {
+					b.WriteString(readsArrow(edge.From, reader))
 				}
-			}
-		}
 
-		// command -> event (via Flow entries)
-		for _, flow := range s.Flows {
-			command, commandDrawn := nameToBox[flow.CommandName]
-			evt, eventDrawn := nameToBox[flow.EventName]
-			if commandDrawn && eventDrawn {
-				b.WriteString(svgArrowBetween(command, evt))
-			}
-		}
-
-		// event -> view (via subscribes) — cross-slice lookup
-		for _, view := range s.Views {
-			viewBox, drawn := nameToBox[view.Name]
-			if !drawn {
-				continue
-			}
-			for _, sub := range view.Subscribes {
-				if evt, drawn := nameToBox[sub]; drawn {
-					b.WriteString(svgArrowBetween(evt, viewBox))
+			case EdgeTranslationReads:
+				if reader, drawn := nameToBox[reactorExternal[edge.To]]; drawn {
+					b.WriteString(readsArrow(edge.From, reader))
 				}
-			}
-		}
 
-		// event -> automation -> command — cross-slice lookup
-		for _, auto := range s.Automations {
-			automation, drawn := nameToBox[auto.Name]
-			if !drawn {
-				continue
-			}
-			b.WriteString(readsArrow(auto.Reads, automation))
-			if evt, drawn := nameToBox[auto.OnEvent]; drawn {
-				b.WriteString(svgArrowBetween(evt, automation))
-			}
-			if command, drawn := nameToBox[auto.Command]; drawn {
-				b.WriteString(svgArrowBetween(automation, command))
-			}
-		}
-
-		// Translation: ext sys -> reactor -> command/event
-		for _, tr := range s.Translations {
-			externalSystem, externalDrawn := nameToBox[tr.ExternalSystem]
-			reactor, reactorDrawn := nameToBox[tr.Name]
-			if !externalDrawn || !reactorDrawn {
-				continue
-			}
-
-			b.WriteString(readsArrow(tr.Reads, externalSystem))
-			b.WriteString(svgArrowBetween(externalSystem, reactor))
-			if tr.Command != "" {
-				if command, drawn := nameToBox[tr.Command]; drawn {
-					b.WriteString(svgArrowBetween(reactor, command))
-				}
-			}
-			// command -> event (translation implies command emits event, unless a
-			// flow already declares it and has drawn the arrow above)
-			if tr.Command != "" && tr.Event != nil && tr.Event.Name != "" &&
-				!declaresFlow(s, tr.Command, tr.Event.Name) {
-				command, commandDrawn := nameToBox[tr.Command]
-				evt, eventDrawn := nameToBox[tr.Event.Name]
-				if commandDrawn && eventDrawn {
-					b.WriteString(svgArrowBetween(command, evt))
+			default:
+				from, fromDrawn := nameToBox[edge.From]
+				to, toDrawn := nameToBox[edge.To]
+				if fromDrawn && toDrawn {
+					b.WriteString(svgArrowBetween(from, to))
 				}
 			}
 		}

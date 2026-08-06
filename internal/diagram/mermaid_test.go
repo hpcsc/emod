@@ -59,6 +59,7 @@ func timeframeSlotModel() *ast.Model {
 				Slices: []*ast.Slice{
 					{
 						Name:     "Borrow Copy",
+						NamePos:  ast.Position{Line: 5, Column: 5},
 						Trigger:  &ast.Trigger{Name: "Lending Desk", Actor: "Member"},
 						Commands: []*ast.Command{command("BorrowCopy")},
 						Events:   []*ast.Event{event("CopyBorrowed")},
@@ -77,6 +78,7 @@ func timeframeSlotModel() *ast.Model {
 					},
 					{
 						Name:     "Empty The Returns Bin",
+						NamePos:  ast.Position{Line: 20, Column: 5},
 						Trigger:  &ast.Trigger{Name: "ReturnsBinWatcher"},
 						Commands: []*ast.Command{command("ReturnCopy")},
 					},
@@ -84,6 +86,7 @@ func timeframeSlotModel() *ast.Model {
 			}},
 			Slices: []*ast.Slice{{
 				Name:     "Sweep Overdue Loans",
+				NamePos:  ast.Position{Line: 30, Column: 3},
 				Trigger:  &ast.Trigger{Name: "NightlySweep"},
 				Commands: []*ast.Command{command("RecallCopy")},
 				Events: []*ast.Event{
@@ -784,7 +787,7 @@ func TestExportMermaid(t *testing.T) {
 							Name: "PrioritizeOrder",
 							DecidesOn: &ast.DecidesOnClause{
 								Events: []string{"OrderPrioritized", "OrderFlagged"},
-								Predicate: ast.TagPredicate{
+								Predicate: &ast.TagPredicate{
 									Field:    "priority",
 									Operator: "==",
 									Value:    "high",

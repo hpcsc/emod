@@ -649,7 +649,7 @@ func TestExportDrawio(t *testing.T) {
 							Name: "PrioritizeOrder",
 							DecidesOn: &ast.DecidesOnClause{
 								Events: []string{"OrderPrioritized", "OrderFlagged"},
-								Predicate: ast.TagPredicate{
+								Predicate: &ast.TagPredicate{
 									Field:    "priority",
 									Operator: "==",
 									Value:    "high",

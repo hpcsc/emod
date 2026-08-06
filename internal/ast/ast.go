@@ -267,7 +267,7 @@ type TagPredicate struct {
 	ValuePos Position
 }
 
-func (TagPredicate) predicateNode() {}
+func (*TagPredicate) predicateNode() {}
 
 // LogicalExpr represents a logical AND/OR combination of two predicates.
 type LogicalExpr struct {
@@ -277,7 +277,7 @@ type LogicalExpr struct {
 	Right    PredicateExpr
 }
 
-func (LogicalExpr) predicateNode() {}
+func (*LogicalExpr) predicateNode() {}
 
 // NotExpr represents a negated predicate.
 type NotExpr struct {
@@ -285,12 +285,4 @@ type NotExpr struct {
 	Expr  PredicateExpr
 }
 
-func (NotExpr) predicateNode() {}
-
-// FieldRef represents a field reference in a predicate (e.g. tag.priority).
-type FieldRef struct {
-	Name    string
-	NamePos Position
-}
-
-func (FieldRef) predicateNode() {}
+func (*NotExpr) predicateNode() {}
