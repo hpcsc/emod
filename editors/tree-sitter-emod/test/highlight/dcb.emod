@@ -1,0 +1,34 @@
+# Marker lines name the highlight capture expected at the marked column of the
+# nearest source line above. An assertion only discriminates while another
+# highlighted token follows it on the same line; with none, the runner scans on
+# into later lines and accepts a capture found there. Every marked token below
+# is followed on its own line by a brace, an operator, a further keyword or a
+# trailing comment, and that is what makes the assertion mean anything.
+
+context "Fulfillment" mode dcb {
+#                     ^ keyword
+  slice "Authorize Payment" {
+    command AuthorizePayment {
+      decides_on {
+#     ^ keyword
+        events [OrderPlaced]
+#       ^ keyword
+        where tag(a = b) and not tag(c = d) or tag(e = f)
+#       ^ keyword
+#             ^ keyword
+#                   ^ operator
+#                        ^ keyword
+#                            ^ keyword
+#                                           ^ keyword
+      }
+    }
+
+    event PaymentAuthorized {
+      tags {
+#     ^ keyword
+        entity: customerId # the key cross-references a field of this event
+#             ^ operator
+      }
+    }
+  }
+}

@@ -60,11 +60,20 @@ module.exports = grammar({
       $.string,
     ),
 
-    // context "name" { aggregate "name" { ... } }
+    // context "name" [mode dcb] { aggregate "name" { ... } }
     context_definition: $ => seq(
       'context',
       $.string,
+      optional($.mode_clause),
       buildDescribedBlock($, $.invariant, $.aggregate_definition, $.slice_definition),
+    ),
+
+    // mode dcb | mode aggregate | mode mixed — the value is a free identifier
+    // so that `aggregate` here reads as the name of a mode, not as the
+    // declaration keyword, matching what checkIdentifierLike accepts.
+    mode_clause: $ => seq(
+      'mode',
+      $.any_identifier,
     ),
 
     // aggregate "name" { slice "name" { ... } }
@@ -130,22 +139,97 @@ module.exports = grammar({
       ']',
     ),
 
-    // command Name { fields { ... } }
+    // command Name { decides_on { ... } fields { ... } }
     command_definition: $ => seq(
       'command',
       $.identifier,
-      buildDescribedBlock($, $.fields_block),
+      buildDescribedBlock($, $.fields_block, $.decides_on_block),
     ),
 
-    // event Name { fields { ... } source external "..." }
+    // decides_on { events [Evt, Evt] where <predicate> }
+    decides_on_block: $ => seq(
+      'decides_on',
+      '{',
+      repeat(choice($.events_list, $.where_clause)),
+      '}',
+    ),
+
+    // events [Evt, Evt]
+    events_list: $ => seq(
+      'events',
+      '[',
+      optional(seq(
+        $.any_identifier,
+        repeat(seq(',', $.any_identifier)),
+      )),
+      ']',
+    ),
+
+    // where tag(a = b) and not (tag(c = d) or tag(e = "f"))
+    where_clause: $ => seq(
+      'where',
+      $._predicate,
+    ),
+
+    _predicate: $ => choice(
+      $.tag_predicate,
+      $.not_predicate,
+      $.logical_predicate,
+      $.parenthesized_predicate,
+    ),
+
+    // `not` outranks both binary operators so that `not X and Y` groups as
+    // `(not X) and Y`, which is how parseNotExpr recurses into its operand only.
+    not_predicate: $ => prec(3, seq(
+      'not',
+      $._predicate,
+    )),
+
+    logical_predicate: $ => choice(
+      prec.left(2, seq($._predicate, 'and', $._predicate)),
+      prec.left(1, seq($._predicate, 'or', $._predicate)),
+    ),
+
+    parenthesized_predicate: $ => seq(
+      '(',
+      $._predicate,
+      ')',
+    ),
+
+    // tag(key = fieldRef) — the value may also be a quoted literal
+    tag_predicate: $ => seq(
+      'tag',
+      '(',
+      $.any_identifier,
+      '=',
+      choice($.any_identifier, $.string),
+      ')',
+    ),
+
+    // event Name { tags { ... } fields { ... } source external "..." }
     event_definition: $ => seq(
       'event',
       $.identifier,
       buildDescribedBlock(
         $,
+        $.tags_block,
         $.fields_block,
         seq('source', 'external', $.string),
       ),
+    ),
+
+    // tags { key: fieldRef ... }
+    tags_block: $ => seq(
+      'tags',
+      '{',
+      repeat($.tag_entry),
+      '}',
+    ),
+
+    tag_entry: $ => seq(
+      $.any_identifier,
+      ':',
+      $.any_identifier,
     ),
 
     // fields { name type [modifier] ... }

@@ -1,0 +1,26 @@
+# SYNTAX TEST "source.emod"
+
+context "Lending" {
+  invariant OneCopyPerLoan "A copy is on loan to at most one member"
+# ^^^^^^^^^ keyword.control.emod
+  aggregate "Loan" {
+    slice "Borrow a Copy" {
+      description "Lending a copy to a member"
+#     ^^^^^^^^^^^ keyword.control.emod
+      spec "borrows a free copy" {
+#     ^^^^ keyword.control.emod
+        given [CopyReturned]
+#       ^^^^^ keyword.control.emod
+        when BorrowCopy
+#       ^^^^ keyword.control.emod
+        then [CopyBorrowed]
+#       ^^^^ keyword.control.emod
+      }
+      spec "rejects a second borrow" {
+        then rejected OneCopyPerLoan
+#       ^^^^ keyword.control.emod
+#            ^^^^^^^^ keyword.control.emod
+      }
+    }
+  }
+}

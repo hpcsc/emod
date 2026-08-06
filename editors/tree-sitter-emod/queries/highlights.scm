@@ -18,8 +18,11 @@
 ; --- Keywords ---
 ; Every keyword this file colours, listed by hand: nothing derives the list from
 ; the grammar, so a keyword the grammar defines stays uncoloured until it is
-; added here.
+; added here. TestEditorKeywordCoverage
+; (test/queries/keywords_test.go) requires the list to name every spelling
+; internal/lexer defines.
 [
+  "emod"
   "model"
   "actor"
   "context"
@@ -41,6 +44,22 @@
   "target"
   "on"
   "every"
+  "mode"
+  "tags"
+  "decides_on"
+  "events"
+  "where"
+  "tag"
+  "and"
+  "or"
+  "not"
+  "description"
+  "invariant"
+  "spec"
+  "given"
+  "when"
+  "then"
+  "rejected"
 ] @keyword
 
 ; --- Entity names (mapped to @function) ---
@@ -83,7 +102,7 @@
   . (any_identifier) @type.qualifier)
 
 ; --- Operators ---
-["->" ":"] @operator
+["->" ":" "="] @operator
 
 ; --- Punctuation ---
 ["{" "}" "[" "]" ","] @punctuation

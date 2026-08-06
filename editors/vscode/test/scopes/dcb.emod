@@ -1,0 +1,34 @@
+# SYNTAX TEST "source.emod"
+
+# The mode's own value is a free identifier, so only the keyword introducing it
+# reads as a keyword - dcb, aggregate and mixed are names the lexer never owns.
+context "Fulfillment" mode dcb {
+#                     ^^^^ keyword.control.emod
+#                          ^^^ - keyword.control.emod
+  slice "Authorize Payment" {
+    command AuthorizePayment {
+      decides_on {
+#     ^^^^^^^^^^ keyword.control.emod
+        events [OrderPlaced]
+#       ^^^^^^ keyword.control.emod
+        where tag(a = b) and not tag(c = d) or tag(e = f)
+#       ^^^^^ keyword.control.emod
+#             ^^^ keyword.control.emod
+#                   ^ keyword.operator.emod
+#                        ^^^ keyword.control.emod
+#                            ^^^ keyword.control.emod
+#                                ^^^ keyword.control.emod
+#                                           ^^ keyword.control.emod
+#                                              ^^^ keyword.control.emod
+      }
+    }
+
+    event PaymentAuthorized {
+      tags {
+#     ^^^^ keyword.control.emod
+        entity: customerId
+#             ^ keyword.operator.emod
+      }
+    }
+  }
+}

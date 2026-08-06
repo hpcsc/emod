@@ -1,0 +1,311 @@
+========================
+Context declaring dcb mode over a direct slice
+========================
+
+context "Fulfillment" mode dcb {
+  slice "Place Order" {
+    command PlaceOrder {
+      decides_on {
+        events [OrderPlaced]
+        where tag(entity = customerId)
+      }
+      fields {
+        customerId string required
+      }
+    }
+  }
+}
+
+---
+
+(source_file
+  (context_definition
+    (string)
+    (mode_clause
+      (any_identifier))
+    (slice_definition
+      (string)
+      (command_definition
+        (identifier)
+        (decides_on_block
+          (events_list
+            (any_identifier))
+          (where_clause
+            (tag_predicate
+              (any_identifier)
+              (any_identifier))))
+        (fields_block
+          (field_line
+            (any_identifier)
+            (any_identifier)
+            (any_identifier)))))))
+
+========================
+Mode naming a declaration keyword
+========================
+
+context "Ordering" mode aggregate {
+  aggregate "Order" {}
+}
+
+---
+
+(source_file
+  (context_definition
+    (string)
+    (mode_clause
+      (any_identifier))
+    (aggregate_definition
+      (string))))
+
+========================
+Event carrying a tags block
+========================
+
+context "Fulfillment" mode dcb {
+  slice "Ship Order" {
+    event OrderShipped {
+      tags {
+        entity  : customerId
+        category: orderType
+      }
+      fields {
+        orderId string required
+      }
+    }
+  }
+}
+
+---
+
+(source_file
+  (context_definition
+    (string)
+    (mode_clause
+      (any_identifier))
+    (slice_definition
+      (string)
+      (event_definition
+        (identifier)
+        (tags_block
+          (tag_entry
+            (any_identifier)
+            (any_identifier))
+          (tag_entry
+            (any_identifier)
+            (any_identifier)))
+        (fields_block
+          (field_line
+            (any_identifier)
+            (any_identifier)
+            (any_identifier)))))))
+
+========================
+Predicate binding and tighter than or
+========================
+
+context "C" mode dcb {
+  slice "S" {
+    command Decide {
+      decides_on {
+        events [Opened]
+        where tag(a = x) or tag(b = y) and tag(c = z)
+      }
+    }
+  }
+}
+
+---
+
+(source_file
+  (context_definition
+    (string)
+    (mode_clause
+      (any_identifier))
+    (slice_definition
+      (string)
+      (command_definition
+        (identifier)
+        (decides_on_block
+          (events_list
+            (any_identifier))
+          (where_clause
+            (logical_predicate
+              (tag_predicate
+                (any_identifier)
+                (any_identifier))
+              (logical_predicate
+                (tag_predicate
+                  (any_identifier)
+                  (any_identifier))
+                (tag_predicate
+                  (any_identifier)
+                  (any_identifier))))))))))
+
+========================
+Negation applying to its operand alone
+========================
+
+context "C" mode dcb {
+  slice "S" {
+    command Decide {
+      decides_on {
+        events [Opened, Closed]
+        where not (tag(a = x) or tag(b = "premium")) and tag(c = z)
+      }
+    }
+  }
+}
+
+---
+
+(source_file
+  (context_definition
+    (string)
+    (mode_clause
+      (any_identifier))
+    (slice_definition
+      (string)
+      (command_definition
+        (identifier)
+        (decides_on_block
+          (events_list
+            (any_identifier)
+            (any_identifier))
+          (where_clause
+            (logical_predicate
+              (not_predicate
+                (parenthesized_predicate
+                  (logical_predicate
+                    (tag_predicate
+                      (any_identifier)
+                      (any_identifier))
+                    (tag_predicate
+                      (any_identifier)
+                      (string)))))
+              (tag_predicate
+                (any_identifier)
+                (any_identifier)))))))))
+
+========================
+decides_on entries written out of canonical order
+========================
+
+context "C" mode dcb {
+  slice "S" {
+    command Decide {
+      decides_on {
+        where tag(a = x)
+        events [Opened]
+      }
+    }
+  }
+}
+
+---
+
+(source_file
+  (context_definition
+    (string)
+    (mode_clause
+      (any_identifier))
+    (slice_definition
+      (string)
+      (command_definition
+        (identifier)
+        (decides_on_block
+          (where_clause
+            (tag_predicate
+              (any_identifier)
+              (any_identifier)))
+          (events_list
+            (any_identifier)))))))
+
+========================
+Fields named after every DCB keyword
+========================
+
+context "C" {
+  aggregate "A" {
+    slice "Core" {
+      fields {
+        mode       string required
+        tags       string required
+        decides_on string required
+        where      string required
+        events     string required
+        tag        string required
+        and        string required
+        or         string required
+        not        string required
+      }
+    }
+  }
+}
+
+---
+
+(source_file
+  (context_definition
+    (string)
+    (aggregate_definition
+      (string)
+      (slice_definition
+        (string)
+        (fields_block
+          (field_line
+            (any_identifier)
+            (any_identifier)
+            (any_identifier))
+          (field_line
+            (any_identifier)
+            (any_identifier)
+            (any_identifier))
+          (field_line
+            (any_identifier)
+            (any_identifier)
+            (any_identifier))
+          (field_line
+            (any_identifier)
+            (any_identifier)
+            (any_identifier))
+          (field_line
+            (any_identifier)
+            (any_identifier)
+            (any_identifier))
+          (field_line
+            (any_identifier)
+            (any_identifier)
+            (any_identifier))
+          (field_line
+            (any_identifier)
+            (any_identifier)
+            (any_identifier))
+          (field_line
+            (any_identifier)
+            (any_identifier)
+            (any_identifier))
+          (field_line
+            (any_identifier)
+            (any_identifier)
+            (any_identifier)))))))
+
+========================
+Tag predicate missing its operator
+:error
+========================
+
+context "C" mode dcb {
+  slice "S" {
+    command Decide {
+      decides_on {
+        events [Opened]
+        where tag(a x)
+      }
+    }
+  }
+}
+
+---
+
+(ERROR)

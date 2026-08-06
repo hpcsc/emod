@@ -93,7 +93,8 @@
       ]
     },
     "keywords": {
-      "match": "(?i)\\b(model|actor|context|aggregate|slice|command|event|fields|flow|trigger|view|automation|translation|subscribes|reads|source|external|external_system|target)\\b",
+      "comment": "Every lexer keyword except on and every, which #activations colours case-sensitively so a field named after one stays a field. Longer spellings precede the shorter ones they contain (events before event, tags before tag) to keep the alternation readable; the surrounding \\b makes the order immaterial.",
+      "match": "(?i)\\b(model|actor|context|aggregate|slice|command|events|event|fields|flow|trigger|view|automation|translation|subscribes|reads|source|external_system|external|target|mode|tags|tag|decides_on|where|and|or|not|emod|description|invariant|spec|given|when|then|rejected)\\b",
       "name": "keyword.control.emod"
     },
     "field-modifiers": {
@@ -105,7 +106,7 @@
       "name": "storage.type.emod"
     },
     "operators": {
-      "match": "(->|:)",
+      "match": "(->|:|=)",
       "name": "keyword.operator.emod"
     },
     "punctuation": {
