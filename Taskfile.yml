@@ -77,11 +77,14 @@ tasks:
       - npm test
 
   test:grammar:
-    desc: Run the tree-sitter grammar corpus tests
+    desc: Run the tree-sitter grammar corpus, highlight and editor query tests
     dir: editors/tree-sitter-emod
     cmds:
       - tree-sitter generate
       - tree-sitter test
+      # -count=1 because the query files and grammar.js are inputs the Go test
+      # cache never sees: it reaches them through the tree-sitter CLI.
+      - go test -count=1 -tags grammar ./test/queries/...
 
   test:e2e:viewer:
     desc: Run viewer browser e2e tests against the static web bundle

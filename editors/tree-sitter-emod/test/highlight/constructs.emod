@@ -66,6 +66,12 @@ context "Ordering" {
         command PlaceOrder
       }
 
+      automation ArchiveOrders {
+        every "0 9 * * *"
+        reads OrderSummary
+        command PlaceOrder
+      }
+
       translation ImportOrder {
 #                 ^ function
         external_system "Legacy" # names a foreign system, not a declaration
