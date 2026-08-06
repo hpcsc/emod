@@ -121,6 +121,45 @@ context "Reservations" {
       }
     }
 
+    # Slice 6: Automation Pattern — woken by a schedule
+    slice "Expire Unconfirmed Reservations" {
+      automation UnconfirmedReservationExpirer {
+        every "0 2 * * *"
+        reads UnconfirmedReservationsView
+        command ExpireReservation
+      }
+
+      command ExpireReservation {
+        fields {
+          reservationId string required
+        }
+      }
+
+      event ReservationExpired {
+        fields {
+          reservationId string    required
+          roomId        string    required
+          expiredAt     timestamp required
+        }
+      }
+
+      flow {
+        command -> event: ExpireReservation -> ReservationExpired
+      }
+    }
+
+    # Slice 7: View Pattern — the expirer's todo list
+    slice "View Unconfirmed Reservations" {
+      view UnconfirmedReservationsView {
+        fields {
+          reservationId string    required
+          roomId        string    required
+          reservedAt    timestamp required
+        }
+        subscribes [RoomReserved, ReservationExpired]
+      }
+    }
+
   }
 }
 

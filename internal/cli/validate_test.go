@@ -34,10 +34,8 @@ func TestValidate(t *testing.T) {
 		require.NoError(t, err)
 	})
 
-	t.Run("returns no error for each model the repository ships as valid", func(t *testing.T) {
+	t.Run("returns no error for each parser fixture the repository ships as valid", func(t *testing.T) {
 		for _, shipped := range []string{
-			"examples/all_patterns.emod",
-			"examples/dcb_model.emod",
 			"internal/parser/testdata/all_patterns.emod",
 			"internal/parser/testdata/minimal.emod",
 			"internal/parser/testdata/multi_context.emod",
@@ -48,6 +46,45 @@ func TestValidate(t *testing.T) {
 				require.NoError(t, err)
 			})
 		}
+	})
+
+	t.Run("examples", func(t *testing.T) {
+		authoredToValidate, authoredToFail := examplePaths(t)
+
+		t.Run("returns no error for every example authored to validate", func(t *testing.T) {
+			for _, path := range authoredToValidate {
+				t.Run(filepath.Base(path), func(t *testing.T) {
+					err := cli.RunValidate(path, "text")
+
+					require.NoError(t, err)
+				})
+			}
+		})
+
+		t.Run("returns the diagnostics every example authored to fail demonstrates", func(t *testing.T) {
+			demonstrated := map[string][]string{
+				"error_diagnostics_test.emod": {
+					`event "GuestCheckedOut" does not exist`,
+					`[orphan-command] command "SendEmail" is orphaned`,
+				},
+			}
+
+			for _, path := range authoredToFail {
+				name := filepath.Base(path)
+				t.Run(name, func(t *testing.T) {
+					expected, declared := demonstrated[name]
+					require.True(t, declared, "list the diagnostics %s is authored to demonstrate", name)
+
+					err := cli.RunValidate(path, "text")
+
+					require.Error(t, err)
+					require.Contains(t, err.Error(), path)
+					for _, diagnostic := range expected {
+						require.Contains(t, err.Error(), diagnostic)
+					}
+				})
+			}
+		})
 	})
 
 	t.Run("returns error for invalid input", func(t *testing.T) {
@@ -731,6 +768,31 @@ context "Orders" {
 		require.Contains(t, err.Error(), path)
 		require.Contains(t, err.Error(), ":1:")
 	})
+}
+
+func examplePaths(t *testing.T) (authoredToValidate, authoredToFail []string) {
+	t.Helper()
+	const dir = "../../examples"
+
+	entries, err := os.ReadDir(dir)
+	require.NoError(t, err)
+
+	for _, entry := range entries {
+		name := entry.Name()
+		if filepath.Ext(name) != ".emod" {
+			continue
+		}
+		path := filepath.Join(dir, name)
+		if strings.HasSuffix(name, "_test.emod") {
+			authoredToFail = append(authoredToFail, path)
+			continue
+		}
+		authoredToValidate = append(authoredToValidate, path)
+	}
+	require.NotEmpty(t, authoredToValidate)
+	require.NotEmpty(t, authoredToFail)
+
+	return authoredToValidate, authoredToFail
 }
 
 func writeTemp(t *testing.T, name, content string) string {

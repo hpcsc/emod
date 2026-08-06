@@ -1,7 +1,7 @@
 # US-011: Learn the realignment from examples and the reference
 
 ## Progress
-- [ ] Task 1: Show the realigned automation in the examples and hold them to `emod validate`
+- [x] Task 1: Show the realigned automation in the examples and hold them to `emod validate`
 - [ ] Task 2: Document the kindless trigger and the realigned automation in the reference's pattern sections
 - [ ] Task 3: Correct the reference's cross-references and remaining activation prose
 - [ ] Task 4: Put the new forms in the README quick-start and validate every fenced model
