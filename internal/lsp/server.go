@@ -7,10 +7,7 @@ import (
 	"strings"
 
 	"github.com/hpcsc/emod/internal/formatter"
-	"github.com/hpcsc/emod/internal/lexer"
-	"github.com/hpcsc/emod/internal/linter"
-	"github.com/hpcsc/emod/internal/parser"
-	"github.com/hpcsc/emod/internal/validator"
+	"github.com/hpcsc/emod/internal/oracle"
 )
 
 // Server is an LSP server that reads JSON-RPC messages from an injected io.Reader,
@@ -99,8 +96,8 @@ func (s *Server) handleInitialize(msg *Message) error {
 	triggerChars := []string{" "}
 	result := InitializeResult{
 		Capabilities: ServerCapabilities{
-			TextDocumentSync:           SyncFull,
-			CompletionProvider:         &CompletionOptions{
+			TextDocumentSync: SyncFull,
+			CompletionProvider: &CompletionOptions{
 				TriggerCharacters: triggerChars,
 			},
 			DefinitionProvider:         true,
@@ -353,10 +350,8 @@ func (s *Server) handleFormatting(msg *Message) error {
 	}
 
 	// Lex → parse; if either produces errors, return empty TextEdit array.
-	tokens, scanErrs := lexer.Scan(doc, uri)
-	p := parser.New(tokens, uri)
-	model, parseErrs := p.Parse()
-	if len(scanErrs) > 0 || len(parseErrs) > 0 {
+	model, parseDiags := oracle.Parse(doc, uri)
+	if len(parseDiags) > 0 {
 		return s.writeMessage(&Message{
 			JSONRPC: Version,
 			ID:      msg.ID,
@@ -393,17 +388,7 @@ func (s *Server) handleFormatting(msg *Message) error {
 // pushDiagnostics runs the lex→parse→validate→lint pipeline on the given text
 // and sends a textDocument/publishDiagnostics notification with the results.
 func (s *Server) pushDiagnostics(uri, text string) {
-	tokens, diags := lexer.Scan(text, uri)
-
-	p := parser.New(tokens, uri)
-	model, parserDiags := p.Parse()
-	diags = append(diags, parserDiags...)
-
-	validatorDiags := validator.Validate(model)
-	diags = append(diags, validatorDiags...)
-
-	lintDiags := linter.Lint(model)
-	diags = append(diags, lintDiags...)
+	_, diags := oracle.Run(text, uri)
 
 	lspDiags := ConvertDiagnostics(uri, diags)
 

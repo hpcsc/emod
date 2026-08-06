@@ -12,10 +12,7 @@ import (
 	"github.com/hpcsc/emod/internal/export"
 	"github.com/hpcsc/emod/internal/formatter"
 	"github.com/hpcsc/emod/internal/importer"
-	"github.com/hpcsc/emod/internal/lexer"
-	"github.com/hpcsc/emod/internal/linter"
-	"github.com/hpcsc/emod/internal/parser"
-	"github.com/hpcsc/emod/internal/validator"
+	"github.com/hpcsc/emod/internal/oracle"
 )
 
 // exportFunc is a function that serializes a model and diagnostics into JSON.
@@ -44,12 +41,7 @@ func runPipeline(source string, fn exportFunc) (result []byte, err error) {
 		}
 	}()
 
-	tokens, diags := lexer.Scan(source, "input.emod")
-	p := parser.New(tokens, "input.emod")
-	model, parserDiags := p.Parse()
-	diags = append(diags, parserDiags...)
-	diags = append(diags, validator.Validate(model)...)
-	diags = append(diags, linter.Lint(model)...)
+	model, diags := oracle.Run(source, "input.emod")
 
 	return fn(model, diags)
 }

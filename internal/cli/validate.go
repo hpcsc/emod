@@ -2,7 +2,6 @@ package cli
 
 import (
 	"fmt"
-	"os"
 
 	"github.com/hpcsc/emod/internal/oracle"
 )
@@ -20,23 +19,12 @@ func RunValidate(path, format string) error {
 		}
 	}
 
-	if path == "" {
-		return &LintError{
-			Message:  "validate requires exactly one file argument",
-			ExitCode: 1,
-			Cause:    ErrMissingFileArgument,
-		}
-	}
-
-	source, err := os.ReadFile(path)
+	source, err := readSourceFile("validate", path)
 	if err != nil {
-		return &LintError{
-			Message:  fmt.Sprintf("reading %s: %s", path, err),
-			ExitCode: 1,
-		}
+		return err
 	}
 
-	diagnostics := oracle.Check(string(source), path)
+	diagnostics := oracle.Check(source, path)
 
 	if format == "json" {
 		return formatJSON(diagnostics)

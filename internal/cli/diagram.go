@@ -14,10 +14,7 @@ import (
 	"github.com/hpcsc/emod/internal/diagnostic"
 	"github.com/hpcsc/emod/internal/diagram"
 	"github.com/hpcsc/emod/internal/export"
-	"github.com/hpcsc/emod/internal/lexer"
-	"github.com/hpcsc/emod/internal/linter"
-	"github.com/hpcsc/emod/internal/parser"
-	"github.com/hpcsc/emod/internal/validator"
+	"github.com/hpcsc/emod/internal/oracle"
 	"github.com/hpcsc/emod/internal/viewer"
 )
 
@@ -30,33 +27,12 @@ import (
 // Lint warnings still produce the diagram but with exit code 1.
 // style controls the layout strategy (auto, projected, dcb).
 func RunDiagram(path, outputPath, format string, style diagram.Style) error {
-	if path == "" {
-		return &LintError{
-			Message:  "diagram requires exactly one file argument",
-			ExitCode: 1,
-			Cause:    ErrMissingFileArgument,
-		}
-	}
-
-	source, err := os.ReadFile(path)
+	source, err := readSourceFile("diagram", path)
 	if err != nil {
-		return &LintError{
-			Message:  fmt.Sprintf("reading %s: %s", path, err),
-			ExitCode: 1,
-		}
+		return err
 	}
 
-	tokens, diagnostics := lexer.Scan(string(source), path)
-
-	p := parser.New(tokens, path)
-	model, parserDiags := p.Parse()
-	diagnostics = append(diagnostics, parserDiags...)
-
-	validatorDiags := validator.Validate(model)
-	diagnostics = append(diagnostics, validatorDiags...)
-
-	lintDiags := linter.Lint(model)
-	diagnostics = append(diagnostics, lintDiags...)
+	model, diagnostics := oracle.Run(source, path)
 
 	// Check for errors that prevent diagram generation
 	hasErrors := false
@@ -177,14 +153,7 @@ func RunDiagramServe(ctx context.Context, path string, launchBrowser bool) error
 		if err != nil {
 			fmt.Fprintln(os.Stderr, err)
 		} else {
-			tokens, diagnostics := lexer.Scan(string(source), path)
-
-			p := parser.New(tokens, path)
-			model, parserDiags := p.Parse()
-			diagnostics = append(diagnostics, parserDiags...)
-
-			diagnostics = append(diagnostics, validator.Validate(model)...)
-			diagnostics = append(diagnostics, linter.Lint(model)...)
+			model, diagnostics := oracle.Run(string(source), path)
 
 			for _, d := range diagnostics {
 				fmt.Fprintln(os.Stderr, d.String())

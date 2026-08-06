@@ -4,13 +4,11 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"os"
 	"strings"
 
 	"github.com/hpcsc/emod/internal/diagnostic"
-	"github.com/hpcsc/emod/internal/lexer"
 	"github.com/hpcsc/emod/internal/linter"
-	"github.com/hpcsc/emod/internal/parser"
+	"github.com/hpcsc/emod/internal/oracle"
 )
 
 // Commands report these conditions so callers can branch on the cause rather
@@ -112,31 +110,12 @@ func RunLint(path, format string) error {
 		}
 	}
 
-	if path == "" {
-		return &LintError{
-			Message:  "lint requires exactly one file argument",
-			ExitCode: 1,
-			Cause:    ErrMissingFileArgument,
-		}
-	}
-
-	source, err := os.ReadFile(path)
+	source, err := readSourceFile("lint", path)
 	if err != nil {
-		return &LintError{
-			Message:  fmt.Sprintf("reading %s: %s", path, err),
-			ExitCode: 1,
-		}
+		return err
 	}
 
-	tokens, diagnostics := lexer.Scan(string(source), path)
-
-	p := parser.New(tokens, path)
-	model, parserDiags := p.Parse()
-	diagnostics = append(diagnostics, parserDiags...)
-
-	if len(diagnostics) == 0 {
-		diagnostics = linter.Lint(model)
-	}
+	diagnostics := oracle.Check(source, path)
 
 	if format == "json" {
 		return formatJSON(diagnostics)

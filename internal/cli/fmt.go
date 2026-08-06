@@ -7,8 +7,7 @@ import (
 	"strings"
 
 	"github.com/hpcsc/emod/internal/formatter"
-	"github.com/hpcsc/emod/internal/lexer"
-	"github.com/hpcsc/emod/internal/parser"
+	"github.com/hpcsc/emod/internal/oracle"
 )
 
 func RunFmt(path string, check bool) error {
@@ -21,11 +20,7 @@ func RunFmt(path string, check bool) error {
 		return fmt.Errorf("reading %s: %w", path, err)
 	}
 
-	tokens, diagnostics := lexer.Scan(string(source), path)
-
-	p := parser.New(tokens, path)
-	model, parserDiags := p.Parse()
-	diagnostics = append(diagnostics, parserDiags...)
+	model, diagnostics := oracle.Parse(string(source), path)
 
 	if len(diagnostics) > 0 {
 		var sb strings.Builder

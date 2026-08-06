@@ -116,7 +116,7 @@ context "Fulfillment" mode dcb {
 
     event PaymentAuthorized {
       tags {
-        entity: customerId
+        entity: paymentId
       }
       fields {
         paymentId string required
@@ -312,11 +312,20 @@ context "Orders" {
 context "Orders" {
   aggregate "Order" {
     slice "Update Order" {
+      command PlaceOrder {
+        fields {
+          orderId string required
+          reason  string required
+        }
+      }
       event OrderUpdated {
         fields {
           orderId string required
           reason  string required
         }
+      }
+      flow {
+        command -> event: PlaceOrder -> OrderUpdated
       }
     }
   }
@@ -346,10 +355,18 @@ context "Orders" {
 context "Orders" {
   aggregate "Order" {
     slice "Events" {
+      command PlaceOrder {
+        fields {
+          orderId string required
+        }
+      }
       event SingleIdEvent {
         fields {
           orderId string required
         }
+      }
+      flow {
+        command -> event: PlaceOrder -> SingleIdEvent
       }
     }
   }
@@ -587,6 +604,17 @@ func TestLintExplain(t *testing.T) {
 		require.Regexp(t, `\breads\b`, output)
 	})
 
+	t.Run("validator-emitted orphan rules print descriptions and return no error", func(t *testing.T) {
+		for _, rule := range []string{"orphan-command", "orphan-event"} {
+			output := captureStdout(t, func() {
+				err := cli.RunLintExplain(rule)
+				require.NoError(t, err)
+			})
+
+			require.Contains(t, output, "flow")
+		}
+	})
+
 	t.Run("unknown rule returns error", func(t *testing.T) {
 		err := cli.RunLintExplain("dcb/nonexistent")
 
@@ -597,6 +625,8 @@ func TestLintExplain(t *testing.T) {
 
 	t.Run("all rules have descriptions", func(t *testing.T) {
 		rules := []string{
+			"orphan-command",
+			"orphan-event",
 			"state-obsession",
 			"property-sourcing",
 			"command-in-disguise",

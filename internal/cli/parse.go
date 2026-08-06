@@ -5,13 +5,14 @@ import (
 	"os"
 
 	"github.com/hpcsc/emod/internal/ast"
-	"github.com/hpcsc/emod/internal/lexer"
-	"github.com/hpcsc/emod/internal/parser"
+	"github.com/hpcsc/emod/internal/oracle"
 )
 
-func parseModelFile(command, path string) (*ast.Model, error) {
+// readSourceFile reads the model source at path, reporting a missing argument
+// or read failure as a LintError named after the command.
+func readSourceFile(command, path string) (string, error) {
 	if path == "" {
-		return nil, &LintError{
+		return "", &LintError{
 			Message:  fmt.Sprintf("%s requires exactly one file argument", command),
 			ExitCode: 1,
 			Cause:    ErrMissingFileArgument,
@@ -20,17 +21,22 @@ func parseModelFile(command, path string) (*ast.Model, error) {
 
 	source, err := os.ReadFile(path)
 	if err != nil {
-		return nil, &LintError{
+		return "", &LintError{
 			Message:  fmt.Sprintf("reading %s: %s", path, err),
 			ExitCode: 1,
 		}
 	}
 
-	tokens, diagnostics := lexer.Scan(string(source), path)
+	return string(source), nil
+}
 
-	model, parserDiags := parser.New(tokens, path).Parse()
-	diagnostics = append(diagnostics, parserDiags...)
+func parseModelFile(command, path string) (*ast.Model, error) {
+	source, err := readSourceFile(command, path)
+	if err != nil {
+		return nil, err
+	}
 
+	model, diagnostics := oracle.Parse(source, path)
 	if len(diagnostics) > 0 {
 		return nil, formatText(diagnostics)
 	}

@@ -7,10 +7,7 @@ import (
 	"github.com/hpcsc/emod/internal/ast"
 	"github.com/hpcsc/emod/internal/diagnostic"
 	"github.com/hpcsc/emod/internal/export"
-	"github.com/hpcsc/emod/internal/lexer"
-	"github.com/hpcsc/emod/internal/linter"
-	"github.com/hpcsc/emod/internal/parser"
-	"github.com/hpcsc/emod/internal/validator"
+	"github.com/hpcsc/emod/internal/oracle"
 )
 
 // RunExport reads the file at path, lexes and parses it, validates and lints,
@@ -28,33 +25,12 @@ func RunExport(path, format string) error {
 		}
 	}
 
-	if path == "" {
-		return &LintError{
-			Message:  "export requires exactly one file argument",
-			ExitCode: 1,
-			Cause:    ErrMissingFileArgument,
-		}
-	}
-
-	source, err := os.ReadFile(path)
+	source, err := readSourceFile("export", path)
 	if err != nil {
-		return &LintError{
-			Message:  fmt.Sprintf("reading %s: %s", path, err),
-			ExitCode: 1,
-		}
+		return err
 	}
 
-	tokens, diags := lexer.Scan(string(source), path)
-
-	p := parser.New(tokens, path)
-	model, parserDiags := p.Parse()
-	diags = append(diags, parserDiags...)
-
-	validatorDiags := validator.Validate(model)
-	diags = append(diags, validatorDiags...)
-
-	lintDiags := linter.Lint(model)
-	diags = append(diags, lintDiags...)
+	model, diags := oracle.Run(source, path)
 
 	switch format {
 	case "json":
