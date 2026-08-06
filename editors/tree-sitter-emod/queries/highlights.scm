@@ -16,7 +16,9 @@
 (string) @string
 
 ; --- Keywords ---
-; All DSL keywords
+; Every keyword this file colours, listed by hand: nothing derives the list from
+; the grammar, so a keyword the grammar defines stays uncoloured until it is
+; added here.
 [
   "model"
   "actor"
@@ -37,6 +39,8 @@
   "external"
   "external_system"
   "target"
+  "on"
+  "every"
 ] @keyword
 
 ; --- Entity names (mapped to @function) ---
@@ -57,18 +61,26 @@
 (automation_definition (identifier) @function)
 (translation_definition (identifier) @function)
 
-; --- Field types ---
+; --- Field lines: name, type, modifier ---
+; The anchors are not redundant: unanchored, each pattern also matches every
+; later identifier on the line, so one token carries up to three captures and
+; the consumer's precedence rule, not this file, picks the winner.
+; The (comment)* steps are not redundant either: an anchor skips only anonymous
+; nodes, and a comment written mid-line parses as a named child of field_line.
 (field_line
-  (any_identifier) ; field name
-  (any_identifier) @type
-  (#match? @type "^(string|date|timestamp|int)$"))
+  . (any_identifier) @variable.member)
 
-; --- Field modifiers ---
 (field_line
-  (any_identifier) ; field name
-  (any_identifier) ; field type
-  (any_identifier) @type.qualifier
-  (#match? @type.qualifier "^(required|optional)$"))
+  . (any_identifier)
+  (comment)*
+  . (any_identifier) @type)
+
+(field_line
+  . (any_identifier)
+  (comment)*
+  . (any_identifier)
+  (comment)*
+  . (any_identifier) @type.qualifier)
 
 ; --- Operators ---
 ["->" ":"] @operator

@@ -1,0 +1,39 @@
+# Marker lines name the highlight capture expected at the marked column of the
+# nearest source line above. An assertion only discriminates while another
+# highlighted token follows it on the same line; with none, the runner scans on
+# into later lines and accepts a capture found there. The trailing comments
+# below are that guard: drop one and its assertion passes on any capture.
+
+context "Ordering" {
+  aggregate "Order" {
+    slice "Placement" {
+      automation NotifyCustomer {
+        on OrderPlaced # an activation event carries no capture of its own
+#       ^ keyword
+        every "0 9 * * *"
+#       ^ keyword
+        reads OrderSummary
+        command PlaceOrder
+      }
+
+      command RecordReminder {
+        fields {
+          on string required
+#         ^ variable.member
+          every string required
+#         ^ variable.member
+
+          notified on required
+#                  ^ type
+          scheduled every required
+#                   ^ type
+
+          flagged string on # a field's modifier is the line's last token
+#                        ^ type.qualifier
+          repeats string every # a field's modifier is the line's last token
+#                        ^ type.qualifier
+        }
+      }
+    }
+  }
+}

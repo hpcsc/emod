@@ -28,8 +28,21 @@ context "Ordering" {
         fields {
 #       ^ keyword
           orderId string required # required is a modifier, not a second type
+#         ^ variable.member
 #                 ^ type
 #                        ^ type.qualifier
+          roomId RoomID required # RoomID is a domain type, not a built-in one
+#         ^ variable.member
+#                ^ type
+#                       ^ type.qualifier
+          shippedAt # a comment may interrupt a field line between its parts
+#         ^ variable.member
+          timestamp required # this row completes the field line above it
+#         ^ type
+#                   ^ type.qualifier
+          quantity int # a modifier-less line ends at its type
+#         ^ variable.member
+#                  ^ type
         }
       }
 
