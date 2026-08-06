@@ -2864,7 +2864,10 @@ func TestLint(t *testing.T) {
 			require.False(t, found, "dcb/orphan-tag-key should not fire when all tag keys are used in predicates")
 		})
 
-		t.Run("multiple orphan keys each produce separate diagnostics", func(t *testing.T) {
+		t.Run("multiple orphan keys each produce separate diagnostics in declaration order", func(t *testing.T) {
+			// "source" is declared after "region" in the alphabet but before it
+			// in the file, so ordering by name instead of by declaration —
+			// or leaving Go's randomised map order in place — fails here.
 			model := &ast.Model{
 				Contexts: []*ast.Context{
 					{
@@ -2883,8 +2886,19 @@ func TestLint(t *testing.T) {
 										},
 										Tags: []ast.TagEntry{
 											{Key: "priority", FieldRef: "OrderId"},
-											{Key: "region", FieldRef: "WarehouseId"},
 											{Key: "source", FieldRef: "Channel"},
+										},
+									},
+									{
+										Name: "OrderShipped",
+										NamePos: ast.Position{
+											Filename: "orders.emod",
+											Line:     20,
+											Column:   3,
+										},
+										Tags: []ast.TagEntry{
+											{Key: "priority", FieldRef: "OrderId"},
+											{Key: "region", FieldRef: "WarehouseId"},
 										},
 									},
 								},
@@ -2907,13 +2921,17 @@ func TestLint(t *testing.T) {
 
 			diags := linter.Lint(model)
 
-			orphanCount := 0
+			var orphans []*diagnostic.Entry
 			for _, d := range diags {
 				if d.RuleName == "dcb/orphan-tag-key" {
-					orphanCount++
+					orphans = append(orphans, d)
 				}
 			}
-			require.Equal(t, 2, orphanCount, "expected 2 orphan tag key diagnostics (region, source)")
+			require.Len(t, orphans, 2)
+			require.Equal(t, 10, orphans[0].Line)
+			require.Contains(t, orphans[0].Message, `tag key "source"`)
+			require.Equal(t, 20, orphans[1].Line)
+			require.Contains(t, orphans[1].Message, `tag key "region"`)
 		})
 
 		t.Run("orphan-tag-key does not fire in aggregate mode", func(t *testing.T) {

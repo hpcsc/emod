@@ -107,14 +107,14 @@ func GetSemanticTokens(doc string) *SemanticTokens {
 		entries.addQuoted(agg.NamePos, agg.Name, TokenTypeStruct)
 	}
 
-	for _, scoped := range scopedSlices(model) {
-		for _, cmd := range scoped.slice.Commands {
+	for _, slice := range model.AllSlices() {
+		for _, cmd := range slice.Commands {
 			entries.addIdentifier(cmd.NamePos, cmd.Name, TokenTypeFunction)
 		}
-		for _, evt := range scoped.slice.Events {
+		for _, evt := range slice.Events {
 			entries.addIdentifier(evt.NamePos, evt.Name, TokenTypeEvent)
 		}
-		for _, v := range scoped.slice.Views {
+		for _, v := range slice.Views {
 			entries.addIdentifier(v.NamePos, v.Name, TokenTypeClass)
 		}
 	}

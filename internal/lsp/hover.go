@@ -51,18 +51,18 @@ func GetHover(text string, line, character int) *Hover {
 
 	at := cursorAt(line, character)
 
-	for _, scoped := range scopedSlices(model) {
-		for _, cmd := range scoped.slice.Commands {
+	for _, scoped := range model.SliceRefs() {
+		for _, cmd := range scoped.Slice.Commands {
 			if at.onName(cmd.NamePos, cmd.Name) {
 				return hoverForCommand(cmd, declaredIn(scoped))
 			}
 		}
-		for _, evt := range scoped.slice.Events {
+		for _, evt := range scoped.Slice.Events {
 			if at.onName(evt.NamePos, evt.Name) {
 				return hoverForEvent(evt, declaredIn(scoped))
 			}
 		}
-		for _, v := range scoped.slice.Views {
+		for _, v := range scoped.Slice.Views {
 			if at.onName(v.NamePos, v.Name) {
 				return hoverForView(v, declaredIn(scoped))
 			}
@@ -83,11 +83,11 @@ func GetHover(text string, line, character int) *Hover {
 	return nil
 }
 
-func declaredIn(scoped scopedSlice) string {
-	if scoped.aggregate == nil {
-		return scoped.context.Name
+func declaredIn(scoped ast.SliceRef) string {
+	if scoped.Aggregate == nil {
+		return scoped.Context.Name
 	}
-	return fmt.Sprintf("%s > %s", scoped.context.Name, scoped.aggregate.Name)
+	return fmt.Sprintf("%s > %s", scoped.Context.Name, scoped.Aggregate.Name)
 }
 
 func hoverForCommand(cmd *ast.Command, scope string) *Hover {

@@ -1,7 +1,9 @@
 package linter
 
 import (
+	"cmp"
 	"fmt"
+	"slices"
 	"strings"
 	"unicode"
 
@@ -33,7 +35,7 @@ func warning(pos ast.Position, rule, msg string) *diagnostic.Entry {
 	}
 }
 
-func error(pos ast.Position, rule, msg string) *diagnostic.Entry {
+func errorEntry(pos ast.Position, rule, msg string) *diagnostic.Entry {
 	return &diagnostic.Entry{
 		Filename: pos.Filename,
 		Line:     pos.Line,
@@ -53,18 +55,9 @@ func Lint(model *ast.Model) []*diagnostic.Entry {
 
 	// Build flow count map for left-chair detection across all slices
 	flowCount := make(map[string]int)
-	for _, ctx := range model.Contexts {
-		for _, agg := range ctx.Aggregates {
-			for _, slice := range agg.Slices {
-				for _, flow := range slice.Flows {
-					flowCount[flow.CommandName]++
-				}
-			}
-		}
-		for _, slice := range ctx.Slices {
-			for _, flow := range slice.Flows {
-				flowCount[flow.CommandName]++
-			}
+	for _, slice := range model.AllSlices() {
+		for _, flow := range slice.Flows {
+			flowCount[flow.CommandName]++
 		}
 	}
 
@@ -97,16 +90,12 @@ func Lint(model *ast.Model) []*diagnostic.Entry {
 			diags = append(diags, checkOrphanTagKeys(ctx)...)
 		}
 
-		// Existing checks on aggregate-level slices
-		for _, agg := range ctx.Aggregates {
-			for _, slice := range agg.Slices {
-				diags = append(diags, checkSlice(slice, agg.Name, flowCount)...)
+		for _, ref := range ctx.SliceRefs() {
+			aggregateName := ""
+			if ref.Aggregate != nil {
+				aggregateName = ref.Aggregate.Name
 			}
-		}
-
-		// Existing checks on context-level slices
-		for _, slice := range ctx.Slices {
-			diags = append(diags, checkSlice(slice, "", flowCount)...)
+			diags = append(diags, checkSlice(ref.Slice, aggregateName, flowCount)...)
 		}
 	}
 
@@ -175,10 +164,7 @@ func checkDCBInAggregateMode(ctx *ast.Context) []*diagnostic.Entry {
 	var diags []*diagnostic.Entry
 
 	// Check all slices (both aggregate-level and context-level) for DCB constructs
-	allSlices := ctx.Slices
-	for _, agg := range ctx.Aggregates {
-		allSlices = append(allSlices, agg.Slices...)
-	}
+	allSlices := ctx.AllSlices()
 
 	for _, slice := range allSlices {
 		for _, evt := range slice.Events {
@@ -225,21 +211,18 @@ func checkAggregateInDCBMode(ctx *ast.Context) []*diagnostic.Entry {
 func checkUntaggedEvents(ctx *ast.Context) []*diagnostic.Entry {
 	var diags []*diagnostic.Entry
 
-	allSlices := ctx.Slices
-	for _, agg := range ctx.Aggregates {
-		allSlices = append(allSlices, agg.Slices...)
-	}
+	allSlices := ctx.AllSlices()
 
 	for _, slice := range allSlices {
 		for _, evt := range slice.Events {
 			if len(evt.Tags) == 0 {
-				diags = append(diags, error(evt.NamePos, "dcb/untagged-event",
+				diags = append(diags, errorEntry(evt.NamePos, "dcb/untagged-event",
 					fmt.Sprintf("event %q is missing tags in %s-mode context %q", evt.Name, ctx.Mode, ctx.Name)))
 			}
 		}
 		for _, tr := range slice.Translations {
 			if tr.Event != nil && len(tr.Event.Tags) == 0 {
-				diags = append(diags, error(tr.Event.NamePos, "dcb/untagged-event",
+				diags = append(diags, errorEntry(tr.Event.NamePos, "dcb/untagged-event",
 					fmt.Sprintf("event %q is missing tags in %s-mode context %q", tr.Event.Name, ctx.Mode, ctx.Name)))
 			}
 		}
@@ -255,10 +238,7 @@ func checkUntaggedEvents(ctx *ast.Context) []*diagnostic.Entry {
 func checkSingleTagEverywhere(ctx *ast.Context) []*diagnostic.Entry {
 	var diags []*diagnostic.Entry
 
-	allSlices := ctx.Slices
-	for _, agg := range ctx.Aggregates {
-		allSlices = append(allSlices, agg.Slices...)
-	}
+	allSlices := ctx.AllSlices()
 
 	tagKeys := make(map[string]bool)
 	for _, slice := range allSlices {
@@ -291,10 +271,7 @@ func checkSingleTagEverywhere(ctx *ast.Context) []*diagnostic.Entry {
 func checkOrphanTagKeys(ctx *ast.Context) []*diagnostic.Entry {
 	var diags []*diagnostic.Entry
 
-	allSlices := ctx.Slices
-	for _, agg := range ctx.Aggregates {
-		allSlices = append(allSlices, agg.Slices...)
-	}
+	allSlices := ctx.AllSlices()
 
 	// Collect all tag keys declared on events, tracking the first event for each key
 	eventTagKeys := make(map[string]bool)
@@ -340,13 +317,26 @@ func checkOrphanTagKeys(ctx *ast.Context) []*diagnostic.Entry {
 		}
 	}
 
-	// Find orphan keys — declared on events but never referenced in predicates
+	// Find orphan keys — declared on events but never referenced in predicates.
+	// Sorted by declaration position: ranging over the map directly would emit
+	// diagnostics in Go's randomised map order, so the same file would report
+	// the same problems in a different order on every run.
+	orphaned := make([]string, 0, len(eventTagKeys))
 	for key := range eventTagKeys {
 		if !predicateTagKeys[key] {
-			pos := firstEventForKey[key]
-			diags = append(diags, warning(pos, "dcb/orphan-tag-key",
-				fmt.Sprintf("tag key %q declared on events is never referenced in any command's decides_on predicate in %s-mode context %q", key, ctx.Mode, ctx.Name)))
+			orphaned = append(orphaned, key)
 		}
+	}
+	slices.SortFunc(orphaned, func(a, b string) int {
+		if c := firstEventForKey[a].Compare(firstEventForKey[b]); c != 0 {
+			return c
+		}
+		return cmp.Compare(a, b)
+	})
+
+	for _, key := range orphaned {
+		diags = append(diags, warning(firstEventForKey[key], "dcb/orphan-tag-key",
+			fmt.Sprintf("tag key %q declared on events is never referenced in any command's decides_on predicate in %s-mode context %q", key, ctx.Mode, ctx.Name)))
 	}
 
 	return diags
@@ -377,10 +367,7 @@ func collectPredicateTagKeys(pred ast.PredicateExpr) []string {
 func checkQueryTooBroad(ctx *ast.Context) []*diagnostic.Entry {
 	var diags []*diagnostic.Entry
 
-	allSlices := ctx.Slices
-	for _, agg := range ctx.Aggregates {
-		allSlices = append(allSlices, agg.Slices...)
-	}
+	allSlices := ctx.AllSlices()
 
 	for _, slice := range allSlices {
 		for _, cmd := range slice.Commands {
@@ -502,7 +489,7 @@ func checkViewNaming(view *ast.View) *diagnostic.Entry {
 
 func checkLeftChair(cmd *ast.Command, flowCount map[string]int) *diagnostic.Entry {
 	if flowCount[cmd.Name] >= 3 {
-		return error(cmd.NamePos, "left-chair", fmt.Sprintf("command %q is referenced by %d flows; consider splitting into specialized commands to reduce coupling", cmd.Name, flowCount[cmd.Name]))
+		return errorEntry(cmd.NamePos, "left-chair", fmt.Sprintf("command %q is referenced by %d flows; consider splitting into specialized commands to reduce coupling", cmd.Name, flowCount[cmd.Name]))
 	}
 	return nil
 }
@@ -523,7 +510,7 @@ func checkMissingTodoList(auto *ast.Automation) *diagnostic.Entry {
 
 func checkGodView(view *ast.View) *diagnostic.Entry {
 	if len(view.Subscribes) >= 5 {
-		return error(view.NamePos, "god-view", fmt.Sprintf("view %q subscribes to %d events; consider splitting into smaller focused views", view.Name, len(view.Subscribes)))
+		return errorEntry(view.NamePos, "god-view", fmt.Sprintf("view %q subscribes to %d events; consider splitting into smaller focused views", view.Name, len(view.Subscribes)))
 	}
 	return nil
 }
@@ -536,7 +523,7 @@ func isIDField(name string) bool {
 
 func checkClickbaitEvent(evt *ast.Event) *diagnostic.Entry {
 	if len(evt.Fields) == 1 && isIDField(evt.Fields[0].Name) {
-		return error(evt.NamePos, "clickbait-event", fmt.Sprintf("event %q has a single ID field %q; consider adding domain-relevant fields or inlining the identifier", evt.Name, evt.Fields[0].Name))
+		return errorEntry(evt.NamePos, "clickbait-event", fmt.Sprintf("event %q has a single ID field %q; consider adding domain-relevant fields or inlining the identifier", evt.Name, evt.Fields[0].Name))
 	}
 	return nil
 }

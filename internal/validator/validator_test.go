@@ -1215,8 +1215,8 @@ func TestValidate(t *testing.T) {
 		})
 
 		t.Run("expressions in both slice homes are reported in declaration order", func(t *testing.T) {
-			// A context's own slices are walked ahead of its aggregates', so
-			// findings left in collection order come out reversed here.
+			// The aggregate's slice is declared before the context's own, so a
+			// walk that visits either collection first comes out reversed here.
 			model := &ast.Model{
 				Contexts: []*ast.Context{
 					{
@@ -1227,7 +1227,8 @@ func TestValidate(t *testing.T) {
 								Name: "Hold",
 								Slices: []*ast.Slice{
 									{
-										Name: "Expire Stale Holds",
+										Name:    "Expire Stale Holds",
+										NamePos: ast.Position{Filename: "availability.emod", Line: 10, Column: 9},
 										Automations: []*ast.Automation{
 											{
 												Name:        "StaleHoldExpirer",
@@ -1241,7 +1242,8 @@ func TestValidate(t *testing.T) {
 						},
 						Slices: []*ast.Slice{
 							{
-								Name: "Release Held Rooms",
+								Name:    "Release Held Rooms",
+								NamePos: ast.Position{Filename: "availability.emod", Line: 28, Column: 9},
 								Automations: []*ast.Automation{
 									{
 										Name:        "HeldRoomReleaser",

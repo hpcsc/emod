@@ -70,11 +70,8 @@ func newModelIndex(model *ast.Model) *modelIndex {
 
 	for _, ctx := range model.Contexts {
 		index.contextNames[ctx.Name] = true
-		index.slices = append(index.slices, ctx.Slices...)
-		for _, agg := range ctx.Aggregates {
-			index.slices = append(index.slices, agg.Slices...)
-		}
 	}
+	index.slices = model.AllSlices()
 
 	for _, slice := range index.slices {
 		index.collect(slice)
@@ -184,7 +181,7 @@ func orphanNames(positions map[string]ast.Position, referenced map[string]bool) 
 	}
 
 	slices.SortFunc(names, func(a, b string) int {
-		if c := comparePositions(positions[a], positions[b]); c != 0 {
+		if c := positions[a].Compare(positions[b]); c != 0 {
 			return c
 		}
 		return cmp.Compare(a, b)
@@ -193,23 +190,13 @@ func orphanNames(positions map[string]ast.Position, referenced map[string]bool) 
 	return names
 }
 
-func comparePositions(a, b ast.Position) int {
-	if c := cmp.Compare(a.Filename, b.Filename); c != 0 {
-		return c
-	}
-	if c := cmp.Compare(a.Line, b.Line); c != 0 {
-		return c
-	}
-	return cmp.Compare(a.Column, b.Column)
-}
-
 func sortInDeclarationOrder(diags []*diagnostic.Entry) {
 	position := func(d *diagnostic.Entry) ast.Position {
 		return ast.Position{Filename: d.Filename, Line: d.Line, Column: d.Column}
 	}
 
 	slices.SortStableFunc(diags, func(a, b *diagnostic.Entry) int {
-		return comparePositions(position(a), position(b))
+		return position(a).Compare(position(b))
 	})
 }
 
@@ -380,9 +367,6 @@ func undeclaredSpecEvents(refs []*ast.SpecElement, index *modelIndex) []undeclar
 	return undeclared
 }
 
-// The findings are sorted because a slice hangs off an aggregate or off a
-// `mode dcb` context directly, and the two collections lose which of them was
-// written first.
 func scheduleExpressionDiagnostics(modelSlices []*ast.Slice) []*diagnostic.Entry {
 	var diags []*diagnostic.Entry
 	for _, slice := range modelSlices {
@@ -394,7 +378,6 @@ func scheduleExpressionDiagnostics(modelSlices []*ast.Slice) []*diagnostic.Entry
 				"schedule expression %q is neither a Go duration nor a five-field cron expression", auto.Schedule))
 		}
 	}
-	sortInDeclarationOrder(diags)
 
 	return diags
 }
@@ -504,10 +487,6 @@ func predicateDiagnostics(expr ast.PredicateExpr, events []string, index *modelI
 
 	case *ast.NotExpr:
 		diags = append(diags, predicateDiagnostics(e.Expr, events, index)...)
-
-	case *ast.FieldRef:
-		// A predicate parses a bare field reference only as one side of a tag
-		// comparison, which *ast.TagPredicate already covers.
 	}
 
 	return diags

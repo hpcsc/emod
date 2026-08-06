@@ -12,29 +12,6 @@ func parseModel(text, uri string) (*ast.Model, []*lexer.Token) {
 	return model, tokens
 }
 
-// scopedSlice pairs a slice with where it was declared: aggregate is nil for the
-// slices a `mode dcb` context declares directly, which hang off no aggregate.
-type scopedSlice struct {
-	slice     *ast.Slice
-	context   *ast.Context
-	aggregate *ast.Aggregate
-}
-
-func scopedSlices(model *ast.Model) []scopedSlice {
-	var scoped []scopedSlice
-	for _, ctx := range model.Contexts {
-		for _, agg := range ctx.Aggregates {
-			for _, s := range agg.Slices {
-				scoped = append(scoped, scopedSlice{slice: s, context: ctx, aggregate: agg})
-			}
-		}
-		for _, s := range ctx.Slices {
-			scoped = append(scoped, scopedSlice{slice: s, context: ctx})
-		}
-	}
-	return scoped
-}
-
 func declaredAggregates(model *ast.Model) []*ast.Aggregate {
 	var aggregates []*ast.Aggregate
 	for _, ctx := range model.Contexts {
@@ -67,14 +44,14 @@ func declarationsIn(model *ast.Model) []nameDecl {
 	for _, ctx := range model.Contexts {
 		add(contextName, ctx.Name, ctx.NamePos)
 	}
-	for _, scoped := range scopedSlices(model) {
-		for _, cmd := range scoped.slice.Commands {
+	for _, slice := range model.AllSlices() {
+		for _, cmd := range slice.Commands {
 			add(commandName, cmd.Name, cmd.NamePos)
 		}
-		for _, evt := range scoped.slice.Events {
+		for _, evt := range slice.Events {
 			add(eventName, evt.Name, evt.NamePos)
 		}
-		for _, v := range scoped.slice.Views {
+		for _, v := range slice.Views {
 			add(viewName, v.Name, v.NamePos)
 		}
 	}
@@ -127,9 +104,7 @@ func referencesIn(model *ast.Model) []nameRef {
 		refs = append(refs, nameRef{kind: kind, name: name, pos: pos})
 	}
 
-	for _, scoped := range scopedSlices(model) {
-		slice := scoped.slice
-
+	for _, slice := range model.AllSlices() {
 		for _, v := range slice.Views {
 			for i, sub := range v.Subscribes {
 				if i < len(v.SubscribesPos) {

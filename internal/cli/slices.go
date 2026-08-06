@@ -28,7 +28,7 @@ func RunSlices(path, format string) error {
 		return err
 	}
 
-	entries := collectSliceEntries(model)
+	entries := model.SliceRefs()
 
 	if format == "json" {
 		return formatSlicesJSON(entries)
@@ -51,12 +51,12 @@ func RunSlices(path, format string) error {
 	maxPattern := len("PATTERN")
 	maxContext := len("CONTEXT")
 	for _, e := range entries {
-		pattern := detectPattern(e.slice)
-		keyElements := keyElementsForPattern(e.slice, pattern)
+		pattern := detectPattern(e.Slice)
+		keyElements := keyElementsForPattern(e.Slice, pattern)
 		r := row{
-			sliceName:   e.slice.Name,
+			sliceName:   e.Slice.Name,
 			pattern:     pattern,
-			ctxName:     e.ctxName,
+			ctxName:     e.Context.Name,
 			keyElements: keyElements,
 		}
 		rows = append(rows, r)
@@ -82,15 +82,15 @@ func RunSlices(path, format string) error {
 	return nil
 }
 
-func formatSlicesJSON(entries []sliceEntry) error {
+func formatSlicesJSON(entries []ast.SliceRef) error {
 	jsonEntries := make([]sliceJSONEntry, 0, len(entries))
 	for _, e := range entries {
-		pattern := detectPattern(e.slice)
-		keyElements := keyElementsForPattern(e.slice, pattern)
+		pattern := detectPattern(e.Slice)
+		keyElements := keyElementsForPattern(e.Slice, pattern)
 		jsonEntries = append(jsonEntries, sliceJSONEntry{
-			Name:        e.slice.Name,
+			Name:        e.Slice.Name,
 			Pattern:     pattern,
-			Context:     e.ctxName,
+			Context:     e.Context.Name,
 			KeyElements: keyElements,
 		})
 	}
@@ -104,26 +104,6 @@ func formatSlicesJSON(entries []sliceEntry) error {
 	}
 	fmt.Println(string(out))
 	return nil
-}
-
-type sliceEntry struct {
-	slice   *ast.Slice
-	ctxName string
-}
-
-func collectSliceEntries(model *ast.Model) []sliceEntry {
-	var entries []sliceEntry
-	if model == nil {
-		return entries
-	}
-	for _, ctx := range model.Contexts {
-		for _, agg := range ctx.Aggregates {
-			for _, s := range agg.Slices {
-				entries = append(entries, sliceEntry{slice: s, ctxName: ctx.Name})
-			}
-		}
-	}
-	return entries
 }
 
 func detectPattern(s *ast.Slice) string {

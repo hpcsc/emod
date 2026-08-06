@@ -44,7 +44,7 @@ func newDocument(model *ast.Model) document {
 func contextSections(contexts []*ast.Context, descriptions map[string]string) []contextSection {
 	var sections []contextSection
 	for _, ctx := range contexts {
-		slices := allSlicesIn(ctx)
+		slices := ctx.AllSlices()
 		sections = append(sections, contextSection{
 			term:       term{Name: ctx.Name, Description: ctx.Description},
 			Invariants: invariantTerms(ctx.Invariants),
@@ -56,14 +56,6 @@ func contextSections(contexts []*ast.Context, descriptions map[string]string) []
 		})
 	}
 	return sections
-}
-
-func allSlicesIn(ctx *ast.Context) []*ast.Slice {
-	var slices []*ast.Slice
-	for _, agg := range ctx.Aggregates {
-		slices = append(slices, agg.Slices...)
-	}
-	return append(slices, ctx.Slices...)
 }
 
 func aggregateSections(aggregates []*ast.Aggregate) []aggregateSection {
@@ -151,10 +143,8 @@ func actorDescriptions(actors []*ast.Actor) map[string]string {
 
 func unreferencedActorTerms(model *ast.Model) []term {
 	referenced := make(map[string]bool)
-	for _, ctx := range model.Contexts {
-		for _, name := range triggerActorNames(allSlicesIn(ctx)) {
-			referenced[name] = true
-		}
+	for _, name := range triggerActorNames(model.AllSlices()) {
+		referenced[name] = true
 	}
 
 	var terms []term

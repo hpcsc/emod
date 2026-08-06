@@ -104,6 +104,46 @@ func TestSlices(t *testing.T) {
 			require.Contains(t, sliceLines[3], "Import External Booking")
 		})
 
+		t.Run("lists slices a DCB context declares directly", func(t *testing.T) {
+			input := `model "Orders"
+
+context "Fulfillment" mode dcb {
+  slice "Place Order" {
+    trigger "Order Form" {
+      actor Customer
+    }
+    command PlaceOrder {
+      fields {
+        customerId string required
+      }
+    }
+    event OrderPlaced {
+      tags {
+        entity: customerId
+      }
+      fields {
+        orderId    string required
+        customerId string required
+      }
+    }
+    flow {
+      command -> event: PlaceOrder -> OrderPlaced
+    }
+  }
+}
+`
+			path := writeTemp(t, "dcb.emod", input)
+
+			output := captureStdout(t, func() {
+				err := cli.RunSlices(path, "text")
+				require.NoError(t, err)
+			})
+
+			require.Contains(t, output, "Place Order")
+			require.Contains(t, output, "Fulfillment")
+			require.NotContains(t, output, "No slices found.")
+		})
+
 		t.Run("names the cadence of a scheduled automation and the event of an event-activated one", func(t *testing.T) {
 			path := writeTemp(t, "cadence.emod", automationCadenceEmod)
 
