@@ -220,6 +220,7 @@ noted. "Side effect" marks whether a tool writes to disk (see
 | `emod_export` | `export.ExportJSONDiagnostics` / `export.ExportCUE` (body of `RunExport`) | `{path?, content?, format:"json"\|"cue"}` | JSON object or CUE text + diagnostics | none |
 | `emod_diagram` | `diagram.ExportMermaid` / `ExportASCII` / `ExportSVG` (body of `RunDiagram`) | `{path?, content?, format:"mermaid"\|"svg"\|"ascii", style?}` | diagram text (mermaid/svg/ascii string) | none |
 | `emod_slices_list` | `ast.Model.SliceRefs` + `detectPattern` (body of `RunSlicesList`) | `{path?, content?}` | `[]{name,pattern,context,keyElements}` | none |
+| `emod_slices_arrange` | `arrange.Model` + `formatter.Format` (body of `RunSlicesArrange`) | `{path?, content?, write?}` | `{arranged, changed, moved, backwardBefore, backwardAfter, backward:[]{kind,label,from,to}}`; writes file only if `write:true` **and** path given | optional write |
 | `emod_schema` | embedded `cue.Schema` (`RunSchema`) | `{}` | CUE schema text | none |
 
 Notes on fidelity to existing behavior:
@@ -228,6 +229,14 @@ Notes on fidelity to existing behavior:
   of `internal/cli`, where both are unexported today. They classify a slice
   rather than print one, so they belong beside the traversal helper the listing
   already reads; only the column padding is the CLI's own.
+- `emod_slices_arrange` returns `arrange.Report` alongside the rewritten text,
+  which is the half a model most needs: the references still pointing backward
+  are the ones no ordering can fix, so a model that sees them stops trying. Its
+  read-only default is the CLI's `--check`, and `changed` carries what `--check`
+  says through an exit code the MCP boundary does not pass.
+- `emod_slices_arrange` reorders and reprints, so a model calling it on unformatted
+  text gets it formatted too. `arrange.Model` moves nothing in an already-arranged
+  model, so `emod_fmt` remains the tool for formatting alone.
 - `emod_validate` runs the **full** pipeline (validator + linter), matching
   `RunValidate`; `emod_lint` runs only `linter.Lint` after a clean parse, matching
   `RunLint`. Both return the same `{file,line,rule,severity,message}` records the
@@ -260,7 +269,7 @@ which it mirrors:
 		},
 		&urfave.BoolFlag{
 			Name:  "allow-write",
-			Usage: "Enable tools that write to disk (emod_fmt --write)",
+			Usage: "Enable tools that write to disk (emod_fmt, emod_slices_arrange)",
 		},
 	},
 	Action: func(c *urfave.Context) error {
@@ -390,8 +399,9 @@ shared read+pipeline path so the CLI and MCP server call one helper rather than
 diverging. Ships the highest-value capability (the self-check loop) on its own.
 
 **Phase 2 — Export, diagram, format, resources (M).**
-Add `emod_export` (json/cue), `emod_diagram` (mermaid/svg/ascii), and `emod_fmt`
-(read-only `formatted`/`changed`; `write` gated behind `--allow-write`). Register
+Add `emod_export` (json/cue), `emod_diagram` (mermaid/svg/ascii), and the two
+tools that rewrite a model, `emod_fmt` and `emod_slices_arrange` (read-only
+`formatted`/`arranged` plus `changed`; `write` gated behind `--allow-write`). Register
 resources: `emod://schema`, `emod://examples/*`, `emod://docs/*`. Add path scoping
 (`--root`) and the read-only/write tool split.
 
@@ -408,7 +418,8 @@ only if a non-local host needs it.
 
 ## Risks & Mitigations
 
-- **Write tools are dangerous by default.** Only `emod_fmt --write` mutates disk.
+- **Write tools are dangerous by default.** Only `emod_fmt` and
+  `emod_slices_arrange` can mutate disk.
   Mitigation: writes are off unless `--allow-write` is passed *and* a `path`
   (not inline `content`) is given; everything else is read-only. The server is
   safe to register globally in its default mode.

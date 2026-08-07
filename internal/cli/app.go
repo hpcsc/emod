@@ -175,6 +175,22 @@ func NewApp() *urfave.App {
 							return reportExitError(RunSlicesList(path, format))
 						},
 					},
+					{
+						Name:      "arrange",
+						Usage:     "Reorder slices so the model reads forward, moving view slices only",
+						ArgsUsage: "<file>",
+						Flags: []urfave.Flag{
+							&urfave.BoolFlag{
+								Name:  "check",
+								Usage: "Report whether the slices are already arranged (exit 1 if not)",
+							},
+						},
+						Action: func(c *urfave.Context) error {
+							path := c.Args().First()
+							check := c.Bool("check")
+							return reportExitError(RunSlicesArrange(path, check))
+						},
+					},
 				},
 			},
 			{

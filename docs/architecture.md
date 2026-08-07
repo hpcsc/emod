@@ -140,7 +140,10 @@ flowchart LR
   which return slices in source order paired with the context and aggregate
   declaring them. A slice hangs off an aggregate *or* directly off a
   `mode dcb` context — always traverse through these helpers rather than
-  walking `ctx.Slices` and `agg.Slices` by hand.
+  walking `ctx.Slices` and `agg.Slices` by hand. The one exception is
+  `arrange`, which reorders those fields: the helpers flatten the containers
+  and sort by source position, which is precisely what reordering has to
+  change.
 - **`diagnostic.Entry`** is the one finding shape every stage emits, so
   frontends render CLI text, LSP diagnostics and viewer JSON from the same
   values.
@@ -193,6 +196,7 @@ exactly one writer.
 | `emod diagram` | drawio / svg / ascii / mermaid; `--serve` starts the embedded viewer |
 | `emod export` | json / diagram-json / cue |
 | `emod slices list` | Lists every slice with its detected pattern |
+| `emod slices arrange` | Reorders view slices so references read forward; `--check` for CI |
 | `emod glossary` | Domain glossary as markdown or JSON |
 | `emod schema` | Prints the embedded CUE schema |
 | `emod lsp` | Starts the language server on stdio |

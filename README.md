@@ -176,6 +176,24 @@ emod export reservation.emod -f cue   # CUE schema
 emod slices list reservation.emod
 ```
 
+### Arrange slices
+
+Reorders each container's slices so the model reads forward — as far as
+possible, every reference a slice makes points at a slice declared before it.
+Only view slices move: a view projects events rather than stating a step of the
+process, so it has no place of its own in the story, while the process slices
+keep the order their author gave them.
+
+```bash
+emod slices arrange reservation.emod           # rewrite the file
+emod slices arrange --check reservation.emod   # exit 1 if a view is out of place
+```
+
+Both forms report the references still pointing backward. Some cannot be removed
+by any ordering — two slices producing one event means the second points back at
+the declaration whichever way round they go — so the report says what the order
+genuinely costs rather than claiming the model is now free of them.
+
 ### Render a glossary
 
 ```bash
