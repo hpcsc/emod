@@ -347,3 +347,8 @@ Then run `hx --grammar fetch && hx --grammar build` to compile the parser.
 go test -tags unit ./...  # unit tests
 go test -tags unit -count=1 ./...  # bypass cache
 ```
+
+How the repository fits together — packages, the language pipeline, renderers,
+the browser viewer and the editor grammars — is described in
+[docs/architecture.md](docs/architecture.md), with the WebAssembly subsystem
+covered in depth by [docs/wasm-architecture.md](docs/wasm-architecture.md).
