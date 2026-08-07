@@ -107,20 +107,124 @@ func (g *diagramIDGenerator) next(typ string) string {
 	return fmt.Sprintf("%s-%d", typ, g.counters[typ])
 }
 
-func collectSliceNodes(
-	s *ast.Slice,
-	sliceID string,
-	g *diagramIDGenerator,
-	doc *jsonDiagramDocument,
-	cmdIDs, evtIDs, triggerIDs, viewIDs, autoIDs, transIDs map[string]string,
-) {
-	// Commands
-	for _, cmd := range s.Commands {
+// diagramBuilder accumulates the nodes and edges of one diagram document. The
+// name→ID maps are filled while nodes are drawn and read only once every node
+// exists: an edge names its endpoints by construct name, and a slice may name a
+// construct another slice declares, so no edge can be drawn while nodes still
+// are.
+type diagramBuilder struct {
+	doc *jsonDiagramDocument
+	ids *diagramIDGenerator
+
+	commandIDs     map[string]string
+	eventIDs       map[string]string
+	triggerIDs     map[string]string
+	viewIDs        map[string]string
+	automationIDs  map[string]string
+	translationIDs map[string]string
+}
+
+func newDiagramBuilder(modelName string) *diagramBuilder {
+	return &diagramBuilder{
+		doc: &jsonDiagramDocument{
+			ModelName: modelName,
+			Nodes:     make([]*jsonDiagramNode, 0),
+			Edges:     make([]*jsonDiagramEdge, 0),
+		},
+		ids:            newDiagramIDGenerator(),
+		commandIDs:     make(map[string]string),
+		eventIDs:       make(map[string]string),
+		triggerIDs:     make(map[string]string),
+		viewIDs:        make(map[string]string),
+		automationIDs:  make(map[string]string),
+		translationIDs: make(map[string]string),
+	}
+}
+
+func (b *diagramBuilder) appendNode(n *jsonDiagramNode) {
+	b.doc.Nodes = append(b.doc.Nodes, n)
+}
+
+func (b *diagramBuilder) appendActor(a *ast.Actor) {
+	if a == nil {
+		return
+	}
+	b.appendNode(&jsonDiagramNode{
+		ID:       b.ids.next("actor"),
+		Type:     "actor",
+		Label:    a.Name,
+		ParentID: nil,
+		Position: convertPosition(a.NamePos),
+	})
+}
+
+func (b *diagramBuilder) appendContext(c *ast.Context) {
+	if c == nil {
+		return
+	}
+	ctxID := b.ids.next("context")
+	b.appendNode(&jsonDiagramNode{
+		ID:       ctxID,
+		Type:     "context",
+		Label:    c.Name,
+		ParentID: nil,
+		Position: convertPosition(c.NamePos),
+	})
+
+	for _, agg := range c.Aggregates {
+		b.appendAggregate(agg, ctxID)
+	}
+	for _, s := range c.Slices {
+		b.appendSlice(s, ctxID)
+	}
+}
+
+func (b *diagramBuilder) appendAggregate(agg *ast.Aggregate, ctxID string) {
+	if agg == nil {
+		return
+	}
+	aggID := b.ids.next("aggregate")
+	b.appendNode(&jsonDiagramNode{
+		ID:       aggID,
+		Type:     "aggregate",
+		Label:    agg.Name,
+		ParentID: &ctxID,
+		Position: convertPosition(agg.NamePos),
+	})
+
+	for _, s := range agg.Slices {
+		b.appendSlice(s, aggID)
+	}
+}
+
+func (b *diagramBuilder) appendSlice(s *ast.Slice, parentID string) {
+	if s == nil {
+		return
+	}
+	sliceID := b.ids.next("slice")
+	b.appendNode(&jsonDiagramNode{
+		ID:       sliceID,
+		Type:     "slice",
+		Label:    s.Name,
+		ParentID: &parentID,
+		Position: convertPosition(s.NamePos),
+	})
+
+	b.appendCommands(s.Commands, sliceID)
+	b.appendEvents(s.Events, sliceID)
+	b.appendTrigger(s.Trigger, sliceID)
+	b.appendViews(s.Views, sliceID)
+	b.appendAutomations(s.Automations, sliceID)
+	b.appendTranslations(s.Translations, sliceID)
+}
+
+func (b *diagramBuilder) appendCommands(commands []*ast.Command, sliceID string) {
+	for _, cmd := range commands {
 		if cmd == nil {
 			continue
 		}
-		cmdID := g.next("command")
-		cmdIDs[cmd.Name] = cmdID
+		cmdID := b.ids.next("command")
+		b.commandIDs[cmd.Name] = cmdID
 		node := &jsonDiagramNode{
 			ID:       cmdID,
 			Type:     "command",
@@ -131,53 +235,61 @@ func collectSliceNodes(
 		if len(cmd.Fields) > 0 {
 			node.Fields = convertFieldsToDiagram(cmd.Fields)
 		}
-		doc.Nodes = append(doc.Nodes, node)
+		b.appendNode(node)
 	}
+}
 
-	// Events
-	for _, evt := range s.Events {
-		if evt == nil {
-			continue
-		}
-		evtID := g.next("event")
-		evtIDs[evt.Name] = evtID
-		node := &jsonDiagramNode{
-			ID:           evtID,
-			Type:         "event",
-			Label:        evt.Name,
-			ParentID:     &sliceID,
-			Position:     convertPosition(evt.NamePos),
-			Source:       evt.Source,
-			ExternalName: evt.ExternalName,
-		}
-		if len(evt.Fields) > 0 {
-			node.Fields = convertFieldsToDiagram(evt.Fields)
-		}
-		doc.Nodes = append(doc.Nodes, node)
+func (b *diagramBuilder) appendEvents(events []*ast.Event, sliceID string) {
+	for _, evt := range events {
+		b.appendEvent(evt, sliceID)
 	}
+}
 
-	// Trigger node (single per slice)
-	if s.Trigger != nil {
-		tID := g.next("trigger")
-		triggerIDs[s.Trigger.Name] = tID
-		doc.Nodes = append(doc.Nodes, &jsonDiagramNode{
-			ID:       tID,
-			Type:     "trigger",
-			Label:    s.Trigger.Name,
-			ParentID: &sliceID,
-			Position: convertPosition(s.Trigger.NamePos),
-			Actor:    s.Trigger.Actor,
-			Reads:    s.Trigger.Reads,
-		})
+func (b *diagramBuilder) appendEvent(evt *ast.Event, sliceID string) {
+	if evt == nil {
+		return
 	}
+	evtID := b.ids.next("event")
+	b.eventIDs[evt.Name] = evtID
+	node := &jsonDiagramNode{
+		ID:           evtID,
+		Type:         "event",
+		Label:        evt.Name,
+		ParentID:     &sliceID,
+		Position:     convertPosition(evt.NamePos),
+		Source:       evt.Source,
+		ExternalName: evt.ExternalName,
+	}
+	if len(evt.Fields) > 0 {
+		node.Fields = convertFieldsToDiagram(evt.Fields)
+	}
+	b.appendNode(node)
+}
 
-	// View nodes
-	for _, v := range s.Views {
+func (b *diagramBuilder) appendTrigger(t *ast.Trigger, sliceID string) {
+	if t == nil {
+		return
+	}
+	tID := b.ids.next("trigger")
+	b.triggerIDs[t.Name] = tID
+	b.appendNode(&jsonDiagramNode{
+		ID:       tID,
+		Type:     "trigger",
+		Label:    t.Name,
+		ParentID: &sliceID,
+		Position: convertPosition(t.NamePos),
+		Actor:    t.Actor,
+		Reads:    t.Reads,
+	})
+}
+
+func (b *diagramBuilder) appendViews(views []*ast.View, sliceID string) {
+	for _, v := range views {
 		if v == nil {
 			continue
 		}
-		vID := g.next("view")
-		viewIDs[v.Name] = vID
+		vID := b.ids.next("view")
+		b.viewIDs[v.Name] = vID
 		node := &jsonDiagramNode{
 			ID:         vID,
 			Type:       "view",
@@ -189,17 +301,18 @@ func collectSliceNodes(
 		if len(v.Fields) > 0 {
 			node.Fields = convertFieldsToDiagram(v.Fields)
 		}
-		doc.Nodes = append(doc.Nodes, node)
+		b.appendNode(node)
 	}
+}
 
-	// Automation nodes
-	for _, a := range s.Automations {
+func (b *diagramBuilder) appendAutomations(automations []*ast.Automation, sliceID string) {
+	for _, a := range automations {
 		if a == nil {
 			continue
 		}
-		aID := g.next("auto")
-		autoIDs[a.Name] = aID
-		doc.Nodes = append(doc.Nodes, &jsonDiagramNode{
+		aID := b.ids.next("auto")
+		b.automationIDs[a.Name] = aID
+		b.appendNode(&jsonDiagramNode{
 			ID:            aID,
 			Type:          "automation",
 			Label:         a.Name,
@@ -212,14 +325,15 @@ func collectSliceNodes(
 			TargetContext: a.TargetContext,
 		})
 	}
+}
 
-	// Translation nodes (with optional standalone nested event node)
-	for _, t := range s.Translations {
+func (b *diagramBuilder) appendTranslations(translations []*ast.Translation, sliceID string) {
+	for _, t := range translations {
 		if t == nil {
 			continue
 		}
-		tID := g.next("trans")
-		transIDs[t.Name] = tID
+		tID := b.ids.next("trans")
+		b.translationIDs[t.Name] = tID
 		node := &jsonDiagramNode{
 			ID:             tID,
 			Type:           "translation",
@@ -233,189 +347,47 @@ func collectSliceNodes(
 		if t.Event != nil {
 			node.Event = convertEventToDiagram(t.Event)
 
-			// Create a standalone event node for the translation_event edge target
-			evtID := g.next("event")
-			evtIDs[t.Event.Name] = evtID
-			evtNode := &jsonDiagramNode{
-				ID:           evtID,
-				Type:         "event",
-				Label:        t.Event.Name,
-				ParentID:     &sliceID,
-				Position:     convertPosition(t.Event.NamePos),
-				Source:       t.Event.Source,
-				ExternalName: t.Event.ExternalName,
-			}
-			if len(t.Event.Fields) > 0 {
-				evtNode.Fields = convertFieldsToDiagram(t.Event.Fields)
-			}
-			doc.Nodes = append(doc.Nodes, evtNode)
+			// The event a translation nests also gets a node of its own: the
+			// translation_event edge needs an endpoint to point at.
+			b.appendEvent(t.Event, sliceID)
 		}
-		doc.Nodes = append(doc.Nodes, node)
+		b.appendNode(node)
 	}
 }
 
-func convertModelToDiagram(m *ast.Model) *jsonDiagramDocument {
-	if m == nil {
-		return nil
-	}
-
-	g := newDiagramIDGenerator()
-	doc := &jsonDiagramDocument{
-		ModelName: m.Name,
-		Nodes:     make([]*jsonDiagramNode, 0),
-		Edges:     make([]*jsonDiagramEdge, 0),
-	}
-
-	// Global name→ID maps for two-pass name resolution (Pass 1: collect, Pass 2: resolve)
-	cmdIDs := make(map[string]string)
-	evtIDs := make(map[string]string)
-	viewIDs := make(map[string]string)
-	autoIDs := make(map[string]string)
-	transIDs := make(map[string]string)
-	triggerIDs := make(map[string]string)
-
-	// ---- Pass 1: Create all nodes and build global name→ID maps ----
-
-	for _, a := range m.Actors {
-		if a == nil {
-			continue
-		}
-		doc.Nodes = append(doc.Nodes, &jsonDiagramNode{
-			ID:       g.next("actor"),
-			Type:     "actor",
-			Label:    a.Name,
-			ParentID: nil,
-			Position: convertPosition(a.NamePos),
-		})
-	}
-
-	for _, c := range m.Contexts {
-		if c == nil {
-			continue
-		}
-		ctxID := g.next("context")
-		doc.Nodes = append(doc.Nodes, &jsonDiagramNode{
-			ID:       ctxID,
-			Type:     "context",
-			Label:    c.Name,
-			ParentID: nil,
-			Position: convertPosition(c.NamePos),
-		})
-
-		for _, agg := range c.Aggregates {
-			if agg == nil {
-				continue
-			}
-			aggID := g.next("aggregate")
-			doc.Nodes = append(doc.Nodes, &jsonDiagramNode{
-				ID:       aggID,
-				Type:     "aggregate",
-				Label:    agg.Name,
-				ParentID: &ctxID,
-				Position: convertPosition(agg.NamePos),
-			})
-
-			for _, s := range agg.Slices {
-				if s == nil {
-					continue
-				}
-				sliceID := g.next("slice")
-				doc.Nodes = append(doc.Nodes, &jsonDiagramNode{
-					ID:       sliceID,
-					Type:     "slice",
-					Label:    s.Name,
-					ParentID: &aggID,
-					Position: convertPosition(s.NamePos),
-				})
-				collectSliceNodes(s, sliceID, g, doc, cmdIDs, evtIDs, triggerIDs, viewIDs, autoIDs, transIDs)
-			}
-		}
-
-		for _, s := range c.Slices {
-			if s == nil {
-				continue
-			}
-			sliceID := g.next("slice")
-			doc.Nodes = append(doc.Nodes, &jsonDiagramNode{
-				ID:       sliceID,
-				Type:     "slice",
-				Label:    s.Name,
-				ParentID: &ctxID,
-				Position: convertPosition(s.NamePos),
-			})
-			collectSliceNodes(s, sliceID, g, doc, cmdIDs, evtIDs, triggerIDs, viewIDs, autoIDs, transIDs)
-		}
-	}
-
-	// ---- Pass 2: Resolve references and emit edges ----
-	// The semantic edges come from diagram.SliceEdges, the same derivation the
-	// renderers draw from, so this JSON and the drawn diagrams cannot disagree
-	// about which arrows exist. Unresolved references are silently skipped
-	// (no panic, no broken output).
-
-	appendEdge := func(srcID string, srcOK bool, tgtID string, tgtOK bool, edgeType string) {
-		if !srcOK || !tgtOK {
-			return
-		}
-		doc.Edges = append(doc.Edges, &jsonDiagramEdge{
-			Source: srcID,
-			Target: tgtID,
-			Type:   edgeType,
-		})
-	}
-	readsEdge := func(viewName string, readerID string, readerOK bool) {
-		viewID, declared := viewIDs[viewName]
-		appendEdge(viewID, declared, readerID, readerOK, "reads")
-	}
-	resolved := func(ids map[string]string, name string) (string, bool) {
-		id, ok := ids[name]
-		return id, ok
-	}
-
+// appendEdges draws the arrows every slice of the model declares. They come
+// from diagram.SliceEdges, the same derivation the renderers draw from, so this
+// JSON and the drawn diagrams cannot disagree about which arrows exist.
+func (b *diagramBuilder) appendEdges(m *ast.Model) {
 	for _, ref := range m.SliceRefs() {
 		for _, e := range diagram.SliceEdges(ref.Slice) {
 			switch e.Kind {
 			case diagram.EdgeFlow, diagram.EdgeTranslationFlow:
-				srcID, srcOK := resolved(cmdIDs, e.From)
-				tgtID, tgtOK := resolved(evtIDs, e.To)
-				appendEdge(srcID, srcOK, tgtID, tgtOK, "flow")
+				b.link(b.commandIDs, e.From, b.eventIDs, e.To, "flow")
 
 			case diagram.EdgeTriggerReads:
-				readerID, ok := resolved(triggerIDs, e.To)
-				readsEdge(e.From, readerID, ok)
+				b.link(b.viewIDs, e.From, b.triggerIDs, e.To, "reads")
 
 			case diagram.EdgeAutomationReads:
-				readerID, ok := resolved(autoIDs, e.To)
-				readsEdge(e.From, readerID, ok)
+				b.link(b.viewIDs, e.From, b.automationIDs, e.To, "reads")
 
 			case diagram.EdgeTranslationReads:
-				readerID, ok := resolved(transIDs, e.To)
-				readsEdge(e.From, readerID, ok)
+				b.link(b.viewIDs, e.From, b.translationIDs, e.To, "reads")
 
 			case diagram.EdgeTriggerCommand:
-				srcID, srcOK := resolved(triggerIDs, e.From)
-				tgtID, tgtOK := resolved(cmdIDs, e.To)
-				appendEdge(srcID, srcOK, tgtID, tgtOK, "trigger_command")
+				b.link(b.triggerIDs, e.From, b.commandIDs, e.To, "trigger_command")
 
 			case diagram.EdgeSubscription:
-				srcID, srcOK := resolved(evtIDs, e.From)
-				tgtID, tgtOK := resolved(viewIDs, e.To)
-				appendEdge(srcID, srcOK, tgtID, tgtOK, "subscription")
+				b.link(b.eventIDs, e.From, b.viewIDs, e.To, "subscription")
 
 			case diagram.EdgeAutomationTrigger:
-				srcID, srcOK := resolved(evtIDs, e.From)
-				tgtID, tgtOK := resolved(autoIDs, e.To)
-				appendEdge(srcID, srcOK, tgtID, tgtOK, "automation_trigger")
+				b.link(b.eventIDs, e.From, b.automationIDs, e.To, "automation_trigger")
 
 			case diagram.EdgeAutomationCommand:
-				srcID, srcOK := resolved(autoIDs, e.From)
-				tgtID, tgtOK := resolved(cmdIDs, e.To)
-				appendEdge(srcID, srcOK, tgtID, tgtOK, "automation_command")
+				b.link(b.automationIDs, e.From, b.commandIDs, e.To, "automation_command")
 
 			case diagram.EdgeTranslationCommand:
-				srcID, srcOK := resolved(transIDs, e.From)
-				tgtID, tgtOK := resolved(cmdIDs, e.To)
-				appendEdge(srcID, srcOK, tgtID, tgtOK, "translation_command")
+				b.link(b.translationIDs, e.From, b.commandIDs, e.To, "translation_command")
 
 			case diagram.EdgeTranslationExternal:
 				// External systems are not diagram-JSON nodes; the translation
@@ -423,8 +395,40 @@ func convertModelToDiagram(m *ast.Model) *jsonDiagramDocument {
 			}
 		}
 	}
+}
 
-	return doc
+// link draws an edge between the nodes two named constructs were drawn as. An
+// endpoint naming a construct no node was drawn for leaves the edge out rather
+// than dangling: an export runs on models that have not passed validation, so
+// an unresolved name is a diagnostic elsewhere, not broken output here.
+func (b *diagramBuilder) link(fromIDs map[string]string, from string, toIDs map[string]string, to string, edgeType string) {
+	fromID, fromDrawn := fromIDs[from]
+	toID, toDrawn := toIDs[to]
+	if !fromDrawn || !toDrawn {
+		return
+	}
+	b.doc.Edges = append(b.doc.Edges, &jsonDiagramEdge{
+		Source: fromID,
+		Target: toID,
+		Type:   edgeType,
+	})
+}
+
+func convertModelToDiagram(m *ast.Model) *jsonDiagramDocument {
+	if m == nil {
+		return nil
+	}
+
+	b := newDiagramBuilder(m.Name)
+	for _, a := range m.Actors {
+		b.appendActor(a)
+	}
+	for _, c := range m.Contexts {
+		b.appendContext(c)
+	}
+	b.appendEdges(m)
+
+	return b.doc
 }
 
 func convertEventToDiagram(e *ast.Event) *jsonDiagramEvent {
