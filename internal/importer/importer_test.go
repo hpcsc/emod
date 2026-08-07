@@ -3,6 +3,7 @@
 package importer_test
 
 import (
+	"encoding/json"
 	"fmt"
 	"os"
 	"testing"
@@ -36,9 +37,39 @@ func importFrom(t *testing.T, source string) *ast.Model {
 // the model becomes diagram JSON, the diagram JSON becomes an AST again.
 func importExported(t *testing.T, model *ast.Model) *ast.Model {
 	t.Helper()
+	return importDiagram(t, exportedDiagram(t, model))
+}
+
+func exportedDiagram(t *testing.T, model *ast.Model) string {
+	t.Helper()
 	diagramJSON, err := export.ExportDiagramJSON(model)
 	require.NoError(t, err)
-	return importDiagram(t, string(diagramJSON))
+	return string(diagramJSON)
+}
+
+// withoutNodeLabelled returns document with the node carrying label taken out of
+// it, standing for a viewer user deleting that node before saving.
+func withoutNodeLabelled(t *testing.T, document, label string) string {
+	t.Helper()
+
+	var doc map[string]any
+	require.NoError(t, json.Unmarshal([]byte(document), &doc))
+
+	nodes := doc["nodes"].([]any)
+	kept := make([]any, 0, len(nodes))
+	for _, node := range nodes {
+		if node.(map[string]any)["label"] == label {
+			continue
+		}
+		kept = append(kept, node)
+	}
+	require.Len(t, kept, len(nodes)-1,
+		"the document has to hold one node labelled %s, or the deletion below deletes nothing", label)
+	doc["nodes"] = kept
+
+	edited, err := json.Marshal(doc)
+	require.NoError(t, err)
+	return string(edited)
 }
 
 func importDiagram(t *testing.T, document string) *ast.Model {
@@ -86,28 +117,138 @@ func automationNodeKeying(label, value string) func(key string) string {
 
 func TestImportDiagram(t *testing.T) {
 	t.Run("round trip", func(t *testing.T) {
-		t.Run("reproduces the formatted source for every documented pattern", func(t *testing.T) {
-			source, err := os.ReadFile("../parser/testdata/all_patterns.emod")
-			require.NoError(t, err)
-
-			// Comments do not survive diagram JSON, so the baseline is the
-			// formatted model with comments stripped rather than the file.
-			original := parseModel(t, string(source))
-			stripComments(original)
-			expected := formatter.Format(original)
-
-			require.Equal(t, expected, formatter.Format(importFrom(t, string(source))))
+		t.Run("reproduces the formatted source for every documented pattern, notes on its slices included", func(t *testing.T) {
+			requireSaveRewritesFile(t, "../parser/testdata/all_patterns.emod",
+				"# Slice 1: Command Pattern")
 		})
 
-		t.Run("reproduces the formatted source across multiple contexts", func(t *testing.T) {
-			source, err := os.ReadFile("../parser/testdata/multi_context.emod")
-			require.NoError(t, err)
+		t.Run("reproduces the formatted source across multiple contexts, notes on the slices of each included", func(t *testing.T) {
+			requireSaveRewritesFile(t, "../parser/testdata/multi_context.emod",
+				"# A customer commits to buying and the shop records it",
+				"# The notice the order side asked for leaves the building")
+		})
 
-			original := parseModel(t, string(source))
-			stripComments(original)
-			expected := formatter.Format(original)
+		t.Run("re-emits every comment above the construct it was written on", func(t *testing.T) {
+			source := `emod 1
+model "Library Lending"
 
-			require.Equal(t, expected, formatter.Format(importFrom(t, string(source))))
+# Anyone holding a library card
+actor "Member"
+
+# Everything the library knows about a copy leaving the building
+context "Lending" {
+  # One copy held by one member over one date range
+  aggregate "Loan" {
+    # A member takes a copy off the shelf
+    slice "Borrow Copy" {
+      # The desk terminal the librarian types into
+      trigger "Lending Desk" {
+        actor Member
+        reads AvailableCopiesView
+      }
+
+      # Ask the library to hand a copy over
+      # The deposit is taken at the desk, not here
+      command BorrowCopy {
+        fields {
+          copyId string required
+        }
+      }
+
+      # A copy left the building
+      event CopyBorrowed {
+        fields {
+          loanId string required
+          copyId string required
+        }
+      }
+
+      # Every copy still on the shelf
+      view AvailableCopiesView {
+        fields {
+          copyId string required
+        }
+        subscribes [CopyBorrowed]
+      }
+
+      # Chases a copy nobody brought back
+      automation RecallOverdueCopy {
+        on CopyBorrowed
+        command BorrowCopy
+      }
+
+      flow {
+        command -> event: BorrowCopy -> CopyBorrowed
+      }
+    }
+  }
+
+  # A partner branch reports a loan of its own
+  slice "Import Partner Loan" {
+    # Record a loan taken at a partner branch
+    command ImportPartnerLoan {
+      fields {
+        externalRef string required
+      }
+    }
+
+    # Restates a partner branch's notice in the library's own language
+    translation PartnerLoanImport {
+      external_system "Partner Branch API"
+      command ImportPartnerLoan
+      # A partner branch reported a loan
+      event PartnerLoanImported {
+        fields {
+          loanId      string required
+          externalRef string required
+        }
+      }
+    }
+  }
+}
+`
+			require.Equal(t, source, formatter.Format(importFrom(t, source)))
+		})
+
+		t.Run("deleting a node takes its comments with it and leaves the ones beside it alone", func(t *testing.T) {
+			source := `emod 1
+model "Library Lending"
+
+context "Lending" {
+  slice "Borrow Copy" {
+    # Ask the library to hand a copy over
+    command BorrowCopy {
+      fields {
+        copyId string required
+      }
+    }
+
+    # Pull a copy back from a member who kept it too long
+    # Only a librarian may run this
+    command RecallCopy {
+      fields {
+        loanId string required
+      }
+    }
+  }
+}
+`
+			document := withoutNodeLabelled(t, exportedDiagram(t, parseModel(t, source)), "RecallCopy")
+
+			require.Equal(t, `emod 1
+model "Library Lending"
+
+context "Lending" {
+  slice "Borrow Copy" {
+    # Ask the library to hand a copy over
+    command BorrowCopy {
+      fields {
+        copyId string required
+      }
+    }
+  }
+}
+`, formatter.Format(importDiagram(t, document)))
 		})
 
 		t.Run("preserves slices declared directly under a context", func(t *testing.T) {
@@ -716,10 +857,11 @@ context "C" {
 }
 
 // stripWhatDiagramJSONDrops removes what ImportDiagram states a diagram document
-// does not carry — comments, context modes, event tags and decides_on clauses —
-// so what remains is the most a round trip through that document can reproduce.
+// does not carry — the comments no node stands for, context modes, event tags and
+// decides_on clauses — so what remains is the most a round trip through that
+// document can reproduce.
 func stripWhatDiagramJSONDrops(model *ast.Model) {
-	stripComments(model)
+	stripCommentsNoNodeCarries(model)
 	for _, c := range model.Contexts {
 		c.Mode = ""
 	}
@@ -737,6 +879,29 @@ func stripWhatASaveStillLoses(model *ast.Model) {
 	stripWhatDiagramJSONDrops(model)
 	model.Description = ""
 	forEachSlice(model, stripFlowsLeavingTheSlice)
+}
+
+// requireSaveRewritesFile requires that a viewer save of the .emod file at path
+// reproduces that file's own formatting, minus what a diagram document drops.
+// Each comment in commentsKept is required of the baseline first, so a strip
+// that took every comment out cannot answer the comparison with a baseline
+// carrying none of them.
+func requireSaveRewritesFile(t *testing.T, path string, commentsKept ...string) {
+	t.Helper()
+
+	source, err := os.ReadFile(path)
+	require.NoError(t, err)
+
+	original := parseModel(t, string(source))
+	stripWhatDiagramJSONDrops(original)
+	expected := formatter.Format(original)
+
+	for _, comment := range commentsKept {
+		require.Contains(t, expected, comment,
+			"the baseline has to keep the notes a node does carry, or a file stripped of every one of them answers the comparison below")
+	}
+
+	require.Equal(t, expected, formatter.Format(importFrom(t, string(source))))
 }
 
 // requireSaveKeepsAllButItsLosses requires that a viewer save of the fixture —
@@ -798,44 +963,38 @@ func stripSliceDecisionMetadata(s *ast.Slice) {
 	}
 }
 
-func stripComments(model *ast.Model) {
+// stripCommentsNoNodeCarries removes the comments a diagram document files under
+// no node: the model's own, and those written on an invariant, a spec, a flow and
+// a decides_on clause, none of which the exporter draws. Every other comment is
+// left where it was written, because the node its construct is drawn as carries
+// it back.
+func stripCommentsNoNodeCarries(model *ast.Model) {
 	model.Comments = nil
-	for _, a := range model.Actors {
-		a.Comments = nil
-	}
 	for _, c := range model.Contexts {
-		c.Comments = nil
+		stripInvariantComments(c.Invariants)
 		for _, agg := range c.Aggregates {
-			agg.Comments = nil
+			stripInvariantComments(agg.Invariants)
 		}
 	}
-	forEachSlice(model, stripSliceComments)
+	forEachSlice(model, stripSliceCommentsNoNodeCarries)
 }
 
-func stripSliceComments(s *ast.Slice) {
-	s.Comments = nil
-	if s.Trigger != nil {
-		s.Trigger.Comments = nil
+func stripInvariantComments(invariants []*ast.Invariant) {
+	for _, inv := range invariants {
+		inv.Comments = nil
 	}
+}
+
+func stripSliceCommentsNoNodeCarries(s *ast.Slice) {
 	for _, c := range s.Commands {
-		c.Comments = nil
-	}
-	for _, e := range s.Events {
-		e.Comments = nil
-	}
-	for _, v := range s.Views {
-		v.Comments = nil
-	}
-	for _, a := range s.Automations {
-		a.Comments = nil
-	}
-	for _, tr := range s.Translations {
-		tr.Comments = nil
-		if tr.Event != nil {
-			tr.Event.Comments = nil
+		if c.DecidesOn != nil {
+			c.DecidesOn.Comments = nil
 		}
 	}
 	for _, f := range s.Flows {
 		f.Comments = nil
+	}
+	for _, spec := range s.Specs {
+		spec.Comments = nil
 	}
 }

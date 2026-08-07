@@ -3179,6 +3179,17 @@ func TestExport(t *testing.T) {
 			}, diagramDescriptionsByLabel(doc))
 		})
 
+		t.Run("carries every commented construct's own notes on the node drawn for it, while a model commenting only itself carries none", func(t *testing.T) {
+			commented := diagramDocOf(t, commentedLibraryLendingModel())
+
+			require.Equal(t, commentedLibraryLendingNodeComments(), diagramCommentsByLabel(commented))
+
+			require.Len(t, commentsAnywhere(commented), len(commentedLibraryLendingNodeComments()),
+				"the walk has to find comments where they do belong, or finding none below says nothing")
+			require.Empty(t, commentsAnywhere(diagramDocOf(t, test.HotelReservationModel(t))),
+				"a note written on the model belongs to no node, and an uncommented construct must not carry the key even empty-valued, or its bytes change")
+		})
+
 		t.Run("fields named after keywords reach the node field lists and nothing else", func(t *testing.T) {
 			keywordNamed := diagramDocOf(t, test.KeywordFieldSearchCatalogModel(t))
 			ordinaryNamed := diagramDocOf(t, test.WithOrdinaryFieldNames(test.KeywordFieldSearchCatalogModel(t)))
@@ -4267,6 +4278,90 @@ func describedHotelReservationNodeDescriptions() map[string]string {
 	return byLabel
 }
 
+// commentedLibraryLendingModel comments a construct of every kind a node is
+// drawn for, in both homes a slice has, and comments the model itself, which no
+// node stands for.
+func commentedLibraryLendingModel() *ast.Model {
+	return &ast.Model{
+		Name:     "Library Lending",
+		Comments: []*ast.Comment{{Text: "# The lending side of the library"}},
+		Actors: []*ast.Actor{{
+			Name:     "Member",
+			Comments: []*ast.Comment{{Text: "# Anyone holding a library card"}},
+		}},
+		Contexts: []*ast.Context{{
+			Name:     "Lending",
+			Comments: []*ast.Comment{{Text: "# Everything the library knows about a copy leaving the building"}},
+			Aggregates: []*ast.Aggregate{{
+				Name:     "Loan",
+				Comments: []*ast.Comment{{Text: "# One copy held by one member over one date range"}},
+				Slices: []*ast.Slice{{
+					Name:     "Borrow Copy",
+					Comments: []*ast.Comment{{Text: "# A member takes a copy off the shelf"}},
+					Trigger: &ast.Trigger{
+						Name:     "Lending Desk",
+						Comments: []*ast.Comment{{Text: "# The desk terminal the librarian types into"}},
+					},
+					Commands: []*ast.Command{{
+						Name: "BorrowCopy",
+						Comments: []*ast.Comment{
+							{Text: "# Ask the library to hand a copy over"},
+							{Text: "# The deposit is taken at the desk, not here"},
+						},
+					}},
+					Events: []*ast.Event{{
+						Name:     "CopyBorrowed",
+						Comments: []*ast.Comment{{Text: "# A copy left the building"}},
+					}},
+					Views: []*ast.View{{
+						Name:     "AvailableCopiesView",
+						Comments: []*ast.Comment{{Text: "# Every copy still on the shelf"}},
+					}},
+					Automations: []*ast.Automation{{
+						Name:     "RecallOverdueCopy",
+						Comments: []*ast.Comment{{Text: "# Chases a copy nobody brought back"}},
+					}},
+				}},
+			}},
+			Slices: []*ast.Slice{{
+				Name:     "Import Partner Loan",
+				Comments: []*ast.Comment{{Text: "# A partner branch reports a loan of its own"}},
+				Translations: []*ast.Translation{{
+					Name:     "PartnerLoanImport",
+					Comments: []*ast.Comment{{Text: "# Restates a partner branch's notice in the library's own language"}},
+					Event: &ast.Event{
+						Name:     "PartnerLoanImported",
+						Comments: []*ast.Comment{{Text: "# A partner branch reported a loan"}},
+					},
+				}},
+			}},
+		}},
+	}
+}
+
+// commentedLibraryLendingNodeComments is the prose a diagram document of
+// commentedLibraryLendingModel files by node label: the comments every construct
+// carries, plus a second copy of the translation event's, because the exporter
+// draws that event a node of its own beside nesting it in the translation. The
+// model's own comment is left out — it belongs to no node.
+func commentedLibraryLendingNodeComments() map[string][]string {
+	return map[string][]string{
+		"Member":                  {"# Anyone holding a library card"},
+		"Lending":                 {"# Everything the library knows about a copy leaving the building"},
+		"Loan":                    {"# One copy held by one member over one date range"},
+		"Borrow Copy":             {"# A member takes a copy off the shelf"},
+		"Lending Desk":            {"# The desk terminal the librarian types into"},
+		"BorrowCopy":              {"# Ask the library to hand a copy over", "# The deposit is taken at the desk, not here"},
+		"CopyBorrowed":            {"# A copy left the building"},
+		"AvailableCopiesView":     {"# Every copy still on the shelf"},
+		"RecallOverdueCopy":       {"# Chases a copy nobody brought back"},
+		"Import Partner Loan":     {"# A partner branch reports a loan of its own"},
+		"PartnerLoanImport":       {"# Restates a partner branch's notice in the library's own language"},
+		"PartnerLoanImport event": {"# A partner branch reported a loan"},
+		"PartnerLoanImported":     {"# A partner branch reported a loan"},
+	}
+}
+
 // keywordFieldsByOwner transcribes what test.KeywordFieldSearchCatalog declares,
 // so an export is read back against the source an author wrote rather than
 // against another export of it.
@@ -4996,34 +5091,62 @@ func descriptionsByConstruct(t *testing.T, doc map[string]any) map[string]any {
 	}
 }
 
-// diagramDescriptionsByLabel files the description of every node of a decoded
-// diagram document under that node's label, and the description of the event a
-// translation node nests under the translation's label followed by "event", so
-// the standalone node the exporter draws for that same event keeps an entry of
-// its own rather than overwriting it.
+// diagramObjectsByLabel files every node of a decoded diagram document under its
+// label, and the event a translation node nests under the translation's label
+// followed by "event", so the standalone node the exporter draws for that same
+// event keeps an entry of its own rather than overwriting it.
+func diagramObjectsByLabel(doc map[string]any) map[string]map[string]any {
+	byLabel := make(map[string]map[string]any)
+	for _, node := range objectsUnder(doc, "nodes") {
+		label := node["label"].(string)
+		byLabel[label] = node
+		if event, nests := node["event"].(map[string]any); nests {
+			byLabel[label+" event"] = event
+		}
+	}
+	return byLabel
+}
+
 func diagramDescriptionsByLabel(doc map[string]any) map[string]string {
 	byLabel := make(map[string]string)
-	describe := func(label string, object map[string]any) {
+	for label, object := range diagramObjectsByLabel(doc) {
 		if description, describes := object["description"].(string); describes {
 			byLabel[label] = description
 		}
 	}
+	return byLabel
+}
 
-	for _, node := range objectsUnder(doc, "nodes") {
-		label := node["label"].(string)
-		describe(label, node)
-		if event, nests := node["event"].(map[string]any); nests {
-			describe(label+" event", event)
+func diagramCommentsByLabel(doc map[string]any) map[string][]string {
+	byLabel := make(map[string][]string)
+	for label, object := range diagramObjectsByLabel(doc) {
+		var texts []string
+		for _, comment := range objectsUnder(object, "comments") {
+			texts = append(texts, comment["text"].(string))
+		}
+		if len(texts) > 0 {
+			byLabel[label] = texts
 		}
 	}
 	return byLabel
 }
 
 func descriptionsAnywhere(node any) []any {
+	return valuesAnywhere(node, "description")
+}
+
+func commentsAnywhere(node any) []any {
+	return valuesAnywhere(node, "comments")
+}
+
+// valuesAnywhere collects what every object of a decoded document files under
+// key, however deeply nested, so a document can be asked whether it carries the
+// key at all rather than only where a reader thought to look.
+func valuesAnywhere(node any, key string) []any {
 	var found []any
 	eachObject(node, func(object map[string]any) {
-		if description, ok := object["description"]; ok {
-			found = append(found, description)
+		if value, carries := object[key]; carries {
+			found = append(found, value)
 		}
 	})
 	return found

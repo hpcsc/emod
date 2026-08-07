@@ -19,31 +19,40 @@ type diagramDocument struct {
 }
 
 type diagramNode struct {
-	ID             string          `json:"id"`
-	Type           string          `json:"type"`
-	Label          string          `json:"label"`
-	Description    string          `json:"description,omitempty"`
-	ParentID       *string         `json:"parentId"`
-	Fields         []*diagramField `json:"fields,omitempty"`
-	Actor          string          `json:"actor,omitempty"`
-	Reads          string          `json:"reads,omitempty"`
-	Subscribes     []string        `json:"subscribes,omitempty"`
-	OnEvent        string          `json:"on_event,omitempty"`
-	Schedule       string          `json:"every,omitempty"`
-	Command        string          `json:"command,omitempty"`
-	TargetContext  string          `json:"target_context,omitempty"`
-	ExternalSystem string          `json:"external_system,omitempty"`
-	Source         string          `json:"source,omitempty"`
-	ExternalName   string          `json:"external_name,omitempty"`
-	Event          *diagramEvent   `json:"event,omitempty"`
+	ID             string            `json:"id"`
+	Type           string            `json:"type"`
+	Label          string            `json:"label"`
+	Description    string            `json:"description,omitempty"`
+	ParentID       *string           `json:"parentId"`
+	Fields         []*diagramField   `json:"fields,omitempty"`
+	Comments       []*diagramComment `json:"comments,omitempty"`
+	Actor          string            `json:"actor,omitempty"`
+	Reads          string            `json:"reads,omitempty"`
+	Subscribes     []string          `json:"subscribes,omitempty"`
+	OnEvent        string            `json:"on_event,omitempty"`
+	Schedule       string            `json:"every,omitempty"`
+	Command        string            `json:"command,omitempty"`
+	TargetContext  string            `json:"target_context,omitempty"`
+	ExternalSystem string            `json:"external_system,omitempty"`
+	Source         string            `json:"source,omitempty"`
+	ExternalName   string            `json:"external_name,omitempty"`
+	Event          *diagramEvent     `json:"event,omitempty"`
 }
 
 type diagramEvent struct {
-	Name         string          `json:"name"`
-	Description  string          `json:"description,omitempty"`
-	Source       string          `json:"source,omitempty"`
-	ExternalName string          `json:"external_name,omitempty"`
-	Fields       []*diagramField `json:"fields,omitempty"`
+	Name         string            `json:"name"`
+	Description  string            `json:"description,omitempty"`
+	Comments     []*diagramComment `json:"comments,omitempty"`
+	Source       string            `json:"source,omitempty"`
+	ExternalName string            `json:"external_name,omitempty"`
+	Fields       []*diagramField   `json:"fields,omitempty"`
+}
+
+// diagramComment drops the position the exporter writes beside each comment: it
+// points into the file the diagram was exported from, and a viewer save rewrites
+// every line of that file.
+type diagramComment struct {
+	Text string `json:"text"`
 }
 
 type diagramField struct {
@@ -60,9 +69,11 @@ type diagramEdge struct {
 
 // ImportDiagram converts a diagram JSON document into an AST model.
 //
-// Diagram JSON carries no comments, context modes, event tags, or decides_on
-// clauses, so those are absent from the result even if the model the diagram
-// was exported from had them.
+// Diagram JSON carries no context modes, event tags or decides_on clauses, so
+// those are absent from the result even if the model the diagram was exported
+// from had them. A comment survives wherever a node stands for the construct it
+// was written on, and is lost where none does — on the model itself, on an
+// invariant, a spec, a flow or a decides_on clause.
 func ImportDiagram(data []byte) (*ast.Model, error) {
 	var doc diagramDocument
 	if err := json.Unmarshal(data, &doc); err != nil {
@@ -94,7 +105,11 @@ func ImportDiagram(data []byte) (*ast.Model, error) {
 		}
 		switch n.Type {
 		case "actor":
-			model.Actors = append(model.Actors, &ast.Actor{Name: n.Label, Description: n.Description})
+			model.Actors = append(model.Actors, &ast.Actor{
+				Name:        n.Label,
+				Description: n.Description,
+				Comments:    convertComments(n.Comments),
+			})
 		case "context":
 			model.Contexts = append(model.Contexts, b.buildContext(n))
 		}
@@ -128,13 +143,13 @@ func (b *builder) children(parentID, typ string) []*diagramNode {
 }
 
 func (b *builder) buildContext(n *diagramNode) *ast.Context {
-	ctx := &ast.Context{Name: n.Label, Description: n.Description}
+	ctx := &ast.Context{
+		Name:        n.Label,
+		Description: n.Description,
+		Comments:    convertComments(n.Comments),
+	}
 	for _, aggNode := range b.children(n.ID, "aggregate") {
-		agg := &ast.Aggregate{Name: aggNode.Label, Description: aggNode.Description}
-		for _, sliceNode := range b.children(aggNode.ID, "slice") {
-			agg.Slices = append(agg.Slices, b.buildSlice(sliceNode))
-		}
-		ctx.Aggregates = append(ctx.Aggregates, agg)
+		ctx.Aggregates = append(ctx.Aggregates, b.buildAggregate(aggNode))
 	}
 	for _, sliceNode := range b.children(n.ID, "slice") {
 		ctx.Slices = append(ctx.Slices, b.buildSlice(sliceNode))
@@ -142,44 +157,77 @@ func (b *builder) buildContext(n *diagramNode) *ast.Context {
 	return ctx
 }
 
+func (b *builder) buildAggregate(n *diagramNode) *ast.Aggregate {
+	agg := &ast.Aggregate{
+		Name:        n.Label,
+		Description: n.Description,
+		Comments:    convertComments(n.Comments),
+	}
+	for _, sliceNode := range b.children(n.ID, "slice") {
+		agg.Slices = append(agg.Slices, b.buildSlice(sliceNode))
+	}
+	return agg
+}
+
 func (b *builder) buildSlice(n *diagramNode) *ast.Slice {
-	slice := &ast.Slice{Name: n.Label, Description: n.Description}
-
-	// Translation events are re-emitted inside their translation block, so the
-	// standalone event node the exporter adds for them must not become a
-	// second, duplicate top-level event declaration.
-	translationEvents := make(map[string]bool)
-	for _, t := range b.children(n.ID, "translation") {
-		if t.Event != nil && t.Event.Name != "" {
-			translationEvents[t.Event.Name] = true
-		}
+	slice := &ast.Slice{
+		Name:        n.Label,
+		Description: n.Description,
+		Comments:    convertComments(n.Comments),
 	}
 
-	if triggers := b.children(n.ID, "trigger"); len(triggers) > 0 {
-		t := triggers[0]
-		slice.Trigger = &ast.Trigger{
-			Name:        t.Label,
-			Description: t.Description,
-			Actor:       t.Actor,
-			Reads:       t.Reads,
-		}
-		b.register(t.ID, slice, slice.Trigger)
-	}
+	b.appendTrigger(slice, n.ID)
+	b.appendCommands(slice, n.ID)
+	b.appendEvents(slice, n.ID)
+	b.appendViews(slice, n.ID)
+	b.appendAutomations(slice, n.ID)
+	b.appendTranslations(slice, n.ID)
 
-	for _, c := range b.children(n.ID, "command") {
-		cmd := &ast.Command{Name: c.Label, Description: c.Description, Fields: convertFields(c.Fields)}
+	b.register(n.ID, slice, slice)
+	return slice
+}
+
+func (b *builder) appendTrigger(slice *ast.Slice, sliceID string) {
+	triggers := b.children(sliceID, "trigger")
+	if len(triggers) == 0 {
+		return
+	}
+	t := triggers[0]
+	slice.Trigger = &ast.Trigger{
+		Name:        t.Label,
+		Description: t.Description,
+		Comments:    convertComments(t.Comments),
+		Actor:       t.Actor,
+		Reads:       t.Reads,
+	}
+	b.register(t.ID, slice, slice.Trigger)
+}
+
+func (b *builder) appendCommands(slice *ast.Slice, sliceID string) {
+	for _, c := range b.children(sliceID, "command") {
+		cmd := &ast.Command{
+			Name:        c.Label,
+			Description: c.Description,
+			Comments:    convertComments(c.Comments),
+			Fields:      convertFields(c.Fields),
+		}
 		slice.Commands = append(slice.Commands, cmd)
 		b.register(c.ID, slice, cmd)
 	}
+}
 
-	for _, e := range b.children(n.ID, "event") {
-		if translationEvents[e.Label] {
+func (b *builder) appendEvents(slice *ast.Slice, sliceID string) {
+	nestedInTranslation := b.translationEventNames(sliceID)
+
+	for _, e := range b.children(sliceID, "event") {
+		if nestedInTranslation[e.Label] {
 			b.register(e.ID, slice, nil)
 			continue
 		}
 		evt := &ast.Event{
 			Name:         e.Label,
 			Description:  e.Description,
+			Comments:     convertComments(e.Comments),
 			Source:       e.Source,
 			ExternalName: e.ExternalName,
 			Fields:       convertFields(e.Fields),
@@ -187,22 +235,42 @@ func (b *builder) buildSlice(n *diagramNode) *ast.Slice {
 		slice.Events = append(slice.Events, evt)
 		b.register(e.ID, slice, evt)
 	}
+}
 
-	for _, v := range b.children(n.ID, "view") {
+// translationEventNames names the events the slice's translations nest. Each of
+// them is re-emitted inside its translation block, so the standalone event node
+// the exporter adds for it must not become a second, duplicate top-level event
+// declaration.
+func (b *builder) translationEventNames(sliceID string) map[string]bool {
+	nested := make(map[string]bool)
+	for _, t := range b.children(sliceID, "translation") {
+		if t.Event != nil && t.Event.Name != "" {
+			nested[t.Event.Name] = true
+		}
+	}
+	return nested
+}
+
+func (b *builder) appendViews(slice *ast.Slice, sliceID string) {
+	for _, v := range b.children(sliceID, "view") {
 		view := &ast.View{
 			Name:        v.Label,
 			Description: v.Description,
+			Comments:    convertComments(v.Comments),
 			Fields:      convertFields(v.Fields),
 			Subscribes:  append([]string(nil), v.Subscribes...),
 		}
 		slice.Views = append(slice.Views, view)
 		b.register(v.ID, slice, view)
 	}
+}
 
-	for _, a := range b.children(n.ID, "automation") {
+func (b *builder) appendAutomations(slice *ast.Slice, sliceID string) {
+	for _, a := range b.children(sliceID, "automation") {
 		auto := &ast.Automation{
 			Name:          a.Label,
 			Description:   a.Description,
+			Comments:      convertComments(a.Comments),
 			OnEvent:       a.OnEvent,
 			Schedule:      a.Schedule,
 			Reads:         a.Reads,
@@ -212,11 +280,14 @@ func (b *builder) buildSlice(n *diagramNode) *ast.Slice {
 		slice.Automations = append(slice.Automations, auto)
 		b.register(a.ID, slice, auto)
 	}
+}
 
-	for _, t := range b.children(n.ID, "translation") {
+func (b *builder) appendTranslations(slice *ast.Slice, sliceID string) {
+	for _, t := range b.children(sliceID, "translation") {
 		trans := &ast.Translation{
 			Name:           t.Label,
 			Description:    t.Description,
+			Comments:       convertComments(t.Comments),
 			ExternalSystem: t.ExternalSystem,
 			Reads:          t.Reads,
 			Command:        t.Command,
@@ -225,6 +296,7 @@ func (b *builder) buildSlice(n *diagramNode) *ast.Slice {
 			trans.Event = &ast.Event{
 				Name:         t.Event.Name,
 				Description:  t.Event.Description,
+				Comments:     convertComments(t.Event.Comments),
 				Source:       t.Event.Source,
 				ExternalName: t.Event.ExternalName,
 				Fields:       convertFields(t.Event.Fields),
@@ -233,9 +305,6 @@ func (b *builder) buildSlice(n *diagramNode) *ast.Slice {
 		slice.Translations = append(slice.Translations, trans)
 		b.register(t.ID, slice, trans)
 	}
-
-	b.register(n.ID, slice, slice)
-	return slice
 }
 
 func (b *builder) register(nodeID string, slice *ast.Slice, value any) {
@@ -341,6 +410,20 @@ func appendMissing(existing []string, value string) []string {
 		return existing
 	}
 	return append(existing, value)
+}
+
+func convertComments(comments []*diagramComment) []*ast.Comment {
+	if len(comments) == 0 {
+		return nil
+	}
+	out := make([]*ast.Comment, 0, len(comments))
+	for _, c := range comments {
+		if c == nil {
+			continue
+		}
+		out = append(out, &ast.Comment{Text: c.Text})
+	}
+	return out
 }
 
 func convertFields(fields []*diagramField) []*ast.Field {

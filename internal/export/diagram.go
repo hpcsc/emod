@@ -25,6 +25,7 @@ type jsonDiagramNode struct {
 	ParentID    *string             `json:"parentId"`
 	Fields      []*jsonDiagramField `json:"fields,omitempty"`
 	Position    *jsonPosition       `json:"position,omitempty"`
+	Comments    []*jsonComment      `json:"comments,omitempty"`
 	// Type-specific metadata for trigger, event, view, automation, translation
 	Actor          string            `json:"actor,omitempty"`
 	Reads          string            `json:"reads,omitempty"`
@@ -158,6 +159,7 @@ func (b *diagramBuilder) appendActor(a *ast.Actor) {
 		Description: a.Description,
 		ParentID:    nil,
 		Position:    convertPosition(a.NamePos),
+		Comments:    convertComments(a.Comments),
 	})
 }
 
@@ -173,6 +175,7 @@ func (b *diagramBuilder) appendContext(c *ast.Context) {
 		Description: c.Description,
 		ParentID:    nil,
 		Position:    convertPosition(c.NamePos),
+		Comments:    convertComments(c.Comments),
 	})
 
 	for _, agg := range c.Aggregates {
@@ -195,6 +198,7 @@ func (b *diagramBuilder) appendAggregate(agg *ast.Aggregate, ctxID string) {
 		Description: agg.Description,
 		ParentID:    &ctxID,
 		Position:    convertPosition(agg.NamePos),
+		Comments:    convertComments(agg.Comments),
 	})
 
 	for _, s := range agg.Slices {
@@ -214,6 +218,7 @@ func (b *diagramBuilder) appendSlice(s *ast.Slice, parentID string) {
 		Description: s.Description,
 		ParentID:    &parentID,
 		Position:    convertPosition(s.NamePos),
+		Comments:    convertComments(s.Comments),
 	})
 
 	b.appendCommands(s.Commands, sliceID)
@@ -238,6 +243,7 @@ func (b *diagramBuilder) appendCommands(commands []*ast.Command, sliceID string)
 			Description: cmd.Description,
 			ParentID:    &sliceID,
 			Position:    convertPosition(cmd.NamePos),
+			Comments:    convertComments(cmd.Comments),
 		}
 		if len(cmd.Fields) > 0 {
 			node.Fields = convertFieldsToDiagram(cmd.Fields)
@@ -265,6 +271,7 @@ func (b *diagramBuilder) appendEvent(evt *ast.Event, sliceID string) {
 		Description:  evt.Description,
 		ParentID:     &sliceID,
 		Position:     convertPosition(evt.NamePos),
+		Comments:     convertComments(evt.Comments),
 		Source:       evt.Source,
 		ExternalName: evt.ExternalName,
 	}
@@ -287,6 +294,7 @@ func (b *diagramBuilder) appendTrigger(t *ast.Trigger, sliceID string) {
 		Description: t.Description,
 		ParentID:    &sliceID,
 		Position:    convertPosition(t.NamePos),
+		Comments:    convertComments(t.Comments),
 		Actor:       t.Actor,
 		Reads:       t.Reads,
 	})
@@ -306,6 +314,7 @@ func (b *diagramBuilder) appendViews(views []*ast.View, sliceID string) {
 			Description: v.Description,
 			ParentID:    &sliceID,
 			Position:    convertPosition(v.NamePos),
+			Comments:    convertComments(v.Comments),
 			Subscribes:  v.Subscribes,
 		}
 		if len(v.Fields) > 0 {
@@ -329,6 +338,7 @@ func (b *diagramBuilder) appendAutomations(automations []*ast.Automation, sliceI
 			Description:   a.Description,
 			ParentID:      &sliceID,
 			Position:      convertPosition(a.NamePos),
+			Comments:      convertComments(a.Comments),
 			OnEvent:       a.OnEvent,
 			Schedule:      a.Schedule,
 			Reads:         a.Reads,
@@ -352,6 +362,7 @@ func (b *diagramBuilder) appendTranslations(translations []*ast.Translation, sli
 			Description:    t.Description,
 			ParentID:       &sliceID,
 			Position:       convertPosition(t.NamePos),
+			Comments:       convertComments(t.Comments),
 			ExternalSystem: t.ExternalSystem,
 			Reads:          t.Reads,
 			Command:        t.Command,

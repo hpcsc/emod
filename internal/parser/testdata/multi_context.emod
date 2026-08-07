@@ -3,6 +3,7 @@ model "Order Management"
 
 context "Orders" {
   aggregate "Order" {
+    # A customer commits to buying and the shop records it
     slice "Place Order" {
       command PlaceOrder {
         fields {
@@ -44,6 +45,7 @@ context "Orders" {
 
 context "Notifications" {
   aggregate "Notification" {
+    # The notice the order side asked for leaves the building
     slice "Send Notification" {
       command SendNotification {
         fields {
