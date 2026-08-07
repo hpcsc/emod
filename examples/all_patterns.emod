@@ -1,3 +1,4 @@
+emod 1
 # Hotel Reservation System — exercises all four slice patterns
 model "Hotel Reservation"
 
@@ -5,7 +6,6 @@ actor "Guest"
 
 context "Reservations" {
   aggregate "Reservation" {
-
     # Slice 1: Command Pattern
     slice "Reserve a Room" {
       trigger "Reservation Form" {
@@ -15,20 +15,20 @@ context "Reservations" {
 
       command ReserveRoom {
         fields {
-          roomId     string required
-          guestName  string required
-          checkIn    date   required
-          checkOut   date   required
+          roomId    string required
+          guestName string required
+          checkIn   date   required
+          checkOut  date   required
         }
       }
 
       event RoomReserved {
         fields {
-          reservationId string required
-          roomId        string required
-          guestName     string required
-          checkIn       date   required
-          checkOut      date   required
+          reservationId string    required
+          roomId        string    required
+          guestName     string    required
+          checkIn       date      required
+          checkOut      date      required
           reservedAt    timestamp required
         }
       }
@@ -61,8 +61,8 @@ context "Reservations" {
 
       event GuestCheckedOut {
         fields {
-          reservationId string required
-          roomId        string required
+          reservationId string    required
+          roomId        string    required
           checkedOutAt  timestamp required
         }
       }
@@ -123,12 +123,6 @@ context "Reservations" {
 
     # Slice 6: Automation Pattern — woken by a schedule
     slice "Expire Unconfirmed Reservations" {
-      automation UnconfirmedReservationExpirer {
-        every "0 2 * * *"
-        reads UnconfirmedReservationsView
-        command ExpireReservation
-      }
-
       command ExpireReservation {
         fields {
           reservationId string required
@@ -141,6 +135,12 @@ context "Reservations" {
           roomId        string    required
           expiredAt     timestamp required
         }
+      }
+
+      automation UnconfirmedReservationExpirer {
+        every "0 2 * * *"
+        reads UnconfirmedReservationsView
+        command ExpireReservation
       }
 
       flow {
@@ -159,7 +159,6 @@ context "Reservations" {
         subscribes [RoomReserved, ReservationExpired]
       }
     }
-
   }
 }
 

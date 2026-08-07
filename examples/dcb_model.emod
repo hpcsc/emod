@@ -1,3 +1,4 @@
+emod 1
 # Order Processing — Dynamic Consistency Boundary model
 # Events carry tags so commands can express cross-cutting consistency
 # boundaries via tag-scoped queries
