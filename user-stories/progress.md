@@ -3,7 +3,7 @@
 Which story in each in-progress story file is delivered. Files under
 `user-stories/completed/` are finished in full and are not tracked here.
 
-**22 of 172 delivered.**
+**22 of 178 delivered.**
 
 ## [emod-desktop.md](./emod-desktop.md) — 0/16
 
@@ -69,6 +69,15 @@ realigned forms under a test that runs every one of them through `emod validate`
 - [x] US-009: Complete and navigate automations in the editor
 - [x] US-010: Highlight the realigned syntax
 - [x] US-011: Learn the realignment from examples and the reference
+
+## [viewer-descriptions-and-comments.md](./viewer-descriptions-and-comments.md) — 0/6
+
+- [ ] US-001: Carry descriptions through the diagram JSON
+- [ ] US-002: Preserve comments through a viewer round-trip
+- [ ] US-003: Read a construct's description in the detail panel
+- [ ] US-004: See context and aggregate descriptions on their headers
+- [ ] US-005: Spot and read a description without opening the panel
+- [ ] US-006: Spot and read comments on any construct
 
 ## [00-llm-foundation.md](./ai/00-llm-foundation.md) — 5/10
 
