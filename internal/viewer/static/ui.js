@@ -4,19 +4,36 @@ import { Model } from './model.js';
 import { bus } from './bus.js';
 
 // ─── Tooltip ─────────────────────────────────────────────────
+function nodeFields(node) {
+  return node.fields || [];
+}
+
+function hasTooltipContent(node) {
+  return Boolean(node.description) || nodeFields(node).length > 0;
+}
+
+function buildTooltipHtml(node) {
+  let html = '<div class="tt-header">' + Renderer.esc(node.label) + '</div>';
+  if (node.description) {
+    html += '<div class="tt-description">' + Renderer.esc(node.description) + '</div>';
+  }
+
+  const fields = nodeFields(node);
+  if (fields.length === 0) return html;
+
+  html += '<table><thead><tr><th>Field</th><th>Type</th><th></th></tr></thead><tbody>';
+  fields.forEach(function(f) {
+    const mod = f.modifier ? '<span class="tf-modifier">(' + Renderer.esc(f.modifier) + ')</span>' : '';
+    html += '<tr><td class="tf-name">' + Renderer.esc(f.name) + '</td><td class="tf-type">' + Renderer.esc(f.type) + '</td><td>' + mod + '</td></tr>';
+  });
+  return html + '</tbody></table>';
+}
+
 function showTooltip(store, node, evt) {
   const el = store.dom.tooltip;
   if (!el) return;
 
-  let html = '<div class="tt-header">' + Renderer.esc(node.label) + '</div>';
-  html += '<table><thead><tr><th>Field</th><th>Type</th><th></th></tr></thead><tbody>';
-  (node.fields || []).forEach(function(f) {
-    const mod = f.modifier ? '<span class="tf-modifier">(' + Renderer.esc(f.modifier) + ')</span>' : '';
-    html += '<tr><td class="tf-name">' + Renderer.esc(f.name) + '</td><td class="tf-type">' + Renderer.esc(f.type) + '</td><td>' + mod + '</td></tr>';
-  });
-  html += '</tbody></table>';
-  el.innerHTML = html;
-
+  el.innerHTML = buildTooltipHtml(node);
   el.style.display = "block";
   positionTooltip(store, evt.clientX, evt.clientY);
 }
@@ -24,6 +41,16 @@ function showTooltip(store, node, evt) {
 function hideTooltip(store) {
   const el = store.dom.tooltip;
   if (el) el.style.display = "none";
+}
+
+function updateTooltipForBlock(store, block, evt) {
+  const nodeId = block.dataset.nodeId;
+  const node = nodeId ? store.nodeById.get(nodeId) : null;
+  if (!node || !hasTooltipContent(node) || nodeId === store.interaction.selectedNodeId) {
+    hideTooltip(store);
+    return;
+  }
+  showTooltip(store, node, evt);
 }
 
 function positionTooltip(store, cx, cy) {
@@ -664,13 +691,7 @@ function initDelegation(store) {
     const block = evt.target.closest(".diagram-node");
     if (block === hoveredBlock) return;
     hoveredBlock = block;
-    if (!block) return;
-    const nodeId = block.dataset.nodeId;
-    if (!nodeId) return;
-    const node = store.nodeById.get(nodeId);
-    if (!node || !node.fields || node.fields.length === 0) return;
-    if (nodeId === store.interaction.selectedNodeId) return;
-    showTooltip(store, node, evt);
+    if (block) updateTooltipForBlock(store, block, evt);
   });
 
   svgEl.addEventListener("pointerout", function(evt) {
