@@ -3,6 +3,50 @@ import { Layout } from './layout.js';
 
 var NS = "http://www.w3.org/2000/svg";
 var clockMarking = "⏱";
+var ellipsis = "…";
+var labelWidthFontSize = 13;
+var labelWidthPadding = 16;
+var descriptionSize = 11;
+
+var ctxHeaderStyle = {
+  ownerAttr: "data-ctx-id",
+  nameSize: 16,
+  nameFill: "#ffffff",
+  nameAttrs: "font-weight=\"bold\" class=\"ctx-label\"",
+  descriptionFill: "#ced4da",
+  descriptionAttrs: "class=\"ctx-desc\"",
+};
+
+var aggHeaderStyle = {
+  ownerAttr: "data-agg-id",
+  nameSize: 13,
+  nameFill: "#495057",
+  nameAttrs: "font-weight=\"600\" class=\"agg-label\"",
+  descriptionFill: "#868e96",
+  descriptionAttrs: "class=\"agg-desc\"",
+};
+
+// Rescaling carries Layout.labelWidth's padding along with it, and that padding
+// is the gap the following text sits in — drop it and a description butts
+// straight against the name it follows.
+function labelAdvance(label, fontSize) {
+  return Layout.labelWidth(label) * fontSize / labelWidthFontSize;
+}
+
+function drawnWidth(text) {
+  return Layout.labelWidth(text) - labelWidthPadding;
+}
+
+// Empty when not even one character and the ellipsis fit: an aggregate row is
+// floored at 100px wide, so a long name can leave nothing beside it.
+function fitWithEllipsis(text, maxWidth) {
+  if (drawnWidth(text) <= maxWidth) return text;
+  for (var len = text.length - 1; len > 0; len--) {
+    var candidate = text.slice(0, len) + ellipsis;
+    if (drawnWidth(candidate) <= maxWidth) return candidate;
+  }
+  return "";
+}
 
 function esc(str) {
   return String(str).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
@@ -156,6 +200,72 @@ function connectPort(nodeId, dir, pos) {
   return portG;
 }
 
+function appendHeaderLabels(parent, node, band, style) {
+  var owner = " " + style.ownerAttr + "=\"" + node.id + "\"";
+  parent.appendChild(svgText(band.x, band.baseline, node.label, style.nameSize, style.nameFill,
+    style.nameAttrs + owner));
+  if (!node.description) return;
+
+  var descriptionX = band.x + labelAdvance(node.label, style.nameSize);
+  var fitted = fitWithEllipsis(node.description, band.rightEdge - descriptionX);
+  if (!fitted) return;
+  // Prose is painted over the band that answers the right-click and the
+  // highlighting click for the construct it documents, so it stays transparent to
+  // the pointer and leaves that band reachable straight through it.
+  parent.appendChild(svgText(descriptionX, band.baseline, fitted, descriptionSize,
+    style.descriptionFill, style.descriptionAttrs + owner + " pointer-events=\"none\""));
+}
+
+function appendContextHeader(swimlane, ctx, cp) {
+  swimlane.appendChild(svgRect(cp.x, cp.y, cp.w, L.swimlaneHdr, "#2c3e50", "#2c3e50",
+    "rx=\"8\" class=\"ctx-header\" data-ctx-id=\"" + ctx.id + "\""));
+  swimlane.appendChild(svgRect(cp.x, cp.y + L.swimlaneHdr - 8, cp.w, 8, "#2c3e50", "#2c3e50",
+    "class=\"ctx-header\" data-ctx-id=\"" + ctx.id + "\""));
+
+  appendHeaderLabels(swimlane, ctx, {
+    x: cp.x + 16,
+    baseline: cp.y + L.swimlaneHdr - 14,
+    rightEdge: cp.x + cp.w,
+  }, ctxHeaderStyle);
+}
+
+function computeAggregateRows(aggs, positions, cp) {
+  var rows = [];
+  var rowX = cp.x;
+  aggs.forEach(function(agg) {
+    var ap = positions[agg.id];
+    if (!ap) return;
+    var ownWidth = Math.max(100, ap.w - (rowX - cp.x));
+    rows.push({ agg: agg, x: rowX, w: ownWidth });
+    rowX += ownWidth;
+  });
+  return rows;
+}
+
+function appendAggregateRows(swimlane, rows, y) {
+  rows.forEach(function(row) {
+    swimlane.appendChild(svgRect(row.x, y, row.w, L.aggLabelH, "#e9ecef", "#e9ecef",
+      "class=\"agg-row\" data-agg-id=\"" + row.agg.id + "\""));
+  });
+  // Every row rect goes down before any label, because a narrow aggregate
+  // is floored at 100px wide and the next row then starts partway through
+  // its neighbour's label, painting over the text.
+  rows.forEach(function(row) {
+    appendHeaderLabels(swimlane, row.agg, {
+      x: row.x + 16,
+      baseline: y + L.aggLabelH - 6,
+      rightEdge: row.x + row.w,
+    }, aggHeaderStyle);
+  });
+}
+
+function appendAggregateAreas(swimlane, rows, y, h) {
+  rows.forEach(function(row) {
+    swimlane.appendChild(svgRect(row.x, y, row.w, h, "transparent", "none",
+      "class=\"agg-area\" data-agg-id=\"" + row.agg.id + "\""));
+  });
+}
+
 function appendBlockLabels(blockG, node, pos, stroke) {
   var midX = pos.x + pos.w / 2;
   var midY = pos.y + pos.h / 2;
@@ -205,48 +315,13 @@ function buildSVG(store) {
     var swimlane = g("swimlane-" + ctx.id);
     swimlane.appendChild(svgRect(cp.x, cp.y, cp.w, cp.h, "#f1f3f5", "#2c3e50",
       "rx=\"8\" stroke-width=\"2\""));
-    swimlane.appendChild(svgRect(cp.x, cp.y, cp.w, L.swimlaneHdr, "#2c3e50", "#2c3e50",
-      "rx=\"8\" class=\"ctx-header\" data-ctx-id=\"" + ctx.id + "\""));
-    swimlane.appendChild(svgRect(cp.x, cp.y + L.swimlaneHdr - 8, cp.w, 8, "#2c3e50", "#2c3e50",
-      "class=\"ctx-header\" data-ctx-id=\"" + ctx.id + "\""));
-    swimlane.appendChild(svgText(cp.x + 16, cp.y + L.swimlaneHdr - 14, ctx.label, 16, "#ffffff",
-      "font-weight=\"bold\" class=\"ctx-label\" data-ctx-id=\"" + ctx.id + "\""));
+    appendContextHeader(swimlane, ctx, cp);
 
-    if (aggs.length > 0) {
-      var aggY = cp.y + L.swimlaneHdr;
-      var aggRowX = cp.x;
-      var aggRows = [];
-      aggs.forEach(function(agg) {
-        var ap = positions[agg.id];
-        if (!ap) return;
-        var aggOwnWidth = Math.max(100, ap.w - (aggRowX - cp.x));
-        aggRows.push({ agg: agg, x: aggRowX, w: aggOwnWidth });
-        aggRowX += aggOwnWidth;
-      });
-      aggRows.forEach(function(row) {
-        swimlane.appendChild(svgRect(row.x, aggY, row.w, L.aggLabelH, "#e9ecef", "#e9ecef",
-          "class=\"agg-row\" data-agg-id=\"" + row.agg.id + "\""));
-      });
-      // Every row rect goes down before any label, because a narrow aggregate
-      // is floored at 100px wide and the next row then starts partway through
-      // its neighbour's label, painting over the text.
-      aggRows.forEach(function(row) {
-        swimlane.appendChild(svgText(row.x + 16, aggY + L.aggLabelH - 6, row.agg.label, 13, "#495057",
-          "font-weight=\"600\" class=\"agg-label\" data-agg-id=\"" + row.agg.id + "\""));
-      });
-    }
+    var aggRows = computeAggregateRows(aggs, positions, cp);
+    appendAggregateRows(swimlane, aggRows, cp.y + L.swimlaneHdr);
 
-    var aggAreaX = cp.x;
-    aggs.forEach(function(agg) {
-      var ap = positions[agg.id];
-      if (!ap) return;
-      var aggAreaW = Math.max(100, ap.w - (aggAreaX - cp.x));
-      var aggAreaY = cp.y + L.swimlaneHdr + L.aggLabelH;
-      var aggAreaH = (cp.y + cp.h) - aggAreaY;
-      swimlane.appendChild(svgRect(aggAreaX, aggAreaY, aggAreaW, aggAreaH, "transparent", "none",
-        "class=\"agg-area\" data-agg-id=\"" + agg.id + "\""));
-      aggAreaX += aggAreaW;
-    });
+    var aggAreaY = cp.y + L.swimlaneHdr + L.aggLabelH;
+    appendAggregateAreas(swimlane, aggRows, aggAreaY, (cp.y + cp.h) - aggAreaY);
 
     function renderSlice(sl) {
       var sp = positions[sl.id];

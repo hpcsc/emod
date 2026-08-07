@@ -69,6 +69,71 @@ function narrowAndWideContexts() {
   ];
 }
 
+const ellipsis = '…';
+const contextDescription = 'Everything after an invoice falls due';
+const overlongContextDescription =
+  'Everything that happens after an invoice falls due, from the first reminder ' +
+  'through negotiated instalment plans and on to the point where the balance is ' +
+  'either settled in full or written off by finance';
+const aggregateDescription = 'Payment terms';
+const overlongAggregateDescription = 'Instalment plans negotiated with the customer';
+const neighbourAggregateDescription = 'Card capture';
+const crowdingAggregateName = 'ArrangementNegotiationSchedule';
+
+function describedAs(nodes, textById) {
+  return nodes.map((n) => (textById[n.id] ? { ...n, description: textById[n.id] } : n));
+}
+
+// A described context beside an undescribed one, so a single render puts a
+// header carrying prose next to a header carrying none.
+function describedAndPlainContexts() {
+  return describedAs(narrowAndWideContexts(), { ctxWide: contextDescription });
+}
+
+// A description far wider than any swimlane beside one of a few words, so the
+// header that has to give way and the header that does not are drawn together.
+function crowdedAndRoomyContexts() {
+  return describedAs(narrowAndWideContexts(), {
+    ctxWide: overlongContextDescription,
+    ctxNarrow: contextDescription,
+  });
+}
+
+function describedAndPlainAggregates() {
+  return describedAs(twoAggregates(), { agg1: aggregateDescription });
+}
+
+// A description far wider than its aggregate's row beside one that fits its own,
+// so the row that has to give way and the row that does not are drawn together.
+function crowdedAndRoomyDescriptions() {
+  return describedAs(twoAggregates(), {
+    agg1: overlongAggregateDescription,
+    agg2: neighbourAggregateDescription,
+  });
+}
+
+// A documented aggregate whose name alone reaches past its row, leaving its
+// description nowhere to go.
+function aggregateNameFillingItsRow() {
+  return describedAndPlainAggregates()
+    .map((n) => (n.id === 'agg1' ? { ...n, label: crowdingAggregateName } : n));
+}
+
+const describedThroughoutText = {
+  ctx1: contextDescription,
+  agg1: aggregateDescription,
+  agg2: 'Card and bank capture',
+  sl1: 'Offers the customer a plan',
+};
+
+// The two-aggregate swimlane documented at every level that carries prose, the
+// slice included — the slice description is what proves the slice header leaves
+// it undrawn — so it can be compared against the undocumented twin
+// twoAggregates() returns.
+function describedThroughout() {
+  return describedAs(twoAggregates(), describedThroughoutText);
+}
+
 const clockMarking = '⏱';
 const cronExpression = '0 9 * * 1-5';
 const cadenceBadge = clockMarking + ' ' + cronExpression;
@@ -215,6 +280,34 @@ function rowFor(svg, aggId) {
   return svg.querySelector('.agg-row[data-agg-id="' + aggId + '"]');
 }
 
+function headerFor(svg, ctxId) {
+  return svg.querySelector('rect.ctx-header[data-ctx-id="' + ctxId + '"]');
+}
+
+function rightEdgeOfBand(band) {
+  return numeric(band, 'x') + numeric(band, 'width');
+}
+
+function bottomEdgeOfBand(band) {
+  return numeric(band, 'y') + numeric(band, 'height');
+}
+
+function textsOwnedBy(svg, attr, id) {
+  return [...svg.querySelectorAll('text[' + attr + '="' + id + '"]')];
+}
+
+const ctxHeaderTexts = (svg, ctxId) => textsOwnedBy(svg, 'data-ctx-id', ctxId);
+const aggRowTexts = (svg, aggId) => textsOwnedBy(svg, 'data-agg-id', aggId);
+const sliceHeaderTexts = (svg, sliceId) => textsOwnedBy(svg, 'data-slice-id', sliceId);
+
+const textOf = (els) => els.map((el) => el.textContent);
+
+// How far right a drawn string reaches. Layout.labelWidth pads its measurement
+// for layout breathing room, which the drawn glyphs do not occupy.
+function rightEdgeOf(el) {
+  return numeric(el, 'x') + Layout.labelWidth(el.textContent) - 16;
+}
+
 function nodeGroup(svg, nodeId) {
   return svg.querySelector('.diagram-node[data-node-id="' + nodeId + '"]');
 }
@@ -252,6 +345,21 @@ function drawnBoxes(svg) {
   return Object.fromEntries(entries);
 }
 
+// Every rect the swimlane and its slices are built from, so a change that
+// reflowed the diagram shows up as a moved or resized frame.
+function drawnFrames(svg) {
+  const selector = 'rect.ctx-header, rect.agg-row, rect.agg-area, rect.slice-box, rect.slice-header';
+  return [...svg.querySelectorAll(selector)].map((el) => [
+    el.getAttribute('class'),
+    numeric(el, 'x'), numeric(el, 'y'), numeric(el, 'width'), numeric(el, 'height'),
+  ]);
+}
+
+function namePlacements(svg) {
+  return [...svg.querySelectorAll('.ctx-label, .agg-label')]
+    .map((el) => [el.textContent, numeric(el, 'x'), numeric(el, 'y')]);
+}
+
 const numeric = (el, attr) => Number(el.getAttribute(attr));
 
 beforeEach(() => {
@@ -282,11 +390,15 @@ describe('Renderer.buildSVG', () => {
     });
 
     it('draws every row before any label, so no row can cover its neighbour text', () => {
-      const { svg } = render(twoAggregates());
+      const { svg } = render(describedThroughout());
 
-      const painted = [...svg.querySelectorAll('.agg-row, .agg-label')]
+      const painted = [...svg.querySelectorAll('.agg-row, .agg-label, .agg-desc')]
         .map((el) => el.getAttribute('class'));
-      expect(painted).toEqual(['agg-row', 'agg-row', 'agg-label', 'agg-label']);
+      expect(painted).toEqual([
+        'agg-row', 'agg-row',
+        'agg-label', 'agg-desc',
+        'agg-label', 'agg-desc',
+      ]);
     });
 
     it('stretches the last row to the swimlane edge when the context is widened', () => {
@@ -328,6 +440,146 @@ describe('Renderer.buildSVG', () => {
       expect(rowFor(svg, 'agg1')).toBeNull();
       expect(labelFor(svg, 'agg1')).toBeNull();
       expect(rowFor(svg, 'agg2')).not.toBeNull();
+    });
+  });
+
+  describe('context header descriptions', () => {
+    it('reads a description after the context name, leaving an undescribed header to its name alone', () => {
+      const { svg } = render(describedAndPlainContexts());
+
+      const described = ctxHeaderTexts(svg, 'ctxWide');
+      expect(textOf(described)).toEqual(['Wide', contextDescription]);
+      expect(numeric(described[1], 'x')).toBeGreaterThan(numeric(described[0], 'x'));
+
+      expect(textOf(ctxHeaderTexts(svg, 'ctxNarrow'))).toEqual(['Narrow']);
+    });
+
+    it('keeps that description on the name\'s line inside the header band', () => {
+      const { svg } = render(describedAndPlainContexts());
+
+      const [name, description] = ctxHeaderTexts(svg, 'ctxWide');
+      const header = headerFor(svg, 'ctxWide');
+      expect(numeric(description, 'y')).toBe(numeric(name, 'y'));
+      expect(numeric(description, 'y')).toBeGreaterThan(numeric(header, 'y'));
+      expect(numeric(description, 'y')).toBeLessThanOrEqual(bottomEdgeOfBand(header));
+    });
+
+    it('cuts an over-long context description short of the swimlane edge while one that fits is drawn whole', () => {
+      const { svg } = render(crowdedAndRoomyContexts());
+
+      const [, crowded] = ctxHeaderTexts(svg, 'ctxWide');
+      expect(crowded.textContent.length).toBeLessThan(overlongContextDescription.length);
+      expect(crowded.textContent.endsWith(ellipsis)).toBe(true);
+      expect(rightEdgeOf(crowded)).toBeLessThanOrEqual(rightEdgeOfBand(headerFor(svg, 'ctxWide')));
+
+      const [, roomy] = ctxHeaderTexts(svg, 'ctxNarrow');
+      expect(roomy.textContent).toBe(contextDescription);
+      expect(roomy.textContent).not.toContain(ellipsis);
+    });
+
+    it('draws that description smaller and in another colour than the name it follows', () => {
+      const { svg } = render(describedAndPlainContexts());
+
+      const [name, description] = ctxHeaderTexts(svg, 'ctxWide');
+      expect(numeric(description, 'font-size')).toBeLessThan(numeric(name, 'font-size'));
+      expect(description.getAttribute('fill')).not.toBe(name.getAttribute('fill'));
+    });
+  });
+
+  describe('aggregate row descriptions', () => {
+    it('reads a description after the aggregate name inside its own row, leaving an undescribed row to its name alone', () => {
+      const { svg } = render(describedAndPlainAggregates());
+
+      const described = aggRowTexts(svg, 'agg1');
+      expect(textOf(described)).toEqual(['Arrangement', aggregateDescription]);
+      expect(numeric(described[1], 'x')).toBeGreaterThan(numeric(described[0], 'x'));
+
+      const row = rowFor(svg, 'agg1');
+      expect(numeric(described[1], 'x')).toBeGreaterThan(numeric(row, 'x'));
+      expect(rightEdgeOf(described[1])).toBeLessThanOrEqual(rightEdgeOfBand(row));
+
+      expect(textOf(aggRowTexts(svg, 'agg2'))).toEqual(['Payment']);
+    });
+
+    it('keeps that description on the name\'s line inside the row it belongs to', () => {
+      const { svg } = render(describedAndPlainAggregates());
+
+      const [name, description] = aggRowTexts(svg, 'agg1');
+      const row = rowFor(svg, 'agg1');
+      expect(numeric(description, 'y')).toBe(numeric(name, 'y'));
+      expect(numeric(description, 'y')).toBeGreaterThan(numeric(row, 'y'));
+      expect(numeric(description, 'y')).toBeLessThanOrEqual(bottomEdgeOfBand(row));
+    });
+
+    it('cuts an over-long description short of the next row while a description that fits is drawn whole', () => {
+      const { svg } = render(crowdedAndRoomyDescriptions());
+
+      const [, crowded] = aggRowTexts(svg, 'agg1');
+      expect(crowded.textContent.length).toBeLessThan(overlongAggregateDescription.length);
+      expect(crowded.textContent.endsWith(ellipsis)).toBe(true);
+      expect(rightEdgeOf(crowded)).toBeLessThanOrEqual(numeric(rowFor(svg, 'agg2'), 'x'));
+
+      const [, roomy] = aggRowTexts(svg, 'agg2');
+      expect(roomy.textContent).toBe(neighbourAggregateDescription);
+      expect(roomy.textContent).not.toContain(ellipsis);
+    });
+
+    it('drops the description entirely from a row its aggregate name already fills', () => {
+      const { svg } = render(aggregateNameFillingItsRow());
+
+      expect(rightEdgeOf(labelFor(svg, 'agg1')))
+        .toBeGreaterThan(numeric(rowFor(svg, 'agg2'), 'x'));
+      expect(textOf(aggRowTexts(svg, 'agg1'))).toEqual([crowdingAggregateName]);
+    });
+  });
+
+  describe('headers documented and undocumented', () => {
+    it('adds the prose without moving a single frame, name or block', () => {
+      const plain = render(twoAggregates());
+      const described = render(describedThroughout());
+
+      expect(drawnFrames(described.svg)).toEqual(drawnFrames(plain.svg));
+      expect(namePlacements(described.svg)).toEqual(namePlacements(plain.svg));
+      expect(drawnBoxes(described.svg)).toEqual(drawnBoxes(plain.svg));
+
+      const plainText = drawnText(plain.svg);
+      const added = drawnText(described.svg).filter((t) => !plainText.includes(t));
+      expect(added).toEqual([
+        describedThroughoutText.ctx1,
+        describedThroughoutText.agg1,
+        describedThroughoutText.agg2,
+      ]);
+    });
+
+    it('lets the pointer through the prose to the header and row it is painted over', () => {
+      const { svg } = render(describedThroughout());
+
+      const prose = [...svg.querySelectorAll('.ctx-desc, .agg-desc')];
+      expect(textOf(prose)).toEqual([
+        describedThroughoutText.ctx1,
+        describedThroughoutText.agg1,
+        describedThroughoutText.agg2,
+      ]);
+      prose.forEach((el) => expect(el.getAttribute('pointer-events')).toBe('none'));
+
+      // The bands underneath answer the right-click and the highlighting click,
+      // and the name is what a double-click renames — none of them may go deaf.
+      const answering = [headerFor(svg, 'ctx1'), rowFor(svg, 'agg1'), labelFor(svg, 'agg1')];
+      answering.forEach((el) => expect(el.getAttribute('pointer-events')).toBeNull());
+    });
+
+    it('keeps the slice name centred where it is and draws no prose in the slice header', () => {
+      const plain = render(twoAggregates());
+      const described = render(describedThroughout());
+
+      expect(drawnText(described.svg)).toContain(describedThroughoutText.agg1);
+
+      const [plainName] = sliceHeaderTexts(plain.svg, 'sl1');
+      const headerTexts = sliceHeaderTexts(described.svg, 'sl1');
+      expect(textOf(headerTexts)).toEqual(['Propose plan']);
+      expect(headerTexts[0].getAttribute('text-anchor')).toBe('middle');
+      expect(numeric(headerTexts[0], 'x')).toBe(numeric(plainName, 'x'));
+      expect(numeric(headerTexts[0], 'y')).toBe(numeric(plainName, 'y'));
     });
   });
 

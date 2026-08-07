@@ -4,7 +4,7 @@
 - [x] Task 1: Carry every construct's description on its diagram node and read it back
 - [x] Task 2: Carry a construct's comments on its diagram node and read them back
 - [x] Task 3: Show a node's description in the detail panel
-- [ ] Task 4: Render context and aggregate descriptions on their headers
+- [x] Task 4: Render context and aggregate descriptions on their headers
 - [ ] Task 5: Show a node's description in the hover tooltip, including nodes with no fields
 - [ ] Task 6: Mark a described node and slice, and read the description off the marker
 - [ ] Task 7: Mark a commented node and slice, and read the comments off the marker
