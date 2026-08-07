@@ -182,7 +182,7 @@ This makes emod **AI-consumable** rather than **AI-powered**. It adds **no LLM p
 - [ ] Comments are preserved in the formatted output
 - [ ] When the server is in its default (read-only) mode, the tool never writes a file regardless of any write request
 
-**Context:** Formatting is the one capability that can mutate disk. This story covers only the read-only behaviour; the gated write behaviour is US-MCP-014. Keeping the default read-only is what makes the server safe to register globally.
+**Context:** Formatting is one of the two capabilities that can mutate disk, the other being arranging (US-MCP-018). This story covers only the read-only behaviour; the gated write behaviour is US-MCP-014. Keeping the default read-only is what makes the server safe to register globally.
 
 **Depends on:** US-MCP-001
 
@@ -247,15 +247,15 @@ This makes emod **AI-consumable** rather than **AI-powered**. It adds **no LLM p
 
 **Acceptance Criteria:**
 - [ ] In the default server mode, no tool writes to disk under any input
-- [ ] `emod mcp` accepts an `--allow-write` option that enables write behaviour for the format tool
-- [ ] With `--allow-write` set, the format tool writes the formatted result to a file only when given a file `path` (not inline `content`) and an explicit write request
-- [ ] With `--allow-write` set but called with inline `content`, the format tool returns formatted text and writes nothing
+- [ ] `emod mcp` accepts an `--allow-write` option that enables write behaviour for the format and arrange tools
+- [ ] With `--allow-write` set, a writing tool writes its result to a file only when given a file `path` (not inline `content`) and an explicit write request
+- [ ] With `--allow-write` set but called with inline `content`, a writing tool returns its result text and writes nothing
 - [ ] A write attempt is still subject to the root scoping from US-MCP-013
-- [ ] All tools other than the format tool remain read-only regardless of the `--allow-write` setting
+- [ ] All tools other than the format and arrange tools remain read-only regardless of the `--allow-write` setting
 
-**Context:** Formatting is the only capability exposed over MCP that can mutate disk. Defaulting writes off — and requiring both the flag and a path — is what lets the server be registered globally in its safe default mode.
+**Context:** Formatting and arranging are the only capabilities exposed over MCP that can mutate disk. Defaulting writes off — and requiring both the flag and a path — is what lets the server be registered globally in its safe default mode.
 
-**Depends on:** US-MCP-010, US-MCP-013
+**Depends on:** US-MCP-010, US-MCP-013, US-MCP-018
 
 ---
 
@@ -303,6 +303,25 @@ This makes emod **AI-consumable** rather than **AI-powered**. It adds **no LLM p
 - [ ] Each listed tool shows its name and a one-line description
 - [ ] Each listed resource shows its URI; each listed prompt shows its name and accepted arguments
 - [ ] The command exits without waiting for client input
+
+**Depends on:** US-MCP-001
+
+---
+
+### US-MCP-018: Arrange a model's slices via a read-only MCP tool
+
+**Description:** As an AI assistant, I want to reorder a model's slices so its references read forward, and to see the ones still pointing backward, so that I can hand back a model that reads in order without guessing which of its arrows were fixable.
+
+**Acceptance Criteria:**
+- [ ] A tool (e.g. `emod_slices_arrange`) accepts either a file `path` or inline `content`; `content` wins when both are present
+- [ ] By default the tool returns the arranged text and a flag indicating whether any slice moved, and writes nothing to disk
+- [ ] The arranged output matches what `emod slices arrange` produces for the same input
+- [ ] The result reports the references still pointing backward, each naming its kind (`subscribes`, `reads`, `on` or `flow`), the reference itself, and the two slices it runs between
+- [ ] A model whose slices are already arranged reports nothing moved and returns its input unchanged
+- [ ] A comment written above a slice stays with that slice wherever it lands
+- [ ] When the server is in its default (read-only) mode, the tool never writes a file regardless of any write request
+
+**Context:** Arranging moves view slices only — the process slices keep their authored order — so the tool reorders a model without rewriting the story it tells. The backward references it reports are the ones no ordering can remove: two slices producing one event leaves the second pointing back at the declaration whichever way round they go. Reporting them is what stops a model arranging the same file repeatedly trying to reach zero. As with formatting (US-MCP-010), this story covers the read-only behaviour only; the gated write is US-MCP-014.
 
 **Depends on:** US-MCP-001
 

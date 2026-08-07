@@ -3,7 +3,7 @@
 Which story in each in-progress story file is delivered. Files under
 `user-stories/completed/` are finished in full and are not tracked here.
 
-**22 of 171 delivered.**
+**22 of 172 delivered.**
 
 ## [emod-desktop.md](./emod-desktop.md) — 0/16
 
@@ -157,7 +157,7 @@ Breakdown in flight at `tasks/00-llm-foundation.md` (tasks 1-5 of 10 checked off
 - [ ] US-007: Convert an aggregate-mode context to DCB
 - [ ] US-008: Surface DCB suggestions as editor quick-fixes
 
-## [06-mcp-server.md](./ai/06-mcp-server.md) — 0/17
+## [06-mcp-server.md](./ai/06-mcp-server.md) — 0/18
 
 - [ ] US-MCP-001: Start the MCP server over stdio
 - [ ] US-MCP-002: Validate a model via an MCP tool
@@ -176,6 +176,7 @@ Breakdown in flight at `tasks/00-llm-foundation.md` (tasks 1-5 of 10 checked off
 - [ ] US-MCP-015: Register the emod server with an MCP host
 - [ ] US-MCP-016: Tool output matches the CLI for the same input
 - [ ] US-MCP-017: Self-describe the server for debugging
+- [ ] US-MCP-018: Arrange a model's slices via a read-only MCP tool
 
 ## [07-talk-to-your-model-qa.md](./ai/07-talk-to-your-model-qa.md) — 0/12
 
