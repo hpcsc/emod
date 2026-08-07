@@ -295,6 +295,13 @@ function showDetailPanel(store, node) {
     html += '<button class="dp-delete-btn" title="Delete node">Delete</button>';
   }
 
+  if (node.description) {
+    html += '<div class="dp-section">';
+    html += '<div class="dp-section-title">Description</div>';
+    html += '<div class="dp-description">' + Renderer.esc(node.description) + '</div>';
+    html += '</div>';
+  }
+
   const isFieldNode = (node.type === 'command' || node.type === 'event');
   const showFields = isFieldNode || (node.fields && node.fields.length > 0);
 

@@ -33,11 +33,43 @@ function triggerNode(attrs = {}) {
   );
 }
 
+function commandNode(attrs = {}) {
+  return Object.assign(
+    {
+      id: 'cmd1',
+      type: 'command',
+      label: 'Place Order',
+      fields: [{ name: 'orderId', type: 'UUID' }],
+      position: { filename: 'orders.emod', line: 12 },
+    },
+    attrs,
+  );
+}
+
 function shownRows(store) {
   return [...store.dom.dpContent.querySelectorAll('tr')].map((row) => ({
     label: row.querySelector('th').textContent,
     value: row.querySelector('td').textContent,
   }));
+}
+
+function shownSections(store) {
+  return [...store.dom.dpContent.querySelectorAll('.dp-section')].map((section) => {
+    const [title, ...body] = [...section.children];
+    return {
+      title: title.textContent,
+      text: body.map((el) => el.textContent).join(''),
+    };
+  });
+}
+
+function sectionTitles(store) {
+  return shownSections(store).map((section) => section.title);
+}
+
+function sectionText(store, title) {
+  const found = shownSections(store).find((section) => section.title === title);
+  return found ? found.text : null;
 }
 
 beforeEach(() => {
@@ -166,6 +198,56 @@ describe('detail panel for a trigger', () => {
     UI.showDetailPanel(store, triggerNode({ [key]: value }));
 
     expect(shownRows(store)).toContainEqual({ label, value });
+    expect(store.dom.dpContent.querySelector('b')).toBeNull();
+  });
+});
+
+describe('detail panel description', () => {
+  it('shows a command node description in full, ahead of its fields', () => {
+    const store = createStore();
+    const description = 'Places a customer order, reserving stock for every line item until the payment clears or the reservation expires.';
+
+    UI.showDetailPanel(store, commandNode({ description }));
+
+    expect(sectionTitles(store)).toEqual(['Description', 'Fields', 'Source']);
+    expect(sectionText(store, 'Description')).toBe(description);
+  });
+
+  it.each([
+    { stated: 'no description', attrs: {} },
+    { stated: 'an empty description', attrs: { description: '' } },
+  ])('titles its sections without a Description for a node stating $stated', ({ attrs }) => {
+    const store = createStore();
+
+    UI.showDetailPanel(store, commandNode(attrs));
+
+    expect(sectionTitles(store)).toEqual(['Fields', 'Source']);
+  });
+
+  it.each([
+    { type: 'trigger', description: 'A guest submits the reservation form' },
+    { type: 'view', description: 'Rooms still free on the requested dates' },
+    { type: 'automation', description: 'Chases an invoice once it falls overdue' },
+    { type: 'translation', description: 'Turns a provider webhook into a payment command' },
+    { type: 'context', description: 'Everything the front desk owns' },
+    { type: 'aggregate', description: 'A reservation and its lifecycle' },
+    { type: 'slice', description: 'Booking a room from enquiry to confirmation' },
+  ])('shows the description a $type states even with no fields section', ({ type, description }) => {
+    const store = createStore();
+
+    UI.showDetailPanel(store, { id: type + '1', type, label: 'Front Desk', description });
+
+    expect(sectionTitles(store)).not.toContain('Fields');
+    expect(sectionText(store, 'Description')).toBe(description);
+  });
+
+  it('shows a description containing markup as text', () => {
+    const store = createStore();
+    const description = 'Places an <b>&</b> order';
+
+    UI.showDetailPanel(store, commandNode({ description }));
+
+    expect(sectionText(store, 'Description')).toBe(description);
     expect(store.dom.dpContent.querySelector('b')).toBeNull();
   });
 });
