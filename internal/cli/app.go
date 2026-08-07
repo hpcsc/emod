@@ -149,20 +149,32 @@ func NewApp() *urfave.App {
 				},
 			},
 			{
-				Name:      "slices",
-				Usage:     "List all slices in a model with their pattern types",
-				ArgsUsage: "<file>",
-				Flags: []urfave.Flag{
-					&urfave.StringFlag{
-						Name:  "format",
-						Usage: "Output format (text|json)",
-						Value: "text",
-					},
-				},
+				Name:  "slices",
+				Usage: "Inspect the slices in a model",
 				Action: func(c *urfave.Context) error {
-					path := c.Args().First()
-					format := c.String("format")
-					return reportExitError(RunSlices(path, format))
+					if arg := c.Args().First(); arg != "" {
+						return reportExitError(fmt.Errorf("unknown slices subcommand %q; to list a model's slices run: emod slices list %s", arg, arg))
+					}
+					return urfave.ShowSubcommandHelp(c)
+				},
+				Subcommands: []*urfave.Command{
+					{
+						Name:      "list",
+						Usage:     "List all slices in a model with their pattern types",
+						ArgsUsage: "<file>",
+						Flags: []urfave.Flag{
+							&urfave.StringFlag{
+								Name:  "format",
+								Usage: "Output format (text|json)",
+								Value: "text",
+							},
+						},
+						Action: func(c *urfave.Context) error {
+							path := c.Args().First()
+							format := c.String("format")
+							return reportExitError(RunSlicesList(path, format))
+						},
+					},
 				},
 			},
 			{

@@ -192,7 +192,7 @@ exactly one writer.
 | `emod fmt` | Parse + `formatter.Format`; `--check` for CI |
 | `emod diagram` | drawio / svg / ascii / mermaid; `--serve` starts the embedded viewer |
 | `emod export` | json / diagram-json / cue |
-| `emod slices` | Lists every slice with its detected pattern |
+| `emod slices list` | Lists every slice with its detected pattern |
 | `emod glossary` | Domain glossary as markdown or JSON |
 | `emod schema` | Prints the embedded CUE schema |
 | `emod lsp` | Starts the language server on stdio |

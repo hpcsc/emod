@@ -50,13 +50,13 @@ context "Lending" {
 }
 `
 
-func TestSlices(t *testing.T) {
+func TestSlicesList(t *testing.T) {
 	t.Run("text format", func(t *testing.T) {
 		t.Run("prints table for valid file with all pattern types", func(t *testing.T) {
 			path := writeTemp(t, "valid.emod", validEmod)
 
 			output := captureStdout(t, func() {
-				err := cli.RunSlices(path, "text")
+				err := cli.RunSlicesList(path, "text")
 				require.NoError(t, err)
 			})
 
@@ -83,7 +83,7 @@ func TestSlices(t *testing.T) {
 			path := writeTemp(t, "valid.emod", validEmod)
 
 			output := captureStdout(t, func() {
-				err := cli.RunSlices(path, "text")
+				err := cli.RunSlicesList(path, "text")
 				require.NoError(t, err)
 			})
 
@@ -135,7 +135,7 @@ context "Fulfillment" mode dcb {
 			path := writeTemp(t, "dcb.emod", input)
 
 			output := captureStdout(t, func() {
-				err := cli.RunSlices(path, "text")
+				err := cli.RunSlicesList(path, "text")
 				require.NoError(t, err)
 			})
 
@@ -148,7 +148,7 @@ context "Fulfillment" mode dcb {
 			path := writeTemp(t, "cadence.emod", automationCadenceEmod)
 
 			output := captureStdout(t, func() {
-				err := cli.RunSlices(path, "text")
+				err := cli.RunSlicesList(path, "text")
 				require.NoError(t, err)
 			})
 
@@ -203,7 +203,7 @@ context "Orders" {
 			path := writeTemp(t, "mixed.emod", input)
 
 			output := captureStdout(t, func() {
-				err := cli.RunSlices(path, "text")
+				err := cli.RunSlicesList(path, "text")
 				require.NoError(t, err)
 			})
 
@@ -217,7 +217,7 @@ context "Orders" {
 			path := writeTemp(t, "valid.emod", validEmod)
 
 			output := captureStdout(t, func() {
-				err := cli.RunSlices(path, "json")
+				err := cli.RunSlicesList(path, "json")
 				require.NoError(t, err)
 			})
 
@@ -254,7 +254,7 @@ context "Orders" {
 			path := writeTemp(t, "empty.emod", input)
 
 			output := captureStdout(t, func() {
-				err := cli.RunSlices(path, "json")
+				err := cli.RunSlicesList(path, "json")
 				require.NoError(t, err)
 			})
 
@@ -265,7 +265,7 @@ context "Orders" {
 	t.Run("fails with descriptive message for parse errors", func(t *testing.T) {
 		path := writeTemp(t, "invalid.emod", invalidEmod)
 
-		err := cli.RunSlices(path, "text")
+		err := cli.RunSlicesList(path, "text")
 
 		require.Error(t, err)
 		require.Contains(t, err.Error(), path)
@@ -276,7 +276,7 @@ context "Orders" {
 	})
 
 	t.Run("fails for missing file argument", func(t *testing.T) {
-		err := cli.RunSlices("", "text")
+		err := cli.RunSlicesList("", "text")
 
 		require.ErrorIs(t, err, cli.ErrMissingFileArgument)
 		var lintErr *cli.LintError
@@ -285,7 +285,7 @@ context "Orders" {
 	})
 
 	t.Run("fails for nonexistent file", func(t *testing.T) {
-		err := cli.RunSlices("/tmp/nonexistent-emod-slices-file-abc123.emod", "text")
+		err := cli.RunSlicesList("/tmp/nonexistent-emod-slices-file-abc123.emod", "text")
 
 		require.Error(t, err)
 		require.Contains(t, err.Error(), "/tmp/nonexistent-emod-slices-file-abc123.emod")
@@ -297,7 +297,7 @@ context "Orders" {
 	t.Run("unsupported format returns error", func(t *testing.T) {
 		path := writeTemp(t, "valid.emod", validEmod)
 
-		err := cli.RunSlices(path, "xml")
+		err := cli.RunSlicesList(path, "xml")
 
 		require.ErrorIs(t, err, cli.ErrUnsupportedFormat)
 		require.Contains(t, err.Error(), "text")
@@ -310,7 +310,7 @@ context "Orders" {
 	t.Run("fails with descriptive message for parse errors with json format", func(t *testing.T) {
 		path := writeTemp(t, "invalid.emod", invalidEmod)
 
-		err := cli.RunSlices(path, "json")
+		err := cli.RunSlicesList(path, "json")
 
 		require.Error(t, err)
 		require.Contains(t, err.Error(), path)

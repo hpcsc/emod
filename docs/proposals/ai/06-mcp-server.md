@@ -146,9 +146,9 @@ func handleValidate(ctx context.Context, in validateInput) (*mcpsdk.CallToolResu
 }
 ```
 
-`emod_export`, `emod_diagram`, `emod_slices`, and `emod_schema` follow the same
+`emod_export`, `emod_diagram`, `emod_slices_list`, and `emod_schema` follow the same
 shape, delegating to `export.ExportJSONDiagnostics` / `export.ExportCUE`,
-`diagram.ExportMermaid` / `ExportASCII` / `ExportSVG`, `cli.collectSliceEntries`,
+`diagram.ExportMermaid` / `ExportASCII` / `ExportSVG`, `ast.Model.SliceRefs` with `cli.detectPattern`,
 and the embedded `cue.Schema` respectively. `emod_explain_rule` is a direct
 passthrough to `linter.RuleDescription` (the same call behind `emod lint
 --explain`). Nothing here is new modeling code; it is the CLI's body re-presented
@@ -219,11 +219,15 @@ noted. "Side effect" marks whether a tool writes to disk (see
 | `emod_fmt` | `formatter.Format` (body of `RunFmt`) | `{path?, content?, write?}` | `{formatted, changed}`; writes file only if `write:true` **and** path given | optional write |
 | `emod_export` | `export.ExportJSONDiagnostics` / `export.ExportCUE` (body of `RunExport`) | `{path?, content?, format:"json"\|"cue"}` | JSON object or CUE text + diagnostics | none |
 | `emod_diagram` | `diagram.ExportMermaid` / `ExportASCII` / `ExportSVG` (body of `RunDiagram`) | `{path?, content?, format:"mermaid"\|"svg"\|"ascii", style?}` | diagram text (mermaid/svg/ascii string) | none |
-| `emod_slices` | `cli.collectSliceEntries` + `detectPattern` (body of `RunSlices`) | `{path?, content?}` | `[]{name,pattern,context,keyElements}` | none |
+| `emod_slices_list` | `ast.Model.SliceRefs` + `detectPattern` (body of `RunSlicesList`) | `{path?, content?}` | `[]{name,pattern,context,keyElements}` | none |
 | `emod_schema` | embedded `cue.Schema` (`RunSchema`) | `{}` | CUE schema text | none |
 
 Notes on fidelity to existing behavior:
 
+- `emod_slices_list` needs `detectPattern` and `keyElementsForPattern` lifted out
+  of `internal/cli`, where both are unexported today. They classify a slice
+  rather than print one, so they belong beside the traversal helper the listing
+  already reads; only the column padding is the CLI's own.
 - `emod_validate` runs the **full** pipeline (validator + linter), matching
   `RunValidate`; `emod_lint` runs only `linter.Lint` after a clean parse, matching
   `RunLint`. Both return the same `{file,line,rule,severity,message}` records the
@@ -381,7 +385,7 @@ the final, validated `.emod` and its diagram.
 Add `github.com/modelcontextprotocol/go-sdk`. Create `internal/mcp` with `Serve`
 over stdio and the `mcp` subcommand in `app.go` + `internal/cli/mcp.go`. Implement
 the read-only tools that already have JSON-shaped output: `emod_validate`,
-`emod_lint`, `emod_explain_rule`, `emod_schema`, `emod_slices`. Refactor the
+`emod_lint`, `emod_explain_rule`, `emod_schema`, `emod_slices_list`. Refactor the
 shared read+pipeline path so the CLI and MCP server call one helper rather than
 diverging. Ships the highest-value capability (the self-check loop) on its own.
 

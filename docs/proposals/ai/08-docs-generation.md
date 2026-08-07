@@ -108,7 +108,7 @@ The model-facing logic lives in a new `internal/ai/docs` package, depending only
 on `llm.Model` plus the existing `internal/export`, `internal/diagram`,
 `internal/parser`, `internal/validator`, and `internal/linter`. The CLI command is
 a thin wrapper in `internal/cli`, matching the existing `RunExport` / `RunDiagram`
-/ `RunSlices` actions in `internal/cli/app.go`.
+/ `RunSlicesList` actions in `internal/cli/app.go`.
 
 The generator **refuses to document an invalid model**: it runs the validator
 first and exits non-zero on errors, because documenting a broken model would
@@ -138,7 +138,7 @@ a single slice) plus an explicit instruction: *the `comments[].text` is the
 author's stated intent; honour it, expand it, never contradict it; if a comment
 and the structure disagree, say so rather than invent a reconciliation.*
 
-The generator also reuses `emod slices` (`internal/cli/slices.go`) for the
+The generator also reuses `emod slices list` (`internal/cli/slices_list.go`) for the
 per-slice **pattern label** — `command`, `view`, `automation`, `translation` —
 which `detectPattern` already computes. Telling the model "this slice is an
 *automation* pattern: `on` event → command → target context" anchors the prose
@@ -352,7 +352,7 @@ non-escalated message.`; the command `EmailConversationInitiateReply`; the event
 `EmailConversationInitiateReply -> EmailConversationReplyInitiated`; and the
 automation `EmailConversationComposeReply` (`on EmailConversationClassified`,
 `command EmailConversationInitiateReply`, `target context InboundEmail`).
-`emod slices` labels the slice pattern `automation`.
+`emod slices list` labels the slice pattern `automation`.
 
 The generated narrative section (style `narrative`) reads roughly:
 

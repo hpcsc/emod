@@ -14,7 +14,7 @@ type sliceJSONEntry struct {
 	KeyElements string `json:"keyElements"`
 }
 
-func RunSlices(path, format string) error {
+func RunSlicesList(path, format string) error {
 	if format != "text" && format != "json" {
 		return &LintError{
 			Message:  fmt.Sprintf("unsupported format %q; supported formats: text, json", format),

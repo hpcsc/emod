@@ -241,7 +241,7 @@ A new `internal/ai/testgen.go` depending only on `llm.Model`, the parsed
 `internal/ast`, and a small field-schema helper (which may live beside
 `internal/export`, since export already walks the same field structures). The CLI
 command in `internal/cli` is a thin wrapper matching the existing
-`RunExport`/`RunSlices` actions in `internal/cli/app.go`. Model selection follows
+`RunExport`/`RunSlicesList` actions in `internal/cli/app.go`. Model selection follows
 the foundation: routine payload-filling is a low-stakes mechanical pass, so it
 defaults to **`anthropic.claude-haiku-4-5`** at `low` effort; `--effort high`
 escalates to `anthropic.claude-opus-4-8` when richer edge-case reasoning is wanted.
@@ -444,7 +444,7 @@ set. `--format gherkin|json|both`.
 
 **Phase 4 — CLI surface (S).** `emod ai testgen` in `internal/cli`: `-o` dir vs.
 stdout, `--slice`, `--negatives`, `--attempts`, `--effort`, `--seed`, `--show-cost`,
-`--json`. Match `RunExport`/`RunSlices` structure and `LintError` exit handling in
+`--json`. Match `RunExport`/`RunSlicesList` structure and `LintError` exit handling in
 `internal/cli/app.go`.
 
 **Phase 5 — Edge-case enrichment & polish (M/L).** Prompt tuning so the model

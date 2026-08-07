@@ -94,9 +94,9 @@ This makes emod **AI-consumable** rather than **AI-powered**. It adds **no LLM p
 **Description:** As an AI assistant, I want to retrieve the slices detected in a model so that I can reason about its structure and patterns without re-deriving them.
 
 **Acceptance Criteria:**
-- [ ] A tool (e.g. `emod_slices`) accepts either a file `path` or inline `content`; `content` wins when both are present
+- [ ] A tool (e.g. `emod_slices_list`) accepts either a file `path` or inline `content`; `content` wins when both are present
 - [ ] The result is a JSON array of slice records, each carrying the slice `name`, detected `pattern`, `context`, and key elements
-- [ ] The output matches what `emod slices` produces for the same input
+- [ ] The output matches what `emod slices list` produces for the same input
 - [ ] A model with no slices returns an empty array
 - [ ] Input that cannot be parsed is reported as a tool error, not as an empty slice list
 
@@ -285,7 +285,7 @@ This makes emod **AI-consumable** rather than **AI-powered**. It adds **no LLM p
 - [ ] For the same model, `emod_validate` returns the same diagnostic records as `emod validate --format json`
 - [ ] For the same model, `emod_lint` returns the same diagnostic records as `emod lint --format json`
 - [ ] For the same model and format, `emod_export` and `emod_diagram` return the same content as the corresponding CLI commands
-- [ ] For the same model, `emod_slices` returns the same slice records as `emod slices`
+- [ ] For the same model, `emod_slices_list` returns the same slice records as `emod slices list`
 - [ ] For the same rule, `emod_explain_rule` returns the same description as `emod lint --explain`
 
 **Context:** Both surfaces share the same read-and-pipeline path and the same export/diagram/linter/schema capabilities; the MCP layer only re-presents the result. This story is the guard against the two surfaces drifting apart.

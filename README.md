@@ -173,7 +173,7 @@ emod export reservation.emod -f cue   # CUE schema
 ### List slices
 
 ```bash
-emod slices reservation.emod
+emod slices list reservation.emod
 ```
 
 ### Render a glossary
