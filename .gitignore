@@ -5,6 +5,7 @@ e2e/node_modules/
 /dist
 tasks/.cycles
 tasks/.checkpoint
+.worktrees/
 node_modules
 /web
 internal/viewer/generated/
