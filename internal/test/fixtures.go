@@ -1194,6 +1194,31 @@ var AutomationScheduleLibraryLendingActivationEvents = []string{
 	"DeskReleased",
 }
 
+// DescribedHotelReservationDescriptions transcribes the description
+// DescribedHotelReservation states for every construct declared under its model,
+// filed under the name that construct carries, with the event a translation
+// nests filed under the translation's own name followed by "event". The model's
+// own description is left out: it belongs to the model rather than to a
+// construct the model declares.
+var DescribedHotelReservationDescriptions = map[string]string{
+	"Guest":                    "A person booking a room, not necessarily the one staying in it",
+	"Reservations":             "Everything the hotel knows about a stay before the guest arrives",
+	"Reservation":              "One guest holding one room over one date range",
+	"Make Reservation":         "A guest books a room from the public site",
+	"Reservation Form":         "The booking form on the public site",
+	"MakeReservation":          "Ask the hotel to hold a room for a date range, 10% deposit taken up front",
+	"ReservationMade":          "A room is held for a guest",
+	"View Reservations":        "A guest reviews the stays they have booked",
+	"ReservationsView":         "Every reservation with the stage it has reached",
+	"Auto Confirm Reservation": "The hotel confirms a held room without a clerk touching it",
+	"ConfirmReservation":       "Turn a held room into a confirmed stay",
+	"AutoConfirm":              "Confirms every reservation the moment it is made",
+	"Import External Booking":  "A booking made on a partner site becomes a reservation here",
+	"ImportBooking":            "Record a booking taken by a partner site",
+	"BookingImport":            "Restates a partner webhook in the hotel's own language",
+	"BookingImport event":      "A partner site reported a booking",
+}
+
 // WithOrdinaryFieldNames renames every field of model in place so that no name
 // spells a DSL keyword, giving KeywordFieldSearchCatalog a twin that differs
 // from it in nothing but the naming of its fields. Renaming the parsed model
@@ -1304,6 +1329,57 @@ func DeclaredSpecNames(model *ast.Model) []string {
 		}
 	}
 	return names
+}
+
+// DeclaredDescriptions files the description every construct of model states
+// under the name that construct carries, both slice homes together, with the
+// event a translation nests filed under the translation's own name followed by
+// "event", so a caller pairing it with a transcribed map reads back short when a
+// walk reaches only one of the homes. The model's own description is left out,
+// so the map holds constructs only.
+func DeclaredDescriptions(model *ast.Model) map[string]string {
+	described := make(map[string]string)
+	describe := func(name, description string) {
+		if description != "" {
+			described[name] = description
+		}
+	}
+
+	for _, a := range model.Actors {
+		describe(a.Name, a.Description)
+	}
+	for _, ctx := range model.Contexts {
+		describe(ctx.Name, ctx.Description)
+		for _, agg := range ctx.Aggregates {
+			describe(agg.Name, agg.Description)
+		}
+	}
+	for _, s := range declaredSlices(model) {
+		describe(s.Name, s.Description)
+		if s.Trigger != nil {
+			describe(s.Trigger.Name, s.Trigger.Description)
+		}
+		for _, cmd := range s.Commands {
+			describe(cmd.Name, cmd.Description)
+		}
+		for _, evt := range s.Events {
+			describe(evt.Name, evt.Description)
+		}
+		for _, v := range s.Views {
+			describe(v.Name, v.Description)
+		}
+		for _, auto := range s.Automations {
+			describe(auto.Name, auto.Description)
+		}
+		for _, tr := range s.Translations {
+			describe(tr.Name, tr.Description)
+			if tr.Event != nil {
+				describe(tr.Name+" event", tr.Event.Description)
+			}
+		}
+	}
+
+	return described
 }
 
 // DeclaredAutomationReads names the view every automation of model reads, both

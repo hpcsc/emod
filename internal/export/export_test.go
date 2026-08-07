@@ -5,6 +5,7 @@ package export_test
 import (
 	"bytes"
 	"encoding/json"
+	"maps"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -3139,15 +3140,43 @@ func TestExport(t *testing.T) {
 			}
 		})
 
-		t.Run("a described model still produces a document free of prose", func(t *testing.T) {
-			raw, err := export.ExportDiagramJSON(buildFullModel())
-			require.NoError(t, err)
+		t.Run("carries every described construct's own prose on the node drawn for it", func(t *testing.T) {
+			require.Equal(t, describedHotelReservationNodeDescriptions(),
+				diagramDescriptionsByLabel(diagramDocOf(t, test.DescribedHotelReservationModel(t))))
+		})
 
-			var doc map[string]any
-			require.NoError(t, json.Unmarshal(raw, &doc))
+		t.Run("a model describing nothing carries no description key, while its described twin carries one per described construct", func(t *testing.T) {
+			require.Len(t, descriptionsAnywhere(diagramDocOf(t, test.DescribedHotelReservationModel(t))),
+				len(describedHotelReservationNodeDescriptions()),
+				"the walk has to find descriptions where they do belong, or finding none below says nothing")
 
-			require.Empty(t, descriptionsAnywhere(doc),
-				"the diagram document is nodes and edges; descriptions belong to the model export")
+			require.Empty(t, descriptionsAnywhere(diagramDocOf(t, test.HotelReservationModel(t))),
+				"an undescribed model must not carry the key, not even empty-valued, or its bytes change")
+		})
+
+		t.Run("carries the description of a slice an aggregate holds and of a slice its context declares directly", func(t *testing.T) {
+			doc := diagramDocOf(t, &ast.Model{
+				Name: "Library Lending",
+				Contexts: []*ast.Context{{
+					Name: "Lending",
+					Aggregates: []*ast.Aggregate{{
+						Name: "Loan",
+						Slices: []*ast.Slice{{
+							Name:        "Borrow Copy",
+							Description: "A member takes a copy off the shelf",
+						}},
+					}},
+					Slices: []*ast.Slice{{
+						Name:        "Claim Desk",
+						Description: "A reader takes a seat in the reading room",
+					}},
+				}},
+			})
+
+			require.Equal(t, map[string]string{
+				"Borrow Copy": "A member takes a copy off the shelf",
+				"Claim Desk":  "A reader takes a seat in the reading room",
+			}, diagramDescriptionsByLabel(doc))
 		})
 
 		t.Run("fields named after keywords reach the node field lists and nothing else", func(t *testing.T) {
@@ -4227,6 +4256,17 @@ func awkwardlyDescribedModel() *ast.Model {
 	}
 }
 
+// describedHotelReservationNodeDescriptions is the prose a diagram document of
+// test.DescribedHotelReservation files by node label: the description every
+// construct states, plus a second copy of the translation event's, because the
+// exporter draws that event a node of its own beside nesting it in the
+// translation.
+func describedHotelReservationNodeDescriptions() map[string]string {
+	byLabel := maps.Clone(test.DescribedHotelReservationDescriptions)
+	byLabel["BookingImported"] = "A partner site reported a booking"
+	return byLabel
+}
+
 // keywordFieldsByOwner transcribes what test.KeywordFieldSearchCatalog declares,
 // so an export is read back against the source an author wrote rather than
 // against another export of it.
@@ -4954,6 +4994,29 @@ func descriptionsByConstruct(t *testing.T, doc map[string]any) map[string]any {
 		"translation":       translation["description"],
 		"translation event": translation["event"].(map[string]any)["description"],
 	}
+}
+
+// diagramDescriptionsByLabel files the description of every node of a decoded
+// diagram document under that node's label, and the description of the event a
+// translation node nests under the translation's label followed by "event", so
+// the standalone node the exporter draws for that same event keeps an entry of
+// its own rather than overwriting it.
+func diagramDescriptionsByLabel(doc map[string]any) map[string]string {
+	byLabel := make(map[string]string)
+	describe := func(label string, object map[string]any) {
+		if description, describes := object["description"].(string); describes {
+			byLabel[label] = description
+		}
+	}
+
+	for _, node := range objectsUnder(doc, "nodes") {
+		label := node["label"].(string)
+		describe(label, node)
+		if event, nests := node["event"].(map[string]any); nests {
+			describe(label+" event", event)
+		}
+	}
+	return byLabel
 }
 
 func descriptionsAnywhere(node any) []any {

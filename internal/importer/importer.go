@@ -22,6 +22,7 @@ type diagramNode struct {
 	ID             string          `json:"id"`
 	Type           string          `json:"type"`
 	Label          string          `json:"label"`
+	Description    string          `json:"description,omitempty"`
 	ParentID       *string         `json:"parentId"`
 	Fields         []*diagramField `json:"fields,omitempty"`
 	Actor          string          `json:"actor,omitempty"`
@@ -39,6 +40,7 @@ type diagramNode struct {
 
 type diagramEvent struct {
 	Name         string          `json:"name"`
+	Description  string          `json:"description,omitempty"`
 	Source       string          `json:"source,omitempty"`
 	ExternalName string          `json:"external_name,omitempty"`
 	Fields       []*diagramField `json:"fields,omitempty"`
@@ -92,7 +94,7 @@ func ImportDiagram(data []byte) (*ast.Model, error) {
 		}
 		switch n.Type {
 		case "actor":
-			model.Actors = append(model.Actors, &ast.Actor{Name: n.Label})
+			model.Actors = append(model.Actors, &ast.Actor{Name: n.Label, Description: n.Description})
 		case "context":
 			model.Contexts = append(model.Contexts, b.buildContext(n))
 		}
@@ -126,9 +128,9 @@ func (b *builder) children(parentID, typ string) []*diagramNode {
 }
 
 func (b *builder) buildContext(n *diagramNode) *ast.Context {
-	ctx := &ast.Context{Name: n.Label}
+	ctx := &ast.Context{Name: n.Label, Description: n.Description}
 	for _, aggNode := range b.children(n.ID, "aggregate") {
-		agg := &ast.Aggregate{Name: aggNode.Label}
+		agg := &ast.Aggregate{Name: aggNode.Label, Description: aggNode.Description}
 		for _, sliceNode := range b.children(aggNode.ID, "slice") {
 			agg.Slices = append(agg.Slices, b.buildSlice(sliceNode))
 		}
@@ -141,7 +143,7 @@ func (b *builder) buildContext(n *diagramNode) *ast.Context {
 }
 
 func (b *builder) buildSlice(n *diagramNode) *ast.Slice {
-	slice := &ast.Slice{Name: n.Label}
+	slice := &ast.Slice{Name: n.Label, Description: n.Description}
 
 	// Translation events are re-emitted inside their translation block, so the
 	// standalone event node the exporter adds for them must not become a
@@ -156,15 +158,16 @@ func (b *builder) buildSlice(n *diagramNode) *ast.Slice {
 	if triggers := b.children(n.ID, "trigger"); len(triggers) > 0 {
 		t := triggers[0]
 		slice.Trigger = &ast.Trigger{
-			Name:  t.Label,
-			Actor: t.Actor,
-			Reads: t.Reads,
+			Name:        t.Label,
+			Description: t.Description,
+			Actor:       t.Actor,
+			Reads:       t.Reads,
 		}
 		b.register(t.ID, slice, slice.Trigger)
 	}
 
 	for _, c := range b.children(n.ID, "command") {
-		cmd := &ast.Command{Name: c.Label, Fields: convertFields(c.Fields)}
+		cmd := &ast.Command{Name: c.Label, Description: c.Description, Fields: convertFields(c.Fields)}
 		slice.Commands = append(slice.Commands, cmd)
 		b.register(c.ID, slice, cmd)
 	}
@@ -176,6 +179,7 @@ func (b *builder) buildSlice(n *diagramNode) *ast.Slice {
 		}
 		evt := &ast.Event{
 			Name:         e.Label,
+			Description:  e.Description,
 			Source:       e.Source,
 			ExternalName: e.ExternalName,
 			Fields:       convertFields(e.Fields),
@@ -186,9 +190,10 @@ func (b *builder) buildSlice(n *diagramNode) *ast.Slice {
 
 	for _, v := range b.children(n.ID, "view") {
 		view := &ast.View{
-			Name:       v.Label,
-			Fields:     convertFields(v.Fields),
-			Subscribes: append([]string(nil), v.Subscribes...),
+			Name:        v.Label,
+			Description: v.Description,
+			Fields:      convertFields(v.Fields),
+			Subscribes:  append([]string(nil), v.Subscribes...),
 		}
 		slice.Views = append(slice.Views, view)
 		b.register(v.ID, slice, view)
@@ -197,6 +202,7 @@ func (b *builder) buildSlice(n *diagramNode) *ast.Slice {
 	for _, a := range b.children(n.ID, "automation") {
 		auto := &ast.Automation{
 			Name:          a.Label,
+			Description:   a.Description,
 			OnEvent:       a.OnEvent,
 			Schedule:      a.Schedule,
 			Reads:         a.Reads,
@@ -210,6 +216,7 @@ func (b *builder) buildSlice(n *diagramNode) *ast.Slice {
 	for _, t := range b.children(n.ID, "translation") {
 		trans := &ast.Translation{
 			Name:           t.Label,
+			Description:    t.Description,
 			ExternalSystem: t.ExternalSystem,
 			Reads:          t.Reads,
 			Command:        t.Command,
@@ -217,6 +224,7 @@ func (b *builder) buildSlice(n *diagramNode) *ast.Slice {
 		if t.Event != nil {
 			trans.Event = &ast.Event{
 				Name:         t.Event.Name,
+				Description:  t.Event.Description,
 				Source:       t.Event.Source,
 				ExternalName: t.Event.ExternalName,
 				Fields:       convertFields(t.Event.Fields),

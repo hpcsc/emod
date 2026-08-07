@@ -344,6 +344,29 @@ context "Orders" {
 		require.NotEmpty(t, edges, "expected non-empty edges for valid file")
 	})
 
+	t.Run("described file's descriptions reach the nodes of the diagram JSON envelope", func(t *testing.T) {
+		path := writeTemp(t, "described.emod", describedEmod)
+
+		output := captureStdout(t, func() {
+			err := cli.RunExport(path, "diagram-json")
+			require.NoError(t, err)
+		})
+
+		var doc map[string]interface{}
+		require.NoError(t, json.Unmarshal([]byte(output), &doc))
+		require.Empty(t, doc["diagnostics"])
+
+		require.Equal(t, map[string]interface{}{
+			"context": "Everything the hotel knows about a stay before the guest arrives",
+			"slice":   "A guest books a room from the public site",
+			"command": "Ask the hotel to hold a room for a date range, 10% deposit taken up front",
+		}, map[string]interface{}{
+			"context": findDiagramNodeByLabel(t, doc, "Reservations")["description"],
+			"slice":   findDiagramNodeByLabel(t, doc, "Make Reservation")["description"],
+			"command": findDiagramNodeByLabel(t, doc, "MakeReservation")["description"],
+		})
+	})
+
 	t.Run("file with validation errors outputs diagram JSON with diagnostics on stdout and empty stderr", func(t *testing.T) {
 		path := writeTemp(t, "invalid.emod", invalidEmod)
 
@@ -489,6 +512,20 @@ func TestExportAllPatterns(t *testing.T) {
 		require.Contains(t, output, `reads: "AvailableRoomsView"`)
 		require.NotContains(t, output, "kind: ", "exported CUE trigger must not carry kind")
 	})
+}
+
+func findDiagramNodeByLabel(t *testing.T, doc map[string]interface{}, label string) map[string]interface{} {
+	t.Helper()
+
+	diagram := doc["diagram"].(map[string]interface{})
+	for _, n := range diagram["nodes"].([]interface{}) {
+		node := n.(map[string]interface{})
+		if node["label"] == label {
+			return node
+		}
+	}
+	t.Fatalf("node labelled %q not found", label)
+	return nil
 }
 
 func findSliceByName(t *testing.T, model map[string]any, name string) map[string]any {

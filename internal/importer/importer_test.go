@@ -405,6 +405,17 @@ context "C" {
 			require.Equal(t, a.Contexts[0].Slices[0].Trigger, b.Contexts[0].Slices[0].Trigger)
 		})
 
+		t.Run("re-emits the description every construct states, and writes none for the twin that states none", func(t *testing.T) {
+			require.Equal(t, test.DescribedHotelReservationDescriptions,
+				test.DeclaredDescriptions(test.DescribedHotelReservationModel(t)),
+				"the fixture has to describe every construct, or the round trips below say nothing about prose")
+			require.Empty(t, test.DeclaredDescriptions(test.HotelReservationModel(t)),
+				"and its twin has to describe none, or they cannot show prose being invented")
+
+			requireSaveKeepsAllButItsLosses(t, test.DescribedHotelReservationModel)
+			requireSaveKeepsAllButItsLosses(t, test.HotelReservationModel)
+		})
+
 		t.Run("preserves external event sources", func(t *testing.T) {
 			source := `emod 1
 model "M"
@@ -713,6 +724,48 @@ func stripWhatDiagramJSONDrops(model *ast.Model) {
 		c.Mode = ""
 	}
 	forEachSlice(model, stripSliceDecisionMetadata)
+}
+
+// stripWhatASaveStillLoses removes, beyond what a diagram document was designed
+// to leave behind, two things a save drops that it was not: the model's own
+// description, which the document files under no node, and a flow naming an event
+// the slice does not itself declare, which no edge between two of that slice's
+// nodes stands for. They are losses rather than choices, so they stay out of
+// stripWhatDiagramJSONDrops — a model keeping its flows within one slice must
+// still round-trip every one of them.
+func stripWhatASaveStillLoses(model *ast.Model) {
+	stripWhatDiagramJSONDrops(model)
+	model.Description = ""
+	forEachSlice(model, stripFlowsLeavingTheSlice)
+}
+
+// requireSaveKeepsAllButItsLosses requires that a viewer save of the fixture —
+// export to a diagram document, import it back, format — rewrites the file the
+// fixture states, minus what a save loses. The fixture is read twice because the
+// strip rewrites the model it is handed, and the round trip has to run on one no
+// strip has touched.
+func requireSaveKeepsAllButItsLosses(t *testing.T, fixture func(*testing.T) *ast.Model) {
+	t.Helper()
+
+	carried := fixture(t)
+	stripWhatASaveStillLoses(carried)
+
+	require.Equal(t, formatter.Format(carried), formatter.Format(importExported(t, fixture(t))))
+}
+
+func stripFlowsLeavingTheSlice(s *ast.Slice) {
+	declared := make(map[string]bool)
+	for _, e := range s.Events {
+		declared[e.Name] = true
+	}
+
+	var kept []*ast.Flow
+	for _, f := range s.Flows {
+		if declared[f.EventName] {
+			kept = append(kept, f)
+		}
+	}
+	s.Flows = kept
 }
 
 // forEachSlice visits both homes a slice has — nested in an aggregate and

@@ -18,12 +18,13 @@ type jsonDiagramDocument struct {
 }
 
 type jsonDiagramNode struct {
-	ID       string              `json:"id"`
-	Type     string              `json:"type"`
-	Label    string              `json:"label"`
-	ParentID *string             `json:"parentId"`
-	Fields   []*jsonDiagramField `json:"fields,omitempty"`
-	Position *jsonPosition       `json:"position,omitempty"`
+	ID          string              `json:"id"`
+	Type        string              `json:"type"`
+	Label       string              `json:"label"`
+	Description string              `json:"description,omitempty"`
+	ParentID    *string             `json:"parentId"`
+	Fields      []*jsonDiagramField `json:"fields,omitempty"`
+	Position    *jsonPosition       `json:"position,omitempty"`
 	// Type-specific metadata for trigger, event, view, automation, translation
 	Actor          string            `json:"actor,omitempty"`
 	Reads          string            `json:"reads,omitempty"`
@@ -52,6 +53,7 @@ type jsonDiagramField struct {
 
 type jsonDiagramEvent struct {
 	Name                 string         `json:"name"`
+	Description          string         `json:"description,omitempty"`
 	Position             *jsonPosition  `json:"position,omitempty"`
 	SourcePosition       *jsonPosition  `json:"source_position,omitempty"`
 	ExternalNamePosition *jsonPosition  `json:"external_name_position,omitempty"`
@@ -150,11 +152,12 @@ func (b *diagramBuilder) appendActor(a *ast.Actor) {
 		return
 	}
 	b.appendNode(&jsonDiagramNode{
-		ID:       b.ids.next("actor"),
-		Type:     "actor",
-		Label:    a.Name,
-		ParentID: nil,
-		Position: convertPosition(a.NamePos),
+		ID:          b.ids.next("actor"),
+		Type:        "actor",
+		Label:       a.Name,
+		Description: a.Description,
+		ParentID:    nil,
+		Position:    convertPosition(a.NamePos),
 	})
 }
 
@@ -164,11 +167,12 @@ func (b *diagramBuilder) appendContext(c *ast.Context) {
 	}
 	ctxID := b.ids.next("context")
 	b.appendNode(&jsonDiagramNode{
-		ID:       ctxID,
-		Type:     "context",
-		Label:    c.Name,
-		ParentID: nil,
-		Position: convertPosition(c.NamePos),
+		ID:          ctxID,
+		Type:        "context",
+		Label:       c.Name,
+		Description: c.Description,
+		ParentID:    nil,
+		Position:    convertPosition(c.NamePos),
 	})
 
 	for _, agg := range c.Aggregates {
@@ -185,11 +189,12 @@ func (b *diagramBuilder) appendAggregate(agg *ast.Aggregate, ctxID string) {
 	}
 	aggID := b.ids.next("aggregate")
 	b.appendNode(&jsonDiagramNode{
-		ID:       aggID,
-		Type:     "aggregate",
-		Label:    agg.Name,
-		ParentID: &ctxID,
-		Position: convertPosition(agg.NamePos),
+		ID:          aggID,
+		Type:        "aggregate",
+		Label:       agg.Name,
+		Description: agg.Description,
+		ParentID:    &ctxID,
+		Position:    convertPosition(agg.NamePos),
 	})
 
 	for _, s := range agg.Slices {
@@ -203,11 +208,12 @@ func (b *diagramBuilder) appendSlice(s *ast.Slice, parentID string) {
 	}
 	sliceID := b.ids.next("slice")
 	b.appendNode(&jsonDiagramNode{
-		ID:       sliceID,
-		Type:     "slice",
-		Label:    s.Name,
-		ParentID: &parentID,
-		Position: convertPosition(s.NamePos),
+		ID:          sliceID,
+		Type:        "slice",
+		Label:       s.Name,
+		Description: s.Description,
+		ParentID:    &parentID,
+		Position:    convertPosition(s.NamePos),
 	})
 
 	b.appendCommands(s.Commands, sliceID)
@@ -226,11 +232,12 @@ func (b *diagramBuilder) appendCommands(commands []*ast.Command, sliceID string)
 		cmdID := b.ids.next("command")
 		b.commandIDs[cmd.Name] = cmdID
 		node := &jsonDiagramNode{
-			ID:       cmdID,
-			Type:     "command",
-			Label:    cmd.Name,
-			ParentID: &sliceID,
-			Position: convertPosition(cmd.NamePos),
+			ID:          cmdID,
+			Type:        "command",
+			Label:       cmd.Name,
+			Description: cmd.Description,
+			ParentID:    &sliceID,
+			Position:    convertPosition(cmd.NamePos),
 		}
 		if len(cmd.Fields) > 0 {
 			node.Fields = convertFieldsToDiagram(cmd.Fields)
@@ -255,6 +262,7 @@ func (b *diagramBuilder) appendEvent(evt *ast.Event, sliceID string) {
 		ID:           evtID,
 		Type:         "event",
 		Label:        evt.Name,
+		Description:  evt.Description,
 		ParentID:     &sliceID,
 		Position:     convertPosition(evt.NamePos),
 		Source:       evt.Source,
@@ -273,13 +281,14 @@ func (b *diagramBuilder) appendTrigger(t *ast.Trigger, sliceID string) {
 	tID := b.ids.next("trigger")
 	b.triggerIDs[t.Name] = tID
 	b.appendNode(&jsonDiagramNode{
-		ID:       tID,
-		Type:     "trigger",
-		Label:    t.Name,
-		ParentID: &sliceID,
-		Position: convertPosition(t.NamePos),
-		Actor:    t.Actor,
-		Reads:    t.Reads,
+		ID:          tID,
+		Type:        "trigger",
+		Label:       t.Name,
+		Description: t.Description,
+		ParentID:    &sliceID,
+		Position:    convertPosition(t.NamePos),
+		Actor:       t.Actor,
+		Reads:       t.Reads,
 	})
 }
 
@@ -291,12 +300,13 @@ func (b *diagramBuilder) appendViews(views []*ast.View, sliceID string) {
 		vID := b.ids.next("view")
 		b.viewIDs[v.Name] = vID
 		node := &jsonDiagramNode{
-			ID:         vID,
-			Type:       "view",
-			Label:      v.Name,
-			ParentID:   &sliceID,
-			Position:   convertPosition(v.NamePos),
-			Subscribes: v.Subscribes,
+			ID:          vID,
+			Type:        "view",
+			Label:       v.Name,
+			Description: v.Description,
+			ParentID:    &sliceID,
+			Position:    convertPosition(v.NamePos),
+			Subscribes:  v.Subscribes,
 		}
 		if len(v.Fields) > 0 {
 			node.Fields = convertFieldsToDiagram(v.Fields)
@@ -316,6 +326,7 @@ func (b *diagramBuilder) appendAutomations(automations []*ast.Automation, sliceI
 			ID:            aID,
 			Type:          "automation",
 			Label:         a.Name,
+			Description:   a.Description,
 			ParentID:      &sliceID,
 			Position:      convertPosition(a.NamePos),
 			OnEvent:       a.OnEvent,
@@ -338,6 +349,7 @@ func (b *diagramBuilder) appendTranslations(translations []*ast.Translation, sli
 			ID:             tID,
 			Type:           "translation",
 			Label:          t.Name,
+			Description:    t.Description,
 			ParentID:       &sliceID,
 			Position:       convertPosition(t.NamePos),
 			ExternalSystem: t.ExternalSystem,
@@ -437,6 +449,7 @@ func convertEventToDiagram(e *ast.Event) *jsonDiagramEvent {
 	}
 	return &jsonDiagramEvent{
 		Name:                 e.Name,
+		Description:          e.Description,
 		Position:             convertPosition(e.NamePos),
 		SourcePosition:       convertPosition(e.SourcePos),
 		ExternalNamePosition: convertPosition(e.ExternalNamePos),
