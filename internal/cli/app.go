@@ -206,7 +206,8 @@ func NewApp() *urfave.App {
 					},
 				},
 				Action: func(c *urfave.Context) error {
-					path, format := glossaryPathAndFormat(c.Args().Slice(), c.String("format"))
+					path := c.Args().First()
+					format := c.String("format")
 					return reportExitError(RunGlossary(path, format))
 				},
 			},

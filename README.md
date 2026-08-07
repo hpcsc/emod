@@ -157,17 +157,17 @@ See [examples/dcb_model.emod](/examples/dcb_model.emod) for a complete DCB examp
 ### Generate diagrams
 
 ```bash
-emod diagram reservation.emod -f drawio   # draw.io XML (default)
-emod diagram reservation.emod -f mermaid  # Mermaid markdown
-emod diagram reservation.emod -f svg      # standalone SVG
-emod diagram reservation.emod -f ascii    # terminal preview
+emod diagram reservation.emod --format drawio   # draw.io XML (default)
+emod diagram reservation.emod --format mermaid  # Mermaid markdown
+emod diagram reservation.emod --format svg      # standalone SVG
+emod diagram reservation.emod --format ascii    # terminal preview
 ```
 
 ### Export
 
 ```bash
-emod export reservation.emod -f json  # JSON
-emod export reservation.emod -f cue   # CUE schema
+emod export reservation.emod --format json  # JSON
+emod export reservation.emod --format cue   # CUE schema
 ```
 
 ### List slices
@@ -197,8 +197,8 @@ genuinely costs rather than claiming the model is now free of them.
 ### Render a glossary
 
 ```bash
-emod glossary reservation.emod          # markdown (default)
-emod glossary reservation.emod -f json  # JSON
+emod glossary reservation.emod                # markdown (default)
+emod glossary reservation.emod --format json  # JSON
 ```
 
 ## Editor Setup

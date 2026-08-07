@@ -18,7 +18,7 @@ func runCommandLine(t *testing.T, args ...string) error {
 	t.Helper()
 	app := cli.NewApp()
 	app.ExitErrHandler = func(*urfave.Context, error) {}
-	return app.Run(args)
+	return cli.RunApp(app, args)
 }
 
 func TestGlossary(t *testing.T) {
