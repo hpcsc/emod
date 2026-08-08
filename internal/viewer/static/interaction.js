@@ -1,5 +1,6 @@
 import { L, DRAG_THRESHOLD } from './config.js';
 import { Layout } from './layout.js';
+import { Renderer } from './renderer.js';
 import { Model } from './model.js';
 import { bus } from './bus.js';
 
@@ -183,8 +184,7 @@ function resizeSliceParts(store, sliceId, w, h) {
     area.setAttribute("width", w);
     area.setAttribute("height", Math.max(0, h - L.sliceHdrH));
   }
-  const label = svgEl.querySelector('text.slice-header[data-slice-id="' + sliceId + '"]');
-  if (label && sp) label.setAttribute("x", sp.x + w / 2);
+  if (sp) Renderer.placeSliceHeaderTexts(svgEl, sliceId, sp.x, w);
 }
 
 function dragNodeTo(store, drag, dx, dy) {

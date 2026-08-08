@@ -3,6 +3,7 @@ import { Layout } from './layout.js';
 
 var NS = "http://www.w3.org/2000/svg";
 var clockMarking = "⏱";
+var screenBar = { inset: 8, top: 6, height: 6, stroke: 1 };
 var ellipsis = "…";
 var labelWidthFontSize = 13;
 var labelWidthPadding = 16;
@@ -266,6 +267,69 @@ function appendAggregateAreas(swimlane, rows, y, h) {
   });
 }
 
+function sliceNameX(pos) {
+  return pos.x + pos.w / 2;
+}
+
+// A drag stretches a slice around the block it is moving and leaves the header
+// at whatever width the pointer stopped at, so the band's strings are placed
+// through here on that path as well as on the render.
+function placeSliceHeaderTexts(root, sliceId, x, w) {
+  var band = { x: x, w: w };
+  root.querySelectorAll('text.slice-header[data-slice-id="' + sliceId + '"]').forEach(function(el) {
+    el.setAttribute("x", sliceNameX(band));
+  });
+}
+
+function buildSlice(slice, sp) {
+  var owner = " data-slice-id=\"" + slice.id + "\"";
+  var headerAttrs = "class=\"slice-header\"" + owner;
+
+  var sliceG = g("slice-" + slice.id);
+  sliceG.appendChild(svgRect(sp.x, sp.y, sp.w, sp.h, "#ffffff", "#adb5bd",
+    "rx=\"4\" stroke-width=\"1.5\" stroke-dasharray=\"6,3\" class=\"slice-box\"" + owner));
+  sliceG.appendChild(svgRect(sp.x, sp.y, sp.w, L.sliceHdrH, "#f8f9fa", "none",
+    "rx=\"4\" " + headerAttrs));
+  sliceG.appendChild(svgRect(sp.x, sp.y + L.sliceHdrH - 4, sp.w, 4, "#f8f9fa", "none",
+    headerAttrs));
+  sliceG.appendChild(svgText(sliceNameX(sp), sp.y + 18, slice.label, 12, "#495057",
+    "text-anchor=\"middle\" font-weight=\"500\" " + headerAttrs));
+  sliceG.appendChild(svgRect(sp.x, sp.y + L.sliceHdrH, sp.w, sp.h - L.sliceHdrH, "transparent", "none",
+    "class=\"slice-area\"" + owner));
+  return sliceG;
+}
+
+function childrenOfType(nodes, type, parentId) {
+  return nodes.filter(function(n) {
+    return n.type === type && n.parentId === parentId;
+  });
+}
+
+function buildSwimlane(nodes, positions, ctx, cp) {
+  var aggs = childrenOfType(nodes, "aggregate", ctx.id);
+
+  var swimlane = g("swimlane-" + ctx.id);
+  swimlane.appendChild(svgRect(cp.x, cp.y, cp.w, cp.h, "#f1f3f5", "#2c3e50",
+    "rx=\"8\" stroke-width=\"2\""));
+  appendContextHeader(swimlane, ctx, cp);
+
+  var aggRows = computeAggregateRows(aggs, positions, cp);
+  appendAggregateRows(swimlane, aggRows, cp.y + L.swimlaneHdr);
+
+  var aggAreaY = cp.y + L.swimlaneHdr + L.aggLabelH;
+  appendAggregateAreas(swimlane, aggRows, aggAreaY, (cp.y + cp.h) - aggAreaY);
+
+  var sliceOwners = aggs.map(function(agg) { return agg.id; }).concat(ctx.id);
+  sliceOwners.forEach(function(ownerId) {
+    childrenOfType(nodes, "slice", ownerId).forEach(function(sl) {
+      var sp = positions[sl.id];
+      if (sp) swimlane.appendChild(buildSlice(sl, sp));
+    });
+  });
+
+  return swimlane;
+}
+
 function appendBlockLabels(blockG, node, pos, stroke) {
   var midX = pos.x + pos.w / 2;
   var midY = pos.y + pos.h / 2;
@@ -295,6 +359,71 @@ function appendBlockLabels(blockG, node, pos, stroke) {
   blockG.appendChild(centeredText(midX, midY, node.label, 13, stroke));
 }
 
+function buildBlock(node, pos, palette) {
+  var stroke = palette.stroke;
+
+  var blockG = g(node.type + "-block diagram-node");
+  blockG.setAttribute("data-node-id", node.id);
+  blockG.appendChild(svgRect(pos.x, pos.y, pos.w, pos.h, palette.fill, stroke,
+    "rx=\"4\" stroke-width=\"1.5\""));
+
+  if (node.type === "trigger") {
+    // A trigger is drawn as a screen: a small header bar inside the top edge
+    // of the box, matching the Go renderers. The main rect stays first so
+    // drawnBoxes(svg) keeps reading the box itself.
+    blockG.appendChild(svgRect(pos.x + screenBar.inset, pos.y + screenBar.top,
+      pos.w - screenBar.inset * 2, screenBar.height, stroke, stroke,
+      "rx=\"0\" stroke-width=\"" + screenBar.stroke + "\""));
+  }
+
+  PORT_DIRECTIONS.forEach(function(dir) {
+    blockG.appendChild(connectPort(node.id, dir, pos));
+  });
+
+  appendBlockLabels(blockG, node, pos, stroke);
+  return blockG;
+}
+
+function arrowHandle(end, point, edge, edgeId) {
+  var el = document.createElementNS(NS, "circle");
+  el.setAttribute("cx", point.x);
+  el.setAttribute("cy", point.y);
+  el.setAttribute("r", "6");
+  el.setAttribute("fill", "transparent");
+  el.setAttribute("stroke", "transparent");
+  el.setAttribute("stroke-width", "2");
+  el.setAttribute("class", "arrow-handle");
+  el.setAttribute("data-arrow-handle", end);
+  el.setAttribute("data-edge-source", edge.source);
+  el.setAttribute("data-edge-target", edge.target);
+  el.setAttribute("data-edge-type", edge.type);
+  el.setAttribute("data-edge-id", edgeId);
+  el.setAttribute("cursor", "pointer");
+  return el;
+}
+
+function appendEdge(vg, hitLayer, store, edge, ei) {
+  var positions = store.layoutPositions;
+  var cfg = edgeConfig[edge.type];
+  var srcPos = positions[edge.source];
+  var tgtPos = positions[edge.target];
+  if (!cfg || !srcPos || !tgtPos) return;
+
+  var crossBoundary = Layout.isCrossBoundary(store.nodes, edge.source, edge.target);
+  var d = Layout.computeArrowD(srcPos, tgtPos, crossBoundary, ei);
+
+  store.arrowData.push({ source: edge.source, target: edge.target, path: d });
+
+  var edgeId = edge.source + "--" + edge.target;
+
+  hitLayer.appendChild(arrowHitPath(d, edge.source, edge.target, edgeId));
+  vg.appendChild(path(d, cfg.cls, cfg.stroke, cfg.marker, cfg.dash, edge.source, edge.target, edgeId));
+
+  var eps = Layout.computeArrowEndpoints(srcPos, tgtPos, crossBoundary);
+  vg.appendChild(arrowHandle("source", eps.src, edge, edgeId));
+  vg.appendChild(arrowHandle("target", eps.tgt, edge, edgeId));
+}
+
 function buildSVG(store) {
   var positions = store.layoutPositions;
   var nodes = store.nodes;
@@ -302,58 +431,9 @@ function buildSVG(store) {
 
   var vg = g("");
 
-  var ctxNodes = nodes.filter(function(n) { return n.type === "context"; });
-
-  ctxNodes.forEach(function(ctx) {
+  nodes.filter(function(n) { return n.type === "context"; }).forEach(function(ctx) {
     var cp = positions[ctx.id];
-    if (!cp) return;
-
-    var aggs = nodes.filter(function(n) {
-      return n.type === "aggregate" && n.parentId === ctx.id;
-    });
-
-    var swimlane = g("swimlane-" + ctx.id);
-    swimlane.appendChild(svgRect(cp.x, cp.y, cp.w, cp.h, "#f1f3f5", "#2c3e50",
-      "rx=\"8\" stroke-width=\"2\""));
-    appendContextHeader(swimlane, ctx, cp);
-
-    var aggRows = computeAggregateRows(aggs, positions, cp);
-    appendAggregateRows(swimlane, aggRows, cp.y + L.swimlaneHdr);
-
-    var aggAreaY = cp.y + L.swimlaneHdr + L.aggLabelH;
-    appendAggregateAreas(swimlane, aggRows, aggAreaY, (cp.y + cp.h) - aggAreaY);
-
-    function renderSlice(sl) {
-      var sp = positions[sl.id];
-      if (!sp) return;
-
-      var sliceG = g("slice-" + sl.id);
-      sliceG.appendChild(svgRect(sp.x, sp.y, sp.w, sp.h, "#ffffff", "#adb5bd",
-        "rx=\"4\" stroke-width=\"1.5\" stroke-dasharray=\"6,3\" class=\"slice-box\" data-slice-id=\"" + sl.id + "\""));
-      sliceG.appendChild(svgRect(sp.x, sp.y, sp.w, 28, "#f8f9fa", "none",
-        "rx=\"4\" class=\"slice-header\" data-slice-id=\"" + sl.id + "\""));
-      sliceG.appendChild(svgRect(sp.x, sp.y + 24, sp.w, 4, "#f8f9fa", "none",
-        "class=\"slice-header\" data-slice-id=\"" + sl.id + "\""));
-      sliceG.appendChild(svgText(sp.x + sp.w / 2, sp.y + 18, sl.label, 12, "#495057",
-        "text-anchor=\"middle\" font-weight=\"500\" class=\"slice-header\" data-slice-id=\"" + sl.id + "\""));
-      sliceG.appendChild(svgRect(sp.x, sp.y + 28, sp.w, sp.h - 28, "transparent", "none",
-        "class=\"slice-area\" data-slice-id=\"" + sl.id + "\""));
-      swimlane.appendChild(sliceG);
-    }
-
-    aggs.forEach(function(agg) {
-      var slices = nodes.filter(function(n) {
-        return n.type === "slice" && n.parentId === agg.id;
-      });
-      slices.forEach(renderSlice);
-    });
-
-    var dcbSlices = nodes.filter(function(n) {
-      return n.type === "slice" && n.parentId === ctx.id;
-    });
-    dcbSlices.forEach(renderSlice);
-
-    vg.appendChild(swimlane);
+    if (cp) vg.appendChild(buildSwimlane(nodes, positions, ctx, cp));
   });
 
   // Appended before the blocks so the arrows' hit areas paint underneath them.
@@ -361,93 +441,14 @@ function buildSVG(store) {
   vg.appendChild(hitLayer);
 
   nodes.forEach(function(n) {
-    if (n.type !== "command" && n.type !== "event" &&
-        n.type !== "trigger" && n.type !== "view" &&
-        n.type !== "automation" && n.type !== "translation") return;
-    var np = positions[n.id];
-    if (!np) return;
-
     var palette = nodePalette[n.type];
-    if (!palette) {
-      return;
-    }
-    var fill = palette.fill;
-    var stroke = palette.stroke;
-    var cls = n.type + '-block';
-
-    var blockG = g(cls + " diagram-node");
-    blockG.setAttribute("data-node-id", n.id);
-    blockG.appendChild(svgRect(np.x, np.y, np.w, np.h, fill, stroke,
-      "rx=\"4\" stroke-width=\"1.5\""));
-
-    if (n.type === "trigger") {
-      // A trigger is drawn as a screen: a small header bar inside the top edge
-      // of the box, matching the Go renderers. The main rect stays first so
-      // drawnBoxes(svg) keeps reading the box itself.
-      blockG.appendChild(svgRect(np.x + 8, np.y + 6, np.w - 16, 6, stroke, stroke,
-        "rx=\"0\" stroke-width=\"1\""));
-    }
-
-    PORT_DIRECTIONS.forEach(function(dir) {
-      blockG.appendChild(connectPort(n.id, dir, np));
-    });
-
-    appendBlockLabels(blockG, n, np, stroke);
-    vg.appendChild(blockG);
+    var np = positions[n.id];
+    if (palette && np) vg.appendChild(buildBlock(n, np, palette));
   });
 
   store.arrowData = [];
   edges.forEach(function(edge, ei) {
-    var cfg = edgeConfig[edge.type];
-    if (!cfg) return;
-    var srcPos = positions[edge.source];
-    var tgtPos = positions[edge.target];
-    if (!srcPos || !tgtPos) return;
-
-    var crossBoundary = Layout.isCrossBoundary(store.nodes, edge.source, edge.target);
-    var d = Layout.computeArrowD(srcPos, tgtPos, crossBoundary, ei);
-
-    store.arrowData.push({ source: edge.source, target: edge.target, path: d });
-
-    var edgeId = edge.source + "--" + edge.target;
-
-    hitLayer.appendChild(arrowHitPath(d, edge.source, edge.target, edgeId));
-    vg.appendChild(path(d, cfg.cls, cfg.stroke, cfg.marker, cfg.dash, edge.source, edge.target, edgeId));
-
-    // Arrow endpoint handles (for repointing)
-    var eps = Layout.computeArrowEndpoints(srcPos, tgtPos, crossBoundary);
-
-    var srcHandle = document.createElementNS(NS, "circle");
-    srcHandle.setAttribute("cx", eps.src.x);
-    srcHandle.setAttribute("cy", eps.src.y);
-    srcHandle.setAttribute("r", "6");
-    srcHandle.setAttribute("fill", "transparent");
-    srcHandle.setAttribute("stroke", "transparent");
-    srcHandle.setAttribute("stroke-width", "2");
-    srcHandle.setAttribute("class", "arrow-handle");
-    srcHandle.setAttribute("data-arrow-handle", "source");
-    srcHandle.setAttribute("data-edge-source", edge.source);
-    srcHandle.setAttribute("data-edge-target", edge.target);
-    srcHandle.setAttribute("data-edge-type", edge.type);
-    srcHandle.setAttribute("data-edge-id", edgeId);
-    srcHandle.setAttribute("cursor", "pointer");
-    vg.appendChild(srcHandle);
-
-    var tgtHandle = document.createElementNS(NS, "circle");
-    tgtHandle.setAttribute("cx", eps.tgt.x);
-    tgtHandle.setAttribute("cy", eps.tgt.y);
-    tgtHandle.setAttribute("r", "6");
-    tgtHandle.setAttribute("fill", "transparent");
-    tgtHandle.setAttribute("stroke", "transparent");
-    tgtHandle.setAttribute("stroke-width", "2");
-    tgtHandle.setAttribute("class", "arrow-handle");
-    tgtHandle.setAttribute("data-arrow-handle", "target");
-    tgtHandle.setAttribute("data-edge-source", edge.source);
-    tgtHandle.setAttribute("data-edge-target", edge.target);
-    tgtHandle.setAttribute("data-edge-type", edge.type);
-    tgtHandle.setAttribute("data-edge-id", edgeId);
-    tgtHandle.setAttribute("cursor", "pointer");
-    vg.appendChild(tgtHandle);
+    appendEdge(vg, hitLayer, store, edge, ei);
   });
 
   vg.setAttribute("id", "viewport-group");
@@ -462,4 +463,5 @@ export const Renderer = {
   clearSVG,
   inject,
   buildSVG,
+  placeSliceHeaderTexts,
 };

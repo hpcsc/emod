@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
-import { installSVGGeometry } from './svg-env.js';
+import { installSVGGeometry, installIdentityMapping } from './svg-env.js';
 
 installSVGGeometry();
 
@@ -9,19 +9,6 @@ const { Renderer } = await import('../static/renderer.js');
 const { Interaction } = await import('../static/interaction.js');
 const { bus } = await import('../static/bus.js');
 const { L, DRAG_THRESHOLD } = await import('../static/config.js');
-
-// jsdom has no SVG coordinate mapping, so diagram space and client space are
-// made one and the same — a 10px mouse move is a 10px move in the diagram.
-function installIdentityMapping(svg) {
-  let pt = null;
-  svg.createSVGPoint = function () {
-    pt = { x: 0, y: 0, matrixTransform() { return { x: this.x, y: this.y }; } };
-    return pt;
-  };
-  svg.getScreenCTM = function () {
-    return { inverse() { return { multiply(p) { return p; } }; } };
-  };
-}
 
 function oneSlice() {
   return [

@@ -776,14 +776,18 @@ describe('Renderer.buildSVG', () => {
 
     it('uses no node fill or stroke literals outside the palette table in renderer.js', () => {
       const rendererSource = readFileSync(resolve(__dirname, '../static/renderer.js'), 'utf-8');
-      // The node loop is the only place that should pick a fill or stroke by
-      // node type; it must read from nodePalette instead of spelling a hex.
-      const nodeLoop = rendererSource.substring(
-        rendererSource.indexOf('nodes.forEach'),
-        rendererSource.indexOf('store.arrowData'),
-      );
+      // buildBlock is the only place that picks a fill or stroke by node type;
+      // it must read from nodePalette instead of spelling a hex. The window
+      // stops at the next top-level declaration because container chrome
+      // carries its own colours, which are not palette values.
+      const fromBuildBlock = rendererSource.slice(rendererSource.indexOf('function buildBlock('));
+      const buildBlockBody = fromBuildBlock.slice(0, fromBuildBlock.indexOf('\nfunction '));
+      // A window that missed the palette lookup would pass however many hexes
+      // buildBlock spelled, so prove the slice caught the code being guarded.
+      expect(buildBlockBody).toContain('palette.fill');
+
       const hex = /#([0-9a-fA-F]{6})/g;
-      const literals = [...nodeLoop.matchAll(hex)].map((m) => m[0].toLowerCase());
+      const literals = [...buildBlockBody.matchAll(hex)].map((m) => m[0].toLowerCase());
       const paletteValues = new Set(Object.values(nodePalette).flatMap((p) => [
         p.fill, p.stroke, p.hoverFill, p.highlightFill,
       ]));

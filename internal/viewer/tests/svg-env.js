@@ -33,3 +33,14 @@ export function installSVGGeometry() {
     };
   }
 }
+
+// jsdom has no SVG coordinate mapping, so diagram space and client space are
+// made one and the same — a 10px mouse move is a 10px move in the diagram.
+export function installIdentityMapping(svg) {
+  svg.createSVGPoint = function () {
+    return { x: 0, y: 0, matrixTransform() { return { x: this.x, y: this.y }; } };
+  };
+  svg.getScreenCTM = function () {
+    return { inverse() { return { multiply(p) { return p; } }; } };
+  };
+}

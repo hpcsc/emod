@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
-import { installSVGGeometry } from './svg-env.js';
+import { installSVGGeometry, installIdentityMapping } from './svg-env.js';
 
 installSVGGeometry();
 
@@ -10,15 +10,6 @@ const { Interaction } = await import('../static/interaction.js');
 const { UI } = await import('../static/ui.js');
 const { bus } = await import('../static/bus.js');
 const { L, DRAG_THRESHOLD } = await import('../static/config.js');
-
-function installIdentityMapping(svg) {
-  svg.createSVGPoint = function () {
-    return { x: 0, y: 0, matrixTransform() { return { x: this.x, y: this.y }; } };
-  };
-  svg.getScreenCTM = function () {
-    return { inverse() { return { multiply(p) { return p; } }; } };
-  };
-}
 
 // jsdom does no hit-testing, but dropping a connection is resolved by
 // coordinate, so stand in with the blocks whose boxes contain the point.
