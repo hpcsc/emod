@@ -3,7 +3,7 @@
 Which story in each in-progress story file is delivered. Files under
 `user-stories/completed/` are finished in full and are not tracked here.
 
-**30 of 180 delivered.**
+**32 of 180 delivered.**
 
 ## [emod-desktop.md](./emod-desktop.md) — 0/16
 
@@ -24,7 +24,7 @@ Which story in each in-progress story file is delivered. Files under
 - [ ] US-015: Download a desktop build without building it
 - [ ] US-016: Run the desktop app on Windows
 
-## [specs-and-metadata.md](./specs-and-metadata.md) — 6/18
+## [specs-and-metadata.md](./specs-and-metadata.md) — 8/18
 
 Delivered on `main`: the `emod <n>` version header, `description` on every construct, keywords
 usable as field names, `emod glossary`, named invariants on aggregates and DCB contexts, and
@@ -36,8 +36,8 @@ Given-When-Then specs on command slices.
 - [x] US-004: Generate a glossary from the model
 - [x] US-005: Declare named invariants
 - [x] US-006: Write Given-When-Then specs on command slices
-- [ ] US-007: Write specs for view, automation, and translation slices
-- [ ] US-008: Lint spec coverage and boundary assumptions
+- [x] US-007: Write specs for view, automation, and translation slices
+- [x] US-008: Lint spec coverage and boundary assumptions
 - [ ] US-009: Show rejection paths on the timeline
 - [ ] US-010: State example payloads in specs
 - [ ] US-011: Value-aware boundary checking in DCB mode
