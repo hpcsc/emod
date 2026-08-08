@@ -14,15 +14,22 @@ const SVG_NS = 'http://www.w3.org/2000/svg';
 
 const sliceDescription = 'Everything it takes to agree a plan';
 const commandDescription = 'Offers the customer an instalment plan';
+const sliceComments = [{ text: '# Rewritten after the 2024 affordability rules' }];
+const commandComments = [{ text: '# Only the plan the customer accepted' }];
 
 function documentedSlice() {
   return [
     { id: 'ctx1', type: 'context', label: 'Collections' },
     { id: 'agg1', type: 'aggregate', label: 'Arrangement', parentId: 'ctx1' },
-    { id: 'sl1', type: 'slice', label: 'Propose plan', parentId: 'agg1', description: sliceDescription },
+    {
+      id: 'sl1', type: 'slice', label: 'Propose plan', parentId: 'agg1',
+      description: sliceDescription,
+      comments: sliceComments,
+    },
     {
       id: 'cmd1', type: 'command', label: 'ProposePlan', parentId: 'sl1',
       description: commandDescription,
+      comments: commandComments,
       fields: [{ name: 'planId', type: 'UUID' }],
     },
   ];
@@ -46,8 +53,8 @@ function release(dx, dy) {
   fire(document, 'mouseup', { clientX: PRESS.x + dx, clientY: PRESS.y + dy });
 }
 
-function markOn(nodeId) {
-  return store.dom.svg.querySelector('[data-marker="description"][data-node-id="' + nodeId + '"]');
+function markOn(kind, nodeId) {
+  return store.dom.svg.querySelector('[data-marker="' + kind + '"][data-node-id="' + nodeId + '"]');
 }
 
 function headerBandOf(sliceId) {
@@ -64,7 +71,10 @@ function blockOf(nodeId) {
 
 const numeric = (el, attr) => Number(el.getAttribute(attr));
 
-const rightEdgeOf = (band) => numeric(band, 'x') + numeric(band, 'width');
+const rightEdgeOfBand = (band) => numeric(band, 'x') + numeric(band, 'width');
+
+const leftEdgeOfCentred = (el) => numeric(el, 'x') - Layout.labelWidth(el.textContent) / 2;
+const rightEdgeOfCentred = (el) => numeric(el, 'x') + Layout.labelWidth(el.textContent) / 2;
 
 function menuItems() {
   return [...store.dom.ctxMenu.querySelectorAll('.ctx-menu-item')].map((el) => el.textContent);
@@ -101,10 +111,11 @@ beforeEach(() => {
   UI.initDelegation(store);
 });
 
-describe('the mark on a documented construct', () => {
+describe('the marks on a documented construct', () => {
   it.each([
     ['the header band', () => headerBandOf('sl1')],
-    ['the mark drawn in it', () => markOn('sl1')],
+    ['the description mark drawn in it', () => markOn('description', 'sl1')],
+    ['the comments mark drawn in it', () => markOn('comments', 'sl1')],
   ])('carries the slice with the pointer when the press lands on %s', (_, find) => {
     const sliceGroup = store.dom.svg.querySelector('.slice-sl1');
 
@@ -118,21 +129,26 @@ describe('the mark on a documented construct', () => {
 
   it('rides the header corner while a block dragged out to the right stretches the slice', () => {
     const header = headerBandOf('sl1');
-    const mark = markOn('sl1');
-    const restingEdge = rightEdgeOf(header);
-    const restingInset = restingEdge - numeric(mark, 'x');
+    const marks = [markOn('description', 'sl1'), markOn('comments', 'sl1')];
+    const restingEdge = rightEdgeOfBand(header);
+    const restingInsets = marks.map((mark) => restingEdge - numeric(mark, 'x'));
 
     pressAndMove(blockOf('cmd1'), 300, 0);
 
-    expect(rightEdgeOf(header)).toBeGreaterThan(restingEdge);
-    expect(rightEdgeOf(header) - numeric(mark, 'x')).toBe(restingInset);
-    expect(numeric(mark, 'x')).toBeGreaterThan(numeric(nameIn('sl1'), 'x'));
+    const stretchedEdge = rightEdgeOfBand(header);
+    expect(stretchedEdge).toBeGreaterThan(restingEdge);
+    expect(marks.map((mark) => stretchedEdge - numeric(mark, 'x'))).toEqual(restingInsets);
+    marks.forEach((mark) => {
+      expect(numeric(mark, 'x')).toBeGreaterThan(numeric(nameIn('sl1'), 'x'));
+      expect(numeric(mark, 'x')).toBeLessThan(stretchedEdge);
+    });
+    expect(rightEdgeOfCentred(marks[1])).toBeLessThan(leftEdgeOfCentred(marks[0]));
 
     release(300, 0);
   });
 
   it('carries the block with the pointer when the press lands on the mark in its corner', () => {
-    pressAndMove(markOn('cmd1'), 40, 20);
+    pressAndMove(markOn('description', 'cmd1'), 40, 20);
     release(40, 20);
 
     expect(store.nodeOffsets.cmd1).toEqual({ dx: 40, dy: 20 });
@@ -140,7 +156,8 @@ describe('the mark on a documented construct', () => {
 
   it.each([
     ['the header band', () => headerBandOf('sl1')],
-    ['the mark drawn in it', () => markOn('sl1')],
+    ['the description mark drawn in it', () => markOn('description', 'sl1')],
+    ['the comments mark drawn in it', () => markOn('comments', 'sl1')],
   ])('opens the slice menu when the right-click lands on %s', (_, find) => {
     fire(find(), 'contextmenu', { clientX: 120, clientY: 140 });
 
@@ -153,8 +170,17 @@ describe('the mark on a documented construct', () => {
     ['a slice, which shows no prose in its header', 'sl1', 'Propose plan', sliceDescription],
     ['a block, which shows none on its face', 'cmd1', 'ProposePlan', commandDescription],
   ])('reads out the description of %s when the pointer rests on its mark', (_, nodeId, name, description) => {
-    fire(markOn(nodeId), 'pointerover', { clientX: 120, clientY: 140 });
+    fire(markOn('description', nodeId), 'pointerover', { clientX: 120, clientY: 140 });
 
     expect(shownTooltip()).toEqual({ shown: true, reads: [name, description] });
+  });
+
+  it.each([
+    ['a slice, which shows no prose in its header', 'sl1', 'Propose plan', 'Rewritten after the 2024 affordability rules'],
+    ['a block, which shows none on its face', 'cmd1', 'ProposePlan', 'Only the plan the customer accepted'],
+  ])('reads out the comments of %s when the pointer rests on its mark', (_, nodeId, name, note) => {
+    fire(markOn('comments', nodeId), 'pointerover', { clientX: 120, clientY: 140 });
+
+    expect(shownTooltip()).toEqual({ shown: true, reads: [name, note] });
   });
 });

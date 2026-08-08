@@ -72,6 +72,11 @@ function sectionText(store, title) {
   return found ? found.text : null;
 }
 
+function editableControls(store) {
+  return [...store.dom.dpContent.querySelectorAll('input, textarea, button, [contenteditable]')]
+    .map((el) => ({ control: el.tagName.toLowerCase(), reads: el.value || el.textContent }));
+}
+
 beforeEach(() => {
   document.body.innerHTML = '';
 });
@@ -249,5 +254,20 @@ describe('detail panel description', () => {
 
     expect(sectionText(store, 'Description')).toBe(description);
     expect(store.dom.dpContent.querySelector('b')).toBeNull();
+  });
+});
+
+describe('detail panel comments', () => {
+  it('offers nothing to write a comment with, listing the same sections and controls for a commented node as for a bare one', () => {
+    const commented = createStore();
+    const bare = createStore();
+
+    UI.showDetailPanel(commented, commandNode({
+      comments: [{ text: '# Stock is reserved by the basket, not here' }],
+    }));
+    UI.showDetailPanel(bare, commandNode());
+
+    expect(sectionTitles(commented)).toEqual(['Fields', 'Source']);
+    expect(editableControls(commented)).toEqual(editableControls(bare));
   });
 });

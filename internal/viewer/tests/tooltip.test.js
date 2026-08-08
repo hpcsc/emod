@@ -12,6 +12,8 @@ const ORDER_FIELDS = [
   { name: 'placedAt', type: 'Timestamp' },
 ];
 
+const AVAILABILITY_PROSE = 'Rooms still free on the requested dates';
+
 function blockGroup(node) {
   const group = document.createElementNS(SVG_NS, 'g');
   group.setAttribute('class', node.type + '-block diagram-node');
@@ -58,22 +60,22 @@ function hover(store, nodeId, at) {
   pointerOver(rectOf(store, nodeId), at);
 }
 
-function descriptionMark(parent, nodeId) {
-  const mark = document.createElementNS(SVG_NS, 'text');
-  mark.setAttribute('data-marker', 'description');
-  mark.setAttribute('data-node-id', nodeId);
-  parent.appendChild(mark);
-  return mark;
+function createMark(parent, kind, nodeId) {
+  const el = document.createElementNS(SVG_NS, 'text');
+  el.setAttribute('data-marker', kind);
+  el.setAttribute('data-node-id', nodeId);
+  parent.appendChild(el);
+  return el;
 }
 
-function markOnBlock(store, nodeId) {
-  return descriptionMark(blockOf(store, nodeId), nodeId);
+function markOnBlock(store, kind, nodeId) {
+  return createMark(blockOf(store, nodeId), kind, nodeId);
 }
 
 // A slice is drawn as a header band rather than as a block, so its mark hangs
 // off the diagram with no block group around it to fall back on.
-function markOnSliceHeader(store, nodeId) {
-  return descriptionMark(store.dom.svg, nodeId);
+function markOnSliceHeader(store, kind, nodeId) {
+  return createMark(store.dom.svg, kind, nodeId);
 }
 
 function movePointer(store, fromNodeId, toNodeId) {
@@ -106,10 +108,12 @@ beforeEach(() => {
 });
 
 describe('tooltip on hovering the diagram', () => {
-  it('reads out the description of a node stating no fields, and clears away over a sibling stating neither', () => {
-    const description = 'Rooms still free on the requested dates';
+  it.each([
+    ['a description', { description: AVAILABILITY_PROSE }],
+    ['comments', { comments: [{ text: '# ' + AVAILABILITY_PROSE }] }],
+  ])('reads out %s of a node stating nothing else, and clears away over a sibling stating none', (_, carries) => {
     const store = createStore([
-      { id: 'view1', type: 'view', label: 'Available Rooms', description: description },
+      { id: 'view1', type: 'view', label: 'Available Rooms', ...carries },
       { id: 'view2', type: 'view', label: 'Occupancy' },
     ]);
     UI.initDelegation(store);
@@ -119,7 +123,7 @@ describe('tooltip on hovering the diagram', () => {
     expect(shownTooltip(store)).toEqual({
       shown: true,
       title: 'Available Rooms',
-      prose: [description],
+      prose: [AVAILABILITY_PROSE],
       columns: [],
       fields: [],
     });
@@ -182,7 +186,7 @@ describe('tooltip on hovering the diagram', () => {
     const store = createStore([commandNode({ description: description, fields: ORDER_FIELDS })]);
     UI.initDelegation(store);
 
-    pointerOver(markOnBlock(store, 'cmd1'));
+    pointerOver(markOnBlock(store, 'description', 'cmd1'));
 
     expect(shownTooltip(store)).toEqual({
       shown: true,
@@ -199,9 +203,9 @@ describe('tooltip on hovering the diagram', () => {
       { id: 'sl1', type: 'slice', label: 'Reserve a room', description: description },
     ]);
     UI.initDelegation(store);
-    const mark = markOnSliceHeader(store, 'sl1');
+    const headerMark = markOnSliceHeader(store, 'description', 'sl1');
 
-    pointerOver(mark);
+    pointerOver(headerMark);
 
     expect(shownTooltip(store)).toEqual({
       shown: true,
@@ -211,14 +215,61 @@ describe('tooltip on hovering the diagram', () => {
       fields: [],
     });
 
-    pointerOut(mark, { clientX: 300, clientY: 300 });
+    pointerOut(headerMark, { clientX: 300, clientY: 300 });
 
     expect(shownTooltip(store).shown).toBe(false);
   });
 
+  it('gives each of a node\'s two marks the prose it stands for and none of the other\'s', () => {
+    const description = 'Places a customer order against the stock the basket reserved';
+    const store = createStore([commandNode({
+      description: description,
+      comments: [{ text: '# Stock is reserved by the basket, not here' }],
+      fields: ORDER_FIELDS,
+    })]);
+    UI.initDelegation(store);
+
+    pointerOver(markOnBlock(store, 'description', 'cmd1'));
+
+    expect(shownTooltip(store).prose).toEqual([description]);
+
+    pointerOver(markOnBlock(store, 'comments', 'cmd1'));
+
+    expect(shownTooltip(store).prose).toEqual(['Stock is reserved by the basket, not here']);
+  });
+
+  it('reads the comments off a mark one line per comment, in source order and without the hash', () => {
+    const store = createStore([commandNode({
+      comments: [{ text: '# first note' }, { text: '#second note' }],
+    })]);
+    UI.initDelegation(store);
+
+    pointerOver(markOnBlock(store, 'comments', 'cmd1'));
+
+    expect(shownTooltip(store)).toEqual({
+      shown: true,
+      title: 'Place Order',
+      prose: ['first note', 'second note'],
+      columns: [],
+      fields: [],
+    });
+    expect(store.dom.tooltip.querySelector('input, textarea, button, [contenteditable]')).toBeNull();
+  });
+
+  it('reads out a comment containing markup as text', () => {
+    const comment = 'Counts an <b>&</b> order once';
+    const store = createStore([commandNode({ comments: [{ text: '# ' + comment }] })]);
+    UI.initDelegation(store);
+
+    pointerOver(markOnBlock(store, 'comments', 'cmd1'));
+
+    expect(shownTooltip(store).prose).toEqual([comment]);
+    expect(store.dom.tooltip.querySelector('b')).toBeNull();
+  });
+
   it.each([
     ['its box', (store) => rectOf(store, 'cmd1')],
-    ['the mark in its corner', (store) => markOnBlock(store, 'cmd1')],
+    ['the mark in its corner', (store) => markOnBlock(store, 'description', 'cmd1')],
   ])('stays away over %s while that node\'s detail panel is already open', (_, find) => {
     const store = createStore([
       commandNode({ description: 'Places a customer order', fields: ORDER_FIELDS }),

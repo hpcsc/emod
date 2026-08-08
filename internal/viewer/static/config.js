@@ -21,6 +21,12 @@ export const PORT_DIRECTIONS = [
   { name: "left",   dx: -1, dy: 0  },
 ];
 
+// The kinds of prose a construct can carry, in the order a construct carrying
+// more than one shows them. Rendering writes each kind as the `data-marker` of
+// the mark that stands for it, and the tooltip code resolves a hovered mark
+// back through the same list, so a mark that renders can always be read.
+export const PROSE_KINDS = ["description", "comments"];
+
 export const DRAG_THRESHOLD = 5;
 
 export const MINIMAP_W = 180;

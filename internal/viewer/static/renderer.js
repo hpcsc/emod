@@ -1,11 +1,21 @@
-import { L, nodePalette, edgeConfig, arrowClassMap, PORT_DIRECTIONS } from './config.js';
+import { L, nodePalette, edgeConfig, arrowClassMap, PORT_DIRECTIONS, PROSE_KINDS } from './config.js';
 import { Layout } from './layout.js';
 
 var NS = "http://www.w3.org/2000/svg";
 var clockMarking = "⏱";
-var descriptionMarking = "ⓘ";
+var proseMarkings = {
+  description: {
+    glyph: "ⓘ",
+    carriedBy: function(node) { return Boolean(node.description); },
+  },
+  comments: {
+    glyph: "❞",
+    carriedBy: function(node) { return (node.comments || []).length > 0; },
+  },
+};
 var markingSize = 11;
 var markingInset = 12;
+var markingStep = 26;
 var screenBar = { inset: 8, top: 6, height: 6, stroke: 1 };
 var ellipsis = "…";
 var labelWidthFontSize = 13;
@@ -270,19 +280,45 @@ function appendAggregateAreas(swimlane, rows, y, h) {
   });
 }
 
-// The prose itself is read out on hover by the viewer's own tooltip, which is
-// why the mark carries no <title>: a native one would open beside it.
-function appendDescriptionMarking(parent, node, point, fill, attrs) {
-  if (!node.description) return;
-  var el = centeredText(point.x, point.y, descriptionMarking, markingSize, fill);
-  el.setAttribute("data-marker", "description");
-  el.setAttribute("data-node-id", node.id);
-  setAttrs(el, attrs);
-  parent.appendChild(el);
+function markingKindsOf(node) {
+  return PROSE_KINDS.filter(function(kind) { return proseMarkings[kind].carriedBy(node); });
 }
 
-function markingX(pos) {
-  return pos.x + pos.w - markingInset;
+// Every mark tiles back from the corner into its own slot, and each one's centre
+// keeps its own half-width clear of what it stands against: the block's right
+// edge for the mark in the corner, the block's midline for the last one in. A
+// block placed in a row can be a third the width of a stacked one, so the slots
+// close up on each other rather than reaching past the middle of the block.
+function markingPitch(width, count) {
+  var room = width / 2 - markingSize / 2;
+  if (count < 2 || markingInset + (count - 1) * markingStep <= room) {
+    return { inset: markingInset, step: markingStep };
+  }
+  var inset = Math.max(markingSize / 2, room - (count - 1) * markingStep);
+  return { inset: inset, step: (room - inset) / (count - 1) };
+}
+
+function markingSlotsX(band, count) {
+  var pitch = markingPitch(band.w, count);
+  var slotsX = [];
+  for (var slot = 0; slot < count; slot++) {
+    slotsX.push(band.x + band.w - pitch.inset - slot * pitch.step);
+  }
+  return slotsX;
+}
+
+// The prose itself is read out on hover by the viewer's own tooltip, which is
+// why a mark carries no <title>: a native one would open beside it.
+function appendMarkings(parent, node, band, fill, attrs) {
+  var kinds = markingKindsOf(node);
+  var slotsX = markingSlotsX(band, kinds.length);
+  kinds.forEach(function(kind, slot) {
+    var el = centeredText(slotsX[slot], band.y, proseMarkings[kind].glyph, markingSize, fill);
+    el.setAttribute("data-marker", kind);
+    el.setAttribute("data-node-id", node.id);
+    setAttrs(el, attrs);
+    parent.appendChild(el);
+  });
 }
 
 function sliceNameX(pos) {
@@ -294,23 +330,31 @@ function sliceNameX(pos) {
 // through here on that path as well as on the render.
 function placeSliceHeaderTexts(root, sliceId, x, w) {
   var band = { x: x, w: w };
+  var marks = [];
   root.querySelectorAll('text.slice-header[data-slice-id="' + sliceId + '"]').forEach(function(el) {
-    el.setAttribute("x", el.hasAttribute("data-marker") ? markingX(band) : sliceNameX(band));
+    if (el.hasAttribute("data-marker")) marks.push(el);
+    else el.setAttribute("x", sliceNameX(band));
+  });
+
+  var slotsX = markingSlotsX(band, marks.length);
+  marks.forEach(function(el, slot) {
+    el.setAttribute("x", slotsX[slot]);
   });
 }
 
-function sliceMarkingPoint(pos) {
-  return { x: markingX(pos), y: pos.y + L.sliceHdrH / 2 };
+function markingBand(pos, y) {
+  return { x: pos.x, w: pos.w, y: y };
+}
+
+function sliceMarkingBand(pos) {
+  return markingBand(pos, pos.y + L.sliceHdrH / 2);
 }
 
 // A trigger is drawn as a screen, with a bar across the top of its box, so its
-// mark drops below the bar rather than into it.
-function blockMarkingPoint(node, pos) {
+// marks drop below the bar rather than into it.
+function blockMarkingBand(node, pos) {
   var belowScreenBar = pos.y + screenBar.top + screenBar.height + screenBar.stroke + markingSize / 2;
-  return {
-    x: markingX(pos),
-    y: node.type === "trigger" ? belowScreenBar : pos.y + markingInset,
-  };
+  return markingBand(pos, node.type === "trigger" ? belowScreenBar : pos.y + markingInset);
 }
 
 function buildSlice(slice, sp) {
@@ -329,7 +373,7 @@ function buildSlice(slice, sp) {
   // The mark stands on the band that answers the drag, the rename and the
   // slice menu, so it joins the band rather than covering it: every one of
   // those reaches the slice through .slice-header.
-  appendDescriptionMarking(sliceG, slice, sliceMarkingPoint(sp), "#495057", headerAttrs);
+  appendMarkings(sliceG, slice, sliceMarkingBand(sp), "#495057", headerAttrs);
   sliceG.appendChild(svgRect(sp.x, sp.y + L.sliceHdrH, sp.w, sp.h - L.sliceHdrH, "transparent", "none",
     "class=\"slice-area\"" + owner));
   return sliceG;
@@ -417,7 +461,7 @@ function buildBlock(node, pos, palette) {
   });
 
   appendBlockLabels(blockG, node, pos, stroke);
-  appendDescriptionMarking(blockG, node, blockMarkingPoint(node, pos), stroke);
+  appendMarkings(blockG, node, blockMarkingBand(node, pos), stroke);
   return blockG;
 }
 

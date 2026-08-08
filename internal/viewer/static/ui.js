@@ -1,27 +1,35 @@
+import { PROSE_KINDS } from './config.js';
 import { Renderer } from './renderer.js';
 import { Layout } from './layout.js';
 import { Model } from './model.js';
 import { bus } from './bus.js';
 
 // ─── Tooltip ─────────────────────────────────────────────────
-function nodeFields(node) {
-  return node.fields || [];
+// A comment reaches the viewer as the source spells it, hash and all, because
+// the same text has to go back into the file on a save.
+function buildCommentLines(node) {
+  return (node.comments || []).map(function(comment) {
+    return String(comment.text || '').replace(/^#[ ]?/, '');
+  });
 }
 
-function hasTooltipContent(node) {
-  return Boolean(node.description) || nodeFields(node).length > 0;
+function buildHeadingHtml(node) {
+  return '<div class="tt-header">' + Renderer.esc(node.label) + '</div>';
 }
 
 function buildDescriptionHtml(node) {
-  let html = '<div class="tt-header">' + Renderer.esc(node.label) + '</div>';
-  if (node.description) {
-    html += '<div class="tt-description">' + Renderer.esc(node.description) + '</div>';
-  }
-  return html;
+  if (!node.description) return '';
+  return '<div class="tt-description">' + Renderer.esc(node.description) + '</div>';
+}
+
+function buildCommentsHtml(node) {
+  return buildCommentLines(node).map(function(line) {
+    return '<div class="tt-comment">' + Renderer.esc(line) + '</div>';
+  }).join('');
 }
 
 function buildFieldsHtml(node) {
-  const fields = nodeFields(node);
+  const fields = node.fields || [];
   if (fields.length === 0) return '';
 
   let html = '<table><thead><tr><th>Field</th><th>Type</th><th></th></tr></thead><tbody>';
@@ -32,8 +40,19 @@ function buildFieldsHtml(node) {
   return html + '</tbody></table>';
 }
 
-function buildTooltipHtml(node) {
-  return buildDescriptionHtml(node) + buildFieldsHtml(node);
+const proseBuilders = {
+  description: buildDescriptionHtml,
+  comments: buildCommentsHtml,
+};
+
+function buildProseHtml(node) {
+  return PROSE_KINDS.map(function(kind) { return proseBuilders[kind](node); }).join('');
+}
+
+function buildBodyHtml(node, marker) {
+  if (!marker) return buildProseHtml(node) + buildFieldsHtml(node);
+  const build = proseBuilders[marker];
+  return build ? build(node) : '';
 }
 
 function showTooltip(store, html, evt) {
@@ -61,11 +80,8 @@ function tooltipHtmlFor(store, target) {
   const node = hoveredNode(store, target);
   if (!node) return "";
 
-  const marker = target.dataset.marker;
-  if (marker) {
-    return marker === "description" && node.description ? buildDescriptionHtml(node) : "";
-  }
-  return hasTooltipContent(node) ? buildTooltipHtml(node) : "";
+  const body = buildBodyHtml(node, target.dataset.marker);
+  return body ? buildHeadingHtml(node) + body : "";
 }
 
 function updateTooltipFor(store, target, evt) {
