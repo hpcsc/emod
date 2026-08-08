@@ -5,6 +5,7 @@ package viewer_test
 import (
 	"io"
 	"net/http"
+	"strings"
 	"testing"
 	"time"
 
@@ -80,13 +81,33 @@ func TestServeViewer(t *testing.T) {
 	})
 
 	t.Run("initial data", func(t *testing.T) {
-		t.Run("injects the diagram JSON for the viewer to load", func(t *testing.T) {
+		// The placeholder it replaces sits between two <script> tags rather than inside
+		// one, so an assignment injected bare is document text: the browser lays the
+		// JSON out down the page and the viewer loads with no model. Asserting the
+		// substring alone cannot tell those two apart, which is how that shipped.
+		t.Run("injects the diagram JSON as script the browser will run", func(t *testing.T) {
 			diagramJSON := []byte(`{"nodes":[],"edges":[]}`)
 
 			addr := startViewer(t, diagramJSON)
 
-			require.Contains(t, body(t, get(t, addr)),
-				`window.INITIAL_DATA = {"nodes":[],"edges":[]};`)
+			require.Regexp(t,
+				`(?s)<script>\s*window\.INITIAL_DATA = \{"nodes":\[\],"edges":\[\]\};\s*</script>`,
+				body(t, get(t, addr)))
+		})
+
+		t.Run("a model that spells the closing script tag cannot end the block early", func(t *testing.T) {
+			diagramJSON := []byte(`{"model_name":"</script><img src=x>","nodes":[]}`)
+
+			addr := startViewer(t, diagramJSON)
+
+			pageBody := body(t, get(t, addr))
+			injected := pageBody[strings.Index(pageBody, "window.INITIAL_DATA"):]
+			// Everything up to the block's own terminator is one script: the model's
+			// text must not have contributed a `</script>` of its own along the way.
+			// Its `<img>` still appears in the page — as characters inside a JS string,
+			// which is exactly the point, so asserting its absence would be wrong.
+			require.NotContains(t, injected[:strings.Index(injected, "\n</script>")], "</script>")
+			require.Contains(t, pageBody, `"model_name":"<\/script><img src=x>"`)
 		})
 
 		t.Run("omits the injection when no diagram JSON is given", func(t *testing.T) {

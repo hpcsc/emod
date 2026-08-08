@@ -85,7 +85,14 @@ func buildHTML(diagramJSON []byte) string {
 	}
 	html := string(data)
 	if len(diagramJSON) > 0 {
-		injection := fmt.Sprintf("\nwindow.INITIAL_DATA = %s;", string(diagramJSON))
+		// The placeholder sits between two <script> tags, not inside one, so the
+		// assignment has to bring its own or the browser lays the whole document
+		// out as text and the viewer loads with no model.
+		// `</` is escaped so a model that spells `</script>` in a name or description
+		// cannot end the block early and have the rest of itself parsed as markup.
+		// `\/` is a valid JSON string escape, and `/` occurs nowhere else in JSON.
+		safe := strings.ReplaceAll(string(diagramJSON), "</", `<\/`)
+		injection := fmt.Sprintf("<script>\nwindow.INITIAL_DATA = %s;\n</script>", safe)
 		html = strings.Replace(html, "<!--INITIAL_DATA-->", injection, 1)
 	} else {
 		html = strings.Replace(html, "<!--INITIAL_DATA-->", "", 1)
