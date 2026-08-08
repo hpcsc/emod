@@ -35,6 +35,10 @@ function createRequiredElements() {
     <div id="visibility-panel" class="hidden"></div>
     <button id="visibility-toggle"></button>
     <div id="visibility-tree"></div>
+    <div id="legend-panel" class="hidden"></div>
+    <button id="legend-toggle"></button>
+    <div id="legend-content"></div>
+    <button id="legend-close"></button>
     <div id="tooltip"></div>
     <div id="detail-panel"></div>
     <div id="dp-content"></div>

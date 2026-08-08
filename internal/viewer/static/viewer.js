@@ -4,6 +4,7 @@ import { Renderer } from './renderer.js';
 import { Interaction } from './interaction.js';
 import { UI } from './ui.js';
 import { Minimap } from './minimap.js';
+import { Legend } from './legend.js';
 import { CtxActions } from './ctx-actions.js';
 import { Model } from './model.js';
 import { bus } from './bus.js';
@@ -104,6 +105,10 @@ function init() {
   store.dom.visibilityPanel = document.getElementById("visibility-panel");
   store.dom.visibilityToggle = document.getElementById("visibility-toggle");
   store.dom.visibilityTree = document.getElementById("visibility-tree");
+  store.dom.legendPanel = document.getElementById("legend-panel");
+  store.dom.legendToggle = document.getElementById("legend-toggle");
+  store.dom.legendContent = document.getElementById("legend-content");
+  store.dom.legendClose = document.getElementById("legend-close");
   store.dom.tooltip = document.getElementById("tooltip");
   store.dom.detailPanel = document.getElementById("detail-panel");
   store.dom.dpContent = document.getElementById("dp-content");
@@ -220,6 +225,16 @@ function init() {
   // ─── Visibility toggle ────────────────────────────────────────────
   store.dom.visibilityToggle.addEventListener("click", function() {
     UI.toggleVisibilityPanel(store);
+  });
+
+  // ─── Legend toggle ───────────────────────────────────────────────
+  store.dom.legendToggle.addEventListener("click", function() {
+    Legend.toggleLegendPanel(store);
+  });
+
+  store.dom.legendClose.addEventListener("click", function(evt) {
+    evt.stopPropagation();
+    Legend.toggleLegendPanel(store, false);
   });
 
   // ─── Diagnostics toggle ──────────────────────────────────────────

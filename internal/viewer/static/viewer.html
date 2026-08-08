@@ -304,6 +304,73 @@ header .model-name span {
 #visibility-panel.hidden {
   display: none;
 }
+#legend-panel {
+  position: absolute;
+  bottom: 12px;
+  left: 4px;
+  width: 260px;
+  max-height: 60%;
+  background: #fff;
+  border: 1px solid #ccc;
+  border-radius: 6px;
+  box-shadow: 0 2px 10px rgba(0,0,0,0.15);
+  z-index: 100;
+  overflow-y: auto;
+  font-size: 13px;
+}
+#legend-panel.hidden {
+  display: none;
+}
+#legend-panel-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 8px 12px;
+  font-weight: 600;
+  font-size: 13px;
+  background: #f8f9fa;
+  border-bottom: 1px solid #e9ecef;
+  border-radius: 6px 6px 0 0;
+  user-select: none;
+}
+#legend-close {
+  border: none;
+  background: none;
+  font-size: 18px;
+  line-height: 1;
+  cursor: pointer;
+  color: #868e96;
+  padding: 0 2px;
+}
+#legend-close:hover {
+  color: #212529;
+}
+#legend-content {
+  padding: 4px 0 8px;
+}
+#legend-content .lg-section {
+  padding: 4px 12px 2px;
+}
+#legend-content .lg-section-title {
+  font-weight: 600;
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: #868e96;
+  margin: 6px 0 4px;
+}
+#legend-content .lg-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 2px 0;
+}
+#legend-content .lg-swatch {
+  flex: none;
+}
+#legend-content .lg-name {
+  color: #495057;
+}
 #visibility-panel-header {
   padding: 8px 12px;
   font-weight: 600;
@@ -980,6 +1047,7 @@ header .model-name span {
     <button id="fit-view" title="Reset viewport to fit the entire diagram">Fit view</button>
     <button id="minimap-toggle" title="Toggle minimap overview">Minimap</button>
     <button id="visibility-toggle" title="Toggle visibility panel for contexts, aggregates and slices">Visibility</button>
+    <button id="legend-toggle" title="Toggle legend for element and connection types">Legend</button>
     <button id="export-emod" title="Export diagram as .emod file">Export .emod</button>
     <button id="diagnostics-badge" title="Show diagnostic errors" style="display:none"></button>
     <div class="model-name">Model: <span id="model-name-display">—</span></div>
@@ -1023,6 +1091,11 @@ header .model-name span {
     <div id="minimap-handle">Overview</div>
     <svg id="minimap-svg" xmlns="http://www.w3.org/2000/svg"></svg>
     <button id="minimap-close" title="Close minimap">×</button>
+  </div>
+
+  <div id="legend-panel" class="hidden">
+    <div id="legend-panel-header">Legend<button id="legend-close" title="Close legend">&times;</button></div>
+    <div id="legend-content"></div>
   </div>
 
   <div id="visibility-panel" class="hidden">
