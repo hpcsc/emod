@@ -380,6 +380,54 @@ context "Lending" {
 		require.Contains(t, err.Error(), `view "MissingView" does not exist`)
 	})
 
+	t.Run("returns error naming the outcome shape and construct kind for a view outcome inside a command slice", func(t *testing.T) {
+		input := `model "Library Lending"
+context "Lending" {
+  aggregate "Loan" {
+    slice "Borrow Copy" {
+      command BorrowCopy {
+        fields {
+          memberId string required
+          copyId   string required
+        }
+      }
+      event CopyBorrowed {
+        fields {
+          loanId   string required
+          memberId string required
+          copyId   string required
+        }
+      }
+      spec "lists loans no one holds" {
+        then view MemberLoansView
+      }
+      flow {
+        command -> event: BorrowCopy -> CopyBorrowed
+      }
+    }
+  }
+}
+context "Reading Room" mode dcb {
+  slice "Browse Desk Occupancy" {
+    view MemberLoansView {
+      fields {
+        deskId string required
+      }
+      subscribes [DeskClaimed]
+    }
+  }
+}
+`
+		path := writeTemp(t, "view_outcome_in_command_slice.emod", input)
+
+		err := cli.RunValidate(path, "text")
+
+		var lintErr *cli.LintError
+		require.True(t, errors.As(err, &lintErr))
+		require.Equal(t, 1, lintErr.ExitCode)
+		require.Contains(t, err.Error(), `outcome "view" requires a view in this slice`)
+	})
+
 	t.Run("returns no error for valid multi-context model", func(t *testing.T) {
 		input := `model "Multi Context Test"
 

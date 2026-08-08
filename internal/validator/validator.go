@@ -317,6 +317,35 @@ func referenceDiagnostics(slice *ast.Slice, index *modelIndex) []*diagnostic.Ent
 	}
 	for _, spec := range slice.Specs {
 		diags = append(diags, specDiagnostics(spec, index)...)
+		diags = append(diags, specShapeDiagnostics(spec, slice)...)
+	}
+
+	return diags
+}
+
+func specShapeDiagnostics(spec *ast.Spec, slice *ast.Slice) []*diagnostic.Entry {
+	var diags []*diagnostic.Entry
+	switch outcome := spec.Then.(type) {
+	case *ast.ThenEvents:
+		if len(slice.Commands) == 0 && len(slice.Translations) == 0 {
+			pos := spec.NamePos
+			if len(outcome.Events) > 0 {
+				pos = outcome.Events[0].NamePos
+			}
+			diags = append(diags, errorAt(pos, `outcome "events" requires a command or translation in this slice`))
+		}
+	case *ast.ThenRejected:
+		if len(slice.Commands) == 0 {
+			diags = append(diags, errorAt(outcome.InvariantPos, `outcome "rejected" requires a command in this slice`))
+		}
+	case *ast.ThenView:
+		if len(slice.Views) == 0 {
+			diags = append(diags, errorAt(outcome.ViewPos, `outcome "view" requires a view in this slice`))
+		}
+	case *ast.ThenCommand:
+		if len(slice.Automations) == 0 {
+			diags = append(diags, errorAt(outcome.CommandPos, `outcome "command" requires an automation in this slice`))
+		}
 	}
 
 	return diags

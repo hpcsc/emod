@@ -1436,7 +1436,10 @@ func TestValidate(t *testing.T) {
 								Name: "Loan",
 								Slices: []*ast.Slice{
 									{
-										Name: "Borrow Copy",
+										Name:     "Borrow Copy",
+										Commands: []*ast.Command{{Name: "BorrowCopy"}},
+										Events:   []*ast.Event{{Name: "CopyBorrowed"}},
+										Flows:    []*ast.Flow{{CommandName: "BorrowCopy", EventName: "CopyBorrowed"}},
 										Specs: []*ast.Spec{
 											{
 												Name: "borrows an imported copy the member returned",
@@ -1944,16 +1947,379 @@ func TestValidate(t *testing.T) {
 					},
 				}
 
-			require.Equal(t, []string{
-				`shelf.emod:14: invariant "FiveCopiesPerMemer" is not declared in context "Lending"`,
-				`shelf.emod:40: invariant "OneCopyPerLon" is not declared in aggregate "Loan"`,
-				`shelf.emod:70: invariant "NoQueueSkipping" is not declared in context "Lending"`,
-			}, reportedLines(validator.Validate(model)))
+				require.Equal(t, []string{
+					`shelf.emod:14: invariant "FiveCopiesPerMemer" is not declared in context "Lending"`,
+					`shelf.emod:40: invariant "OneCopyPerLon" is not declared in aggregate "Loan"`,
+					`shelf.emod:70: invariant "NoQueueSkipping" is not declared in context "Lending"`,
+				}, reportedLines(validator.Validate(model)))
+			})
+		})
+
+		t.Run("outcome references", func(t *testing.T) {
+			t.Run("a view outcome naming an undeclared view is reported on the view name", func(t *testing.T) {
+				model := &ast.Model{
+					Contexts: []*ast.Context{
+						{
+							Name: "Lending",
+							Aggregates: []*ast.Aggregate{
+								{
+									Name: "Loan",
+									Slices: []*ast.Slice{
+										{
+											Name:  "Review Member Loans",
+											Views: []*ast.View{{Name: "MemberLoansView"}},
+											Specs: []*ast.Spec{
+												{
+													Name: "lists loans no one holds",
+													Then: &ast.ThenView{
+														ViewName: "MissingView",
+														ViewPos:  ast.Position{Filename: "lending.emod", Line: 12, Column: 18},
+													},
+												},
+											},
+										},
+									},
+								},
+							},
+						},
+					},
+				}
+
+				diags := validator.Validate(model)
+
+				require.Equal(t, []*diagnostic.Entry{
+					{
+						Filename: "lending.emod",
+						Line:     12,
+						Column:   18,
+						Severity: diagnostic.Error,
+						Message:  `view "MissingView" does not exist`,
+					},
+				}, diags)
+			})
+
+			t.Run("a command outcome naming an undeclared command is reported on the command name", func(t *testing.T) {
+				model := &ast.Model{
+					Contexts: []*ast.Context{
+						{
+							Name: "Lending",
+							Aggregates: []*ast.Aggregate{
+								{
+									Name: "Loan",
+									Slices: []*ast.Slice{
+										{
+											Name:     "Sweep Overdue Loans",
+											Commands: []*ast.Command{{Name: "RecallCopy"}},
+											Events:   []*ast.Event{{Name: "CopyRecalled"}},
+											Flows:    []*ast.Flow{{CommandName: "RecallCopy", EventName: "CopyRecalled"}},
+											Automations: []*ast.Automation{
+												{Name: "RecallOverdueCopy", Command: "RecallCopy"},
+											},
+											Specs: []*ast.Spec{
+												{
+													Name: "recalls copies that are overdue",
+													Then: &ast.ThenCommand{
+														CommandName: "MissingCommand",
+														CommandPos:  ast.Position{Filename: "lending.emod", Line: 15, Column: 20},
+													},
+												},
+											},
+										},
+									},
+								},
+							},
+						},
+					},
+				}
+
+				diags := validator.Validate(model)
+
+				require.Equal(t, []*diagnostic.Entry{
+					{
+						Filename: "lending.emod",
+						Line:     15,
+						Column:   20,
+						Severity: diagnostic.Error,
+						Message:  `command "MissingCommand" does not exist`,
+					},
+				}, diags)
+			})
+
+			t.Run("a view outcome naming a view in another aggregate produces no diagnostic", func(t *testing.T) {
+				model := &ast.Model{
+					Contexts: []*ast.Context{
+						{
+							Name: "Lending",
+							Aggregates: []*ast.Aggregate{
+								{
+									Name: "Loan",
+									Slices: []*ast.Slice{
+										{
+											Name:  "Review Member Loans",
+											Views: []*ast.View{{Name: "MemberLoansView"}},
+										},
+										{
+											Name:  "Chase Overdue Copy",
+											Views: []*ast.View{{Name: "OverdueLoansView"}},
+											Specs: []*ast.Spec{
+												{
+													Name: "lists loans that are overdue",
+													Then: &ast.ThenView{ViewName: "MemberLoansView"},
+												},
+											},
+										},
+									},
+								},
+							},
+						},
+					},
+				}
+
+				require.Empty(t, validator.Validate(model))
+			})
+
+			t.Run("a view outcome naming a view on a DCB context produces no diagnostic", func(t *testing.T) {
+				model := &ast.Model{
+					Contexts: []*ast.Context{
+						{
+							Name: "Lending",
+							Aggregates: []*ast.Aggregate{
+								{
+									Name: "Loan",
+									Slices: []*ast.Slice{
+										{
+											Name:  "Chase Overdue Copy",
+											Views: []*ast.View{{Name: "OverdueLoansView"}},
+											Specs: []*ast.Spec{
+												{
+													Name: "lists loans that are overdue",
+													Then: &ast.ThenView{ViewName: "DeskOccupancyView"},
+												},
+											},
+										},
+									},
+								},
+							},
+						},
+						{
+							Name: "Reading Room",
+							Mode: "dcb",
+							Slices: []*ast.Slice{
+								{
+									Name:  "Browse Desk Occupancy",
+									Views: []*ast.View{{Name: "DeskOccupancyView"}},
+								},
+							},
+						},
+					},
+				}
+
+				require.Empty(t, validator.Validate(model))
+			})
+
+			t.Run("a command outcome naming a command in another context produces no diagnostic", func(t *testing.T) {
+				model := &ast.Model{
+					Contexts: []*ast.Context{
+						{
+							Name: "Lending",
+							Aggregates: []*ast.Aggregate{
+								{
+									Name: "Loan",
+									Slices: []*ast.Slice{
+										{
+											Name:     "Sweep Overdue Loans",
+											Commands: []*ast.Command{{Name: "RecallCopy"}},
+											Events:   []*ast.Event{{Name: "CopyRecalled"}},
+											Flows:    []*ast.Flow{{CommandName: "RecallCopy", EventName: "CopyRecalled"}},
+											Automations: []*ast.Automation{
+												{Name: "RecallOverdueCopy", Command: "RecallCopy"},
+											},
+											Specs: []*ast.Spec{
+												{
+													Name: "recalls copies that are overdue",
+													Then: &ast.ThenCommand{CommandName: "ReleaseDesk"},
+												},
+											},
+										},
+									},
+								},
+							},
+						},
+						{
+							Name: "Reading Room",
+							Mode: "dcb",
+							Slices: []*ast.Slice{
+								{
+									Name:     "Release Desk",
+									Commands: []*ast.Command{{Name: "ReleaseDesk"}},
+									Events:   []*ast.Event{{Name: "DeskReleased"}},
+									Flows:    []*ast.Flow{{CommandName: "ReleaseDesk", EventName: "DeskReleased"}},
+								},
+							},
+						},
+					},
+				}
+
+				require.Empty(t, validator.Validate(model))
+			})
+
+			t.Run("a view outcome naming something declared only as a command is reported as a missing view", func(t *testing.T) {
+				model := &ast.Model{
+					Contexts: []*ast.Context{
+						{
+							Name: "Lending",
+							Aggregates: []*ast.Aggregate{
+								{
+									Name: "Loan",
+									Slices: []*ast.Slice{
+										{
+											Name:     "Sweep Overdue Loans",
+											Views:    []*ast.View{{Name: "OverdueLoansView"}},
+											Commands: []*ast.Command{{Name: "RecallCopy"}},
+											Events:   []*ast.Event{{Name: "CopyRecalled"}},
+											Flows:    []*ast.Flow{{CommandName: "RecallCopy", EventName: "CopyRecalled"}},
+											Specs: []*ast.Spec{
+												{
+													Name: "recalls copies that are overdue",
+													Then: &ast.ThenView{
+														ViewName: "RecallCopy",
+														ViewPos:  ast.Position{Filename: "lending.emod", Line: 12, Column: 16},
+													},
+												},
+											},
+										},
+									},
+								},
+							},
+						},
+					},
+				}
+
+				diags := validator.Validate(model)
+
+				require.Equal(t, []*diagnostic.Entry{
+					{
+						Filename: "lending.emod",
+						Line:     12,
+						Column:   16,
+						Severity: diagnostic.Error,
+						Message:  `view "RecallCopy" does not exist`,
+					},
+				}, diags)
+			})
+
+			t.Run("a command outcome naming something declared only as a view is reported as a missing command", func(t *testing.T) {
+				model := &ast.Model{
+					Contexts: []*ast.Context{
+						{
+							Name: "Lending",
+							Aggregates: []*ast.Aggregate{
+								{
+									Name: "Loan",
+									Slices: []*ast.Slice{
+										{
+											Name:     "Review Member Loans",
+											Views:    []*ast.View{{Name: "MemberLoansView"}},
+											Commands: []*ast.Command{{Name: "ListLoans"}},
+											Events:   []*ast.Event{{Name: "LoansListed"}},
+											Flows:    []*ast.Flow{{CommandName: "ListLoans", EventName: "LoansListed"}},
+											Automations: []*ast.Automation{
+												{Name: "ListLoansOnRequest", Command: "ListLoans"},
+											},
+											Specs: []*ast.Spec{
+												{
+													Name: "lists loans no one holds",
+													Then: &ast.ThenCommand{
+														CommandName: "MemberLoansView",
+														CommandPos:  ast.Position{Filename: "lending.emod", Line: 12, Column: 18},
+													},
+												},
+											},
+										},
+									},
+								},
+							},
+						},
+					},
+				}
+
+				diags := validator.Validate(model)
+
+				require.Equal(t, []*diagnostic.Entry{
+					{
+						Filename: "lending.emod",
+						Line:     12,
+						Column:   18,
+						Severity: diagnostic.Error,
+						Message:  `command "MemberLoansView" does not exist`,
+					},
+				}, diags)
+			})
+
+			t.Run("multiple undefined view and command outcomes are reported in declaration order on every run", func(t *testing.T) {
+				model := &ast.Model{
+					Contexts: []*ast.Context{
+						{
+							Name: "Lending",
+							Aggregates: []*ast.Aggregate{
+								{
+									Name: "Loan",
+									Slices: []*ast.Slice{
+										{
+											Name:     "Sweep Overdue Loans",
+											Commands: []*ast.Command{{Name: "RecallCopy"}},
+											Events:   []*ast.Event{{Name: "CopyRecalled"}},
+											Flows:    []*ast.Flow{{CommandName: "RecallCopy", EventName: "CopyRecalled"}},
+											Automations: []*ast.Automation{
+												{Name: "RecallOverdueCopy", Command: "RecallCopy"},
+											},
+											Specs: []*ast.Spec{
+												{
+													Name: "recalls copies that are overdue",
+													Then: &ast.ThenCommand{
+														CommandName: "MissingCommandA",
+														CommandPos:  ast.Position{Filename: "lending.emod", Line: 10, Column: 20},
+													},
+												},
+											},
+										},
+										{
+											Name:  "Review Member Loans",
+											Views: []*ast.View{{Name: "MemberLoansView"}},
+											Specs: []*ast.Spec{
+												{
+													Name: "lists loans no one holds",
+													Then: &ast.ThenView{
+														ViewName: "MissingViewA",
+														ViewPos:  ast.Position{Filename: "lending.emod", Line: 14, Column: 18},
+													},
+												},
+											},
+										},
+									},
+								},
+							},
+						},
+					},
+				}
+
+				runs := make([][]string, 0, 3)
+				for range 3 {
+					runs = append(runs, reportedLines(validator.Validate(model)))
+				}
+
+				require.Equal(t, []string{
+					`lending.emod:10: command "MissingCommandA" does not exist`,
+					`lending.emod:14: view "MissingViewA" does not exist`,
+				}, runs[0])
+				require.Equal(t, runs[0], runs[1])
+				require.Equal(t, runs[0], runs[2])
+			})
 		})
 	})
 
-	t.Run("outcome references", func(t *testing.T) {
-		t.Run("a view outcome naming an undeclared view is reported on the view name", func(t *testing.T) {
+	t.Run("outcome shape", func(t *testing.T) {
+		t.Run("a view outcome in a slice declaring no view is reported on the view name", func(t *testing.T) {
 			model := &ast.Model{
 				Contexts: []*ast.Context{
 					{
@@ -1963,13 +2329,19 @@ func TestValidate(t *testing.T) {
 								Name: "Loan",
 								Slices: []*ast.Slice{
 									{
-										Name: "Review Member Loans",
+										Name:  "Review Member Loans",
 										Views: []*ast.View{{Name: "MemberLoansView"}},
+									},
+									{
+										Name:     "Borrow Copy",
+										Commands: []*ast.Command{{Name: "BorrowCopy"}},
+										Events:   []*ast.Event{{Name: "CopyBorrowed"}},
+										Flows:    []*ast.Flow{{CommandName: "BorrowCopy", EventName: "CopyBorrowed"}},
 										Specs: []*ast.Spec{
 											{
 												Name: "lists loans no one holds",
 												Then: &ast.ThenView{
-													ViewName: "MissingView",
+													ViewName: "MemberLoansView",
 													ViewPos:  ast.Position{Filename: "lending.emod", Line: 12, Column: 18},
 												},
 											},
@@ -1990,12 +2362,12 @@ func TestValidate(t *testing.T) {
 					Line:     12,
 					Column:   18,
 					Severity: diagnostic.Error,
-					Message:  `view "MissingView" does not exist`,
+					Message:  `outcome "view" requires a view in this slice`,
 				},
 			}, diags)
 		})
 
-		t.Run("a command outcome naming an undeclared command is reported on the command name", func(t *testing.T) {
+		t.Run("a command outcome in a slice declaring no automation is reported on the command name", func(t *testing.T) {
 			model := &ast.Model{
 				Contexts: []*ast.Context{
 					{
@@ -2005,16 +2377,16 @@ func TestValidate(t *testing.T) {
 								Name: "Loan",
 								Slices: []*ast.Slice{
 									{
-										Name: "Sweep Overdue Loans",
-										Commands: []*ast.Command{{Name: "RecallCopy"}},
-										Events:   []*ast.Event{{Name: "CopyRecalled"}},
-										Flows:    []*ast.Flow{{CommandName: "RecallCopy", EventName: "CopyRecalled"}},
+										Name:     "Borrow Copy",
+										Commands: []*ast.Command{{Name: "BorrowCopy"}},
+										Events:   []*ast.Event{{Name: "CopyBorrowed"}},
+										Flows:    []*ast.Flow{{CommandName: "BorrowCopy", EventName: "CopyBorrowed"}},
 										Specs: []*ast.Spec{
 											{
 												Name: "recalls copies that are overdue",
 												Then: &ast.ThenCommand{
-													CommandName: "MissingCommand",
-													CommandPos:  ast.Position{Filename: "lending.emod", Line: 15, Column: 20},
+													CommandName: "BorrowCopy",
+													CommandPos:  ast.Position{Filename: "lending.emod", Line: 12, Column: 20},
 												},
 											},
 										},
@@ -2031,15 +2403,58 @@ func TestValidate(t *testing.T) {
 			require.Equal(t, []*diagnostic.Entry{
 				{
 					Filename: "lending.emod",
-					Line:     15,
+					Line:     12,
 					Column:   20,
 					Severity: diagnostic.Error,
-					Message:  `command "MissingCommand" does not exist`,
+					Message:  `outcome "command" requires an automation in this slice`,
 				},
 			}, diags)
 		})
 
-		t.Run("a view outcome naming a view in another aggregate produces no diagnostic", func(t *testing.T) {
+		t.Run("a rejection outcome in a slice declaring no command is reported on the invariant name", func(t *testing.T) {
+			model := &ast.Model{
+				Contexts: []*ast.Context{
+					{
+						Name: "Lending",
+						Aggregates: []*ast.Aggregate{
+							{
+								Name:       "Loan",
+								Invariants: []*ast.Invariant{{Name: "OneCopyPerLoan"}},
+								Slices: []*ast.Slice{
+									{
+										Name:  "Review Member Loans",
+										Views: []*ast.View{{Name: "MemberLoansView"}},
+										Specs: []*ast.Spec{
+											{
+												Name: "refuses a copy already on loan",
+												Then: &ast.ThenRejected{
+													InvariantName: "OneCopyPerLoan",
+													InvariantPos:  ast.Position{Filename: "lending.emod", Line: 12, Column: 21},
+												},
+											},
+										},
+									},
+								},
+							},
+						},
+					},
+				},
+			}
+
+			diags := validator.Validate(model)
+
+			require.Equal(t, []*diagnostic.Entry{
+				{
+					Filename: "lending.emod",
+					Line:     12,
+					Column:   21,
+					Severity: diagnostic.Error,
+					Message:  `outcome "rejected" requires a command in this slice`,
+				},
+			}, diags)
+		})
+
+		t.Run("an event list outcome in a slice declaring neither command nor translation is reported on the first event", func(t *testing.T) {
 			model := &ast.Model{
 				Contexts: []*ast.Context{
 					{
@@ -2049,14 +2464,93 @@ func TestValidate(t *testing.T) {
 								Name: "Loan",
 								Slices: []*ast.Slice{
 									{
-										Name: "Review Member Loans",
-										Views: []*ast.View{{Name: "MemberLoansView"}},
-									},
-									{
-										Name: "Chase Overdue Copy",
+										Name:   "Review Member Loans",
+										Views:  []*ast.View{{Name: "MemberLoansView"}},
+										Events: []*ast.Event{{Name: "CopyBorrowed", Source: "external"}},
 										Specs: []*ast.Spec{
 											{
-												Name: "lists loans that are overdue",
+												Name: "lists loans no one holds",
+												Then: &ast.ThenEvents{Events: []*ast.SpecElement{
+													{Name: "CopyBorrowed", NamePos: ast.Position{Filename: "lending.emod", Line: 12, Column: 15}},
+												}},
+											},
+										},
+									},
+								},
+							},
+						},
+					},
+				},
+			}
+
+			diags := validator.Validate(model)
+
+			require.Equal(t, []*diagnostic.Entry{
+				{
+					Filename: "lending.emod",
+					Line:     12,
+					Column:   15,
+					Severity: diagnostic.Error,
+					Message:  `outcome "events" requires a command or translation in this slice`,
+				},
+			}, diags)
+		})
+
+		t.Run("an empty event list outcome in a slice declaring neither command nor translation is reported on the spec name", func(t *testing.T) {
+			model := &ast.Model{
+				Contexts: []*ast.Context{
+					{
+						Name: "Lending",
+						Aggregates: []*ast.Aggregate{
+							{
+								Name: "Loan",
+								Slices: []*ast.Slice{
+									{
+										Name:  "Review Member Loans",
+										Views: []*ast.View{{Name: "MemberLoansView"}},
+										Specs: []*ast.Spec{
+											{
+												Name:    "lists loans no one holds",
+												NamePos: ast.Position{Filename: "lending.emod", Line: 10, Column: 12},
+												Then:    &ast.ThenEvents{Events: []*ast.SpecElement{}},
+											},
+										},
+									},
+								},
+							},
+						},
+					},
+				},
+			}
+
+			diags := validator.Validate(model)
+
+			require.Equal(t, []*diagnostic.Entry{
+				{
+					Filename: "lending.emod",
+					Line:     10,
+					Column:   12,
+					Severity: diagnostic.Error,
+					Message:  `outcome "events" requires a command or translation in this slice`,
+				},
+			}, diags)
+		})
+
+		t.Run("a view outcome in a slice declaring a view produces no diagnostic", func(t *testing.T) {
+			model := &ast.Model{
+				Contexts: []*ast.Context{
+					{
+						Name: "Lending",
+						Aggregates: []*ast.Aggregate{
+							{
+								Name: "Loan",
+								Slices: []*ast.Slice{
+									{
+										Name:  "Review Member Loans",
+										Views: []*ast.View{{Name: "MemberLoansView"}},
+										Specs: []*ast.Spec{
+											{
+												Name: "lists loans no one holds",
 												Then: &ast.ThenView{ViewName: "MemberLoansView"},
 											},
 										},
@@ -2071,7 +2565,7 @@ func TestValidate(t *testing.T) {
 			require.Empty(t, validator.Validate(model))
 		})
 
-		t.Run("a view outcome naming a view on a DCB context produces no diagnostic", func(t *testing.T) {
+		t.Run("a command outcome in a slice declaring an automation produces no diagnostic", func(t *testing.T) {
 			model := &ast.Model{
 				Contexts: []*ast.Context{
 					{
@@ -2081,95 +2575,17 @@ func TestValidate(t *testing.T) {
 								Name: "Loan",
 								Slices: []*ast.Slice{
 									{
-										Name: "Chase Overdue Copy",
-										Specs: []*ast.Spec{
-											{
-												Name: "lists loans that are overdue",
-												Then: &ast.ThenView{ViewName: "DeskOccupancyView"},
-											},
-										},
-									},
-								},
-							},
-						},
-					},
-					{
-						Name: "Reading Room",
-						Mode: "dcb",
-						Slices: []*ast.Slice{
-							{
-								Name: "Browse Desk Occupancy",
-								Views: []*ast.View{{Name: "DeskOccupancyView"}},
-							},
-						},
-					},
-				},
-			}
-
-			require.Empty(t, validator.Validate(model))
-		})
-
-		t.Run("a command outcome naming a command in another context produces no diagnostic", func(t *testing.T) {
-			model := &ast.Model{
-				Contexts: []*ast.Context{
-					{
-						Name: "Lending",
-						Aggregates: []*ast.Aggregate{
-							{
-								Name: "Loan",
-								Slices: []*ast.Slice{
-									{
-										Name: "Sweep Overdue Loans",
-										Specs: []*ast.Spec{
-											{
-												Name: "recalls copies that are overdue",
-												Then: &ast.ThenCommand{CommandName: "ReleaseDesk"},
-											},
-										},
-									},
-								},
-							},
-						},
-					},
-					{
-						Name: "Reading Room",
-						Mode: "dcb",
-						Slices: []*ast.Slice{
-							{
-								Name: "Release Desk",
-								Commands: []*ast.Command{{Name: "ReleaseDesk"}},
-								Events:   []*ast.Event{{Name: "DeskReleased"}},
-								Flows:    []*ast.Flow{{CommandName: "ReleaseDesk", EventName: "DeskReleased"}},
-							},
-						},
-					},
-				},
-			}
-
-			require.Empty(t, validator.Validate(model))
-		})
-
-		t.Run("a view outcome naming something declared only as a command is reported as a missing view", func(t *testing.T) {
-			model := &ast.Model{
-				Contexts: []*ast.Context{
-					{
-						Name: "Lending",
-						Aggregates: []*ast.Aggregate{
-							{
-								Name: "Loan",
-								Slices: []*ast.Slice{
-									{
-										Name: "Sweep Overdue Loans",
+										Name:     "Sweep Overdue Loans",
 										Commands: []*ast.Command{{Name: "RecallCopy"}},
 										Events:   []*ast.Event{{Name: "CopyRecalled"}},
 										Flows:    []*ast.Flow{{CommandName: "RecallCopy", EventName: "CopyRecalled"}},
+										Automations: []*ast.Automation{
+											{Name: "RecallOverdueCopy", Command: "RecallCopy"},
+										},
 										Specs: []*ast.Spec{
 											{
 												Name: "recalls copies that are overdue",
-												Then: &ast.ThenView{
-													ViewName: "RecallCopy",
-													ViewPos:  ast.Position{Filename: "lending.emod", Line: 12, Column: 16},
-												},
+												Then: &ast.ThenCommand{CommandName: "RecallCopy"},
 											},
 										},
 									},
@@ -2180,38 +2596,28 @@ func TestValidate(t *testing.T) {
 				},
 			}
 
-			diags := validator.Validate(model)
-
-			require.Equal(t, []*diagnostic.Entry{
-				{
-					Filename: "lending.emod",
-					Line:     12,
-					Column:   16,
-					Severity: diagnostic.Error,
-					Message:  `view "RecallCopy" does not exist`,
-				},
-			}, diags)
+			require.Empty(t, validator.Validate(model))
 		})
 
-		t.Run("a command outcome naming something declared only as a view is reported as a missing command", func(t *testing.T) {
+		t.Run("a rejection outcome in a slice declaring a command produces no diagnostic", func(t *testing.T) {
 			model := &ast.Model{
 				Contexts: []*ast.Context{
 					{
 						Name: "Lending",
 						Aggregates: []*ast.Aggregate{
 							{
-								Name: "Loan",
+								Name:       "Loan",
+								Invariants: []*ast.Invariant{{Name: "OneCopyPerLoan"}},
 								Slices: []*ast.Slice{
 									{
-										Name: "Review Member Loans",
-										Views: []*ast.View{{Name: "MemberLoansView"}},
+										Name:     "Borrow Copy",
+										Commands: []*ast.Command{{Name: "BorrowCopy"}},
+										Events:   []*ast.Event{{Name: "CopyBorrowed"}},
+										Flows:    []*ast.Flow{{CommandName: "BorrowCopy", EventName: "CopyBorrowed"}},
 										Specs: []*ast.Spec{
 											{
-												Name: "lists loans no one holds",
-												Then: &ast.ThenCommand{
-													CommandName: "MemberLoansView",
-													CommandPos:  ast.Position{Filename: "lending.emod", Line: 12, Column: 18},
-												},
+												Name: "refuses a copy already on loan",
+												Then: &ast.ThenRejected{InvariantName: "OneCopyPerLoan"},
 											},
 										},
 									},
@@ -2222,20 +2628,10 @@ func TestValidate(t *testing.T) {
 				},
 			}
 
-			diags := validator.Validate(model)
-
-			require.Equal(t, []*diagnostic.Entry{
-				{
-					Filename: "lending.emod",
-					Line:     12,
-					Column:   18,
-					Severity: diagnostic.Error,
-					Message:  `command "MemberLoansView" does not exist`,
-				},
-			}, diags)
+			require.Empty(t, validator.Validate(model))
 		})
 
-		t.Run("multiple undefined view and command outcomes are reported in declaration order on every run", func(t *testing.T) {
+		t.Run("an event list outcome in a slice declaring a command produces no diagnostic", func(t *testing.T) {
 			model := &ast.Model{
 				Contexts: []*ast.Context{
 					{
@@ -2245,27 +2641,198 @@ func TestValidate(t *testing.T) {
 								Name: "Loan",
 								Slices: []*ast.Slice{
 									{
-										Name: "Sweep Overdue Loans",
+										Name:     "Borrow Copy",
+										Commands: []*ast.Command{{Name: "BorrowCopy"}},
+										Events:   []*ast.Event{{Name: "CopyBorrowed"}},
+										Flows:    []*ast.Flow{{CommandName: "BorrowCopy", EventName: "CopyBorrowed"}},
 										Specs: []*ast.Spec{
 											{
-												Name: "recalls copies that are overdue",
-												Then: &ast.ThenCommand{
-													CommandName: "MissingCommandA",
-													CommandPos:  ast.Position{Filename: "lending.emod", Line: 10, Column: 20},
-												},
+												Name: "borrows a copy no one holds",
+												Then: &ast.ThenEvents{Events: []*ast.SpecElement{{Name: "CopyBorrowed"}}},
 											},
 										},
 									},
+								},
+							},
+						},
+					},
+				},
+			}
+
+			require.Empty(t, validator.Validate(model))
+		})
+
+		t.Run("an event list outcome in a slice declaring a translation produces no diagnostic", func(t *testing.T) {
+			model := &ast.Model{
+				Contexts: []*ast.Context{
+					{
+						Name: "Reading Room",
+						Mode: "dcb",
+						Slices: []*ast.Slice{
+							{
+								Name: "Import External Desk Booking",
+								Translations: []*ast.Translation{
 									{
-										Name: "Review Member Loans",
+										Name:  "ExternalDeskBookingImport",
+										Event: &ast.Event{Name: "ExternalDeskBookingImported"},
+									},
+								},
+								Specs: []*ast.Spec{
+									{
+										Name: "imports a desk booking",
+										Then: &ast.ThenEvents{Events: []*ast.SpecElement{{Name: "ExternalDeskBookingImported"}}},
+									},
+								},
+							},
+						},
+					},
+				},
+			}
+
+			require.Empty(t, validator.Validate(model))
+		})
+
+		t.Run("a slice declaring both a command and an automation accepts event-list and command outcomes", func(t *testing.T) {
+			model := &ast.Model{
+				Contexts: []*ast.Context{
+					{
+						Name: "Lending",
+						Aggregates: []*ast.Aggregate{
+							{
+								Name: "Loan",
+								Slices: []*ast.Slice{
+									{
+										Name:     "Chase Overdue Copy",
+										Commands: []*ast.Command{{Name: "RemindMember"}},
+										Events:   []*ast.Event{{Name: "MemberReminded"}},
+										Flows:    []*ast.Flow{{CommandName: "RemindMember", EventName: "MemberReminded"}},
+										Automations: []*ast.Automation{
+											{Name: "RemindOnDueDate", Command: "RemindMember"},
+										},
+										Specs: []*ast.Spec{
+											{
+												Name: "reminds a member when a copy becomes due",
+												Then: &ast.ThenEvents{Events: []*ast.SpecElement{{Name: "MemberReminded"}}},
+											},
+											{
+												Name: "recalls copies that are overdue",
+												Then: &ast.ThenCommand{CommandName: "RemindMember"},
+											},
+										},
+									},
+								},
+							},
+						},
+					},
+				},
+			}
+
+			require.Empty(t, validator.Validate(model))
+		})
+
+		t.Run("a spec that omits when is accepted in every slice", func(t *testing.T) {
+			model := &ast.Model{
+				Contexts: []*ast.Context{
+					{
+						Name: "Lending",
+						Aggregates: []*ast.Aggregate{
+							{
+								Name: "Loan",
+								Slices: []*ast.Slice{
+									{
+										Name:     "Borrow Copy",
+										Commands: []*ast.Command{{Name: "BorrowCopy"}},
+										Events:   []*ast.Event{{Name: "CopyBorrowed"}},
+										Flows:    []*ast.Flow{{CommandName: "BorrowCopy", EventName: "CopyBorrowed"}},
+										Specs: []*ast.Spec{
+											{
+												Name: "borrows a copy no one holds",
+												Then: &ast.ThenEvents{Events: []*ast.SpecElement{{Name: "CopyBorrowed"}}},
+											},
+										},
+									},
+								},
+							},
+						},
+					},
+				},
+			}
+
+			require.Empty(t, validator.Validate(model))
+		})
+
+		t.Run("a when naming an event is accepted in every slice", func(t *testing.T) {
+			model := &ast.Model{
+				Contexts: []*ast.Context{
+					{
+						Name: "Lending",
+						Aggregates: []*ast.Aggregate{
+							{
+								Name: "Loan",
+								Slices: []*ast.Slice{
+									{
+										Name:     "Borrow Copy",
+										Commands: []*ast.Command{{Name: "BorrowCopy"}},
+										Events:   []*ast.Event{{Name: "CopyBorrowed"}},
+										Flows:    []*ast.Flow{{CommandName: "BorrowCopy", EventName: "CopyBorrowed"}},
+										Specs: []*ast.Spec{
+											{
+												Name: "borrows a copy no one holds",
+												When: &ast.SpecElement{Name: "CopyBorrowed"},
+												Then: &ast.ThenEvents{Events: []*ast.SpecElement{{Name: "CopyBorrowed"}}},
+											},
+										},
+									},
+								},
+							},
+						},
+					},
+				},
+			}
+
+			require.Empty(t, validator.Validate(model))
+		})
+
+		t.Run("mismatched outcomes in both slice homes are reported in declaration order on every run", func(t *testing.T) {
+			model := &ast.Model{
+				Contexts: []*ast.Context{
+					{
+						Name:       "Lending",
+						Invariants: []*ast.Invariant{{Name: "OneReaderPerDesk"}},
+						Aggregates: []*ast.Aggregate{
+							{
+								Name: "Loan",
+								Slices: []*ast.Slice{
+									{
+										Name:     "Borrow Copy",
+										NamePos:  ast.Position{Filename: "lending.emod", Line: 5, Column: 5},
+										Commands: []*ast.Command{{Name: "BorrowCopy"}},
+										Events:   []*ast.Event{{Name: "CopyBorrowed"}},
+										Flows:    []*ast.Flow{{CommandName: "BorrowCopy", EventName: "CopyBorrowed"}},
 										Specs: []*ast.Spec{
 											{
 												Name: "lists loans no one holds",
 												Then: &ast.ThenView{
-													ViewName: "MissingViewA",
-													ViewPos:  ast.Position{Filename: "lending.emod", Line: 14, Column: 18},
+													ViewName: "MemberLoansView",
+													ViewPos:  ast.Position{Filename: "lending.emod", Line: 10, Column: 18},
 												},
 											},
+										},
+									},
+								},
+							},
+						},
+						Slices: []*ast.Slice{
+							{
+								Name:    "Review Member Loans",
+								NamePos: ast.Position{Filename: "lending.emod", Line: 25, Column: 5},
+								Views:   []*ast.View{{Name: "MemberLoansView"}},
+								Specs: []*ast.Spec{
+									{
+										Name: "refuses a desk another reader is seated at",
+										Then: &ast.ThenRejected{
+											InvariantName: "OneReaderPerDesk",
+											InvariantPos:  ast.Position{Filename: "lending.emod", Line: 30, Column: 21},
 										},
 									},
 								},
@@ -2281,14 +2848,13 @@ func TestValidate(t *testing.T) {
 			}
 
 			require.Equal(t, []string{
-				`lending.emod:10: command "MissingCommandA" does not exist`,
-				`lending.emod:14: view "MissingViewA" does not exist`,
+				`lending.emod:10: outcome "view" requires a view in this slice`,
+				`lending.emod:30: outcome "rejected" requires a command in this slice`,
 			}, runs[0])
 			require.Equal(t, runs[0], runs[1])
 			require.Equal(t, runs[0], runs[2])
 		})
 	})
-})
 
 	t.Run("orphan commands and events", func(t *testing.T) {
 		t.Run("command defined with no flow reference produces orphan diagnostic", func(t *testing.T) {
