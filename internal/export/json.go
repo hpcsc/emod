@@ -202,6 +202,10 @@ type jsonSpecOutcome struct {
 	RejectedPosition *jsonPosition `json:"rejected_position,omitempty"`
 	Events           []string      `json:"events,omitempty"`
 	Rejected         string        `json:"rejected,omitempty"`
+	ViewPosition     *jsonPosition `json:"view_position,omitempty"`
+	View             string        `json:"view,omitempty"`
+	CommandPosition  *jsonPosition `json:"command_position,omitempty"`
+	Command          string        `json:"command,omitempty"`
 }
 
 // jsonDiagnosticsWrapper is the top-level envelope for JSON diagnostics output.
@@ -442,6 +446,16 @@ func convertSpecOutcome(then ast.ThenClause) *jsonSpecOutcome {
 		return &jsonSpecOutcome{
 			RejectedPosition: convertPosition(t.InvariantPos),
 			Rejected:         t.InvariantName,
+		}
+	case *ast.ThenView:
+		return &jsonSpecOutcome{
+			ViewPosition: convertPosition(t.ViewPos),
+			View:         t.ViewName,
+		}
+	case *ast.ThenCommand:
+		return &jsonSpecOutcome{
+			CommandPosition: convertPosition(t.CommandPos),
+			Command:         t.CommandName,
 		}
 	}
 	return nil

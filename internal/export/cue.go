@@ -147,6 +147,10 @@ func (w *cueWriter) writeSpecOutcome(then ast.ThenClause) {
 		w.listIfSet("events", specElementNames(t.Events))
 	case *ast.ThenRejected:
 		w.lineIfSet("rejected", t.InvariantName)
+	case *ast.ThenView:
+		w.lineIfSet("view", t.ViewName)
+	case *ast.ThenCommand:
+		w.lineIfSet("command", t.CommandName)
 	}
 }
 

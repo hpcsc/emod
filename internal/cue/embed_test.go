@@ -239,6 +239,13 @@ const fullModelJSON = `{
           "given": ["ReservationMade"],
           "when": "MakeReservation",
           "then": {"rejected": "OneRoomPerReservation"}
+        }, {
+          "name": "lists the rooms a guest can book",
+          "then": {"view": "RoomsView"}
+        }, {
+          "name": "asks the system to hold a room",
+          "when": "MakeReservation",
+          "then": {"command": "MakeReservation"}
         }]
       }]
     }]

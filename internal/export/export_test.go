@@ -1465,7 +1465,11 @@ func TestExport(t *testing.T) {
 			require.Equal(t, libraryLendingSpecs, specsByOwner(modelDocOf(t, test.SpecLibraryLendingModel(t))))
 		})
 
-		t.Run("includes positions for spec name/when/rejected and braces", func(t *testing.T) {
+		t.Run("files every spec of the slice-pattern fixture under its slice with all four outcomes", func(t *testing.T) {
+			require.Equal(t, slicePatternLibraryLendingSpecs, specsByOwner(modelDocOf(t, test.SlicePatternLibraryLendingModel(t))))
+		})
+
+		t.Run("includes positions for spec name/when/outcome and braces", func(t *testing.T) {
 			model := &ast.Model{
 				Name: "Test",
 				Contexts: []*ast.Context{{
@@ -1474,26 +1478,53 @@ func TestExport(t *testing.T) {
 						Name: "Agg",
 						Slices: []*ast.Slice{{
 							Name: "S",
-							Specs: []*ast.Spec{{
-								Name:    "refuses a copy already on loan",
-								NamePos: ast.Position{Filename: "test.emod", Line: 6, Column: 7},
-								OpenPos: ast.Position{Filename: "test.emod", Line: 6, Column: 41},
-								When: &ast.SpecElement{
-									Name:    "BorrowCopy",
-									NamePos: ast.Position{Filename: "test.emod", Line: 7, Column: 14},
+							Specs: []*ast.Spec{
+								{
+									Name:    "refuses a copy already on loan",
+									NamePos: ast.Position{Filename: "test.emod", Line: 6, Column: 7},
+									OpenPos: ast.Position{Filename: "test.emod", Line: 6, Column: 41},
+									When: &ast.SpecElement{
+										Name:    "BorrowCopy",
+										NamePos: ast.Position{Filename: "test.emod", Line: 7, Column: 14},
+									},
+									Then: &ast.ThenRejected{
+										InvariantName: "OneCopyPerLoan",
+										InvariantPos:  ast.Position{Filename: "test.emod", Line: 8, Column: 23},
+									},
+									ClosePos: ast.Position{Filename: "test.emod", Line: 9, Column: 7},
 								},
-								Then: &ast.ThenRejected{
-									InvariantName: "OneCopyPerLoan",
-									InvariantPos:  ast.Position{Filename: "test.emod", Line: 8, Column: 23},
+								{
+									Name:    "lists the loans a member holds",
+									NamePos: ast.Position{Filename: "test.emod", Line: 11, Column: 7},
+									OpenPos: ast.Position{Filename: "test.emod", Line: 11, Column: 42},
+									Then: &ast.ThenView{
+										ViewName: "MemberLoansView",
+										ViewPos:  ast.Position{Filename: "test.emod", Line: 12, Column: 18},
+									},
+									ClosePos: ast.Position{Filename: "test.emod", Line: 13, Column: 7},
 								},
-								ClosePos: ast.Position{Filename: "test.emod", Line: 9, Column: 7},
-							}},
+								{
+									Name:    "reminds a member when a copy becomes due",
+									NamePos: ast.Position{Filename: "test.emod", Line: 15, Column: 7},
+									OpenPos: ast.Position{Filename: "test.emod", Line: 15, Column: 55},
+									When: &ast.SpecElement{
+										Name:    "CopyBorrowed",
+										NamePos: ast.Position{Filename: "test.emod", Line: 16, Column: 14},
+									},
+									Then: &ast.ThenCommand{
+										CommandName: "RemindMember",
+										CommandPos:  ast.Position{Filename: "test.emod", Line: 17, Column: 21},
+									},
+									ClosePos: ast.Position{Filename: "test.emod", Line: 18, Column: 7},
+								},
+							},
 						}},
 					}},
 				}},
 			}
 
-			spec := firstOf(t, firstSliceOf(t, modelDocOf(t, model)), "specs")
+			specs := firstSliceOf(t, modelDocOf(t, model))["specs"].([]any)
+			require.Len(t, specs, 3)
 
 			require.Equal(t, map[string]any{
 				"name":           "refuses a copy already on loan",
@@ -1506,7 +1537,134 @@ func TestExport(t *testing.T) {
 					"rejected":          "OneCopyPerLoan",
 					"rejected_position": map[string]any{"filename": "test.emod", "line": float64(8), "column": float64(23)},
 				},
-			}, spec)
+			}, specs[0])
+			require.Equal(t, map[string]any{
+				"name":           "lists the loans a member holds",
+				"position":       map[string]any{"filename": "test.emod", "line": float64(11), "column": float64(7)},
+				"open_position":  map[string]any{"filename": "test.emod", "line": float64(11), "column": float64(42)},
+				"close_position": map[string]any{"filename": "test.emod", "line": float64(13), "column": float64(7)},
+				"then": map[string]any{
+					"view":          "MemberLoansView",
+					"view_position": map[string]any{"filename": "test.emod", "line": float64(12), "column": float64(18)},
+				},
+			}, specs[1])
+			require.Equal(t, map[string]any{
+				"name":           "reminds a member when a copy becomes due",
+				"position":       map[string]any{"filename": "test.emod", "line": float64(15), "column": float64(7)},
+				"open_position":  map[string]any{"filename": "test.emod", "line": float64(15), "column": float64(55)},
+				"when":           "CopyBorrowed",
+				"when_position":  map[string]any{"filename": "test.emod", "line": float64(16), "column": float64(14)},
+				"close_position": map[string]any{"filename": "test.emod", "line": float64(18), "column": float64(7)},
+				"then": map[string]any{
+					"command":          "RemindMember",
+					"command_position": map[string]any{"filename": "test.emod", "line": float64(17), "column": float64(21)},
+				},
+			}, specs[2])
+		})
+
+		t.Run("files the outcome object's value and position keys like its siblings", func(t *testing.T) {
+			t.Run("view outcome places position ahead of value", func(t *testing.T) {
+				model := &ast.Model{
+					Name: "Test",
+					Contexts: []*ast.Context{{
+						Name: "Ctx",
+						Slices: []*ast.Slice{{
+							Name: "S",
+							Specs: []*ast.Spec{{
+								Name: "lists a view",
+								Then: &ast.ThenView{
+									ViewName: "MyView",
+									ViewPos:  ast.Position{Filename: "test.emod", Line: 2, Column: 5},
+								},
+							}},
+						}},
+					}},
+				}
+
+				raw, err := export.ExportJSON(model)
+				require.NoError(t, err)
+
+				keyOrder := emittedKeyOrder(t, raw)
+				require.Equal(t, []string{"view_position", "view"}, keyOrder["then"])
+			})
+
+			t.Run("command outcome places position ahead of value", func(t *testing.T) {
+				model := &ast.Model{
+					Name: "Test",
+					Contexts: []*ast.Context{{
+						Name: "Ctx",
+						Slices: []*ast.Slice{{
+							Name: "S",
+							Specs: []*ast.Spec{{
+								Name: "issues a command",
+								Then: &ast.ThenCommand{
+									CommandName: "DoIt",
+									CommandPos:  ast.Position{Filename: "test.emod", Line: 2, Column: 5},
+								},
+							}},
+						}},
+					}},
+				}
+
+				raw, err := export.ExportJSON(model)
+				require.NoError(t, err)
+
+				keyOrder := emittedKeyOrder(t, raw)
+				require.Equal(t, []string{"command_position", "command"}, keyOrder["then"])
+			})
+		})
+
+		t.Run("rejects a spec outcome re-keyed with Go-field spelling", func(t *testing.T) {
+			cueBin := lookupCue(t)
+			model := &ast.Model{
+				Name: "Test",
+				Contexts: []*ast.Context{{
+					Name: "Ctx",
+					Slices: []*ast.Slice{{
+						Name: "S",
+						Views:    []*ast.View{{Name: "MyView"}},
+						Commands: []*ast.Command{{Name: "DoIt"}},
+						Specs: []*ast.Spec{
+							{
+								Name: "reads a view",
+								Then: &ast.ThenView{
+									ViewName: "MyView",
+									ViewPos:  ast.Position{Filename: "test.emod", Line: 3, Column: 5},
+								},
+							},
+							{
+								Name: "issues a command",
+								Then: &ast.ThenCommand{
+									CommandName: "DoIt",
+									CommandPos:  ast.Position{Filename: "test.emod", Line: 4, Column: 5},
+								},
+							},
+						},
+					}},
+				}},
+			}
+
+			raw, err := export.ExportJSON(model)
+			require.NoError(t, err)
+
+			rekeyed := strings.ReplaceAll(string(raw), `"view":`, `"viewName":`)
+			rekeyed = strings.ReplaceAll(rekeyed, `"view_position":`, `"viewNamePosition":`)
+			rekeyed = strings.ReplaceAll(rekeyed, `"command":`, `"commandName":`)
+			rekeyed = strings.ReplaceAll(rekeyed, `"command_position":`, `"commandNamePosition":`)
+
+			dir := t.TempDir()
+			schemaPath := filepath.Join(dir, "schema.cue")
+			schemaData, err := os.ReadFile("../cue/schema.cue")
+			require.NoError(t, err)
+			require.NoError(t, os.WriteFile(schemaPath, schemaData, 0o644))
+
+			modelPath := filepath.Join(dir, "model.json")
+			require.NoError(t, os.WriteFile(modelPath, []byte(rekeyed), 0o644))
+
+			output, err := exec.Command(cueBin, "vet", "-d", "#Model", schemaPath, modelPath).CombinedOutput()
+			require.Error(t, err, "schema accepted a spec outcome keyed with Go-field spelling")
+			require.Contains(t, string(output), "viewName")
+			require.Contains(t, string(output), "commandName")
 		})
 	})
 
@@ -3231,6 +3389,27 @@ func TestExport(t *testing.T) {
 				"nor does an event a spec names in its given or then history reach a node or an edge of its own")
 		})
 
+		t.Run("the slice-pattern fixture produces a diagram document with no trace of specs", func(t *testing.T) {
+			stated := test.SlicePatternLibraryLendingModel(t)
+			unstated := test.WithoutSpecs(stated)
+
+			require.NotEqual(t, stated, unstated,
+				"the twin has to state no spec, or the comparison below says nothing")
+			require.Equal(t, test.SlicePatternLibraryLendingSpecNames, test.DeclaredSpecNames(stated))
+			require.Empty(t, test.DeclaredSpecNames(unstated),
+				"the twin has to lose the specs of both slice homes, or the last comparison below is answered by whichever home it kept")
+
+			statedRaw, err := export.ExportDiagramJSON(stated)
+			require.NoError(t, err)
+			unstatedRaw, err := export.ExportDiagramJSON(unstated)
+			require.NoError(t, err)
+			require.Equal(t, unstatedRaw, statedRaw,
+				"the diagram document is nodes and edges; a scenario is neither")
+
+			require.Empty(t, slicePatternSpecTextAnywhere(diagramDocOf(t, stated)),
+				"the diagram document carries no spec text")
+		})
+
 		t.Run("the view an automation reads reaches its node and draws an edge of its own, while a name no slice declares draws none", func(t *testing.T) {
 			reading := test.AutomationReadsLibraryLendingModel(t)
 			unread := test.WithoutAutomationReads(reading)
@@ -3882,6 +4061,17 @@ func TestExport(t *testing.T) {
 			requireBothFormatsAgree(t, lookupCue(t), test.SpecLibraryLendingModel(t))
 		})
 
+		t.Run("CUE and JSON exports agree on the slice-pattern fixture with all four outcomes", func(t *testing.T) {
+			cueBin := lookupCue(t)
+
+			requireBothFormatsAgree(t, cueBin, test.SlicePatternLibraryLendingModel(t))
+
+			docs := exportedDocs(t, cueBin, test.SlicePatternLibraryLendingModel(t))
+			for format, doc := range docs {
+				require.Equal(t, slicePatternLibraryLendingSpecs, specsByOwner(doc), "%s export", format)
+			}
+		})
+
 		t.Run("CUE and JSON exports agree on the view each automation reads", func(t *testing.T) {
 			cueBin := lookupCue(t)
 			reading := test.AutomationReadsLibraryLendingModel(t)
@@ -4438,6 +4628,73 @@ func libraryLendingInvariantText() []string {
 	return text
 }
 
+// slicePatternLibraryLendingSpecs transcribes the scenarios
+// test.SlicePatternLibraryLending states, filed under the slice that states each
+// and naming the outcome each then declares, so an export is read back against
+// the source an author wrote rather than against another export of it. Both
+// homes a slice has appear — nested in an aggregate and declared directly on a
+// DCB-mode context — and every one of the four outcomes is present.
+var slicePatternLibraryLendingSpecs = map[string][]map[string]any{
+	"Borrow Copy": {
+		{
+			"name": "borrows a copy no one holds",
+			"when": "BorrowCopy",
+			"then": map[string]any{"events": []any{"CopyBorrowed"}},
+		},
+		{
+			"name": "refuses a copy already on loan",
+			"when": "BorrowCopy",
+			"then": map[string]any{"rejected": "OneCopyPerLoan"},
+		},
+		{
+			"name":  "borrows a copy the member before returned",
+			"given": []any{"CopyBorrowed", "CopyReturned"},
+			"when":  "BorrowCopy",
+			"then":  map[string]any{"events": []any{"CopyBorrowed"}},
+		},
+	},
+	"Review Member Loans": {
+		{
+			"name": "lists the loans a member holds",
+			"then": map[string]any{"view": "MemberLoansView"},
+		},
+	},
+	"Chase Overdue Copy": {
+		{
+			"name": "reminds a member when a copy becomes due",
+			"when": "CopyBorrowed",
+			"then": map[string]any{"command": "RemindMember"},
+		},
+	},
+	"Sweep Overdue Loans": {
+		{
+			"name": "recalls copies that are overdue",
+			"then": map[string]any{"command": "RecallCopy"},
+		},
+	},
+	"Claim Desk": {
+		{
+			"name": "seats a reader at a free desk",
+			"when": "ClaimDesk",
+			"then": map[string]any{"events": []any{"DeskClaimed"}},
+		},
+		{
+			"name":  "refuses a desk another reader is seated at",
+			"given": []any{"DeskClaimed"},
+			"when":  "ClaimDesk",
+			"then":  map[string]any{"rejected": "OneReaderPerDesk"},
+		},
+	},
+	"Import External Desk Booking": {
+		{
+			"name":  "imports a desk booking from an external system",
+			"given": []any{"DeskClaimed"},
+			"when":  "ImportExternalDeskBooking",
+			"then":  map[string]any{"events": []any{"ExternalDeskBookingImported"}},
+		},
+	},
+}
+
 // libraryLendingSpecs transcribes the scenarios test.SpecLibraryLending states,
 // filed under the slice that states each, so an export is read back against the
 // source an author wrote rather than against another export of it. Both homes a
@@ -4561,6 +4818,23 @@ func specsByOwner(doc map[string]any) map[string][]map[string]any {
 
 func specTextAnywhere(doc map[string]any) []string {
 	return textAnywhere(doc, libraryLendingSpecText())
+}
+
+func slicePatternLibraryLendingSpecText() []string {
+	var text []string
+	for _, specs := range slicePatternLibraryLendingSpecs {
+		for _, spec := range specs {
+			text = append(text, spec["name"].(string))
+			if rejected, ok := spec["then"].(map[string]any)["rejected"].(string); ok {
+				text = append(text, rejected)
+			}
+		}
+	}
+	return text
+}
+
+func slicePatternSpecTextAnywhere(doc map[string]any) []string {
+	return textAnywhere(doc, slicePatternLibraryLendingSpecText())
 }
 
 func invariantsByOwner(doc map[string]any) map[string][]map[string]any {
@@ -4909,6 +5183,7 @@ type keyOrderReader struct {
 	t          *testing.T
 	decoder    *json.Decoder
 	keysByName map[string][]string
+	fieldKey   string // key whose value is currently being read
 }
 
 // readValue reads one JSON value, returning it when it is a scalar and nil when
@@ -4944,13 +5219,18 @@ func (r *keyOrderReader) readObject() {
 		key := r.readToken().(string)
 		keys = append(keys, key)
 
+		saved := r.fieldKey
+		r.fieldKey = key
 		if text, isText := r.readValue().(string); isText && key == "name" {
 			name = text
 		}
+		r.fieldKey = saved
 	}
 
 	if name != "" {
 		r.keysByName[name] = keys
+	} else if r.fieldKey != "" {
+		r.keysByName[r.fieldKey] = keys
 	}
 }
 

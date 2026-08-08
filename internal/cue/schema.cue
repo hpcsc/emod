@@ -74,6 +74,8 @@
 #SpecOutcome: {
 	events?:   [...string]
 	rejected?: string
+	view?:     string
+	command?:  string
 }
 
 #Spec: {

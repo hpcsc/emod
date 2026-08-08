@@ -598,6 +598,22 @@ A member holds at most one reservation on a title
 		require.Equal(t, renderedJSON(t, unstated), renderedJSON(t, stated),
 			"a glossary defines the terms of a ubiquitous language, and a scenario is not one of them")
 	})
+
+	t.Run("stating specs with all four outcomes leaves both renderings untouched", func(t *testing.T) {
+		stated := test.SlicePatternLibraryLendingModel(t)
+		unstated := test.WithoutSpecs(stated)
+
+		require.NotEqual(t, stated, unstated,
+			"the twin has to state no spec, or the comparisons below say nothing")
+		require.Equal(t, test.SlicePatternLibraryLendingSpecNames, test.DeclaredSpecNames(stated))
+		require.Empty(t, test.DeclaredSpecNames(unstated),
+			"the twin has to lose the specs of both slice homes, or the comparisons below are answered by whichever home it kept")
+
+		require.Equal(t, renderedMarkdown(t, unstated), renderedMarkdown(t, stated),
+			"a glossary defines the terms of a ubiquitous language, and a scenario is not one of them")
+		require.Equal(t, renderedJSON(t, unstated), renderedJSON(t, stated),
+			"a glossary defines the terms of a ubiquitous language, and a scenario is not one of them")
+	})
 }
 
 func renderedMarkdown(t *testing.T, model *ast.Model) string {
