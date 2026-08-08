@@ -3,7 +3,7 @@
 Which story in each in-progress story file is delivered. Files under
 `user-stories/completed/` are finished in full and are not tracked here.
 
-**22 of 178 delivered.**
+**28 of 178 delivered.**
 
 ## [emod-desktop.md](./emod-desktop.md) — 0/16
 
@@ -70,14 +70,22 @@ realigned forms under a test that runs every one of them through `emod validate`
 - [x] US-010: Highlight the realigned syntax
 - [x] US-011: Learn the realignment from examples and the reference
 
-## [viewer-descriptions-and-comments.md](./viewer-descriptions-and-comments.md) — 0/6
+## [viewer-descriptions-and-comments.md](./viewer-descriptions-and-comments.md) — 6/6
 
-- [ ] US-001: Carry descriptions through the diagram JSON
-- [ ] US-002: Preserve comments through a viewer round-trip
-- [ ] US-003: Read a construct's description in the detail panel
-- [ ] US-004: See context and aggregate descriptions on their headers
-- [ ] US-005: Spot and read a description without opening the panel
-- [ ] US-006: Spot and read comments on any construct
+Delivered in full. The wire: `description` and `comments` on every diagram node, read back by the
+importer so a visual edit no longer deletes the prose a file came with. The surfaces: a description
+block in the detail panel, context and aggregate descriptions inline on their headers with the
+narrow-row truncation that keeps them off a neighbour's label, the same prose in the hover tooltip
+for nodes that had no tooltip at all, and an ⓘ mark and a comment mark on any construct carrying
+either — slices and container headers included, which is what gives them a hover surface without a
+detail panel of their own.
+
+- [x] US-001: Carry descriptions through the diagram JSON
+- [x] US-002: Preserve comments through a viewer round-trip
+- [x] US-003: Read a construct's description in the detail panel
+- [x] US-004: See context and aggregate descriptions on their headers
+- [x] US-005: Spot and read a description without opening the panel
+- [x] US-006: Spot and read comments on any construct
 
 ## [00-llm-foundation.md](./ai/00-llm-foundation.md) — 5/10
 
