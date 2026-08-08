@@ -3,6 +3,7 @@ settings.local.json
 e2e/node_modules/
 /bin
 /dist
+tasks/.environment
 tasks/.cycles
 tasks/.checkpoint
 .worktrees/
