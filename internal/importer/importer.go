@@ -13,9 +13,10 @@ import (
 )
 
 type diagramDocument struct {
-	ModelName string         `json:"model_name"`
-	Nodes     []*diagramNode `json:"nodes"`
-	Edges     []*diagramEdge `json:"edges"`
+	ModelName        string         `json:"model_name"`
+	ModelDescription string         `json:"model_description,omitempty"`
+	Nodes            []*diagramNode `json:"nodes"`
+	Edges            []*diagramEdge `json:"edges"`
 }
 
 type diagramNode struct {
@@ -97,7 +98,7 @@ func ImportDiagram(data []byte) (*ast.Model, error) {
 		}
 	}
 
-	model := &ast.Model{Name: doc.ModelName}
+	model := &ast.Model{Name: doc.ModelName, Description: doc.ModelDescription}
 
 	for _, n := range doc.Nodes {
 		if n == nil || n.ParentID != nil {

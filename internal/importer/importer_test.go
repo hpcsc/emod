@@ -869,15 +869,13 @@ func stripWhatDiagramJSONDrops(model *ast.Model) {
 }
 
 // stripWhatASaveStillLoses removes, beyond what a diagram document was designed
-// to leave behind, two things a save drops that it was not: the model's own
-// description, which the document files under no node, and a flow naming an event
+// to leave behind, one thing a save drops that it was not: a flow naming an event
 // the slice does not itself declare, which no edge between two of that slice's
-// nodes stands for. They are losses rather than choices, so they stay out of
+// nodes stands for. That is a loss rather than a choice, so it stays out of
 // stripWhatDiagramJSONDrops — a model keeping its flows within one slice must
 // still round-trip every one of them.
 func stripWhatASaveStillLoses(model *ast.Model) {
 	stripWhatDiagramJSONDrops(model)
-	model.Description = ""
 	forEachSlice(model, stripFlowsLeavingTheSlice)
 }
 

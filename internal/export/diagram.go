@@ -12,9 +12,10 @@ import (
 // Diagram JSON intermediate types.
 
 type jsonDiagramDocument struct {
-	ModelName string             `json:"model_name"`
-	Nodes     []*jsonDiagramNode `json:"nodes"`
-	Edges     []*jsonDiagramEdge `json:"edges"`
+	ModelName        string             `json:"model_name"`
+	ModelDescription string             `json:"model_description,omitempty"`
+	Nodes            []*jsonDiagramNode `json:"nodes"`
+	Edges            []*jsonDiagramEdge `json:"edges"`
 }
 
 type jsonDiagramNode struct {
@@ -127,12 +128,13 @@ type diagramBuilder struct {
 	translationIDs map[string]string
 }
 
-func newDiagramBuilder(modelName string) *diagramBuilder {
+func newDiagramBuilder(modelName, modelDescription string) *diagramBuilder {
 	return &diagramBuilder{
 		doc: &jsonDiagramDocument{
-			ModelName: modelName,
-			Nodes:     make([]*jsonDiagramNode, 0),
-			Edges:     make([]*jsonDiagramEdge, 0),
+			ModelName:        modelName,
+			ModelDescription: modelDescription,
+			Nodes:            make([]*jsonDiagramNode, 0),
+			Edges:            make([]*jsonDiagramEdge, 0),
 		},
 		ids:            newDiagramIDGenerator(),
 		commandIDs:     make(map[string]string),
@@ -442,7 +444,7 @@ func convertModelToDiagram(m *ast.Model) *jsonDiagramDocument {
 		return nil
 	}
 
-	b := newDiagramBuilder(m.Name)
+	b := newDiagramBuilder(m.Name, m.Description)
 	for _, a := range m.Actors {
 		b.appendActor(a)
 	}
