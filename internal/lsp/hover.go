@@ -35,7 +35,7 @@ var keywordDescriptions = map[string]string{
 	"spec":            "Defines a given/when/then scenario a slice must satisfy.",
 	"given":           "Lists the events that have already occurred when a spec's scenario starts.",
 	"when":            "Names the command or event a spec exercises.",
-	"then":            "States a spec's outcome: the events produced, or a rejection.",
+	"then":            "States a spec's outcome: the events produced, a rejection, a view, or a command.",
 	"rejected":        "States that a spec's command is rejected by the named invariant.",
 	"mode":            `Sets a context's modeling mode: "aggregate", "dcb", or "mixed".`,
 	"tags":            "Defines the tag entries on an event, each mapping a tag key to a field.",

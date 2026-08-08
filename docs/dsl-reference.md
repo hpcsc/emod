@@ -375,7 +375,9 @@ slice "<name>" {
 
 ### `spec`
 
-A `spec` states expected behaviour as Given-When-Then, next to the structure it describes. A slice may hold any number of specs, in any position among its other entries.
+A `spec` states expected behaviour as Given-When-Then, next to the structure it describes. The `then` shape a spec may state depends on the pattern of the enclosing slice. A slice may hold any number of specs, in any position among its other entries.
+
+**Command slice spec.** A slice that declares a `command` or a `translation` accepts the event-list and rejection outcomes. The command slice is the pattern the existing examples show:
 
 ```
 slice "Borrow a Copy" {
@@ -399,7 +401,7 @@ spec "borrows a free copy" {
 }
 ```
 
-`when` names the command under test. `then` states the outcome, in one of two shapes. A bracketed event list is the success outcome — the events appended, in order:
+`when` names the command under test. A bracketed event list after `then` is the success outcome — the events appended, in order:
 
 ```
 then [CopyBorrowed, LoanOpened]
@@ -415,11 +417,64 @@ spec "rejects a second borrow" {
 }
 ```
 
-**Name resolution.** Every event in `given` and in a `then` list, and the command in `when`, must be defined somewhere in the model. A `rejected` name must be declared on the enclosing aggregate or, for a slice declared directly on a context, on that context — an aggregate and its context are separate scopes, so a name declared one level up does not resolve.
+**View slice spec.** A slice that declares a `view` concludes its spec with `then view <ViewName>`. The outcome names a view declared anywhere in the model. A view-slice spec omits `when` — a view has no command to exercise:
+
+```
+slice "Review Member Loans" {
+  view MemberLoansView {
+    fields { loanId string required }
+    subscribes [CopyBorrowed, CopyReturned]
+  }
+
+  spec "shows active member loans" {
+    given [CopyBorrowed, CopyReturned, LoanRenewed]
+    then view MemberLoansView
+  }
+}
+```
+
+**Automation slice spec.** A slice that declares an `automation` concludes its spec with `then command <CommandName>`. The outcome names a command declared anywhere in the model. The `when` entry distinguishes the two activation forms: an event-driven automation's `when` names the event the automation activates on, while a schedule-driven automation omits `when` entirely:
+
+```
+# Event-driven
+spec "recalls overdue copy" {
+  when CopyOverdue
+  then command RecallCopy
+}
+
+# Schedule-driven
+spec "chases overdue copies on schedule" {
+  then command ChaseOverdue
+}
+```
+
+A spec that omits `when` in a view slice and a schedule-driven automation are told apart by their outcome — `then view` for the former, `then command` for the latter.
+
+**Translation slice spec.** A translation accepts the given/when/then-events form its enclosing slice's command-and-event pair exercises:
+
+```
+slice "Claim Desk" {
+  command ClaimCopy { fields { copyId string required } }
+  translation DeskWatcher {
+    external_system "Desk"
+    reads DeskClaims
+    command ClaimCopy
+    event CopyClaimed { fields { copyId string required } }
+  }
+
+  spec "claims a copy via the desk" {
+    given [CopyBorrowed]
+    when ClaimCopy
+    then [CopyClaimed]
+  }
+}
+```
+
+**Outcome–pattern rule.** A `then` shape the enclosing slice cannot state is a validation error. The rule is local to the slice: a `view` outcome requires a `view` declaration, a `command` outcome requires an `automation`, a rejection or an event list requires a `command` or a `translation`. The message names the outcome shape and the construct kind the slice would have to declare.
+
+**Name resolution.** Every event in `given` and in a `then` list, and the command in `when`, must be defined somewhere in the model. A `rejected` name must be declared on the enclosing aggregate or, for a slice declared directly on a context, on that context — an aggregate and its context are separate scopes, so a name declared one level up does not resolve. A `then view` name must be a view declared anywhere in the model, and a `then command` name a command declared anywhere in the model; both are unqualified and model-wide.
 
 Specs are carried through `emod fmt`, the JSON and CUE exports, and the embedded schema.
-
-The spec shapes for view, automation, and translation slices — `then view <Name>` and `then command <Name>` — are not part of the language yet.
 
 ---
 
@@ -639,8 +694,8 @@ All references use unqualified names. `emod validate` resolves them, except for 
 |---|---|---|
 | `context "<name>"` | `automation { target context <Name> }` | [`automation`](#automation-pattern) |
 | `event <Name>` | `subscribes [<Name>]`, `flow`, `automation { on <Name> }`, `automation { command <Name> }`, `translation { event <Name> }`, `translation { command <Name> }`, `spec { given [<Name>] }`, `spec { then [<Name>] }` | [`view`](#view-pattern), [`automation`](#automation-pattern), [`translation`](#translation-pattern), [`spec`](#spec) |
-| `command <Name>` | `flow`, `automation { command <Name> }`, `translation { command <Name> }`, `spec { when <Name> }` | [`flow`](#7-flows), [`automation`](#automation-pattern), [`translation`](#translation-pattern), [`spec`](#spec) |
-| `view <Name>` | `automation { reads <Name> }`, `trigger { reads <Name> }`, `translation { reads <Name> }` | [`automation`](#automation-pattern), [`command` pattern](#command-pattern), [`translation`](#translation-pattern) |
+| `command <Name>` | `flow`, `automation { command <Name> }`, `translation { command <Name> }`, `spec { when <Name> }`, `spec { then command <Name> }` | [`flow`](#7-flows), [`automation`](#automation-pattern), [`translation`](#translation-pattern), [`spec`](#spec) |
+| `view <Name>` | `automation { reads <Name> }`, `trigger { reads <Name> }`, `translation { reads <Name> }`, `spec { then view <Name> }` | [`automation`](#automation-pattern), [`command` pattern](#command-pattern), [`translation`](#translation-pattern), [`spec`](#spec) |
 | `actor "<name>"` | `trigger { actor <Name> }` | [`command` pattern](#command-pattern) |
 | `invariant <name>` | `spec { then rejected <name> }` | [`spec`](#spec) |
 
@@ -653,6 +708,8 @@ Validation detects:
 - **Redeclared invariants**: one name declared twice in a single scope (see [Bounded Contexts](#4-bounded-contexts)).
 - **Undefined spec references**: an event in `given` or `then`, or a command in `when`, that the model does not define — reported as `event "<Name>" does not exist` or `command "<Name>" does not exist`.
 - **Unresolved rejections**: a `then rejected <name>` whose invariant is not declared in the enclosing scope — reported as `invariant "<name>" is not declared in <scope> "<Name>"`.
+- **Undefined spec outcome references**: a `then view <Name>` naming a view no slice declares, or a `then command <Name>` naming a command no slice declares — reported as `view "<Name>" does not exist` or `command "<Name>" does not exist`.
+- **Outcome–pattern mismatches**: a `view` outcome in a slice declaring no view, a `command` outcome in a slice declaring no automation, a rejection in a slice declaring no command, or an event list in a slice declaring neither a command nor a translation — each reported naming the outcome shape and the construct kind the slice would have to declare.
 
 ---
 
