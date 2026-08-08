@@ -40,6 +40,12 @@ func SpecLibraryLendingModel(t *testing.T) *ast.Model {
 	return parseFixture(t, SpecLibraryLending, "specs.emod")
 }
 
+func SlicePatternLibraryLendingModel(t *testing.T) *ast.Model {
+	t.Helper()
+
+	return parseFixture(t, SlicePatternLibraryLending, "slice-patterns.emod")
+}
+
 func AutomationReadsLibraryLendingModel(t *testing.T) *ast.Model {
 	t.Helper()
 

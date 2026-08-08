@@ -63,6 +63,12 @@ func TestCheck(t *testing.T) {
 			require.Empty(t, diagnostics)
 		})
 
+		t.Run("returns an empty diagnostic list for a model stating a spec for every slice pattern in both homes", func(t *testing.T) {
+			diagnostics := oracle.Check(test.SlicePatternLibraryLending, "slice-patterns.emod")
+
+			require.Empty(t, diagnostics)
+		})
+
 		t.Run("reports nothing about an invariant a context declares outside dcb mode", func(t *testing.T) {
 			tests := []struct {
 				mode   string

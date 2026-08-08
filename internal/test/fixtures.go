@@ -571,6 +571,245 @@ context "Reading Room" mode dcb {
 }
 `
 
+// SlicePatternLibraryLending states a spec for each slice pattern in both homes
+// a slice has — nested in an aggregate, and declared directly on a DCB-mode
+// context — and with every outcome a spec's then accepts, so packages that walk
+// or strip specs share one model. The view, command and no-when outcomes only
+// this fixture has sit in the aggregate home; the DCB home carries command and
+// translation specs so both homes read back short against the transcriptions.
+const SlicePatternLibraryLending = `# Lending a library's copies and seating its readers, with a spec for every slice pattern
+model "Library Lending"
+
+actor "Member"
+
+context "Lending" {
+  aggregate "Loan" {
+    invariant OneCopyPerLoan "A loan covers exactly one copy of one title"
+
+    slice "Borrow Copy" {
+      command BorrowCopy {
+        fields {
+          memberId string required
+          copyId   string required
+          dueOn    date   required
+        }
+      }
+      event CopyBorrowed {
+        fields {
+          loanId   string required
+          memberId string required
+          copyId   string required
+          dueOn    date   required
+        }
+      }
+      spec "borrows a copy no one holds" {
+        given []
+        when BorrowCopy
+        then [CopyBorrowed]
+      }
+      spec "refuses a copy already on loan" {
+        when BorrowCopy
+        then rejected OneCopyPerLoan
+      }
+      spec "borrows a copy the member before returned" {
+        given [CopyBorrowed, CopyReturned]
+        then [CopyBorrowed]
+        when BorrowCopy
+      }
+      flow {
+        command -> event: BorrowCopy -> CopyBorrowed
+      }
+    }
+
+    slice "Review Member Loans" {
+      view MemberLoansView {
+        fields {
+          loanId   string required
+          memberId string required
+          dueOn    date   required
+        }
+        subscribes [CopyBorrowed, CopyReturned]
+      }
+      spec "lists the loans a member holds" {
+        then view MemberLoansView
+      }
+    }
+
+    slice "Chase Overdue Copy" {
+      view OverdueLoansView {
+        fields {
+          loanId   string required
+          memberId string required
+        }
+        subscribes [CopyBorrowed, CopyReturned]
+      }
+      command RemindMember {
+        fields {
+          loanId   string required
+          memberId string required
+        }
+      }
+      event MemberReminded {
+        fields {
+          loanId     string required
+          memberId   string required
+          remindedAt timestamp required
+        }
+      }
+      automation RemindOnDueDate {
+        on CopyBorrowed
+        reads OverdueLoansView
+        command RemindMember
+      }
+      flow {
+        command -> event: RemindMember -> MemberReminded
+      }
+      spec "reminds a member when a copy becomes due" {
+        when CopyBorrowed
+        then command RemindMember
+      }
+    }
+
+    slice "Sweep Overdue Loans" {
+      view OverdueLoansView {
+        fields {
+          loanId   string required
+          memberId string required
+        }
+        subscribes [CopyBorrowed, CopyReturned]
+      }
+      command RecallCopy {
+        fields {
+          loanId string required
+          copyId string required
+        }
+      }
+      event CopyRecalled {
+        fields {
+          loanId     string required
+          copyId     string required
+          recalledAt timestamp required
+        }
+      }
+      automation RecallOverdueCopy {
+        every "15m"
+        reads OverdueLoansView
+        command RecallCopy
+      }
+      flow {
+        command -> event: RecallCopy -> CopyRecalled
+      }
+      spec "recalls copies that are overdue" {
+        then command RecallCopy
+      }
+    }
+
+    slice "Return Copy" {
+      command ReturnCopy {
+        fields {
+          loanId string required
+          copyId string required
+        }
+      }
+      event CopyReturned {
+        fields {
+          loanId     string required
+          copyId     string required
+          returnedAt timestamp required
+        }
+      }
+      flow {
+        command -> event: ReturnCopy -> CopyReturned
+      }
+    }
+  }
+}
+
+context "Reading Room" mode dcb {
+  invariant OneReaderPerDesk "A desk seats at most one reader at any moment"
+
+  slice "Desk Occupancy" {
+    view DeskOccupancyView {
+      fields {
+        deskId   string required
+        memberId string required
+      }
+      subscribes [DeskClaimed]
+    }
+  }
+
+  slice "Claim Desk" {
+    command ClaimDesk {
+      decides_on {
+        events [DeskClaimed]
+        where tag(desk = deskId) and tag(reader = memberId)
+      }
+      fields {
+        memberId string required
+        deskId   string required
+      }
+    }
+    event DeskClaimed {
+      tags {
+        desk  : deskId
+        reader: memberId
+      }
+      fields {
+        sessionId string    required
+        deskId    string    required
+        memberId  string    required
+        claimedAt timestamp required
+      }
+    }
+    spec "seats a reader at a free desk" {
+      given []
+      when ClaimDesk
+      then [DeskClaimed]
+    }
+    spec "refuses a desk another reader is seated at" {
+      given [DeskClaimed]
+      when ClaimDesk
+      then rejected OneReaderPerDesk
+    }
+    flow {
+      command -> event: ClaimDesk -> DeskClaimed
+    }
+  }
+
+  slice "Import External Desk Booking" {
+    command ImportExternalDeskBooking {
+      fields {
+        externalRef string required
+        deskId      string required
+        memberId    string required
+      }
+    }
+    translation ExternalDeskBookingImport {
+      external_system "Room Booking API"
+      reads DeskOccupancyView
+      command ImportExternalDeskBooking
+      event ExternalDeskBookingImported {
+        tags {
+          desk  : deskId
+          reader: memberId
+        }
+        fields {
+          externalRef string    required
+          deskId      string    required
+          memberId    string    required
+          importedAt  timestamp required
+        }
+      }
+    }
+    spec "imports a desk booking from an external system" {
+      given [DeskClaimed]
+      when ImportExternalDeskBooking
+      then [ExternalDeskBookingImported]
+    }
+  }
+}
+`
+
 // AutomationReadsLibraryLending names the view its automations read in both
 // homes a slice has — nested in an aggregate, and declared directly on a
 // DCB-mode context — and one of them reads a view another context declares, so
@@ -1126,6 +1365,38 @@ var SpecLibraryLendingSpecNames = []string{
 	"frees the desk its reader is seated at",
 }
 
+// SlicePatternLibraryLendingSpecNames transcribes the name of every scenario
+// SlicePatternLibraryLending states, both slice homes together and in
+// declaration order, so a walk or a strip that reaches only one of the homes
+// reads back short against it.
+var SlicePatternLibraryLendingSpecNames = []string{
+	"borrows a copy no one holds",
+	"refuses a copy already on loan",
+	"borrows a copy the member before returned",
+	"lists the loans a member holds",
+	"reminds a member when a copy becomes due",
+	"recalls copies that are overdue",
+	"seats a reader at a free desk",
+	"refuses a desk another reader is seated at",
+	"imports a desk booking from an external system",
+}
+
+// SlicePatternLibraryLendingOutcomeKinds transcribes the outcome kind of every
+// scenario SlicePatternLibraryLending states, both slice homes together and in
+// declaration order, so a walk or a strip that collapses one outcome kind into
+// another reads back short against it.
+var SlicePatternLibraryLendingOutcomeKinds = []string{
+	"events",
+	"rejection",
+	"events",
+	"view",
+	"command",
+	"command",
+	"events",
+	"rejection",
+	"events",
+}
+
 // AutomationReadsLibraryLendingViewNames transcribes the view every automation
 // of AutomationReadsLibraryLending reads, both slice homes together and in
 // declaration order, so a walk or a strip that reaches only one of the homes
@@ -1380,6 +1651,35 @@ func DeclaredDescriptions(model *ast.Model) map[string]string {
 	}
 
 	return described
+}
+
+// DeclaredSpecOutcomeKinds names the outcome kind of every spec model states,
+// both slice homes together and in declaration order, so a caller pairing it
+// with a transcribed list reads back short when a strip or a walk collapses one
+// outcome kind into another.
+func DeclaredSpecOutcomeKinds(model *ast.Model) []string {
+	var kinds []string
+	for _, s := range declaredSlices(model) {
+		for _, spec := range s.Specs {
+			kinds = append(kinds, specOutcomeKind(spec.Then))
+		}
+	}
+	return kinds
+}
+
+func specOutcomeKind(then ast.ThenClause) string {
+	switch then.(type) {
+	case *ast.ThenEvents:
+		return "events"
+	case *ast.ThenRejected:
+		return "rejection"
+	case *ast.ThenView:
+		return "view"
+	case *ast.ThenCommand:
+		return "command"
+	default:
+		return fmt.Sprintf("%T", then)
+	}
 }
 
 // DeclaredAutomationReads names the view every automation of model reads, both

@@ -8,6 +8,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/google/go-cmp/cmp"
 	"github.com/google/go-cmp/cmp/cmpopts"
 	"github.com/hpcsc/emod/internal/ast"
 	"github.com/hpcsc/emod/internal/diagnostic"
@@ -1264,6 +1265,63 @@ context "Lending" {
 			require.NotZero(t, dcbContextRejections, "no slice declared on a dcb context states a rejection")
 			requireSpecCoverage(t, test.SpecLibraryLending, declaredSpecs(model))
 			requireASpecAheadOfALaterEntry(t, model)
+		})
+
+		t.Run("the slice pattern fixture states a spec for every slice pattern in both homes, with the new outcomes covered", func(t *testing.T) {
+			model := test.SlicePatternLibraryLendingModel(t)
+
+			requireSpecCoverage(t, test.SlicePatternLibraryLending, declaredSpecs(model))
+			requireSpecOutcomeKinds(t, declaredSpecs(model))
+			requireASpecAheadOfALaterEntry(t, model)
+
+			t.Run("reads back the transcribed spec names and outcome kinds", func(t *testing.T) {
+				require.Equal(t, test.SlicePatternLibraryLendingSpecNames, test.DeclaredSpecNames(model))
+				require.Equal(t, test.SlicePatternLibraryLendingOutcomeKinds, test.DeclaredSpecOutcomeKinds(model))
+			})
+
+			t.Run("WithoutSpecs returns a distinct model whose slices state no spec", func(t *testing.T) {
+				withoutSpecs := test.WithoutSpecs(model)
+
+				require.NotNil(t, withoutSpecs)
+				require.False(t, cmp.Equal(model, withoutSpecs), "WithoutSpecs must differ from the original")
+				require.Empty(t, test.DeclaredSpecNames(withoutSpecs))
+				require.Empty(t, test.DeclaredSpecOutcomeKinds(withoutSpecs))
+			})
+
+			t.Run("the original still reads back both transcriptions after WithoutSpecs", func(t *testing.T) {
+				_ = test.WithoutSpecs(model)
+
+				require.Equal(t, test.SlicePatternLibraryLendingSpecNames, test.DeclaredSpecNames(model))
+				require.Equal(t, test.SlicePatternLibraryLendingOutcomeKinds, test.DeclaredSpecOutcomeKinds(model))
+			})
+
+			t.Run("loses the view outcome if the view spec is removed", func(t *testing.T) {
+				source := strings.Replace(test.SlicePatternLibraryLending, "then view MemberLoansView", "then [CopyBorrowed]", 1)
+				stripped := parseModel(t, source)
+
+				requireSpecCoverage(t, source, declaredSpecs(stripped))
+				requireSpecOutcomeKindsFails(t, declaredSpecs(stripped), "view")
+			})
+
+			t.Run("loses the command outcome if both automation specs are rewritten as event lists", func(t *testing.T) {
+				source := test.SlicePatternLibraryLending
+				source = strings.Replace(source, "then command RemindMember", "then [MemberReminded]", 1)
+				source = strings.Replace(source, "then command RecallCopy", "then [CopyRecalled]", 1)
+				stripped := parseModel(t, source)
+
+				requireSpecCoverage(t, source, declaredSpecs(stripped))
+				requireSpecOutcomeKindsFails(t, declaredSpecs(stripped), "command")
+			})
+
+			t.Run("loses the no-when shape if every spec is given a when", func(t *testing.T) {
+				source := test.SlicePatternLibraryLending
+				source = strings.Replace(source, "spec \"lists the loans a member holds\" {\n        then view MemberLoansView", "spec \"lists the loans a member holds\" {\n        when BorrowCopy\n        then view MemberLoansView", 1)
+				source = strings.Replace(source, "spec \"recalls copies that are overdue\" {\n        then command RecallCopy", "spec \"recalls copies that are overdue\" {\n        when RecallCopy\n        then command RecallCopy", 1)
+				stripped := parseModel(t, source)
+
+				requireSpecCoverage(t, source, declaredSpecs(stripped))
+				requireSpecOutcomeKindsFails(t, declaredSpecs(stripped), "no-when")
+			})
 		})
 
 		t.Run("a spec whose then names a view records the view outcome", func(t *testing.T) {
@@ -6060,6 +6118,48 @@ func requireSpecCoverage(t *testing.T, source string, specs []*ast.Spec) {
 	require.True(t, thenAboveWhen, "no spec writes its then above its when")
 }
 
+// requireSpecOutcomeKinds guards the three shapes the slice-pattern fixture
+// introduces beyond SpecLibraryLending: a view outcome, a command outcome, and a
+// spec written with no when at all. It is kept separate from requireSpecCoverage
+// because SpecLibraryLending also uses that guard and states none of these three.
+func requireSpecOutcomeKinds(t *testing.T, specs []*ast.Spec) {
+	t.Helper()
+	var viewOutcome, commandOutcome, noWhen bool
+	for _, spec := range specs {
+		viewOutcome = viewOutcome || outcomeKind(spec.Then) == "view"
+		commandOutcome = commandOutcome || outcomeKind(spec.Then) == "command"
+		noWhen = noWhen || spec.When == nil
+	}
+
+	require.True(t, viewOutcome, "no spec states a view outcome")
+	require.True(t, commandOutcome, "no spec states a command outcome")
+	require.True(t, noWhen, "no spec omits its when")
+}
+
+// requireSpecOutcomeKindsFails asserts that the given specs are missing exactly
+// the shape named by missing, so a fixture stripped of one of the three new
+// shapes fails the sibling guard.
+func requireSpecOutcomeKindsFails(t *testing.T, specs []*ast.Spec, missing string) {
+	t.Helper()
+	var viewOutcome, commandOutcome, noWhen bool
+	for _, spec := range specs {
+		viewOutcome = viewOutcome || outcomeKind(spec.Then) == "view"
+		commandOutcome = commandOutcome || outcomeKind(spec.Then) == "command"
+		noWhen = noWhen || spec.When == nil
+	}
+
+	switch missing {
+	case "view":
+		require.False(t, viewOutcome, "expected no view outcome after deleting the shape")
+	case "command":
+		require.False(t, commandOutcome, "expected no command outcome after deleting the shape")
+	case "no-when":
+		require.False(t, noWhen, "expected every spec to state a when after deleting the shape")
+	default:
+		require.Fail(t, "unknown missing shape", missing)
+	}
+}
+
 func specSourceLines(t *testing.T, source string, spec *ast.Spec) []string {
 	t.Helper()
 	lines := strings.Split(source, "\n")
@@ -6104,6 +6204,18 @@ func declaredSlices(model *ast.Model) []*ast.Slice {
 		}
 	}
 	return slices
+}
+
+func parseModel(t *testing.T, source string) *ast.Model {
+	t.Helper()
+
+	tokens, scanErrs := lexer.Scan(source, "test.emod")
+	require.Empty(t, scanErrs)
+
+	model, parseErrs := parser.New(tokens, "test.emod").Parse()
+	require.Empty(t, parseErrs)
+
+	return model
 }
 
 func declaredInvariant(t *testing.T, filename, source, name, statement string) *ast.Invariant {
