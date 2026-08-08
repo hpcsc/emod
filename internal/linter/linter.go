@@ -118,6 +118,7 @@ func Lint(model *ast.Model) []*diagnostic.Entry {
 	}
 
 	diags = append(diags, checkInvariantNeverExercised(model)...)
+	diags = append(diags, checkGivenOutsideBoundary(model)...)
 
 	slices.SortFunc(diags, func(a, b *diagnostic.Entry) int {
 		aSpec := strings.HasPrefix(a.RuleName, "spec/")
@@ -636,6 +637,74 @@ func scopeUnexercisedInvariants(invariants []*ast.Invariant, slices []*ast.Slice
 		diags = append(diags, warning(inv.NamePos, "spec/invariant-never-exercised",
 			fmt.Sprintf("invariant %q in %s %q is not referenced by any rejection", inv.Name, scopeKind, scopeName)))
 	}
+
+	return diags
+}
+
+func eventHomeIndex(model *ast.Model) map[string]struct {
+	name string
+	kind string
+} {
+	index := make(map[string]struct {
+		name string
+		kind string
+	})
+	for _, ctx := range model.Contexts {
+		for _, ref := range ctx.SliceRefs() {
+			homeName := ctx.Name
+			homeKind := "context"
+			if ref.Aggregate != nil {
+				homeName = ref.Aggregate.Name
+				homeKind = "aggregate"
+			}
+			for _, evt := range ref.Slice.Events {
+				index[evt.Name] = struct {
+					name string
+					kind string
+				}{homeName, homeKind}
+			}
+			for _, tr := range ref.Slice.Translations {
+				if tr.Event != nil {
+					index[tr.Event.Name] = struct {
+						name string
+						kind string
+					}{homeName, homeKind}
+				}
+			}
+		}
+	}
+	return index
+}
+
+func checkGivenOutsideBoundary(model *ast.Model) []*diagnostic.Entry {
+	eventHome := eventHomeIndex(model)
+
+	var diags []*diagnostic.Entry
+	for _, ctx := range model.Contexts {
+		for _, ref := range ctx.SliceRefs() {
+			if ref.Aggregate == nil {
+				continue
+			}
+			for _, spec := range ref.Slice.Specs {
+				for _, given := range spec.Given {
+					home, ok := eventHome[given.Name]
+					if !ok {
+						continue
+					}
+					if home.name == ref.Aggregate.Name {
+						continue
+					}
+					diags = append(diags, warning(given.NamePos, "spec/given-outside-boundary",
+						fmt.Sprintf("given event %q names an event declared by %s %q instead of aggregate %q",
+							given.Name, home.kind, home.name, ref.Aggregate.Name)))
+				}
+			}
+		}
+	}
+
+	slices.SortFunc(diags, func(a, b *diagnostic.Entry) int {
+		return cmp.Compare(a.Line, b.Line)
+	})
 
 	return diags
 }

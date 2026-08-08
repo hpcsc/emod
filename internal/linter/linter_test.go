@@ -4541,6 +4541,455 @@ func TestLint(t *testing.T) {
 			}, reportedLines(diags))
 		})
 	})
+
+	t.Run("spec/given-outside-boundary", func(t *testing.T) {
+		t.Run("aggregate arm: reports a given event from another aggregate", func(t *testing.T) {
+			model := &ast.Model{
+				Contexts: []*ast.Context{
+					{
+						Name: "Lending",
+						Aggregates: []*ast.Aggregate{
+							{
+								Name: "Loan",
+								Slices: []*ast.Slice{
+									{
+										Name: "Borrow Copy",
+										Events: []*ast.Event{
+											{
+												Name: "CopyBorrowed",
+												NamePos: ast.Position{
+													Filename: "lending.emod",
+													Line:     12,
+													Column:   9,
+												},
+											},
+										},
+									},
+								},
+							},
+							{
+								Name: "Reader",
+								Slices: []*ast.Slice{
+									{
+										Name: "Claim Desk",
+										Specs: []*ast.Spec{
+											{
+												Name: "claims a desk",
+												When: &ast.SpecElement{Name: "ClaimDesk"},
+												Given: []*ast.SpecElement{
+													{
+														Name: "CopyBorrowed",
+														NamePos: ast.Position{
+															Filename: "lending.emod",
+															Line:     22,
+															Column:   15,
+														},
+													},
+												},
+											},
+										},
+									},
+								},
+							},
+						},
+					},
+				},
+			}
+
+			diags := linter.Lint(model)
+
+			require.Len(t, diags, 1)
+			require.Equal(t, "spec/given-outside-boundary", diags[0].RuleName)
+			require.Equal(t, diagnostic.Warning, diags[0].Severity)
+			require.Equal(t, `given event "CopyBorrowed" names an event declared by aggregate "Loan" instead of aggregate "Reader"`, diags[0].Message)
+		})
+
+		t.Run("aggregate arm: reports a given event declared in another context", func(t *testing.T) {
+			model := &ast.Model{
+				Contexts: []*ast.Context{
+					{
+						Name: "Lending",
+						Mode: "mixed",
+						Slices: []*ast.Slice{
+							{
+								Name: "Register Member",
+								Commands: []*ast.Command{
+									{
+										Name: "RegisterMember",
+										NamePos: ast.Position{
+											Filename: "lending.emod",
+											Line:     5,
+											Column:   9,
+										},
+										DecidesOn: &ast.DecidesOnClause{
+											Events: []string{"MemberRegistered"},
+											Predicate: &ast.LogicalExpr{
+												Left:  &ast.TagPredicate{Field: "role"},
+												Right: &ast.TagPredicate{Field: "region"},
+											},
+										},
+									},
+								},
+								Events: []*ast.Event{
+									{
+										Name: "MemberRegistered",
+										NamePos: ast.Position{
+											Filename: "lending.emod",
+											Line:     12,
+											Column:   9,
+										},
+										Tags: []ast.TagEntry{{Key: "role", FieldRef: "member"}, {Key: "region", FieldRef: "country"}},
+									},
+								},
+								Specs: []*ast.Spec{
+									{
+										Name: "registers a new member",
+										When: &ast.SpecElement{Name: "RegisterMember"},
+										Then: &ast.ThenEvents{},
+									},
+									{
+										Name: "refuses a duplicate",
+										When: &ast.SpecElement{Name: "RegisterMember"},
+										Then: &ast.ThenRejected{InvariantName: "OneMemberPerEmail"},
+									},
+								},
+							},
+						},
+					},
+					{
+						Name: "Reading Room",
+						Aggregates: []*ast.Aggregate{
+							{
+								Name: "Desk",
+								Slices: []*ast.Slice{
+									{
+										Name: "Claim Desk",
+										Specs: []*ast.Spec{
+											{
+												Name: "claims a desk",
+												When: &ast.SpecElement{Name: "ClaimDesk"},
+												Given: []*ast.SpecElement{
+													{
+														Name: "MemberRegistered",
+														NamePos: ast.Position{
+															Filename: "lending.emod",
+															Line:     18,
+															Column:   15,
+														},
+													},
+												},
+											},
+										},
+									},
+								},
+							},
+						},
+					},
+				},
+			}
+
+			diags := linter.Lint(model)
+
+			require.Len(t, diags, 1)
+			require.Equal(t, `given event "MemberRegistered" names an event declared by context "Lending" instead of aggregate "Desk"`, diags[0].Message)
+		})
+
+		t.Run("aggregate arm: reports nothing when the event is declared by a sibling slice of the same aggregate", func(t *testing.T) {
+			model := &ast.Model{
+				Contexts: []*ast.Context{
+					{
+						Name: "Lending",
+						Aggregates: []*ast.Aggregate{
+							{
+								Name: "Loan",
+								Slices: []*ast.Slice{
+									{
+										Name: "Borrow Copy",
+										Events: []*ast.Event{
+											{
+												Name: "CopyBorrowed",
+												NamePos: ast.Position{
+													Filename: "lending.emod",
+													Line:     8,
+													Column:   9,
+												},
+											},
+										},
+									},
+									{
+										Name: "Return Copy",
+										Specs: []*ast.Spec{
+											{
+												Name: "returns a copy",
+												When: &ast.SpecElement{Name: "ReturnCopy"},
+												Given: []*ast.SpecElement{
+													{
+														Name: "CopyBorrowed",
+														NamePos: ast.Position{
+															Filename: "lending.emod",
+															Line:     16,
+															Column:   15,
+														},
+													},
+												},
+											},
+										},
+									},
+								},
+							},
+						},
+					},
+				},
+			}
+
+			diags := linter.Lint(model)
+
+			require.Empty(t, diags)
+		})
+
+		t.Run("aggregate arm: an event inside a translation counts as declared by the slice", func(t *testing.T) {
+			model := &ast.Model{
+				Contexts: []*ast.Context{
+					{
+						Name: "Lending",
+						Aggregates: []*ast.Aggregate{
+							{
+								Name: "Loan",
+								Slices: []*ast.Slice{
+									{
+										Name: "Borrow Copy",
+										Translations: []*ast.Translation{
+											{
+												Event: &ast.Event{
+													Name: "CopyBorrowed",
+													NamePos: ast.Position{
+														Filename: "lending.emod",
+														Line:     8,
+														Column:   9,
+													},
+												},
+											},
+										},
+									},
+									{
+										Name: "Return Copy",
+										Specs: []*ast.Spec{
+											{
+												Name: "returns a copy",
+												When: &ast.SpecElement{Name: "ReturnCopy"},
+												Given: []*ast.SpecElement{
+													{
+														Name: "CopyBorrowed",
+														NamePos: ast.Position{
+															Filename: "lending.emod",
+															Line:     16,
+															Column:   15,
+														},
+													},
+												},
+											},
+										},
+									},
+								},
+							},
+						},
+					},
+				},
+			}
+
+			diags := linter.Lint(model)
+
+			require.Empty(t, diags)
+		})
+
+		t.Run("aggregate arm: an undeclared given event produces no diagnostic", func(t *testing.T) {
+			model := &ast.Model{
+				Contexts: []*ast.Context{
+					{
+						Name: "Lending",
+						Aggregates: []*ast.Aggregate{
+							{
+								Name: "Loan",
+								Slices: []*ast.Slice{
+									{
+										Name: "Borrow Copy",
+										Specs: []*ast.Spec{
+											{
+												Name: "borrows a copy",
+												When: &ast.SpecElement{Name: "BorrowCopy"},
+												Given: []*ast.SpecElement{
+													{
+														Name: "UnknownEvent",
+														NamePos: ast.Position{
+															Filename: "lending.emod",
+															Line:     8,
+															Column:   15,
+														},
+													},
+												},
+											},
+										},
+									},
+								},
+							},
+						},
+					},
+				},
+			}
+
+			diags := linter.Lint(model)
+
+			require.Empty(t, diags)
+		})
+
+		t.Run("aggregate arm: empty or missing given produces no diagnostic", func(t *testing.T) {
+			model := &ast.Model{
+				Contexts: []*ast.Context{
+					{
+						Name: "Lending",
+						Aggregates: []*ast.Aggregate{
+							{
+								Name: "Loan",
+								Slices: []*ast.Slice{
+									{
+										Name: "Borrow Copy",
+										Specs: []*ast.Spec{
+											{
+												Name: "borrows a copy",
+												When: &ast.SpecElement{Name: "BorrowCopy"},
+												Given: []*ast.SpecElement{},
+											},
+											{
+												Name: "returns a copy",
+												When: &ast.SpecElement{Name: "ReturnCopy"},
+											},
+										},
+									},
+								},
+							},
+						},
+					},
+				},
+			}
+
+			diags := linter.Lint(model)
+
+			require.Empty(t, diags)
+		})
+
+		t.Run("aggregate arm: reports every offending name in declaration order", func(t *testing.T) {
+			model := &ast.Model{
+				Contexts: []*ast.Context{
+					{
+						Name: "Lending",
+						Aggregates: []*ast.Aggregate{
+							{
+								Name: "Loan",
+								Slices: []*ast.Slice{
+									{
+										Name: "Borrow Copy",
+										Events: []*ast.Event{
+											{
+												Name: "CopyBorrowed",
+												NamePos: ast.Position{
+													Filename: "lending.emod",
+													Line:     8,
+													Column:   9,
+												},
+											},
+											{
+												Name: "CopyReturned",
+												NamePos: ast.Position{
+													Filename: "lending.emod",
+													Line:     10,
+													Column:   9,
+												},
+											},
+										},
+									},
+								},
+							},
+							{
+								Name: "Reader",
+								Slices: []*ast.Slice{
+									{
+										Name: "Claim Desk",
+										Specs: []*ast.Spec{
+											{
+												Name: "claims a desk",
+												When: &ast.SpecElement{Name: "ClaimDesk"},
+												Given: []*ast.SpecElement{
+													{
+														Name: "CopyBorrowed",
+														NamePos: ast.Position{
+															Filename: "lending.emod",
+															Line:     22,
+															Column:   15,
+														},
+													},
+													{
+														Name: "CopyReturned",
+														NamePos: ast.Position{
+															Filename: "lending.emod",
+															Line:     23,
+															Column:   15,
+														},
+													},
+												},
+											},
+										},
+									},
+								},
+							},
+						},
+					},
+				},
+			}
+
+			diags := linter.Lint(model)
+
+			require.Equal(t, []string{
+				`lending.emod:22: [spec/given-outside-boundary] given event "CopyBorrowed" names an event declared by aggregate "Loan" instead of aggregate "Reader"`,
+				`lending.emod:23: [spec/given-outside-boundary] given event "CopyReturned" names an event declared by aggregate "Loan" instead of aggregate "Reader"`,
+			}, reportedLines(diags))
+		})
+
+		t.Run("aggregate arm: a DCB context-level spec produces no diagnostic from this arm", func(t *testing.T) {
+			model := &ast.Model{
+				Contexts: []*ast.Context{
+					{
+						Name: "Reading Room",
+						Mode: "dcb",
+						Slices: []*ast.Slice{
+							{
+								Name: "Claim Desk",
+								Specs: []*ast.Spec{
+									{
+										Name: "claims a desk",
+										When: &ast.SpecElement{Name: "ClaimDesk"},
+										Given: []*ast.SpecElement{
+											{
+												Name: "DeskClaimed",
+												NamePos: ast.Position{
+													Filename: "reading.emod",
+													Line:     5,
+													Column:   15,
+												},
+											},
+										},
+									},
+								},
+							},
+						},
+					},
+				},
+			}
+
+			diags := linter.Lint(model)
+
+			require.Empty(t, diags)
+		})
+	})
 }
 
 func reportedLines(diags []*diagnostic.Entry) []string {

@@ -339,6 +339,80 @@ context "Lending" {
 }
 `
 
+// givenOutsideBoundaryEmod declares two aggregates with specs and rejections
+// exercising every command and invariant so Tasks 2, 3 and 4 stay quiet, and
+// states a given naming the other aggregate's event so spec/given-outside-boundary
+// reports it and no other rule fires.
+const givenOutsideBoundaryEmod = `model "Lending"
+
+context "Lending" {
+  aggregate "Loan" {
+    invariant OneCopyPerLoan "A loan covers exactly one copy"
+    slice "Borrow Copy" {
+      command BorrowCopy {
+        fields {
+          memberId string required
+          copyId   string required
+        }
+      }
+      event CopyBorrowed {
+        fields {
+          loanId   string required
+          memberId string required
+          copyId   string required
+        }
+      }
+      flow {
+        command -> event: BorrowCopy -> CopyBorrowed
+      }
+      spec "borrows a copy" {
+        when BorrowCopy
+        then [CopyBorrowed]
+      }
+      spec "refuses a copy already on loan" {
+        given [CopyBorrowed]
+        when BorrowCopy
+        then rejected OneCopyPerLoan
+      }
+    }
+  }
+  aggregate "Reader" {
+    invariant OneReaderPerFloor "A reader stays on one floor"
+    slice "Claim Floor" {
+      command ClaimFloor {
+        fields {
+          readerId string required
+          floorId  string required
+        }
+      }
+      event FloorClaimed {
+        fields {
+          claimId  string required
+          readerId string required
+          floorId  string required
+        }
+      }
+      flow {
+        command -> event: ClaimFloor -> FloorClaimed
+      }
+      spec "claims a floor" {
+        when ClaimFloor
+        then [FloorClaimed]
+      }
+      spec "refuses a floor another reader holds" {
+        when ClaimFloor
+        then rejected OneReaderPerFloor
+      }
+      spec "refuses when the member already borrowed a copy" {
+        given [CopyBorrowed]
+        when ClaimFloor
+        then rejected OneReaderPerFloor
+      }
+    }
+  }
+}
+`
+
 func captureStdout(t *testing.T, fn func()) string {
 	t.Helper()
 	old := os.Stdout
@@ -843,6 +917,43 @@ context "Orders" {
 			require.Contains(t, err.Error(), `invariant "FiveCopiesPerMember" in aggregate "Loan" is not referenced by any rejection`)
 		})
 	})
+
+	t.Run("spec/given-outside-boundary", func(t *testing.T) {
+		t.Run("json output reports the rule at warning severity and exits 1", func(t *testing.T) {
+			path := writeTemp(t, "outside_boundary.emod", givenOutsideBoundaryEmod)
+
+			var err error
+			output := captureStdout(t, func() {
+				err = cli.RunLint(path, "json")
+			})
+
+			var lintErr *cli.LintError
+			require.True(t, errors.As(err, &lintErr))
+			require.Equal(t, 1, lintErr.ExitCode)
+
+			var entries []map[string]interface{}
+			require.NoError(t, json.Unmarshal([]byte(output), &entries))
+			require.Len(t, entries, 1)
+			require.Equal(t, "warning", entries[0]["severity"])
+			require.Equal(t, "spec/given-outside-boundary", entries[0]["rule"])
+			require.Equal(t, path, entries[0]["file"])
+			require.Contains(t, entries[0]["message"], "CopyBorrowed")
+			require.Contains(t, entries[0]["message"], "aggregate")
+		})
+
+		t.Run("text output names the rule, the event and the line it is written on", func(t *testing.T) {
+			path := writeTemp(t, "outside_boundary.emod", givenOutsideBoundaryEmod)
+
+			err := cli.RunLint(path, "text")
+
+			var lintErr *cli.LintError
+			require.True(t, errors.As(err, &lintErr))
+			require.Equal(t, 1, lintErr.ExitCode)
+			require.Contains(t, err.Error(), path)
+			require.Contains(t, err.Error(), "[spec/given-outside-boundary]")
+			require.Contains(t, err.Error(), `given event "CopyBorrowed" names an event declared by aggregate "Loan" instead of aggregate "Reader"`)
+		})
+	})
 }
 
 func TestLintExplain(t *testing.T) {
@@ -936,6 +1047,7 @@ func TestLintExplain(t *testing.T) {
 			"spec/command-without-spec",
 			"spec/no-rejection-path",
 			"spec/invariant-never-exercised",
+			"spec/given-outside-boundary",
 		}
 		for _, rule := range rules {
 			t.Run(rule, func(t *testing.T) {
