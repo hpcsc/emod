@@ -678,6 +678,10 @@ context "Lending" {
         when CopyBorrowed
         then command RemindMember
       }
+      spec "sanctions a member's loan" {
+        when RemindMember
+        then [MemberReminded]
+      }
     }
 
     slice "Sweep Overdue Loans" {
@@ -712,6 +716,10 @@ context "Lending" {
       spec "recalls copies that are overdue" {
         then command RecallCopy
       }
+      spec "calls in a copy before its due date" {
+        when RecallCopy
+        then [CopyRecalled]
+      }
     }
 
     slice "Return Copy" {
@@ -730,6 +738,10 @@ context "Lending" {
       }
       flow {
         command -> event: ReturnCopy -> CopyReturned
+      }
+      spec "returns a loaned copy to the library" {
+        when ReturnCopy
+        then [CopyReturned]
       }
     }
   }
@@ -1387,7 +1399,10 @@ var SlicePatternLibraryLendingSpecNames = []string{
 	"borrows a copy the member before returned",
 	"lists the loans a member holds",
 	"reminds a member when a copy becomes due",
+	"sanctions a member's loan",
 	"recalls copies that are overdue",
+	"calls in a copy before its due date",
+	"returns a loaned copy to the library",
 	"seats a reader at a free desk",
 	"refuses a desk another reader is seated at",
 	"imports a desk booking from an external system",
@@ -1403,7 +1418,10 @@ var SlicePatternLibraryLendingOutcomeKinds = []string{
 	"events",
 	"view",
 	"command",
+	"events",
 	"command",
+	"events",
+	"events",
 	"events",
 	"rejection",
 	"events",

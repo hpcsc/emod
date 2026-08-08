@@ -3612,6 +3612,325 @@ func TestLint(t *testing.T) {
 			}, reportedLines(diags))
 		})
 	})
+
+	t.Run("spec/command-without-spec", func(t *testing.T) {
+		t.Run("reports a command no spec exercises at info severity", func(t *testing.T) {
+			model := &ast.Model{
+				Contexts: []*ast.Context{
+					{
+						Name: "Lending",
+						Aggregates: []*ast.Aggregate{
+							{
+								Name: "Loan",
+								Slices: []*ast.Slice{
+									{
+										Name: "Borrow Copy",
+										Commands: []*ast.Command{
+											{
+												Name: "BorrowCopy",
+												NamePos: ast.Position{
+													Filename: "lending.emod",
+													Line:     5,
+													Column:   7,
+												},
+											},
+										},
+										Specs: []*ast.Spec{
+											{
+												Name: "borrows a copy no one holds",
+												When: &ast.SpecElement{
+													Name: "BorrowCopy",
+												},
+											},
+										},
+									},
+									{
+										Name: "Return Copy",
+										Commands: []*ast.Command{
+											{
+												Name: "ReturnCopy",
+												NamePos: ast.Position{
+													Filename: "lending.emod",
+													Line:     15,
+													Column:   7,
+												},
+											},
+										},
+									},
+								},
+							},
+						},
+					},
+				},
+			}
+
+			diags := linter.Lint(model)
+
+			require.Len(t, diags, 1)
+			require.Equal(t, "spec/command-without-spec", diags[0].RuleName)
+			require.Equal(t, diagnostic.Info, diags[0].Severity)
+			require.Equal(t, "lending.emod", diags[0].Filename)
+			require.Equal(t, 15, diags[0].Line)
+			require.Equal(t, `command "ReturnCopy" is not exercised by any spec`, diags[0].Message)
+		})
+
+		t.Run("reports nothing when no model-wide spec exists", func(t *testing.T) {
+			model := &ast.Model{
+				Contexts: []*ast.Context{
+					{
+						Name: "Lending",
+						Aggregates: []*ast.Aggregate{
+							{
+								Name: "Loan",
+								Slices: []*ast.Slice{
+									{
+										Name: "Borrow Copy",
+										Commands: []*ast.Command{
+											{
+												Name: "BorrowCopy",
+												NamePos: ast.Position{
+													Filename: "lending.emod",
+													Line:     5,
+													Column:   7,
+												},
+											},
+										},
+									},
+									{
+										Name: "Return Copy",
+										Commands: []*ast.Command{
+											{
+												Name: "ReturnCopy",
+												NamePos: ast.Position{
+													Filename: "lending.emod",
+													Line:     15,
+													Column:   7,
+												},
+											},
+										},
+									},
+								},
+							},
+						},
+					},
+				},
+			}
+
+			diags := linter.Lint(model)
+
+			require.Empty(t, diags)
+		})
+
+		t.Run("reports nothing for a command exercised by any spec", func(t *testing.T) {
+			model := &ast.Model{
+				Contexts: []*ast.Context{
+					{
+						Name: "Lending",
+						Aggregates: []*ast.Aggregate{
+							{
+								Name: "Loan",
+								Slices: []*ast.Slice{
+									{
+										Name: "Borrow Copy",
+										Commands: []*ast.Command{
+											{
+												Name: "BorrowCopy",
+												NamePos: ast.Position{
+													Filename: "lending.emod",
+													Line:     5,
+													Column:   7,
+												},
+											},
+										},
+										Specs: []*ast.Spec{
+											{
+												Name: "borrows a copy no one holds",
+												When: &ast.SpecElement{
+													Name: "BorrowCopy",
+												},
+											},
+										},
+									},
+								},
+							},
+						},
+					},
+				},
+			}
+
+			diags := linter.Lint(model)
+
+			require.Empty(t, diags)
+		})
+
+		t.Run("coverage reaches across slices", func(t *testing.T) {
+			model := &ast.Model{
+				Contexts: []*ast.Context{
+					{
+						Name: "Lending",
+						Aggregates: []*ast.Aggregate{
+							{
+								Name: "Loan",
+								Slices: []*ast.Slice{
+									{
+										Name: "Borrow Copy",
+										Commands: []*ast.Command{
+											{
+												Name: "BorrowCopy",
+												NamePos: ast.Position{
+													Filename: "lending.emod",
+													Line:     5,
+													Column:   7,
+												},
+											},
+										},
+									},
+									{
+										Name: "Return Copy",
+										Commands: []*ast.Command{
+											{
+												Name: "ReturnCopy",
+												NamePos: ast.Position{
+													Filename: "lending.emod",
+													Line:     15,
+													Column:   7,
+												},
+											},
+										},
+										Specs: []*ast.Spec{
+											{
+												Name: "returns a copy the member holds",
+												When: &ast.SpecElement{
+													Name: "ReturnCopy",
+												},
+											},
+										},
+									},
+									{
+										Name: "Review Member Loans",
+										Specs: []*ast.Spec{
+											{
+												Name: "covers a command in an earlier slice",
+												When: &ast.SpecElement{
+													Name: "BorrowCopy",
+												},
+											},
+										},
+									},
+								},
+							},
+						},
+					},
+				},
+			}
+
+			diags := linter.Lint(model)
+
+			require.Empty(t, diags)
+		})
+
+		t.Run("a spec whose when is absent exercises no command", func(t *testing.T) {
+			model := &ast.Model{
+				Contexts: []*ast.Context{
+					{
+						Name: "Lending",
+						Aggregates: []*ast.Aggregate{
+							{
+								Name: "Loan",
+								Slices: []*ast.Slice{
+									{
+										Name: "Borrow Copy",
+										Commands: []*ast.Command{
+											{
+												Name: "BorrowCopy",
+												NamePos: ast.Position{
+													Filename: "lending.emod",
+													Line:     5,
+													Column:   7,
+												},
+											},
+										},
+										Specs: []*ast.Spec{
+											{
+												Name: "has no when clause",
+											},
+										},
+									},
+								},
+							},
+						},
+					},
+				},
+			}
+
+			diags := linter.Lint(model)
+
+			require.Len(t, diags, 1)
+			require.Equal(t, "spec/command-without-spec", diags[0].RuleName)
+			require.Equal(t, `command "BorrowCopy" is not exercised by any spec`, diags[0].Message)
+		})
+
+		t.Run("reports uncovered commands from both slice homes in declaration order", func(t *testing.T) {
+			model := &ast.Model{
+				Contexts: []*ast.Context{
+					{
+						Name: "Lending",
+						Mode: "mixed",
+						Aggregates: []*ast.Aggregate{
+							{
+								Name: "Loan",
+								Slices: []*ast.Slice{
+									{
+										Name: "Borrow Copy",
+										Commands: []*ast.Command{
+											{
+												Name: "BorrowCopy",
+												NamePos: ast.Position{
+													Filename: "lending.emod",
+													Line:     5,
+													Column:   7,
+												},
+											},
+										},
+									},
+								},
+							},
+						},
+						Slices: []*ast.Slice{
+							{
+								Name: "Release Desk",
+								Commands: []*ast.Command{
+									{
+										Name: "ReleaseDesk",
+										NamePos: ast.Position{
+											Filename: "lending.emod",
+											Line:     20,
+											Column:   7,
+										},
+									},
+								},
+								Specs: []*ast.Spec{
+									{
+										Name: "has a spec but for a different command",
+										When: &ast.SpecElement{
+											Name: "ClaimDesk",
+										},
+									},
+								},
+							},
+						},
+					},
+				},
+			}
+
+			diags := linter.Lint(model)
+
+			require.Equal(t, []string{
+				`lending.emod:5: [spec/command-without-spec] command "BorrowCopy" is not exercised by any spec`,
+				`lending.emod:20: [spec/command-without-spec] command "ReleaseDesk" is not exercised by any spec`,
+			}, reportedLines(diags))
+		})
+	})
 }
 
 func reportedLines(diags []*diagnostic.Entry) []string {

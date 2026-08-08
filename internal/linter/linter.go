@@ -61,6 +61,20 @@ func Lint(model *ast.Model) []*diagnostic.Entry {
 		}
 	}
 
+	// Collect which commands are exercised by at least one spec, model-wide,
+	// and whether the model states any spec at all — the gate that silences
+	// spec/command-without-spec for a model that has not adopted specs.
+	hasSpec := false
+	exercisedCommands := make(map[string]bool)
+	for _, slice := range model.AllSlices() {
+		for _, spec := range slice.Specs {
+			hasSpec = true
+			if spec.When != nil {
+				exercisedCommands[spec.When.Name] = true
+			}
+		}
+	}
+
 	for _, ctx := range model.Contexts {
 		// Mode-aware checks
 		if isAggregateMode(ctx.Mode) {
@@ -95,16 +109,23 @@ func Lint(model *ast.Model) []*diagnostic.Entry {
 			if ref.Aggregate != nil {
 				aggregateName = ref.Aggregate.Name
 			}
-			diags = append(diags, checkSlice(ref.Slice, aggregateName, flowCount)...)
+			diags = append(diags, checkSlice(ref.Slice, aggregateName, flowCount, hasSpec, exercisedCommands)...)
 		}
 	}
+
+	slices.SortFunc(diags, func(a, b *diagnostic.Entry) int {
+		if a.RuleName == "spec/command-without-spec" && b.RuleName == "spec/command-without-spec" {
+			return cmp.Compare(a.Line, b.Line)
+		}
+		return 0
+	})
 
 	return diags
 }
 
 // checkSlice applies all existing lint checks to a single slice.
 // aggregateName is used for property-sourcing detection; pass "" for context-level slices.
-func checkSlice(slice *ast.Slice, aggregateName string, flowCount map[string]int) []*diagnostic.Entry {
+func checkSlice(slice *ast.Slice, aggregateName string, flowCount map[string]int, hasSpec bool, exercisedCommands map[string]bool) []*diagnostic.Entry {
 	var diags []*diagnostic.Entry
 	for _, evt := range slice.Events {
 		diags = append(diags, checkEvent(evt, aggregateName)...)
@@ -125,6 +146,9 @@ func checkSlice(slice *ast.Slice, aggregateName string, flowCount map[string]int
 			diags = append(diags, d)
 		}
 		if d := checkLeftChair(cmd, flowCount); d != nil {
+			diags = append(diags, d)
+		}
+		if d := checkCommandWithoutSpec(cmd, hasSpec, exercisedCommands); d != nil {
 			diags = append(diags, d)
 		}
 	}
@@ -492,6 +516,16 @@ func checkLeftChair(cmd *ast.Command, flowCount map[string]int) *diagnostic.Entr
 		return errorEntry(cmd.NamePos, "left-chair", fmt.Sprintf("command %q is referenced by %d flows; consider splitting into specialized commands to reduce coupling", cmd.Name, flowCount[cmd.Name]))
 	}
 	return nil
+}
+
+func checkCommandWithoutSpec(cmd *ast.Command, hasSpec bool, exercisedCommands map[string]bool) *diagnostic.Entry {
+	if !hasSpec {
+		return nil
+	}
+	if exercisedCommands[cmd.Name] {
+		return nil
+	}
+	return info(cmd.NamePos, "spec/command-without-spec", fmt.Sprintf("command %q is not exercised by any spec", cmd.Name))
 }
 
 func checkMissingTodoList(auto *ast.Automation) *diagnostic.Entry {

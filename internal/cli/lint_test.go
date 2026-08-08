@@ -180,6 +180,57 @@ context "Lending" {
 }
 `
 
+// commandWithoutSpecEmod states a spec for one command and leaves another
+// uncovered, so spec/command-without-spec reports the uncovered command at info
+// severity and no other rule fires.
+const commandWithoutSpecEmod = `model "Lending"
+
+context "Lending" {
+  aggregate "Loan" {
+    slice "Borrow Copy" {
+      command BorrowCopy {
+        fields {
+          memberId string required
+          copyId   string required
+        }
+      }
+      event CopyBorrowed {
+        fields {
+          loanId   string required
+          memberId string required
+          copyId   string required
+        }
+      }
+      flow {
+        command -> event: BorrowCopy -> CopyBorrowed
+      }
+      spec "borrows a copy no one holds" {
+        when BorrowCopy
+        then [CopyBorrowed]
+      }
+    }
+    slice "Return Copy" {
+      command ReturnCopy {
+        fields {
+          loanId string required
+          copyId string required
+        }
+      }
+      event CopyReturned {
+        fields {
+          loanId   string required
+          copyId   string required
+          returnedAt timestamp required
+        }
+      }
+      flow {
+        command -> event: ReturnCopy -> CopyReturned
+      }
+    }
+  }
+}
+`
+
 func captureStdout(t *testing.T, fn func()) string {
 	t.Helper()
 	old := os.Stdout
@@ -572,6 +623,43 @@ context "Orders" {
 			require.Equal(t, path+`:37: [automation/missing-todo-list] automation "RemindOnDueDate" reads no view, so nothing in the model shows what work is outstanding; project a view of pending work and read it`, err.Error())
 		})
 	})
+
+	t.Run("spec/command-without-spec", func(t *testing.T) {
+		t.Run("json output reports the rule at info severity and exits 1", func(t *testing.T) {
+			path := writeTemp(t, "uncovered_command.emod", commandWithoutSpecEmod)
+
+			var err error
+			output := captureStdout(t, func() {
+				err = cli.RunLint(path, "json")
+			})
+
+			var lintErr *cli.LintError
+			require.True(t, errors.As(err, &lintErr))
+			require.Equal(t, 1, lintErr.ExitCode)
+
+			var entries []map[string]interface{}
+			require.NoError(t, json.Unmarshal([]byte(output), &entries))
+			require.Len(t, entries, 1)
+			require.Equal(t, "info", entries[0]["severity"])
+			require.Equal(t, "spec/command-without-spec", entries[0]["rule"])
+			require.Equal(t, path, entries[0]["file"])
+			require.Equal(t, float64(28), entries[0]["line"])
+			require.Contains(t, entries[0]["message"], "ReturnCopy")
+		})
+
+		t.Run("text output names the rule, the command and the line it is declared on", func(t *testing.T) {
+			path := writeTemp(t, "uncovered_command.emod", commandWithoutSpecEmod)
+
+			err := cli.RunLint(path, "text")
+
+			var lintErr *cli.LintError
+			require.True(t, errors.As(err, &lintErr))
+			require.Equal(t, 1, lintErr.ExitCode)
+			require.Contains(t, err.Error(), path)
+			require.Contains(t, err.Error(), "[spec/command-without-spec]")
+			require.Contains(t, err.Error(), `command "ReturnCopy" is not exercised by any spec`)
+		})
+	})
 }
 
 func TestLintExplain(t *testing.T) {
@@ -602,6 +690,16 @@ func TestLintExplain(t *testing.T) {
 
 		require.Contains(t, output, "todo list")
 		require.Regexp(t, `\breads\b`, output)
+	})
+
+	t.Run("spec rule prints description and returns no error", func(t *testing.T) {
+		output := captureStdout(t, func() {
+			err := cli.RunLintExplain("spec/command-without-spec")
+			require.NoError(t, err)
+		})
+
+		require.Contains(t, output, "no spec exercises")
+		require.Contains(t, output, "not adopted specs")
 	})
 
 	t.Run("validator-emitted orphan rules print descriptions and return no error", func(t *testing.T) {
@@ -642,6 +740,7 @@ func TestLintExplain(t *testing.T) {
 			"dcb/single-tag-everywhere",
 			"dcb/orphan-tag-key",
 			"automation/missing-todo-list",
+			"spec/command-without-spec",
 		}
 		for _, rule := range rules {
 			t.Run(rule, func(t *testing.T) {

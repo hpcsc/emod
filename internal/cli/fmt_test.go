@@ -590,6 +590,11 @@ context "Lending" {
         when CopyBorrowed
         then command RemindMember
       }
+
+      spec "sanctions a member's loan" {
+        when RemindMember
+        then [MemberReminded]
+      }
     }
 
     slice "Sweep Overdue Loans" {
@@ -629,6 +634,11 @@ context "Lending" {
       spec "recalls copies that are overdue" {
         then command RecallCopy
       }
+
+      spec "calls in a copy before its due date" {
+        when RecallCopy
+        then [CopyRecalled]
+      }
     }
 
     slice "Return Copy" {
@@ -649,6 +659,11 @@ context "Lending" {
 
       flow {
         command -> event: ReturnCopy -> CopyReturned
+      }
+
+      spec "returns a loaned copy to the library" {
+        when ReturnCopy
+        then [CopyReturned]
       }
     }
   }

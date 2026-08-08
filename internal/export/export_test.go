@@ -4665,11 +4665,28 @@ var slicePatternLibraryLendingSpecs = map[string][]map[string]any{
 			"when": "CopyBorrowed",
 			"then": map[string]any{"command": "RemindMember"},
 		},
+		{
+			"name": "sanctions a member's loan",
+			"when": "RemindMember",
+			"then": map[string]any{"events": []any{"MemberReminded"}},
+		},
 	},
 	"Sweep Overdue Loans": {
 		{
 			"name": "recalls copies that are overdue",
 			"then": map[string]any{"command": "RecallCopy"},
+		},
+		{
+			"name": "calls in a copy before its due date",
+			"when": "RecallCopy",
+			"then": map[string]any{"events": []any{"CopyRecalled"}},
+		},
+	},
+	"Return Copy": {
+		{
+			"name": "returns a loaned copy to the library",
+			"when": "ReturnCopy",
+			"then": map[string]any{"events": []any{"CopyReturned"}},
 		},
 	},
 	"Claim Desk": {
