@@ -299,6 +299,46 @@ context "Lending" {
 }
 `
 
+// invariantNeverExercisedEmod declares one unexercised invariant and gives every
+// command a spec and a rejection so spec/command-without-spec and spec/no-rejection-path
+// stay quiet, tripping only spec/invariant-never-exercised.
+const invariantNeverExercisedEmod = `model "Lending"
+
+context "Lending" {
+  aggregate "Loan" {
+    invariant OneCopyPerLoan "A loan covers exactly one copy"
+    invariant FiveCopiesPerMember "A member holds at most five copies at one time"
+    slice "Borrow Copy" {
+      command BorrowCopy {
+        fields {
+          memberId string required
+          copyId   string required
+        }
+      }
+      event CopyBorrowed {
+        fields {
+          loanId   string required
+          memberId string required
+          copyId   string required
+        }
+      }
+      flow {
+        command -> event: BorrowCopy -> CopyBorrowed
+      }
+      spec "borrows a copy no one holds" {
+        when BorrowCopy
+        then [CopyBorrowed]
+      }
+      spec "refuses a copy already on loan" {
+        given [CopyBorrowed]
+        when BorrowCopy
+        then rejected OneCopyPerLoan
+      }
+    }
+  }
+}
+`
+
 func captureStdout(t *testing.T, fn func()) string {
 	t.Helper()
 	old := os.Stdout
@@ -765,6 +805,44 @@ context "Orders" {
 			require.Contains(t, err.Error(), `command "ReturnCopy" is exercised by specs but none states a rejection`)
 		})
 	})
+
+	t.Run("spec/invariant-never-exercised", func(t *testing.T) {
+		t.Run("json output reports the rule at warning severity and exits 1", func(t *testing.T) {
+			path := writeTemp(t, "unexercised_invariant.emod", invariantNeverExercisedEmod)
+
+			var err error
+			output := captureStdout(t, func() {
+				err = cli.RunLint(path, "json")
+			})
+
+			var lintErr *cli.LintError
+			require.True(t, errors.As(err, &lintErr))
+			require.Equal(t, 1, lintErr.ExitCode)
+
+			var entries []map[string]interface{}
+			require.NoError(t, json.Unmarshal([]byte(output), &entries))
+			require.Len(t, entries, 1)
+			require.Equal(t, "warning", entries[0]["severity"])
+			require.Equal(t, "spec/invariant-never-exercised", entries[0]["rule"])
+			require.Equal(t, path, entries[0]["file"])
+			require.Equal(t, float64(6), entries[0]["line"])
+			require.Contains(t, entries[0]["message"], "FiveCopiesPerMember")
+			require.Contains(t, entries[0]["message"], "Loan")
+		})
+
+		t.Run("text output names the rule, the invariant and the line it is declared on", func(t *testing.T) {
+			path := writeTemp(t, "unexercised_invariant.emod", invariantNeverExercisedEmod)
+
+			err := cli.RunLint(path, "text")
+
+			var lintErr *cli.LintError
+			require.True(t, errors.As(err, &lintErr))
+			require.Equal(t, 1, lintErr.ExitCode)
+			require.Contains(t, err.Error(), path)
+			require.Contains(t, err.Error(), "[spec/invariant-never-exercised]")
+			require.Contains(t, err.Error(), `invariant "FiveCopiesPerMember" in aggregate "Loan" is not referenced by any rejection`)
+		})
+	})
 }
 
 func TestLintExplain(t *testing.T) {
@@ -857,6 +935,7 @@ func TestLintExplain(t *testing.T) {
 			"automation/missing-todo-list",
 			"spec/command-without-spec",
 			"spec/no-rejection-path",
+			"spec/invariant-never-exercised",
 		}
 		for _, rule := range rules {
 			t.Run(rule, func(t *testing.T) {

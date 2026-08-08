@@ -4212,6 +4212,335 @@ func TestLint(t *testing.T) {
 			}, reportedLines(diags))
 		})
 	})
+
+	t.Run("spec/invariant-never-exercised", func(t *testing.T) {
+		t.Run("reports an invariant no rejection references in an aggregate scope", func(t *testing.T) {
+			model := &ast.Model{
+				Contexts: []*ast.Context{
+					{
+						Name: "Lending",
+						Aggregates: []*ast.Aggregate{
+							{
+								Name: "Loan",
+								Invariants: []*ast.Invariant{
+									{
+										Name: "OneCopyPerLoan",
+										NamePos: ast.Position{
+											Filename: "lending.emod",
+											Line:     5,
+											Column:   18,
+										},
+									},
+								},
+								Slices: []*ast.Slice{
+									{
+										Name: "Borrow Copy",
+									},
+								},
+							},
+						},
+					},
+				},
+			}
+
+			diags := linter.Lint(model)
+
+			require.Len(t, diags, 1)
+			require.Equal(t, "spec/invariant-never-exercised", diags[0].RuleName)
+			require.Equal(t, diagnostic.Warning, diags[0].Severity)
+			require.Equal(t, `invariant "OneCopyPerLoan" in aggregate "Loan" is not referenced by any rejection`, diags[0].Message)
+		})
+
+		t.Run("reports an invariant no rejection references in a context scope", func(t *testing.T) {
+			model := &ast.Model{
+				Contexts: []*ast.Context{
+					{
+						Name: "Reading Room",
+						Mode: "dcb",
+						Invariants: []*ast.Invariant{
+							{
+								Name: "OneReaderPerDesk",
+								NamePos: ast.Position{
+									Filename: "reading.emod",
+									Line:     5,
+									Column:   18,
+								},
+							},
+						},
+						Slices: []*ast.Slice{
+							{
+								Name: "Claim Desk",
+							},
+						},
+					},
+				},
+			}
+
+			diags := linter.Lint(model)
+
+			require.Len(t, diags, 1)
+			require.Equal(t, diagnostic.Warning, diags[0].Severity)
+			require.Equal(t, `invariant "OneReaderPerDesk" in context "Reading Room" is not referenced by any rejection`, diags[0].Message)
+		})
+
+		t.Run("scope is not inherited: a context rejection does not exercise an aggregate invariant", func(t *testing.T) {
+			model := &ast.Model{
+				Contexts: []*ast.Context{
+					{
+						Name: "Reading Room",
+						Mode: "mixed",
+						Slices: []*ast.Slice{
+							{
+								Name: "Scan Badge",
+								Specs: []*ast.Spec{
+									{
+										Name: "rejects an unknown badge",
+										When: &ast.SpecElement{Name: "ScanBadge"},
+										Then: &ast.ThenRejected{InvariantName: "OneCopyPerLoan"},
+									},
+								},
+							},
+						},
+						Aggregates: []*ast.Aggregate{
+							{
+								Name: "Loan",
+								Invariants: []*ast.Invariant{
+									{
+										Name: "OneCopyPerLoan",
+										NamePos: ast.Position{
+											Filename: "reading.emod",
+											Line:     10,
+											Column:   18,
+										},
+									},
+								},
+								Slices: []*ast.Slice{
+									{
+										Name: "Borrow Copy",
+									},
+								},
+							},
+						},
+					},
+				},
+			}
+
+			diags := linter.Lint(model)
+
+			require.Len(t, diags, 1)
+			require.Equal(t, `invariant "OneCopyPerLoan" in aggregate "Loan" is not referenced by any rejection`, diags[0].Message)
+		})
+
+		t.Run("scope is not inherited: an aggregate rejection does not exercise a context invariant", func(t *testing.T) {
+			model := &ast.Model{
+				Contexts: []*ast.Context{
+					{
+						Name: "Reading Room",
+						Mode: "mixed",
+						Invariants: []*ast.Invariant{
+							{
+								Name: "OneReaderPerDesk",
+								NamePos: ast.Position{
+									Filename: "reading.emod",
+									Line:     5,
+									Column:   18,
+								},
+							},
+						},
+						Slices: []*ast.Slice{
+							{
+								Name: "Scan Badge",
+							},
+						},
+						Aggregates: []*ast.Aggregate{
+							{
+								Name: "Loan",
+								Slices: []*ast.Slice{
+									{
+										Name: "Borrow Copy",
+										Specs: []*ast.Spec{
+											{
+												Name: "rejects a duplicate loan",
+												When: &ast.SpecElement{Name: "BorrowCopy"},
+												Then: &ast.ThenRejected{InvariantName: "OneReaderPerDesk"},
+											},
+										},
+									},
+								},
+							},
+						},
+					},
+				},
+			}
+
+			diags := linter.Lint(model)
+
+			require.Len(t, diags, 1)
+			require.Equal(t, "spec/invariant-never-exercised", diags[0].RuleName)
+			require.Equal(t, `invariant "OneReaderPerDesk" in context "Reading Room" is not referenced by any rejection`, diags[0].Message)
+		})
+
+		t.Run("an unresolved then rejected does not count as a reference", func(t *testing.T) {
+			model := &ast.Model{
+				Contexts: []*ast.Context{
+					{
+						Name: "Lending",
+						Aggregates: []*ast.Aggregate{
+							{
+								Name: "Loan",
+								Invariants: []*ast.Invariant{
+									{
+										Name: "OneCopyPerLoan",
+										NamePos: ast.Position{
+											Filename: "lending.emod",
+											Line:     5,
+											Column:   18,
+										},
+									},
+								},
+								Slices: []*ast.Slice{
+									{
+										Name: "Borrow Copy",
+										Specs: []*ast.Spec{
+											{
+												Name: "rejects with a typoed name",
+												When: &ast.SpecElement{Name: "BorrowCopy"},
+												Then: &ast.ThenRejected{InvariantName: "OneCpyPerLoan"},
+											},
+										},
+									},
+								},
+							},
+						},
+					},
+				},
+			}
+
+			diags := linter.Lint(model)
+
+			require.Len(t, diags, 1)
+			require.Equal(t, "spec/invariant-never-exercised", diags[0].RuleName)
+			require.Equal(t, `invariant "OneCopyPerLoan" in aggregate "Loan" is not referenced by any rejection`, diags[0].Message)
+		})
+
+		t.Run("declaring no invariant produces nothing", func(t *testing.T) {
+			model := &ast.Model{
+				Contexts: []*ast.Context{
+					{
+						Name: "Lending",
+						Aggregates: []*ast.Aggregate{
+							{
+								Name: "Loan",
+								Slices: []*ast.Slice{
+									{
+										Name: "Borrow Copy",
+									},
+								},
+							},
+						},
+					},
+				},
+			}
+
+			diags := linter.Lint(model)
+
+			require.Empty(t, diags)
+		})
+
+		t.Run("an invariant exercised by a rejection produces nothing", func(t *testing.T) {
+			model := &ast.Model{
+				Contexts: []*ast.Context{
+					{
+						Name: "Lending",
+						Aggregates: []*ast.Aggregate{
+							{
+								Name: "Loan",
+								Invariants: []*ast.Invariant{
+									{
+										Name: "OneCopyPerLoan",
+										NamePos: ast.Position{
+											Filename: "lending.emod",
+											Line:     5,
+											Column:   18,
+										},
+									},
+								},
+								Slices: []*ast.Slice{
+									{
+										Name: "Borrow Copy",
+										Specs: []*ast.Spec{
+											{
+												Name: "rejects a copy already on loan",
+												When: &ast.SpecElement{Name: "BorrowCopy"},
+												Then: &ast.ThenRejected{InvariantName: "OneCopyPerLoan"},
+											},
+										},
+									},
+								},
+							},
+						},
+					},
+				},
+			}
+
+			diags := linter.Lint(model)
+
+			require.Empty(t, diags)
+		})
+
+		t.Run("reports findings in declaration order across context and aggregate scopes", func(t *testing.T) {
+			model := &ast.Model{
+				Contexts: []*ast.Context{
+					{
+						Name: "Lending",
+						Mode: "mixed",
+						Invariants: []*ast.Invariant{
+							{
+								Name: "DeskFreeAtClosing",
+								NamePos: ast.Position{
+									Filename: "lending.emod",
+									Line:     26,
+									Column:   18,
+								},
+							},
+						},
+						Slices: []*ast.Slice{
+							{
+								Name: "Scan Badge",
+							},
+						},
+						Aggregates: []*ast.Aggregate{
+							{
+								Name: "Loan",
+								Invariants: []*ast.Invariant{
+									{
+										Name: "OneCopyPerLoan",
+										NamePos: ast.Position{
+											Filename: "lending.emod",
+											Line:     5,
+											Column:   18,
+										},
+									},
+								},
+								Slices: []*ast.Slice{
+									{
+										Name: "Borrow Copy",
+									},
+								},
+							},
+						},
+					},
+				},
+			}
+
+			diags := linter.Lint(model)
+
+			require.Equal(t, []string{
+				`lending.emod:5: [spec/invariant-never-exercised] invariant "OneCopyPerLoan" in aggregate "Loan" is not referenced by any rejection`,
+				`lending.emod:26: [spec/invariant-never-exercised] invariant "DeskFreeAtClosing" in context "Lending" is not referenced by any rejection`,
+			}, reportedLines(diags))
+		})
+	})
 }
 
 func reportedLines(diags []*diagnostic.Entry) []string {

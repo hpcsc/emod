@@ -117,6 +117,8 @@ func Lint(model *ast.Model) []*diagnostic.Entry {
 		}
 	}
 
+	diags = append(diags, checkInvariantNeverExercised(model)...)
+
 	slices.SortFunc(diags, func(a, b *diagnostic.Entry) int {
 		aSpec := strings.HasPrefix(a.RuleName, "spec/")
 		bSpec := strings.HasPrefix(b.RuleName, "spec/")
@@ -579,4 +581,61 @@ func checkClickbaitEvent(evt *ast.Event) *diagnostic.Entry {
 		return errorEntry(evt.NamePos, "clickbait-event", fmt.Sprintf("event %q has a single ID field %q; consider adding domain-relevant fields or inlining the identifier", evt.Name, evt.Fields[0].Name))
 	}
 	return nil
+}
+
+func checkInvariantNeverExercised(model *ast.Model) []*diagnostic.Entry {
+	var diags []*diagnostic.Entry
+
+	for _, ctx := range model.Contexts {
+		diags = append(diags, scopeUnexercisedInvariants(ctx.Invariants, ctx.Slices, "context", ctx.Name)...)
+		for _, agg := range ctx.Aggregates {
+			diags = append(diags, scopeUnexercisedInvariants(agg.Invariants, agg.Slices, "aggregate", agg.Name)...)
+		}
+	}
+
+	slices.SortFunc(diags, func(a, b *diagnostic.Entry) int {
+		return cmp.Compare(a.Line, b.Line)
+	})
+
+	return diags
+}
+
+func rejectionReferences(slices []*ast.Slice, invariants []*ast.Invariant) map[string]bool {
+	declared := make(map[string]bool, len(invariants))
+	for _, inv := range invariants {
+		declared[inv.Name] = true
+	}
+
+	referenced := make(map[string]bool)
+	for _, sl := range slices {
+		for _, spec := range sl.Specs {
+			rejection, ok := spec.Then.(*ast.ThenRejected)
+			if !ok {
+				continue
+			}
+			if declared[rejection.InvariantName] {
+				referenced[rejection.InvariantName] = true
+			}
+		}
+	}
+	return referenced
+}
+
+func scopeUnexercisedInvariants(invariants []*ast.Invariant, slices []*ast.Slice, scopeKind, scopeName string) []*diagnostic.Entry {
+	if len(invariants) == 0 {
+		return nil
+	}
+
+	referenced := rejectionReferences(slices, invariants)
+
+	var diags []*diagnostic.Entry
+	for _, inv := range invariants {
+		if referenced[inv.Name] {
+			continue
+		}
+		diags = append(diags, warning(inv.NamePos, "spec/invariant-never-exercised",
+			fmt.Sprintf("invariant %q in %s %q is not referenced by any rejection", inv.Name, scopeKind, scopeName)))
+	}
+
+	return diags
 }

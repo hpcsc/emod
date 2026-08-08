@@ -199,6 +199,23 @@ context "Lending" {
       flow {
         command -> event: BorrowCopy -> CopyBorrowed
       }
+
+      spec "borrows a copy no one holds" {
+        when BorrowCopy
+        then [CopyBorrowed]
+      }
+
+      spec "refuses a copy already on loan" {
+        given [CopyBorrowed]
+        when BorrowCopy
+        then rejected OneCopyPerLoan
+      }
+
+      spec "refuses when member has five copies" {
+        given [CopyBorrowed]
+        when BorrowCopy
+        then rejected FiveCopiesPerMember
+      }
     }
   }
 }
@@ -233,6 +250,23 @@ context "Reading Room" mode dcb {
     flow {
       command -> event: ClaimDesk -> DeskClaimed
     }
+
+    spec "claims a free desk" {
+      when ClaimDesk
+      then [DeskClaimed]
+    }
+
+    spec "refuses when reader is already seated" {
+      given [DeskClaimed]
+      when ClaimDesk
+      then rejected OneReaderPerDesk
+    }
+
+    spec "refuses when desk is taken" {
+      given [DeskClaimed]
+      when ClaimDesk
+      then rejected OneDeskPerReader
+    }
   }
 }
 ```
@@ -244,7 +278,7 @@ context "Reading Room" mode dcb {
   ```
 
 - **An aggregate and its context are separate scopes**, as are two sibling aggregates. The same identifier may be declared in each, and neither declaration hides the other.
-- **An invariant nothing references is not an error:** no construct refers to an invariant, and neither `emod validate` nor `emod lint` reports one for going unmentioned.
+- **An invariant nothing references is not a validation error:** `emod validate` reports nothing, but `emod lint` warns with `spec/invariant-never-exercised` for an invariant no `then rejected` spec names in its own scope.
 - **`emod fmt` writes them at the top of the block**, after the `description` line and ahead of the block's aggregates and slices, one per line, with the statement written verbatim.
 - **The glossary lists them under the scope that declares them:** `emod glossary` puts an "Invariants" group under each aggregate and each context declaring one, in declaration order, with the statement standing as the definition. `emod glossary --format json` carries the same grouping, pairing each name with a `description` key holding the statement.
 - **Exports carry them:** `emod export --format json` and `emod export --format cue` emit an `invariants` list of `name` and `statement` on every aggregate and context that declares one; the key is absent where none was written. The bundled schema printed by `emod schema` declares it as an optional key on both definitions.

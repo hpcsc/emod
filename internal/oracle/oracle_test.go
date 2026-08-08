@@ -51,12 +51,6 @@ func TestCheck(t *testing.T) {
 			require.Empty(t, errorsIn(diagnostics))
 		})
 
-		t.Run("returns an empty diagnostic list for a model declaring invariants on an aggregate and on a context", func(t *testing.T) {
-			diagnostics := oracle.Check(test.InvariantLibraryLending, "invariants.emod")
-
-			require.Empty(t, diagnostics)
-		})
-
 		t.Run("returns an empty diagnostic list for a model stating specs in an aggregate slice and on a context slice", func(t *testing.T) {
 			diagnostics := oracle.Check(test.SpecLibraryLending, "specs.emod")
 
@@ -67,51 +61,6 @@ func TestCheck(t *testing.T) {
 			diagnostics := oracle.Check(test.SlicePatternLibraryLending, "slice-patterns.emod")
 
 			require.Empty(t, diagnostics)
-		})
-
-		t.Run("reports nothing about an invariant a context declares outside dcb mode", func(t *testing.T) {
-			tests := []struct {
-				mode   string
-				clause string
-			}{
-				{mode: "mode aggregate", clause: " mode aggregate"},
-				{mode: "no mode clause", clause: ""},
-			}
-
-			for _, tc := range tests {
-				t.Run(tc.mode, func(t *testing.T) {
-					source := fmt.Sprintf(`model "Library Lending"
-
-context "Lending"%s {
-  invariant FiveCopiesPerMember "A member holds at most five copies at one time"
-  aggregate "Loan" {
-    slice "Borrow Copy" {
-      command BorrowCopy {
-        fields {
-          memberId string required
-          copyId   string required
-        }
-      }
-      event CopyBorrowed {
-        fields {
-          loanId   string required
-          memberId string required
-          copyId   string required
-        }
-      }
-      flow {
-        command -> event: BorrowCopy -> CopyBorrowed
-      }
-    }
-  }
-}
-`, tc.clause)
-
-					diagnostics := oracle.Check(source, "lending.emod")
-
-					require.Empty(t, diagnostics)
-				})
-			}
 		})
 	})
 
@@ -158,6 +107,20 @@ context "Lending"%s {
 				`automation-schedule.emod:74: [automation/missing-todo-list] automation "RecallOnSecondReminder" reads no view, so nothing in the model shows what work is outstanding; project a view of pending work and read it`,
 				`automation-schedule.emod:78: [automation/missing-todo-list] automation "SweepOverdueLoans" reads no view, so the model does not state what the processor acts on; project a view of pending work and read it`,
 				`automation-schedule.emod:161: [automation/missing-todo-list] automation "SweepIdleDesks" reads no view, so the model does not state what the processor acts on; project a view of pending work and read it`,
+			}, reportedLines(diagnostics))
+		})
+	})
+
+	t.Run("invariants never exercised", func(t *testing.T) {
+		t.Run("names every invariant a model of lending declares without a rejection", func(t *testing.T) {
+			diagnostics := oracle.Check(test.InvariantLibraryLending, "invariants.emod")
+
+			require.Equal(t, []string{
+				`invariants.emod:8: [spec/invariant-never-exercised] invariant "OneCopyPerLoan" in aggregate "Loan" is not referenced by any rejection`,
+				`invariants.emod:33: [spec/invariant-never-exercised] invariant "FiveCopiesPerMember" in aggregate "Loan" is not referenced by any rejection`,
+				`invariants.emod:48: [spec/invariant-never-exercised] invariant "OneReaderPerDesk" in context "Reading Room" is not referenced by any rejection`,
+				`invariants.emod:49: [spec/invariant-never-exercised] invariant "OneDeskPerReader" in context "Reading Room" is not referenced by any rejection`,
+				`invariants.emod:73: [spec/invariant-never-exercised] invariant "DeskFreeAtClosing" in context "Reading Room" is not referenced by any rejection`,
 			}, reportedLines(diagnostics))
 		})
 	})
