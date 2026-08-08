@@ -321,6 +321,12 @@ context "Lending" {
         when ReturnCopy
         then [CopyReturned]
       }
+
+      spec "refuses to return a copy the member no longer holds" {
+        given [CopyBorrowed]
+        when ReturnCopy
+        then rejected OneCopyPerLoan
+      }
     }
 
     slice "Review Member Loans" {
@@ -407,6 +413,12 @@ context "Reading Room" mode dcb {
       given [DeskClaimed]
       when ReleaseDesk
       then [DeskReleased]
+    }
+
+    spec "refuses to free a desk already empty" {
+      given [DeskClaimed]
+      when ReleaseDesk
+      then rejected OneReaderPerDesk
     }
   }
 }

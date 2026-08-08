@@ -1,7 +1,7 @@
 # US-008: Lint spec coverage and boundary assumptions
 
 ## Progress
-- [ ] Task 1: Give every specced command in the shared spec fixture a rejection path
+- [x] Task 1: Give every specced command in the shared spec fixture a rejection path
 - [ ] Task 2: Report a command no spec exercises
 - [ ] Task 3: Report a command whose specs never reject
 - [ ] Task 4: Report an invariant no rejection references

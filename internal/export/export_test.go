@@ -4730,6 +4730,12 @@ var libraryLendingSpecs = map[string][]map[string]any{
 			"when":  "ReturnCopy",
 			"then":  map[string]any{"events": []any{"CopyReturned"}},
 		},
+		{
+			"name":  "refuses to return a copy the member no longer holds",
+			"given": []any{"CopyBorrowed"},
+			"when":  "ReturnCopy",
+			"then":  map[string]any{"rejected": "OneCopyPerLoan"},
+		},
 	},
 	"Claim Desk": {
 		{
@@ -4750,6 +4756,12 @@ var libraryLendingSpecs = map[string][]map[string]any{
 			"given": []any{"DeskClaimed"},
 			"when":  "ReleaseDesk",
 			"then":  map[string]any{"events": []any{"DeskReleased"}},
+		},
+		{
+			"name":  "refuses to free a desk already empty",
+			"given": []any{"DeskClaimed"},
+			"when":  "ReleaseDesk",
+			"then":  map[string]any{"rejected": "OneReaderPerDesk"},
 		},
 	},
 }
@@ -4797,11 +4809,15 @@ func automationsReadingNoView(byOwner map[string][]map[string]any) map[string][]
 // declares those in their own right, so finding one proves nothing.
 func libraryLendingSpecText() []string {
 	var text []string
+	added := map[string]bool{}
 	for _, specs := range libraryLendingSpecs {
 		for _, spec := range specs {
 			text = append(text, spec["name"].(string))
 			if rejected, ok := spec["then"].(map[string]any)["rejected"].(string); ok {
-				text = append(text, rejected)
+				if !added[rejected] {
+					text = append(text, rejected)
+					added[rejected] = true
+				}
 			}
 		}
 	}

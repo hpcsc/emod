@@ -485,6 +485,11 @@ context "Lending" {
         then [CopyReturned]
         when ReturnCopy
       }
+      spec "refuses to return a copy the member no longer holds" {
+        given [CopyBorrowed]
+        when ReturnCopy
+        then rejected OneCopyPerLoan
+      }
       flow {
         command -> event: ReturnCopy -> CopyReturned
       }
@@ -563,6 +568,11 @@ context "Reading Room" mode dcb {
       given [DeskClaimed]
       when ReleaseDesk
       then [DeskReleased]
+    }
+    spec "refuses to free a desk already empty" {
+      given [DeskClaimed]
+      when ReleaseDesk
+      then rejected OneReaderPerDesk
     }
     flow {
       command -> event: ReleaseDesk -> DeskReleased
@@ -1360,9 +1370,11 @@ var SpecLibraryLendingSpecNames = []string{
 	"borrows a copy the member before returned",
 	"refuses a copy already on loan",
 	"returns a copy the member holds",
+	"refuses to return a copy the member no longer holds",
 	"seats a reader at a free desk",
 	"refuses a desk another reader is seated at",
 	"frees the desk its reader is seated at",
+	"refuses to free a desk already empty",
 }
 
 // SlicePatternLibraryLendingSpecNames transcribes the name of every scenario
