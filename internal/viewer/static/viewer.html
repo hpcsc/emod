@@ -153,6 +153,25 @@ header .model-name span {
   border-color: #fff;
 }
 
+#legend-toggle {
+  background: rgba(255,255,255,0.15);
+  color: #fff;
+  border: 1px solid rgba(255,255,255,0.25);
+  border-radius: 4px;
+  padding: 5px 12px;
+  font-size: 12px;
+  cursor: pointer;
+  transition: background 0.2s;
+  white-space: nowrap;
+}
+#legend-toggle:hover {
+  background: rgba(255,255,255,0.25);
+}
+#legend-toggle.active {
+  background: rgba(255,255,255,0.35);
+  border-color: #fff;
+}
+
 #export-emod {
   background: rgba(255,255,255,0.15);
   color: #fff;
@@ -308,8 +327,8 @@ header .model-name span {
   position: absolute;
   bottom: 12px;
   left: 4px;
-  width: 260px;
-  max-height: 60%;
+  width: 290px;
+  max-height: 88%;
   background: #fff;
   border: 1px solid #ccc;
   border-radius: 6px;
@@ -346,10 +365,10 @@ header .model-name span {
   color: #212529;
 }
 #legend-content {
-  padding: 4px 0 8px;
+  padding: 2px 0 6px;
 }
 #legend-content .lg-section {
-  padding: 4px 12px 2px;
+  padding: 2px 12px 0;
 }
 #legend-content .lg-section-title {
   font-weight: 600;
@@ -357,16 +376,20 @@ header .model-name span {
   text-transform: uppercase;
   letter-spacing: 0.04em;
   color: #868e96;
-  margin: 6px 0 4px;
+  margin: 7px 0 3px;
 }
 #legend-content .lg-row {
   display: flex;
   align-items: center;
   gap: 8px;
-  padding: 2px 0;
+  padding: 1px 0;
 }
+/* #canvas-container svg stretches every svg inside the canvas to fill it, and
+   the legend's panel lives in there, so each swatch states its own size. */
 #legend-content .lg-swatch {
   flex: none;
+  width: 40px;
+  height: 18px;
 }
 #legend-content .lg-name {
   color: #495057;

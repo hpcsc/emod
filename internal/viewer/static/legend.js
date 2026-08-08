@@ -39,7 +39,7 @@ function createSvgEl(tag, attrs) {
 }
 
 function buildElementSwatch(palette) {
-  const swatch = createSvgEl('svg', { class: 'lg-swatch', width: 30, height: 18 });
+  const swatch = createSvgEl('svg', { class: 'lg-swatch', width: 40, height: 18 });
   swatch.appendChild(createSvgEl('rect', {
     x: 1, y: 1, width: 28, height: 16, rx: 3,
     fill: palette.fill, stroke: palette.stroke, 'stroke-width': 1.5,

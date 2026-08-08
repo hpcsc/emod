@@ -20,6 +20,20 @@ function createStore() {
   };
 }
 
+// The declaration block for a selector, or null when the stylesheet has no such
+// rule. The trailing `{` keeps `#legend-toggle` from matching `:hover`.
+function cssRule(selector) {
+  const styleMatch = viewerHtml.match(/<style[^>]*>([\s\S]*?)<\/style>/i);
+  expect(styleMatch).not.toBeNull();
+  const escaped = selector.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  const found = styleMatch[1].match(new RegExp(escaped + '\\s*\\{([^}]*)\\}'));
+  return found ? found[1] : null;
+}
+
+function declarationsOf(block) {
+  return block.split(';').map((d) => d.trim()).filter(Boolean).sort();
+}
+
 function sectionTitles(root) {
   return [...root.querySelectorAll('.lg-section-title')].map((el) => el.textContent);
 }
@@ -169,6 +183,24 @@ describe('Legend', () => {
     });
   });
 
+  describe('looking like the rest of the viewer', () => {
+    // Every toolbar button is styled by its own id rule — there is no shared
+    // selector to inherit from — so a missing rule leaves a default browser
+    // button sitting among the others.
+    it('styles the toolbar button exactly as the sibling panel toggle', () => {
+      const legend = cssRule('#legend-toggle');
+      const visibility = cssRule('#visibility-toggle');
+      expect(legend).not.toBeNull();
+      expect(visibility).not.toBeNull();
+      expect(declarationsOf(legend)).toEqual(declarationsOf(visibility));
+    });
+
+    it('marks the button active while the panel is open, as the sibling does', () => {
+      expect(declarationsOf(cssRule('#legend-toggle.active') || ''))
+        .toEqual(declarationsOf(cssRule('#visibility-toggle.active')));
+    });
+  });
+
   describe('staying in step with the palette', () => {
     // The swatches must be read from the palette at render time. Restating a
     // colour in markup or CSS would pass every leaf above while drifting the
@@ -177,8 +209,11 @@ describe('Legend', () => {
       const legendSource = readFileSync(resolve(__dirname, '../static/legend.js'), 'utf-8');
       const styleMatch = viewerHtml.match(/<style[^>]*>([\s\S]*?)<\/style>/i);
       expect(styleMatch).not.toBeNull();
-      const legendCss = styleMatch[1].match(/#legend-[\s\S]*?(?=\n#visibility-panel-header)/);
-      expect(legendCss).not.toBeNull();
+      // Gathered by selector rather than by slicing between two landmarks: the
+      // legend's rules sit in more than one place in the sheet, and a slice
+      // would swallow whichever rules happened to fall between them.
+      const legendCss = [...styleMatch[1].matchAll(/#legend[^{}]*\{[^}]*\}/g)].map((m) => m[0]);
+      expect(legendCss.length).toBeGreaterThan(0);
 
       const palette = new Set(
         Object.values(nodePalette)
@@ -188,12 +223,23 @@ describe('Legend', () => {
       );
 
       const hexes = (text) => [...text.matchAll(/#([0-9a-fA-F]{6})/g)].map((m) => m[0].toLowerCase());
-      // Proves the two regions really were read, so a miss cannot pass as clean.
-      expect(legendSource.length).toBeGreaterThan(0);
-      expect(legendCss[0]).toContain('#legend-panel');
+      // Proves both regions really were read, so a miss cannot pass as clean.
+      expect(legendSource).toContain('buildElementSwatch');
+      expect(legendCss.join('\n')).toContain('#legend-panel');
 
       hexes(legendSource).forEach((hex) => expect(palette).not.toContain(hex));
-      hexes(legendCss[0]).forEach((hex) => expect(palette).not.toContain(hex));
+      hexes(legendCss.join('\n')).forEach((hex) => expect(palette).not.toContain(hex));
+    });
+
+    it('sizes each swatch itself, because the canvas stretches every svg inside it', () => {
+      // Stating the hazard first: without this the swatch rule below would be
+      // guarding a stretch that no longer happens, and would pass unmaintained.
+      expect(cssRule('#canvas-container svg')).toMatch(/width:\s*100%/);
+
+      const swatch = cssRule('#legend-content .lg-swatch');
+      expect(swatch).not.toBeNull();
+      expect(swatch).toMatch(/width:\s*\d+px/);
+      expect(swatch).toMatch(/height:\s*\d+px/);
     });
 
     it('carries one row per palette entry, so a new type reaches the legend unedited', () => {
