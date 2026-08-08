@@ -61,9 +61,6 @@ func Lint(model *ast.Model) []*diagnostic.Entry {
 		}
 	}
 
-	// Collect which commands are exercised by at least one spec, model-wide,
-	// and whether the model states any spec at all — the gate that silences
-	// spec/command-without-spec for a model that has not adopted specs.
 	hasSpec := false
 	exercisedCommands := make(map[string]bool)
 	commandsWithRejection := make(map[string]bool)
@@ -121,12 +118,7 @@ func Lint(model *ast.Model) []*diagnostic.Entry {
 	diags = append(diags, checkGivenOutsideBoundary(model)...)
 
 	slices.SortFunc(diags, func(a, b *diagnostic.Entry) int {
-		aSpec := strings.HasPrefix(a.RuleName, "spec/")
-		bSpec := strings.HasPrefix(b.RuleName, "spec/")
-		if aSpec && bSpec {
-			return cmp.Compare(a.Line, b.Line)
-		}
-		return 0
+		return cmp.Compare(a.Line, b.Line)
 	})
 
 	return diags
@@ -641,14 +633,13 @@ func scopeUnexercisedInvariants(invariants []*ast.Invariant, slices []*ast.Slice
 	return diags
 }
 
-func eventHomeIndex(model *ast.Model) map[string]struct {
-	name string
-	kind string
-} {
-	index := make(map[string]struct {
-		name string
-		kind string
-	})
+type eventDeclaration struct {
+	ownerName string
+	kind      string
+}
+
+func eventHomeIndex(model *ast.Model) map[string][]eventDeclaration {
+	index := make(map[string][]eventDeclaration)
 	for _, ctx := range model.Contexts {
 		for _, ref := range ctx.SliceRefs() {
 			homeName := ctx.Name
@@ -658,22 +649,24 @@ func eventHomeIndex(model *ast.Model) map[string]struct {
 				homeKind = "aggregate"
 			}
 			for _, evt := range ref.Slice.Events {
-				index[evt.Name] = struct {
-					name string
-					kind string
-				}{homeName, homeKind}
+				index[evt.Name] = append(index[evt.Name], eventDeclaration{homeName, homeKind})
 			}
 			for _, tr := range ref.Slice.Translations {
 				if tr.Event != nil {
-					index[tr.Event.Name] = struct {
-						name string
-						kind string
-					}{homeName, homeKind}
+					index[tr.Event.Name] = append(index[tr.Event.Name], eventDeclaration{homeName, homeKind})
 				}
 			}
 		}
 	}
 	return index
+}
+
+func eventHomeLookup(index map[string][]eventDeclaration, eventName string) (eventDeclaration, bool) {
+	homes, ok := index[eventName]
+	if !ok || len(homes) == 0 {
+		return eventDeclaration{}, false
+	}
+	return homes[0], true
 }
 
 func checkGivenOutsideBoundary(model *ast.Model) []*diagnostic.Entry {
@@ -692,16 +685,23 @@ func checkGivenOutsideBoundary(model *ast.Model) []*diagnostic.Entry {
 			if ref.Aggregate != nil {
 				for _, spec := range ref.Slice.Specs {
 					for _, given := range spec.Given {
-						home, ok := eventHome[given.Name]
-						if !ok {
+						homes, ok := eventHome[given.Name]
+						if !ok || len(homes) == 0 {
 							continue
 						}
-						if home.name == ref.Aggregate.Name {
+						inBoundary := false
+						for _, h := range homes {
+							if h.ownerName == ref.Aggregate.Name {
+								inBoundary = true
+								break
+							}
+						}
+						if inBoundary {
 							continue
 						}
 						diags = append(diags, warning(given.NamePos, "spec/given-outside-boundary",
 							fmt.Sprintf("given event %q names an event declared by %s %q instead of aggregate %q",
-								given.Name, home.kind, home.name, ref.Aggregate.Name)))
+								given.Name, homes[0].kind, homes[0].ownerName, ref.Aggregate.Name)))
 					}
 				}
 				continue
@@ -723,7 +723,7 @@ func checkGivenOutsideBoundary(model *ast.Model) []*diagnostic.Entry {
 					decidesSet[e] = true
 				}
 				for _, given := range spec.Given {
-					if !eventHomeIndexContains(eventHome, given.Name) {
+					if _, ok := eventHomeLookup(eventHome, given.Name); !ok {
 						continue
 					}
 					if decidesSet[given.Name] {
@@ -742,12 +742,4 @@ func checkGivenOutsideBoundary(model *ast.Model) []*diagnostic.Entry {
 	})
 
 	return diags
-}
-
-func eventHomeIndexContains(index map[string]struct {
-	name string
-	kind string
-}, eventName string) bool {
-	_, ok := index[eventName]
-	return ok
 }

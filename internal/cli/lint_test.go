@@ -180,9 +180,6 @@ context "Lending" {
 }
 `
 
-// commandWithoutSpecEmod states a spec for one command and leaves another
-// uncovered, so spec/command-without-spec reports the uncovered command at info
-// severity and no other rule fires.
 const commandWithoutSpecEmod = `model "Lending"
 
 context "Lending" {
@@ -237,9 +234,6 @@ context "Lending" {
 }
 `
 
-// noRejectionPathEmod gives every command a spec and leaves one command's specs
-// rejection-free, so spec/no-rejection-path reports it and spec/command-without-spec
-// stays quiet.
 const noRejectionPathEmod = `model "Lending"
 
 context "Lending" {
@@ -299,9 +293,6 @@ context "Lending" {
 }
 `
 
-// invariantNeverExercisedEmod declares one unexercised invariant and gives every
-// command a spec and a rejection so spec/command-without-spec and spec/no-rejection-path
-// stay quiet, tripping only spec/invariant-never-exercised.
 const invariantNeverExercisedEmod = `model "Lending"
 
 context "Lending" {
@@ -339,10 +330,6 @@ context "Lending" {
 }
 `
 
-// givenOutsideBoundaryEmod declares two aggregates with specs and rejections
-// exercising every command and invariant so Tasks 2, 3 and 4 stay quiet, and
-// states a given naming the other aggregate's event so spec/given-outside-boundary
-// reports it and no other rule fires.
 const givenOutsideBoundaryEmod = `model "Lending"
 
 context "Lending" {
@@ -413,10 +400,6 @@ context "Lending" {
 }
 `
 
-// givenOutsideBoundaryDCBEmod declares a mode dcb context with tagged events,
-// decides_on predicates referencing two tag keys, invariable, specs and rejections
-// so all other rules stay quiet, and states a given the when command's decides_on
-// does not list so spec/given-outside-boundary reports the DCB arm.
 const givenOutsideBoundaryDCBEmod = `model "Library Lending"
 
 context "Reading Room" mode dcb {
