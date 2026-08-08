@@ -4670,6 +4670,12 @@ var slicePatternLibraryLendingSpecs = map[string][]map[string]any{
 			"when": "RemindMember",
 			"then": map[string]any{"events": []any{"MemberReminded"}},
 		},
+		{
+			"name":  "refuses to remind a member with no overdue loans",
+			"given": []any{"MemberReminded"},
+			"when":  "RemindMember",
+			"then":  map[string]any{"rejected": "OneCopyPerLoan"},
+		},
 	},
 	"Sweep Overdue Loans": {
 		{
@@ -4681,12 +4687,24 @@ var slicePatternLibraryLendingSpecs = map[string][]map[string]any{
 			"when": "RecallCopy",
 			"then": map[string]any{"events": []any{"CopyRecalled"}},
 		},
+		{
+			"name":  "refuses to recall a copy already returned",
+			"given": []any{"CopyReturned"},
+			"when":  "RecallCopy",
+			"then":  map[string]any{"rejected": "OneCopyPerLoan"},
+		},
 	},
 	"Return Copy": {
 		{
 			"name": "returns a loaned copy to the library",
 			"when": "ReturnCopy",
 			"then": map[string]any{"events": []any{"CopyReturned"}},
+		},
+		{
+			"name":  "refuses to return a copy already returned",
+			"given": []any{"CopyReturned"},
+			"when":  "ReturnCopy",
+			"then":  map[string]any{"rejected": "OneCopyPerLoan"},
 		},
 	},
 	"Claim Desk": {
@@ -4708,6 +4726,12 @@ var slicePatternLibraryLendingSpecs = map[string][]map[string]any{
 			"given": []any{"DeskClaimed"},
 			"when":  "ImportExternalDeskBooking",
 			"then":  map[string]any{"events": []any{"ExternalDeskBookingImported"}},
+		},
+		{
+			"name":  "refuses to import a booking for an occupied desk",
+			"given": []any{"DeskClaimed"},
+			"when":  "ImportExternalDeskBooking",
+			"then":  map[string]any{"rejected": "OneReaderPerDesk"},
 		},
 	},
 }

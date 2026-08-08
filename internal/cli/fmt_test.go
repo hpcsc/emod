@@ -595,6 +595,12 @@ context "Lending" {
         when RemindMember
         then [MemberReminded]
       }
+
+      spec "refuses to remind a member with no overdue loans" {
+        given [MemberReminded]
+        when RemindMember
+        then rejected OneCopyPerLoan
+      }
     }
 
     slice "Sweep Overdue Loans" {
@@ -639,6 +645,12 @@ context "Lending" {
         when RecallCopy
         then [CopyRecalled]
       }
+
+      spec "refuses to recall a copy already returned" {
+        given [CopyReturned]
+        when RecallCopy
+        then rejected OneCopyPerLoan
+      }
     }
 
     slice "Return Copy" {
@@ -664,6 +676,12 @@ context "Lending" {
       spec "returns a loaned copy to the library" {
         when ReturnCopy
         then [CopyReturned]
+      }
+
+      spec "refuses to return a copy already returned" {
+        given [CopyReturned]
+        when ReturnCopy
+        then rejected OneCopyPerLoan
       }
     }
   }
@@ -753,6 +771,12 @@ context "Reading Room" mode dcb {
       given [DeskClaimed]
       when ImportExternalDeskBooking
       then [ExternalDeskBookingImported]
+    }
+
+    spec "refuses to import a booking for an occupied desk" {
+      given [DeskClaimed]
+      when ImportExternalDeskBooking
+      then rejected OneReaderPerDesk
     }
   }
 }

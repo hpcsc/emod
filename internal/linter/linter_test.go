@@ -3642,6 +3642,11 @@ func TestLint(t *testing.T) {
 													Name: "BorrowCopy",
 												},
 											},
+											{
+												Name: "refuses a copy already on loan",
+												When: &ast.SpecElement{Name: "BorrowCopy"},
+												Then: &ast.ThenRejected{InvariantName: "OneCopyPerLoan"},
+											},
 										},
 									},
 									{
@@ -3749,6 +3754,11 @@ func TestLint(t *testing.T) {
 													Name: "BorrowCopy",
 												},
 											},
+											{
+												Name: "refuses a copy already on loan",
+												When: &ast.SpecElement{Name: "BorrowCopy"},
+												Then: &ast.ThenRejected{InvariantName: "OneCopyPerLoan"},
+											},
 										},
 									},
 								},
@@ -3804,6 +3814,11 @@ func TestLint(t *testing.T) {
 													Name: "ReturnCopy",
 												},
 											},
+											{
+												Name: "refuses to return an unborrowed copy",
+												When: &ast.SpecElement{Name: "ReturnCopy"},
+												Then: &ast.ThenRejected{InvariantName: "OneCopyPerLoan"},
+											},
 										},
 									},
 									{
@@ -3814,6 +3829,7 @@ func TestLint(t *testing.T) {
 												When: &ast.SpecElement{
 													Name: "BorrowCopy",
 												},
+												Then: &ast.ThenRejected{InvariantName: "OneCopyPerLoan"},
 											},
 										},
 									},
@@ -3928,6 +3944,271 @@ func TestLint(t *testing.T) {
 			require.Equal(t, []string{
 				`lending.emod:5: [spec/command-without-spec] command "BorrowCopy" is not exercised by any spec`,
 				`lending.emod:20: [spec/command-without-spec] command "ReleaseDesk" is not exercised by any spec`,
+			}, reportedLines(diags))
+		})
+	})
+
+	t.Run("spec/no-rejection-path", func(t *testing.T) {
+		t.Run("reports a command exercised by specs but with no rejection", func(t *testing.T) {
+			model := &ast.Model{
+				Contexts: []*ast.Context{
+					{
+						Name: "Lending",
+						Aggregates: []*ast.Aggregate{
+							{
+								Name: "Loan",
+								Slices: []*ast.Slice{
+									{
+										Name: "Borrow Copy",
+										Commands: []*ast.Command{
+											{
+												Name: "BorrowCopy",
+												NamePos: ast.Position{
+													Filename: "lending.emod",
+													Line:     5,
+													Column:   7,
+												},
+											},
+										},
+										Specs: []*ast.Spec{
+											{
+												Name: "borrows a copy no one holds",
+												When: &ast.SpecElement{Name: "BorrowCopy"},
+												Then: &ast.ThenEvents{},
+											},
+										},
+									},
+								},
+							},
+						},
+					},
+				},
+			}
+
+			diags := linter.Lint(model)
+
+			require.Len(t, diags, 1)
+			require.Equal(t, "spec/no-rejection-path", diags[0].RuleName)
+			require.Equal(t, diagnostic.Info, diags[0].Severity)
+			require.Equal(t, `command "BorrowCopy" is exercised by specs but none states a rejection`, diags[0].Message)
+		})
+
+		t.Run("reports nothing when a command has a rejection spec", func(t *testing.T) {
+			model := &ast.Model{
+				Contexts: []*ast.Context{
+					{
+						Name: "Lending",
+						Aggregates: []*ast.Aggregate{
+							{
+								Name: "Loan",
+								Slices: []*ast.Slice{
+									{
+										Name: "Borrow Copy",
+										Commands: []*ast.Command{
+											{
+												Name: "BorrowCopy",
+												NamePos: ast.Position{
+													Filename: "lending.emod",
+													Line:     5,
+													Column:   7,
+												},
+											},
+										},
+										Specs: []*ast.Spec{
+											{
+												Name: "borrows a copy no one holds",
+												When: &ast.SpecElement{Name: "BorrowCopy"},
+												Then: &ast.ThenEvents{},
+											},
+											{
+												Name: "refuses a copy already on loan",
+												Given: []*ast.SpecElement{{Name: "CopyBorrowed"}},
+												When:  &ast.SpecElement{Name: "BorrowCopy"},
+												Then:  &ast.ThenRejected{InvariantName: "OneCopyPerLoan"},
+											},
+										},
+									},
+								},
+							},
+						},
+					},
+				},
+			}
+
+			diags := linter.Lint(model)
+
+			require.Empty(t, diags)
+		})
+
+		t.Run("does not fire on a command no spec exercises", func(t *testing.T) {
+			model := &ast.Model{
+				Contexts: []*ast.Context{
+					{
+						Name: "Lending",
+						Aggregates: []*ast.Aggregate{
+							{
+								Name: "Loan",
+								Slices: []*ast.Slice{
+									{
+										Name: "Borrow Copy",
+										Commands: []*ast.Command{
+											{
+												Name: "BorrowCopy",
+												NamePos: ast.Position{
+													Filename: "lending.emod",
+													Line:     5,
+													Column:   7,
+												},
+											},
+										},
+										Specs: []*ast.Spec{
+											{
+												Name: "borrows a copy no one holds",
+												When: &ast.SpecElement{Name: "BorrowCopy"},
+												Then: &ast.ThenEvents{},
+											},
+											{
+												Name: "refuses a copy already on loan",
+												When: &ast.SpecElement{Name: "BorrowCopy"},
+												Then: &ast.ThenRejected{InvariantName: "OneCopyPerLoan"},
+											},
+										},
+									},
+									{
+										Name: "Return Copy",
+										Commands: []*ast.Command{
+											{
+												Name: "ReturnCopy",
+												NamePos: ast.Position{
+													Filename: "lending.emod",
+													Line:     15,
+													Column:   7,
+												},
+											},
+										},
+									},
+								},
+							},
+						},
+					},
+				},
+			}
+
+			diags := linter.Lint(model)
+
+			require.Len(t, diags, 1)
+			require.Equal(t, "spec/command-without-spec", diags[0].RuleName)
+			require.Contains(t, diags[0].Message, "ReturnCopy")
+		})
+
+		t.Run("rejection counts from a spec in a different slice", func(t *testing.T) {
+			model := &ast.Model{
+				Contexts: []*ast.Context{
+					{
+						Name: "Lending",
+						Aggregates: []*ast.Aggregate{
+							{
+								Name: "Loan",
+								Slices: []*ast.Slice{
+									{
+										Name: "Borrow Copy",
+										Commands: []*ast.Command{
+											{
+												Name: "BorrowCopy",
+												NamePos: ast.Position{
+													Filename: "lending.emod",
+													Line:     5,
+													Column:   7,
+												},
+											},
+										},
+									},
+									{
+										Name: "Return Copy",
+										Specs: []*ast.Spec{
+											{
+												Name: "returns a copy no loan holds",
+												When: &ast.SpecElement{Name: "BorrowCopy"},
+												Then: &ast.ThenRejected{InvariantName: "OneCopyPerLoan"},
+											},
+										},
+									},
+								},
+							},
+						},
+					},
+				},
+			}
+
+			diags := linter.Lint(model)
+
+			require.Empty(t, diags)
+		})
+
+		t.Run("reports both commands in declaration order when neither has a rejection spec", func(t *testing.T) {
+			model := &ast.Model{
+				Contexts: []*ast.Context{
+					{
+						Name: "Lending",
+						Mode: "mixed",
+						Aggregates: []*ast.Aggregate{
+							{
+								Name: "Loan",
+								Slices: []*ast.Slice{
+									{
+										Name: "Borrow Copy",
+										Commands: []*ast.Command{
+											{
+												Name: "BorrowCopy",
+												NamePos: ast.Position{
+													Filename: "lending.emod",
+													Line:     5,
+													Column:   7,
+												},
+											},
+										},
+										Specs: []*ast.Spec{
+											{
+												Name: "borrows a copy",
+												When: &ast.SpecElement{Name: "BorrowCopy"},
+												Then: &ast.ThenEvents{},
+											},
+										},
+									},
+								},
+							},
+						},
+						Slices: []*ast.Slice{
+							{
+								Name: "Return Copy",
+								Commands: []*ast.Command{
+									{
+										Name: "ReturnCopy",
+										NamePos: ast.Position{
+											Filename: "lending.emod",
+											Line:     20,
+											Column:   7,
+										},
+									},
+								},
+								Specs: []*ast.Spec{
+									{
+										Name: "returns a copy",
+										When: &ast.SpecElement{Name: "ReturnCopy"},
+										Then: &ast.ThenEvents{},
+									},
+								},
+							},
+						},
+					},
+				},
+			}
+
+			diags := linter.Lint(model)
+
+			require.Equal(t, []string{
+				`lending.emod:5: [spec/no-rejection-path] command "BorrowCopy" is exercised by specs but none states a rejection`,
+				`lending.emod:20: [spec/no-rejection-path] command "ReturnCopy" is exercised by specs but none states a rejection`,
 			}, reportedLines(diags))
 		})
 	})

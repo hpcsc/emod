@@ -187,6 +187,7 @@ const commandWithoutSpecEmod = `model "Lending"
 
 context "Lending" {
   aggregate "Loan" {
+    invariant OneCopyPerLoan "A loan covers exactly one copy"
     slice "Borrow Copy" {
       command BorrowCopy {
         fields {
@@ -208,6 +209,11 @@ context "Lending" {
         when BorrowCopy
         then [CopyBorrowed]
       }
+      spec "refuses a copy already on loan" {
+        given [CopyBorrowed]
+        when BorrowCopy
+        then rejected OneCopyPerLoan
+      }
     }
     slice "Return Copy" {
       command ReturnCopy {
@@ -225,6 +231,68 @@ context "Lending" {
       }
       flow {
         command -> event: ReturnCopy -> CopyReturned
+      }
+    }
+  }
+}
+`
+
+// noRejectionPathEmod gives every command a spec and leaves one command's specs
+// rejection-free, so spec/no-rejection-path reports it and spec/command-without-spec
+// stays quiet.
+const noRejectionPathEmod = `model "Lending"
+
+context "Lending" {
+  aggregate "Loan" {
+    invariant OneCopyPerLoan "A loan covers exactly one copy"
+    slice "Borrow Copy" {
+      command BorrowCopy {
+        fields {
+          memberId string required
+          copyId   string required
+        }
+      }
+      event CopyBorrowed {
+        fields {
+          loanId   string required
+          memberId string required
+          copyId   string required
+        }
+      }
+      flow {
+        command -> event: BorrowCopy -> CopyBorrowed
+      }
+      spec "borrows a copy no one holds" {
+        when BorrowCopy
+        then [CopyBorrowed]
+      }
+      spec "refuses a copy already on loan" {
+        given [CopyBorrowed]
+        when BorrowCopy
+        then rejected OneCopyPerLoan
+      }
+    }
+    slice "Return Copy" {
+      command ReturnCopy {
+        fields {
+          loanId string required
+          copyId string required
+        }
+      }
+      event CopyReturned {
+        fields {
+          loanId   string required
+          copyId   string required
+          returnedAt timestamp required
+        }
+      }
+      flow {
+        command -> event: ReturnCopy -> CopyReturned
+      }
+      spec "returns a copy the member holds" {
+        given [CopyBorrowed]
+        when ReturnCopy
+        then [CopyReturned]
       }
     }
   }
@@ -643,7 +711,7 @@ context "Orders" {
 			require.Equal(t, "info", entries[0]["severity"])
 			require.Equal(t, "spec/command-without-spec", entries[0]["rule"])
 			require.Equal(t, path, entries[0]["file"])
-			require.Equal(t, float64(28), entries[0]["line"])
+			require.Equal(t, float64(34), entries[0]["line"])
 			require.Contains(t, entries[0]["message"], "ReturnCopy")
 		})
 
@@ -658,6 +726,43 @@ context "Orders" {
 			require.Contains(t, err.Error(), path)
 			require.Contains(t, err.Error(), "[spec/command-without-spec]")
 			require.Contains(t, err.Error(), `command "ReturnCopy" is not exercised by any spec`)
+		})
+	})
+
+	t.Run("spec/no-rejection-path", func(t *testing.T) {
+		t.Run("json output reports the rule at info severity and exits 1", func(t *testing.T) {
+			path := writeTemp(t, "no_rejection.emod", noRejectionPathEmod)
+
+			var err error
+			output := captureStdout(t, func() {
+				err = cli.RunLint(path, "json")
+			})
+
+			var lintErr *cli.LintError
+			require.True(t, errors.As(err, &lintErr))
+			require.Equal(t, 1, lintErr.ExitCode)
+
+			var entries []map[string]interface{}
+			require.NoError(t, json.Unmarshal([]byte(output), &entries))
+			require.Len(t, entries, 1)
+			require.Equal(t, "info", entries[0]["severity"])
+			require.Equal(t, "spec/no-rejection-path", entries[0]["rule"])
+			require.Equal(t, path, entries[0]["file"])
+			require.Equal(t, float64(34), entries[0]["line"])
+			require.Contains(t, entries[0]["message"], "ReturnCopy")
+		})
+
+		t.Run("text output names the rule, the command and the line it is declared on", func(t *testing.T) {
+			path := writeTemp(t, "no_rejection.emod", noRejectionPathEmod)
+
+			err := cli.RunLint(path, "text")
+
+			var lintErr *cli.LintError
+			require.True(t, errors.As(err, &lintErr))
+			require.Equal(t, 1, lintErr.ExitCode)
+			require.Contains(t, err.Error(), path)
+			require.Contains(t, err.Error(), "[spec/no-rejection-path]")
+			require.Contains(t, err.Error(), `command "ReturnCopy" is exercised by specs but none states a rejection`)
 		})
 	})
 }
@@ -702,6 +807,16 @@ func TestLintExplain(t *testing.T) {
 		require.Contains(t, output, "not adopted specs")
 	})
 
+	t.Run("rejection-path rule prints description and returns no error", func(t *testing.T) {
+		output := captureStdout(t, func() {
+			err := cli.RunLintExplain("spec/no-rejection-path")
+			require.NoError(t, err)
+		})
+
+		require.Contains(t, output, "rejection")
+		require.Contains(t, output, "happy-path")
+	})
+
 	t.Run("validator-emitted orphan rules print descriptions and return no error", func(t *testing.T) {
 		for _, rule := range []string{"orphan-command", "orphan-event"} {
 			output := captureStdout(t, func() {
@@ -741,6 +856,7 @@ func TestLintExplain(t *testing.T) {
 			"dcb/orphan-tag-key",
 			"automation/missing-todo-list",
 			"spec/command-without-spec",
+			"spec/no-rejection-path",
 		}
 		for _, rule := range rules {
 			t.Run(rule, func(t *testing.T) {
