@@ -13,3 +13,4 @@ internal/viewer/generated/
 editors/vscode/out
 e2e-viewer/test-results/
 e2e-viewer/playwright-report/
+.task/

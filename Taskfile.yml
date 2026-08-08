@@ -72,10 +72,23 @@ tasks:
 
   test:viewer:
     desc: Run viewer JS unit tests
+    deps:
+      - test:viewer:deps
+    dir: internal/viewer
+    cmds:
+      - npm test
+
+  # Reinstalling on every run costs ~18s and reinstates the same 110 packages. The
+  # fingerprint is the lockfile, so an unchanged one skips the install entirely.
+  test:viewer:deps:
+    desc: Install viewer test dependencies when the lockfile has changed
     dir: internal/viewer
     cmds:
       - npm ci
-      - npm test
+    sources:
+      - package-lock.json
+    generates:
+      - node_modules/.package-lock.json
 
   test:grammar:
     desc: Run the tree-sitter grammar corpus, highlight and editor query tests

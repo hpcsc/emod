@@ -1,0 +1,6 @@
+{
+  "_comment": "Test commands the implement-* and audit-flow skills use. A per-task stage runs the entry for that task's language; whole-branch gates (final suite, cross-cutting refactor, integration) always run `default`. Keys are canonical language names; lowercase aliases (go, js, typescript) also resolve.",
+  "default": "task test:unit && task test:integration && task test:viewer",
+  "Go": "task test:unit && task test:integration",
+  "JavaScript/TypeScript": "task test:viewer"
+}
