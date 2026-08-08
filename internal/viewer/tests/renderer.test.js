@@ -156,6 +156,50 @@ function pairedAutomations(schedule) {
   ];
 }
 
+const commandDescription = 'Offers the customer an instalment plan';
+const sliceDescription = 'Everything it takes to agree a plan';
+const automationDescription = 'Sweeps every arrears account each weekday';
+const translationDescription = 'Hands the arrears file to the dialler';
+
+// A documented command beside an undocumented one in the same slice, so one
+// render draws the marked case and the unmarked case side by side.
+function describedAndPlainCommands() {
+  return [
+    { id: 'ctx1', type: 'context', label: 'Collections' },
+    { id: 'agg1', type: 'aggregate', label: 'Arrangement', parentId: 'ctx1' },
+    { id: 'sl1', type: 'slice', label: 'Propose plan', parentId: 'agg1' },
+    { id: 'cmd1', type: 'command', label: 'ProposePlan', parentId: 'sl1', description: commandDescription },
+    { id: 'cmd2', type: 'command', label: 'TakePayment', parentId: 'sl1' },
+  ];
+}
+
+// A documented automation stating its cadence and a documented translation
+// naming its external system: each box already draws a second row of text,
+// which is what a mark in the corner can end up painted over.
+function describedProcessors() {
+  return [
+    { id: 'ctx1', type: 'context', label: 'Collections' },
+    { id: 'agg1', type: 'aggregate', label: 'Arrangement', parentId: 'ctx1' },
+    { id: 'sl1', type: 'slice', label: 'Chase arrears', parentId: 'agg1' },
+    { id: 'auto1', type: 'automation', label: 'SweepArrears', parentId: 'sl1', every: cronExpression, description: automationDescription },
+    { id: 'sl2', type: 'slice', label: 'Push to dialler', parentId: 'agg1' },
+    { id: 'trans1', type: 'translation', label: 'PushToDialler', parentId: 'sl2', external_system: 'Genesys', description: translationDescription },
+  ];
+}
+
+const triggerDescription = 'The screen an agent works the arrears list from';
+
+// A documented trigger: its box is drawn as a screen, with a bar painted across
+// the top — the one thing already standing where a corner mark lands.
+function describedTrigger() {
+  return [
+    { id: 'ctx1', type: 'context', label: 'Collections' },
+    { id: 'agg1', type: 'aggregate', label: 'Arrangement', parentId: 'ctx1' },
+    { id: 'sl1', type: 'slice', label: 'Chase arrears', parentId: 'agg1' },
+    { id: 'trg1', type: 'trigger', label: 'CollectorScreen', parentId: 'sl1', description: triggerDescription },
+  ];
+}
+
 const viewLabel = 'ArrearsView';
 
 // One view read by a trigger, an automation and a translation in the same
@@ -284,6 +328,10 @@ function headerFor(svg, ctxId) {
   return svg.querySelector('rect.ctx-header[data-ctx-id="' + ctxId + '"]');
 }
 
+function sliceHeaderFor(svg, sliceId) {
+  return svg.querySelector('rect.slice-header[data-slice-id="' + sliceId + '"]');
+}
+
 function rightEdgeOfBand(band) {
   return numeric(band, 'x') + numeric(band, 'width');
 }
@@ -299,6 +347,9 @@ function textsOwnedBy(svg, attr, id) {
 const ctxHeaderTexts = (svg, ctxId) => textsOwnedBy(svg, 'data-ctx-id', ctxId);
 const aggRowTexts = (svg, aggId) => textsOwnedBy(svg, 'data-agg-id', aggId);
 const sliceHeaderTexts = (svg, sliceId) => textsOwnedBy(svg, 'data-slice-id', sliceId);
+
+const withoutMarks = (els) => els.filter((el) => !el.hasAttribute('data-marker'));
+const sliceHeaderNames = (svg, sliceId) => withoutMarks(sliceHeaderTexts(svg, sliceId));
 
 const textOf = (els) => els.map((el) => el.textContent);
 
@@ -331,6 +382,61 @@ function badgeIn(group) {
   return drawnLabels(group).find((el) => el.textContent.includes(clockMarking));
 }
 
+function descriptionMarkersIn(root) {
+  return [...root.querySelectorAll('[data-marker="description"]')];
+}
+
+// The drawn strings without the marks: a mark is a glyph standing for prose held
+// elsewhere, so the leaves comparing two renders account for it on its own.
+function proseIn(root) {
+  return withoutMarks(drawnLabels(root));
+}
+
+const placements = (els) => els.map((el) => [el.textContent, numeric(el, 'x'), numeric(el, 'y')]);
+
+// Everything inside a block is centred on its own x, so it runs half its
+// measured width either side.
+const leftEdgeOfCentred = (el) => numeric(el, 'x') - Layout.labelWidth(el.textContent) / 2;
+const rightEdgeOfCentred = (el) => numeric(el, 'x') + Layout.labelWidth(el.textContent) / 2;
+
+// A centred glyph occupies its font size vertically, half of it either side of
+// the line it is centred on.
+function inkOfCentred(el) {
+  const half = numeric(el, 'font-size') / 2;
+  return {
+    left: leftEdgeOfCentred(el),
+    right: rightEdgeOfCentred(el),
+    top: numeric(el, 'y') - half,
+    bottom: numeric(el, 'y') + half,
+  };
+}
+
+// A stroked rect paints half its stroke outside the edge it is drawn on.
+function inkOfRect(el) {
+  const bleed = numeric(el, 'stroke-width') / 2;
+  return {
+    left: numeric(el, 'x') - bleed,
+    right: rightEdgeOfBand(el) + bleed,
+    top: numeric(el, 'y') - bleed,
+    bottom: bottomEdgeOfBand(el) + bleed,
+  };
+}
+
+function overlapArea(a, b) {
+  const width = Math.min(a.right, b.right) - Math.max(a.left, b.left);
+  const height = Math.min(a.bottom, b.bottom) - Math.max(a.top, b.top);
+  return Math.max(0, width) * Math.max(0, height);
+}
+
+function cornerOf(box, mark) {
+  const x = numeric(mark, 'x');
+  const y = numeric(mark, 'y');
+  if (x <= box.x || x >= box.x + box.w || y <= box.y || y >= box.y + box.h) return 'outside';
+  const vertical = y < box.y + box.h / 2 ? 'top' : 'bottom';
+  const horizontal = x > box.x + box.w / 2 ? 'right' : 'left';
+  return vertical + '-' + horizontal;
+}
+
 function drawnBoxes(svg) {
   const entries = [...svg.querySelectorAll('.diagram-node')].map((group) => {
     const box = group.querySelector('rect');
@@ -356,8 +462,7 @@ function drawnFrames(svg) {
 }
 
 function namePlacements(svg) {
-  return [...svg.querySelectorAll('.ctx-label, .agg-label')]
-    .map((el) => [el.textContent, numeric(el, 'x'), numeric(el, 'y')]);
+  return placements([...svg.querySelectorAll('.ctx-label, .agg-label')]);
 }
 
 const numeric = (el, attr) => Number(el.getAttribute(attr));
@@ -543,7 +648,9 @@ describe('Renderer.buildSVG', () => {
       expect(drawnBoxes(described.svg)).toEqual(drawnBoxes(plain.svg));
 
       const plainText = drawnText(plain.svg);
-      const added = drawnText(described.svg).filter((t) => !plainText.includes(t));
+      const added = proseIn(described.svg)
+        .map((el) => el.textContent)
+        .filter((t) => !plainText.includes(t));
       expect(added).toEqual([
         describedThroughoutText.ctx1,
         describedThroughoutText.agg1,
@@ -574,12 +681,12 @@ describe('Renderer.buildSVG', () => {
 
       expect(drawnText(described.svg)).toContain(describedThroughoutText.agg1);
 
-      const [plainName] = sliceHeaderTexts(plain.svg, 'sl1');
-      const headerTexts = sliceHeaderTexts(described.svg, 'sl1');
-      expect(textOf(headerTexts)).toEqual(['Propose plan']);
-      expect(headerTexts[0].getAttribute('text-anchor')).toBe('middle');
-      expect(numeric(headerTexts[0], 'x')).toBe(numeric(plainName, 'x'));
-      expect(numeric(headerTexts[0], 'y')).toBe(numeric(plainName, 'y'));
+      const [plainName] = sliceHeaderNames(plain.svg, 'sl1');
+      const names = sliceHeaderNames(described.svg, 'sl1');
+      expect(textOf(names)).toEqual(['Propose plan']);
+      expect(names[0].getAttribute('text-anchor')).toBe('middle');
+      expect(numeric(names[0], 'x')).toBe(numeric(plainName, 'x'));
+      expect(numeric(names[0], 'y')).toBe(numeric(plainName, 'y'));
     });
   });
 
@@ -677,6 +784,97 @@ describe('Renderer.buildSVG', () => {
       expect(box.fill).toBe(automationFill);
       expect(box.height).toBe(boxes.cmd1.height);
       expect(boxes).toEqual(drawnBoxes(eventActivated.svg));
+    });
+  });
+
+  describe('description marks', () => {
+    it('marks the documented command and leaves the undocumented one beside it bare', () => {
+      const { svg, positions } = render(describedAndPlainCommands());
+
+      const marks = descriptionMarkersIn(svg);
+      expect(marks.length).toBe(1);
+      expect(marks[0].getAttribute('data-node-id')).toBe('cmd1');
+      expect(cornerOf(positions.cmd1, marks[0])).toBe('top-right');
+    });
+
+    it.each([
+      { box: 'an automation stating a cadence', id: 'auto1' },
+      { box: 'a translation naming an external system', id: 'trans1' },
+    ])('keeps the mark on $box clear of the rows that box already draws', ({ id }) => {
+      const { svg } = render(describedProcessors());
+
+      const group = nodeGroup(svg, id);
+      const [mark] = descriptionMarkersIn(group);
+      const rows = proseIn(group);
+
+      expect(rows.length).toBe(2);
+      rows.forEach((row) => {
+        expect(leftEdgeOfCentred(mark)).toBeGreaterThan(rightEdgeOfCentred(row));
+      });
+    });
+
+    it('keeps the mark on a trigger in the corner and off the screen bar drawn across its top', () => {
+      const { svg, positions } = render(describedTrigger());
+
+      const group = nodeGroup(svg, 'trg1');
+      const [mark] = descriptionMarkersIn(group);
+      const screenBar = group.querySelectorAll('rect')[1];
+
+      expect(overlapArea(inkOfCentred(mark), inkOfRect(screenBar))).toBe(0);
+      expect(cornerOf(positions.trg1, mark)).toBe('top-right');
+    });
+
+    it('marks the documented slice inside its header, leaving both slice names centred where they were', () => {
+      const plain = render(twoAggregates());
+      const described = render(describedAs(twoAggregates(), { sl1: sliceDescription }));
+
+      const marks = descriptionMarkersIn(described.svg);
+      expect(marks.map((el) => el.getAttribute('data-node-id'))).toEqual(['sl1']);
+
+      const header = sliceHeaderFor(described.svg, 'sl1');
+      expect(numeric(marks[0], 'x')).toBeGreaterThan(numeric(header, 'x'));
+      expect(numeric(marks[0], 'x')).toBeLessThan(rightEdgeOfBand(header));
+      expect(numeric(marks[0], 'y')).toBeGreaterThan(numeric(header, 'y'));
+      expect(numeric(marks[0], 'y')).toBeLessThan(bottomEdgeOfBand(header));
+
+      ['sl1', 'sl2'].forEach((sliceId) => {
+        const names = sliceHeaderNames(described.svg, sliceId);
+        const [plainName] = sliceHeaderNames(plain.svg, sliceId);
+        expect(textOf(names)).toEqual([plainName.textContent]);
+        expect(names[0].getAttribute('text-anchor')).toBe('middle');
+        expect(numeric(names[0], 'x')).toBe(numeric(plainName, 'x'));
+        expect(numeric(names[0], 'y')).toBe(numeric(plainName, 'y'));
+      });
+    });
+
+    it('adds the marks without moving a single frame, box or label', () => {
+      const plain = render(twoAggregates());
+      const described = render(describedAs(twoAggregates(), {
+        cmd1: commandDescription,
+        sl1: sliceDescription,
+      }));
+
+      expect(drawnFrames(described.svg)).toEqual(drawnFrames(plain.svg));
+      expect(drawnBoxes(described.svg)).toEqual(drawnBoxes(plain.svg));
+      expect(placements(proseIn(described.svg))).toEqual(placements(proseIn(plain.svg)));
+
+      expect(descriptionMarkersIn(described.svg).map((el) => el.getAttribute('data-node-id')).sort())
+        .toEqual(['cmd1', 'sl1']);
+      expect(descriptionMarkersIn(plain.svg)).toEqual([]);
+    });
+
+    it('gives no mark a native tooltip of its own, and leaves the cadence with the one it had', () => {
+      const { svg } = render(describedAs(pairedAutomations(cronExpression), {
+        autoScheduled: automationDescription,
+        sl1: sliceDescription,
+      }));
+
+      const marks = descriptionMarkersIn(svg);
+      expect(marks.map((el) => el.getAttribute('data-node-id')).sort())
+        .toEqual(['autoScheduled', 'sl1']);
+      marks.forEach((mark) => expect(mark.querySelector('title')).toBeNull());
+
+      expect(tooltipOf(nodeGroup(svg, 'autoScheduled'))).toBe(cronExpression);
     });
   });
 

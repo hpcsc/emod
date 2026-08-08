@@ -12,16 +12,19 @@ function hasTooltipContent(node) {
   return Boolean(node.description) || nodeFields(node).length > 0;
 }
 
-function buildTooltipHtml(node) {
+function buildDescriptionHtml(node) {
   let html = '<div class="tt-header">' + Renderer.esc(node.label) + '</div>';
   if (node.description) {
     html += '<div class="tt-description">' + Renderer.esc(node.description) + '</div>';
   }
+  return html;
+}
 
+function buildFieldsHtml(node) {
   const fields = nodeFields(node);
-  if (fields.length === 0) return html;
+  if (fields.length === 0) return '';
 
-  html += '<table><thead><tr><th>Field</th><th>Type</th><th></th></tr></thead><tbody>';
+  let html = '<table><thead><tr><th>Field</th><th>Type</th><th></th></tr></thead><tbody>';
   fields.forEach(function(f) {
     const mod = f.modifier ? '<span class="tf-modifier">(' + Renderer.esc(f.modifier) + ')</span>' : '';
     html += '<tr><td class="tf-name">' + Renderer.esc(f.name) + '</td><td class="tf-type">' + Renderer.esc(f.type) + '</td><td>' + mod + '</td></tr>';
@@ -29,11 +32,15 @@ function buildTooltipHtml(node) {
   return html + '</tbody></table>';
 }
 
-function showTooltip(store, node, evt) {
+function buildTooltipHtml(node) {
+  return buildDescriptionHtml(node) + buildFieldsHtml(node);
+}
+
+function showTooltip(store, html, evt) {
   const el = store.dom.tooltip;
   if (!el) return;
 
-  el.innerHTML = buildTooltipHtml(node);
+  el.innerHTML = html;
   el.style.display = "block";
   positionTooltip(store, evt.clientX, evt.clientY);
 }
@@ -43,14 +50,31 @@ function hideTooltip(store) {
   if (el) el.style.display = "none";
 }
 
-function updateTooltipForBlock(store, block, evt) {
-  const nodeId = block.dataset.nodeId;
+function hoveredNode(store, target) {
+  const nodeId = target.dataset.nodeId;
   const node = nodeId ? store.nodeById.get(nodeId) : null;
-  if (!node || !hasTooltipContent(node) || nodeId === store.interaction.selectedNodeId) {
+  if (!node || nodeId === store.interaction.selectedNodeId) return null;
+  return node;
+}
+
+function tooltipHtmlFor(store, target) {
+  const node = hoveredNode(store, target);
+  if (!node) return "";
+
+  const marker = target.dataset.marker;
+  if (marker) {
+    return marker === "description" && node.description ? buildDescriptionHtml(node) : "";
+  }
+  return hasTooltipContent(node) ? buildTooltipHtml(node) : "";
+}
+
+function updateTooltipFor(store, target, evt) {
+  const html = tooltipHtmlFor(store, target);
+  if (!html) {
     hideTooltip(store);
     return;
   }
-  showTooltip(store, node, evt);
+  showTooltip(store, html, evt);
 }
 
 function positionTooltip(store, cx, cy) {
@@ -69,7 +93,10 @@ function positionTooltip(store, cx, cy) {
   el.style.top = Math.max(4, y) + "px";
 }
 
-let hoveredBlock = null;
+// A marker sits inside the block it documents, so it is matched first: closest()
+// walks up from the pointer and stops at whichever comes nearer. A slice's
+// marker has no block around it at all and is only reachable this way.
+const HOVER_TARGETS = "[data-marker], .diagram-node";
 
 // ─── Actor annotations ──────────────────────────────────────────
 function renderActorAnnotations(store) {
@@ -687,23 +714,26 @@ function initDelegation(store) {
   const svgEl = store.dom.svg;
 
   // Tooltip delegation
+  let hovered = null;
+
   svgEl.addEventListener("pointerover", function(evt) {
-    const block = evt.target.closest(".diagram-node");
-    if (block === hoveredBlock) return;
-    hoveredBlock = block;
-    if (block) updateTooltipForBlock(store, block, evt);
+    const target = evt.target.closest(HOVER_TARGETS);
+    if (target === hovered) return;
+    hovered = target;
+    if (target) updateTooltipFor(store, target, evt);
   });
 
   svgEl.addEventListener("pointerout", function(evt) {
-    const block = evt.target.closest(".diagram-node");
-    if (block && (!evt.relatedTarget || !evt.relatedTarget.closest(".diagram-node"))) {
-      hoveredBlock = null;
-      hideTooltip(store);
-    }
+    const target = evt.target.closest(HOVER_TARGETS);
+    if (!target) return;
+    const arriving = evt.relatedTarget ? evt.relatedTarget.closest(HOVER_TARGETS) : null;
+    if (arriving === target) return;
+    hovered = null;
+    hideTooltip(store);
   });
 
   svgEl.addEventListener("pointermove", function(evt) {
-    if (hoveredBlock) positionTooltip(store, evt.clientX, evt.clientY);
+    if (hovered) positionTooltip(store, evt.clientX, evt.clientY);
   });
 
   // Arrow handle visibility on hover
@@ -983,7 +1013,6 @@ function initKeyboard(store) {
 }
 
 export const UI = {
-  showTooltip,
   hideTooltip,
   positionTooltip,
   renderActorAnnotations,

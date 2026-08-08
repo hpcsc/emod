@@ -24,7 +24,7 @@ function createStore(nodes) {
   const tooltip = document.createElement('div');
   tooltip.style.display = 'none';
   const svg = document.createElementNS(SVG_NS, 'svg');
-  nodes.forEach((node) => svg.appendChild(blockGroup(node)));
+  nodes.filter((node) => node.type !== 'slice').forEach((node) => svg.appendChild(blockGroup(node)));
   document.body.append(tooltip, svg);
 
   return {
@@ -38,21 +38,50 @@ function commandNode(attrs = {}) {
   return Object.assign({ id: 'cmd1', type: 'command', label: 'Place Order' }, attrs);
 }
 
-function rectOf(store, nodeId) {
-  return store.dom.svg.querySelector('.diagram-node[data-node-id="' + nodeId + '"] rect');
+function blockOf(store, nodeId) {
+  return store.dom.svg.querySelector('.diagram-node[data-node-id="' + nodeId + '"]');
 }
 
-function hover(store, nodeId, at = { clientX: 40, clientY: 60 }) {
-  rectOf(store, nodeId).dispatchEvent(new MouseEvent('pointerover', { bubbles: true, ...at }));
+function rectOf(store, nodeId) {
+  return blockOf(store, nodeId).querySelector('rect');
+}
+
+function pointerOver(el, at = { clientX: 40, clientY: 60 }) {
+  el.dispatchEvent(new MouseEvent('pointerover', { bubbles: true, ...at }));
+}
+
+function pointerOut(el, at) {
+  el.dispatchEvent(new MouseEvent('pointerout', { bubbles: true, ...at }));
+}
+
+function hover(store, nodeId, at) {
+  pointerOver(rectOf(store, nodeId), at);
+}
+
+function descriptionMark(parent, nodeId) {
+  const mark = document.createElementNS(SVG_NS, 'text');
+  mark.setAttribute('data-marker', 'description');
+  mark.setAttribute('data-node-id', nodeId);
+  parent.appendChild(mark);
+  return mark;
+}
+
+function markOnBlock(store, nodeId) {
+  return descriptionMark(blockOf(store, nodeId), nodeId);
+}
+
+// A slice is drawn as a header band rather than as a block, so its mark hangs
+// off the diagram with no block group around it to fall back on.
+function markOnSliceHeader(store, nodeId) {
+  return descriptionMark(store.dom.svg, nodeId);
 }
 
 function movePointer(store, fromNodeId, toNodeId) {
-  rectOf(store, fromNodeId).dispatchEvent(new MouseEvent('pointerout', {
-    bubbles: true,
+  pointerOut(rectOf(store, fromNodeId), {
     clientX: 140,
     clientY: 60,
     relatedTarget: rectOf(store, toNodeId),
-  }));
+  });
   hover(store, toNodeId, { clientX: 140, clientY: 60 });
 }
 
@@ -76,7 +105,7 @@ beforeEach(() => {
   document.body.innerHTML = '';
 });
 
-describe('tooltip on hovering a block', () => {
+describe('tooltip on hovering the diagram', () => {
   it('reads out the description of a node stating no fields, and clears away over a sibling stating neither', () => {
     const description = 'Rooms still free on the requested dates';
     const store = createStore([
@@ -148,14 +177,56 @@ describe('tooltip on hovering a block', () => {
     expect(store.dom.tooltip.querySelector('b')).toBeNull();
   });
 
-  it('stays away over the node whose detail panel is already open', () => {
+  it('reads the description off a block\'s mark, without the fields the block itself shows', () => {
+    const description = 'Places a customer order against the stock the basket reserved';
+    const store = createStore([commandNode({ description: description, fields: ORDER_FIELDS })]);
+    UI.initDelegation(store);
+
+    pointerOver(markOnBlock(store, 'cmd1'));
+
+    expect(shownTooltip(store)).toEqual({
+      shown: true,
+      title: 'Place Order',
+      prose: [description],
+      columns: [],
+      fields: [],
+    });
+  });
+
+  it('reads a slice description off the mark in its header, and clears it when the pointer leaves', () => {
+    const description = 'Everything the guest does to hold a room';
+    const store = createStore([
+      { id: 'sl1', type: 'slice', label: 'Reserve a room', description: description },
+    ]);
+    UI.initDelegation(store);
+    const mark = markOnSliceHeader(store, 'sl1');
+
+    pointerOver(mark);
+
+    expect(shownTooltip(store)).toEqual({
+      shown: true,
+      title: 'Reserve a room',
+      prose: [description],
+      columns: [],
+      fields: [],
+    });
+
+    pointerOut(mark, { clientX: 300, clientY: 300 });
+
+    expect(shownTooltip(store).shown).toBe(false);
+  });
+
+  it.each([
+    ['its box', (store) => rectOf(store, 'cmd1')],
+    ['the mark in its corner', (store) => markOnBlock(store, 'cmd1')],
+  ])('stays away over %s while that node\'s detail panel is already open', (_, find) => {
     const store = createStore([
       commandNode({ description: 'Places a customer order', fields: ORDER_FIELDS }),
     ]);
     store.interaction.selectedNodeId = 'cmd1';
     UI.initDelegation(store);
 
-    hover(store, 'cmd1');
+    pointerOver(find(store));
 
     expect(shownTooltip(store).shown).toBe(false);
   });

@@ -3,6 +3,9 @@ import { Layout } from './layout.js';
 
 var NS = "http://www.w3.org/2000/svg";
 var clockMarking = "⏱";
+var descriptionMarking = "ⓘ";
+var markingSize = 11;
+var markingInset = 12;
 var screenBar = { inset: 8, top: 6, height: 6, stroke: 1 };
 var ellipsis = "…";
 var labelWidthFontSize = 13;
@@ -267,6 +270,21 @@ function appendAggregateAreas(swimlane, rows, y, h) {
   });
 }
 
+// The prose itself is read out on hover by the viewer's own tooltip, which is
+// why the mark carries no <title>: a native one would open beside it.
+function appendDescriptionMarking(parent, node, point, fill, attrs) {
+  if (!node.description) return;
+  var el = centeredText(point.x, point.y, descriptionMarking, markingSize, fill);
+  el.setAttribute("data-marker", "description");
+  el.setAttribute("data-node-id", node.id);
+  setAttrs(el, attrs);
+  parent.appendChild(el);
+}
+
+function markingX(pos) {
+  return pos.x + pos.w - markingInset;
+}
+
 function sliceNameX(pos) {
   return pos.x + pos.w / 2;
 }
@@ -277,8 +295,22 @@ function sliceNameX(pos) {
 function placeSliceHeaderTexts(root, sliceId, x, w) {
   var band = { x: x, w: w };
   root.querySelectorAll('text.slice-header[data-slice-id="' + sliceId + '"]').forEach(function(el) {
-    el.setAttribute("x", sliceNameX(band));
+    el.setAttribute("x", el.hasAttribute("data-marker") ? markingX(band) : sliceNameX(band));
   });
+}
+
+function sliceMarkingPoint(pos) {
+  return { x: markingX(pos), y: pos.y + L.sliceHdrH / 2 };
+}
+
+// A trigger is drawn as a screen, with a bar across the top of its box, so its
+// mark drops below the bar rather than into it.
+function blockMarkingPoint(node, pos) {
+  var belowScreenBar = pos.y + screenBar.top + screenBar.height + screenBar.stroke + markingSize / 2;
+  return {
+    x: markingX(pos),
+    y: node.type === "trigger" ? belowScreenBar : pos.y + markingInset,
+  };
 }
 
 function buildSlice(slice, sp) {
@@ -294,6 +326,10 @@ function buildSlice(slice, sp) {
     headerAttrs));
   sliceG.appendChild(svgText(sliceNameX(sp), sp.y + 18, slice.label, 12, "#495057",
     "text-anchor=\"middle\" font-weight=\"500\" " + headerAttrs));
+  // The mark stands on the band that answers the drag, the rename and the
+  // slice menu, so it joins the band rather than covering it: every one of
+  // those reaches the slice through .slice-header.
+  appendDescriptionMarking(sliceG, slice, sliceMarkingPoint(sp), "#495057", headerAttrs);
   sliceG.appendChild(svgRect(sp.x, sp.y + L.sliceHdrH, sp.w, sp.h - L.sliceHdrH, "transparent", "none",
     "class=\"slice-area\"" + owner));
   return sliceG;
@@ -381,6 +417,7 @@ function buildBlock(node, pos, palette) {
   });
 
   appendBlockLabels(blockG, node, pos, stroke);
+  appendDescriptionMarking(blockG, node, blockMarkingPoint(node, pos), stroke);
   return blockG;
 }
 
