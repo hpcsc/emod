@@ -413,6 +413,86 @@ context "Lending" {
 }
 `
 
+// givenOutsideBoundaryDCBEmod declares a mode dcb context with tagged events,
+// decides_on predicates referencing two tag keys, invariable, specs and rejections
+// so all other rules stay quiet, and states a given the when command's decides_on
+// does not list so spec/given-outside-boundary reports the DCB arm.
+const givenOutsideBoundaryDCBEmod = `model "Library Lending"
+
+context "Reading Room" mode dcb {
+  invariant OneDeskPerReader "A reader holds at most one desk"
+  slice "Desk Operations" {
+    command ClaimDesk {
+      decides_on {
+        events [DeskClaimed]
+        where tag(desk = deskId) and tag(region = regionId)
+      }
+      fields {
+        memberId string required
+        deskId   string required
+      }
+    }
+    command ReleaseDesk {
+      fields {
+        sessionId string required
+      }
+    }
+    event DeskClaimed {
+      tags {
+        desk  : deskId
+        region: regionId
+      }
+      fields {
+        sessionId string required
+        deskId    string required
+        memberId  string required
+        regionId  string required
+      }
+    }
+    event DeskReleased {
+      tags {
+        desk  : deskId
+        region: regionId
+      }
+      fields {
+        sessionId  string    required
+        deskId     string    required
+        memberId   string    required
+        regionId   string    required
+        releasedAt timestamp required
+      }
+    }
+    flow {
+      command -> event: ClaimDesk -> DeskClaimed
+    }
+    flow {
+      command -> event: ReleaseDesk -> DeskReleased
+    }
+    spec "claims a free desk" {
+      when ClaimDesk
+      then [DeskClaimed]
+    }
+    spec "refuses when reader is seated" {
+      when ClaimDesk
+      then rejected OneDeskPerReader
+    }
+    spec "claims a desk after release" {
+      given [DeskReleased]
+      when ClaimDesk
+      then [DeskClaimed]
+    }
+    spec "releases a desk" {
+      when ReleaseDesk
+      then [DeskReleased]
+    }
+    spec "refuses to release a free desk" {
+      when ReleaseDesk
+      then rejected OneDeskPerReader
+    }
+  }
+}
+`
+
 func captureStdout(t *testing.T, fn func()) string {
 	t.Helper()
 	old := os.Stdout
@@ -952,6 +1032,41 @@ context "Orders" {
 			require.Contains(t, err.Error(), path)
 			require.Contains(t, err.Error(), "[spec/given-outside-boundary]")
 			require.Contains(t, err.Error(), `given event "CopyBorrowed" names an event declared by aggregate "Loan" instead of aggregate "Reader"`)
+		})
+
+		t.Run("DCB arm: json output reports the DCB-arm message at warning severity and exits 1", func(t *testing.T) {
+			path := writeTemp(t, "outside_boundary_dcb.emod", givenOutsideBoundaryDCBEmod)
+
+			var err error
+			output := captureStdout(t, func() {
+				err = cli.RunLint(path, "json")
+			})
+
+			var lintErr *cli.LintError
+			require.True(t, errors.As(err, &lintErr))
+			require.Equal(t, 1, lintErr.ExitCode)
+
+			var entries []map[string]interface{}
+			require.NoError(t, json.Unmarshal([]byte(output), &entries))
+			require.Len(t, entries, 1)
+			require.Equal(t, "warning", entries[0]["severity"])
+			require.Equal(t, "spec/given-outside-boundary", entries[0]["rule"])
+			require.Equal(t, path, entries[0]["file"])
+			require.Contains(t, entries[0]["message"], "DeskReleased")
+			require.Contains(t, entries[0]["message"], "decides_on")
+		})
+
+		t.Run("DCB arm: text output names the rule, the event and the line it is written on", func(t *testing.T) {
+			path := writeTemp(t, "outside_boundary_dcb.emod", givenOutsideBoundaryDCBEmod)
+
+			err := cli.RunLint(path, "text")
+
+			var lintErr *cli.LintError
+			require.True(t, errors.As(err, &lintErr))
+			require.Equal(t, 1, lintErr.ExitCode)
+			require.Contains(t, err.Error(), path)
+			require.Contains(t, err.Error(), "[spec/given-outside-boundary]")
+			require.Contains(t, err.Error(), `given event "DeskReleased" names an event command "ClaimDesk"'s decides_on does not list`)
 		})
 	})
 }

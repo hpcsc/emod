@@ -679,24 +679,59 @@ func eventHomeIndex(model *ast.Model) map[string]struct {
 func checkGivenOutsideBoundary(model *ast.Model) []*diagnostic.Entry {
 	eventHome := eventHomeIndex(model)
 
+	commandIndex := make(map[string]*ast.Command)
+	for _, sl := range model.AllSlices() {
+		for _, cmd := range sl.Commands {
+			commandIndex[cmd.Name] = cmd
+		}
+	}
+
 	var diags []*diagnostic.Entry
 	for _, ctx := range model.Contexts {
 		for _, ref := range ctx.SliceRefs() {
-			if ref.Aggregate == nil {
+			if ref.Aggregate != nil {
+				for _, spec := range ref.Slice.Specs {
+					for _, given := range spec.Given {
+						home, ok := eventHome[given.Name]
+						if !ok {
+							continue
+						}
+						if home.name == ref.Aggregate.Name {
+							continue
+						}
+						diags = append(diags, warning(given.NamePos, "spec/given-outside-boundary",
+							fmt.Sprintf("given event %q names an event declared by %s %q instead of aggregate %q",
+								given.Name, home.kind, home.name, ref.Aggregate.Name)))
+					}
+				}
 				continue
 			}
+
 			for _, spec := range ref.Slice.Specs {
+				if spec.When == nil {
+					continue
+				}
+				cmd, ok := commandIndex[spec.When.Name]
+				if !ok {
+					continue
+				}
+				if cmd.DecidesOn == nil {
+					continue
+				}
+				decidesSet := make(map[string]bool, len(cmd.DecidesOn.Events))
+				for _, e := range cmd.DecidesOn.Events {
+					decidesSet[e] = true
+				}
 				for _, given := range spec.Given {
-					home, ok := eventHome[given.Name]
-					if !ok {
+					if !eventHomeIndexContains(eventHome, given.Name) {
 						continue
 					}
-					if home.name == ref.Aggregate.Name {
+					if decidesSet[given.Name] {
 						continue
 					}
 					diags = append(diags, warning(given.NamePos, "spec/given-outside-boundary",
-						fmt.Sprintf("given event %q names an event declared by %s %q instead of aggregate %q",
-							given.Name, home.kind, home.name, ref.Aggregate.Name)))
+						fmt.Sprintf("given event %q names an event command %q's decides_on does not list",
+							given.Name, spec.When.Name)))
 				}
 			}
 		}
@@ -707,4 +742,12 @@ func checkGivenOutsideBoundary(model *ast.Model) []*diagnostic.Entry {
 	})
 
 	return diags
+}
+
+func eventHomeIndexContains(index map[string]struct {
+	name string
+	kind string
+}, eventName string) bool {
+	_, ok := index[eventName]
+	return ok
 }

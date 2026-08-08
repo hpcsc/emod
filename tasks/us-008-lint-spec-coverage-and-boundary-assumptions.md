@@ -6,7 +6,7 @@
 - [x] Task 3: Report a command whose specs never reject
 - [x] Task 4: Report an invariant no rejection references
 - [x] Task 5: Report a `given` event outside the aggregate boundary
-- [ ] Task 6: Report a `given` event the command's `decides_on` does not match
+- [x] Task 6: Report a `given` event the command's `decides_on` does not match
 
 ---
 

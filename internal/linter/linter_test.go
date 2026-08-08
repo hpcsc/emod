@@ -4989,6 +4989,294 @@ func TestLint(t *testing.T) {
 
 			require.Empty(t, diags)
 		})
+
+		t.Run("DCB arm: reports a given event not listed by the when command's decides_on", func(t *testing.T) {
+			makeDCBModel := func() *ast.Model {
+				return &ast.Model{
+					Contexts: []*ast.Context{
+						{
+							Name: "Reading Room", Mode: "dcb",
+							Invariants: []*ast.Invariant{
+								{Name: "OneDeskPerReader", NamePos: ast.Position{Filename: "reading.emod", Line: 2, Column: 18}},
+							},
+							Slices: []*ast.Slice{{Name: "Claim Desk",
+								Commands: []*ast.Command{{
+									Name: "ClaimDesk", NamePos: ast.Position{Filename: "reading.emod", Line: 4, Column: 9},
+									DecidesOn: &ast.DecidesOnClause{
+										Events:    []string{"DeskClaimed"},
+										Predicate: &ast.LogicalExpr{Left: &ast.TagPredicate{Field: "desk"}, Right: &ast.TagPredicate{Field: "region"}},
+									},
+								}},
+								Events: []*ast.Event{
+									{Name: "DeskClaimed", NamePos: ast.Position{Filename: "reading.emod", Line: 10, Column: 9}, Tags: []ast.TagEntry{{Key: "desk", FieldRef: "deskId"}, {Key: "region", FieldRef: "regionId"}}},
+									{Name: "DeskReleased", NamePos: ast.Position{Filename: "reading.emod", Line: 12, Column: 9}, Tags: []ast.TagEntry{{Key: "desk", FieldRef: "deskId"}, {Key: "region", FieldRef: "regionId"}}},
+								},
+								Specs: []*ast.Spec{
+									{Name: "claims a desk", When: &ast.SpecElement{Name: "ClaimDesk"}, Then: &ast.ThenEvents{}},
+									{Name: "refuses when taken", When: &ast.SpecElement{Name: "ClaimDesk"}, Then: &ast.ThenRejected{InvariantName: "OneDeskPerReader"}},
+								},
+							}},
+						},
+					},
+				}
+			}
+
+			model := makeDCBModel()
+			model.Contexts[0].Slices[0].Specs = append(model.Contexts[0].Slices[0].Specs, &ast.Spec{
+				Name: "claims a desk when released",
+				When: &ast.SpecElement{Name: "ClaimDesk"},
+				Given: []*ast.SpecElement{
+					{Name: "DeskReleased", NamePos: ast.Position{Filename: "reading.emod", Line: 22, Column: 15}},
+				},
+				Then: &ast.ThenEvents{},
+			})
+
+			diags := linter.Lint(model)
+
+			require.Len(t, diags, 1)
+			require.Equal(t, "spec/given-outside-boundary", diags[0].RuleName)
+			require.Equal(t, diagnostic.Warning, diags[0].Severity)
+			require.Equal(t, `given event "DeskReleased" names an event command "ClaimDesk"'s decides_on does not list`, diags[0].Message)
+		})
+
+		t.Run("DCB arm: reports nothing when the given event is in decides_on", func(t *testing.T) {
+			model := &ast.Model{
+				Contexts: []*ast.Context{
+					{
+						Name: "Reading Room", Mode: "dcb",
+						Invariants: []*ast.Invariant{
+							{Name: "OneDeskPerReader", NamePos: ast.Position{Filename: "reading.emod", Line: 2, Column: 18}},
+						},
+						Slices: []*ast.Slice{{Name: "Claim Desk",
+							Commands: []*ast.Command{{
+								Name: "ClaimDesk", NamePos: ast.Position{Filename: "reading.emod", Line: 4, Column: 9},
+								DecidesOn: &ast.DecidesOnClause{
+									Events:    []string{"DeskClaimed", "DeskReleased"},
+									Predicate: &ast.LogicalExpr{Left: &ast.TagPredicate{Field: "desk"}, Right: &ast.TagPredicate{Field: "region"}},
+								},
+							}},
+							Events: []*ast.Event{
+								{Name: "DeskClaimed", NamePos: ast.Position{Filename: "reading.emod", Line: 10, Column: 9}, Tags: []ast.TagEntry{{Key: "desk", FieldRef: "deskId"}, {Key: "region", FieldRef: "regionId"}}},
+							},
+							Specs: []*ast.Spec{
+								{Name: "claims a desk", When: &ast.SpecElement{Name: "ClaimDesk"}, Then: &ast.ThenEvents{}},
+								{Name: "refuses when taken", When: &ast.SpecElement{Name: "ClaimDesk"}, Then: &ast.ThenRejected{InvariantName: "OneDeskPerReader"}},
+								{
+									Name: "claims a desk when released",
+									When: &ast.SpecElement{Name: "ClaimDesk"},
+									Given: []*ast.SpecElement{{Name: "DeskClaimed", NamePos: ast.Position{Filename: "reading.emod", Line: 20, Column: 15}}},
+									Then: &ast.ThenEvents{},
+								},
+							},
+						}},
+					},
+				},
+			}
+
+			diags := linter.Lint(model)
+			require.Empty(t, diags)
+		})
+
+		t.Run("DCB arm: a command with no decides_on puts nothing outside the boundary", func(t *testing.T) {
+			model := &ast.Model{
+				Contexts: []*ast.Context{
+					{
+						Name: "Reading Room", Mode: "dcb",
+						Invariants: []*ast.Invariant{
+							{Name: "OneDeskPerReader", NamePos: ast.Position{Filename: "reading.emod", Line: 2, Column: 18}},
+						},
+						Slices: []*ast.Slice{{Name: "Claim Desk",
+							Commands: []*ast.Command{{Name: "ClaimDesk", NamePos: ast.Position{Filename: "reading.emod", Line: 4, Column: 9}}},
+							Specs: []*ast.Spec{
+								{Name: "claims a desk", When: &ast.SpecElement{Name: "ClaimDesk"}, Then: &ast.ThenEvents{}},
+								{Name: "refuses when taken", When: &ast.SpecElement{Name: "ClaimDesk"}, Then: &ast.ThenRejected{InvariantName: "OneDeskPerReader"}},
+								{
+									Name: "claims a desk after release",
+									When: &ast.SpecElement{Name: "ClaimDesk"},
+									Given: []*ast.SpecElement{{Name: "DeskClaimed", NamePos: ast.Position{Filename: "reading.emod", Line: 14, Column: 15}}},
+									Then: &ast.ThenEvents{},
+								},
+							},
+						}},
+					},
+				},
+			}
+
+			diags := linter.Lint(model)
+			require.Empty(t, diags)
+		})
+
+		t.Run("DCB arm: a spec whose when is absent produces no diagnostic", func(t *testing.T) {
+			model := &ast.Model{
+				Contexts: []*ast.Context{
+					{
+						Name: "Reading Room", Mode: "dcb",
+						Slices: []*ast.Slice{{Name: "Claim Desk",
+							Specs: []*ast.Spec{
+								{Name: "claims a desk", Given: []*ast.SpecElement{{Name: "DeskReleased", NamePos: ast.Position{Filename: "reading.emod", Line: 5, Column: 15}}}},
+							},
+						}},
+					},
+				},
+			}
+
+			diags := linter.Lint(model)
+			require.Empty(t, diags)
+		})
+
+		t.Run("DCB arm: an undeclared given event produces no diagnostic", func(t *testing.T) {
+			model := &ast.Model{
+				Contexts: []*ast.Context{
+					{
+						Name: "Reading Room", Mode: "dcb",
+						Invariants: []*ast.Invariant{
+							{Name: "OneDeskPerReader", NamePos: ast.Position{Filename: "reading.emod", Line: 2, Column: 18}},
+						},
+						Slices: []*ast.Slice{{Name: "Claim Desk",
+							Commands: []*ast.Command{{
+								Name: "ClaimDesk", NamePos: ast.Position{Filename: "reading.emod", Line: 4, Column: 9},
+								DecidesOn: &ast.DecidesOnClause{
+									Events:    []string{"DeskClaimed"},
+									Predicate: &ast.LogicalExpr{Left: &ast.TagPredicate{Field: "desk"}, Right: &ast.TagPredicate{Field: "region"}},
+								},
+							}},
+							Events: []*ast.Event{
+								{Name: "DeskClaimed", NamePos: ast.Position{Filename: "reading.emod", Line: 10, Column: 9}, Tags: []ast.TagEntry{{Key: "desk", FieldRef: "deskId"}, {Key: "region", FieldRef: "regionId"}}},
+							},
+							Specs: []*ast.Spec{
+								{Name: "claims a desk", When: &ast.SpecElement{Name: "ClaimDesk"}, Then: &ast.ThenEvents{}},
+								{Name: "refuses when taken", When: &ast.SpecElement{Name: "ClaimDesk"}, Then: &ast.ThenRejected{InvariantName: "OneDeskPerReader"}},
+								{
+									Name: "unknown event", When: &ast.SpecElement{Name: "ClaimDesk"},
+									Given: []*ast.SpecElement{{Name: "UnknownEvent", NamePos: ast.Position{Filename: "reading.emod", Line: 20, Column: 15}}},
+									Then: &ast.ThenEvents{},
+								},
+							},
+						}},
+					},
+				},
+			}
+
+			diags := linter.Lint(model)
+			require.Empty(t, diags)
+		})
+
+		t.Run("DCB arm: reports every offending name in declaration order", func(t *testing.T) {
+			model := &ast.Model{
+				Contexts: []*ast.Context{
+					{
+						Name: "Reading Room", Mode: "dcb",
+						Invariants: []*ast.Invariant{
+							{Name: "OneDeskPerReader", NamePos: ast.Position{Filename: "reading.emod", Line: 2, Column: 18}},
+						},
+						Slices: []*ast.Slice{{Name: "Claim Desk",
+							Commands: []*ast.Command{{
+								Name: "ClaimDesk", NamePos: ast.Position{Filename: "reading.emod", Line: 4, Column: 9},
+								DecidesOn: &ast.DecidesOnClause{
+									Events:    []string{"DeskClaimed"},
+									Predicate: &ast.LogicalExpr{Left: &ast.TagPredicate{Field: "desk"}, Right: &ast.TagPredicate{Field: "region"}},
+								},
+							}},
+							Events: []*ast.Event{
+								{Name: "DeskClaimed", NamePos: ast.Position{Filename: "reading.emod", Line: 10, Column: 9}, Tags: []ast.TagEntry{{Key: "desk", FieldRef: "deskId"}, {Key: "region", FieldRef: "regionId"}}},
+								{Name: "DeskReleased", NamePos: ast.Position{Filename: "reading.emod", Line: 12, Column: 9}, Tags: []ast.TagEntry{{Key: "desk", FieldRef: "deskId"}, {Key: "region", FieldRef: "regionId"}}},
+							},
+							Specs: []*ast.Spec{
+								{Name: "claims a desk", When: &ast.SpecElement{Name: "ClaimDesk"}, Then: &ast.ThenEvents{}},
+								{Name: "refuses when taken", When: &ast.SpecElement{Name: "ClaimDesk"}, Then: &ast.ThenRejected{InvariantName: "OneDeskPerReader"}},
+								{
+									Name: "claims a desk after events", When: &ast.SpecElement{Name: "ClaimDesk"},
+									Given: []*ast.SpecElement{
+										{Name: "DeskReleased", NamePos: ast.Position{Filename: "reading.emod", Line: 18, Column: 15}},
+										{Name: "DeskClaimed", NamePos: ast.Position{Filename: "reading.emod", Line: 19, Column: 15}},
+									},
+									Then: &ast.ThenEvents{},
+								},
+							},
+						}},
+					},
+				},
+			}
+
+			diags := linter.Lint(model)
+
+			require.Equal(t, []string{
+				`reading.emod:18: [spec/given-outside-boundary] given event "DeskReleased" names an event command "ClaimDesk"'s decides_on does not list`,
+			}, reportedLines(diags))
+		})
+
+		t.Run("both arms report one diagnostic each per arm with different text", func(t *testing.T) {
+			model := &ast.Model{
+				Contexts: []*ast.Context{
+					{
+						Name: "Lending",
+						Aggregates: []*ast.Aggregate{
+							{
+								Name: "Loan",
+								Slices: []*ast.Slice{
+									{Name: "Borrow Copy",
+										Events: []*ast.Event{
+											{Name: "CopyBorrowed", NamePos: ast.Position{Filename: "lending.emod", Line: 6, Column: 9}},
+										},
+									},
+								},
+							},
+							{
+								Name: "Reader",
+								Slices: []*ast.Slice{
+									{Name: "Claim Desk",
+										Specs: []*ast.Spec{
+											{Name: "claims a desk", When: &ast.SpecElement{Name: "ClaimDesk"},
+												Given: []*ast.SpecElement{
+													{Name: "CopyBorrowed", NamePos: ast.Position{Filename: "lending.emod", Line: 16, Column: 15}},
+												},
+											},
+										},
+									},
+								},
+							},
+						},
+					},
+					{
+						Name: "Reading Room", Mode: "dcb",
+						Invariants: []*ast.Invariant{
+							{Name: "OneDeskPerDay", NamePos: ast.Position{Filename: "lending.emod", Line: 24, Column: 18}},
+						},
+						Slices: []*ast.Slice{
+							{Name: "Release Desk",
+								Commands: []*ast.Command{{
+									Name: "ReleaseDesk", NamePos: ast.Position{Filename: "lending.emod", Line: 26, Column: 9},
+									DecidesOn: &ast.DecidesOnClause{
+										Events:    []string{"DeskClaimed"},
+										Predicate: &ast.LogicalExpr{Left: &ast.TagPredicate{Field: "desk"}, Right: &ast.TagPredicate{Field: "region"}},
+									},
+								}},
+								Events: []*ast.Event{
+									{Name: "DeskClaimed", NamePos: ast.Position{Filename: "lending.emod", Line: 30, Column: 9}, Tags: []ast.TagEntry{{Key: "desk", FieldRef: "deskId"}, {Key: "region", FieldRef: "regionId"}}},
+									{Name: "DeskReleased", NamePos: ast.Position{Filename: "lending.emod", Line: 32, Column: 9}, Tags: []ast.TagEntry{{Key: "desk", FieldRef: "deskId"}, {Key: "region", FieldRef: "regionId"}}},
+								},
+								Specs: []*ast.Spec{
+									{Name: "releases a free desk", When: &ast.SpecElement{Name: "ReleaseDesk"}, Then: &ast.ThenRejected{InvariantName: "OneDeskPerDay"}},
+									{
+										Name: "releases a desk", When: &ast.SpecElement{Name: "ReleaseDesk"},
+										Given: []*ast.SpecElement{
+											{Name: "DeskReleased", NamePos: ast.Position{Filename: "lending.emod", Line: 38, Column: 15}},
+										},
+									},
+								},
+							},
+						},
+					},
+				},
+			}
+
+			diags := linter.Lint(model)
+
+			require.Equal(t, []string{
+				`lending.emod:16: [spec/given-outside-boundary] given event "CopyBorrowed" names an event declared by aggregate "Loan" instead of aggregate "Reader"`,
+				`lending.emod:38: [spec/given-outside-boundary] given event "DeskReleased" names an event command "ReleaseDesk"'s decides_on does not list`,
+			}, reportedLines(diags))
+		})
 	})
 }
 
