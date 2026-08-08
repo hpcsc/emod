@@ -7,8 +7,8 @@
 - [x] Task 4: Reject a `then` shape the enclosing slice cannot state
 - [x] Task 5: Preserve the view and command outcomes through `emod fmt`
 - [x] Task 6: Carry the two outcomes through the JSON and CUE exports and the embedded schema
-- [ ] Task 7: Accept the two outcomes in the tree-sitter grammar
-- [ ] Task 8: Document the four spec shapes in the DSL reference
+- [x] Task 7: Accept the two outcomes in the tree-sitter grammar
+- [x] Task 8: Document the four spec shapes in the DSL reference
 
 ---
 
