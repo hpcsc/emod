@@ -1,7 +1,7 @@
 # US-007: Write specs for view, automation, and translation slices
 
 ## Progress
-- [ ] Task 1: Parse `then view <ViewName>` and `then command <CommandName>`
+- [x] Task 1: Parse `then view <ViewName>` and `then command <CommandName>`
 - [ ] Task 2: Share a fixture stating a spec for every slice pattern
 - [ ] Task 3: Resolve a spec's view and command outcomes against the model
 - [ ] Task 4: Reject a `then` shape the enclosing slice cannot state

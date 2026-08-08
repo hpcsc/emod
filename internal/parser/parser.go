@@ -512,8 +512,26 @@ func (p *Instance) parseSpecOutcome(keywordTok *lexer.Token) ast.ThenClause {
 		}
 		nameTok := p.advance()
 		return &ast.ThenRejected{InvariantName: nameTok.Value, InvariantPos: p.position(nameTok)}
+	case p.check(lexer.KeywordView):
+		viewTok := p.advance()
+		if !p.checkSameLineAs(viewTok) || !p.check(lexer.Identifier) {
+			p.errorAt(keywordTok, "expected view name after view in spec")
+			p.skipRestOfLineOrBlockEnd(viewTok)
+			return nil
+		}
+		nameTok := p.advance()
+		return &ast.ThenView{ViewName: nameTok.Value, ViewPos: p.position(nameTok)}
+	case p.check(lexer.KeywordCommand):
+		commandTok := p.advance()
+		if !p.checkSameLineAs(commandTok) || !p.check(lexer.Identifier) {
+			p.errorAt(keywordTok, "expected command name after command in spec")
+			p.skipRestOfLineOrBlockEnd(commandTok)
+			return nil
+		}
+		nameTok := p.advance()
+		return &ast.ThenCommand{CommandName: nameTok.Value, CommandPos: p.position(nameTok)}
 	default:
-		p.errorAt(keywordTok, "expected an event list or rejected after then in spec")
+		p.errorAt(keywordTok, "expected an event list, rejected, view or command after then in spec")
 		p.skipRestOfLineOrBlockEnd(keywordTok)
 		return nil
 	}

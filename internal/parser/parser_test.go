@@ -1265,6 +1265,207 @@ context "Lending" {
 			requireSpecCoverage(t, test.SpecLibraryLending, declaredSpecs(model))
 			requireASpecAheadOfALaterEntry(t, model)
 		})
+
+		t.Run("a spec whose then names a view records the view outcome", func(t *testing.T) {
+			input := `model "Library Lending"
+context "Lending" {
+  aggregate "Loan" {
+    slice "List Member Loans" {
+      view MemberLoansView {
+        fields {
+          loanId string
+        }
+        subscribes [LoanMade]
+      }
+      spec "lists member loans" {
+        given []
+        when ListMemberLoans
+        then view MemberLoansView
+      }
+    }
+  }
+}`
+			tokens, lexDiags := lexer.Scan(input, "test.emod")
+			require.Empty(t, lexDiags)
+
+			model, diags := parser.New(tokens, "test.emod").Parse()
+
+			require.Empty(t, diags)
+			specs := model.Contexts[0].Aggregates[0].Slices[0].Specs
+			require.Len(t, specs, 1)
+			require.Equal(t, "view", outcomeKind(specs[0].Then))
+			test.RequireEqual(t, &ast.ThenView{
+				ViewName: "MemberLoansView",
+				ViewPos:  astPositionOf(t, "test.emod", input, "then view MemberLoansView", "MemberLoansView"),
+			}, specs[0].Then)
+		})
+
+		t.Run("a spec whose then names a command records the command outcome", func(t *testing.T) {
+			input := `model "Library Lending"
+context "Lending" mode dcb {
+  slice "Recall a Copy" {
+    spec "recalls a copy" {
+      given []
+      when CopyOverdue
+      then command RecallCopy
+    }
+  }
+}`
+			tokens, lexDiags := lexer.Scan(input, "test.emod")
+			require.Empty(t, lexDiags)
+
+			model, diags := parser.New(tokens, "test.emod").Parse()
+
+			require.Empty(t, diags)
+			specs := model.Contexts[0].Slices[0].Specs
+			require.Len(t, specs, 1)
+			require.Equal(t, "command", outcomeKind(specs[0].Then))
+			test.RequireEqual(t, &ast.ThenCommand{
+				CommandName: "RecallCopy",
+				CommandPos:  astPositionOf(t, "test.emod", input, "then command RecallCopy", "RecallCopy"),
+			}, specs[0].Then)
+		})
+
+		t.Run("view and command outcomes parse in both slice homes", func(t *testing.T) {
+			tests := []struct {
+				name     string
+				input    string
+				wantKind string
+			}{
+				{
+					name: "a view outcome nested in an aggregate",
+					input: `model "Test"
+context "Lending" {
+  aggregate "Loan" {
+    slice "Slice" {
+      spec "spec" {
+        given []
+        when DoThing
+        then view MemberLoansView
+      }
+    }
+  }
+}`,
+					wantKind: "view",
+				},
+				{
+					name: "a command outcome nested in an aggregate",
+					input: `model "Test"
+context "Lending" {
+  aggregate "Loan" {
+    slice "Slice" {
+      spec "spec" {
+        given []
+        when DoThing
+        then command RecallCopy
+      }
+    }
+  }
+}`,
+					wantKind: "command",
+				},
+				{
+					name: "a view outcome on a mode dcb context",
+					input: `model "Test"
+context "Lending" mode dcb {
+  slice "Slice" {
+    spec "spec" {
+      given []
+      when DoThing
+      then view MemberLoansView
+    }
+  }
+}`,
+					wantKind: "view",
+				},
+				{
+					name: "a command outcome on a mode dcb context",
+					input: `model "Test"
+context "Lending" mode dcb {
+  slice "Slice" {
+    spec "spec" {
+      given []
+      when DoThing
+      then command RecallCopy
+    }
+  }
+}`,
+					wantKind: "command",
+				},
+			}
+
+			for _, tc := range tests {
+				t.Run(tc.name, func(t *testing.T) {
+					tokens, lexDiags := lexer.Scan(tc.input, "test.emod")
+					require.Empty(t, lexDiags)
+
+					model, diags := parser.New(tokens, "test.emod").Parse()
+
+					require.Empty(t, diags)
+					specs := declaredSpecs(model)
+					require.Len(t, specs, 1)
+					require.Equal(t, tc.wantKind, outcomeKind(specs[0].Then))
+				})
+			}
+		})
+
+		t.Run("a view or command outcome with no when parses with no diagnostics", func(t *testing.T) {
+			tests := []struct {
+				name    string
+				outcome string
+				want    ast.ThenClause
+			}{
+				{
+					name:    "a view outcome and no when",
+					outcome: "then view MemberLoansView",
+					want:    &ast.ThenView{ViewName: "MemberLoansView"},
+				},
+				{
+					name:    "a command outcome and no when",
+					outcome: "then command RecallCopy",
+					want:    &ast.ThenCommand{CommandName: "RecallCopy"},
+				},
+			}
+
+			for _, tc := range tests {
+				t.Run(tc.name, func(t *testing.T) {
+					input := modelWithSpecEntries(tc.outcome)
+					tokens, lexDiags := lexer.Scan(input, "test.emod")
+					require.Empty(t, lexDiags)
+
+					model, diags := parser.New(tokens, "test.emod").Parse()
+
+					require.Empty(t, diags)
+					spec := model.Contexts[0].Aggregates[0].Slices[0].Specs[0]
+					require.Nil(t, spec.When)
+					test.RequireEqual(t, tc.want, spec.Then, ignoreASTPositions)
+				})
+			}
+		})
+
+		t.Run("a command outcome after an event when parses with no diagnostics", func(t *testing.T) {
+			input := `model "Library Lending"
+context "Lending" mode dcb {
+  slice "Recall a Copy" {
+    spec "recalls a copy" {
+      given []
+      when CopyOverdue
+      then command RecallCopy
+    }
+  }
+}`
+			tokens, lexDiags := lexer.Scan(input, "test.emod")
+			require.Empty(t, lexDiags)
+
+			model, diags := parser.New(tokens, "test.emod").Parse()
+
+			require.Empty(t, diags)
+			spec := model.Contexts[0].Slices[0].Specs[0]
+			require.Equal(t, "CopyOverdue", spec.When.Name)
+			require.Equal(t, "command", outcomeKind(spec.Then))
+			require.Equal(t, "RecallCopy", spec.Then.(*ast.ThenCommand).CommandName)
+		})
+
 	})
 
 	t.Run("commands, events and flows", func(t *testing.T) {
@@ -2879,6 +3080,130 @@ context "Lending" {
 			require.Contains(t, diags[0].Message, "spec")
 			require.Contains(t, diags[0].Message, "event list")
 			require.Contains(t, diags[0].Message, "rejected")
+
+			slice := model.Contexts[0].Aggregates[0].Slices[0]
+			require.Len(t, slice.Commands, 1)
+			require.Equal(t, "BorrowCopy", slice.Commands[0].Name)
+			require.Len(t, slice.Specs, 1)
+			require.Nil(t, slice.Specs[0].Then)
+			require.Equal(t, "BorrowCopy", specElementName(slice.Specs[0].When))
+			require.NotZero(t, slice.Specs[0].ClosePos.Line)
+			require.NotZero(t, slice.ClosePos.Line)
+			require.NotZero(t, model.Contexts[0].ClosePos.Line)
+		})
+
+		t.Run("then view or then command naming nothing reports one diagnostic and the entry below still parses", func(t *testing.T) {
+			tests := []struct {
+				name      string
+				entry     string
+				keyword   string
+				nextEntry string
+				wantWhen  string
+			}{
+				{
+					name:      "then view naming no view",
+					entry:     "then view",
+					keyword:   "then",
+					nextEntry: "when BorrowCopy",
+					wantWhen:  "BorrowCopy",
+				},
+				{
+					name:      "then command naming no command",
+					entry:     "then command",
+					keyword:   "then",
+					nextEntry: "when BorrowCopy",
+					wantWhen:  "BorrowCopy",
+				},
+			}
+
+			for _, tc := range tests {
+				t.Run(tc.name, func(t *testing.T) {
+					input := fmt.Sprintf(`model "Test"
+context "Lending" {
+  aggregate "Loan" {
+    slice "Borrow a Copy" {
+      spec "borrows a free copy" {
+        %s
+        %s
+      }
+    }
+  }
+}`, tc.entry, tc.nextEntry)
+					tokens, lexDiags := lexer.Scan(input, "test.emod")
+					require.Empty(t, lexDiags)
+
+					model, diags := parser.New(tokens, "test.emod").Parse()
+
+					require.Len(t, diags, 1)
+					require.Contains(t, diags[0].Message, "spec")
+					line, column := positionOf(t, input, tc.entry, tc.keyword)
+					require.Equal(t, line, diags[0].Line)
+					require.Equal(t, column, diags[0].Column)
+
+					specs := model.Contexts[0].Aggregates[0].Slices[0].Specs
+					require.Len(t, specs, 1)
+					require.Equal(t, tc.wantWhen, specElementName(specs[0].When))
+					require.Nil(t, specs[0].Then)
+				})
+			}
+		})
+
+		t.Run("a name on the line below then view is not taken as the outcome", func(t *testing.T) {
+			input := `model "Test"
+context "Lending" {
+  aggregate "Loan" {
+    slice "Borrow a Copy" {
+      spec "borrows a free copy" {
+        when BorrowCopy
+        then view
+        MemberLoansView
+      }
+    }
+  }
+}`
+			tokens, lexDiags := lexer.Scan(input, "test.emod")
+			require.Empty(t, lexDiags)
+
+			model, diags := parser.New(tokens, "test.emod").Parse()
+
+			require.Len(t, diags, 2)
+			require.Contains(t, diags[0].Message, "expected view name after view in spec")
+			specs := model.Contexts[0].Aggregates[0].Slices[0].Specs
+			require.Len(t, specs, 1)
+			require.Nil(t, specs[0].Then)
+		})
+
+		t.Run("then followed by an unrecognised outcome names all four accepted outcomes and the enclosing blocks close", func(t *testing.T) {
+			input := `model "Test"
+context "Lending" {
+  aggregate "Loan" {
+    slice "Borrow a Copy" {
+      command BorrowCopy {
+        fields {
+          copyId string required
+        }
+      }
+      spec "borrows a free copy" {
+        given []
+        when BorrowCopy
+        then CopyBorrowed
+      }
+    }
+  }
+}`
+			tokens, lexDiags := lexer.Scan(input, "test.emod")
+			require.Empty(t, lexDiags)
+
+			model, diags := parser.New(tokens, "test.emod").Parse()
+
+			require.Len(t, diags, 1)
+			line, column := positionOf(t, input, "then CopyBorrowed", "then")
+			require.Equal(t, line, diags[0].Line)
+			require.Equal(t, column, diags[0].Column)
+			require.Contains(t, diags[0].Message, "event list")
+			require.Contains(t, diags[0].Message, "rejected")
+			require.Regexp(t, `\bview\b`, diags[0].Message)
+			require.Regexp(t, `\bcommand\b`, diags[0].Message)
 
 			slice := model.Contexts[0].Aggregates[0].Slices[0]
 			require.Len(t, slice.Commands, 1)
@@ -5674,6 +5999,10 @@ func outcomeKind(outcome ast.ThenClause) string {
 		return "events"
 	case *ast.ThenRejected:
 		return "rejection"
+	case *ast.ThenView:
+		return "view"
+	case *ast.ThenCommand:
+		return "command"
 	default:
 		return fmt.Sprintf("%T", outcome)
 	}
@@ -5688,6 +6017,10 @@ func outcomeLine(outcome ast.ThenClause) int {
 		return then.Events[0].NamePos.Line
 	case *ast.ThenRejected:
 		return then.InvariantPos.Line
+	case *ast.ThenView:
+		return then.ViewPos.Line
+	case *ast.ThenCommand:
+		return then.CommandPos.Line
 	default:
 		return 0
 	}

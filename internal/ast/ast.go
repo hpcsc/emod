@@ -125,6 +125,20 @@ type ThenRejected struct {
 
 func (*ThenRejected) thenNode() {}
 
+type ThenView struct {
+	ViewName string
+	ViewPos  Position
+}
+
+func (*ThenView) thenNode() {}
+
+type ThenCommand struct {
+	CommandName string
+	CommandPos  Position
+}
+
+func (*ThenCommand) thenNode() {}
+
 type Command struct {
 	Comments       []*Comment
 	Name           string
