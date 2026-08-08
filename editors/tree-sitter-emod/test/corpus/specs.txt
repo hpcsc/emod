@@ -226,3 +226,228 @@ context "Fulfillment" {
         (spec_then
           (spec_event_list
             (any_identifier)))))))
+========================
+View slice spec with then view outcome and no when
+========================
+
+context "C" {
+  aggregate "A" {
+    slice "S" {
+      view V { subscribes [] }
+      spec "shows V" {
+        given [E1, E2]
+        then view V
+      }
+    }
+  }
+}
+
+---
+
+(source_file
+  (context_definition
+    (string)
+    (aggregate_definition
+      (string)
+      (slice_definition
+        (string)
+        (view_definition
+          (identifier)
+          (subscribes_block))
+        (spec_definition
+          (string)
+          (spec_given
+            (spec_event_list
+              (any_identifier)
+              (any_identifier)))
+          (spec_then
+            (any_identifier)))))))
+
+========================
+Event-driven automation spec with when and then command
+========================
+
+context "C" {
+  aggregate "A" {
+    slice "S" {
+      automation Auto {
+        on Evt
+        command Cmd
+        target context Ctx
+      }
+      spec "auto fires" {
+        when Evt
+        then command Cmd
+      }
+    }
+  }
+}
+
+---
+
+(source_file
+  (context_definition
+    (string)
+    (aggregate_definition
+      (string)
+      (slice_definition
+        (string)
+        (automation_definition
+          (identifier)
+          (any_identifier)
+          (any_identifier)
+          (any_identifier))
+        (spec_definition
+          (string)
+          (spec_when
+            (any_identifier))
+          (spec_then
+            (any_identifier)))))))
+
+========================
+Schedule-driven automation spec with no when and then command
+========================
+
+context "C" {
+  slice "S" {
+    automation Auto {
+      every "30m"
+      command Cmd
+      target context Ctx
+    }
+    spec "auto fires" {
+      then command Cmd
+    }
+  }
+}
+
+---
+
+(source_file
+  (context_definition
+    (string)
+    (slice_definition
+      (string)
+      (automation_definition
+        (identifier)
+        (string)
+        (any_identifier)
+        (any_identifier))
+      (spec_definition
+        (string)
+        (spec_then
+          (any_identifier))))))
+
+========================
+Translation slice spec in given/when/then-events form
+========================
+
+context "C" {
+  aggregate "A" {
+    slice "S" {
+      translation Trans {
+        external_system "Ext"
+        reads V
+        command Cmd
+        event Evt {}
+      }
+      spec "trans spec" {
+        given [E1]
+        when Cmd
+        then [Evt]
+      }
+    }
+  }
+}
+
+---
+
+(source_file
+  (context_definition
+    (string)
+    (aggregate_definition
+      (string)
+      (slice_definition
+        (string)
+        (translation_definition
+          (identifier)
+          (string)
+          (any_identifier)
+          (any_identifier)
+          (event_definition
+            (identifier)))
+        (spec_definition
+          (string)
+          (spec_given
+            (spec_event_list
+              (any_identifier)))
+          (spec_when
+            (any_identifier))
+          (spec_then
+            (spec_event_list
+              (any_identifier))))))))
+
+========================
+Spec entries out of canonical order with then view
+========================
+
+context "C" {
+  aggregate "A" {
+    slice "S" {
+      view V { subscribes [] }
+      spec "reordered" {
+        then view V
+        given [E1, E2]
+      }
+    }
+  }
+}
+
+---
+
+(source_file
+  (context_definition
+    (string)
+    (aggregate_definition
+      (string)
+      (slice_definition
+        (string)
+        (view_definition
+          (identifier)
+          (subscribes_block))
+        (spec_definition
+          (string)
+          (spec_then
+            (any_identifier))
+          (spec_given
+            (spec_event_list
+              (any_identifier)
+              (any_identifier))))))))
+
+========================
+View slice spec on a DCB context
+========================
+
+context "C" {
+  slice "S" {
+    view V { subscribes [] }
+    spec "shows V" {
+      then view V
+    }
+  }
+}
+
+---
+
+(source_file
+  (context_definition
+    (string)
+    (slice_definition
+      (string)
+      (view_definition
+        (identifier)
+        (subscribes_block))
+      (spec_definition
+        (string)
+        (spec_then
+          (any_identifier))))))

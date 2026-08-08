@@ -103,7 +103,7 @@ module.exports = grammar({
       $.spec_definition,
     ),
 
-    // spec "name" { given [...] when Cmd then [...] | then rejected Name }
+    // spec "name" { given [...] when Cmd then [...] | then rejected Name | then view Name | then command Name }
     spec_definition: $ => seq(
       'spec',
       $.string,
@@ -127,6 +127,8 @@ module.exports = grammar({
       choice(
         $.spec_event_list,
         seq('rejected', $.any_identifier),
+        seq('view', $.any_identifier),
+        seq('command', $.any_identifier),
       ),
     ),
 
