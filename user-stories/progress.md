@@ -3,7 +3,7 @@
 Which story in each in-progress story file is delivered. Files under
 `user-stories/completed/` are finished in full and are not tracked here.
 
-**28 of 180 delivered.**
+**30 of 180 delivered.**
 
 ## [emod-desktop.md](./emod-desktop.md) — 0/16
 
@@ -87,10 +87,15 @@ detail panel of their own.
 - [x] US-005: Spot and read a description without opening the panel
 - [x] US-006: Spot and read comments on any construct
 
-## [viewer-legend.md](./viewer-legend.md) — 0/2
+## [viewer-legend.md](./viewer-legend.md) — 2/2
 
-- [ ] US-001: Read what each element colour means
-- [ ] US-002: Read what each connection style means
+Delivered in full. A Legend panel, off by default and toggled from the toolbar, naming every
+element colour and every connection style. Both sections are built from `nodePalette` and
+`edgeConfig` at render time rather than restating a colour, so a new type reaches the legend
+without a second edit — a test scans `legend.js` and the panel's stylesheet to keep it that way.
+
+- [x] US-001: Read what each element colour means
+- [x] US-002: Read what each connection style means
 
 ## [00-llm-foundation.md](./ai/00-llm-foundation.md) — 5/10
 
