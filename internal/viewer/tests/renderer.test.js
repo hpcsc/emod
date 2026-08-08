@@ -719,6 +719,17 @@ describe('Renderer.buildSVG', () => {
       ]);
       prose.forEach((el) => expect(el.getAttribute('pointer-events')).toBe('none'));
 
+      // Each string really is drawn inside the band it is painted over. Without
+      // this the rules below would be guarding prose that covers nothing, and
+      // would go on passing if the prose stopped being drawn at all.
+      const covers = (band, text) =>
+        numeric(text, 'x') >= numeric(band, 'x') &&
+        numeric(text, 'x') <= rightEdgeOfBand(band) &&
+        numeric(text, 'y') >= numeric(band, 'y') &&
+        numeric(text, 'y') <= bottomEdgeOfBand(band);
+      expect(covers(headerFor(svg, 'ctx1'), prose[0])).toBe(true);
+      expect(covers(rowFor(svg, 'agg1'), prose[1])).toBe(true);
+
       // The bands underneath answer the right-click and the highlighting click,
       // and the name is what a double-click renames — none of them may go deaf.
       const answering = [headerFor(svg, 'ctx1'), rowFor(svg, 'agg1'), labelFor(svg, 'agg1')];
