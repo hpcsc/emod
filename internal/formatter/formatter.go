@@ -393,6 +393,16 @@ func formatOutcome(then ast.ThenClause) string {
 			return ""
 		}
 		return fmt.Sprintf("rejected %s", t.InvariantName)
+	case *ast.ThenView:
+		if t.ViewName == "" {
+			return ""
+		}
+		return fmt.Sprintf("view %s", t.ViewName)
+	case *ast.ThenCommand:
+		if t.CommandName == "" {
+			return ""
+		}
+		return fmt.Sprintf("command %s", t.CommandName)
 	default:
 		return ""
 	}

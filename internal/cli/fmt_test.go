@@ -8,6 +8,7 @@ import (
 	"testing"
 
 	"github.com/hpcsc/emod/internal/cli"
+	"github.com/hpcsc/emod/internal/test"
 	"github.com/stretchr/testify/require"
 )
 
@@ -476,6 +477,260 @@ context "Fulfilment" {
 }
 `
 
+const slicePatternFormattedEmod = `emod 1
+# Lending a library's copies and seating its readers, with a spec for every slice pattern
+model "Library Lending"
+
+actor "Member"
+
+context "Lending" {
+  aggregate "Loan" {
+    invariant OneCopyPerLoan "A loan covers exactly one copy of one title"
+    slice "Borrow Copy" {
+      command BorrowCopy {
+        fields {
+          memberId string required
+          copyId   string required
+          dueOn    date   required
+        }
+      }
+
+      event CopyBorrowed {
+        fields {
+          loanId   string required
+          memberId string required
+          copyId   string required
+          dueOn    date   required
+        }
+      }
+
+      flow {
+        command -> event: BorrowCopy -> CopyBorrowed
+      }
+
+      spec "borrows a copy no one holds" {
+        when BorrowCopy
+        then [CopyBorrowed]
+      }
+
+      spec "refuses a copy already on loan" {
+        when BorrowCopy
+        then rejected OneCopyPerLoan
+      }
+
+      spec "borrows a copy the member before returned" {
+        given [CopyBorrowed, CopyReturned]
+        when BorrowCopy
+        then [CopyBorrowed]
+      }
+    }
+
+    slice "Review Member Loans" {
+      view MemberLoansView {
+        fields {
+          loanId   string required
+          memberId string required
+          dueOn    date   required
+        }
+        subscribes [CopyBorrowed, CopyReturned]
+      }
+
+      spec "lists the loans a member holds" {
+        then view MemberLoansView
+      }
+    }
+
+    slice "Chase Overdue Copy" {
+      command RemindMember {
+        fields {
+          loanId   string required
+          memberId string required
+        }
+      }
+
+      event MemberReminded {
+        fields {
+          loanId     string    required
+          memberId   string    required
+          remindedAt timestamp required
+        }
+      }
+
+      view OverdueLoansView {
+        fields {
+          loanId   string required
+          memberId string required
+        }
+        subscribes [CopyBorrowed, CopyReturned]
+      }
+
+      automation RemindOnDueDate {
+        on CopyBorrowed
+        reads OverdueLoansView
+        command RemindMember
+      }
+
+      flow {
+        command -> event: RemindMember -> MemberReminded
+      }
+
+      spec "reminds a member when a copy becomes due" {
+        when CopyBorrowed
+        then command RemindMember
+      }
+    }
+
+    slice "Sweep Overdue Loans" {
+      command RecallCopy {
+        fields {
+          loanId string required
+          copyId string required
+        }
+      }
+
+      event CopyRecalled {
+        fields {
+          loanId     string    required
+          copyId     string    required
+          recalledAt timestamp required
+        }
+      }
+
+      view OverdueLoansView {
+        fields {
+          loanId   string required
+          memberId string required
+        }
+        subscribes [CopyBorrowed, CopyReturned]
+      }
+
+      automation RecallOverdueCopy {
+        every "15m"
+        reads OverdueLoansView
+        command RecallCopy
+      }
+
+      flow {
+        command -> event: RecallCopy -> CopyRecalled
+      }
+
+      spec "recalls copies that are overdue" {
+        then command RecallCopy
+      }
+    }
+
+    slice "Return Copy" {
+      command ReturnCopy {
+        fields {
+          loanId string required
+          copyId string required
+        }
+      }
+
+      event CopyReturned {
+        fields {
+          loanId     string    required
+          copyId     string    required
+          returnedAt timestamp required
+        }
+      }
+
+      flow {
+        command -> event: ReturnCopy -> CopyReturned
+      }
+    }
+  }
+}
+
+context "Reading Room" mode dcb {
+  invariant OneReaderPerDesk "A desk seats at most one reader at any moment"
+  slice "Desk Occupancy" {
+    view DeskOccupancyView {
+      fields {
+        deskId   string required
+        memberId string required
+      }
+      subscribes [DeskClaimed]
+    }
+  }
+
+  slice "Claim Desk" {
+    command ClaimDesk {
+      decides_on {
+        events [DeskClaimed]
+        where tag(desk = deskId) and tag(reader = memberId)
+      }
+      fields {
+        memberId string required
+        deskId   string required
+      }
+    }
+
+    event DeskClaimed {
+      tags {
+        desk  : deskId
+        reader: memberId
+      }
+      fields {
+        sessionId string    required
+        deskId    string    required
+        memberId  string    required
+        claimedAt timestamp required
+      }
+    }
+
+    flow {
+      command -> event: ClaimDesk -> DeskClaimed
+    }
+
+    spec "seats a reader at a free desk" {
+      when ClaimDesk
+      then [DeskClaimed]
+    }
+
+    spec "refuses a desk another reader is seated at" {
+      given [DeskClaimed]
+      when ClaimDesk
+      then rejected OneReaderPerDesk
+    }
+  }
+
+  slice "Import External Desk Booking" {
+    command ImportExternalDeskBooking {
+      fields {
+        externalRef string required
+        deskId      string required
+        memberId    string required
+      }
+    }
+
+    translation ExternalDeskBookingImport {
+      external_system "Room Booking API"
+      reads DeskOccupancyView
+      command ImportExternalDeskBooking
+      event ExternalDeskBookingImported {
+        tags {
+          desk  : deskId
+          reader: memberId
+        }
+        fields {
+          externalRef string    required
+          deskId      string    required
+          memberId    string    required
+          importedAt  timestamp required
+        }
+      }
+    }
+
+    spec "imports a desk booking from an external system" {
+      given [DeskClaimed]
+      when ImportExternalDeskBooking
+      then [ExternalDeskBookingImported]
+    }
+  }
+}
+`
+
 const unparsableEmod = `foobar {
 }
 `
@@ -579,6 +834,12 @@ func TestFmt(t *testing.T) {
 		path := writeTemp(t, "specs.emod", specEmod)
 
 		requireFmtSettlesOn(t, path, specFormattedEmod)
+	})
+
+	t.Run("keeps every spec outcome including view and command and settles after one run", func(t *testing.T) {
+		path := writeTemp(t, "slice-patterns.emod", test.SlicePatternLibraryLending)
+
+		requireFmtSettlesOn(t, path, slicePatternFormattedEmod)
 	})
 
 	t.Run("moves an automation's schedule to its canonical line and settles after one run", func(t *testing.T) {

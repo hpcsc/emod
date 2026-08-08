@@ -900,6 +900,16 @@ func TestFormat(t *testing.T) {
 			}, reparsed.Contexts[0].Aggregates[0].Slices[0].Specs, ignoreFormatterNormalizations)
 		})
 
+		t.Run("round-trip: the view and command outcomes in the slice-pattern fixture survive formatting", func(t *testing.T) {
+			original := test.SlicePatternLibraryLendingModel(t)
+
+			reparsed := requireStableFormat(t, original)
+
+			test.RequireEqual(t, original, reparsed, ignoreFormatterNormalizations)
+			require.Equal(t, test.SlicePatternLibraryLendingSpecNames, test.DeclaredSpecNames(reparsed))
+			require.Equal(t, test.SlicePatternLibraryLendingOutcomeKinds, test.DeclaredSpecOutcomeKinds(reparsed))
+		})
+
 		t.Run("round-trip: an empty given history is written by leaving the given line out, however it was spelled", func(t *testing.T) {
 			expected := strings.Join([]string{
 				`emod 1`,
@@ -3703,6 +3713,47 @@ func TestFormat(t *testing.T) {
 
 			require.Equal(t, expected, result)
 			test.RequireEqual(t, original, parseModel(t, result, "formatted.emod"), ignoreFormatterNormalizations)
+		})
+
+		t.Run("a spec that states no when omits the when line and round-trips", func(t *testing.T) {
+			input := strings.Join([]string{
+				`model "Library Lending"`,
+				``,
+				`context "Lending" {`,
+				`  aggregate "Loan" {`,
+				`    slice "Review Member Loans" {`,
+				`      spec "lists the loans a member holds" {`,
+				`        then view MemberLoansView`,
+				`      }`,
+				`    }`,
+				`  }`,
+				`}`,
+				``,
+			}, "\n")
+			original := parseModel(t, input, "specs.emod")
+
+			result := formatter.Format(original)
+
+			expected := strings.Join([]string{
+				`emod 1`,
+				`model "Library Lending"`,
+				``,
+				`context "Lending" {`,
+				`  aggregate "Loan" {`,
+				`    slice "Review Member Loans" {`,
+				`      spec "lists the loans a member holds" {`,
+				`        then view MemberLoansView`,
+				`      }`,
+				`    }`,
+				`  }`,
+				`}`,
+				``,
+			}, "\n")
+
+			require.Equal(t, expected, result)
+			reparsed := parseModel(t, result, "formatted.emod")
+			test.RequireEqual(t, original, reparsed, ignoreFormatterNormalizations)
+			require.Nil(t, reparsed.Contexts[0].Aggregates[0].Slices[0].Specs[0].When)
 		})
 	})
 
