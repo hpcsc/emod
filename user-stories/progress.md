@@ -3,7 +3,7 @@
 Which story in each in-progress story file is delivered. Files under
 `user-stories/completed/` are finished in full and are not tracked here.
 
-**28 of 178 delivered.**
+**28 of 180 delivered.**
 
 ## [emod-desktop.md](./emod-desktop.md) — 0/16
 
@@ -86,6 +86,11 @@ detail panel of their own.
 - [x] US-004: See context and aggregate descriptions on their headers
 - [x] US-005: Spot and read a description without opening the panel
 - [x] US-006: Spot and read comments on any construct
+
+## [viewer-legend.md](./viewer-legend.md) — 0/2
+
+- [ ] US-001: Read what each element colour means
+- [ ] US-002: Read what each connection style means
 
 ## [00-llm-foundation.md](./ai/00-llm-foundation.md) — 5/10
 
