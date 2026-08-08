@@ -1,4 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { readFileSync } from 'fs';
+import { resolve } from 'path';
 import { installSVGGeometry } from './svg-env.js';
 
 // Only the WASM parser is stubbed — it is the module boundary the viewer talks
@@ -324,6 +326,41 @@ describe('viewer diagnostics panel', () => {
     expect(panel.classList.contains('hidden')).toBe(false);
 
     document.getElementById('diagnostics-close').click();
+    expect(panel.classList.contains('hidden')).toBe(true);
+  });
+});
+
+// The fixture above is hand-written, so it cannot notice viewer.html losing an
+// element init() reaches for. `init` looks each one up unguarded and throws on
+// the first miss, killing every listener wired after it — on the shipped page
+// only, with the suite green. This pins the page against the code that reads it.
+describe('viewer.html satisfies what init reads from it', () => {
+  const viewerJs = readFileSync(resolve(__dirname, '../static/viewer.js'), 'utf-8');
+  const viewerHtml = readFileSync(resolve(__dirname, '../static/viewer.html'), 'utf-8');
+  const required = [...viewerJs.matchAll(/getElementById\("([^"]+)"\)/g)].map((m) => m[1]);
+
+  it('reads more than a handful of ids, so the scan below is not matching nothing', () => {
+    expect(required.length).toBeGreaterThan(10);
+    expect(required).toContain('legend-close');
+  });
+
+  it.each([...new Set(required)])('declares id="%s"', (id) => {
+    expect(viewerHtml).toContain(`id="${id}"`);
+  });
+});
+
+describe('viewer legend', () => {
+  it('opens and closes the legend from the toolbar, and closes it from the panel', async () => {
+    await startViewer();
+
+    const panel = document.getElementById('legend-panel');
+    expect(panel.classList.contains('hidden')).toBe(true);
+
+    document.getElementById('legend-toggle').click();
+    expect(panel.classList.contains('hidden')).toBe(false);
+    expect(document.querySelectorAll('#legend-content .lg-row').length).toBeGreaterThan(0);
+
+    document.getElementById('legend-close').click();
     expect(panel.classList.contains('hidden')).toBe(true);
   });
 });
