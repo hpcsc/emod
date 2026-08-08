@@ -92,7 +92,7 @@ This set carries both through the diagram JSON in each direction, then surfaces 
 - [ ] Context, aggregate and slice headers render the same marker when their construct carries comments
 - [ ] Hovering the marker shows the comments in the viewer's own tooltip, in source order, one per line, with the leading `#` stripped
 - [ ] A construct carrying both a description and comments shows both markers, and each shows only its own text
-- [ ] Comments are read-only in the viewer: no editing affordance appears in the tooltip or the detail panel
+- [ ] Comments are read-only in the viewer: the tooltip offers no way to write one, and selecting a commented construct offers exactly the editing controls its uncommented twin does — carrying comments adds no way to change them
 
 **Context:** Comments stay read-only because a comment's meaning is tied to a source position that viewer editing can invalidate — the node it is attached to can be deleted, and slices can be reordered underneath it.
 
