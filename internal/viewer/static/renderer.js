@@ -21,8 +21,6 @@ var markingStep = 26;
 var headerMarkingKinds = ["comments"];
 var screenBar = { inset: 8, top: 6, height: 6, stroke: 1 };
 var ellipsis = "…";
-var labelWidthFontSize = 13;
-var labelWidthPadding = 16;
 var descriptionSize = 11;
 var headerTextInset = 16;
 
@@ -47,24 +45,19 @@ var aggHeaderStyle = {
 // Rescaling carries Layout.labelWidth's padding along with it, and that padding
 // is the gap the following text sits in — drop it and a description butts
 // straight against the name it follows.
-function labelAdvance(label, fontSize) {
-  return Layout.labelWidth(label) * fontSize / labelWidthFontSize;
-}
 
-function drawnWidth(text) {
-  return Layout.labelWidth(text) - labelWidthPadding;
-}
+
+
 
 // Empty when not even one character and the ellipsis fit: an aggregate row is
-// floored at 100px wide, so a long name can leave nothing beside it. A string
-// drawn larger than Layout.labelWidth measures inks wider than the measurement
-// reports, so its room is taken in that measurement's own scale.
+// floored at 100px wide, so a long name can leave nothing beside it. Both sides
+// are real drawn pixels — Layout.textWidth rescales to the size the string is
+// actually painted at, so the budget needs no conversion here.
 function fitWithEllipsis(text, maxWidth, fontSize) {
-  var room = maxWidth * labelWidthFontSize / (fontSize || labelWidthFontSize);
-  if (drawnWidth(text) <= room) return text;
+  if (Layout.textWidth(text, fontSize) <= maxWidth) return text;
   for (var len = text.length - 1; len > 0; len--) {
     var candidate = text.slice(0, len) + ellipsis;
-    if (drawnWidth(candidate) <= room) return candidate;
+    if (Layout.textWidth(candidate, fontSize) <= maxWidth) return candidate;
   }
   return "";
 }
@@ -239,9 +232,9 @@ function appendHeaderLabels(parent, node, band, style) {
   appendMarkings(parent, node, band, style.nameFill, owner, headerMarkingKinds);
   if (!node.description) return;
 
-  var descriptionX = nameX + labelAdvance(name, style.nameSize);
+  var descriptionX = nameX + Layout.labelAdvance(name, style.nameSize);
   var descriptionEdge = marksEdge === null ? band.x + band.w : marksEdge;
-  var fitted = fitWithEllipsis(node.description, descriptionEdge - descriptionX);
+  var fitted = fitWithEllipsis(node.description, descriptionEdge - descriptionX, descriptionSize);
   if (!fitted) return;
   // Prose is painted over the band that answers the right-click and the
   // highlighting click for the construct it documents, so it stays transparent to
@@ -339,7 +332,7 @@ function markingsLeftEdge(node, band, kinds) {
   var marks = markingPlacements(node, band, kinds);
   if (!marks.length) return null;
   var innermost = marks[marks.length - 1];
-  return innermost.x - drawnWidth(proseMarkings[innermost.kind].glyph) / 2;
+  return innermost.x - Layout.textWidth(proseMarkings[innermost.kind].glyph) / 2;
 }
 
 // The prose itself is read out on hover by the viewer's own tooltip, which is

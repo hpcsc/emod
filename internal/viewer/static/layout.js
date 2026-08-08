@@ -1,5 +1,11 @@
 import { L, PORT_DIRECTIONS } from './config.js';
 
+// The size the hidden measurer draws at, and the gap labelWidth adds so two
+// measured labels laid side by side do not touch. Private: a caller needing
+// either goes through textWidth or labelAdvance.
+const MEASURE_FONT_SIZE = 13;
+const LABEL_PADDING = 16;
+
 const measureSvg = document.createElementNS("http://www.w3.org/2000/svg", "svg");
 measureSvg.style.position = "fixed";
 measureSvg.style.visibility = "hidden";
@@ -8,18 +14,33 @@ measureSvg.style.width = "0";
 measureSvg.style.height = "0";
 const measureText = document.createElementNS("http://www.w3.org/2000/svg", "text");
 measureText.setAttribute("font-family", "sans-serif");
-measureText.setAttribute("font-size", "13");
+measureText.setAttribute("font-size", String(MEASURE_FONT_SIZE));
 measureSvg.appendChild(measureText);
 document.body.appendChild(measureSvg);
-const labelWidthCache = {};
+const textWidthCache = {};
+
+// Glyph width alone, rescaled to the size it will actually be drawn at. This is
+// the primitive: measuring happens at one font size, and a caller drawing at
+// another needs the conversion done here rather than by restating this module's
+// size and padding on its own side.
+function textWidth(text, fontSize) {
+  const s = text || '';
+  if (textWidthCache[s] === undefined) {
+    measureText.textContent = s;
+    textWidthCache[s] = measureText.getComputedTextLength();
+  }
+  return textWidthCache[s] * (fontSize || MEASURE_FONT_SIZE) / MEASURE_FONT_SIZE;
+}
 
 function labelWidth(label) {
-  const s = label || '';
-  if (labelWidthCache[s] !== undefined) return labelWidthCache[s];
-  measureText.textContent = s;
-  const width = measureText.getComputedTextLength() + 16;
-  labelWidthCache[s] = width;
-  return width;
+  return textWidth(label, MEASURE_FONT_SIZE) + LABEL_PADDING;
+}
+
+// How far a label pushes what follows it: its glyphs plus the gap labelWidth's
+// padding stands for, both at the size the label is drawn.
+function labelAdvance(label, fontSize) {
+  const size = fontSize || MEASURE_FONT_SIZE;
+  return textWidth(label, size) + LABEL_PADDING * size / MEASURE_FONT_SIZE;
 }
 
 function buildTree(nodes) {
@@ -348,6 +369,8 @@ function portAnchor(pos, direction) {
 
 export const Layout = {
   labelWidth,
+  textWidth,
+  labelAdvance,
   portAnchor,
   buildTree,
   computeLayout,

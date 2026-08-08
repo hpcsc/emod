@@ -458,8 +458,10 @@ const textOf = (els) => els.map((el) => el.textContent);
 
 // Layout.labelWidth pads its measurement for layout breathing room, which the
 // drawn glyphs never reach into.
-const LABEL_PADDING = 16;
-const drawnWidth = (el) => Layout.labelWidth(el.textContent) - LABEL_PADDING;
+// What the string actually inks, at the size it is actually drawn. Measuring
+// every element at labelWidth's own 13px over-states an 11px description by
+// nearly a fifth — the same scattered-measurement mistake the renderer had.
+const drawnWidth = (el) => Layout.textWidth(el.textContent, numeric(el, 'font-size'));
 
 function rightEdgeOf(el) {
   return numeric(el, 'x') + drawnWidth(el);
