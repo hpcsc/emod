@@ -1242,15 +1242,28 @@ describe('Renderer.buildSVG', () => {
   });
 
   describe('palette table', () => {
-    it('paints every node type from nodePalette and keeps all six fills distinct', () => {
+    // Per type, not as a set: comparing the collected fills against the palette's
+    // fills says nothing about which type wore which, so the six could be
+    // permuted and still match. Stroke is read here for the first time — a block
+    // drawn in a neighbour's outline was invisible to every other leaf.
+    it('paints each node type in its own palette fill and stroke', () => {
       const { svg } = render(allElementTypes());
-      const boxes = drawnBoxes(svg);
-      const fills = Object.values(boxes).map((box) => box.fill);
-      const paletteFills = Object.values(nodePalette).map((p) => p.fill);
-      expect(new Set(fills).size).toBe(paletteFills.length);
-      for (const fill of paletteFills) {
-        expect(fills).toContain(fill);
+
+      const painted = {};
+      svg.querySelectorAll('.diagram-node').forEach((group) => {
+        const type = group.getAttribute('class').split(' ')[0].replace(/-block$/, '');
+        const rect = group.querySelector('rect');
+        painted[type] = {
+          fill: rect.getAttribute('fill'),
+          stroke: rect.getAttribute('stroke'),
+        };
+      });
+
+      const expected = {};
+      for (const [type, palette] of Object.entries(nodePalette)) {
+        expected[type] = { fill: palette.fill, stroke: palette.stroke };
       }
+      expect(painted).toEqual(expected);
     });
 
     it('uses no node fill or stroke literals outside the palette table in renderer.js', () => {
