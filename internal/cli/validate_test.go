@@ -334,6 +334,52 @@ context "Lending" {
 		require.Contains(t, err.Error(), `invariant "FiveCopiesPerMember" is not declared in aggregate "Loan"`)
 	})
 
+	t.Run("returns error naming the view a spec outcome names and the kind it was looked up as", func(t *testing.T) {
+		input := `model "Library Lending"
+context "Lending" {
+  aggregate "Loan" {
+    slice "Review Member Loans" {
+      view MemberLoansView {
+        fields {
+          loanId string required
+        }
+        subscribes [CopyBorrowed]
+      }
+      spec "lists loans no one holds" {
+        then view MissingView
+      }
+    }
+    slice "Borrow Copy" {
+      command BorrowCopy {
+        fields {
+          memberId string required
+          copyId   string required
+        }
+      }
+      event CopyBorrowed {
+        fields {
+          loanId   string required
+          memberId string required
+          copyId   string required
+        }
+      }
+      flow {
+        command -> event: BorrowCopy -> CopyBorrowed
+      }
+    }
+  }
+}
+`
+		path := writeTemp(t, "misspelled_spec_view.emod", input)
+
+		err := cli.RunValidate(path, "text")
+
+		var lintErr *cli.LintError
+		require.True(t, errors.As(err, &lintErr))
+		require.Equal(t, 1, lintErr.ExitCode)
+		require.Contains(t, err.Error(), `view "MissingView" does not exist`)
+	})
+
 	t.Run("returns no error for valid multi-context model", func(t *testing.T) {
 		input := `model "Multi Context Test"
 

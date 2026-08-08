@@ -346,6 +346,22 @@ func specDiagnostics(spec *ast.Spec, index *modelIndex) []*diagnostic.Entry {
 	if outcome, ok := spec.Then.(*ast.ThenEvents); ok {
 		undeclared = append(undeclared, undeclaredSpecEvents(outcome.Events, index)...)
 	}
+	if outcome, ok := spec.Then.(*ast.ThenView); ok {
+		if !index.viewNames[outcome.ViewName] {
+			undeclared = append(undeclared, undeclaredSpecReference{
+				element: &ast.SpecElement{Name: outcome.ViewName, NamePos: outcome.ViewPos},
+				kind:    "view",
+			})
+		}
+	}
+	if outcome, ok := spec.Then.(*ast.ThenCommand); ok {
+		if !index.commandNames[outcome.CommandName] {
+			undeclared = append(undeclared, undeclaredSpecReference{
+				element: &ast.SpecElement{Name: outcome.CommandName, NamePos: outcome.CommandPos},
+				kind:    "command",
+			})
+		}
+	}
 
 	diags := make([]*diagnostic.Entry, 0, len(undeclared))
 	for _, ref := range undeclared {
