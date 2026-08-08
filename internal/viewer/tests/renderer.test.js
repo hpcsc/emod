@@ -11,15 +11,6 @@ const { nodePalette } = await import('../static/config.js');
 
 const viewerHtml = readFileSync(resolve(__dirname, '../static/viewer.html'), 'utf-8');
 
-const classForType = {
-  trigger: 'trg',
-  command: 'cmd',
-  event: 'evt',
-  view: 'view',
-  automation: 'auto',
-  translation: 'trans',
-};
-
 // Extracts the fill declaration for a selector from the embedded CSS.
 function cssFill(selector) {
   const styleMatch = viewerHtml.match(/<style[^>]*>([\s\S]*?)<\/style>/i);
@@ -462,6 +453,18 @@ const textOf = (els) => els.map((el) => el.textContent);
 // every element at labelWidth's own 13px over-states an 11px description by
 // nearly a fifth — the same scattered-measurement mistake the renderer had.
 const drawnWidth = (el) => Layout.textWidth(el.textContent, numeric(el, 'font-size'));
+
+// The type-class each node type is actually drawn with, read off a render, so a
+// stylesheet rule can be checked against the page instead of against a name the
+// test made up.
+function drawnBlockClasses(svg) {
+  const byType = {};
+  svg.querySelectorAll('.diagram-node').forEach((group) => {
+    const cls = group.getAttribute('class').split(' ')[0];
+    byType[cls.replace(/-block$/, '')] = cls;
+  });
+  return byType;
+}
 
 function rightEdgeOf(el) {
   return numeric(el, 'x') + drawnWidth(el);
@@ -1290,15 +1293,27 @@ describe('Renderer.buildSVG', () => {
       }
     });
 
-    it('declares hover fills in the stylesheet that match the palette', () => {
+    // Keyed on the class each block is really drawn with, not on a name this
+    // file keeps for itself: the stylesheet spent this whole feature styling
+    // .cmd-block while the renderer emitted .command-block, and a test holding
+    // its own copy of the abbreviation agreed with the stylesheet about a rule
+    // that matched nothing on the page.
+    it('declares hover fills for the classes blocks are drawn with', () => {
+      const { svg } = render(allElementTypes());
+
+      const drawn = drawnBlockClasses(svg);
+      expect(Object.keys(drawn).sort()).toEqual(Object.keys(nodePalette).sort());
       for (const [type, palette] of Object.entries(nodePalette)) {
-        expect(cssFill(`#diagram-canvas .${classForType[type]}-block:hover rect`)).toBe(palette.hoverFill);
+        expect(cssFill(`#diagram-canvas .${drawn[type]}:hover rect`)).toBe(palette.hoverFill);
       }
     });
 
-    it('declares highlight fills in the stylesheet that match the palette', () => {
+    it('declares highlight fills for the classes blocks are drawn with', () => {
+      const { svg } = render(allElementTypes());
+
+      const drawn = drawnBlockClasses(svg);
       for (const [type, palette] of Object.entries(nodePalette)) {
-        expect(cssFill(`#diagram-canvas .hl.${classForType[type]}-block rect`)).toBe(palette.highlightFill);
+        expect(cssFill(`#diagram-canvas .hl.${drawn[type]} rect`)).toBe(palette.highlightFill);
       }
     });
 
