@@ -79,6 +79,7 @@ const aggregateDescription = 'Payment terms';
 const overlongAggregateDescription = 'Instalment plans negotiated with the customer';
 const neighbourAggregateDescription = 'Card capture';
 const crowdingAggregateName = 'ArrangementNegotiationSchedule';
+const neighbourCrowdingName = 'SettlementReconciliationLedger';
 
 function describedAs(nodes, textById) {
   return nodes.map((n) => (textById[n.id] ? { ...n, description: textById[n.id] } : n));
@@ -88,6 +89,10 @@ function describedAs(nodes, textById) {
 // carrying the leading # the source spells it with.
 function commentedAs(nodes, commentsById) {
   return nodes.map((n) => (commentsById[n.id] ? { ...n, comments: commentsById[n.id] } : n));
+}
+
+function labelledAs(nodes, labelById) {
+  return nodes.map((n) => (labelById[n.id] ? { ...n, label: labelById[n.id] } : n));
 }
 
 // A described context beside an undescribed one, so a single render puts a
@@ -121,8 +126,58 @@ function crowdedAndRoomyDescriptions() {
 // A documented aggregate whose name alone reaches past its row, leaving its
 // description nowhere to go.
 function aggregateNameFillingItsRow() {
-  return describedAndPlainAggregates()
-    .map((n) => (n.id === 'agg1' ? { ...n, label: crowdingAggregateName } : n));
+  return labelledAs(describedAndPlainAggregates(), { agg1: crowdingAggregateName });
+}
+
+const contextComments = [{ text: '# Split out of Billing when the team divided' }];
+const aggregateComments = [{ text: '# The plan, not the invoice that settles it' }];
+
+// A container carrying notes beside one whose prose is already on show, so a
+// single render draws the header that has something left to read next to the
+// header that has not.
+function commentedAndDescribedContexts() {
+  return commentedAs(
+    describedAs(narrowAndWideContexts(), {
+      ctxWide: contextDescription,
+      ctxNarrow: contextDescription,
+    }),
+    { ctxWide: contextComments },
+  );
+}
+
+function commentedAndDescribedAggregates() {
+  return commentedAs(
+    describedAs(twoAggregates(), {
+      agg1: aggregateDescription,
+      agg2: neighbourAggregateDescription,
+    }),
+    { agg1: aggregateComments },
+  );
+}
+
+// The crowded headers of the description fixtures, with notes on the crowded one
+// only: its description now has the mark to give way to as well as the edge.
+function crowdedCommentedContexts() {
+  return commentedAs(crowdedAndRoomyContexts(), { ctxWide: contextComments });
+}
+
+function crowdedCommentedAggregates() {
+  return commentedAs(crowdedAndRoomyDescriptions(), { agg1: aggregateComments });
+}
+
+// Two aggregate rows whose names alone reach past their own edge, notes on the
+// first only, so one overflowing name has a mark standing where it runs and the
+// other has nothing in its way.
+function crowdingNamesOneCommented() {
+  const threeRows = twoAggregates().concat([
+    { id: 'agg3', type: 'aggregate', label: 'Refund', parentId: 'ctx1' },
+    { id: 'sl3', type: 'slice', label: 'Refund overpayment', parentId: 'agg3' },
+    { id: 'cmd3', type: 'command', label: 'RefundOverpayment', parentId: 'sl3' },
+  ]);
+  return commentedAs(
+    labelledAs(threeRows, { agg1: crowdingAggregateName, agg2: neighbourCrowdingName }),
+    { agg1: aggregateComments },
+  );
 }
 
 const describedThroughoutText = {
@@ -379,6 +434,13 @@ function rightEdgeOfBand(band) {
 
 function bottomEdgeOfBand(band) {
   return numeric(band, 'y') + numeric(band, 'height');
+}
+
+// A string is drawn from a single point, so the band it sits in is the band that
+// point falls in.
+function insideBand(band, el) {
+  return numeric(el, 'x') > numeric(band, 'x') && numeric(el, 'x') < rightEdgeOfBand(band) &&
+    numeric(el, 'y') > numeric(band, 'y') && numeric(el, 'y') < bottomEdgeOfBand(band);
 }
 
 function textsOwnedBy(svg, attr, id) {
@@ -722,13 +784,8 @@ describe('Renderer.buildSVG', () => {
       // Each string really is drawn inside the band it is painted over. Without
       // this the rules below would be guarding prose that covers nothing, and
       // would go on passing if the prose stopped being drawn at all.
-      const covers = (band, text) =>
-        numeric(text, 'x') >= numeric(band, 'x') &&
-        numeric(text, 'x') <= rightEdgeOfBand(band) &&
-        numeric(text, 'y') >= numeric(band, 'y') &&
-        numeric(text, 'y') <= bottomEdgeOfBand(band);
-      expect(covers(headerFor(svg, 'ctx1'), prose[0])).toBe(true);
-      expect(covers(rowFor(svg, 'agg1'), prose[1])).toBe(true);
+      expect(insideBand(headerFor(svg, 'ctx1'), prose[0])).toBe(true);
+      expect(insideBand(rowFor(svg, 'agg1'), prose[1])).toBe(true);
 
       // The bands underneath answer the right-click and the highlighting click,
       // and the name is what a double-click renames — none of them may go deaf.
@@ -989,6 +1046,116 @@ describe('Renderer.buildSVG', () => {
       marks.forEach((mark) => expect(mark.querySelector('title')).toBeNull());
 
       expect(tooltipOf(nodeGroup(svg, 'autoScheduled'))).toBe(cronExpression);
+    });
+  });
+
+  describe('marks on documented containers', () => {
+    it.each([
+      {
+        band: 'a swimlane header',
+        fixture: commentedAndDescribedContexts,
+        commented: 'ctxWide',
+        bandFor: headerFor,
+        textsOf: ctxHeaderTexts,
+        unmarked: { id: 'ctxNarrow', reads: ['Narrow', contextDescription] },
+      },
+      {
+        band: 'an aggregate label row',
+        fixture: commentedAndDescribedAggregates,
+        commented: 'agg1',
+        bandFor: rowFor,
+        textsOf: aggRowTexts,
+        unmarked: { id: 'agg2', reads: ['Payment', neighbourAggregateDescription] },
+      },
+    ])(
+      'marks $band whose container carries comments and leaves the described one beside it unmarked',
+      ({ fixture, commented, bandFor, textsOf, unmarked }) => {
+        const { svg } = render(fixture());
+
+        expect(marksWithOwners(svg)).toEqual(['comments ' + commented]);
+        expect(insideBand(bandFor(svg, commented), marksIn(svg)[0])).toBe(true);
+
+        expect(textOf(withoutMarks(textsOf(svg, unmarked.id)))).toEqual(unmarked.reads);
+        expect(marksIn(svg).filter((mark) => insideBand(bandFor(svg, unmarked.id), mark))).toEqual([]);
+      });
+
+    it('sets the aggregate mark clear of its own row\'s text and short of the row next door', () => {
+      const { svg } = render(commentedAndDescribedAggregates());
+
+      const [name, description] = withoutMarks(aggRowTexts(svg, 'agg1'));
+      const [mark] = marksIn(svg, 'comments');
+
+      expect(textOf([name, description])).toEqual(['Arrangement', aggregateDescription]);
+      expect(rightEdgeOf(name)).toBeLessThan(inkOfCentred(mark).left);
+      expect(rightEdgeOf(description)).toBeLessThanOrEqual(inkOfCentred(mark).left);
+      expect(inkOfCentred(mark).right).toBeLessThanOrEqual(numeric(rowFor(svg, 'agg2'), 'x'));
+    });
+
+    it.each([
+      {
+        header: 'a swimlane header',
+        fixture: crowdedCommentedContexts,
+        commented: 'ctxWide',
+        textsOf: ctxHeaderTexts,
+        overlong: overlongContextDescription,
+        roomy: { id: 'ctxNarrow', description: contextDescription },
+      },
+      {
+        header: 'an aggregate label row',
+        fixture: crowdedCommentedAggregates,
+        commented: 'agg1',
+        textsOf: aggRowTexts,
+        overlong: overlongAggregateDescription,
+        roomy: { id: 'agg2', description: neighbourAggregateDescription },
+      },
+    ])('cuts a description too wide for $header short of the mark, drawing an uncommented roomy one whole',
+      ({ fixture, commented, textsOf, overlong, roomy }) => {
+        const { svg } = render(fixture());
+
+        const [, crowded] = withoutMarks(textsOf(svg, commented));
+        const [mark] = marksIn(svg, 'comments');
+        expect(crowded.textContent.length).toBeLessThan(overlong.length);
+        expect(crowded.textContent.endsWith(ellipsis)).toBe(true);
+        expect(rightEdgeOf(crowded)).toBeLessThanOrEqual(inkOfCentred(mark).left);
+
+        const [, whole] = withoutMarks(textsOf(svg, roomy.id));
+        expect(whole.textContent).toBe(roomy.description);
+        expect(whole.textContent).not.toContain(ellipsis);
+      });
+
+    it('cuts a name short of the mark standing in its row and leaves the unmarked name beside it whole', () => {
+      const { svg } = render(crowdingNamesOneCommented());
+
+      const marked = labelFor(svg, 'agg1');
+      const [mark] = marksIn(svg, 'comments');
+      expect(marked.textContent.length).toBeLessThan(crowdingAggregateName.length);
+      expect(marked.textContent.endsWith(ellipsis)).toBe(true);
+      expect(rightEdgeOf(marked)).toBeLessThanOrEqual(inkOfCentred(mark).left);
+
+      // The mark is the only thing that cuts a name: the row beside it carries
+      // none, and its name is left to reach past its own edge.
+      const unmarked = labelFor(svg, 'agg2');
+      expect(unmarked.textContent).toBe(neighbourCrowdingName);
+      expect(rightEdgeOf(unmarked)).toBeGreaterThan(numeric(rowFor(svg, 'agg3'), 'x'));
+    });
+
+    it('adds the header marks without moving a single frame, name, description or block', () => {
+      const plain = render(describedThroughout());
+      const commented = render(commentedAs(describedThroughout(), {
+        ctx1: contextComments,
+        agg1: aggregateComments,
+        agg2: aggregateComments,
+      }));
+
+      expect(drawnFrames(commented.svg)).toEqual(drawnFrames(plain.svg));
+      expect(namePlacements(commented.svg)).toEqual(namePlacements(plain.svg));
+      expect(drawnBoxes(commented.svg)).toEqual(drawnBoxes(plain.svg));
+      expect(placements(proseIn(commented.svg))).toEqual(placements(proseIn(plain.svg)));
+
+      expect(marksWithOwners(commented.svg).sort()).toEqual([
+        'comments agg1', 'comments agg2', 'comments ctx1', 'description sl1',
+      ]);
+      expect(marksWithOwners(plain.svg)).toEqual(['description sl1']);
     });
   });
 

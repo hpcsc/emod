@@ -8,7 +8,7 @@
 - [x] Task 5: Show a node's description in the hover tooltip, including nodes with no fields
 - [x] Task 6: Mark a described node and slice, and read the description off the marker
 - [x] Task 7: Mark a commented node and slice, and read the comments off the marker
-- [ ] Task 8: Mark commented context and aggregate headers
+- [x] Task 8: Mark commented context and aggregate headers
 
 ## Story Reference
 

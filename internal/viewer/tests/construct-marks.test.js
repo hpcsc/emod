@@ -35,10 +35,26 @@ function documentedSlice() {
   ];
 }
 
+const contextComments = [{ text: '# Split out of Billing when the team divided' }];
+const aggregateComments = [{ text: '# The plan, not the invoice that settles it' }];
+
+// A context and an aggregate carrying notes. Neither opens a detail panel, so
+// the mark on the header is the only way to read them off the diagram.
+function commentedContainers() {
+  return [
+    { id: 'ctx1', type: 'context', label: 'Collections', comments: contextComments },
+    { id: 'agg1', type: 'aggregate', label: 'Arrangement', parentId: 'ctx1', comments: aggregateComments },
+    { id: 'sl1', type: 'slice', label: 'Propose plan', parentId: 'agg1' },
+    { id: 'cmd1', type: 'command', label: 'ProposePlan', parentId: 'sl1' },
+  ];
+}
+
 let store;
 
 function fire(target, type, opts) {
-  target.dispatchEvent(new MouseEvent(type, Object.assign({ bubbles: true, cancelable: true, button: 0 }, opts)));
+  const evt = new MouseEvent(type, Object.assign({ bubbles: true, cancelable: true, button: 0 }, opts));
+  target.dispatchEvent(evt);
+  return evt;
 }
 
 const PRESS = { x: 500, y: 500 };
@@ -53,20 +69,29 @@ function release(dx, dy) {
   fire(document, 'mouseup', { clientX: PRESS.x + dx, clientY: PRESS.y + dy });
 }
 
+function renderNodes(nodes) {
+  store.nodes = nodes;
+  store.nodeById = new Map(nodes.map((n) => [n.id, n]));
+  store.layoutPositions = Layout.computeLayout(store).positions;
+  Renderer.inject(store.dom.svg, Renderer.buildSVG(store));
+}
+
+const inSvg = (selector) => store.dom.svg.querySelector(selector);
+
 function markOn(kind, nodeId) {
-  return store.dom.svg.querySelector('[data-marker="' + kind + '"][data-node-id="' + nodeId + '"]');
+  return inSvg('[data-marker="' + kind + '"][data-node-id="' + nodeId + '"]');
 }
 
 function headerBandOf(sliceId) {
-  return store.dom.svg.querySelector('rect.slice-header[data-slice-id="' + sliceId + '"]');
+  return inSvg('rect.slice-header[data-slice-id="' + sliceId + '"]');
 }
 
 function nameIn(sliceId) {
-  return store.dom.svg.querySelector('text.slice-header[data-slice-id="' + sliceId + '"]:not([data-marker])');
+  return inSvg('text.slice-header[data-slice-id="' + sliceId + '"]:not([data-marker])');
 }
 
 function blockOf(nodeId) {
-  return store.dom.svg.querySelector('.diagram-node[data-node-id="' + nodeId + '"]');
+  return inSvg('.diagram-node[data-node-id="' + nodeId + '"]');
 }
 
 const numeric = (el, attr) => Number(el.getAttribute(attr));
@@ -88,12 +113,25 @@ function shownTooltip() {
   };
 }
 
+const panOffset = () => ({ x: store.viewport.offsetX, y: store.viewport.offsetY });
+
+const sliceHeaderTargets = [
+  ['the header band', () => headerBandOf('sl1')],
+  ['the description mark drawn in it', () => markOn('description', 'sl1')],
+  ['the comments mark drawn in it', () => markOn('comments', 'sl1')],
+];
+
+const containerHeaderTargets = [
+  ['the swimlane header band', () => inSvg('rect.ctx-header')],
+  ['the mark drawn in it', () => markOn('comments', 'ctx1')],
+  ['the aggregate row band', () => inSvg('rect.agg-row')],
+  ['the mark drawn in that', () => markOn('comments', 'agg1')],
+];
+
 beforeEach(() => {
   document.body.innerHTML = '';
 
   store = createStore();
-  store.nodes = documentedSlice();
-  store.nodeById = new Map(store.nodes.map((n) => [n.id, n]));
 
   const svg = document.createElementNS(SVG_NS, 'svg');
   installIdentityMapping(svg);
@@ -105,19 +143,17 @@ beforeEach(() => {
   store.dom.tooltip = tooltip;
   store.dom.ctxMenu = ctxMenu;
 
-  store.layoutPositions = Layout.computeLayout(store).positions;
-  Renderer.inject(svg, Renderer.buildSVG(store));
   Interaction.initEventListeners(store);
   UI.initDelegation(store);
 });
 
 describe('the marks on a documented construct', () => {
-  it.each([
-    ['the header band', () => headerBandOf('sl1')],
-    ['the description mark drawn in it', () => markOn('description', 'sl1')],
-    ['the comments mark drawn in it', () => markOn('comments', 'sl1')],
-  ])('carries the slice with the pointer when the press lands on %s', (_, find) => {
-    const sliceGroup = store.dom.svg.querySelector('.slice-sl1');
+  beforeEach(() => {
+    renderNodes(documentedSlice());
+  });
+
+  it.each(sliceHeaderTargets)('carries the slice with the pointer when the press lands on %s', (_, find) => {
+    const sliceGroup = inSvg('.slice-sl1');
 
     pressAndMove(find(), 60, 30);
 
@@ -154,11 +190,7 @@ describe('the marks on a documented construct', () => {
     expect(store.nodeOffsets.cmd1).toEqual({ dx: 40, dy: 20 });
   });
 
-  it.each([
-    ['the header band', () => headerBandOf('sl1')],
-    ['the description mark drawn in it', () => markOn('description', 'sl1')],
-    ['the comments mark drawn in it', () => markOn('comments', 'sl1')],
-  ])('opens the slice menu when the right-click lands on %s', (_, find) => {
+  it.each(sliceHeaderTargets)('opens the slice menu when the right-click lands on %s', (_, find) => {
     fire(find(), 'contextmenu', { clientX: 120, clientY: 140 });
 
     expect(store.interaction.ctxMenu).toEqual({ targetSliceId: 'sl1' });
@@ -182,5 +214,41 @@ describe('the marks on a documented construct', () => {
     fire(markOn('comments', nodeId), 'pointerover', { clientX: 120, clientY: 140 });
 
     expect(shownTooltip()).toEqual({ shown: true, reads: [name, note] });
+  });
+});
+
+describe('the marks on a documented container', () => {
+  beforeEach(() => {
+    renderNodes(commentedContainers());
+  });
+
+  it.each([
+    ['a context', 'ctx1', 'Collections', 'Split out of Billing when the team divided'],
+    ['an aggregate', 'agg1', 'Arrangement', 'The plan, not the invoice that settles it'],
+  ])('reads out the comments of %s, which opens no panel of its own, when the pointer rests on the mark in its header',
+    (_, nodeId, name, note) => {
+      fire(markOn('comments', nodeId), 'pointerover', { clientX: 120, clientY: 140 });
+
+      expect(shownTooltip()).toEqual({ shown: true, reads: [name, note] });
+    });
+
+  it.each(containerHeaderTargets)('opens the menu of the container the header belongs to when the right-click lands on %s', (_, find) => {
+    const evt = fire(find(), 'contextmenu', { clientX: 120, clientY: 140 });
+
+    expect(store.interaction.ctxMenu).toEqual({ targetAggId: 'agg1' });
+    expect(store.dom.ctxMenu.style.display).toBe('block');
+    expect(menuItems()).toContain('Add Slice');
+    // Nothing on the header may leave the browser's own menu to open instead.
+    expect(evt.defaultPrevented).toBe(true);
+  });
+
+  it.each(containerHeaderTargets)('pans the canvas when the press lands on %s', (_, find) => {
+    pressAndMove(find(), 60, 30);
+
+    expect(panOffset()).toEqual({ x: 60, y: 30 });
+    expect(store.dom.svg.classList.contains('panning')).toBe(true);
+
+    release(60, 30);
+    expect(store.dom.svg.classList.contains('panning')).toBe(false);
   });
 });

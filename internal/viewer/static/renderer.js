@@ -16,11 +16,15 @@ var proseMarkings = {
 var markingSize = 11;
 var markingInset = 12;
 var markingStep = 26;
+// A container reads its description off its own header, so only the comments —
+// which are written nowhere on the diagram — leave it anything to open.
+var headerMarkingKinds = ["comments"];
 var screenBar = { inset: 8, top: 6, height: 6, stroke: 1 };
 var ellipsis = "…";
 var labelWidthFontSize = 13;
 var labelWidthPadding = 16;
 var descriptionSize = 11;
+var headerTextInset = 16;
 
 var ctxHeaderStyle = {
   ownerAttr: "data-ctx-id",
@@ -52,12 +56,15 @@ function drawnWidth(text) {
 }
 
 // Empty when not even one character and the ellipsis fit: an aggregate row is
-// floored at 100px wide, so a long name can leave nothing beside it.
-function fitWithEllipsis(text, maxWidth) {
-  if (drawnWidth(text) <= maxWidth) return text;
+// floored at 100px wide, so a long name can leave nothing beside it. A string
+// drawn larger than Layout.labelWidth measures inks wider than the measurement
+// reports, so its room is taken in that measurement's own scale.
+function fitWithEllipsis(text, maxWidth, fontSize) {
+  var room = maxWidth * labelWidthFontSize / (fontSize || labelWidthFontSize);
+  if (drawnWidth(text) <= room) return text;
   for (var len = text.length - 1; len > 0; len--) {
     var candidate = text.slice(0, len) + ellipsis;
-    if (drawnWidth(candidate) <= maxWidth) return candidate;
+    if (drawnWidth(candidate) <= room) return candidate;
   }
   return "";
 }
@@ -216,12 +223,25 @@ function connectPort(nodeId, dir, pos) {
 
 function appendHeaderLabels(parent, node, band, style) {
   var owner = " " + style.ownerAttr + "=\"" + node.id + "\"";
-  parent.appendChild(svgText(band.x, band.baseline, node.label, style.nameSize, style.nameFill,
+  var nameX = band.x + headerTextInset;
+  var marksEdge = markingsLeftEdge(node, band, headerMarkingKinds);
+  // Only a mark cuts a name short. A row is floored at 100px however long the
+  // name it carries, and every row rect goes down before any label, so a name
+  // is left to reach past its own row — but a mark is painted over it.
+  var name = marksEdge === null ? node.label
+    : fitWithEllipsis(node.label, marksEdge - nameX, style.nameSize);
+  parent.appendChild(svgText(nameX, band.baseline, name, style.nameSize, style.nameFill,
     style.nameAttrs + owner));
+  // The mark names its container, which is how the right-click the band under it
+  // answers reaches that container through the mark as well. It wears none of the
+  // band's classes: those would highlight the whole context when it was clicked
+  // and go deaf to the drag that pans the canvas.
+  appendMarkings(parent, node, band, style.nameFill, owner, headerMarkingKinds);
   if (!node.description) return;
 
-  var descriptionX = band.x + labelAdvance(node.label, style.nameSize);
-  var fitted = fitWithEllipsis(node.description, band.rightEdge - descriptionX);
+  var descriptionX = nameX + labelAdvance(name, style.nameSize);
+  var descriptionEdge = marksEdge === null ? band.x + band.w : marksEdge;
+  var fitted = fitWithEllipsis(node.description, descriptionEdge - descriptionX);
   if (!fitted) return;
   // Prose is painted over the band that answers the right-click and the
   // highlighting click for the construct it documents, so it stays transparent to
@@ -237,9 +257,10 @@ function appendContextHeader(swimlane, ctx, cp) {
     "class=\"ctx-header\" data-ctx-id=\"" + ctx.id + "\""));
 
   appendHeaderLabels(swimlane, ctx, {
-    x: cp.x + 16,
+    x: cp.x,
+    w: cp.w,
+    y: cp.y + L.swimlaneHdr / 2,
     baseline: cp.y + L.swimlaneHdr - 14,
-    rightEdge: cp.x + cp.w,
   }, ctxHeaderStyle);
 }
 
@@ -266,9 +287,10 @@ function appendAggregateRows(swimlane, rows, y) {
   // its neighbour's label, painting over the text.
   rows.forEach(function(row) {
     appendHeaderLabels(swimlane, row.agg, {
-      x: row.x + 16,
+      x: row.x,
+      w: row.w,
+      y: y + L.aggLabelH / 2,
       baseline: y + L.aggLabelH - 6,
-      rightEdge: row.x + row.w,
     }, aggHeaderStyle);
   });
 }
@@ -278,10 +300,6 @@ function appendAggregateAreas(swimlane, rows, y, h) {
     swimlane.appendChild(svgRect(row.x, y, row.w, h, "transparent", "none",
       "class=\"agg-area\" data-agg-id=\"" + row.agg.id + "\""));
   });
-}
-
-function markingKindsOf(node) {
-  return PROSE_KINDS.filter(function(kind) { return proseMarkings[kind].carriedBy(node); });
 }
 
 // Every mark tiles back from the corner into its own slot, and each one's centre
@@ -307,14 +325,29 @@ function markingSlotsX(band, count) {
   return slotsX;
 }
 
+function markingPlacements(node, band, kinds) {
+  var carried = (kinds || PROSE_KINDS).filter(function(kind) {
+    return proseMarkings[kind].carriedBy(node);
+  });
+  var slotsX = markingSlotsX(band, carried.length);
+  return carried.map(function(kind, slot) { return { kind: kind, x: slotsX[slot] }; });
+}
+
+// Where the marks start eating into the band, and null when the band carries
+// none, so a header's strings stop short of them rather than running under.
+function markingsLeftEdge(node, band, kinds) {
+  var marks = markingPlacements(node, band, kinds);
+  if (!marks.length) return null;
+  var innermost = marks[marks.length - 1];
+  return innermost.x - drawnWidth(proseMarkings[innermost.kind].glyph) / 2;
+}
+
 // The prose itself is read out on hover by the viewer's own tooltip, which is
 // why a mark carries no <title>: a native one would open beside it.
-function appendMarkings(parent, node, band, fill, attrs) {
-  var kinds = markingKindsOf(node);
-  var slotsX = markingSlotsX(band, kinds.length);
-  kinds.forEach(function(kind, slot) {
-    var el = centeredText(slotsX[slot], band.y, proseMarkings[kind].glyph, markingSize, fill);
-    el.setAttribute("data-marker", kind);
+function appendMarkings(parent, node, band, fill, attrs, kinds) {
+  markingPlacements(node, band, kinds).forEach(function(mark) {
+    var el = centeredText(mark.x, band.y, proseMarkings[mark.kind].glyph, markingSize, fill);
+    el.setAttribute("data-marker", mark.kind);
     el.setAttribute("data-node-id", node.id);
     setAttrs(el, attrs);
     parent.appendChild(el);

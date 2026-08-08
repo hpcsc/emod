@@ -725,6 +725,31 @@ function hideContextMenu(store) {
   store.interaction.ctxMenu = null;
 }
 
+function firstAggregateIdIn(store, ctxId) {
+  const agg = store.nodes.find(function(n) {
+    return n.type === "aggregate" && n.parentId === ctxId;
+  });
+  return agg ? agg.id : null;
+}
+
+function ownerIdAt(target, attr) {
+  const owner = target.closest("[" + attr + "]");
+  return owner ? owner.getAttribute(attr) : null;
+}
+
+// Every part of a container's chrome names the container it belongs to — the
+// band, the label drawn on it and any mark standing beside that label — so the
+// menu is reached by that id. Matching the band classes instead would leave
+// whatever is painted over them a patch that answers nothing.
+function containerMenuIdAt(store, target) {
+  const aggId = ownerIdAt(target, "data-agg-id");
+  if (aggId) return aggId;
+
+  const ctxId = ownerIdAt(target, "data-ctx-id");
+  if (!ctxId) return null;
+  return firstAggregateIdIn(store, ctxId) || ctxId;
+}
+
 // ─── SVG event delegation (click, dblclick, contextmenu, tooltip) ─
 function initDelegation(store) {
   const svgEl = store.dom.svg;
@@ -934,58 +959,10 @@ function initDelegation(store) {
       return;
     }
 
-    const aggArea = target.closest(".agg-area");
-    if (aggArea) {
-      const aggId = aggArea.getAttribute("data-agg-id");
-      if (aggId) {
-        evt.preventDefault();
-        showContextMenu(store, evt.clientX, evt.clientY, { aggOrCtxId: aggId });
-        return;
-      }
-    }
-
-    const aggLabel = target.closest(".agg-label");
-    if (aggLabel) {
-      const aggId = aggLabel.getAttribute("data-agg-id");
-      if (aggId) {
-        evt.preventDefault();
-        showContextMenu(store, evt.clientX, evt.clientY, { aggOrCtxId: aggId });
-        return;
-      }
-    }
-
-    const ctxHeader = target.closest(".ctx-header");
-    if (ctxHeader) {
-      const ctxId = ctxHeader.getAttribute("data-ctx-id");
-      if (ctxId) {
-        let aggId = null;
-        for (let i = 0; i < store.nodes.length; i++) {
-          if (store.nodes[i].type === "aggregate" && store.nodes[i].parentId === ctxId) {
-            aggId = store.nodes[i].id;
-            break;
-          }
-        }
-        evt.preventDefault();
-        showContextMenu(store, evt.clientX, evt.clientY, { aggOrCtxId: aggId || ctxId });
-        return;
-      }
-    }
-
-    const ctxLabel = target.closest(".ctx-label");
-    if (ctxLabel) {
-      const ctxId = ctxLabel.getAttribute("data-ctx-id");
-      if (ctxId) {
-        let aggId = null;
-        for (let i = 0; i < store.nodes.length; i++) {
-          if (store.nodes[i].type === "aggregate" && store.nodes[i].parentId === ctxId) {
-            aggId = store.nodes[i].id;
-            break;
-          }
-        }
-        evt.preventDefault();
-        showContextMenu(store, evt.clientX, evt.clientY, { aggOrCtxId: aggId || ctxId });
-        return;
-      }
+    const containerId = containerMenuIdAt(store, target);
+    if (containerId) {
+      evt.preventDefault();
+      showContextMenu(store, evt.clientX, evt.clientY, { aggOrCtxId: containerId });
     }
   });
 }
