@@ -1103,6 +1103,38 @@ func TestFormat(t *testing.T) {
 				}, "\n"))
 		})
 
+		t.Run("round-trip: a comment in a flow block survives repeated formatting", func(t *testing.T) {
+			input := strings.Join([]string{
+				`model "Library Lending"`,
+				``,
+				`context "Lending" {`,
+				`  aggregate "Loan" {`,
+				`    invariant OneCopyPerLoan "A loan covers exactly one copy of one title"`,
+				``,
+				`    slice "Borrow a Copy" {`,
+				`      flow {`,
+				`        # the copy leaves the shelf`,
+				`        command -> event: BorrowCopy -> CopyBorrowed`,
+				`        # unless someone else already has it`,
+				`        command -> rejected: BorrowCopy -> OneCopyPerLoan`,
+				`      }`,
+				`    }`,
+				`  }`,
+				`}`,
+				``,
+			}, "\n")
+
+			// The formatter writes a flow entry's comment inside the block, so
+			// the parser has to read it back from there. While it did not, a
+			// second emod fmt deleted the comment outright, or moved it onto
+			// whatever construct followed the block.
+			reparsed := requireStableFormat(t, parseModel(t, input, "test.emod"))
+
+			slice := reparsed.Contexts[0].Aggregates[0].Slices[0]
+			require.Equal(t, []string{"# the copy leaves the shelf"}, formattedCommentTexts(slice.Flows[0].Comments))
+			require.Equal(t, []string{"# unless someone else already has it"}, formattedCommentTexts(slice.Rejections[0].Comments))
+		})
+
 		t.Run("a comment carried on a rejection entry is written back out", func(t *testing.T) {
 			model := &ast.Model{
 				Name: "Library Lending",
@@ -4249,6 +4281,14 @@ func indexOfLine(t *testing.T, lines []string, from int, text string) int {
 	require.FailNowf(t, "line not found in formatted output", "%q at or after line %d in:\n%s",
 		text, from+1, strings.Join(lines, "\n"))
 	return -1
+}
+
+func formattedCommentTexts(comments []*ast.Comment) []string {
+	texts := make([]string, 0, len(comments))
+	for _, comment := range comments {
+		texts = append(texts, comment.Text)
+	}
+	return texts
 }
 
 var ignoreFormatterNormalizations = cmp.Options{

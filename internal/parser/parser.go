@@ -1364,19 +1364,34 @@ func (p *Instance) parseFlowBlock() ([]*ast.Flow, []*ast.Rejection) {
 	openTok := p.advance()
 	openLine := openTok.Line
 
+	// Comments written inside the block are collected here rather than in
+	// parseFlowEntry, so that a malformed entry hands its comments on to the
+	// next one instead of dropping them. Every sibling construct takes its own
+	// comments at the top of its parse function; a flow entry cannot, because
+	// the keyword that opens one is also what the block loop dispatches on.
+	entryComments := p.takePendingComments()
+	attach := func(target *[]*ast.Comment) {
+		*target = entryComments
+		entryComments = nil
+	}
+
 	for !p.check(lexer.CloseBrace) && !p.isAtEnd() {
 		if !p.check(lexer.KeywordCommand) {
 			p.error("expected command in flow")
 			p.skipToNextFlowEntry()
+			entryComments = append(entryComments, p.takePendingComments()...)
 			continue
 		}
 		flow, rejection := p.parseFlowEntry()
 		switch {
 		case flow != nil:
+			attach(&flow.Comments)
 			flows = append(flows, flow)
 		case rejection != nil:
+			attach(&rejection.Comments)
 			rejections = append(rejections, rejection)
 		}
+		entryComments = append(entryComments, p.takePendingComments()...)
 	}
 
 	if !p.check(lexer.CloseBrace) {
@@ -1385,19 +1400,28 @@ func (p *Instance) parseFlowBlock() ([]*ast.Flow, []*ast.Rejection) {
 	}
 	p.advance()
 
-	// The block's leading comments go to the first entry the formatter will
-	// write, which is a flow whenever the block states one. Attaching them to
-	// whichever entry came first in source instead would move them out of the
-	// block on the next emod fmt, because the formatter writes every flow ahead
-	// of every rejection.
+	// A comment written above `flow {` leads the first entry the formatter will
+	// write, which is a flow whenever the block states one: the formatter emits
+	// every flow ahead of every rejection, so leaving it on whichever entry came
+	// first in source would sink it below the entry it introduces. It goes ahead
+	// of that entry's own comments, which is the order the author wrote them in.
+	var first *[]*ast.Comment
 	switch {
 	case len(flows) > 0:
-		flows[0].Comments = comments
+		first = &flows[0].Comments
 	case len(rejections) > 0:
-		rejections[0].Comments = comments
-	default:
-		p.pending = comments
+		first = &rejections[0].Comments
 	}
+	if first != nil {
+		*first = append(comments, *first...)
+		comments = nil
+	}
+
+	// Anything left belongs to no entry: the block stated none, or the comments
+	// trail the last one. A flow block is not an AST node, so there is nowhere
+	// to hang those; they return to the pending list for the next construct
+	// rather than being dropped.
+	p.pending = append(comments, append(entryComments, p.pending...)...)
 
 	return flows, rejections
 }

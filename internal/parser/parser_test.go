@@ -5348,6 +5348,137 @@ context "Reservations" {
 	})
 
 	t.Run("comments", func(t *testing.T) {
+		t.Run("a comment written inside a flow block attaches to the entry below it", func(t *testing.T) {
+			input := `model "Test"
+context "Lending" {
+  aggregate "Loan" {
+    invariant OneCopyPerLoan "A loan covers exactly one copy of one title"
+    slice "Borrow a Copy" {
+      flow {
+        # the copy leaves the shelf
+        command -> event: BorrowCopy -> CopyBorrowed
+        # unless someone else has it
+        command -> rejected: BorrowCopy -> OneCopyPerLoan
+      }
+    }
+  }
+}`
+			tokens, lexDiags := lexer.Scan(input, "test.emod")
+			require.Empty(t, lexDiags)
+
+			model, diags := parser.New(tokens, "test.emod").Parse()
+
+			require.Empty(t, diags)
+			slice := model.Contexts[0].Aggregates[0].Slices[0]
+			require.Equal(t, []string{"# the copy leaves the shelf"}, commentTexts(slice.Flows[0].Comments))
+			require.Equal(t, []string{"# unless someone else has it"}, commentTexts(slice.Rejections[0].Comments))
+		})
+
+		t.Run("a comment written above a flow block leads its first entry", func(t *testing.T) {
+			input := `model "Test"
+context "Lending" {
+  aggregate "Loan" {
+    slice "Borrow a Copy" {
+      # how a copy leaves the shelf
+      flow {
+        command -> event: BorrowCopy -> CopyBorrowed
+      }
+    }
+  }
+}`
+			tokens, lexDiags := lexer.Scan(input, "test.emod")
+			require.Empty(t, lexDiags)
+
+			model, diags := parser.New(tokens, "test.emod").Parse()
+
+			require.Empty(t, diags)
+			slice := model.Contexts[0].Aggregates[0].Slices[0]
+			require.Equal(t, []string{"# how a copy leaves the shelf"}, commentTexts(slice.Flows[0].Comments))
+		})
+
+		t.Run("a comment above a flow block and one inside it both survive, in the order written", func(t *testing.T) {
+			input := `model "Test"
+context "Lending" {
+  aggregate "Loan" {
+    slice "Borrow a Copy" {
+      # about the whole block
+      flow {
+        # about this entry
+        command -> event: BorrowCopy -> CopyBorrowed
+      }
+    }
+  }
+}`
+			tokens, lexDiags := lexer.Scan(input, "test.emod")
+			require.Empty(t, lexDiags)
+
+			model, diags := parser.New(tokens, "test.emod").Parse()
+
+			require.Empty(t, diags)
+			slice := model.Contexts[0].Aggregates[0].Slices[0]
+			require.Equal(t, []string{"# about the whole block", "# about this entry"},
+				commentTexts(slice.Flows[0].Comments))
+		})
+
+		t.Run("a comment inside a flow block does not leak onto the construct below the block", func(t *testing.T) {
+			input := `model "Test"
+context "Lending" {
+  aggregate "Loan" {
+    slice "Borrow a Copy" {
+      flow {
+        # the copy leaves the shelf
+        command -> event: BorrowCopy -> CopyBorrowed
+      }
+      spec "borrows a free copy" {
+        when BorrowCopy
+        then [CopyBorrowed]
+      }
+    }
+  }
+}`
+			tokens, lexDiags := lexer.Scan(input, "test.emod")
+			require.Empty(t, lexDiags)
+
+			model, diags := parser.New(tokens, "test.emod").Parse()
+
+			require.Empty(t, diags)
+			slice := model.Contexts[0].Aggregates[0].Slices[0]
+			require.Equal(t, []string{"# the copy leaves the shelf"}, commentTexts(slice.Flows[0].Comments))
+			require.Empty(t, slice.Specs[0].Comments,
+				"a comment inside the flow block describes an entry of it, not whatever follows the block")
+		})
+
+		t.Run("a comment trailing the last flow entry belongs to no entry and passes to what follows", func(t *testing.T) {
+			input := `model "Test"
+context "Lending" {
+  aggregate "Loan" {
+    slice "Borrow a Copy" {
+      flow {
+        command -> event: BorrowCopy -> CopyBorrowed
+        # nothing else can happen here
+      }
+      spec "borrows a free copy" {
+        when BorrowCopy
+        then [CopyBorrowed]
+      }
+    }
+  }
+}`
+			tokens, lexDiags := lexer.Scan(input, "test.emod")
+			require.Empty(t, lexDiags)
+
+			model, diags := parser.New(tokens, "test.emod").Parse()
+
+			require.Empty(t, diags)
+			slice := model.Contexts[0].Aggregates[0].Slices[0]
+			// A flow block is not an AST node, so it has nowhere to hang a
+			// comment that follows its last entry. Handing it to the next
+			// construct keeps it in the file and keeps emod fmt a fixed point;
+			// giving it to the entry above would read as annotating that entry.
+			require.Empty(t, slice.Flows[0].Comments)
+			require.Equal(t, []string{"# nothing else can happen here"}, commentTexts(slice.Specs[0].Comments))
+		})
+
 		t.Run("comments before model are attached to Model node", func(t *testing.T) {
 			input := `# Header comment
 model "Test"`
