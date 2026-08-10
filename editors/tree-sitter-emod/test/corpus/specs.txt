@@ -86,8 +86,9 @@ context "Lending" {
             (spec_event_list
               (any_identifier))))
         (flow_definition
-          (identifier)
-          (identifier))
+          (flow_event_entry
+            (identifier)
+            (identifier)))
         (spec_definition
           (string)
           (spec_when

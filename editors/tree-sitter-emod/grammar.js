@@ -262,19 +262,30 @@ module.exports = grammar({
       ),
     ),
 
-    // flow { command -> event: CmdName -> EvtName }
+    // flow { command -> event: CmdName -> EvtName, command -> rejected: CmdName -> InvName }
     flow_definition: $ => seq(
       'flow',
       '{',
-      repeat($._flow_entry),
+      repeat(choice($.flow_event_entry, $.flow_rejection_entry)),
       '}',
     ),
 
     // command -> event: CmdName -> EvtName
-    _flow_entry: $ => seq(
+    flow_event_entry: $ => seq(
       'command',
       '->',
       'event',
+      ':',
+      $.identifier,
+      '->',
+      $.identifier,
+    ),
+
+    // command -> rejected: CmdName -> InvName
+    flow_rejection_entry: $ => seq(
+      'command',
+      '->',
+      'rejected',
       ':',
       $.identifier,
       '->',

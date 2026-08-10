@@ -1199,10 +1199,10 @@ stating no spec reports nothing.
 does not red-squiggle a file `emod validate` accepts.
 
 **Acceptance Criteria:**
-- [ ] `editors/tree-sitter-emod/grammar.js` accepts a `flow` block holding any mixture of
+- [x] `editors/tree-sitter-emod/grammar.js` accepts a `flow` block holding any mixture of
       `command -> event:` and `command -> rejected:` entries in any order, and the parse tree tells
       the two apart
-- [ ] The two entry rules are **named** rather than hidden. `_flow_entry` (`:272-280`) is hidden
+- [x] The two entry rules are **named** rather than hidden. `_flow_entry` (`:272-280`) is hidden
       today, so a `flow_definition`'s children are bare `(identifier)` pairs and a corpus case for a
       rejection entry would produce the shape an event entry already produces — an assertion that
       cannot fail for the reason it was written. Naming both moves the four committed corpus
@@ -1210,30 +1210,30 @@ does not red-squiggle a file `emod validate` accepts.
       `editors/tree-sitter-emod/test/corpus/slice.txt:92` and `:642`,
       `test/corpus/full_model.txt:36`, `test/corpus/specs.txt:88`. Those four files are in this
       task's change set for that reason
-- [ ] `test/corpus/` gains a case for a block holding only a rejection entry and a case for a block
+- [x] `test/corpus/` gains a case for a block holding only a rejection entry and a case for a block
       holding both kinds, each with the entry kinds distinguishable in the expected tree
-- [ ] The one-line comment above `flow_definition` (`:263`) states the rule's full shape including
+- [x] The one-line comment above `flow_definition` (`:263`) states the rule's full shape including
       the new entry — it is the only place in the file the admitted entries are listed, and the rule
       body imposes no order (`tasks/learnings.md:251-254`)
-- [ ] The grammar is not stricter than the Go parser: it imposes no arity and no ordering on the two
+- [x] The grammar is not stricter than the Go parser: it imposes no arity and no ordering on the two
       entry kinds, matching the unbounded loop `parseFlows` runs over the block body
       (`internal/parser/parser.go:1346`) (`tasks/learnings.md:61-64`)
-- [ ] `editors/tree-sitter-emod/queries/highlights.scm`, `folds.scm`, `indents.scm` and
+- [x] `editors/tree-sitter-emod/queries/highlights.scm`, `folds.scm`, `indents.scm` and
       `textobjects.scm` are **not** in this task's change set: `folds.scm:16`, `indents.scm:35` and
       `textobjects.scm:21,51` reference `flow_definition` and not its entries, and `highlights.scm`
       already carries `"flow"` (`:34`) and `"rejected"` (`:62`)
-- [ ] `editors/vscode/syntaxes/emod.tmLanguage.json` and `editors/vscode/test/scopes/` are not in
+- [x] `editors/vscode/syntaxes/emod.tmLanguage.json` and `editors/vscode/test/scopes/` are not in
       this task's change set: no keyword is added, and `rejected` is already in the `#keywords`
       alternation at `:97`
-- [ ] `task test:grammar` passes, run through `mise exec --` so the repo-pinned tree-sitter CLI
+- [x] `task test:grammar` passes, run through `mise exec --` so the repo-pinned tree-sitter CLI
       resolves rather than a globally pinned one (`tasks/learnings.md:11-14`), and after that run the
       only tracked files this task has changed under `editors/` are `grammar.js` and files under
       `editors/tree-sitter-emod/test/corpus/` — the target regenerates artefacts, so checking the
       working tree afterwards is what catches a generated file having become tracked
-- [ ] `editors/tree-sitter-emod/src/` stays gitignored and untracked: the repo does not track
+- [x] `editors/tree-sitter-emod/src/` stays gitignored and untracked: the repo does not track
       generated artefacts, `task test:grammar` regenerates them, and un-ignoring them would put a
       ~3k-line CLI-dependent diff in this commit (`tasks/learnings.md:16-19`)
-- [ ] `TestEditorKeywordCoverage` (`editors/tree-sitter-emod/test/queries/keywords_test.go:47`) and
+- [x] `TestEditorKeywordCoverage` (`editors/tree-sitter-emod/test/queries/keywords_test.go:47`) and
       `TestKeywordCoverage` (`internal/lsp/keywords_test.go:18`) both pass with no edit — this story
       adds no entry to `internal/lexer/token.go`'s `keywords` map, which reports 38 spellings before
       and after

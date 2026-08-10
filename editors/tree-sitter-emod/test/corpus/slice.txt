@@ -90,8 +90,9 @@ context "C" {
       (slice_definition
         (string)
         (flow_definition
-          (identifier)
-          (identifier))))))
+          (flow_event_entry
+            (identifier)
+            (identifier)))))))
 
 ========================
 Slice with trigger
@@ -640,7 +641,77 @@ context "C" {
       (slice_definition
         (string)
         (flow_definition
-          (identifier)
-          (identifier)
-          (identifier)
-          (identifier))))))
+          (flow_event_entry
+            (identifier)
+            (identifier))
+          (flow_event_entry
+            (identifier)
+            (identifier)))))))
+
+========================
+Slice with only rejection entries in its flow block
+========================
+
+context "C" {
+  aggregate "A" {
+    slice "Core" {
+      flow {
+        command -> rejected: BorrowCopy -> OneCopyPerLoan
+        command -> rejected: BorrowCopy -> FiveCopiesPerMember
+      }
+    }
+  }
+}
+
+---
+
+(source_file
+  (context_definition
+    (string)
+    (aggregate_definition
+      (string)
+      (slice_definition
+        (string)
+        (flow_definition
+          (flow_rejection_entry
+            (identifier)
+            (identifier))
+          (flow_rejection_entry
+            (identifier)
+            (identifier)))))))
+
+========================
+Slice with both flow entry kinds interleaved
+========================
+
+context "C" {
+  aggregate "A" {
+    slice "Core" {
+      flow {
+        command -> rejected: BorrowCopy -> OneCopyPerLoan
+        command -> event: BorrowCopy -> CopyBorrowed
+        command -> rejected: ReturnCopy -> OneCopyPerLoan
+      }
+    }
+  }
+}
+
+---
+
+(source_file
+  (context_definition
+    (string)
+    (aggregate_definition
+      (string)
+      (slice_definition
+        (string)
+        (flow_definition
+          (flow_rejection_entry
+            (identifier)
+            (identifier))
+          (flow_event_entry
+            (identifier)
+            (identifier))
+          (flow_rejection_entry
+            (identifier)
+            (identifier)))))))

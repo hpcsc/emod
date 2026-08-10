@@ -86,7 +86,8 @@
       "language": "JavaScript/TypeScript",
       "depends_on": [
         1
-      ]
+      ],
+      "done": true
     },
     {
       "n": 11,

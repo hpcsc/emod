@@ -34,5 +34,6 @@ context "Sales" {
         (event_definition
           (identifier))
         (flow_definition
-          (identifier)
-          (identifier))))))
+          (flow_event_entry
+            (identifier)
+            (identifier)))))))
