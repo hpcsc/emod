@@ -514,15 +514,24 @@ Specs are carried through `emod fmt`, the JSON and CUE exports, and the embedded
 
 ## 7. Flows
 
-`flow` declares a causal relationship: a command produces an event.
+`flow` declares what a command leads to. A block holds two kinds of entry: the event a command produces, and the invariant that refuses it.
 
 ```
 flow {
   command -> event: <CommandName> -> <EventName>
+  command -> rejected: <CommandName> -> <invariantName>
 }
 ```
 
-The `->` arrow is a required operator. Multiple flow entries may appear in one `flow { }` block. Flow declaration is optional for patterns where the wiring is implicit: an automation shows the activation→command link through its `on` event or its `every` schedule, and a translation shows the command→event link through its nested event.
+The `->` arrow is a required operator. Both entry kinds may appear in one `flow { }` block, in any number and any order; `emod fmt` writes every `command -> event:` entry first, then every `command -> rejected:` entry. Flow declaration is optional for patterns where the wiring is implicit: an automation shows the activation→command link through its `on` event or its `every` schedule, and a translation shows the command→event link through its nested event.
+
+`command -> rejected:` states that an [`invariant`](#invariant) can refuse the command. The command fails and **nothing is appended** — a rejection entry names no event because there is none. A failure the business cares about, such as a declined payment, is an event and belongs in a `command -> event:` entry instead; the rejection entry exists for the case where the timeline would otherwise be silent about how a command can fail.
+
+The invariant name resolves against the enclosing aggregate, or for a slice declared directly on a `mode dcb` context, that context — the same scope rule and the same message a spec's `then rejected` gets. The command name is left unchecked, exactly as a flow's is.
+
+- **The drawn diagrams show it as a dashed edge into a rejection badge:** `emod diagram --format drawio` and `--format svg` draw a dashed arrow from the command to a badge carrying the invariant's name, placed alongside that slice's events. The badge carries the invariant's statement as a draw.io tooltip and as an SVG `<title>` element, which browsers show on hover.
+- **The ASCII preview states the relation as a line:** `emod diagram --format ascii` prints `[<CommandName>] -> ✗ <invariantName>`, a marker no element type wears. The `mermaid` format draws no arrows at all, so it shows nothing for a rejection entry.
+- **`emod lint` asks for the scenario:** `flow/rejection-without-spec` reports at info severity when the slice holding the entry states no spec exercising it — no spec whose `when` names that command and whose `then` is a rejection naming that invariant.
 
 ---
 
@@ -731,7 +740,7 @@ All references use unqualified names. `emod validate` resolves them, except for 
 | `command <Name>` | `flow`, `automation { command <Name> }`, `translation { command <Name> }`, `spec { when <Name> }`, `spec { then command <Name> }` | [`flow`](#7-flows), [`automation`](#automation-pattern), [`translation`](#translation-pattern), [`spec`](#spec) |
 | `view <Name>` | `automation { reads <Name> }`, `trigger { reads <Name> }`, `translation { reads <Name> }`, `spec { then view <Name> }` | [`automation`](#automation-pattern), [`command` pattern](#command-pattern), [`translation`](#translation-pattern), [`spec`](#spec) |
 | `actor "<name>"` | `trigger { actor <Name> }` | [`command` pattern](#command-pattern) |
-| `invariant <name>` | `spec { then rejected <name> }` | [`spec`](#spec) |
+| `invariant <name>` | `spec { then rejected <name> }`, `flow { command -> rejected: <Cmd> -> <name> }` | [`spec`](#spec), [`flow`](#7-flows) |
 
 Of the three constructs that spell `reads`, only an automation's is resolved: `emod validate` reports a name that matches no view in the model (see [`automation`](#automation-pattern)). A trigger's `reads` and a translation's are recorded and left unchecked, so either may name a view no slice declares.
 
@@ -741,7 +750,7 @@ Validation detects:
 - **Orphan events**: defined but never produced by any flow, external source, or translation.
 - **Redeclared invariants**: one name declared twice in a single scope (see [Bounded Contexts](#4-bounded-contexts)).
 - **Undefined spec references**: an event in `given` or `then`, or a command in `when`, that the model does not define — reported as `event "<Name>" does not exist` or `command "<Name>" does not exist`.
-- **Unresolved rejections**: a `then rejected <name>` whose invariant is not declared in the enclosing scope — reported as `invariant "<name>" is not declared in <scope> "<Name>"`.
+- **Unresolved rejections**: a `then rejected <name>` in a spec, or a `command -> rejected:` entry in a `flow` block, whose invariant is not declared in the enclosing scope — both reported as `invariant "<name>" is not declared in <scope> "<Name>"`.
 - **Undefined spec outcome references**: a `then view <Name>` naming a view no slice declares, or a `then command <Name>` naming a command no slice declares — reported as `view "<Name>" does not exist` or `command "<Name>" does not exist`.
 - **Outcome–pattern mismatches**: a `view` outcome in a slice declaring no view, a `command` outcome in a slice declaring no automation, a rejection in a slice declaring no command, or an event list in a slice declaring neither a command nor a translation — each reported naming the outcome shape and the construct kind the slice would have to declare.
 

@@ -1272,35 +1272,35 @@ references an invariant state the rejection entry, so a reader learns the syntax
 grammar.
 
 **Acceptance Criteria:**
-- [ ] §7 "Flows" (`docs/dsl-reference.md:426-438`) states both entry kinds, gives the rejection
+- [x] §7 "Flows" (`docs/dsl-reference.md:426-438`) states both entry kinds, gives the rejection
       entry's skeleton `command -> rejected: <CommandName> -> <invariantName>`, and says what it
       means — the command is refused and nothing is appended — pointing at
       [`invariant`](#invariant) for where the name is declared
-- [ ] §7 states what each diagram surface does with it, in the shape §10's closing bullet (`:627`)
+- [x] §7 states what each diagram surface does with it, in the shape §10's closing bullet (`:627`)
       uses: the draw.io and SVG outputs draw a dashed edge into a rejection badge carrying the
       invariant's statement as a tooltip and a `<title>`, the ASCII preview states the relation as a
       line, and Mermaid draws no arrows so it shows nothing
-- [ ] §7's skeleton stays inside a **bare** ``` fence rather than an ` ```emod ` one, as it is today
+- [x] §7's skeleton stays inside a **bare** ``` fence rather than an ` ```emod ` one, as it is today
       (`:430-434`): an ` ```emod ` fence is a promise the block validates whole, and a syntax
       skeleton with `<placeholder>` names does not (`tasks/learnings.md:526-529`). No new
       ` ```emod ` fence is added by this task, and `internal/oracle`'s "documented models" leaf passes
       unchanged over its seven blocks
-- [ ] §11's cross-reference table row for `invariant <name>` (`:645`) names the flow rejection entry
+- [x] §11's cross-reference table row for `invariant <name>` (`:645`) names the flow rejection entry
       alongside `spec { then rejected <name> }`, and its Context column links to both
       [`spec`](#spec) and [`flow`](#7-flows)
-- [ ] §11's "Unresolved rejections" bullet (`:655`) states that the check covers a rejection edge as
+- [x] §11's "Unresolved rejections" bullet (`:655`) states that the check covers a rejection edge as
       well as a spec's `then rejected`, and that the message is the same
-- [ ] §11's row for `command <Name>` (`:643`) is left as it is: a rejection entry names a command,
+- [x] §11's row for `command <Name>` (`:643`) is left as it is: a rejection entry names a command,
       but `emod validate` does not resolve it — nor does it resolve a flow's — so listing it would
       state a check that does not exist
-- [ ] No heading is added, renamed, renumbered or reordered: the `^## [0-9]+\.` list reconciles
+- [x] No heading is added, renamed, renumbered or reordered: the `^## [0-9]+\.` list reconciles
       against the `\(#[0-9]+-` list and the `^### ` list against the `\(#[a-z]` list exactly as they
       do before this task, so the four number-prefixed links and the fourteen sub-heading links —
       `#invariant` and `#spec` among them — still resolve (`tasks/learnings.md:36-39`, `:541-544`)
-- [ ] §13's `Diagram Palette` table is untouched and `TestExporterPaletteMatchesReference` passes: a
+- [x] §13's `Diagram Palette` table is untouched and `TestExporterPaletteMatchesReference` passes: a
       rejection badge is not an element type and holds no palette row, and the table is machine-read
       with exactly six rows (`tasks/learnings.md:411-414`)
-- [ ] `docs/proposals/` and `user-stories/` are not in this task's change set, and neither is
+- [x] `docs/proposals/` and `user-stories/` are not in this task's change set, and neither is
       `README.md`: the README's `emod diagram` block describes invocations, not model syntax
 
 **Affected Files/Modules:**
