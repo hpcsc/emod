@@ -3,7 +3,7 @@
 ## Progress
 - [x] Task 1: Accept a rejection entry in a `flow` block and re-emit it through `emod fmt`
 - [x] Task 2: Share a model that states rejection edges in both slice homes
-- [ ] Task 3: Resolve a rejection edge's invariant against its declaring scope
+- [x] Task 3: Resolve a rejection edge's invariant against its declaring scope
 - [ ] Task 4: Derive the rejection edge and state it in the ASCII preview
 - [ ] Task 5: Draw the rejection edge dashed into a badge in the SVG diagram
 - [ ] Task 6: Draw the same dashed edge and badge in the draw.io diagram
@@ -663,36 +663,36 @@ that context — does not declare. It is the same rule, the same scope construct
 message a spec's `then rejected` already gets, so a model author sees one behaviour for one concept.
 
 **Acceptance Criteria:**
-- [ ] A rejection edge in a slice nested in an aggregate whose invariant name that aggregate does not
+- [x] A rejection edge in a slice nested in an aggregate whose invariant name that aggregate does not
       declare produces exactly one diagnostic at `diagnostic.Error`, positioned at the invariant
       name, whose whole formatted line equals the line a spec's `then rejected` produces for the same
       name and scope — asserted as one `require.Equal` over the formatted line, not as two
       `require.Contains` calls, because the invariant's name and its scope's name may be substrings
       of each other (`tasks/learnings.md:136-139`)
-- [ ] A rejection edge in a slice declared directly on a `mode dcb` context resolves against that
+- [x] A rejection edge in a slice declared directly on a `mode dcb` context resolves against that
       context's own invariants and reports the same way
-- [ ] Scope is not inherited in either direction: an invariant declared on the enclosing context does
+- [x] Scope is not inherited in either direction: an invariant declared on the enclosing context does
       not resolve a rejection edge written in one of its aggregates' slices, and a sibling
       aggregate's invariant does not resolve it either — a model declaring the same identifier in two
       scopes and rejecting it in one reports the other and only the other
-- [ ] A rejection edge whose invariant resolves produces no diagnostic, and neither does a model with
+- [x] A rejection edge whose invariant resolves produces no diagnostic, and neither does a model with
       no rejection edges: every model the repository ships as valid, including Task 2's fixture,
       still returns an empty `oracle.Check`
-- [ ] Findings gathered from a scope's slices' specs and from their rejection edges come back in
+- [x] Findings gathered from a scope's slices' specs and from their rejection edges come back in
       declaration order, asserted as one comparison over the whole list of formatted lines — the two
       are separate AST collections, so an unsorted walk reports them in field order rather than
       source order (`tasks/learnings.md:181-184`)
-- [ ] The diagnostic carries **no** `RuleName`: nothing configures it and `emod lint --explain` must
+- [x] The diagnostic carries **no** `RuleName`: nothing configures it and `emod lint --explain` must
       not claim to describe it (`tasks/learnings.md:166-169`)
-- [ ] The rejection edge's **command** name is not resolved, matching a flow's, which
+- [x] The rejection edge's **command** name is not resolved, matching a flow's, which
       `referenceDiagnostics` (`internal/validator/validator.go:315-317`) checks only for its event: a
       rejection edge naming a command no slice declares produces no diagnostic from this task, and a
       leaf states that
-- [ ] The scope construction is reused rather than rebuilt: `invariantScopes`
+- [x] The scope construction is reused rather than rebuilt: `invariantScopes`
       (`internal/validator/validator.go:220-230`) is called once and serves redeclaration, spec
       rejections and rejection edges alike, so a reviewer can point at one place where "which
       invariants does this scope declare, and which of its slices may name them" is decided
-- [ ] `internal/linter`, `internal/formatter`, `internal/export`, `internal/diagram` and
+- [x] `internal/linter`, `internal/formatter`, `internal/export`, `internal/diagram` and
       `internal/lsp` are untouched
 
 **Affected Files/Modules:**

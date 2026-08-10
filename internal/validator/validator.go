@@ -258,6 +258,12 @@ func (s invariantScope) unresolvedRejections() []scopedInvariant {
 			}
 			found = append(found, scopedInvariant{name: rejection.InvariantName, pos: rejection.InvariantPos, scope: s})
 		}
+		for _, rejection := range slice.Rejections {
+			if declared[rejection.InvariantName] {
+				continue
+			}
+			found = append(found, scopedInvariant{name: rejection.InvariantName, pos: rejection.InvariantPos, scope: s})
+		}
 	}
 
 	return found

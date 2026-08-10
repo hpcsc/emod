@@ -8,6 +8,7 @@ import (
 
 	"github.com/hpcsc/emod/internal/ast"
 	"github.com/hpcsc/emod/internal/diagnostic"
+	"github.com/hpcsc/emod/internal/test"
 	"github.com/hpcsc/emod/internal/validator"
 	"github.com/stretchr/testify/require"
 )
@@ -1952,6 +1953,237 @@ func TestValidate(t *testing.T) {
 					`shelf.emod:40: invariant "OneCopyPerLon" is not declared in aggregate "Loan"`,
 					`shelf.emod:70: invariant "NoQueueSkipping" is not declared in context "Lending"`,
 				}, reportedLines(validator.Validate(model)))
+			})
+
+			t.Run("a rejection edge on the timeline resolves exactly as a spec's rejection does", func(t *testing.T) {
+				t.Run("an edge naming an invariant its aggregate does not declare reports the line a spec would", func(t *testing.T) {
+					edgeModel := rejectionScopeModel(&ast.Slice{
+						Name:     "Borrow Copy",
+						Commands: []*ast.Command{{Name: "BorrowCopy"}},
+						Events:   []*ast.Event{{Name: "CopyBorrowed"}},
+						Flows:    []*ast.Flow{{CommandName: "BorrowCopy", EventName: "CopyBorrowed"}},
+						Rejections: []*ast.Rejection{
+							{
+								CommandName:   "BorrowCopy",
+								InvariantName: "OneHoldPerCopy",
+								InvariantPos:  ast.Position{Filename: "lending.emod", Line: 15, Column: 43},
+							},
+						},
+					})
+					specModel := rejectionScopeModel(&ast.Slice{
+						Name:     "Borrow Copy",
+						Commands: []*ast.Command{{Name: "BorrowCopy"}},
+						Events:   []*ast.Event{{Name: "CopyBorrowed"}},
+						Flows:    []*ast.Flow{{CommandName: "BorrowCopy", EventName: "CopyBorrowed"}},
+						Specs: []*ast.Spec{
+							{
+								Name: "refuses a copy already held",
+								When: &ast.SpecElement{Name: "BorrowCopy"},
+								Then: &ast.ThenRejected{
+									InvariantName: "OneHoldPerCopy",
+									InvariantPos:  ast.Position{Filename: "lending.emod", Line: 15, Column: 43},
+								},
+							},
+						},
+					})
+
+					diags := validator.Validate(edgeModel)
+
+					require.Len(t, diags, 1)
+					require.Equal(t, diagnostic.Error, diags[0].Severity)
+					require.Empty(t, diags[0].RuleName, "nothing configures this check, so lint --explain must not claim to describe it")
+					require.Equal(t, reportedLines(validator.Validate(specModel)), reportedLines(diags))
+				})
+
+				t.Run("an edge on a dcb context's own slice resolves against that context's invariants", func(t *testing.T) {
+					model := &ast.Model{
+						Contexts: []*ast.Context{
+							{
+								Name:       "Reading Room",
+								Mode:       "dcb",
+								Invariants: []*ast.Invariant{{Name: "OneReaderPerDesk"}},
+								Slices: []*ast.Slice{
+									{
+										Name:     "Claim Desk",
+										Commands: []*ast.Command{{Name: "ClaimDesk"}},
+										Events:   []*ast.Event{{Name: "DeskClaimed"}},
+										Flows:    []*ast.Flow{{CommandName: "ClaimDesk", EventName: "DeskClaimed"}},
+										Rejections: []*ast.Rejection{
+											{CommandName: "ClaimDesk", InvariantName: "OneReaderPerDesk"},
+											{
+												CommandName:   "ClaimDesk",
+												InvariantName: "OneDeskPerReader",
+												InvariantPos:  ast.Position{Filename: "room.emod", Line: 22, Column: 41},
+											},
+										},
+									},
+								},
+							},
+						},
+					}
+
+					require.Equal(t, []string{
+						`room.emod:22: invariant "OneDeskPerReader" is not declared in context "Reading Room"`,
+					}, reportedLines(validator.Validate(model)))
+				})
+
+				t.Run("an edge inherits no scope in either direction", func(t *testing.T) {
+					model := &ast.Model{
+						Contexts: []*ast.Context{
+							{
+								Name:       "Lending",
+								Invariants: []*ast.Invariant{{Name: "FiveCopiesPerMember"}},
+								Aggregates: []*ast.Aggregate{
+									{
+										Name:       "Loan",
+										Invariants: []*ast.Invariant{{Name: "OneCopyPerLoan"}},
+										Slices: []*ast.Slice{
+											{
+												Name:     "Borrow Copy",
+												Commands: []*ast.Command{{Name: "BorrowCopy"}},
+												Events:   []*ast.Event{{Name: "CopyBorrowed"}},
+												Flows:    []*ast.Flow{{CommandName: "BorrowCopy", EventName: "CopyBorrowed"}},
+												Rejections: []*ast.Rejection{
+													{
+														CommandName:   "BorrowCopy",
+														InvariantName: "FiveCopiesPerMember",
+														InvariantPos:  ast.Position{Filename: "lending.emod", Line: 16, Column: 43},
+													},
+												},
+											},
+										},
+									},
+								},
+								Slices: []*ast.Slice{
+									{
+										Name:     "Waive Fine",
+										Commands: []*ast.Command{{Name: "WaiveFine"}},
+										Events:   []*ast.Event{{Name: "FineWaived"}},
+										Flows:    []*ast.Flow{{CommandName: "WaiveFine", EventName: "FineWaived"}},
+										Rejections: []*ast.Rejection{
+											{
+												CommandName:   "WaiveFine",
+												InvariantName: "OneCopyPerLoan",
+												InvariantPos:  ast.Position{Filename: "lending.emod", Line: 30, Column: 41},
+											},
+										},
+									},
+								},
+							},
+						},
+					}
+
+					require.Equal(t, []string{
+						`lending.emod:16: invariant "FiveCopiesPerMember" is not declared in aggregate "Loan"`,
+						`lending.emod:30: invariant "OneCopyPerLoan" is not declared in context "Lending"`,
+					}, reportedLines(validator.Validate(model)))
+				})
+
+				t.Run("findings from a scope's specs and its edges come back in declaration order", func(t *testing.T) {
+					model := &ast.Model{
+						Contexts: []*ast.Context{
+							{
+								Name: "Lending",
+								Aggregates: []*ast.Aggregate{
+									{
+										Name:       "Loan",
+										Invariants: []*ast.Invariant{{Name: "OneCopyPerLoan"}},
+										Slices: []*ast.Slice{
+											{
+												Name:     "Borrow Copy",
+												Commands: []*ast.Command{{Name: "BorrowCopy"}},
+												Events:   []*ast.Event{{Name: "CopyBorrowed"}},
+												Flows:    []*ast.Flow{{CommandName: "BorrowCopy", EventName: "CopyBorrowed"}},
+												Rejections: []*ast.Rejection{
+													{
+														CommandName:   "BorrowCopy",
+														InvariantName: "EdgeAbove",
+														InvariantPos:  ast.Position{Filename: "lending.emod", Line: 12, Column: 43},
+													},
+													{
+														CommandName:   "BorrowCopy",
+														InvariantName: "EdgeBelow",
+														InvariantPos:  ast.Position{Filename: "lending.emod", Line: 30, Column: 43},
+													},
+												},
+												Specs: []*ast.Spec{
+													{
+														Name: "refuses a copy already on loan",
+														When: &ast.SpecElement{Name: "BorrowCopy"},
+														Then: &ast.ThenRejected{
+															InvariantName: "SpecBetween",
+															InvariantPos:  ast.Position{Filename: "lending.emod", Line: 20, Column: 21},
+														},
+													},
+												},
+											},
+										},
+									},
+								},
+							},
+						},
+					}
+
+					require.Equal(t, []string{
+						`lending.emod:12: invariant "EdgeAbove" is not declared in aggregate "Loan"`,
+						`lending.emod:20: invariant "SpecBetween" is not declared in aggregate "Loan"`,
+						`lending.emod:30: invariant "EdgeBelow" is not declared in aggregate "Loan"`,
+					}, reportedLines(validator.Validate(model)))
+				})
+
+				t.Run("two scopes declaring one invariant name each resolve their own edges, and a third scope declaring it not at all is the only one reported", func(t *testing.T) {
+					edgeSlice := func(name, command, event string, pos ast.Position) *ast.Slice {
+						return &ast.Slice{
+							Name:       name,
+							Commands:   []*ast.Command{{Name: command}},
+							Events:     []*ast.Event{{Name: event}},
+							Flows:      []*ast.Flow{{CommandName: command, EventName: event}},
+							Rejections: []*ast.Rejection{{CommandName: command, InvariantName: "OneCopyPerLoan", InvariantPos: pos}},
+						}
+					}
+					model := &ast.Model{
+						Contexts: []*ast.Context{
+							{
+								Name: "Lending",
+								Aggregates: []*ast.Aggregate{
+									{
+										Name:       "Loan",
+										Invariants: []*ast.Invariant{{Name: "OneCopyPerLoan"}},
+										Slices:     []*ast.Slice{edgeSlice("Borrow Copy", "BorrowCopy", "CopyBorrowed", ast.Position{})},
+									},
+									{
+										Name:       "Reservation",
+										Invariants: []*ast.Invariant{{Name: "OneCopyPerLoan"}},
+										Slices:     []*ast.Slice{edgeSlice("Hold Copy", "HoldCopy", "CopyHeld", ast.Position{})},
+									},
+								},
+								Slices: []*ast.Slice{
+									edgeSlice("Waive Fine", "WaiveFine", "FineWaived", ast.Position{Filename: "lending.emod", Line: 44, Column: 41}),
+								},
+							},
+						},
+					}
+
+					require.Equal(t, []string{
+						`lending.emod:44: invariant "OneCopyPerLoan" is not declared in context "Lending"`,
+					}, reportedLines(validator.Validate(model)))
+				})
+
+				t.Run("an edge naming a command no slice declares is reported on nothing, as a flow's is not", func(t *testing.T) {
+					model := rejectionScopeModel(&ast.Slice{
+						Name:       "Borrow Copy",
+						Commands:   []*ast.Command{{Name: "BorrowCopy"}},
+						Events:     []*ast.Event{{Name: "CopyBorrowed"}},
+						Flows:      []*ast.Flow{{CommandName: "BorrowCopy", EventName: "CopyBorrowed"}},
+						Rejections: []*ast.Rejection{{CommandName: "ReturnCopy", InvariantName: "OneCopyPerLoan"}},
+					})
+
+					require.Empty(t, validator.Validate(model))
+				})
+
+				t.Run("the shared rejection fixture resolves every edge it states", func(t *testing.T) {
+					require.Empty(t, validator.Validate(test.RejectionLibraryLendingModel(t)))
+				})
 			})
 		})
 
@@ -4216,6 +4448,26 @@ func modelSchedulingEvery(expressions ...string) *ast.Model {
 								Automations: automations,
 							},
 						},
+					},
+				},
+			},
+		},
+	}
+}
+
+// rejectionScopeModel puts slice under an aggregate declaring OneCopyPerLoan, so
+// two models differing only in whether a spec or a rejection edge names an
+// invariant can be validated against each other.
+func rejectionScopeModel(slice *ast.Slice) *ast.Model {
+	return &ast.Model{
+		Contexts: []*ast.Context{
+			{
+				Name: "Lending",
+				Aggregates: []*ast.Aggregate{
+					{
+						Name:       "Loan",
+						Invariants: []*ast.Invariant{{Name: "OneCopyPerLoan"}},
+						Slices:     []*ast.Slice{slice},
 					},
 				},
 			},
