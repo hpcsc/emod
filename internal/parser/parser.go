@@ -1406,16 +1406,25 @@ func (p *Instance) parseFlowBlock() ([]*ast.Flow, []*ast.Rejection) {
 func (p *Instance) parseFlowEntry() (*ast.Flow, *ast.Rejection) {
 	commandTok := p.advance()
 
-	// A malformed entry is reported on the line it was written on. Reporting at
+	// A malformed entry is reported on the line it was written on: reporting at
 	// the offending token would name the line below whenever the entry runs out
 	// of tokens at end of line, and that line is usually blameless.
 	reject := func(msg string) {
+		offending := p.peek()
 		if p.checkSameLineAs(commandTok) {
 			p.error(msg)
-		} else {
-			p.errorAt(commandTok, msg)
+			p.skipRestOfLineOrBlockEnd(commandTok)
+			return
 		}
-		p.skipRestOfLineOrBlockEnd(commandTok)
+
+		// The entry ran past its own line, so draining that line would consume
+		// nothing and the block loop would report the same token again. What to
+		// drain instead turns on what the token is: one that opens the next
+		// entry belongs to the loop, anything else is this entry's continuation.
+		p.errorAt(commandTok, msg)
+		if !p.check(lexer.KeywordCommand) {
+			p.skipRestOfLineOrBlockEnd(offending)
+		}
 	}
 
 	if !p.check(lexer.Arrow) {
@@ -1449,7 +1458,17 @@ func (p *Instance) parseFlowEntry() (*ast.Flow, *ast.Rejection) {
 		return nil, nil
 	}
 	p.advance()
-	if !p.check(lexer.Identifier) {
+	// An invariant may be named after a keyword — parseInvariant declares one
+	// with checkIdentifierLike and a spec's `then rejected` names one the same
+	// way, so gating this slot on a bare identifier would leave an invariant
+	// that can be declared and rejected in a spec unnameable from the timeline.
+	// `command` is the exception: it opens the next entry of this block, so
+	// taking it here would swallow that entry whenever this one is truncated.
+	namesTarget := p.check(lexer.Identifier)
+	if rejected {
+		namesTarget = p.checkIdentifierLike() && !p.check(lexer.KeywordCommand)
+	}
+	if !namesTarget {
 		if rejected {
 			reject("expected invariant identifier")
 		} else {

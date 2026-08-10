@@ -1103,7 +1103,7 @@ func TestFormat(t *testing.T) {
 				}, "\n"))
 		})
 
-		t.Run("round-trip: a comment above a rejection entry is not deleted", func(t *testing.T) {
+		t.Run("a comment carried on a rejection entry is written back out", func(t *testing.T) {
 			model := &ast.Model{
 				Name: "Library Lending",
 				Contexts: []*ast.Context{{

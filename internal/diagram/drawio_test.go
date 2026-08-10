@@ -881,6 +881,30 @@ func TestExportDrawio(t *testing.T) {
 			}
 		})
 
+		t.Run("one slice rejecting two invariants sends each edge to its own badge", func(t *testing.T) {
+			output := drawioOf(t, twoRejectionsOneSliceModel(), diagram.StyleAuto)
+
+			badgeIDs := map[string]string{}
+			for _, shape := range drawioShapes(t, output) {
+				if strings.Contains(shape.style, "fillColor="+fillRejectionHex) {
+					badgeIDs[shape.label] = shape.id
+				}
+			}
+			require.Len(t, badgeIDs, 2)
+
+			var reached []string
+			for _, m := range drawioEdge.FindAllStringSubmatch(output, -1) {
+				if m[1] == rejectionEdgeStyleFor(t, output) {
+					reached = append(reached, m[3])
+				}
+			}
+
+			// Pairing every edge with badges[i][0] stacks both on the first
+			// badge and orphans the second, which reading target ids catches
+			// and reading target labels cannot.
+			require.ElementsMatch(t, []string{badgeIDs["OneCopyPerLoan"], badgeIDs["FiveCopiesPerMember"]}, reached)
+		})
+
 		t.Run("a model stating no rejection edge draws no badge and no dashed rejection edge", func(t *testing.T) {
 			_, unstated := requireRejectionTwinDiffers(t)
 
@@ -951,6 +975,21 @@ func drawioOf(t *testing.T, model *ast.Model, style diagram.Style) string {
 	require.NoError(t, err)
 
 	return string(raw)
+}
+
+// rejectionEdgeStyleFor returns the style string the render paints its dashed
+// rejection edges with, read out of the render rather than restated, so the
+// caller selects those edges without pinning a style table it does not own.
+func rejectionEdgeStyleFor(t *testing.T, output string) string {
+	t.Helper()
+
+	for _, m := range drawioEdge.FindAllStringSubmatch(output, -1) {
+		if strings.Contains(m[1], "strokeColor="+strokeRejectionHex) {
+			return m[1]
+		}
+	}
+	require.FailNow(t, "the render draws no rejection edge")
+	return ""
 }
 
 // drawioBadgeLabels names the rejection badges the diagram draws, in document

@@ -648,9 +648,6 @@ func rejectionReferences(slices []*ast.Slice, invariants []*ast.Invariant) map[s
 				referenced[rejection.InvariantName] = true
 			}
 		}
-		// The declared guard is load-bearing here: an edge naming an invariant
-		// no scope declares is already a validation error, and letting it count
-		// would silence this rule for the invariant the typo was written for.
 		for _, rejection := range sl.Rejections {
 			if declared[rejection.InvariantName] {
 				referenced[rejection.InvariantName] = true

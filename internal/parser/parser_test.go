@@ -4178,6 +4178,81 @@ context "Lending" {
 			require.NotZero(t, model.Contexts[0].Aggregates[0].Slices[0].ClosePos.Line)
 		})
 
+		t.Run("a malformed entry that has wrapped onto a continuation line still reports once", func(t *testing.T) {
+			for _, tc := range []struct {
+				name    string
+				entry   string
+				message string
+			}{
+				{
+					name:    "an event entry",
+					entry:   "command -> event: BorrowCopy\n          CopyBorrowed",
+					message: "expected -> between command and event identifiers",
+				},
+				{
+					name:    "a rejection entry",
+					entry:   "command -> rejected: BorrowCopy\n          OneCopyPerLoan",
+					message: "expected -> between command and invariant identifiers",
+				},
+			} {
+				t.Run(tc.name, func(t *testing.T) {
+					input := fmt.Sprintf(`model "Test"
+context "Lending" {
+  aggregate "Loan" {
+    slice "Borrow a Copy" {
+      flow {
+        %s
+        command -> event: ReturnCopy -> CopyReturned
+      }
+    }
+  }
+}`, tc.entry)
+					tokens, lexDiags := lexer.Scan(input, "test.emod")
+					require.Empty(t, lexDiags)
+
+					model, diags := parser.New(tokens, "test.emod").Parse()
+
+					// Draining the command keyword's line consumes nothing once
+					// the offending token has wrapped, and the block loop then
+					// reports the same token a second time.
+					require.Len(t, diags, 1)
+					require.Equal(t, tc.message, diags[0].Message)
+
+					slice := model.Contexts[0].Aggregates[0].Slices[0]
+					require.Equal(t, []string{"CopyReturned"}, flowEventNames(slice.Flows))
+					require.NotZero(t, slice.ClosePos.Line)
+				})
+			}
+		})
+
+		t.Run("an invariant named after a keyword is nameable from a rejection edge, as it is from a spec", func(t *testing.T) {
+			input := `model "Test"
+context "Lending" {
+  aggregate "Loan" {
+    invariant when "a loan covers exactly one copy"
+    slice "Borrow a Copy" {
+      flow {
+        command -> rejected: BorrowCopy -> when
+      }
+      spec "refuses a second loan" {
+        when BorrowCopy
+        then rejected when
+      }
+    }
+  }
+}`
+			tokens, lexDiags := lexer.Scan(input, "test.emod")
+			require.Empty(t, lexDiags)
+
+			model, diags := parser.New(tokens, "test.emod").Parse()
+
+			require.Empty(t, diags,
+				"an invariant declarable and spec-referenceable by that name must be nameable on the timeline too")
+			slice := model.Contexts[0].Aggregates[0].Slices[0]
+			require.Equal(t, []string{"when"}, rejectionEdgeInvariants(slice.Rejections))
+			require.Equal(t, []string{"when"}, rejectedInvariantNames(slice.Specs))
+		})
+
 		t.Run("a flow entry wrapped across lines parses as it always has", func(t *testing.T) {
 			input := `model "Test"
 context "Lending" {

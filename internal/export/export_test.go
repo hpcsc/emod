@@ -1783,14 +1783,21 @@ func TestExport(t *testing.T) {
 
 			t.Run("the diagram document still carries no rejection key", func(t *testing.T) {
 				stated := test.RejectionLibraryLendingModel(t)
-				doc := diagramDocOf(t, stated)
+				invariants := []string{"OneCopyPerLoan", "OneReaderPerDesk"}
 
-				// The fixture's filename is rejections.emod, so a raw text
-				// search matches every position object; the keys are the
-				// question, and they have to be asked of the decoded document.
-				require.Empty(t, keysNamed(doc, "rejections"))
-				require.Empty(t, keysNamed(doc, "invariant_name"))
-				require.Empty(t, textAnywhere(doc, []string{"OneCopyPerLoan", "OneReaderPerDesk"}),
+				// The searches have to find the feature where it does belong,
+				// or finding none in the diagram document says nothing. A raw
+				// text search cannot ask this: the fixture's filename is
+				// rejections.emod, so it matches every position object.
+				modelDoc := modelDocOf(t, stated)
+				require.NotEmpty(t, keysNamed(modelDoc, "rejections"))
+				require.NotEmpty(t, keysNamed(modelDoc, "invariant_name"))
+				require.ElementsMatch(t, invariants, textAnywhere(modelDoc, invariants))
+
+				diagramDoc := diagramDocOf(t, stated)
+				require.Empty(t, keysNamed(diagramDoc, "rejections"))
+				require.Empty(t, keysNamed(diagramDoc, "invariant_name"))
+				require.Empty(t, textAnywhere(diagramDoc, invariants),
 					"an invariant is not a diagram-JSON node")
 			})
 		})
