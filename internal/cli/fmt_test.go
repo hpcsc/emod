@@ -489,6 +489,189 @@ context "Fulfilment" {
 }
 `
 
+// rejectionFormattedEmod is what emod fmt writes for test.RejectionLibraryLending,
+// not that fixture re-indented: the header is added, each slice's specs move below
+// its flow block, an empty given history loses its line, and a flow block's two
+// entry kinds are written in canonical order.
+const rejectionFormattedEmod = `emod 1
+# Lending a library's copies and seating its readers, with the rejections each command can meet
+model "Library Lending"
+
+actor "Member"
+
+context "Lending" {
+  aggregate "Loan" {
+    invariant OneCopyPerLoan "A loan covers exactly one copy of one title"
+    slice "Borrow Copy" {
+      trigger "Lending Desk" {
+        actor Member
+        reads AvailableCopiesView
+      }
+
+      command BorrowCopy {
+        fields {
+          memberId string required
+          copyId   string required
+          dueOn    date   required
+        }
+      }
+
+      event CopyBorrowed {
+        fields {
+          loanId   string required
+          memberId string required
+          copyId   string required
+          dueOn    date   required
+        }
+      }
+
+      flow {
+        command -> event: BorrowCopy -> CopyBorrowed
+        command -> rejected: BorrowCopy -> OneCopyPerLoan
+      }
+
+      spec "borrows a copy no one holds" {
+        when BorrowCopy
+        then [CopyBorrowed]
+      }
+
+      spec "refuses a copy already on loan" {
+        given [CopyBorrowed]
+        when BorrowCopy
+        then rejected OneCopyPerLoan
+      }
+    }
+
+    slice "Return Copy" {
+      command ReturnCopy {
+        fields {
+          loanId string required
+          copyId string required
+        }
+      }
+
+      event CopyReturned {
+        fields {
+          loanId     string    required
+          copyId     string    required
+          returnedAt timestamp required
+        }
+      }
+
+      flow {
+        command -> event: ReturnCopy -> CopyReturned
+        command -> rejected: ReturnCopy -> OneCopyPerLoan
+      }
+
+      spec "returns a copy the member holds" {
+        given [CopyBorrowed]
+        when ReturnCopy
+        then [CopyReturned]
+      }
+
+      spec "refuses to return a copy the member no longer holds" {
+        given [CopyBorrowed]
+        when ReturnCopy
+        then rejected OneCopyPerLoan
+      }
+    }
+
+    slice "Review Member Loans" {
+      view MemberLoansView {
+        fields {
+          loanId   string required
+          memberId string required
+          dueOn    date   required
+        }
+        subscribes [CopyBorrowed]
+      }
+    }
+  }
+}
+
+context "Reading Room" mode dcb {
+  invariant OneReaderPerDesk "A desk seats at most one reader at any moment"
+  slice "Claim Desk" {
+    command ClaimDesk {
+      fields {
+        memberId string required
+        deskId   string required
+      }
+    }
+
+    event DeskClaimed {
+      tags {
+        desk  : deskId
+        reader: memberId
+      }
+      fields {
+        sessionId string    required
+        deskId    string    required
+        memberId  string    required
+        claimedAt timestamp required
+      }
+    }
+
+    flow {
+      command -> event: ClaimDesk -> DeskClaimed
+      command -> rejected: ClaimDesk -> OneReaderPerDesk
+    }
+
+    spec "seats a reader at a free desk" {
+      when ClaimDesk
+      then [DeskClaimed]
+    }
+
+    spec "refuses a desk another reader is seated at" {
+      given [DeskClaimed]
+      when ClaimDesk
+      then rejected OneReaderPerDesk
+    }
+  }
+
+  slice "Release Desk" {
+    command ReleaseDesk {
+      decides_on {
+        events [DeskClaimed]
+        where tag(desk = deskId) and tag(reader = memberId)
+      }
+      fields {
+        sessionId string required
+      }
+    }
+
+    event DeskReleased {
+      tags {
+        desk  : deskId
+        reader: memberId
+      }
+      fields {
+        sessionId  string    required
+        deskId     string    required
+        memberId   string    required
+        releasedAt timestamp required
+      }
+    }
+
+    flow {
+      command -> event: ReleaseDesk -> DeskReleased
+    }
+
+    spec "frees the desk its reader is seated at" {
+      given [DeskClaimed]
+      when ReleaseDesk
+      then [DeskReleased]
+    }
+
+    spec "refuses to free a desk already empty" {
+      given [DeskClaimed]
+      when ReleaseDesk
+      then rejected OneReaderPerDesk
+    }
+  }
+}
+`
+
 const slicePatternFormattedEmod = `emod 1
 # Lending a library's copies and seating its readers, with a spec for every slice pattern
 model "Library Lending"
@@ -891,6 +1074,12 @@ func TestFmt(t *testing.T) {
 		path := writeTemp(t, "slice-patterns.emod", test.SlicePatternLibraryLending)
 
 		requireFmtSettlesOn(t, path, slicePatternFormattedEmod)
+	})
+
+	t.Run("keeps every rejection edge in both slice homes and settles after one run", func(t *testing.T) {
+		path := writeTemp(t, "rejections.emod", test.RejectionLibraryLending)
+
+		requireFmtSettlesOn(t, path, rejectionFormattedEmod)
 	})
 
 	t.Run("moves an automation's schedule to its canonical line and settles after one run", func(t *testing.T) {

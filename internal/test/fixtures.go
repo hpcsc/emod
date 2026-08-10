@@ -581,6 +581,175 @@ context "Reading Room" mode dcb {
 }
 `
 
+// RejectionLibraryLending states rejection edges on the timeline in both homes a
+// slice has — nested in an aggregate, and directly on a DCB-mode context — so
+// packages that carry the entry through their own pipeline share one model. Three
+// things about its shape are load-bearing. "Borrow Copy" writes its rejection
+// entry ahead of a further command -> event: entry, because a rejection written
+// only as a block's last entry cannot catch one running on into what follows it.
+// "Release Desk" states a flow block and no rejection at all, so a walk assuming
+// every flow block has one reads back wrong. And "Borrow Copy" and "Return Copy"
+// reject the same invariant from two different slices, which is what a badge map
+// keyed by the invariant's name alone collapses into one box.
+const RejectionLibraryLending = `# Lending a library's copies and seating its readers, with the rejections each command can meet
+model "Library Lending"
+
+actor "Member"
+
+context "Lending" {
+  aggregate "Loan" {
+    invariant OneCopyPerLoan "A loan covers exactly one copy of one title"
+    slice "Borrow Copy" {
+      trigger "Lending Desk" {
+        actor Member
+        reads AvailableCopiesView
+      }
+      command BorrowCopy {
+        fields {
+          memberId string required
+          copyId   string required
+          dueOn    date   required
+        }
+      }
+      spec "borrows a copy no one holds" {
+        when BorrowCopy
+        then [CopyBorrowed]
+      }
+      event CopyBorrowed {
+        fields {
+          loanId   string required
+          memberId string required
+          copyId   string required
+          dueOn    date   required
+        }
+      }
+      spec "refuses a copy already on loan" {
+        given [CopyBorrowed]
+        when BorrowCopy
+        then rejected OneCopyPerLoan
+      }
+      flow {
+        command -> rejected: BorrowCopy -> OneCopyPerLoan
+        command -> event: BorrowCopy -> CopyBorrowed
+      }
+    }
+    slice "Return Copy" {
+      command ReturnCopy {
+        fields {
+          loanId string required
+          copyId string required
+        }
+      }
+      event CopyReturned {
+        fields {
+          loanId     string    required
+          copyId     string    required
+          returnedAt timestamp required
+        }
+      }
+      spec "returns a copy the member holds" {
+        given [CopyBorrowed]
+        when ReturnCopy
+        then [CopyReturned]
+      }
+      spec "refuses to return a copy the member no longer holds" {
+        given [CopyBorrowed]
+        when ReturnCopy
+        then rejected OneCopyPerLoan
+      }
+      flow {
+        command -> event: ReturnCopy -> CopyReturned
+        command -> rejected: ReturnCopy -> OneCopyPerLoan
+      }
+    }
+    slice "Review Member Loans" {
+      view MemberLoansView {
+        fields {
+          loanId   string required
+          memberId string required
+          dueOn    date   required
+        }
+        subscribes [CopyBorrowed]
+      }
+    }
+  }
+}
+
+context "Reading Room" mode dcb {
+  invariant OneReaderPerDesk "A desk seats at most one reader at any moment"
+  slice "Claim Desk" {
+    command ClaimDesk {
+      fields {
+        memberId string required
+        deskId   string required
+      }
+    }
+    spec "seats a reader at a free desk" {
+      given []
+      when ClaimDesk
+      then [DeskClaimed]
+    }
+    event DeskClaimed {
+      tags {
+        desk  : deskId
+        reader: memberId
+      }
+      fields {
+        sessionId string    required
+        deskId    string    required
+        memberId  string    required
+        claimedAt timestamp required
+      }
+    }
+    spec "refuses a desk another reader is seated at" {
+      given [DeskClaimed]
+      when ClaimDesk
+      then rejected OneReaderPerDesk
+    }
+    flow {
+      command -> rejected: ClaimDesk -> OneReaderPerDesk
+      command -> event: ClaimDesk -> DeskClaimed
+    }
+  }
+  slice "Release Desk" {
+    command ReleaseDesk {
+      decides_on {
+        events [DeskClaimed]
+        where tag(desk = deskId) and tag(reader = memberId)
+      }
+      fields {
+        sessionId string required
+      }
+    }
+    event DeskReleased {
+      tags {
+        desk  : deskId
+        reader: memberId
+      }
+      fields {
+        sessionId  string    required
+        deskId     string    required
+        memberId   string    required
+        releasedAt timestamp required
+      }
+    }
+    spec "frees the desk its reader is seated at" {
+      given [DeskClaimed]
+      when ReleaseDesk
+      then [DeskReleased]
+    }
+    spec "refuses to free a desk already empty" {
+      given [DeskClaimed]
+      when ReleaseDesk
+      then rejected OneReaderPerDesk
+    }
+    flow {
+      command -> event: ReleaseDesk -> DeskReleased
+    }
+  }
+}
+`
+
 // SlicePatternLibraryLending states a spec for each slice pattern in both homes
 // a slice has — nested in an aggregate, and declared directly on a DCB-mode
 // context — and with every outcome a spec's then accepts, so packages that walk
@@ -1409,6 +1578,24 @@ var SpecLibraryLendingSpecNames = []string{
 	"refuses to free a desk already empty",
 }
 
+// RejectionEdge names both halves of a rejection edge. A transcription of the
+// invariant alone cannot tell two edges apart when two slices reject the same
+// one, which RejectionLibraryLending deliberately does.
+type RejectionEdge struct {
+	CommandName   string
+	InvariantName string
+}
+
+// RejectionLibraryLendingRejections transcribes every rejection edge
+// RejectionLibraryLending states, both slice homes together and in declaration
+// order, so a walk or a strip that reaches only one of the homes reads back short
+// against it.
+var RejectionLibraryLendingRejections = []RejectionEdge{
+	{CommandName: "BorrowCopy", InvariantName: "OneCopyPerLoan"},
+	{CommandName: "ReturnCopy", InvariantName: "OneCopyPerLoan"},
+	{CommandName: "ClaimDesk", InvariantName: "OneReaderPerDesk"},
+}
+
 // SlicePatternLibraryLendingSpecNames transcribes the name of every scenario
 // SlicePatternLibraryLending states, both slice homes together and in
 // declaration order, so a walk or a strip that reaches only one of the homes
@@ -1573,6 +1760,18 @@ func WithoutSpecs(model *ast.Model) *ast.Model {
 	})
 }
 
+// WithoutRejections returns a copy of model whose slices state no rejection edge,
+// in both homes a slice has — nested in an aggregate and declared directly on a
+// context. The original keeps every edge it was written with, so a caller
+// comparing the two is not comparing a model with itself. Flows, specs and
+// invariants are left alone: only the rejection edge is the subject of the
+// comparison, and a slice whose flow block held nothing else keeps that block.
+func WithoutRejections(model *ast.Model) *ast.Model {
+	return copyWithEditedSlices(model, func(s *ast.Slice) {
+		s.Rejections = nil
+	})
+}
+
 // WithoutAutomationReads returns a copy of model whose automations name no view
 // they read, in both homes a slice has — nested in an aggregate and declared
 // directly on a context. The original keeps every view it was written reading,
@@ -1658,6 +1857,22 @@ func DeclaredSpecNames(model *ast.Model) []string {
 		}
 	}
 	return names
+}
+
+// DeclaredRejections names every rejection edge model states, both slice homes
+// together and in declaration order, so a caller pairing it with a transcribed
+// list reads back short when a strip or a walk reaches only one of the homes.
+func DeclaredRejections(model *ast.Model) []RejectionEdge {
+	var edges []RejectionEdge
+	for _, s := range declaredSlices(model) {
+		for _, rejection := range s.Rejections {
+			edges = append(edges, RejectionEdge{
+				CommandName:   rejection.CommandName,
+				InvariantName: rejection.InvariantName,
+			})
+		}
+	}
+	return edges
 }
 
 // DeclaredDescriptions files the description every construct of model states

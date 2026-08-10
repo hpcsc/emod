@@ -1059,6 +1059,29 @@ func TestFormat(t *testing.T) {
 			}, reparsed.Contexts[0].Aggregates[0].Slices[0].Specs, ignoreFormatterNormalizations)
 		})
 
+		t.Run("round-trip: rejection edges declared in an aggregate slice and on a dcb context slice survive formatting", func(t *testing.T) {
+			original := test.RejectionLibraryLendingModel(t)
+
+			reparsed := requireStableFormat(t, original)
+
+			test.RequireEqual(t, original, reparsed, ignoreFormatterNormalizations)
+			require.NotEmpty(t, test.RejectionLibraryLendingRejections)
+			require.Equal(t, test.RejectionLibraryLendingRejections, test.DeclaredRejections(reparsed))
+		})
+
+		t.Run("round-trip: the rejection twin clears every edge in both slice homes and moves nothing else", func(t *testing.T) {
+			stating := test.RejectionLibraryLendingModel(t)
+
+			twin := test.WithoutRejections(stating)
+
+			require.Empty(t, test.DeclaredRejections(twin))
+			require.Equal(t, test.RejectionLibraryLendingRejections, test.DeclaredRejections(stating),
+				"the twin must not write through to the model it was handed")
+			test.RequireEqual(t, stating, twin, cmpopts.IgnoreFields(ast.Slice{}, "Rejections"))
+			require.Empty(t, test.DeclaredRejections(requireStableFormat(t, twin)),
+				"the twin states no rejection edge, so formatting it may not invent one")
+		})
+
 		t.Run("round-trip: the view and command outcomes in the slice-pattern fixture survive formatting", func(t *testing.T) {
 			original := test.SlicePatternLibraryLendingModel(t)
 

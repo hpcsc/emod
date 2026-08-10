@@ -2,7 +2,7 @@
 
 ## Progress
 - [x] Task 1: Accept a rejection entry in a `flow` block and re-emit it through `emod fmt`
-- [ ] Task 2: Share a model that states rejection edges in both slice homes
+- [x] Task 2: Share a model that states rejection edges in both slice homes
 - [ ] Task 3: Resolve a rejection edge's invariant against its declaring scope
 - [ ] Task 4: Derive the rejection edge and state it in the ASCII preview
 - [ ] Task 5: Draw the rejection edge dashed into a badge in the SVG diagram
@@ -583,48 +583,48 @@ depends on it staying still as its off-by-default receipt. `tasks/learnings.md:4
 shared-fixture edit costs a change-set criterion.
 
 **Acceptance Criteria:**
-- [ ] `internal/test/fixtures.go` gains one model constant stating rejection edges in **both** slice
+- [x] `internal/test/fixtures.go` gains one model constant stating rejection edges in **both** slice
       homes — at least one in a slice nested in an aggregate, at least one in a slice declared
       directly on a `mode dcb` context — with every invariant it names declared in that slice's own
       scope
-- [ ] The fixture states at least one `flow` block holding both entry kinds, and at least one slice
+- [x] The fixture states at least one `flow` block holding both entry kinds, and at least one slice
       whose flow block holds a rejection entry **ahead of** a further `command -> event:` entry, so
       an entry running on into what follows it is caught; a rejection written only as a block's last
       entry witnesses nothing (`tasks/learnings.md:91-94`)
-- [ ] The fixture declares at least one slice with a flow block and **no** rejection entry, so a walk
+- [x] The fixture declares at least one slice with a flow block and **no** rejection entry, so a walk
       that assumes every flow block has one reads back wrong
-- [ ] Every rejection edge in the fixture is exercised by a spec on its own slice — a spec whose
+- [x] Every rejection edge in the fixture is exercised by a spec on its own slice — a spec whose
       `when` names that edge's command and whose `then` is `rejected <that invariant>` — so the
       fixture is already clean when Task 8's rule lands and needs no second edit
-- [ ] Every invariant the fixture declares is named by at least one `then rejected` spec, so the
+- [x] Every invariant the fixture declares is named by at least one `then rejected` spec, so the
       fixture is also clean under US-008's `spec/invariant-never-exercised` whenever that lands
-- [ ] `oracle.Check` over the fixture returns an empty diagnostic list, and a leaf in
+- [x] `oracle.Check` over the fixture returns an empty diagnostic list, and a leaf in
       `internal/oracle/oracle_test.go`'s "clean input" group (`:26`) asserts it — `oracle.Check` runs
       the linter too, and a `mode dcb` shape is the usual tripwire: tag every event and let a
       `decides_on` reach every tag key, or `dcb/untagged-event` and `dcb/orphan-tag-key` fire
       (`tasks/learnings.md:151-154`)
-- [ ] A hand-transcribed list names every rejection edge the fixture states — both halves of each
+- [x] A hand-transcribed list names every rejection edge the fixture states — both halves of each
       edge, its command and its invariant — both slice homes together and in declaration order, so a
       walk or a strip reaching only one home reads back short against it
-- [ ] A `Declared…` getter walks `declaredSlices` (`internal/test/fixtures.go:1364`) and returns that
+- [x] A `Declared…` getter walks `declaredSlices` (`internal/test/fixtures.go:1364`) and returns that
       same list for the parsed fixture, and `require.Equal` against the transcription passes
-- [ ] A `Without…` twin returns a copy whose slices state no rejection edge in either home, built on
+- [x] A `Without…` twin returns a copy whose slices state no rejection edge in either home, built on
       `copyWithEditedSlices`/`editedCopies` so a nil list stays nil; the twin reads back empty from
       the getter while the original still reads back the full transcription, which is what makes a
       later differential a comparison of two different things rather than a model with itself
       (`tasks/learnings.md:96-99`, `:206-209`)
-- [ ] The twin clears rejection edges **only**: the fixture's flows, specs and invariants are
+- [x] The twin clears rejection edges **only**: the fixture's flows, specs and invariants are
       identical in both, asserted positively rather than by count
-- [ ] `internal/test/models.go` gains the parsed accessor for the fixture, matching the eight
+- [x] `internal/test/models.go` gains the parsed accessor for the fixture, matching the eight
       existing `…Model(t *testing.T) *ast.Model` siblings (`:13-61`)
-- [ ] `internal/cli/fmt_test.go` gains a canonical constant holding what `emod fmt` writes for this
+- [x] `internal/cli/fmt_test.go` gains a canonical constant holding what `emod fmt` writes for this
       fixture, and `requireFmtSettlesOn` is passed *that* constant rather than the fixture source —
       the fixture is not byte-stable under `Format`, because `emod fmt` canonicalises the order of a
       slice's entry kinds (`tasks/learnings.md:141-144`)
-- [ ] `internal/formatter/formatter_test.go`'s round-trip group gains one leaf for this fixture,
+- [x] `internal/formatter/formatter_test.go`'s round-trip group gains one leaf for this fixture,
       folded into the group's existing per-fixture shape rather than opening a parallel table, and
       pairs the `Declared…` getter with the non-empty transcription (`tasks/learnings.md:256-259`)
-- [ ] No existing fixture constant, transcription, twin, getter, golden or `*FormattedEmod` constant
+- [x] No existing fixture constant, transcription, twin, getter, golden or `*FormattedEmod` constant
       moves: `git diff` in `internal/test`, `internal/formatter`, `internal/cli`, `internal/export`,
       `internal/glossary` and `internal/diagram` shows additions only
 
