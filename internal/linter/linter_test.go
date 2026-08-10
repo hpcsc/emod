@@ -4731,6 +4731,176 @@ func TestLint(t *testing.T) {
 				`lending.emod:26: [spec/invariant-never-exercised] invariant "DeskFreeAtClosing" in context "Lending" is not referenced by any rejection`,
 			}, reportedLines(diags))
 		})
+
+		t.Run("a rejection edge references an invariant as much as a spec's rejection does", func(t *testing.T) {
+			invariantAt := func(name string, line int) *ast.Invariant {
+				return &ast.Invariant{
+					Name:    name,
+					NamePos: ast.Position{Filename: "lending.emod", Line: line, Column: 18},
+				}
+			}
+			edge := func(command, invariant string) *ast.Rejection {
+				return &ast.Rejection{
+					CommandName:   command,
+					InvariantName: invariant,
+					InvariantPos:  ast.Position{Filename: "lending.emod", Line: 30, Column: 41},
+				}
+			}
+			// No slice below pairs its edge with an exercising spec. A spec that
+			// silenced flow/rejection-without-spec would silence this rule too
+			// through the reference it is itself, leaving the edge doing nothing
+			// and the leaf passing whether or not the collector reads edges at
+			// all. So the edge is the only reference, and the noise the other
+			// rule makes is filtered out by name.
+			exercised := func(diags []*diagnostic.Entry) []string {
+				return rulesNamed(diags, "spec/invariant-never-exercised")
+			}
+
+			t.Run("an aggregate's invariant named only by an edge in its own slices is not reported", func(t *testing.T) {
+				model := &ast.Model{
+					Contexts: []*ast.Context{{
+						Name: "Lending",
+						Aggregates: []*ast.Aggregate{{
+							Name:       "Loan",
+							Invariants: []*ast.Invariant{invariantAt("OneCopyPerLoan", 5)},
+							Slices: []*ast.Slice{{
+								Name:       "Borrow Copy",
+								Rejections: []*ast.Rejection{edge("BorrowCopy", "OneCopyPerLoan")},
+							}},
+						}},
+					}},
+				}
+
+				require.Empty(t, exercised(linter.Lint(model)))
+			})
+
+			t.Run("a dcb context's own invariant named only by an edge in its own slices is not reported", func(t *testing.T) {
+				model := &ast.Model{
+					Contexts: []*ast.Context{{
+						Name:       "Reading Room",
+						Mode:       "dcb",
+						Invariants: []*ast.Invariant{invariantAt("OneReaderPerDesk", 5)},
+						Slices: []*ast.Slice{{
+							Name:       "Claim Desk",
+							Rejections: []*ast.Rejection{edge("ClaimDesk", "OneReaderPerDesk")},
+						}},
+					}},
+				}
+
+				require.Empty(t, exercised(linter.Lint(model)))
+			})
+
+			t.Run("an edge in a sibling aggregate's slice does not exercise it", func(t *testing.T) {
+				model := &ast.Model{
+					Contexts: []*ast.Context{{
+						Name: "Lending",
+						Aggregates: []*ast.Aggregate{
+							{
+								Name:       "Loan",
+								Invariants: []*ast.Invariant{invariantAt("OneCopyPerLoan", 5)},
+								Slices:     []*ast.Slice{{Name: "Borrow Copy"}},
+							},
+							{
+								Name: "Reservation",
+								Slices: []*ast.Slice{{
+									Name:       "Hold Copy",
+									Rejections: []*ast.Rejection{edge("HoldCopy", "OneCopyPerLoan")},
+								}},
+							},
+						},
+					}},
+				}
+
+				require.Equal(t, []string{
+					`lending.emod:5: [spec/invariant-never-exercised] invariant "OneCopyPerLoan" in aggregate "Loan" is not referenced by any rejection`,
+				}, exercised(linter.Lint(model)))
+			})
+
+			t.Run("an edge in an aggregate's slice does not exercise the enclosing context's invariant", func(t *testing.T) {
+				model := &ast.Model{
+					Contexts: []*ast.Context{{
+						Name:       "Lending",
+						Mode:       "mixed",
+						Invariants: []*ast.Invariant{invariantAt("DeskFreeAtClosing", 5)},
+						Aggregates: []*ast.Aggregate{{
+							Name: "Loan",
+							Slices: []*ast.Slice{{
+								Name:       "Borrow Copy",
+								Rejections: []*ast.Rejection{edge("BorrowCopy", "DeskFreeAtClosing")},
+							}},
+						}},
+					}},
+				}
+
+				require.Equal(t, []string{
+					`lending.emod:5: [spec/invariant-never-exercised] invariant "DeskFreeAtClosing" in context "Lending" is not referenced by any rejection`,
+				}, exercised(linter.Lint(model)))
+			})
+
+			t.Run("an edge naming an invariant no scope declares leaves the one it was written for reported", func(t *testing.T) {
+				model := &ast.Model{
+					Contexts: []*ast.Context{{
+						Name: "Lending",
+						Aggregates: []*ast.Aggregate{{
+							Name:       "Loan",
+							Invariants: []*ast.Invariant{invariantAt("OneCopyPerLoan", 5)},
+							Slices: []*ast.Slice{{
+								Name:       "Borrow Copy",
+								Rejections: []*ast.Rejection{edge("BorrowCopy", "OneCopyPerLon")},
+							}},
+						}},
+					}},
+				}
+
+				require.Equal(t, []string{
+					`lending.emod:5: [spec/invariant-never-exercised] invariant "OneCopyPerLoan" in aggregate "Loan" is not referenced by any rejection`,
+				}, exercised(linter.Lint(model)), "a typo must not silence the rule for the invariant it was meant to name")
+			})
+
+			t.Run("an invariant an edge and a spec both reference is silent while its unreferenced sibling is still reported once", func(t *testing.T) {
+				model := &ast.Model{
+					Contexts: []*ast.Context{{
+						Name: "Lending",
+						Aggregates: []*ast.Aggregate{{
+							Name:       "Loan",
+							Invariants: []*ast.Invariant{invariantAt("OneCopyPerLoan", 5), invariantAt("FiveCopiesPerMember", 6)},
+							Slices: []*ast.Slice{{
+								Name:       "Borrow Copy",
+								Rejections: []*ast.Rejection{edge("BorrowCopy", "OneCopyPerLoan")},
+								Specs: []*ast.Spec{{
+									Name: "refuses a copy already on loan",
+									When: &ast.SpecElement{Name: "BorrowCopy"},
+									Then: &ast.ThenRejected{InvariantName: "OneCopyPerLoan"},
+								}},
+							}},
+						}},
+					}},
+				}
+
+				require.Equal(t, []string{
+					`lending.emod:6: [spec/invariant-never-exercised] invariant "FiveCopiesPerMember" in aggregate "Loan" is not referenced by any rejection`,
+				}, exercised(linter.Lint(model)))
+			})
+
+			t.Run("a model stating no spec at all is still silenced by its edges", func(t *testing.T) {
+				model := &ast.Model{
+					Contexts: []*ast.Context{{
+						Name: "Lending",
+						Aggregates: []*ast.Aggregate{{
+							Name:       "Loan",
+							Invariants: []*ast.Invariant{invariantAt("OneCopyPerLoan", 5)},
+							Slices: []*ast.Slice{{
+								Name:       "Borrow Copy",
+								Rejections: []*ast.Rejection{edge("BorrowCopy", "OneCopyPerLoan")},
+							}},
+						}},
+					}},
+				}
+
+				require.Empty(t, exercised(linter.Lint(model)),
+					"this is the case the seam exists for, and the one a spec gate would have broken")
+			})
+		})
 	})
 
 	t.Run("spec/given-outside-boundary", func(t *testing.T) {
@@ -5469,6 +5639,19 @@ func TestLint(t *testing.T) {
 			}, reportedLines(diags))
 		})
 	})
+}
+
+// rulesNamed selects the diagnostics one rule produced, so a leaf about that
+// rule can be written over a model another rule also has something to say about.
+func rulesNamed(diags []*diagnostic.Entry, rule string) []string {
+	var lines []string
+	for _, d := range diags {
+		if d.RuleName == rule {
+			lines = append(lines, d.String())
+		}
+	}
+
+	return lines
 }
 
 func reportedLines(diags []*diagnostic.Entry) []string {

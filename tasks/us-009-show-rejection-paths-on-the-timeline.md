@@ -1141,33 +1141,33 @@ within its own scope only and only by a reference that resolves (its Open questi
 starts only after US-008 Task 4 has landed.
 
 **Acceptance Criteria:**
-- [ ] An invariant declared on an aggregate that no spec in that aggregate's slices rejects, but that
+- [x] An invariant declared on an aggregate that no spec in that aggregate's slices rejects, but that
       a rejection edge in one of those slices names, produces no `spec/invariant-never-exercised`
       diagnostic
-- [ ] The same holds for an invariant declared directly on a `mode dcb` context and named by a
+- [x] The same holds for an invariant declared directly on a `mode dcb` context and named by a
       rejection edge in one of that context's own slices
-- [ ] Scope is not widened: a rejection edge in a sibling aggregate's slice does not exercise an
+- [x] Scope is not widened: a rejection edge in a sibling aggregate's slice does not exercise an
       invariant, and one in an aggregate's slice does not exercise an invariant declared on the
       enclosing context — a model declaring the same identifier in two scopes and naming it from a
       rejection edge in one reports the other and only the other
-- [ ] A rejection edge naming an invariant no scope declares — already a validation error from Task 3
+- [x] A rejection edge naming an invariant no scope declares — already a validation error from Task 3
       — does not count as a reference, so the invariant it was meant to name is still reported;
       otherwise a typo silences the rule for the invariant it was written for
-- [ ] An invariant referenced by both a spec rejection and a rejection edge is reported once, which
+- [x] An invariant referenced by both a spec rejection and a rejection edge is reported once, which
       is to say not at all, and an invariant referenced by neither is still reported exactly once
-- [ ] The rule's message, severity, position and rule name are unchanged: a leaf compares whole
+- [x] The rule's message, severity, position and rule name are unchanged: a leaf compares whole
       formatted lines against US-008 Task 4's own expectations for a model where the rule still fires
-- [ ] The change is confined to the collector US-008 Task 4 built: the comparison, the message and
+- [x] The change is confined to the collector US-008 Task 4 built: the comparison, the message and
       the scope walk are untouched, and `git diff` in `internal/linter/linter.go` shows the
       collector's body and nothing else
-- [ ] A linter fixture whose **only** reference to an invariant is a rejection edge — no spec
+- [x] A linter fixture whose **only** reference to an invariant is a rejection edge — no spec
       anywhere in the model — reports nothing for that invariant, which is the case the seam exists
       for and the one a spec gate would have broken
-- [ ] `oracle.Check` over Task 2's fixture stays empty, and over every other model the repository
+- [x] `oracle.Check` over Task 2's fixture stays empty, and over every other model the repository
       ships as valid stays as US-008 Task 4 left it — `test.InvariantLibraryLending` and the fence at
       `docs/dsl-reference.md:175` are that task's to move, not this one's, and neither gains a
       rejection edge here
-- [ ] `internal/validator`, `internal/formatter`, `internal/export`, `internal/diagram` and
+- [x] `internal/validator`, `internal/formatter`, `internal/export`, `internal/diagram` and
       `docs/` are untouched
 
 **Affected Files/Modules:**
