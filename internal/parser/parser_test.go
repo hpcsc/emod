@@ -4123,9 +4123,28 @@ context "Ctx" {
 				},
 			}
 
+			// Each shape is run as written and again wrapped before its last
+			// token. An entry may legally span lines, so recovery that drains a
+			// line rather than an entry leaves the continuation for the block
+			// loop to report a second time — which no single-line case can show.
+			layouts := []struct {
+				name string
+				lay  func(string) string
+			}{
+				{name: "on one line", lay: func(entry string) string { return entry }},
+				{name: "wrapped before its last token", lay: func(entry string) string {
+					cut := strings.LastIndex(entry, " ")
+					if cut < 0 {
+						return entry
+					}
+					return entry[:cut] + "\n          " + entry[cut+1:]
+				}},
+			}
+
 			for _, tc := range tests {
-				t.Run(tc.name, func(t *testing.T) {
-					input := fmt.Sprintf(`model "Test"
+				for _, layout := range layouts {
+					t.Run(tc.name+" "+layout.name, func(t *testing.T) {
+						input := fmt.Sprintf(`model "Test"
 context "Lending" {
   aggregate "Loan" {
     invariant OneCopyPerLoan "A loan covers exactly one copy of one title"
@@ -4136,21 +4155,22 @@ context "Lending" {
       }
     }
   }
-}`, tc.entry)
-					tokens, lexDiags := lexer.Scan(input, "test.emod")
-					require.Empty(t, lexDiags)
+}`, layout.lay(tc.entry))
+						tokens, lexDiags := lexer.Scan(input, "test.emod")
+						require.Empty(t, lexDiags)
 
-					model, diags := parser.New(tokens, "test.emod").Parse()
+						model, diags := parser.New(tokens, "test.emod").Parse()
 
-					require.Len(t, diags, 1)
-					require.Equal(t, tc.message, diags[0].Message)
+						require.Len(t, diags, 1)
+						require.Equal(t, tc.message, diags[0].Message)
 
-					slice := model.Contexts[0].Aggregates[0].Slices[0]
-					require.Equal(t, []string{"CopyReturned"}, flowEventNames(slice.Flows))
-					require.Empty(t, slice.Rejections)
-					require.NotZero(t, slice.ClosePos.Line)
-					require.NotZero(t, model.Contexts[0].ClosePos.Line)
-				})
+						slice := model.Contexts[0].Aggregates[0].Slices[0]
+						require.Equal(t, []string{"CopyReturned"}, flowEventNames(slice.Flows))
+						require.Empty(t, slice.Rejections)
+						require.NotZero(t, slice.ClosePos.Line)
+						require.NotZero(t, model.Contexts[0].ClosePos.Line)
+					})
+				}
 			}
 		})
 

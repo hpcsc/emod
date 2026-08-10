@@ -1366,9 +1366,8 @@ func (p *Instance) parseFlowBlock() ([]*ast.Flow, []*ast.Rejection) {
 
 	for !p.check(lexer.CloseBrace) && !p.isAtEnd() {
 		if !p.check(lexer.KeywordCommand) {
-			offending := p.peek()
-			p.errorAt(offending, "expected command in flow")
-			p.skipRestOfLineOrBlockEnd(offending)
+			p.error("expected command in flow")
+			p.skipToNextFlowEntry()
 			continue
 		}
 		flow, rejection := p.parseFlowEntry()
@@ -1410,21 +1409,12 @@ func (p *Instance) parseFlowEntry() (*ast.Flow, *ast.Rejection) {
 	// the offending token would name the line below whenever the entry runs out
 	// of tokens at end of line, and that line is usually blameless.
 	reject := func(msg string) {
-		offending := p.peek()
 		if p.checkSameLineAs(commandTok) {
 			p.error(msg)
-			p.skipRestOfLineOrBlockEnd(commandTok)
-			return
+		} else {
+			p.errorAt(commandTok, msg)
 		}
-
-		// The entry ran past its own line, so draining that line would consume
-		// nothing and the block loop would report the same token again. What to
-		// drain instead turns on what the token is: one that opens the next
-		// entry belongs to the loop, anything else is this entry's continuation.
-		p.errorAt(commandTok, msg)
-		if !p.check(lexer.KeywordCommand) {
-			p.skipRestOfLineOrBlockEnd(offending)
-		}
+		p.skipToNextFlowEntry()
 	}
 
 	if !p.check(lexer.Arrow) {
@@ -1600,6 +1590,17 @@ func (p *Instance) consume(typ lexer.Kind, msg string) {
 		return
 	}
 	p.advance()
+}
+
+// skipToNextFlowEntry drains a malformed flow entry up to whatever starts the
+// next one. An entry may wrap onto further lines, so draining by line leaves
+// the continuation behind for the block loop to report a second time; and every
+// entry opens on "command", which no entry can contain anywhere else, so that
+// keyword is an unambiguous place to resume.
+func (p *Instance) skipToNextFlowEntry() {
+	for !p.isAtEnd() && !p.check(lexer.KeywordCommand) && !p.check(lexer.CloseBrace) {
+		p.advance()
+	}
 }
 
 func (p *Instance) skipRestOfLineOrBlockEnd(tok *lexer.Token) {
