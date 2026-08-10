@@ -42,6 +42,12 @@
 	event_name:   string
 }
 
+#Rejection: {
+	comments?:      [...#Comment]
+	command_name:   string
+	invariant_name: string
+}
+
 #View: {
 	comments?:    [...#Comment]
 	name:         string
@@ -95,6 +101,7 @@
 	events?:       [...#Event]
 	fields?:       [...#Field]
 	flows?:        [...#Flow]
+	rejections?:   [...#Rejection]
 	views?:        [...#View]
 	automations?:  [...#Automation]
 	translations?: [...#Translation]

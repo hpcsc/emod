@@ -125,6 +125,7 @@ func (w *cueWriter) writeSlice(s *ast.Slice) {
 	writeCUEList(w, "events", s.Events, w.writeEvent)
 	writeCUEList(w, "fields", s.Fields, w.writeField)
 	writeCUEList(w, "flows", s.Flows, w.writeFlow)
+	writeCUEList(w, "rejections", s.Rejections, w.writeRejection)
 	writeCUEList(w, "views", s.Views, w.writeView)
 	writeCUEList(w, "automations", s.Automations, w.writeAutomation)
 	writeCUEList(w, "translations", s.Translations, w.writeTranslation)
@@ -188,6 +189,12 @@ func (w *cueWriter) writeFlow(f *ast.Flow) {
 	w.writeComments(f.Comments)
 	w.line("command_name: %q", f.CommandName)
 	w.line("event_name: %q", f.EventName)
+}
+
+func (w *cueWriter) writeRejection(r *ast.Rejection) {
+	w.writeComments(r.Comments)
+	w.line("command_name: %q", r.CommandName)
+	w.line("invariant_name: %q", r.InvariantName)
 }
 
 func (w *cueWriter) writeView(v *ast.View) {

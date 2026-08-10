@@ -80,6 +80,7 @@ type jsonSlice struct {
 	Events        []*jsonEvent       `json:"events,omitempty"`
 	Fields        []*jsonField       `json:"fields,omitempty"`
 	Flows         []*jsonFlow        `json:"flows,omitempty"`
+	Rejections    []*jsonRejection   `json:"rejections,omitempty"`
 	Views         []*jsonView        `json:"views,omitempty"`
 	Automations   []*jsonAutomation  `json:"automations,omitempty"`
 	Translations  []*jsonTranslation `json:"translations,omitempty"`
@@ -125,6 +126,18 @@ type jsonFlow struct {
 	CommandPosition *jsonPosition  `json:"command_position,omitempty"`
 	EventName       string         `json:"event_name"`
 	EventPosition   *jsonPosition  `json:"event_position,omitempty"`
+}
+
+// jsonRejection files its keys like jsonFlow rather than like the json* family,
+// whose documents open with Name. The two are the entry kinds of one flow block,
+// and filing them differently from each other would read worse than filing both
+// differently from the family.
+type jsonRejection struct {
+	Comments          []*jsonComment `json:"comments,omitempty"`
+	CommandName       string         `json:"command_name"`
+	CommandPosition   *jsonPosition  `json:"command_position,omitempty"`
+	InvariantName     string         `json:"invariant_name"`
+	InvariantPosition *jsonPosition  `json:"invariant_position,omitempty"`
 }
 
 type jsonTrigger struct {
@@ -410,6 +423,7 @@ func convertSlice(s *ast.Slice) *jsonSlice {
 		Events:        convertEvents(s.Events),
 		Fields:        convertFields(s.Fields),
 		Flows:         convertFlows(s.Flows),
+		Rejections:    convertList(s.Rejections, convertRejection),
 		Views:         convertViews(s.Views),
 		Automations:   convertAutomations(s.Automations),
 		Translations:  convertTranslations(s.Translations),
@@ -560,6 +574,19 @@ func convertFlow(f *ast.Flow) *jsonFlow {
 		CommandPosition: convertPosition(f.CommandPos),
 		EventName:       f.EventName,
 		EventPosition:   convertPosition(f.EventPos),
+	}
+}
+
+func convertRejection(r *ast.Rejection) *jsonRejection {
+	if r == nil {
+		return nil
+	}
+	return &jsonRejection{
+		Comments:          convertComments(r.Comments),
+		CommandName:       r.CommandName,
+		CommandPosition:   convertPosition(r.CommandPos),
+		InvariantName:     r.InvariantName,
+		InvariantPosition: convertPosition(r.InvariantPos),
 	}
 }
 

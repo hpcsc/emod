@@ -59,7 +59,8 @@
       "language": "Go",
       "depends_on": [
         2
-      ]
+      ],
+      "done": true
     },
     {
       "n": 8,

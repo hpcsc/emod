@@ -969,10 +969,10 @@ tooltip out of the written file.
 rejection edge exports the exact bytes it exports today.
 
 **Acceptance Criteria:**
-- [ ] `emod export -f json` emits one object per rejection edge under a slice, carrying the command's
+- [x] `emod export -f json` emits one object per rejection edge under a slice, carrying the command's
       name and position and the invariant's name and position, and the CUE export emits the same
       content under the same key name
-- [ ] The JSON object files its keys in the order `jsonFlow` (`internal/export/json.go:122-128`)
+- [x] The JSON object files its keys in the order `jsonFlow` (`internal/export/json.go:122-128`)
       files its own, asserted through `emittedKeyOrder` (`internal/export/export_test.go`) against
       the flow object's key list produced by the **same** subtest, so the expectation is a sibling
       rather than an arbitrary literal (`tasks/learnings.md:231-234`). Note this deliberately
@@ -980,30 +980,30 @@ rejection edge exports the exact bytes it exports today.
       `Name`-first convention (`tasks/learnings.md:146-149`): the two entry kinds of one block filing
       their keys differently from each other would read worse than either filing them differently
       from the family
-- [ ] Each position key's value is wired to its **own** AST position: a leaf asserts the line and
+- [x] Each position key's value is wired to its **own** AST position: a leaf asserts the line and
       column of the command position and of the invariant position separately, over a fixture where
       the two differ, so swapping them fails (`tasks/learnings.md:311-314`)
-- [ ] `internal/cue/schema.cue` declares the rejection definition beside `#Flow` (`:39-43`) and the
+- [x] `internal/cue/schema.cue` declares the rejection definition beside `#Flow` (`:39-43`) and the
       slice-level key beside `flows?` (`:95`), and the "output conforms to the schema's Model
       definition" subtest — `cue vet -d '#Model'` — passes for Task 2's fixture
-- [ ] The "CUE and JSON exports describe the same model" subtest passes for Task 2's fixture, and a
+- [x] The "CUE and JSON exports describe the same model" subtest passes for Task 2's fixture, and a
       transcribed read-back leaf in the shape of `listsKeyedBy` asserts both documents carry the
       fixture's full transcription of rejection edges under **both** slice homes — the export-parity
       and schema-conformance guards agree trivially over a list neither writer emits
       (`tasks/learnings.md:161-164`)
-- [ ] A retired-key style negative leaf exists on the schema side in the shape of
+- [x] A retired-key style negative leaf exists on the schema side in the shape of
       `internal/cue/embed_test.go:112`: re-keying the rejection object in a valid document and
       requiring `cue vet` to fail naming the wrong key, so a schema left accepting both spellings
       cannot ship green (`tasks/learnings.md:276-279`)
-- [ ] Exporting Task 2's fixture's `Without…` twin in both formats produces bytes byte-identical to
+- [x] Exporting Task 2's fixture's `Without…` twin in both formats produces bytes byte-identical to
       what those formats produce for the twin before this task, with the twin proved empty of
       rejection edges and the stated model proved to read back the full transcription first
-- [ ] The diagram-JSON document is unchanged and still carries no rejection key: `jsonDiagramEvent`
+- [x] The diagram-JSON document is unchanged and still carries no rejection key: `jsonDiagramEvent`
       and its siblings in `internal/export/diagram.go` are deliberately forked from the model
       documents so a new field cannot leak into the node-and-edge contract
       (`tasks/learnings.md:56-59`), and a subtest walks the whole diagram document asserting the key
       appears nowhere
-- [ ] `internal/importer/importer.go` and `internal/viewer` are untouched: the key is a model-export
+- [x] `internal/importer/importer.go` and `internal/viewer` are untouched: the key is a model-export
       key, not a diagram-node key, so nothing reads it back on the viewer's save path
 
 **Affected Files/Modules:**

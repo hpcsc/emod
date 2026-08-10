@@ -1666,6 +1666,111 @@ func TestExport(t *testing.T) {
 			require.Contains(t, string(output), "viewName")
 			require.Contains(t, string(output), "commandName")
 		})
+
+		t.Run("rejection edges", func(t *testing.T) {
+			t.Run("files a rejection object's keys where the flow object beside it files its own", func(t *testing.T) {
+				raw, err := export.ExportJSON(test.RejectionLibraryLendingModel(t))
+				require.NoError(t, err)
+
+				keyOrder := emittedKeyOrder(t, raw)
+
+				// The flow's own list comes from this same subtest, so the
+				// expectation is a sibling rather than an arbitrary literal.
+				require.Equal(t,
+					[]string{"command_name", "command_position", "event_name", "event_position"},
+					keyOrder["flows"])
+				require.Equal(t,
+					[]string{"command_name", "command_position", "invariant_name", "invariant_position"},
+					keyOrder["rejections"])
+			})
+
+			t.Run("wires each position key to its own AST position", func(t *testing.T) {
+				raw, err := export.ExportJSON(test.RejectionLibraryLendingModel(t))
+				require.NoError(t, err)
+
+				var doc map[string]any
+				require.NoError(t, json.Unmarshal(raw, &doc))
+
+				var rejection map[string]any
+				for _, slice := range exportedSlices(doc) {
+					for _, entry := range objectsUnder(slice, "rejections") {
+						if entry["invariant_name"] == "OneReaderPerDesk" {
+							rejection = entry
+						}
+					}
+				}
+				require.NotNil(t, rejection)
+
+				commandPos := rejection["command_position"].(map[string]any)
+				invariantPos := rejection["invariant_position"].(map[string]any)
+
+				// The two names sit on one line at different columns, so swapping
+				// the two keys' values fails here and nowhere else.
+				require.Equal(t, commandPos["line"], invariantPos["line"])
+				require.Less(t, commandPos["column"].(float64), invariantPos["column"].(float64),
+					"the command is written before the invariant on a rejection entry's line")
+			})
+
+			t.Run("both formats carry every edge the fixture states, under both slice homes", func(t *testing.T) {
+				cueBin := lookupCue(t)
+				model := test.RejectionLibraryLendingModel(t)
+
+				requireBothFormatsAgree(t, cueBin, model)
+
+				for name, doc := range exportedDocs(t, cueBin, model) {
+					require.Equal(t, rejectionsBySlice, rejectionEdgesIn(doc), "in the %s export", name)
+				}
+			})
+
+			t.Run("a document keyed with the Go field spelling is refused by the schema", func(t *testing.T) {
+				cueBin := lookupCue(t)
+
+				raw, err := export.ExportJSON(test.RejectionLibraryLendingModel(t))
+				require.NoError(t, err)
+				rekeyed := strings.ReplaceAll(string(raw), `"invariant_name"`, `"invariantName"`)
+				require.NotEqual(t, string(raw), rekeyed, "the re-keying has to change something")
+
+				dir := t.TempDir()
+				schemaPath := filepath.Join(dir, "schema.cue")
+				schemaData, err := os.ReadFile("../cue/schema.cue")
+				require.NoError(t, err)
+				require.NoError(t, os.WriteFile(schemaPath, schemaData, 0o644))
+				modelPath := filepath.Join(dir, "model.json")
+				require.NoError(t, os.WriteFile(modelPath, []byte(rekeyed), 0o644))
+
+				output, err := exec.Command(cueBin, "vet", "-d", "#Model", schemaPath, modelPath).CombinedOutput()
+				require.Error(t, err, "schema accepted a rejection keyed with Go-field spelling")
+				require.Contains(t, string(output), "invariantName")
+			})
+
+			t.Run("a model stating no rejection edge exports no rejections key in either format", func(t *testing.T) {
+				cueBin := lookupCue(t)
+				stated := test.RejectionLibraryLendingModel(t)
+				unstated := test.WithoutRejections(stated)
+
+				require.Equal(t, test.RejectionLibraryLendingRejections, test.DeclaredRejections(stated))
+				require.Empty(t, test.DeclaredRejections(unstated),
+					"the twin has to lose the edges of both slice homes, or the comparison below is answered by whichever home it kept")
+
+				for name, doc := range exportedDocs(t, cueBin, unstated) {
+					require.Empty(t, rejectionEdgesIn(doc), "in the %s export", name)
+					require.Empty(t, keysNamed(doc, "rejections"), "in the %s export", name)
+				}
+			})
+
+			t.Run("the diagram document still carries no rejection key", func(t *testing.T) {
+				stated := test.RejectionLibraryLendingModel(t)
+				doc := diagramDocOf(t, stated)
+
+				// The fixture's filename is rejections.emod, so a raw text
+				// search matches every position object; the keys are the
+				// question, and they have to be asked of the decoded document.
+				require.Empty(t, keysNamed(doc, "rejections"))
+				require.Empty(t, keysNamed(doc, "invariant_name"))
+				require.Empty(t, textAnywhere(doc, []string{"OneCopyPerLoan", "OneReaderPerDesk"}),
+					"an invariant is not a diagram-JSON node")
+			})
+		})
 	})
 
 	t.Run("model json with diagnostics", func(t *testing.T) {
@@ -5129,6 +5234,36 @@ func exportedAutomations(doc map[string]any) []map[string]any {
 // writer emitted them: those an aggregate holds ahead of those the context
 // declares directly. Walking the document by key would visit them in map order,
 // which says nothing about declaration order.
+// rejectionsBySlice transcribes every rejection edge test.RejectionLibraryLending
+// states, filed under the slice that states it, in the order a document writer
+// visits the two slice homes.
+var rejectionsBySlice = map[string][]string{
+	"Borrow Copy": {"BorrowCopy -> OneCopyPerLoan"},
+	"Return Copy": {"ReturnCopy -> OneCopyPerLoan"},
+	"Claim Desk":  {"ClaimDesk -> OneReaderPerDesk"},
+}
+
+// rejectionEdgesIn reads both halves of every rejection edge a document carries
+// back out, filed under its slice, so a writer that emits one half or reaches
+// one slice home reads back short against the transcription.
+func rejectionEdgesIn(doc map[string]any) map[string][]string {
+	edges := make(map[string][]string)
+	for _, slice := range exportedSlices(doc) {
+		name, named := slice["name"].(string)
+		if !named {
+			continue
+		}
+		for _, entry := range objectsUnder(slice, "rejections") {
+			edges[name] = append(edges[name],
+				entry["command_name"].(string)+" -> "+entry["invariant_name"].(string))
+		}
+	}
+	if len(edges) == 0 {
+		return nil
+	}
+	return edges
+}
+
 func exportedSlices(doc map[string]any) []map[string]any {
 	var slices []map[string]any
 	for _, context := range objectsUnder(doc, "contexts") {
@@ -5222,6 +5357,19 @@ func listsKeyedBy[T any](doc map[string]any, listKey, ownerKey string, entryOf f
 		byOwner[owner] = entries
 	})
 	return byOwner
+}
+
+// keysNamed collects the value every object in the document files under key, so
+// a test can ask whether a key appears anywhere without a raw text search — the
+// filename in each position object answers that one for the wrong reason.
+func keysNamed(doc map[string]any, key string) []any {
+	var found []any
+	eachObject(doc, func(object map[string]any) {
+		if value, states := object[key]; states {
+			found = append(found, value)
+		}
+	})
+	return found
 }
 
 func eachObject(node any, visit func(map[string]any)) {
