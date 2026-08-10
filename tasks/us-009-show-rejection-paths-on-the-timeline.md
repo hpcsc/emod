@@ -809,49 +809,49 @@ browser shows on hover. A command that can be rejected no longer renders identic
 cannot. A model stating no rejection edge draws the bytes it draws today.
 
 **Acceptance Criteria:**
-- [ ] Rendering Task 2's fixture draws one badge per rejection edge, labelled with the invariant's
+- [x] Rendering Task 2's fixture draws one badge per rejection edge, labelled with the invariant's
       name, read back through `svgBoxes` as naming every invariant in the fixture's transcription in
       declaration order across both slice homes
-- [ ] Each badge's `<title>` carries that invariant's `Statement` verbatim, read back through
+- [x] Each badge's `<title>` carries that invariant's `Statement` verbatim, read back through
       `svgTooltipOf` (`internal/diagram/svg_test.go:513`), and a badge for an invariant whose
       statement contains XML-significant characters carries them escaped and decodes back to the
       original
-- [ ] `svgConnections` reports one connection per rejection edge, its source the rejected command's
+- [x] `svgConnections` reports one connection per rejection edge, its source the rejected command's
       label and its target that badge's label, with a `paint` differing from the paint of a flow
       arrow drawn in the **same** render — the comparison is against a sibling arrow in that render,
       never against a restated stroke or dash string (`tasks/learnings.md:361-364`)
-- [ ] `svgShapes` over the render reports exactly one more shape per badge than the same model's
+- [x] `svgShapes` over the render reports exactly one more shape per badge than the same model's
       `Without…` twin reports in total, and the label of every shape the twin's render produces is
       byte-identical in both — asserted as a whole-list comparison of the twin's shapes against the
       featured render's, so a badge emitting a stray `<text>`, or emitting its text before its rect,
       fails. `svgShapes` binds each `</text>` to the most recently appended `<rect>`
       (`internal/diagram/svg_test.go:392`), so a badge is one rect followed by exactly one `<text>`,
       with its `<title>` nested inside the rect
-- [ ] `svgConnections` over the featured render resolves every arrow — it fails loudly when an
+- [x] `svgConnections` over the featured render resolves every arrow — it fails loudly when an
       endpoint is not exactly a rect's centre (`internal/diagram/svg_test.go:472`) — and reports
       the twin's arrows unchanged by source label, target label and paint, with the rejection
       arrows added
-- [ ] `boxesDrawnOver` reports no overlap among the featured render's boxes, badges included, and
+- [x] `boxesDrawnOver` reports no overlap among the featured render's boxes, badges included, and
       `labelsWithin` places every badge inside the lane its slice's events are drawn in
-- [ ] A model whose **two** slices reject the **same** invariant draws two badges and two dashed
+- [x] A model whose **two** slices reject the **same** invariant draws two badges and two dashed
       arrows, each arrow ending at the badge in its own slice's column — the box maps in both picture
       exporters are keyed by name across every slice (`nameToBox`, `internal/diagram/svg.go:57`), so
       a badge filed under the invariant's name alone collapses the two. This leaf is what fails if it
       does
-- [ ] The badge is not an element type: `internal/viewer/static/config.js`,
+- [x] The badge is not an element type: `internal/viewer/static/config.js`,
       `internal/viewer/static/viewer.html` and `docs/dsl-reference.md` §13 are not in this task's
       change set, and `TestExporterPalette`, `TestExporterPalettePinsViewer` and
       `TestExporterPaletteMatchesReference` pass with no edit, still seeing exactly six element types
-- [ ] The badge's fill and stroke are their own named constants beside the twelve in
+- [x] The badge's fill and stroke are their own named constants beside the twelve in
       `internal/diagram/layout.go:71-89`, named for what they paint and not aliased onto an equal
       value (`tasks/learnings.md:421-424`)
-- [ ] `ExportSVG` over Task 2's fixture's `Without…` twin returns bytes byte-identical to what it
+- [x] `ExportSVG` over Task 2's fixture's `Without…` twin returns bytes byte-identical to what it
       returns for that twin before this task, and `svgLaneLabels` reports the same four lanes for
       both the featured and the default render — a badge is narrower than a lane, and
       `svgLaneLabels` infers "lane" from being the widest shape (`internal/diagram/svg_test.go:415-437`)
-- [ ] The featured render is well-formed XML and its `viewBox` is unchanged: a badge takes a place in
+- [x] The featured render is well-formed XML and its `viewBox` is unchanged: a badge takes a place in
       a row that already exists rather than growing the canvas
-- [ ] `internal/diagram/drawio.go`, `mermaid.go`, `ascii.go`, `graph.go` and `internal/export/` are
+- [x] `internal/diagram/drawio.go`, `mermaid.go`, `ascii.go`, `graph.go` and `internal/export/` are
       unchanged by this task
 
 **Affected Files/Modules:**

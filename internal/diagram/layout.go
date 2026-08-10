@@ -86,6 +86,11 @@ const (
 	strokePurpleUp    = "#9B59B6"
 	strokeGreenUp     = "#82b366"
 	strokeStandard    = "#333333"
+
+	// A rejection badge is not an element type and holds no palette entry of its
+	// own; these name what it paints so it can be repainted apart from the six.
+	fillRejection   = "#f8cecc"
+	strokeRejection = "#b85450"
 )
 
 type sliceEntry struct {
@@ -93,6 +98,22 @@ type sliceEntry struct {
 	ctxName        string
 	ctxDescription string
 	fromDCB        bool // true if slice comes from a direct (DCB) context
+	// invariants are the ones this slice may name, which is its aggregate's or,
+	// for a slice declared directly on a context, that context's — the scope
+	// rule the validator resolves a rejection against.
+	invariants []*ast.Invariant
+}
+
+// invariantStatement returns the prose of the named invariant, or "" when the
+// slice's own scope declares no such name. Resolving within the scope rather
+// than across the model keeps two aggregates free to declare one name each.
+func (e sliceEntry) invariantStatement(name string) string {
+	for _, inv := range e.invariants {
+		if inv != nil && inv.Name == name {
+			return inv.Statement
+		}
+	}
+	return ""
 }
 
 // collectSlices flattens all slices from the model into a list, in source
@@ -100,11 +121,16 @@ type sliceEntry struct {
 func collectSlices(model *ast.Model) []sliceEntry {
 	var entries []sliceEntry
 	for _, ref := range model.SliceRefs() {
+		invariants := ref.Context.Invariants
+		if ref.Aggregate != nil {
+			invariants = ref.Aggregate.Invariants
+		}
 		entries = append(entries, sliceEntry{
 			slice:          ref.Slice,
 			ctxName:        ref.Context.Name,
 			ctxDescription: ref.Context.Description,
 			fromDCB:        ref.Aggregate == nil,
+			invariants:     invariants,
 		})
 	}
 	return entries

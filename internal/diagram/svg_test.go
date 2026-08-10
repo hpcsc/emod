@@ -5,14 +5,18 @@ package diagram_test
 import (
 	"encoding/xml"
 	"errors"
+	"fmt"
 	"io"
+	"maps"
 	"regexp"
+	"slices"
 	"strconv"
 	"strings"
 	"testing"
 
 	"github.com/hpcsc/emod/internal/ast"
 	"github.com/hpcsc/emod/internal/diagram"
+	"github.com/hpcsc/emod/internal/test"
 	"github.com/stretchr/testify/require"
 )
 
@@ -319,6 +323,225 @@ func TestExportSVG(t *testing.T) {
 			require.Equal(t, prose, svgTooltipOf(t, output, "HoldRoom"))
 		})
 	})
+
+	t.Run("rejection badges", func(t *testing.T) {
+		t.Run("draws one badge per rejection edge, labelled with the invariant it names", func(t *testing.T) {
+			output := svgOf(t, test.RejectionLibraryLendingModel(t))
+
+			var badged []string
+			for _, box := range svgBoxes(t, output) {
+				if strings.Contains(box.appearance, fillRejectionHex) {
+					badged = append(badged, box.label)
+				}
+			}
+
+			var expected []string
+			for _, edge := range test.RejectionLibraryLendingRejections {
+				expected = append(expected, edge.InvariantName)
+			}
+			require.Equal(t, expected, badged)
+		})
+
+		t.Run("a badge carries the invariant's statement as the title a browser shows on hover", func(t *testing.T) {
+			output := svgOf(t, test.RejectionLibraryLendingModel(t))
+
+			require.Equal(t, "A desk seats at most one reader at any moment",
+				svgTooltipOf(t, output, "OneReaderPerDesk"))
+		})
+
+		t.Run("a statement written with markup characters reads back as written", func(t *testing.T) {
+			prose := `Held < 24h & marked "urgent"`
+			model := test.RejectionLibraryLendingModel(t)
+			model.Contexts[1].Invariants[0].Statement = prose
+
+			output := svgOf(t, model)
+
+			requireValidXML(t, output)
+			require.Equal(t, prose, svgTooltipOf(t, output, "OneReaderPerDesk"))
+		})
+
+		t.Run("a dashed arrow runs from the rejected command to that badge, painted unlike a flow arrow", func(t *testing.T) {
+			output := svgOf(t, test.RejectionLibraryLendingModel(t))
+
+			connections := svgConnections(t, output)
+			var rejection, flow diagramConnection
+			for _, c := range connections {
+				if c.source == "ClaimDesk" && c.target == "OneReaderPerDesk" {
+					rejection = c
+				}
+				if c.source == "ClaimDesk" && c.target == "DeskClaimed" {
+					flow = c
+				}
+			}
+
+			require.NotEmpty(t, flow.paint, "the flow arrow this is compared against must be in the same render")
+			require.NotEmpty(t, rejection.paint, "no dashed arrow reaches the badge")
+			require.NotEqual(t, flow.paint, rejection.paint,
+				"a rejection must not be drawn like the flow beside it")
+			require.Contains(t, rejection.paint, "stroke-dasharray")
+		})
+
+		t.Run("two slices rejecting one invariant each get their own badge and their own arrow", func(t *testing.T) {
+			output := svgOf(t, test.RejectionLibraryLendingModel(t))
+
+			var badgeCentres [][2]int
+			for _, box := range svgBoxes(t, output) {
+				if box.label == "OneCopyPerLoan" {
+					badgeCentres = append(badgeCentres, box.rect.centre())
+				}
+			}
+			require.Len(t, badgeCentres, 2, "each of the two slices draws its own badge")
+
+			// Comparing endpoints rather than target labels is the whole point:
+			// both arrows resolve to the label "OneCopyPerLoan" even when they
+			// end at the same box, so a label comparison cannot see the collapse.
+			var reached [][2]int
+			for _, end := range dashedArrowEndpoints(t, output) {
+				if slices.Contains(badgeCentres, end) {
+					reached = append(reached, end)
+				}
+			}
+
+			require.ElementsMatch(t, badgeCentres, reached,
+				"each slice's dashed arrow ends at the badge in its own column; filing a badge under the invariant's name alone points both at whichever slice was drawn last")
+
+			require.Equal(t, []string{"BorrowCopy", "ReturnCopy"}, sourcesReaching(t, output, "OneCopyPerLoan"))
+		})
+
+		t.Run("a badge adds one shape to its slice's event row and moves no label the twin drew", func(t *testing.T) {
+			stated := test.RejectionLibraryLendingModel(t)
+			unstated := test.WithoutRejections(stated)
+			require.Empty(t, test.DeclaredRejections(unstated))
+			require.Equal(t, test.RejectionLibraryLendingRejections, test.DeclaredRejections(stated))
+
+			statedShapes := svgShapes(t, svgOf(t, stated))
+			unstatedShapes := svgShapes(t, svgOf(t, unstated))
+
+			require.Len(t, statedShapes, len(unstatedShapes)+len(test.RejectionLibraryLendingRejections),
+				"a badge is one rect followed by exactly one text, so it adds one shape and no more")
+
+			var statedLabels, unstatedLabels []string
+			for _, shape := range statedShapes {
+				if !strings.Contains(shape.attributes, fillRejectionHex) {
+					statedLabels = append(statedLabels, shape.label)
+				}
+			}
+			for _, shape := range unstatedShapes {
+				unstatedLabels = append(unstatedLabels, shape.label)
+			}
+			require.Equal(t, unstatedLabels, statedLabels,
+				"a badge emitting a stray text element overwrites the label of the box before it")
+		})
+
+		t.Run("badges overlap nothing and sit in the lane their slice's events are drawn in", func(t *testing.T) {
+			output := svgOf(t, test.RejectionLibraryLendingModel(t))
+			boxes := svgBoxes(t, output)
+
+			rects := drawnElementRects(t, output)
+			require.Empty(t, boxesDrawnOver(rects, slices.Sorted(maps.Keys(rects))))
+
+			eventLane := boxLabelled(t, boxes, "Events").rect
+			within := labelsWithin(boxes, eventLane)
+			for _, edge := range test.RejectionLibraryLendingRejections {
+				require.Contains(t, within, edge.InvariantName)
+			}
+		})
+
+		t.Run("a badge is narrower than a lane, so the diagram still names four lanes and keeps its viewBox", func(t *testing.T) {
+			stated := test.RejectionLibraryLendingModel(t)
+			statedOut := svgOf(t, stated)
+			unstatedOut := svgOf(t, test.WithoutRejections(stated))
+
+			requireValidXML(t, statedOut)
+			require.Equal(t, svgLaneLabels(t, unstatedOut), svgLaneLabels(t, statedOut))
+			require.Equal(t, svgViewBox(t, unstatedOut), svgViewBox(t, statedOut),
+				"a badge takes a place in a row that already exists rather than growing the canvas")
+		})
+	})
+}
+
+// fillRejectionHex is the badge's fill as svgAttributes renders it. Stating it
+// here rather than importing the constant keeps the test reading the bytes a
+// browser would.
+const fillRejectionHex = "fill=#f8cecc"
+
+func svgOf(t *testing.T, model *ast.Model) string {
+	t.Helper()
+
+	raw, err := diagram.ExportSVG(model, diagram.StyleAuto)
+	require.NoError(t, err)
+
+	return string(raw)
+}
+
+var svgViewBoxAttribute = regexp.MustCompile(`viewBox="([^"]*)"`)
+
+func svgViewBox(t *testing.T, output string) string {
+	t.Helper()
+
+	found := svgViewBoxAttribute.FindStringSubmatch(output)
+	require.NotNil(t, found, "the diagram states no viewBox")
+
+	return found[1]
+}
+
+// dashedArrowEndpoints returns the point each dashed arrow ends at, so a test can
+// say which box an arrow reached rather than which label that box happens to
+// carry — two boxes may carry the same one.
+func dashedArrowEndpoints(t *testing.T, output string) [][2]int {
+	t.Helper()
+
+	var ends [][2]int
+	for _, arrow := range svgArrows(output) {
+		if !strings.Contains(arrow, "stroke-dasharray") {
+			continue
+		}
+		path := svgPathData.FindStringSubmatch(arrow)
+		require.NotNil(t, path, "an arrow carries no path: %s", arrow)
+
+		points := svgPathPoint.FindAllStringSubmatch(path[1], -1)
+		require.NotEmpty(t, points, "an arrow's path names no point: %s", arrow)
+
+		ends = append(ends, svgPoint(t, points[len(points)-1]))
+	}
+
+	return ends
+}
+
+func sourcesReaching(t *testing.T, output, label string) []string {
+	t.Helper()
+
+	var sources []string
+	for _, c := range svgConnections(t, output) {
+		if c.target == label {
+			sources = append(sources, c.source)
+		}
+	}
+
+	return sources
+}
+
+// drawnElementRects keys every labelled box by its label and the position it was
+// drawn at, so two slices drawing a badge for one invariant are two entries
+// rather than one overwriting the other. The lanes are left out: a lane is drawn
+// around the boxes it holds, so it overlaps all of them by design.
+func drawnElementRects(t *testing.T, output string) map[string]boxRect {
+	t.Helper()
+
+	lanes := make(map[string]bool)
+	for _, label := range svgLaneLabels(t, output) {
+		lanes[label] = true
+	}
+
+	rects := make(map[string]boxRect)
+	for i, box := range svgBoxes(t, output) {
+		if box.label == "" || lanes[box.label] {
+			continue
+		}
+		rects[fmt.Sprintf("%s#%d", box.label, i)] = box.rect
+	}
+
+	return rects
 }
 
 // --- svg helpers ---

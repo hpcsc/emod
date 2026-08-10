@@ -1436,14 +1436,8 @@ func TestExporterRejectionEdge(t *testing.T) {
 		}
 	})
 
-	t.Run("the picture formats ignore an edge kind no renderer has learnt", func(t *testing.T) {
+	t.Run("draw.io ignores an edge kind it has not learnt", func(t *testing.T) {
 		stated, unstated := requireRejectionTwinDiffers(t)
-
-		svgStated, err := diagram.ExportSVG(stated, diagram.StyleAuto)
-		require.NoError(t, err)
-		svgUnstated, err := diagram.ExportSVG(unstated, diagram.StyleAuto)
-		require.NoError(t, err)
-		require.Equal(t, string(svgUnstated), string(svgStated))
 
 		for _, style := range []diagram.Style{diagram.StyleAuto, diagram.StyleDCB, diagram.StyleProjected} {
 			drawioStated, err := diagram.ExportDrawio(stated, style)
