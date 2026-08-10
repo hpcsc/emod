@@ -1,201 +1,71 @@
 {
-  "story": "us-009-show-rejection-paths-on-the-timeline",
-  "tasks_file": "tasks/us-009-show-rejection-paths-on-the-timeline.md",
-  "recovered_from": "sections",
+  "story": "US-009: Show rejection paths on the timeline",
   "tasks": [
     {
       "n": 1,
       "title": "Accept a rejection entry in a `flow` block and re-emit it through `emod fmt`",
       "language": "Go",
-      "testable": true,
-      "depends_on": [],
-      "affected_files": [
-        "internal/ast/ast.go",
-        "Slice",
-        "internal/parser/parser.go",
-        "parseFlowEntry",
-        "->",
-        "internal/parser/parser_test.go",
-        ":1849",
-        "internal/formatter/formatter.go",
-        ":325-331",
-        "internal/formatter/formatter_test.go"
-      ],
-      "done": false
+      "depends_on": []
     },
     {
       "n": 2,
       "title": "Share a model that states rejection edges in both slice homes",
       "language": "Go",
-      "testable": true,
-      "depends_on": [
-        1
-      ],
-      "affected_files": [
-        "internal/test/fixtures.go",
-        "internal/test/models.go",
-        "internal/oracle/oracle_test.go",
-        "internal/cli/fmt_test.go",
-        "internal/formatter/formatter_test.go"
-      ],
-      "done": false
+      "depends_on": [1]
     },
     {
       "n": 3,
       "title": "Resolve a rejection edge's invariant against its declaring scope",
       "language": "Go",
-      "testable": true,
-      "depends_on": [
-        2
-      ],
-      "affected_files": [
-        "internal/validator/validator.go",
-        "unresolvedRejectionDiagnostics",
-        "internal/validator/validator_test.go"
-      ],
-      "done": false
+      "depends_on": [2]
     },
     {
       "n": 4,
       "title": "Derive the rejection edge and state it in the ASCII preview",
       "language": "Go",
-      "testable": true,
-      "depends_on": [
-        2
-      ],
-      "affected_files": [
-        "internal/diagram/graph.go",
-        "internal/diagram/ascii.go",
-        "internal/diagram/ascii_test.go",
-        "internal/export/diagram.go",
-        "internal/export/export_test.go",
-        "internal/diagram/contract_test.go"
-      ],
-      "done": false
+      "depends_on": [2]
     },
     {
       "n": 5,
       "title": "Draw the rejection edge dashed into a badge in the SVG diagram",
       "language": "Go",
-      "testable": true,
-      "depends_on": [
-        4
-      ],
-      "affected_files": [
-        "internal/diagram/svg.go",
-        ":303-328",
-        "nameToBox",
-        "internal/diagram/layout.go",
-        "itemLayout",
-        "internal/diagram/labels.go",
-        "internal/diagram/svg_test.go",
-        "internal/diagram/contract_test.go"
-      ],
-      "done": false
+      "depends_on": [4]
     },
     {
       "n": 6,
       "title": "Draw the same dashed edge and badge in the draw.io diagram",
       "language": "Go",
-      "testable": true,
-      "depends_on": [
-        5
-      ],
-      "affected_files": [
-        "internal/diagram/drawio.go",
-        "hasEventsLane",
-        "internal/diagram/layout.go",
-        "internal/diagram/drawio_test.go",
-        "internal/diagram/contract_test.go"
-      ],
-      "done": false
+      "depends_on": [5]
     },
     {
       "n": 7,
       "title": "Carry rejection edges through the JSON and CUE exports and the embedded schema",
       "language": "Go",
-      "testable": true,
-      "depends_on": [
-        2
-      ],
-      "affected_files": [
-        "internal/export/json.go",
-        "Flows",
-        "internal/export/cue.go",
-        "writeCUEList(w,",
-        "\"flows\",",
-        "…)",
-        "internal/cue/schema.cue",
-        "#Slice.flows?",
-        "internal/export/export_test.go",
-        "internal/cue/embed_test.go"
-      ],
-      "done": false
+      "depends_on": [2]
     },
     {
       "n": 8,
       "title": "Report a rejection edge no spec exercises",
       "language": "Go",
-      "testable": true,
-      "depends_on": [
-        2
-      ],
-      "affected_files": [
-        "internal/linter/linter.go",
-        "internal/linter/descriptions.go",
-        "internal/linter/linter_test.go",
-        "internal/cli/lint_test.go",
-        ":627-645"
-      ],
-      "done": false
+      "depends_on": [2]
     },
     {
       "n": 9,
       "title": "Count a rejection edge as a reference for `spec/invariant-never-exercised`",
       "language": "Go",
-      "testable": true,
-      "depends_on": [
-        8
-      ],
-      "affected_files": [
-        "internal/linter/linter.go",
-        "internal/linter/linter_test.go"
-      ],
-      "done": false
+      "depends_on": [8]
     },
     {
       "n": 10,
       "title": "Accept the rejection entry in the tree-sitter grammar",
       "language": "JavaScript/TypeScript",
-      "testable": true,
-      "depends_on": [
-        1
-      ],
-      "affected_files": [
-        "editors/tree-sitter-emod/grammar.js",
-        ":263",
-        "editors/tree-sitter-emod/test/corpus/slice.txt",
-        ":642",
-        "editors/tree-sitter-emod/test/corpus/full_model.txt",
-        "flow_definition"
-      ],
-      "done": false
+      "depends_on": [1]
     },
     {
       "n": 11,
       "title": "Document the rejection edge in the DSL reference",
-      "language": "Generic",
-      "testable": false,
-      "depends_on": [
-        3,
-        6,
-        8
-      ],
-      "affected_files": [
-        "docs/dsl-reference.md",
-        ":645"
-      ],
-      "done": false
+      "language": "Go",
+      "depends_on": [3, 6, 8]
     }
   ]
 }

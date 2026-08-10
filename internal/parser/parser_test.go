@@ -1672,6 +1672,88 @@ context "Ctx" {
 			require.Len(t, slice.Flows, 1)
 			require.Equal(t, "TestCommand", slice.Flows[0].CommandName)
 			require.Equal(t, "TestEvent", slice.Flows[0].EventName)
+			require.Empty(t, slice.Rejections)
+		})
+
+		t.Run("a flow block holds rejection entries beside event entries", func(t *testing.T) {
+			input := `model "Test"
+context "Lending" {
+  aggregate "Loan" {
+    invariant OneCopyPerLoan "A loan covers exactly one copy of one title"
+    slice "Borrow a Copy" {
+      flow {
+        command -> event: BorrowCopy -> CopyBorrowed
+        command -> rejected: BorrowCopy -> OneCopyPerLoan
+        command -> event: BorrowCopy -> LoanOpened
+      }
+    }
+  }
+}`
+			tokens, lexDiags := lexer.Scan(input, "test.emod")
+			require.Empty(t, lexDiags)
+
+			model, diags := parser.New(tokens, "test.emod").Parse()
+
+			require.Empty(t, diags)
+			slice := model.Contexts[0].Aggregates[0].Slices[0]
+			require.Equal(t, []*ast.Rejection{
+				{
+					CommandName:   "BorrowCopy",
+					CommandPos:    astPositionOf(t, "test.emod", input, "-> rejected:", "BorrowCopy"),
+					InvariantName: "OneCopyPerLoan",
+					InvariantPos:  astPositionOf(t, "test.emod", input, "-> rejected:", "OneCopyPerLoan"),
+				},
+			}, slice.Rejections)
+			require.Equal(t, []string{"CopyBorrowed", "LoanOpened"}, flowEventNames(slice.Flows))
+		})
+
+		t.Run("a flow block stating only rejections reads back no flows", func(t *testing.T) {
+			input := `model "Test"
+context "Lending" {
+  aggregate "Loan" {
+    invariant OneCopyPerLoan "A loan covers exactly one copy of one title"
+    invariant FiveCopiesPerMember "A member holds at most five copies at one time"
+    slice "Borrow a Copy" {
+      flow {
+        command -> rejected: BorrowCopy -> OneCopyPerLoan
+        command -> rejected: BorrowCopy -> FiveCopiesPerMember
+      }
+    }
+  }
+}`
+			tokens, lexDiags := lexer.Scan(input, "test.emod")
+			require.Empty(t, lexDiags)
+
+			model, diags := parser.New(tokens, "test.emod").Parse()
+
+			require.Empty(t, diags)
+			slice := model.Contexts[0].Aggregates[0].Slices[0]
+			require.Empty(t, slice.Flows)
+			require.Equal(t, []string{"OneCopyPerLoan", "FiveCopiesPerMember"}, rejectionEdgeInvariants(slice.Rejections))
+		})
+
+		t.Run("a flow block's leading comments attach to its first entry when that entry is a rejection", func(t *testing.T) {
+			input := `model "Test"
+context "Lending" {
+  aggregate "Loan" {
+    invariant OneCopyPerLoan "A loan covers exactly one copy of one title"
+    slice "Borrow a Copy" {
+      # the copy may already be out
+      flow {
+        command -> rejected: BorrowCopy -> OneCopyPerLoan
+      }
+    }
+  }
+}`
+			tokens, lexDiags := lexer.Scan(input, "test.emod")
+			require.Empty(t, lexDiags)
+
+			model, diags := parser.New(tokens, "test.emod").Parse()
+
+			require.Empty(t, diags)
+			slice := model.Contexts[0].Aggregates[0].Slices[0]
+			require.Len(t, slice.Rejections, 1)
+			require.Equal(t, []string{"# the copy may already be out"}, commentTexts(slice.Rejections[0].Comments))
 		})
 
 		t.Run("complete sample", func(t *testing.T) {
@@ -3987,6 +4069,135 @@ context "Ctx" {
 				require.Equal(t, "Guest", trigger.Actor)
 			})
 		})
+
+		t.Run("a malformed flow entry reports once and the entry below it still parses", func(t *testing.T) {
+			tests := []struct {
+				name    string
+				entry   string
+				message string
+			}{
+				{
+					name:    "an entry opening on a word other than command",
+					entry:   "event -> event: BorrowCopy -> CopyBorrowed",
+					message: "expected command in flow",
+				},
+				{
+					name:    "an entry with no arrow after command",
+					entry:   "command event: BorrowCopy -> CopyBorrowed",
+					message: "expected -> after command in flow",
+				},
+				{
+					name:    "an entry naming neither outcome after the arrow",
+					entry:   "command -> outcome: BorrowCopy -> CopyBorrowed",
+					message: "expected event or rejected after -> in flow",
+				},
+				{
+					name:    "an entry with no colon",
+					entry:   "command -> event BorrowCopy -> CopyBorrowed",
+					message: "expected : in flow",
+				},
+				{
+					name:    "an entry naming no command",
+					entry:   "command -> event: -> CopyBorrowed",
+					message: "expected command identifier after : in flow",
+				},
+				{
+					name:    "an entry with no arrow between its identifiers",
+					entry:   "command -> event: BorrowCopy CopyBorrowed",
+					message: "expected -> between command and event identifiers",
+				},
+				{
+					name:    "an entry naming no event",
+					entry:   "command -> event: BorrowCopy ->",
+					message: "expected event identifier",
+				},
+				{
+					name:    "a rejection with no arrow between its identifiers",
+					entry:   "command -> rejected: BorrowCopy OneCopyPerLoan",
+					message: "expected -> between command and invariant identifiers",
+				},
+				{
+					name:    "a rejection naming no invariant",
+					entry:   "command -> rejected: BorrowCopy ->",
+					message: "expected invariant identifier",
+				},
+			}
+
+			for _, tc := range tests {
+				t.Run(tc.name, func(t *testing.T) {
+					input := fmt.Sprintf(`model "Test"
+context "Lending" {
+  aggregate "Loan" {
+    invariant OneCopyPerLoan "A loan covers exactly one copy of one title"
+    slice "Borrow a Copy" {
+      flow {
+        %s
+        command -> event: ReturnCopy -> CopyReturned
+      }
+    }
+  }
+}`, tc.entry)
+					tokens, lexDiags := lexer.Scan(input, "test.emod")
+					require.Empty(t, lexDiags)
+
+					model, diags := parser.New(tokens, "test.emod").Parse()
+
+					require.Len(t, diags, 1)
+					require.Equal(t, tc.message, diags[0].Message)
+
+					slice := model.Contexts[0].Aggregates[0].Slices[0]
+					require.Equal(t, []string{"CopyReturned"}, flowEventNames(slice.Flows))
+					require.Empty(t, slice.Rejections)
+					require.NotZero(t, slice.ClosePos.Line)
+					require.NotZero(t, model.Contexts[0].ClosePos.Line)
+				})
+			}
+		})
+
+		t.Run("an entry naming neither outcome after the arrow names both accepted spellings", func(t *testing.T) {
+			input := `model "Test"
+context "Lending" {
+  aggregate "Loan" {
+    slice "Borrow a Copy" {
+      flow {
+        command -> outcome: BorrowCopy -> CopyBorrowed
+      }
+    }
+  }
+}`
+			tokens, lexDiags := lexer.Scan(input, "test.emod")
+			require.Empty(t, lexDiags)
+
+			_, diags := parser.New(tokens, "test.emod").Parse()
+
+			require.Len(t, diags, 1)
+			require.Regexp(t, `\bevent\b`, diags[0].Message)
+			require.Regexp(t, `\brejected\b`, diags[0].Message)
+		})
+
+		t.Run("a rejection missing its invariant does not read the next line's identifier as one", func(t *testing.T) {
+			input := `model "Test"
+context "Lending" {
+  aggregate "Loan" {
+    invariant OneCopyPerLoan "A loan covers exactly one copy of one title"
+    slice "Borrow a Copy" {
+      flow {
+        command -> rejected: BorrowCopy ->
+        OneCopyPerLoan
+      }
+    }
+  }
+}`
+			tokens, lexDiags := lexer.Scan(input, "test.emod")
+			require.Empty(t, lexDiags)
+
+			model, diags := parser.New(tokens, "test.emod").Parse()
+
+			slice := model.Contexts[0].Aggregates[0].Slices[0]
+			require.Empty(t, slice.Rejections, "the identifier on the line below is not this entry's invariant")
+			require.Contains(t, diagnosticMessages(diags), "expected invariant identifier")
+			require.NotZero(t, slice.ClosePos.Line)
+		})
 	})
 
 	t.Run("event sources and tags", func(t *testing.T) {
@@ -6026,6 +6237,38 @@ func invariantNames(invariants []*ast.Invariant) []string {
 		names = append(names, invariant.Name)
 	}
 	return names
+}
+
+func diagnosticMessages(diagnostics []*diagnostic.Entry) []string {
+	var messages []string
+	for _, entry := range diagnostics {
+		messages = append(messages, entry.Message)
+	}
+	return messages
+}
+
+func rejectionEdgeInvariants(rejections []*ast.Rejection) []string {
+	var names []string
+	for _, rejection := range rejections {
+		names = append(names, rejection.InvariantName)
+	}
+	return names
+}
+
+func flowEventNames(flows []*ast.Flow) []string {
+	var names []string
+	for _, flow := range flows {
+		names = append(names, flow.EventName)
+	}
+	return names
+}
+
+func commentTexts(comments []*ast.Comment) []string {
+	var texts []string
+	for _, comment := range comments {
+		texts = append(texts, comment.Text)
+	}
+	return texts
 }
 
 func rejectedInvariantNames(specs []*ast.Spec) []string {

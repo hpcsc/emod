@@ -1,7 +1,7 @@
 # US-009: Show rejection paths on the timeline
 
 ## Progress
-- [ ] Task 1: Accept a rejection entry in a `flow` block and re-emit it through `emod fmt`
+- [x] Task 1: Accept a rejection entry in a `flow` block and re-emit it through `emod fmt`
 - [ ] Task 2: Share a model that states rejection edges in both slice homes
 - [ ] Task 3: Resolve a rejection edge's invariant against its declaring scope
 - [ ] Task 4: Derive the rejection edge and state it in the ASCII preview
@@ -486,54 +486,54 @@ idempotence nor an existing golden notices, and `:281-284` records the same clas
 regression for a wire rename split across two commits.
 
 **Acceptance Criteria:**
-- [ ] `internal/ast` carries a rejection node with the command's name and position, the invariant's
+- [x] `internal/ast` carries a rejection node with the command's name and position, the invariant's
       name and position, and comments, and a slice carries a collection of them separate from
       `Slice.Flows`; `Slice.Flows`, `ast.Flow` and every one of the eleven production readers of
       `Slice.Flows` listed in "Open questions, decided" item 1 are unchanged, which the compiler and
       an unedited `internal/linter`, `internal/arrange`, `internal/importer`, `internal/lsp` and
       `internal/cli/slices_list.go` witness
-- [ ] A `flow` block containing only `command -> event:` entries parses to exactly the AST it parses
+- [x] A `flow` block containing only `command -> event:` entries parses to exactly the AST it parses
       to today: a model with no rejection entry reads back an empty rejection collection on every
       slice, and every existing subtest in `internal/parser/parser_test.go`'s "commands, events and
       flows" group passes with no edit
-- [ ] A `flow` block containing both entry kinds, in either written order and interleaved, parses
+- [x] A `flow` block containing both entry kinds, in either written order and interleaved, parses
       each into its own collection with the positions of the command name and the invariant name
       recorded on the tokens the author wrote
-- [ ] A `flow` block containing only rejection entries parses, and its slice reads back no flows and
+- [x] A `flow` block containing only rejection entries parses, and its slice reads back no flows and
       one rejection per entry
-- [ ] The block's leading comments attach to its first entry whichever kind that entry is — today
+- [x] The block's leading comments attach to its first entry whichever kind that entry is — today
       they attach to `flows[0]` (`internal/parser/parser.go:1363-1367`) — and a block whose only
       entry is a rejection does not silently drop them
-- [ ] Each of the malformed shapes — a word other than `command` opening an entry, a missing `->`, a
+- [x] Each of the malformed shapes — a word other than `command` opening an entry, a missing `->`, a
       word after `->` that is neither `event` nor `rejected`, a missing `:`, a missing identifier in
       either position, a missing `->` between the two identifiers — reports **exactly one**
       diagnostic, asserted with `require.Len(t, diags, 1)`, and the block still closes: the slice's
       and the model's `ClosePos.Line` read back non-zero, so the recovery drained to the end of the
       offending line rather than eating the `}`
-- [ ] The message reporting a word after `->` that is neither `event` nor `rejected` names both
+- [x] The message reporting a word after `->` that is neither `event` nor `rejected` names both
       accepted spellings, asserted with `\b`-bounded `require.Regexp` for each — `event` and
       `rejected` are both substrings of longer words the surrounding messages contain
       (`tasks/learnings.md:236-239`)
-- [ ] `emod fmt` writes a slice's flow entries as one `flow {` block holding every
+- [x] `emod fmt` writes a slice's flow entries as one `flow {` block holding every
       `command -> event:` entry in declaration order and then every `command -> rejected:` entry in
       declaration order, one entry per line, with no column alignment across the two kinds — US-014
       owns the `:` alignment
-- [ ] A slice stating rejection entries and no flow entries still emits a `flow {` block; a slice
+- [x] A slice stating rejection entries and no flow entries still emits a `flow {` block; a slice
       stating neither emits none, so `internal/formatter`'s existing goldens and every
       `*FormattedEmod` constant in `internal/cli/fmt_test.go` pass with no edit
-- [ ] The parse → format → reparse comparison (`internal/formatter/formatter_test.go:427`, "round-trip
+- [x] The parse → format → reparse comparison (`internal/formatter/formatter_test.go:427`, "round-trip
       through the parser") holds for a source stating both entry kinds in both slice homes: the
       reparsed model states the same rejection entries, in the same order, as the original — this is
       the assertion that catches the formatter dropping the entry, and neither idempotence nor a
       golden does
-- [ ] Formatting is idempotent over a source whose invariant name and command name are ordinary
+- [x] Formatting is idempotent over a source whose invariant name and command name are ordinary
       identifiers, and no emod source text produced here goes through `%q`
       (`tasks/learnings.md:46-49`)
-- [ ] `oracle.Check` over every model the repository ships as valid returns an empty diagnostic list:
+- [x] `oracle.Check` over every model the repository ships as valid returns an empty diagnostic list:
       the nine shared fixtures, `examples/all_patterns.emod`, `examples/dcb_model.emod`, the three
       valid files under `internal/parser/testdata/`, the seven ` ```emod ` fences, and `billingModel`
       in `internal/wasm/pipeline_test.go`
-- [ ] `internal/validator`, `internal/linter`, `internal/export`, `internal/diagram`,
+- [x] `internal/validator`, `internal/linter`, `internal/export`, `internal/diagram`,
       `internal/importer`, `internal/lsp`, `internal/glossary` and `editors/` are untouched: this task
       teaches the language to read and write the entry and nothing to interpret it
 

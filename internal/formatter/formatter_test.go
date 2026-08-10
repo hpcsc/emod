@@ -152,6 +152,123 @@ func TestFormat(t *testing.T) {
 			require.Equal(t, expected, result)
 		})
 
+		t.Run("a flow block writes every event entry, then every rejection entry", func(t *testing.T) {
+			model := &ast.Model{
+				Name: "Library Lending",
+				Contexts: []*ast.Context{
+					{
+						Name: "Lending",
+						Aggregates: []*ast.Aggregate{
+							{
+								Name: "Loan",
+								Slices: []*ast.Slice{
+									{
+										Name: "Borrow a Copy",
+										Flows: []*ast.Flow{
+											{CommandName: "BorrowCopy", EventName: "CopyBorrowed"},
+											{CommandName: "BorrowCopy", EventName: "LoanOpened"},
+										},
+										Rejections: []*ast.Rejection{
+											{CommandName: "BorrowCopy", InvariantName: "OneCopyPerLoan"},
+											{CommandName: "BorrowCopy", InvariantName: "FiveCopiesPerMember"},
+										},
+									},
+								},
+							},
+						},
+					},
+				},
+			}
+
+			result := formatter.Format(model)
+
+			expected := strings.Join([]string{
+				`emod 1`,
+				`model "Library Lending"`,
+				``,
+				`context "Lending" {`,
+				`  aggregate "Loan" {`,
+				`    slice "Borrow a Copy" {`,
+				`      flow {`,
+				`        command -> event: BorrowCopy -> CopyBorrowed`,
+				`        command -> event: BorrowCopy -> LoanOpened`,
+				`        command -> rejected: BorrowCopy -> OneCopyPerLoan`,
+				`        command -> rejected: BorrowCopy -> FiveCopiesPerMember`,
+				`      }`,
+				`    }`,
+				`  }`,
+				`}`,
+				``,
+			}, "\n")
+
+			require.Equal(t, expected, result)
+		})
+
+		t.Run("a slice stating only rejections still emits a flow block", func(t *testing.T) {
+			model := &ast.Model{
+				Name: "Library Lending",
+				Contexts: []*ast.Context{
+					{
+						Name: "Lending",
+						Aggregates: []*ast.Aggregate{
+							{
+								Name: "Loan",
+								Slices: []*ast.Slice{
+									{
+										Name: "Borrow a Copy",
+										Rejections: []*ast.Rejection{
+											{CommandName: "BorrowCopy", InvariantName: "OneCopyPerLoan"},
+										},
+									},
+								},
+							},
+						},
+					},
+				},
+			}
+
+			result := formatter.Format(model)
+
+			expected := strings.Join([]string{
+				`emod 1`,
+				`model "Library Lending"`,
+				``,
+				`context "Lending" {`,
+				`  aggregate "Loan" {`,
+				`    slice "Borrow a Copy" {`,
+				`      flow {`,
+				`        command -> rejected: BorrowCopy -> OneCopyPerLoan`,
+				`      }`,
+				`    }`,
+				`  }`,
+				`}`,
+				``,
+			}, "\n")
+
+			require.Equal(t, expected, result)
+		})
+
+		t.Run("a slice stating neither entry kind emits no flow block", func(t *testing.T) {
+			model := &ast.Model{
+				Name: "Library Lending",
+				Contexts: []*ast.Context{
+					{
+						Name: "Lending",
+						Aggregates: []*ast.Aggregate{
+							{
+								Name:   "Loan",
+								Slices: []*ast.Slice{{Name: "Borrow a Copy"}},
+							},
+						},
+					},
+				},
+			}
+
+			result := formatter.Format(model)
+
+			require.NotContains(t, result, "flow {")
+		})
+
 		t.Run("formats trigger block", func(t *testing.T) {
 			model := &ast.Model{
 				Name: "Test",
@@ -766,6 +883,48 @@ func TestFormat(t *testing.T) {
 				{Name: "roomType", Type: "string"},
 				{Name: "guestId", Type: "string", Modifier: "required"},
 			}, reparsed.Contexts[0].Aggregates[0].Slices[0].Commands[0].Fields, ignoreFormatterNormalizations)
+		})
+
+		t.Run("round-trip: rejection edges in both slice homes survive formatting", func(t *testing.T) {
+			input := strings.Join([]string{
+				`model "Library Lending"`,
+				``,
+				`context "Lending" {`,
+				`  aggregate "Loan" {`,
+				`    invariant OneCopyPerLoan "A loan covers exactly one copy of one title"`,
+				``,
+				`    slice "Borrow a Copy" {`,
+				`      flow {`,
+				`        command -> event: BorrowCopy -> CopyBorrowed`,
+				`        command -> rejected: BorrowCopy -> OneCopyPerLoan`,
+				`        command -> event: BorrowCopy -> LoanOpened`,
+				`      }`,
+				`    }`,
+				`  }`,
+				`}`,
+				``,
+				`context "Reading Room" mode dcb {`,
+				`  invariant OneReaderPerDesk "A desk seats at most one reader at any moment"`,
+				``,
+				`  slice "Claim a Desk" {`,
+				`    flow {`,
+				`      command -> rejected: ClaimDesk -> OneReaderPerDesk`,
+				`    }`,
+				`  }`,
+				`}`,
+				``,
+			}, "\n")
+
+			original := parseModel(t, input, "test.emod")
+			reparsed := requireStableFormat(t, original)
+
+			test.RequireEqual(t, original, reparsed, ignoreFormatterNormalizations)
+			test.RequireEqual(t, []*ast.Rejection{
+				{CommandName: "BorrowCopy", InvariantName: "OneCopyPerLoan"},
+			}, reparsed.Contexts[0].Aggregates[0].Slices[0].Rejections, ignoreFormatterNormalizations)
+			test.RequireEqual(t, []*ast.Rejection{
+				{CommandName: "ClaimDesk", InvariantName: "OneReaderPerDesk"},
+			}, reparsed.Contexts[1].Slices[0].Rejections, ignoreFormatterNormalizations)
 		})
 
 		t.Run("round-trip: fields named after keywords survive formatting", func(t *testing.T) {
@@ -4022,6 +4181,7 @@ var ignoreFormatterNormalizations = cmp.Options{
 	cmpopts.IgnoreFields(ast.Command{}, "Comments"),
 	cmpopts.IgnoreFields(ast.Event{}, "Comments"),
 	cmpopts.IgnoreFields(ast.Flow{}, "Comments"),
+	cmpopts.IgnoreFields(ast.Rejection{}, "Comments"),
 	cmpopts.IgnoreFields(ast.Trigger{}, "Comments"),
 	cmpopts.IgnoreFields(ast.View{}, "Comments"),
 	cmpopts.IgnoreFields(ast.Automation{}, "Comments"),

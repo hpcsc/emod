@@ -84,6 +84,7 @@ type Slice struct {
 	Events         []*Event
 	Fields         []*Field
 	Flows          []*Flow
+	Rejections     []*Rejection
 	Views          []*View
 	Automations    []*Automation
 	Translations   []*Translation
@@ -182,6 +183,18 @@ type Flow struct {
 	CommandPos  Position
 	EventName   string
 	EventPos    Position
+}
+
+// Rejection is the other entry kind a flow block holds: a command refused by an
+// invariant, appending nothing. It is a collection of its own rather than a
+// variant of Flow because every reader of Slice.Flows means "a command that
+// produced an event" by it.
+type Rejection struct {
+	Comments      []*Comment
+	CommandName   string
+	CommandPos    Position
+	InvariantName string
+	InvariantPos  Position
 }
 
 type Trigger struct {

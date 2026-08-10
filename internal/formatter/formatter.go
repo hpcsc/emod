@@ -192,9 +192,9 @@ func (w *writer) writeSlice(slice *ast.Slice, level int) {
 		w.writeTranslation(trans, inner)
 	}
 
-	if len(slice.Flows) > 0 {
+	if len(slice.Flows) > 0 || len(slice.Rejections) > 0 {
 		separate()
-		w.writeFlows(slice.Flows, inner)
+		w.writeFlowBlock(slice.Flows, slice.Rejections, inner)
 	}
 
 	for _, spec := range slice.Specs {
@@ -322,11 +322,15 @@ func fieldColumnWidths(fields []*ast.Field) (nameWidth, typeWidth int) {
 	return nameWidth, typeWidth
 }
 
-func (w *writer) writeFlows(flows []*ast.Flow, level int) {
+func (w *writer) writeFlowBlock(flows []*ast.Flow, rejections []*ast.Rejection, level int) {
 	w.line(level, "flow {")
 	for _, flow := range flows {
 		w.writeComments(flow.Comments, level+1)
 		w.line(level+1, "command -> event: %s -> %s", flow.CommandName, flow.EventName)
+	}
+	for _, rejection := range rejections {
+		w.writeComments(rejection.Comments, level+1)
+		w.line(level+1, "command -> rejected: %s -> %s", rejection.CommandName, rejection.InvariantName)
 	}
 	w.line(level, "}")
 }
