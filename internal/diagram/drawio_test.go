@@ -7,13 +7,16 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"maps"
 	"regexp"
+	"slices"
 	"strconv"
 	"strings"
 	"testing"
 
 	"github.com/hpcsc/emod/internal/ast"
 	"github.com/hpcsc/emod/internal/diagram"
+	"github.com/hpcsc/emod/internal/test"
 	"github.com/stretchr/testify/require"
 )
 
@@ -757,6 +760,285 @@ func TestExportDrawio(t *testing.T) {
 				drawioTooltipsOf(t, string(raw), "StaySettled"))
 		})
 	})
+
+	t.Run("rejection badges", func(t *testing.T) {
+		t.Run("draws one cell per rejection edge, labelled with the invariant it names", func(t *testing.T) {
+			output := drawioOf(t, test.RejectionLibraryLendingModel(t), diagram.StyleAuto)
+
+			var expected []string
+			for _, edge := range test.RejectionLibraryLendingRejections {
+				expected = append(expected, edge.InvariantName)
+			}
+			require.Equal(t, expected, drawioBadgeLabels(t, output))
+		})
+
+		t.Run("a badge carries the invariant's statement as its tooltip", func(t *testing.T) {
+			output := drawioOf(t, test.RejectionLibraryLendingModel(t), diagram.StyleAuto)
+
+			require.Equal(t,
+				[]string{"A desk seats at most one reader at any moment"},
+				drawioTooltipsOf(t, output, "OneReaderPerDesk"))
+		})
+
+		t.Run("a dashed edge runs from the rejected command to that badge, styled unlike a flow edge", func(t *testing.T) {
+			output := drawioOf(t, test.RejectionLibraryLendingModel(t), diagram.StyleAuto)
+
+			var rejection, flow diagramConnection
+			for _, e := range drawioEdges(t, output) {
+				if e.source == "ClaimDesk" && e.target == "OneReaderPerDesk" {
+					rejection = e
+				}
+				if e.source == "ClaimDesk" && e.target == "DeskClaimed" {
+					flow = e
+				}
+			}
+
+			require.NotEmpty(t, flow.paint, "the flow edge this is compared against must be in the same render")
+			require.NotEmpty(t, rejection.paint, "no dashed edge reaches the badge")
+			require.NotEqual(t, flow.paint, rejection.paint,
+				"a rejection must not be drawn like the flow beside it")
+			require.Contains(t, rejection.paint, "dashed=1")
+		})
+
+		t.Run("two slices rejecting one invariant each get their own badge and their own edge", func(t *testing.T) {
+			output := drawioOf(t, test.RejectionLibraryLendingModel(t), diagram.StyleAuto)
+
+			var badgeIDs []string
+			for _, shape := range drawioShapes(t, output) {
+				if shape.label == "OneCopyPerLoan" {
+					badgeIDs = append(badgeIDs, shape.id)
+				}
+			}
+			require.Len(t, badgeIDs, 2, "each of the two slices draws its own badge cell")
+
+			// Comparing target ids rather than target labels is the whole point:
+			// both edges read back as reaching "OneCopyPerLoan" even when they
+			// end at the same cell, so a label comparison cannot see the collapse.
+			var reached []string
+			for _, m := range drawioEdge.FindAllStringSubmatch(output, -1) {
+				if slices.Contains(badgeIDs, m[3]) {
+					reached = append(reached, m[3])
+				}
+			}
+
+			require.ElementsMatch(t, badgeIDs, reached,
+				"each slice's dashed edge ends at the badge in its own column; filing a badge under the invariant's name alone points both at whichever slice was drawn first")
+		})
+
+		for _, s := range []struct {
+			name  string
+			style diagram.Style
+		}{
+			{name: "auto style", style: diagram.StyleAuto},
+			{name: "dcb style", style: diagram.StyleDCB},
+			{name: "projected style", style: diagram.StyleProjected},
+		} {
+			t.Run(s.name+" draws every badge inside a lane, overlapping no cell", func(t *testing.T) {
+				output := drawioOf(t, test.RejectionLibraryLendingModel(t), s.style)
+				requireValidXML(t, output)
+
+				rects := drawnCellRects(t, output)
+				var badgeKeys []string
+				for key := range maps.Keys(rects) {
+					if strings.HasPrefix(key, "OneCopyPerLoan#") || strings.HasPrefix(key, "OneReaderPerDesk#") {
+						badgeKeys = append(badgeKeys, key)
+					}
+				}
+				slices.Sort(badgeKeys)
+				require.Len(t, badgeKeys, len(test.RejectionLibraryLendingRejections))
+				require.Empty(t, boxesDrawnOver(rects, badgeKeys),
+					"a badge overlaps a cell already drawn")
+
+				lanes := laneRectsOf(t, output)
+				require.NotEmpty(t, lanes)
+				for _, box := range drawioBoxes(t, output) {
+					if !strings.Contains(box.appearance, "fillColor="+fillRejectionHex) {
+						continue
+					}
+					require.True(t, slices.ContainsFunc(lanes, box.rect.within),
+						"badge %q is drawn at a lane's coordinates with no lane behind it", box.label)
+				}
+			})
+		}
+
+		t.Run("a projected model whose events all sit in tag lanes still gets an events lane for its badges", func(t *testing.T) {
+			model := taggedOnlyRejectionModel()
+
+			withoutBadges, err := diagram.ExportDrawio(test.WithoutRejections(model), diagram.StyleProjected)
+			require.NoError(t, err)
+			require.NotContains(t, drawioLaneLabels(t, string(withoutBadges)), "Events",
+				"without a rejection edge this shape draws no events lane, or the assertion below says nothing")
+
+			output := drawioOf(t, model, diagram.StyleProjected)
+
+			require.Contains(t, drawioLaneLabels(t, output), "Events")
+			require.Equal(t, []string{"OneCopyPerLoan"}, drawioBadgeLabels(t, output))
+			for _, box := range drawioBoxes(t, output) {
+				if box.label != "OneCopyPerLoan" {
+					continue
+				}
+				require.True(t, slices.ContainsFunc(laneRectsOf(t, output), box.rect.within))
+			}
+		})
+
+		t.Run("a model stating no rejection edge draws no badge and no dashed rejection edge", func(t *testing.T) {
+			_, unstated := requireRejectionTwinDiffers(t)
+
+			for _, style := range []diagram.Style{diagram.StyleAuto, diagram.StyleDCB, diagram.StyleProjected} {
+				output := drawioOf(t, unstated, style)
+
+				require.Empty(t, drawioBadgeLabels(t, output))
+				require.NotContains(t, output, "strokeColor="+strokeRejectionHex,
+					"nothing this task added reaches a model that states no rejection edge")
+			}
+		})
+
+		t.Run("every cell the twin draws keeps its id, label and style, and only its slice's event sequence reflows", func(t *testing.T) {
+			stated, unstated := requireRejectionTwinDiffers(t)
+
+			// A badge takes a place in the sequence its slice's events are laid
+			// out in, so those boxes narrow — and in the projected layout that
+			// reaches the tag lanes those events are drawn into as well, because
+			// one sequence feeds both. Nothing outside it may move.
+			inEventSequence := func(shape drawioShape) bool {
+				return strings.Contains(shape.style, "fillColor="+fillEventHex) ||
+					strings.Contains(shape.style, "fillColor="+fillRejectionHex)
+			}
+
+			for _, style := range []diagram.Style{diagram.StyleAuto, diagram.StyleDCB, diagram.StyleProjected} {
+				statedOutput := drawioOf(t, stated, style)
+				unstatedOutput := drawioOf(t, unstated, style)
+
+				statedByID := map[string]drawioShape{}
+				badges := 0
+				for _, shape := range drawioShapes(t, statedOutput) {
+					statedByID[shape.id] = shape
+					if strings.Contains(shape.style, "fillColor="+fillRejectionHex) {
+						badges++
+					}
+				}
+				require.Equal(t, len(test.RejectionLibraryLendingRejections), badges,
+					"no badge was drawn, so the exemption below says nothing")
+
+				for _, shape := range drawioShapes(t, unstatedOutput) {
+					counterpart, drawn := statedByID[shape.id]
+					require.True(t, drawn, "cell %s (%q) lost its id", shape.id, shape.label)
+					require.Equal(t, shape.label, counterpart.label,
+						"cell %s changed what it names, so a badge id was taken before its cell was certain and renumbered every later one", shape.id)
+					require.Equal(t, shape.style, counterpart.style)
+					if !inEventSequence(shape) {
+						require.Equal(t, shape.rect, counterpart.rect,
+							"only a slice's event sequence may reflow")
+					}
+				}
+
+				// The exemption is by kind, not by slice, so an event whose own
+				// slice states no rejection is named explicitly: it must not
+				// move, in any lane the projected layout draws it into.
+				require.Equal(t,
+					drawioRectsLabelled(t, unstatedOutput, "DeskReleased"),
+					drawioRectsLabelled(t, statedOutput, "DeskReleased"),
+					"a slice stating no rejection edge keeps its event geometry")
+			}
+		})
+	})
+}
+
+func drawioOf(t *testing.T, model *ast.Model, style diagram.Style) string {
+	t.Helper()
+
+	raw, err := diagram.ExportDrawio(model, style)
+	require.NoError(t, err)
+
+	return string(raw)
+}
+
+// drawioBadgeLabels names the rejection badges the diagram draws, in document
+// order, told from every other cell by the fill only they carry.
+func drawioBadgeLabels(t *testing.T, output string) []string {
+	t.Helper()
+
+	var labels []string
+	for _, shape := range drawioShapes(t, output) {
+		if strings.Contains(shape.style, "fillColor="+fillRejectionHex) {
+			labels = append(labels, shape.label)
+		}
+	}
+
+	return labels
+}
+
+// drawioRectsLabelled returns where every cell whose label names the construct
+// was drawn, in document order. Two things stop this being a single-match
+// lookup: a projected layout draws one tagged event once per tag lane it
+// matches, and the DCB layout appends the event's tag badges to its label.
+func drawioRectsLabelled(t *testing.T, output, label string) []boxRect {
+	t.Helper()
+
+	var rects []boxRect
+	for _, shape := range drawioShapes(t, output) {
+		if strings.Contains(shape.label, label) {
+			rects = append(rects, shape.rect)
+		}
+	}
+	require.NotEmpty(t, rects, "the diagram draws no cell labelled %q", label)
+
+	return rects
+}
+
+// laneRectsOf returns the band each swimlane occupies, so a test can ask whether
+// a cell was drawn inside one rather than at a coordinate that merely looks right.
+func laneRectsOf(t *testing.T, output string) []boxRect {
+	t.Helper()
+
+	var lanes []boxRect
+	for _, shape := range drawioShapes(t, output) {
+		if strings.HasPrefix(shape.style, "swimlane;") {
+			lanes = append(lanes, shape.rect)
+		}
+	}
+
+	return lanes
+}
+
+// drawnCellRects keys every non-lane cell by its label and id, so two slices
+// drawing a badge for one invariant are two entries rather than one overwriting
+// the other. Lanes are left out: a lane is drawn around the cells it holds.
+func drawnCellRects(t *testing.T, output string) map[string]boxRect {
+	t.Helper()
+
+	rects := make(map[string]boxRect)
+	for _, shape := range drawioShapes(t, output) {
+		if shape.label == "" || strings.HasPrefix(shape.style, "swimlane;") || shape.parentID != "1" {
+			continue
+		}
+		rects[shape.label+"#"+shape.id] = shape.rect
+	}
+
+	return rects
+}
+
+// taggedOnlyRejectionModel is the shape for which hasEventsLane is false today:
+// DCB slices whose events all carry tags, with no translations and no aggregate
+// events. Its rejection badge has nowhere to sit unless the edge counts.
+func taggedOnlyRejectionModel() *ast.Model {
+	return &ast.Model{
+		Name: "Lending",
+		Contexts: []*ast.Context{{
+			Name:       "Lending",
+			Mode:       "dcb",
+			Invariants: []*ast.Invariant{{Name: "OneCopyPerLoan", Statement: "A loan covers exactly one copy"}},
+			Slices: []*ast.Slice{{
+				Name:     "Borrow Copy",
+				Commands: []*ast.Command{{Name: "BorrowCopy"}},
+				Events: []*ast.Event{
+					{Name: "CopyBorrowed", Tags: []ast.TagEntry{{Key: "loan", FieldRef: "loanId"}}},
+				},
+				Flows:      []*ast.Flow{{CommandName: "BorrowCopy", EventName: "CopyBorrowed"}},
+				Rejections: []*ast.Rejection{{CommandName: "BorrowCopy", InvariantName: "OneCopyPerLoan"}},
+			}},
+		}},
+	}
 }
 
 // dcbReactorLabels labels the box drawn for each automation and each translation

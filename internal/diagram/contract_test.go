@@ -1436,17 +1436,30 @@ func TestExporterRejectionEdge(t *testing.T) {
 		}
 	})
 
-	t.Run("draw.io ignores an edge kind it has not learnt", func(t *testing.T) {
-		stated, unstated := requireRejectionTwinDiffers(t)
+	t.Run("both picture formats state the same badge text for the same model", func(t *testing.T) {
+		stated, _ := requireRejectionTwinDiffers(t)
 
-		for _, style := range []diagram.Style{diagram.StyleAuto, diagram.StyleDCB, diagram.StyleProjected} {
-			drawioStated, err := diagram.ExportDrawio(stated, style)
-			require.NoError(t, err)
-			drawioUnstated, err := diagram.ExportDrawio(unstated, style)
-			require.NoError(t, err)
+		svgOutput, err := diagram.ExportSVG(stated, diagram.StyleAuto)
+		require.NoError(t, err)
+		drawioOutput, err := diagram.ExportDrawio(stated, diagram.StyleAuto)
+		require.NoError(t, err)
 
-			require.Equal(t, string(drawioUnstated), string(drawioStated))
+		badgeText := func(boxes []diagramBox, fill string) []string {
+			var text []string
+			for _, box := range boxes {
+				if strings.Contains(box.appearance, fill) {
+					text = append(text, strings.ReplaceAll(box.label, `\n`, "\n"))
+				}
+			}
+			return text
 		}
+
+		fromSVG := badgeText(svgBoxes(t, string(svgOutput)), "fill="+fillRejectionHex)
+		fromDrawio := badgeText(drawioBoxes(t, string(drawioOutput)), "fillColor="+fillRejectionHex)
+
+		require.NotEmpty(t, fromSVG, "neither list says anything if the badges were not found")
+		require.Equal(t, fromSVG, fromDrawio,
+			"a change to one format's badge label and not the other's fails here")
 	})
 }
 

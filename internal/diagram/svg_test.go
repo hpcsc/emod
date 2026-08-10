@@ -460,10 +460,14 @@ func TestExportSVG(t *testing.T) {
 	})
 }
 
-// fillRejectionHex is the badge's fill as svgAttributes renders it. Stating it
-// here rather than importing the constant keeps the test reading the bytes a
-// browser would.
-const fillRejectionHex = "fill=#f8cecc"
+// fillRejectionHex and fillEventHex are stated here rather than read from the
+// production constants, so a test compares the bytes a reader sees against a
+// value written down independently of the code that emits it.
+const (
+	fillRejectionHex   = "#f8cecc"
+	strokeRejectionHex = "#b85450"
+	fillEventHex       = "#ffe6cc"
+)
 
 func svgOf(t *testing.T, model *ast.Model) string {
 	t.Helper()

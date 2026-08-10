@@ -895,43 +895,43 @@ lane sets, with the invariant's prose as the cell's tooltip. The two picture for
 badge text for the same model.
 
 **Acceptance Criteria:**
-- [ ] Rendering Task 2's fixture draws one draw.io cell per rejection edge, `drawioBoxes` reading
+- [x] Rendering Task 2's fixture draws one draw.io cell per rejection edge, `drawioBoxes` reading
       their labels back as every invariant in the fixture's transcription in declaration order, and
       each carrying that invariant's `Statement` as its tooltip — which means the cell is wrapped in
       an `<object>`, the shape `vertexCell` (`internal/diagram/drawio.go:513`) already takes for a
       cell with prose
-- [ ] The badge text draw.io states and the badge text SVG states are equal once each format's line
+- [x] The badge text draw.io states and the badge text SVG states are equal once each format's line
       break is normalised, asserted once at the contract level so a change to one format's label and
       not the other fails
-- [ ] `drawioEdges` reports one edge per rejection edge, source the rejected command's cell and
+- [x] `drawioEdges` reports one edge per rejection edge, source the rejected command's cell and
       target that badge's cell, with a style differing from the standard flow edge's style in the
       same render and carrying draw.io's dash
-- [ ] Under `StyleAuto`, `StyleDCB` and `StyleProjected` the badge is drawn inside a lane the style
+- [x] Under `StyleAuto`, `StyleDCB` and `StyleProjected` the badge is drawn inside a lane the style
       draws and overlaps no cell of any lane. This is asserted in draw.io only: `ExportSVG` declares
       its `Style` parameter `_` and always draws the same four lanes, so an SVG subtest parameterised
       over the other two styles asserts nothing its `StyleAuto` case did not
       (`tasks/learnings.md:376-379`)
-- [ ] In `StyleProjected`, a model whose only slices are DCB slices with fully tagged events and no
+- [x] In `StyleProjected`, a model whose only slices are DCB slices with fully tagged events and no
       translations — a shape for which `hasEventsLane` is false today
       (`internal/diagram/drawio.go:96-122`) — draws its rejection badges in a lane rather than at a
       lane's coordinates with no lane behind them: a slice stating a rejection edge counts toward
       `hasEventsLane` the way an untagged DCB event and a translation event already do. A leaf states
       this over exactly that model
-- [ ] Every cell the `Without…` twin's render writes appears in the featured render with the same id,
+- [x] Every cell the `Without…` twin's render writes appears in the featured render with the same id,
       the same geometry and the same style string, except for the cells of the row a badge joins,
       whose reflow is the intended consequence of one more box in that row — no badge id is allocated
       before both the "this slice states a rejection edge" guard and the badge's lane have been
       resolved, so an id taken early does not renumber every later cell
       (`tasks/learnings.md:356-359`)
-- [ ] A model whose two slices reject the same invariant draws two badge cells and two edges, each
+- [x] A model whose two slices reject the same invariant draws two badge cells and two edges, each
       edge ending at the badge in its own slice's column — `nameToElem`
       (`internal/diagram/drawio.go:351-356`) keeps the **first** entry for a repeated name, the
       opposite of `nameToBox`, so a badge filed by invariant name alone fails differently in the two
       formats and this leaf catches both
-- [ ] `ExportDrawio` over the twin returns bytes byte-identical to what it returns for that twin
+- [x] `ExportDrawio` over the twin returns bytes byte-identical to what it returns for that twin
       before this task, under all three styles
-- [ ] The three palette tests pass with no edit and still see exactly six element types
-- [ ] The featured render is well-formed XML
+- [x] The three palette tests pass with no edit and still see exactly six element types
+- [x] The featured render is well-formed XML
 
 **Affected Files/Modules:**
 - `internal/diagram/drawio.go` — the badge cell, its style constant beside `style*` (`:12-25`), the

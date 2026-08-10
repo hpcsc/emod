@@ -21,6 +21,7 @@ const (
 	styleAutomation     = boxBase + "fillColor=" + fillAutomation + ";strokeColor=" + strokeAutomation + ";" + boxFont
 	styleTranslation    = boxBase + "fillColor=" + fillTranslation + ";strokeColor=" + strokeTranslation + ";" + boxFont
 	styleExternalSystem = boxBase + "fillColor=" + fillExternal + ";strokeColor=" + strokeExternal + ";dashed=1;" + boxFont
+	styleRejection      = boxBase + "fillColor=" + fillRejection + ";strokeColor=" + strokeRejection + ";dashed=1;" + boxFont
 )
 
 // ExportDrawio converts a parsed AST model into draw.io XML (mxGraph format).
@@ -92,8 +93,17 @@ func ExportDrawio(model *ast.Model, style Style) ([]byte, error) {
 		// Check if we need an Events lane for:
 		// - aggregate events, or
 		// - untagged DCB events, or
-		// - translation events (from any slice)
+		// - translation events (from any slice), or
+		// - rejection badges, which are drawn in the events row
 		hasEventsLane = hasAggEvents
+		if !hasEventsLane {
+			for _, e := range entries {
+				if len(e.slice.Rejections) > 0 {
+					hasEventsLane = true
+					break
+				}
+			}
+		}
 		if !hasEventsLane {
 			for _, e := range entries {
 				if e.fromDCB {
@@ -198,6 +208,20 @@ func ExportDrawio(model *ast.Model, style Style) ([]byte, error) {
 	}
 	var elems []namedElem
 
+	// Badges are filed per slice, in declaration order, rather than in
+	// nameToElem: two slices may reject the same invariant, and nameToElem keeps
+	// the first cell drawn for a name, so both dashed arrows would end at
+	// whichever slice was drawn first.
+	badges := make([][]namedElem, len(entries))
+
+	type pendingBadge struct {
+		sliceIndex int
+		name       string
+		statement  string
+		x, y, w, h int
+	}
+	var pendingBadges []pendingBadge
+
 	// Multi-tag event tracking for connectors
 	type multiTagEntry struct {
 		name    string
@@ -254,7 +278,7 @@ func ExportDrawio(model *ast.Model, style Style) ([]byte, error) {
 		// In projected style, DCB events go to tag lanes; aggregate events go to Events lane.
 		// In standard style, all events go to the Events lane.
 		usableW = sliceWidth - 20
-		totalEvts := len(s.Events)
+		totalEvts := len(s.Events) + len(s.Rejections)
 		for _, tr := range s.Translations {
 			if tr.Event != nil && tr.Event.Name != "" {
 				totalEvts++
@@ -310,6 +334,22 @@ func ExportDrawio(model *ast.Model, style Style) ([]byte, error) {
 			}
 		}
 
+		// --- Rejection badges (events row) ---
+		// Where each badge goes is settled here, beside the events it shares a
+		// row with, but the cells are written after every other slice's, so a
+		// badge takes an id past the last one a model without rejection edges
+		// uses and renumbers none of them.
+		for _, rejection := range s.Rejections {
+			itemW, x := itemLayout(usableW, totalEvts, ei, sliceX)
+			ei++
+			pendingBadges = append(pendingBadges, pendingBadge{
+				sliceIndex: i,
+				name:       rejection.InvariantName,
+				statement:  entry.invariantStatement(rejection.InvariantName),
+				x:          x, y: eventRowY, w: itemW, h: boxHeight,
+			})
+		}
+
 		// --- Automations and translation reactors (middle lane) ---
 		for _, reactor := range reactorBoxes(s, cmdViewLaneY, sliceX, "\\n") {
 			id := allocID()
@@ -338,12 +378,20 @@ func ExportDrawio(model *ast.Model, style Style) ([]byte, error) {
 		}
 	}
 
+	for _, badge := range pendingBadges {
+		id := allocID()
+		b.WriteString(vertexCell(id, badge.name, badge.statement, badge.x, badge.y, badge.w, badge.h, styleRejection))
+		badges[badge.sliceIndex] = append(badges[badge.sliceIndex],
+			namedElem{name: badge.name, id: id, x: badge.x, y: badge.y, w: badge.w, h: badge.h})
+	}
+
 	// --- Connections ---
 	// Style definitions per guideline.
 	standardStyle := "edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;fontFamily=Helvetica;strokeColor=" + strokeStandard + ";endArrow=classic;"
 	purpleUpStyle := "edgeStyle=orthogonalEdgeStyle;html=1;fontFamily=Helvetica;strokeColor=" + strokePurpleUp + ";fontSize=10;endArrow=classic;exitX=1;exitY=0.5;exitDx=0;exitDy=0;curved=1;"
 	greenUpStyle := "edgeStyle=orthogonalEdgeStyle;html=1;fontFamily=Helvetica;strokeColor=" + strokeGreenUp + ";fontSize=10;endArrow=classic;exitX=1;exitY=0.5;exitDx=0;exitDy=0;entryX=0;entryY=1;entryDx=0;entryDy=0;curved=1;"
 	extStyle := "edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;fontFamily=Helvetica;strokeColor=" + strokeExternal + ";dashed=1;endArrow=classic;fontSize=10;"
+	rejectionStyle := "edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;fontFamily=Helvetica;strokeColor=" + strokeRejection + ";dashed=1;endArrow=classic;"
 
 	// Global element lookup across all slices (needed for cross-slice references)
 	// For multi-tag events, only the first representation is stored in nameToElem
@@ -407,7 +455,8 @@ func ExportDrawio(model *ast.Model, style Style) ([]byte, error) {
 		}
 	}
 
-	for _, entry := range entries {
+	for i, entry := range entries {
+		rejected := 0
 		for _, edge := range SliceEdges(entry.slice) {
 			from := nameToElem[edge.From]
 			to := nameToElem[edge.To]
@@ -454,6 +503,14 @@ func ExportDrawio(model *ast.Model, style Style) ([]byte, error) {
 				if from != nil && to != nil {
 					b.WriteString(edgeCell(allocID(), extStyle, from.id, to.id))
 				}
+
+			case EdgeRejection:
+				// SliceEdges emits rejection edges in declaration order, so the
+				// nth one this slice states ends at the nth badge it drew.
+				if from != nil && rejected < len(badges[i]) {
+					b.WriteString(edgeCell(allocID(), rejectionStyle, from.id, badges[i][rejected].id))
+				}
+				rejected++
 			}
 		}
 	}
