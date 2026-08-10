@@ -9,6 +9,7 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"github.com/hpcsc/emod/internal/cli"
@@ -592,6 +593,129 @@ context "Orders" {
 		require.Contains(t, err.Error(), "command-in-disguise")
 	})
 
+	t.Run("flow/rejection-without-spec", func(t *testing.T) {
+		// Written to fire flow/rejection-without-spec and nothing else. Both
+		// invariants are declared and both are exercised by a rejection spec
+		// somewhere in the aggregate, so spec/invariant-never-exercised stays
+		// quiet; both commands carry a spec and a rejection scenario, so
+		// spec/command-without-spec and spec/no-rejection-path do too; and both
+		// have a flow, so neither command nor event is orphaned. What is missing
+		// is the one thing under test: nothing on "Borrow Copy" exercises the
+		// rejection its own flow block states.
+		const rejectionWithoutSpecEmod = `model "Library Lending"
+
+context "Lending" {
+  aggregate "Loan" {
+    invariant OneCopyPerLoan "A loan covers exactly one copy of one title"
+    invariant FiveCopiesPerMember "A member holds at most five copies at one time"
+
+    slice "Borrow Copy" {
+      command BorrowCopy {
+        fields {
+          memberId string required
+          copyId   string required
+        }
+      }
+
+      event CopyBorrowed {
+        fields {
+          loanId   string required
+          memberId string required
+          copyId   string required
+        }
+      }
+
+      flow {
+        command -> event: BorrowCopy -> CopyBorrowed
+        command -> rejected: BorrowCopy -> FiveCopiesPerMember
+      }
+
+      spec "refuses a copy already on loan" {
+        when BorrowCopy
+        then rejected OneCopyPerLoan
+      }
+    }
+
+    slice "Return Copy" {
+      command ReturnCopy {
+        fields {
+          loanId string required
+          copyId string required
+        }
+      }
+
+      event CopyReturned {
+        fields {
+          loanId     string    required
+          copyId     string    required
+          returnedAt timestamp required
+        }
+      }
+
+      flow {
+        command -> event: ReturnCopy -> CopyReturned
+      }
+
+      spec "refuses a return of a copy the member does not hold" {
+        when ReturnCopy
+        then rejected FiveCopiesPerMember
+      }
+    }
+  }
+}
+`
+
+		t.Run("text output names the rule, the command, the invariant and the line", func(t *testing.T) {
+			path := writeTemp(t, "rejection-without-spec.emod", rejectionWithoutSpecEmod)
+
+			err := cli.RunLint(path, "text")
+
+			require.Error(t, err)
+			require.Len(t, strings.Split(strings.TrimSpace(err.Error()), "\n"), 1,
+				"the fixture is written to trip this rule and no other")
+			require.Contains(t, err.Error(), "flow/rejection-without-spec")
+			require.Contains(t, err.Error(), "BorrowCopy")
+			require.Contains(t, err.Error(), "FiveCopiesPerMember")
+			require.Contains(t, err.Error(), ":26:",
+				"the diagnostic sits on the rejection entry's invariant name")
+		})
+
+		t.Run("json output reports info severity and exit code 1", func(t *testing.T) {
+			path := writeTemp(t, "rejection-without-spec.emod", rejectionWithoutSpecEmod)
+
+			output := captureStdout(t, func() {
+				err := cli.RunLint(path, "json")
+				var lintErr *cli.LintError
+				require.True(t, errors.As(err, &lintErr))
+				require.Equal(t, 1, lintErr.ExitCode)
+			})
+
+			var entries []map[string]interface{}
+			require.NoError(t, json.Unmarshal([]byte(output), &entries))
+			require.Len(t, entries, 1)
+			require.Equal(t, "info", entries[0]["severity"])
+			require.Equal(t, "flow/rejection-without-spec", entries[0]["rule"])
+		})
+
+		t.Run("an info diagnostic is still a diagnostic, so validate fails too", func(t *testing.T) {
+			path := writeTemp(t, "rejection-without-spec.emod", rejectionWithoutSpecEmod)
+
+			err := cli.RunValidate(path, "text")
+
+			require.Error(t, err)
+			require.Contains(t, err.Error(), "flow/rejection-without-spec")
+		})
+
+		t.Run("explaining the rule prints a description and an unknown rule still errors", func(t *testing.T) {
+			output := captureStdout(t, func() {
+				require.NoError(t, cli.RunLintExplain("flow/rejection-without-spec"))
+			})
+			require.NotEmpty(t, output)
+
+			require.Error(t, cli.RunLintExplain("flow/rejection-without-a-spec"))
+		})
+	})
+
 	t.Run("json format on clean file outputs empty array", func(t *testing.T) {
 		path := writeTemp(t, "clean.emod", validEmod)
 
@@ -1142,6 +1266,7 @@ func TestLintExplain(t *testing.T) {
 			"dcb/single-tag-everywhere",
 			"dcb/orphan-tag-key",
 			"automation/missing-todo-list",
+			"flow/rejection-without-spec",
 			"spec/command-without-spec",
 			"spec/no-rejection-path",
 			"spec/invariant-never-exercised",

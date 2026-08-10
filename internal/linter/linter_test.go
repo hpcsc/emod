@@ -8,6 +8,7 @@ import (
 	"github.com/hpcsc/emod/internal/ast"
 	"github.com/hpcsc/emod/internal/diagnostic"
 	"github.com/hpcsc/emod/internal/linter"
+	"github.com/hpcsc/emod/internal/test"
 	"github.com/stretchr/testify/require"
 )
 
@@ -3610,6 +3611,196 @@ func TestLint(t *testing.T) {
 				`lending.emod:30: [automation/missing-todo-list] automation "RemindOnDueDate" reads no view, so nothing in the model shows what work is outstanding; project a view of pending work and read it`,
 				`lending.emod:61: [automation/missing-todo-list] automation "SweepIdleDesks" reads no view, so the model does not state what the processor acts on; project a view of pending work and read it`,
 			}, reportedLines(diags))
+		})
+	})
+
+	t.Run("flow/rejection-without-spec", func(t *testing.T) {
+		rejectionAt := func(command, invariant string, line int) *ast.Rejection {
+			return &ast.Rejection{
+				CommandName:   command,
+				InvariantName: invariant,
+				InvariantPos:  ast.Position{Filename: "lending.emod", Line: line, Column: 41},
+			}
+		}
+		exercising := func(command, invariant string) *ast.Spec {
+			return &ast.Spec{
+				Name: "refuses it",
+				When: &ast.SpecElement{Name: command},
+				Then: &ast.ThenRejected{InvariantName: invariant},
+			}
+		}
+		// The models below declare no invariant. This rule reads the edge's own
+		// two names and never the declarations, and declaring one that no spec
+		// rejects would additionally trip spec/invariant-never-exercised, which
+		// is a different rule's subject.
+		aggregateModel := func(slices ...*ast.Slice) *ast.Model {
+			return &ast.Model{
+				Contexts: []*ast.Context{{
+					Name:       "Lending",
+					Aggregates: []*ast.Aggregate{{Name: "Loan", Slices: slices}},
+				}},
+			}
+		}
+
+		t.Run("reports a rejection edge its slice states no exercising spec for", func(t *testing.T) {
+			model := aggregateModel(&ast.Slice{
+				Name:       "Borrow Copy",
+				Rejections: []*ast.Rejection{rejectionAt("BorrowCopy", "OneCopyPerLoan", 12)},
+			})
+
+			diags := linter.Lint(model)
+
+			require.Len(t, diags, 1)
+			require.Equal(t, "flow/rejection-without-spec", diags[0].RuleName)
+			require.Equal(t, diagnostic.Info, diags[0].Severity)
+			require.Equal(t, ast.Position{Filename: "lending.emod", Line: 12, Column: 41},
+				ast.Position{Filename: diags[0].Filename, Line: diags[0].Line, Column: diags[0].Column})
+			require.Equal(t,
+				`command "BorrowCopy" can be rejected by invariant "OneCopyPerLoan", but no spec on this slice exercises that rejection`,
+				diags[0].Message)
+		})
+
+		t.Run("a matching spec on the same slice silences it", func(t *testing.T) {
+			model := aggregateModel(&ast.Slice{
+				Name:       "Borrow Copy",
+				Rejections: []*ast.Rejection{rejectionAt("BorrowCopy", "OneCopyPerLoan", 12)},
+				Specs:      []*ast.Spec{exercising("BorrowCopy", "OneCopyPerLoan")},
+			})
+
+			require.Empty(t, linter.Lint(model))
+		})
+
+		t.Run("matching is on both halves", func(t *testing.T) {
+			t.Run("a spec rejecting that invariant from another command does not silence it", func(t *testing.T) {
+				model := aggregateModel(&ast.Slice{
+					Name:       "Borrow Copy",
+					Rejections: []*ast.Rejection{rejectionAt("BorrowCopy", "OneCopyPerLoan", 12)},
+					Specs:      []*ast.Spec{exercising("ReturnCopy", "OneCopyPerLoan")},
+				})
+
+				diags := linter.Lint(model)
+
+				require.Len(t, diags, 1)
+				require.Equal(t, "flow/rejection-without-spec", diags[0].RuleName)
+			})
+
+			t.Run("a spec naming that command but rejecting another invariant does not silence it", func(t *testing.T) {
+				model := aggregateModel(&ast.Slice{
+					Name:       "Borrow Copy",
+					Rejections: []*ast.Rejection{rejectionAt("BorrowCopy", "OneCopyPerLoan", 12)},
+					Specs:      []*ast.Spec{exercising("BorrowCopy", "FiveCopiesPerMember")},
+				})
+
+				diags := linter.Lint(model)
+
+				require.Len(t, diags, 1)
+				require.Equal(t, "flow/rejection-without-spec", diags[0].RuleName)
+			})
+
+			t.Run("a spec whose then is not a rejection does not silence it", func(t *testing.T) {
+				model := aggregateModel(&ast.Slice{
+					Name:       "Borrow Copy",
+					Rejections: []*ast.Rejection{rejectionAt("BorrowCopy", "OneCopyPerLoan", 12)},
+					Specs: []*ast.Spec{{
+						Name: "borrows a free copy",
+						When: &ast.SpecElement{Name: "BorrowCopy"},
+						Then: &ast.ThenEvents{Events: []*ast.SpecElement{{Name: "CopyBorrowed"}}},
+					}},
+				})
+
+				diags := linter.Lint(model)
+
+				require.Len(t, diags, 1)
+				require.Equal(t, "flow/rejection-without-spec", diags[0].RuleName)
+			})
+		})
+
+		t.Run("the search is slice-local", func(t *testing.T) {
+			t.Run("a matching spec in a sibling slice of the same aggregate does not silence it", func(t *testing.T) {
+				model := aggregateModel(
+					&ast.Slice{
+						Name:       "Borrow Copy",
+						Rejections: []*ast.Rejection{rejectionAt("BorrowCopy", "OneCopyPerLoan", 12)},
+					},
+					&ast.Slice{
+						Name:  "Return Copy",
+						Specs: []*ast.Spec{exercising("BorrowCopy", "OneCopyPerLoan")},
+					},
+				)
+
+				diags := linter.Lint(model)
+
+				require.Len(t, diags, 1)
+				require.Equal(t, "flow/rejection-without-spec", diags[0].RuleName)
+			})
+
+			t.Run("a matching spec in another context does not silence it", func(t *testing.T) {
+				model := aggregateModel(&ast.Slice{
+					Name:       "Borrow Copy",
+					Rejections: []*ast.Rejection{rejectionAt("BorrowCopy", "OneCopyPerLoan", 12)},
+				})
+				model.Contexts = append(model.Contexts, &ast.Context{
+					Name: "Reading Room",
+					Mode: "dcb",
+					Slices: []*ast.Slice{{
+						Name:  "Claim Desk",
+						Specs: []*ast.Spec{exercising("BorrowCopy", "OneCopyPerLoan")},
+					}},
+				})
+
+				diags := linter.Lint(model)
+
+				require.Len(t, diags, 1)
+				require.Equal(t, "flow/rejection-without-spec", diags[0].RuleName)
+			})
+		})
+
+		t.Run("a slice stating no rejection edge reports nothing however many specs and flows it declares", func(t *testing.T) {
+			model := aggregateModel(&ast.Slice{
+				Name:  "Borrow Copy",
+				Flows: []*ast.Flow{{CommandName: "BorrowCopy", EventName: "CopyBorrowed"}},
+				Specs: []*ast.Spec{exercising("BorrowCopy", "OneCopyPerLoan")},
+			})
+
+			require.Empty(t, linter.Lint(model))
+		})
+
+		t.Run("reaches both slice homes and reports in declaration order", func(t *testing.T) {
+			model := &ast.Model{
+				Contexts: []*ast.Context{
+					{
+						Name: "Lending",
+						Aggregates: []*ast.Aggregate{{
+							Name: "Loan",
+							Slices: []*ast.Slice{{
+								Name: "Borrow Copy",
+								Rejections: []*ast.Rejection{
+									rejectionAt("BorrowCopy", "OneCopyPerLoan", 12),
+									rejectionAt("BorrowCopy", "FiveCopiesPerMember", 13),
+								},
+							}},
+						}},
+					},
+					{
+						Name: "Reading Room",
+						Mode: "dcb",
+						Slices: []*ast.Slice{{
+							Name:       "Claim Desk",
+							Rejections: []*ast.Rejection{rejectionAt("ClaimDesk", "OneReaderPerDesk", 40)},
+						}},
+					},
+				},
+			}
+
+			require.Equal(t, []string{
+				`lending.emod:12: [flow/rejection-without-spec] command "BorrowCopy" can be rejected by invariant "OneCopyPerLoan", but no spec on this slice exercises that rejection`,
+				`lending.emod:13: [flow/rejection-without-spec] command "BorrowCopy" can be rejected by invariant "FiveCopiesPerMember", but no spec on this slice exercises that rejection`,
+				`lending.emod:40: [flow/rejection-without-spec] command "ClaimDesk" can be rejected by invariant "OneReaderPerDesk", but no spec on this slice exercises that rejection`,
+			}, reportedLines(linter.Lint(model)))
+		})
+
+		t.Run("the shared rejection fixture exercises every edge it states", func(t *testing.T) {
+			require.Empty(t, linter.Lint(test.RejectionLibraryLendingModel(t)))
 		})
 	})
 

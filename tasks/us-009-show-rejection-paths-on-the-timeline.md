@@ -1044,48 +1044,48 @@ spec whose `when` names the edge's command and whose `then` rejects that same in
 a command can fail; the rule asks for the scenario that shows how.
 
 **Acceptance Criteria:**
-- [ ] A rejection edge on a slice whose specs include none whose `when` names that edge's command and
+- [x] A rejection edge on a slice whose specs include none whose `when` names that edge's command and
       whose `then` is a rejection naming that edge's invariant produces exactly one diagnostic at
       `diagnostic.Info`, rule name `flow/rejection-without-spec`, positioned at the invariant name in
       the edge, with one message text naming both the command and the invariant
-- [ ] A rejection edge whose slice states a matching spec produces no diagnostic
-- [ ] Matching is on both halves and a leaf states each miss separately: a spec rejecting that
+- [x] A rejection edge whose slice states a matching spec produces no diagnostic
+- [x] Matching is on both halves and a leaf states each miss separately: a spec rejecting that
       invariant but naming a different command in its `when` does not silence the edge, and a spec
       naming that command but rejecting a different invariant does not either
-- [ ] The search is slice-local: a matching spec declared in a **different** slice of the same
+- [x] The search is slice-local: a matching spec declared in a **different** slice of the same
       aggregate, and one declared in a different context, each leave the edge reported — this is a
       deliberate departure from US-008's model-wide `when` resolution, and a leaf pins it so a later
       "tidy" toward the model-wide lookup fails
-- [ ] A slice stating no rejection edge produces nothing however many specs or flows it declares, and
+- [x] A slice stating no rejection edge produces nothing however many specs or flows it declares, and
       a model stating no rejection edge anywhere produces nothing
-- [ ] The rule reaches both slice homes — nested in an aggregate and declared directly on a `mode
+- [x] The rule reaches both slice homes — nested in an aggregate and declared directly on a `mode
       dcb` context — and a model with several unexercised rejection edges across both homes reports
       them in declaration order, asserted as one comparison over the whole list of formatted lines
-- [ ] `linter.RuleDescription` answers for `flow/rejection-without-spec`, `emod lint --explain
+- [x] `linter.RuleDescription` answers for `flow/rejection-without-spec`, `emod lint --explain
       flow/rejection-without-spec` prints that non-empty description and returns no error, an unknown
       rule name still returns an error, and the rule name joins the hand-maintained list at
       `internal/cli/lint_test.go:627-645` so the "all rules have descriptions" leaf covers it
-- [ ] A CLI lint fixture states one rejection edge with no matching spec and trips this rule and no
+- [x] A CLI lint fixture states one rejection edge with no matching spec and trips this rule and no
       other — asserted with a length of exactly one entry — with a declaring comment naming the rule
       it is written to fire. Keeping the other seventeen quiet needs full flows and events with real
       fields: `orphan-command`, `orphan-event`, `left-chair`, `god-view`, `view-naming`,
       `clickbait-event` and the `dcb/*` family are the tripwires
       (`tasks/learnings.md:471-474`)
-- [ ] `cli.RunLint` and `cli.RunValidate` both return an error for that fixture — an info diagnostic
+- [x] `cli.RunLint` and `cli.RunValidate` both return an error for that fixture — an info diagnostic
       is still a diagnostic — the text output names the rule, the command, the invariant and the line
       the edge is written on, and `-f json` reports `"severity": "info"` with exit code 1
-- [ ] Every model the repository ships as valid still produces zero diagnostics from `oracle.Check`:
+- [x] Every model the repository ships as valid still produces zero diagnostics from `oracle.Check`:
       the nine shared fixtures **including Task 2's**, every file under `examples/` without the
       `_test.emod` suffix, every fixture under `internal/parser/testdata/`, every ` ```emod ` fence in
       `README.md` and `docs/dsl-reference.md`, and `billingModel` in `internal/wasm/pipeline_test.go`.
       Measured before the rule exists: it fires **0** times across the tree, because no checked-in
       model stated a rejection edge and Task 2's fixture exercises every one of its own
-- [ ] `require.Len(t, ruleNames, 8)` at `internal/linter/linter_test.go:1013` passes unedited: the
+- [x] `require.Len(t, ruleNames, 8)` at `internal/linter/linter_test.go:1013` passes unedited: the
       model that leaf builds states no rejection edge
-- [ ] The rule asks of a spec's `then` only whether it is a rejection naming a given name, through an
+- [x] The rule asks of a spec's `then` only whether it is a rejection naming a given name, through an
       `ok`-guarded assertion rather than a switch over `ast.ThenClause`, so a variant US-007 adds is
       neither counted as a rejection nor treated as an error (`tasks/learnings.md:186-189`)
-- [ ] `internal/parser`, `internal/validator`, `internal/formatter`, `internal/export` and
+- [x] `internal/parser`, `internal/validator`, `internal/formatter`, `internal/export` and
       `internal/diagram` are untouched
 
 **Affected Files/Modules:**

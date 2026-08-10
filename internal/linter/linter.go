@@ -156,6 +156,7 @@ func checkSlice(slice *ast.Slice, aggregateName string, flowCount map[string]int
 			diags = append(diags, d)
 		}
 	}
+	diags = append(diags, checkRejectionsWithoutSpec(slice)...)
 	for _, view := range slice.Views {
 		if d := checkViewNaming(view); d != nil {
 			diags = append(diags, d)
@@ -170,6 +171,43 @@ func checkSlice(slice *ast.Slice, aggregateName string, flowCount map[string]int
 		}
 	}
 	return diags
+}
+
+// checkRejectionsWithoutSpec reports each rejection edge whose own slice states
+// no spec exercising it. The search is slice-local on purpose: a rejection edge
+// is declared inside one slice's flow block, so that slice is its scope and a
+// spec written in an unrelated slice must not silence it.
+func checkRejectionsWithoutSpec(slice *ast.Slice) []*diagnostic.Entry {
+	var diags []*diagnostic.Entry
+	for _, rejection := range slice.Rejections {
+		if rejection == nil || exercisesRejection(slice, rejection) {
+			continue
+		}
+		diags = append(diags, info(rejection.InvariantPos, "flow/rejection-without-spec",
+			fmt.Sprintf("command %q can be rejected by invariant %q, but no spec on this slice exercises that rejection",
+				rejection.CommandName, rejection.InvariantName)))
+	}
+
+	return diags
+}
+
+// exercisesRejection matches both halves of the edge. Matching the invariant
+// alone would let one command's rejection spec silence another command's edge.
+// The outcome is asked whether it is a rejection through an ok-guarded
+// assertion, so a variant added to ThenClause later is neither counted as one
+// nor treated as an error.
+func exercisesRejection(slice *ast.Slice, rejection *ast.Rejection) bool {
+	for _, spec := range slice.Specs {
+		if spec == nil || spec.When == nil || spec.When.Name != rejection.CommandName {
+			continue
+		}
+		if rejected, isRejection := spec.Then.(*ast.ThenRejected); isRejection &&
+			rejected.InvariantName == rejection.InvariantName {
+			return true
+		}
+	}
+
+	return false
 }
 
 // Mode helpers
