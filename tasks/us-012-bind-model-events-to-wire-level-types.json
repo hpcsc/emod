@@ -1,1 +1,130 @@
-{"story":"us-012-bind-model-events-to-wire-level-types","tasks_file":"tasks/us-012-bind-model-events-to-wire-level-types.md","recovered_from":"sections","tasks":[{"n":1,"title":"Spell `type` on the hand-maintained editor keyword surfaces","language":"JavaScript/TypeScript","testable":true,"depends_on":[],"affected_files":["editors/tree-sitter-emod/grammar.js","editors/tree-sitter-emod/test/corpus/","type","editors/tree-sitter-emod/queries/highlights.scm","editors/tree-sitter-emod/test/highlight/","editors/vscode/syntaxes/emod.tmLanguage.json","editors/vscode/test/scopes/"]},{"n":2,"title":"Carry a wire `type` attribute on `event`","language":"Go","testable":true,"depends_on":[1],"affected_files":["internal/lexer/token.go",":73-112","internal/ast/ast.go","ast.Field.Type","internal/parser/parser.go",":979","internal/parser/parser_test.go","internal/lsp/hover.go","internal/test/fixtures.go","internal/oracle/oracle_test.go"]},{"n":3,"title":"Preserve wire types through `emod fmt`","language":"Go","testable":true,"depends_on":[2],"affected_files":["internal/formatter/formatter.go","internal/formatter/formatter_test.go","internal/cli/fmt_test.go"]},{"n":4,"title":"Reject two events sharing one wire type","language":"Go","testable":true,"depends_on":[2],"affected_files":["internal/validator/validator.go",":15-41","internal/validator/validator_test.go","internal/cli/validate_test.go"]},{"n":5,"title":"Carry wire types through the JSON and CUE exports and the embedded schema","language":"Go","testable":true,"depends_on":[2],"affected_files":["internal/export/json.go",":498-515","internal/export/cue.go","internal/cue/schema.cue","internal/cue/embed_test.go","internal/export/export_test.go","internal/cli/export_test.go"]},{"n":6,"title":"Nudge wire types toward reverse-DNS kebab-case with `wire/type-format`","language":"Go","testable":true,"depends_on":[2],"affected_files":["internal/linter/linter.go",":118-120","internal/linter/descriptions.go","internal/linter/linter_test.go","internal/cli/lint_test.go",":627-645"]},{"n":7,"title":"Document the wire type in the DSL reference","language":"Generic","testable":false,"depends_on":[2,4,5,6],"affected_files":["docs/dsl-reference.md"]}]}
+{
+  "story": "us-012-bind-model-events-to-wire-level-types",
+  "tasks_file": "tasks/us-012-bind-model-events-to-wire-level-types.md",
+  "recovered_from": "sections",
+  "tasks": [
+    {
+      "n": 1,
+      "title": "Spell `type` on the hand-maintained editor keyword surfaces",
+      "language": "JavaScript/TypeScript",
+      "testable": true,
+      "depends_on": [],
+      "affected_files": [
+        "editors/tree-sitter-emod/grammar.js",
+        "editors/tree-sitter-emod/test/corpus/",
+        "type",
+        "editors/tree-sitter-emod/queries/highlights.scm",
+        "editors/tree-sitter-emod/test/highlight/",
+        "editors/vscode/syntaxes/emod.tmLanguage.json",
+        "editors/vscode/test/scopes/"
+      ],
+      "done": false
+    },
+    {
+      "n": 2,
+      "title": "Carry a wire `type` attribute on `event`",
+      "language": "Go",
+      "testable": true,
+      "depends_on": [
+        1
+      ],
+      "affected_files": [
+        "internal/lexer/token.go",
+        ":73-112",
+        "internal/ast/ast.go",
+        "ast.Field.Type",
+        "internal/parser/parser.go",
+        ":979",
+        "internal/parser/parser_test.go",
+        "internal/lsp/hover.go",
+        "internal/test/fixtures.go",
+        "internal/oracle/oracle_test.go"
+      ],
+      "done": false
+    },
+    {
+      "n": 3,
+      "title": "Preserve wire types through `emod fmt`",
+      "language": "Go",
+      "testable": true,
+      "depends_on": [
+        2
+      ],
+      "affected_files": [
+        "internal/formatter/formatter.go",
+        "internal/formatter/formatter_test.go",
+        "internal/cli/fmt_test.go"
+      ],
+      "done": false
+    },
+    {
+      "n": 4,
+      "title": "Reject two events sharing one wire type",
+      "language": "Go",
+      "testable": true,
+      "depends_on": [
+        2
+      ],
+      "affected_files": [
+        "internal/validator/validator.go",
+        ":15-41",
+        "internal/validator/validator_test.go",
+        "internal/cli/validate_test.go"
+      ],
+      "done": false
+    },
+    {
+      "n": 5,
+      "title": "Carry wire types through the JSON and CUE exports and the embedded schema",
+      "language": "Go",
+      "testable": true,
+      "depends_on": [
+        2
+      ],
+      "affected_files": [
+        "internal/export/json.go",
+        ":498-515",
+        "internal/export/cue.go",
+        "internal/cue/schema.cue",
+        "internal/cue/embed_test.go",
+        "internal/export/export_test.go",
+        "internal/cli/export_test.go"
+      ],
+      "done": false
+    },
+    {
+      "n": 6,
+      "title": "Nudge wire types toward reverse-DNS kebab-case with `wire/type-format`",
+      "language": "Go",
+      "testable": true,
+      "depends_on": [
+        2
+      ],
+      "affected_files": [
+        "internal/linter/linter.go",
+        ":118-120",
+        "internal/linter/descriptions.go",
+        "internal/linter/linter_test.go",
+        "internal/cli/lint_test.go",
+        ":627-645"
+      ],
+      "done": false
+    },
+    {
+      "n": 7,
+      "title": "Document the wire type in the DSL reference",
+      "language": "Generic",
+      "testable": false,
+      "depends_on": [
+        2,
+        4,
+        5,
+        6
+      ],
+      "affected_files": [
+        "docs/dsl-reference.md"
+      ],
+      "done": false
+    }
+  ]
+}

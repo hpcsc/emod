@@ -1,1 +1,77 @@
-{"story":"us-016-render-specs-on-diagrams","tasks_file":"tasks/us-016-render-specs-on-diagrams.md","recovered_from":"sections","tasks":[{"n":1,"title":"Draw a slice's specs as a card in the SVG diagram","language":"Go","testable":true,"depends_on":[],"affected_files":["internal/diagram/svg.go","diagramH","internal/diagram/layout.go","internal/diagram/labels.go","reactorBoxes","internal/diagram/svg_test.go",":19"]},{"n":2,"title":"Draw the same card in the draw.io diagram","language":"Go","testable":true,"depends_on":[1],"affected_files":["internal/diagram/drawio.go","extLaneY","style*","internal/diagram/layout.go","internal/diagram/layout.go","internal/diagram/drawio_test.go","internal/diagram/contract_test.go"]},{"n":3,"title":"Render the cards from the command line behind `--specs`","language":"Go","testable":true,"depends_on":[2],"affected_files":["internal/cli/app.go","--format","internal/cli/diagram.go",":68-77","app.go","internal/cli/diagram_test.go","serve"]},{"n":4,"title":"Document `--specs` where the diagram command is described","language":"Generic","testable":false,"depends_on":[3],"affected_files":["README.md","docs/dsl-reference.md","docs/architecture.md"]}]}
+{
+  "story": "us-016-render-specs-on-diagrams",
+  "tasks_file": "tasks/us-016-render-specs-on-diagrams.md",
+  "recovered_from": "sections",
+  "tasks": [
+    {
+      "n": 1,
+      "title": "Draw a slice's specs as a card in the SVG diagram",
+      "language": "Go",
+      "testable": true,
+      "depends_on": [],
+      "affected_files": [
+        "internal/diagram/svg.go",
+        "diagramH",
+        "internal/diagram/layout.go",
+        "internal/diagram/labels.go",
+        "reactorBoxes",
+        "internal/diagram/svg_test.go",
+        ":19"
+      ],
+      "done": false
+    },
+    {
+      "n": 2,
+      "title": "Draw the same card in the draw.io diagram",
+      "language": "Go",
+      "testable": true,
+      "depends_on": [
+        1
+      ],
+      "affected_files": [
+        "internal/diagram/drawio.go",
+        "extLaneY",
+        "style*",
+        "internal/diagram/layout.go",
+        "internal/diagram/layout.go",
+        "internal/diagram/drawio_test.go",
+        "internal/diagram/contract_test.go"
+      ],
+      "done": false
+    },
+    {
+      "n": 3,
+      "title": "Render the cards from the command line behind `--specs`",
+      "language": "Go",
+      "testable": true,
+      "depends_on": [
+        2
+      ],
+      "affected_files": [
+        "internal/cli/app.go",
+        "--format",
+        "internal/cli/diagram.go",
+        ":68-77",
+        "app.go",
+        "internal/cli/diagram_test.go",
+        "serve"
+      ],
+      "done": false
+    },
+    {
+      "n": 4,
+      "title": "Document `--specs` where the diagram command is described",
+      "language": "Generic",
+      "testable": false,
+      "depends_on": [
+        3
+      ],
+      "affected_files": [
+        "README.md",
+        "docs/dsl-reference.md",
+        "docs/architecture.md"
+      ],
+      "done": false
+    }
+  ]
+}

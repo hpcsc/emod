@@ -1,1 +1,67 @@
-{"story":"us-018-learn-the-new-constructs-from-examples-and-the-reference","tasks_file":"tasks/us-018-learn-the-new-constructs-from-examples-and-the-reference.md","recovered_from":"sections","tasks":[{"n":1,"title":"Pin the version, describe the constructs, bind wire types and delay an automation in the flagship example","language":"Go","testable":true,"depends_on":[],"affected_files":["examples/all_patterns.emod","ConfirmationEmailReactor","internal/cli/validate_test.go"]},{"n":2,"title":"State the invariants, specs and rejection path in the flagship example","language":"Go","testable":true,"depends_on":[1],"affected_files":["examples/all_patterns.emod",":167","flow","internal/cli/validate_test.go"]},{"n":3,"title":"Add `examples/specs_hotel.emod` as a model that validates","language":"Generic","testable":true,"depends_on":[2],"affected_files":["examples/specs_hotel.emod"]},{"n":4,"title":"Document the elapsed-time automation and close the reference's coverage of the batch","language":"Generic","testable":false,"depends_on":[1,2,3],"affected_files":["docs/dsl-reference.md","###","Automation","Pattern"]}]}
+{
+  "story": "us-018-learn-the-new-constructs-from-examples-and-the-reference",
+  "tasks_file": "tasks/us-018-learn-the-new-constructs-from-examples-and-the-reference.md",
+  "recovered_from": "sections",
+  "tasks": [
+    {
+      "n": 1,
+      "title": "Pin the version, describe the constructs, bind wire types and delay an automation in the flagship example",
+      "language": "Go",
+      "testable": true,
+      "depends_on": [],
+      "affected_files": [
+        "examples/all_patterns.emod",
+        "ConfirmationEmailReactor",
+        "internal/cli/validate_test.go"
+      ],
+      "done": false
+    },
+    {
+      "n": 2,
+      "title": "State the invariants, specs and rejection path in the flagship example",
+      "language": "Go",
+      "testable": true,
+      "depends_on": [
+        1
+      ],
+      "affected_files": [
+        "examples/all_patterns.emod",
+        ":167",
+        "flow",
+        "internal/cli/validate_test.go"
+      ],
+      "done": false
+    },
+    {
+      "n": 3,
+      "title": "Add `examples/specs_hotel.emod` as a model that validates",
+      "language": "Generic",
+      "testable": true,
+      "depends_on": [
+        2
+      ],
+      "affected_files": [
+        "examples/specs_hotel.emod"
+      ],
+      "done": false
+    },
+    {
+      "n": 4,
+      "title": "Document the elapsed-time automation and close the reference's coverage of the batch",
+      "language": "Generic",
+      "testable": false,
+      "depends_on": [
+        1,
+        2,
+        3
+      ],
+      "affected_files": [
+        "docs/dsl-reference.md",
+        "###",
+        "Automation",
+        "Pattern"
+      ],
+      "done": false
+    }
+  ]
+}

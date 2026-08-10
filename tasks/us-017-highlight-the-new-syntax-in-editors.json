@@ -1,1 +1,63 @@
-{"story":"us-017-highlight-the-new-syntax-in-editors","tasks_file":"tasks/us-017-highlight-the-new-syntax-in-editors.md","recovered_from":"sections","tasks":[{"n":1,"title":"Assert the field-name and keyword captures for the spec and metadata keywords in tree-sitter","language":"Generic","testable":true,"depends_on":[],"affected_files":["editors/tree-sitter-emod/test/highlight/","unreserved-keywords.emod","editors/tree-sitter-emod/queries/highlights.scm"]},{"n":2,"title":"Paint a keyword-named field as a field name in the VS Code grammar","language":"JavaScript/TypeScript","testable":true,"depends_on":[],"affected_files":["editors/vscode/syntaxes/emod.tmLanguage.json",":33-37","editors/vscode/test/scopes/fields.emod","editors/vscode/test/scopes/","editors/vscode/test/scope-assertions.test.js",":115-160"]},{"n":3,"title":"Capture payload numbers and booleans as literals in the tree-sitter highlight query","language":"Generic","testable":true,"depends_on":[],"affected_files":["editors/tree-sitter-emod/queries/highlights.scm",":14-16","editors/tree-sitter-emod/test/highlight/"]},{"n":4,"title":"Scope payload numbers and booleans as literals in the VS Code grammar","language":"JavaScript/TypeScript","testable":true,"depends_on":[],"affected_files":["editors/vscode/syntaxes/emod.tmLanguage.json","standalone-tokens","editors/vscode/test/scopes/","editors/vscode/test/scope-assertions.test.js"]}]}
+{
+  "story": "us-017-highlight-the-new-syntax-in-editors",
+  "tasks_file": "tasks/us-017-highlight-the-new-syntax-in-editors.md",
+  "recovered_from": "sections",
+  "tasks": [
+    {
+      "n": 1,
+      "title": "Assert the field-name and keyword captures for the spec and metadata keywords in tree-sitter",
+      "language": "Generic",
+      "testable": true,
+      "depends_on": [],
+      "affected_files": [
+        "editors/tree-sitter-emod/test/highlight/",
+        "unreserved-keywords.emod",
+        "editors/tree-sitter-emod/queries/highlights.scm"
+      ],
+      "done": false
+    },
+    {
+      "n": 2,
+      "title": "Paint a keyword-named field as a field name in the VS Code grammar",
+      "language": "JavaScript/TypeScript",
+      "testable": true,
+      "depends_on": [],
+      "affected_files": [
+        "editors/vscode/syntaxes/emod.tmLanguage.json",
+        ":33-37",
+        "editors/vscode/test/scopes/fields.emod",
+        "editors/vscode/test/scopes/",
+        "editors/vscode/test/scope-assertions.test.js",
+        ":115-160"
+      ],
+      "done": false
+    },
+    {
+      "n": 3,
+      "title": "Capture payload numbers and booleans as literals in the tree-sitter highlight query",
+      "language": "Generic",
+      "testable": true,
+      "depends_on": [],
+      "affected_files": [
+        "editors/tree-sitter-emod/queries/highlights.scm",
+        ":14-16",
+        "editors/tree-sitter-emod/test/highlight/"
+      ],
+      "done": false
+    },
+    {
+      "n": 4,
+      "title": "Scope payload numbers and booleans as literals in the VS Code grammar",
+      "language": "JavaScript/TypeScript",
+      "testable": true,
+      "depends_on": [],
+      "affected_files": [
+        "editors/vscode/syntaxes/emod.tmLanguage.json",
+        "standalone-tokens",
+        "editors/vscode/test/scopes/",
+        "editors/vscode/test/scope-assertions.test.js"
+      ],
+      "done": false
+    }
+  ]
+}

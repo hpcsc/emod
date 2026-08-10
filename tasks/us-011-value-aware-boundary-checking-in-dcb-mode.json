@@ -1,1 +1,54 @@
-{"story":"us-011-value-aware-boundary-checking-in-dcb-mode","tasks_file":"tasks/us-011-value-aware-boundary-checking-in-dcb-mode.md","recovered_from":"sections","tasks":[{"n":1,"title":"State a tagged field in both payloads of the shared payload fixture","language":"Go","testable":true,"depends_on":[],"affected_files":["internal/test/fixtures.go","internal/cli/fmt_test.go","internal/export/export_test.go","internal/diagram/contract_test.go"]},{"n":2,"title":"Report a `given` payload value the command's tag predicate excludes","language":"Go","testable":true,"depends_on":[1],"affected_files":["internal/linter/linter.go","when","internal/linter/descriptions.go","internal/linter/linter_test.go","internal/cli/lint_test.go"]},{"n":3,"title":"Check every tag predicate a conjunction states, and no other","language":"Go","testable":true,"depends_on":[2],"affected_files":["internal/linter/linter.go","internal/linter/linter_test.go","or","internal/cli/lint_test.go"]}]}
+{
+  "story": "us-011-value-aware-boundary-checking-in-dcb-mode",
+  "tasks_file": "tasks/us-011-value-aware-boundary-checking-in-dcb-mode.md",
+  "recovered_from": "sections",
+  "tasks": [
+    {
+      "n": 1,
+      "title": "State a tagged field in both payloads of the shared payload fixture",
+      "language": "Go",
+      "testable": true,
+      "depends_on": [],
+      "affected_files": [
+        "internal/test/fixtures.go",
+        "internal/cli/fmt_test.go",
+        "internal/export/export_test.go",
+        "internal/diagram/contract_test.go"
+      ],
+      "done": false
+    },
+    {
+      "n": 2,
+      "title": "Report a `given` payload value the command's tag predicate excludes",
+      "language": "Go",
+      "testable": true,
+      "depends_on": [
+        1
+      ],
+      "affected_files": [
+        "internal/linter/linter.go",
+        "when",
+        "internal/linter/descriptions.go",
+        "internal/linter/linter_test.go",
+        "internal/cli/lint_test.go"
+      ],
+      "done": false
+    },
+    {
+      "n": 3,
+      "title": "Check every tag predicate a conjunction states, and no other",
+      "language": "Go",
+      "testable": true,
+      "depends_on": [
+        2
+      ],
+      "affected_files": [
+        "internal/linter/linter.go",
+        "internal/linter/linter_test.go",
+        "or",
+        "internal/cli/lint_test.go"
+      ],
+      "done": false
+    }
+  ]
+}

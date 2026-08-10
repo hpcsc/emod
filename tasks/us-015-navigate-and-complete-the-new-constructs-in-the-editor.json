@@ -1,1 +1,142 @@
-{"story":"us-015-navigate-and-complete-the-new-constructs-in-the-editor","tasks_file":"tasks/us-015-navigate-and-complete-the-new-constructs-in-the-editor.md","recovered_from":"sections","tasks":[{"n":1,"title":"Answer hover on every declaration, naming its kind and where it was declared","language":"Go","testable":true,"depends_on":[],"affected_files":["internal/lsp/model.go","internal/lsp/hover.go","hoverFor*","internal/lsp/position.go","internal/lsp/hover_test.go"]},{"n":2,"title":"Show a construct's description on hover","language":"Go","testable":true,"depends_on":[1],"affected_files":["internal/lsp/hover.go",":110-122","internal/lsp/hover_test.go"]},{"n":3,"title":"Show an invariant's prose where it is declared and where a spec rejects by it","language":"Go","testable":true,"depends_on":[1],"affected_files":["internal/lsp/model.go","internal/lsp/hover.go","internal/lsp/hover_test.go"]},{"n":4,"title":"Jump to and from the events and commands a spec names","language":"Go","testable":true,"depends_on":[],"affected_files":["internal/lsp/model.go","internal/lsp/definition_test.go"]},{"n":5,"title":"Jump to and from the invariant a spec's `then rejected` names","language":"Go","testable":true,"depends_on":[3],"affected_files":["internal/lsp/definition.go","internal/lsp/references.go","internal/lsp/definition_test.go"]},{"n":6,"title":"Offer the invariants in scope after `then rejected`","language":"Go","testable":true,"depends_on":[],"affected_files":["internal/lsp/completer.go",":181","internal/lsp/model.go","internal/lsp/completer_test.go"]},{"n":7,"title":"Offer a spec's entries and the names its `given`, `when` and `then` accept","language":"Go","testable":true,"depends_on":[6],"affected_files":["internal/lsp/completer.go",":223","internal/lsp/completer_test.go"]},{"n":8,"title":"Offer a payload's field names, scoped to the construct the reference names","language":"Go","testable":true,"depends_on":[6,7],"affected_files":["internal/lsp/completer.go","valueCompletions","nameKind","internal/lsp/model.go","declarationsIn","internal/lsp/completer_test.go"]},{"n":9,"title":"See a flow rejection edge from hover, go-to-definition and find-references","language":"Go","testable":true,"depends_on":[3,5],"affected_files":["internal/lsp/model.go","internal/lsp/hover_test.go"]}]}
+{
+  "story": "us-015-navigate-and-complete-the-new-constructs-in-the-editor",
+  "tasks_file": "tasks/us-015-navigate-and-complete-the-new-constructs-in-the-editor.md",
+  "recovered_from": "sections",
+  "tasks": [
+    {
+      "n": 1,
+      "title": "Answer hover on every declaration, naming its kind and where it was declared",
+      "language": "Go",
+      "testable": true,
+      "depends_on": [],
+      "affected_files": [
+        "internal/lsp/model.go",
+        "internal/lsp/hover.go",
+        "hoverFor*",
+        "internal/lsp/position.go",
+        "internal/lsp/hover_test.go"
+      ],
+      "done": false
+    },
+    {
+      "n": 2,
+      "title": "Show a construct's description on hover",
+      "language": "Go",
+      "testable": true,
+      "depends_on": [
+        1
+      ],
+      "affected_files": [
+        "internal/lsp/hover.go",
+        ":110-122",
+        "internal/lsp/hover_test.go"
+      ],
+      "done": false
+    },
+    {
+      "n": 3,
+      "title": "Show an invariant's prose where it is declared and where a spec rejects by it",
+      "language": "Go",
+      "testable": true,
+      "depends_on": [
+        1
+      ],
+      "affected_files": [
+        "internal/lsp/model.go",
+        "internal/lsp/hover.go",
+        "internal/lsp/hover_test.go"
+      ],
+      "done": false
+    },
+    {
+      "n": 4,
+      "title": "Jump to and from the events and commands a spec names",
+      "language": "Go",
+      "testable": true,
+      "depends_on": [],
+      "affected_files": [
+        "internal/lsp/model.go",
+        "internal/lsp/definition_test.go"
+      ],
+      "done": false
+    },
+    {
+      "n": 5,
+      "title": "Jump to and from the invariant a spec's `then rejected` names",
+      "language": "Go",
+      "testable": true,
+      "depends_on": [
+        3
+      ],
+      "affected_files": [
+        "internal/lsp/definition.go",
+        "internal/lsp/references.go",
+        "internal/lsp/definition_test.go"
+      ],
+      "done": false
+    },
+    {
+      "n": 6,
+      "title": "Offer the invariants in scope after `then rejected`",
+      "language": "Go",
+      "testable": true,
+      "depends_on": [],
+      "affected_files": [
+        "internal/lsp/completer.go",
+        ":181",
+        "internal/lsp/model.go",
+        "internal/lsp/completer_test.go"
+      ],
+      "done": false
+    },
+    {
+      "n": 7,
+      "title": "Offer a spec's entries and the names its `given`, `when` and `then` accept",
+      "language": "Go",
+      "testable": true,
+      "depends_on": [
+        6
+      ],
+      "affected_files": [
+        "internal/lsp/completer.go",
+        ":223",
+        "internal/lsp/completer_test.go"
+      ],
+      "done": false
+    },
+    {
+      "n": 8,
+      "title": "Offer a payload's field names, scoped to the construct the reference names",
+      "language": "Go",
+      "testable": true,
+      "depends_on": [
+        6,
+        7
+      ],
+      "affected_files": [
+        "internal/lsp/completer.go",
+        "valueCompletions",
+        "nameKind",
+        "internal/lsp/model.go",
+        "declarationsIn",
+        "internal/lsp/completer_test.go"
+      ],
+      "done": false
+    },
+    {
+      "n": 9,
+      "title": "See a flow rejection edge from hover, go-to-definition and find-references",
+      "language": "Go",
+      "testable": true,
+      "depends_on": [
+        3,
+        5
+      ],
+      "affected_files": [
+        "internal/lsp/model.go",
+        "internal/lsp/hover_test.go"
+      ],
+      "done": false
+    }
+  ]
+}
