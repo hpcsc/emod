@@ -4212,7 +4212,7 @@ func TestLint(t *testing.T) {
 												Then: &ast.ThenEvents{},
 											},
 											{
-												Name: "refuses a copy already on loan",
+												Name:  "refuses a copy already on loan",
 												Given: []*ast.SpecElement{{Name: "CopyBorrowed"}},
 												When:  &ast.SpecElement{Name: "BorrowCopy"},
 												Then:  &ast.ThenRejected{InvariantName: "OneCopyPerLoan"},
@@ -4753,7 +4753,7 @@ func TestLint(t *testing.T) {
 			// all. So the edge is the only reference, and the noise the other
 			// rule makes is filtered out by name.
 			exercised := func(diags []*diagnostic.Entry) []string {
-				return rulesNamed(diags, "spec/invariant-never-exercised")
+				return linesReportedBy(diags, "spec/invariant-never-exercised")
 			}
 
 			t.Run("an aggregate's invariant named only by an edge in its own slices is not reported", func(t *testing.T) {
@@ -4771,7 +4771,8 @@ func TestLint(t *testing.T) {
 					}},
 				}
 
-				require.Empty(t, exercised(linter.Lint(model)))
+				require.Empty(t, exercised(linter.Lint(model)),
+					"the model states no spec at all, which is the case the seam exists for and the one a spec gate would have broken")
 			})
 
 			t.Run("a dcb context's own invariant named only by an edge in its own slices is not reported", func(t *testing.T) {
@@ -4882,24 +4883,6 @@ func TestLint(t *testing.T) {
 				}, exercised(linter.Lint(model)))
 			})
 
-			t.Run("a model stating no spec at all is still silenced by its edges", func(t *testing.T) {
-				model := &ast.Model{
-					Contexts: []*ast.Context{{
-						Name: "Lending",
-						Aggregates: []*ast.Aggregate{{
-							Name:       "Loan",
-							Invariants: []*ast.Invariant{invariantAt("OneCopyPerLoan", 5)},
-							Slices: []*ast.Slice{{
-								Name:       "Borrow Copy",
-								Rejections: []*ast.Rejection{edge("BorrowCopy", "OneCopyPerLoan")},
-							}},
-						}},
-					}},
-				}
-
-				require.Empty(t, exercised(linter.Lint(model)),
-					"this is the case the seam exists for, and the one a spec gate would have broken")
-			})
 		})
 	})
 
@@ -5216,8 +5199,8 @@ func TestLint(t *testing.T) {
 										Name: "Borrow Copy",
 										Specs: []*ast.Spec{
 											{
-												Name: "borrows a copy",
-												When: &ast.SpecElement{Name: "BorrowCopy"},
+												Name:  "borrows a copy",
+												When:  &ast.SpecElement{Name: "BorrowCopy"},
 												Given: []*ast.SpecElement{},
 											},
 											{
@@ -5423,10 +5406,10 @@ func TestLint(t *testing.T) {
 								{Name: "claims a desk", When: &ast.SpecElement{Name: "ClaimDesk"}, Then: &ast.ThenEvents{}},
 								{Name: "refuses when taken", When: &ast.SpecElement{Name: "ClaimDesk"}, Then: &ast.ThenRejected{InvariantName: "OneDeskPerReader"}},
 								{
-									Name: "claims a desk when released",
-									When: &ast.SpecElement{Name: "ClaimDesk"},
+									Name:  "claims a desk when released",
+									When:  &ast.SpecElement{Name: "ClaimDesk"},
 									Given: []*ast.SpecElement{{Name: "DeskClaimed", NamePos: ast.Position{Filename: "reading.emod", Line: 20, Column: 15}}},
-									Then: &ast.ThenEvents{},
+									Then:  &ast.ThenEvents{},
 								},
 							},
 						}},
@@ -5452,10 +5435,10 @@ func TestLint(t *testing.T) {
 								{Name: "claims a desk", When: &ast.SpecElement{Name: "ClaimDesk"}, Then: &ast.ThenEvents{}},
 								{Name: "refuses when taken", When: &ast.SpecElement{Name: "ClaimDesk"}, Then: &ast.ThenRejected{InvariantName: "OneDeskPerReader"}},
 								{
-									Name: "claims a desk after release",
-									When: &ast.SpecElement{Name: "ClaimDesk"},
+									Name:  "claims a desk after release",
+									When:  &ast.SpecElement{Name: "ClaimDesk"},
 									Given: []*ast.SpecElement{{Name: "DeskClaimed", NamePos: ast.Position{Filename: "reading.emod", Line: 14, Column: 15}}},
-									Then: &ast.ThenEvents{},
+									Then:  &ast.ThenEvents{},
 								},
 							},
 						}},
@@ -5510,7 +5493,7 @@ func TestLint(t *testing.T) {
 								{
 									Name: "unknown event", When: &ast.SpecElement{Name: "ClaimDesk"},
 									Given: []*ast.SpecElement{{Name: "UnknownEvent", NamePos: ast.Position{Filename: "reading.emod", Line: 20, Column: 15}}},
-									Then: &ast.ThenEvents{},
+									Then:  &ast.ThenEvents{},
 								},
 							},
 						}},
@@ -5641,9 +5624,10 @@ func TestLint(t *testing.T) {
 	})
 }
 
-// rulesNamed selects the diagnostics one rule produced, so a leaf about that
-// rule can be written over a model another rule also has something to say about.
-func rulesNamed(diags []*diagnostic.Entry, rule string) []string {
+// linesReportedBy selects the formatted lines one rule produced, so a leaf about
+// that rule can be written over a model another rule also has something to say
+// about.
+func linesReportedBy(diags []*diagnostic.Entry, rule string) []string {
 	var lines []string
 	for _, d := range diags {
 		if d.RuleName == rule {

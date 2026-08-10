@@ -1621,7 +1621,7 @@ func TestExport(t *testing.T) {
 				Contexts: []*ast.Context{{
 					Name: "Ctx",
 					Slices: []*ast.Slice{{
-						Name: "S",
+						Name:     "S",
 						Views:    []*ast.View{{Name: "MyView"}},
 						Commands: []*ast.Command{{Name: "DoIt"}},
 						Specs: []*ast.Spec{
@@ -1711,6 +1711,14 @@ func TestExport(t *testing.T) {
 					"the command is written before the invariant on a rejection entry's line")
 			})
 
+			t.Run("a rejection-stating model's export conforms to the embedded schema", func(t *testing.T) {
+				// Without this, #Rejection and #Slice.rejections? are vetted by
+				// nothing positive: cue vet only constrains keys a document has,
+				// so a wrong key name in the shipped schema passes every other
+				// leaf here.
+				requireConformsToSchema(t, lookupCue(t), test.RejectionLibraryLendingModel(t))
+			})
+
 			t.Run("both formats carry every edge the fixture states, under both slice homes", func(t *testing.T) {
 				cueBin := lookupCue(t)
 				model := test.RejectionLibraryLendingModel(t)
@@ -1724,23 +1732,38 @@ func TestExport(t *testing.T) {
 
 			t.Run("a document keyed with the Go field spelling is refused by the schema", func(t *testing.T) {
 				cueBin := lookupCue(t)
+				model := test.RejectionLibraryLendingModel(t)
 
-				raw, err := export.ExportJSON(test.RejectionLibraryLendingModel(t))
+				// The CUE export is the document that conforms; ExportJSON's
+				// output carries *_position keys the closed #Model rejects on
+				// its own, so re-keying that would fail for the wrong reason and
+				// the assertion below could not tell the two apart.
+				cueOutput, err := export.ExportCUE(model)
 				require.NoError(t, err)
-				rekeyed := strings.ReplaceAll(string(raw), `"invariant_name"`, `"invariantName"`)
-				require.NotEqual(t, string(raw), rekeyed, "the re-keying has to change something")
+				conforming := string(cueExportJSON(t, cueBin, cueOutput))
 
-				dir := t.TempDir()
-				schemaPath := filepath.Join(dir, "schema.cue")
-				schemaData, err := os.ReadFile("../cue/schema.cue")
-				require.NoError(t, err)
-				require.NoError(t, os.WriteFile(schemaPath, schemaData, 0o644))
-				modelPath := filepath.Join(dir, "model.json")
-				require.NoError(t, os.WriteFile(modelPath, []byte(rekeyed), 0o644))
+				vet := func(document string) (string, error) {
+					dir := t.TempDir()
+					schemaPath := filepath.Join(dir, "schema.cue")
+					schemaData, readErr := os.ReadFile("../cue/schema.cue")
+					require.NoError(t, readErr)
+					require.NoError(t, os.WriteFile(schemaPath, schemaData, 0o644))
+					modelPath := filepath.Join(dir, "model.json")
+					require.NoError(t, os.WriteFile(modelPath, []byte(document), 0o644))
 
-				output, err := exec.Command(cueBin, "vet", "-d", "#Model", schemaPath, modelPath).CombinedOutput()
+					out, vetErr := exec.Command(cueBin, "vet", "-d", "#Model", schemaPath, modelPath).CombinedOutput()
+					return string(out), vetErr
+				}
+
+				_, err = vet(conforming)
+				require.NoError(t, err, "the unmodified document must pass, or the refusal below says nothing")
+
+				rekeyed := strings.ReplaceAll(conforming, `"invariant_name"`, `"invariantName"`)
+				require.NotEqual(t, conforming, rekeyed, "the re-keying has to change something")
+
+				output, err := vet(rekeyed)
 				require.Error(t, err, "schema accepted a rejection keyed with Go-field spelling")
-				require.Contains(t, string(output), "invariantName")
+				require.Contains(t, output, "invariantName")
 			})
 
 			t.Run("a model stating no rejection edge exports no rejections key in either format", func(t *testing.T) {
@@ -5234,6 +5257,17 @@ func exportedAutomations(doc map[string]any) []map[string]any {
 // writer emitted them: those an aggregate holds ahead of those the context
 // declares directly. Walking the document by key would visit them in map order,
 // which says nothing about declaration order.
+func exportedSlices(doc map[string]any) []map[string]any {
+	var slices []map[string]any
+	for _, context := range objectsUnder(doc, "contexts") {
+		for _, aggregate := range objectsUnder(context, "aggregates") {
+			slices = append(slices, objectsUnder(aggregate, "slices")...)
+		}
+		slices = append(slices, objectsUnder(context, "slices")...)
+	}
+	return slices
+}
+
 // rejectionsBySlice transcribes every rejection edge test.RejectionLibraryLending
 // states, filed under the slice that states it, in the order a document writer
 // visits the two slice homes.
@@ -5262,17 +5296,6 @@ func rejectionEdgesIn(doc map[string]any) map[string][]string {
 		return nil
 	}
 	return edges
-}
-
-func exportedSlices(doc map[string]any) []map[string]any {
-	var slices []map[string]any
-	for _, context := range objectsUnder(doc, "contexts") {
-		for _, aggregate := range objectsUnder(context, "aggregates") {
-			slices = append(slices, objectsUnder(aggregate, "slices")...)
-		}
-		slices = append(slices, objectsUnder(context, "slices")...)
-	}
-	return slices
 }
 
 // statedUnder leaves out the objects stating nothing under key, so a list read

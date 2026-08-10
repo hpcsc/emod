@@ -675,10 +675,38 @@ context "C" {
         (flow_definition
           (flow_rejection_entry
             (identifier)
-            (identifier))
+            (any_identifier))
           (flow_rejection_entry
             (identifier)
-            (identifier)))))))
+            (any_identifier)))))))
+
+========================
+Slice rejecting an invariant whose name starts lowercase
+========================
+
+context "C" {
+  aggregate "A" {
+    slice "Core" {
+      flow {
+        command -> rejected: BorrowCopy -> oneCopyPerLoan
+      }
+    }
+  }
+}
+
+---
+
+(source_file
+  (context_definition
+    (string)
+    (aggregate_definition
+      (string)
+      (slice_definition
+        (string)
+        (flow_definition
+          (flow_rejection_entry
+            (identifier)
+            (any_identifier)))))))
 
 ========================
 Slice with both flow entry kinds interleaved
@@ -708,10 +736,10 @@ context "C" {
         (flow_definition
           (flow_rejection_entry
             (identifier)
-            (identifier))
+            (any_identifier))
           (flow_event_entry
             (identifier)
             (identifier))
           (flow_rejection_entry
             (identifier)
-            (identifier)))))))
+            (any_identifier)))))))

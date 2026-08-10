@@ -129,10 +129,6 @@ func ExportSVG(model *ast.Model, _ Style) ([]byte, error) {
 		}
 
 		// --- Rejection badges (event row) ---
-		// A badge is one rect followed by exactly one text, with its title
-		// nested in the rect: svgShapes binds each closing text tag to the rect
-		// it saw last, so a second text element here would overwrite the label
-		// of the box before it.
 		for _, rejection := range s.Rejections {
 			itemW, x := itemLayout(usableW, totalEvts, ei, sliceX)
 			ei++
@@ -334,9 +330,9 @@ func svgArrowBetween(from, to svgBox) string {
 	return svgArrowPath(from.x+from.w/2, from.y+from.h/2, to.x+to.w/2, to.y+to.h/2, "")
 }
 
-// svgDashedArrowBetween draws the same route as svgArrowBetween, dashed. The
-// route has to stay the same: svgConnections resolves an arrow's ends through
-// the box whose centre sits exactly on them, and fails loudly otherwise.
+// svgDashedArrowBetween draws the same route as svgArrowBetween, dashed. Both
+// ends must stay exactly on a box's centre: a reader of the output identifies
+// which boxes an arrow joins by those points and can resolve nothing else.
 func svgDashedArrowBetween(from, to svgBox) string {
 	return svgArrowPath(from.x+from.w/2, from.y+from.h/2, to.x+to.w/2, to.y+to.h/2, ` stroke-dasharray="6,4"`)
 }

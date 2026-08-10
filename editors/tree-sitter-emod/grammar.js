@@ -262,7 +262,7 @@ module.exports = grammar({
       ),
     ),
 
-    // flow { command -> event: CmdName -> EvtName, command -> rejected: CmdName -> InvName }
+    // flow { command -> event: CmdName -> EvtName | command -> rejected: CmdName -> invName }
     flow_definition: $ => seq(
       'flow',
       '{',
@@ -281,7 +281,10 @@ module.exports = grammar({
       $.identifier,
     ),
 
-    // command -> rejected: CmdName -> InvName
+    // command -> rejected: CmdName -> invName
+    // The invariant takes any_identifier, as `invariant` and `spec_then` do:
+    // the Go parser accepts any identifier there, and a grammar stricter than
+    // the language red-squiggles a file emod validate accepts.
     flow_rejection_entry: $ => seq(
       'command',
       '->',
@@ -289,7 +292,7 @@ module.exports = grammar({
       ':',
       $.identifier,
       '->',
-      $.identifier,
+      $.any_identifier,
     ),
 
     // view Name { fields { ... } subscribes [...] }

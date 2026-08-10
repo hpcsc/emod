@@ -395,7 +395,7 @@ func (p *Instance) parseSlice() *ast.Slice {
 				slice.Trigger = trigger
 			}
 		} else if p.check(lexer.KeywordFlow) {
-			flows, rejections := p.parseFlows()
+			flows, rejections := p.parseFlowBlock()
 			slice.Flows = append(slice.Flows, flows...)
 			slice.Rejections = append(slice.Rejections, rejections...)
 		} else if p.check(lexer.KeywordView) {
@@ -1352,7 +1352,7 @@ func (p *Instance) parseTagEntry() *ast.TagEntry {
 	}
 }
 
-func (p *Instance) parseFlows() ([]*ast.Flow, []*ast.Rejection) {
+func (p *Instance) parseFlowBlock() ([]*ast.Flow, []*ast.Rejection) {
 	comments := p.takePendingComments()
 	var flows []*ast.Flow
 	var rejections []*ast.Rejection
@@ -1363,11 +1363,6 @@ func (p *Instance) parseFlows() ([]*ast.Flow, []*ast.Rejection) {
 	}
 	openTok := p.advance()
 	openLine := openTok.Line
-
-	// The block's leading comments belong to whichever entry the author wrote
-	// first, and the two kinds live in separate collections, so the target is
-	// captured as it is appended rather than recovered afterwards.
-	var firstComments *[]*ast.Comment
 
 	for !p.check(lexer.CloseBrace) && !p.isAtEnd() {
 		if !p.check(lexer.KeywordCommand) {
@@ -1380,14 +1375,8 @@ func (p *Instance) parseFlows() ([]*ast.Flow, []*ast.Rejection) {
 		switch {
 		case flow != nil:
 			flows = append(flows, flow)
-			if firstComments == nil {
-				firstComments = &flow.Comments
-			}
 		case rejection != nil:
 			rejections = append(rejections, rejection)
-			if firstComments == nil {
-				firstComments = &rejection.Comments
-			}
 		}
 	}
 
@@ -1397,9 +1386,17 @@ func (p *Instance) parseFlows() ([]*ast.Flow, []*ast.Rejection) {
 	}
 	p.advance()
 
-	if firstComments != nil {
-		*firstComments = comments
-	} else {
+	// The block's leading comments go to the first entry the formatter will
+	// write, which is a flow whenever the block states one. Attaching them to
+	// whichever entry came first in source instead would move them out of the
+	// block on the next emod fmt, because the formatter writes every flow ahead
+	// of every rejection.
+	switch {
+	case len(flows) > 0:
+		flows[0].Comments = comments
+	case len(rejections) > 0:
+		rejections[0].Comments = comments
+	default:
 		p.pending = comments
 	}
 
@@ -1407,42 +1404,43 @@ func (p *Instance) parseFlows() ([]*ast.Flow, []*ast.Rejection) {
 }
 
 func (p *Instance) parseFlowEntry() (*ast.Flow, *ast.Rejection) {
-	commandTok := p.advance() // consume "command"
+	commandTok := p.advance()
 
-	// A flow entry is one line, so every part after the first is gated on the
-	// command keyword's line: an ungated trailing identifier reads the next
-	// line's first token as its own and the malformed entry reports nothing.
-	onLine := func(typ lexer.Kind) bool {
-		return p.checkSameLineAs(commandTok) && p.check(typ)
-	}
+	// A malformed entry is reported on the line it was written on. Reporting at
+	// the offending token would name the line below whenever the entry runs out
+	// of tokens at end of line, and that line is usually blameless.
 	reject := func(msg string) {
-		p.error(msg)
+		if p.checkSameLineAs(commandTok) {
+			p.error(msg)
+		} else {
+			p.errorAt(commandTok, msg)
+		}
 		p.skipRestOfLineOrBlockEnd(commandTok)
 	}
 
-	if !onLine(lexer.Arrow) {
+	if !p.check(lexer.Arrow) {
 		reject("expected -> after command in flow")
 		return nil, nil
 	}
 	p.advance()
-	if !p.checkSameLineAs(commandTok) || !p.checkAny(lexer.KeywordEvent, lexer.KeywordRejected) {
+	if !p.checkAny(lexer.KeywordEvent, lexer.KeywordRejected) {
 		reject("expected event or rejected after -> in flow")
 		return nil, nil
 	}
 	kindTok := p.advance()
-	if !onLine(lexer.Colon) {
+	if !p.check(lexer.Colon) {
 		reject("expected : in flow")
 		return nil, nil
 	}
 	p.advance()
-	if !onLine(lexer.Identifier) {
+	if !p.check(lexer.Identifier) {
 		reject("expected command identifier after : in flow")
 		return nil, nil
 	}
 	cmdTok := p.advance()
 
 	rejected := kindTok.Type == lexer.KeywordRejected
-	if !onLine(lexer.Arrow) {
+	if !p.check(lexer.Arrow) {
 		if rejected {
 			reject("expected -> between command and invariant identifiers")
 		} else {
@@ -1451,7 +1449,7 @@ func (p *Instance) parseFlowEntry() (*ast.Flow, *ast.Rejection) {
 		return nil, nil
 	}
 	p.advance()
-	if !onLine(lexer.Identifier) {
+	if !p.check(lexer.Identifier) {
 		if rejected {
 			reject("expected invariant identifier")
 		} else {

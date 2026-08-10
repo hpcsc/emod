@@ -4154,36 +4154,13 @@ context "Lending" {
 			}
 		})
 
-		t.Run("an entry naming neither outcome after the arrow names both accepted spellings", func(t *testing.T) {
+		t.Run("a malformed entry is reported on the line it was written on, not the blameless line below", func(t *testing.T) {
 			input := `model "Test"
 context "Lending" {
   aggregate "Loan" {
     slice "Borrow a Copy" {
       flow {
-        command -> outcome: BorrowCopy -> CopyBorrowed
-      }
-    }
-  }
-}`
-			tokens, lexDiags := lexer.Scan(input, "test.emod")
-			require.Empty(t, lexDiags)
-
-			_, diags := parser.New(tokens, "test.emod").Parse()
-
-			require.Len(t, diags, 1)
-			require.Regexp(t, `\bevent\b`, diags[0].Message)
-			require.Regexp(t, `\brejected\b`, diags[0].Message)
-		})
-
-		t.Run("a rejection missing its invariant does not read the next line's identifier as one", func(t *testing.T) {
-			input := `model "Test"
-context "Lending" {
-  aggregate "Loan" {
-    invariant OneCopyPerLoan "A loan covers exactly one copy of one title"
-    slice "Borrow a Copy" {
-      flow {
-        command -> rejected: BorrowCopy ->
-        OneCopyPerLoan
+        command -> event: BorrowCopy ->
       }
     }
   }
@@ -4193,10 +4170,38 @@ context "Lending" {
 
 			model, diags := parser.New(tokens, "test.emod").Parse()
 
+			require.Len(t, diags, 1)
+			require.Equal(t, "expected event identifier", diags[0].Message)
+			line, _ := positionOf(t, input, "command -> event: BorrowCopy ->", "command")
+			require.Equal(t, line, diags[0].Line,
+				"the entry runs out of tokens at end of line, so the offending token sits on the closing brace's line")
+			require.NotZero(t, model.Contexts[0].Aggregates[0].Slices[0].ClosePos.Line)
+		})
+
+		t.Run("a flow entry wrapped across lines parses as it always has", func(t *testing.T) {
+			input := `model "Test"
+context "Lending" {
+  aggregate "Loan" {
+    invariant OneCopyPerLoan "A loan covers exactly one copy of one title"
+    slice "Borrow a Copy" {
+      flow {
+        command -> event:
+          BorrowCopy -> CopyBorrowed
+        command -> rejected: BorrowCopy
+          -> OneCopyPerLoan
+      }
+    }
+  }
+}`
+			tokens, lexDiags := lexer.Scan(input, "test.emod")
+			require.Empty(t, lexDiags)
+
+			model, diags := parser.New(tokens, "test.emod").Parse()
+
+			require.Empty(t, diags, "the parser must not be stricter than the tree-sitter grammar, which accepts this")
 			slice := model.Contexts[0].Aggregates[0].Slices[0]
-			require.Empty(t, slice.Rejections, "the identifier on the line below is not this entry's invariant")
-			require.Contains(t, diagnosticMessages(diags), "expected invariant identifier")
-			require.NotZero(t, slice.ClosePos.Line)
+			require.Equal(t, []string{"CopyBorrowed"}, flowEventNames(slice.Flows))
+			require.Equal(t, []string{"OneCopyPerLoan"}, rejectionEdgeInvariants(slice.Rejections))
 		})
 	})
 
@@ -6237,14 +6242,6 @@ func invariantNames(invariants []*ast.Invariant) []string {
 		names = append(names, invariant.Name)
 	}
 	return names
-}
-
-func diagnosticMessages(diagnostics []*diagnostic.Entry) []string {
-	var messages []string
-	for _, entry := range diagnostics {
-		messages = append(messages, entry.Message)
-	}
-	return messages
 }
 
 func rejectionEdgeInvariants(rejections []*ast.Rejection) []string {

@@ -345,8 +345,22 @@ func TestExportSVG(t *testing.T) {
 		t.Run("a badge carries the invariant's statement as the title a browser shows on hover", func(t *testing.T) {
 			output := svgOf(t, test.RejectionLibraryLendingModel(t))
 
+			// Both scopes an invariant can be declared in are named: the context
+			// arm alone leaves the aggregate branch of the scope lookup free to
+			// be deleted with the suite still green.
 			require.Equal(t, "A desk seats at most one reader at any moment",
 				svgTooltipOf(t, output, "OneReaderPerDesk"))
+
+			var aggregateScoped []string
+			for _, shape := range svgShapes(t, output) {
+				if shape.label == "OneCopyPerLoan" {
+					aggregateScoped = append(aggregateScoped, shape.tooltip)
+				}
+			}
+			require.Equal(t, []string{
+				"A loan covers exactly one copy of one title",
+				"A loan covers exactly one copy of one title",
+			}, aggregateScoped, "an aggregate-scoped invariant's statement reaches its badge too")
 		})
 
 		t.Run("a statement written with markup characters reads back as written", func(t *testing.T) {
@@ -406,6 +420,26 @@ func TestExportSVG(t *testing.T) {
 				"each slice's dashed arrow ends at the badge in its own column; filing a badge under the invariant's name alone points both at whichever slice was drawn last")
 
 			require.Equal(t, []string{"BorrowCopy", "ReturnCopy"}, sourcesReaching(t, output, "OneCopyPerLoan"))
+		})
+
+		t.Run("one slice rejecting two invariants sends each arrow to its own badge", func(t *testing.T) {
+			output := svgOf(t, twoRejectionsOneSliceModel())
+
+			centreOf := func(label string) [2]int {
+				for _, box := range svgBoxes(t, output) {
+					if box.label == label {
+						return box.rect.centre()
+					}
+				}
+				require.FailNowf(t, "no box drawn", "%q", label)
+				return [2]int{}
+			}
+
+			// Pairing the nth edge with badges[i][0] instead of badges[i][n]
+			// orphans the second badge and stacks both arrows on the first.
+			require.ElementsMatch(t,
+				[][2]int{centreOf("OneCopyPerLoan"), centreOf("FiveCopiesPerMember")},
+				dashedArrowEndpoints(t, output))
 		})
 
 		t.Run("a badge adds one shape to its slice's event row and moves no label the twin drew", func(t *testing.T) {
@@ -468,6 +502,36 @@ const (
 	strokeRejectionHex = "#b85450"
 	fillEventHex       = "#ffe6cc"
 )
+
+// twoRejectionsOneSliceModel gives a single slice two rejection edges, the shape
+// that tells a per-edge badge index apart from one that always reaches the
+// slice's first badge. The shared fixture states one edge per slice, so it
+// cannot ask this.
+func twoRejectionsOneSliceModel() *ast.Model {
+	return &ast.Model{
+		Name: "Library Lending",
+		Contexts: []*ast.Context{{
+			Name: "Lending",
+			Aggregates: []*ast.Aggregate{{
+				Name: "Loan",
+				Invariants: []*ast.Invariant{
+					{Name: "OneCopyPerLoan", Statement: "A loan covers exactly one copy"},
+					{Name: "FiveCopiesPerMember", Statement: "A member holds at most five copies"},
+				},
+				Slices: []*ast.Slice{{
+					Name:     "Borrow Copy",
+					Commands: []*ast.Command{{Name: "BorrowCopy"}},
+					Events:   []*ast.Event{{Name: "CopyBorrowed"}},
+					Flows:    []*ast.Flow{{CommandName: "BorrowCopy", EventName: "CopyBorrowed"}},
+					Rejections: []*ast.Rejection{
+						{CommandName: "BorrowCopy", InvariantName: "OneCopyPerLoan"},
+						{CommandName: "BorrowCopy", InvariantName: "FiveCopiesPerMember"},
+					},
+				}},
+			}},
+		}},
+	}
+}
 
 func svgOf(t *testing.T, model *ast.Model) string {
 	t.Helper()

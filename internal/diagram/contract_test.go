@@ -1399,6 +1399,30 @@ func dslReferencePalette(t *testing.T) map[string]struct{ fill, stroke string } 
 
 // TestExporterPalettePinsViewer checks that the two Go renderers emit the same
 // fill and stroke per element type that the viewer's own palette table names.
+func TestExporterPalettePinsViewer(t *testing.T) {
+	viewerPalette := viewerNodePalette(t)
+
+	for _, e := range exporters() {
+		if e.fillOfLabel == nil || e.strokeOfLabel == nil {
+			continue
+		}
+
+		t.Run(e.name, func(t *testing.T) {
+			output := e.run(t, paletteModel(), diagram.StyleAuto)
+
+			for viewerType, modelLabel := range viewerTypeToModelLabel {
+				viewerEntry, ok := viewerPalette[viewerType]
+				require.True(t, ok, "viewer palette missing entry for %q", viewerType)
+
+				require.Equal(t, viewerEntry.fill, e.fillOfLabel(t, output, modelLabel),
+					"fill for %q disagrees between %s and the viewer palette", viewerType, e.name)
+				require.Equal(t, viewerEntry.stroke, e.strokeOfLabel(t, output, modelLabel),
+					"stroke for %q disagrees between %s and the viewer palette", viewerType, e.name)
+			}
+		})
+	}
+}
+
 // requireRejectionTwinDiffers hands back the shared rejection fixture and its
 // twin, having first proved the two really differ in the edges of both slice
 // homes. Without that, a differential over them is two identical pictures
@@ -1461,30 +1485,6 @@ func TestExporterRejectionEdge(t *testing.T) {
 		require.Equal(t, fromSVG, fromDrawio,
 			"a change to one format's badge label and not the other's fails here")
 	})
-}
-
-func TestExporterPalettePinsViewer(t *testing.T) {
-	viewerPalette := viewerNodePalette(t)
-
-	for _, e := range exporters() {
-		if e.fillOfLabel == nil || e.strokeOfLabel == nil {
-			continue
-		}
-
-		t.Run(e.name, func(t *testing.T) {
-			output := e.run(t, paletteModel(), diagram.StyleAuto)
-
-			for viewerType, modelLabel := range viewerTypeToModelLabel {
-				viewerEntry, ok := viewerPalette[viewerType]
-				require.True(t, ok, "viewer palette missing entry for %q", viewerType)
-
-				require.Equal(t, viewerEntry.fill, e.fillOfLabel(t, output, modelLabel),
-					"fill for %q disagrees between %s and the viewer palette", viewerType, e.name)
-				require.Equal(t, viewerEntry.stroke, e.strokeOfLabel(t, output, modelLabel),
-					"stroke for %q disagrees between %s and the viewer palette", viewerType, e.name)
-			}
-		})
-	}
 }
 
 // TestExporterPaletteMatchesReference checks that the documented palette in the

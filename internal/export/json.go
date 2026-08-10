@@ -423,7 +423,7 @@ func convertSlice(s *ast.Slice) *jsonSlice {
 		Events:        convertEvents(s.Events),
 		Fields:        convertFields(s.Fields),
 		Flows:         convertFlows(s.Flows),
-		Rejections:    convertList(s.Rejections, convertRejection),
+		Rejections:    convertRejections(s.Rejections),
 		Views:         convertViews(s.Views),
 		Automations:   convertAutomations(s.Automations),
 		Translations:  convertTranslations(s.Translations),
@@ -575,6 +575,10 @@ func convertFlow(f *ast.Flow) *jsonFlow {
 		EventName:       f.EventName,
 		EventPosition:   convertPosition(f.EventPos),
 	}
+}
+
+func convertRejections(rejections []*ast.Rejection) []*jsonRejection {
+	return convertList(rejections, convertRejection)
 }
 
 func convertRejection(r *ast.Rejection) *jsonRejection {

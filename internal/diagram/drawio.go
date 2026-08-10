@@ -335,10 +335,10 @@ func ExportDrawio(model *ast.Model, style Style) ([]byte, error) {
 		}
 
 		// --- Rejection badges (events row) ---
-		// Where each badge goes is settled here, beside the events it shares a
-		// row with, but the cells are written after every other slice's, so a
-		// badge takes an id past the last one a model without rejection edges
-		// uses and renumbers none of them.
+		// Placed here, beside the events they share a row with, but written
+		// after every other slice's cells: allocID is a running counter, so a
+		// badge written in place would shift the id of every vertex after it in
+		// a model that states one.
 		for _, rejection := range s.Rejections {
 			itemW, x := itemLayout(usableW, totalEvts, ei, sliceX)
 			ei++

@@ -5,13 +5,13 @@
 - [x] Task 2: Share a model that states rejection edges in both slice homes
 - [x] Task 3: Resolve a rejection edge's invariant against its declaring scope
 - [x] Task 4: Derive the rejection edge and state it in the ASCII preview
-- [ ] Task 5: Draw the rejection edge dashed into a badge in the SVG diagram
-- [ ] Task 6: Draw the same dashed edge and badge in the draw.io diagram
-- [ ] Task 7: Carry rejection edges through the JSON and CUE exports and the embedded schema
-- [ ] Task 8: Report a rejection edge no spec exercises
-- [ ] Task 9: Count a rejection edge as a reference for `spec/invariant-never-exercised`
-- [ ] Task 10: Accept the rejection entry in the tree-sitter grammar
-- [ ] Task 11: Document the rejection edge in the DSL reference
+- [x] Task 5: Draw the rejection edge dashed into a badge in the SVG diagram
+- [x] Task 6: Draw the same dashed edge and badge in the draw.io diagram
+- [x] Task 7: Carry rejection edges through the JSON and CUE exports and the embedded schema
+- [x] Task 8: Report a rejection edge no spec exercises
+- [x] Task 9: Count a rejection edge as a reference for `spec/invariant-never-exercised`
+- [x] Task 10: Accept the rejection entry in the tree-sitter grammar
+- [x] Task 11: Document the rejection edge in the DSL reference
 
 ---
 

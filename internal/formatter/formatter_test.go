@@ -1069,6 +1069,63 @@ func TestFormat(t *testing.T) {
 			require.Equal(t, test.RejectionLibraryLendingRejections, test.DeclaredRejections(reparsed))
 		})
 
+		t.Run("a flow block's leading comment is written at the top of the block, not behind its flow entries", func(t *testing.T) {
+			input := strings.Join([]string{
+				`model "Library Lending"`,
+				``,
+				`context "Lending" {`,
+				`  aggregate "Loan" {`,
+				`    invariant OneCopyPerLoan "A loan covers exactly one copy of one title"`,
+				``,
+				`    slice "Borrow a Copy" {`,
+				`      # the copy may already be out`,
+				`      flow {`,
+				`        command -> rejected: BorrowCopy -> OneCopyPerLoan`,
+				`        command -> event: BorrowCopy -> CopyBorrowed`,
+				`      }`,
+				`    }`,
+				`  }`,
+				`}`,
+				``,
+			}, "\n")
+
+			// The block's comment is parsed onto its first entry and the
+			// formatter writes every flow ahead of every rejection, so leaving
+			// it on the rejection the author wrote first would sink the comment
+			// below the entry it introduces.
+			require.Contains(t, formatter.Format(parseModel(t, input, "test.emod")),
+				strings.Join([]string{
+					`      flow {`,
+					`        # the copy may already be out`,
+					`        command -> event: BorrowCopy -> CopyBorrowed`,
+					`        command -> rejected: BorrowCopy -> OneCopyPerLoan`,
+					`      }`,
+				}, "\n"))
+		})
+
+		t.Run("round-trip: a comment above a rejection entry is not deleted", func(t *testing.T) {
+			model := &ast.Model{
+				Name: "Library Lending",
+				Contexts: []*ast.Context{{
+					Name: "Lending",
+					Aggregates: []*ast.Aggregate{{
+						Name: "Loan",
+						Slices: []*ast.Slice{{
+							Name: "Borrow a Copy",
+							Rejections: []*ast.Rejection{{
+								Comments:      []*ast.Comment{{Text: "# the copy may already be out"}},
+								CommandName:   "BorrowCopy",
+								InvariantName: "OneCopyPerLoan",
+							}},
+						}},
+					}},
+				}},
+			}
+
+			require.Contains(t, formatter.Format(model), "# the copy may already be out",
+				"emod fmt must not silently delete a comment written above a rejection entry")
+		})
+
 		t.Run("round-trip: the rejection twin clears every edge in both slice homes and moves nothing else", func(t *testing.T) {
 			stating := test.RejectionLibraryLendingModel(t)
 

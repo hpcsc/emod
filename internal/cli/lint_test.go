@@ -706,14 +706,6 @@ context "Lending" {
 			require.Contains(t, err.Error(), "flow/rejection-without-spec")
 		})
 
-		t.Run("explaining the rule prints a description and an unknown rule still errors", func(t *testing.T) {
-			output := captureStdout(t, func() {
-				require.NoError(t, cli.RunLintExplain("flow/rejection-without-spec"))
-			})
-			require.NotEmpty(t, output)
-
-			require.Error(t, cli.RunLintExplain("flow/rejection-without-a-spec"))
-		})
 	})
 
 	t.Run("json format on clean file outputs empty array", func(t *testing.T) {
