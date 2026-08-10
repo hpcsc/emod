@@ -34,6 +34,10 @@ const (
 	// It is derived only when no flow already declares the same pair, so a
 	// consumer never draws that arrow twice.
 	EdgeTranslationFlow
+	// EdgeRejection is a command -> invariant arrow a flow block's rejection
+	// entry declares. Its target names an invariant rather than an event: the
+	// command is refused and nothing is appended.
+	EdgeRejection
 )
 
 // Edge is one semantic arrow a slice declares, named by its endpoints.
@@ -56,6 +60,13 @@ func SliceEdges(s *ast.Slice) []Edge {
 			continue
 		}
 		edges = append(edges, Edge{Kind: EdgeFlow, From: f.CommandName, To: f.EventName})
+	}
+
+	for _, r := range s.Rejections {
+		if r == nil {
+			continue
+		}
+		edges = append(edges, Edge{Kind: EdgeRejection, From: r.CommandName, To: r.InvariantName})
 	}
 
 	if s.Trigger != nil {

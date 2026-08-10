@@ -1399,6 +1399,63 @@ func dslReferencePalette(t *testing.T) map[string]struct{ fill, stroke string } 
 
 // TestExporterPalettePinsViewer checks that the two Go renderers emit the same
 // fill and stroke per element type that the viewer's own palette table names.
+// requireRejectionTwinDiffers hands back the shared rejection fixture and its
+// twin, having first proved the two really differ in the edges of both slice
+// homes. Without that, a differential over them is two identical pictures
+// agreeing.
+func requireRejectionTwinDiffers(t *testing.T) (stated, unstated *ast.Model) {
+	t.Helper()
+
+	stated = test.RejectionLibraryLendingModel(t)
+	unstated = test.WithoutRejections(stated)
+
+	require.NotEqual(t, stated, unstated,
+		"the twin has to state no rejection edge, or the comparison it backs says nothing")
+	require.Equal(t, test.RejectionLibraryLendingRejections, test.DeclaredRejections(stated))
+	require.Empty(t, test.DeclaredRejections(unstated),
+		"the twin has to lose the edges of both slice homes, or the comparison it backs is answered by whichever home it kept")
+
+	return stated, unstated
+}
+
+// TestExporterRejectionEdge covers what each drawn surface does with a rejection
+// edge. Mermaid's answer is permanent: it emits timeframe lines and comments and
+// has no arrow vocabulary at all, so there is nothing for the edge to join.
+func TestExporterRejectionEdge(t *testing.T) {
+	t.Run("mermaid draws the same bytes for a model stating rejection edges and one that does not", func(t *testing.T) {
+		stated, unstated := requireRejectionTwinDiffers(t)
+
+		for _, style := range []diagram.Style{diagram.StyleAuto, diagram.StyleDCB, diagram.StyleProjected} {
+			statedOut, err := diagram.ExportMermaid(stated, style)
+			require.NoError(t, err)
+			unstatedOut, err := diagram.ExportMermaid(unstated, style)
+			require.NoError(t, err)
+
+			require.Equal(t, string(unstatedOut), string(statedOut),
+				"mermaid draws no arrows in any layout, so a rejection edge has nothing to join")
+		}
+	})
+
+	t.Run("the picture formats ignore an edge kind no renderer has learnt", func(t *testing.T) {
+		stated, unstated := requireRejectionTwinDiffers(t)
+
+		svgStated, err := diagram.ExportSVG(stated, diagram.StyleAuto)
+		require.NoError(t, err)
+		svgUnstated, err := diagram.ExportSVG(unstated, diagram.StyleAuto)
+		require.NoError(t, err)
+		require.Equal(t, string(svgUnstated), string(svgStated))
+
+		for _, style := range []diagram.Style{diagram.StyleAuto, diagram.StyleDCB, diagram.StyleProjected} {
+			drawioStated, err := diagram.ExportDrawio(stated, style)
+			require.NoError(t, err)
+			drawioUnstated, err := diagram.ExportDrawio(unstated, style)
+			require.NoError(t, err)
+
+			require.Equal(t, string(drawioUnstated), string(drawioStated))
+		}
+	})
+}
+
 func TestExporterPalettePinsViewer(t *testing.T) {
 	viewerPalette := viewerNodePalette(t)
 

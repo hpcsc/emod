@@ -175,6 +175,99 @@ func TestExportASCII(t *testing.T) {
 		require.Contains(t, output, "(OrderCreated)")
 	})
 
+	t.Run("renders a rejection as a command to invariant arrow, in a marker no element type wears", func(t *testing.T) {
+		model := &ast.Model{
+			Name: "Test",
+			Contexts: []*ast.Context{{
+				Name: "Lending",
+				Aggregates: []*ast.Aggregate{{
+					Name:       "Loan",
+					Invariants: []*ast.Invariant{{Name: "OneCopyPerLoan"}},
+					Slices: []*ast.Slice{{
+						Name:     "Borrow Copy",
+						Commands: []*ast.Command{{Name: "BorrowCopy"}},
+						Events:   []*ast.Event{{Name: "CopyBorrowed"}},
+						Flows:    []*ast.Flow{{CommandName: "BorrowCopy", EventName: "CopyBorrowed"}},
+						Rejections: []*ast.Rejection{
+							{CommandName: "BorrowCopy", InvariantName: "OneCopyPerLoan"},
+						},
+					}},
+				}},
+			}},
+		}
+
+		raw, err := diagram.ExportASCII(model, diagram.StyleAuto)
+		require.NoError(t, err)
+
+		output := string(raw)
+		require.Contains(t, output, "[BorrowCopy] -> ✗ OneCopyPerLoan")
+		require.NotContains(t, output, "(OneCopyPerLoan)",
+			"an invariant drawn in the event marker reads as an event the command appended")
+		require.NotContains(t, output, "{OneCopyPerLoan}")
+		require.NotContains(t, output, "[OneCopyPerLoan]")
+	})
+
+	t.Run("every rejection edge the shared fixture states gets a line of its own", func(t *testing.T) {
+		model := test.RejectionLibraryLendingModel(t)
+
+		raw, err := diagram.ExportASCII(model, diagram.StyleAuto)
+		require.NoError(t, err)
+
+		var drawn []string
+		for _, line := range strings.Split(string(raw), "\n") {
+			if strings.Contains(line, "✗") {
+				drawn = append(drawn, strings.TrimSpace(line))
+			}
+		}
+
+		require.Equal(t, []string{
+			"[BorrowCopy] -> ✗ OneCopyPerLoan",
+			"[ReturnCopy] -> ✗ OneCopyPerLoan",
+			"[ClaimDesk] -> ✗ OneReaderPerDesk",
+		}, drawn)
+	})
+
+	t.Run("each rejection line adds one to the arrow count the contract harness reads", func(t *testing.T) {
+		model := test.RejectionLibraryLendingModel(t)
+		twin := test.WithoutRejections(model)
+		require.Empty(t, test.DeclaredRejections(twin))
+		require.Equal(t, test.RejectionLibraryLendingRejections, test.DeclaredRejections(model))
+
+		stated, err := diagram.ExportASCII(model, diagram.StyleAuto)
+		require.NoError(t, err)
+		unstated, err := diagram.ExportASCII(twin, diagram.StyleAuto)
+		require.NoError(t, err)
+
+		arrows := func(output []byte) int { return strings.Count(string(output), " -> ") }
+		require.Equal(t, arrows(unstated)+len(test.RejectionLibraryLendingRejections), arrows(stated))
+	})
+
+	t.Run("a command whose only wiring is a rejection still prints as standalone", func(t *testing.T) {
+		model := &ast.Model{
+			Name: "Test",
+			Contexts: []*ast.Context{{
+				Name: "Lending",
+				Aggregates: []*ast.Aggregate{{
+					Name:       "Loan",
+					Invariants: []*ast.Invariant{{Name: "OneCopyPerLoan"}},
+					Slices: []*ast.Slice{{
+						Name:     "Borrow Copy",
+						Commands: []*ast.Command{{Name: "BorrowCopy"}},
+						Rejections: []*ast.Rejection{
+							{CommandName: "BorrowCopy", InvariantName: "OneCopyPerLoan"},
+						},
+					}},
+				}},
+			}},
+		}
+
+		raw, err := diagram.ExportASCII(model, diagram.StyleAuto)
+		require.NoError(t, err)
+
+		require.Contains(t, string(raw), "  [BorrowCopy]\n",
+			"a rejection edge shows no event, so it does not make the command wired")
+	})
+
 	t.Run("renders trigger along with flow chain", func(t *testing.T) {
 		model := &ast.Model{
 			Name: "Test",

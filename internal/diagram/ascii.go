@@ -16,6 +16,7 @@ import (
 //   - Triggers as <<Name>> or <<Name (Actor)>>
 //   - Automations as ⚙ Name
 //   - Cadences as every "Expression"
+//   - Invariants a command is rejected by as ✗ Name
 //
 // Flows are rendered with -> arrows between connected elements.
 func ExportASCII(model *ast.Model, _ Style) ([]byte, error) {
@@ -68,6 +69,11 @@ func ExportASCII(model *ast.Model, _ Style) ([]byte, error) {
 		// Flows (command → event)
 		for _, flow := range s.Flows {
 			fmt.Fprintf(&b, "  [%s] -> (%s)\n", flow.CommandName, flow.EventName)
+		}
+
+		// Rejections (command → invariant that refuses it, appending nothing)
+		for _, rejection := range s.Rejections {
+			fmt.Fprintf(&b, "  [%s] -> ✗ %s\n", rejection.CommandName, rejection.InvariantName)
 		}
 
 		// Views with event arrows

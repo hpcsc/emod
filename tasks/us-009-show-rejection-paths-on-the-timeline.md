@@ -4,7 +4,7 @@
 - [x] Task 1: Accept a rejection entry in a `flow` block and re-emit it through `emod fmt`
 - [x] Task 2: Share a model that states rejection edges in both slice homes
 - [x] Task 3: Resolve a rejection edge's invariant against its declaring scope
-- [ ] Task 4: Derive the rejection edge and state it in the ASCII preview
+- [x] Task 4: Derive the rejection edge and state it in the ASCII preview
 - [ ] Task 5: Draw the rejection edge dashed into a badge in the SVG diagram
 - [ ] Task 6: Draw the same dashed edge and badge in the draw.io diagram
 - [ ] Task 7: Carry rejection edges through the JSON and CUE exports and the embedded schema
@@ -737,39 +737,39 @@ whose picture receipts are byte-identity, and lets Tasks 5 and 6 be about drawin
 deriving.
 
 **Acceptance Criteria:**
-- [ ] `internal/diagram/graph.go` gains one `EdgeKind` for a rejection, with a doc comment in the
+- [x] `internal/diagram/graph.go` gains one `EdgeKind` for a rejection, with a doc comment in the
       shape its eleven siblings carry, and `SliceEdges` emits one such edge per rejection entry,
       naming the entry's command and its invariant, in declaration order, positioned in the returned
       slice among the flow edges of the same slice
-- [ ] A slice stating no rejection entry returns exactly the edges it returns today, asserted as a
+- [x] A slice stating no rejection entry returns exactly the edges it returns today, asserted as a
       whole-list comparison so an edge appearing in a new position fails
-- [ ] `ExportASCII` states one line per rejection edge, in a marker vocabulary distinct from the
+- [x] `ExportASCII` states one line per rejection edge, in a marker vocabulary distinct from the
       event marker `(Name)`, the command marker `[Name]`, the view marker `{Name}` and the automation
       marker `⚙ Name`, so a reader cannot mistake a rejected invariant for an event; the marker is
       documented in `ExportASCII`'s own doc comment (`internal/diagram/ascii.go:11-20`), which today
       lists every marker the format draws
-- [ ] `standaloneCommands` and `standaloneEvents` (`internal/diagram/ascii.go:130-174`) are unchanged
+- [x] `standaloneCommands` and `standaloneEvents` (`internal/diagram/ascii.go:130-174`) are unchanged
       and still read `s.Flows` alone: a command whose only wiring is a rejection edge still prints as
       standalone, which is the reading "Open questions, decided" item 4 fixes for `orphan-command`
-- [ ] `countConnections` for ASCII counts `" -> "` (`internal/diagram/contract_test.go:128`), so a
+- [x] `countConnections` for ASCII counts `" -> "` (`internal/diagram/contract_test.go:128`), so a
       leaf states what the rejection line contributes to that count rather than leaving it to be
       discovered by a failing contract subtest
-- [ ] `ExportMermaid` returns byte-identical output for Task 2's fixture and its `Without…` twin,
+- [x] `ExportMermaid` returns byte-identical output for Task 2's fixture and its `Without…` twin,
       with the twin first proved to have lost the edges of both homes and the stated model proved to
       read back the full transcription — Mermaid draws no arrows in any of its three layouts, so it
       has nothing to add
-- [ ] `ExportSVG` and `ExportDrawio` return byte-identical output for Task 2's fixture and its twin,
+- [x] `ExportSVG` and `ExportDrawio` return byte-identical output for Task 2's fixture and its twin,
       under all three styles for draw.io: the new edge kind reaches both and neither draws it yet
-- [ ] `internal/export/diagram.go`'s edge switch (`:377-423`) gains an explicit case for the new kind
+- [x] `internal/export/diagram.go`'s edge switch (`:377-423`) gains an explicit case for the new kind
       carrying a comment stating that an invariant is not a diagram-JSON node and the edge therefore
       has no representation — the shape `case diagram.EdgeTranslationExternal:` (`:420`) already
       uses. A leaf walks the whole diagram document for Task 2's fixture and requires no edge of the
       new type, no node carrying an invariant's name, and the same node and edge lists the twin
       produces
-- [ ] `internal/importer/importer.go`, `internal/viewer/static/*` and `internal/wasm` are untouched,
+- [x] `internal/importer/importer.go`, `internal/viewer/static/*` and `internal/wasm` are untouched,
       and `internal/viewer/tests` needs no run: nothing was added to a diagram node or edge for the
       viewer to read
-- [ ] `internal/diagram/flows.go`'s `declaresFlow` is unchanged — a translation's derived
+- [x] `internal/diagram/flows.go`'s `declaresFlow` is unchanged — a translation's derived
       command→event edge is suppressed by an explicit *flow*, and a rejection entry is not one
 
 **Affected Files/Modules:**

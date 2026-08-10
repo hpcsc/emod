@@ -417,6 +417,13 @@ func (b *diagramBuilder) appendEdges(m *ast.Model) {
 			case diagram.EdgeTranslationExternal:
 				// External systems are not diagram-JSON nodes; the translation
 				// node stands in for them, so this edge has no representation.
+
+			case diagram.EdgeRejection:
+				// Invariants are not diagram-JSON nodes, so this edge has no
+				// representation either. Giving one a node would oblige a
+				// palette entry, an EDGE_TYPE_BY_ENDS pairing, an edgeConfig
+				// pair, a detail-panel section and a foldEdges arm for a
+				// construct the viewer cannot edit.
 			}
 		}
 	}

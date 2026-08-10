@@ -3389,6 +3389,26 @@ func TestExport(t *testing.T) {
 				"nor does an event a spec names in its given or then history reach a node or an edge of its own")
 		})
 
+		t.Run("a model stating rejection edges still produces a diagram document free of them", func(t *testing.T) {
+			stated := test.RejectionLibraryLendingModel(t)
+			unstated := test.WithoutRejections(stated)
+
+			require.NotEqual(t, stated, unstated,
+				"the twin has to state no rejection edge, or the comparison below says nothing")
+			require.Equal(t, test.RejectionLibraryLendingRejections, test.DeclaredRejections(stated))
+			require.Empty(t, test.DeclaredRejections(unstated),
+				"the twin has to lose the edges of both slice homes, or the comparison below is answered by whichever home it kept")
+
+			rejectedInvariants := []string{"OneCopyPerLoan", "OneReaderPerDesk"}
+			require.ElementsMatch(t, rejectedInvariants, textAnywhere(modelDocOf(t, stated), rejectedInvariants),
+				"the search has to find the invariant names where they do belong, or finding none below says nothing")
+
+			require.Empty(t, textAnywhere(diagramDocOf(t, stated), rejectedInvariants),
+				"an invariant is not a diagram-JSON node, so nothing the edge names reaches the document")
+			require.Equal(t, diagramDocOf(t, unstated), diagramDocOf(t, stated),
+				"a rejection edge has no representation in the node-and-edge contract")
+		})
+
 		t.Run("the slice-pattern fixture produces a diagram document with no trace of specs", func(t *testing.T) {
 			stated := test.SlicePatternLibraryLendingModel(t)
 			unstated := test.WithoutSpecs(stated)
