@@ -8,7 +8,7 @@
 - [x] Task 5: Preserve payloads through `emod fmt`
 - [x] Task 6: Carry payloads through the JSON and CUE exports and the embedded schema
 - [x] Task 7: Accept payloads in the tree-sitter grammar
-- [ ] Task 8: Document payloads in the DSL reference
+- [x] Task 8: Document payloads in the DSL reference
 
 ---
 
@@ -808,26 +808,26 @@ payloads. A reader learning the language finds it inside the `spec` subsection t
 Given-When-Then.
 
 **Acceptance Criteria:**
-- [ ] The `### spec` subsection (`docs/dsl-reference.md:376`) covers the payload block on any event or
+- [x] The `### spec` subsection (`docs/dsl-reference.md:376`) covers the payload block on any event or
       command reference in `given`, `when` and a `then` event list, with an example of each, and states
       that payloads are partial — a field declared `required` may be omitted — and that a names-only
       spec stays valid
-- [ ] It states the three literal forms and, for each, the declared field types it satisfies: strings
+- [x] It states the three literal forms and, for each, the declared field types it satisfies: strings
       satisfy `string`, and `date`, `timestamp` and `uuid` when the value parses as that format, naming
       the format expected for each; numbers satisfy `decimal`, and `int` when there is no fractional
       part; `true` and `false` satisfy `bool`
-- [ ] It states that any other declared type is a domain type and accepts any literal unchecked, that
+- [x] It states that any other declared type is a domain type and accepts any literal unchecked, that
       `then rejected` takes no payload, and that expected view-state payloads are not part of the
       language
-- [ ] The field-type bullet in §8 "Fields" (`docs/dsl-reference.md:451`) names the types a payload
+- [x] The field-type bullet in §8 "Fields" (`docs/dsl-reference.md:451`) names the types a payload
       literal is checked against and links to the `spec` subsection
-- [ ] §11 "Cross-References" lists the payload field name as a referencing site for a command's or an
+- [x] §11 "Cross-References" lists the payload field name as a referencing site for a command's or an
       event's fields, and its validation bullets name the two errors this story adds
-- [ ] No `## <n>.` heading and no `### ` heading in `docs/dsl-reference.md` is added, removed, renamed or
+- [x] No `## <n>.` heading and no `### ` heading in `docs/dsl-reference.md` is added, removed, renamed or
       reordered, so every existing `(#<n>-<slug>)` and `(#<sub-heading>)` link still resolves
-- [ ] Any block added under an ```emod fence is a whole model that `oracle.Check` reports nothing for; a
+- [x] Any block added under an ```emod fence is a whole model that `oracle.Check` reports nothing for; a
       fragment that is an illustration rather than a model takes a plain fence
-- [ ] The subsection reads as if it were its first version, with no note of what the reference used to
+- [x] The subsection reads as if it were its first version, with no note of what the reference used to
       say
 
 **Affected Files/Modules:**

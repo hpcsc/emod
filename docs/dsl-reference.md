@@ -508,7 +508,33 @@ slice "Claim Desk" {
 
 **Name resolution.** Every event in `given` and in a `then` list, and the command in `when`, must be defined somewhere in the model. A `rejected` name must be declared on the enclosing aggregate or, for a slice declared directly on a context, on that context — an aggregate and its context are separate scopes, so a name declared one level up does not resolve. A `then view` name must be a view declared anywhere in the model, and a `then command` name a command declared anywhere in the model; both are unqualified and model-wide.
 
-Specs are carried through `emod fmt`, the JSON and CUE exports, and the embedded schema.
+**Example payloads.** Any event or command reference in a spec may be followed by a brace block of `field: value` pairs, stating the example values the scenario runs on. A payload may be written on every element of a `given` list, on the `when` reference, and on every element of a `then` event list:
+
+```
+spec "borrows a copy no one holds" {
+  given [CopyReturned { copyId: "C-93204" }]
+  when BorrowCopy { copyId: "C-93204", dueOn: "2024-07-19" }
+  then [CopyBorrowed { lateFee: 12.50, renewals: 4, expedited: true }]
+}
+```
+
+The opening brace sits on the line of the reference it qualifies; the entries and the closing brace may span lines, and the comma between entries is optional. `then rejected` names an invariant rather than an event or a command, so it takes no payload, and expected view-state payloads on `then view` are not part of the language.
+
+A payload is partial by design: a field declared `required` may be omitted, and a names-only reference stays valid everywhere. Writing `{}` means the same as writing no payload at all.
+
+Three literal forms exist, and each satisfies a set of declared [field types](#8-fields):
+
+| Literal | Written | Satisfies |
+|---|---|---|
+| String | `"C-93204"` | `string`; `date` when the value reads as `YYYY-MM-DD`; `timestamp` when it reads as an RFC 3339 timestamp; `uuid` when it reads as the canonical 36-character 8-4-4-4-12 hexadecimal form, in either case |
+| Number | `42`, `12.50` | `decimal`; `int` when the literal states no fractional part. Numbers are unsigned — a leading `-` is not part of the literal grammar |
+| Boolean | `true`, `false` | `bool` |
+
+Any other declared type is a domain type, opaque to the model, and accepts any literal unchecked. `true` and `false` are recognised by position rather than reserved, so both stay usable as field names, types and modifiers.
+
+`emod validate` reports two things about a payload: a field name the referenced construct does not declare on its `fields`, and a literal whose kind or format the declared type does not admit. A payload on a reference the model does not declare is left alone — the missing reference is reported on its own.
+
+Specs and the payloads they state are carried through `emod fmt`, the JSON and CUE exports, and the embedded schema. A number reaches both exports as a number and a string as a string, digit for digit — a leading zero is dropped, since neither format has a literal for one, and everything else is written exactly as it was read.
 
 ---
 
@@ -546,7 +572,7 @@ fields {
 ```
 
 - **name**: Any identifier, including any word the DSL uses as a keyword. The examples in this document use lowerCamelCase.
-- **type**: Any identifier (`string`, `date`, `timestamp`, `int`, domain types like `RoomID`, etc.).
+- **type**: Any identifier (`string`, `date`, `timestamp`, `int`, domain types like `RoomID`, etc.). Seven spellings are checked against the literals a spec's [example payloads](#spec) state — `string`, `date`, `timestamp`, `uuid`, `int`, `decimal` and `bool`; any other type is a domain type and accepts any literal unchecked.
 - **modifier** (optional): `required` (default behavior) or `optional`.
 
 The formatter alignment pads the name and type columns.
@@ -738,6 +764,7 @@ All references use unqualified names. `emod validate` resolves them, except for 
 | `context "<name>"` | `automation { target context <Name> }` | [`automation`](#automation-pattern) |
 | `event <Name>` | `subscribes [<Name>]`, `flow`, `automation { on <Name> }`, `automation { command <Name> }`, `translation { event <Name> }`, `translation { command <Name> }`, `spec { given [<Name>] }`, `spec { then [<Name>] }` | [`view`](#view-pattern), [`automation`](#automation-pattern), [`translation`](#translation-pattern), [`spec`](#spec) |
 | `command <Name>` | `flow`, `automation { command <Name> }`, `translation { command <Name> }`, `spec { when <Name> }`, `spec { then command <Name> }` | [`flow`](#7-flows), [`automation`](#automation-pattern), [`translation`](#translation-pattern), [`spec`](#spec) |
+| a command's or an event's `fields` | the field name of an [example payload](#spec) on a spec reference: `spec { when <Name> { <field>: <value> } }` | [`spec`](#spec) |
 | `view <Name>` | `automation { reads <Name> }`, `trigger { reads <Name> }`, `translation { reads <Name> }`, `spec { then view <Name> }` | [`automation`](#automation-pattern), [`command` pattern](#command-pattern), [`translation`](#translation-pattern), [`spec`](#spec) |
 | `actor "<name>"` | `trigger { actor <Name> }` | [`command` pattern](#command-pattern) |
 | `invariant <name>` | `spec { then rejected <name> }`, `flow { command -> rejected: <Cmd> -> <name> }` | [`spec`](#spec), [`flow`](#7-flows) |
@@ -753,6 +780,8 @@ Validation detects:
 - **Unresolved rejections**: a `then rejected <name>` in a spec, or a `command -> rejected:` entry in a `flow` block, whose invariant is not declared in the enclosing scope — both reported as `invariant "<name>" is not declared in <scope> "<Name>"`.
 - **Undefined spec outcome references**: a `then view <Name>` naming a view no slice declares, or a `then command <Name>` naming a command no slice declares — reported as `view "<Name>" does not exist` or `command "<Name>" does not exist`.
 - **Outcome–pattern mismatches**: a `view` outcome in a slice declaring no view, a `command` outcome in a slice declaring no automation, a rejection in a slice declaring no command, or an event list in a slice declaring neither a command nor a translation — each reported naming the outcome shape and the construct kind the slice would have to declare.
+- **Undeclared payload fields**: an example payload naming a field the referenced construct's `fields` does not declare — reported as `payload field "<field>" is not declared on <kind> "<Name>"`.
+- **Payload literal mismatches**: a literal whose kind or format the field's declared type does not admit — reported as `payload value <value> for field "<field>" is not a valid <type>`.
 
 ---
 
