@@ -52,6 +52,7 @@ const (
 	Identifier
 	String
 	Integer
+	Decimal
 
 	// Operators and punctuation
 	OpenBrace
@@ -149,6 +150,8 @@ func (k Kind) String() string {
 		return "string"
 	case Integer:
 		return "integer"
+	case Decimal:
+		return "decimal"
 	case OpenBrace:
 		return "{"
 	case CloseBrace:

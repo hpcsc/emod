@@ -21,7 +21,7 @@
         "1.5",
         "internal/lexer/tokenizer_test.go"
       ],
-      "done": false
+      "done": true
     },
     {
       "n": 2,

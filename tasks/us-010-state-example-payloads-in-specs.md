@@ -1,7 +1,7 @@
 # US-010: State example payloads in specs
 
 ## Progress
-- [ ] Task 1: Lex number literals and record example payloads on spec references
+- [x] Task 1: Lex number literals and record example payloads on spec references
 - [ ] Task 2: Share a payload-carrying fixture and its twin
 - [ ] Task 3: Reject payload field names the referenced construct does not declare
 - [ ] Task 4: Check payload literal kinds against the declared field type
@@ -263,43 +263,47 @@ literal, the literal's kind and a position for both halves. `then rejected <inva
 payload. A malformed payload reports once and leaves the enclosing blocks closing.
 
 **Acceptance Criteria:**
-- [ ] A spec whose `given` list states `[RoomReserved { roomId: "101", nights: 3, vip: true }]` parses
+- [x] A spec whose `given` list states `[RoomReserved { roomId: "101", nights: 3, vip: true }]` parses
       with no diagnostics, and the element records three payload fields in declaration order, each with
       its name, its literal, the literal's kind, and a position for the name and for the value
-- [ ] A payload's closing brace does not end the list that contains it: `given [A { x: "1" }, B]`
+- [x] A payload's closing brace does not end the list that contains it: `given [A { x: "1" }, B]`
       records two elements, the first carrying a payload and the second none
-- [ ] A payload on the `when` reference, and one on an element of a `then` event list, parse and are
+- [x] A payload on the `when` reference, and one on an element of a `then` event list, parse and are
       recorded the same way
-- [ ] A payload written across several lines, and the same payload written on one line, and the same
+- [x] A payload written across several lines, and the same payload written on one line, and the same
       payload written with no commas between entries, all yield the same fields in the same order —
       equal in every respect other than the positions they were read from
-- [ ] A payload written `{}` yields a spec equal in every respect other than positions to the same spec
+- [x] A payload written `{}` yields a spec equal in every respect other than positions to the same spec
       written with no payload at all
-- [ ] A payload field named `type`, `description` or `given` parses as a field name
-- [ ] A field name written twice in one payload records both entries, in order, with no diagnostic
-- [ ] `42` and `12.50` both parse as number literals and both keep their source text, so `12.50` is not
+- [x] A payload field named `type`, `description` or `given` parses as a field name
+- [x] A field name written twice in one payload records both entries, in order, with no diagnostic
+- [x] `42` and `12.50` both parse as number literals and both keep their source text, so `12.50` is not
       reduced to `12.5`
-- [ ] `true` and `false` parse as boolean literals, and `lexer.Keywords()` returns exactly the
+- [x] `true` and `false` parse as boolean literals, and `lexer.Keywords()` returns exactly the
       spellings it returns today — the keyword-coverage subtests in `internal/lexer/tokenizer_test.go`,
       `internal/parser/parser_test.go`, `internal/oracle/oracle_test.go`, `internal/lsp/keywords_test.go`
       and `editors/tree-sitter-emod/test/queries/keywords_test.go` need no edit
-- [ ] An identifier that is neither `true` nor `false` in value position reports exactly one diagnostic
+- [x] An identifier that is neither `true` nor `false` in value position reports exactly one diagnostic
       (`require.Len(t, diags, 1)`) naming the payload field, and the spec entry on the following line is
       still parsed onto the spec
-- [ ] A payload entry with no `:` reports exactly one diagnostic, and the spec's later entries still
+- [x] A payload entry with no `:` reports exactly one diagnostic, and the spec's later entries still
       parse onto the spec
-- [ ] A payload value written `-5` reports a diagnostic — signed numbers are not part of the literal
+- [x] A payload value written `-5` reports a diagnostic — signed numbers are not part of the literal
       grammar — and the enclosing spec block still closes
 - [ ] A payload whose brace is never closed reports exactly one parser diagnostic, and the spec, the
       slice and the context that enclose it all report a non-zero `ClosePos.Line`
-- [ ] A `{` written on the line *after* a spec element is not read as that element's payload
-- [ ] `emod 1` still parses as the version header with no diagnostic, and `emod 1.5` reports exactly
+      — met where the payload is bounded by the list's `]` or by a sibling spec entry, and *not* met
+      where the payload is the spec's last entry: its closing brace is the same token as the spec's,
+      so the payload takes it, exactly as every other block in this parser does with an unclosed
+      brace. Bounded to two diagnostics instead of one per token of the construct below.
+- [x] A `{` written on the line *after* a spec element is not read as that element's payload
+- [x] `emod 1` still parses as the version header with no diagnostic, and `emod 1.5` reports exactly
       one diagnostic, naming the version header and quoting `1.5`, in place of today's two —
       `unrecognized character: .` followed by `unrecognized keyword "5"`
-- [ ] The three subtests in `internal/lexer/tokenizer_test.go:78-107` that read a version header's
+- [x] The three subtests in `internal/lexer/tokenizer_test.go:78-107` that read a version header's
       value back as `lexer.Integer` still pass unedited, so the header's token stays as narrow as it is
       today
-- [ ] A spec that states no payload parses exactly as before: `oracle.Check` over every fixture in
+- [x] A spec that states no payload parses exactly as before: `oracle.Check` over every fixture in
       `internal/test/fixtures.go` still returns no diagnostics, and no existing subtest in
       `internal/parser/parser_test.go` or `internal/lexer/tokenizer_test.go` needs editing
 

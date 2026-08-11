@@ -494,7 +494,7 @@ func (p *Instance) parseSpecCommand(keywordTok *lexer.Token) *ast.SpecElement {
 
 	nameTok := p.advance()
 
-	return &ast.SpecElement{Name: nameTok.Value, NamePos: p.position(nameTok)}
+	return &ast.SpecElement{Name: nameTok.Value, NamePos: p.position(nameTok), Payload: p.parsePayload(nameTok)}
 }
 
 func (p *Instance) parseSpecOutcome(keywordTok *lexer.Token) ast.ThenClause {
@@ -548,7 +548,7 @@ func (p *Instance) parseSpecEventList(keywordTok *lexer.Token) ([]*ast.SpecEleme
 	}
 	p.advance()
 
-	identifiers := p.parseIdentifiersUntil(p.atSpecEventListEnd, fmt.Sprintf("expected event identifier in %s list of spec", entry))
+	events := p.parseSpecElementsUntilListEnd(entry)
 
 	if !p.check(lexer.CloseBracket) {
 		p.errorAt(keywordTok, fmt.Sprintf("expected ] to close %s list of spec", entry))
@@ -556,16 +556,162 @@ func (p *Instance) parseSpecEventList(keywordTok *lexer.Token) ([]*ast.SpecEleme
 	}
 	p.advance()
 
+	return events, true
+}
+
+// parseSpecElementsUntilListEnd reads the list itself rather than delegating to
+// parseIdentifiersUntil, because an element's payload closes on a CloseBrace,
+// which atSpecEventListEnd reads as the end of the list around it.
+func (p *Instance) parseSpecElementsUntilListEnd(entry string) []*ast.SpecElement {
 	var events []*ast.SpecElement
-	for _, tok := range identifiers {
-		events = append(events, &ast.SpecElement{Name: tok.Value, NamePos: p.position(tok)})
+	reported := false
+	for !p.atSpecEventListEnd() {
+		if !p.check(lexer.Identifier) {
+			// Report the first offending token only, but keep reading: an
+			// unclosed payload leaves the list scanning the construct below it,
+			// where a diagnostic per token buries the one that names the real
+			// problem, while draining to the end of the list would silently drop
+			// the elements written after the offending one.
+			if !reported {
+				p.error(fmt.Sprintf("expected event identifier in %s list of spec", entry))
+				reported = true
+			}
+			p.advance()
+			continue
+		}
+
+		nameTok := p.advance()
+		events = append(events, &ast.SpecElement{
+			Name:    nameTok.Value,
+			NamePos: p.position(nameTok),
+			Payload: p.parsePayload(nameTok),
+		})
+
+		if p.check(lexer.Comma) {
+			p.advance()
+		}
 	}
 
-	return events, true
+	return events
 }
 
 func (p *Instance) atSpecEventListEnd() bool {
 	return p.isAtEnd() || p.checkAny(lexer.CloseBracket, lexer.CloseBrace, lexer.KeywordGiven, lexer.KeywordWhen, lexer.KeywordThen)
+}
+
+// parsePayload reads the optional { field: literal, ... } block qualifying a
+// spec reference. The opening brace must sit on the reference's own line, or a
+// brace opening the next construct is taken as this reference's payload.
+func (p *Instance) parsePayload(refTok *lexer.Token) []*ast.PayloadField {
+	if !p.checkSameLineAs(refTok) || !p.check(lexer.OpenBrace) {
+		return nil
+	}
+	openTok := p.advance()
+
+	var payload []*ast.PayloadField
+	for !p.atPayloadEnd() {
+		if field := p.parsePayloadField(); field != nil {
+			payload = append(payload, field)
+		}
+
+		if p.check(lexer.Comma) {
+			p.advance()
+		}
+	}
+
+	if !p.check(lexer.CloseBrace) {
+		p.errorAt(openTok, fmt.Sprintf("unclosed brace for payload opened at line %d", openTok.Line))
+		return payload
+	}
+	p.advance()
+
+	return payload
+}
+
+// atPayloadEnd stops an unclosed payload at whatever encloses it — the spec
+// list's bracket or a sibling spec entry — so one missing brace does not eat
+// the rest of the spec. A sibling keyword followed by a colon is a payload
+// field named after it, which stays legal, so only a bare one ends the payload.
+func (p *Instance) atPayloadEnd() bool {
+	if p.isAtEnd() || p.checkAny(lexer.CloseBrace, lexer.CloseBracket) {
+		return true
+	}
+	return p.checkAny(lexer.KeywordGiven, lexer.KeywordWhen, lexer.KeywordThen) && !p.currentIsFollowedByColon()
+}
+
+// skipRestOfPayloadEntry drains a malformed entry without crossing whatever
+// ends the payload, so a payload that is also unclosed still reports once.
+func (p *Instance) skipRestOfPayloadEntry(tok *lexer.Token) {
+	for p.checkSameLineAs(tok) && !p.atPayloadEnd() {
+		p.advance()
+	}
+}
+
+func (p *Instance) currentIsFollowedByColon() bool {
+	p.skipComments()
+	for next := p.pos + 1; next < len(p.tokens); next++ {
+		if p.tokens[next].Type == lexer.Comment {
+			continue
+		}
+		return p.tokens[next].Type == lexer.Colon
+	}
+	return false
+}
+
+func (p *Instance) parsePayloadField() *ast.PayloadField {
+	if !p.checkIdentifierLike() {
+		offending := p.peek()
+		p.errorAt(offending, fmt.Sprintf("expected payload field name, got %q", offending.Value))
+		p.advance()
+		p.skipRestOfPayloadEntry(offending)
+		return nil
+	}
+
+	nameTok := p.advance()
+
+	if !p.check(lexer.Colon) {
+		p.errorAt(nameTok, fmt.Sprintf("expected : after payload field %q", nameTok.Value))
+		p.skipRestOfPayloadEntry(nameTok)
+		return nil
+	}
+	p.advance()
+
+	kind, ok := p.payloadLiteralKind()
+	if !ok {
+		offending := p.peek()
+		p.errorAt(offending, fmt.Sprintf("expected a quoted string, number, true or false after payload field %q, got %q", nameTok.Value, offending.Value))
+		p.skipRestOfPayloadEntry(nameTok)
+		return nil
+	}
+	valueTok := p.advance()
+
+	return &ast.PayloadField{
+		Name:     nameTok.Value,
+		NamePos:  p.position(nameTok),
+		Value:    valueTok.Value,
+		ValuePos: p.position(valueTok),
+		Kind:     kind,
+	}
+}
+
+// payloadLiteralKind reads true and false by position rather than as keywords,
+// so both stay usable as identifiers everywhere else in the language.
+func (p *Instance) payloadLiteralKind() (ast.LiteralKind, bool) {
+	tok := p.peek()
+	switch tok.Type {
+	case lexer.String:
+		return ast.StringLiteral, true
+	case lexer.Integer:
+		return ast.IntegerLiteral, true
+	case lexer.Decimal:
+		return ast.DecimalLiteral, true
+	case lexer.Identifier:
+		if tok.Value == "true" || tok.Value == "false" {
+			return ast.BooleanLiteral, true
+		}
+	}
+
+	return 0, false
 }
 
 func (p *Instance) parseTrigger() *ast.Trigger {

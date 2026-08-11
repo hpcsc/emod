@@ -107,7 +107,25 @@ type Spec struct {
 type SpecElement struct {
 	Name    string
 	NamePos Position
+	Payload []*PayloadField
 }
+
+type PayloadField struct {
+	Name     string
+	NamePos  Position
+	Value    string
+	ValuePos Position
+	Kind     LiteralKind
+}
+
+type LiteralKind int
+
+const (
+	StringLiteral LiteralKind = iota + 1
+	IntegerLiteral
+	DecimalLiteral
+	BooleanLiteral
+)
 
 type ThenClause interface {
 	thenNode()

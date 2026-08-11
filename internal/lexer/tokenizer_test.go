@@ -108,6 +108,46 @@ actor "Guest"`
 		})
 	})
 
+	t.Run("decimals", func(t *testing.T) {
+		t.Run("a fractional part reads as one decimal token keeping its source text", func(t *testing.T) {
+			tokens, diags := lexer.Scan("12.50", "test.emod")
+
+			require.Empty(t, diags)
+			require.Len(t, tokens, 2)
+			require.Equal(t, lexer.Decimal, tokens[0].Type)
+			require.Equal(t, "12.50", tokens[0].Value)
+			require.Equal(t, 1, tokens[0].Line)
+			require.Equal(t, 1, tokens[0].Column)
+		})
+
+		t.Run("a dot with no digit after it is not part of the number", func(t *testing.T) {
+			tokens, diags := lexer.Scan("12.", "test.emod")
+
+			require.Len(t, diags, 1)
+			require.Equal(t, "unrecognized character: .", diags[0].Message)
+			require.Equal(t, lexer.Integer, tokens[0].Type)
+			require.Equal(t, "12", tokens[0].Value)
+		})
+
+		t.Run("names itself apart from the integer kind", func(t *testing.T) {
+			require.Equal(t, "decimal", lexer.Decimal.String())
+			require.NotEqual(t, lexer.Integer.String(), lexer.Decimal.String())
+		})
+	})
+
+	t.Run("true and false scan as identifiers, so neither is a keyword", func(t *testing.T) {
+		for _, literal := range []string{"true", "false"} {
+			t.Run(literal, func(t *testing.T) {
+				tokens, diags := lexer.Scan(literal, "test.emod")
+
+				require.Empty(t, diags)
+				require.Equal(t, lexer.Identifier, tokens[0].Type)
+				require.Equal(t, literal, tokens[0].Value)
+				require.NotContains(t, lexer.Keywords(), literal)
+			})
+		}
+	})
+
 	t.Run("braces", func(t *testing.T) {
 		tokens, diags := lexer.Scan("{ }", "test.emod")
 		require.Empty(t, diags)

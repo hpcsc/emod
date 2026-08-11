@@ -176,6 +176,22 @@ model "Test"`,
 			}
 		})
 
+		t.Run("a version stating a fractional part is one token, so the header reports it whole", func(t *testing.T) {
+			input := `emod 1.5
+model "Test"`
+
+			tokens, lexDiags := lexer.Scan(input, "versions.emod")
+
+			require.Empty(t, lexDiags)
+
+			model, diags := parser.New(tokens, "versions.emod").Parse()
+
+			require.Len(t, diags, 1)
+			require.Equal(t, `versions.emod:1: invalid version header: expected an integer after "emod", got "1.5"`, diags[0].String())
+			require.Equal(t, "Test", model.Name)
+			require.False(t, model.VersionDeclared)
+		})
+
 		t.Run("a version number on the line below the keyword does not form a header", func(t *testing.T) {
 			input := `emod
 2
@@ -1524,6 +1540,157 @@ context "Lending" mode dcb {
 			require.Equal(t, "RecallCopy", spec.Then.(*ast.ThenCommand).CommandName)
 		})
 
+		t.Run("a spec element records the example payload written after it", func(t *testing.T) {
+			source := modelWithSpecEntries(`given [RoomReserved { roomId: "101", nights: 3, rate: 12.50, vip: true }]
+        when ReserveRoom
+        then [RoomConfirmed]`)
+
+			model := parseModel(t, source)
+
+			element := model.Contexts[0].Aggregates[0].Slices[0].Specs[0].Given[0]
+			require.Equal(t, []*ast.PayloadField{
+				{
+					Name: "roomId", NamePos: astPositionOf(t, "test.emod", source, "given [RoomReserved", "roomId"),
+					Value: "101", ValuePos: astPositionOf(t, "test.emod", source, "given [RoomReserved", `"101"`),
+					Kind: ast.StringLiteral,
+				},
+				{
+					Name: "nights", NamePos: astPositionOf(t, "test.emod", source, "given [RoomReserved", "nights"),
+					Value: "3", ValuePos: astPositionOf(t, "test.emod", source, "given [RoomReserved", "3"),
+					Kind: ast.IntegerLiteral,
+				},
+				{
+					Name: "rate", NamePos: astPositionOf(t, "test.emod", source, "given [RoomReserved", "rate"),
+					Value: "12.50", ValuePos: astPositionOf(t, "test.emod", source, "given [RoomReserved", "12.50"),
+					Kind: ast.DecimalLiteral,
+				},
+				{
+					Name: "vip", NamePos: astPositionOf(t, "test.emod", source, "given [RoomReserved", "vip"),
+					Value: "true", ValuePos: astPositionOf(t, "test.emod", source, "given [RoomReserved", "true"),
+					Kind: ast.BooleanLiteral,
+				},
+			}, element.Payload)
+		})
+
+		t.Run("a payload's closing brace does not end the list around it", func(t *testing.T) {
+			model := parseModel(t, modelWithSpecEntries(`given [RoomReserved { roomId: "101" }, RoomCleaned]
+        when ReserveRoom
+        then [RoomConfirmed]`))
+
+			given := model.Contexts[0].Aggregates[0].Slices[0].Specs[0].Given
+			require.Equal(t, []string{"RoomReserved", "RoomCleaned"}, specElementNames(given))
+			require.Equal(t, []string{"roomId"}, payloadFieldNames(given[0]))
+			require.Nil(t, given[1].Payload)
+		})
+
+		t.Run("every event and command reference in a spec carries a payload of its own", func(t *testing.T) {
+			model := parseModel(t, modelWithSpecEntries(`given [RoomReserved { roomId: "101" }]
+        when ReserveRoom { guestId: "G-77" }
+        then [RoomConfirmed { confirmedBy: "desk" }]`))
+
+			spec := model.Contexts[0].Aggregates[0].Slices[0].Specs[0]
+			require.Equal(t, []string{"roomId"}, payloadFieldNames(spec.Given[0]))
+			require.Equal(t, []string{"guestId"}, payloadFieldNames(spec.When))
+			require.Equal(t, []string{"confirmedBy"}, payloadFieldNames(spec.Then.(*ast.ThenEvents).Events[0]))
+		})
+
+		t.Run("differently arranged spellings of one payload parse to the same fields", func(t *testing.T) {
+			canonical := `given [RoomReserved { roomId: "101", nights: 3, vip: true }]
+        when ReserveRoom
+        then [RoomConfirmed]`
+			tests := []struct {
+				name    string
+				variant string
+			}{
+				{
+					name: "spread across several lines",
+					variant: `given [RoomReserved {
+          roomId: "101",
+          nights: 3,
+          vip: true
+        }]
+        when ReserveRoom
+        then [RoomConfirmed]`,
+				},
+				{
+					name: "written with no commas between entries",
+					variant: `given [RoomReserved { roomId: "101" nights: 3 vip: true }]
+        when ReserveRoom
+        then [RoomConfirmed]`,
+				},
+				{
+					name: "spread across several lines with no commas",
+					variant: `given [RoomReserved {
+          roomId: "101"
+          nights: 3
+          vip: true
+        }]
+        when ReserveRoom
+        then [RoomConfirmed]`,
+				},
+			}
+
+			for _, tc := range tests {
+				t.Run(tc.name, func(t *testing.T) {
+					canonicalSpec := parseModel(t, modelWithSpecEntries(canonical)).Contexts[0].Aggregates[0].Slices[0].Specs[0]
+					variantSpec := parseModel(t, modelWithSpecEntries(tc.variant)).Contexts[0].Aggregates[0].Slices[0].Specs[0]
+
+					require.Equal(t, []string{"roomId", "nights", "vip"}, payloadFieldNames(canonicalSpec.Given[0]))
+					test.RequireEqual(t, canonicalSpec, variantSpec, ignoreASTPositions)
+				})
+			}
+		})
+
+		t.Run("an empty payload reads as no payload at all", func(t *testing.T) {
+			stated := parseModel(t, modelWithSpecEntries(`given [RoomReserved {}]
+        when ReserveRoom {}
+        then [RoomConfirmed {}]`)).Contexts[0].Aggregates[0].Slices[0].Specs[0]
+			omitted := parseModel(t, modelWithSpecEntries(`given [RoomReserved]
+        when ReserveRoom
+        then [RoomConfirmed]`)).Contexts[0].Aggregates[0].Slices[0].Specs[0]
+
+			require.Nil(t, stated.Given[0].Payload)
+			test.RequireEqual(t, omitted, stated, ignoreASTPositions)
+		})
+
+		t.Run("a payload field may be named after a DSL keyword", func(t *testing.T) {
+			for _, keyword := range lexer.Keywords() {
+				t.Run(keyword, func(t *testing.T) {
+					model := parseModel(t, modelWithSpecEntries(fmt.Sprintf(`given [RoomReserved { %s: "101" }]
+        when ReserveRoom
+        then [RoomConfirmed]`, keyword)))
+
+					given := model.Contexts[0].Aggregates[0].Slices[0].Specs[0].Given
+					require.Equal(t, []string{keyword}, payloadFieldNames(given[0]))
+				})
+			}
+		})
+
+		t.Run("a payload field name written twice keeps both entries in order", func(t *testing.T) {
+			model := parseModel(t, modelWithSpecEntries(`given [RoomReserved { roomId: "101", roomId: "202" }]
+        when ReserveRoom
+        then [RoomConfirmed]`))
+
+			given := model.Contexts[0].Aggregates[0].Slices[0].Specs[0].Given
+			require.Equal(t, []string{"roomId", "roomId"}, payloadFieldNames(given[0]))
+			require.Equal(t, []string{"101", "202"}, payloadFieldValues(given[0]))
+		})
+
+		t.Run("a brace on the line below a spec reference is not that reference's payload", func(t *testing.T) {
+			source := modelWithSpecEntries(`given [RoomReserved]
+        when ReserveRoom
+        { guestId: "G-77" }
+        then [RoomConfirmed]`)
+			tokens, lexDiags := lexer.Scan(source, "test.emod")
+			require.Empty(t, lexDiags)
+
+			model, diags := parser.New(tokens, "test.emod").Parse()
+
+			require.NotEmpty(t, diags)
+			spec := model.Contexts[0].Aggregates[0].Slices[0].Specs[0]
+			require.Equal(t, "ReserveRoom", spec.When.Name)
+			require.Nil(t, spec.When.Payload)
+		})
 	})
 
 	t.Run("commands, events and flows", func(t *testing.T) {
@@ -3415,6 +3582,171 @@ context "Lending" {
 					require.NotZero(t, model.Contexts[0].ClosePos.Line)
 				})
 			}
+		})
+
+		t.Run("a malformed payload entry is reported once and the spec's later entries still parse", func(t *testing.T) {
+			tests := []struct {
+				name        string
+				element     string
+				wantMessage string
+			}{
+				{
+					name:        "a value that is neither a literal nor true or false",
+					element:     `CopyReturned { copyId: sometimes }`,
+					wantMessage: `expected a quoted string, number, true or false after payload field "copyId", got "sometimes"`,
+				},
+				{
+					name:        "an entry with no colon between its name and its value",
+					element:     `CopyReturned { copyId "C-1" }`,
+					wantMessage: `expected : after payload field "copyId"`,
+				},
+				{
+					name:        "an entry that is not a field name at all",
+					element:     `CopyReturned { "copyId": "C-1" }`,
+					wantMessage: `expected payload field name, got "copyId"`,
+				},
+			}
+
+			for _, tc := range tests {
+				t.Run(tc.name, func(t *testing.T) {
+					input := specModelWithGiven(tc.element)
+					tokens, lexDiags := lexer.Scan(input, "test.emod")
+					require.Empty(t, lexDiags)
+
+					model, diags := parser.New(tokens, "test.emod").Parse()
+
+					require.Len(t, diags, 1)
+					require.Equal(t, tc.wantMessage, diags[0].Message)
+					spec := model.Contexts[0].Aggregates[0].Slices[0].Specs[0]
+					require.Equal(t, []string{"CopyReturned"}, specElementNames(spec.Given))
+					require.Equal(t, "BorrowCopy", specElementName(spec.When))
+					require.Equal(t, []string{"CopyBorrowed"}, thenEventNames(t, spec.Then))
+				})
+			}
+		})
+
+		t.Run("a signed number is rejected by the scanner and the spec block still closes", func(t *testing.T) {
+			input := specModelWithGiven(`CopyReturned { nights: -5 }`)
+
+			tokens, lexDiags := lexer.Scan(input, "test.emod")
+
+			require.Len(t, lexDiags, 1)
+			require.Equal(t, "unrecognized character: -", lexDiags[0].Message)
+
+			model, diags := parser.New(tokens, "test.emod").Parse()
+
+			require.Empty(t, diags)
+			slice := model.Contexts[0].Aggregates[0].Slices[0]
+			require.NotZero(t, slice.Specs[0].ClosePos.Line)
+			require.NotZero(t, slice.ClosePos.Line)
+			require.NotZero(t, model.Contexts[0].ClosePos.Line)
+		})
+
+		t.Run("an unclosed payload brace is reported once and the enclosing blocks still close", func(t *testing.T) {
+			tests := []struct {
+				name    string
+				entries string
+			}{
+				{
+					name: "on a given element, bounded by the list's bracket",
+					entries: `given [CopyReturned { copyId: "C-1"]
+        when BorrowCopy
+        then [CopyBorrowed]`,
+				},
+				{
+					name: "on the when reference, bounded by the sibling entry below it",
+					entries: `given [CopyReturned]
+        when BorrowCopy { copyId: "C-1"
+        then [CopyBorrowed]`,
+				},
+			}
+
+			for _, tc := range tests {
+				t.Run(tc.name, func(t *testing.T) {
+					input := fmt.Sprintf(`model "Test"
+context "Lending" {
+  aggregate "Loan" {
+    slice "Borrow a Copy" {
+      spec "borrows a returned copy" {
+        %s
+      }
+    }
+  }
+}`, tc.entries)
+					tokens, lexDiags := lexer.Scan(input, "test.emod")
+					require.Empty(t, lexDiags)
+
+					model, diags := parser.New(tokens, "test.emod").Parse()
+
+					require.Len(t, diags, 1)
+					require.Contains(t, diags[0].Message, "unclosed brace for payload")
+					slice := model.Contexts[0].Aggregates[0].Slices[0]
+					spec := slice.Specs[0]
+					require.Equal(t, []string{"CopyReturned"}, specElementNames(spec.Given))
+					require.Equal(t, "BorrowCopy", specElementName(spec.When))
+					require.Equal(t, []string{"CopyBorrowed"}, thenEventNames(t, spec.Then))
+					require.NotZero(t, spec.ClosePos.Line)
+					require.NotZero(t, slice.ClosePos.Line)
+					require.NotZero(t, model.Contexts[0].ClosePos.Line)
+				})
+			}
+		})
+
+		t.Run("an element written after a malformed one in a spec list still parses", func(t *testing.T) {
+			input := `model "Test"
+context "Lending" {
+  aggregate "Loan" {
+    slice "Borrow a Copy" {
+      spec "borrows a returned copy" {
+        given [CopyReturned, "oops", CopyBorrowed]
+        when BorrowCopy
+        then [CopyBorrowed]
+      }
+    }
+  }
+}`
+			tokens, lexDiags := lexer.Scan(input, "test.emod")
+			require.Empty(t, lexDiags)
+
+			model, diags := parser.New(tokens, "test.emod").Parse()
+
+			require.Len(t, diags, 1)
+			require.Contains(t, diags[0].Message, "expected event identifier in given list of spec")
+			spec := model.Contexts[0].Aggregates[0].Slices[0].Specs[0]
+			require.Equal(t, []string{"CopyReturned", "CopyBorrowed"}, specElementNames(spec.Given),
+				"recovery has to keep reading the list, or every element after the bad token is lost")
+			require.Equal(t, "BorrowCopy", specElementName(spec.When))
+		})
+
+		t.Run("an unclosed payload with no sibling entry below it reports once rather than per token", func(t *testing.T) {
+			// A payload's closing brace is the same token as the spec's, so a
+			// payload left open where nothing follows it inside the spec takes
+			// the spec's brace — the ambiguity every block in this parser has.
+			// What must not follow is a diagnostic per token of the construct
+			// below, which is what buries the one that names the real problem.
+			input := `model "Test"
+context "Lending" {
+  aggregate "Loan" {
+    slice "Borrow a Copy" {
+      spec "borrows a returned copy" {
+        given [CopyReturned]
+        when BorrowCopy
+        then [CopyBorrowed { copyId: "C-1"
+      }
+      flow {
+        command -> event: BorrowCopy -> CopyBorrowed
+      }
+    }
+  }
+}`
+			tokens, lexDiags := lexer.Scan(input, "test.emod")
+			require.Empty(t, lexDiags)
+
+			_, diags := parser.New(tokens, "test.emod").Parse()
+
+			require.Len(t, diags, 2)
+			require.Contains(t, diags[0].Message, "expected event identifier in then list of spec")
+			require.Contains(t, diags[1].Message, "expected ] to close then list of spec")
 		})
 
 		t.Run("an unrecognised entry inside a spec names the entries a spec accepts", func(t *testing.T) {
@@ -6442,6 +6774,28 @@ func specElementName(element *ast.SpecElement) string {
 		return ""
 	}
 	return element.Name
+}
+
+func specModelWithGiven(element string) string {
+	return modelWithSpecEntries(fmt.Sprintf(`given [%s]
+        when BorrowCopy
+        then [CopyBorrowed]`, element))
+}
+
+func payloadFieldNames(element *ast.SpecElement) []string {
+	var names []string
+	for _, field := range element.Payload {
+		names = append(names, field.Name)
+	}
+	return names
+}
+
+func payloadFieldValues(element *ast.SpecElement) []string {
+	var values []string
+	for _, field := range element.Payload {
+		values = append(values, field.Value)
+	}
+	return values
 }
 
 func specElementNames(elements []*ast.SpecElement) []string {

@@ -76,7 +76,7 @@ func Scan(input, filename string) ([]*Token, []*diagnostic.Entry) {
 			tokens = append(tokens, tok)
 		case isDigit(peek(c)):
 			var tok *Token
-			c, tok = readInteger(c)
+			c, tok = readNumber(c)
 			tokens = append(tokens, tok)
 		default:
 			diags = append(diags, newDiag("unrecognized character: "+string(peek(c)), c))
@@ -165,15 +165,28 @@ func readIdentifierOrKeyword(c cursor) (cursor, *Token) {
 	return c, &Token{Type: keywordOrIdentifier(value), Value: value, Line: c.line, Column: startCol}
 }
 
-func readInteger(c cursor) (cursor, *Token) {
+// readNumber produces Integer for digits alone and Decimal once a fractional
+// part follows, keeping Integer as narrow as the version header expects it.
+func readNumber(c cursor) (cursor, *Token) {
 	startCol := c.column
 
 	start := c.pos
+	c = readDigits(c)
+
+	kind := Integer
+	if peek(c) == '.' && isDigit(peekAhead(c, 1)) {
+		kind = Decimal
+		c = readDigits(advance(c))
+	}
+
+	return c, &Token{Type: kind, Value: c.input[start:c.pos], Line: c.line, Column: startCol}
+}
+
+func readDigits(c cursor) cursor {
 	for c.pos < len(c.input) && isDigit(peek(c)) {
 		c = advance(c)
 	}
-
-	return c, &Token{Type: Integer, Value: c.input[start:c.pos], Line: c.line, Column: startCol}
+	return c
 }
 
 func peek(c cursor) byte {
