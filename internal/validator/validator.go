@@ -52,6 +52,7 @@ type modelIndex struct {
 	producedEvents     map[string]bool
 	eventFields        map[string][]string
 	eventTagKeys       map[string][]string
+	constructFields    map[string]map[string]*ast.Field
 }
 
 func newModelIndex(model *ast.Model) *modelIndex {
@@ -66,6 +67,7 @@ func newModelIndex(model *ast.Model) *modelIndex {
 		producedEvents:     make(map[string]bool),
 		eventFields:        make(map[string][]string),
 		eventTagKeys:       make(map[string][]string),
+		constructFields:    make(map[string]map[string]*ast.Field),
 	}
 
 	for _, ctx := range model.Contexts {
@@ -84,6 +86,7 @@ func (i *modelIndex) collect(slice *ast.Slice) {
 	for _, cmd := range slice.Commands {
 		i.commandNames[cmd.Name] = true
 		i.commandPositions[cmd.Name] = cmd.NamePos
+		i.collectFields(cmd.Name, cmd.Fields)
 	}
 	for _, evt := range slice.Events {
 		i.eventNames[evt.Name] = true
@@ -127,6 +130,25 @@ func (i *modelIndex) collectEventShape(evt *ast.Event) {
 	}
 	for _, tag := range evt.Tags {
 		i.eventTagKeys[evt.Name] = append(i.eventTagKeys[evt.Name], tag.Key)
+	}
+	i.collectFields(evt.Name, evt.Fields)
+}
+
+// collectFields files a construct's fields under its own name. Two constructs
+// sharing a name accumulate rather than replace, the way collectEventShape
+// already treats a repeated event.
+func (i *modelIndex) collectFields(construct string, fields []*ast.Field) {
+	if len(fields) == 0 {
+		return
+	}
+
+	declared, ok := i.constructFields[construct]
+	if !ok {
+		declared = make(map[string]*ast.Field, len(fields))
+		i.constructFields[construct] = declared
+	}
+	for _, f := range fields {
+		declared[f.Name] = f
 	}
 }
 
@@ -402,9 +424,59 @@ func specDiagnostics(spec *ast.Spec, index *modelIndex) []*diagnostic.Entry {
 	for _, ref := range undeclared {
 		diags = append(diags, errorAt(ref.element.NamePos, "%s %q does not exist", ref.kind, ref.element.Name))
 	}
+	diags = append(diags, payloadDiagnostics(spec, index)...)
 	sortInDeclarationOrder(diags)
 
 	return diags
+}
+
+func payloadDiagnostics(spec *ast.Spec, index *modelIndex) []*diagnostic.Entry {
+	var diags []*diagnostic.Entry
+	for _, given := range spec.Given {
+		diags = append(diags, index.payloadFieldDiagnostics(given, "event", index.eventNames[given.Name])...)
+	}
+	if ref := spec.When; ref != nil {
+		diags = append(diags, index.payloadFieldDiagnostics(ref, index.whenKind(ref.Name), index.declaresCommandOrEvent(ref.Name))...)
+	}
+	if outcome, ok := spec.Then.(*ast.ThenEvents); ok {
+		for _, event := range outcome.Events {
+			diags = append(diags, index.payloadFieldDiagnostics(event, "event", index.eventNames[event.Name])...)
+		}
+	}
+
+	return diags
+}
+
+// payloadFieldDiagnostics reports each payload field the referenced construct
+// does not declare. A reference no construct declares is left alone: the
+// reference check above already reports it, there is nothing to look the field
+// names up on, and reporting both would turn one typo into a cascade.
+func (i *modelIndex) payloadFieldDiagnostics(ref *ast.SpecElement, kind string, declared bool) []*diagnostic.Entry {
+	if !declared {
+		return nil
+	}
+
+	fields := i.constructFields[ref.Name]
+	var diags []*diagnostic.Entry
+	for _, stated := range ref.Payload {
+		if _, ok := fields[stated.Name]; ok {
+			continue
+		}
+		diags = append(diags, errorAt(stated.NamePos,
+			"payload field %q is not declared on %s %q", stated.Name, kind, ref.Name))
+	}
+
+	return diags
+}
+
+// whenKind names what a spec's when resolved against, which is a command in a
+// command slice and the triggering event in an automation slice.
+func (i *modelIndex) whenKind(name string) string {
+	if i.commandNames[name] {
+		return "command"
+	}
+
+	return "event"
 }
 
 func undeclaredSpecEvents(refs []*ast.SpecElement, index *modelIndex) []undeclaredSpecReference {

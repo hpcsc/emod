@@ -8,6 +8,8 @@ import (
 
 	"github.com/hpcsc/emod/internal/ast"
 	"github.com/hpcsc/emod/internal/diagnostic"
+	"github.com/hpcsc/emod/internal/lexer"
+	"github.com/hpcsc/emod/internal/parser"
 	"github.com/hpcsc/emod/internal/test"
 	"github.com/hpcsc/emod/internal/validator"
 	"github.com/stretchr/testify/require"
@@ -2550,6 +2552,157 @@ func TestValidate(t *testing.T) {
 		})
 	})
 
+	t.Run("payload field names", func(t *testing.T) {
+		t.Run("a field the referenced construct does not declare is reported on the field name", func(t *testing.T) {
+			tests := []struct {
+				name  string
+				specs string
+				want  []string
+			}{
+				{
+					name: "on a given element, against the event's fields",
+					specs: `spec "borrows a copy the member returned" {
+        given [CopyReturned { copyIdd: "C-93204" }]
+        when BorrowCopy
+        then [CopyBorrowed]
+      }`,
+					want: []string{`lending.emod:31: payload field "copyIdd" is not declared on event "CopyReturned"`},
+				},
+				{
+					name: "on the when reference, against the command's fields",
+					specs: `spec "borrows a copy no one holds" {
+        when BorrowCopy { copyIdd: "C-93204" }
+        then [CopyBorrowed]
+      }`,
+					want: []string{`lending.emod:31: payload field "copyIdd" is not declared on command "BorrowCopy"`},
+				},
+				{
+					name: "on a then event, against the event's fields",
+					specs: `spec "borrows a copy no one holds" {
+        when BorrowCopy
+        then [CopyBorrowed { loanIdd: "L-771" }]
+      }`,
+					want: []string{`lending.emod:32: payload field "loanIdd" is not declared on event "CopyBorrowed"`},
+				},
+				{
+					name: "on a when naming an event rather than a command",
+					specs: `spec "records a return the desk logged" {
+        when CopyReturned { copyIdd: "C-93204" }
+        then [CopyBorrowed]
+      }`,
+					want: []string{`lending.emod:31: payload field "copyIdd" is not declared on event "CopyReturned"`},
+				},
+				{
+					name: "on a construct declaring no fields block at all, once per payload field",
+					specs: `spec "shelves a copy no one holds" {
+        when ShelveCopy { copyId: "C-93204", shelfMark: "AURELIA" }
+        then [CopyBorrowed]
+      }`,
+					want: []string{
+						`lending.emod:31: payload field "copyId" is not declared on command "ShelveCopy"`,
+						`lending.emod:31: payload field "shelfMark" is not declared on command "ShelveCopy"`,
+					},
+				},
+				{
+					name: "on a field named after a DSL keyword the construct does not declare",
+					specs: `spec "borrows a copy no one holds" {
+        when BorrowCopy { given: "C-93204" }
+        then [CopyBorrowed]
+      }`,
+					want: []string{`lending.emod:31: payload field "given" is not declared on command "BorrowCopy"`},
+				},
+			}
+
+			for _, tc := range tests {
+				t.Run(tc.name, func(t *testing.T) {
+					diags := validateSource(t, lendingModelWithSpecs(tc.specs))
+
+					require.Equal(t, tc.want, reportedLines(diags))
+				})
+			}
+		})
+
+		t.Run("a field the referenced construct declares is accepted", func(t *testing.T) {
+			tests := []struct {
+				name  string
+				specs string
+			}{
+				{
+					name: "on every reference a spec accepts",
+					specs: `spec "borrows a copy the member returned" {
+        given [CopyReturned { copyId: "C-93204" }]
+        when BorrowCopy { copyId: "C-93204", shelfMark: "AURELIA" }
+        then [CopyBorrowed { loanId: "L-771" }]
+      }`,
+				},
+				{
+					name: "when every required field but one is omitted, because a payload is partial",
+					specs: `spec "borrows a copy no one holds" {
+        when BorrowCopy { copyId: "C-93204" }
+        then [CopyBorrowed]
+      }`,
+				},
+				{
+					name: "on a field named after a DSL keyword the construct declares",
+					specs: `spec "borrows a copy no one holds" {
+        when BorrowCopy { where: "AURELIA" }
+        then [CopyBorrowed]
+      }`,
+				},
+			}
+
+			for _, tc := range tests {
+				t.Run(tc.name, func(t *testing.T) {
+					require.Empty(t, validateSource(t, lendingModelWithSpecs(tc.specs)))
+				})
+			}
+		})
+
+		t.Run("a payload on a reference no construct declares reports only the missing reference", func(t *testing.T) {
+			diags := validateSource(t, lendingModelWithSpecs(`spec "borrows a copy no one holds" {
+        when BorrwoCopy { copyIdd: "C-93204" }
+        then [CopyBorrowed]
+      }`))
+
+			require.Equal(t, []string{`lending.emod:31: command "BorrwoCopy" does not exist`}, reportedLines(diags))
+		})
+
+		t.Run("several undeclared fields are reported in declaration order, identically across runs", func(t *testing.T) {
+			source := lendingModelWithSpecs(`spec "borrows a copy the member returned" {
+        given [CopyReturned { returnedAtt: "2024-07-19" }]
+        when BorrowCopy { copyIdd: "C-93204", shelfMarkk: "AURELIA" }
+        then [CopyBorrowed { loanIdd: "L-771" }]
+      }`)
+			want := []string{
+				`lending.emod:31: payload field "returnedAtt" is not declared on event "CopyReturned"`,
+				`lending.emod:32: payload field "copyIdd" is not declared on command "BorrowCopy"`,
+				`lending.emod:32: payload field "shelfMarkk" is not declared on command "BorrowCopy"`,
+				`lending.emod:33: payload field "loanIdd" is not declared on event "CopyBorrowed"`,
+			}
+
+			for run := range 3 {
+				t.Run(fmt.Sprintf("run %d", run+1), func(t *testing.T) {
+					require.Equal(t, want, reportedLines(validateSource(t, source)))
+				})
+			}
+		})
+
+		t.Run("the diagnostic carries no rule name, so emod lint --explain has nothing to answer for", func(t *testing.T) {
+			diags := validateSource(t, lendingModelWithSpecs(`spec "borrows a copy no one holds" {
+        when BorrowCopy { copyIdd: "C-93204" }
+        then [CopyBorrowed]
+      }`))
+
+			require.Len(t, diags, 1)
+			require.Equal(t, diagnostic.Error, diags[0].Severity)
+			require.Empty(t, diags[0].RuleName)
+		})
+
+		t.Run("the shared payload fixture states no field its constructs fail to declare", func(t *testing.T) {
+			require.Empty(t, validator.Validate(test.PayloadLibraryLendingModel(t)))
+		})
+	})
+
 	t.Run("outcome shape", func(t *testing.T) {
 		t.Run("a view outcome in a slice declaring no view is reported on the view name", func(t *testing.T) {
 			model := &ast.Model{
@@ -4473,6 +4626,65 @@ func rejectionScopeModel(slice *ast.Slice) *ast.Model {
 			},
 		},
 	}
+}
+
+// validateSource runs the validator over parsed source rather than a model built
+// in Go, so the position a payload diagnostic reports is the one an author would
+// see and a whole-line expectation can name it.
+func validateSource(t *testing.T, source string) []*diagnostic.Entry {
+	t.Helper()
+
+	tokens, scanDiags := lexer.Scan(source, "lending.emod")
+	require.Empty(t, scanDiags)
+
+	model, parseDiags := parser.New(tokens, "lending.emod").Parse()
+	require.Empty(t, parseDiags)
+
+	return validator.Validate(model)
+}
+
+// lendingModelWithSpecs wraps specs in a model whose commands and events declare
+// fields of every type a payload literal is checked against. The spec block it
+// wraps opens on line 30, which is what lets a caller name the line each
+// diagnostic reports on.
+func lendingModelWithSpecs(specs string) string {
+	return fmt.Sprintf(`model "Library Lending"
+context "Lending" {
+  aggregate "Loan" {
+    slice "Borrow Copy" {
+      command BorrowCopy {
+        fields {
+          copyId    string required
+          dueOn     date   required
+          where     string
+          shelfMark ShelfMark
+        }
+      }
+      command ShelveCopy {
+      }
+      event CopyBorrowed {
+        fields {
+          loanId     string    required
+          borrowedAt timestamp required
+          renewals   int
+          lateFee    decimal
+          expedited  bool
+        }
+      }
+      event CopyReturned {
+        fields {
+          copyId     string    required
+          returnedAt timestamp required
+        }
+      }
+      %s
+      flow {
+        command -> event: BorrowCopy -> CopyBorrowed
+        command -> event: ShelveCopy -> CopyReturned
+      }
+    }
+  }
+}`, specs)
 }
 
 func reportedLines(diags []*diagnostic.Entry) []string {

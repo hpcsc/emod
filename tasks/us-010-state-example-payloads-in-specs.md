@@ -3,7 +3,7 @@
 ## Progress
 - [x] Task 1: Lex number literals and record example payloads on spec references
 - [x] Task 2: Share a payload-carrying fixture and its twin
-- [ ] Task 3: Reject payload field names the referenced construct does not declare
+- [x] Task 3: Reject payload field names the referenced construct does not declare
 - [ ] Task 4: Check payload literal kinds against the declared field type
 - [ ] Task 5: Preserve payloads through `emod fmt`
 - [ ] Task 6: Carry payloads through the JSON and CUE exports and the embedded schema
@@ -444,29 +444,29 @@ asymmetry US-006 established for the reference itself; a payload on a reference 
 declare produces no payload diagnostic.
 
 **Acceptance Criteria:**
-- [ ] A payload on a `given` element naming a field the referenced event does not declare produces
+- [x] A payload on a `given` element naming a field the referenced event does not declare produces
       exactly one diagnostic, at `Error` severity, positioned on the field name, whose whole formatted
       line names the field and the event
-- [ ] A payload on `when` naming a field the referenced command does not declare produces the equivalent
+- [x] A payload on `when` naming a field the referenced command does not declare produces the equivalent
       diagnostic, naming the command
-- [ ] A payload on a `then` event-list element produces the equivalent diagnostic
-- [ ] A `when` that names an event rather than a command resolves its payload fields against that
+- [x] A payload on a `then` event-list element produces the equivalent diagnostic
+- [x] A `when` that names an event rather than a command resolves its payload fields against that
       event's fields
-- [ ] A payload field declared on the referenced construct produces no diagnostic, including when the
+- [x] A payload field declared on the referenced construct produces no diagnostic, including when the
       field is declared `required` and every other field is omitted — a payload is partial by design
-- [ ] A payload on a reference no construct in the model declares produces only the existing
+- [x] A payload on a reference no construct in the model declares produces only the existing
       "event %q does not exist" or "command %q does not exist" diagnostic, and no payload diagnostic
-- [ ] A payload on a construct that declares no `fields` block at all reports one diagnostic per payload
+- [x] A payload on a construct that declares no `fields` block at all reports one diagnostic per payload
       field, the same way
-- [ ] A payload field named after a DSL keyword resolves against a field of that name, and a keyword-named
+- [x] A payload field named after a DSL keyword resolves against a field of that name, and a keyword-named
       field the construct does not declare is reported like any other
-- [ ] A spec whose payloads name several undeclared fields produces one diagnostic per field, in
+- [x] A spec whose payloads name several undeclared fields produces one diagnostic per field, in
       declaration order, identical across repeated runs of `validator.Validate` over the same model
-- [ ] These diagnostics carry no `RuleName`, so `emod lint --explain` gains nothing to answer for and no
+- [x] These diagnostics carry no `RuleName`, so `emod lint --explain` gains nothing to answer for and no
       lint rule is added by this task
-- [ ] `cli.RunValidate` over a file whose payload names an undeclared field exits with `ExitCode` 1, and
+- [x] `cli.RunValidate` over a file whose payload names an undeclared field exits with `ExitCode` 1, and
       the reported message names the field and the construct rather than only the path and line number
-- [ ] `oracle.Check` over the Task 2 fixture, and over every fixture that states no payload, still
+- [x] `oracle.Check` over the Task 2 fixture, and over every fixture that states no payload, still
       returns no diagnostics
 
 **Affected Files/Modules:**

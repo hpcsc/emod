@@ -293,6 +293,45 @@ context "Lending" {
 		require.Contains(t, err.Error(), `event "CopyBorroed" does not exist`)
 	})
 
+	t.Run("returns error naming the payload field a spec states and the construct that does not declare it", func(t *testing.T) {
+		input := `model "Library Lending"
+context "Lending" {
+  aggregate "Loan" {
+    slice "Borrow Copy" {
+      command BorrowCopy {
+        fields {
+          memberId string required
+          copyId   string required
+        }
+      }
+      event CopyBorrowed {
+        fields {
+          loanId   string required
+          memberId string required
+          copyId   string required
+        }
+      }
+      spec "borrows a copy no one holds" {
+        when BorrowCopy { copyIdd: "C-93204" }
+        then [CopyBorrowed]
+      }
+      flow {
+        command -> event: BorrowCopy -> CopyBorrowed
+      }
+    }
+  }
+}
+`
+		path := writeTemp(t, "undeclared_payload_field.emod", input)
+
+		err := cli.RunValidate(path, "text")
+
+		var lintErr *cli.LintError
+		require.True(t, errors.As(err, &lintErr))
+		require.Equal(t, 1, lintErr.ExitCode)
+		require.Contains(t, err.Error(), `payload field "copyIdd" is not declared on command "BorrowCopy"`)
+	})
+
 	t.Run("returns error naming the invariant a spec rejects from outside the declaring scope", func(t *testing.T) {
 		input := `model "Library Lending"
 context "Lending" {
