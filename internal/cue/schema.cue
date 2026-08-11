@@ -77,8 +77,18 @@
 	event?:           #Event
 }
 
+#PayloadField: {
+	name:  string
+	value: string | number | bool
+}
+
+#SpecElement: {
+	name:     string
+	payload?: [...#PayloadField]
+}
+
 #SpecOutcome: {
-	events?:   [...string]
+	events?:   [...#SpecElement]
 	rejected?: string
 	view?:     string
 	command?:  string
@@ -87,8 +97,8 @@
 #Spec: {
 	comments?: [...#Comment]
 	name:      string
-	given?:    [...string]
-	when?:     string
+	given?:    [...#SpecElement]
+	when?:     #SpecElement
 	then?:     #SpecOutcome
 }
 

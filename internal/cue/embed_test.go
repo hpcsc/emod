@@ -145,6 +145,41 @@ func TestSchema(t *testing.T) {
 		require.Contains(t, string(output), "schedule")
 	})
 
+	t.Run("rejects a spec whose given is stated in the retired bare-name shape", func(t *testing.T) {
+		cueBin := requireCue(t)
+
+		output, err := vetAgainstModel(t, cueBin, strings.Replace(fullModelJSON,
+			`"given": [{"name": "ReservationMade"}]`,
+			`"given": ["ReservationMade"]`, 1))
+
+		require.Error(t, err, "schema accepted a given listing bare names")
+		require.Contains(t, string(output), "given")
+	})
+
+	t.Run("rejects a spec whose when is stated in the retired bare-name shape", func(t *testing.T) {
+		cueBin := requireCue(t)
+
+		output, err := vetAgainstModel(t, cueBin, strings.Replace(fullModelJSON,
+			`"when": {"name": "MakeReservation"},
+          "then": {"rejected"`,
+			`"when": "MakeReservation",
+          "then": {"rejected"`, 1))
+
+		require.Error(t, err, "schema accepted a when naming a bare string")
+		require.Contains(t, string(output), "when")
+	})
+
+	t.Run("rejects a payload value the schema does not admit", func(t *testing.T) {
+		cueBin := requireCue(t)
+
+		output, err := vetAgainstModel(t, cueBin, strings.Replace(fullModelJSON,
+			`{"name": "nights", "value": 3}`,
+			`{"name": "nights", "value": {"amount": 3}}`, 1))
+
+		require.Error(t, err, "schema accepted a payload value that is neither a string, a number nor a bool")
+		require.Contains(t, string(output), "value")
+	})
+
 	t.Run("rejects a flow that names only one side", func(t *testing.T) {
 		cueBin := requireCue(t)
 
@@ -232,19 +267,19 @@ const fullModelJSON = `{
         "specs": [{
           "comments": [{"text": "# The room has to be free"}],
           "name": "holds a room no guest holds",
-          "when": "MakeReservation",
-          "then": {"events": ["ReservationMade"]}
+          "when": {"name": "MakeReservation", "payload": [{"name": "roomType", "value": "suite"}]},
+          "then": {"events": [{"name": "ReservationMade", "payload": [{"name": "nights", "value": 3}, {"name": "rate", "value": 149.5}, {"name": "prepaid", "value": true}]}]}
         }, {
           "name": "refuses a room another guest holds",
-          "given": ["ReservationMade"],
-          "when": "MakeReservation",
+          "given": [{"name": "ReservationMade"}],
+          "when": {"name": "MakeReservation"},
           "then": {"rejected": "OneRoomPerReservation"}
         }, {
           "name": "lists the rooms a guest can book",
           "then": {"view": "RoomsView"}
         }, {
           "name": "asks the system to hold a room",
-          "when": "MakeReservation",
+          "when": {"name": "MakeReservation"},
           "then": {"command": "MakeReservation"}
         }]
       }]

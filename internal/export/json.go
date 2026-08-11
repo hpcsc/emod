@@ -2,6 +2,7 @@ package export
 
 import (
 	"encoding/json"
+	"strings"
 
 	"github.com/hpcsc/emod/internal/ast"
 	"github.com/hpcsc/emod/internal/diagnostic"
@@ -200,25 +201,35 @@ type jsonTranslation struct {
 }
 
 type jsonSpec struct {
-	Name          string           `json:"name"`
-	Position      *jsonPosition    `json:"position,omitempty"`
-	WhenPosition  *jsonPosition    `json:"when_position,omitempty"`
-	OpenPosition  *jsonPosition    `json:"open_position,omitempty"`
-	ClosePosition *jsonPosition    `json:"close_position,omitempty"`
-	Comments      []*jsonComment   `json:"comments,omitempty"`
-	Given         []string         `json:"given,omitempty"`
-	When          string           `json:"when,omitempty"`
-	Then          *jsonSpecOutcome `json:"then,omitempty"`
+	Name          string             `json:"name"`
+	Position      *jsonPosition      `json:"position,omitempty"`
+	WhenPosition  *jsonPosition      `json:"when_position,omitempty"`
+	OpenPosition  *jsonPosition      `json:"open_position,omitempty"`
+	ClosePosition *jsonPosition      `json:"close_position,omitempty"`
+	Comments      []*jsonComment     `json:"comments,omitempty"`
+	Given         []*jsonSpecElement `json:"given,omitempty"`
+	When          *jsonSpecElement   `json:"when,omitempty"`
+	Then          *jsonSpecOutcome   `json:"then,omitempty"`
+}
+
+type jsonSpecElement struct {
+	Name    string              `json:"name"`
+	Payload []*jsonPayloadField `json:"payload,omitempty"`
+}
+
+type jsonPayloadField struct {
+	Name  string `json:"name"`
+	Value any    `json:"value"`
 }
 
 type jsonSpecOutcome struct {
-	RejectedPosition *jsonPosition `json:"rejected_position,omitempty"`
-	Events           []string      `json:"events,omitempty"`
-	Rejected         string        `json:"rejected,omitempty"`
-	ViewPosition     *jsonPosition `json:"view_position,omitempty"`
-	View             string        `json:"view,omitempty"`
-	CommandPosition  *jsonPosition `json:"command_position,omitempty"`
-	Command          string        `json:"command,omitempty"`
+	RejectedPosition *jsonPosition      `json:"rejected_position,omitempty"`
+	Events           []*jsonSpecElement `json:"events,omitempty"`
+	Rejected         string             `json:"rejected,omitempty"`
+	ViewPosition     *jsonPosition      `json:"view_position,omitempty"`
+	View             string             `json:"view,omitempty"`
+	CommandPosition  *jsonPosition      `json:"command_position,omitempty"`
+	Command          string             `json:"command,omitempty"`
 }
 
 // jsonDiagnosticsWrapper is the top-level envelope for JSON diagnostics output.
@@ -446,8 +457,8 @@ func convertSpec(s *ast.Spec) *jsonSpec {
 		OpenPosition:  convertPosition(s.OpenPos),
 		ClosePosition: convertPosition(s.ClosePos),
 		Comments:      convertComments(s.Comments),
-		Given:         specElementNames(s.Given),
-		When:          specElementName(s.When),
+		Given:         convertSpecElements(s.Given),
+		When:          convertSpecElement(s.When),
 		Then:          convertSpecOutcome(s.Then),
 	}
 }
@@ -455,7 +466,7 @@ func convertSpec(s *ast.Spec) *jsonSpec {
 func convertSpecOutcome(then ast.ThenClause) *jsonSpecOutcome {
 	switch t := then.(type) {
 	case *ast.ThenEvents:
-		return &jsonSpecOutcome{Events: specElementNames(t.Events)}
+		return &jsonSpecOutcome{Events: convertSpecElements(t.Events)}
 	case *ast.ThenRejected:
 		return &jsonSpecOutcome{
 			RejectedPosition: convertPosition(t.InvariantPos),
@@ -475,22 +486,62 @@ func convertSpecOutcome(then ast.ThenClause) *jsonSpecOutcome {
 	return nil
 }
 
-func specElementNames(elements []*ast.SpecElement) []string {
+func convertSpecElements(elements []*ast.SpecElement) []*jsonSpecElement {
 	if len(elements) == 0 {
 		return nil
 	}
-	names := make([]string, 0, len(elements))
+	converted := make([]*jsonSpecElement, 0, len(elements))
 	for _, element := range elements {
-		names = append(names, element.Name)
+		converted = append(converted, convertSpecElement(element))
 	}
-	return names
+	return converted
 }
 
-func specElementName(element *ast.SpecElement) string {
+func convertSpecElement(element *ast.SpecElement) *jsonSpecElement {
 	if element == nil {
-		return ""
+		return nil
 	}
-	return element.Name
+	converted := &jsonSpecElement{Name: element.Name}
+	for _, field := range element.Payload {
+		converted.Payload = append(converted.Payload, &jsonPayloadField{
+			Name:  field.Name,
+			Value: payloadValue(field),
+		})
+	}
+	return converted
+}
+
+// payloadValue carries a literal as the JSON type it stands for — a string as a
+// string, a number as a number, true as a boolean — because the declared field
+// type already tells a consumer whether a number is an int or a decimal. A
+// number travels as its digits rather than a float64: parsing it here would
+// round a literal wider than an int64, so 99999999999999999999 would export as
+// 1e+20.
+func payloadValue(field *ast.PayloadField) any {
+	switch field.Kind {
+	case ast.IntegerLiteral, ast.DecimalLiteral:
+		return json.Number(canonicalNumber(field.Value))
+	case ast.BooleanLiteral:
+		return field.Value == "true"
+	default:
+		return field.Value
+	}
+}
+
+// canonicalNumber trims the leading zeros an emod number literal may carry: 007
+// is a legal payload value and an illegal JSON and CUE number, so a document
+// emitting it verbatim is one neither format can read back.
+func canonicalNumber(text string) string {
+	whole, fraction, hasFraction := strings.Cut(text, ".")
+	whole = strings.TrimLeft(whole, "0")
+	if whole == "" {
+		whole = "0"
+	}
+	if hasFraction {
+		return whole + "." + fraction
+	}
+
+	return whole
 }
 
 func specElementPosition(element *ast.SpecElement) *jsonPosition {

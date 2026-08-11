@@ -23,6 +23,18 @@ func TestSchema(t *testing.T) {
 		require.Contains(t, output, "#Slice:")
 	})
 
+	t.Run("prints a schema declaring the payload a spec element may state", func(t *testing.T) {
+		output := captureStdout(t, func() {
+			err := cli.RunSchema("cue")
+			require.NoError(t, err)
+		})
+
+		require.Contains(t, output, "#SpecElement:")
+		require.Contains(t, output, "#PayloadField:")
+		require.Regexp(t, `payload\?:\s+\[\.\.\.#PayloadField\]`, output)
+		require.Regexp(t, `value:\s+string \| number \| bool`, output)
+	})
+
 	t.Run("output matches embedded schema content", func(t *testing.T) {
 		output := captureStdout(t, func() {
 			err := cli.RunSchema("cue")

@@ -6,7 +6,7 @@
 - [x] Task 3: Reject payload field names the referenced construct does not declare
 - [x] Task 4: Check payload literal kinds against the declared field type
 - [x] Task 5: Preserve payloads through `emod fmt`
-- [ ] Task 6: Carry payloads through the JSON and CUE exports and the embedded schema
+- [x] Task 6: Carry payloads through the JSON and CUE exports and the embedded schema
 - [ ] Task 7: Accept payloads in the tree-sitter grammar
 - [ ] Task 8: Document payloads in the DSL reference
 
@@ -657,31 +657,31 @@ is nodes and edges — carries no trace of a spec or a payload, and neither the 
 glossary change. A model whose specs carry no payload exports and renders as it did before.
 
 **Acceptance Criteria:**
-- [ ] The JSON export of the Task 2 fixture files every payload under the reference that states it, in
+- [x] The JSON export of the Task 2 fixture files every payload under the reference that states it, in
       declaration order, read back against the hand-transcribed list from Task 2 rather than against
       another export
-- [ ] A string value reads back as a JSON string, a number as a JSON number and `true` as a JSON boolean
-- [ ] A reference that states no payload states no payload key at all, and a spec whose references are
+- [x] A string value reads back as a JSON string, a number as a JSON number and `true` as a JSON boolean
+- [x] A reference that states no payload states no payload key at all, and a spec whose references are
       all names-only exports the same content it exports today apart from the element's shape
-- [ ] The CUE export carries the same, and "CUE and JSON exports agree on the specs a model states"
+- [x] The CUE export carries the same, and "CUE and JSON exports agree on the specs a model states"
       (`internal/export/export_test.go:3841`) passes for the payload fixture
-- [ ] `internal/cue/schema.cue` declares the spec element and its payload field, and `cue vet -d '#Model'`
+- [x] `internal/cue/schema.cue` declares the spec element and its payload field, and `cue vet -d '#Model'`
       over the export of the fixture passes (`internal/export/export_test.go:3812`)
-- [ ] `emod schema` prints a schema that declares a payload on a spec element
-- [ ] A document stating a spec's `given` in the retired shape — a bare list of names — fails `cue vet`
+- [x] `emod schema` prints a schema that declares a payload on a spec element
+- [x] A document stating a spec's `given` in the retired shape — a bare list of names — fails `cue vet`
       with a message naming it, the way `internal/cue/embed_test.go:112` pins a retired key
-- [ ] The keys inside the spec element object are emitted in the order its `json*` siblings emit theirs,
+- [x] The keys inside the spec element object are emitted in the order its `json*` siblings emit theirs,
       pinned with `emittedKeyOrder` (`internal/export/export_test.go:4760`) against a sibling's key list
       in the same subtest
-- [ ] Walking the whole diagram JSON document produced from the fixture finds no payload field name and
+- [x] Walking the whole diagram JSON document produced from the fixture finds no payload field name and
       no payload value at any key or depth — after first proving the same search finds them in the model
       document
-- [ ] Every diagram rendering of the fixture — drawio, SVG, mermaid and ASCII — is byte-identical to the
+- [x] Every diagram rendering of the fixture — drawio, SVG, mermaid and ASCII — is byte-identical to the
       rendering of the same model with its payloads stripped, and the comparison opens by asserting the
       two models differ, that the twin states no payload, and that the featured model states the whole
       transcribed list
-- [ ] The glossary markdown and JSON renderings of the fixture are identical to those of the twin
-- [ ] The only expected values that move are those restating the spec element's wire shape —
+- [x] The glossary markdown and JSON renderings of the fixture are identical to those of the twin
+- [x] The only expected values that move are those restating the spec element's wire shape —
       `libraryLendingSpecs` (`internal/export/export_test.go:4306`) and `fullModelJSON`
       (`internal/cue/embed_test.go:232`); no golden, canonical constant or transcribed list in
       `internal/formatter`, `internal/diagram`, `internal/glossary` or `internal/cli` moves

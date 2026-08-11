@@ -135,17 +135,43 @@ func (w *cueWriter) writeSlice(s *ast.Slice) {
 func (w *cueWriter) writeSpec(s *ast.Spec) {
 	w.writeComments(s.Comments)
 	w.line("name: %q", s.Name)
-	w.listIfSet("given", specElementNames(s.Given))
-	w.lineIfSet("when", specElementName(s.When))
+	writeCUEList(w, "given", s.Given, w.writeSpecElement)
+	if s.When != nil {
+		w.writeObject("when", func() { w.writeSpecElement(s.When) })
+	}
 	if s.Then != nil {
 		w.writeObject("then", func() { w.writeSpecOutcome(s.Then) })
+	}
+}
+
+func (w *cueWriter) writeSpecElement(element *ast.SpecElement) {
+	w.line("name: %q", element.Name)
+	writeCUEList(w, "payload", element.Payload, w.writePayloadField)
+}
+
+func (w *cueWriter) writePayloadField(field *ast.PayloadField) {
+	w.line("name: %q", field.Name)
+	w.line("value: %s", cueLiteral(field))
+}
+
+// cueLiteral escapes a string, unlike the formatter's quoted: CUE does have
+// escape sequences, so a backslash or a tab in a payload value must be written
+// as one or the document will not parse back.
+func cueLiteral(field *ast.PayloadField) string {
+	switch field.Kind {
+	case ast.IntegerLiteral, ast.DecimalLiteral:
+		return canonicalNumber(field.Value)
+	case ast.BooleanLiteral:
+		return field.Value
+	default:
+		return fmt.Sprintf("%q", field.Value)
 	}
 }
 
 func (w *cueWriter) writeSpecOutcome(then ast.ThenClause) {
 	switch t := then.(type) {
 	case *ast.ThenEvents:
-		w.listIfSet("events", specElementNames(t.Events))
+		writeCUEList(w, "events", t.Events, w.writeSpecElement)
 	case *ast.ThenRejected:
 		w.lineIfSet("rejected", t.InvariantName)
 	case *ast.ThenView:

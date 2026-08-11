@@ -452,6 +452,22 @@ func TestExporterContract(t *testing.T) {
 					"a diagram shows elements and arrows, not the scenarios they must satisfy, so stating a spec cannot move it")
 			})
 
+			t.Run("stating example payloads leaves the picture untouched", func(t *testing.T) {
+				stated := test.PayloadLibraryLendingModel(t)
+				unstated := test.WithoutSpecPayloads(stated)
+
+				require.NotEqual(t, stated, unstated,
+					"the twin has to state no payload, or the comparison below says nothing")
+				require.Equal(t, test.PayloadLibraryLendingPayloads, test.DeclaredSpecPayloads(stated))
+				require.Empty(t, test.DeclaredSpecPayloads(unstated),
+					"the twin has to lose the payloads of both slice homes, or the comparison below is answered by whichever home it kept")
+				require.Equal(t, test.DeclaredSpecNames(stated), test.DeclaredSpecNames(unstated),
+					"the twin has to keep every spec, or it is a spec differential rather than a payload one")
+
+				require.Equal(t, e.run(t, unstated, diagram.StyleAuto), e.run(t, stated, diagram.StyleAuto),
+					"a diagram shows elements and arrows, not the example values a scenario states, so stating a payload cannot move it")
+			})
+
 			t.Run("stating specs with all four outcomes leaves the picture untouched", func(t *testing.T) {
 				stated := test.SlicePatternLibraryLendingModel(t)
 				unstated := test.WithoutSpecs(stated)

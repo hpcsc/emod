@@ -5,6 +5,7 @@ package export_test
 import (
 	"bytes"
 	"encoding/json"
+	"fmt"
 	"maps"
 	"os"
 	"os/exec"
@@ -1465,6 +1466,67 @@ func TestExport(t *testing.T) {
 			require.Equal(t, libraryLendingSpecs, specsByOwner(modelDocOf(t, test.SpecLibraryLendingModel(t))))
 		})
 
+		t.Run("files every payload under the reference that states it, in declaration order", func(t *testing.T) {
+			require.Equal(t, payloadLibraryLendingSpecs, specsByOwner(modelDocOf(t, test.PayloadLibraryLendingModel(t))))
+		})
+
+		t.Run("the exported document names the same payloads the fixture's own transcription does", func(t *testing.T) {
+			var stated []string
+			for _, payload := range test.PayloadLibraryLendingPayloads {
+				for _, value := range payload.Values {
+					stated = append(stated, fmt.Sprintf("%s/%s/%s", payload.SpecName, payload.Reference, value.Field))
+				}
+			}
+
+			exported := transcribedPayloadFieldsOf(
+				specsByOwner(modelDocOf(t, test.PayloadLibraryLendingModel(t))),
+				[]string{"Borrow Copy", "Return Copy", "Claim Desk", "Release Desk"})
+
+			require.Equal(t, stated, exported)
+		})
+
+		t.Run("a number keeps its digits rather than the float64 they round to", func(t *testing.T) {
+			tests := []struct {
+				name    string
+				literal string
+				kind    ast.LiteralKind
+				want    string
+			}{
+				{name: "a leading zero is trimmed, which JSON has no literal for", literal: "007", kind: ast.IntegerLiteral, want: "7"},
+				{name: "a leading zero ahead of a fraction is trimmed", literal: "00.5", kind: ast.DecimalLiteral, want: "0.5"},
+				{name: "a trailing zero survives", literal: "12.50", kind: ast.DecimalLiteral, want: "12.50"},
+				{name: "an integer wider than an int64 keeps every digit", literal: "99999999999999999999", kind: ast.IntegerLiteral, want: "99999999999999999999"},
+			}
+
+			for _, tc := range tests {
+				t.Run(tc.name, func(t *testing.T) {
+					raw, err := export.ExportJSON(modelStatingPayload(tc.literal, tc.kind))
+					require.NoError(t, err)
+
+					require.Contains(t, string(raw), `{"name":"shelfMark","value":`+tc.want+`}`)
+					require.NoError(t, json.Unmarshal(raw, &map[string]any{}),
+						"the document has to read back as JSON, which %q does not", tc.literal)
+				})
+			}
+		})
+
+		t.Run("the keys of a spec element are emitted in the order its siblings emit theirs", func(t *testing.T) {
+			raw, err := export.ExportJSON(test.PayloadLibraryLendingModel(t))
+			require.NoError(t, err)
+
+			order := emittedKeyOrder(t, raw)
+
+			// A slice emits its specs after its commands and events, and
+			// emittedKeyOrder files an object under its own name, so the entry a
+			// construct's name carries is the spec element that repeated it.
+			require.Equal(t, []string{"name", "payload"}, order["BorrowCopy"],
+				"a spec element opens with its name and then its children, like every other json document type")
+			require.Equal(t, []string{"name", "value"}, order["catalogueNumber"],
+				"a payload field opens with its name and then what it states")
+			require.Equal(t, []string{"name", "position", "type_position", "modifier_position", "type", "modifier"}, order["returnedAt"],
+				"the sibling whose key list makes the element's own order non-arbitrary")
+		})
+
 		t.Run("files every spec of the slice-pattern fixture under its slice with all four outcomes", func(t *testing.T) {
 			require.Equal(t, slicePatternLibraryLendingSpecs, specsByOwner(modelDocOf(t, test.SlicePatternLibraryLendingModel(t))))
 		})
@@ -1530,7 +1592,7 @@ func TestExport(t *testing.T) {
 				"name":           "refuses a copy already on loan",
 				"position":       map[string]any{"filename": "test.emod", "line": float64(6), "column": float64(7)},
 				"open_position":  map[string]any{"filename": "test.emod", "line": float64(6), "column": float64(41)},
-				"when":           "BorrowCopy",
+				"when":           map[string]any{"name": "BorrowCopy"},
 				"when_position":  map[string]any{"filename": "test.emod", "line": float64(7), "column": float64(14)},
 				"close_position": map[string]any{"filename": "test.emod", "line": float64(9), "column": float64(7)},
 				"then": map[string]any{
@@ -1552,7 +1614,7 @@ func TestExport(t *testing.T) {
 				"name":           "reminds a member when a copy becomes due",
 				"position":       map[string]any{"filename": "test.emod", "line": float64(15), "column": float64(7)},
 				"open_position":  map[string]any{"filename": "test.emod", "line": float64(15), "column": float64(55)},
-				"when":           "CopyBorrowed",
+				"when":           map[string]any{"name": "CopyBorrowed"},
 				"when_position":  map[string]any{"filename": "test.emod", "line": float64(16), "column": float64(14)},
 				"close_position": map[string]any{"filename": "test.emod", "line": float64(18), "column": float64(7)},
 				"then": map[string]any{
@@ -3565,6 +3627,30 @@ func TestExport(t *testing.T) {
 				"the diagram document carries no spec text")
 		})
 
+		t.Run("the payload fixture produces a diagram document with no trace of an example value", func(t *testing.T) {
+			stated := test.PayloadLibraryLendingModel(t)
+			unstated := test.WithoutSpecPayloads(stated)
+
+			require.NotEqual(t, stated, unstated,
+				"the twin has to state no payload, or the comparison below says nothing")
+			require.Equal(t, test.PayloadLibraryLendingPayloads, test.DeclaredSpecPayloads(stated))
+			require.Empty(t, test.DeclaredSpecPayloads(unstated),
+				"the twin has to lose the payloads of both slice homes, or the last comparison below is answered by whichever home it kept")
+
+			require.ElementsMatch(t, payloadFixtureValueText(), payloadValueTextAnywhere(modelDocOf(t, stated)),
+				"the search has to find every value in the model document, or finding none in the diagram document says nothing")
+
+			statedRaw, err := export.ExportDiagramJSON(stated)
+			require.NoError(t, err)
+			unstatedRaw, err := export.ExportDiagramJSON(unstated)
+			require.NoError(t, err)
+			require.Equal(t, unstatedRaw, statedRaw,
+				"the diagram document is nodes and edges; an example value is neither")
+
+			require.Empty(t, payloadValueTextAnywhere(diagramDocOf(t, stated)),
+				"the diagram document carries no payload value")
+		})
+
 		t.Run("the view an automation reads reaches its node and draws an edge of its own, while a name no slice declares draws none", func(t *testing.T) {
 			reading := test.AutomationReadsLibraryLendingModel(t)
 			unread := test.WithoutAutomationReads(reading)
@@ -4187,6 +4273,10 @@ func TestExport(t *testing.T) {
 			requireConformsToSchema(t, lookupCue(t), test.SpecLibraryLendingModel(t))
 		})
 
+		t.Run("a model stating example payloads conforms to the schema's Model definition", func(t *testing.T) {
+			requireConformsToSchema(t, lookupCue(t), test.PayloadLibraryLendingModel(t))
+		})
+
 		t.Run("a model whose automations read views conforms to the schema's Model definition", func(t *testing.T) {
 			requireConformsToSchema(t, lookupCue(t), test.AutomationReadsLibraryLendingModel(t))
 		})
@@ -4214,6 +4304,46 @@ func TestExport(t *testing.T) {
 
 		t.Run("CUE and JSON exports agree on the specs a model states", func(t *testing.T) {
 			requireBothFormatsAgree(t, lookupCue(t), test.SpecLibraryLendingModel(t))
+		})
+
+		t.Run("CUE and JSON exports agree on the payloads a model states", func(t *testing.T) {
+			cueBin := lookupCue(t)
+			stating := test.PayloadLibraryLendingModel(t)
+
+			requireBothFormatsAgree(t, cueBin, stating)
+
+			for format, doc := range exportedDocs(t, cueBin, stating) {
+				require.Equal(t, payloadLibraryLendingSpecs, specsByOwner(doc), "%s export", format)
+			}
+		})
+
+		t.Run("a payload value CUE spells differently from emod is written so CUE reads it back", func(t *testing.T) {
+			tests := []struct {
+				name  string
+				value string
+				kind  ast.LiteralKind
+				want  any
+			}{
+				{name: "a backslash CUE would otherwise read as an escape", value: `C:\hotel\rates`, kind: ast.StringLiteral, want: `C:\hotel\rates`},
+				{name: "a tab", value: "two\tcolumns", kind: ast.StringLiteral, want: "two\tcolumns"},
+				{name: "a double quote, which no emod source can hold", value: `the "quiet" room`, kind: ast.StringLiteral, want: `the "quiet" room`},
+				{name: "a leading zero, which is no CUE integer", value: "007", kind: ast.IntegerLiteral, want: float64(7)},
+				{name: "a trailing zero", value: "12.50", kind: ast.DecimalLiteral, want: 12.5},
+			}
+
+			for _, tc := range tests {
+				t.Run(tc.name, func(t *testing.T) {
+					cueBin := lookupCue(t)
+					model := modelStatingPayload(tc.value, tc.kind)
+
+					// cue export fails outright on a document CUE cannot read,
+					// so decoding at all is half the assertion.
+					doc := exportedCUEDoc(t, cueBin, model)
+
+					require.Equal(t, tc.want, payloadOf(t, doc, "Borrow Copy", "borrows a copy")["shelfMark"])
+					requireConformsToSchema(t, cueBin, model)
+				})
+			}
 		})
 
 		t.Run("CUE and JSON exports agree on the slice-pattern fixture with all four outcomes", func(t *testing.T) {
@@ -4793,19 +4923,19 @@ var slicePatternLibraryLendingSpecs = map[string][]map[string]any{
 	"Borrow Copy": {
 		{
 			"name": "borrows a copy no one holds",
-			"when": "BorrowCopy",
-			"then": map[string]any{"events": []any{"CopyBorrowed"}},
+			"when": map[string]any{"name": "BorrowCopy"},
+			"then": map[string]any{"events": []any{map[string]any{"name": "CopyBorrowed"}}},
 		},
 		{
 			"name": "refuses a copy already on loan",
-			"when": "BorrowCopy",
+			"when": map[string]any{"name": "BorrowCopy"},
 			"then": map[string]any{"rejected": "OneCopyPerLoan"},
 		},
 		{
 			"name":  "borrows a copy the member before returned",
-			"given": []any{"CopyBorrowed", "CopyReturned"},
-			"when":  "BorrowCopy",
-			"then":  map[string]any{"events": []any{"CopyBorrowed"}},
+			"given": []any{map[string]any{"name": "CopyBorrowed"}, map[string]any{"name": "CopyReturned"}},
+			"when":  map[string]any{"name": "BorrowCopy"},
+			"then":  map[string]any{"events": []any{map[string]any{"name": "CopyBorrowed"}}},
 		},
 	},
 	"Review Member Loans": {
@@ -4817,18 +4947,18 @@ var slicePatternLibraryLendingSpecs = map[string][]map[string]any{
 	"Chase Overdue Copy": {
 		{
 			"name": "reminds a member when a copy becomes due",
-			"when": "CopyBorrowed",
+			"when": map[string]any{"name": "CopyBorrowed"},
 			"then": map[string]any{"command": "RemindMember"},
 		},
 		{
 			"name": "sanctions a member's loan",
-			"when": "RemindMember",
-			"then": map[string]any{"events": []any{"MemberReminded"}},
+			"when": map[string]any{"name": "RemindMember"},
+			"then": map[string]any{"events": []any{map[string]any{"name": "MemberReminded"}}},
 		},
 		{
 			"name":  "refuses to remind a member with no overdue loans",
-			"given": []any{"MemberReminded"},
-			"when":  "RemindMember",
+			"given": []any{map[string]any{"name": "MemberReminded"}},
+			"when":  map[string]any{"name": "RemindMember"},
 			"then":  map[string]any{"rejected": "OneCopyPerLoan"},
 		},
 	},
@@ -4839,53 +4969,53 @@ var slicePatternLibraryLendingSpecs = map[string][]map[string]any{
 		},
 		{
 			"name": "calls in a copy before its due date",
-			"when": "RecallCopy",
-			"then": map[string]any{"events": []any{"CopyRecalled"}},
+			"when": map[string]any{"name": "RecallCopy"},
+			"then": map[string]any{"events": []any{map[string]any{"name": "CopyRecalled"}}},
 		},
 		{
 			"name":  "refuses to recall a copy already returned",
-			"given": []any{"CopyReturned"},
-			"when":  "RecallCopy",
+			"given": []any{map[string]any{"name": "CopyReturned"}},
+			"when":  map[string]any{"name": "RecallCopy"},
 			"then":  map[string]any{"rejected": "OneCopyPerLoan"},
 		},
 	},
 	"Return Copy": {
 		{
 			"name": "returns a loaned copy to the library",
-			"when": "ReturnCopy",
-			"then": map[string]any{"events": []any{"CopyReturned"}},
+			"when": map[string]any{"name": "ReturnCopy"},
+			"then": map[string]any{"events": []any{map[string]any{"name": "CopyReturned"}}},
 		},
 		{
 			"name":  "refuses to return a copy already returned",
-			"given": []any{"CopyReturned"},
-			"when":  "ReturnCopy",
+			"given": []any{map[string]any{"name": "CopyReturned"}},
+			"when":  map[string]any{"name": "ReturnCopy"},
 			"then":  map[string]any{"rejected": "OneCopyPerLoan"},
 		},
 	},
 	"Claim Desk": {
 		{
 			"name": "seats a reader at a free desk",
-			"when": "ClaimDesk",
-			"then": map[string]any{"events": []any{"DeskClaimed"}},
+			"when": map[string]any{"name": "ClaimDesk"},
+			"then": map[string]any{"events": []any{map[string]any{"name": "DeskClaimed"}}},
 		},
 		{
 			"name":  "refuses a desk another reader is seated at",
-			"given": []any{"DeskClaimed"},
-			"when":  "ClaimDesk",
+			"given": []any{map[string]any{"name": "DeskClaimed"}},
+			"when":  map[string]any{"name": "ClaimDesk"},
 			"then":  map[string]any{"rejected": "OneReaderPerDesk"},
 		},
 	},
 	"Import External Desk Booking": {
 		{
 			"name":  "imports a desk booking from an external system",
-			"given": []any{"DeskClaimed"},
-			"when":  "ImportExternalDeskBooking",
-			"then":  map[string]any{"events": []any{"ExternalDeskBookingImported"}},
+			"given": []any{map[string]any{"name": "DeskClaimed"}},
+			"when":  map[string]any{"name": "ImportExternalDeskBooking"},
+			"then":  map[string]any{"events": []any{map[string]any{"name": "ExternalDeskBookingImported"}}},
 		},
 		{
 			"name":  "refuses to import a booking for an occupied desk",
-			"given": []any{"DeskClaimed"},
-			"when":  "ImportExternalDeskBooking",
+			"given": []any{map[string]any{"name": "DeskClaimed"}},
+			"when":  map[string]any{"name": "ImportExternalDeskBooking"},
 			"then":  map[string]any{"rejected": "OneReaderPerDesk"},
 		},
 	},
@@ -4903,63 +5033,277 @@ var libraryLendingSpecs = map[string][]map[string]any{
 	"Borrow Copy": {
 		{
 			"name": "borrows a copy no one holds",
-			"when": "BorrowCopy",
-			"then": map[string]any{"events": []any{"CopyBorrowed"}},
+			"when": map[string]any{"name": "BorrowCopy"},
+			"then": map[string]any{"events": []any{map[string]any{"name": "CopyBorrowed"}}},
 		},
 		{
 			"name":  "borrows a copy the member before returned",
-			"given": []any{"CopyBorrowed", "CopyReturned"},
-			"when":  "BorrowCopy",
-			"then":  map[string]any{"events": []any{"CopyBorrowed"}},
+			"given": []any{map[string]any{"name": "CopyBorrowed"}, map[string]any{"name": "CopyReturned"}},
+			"when":  map[string]any{"name": "BorrowCopy"},
+			"then":  map[string]any{"events": []any{map[string]any{"name": "CopyBorrowed"}}},
 		},
 		{
 			"name":  "refuses a copy already on loan",
-			"given": []any{"CopyBorrowed"},
-			"when":  "BorrowCopy",
+			"given": []any{map[string]any{"name": "CopyBorrowed"}},
+			"when":  map[string]any{"name": "BorrowCopy"},
 			"then":  map[string]any{"rejected": "OneCopyPerLoan"},
 		},
 	},
 	"Return Copy": {
 		{
 			"name":  "returns a copy the member holds",
-			"given": []any{"CopyBorrowed"},
-			"when":  "ReturnCopy",
-			"then":  map[string]any{"events": []any{"CopyReturned"}},
+			"given": []any{map[string]any{"name": "CopyBorrowed"}},
+			"when":  map[string]any{"name": "ReturnCopy"},
+			"then":  map[string]any{"events": []any{map[string]any{"name": "CopyReturned"}}},
 		},
 		{
 			"name":  "refuses to return a copy the member no longer holds",
-			"given": []any{"CopyBorrowed"},
-			"when":  "ReturnCopy",
+			"given": []any{map[string]any{"name": "CopyBorrowed"}},
+			"when":  map[string]any{"name": "ReturnCopy"},
 			"then":  map[string]any{"rejected": "OneCopyPerLoan"},
 		},
 	},
 	"Claim Desk": {
 		{
 			"name": "seats a reader at a free desk",
-			"when": "ClaimDesk",
-			"then": map[string]any{"events": []any{"DeskClaimed"}},
+			"when": map[string]any{"name": "ClaimDesk"},
+			"then": map[string]any{"events": []any{map[string]any{"name": "DeskClaimed"}}},
 		},
 		{
 			"name":  "refuses a desk another reader is seated at",
-			"given": []any{"DeskClaimed"},
-			"when":  "ClaimDesk",
+			"given": []any{map[string]any{"name": "DeskClaimed"}},
+			"when":  map[string]any{"name": "ClaimDesk"},
 			"then":  map[string]any{"rejected": "OneReaderPerDesk"},
 		},
 	},
 	"Release Desk": {
 		{
 			"name":  "frees the desk its reader is seated at",
-			"given": []any{"DeskClaimed"},
-			"when":  "ReleaseDesk",
-			"then":  map[string]any{"events": []any{"DeskReleased"}},
+			"given": []any{map[string]any{"name": "DeskClaimed"}},
+			"when":  map[string]any{"name": "ReleaseDesk"},
+			"then":  map[string]any{"events": []any{map[string]any{"name": "DeskReleased"}}},
 		},
 		{
 			"name":  "refuses to free a desk already empty",
-			"given": []any{"DeskClaimed"},
-			"when":  "ReleaseDesk",
+			"given": []any{map[string]any{"name": "DeskClaimed"}},
+			"when":  map[string]any{"name": "ReleaseDesk"},
 			"then":  map[string]any{"rejected": "OneReaderPerDesk"},
 		},
 	},
+}
+
+// payloadLibraryLendingSpecs transcribes the scenarios test.PayloadLibraryLending
+// states as the document carries them, filed under the slice that states each.
+// Every payload value is written as the JSON it lands as — a string as a string,
+// a number as a number, true as a boolean — by hand rather than by running the
+// exporter's own conversion, which would compare it against itself. The one loss
+// the wire takes is a trailing zero: the source states lateFee as 12.50 and the
+// document carries 12.5. A reference stating no payload carries a name and
+// nothing else, and the leaf below requires the spec, reference and field names
+// here to match test.PayloadLibraryLendingPayloads, so the two cannot drift.
+var payloadLibraryLendingSpecs = map[string][]map[string]any{
+	"Borrow Copy": {
+		{
+			"name": "borrows a copy no one holds",
+			"when": map[string]any{"name": "BorrowCopy", "payload": []any{
+				map[string]any{"name": "memberId", "value": "M-40817"},
+				map[string]any{"name": "copyId", "value": "C-93204"},
+				map[string]any{"name": "dueOn", "value": "2024-07-19"},
+				map[string]any{"name": "shelfMark", "value": "AURELIA"},
+			}},
+			"then": map[string]any{"events": []any{
+				map[string]any{"name": "CopyBorrowed", "payload": []any{
+					map[string]any{"name": "loanId", "value": "7c9e6679-7425-40de-944b-e07fc1f90ae7"},
+					map[string]any{"name": "borrowedAt", "value": "2024-07-05T14:32:00Z"},
+					map[string]any{"name": "catalogueNumber", "value": float64(4821)},
+					map[string]any{"name": "lateFee", "value": 12.5},
+					map[string]any{"name": "expedited", "value": true},
+				}},
+			}},
+		},
+		{
+			"name": "refuses a copy already on loan",
+			"given": []any{
+				map[string]any{"name": "CopyBorrowed", "payload": []any{
+					map[string]any{"name": "copyId", "value": "C-93204"},
+					map[string]any{"name": "expedited", "value": false},
+				}},
+				map[string]any{"name": "CopyReturned"},
+			},
+			"when": map[string]any{"name": "BorrowCopy", "payload": []any{
+				map[string]any{"name": "copyId", "value": "C-93204"},
+			}},
+			"then": map[string]any{"rejected": "OneCopyPerLoan"},
+		},
+	},
+	"Return Copy": {
+		{
+			"name":  "returns a copy the member holds",
+			"given": []any{map[string]any{"name": "CopyBorrowed"}},
+			"when":  map[string]any{"name": "ReturnCopy"},
+			"then":  map[string]any{"events": []any{map[string]any{"name": "CopyReturned"}}},
+		},
+		{
+			"name":  "refuses to return a copy the member no longer holds",
+			"given": []any{map[string]any{"name": "CopyBorrowed"}},
+			"when":  map[string]any{"name": "ReturnCopy"},
+			"then":  map[string]any{"rejected": "OneCopyPerLoan"},
+		},
+	},
+	"Claim Desk": {
+		{
+			"name": "seats a reader at a free desk",
+			"when": map[string]any{"name": "ClaimDesk", "payload": []any{
+				map[string]any{"name": "memberId", "value": "M-40817"},
+				map[string]any{"name": "deskId", "value": "D-5817"},
+			}},
+			"then": map[string]any{"events": []any{
+				map[string]any{"name": "DeskClaimed", "payload": []any{
+					map[string]any{"name": "sessionId", "value": "b6f4a3d2-91c8-4e57-8f10-2d6a5c7e9b31"},
+					map[string]any{"name": "claimedAt", "value": "2024-07-05T09:15:00Z"},
+					map[string]any{"name": "quietZone", "value": true},
+				}},
+			}},
+		},
+		{
+			"name": "refuses a desk another reader is seated at",
+			"given": []any{map[string]any{"name": "DeskClaimed", "payload": []any{
+				map[string]any{"name": "deskId", "value": "D-5817"},
+			}}},
+			"when": map[string]any{"name": "ClaimDesk", "payload": []any{
+				map[string]any{"name": "deskId", "value": "D-5817"},
+			}},
+			"then": map[string]any{"rejected": "OneReaderPerDesk"},
+		},
+	},
+	"Release Desk": {
+		{
+			"name": "frees the desk its reader is seated at",
+			"given": []any{map[string]any{"name": "DeskClaimed", "payload": []any{
+				map[string]any{"name": "quietZone", "value": false},
+			}}},
+			"when": map[string]any{"name": "ReleaseDesk", "payload": []any{
+				map[string]any{"name": "sessionId", "value": "b6f4a3d2-91c8-4e57-8f10-2d6a5c7e9b31"},
+			}},
+			"then": map[string]any{"events": []any{
+				map[string]any{"name": "DeskReleased", "payload": []any{
+					map[string]any{"name": "releasedAt", "value": "2024-07-05T11:40:00Z"},
+					map[string]any{"name": "seatedFor", "value": 145.25},
+				}},
+			}},
+		},
+		{
+			"name":  "refuses to free a desk already empty",
+			"given": []any{map[string]any{"name": "DeskClaimed"}},
+			"when":  map[string]any{"name": "ReleaseDesk"},
+			"then":  map[string]any{"rejected": "OneReaderPerDesk"},
+		},
+	},
+}
+
+// transcribedPayloadFieldsOf names every payload a transcription of exported
+// specs states as "<spec>/<reference>/<field>", in the order a spec's given,
+// when and then are walked, so an export transcription and the fixture's own can
+// be required to name the same payloads without agreeing on how a value lands.
+func transcribedPayloadFieldsOf(specsByOwner map[string][]map[string]any, owners []string) []string {
+	var named []string
+	appendStated := func(specName string, element map[string]any) {
+		payload, ok := element["payload"].([]any)
+		if !ok {
+			return
+		}
+		for _, field := range payload {
+			named = append(named, fmt.Sprintf("%s/%s/%s",
+				specName, element["name"], field.(map[string]any)["name"]))
+		}
+	}
+
+	for _, owner := range owners {
+		for _, spec := range specsByOwner[owner] {
+			specName := spec["name"].(string)
+			for _, given := range elementsUnder(spec, "given") {
+				appendStated(specName, given)
+			}
+			if when, ok := spec["when"].(map[string]any); ok {
+				appendStated(specName, when)
+			}
+			if outcome, ok := spec["then"].(map[string]any); ok {
+				for _, event := range elementsUnder(outcome, "events") {
+					appendStated(specName, event)
+				}
+			}
+		}
+	}
+
+	return named
+}
+
+// modelStatingPayload builds a model whose one spec states value on its then
+// event, through the AST rather than through source: emod strings run verbatim
+// from one quote to the next, so a value holding a quote is unwritable in the
+// language yet still reaches the writers from the importer and the viewer.
+func modelStatingPayload(value string, kind ast.LiteralKind) *ast.Model {
+	return &ast.Model{
+		Contexts: []*ast.Context{{
+			Name: "Lending",
+			Aggregates: []*ast.Aggregate{{
+				Name: "Loan",
+				Slices: []*ast.Slice{{
+					Name:     "Borrow Copy",
+					Commands: []*ast.Command{{Name: "BorrowCopy"}},
+					Events:   []*ast.Event{{Name: "CopyBorrowed"}},
+					Specs: []*ast.Spec{{
+						Name: "borrows a copy",
+						When: &ast.SpecElement{Name: "BorrowCopy"},
+						Then: &ast.ThenEvents{Events: []*ast.SpecElement{{
+							Name:    "CopyBorrowed",
+							Payload: []*ast.PayloadField{{Name: "shelfMark", Value: value, Kind: kind}},
+						}}},
+					}},
+				}},
+			}},
+		}},
+	}
+}
+
+// payloadOf reads the payload the named spec's then event states, as a map of
+// field name to the value the document carries, so a leaf can ask what JSON type
+// a literal landed as without restating the whole document.
+func payloadOf(t *testing.T, doc map[string]any, owner, specName string) map[string]any {
+	t.Helper()
+
+	for _, spec := range specsByOwner(doc)[owner] {
+		if spec["name"] != specName {
+			continue
+		}
+		outcome, ok := spec["then"].(map[string]any)
+		require.True(t, ok, "spec %q states no then", specName)
+		events := elementsUnder(outcome, "events")
+		require.NotEmpty(t, events, "spec %q states no then events", specName)
+
+		stated := map[string]any{}
+		for _, field := range elementsUnder(events[0], "payload") {
+			stated[field["name"].(string)] = field["value"]
+		}
+		require.NotEmpty(t, stated, "spec %q states no payload on its then event", specName)
+		return stated
+	}
+
+	require.FailNowf(t, "spec not found", "%q under %q", specName, owner)
+	return nil
+}
+
+func elementsUnder(parent map[string]any, key string) []map[string]any {
+	listed, ok := parent[key].([]any)
+	if !ok {
+		return nil
+	}
+
+	elements := make([]map[string]any, 0, len(listed))
+	for _, element := range listed {
+		elements = append(elements, element.(map[string]any))
+	}
+	return elements
 }
 
 // libraryLendingAutomationReads transcribes the view every automation of
@@ -5047,6 +5391,30 @@ func slicePatternLibraryLendingSpecText() []string {
 
 func slicePatternSpecTextAnywhere(doc map[string]any) []string {
 	return textAnywhere(doc, slicePatternLibraryLendingSpecText())
+}
+
+// payloadFixtureValueText lists every string value test.PayloadLibraryLending
+// states in a payload, deduplicated because two specs state the same copy id.
+// Only string values are searched: a boolean and a number are spelled the same
+// way by any document that carries one for another reason, so finding one would
+// say nothing about payloads reaching it.
+func payloadFixtureValueText() []string {
+	var text []string
+	seen := map[string]bool{}
+	for _, payload := range test.PayloadLibraryLendingPayloads {
+		for _, value := range payload.Values {
+			if value.Kind != ast.StringLiteral || seen[value.Value] {
+				continue
+			}
+			seen[value.Value] = true
+			text = append(text, value.Value)
+		}
+	}
+	return text
+}
+
+func payloadValueTextAnywhere(doc map[string]any) []string {
+	return textAnywhere(doc, payloadFixtureValueText())
 }
 
 func invariantsByOwner(doc map[string]any) map[string][]map[string]any {
