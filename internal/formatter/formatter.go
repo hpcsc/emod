@@ -377,10 +377,10 @@ func (w *writer) writeSpec(spec *ast.Spec, level int) {
 	w.writeComments(spec.Comments, level)
 	w.line(level, "spec %s {", quoted(spec.Name))
 	if len(spec.Given) > 0 {
-		w.line(level+1, "given %s", bracketed(specElementNames(spec.Given)))
+		w.line(level+1, "given %s", bracketed(specElementTexts(spec.Given)))
 	}
 	if spec.When != nil {
-		w.line(level+1, "when %s", spec.When.Name)
+		w.line(level+1, "when %s", specElementText(spec.When))
 	}
 	if outcome := formatOutcome(spec.Then); outcome != "" {
 		w.line(level+1, "then %s", outcome)
@@ -391,7 +391,7 @@ func (w *writer) writeSpec(spec *ast.Spec, level int) {
 func formatOutcome(then ast.ThenClause) string {
 	switch t := then.(type) {
 	case *ast.ThenEvents:
-		return bracketed(specElementNames(t.Events))
+		return bracketed(specElementTexts(t.Events))
 	case *ast.ThenRejected:
 		if t.InvariantName == "" {
 			return ""
@@ -412,10 +412,36 @@ func formatOutcome(then ast.ThenClause) string {
 	}
 }
 
-func specElementNames(elements []*ast.SpecElement) []string {
-	names := make([]string, 0, len(elements))
+func specElementTexts(elements []*ast.SpecElement) []string {
+	texts := make([]string, 0, len(elements))
 	for _, element := range elements {
-		names = append(names, element.Name)
+		texts = append(texts, specElementText(element))
 	}
-	return names
+	return texts
+}
+
+// specElementText writes a reference beside the example payload it states. A
+// payload stating nothing is written as no braces at all, so {} and an omitted
+// payload format to the same text.
+func specElementText(element *ast.SpecElement) string {
+	if len(element.Payload) == 0 {
+		return element.Name
+	}
+
+	fields := make([]string, 0, len(element.Payload))
+	for _, field := range element.Payload {
+		fields = append(fields, fmt.Sprintf("%s: %s", field.Name, payloadLiteral(field)))
+	}
+
+	return fmt.Sprintf("%s { %s }", element.Name, strings.Join(fields, ", "))
+}
+
+// payloadLiteral writes a number or a boolean as the source text it was read
+// from, so 12.50 is written back whole rather than reduced to 12.5.
+func payloadLiteral(field *ast.PayloadField) string {
+	if field.Kind == ast.StringLiteral {
+		return quoted(field.Value)
+	}
+
+	return field.Value
 }

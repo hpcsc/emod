@@ -5,7 +5,7 @@
 - [x] Task 2: Share a payload-carrying fixture and its twin
 - [x] Task 3: Reject payload field names the referenced construct does not declare
 - [x] Task 4: Check payload literal kinds against the declared field type
-- [ ] Task 5: Preserve payloads through `emod fmt`
+- [x] Task 5: Preserve payloads through `emod fmt`
 - [ ] Task 6: Carry payloads through the JSON and CUE exports and the embedded schema
 - [ ] Task 7: Accept payloads in the tree-sitter grammar
 - [ ] Task 8: Document payloads in the DSL reference
@@ -588,24 +588,24 @@ payload stating nothing is written as no braces at all, so `{}` and an omitted p
 model whose specs carry no payload formats to exactly the bytes it formatted to before.
 
 **Acceptance Criteria:**
-- [ ] Parsing the Task 2 fixture, formatting it and re-parsing yields a model whose spec elements match
+- [x] Parsing the Task 2 fixture, formatting it and re-parsing yields a model whose spec elements match
       the original in name, declaration order, and payload field names, values and literal kinds, across
       `given`, `when` and `then` — the comparison being against the original model, never against a
       second format run
-- [ ] Formatting the formatter's own output produces byte-identical text
-- [ ] A payload written across several lines, and one written with no commas between entries, both
+- [x] Formatting the formatter's own output produces byte-identical text
+- [x] A payload written across several lines, and one written with no commas between entries, both
       format to the same canonical single-line form, and re-parsing the result yields the same payload
-- [ ] A payload written `{}` formats to a reference with no braces, and the result re-parses to a spec
+- [x] A payload written `{}` formats to a reference with no braces, and the result re-parses to a spec
       equal to one written with no payload
-- [ ] A payload value containing a backslash, a tab, a double quote, a `%` and a non-ASCII character
+- [x] A payload value containing a backslash, a tab, a double quote, a `%` and a non-ASCII character
       survives parse → format → parse → format with identical bytes, proving the text is never escaped
-- [ ] A `12.50` value formats as `12.50`, not as `12.5`
-- [ ] A names-only element formats exactly as before: `internal/formatter/formatter_test.go` and
+- [x] A `12.50` value formats as `12.50`, not as `12.5`
+- [x] A names-only element formats exactly as before: `internal/formatter/formatter_test.go` and
       `internal/cli/fmt_test.go` pass with no edit to any existing expected-output constant, including
       `specFormattedEmod` (`internal/cli/fmt_test.go:244`)
-- [ ] `internal/cli/fmt_test.go` gains a canonical formatted constant for the Task 2 fixture and feeds
+- [x] `internal/cli/fmt_test.go` gains a canonical formatted constant for the Task 2 fixture and feeds
       it to `requireFmtSettlesOn`, rather than handing the input fixture back as the expected value
-- [ ] `emod fmt --check` over an already-formatted file whose specs state payloads reports no change
+- [x] `emod fmt --check` over an already-formatted file whose specs state payloads reports no change
       needed, and the file on disk is unchanged
 
 **Affected Files/Modules:**

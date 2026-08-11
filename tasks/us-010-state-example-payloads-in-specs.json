@@ -87,7 +87,7 @@
         "internal/cli/fmt_test.go",
         ":244"
       ],
-      "done": false
+      "done": true
     },
     {
       "n": 6,

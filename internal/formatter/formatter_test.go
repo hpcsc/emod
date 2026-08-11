@@ -4026,6 +4026,128 @@ func TestFormat(t *testing.T) {
 			test.RequireEqual(t, original, reparsed, ignoreFormatterNormalizations)
 			require.Nil(t, reparsed.Contexts[0].Aggregates[0].Slices[0].Specs[0].When)
 		})
+
+		t.Run("a payload is written back on the line of the reference it qualifies", func(t *testing.T) {
+			input := strings.Join([]string{
+				`model "Library Lending"`,
+				``,
+				`context "Lending" {`,
+				`  aggregate "Loan" {`,
+				`    slice "Borrow Copy" {`,
+				`      spec "borrows a copy no one holds" {`,
+				`        given [CopyReturned { copyId: "C-93204" }, CopyShelved]`,
+				`        when BorrowCopy { copyId: "C-93204", dueOn: "2024-07-19" }`,
+				`        then [CopyBorrowed { lateFee: 12.50, renewals: 4821, expedited: true }]`,
+				`      }`,
+				`    }`,
+				`  }`,
+				`}`,
+				``,
+			}, "\n")
+			original := parseModel(t, input, "specs.emod")
+
+			result := formatter.Format(original)
+
+			expected := strings.Join([]string{
+				`emod 1`,
+				`model "Library Lending"`,
+				``,
+				`context "Lending" {`,
+				`  aggregate "Loan" {`,
+				`    slice "Borrow Copy" {`,
+				`      spec "borrows a copy no one holds" {`,
+				`        given [CopyReturned { copyId: "C-93204" }, CopyShelved]`,
+				`        when BorrowCopy { copyId: "C-93204", dueOn: "2024-07-19" }`,
+				`        then [CopyBorrowed { lateFee: 12.50, renewals: 4821, expedited: true }]`,
+				`      }`,
+				`    }`,
+				`  }`,
+				`}`,
+				``,
+			}, "\n")
+
+			require.Equal(t, expected, result)
+			test.RequireEqual(t, original, parseModel(t, result, "formatted.emod"), ignoreFormatterNormalizations)
+		})
+
+		t.Run("a payload spread across lines or written without commas formats to one canonical line", func(t *testing.T) {
+			canonical := `given [CopyReturned { copyId: "C-93204", expedited: true }]`
+			variants := map[string]string{
+				"spread across several lines": strings.Join([]string{
+					`given [CopyReturned {`,
+					`          copyId: "C-93204",`,
+					`          expedited: true`,
+					`        }]`,
+				}, "\n"),
+				"written with no commas": `given [CopyReturned { copyId: "C-93204" expedited: true }]`,
+				"spread across lines with no commas": strings.Join([]string{
+					`given [CopyReturned {`,
+					`          copyId: "C-93204"`,
+					`          expedited: true`,
+					`        }]`,
+				}, "\n"),
+			}
+
+			wanted := formatter.Format(parseModel(t, specModelWithGiven(canonical), "specs.emod"))
+			require.Contains(t, wanted, `given [CopyReturned { copyId: "C-93204", expedited: true }]`)
+
+			for name, variant := range variants {
+				t.Run(name, func(t *testing.T) {
+					original := parseModel(t, specModelWithGiven(variant), "specs.emod")
+
+					result := formatter.Format(original)
+
+					require.Equal(t, wanted, result)
+					test.RequireEqual(t, original, parseModel(t, result, "formatted.emod"), ignoreFormatterNormalizations)
+				})
+			}
+		})
+
+		t.Run("a payload stating nothing formats to a reference with no braces", func(t *testing.T) {
+			empty := parseModel(t, specModelWithGiven(`given [CopyReturned {}]`), "specs.emod")
+			omitted := parseModel(t, specModelWithGiven(`given [CopyReturned]`), "specs.emod")
+
+			result := formatter.Format(empty)
+
+			require.Equal(t, formatter.Format(omitted), result)
+			require.Contains(t, result, `given [CopyReturned]`)
+			test.RequireEqual(t, omitted, parseModel(t, result, "formatted.emod"), ignoreFormatterNormalizations)
+		})
+
+		t.Run("a payload value survives text that quoting could mangle", func(t *testing.T) {
+			for _, testCase := range []struct {
+				hazard string
+				value  string
+			}{
+				// A double quote is deliberately absent: an emod string runs
+				// verbatim from one quote to the next, so a value containing one
+				// cannot be written in the language at all.
+				{"backslash", `C:\hotel\rates`},
+				{"tab", "two\tcolumns"},
+				{"newline", "two lines:\nshelf then rate"},
+				{"percent", "a 10% deposit"},
+				{"non-ascii", "salle de lecture — étage 2"},
+			} {
+				t.Run(testCase.hazard, func(t *testing.T) {
+					source := specModelWithGiven(`given [CopyReturned { shelfMark: "` + testCase.value + `" }]`)
+					original := parseModel(t, source, "specs.emod")
+
+					reparsed := requireStableFormat(t, original)
+
+					test.RequireEqual(t, original, reparsed, ignoreFormatterNormalizations)
+					require.Equal(t, testCase.value, reparsed.Contexts[0].Aggregates[0].Slices[0].Specs[0].Given[0].Payload[0].Value)
+				})
+			}
+		})
+
+		t.Run("round-trip: the shared payload fixture survives formatting in both slice homes", func(t *testing.T) {
+			original := test.PayloadLibraryLendingModel(t)
+
+			reparsed := requireStableFormat(t, original)
+
+			test.RequireEqual(t, original, reparsed, ignoreFormatterNormalizations)
+			require.Equal(t, test.PayloadLibraryLendingPayloads, test.DeclaredSpecPayloads(reparsed))
+		})
 	})
 
 	t.Run("dcb regression", func(t *testing.T) {
@@ -4281,6 +4403,27 @@ func indexOfLine(t *testing.T, lines []string, from int, text string) int {
 	require.FailNowf(t, "line not found in formatted output", "%q at or after line %d in:\n%s",
 		text, from+1, strings.Join(lines, "\n"))
 	return -1
+}
+
+// specModelWithGiven wraps a given entry in a slice holding nothing else, so a
+// formatted result differs only in how the entry itself was written.
+func specModelWithGiven(entry string) string {
+	return strings.Join([]string{
+		`model "Library Lending"`,
+		``,
+		`context "Lending" {`,
+		`  aggregate "Loan" {`,
+		`    slice "Borrow Copy" {`,
+		`      spec "borrows a copy no one holds" {`,
+		`        ` + entry,
+		`        when BorrowCopy`,
+		`        then [CopyBorrowed]`,
+		`      }`,
+		`    }`,
+		`  }`,
+		`}`,
+		``,
+	}, "\n")
 }
 
 func formattedCommentTexts(comments []*ast.Comment) []string {

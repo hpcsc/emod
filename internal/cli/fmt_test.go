@@ -424,6 +424,187 @@ context "Reading Room" mode dcb {
 }
 `
 
+// payloadFormattedEmod is what emod fmt writes for test.PayloadLibraryLending:
+// each payload on the line of the reference it qualifies, as one canonical
+// comma-separated brace block, with 12.50 written back whole.
+const payloadFormattedEmod = `emod 1
+# Lending a library's copies and seating its readers, with example values on the scenarios each slice must satisfy
+model "Library Lending"
+
+actor "Member"
+
+context "Lending" {
+  aggregate "Loan" {
+    invariant OneCopyPerLoan "A loan covers exactly one copy of one title"
+    slice "Borrow Copy" {
+      command BorrowCopy {
+        fields {
+          memberId  string    required
+          copyId    string    required
+          dueOn     date      required
+          shelfMark ShelfMark
+        }
+      }
+
+      event CopyBorrowed {
+        fields {
+          loanId          uuid      required
+          memberId        string    required
+          copyId          string    required
+          dueOn           date      required
+          borrowedAt      timestamp required
+          catalogueNumber int
+          lateFee         decimal
+          expedited       bool
+        }
+      }
+
+      flow {
+        command -> event: BorrowCopy -> CopyBorrowed
+      }
+
+      spec "borrows a copy no one holds" {
+        when BorrowCopy { memberId: "M-40817", copyId: "C-93204", dueOn: "2024-07-19", shelfMark: "AURELIA" }
+        then [CopyBorrowed { loanId: "7c9e6679-7425-40de-944b-e07fc1f90ae7", borrowedAt: "2024-07-05T14:32:00Z", catalogueNumber: 4821, lateFee: 12.50, expedited: true }]
+      }
+
+      spec "refuses a copy already on loan" {
+        given [CopyBorrowed { copyId: "C-93204", expedited: false }, CopyReturned]
+        when BorrowCopy { copyId: "C-93204" }
+        then rejected OneCopyPerLoan
+      }
+    }
+
+    slice "Return Copy" {
+      command ReturnCopy {
+        fields {
+          loanId uuid   required
+          copyId string required
+        }
+      }
+
+      event CopyReturned {
+        fields {
+          loanId     uuid      required
+          copyId     string    required
+          returnedAt timestamp required
+        }
+      }
+
+      flow {
+        command -> event: ReturnCopy -> CopyReturned
+      }
+
+      spec "returns a copy the member holds" {
+        given [CopyBorrowed]
+        when ReturnCopy
+        then [CopyReturned]
+      }
+
+      spec "refuses to return a copy the member no longer holds" {
+        given [CopyBorrowed]
+        when ReturnCopy
+        then rejected OneCopyPerLoan
+      }
+    }
+
+    slice "Review Member Loans" {
+      view MemberLoansView {
+        fields {
+          loanId   uuid   required
+          memberId string required
+          dueOn    date   required
+        }
+        subscribes [CopyBorrowed]
+      }
+    }
+  }
+}
+
+context "Reading Room" mode dcb {
+  invariant OneReaderPerDesk "A desk seats at most one reader at any moment"
+  slice "Claim Desk" {
+    command ClaimDesk {
+      fields {
+        memberId string required
+        deskId   string required
+      }
+    }
+
+    event DeskClaimed {
+      tags {
+        desk  : deskId
+        reader: memberId
+      }
+      fields {
+        sessionId uuid      required
+        deskId    string    required
+        memberId  string    required
+        claimedAt timestamp required
+        quietZone bool
+      }
+    }
+
+    flow {
+      command -> event: ClaimDesk -> DeskClaimed
+    }
+
+    spec "seats a reader at a free desk" {
+      when ClaimDesk { memberId: "M-40817", deskId: "D-5817" }
+      then [DeskClaimed { sessionId: "b6f4a3d2-91c8-4e57-8f10-2d6a5c7e9b31", claimedAt: "2024-07-05T09:15:00Z", quietZone: true }]
+    }
+
+    spec "refuses a desk another reader is seated at" {
+      given [DeskClaimed { deskId: "D-5817" }]
+      when ClaimDesk { deskId: "D-5817" }
+      then rejected OneReaderPerDesk
+    }
+  }
+
+  slice "Release Desk" {
+    command ReleaseDesk {
+      decides_on {
+        events [DeskClaimed]
+        where tag(desk = deskId) and tag(reader = memberId)
+      }
+      fields {
+        sessionId uuid required
+      }
+    }
+
+    event DeskReleased {
+      tags {
+        desk  : deskId
+        reader: memberId
+      }
+      fields {
+        sessionId  uuid      required
+        deskId     string    required
+        memberId   string    required
+        releasedAt timestamp required
+        seatedFor  decimal
+      }
+    }
+
+    flow {
+      command -> event: ReleaseDesk -> DeskReleased
+    }
+
+    spec "frees the desk its reader is seated at" {
+      given [DeskClaimed { quietZone: false }]
+      when ReleaseDesk { sessionId: "b6f4a3d2-91c8-4e57-8f10-2d6a5c7e9b31" }
+      then [DeskReleased { releasedAt: "2024-07-05T11:40:00Z", seatedFor: 145.25 }]
+    }
+
+    spec "refuses to free a desk already empty" {
+      given [DeskClaimed]
+      when ReleaseDesk
+      then rejected OneReaderPerDesk
+    }
+  }
+}
+`
+
 const scheduledAutomationEmod = `model "Order Fulfilment"
 
 context "Fulfilment" {
@@ -1068,6 +1249,12 @@ func TestFmt(t *testing.T) {
 		path := writeTemp(t, "specs.emod", specEmod)
 
 		requireFmtSettlesOn(t, path, specFormattedEmod)
+	})
+
+	t.Run("keeps every example payload in both slice homes and settles after one run", func(t *testing.T) {
+		path := writeTemp(t, "payloads.emod", test.PayloadLibraryLending)
+
+		requireFmtSettlesOn(t, path, payloadFormattedEmod)
 	})
 
 	t.Run("keeps every spec outcome including view and command and settles after one run", func(t *testing.T) {
