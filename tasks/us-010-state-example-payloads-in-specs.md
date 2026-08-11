@@ -4,7 +4,7 @@
 - [x] Task 1: Lex number literals and record example payloads on spec references
 - [x] Task 2: Share a payload-carrying fixture and its twin
 - [x] Task 3: Reject payload field names the referenced construct does not declare
-- [ ] Task 4: Check payload literal kinds against the declared field type
+- [x] Task 4: Check payload literal kinds against the declared field type
 - [ ] Task 5: Preserve payloads through `emod fmt`
 - [ ] Task 6: Carry payloads through the JSON and CUE exports and the embedded schema
 - [ ] Task 7: Accept payloads in the tree-sitter grammar
@@ -517,34 +517,34 @@ accepts any literal unchecked — domain types are opaque to the model. Each mis
 value's position, naming the value, the field and the type it was checked against.
 
 **Acceptance Criteria:**
-- [ ] A string literal against a `string` field produces no diagnostic, including the empty string
-- [ ] A string literal that parses as a date against a `date` field, as RFC 3339 against a `timestamp`
+- [x] A string literal against a `string` field produces no diagnostic, including the empty string
+- [x] A string literal that parses as a date against a `date` field, as RFC 3339 against a `timestamp`
       field, and as a canonical uuid against a `uuid` field, each produce no diagnostic; a uuid written
       in upper case is accepted
-- [ ] A string literal that does not parse as the declared format produces exactly one diagnostic, at
+- [x] A string literal that does not parse as the declared format produces exactly one diagnostic, at
       `Error` severity, positioned on the value, whose whole formatted line names the value, the field
       and the declared type — asserted separately for `date`, `timestamp` and `uuid`, since one message
       is chosen per type
-- [ ] A date-only value against a `timestamp` field is reported, and a timestamp value against a `date`
+- [x] A date-only value against a `timestamp` field is reported, and a timestamp value against a `date`
       field is reported
-- [ ] A number literal against a `decimal` field produces no diagnostic whether or not it states a
+- [x] A number literal against a `decimal` field produces no diagnostic whether or not it states a
       fractional part; a number literal with no fractional part against an `int` field produces none;
       one with a fractional part against an `int` field produces exactly one diagnostic
-- [ ] `true` and `false` against a `bool` field produce no diagnostic
-- [ ] Each of the cross-kind mismatches produces exactly one diagnostic: a number against `string`, a
+- [x] `true` and `false` against a `bool` field produce no diagnostic
+- [x] Each of the cross-kind mismatches produces exactly one diagnostic: a number against `string`, a
       string against `int`, a boolean against `string`, a string against `bool`
-- [ ] A field declared with a domain type accepts a string, a number and a boolean with no diagnostic,
+- [x] A field declared with a domain type accepts a string, a number and a boolean with no diagnostic,
       and so does a field whose declared type spells a DSL keyword — a type this story does not name is
       a domain type
-- [ ] The set of type names this check knows is declared once in production code, and a test transcribes
+- [x] The set of type names this check knows is declared once in production code, and a test transcribes
       the seven names by hand and requires the two to agree, so a type cannot be taught to one surface
       alone
-- [ ] A spec whose payloads state several mismatched literals produces one diagnostic per literal, in
+- [x] A spec whose payloads state several mismatched literals produces one diagnostic per literal, in
       declaration order, identical across repeated runs
-- [ ] These diagnostics carry no `RuleName`
-- [ ] `cli.RunValidate` over a file whose payload states a mismatched literal exits with `ExitCode` 1
+- [x] These diagnostics carry no `RuleName`
+- [x] `cli.RunValidate` over a file whose payload states a mismatched literal exits with `ExitCode` 1
       and the reported message names the value and the declared type
-- [ ] `oracle.Check` over the Task 2 fixture still returns no diagnostics, and a model that states no
+- [x] `oracle.Check` over the Task 2 fixture still returns no diagnostics, and a model that states no
       payload validates exactly as before
 
 **Affected Files/Modules:**

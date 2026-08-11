@@ -332,6 +332,45 @@ context "Lending" {
 		require.Contains(t, err.Error(), `payload field "copyIdd" is not declared on command "BorrowCopy"`)
 	})
 
+	t.Run("returns error naming the payload value a spec states and the type its field declares", func(t *testing.T) {
+		input := `model "Library Lending"
+context "Lending" {
+  aggregate "Loan" {
+    slice "Borrow Copy" {
+      command BorrowCopy {
+        fields {
+          memberId string required
+          copyId   string required
+        }
+      }
+      event CopyBorrowed {
+        fields {
+          loanId   string required
+          memberId string required
+          renewals int
+        }
+      }
+      spec "borrows a copy no one holds" {
+        when BorrowCopy
+        then [CopyBorrowed { renewals: 12.50 }]
+      }
+      flow {
+        command -> event: BorrowCopy -> CopyBorrowed
+      }
+    }
+  }
+}
+`
+		path := writeTemp(t, "mismatched_payload_literal.emod", input)
+
+		err := cli.RunValidate(path, "text")
+
+		var lintErr *cli.LintError
+		require.True(t, errors.As(err, &lintErr))
+		require.Equal(t, 1, lintErr.ExitCode)
+		require.Contains(t, err.Error(), `payload value 12.50 for field "renewals" is not a valid int`)
+	})
+
 	t.Run("returns error naming the invariant a spec rejects from outside the declaring scope", func(t *testing.T) {
 		input := `model "Library Lending"
 context "Lending" {

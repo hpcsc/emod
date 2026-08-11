@@ -69,7 +69,7 @@
         "internal/validator/validator_test.go",
         "internal/cli/validate_test.go"
       ],
-      "done": false
+      "done": true
     },
     {
       "n": 5,

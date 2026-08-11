@@ -41,33 +41,35 @@ func Validate(model *ast.Model) []*diagnostic.Entry {
 }
 
 type modelIndex struct {
-	slices             []*ast.Slice
-	contextNames       map[string]bool
-	commandNames       map[string]bool
-	eventNames         map[string]bool
-	viewNames          map[string]bool
-	commandPositions   map[string]ast.Position
-	eventPositions     map[string]ast.Position
-	referencedCommands map[string]bool
-	producedEvents     map[string]bool
-	eventFields        map[string][]string
-	eventTagKeys       map[string][]string
-	constructFields    map[string]map[string]*ast.Field
+	slices              []*ast.Slice
+	contextNames        map[string]bool
+	commandNames        map[string]bool
+	eventNames          map[string]bool
+	viewNames           map[string]bool
+	commandPositions    map[string]ast.Position
+	eventPositions      map[string]ast.Position
+	referencedCommands  map[string]bool
+	producedEvents      map[string]bool
+	eventFields         map[string][]string
+	eventTagKeys        map[string][]string
+	commandFieldsByName map[string]map[string]*ast.Field
+	eventFieldsByName   map[string]map[string]*ast.Field
 }
 
 func newModelIndex(model *ast.Model) *modelIndex {
 	index := &modelIndex{
-		contextNames:       make(map[string]bool, len(model.Contexts)),
-		commandNames:       make(map[string]bool),
-		eventNames:         make(map[string]bool),
-		viewNames:          make(map[string]bool),
-		commandPositions:   make(map[string]ast.Position),
-		eventPositions:     make(map[string]ast.Position),
-		referencedCommands: make(map[string]bool),
-		producedEvents:     make(map[string]bool),
-		eventFields:        make(map[string][]string),
-		eventTagKeys:       make(map[string][]string),
-		constructFields:    make(map[string]map[string]*ast.Field),
+		contextNames:        make(map[string]bool, len(model.Contexts)),
+		commandNames:        make(map[string]bool),
+		eventNames:          make(map[string]bool),
+		viewNames:           make(map[string]bool),
+		commandPositions:    make(map[string]ast.Position),
+		eventPositions:      make(map[string]ast.Position),
+		referencedCommands:  make(map[string]bool),
+		producedEvents:      make(map[string]bool),
+		eventFields:         make(map[string][]string),
+		eventTagKeys:        make(map[string][]string),
+		commandFieldsByName: make(map[string]map[string]*ast.Field),
+		eventFieldsByName:   make(map[string]map[string]*ast.Field),
 	}
 
 	for _, ctx := range model.Contexts {
@@ -86,7 +88,7 @@ func (i *modelIndex) collect(slice *ast.Slice) {
 	for _, cmd := range slice.Commands {
 		i.commandNames[cmd.Name] = true
 		i.commandPositions[cmd.Name] = cmd.NamePos
-		i.collectFields(cmd.Name, cmd.Fields)
+		collectFieldsInto(i.commandFieldsByName, cmd.Name, cmd.Fields)
 	}
 	for _, evt := range slice.Events {
 		i.eventNames[evt.Name] = true
@@ -131,21 +133,23 @@ func (i *modelIndex) collectEventShape(evt *ast.Event) {
 	for _, tag := range evt.Tags {
 		i.eventTagKeys[evt.Name] = append(i.eventTagKeys[evt.Name], tag.Key)
 	}
-	i.collectFields(evt.Name, evt.Fields)
+	collectFieldsInto(i.eventFieldsByName, evt.Name, evt.Fields)
 }
 
-// collectFields files a construct's fields under its own name. Two constructs
-// sharing a name accumulate rather than replace, the way collectEventShape
-// already treats a repeated event.
-func (i *modelIndex) collectFields(construct string, fields []*ast.Field) {
+// collectFieldsInto files a construct's fields under its own name, in a map of
+// its own kind: a command and an event may share a name, and pooling their
+// fields would accept on one a payload field only the other declares. Two
+// constructs of the same kind sharing a name accumulate rather than replace, the
+// way collectEventShape already treats a repeated event.
+func collectFieldsInto(byName map[string]map[string]*ast.Field, construct string, fields []*ast.Field) {
 	if len(fields) == 0 {
 		return
 	}
 
-	declared, ok := i.constructFields[construct]
+	declared, ok := byName[construct]
 	if !ok {
 		declared = make(map[string]*ast.Field, len(fields))
-		i.constructFields[construct] = declared
+		byName[construct] = declared
 	}
 	for _, f := range fields {
 		declared[f.Name] = f
@@ -433,14 +437,14 @@ func specDiagnostics(spec *ast.Spec, index *modelIndex) []*diagnostic.Entry {
 func payloadDiagnostics(spec *ast.Spec, index *modelIndex) []*diagnostic.Entry {
 	var diags []*diagnostic.Entry
 	for _, given := range spec.Given {
-		diags = append(diags, index.payloadFieldDiagnostics(given, "event", index.eventNames[given.Name])...)
+		diags = append(diags, index.payloadFieldDiagnostics(given, index.asEvent(given.Name))...)
 	}
 	if ref := spec.When; ref != nil {
-		diags = append(diags, index.payloadFieldDiagnostics(ref, index.whenKind(ref.Name), index.declaresCommandOrEvent(ref.Name))...)
+		diags = append(diags, index.payloadFieldDiagnostics(ref, index.asCommandOrEvent(ref.Name))...)
 	}
 	if outcome, ok := spec.Then.(*ast.ThenEvents); ok {
 		for _, event := range outcome.Events {
-			diags = append(diags, index.payloadFieldDiagnostics(event, "event", index.eventNames[event.Name])...)
+			diags = append(diags, index.payloadFieldDiagnostics(event, index.asEvent(event.Name))...)
 		}
 	}
 
@@ -451,22 +455,127 @@ func payloadDiagnostics(spec *ast.Spec, index *modelIndex) []*diagnostic.Entry {
 // does not declare. A reference no construct declares is left alone: the
 // reference check above already reports it, there is nothing to look the field
 // names up on, and reporting both would turn one typo into a cascade.
-func (i *modelIndex) payloadFieldDiagnostics(ref *ast.SpecElement, kind string, declared bool) []*diagnostic.Entry {
-	if !declared {
+func (i *modelIndex) payloadFieldDiagnostics(ref *ast.SpecElement, referenced referencedConstruct) []*diagnostic.Entry {
+	if referenced.kind == "" {
 		return nil
 	}
 
-	fields := i.constructFields[ref.Name]
 	var diags []*diagnostic.Entry
 	for _, stated := range ref.Payload {
-		if _, ok := fields[stated.Name]; ok {
+		declared, ok := referenced.fields[stated.Name]
+		if !ok {
+			diags = append(diags, errorAt(stated.NamePos,
+				"payload field %q is not declared on %s %q", stated.Name, referenced.kind, ref.Name))
 			continue
 		}
-		diags = append(diags, errorAt(stated.NamePos,
-			"payload field %q is not declared on %s %q", stated.Name, kind, ref.Name))
+		if mismatch := literalKindDiagnostic(stated, declared.Type); mismatch != nil {
+			diags = append(diags, mismatch)
+		}
 	}
 
 	return diags
+}
+
+// referencedConstruct is what a spec reference resolved to: the kind to name in
+// a diagnostic and the fields that kind declares under that name. A reference no
+// construct declares resolves to the zero value, whose empty kind says so.
+type referencedConstruct struct {
+	kind   string
+	fields map[string]*ast.Field
+}
+
+func (i *modelIndex) asEvent(name string) referencedConstruct {
+	if !i.eventNames[name] {
+		return referencedConstruct{}
+	}
+
+	return referencedConstruct{kind: "event", fields: i.eventFieldsByName[name]}
+}
+
+// asCommandOrEvent backs a spec's when, which names the command a command slice
+// exercises but the triggering event of an automation slice. A command wins a
+// name both declare, because that is the reading a command slice gives it.
+func (i *modelIndex) asCommandOrEvent(name string) referencedConstruct {
+	if i.commandNames[name] {
+		return referencedConstruct{kind: "command", fields: i.commandFieldsByName[name]}
+	}
+
+	return i.asEvent(name)
+}
+
+const (
+	typeString    = "string"
+	typeDate      = "date"
+	typeTimestamp = "timestamp"
+	typeUUID      = "uuid"
+	typeInt       = "int"
+	typeDecimal   = "decimal"
+	typeBool      = "bool"
+)
+
+// literalCheckers names every declared field type a payload literal is checked
+// against. A type absent from it is a domain type — opaque to the model, and so
+// satisfied by any literal — which is why the map is the whole of the rule and
+// not a fast path in front of a switch.
+var literalCheckers = map[string]func(*ast.PayloadField) bool{
+	typeString:    func(f *ast.PayloadField) bool { return f.Kind == ast.StringLiteral },
+	typeDate:      func(f *ast.PayloadField) bool { return f.Kind == ast.StringLiteral && isDate(f.Value) },
+	typeTimestamp: func(f *ast.PayloadField) bool { return f.Kind == ast.StringLiteral && isTimestamp(f.Value) },
+	typeUUID:      func(f *ast.PayloadField) bool { return f.Kind == ast.StringLiteral && isUUID(f.Value) },
+	typeInt:       func(f *ast.PayloadField) bool { return f.Kind == ast.IntegerLiteral },
+	typeDecimal:   func(f *ast.PayloadField) bool { return f.Kind == ast.IntegerLiteral || f.Kind == ast.DecimalLiteral },
+	typeBool:      func(f *ast.PayloadField) bool { return f.Kind == ast.BooleanLiteral },
+}
+
+// literalExpectations spells the format a value must parse as, for the three
+// types where satisfying the literal kind is not the whole of the rule.
+var literalExpectations = map[string]string{
+	typeDate:      "expected YYYY-MM-DD",
+	typeTimestamp: "expected an RFC 3339 timestamp",
+	typeUUID:      "expected 8-4-4-4-12 hexadecimal digits",
+}
+
+func literalKindDiagnostic(stated *ast.PayloadField, declaredType string) *diagnostic.Entry {
+	satisfies, checked := literalCheckers[declaredType]
+	if !checked || satisfies(stated) {
+		return nil
+	}
+
+	message := fmt.Sprintf("payload value %s for field %q is not a valid %s",
+		literalText(stated), stated.Name, declaredType)
+	if expectation, ok := literalExpectations[declaredType]; ok {
+		message += " (" + expectation + ")"
+	}
+
+	return errorAt(stated.ValuePos, "%s", message)
+}
+
+// literalText quotes a string literal and leaves a number or a boolean bare, so
+// a message tells "12.50" apart from 12.50.
+func literalText(stated *ast.PayloadField) string {
+	if stated.Kind == ast.StringLiteral {
+		return fmt.Sprintf("%q", stated.Value)
+	}
+
+	return stated.Value
+}
+
+var uuidPattern = regexp.MustCompile(`^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$`)
+
+func isDate(value string) bool {
+	_, err := time.Parse(time.DateOnly, value)
+
+	return err == nil
+}
+
+func isTimestamp(value string) bool {
+	_, err := time.Parse(time.RFC3339, value)
+
+	return err == nil
+}
+
+func isUUID(value string) bool {
+	return uuidPattern.MatchString(value)
 }
 
 // whenKind names what a spec's when resolved against, which is a command in a
