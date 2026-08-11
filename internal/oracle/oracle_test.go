@@ -57,6 +57,12 @@ func TestCheck(t *testing.T) {
 			require.Empty(t, diagnostics)
 		})
 
+		t.Run("returns an empty diagnostic list for a model stating example payloads in an aggregate slice and on a context slice", func(t *testing.T) {
+			diagnostics := oracle.Check(test.PayloadLibraryLending, "payloads.emod")
+
+			require.Empty(t, diagnostics)
+		})
+
 		t.Run("returns an empty diagnostic list for a model stating rejection edges in an aggregate slice and on a context slice", func(t *testing.T) {
 			diagnostics := oracle.Check(test.RejectionLibraryLending, "rejections.emod")
 

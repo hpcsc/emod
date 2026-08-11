@@ -2,7 +2,7 @@
 
 ## Progress
 - [x] Task 1: Lex number literals and record example payloads on spec references
-- [ ] Task 2: Share a payload-carrying fixture and its twin
+- [x] Task 2: Share a payload-carrying fixture and its twin
 - [ ] Task 3: Reject payload field names the referenced construct does not declare
 - [ ] Task 4: Check payload literal kinds against the declared field type
 - [ ] Task 5: Preserve payloads through `emod fmt`
@@ -372,31 +372,31 @@ states, a twin that clears them, a getter that reads them back, and a zero-diagn
 leaf.
 
 **Acceptance Criteria:**
-- [ ] `internal/test/fixtures.go` gains a source declaring payloads inside a slice nested in an
+- [x] `internal/test/fixtures.go` gains a source declaring payloads inside a slice nested in an
       aggregate *and* inside a slice declared directly on a `mode dcb` context, and
       `internal/test/models.go` gains its parsed-model helper alongside `SpecLibraryLendingModel`
       (`:37`)
-- [ ] Across its specs the fixture exercises: a payload on a `given` element, one on `when`, one on a
+- [x] Across its specs the fixture exercises: a payload on a `given` element, one on `when`, one on a
       `then` event-list element, a names-only element beside a payload-carrying one *in the same list*,
       a spec that states no payload at all, and a `then rejected` spec whose `given` and `when` carry
       payloads
-- [ ] Its payload values cover a field declared `string`, one `date`, one `timestamp`, one `uuid`, one
+- [x] Its payload values cover a field declared `string`, one `date`, one `timestamp`, one `uuid`, one
       `int`, one `decimal`, one `bool` and one of a domain type, and every value parses as the format
       its field declares
-- [ ] One payload-carrying element sits ahead of a further element in its list, and one payload-carrying
+- [x] One payload-carrying element sits ahead of a further element in its list, and one payload-carrying
       spec sits ahead of a further slice entry rather than last — an entry that runs on into what
       follows it is only caught when something follows it
-- [ ] No payload value in the fixture equals a construct name, a field name or a bare small integer, so
+- [x] No payload value in the fixture equals a construct name, a field name or a bare small integer, so
       a whole-document text search for one cannot match a position, an id or another construct
-- [ ] `oracle.Check` over the fixture returns no diagnostics at all, and `internal/oracle/oracle_test.go`
+- [x] `oracle.Check` over the fixture returns no diagnostics at all, and `internal/oracle/oracle_test.go`
       `"clean input"` carries that subtest
-- [ ] A hand-written transcription in `internal/test/fixtures.go` restates every payload the fixture
+- [x] A hand-written transcription in `internal/test/fixtures.go` restates every payload the fixture
       states — filed under the reference that states it, in declaration order across both slice homes —
       and a getter reads the same back off a parsed model
-- [ ] A twin helper returns a copy with every payload cleared and every spec otherwise intact: the
+- [x] A twin helper returns a copy with every payload cleared and every spec otherwise intact: the
       getter over the twin is empty, the getter over the fixture equals the transcription, and the model
       handed to the twin still states its payloads afterwards
-- [ ] `SpecLibraryLending`, `HotelReservation`, `DescribedHotelReservation`, `KeywordFieldSearchCatalog`,
+- [x] `SpecLibraryLending`, `HotelReservation`, `DescribedHotelReservation`, `KeywordFieldSearchCatalog`,
       `InvariantLibraryLending`, `AutomationReadsLibraryLending`, `TriggerReadsLibraryLending` and
       `AutomationScheduleLibraryLending` are unchanged, so every existing golden keeps witnessing a
       model whose specs carry no payload

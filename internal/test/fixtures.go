@@ -1562,6 +1562,178 @@ context "Reading Room" mode dcb {
 }
 `
 
+// PayloadLibraryLending states example values on the scenarios its slices must
+// satisfy, in both homes a slice has — nested in an aggregate, and directly on a
+// DCB-mode context — so packages that carry payloads through the pipeline share
+// one model. Four things about its shape are load-bearing. A payload-carrying
+// element is written ahead of a names-only one in the same list, and a
+// payload-carrying spec ahead of a further slice entry, because an entry running
+// on into what follows it is only caught when something follows it. Its fields
+// span every type a payload literal is checked against plus one domain type, so
+// no type is left witnessed by nothing. Two specs state no payload at all, which
+// is what proves a names-only spec stays valid. And no value it states is a
+// construct name, a field name or a bare small integer, so a whole-document
+// search for one cannot match a position, an id or another construct.
+const PayloadLibraryLending = `# Lending a library's copies and seating its readers, with example values on the scenarios each slice must satisfy
+model "Library Lending"
+
+actor "Member"
+
+context "Lending" {
+  aggregate "Loan" {
+    invariant OneCopyPerLoan "A loan covers exactly one copy of one title"
+    slice "Borrow Copy" {
+      command BorrowCopy {
+        fields {
+          memberId  string    required
+          copyId    string    required
+          dueOn     date      required
+          shelfMark ShelfMark
+        }
+      }
+      spec "borrows a copy no one holds" {
+        given []
+        when BorrowCopy { memberId: "M-40817", copyId: "C-93204", dueOn: "2024-07-19", shelfMark: "AURELIA" }
+        then [CopyBorrowed { loanId: "7c9e6679-7425-40de-944b-e07fc1f90ae7", borrowedAt: "2024-07-05T14:32:00Z", catalogueNumber: 4821, lateFee: 12.50, expedited: true }]
+      }
+      event CopyBorrowed {
+        fields {
+          loanId          uuid      required
+          memberId        string    required
+          copyId          string    required
+          dueOn           date      required
+          borrowedAt      timestamp required
+          catalogueNumber int
+          lateFee         decimal
+          expedited       bool
+        }
+      }
+      spec "refuses a copy already on loan" {
+        given [CopyBorrowed { copyId: "C-93204", expedited: false }, CopyReturned]
+        when BorrowCopy { copyId: "C-93204" }
+        then rejected OneCopyPerLoan
+      }
+      flow {
+        command -> event: BorrowCopy -> CopyBorrowed
+      }
+    }
+    slice "Return Copy" {
+      command ReturnCopy {
+        fields {
+          loanId uuid   required
+          copyId string required
+        }
+      }
+      event CopyReturned {
+        fields {
+          loanId     uuid      required
+          copyId     string    required
+          returnedAt timestamp required
+        }
+      }
+      spec "returns a copy the member holds" {
+        given [CopyBorrowed]
+        when ReturnCopy
+        then [CopyReturned]
+      }
+      spec "refuses to return a copy the member no longer holds" {
+        given [CopyBorrowed]
+        when ReturnCopy
+        then rejected OneCopyPerLoan
+      }
+      flow {
+        command -> event: ReturnCopy -> CopyReturned
+      }
+    }
+    slice "Review Member Loans" {
+      view MemberLoansView {
+        fields {
+          loanId   uuid   required
+          memberId string required
+          dueOn    date   required
+        }
+        subscribes [CopyBorrowed]
+      }
+    }
+  }
+}
+
+context "Reading Room" mode dcb {
+  invariant OneReaderPerDesk "A desk seats at most one reader at any moment"
+  slice "Claim Desk" {
+    command ClaimDesk {
+      fields {
+        memberId string required
+        deskId   string required
+      }
+    }
+    spec "seats a reader at a free desk" {
+      given []
+      when ClaimDesk { memberId: "M-40817", deskId: "D-5817" }
+      then [DeskClaimed { sessionId: "b6f4a3d2-91c8-4e57-8f10-2d6a5c7e9b31", claimedAt: "2024-07-05T09:15:00Z", quietZone: true }]
+    }
+    event DeskClaimed {
+      tags {
+        desk  : deskId
+        reader: memberId
+      }
+      fields {
+        sessionId uuid      required
+        deskId    string    required
+        memberId  string    required
+        claimedAt timestamp required
+        quietZone bool
+      }
+    }
+    spec "refuses a desk another reader is seated at" {
+      given [DeskClaimed { deskId: "D-5817" }]
+      when ClaimDesk { deskId: "D-5817" }
+      then rejected OneReaderPerDesk
+    }
+    flow {
+      command -> event: ClaimDesk -> DeskClaimed
+    }
+  }
+  slice "Release Desk" {
+    command ReleaseDesk {
+      decides_on {
+        events [DeskClaimed]
+        where tag(desk = deskId) and tag(reader = memberId)
+      }
+      fields {
+        sessionId uuid required
+      }
+    }
+    event DeskReleased {
+      tags {
+        desk  : deskId
+        reader: memberId
+      }
+      fields {
+        sessionId  uuid      required
+        deskId     string    required
+        memberId   string    required
+        releasedAt timestamp required
+        seatedFor  decimal
+      }
+    }
+    spec "frees the desk its reader is seated at" {
+      given [DeskClaimed { quietZone: false }]
+      when ReleaseDesk { sessionId: "b6f4a3d2-91c8-4e57-8f10-2d6a5c7e9b31" }
+      then [DeskReleased { releasedAt: "2024-07-05T11:40:00Z", seatedFor: 145.25 }]
+    }
+    spec "refuses to free a desk already empty" {
+      given [DeskClaimed]
+      when ReleaseDesk
+      then rejected OneReaderPerDesk
+    }
+    flow {
+      command -> event: ReleaseDesk -> DeskReleased
+    }
+  }
+}
+`
+
 // SpecLibraryLendingSpecNames transcribes the name of every scenario
 // SpecLibraryLending states, both slice homes together and in declaration order,
 // so a walk or a strip that reaches only one of the homes reads back short
@@ -1576,6 +1748,120 @@ var SpecLibraryLendingSpecNames = []string{
 	"refuses a desk another reader is seated at",
 	"frees the desk its reader is seated at",
 	"refuses to free a desk already empty",
+}
+
+// SpecPayload names the spec and the reference a payload is written on beside
+// the values it states. The reference alone cannot tell two payloads apart when
+// two specs write one on the same event, which PayloadLibraryLending
+// deliberately does.
+type SpecPayload struct {
+	SpecName  string
+	Reference string
+	Values    []PayloadValue
+}
+
+// PayloadValue is one field of a payload as its author wrote it: the source text
+// of the literal, never a decoded number, so 12.50 is told from 12.5.
+type PayloadValue struct {
+	Field string
+	Value string
+	Kind  ast.LiteralKind
+}
+
+// PayloadLibraryLendingPayloads transcribes every payload PayloadLibraryLending
+// states, filed under the reference stating it, both slice homes together and in
+// the order a spec's given, when and then are walked, so a strip or a walk that
+// reaches only one of the homes reads back short against it.
+var PayloadLibraryLendingPayloads = []SpecPayload{
+	{
+		SpecName:  "borrows a copy no one holds",
+		Reference: "BorrowCopy",
+		Values: []PayloadValue{
+			{Field: "memberId", Value: "M-40817", Kind: ast.StringLiteral},
+			{Field: "copyId", Value: "C-93204", Kind: ast.StringLiteral},
+			{Field: "dueOn", Value: "2024-07-19", Kind: ast.StringLiteral},
+			{Field: "shelfMark", Value: "AURELIA", Kind: ast.StringLiteral},
+		},
+	},
+	{
+		SpecName:  "borrows a copy no one holds",
+		Reference: "CopyBorrowed",
+		Values: []PayloadValue{
+			{Field: "loanId", Value: "7c9e6679-7425-40de-944b-e07fc1f90ae7", Kind: ast.StringLiteral},
+			{Field: "borrowedAt", Value: "2024-07-05T14:32:00Z", Kind: ast.StringLiteral},
+			{Field: "catalogueNumber", Value: "4821", Kind: ast.IntegerLiteral},
+			{Field: "lateFee", Value: "12.50", Kind: ast.DecimalLiteral},
+			{Field: "expedited", Value: "true", Kind: ast.BooleanLiteral},
+		},
+	},
+	{
+		SpecName:  "refuses a copy already on loan",
+		Reference: "CopyBorrowed",
+		Values: []PayloadValue{
+			{Field: "copyId", Value: "C-93204", Kind: ast.StringLiteral},
+			{Field: "expedited", Value: "false", Kind: ast.BooleanLiteral},
+		},
+	},
+	{
+		SpecName:  "refuses a copy already on loan",
+		Reference: "BorrowCopy",
+		Values: []PayloadValue{
+			{Field: "copyId", Value: "C-93204", Kind: ast.StringLiteral},
+		},
+	},
+	{
+		SpecName:  "seats a reader at a free desk",
+		Reference: "ClaimDesk",
+		Values: []PayloadValue{
+			{Field: "memberId", Value: "M-40817", Kind: ast.StringLiteral},
+			{Field: "deskId", Value: "D-5817", Kind: ast.StringLiteral},
+		},
+	},
+	{
+		SpecName:  "seats a reader at a free desk",
+		Reference: "DeskClaimed",
+		Values: []PayloadValue{
+			{Field: "sessionId", Value: "b6f4a3d2-91c8-4e57-8f10-2d6a5c7e9b31", Kind: ast.StringLiteral},
+			{Field: "claimedAt", Value: "2024-07-05T09:15:00Z", Kind: ast.StringLiteral},
+			{Field: "quietZone", Value: "true", Kind: ast.BooleanLiteral},
+		},
+	},
+	{
+		SpecName:  "refuses a desk another reader is seated at",
+		Reference: "DeskClaimed",
+		Values: []PayloadValue{
+			{Field: "deskId", Value: "D-5817", Kind: ast.StringLiteral},
+		},
+	},
+	{
+		SpecName:  "refuses a desk another reader is seated at",
+		Reference: "ClaimDesk",
+		Values: []PayloadValue{
+			{Field: "deskId", Value: "D-5817", Kind: ast.StringLiteral},
+		},
+	},
+	{
+		SpecName:  "frees the desk its reader is seated at",
+		Reference: "DeskClaimed",
+		Values: []PayloadValue{
+			{Field: "quietZone", Value: "false", Kind: ast.BooleanLiteral},
+		},
+	},
+	{
+		SpecName:  "frees the desk its reader is seated at",
+		Reference: "ReleaseDesk",
+		Values: []PayloadValue{
+			{Field: "sessionId", Value: "b6f4a3d2-91c8-4e57-8f10-2d6a5c7e9b31", Kind: ast.StringLiteral},
+		},
+	},
+	{
+		SpecName:  "frees the desk its reader is seated at",
+		Reference: "DeskReleased",
+		Values: []PayloadValue{
+			{Field: "releasedAt", Value: "2024-07-05T11:40:00Z", Kind: ast.StringLiteral},
+			{Field: "seatedFor", Value: "145.25", Kind: ast.DecimalLiteral},
+		},
+	},
 }
 
 // RejectionEdge names both halves of a rejection edge. A transcription of the
@@ -1760,6 +2046,29 @@ func WithoutSpecs(model *ast.Model) *ast.Model {
 	})
 }
 
+// WithoutSpecPayloads returns a copy of model whose spec references state no
+// example payload, in both homes a slice has — nested in an aggregate and
+// declared directly on a context. Every spec keeps its name, its references and
+// its outcome; only the payloads go. The original keeps every payload it was
+// written with, so a caller comparing the two is not comparing a model with
+// itself, which is why each spec and each element it holds is copied rather than
+// edited where it sits.
+func WithoutSpecPayloads(model *ast.Model) *ast.Model {
+	return copyWithEditedSlices(model, func(s *ast.Slice) {
+		s.Specs = editedCopies(s.Specs, func(spec *ast.Spec) {
+			spec.Given = editedCopies(spec.Given, clearPayload)
+			spec.When = editedCopy(spec.When, clearPayload)
+			if events, ok := spec.Then.(*ast.ThenEvents); ok {
+				spec.Then = &ast.ThenEvents{Events: editedCopies(events.Events, clearPayload)}
+			}
+		})
+	})
+}
+
+func clearPayload(element *ast.SpecElement) {
+	element.Payload = nil
+}
+
 // WithoutRejections returns a copy of model whose slices state no rejection edge,
 // in both homes a slice has — nested in an aggregate and declared directly on a
 // context. The original keeps every edge it was written with, so a caller
@@ -1857,6 +2166,44 @@ func DeclaredSpecNames(model *ast.Model) []string {
 		}
 	}
 	return names
+}
+
+// DeclaredSpecPayloads names every payload model states, filed under the
+// reference stating it, both slice homes together and in the order a spec's
+// given, when and then are walked. A reference stating no payload contributes
+// nothing, so a caller pairing this with a transcribed list is comparing stated
+// payloads rather than counting references.
+func DeclaredSpecPayloads(model *ast.Model) []SpecPayload {
+	var payloads []SpecPayload
+	appendStated := func(specName string, element *ast.SpecElement) {
+		if element == nil || len(element.Payload) == 0 {
+			return
+		}
+		stated := SpecPayload{SpecName: specName, Reference: element.Name}
+		for _, field := range element.Payload {
+			stated.Values = append(stated.Values, PayloadValue{
+				Field: field.Name,
+				Value: field.Value,
+				Kind:  field.Kind,
+			})
+		}
+		payloads = append(payloads, stated)
+	}
+
+	for _, s := range declaredSlices(model) {
+		for _, spec := range s.Specs {
+			for _, given := range spec.Given {
+				appendStated(spec.Name, given)
+			}
+			appendStated(spec.Name, spec.When)
+			if events, ok := spec.Then.(*ast.ThenEvents); ok {
+				for _, event := range events.Events {
+					appendStated(spec.Name, event)
+				}
+			}
+		}
+	}
+	return payloads
 }
 
 // DeclaredRejections names every rejection edge model states, both slice homes

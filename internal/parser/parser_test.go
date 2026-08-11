@@ -4,6 +4,8 @@ package parser_test
 
 import (
 	"fmt"
+	"maps"
+	"slices"
 	"strconv"
 	"strings"
 	"testing"
@@ -1281,6 +1283,76 @@ context "Lending" {
 			require.NotZero(t, dcbContextRejections, "no slice declared on a dcb context states a rejection")
 			requireSpecCoverage(t, test.SpecLibraryLending, declaredSpecs(model))
 			requireASpecAheadOfALaterEntry(t, model)
+		})
+
+		t.Run("the shared payload model states a payload everywhere a spec accepts one, in both slice homes", func(t *testing.T) {
+			model := test.PayloadLibraryLendingModel(t)
+
+			requirePayloadCoverage(t, model)
+			requirePayloadsInBothSliceHomes(t, model)
+			requireASpecAheadOfALaterEntry(t, model)
+
+			t.Run("reads the transcribed payloads back off the parsed model", func(t *testing.T) {
+				require.Equal(t, test.PayloadLibraryLendingPayloads, test.DeclaredSpecPayloads(model))
+			})
+
+			t.Run("states a value of every type a payload literal is checked against, plus a domain type", func(t *testing.T) {
+				require.Equal(t, []string{
+					"ShelfMark", "bool", "date", "decimal", "int", "string", "timestamp", "uuid",
+				}, payloadFieldTypes(t, model))
+			})
+
+			t.Run("states no value a whole-document search could confuse with a name or a position", func(t *testing.T) {
+				declared := declaredNames(model)
+
+				for _, stated := range test.DeclaredSpecPayloads(model) {
+					for _, value := range stated.Values {
+						require.NotContains(t, declared, value.Value,
+							"payload value %q on %s is also a declared name", value.Value, stated.Reference)
+						if value.Kind == ast.IntegerLiteral {
+							require.Greater(t, len(value.Value), 3,
+								"integer payload value %q is short enough to match a line or column number", value.Value)
+						}
+					}
+				}
+			})
+
+			t.Run("WithoutSpecPayloads returns a distinct model whose spec references state no payload", func(t *testing.T) {
+				stripped := test.WithoutSpecPayloads(model)
+
+				require.NotNil(t, stripped)
+				require.False(t, cmp.Equal(model, stripped), "WithoutSpecPayloads must differ from the original")
+				require.Empty(t, test.DeclaredSpecPayloads(stripped))
+				require.Equal(t, test.DeclaredSpecNames(model), test.DeclaredSpecNames(stripped))
+				require.Equal(t, test.DeclaredSpecOutcomeKinds(model), test.DeclaredSpecOutcomeKinds(stripped))
+			})
+
+			t.Run("the original still states its payloads after WithoutSpecPayloads", func(t *testing.T) {
+				_ = test.WithoutSpecPayloads(model)
+
+				require.Equal(t, test.PayloadLibraryLendingPayloads, test.DeclaredSpecPayloads(model))
+			})
+		})
+
+		t.Run("every fixture that predates payloads states none, so its goldens keep witnessing a model without them", func(t *testing.T) {
+			models := map[string]*ast.Model{
+				"HotelReservation":                 test.HotelReservationModel(t),
+				"DescribedHotelReservation":        test.DescribedHotelReservationModel(t),
+				"KeywordFieldSearchCatalog":        test.KeywordFieldSearchCatalogModel(t),
+				"InvariantLibraryLending":          test.InvariantLibraryLendingModel(t),
+				"SpecLibraryLending":               test.SpecLibraryLendingModel(t),
+				"RejectionLibraryLending":          test.RejectionLibraryLendingModel(t),
+				"SlicePatternLibraryLending":       test.SlicePatternLibraryLendingModel(t),
+				"AutomationReadsLibraryLending":    test.AutomationReadsLibraryLendingModel(t),
+				"TriggerReadsLibraryLending":       test.TriggerReadsLibraryLendingModel(t),
+				"AutomationScheduleLibraryLending": test.AutomationScheduleLibraryLendingModel(t),
+			}
+
+			for name, fixture := range models {
+				t.Run(name, func(t *testing.T) {
+					require.Empty(t, test.DeclaredSpecPayloads(fixture))
+				})
+			}
 		})
 
 		t.Run("the slice pattern fixture states a spec for every slice pattern in both homes, with the new outcomes covered", func(t *testing.T) {
@@ -6986,6 +7058,177 @@ func specSourceLines(t *testing.T, source string, spec *ast.Spec) []string {
 	require.Less(t, spec.OpenPos.Line, spec.ClosePos.Line, spec.Name)
 	require.LessOrEqual(t, spec.ClosePos.Line, len(lines), spec.Name)
 	return lines[spec.OpenPos.Line : spec.ClosePos.Line-1]
+}
+
+// requirePayloadCoverage guards that the payload fixture writes a payload in
+// every place a spec accepts one, and beside the two absences that are the only
+// witnesses a names-only reference and a names-only spec stay valid.
+func requirePayloadCoverage(t *testing.T, model *ast.Model) {
+	t.Helper()
+	var onGiven, onWhen, onThenEvent, besideANamesOnlyElement, aheadOfAFurtherElement, wholeSpecWithout, rejectionWithGivenAndWhen bool
+	for _, spec := range declaredSpecs(model) {
+		var statedInSpec int
+		for index, given := range spec.Given {
+			if len(given.Payload) == 0 {
+				continue
+			}
+			statedInSpec++
+			onGiven = true
+			aheadOfAFurtherElement = aheadOfAFurtherElement || index < len(spec.Given)-1
+			besideANamesOnlyElement = besideANamesOnlyElement || anyElementWithoutPayload(spec.Given)
+		}
+		if spec.When != nil && len(spec.When.Payload) > 0 {
+			statedInSpec++
+			onWhen = true
+		}
+		if events, ok := spec.Then.(*ast.ThenEvents); ok {
+			for _, event := range events.Events {
+				if len(event.Payload) == 0 {
+					continue
+				}
+				statedInSpec++
+				onThenEvent = true
+			}
+		}
+		if _, rejects := spec.Then.(*ast.ThenRejected); rejects && spec.When != nil {
+			rejectionWithGivenAndWhen = rejectionWithGivenAndWhen ||
+				len(spec.When.Payload) > 0 && anyElementWithPayload(spec.Given)
+		}
+		wholeSpecWithout = wholeSpecWithout || statedInSpec == 0
+	}
+
+	require.True(t, onGiven, "no given element states a payload")
+	require.True(t, onWhen, "no when reference states a payload")
+	require.True(t, onThenEvent, "no then event states a payload")
+	require.True(t, besideANamesOnlyElement, "no list holds a names-only element beside a payload-carrying one")
+	require.True(t, aheadOfAFurtherElement, "every payload-carrying element is the last of its list")
+	require.True(t, wholeSpecWithout, "no spec states no payload at all")
+	require.True(t, rejectionWithGivenAndWhen, "no rejection spec carries payloads on both its given and its when")
+}
+
+func requirePayloadsInBothSliceHomes(t *testing.T, model *ast.Model) {
+	t.Helper()
+	var inAggregate, onContext bool
+	for _, context := range model.Contexts {
+		onContext = onContext || anySliceStatesAPayload(context.Slices)
+		for _, aggregate := range context.Aggregates {
+			inAggregate = inAggregate || anySliceStatesAPayload(aggregate.Slices)
+		}
+	}
+
+	require.True(t, inAggregate, "no slice nested in an aggregate states a payload")
+	require.True(t, onContext, "no slice declared on a context states a payload")
+}
+
+func anySliceStatesAPayload(slices []*ast.Slice) bool {
+	for _, slice := range slices {
+		for _, spec := range slice.Specs {
+			if anyElementWithPayload(spec.Given) || (spec.When != nil && len(spec.When.Payload) > 0) {
+				return true
+			}
+			if events, ok := spec.Then.(*ast.ThenEvents); ok && anyElementWithPayload(events.Events) {
+				return true
+			}
+		}
+	}
+	return false
+}
+
+func anyElementWithPayload(elements []*ast.SpecElement) bool {
+	for _, element := range elements {
+		if len(element.Payload) > 0 {
+			return true
+		}
+	}
+	return false
+}
+
+func anyElementWithoutPayload(elements []*ast.SpecElement) bool {
+	for _, element := range elements {
+		if len(element.Payload) == 0 {
+			return true
+		}
+	}
+	return false
+}
+
+// payloadFieldTypes names, sorted and deduplicated, the type each payload field
+// is declared with on the command or event its reference names, so a fixture
+// that stopped exercising one of them reads back short.
+func payloadFieldTypes(t *testing.T, model *ast.Model) []string {
+	t.Helper()
+	declared := map[string]map[string]string{}
+	for _, slice := range declaredSlices(model) {
+		for _, cmd := range slice.Commands {
+			declared[cmd.Name] = fieldTypesByName(cmd.Fields)
+		}
+		for _, evt := range slice.Events {
+			declared[evt.Name] = fieldTypesByName(evt.Fields)
+		}
+	}
+
+	seen := map[string]bool{}
+	for _, stated := range test.DeclaredSpecPayloads(model) {
+		fields, ok := declared[stated.Reference]
+		require.True(t, ok, "payload written on %q, which no command or event declares", stated.Reference)
+		for _, value := range stated.Values {
+			fieldType, ok := fields[value.Field]
+			require.True(t, ok, "payload names field %q, which %s does not declare", value.Field, stated.Reference)
+			seen[fieldType] = true
+		}
+	}
+
+	return slices.Sorted(maps.Keys(seen))
+}
+
+func fieldTypesByName(fields []*ast.Field) map[string]string {
+	types := make(map[string]string, len(fields))
+	for _, field := range fields {
+		types[field.Name] = field.Type
+	}
+	return types
+}
+
+// declaredNames names every construct and field the model declares, so a payload
+// value can be required not to be one of them.
+func declaredNames(model *ast.Model) []string {
+	var names []string
+	for _, context := range model.Contexts {
+		names = append(names, context.Name)
+		for _, invariant := range context.Invariants {
+			names = append(names, invariant.Name)
+		}
+		for _, aggregate := range context.Aggregates {
+			names = append(names, aggregate.Name)
+			for _, invariant := range aggregate.Invariants {
+				names = append(names, invariant.Name)
+			}
+		}
+	}
+	for _, slice := range declaredSlices(model) {
+		names = append(names, slice.Name)
+		for _, cmd := range slice.Commands {
+			names = append(names, cmd.Name)
+			names = append(names, fieldNames(cmd.Fields)...)
+		}
+		for _, evt := range slice.Events {
+			names = append(names, evt.Name)
+			names = append(names, fieldNames(evt.Fields)...)
+		}
+		for _, view := range slice.Views {
+			names = append(names, view.Name)
+			names = append(names, fieldNames(view.Fields)...)
+		}
+	}
+	return names
+}
+
+func fieldNames(fields []*ast.Field) []string {
+	var names []string
+	for _, field := range fields {
+		names = append(names, field.Name, field.Type)
+	}
+	return names
 }
 
 func requireASpecAheadOfALaterEntry(t *testing.T, model *ast.Model) {
