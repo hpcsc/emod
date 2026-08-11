@@ -130,7 +130,7 @@
         "spec_when",
         "editors/tree-sitter-emod/test/corpus/specs.txt"
       ],
-      "done": false
+      "done": true
     },
     {
       "n": 8,

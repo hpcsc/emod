@@ -452,3 +452,192 @@ context "C" {
         (string)
         (spec_then
           (any_identifier))))))
+
+========================
+Payload on a given element, a when reference and a then event
+========================
+
+context "Lending" {
+  aggregate "Loan" {
+    slice "Borrow a Copy" {
+      spec "borrows a copy no one holds" {
+        given [CopyReturned { copyId: "C-93204" }]
+        when BorrowCopy { copyId: "C-93204", dueOn: "2024-07-19" }
+        then [CopyBorrowed { lateFee: 12.50, renewals: 4821, expedited: true }]
+      }
+    }
+  }
+}
+
+---
+
+(source_file
+  (context_definition
+    (string)
+    (aggregate_definition
+      (string)
+      (slice_definition
+        (string)
+        (spec_definition
+          (string)
+          (spec_given
+            (spec_event_list
+              (any_identifier)
+              (payload
+                (payload_field
+                  (any_identifier)
+                  (string)))))
+          (spec_when
+            (any_identifier)
+            (payload
+              (payload_field
+                (any_identifier)
+                (string))
+              (payload_field
+                (any_identifier)
+                (string))))
+          (spec_then
+            (spec_event_list
+              (any_identifier)
+              (payload
+                (payload_field
+                  (any_identifier)
+                  (number))
+                (payload_field
+                  (any_identifier)
+                  (number))
+                (payload_field
+                  (any_identifier)
+                  (boolean))))))))))
+
+========================
+Payload beside a names-only element, one written empty and one with a single field
+========================
+
+context "Lending" {
+  slice "Claim a Desk" {
+    spec "seats a reader" {
+      given [DeskClaimed { quietZone: false }, DeskReleased, DeskSwept {}]
+      when ClaimDesk { deskId: "D-5817" }
+      then [DeskClaimed]
+    }
+  }
+}
+
+---
+
+(source_file
+  (context_definition
+    (string)
+    (slice_definition
+      (string)
+      (spec_definition
+        (string)
+        (spec_given
+          (spec_event_list
+            (any_identifier)
+            (payload
+              (payload_field
+                (any_identifier)
+                (boolean)))
+            (any_identifier)
+            (any_identifier)
+            (payload)))
+        (spec_when
+          (any_identifier)
+          (payload
+            (payload_field
+              (any_identifier)
+              (string))))
+        (spec_then
+          (spec_event_list
+            (any_identifier)))))))
+
+========================
+Payload written with no commas between its fields
+========================
+
+context "Lending" {
+  slice "Borrow a Copy" {
+    spec "borrows a copy" {
+      when BorrowCopy {
+        copyId: "C-93204"
+        renewals: 4821
+        expedited: true
+      }
+      then [CopyBorrowed]
+    }
+  }
+}
+
+---
+
+(source_file
+  (context_definition
+    (string)
+    (slice_definition
+      (string)
+      (spec_definition
+        (string)
+        (spec_when
+          (any_identifier)
+          (payload
+            (payload_field
+              (any_identifier)
+              (string))
+            (payload_field
+              (any_identifier)
+              (number))
+            (payload_field
+              (any_identifier)
+              (boolean))))
+        (spec_then
+          (spec_event_list
+            (any_identifier)))))))
+
+========================
+Payload fields named after DSL keywords and after true and false
+========================
+
+context "Lending" {
+  slice "Borrow a Copy" {
+    spec "borrows a copy" {
+      when BorrowCopy { given: "a", when: "b", then: "c", description: "d", true: "e", false: "f" }
+      then [CopyBorrowed]
+    }
+  }
+}
+
+---
+
+(source_file
+  (context_definition
+    (string)
+    (slice_definition
+      (string)
+      (spec_definition
+        (string)
+        (spec_when
+          (any_identifier)
+          (payload
+            (payload_field
+              (any_identifier)
+              (string))
+            (payload_field
+              (any_identifier)
+              (string))
+            (payload_field
+              (any_identifier)
+              (string))
+            (payload_field
+              (any_identifier)
+              (string))
+            (payload_field
+              (any_identifier)
+              (string))
+            (payload_field
+              (any_identifier)
+              (string))))
+        (spec_then
+          (spec_event_list
+            (any_identifier)))))))

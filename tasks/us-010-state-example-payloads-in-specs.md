@@ -7,7 +7,7 @@
 - [x] Task 4: Check payload literal kinds against the declared field type
 - [x] Task 5: Preserve payloads through `emod fmt`
 - [x] Task 6: Carry payloads through the JSON and CUE exports and the embedded schema
-- [ ] Task 7: Accept payloads in the tree-sitter grammar
+- [x] Task 7: Accept payloads in the tree-sitter grammar
 - [ ] Task 8: Document payloads in the DSL reference
 
 ---
@@ -746,27 +746,27 @@ by a tree-sitter-backed editor. The grammar stays looser than the Go parser: any
 fields in any order, commas optional, and the payload free to span lines.
 
 **Acceptance Criteria:**
-- [ ] Corpus cases parse a payload on a `given` element, on the `when` reference, and on a `then`
+- [x] Corpus cases parse a payload on a `given` element, on the `when` reference, and on a `then`
       event-list element
-- [ ] A corpus case covers a payload with several fields, one with a single field, and one written `{}`
-- [ ] A corpus case covers a string value, a number with a fractional part, a number without one, and
+- [x] A corpus case covers a payload with several fields, one with a single field, and one written `{}`
+- [x] A corpus case covers a string value, a number with a fractional part, a number without one, and
       `true` and `false`
-- [ ] A corpus case places a payload-carrying element beside a names-only element in the same list, and
+- [x] A corpus case places a payload-carrying element beside a names-only element in the same list, and
       another spreads a payload across several lines with no commas between its fields
-- [ ] A corpus case for a `fields` block declaring fields named `true` and `false` parses them as field
+- [x] A corpus case for a `fields` block declaring fields named `true` and `false` parses them as field
       lines, not as literals
-- [ ] The expected trees of the existing cases in `editors/tree-sitter-emod/test/corpus/specs.txt` are
+- [x] The expected trees of the existing cases in `editors/tree-sitter-emod/test/corpus/specs.txt` are
       unchanged — the payload is admitted as an optional addition rather than by wrapping every
       reference in a new node
-- [ ] The rule comment above `spec_definition` (`editors/tree-sitter-emod/grammar.js:106`) spells the
+- [x] The rule comment above `spec_definition` (`editors/tree-sitter-emod/grammar.js:106`) spells the
       payload out, so the file's one description of the construct is not left under-stating it
-- [ ] `mise exec -- task test:grammar` passes, and running it a second time leaves every tracked file
+- [x] `mise exec -- task test:grammar` passes, and running it a second time leaves every tracked file
       under `editors/tree-sitter-emod/` byte-identical
-- [ ] No file under `editors/tree-sitter-emod/src/` is tracked — `.gitignore` still ignores it
-- [ ] No file under `editors/tree-sitter-emod/queries/` changes and
+- [x] No file under `editors/tree-sitter-emod/src/` is tracked — `.gitignore` still ignores it
+- [x] No file under `editors/tree-sitter-emod/queries/` changes and
       `editors/vscode/syntaxes/emod.tmLanguage.json` is untouched — highlighting numbers and booleans as
       literals is US-017
-- [ ] `editors/tree-sitter-emod/test/queries/keywords_test.go` needs no edit, since this story adds no
+- [x] `editors/tree-sitter-emod/test/queries/keywords_test.go` needs no edit, since this story adds no
       keyword
 
 **Affected Files/Modules:**

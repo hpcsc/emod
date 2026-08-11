@@ -211,3 +211,42 @@ context "C" {
             (any_identifier)
             (any_identifier)
             (any_identifier)))))))
+
+========================
+Fields named true and false inside a fields block
+========================
+
+context "C" {
+  slice "S" {
+    event E {
+      fields {
+        true  bool required
+        false bool required
+        flag  bool required
+      }
+    }
+  }
+}
+
+---
+
+(source_file
+  (context_definition
+    (string)
+    (slice_definition
+      (string)
+      (event_definition
+        (identifier)
+        (fields_block
+          (field_line
+            (any_identifier)
+            (any_identifier)
+            (any_identifier))
+          (field_line
+            (any_identifier)
+            (any_identifier)
+            (any_identifier))
+          (field_line
+            (any_identifier)
+            (any_identifier)
+            (any_identifier)))))))

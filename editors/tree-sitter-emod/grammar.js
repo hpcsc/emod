@@ -103,7 +103,7 @@ module.exports = grammar({
       $.spec_definition,
     ),
 
-    // spec "name" { given [...] when Cmd then [...] | then rejected Name | then view Name | then command Name }
+    // spec "name" { given [Evt { field: "value" }] when Cmd { field: 42 } then [Evt] | then rejected Name | then view Name | then command Name }
     spec_definition: $ => seq(
       'spec',
       $.string,
@@ -119,7 +119,7 @@ module.exports = grammar({
 
     spec_when: $ => seq(
       'when',
-      $.any_identifier,
+      $._spec_element,
     ),
 
     spec_then: $ => seq(
@@ -135,10 +135,30 @@ module.exports = grammar({
     spec_event_list: $ => seq(
       '[',
       optional(seq(
-        $.any_identifier,
-        repeat(seq(',', $.any_identifier)),
+        $._spec_element,
+        repeat(seq(',', $._spec_element)),
       )),
       ']',
+    ),
+
+    // Hidden, so a reference that states a payload keeps the tree a names-only
+    // one has always parsed to.
+    _spec_element: $ => seq(
+      $.any_identifier,
+      optional($.payload),
+    ),
+
+    // { field: "value", other: 12.50, flag: true }
+    payload: $ => seq(
+      '{',
+      repeat(seq($.payload_field, optional(','))),
+      '}',
+    ),
+
+    payload_field: $ => seq(
+      $.any_identifier,
+      ':',
+      choice($.string, $.number, $.boolean),
     ),
 
     // command Name { decides_on { ... } fields { ... } }
@@ -344,6 +364,13 @@ module.exports = grammar({
 
     // Quoted strings: "..."
     string: $ => token(seq('"', repeat(/[^"]/), '"')),
+
+    // Unsigned numbers with an optional fractional part: 42, 12.50
+    number: $ => token(/\d+(\.\d+)?/),
+
+    // true and false hold only in a payload's value slot, so a fields block
+    // declaring a field named true still reads it as an identifier.
+    boolean: $ => choice('true', 'false'),
 
     // Line comments: # ...
     comment: $ => token(seq('#', /.*/)),
