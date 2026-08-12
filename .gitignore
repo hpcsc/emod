@@ -7,6 +7,7 @@ tasks/.environment
 tasks/.cycles
 tasks/.checkpoint
 .worktrees/
+.claude/worktrees/
 node_modules
 /web
 internal/viewer/generated/
