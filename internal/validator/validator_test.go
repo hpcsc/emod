@@ -4062,6 +4062,198 @@ context "Lending" {
 		})
 	})
 
+	t.Run("duplicate wire types", func(t *testing.T) {
+		const collision = `hotel.emod:12: event "RoomHeld" binds wire type "com.acme.reservations.room-reserved", already bound by event "RoomReserved"`
+
+		t.Run("the check spans the whole model", func(t *testing.T) {
+			first := eventBinding("RoomReserved", "com.acme.reservations.room-reserved", 6)
+			second := eventBinding("RoomHeld", "com.acme.reservations.room-reserved", 12)
+
+			for _, testCase := range []struct {
+				shape string
+				model *ast.Model
+			}{
+				{
+					shape: "two events in one slice",
+					model: modelOf(contextOf("Reservations", aggregateOf("Reservation", sliceOf("Reserve", first, second)))),
+				},
+				{
+					shape: "two aggregates of one context",
+					model: modelOf(contextOf("Reservations",
+						aggregateOf("Reservation", sliceOf("Reserve", first)),
+						aggregateOf("Hold", sliceOf("Hold", second)))),
+				},
+				{
+					shape: "two different contexts",
+					model: modelOf(
+						contextOf("Reservations", aggregateOf("Reservation", sliceOf("Reserve", first))),
+						contextOf("Housekeeping", aggregateOf("Room", sliceOf("Hold", second)))),
+				},
+				{
+					shape: "a slice event and a translation's nested event",
+					model: modelOf(contextOf("Reservations", aggregateOf("Reservation",
+						sliceOf("Reserve", first),
+						translatingSlice("Import", second)))),
+				},
+			} {
+				t.Run(testCase.shape, func(t *testing.T) {
+					diags := validator.Validate(testCase.model)
+
+					require.Equal(t, []string{collision}, reportedLines(diags))
+				})
+			}
+		})
+
+		t.Run("the collision is reported at the second event's wire-type value as a hard error", func(t *testing.T) {
+			model := modelOf(contextOf("Reservations", aggregateOf("Reservation", sliceOf("Reserve",
+				eventBinding("RoomReserved", "com.acme.reservations.room-reserved", 6),
+				eventBinding("RoomHeld", "com.acme.reservations.room-reserved", 12)))))
+
+			diags := validator.Validate(model)
+
+			require.Equal(t, []string{collision}, reportedLines(diags))
+			require.Equal(t, diagnostic.Error, diags[0].Severity)
+			require.Equal(t, wireTypeColumn, diags[0].Column)
+			require.Empty(t, diags[0].RuleName,
+				"a hard error no configuration can silence carries no rule for emod lint --explain to describe")
+		})
+
+		t.Run("three events binding one wire type report twice, each naming the event that bound it first", func(t *testing.T) {
+			model := modelOf(contextOf("Reservations", aggregateOf("Reservation", sliceOf("Reserve",
+				eventBinding("RoomReserved", "com.acme.reservations.room-reserved", 6),
+				eventBinding("RoomHeld", "com.acme.reservations.room-reserved", 12),
+				eventBinding("RoomBlocked", "com.acme.reservations.room-reserved", 18)))))
+
+			diags := validator.Validate(model)
+
+			require.Equal(t, []string{
+				collision,
+				`hotel.emod:18: event "RoomBlocked" binds wire type "com.acme.reservations.room-reserved", already bound by event "RoomReserved"`,
+			}, reportedLines(diags))
+		})
+
+		// The earliest binding is the one a translation nests, which a slice
+		// keeps in a separate field and the AST therefore yields last. That is
+		// what separates walking the source from walking the collection: sorting
+		// only the emitted diagnostics puts them in the right order while still
+		// crediting the wrong event as the prior binder, so this leaf pins the
+		// attribution rather than the order alone.
+		t.Run("the earliest binding is named as the prior binder even when the AST yields it last", func(t *testing.T) {
+			model := modelOf(contextOf("Reservations", aggregateOf("Reservation", &ast.Slice{
+				Name: "Reserve",
+				Events: []*ast.Event{
+					eventBinding("RoomReserved", "com.acme.reservations.room-reserved", 18),
+					eventBinding("RoomBlocked", "com.acme.reservations.room-reserved", 30),
+				},
+				Translations: []*ast.Translation{{
+					Name:  "BookingImport",
+					Event: eventBinding("BookingImported", "com.acme.reservations.room-reserved", 6),
+				}},
+			})))
+
+			diags := validator.Validate(model)
+
+			require.Equal(t, []string{
+				`hotel.emod:18: event "RoomReserved" binds wire type "com.acme.reservations.room-reserved", already bound by event "BookingImported"`,
+				`hotel.emod:30: event "RoomBlocked" binds wire type "com.acme.reservations.room-reserved", already bound by event "BookingImported"`,
+			}, reportedLines(diags))
+		})
+
+		t.Run("collisions come back in declaration order across both slice homes", func(t *testing.T) {
+			model := modelOf(
+				contextOf("Reservations", aggregateOf("Reservation", sliceOf("Reserve",
+					eventBinding("RoomReserved", "com.acme.reservations.room-reserved", 6),
+					eventBinding("RoomHeld", "com.acme.reservations.room-reserved", 12)))),
+				dcbContextOf("Housekeeping", sliceOf("Clean",
+					eventBinding("RoomCleaned", "com.acme.housekeeping.room-cleaned", 20),
+					eventBinding("RoomInspected", "com.acme.housekeeping.room-cleaned", 26))))
+
+			diags := validator.Validate(model)
+
+			require.Equal(t, []string{
+				collision,
+				`hotel.emod:26: event "RoomInspected" binds wire type "com.acme.housekeeping.room-cleaned", already bound by event "RoomCleaned"`,
+			}, reportedLines(diags))
+		})
+
+		t.Run("wire types that do not collide are left alone", func(t *testing.T) {
+			for _, testCase := range []struct {
+				shape  string
+				events []*ast.Event
+			}{
+				{
+					shape: "two events binding distinct wire types",
+					events: []*ast.Event{
+						eventBinding("RoomReserved", "com.acme.reservations.room-reserved", 6),
+						eventBinding("RoomHeld", "com.acme.reservations.room-held", 12),
+					},
+				},
+				{
+					shape: "two events binding wire types that differ only in letter case",
+					events: []*ast.Event{
+						eventBinding("RoomReserved", "com.acme.reservations.room-reserved", 6),
+						eventBinding("RoomHeld", "Com.Acme.Reservations.Room-Reserved", 12),
+					},
+				},
+				// An event binding nothing and one binding "" are a single AST
+				// state, so the empty pair is the whole of that case; the third
+				// event binding a real value is what proves the walk still
+				// reaches past them.
+				{
+					shape: "two events binding the empty string ahead of one binding a real value",
+					events: []*ast.Event{
+						eventBinding("RoomReserved", "", 6),
+						eventBinding("RoomHeld", "", 12),
+						eventBinding("RoomBlocked", "com.acme.reservations.room-blocked", 18),
+					},
+				},
+				// One event declared twice is one event to the rest of the
+				// validator, so binding it consistently is not a collision and
+				// must not report the event as its own prior binder.
+				{
+					shape: "one event name declared twice binding the same wire type",
+					events: []*ast.Event{
+						eventBinding("RoomReserved", "com.acme.reservations.room-reserved", 6),
+						eventBinding("RoomReserved", "com.acme.reservations.room-reserved", 18),
+					},
+				},
+				// Whether one event may bind two wire types is a question this
+				// check does not answer; it reports repeated values, not
+				// repeated names.
+				{
+					shape: "one event name declared twice binding two distinct wire types",
+					events: []*ast.Event{
+						eventBinding("RoomReserved", "com.acme.reservations.room-reserved", 6),
+						eventBinding("RoomReserved", "com.acme.reservations.room-rebooked", 18),
+					},
+				},
+			} {
+				t.Run(testCase.shape, func(t *testing.T) {
+					model := modelOf(contextOf("Reservations", aggregateOf("Reservation", sliceOf("Reserve", testCase.events...))))
+
+					diags := validator.Validate(model)
+
+					require.Empty(t, reportedLines(diags))
+				})
+			}
+		})
+
+		// Skipping a repeat of the same name must not consume the binding: a
+		// third event under a different name still collides with the first.
+		t.Run("a repeated event name leaves the wire type bound for a differently named event to collide with", func(t *testing.T) {
+			model := modelOf(contextOf("Reservations", aggregateOf("Reservation", sliceOf("Reserve",
+				eventBinding("RoomReserved", "com.acme.reservations.room-reserved", 6),
+				eventBinding("RoomReserved", "com.acme.reservations.room-reserved", 18),
+				eventBinding("RoomHeld", "com.acme.reservations.room-reserved", 30)))))
+
+			diags := validator.Validate(model)
+
+			require.Equal(t, []string{
+				`hotel.emod:30: event "RoomHeld" binds wire type "com.acme.reservations.room-reserved", already bound by event "RoomReserved"`,
+			}, reportedLines(diags))
+		})
+	})
+
 	// ── DCB: tag field reference validation ──────────────────────────────
 
 	t.Run("tag field references", func(t *testing.T) {
@@ -4986,6 +5178,51 @@ context "Lending" {
     }
   }
 }`, specs)
+}
+
+// wireTypeColumn is where every event these builders make states its wire type.
+// The column is the same for all of them because only the line tells the
+// collisions apart in a formatted diagnostic.
+const wireTypeColumn = 14
+
+// eventBinding gives every event an external source, which is what keeps
+// orphan-event off a model declaring an event no flow produces: these models
+// exist to collide wire types, and an unrelated orphan would ride along in the
+// whole-list comparison each leaf makes.
+func eventBinding(name, wireType string, line int) *ast.Event {
+	return &ast.Event{
+		Name:        name,
+		Source:      "external",
+		WireType:    wireType,
+		WireTypePos: ast.Position{Filename: "hotel.emod", Line: line, Column: wireTypeColumn},
+	}
+}
+
+func modelOf(contexts ...*ast.Context) *ast.Model {
+	return &ast.Model{Contexts: contexts}
+}
+
+func contextOf(name string, aggregates ...*ast.Aggregate) *ast.Context {
+	return &ast.Context{Name: name, Aggregates: aggregates}
+}
+
+func dcbContextOf(name string, slices ...*ast.Slice) *ast.Context {
+	return &ast.Context{Name: name, Mode: "dcb", Slices: slices}
+}
+
+func aggregateOf(name string, slices ...*ast.Slice) *ast.Aggregate {
+	return &ast.Aggregate{Name: name, Slices: slices}
+}
+
+func sliceOf(name string, events ...*ast.Event) *ast.Slice {
+	return &ast.Slice{Name: name, Events: events}
+}
+
+func translatingSlice(name string, nested *ast.Event) *ast.Slice {
+	return &ast.Slice{
+		Name:         name,
+		Translations: []*ast.Translation{{Name: name + "Import", Event: nested}},
+	}
 }
 
 func reportedLines(diags []*diagnostic.Entry) []string {

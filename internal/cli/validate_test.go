@@ -119,6 +119,50 @@ context "Ctx" {
 		require.Regexp(t, `\bevery\b`, err.Error())
 	})
 
+	t.Run("returns error naming both events and the wire type they share", func(t *testing.T) {
+		input := `model "Test"
+context "Reservations" {
+  aggregate "Reservation" {
+    slice "Reserve Room" {
+      command ReserveRoom {
+        fields {
+          guestId string required
+        }
+      }
+
+      event RoomReserved {
+        type "com.acme.reservations.room-reserved"
+        fields {
+          reservationId string required
+        }
+      }
+
+      event RoomHeld {
+        type "com.acme.reservations.room-reserved"
+        fields {
+          reservationId string required
+        }
+      }
+
+      flow {
+        command -> event: ReserveRoom -> RoomReserved
+        command -> event: ReserveRoom -> RoomHeld
+      }
+    }
+  }
+}
+`
+		path := writeTemp(t, "duplicate_wire_type.emod", input)
+
+		err := cli.RunValidate(path, "text")
+
+		require.Error(t, err)
+		require.Contains(t, err.Error(), "RoomHeld")
+		require.Contains(t, err.Error(), "RoomReserved")
+		require.Contains(t, err.Error(), "com.acme.reservations.room-reserved")
+		require.Contains(t, err.Error(), "already bound by")
+	})
+
 	t.Run("returns error naming the file when it does not exist", func(t *testing.T) {
 		missing := filepath.Join(t.TempDir(), "nonexistent.emod")
 

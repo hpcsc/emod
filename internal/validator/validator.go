@@ -31,6 +31,7 @@ func Validate(model *ast.Model) []*diagnostic.Entry {
 	}
 	diags = append(diags, scheduleExpressionDiagnostics(index.slices)...)
 	diags = append(diags, redeclaredInvariantDiagnostics(model)...)
+	diags = append(diags, duplicateWireTypeDiagnostics(model)...)
 	diags = append(diags, unresolvedRejectionDiagnostics(model)...)
 	diags = append(diags, orphanDiagnostics(index.commandPositions, index.referencedCommands,
 		"orphan-command", "command %q is orphaned (no flow references it)")...)
@@ -302,6 +303,73 @@ func redeclaredInvariantDiagnostics(model *ast.Model) []*diagnostic.Entry {
 	}
 
 	return scopedInvariantDiagnostics(redeclared, "invariant %q is already declared in %s %q")
+}
+
+// duplicateWireTypeDiagnostics flags every event binding a wire type an earlier
+// event already bound. The scope is the whole model rather than a context: a
+// wire type is by construction an identifier outside the model — the subject a
+// schema registry keys on, the type a consumer routes by — so two contexts
+// binding one produce output that consumer cannot tell apart. That is the
+// deliberate contrast with an invariant name, which never leaves the model and
+// is therefore scoped per aggregate or context.
+//
+// The comparison is verbatim: the story calls the value opaque and CloudEvents
+// types are case-sensitive, so two events binding names that differ only in case
+// do not collide. The lint rule flags the second for its shape; this does not.
+func duplicateWireTypeDiagnostics(model *ast.Model) []*diagnostic.Entry {
+	boundBy := make(map[string]string)
+
+	var diags []*diagnostic.Entry
+	for _, evt := range eventsBindingWireTypes(model) {
+		if first, bound := boundBy[evt.WireType]; bound {
+			// One event declared in two slices is one event to the rest of the
+			// validator — collectFieldsInto accumulates a repeated name's fields
+			// rather than replacing them — so stating the same wire type on both
+			// is consistent, not a collision, and reporting it would name the
+			// event as its own prior binder.
+			if first == evt.Name {
+				continue
+			}
+			diags = append(diags, errorAt(evt.WireTypePos,
+				"event %q binds wire type %q, already bound by event %q", evt.Name, evt.WireType, first))
+			continue
+		}
+		boundBy[evt.WireType] = evt.Name
+	}
+
+	return diags
+}
+
+// eventsBindingWireTypes returns every event of the model that binds a wire
+// type, over both homes a slice has and including the event a translation
+// nests, ordered by where the binding was written.
+//
+// The sort is what makes the report match the file: a slice keeps its own
+// events and its translations in separate fields, so a translation written
+// above a sibling event is collected after it. Walking in collection order
+// would report the collision on whichever of the pair was written first and
+// name the later one as the binder that came before it. Ordering the inputs
+// also leaves the diagnostics ascending by position, so this check needs no
+// sortInDeclarationOrder pass of its own.
+func eventsBindingWireTypes(model *ast.Model) []*ast.Event {
+	var bound []*ast.Event
+	for _, slice := range model.AllSlices() {
+		for _, evt := range slice.Events {
+			if evt.WireType != "" {
+				bound = append(bound, evt)
+			}
+		}
+		for _, tr := range slice.Translations {
+			if tr.Event != nil && tr.Event.WireType != "" {
+				bound = append(bound, tr.Event)
+			}
+		}
+	}
+	slices.SortStableFunc(bound, func(a, b *ast.Event) int {
+		return a.WireTypePos.Compare(b.WireTypePos)
+	})
+
+	return bound
 }
 
 func unresolvedRejectionDiagnostics(model *ast.Model) []*diagnostic.Entry {

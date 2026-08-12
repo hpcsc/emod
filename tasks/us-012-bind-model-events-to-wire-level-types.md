@@ -4,7 +4,7 @@
 - [x] Task 1: Spell `type` on the hand-maintained editor keyword surfaces
 - [x] Task 2: Carry a wire `type` attribute on `event`
 - [x] Task 3: Preserve wire types through `emod fmt`
-- [ ] Task 4: Reject two events sharing one wire type
+- [x] Task 4: Reject two events sharing one wire type
 - [ ] Task 5: Carry wire types through the JSON and CUE exports and the embedded schema
 - [ ] Task 6: Nudge wire types toward reverse-DNS kebab-case with `wire/type-format`
 - [ ] Task 7: Document the wire type in the DSL reference
@@ -567,30 +567,30 @@ naming both events and the value. Events with distinct wire types, and events wi
 unaffected.
 
 **Acceptance Criteria:**
-- [ ] Two events in one model stating the same wire type produce one error, positioned at the *second*
+- [x] Two events in one model stating the same wire type produce one error, positioned at the *second*
       event's wire-type value, naming the repeated value, the event reporting it and the event that
       stated it first
-- [ ] The check spans the whole model: the pair collides when the two events sit in the same slice, in
+- [x] The check spans the whole model: the pair collides when the two events sit in the same slice, in
       two aggregates of one context, in two different contexts, and when one of them is a
       translation's nested event
-- [ ] Three events sharing one wire type produce two errors — the second and third occurrences — each
+- [x] Three events sharing one wire type produce two errors — the second and third occurrences — each
       naming the first declarer
-- [ ] Distinct wire types produce nothing; a model in which no event states a wire type produces
+- [x] Distinct wire types produce nothing; a model in which no event states a wire type produces
       nothing
-- [ ] Two wire types differing only in letter case do not collide — the value is opaque and compared
+- [x] Two wire types differing only in letter case do not collide — the value is opaque and compared
       verbatim
-- [ ] An event whose wire type is the empty string is treated as stating none: it never collides, and
+- [x] An event whose wire type is the empty string is treated as stating none: it never collides, and
       two events both writing an empty wire type produce nothing
-- [ ] The diagnostics come back in declaration order across both slice homes, asserted as one
+- [x] The diagnostics come back in declaration order across both slice homes, asserted as one
       `require.Equal` over the whole list of formatted lines rather than a length plus a first-element
       check
-- [ ] The message is asserted as a complete formatted line, so an assertion naming the value cannot be
+- [x] The message is asserted as a complete formatted line, so an assertion naming the value cannot be
       satisfied by a message that dropped one of the two event names
-- [ ] The diagnostic carries no `RuleName`: it is a hard error no configuration can silence, and
+- [x] The diagnostic carries no `RuleName`: it is a hard error no configuration can silence, and
       `emod lint --explain` describes nothing by that name
-- [ ] `cli.RunValidate` on a file with a collision returns a non-nil error whose text names both
+- [x] `cli.RunValidate` on a file with a collision returns a non-nil error whose text names both
       events and the repeated wire type, not merely a position and a count
-- [ ] `internal/test.HotelReservation`, the wire-type fixture from Task 2, every file under
+- [x] `internal/test.HotelReservation`, the wire-type fixture from Task 2, every file under
       `examples/` the repository ships as valid, and every fixture under `internal/parser/testdata/`
       still return zero diagnostics from `oracle.Check`
 
