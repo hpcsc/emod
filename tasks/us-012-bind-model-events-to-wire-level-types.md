@@ -1,7 +1,7 @@
 # US-012: Bind model events to wire-level types
 
 ## Progress
-- [ ] Task 1: Spell `type` on the hand-maintained editor keyword surfaces
+- [x] Task 1: Spell `type` on the hand-maintained editor keyword surfaces
 - [ ] Task 2: Carry a wire `type` attribute on `event`
 - [ ] Task 3: Preserve wire types through `emod fmt`
 - [ ] Task 4: Reject two events sharing one wire type
@@ -312,35 +312,35 @@ lands. The grammar accepting syntax the Go parser does not yet accept is the saf
 only one this repo permits (`tasks/learnings.md:61-64`).
 
 **Acceptance Criteria:**
-- [ ] `grammar.js` parses `type "<text>"` among an `event` block's entries, in any position within the
+- [x] `grammar.js` parses `type "<text>"` among an `event` block's entries, in any position within the
       block and any number of times, with a corpus expectation naming the node and containing no
       `ERROR` or `MISSING` node
-- [ ] The nested `event` inside a `translation` accepts it on the same terms, with its own corpus case
-- [ ] A corpus case parses `fields { type string required }` as a `field_line` of `any_identifier`
+- [x] The nested `event` inside a `translation` accepts it on the same terms, with its own corpus case
+- [x] A corpus case parses `fields { type string required }` as a `field_line` of `any_identifier`
       nodes, mirroring `test/corpus/version_header.txt:31-58`
-- [ ] The `// event Name { ... }` comment above `event_definition` names the new entry, so the file's
+- [x] The `// event Name { ... }` comment above `event_definition` names the new entry, so the file's
       one description of the construct still states it whole
-- [ ] `highlights.scm` captures the `type` keyword of an attribute as `@keyword`, asserted by a marker
+- [x] `highlights.scm` captures the `type` keyword of an attribute as `@keyword`, asserted by a marker
       in `editors/tree-sitter-emod/test/highlight/`, and the same file asserts that a field named
       `type` still captures `variable.member` and a field *typed* `type` still captures `@type`
-- [ ] Each new highlight marker has a further highlighted token after it on its source line, so the
+- [x] Each new highlight marker has a further highlighted token after it on its source line, so the
       assertion discriminates rather than scanning on into a later line
-- [ ] `emod.tmLanguage.json` scopes `type` as `keyword.control.emod` only where a quoted string
+- [x] `emod.tmLanguage.json` scopes `type` as `keyword.control.emod` only where a quoted string
       follows it, case-sensitively, matching the `every` rule at `:80` — it is **not** added to the
       positionless `#keywords` alternation at `:97`, and the pattern group it joins is one the `fields`
       block rule does not include
-- [ ] The rule group `type` joins states in its name or `comment` what it now covers, rather than
+- [x] The rule group `type` joins states in its name or `comment` what it now covers, rather than
       leaving a `type` attribute filed under a heading that says activations
-- [ ] `editors/vscode/test/scopes/` asserts both directions: `type "com.acme.reservations.room-reserved"`
+- [x] `editors/vscode/test/scopes/` asserts both directions: `type "com.acme.reservations.room-reserved"`
       scopes `type` as a keyword and the value as a string, and `fields { type string required }`
       scopes `type` as a field name with the keyword scope absent
-- [ ] An event named `Type` and a field named `Type` keep their existing scopes on both surfaces — the
+- [x] An event named `Type` and a field named `Type` keep their existing scopes on both surfaces — the
       lexer's keyword lookup is case-sensitive, so the highlight rules must be too
-- [ ] `TestEditorKeywordCoverage` still passes for every spelling `lexer.Keywords()` reports today,
+- [x] `TestEditorKeywordCoverage` still passes for every spelling `lexer.Keywords()` reports today,
       and its "yields distinct spellings rather than one run of text" leaf still holds for all three
       files
-- [ ] Every existing corpus, highlight and scope expectation matches unchanged
-- [ ] `mise exec -- task test:grammar` and `mise exec -- task test:vscode` pass, and no file under
+- [x] Every existing corpus, highlight and scope expectation matches unchanged
+- [x] `mise exec -- task test:grammar` and `mise exec -- task test:vscode` pass, and no file under
       `editors/tree-sitter-emod/src/` is tracked, and `editors/tree-sitter-emod/.gitignore` is
       unmodified
 

@@ -16,6 +16,11 @@ context "Ordering" {
         command PlaceOrder
       }
 
+      event RoomReserved {
+        type "com.acme.reservations.room-reserved"
+#       ^ keyword
+      }
+
       command RecordReminder {
         fields {
           on string required
@@ -23,9 +28,14 @@ context "Ordering" {
           every string required
 #         ^ variable.member
 
+          type string required
+#         ^ variable.member
+
           notified on required
 #                  ^ type
           scheduled every required
+#                   ^ type
+          published type required
 #                   ^ type
 
           flagged string on # a field's modifier is the line's last token

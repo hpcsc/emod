@@ -12,10 +12,18 @@ command RecordReminder {
 #   ^^^^^ - keyword.control.emod entity.name.function.emod
 #         ^^^^^^ storage.type.emod
 #                ^^^^^^^^ storage.modifier.emod
+    type string required
+#   ^^^^ - keyword.control.emod entity.name.function.emod
+#        ^^^^^^ storage.type.emod
+#               ^^^^^^^^ storage.modifier.emod
     notified on required
 #   ^^^^^^^^ - keyword.control.emod
 #            ^^ - keyword.control.emod entity.name.function.emod
 #               ^^^^^^^^ storage.modifier.emod
+    published type required
+#   ^^^^^^^^^ - keyword.control.emod
+#             ^^^^ - keyword.control.emod entity.name.function.emod
+#                  ^^^^^^^^ storage.modifier.emod
     scheduled every required
 #   ^^^^^^^^^ - keyword.control.emod
 #             ^^^^^ - keyword.control.emod entity.name.function.emod

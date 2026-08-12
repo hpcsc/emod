@@ -60,6 +60,7 @@
   "when"
   "then"
   "rejected"
+  "type"
 ] @keyword
 
 ; --- Entity names (mapped to @function) ---

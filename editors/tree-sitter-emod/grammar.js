@@ -228,16 +228,23 @@ module.exports = grammar({
       ')',
     ),
 
-    // event Name { tags { ... } fields { ... } source external "..." }
+    // event Name { type "..." tags { ... } fields { ... } source external "..." }
     event_definition: $ => seq(
       'event',
       $.identifier,
       buildDescribedBlock(
         $,
+        $.wire_type,
         $.tags_block,
         $.fields_block,
         seq('source', 'external', $.string),
       ),
+    ),
+
+    // type "com.acme.reservations.room-reserved"
+    wire_type: $ => seq(
+      'type',
+      $.string,
     ),
 
     // tags { key: fieldRef ... }

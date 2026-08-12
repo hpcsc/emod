@@ -18,7 +18,7 @@
         "editors/vscode/syntaxes/emod.tmLanguage.json",
         "editors/vscode/test/scopes/"
       ],
-      "done": false
+      "done": true
     },
     {
       "n": 2,

@@ -1,0 +1,22 @@
+# SYNTAX TEST "source.emod"
+
+# An event's wire type reads as a keyword only where a quoted value follows it,
+# so the rule is keyed on that operand and the value itself stays a string.
+event RoomReserved { type "com.acme.reservations.room-reserved" }
+#                    ^^^^ keyword.control.emod
+#                         ^^^^^^^ string.quoted.double.emod - keyword.control.emod
+
+# The lexer's keyword lookup is case-sensitive, so Type still names an event.
+event Type { type "com.acme.reservations.type-recorded" }
+#     ^^^^ entity.name.function.emod - keyword.control.emod
+#            ^^^^ keyword.control.emod
+
+# A tag key spelled type has no quoted value after it, so the rule's lookahead
+# is what keeps it a tag key. Drop the lookahead and this line paints a keyword.
+event DeskClaimed { tags { type: deskId } }
+#                          ^^^^ - keyword.control.emod
+
+# An invariant named Type is followed by a quoted statement, so only the rule's
+# case-sensitivity keeps it a name. Add (?i) and this line paints a keyword.
+invariant Type "A desk seats at most one reader"
+#         ^^^^ - keyword.control.emod

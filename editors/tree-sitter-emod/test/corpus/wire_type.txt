@@ -1,0 +1,162 @@
+========================
+Event with a wire type
+========================
+
+context "C" {
+  aggregate "A" {
+    slice "Core" {
+      event RoomReserved {
+        type "com.acme.reservations.room-reserved"
+      }
+    }
+  }
+}
+
+---
+
+(source_file
+  (context_definition
+    (string)
+    (aggregate_definition
+      (string)
+      (slice_definition
+        (string)
+        (event_definition
+          (identifier)
+          (wire_type
+            (string)))))))
+
+========================
+Event stating its wire type between other entries
+========================
+
+context "C" {
+  aggregate "A" {
+    slice "Core" {
+      event RoomReserved {
+        description "A room was held for a guest"
+        fields {
+          roomId string required
+        }
+        type "com.acme.reservations.room-reserved"
+        source external "Kafka"
+      }
+    }
+  }
+}
+
+---
+
+(source_file
+  (context_definition
+    (string)
+    (aggregate_definition
+      (string)
+      (slice_definition
+        (string)
+        (event_definition
+          (identifier)
+          (description
+            (string))
+          (fields_block
+            (field_line
+              (any_identifier)
+              (any_identifier)
+              (any_identifier)))
+          (wire_type
+            (string))
+          (string))))))
+
+========================
+Event stating a wire type twice
+========================
+
+context "C" {
+  aggregate "A" {
+    slice "Core" {
+      event RoomReserved {
+        type "com.acme.reservations.room-held"
+        type "com.acme.reservations.room-reserved"
+      }
+    }
+  }
+}
+
+---
+
+(source_file
+  (context_definition
+    (string)
+    (aggregate_definition
+      (string)
+      (slice_definition
+        (string)
+        (event_definition
+          (identifier)
+          (wire_type
+            (string))
+          (wire_type
+            (string)))))))
+
+========================
+Wire type on a translation's nested event
+========================
+
+context "C" {
+  aggregate "A" {
+    slice "Core" {
+      translation BookingImport {
+        external_system "Booking.com"
+        event BookingImported {
+          type "com.acme.bookings.booking-imported"
+        }
+      }
+    }
+  }
+}
+
+---
+
+(source_file
+  (context_definition
+    (string)
+    (aggregate_definition
+      (string)
+      (slice_definition
+        (string)
+        (translation_definition
+          (identifier)
+          (string)
+          (event_definition
+            (identifier)
+            (wire_type
+              (string))))))))
+
+========================
+Field typed type inside a fields block
+========================
+
+context "C" {
+  aggregate "A" {
+    slice "Core" {
+      fields {
+        published type required
+      }
+    }
+  }
+}
+
+---
+
+(source_file
+  (context_definition
+    (string)
+    (aggregate_definition
+      (string)
+      (slice_definition
+        (string)
+        (fields_block
+          (field_line
+            (any_identifier)
+            (any_identifier)
+            (any_identifier)))))))

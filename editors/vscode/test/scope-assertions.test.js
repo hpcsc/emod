@@ -127,19 +127,24 @@ describe('emod TextMate scope assertions', () => {
     })
   })
 
-  test('a grammar that colours the activation keywords by word alone paints a field named after one', (t) => {
-    const config = extensionConfigFor(t, grammarWithFlatKeywordsExtended(['on', 'every']))
-    const keywordFieldAssertions = assertionPath('unreserved-keywords.emod')
+  for (const { keywords, sourceLine } of [
+    { keywords: ['on', 'every'], sourceLine: 'on string required' },
+    { keywords: ['type'], sourceLine: 'type string required' },
+  ]) {
+    test(`a grammar that colours ${keywords.join(' and ')} by word alone paints a field named after one`, (t) => {
+      const config = extensionConfigFor(t, grammarWithFlatKeywordsExtended(keywords))
+      const keywordFieldAssertions = assertionPath('unreserved-keywords.emod')
 
-    const run = runScopeTest('--config', config, keywordFieldAssertions)
+      const run = runScopeTest('--config', config, keywordFieldAssertions)
 
-    assertReportsMismatch(run, {
-      file: keywordFieldAssertions,
-      sourceLine: 'on string required',
-      prohibited: 'keyword.control.emod',
-      produced: 'keyword.control.emod',
+      assertReportsMismatch(run, {
+        file: keywordFieldAssertions,
+        sourceLine,
+        prohibited: 'keyword.control.emod',
+        produced: 'keyword.control.emod',
+      })
     })
-  })
+  }
 
   test('an assertion naming a scope the grammar does not produce fails, naming the position and the scope produced', (t) => {
     const assertions = assertionsWithScopeRenamed('declarations.emod', {
