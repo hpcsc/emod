@@ -16,9 +16,40 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
+// nonConformingWireTypeEmod binds a wire type that does not read as reverse-DNS
+// kebab-case, which wire/type-format reports at info severity and no other rule
+// reports. Its slice carries a full flow and its event real fields so that an
+// orphan or a clickbait event cannot ride along in the count.
+const nonConformingWireTypeEmod = `model "Reservations"
+
+context "Booking" {
+  aggregate "Reservation" {
+    slice "Reserve Room" {
+      command ReserveRoom {
+        fields {
+          guestId  string required
+          roomType string required
+        }
+      }
+
+      event RoomReserved {
+        type "RoomReserved"
+        fields {
+          reservationId string required
+          guestId       string required
+        }
+      }
+
+      flow {
+        command -> event: ReserveRoom -> RoomReserved
+      }
+    }
+  }
+}
+`
+
 // singleTagDCBEmod uses one tag key across every decides_on predicate, which
-// the dcb/single-tag-everywhere rule reports at info severity — the only rule
-// that produces info diagnostics.
+// the dcb/single-tag-everywhere rule reports at info severity.
 const singleTagDCBEmod = `model "Orders"
 
 context "Fulfillment" mode dcb {
@@ -1175,6 +1206,45 @@ context "Orders" {
 			require.Contains(t, err.Error(), path+":3:")
 			require.Contains(t, err.Error(), "[dcb/single-tag-everywhere]")
 		})
+
+		t.Run("a non-conforming wire type trips wire/type-format and no other rule", func(t *testing.T) {
+			path := writeTemp(t, "wire_type.emod", nonConformingWireTypeEmod)
+
+			var err error
+			output := captureStdout(t, func() {
+				err = cli.RunLint(path, "json")
+			})
+
+			var lintErr *cli.LintError
+			require.True(t, errors.As(err, &lintErr))
+			require.Equal(t, 1, lintErr.ExitCode)
+
+			var entries []map[string]interface{}
+			require.NoError(t, json.Unmarshal([]byte(output), &entries))
+			require.Len(t, entries, 1)
+			require.Equal(t, "info", entries[0]["severity"])
+			require.Equal(t, "wire/type-format", entries[0]["rule"])
+			require.Equal(t, float64(14), entries[0]["line"])
+			require.Contains(t, entries[0]["message"], "RoomReserved")
+		})
+
+		t.Run("an info diagnostic is still a diagnostic, so lint and validate both report the wire type", func(t *testing.T) {
+			path := writeTemp(t, "wire_type.emod", nonConformingWireTypeEmod)
+
+			for name, run := range map[string]func() error{
+				"lint":     func() error { return cli.RunLint(path, "text") },
+				"validate": func() error { return cli.RunValidate(path, "text") },
+			} {
+				t.Run(name, func(t *testing.T) {
+					err := run()
+
+					require.Error(t, err)
+					require.Contains(t, err.Error(), "[wire/type-format]")
+					require.Contains(t, err.Error(), `"RoomReserved"`)
+					require.Contains(t, err.Error(), "reverse-DNS kebab-case")
+				})
+			}
+		})
 	})
 
 	t.Run("automation reading no view", func(t *testing.T) {
@@ -1622,6 +1692,7 @@ func TestLintExplain(t *testing.T) {
 			"spec/no-rejection-path",
 			"spec/invariant-never-exercised",
 			"spec/given-outside-boundary",
+			"wire/type-format",
 		}
 		for _, rule := range rules {
 			t.Run(rule, func(t *testing.T) {

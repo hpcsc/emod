@@ -6,7 +6,7 @@
 - [x] Task 3: Preserve wire types through `emod fmt`
 - [x] Task 4: Reject two events sharing one wire type
 - [x] Task 5: Carry wire types through the JSON and CUE exports and the embedded schema
-- [ ] Task 6: Nudge wire types toward reverse-DNS kebab-case with `wire/type-format`
+- [x] Task 6: Nudge wire types toward reverse-DNS kebab-case with `wire/type-format`
 - [ ] Task 7: Document the wire type in the DSL reference
 
 ---
@@ -730,35 +730,35 @@ diagnostic pointing at the CloudEvents convention. An event whose wire type conf
 with no wire type at all, draw nothing.
 
 **Acceptance Criteria:**
-- [ ] A wire type conforms when it is two or more dot-separated segments, every segment lowercase and
+- [x] A wire type conforms when it is two or more dot-separated segments, every segment lowercase and
       built from letters `a`-`z`, digits and hyphens, no segment empty, and no segment opening or
       closing with a hyphen; `com.acme.reservations.room-reserved` conforms
-- [ ] Each of these draws exactly one diagnostic, asserted as a table: a name with no dot at all; a
+- [x] Each of these draws exactly one diagnostic, asserted as a table: a name with no dot at all; a
       name carrying an uppercase letter in any segment; a name using an underscore as a separator; a
       name with an empty segment from a leading, trailing or doubled dot; a segment opening or closing
       with a hyphen
-- [ ] The diagnostic sits at the event's wire-type value, carries severity info and rule name
+- [x] The diagnostic sits at the event's wire-type value, carries severity info and rule name
       `wire/type-format`, and its single message names the event, the offending value and the
       convention — one text, with no branch on which part of the value failed
-- [ ] An event with no wire type produces nothing, and an event whose wire type is the empty string
+- [x] An event with no wire type produces nothing, and an event whose wire type is the empty string
       produces nothing
-- [ ] The rule fires for a translation's nested event as well as for a slice event, in both slice
+- [x] The rule fires for a translation's nested event as well as for a slice event, in both slice
       homes, and fires once per event rather than once per naming rule that also matched — it is
       reachable independently of the event-naming checks that short-circuit each other
-- [ ] `linter.RuleDescription` answers for `wire/type-format`, `emod lint --explain wire/type-format`
+- [x] `linter.RuleDescription` answers for `wire/type-format`, `emod lint --explain wire/type-format`
       prints that non-empty description and returns no error, and an unknown rule name still returns
       an error
-- [ ] The hand-maintained rule list in `internal/cli/lint_test.go:627-645` names `wire/type-format`,
+- [x] The hand-maintained rule list in `internal/cli/lint_test.go:627-645` names `wire/type-format`,
       so the new description is covered by the "all rules have descriptions" leaf
-- [ ] A CLI lint fixture states one non-conforming wire type and trips this rule and no other,
+- [x] A CLI lint fixture states one non-conforming wire type and trips this rule and no other,
       asserted with a length of exactly one entry, and its declaring comment names the rule it is
       written to fire
-- [ ] `cli.RunLint` and `cli.RunValidate` both return an error for that fixture — an info diagnostic
+- [x] `cli.RunLint` and `cli.RunValidate` both return an error for that fixture — an info diagnostic
       is still a diagnostic — and the error text names the rule and the offending value
-- [ ] Every shared fixture in `internal/test/fixtures.go`, every file under `examples/` the repository
+- [x] Every shared fixture in `internal/test/fixtures.go`, every file under `examples/` the repository
       ships as valid, every fixture under `internal/parser/testdata/`, and every ` ```emod ` fence in
       `README.md` and `docs/dsl-reference.md` still return zero diagnostics from `oracle.Check`
-- [ ] The diagnostics for several non-conforming events come back in declaration order across both
+- [x] The diagnostics for several non-conforming events come back in declaration order across both
       slice homes, asserted as one comparison over the whole list of formatted lines
 
 **Affected Files/Modules:**

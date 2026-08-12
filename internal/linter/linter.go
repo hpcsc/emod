@@ -144,11 +144,17 @@ func checkSlice(slice *ast.Slice, aggregateName string, flowCount map[string]int
 		if d := checkClickbaitEvent(evt); d != nil {
 			diags = append(diags, d)
 		}
+		if d := checkWireTypeFormat(evt); d != nil {
+			diags = append(diags, d)
+		}
 	}
 	for _, tr := range slice.Translations {
 		if tr.Event != nil {
 			diags = append(diags, checkEvent(tr.Event, aggregateName)...)
 			if d := checkClickbaitEvent(tr.Event); d != nil {
+				diags = append(diags, d)
+			}
+			if d := checkWireTypeFormat(tr.Event); d != nil {
 				diags = append(diags, d)
 			}
 		}
@@ -623,6 +629,43 @@ func checkClickbaitEvent(evt *ast.Event) *diagnostic.Entry {
 		return errorEntry(evt.NamePos, "clickbait-event", fmt.Sprintf("event %q has a single ID field %q; consider adding domain-relevant fields or inlining the identifier", evt.Name, evt.Fields[0].Name))
 	}
 	return nil
+}
+
+// checkWireTypeFormat nudges a wire type toward the shape CloudEvents consumers
+// expect. It reports one text whatever part of the value failed: a message that
+// varies with model state can only be pinned by whole-line comparison, and
+// multiplies the leaves needed to hold it honest.
+func checkWireTypeFormat(evt *ast.Event) *diagnostic.Entry {
+	if evt.WireType == "" || readsAsReverseDNSKebabCase(evt.WireType) {
+		return nil
+	}
+
+	return info(evt.WireTypePos, "wire/type-format", fmt.Sprintf(
+		"event %q binds wire type %q, which does not read as reverse-DNS kebab-case: "+
+			"two or more dot-separated segments of lowercase letters, digits and inner hyphens, "+
+			"as in %q", evt.Name, evt.WireType, "com.acme.reservations.room-reserved"))
+}
+
+func readsAsReverseDNSKebabCase(wireType string) bool {
+	segments := strings.Split(wireType, ".")
+	if len(segments) < 2 {
+		return false
+	}
+
+	for _, segment := range segments {
+		if segment == "" || strings.HasPrefix(segment, "-") || strings.HasSuffix(segment, "-") {
+			return false
+		}
+		for _, r := range segment {
+			lowercase := r >= 'a' && r <= 'z'
+			digit := r >= '0' && r <= '9'
+			if !lowercase && !digit && r != '-' {
+				return false
+			}
+		}
+	}
+
+	return true
 }
 
 func checkInvariantNeverExercised(model *ast.Model) []*diagnostic.Entry {

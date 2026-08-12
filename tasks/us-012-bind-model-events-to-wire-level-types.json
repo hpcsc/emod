@@ -108,7 +108,7 @@
         "internal/cli/lint_test.go",
         ":627-645"
       ],
-      "done": false
+      "done": true
     },
     {
       "n": 7,

@@ -2224,6 +2224,132 @@ func TestLint(t *testing.T) {
 		})
 	})
 
+	t.Run("wire/type-format", func(t *testing.T) {
+		// bindingEvents puts every event in one aggregate slice, with fields
+		// enough to keep clickbait-event quiet, so a length assertion below
+		// counts this rule and no other.
+		bindingEvents := func(events ...*ast.Event) *ast.Model {
+			return &ast.Model{
+				Contexts: []*ast.Context{{
+					Name: "Reservations",
+					Aggregates: []*ast.Aggregate{{
+						Name:   "Reservation",
+						Slices: []*ast.Slice{{Name: "Reserve", Events: events}},
+					}},
+				}},
+			}
+		}
+		binding := func(name, wireType string, line int) *ast.Event {
+			return &ast.Event{
+				Name:        name,
+				WireType:    wireType,
+				WireTypePos: ast.Position{Filename: "hotel.emod", Line: line, Column: 9},
+				Fields: []*ast.Field{
+					{Name: "reservationId", Type: "string"},
+					{Name: "roomType", Type: "string"},
+				},
+			}
+		}
+
+		t.Run("a wire type reading as reverse-DNS kebab-case draws nothing", func(t *testing.T) {
+			for _, conforming := range []string{
+				"com.acme.reservations.room-reserved",
+				"com.acme",
+				"com.acme.v2.room-reserved-2",
+			} {
+				t.Run(conforming, func(t *testing.T) {
+					diags := linter.Lint(bindingEvents(binding("RoomReserved", conforming, 6)))
+
+					require.Empty(t, reportedLines(diags))
+				})
+			}
+		})
+
+		t.Run("a wire type not reading as reverse-DNS kebab-case draws exactly one info diagnostic", func(t *testing.T) {
+			for _, testCase := range []struct {
+				shape    string
+				wireType string
+			}{
+				{shape: "no dot at all", wireType: "roomreserved"},
+				{shape: "an uppercase letter in a segment", wireType: "com.Acme.room-reserved"},
+				{shape: "an underscore as a separator", wireType: "com_acme_room-reserved"},
+				{shape: "an empty segment from a leading dot", wireType: ".com.acme.room-reserved"},
+				{shape: "an empty segment from a trailing dot", wireType: "com.acme.room-reserved."},
+				{shape: "an empty segment from a doubled dot", wireType: "com..acme.room-reserved"},
+				{shape: "a segment opening with a hyphen", wireType: "com.-acme.room-reserved"},
+				{shape: "a segment closing with a hyphen", wireType: "com.acme-.room-reserved"},
+			} {
+				t.Run(testCase.shape, func(t *testing.T) {
+					diags := linter.Lint(bindingEvents(binding("RoomReserved", testCase.wireType, 6)))
+
+					require.Len(t, diags, 1)
+					require.Equal(t, "wire/type-format", diags[0].RuleName)
+					require.Equal(t, diagnostic.Info, diags[0].Severity)
+					require.Equal(t, "hotel.emod", diags[0].Filename)
+					require.Equal(t, 6, diags[0].Line)
+					require.Equal(t, 9, diags[0].Column)
+					require.Contains(t, diags[0].Message, "RoomReserved")
+					require.Contains(t, diags[0].Message, testCase.wireType)
+					require.Contains(t, diags[0].Message, "reverse-DNS kebab-case")
+				})
+			}
+		})
+
+		t.Run("an event binding no wire type draws nothing", func(t *testing.T) {
+			diags := linter.Lint(bindingEvents(binding("RoomReserved", "", 6)))
+
+			require.Empty(t, reportedLines(diags))
+		})
+
+		t.Run("the rule fires in both slice homes and on the event a translation nests, in declaration order", func(t *testing.T) {
+			model := &ast.Model{
+				Contexts: []*ast.Context{
+					{
+						Name: "Reservations",
+						Aggregates: []*ast.Aggregate{{
+							Name: "Reservation",
+							Slices: []*ast.Slice{{
+								Name:   "Reserve",
+								Events: []*ast.Event{binding("RoomReserved", "RoomReserved", 6)},
+								Translations: []*ast.Translation{{
+									Name:  "BookingImport",
+									Event: binding("BookingImported", "Booking_Imported", 12),
+								}},
+							}},
+						}},
+					},
+					{
+						Name: "Housekeeping",
+						Mode: "dcb",
+						Slices: []*ast.Slice{{
+							Name:   "Clean",
+							Events: []*ast.Event{binding("RoomCleaned", "com..housekeeping.room-cleaned", 20)},
+						}},
+					},
+				},
+			}
+
+			diags := linter.Lint(model)
+
+			require.Equal(t, []string{
+				`hotel.emod:6: [wire/type-format] event "RoomReserved" binds wire type "RoomReserved", which does not read as reverse-DNS kebab-case: two or more dot-separated segments of lowercase letters, digits and inner hyphens, as in "com.acme.reservations.room-reserved"`,
+				`hotel.emod:12: [wire/type-format] event "BookingImported" binds wire type "Booking_Imported", which does not read as reverse-DNS kebab-case: two or more dot-separated segments of lowercase letters, digits and inner hyphens, as in "com.acme.reservations.room-reserved"`,
+				`hotel.emod:20: [wire/type-format] event "RoomCleaned" binds wire type "com..housekeeping.room-cleaned", which does not read as reverse-DNS kebab-case: two or more dot-separated segments of lowercase letters, digits and inner hyphens, as in "com.acme.reservations.room-reserved"`,
+			}, linesReportedBy(diags, "wire/type-format"))
+		})
+
+		t.Run("the rule reaches an event the naming checks would have short-circuited", func(t *testing.T) {
+			model := bindingEvents(binding("OrderUpdated", "OrderUpdated", 6))
+
+			diags := linter.Lint(model)
+
+			require.Len(t, linesReportedBy(diags, "wire/type-format"), 1,
+				"state-obsession reports on the same event, and this rule must not be suppressed by it")
+			require.NotEmpty(t, linesReportedBy(diags, "state-obsession"),
+				"the event has to trip the naming rule too, or this leaf proves nothing about short-circuiting")
+		})
+	})
+
 	t.Run("dcb/single-tag-everywhere", func(t *testing.T) {
 		t.Run("dcb/single-tag-everywhere fires when all commands use same tag key in dcb mode", func(t *testing.T) {
 			model := &ast.Model{
