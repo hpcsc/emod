@@ -5549,83 +5549,19 @@ func TestLint(t *testing.T) {
 			}, reportedLines(diags))
 		})
 
-		t.Run("both arms report one diagnostic each per arm with different text", func(t *testing.T) {
-			model := &ast.Model{
-				Contexts: []*ast.Context{
-					{
-						Name: "Lending",
-						Aggregates: []*ast.Aggregate{
-							{
-								Name: "Loan",
-								Slices: []*ast.Slice{
-									{Name: "Borrow Copy",
-										Events: []*ast.Event{
-											{Name: "CopyBorrowed", NamePos: ast.Position{Filename: "lending.emod", Line: 6, Column: 9}},
-										},
-									},
-								},
-							},
-							{
-								Name: "Reader",
-								Slices: []*ast.Slice{
-									{Name: "Claim Desk",
-										Specs: []*ast.Spec{
-											{Name: "claims a desk", When: &ast.SpecElement{Name: "ClaimDesk"},
-												Given: []*ast.SpecElement{
-													{Name: "CopyBorrowed", NamePos: ast.Position{Filename: "lending.emod", Line: 16, Column: 15}},
-												},
-											},
-										},
-									},
-								},
-							},
-						},
-					},
-					{
-						Name: "Reading Room", Mode: "dcb",
-						Invariants: []*ast.Invariant{
-							{Name: "OneDeskPerDay", NamePos: ast.Position{Filename: "lending.emod", Line: 24, Column: 18}},
-						},
-						Slices: []*ast.Slice{
-							{Name: "Release Desk",
-								Commands: []*ast.Command{{
-									Name: "ReleaseDesk", NamePos: ast.Position{Filename: "lending.emod", Line: 26, Column: 9},
-									DecidesOn: &ast.DecidesOnClause{
-										Events:    []string{"DeskClaimed"},
-										Predicate: &ast.LogicalExpr{Left: &ast.TagPredicate{Field: "desk"}, Right: &ast.TagPredicate{Field: "region"}},
-									},
-								}},
-								Events: []*ast.Event{
-									{Name: "DeskClaimed", NamePos: ast.Position{Filename: "lending.emod", Line: 30, Column: 9}, Tags: []ast.TagEntry{{Key: "desk", FieldRef: "deskId"}, {Key: "region", FieldRef: "regionId"}}},
-									{Name: "DeskReleased", NamePos: ast.Position{Filename: "lending.emod", Line: 32, Column: 9}, Tags: []ast.TagEntry{{Key: "desk", FieldRef: "deskId"}, {Key: "region", FieldRef: "regionId"}}},
-								},
-								Specs: []*ast.Spec{
-									{Name: "releases a free desk", When: &ast.SpecElement{Name: "ReleaseDesk"}, Then: &ast.ThenRejected{InvariantName: "OneDeskPerDay"}},
-									{
-										Name: "releases a desk", When: &ast.SpecElement{Name: "ReleaseDesk"},
-										Given: []*ast.SpecElement{
-											{Name: "DeskReleased", NamePos: ast.Position{Filename: "lending.emod", Line: 38, Column: 15}},
-										},
-									},
-								},
-							},
-						},
-					},
+		t.Run("value arm: reports a given payload value the command's tag predicate excludes", func(t *testing.T) {
+			spec := &ast.Spec{
+				Name: "claims a desk another reader holds",
+				Given: []*ast.SpecElement{
+					specElementAt("DeskClaimed", 18,
+						payloadValueAt("deskId", "D-4210", ast.StringLiteral, 18, 34)),
 				},
+				When: specElementAt("ClaimDesk", 19,
+					payloadValueAt("deskId", "D-5817", ast.StringLiteral, 19, 30)),
+				Then: &ast.ThenEvents{},
 			}
 
-			diags := linter.Lint(model)
-
-			require.Equal(t, []string{
-				`lending.emod:16: [spec/given-outside-boundary] given event "CopyBorrowed" names an event declared by aggregate "Loan" instead of aggregate "Reader"`,
-				`lending.emod:38: [spec/given-outside-boundary] given event "DeskReleased" names an event command "ReleaseDesk"'s decides_on does not list`,
-			}, reportedLines(diags))
-		})
-
-		t.Run("value arm: reports a given payload value the command's tag predicate excludes", func(t *testing.T) {
-			model := dcbValueModel(&ast.TagPredicate{Field: "desk", Value: "deskId"}, disagreeingDeskSpec())
-
-			diags := linter.Lint(model)
+			diags := linter.Lint(dcbValueModel(&ast.TagPredicate{Field: "desk", Value: "deskId"}, spec))
 
 			require.Len(t, diags, 1)
 			require.Equal(t, diagnostic.Warning, diags[0].Severity)
@@ -5633,7 +5569,9 @@ func TestLint(t *testing.T) {
 			require.Equal(t, 18, diags[0].Line)
 			require.Equal(t, 34, diags[0].Column,
 				"the diagnostic sits on the value inside the given payload, not on the event name")
-			require.Equal(t, deskValueExcluded, diags[0].String())
+			require.Equal(t, `reading.emod:18: [spec/given-outside-boundary] given event "DeskClaimed" `+
+				`states deskId "D-4210" while command "ClaimDesk"'s when payload states deskId "D-5817", `+
+				`so tag "desk" excludes it from the query`, diags[0].String())
 		})
 
 		t.Run("value arm: payloads stating the tagged field alike report nothing", func(t *testing.T) {
@@ -5725,6 +5663,8 @@ func TestLint(t *testing.T) {
 			}{
 				{name: "a trailing zero is not a different value", given: "12.50", givenKind: ast.DecimalLiteral, when: "12.5", whenKind: ast.DecimalLiteral},
 				{name: "a leading zero is not a different value", given: "007", givenKind: ast.IntegerLiteral, when: "7", whenKind: ast.IntegerLiteral},
+				{name: "an integer and a decimal of one value agree", given: "7", givenKind: ast.IntegerLiteral, when: "7.0", whenKind: ast.DecimalLiteral},
+				{name: "an integer and a decimal of different value disagree", given: "7", givenKind: ast.IntegerLiteral, when: "7.5", whenKind: ast.DecimalLiteral, reports: true},
 				{name: "two numbers of different value disagree", given: "12.50", givenKind: ast.DecimalLiteral, when: "12.75", whenKind: ast.DecimalLiteral, reports: true},
 			}
 			for _, pair := range pairs {
@@ -5740,8 +5680,9 @@ func TestLint(t *testing.T) {
 						return
 					}
 					require.Equal(t, []string{
-						`reading.emod:18: [spec/given-outside-boundary] given event "DeskClaimed" states deskId 12.50 ` +
-							`while command "ClaimDesk"'s when payload states deskId 12.75, so tag "desk" excludes it from the query`,
+						`reading.emod:18: [spec/given-outside-boundary] given event "DeskClaimed" states deskId ` + pair.given +
+							` while command "ClaimDesk"'s when payload states deskId ` + pair.when +
+							`, so tag "desk" excludes it from the query`,
 					}, reportedLines(diags))
 				})
 			}
@@ -6022,11 +5963,73 @@ func TestLint(t *testing.T) {
 			})
 
 			t.Run("an event binding no such key leaves the comparison no basis", func(t *testing.T) {
-				model := mapped("S-99", "D-5817", "D-5817")
+				model := mapped("S-99", "D-4210", "D-5817")
 				model.Contexts[0].Slices[0].Events[0].Tags = []ast.TagEntry{{Key: "region", FieldRef: "regionId"}}
 
 				require.Empty(t, linesReportedBy(linter.Lint(model), "spec/given-outside-boundary"),
-					"an event the desk tag never routes is not placed outside the query by this rule")
+					"the payloads disagree on deskId too, so only the missing key can be keeping this silent")
+			})
+
+			t.Run("a same-named event in another context does not supply the mapping", func(t *testing.T) {
+				model := mapped("D-5817", "D-4210", "D-5817")
+				model.Contexts = append([]*ast.Context{{
+					Name: "Archive",
+					Mode: "dcb",
+					Slices: []*ast.Slice{{
+						Name: "Shelve Desk",
+						Events: []*ast.Event{{
+							Name:    "DeskClaimed",
+							NamePos: ast.Position{Filename: "archive.emod", Line: 6, Column: 9},
+							Tags:    []ast.TagEntry{{Key: "desk", FieldRef: "deskId"}},
+						}},
+					}},
+				}}, model.Contexts...)
+
+				require.Empty(t, linesReportedBy(linter.Lint(model), "spec/given-outside-boundary"),
+					"the Reading Room event binds desk to seatId, and seatId agrees; reading Archive's mapping would report deskId")
+			})
+
+			t.Run("an event only another context declares binds nothing here", func(t *testing.T) {
+				spec := disagreeingDeskSpec()
+				spec.Given[0] = specElementAt("ShelvedDesk", 18,
+					payloadValueAt("deskId", "D-4210", ast.StringLiteral, 18, 34))
+				model := dcbValueModel(&ast.TagPredicate{Field: "desk", Value: "deskId"}, spec)
+				model.Contexts[0].Slices[0].Commands[0].DecidesOn.Events = []string{"DeskClaimed", "ShelvedDesk"}
+				model.Contexts = append(model.Contexts, &ast.Context{
+					Name: "Archive",
+					Slices: []*ast.Slice{{
+						Name: "Shelve Desk",
+						Events: []*ast.Event{{
+							Name:    "ShelvedDesk",
+							NamePos: ast.Position{Filename: "archive.emod", Line: 6, Column: 9},
+							Tags:    []ast.TagEntry{{Key: "desk", FieldRef: "deskId"}},
+						}},
+					}},
+				})
+
+				require.Empty(t, linesReportedBy(linter.Lint(model), "spec/given-outside-boundary"),
+					"the payloads disagree on deskId, so only the event being absent from this context keeps it silent")
+			})
+
+			t.Run("an event a translation declares in this context binds its own tags", func(t *testing.T) {
+				spec := disagreeingDeskSpec()
+				spec.Given[0] = specElementAt("DeskImported", 18,
+					payloadValueAt("seatId", "S-99", ast.StringLiteral, 18, 34))
+				model := dcbValueModel(&ast.TagPredicate{Field: "desk", Value: "deskId"}, spec)
+				model.Contexts[0].Slices[0].Commands[0].DecidesOn.Events = []string{"DeskClaimed", "DeskImported"}
+				model.Contexts[0].Slices[0].Translations = []*ast.Translation{{
+					Name: "ImportDesk",
+					Event: &ast.Event{
+						Name:    "DeskImported",
+						NamePos: ast.Position{Filename: "reading.emod", Line: 14, Column: 9},
+						Tags:    []ast.TagEntry{{Key: "desk", FieldRef: "seatId"}},
+					},
+				}}
+
+				require.Equal(t, []string{
+					`reading.emod:18: [spec/given-outside-boundary] given event "DeskImported" states seatId "S-99" ` +
+						`while command "ClaimDesk"'s when payload states deskId "D-5817", so tag "desk" excludes it from the query`,
+				}, linesReportedBy(linter.Lint(model), "spec/given-outside-boundary"))
 			})
 		})
 

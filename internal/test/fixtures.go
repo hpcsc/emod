@@ -1575,9 +1575,9 @@ context "Reading Room" mode dcb {
 // construct name, a field name or a bare small integer, so a whole-document
 // search for one cannot match a position, an id or another construct.
 //
-// Its "Reading Room" context is the one shared fixture whose DCB commands
-// declare the fields their decides_on predicates tag, which is what lets a
-// payload state a tagged field on both sides of a spec. ClaimDesk tags
+// Its "Reading Room" context declares on each DCB command the fields that
+// command's decides_on predicates tag, which is what lets a payload state a
+// tagged field on both sides of a spec. ClaimDesk tags
 // one field and ReleaseDesk two joined by "and", so both predicate shapes have a
 // checked-in witness; each is exercised by a spec whose given and when payloads
 // state the tagged field with the same value, so a value-level boundary check

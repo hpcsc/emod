@@ -690,7 +690,6 @@ func scopeUnexercisedInvariants(invariants []*ast.Invariant, slices []*ast.Slice
 type eventDeclaration struct {
 	ownerName string
 	kind      string
-	event     *ast.Event
 }
 
 func eventHomeIndex(model *ast.Model) map[string][]eventDeclaration {
@@ -704,15 +703,41 @@ func eventHomeIndex(model *ast.Model) map[string][]eventDeclaration {
 				homeKind = "aggregate"
 			}
 			for _, evt := range ref.Slice.Events {
-				index[evt.Name] = append(index[evt.Name], eventDeclaration{ownerName: homeName, kind: homeKind, event: evt})
+				index[evt.Name] = append(index[evt.Name], eventDeclaration{homeName, homeKind})
 			}
 			for _, tr := range ref.Slice.Translations {
 				if tr.Event != nil {
-					index[tr.Event.Name] = append(index[tr.Event.Name], eventDeclaration{ownerName: homeName, kind: homeKind, event: tr.Event})
+					index[tr.Event.Name] = append(index[tr.Event.Name], eventDeclaration{homeName, homeKind})
 				}
 			}
 		}
 	}
+	return index
+}
+
+// contextEventIndex names the events one context declares. A DCB query reads the
+// history its own context holds, and event names are only unique within one, so
+// resolving a given event's tags model-wide would read the tag mapping off a
+// same-named event another context declares. An event this context does not
+// declare is absent rather than borrowed from elsewhere.
+func contextEventIndex(ctx *ast.Context) map[string]*ast.Event {
+	index := make(map[string]*ast.Event)
+	for _, slice := range ctx.AllSlices() {
+		for _, evt := range slice.Events {
+			if _, seen := index[evt.Name]; !seen {
+				index[evt.Name] = evt
+			}
+		}
+		for _, tr := range slice.Translations {
+			if tr.Event == nil {
+				continue
+			}
+			if _, seen := index[tr.Event.Name]; !seen {
+				index[tr.Event.Name] = tr.Event
+			}
+		}
+	}
+
 	return index
 }
 
@@ -736,6 +761,7 @@ func checkGivenOutsideBoundary(model *ast.Model) []*diagnostic.Entry {
 
 	var diags []*diagnostic.Entry
 	for _, ctx := range model.Contexts {
+		declaredHere := contextEventIndex(ctx)
 		for _, ref := range ctx.SliceRefs() {
 			if ref.Aggregate != nil {
 				for _, spec := range ref.Slice.Specs {
@@ -778,8 +804,7 @@ func checkGivenOutsideBoundary(model *ast.Model) []*diagnostic.Entry {
 					decidesSet[e] = true
 				}
 				for _, given := range spec.Given {
-					home, ok := eventHomeLookup(eventHome, given.Name)
-					if !ok {
+					if _, ok := eventHomeLookup(eventHome, given.Name); !ok {
 						continue
 					}
 					if !decidesSet[given.Name] {
@@ -788,7 +813,7 @@ func checkGivenOutsideBoundary(model *ast.Model) []*diagnostic.Entry {
 								given.Name, spec.When.Name)))
 						continue
 					}
-					diags = append(diags, excludedPayloadValues(given, home.event, spec.When, cmd)...)
+					diags = append(diags, excludedPayloadValues(given, declaredHere[given.Name], spec.When, cmd)...)
 				}
 			}
 		}
