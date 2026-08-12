@@ -1,7 +1,7 @@
 # US-011: Value-aware boundary checking in DCB mode
 
 ## Progress
-- [ ] Task 1: State a tagged field in both payloads of the shared payload fixture
+- [x] Task 1: State a tagged field in both payloads of the shared payload fixture
 - [ ] Task 2: Report a `given` payload value the command's tag predicate excludes
 - [ ] Task 3: Check every tag predicate a conjunction states, and no other
 
@@ -369,41 +369,41 @@ no-op for diagnostics today, and the rule then finds the fixture already clean, 
 fixture-before-rule sequencing US-008 Task 1 uses.
 
 **Acceptance Criteria:**
-- [ ] The payload-carrying fixture in `internal/test/fixtures.go` declares a `mode dcb` context with
+- [x] The payload-carrying fixture in `internal/test/fixtures.go` declares a `mode dcb` context with
       two command slices, one whose command's `decides_on` states a `where` with a single
       `tag(key = field)` predicate and one whose command's states two joined by `and`, and each of
       those commands declares in its own `fields` block the field its predicate tags
-- [ ] Each of those two commands is exercised by a spec whose `when` payload states the tagged field
+- [x] Each of those two commands is exercised by a spec whose `when` payload states the tagged field
       and whose `given` payload states the same field with a value equal in both source text and
       literal kind, so the two payloads agree; the `given` event is one the command's `decides_on`
       events list names
-- [ ] One spec in that context leaves the tagged field out of its `given` payload while stating it
+- [x] One spec in that context leaves the tagged field out of its `given` payload while stating it
       in its `when` payload, and one leaves it out of its `when` payload while stating it in a
       `given` payload — the two shapes the story's third criterion requires the rule to stay silent
       on, present in the model rather than only in a test source
-- [ ] The tagged field's declared type is the same on the command and on the event in every pair the
+- [x] The tagged field's declared type is the same on the command and on the event in every pair the
       fixture states, so no pair depends on the cross-kind decision, and no stated value equals a
       construct name, a field name or a bare small integer
-- [ ] The context declares at least two distinct tag keys across its predicates, every tag key
+- [x] The context declares at least two distinct tag keys across its predicates, every tag key
       declared on any of its events is referenced by some predicate, every event carries at least one
       tag and more than one field, and every slice states a full `flow` — so `dcb/single-tag-everywhere`,
       `dcb/orphan-tag-key`, `dcb/untagged-event`, `dcb/query-too-broad`, `clickbait-event`,
       `orphan-command` and `orphan-event` all stay quiet
-- [ ] `oracle.Check` over the fixture returns an empty diagnostic list, so its leaf in
+- [x] `oracle.Check` over the fixture returns an empty diagnostic list, so its leaf in
       `internal/oracle/oracle_test.go` "clean input" is unchanged and still passes
-- [ ] The hand-written payload transcription US-010 Task 2 ships restates every payload the fixture
+- [x] The hand-written payload transcription US-010 Task 2 ships restates every payload the fixture
       now states, in declaration order across both slice homes, and the getter over the parsed
       fixture equals it; the twin still clears every payload and the getter over the twin is empty
-- [ ] The only expected values that move are those restating this fixture's own text — its
+- [x] The only expected values that move are those restating this fixture's own text — its
       transcription in `internal/test/fixtures.go`, its canonical formatted constant in
       `internal/cli/fmt_test.go`, and any read-back list in `internal/export`, `internal/formatter`,
       `internal/diagram` or `internal/glossary` that transcribes it. `git diff --stat` names no
       golden, canonical constant or transcribed list belonging to a fixture this task does not edit,
       and `test.SpecLibraryLending` in particular is unchanged
-- [ ] `task test:unit` passes, and `internal/parser`, `internal/validator`, `internal/formatter`,
+- [x] `task test:unit` passes, and `internal/parser`, `internal/validator`, `internal/formatter`,
       `internal/export`, `internal/glossary`, `internal/diagram`, `internal/oracle` and
       `internal/cli` are green with no test skipped or weakened
-- [ ] `internal/linter` and `internal/linter/descriptions.go` are untouched — this task adds no rule
+- [x] `internal/linter` and `internal/linter/descriptions.go` are untouched — this task adds no rule
       and no arm
 
 **Affected Files/Modules:**

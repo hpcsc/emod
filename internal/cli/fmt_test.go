@@ -525,9 +525,14 @@ context "Reading Room" mode dcb {
   invariant OneReaderPerDesk "A desk seats at most one reader at any moment"
   slice "Claim Desk" {
     command ClaimDesk {
+      decides_on {
+        events [DeskClaimed, DeskReleased]
+        where tag(desk = deskId)
+      }
       fields {
-        memberId string required
-        deskId   string required
+        memberId      string required
+        deskId        string required
+        preferredZone string
       }
     }
 
@@ -549,14 +554,15 @@ context "Reading Room" mode dcb {
       command -> event: ClaimDesk -> DeskClaimed
     }
 
-    spec "seats a reader at a free desk" {
-      when ClaimDesk { memberId: "M-40817", deskId: "D-5817" }
+    spec "seats a reader at a desk its last reader released" {
+      given [DeskReleased { deskId: "D-5817", releasedAt: "2024-07-05T08:50:00Z" }]
+      when ClaimDesk { memberId: "M-40817", preferredZone: "north gallery" }
       then [DeskClaimed { sessionId: "b6f4a3d2-91c8-4e57-8f10-2d6a5c7e9b31", claimedAt: "2024-07-05T09:15:00Z", quietZone: true }]
     }
 
     spec "refuses a desk another reader is seated at" {
-      given [DeskClaimed { deskId: "D-5817" }]
-      when ClaimDesk { deskId: "D-5817" }
+      given [DeskClaimed { deskId: "D-5817", quietZone: false }]
+      when ClaimDesk { memberId: "M-63204", deskId: "D-5817" }
       then rejected OneReaderPerDesk
     }
   }
@@ -568,7 +574,9 @@ context "Reading Room" mode dcb {
         where tag(desk = deskId) and tag(reader = memberId)
       }
       fields {
-        sessionId uuid required
+        sessionId uuid   required
+        deskId    string required
+        memberId  string required
       }
     }
 
@@ -591,14 +599,14 @@ context "Reading Room" mode dcb {
     }
 
     spec "frees the desk its reader is seated at" {
-      given [DeskClaimed { quietZone: false }]
-      when ReleaseDesk { sessionId: "b6f4a3d2-91c8-4e57-8f10-2d6a5c7e9b31" }
+      given [DeskClaimed { deskId: "D-5817", memberId: "M-40817", quietZone: false }]
+      when ReleaseDesk { sessionId: "b6f4a3d2-91c8-4e57-8f10-2d6a5c7e9b31", deskId: "D-5817", memberId: "M-40817" }
       then [DeskReleased { releasedAt: "2024-07-05T11:40:00Z", seatedFor: 145.25 }]
     }
 
     spec "refuses to free a desk already empty" {
-      given [DeskClaimed]
-      when ReleaseDesk
+      given [DeskClaimed { sessionId: "3f21c8a7-6d94-4b02-9e15-7c8a3d5f2b64", claimedAt: "2024-07-04T16:05:00Z", quietZone: true }]
+      when ReleaseDesk { sessionId: "b6f4a3d2-91c8-4e57-8f10-2d6a5c7e9b31", deskId: "D-5817", memberId: "M-40817" }
       then rejected OneReaderPerDesk
     }
   }

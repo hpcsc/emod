@@ -15,7 +15,7 @@
         "internal/export/export_test.go",
         "internal/diagram/contract_test.go"
       ],
-      "done": false
+      "done": true
     },
     {
       "n": 2,

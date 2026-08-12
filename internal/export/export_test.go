@@ -5152,10 +5152,14 @@ var payloadLibraryLendingSpecs = map[string][]map[string]any{
 	},
 	"Claim Desk": {
 		{
-			"name": "seats a reader at a free desk",
+			"name": "seats a reader at a desk its last reader released",
+			"given": []any{map[string]any{"name": "DeskReleased", "payload": []any{
+				map[string]any{"name": "deskId", "value": "D-5817"},
+				map[string]any{"name": "releasedAt", "value": "2024-07-05T08:50:00Z"},
+			}}},
 			"when": map[string]any{"name": "ClaimDesk", "payload": []any{
 				map[string]any{"name": "memberId", "value": "M-40817"},
-				map[string]any{"name": "deskId", "value": "D-5817"},
+				map[string]any{"name": "preferredZone", "value": "north gallery"},
 			}},
 			"then": map[string]any{"events": []any{
 				map[string]any{"name": "DeskClaimed", "payload": []any{
@@ -5169,8 +5173,10 @@ var payloadLibraryLendingSpecs = map[string][]map[string]any{
 			"name": "refuses a desk another reader is seated at",
 			"given": []any{map[string]any{"name": "DeskClaimed", "payload": []any{
 				map[string]any{"name": "deskId", "value": "D-5817"},
+				map[string]any{"name": "quietZone", "value": false},
 			}}},
 			"when": map[string]any{"name": "ClaimDesk", "payload": []any{
+				map[string]any{"name": "memberId", "value": "M-63204"},
 				map[string]any{"name": "deskId", "value": "D-5817"},
 			}},
 			"then": map[string]any{"rejected": "OneReaderPerDesk"},
@@ -5180,10 +5186,14 @@ var payloadLibraryLendingSpecs = map[string][]map[string]any{
 		{
 			"name": "frees the desk its reader is seated at",
 			"given": []any{map[string]any{"name": "DeskClaimed", "payload": []any{
+				map[string]any{"name": "deskId", "value": "D-5817"},
+				map[string]any{"name": "memberId", "value": "M-40817"},
 				map[string]any{"name": "quietZone", "value": false},
 			}}},
 			"when": map[string]any{"name": "ReleaseDesk", "payload": []any{
 				map[string]any{"name": "sessionId", "value": "b6f4a3d2-91c8-4e57-8f10-2d6a5c7e9b31"},
+				map[string]any{"name": "deskId", "value": "D-5817"},
+				map[string]any{"name": "memberId", "value": "M-40817"},
 			}},
 			"then": map[string]any{"events": []any{
 				map[string]any{"name": "DeskReleased", "payload": []any{
@@ -5193,10 +5203,18 @@ var payloadLibraryLendingSpecs = map[string][]map[string]any{
 			}},
 		},
 		{
-			"name":  "refuses to free a desk already empty",
-			"given": []any{map[string]any{"name": "DeskClaimed"}},
-			"when":  map[string]any{"name": "ReleaseDesk"},
-			"then":  map[string]any{"rejected": "OneReaderPerDesk"},
+			"name": "refuses to free a desk already empty",
+			"given": []any{map[string]any{"name": "DeskClaimed", "payload": []any{
+				map[string]any{"name": "sessionId", "value": "3f21c8a7-6d94-4b02-9e15-7c8a3d5f2b64"},
+				map[string]any{"name": "claimedAt", "value": "2024-07-04T16:05:00Z"},
+				map[string]any{"name": "quietZone", "value": true},
+			}}},
+			"when": map[string]any{"name": "ReleaseDesk", "payload": []any{
+				map[string]any{"name": "sessionId", "value": "b6f4a3d2-91c8-4e57-8f10-2d6a5c7e9b31"},
+				map[string]any{"name": "deskId", "value": "D-5817"},
+				map[string]any{"name": "memberId", "value": "M-40817"},
+			}},
+			"then": map[string]any{"rejected": "OneReaderPerDesk"},
 		},
 	},
 }

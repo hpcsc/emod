@@ -1574,6 +1574,18 @@ context "Reading Room" mode dcb {
 // is what proves a names-only spec stays valid. And no value it states is a
 // construct name, a field name or a bare small integer, so a whole-document
 // search for one cannot match a position, an id or another construct.
+//
+// Its "Reading Room" context is the one shared fixture whose DCB commands
+// declare the fields their decides_on predicates tag, which is what lets a
+// payload state a tagged field on both sides of a spec. ClaimDesk tags
+// one field and ReleaseDesk two joined by "and", so both predicate shapes have a
+// checked-in witness; each is exercised by a spec whose given and when payloads
+// state the tagged field with the same value, so a value-level boundary check
+// reads agreement here rather than silence. The other two specs omit the tagged
+// field from one side each — from the when in "seats a reader at a desk its last
+// reader released", from the given in "refuses to free a desk already empty" —
+// and both omissions sit mid-payload, ahead of a further field, because a part
+// left out at the end runs into nothing.
 const PayloadLibraryLending = `# Lending a library's copies and seating its readers, with example values on the scenarios each slice must satisfy
 model "Library Lending"
 
@@ -1662,14 +1674,19 @@ context "Reading Room" mode dcb {
   invariant OneReaderPerDesk "A desk seats at most one reader at any moment"
   slice "Claim Desk" {
     command ClaimDesk {
+      decides_on {
+        events [DeskClaimed, DeskReleased]
+        where tag(desk = deskId)
+      }
       fields {
-        memberId string required
-        deskId   string required
+        memberId      string required
+        deskId        string required
+        preferredZone string
       }
     }
-    spec "seats a reader at a free desk" {
-      given []
-      when ClaimDesk { memberId: "M-40817", deskId: "D-5817" }
+    spec "seats a reader at a desk its last reader released" {
+      given [DeskReleased { deskId: "D-5817", releasedAt: "2024-07-05T08:50:00Z" }]
+      when ClaimDesk { memberId: "M-40817", preferredZone: "north gallery" }
       then [DeskClaimed { sessionId: "b6f4a3d2-91c8-4e57-8f10-2d6a5c7e9b31", claimedAt: "2024-07-05T09:15:00Z", quietZone: true }]
     }
     event DeskClaimed {
@@ -1686,8 +1703,8 @@ context "Reading Room" mode dcb {
       }
     }
     spec "refuses a desk another reader is seated at" {
-      given [DeskClaimed { deskId: "D-5817" }]
-      when ClaimDesk { deskId: "D-5817" }
+      given [DeskClaimed { deskId: "D-5817", quietZone: false }]
+      when ClaimDesk { memberId: "M-63204", deskId: "D-5817" }
       then rejected OneReaderPerDesk
     }
     flow {
@@ -1701,7 +1718,9 @@ context "Reading Room" mode dcb {
         where tag(desk = deskId) and tag(reader = memberId)
       }
       fields {
-        sessionId uuid required
+        sessionId uuid   required
+        deskId    string required
+        memberId  string required
       }
     }
     event DeskReleased {
@@ -1718,13 +1737,13 @@ context "Reading Room" mode dcb {
       }
     }
     spec "frees the desk its reader is seated at" {
-      given [DeskClaimed { quietZone: false }]
-      when ReleaseDesk { sessionId: "b6f4a3d2-91c8-4e57-8f10-2d6a5c7e9b31" }
+      given [DeskClaimed { deskId: "D-5817", memberId: "M-40817", quietZone: false }]
+      when ReleaseDesk { sessionId: "b6f4a3d2-91c8-4e57-8f10-2d6a5c7e9b31", deskId: "D-5817", memberId: "M-40817" }
       then [DeskReleased { releasedAt: "2024-07-05T11:40:00Z", seatedFor: 145.25 }]
     }
     spec "refuses to free a desk already empty" {
-      given [DeskClaimed]
-      when ReleaseDesk
+      given [DeskClaimed { sessionId: "3f21c8a7-6d94-4b02-9e15-7c8a3d5f2b64", claimedAt: "2024-07-04T16:05:00Z", quietZone: true }]
+      when ReleaseDesk { sessionId: "b6f4a3d2-91c8-4e57-8f10-2d6a5c7e9b31", deskId: "D-5817", memberId: "M-40817" }
       then rejected OneReaderPerDesk
     }
     flow {
@@ -1810,15 +1829,23 @@ var PayloadLibraryLendingPayloads = []SpecPayload{
 		},
 	},
 	{
-		SpecName:  "seats a reader at a free desk",
-		Reference: "ClaimDesk",
+		SpecName:  "seats a reader at a desk its last reader released",
+		Reference: "DeskReleased",
 		Values: []PayloadValue{
-			{Field: "memberId", Value: "M-40817", Kind: ast.StringLiteral},
 			{Field: "deskId", Value: "D-5817", Kind: ast.StringLiteral},
+			{Field: "releasedAt", Value: "2024-07-05T08:50:00Z", Kind: ast.StringLiteral},
 		},
 	},
 	{
-		SpecName:  "seats a reader at a free desk",
+		SpecName:  "seats a reader at a desk its last reader released",
+		Reference: "ClaimDesk",
+		Values: []PayloadValue{
+			{Field: "memberId", Value: "M-40817", Kind: ast.StringLiteral},
+			{Field: "preferredZone", Value: "north gallery", Kind: ast.StringLiteral},
+		},
+	},
+	{
+		SpecName:  "seats a reader at a desk its last reader released",
 		Reference: "DeskClaimed",
 		Values: []PayloadValue{
 			{Field: "sessionId", Value: "b6f4a3d2-91c8-4e57-8f10-2d6a5c7e9b31", Kind: ast.StringLiteral},
@@ -1831,12 +1858,14 @@ var PayloadLibraryLendingPayloads = []SpecPayload{
 		Reference: "DeskClaimed",
 		Values: []PayloadValue{
 			{Field: "deskId", Value: "D-5817", Kind: ast.StringLiteral},
+			{Field: "quietZone", Value: "false", Kind: ast.BooleanLiteral},
 		},
 	},
 	{
 		SpecName:  "refuses a desk another reader is seated at",
 		Reference: "ClaimDesk",
 		Values: []PayloadValue{
+			{Field: "memberId", Value: "M-63204", Kind: ast.StringLiteral},
 			{Field: "deskId", Value: "D-5817", Kind: ast.StringLiteral},
 		},
 	},
@@ -1844,6 +1873,8 @@ var PayloadLibraryLendingPayloads = []SpecPayload{
 		SpecName:  "frees the desk its reader is seated at",
 		Reference: "DeskClaimed",
 		Values: []PayloadValue{
+			{Field: "deskId", Value: "D-5817", Kind: ast.StringLiteral},
+			{Field: "memberId", Value: "M-40817", Kind: ast.StringLiteral},
 			{Field: "quietZone", Value: "false", Kind: ast.BooleanLiteral},
 		},
 	},
@@ -1852,6 +1883,8 @@ var PayloadLibraryLendingPayloads = []SpecPayload{
 		Reference: "ReleaseDesk",
 		Values: []PayloadValue{
 			{Field: "sessionId", Value: "b6f4a3d2-91c8-4e57-8f10-2d6a5c7e9b31", Kind: ast.StringLiteral},
+			{Field: "deskId", Value: "D-5817", Kind: ast.StringLiteral},
+			{Field: "memberId", Value: "M-40817", Kind: ast.StringLiteral},
 		},
 	},
 	{
@@ -1860,6 +1893,24 @@ var PayloadLibraryLendingPayloads = []SpecPayload{
 		Values: []PayloadValue{
 			{Field: "releasedAt", Value: "2024-07-05T11:40:00Z", Kind: ast.StringLiteral},
 			{Field: "seatedFor", Value: "145.25", Kind: ast.DecimalLiteral},
+		},
+	},
+	{
+		SpecName:  "refuses to free a desk already empty",
+		Reference: "DeskClaimed",
+		Values: []PayloadValue{
+			{Field: "sessionId", Value: "3f21c8a7-6d94-4b02-9e15-7c8a3d5f2b64", Kind: ast.StringLiteral},
+			{Field: "claimedAt", Value: "2024-07-04T16:05:00Z", Kind: ast.StringLiteral},
+			{Field: "quietZone", Value: "true", Kind: ast.BooleanLiteral},
+		},
+	},
+	{
+		SpecName:  "refuses to free a desk already empty",
+		Reference: "ReleaseDesk",
+		Values: []PayloadValue{
+			{Field: "sessionId", Value: "b6f4a3d2-91c8-4e57-8f10-2d6a5c7e9b31", Kind: ast.StringLiteral},
+			{Field: "deskId", Value: "D-5817", Kind: ast.StringLiteral},
+			{Field: "memberId", Value: "M-40817", Kind: ast.StringLiteral},
 		},
 	},
 }
