@@ -32,7 +32,7 @@
         "internal/linter/linter_test.go",
         "internal/cli/lint_test.go"
       ],
-      "done": false
+      "done": true
     },
     {
       "n": 3,

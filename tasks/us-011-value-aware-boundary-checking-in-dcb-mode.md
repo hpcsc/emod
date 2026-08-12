@@ -2,7 +2,7 @@
 
 ## Progress
 - [x] Task 1: State a tagged field in both payloads of the shared payload fixture
-- [ ] Task 2: Report a `given` payload value the command's tag predicate excludes
+- [x] Task 2: Report a `given` payload value the command's tag predicate excludes
 - [ ] Task 3: Check every tag predicate a conjunction states, and no other
 
 ---
@@ -453,72 +453,72 @@ the field, the tag key, both stated values and the command. Matching values repo
 does every shape in which the comparison has no basis.
 
 **Acceptance Criteria:**
-- [ ] A spec in a context-level slice, whose `when` names a command whose `decides_on` states one
+- [x] A spec in a context-level slice, whose `when` names a command whose `decides_on` states one
       `tag(key = field)` predicate, and whose `given` names an event that `decides_on` lists, where
       both payloads state that field with the same literal kind and different values, produces
       exactly one diagnostic at `diagnostic.Warning`, rule name `spec/given-outside-boundary`,
       positioned at the value inside the `given` payload, whose whole formatted line names the
       field, the tag key, both values and the command
-- [ ] The same shape with both payloads stating that field with the same kind and the same value
+- [x] The same shape with both payloads stating that field with the same kind and the same value
       produces no diagnostic
-- [ ] The arm's message text differs from both texts US-008 Tasks 5 and 6 give the rule, and every
+- [x] The arm's message text differs from both texts US-008 Tasks 5 and 6 give the rule, and every
       leaf asserting any of the three compares the whole formatted diagnostic line, so a leaf cannot
       pass against another arm's wording
-- [ ] A `given` payload omitting the tagged field produces no diagnostic, and a `when` payload
+- [x] A `given` payload omitting the tagged field produces no diagnostic, and a `when` payload
       omitting it produces none either, however many other fields either payload states — the story's
       third criterion, asserted separately for each side
-- [ ] A `given` element stating no payload at all, and a `when` element stating none, each produce no
+- [x] A `given` element stating no payload at all, and a `when` element stating none, each produce no
       diagnostic
-- [ ] Two literals of different kinds are not compared: a `when` payload stating the tagged field as
+- [x] Two literals of different kinds are not compared: a `when` payload stating the tagged field as
       a string and a `given` payload stating it as a number produce no diagnostic, asserted for the
       string/number pair and for a boolean against each of the other two
-- [ ] Two number literals equal in value but not in source text are one value: `12.50` against
+- [x] Two number literals equal in value but not in source text are one value: `12.50` against
       `12.5`, and `007` against `7`, each produce no diagnostic, while two numbers of different value
       produce one
-- [ ] Two string literals differing only in case, and two differing by surrounding whitespace, are
+- [x] Two string literals differing only in case, and two differing by surrounding whitespace, are
       each different values and produce a diagnostic — a string compares by its exact text
-- [ ] A payload stating the tagged field more than once produces no diagnostic, asserted for a
+- [x] A payload stating the tagged field more than once produces no diagnostic, asserted for a
       repeat on the `given` side and for one on the `when` side
-- [ ] A `when` command stating no `decides_on` produces no diagnostic however its payloads and the
+- [x] A `when` command stating no `decides_on` produces no diagnostic however its payloads and the
       `given` payloads disagree, and a command stating `decides_on` with no `where` predicate
       produces none either
-- [ ] A `given` event whose name the `when` command's `decides_on` events list does not carry
+- [x] A `given` event whose name the `when` command's `decides_on` events list does not carry
       produces exactly one diagnostic — US-008 Task 6's type-level one — and no value-level
       diagnostic, however far its payload value is from the `when` payload's
-- [ ] A spec whose `when` is absent, and a spec whose `when` names an event rather than a command,
+- [x] A spec whose `when` is absent, and a spec whose `when` names an event rather than a command,
       produce no diagnostic
-- [ ] A spec in an aggregate-nested slice produces no value-level diagnostic whatever its payloads
+- [x] A spec in an aggregate-nested slice produces no value-level diagnostic whatever its payloads
       state and whatever the enclosing context's mode string is, and a leaf asserts a model carrying
       the disagreeing shape in both slice homes reports once, for the context-level home only
-- [ ] A `where` predicate stating two tag predicates joined by `and`, one of them disagreeing,
+- [x] A `where` predicate stating two tag predicates joined by `and`, one of them disagreeing,
       produces no diagnostic from this task — Task 3 owns conjunctions, and a leaf asserts this task
       leaves them alone
-- [ ] Several disagreeing `given` elements in one model come back in declaration order, asserted as
+- [x] Several disagreeing `given` elements in one model come back in declaration order, asserted as
       one comparison over the whole list of formatted lines
-- [ ] `linter.RuleDescription` still answers for `spec/given-outside-boundary` with a single
+- [x] `linter.RuleDescription` still answers for `spec/given-outside-boundary` with a single
       description that now covers the value-level arm alongside the two type-level ones,
       `emod lint --explain spec/given-outside-boundary` prints it and returns no error, no second
       rule name is introduced, and the hand-maintained rule list at
       `internal/cli/lint_test.go:627-645` is unchanged
-- [ ] A CLI lint fixture declares a `mode dcb` context whose commands each carry a `decides_on` with
+- [x] A CLI lint fixture declares a `mode dcb` context whose commands each carry a `decides_on` with
       one tag predicate over the field the command declares, gives every command a spec and a
       rejection, exercises every invariant it declares, tags every event and references every tag
       key from some predicate across at least two distinct keys, and states one `given` payload
       value the `when` payload contradicts — tripping this rule and no other, asserted with a length
       of exactly one entry, with a declaring comment naming the rule and the arm it is written to
       fire
-- [ ] `cli.RunLint` and `cli.RunValidate` both return an error for that fixture, the text output
+- [x] `cli.RunLint` and `cli.RunValidate` both return an error for that fixture, the text output
       names the rule, the field and the line the `given` payload is written on, and `-f json`
       reports `"severity": "warning"` with exit code 1
-- [ ] The arm reads `Spec.Given` and `Spec.When` only and never `Spec.Then`, so a `then` variant
+- [x] The arm reads `Spec.Given` and `Spec.When` only and never `Spec.Then`, so a `then` variant
       US-007 adds is neither read nor a silent failure, and no type switch over `ast.ThenClause`
       appears in the change
-- [ ] Every shared fixture in `internal/test/fixtures.go` — the Task 1 fixture included — every file
+- [x] Every shared fixture in `internal/test/fixtures.go` — the Task 1 fixture included — every file
       under `examples/` the repository ships as valid, every fixture under
       `internal/parser/testdata/`, every ` ```emod ` fence in `README.md` and `docs/dsl-reference.md`
       including the `mode dcb` fence at `:175`, and `billingModel` in
       `internal/wasm/pipeline_test.go` still produce zero diagnostics from `oracle.Check`
-- [ ] `internal/parser`, `internal/validator`, `internal/formatter`, `internal/export`,
+- [x] `internal/parser`, `internal/validator`, `internal/formatter`, `internal/export`,
       `internal/diagram` and `internal/lsp` are untouched: this arm reads the AST and changes no
       other stage
 

@@ -401,6 +401,88 @@ context "Lending" {
 }
 `
 
+// givenValueOutsideBoundaryEmod states a given payload value the when payload
+// contradicts on the field ClaimDesk's lone tag predicate routes on, which the
+// value-level arm of spec/given-outside-boundary reports and no other rule does.
+// Every command declares the field its predicate tags and carries a happy-path
+// spec and a rejection, both events are tagged, the context spends two distinct
+// tag keys and every declared key is routed on, and each slice states a flow, so
+// the four dcb/* rules, the three sibling spec/* rules and the orphan checks all
+// stay quiet.
+const givenValueOutsideBoundaryEmod = `model "Library Lending"
+
+context "Reading Room" mode dcb {
+  invariant OneDeskPerReader "A reader holds at most one desk"
+  slice "Claim Desk" {
+    command ClaimDesk {
+      decides_on {
+        events [DeskClaimed]
+        where tag(desk = deskId)
+      }
+      fields {
+        memberId string required
+        deskId   string required
+      }
+    }
+    event DeskClaimed {
+      tags {
+        desk: deskId
+      }
+      fields {
+        sessionId string required
+        deskId    string required
+        memberId  string required
+      }
+    }
+    flow {
+      command -> event: ClaimDesk -> DeskClaimed
+    }
+    spec "claims a free desk" {
+      when ClaimDesk
+      then [DeskClaimed]
+    }
+    spec "refuses a desk another reader holds" {
+      given [DeskClaimed { deskId: "D-4210" }]
+      when ClaimDesk { deskId: "D-5817" }
+      then rejected OneDeskPerReader
+    }
+  }
+  slice "Release Desk" {
+    command ReleaseDesk {
+      decides_on {
+        events [DeskReleased]
+        where tag(reader = memberId)
+      }
+      fields {
+        sessionId string required
+        memberId  string required
+      }
+    }
+    event DeskReleased {
+      tags {
+        reader: memberId
+      }
+      fields {
+        sessionId  string    required
+        memberId   string    required
+        releasedAt timestamp required
+      }
+    }
+    flow {
+      command -> event: ReleaseDesk -> DeskReleased
+    }
+    spec "frees a desk its reader holds" {
+      when ReleaseDesk
+      then [DeskReleased]
+    }
+    spec "refuses to free a desk nobody holds" {
+      when ReleaseDesk
+      then rejected OneDeskPerReader
+    }
+  }
+}
+`
+
 const givenOutsideBoundaryDCBEmod = `model "Library Lending"
 
 context "Reading Room" mode dcb {
@@ -1167,6 +1249,55 @@ context "Orders" {
 			require.Contains(t, err.Error(), "[spec/given-outside-boundary]")
 			require.Contains(t, err.Error(), `given event "DeskReleased" names an event command "ClaimDesk"'s decides_on does not list`)
 		})
+
+		t.Run("value arm: json output reports the value-level message at warning severity and exits 1", func(t *testing.T) {
+			path := writeTemp(t, "value_outside_boundary.emod", givenValueOutsideBoundaryEmod)
+
+			var err error
+			output := captureStdout(t, func() {
+				err = cli.RunLint(path, "json")
+			})
+
+			var lintErr *cli.LintError
+			require.True(t, errors.As(err, &lintErr))
+			require.Equal(t, 1, lintErr.ExitCode)
+
+			var entries []map[string]interface{}
+			require.NoError(t, json.Unmarshal([]byte(output), &entries))
+			require.Len(t, entries, 1, "the fixture is written to trip this arm and no other rule")
+			require.Equal(t, "warning", entries[0]["severity"])
+			require.Equal(t, "spec/given-outside-boundary", entries[0]["rule"])
+			require.Equal(t, path, entries[0]["file"])
+			require.Equal(t, float64(34), entries[0]["line"],
+				"the line the given payload is written on")
+			require.Equal(t, `given event "DeskClaimed" states deskId "D-4210" while command "ClaimDesk"'s `+
+				`when payload states "D-5817", so tag "desk" excludes it from the query`, entries[0]["message"])
+		})
+
+		t.Run("value arm: text output names the rule, the field and the line the given payload is written on", func(t *testing.T) {
+			path := writeTemp(t, "value_outside_boundary.emod", givenValueOutsideBoundaryEmod)
+
+			err := cli.RunLint(path, "text")
+
+			var lintErr *cli.LintError
+			require.True(t, errors.As(err, &lintErr))
+			require.Equal(t, 1, lintErr.ExitCode)
+			require.Equal(t, path+`:34: [spec/given-outside-boundary] given event "DeskClaimed" states deskId "D-4210" `+
+				`while command "ClaimDesk"'s when payload states "D-5817", so tag "desk" excludes it from the query`,
+				err.Error())
+		})
+
+		t.Run("value arm: validate fails on the same model", func(t *testing.T) {
+			path := writeTemp(t, "value_outside_boundary.emod", givenValueOutsideBoundaryEmod)
+
+			err := cli.RunValidate(path, "text")
+
+			var lintErr *cli.LintError
+			require.True(t, errors.As(err, &lintErr))
+			require.Equal(t, 1, lintErr.ExitCode)
+			require.Contains(t, err.Error(), "[spec/given-outside-boundary]")
+			require.Contains(t, err.Error(), `states deskId "D-4210"`)
+		})
 	})
 }
 
@@ -1237,6 +1368,17 @@ func TestLintExplain(t *testing.T) {
 		require.Error(t, err)
 		require.Contains(t, err.Error(), "unknown rule")
 		require.Contains(t, err.Error(), "dcb/nonexistent")
+	})
+
+	t.Run("the boundary rule is explained once, covering its value-level arm alongside the two type-level ones", func(t *testing.T) {
+		output := captureStdout(t, func() {
+			err := cli.RunLintExplain("spec/given-outside-boundary")
+			require.NoError(t, err)
+		})
+
+		require.Contains(t, output, "the boundary is the aggregate")
+		require.Contains(t, output, "must appear in the list of events the command queries")
+		require.Contains(t, output, "a different value for the tagged field")
 	})
 
 	t.Run("all rules have descriptions", func(t *testing.T) {

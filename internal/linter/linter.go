@@ -3,6 +3,7 @@ package linter
 import (
 	"cmp"
 	"fmt"
+	"math/big"
 	"slices"
 	"strings"
 	"unicode"
@@ -769,12 +770,13 @@ func checkGivenOutsideBoundary(model *ast.Model) []*diagnostic.Entry {
 					if _, ok := eventHomeLookup(eventHome, given.Name); !ok {
 						continue
 					}
-					if decidesSet[given.Name] {
+					if !decidesSet[given.Name] {
+						diags = append(diags, warning(given.NamePos, "spec/given-outside-boundary",
+							fmt.Sprintf("given event %q names an event command %q's decides_on does not list",
+								given.Name, spec.When.Name)))
 						continue
 					}
-					diags = append(diags, warning(given.NamePos, "spec/given-outside-boundary",
-						fmt.Sprintf("given event %q names an event command %q's decides_on does not list",
-							given.Name, spec.When.Name)))
+					diags = append(diags, excludedPayloadValues(given, spec.When, cmd)...)
 				}
 			}
 		}
@@ -785,4 +787,110 @@ func checkGivenOutsideBoundary(model *ast.Model) []*diagnostic.Entry {
 	})
 
 	return diags
+}
+
+// excludedPayloadValues reports the tagged field whose value the given payload
+// states differently from the when payload, so the command's query would pass
+// over the event the given names. A predicate that is not a lone tag states no
+// single requirement to compare against.
+func excludedPayloadValues(given, when *ast.SpecElement, cmd *ast.Command) []*diagnostic.Entry {
+	predicate, ok := cmd.DecidesOn.Predicate.(*ast.TagPredicate)
+	if !ok {
+		return nil
+	}
+
+	givenValue := statedOnce(given.Payload, predicate.Value)
+	whenValue := statedOnce(when.Payload, predicate.Value)
+	if givenValue == nil || whenValue == nil {
+		return nil
+	}
+	if compareLiterals(givenValue, whenValue) != literalsDiffer {
+		return nil
+	}
+
+	return []*diagnostic.Entry{warning(givenValue.ValuePos, "spec/given-outside-boundary",
+		fmt.Sprintf("given event %q states %s %s while command %q's when payload states %s, so tag %q excludes it from the query",
+			given.Name, predicate.Value, literalSource(givenValue),
+			cmd.Name, literalSource(whenValue), predicate.Field))}
+}
+
+// statedOnce returns the single field a payload states under name. A payload
+// that omits it leaves nothing to compare — a spec is an example, not an
+// instance — and one that states it twice states two values, so nothing here
+// can say which one the author meant.
+func statedOnce(payload []*ast.PayloadField, name string) *ast.PayloadField {
+	var found *ast.PayloadField
+	for _, field := range payload {
+		if field.Name != name {
+			continue
+		}
+		if found != nil {
+			return nil
+		}
+		found = field
+	}
+
+	return found
+}
+
+// literalAgreement is how two payload literals stand to one another. Literals of
+// different kinds are incomparable rather than unequal: nothing requires a
+// command's field and an event's field of one name to declare the same type, so
+// such a pair is a field typed two ways — and a check that cannot tell a
+// different value from a different spelling has no business naming a boundary.
+type literalAgreement int
+
+const (
+	literalsIncomparable literalAgreement = iota
+	literalsEqual
+	literalsDiffer
+)
+
+func compareLiterals(given, when *ast.PayloadField) literalAgreement {
+	switch {
+	case given.Kind == ast.StringLiteral && when.Kind == ast.StringLiteral,
+		given.Kind == ast.BooleanLiteral && when.Kind == ast.BooleanLiteral:
+		if given.Value == when.Value {
+			return literalsEqual
+		}
+
+		return literalsDiffer
+	case isNumberLiteral(given.Kind) && isNumberLiteral(when.Kind):
+		return compareNumberLiterals(given.Value, when.Value)
+	}
+
+	return literalsIncomparable
+}
+
+func isNumberLiteral(kind ast.LiteralKind) bool {
+	return kind == ast.IntegerLiteral || kind == ast.DecimalLiteral
+}
+
+// compareNumberLiterals reads both literals as exact rationals rather than as
+// source text, so 12.50 and 12.5 are one value and 007 and 7 are one value: the
+// AST keeps a number's spelling verbatim so emod fmt can write it back, and a
+// formatting difference is not a boundary violation. float64 would equate two
+// distinct integers past its precision.
+func compareNumberLiterals(given, when string) literalAgreement {
+	left, leftOK := new(big.Rat).SetString(given)
+	right, rightOK := new(big.Rat).SetString(when)
+	if !leftOK || !rightOK {
+		return literalsIncomparable
+	}
+	if left.Cmp(right) == 0 {
+		return literalsEqual
+	}
+
+	return literalsDiffer
+}
+
+// literalSource spells a literal the way its author wrote it, so a message
+// echoes the source: a string keeps its quotes and 12.50 keeps its trailing
+// zero, though the comparison above reads it as a number.
+func literalSource(field *ast.PayloadField) string {
+	if field.Kind == ast.StringLiteral {
+		return `"` + field.Value + `"`
+	}
+
+	return field.Value
 }
