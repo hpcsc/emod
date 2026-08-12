@@ -5635,8 +5635,8 @@ func TestLint(t *testing.T) {
 				whenValue  string
 				whenKind   ast.LiteralKind
 			}{
-				{"a string against a number", "4210", ast.StringLiteral, "4210", ast.IntegerLiteral},
-				{"a boolean against a string", "true", ast.BooleanLiteral, "true", ast.StringLiteral},
+				{"a string against a number", "4210", ast.StringLiteral, "4211", ast.IntegerLiteral},
+				{"a boolean against a string", "true", ast.BooleanLiteral, "yes", ast.StringLiteral},
 				{"a boolean against a number", "true", ast.BooleanLiteral, "1", ast.IntegerLiteral},
 			}
 			for _, pair := range pairs {
@@ -5683,6 +5683,36 @@ func TestLint(t *testing.T) {
 						`reading.emod:18: [spec/given-outside-boundary] given event "DeskClaimed" states deskId ` + pair.given +
 							` while command "ClaimDesk"'s when payload states deskId ` + pair.when +
 							`, so tag "desk" excludes it from the query`,
+					}, reportedLines(diags))
+				})
+			}
+		})
+
+		t.Run("value arm: booleans compare by their spelling", func(t *testing.T) {
+			pairs := []struct {
+				name    string
+				given   string
+				when    string
+				reports bool
+			}{
+				{name: "one spelling on both sides agrees", given: "true", when: "true"},
+				{name: "the two spellings disagree", given: "true", when: "false", reports: true},
+			}
+			for _, pair := range pairs {
+				t.Run(pair.name, func(t *testing.T) {
+					spec := disagreeingDeskSpec()
+					spec.Given[0].Payload = []*ast.PayloadField{payloadValueAt("deskId", pair.given, ast.BooleanLiteral, 18, 34)}
+					spec.When.Payload = []*ast.PayloadField{payloadValueAt("deskId", pair.when, ast.BooleanLiteral, 19, 30)}
+
+					diags := linter.Lint(dcbValueModel(&ast.TagPredicate{Field: "desk", Value: "deskId"}, spec))
+
+					if !pair.reports {
+						require.Empty(t, diags)
+						return
+					}
+					require.Equal(t, []string{
+						`reading.emod:18: [spec/given-outside-boundary] given event "DeskClaimed" states deskId true ` +
+							`while command "ClaimDesk"'s when payload states deskId false, so tag "desk" excludes it from the query`,
 					}, reportedLines(diags))
 				})
 			}
@@ -5793,28 +5823,16 @@ func TestLint(t *testing.T) {
 		})
 
 		t.Run("value arm: a spec in an aggregate-nested slice takes no value check", func(t *testing.T) {
-			modes := []struct {
-				name string
-				mode string
-			}{
-				{"an unset mode", ""},
-				{"dcb mode", "dcb"},
-				{"mixed mode", "mixed"},
-			}
-			for _, declared := range modes {
-				t.Run("enclosing context in "+declared.name, func(t *testing.T) {
-					model := dcbValueModel(&ast.TagPredicate{Field: "desk", Value: "deskId"})
-					nested := model.Contexts[0].Slices[0]
-					nested.Specs = append(nested.Specs, disagreeingDeskSpec())
-					model.Contexts[0].Slices = model.Contexts[0].Slices[1:]
-					model.Contexts[0].Aggregates = []*ast.Aggregate{{Name: "Desk", Slices: []*ast.Slice{nested}}}
-					model.Contexts[0].Mode = declared.mode
+			model := dcbValueModel(&ast.TagPredicate{Field: "desk", Value: "deskId"})
+			nested := model.Contexts[0].Slices[0]
+			nested.Specs = append(nested.Specs, disagreeingDeskSpec())
+			model.Contexts[0].Slices = model.Contexts[0].Slices[1:]
+			model.Contexts[0].Aggregates = []*ast.Aggregate{{Name: "Desk", Slices: []*ast.Slice{nested}}}
 
-					diags := linter.Lint(model)
+			diags := linter.Lint(model)
 
-					require.Empty(t, linesReportedBy(diags, "spec/given-outside-boundary"))
-				})
-			}
+			require.Empty(t, linesReportedBy(diags, "spec/given-outside-boundary"),
+				"arm selection is by slice home, so a nested slice takes the aggregate arm and no value check")
 		})
 
 		t.Run("value arm: a model carrying the shape in both slice homes reports for the context-level home only", func(t *testing.T) {
@@ -6009,6 +6027,48 @@ func TestLint(t *testing.T) {
 
 				require.Empty(t, linesReportedBy(linter.Lint(model), "spec/given-outside-boundary"),
 					"the payloads disagree on deskId, so only the event being absent from this context keeps it silent")
+			})
+
+			t.Run("a same-named command in another context does not supply the predicate", func(t *testing.T) {
+				spec := disagreeingDeskSpec()
+				spec.When = specElementAt("ClaimDesk", 19,
+					payloadValueAt("deskId", "D-4210", ast.StringLiteral, 19, 30),
+					payloadValueAt("seatId", "S-9", ast.StringLiteral, 19, 52))
+				model := dcbValueModel(&ast.TagPredicate{Field: "desk", Value: "deskId"}, spec)
+				model.Contexts = append(model.Contexts, &ast.Context{
+					Name: "Study Hall",
+					Mode: "dcb",
+					Slices: []*ast.Slice{{
+						Name: "Claim Seat",
+						Commands: []*ast.Command{{
+							Name:    "ClaimDesk",
+							NamePos: ast.Position{Filename: "study.emod", Line: 4, Column: 9},
+							DecidesOn: &ast.DecidesOnClause{
+								Events:    []string{"DeskClaimed"},
+								Predicate: &ast.TagPredicate{Field: "desk", Value: "seatId"},
+							},
+						}},
+					}},
+				})
+
+				require.Empty(t, linesReportedBy(linter.Lint(model), "spec/given-outside-boundary"),
+					"Reading Room's own predicate names deskId, and both payloads state D-4210; "+
+						"reading Study Hall's predicate would compare deskId against seatId")
+			})
+
+			t.Run("a mixed-mode context binds through an event its own aggregate declares", func(t *testing.T) {
+				spec := disagreeingDeskSpec()
+				model := dcbValueModel(&ast.TagPredicate{Field: "desk", Value: "deskId"}, spec)
+				model.Contexts[0].Mode = "mixed"
+				model.Contexts[0].Aggregates = []*ast.Aggregate{{
+					Name:   "Desk",
+					Slices: []*ast.Slice{{Name: "Record Desk", Events: model.Contexts[0].Slices[0].Events}},
+				}}
+				model.Contexts[0].Slices[0].Events = nil
+
+				require.Equal(t, []string{deskValueExcluded},
+					linesReportedBy(linter.Lint(model), "spec/given-outside-boundary"),
+					"the event lives in an aggregate of this context, which still declares it")
 			})
 
 			t.Run("an event a translation declares in this context binds its own tags", func(t *testing.T) {

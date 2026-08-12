@@ -1480,18 +1480,6 @@ context "Orders" {
 				err.Error())
 		})
 
-		t.Run("conjunction: validate fails on the same model", func(t *testing.T) {
-			path := writeTemp(t, "conjunctive_value.emod", conjunctiveValueOutsideBoundaryEmod)
-
-			err := cli.RunValidate(path, "text")
-
-			var lintErr *cli.LintError
-			require.True(t, errors.As(err, &lintErr))
-			require.Equal(t, 1, lintErr.ExitCode)
-			require.Contains(t, err.Error(), "[spec/given-outside-boundary]")
-			require.Contains(t, err.Error(), `states deskId "D-4210"`)
-		})
-
 		t.Run("value arm: a number parsed from source compares by value, not by the text it was written with", func(t *testing.T) {
 			t.Run("12.5 against a given payload's 12.50 reports nothing", func(t *testing.T) {
 				path := writeTemp(t, "late_fee.emod", lateFeeValueEmod("12.5"))

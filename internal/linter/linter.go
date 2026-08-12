@@ -715,30 +715,44 @@ func eventHomeIndex(model *ast.Model) map[string][]eventDeclaration {
 	return index
 }
 
-// contextEventIndex names the events one context declares. A DCB query reads the
-// history its own context holds, and event names are only unique within one, so
-// resolving a given event's tags model-wide would read the tag mapping off a
-// same-named event another context declares. An event this context does not
-// declare is absent rather than borrowed from elsewhere.
-func contextEventIndex(ctx *ast.Context) map[string]*ast.Event {
-	index := make(map[string]*ast.Event)
+// contextDeclarations names the commands and events one context declares. A DCB
+// query reads the history its own context holds, and neither name is unique
+// across contexts, so resolving either side model-wide would read a predicate or
+// a tag mapping off a same-named construct another context declares — and which
+// one it picked would turn on declaration order. A construct this context does
+// not declare is absent rather than borrowed from elsewhere.
+type contextDeclarations struct {
+	commands map[string]*ast.Command
+	events   map[string]*ast.Event
+}
+
+func declarationsIn(ctx *ast.Context) contextDeclarations {
+	declared := contextDeclarations{
+		commands: make(map[string]*ast.Command),
+		events:   make(map[string]*ast.Event),
+	}
 	for _, slice := range ctx.AllSlices() {
+		for _, cmd := range slice.Commands {
+			if _, seen := declared.commands[cmd.Name]; !seen {
+				declared.commands[cmd.Name] = cmd
+			}
+		}
 		for _, evt := range slice.Events {
-			if _, seen := index[evt.Name]; !seen {
-				index[evt.Name] = evt
+			if _, seen := declared.events[evt.Name]; !seen {
+				declared.events[evt.Name] = evt
 			}
 		}
 		for _, tr := range slice.Translations {
 			if tr.Event == nil {
 				continue
 			}
-			if _, seen := index[tr.Event.Name]; !seen {
-				index[tr.Event.Name] = tr.Event
+			if _, seen := declared.events[tr.Event.Name]; !seen {
+				declared.events[tr.Event.Name] = tr.Event
 			}
 		}
 	}
 
-	return index
+	return declared
 }
 
 func eventHomeLookup(index map[string][]eventDeclaration, eventName string) (eventDeclaration, bool) {
@@ -752,16 +766,9 @@ func eventHomeLookup(index map[string][]eventDeclaration, eventName string) (eve
 func checkGivenOutsideBoundary(model *ast.Model) []*diagnostic.Entry {
 	eventHome := eventHomeIndex(model)
 
-	commandIndex := make(map[string]*ast.Command)
-	for _, sl := range model.AllSlices() {
-		for _, cmd := range sl.Commands {
-			commandIndex[cmd.Name] = cmd
-		}
-	}
-
 	var diags []*diagnostic.Entry
 	for _, ctx := range model.Contexts {
-		declaredHere := contextEventIndex(ctx)
+		declaredHere := declarationsIn(ctx)
 		for _, ref := range ctx.SliceRefs() {
 			if ref.Aggregate != nil {
 				for _, spec := range ref.Slice.Specs {
@@ -792,7 +799,7 @@ func checkGivenOutsideBoundary(model *ast.Model) []*diagnostic.Entry {
 				if spec.When == nil {
 					continue
 				}
-				cmd, ok := commandIndex[spec.When.Name]
+				cmd, ok := declaredHere.commands[spec.When.Name]
 				if !ok {
 					continue
 				}
@@ -813,7 +820,7 @@ func checkGivenOutsideBoundary(model *ast.Model) []*diagnostic.Entry {
 								given.Name, spec.When.Name)))
 						continue
 					}
-					diags = append(diags, excludedPayloadValues(given, declaredHere[given.Name], spec.When, cmd)...)
+					diags = append(diags, excludedPayloadValues(given, declaredHere.events[given.Name], spec.When, cmd)...)
 				}
 			}
 		}
