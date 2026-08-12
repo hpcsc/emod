@@ -118,7 +118,7 @@ func Lint(model *ast.Model) []*diagnostic.Entry {
 	diags = append(diags, checkInvariantNeverExercised(model)...)
 	diags = append(diags, checkGivenOutsideBoundary(model)...)
 
-	slices.SortFunc(diags, func(a, b *diagnostic.Entry) int {
+	slices.SortStableFunc(diags, func(a, b *diagnostic.Entry) int {
 		return cmp.Compare(a.Line, b.Line)
 	})
 
@@ -625,7 +625,7 @@ func checkInvariantNeverExercised(model *ast.Model) []*diagnostic.Entry {
 		}
 	}
 
-	slices.SortFunc(diags, func(a, b *diagnostic.Entry) int {
+	slices.SortStableFunc(diags, func(a, b *diagnostic.Entry) int {
 		return cmp.Compare(a.Line, b.Line)
 	})
 
@@ -782,36 +782,61 @@ func checkGivenOutsideBoundary(model *ast.Model) []*diagnostic.Entry {
 		}
 	}
 
-	slices.SortFunc(diags, func(a, b *diagnostic.Entry) int {
+	slices.SortStableFunc(diags, func(a, b *diagnostic.Entry) int {
 		return cmp.Compare(a.Line, b.Line)
 	})
 
 	return diags
 }
 
-// excludedPayloadValues reports the tagged field whose value the given payload
+// excludedPayloadValues reports each tagged field whose value the given payload
 // states differently from the when payload, so the command's query would pass
-// over the event the given names. A predicate that is not a lone tag states no
-// single requirement to compare against.
+// over the event the given names. Each predicate the query requires states a
+// separate routing requirement and so is separately fixable.
 func excludedPayloadValues(given, when *ast.SpecElement, cmd *ast.Command) []*diagnostic.Entry {
-	predicate, ok := cmd.DecidesOn.Predicate.(*ast.TagPredicate)
-	if !ok {
+	var diags []*diagnostic.Entry
+	for _, predicate := range requiredTagPredicates(cmd.DecidesOn.Predicate) {
+		givenValue := statedOnce(given.Payload, predicate.Value)
+		whenValue := statedOnce(when.Payload, predicate.Value)
+		if givenValue == nil || whenValue == nil {
+			continue
+		}
+		if compareLiterals(givenValue, whenValue) != literalsDiffer {
+			continue
+		}
+
+		diags = append(diags, warning(givenValue.ValuePos, "spec/given-outside-boundary",
+			fmt.Sprintf("given event %q states %s %s while command %q's when payload states %s, so tag %q excludes it from the query",
+				given.Name, predicate.Value, literalSource(givenValue),
+				cmd.Name, literalSource(whenValue), predicate.Field)))
+	}
+
+	return diags
+}
+
+// requiredTagPredicates selects the tag predicates a query requires to hold:
+// those reachable from the root through "and" alone. Under "or" a single
+// disagreement does not put the event outside the query, and under "not" it
+// argues the opposite, so neither is crossed and every warning the arm emits
+// names a predicate the command genuinely demands. Parentheses leave no node
+// behind, so conjunctive position is decidable from the tree alone. Note the
+// deliberate difference from collectPredicateTagKeys, which descends both
+// operands whatever the operator and descends a not: this walk does neither.
+func requiredTagPredicates(pred ast.PredicateExpr) []*ast.TagPredicate {
+	switch p := pred.(type) {
+	case *ast.TagPredicate:
+		return []*ast.TagPredicate{p}
+	case *ast.LogicalExpr:
+		if p.Operator != "and" {
+			return nil
+		}
+
+		return append(requiredTagPredicates(p.Left), requiredTagPredicates(p.Right)...)
+	case *ast.NotExpr:
 		return nil
 	}
 
-	givenValue := statedOnce(given.Payload, predicate.Value)
-	whenValue := statedOnce(when.Payload, predicate.Value)
-	if givenValue == nil || whenValue == nil {
-		return nil
-	}
-	if compareLiterals(givenValue, whenValue) != literalsDiffer {
-		return nil
-	}
-
-	return []*diagnostic.Entry{warning(givenValue.ValuePos, "spec/given-outside-boundary",
-		fmt.Sprintf("given event %q states %s %s while command %q's when payload states %s, so tag %q excludes it from the query",
-			given.Name, predicate.Value, literalSource(givenValue),
-			cmd.Name, literalSource(whenValue), predicate.Field))}
+	return nil
 }
 
 // statedOnce returns the single field a payload states under name. A payload

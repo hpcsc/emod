@@ -483,6 +483,102 @@ context "Reading Room" mode dcb {
 }
 `
 
+// conjunctiveValueOutsideBoundaryEmod joins two tag predicates with "and" and
+// disagrees on exactly one of the two fields they tag, which the value-level arm
+// of spec/given-outside-boundary reports once and no other rule does. The
+// conjunction is what makes the model worth a fixture of its own: each predicate
+// the query requires is checked separately, so the field the payloads agree on
+// has to stay silent while its sibling reports. Spending two tag keys on one
+// command is also what lets a single slice keep dcb/single-tag-everywhere and
+// dcb/orphan-tag-key quiet.
+const conjunctiveValueOutsideBoundaryEmod = `model "Library Lending"
+
+context "Reading Room" mode dcb {
+  invariant OneDeskPerReader "A reader holds at most one desk"
+  slice "Claim Desk" {
+    command ClaimDesk {
+      decides_on {
+        events [DeskClaimed]
+        where tag(desk = deskId) and tag(reader = memberId)
+      }
+      fields {
+        memberId string required
+        deskId   string required
+      }
+    }
+    event DeskClaimed {
+      tags {
+        desk  : deskId
+        reader: memberId
+      }
+      fields {
+        sessionId string required
+        deskId    string required
+        memberId  string required
+      }
+    }
+    flow {
+      command -> event: ClaimDesk -> DeskClaimed
+    }
+    spec "claims a free desk" {
+      when ClaimDesk
+      then [DeskClaimed]
+    }
+    spec "refuses a desk another reader holds" {
+      given [DeskClaimed { deskId: "D-4210", memberId: "M-40817" }]
+      when ClaimDesk { deskId: "D-5817", memberId: "M-40817" }
+      then rejected OneDeskPerReader
+    }
+  }
+}
+`
+
+// parenthesisedConjunctiveValueEmod is conjunctiveValueOutsideBoundaryEmod with
+// redundant parentheses around each operand. parsePrimary returns a
+// parenthesised sub-expression unwrapped, so the two models are one tree and
+// must lint alike.
+const parenthesisedConjunctiveValueEmod = `model "Library Lending"
+
+context "Reading Room" mode dcb {
+  invariant OneDeskPerReader "A reader holds at most one desk"
+  slice "Claim Desk" {
+    command ClaimDesk {
+      decides_on {
+        events [DeskClaimed]
+        where (tag(desk = deskId)) and (tag(reader = memberId))
+      }
+      fields {
+        memberId string required
+        deskId   string required
+      }
+    }
+    event DeskClaimed {
+      tags {
+        desk  : deskId
+        reader: memberId
+      }
+      fields {
+        sessionId string required
+        deskId    string required
+        memberId  string required
+      }
+    }
+    flow {
+      command -> event: ClaimDesk -> DeskClaimed
+    }
+    spec "claims a free desk" {
+      when ClaimDesk
+      then [DeskClaimed]
+    }
+    spec "refuses a desk another reader holds" {
+      given [DeskClaimed { deskId: "D-4210", memberId: "M-40817" }]
+      when ClaimDesk { deskId: "D-5817", memberId: "M-40817" }
+      then rejected OneDeskPerReader
+    }
+  }
+}
+`
+
 const givenOutsideBoundaryDCBEmod = `model "Library Lending"
 
 context "Reading Room" mode dcb {
@@ -1297,6 +1393,68 @@ context "Orders" {
 			require.Equal(t, 1, lintErr.ExitCode)
 			require.Contains(t, err.Error(), "[spec/given-outside-boundary]")
 			require.Contains(t, err.Error(), `states deskId "D-4210"`)
+		})
+
+		t.Run("conjunction: json output reports the disagreeing field alone at warning severity and exits 1", func(t *testing.T) {
+			path := writeTemp(t, "conjunctive_value.emod", conjunctiveValueOutsideBoundaryEmod)
+
+			var err error
+			output := captureStdout(t, func() {
+				err = cli.RunLint(path, "json")
+			})
+
+			var lintErr *cli.LintError
+			require.True(t, errors.As(err, &lintErr))
+			require.Equal(t, 1, lintErr.ExitCode)
+
+			var entries []map[string]interface{}
+			require.NoError(t, json.Unmarshal([]byte(output), &entries))
+			require.Len(t, entries, 1,
+				"the payloads agree on the field the second predicate tags, and the fixture trips no other rule")
+			require.Equal(t, "warning", entries[0]["severity"])
+			require.Equal(t, "spec/given-outside-boundary", entries[0]["rule"])
+			require.Equal(t, float64(35), entries[0]["line"])
+			require.Equal(t, `given event "DeskClaimed" states deskId "D-4210" while command "ClaimDesk"'s `+
+				`when payload states "D-5817", so tag "desk" excludes it from the query`, entries[0]["message"])
+		})
+
+		t.Run("conjunction: text output names the rule and the disagreeing field", func(t *testing.T) {
+			path := writeTemp(t, "conjunctive_value.emod", conjunctiveValueOutsideBoundaryEmod)
+
+			err := cli.RunLint(path, "text")
+
+			var lintErr *cli.LintError
+			require.True(t, errors.As(err, &lintErr))
+			require.Equal(t, 1, lintErr.ExitCode)
+			require.Equal(t, path+`:35: [spec/given-outside-boundary] given event "DeskClaimed" states deskId "D-4210" `+
+				`while command "ClaimDesk"'s when payload states "D-5817", so tag "desk" excludes it from the query`,
+				err.Error())
+		})
+
+		t.Run("conjunction: validate fails on the same model", func(t *testing.T) {
+			path := writeTemp(t, "conjunctive_value.emod", conjunctiveValueOutsideBoundaryEmod)
+
+			err := cli.RunValidate(path, "text")
+
+			var lintErr *cli.LintError
+			require.True(t, errors.As(err, &lintErr))
+			require.Equal(t, 1, lintErr.ExitCode)
+			require.Contains(t, err.Error(), "[spec/given-outside-boundary]")
+			require.Contains(t, err.Error(), `states deskId "D-4210"`)
+		})
+
+		t.Run("conjunction: redundant parentheses report exactly what the same model without them does", func(t *testing.T) {
+			bare := writeTemp(t, "conjunctive_value.emod", conjunctiveValueOutsideBoundaryEmod)
+			parenthesised := writeTemp(t, "parenthesised_value.emod", parenthesisedConjunctiveValueEmod)
+
+			bareErr := cli.RunLint(bare, "text")
+			parenthesisedErr := cli.RunLint(parenthesised, "text")
+
+			require.Error(t, bareErr)
+			require.Error(t, parenthesisedErr)
+			require.Equal(t,
+				strings.Replace(bareErr.Error(), bare, "<model>", 1),
+				strings.Replace(parenthesisedErr.Error(), parenthesised, "<model>", 1))
 		})
 	})
 }

@@ -48,7 +48,7 @@
         "or",
         "internal/cli/lint_test.go"
       ],
-      "done": false
+      "done": true
     }
   ]
 }

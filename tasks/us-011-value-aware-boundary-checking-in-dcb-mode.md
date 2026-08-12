@@ -3,7 +3,7 @@
 ## Progress
 - [x] Task 1: State a tagged field in both payloads of the shared payload fixture
 - [x] Task 2: Report a `given` payload value the command's tag predicate excludes
-- [ ] Task 3: Check every tag predicate a conjunction states, and no other
+- [x] Task 3: Check every tag predicate a conjunction states, and no other
 
 ---
 
@@ -580,49 +580,49 @@ rather than guessing. The arm's claim stays exact: every warning it emits names 
 command's query requires to hold.
 
 **Acceptance Criteria:**
-- [ ] A `where` stating two tag predicates joined by `and`, where the two payloads disagree on the
+- [x] A `where` stating two tag predicates joined by `and`, where the two payloads disagree on the
       field one of them tags and agree on the other's, produces exactly one diagnostic, naming the
       disagreeing field
-- [ ] Where the two payloads disagree on both fields, two diagnostics are produced, one per field,
+- [x] Where the two payloads disagree on both fields, two diagnostics are produced, one per field,
       each positioned at that field's value inside the `given` payload, asserted as one comparison
       over the whole list of formatted lines so both position and order are pinned
-- [ ] Three tag predicates joined by two `and`s are all checked, so the walk is a recursion rather
+- [x] Three tag predicates joined by two `and`s are all checked, so the walk is a recursion rather
       than a single unwrapping of the root
-- [ ] A `where` stating two tag predicates joined by `or` produces no diagnostic from this rule,
+- [x] A `where` stating two tag predicates joined by `or` produces no diagnostic from this rule,
       however the payloads disagree — a leaf states this over a model identical to the two-`and` one
       but for the operator
-- [ ] A tag predicate under `not` produces no diagnostic, asserted both for `not` at the root and for
+- [x] A tag predicate under `not` produces no diagnostic, asserted both for `not` at the root and for
       an `and` one of whose operands is a `not`
-- [ ] An `and` one of whose operands is an `or` checks the `and`'s other operand and neither of the
+- [x] An `and` one of whose operands is an `or` checks the `and`'s other operand and neither of the
       `or`'s, so a model whose disagreement sits inside the `or` reports nothing and one whose
       disagreement sits in the conjunctive operand reports once
-- [ ] Parentheses change nothing the parser does not already record: a model writing its conjunction
+- [x] Parentheses change nothing the parser does not already record: a model writing its conjunction
       with redundant parentheses produces the same diagnostics as the same model without them
-- [ ] Two tag predicates naming the *same* field with different tag keys count once per predicate, so
+- [x] Two tag predicates naming the *same* field with different tag keys count once per predicate, so
       a disagreement on that field reports once per predicate that tags it, and a leaf states which
       it chose
-- [ ] Every silence rule Task 2 established still holds under a conjunction: a tagged field either
+- [x] Every silence rule Task 2 established still holds under a conjunction: a tagged field either
       payload omits, states twice, or states at a different literal kind contributes no diagnostic
       while its sibling predicate's field still does
-- [ ] The single-predicate behaviour Task 2 delivers is unchanged, and the three story criteria still
+- [x] The single-predicate behaviour Task 2 delivers is unchanged, and the three story criteria still
       close: a leaf over a root-level lone `tag(key = field)` reports exactly as it did
-- [ ] The message text is the one Task 2 introduced, unchanged, and the rule name and description are
+- [x] The message text is the one Task 2 introduced, unchanged, and the rule name and description are
       unchanged — this task adds no fourth text, no rule name and no description entry
-- [ ] A CLI lint fixture states a `mode dcb` context whose offending command's `decides_on` joins two
+- [x] A CLI lint fixture states a `mode dcb` context whose offending command's `decides_on` joins two
       tag predicates with `and` and whose spec disagrees on exactly one of the two tagged fields,
       tripping this rule once and no other rule at all — asserted with a length of exactly one entry
       — with a declaring comment naming the rule and why the conjunction matters
-- [ ] `cli.RunLint` and `cli.RunValidate` both return an error for that fixture, the text output
+- [x] `cli.RunLint` and `cli.RunValidate` both return an error for that fixture, the text output
       names the rule and the disagreeing field, and `-f json` reports `"severity": "warning"` with
       exit code 1
-- [ ] `oracle.Check` over the Task 1 fixture returns an empty diagnostic list: its conjunctive
+- [x] `oracle.Check` over the Task 1 fixture returns an empty diagnostic list: its conjunctive
       command's spec states the tagged field with the same value in both payloads
-- [ ] Every other shared fixture, every file under `examples/` the repository ships as valid
+- [x] Every other shared fixture, every file under `examples/` the repository ships as valid
       including `examples/dcb_model.emod`, every fixture under `internal/parser/testdata/`, every
       ` ```emod ` fence in `README.md` and `docs/dsl-reference.md` including the `mode dcb` fence at
       `:175`, and `billingModel` in `internal/wasm/pipeline_test.go` still produce zero diagnostics
       from `oracle.Check`
-- [ ] The predicate walk is one recursion over `ast.PredicateExpr` with a single dispatch point, so a
+- [x] The predicate walk is one recursion over `ast.PredicateExpr` with a single dispatch point, so a
       fourth variant added to the interface is a change at one site rather than a silent omission
 
 **Affected Files/Modules:**
