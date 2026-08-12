@@ -1437,8 +1437,8 @@ func TestExport(t *testing.T) {
 			require.NoError(t, json.Unmarshal(raw, &doc))
 
 			event := firstSliceOf(t, doc)["events"].([]any)[0].(map[string]any)
-			require.Equal(t, awkwardDescription, doc["description"])
-			require.Equal(t, awkwardDescription, event["description"])
+			require.Equal(t, awkwardText, doc["description"])
+			require.Equal(t, awkwardText, event["description"])
 		})
 
 		t.Run("keeps a field named after a keyword under the name it was declared with", func(t *testing.T) {
@@ -3509,6 +3509,27 @@ func TestExport(t *testing.T) {
 				"an undescribed model must not carry the key, not even empty-valued, or its bytes change")
 		})
 
+		// jsonDiagramEvent forks jsonEvent precisely so a new AST field cannot
+		// leak into the node-and-edge contract, which is why the wire type has
+		// to be shown absent here rather than assumed absent.
+		t.Run("a model binding wire types produces the same diagram document as the same model binding none", func(t *testing.T) {
+			binding := test.WireTypeLibraryLendingModel(t)
+			unbound := test.WithoutWireTypes(binding)
+
+			require.Equal(t, test.WireTypeLibraryLendingWireTypes, test.DeclaredWireTypes(binding),
+				"the model has to bind wire types, or comparing the two documents says nothing")
+			require.Empty(t, test.DeclaredWireTypes(unbound))
+
+			bound, err := export.ExportDiagramJSON(binding)
+			require.NoError(t, err)
+			without, err := export.ExportDiagramJSON(unbound)
+			require.NoError(t, err)
+
+			require.Equal(t, string(without), string(bound))
+			require.Empty(t, textAnywhere(diagramDocOf(t, binding), test.WireTypeLibraryLendingWireTypes),
+				"a wire type must reach no diagram node, however many the model binds")
+		})
+
 		t.Run("carries the description of a slice an aggregate holds and of a slice its context declares directly", func(t *testing.T) {
 			doc := diagramDocOf(t, &ast.Model{
 				Name: "Library Lending",
@@ -4206,8 +4227,8 @@ func TestExport(t *testing.T) {
 				doc := exportedCUEDoc(t, cueBin, awkwardlyDescribedModel())
 
 				event := firstSliceOf(t, doc)["events"].([]any)[0].(map[string]any)
-				require.Equal(t, awkwardDescription, doc["description"])
-				require.Equal(t, awkwardDescription, event["description"])
+				require.Equal(t, awkwardText, doc["description"])
+				require.Equal(t, awkwardText, event["description"])
 			})
 
 			t.Run("keeps comments attached to the element they document", func(t *testing.T) {
@@ -4422,6 +4443,139 @@ func TestExport(t *testing.T) {
 
 			for format, doc := range exportedDocs(t, cueBin, activated) {
 				require.Empty(t, textAnywhere(doc, scheduleKeys), "%s export", format)
+			}
+		})
+
+		// A field states its own type under the same key, so the absence has to
+		// be read off the event objects rather than searched for in the bytes.
+		t.Run("an event binding no wire type carries no type key at all, not one holding the empty string", func(t *testing.T) {
+			cueBin := lookupCue(t)
+			unfeatured := test.HotelReservationModel(t)
+
+			require.Empty(t, test.DeclaredWireTypes(unfeatured),
+				"the unfeatured witness must bind no wire type, or it cannot witness the absent key")
+
+			for format, doc := range exportedDocs(t, cueBin, unfeatured) {
+				events := exportedEvents(doc)
+				require.NotEmpty(t, events, "%s export: a document holding no event witnesses nothing", format)
+				for _, event := range events {
+					_, carried := event["type"]
+					require.False(t, carried,
+						"%s export: event %v carries the key its model never bound", format, event["name"])
+				}
+			}
+		})
+
+		t.Run("an event files its wire type after the prefix it shares with every sibling and ahead of its own values", func(t *testing.T) {
+			at := func(line int) ast.Position {
+				return ast.Position{Filename: "test.emod", Line: line, Column: 5}
+			}
+			model := &ast.Model{
+				Name: "Test",
+				Contexts: []*ast.Context{{
+					Name: "Ctx",
+					Slices: []*ast.Slice{{
+						Name: "S",
+						Events: []*ast.Event{{
+							Name:            "Evt",
+							NamePos:         at(3),
+							Description:     "The fact the decision leaves behind",
+							WireType:        "com.acme.full.evt",
+							Source:          "external",
+							SourcePos:       at(5),
+							ExternalName:    "Provider",
+							ExternalNamePos: at(6),
+							OpenPos:         at(3),
+							ClosePos:        at(9),
+							Comments:        []*ast.Comment{{Text: "why it matters"}},
+							Fields:          []*ast.Field{{Name: "id", Type: "string"}},
+						}},
+						Views: []*ast.View{{
+							Name:        "MyView",
+							NamePos:     at(11),
+							Description: "What the actor reads before deciding",
+							OpenPos:     at(11),
+							ClosePos:    at(15),
+							Comments:    []*ast.Comment{{Text: "why it matters"}},
+							Fields:      []*ast.Field{{Name: "id", Type: "string"}},
+						}},
+					}},
+				}},
+			}
+
+			raw, err := export.ExportJSON(model)
+			require.NoError(t, err)
+
+			keyOrder := emittedKeyOrder(t, raw)
+			require.Equal(t, []string{
+				"name", "description", "position", "source_position", "external_name_position",
+				"open_position", "close_position", "comments",
+				"type", "source", "external_name", "fields",
+			}, keyOrder["Evt"])
+			require.Equal(t, []string{
+				"name", "description", "position",
+				"open_position", "close_position", "comments",
+				"fields",
+			}, keyOrder["MyView"],
+				"the wire type joins an event's own values; the prefix it shares with every sibling is unchanged")
+		})
+
+		t.Run("both exports carry every wire type a model binds, including the event a translation nests", func(t *testing.T) {
+			cueBin := lookupCue(t)
+			binding := test.WireTypeLibraryLendingModel(t)
+
+			require.Equal(t, test.WireTypeLibraryLendingWireTypes, test.DeclaredWireTypes(binding),
+				"the model has to bind wire types in both slice homes, or the comparisons below say nothing")
+
+			requireBothFormatsAgree(t, cueBin, binding)
+
+			for format, doc := range exportedDocs(t, cueBin, binding) {
+				require.Equal(t, test.WireTypeLibraryLendingWireTypes, exportedWireTypes(doc), "%s export", format)
+			}
+		})
+
+		t.Run("the wire type key reaches neither export of a model binding none", func(t *testing.T) {
+			cueBin := lookupCue(t)
+			binding := test.WireTypeLibraryLendingModel(t)
+			unbound := test.WithoutWireTypes(binding)
+
+			require.Equal(t, test.WireTypeLibraryLendingWireTypes, test.DeclaredWireTypes(binding),
+				"the model has to bind wire types, or finding the key nowhere proves nothing")
+			require.Empty(t, test.DeclaredWireTypes(unbound),
+				"the twin has to lose the wire types of both slice homes and of the nested event")
+
+			requireBothFormatsAgree(t, cueBin, unbound)
+
+			bound := exportedDocs(t, cueBin, binding)
+			require.Equal(t, test.WireTypeLibraryLendingWireTypes,
+				textAnywhere(bound[jsonFormat], test.WireTypeLibraryLendingWireTypes))
+
+			for format, doc := range exportedDocs(t, cueBin, unbound) {
+				require.Empty(t, exportedWireTypes(doc), "%s export", format)
+				require.Empty(t, textAnywhere(doc, test.WireTypeLibraryLendingWireTypes), "%s export", format)
+			}
+		})
+
+		t.Run("a wire type carrying characters both formats escape round-trips its exact text", func(t *testing.T) {
+			cueBin := lookupCue(t)
+			model := &ast.Model{
+				Name: "Awkward",
+				Contexts: []*ast.Context{{
+					Name: "Ctx",
+					Aggregates: []*ast.Aggregate{{
+						Name: "Agg",
+						Slices: []*ast.Slice{{
+							Name:   "S",
+							Events: []*ast.Event{{Name: "Evt", WireType: awkwardText}},
+						}},
+					}},
+				}},
+			}
+
+			requireBothFormatsAgree(t, cueBin, model)
+
+			for format, doc := range exportedDocs(t, cueBin, model) {
+				require.Equal(t, []string{awkwardText}, exportedWireTypes(doc), "%s export", format)
 			}
 		})
 
@@ -4674,6 +4828,7 @@ func buildFullModel() *ast.Model {
 									{
 										Name:         "Evt",
 										Description:  "The fact the decision leaves behind",
+										WireType:     "com.acme.full.evt",
 										Source:       "external",
 										ExternalName: "Provider",
 									},
@@ -4703,6 +4858,7 @@ func buildFullModel() *ast.Model {
 										Event: &ast.Event{
 											Name:        "PartnerEvt",
 											Description: "The fact a partner reported",
+											WireType:    "com.acme.full.partner-evt",
 										},
 									},
 								},
@@ -4718,14 +4874,16 @@ func buildFullModel() *ast.Model {
 	}
 }
 
-// awkwardDescription mixes the characters both formats have to escape with text
-// outside ASCII.
-const awkwardDescription = `Guest said "hold it" \ paid 50% — café`
+// awkwardText mixes the characters both formats have to escape with text
+// outside ASCII. It stands for any opaque string an author may write, not for a
+// description in particular: the exporters escape a description and a wire type
+// through the same path.
+const awkwardText = `Guest said "hold it" \ paid 50% — café`
 
 func awkwardlyDescribedModel() *ast.Model {
 	return &ast.Model{
 		Name:        "Awkward",
-		Description: awkwardDescription,
+		Description: awkwardText,
 		Contexts: []*ast.Context{{
 			Name: "Ctx",
 			Aggregates: []*ast.Aggregate{{
@@ -4734,7 +4892,7 @@ func awkwardlyDescribedModel() *ast.Model {
 					Name: "S",
 					Events: []*ast.Event{{
 						Name:        "Evt",
-						Description: awkwardDescription,
+						Description: awkwardText,
 					}},
 				}},
 			}},
@@ -5689,6 +5847,33 @@ func rejectionEdgesIn(doc map[string]any) map[string][]string {
 		return nil
 	}
 	return edges
+}
+
+// exportedWireTypes names the wire type every event a document carries binds,
+// visiting each slice's own events before the event its translations nest —
+// the order the writers emit and the order the transcription is written in.
+// An event stating no wire type contributes nothing, so a document read back
+// against the transcription counts what it binds rather than how many events
+// it holds.
+func exportedWireTypes(doc map[string]any) []string {
+	return statedUnder(exportedEvents(doc), "type")
+}
+
+// exportedEvents visits every event a document carries, each slice's own events
+// before the event its translations nest — the order the writers emit and the
+// order a transcription is written in.
+func exportedEvents(doc map[string]any) []map[string]any {
+	var events []map[string]any
+	for _, slice := range exportedSlices(doc) {
+		events = append(events, objectsUnder(slice, "events")...)
+		for _, translation := range objectsUnder(slice, "translations") {
+			if nested, nests := translation["event"].(map[string]any); nests {
+				events = append(events, nested)
+			}
+		}
+	}
+
+	return events
 }
 
 // statedUnder leaves out the objects stating nothing under key, so a list read

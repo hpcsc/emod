@@ -200,6 +200,7 @@ func (w *cueWriter) writeEvent(e *ast.Event) {
 	w.writeComments(e.Comments)
 	w.line("name: %q", e.Name)
 	w.lineIfSet("description", e.Description)
+	w.lineIfSet("type", e.WireType)
 	w.lineIfSet("source", e.Source)
 	w.lineIfSet("external_name", e.ExternalName)
 	writeCUEList(w, "fields", e.Fields, w.writeField)

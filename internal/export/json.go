@@ -107,6 +107,7 @@ type jsonEvent struct {
 	OpenPosition         *jsonPosition  `json:"open_position,omitempty"`
 	ClosePosition        *jsonPosition  `json:"close_position,omitempty"`
 	Comments             []*jsonComment `json:"comments,omitempty"`
+	WireType             string         `json:"type,omitempty"`
 	Source               string         `json:"source,omitempty"`
 	ExternalName         string         `json:"external_name,omitempty"`
 	Fields               []*jsonField   `json:"fields,omitempty"`
@@ -587,6 +588,7 @@ func convertEvent(e *ast.Event) *jsonEvent {
 		OpenPosition:         convertPosition(e.OpenPos),
 		ClosePosition:        convertPosition(e.ClosePos),
 		Comments:             convertComments(e.Comments),
+		WireType:             e.WireType,
 		Source:               e.Source,
 		ExternalName:         e.ExternalName,
 		Fields:               convertFields(e.Fields),

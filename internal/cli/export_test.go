@@ -12,6 +12,7 @@ import (
 	"testing"
 
 	"github.com/hpcsc/emod/internal/cli"
+	"github.com/hpcsc/emod/internal/test"
 	"github.com/stretchr/testify/require"
 )
 
@@ -118,6 +119,29 @@ func TestExport(t *testing.T) {
 			"slice":     slice["description"],
 			"command":   command["description"],
 		})
+	})
+
+	t.Run("a file binding wire types carries them into the model object of the JSON envelope", func(t *testing.T) {
+		path := writeTemp(t, "wire-types.emod", test.WireTypeLibraryLending)
+
+		output := captureStdout(t, func() {
+			err := cli.RunExport(path, "json")
+			require.NoError(t, err)
+		})
+
+		var doc map[string]interface{}
+		require.NoError(t, json.Unmarshal([]byte(output), &doc))
+
+		require.Len(t, doc, 2, "envelope should carry diagnostics and model only")
+		require.Empty(t, doc["diagnostics"])
+
+		modelVal := doc["model"].(map[string]interface{})
+		context := modelVal["contexts"].([]interface{})[0].(map[string]interface{})
+		aggregate := context["aggregates"].([]interface{})[0].(map[string]interface{})
+		slice := aggregate["slices"].([]interface{})[0].(map[string]interface{})
+		event := slice["events"].([]interface{})[0].(map[string]interface{})
+
+		require.Equal(t, "com.library.lending.copy-borrowed", event["type"])
 	})
 
 	t.Run("a file naming its fields after keywords exports those names with no diagnostics", func(t *testing.T) {

@@ -134,6 +134,28 @@ func TestSchema(t *testing.T) {
 		require.Contains(t, string(output), "kind")
 	})
 
+	t.Run("rejects an event whose wire type is not a string", func(t *testing.T) {
+		cueBin := requireCue(t)
+
+		output, err := vetAgainstModel(t, cueBin, strings.Replace(fullModelJSON,
+			`"type": "com.acme.reservations.reservation-made"`,
+			`"type": 42`, 1))
+
+		require.Error(t, err, "schema accepted a numeric wire type")
+		require.Contains(t, string(output), "type")
+	})
+
+	t.Run("rejects an event whose wire type is stated under a key the schema does not declare", func(t *testing.T) {
+		cueBin := requireCue(t)
+
+		output, err := vetAgainstModel(t, cueBin, strings.Replace(fullModelJSON,
+			`"type": "com.acme.reservations.reservation-made"`,
+			`"wire_type": "com.acme.reservations.reservation-made"`, 1))
+
+		require.Error(t, err, "schema accepted an event keyed wire_type")
+		require.Contains(t, string(output), "wire_type")
+	})
+
 	t.Run("rejects an automation whose schedule is stated under a key the schema does not declare", func(t *testing.T) {
 		cueBin := requireCue(t)
 
@@ -231,6 +253,7 @@ const fullModelJSON = `{
         "events": [{
           "name": "ReservationMade",
           "description": "A room is held for a guest",
+          "type": "com.acme.reservations.reservation-made",
           "source": "external",
           "external_name": "Stripe",
           "fields": [{"name": "reservationId", "type": "int", "modifier": "optional"}]

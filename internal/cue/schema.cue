@@ -31,6 +31,7 @@
 	comments?:      [...#Comment]
 	name:           string
 	description?:   string
+	type?:          string
 	source?:        string
 	external_name?: string
 	fields?:        [...#Field]

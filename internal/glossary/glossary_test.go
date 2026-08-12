@@ -599,6 +599,22 @@ A member holds at most one reservation on a title
 			"a glossary defines the terms of a ubiquitous language, and a scenario is not one of them")
 	})
 
+	t.Run("binding wire types leaves both renderings untouched", func(t *testing.T) {
+		bound := test.WireTypeLibraryLendingModel(t)
+		unbound := test.WithoutWireTypes(bound)
+
+		require.NotEqual(t, bound, unbound,
+			"the twin has to bind no wire type, or the comparisons below say nothing")
+		require.Equal(t, test.WireTypeLibraryLendingWireTypes, test.DeclaredWireTypes(bound))
+		require.Empty(t, test.DeclaredWireTypes(unbound),
+			"the twin has to lose the wire types of both slice homes and of the nested event, or the comparisons below are answered by whichever it kept")
+
+		require.Equal(t, renderedMarkdown(t, unbound), renderedMarkdown(t, bound),
+			"a glossary defines the terms of a ubiquitous language, and a deployment identifier is not one of them")
+		require.Equal(t, renderedJSON(t, unbound), renderedJSON(t, bound),
+			"a glossary defines the terms of a ubiquitous language, and a deployment identifier is not one of them")
+	})
+
 	t.Run("stating example payloads leaves both renderings untouched", func(t *testing.T) {
 		stated := test.PayloadLibraryLendingModel(t)
 		unstated := test.WithoutSpecPayloads(stated)

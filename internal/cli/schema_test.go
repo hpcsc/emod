@@ -35,6 +35,16 @@ func TestSchema(t *testing.T) {
 		require.Regexp(t, `value:\s+string \| number \| bool`, output)
 	})
 
+	t.Run("prints a schema declaring the wire type an event may bind", func(t *testing.T) {
+		output := captureStdout(t, func() {
+			err := cli.RunSchema("cue")
+			require.NoError(t, err)
+		})
+
+		require.Contains(t, output, "#Event:")
+		require.Regexp(t, `type\?:\s+string`, output)
+	})
+
 	t.Run("output matches embedded schema content", func(t *testing.T) {
 		output := captureStdout(t, func() {
 			err := cli.RunSchema("cue")

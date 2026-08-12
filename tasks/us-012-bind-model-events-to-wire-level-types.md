@@ -5,7 +5,7 @@
 - [x] Task 2: Carry a wire `type` attribute on `event`
 - [x] Task 3: Preserve wire types through `emod fmt`
 - [x] Task 4: Reject two events sharing one wire type
-- [ ] Task 5: Carry wire types through the JSON and CUE exports and the embedded schema
+- [x] Task 5: Carry wire types through the JSON and CUE exports and the embedded schema
 - [ ] Task 6: Nudge wire types toward reverse-DNS kebab-case with `wire/type-format`
 - [ ] Task 7: Document the wire type in the DSL reference
 
@@ -643,37 +643,37 @@ fixture and requires the two documents to be equal: teaching one format about wi
 other stays ignorant breaks that parity the moment the shared export fixture gains one.
 
 **Acceptance Criteria:**
-- [ ] `export.ExportJSON` and `export.ExportCUE` each emit the wire type for every event that states
+- [x] `export.ExportJSON` and `export.ExportCUE` each emit the wire type for every event that states
       one, including a translation's nested event
-- [ ] Both wires spell the key after the DSL keyword — the same spelling the language uses — rather
+- [x] Both wires spell the key after the DSL keyword — the same spelling the language uses — rather
       than after the Go field name
-- [ ] The key is absent, not empty-valued, for an event with no wire type, so `ExportJSON` and
+- [x] The key is absent, not empty-valued, for an event with no wire type, so `ExportJSON` and
       `ExportCUE` on `internal/test.HotelReservation` both produce byte-identical output to before
       this task
-- [ ] The "CUE and JSON exports describe the same model" subtest still passes with the shared export
+- [x] The "CUE and JSON exports describe the same model" subtest still passes with the shared export
       fixture extended to carry wire types
-- [ ] An `emittedKeyOrder` assertion pins the whole list of keys an event object emits, alongside the
+- [x] An `emittedKeyOrder` assertion pins the whole list of keys an event object emits, alongside the
       sibling object whose key order it should match; the universal prefix every `json*` document
       shares — name, description, positions, comments — is unchanged
-- [ ] `internal/cue/schema.cue` declares the key as an optional string on `#Event`, and the CUE
+- [x] `internal/cue/schema.cue` declares the key as an optional string on `#Event`, and the CUE
       writer's emission order matches the schema's field order, which is not the JSON struct's
-- [ ] `cue vet -d '#Model'` accepts a model document carrying a wire type — the full-model constant in
+- [x] `cue vet -d '#Model'` accepts a model document carrying a wire type — the full-model constant in
       `internal/cue/embed_test.go` is extended, so a dropped or misnamed key fails the existing
       acceptance subtest — and rejects one whose wire type is not a string
-- [ ] A negative leaf re-keys the value under a spelling the writer never emits and requires `cue vet`
+- [x] A negative leaf re-keys the value under a spelling the writer never emits and requires `cue vet`
       to fail naming that key, so the wire vocabulary cannot silently split from the language
-- [ ] The CUE export of a model carrying wire types still conforms to `#Model`
-- [ ] `emod schema -f cue` prints a schema containing the new optional key, and the schema still
+- [x] The CUE export of a model carrying wire types still conforms to `#Model`
+- [x] `emod schema -f cue` prints a schema containing the new optional key, and the schema still
       imports nothing
-- [ ] `cli.RunExport` called with the `json` format on a file using wire types prints them inside the
+- [x] `cli.RunExport` called with the `json` format on a file using wire types prints them inside the
       `model` object of the `{diagnostics, model}` envelope, and the envelope shape is otherwise
       unchanged; the format is passed to the function directly rather than as an argument written
       after the file path
-- [ ] A wire type containing quotes, a backslash and non-ASCII characters round-trips its exact text
+- [x] A wire type containing quotes, a backslash and non-ASCII characters round-trips its exact text
       through both formats
-- [ ] `ExportDiagramJSON` output is unchanged for both a model carrying wire types and one without,
+- [x] `ExportDiagramJSON` output is unchanged for both a model carrying wire types and one without,
       and the existing whole-document walk still finds the key nowhere
-- [ ] `glossary.RenderMarkdown` and `glossary.RenderJSON` produce byte-identical output for a model
+- [x] `glossary.RenderMarkdown` and `glossary.RenderJSON` produce byte-identical output for a model
       carrying wire types and the same model without them — the glossary deliberately does not show
       them
 
