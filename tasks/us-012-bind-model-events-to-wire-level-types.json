@@ -55,7 +55,7 @@
         "internal/formatter/formatter_test.go",
         "internal/cli/fmt_test.go"
       ],
-      "done": false
+      "done": true
     },
     {
       "n": 4,

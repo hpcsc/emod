@@ -3,7 +3,7 @@
 ## Progress
 - [x] Task 1: Spell `type` on the hand-maintained editor keyword surfaces
 - [x] Task 2: Carry a wire `type` attribute on `event`
-- [ ] Task 3: Preserve wire types through `emod fmt`
+- [x] Task 3: Preserve wire types through `emod fmt`
 - [ ] Task 4: Reject two events sharing one wire type
 - [ ] Task 5: Carry wire types through the JSON and CUE exports and the embedded schema
 - [ ] Task 6: Nudge wire types toward reverse-DNS kebab-case with `wire/type-format`
@@ -507,25 +507,25 @@ This task exists to stop a regression rather than to add a feature: until it lan
 run deletes every wire type an author writes, and neither idempotence nor any existing golden notices.
 
 **Acceptance Criteria:**
-- [ ] Formatting the wire-type fixture, re-parsing the output and comparing the two ASTs yields
+- [x] Formatting the wire-type fixture, re-parsing the output and comparing the two ASTs yields
       equality — no wire type is lost — following the round-trip subtest in
       `internal/formatter/formatter_test.go`
-- [ ] Inside an event block the wire type is emitted directly after `description` and ahead of `tags`,
+- [x] Inside an event block the wire type is emitted directly after `description` and ahead of `tags`,
       `source external` and `fields`; the existing relative order of those three is unchanged
-- [ ] A translation's nested event emits its wire type on the same terms
-- [ ] An event with no wire type, or one whose wire type is the empty string, emits no such line
-- [ ] Formatting `internal/test.HotelReservation` and every existing formatter golden, canonical
+- [x] A translation's nested event emits its wire type on the same terms
+- [x] An event with no wire type, or one whose wire type is the empty string, emits no such line
+- [x] Formatting `internal/test.HotelReservation` and every existing formatter golden, canonical
       `*FormattedEmod` constant and transcribed name list produces byte-identical output to before
       this task — no existing expected value moves, since this task adds no line to any existing
       fixture
-- [ ] Formatting is idempotent for a model carrying wire types
-- [ ] A wire type containing a backslash, a tab, a quote, a `%` and non-ASCII characters survives a
+- [x] Formatting is idempotent for a model carrying wire types
+- [x] A wire type containing a backslash, a tab, a quote, a `%` and non-ASCII characters survives a
       second `Format` of the output byte-identically, so the value is written through `quoted()` and
       never through `%q`
-- [ ] `RunFmt` in `--check` mode reports no change needed for a canonically formatted file that uses
+- [x] `RunFmt` in `--check` mode reports no change needed for a canonically formatted file that uses
       wire types, and the canonical constant it is compared against opens with the `emod 1` header and
       is written as canonical output rather than as the input fixture re-indented
-- [ ] The round-trip group gains its assertion inside the existing per-fixture leaf rather than a
+- [x] The round-trip group gains its assertion inside the existing per-fixture leaf rather than a
       parallel table, and pairs the `Declared…` getter with the non-empty transcribed list so the
       assertion cannot pass against a writer that emits nothing
 

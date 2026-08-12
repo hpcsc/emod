@@ -814,6 +814,136 @@ func TestFormat(t *testing.T) {
 
 			require.Equal(t, expected, result)
 		})
+
+		t.Run("formats an event's wire type after its description and ahead of its tags, source and fields", func(t *testing.T) {
+			model := &ast.Model{
+				Name: "Test",
+				Contexts: []*ast.Context{
+					{
+						Name: "Ctx",
+						Aggregates: []*ast.Aggregate{
+							{
+								Name: "Agg",
+								Slices: []*ast.Slice{
+									{
+										Name: "Receive",
+										Events: []*ast.Event{
+											{
+												Name:         "PaymentReceived",
+												Description:  "A payment cleared at the provider",
+												WireType:     "com.acme.payments.payment-received",
+												Tags:         []ast.TagEntry{{Key: "payment", FieldRef: "paymentId"}},
+												Source:       "external",
+												ExternalName: "Stripe",
+												Fields: []*ast.Field{
+													{Name: "paymentId", Type: "string", Modifier: "required"},
+												},
+											},
+										},
+									},
+								},
+							},
+						},
+					},
+				},
+			}
+
+			result := formatter.Format(model)
+
+			expected := strings.Join([]string{
+				`emod 1`,
+				`model "Test"`,
+				``,
+				`context "Ctx" {`,
+				`  aggregate "Agg" {`,
+				`    slice "Receive" {`,
+				`      event PaymentReceived {`,
+				`        description "A payment cleared at the provider"`,
+				`        type "com.acme.payments.payment-received"`,
+				`        tags {`,
+				`          payment: paymentId`,
+				`        }`,
+				`        source external "Stripe"`,
+				`        fields {`,
+				`          paymentId string required`,
+				`        }`,
+				`      }`,
+				`    }`,
+				`  }`,
+				`}`,
+				``,
+			}, "\n")
+
+			require.Equal(t, expected, result)
+		})
+
+		// An event binding nothing and an event binding "" are one AST state, not
+		// two: emptiness is the whole test, and no position is stored for a value
+		// that was never written.
+		t.Run("an event binding no wire type emits no type line", func(t *testing.T) {
+			model := &ast.Model{
+				Name: "Test",
+				Contexts: []*ast.Context{
+					{
+						Name: "Ctx",
+						Aggregates: []*ast.Aggregate{
+							{
+								Name: "Agg",
+								Slices: []*ast.Slice{
+									{
+										Name:   "Receive",
+										Events: []*ast.Event{{Name: "PaymentReceived", WireType: ""}},
+									},
+								},
+							},
+						},
+					},
+				},
+			}
+
+			result := formatter.Format(model)
+
+			require.NotContains(t, result, "type ")
+			require.Contains(t, result, "event PaymentReceived {")
+		})
+
+		t.Run("formats the wire type on the event a translation nests", func(t *testing.T) {
+			model := &ast.Model{
+				Name: "Test",
+				Contexts: []*ast.Context{
+					{
+						Name: "Ctx",
+						Aggregates: []*ast.Aggregate{
+							{
+								Name: "Agg",
+								Slices: []*ast.Slice{
+									{
+										Name: "Import",
+										Translations: []*ast.Translation{
+											{
+												Name:           "BookingImport",
+												ExternalSystem: "Booking.com",
+												Reads:          "BookingWebhookView",
+												Command:        "ImportBooking",
+												Event: &ast.Event{
+													Name:     "BookingImported",
+													WireType: "com.acme.bookings.booking-imported",
+												},
+											},
+										},
+									},
+								},
+							},
+						},
+					},
+				},
+			}
+
+			result := formatter.Format(model)
+
+			require.Contains(t, result, `        event BookingImported {`+"\n"+`          type "com.acme.bookings.booking-imported"`)
+		})
+
 	})
 
 	t.Run("round-trip through the parser", func(t *testing.T) {
@@ -1323,6 +1453,7 @@ func TestFormat(t *testing.T) {
 				schedules        []string
 				triggerReads     []string
 				automationReads  []string
+				wireTypes        []string
 			}{
 				{
 					shape:            "automations in both slice homes, reading views across contexts",
@@ -1353,6 +1484,13 @@ func TestFormat(t *testing.T) {
 					triggerReads:     test.TriggerReadsLibraryLendingTriggerViewNames,
 					automationReads:  test.TriggerReadsLibraryLendingAutomationViewNames,
 				},
+				{
+					shape:            "events binding wire types in both slice homes and on the event a translation nests",
+					parse:            test.WireTypeLibraryLendingModel,
+					activationEvents: []string{"CopyBorrowed"},
+					automationReads:  []string{"OverdueLoansView"},
+					wireTypes:        test.WireTypeLibraryLendingWireTypes,
+				},
 			} {
 				t.Run(testCase.shape, func(t *testing.T) {
 					original := testCase.parse(t)
@@ -1364,6 +1502,41 @@ func TestFormat(t *testing.T) {
 					require.Equal(t, testCase.schedules, test.DeclaredSchedules(reparsed))
 					require.Equal(t, testCase.triggerReads, test.DeclaredTriggerReads(reparsed))
 					require.Equal(t, testCase.automationReads, test.DeclaredAutomationReads(reparsed))
+					require.Equal(t, testCase.wireTypes, test.DeclaredWireTypes(reparsed))
+				})
+			}
+		})
+
+		t.Run("round-trip: a wire type survives text that quoting could mangle", func(t *testing.T) {
+			for _, testCase := range []struct {
+				hazard   string
+				wireType string
+			}{
+				{"backslash", `com.acme\reservations.room-reserved`},
+				{"tab", "com.acme\treservations.room-reserved"},
+				{"percent", "com.acme.100%.room-reserved"},
+				{"non-ascii", "com.acme.réservations.room-reserved"},
+			} {
+				t.Run(testCase.hazard, func(t *testing.T) {
+					source := strings.Join([]string{
+						`model "Hotel"`,
+						``,
+						`context "Reservations" {`,
+						`  aggregate "Reservation" {`,
+						`    slice "Reserve Room" {`,
+						`      event RoomReserved {`,
+						`        type "` + testCase.wireType + `"`,
+						`      }`,
+						`    }`,
+						`  }`,
+						`}`,
+						``,
+					}, "\n")
+
+					reparsed := requireStableFormat(t, parseModel(t, source, "wire-types.emod"))
+
+					require.Equal(t, testCase.wireType,
+						reparsed.Contexts[0].Aggregates[0].Slices[0].Events[0].WireType)
 				})
 			}
 		})

@@ -270,6 +270,7 @@ func (w *writer) writeEvent(evt *ast.Event, level int) {
 	w.writeComments(evt.Comments, level)
 	w.line(level, "event %s {", evt.Name)
 	w.writeDescription(evt.Description, level+1)
+	w.quotedLineIfSet(level+1, "type %s", evt.WireType)
 	if len(evt.Tags) > 0 {
 		w.writeTags(evt.Tags, level+1)
 	}

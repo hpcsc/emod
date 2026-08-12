@@ -678,6 +678,64 @@ context "Fulfilment" {
 }
 `
 
+const wireTypeEmod = `model "Reservations"
+
+context "Booking" {
+  aggregate "Reservation" {
+    slice "Reserve Room" {
+      command ReserveRoom {
+        fields {
+          guestId string required
+        }
+      }
+
+      event RoomReserved {
+        fields {
+          reservationId string required
+          guestId string required
+        }
+            type "com.acme.reservations.room-reserved"
+      }
+
+      flow {
+        command -> event: ReserveRoom -> RoomReserved
+      }
+    }
+  }
+}
+`
+
+// wireTypeFormattedEmod is what emod fmt writes for wireTypeEmod, not that
+// fixture re-indented: the header is added, the wire type moves from below the
+// fields block to the event's first line, and the field columns align.
+const wireTypeFormattedEmod = `emod 1
+model "Reservations"
+
+context "Booking" {
+  aggregate "Reservation" {
+    slice "Reserve Room" {
+      command ReserveRoom {
+        fields {
+          guestId string required
+        }
+      }
+
+      event RoomReserved {
+        type "com.acme.reservations.room-reserved"
+        fields {
+          reservationId string required
+          guestId       string required
+        }
+      }
+
+      flow {
+        command -> event: ReserveRoom -> RoomReserved
+      }
+    }
+  }
+}
+`
+
 // rejectionFormattedEmod is what emod fmt writes for test.RejectionLibraryLending,
 // not that fixture re-indented: the header is added, each slice's specs move below
 // its flow block, an empty given history loses its line, and a flow block's two
@@ -1281,6 +1339,12 @@ func TestFmt(t *testing.T) {
 		path := writeTemp(t, "scheduled-automation.emod", scheduledAutomationEmod)
 
 		requireFmtSettlesOn(t, path, scheduledAutomationFormattedEmod)
+	})
+
+	t.Run("moves an event's wire type to its canonical line and settles after one run", func(t *testing.T) {
+		path := writeTemp(t, "wire-types.emod", wireTypeEmod)
+
+		requireFmtSettlesOn(t, path, wireTypeFormattedEmod)
 	})
 
 	t.Run("check mode returns nil when file is already formatted", func(t *testing.T) {
