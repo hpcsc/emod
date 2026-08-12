@@ -118,11 +118,21 @@ func Lint(model *ast.Model) []*diagnostic.Entry {
 	diags = append(diags, checkInvariantNeverExercised(model)...)
 	diags = append(diags, checkGivenOutsideBoundary(model)...)
 
-	slices.SortStableFunc(diags, func(a, b *diagnostic.Entry) int {
-		return cmp.Compare(a.Line, b.Line)
-	})
+	slices.SortFunc(diags, byPosition)
 
 	return diags
+}
+
+// byPosition orders diagnostics as a reader meets them. Line alone is not a
+// total order: one payload written the way emod fmt writes it puts every value
+// on a single line, so several diagnostics share it and only the column tells
+// them apart.
+func byPosition(a, b *diagnostic.Entry) int {
+	if line := cmp.Compare(a.Line, b.Line); line != 0 {
+		return line
+	}
+
+	return cmp.Compare(a.Column, b.Column)
 }
 
 // checkSlice applies all existing lint checks to a single slice.
@@ -625,7 +635,7 @@ func checkInvariantNeverExercised(model *ast.Model) []*diagnostic.Entry {
 		}
 	}
 
-	slices.SortStableFunc(diags, func(a, b *diagnostic.Entry) int {
+	slices.SortFunc(diags, func(a, b *diagnostic.Entry) int {
 		return cmp.Compare(a.Line, b.Line)
 	})
 
@@ -680,6 +690,7 @@ func scopeUnexercisedInvariants(invariants []*ast.Invariant, slices []*ast.Slice
 type eventDeclaration struct {
 	ownerName string
 	kind      string
+	event     *ast.Event
 }
 
 func eventHomeIndex(model *ast.Model) map[string][]eventDeclaration {
@@ -693,11 +704,11 @@ func eventHomeIndex(model *ast.Model) map[string][]eventDeclaration {
 				homeKind = "aggregate"
 			}
 			for _, evt := range ref.Slice.Events {
-				index[evt.Name] = append(index[evt.Name], eventDeclaration{homeName, homeKind})
+				index[evt.Name] = append(index[evt.Name], eventDeclaration{ownerName: homeName, kind: homeKind, event: evt})
 			}
 			for _, tr := range ref.Slice.Translations {
 				if tr.Event != nil {
-					index[tr.Event.Name] = append(index[tr.Event.Name], eventDeclaration{homeName, homeKind})
+					index[tr.Event.Name] = append(index[tr.Event.Name], eventDeclaration{ownerName: homeName, kind: homeKind, event: tr.Event})
 				}
 			}
 		}
@@ -767,7 +778,8 @@ func checkGivenOutsideBoundary(model *ast.Model) []*diagnostic.Entry {
 					decidesSet[e] = true
 				}
 				for _, given := range spec.Given {
-					if _, ok := eventHomeLookup(eventHome, given.Name); !ok {
+					home, ok := eventHomeLookup(eventHome, given.Name)
+					if !ok {
 						continue
 					}
 					if !decidesSet[given.Name] {
@@ -776,15 +788,13 @@ func checkGivenOutsideBoundary(model *ast.Model) []*diagnostic.Entry {
 								given.Name, spec.When.Name)))
 						continue
 					}
-					diags = append(diags, excludedPayloadValues(given, spec.When, cmd)...)
+					diags = append(diags, excludedPayloadValues(given, home.event, spec.When, cmd)...)
 				}
 			}
 		}
 	}
 
-	slices.SortStableFunc(diags, func(a, b *diagnostic.Entry) int {
-		return cmp.Compare(a.Line, b.Line)
-	})
+	slices.SortFunc(diags, byPosition)
 
 	return diags
 }
@@ -793,10 +803,21 @@ func checkGivenOutsideBoundary(model *ast.Model) []*diagnostic.Entry {
 // states differently from the when payload, so the command's query would pass
 // over the event the given names. Each predicate the query requires states a
 // separate routing requirement and so is separately fixable.
-func excludedPayloadValues(given, when *ast.SpecElement, cmd *ast.Command) []*diagnostic.Entry {
+//
+// The two sides are looked up under different names. A tag key is an
+// indirection — "tags { desk: seatId }" says the desk tag is carried by seatId —
+// so the given event is read through the field its own tags block maps the key
+// to, while the when payload is read under the field the predicate names on the
+// command. Reading both under the predicate's name compares seatId against
+// nothing whenever a model spells the two apart.
+func excludedPayloadValues(given *ast.SpecElement, declared *ast.Event, when *ast.SpecElement, cmd *ast.Command) []*diagnostic.Entry {
 	var diags []*diagnostic.Entry
 	for _, predicate := range requiredTagPredicates(cmd.DecidesOn.Predicate) {
-		givenValue := statedOnce(given.Payload, predicate.Value)
+		givenField, tagged := taggedField(declared, predicate.Field)
+		if !tagged {
+			continue
+		}
+		givenValue := statedOnce(given.Payload, givenField)
 		whenValue := statedOnce(when.Payload, predicate.Value)
 		if givenValue == nil || whenValue == nil {
 			continue
@@ -806,12 +827,28 @@ func excludedPayloadValues(given, when *ast.SpecElement, cmd *ast.Command) []*di
 		}
 
 		diags = append(diags, warning(givenValue.ValuePos, "spec/given-outside-boundary",
-			fmt.Sprintf("given event %q states %s %s while command %q's when payload states %s, so tag %q excludes it from the query",
-				given.Name, predicate.Value, literalSource(givenValue),
-				cmd.Name, literalSource(whenValue), predicate.Field)))
+			fmt.Sprintf("given event %q states %s %s while command %q's when payload states %s %s, so tag %q excludes it from the query",
+				given.Name, givenField, literalSource(givenValue),
+				cmd.Name, predicate.Value, literalSource(whenValue), predicate.Field)))
 	}
 
 	return diags
+}
+
+// taggedField names the field an event's tags block binds a tag key to. An event
+// carrying no such key is not routed on it at all, which leaves the comparison
+// no basis rather than a disagreement.
+func taggedField(declared *ast.Event, key string) (string, bool) {
+	if declared == nil {
+		return "", false
+	}
+	for _, tag := range declared.Tags {
+		if tag.Key == key {
+			return tag.FieldRef, true
+		}
+	}
+
+	return "", false
 }
 
 // requiredTagPredicates selects the tag predicates a query requires to hold:

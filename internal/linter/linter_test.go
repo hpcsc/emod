@@ -5741,7 +5741,7 @@ func TestLint(t *testing.T) {
 					}
 					require.Equal(t, []string{
 						`reading.emod:18: [spec/given-outside-boundary] given event "DeskClaimed" states deskId 12.50 ` +
-							`while command "ClaimDesk"'s when payload states 12.75, so tag "desk" excludes it from the query`,
+							`while command "ClaimDesk"'s when payload states deskId 12.75, so tag "desk" excludes it from the query`,
 					}, reportedLines(diags))
 				})
 			}
@@ -5766,7 +5766,7 @@ func TestLint(t *testing.T) {
 
 					require.Equal(t, []string{
 						`reading.emod:18: [spec/given-outside-boundary] given event "DeskClaimed" states deskId "` + pair.given +
-							`" while command "ClaimDesk"'s when payload states "D-5817", so tag "desk" excludes it from the query`,
+							`" while command "ClaimDesk"'s when payload states deskId "D-5817", so tag "desk" excludes it from the query`,
 					}, reportedLines(diags))
 				})
 			}
@@ -5776,21 +5776,23 @@ func TestLint(t *testing.T) {
 			t.Run("the given side", func(t *testing.T) {
 				spec := disagreeingDeskSpec()
 				spec.Given[0].Payload = append(spec.Given[0].Payload,
-					payloadValueAt("deskId", "D-5817", ast.StringLiteral, 18, 52))
+					payloadValueAt("deskId", "D-9006", ast.StringLiteral, 18, 52))
 
 				diags := linter.Lint(dcbValueModel(&ast.TagPredicate{Field: "desk", Value: "deskId"}, spec))
 
-				require.Empty(t, diags)
+				require.Empty(t, diags,
+					"neither entry is the value: taking the first or the last would report")
 			})
 
 			t.Run("the when side", func(t *testing.T) {
 				spec := disagreeingDeskSpec()
 				spec.When.Payload = append(spec.When.Payload,
-					payloadValueAt("deskId", "D-4210", ast.StringLiteral, 19, 48))
+					payloadValueAt("deskId", "D-0000", ast.StringLiteral, 19, 48))
 
 				diags := linter.Lint(dcbValueModel(&ast.TagPredicate{Field: "desk", Value: "deskId"}, spec))
 
-				require.Empty(t, diags)
+				require.Empty(t, diags,
+					"neither entry is the value: taking the first or the last would report")
 			})
 		})
 
@@ -5839,15 +5841,6 @@ func TestLint(t *testing.T) {
 				"one mistake earns one diagnostic: the type arm owns a given the query never reaches")
 		})
 
-		t.Run("value arm: a spec whose when is absent reports nothing", func(t *testing.T) {
-			spec := disagreeingDeskSpec()
-			spec.When = nil
-
-			diags := linter.Lint(dcbValueModel(&ast.TagPredicate{Field: "desk", Value: "deskId"}, spec))
-
-			require.Empty(t, diags)
-		})
-
 		t.Run("value arm: a when naming an event rather than a command reports nothing", func(t *testing.T) {
 			spec := disagreeingDeskSpec()
 			spec.When = specElementAt("DeskClaimed", 19,
@@ -5859,14 +5852,22 @@ func TestLint(t *testing.T) {
 		})
 
 		t.Run("value arm: a spec in an aggregate-nested slice takes no value check", func(t *testing.T) {
-			for _, mode := range []string{"", "dcb", "mixed"} {
-				t.Run("enclosing context in "+mode+" mode", func(t *testing.T) {
+			modes := []struct {
+				name string
+				mode string
+			}{
+				{"an unset mode", ""},
+				{"dcb mode", "dcb"},
+				{"mixed mode", "mixed"},
+			}
+			for _, declared := range modes {
+				t.Run("enclosing context in "+declared.name, func(t *testing.T) {
 					model := dcbValueModel(&ast.TagPredicate{Field: "desk", Value: "deskId"})
 					nested := model.Contexts[0].Slices[0]
 					nested.Specs = append(nested.Specs, disagreeingDeskSpec())
 					model.Contexts[0].Slices = model.Contexts[0].Slices[1:]
 					model.Contexts[0].Aggregates = []*ast.Aggregate{{Name: "Desk", Slices: []*ast.Slice{nested}}}
-					model.Contexts[0].Mode = mode
+					model.Contexts[0].Mode = declared.mode
 
 					diags := linter.Lint(model)
 
@@ -5898,7 +5899,7 @@ func TestLint(t *testing.T) {
 		t.Run("value arm: a conjunction checks each predicate it states", func(t *testing.T) {
 			t.Run("one field disagreeing reports that field alone", func(t *testing.T) {
 				spec := twoTagDeskSpec()
-				spec.Given[0].Payload[1].Value = "M-40817"
+				spec.Given[0].Payload[1].Value = "R-40817"
 
 				diags := linter.Lint(dcbValueModel(deskAndRegion("and"), spec))
 
@@ -5913,6 +5914,24 @@ func TestLint(t *testing.T) {
 					"each diagnostic sits on its own field's value, both on the one payload line")
 			})
 
+			t.Run("both fields disagreeing come back in source order, not predicate order", func(t *testing.T) {
+				spec := twoTagDeskSpec()
+				spec.Given[0] = specElementAt("DeskClaimed", 18,
+					payloadValueAt("regionId", "R-63204", ast.StringLiteral, 18, 34),
+					payloadValueAt("deskId", "D-4210", ast.StringLiteral, 18, 56))
+
+				diags := linter.Lint(dcbValueModel(deskAndRegion("and"), spec))
+
+				require.Equal(t, []int{34, 56}, reportedColumns(diags),
+					"the payload writes the second predicate's field first, so only a column tiebreak orders these")
+				require.Equal(t, []string{
+					`reading.emod:18: [spec/given-outside-boundary] given event "DeskClaimed" states regionId "R-63204" ` +
+						`while command "ClaimDesk"'s when payload states regionId "R-40817", so tag "region" excludes it from the query`,
+					`reading.emod:18: [spec/given-outside-boundary] given event "DeskClaimed" states deskId "D-4210" ` +
+						`while command "ClaimDesk"'s when payload states deskId "D-5817", so tag "desk" excludes it from the query`,
+				}, reportedLines(diags))
+			})
+
 			t.Run("three predicates joined by two ands are all checked", func(t *testing.T) {
 				spec := twoTagDeskSpec()
 				spec.Given[0].Payload = append(spec.Given[0].Payload,
@@ -5924,32 +5943,90 @@ func TestLint(t *testing.T) {
 					Operator: "and",
 					Right:    &ast.TagPredicate{Field: "zone", Value: "zoneId"},
 				}
+				model := dcbValueModel(predicate, spec)
+				model.Contexts[0].Slices[0].Events[0].Tags = append(
+					model.Contexts[0].Slices[0].Events[0].Tags, ast.TagEntry{Key: "zone", FieldRef: "zoneId"})
 
-				diags := linter.Lint(dcbValueModel(predicate, spec))
+				diags := linter.Lint(model)
 
 				require.Equal(t, []string{
 					deskValueExcluded,
 					regionValueExcluded,
 					`reading.emod:18: [spec/given-outside-boundary] given event "DeskClaimed" states zoneId "Z-11" ` +
-						`while command "ClaimDesk"'s when payload states "Z-92", so tag "zone" excludes it from the query`,
+						`while command "ClaimDesk"'s when payload states zoneId "Z-92", so tag "zone" excludes it from the query`,
 				}, reportedLines(diags))
 			})
 
-			t.Run("two predicates tagging one field report once per predicate", func(t *testing.T) {
+			t.Run("two keys the event binds to one field report once per predicate", func(t *testing.T) {
 				predicate := &ast.LogicalExpr{
 					Left:     &ast.TagPredicate{Field: "desk", Value: "deskId"},
 					Operator: "and",
 					Right:    &ast.TagPredicate{Field: "region", Value: "deskId"},
 				}
+				model := dcbValueModel(predicate, disagreeingDeskSpec())
+				model.Contexts[0].Slices[0].Events[0].Tags = []ast.TagEntry{
+					{Key: "desk", FieldRef: "deskId"},
+					{Key: "region", FieldRef: "deskId"},
+				}
 
-				diags := linter.Lint(dcbValueModel(predicate, disagreeingDeskSpec()))
+				diags := linter.Lint(model)
 
 				require.Equal(t, []string{
 					deskValueExcluded,
 					`reading.emod:18: [spec/given-outside-boundary] given event "DeskClaimed" states deskId "D-4210" ` +
-						`while command "ClaimDesk"'s when payload states "D-5817", so tag "region" excludes it from the query`,
+						`while command "ClaimDesk"'s when payload states deskId "D-5817", so tag "region" excludes it from the query`,
 				}, reportedLines(diags),
 					"each predicate states a separate routing requirement, so each is separately fixable")
+			})
+		})
+
+		t.Run("value arm: the given side is read through the field the event binds the tag key to", func(t *testing.T) {
+			// tags { desk: seatId } routes the desk tag on seatId, while the
+			// predicate names the command's own deskId — so the two sides are
+			// looked up under different names.
+			mapped := func(seat, deskOnGiven, deskOnWhen string) *ast.Model {
+				spec := &ast.Spec{
+					Name: "claims a desk another reader holds",
+					Given: []*ast.SpecElement{
+						specElementAt("DeskClaimed", 18,
+							payloadValueAt("seatId", seat, ast.StringLiteral, 18, 34),
+							payloadValueAt("deskId", deskOnGiven, ast.StringLiteral, 18, 56)),
+					},
+					When: specElementAt("ClaimDesk", 19,
+						payloadValueAt("deskId", deskOnWhen, ast.StringLiteral, 19, 30)),
+					Then: &ast.ThenEvents{},
+				}
+				model := dcbValueModel(&ast.TagPredicate{Field: "desk", Value: "deskId"}, spec)
+				model.Contexts[0].Slices[0].Events[0].Tags = []ast.TagEntry{
+					{Key: "desk", FieldRef: "seatId"},
+					{Key: "region", FieldRef: "regionId"},
+				}
+
+				return model
+			}
+
+			t.Run("the bound field agreeing keeps the event inside the query", func(t *testing.T) {
+				diags := linter.Lint(mapped("D-5817", "D-4210", "D-5817"))
+
+				require.Empty(t, diags,
+					"the desk tag reads seatId, and a same-named deskId the query never consults must not report")
+			})
+
+			t.Run("the bound field disagreeing puts the event outside it", func(t *testing.T) {
+				diags := linter.Lint(mapped("S-99", "D-5817", "D-5817"))
+
+				require.Equal(t, []string{
+					`reading.emod:18: [spec/given-outside-boundary] given event "DeskClaimed" states seatId "S-99" ` +
+						`while command "ClaimDesk"'s when payload states deskId "D-5817", so tag "desk" excludes it from the query`,
+				}, reportedLines(diags))
+			})
+
+			t.Run("an event binding no such key leaves the comparison no basis", func(t *testing.T) {
+				model := mapped("S-99", "D-5817", "D-5817")
+				model.Contexts[0].Slices[0].Events[0].Tags = []ast.TagEntry{{Key: "region", FieldRef: "regionId"}}
+
+				require.Empty(t, linesReportedBy(linter.Lint(model), "spec/given-outside-boundary"),
+					"an event the desk tag never routes is not placed outside the query by this rule")
 			})
 		})
 
@@ -5973,7 +6050,7 @@ func TestLint(t *testing.T) {
 				predicate := &ast.LogicalExpr{
 					Left:     &ast.NotExpr{Expr: &ast.TagPredicate{Field: "desk", Value: "deskId"}},
 					Operator: "and",
-					Right:    &ast.TagPredicate{Field: "region", Value: "memberId"},
+					Right:    &ast.TagPredicate{Field: "region", Value: "regionId"},
 				}
 				spec := twoTagDeskSpec()
 
@@ -6011,7 +6088,7 @@ func TestLint(t *testing.T) {
 			t.Run("a field the given payload states twice", func(t *testing.T) {
 				spec := twoTagDeskSpec()
 				spec.Given[0].Payload = append(spec.Given[0].Payload,
-					payloadValueAt("deskId", "D-5817", ast.StringLiteral, 18, 70))
+					payloadValueAt("deskId", "D-9006", ast.StringLiteral, 18, 70))
 
 				diags := linter.Lint(dcbValueModel(deskAndRegion("and"), spec))
 
@@ -6038,7 +6115,7 @@ func TestLint(t *testing.T) {
 			require.Equal(t, []string{
 				deskValueExcluded,
 				`reading.emod:20: [spec/given-outside-boundary] given event "DeskClaimed" states deskId "D-9006" ` +
-					`while command "ClaimDesk"'s when payload states "D-5817", so tag "desk" excludes it from the query`,
+					`while command "ClaimDesk"'s when payload states deskId "D-5817", so tag "desk" excludes it from the query`,
 			}, reportedLines(diags))
 		})
 
@@ -6218,20 +6295,22 @@ func twoTagDeskSpec() *ast.Spec {
 		Given: []*ast.SpecElement{
 			specElementAt("DeskClaimed", 18,
 				payloadValueAt("deskId", "D-4210", ast.StringLiteral, 18, 34),
-				payloadValueAt("memberId", "M-63204", ast.StringLiteral, 18, 52)),
+				payloadValueAt("regionId", "R-63204", ast.StringLiteral, 18, 52)),
 		},
 		When: specElementAt("ClaimDesk", 19,
 			payloadValueAt("deskId", "D-5817", ast.StringLiteral, 19, 30),
-			payloadValueAt("memberId", "M-40817", ast.StringLiteral, 19, 48)),
+			payloadValueAt("regionId", "R-40817", ast.StringLiteral, 19, 48)),
 		Then: &ast.ThenEvents{},
 	}
 }
 
+// deskAndRegion names the fields DeskClaimed's own tags block binds each key to,
+// which is what the given side is read under.
 func deskAndRegion(operator string) *ast.LogicalExpr {
 	return &ast.LogicalExpr{
 		Left:     &ast.TagPredicate{Field: "desk", Value: "deskId"},
 		Operator: operator,
-		Right:    &ast.TagPredicate{Field: "region", Value: "memberId"},
+		Right:    &ast.TagPredicate{Field: "region", Value: "regionId"},
 	}
 }
 
@@ -6246,8 +6325,8 @@ func reportedColumns(diags []*diagnostic.Entry) []int {
 
 const deskValueExcluded = `reading.emod:18: [spec/given-outside-boundary] ` +
 	`given event "DeskClaimed" states deskId "D-4210" while command "ClaimDesk"'s ` +
-	`when payload states "D-5817", so tag "desk" excludes it from the query`
+	`when payload states deskId "D-5817", so tag "desk" excludes it from the query`
 
 const regionValueExcluded = `reading.emod:18: [spec/given-outside-boundary] ` +
-	`given event "DeskClaimed" states memberId "M-63204" while command "ClaimDesk"'s ` +
-	`when payload states "M-40817", so tag "region" excludes it from the query`
+	`given event "DeskClaimed" states regionId "R-63204" while command "ClaimDesk"'s ` +
+	`when payload states regionId "R-40817", so tag "region" excludes it from the query`

@@ -579,6 +579,55 @@ context "Reading Room" mode dcb {
 }
 `
 
+// lateFeeValueEmod states a decimal-typed tagged field on both sides of a spec
+// whose given payload writes 12.50, so the numeric comparison is exercised over
+// a model the lexer and parser produced rather than an AST a test assembled —
+// the tokenizer, the literal kind the parser records and compareNumberLiterals
+// only compose here. whenFee is what the when payload states against it.
+func lateFeeValueEmod(whenFee string) string {
+	return `model "Library Lending"
+
+context "Reading Room" mode dcb {
+  invariant OneFeePerLoan "A loan carries at most one late fee"
+  slice "Charge Late Fee" {
+    command ChargeLateFee {
+      decides_on {
+        events [LateFeeCharged]
+        where tag(fee = lateFee) and tag(member = memberId)
+      }
+      fields {
+        memberId string  required
+        lateFee  decimal required
+      }
+    }
+    event LateFeeCharged {
+      tags {
+        fee   : lateFee
+        member: memberId
+      }
+      fields {
+        chargeId string  required
+        memberId string  required
+        lateFee  decimal required
+      }
+    }
+    flow {
+      command -> event: ChargeLateFee -> LateFeeCharged
+    }
+    spec "charges a fee no one has paid" {
+      when ChargeLateFee
+      then [LateFeeCharged]
+    }
+    spec "refuses a fee already charged" {
+      given [LateFeeCharged { lateFee: 12.50, memberId: "M-40817" }]
+      when ChargeLateFee { lateFee: ` + whenFee + `, memberId: "M-40817" }
+      then rejected OneFeePerLoan
+    }
+  }
+}
+`
+}
+
 const givenOutsideBoundaryDCBEmod = `model "Library Lending"
 
 context "Reading Room" mode dcb {
@@ -1367,7 +1416,7 @@ context "Orders" {
 			require.Equal(t, float64(34), entries[0]["line"],
 				"the line the given payload is written on")
 			require.Equal(t, `given event "DeskClaimed" states deskId "D-4210" while command "ClaimDesk"'s `+
-				`when payload states "D-5817", so tag "desk" excludes it from the query`, entries[0]["message"])
+				`when payload states deskId "D-5817", so tag "desk" excludes it from the query`, entries[0]["message"])
 		})
 
 		t.Run("value arm: text output names the rule, the field and the line the given payload is written on", func(t *testing.T) {
@@ -1379,7 +1428,7 @@ context "Orders" {
 			require.True(t, errors.As(err, &lintErr))
 			require.Equal(t, 1, lintErr.ExitCode)
 			require.Equal(t, path+`:34: [spec/given-outside-boundary] given event "DeskClaimed" states deskId "D-4210" `+
-				`while command "ClaimDesk"'s when payload states "D-5817", so tag "desk" excludes it from the query`,
+				`while command "ClaimDesk"'s when payload states deskId "D-5817", so tag "desk" excludes it from the query`,
 				err.Error())
 		})
 
@@ -1415,7 +1464,7 @@ context "Orders" {
 			require.Equal(t, "spec/given-outside-boundary", entries[0]["rule"])
 			require.Equal(t, float64(35), entries[0]["line"])
 			require.Equal(t, `given event "DeskClaimed" states deskId "D-4210" while command "ClaimDesk"'s `+
-				`when payload states "D-5817", so tag "desk" excludes it from the query`, entries[0]["message"])
+				`when payload states deskId "D-5817", so tag "desk" excludes it from the query`, entries[0]["message"])
 		})
 
 		t.Run("conjunction: text output names the rule and the disagreeing field", func(t *testing.T) {
@@ -1427,7 +1476,7 @@ context "Orders" {
 			require.True(t, errors.As(err, &lintErr))
 			require.Equal(t, 1, lintErr.ExitCode)
 			require.Equal(t, path+`:35: [spec/given-outside-boundary] given event "DeskClaimed" states deskId "D-4210" `+
-				`while command "ClaimDesk"'s when payload states "D-5817", so tag "desk" excludes it from the query`,
+				`while command "ClaimDesk"'s when payload states deskId "D-5817", so tag "desk" excludes it from the query`,
 				err.Error())
 		})
 
@@ -1441,6 +1490,25 @@ context "Orders" {
 			require.Equal(t, 1, lintErr.ExitCode)
 			require.Contains(t, err.Error(), "[spec/given-outside-boundary]")
 			require.Contains(t, err.Error(), `states deskId "D-4210"`)
+		})
+
+		t.Run("value arm: a number parsed from source compares by value, not by the text it was written with", func(t *testing.T) {
+			t.Run("12.5 against a given payload's 12.50 reports nothing", func(t *testing.T) {
+				path := writeTemp(t, "late_fee.emod", lateFeeValueEmod("12.5"))
+
+				require.NoError(t, cli.RunLint(path, "text"))
+			})
+
+			t.Run("12.75 against the same given payload reports once", func(t *testing.T) {
+				path := writeTemp(t, "late_fee.emod", lateFeeValueEmod("12.75"))
+
+				err := cli.RunLint(path, "text")
+
+				require.Error(t, err)
+				require.Equal(t, path+`:35: [spec/given-outside-boundary] given event "LateFeeCharged" states lateFee 12.50 `+
+					`while command "ChargeLateFee"'s when payload states lateFee 12.75, so tag "fee" excludes it from the query`,
+					err.Error())
+			})
 		})
 
 		t.Run("conjunction: redundant parentheses report exactly what the same model without them does", func(t *testing.T) {
@@ -1537,6 +1605,9 @@ func TestLintExplain(t *testing.T) {
 		require.Contains(t, output, "the boundary is the aggregate")
 		require.Contains(t, output, "must appear in the list of events the command queries")
 		require.Contains(t, output, "a different value for the tagged field")
+		require.Contains(t, output, `those joined by "and"`,
+			"the description must not promise a check the or and not arms deliberately do not perform")
+		require.Contains(t, output, "the field the event's own tags block binds the key to")
 	})
 
 	t.Run("all rules have descriptions", func(t *testing.T) {
