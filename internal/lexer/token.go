@@ -47,6 +47,7 @@ const (
 	KeywordRejected
 	KeywordOn
 	KeywordEvery
+	KeywordType
 
 	// Literals and identifiers
 	Identifier
@@ -110,6 +111,7 @@ var keywords = map[string]Kind{
 	"rejected":        KeywordRejected,
 	"on":              KeywordOn,
 	"every":           KeywordEvery,
+	"type":            KeywordType,
 }
 
 var keywordNames = invertKeywords()

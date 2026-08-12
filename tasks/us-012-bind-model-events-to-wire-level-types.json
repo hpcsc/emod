@@ -40,7 +40,7 @@
         "internal/test/fixtures.go",
         "internal/oracle/oracle_test.go"
       ],
-      "done": false
+      "done": true
     },
     {
       "n": 3,

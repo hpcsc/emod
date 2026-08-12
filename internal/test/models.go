@@ -76,6 +76,12 @@ func AutomationScheduleLibraryLendingModel(t *testing.T) *ast.Model {
 	return parseFixture(t, AutomationScheduleLibraryLending, "automation-schedule.emod")
 }
 
+func WireTypeLibraryLendingModel(t *testing.T) *ast.Model {
+	t.Helper()
+
+	return parseFixture(t, WireTypeLibraryLending, "wire-types.emod")
+}
+
 // parseFixture runs a fixture through the lexer and parser rather than handing
 // back a model built in Go, so what a test reads back cannot drift from what an
 // author writing that source would get.

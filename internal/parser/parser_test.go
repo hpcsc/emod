@@ -1812,6 +1812,109 @@ context "Ctx" {
 			require.Equal(t, "TestEvent", slice.Events[0].Name)
 		})
 
+		t.Run("an event binds a wire type stated anywhere among its entries", func(t *testing.T) {
+			input := `model "Test"
+context "Ctx" {
+  aggregate "Agg" {
+    slice "Slice" {
+      event RoomReserved {
+        description "A room was held for a guest"
+        type "com.acme.reservations.room-reserved"
+        fields {
+          roomId string required
+        }
+      }
+      event RoomReleased {
+        fields {
+          roomId string required
+        }
+        type "com.acme.reservations.room-released"
+      }
+    }
+  }
+}`
+			tokens, lexDiags := lexer.Scan(input, "test.emod")
+			require.Empty(t, lexDiags)
+
+			model, diags := parser.New(tokens, "test.emod").Parse()
+
+			require.Empty(t, diags)
+			events := model.Contexts[0].Aggregates[0].Slices[0].Events
+			require.Len(t, events, 2)
+			require.Equal(t, "com.acme.reservations.room-reserved", events[0].WireType)
+			require.Equal(t, "com.acme.reservations.room-released", events[1].WireType)
+			require.Equal(t,
+				astPositionOf(t, "test.emod", input, `type "com.acme.reservations.room-reserved"`, `"com.acme.reservations.room-reserved"`),
+				events[0].WireTypePos)
+		})
+
+		t.Run("a translation's nested event binds a wire type", func(t *testing.T) {
+			input := `model "Test"
+context "Ctx" {
+  aggregate "Agg" {
+    slice "Slice" {
+      translation BookingImport {
+        external_system "Booking.com"
+        reads BookingWebhookView
+        command ImportBooking
+        event BookingImported {
+          type "com.acme.bookings.booking-imported"
+        }
+      }
+    }
+  }
+}`
+			tokens, lexDiags := lexer.Scan(input, "test.emod")
+			require.Empty(t, lexDiags)
+
+			model, diags := parser.New(tokens, "test.emod").Parse()
+
+			require.Empty(t, diags)
+			translation := model.Contexts[0].Aggregates[0].Slices[0].Translations[0]
+			require.Equal(t, "com.acme.bookings.booking-imported", translation.Event.WireType)
+		})
+
+		t.Run("an event stating a wire type twice keeps the last value", func(t *testing.T) {
+			input := `model "Test"
+context "Ctx" {
+  aggregate "Agg" {
+    slice "Slice" {
+      event RoomReserved {
+        type "com.acme.reservations.room-held"
+        type "com.acme.reservations.room-reserved"
+      }
+    }
+  }
+}`
+			tokens, lexDiags := lexer.Scan(input, "test.emod")
+			require.Empty(t, lexDiags)
+
+			model, diags := parser.New(tokens, "test.emod").Parse()
+
+			require.Empty(t, diags)
+			event := model.Contexts[0].Aggregates[0].Slices[0].Events[0]
+			require.Equal(t, "com.acme.reservations.room-reserved", event.WireType)
+			require.Equal(t,
+				astPositionOf(t, "test.emod", input, `type "com.acme.reservations.room-reserved"`, `"com.acme.reservations.room-reserved"`),
+				event.WireTypePos)
+		})
+
+		t.Run("the shared wire-type model binds every wire type it was written with, in both slice homes", func(t *testing.T) {
+			stated := test.WireTypeLibraryLendingModel(t)
+
+			require.Equal(t, test.WireTypeLibraryLendingWireTypes, test.DeclaredWireTypes(stated))
+			require.NotEmpty(t, test.WireTypeLibraryLendingWireTypes)
+		})
+
+		t.Run("stripping the shared wire-type model leaves it binding nothing while the original still binds everything", func(t *testing.T) {
+			stated := test.WireTypeLibraryLendingModel(t)
+
+			stripped := test.WithoutWireTypes(stated)
+
+			require.Empty(t, test.DeclaredWireTypes(stripped))
+			require.Equal(t, test.WireTypeLibraryLendingWireTypes, test.DeclaredWireTypes(stated))
+		})
+
 		t.Run("fields in command", func(t *testing.T) {
 			input := `model "Test"
 context "Ctx" {
@@ -4701,6 +4804,64 @@ context "Lending" {
 			slice := model.Contexts[0].Aggregates[0].Slices[0]
 			require.Equal(t, []string{"CopyBorrowed"}, flowEventNames(slice.Flows))
 			require.Equal(t, []string{"OneCopyPerLoan"}, rejectionEdgeInvariants(slice.Rejections))
+		})
+
+		t.Run("a wire type naming something other than a quoted string reports once and the event parses on", func(t *testing.T) {
+			input := `model "Test"
+context "Ctx" {
+  aggregate "Agg" {
+    slice "Slice" {
+      event RoomReserved {
+        type roomReserved
+        description "A room was held for a guest"
+        fields {
+          roomId string required
+        }
+      }
+    }
+  }
+}`
+			tokens, lexDiags := lexer.Scan(input, "test.emod")
+			require.Empty(t, lexDiags)
+
+			model, diags := parser.New(tokens, "test.emod").Parse()
+
+			require.Len(t, diags, 1)
+			require.Regexp(t, `\btype\b`, diags[0].Message)
+			require.Contains(t, diags[0].Message, "event")
+			require.Contains(t, diags[0].Message, "roomReserved")
+			line, column := positionOf(t, input, "type roomReserved", "roomReserved")
+			require.Equal(t, line, diags[0].Line)
+			require.Equal(t, column, diags[0].Column)
+
+			event := model.Contexts[0].Aggregates[0].Slices[0].Events[0]
+			require.Equal(t, "", event.WireType)
+			require.Equal(t, "A room was held for a guest", event.Description)
+			require.Equal(t, []string{"roomId", "string"}, fieldNames(event.Fields))
+			require.NotZero(t, event.ClosePos.Line)
+		})
+
+		t.Run("an unrecognised entry inside an event names the entries an event accepts", func(t *testing.T) {
+			input := `model "Test"
+context "Ctx" {
+  aggregate "Agg" {
+    slice "Slice" {
+      event RoomReserved {
+        tpye
+      }
+    }
+  }
+}`
+			tokens, lexDiags := lexer.Scan(input, "test.emod")
+			require.Empty(t, lexDiags)
+
+			_, diags := parser.New(tokens, "test.emod").Parse()
+
+			require.Len(t, diags, 1)
+			require.Contains(t, diags[0].Message, "event")
+			for _, entry := range []string{"description", "type", "fields", "source", "tags"} {
+				require.Regexp(t, `\b`+entry+`\b`, diags[0].Message)
+			}
 		})
 	})
 

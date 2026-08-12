@@ -1117,6 +1117,8 @@ func (p *Instance) parseEvent() *ast.Event {
 	for !p.check(lexer.CloseBrace) && !p.isAtEnd() {
 		if p.check(lexer.KeywordDescription) {
 			p.parseQuotedEntryInto("event", &event.Description, &event.DescriptionPos)
+		} else if p.check(lexer.KeywordType) {
+			p.parseQuotedEntryInto("event", &event.WireType, &event.WireTypePos)
 		} else if p.check(lexer.KeywordFields) {
 			event.Fields = p.parseFields()
 		} else if p.check(lexer.KeywordSource) {
@@ -1142,7 +1144,7 @@ func (p *Instance) parseEvent() *ast.Event {
 		} else if p.check(lexer.KeywordTags) {
 			event.Tags = p.parseTags()
 		} else {
-			p.error("expected description, fields, source, or tags in event")
+			p.error("expected description, type, fields, source, or tags in event")
 			p.advance()
 		}
 	}

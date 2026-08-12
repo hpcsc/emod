@@ -176,6 +176,8 @@ type Event struct {
 	NamePos         Position
 	Description     string
 	DescriptionPos  Position
+	WireType        string
+	WireTypePos     Position
 	Source          string
 	SourcePos       Position
 	ExternalName    string

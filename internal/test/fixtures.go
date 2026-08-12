@@ -1753,6 +1753,221 @@ context "Reading Room" mode dcb {
 }
 `
 
+// WireTypeLibraryLending binds a wire type to its events in both homes a slice
+// has — nested in an aggregate, and declared directly on a DCB-mode context —
+// and on the event a translation nests, so packages that carry a wire type
+// through the pipeline share one model. Two things about its shape are
+// load-bearing. MemberReminded states no wire type and is written ahead of a
+// further event in the same slice, because an event running on into what
+// follows it is only caught when something follows it. And every wire type it
+// states is distinct and reads as reverse-DNS kebab-case, so the fixture stays
+// clean under both the uniqueness error and the wire/type-format lint rule.
+const WireTypeLibraryLending = `# Lending a library's copies and seating its readers, with the wire types its events bind
+model "Library Lending"
+
+actor "Member"
+
+context "Lending" {
+  aggregate "Loan" {
+    slice "Borrow Copy" {
+      command BorrowCopy {
+        fields {
+          memberId string required
+          copyId   string required
+          dueOn    date   required
+        }
+      }
+      event CopyBorrowed {
+        type "com.library.lending.copy-borrowed"
+        fields {
+          loanId   string required
+          memberId string required
+          copyId   string required
+          dueOn    date   required
+        }
+      }
+      flow {
+        command -> event: BorrowCopy -> CopyBorrowed
+      }
+    }
+
+    slice "Review Member Loans" {
+      view MemberLoansView {
+        fields {
+          loanId   string required
+          memberId string required
+          dueOn    date   required
+        }
+        subscribes [CopyBorrowed, CopyReturned]
+      }
+    }
+
+    slice "Chase Overdue Copy" {
+      view OverdueLoansView {
+        fields {
+          loanId   string required
+          memberId string required
+        }
+        subscribes [CopyBorrowed, CopyReturned]
+      }
+      command RemindMember {
+        fields {
+          loanId   string required
+          memberId string required
+        }
+      }
+      command RecallCopy {
+        fields {
+          loanId string required
+          copyId string required
+        }
+      }
+      event MemberReminded {
+        fields {
+          loanId     string    required
+          memberId   string    required
+          remindedAt timestamp required
+        }
+      }
+      event CopyRecalled {
+        type "com.library.lending.copy-recalled"
+        fields {
+          loanId     string    required
+          copyId     string    required
+          recalledAt timestamp required
+        }
+      }
+      automation RemindOnDueDate {
+        on CopyBorrowed
+        reads OverdueLoansView
+        command RemindMember
+      }
+      flow {
+        command -> event: RemindMember -> MemberReminded
+        command -> event: RecallCopy -> CopyRecalled
+      }
+    }
+
+    slice "Return Copy" {
+      command ReturnCopy {
+        fields {
+          loanId string required
+          copyId string required
+        }
+      }
+      event CopyReturned {
+        type "com.library.lending.copy-returned"
+        fields {
+          loanId     string    required
+          copyId     string    required
+          returnedAt timestamp required
+        }
+      }
+      flow {
+        command -> event: ReturnCopy -> CopyReturned
+      }
+    }
+  }
+}
+
+context "Reading Room" mode dcb {
+  slice "Desk Occupancy" {
+    view DeskOccupancyView {
+      fields {
+        deskId   string required
+        memberId string required
+      }
+      subscribes [DeskClaimed, DeskReleased]
+    }
+  }
+
+  slice "Claim Desk" {
+    command ClaimDesk {
+      decides_on {
+        events [DeskClaimed]
+        where tag(desk = deskId) and tag(reader = memberId)
+      }
+      fields {
+        memberId string required
+        deskId   string required
+      }
+    }
+    command ReleaseDesk {
+      decides_on {
+        events [DeskReleased]
+        where tag(desk = deskId) and tag(reader = memberId)
+      }
+      fields {
+        memberId string required
+        deskId   string required
+      }
+    }
+    event DeskClaimed {
+      type "com.library.reading-room.desk-claimed"
+      tags {
+        desk  : deskId
+        reader: memberId
+      }
+      fields {
+        sessionId string    required
+        deskId    string    required
+        memberId  string    required
+        claimedAt timestamp required
+      }
+    }
+    event DeskReleased {
+      type "com.library.reading-room.desk-released"
+      tags {
+        desk  : deskId
+        reader: memberId
+      }
+      fields {
+        sessionId  string    required
+        deskId     string    required
+        memberId   string    required
+        releasedAt timestamp required
+      }
+    }
+    flow {
+      command -> event: ClaimDesk -> DeskClaimed
+      command -> event: ReleaseDesk -> DeskReleased
+    }
+  }
+
+  slice "Import External Desk Booking" {
+    command ImportExternalDeskBooking {
+      decides_on {
+        events [ExternalDeskBookingImported]
+        where tag(desk = deskId) and tag(reader = memberId)
+      }
+      fields {
+        externalRef string required
+        deskId      string required
+        memberId    string required
+      }
+    }
+    translation ExternalDeskBookingImport {
+      external_system "Room Booking API"
+      reads DeskOccupancyView
+      command ImportExternalDeskBooking
+      event ExternalDeskBookingImported {
+        type "com.library.reading-room.external-desk-booking-imported"
+        tags {
+          desk  : deskId
+          reader: memberId
+        }
+        fields {
+          externalRef string    required
+          deskId      string    required
+          memberId    string    required
+          importedAt  timestamp required
+        }
+      }
+    }
+  }
+}
+`
+
 // SpecLibraryLendingSpecNames transcribes the name of every scenario
 // SpecLibraryLending states, both slice homes together and in declaration order,
 // so a walk or a strip that reaches only one of the homes reads back short
@@ -2047,6 +2262,21 @@ var AutomationScheduleLibraryLendingActivationEvents = []string{
 	"DeskReleased",
 }
 
+// WireTypeLibraryLendingWireTypes transcribes the wire type every event of
+// WireTypeLibraryLending binds, both slice homes together and in declaration
+// order, so a walk or a strip that reaches only one of the homes — or that
+// misses the event a translation nests — reads back short against it. The event
+// stating no wire type contributes nothing, so the list counts what the model
+// binds rather than how many events it declares.
+var WireTypeLibraryLendingWireTypes = []string{
+	"com.library.lending.copy-borrowed",
+	"com.library.lending.copy-recalled",
+	"com.library.lending.copy-returned",
+	"com.library.reading-room.desk-claimed",
+	"com.library.reading-room.desk-released",
+	"com.library.reading-room.external-desk-booking-imported",
+}
+
 // DescribedHotelReservationDescriptions transcribes the description
 // DescribedHotelReservation states for every construct declared under its model,
 // filed under the name that construct carries, with the event a translation
@@ -2158,6 +2388,24 @@ func WithoutTriggerReads(model *ast.Model) *ast.Model {
 		s.Trigger = editedCopy(s.Trigger, func(trigger *ast.Trigger) {
 			trigger.Reads = ""
 			trigger.ReadsPos = ast.Position{}
+		})
+	})
+}
+
+// WithoutWireTypes returns a copy of model whose events bind no wire type, in
+// both homes a slice has — nested in an aggregate and declared directly on a
+// context — and on the event a translation nests. The original keeps every wire
+// type it was written binding, so a caller comparing the two is not comparing a
+// model with itself.
+func WithoutWireTypes(model *ast.Model) *ast.Model {
+	clear := func(event *ast.Event) {
+		event.WireType = ""
+		event.WireTypePos = ast.Position{}
+	}
+	return copyWithEditedSlices(model, func(s *ast.Slice) {
+		s.Events = editedCopies(s.Events, clear)
+		s.Translations = editedCopies(s.Translations, func(translation *ast.Translation) {
+			translation.Event = editedCopy(translation.Event, clear)
 		})
 	})
 }
@@ -2391,6 +2639,29 @@ func DeclaredActivationEvents(model *ast.Model) []string {
 // only one of the homes.
 func DeclaredSchedules(model *ast.Model) []string {
 	return declaredAutomationEntries(model, func(auto *ast.Automation) string { return auto.Schedule })
+}
+
+// DeclaredWireTypes names the wire type every event of model binds, both slice
+// homes together and in declaration order, with the event a translation nests
+// read after the slice's own events, so a caller pairing it with a transcribed
+// list reads back short when a strip or a walk reaches only one of the homes or
+// skips a translation. An event binding no wire type contributes nothing, so the
+// list counts what the model binds rather than how many events it declares.
+func DeclaredWireTypes(model *ast.Model) []string {
+	var wireTypes []string
+	for _, s := range declaredSlices(model) {
+		for _, event := range s.Events {
+			if event.WireType != "" {
+				wireTypes = append(wireTypes, event.WireType)
+			}
+		}
+		for _, translation := range s.Translations {
+			if translation.Event != nil && translation.Event.WireType != "" {
+				wireTypes = append(wireTypes, translation.Event.WireType)
+			}
+		}
+	}
+	return wireTypes
 }
 
 // declaredAutomationEntries leaves out the automations stating no entry, so a

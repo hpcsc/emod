@@ -46,6 +46,7 @@ var keywordDescriptions = map[string]string{
 	"and":             "Combines two decides_on predicates; both must hold.",
 	"or":              "Combines two decides_on predicates; either may hold.",
 	"not":             "Negates a decides_on predicate.",
+	"type":            `Binds the event to the type a consumer outside the model routes by, such as "com.acme.reservations.room-reserved". Two events may not share one.`,
 }
 
 // GetHover returns hover information for the token at the given cursor position.

@@ -74,6 +74,12 @@ func TestCheck(t *testing.T) {
 
 			require.Empty(t, diagnostics)
 		})
+
+		t.Run("returns an empty diagnostic list for a model binding wire types in an aggregate slice and on a context slice", func(t *testing.T) {
+			diagnostics := oracle.Check(test.WireTypeLibraryLending, "wire-types.emod")
+
+			require.Empty(t, reportedLines(diagnostics))
+		})
 	})
 
 	t.Run("documented models", func(t *testing.T) {

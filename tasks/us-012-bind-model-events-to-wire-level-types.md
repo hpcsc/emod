@@ -2,7 +2,7 @@
 
 ## Progress
 - [x] Task 1: Spell `type` on the hand-maintained editor keyword surfaces
-- [ ] Task 2: Carry a wire `type` attribute on `event`
+- [x] Task 2: Carry a wire `type` attribute on `event`
 - [ ] Task 3: Preserve wire types through `emod fmt`
 - [ ] Task 4: Reject two events sharing one wire type
 - [ ] Task 5: Carry wire types through the JSON and CUE exports and the embedded schema
@@ -402,43 +402,43 @@ file that uses no wire types parses to the same AST and the same diagnostics as 
 describes the new keyword on hover.
 
 **Acceptance Criteria:**
-- [ ] A top-level `event` accepts `type "<text>"` among its entries, in any position within the block,
+- [x] A top-level `event` accepts `type "<text>"` among its entries, in any position within the block,
       and the parsed event exposes that text; parsing such a model produces zero diagnostics
-- [ ] The value is recorded with its source position, matching the value-plus-position convention of
+- [x] The value is recorded with its source position, matching the value-plus-position convention of
       `Event.Description`/`DescriptionPos` and `Event.Source`/`SourcePos`
       (`internal/ast/ast.go:140-154`)
-- [ ] The `event` nested inside a `translation` accepts it on the same terms as a top-level event
-- [ ] The entry stated twice in one event block keeps the last value, matching how `description`
+- [x] The `event` nested inside a `translation` accepts it on the same terms as a top-level event
+- [x] The entry stated twice in one event block keeps the last value, matching how `description`
       already behaves — the block loop imposes no arity
-- [ ] `fields { type string required }` parses as an ordinary field named `type`, and
+- [x] `fields { type string required }` parses as an ordinary field named `type`, and
       `fields { published type required }` as an ordinary field *typed* `type`; both are covered by
       the existing subtests that iterate `lexer.Keywords()` (`internal/parser/parser_test.go:225`,
       `:243`) without naming the keyword
-- [ ] `type` followed by something other than a quoted string produces exactly one diagnostic — pinned
+- [x] `type` followed by something other than a quoted string produces exactly one diagnostic — pinned
       by a length assertion, not by inspecting only the first entry — that names the construct and the
       offending token, sits at the offending token, and leaves the enclosing block parsing to
       completion with its remaining contents reported
-- [ ] The event block's fallback message (`internal/parser/parser.go:979`) names the new entry, and
+- [x] The event block's fallback message (`internal/parser/parser.go:979`) names the new entry, and
       the assertion on it is a `\b`-bounded `require.Regexp` rather than a `require.Contains` that a
       four-letter needle could satisfy from an unrelated word
-- [ ] `lsp.GetHover` returns non-empty text for `type` in an event block, so
+- [x] `lsp.GetHover` returns non-empty text for `type` in an event block, so
       `TestKeywordCoverage/hover` (`internal/lsp/keywords_test.go:19-57`) passes for every spelling
       `lexer.Keywords()` reports
-- [ ] `internal/test.HotelReservation`, `internal/test.DescribedHotelReservation` and every fixture
+- [x] `internal/test.HotelReservation`, `internal/test.DescribedHotelReservation` and every fixture
       under `internal/parser/testdata/` parse to the same AST and the same diagnostics as before this
       task, and none of them gains a wire type
-- [ ] A new shared fixture in `internal/test/fixtures.go` declares wire types on events in **both**
+- [x] A new shared fixture in `internal/test/fixtures.go` declares wire types on events in **both**
       slice homes — inside an aggregate and directly on a `mode dcb` context — with one event's wire
       type omitted **mid-block**, ahead of a further event, and with a translation's nested event
       carrying one; every wire type it states is distinct and conforms to reverse-DNS kebab-case, so
       the fixture stays clean once Tasks 4 and 6 land
-- [ ] The fixture ships the rest of its kit: a `…Model(t)` accessor in `internal/test/models.go`, a
+- [x] The fixture ships the rest of its kit: a `…Model(t)` accessor in `internal/test/models.go`, a
       hand-transcribed expectation var listing the declared wire types in declaration order across both
       homes, a `Without…` twin, and a `Declared…` getter walking `declaredSlices`
-- [ ] The twin is proved to differ before anything is compared against it: the stripped model reads
+- [x] The twin is proved to differ before anything is compared against it: the stripped model reads
       back an empty declared-wire-type list while the stated model reads back the transcribed one, so
       a twin that stripped nothing fails
-- [ ] `oracle.Check` on the new fixture returns zero diagnostics, asserted as its own leaf in
+- [x] `oracle.Check` on the new fixture returns zero diagnostics, asserted as its own leaf in
       `internal/oracle/oracle_test.go`'s "clean input" group
 
 **Affected Files/Modules:**
