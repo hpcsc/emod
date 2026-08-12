@@ -7,7 +7,7 @@
 - [x] Task 4: Reject two events sharing one wire type
 - [x] Task 5: Carry wire types through the JSON and CUE exports and the embedded schema
 - [x] Task 6: Nudge wire types toward reverse-DNS kebab-case with `wire/type-format`
-- [ ] Task 7: Document the wire type in the DSL reference
+- [x] Task 7: Document the wire type in the DSL reference
 
 ---
 
@@ -813,23 +813,23 @@ value means, that two events may not share one, that the exports carry it, and t
 nudges toward the CloudEvents convention without enforcing it.
 
 **Acceptance Criteria:**
-- [ ] The reference documents the attribute with at least one worked `emod` example, states that the
+- [x] The reference documents the attribute with at least one worked `emod` example, states that the
       value is an opaque string, and states that the attribute is optional and that a model using none
       behaves exactly as before
-- [ ] It states the uniqueness rule and its scope — two events anywhere in the model may not bind the
+- [x] It states the uniqueness rule and its scope — two events anywhere in the model may not bind the
       same wire type — and names `emod validate` as what reports it
-- [ ] It states that `emod export -f json` and `-f cue` carry the wire type, which is the point of the
+- [x] It states that `emod export -f json` and `-f cue` carry the wire type, which is the point of the
       attribute, and that `emod glossary` and the diagrams deliberately do not show it
-- [ ] It names `wire/type-format` and describes the convention it nudges toward, stating that the rule
+- [x] It names `wire/type-format` and describes the convention it nudges toward, stating that the rule
       is informational and that a wire type not following the convention is still valid
-- [ ] Every ` ```emod ` fenced block added to the reference passes `oracle.Check` with zero
+- [x] Every ` ```emod ` fenced block added to the reference passes `oracle.Check` with zero
       diagnostics, so every wire type written in an example is unique within its block and conforms to
       the convention — an illustrative fragment that is not a whole model carries a plain fence
       instead
-- [ ] No `## <n>. Title` heading is added, removed or renumbered, so every `(#<n>-…)` link still
+- [x] No `## <n>. Title` heading is added, removed or renumbered, so every `(#<n>-…)` link still
       points at the section it names; and no existing `###` heading is renamed, so the fourteen links
       citing sub-heading slugs still resolve
-- [ ] `examples/*.emod`, `internal/parser/testdata/*.emod` and `internal/test/fixtures.go` are
+- [x] `examples/*.emod`, `internal/parser/testdata/*.emod` and `internal/test/fixtures.go` are
       unmodified — rewriting the examples is US-018
 
 **Affected Files/Modules:**

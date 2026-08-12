@@ -625,6 +625,55 @@ event <Name> {
 }
 ```
 
+### Wire Types
+
+An event can bind the type a consumer outside the model routes by — the subject a schema registry keys on, the `type` a CloudEvents consumer switches on:
+
+```
+event <Name> {
+  type "<wire type>"
+  fields { ... }
+}
+```
+
+The value is an opaque string. Nothing in the model resolves against it, and the language places no structure on it:
+
+```emod
+emod 1
+model "Hotel Reservation"
+
+context "Reservations" {
+  aggregate "Reservation" {
+    slice "Reserve a Room" {
+      command ReserveRoom {
+        fields {
+          roomId  string required
+          guestId string required
+        }
+      }
+
+      event RoomReserved {
+        type "com.acme.reservations.room-reserved"
+        fields {
+          reservationId string required
+          roomId        string required
+        }
+      }
+
+      flow {
+        command -> event: ReserveRoom -> RoomReserved
+      }
+    }
+  }
+}
+```
+
+- **The attribute is optional:** an event that binds no wire type validates, formats and exports exactly as it did before the attribute existed. A model that uses none is unaffected in every respect.
+- **Two events may not bind the same wire type:** `emod validate` reports an error naming both events and the repeated value. The scope is the whole model, not a context — a wire type is by construction an identifier outside the model, so two contexts binding one produce output a consumer cannot tell apart. This is the deliberate contrast with an [invariant](#invariant) name, which never leaves the model and is scoped per aggregate or context.
+- **The comparison is verbatim:** wire types are case-sensitive, so `com.acme.room-reserved` and `Com.Acme.Room-Reserved` are two different types and do not collide.
+- **The exports carry it, which is the point of the attribute:** `emod export -f json` and `emod export -f cue` both emit the wire type under a `type` key on the event, and the embedded schema declares it. `emod glossary` and the diagrams deliberately do not show it: a glossary defines the terms of a ubiquitous language, and a deployment identifier is not one of them.
+- **`wire/type-format` nudges without enforcing:** the rule reports at info severity when a wire type does not read as reverse-DNS kebab-case — two or more dot-separated segments, each built from lowercase letters, digits and inner hyphens. A wire type that does not follow the convention is still valid emod, and an event binding none can never trip the rule. Run `emod lint --explain wire/type-format` for the full description.
+
 ---
 
 ## 9. Dynamic Consistency Boundaries
