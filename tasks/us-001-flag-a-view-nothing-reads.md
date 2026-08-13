@@ -433,26 +433,26 @@ how to get the full description from the tool.
 
 **Acceptance Criteria:**
 
-- [ ] The `### View Pattern` subsection of `docs/dsl-reference.md` (`:343`) carries a bullet naming
+- [x] The `### View Pattern` subsection of `docs/dsl-reference.md` (`:343`) carries a bullet naming
       `view/never-read`, stating that it reports at warning severity when no trigger, automation or
       translation reads the view, that it fires only once the model states at least one `reads`, and
       pointing at `emod lint --explain view/never-read` — written in the shape of the lint bullets at
       `:281`, `:560` and `:675`
-- [ ] The rule name in the bullet is byte-identical to the key `linter.RuleDescription` resolves, so
+- [x] The rule name in the bullet is byte-identical to the key `linter.RuleDescription` resolves, so
       the `emod lint --explain` invocation the bullet prints succeeds when run
-- [ ] The reference's statement that a trigger's `reads` and a translation's are recorded and left
+- [x] The reference's statement that a trigger's `reads` and a translation's are recorded and left
       unchecked is unchanged at `:381` and `:820` — resolving them is US-002, and this rule reads all
       three without resolving any
-- [ ] No `## <n>. <Title>` heading is added, removed or renumbered: `rg -n '^## [0-9]+\.
+- [x] No `## <n>. <Title>` heading is added, removed or renumbered: `rg -n '^## [0-9]+\.
       ' docs/dsl-reference.md` still lists thirteen headings with the same numbers and titles, so every
       number-prefixed in-document link still resolves
-- [ ] No fenced ` ```emod ` block is added or edited — `rg -c '```emod' docs/dsl-reference.md` is still
+- [x] No fenced ` ```emod ` block is added or edited — `rg -c '```emod' docs/dsl-reference.md` is still
       7 — so `internal/oracle/oracle_test.go`'s "documented models" leaves over the file still report
       nothing
-- [ ] Section 13's `Diagram Palette` heading and its four-column table are untouched, so
+- [x] Section 13's `Diagram Palette` heading and its four-column table are untouched, so
       `dslReferencePalette` (`internal/diagram/contract_test.go:1349`) still parses it
-- [ ] `git diff --stat` names `docs/dsl-reference.md` and no other file
-- [ ] `mise exec -- task test:unit` is green
+- [x] `git diff --stat` names `docs/dsl-reference.md` and no other file
+- [x] `mise exec -- task test:unit` is green
 
 **Affected Files/Modules:**
 

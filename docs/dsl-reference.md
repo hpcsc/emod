@@ -355,6 +355,8 @@ slice "<name>" {
 
 `subscribes` references event names defined elsewhere in the model (see [Cross-References](#11-cross-references)).
 
+- **`view/never-read` asks who acts on it:** the rule reports at warning severity when no `reads` anywhere in the model names the view — neither a trigger's, an automation's nor a translation's. A view takes one of two legitimate shapes: a trigger reads it, or a processor reads it as its todo list. The rule fires only once the model states at least one `reads`, so a model that has not adopted the concept reports nothing. Run `emod lint --explain view/never-read` for the full description.
+
 ### Automation Pattern
 
 A processor woken by an event or by a schedule reads its outstanding work and issues a command, possibly in a different context.
