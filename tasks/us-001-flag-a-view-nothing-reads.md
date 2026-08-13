@@ -224,38 +224,38 @@ fixtures keep validating, formatting and exporting exactly as they do today.
 
 **Acceptance Criteria:**
 
-- [ ] The trigger in `test.InvariantLibraryLending` (`internal/test/fixtures.go:325`),
+- [x] The trigger in `test.InvariantLibraryLending` (`internal/test/fixtures.go:325`),
       `test.SpecLibraryLending` (`:434`) and `test.RejectionLibraryLending` (`:605`) reads
       `MemberLoansView` — the view each of those models declares in its `slice "Review Member Loans"` —
       in place of `AvailableCopiesView`, which none of them declares anywhere
-- [ ] `test.SlicePatternLibraryLending` and `test.WireTypeLibraryLending` each declare a trigger in
+- [x] `test.SlicePatternLibraryLending` and `test.WireTypeLibraryLending` each declare a trigger in
       their `slice "Borrow Copy"` reading `MemberLoansView`, written as the block the three fixtures
       above already carry
-- [ ] `test.DeclaredTriggerReads` over each of the five parsed models
+- [x] `test.DeclaredTriggerReads` over each of the five parsed models
       (`test.InvariantLibraryLendingModel` and its four siblings in `internal/test/models.go`) reads
       back exactly `[]string{"MemberLoansView"}` — a getter answering `nil` is what this criterion
       exists to rule out
-- [ ] `oracle.Check` returns exactly what it returns today for all five: nothing for
+- [x] `oracle.Check` returns exactly what it returns today for all five: nothing for
       `SpecLibraryLending`, `RejectionLibraryLending`, `SlicePatternLibraryLending` and
       `WireTypeLibraryLending`, and for `InvariantLibraryLending` the same five
       `spec/invariant-never-exercised` lines `internal/oracle/oracle_test.go:136-140` transcribes,
       unchanged down to their line numbers. No leaf in `internal/oracle/oracle_test.go` is edited
-- [ ] `git diff internal/test/fixtures.go` shows changes only inside the five fixtures named above. In
+- [x] `git diff internal/test/fixtures.go` shows changes only inside the five fixtures named above. In
       particular `test.AutomationReadsLibraryLending` (`:1041`) and
       `test.AutomationScheduleLibraryLending` (`:1407`) keep `reads AvailableCopiesView` on their
       triggers, which `internal/formatter/formatter_test.go:1439` asserts by name, and
       `test.PayloadLibraryLending` keeps no `reads` at all, which is what makes it Task 2's witness for
       the guard
-- [ ] The only expected values that move are the ones restating a changed fixture's own text: the
+- [x] The only expected values that move are the ones restating a changed fixture's own text: the
       `reads` line in `specFormattedEmod` (`internal/cli/fmt_test.go:257`) and in
       `rejectionFormattedEmod` (`:755`), the trigger block `slicePatternFormattedEmod` (`:922`) gains
       where `emod fmt` writes it, and the `triggerReads` field of the `WireTypeLibraryLendingModel` row
       in the round-trip table (`internal/formatter/formatter_test.go:1487-1493`), which holds `nil`
       today and must name the view instead. No other golden, `*FormattedEmod` constant or transcribed
       name list moves
-- [ ] `git diff --stat` names exactly three files: `internal/test/fixtures.go`,
+- [x] `git diff --stat` names exactly three files: `internal/test/fixtures.go`,
       `internal/cli/fmt_test.go`, `internal/formatter/formatter_test.go`
-- [ ] `mise exec -- task test:unit` and `mise exec -- task test:integration` are green
+- [x] `mise exec -- task test:unit` and `mise exec -- task test:integration` are green
 
 **Affected Files/Modules:**
 

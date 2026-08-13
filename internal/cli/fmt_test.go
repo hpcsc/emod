@@ -254,7 +254,7 @@ context "Lending" {
     slice "Borrow Copy" {
       trigger "Lending Desk" {
         actor Member
-        reads AvailableCopiesView
+        reads MemberLoansView
       }
 
       command BorrowCopy {
@@ -752,7 +752,7 @@ context "Lending" {
     slice "Borrow Copy" {
       trigger "Lending Desk" {
         actor Member
-        reads AvailableCopiesView
+        reads MemberLoansView
       }
 
       command BorrowCopy {
@@ -929,6 +929,11 @@ context "Lending" {
   aggregate "Loan" {
     invariant OneCopyPerLoan "A loan covers exactly one copy of one title"
     slice "Borrow Copy" {
+      trigger "Lending Desk" {
+        actor Member
+        reads MemberLoansView
+      }
+
       command BorrowCopy {
         fields {
           memberId string required

@@ -310,7 +310,9 @@ context "Discovery" {
 // aggregate to hold them — so packages that carry invariants through the
 // pipeline share one model. Each block puts an invariant ahead of a later
 // entry on purpose: write them all last and nothing here would catch a
-// declaration running on into what follows it.
+// declaration running on into what follows it. Its trigger reads
+// MemberLoansView, the view its own Review Member Loans slice declares, so that
+// view has a reader and the fixture stays clean under view/never-read.
 const InvariantLibraryLending = `# Lending a library's copies, and seating its readers
 model "Library Lending"
 
@@ -322,7 +324,7 @@ context "Lending" {
     slice "Borrow Copy" {
       trigger "Lending Desk" {
         actor Member
-        reads AvailableCopiesView
+        reads MemberLoansView
       }
       command BorrowCopy {
         fields {
@@ -419,7 +421,9 @@ context "Reading Room" mode dcb {
 // through the pipeline share one model. A spec block sits mid-block ahead of a
 // further entry on purpose, and one spec omits its given history entirely:
 // write them all last and nothing here would catch a block running on into what
-// follows it.
+// follows it. Its trigger reads MemberLoansView, the view its own Review Member
+// Loans slice declares, so that view has a reader and the fixture stays clean
+// under view/never-read.
 const SpecLibraryLending = `# Lending a library's copies and seating its readers, with the scenarios each slice must satisfy
 model "Library Lending"
 
@@ -431,7 +435,7 @@ context "Lending" {
     slice "Borrow Copy" {
       trigger "Lending Desk" {
         actor Member
-        reads AvailableCopiesView
+        reads MemberLoansView
       }
       command BorrowCopy {
         fields {
@@ -583,14 +587,16 @@ context "Reading Room" mode dcb {
 
 // RejectionLibraryLending states rejection edges on the timeline in both homes a
 // slice has — nested in an aggregate, and directly on a DCB-mode context — so
-// packages that carry the entry through their own pipeline share one model. Three
+// packages that carry the entry through their own pipeline share one model. Four
 // things about its shape are load-bearing. "Borrow Copy" writes its rejection
 // entry ahead of a further command -> event: entry, because a rejection written
 // only as a block's last entry cannot catch one running on into what follows it.
 // "Release Desk" states a flow block and no rejection at all, so a walk assuming
 // every flow block has one reads back wrong. And "Borrow Copy" and "Return Copy"
 // reject the same invariant from two different slices, which is what a badge map
-// keyed by the invariant's name alone collapses into one box.
+// keyed by the invariant's name alone collapses into one box. And its trigger
+// reads MemberLoansView, the view its own "Review Member Loans" slice declares,
+// so that view has a reader and the fixture stays clean under view/never-read.
 const RejectionLibraryLending = `# Lending a library's copies and seating its readers, with the rejections each command can meet
 model "Library Lending"
 
@@ -602,7 +608,7 @@ context "Lending" {
     slice "Borrow Copy" {
       trigger "Lending Desk" {
         actor Member
-        reads AvailableCopiesView
+        reads MemberLoansView
       }
       command BorrowCopy {
         fields {
@@ -756,6 +762,8 @@ context "Reading Room" mode dcb {
 // or strip specs share one model. The view, command and no-when outcomes only
 // this fixture has sit in the aggregate home; the DCB home carries command and
 // translation specs so both homes read back short against the transcriptions.
+// Its "Borrow Copy" trigger is there for one reason: it reads MemberLoansView,
+// so that view has a reader and the fixture stays clean under view/never-read.
 const SlicePatternLibraryLending = `# Lending a library's copies and seating its readers, with a spec for every slice pattern
 model "Library Lending"
 
@@ -766,6 +774,10 @@ context "Lending" {
     invariant OneCopyPerLoan "A loan covers exactly one copy of one title"
 
     slice "Borrow Copy" {
+      trigger "Lending Desk" {
+        actor Member
+        reads MemberLoansView
+      }
       command BorrowCopy {
         fields {
           memberId string required
@@ -1756,12 +1768,14 @@ context "Reading Room" mode dcb {
 // WireTypeLibraryLending binds a wire type to its events in both homes a slice
 // has — nested in an aggregate, and declared directly on a DCB-mode context —
 // and on the event a translation nests, so packages that carry a wire type
-// through the pipeline share one model. Two things about its shape are
+// through the pipeline share one model. Three things about its shape are
 // load-bearing. MemberReminded states no wire type and is written ahead of a
 // further event in the same slice, because an event running on into what
-// follows it is only caught when something follows it. And every wire type it
+// follows it is only caught when something follows it. Every wire type it
 // states is distinct and reads as reverse-DNS kebab-case, so the fixture stays
-// clean under both the uniqueness error and the wire/type-format lint rule.
+// clean under both the uniqueness error and the wire/type-format lint rule. And
+// its "Borrow Copy" trigger is there for one reason: it reads MemberLoansView,
+// so that view has a reader and the fixture stays clean under view/never-read.
 const WireTypeLibraryLending = `# Lending a library's copies and seating its readers, with the wire types its events bind
 model "Library Lending"
 
@@ -1770,6 +1784,10 @@ actor "Member"
 context "Lending" {
   aggregate "Loan" {
     slice "Borrow Copy" {
+      trigger "Lending Desk" {
+        actor Member
+        reads MemberLoansView
+      }
       command BorrowCopy {
         fields {
           memberId string required

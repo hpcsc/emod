@@ -12,14 +12,17 @@
         "internal/test/fixtures.go",
         "internal/cli/fmt_test.go",
         "internal/formatter/formatter_test.go"
-      ]
+      ],
+      "done": true
     },
     {
       "n": 2,
       "title": "Warn on a view nothing reads",
       "language": "Go",
       "testable": true,
-      "depends_on": [1],
+      "depends_on": [
+        1
+      ],
       "affected_files": [
         "internal/linter/linter.go",
         "internal/linter/descriptions.go",
@@ -33,7 +36,9 @@
       "title": "Describe `view/never-read` in the DSL reference",
       "language": "Generic",
       "testable": false,
-      "depends_on": [2],
+      "depends_on": [
+        2
+      ],
       "affected_files": [
         "docs/dsl-reference.md"
       ]

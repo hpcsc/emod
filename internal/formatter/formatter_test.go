@@ -1488,6 +1488,7 @@ func TestFormat(t *testing.T) {
 					shape:            "events binding wire types in both slice homes and on the event a translation nests",
 					parse:            test.WireTypeLibraryLendingModel,
 					activationEvents: []string{"CopyBorrowed"},
+					triggerReads:     []string{"MemberLoansView"},
 					automationReads:  []string{"OverdueLoansView"},
 					wireTypes:        test.WireTypeLibraryLendingWireTypes,
 				},
