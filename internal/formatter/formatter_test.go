@@ -1466,7 +1466,7 @@ func TestFormat(t *testing.T) {
 					shape:            "an automation among all four slice patterns",
 					parse:            test.HotelReservationModel,
 					activationEvents: []string{"ReservationMade"},
-					triggerReads:     []string{"AvailableRoomsView"},
+					triggerReads:     []string{"ReservationsView"},
 					automationReads:  []string{"ReservationsView"},
 				},
 				{

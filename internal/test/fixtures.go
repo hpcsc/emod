@@ -20,7 +20,7 @@ context "Reservations" {
     slice "Make Reservation" {
       trigger "Reservation Form" {
         actor Guest
-        reads AvailableRoomsView
+        reads ReservationsView
       }
       command MakeReservation {
         fields {
@@ -80,7 +80,7 @@ context "Reservations" {
       }
       translation BookingImport {
         external_system "Booking.com API"
-        reads BookingWebhookView
+        reads ReservationsView
         command ImportBooking
         event BookingImported {
           fields {
@@ -116,7 +116,7 @@ context "Reservations" {
       trigger "Reservation Form" {
         description "The booking form on the public site"
         actor Guest
-        reads AvailableRoomsView
+        reads ReservationsView
       }
       command MakeReservation {
         description "Ask the hotel to hold a room for a date range, 10% deposit taken up front"
@@ -186,7 +186,7 @@ context "Reservations" {
       translation BookingImport {
         description "Restates a partner webhook in the hotel's own language"
         external_system "Booking.com API"
-        reads BookingWebhookView
+        reads ReservationsView
         command ImportBooking
         event BookingImported {
           description "A partner site reported a booking"
@@ -287,7 +287,7 @@ context "Discovery" {
       }
       translation VendorSearchImport {
         external_system "Metabase API"
-        reads VendorSearchWebhookView
+        reads SavedSearchesView
         command ImportVendorSearch
         event VendorSearchImported {
           fields {

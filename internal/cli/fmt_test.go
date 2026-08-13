@@ -220,7 +220,7 @@ context "Discovery" {
 
       translation VendorSearchImport {
         external_system "Metabase API"
-        reads VendorSearchWebhookView
+        reads SavedSearchesView
         command ImportVendorSearch
         event VendorSearchImported {
           fields {

@@ -271,29 +271,29 @@ model declares. What each model contains, how it formats and what it exports is 
 
 **Acceptance Criteria:**
 
-- [ ] The trigger (`internal/test/fixtures.go:23`) and the translation (`:83`) of
+- [x] The trigger (`internal/test/fixtures.go:23`) and the translation (`:83`) of
       `test.HotelReservation` both read `ReservationsView`, the view its `slice "View Reservations"`
       declares, in place of `AvailableRoomsView` and `BookingWebhookView`, which it declares nowhere
-- [ ] The same two lines of `test.DescribedHotelReservation` (`:119`, `:189`) read `ReservationsView`,
+- [x] The same two lines of `test.DescribedHotelReservation` (`:119`, `:189`) read `ReservationsView`,
       the fixture keeping every description it states — `test.DeclaredDescriptions` over the parsed
       model still equals `test.DescribedHotelReservationDescriptions` unedited
-- [ ] The translation of `test.KeywordFieldSearchCatalog` (`:290`) reads `SavedSearchesView`, the view
+- [x] The translation of `test.KeywordFieldSearchCatalog` (`:290`) reads `SavedSearchesView`, the view
       its `slice "Browse Saved Searches"` declares (`:251`), in place of `VendorSearchWebhookView`
-- [ ] `rg -n 'AvailableRoomsView|BookingWebhookView|VendorSearchWebhookView' internal/test/fixtures.go`
+- [x] `rg -n 'AvailableRoomsView|BookingWebhookView|VendorSearchWebhookView' internal/test/fixtures.go`
       prints nothing
-- [ ] `test.DeclaredTriggerReads(test.HotelReservationModel(t))` and the same over
+- [x] `test.DeclaredTriggerReads(test.HotelReservationModel(t))` and the same over
       `test.DescribedHotelReservationModel(t)` each read back `[]string{"ReservationsView"}` — a getter
       answering `nil` is what this criterion exists to rule out
-- [ ] `oracle.Check` returns nothing for all three, exactly as it does today, and no leaf in
+- [x] `oracle.Check` returns nothing for all three, exactly as it does today, and no leaf in
       `internal/oracle/oracle_test.go` is edited
-- [ ] The only expected values that move are the ones restating a changed fixture's own text: the
+- [x] The only expected values that move are the ones restating a changed fixture's own text: the
       `reads` line inside `keywordFieldFormattedEmod` (`internal/cli/fmt_test.go:223`) and the
       `triggerReads` field of the `HotelReservationModel` row in the formatter round-trip table
       (`internal/formatter/formatter_test.go:1469`). No other golden, `*FormattedEmod` constant or
       transcribed name list moves
-- [ ] `git diff --stat` names exactly three files: `internal/test/fixtures.go`,
+- [x] `git diff --stat` names exactly three files: `internal/test/fixtures.go`,
       `internal/cli/fmt_test.go`, `internal/formatter/formatter_test.go`
-- [ ] `mise exec -- task test:unit` and `mise exec -- task test:integration` are green
+- [x] `mise exec -- task test:unit` and `mise exec -- task test:integration` are green
 
 **Affected Files/Modules:**
 

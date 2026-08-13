@@ -12,7 +12,8 @@
         "internal/test/fixtures.go",
         "internal/cli/fmt_test.go",
         "internal/formatter/formatter_test.go"
-      ]
+      ],
+      "done": true
     },
     {
       "n": 2,
@@ -44,7 +45,11 @@
       "title": "Resolve a trigger's and a translation's `reads` at `emod validate`",
       "language": "Go",
       "testable": true,
-      "depends_on": [1, 2, 3],
+      "depends_on": [
+        1,
+        2,
+        3
+      ],
       "affected_files": [
         "internal/validator/validator.go",
         "internal/validator/validator_test.go",
@@ -56,7 +61,9 @@
       "title": "Keep `view/never-read` quiet while a `reads` names a view no slice declares",
       "language": "Go",
       "testable": true,
-      "depends_on": [4],
+      "depends_on": [
+        4
+      ],
       "affected_files": [
         "internal/linter/linter.go",
         "internal/linter/descriptions.go",
@@ -69,7 +76,9 @@
       "title": "State in the reference that all three spellings of `reads` resolve, and correct the learning that says they do not",
       "language": "Go",
       "testable": false,
-      "depends_on": [5],
+      "depends_on": [
+        5
+      ],
       "affected_files": [
         "docs/dsl-reference.md",
         "tasks/learnings.md"
