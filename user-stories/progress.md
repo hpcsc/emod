@@ -3,7 +3,7 @@
 Which story in each in-progress story file is delivered. Files under
 `user-stories/completed/` are finished in full and are not tracked here.
 
-**32 of 180 delivered.**
+**17 of 161 delivered.**
 
 ## [emod-desktop.md](./emod-desktop.md) — 0/16
 
@@ -24,11 +24,17 @@ Which story in each in-progress story file is delivered. Files under
 - [ ] US-015: Download a desktop build without building it
 - [ ] US-016: Run the desktop app on Windows
 
-## [specs-and-metadata.md](./specs-and-metadata.md) — 8/18
+## [specs-and-metadata.md](./specs-and-metadata.md) — 12/18
 
 Delivered on `main`: the `emod <n>` version header, `description` on every construct, keywords
-usable as field names, `emod glossary`, named invariants on aggregates and DCB contexts, and
-Given-When-Then specs on command slices.
+usable as field names, `emod glossary`, named invariants on aggregates and DCB contexts,
+Given-When-Then specs on every slice pattern with example payloads, spec-coverage and
+boundary lint rules, `command -> rejected:` edges on the timeline, value-aware boundary checking
+in DCB mode, and `type` binding a model event to its wire-level name.
+
+The six that remain are the tail of the story file and each has a breakdown waiting in `tasks/`,
+none of them started. US-013's `after` keyword is a precondition for US-017's keyword list, and
+US-018 depends on everything above it.
 
 - [x] US-001: Pin files to a DSL version
 - [x] US-002: Describe constructs where they are declared
@@ -38,10 +44,10 @@ Given-When-Then specs on command slices.
 - [x] US-006: Write Given-When-Then specs on command slices
 - [x] US-007: Write specs for view, automation, and translation slices
 - [x] US-008: Lint spec coverage and boundary assumptions
-- [ ] US-009: Show rejection paths on the timeline
-- [ ] US-010: State example payloads in specs
-- [ ] US-011: Value-aware boundary checking in DCB mode
-- [ ] US-012: Bind model events to wire-level types
+- [x] US-009: Show rejection paths on the timeline
+- [x] US-010: State example payloads in specs
+- [x] US-011: Value-aware boundary checking in DCB mode
+- [x] US-012: Bind model events to wire-level types
 - [ ] US-013: Fire automations after elapsed time
 - [ ] US-014: Format the new constructs consistently
 - [ ] US-015: Navigate and complete the new constructs in the editor
@@ -49,57 +55,11 @@ Given-When-Then specs on command slices.
 - [ ] US-017: Highlight the new syntax in editors
 - [ ] US-018: Learn the new constructs from examples and the reference
 
-## [triggers-and-automations.md](./triggers-and-automations.md) — 11/11
-
-Delivered in full. The language side: `reads` on an automation, `on` and `every` as its two
-activation forms, and the trigger without a kind slot — the grammar `specs-and-metadata.md` US-007
-and US-013 build on. The surfaces around it: the `reads` edge and the human-only top lane on
-diagrams, one palette across the renderers, the `automation/missing-todo-list` rule, editor
-completion, navigation and highlighting, and the examples, reference and README teaching the
-realigned forms under a test that runs every one of them through `emod validate`.
-
-- [x] US-001: Declare the view an automation reads
-- [x] US-002: Name an automation's activation event with `on`
-- [x] US-003: Activate an automation on a schedule
-- [x] US-004: Drop the trigger kind slot
-- [x] US-005: Draw the view a trigger or automation reads
-- [x] US-006: Read the top lane as human-only
-- [x] US-007: One palette for element types
-- [x] US-008: Flag automations with no todo list
-- [x] US-009: Complete and navigate automations in the editor
-- [x] US-010: Highlight the realigned syntax
-- [x] US-011: Learn the realignment from examples and the reference
-
-## [viewer-descriptions-and-comments.md](./viewer-descriptions-and-comments.md) — 6/6
-
-Delivered in full. The wire: `description` and `comments` on every diagram node, read back by the
-importer so a visual edit no longer deletes the prose a file came with. The surfaces: a description
-block in the detail panel, context and aggregate descriptions inline on their headers with the
-narrow-row truncation that keeps them off a neighbour's label, the same prose in the hover tooltip
-for nodes that had no tooltip at all, and an ⓘ mark and a comment mark on any construct carrying
-either — slices and container headers included, which is what gives them a hover surface without a
-detail panel of their own.
-
-- [x] US-001: Carry descriptions through the diagram JSON
-- [x] US-002: Preserve comments through a viewer round-trip
-- [x] US-003: Read a construct's description in the detail panel
-- [x] US-004: See context and aggregate descriptions on their headers
-- [x] US-005: Spot and read a description without opening the panel
-- [x] US-006: Spot and read comments on any construct
-
-## [viewer-legend.md](./viewer-legend.md) — 2/2
-
-Delivered in full. A Legend panel, off by default and toggled from the toolbar, naming every
-element colour and every connection style. Both sections are built from `nodePalette` and
-`edgeConfig` at render time rather than restating a colour, so a new type reaches the legend
-without a second edit — a test scans `legend.js` and the panel's stylesheet to keep it that way.
-
-- [x] US-001: Read what each element colour means
-- [x] US-002: Read what each connection style means
-
 ## [00-llm-foundation.md](./ai/00-llm-foundation.md) — 5/10
 
-Breakdown in flight at `tasks/00-llm-foundation.md` (tasks 1-5 of 10 checked off).
+Breakdown in flight at `tasks/00-llm-foundation.md` (tasks 1-5 of 10 checked off). `internal/llm`
+carries the port, its mock and broken doubles, the Bedrock adapter and the configuration block;
+`internal/oracle` is the deterministic correctness check the repair loop will call.
 
 - [x] US-001: Define the `llm.Model` port
 - [x] US-002: Mock model for network-free tests

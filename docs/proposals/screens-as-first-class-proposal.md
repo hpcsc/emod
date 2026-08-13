@@ -291,7 +291,7 @@ Two facts this model states that the current grammar cannot. `CheckoutPage` is o
 
 ---
 
-## Interaction With `user-stories/lint-unread-view.md`
+## Interaction With `user-stories/completed/lint-unread-view.md`
 
 That story set stays separate and should ship first. It is non-breaking, independently valuable, and its Non-Goals already set this boundary deliberately: multi-valued `reads` is "a grammar change with its own consequences", and a distinct `screen` element "should not be settled by a lint rule". Both judgements hold. Folding a ready lint rule into a breaking restructure would block the first on a decision the second has not yet earned.
 
