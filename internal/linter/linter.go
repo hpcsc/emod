@@ -62,6 +62,23 @@ func Lint(model *ast.Model) []*diagnostic.Entry {
 		}
 	}
 
+	readViews := make(map[string]bool)
+	for _, slice := range model.AllSlices() {
+		if slice.Trigger != nil && slice.Trigger.Reads != "" {
+			readViews[slice.Trigger.Reads] = true
+		}
+		for _, auto := range slice.Automations {
+			if auto.Reads != "" {
+				readViews[auto.Reads] = true
+			}
+		}
+		for _, tr := range slice.Translations {
+			if tr.Reads != "" {
+				readViews[tr.Reads] = true
+			}
+		}
+	}
+
 	hasSpec := false
 	exercisedCommands := make(map[string]bool)
 	commandsWithRejection := make(map[string]bool)
@@ -111,7 +128,7 @@ func Lint(model *ast.Model) []*diagnostic.Entry {
 			if ref.Aggregate != nil {
 				aggregateName = ref.Aggregate.Name
 			}
-			diags = append(diags, checkSlice(ref.Slice, aggregateName, flowCount, hasSpec, exercisedCommands, commandsWithRejection)...)
+			diags = append(diags, checkSlice(ref.Slice, aggregateName, flowCount, hasSpec, exercisedCommands, commandsWithRejection, readViews)...)
 		}
 	}
 
@@ -137,7 +154,7 @@ func byPosition(a, b *diagnostic.Entry) int {
 
 // checkSlice applies all existing lint checks to a single slice.
 // aggregateName is used for property-sourcing detection; pass "" for context-level slices.
-func checkSlice(slice *ast.Slice, aggregateName string, flowCount map[string]int, hasSpec bool, exercisedCommands map[string]bool, commandsWithRejection map[string]bool) []*diagnostic.Entry {
+func checkSlice(slice *ast.Slice, aggregateName string, flowCount map[string]int, hasSpec bool, exercisedCommands map[string]bool, commandsWithRejection map[string]bool, readViews map[string]bool) []*diagnostic.Entry {
 	var diags []*diagnostic.Entry
 	for _, evt := range slice.Events {
 		diags = append(diags, checkEvent(evt, aggregateName)...)
@@ -179,6 +196,9 @@ func checkSlice(slice *ast.Slice, aggregateName string, flowCount map[string]int
 			diags = append(diags, d)
 		}
 		if d := checkGodView(view); d != nil {
+			diags = append(diags, d)
+		}
+		if d := checkNeverRead(view, readViews); d != nil {
 			diags = append(diags, d)
 		}
 	}
@@ -609,6 +629,22 @@ func checkMissingTodoList(auto *ast.Automation) *diagnostic.Entry {
 
 	return warning(auto.NamePos, "automation/missing-todo-list",
 		fmt.Sprintf("automation %q reads no view, so %s; project a view of pending work and read it", auto.Name, consequence))
+}
+
+func checkNeverRead(view *ast.View, readViews map[string]bool) *diagnostic.Entry {
+	// An empty set means the model states no reads at all, which is a model that
+	// has not adopted the concept rather than one whose every view is unread.
+	// Drop this and a half-drafted model reports every view it declares.
+	if len(readViews) == 0 {
+		return nil
+	}
+
+	if readViews[view.Name] {
+		return nil
+	}
+
+	return warning(view.NamePos, "view/never-read",
+		fmt.Sprintf("view %q is read by no trigger, automation or translation, so nothing in the model says who acts on it; give the trigger that opens on it a reads entry, or name it as a processor's todo list", view.Name))
 }
 
 func checkGodView(view *ast.View) *diagnostic.Entry {

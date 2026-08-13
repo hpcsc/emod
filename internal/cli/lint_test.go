@@ -162,6 +162,74 @@ context "Fulfillment" mode dcb {
 }
 `
 
+// viewNeverReadEmod declares MemberLoansView beside a view an automation reads,
+// which view/never-read reports and no other rule does. The read view is what
+// carries the model past the rule's own guard.
+const viewNeverReadEmod = `model "Lending"
+
+context "Lending" {
+  aggregate "Loan" {
+    slice "Borrow Copy" {
+      command BorrowCopy {
+        fields {
+          memberId string required
+          copyId   string required
+        }
+      }
+      event CopyBorrowed {
+        fields {
+          loanId   string required
+          memberId string required
+          copyId   string required
+        }
+      }
+      flow {
+        command -> event: BorrowCopy -> CopyBorrowed
+      }
+    }
+    slice "Chase Overdue Copy" {
+      view OverdueLoansView {
+        fields {
+          loanId   string required
+          memberId string required
+        }
+        subscribes [CopyBorrowed]
+      }
+      command RemindMember {
+        fields {
+          loanId   string required
+          memberId string required
+        }
+      }
+      event MemberReminded {
+        fields {
+          loanId     string    required
+          memberId   string    required
+          remindedAt timestamp required
+        }
+      }
+      automation RemindOnDueDate {
+        on CopyBorrowed
+        reads OverdueLoansView
+        command RemindMember
+      }
+      flow {
+        command -> event: RemindMember -> MemberReminded
+      }
+    }
+    slice "Review Member Loans" {
+      view MemberLoansView {
+        fields {
+          loanId   string required
+          memberId string required
+        }
+        subscribes [MemberReminded]
+      }
+    }
+  }
+}
+`
+
 // automationWithoutViewEmod wires an automation straight from an event to a
 // command, which automation/missing-todo-list reports and no other rule does.
 const automationWithoutViewEmod = `model "Lending"
@@ -1282,6 +1350,40 @@ context "Orders" {
 		})
 	})
 
+	t.Run("view read by nothing", func(t *testing.T) {
+		t.Run("json output reports the rule at warning severity and exits 1", func(t *testing.T) {
+			path := writeTemp(t, "never_read.emod", viewNeverReadEmod)
+
+			var err error
+			output := captureStdout(t, func() {
+				err = cli.RunLint(path, "json")
+			})
+
+			var lintErr *cli.LintError
+			require.True(t, errors.As(err, &lintErr))
+			require.Equal(t, 1, lintErr.ExitCode)
+
+			var entries []map[string]interface{}
+			require.NoError(t, json.Unmarshal([]byte(output), &entries))
+			require.Len(t, entries, 1)
+			require.Equal(t, "warning", entries[0]["severity"])
+			require.Equal(t, "view/never-read", entries[0]["rule"])
+			require.Equal(t, path, entries[0]["file"])
+			require.Equal(t, float64(54), entries[0]["line"])
+		})
+
+		t.Run("text output names the rule, the view and the line it is declared on", func(t *testing.T) {
+			path := writeTemp(t, "never_read.emod", viewNeverReadEmod)
+
+			err := cli.RunLint(path, "text")
+
+			var lintErr *cli.LintError
+			require.True(t, errors.As(err, &lintErr))
+			require.Equal(t, 1, lintErr.ExitCode)
+			require.Equal(t, path+`:54: [view/never-read] view "MemberLoansView" is read by no trigger, automation or translation, so nothing in the model says who acts on it; give the trigger that opens on it a reads entry, or name it as a processor's todo list`, err.Error())
+		})
+	})
+
 	t.Run("spec/command-without-spec", func(t *testing.T) {
 		t.Run("json output reports the rule at info severity and exits 1", func(t *testing.T) {
 			path := writeTemp(t, "uncovered_command.emod", commandWithoutSpecEmod)
@@ -1677,6 +1779,7 @@ func TestLintExplain(t *testing.T) {
 			"command-in-disguise",
 			"command-past-tense",
 			"view-naming",
+			"view/never-read",
 			"left-chair",
 			"god-view",
 			"clickbait-event",

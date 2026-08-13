@@ -309,53 +309,53 @@ describes it.
 
 **Acceptance Criteria:**
 
-- [ ] A model declaring a view no `reads` names, in a model that states at least one `reads` elsewhere,
+- [x] A model declaring a view no `reads` names, in a model that states at least one `reads` elsewhere,
       produces one lint diagnostic with rule name `view/never-read`, `diagnostic.Warning` severity, and
       the filename, line and column of the view's `NamePos` — asserted with one `require.Equal` against
       the whole `*diagnostic.Entry`, not with stacked `require.Contains` calls
-- [ ] That diagnostic's message is exactly
+- [x] That diagnostic's message is exactly
       `view "MemberLoansView" is read by no trigger, automation or translation, so nothing in the model says who acts on it; give the trigger that opens on it a reads entry, or name it as a processor's todo list`
       for a view named `MemberLoansView` — pinned as one whole string and nowhere additionally asserted
       by fragment
-- [ ] A view read by a trigger's `reads`, one read by an automation's, and one read by a translation's
+- [x] A view read by a trigger's `reads`, one read by an automation's, and one read by a translation's
       each produce no diagnostic — asserted on a model that also declares an unread view, so the rule is
       proved to be running
-- [ ] A view declared in one aggregate and read by an automation in another aggregate produces no
+- [x] A view declared in one aggregate and read by an automation in another aggregate produces no
       diagnostic, and neither does one read from another context — resolution is model-wide, matching
       `reads`
-- [ ] A model that states no `reads` at all produces no diagnostic however many views it declares, and
+- [x] A model that states no `reads` at all produces no diagnostic however many views it declares, and
       `oracle.Check(test.PayloadLibraryLending, …)` still returns nothing, its leaf at
       `internal/oracle/oracle_test.go:61` staying in the "clean input" group unedited — the repository's
       checked-in witness for the guard
-- [ ] Two unread views, one in an aggregate's slice and one on a `mode dcb` context's own slice, both
+- [x] Two unread views, one in an aggregate's slice and one on a `mode dcb` context's own slice, both
       report, and the two diagnostics arrive in source order — asserted with one `require.Equal` against
       the reported lines so a misordering shows the whole list on failure
-- [ ] A view name declared by two slices and read once produces no diagnostic for either declaration;
+- [x] A view name declared by two slices and read once produces no diagnostic for either declaration;
       the same name declared twice and read by nothing produces one diagnostic per declaration, each at
       its own `NamePos`
-- [ ] A model whose every view is read produces no diagnostic from this rule
-- [ ] `linter.RuleDescription("view/never-read")` resolves, and `cli.RunLintExplain("view/never-read")`
+- [x] A model whose every view is read produces no diagnostic from this rule
+- [x] `linter.RuleDescription("view/never-read")` resolves, and `cli.RunLintExplain("view/never-read")`
       prints a description and returns no error. The description names the two shapes a reader takes and
       says the rule waits for the model's first `reads`, the way `spec/command-without-spec`'s entry
       (`internal/linter/descriptions.go:32`) states its own guard
-- [ ] The hand-transcribed rule list at `internal/cli/lint_test.go:1671` gains `view/never-read` as its
+- [x] The hand-transcribed rule list at `internal/cli/lint_test.go:1671` gains `view/never-read` as its
       24th entry, written by hand rather than derived from `ruleDescriptions`, and its subtest passes
-- [ ] `cli.RunLint(path, "json")` over a file whose only finding is this rule emits exactly one entry
+- [x] `cli.RunLint(path, "json")` over a file whose only finding is this rule emits exactly one entry
       whose `rule` is `view/never-read`, whose `severity` is `warning`, and whose `file` and `line` name
       the view — and the returned `*cli.LintError` carries exit code 1, not 2
-- [ ] `cli.RunLint(path, "text")` over the same file returns a `*cli.LintError` with exit code 1 whose
+- [x] `cli.RunLint(path, "text")` over the same file returns a `*cli.LintError` with exit code 1 whose
       `Error()` equals the whole formatted line — path, line, `[view/never-read]` and the message above
-- [ ] `cli.RunValidate` over the same file returns an error whose message names the rule and the view,
+- [x] `cli.RunValidate` over the same file returns an error whose message names the rule and the view,
       so the rule reaches an author through `emod validate` as well as `emod lint`
-- [ ] `internal/linter/linter_test.go`'s `"all rules together"` (`:914`) still asserts the same
+- [x] `internal/linter/linter_test.go`'s `"all rules together"` (`:914`) still asserts the same
       diagnostics it does today, and no expected value in that file moves for a rule other than this one
-- [ ] Every leaf in `internal/oracle/oracle_test.go`, `internal/cli/export_test.go` and
+- [x] Every leaf in `internal/oracle/oracle_test.go`, `internal/cli/export_test.go` and
       `internal/linter/linter_test.go` that runs one of the five fixtures Task 1 repaired still passes
       unedited — in particular the four "clean input" `require.Empty` leaves (`:55`, `:67`, `:73`,
       `:79`), the "invariants never exercised" transcription (`:133`), "the shared rejection fixture
       exercises every edge it states" (`internal/linter/linter_test.go:3929`) and the wire-type export
       envelope (`internal/cli/export_test.go:125`)
-- [ ] `mise exec -- task test:unit` and `mise exec -- task test:integration` are green
+- [x] `mise exec -- task test:unit` and `mise exec -- task test:integration` are green
 
 **Affected Files/Modules:**
 

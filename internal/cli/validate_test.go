@@ -735,6 +735,16 @@ context "Test" {
 		require.Contains(t, err.Error(), "OrderNotifier")
 	})
 
+	t.Run("returns error naming the rule and the view for a view nothing reads", func(t *testing.T) {
+		path := writeTemp(t, "never_read.emod", viewNeverReadEmod)
+
+		err := cli.RunValidate(path, "text")
+
+		require.Error(t, err)
+		require.Contains(t, err.Error(), "view/never-read")
+		require.Contains(t, err.Error(), "MemberLoansView")
+	})
+
 	t.Run("returns both lint warnings and validation errors", func(t *testing.T) {
 		input := `model "Test"
 context "Orders" {
