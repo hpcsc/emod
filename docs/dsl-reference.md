@@ -355,7 +355,7 @@ slice "<name>" {
 
 `subscribes` references event names defined elsewhere in the model (see [Cross-References](#11-cross-references)).
 
-- **`view/never-read` asks who acts on it:** the rule reports at warning severity when no `reads` anywhere in the model names the view — neither a trigger's, an automation's nor a translation's. A view takes one of two legitimate shapes: a trigger reads it, or a processor reads it as its todo list. The rule fires only once the model states at least one `reads`, so a model that has not adopted the concept reports nothing. Run `emod lint --explain view/never-read` for the full description.
+- **`view/never-read` asks who acts on it:** the rule reports at warning severity when no `reads` anywhere in the model names the view — neither a trigger's, an automation's nor a translation's. A view takes one of two legitimate shapes: a trigger reads it, or a processor reads it as its todo list. The rule fires only once the model states at least one `reads`, so a model that has not adopted the concept reports nothing. It also stays silent for the whole model while some `reads` names a view no slice declares: that name is already reported where it is written (see [Cross-References](#11-cross-references)), and nothing here can tell which view it was meant to be, so one misspelling yields one diagnostic rather than a second one pointing at the view. Run `emod lint --explain view/never-read` for the full description.
 
 ### Automation Pattern
 
@@ -380,7 +380,7 @@ slice "<name>" {
   reservation.emod:34: schedule expression "nightly" is neither a Go duration nor a five-field cron expression
   ```
 
-- `reads`: the todo list — the view holding the work the processor has left to do. Optional. The name must resolve to a view declared **anywhere in the model** — in any slice, under any aggregate or context — and `emod validate` reports one that resolves to nothing. That resolution is what separates an automation's `reads` from a trigger's and a translation's, which are recorded and left unchecked.
+- `reads`: the todo list — the view holding the work the processor has left to do. Optional. The name must resolve to a view declared **anywhere in the model** — in any slice, under any aggregate or context — and `emod validate` reports one that resolves to nothing.
 - `command`: the command the automation issues. Required.
 - `target context`: a context name (cross-reference, validated at `emod validate`).
 
@@ -808,7 +808,7 @@ context "Reservations" {
 
 ## 11. Cross-References
 
-All references use unqualified names. `emod validate` resolves them, except for two of the three spellings of `reads`.
+All references use unqualified names, and `emod validate` resolves every one of them.
 
 | Declaration | Referenced By | Context |
 |---|---|---|
@@ -820,7 +820,11 @@ All references use unqualified names. `emod validate` resolves them, except for 
 | `actor "<name>"` | `trigger { actor <Name> }` | [`command` pattern](#command-pattern) |
 | `invariant <name>` | `spec { then rejected <name> }`, `flow { command -> rejected: <Cmd> -> <name> }` | [`spec`](#spec), [`flow`](#7-flows) |
 
-Of the three constructs that spell `reads`, only an automation's is resolved: `emod validate` reports a name that matches no view in the model (see [`automation`](#automation-pattern)). A trigger's `reads` and a translation's are recorded and left unchecked, so either may name a view no slice declares.
+All three constructs that spell `reads` resolve alike — a trigger's, an automation's and a translation's. Each is looked up against the views the whole model declares, and a name matching none is reported at the `reads` entry that spells it, in the same words for all three:
+
+```
+lending.emod:22: view "MemberLoansVeiw" does not exist
+```
 
 Validation detects:
 - Missing target contexts, commands, events, or views.

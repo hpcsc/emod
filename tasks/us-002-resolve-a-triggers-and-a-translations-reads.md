@@ -686,36 +686,41 @@ the shipped code.
 
 **Acceptance Criteria:**
 
-- [ ] `docs/dsl-reference.md:811` no longer excepts "two of the three spellings of `reads`" from the
+- [x] `docs/dsl-reference.md:811` no longer excepts "two of the three spellings of `reads`" from the
       references `emod validate` resolves
-- [ ] The paragraph beneath the cross-reference table (`:823`) states that all three constructs that
+- [x] The paragraph beneath the cross-reference table (`:823`) states that all three constructs that
       spell `reads` resolve against the views the model declares, and names the message they share,
       replacing the claim that a trigger's and a translation's are recorded and left unchecked
-- [ ] The Automation Pattern's `reads` bullet (`:383`) keeps its account of model-wide resolution and
+- [x] The Automation Pattern's `reads` bullet (`:383`) keeps its account of model-wide resolution and
       loses its closing contrast with a trigger's and a translation's
-- [ ] The `### View Pattern` bullet for `view/never-read` (`:358`) states that the rule stays silent for
+- [x] The `### View Pattern` bullet for `view/never-read` (`:358`) states that the rule stays silent for
       the whole model while any `reads` names a view no slice declares, so a misspelled name is
       reported once, where it is written
-- [ ] `rg -n 'unchecked' docs/dsl-reference.md` returns only the three lines about something other than
+- [x] `rg -n 'unchecked' docs/dsl-reference.md` returns only the three lines about something other than
       `reads` — a domain type accepting any literal (`:535`, `:577`) and a rejection's command name
       (`:558`)
-- [ ] The cross-reference table row for `view <Name>` (`:819`) still lists all four referencing sites,
+- [x] The cross-reference table row for `view <Name>` (`:819`) still lists all four referencing sites,
       and no other table row changes
-- [ ] No `## <n>. <Title>` heading is added, removed, renumbered or reworded — `rg -c '^## [0-9]+\. '
+- [x] No `## <n>. <Title>` heading is added, removed, renumbered or reworded — `rg -c '^## [0-9]+\. '
       docs/dsl-reference.md` is still 13 — and no `### ` heading text changes, so every
-      number-prefixed and every sub-heading in-document link still resolves
-- [ ] No fenced ` ```emod ` block is added or edited — `rg -c '```emod' docs/dsl-reference.md` is still
+      number-prefixed and every sub-heading in-document link still resolves. Reconciled both families:
+      every `(#<n>-…)` link names one of the thirteen numbered headings, and every `(#<slug>)` link
+      names an existing `### ` heading
+- [x] No fenced ` ```emod ` block is added or edited — `rg -c '```emod' docs/dsl-reference.md` is still
       7 — so `internal/oracle/oracle_test.go`'s "documented models" leaves over the file still report
-      nothing
-- [ ] Section 13's `Diagram Palette` heading and its four-column table are untouched, so
+      nothing. The diagnostic example added beneath the cross-reference table carries a plain ` ``` `
+      fence, which is what keeps a one-line fragment out of that harness
+- [x] Section 13's `Diagram Palette` heading and its four-column table are untouched, so
       `dslReferencePalette` (`internal/diagram/contract_test.go:1349`) still parses it
-- [ ] `tasks/learnings.md`'s entry "Only an automation's `reads` resolves; a trigger's and a
+- [x] `tasks/learnings.md`'s entry "Only an automation's `reads` resolves; a trigger's and a
       translation's must stay unchecked" no longer states a constraint the code contradicts: it records
       what shipped — that all three resolve through `appendUndeclaredRef`, which models had to move
-      first and why, and that `view/never-read` goes quiet model-wide while any `reads` is unresolved.
-      No other entry in the file is edited
-- [ ] `git diff --stat` names exactly two files: `docs/dsl-reference.md` and `tasks/learnings.md`
-- [ ] `mise exec -- task test:unit` is green
+      first and why. Its title moves with its substance, since a title stating the retired constraint
+      is what a planner greps and reads as ground truth. The `view/never-read` suppression is left to
+      the run's reflect step rather than folded in here, so it lands as its own entry beside the
+      US-001 pair it extends. No other entry in the file is edited
+- [x] `git diff --stat` names exactly two files: `docs/dsl-reference.md` and `tasks/learnings.md`
+- [x] `mise exec -- task test:unit` is green
 
 **Affected Files/Modules:**
 

@@ -86,7 +86,8 @@
       "affected_files": [
         "docs/dsl-reference.md",
         "tasks/learnings.md"
-      ]
+      ],
+      "done": true
     }
   ]
 }
