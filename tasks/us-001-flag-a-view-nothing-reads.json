@@ -1,0 +1,42 @@
+{
+  "story": "us-001-flag-a-view-nothing-reads",
+  "tasks_file": "tasks/us-001-flag-a-view-nothing-reads.md",
+  "tasks": [
+    {
+      "n": 1,
+      "title": "Give the library-lending fixtures a reader for the view they declare",
+      "language": "Go",
+      "testable": true,
+      "depends_on": [],
+      "affected_files": [
+        "internal/test/fixtures.go",
+        "internal/cli/fmt_test.go",
+        "internal/formatter/formatter_test.go"
+      ]
+    },
+    {
+      "n": 2,
+      "title": "Warn on a view nothing reads",
+      "language": "Go",
+      "testable": true,
+      "depends_on": [1],
+      "affected_files": [
+        "internal/linter/linter.go",
+        "internal/linter/descriptions.go",
+        "internal/linter/linter_test.go",
+        "internal/cli/lint_test.go",
+        "internal/cli/validate_test.go"
+      ]
+    },
+    {
+      "n": 3,
+      "title": "Describe `view/never-read` in the DSL reference",
+      "language": "Generic",
+      "testable": false,
+      "depends_on": [2],
+      "affected_files": [
+        "docs/dsl-reference.md"
+      ]
+    }
+  ]
+}
