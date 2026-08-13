@@ -1050,7 +1050,7 @@ context "Lending" {
     slice "Borrow Copy" {
       trigger "Lending Desk" {
         actor Member
-        reads AvailableCopiesView
+        reads MemberLoansView
       }
       command BorrowCopy {
         fields {
@@ -1416,7 +1416,7 @@ context "Lending" {
     slice "Borrow Copy" {
       trigger "Lending Desk" {
         actor Member
-        reads AvailableCopiesView
+        reads MemberLoansView
       }
       command BorrowCopy {
         fields {
@@ -2216,8 +2216,7 @@ var SlicePatternLibraryLendingOutcomeKinds = []string{
 // of AutomationReadsLibraryLending reads, both slice homes together and in
 // declaration order, so a walk or a strip that reaches only one of the homes
 // reads back short against it. The automation that reads no view contributes
-// nothing, and the view a trigger reads is not an automation's, so the list is
-// shorter than either count.
+// nothing, so the list is shorter than the automation count.
 var AutomationReadsLibraryLendingViewNames = []string{
 	"MemberLoansView",
 	"DeskOccupancyView",

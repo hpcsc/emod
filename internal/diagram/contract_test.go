@@ -681,22 +681,6 @@ func TestExporterReadsEdges(t *testing.T) {
 				})
 			}
 
-			t.Run("a trigger whose reads names a view no slice declares is drawn no arrow beside an automation whose does not", func(t *testing.T) {
-				reading := test.AutomationReadsLibraryLendingModel(t)
-
-				require.Equal(t, []string{"AvailableCopiesView"}, test.DeclaredTriggerReads(reading),
-					"its trigger has to name a view no slice declares, or the silence below says nothing")
-				require.Equal(t, test.AutomationReadsLibraryLendingViewNames, test.DeclaredAutomationReads(reading))
-
-				output := e.run(t, reading, diagram.StyleAuto)
-
-				e.requireWellFormed(t, output)
-				drawn := e.connections(t, output)
-				require.Empty(t, sourcesInto(drawn, "Lending Desk"))
-				require.ElementsMatch(t, []string{"CopyBorrowed", "MemberLoansView"},
-					sourcesInto(drawn, "RecallOverdueCopy"),
-					"the automation beside it reads a view the model does declare, so its arrow is drawn")
-			})
 		})
 	}
 }

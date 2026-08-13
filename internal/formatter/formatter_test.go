@@ -1437,8 +1437,8 @@ func TestFormat(t *testing.T) {
 				"the twin declares no automation reads, so formatting it may not invent one")
 
 			formatted, formattedTwin := formatter.Format(reading), formatter.Format(unread)
-			require.Contains(t, formattedTwin, "reads AvailableCopiesView",
-				"what a trigger reads is not an automation's, so the twin keeps it")
+			require.Contains(t, formattedTwin, "reads MemberLoansView",
+				"the twin clears only the automations' reads, so the trigger's survives")
 			require.NotEqual(t, formatted, formattedTwin,
 				"the twin has to read no view, or the comparison below says nothing")
 			require.Equal(t, withoutReadsLines(formatted), withoutReadsLines(formattedTwin),
@@ -1459,7 +1459,7 @@ func TestFormat(t *testing.T) {
 					shape:            "automations in both slice homes, reading views across contexts",
 					parse:            test.AutomationReadsLibraryLendingModel,
 					activationEvents: test.AutomationReadsLibraryLendingActivationEvents,
-					triggerReads:     []string{"AvailableCopiesView"},
+					triggerReads:     []string{"MemberLoansView"},
 					automationReads:  test.AutomationReadsLibraryLendingViewNames,
 				},
 				{
@@ -1474,7 +1474,7 @@ func TestFormat(t *testing.T) {
 					parse:            test.AutomationScheduleLibraryLendingModel,
 					activationEvents: test.AutomationScheduleLibraryLendingActivationEvents,
 					schedules:        test.AutomationScheduleLibraryLendingSchedules,
-					triggerReads:     []string{"AvailableCopiesView"},
+					triggerReads:     []string{"MemberLoansView"},
 					automationReads:  []string{"MemberLoansView", "DeskOccupancyView", "MemberLoansView"},
 				},
 				{

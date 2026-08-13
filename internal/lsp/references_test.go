@@ -261,12 +261,13 @@ func TestGetReferences(t *testing.T) {
 			require.Len(t, locs, 4)
 		})
 
-		t.Run("cursor on a view declaration lists the automations reading it across slice and context boundaries", func(t *testing.T) {
+		t.Run("cursor on a view declaration lists every construct reading it across slice and context boundaries", func(t *testing.T) {
 			doc := test.AutomationReadsLibraryLending
 
 			mLine, mChar := posIn(t, doc, "view MemberLoansView", "MemberLoansView")
 			require.Equal(t, []lsp.Location{
 				locationOf(t, doc, "view MemberLoansView", "MemberLoansView"),
+				locationOf(t, doc, `trigger "Lending Desk"`, "MemberLoansView"),
 				locationOf(t, doc, "automation RecallOverdueCopy", "MemberLoansView"),
 				locationOf(t, doc, "automation RemindReaderOfLoans", "MemberLoansView"),
 			}, lsp.GetReferences(doc, mLine, mChar, uri))

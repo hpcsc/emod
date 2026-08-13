@@ -26,7 +26,8 @@
         "internal/formatter/formatter_test.go",
         "internal/export/export_test.go",
         "internal/diagram/contract_test.go"
-      ]
+      ],
+      "done": true
     },
     {
       "n": 3,

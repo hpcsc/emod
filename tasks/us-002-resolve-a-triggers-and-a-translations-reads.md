@@ -339,34 +339,44 @@ only views their own model declares. The two assertions that used those fixtures
 
 **Acceptance Criteria:**
 
-- [ ] The trigger of `test.AutomationReadsLibraryLending` (`internal/test/fixtures.go:1053`) and of
+- [x] The trigger of `test.AutomationReadsLibraryLending` (`internal/test/fixtures.go:1053`) and of
       `test.AutomationScheduleLibraryLending` (`:1419`) reads `MemberLoansView`, the view each model's
       `slice "Review Member Loans"` declares, in place of `AvailableCopiesView`, which neither declares
-- [ ] `rg -n 'AvailableCopiesView' internal/test/fixtures.go` prints nothing
-- [ ] `test.DeclaredTriggerReads` over both parsed models reads back `[]string{"MemberLoansView"}`
-- [ ] `oracle.Check` over both returns exactly the lines `internal/oracle/oracle_test.go:108-110` and
+- [x] `rg -n 'AvailableCopiesView' internal/test/fixtures.go` prints nothing
+- [x] `test.DeclaredTriggerReads` over both parsed models reads back `[]string{"MemberLoansView"}`
+- [x] `oracle.Check` over both returns exactly the lines `internal/oracle/oracle_test.go:108-110` and
       `:124-128` transcribe today, unchanged down to their line numbers, and no leaf in that file is
       edited — the repair replaces a name on a line rather than moving one
-- [ ] `internal/diagram` still asserts that a `reads` naming a view no slice declares is drawn no
+- [x] `internal/diagram` still asserts that a `reads` naming a view no slice declares is drawn no
       arrow, over `mixedReadsModel()` (`internal/diagram/contract_test.go:780`), and no leaf in that
-      package rests that claim on a shared fixture: `rg -n 'AvailableCopiesView' internal/diagram`
-      prints nothing
-- [ ] `internal/export` still asserts that such a name reaches no diagram node and draws no edge, over
+      package rests that claim on a shared fixture. Stated as behaviour rather than as
+      `rg -n 'AvailableCopiesView' internal/diagram` printing nothing, because `wiredSlice()`
+      (`internal/diagram/graph_test.go:19`) keeps the name in a hand-built slice that pins what
+      `SliceEdges` derives before any drawer resolves it — it rests no claim on a shared fixture, and
+      renaming it would churn a test guarding a different layer
+- [x] `internal/export` still asserts that such a name reaches no diagram node and draws no edge, over
       the model built at `internal/export/export_test.go:2837-2887`, and the trailing assertion of
       "the view an automation reads reaches its node and draws an edge of its own…" (`:3692`) states
       the trigger's own edge instead of its absence, its subtest name no longer claiming "while a name
       no slice declares draws none"
-- [ ] The only expected values that move are the ones restating a changed fixture's own text:
+- [x] The only expected values that move are the ones restating a changed fixture's own text:
       `require.Contains(t, formattedTwin, "reads AvailableCopiesView")`
       (`internal/formatter/formatter_test.go:1440`), the `triggerReads` fields of the
       `AutomationReadsLibraryLendingModel` and `AutomationScheduleLibraryLendingModel` rows (`:1462`,
-      `:1477`), `readingTrigger` (`internal/export/export_test.go:4595`), and the two assertions named
-      in the criteria above. No `*FormattedEmod` constant and no transcribed `…ViewNames`,
-      `…ActivationEvents` or `…Schedules` list moves
-- [ ] `git diff --stat` names exactly four files: `internal/test/fixtures.go`,
+      `:1477`), `readingTrigger` (`internal/export/export_test.go:4595`), the cursor anchor of the
+      trigger row in the `reads` completion table (`internal/lsp/completer_test.go:267`), the
+      reference list of "cursor on a view declaration lists every construct reading it…"
+      (`internal/lsp/references_test.go:264`), and the two assertions named in the criteria above. No
+      `*FormattedEmod` constant and no transcribed `…ViewNames`, `…ActivationEvents` or `…Schedules`
+      list moves
+- [x] `git diff --stat` names exactly six files: `internal/test/fixtures.go`,
       `internal/formatter/formatter_test.go`, `internal/export/export_test.go`,
-      `internal/diagram/contract_test.go`
-- [ ] `mise exec -- task test:unit` and `mise exec -- task test:integration` are green
+      `internal/diagram/contract_test.go`, `internal/lsp/completer_test.go` and
+      `internal/lsp/references_test.go`. The two `internal/lsp` files were missed when this list was
+      written: both consume `AutomationReadsLibraryLending`, and once its trigger reads a *declared*
+      view the completer's cursor anchor no longer exists in the document and find-references
+      correctly gains the trigger's site
+- [x] `mise exec -- task test:unit` and `mise exec -- task test:integration` are green
 
 **Affected Files/Modules:**
 

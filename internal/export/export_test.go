@@ -3672,7 +3672,7 @@ func TestExport(t *testing.T) {
 				"the diagram document carries no payload value")
 		})
 
-		t.Run("the view an automation reads reaches its node and draws an edge of its own, while a name no slice declares draws none", func(t *testing.T) {
+		t.Run("the view an automation reads reaches its node and draws an edge of its own, beside the one its slice's trigger draws", func(t *testing.T) {
 			reading := test.AutomationReadsLibraryLendingModel(t)
 			unread := test.WithoutAutomationReads(reading)
 
@@ -3689,8 +3689,10 @@ func TestExport(t *testing.T) {
 
 			require.Equal(t, test.AutomationReadsLibraryLendingViewNames, viewsReadBy(readingDoc, "automation"))
 			require.Empty(t, viewsReadBy(unreadDoc, "automation"))
-			require.Empty(t, viewsReadBy(readingDoc, "trigger"),
-				"the trigger of this model reads AvailableCopiesView, which no slice declares")
+			require.Equal(t, []string{"MemberLoansView"}, viewsReadBy(readingDoc, "trigger"),
+				"the trigger of this model reads MemberLoansView, the view its own slice declares")
+			require.Equal(t, []string{"MemberLoansView"}, viewsReadBy(unreadDoc, "trigger"),
+				"taking the automations' reads leaves the trigger's own edge standing")
 		})
 
 		t.Run("every view a trigger or an automation reads draws its edge, across both slice homes and across a context boundary", func(t *testing.T) {
@@ -4592,7 +4594,7 @@ func TestExport(t *testing.T) {
 			requireBothFormatsAgree(t, cueBin, unread)
 
 			readingNoView := automationsReadingNoView(libraryLendingAutomationReads)
-			readingTrigger := map[string]string{"Borrow Copy": "AvailableCopiesView"}
+			readingTrigger := map[string]string{"Borrow Copy": "MemberLoansView"}
 			docs := exportedDocs(t, cueBin, unread)
 			for format, doc := range docs {
 				require.Equal(t, readingNoView, automationReadsByOwner(doc), "%s export", format)

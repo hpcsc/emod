@@ -264,7 +264,7 @@ func TestGetCompletions(t *testing.T) {
 					block:     "trigger",
 					doc:       test.AutomationReadsLibraryLending,
 					container: `trigger "Lending Desk"`,
-					value:     "AvailableCopiesView",
+					value:     "MemberLoansView",
 					expected:  declaredViews,
 				},
 				{
