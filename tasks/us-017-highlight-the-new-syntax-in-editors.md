@@ -117,9 +117,9 @@ package, `internal/viewer`, `e2e/` and `e2e-viewer/`.
    (`emod.tmLanguage.json:22-38`) is a `begin`/`end` rule, added by that same story, and it is the reason
    the repair is a rule rather than a restructuring.
 2. *`on` and `every` are already correct and stay untouched.* They are the two keywords the flat
-   alternation deliberately omits (`emod.tmLanguage.json:96` says so), coloured instead by
-   `activations` (`:67-84`) keyed on their operand. A general field-name rule must leave their existing
-   assertions in `editors/vscode/test/scopes/unreserved-keywords.emod` passing unedited — those
+   alternation deliberately omits (`emod.tmLanguage.json:101` says so), coloured instead by
+   `positional-keywords` (`:67-89`) keyed on their operand. A general field-name rule must leave their
+   existing assertions in `editors/vscode/test/scopes/unreserved-keywords.emod` passing unedited — those
    assertions are stated as negative scope lists, so a name that gains a positive field-name scope
    still satisfies them.
 3. *The single-line `fields { <name> <type> <modifier> }` form is recorded, not required.* It is legal
@@ -210,7 +210,7 @@ is any assertion that says so.
 **The tree-sitter highlight suite.** `editors/tree-sitter-emod/test/highlight/` holds three assertion
 files — `constructs.emod` (83 lines, the structural constructs and four field lines), `dcb.emod` (34
 lines, `mode dcb`, `decides_on`, `events`, `where`, `tag`, the boolean operators and a `tags` key) and
-`unreserved-keywords.emod` (48 lines, `on` and `every` as activations and then as a field's name, type
+`unreserved-keywords.emod` (56 lines, `on` and `every` as activations and then as a field's name, type
 and modifier). Each opens with a five-line header explaining that a marker asserts against the nearest
 source line above and only discriminates while another highlighted token follows it on that line.
 `tree-sitter.json` declares `queries/highlights.scm` under `highlights`, which is what makes
@@ -218,24 +218,26 @@ source line above and only discriminates while another highlighted token follows
 and then `go test -count=1 -tags grammar ./test/queries/...`, and `.github/workflows/ci.yml:33` runs
 that target.
 
-**The TextMate grammar.** `editors/vscode/syntaxes/emod.tmLanguage.json` is 117 lines. Its top-level
-`patterns` list (`:6-12`) orders `#comments`, `#fields-block`, `#keyword-entity`, `#activations`,
+**The TextMate grammar.** `editors/vscode/syntaxes/emod.tmLanguage.json` is 122 lines. Its top-level
+`patterns` list (`:6-12`) orders `#comments`, `#fields-block`, `#keyword-entity`, `#positional-keywords`,
 `#standalone-tokens`. `fields-block` (`:22-38`) is a `begin`/`end` rule keyed on `fields` and its brace,
 whose inner `patterns` (`:33-37`) are `#comments`, `#keyword-entity` and `#standalone-tokens` —
-`#activations` is deliberately absent, and its comment says why. `keyword-entity` (`:39-66`) holds three
-patterns: keywords taking a quoted entity name, keywords taking an identifier entity name, and `target`
-with its trailing context name. `activations` (`:67-84`) is the case-sensitive rule for `on` and `every`.
-`standalone-tokens` (`:85-94`) chains `#strings`, `#keywords`, `#field-modifiers`, `#field-types`,
-`#operators`, `#punctuation`. The flat `keywords` alternation (`:95-99`) is case-insensitive and
-positionless and carries all thirty-five spellings other than `on` and `every`, including `emod`,
+`#positional-keywords` is deliberately absent, and its comment says why. `keyword-entity` (`:39-66`)
+holds three patterns: keywords taking a quoted entity name, keywords taking an identifier entity name,
+and `target` with its trailing context name. `positional-keywords` (`:67-89`) is the case-sensitive rule
+for `on`, `every` and an event's wire `type`.
+`standalone-tokens` (`:90-99`) chains `#strings`, `#keywords`, `#field-modifiers`, `#field-types`,
+`#operators`, `#punctuation`. The flat `keywords` alternation (`:100-104`) is case-insensitive and
+positionless and carries all thirty-five spellings other than `on`, `every` and `type`, including `emod`,
 `description`, `invariant`, `spec`, `given`, `when`, `then` and `rejected`. Nothing in the file assigns a
 scope to a field's *name*, and nothing assigns a numeric or boolean scope.
 
-**The VS Code scope suite.** `editors/vscode/test/scopes/` holds eight assertion files —
+**The VS Code scope suite.** `editors/vscode/test/scopes/` holds nine assertion files —
 `declarations.emod`, `activations.emod`, `fields.emod`, `specs.emod`, `dcb.emod`, `comments.emod`,
-`strings.emod`, `unreserved-keywords.emod` — driven by `editors/vscode/test/scope-assertions.test.js`
-through `vscode-tmgrammar-test`. That file holds four tests (`:109`, `:115`, `:130`, `:145`): the shipped
-grammar satisfying every assertion, and three negative controls built from
+`strings.emod`, `unreserved-keywords.emod`, `wire-type.emod` — driven by
+`editors/vscode/test/scope-assertions.test.js` through `vscode-tmgrammar-test`. That file runs five
+tests from four call sites (`:109`, `:115`, `:134` twice over a table of keyword sets, `:149`): the
+shipped grammar satisfying every assertion, and four negative controls built from
 `grammarWithScopeRenamed` (`:48`), `grammarWithFlatKeywordsExtended` (`:54`) and
 `assertionsWithScopeRenamed` (`:66`), each checked through `assertReportsMismatch` (`:94`), which
 requires the failure report to name the file, the position, the required or prohibited scope, and the
@@ -387,12 +389,12 @@ where it opens a file.
 - [ ] `scope-assertions.test.js` gains a negative control for the repair: a copy of the grammar with the
       field-name treatment removed makes the keyword-named-field assertions fail, and the report names
       the position, the prohibited scope and the scope actually produced
-- [ ] The three negative controls already in `scope-assertions.test.js` (`:115`, `:130`, `:145`) still
-      pass, the `on` / `every` one unedited — extending the flat alternation with those two spellings
-      must still break the field-name assertions
-- [ ] `emod.tmLanguage.json` is valid JSON, `activations` (`:67-84`) is unchanged, and the flat
-      `keywords` alternation (`:95-99`) still spells every lexer keyword other than `on` and `every`, so
-      `mise exec -- task test:grammar` still passes `TestEditorKeywordCoverage`
+- [ ] The four negative controls already in `scope-assertions.test.js` (`:115`, `:134` twice, `:149`)
+      still pass, the `on` / `every` one unedited — extending the flat alternation with those two
+      spellings must still break the field-name assertions
+- [ ] `emod.tmLanguage.json` is valid JSON, `positional-keywords` (`:67-89`) is unchanged, and the flat
+      `keywords` alternation (`:100-104`) still spells every lexer keyword other than `on`, `every` and
+      `type`, so `mise exec -- task test:grammar` still passes `TestEditorKeywordCoverage`
 - [ ] `git diff` touches only `editors/vscode/syntaxes/emod.tmLanguage.json` and files under
       `editors/vscode/test/`
 
@@ -406,7 +408,7 @@ where it opens a file.
   `:115-160`
 
 **Patterns to Follow:**
-- `activations` (`emod.tmLanguage.json:67-84`) is the precedent for a treatment keyed on position
+- `positional-keywords` (`emod.tmLanguage.json:67-89`) is the precedent for a treatment keyed on position
   rather than on the word alone, and `fields-block`'s comment (`:23`) states the reason the block
   boundary is the only thing that can tell a field line from an activation
 - `highlights.scm:83-102` is the tree-sitter counterpart this brings VS Code level with, and its
@@ -414,7 +416,7 @@ where it opens a file.
   gives a field's name is `@variable.member`
 - `tasks/learnings.md` "A keyword that is only a keyword in one position never joins the flat TextMate
   alternation" — including the note that `fields` is a `begin`/`end` block whose inner patterns
-  deliberately omit `#activations`, and that `standalone-tokens` exists so the file-level and
+  deliberately omit `#positional-keywords`, and that `standalone-tokens` exists so the file-level and
   block-level tails cannot drift apart
 - `tasks/learnings.md` "A suite that pins another tool's output owes a mutated-input negative control"
   — the mismatch helper `assertReportsMismatch` (`scope-assertions.test.js:94`) is what a new control
@@ -513,8 +515,8 @@ inside a quoted string that happens to carry digits.
 - [ ] A quoted payload value keeps `string.quoted.double.emod`, asserted on the same line as a number,
       so the two treatments are proved distinct
 - [ ] Inside a `fields` block, a field named `true` and a field named `false` carry no boolean scope —
-      the boolean treatment keys on payload position the way `activations` (`:67-84`) keys `on` and
-      `every` on their operand, so it cannot be a positionless word alternation
+      the boolean treatment keys on payload position the way `positional-keywords` (`:67-89`) keys
+      `on`, `every` and `type` on their operand, so it cannot be a positionless word alternation
 - [ ] `editors/vscode/test/scopes/strings.emod:14-17` passes unedited: a cron schedule keeps
       `string.quoted.double.emod` across its whole span, with no numeric scope on the digits inside it
       — `standalone-tokens` (`:85-94`) lists `#strings` ahead of the rules that follow it, and that
@@ -528,8 +530,8 @@ inside a quoted string that happens to carry digits.
       grammar with the boolean rule turned into a positionless word alternation makes the
       field-named-`true` assertion fail, and the report names the position, the prohibited scope and the
       scope actually produced
-- [ ] The three negative controls already in `scope-assertions.test.js` (`:115`, `:130`, `:145`) and the
-      one Task 2 added still pass, unedited
+- [ ] The four negative controls already in `scope-assertions.test.js` (`:115`, `:134` twice, `:149`)
+      and the one Task 2 added still pass, unedited
 - [ ] `emod.tmLanguage.json` is valid JSON, its top-level `patterns` order (`:6-12`) still puts
       `#comments` and `#fields-block` ahead of the rest, and `mise exec -- task test:grammar` still
       passes `TestEditorKeywordCoverage`
@@ -543,8 +545,8 @@ inside a quoted string that happens to carry digits.
 - `editors/vscode/test/scope-assertions.test.js` — the new negative control
 
 **Patterns to Follow:**
-- `activations` (`emod.tmLanguage.json:67-84`) is the precedent for a token that is only itself in one
-  position, and its comment records why it is case-sensitive where the surrounding rules are not
+- `positional-keywords` (`emod.tmLanguage.json:67-89`) is the precedent for a token that is only itself
+  in one position, and its comment records why it is case-sensitive where the surrounding rules are not
 - `tasks/learnings.md` "A keyword that is only a keyword in one position never joins the flat TextMate
   alternation" — `true` and `false` are not keywords, but they carry exactly the same hazard, and the
   `fields` block is the same boundary that resolves it
