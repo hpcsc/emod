@@ -72,7 +72,8 @@
         "internal/linter/descriptions.go",
         "internal/linter/linter_test.go",
         "internal/oracle/oracle_test.go"
-      ]
+      ],
+      "done": true
     },
     {
       "n": 6,

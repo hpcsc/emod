@@ -595,37 +595,40 @@ exactly as before on every model whose `reads` all resolve.
 
 **Acceptance Criteria:**
 
-- [ ] `linter.Lint` reports no `view/never-read` diagnostic for any view of a model in which some
+- [x] `linter.Lint` reports no `view/never-read` diagnostic for any view of a model in which some
       `reads` — a trigger's, an automation's or a translation's — names a name no slice of the model
       declares
-- [ ] The leaf proving it is written over a model that states a **resolving** `reads` on a second view,
+- [x] The leaf proving it is written over a model that states a **resolving** `reads` on a second view,
       so `readViews` is non-empty and the rule's own adoption guard cannot be what silenced it, and
       that gives the view under test no second reader, so the unresolved `reads` is the only sufficient
       cause of the silence
-- [ ] The same model with the unresolved `reads` removed — its construct stating no `reads` at all —
+- [x] The same model with the unresolved `reads` removed — its construct stating no `reads` at all —
       reports `view/never-read` for that view, at its `NamePos`, so the leaf above cannot pass against
       a rule that never fired
-- [ ] The suppression holds whichever of the three constructs spells the unresolved `reads`, asserted
+- [x] The suppression holds whichever of the three constructs spells the unresolved `reads`, asserted
       once per construct
-- [ ] Through `oracle.Check`, a model declaring `CaseWorkspaceView` whose trigger reads
+- [x] Through `oracle.Check`, a model declaring `CaseWorkspaceView` whose trigger reads
       `CaseWorkspacveView` reports exactly one line — `view "CaseWorkspacveView" does not exist` at the
       trigger's `reads` — asserted with one `require.Equal` over `reportedLines`, so a second
       diagnostic anywhere in the list fails it
-- [ ] Every other leaf of `internal/linter/linter_test.go`'s `"view/never-read"` group (`:3744-4025`)
+- [x] Every other leaf of `internal/linter/linter_test.go`'s `"view/never-read"` group (`:3744-4025`)
       passes unedited, except "read by nothing, with the model stating a reads elsewhere" (`:4016`),
       whose `reads elsewhere` names `OverdueLoansView` — a view that model declares nowhere. It names a
       view the model does declare instead, and still reports one diagnostic per `MemberLoansView`
-      declaration, at `:20` and `:44`
-- [ ] `ruleDescriptions["view/never-read"]` (`internal/linter/descriptions.go:31`) states the
+      declaration, at `:20` and `:44`. Its shared `declaredTwice` builder gains the slice that declares
+      that view and reads it with a trigger of its own, which is what lets the repointed `reads`
+      resolve without thereby reading `MemberLoansView` — the sibling "read once" leaf runs on the
+      same builder and still reports nothing
+- [x] `ruleDescriptions["view/never-read"]` (`internal/linter/descriptions.go:31`) states the
       suppression, so `emod lint --explain view/never-read` tells an author why the rule went quiet and
       where to look instead. `internal/cli/lint_test.go`'s "all rules have descriptions" loop passes
       unedited
-- [ ] `internal/cli/lint_test.go`'s `viewNeverReadEmod` (`:168`) and its leaves at `:1370` and `:1383`
+- [x] `internal/cli/lint_test.go`'s `viewNeverReadEmod` (`:168`) and its leaves at `:1370` and `:1383`
       pass unedited — that fixture's automation reads a view it declares, so the rule still fires there
-- [ ] `git diff --stat` names exactly `internal/linter/linter.go`,
+- [x] `git diff --stat` names exactly `internal/linter/linter.go`,
       `internal/linter/descriptions.go`, `internal/linter/linter_test.go` and
       `internal/oracle/oracle_test.go`
-- [ ] `mise exec -- task test:unit` and `mise exec -- task test:integration` are green
+- [x] `mise exec -- task test:unit` and `mise exec -- task test:integration` are green
 
 **Affected Files/Modules:**
 

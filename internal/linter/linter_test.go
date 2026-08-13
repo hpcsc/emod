@@ -4000,8 +4000,16 @@ func TestLint(t *testing.T) {
 		})
 
 		t.Run("one reads answers for every declaration of that name, and no reads reports each of them", func(t *testing.T) {
+			// DeskOccupancyView is declared and read by a trigger of its own, so the
+			// reader below can name a view that resolves without thereby reading
+			// MemberLoansView, and draws no diagnostic either way.
 			declaredTwice := func(reader *ast.Trigger) *ast.Model {
 				return lendingWith(
+					&ast.Slice{
+						Name:    "Watch Desks",
+						Trigger: &ast.Trigger{Name: "Desk Board", Reads: "DeskOccupancyView"},
+						Views:   []*ast.View{viewAt("DeskOccupancyView", 12)},
+					},
 					&ast.Slice{Name: "Review Member Loans", Trigger: reader, Views: []*ast.View{viewAt("MemberLoansView", 20)}},
 					&ast.Slice{Name: "Review Desk Loans", Views: []*ast.View{viewAt("MemberLoansView", 44)}},
 				)
@@ -4014,13 +4022,156 @@ func TestLint(t *testing.T) {
 			})
 
 			t.Run("read by nothing, with the model stating a reads elsewhere", func(t *testing.T) {
-				diags := linter.Lint(declaredTwice(&ast.Trigger{Name: "Lending Desk", Reads: "OverdueLoansView"}))
+				diags := linter.Lint(declaredTwice(&ast.Trigger{Name: "Lending Desk", Reads: "DeskOccupancyView"}))
 
 				require.Equal(t, []string{
 					fmt.Sprintf(`lending.emod:20: [view/never-read] `+neverRead, "MemberLoansView"),
 					fmt.Sprintf(`lending.emod:44: [view/never-read] `+neverRead, "MemberLoansView"),
 				}, reportedLines(diags))
 			})
+		})
+
+		t.Run("a reads naming a view no slice declares silences the rule for the whole model", func(t *testing.T) {
+			// The unread view is MemberLoansView. DeskOccupancyView is read by a
+			// trigger of its own so the model states a resolving reads whatever the
+			// slice under test does, which keeps the adoption guard open and out of
+			// the way — and, being read, it draws no diagnostic of its own.
+			modelReading := func(under *ast.Slice) *ast.Model {
+				return lendingWith(
+					&ast.Slice{
+						Name:    "Watch Desks",
+						Trigger: &ast.Trigger{Name: "Desk Board", Reads: "DeskOccupancyView"},
+						Views:   []*ast.View{viewAt("DeskOccupancyView", 12)},
+					},
+					&ast.Slice{Name: "Review Member Loans", Views: []*ast.View{viewAt("MemberLoansView", 20)}},
+					under,
+				)
+			}
+
+			for _, tc := range []struct {
+				construct string
+				reading   *ast.Slice
+				silent    *ast.Slice
+			}{
+				{
+					construct: "a trigger",
+					reading: &ast.Slice{
+						Name:    "Borrow Copy",
+						Trigger: &ast.Trigger{Name: "Lending Desk", Reads: "MemberLoansVeiw"},
+					},
+					silent: &ast.Slice{
+						Name:    "Borrow Copy",
+						Trigger: &ast.Trigger{Name: "Lending Desk"},
+					},
+				},
+				{
+					construct: "an automation",
+					reading: &ast.Slice{
+						Name:        "Borrow Copy",
+						Automations: []*ast.Automation{{Name: "RecallOverdueCopy", Reads: "MemberLoansVeiw"}},
+					},
+					silent: &ast.Slice{
+						Name:        "Borrow Copy",
+						Automations: []*ast.Automation{{Name: "RecallOverdueCopy"}},
+					},
+				},
+				{
+					construct: "a translation",
+					reading: &ast.Slice{
+						Name:         "Borrow Copy",
+						Translations: []*ast.Translation{{Name: "PartnerFeed", Reads: "MemberLoansVeiw"}},
+					},
+					silent: &ast.Slice{
+						Name:         "Borrow Copy",
+						Translations: []*ast.Translation{{Name: "PartnerFeed"}},
+					},
+				},
+			} {
+				t.Run("spelled by "+tc.construct, func(t *testing.T) {
+					misspelled := linter.Lint(modelReading(tc.reading))
+
+					require.Empty(t, linesReportedBy(misspelled, "view/never-read"),
+						"the misspelled name is the only thing that can silence MemberLoansView, and it silences DeskOccupancyView's siblings with it")
+
+					stated := linter.Lint(modelReading(tc.silent))
+
+					require.Equal(t, []string{
+						fmt.Sprintf(`lending.emod:20: [view/never-read] `+neverRead, "MemberLoansView"),
+					}, linesReportedBy(stated, "view/never-read"),
+						"dropping the reads entry alone must bring the rule back, or the silence above says nothing")
+				})
+			}
+		})
+
+		t.Run("an unresolvable reads in one context silences an unread view in another", func(t *testing.T) {
+			// The two live in separate contexts, so a suppression scoped to the
+			// context holding the bad reads would leave MemberLoansView reported.
+			model := &ast.Model{
+				Contexts: []*ast.Context{
+					{
+						Name: "Reading Room",
+						Aggregates: []*ast.Aggregate{
+							{
+								Name: "Desk",
+								Slices: []*ast.Slice{
+									{
+										Name:    "Claim Desk",
+										Trigger: &ast.Trigger{Name: "Desk Board", Reads: "DeskOccupancyVeiw"},
+										Views:   []*ast.View{viewAt("DeskOccupancyView", 12)},
+									},
+								},
+							},
+						},
+					},
+					{
+						Name: "Lending",
+						Aggregates: []*ast.Aggregate{
+							{
+								Name:   "Loan",
+								Slices: []*ast.Slice{{Name: "Review Member Loans", Views: []*ast.View{viewAt("MemberLoansView", 20)}}},
+							},
+						},
+					},
+				},
+			}
+
+			require.Empty(t, linesReportedBy(linter.Lint(model), "view/never-read"))
+		})
+
+		t.Run("a view declared on a dcb context's own slice resolves a reads, so the rule keeps reporting", func(t *testing.T) {
+			// The only declaration of DeskOccupancyView is on a context's own slice.
+			// A walk that visits aggregate homes alone leaves the reads below
+			// unresolved, which would silence MemberLoansView along with it.
+			model := &ast.Model{
+				Contexts: []*ast.Context{
+					{
+						Name:   "Reading Room",
+						Mode:   "dcb",
+						Slices: []*ast.Slice{{Name: "Watch Desks", Views: []*ast.View{viewAt("DeskOccupancyView", 12)}}},
+					},
+					{
+						Name: "Lending",
+						Aggregates: []*ast.Aggregate{
+							{
+								Name: "Loan",
+								Slices: []*ast.Slice{
+									{
+										Name:    "Claim Desk",
+										Trigger: &ast.Trigger{Name: "Desk Board", Reads: "DeskOccupancyView"},
+									},
+									{Name: "Review Member Loans", Views: []*ast.View{viewAt("MemberLoansView", 20)}},
+								},
+							},
+						},
+					},
+				},
+			}
+
+			diags := linter.Lint(model)
+
+			require.Equal(t, []string{
+				fmt.Sprintf(`lending.emod:20: [view/never-read] `+neverRead, "MemberLoansView"),
+			}, linesReportedBy(diags, "view/never-read"))
 		})
 	})
 

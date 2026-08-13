@@ -143,6 +143,60 @@ func TestCheck(t *testing.T) {
 		})
 	})
 
+	t.Run("a misspelled view name", func(t *testing.T) {
+		t.Run("is reported once, at the reads that spells it, and not again at the view it was meant to name", func(t *testing.T) {
+			// The model exists to trip one rule. Its event carries a domain field
+			// beside its identifier so clickbait-event stays quiet, and its command
+			// is flowed so neither orphan check fires.
+			const source = `model "Case Handling"
+
+actor "Worker"
+
+context "Cases" {
+  aggregate "Case" {
+    slice "Review Case" {
+      trigger "Case Desk" {
+        actor Worker
+        reads CaseWorkspacveView
+      }
+      view CaseWorkspaceView {
+        fields {
+          caseId   string required
+          openedBy string required
+        }
+        subscribes [CaseOpened]
+      }
+    }
+    slice "Open Case" {
+      command OpenCase {
+        fields {
+          caseId   string required
+          openedBy string required
+        }
+      }
+      event CaseOpened {
+        fields {
+          caseId   string    required
+          openedBy string    required
+          openedAt timestamp required
+        }
+      }
+      flow {
+        command -> event: OpenCase -> CaseOpened
+      }
+    }
+  }
+}
+`
+
+			diagnostics := oracle.Check(source, "cases.emod")
+
+			require.Equal(t, []string{
+				`cases.emod:10: view "CaseWorkspacveView" does not exist`,
+			}, reportedLines(diagnostics))
+		})
+	})
+
 	t.Run("unparseable input", func(t *testing.T) {
 		t.Run("returns entries carrying position, severity, and message", func(t *testing.T) {
 			diagnostics := oracle.Check(invalidEmod, "invalid.emod")
