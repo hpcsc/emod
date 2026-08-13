@@ -493,7 +493,7 @@ slice "Claim Desk" {
   command ClaimCopy { fields { copyId string required } }
   translation DeskWatcher {
     external_system "Desk"
-    reads DeskClaims
+    reads DeskClaimsView
     command ClaimCopy
     event CopyClaimed { fields { copyId string required } }
   }
