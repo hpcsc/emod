@@ -39,7 +39,8 @@
         "examples/all_patterns.emod",
         "internal/parser/testdata/all_patterns.emod",
         "internal/parser/integration_test.go"
-      ]
+      ],
+      "done": true
     },
     {
       "n": 4,

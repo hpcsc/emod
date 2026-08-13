@@ -427,23 +427,43 @@ declares rather than a name nothing defines.
 
 **Acceptance Criteria:**
 
-- [ ] The `translation BookingComImport` in `examples/all_patterns.emod:108` and in
+- [x] The `translation BookingComImport` in `examples/all_patterns.emod:108` and in
       `internal/parser/testdata/all_patterns.emod:108` reads `AvailableRoomsView`, the view each file's
       `slice "View Available Rooms"` declares at `:43`, in place of `BookingComWebhookView`, which
       neither declares
-- [ ] `rg -n 'BookingComWebhookView' examples internal/parser` prints nothing
-- [ ] `diff examples/all_patterns.emod internal/parser/testdata/all_patterns.emod` still differs only by
+- [x] No `.emod` file the pipeline accepts still names `BookingComWebhookView`. Stated this way rather
+      than as `rg -n 'BookingComWebhookView' examples internal/parser` printing nothing, because
+      `internal/parser/parser_test.go:3135` keeps the name in an inline source asserting the parser
+      *records* a translation's `reads` (`:3158`) — the parser resolves nothing, so that leaf is
+      unaffected by the widening and renaming it would churn a test guarding a different layer.
+      `docs/proposals/completed/proposal.md:97` keeps it too, which `tasks/learnings.md` requires: a
+      completed proposal records the world before a change and is never swept
+- [x] `diff examples/all_patterns.emod internal/parser/testdata/all_patterns.emod` still differs only by
       the example's two trailing slices (its lines 123-161, "Slice 6" and "Slice 7") — the two files
       stay in step everywhere else
-- [ ] `cli.RunValidate` returns no error for either path, which the `examplePaths` leaf
+- [x] `cli.RunValidate` returns no error for either path, which the `examplePaths` leaf
       (`internal/cli/validate_test.go:51-62`) and the parser-fixture leaf (`:37-49`) already assert;
       neither leaf is edited
-- [ ] The expected `Reads` on the translation in `internal/parser/integration_test.go:257` names the
+- [x] The expected `Reads` on the translation in `internal/parser/integration_test.go:257` names the
       view the file now reads, and nothing else in that expected `ast.Translation` — its name, external
       system, command or nested event — moves
-- [ ] `git diff --stat` names exactly three files: `examples/all_patterns.emod`,
+- [x] `git diff --stat` names exactly three files: `examples/all_patterns.emod`,
       `internal/parser/testdata/all_patterns.emod`, `internal/parser/integration_test.go`
-- [ ] `mise exec -- task test:unit` and `mise exec -- task test:integration` are green
+- [x] `mise exec -- task test:unit` and `mise exec -- task test:integration` are green
+
+**Accepted, not fixed — the fixture's three `reads` slots no longer carry three distinct names.**
+Both corpora declare fewer views than they state `reads`, so once the translation stops naming a view
+nothing declares it must share a name with the trigger or the automation. An audit round raised the
+consequence: a stub that ignores a translation's own `reads` and emits the constant
+`"AvailableRoomsView"` now passes the formatter round-trip and the parser integration suite over these
+two files. Declaring a `BookingComWebhookView` to restore three names was tried and reverted — the only
+event available to feed it is `ExternalReservationImported`, which the very translation that reads it
+emits, so the flagship example gained a cycle and a read model fed by its own consumer, contradicting
+the Translation shape `docs/dsl-reference.md` documents. A low-severity gap in one fixture's
+discriminating power is the better trade, particularly as `internal/cli`'s `TestFmt`, the
+`formats_translation_block_with_nested_event` leaf and five other round-trip fixtures still catch that
+stub. Giving the example an honest inbound view needs an event carrying `source external`, which no
+example declares today; that is its own change.
 
 **Affected Files/Modules:**
 

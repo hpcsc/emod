@@ -105,7 +105,7 @@ context "Reservations" {
 
       translation BookingComImport {
         external_system "Booking.com API"
-        reads BookingComWebhookView
+        reads AvailableRoomsView
         command ImportExternalReservation
         event ExternalReservationImported {
           fields {

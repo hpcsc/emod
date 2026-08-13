@@ -254,7 +254,7 @@ func TestIntegration(t *testing.T) {
 		test.RequireEqual(t, &ast.Translation{
 			Name:           "BookingComImport",
 			ExternalSystem: "Booking.com API",
-			Reads:          "BookingComWebhookView",
+			Reads:          "AvailableRoomsView",
 			Command:        "ImportExternalReservation",
 			Event: &ast.Event{
 				Name: "ExternalReservationImported",
