@@ -143,7 +143,7 @@ package, `internal/viewer`, `e2e/` and `e2e-viewer/`.
    begin with one, so a digit run is unambiguous in a way `true` is not. Whether the version header's
    `1` gains a numeric scope alongside the payload's `3` is left to Task 4, which must state the choice
    in an assertion either way. The one hazard is ordering: `every "0 9 * * *"` and a wire type like
-   `"com.acme.v2"` carry digits inside strings, and `standalone-tokens` (`emod.tmLanguage.json:85-94`)
+   `"com.acme.v2"` carry digits inside strings, and `standalone-tokens` (`emod.tmLanguage.json:90-99`)
    lists `#strings` first precisely so a later rule never reaches inside one.
 6. *Payload field names get no capture and no scope.* The criterion names numbers and booleans. A
    payload's `roomId:` is the same shape as a DCB `tags` key (`entity: customerId`,
@@ -192,11 +192,11 @@ author's obligation, never a criterion.
 
 **The tree-sitter highlight query.** `editors/tree-sitter-emod/queries/highlights.scm` is 108 lines in
 seven commented sections: comments (`:12`), a generic string capture (`:16`), a bracketed list of
-thirty-seven anonymous keyword tokens (`:18-63`) whose header comment names `TestEditorKeywordCoverage`
+thirty-nine anonymous keyword tokens (`:18-64`) whose header comment names `TestEditorKeywordCoverage`
 as its guard and states that nothing derives the list from the grammar, quoted entity names for
 `model` / `actor` / `context` / `aggregate` / `slice` / `trigger` (`:67-74`), identifier entity names for
-`command` / `event` / `view` / `automation` / `translation` (`:76-81`), the three anchored `field_line`
-patterns for name, type and modifier (`:83-102`), operators (`:104-105`) and punctuation (`:107-108`).
+`command` / `event` / `view` / `automation` / `translation` (`:77-82`), the three anchored `field_line`
+patterns for name, type and modifier (`:84-103`), operators (`:105-106`) and punctuation (`:108-109`).
 The keyword list already carries all eight of this story's landed spellings. There is no `@number`,
 `@boolean` or `@constant` capture anywhere in the file.
 
@@ -295,7 +295,7 @@ tree-sitter side and its first criterion acquiring the receipt it has never had.
       operator, another keyword or a trailing comment — so no assertion is satisfied by a capture the
       runner found on a later line, and the file's header says so the way the three existing files' do
 - [ ] Every assertion can fail: removing a spelling from the `@keyword` list at
-      `queries/highlights.scm:18-63` makes `mise exec -- task test:grammar` fail on that keyword's
+      `queries/highlights.scm:18-64` makes `mise exec -- task test:grammar` fail on that keyword's
       assertion, and removing the `@variable.member` capture at `:89-90` makes it fail on the
       field-name assertions, each run naming the row, the column and the capture actually produced
 - [ ] The assertion source is emod the parser accepts in its shape on main — no payload, no `type`
@@ -325,7 +325,7 @@ tree-sitter side and its first criterion acquiring the receipt it has never had.
   positions, and its comments at `:31-32` and `:39-40` explain why the modifier-less and domain-typed
   variants are there
 - The captures to assert are the ones `queries/highlights.scm` already names in its section comments
-  (`:11-108`)
+  (`:11-109`)
 - `tasks/learnings.md` "A tree-sitter highlight marker only discriminates while another highlighted
   token follows it on the same line"
 - `tasks/learnings.md` "`highlights.scm` field patterns select by anchor, never by `#match?` on the
@@ -404,14 +404,14 @@ where it opens a file.
 - `editors/vscode/test/scopes/fields.emod` — the recorded gap at `:10-17`
 - `editors/vscode/test/scopes/` — assertions for the eight keywords in field position, for the version
   header, and for the single-line form
-- `editors/vscode/test/scope-assertions.test.js` — the new negative control beside the three at
-  `:115-160`
+- `editors/vscode/test/scope-assertions.test.js` — the new negative control beside the four at
+  `:115-165`
 
 **Patterns to Follow:**
 - `positional-keywords` (`emod.tmLanguage.json:67-89`) is the precedent for a treatment keyed on position
   rather than on the word alone, and `fields-block`'s comment (`:23`) states the reason the block
   boundary is the only thing that can tell a field line from an activation
-- `highlights.scm:83-102` is the tree-sitter counterpart this brings VS Code level with, and its
+- `highlights.scm:84-103` is the tree-sitter counterpart this brings VS Code level with, and its
   header comment (`:7-8`) says the two files are meant to agree on scope assignment; the capture it
   gives a field's name is `@variable.member`
 - `tasks/learnings.md` "A keyword that is only a keyword in one position never joins the flat TextMate
@@ -474,7 +474,7 @@ than as unhighlighted text, distinct from the quoted strings beside them, while 
 
 **Affected Files/Modules:**
 - `editors/tree-sitter-emod/queries/highlights.scm` — a literals section, filed beside the string
-  capture (`:14-16`) and the keyword list (`:18-63`)
+  capture (`:14-16`) and the keyword list (`:18-64`)
 - `editors/tree-sitter-emod/test/highlight/` — payload assertions, in the file Task 1 added or beside it
 
 **Patterns to Follow:**
@@ -519,7 +519,7 @@ inside a quoted string that happens to carry digits.
       `on`, `every` and `type` on their operand, so it cannot be a positionless word alternation
 - [ ] `editors/vscode/test/scopes/strings.emod:14-17` passes unedited: a cron schedule keeps
       `string.quoted.double.emod` across its whole span, with no numeric scope on the digits inside it
-      — `standalone-tokens` (`:85-94`) lists `#strings` ahead of the rules that follow it, and that
+      — `standalone-tokens` (`:90-99`) lists `#strings` ahead of the rules that follow it, and that
       assertion is what holds the ordering
 - [ ] The treatment given to a version header's `1` is asserted either way, so the choice between a
       positionless numeric rule and a payload-keyed one is recorded in the suite rather than left to be
@@ -540,7 +540,7 @@ inside a quoted string that happens to carry digits.
 
 **Affected Files/Modules:**
 - `editors/vscode/syntaxes/emod.tmLanguage.json` — a literals entry in `repository`, and its place in
-  `standalone-tokens` (`:85-94`) or in a payload-scoped rule
+  `standalone-tokens` (`:90-99`) or in a payload-scoped rule
 - `editors/vscode/test/scopes/` — payload assertions, and the field-named-`true` case
 - `editors/vscode/test/scope-assertions.test.js` — the new negative control
 
