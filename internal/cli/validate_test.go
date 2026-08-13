@@ -502,6 +502,60 @@ context "Lending" {
 		require.Contains(t, err.Error(), `view "MissingView" does not exist`)
 	})
 
+	t.Run("returns error naming the view a trigger's reads misspells, at the line the reads is written on", func(t *testing.T) {
+		input := `model "Library Lending"
+
+actor "Member"
+
+context "Lending" {
+  aggregate "Loan" {
+    slice "Review Member Loans" {
+      trigger "Loans Board" {
+        actor Member
+        reads MemberLoansView
+      }
+      view MemberLoansView {
+        fields {
+          loanId string required
+        }
+        subscribes [CopyBorrowed]
+      }
+    }
+    slice "Borrow Copy" {
+      trigger "Lending Desk" {
+        actor Member
+        reads MemberLoansVeiw
+      }
+      command BorrowCopy {
+        fields {
+          memberId string required
+          copyId   string required
+        }
+      }
+      event CopyBorrowed {
+        fields {
+          loanId   string required
+          memberId string required
+          copyId   string required
+        }
+      }
+      flow {
+        command -> event: BorrowCopy -> CopyBorrowed
+      }
+    }
+  }
+}
+`
+		path := writeTemp(t, "misspelled_trigger_view.emod", input)
+
+		err := cli.RunValidate(path, "text")
+
+		var lintErr *cli.LintError
+		require.True(t, errors.As(err, &lintErr))
+		require.Equal(t, 1, lintErr.ExitCode)
+		require.Equal(t, path+`:22: view "MemberLoansVeiw" does not exist`, err.Error())
+	})
+
 	t.Run("returns error naming the outcome shape and construct kind for a view outcome inside a command slice", func(t *testing.T) {
 		input := `model "Library Lending"
 context "Lending" {

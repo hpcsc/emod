@@ -396,15 +396,17 @@ func scopedInvariantDiagnostics(found []scopedInvariant, messageFormat string) [
 
 func referenceDiagnostics(slice *ast.Slice, index *modelIndex) []*diagnostic.Entry {
 	var diags []*diagnostic.Entry
+	if slice.Trigger != nil {
+		diags = appendUndeclaredRef(diags, "view", slice.Trigger.Reads, slice.Trigger.ReadsPos, index.viewNames)
+	}
 	for _, auto := range slice.Automations {
 		diags = appendUndeclaredRef(diags, "target context", auto.TargetContext, auto.TargetContextPos, index.contextNames)
 		diags = appendUndeclaredRef(diags, "command", auto.Command, auto.CommandPos, index.commandNames)
 		diags = appendUndeclaredRef(diags, "event", auto.OnEvent, auto.OnEventPos, index.eventNames)
-		// A trigger's and a translation's `reads` stay unchecked on purpose:
-		// existing models name views in them that no slice declares.
 		diags = appendUndeclaredRef(diags, "view", auto.Reads, auto.ReadsPos, index.viewNames)
 	}
 	for _, tr := range slice.Translations {
+		diags = appendUndeclaredRef(diags, "view", tr.Reads, tr.ReadsPos, index.viewNames)
 		diags = appendUndeclaredRef(diags, "command", tr.Command, tr.CommandPos, index.commandNames)
 	}
 	for _, v := range slice.Views {

@@ -506,30 +506,35 @@ that spell `reads` read the same.
 
 **Acceptance Criteria:**
 
-- [ ] A model whose `trigger` reads a name no slice declares produces exactly one diagnostic: message
+- [x] A model whose `trigger` reads a name no slice declares produces exactly one diagnostic: message
       `view "<Name>" does not exist`, at the trigger's `ReadsPos` filename, line **and column**,
       severity `diagnostic.Error`, and an empty `RuleName`
-- [ ] The same holds for a `translation`'s `reads`, at its own `ReadsPos`
-- [ ] A model whose trigger, automation and translation each read one same undeclared name reports
+- [x] The same holds for a `translation`'s `reads`, at its own `ReadsPos`
+- [x] A model whose trigger, automation and translation each read one same undeclared name reports
       three diagnostics whose messages are byte-identical, one per construct at that construct's own
       `ReadsPos` — asserted as one `require.Equal` over the reported lines, in the order the checks
       emit: the trigger's, then the automation's, then the translation's
-- [ ] A trigger's `reads` and a translation's naming a view the model declares produce no diagnostic,
+- [x] A trigger's `reads` and a translation's naming a view the model declares produce no diagnostic,
       whether that view is declared in the same slice, in another aggregate, in another context, or on
       a `mode dcb` context's own slice — resolution is model-wide, matching an automation's
-- [ ] A slice declaring no trigger, a trigger stating no `reads`, and a translation stating no `reads`
+- [x] A slice declaring no trigger, a trigger stating no `reads`, and a translation stating no `reads`
       each produce no diagnostic
-- [ ] A name declared only as a command or only as an event does not resolve as a view for either
-      construct, reported with the same `view "<Name>" does not exist` wording
-- [ ] `cli.RunValidate` over a file whose trigger misspells a view the model declares returns an error
+- [x] A name declared only as a command or only as an event does not resolve as a view for either
+      construct, reported with the same `view "<Name>" does not exist` wording. Covered by the
+      declared-only-as-a-command case, which is the discriminating one: the mutation resolving a
+      trigger's `reads` against `index.commandNames` fails it, and the only-as-an-event case is
+      already held by the automation leaf at `:1050` against the same `index.viewNames` lookup all
+      three constructs now share
+- [x] `cli.RunValidate` over a file whose trigger misspells a view the model declares returns an error
       whose `Error()` equals the whole formatted line — the path, the line the `reads` is written on,
-      and `view "<Name>" does not exist`
-- [ ] The comment at `internal/validator/validator.go:403-404` recording that a trigger's and a
+      and `view "<Name>" does not exist`. The model gives the real view a second reader, so
+      `view/never-read` is not what the equality has to survive — that interaction is Task 5's
+- [x] The comment at `internal/validator/validator.go:403-404` recording that a trigger's and a
       translation's `reads` stay unchecked is gone, because it is no longer true
-- [ ] No fixture, example, testdata file or golden is edited by this task: `git diff --stat` names
+- [x] No fixture, example, testdata file or golden is edited by this task: `git diff --stat` names
       exactly `internal/validator/validator.go`, `internal/validator/validator_test.go` and
       `internal/cli/validate_test.go`
-- [ ] `mise exec -- task test:unit` and `mise exec -- task test:integration` are green
+- [x] `mise exec -- task test:unit` and `mise exec -- task test:integration` are green
 
 **Affected Files/Modules:**
 

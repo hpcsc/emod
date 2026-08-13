@@ -1085,6 +1085,275 @@ func TestValidate(t *testing.T) {
 			require.Len(t, diags, 1)
 			require.Equal(t, `reservations.emod:14: view "ReservationMade" does not exist`, diags[0].String())
 		})
+
+		t.Run("a view no slice declares is reported on a trigger's reads entry, not on the trigger name", func(t *testing.T) {
+			model := &ast.Model{
+				Contexts: []*ast.Context{
+					{
+						Name: "Reservations",
+						Aggregates: []*ast.Aggregate{
+							{
+								Name: "Reservation",
+								Slices: []*ast.Slice{
+									{
+										Name:  "Make Reservation",
+										Views: []*ast.View{{Name: "ReservationsView"}},
+										Trigger: &ast.Trigger{
+											Name:     "Reservation Form",
+											NamePos:  ast.Position{Filename: "reservations.emod", Line: 6, Column: 15},
+											Reads:    "AvailableRoomsView",
+											ReadsPos: ast.Position{Filename: "reservations.emod", Line: 8, Column: 15},
+										},
+									},
+								},
+							},
+						},
+					},
+				},
+			}
+
+			diags := validator.Validate(model)
+
+			require.Len(t, diags, 1)
+			require.Equal(t, `reservations.emod:8: view "AvailableRoomsView" does not exist`, diags[0].String())
+			require.Equal(t, 15, diags[0].Column)
+			require.Equal(t, diagnostic.Error, diags[0].Severity)
+			require.Empty(t, diags[0].RuleName)
+		})
+
+		t.Run("a view no slice declares is reported on a translation's reads entry, not on the translation name", func(t *testing.T) {
+			model := &ast.Model{
+				Contexts: []*ast.Context{
+					{
+						Name: "Reservations",
+						Aggregates: []*ast.Aggregate{
+							{
+								Name: "Reservation",
+								Slices: []*ast.Slice{
+									{
+										Name:     "Import Booking",
+										Views:    []*ast.View{{Name: "ReservationsView"}},
+										Commands: []*ast.Command{{Name: "ImportBooking"}},
+										Translations: []*ast.Translation{
+											{
+												Name:     "BookingImport",
+												NamePos:  ast.Position{Filename: "reservations.emod", Line: 9, Column: 19},
+												Reads:    "BookingWebhookView",
+												ReadsPos: ast.Position{Filename: "reservations.emod", Line: 11, Column: 15},
+												Command:  "ImportBooking",
+											},
+										},
+									},
+								},
+							},
+						},
+					},
+				},
+			}
+
+			diags := validator.Validate(model)
+
+			require.Len(t, diags, 1)
+			require.Equal(t, `reservations.emod:11: view "BookingWebhookView" does not exist`, diags[0].String())
+			require.Equal(t, 15, diags[0].Column)
+			require.Equal(t, diagnostic.Error, diags[0].Severity)
+			require.Empty(t, diags[0].RuleName)
+		})
+
+		t.Run("the three constructs that spell reads report the same message, each at its own reads entry", func(t *testing.T) {
+			model := &ast.Model{
+				Contexts: []*ast.Context{
+					{
+						Name: "Reservations",
+						Aggregates: []*ast.Aggregate{
+							{
+								Name: "Reservation",
+								Slices: []*ast.Slice{
+									{
+										Name:     "Import Booking",
+										Commands: []*ast.Command{{Name: "ImportBooking"}},
+										Trigger: &ast.Trigger{
+											Name:     "Reservation Form",
+											Reads:    "MissingView",
+											ReadsPos: ast.Position{Filename: "reservations.emod", Line: 8, Column: 15},
+										},
+										Automations: []*ast.Automation{
+											{
+												Name:     "AutoConfirm",
+												Reads:    "MissingView",
+												ReadsPos: ast.Position{Filename: "reservations.emod", Line: 14, Column: 15},
+											},
+										},
+										Translations: []*ast.Translation{
+											{
+												Name:     "BookingImport",
+												Reads:    "MissingView",
+												ReadsPos: ast.Position{Filename: "reservations.emod", Line: 20, Column: 15},
+												Command:  "ImportBooking",
+											},
+										},
+									},
+								},
+							},
+						},
+					},
+				},
+			}
+
+			diags := validator.Validate(model)
+
+			require.Equal(t, []string{
+				`reservations.emod:8: view "MissingView" does not exist`,
+				`reservations.emod:14: view "MissingView" does not exist`,
+				`reservations.emod:20: view "MissingView" does not exist`,
+			}, reportedLines(diags))
+		})
+
+		t.Run("a trigger's and a translation's reads resolve model-wide, against every slice home", func(t *testing.T) {
+			model := &ast.Model{
+				Contexts: []*ast.Context{
+					{
+						Name: "Availability",
+						Mode: "dcb",
+						Slices: []*ast.Slice{
+							{
+								Name:  "Room Availability",
+								Views: []*ast.View{{Name: "RoomAvailabilityView"}},
+							},
+							{
+								Name: "Watch Availability",
+								Trigger: &ast.Trigger{
+									Name:  "Availability Board",
+									Reads: "RoomAvailabilityView",
+								},
+							},
+						},
+					},
+					{
+						Name: "Reservations",
+						Aggregates: []*ast.Aggregate{
+							{
+								Name: "Reservation",
+								Slices: []*ast.Slice{
+									{
+										Name:  "Reservation History",
+										Views: []*ast.View{{Name: "ReservationHistoryView"}},
+									},
+									{
+										Name:     "Import Booking",
+										Commands: []*ast.Command{{Name: "ImportBooking"}},
+										Trigger: &ast.Trigger{
+											Name:  "Reservation Form",
+											Reads: "RoomAvailabilityView",
+										},
+										Translations: []*ast.Translation{
+											{Name: "BookingImport", Reads: "ReservationHistoryView", Command: "ImportBooking"},
+										},
+									},
+								},
+							},
+							{
+								Name: "Confirmation",
+								Slices: []*ast.Slice{
+									{
+										Name:     "Confirm Reservation",
+										Views:    []*ast.View{{Name: "PendingConfirmationsView"}},
+										Commands: []*ast.Command{{Name: "ConfirmReservation"}},
+										Trigger: &ast.Trigger{
+											Name:  "Confirmation Desk",
+											Reads: "PendingConfirmationsView",
+										},
+										Translations: []*ast.Translation{
+											{Name: "PartnerConfirm", Reads: "RoomAvailabilityView", Command: "ConfirmReservation"},
+										},
+									},
+								},
+							},
+						},
+					},
+				},
+			}
+
+			diags := validator.Validate(model)
+
+			require.Empty(t, diags)
+		})
+
+		t.Run("a slice with no trigger, a trigger with no reads and a translation with no reads produce no diagnostic", func(t *testing.T) {
+			model := &ast.Model{
+				Contexts: []*ast.Context{
+					{
+						Name: "Reservations",
+						Aggregates: []*ast.Aggregate{
+							{
+								Name: "Reservation",
+								Slices: []*ast.Slice{
+									{
+										Name:  "View Reservations",
+										Views: []*ast.View{{Name: "ReservationsView"}},
+									},
+									{
+										Name:     "Import Booking",
+										Commands: []*ast.Command{{Name: "ImportBooking"}},
+										Trigger:  &ast.Trigger{Name: "Reservation Form"},
+										Translations: []*ast.Translation{
+											{Name: "BookingImport", Command: "ImportBooking"},
+										},
+									},
+								},
+							},
+						},
+					},
+				},
+			}
+
+			diags := validator.Validate(model)
+
+			require.Empty(t, diags)
+		})
+
+		t.Run("a name declared only as a command does not resolve as a view for a trigger or a translation", func(t *testing.T) {
+			model := &ast.Model{
+				Contexts: []*ast.Context{
+					{
+						Name: "Reservations",
+						Aggregates: []*ast.Aggregate{
+							{
+								Name: "Reservation",
+								Slices: []*ast.Slice{
+									{
+										Name:     "Import Booking",
+										Commands: []*ast.Command{{Name: "ImportBooking"}},
+										Events:   []*ast.Event{{Name: "BookingImported"}},
+										Flows:    []*ast.Flow{{CommandName: "ImportBooking", EventName: "BookingImported"}},
+										Trigger: &ast.Trigger{
+											Name:     "Reservation Form",
+											Reads:    "ImportBooking",
+											ReadsPos: ast.Position{Filename: "reservations.emod", Line: 8, Column: 15},
+										},
+										Translations: []*ast.Translation{
+											{
+												Name:     "BookingImport",
+												Reads:    "ImportBooking",
+												ReadsPos: ast.Position{Filename: "reservations.emod", Line: 20, Column: 15},
+												Command:  "ImportBooking",
+											},
+										},
+									},
+								},
+							},
+						},
+					},
+				},
+			}
+
+			diags := validator.Validate(model)
+
+			require.Equal(t, []string{
+				`reservations.emod:8: view "ImportBooking" does not exist`,
+				`reservations.emod:20: view "ImportBooking" does not exist`,
+			}, reportedLines(diags))
+		})
 	})
 
 	t.Run("schedule expressions", func(t *testing.T) {
