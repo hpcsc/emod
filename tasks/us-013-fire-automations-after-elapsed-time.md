@@ -8,7 +8,7 @@
 - [x] Task 5: Share a fixture whose automations fire after an elapsed delay
 - [x] Task 6: Carry the delay into the JSON, CUE and embedded schema exports
 - [x] Task 7: Carry the delay through the diagram document and back
-- [ ] Task 8: Label the `event -> automation` arrow with the delay in SVG and draw.io
+- [x] Task 8: Label the `event -> automation` arrow with the delay in SVG and draw.io
 - [ ] Task 9: Name the delay in Mermaid, ASCII and `emod slices list`
 - [ ] Task 10: Show an automation's delay in the viewer
 
@@ -956,31 +956,31 @@ An automation with no delay draws the arrow it draws today, unlabelled, with eve
 place, at the same size, in the same fill.
 
 **Acceptance Criteria:**
-- [ ] The SVG of a delayed automation carries the duration as text on the arrow between the activating
+- [x] The SVG of a delayed automation carries the duration as text on the arrow between the activating
       event and the automation, and the draw.io XML carries it on that arrow's cell, with the document
       still parsing as well-formed XML
-- [ ] The duration does not appear on the automation's box in either format: the box label for a
+- [x] The duration does not appear on the automation's box in either format: the box label for a
       delayed automation is exactly the label an undelayed automation's box carries, read back through
       the existing box-label helpers
-- [ ] A scheduled automation in the same model still carries its clock badge and its cadence on its
+- [x] A scheduled automation in the same model still carries its clock badge and its cadence on its
       box, and still draws no incoming activation arrow — asserted on one model declaring a delayed,
       an undelayed and a scheduled automation, so all three cases move together
-- [ ] The arrow to an automation stating no delay carries no label text in either format
-- [ ] Every delayed automation of the Task 5 fixture appears in both renderings with its own duration
+- [x] The arrow to an automation stating no delay carries no label text in either format
+- [x] Every delayed automation of the Task 5 fixture appears in both renderings with its own duration
       on its own arrow, matched against the transcribed list rather than against one hand-written
       string
-- [ ] The label changes no box's position, size or fill and adds, removes or repaints no arrow:
+- [x] The label changes no box's position, size or fill and adds, removes or repaints no arrow:
       rendering the Task 5 fixture and rendering its `Without…` twin produce identical boxes and
       identical arrows, differing only in the labels on the arrows — the comparison opening by
       asserting the twin lost the delays of both slice homes while the fixture still states the
       transcribed list
-- [ ] `internal/diagram/contract_test.go`'s `diagramConnection` (`:82-87`) carries the arrow's label,
+- [x] `internal/diagram/contract_test.go`'s `diagramConnection` (`:82-87`) carries the arrow's label,
       and both format readers resolve it — `drawioEdges` (`drawio_test.go:994-1014`, whose regex at
       `:826` captures style, source and target only) and `svgConnections` (`svg_test.go:462-492`)
-- [ ] `svgShapes` (`svg_test.go:354-399`) attributes an arrow's label to that arrow and not to the
+- [x] `svgShapes` (`svg_test.go:354-399`) attributes an arrow's label to that arrow and not to the
       last rect it saw, so `svgBoxes`, `boxLabelled` and `labelsOf` read the same box labels for a
       delayed model as for its twin
-- [ ] `git diff` moves no expected constant in `internal/diagram/svg_test.go`, `drawio_test.go` or
+- [x] `git diff` moves no expected constant in `internal/diagram/svg_test.go`, `drawio_test.go` or
       `contract_test.go` that describes a model without delays, and the palette and reactor-placement
       tests pass unedited
 

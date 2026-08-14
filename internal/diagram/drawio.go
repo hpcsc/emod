@@ -440,7 +440,7 @@ func ExportDrawio(model *ast.Model, style Style) ([]byte, error) {
 						{rightX, midY},
 						{rightX, tgtMidY},
 					}
-					b.WriteString(edgeCellWaypoints(allocID(), multiTagStyle, srcElem.id, tgtElem.id, points))
+					b.WriteString(edgeCellWaypoints(allocID(), multiTagStyle, "", srcElem.id, tgtElem.id, points))
 				}
 			}
 		}
@@ -484,7 +484,7 @@ func ExportDrawio(model *ast.Model, style Style) ([]byte, error) {
 						{rightX, midY},
 						{to.x, midY},
 					}
-					b.WriteString(edgeCellWaypoints(allocID(), greenUpStyle, from.id, to.id, points))
+					b.WriteString(edgeCellWaypoints(allocID(), greenUpStyle, "", from.id, to.id, points))
 				}
 
 			case EdgeAutomationTrigger:
@@ -496,7 +496,7 @@ func ExportDrawio(model *ast.Model, style Style) ([]byte, error) {
 						{rightX, from.y + from.h/2},
 						{rightX, to.y + to.h/2},
 					}
-					b.WriteString(edgeCellWaypoints(allocID(), purpleUpStyle, from.id, to.id, points))
+					b.WriteString(edgeCellWaypoints(allocID(), purpleUpStyle, edge.Label, from.id, to.id, points))
 				}
 
 			case EdgeTranslationExternal:
@@ -606,9 +606,9 @@ func edgeCell(id int, style string, source, target int) string {
 		`        </mxCell>`+"\n", id, style, source, target)
 }
 
-func edgeCellWaypoints(id int, style string, source, target int, points [][2]int) string {
+func edgeCellWaypoints(id int, style, label string, source, target int, points [][2]int) string {
 	var sb strings.Builder
-	sb.WriteString(fmt.Sprintf(`        <mxCell id="%d" style="%s" edge="1" parent="1" source="%d" target="%d">`+"\n", id, style, source, target))
+	sb.WriteString(fmt.Sprintf(`        <mxCell id="%d" style="%s" edge="1" parent="1" source="%d" target="%d"%s>`+"\n", id, style, source, target, edgeValueAttribute(label)))
 	sb.WriteString(`          <mxGeometry relative="1" as="geometry">` + "\n")
 	sb.WriteString(`            <Array as="points">` + "\n")
 	for _, p := range points {
@@ -618,6 +618,18 @@ func edgeCellWaypoints(id int, style string, source, target int, points [][2]int
 	sb.WriteString(`          </mxGeometry>` + "\n")
 	sb.WriteString(`        </mxCell>` + "\n")
 	return sb.String()
+}
+
+// edgeValueAttribute renders the text draw.io paints on an arrow. An arrow with
+// nothing to say keeps the attribute off entirely, so the diagram of a model
+// that carries no arrow text is byte-identical to what it was before any arrow
+// could carry some.
+func edgeValueAttribute(label string) string {
+	if label == "" {
+		return ""
+	}
+
+	return fmt.Sprintf(` value="%s"`, escapeXML(label))
 }
 
 func escapeXML(s string) string {

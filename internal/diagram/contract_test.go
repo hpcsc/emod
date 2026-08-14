@@ -33,6 +33,10 @@ type exporter struct {
 	// strokeOfLabel returns the stroke colour of the shape drawn for a label; nil
 	// for the text formats, which have no colours.
 	strokeOfLabel func(t *testing.T, output, label string) string
+	// arrowTextTrace matches the mechanism a format paints text on an arrow
+	// with, so a render whose arrows say nothing can be required to carry no
+	// trace of it. Empty for a format that paints none.
+	arrowTextTrace *regexp.Regexp
 	// countConnections reports how many connections the output draws; nil for
 	// formats that describe elements without drawing arrows between them.
 	countConnections func(output string) int
@@ -84,6 +88,8 @@ type diagramConnection struct {
 	target string
 	// paint is how the arrow is drawn, in the format's own spelling.
 	paint string
+	// label is the text painted on the arrow, empty for an arrow carrying none.
+	label string
 }
 
 func requireValidXML(t *testing.T, output string) {
@@ -100,6 +106,7 @@ func exporters() []exporter {
 	return []exporter{
 		{
 			name:              "drawio",
+			arrowTextTrace:    regexp.MustCompile(`target="\d+" value="`),
 			fillOfLabel:       drawioFillOfLabel,
 			strokeOfLabel:     drawioStrokeOfLabel,
 			countConnections:  func(output string) int { return strings.Count(output, `edge="1"`) },
@@ -110,6 +117,7 @@ func exporters() []exporter {
 		},
 		{
 			name:              "svg",
+			arrowTextTrace:    regexp.MustCompile(`class="edge-label"`),
 			fillOfLabel:       svgFillOfLabel,
 			strokeOfLabel:     svgStrokeOfLabel,
 			countConnections:  arrowCount,
@@ -926,6 +934,223 @@ func TestExporterAutomationSchedule(t *testing.T) {
 			})
 		})
 	}
+}
+
+// activation names the two boxes an automation's activation arrow meets, which
+// is how a reader of either picture format identifies that arrow: an automation
+// also has an incoming arrow from the view it reads.
+type activation struct {
+	event      string
+	automation string
+}
+
+// delayedLibraryLendingActivations names the activation arrow of every
+// automation of test.AutomationDelayLibraryLending that fires after a delay,
+// both slice homes together and in declaration order, so each lines up with the
+// delay transcribed at the same place in
+// test.AutomationDelayLibraryLendingDelays.
+var delayedLibraryLendingActivations = []activation{
+	{event: "CopyBorrowed", automation: "RemindAfterGracePeriod"},
+	{event: "DeskClaimed", automation: "ReleaseDeskLeftClaimed"},
+}
+
+// undelayedLibraryLendingActivations names the activation arrows of that same
+// fixture's automations that activate immediately, and
+// scheduledDelayFixtureAutomations the ones that run on a schedule and draw no
+// activation arrow at all.
+var (
+	undelayedLibraryLendingActivations = []activation{
+		{event: "MemberReminded", automation: "RecallOnSecondReminder"},
+		{event: "DeskReleased", automation: "RemindReaderOfLoans"},
+	}
+	scheduledDelayFixtureAutomations = []string{
+		"SweepOverdueLoans",
+		"CloseDesksAtNight",
+	}
+)
+
+// TestExporterAutomationDelay covers the duration the arrow from an activating
+// event to a delayed automation carries. The text formats draw no arrow to
+// carry one on, so they sit it out.
+func TestExporterAutomationDelay(t *testing.T) {
+	for _, e := range exporters() {
+		if e.boxes == nil || e.connections == nil {
+			continue
+		}
+
+		t.Run(e.name, func(t *testing.T) {
+			t.Run("the arrow to a delayed automation carries that automation's own duration", func(t *testing.T) {
+				delaying := test.AutomationDelayLibraryLendingModel(t)
+				output := e.run(t, delaying, diagram.StyleAuto)
+
+				e.requireWellFormed(t, output)
+
+				var carried []string
+				for _, a := range delayedLibraryLendingActivations {
+					carried = append(carried, labelOfActivationArrow(t, e.connections(t, output), a))
+				}
+
+				require.Equal(t, delayLabelsOf(test.AutomationDelayLibraryLendingDelays), carried,
+					"each arrow says the delay of the automation it ends at")
+			})
+
+			t.Run("the arrow to an automation stating no delay carries nothing, and its box says what an undelayed one's does", func(t *testing.T) {
+				output := e.run(t, test.AutomationDelayLibraryLendingModel(t), diagram.StyleAuto)
+				connections := e.connections(t, output)
+
+				for _, a := range delayedLibraryLendingActivations {
+					require.NotEmpty(t, labelOfActivationArrow(t, connections, a),
+						"the delayed automations of this same rendering have to be labelled, or the silence below says nothing")
+				}
+
+				for _, a := range undelayedLibraryLendingActivations {
+					require.Empty(t, labelOfActivationArrow(t, connections, a))
+				}
+
+				for _, a := range delayedLibraryLendingActivations {
+					require.Equal(t, gearMarking+" "+a.automation,
+						e.boxLabelled(t, output, gearMarking+" "+a.automation).label,
+						"a delay belongs on the arrow, so the box says exactly what an undelayed automation's says — the gear and the name, and no clock")
+				}
+			})
+
+			t.Run("a scheduled automation beside a delayed one keeps its cadence on its box and draws no activation arrow", func(t *testing.T) {
+				output := e.run(t, test.AutomationDelayLibraryLendingModel(t), diagram.StyleAuto)
+				connections := e.connections(t, output)
+
+				for _, name := range scheduledDelayFixtureAutomations {
+					label := e.boxLabelled(t, output, gearMarking+" "+name).label
+					require.Contains(t, label, clockMarking, "a schedule is drawn on the box, not on an arrow")
+					require.NotEmpty(t, scheduleShown(label))
+
+					// The view it reads does reach it, so the arrows into its box
+					// are not empty — which is what makes the absence of an
+					// activation arrow among them something this can see.
+					reaching := sourcesOfArrowsInto(connections, label)
+					require.NotEmpty(t, reaching,
+						"the scheduled automation reads a view, so an arrow does reach its box")
+					for _, source := range reaching {
+						require.Contains(t, delayFixtureViews, source,
+							"only the view it reads reaches a scheduled automation; an activation arrow would come from an event")
+					}
+				}
+			})
+
+			t.Run("shows a duration carrying the format's own metacharacters as text", func(t *testing.T) {
+				const hazard = `24h <b>&"</b>`
+				delaying := test.AutomationDelayLibraryLendingModel(t)
+				forEachSlice(delaying, func(s *ast.Slice) {
+					for _, auto := range s.Automations {
+						if auto.After != "" {
+							auto.After = hazard
+						}
+					}
+				})
+
+				output := e.run(t, delaying, diagram.StyleAuto)
+
+				e.requireWellFormed(t, output)
+				for _, a := range delayedLibraryLendingActivations {
+					require.Equal(t, `after "`+hazard+`"`,
+						labelOfActivationArrow(t, e.connections(t, output), a),
+						"the duration reads back as the author wrote it, so the writer escaped it rather than emitting it raw")
+				}
+			})
+
+			t.Run("an arrow carrying no text is drawn byte-identically to how it was before an arrow could carry any", func(t *testing.T) {
+				delaying := test.AutomationDelayLibraryLendingModel(t)
+				undelayed := test.WithoutAutomationDelays(delaying)
+
+				// Reading the labels back cannot see this: an empty label and no
+				// label read alike. What has to be absent is the mechanism —
+				// an empty value attribute on an edge cell, an empty label
+				// element — so the assertion is on the raw picture, and it is
+				// first shown to find that mechanism where it belongs.
+				require.Regexp(t, e.arrowTextTrace, e.run(t, delaying, diagram.StyleAuto),
+					"the delayed render has to carry the mechanism, or finding it nowhere below proves nothing")
+				require.NotRegexp(t, e.arrowTextTrace, e.run(t, undelayed, diagram.StyleAuto))
+			})
+
+			t.Run("labelling the arrows moves, resizes and repaints no box and adds, removes or repaints no arrow", func(t *testing.T) {
+				delaying := test.AutomationDelayLibraryLendingModel(t)
+				undelayed := test.WithoutAutomationDelays(delaying)
+
+				require.Equal(t, test.AutomationDelayLibraryLendingDelays, test.DeclaredDelays(delaying),
+					"the model has to state delays in both slice homes, or the comparison below runs over a copy of itself")
+				require.Empty(t, test.DeclaredDelays(undelayed),
+					"the twin has to lose the delays of both slice homes, or whichever home it kept answers the comparison below")
+
+				delayed := e.run(t, delaying, diagram.StyleAuto)
+				plain := e.run(t, undelayed, diagram.StyleAuto)
+
+				require.Equal(t, e.boxes(t, plain), e.boxes(t, delayed),
+					"a delay must not move, resize, repaint or relabel a box")
+				require.Equal(t, withoutArrowLabels(e.connections(t, plain)), withoutArrowLabels(e.connections(t, delayed)),
+					"a delay must not add, remove, redirect or repaint an arrow")
+				require.NotEqual(t, e.connections(t, plain), e.connections(t, delayed),
+					"the two renderings have to differ in the arrow labels, or the comparison above compares a picture with itself")
+			})
+		})
+	}
+}
+
+// delayFixtureViews names the views test.AutomationDelayLibraryLending declares,
+// which are the only boxes an arrow into one of its automations may come from
+// once that automation is activated by the clock rather than by an event.
+var delayFixtureViews = []string{"MemberLoansView", "DeskOccupancyView"}
+
+// sourcesOfArrowsInto names the boxes every arrow ending at target starts from,
+// so a test can say which kinds of arrow reach a box rather than only how many.
+func sourcesOfArrowsInto(connections []diagramConnection, target string) []string {
+	var sources []string
+	for _, connection := range connections {
+		if connection.target == target {
+			sources = append(sources, connection.source)
+		}
+	}
+
+	return sources
+}
+
+// labelOfActivationArrow names the text painted on the arrow running from an
+// event to the automation it activates. It fails rather than answering "" when
+// the picture draws no such arrow: a reader that quietly finds nothing agrees
+// with every assertion expecting none.
+func labelOfActivationArrow(t *testing.T, connections []diagramConnection, a activation) string {
+	t.Helper()
+
+	var found []diagramConnection
+	for _, connection := range connections {
+		if connection.source == a.event && connection.target == gearMarking+" "+a.automation {
+			found = append(found, connection)
+		}
+	}
+
+	require.Len(t, found, 1, "the picture draws exactly one arrow from %q to %q", a.event, a.automation)
+
+	return found[0].label
+}
+
+// delayLabelsOf renders the delays a fixture transcribes the way a diagram
+// paints them, so an expectation names the durations the model states rather
+// than restating what the renderer produced.
+func delayLabelsOf(delays []string) []string {
+	var labels []string
+	for _, delay := range delays {
+		labels = append(labels, `after "`+delay+`"`)
+	}
+
+	return labels
+}
+
+func withoutArrowLabels(connections []diagramConnection) []diagramConnection {
+	stripped := make([]diagramConnection, 0, len(connections))
+	for _, connection := range connections {
+		connection.label = ""
+		stripped = append(stripped, connection)
+	}
+
+	return stripped
 }
 
 // reactiveModelReactors labels the box drawn for each automation and each

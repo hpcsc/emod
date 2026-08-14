@@ -47,6 +47,10 @@ type Edge struct {
 	Kind EdgeKind
 	From string
 	To   string
+	// Label is the text a renderer paints on the arrow, empty for an arrow that
+	// carries none. It is derived here rather than in each format so the two
+	// picture formats cannot disagree about what an arrow says.
+	Label string
 }
 
 // SliceEdges returns the edges a slice declares. Endpoints are names, not
@@ -95,7 +99,7 @@ func SliceEdges(s *ast.Slice) []Edge {
 			continue
 		}
 		if a.OnEvent != "" {
-			edges = append(edges, Edge{Kind: EdgeAutomationTrigger, From: a.OnEvent, To: a.Name})
+			edges = append(edges, Edge{Kind: EdgeAutomationTrigger, From: a.OnEvent, To: a.Name, Label: delayLabel(a.After)})
 		}
 		if a.Reads != "" {
 			edges = append(edges, Edge{Kind: EdgeAutomationReads, From: a.Reads, To: a.Name})

@@ -6,6 +6,7 @@ import (
 	"encoding/xml"
 	"errors"
 	"fmt"
+	"html"
 	"io"
 	"maps"
 	"regexp"
@@ -1144,7 +1145,9 @@ func requireReactorsClearOfSharedLane(t *testing.T, style diagram.Style, laneLab
 
 // --- drawio helpers ---
 
-var drawioEdge = regexp.MustCompile(`<mxCell id="\d+" style="([^"]*)" edge="1"[^>]*source="(\d+)" target="(\d+)"`)
+// The text an arrow carries is written last and is optional, so an arrow
+// carrying none still matches and the groups naming its ends keep their places.
+var drawioEdge = regexp.MustCompile(`<mxCell id="\d+" style="([^"]*)" edge="1"[^>]*source="(\d+)" target="(\d+)"(?: value="([^"]*)")?`)
 
 // drawioShape is a box the diagram draws, as draw.io reads it back: what it is
 // called, what it says when hovered, and how it is painted and placed.
@@ -1309,6 +1312,13 @@ func withoutTooltips(shapes []drawioShape) []drawioShape {
 	return stripped
 }
 
+// unescapeXML reads back the text draw.io shows from the escaped form the
+// writer put in an attribute, so an assertion names the duration an author
+// wrote rather than its encoding.
+func unescapeXML(escaped string) string {
+	return html.UnescapeString(escaped)
+}
+
 // drawioEdges returns the diagram's edges, each named by the boxes whose cells
 // it references and carrying the style it is drawn with, so a test can say which
 // boxes an edge runs between instead of restating cell ids.
@@ -1328,7 +1338,12 @@ func drawioEdges(t *testing.T, output string) []diagramConnection {
 
 	var edges []diagramConnection
 	for _, m := range drawioEdge.FindAllStringSubmatch(output, -1) {
-		edges = append(edges, diagramConnection{source: boxOf(m[2]), target: boxOf(m[3]), paint: m[1]})
+		edges = append(edges, diagramConnection{
+			source: boxOf(m[2]),
+			target: boxOf(m[3]),
+			paint:  m[1],
+			label:  unescapeXML(m[4]),
+		})
 	}
 
 	return edges

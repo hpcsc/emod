@@ -618,6 +618,44 @@ func arrowCount(output string) int {
 	return len(svgArrows(output))
 }
 
+// svgArrowLabels names, for every arrow svgArrows returns and in the same
+// order, the text painted on it — "" for an arrow carrying none. The writer
+// paints a label on the line immediately after the arrow it belongs to, so the
+// two are read together rather than guessed at from where each landed.
+func svgArrowLabels(t *testing.T, output string) []string {
+	t.Helper()
+
+	lines := strings.Split(output, "\n")
+
+	var labels []string
+	for i, line := range lines {
+		if !strings.Contains(line, "marker-end") {
+			continue
+		}
+
+		label := ""
+		if i+1 < len(lines) && strings.Contains(lines[i+1], `class="`+edgeLabelClass+`"`) {
+			label = svgTextContentOf(t, lines[i+1])
+		}
+		labels = append(labels, label)
+	}
+
+	return labels
+}
+
+// svgTextContentOf reads the text a <text> element shows, decoded, so an
+// assertion names the duration an author wrote rather than its escaped form.
+func svgTextContentOf(t *testing.T, element string) string {
+	t.Helper()
+
+	var text struct {
+		Content string `xml:",chardata"`
+	}
+	require.NoError(t, xml.Unmarshal([]byte(element), &text))
+
+	return text.Content
+}
+
 // svgArrows returns the arrows the diagram draws between its boxes.
 func svgArrows(output string) []string {
 	var arrows []string
@@ -646,9 +684,10 @@ func svgShapes(t *testing.T, output string) []svgShape {
 	t.Helper()
 
 	var (
-		shapes []svgShape
-		inRect bool
-		text   strings.Builder
+		shapes      []svgShape
+		inRect      bool
+		inEdgeLabel bool
+		text        strings.Builder
 	)
 
 	decoder := xml.NewDecoder(strings.NewReader(output))
@@ -665,8 +704,11 @@ func svgShapes(t *testing.T, output string) []svgShape {
 			case "rect":
 				shapes = append(shapes, svgShape{attributes: svgAttributes(element), rect: svgRectOf(t, element)})
 				inRect = true
-			case "title", "text":
+			case "title":
 				text.Reset()
+			case "text":
+				text.Reset()
+				inEdgeLabel = svgAttributeValue(element, "class") == edgeLabelClass
 			}
 		case xml.CharData:
 			text.Write(element)
@@ -679,9 +721,13 @@ func svgShapes(t *testing.T, output string) []svgShape {
 					shapes[len(shapes)-1].tooltip = text.String()
 				}
 			case "text":
-				if len(shapes) > 0 {
+				// An arrow's label is text the picture draws outside any box.
+				// Binding it to the last rect seen would rename that box, and
+				// every reader of a box label reads through this one.
+				if len(shapes) > 0 && !inEdgeLabel {
 					shapes[len(shapes)-1].label = text.String()
 				}
+				inEdgeLabel = false
 			}
 		}
 	}
@@ -764,8 +810,10 @@ func svgConnections(t *testing.T, output string) []diagramConnection {
 		return label
 	}
 
+	labels := svgArrowLabels(t, output)
+
 	var connections []diagramConnection
-	for _, arrow := range svgArrows(output) {
+	for i, arrow := range svgArrows(output) {
 		path := svgPathData.FindStringSubmatch(arrow)
 		require.NotNil(t, path, "an arrow carries no path: %s", arrow)
 
@@ -776,6 +824,7 @@ func svgConnections(t *testing.T, output string) []diagramConnection {
 			source: boxAt(svgPoint(t, points[0])),
 			target: boxAt(svgPoint(t, points[len(points)-1])),
 			paint:  strings.TrimSpace(svgPathData.ReplaceAllString(arrow, "")),
+			label:  labels[i],
 		})
 	}
 
@@ -791,6 +840,20 @@ func svgPoint(t *testing.T, point []string) [2]int {
 	require.NoError(t, err, "an arrow's path names %q, which is no point", point[0])
 
 	return [2]int{x, y}
+}
+
+// edgeLabelClass marks the text an arrow carries, which the writer paints
+// outside any box.
+const edgeLabelClass = "edge-label"
+
+func svgAttributeValue(element xml.StartElement, name string) string {
+	for _, a := range element.Attr {
+		if a.Name.Local == name {
+			return a.Value
+		}
+	}
+
+	return ""
 }
 
 func svgAttributes(element xml.StartElement) string {

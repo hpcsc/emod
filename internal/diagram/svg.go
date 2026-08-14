@@ -201,6 +201,14 @@ func ExportSVG(model *ast.Model, _ Style) ([]byte, error) {
 					b.WriteString(readsArrow(edge.From, reader))
 				}
 
+			case EdgeAutomationTrigger:
+				from, fromDrawn := nameToBox[edge.From]
+				to, toDrawn := nameToBox[edge.To]
+				if fromDrawn && toDrawn {
+					b.WriteString(svgArrowBetween(from, to))
+					b.WriteString(svgArrowLabel(from, to, edge.Label))
+				}
+
 			case EdgeRejection:
 				// SliceEdges emits rejection edges in declaration order, so the
 				// nth one this slice states ends at the nth badge it drew.
@@ -233,7 +241,7 @@ func svgHeader(w, h int) string {
 func svgDefs() string {
 	return `<defs>
 <marker id="arrow" viewBox="0 0 10 10" refX="10" refY="5" markerWidth="6" markerHeight="6" orient="auto">
-<path d="M 0 0 L 10 5 L 0 10 z" fill="#666666"/>
+<path d="M 0 0 L 10 5 L 0 10 z" fill="` + arrowStroke + `"/>
 </marker>
 </defs>
 `
@@ -326,6 +334,25 @@ type svgBox struct {
 	x, y, w, h int
 }
 
+// svgArrowLabel paints an arrow's text midway between the two box centres
+// svgArrowBetween runs between — on the horizontal leg of the orthogonal route
+// it draws, rather than at either bend — and nothing at all for an arrow
+// carrying none, so the picture of a model whose arrows say nothing is
+// byte-identical to what it was.
+// The class is what separates this text from a box's own: a reader binding
+// every <text> to the last rect it saw would otherwise relabel that box.
+func svgArrowLabel(from, to svgBox, label string) string {
+	if label == "" {
+		return ""
+	}
+
+	sx, sy := from.x+from.w/2, from.y+from.h/2
+	tx, ty := to.x+to.w/2, to.y+to.h/2
+
+	return fmt.Sprintf(`<text class="edge-label" x="%d" y="%d" text-anchor="middle" dominant-baseline="middle" font-family="sans-serif" font-size="%d" fill="%s">%s</text>`+"\n",
+		(sx+tx)/2, (sy+ty)/2, edgeLabelFontSize, arrowStroke, escapeXML(label))
+}
+
 func svgArrowBetween(from, to svgBox) string {
 	return svgArrowPath(from.x+from.w/2, from.y+from.h/2, to.x+to.w/2, to.y+to.h/2, "")
 }
@@ -337,6 +364,16 @@ func svgDashedArrowBetween(from, to svgBox) string {
 	return svgArrowPath(from.x+from.w/2, from.y+from.h/2, to.x+to.w/2, to.y+to.h/2, ` stroke-dasharray="6,4"`)
 }
 
+const (
+	// arrowStroke paints every arrow, its arrowhead and any text painted on
+	// one, so a label and the line it names cannot drift apart.
+	arrowStroke = "#666666"
+	// edgeLabelFontSize matches the size a reactor box draws its own label at,
+	// so a duration on an arrow reads as part of the same picture rather than
+	// as an annotation over it.
+	edgeLabelFontSize = 10
+)
+
 func svgArrowPath(sx, sy, tx, ty int, dash string) string {
 	if sx == tx && sy == ty {
 		return ""
@@ -344,12 +381,12 @@ func svgArrowPath(sx, sy, tx, ty int, dash string) string {
 
 	if sx == tx || sy == ty {
 		// Vertical or horizontal only
-		return fmt.Sprintf(`<path d="M %d,%d L %d,%d" fill="none" stroke="#666666" stroke-width="1.5"%s marker-end="url(#arrow)"/>`+"\n",
+		return fmt.Sprintf(`<path d="M %d,%d L %d,%d" fill="none" stroke="`+arrowStroke+`" stroke-width="1.5"%s marker-end="url(#arrow)"/>`+"\n",
 			sx, sy, tx, ty, dash)
 	}
 
 	// Vertical-first orthogonal path
 	midY := (sy + ty) / 2
-	return fmt.Sprintf(`<path d="M %d,%d L %d,%d L %d,%d L %d,%d" fill="none" stroke="#666666" stroke-width="1.5"%s marker-end="url(#arrow)"/>`+"\n",
+	return fmt.Sprintf(`<path d="M %d,%d L %d,%d L %d,%d L %d,%d" fill="none" stroke="`+arrowStroke+`" stroke-width="1.5"%s marker-end="url(#arrow)"/>`+"\n",
 		sx, sy, sx, midY, tx, midY, tx, ty, dash)
 }
