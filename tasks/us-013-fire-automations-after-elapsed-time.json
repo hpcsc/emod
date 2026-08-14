@@ -94,7 +94,7 @@
         "internal/oracle/oracle_test.go",
         "internal/formatter/formatter_test.go"
       ],
-      "done": false
+      "done": true
     },
     {
       "n": 6,

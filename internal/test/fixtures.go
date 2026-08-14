@@ -1574,6 +1574,188 @@ context "Reading Room" mode dcb {
 }
 `
 
+// AutomationDelayLibraryLending fires automations after an elapsed delay in
+// both homes a slice has — nested in an aggregate, and declared directly on a
+// DCB-mode context — stating a different duration in each, beside an automation
+// that activates immediately and one that runs on a schedule, so packages that
+// carry a delay through the pipeline share one model and can read all three
+// timing shapes out of it. Every automation reads a view, which keeps
+// automation/missing-todo-list quiet and the model in oracle's clean-input
+// group; the part deliberately omitted is the delay alone. The automation
+// stating an activation event and no delay sits mid-block ahead of a further
+// automation on purpose: write the omission last and nothing here would catch an
+// activation line running on into what follows it.
+const AutomationDelayLibraryLending = `# Lending a library's copies and seating its readers, with the delays its automations fire after
+model "Library Lending"
+
+actor "Member"
+
+context "Lending" {
+  aggregate "Loan" {
+    slice "Borrow Copy" {
+      trigger "Lending Desk" {
+        actor Member
+        reads MemberLoansView
+      }
+      command BorrowCopy {
+        fields {
+          memberId string required
+          copyId   string required
+          dueOn    date   required
+        }
+      }
+      event CopyBorrowed {
+        fields {
+          loanId   string required
+          memberId string required
+          copyId   string required
+          dueOn    date   required
+        }
+      }
+      flow {
+        command -> event: BorrowCopy -> CopyBorrowed
+      }
+    }
+    slice "Review Member Loans" {
+      view MemberLoansView {
+        fields {
+          loanId   string required
+          memberId string required
+          dueOn    date   required
+        }
+        subscribes [CopyBorrowed]
+      }
+    }
+    slice "Chase Overdue Copy" {
+      command RemindMember {
+        fields {
+          loanId   string required
+          memberId string required
+        }
+      }
+      command RecallCopy {
+        fields {
+          loanId string required
+          copyId string required
+        }
+      }
+      event MemberReminded {
+        fields {
+          loanId     string    required
+          memberId   string    required
+          remindedAt timestamp required
+        }
+      }
+      event CopyRecalled {
+        fields {
+          loanId     string    required
+          copyId     string    required
+          recalledAt timestamp required
+        }
+      }
+      automation RemindAfterGracePeriod {
+        on CopyBorrowed after "72h"
+        reads MemberLoansView
+        command RemindMember
+      }
+      automation RecallOnSecondReminder {
+        on MemberReminded
+        reads MemberLoansView
+        command RecallCopy
+      }
+      automation SweepOverdueLoans {
+        every "15m"
+        reads MemberLoansView
+        command RecallCopy
+      }
+      flow {
+        command -> event: RemindMember -> MemberReminded
+        command -> event: RecallCopy -> CopyRecalled
+      }
+    }
+  }
+}
+
+context "Reading Room" mode dcb {
+  slice "Claim Desk" {
+    command ClaimDesk {
+      fields {
+        memberId string required
+        deskId   string required
+      }
+    }
+    event DeskClaimed {
+      tags {
+        desk  : deskId
+        reader: memberId
+      }
+      fields {
+        sessionId string    required
+        deskId    string    required
+        memberId  string    required
+        claimedAt timestamp required
+      }
+    }
+    flow {
+      command -> event: ClaimDesk -> DeskClaimed
+    }
+  }
+  slice "Release Desk" {
+    command ReleaseDesk {
+      decides_on {
+        events [DeskClaimed]
+        where tag(desk = deskId) and tag(reader = memberId)
+      }
+      fields {
+        sessionId string required
+      }
+    }
+    event DeskReleased {
+      tags {
+        desk  : deskId
+        reader: memberId
+      }
+      fields {
+        sessionId  string    required
+        deskId     string    required
+        memberId   string    required
+        releasedAt timestamp required
+      }
+    }
+    flow {
+      command -> event: ReleaseDesk -> DeskReleased
+    }
+  }
+  slice "Browse Desk Occupancy" {
+    view DeskOccupancyView {
+      fields {
+        deskId    string    required
+        memberId  string    required
+        claimedAt timestamp required
+      }
+      subscribes [DeskClaimed, DeskReleased]
+    }
+  }
+  slice "Close Reading Room" {
+    automation ReleaseDeskLeftClaimed {
+      on DeskClaimed after "30m"
+      reads DeskOccupancyView
+      command ReleaseDesk
+    }
+    automation RemindReaderOfLoans {
+      on DeskReleased
+      reads MemberLoansView
+      command RemindMember
+    }
+    automation CloseDesksAtNight {
+      every "0 22 * * *"
+      reads DeskOccupancyView
+      command ReleaseDesk
+    }
+  }
+}
+`
+
 // PayloadLibraryLending states example values on the scenarios its slices must
 // satisfy, in both homes a slice has — nested in an aggregate, and directly on a
 // DCB-mode context — so packages that carry payloads through the pipeline share
@@ -2279,6 +2461,17 @@ var AutomationScheduleLibraryLendingActivationEvents = []string{
 	"DeskReleased",
 }
 
+// AutomationDelayLibraryLendingDelays transcribes the delay every automation of
+// AutomationDelayLibraryLending fires after, both slice homes together and in
+// declaration order, so a walk or a strip that reaches only one of the homes
+// reads back short against it. The automations that activate immediately and the
+// one that runs on a schedule contribute nothing, so the list is shorter than the
+// automation count.
+var AutomationDelayLibraryLendingDelays = []string{
+	"72h",
+	"30m",
+}
+
 // WireTypeLibraryLendingWireTypes transcribes the wire type every event of
 // WireTypeLibraryLending binds, both slice homes together and in declaration
 // order, so a walk or a strip that reaches only one of the homes — or that
@@ -2390,6 +2583,22 @@ func WithoutAutomationReads(model *ast.Model) *ast.Model {
 		s.Automations = editedCopies(s.Automations, func(auto *ast.Automation) {
 			auto.Reads = ""
 			auto.ReadsPos = ast.Position{}
+		})
+	})
+}
+
+// WithoutAutomationDelays returns a copy of model whose automations fire after
+// no delay, in both homes a slice has — nested in an aggregate and declared
+// directly on a context. The original keeps every delay it was written stating,
+// so a caller comparing the two is not comparing a model with itself. Which
+// event or schedule each automation activates on is left alone: only the delay
+// is the subject of the comparison, and stripping it leaves a model the parser
+// still accepts.
+func WithoutAutomationDelays(model *ast.Model) *ast.Model {
+	return copyWithEditedSlices(model, func(s *ast.Slice) {
+		s.Automations = editedCopies(s.Automations, func(auto *ast.Automation) {
+			auto.After = ""
+			auto.AfterPos = ast.Position{}
 		})
 	})
 }
@@ -2656,6 +2865,16 @@ func DeclaredActivationEvents(model *ast.Model) []string {
 // only one of the homes.
 func DeclaredSchedules(model *ast.Model) []string {
 	return declaredAutomationEntries(model, func(auto *ast.Automation) string { return auto.Schedule })
+}
+
+// DeclaredDelays names the delay every automation of model fires after, both
+// slice homes together and in declaration order, so a caller pairing it with a
+// transcribed list reads back short when an entry goes missing or a walk reaches
+// only one of the homes. An automation stating no delay contributes nothing, so
+// the list counts what the model states rather than how many automations it
+// declares.
+func DeclaredDelays(model *ast.Model) []string {
+	return declaredAutomationEntries(model, func(auto *ast.Automation) string { return auto.After })
 }
 
 // DeclaredWireTypes names the wire type every event of model binds, both slice

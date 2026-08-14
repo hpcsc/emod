@@ -75,6 +75,12 @@ func TestCheck(t *testing.T) {
 			require.Empty(t, diagnostics)
 		})
 
+		t.Run("returns an empty diagnostic list for a model firing automations after a delay in an aggregate slice and on a context slice", func(t *testing.T) {
+			diagnostics := oracle.Check(test.AutomationDelayLibraryLending, "automation-delay.emod")
+
+			require.Empty(t, reportedLines(diagnostics))
+		})
+
 		t.Run("returns an empty diagnostic list for a model binding wire types in an aggregate slice and on a context slice", func(t *testing.T) {
 			diagnostics := oracle.Check(test.WireTypeLibraryLending, "wire-types.emod")
 

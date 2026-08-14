@@ -5,7 +5,7 @@
 - [x] Task 2: Parse `after "<duration>"` on an automation's activation line
 - [x] Task 3: Reject an `after` value that is not a Go duration
 - [x] Task 4: Emit `after` from `emod fmt`
-- [ ] Task 5: Share a fixture whose automations fire after an elapsed delay
+- [x] Task 5: Share a fixture whose automations fire after an elapsed delay
 - [ ] Task 6: Carry the delay into the JSON, CUE and embedded schema exports
 - [ ] Task 7: Carry the delay through the diagram document and back
 - [ ] Task 8: Label the `event -> automation` arrow with the delay in SVG and draw.io
@@ -736,39 +736,39 @@ accept, it survives a format round-trip with every delay intact, and it comes wi
 only the delays so later differentials can compare it against itself.
 
 **Acceptance Criteria:**
-- [ ] `internal/test/fixtures.go` gains a fixture whose automations state `after` in both slice homes,
+- [x] `internal/test/fixtures.go` gains a fixture whose automations state `after` in both slice homes,
       with at least two different durations, beside an automation stating `on` and no delay and an
       automation stating `every` and no delay — one model in which the two timing notations and the
       absence of both are all readable
-- [ ] The automation stating `on` and no delay sits *mid-block* ahead of a further automation, never
+- [x] The automation stating `on` and no delay sits *mid-block* ahead of a further automation, never
       as the last entry: an entry that runs on into what follows it is only caught when something
       follows it
-- [ ] Every automation in the fixture states a `reads`, so `automation/missing-todo-list` stays quiet
+- [x] Every automation in the fixture states a `reads`, so `automation/missing-todo-list` stays quiet
       and the fixture's `oracle.Check` leaf belongs in the `"clean input"` group
       (`internal/oracle/oracle_test.go:26`) rather than `"automations reading no view"` (`:131`)
-- [ ] `oracle.Check` over the fixture returns no diagnostics at all — lexer, parser, validator and
+- [x] `oracle.Check` over the fixture returns no diagnostics at all — lexer, parser, validator and
       linter each accept it, and a `mode dcb` context in it carries the tags and `decides_on` its
       events need
-- [ ] `internal/test/models.go` gains the parsing accessor for it, in the shape of
+- [x] `internal/test/models.go` gains the parsing accessor for it, in the shape of
       `AutomationScheduleLibraryLendingModel`
-- [ ] A hand-transcribed exported list names every delay the fixture states, both slice homes together
+- [x] A hand-transcribed exported list names every delay the fixture states, both slice homes together
       and in declaration order, and is non-empty
-- [ ] A `Declared…` getter walks `declaredSlices` (`internal/test/fixtures.go:1364`) and returns the
+- [x] A `Declared…` getter walks `declaredSlices` (`internal/test/fixtures.go:1364`) and returns the
       delay every automation states, skipping the automations that state none, and `require.Equal`
       against the transcribed list holds — a getter reaching only one slice home reads back short
-- [ ] `test.DeclaredActivationEvents` and `test.DeclaredSchedules` over the same fixture each return a
+- [x] `test.DeclaredActivationEvents` and `test.DeclaredSchedules` over the same fixture each return a
       non-empty list, so the fixture is proved to carry all three activation shapes
-- [ ] A `Without…` twin clears the delays and nothing else: `require.Empty` on the twin's delays,
+- [x] A `Without…` twin clears the delays and nothing else: `require.Empty` on the twin's delays,
       `require.Equal` against the transcribed list for the fixture itself, and the twin's activation
       events and schedules still equal to the fixture's — a strip reaching further than the delays
       cannot pass
-- [ ] The twin returns a copy, so the model handed to it reads back unchanged afterwards; the copy is
+- [x] The twin returns a copy, so the model handed to it reads back unchanged afterwards; the copy is
       shallow, so the edit reaching inside a slice's automations nests a second `editedCopies`
-- [ ] The formatter round-trip group gains this fixture in its existing per-fixture leaf
+- [x] The formatter round-trip group gains this fixture in its existing per-fixture leaf
       (`internal/formatter/formatter_test.go:1037`, whose table rows sit at `:1062` and whose
       assertions sit at `:1082-1083`), asserting the reparsed model reads back the transcribed delays
       alongside the activation events and schedules — one row, not a parallel table
-- [ ] `git diff` leaves every existing fixture in `internal/test/fixtures.go` untouched, and moves no
+- [x] `git diff` leaves every existing fixture in `internal/test/fixtures.go` untouched, and moves no
       transcribed name list and no `*FormattedEmod` constant belonging to another fixture: the models
       stating no delay are this story's byte-identical witnesses
 

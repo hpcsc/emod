@@ -76,6 +76,12 @@ func AutomationScheduleLibraryLendingModel(t *testing.T) *ast.Model {
 	return parseFixture(t, AutomationScheduleLibraryLending, "automation-schedule.emod")
 }
 
+func AutomationDelayLibraryLendingModel(t *testing.T) *ast.Model {
+	t.Helper()
+
+	return parseFixture(t, AutomationDelayLibraryLending, "automation-delay.emod")
+}
+
 func WireTypeLibraryLendingModel(t *testing.T) *ast.Model {
 	t.Helper()
 

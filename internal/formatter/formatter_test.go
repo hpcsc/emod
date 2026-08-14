@@ -1617,6 +1617,7 @@ func TestFormat(t *testing.T) {
 				triggerReads     []string
 				automationReads  []string
 				wireTypes        []string
+				delays           []string
 			}{
 				{
 					shape:            "automations in both slice homes, reading views across contexts",
@@ -1648,6 +1649,15 @@ func TestFormat(t *testing.T) {
 					automationReads:  test.TriggerReadsLibraryLendingAutomationViewNames,
 				},
 				{
+					shape:            "automations firing after a delay in both slice homes, beside one activating immediately and one on a schedule",
+					parse:            test.AutomationDelayLibraryLendingModel,
+					activationEvents: []string{"CopyBorrowed", "MemberReminded", "DeskClaimed", "DeskReleased"},
+					schedules:        []string{"15m", "0 22 * * *"},
+					triggerReads:     []string{"MemberLoansView"},
+					automationReads:  []string{"MemberLoansView", "MemberLoansView", "MemberLoansView", "DeskOccupancyView", "MemberLoansView", "DeskOccupancyView"},
+					delays:           test.AutomationDelayLibraryLendingDelays,
+				},
+				{
 					shape:            "events binding wire types in both slice homes and on the event a translation nests",
 					parse:            test.WireTypeLibraryLendingModel,
 					activationEvents: []string{"CopyBorrowed"},
@@ -1667,6 +1677,7 @@ func TestFormat(t *testing.T) {
 					require.Equal(t, testCase.triggerReads, test.DeclaredTriggerReads(reparsed))
 					require.Equal(t, testCase.automationReads, test.DeclaredAutomationReads(reparsed))
 					require.Equal(t, testCase.wireTypes, test.DeclaredWireTypes(reparsed))
+					require.Equal(t, testCase.delays, test.DeclaredDelays(reparsed))
 				})
 			}
 		})

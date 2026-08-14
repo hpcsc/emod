@@ -2795,6 +2795,26 @@ context "Ctx" {
 			require.Equal(t, astPositionOf(t, "test.emod", input, `after "72h"`, `"72h"`), automation.AfterPos)
 		})
 
+		t.Run("the shared delay model states every delay it was written with, in both slice homes, beside the other two timing shapes", func(t *testing.T) {
+			stated := test.AutomationDelayLibraryLendingModel(t)
+
+			require.Equal(t, test.AutomationDelayLibraryLendingDelays, test.DeclaredDelays(stated))
+			require.NotEmpty(t, test.AutomationDelayLibraryLendingDelays)
+			require.NotEmpty(t, test.DeclaredActivationEvents(stated))
+			require.NotEmpty(t, test.DeclaredSchedules(stated))
+		})
+
+		t.Run("stripping the shared delay model leaves it firing after nothing while the original still states every delay", func(t *testing.T) {
+			stated := test.AutomationDelayLibraryLendingModel(t)
+
+			stripped := test.WithoutAutomationDelays(stated)
+
+			require.Empty(t, test.DeclaredDelays(stripped))
+			require.Equal(t, test.AutomationDelayLibraryLendingDelays, test.DeclaredDelays(stated))
+			require.Equal(t, test.DeclaredActivationEvents(stated), test.DeclaredActivationEvents(stripped))
+			require.Equal(t, test.DeclaredSchedules(stated), test.DeclaredSchedules(stripped))
+		})
+
 		t.Run("automation activating on a schedule records the expression and where it is written", func(t *testing.T) {
 			tests := []struct {
 				name    string
