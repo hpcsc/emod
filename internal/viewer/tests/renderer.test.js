@@ -2,6 +2,7 @@ import { describe, it, expect, beforeEach } from 'vitest';
 import { readFileSync } from 'fs';
 import { resolve } from 'path';
 import { installSVGGeometry } from './svg-env.js';
+import { distanceToPath, pathEnds } from './arrow-geometry.js';
 
 installSVGGeometry();
 
@@ -208,6 +209,72 @@ function pairedAutomations(schedule) {
   ];
 }
 
+// An automation firing after a delay beside one activating immediately and one
+// running on a schedule, so a single render carries all three timing shapes. The
+// scheduled one deliberately has no activation arrow — a schedule draws none,
+// which is the rule this fixture exists to protect — and reaches the render only
+// through the view it reads.
+function delayedAutomations(delay) {
+  const delayed = { id: 'autoDelayed', type: 'automation', label: 'ChaseOverdue', parentId: 'sl1', on_event: 'InvoiceOverdue' };
+  if (delay) delayed.after = delay;
+
+  const nodes = [
+    { id: 'ctx1', type: 'context', label: 'Collections' },
+    { id: 'agg1', type: 'aggregate', label: 'Arrangement', parentId: 'ctx1' },
+    { id: 'sl1', type: 'slice', label: 'Chase arrears', parentId: 'agg1' },
+    { id: 'evt1', type: 'event', label: 'InvoiceOverdue', parentId: 'sl1' },
+    { id: 'view1', type: 'view', label: 'ArrearsView', parentId: 'sl1' },
+    delayed,
+    { id: 'autoPlain', type: 'automation', label: 'NotifyDesk', parentId: 'sl1', on_event: 'InvoiceOverdue' },
+    { id: 'autoScheduled', type: 'automation', label: 'SweepArrears', parentId: 'sl1', every: cronExpression },
+  ];
+  // The delayed automation is reached by a reads arrow as well as its
+  // activation arrow, so a label keyed on the automation rather than on the
+  // arrow's own type would show up on the wrong one.
+  const edges = [
+    { source: 'evt1', target: 'autoDelayed', type: 'automation_trigger' },
+    { source: 'evt1', target: 'autoPlain', type: 'automation_trigger' },
+    { source: 'view1', target: 'autoDelayed', type: 'reads' },
+    { source: 'view1', target: 'autoScheduled', type: 'reads' },
+  ];
+
+  return { nodes, edges };
+}
+
+function renderDelayed(delay) {
+  const { nodes, edges } = delayedAutomations(delay);
+  return render(nodes, edges);
+}
+
+// The delayed automation in a different context from the event that activates
+// it — the shape the story's own shared fixture has, where an automation in one
+// context reacts to an event declared in another. The layout draws that arrow
+// as a cubic curve rather than a straight segment, so a label placed by
+// interpolating the two ends alone lands off the line it names.
+function renderCrossSliceDelayed(delay) {
+  return render([
+    { id: 'ctx1', type: 'context', label: 'Billing' },
+    { id: 'sl1', type: 'slice', label: 'Raise invoice', parentId: 'ctx1' },
+    { id: 'evt1', type: 'event', label: 'InvoiceOverdue', parentId: 'sl1' },
+    { id: 'ctx2', type: 'context', label: 'Collections' },
+    { id: 'sl2', type: 'slice', label: 'Chase arrears', parentId: 'ctx2' },
+    { id: 'autoDelayed', type: 'automation', label: 'ChaseOverdue', parentId: 'sl2', on_event: 'InvoiceOverdue', after: delay },
+  ], [
+    { source: 'evt1', target: 'autoDelayed', type: 'automation_trigger' },
+  ]);
+}
+
+// The text an arrow carries, keyed by the arrow it belongs to. Reading it off
+// the class rather than off position is what keeps it apart from a box's own
+// label, which every reader of a drawn box goes through.
+function arrowLabels(svg) {
+  const entries = [...svg.querySelectorAll('text.edge-label')].map((el) => [
+    el.getAttribute('data-edge-id'),
+    el.textContent,
+  ]);
+  return Object.fromEntries(entries);
+}
+
 const commandDescription = 'Offers the customer an instalment plan';
 const sliceDescription = 'Everything it takes to agree a plan';
 const automationDescription = 'Sweeps every arrears account each weekday';
@@ -394,6 +461,7 @@ function createStore(nodes, { edges = [], hiddenNodes = {} } = {}) {
     hiddenNodes: hiddenNodes,
     nodeOffsets: {},
     layoutPositions: {},
+    nodeById: new Map(nodes.map((n) => [n.id, n])),
   };
 }
 
@@ -907,6 +975,78 @@ describe('Renderer.buildSVG', () => {
       expect(box.fill).toBe(automationFill);
       expect(box.height).toBe(boxes.cmd1.height);
       expect(boxes).toEqual(drawnBoxes(eventActivated.svg));
+    });
+  });
+
+  describe('automation delay', () => {
+    it('draws the duration on the activation arrow alone, leaving every other arrow of the same render bare', () => {
+      const { svg } = renderDelayed('72h');
+
+      // Keyed by arrow, so this says both that the activation arrow carries the
+      // duration and that the reads arrow into the same automation does not.
+      expect(arrowLabels(svg)).toEqual({ 'evt1--autoDelayed': 'after "72h"' });
+    });
+
+    it.each([
+      ['within one slice', () => renderDelayed('72h')],
+      ['across a slice boundary', () => renderCrossSliceDelayed('72h')],
+    ])('places the duration on the arrow it names, %s', (shape, draw) => {
+      const { svg } = draw();
+
+      const label = svg.querySelector('text.edge-label');
+      const arrow = svg.querySelector('path.arrow[data-edge-id="evt1--autoDelayed"]');
+
+      // Measured against the arrow's own route, not against a box: a label the
+      // renderer places by a rule the arrow does not follow lands beside it.
+      expect(distanceToPath(arrow, numeric(label, 'x'), numeric(label, 'y'))).toBeLessThan(5);
+
+      // Nearer the end the arrow points at — the automation the delay
+      // qualifies — which is what keeps it off the boxes the arrow crosses on
+      // its way there. Stated against the arrow's own ends so it holds for a
+      // curve and a straight segment alike.
+      const ends = pathEnds(arrow);
+      const [lx, ly] = [numeric(label, 'x'), numeric(label, 'y')];
+      expect(Math.hypot(lx - ends.end.x, ly - ends.end.y))
+        .toBeLessThan(Math.hypot(lx - ends.start.x, ly - ends.start.y));
+    });
+
+    it('leaves the arrow itself the thing the pointer reaches', () => {
+      const { svg } = renderDelayed('72h');
+
+      expect(svg.querySelector('text.edge-label').getAttribute('pointer-events')).toBe('none');
+    });
+
+    it('leaves the delayed automation\'s box saying what an undelayed one\'s says', () => {
+      const { svg } = renderDelayed('72h');
+
+      const delayed = nodeGroup(svg, 'autoDelayed');
+      expect(drawnText(delayed)).toEqual(['ChaseOverdue']);
+      expect(tooltipOf(delayed)).toBeNull();
+    });
+
+    it('fits the duration on the arrow without moving, resizing or repainting a box', () => {
+      const plain = renderDelayed();
+      const delayed = renderDelayed('72h');
+
+      expect(arrowLabels(plain.svg)).toEqual({});
+      expect(arrowLabels(delayed.svg)).toEqual({ 'evt1--autoDelayed': 'after "72h"' });
+      expect(drawnBoxes(delayed.svg)).toEqual(drawnBoxes(plain.svg));
+    });
+
+    it('shows a duration carrying markup as text', () => {
+      const { svg } = renderDelayed('<b>72h</b>');
+
+      expect(arrowLabels(svg)).toEqual({ 'evt1--autoDelayed': 'after "<b>72h</b>"' });
+      expect(svg.querySelector('text.edge-label b')).toBeNull();
+    });
+
+    it('draws no label for a node stating the delay under a key it does not read', () => {
+      const { nodes, edges } = delayedAutomations();
+      const miskeyed = nodes.map((n) => (n.id === 'autoDelayed' ? { ...n, delay: '72h' } : n));
+
+      const { svg } = render(miskeyed, edges);
+
+      expect(arrowLabels(svg)).toEqual({});
     });
   });
 

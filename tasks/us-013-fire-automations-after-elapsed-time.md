@@ -10,7 +10,7 @@
 - [x] Task 7: Carry the delay through the diagram document and back
 - [x] Task 8: Label the `event -> automation` arrow with the delay in SVG and draw.io
 - [x] Task 9: Name the delay in Mermaid, ASCII and `emod slices list`
-- [ ] Task 10: Show an automation's delay in the viewer
+- [x] Task 10: Show an automation's delay in the viewer
 
 ---
 
@@ -1111,29 +1111,29 @@ so the two timing notations stay legible in the viewer for the same reason they 
 automation stating no delay looks exactly as it does today.
 
 **Acceptance Criteria:**
-- [ ] The SVG the viewer produces for a document whose automation node states a delay carries the
+- [x] The SVG the viewer produces for a document whose automation node states a delay carries the
       duration as text on the `automation_trigger` arrow between the activating event's node and the
       automation's node
-- [ ] An automation node stating no delay contributes an arrow with no label, and an automation node
+- [x] An automation node stating no delay contributes an arrow with no label, and an automation node
       stating a schedule keeps its clock badge and its tooltip and gains no arrow label — all three
       asserted in one test so the cases move together
-- [ ] A delayed automation's box draws the labels it draws today: the delay appears on the arrow and
+- [x] A delayed automation's box draws the labels it draws today: the delay appears on the arrow and
       not among the box's `<text>` elements, read back by walking the group's text nodes rather than
       its `textContent`, which folds the `<title>` in
-- [ ] The delayed automation's box keeps the position, size and fill it has without the delay,
+- [x] The delayed automation's box keeps the position, size and fill it has without the delay,
       compared across a render with and without the value through the drawn-box reader
-- [ ] The details panel shows a row for the delay beside the existing `On Event`, `Every`, `Reads`,
+- [x] The details panel shows a row for the delay beside the existing `On Event`, `Every`, `Reads`,
       `Command` and `Target Context` rows (`internal/viewer/static/ui.js:350-361`), in a fixed
       position, listing the duration for a delayed automation and the em-dash placeholder for one that
       states none
-- [ ] A delay containing markup is shown as text in both the panel and the drawn label, matching the
+- [x] A delay containing markup is shown as text in both the panel and the drawn label, matching the
       escaping the other rows already prove
-- [ ] A node stating the delay under a key the viewer does not read shows the placeholder and draws no
+- [x] A node stating the delay under a key the viewer does not read shows the placeholder and draws no
       arrow label, so both readers are proved to read the same key the exporter writes
-- [ ] An arrow the user draws between an event and an automation still types as `automation_trigger`
+- [x] An arrow the user draws between an event and an automation still types as `automation_trigger`
       (`internal/viewer/static/model.js:145`), and no pairing is added to `EDGE_TYPE_BY_ENDS` — the
       delay travels on the node, so no new arrow direction becomes meaningful
-- [ ] `mise exec -- task test:viewer` passes, and `mise exec -- task test:unit` is unaffected — this
+- [x] `mise exec -- task test:viewer` passes, and `mise exec -- task test:unit` is unaffected — this
       task changes no Go file
 
 **Affected Files/Modules:**

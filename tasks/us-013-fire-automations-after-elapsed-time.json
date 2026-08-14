@@ -179,7 +179,7 @@
         "internal/viewer/static/ui.js",
         "internal/viewer/tests/renderer.test.js"
       ],
-      "done": false
+      "done": true
     }
   ]
 }

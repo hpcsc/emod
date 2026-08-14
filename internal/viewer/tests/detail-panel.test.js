@@ -89,6 +89,7 @@ describe('detail panel for an automation', () => {
       activationRows: [
         { label: 'On Event', value: 'InvoiceOverdue' },
         { label: 'Every', value: '—' },
+        { label: 'After', value: '—' },
       ],
     },
     {
@@ -97,6 +98,16 @@ describe('detail panel for an automation', () => {
       activationRows: [
         { label: 'On Event', value: '—' },
         { label: 'Every', value: '0 9 * * 1-5' },
+        { label: 'After', value: '—' },
+      ],
+    },
+    {
+      activation: 'an event after a delay',
+      attrs: { on_event: 'InvoiceOverdue', after: '72h' },
+      activationRows: [
+        { label: 'On Event', value: 'InvoiceOverdue' },
+        { label: 'Every', value: '—' },
+        { label: 'After', value: '72h' },
       ],
     },
   ])('shows how an automation activated by $activation wakes up, the view it reads, the command it issues and the target context',
@@ -126,6 +137,7 @@ describe('detail panel for an automation', () => {
     expect(shownRows(store)).toEqual([
       { label: 'On Event', value: '—' },
       { label: 'Every', value: '—' },
+      { label: 'After', value: '—' },
       { label: 'Reads', value: '—' },
       { label: 'Command', value: '—' },
       { label: 'Target Context', value: '—' },
@@ -136,6 +148,7 @@ describe('detail panel for an automation', () => {
     { label: 'On Event', key: 'on_event', value: 'Invoice<b>&</b>Overdue' },
     { label: 'Reads', key: 'reads', value: 'Invoices<b>&</b>Payments' },
     { label: 'Every', key: 'every', value: '0 9 * * <b>&</b>' },
+    { label: 'After', key: 'after', value: '72<b>&</b>h' },
   ])('shows the $label value containing markup as text', ({ label, key, value }) => {
     const store = createStore();
 
@@ -148,6 +161,7 @@ describe('detail panel for an automation', () => {
   it.each([
     { label: 'On Event', key: 'trigger_event', value: 'InvoiceOverdue' },
     { label: 'Every', key: 'schedule', value: '0 9 * * 1-5' },
+    { label: 'After', key: 'delay', value: '72h' },
   ])('shows no $label for a node stating it under a key the exporter never writes', ({ label, key, value }) => {
     const store = createStore();
 

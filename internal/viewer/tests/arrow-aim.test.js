@@ -1,5 +1,6 @@
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { installSVGGeometry, installIdentityMapping } from './svg-env.js';
+import { distanceToPath } from './arrow-geometry.js';
 
 installSVGGeometry();
 
@@ -188,6 +189,62 @@ describe('aiming at an arrow', () => {
 
       expect(hitPath().getAttribute('d')).toBe(drawnArrow().getAttribute('d'));
     });
+  });
+});
+
+// An arrow that carries text: the delay an automation fires after. The other
+// rider on an arrow — the invisible hit path — has one leaf per gesture, and
+// the label needs the same, because each gesture reshapes the arrow through its
+// own call site.
+function useDelayedAutomation() {
+  store.nodes = [
+    { id: 'ctx1', type: 'context', label: 'Collections' },
+    { id: 'agg1', type: 'aggregate', label: 'Arrangement', parentId: 'ctx1' },
+    { id: 'sl1', type: 'slice', label: 'Chase', parentId: 'agg1' },
+    { id: 'cmd1', type: 'command', label: 'ChaseInvoice', parentId: 'sl1' },
+    { id: 'evt1', type: 'event', label: 'InvoiceOverdue', parentId: 'sl1' },
+    { id: 'auto1', type: 'automation', label: 'ChaseOverdue', parentId: 'sl1', on_event: 'InvoiceOverdue', after: '72h' },
+  ];
+  store.edges = [{ source: 'evt1', target: 'auto1', type: 'automation_trigger' }];
+  store.nodeById = new Map(store.nodes.map((n) => [n.id, n]));
+  render();
+}
+
+const delayedArrow = () => store.dom.svg.querySelector('path.arrow[data-edge-id="evt1--auto1"]');
+const delayLabel = () => store.dom.svg.querySelector('text.edge-label[data-edge-id="evt1--auto1"]');
+
+function requireLabelOnItsArrow() {
+  const label = delayLabel();
+  expect(label).not.toBeNull();
+  expect(distanceToPath(delayedArrow(), Number(label.getAttribute('x')), Number(label.getAttribute('y'))))
+    .toBeLessThan(1);
+}
+
+describe('an arrow carrying a delay', () => {
+  it('keeps its text on the line while a block it joins is dragged', () => {
+    useDelayedAutomation();
+    requireLabelOnItsArrow();
+
+    const block = store.dom.svg.querySelector('.diagram-node[data-node-id="auto1"]');
+    fire(block, 'mousedown', { clientX: 500, clientY: 500 });
+    fire(document, 'mousemove', { clientX: 500 + DRAG_THRESHOLD + 1, clientY: 500 });
+    fire(document, 'mousemove', { clientX: 640, clientY: 620 });
+
+    requireLabelOnItsArrow();
+  });
+
+  it('keeps its text on the line while one of its ends is dragged', () => {
+    useDelayedAutomation();
+    requireLabelOnItsArrow();
+
+    const h = store.dom.svg.querySelector('.arrow-handle[data-edge-id="evt1--auto1"][data-arrow-handle="target"]');
+    fire(h, 'mousedown', { clientX: 400, clientY: 400 });
+    fire(document, 'mousemove', { clientX: 400 + DRAG_THRESHOLD + 1, clientY: 400 });
+    fire(document, 'mousemove', { clientX: 700, clientY: 620 });
+
+    requireLabelOnItsArrow();
+
+    fire(document, 'mouseup', { clientX: 700, clientY: 620 });
   });
 });
 

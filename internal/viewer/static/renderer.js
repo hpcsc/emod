@@ -509,7 +509,17 @@ function arrowHandle(end, point, edge, edgeId) {
   return el;
 }
 
-function appendEdge(vg, hitLayer, store, edge, ei) {
+// The delay an automation fires after is drawn on the arrow from the event it is
+// measured from, matching where the SVG and draw.io exports put it. It rides on
+// the automation's node rather than on the edge, so an arrow the user redraws
+// still finds it; the clock badge on the box keeps meaning `every` alone.
+function edgeLabelText(store, edge) {
+  if (edge.type !== "automation_trigger") return "";
+  var target = store.nodeById.get(edge.target);
+  return target && target.after ? 'after "' + target.after + '"' : "";
+}
+
+function appendEdge(vg, hitLayer, store, edge) {
   var positions = store.layoutPositions;
   var cfg = edgeConfig[edge.type];
   var srcPos = positions[edge.source];
@@ -517,7 +527,7 @@ function appendEdge(vg, hitLayer, store, edge, ei) {
   if (!cfg || !srcPos || !tgtPos) return;
 
   var crossBoundary = Layout.isCrossBoundary(store.nodes, edge.source, edge.target);
-  var d = Layout.computeArrowD(srcPos, tgtPos, crossBoundary, ei);
+  var d = Layout.computeArrowD(srcPos, tgtPos, crossBoundary);
 
   store.arrowData.push({ source: edge.source, target: edge.target, path: d });
 
@@ -527,6 +537,20 @@ function appendEdge(vg, hitLayer, store, edge, ei) {
   vg.appendChild(path(d, cfg.cls, cfg.stroke, cfg.marker, cfg.dash, edge.source, edge.target, edgeId));
 
   var eps = Layout.computeArrowEndpoints(srcPos, tgtPos, crossBoundary);
+
+  var label = edgeLabelText(store, edge);
+  if (label) {
+    var point = Layout.edgeLabelPoint(srcPos, tgtPos, crossBoundary);
+    var text = centeredText(point.x, point.y, label, 10, cfg.stroke);
+    text.setAttribute("class", "edge-label");
+    text.setAttribute("data-edge-id", edgeId);
+    // The label sits on the arrow it names, and the arrow's own hit path is
+    // what the pointer has to reach: painted text here would take the hover,
+    // the repoint handles and the right-click menu away from the arrow.
+    text.setAttribute("pointer-events", "none");
+    vg.appendChild(text);
+  }
+
   vg.appendChild(arrowHandle("source", eps.src, edge, edgeId));
   vg.appendChild(arrowHandle("target", eps.tgt, edge, edgeId));
 }
@@ -554,8 +578,8 @@ function buildSVG(store) {
   });
 
   store.arrowData = [];
-  edges.forEach(function(edge, ei) {
-    appendEdge(vg, hitLayer, store, edge, ei);
+  edges.forEach(function(edge) {
+    appendEdge(vg, hitLayer, store, edge);
   });
 
   vg.setAttribute("id", "viewport-group");

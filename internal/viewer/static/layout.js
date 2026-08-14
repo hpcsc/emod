@@ -296,8 +296,11 @@ function getSliceChildNodeIds(nodes, sliceId) {
   return ids;
 }
 
-function computeArrowD(srcPos, tgtPos, crossBoundary, edgeIdx) {
-  const stagger = (edgeIdx !== undefined) ? ((edgeIdx % 5 - 2) * 6) : 0;
+// The route an arrow takes, as points rather than as a path string: a straight
+// segment between two boxes in one slice, and a cubic Bézier where it crosses a
+// slice boundary. computeArrowD renders it and edgeLabelPoint samples it, so a
+// label cannot be placed on a line the arrow does not follow.
+function arrowCurve(srcPos, tgtPos, crossBoundary) {
   const gap = 1.5;
   const arrowLen = 10;
   const srcCx = srcPos.x + srcPos.w / 2;
@@ -317,14 +320,36 @@ function computeArrowD(srcPos, tgtPos, crossBoundary, edgeIdx) {
     const cp1x = srcEdgeX + (tgtCx > srcEdgeX ? 1 : -1) * Math.max(dx * 0.3, 20);
     const pullback = Math.min(Math.max(dy * 0.25, 15), 40);
     const p2y = tgtAttachEdge + (tgtAttachEdge < srcMidY ? pullback : -pullback);
-    return "M " + srcEdgeX + "," + srcMidY + " C " + cp1x + "," + srcMidY + " " + tgtCx + "," + p2y + " " + tgtCx + "," + tgtEnd;
-  } else {
-    const downward = srcBottom <= tgtTop;
-    const srcY = downward ? srcBottom : srcTop;
-    const tgtEdge = downward ? tgtTop - gap : tgtBottom + gap;
-    const tgtEnd = downward ? tgtEdge - arrowLen : tgtEdge + arrowLen;
-    return "M " + srcCx + "," + srcY + " L " + tgtCx + "," + tgtEnd;
+    return {
+      curved: true,
+      p0: { x: srcEdgeX, y: srcMidY },
+      p1: { x: cp1x, y: srcMidY },
+      p2: { x: tgtCx, y: p2y },
+      p3: { x: tgtCx, y: tgtEnd },
+    };
   }
+
+  const downward = srcBottom <= tgtTop;
+  const srcY = downward ? srcBottom : srcTop;
+  const tgtEdge = downward ? tgtTop - gap : tgtBottom + gap;
+  const tgtEnd = downward ? tgtEdge - arrowLen : tgtEdge + arrowLen;
+  return {
+    curved: false,
+    p0: { x: srcCx, y: srcY },
+    p3: { x: tgtCx, y: tgtEnd },
+  };
+}
+
+function computeArrowD(srcPos, tgtPos, crossBoundary) {
+  const curve = arrowCurve(srcPos, tgtPos, crossBoundary);
+  if (curve.curved) {
+    return "M " + curve.p0.x + "," + curve.p0.y +
+      " C " + curve.p1.x + "," + curve.p1.y +
+      " " + curve.p2.x + "," + curve.p2.y +
+      " " + curve.p3.x + "," + curve.p3.y;
+  }
+
+  return "M " + curve.p0.x + "," + curve.p0.y + " L " + curve.p3.x + "," + curve.p3.y;
 }
 
 function computeArrowEndpoints(srcPos, tgtPos, crossBoundary) {
@@ -367,6 +392,32 @@ function portAnchor(pos, direction) {
   };
 }
 
+// Where an arrow's label sits: a fraction of the way back from the end the
+// arrow points at, so the label stays beside what the arrow reaches rather than
+// landing on a box the arrow only crosses on its way there. The renderer and
+// the live drag both place it through here, or a dragged block leaves its
+// label behind.
+function edgeLabelPoint(srcPos, tgtPos, crossBoundary) {
+  const curve = arrowCurve(srcPos, tgtPos, crossBoundary);
+  const along = 1 - L.edgeLabelOffset;
+
+  if (!curve.curved) {
+    return {
+      x: curve.p0.x + (curve.p3.x - curve.p0.x) * along,
+      y: curve.p0.y + (curve.p3.y - curve.p0.y) * along,
+    };
+  }
+
+  const back = 1 - along;
+  const sample = (a, b, c, d) =>
+    back * back * back * a + 3 * back * back * along * b + 3 * back * along * along * c + along * along * along * d;
+
+  return {
+    x: sample(curve.p0.x, curve.p1.x, curve.p2.x, curve.p3.x),
+    y: sample(curve.p0.y, curve.p1.y, curve.p2.y, curve.p3.y),
+  };
+}
+
 export const Layout = {
   labelWidth,
   textWidth,
@@ -380,4 +431,5 @@ export const Layout = {
   getSliceChildNodeIds,
   computeArrowD,
   computeArrowEndpoints,
+  edgeLabelPoint,
 };

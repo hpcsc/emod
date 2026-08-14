@@ -8,6 +8,8 @@ export const L = {
   sideGap: 12,
   slicePad: 20, sliceHdrH: 28, sliceTopPad: 36,
   arrowHitWidth: 16,
+  // How far along an arrow, measured from the end it points at, its label sits.
+  edgeLabelOffset: 0.22,
   portGap: 4, portLen: 12, portHalf: 6, portHitR: 11,
 };
 

@@ -101,6 +101,16 @@ function setArrowPath(svgEl, source, target, d) {
     .forEach(function(el) { el.setAttribute("d", d); });
 }
 
+// The label rides on the arrow, so a reshape has to carry it along or a
+// dragged block leaves its delay behind at the point the arrow started from.
+function setArrowLabel(svgEl, source, target, srcPos, tgtPos, crossBoundary) {
+  const el = svgEl.querySelector('text.edge-label[data-edge-id="' + edgeIdOf(source, target) + '"]');
+  if (!el) return;
+  const point = Layout.edgeLabelPoint(srcPos, tgtPos, crossBoundary);
+  el.setAttribute("x", point.x);
+  el.setAttribute("y", point.y);
+}
+
 function visibleArrow(svgEl, source, target) {
   return svgEl.querySelector('path.arrow[data-edge-id="' + edgeIdOf(source, target) + '"]');
 }
@@ -117,6 +127,7 @@ function repointArrowTo(store, connect, point) {
   const tgtPos = connect.handleEnd === "source" ? fixedPos : loose;
   setArrowPath(store.dom.svg, connect.edgeSource, connect.edgeTarget,
     Layout.computeArrowD(srcPos, tgtPos, false));
+  setArrowLabel(store.dom.svg, connect.edgeSource, connect.edgeTarget, srcPos, tgtPos, false);
 }
 
 function updateArrowsForNode(store, nodeId, draggedPos) {
@@ -127,10 +138,9 @@ function updateArrowsForNode(store, nodeId, draggedPos) {
     const tgtPos = edge.target === nodeId ? draggedPos : store.layoutPositions[edge.target];
     if (!srcPos || !tgtPos) return;
     const crossBoundary = Layout.isCrossBoundary(store.nodes, edge.source, edge.target);
-    let edgeIdx = -1;
-    for (let i = 0; i < store.edges.length; i++) { if (store.edges[i] === edge) { edgeIdx = i; break; } }
-    const d = Layout.computeArrowD(srcPos, tgtPos, crossBoundary, edgeIdx);
+    const d = Layout.computeArrowD(srcPos, tgtPos, crossBoundary);
     setArrowPath(svgEl, edge.source, edge.target, d);
+    setArrowLabel(svgEl, edge.source, edge.target, srcPos, tgtPos, crossBoundary);
   });
 }
 
@@ -273,10 +283,9 @@ function updateArrowsForSlice(store, sliceId, dx, dy) {
       if (!srcPos || !tgtPos) return;
 
       const crossBoundary = Layout.isCrossBoundary(store.nodes, edge.source, edge.target);
-      var edgeIdx = -1;
-      for (var i = 0; i < store.edges.length; i++) { if (store.edges[i] === edge) { edgeIdx = i; break; } }
-      const d = Layout.computeArrowD(srcPos, tgtPos, crossBoundary, edgeIdx);
+      const d = Layout.computeArrowD(srcPos, tgtPos, crossBoundary);
       setArrowPath(svgEl, edge.source, edge.target, d);
+      setArrowLabel(svgEl, edge.source, edge.target, srcPos, tgtPos, crossBoundary);
     });
   });
 }

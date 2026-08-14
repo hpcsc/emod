@@ -43,6 +43,7 @@ function createStore(nodes, edges) {
     hiddenNodes: {},
     nodeOffsets: {},
     layoutPositions: {},
+    nodeById: new Map(nodes.map((n) => [n.id, n])),
   };
 }
 

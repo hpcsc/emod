@@ -2,6 +2,7 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { Interaction } from '../static/interaction.js';
 import { Layout } from '../static/layout.js';
 import { DRAG_THRESHOLD } from '../static/config.js';
+import { distanceToPath } from './arrow-geometry.js';
 
 function makeMockSVGPoint() {
   return { x: 0, y: 0, matrixTransform: function () { return { x: this.x, y: this.y }; } };
@@ -111,6 +112,20 @@ function setupSliceAndNodes(store, sliceWidth) {
 
   vg.appendChild(makeArrowEl('arrow-hit', 'M80 165 L210 165'));
   vg.appendChild(makeArrowEl('flow-arrow arrow', 'M80 165 L210 165'));
+}
+
+// An arrow may also carry a label — the delay an automation fires after — keyed
+// by the same edge id. It is added per test rather than to the shared fixture,
+// which several tests count the viewport group's children in.
+function addArrowLabel(store, edgeId) {
+  var label = document.createElementNS('http://www.w3.org/2000/svg', 'text');
+  label.setAttribute('class', 'edge-label');
+  label.setAttribute('data-edge-id', edgeId);
+  label.setAttribute('x', '0');
+  label.setAttribute('y', '0');
+  label.textContent = 'after "72h"';
+  store.dom.svg.querySelector('#viewport-group').appendChild(label);
+  return label;
 }
 
 // The renderer wraps each port in a group carrying the side it sits on; only
@@ -339,6 +354,28 @@ describe('Interaction', function () {
   });
 
   describe('arrow integrity during drag', function () {
+    it('carries an arrow\'s label along with the line it names', function () {
+      setupSliceAndNodes(store);
+      var label = addArrowLabel(store, 'cmd1--evt1');
+      Interaction.initEventListeners(store);
+
+      var arrow = store.dom.svg.querySelector('.flow-arrow');
+
+      fire(store.dom.svg.querySelector('.slice-header'), 'mousedown', { clientX: 100, clientY: 100, button: 0 });
+      fire(document, 'mousemove', { clientX: 100 + DRAG_THRESHOLD + 1, clientY: 100 });
+      fire(document, 'mousemove', { clientX: 130, clientY: 120 });
+
+      var placed = { x: Number(label.getAttribute('x')), y: Number(label.getAttribute('y')) };
+      expect(Number.isNaN(placed.x) || Number.isNaN(placed.y)).toBe(false);
+
+      // On the line the drag left the arrow at, not merely inside its bounding
+      // box: a label placed from the un-dragged layout still falls in that box,
+      // which is the very defect this test exists to rule out.
+      expect(distanceToPath(arrow, placed.x, placed.y)).toBeLessThan(1);
+
+      fire(document, 'mouseup', { clientX: 130, clientY: 120 });
+    });
+
     it('computes arrow with same-slice edge using dragged positions for both ends', function () {
       setupSliceAndNodes(store);
       Interaction.initEventListeners(store);
