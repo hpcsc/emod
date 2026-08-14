@@ -63,6 +63,7 @@
 	description?:    string
 	on_event?:       string
 	every?:          string
+	after?:          string
 	reads?:          string
 	command?:        string
 	target_context?: string

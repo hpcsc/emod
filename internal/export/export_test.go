@@ -1147,7 +1147,7 @@ func TestExport(t *testing.T) {
 			require.Equal(t, float64(6), v["close_position"].(map[string]any)["line"])
 		})
 
-		t.Run("includes positions for automation name/activation event/reads/command/target and braces", func(t *testing.T) {
+		t.Run("includes positions for automation name/activation event/delay/reads/command/target and braces", func(t *testing.T) {
 			model := &ast.Model{
 				Name: "Test",
 				Contexts: []*ast.Context{
@@ -1165,6 +1165,8 @@ func TestExport(t *testing.T) {
 												NamePos:          ast.Position{Filename: "test.cue", Line: 5, Column: 5},
 												OnEvent:          "Evt",
 												OnEventPos:       ast.Position{Filename: "test.cue", Line: 5, Column: 11},
+												After:            "24h",
+												AfterPos:         ast.Position{Filename: "test.cue", Line: 5, Column: 21},
 												Reads:            "MyView",
 												ReadsPos:         ast.Position{Filename: "test.cue", Line: 5, Column: 14},
 												Command:          "DoIt",
@@ -1195,6 +1197,8 @@ func TestExport(t *testing.T) {
 			a := autos[0].(map[string]any)
 			require.Equal(t, float64(5), a["position"].(map[string]any)["line"])
 			require.Equal(t, float64(11), a["on_event_position"].(map[string]any)["column"])
+			require.Equal(t, "24h", a["after"])
+			require.Equal(t, float64(21), a["after_position"].(map[string]any)["column"])
 			require.Equal(t, "MyView", a["reads"])
 			require.Equal(t, float64(14), a["reads_position"].(map[string]any)["column"])
 			require.Equal(t, float64(16), a["command_position"].(map[string]any)["column"])
@@ -1301,7 +1305,7 @@ func TestExport(t *testing.T) {
 			require.Equal(t, float64(7), nestedEvent["position"].(map[string]any)["line"])
 		})
 
-		t.Run("files an automation's schedule and the view it reads in the key order a translation files its entries in", func(t *testing.T) {
+		t.Run("files an automation's schedule, its delay and the view it reads in the key order a translation files its entries in", func(t *testing.T) {
 			at := func(column int) ast.Position {
 				return ast.Position{Filename: "test.emod", Line: 5, Column: column}
 			}
@@ -1318,6 +1322,7 @@ func TestExport(t *testing.T) {
 							Name: "Auto", NamePos: at(5),
 							OnEvent: "Evt", OnEventPos: at(11),
 							Schedule: "0 9 * * *", SchedulePos: at(13),
+							After: "24h", AfterPos: at(20),
 							Reads: "MyView", ReadsPos: at(14),
 							Command: "DoIt", CommandPos: at(16),
 						}},
@@ -1337,8 +1342,8 @@ func TestExport(t *testing.T) {
 			keyOrder := emittedKeyOrder(t, raw)
 			require.Equal(t, []string{
 				"name", "position",
-				"on_event_position", "every_position", "reads_position", "command_position",
-				"on_event", "every", "reads", "command",
+				"on_event_position", "every_position", "after_position", "reads_position", "command_position",
+				"on_event", "every", "after", "reads", "command",
 			}, keyOrder["Auto"])
 			require.Equal(t, []string{
 				"name", "position",
@@ -4558,6 +4563,43 @@ func TestExport(t *testing.T) {
 			}
 		})
 
+		t.Run("both exports carry every delay a model states, beside the activation events and schedules of the same document", func(t *testing.T) {
+			cueBin := lookupCue(t)
+			delaying := test.AutomationDelayLibraryLendingModel(t)
+
+			require.Equal(t, test.AutomationDelayLibraryLendingDelays, test.DeclaredDelays(delaying),
+				"the model has to state delays in both slice homes, or the comparisons below say nothing")
+
+			requireBothFormatsAgree(t, cueBin, delaying)
+
+			for format, doc := range exportedDocs(t, cueBin, delaying) {
+				require.Equal(t, test.AutomationDelayLibraryLendingDelays, exportedDelays(doc), "%s export", format)
+				require.Equal(t, test.DeclaredActivationEvents(delaying), exportedActivationEvents(doc), "%s export", format)
+				require.Equal(t, test.DeclaredSchedules(delaying), exportedSchedules(doc), "%s export", format)
+			}
+		})
+
+		t.Run("the delay key reaches neither export of a model whose automations state none", func(t *testing.T) {
+			cueBin := lookupCue(t)
+			delaying := test.AutomationDelayLibraryLendingModel(t)
+			undelayed := test.AutomationScheduleLibraryLendingModel(t)
+
+			require.Equal(t, test.AutomationDelayLibraryLendingDelays, test.DeclaredDelays(delaying),
+				"the delayed model has to state delays, or finding the key nowhere proves nothing")
+			require.Empty(t, test.DeclaredDelays(undelayed),
+				"the undelayed model has to state none, or it is not the witness this compares against")
+
+			requireBothFormatsAgree(t, cueBin, undelayed)
+
+			for format, doc := range exportedDocs(t, cueBin, delaying) {
+				require.Equal(t, test.AutomationDelayLibraryLendingDelays, exportedDelays(doc), "%s export", format)
+			}
+			for format, doc := range exportedDocs(t, cueBin, undelayed) {
+				require.Empty(t, exportedDelays(doc), "%s export", format)
+				require.Empty(t, textAnywhere(doc, test.AutomationDelayLibraryLendingDelays), "%s export", format)
+			}
+		})
+
 		t.Run("a wire type carrying characters both formats escape round-trips its exact text", func(t *testing.T) {
 			cueBin := lookupCue(t)
 			model := &ast.Model{
@@ -5796,6 +5838,13 @@ func exportedActivationEvents(doc map[string]any) []string {
 // that drops one or reaches only one of the homes reads back short.
 func exportedSchedules(doc map[string]any) []string {
 	return statedUnder(exportedAutomations(doc), "every")
+}
+
+// exportedDelays names the delay every automation of a decoded model document
+// fires after, in declaration order across both slice homes, so a writer that
+// drops one or reaches only one of the homes reads back short.
+func exportedDelays(doc map[string]any) []string {
+	return statedUnder(exportedAutomations(doc), "after")
 }
 
 func exportedAutomations(doc map[string]any) []map[string]any {

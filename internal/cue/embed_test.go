@@ -120,6 +120,17 @@ func TestSchema(t *testing.T) {
 		require.Contains(t, string(output), "trigger_event")
 	})
 
+	t.Run("rejects an automation whose delay is keyed the way the Go field names it", func(t *testing.T) {
+		cueBin := requireCue(t)
+
+		output, err := vetAgainstModel(t, cueBin, strings.Replace(fullModelJSON,
+			`"after": "24h"`,
+			`"delay": "24h"`, 1))
+
+		require.Error(t, err, "schema accepted an automation keyed delay")
+		require.Contains(t, string(output), "delay")
+	})
+
 	t.Run("rejects a trigger that still states the retired kind key", func(t *testing.T) {
 		cueBin := requireCue(t)
 
@@ -268,6 +279,7 @@ const fullModelJSON = `{
           "name": "Notifier",
           "description": "Tells the guest their room is held",
           "on_event": "ReservationMade",
+          "after": "24h",
           "reads": "RoomsView",
           "command": "SendEmail",
           "target_context": "Notifications"

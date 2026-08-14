@@ -110,7 +110,7 @@
         "internal/cue/schema.cue",
         "internal/export/export_test.go"
       ],
-      "done": false
+      "done": true
     },
     {
       "n": 7,

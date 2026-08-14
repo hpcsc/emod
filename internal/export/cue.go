@@ -238,6 +238,7 @@ func (w *cueWriter) writeAutomation(a *ast.Automation) {
 	w.lineIfSet("description", a.Description)
 	w.lineIfSet("on_event", a.OnEvent)
 	w.lineIfSet("every", a.Schedule)
+	w.lineIfSet("after", a.After)
 	w.lineIfSet("reads", a.Reads)
 	w.lineIfSet("command", a.Command)
 	w.lineIfSet("target_context", a.TargetContext)

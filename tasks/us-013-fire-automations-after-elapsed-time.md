@@ -6,7 +6,7 @@
 - [x] Task 3: Reject an `after` value that is not a Go duration
 - [x] Task 4: Emit `after` from `emod fmt`
 - [x] Task 5: Share a fixture whose automations fire after an elapsed delay
-- [ ] Task 6: Carry the delay into the JSON, CUE and embedded schema exports
+- [x] Task 6: Carry the delay into the JSON, CUE and embedded schema exports
 - [ ] Task 7: Carry the delay through the diagram document and back
 - [ ] Task 8: Label the `event -> automation` arrow with the delay in SVG and draw.io
 - [ ] Task 9: Name the delay in Mermaid, ASCII and `emod slices list`
@@ -824,28 +824,28 @@ declares it, so a consumer of either document reads the delay the author wrote a
 automation it was written. An automation stating no delay exports exactly what it exported before.
 
 **Acceptance Criteria:**
-- [ ] The JSON export of the Task 5 fixture states every delay the transcribed list names, read back
+- [x] The JSON export of the Task 5 fixture states every delay the transcribed list names, read back
       with `statedUnder(exportedAutomations(doc), …)` in the writer's slice order, and states the
       transcribed activation events and schedules under their existing keys in the same document
-- [ ] The exported key spells the DSL keyword, and its position key is that spelling plus `_position`
-- [ ] `emittedKeyOrder` shows the automation object filing the delay's position key among the other
+- [x] The exported key spells the DSL keyword, and its position key is that spelling plus `_position`
+- [x] `emittedKeyOrder` shows the automation object filing the delay's position key among the other
       `*_position` keys and its value among the other values, matching the order a `json*` sibling
       uses — the sibling's key list asserted in the same subtest so the expectation is not arbitrary
-- [ ] The automation position leaf ("includes positions for automation name/activation event/reads/
+- [x] The automation position leaf ("includes positions for automation name/activation event/reads/
       command/target and braces", `internal/export/export_test.go`) gains the delay, asserting the line
       and column of its own AST position — a position key wired to a neighbouring field satisfies both
       the key-order and the text-search assertions without this one
-- [ ] The CUE export of the same fixture carries the same delays, and the "CUE and JSON exports
+- [x] The CUE export of the same fixture carries the same delays, and the "CUE and JSON exports
       describe the same model" subtest passes over it
-- [ ] `internal/cue/schema.cue` declares the key on `#Automation` (`:53-62`), and the
+- [x] `internal/cue/schema.cue` declares the key on `#Automation` (`:53-62`), and the
       schema-conformance subtest running `cue vet -d '#Model'` passes for a model carrying delays
-- [ ] `emod schema` prints a schema declaring the key on the automation definition
-- [ ] The embedded-schema fixture in `internal/cue/embed_test.go` carries an automation stating a delay
+- [x] `emod schema` prints a schema declaring the key on the automation definition
+- [x] The embedded-schema fixture in `internal/cue/embed_test.go` carries an automation stating a delay
       beside one that does not, and vets clean against `#Model`
-- [ ] A document stating the delay under a key `#Automation` does not declare fails `cue vet`, and the
+- [x] A document stating the delay under a key `#Automation` does not declare fails `cue vet`, and the
       failure names that key — proving the definition is closed and the emitted spelling is the one
       the schema knows
-- [ ] Exporting `test.AutomationScheduleLibraryLendingModel(t)`, whose automations state no delay,
+- [x] Exporting `test.AutomationScheduleLibraryLendingModel(t)`, whose automations state no delay,
       produces JSON and CUE containing the delay key nowhere, while the Task 5 fixture's exports
       contain it — both asserted in the same subtest, so the search is proved to work before it is
       required to find nothing

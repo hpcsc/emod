@@ -172,6 +172,7 @@ type jsonAutomation struct {
 	Position              *jsonPosition  `json:"position,omitempty"`
 	OnEventPosition       *jsonPosition  `json:"on_event_position,omitempty"`
 	SchedulePosition      *jsonPosition  `json:"every_position,omitempty"`
+	AfterPosition         *jsonPosition  `json:"after_position,omitempty"`
 	ReadsPosition         *jsonPosition  `json:"reads_position,omitempty"`
 	CommandPosition       *jsonPosition  `json:"command_position,omitempty"`
 	TargetContextPosition *jsonPosition  `json:"target_context_position,omitempty"`
@@ -180,6 +181,7 @@ type jsonAutomation struct {
 	Comments              []*jsonComment `json:"comments,omitempty"`
 	OnEvent               string         `json:"on_event,omitempty"`
 	Schedule              string         `json:"every,omitempty"`
+	After                 string         `json:"after,omitempty"`
 	Reads                 string         `json:"reads,omitempty"`
 	Command               string         `json:"command,omitempty"`
 	TargetContext         string         `json:"target_context,omitempty"`
@@ -699,6 +701,7 @@ func convertAutomation(a *ast.Automation) *jsonAutomation {
 		Position:              convertPosition(a.NamePos),
 		OnEventPosition:       convertPosition(a.OnEventPos),
 		SchedulePosition:      convertPosition(a.SchedulePos),
+		AfterPosition:         convertPosition(a.AfterPos),
 		ReadsPosition:         convertPosition(a.ReadsPos),
 		CommandPosition:       convertPosition(a.CommandPos),
 		TargetContextPosition: convertPosition(a.TargetContextPos),
@@ -707,6 +710,7 @@ func convertAutomation(a *ast.Automation) *jsonAutomation {
 		Comments:              convertComments(a.Comments),
 		OnEvent:               a.OnEvent,
 		Schedule:              a.Schedule,
+		After:                 a.After,
 		Reads:                 a.Reads,
 		Command:               a.Command,
 		TargetContext:         a.TargetContext,
