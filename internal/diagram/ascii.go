@@ -130,7 +130,14 @@ func activationMarking(auto *ast.Automation) string {
 		return cadenceLabel(auto.Schedule)
 	}
 
-	return fmt.Sprintf("(%s)", auto.OnEvent)
+	// The parentheses mark what an event is, so the delay qualifying it sits
+	// outside them rather than reading as part of the event's name.
+	marking := fmt.Sprintf("(%s)", auto.OnEvent)
+	if delay := delayLabel(auto.After); auto.OnEvent != "" && delay != "" {
+		return marking + " " + delay
+	}
+
+	return marking
 }
 
 func standaloneCommands(s *ast.Slice) []*ast.Command {

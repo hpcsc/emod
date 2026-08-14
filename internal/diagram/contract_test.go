@@ -974,11 +974,30 @@ var (
 // carry one on, so they sit it out.
 func TestExporterAutomationDelay(t *testing.T) {
 	for _, e := range exporters() {
-		if e.boxes == nil || e.connections == nil {
+		if e.countConnections == nil && e.connections == nil {
 			continue
 		}
 
 		t.Run(e.name, func(t *testing.T) {
+			if e.countConnections != nil {
+				t.Run("a delay names a duration on a connection the picture already drew, and adds none", func(t *testing.T) {
+					delaying := test.AutomationDelayLibraryLendingModel(t)
+					undelayed := test.WithoutAutomationDelays(delaying)
+
+					require.Equal(t, test.AutomationDelayLibraryLendingDelays, test.DeclaredDelays(delaying),
+						"the model has to state delays, or the counts below compare a picture with itself")
+					require.Empty(t, test.DeclaredDelays(undelayed))
+
+					require.Equal(t,
+						e.countConnections(e.run(t, undelayed, diagram.StyleAuto)),
+						e.countConnections(e.run(t, delaying, diagram.StyleAuto)))
+				})
+			}
+
+			if e.boxes == nil || e.connections == nil {
+				return
+			}
+
 			t.Run("the arrow to a delayed automation carries that automation's own duration", func(t *testing.T) {
 				delaying := test.AutomationDelayLibraryLendingModel(t)
 				output := e.run(t, delaying, diagram.StyleAuto)

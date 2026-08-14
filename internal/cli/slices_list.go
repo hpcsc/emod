@@ -126,6 +126,9 @@ func automationActivation(auto *ast.Automation) string {
 	if auto.Schedule != "" {
 		return `every "` + auto.Schedule + `"`
 	}
+	if auto.OnEvent != "" && auto.After != "" {
+		return auto.OnEvent + ` after "` + auto.After + `"`
+	}
 	return auto.OnEvent
 }
 

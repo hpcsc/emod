@@ -9,7 +9,7 @@
 - [x] Task 6: Carry the delay into the JSON, CUE and embedded schema exports
 - [x] Task 7: Carry the delay through the diagram document and back
 - [x] Task 8: Label the `event -> automation` arrow with the delay in SVG and draw.io
-- [ ] Task 9: Name the delay in Mermaid, ASCII and `emod slices list`
+- [x] Task 9: Name the delay in Mermaid, ASCII and `emod slices list`
 - [ ] Task 10: Show an automation's delay in the viewer
 
 ---
@@ -1041,22 +1041,22 @@ picture formats draw — a delay reads as attached to the event, a schedule as t
 cadence — and all three stay exactly as they are for an automation that states no delay.
 
 **Acceptance Criteria:**
-- [ ] The Mermaid output for a delayed automation names the duration alongside the event it activates
+- [x] The Mermaid output for a delayed automation names the duration alongside the event it activates
       on and the command it issues; the output for an undelayed automation and for a scheduled one in
       the same model is unchanged from what it produces today, asserted against their existing
       expected lines
-- [ ] The ASCII chain for a delayed automation names the duration beside the activating event, and the
+- [x] The ASCII chain for a delayed automation names the duration beside the activating event, and the
       chains for an undelayed and a scheduled automation in the same model are unchanged
-- [ ] Every rune of the ASCII output for the Task 5 fixture is ASCII apart from `⚙` — the assertion at
+- [x] Every rune of the ASCII output for the Task 5 fixture is ASCII apart from `⚙` — the assertion at
       `internal/diagram/ascii_test.go:396-412` passes unedited, so no clock glyph reaches this format
-- [ ] The ASCII chain for a delayed automation contains no additional occurrence of `" -> "`, so
+- [x] The ASCII chain for a delayed automation contains no additional occurrence of `" -> "`, so
       `countConnections` (`internal/diagram/contract_test.go:128`) reports the same connection count
       for the Task 5 fixture as for its `Without…` twin
-- [ ] `emod slices list` prints the duration alongside the activating event for a slice whose
+- [x] `emod slices list` prints the duration alongside the activating event for a slice whose
       automation is delayed, the activation event alone for one that is not, and the cadence for a
       scheduled one — all three asserted on one file, so no row is checked in isolation
-- [ ] `emod slices list -f json` carries the same key elements as the text listing for that file
-- [ ] Rendering `test.AutomationScheduleLibraryLendingModel(t)` and
+- [x] `emod slices list -f json` carries the same key elements as the text listing for that file
+- [x] Rendering `test.AutomationScheduleLibraryLendingModel(t)` and
       `test.AutomationReadsLibraryLendingModel(t)` in all four diagram formats, and listing the
       examples under `examples/`, produces the output they produce today: `git diff` moves no expected
       constant describing a model without delays

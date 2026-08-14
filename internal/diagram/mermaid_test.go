@@ -26,6 +26,20 @@ var libraryLendingProcessorTimeframes = []string{
 	`pcr Reading Room.SweepIdleDesks (every "45m" → ReleaseDesk)`,
 }
 
+// delayedLibraryLendingProcessorTimeframes is the processor line every style
+// writes for each automation of test.AutomationDelayLibraryLending, both slice
+// homes together and in declaration order: a delayed one names its duration
+// beside the event the delay is measured from, an immediate one names that event
+// alone, and a scheduled one names its cadence.
+var delayedLibraryLendingProcessorTimeframes = []string{
+	`pcr Lending.RemindAfterGracePeriod (CopyBorrowed after "72h" → RemindMember)`,
+	`pcr Lending.RecallOnSecondReminder (MemberReminded → RecallCopy)`,
+	`pcr Lending.SweepOverdueLoans (every "15m" → RecallCopy)`,
+	`pcr Reading Room.ReleaseDeskLeftClaimed (DeskClaimed after "30m" → ReleaseDesk)`,
+	`pcr Reading Room.RemindReaderOfLoans (DeskReleased → RemindMember)`,
+	`pcr Reading Room.CloseDesksAtNight (every "0 22 * * *" → ReleaseDesk)`,
+}
+
 // timeframeSlotAssignments is the timeframe each of timeframeSlotModel's
 // non-event elements is written into, every style alike, both slice homes
 // together and in declaration order: a trigger belongs to the timeframe a
@@ -321,6 +335,23 @@ func TestExportMermaid(t *testing.T) {
 					require.NoError(t, err)
 
 					require.Equal(t, libraryLendingProcessorTimeframes, processorTimeframes(t, string(raw)))
+				})
+			}
+		})
+
+		t.Run("a delayed automation names its duration beside the event it activates on", func(t *testing.T) {
+			for _, style := range []struct {
+				name  string
+				style diagram.Style
+			}{
+				{name: "auto", style: diagram.StyleAuto},
+				{name: "projected", style: diagram.StyleProjected},
+			} {
+				t.Run(style.name, func(t *testing.T) {
+					raw, err := diagram.ExportMermaid(test.AutomationDelayLibraryLendingModel(t), style.style)
+					require.NoError(t, err)
+
+					require.Equal(t, delayedLibraryLendingProcessorTimeframes, processorTimeframes(t, string(raw)))
 				})
 			}
 		})

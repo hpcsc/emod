@@ -12,9 +12,11 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-// automationCadenceEmod holds, under one aggregate so the listing reaches both,
-// a slice whose automation runs on a cadence beside one whose automation names
-// the event it activates on.
+// automationCadenceEmod holds, under one aggregate so the listing reaches them
+// all, a slice whose automation runs on a cadence, one whose automation names
+// the event it activates on, and one whose automation names a delay beside that
+// event — the three shapes an automation has of stating when it runs, so no row
+// is checked in isolation.
 const automationCadenceEmod = `model "Library Lending"
 
 context "Lending" {
@@ -44,6 +46,22 @@ context "Lending" {
       automation RemindOnDueDate {
         on CopyBorrowed
         command RemindMember
+      }
+    }
+    slice "Release Expired Hold" {
+      command ReleaseHold {
+        fields {
+          holdId string required
+        }
+      }
+      event RoomHeld {
+        fields {
+          holdId string required
+        }
+      }
+      automation ExpiredHoldReleaser {
+        on RoomHeld after "24h"
+        command ReleaseHold
       }
     }
   }
@@ -144,7 +162,7 @@ context "Fulfillment" mode dcb {
 			require.NotContains(t, output, "No slices found.")
 		})
 
-		t.Run("names the cadence of a scheduled automation and the event of an event-activated one", func(t *testing.T) {
+		t.Run("names the cadence of a scheduled automation, the event of an event-activated one and the delay of a delayed one", func(t *testing.T) {
 			path := writeTemp(t, "cadence.emod", automationCadenceEmod)
 
 			output := captureStdout(t, func() {
@@ -154,6 +172,7 @@ context "Fulfillment" mode dcb {
 
 			require.Contains(t, output, `every "15m", RecallCopy`)
 			require.Contains(t, output, "CopyBorrowed, RemindMember")
+			require.Contains(t, output, `RoomHeld after "24h", ReleaseHold`)
 			for _, line := range strings.Split(output, "\n") {
 				require.NotContains(t, line, "  , ", "a row must not open its key elements with a comma")
 			}
@@ -247,6 +266,29 @@ context "Orders" {
 			require.Equal(t, "translation", entries[3]["pattern"])
 			require.Equal(t, "Reservations", entries[3]["context"])
 			require.Equal(t, "ImportBooking, BookingImported", entries[3]["keyElements"])
+		})
+
+		t.Run("carries the same key elements as the text listing for a file stating all three timing shapes", func(t *testing.T) {
+			path := writeTemp(t, "cadence.emod", automationCadenceEmod)
+
+			output := captureStdout(t, func() {
+				err := cli.RunSlicesList(path, "json")
+				require.NoError(t, err)
+			})
+
+			var entries []map[string]interface{}
+			require.NoError(t, json.Unmarshal([]byte(output), &entries))
+
+			keyElements := make([]string, 0, len(entries))
+			for _, entry := range entries {
+				keyElements = append(keyElements, entry["keyElements"].(string))
+			}
+
+			require.Equal(t, []string{
+				`every "15m", RecallCopy`,
+				"CopyBorrowed, RemindMember",
+				`RoomHeld after "24h", ReleaseHold`,
+			}, keyElements)
 		})
 
 		t.Run("empty model outputs empty JSON array", func(t *testing.T) {

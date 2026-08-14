@@ -135,6 +135,11 @@ func mermaidAutomationLabel(auto *ast.Automation, ctxName string) string {
 	eid := namespaced(ns, auto.Name)
 
 	activation := auto.OnEvent
+	if activation != "" {
+		if delay := delayLabel(auto.After); delay != "" {
+			activation += " " + delay
+		}
+	}
 	if auto.Schedule != "" {
 		activation = cadenceLabel(auto.Schedule)
 	}

@@ -25,6 +25,20 @@ var libraryLendingAutomationChains = []string{
 	`every "45m" -> ⚙ SweepIdleDesks -> [ReleaseDesk]`,
 }
 
+// delayedLibraryLendingChains is the chain drawn for each automation of
+// test.AutomationDelayLibraryLending, both slice homes together and in
+// declaration order: a delayed one names its duration beside the event the
+// delay is measured from, an immediate one starts from that event alone, and a
+// scheduled one starts from its cadence.
+var delayedLibraryLendingChains = []string{
+	`(CopyBorrowed) after "72h" -> ⚙ RemindAfterGracePeriod -> [RemindMember]`,
+	`(MemberReminded) -> ⚙ RecallOnSecondReminder -> [RecallCopy]`,
+	`every "15m" -> ⚙ SweepOverdueLoans -> [RecallCopy]`,
+	`(DeskClaimed) after "30m" -> ⚙ ReleaseDeskLeftClaimed -> [ReleaseDesk]`,
+	`(DeskReleased) -> ⚙ RemindReaderOfLoans -> [RemindMember]`,
+	`every "0 22 * * *" -> ⚙ CloseDesksAtNight -> [ReleaseDesk]`,
+}
+
 func reactorChains(output string) []string {
 	var chains []string
 	for _, line := range strings.Split(output, "\n") {
@@ -335,6 +349,15 @@ func TestExportASCII(t *testing.T) {
 		require.NotContains(t, output, "()", "a chain must not start from an empty source")
 	})
 
+	t.Run("names the duration a delayed automation fires after beside the event it is measured from", func(t *testing.T) {
+		delaying := test.AutomationDelayLibraryLendingModel(t)
+
+		raw, err := diagram.ExportASCII(delaying, diagram.StyleAuto)
+		require.NoError(t, err)
+
+		require.Equal(t, delayedLibraryLendingChains, reactorChains(string(raw)))
+	})
+
 	t.Run("lists an event nothing references beside a scheduled automation", func(t *testing.T) {
 		model := singleSliceModel("Library Lending", "Chase Overdue Copy",
 			command("RecallCopy"), event("CopyRecalled"),
@@ -488,6 +511,7 @@ func TestExportASCII(t *testing.T) {
 		}{
 			{name: "every element type", model: func(*testing.T) *ast.Model { return fullModel() }},
 			{name: "automations running on a cadence", model: test.AutomationScheduleLibraryLendingModel},
+			{name: "automations firing after a delay", model: test.AutomationDelayLibraryLendingModel},
 		}
 
 		for _, m := range models {
