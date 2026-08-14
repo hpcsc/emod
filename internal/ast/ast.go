@@ -254,6 +254,8 @@ type Automation struct {
 	OnEventPos       Position
 	Schedule         string
 	SchedulePos      Position
+	After            string
+	AfterPos         Position
 	Reads            string
 	ReadsPos         Position
 	Command          string

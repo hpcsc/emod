@@ -22,6 +22,7 @@ var keywordDescriptions = map[string]string{
 	"automation":      "Defines an automation, the reactive processor of the Automation pattern: activated by an on event or an every schedule, optionally reads a view, and sends a command.",
 	"on":              "Names the event whose occurrence activates the automation.",
 	"every":           `Sets the schedule that activates the automation: a duration such as "5m", or a five-field cron expression such as "0 2 * * *".`,
+	"after":           `Delays the automation by the stated Go duration, such as "24h", measured from each occurrence of its on event. An every schedule is already absolute, so the two never combine.`,
 	"translation":     "Defines a translation from a view to a command.",
 	"subscribes":      "Defines the events a view subscribes to.",
 	"target":          "Defines the target context for an automation.",

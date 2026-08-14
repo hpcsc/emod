@@ -2717,6 +2717,84 @@ context "Ctx" {
 			require.Equal(t, astPositionOf(t, "test.emod", input, "on RoomReleased", "RoomReleased"), automation.OnEventPos)
 		})
 
+		t.Run("automation activating on an event after a delay records the duration and where it is written", func(t *testing.T) {
+			input := modelWithAutomation("ExpiredHoldReleaser", `        on RoomHeld after "24h"
+        command ReleaseHold`)
+			tokens, lexDiags := lexer.Scan(input, "test.emod")
+			require.Empty(t, lexDiags)
+
+			model, diags := parser.New(tokens, "test.emod").Parse()
+
+			require.Empty(t, diags)
+			automation := model.Contexts[0].Aggregates[0].Slices[0].Automations[0]
+			require.Equal(t, "RoomHeld", automation.OnEvent)
+			require.Equal(t, "24h", automation.After)
+			require.Equal(t, astPositionOf(t, "test.emod", input, `on RoomHeld after "24h"`, `"24h"`), automation.AfterPos)
+		})
+
+		t.Run("an automation stating no delay sits beside one that does", func(t *testing.T) {
+			input := `model "Test"
+context "Ctx" {
+  aggregate "Agg" {
+    slice "Slice" {
+      automation ExpiredHoldReleaser {
+        on RoomHeld after "24h"
+        command ReleaseHold
+      }
+      automation ConfirmationEmailReactor {
+        on RoomReserved
+        command SendConfirmationEmail
+      }
+    }
+  }
+}`
+			tokens, lexDiags := lexer.Scan(input, "test.emod")
+			require.Empty(t, lexDiags)
+
+			model, diags := parser.New(tokens, "test.emod").Parse()
+
+			require.Empty(t, diags)
+			declared := map[string]string{}
+			for _, automation := range model.Contexts[0].Aggregates[0].Slices[0].Automations {
+				declared[automation.Name] = automation.After
+			}
+			require.Equal(t, map[string]string{
+				"ExpiredHoldReleaser":      "24h",
+				"ConfirmationEmailReactor": "",
+			}, declared)
+		})
+
+		t.Run("an activation entry stating no delay does not absorb the entry on the next line", func(t *testing.T) {
+			input := modelWithAutomation("ConfirmationEmailReactor", `        on RoomReserved
+        reads PendingConfirmationsView
+        command SendConfirmationEmail`)
+			tokens, lexDiags := lexer.Scan(input, "test.emod")
+			require.Empty(t, lexDiags)
+
+			model, diags := parser.New(tokens, "test.emod").Parse()
+
+			require.Empty(t, diags)
+			automation := model.Contexts[0].Aggregates[0].Slices[0].Automations[0]
+			require.Equal(t, "RoomReserved", automation.OnEvent)
+			require.Equal(t, "", automation.After)
+			require.Equal(t, "PendingConfirmationsView", automation.Reads)
+			require.Equal(t, "SendConfirmationEmail", automation.Command)
+		})
+
+		t.Run("automation declaring after twice on one activation line keeps the delay written last", func(t *testing.T) {
+			input := modelWithAutomation("ExpiredHoldReleaser", `        on RoomHeld after "24h" after "72h"
+        command ReleaseHold`)
+			tokens, lexDiags := lexer.Scan(input, "test.emod")
+			require.Empty(t, lexDiags)
+
+			model, diags := parser.New(tokens, "test.emod").Parse()
+
+			require.Empty(t, diags)
+			automation := model.Contexts[0].Aggregates[0].Slices[0].Automations[0]
+			require.Equal(t, "72h", automation.After)
+			require.Equal(t, astPositionOf(t, "test.emod", input, `after "72h"`, `"72h"`), automation.AfterPos)
+		})
+
 		t.Run("automation activating on a schedule records the expression and where it is written", func(t *testing.T) {
 			tests := []struct {
 				name    string
@@ -2805,7 +2883,7 @@ context "Ctx" {
 		})
 
 		t.Run("an event whose name differs from a keyword only in case is still an event name", func(t *testing.T) {
-			for _, name := range []string{"On", "Every"} {
+			for _, name := range []string{"On", "Every", "After"} {
 				t.Run(name, func(t *testing.T) {
 					input := fmt.Sprintf(`model "Test"
 context "Ctx" {
@@ -4021,6 +4099,118 @@ context "Ctx" {
 			}
 		})
 
+		t.Run("a delay written on its own line is rejected once and the entries below it still parse", func(t *testing.T) {
+			input := modelWithAutomation("ExpiredHoldReleaser", `        on RoomHeld
+        after "24h"
+        reads UnreleasedHolds
+        command ReleaseHold`)
+			tokens, lexDiags := lexer.Scan(input, "test.emod")
+			require.Empty(t, lexDiags)
+
+			model, diags := parser.New(tokens, "test.emod").Parse()
+
+			require.Len(t, diags, 1)
+			require.Regexp(t, `\bafter\b`, diags[0].Message)
+			require.Regexp(t, `\bon\b`, diags[0].Message)
+			line, column := positionOf(t, input, `after "24h"`, "after")
+			require.Equal(t, line, diags[0].Line)
+			require.Equal(t, column, diags[0].Column)
+
+			slice := model.Contexts[0].Aggregates[0].Slices[0]
+			automation := slice.Automations[0]
+			require.Equal(t, "RoomHeld", automation.OnEvent)
+			require.Equal(t, "", automation.After)
+			require.Equal(t, "UnreleasedHolds", automation.Reads)
+			require.Equal(t, "ReleaseHold", automation.Command)
+			require.NotZero(t, automation.ClosePos.Line)
+		})
+
+		t.Run("a delay naming a bare identifier is rejected once and the entry below it still parses", func(t *testing.T) {
+			input := modelWithAutomation("ExpiredHoldReleaser", `        on RoomHeld after tomorrow
+        command ReleaseHold`)
+			tokens, lexDiags := lexer.Scan(input, "test.emod")
+			require.Empty(t, lexDiags)
+
+			model, diags := parser.New(tokens, "test.emod").Parse()
+
+			require.Len(t, diags, 1)
+			require.Regexp(t, `\bafter\b`, diags[0].Message)
+			require.Contains(t, diags[0].Message, "automation")
+
+			automation := model.Contexts[0].Aggregates[0].Slices[0].Automations[0]
+			require.Equal(t, "RoomHeld", automation.OnEvent)
+			require.Equal(t, "", automation.After)
+			require.Equal(t, "ReleaseHold", automation.Command)
+		})
+
+		t.Run("a delay with nothing after it as the last entry still closes the automation and its slice", func(t *testing.T) {
+			input := `model "Test"
+context "Ctx" {
+  aggregate "Agg" {
+    slice "Slice" {
+      automation ExpiredHoldReleaser {
+        on RoomHeld
+        command ReleaseHold
+        after
+      }
+      automation ReminderReactor {
+        on RoomReserved
+        command SendReminder
+      }
+    }
+  }
+}`
+			tokens, lexDiags := lexer.Scan(input, "test.emod")
+			require.Empty(t, lexDiags)
+
+			model, diags := parser.New(tokens, "test.emod").Parse()
+
+			require.Len(t, diags, 1)
+			slice := model.Contexts[0].Aggregates[0].Slices[0]
+			require.Len(t, slice.Automations, 2)
+			require.NotZero(t, slice.Automations[0].ClosePos.Line)
+			require.Equal(t, "ReminderReactor", slice.Automations[1].Name)
+			require.NotZero(t, slice.ClosePos.Line)
+			require.NotZero(t, model.Contexts[0].ClosePos.Line)
+		})
+
+		t.Run("an automation stating a delay on a schedule is reported once at the delay", func(t *testing.T) {
+			input := modelWithAutomation("NightlyExpirySweep", `        every "0 2 * * *" after "24h"
+        command ExpireHold`)
+			tokens, lexDiags := lexer.Scan(input, "test.emod")
+			require.Empty(t, lexDiags)
+
+			model, diags := parser.New(tokens, "test.emod").Parse()
+
+			require.Len(t, diags, 1)
+			require.Regexp(t, `\bafter\b`, diags[0].Message)
+			require.Regexp(t, `\bevery\b`, diags[0].Message)
+			require.Contains(t, diags[0].Message, "absolute")
+			line, column := positionOf(t, input, `every "0 2 * * *" after "24h"`, `"24h"`)
+			require.Equal(t, line, diags[0].Line)
+			require.Equal(t, column, diags[0].Column)
+
+			automation := model.Contexts[0].Aggregates[0].Slices[0].Automations[0]
+			require.Equal(t, "0 2 * * *", automation.Schedule)
+			require.Equal(t, "24h", automation.After)
+		})
+
+		t.Run("an automation stating a delay on an on event alongside a schedule is reported only for the arity", func(t *testing.T) {
+			input := modelWithAutomation("ExpiredHoldReleaser", `        on RoomHeld after "24h"
+        every "5m"
+        command ReleaseHold`)
+			tokens, lexDiags := lexer.Scan(input, "test.emod")
+			require.Empty(t, lexDiags)
+
+			model, diags := parser.New(tokens, "test.emod").Parse()
+
+			require.Len(t, diags, 1)
+			require.Equal(t, "automation block cannot declare both on and every", diags[0].Message)
+
+			automation := model.Contexts[0].Aggregates[0].Slices[0].Automations[0]
+			require.Equal(t, "24h", automation.After)
+		})
+
 		t.Run("a trigger entry inside an automation is rejected once and the entries below it still parse", func(t *testing.T) {
 			input := modelWithAutomation("ConfirmationEmailReactor", `        on RoomReserved
         trigger RoomReleased
@@ -4107,6 +4297,7 @@ context "Ctx" {
 				require.Regexp(t, `\b`+entry+`\b`, diags[0].Message)
 			}
 			require.NotRegexp(t, `\btrigger\b`, diags[0].Message)
+			require.NotRegexp(t, `\bafter\b`, diags[0].Message)
 		})
 
 		t.Run("an automation not declaring exactly one activation form is reported once at its name naming both", func(t *testing.T) {

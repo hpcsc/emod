@@ -40,7 +40,7 @@
         "internal/lsp",
         "completer.go"
       ],
-      "done": false
+      "done": true
     },
     {
       "n": 3,

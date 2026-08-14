@@ -1246,6 +1246,8 @@ func (p *Instance) parseAutomation() *ast.Automation {
 		p.errorAtPosition(automation.NamePos, "automation block cannot declare both on and every")
 	case automation.OnEvent == "" && automation.Schedule == "":
 		p.errorAtPosition(automation.NamePos, "automation block requires either an on event or an every schedule")
+	case automation.Schedule != "" && automation.After != "":
+		p.errorAtPosition(automation.AfterPos, "automation block cannot declare after with every: an every schedule is already absolute, and after measures a delay from an on event")
 	}
 	if automation.Command == "" {
 		p.errorAtPosition(automation.NamePos, "automation block requires a command")
@@ -1259,9 +1261,17 @@ func (p *Instance) parseAutomationEntry(automation *ast.Automation) {
 	case lexer.KeywordDescription:
 		p.parseQuotedEntryInto("automation", &automation.Description, &automation.DescriptionPos)
 	case lexer.KeywordOn:
+		onTok := p.peek()
 		p.parseIdentifierEntryInto("automation", &automation.OnEvent, &automation.OnEventPos)
+		p.parseActivationDelay(automation, onTok)
 	case lexer.KeywordEvery:
+		everyTok := p.peek()
 		p.parseQuotedEntryInto("automation", &automation.Schedule, &automation.SchedulePos)
+		p.parseActivationDelay(automation, everyTok)
+	case lexer.KeywordAfter:
+		afterTok := p.advance()
+		p.errorAt(afterTok, "after qualifies an activation: write it on the same line as on or every")
+		p.skipRestOfLineOrBlockEnd(afterTok)
 	case lexer.KeywordTrigger:
 		triggerTok := p.advance()
 		p.errorAt(triggerTok, "trigger is not an automation entry: name the activation event with on")
@@ -1297,6 +1307,16 @@ func (p *Instance) parseAutomationEntry(automation *ast.Automation) {
 	default:
 		p.error(fmt.Sprintf("expected description, on, every, reads, command, or target in automation, got %q", p.peek().Value))
 		p.advance()
+	}
+}
+
+// parseActivationDelay reads the optional after suffix off an activation entry.
+// The line check is against the activation keyword rather than the value it
+// took, so an entry stating no delay cannot reach down and swallow an `after`
+// written as the next line's own entry — which has a diagnostic of its own.
+func (p *Instance) parseActivationDelay(automation *ast.Automation, activationTok *lexer.Token) {
+	for p.checkSameLineAs(activationTok) && p.check(lexer.KeywordAfter) {
+		p.parseQuotedEntryInto("automation", &automation.After, &automation.AfterPos)
 	}
 }
 

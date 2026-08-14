@@ -48,6 +48,7 @@ const (
 	KeywordOn
 	KeywordEvery
 	KeywordType
+	KeywordAfter
 
 	// Literals and identifiers
 	Identifier
@@ -112,6 +113,7 @@ var keywords = map[string]Kind{
 	"on":              KeywordOn,
 	"every":           KeywordEvery,
 	"type":            KeywordType,
+	"after":           KeywordAfter,
 }
 
 var keywordNames = invertKeywords()

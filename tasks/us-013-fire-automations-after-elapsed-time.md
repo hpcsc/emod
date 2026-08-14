@@ -2,7 +2,7 @@
 
 ## Progress
 - [x] Task 1: Accept and colour `after` across the three editor grammars
-- [ ] Task 2: Parse `after "<duration>"` on an automation's activation line
+- [x] Task 2: Parse `after "<duration>"` on an automation's activation line
 - [ ] Task 3: Reject an `after` value that is not a Go duration
 - [ ] Task 4: Emit `after` from `emod fmt`
 - [ ] Task 5: Share a fixture whose automations fire after an elapsed delay
@@ -475,54 +475,54 @@ describes itself on hover in an LSP-capable editor — the hover map is hand-wri
 that guards it iterates the lexer's keywords, so the word arrives there in the same change.
 
 **Acceptance Criteria:**
-- [ ] An automation declaring `on RoomHeld after "24h"` and a command parses with no diagnostics and
+- [x] An automation declaring `on RoomHeld after "24h"` and a command parses with no diagnostics and
       carries `RoomHeld` as its activation event and `24h` as its delay, together with the filename,
       line and column of the delay's string token
-- [ ] An automation declaring `on RoomHeld` and no delay parses with no diagnostics and carries an
+- [x] An automation declaring `on RoomHeld` and no delay parses with no diagnostics and carries an
       empty delay, asserted on the same model as the delayed automation so both are read back together
-- [ ] An automation whose `on` entry states no delay, written *above* a further entry in the same
+- [x] An automation whose `on` entry states no delay, written *above* a further entry in the same
       block, does not absorb the entry on the next line: the following entry is parsed onto the
       automation and the delay stays empty
-- [ ] A source file writing `after "24h"` on the line below an `on` entry reports exactly one
+- [x] A source file writing `after "24h"` on the line below an `on` entry reports exactly one
       diagnostic (`require.Len(t, diags, 1)`) whose message names `after` and points the author at the
       activation line it qualifies; the automation still closes and any entry below it is still parsed
-- [ ] The unrecognised-entry message inside an automation is unchanged — `after` is a suffix, not an
+- [x] The unrecognised-entry message inside an automation is unchanged — `after` is a suffix, not an
       entry, so the accepted-entry loop in `internal/parser/parser_test.go` still names exactly
       `description`, `on`, `every`, `reads`, `command` and `target`, each with a `\b`-bounded
       `require.Regexp`, and a `require.NotRegexp` pins that it does not name `after`
-- [ ] An automation declaring `every "0 2 * * *" after "24h"` and a command reports exactly one
+- [x] An automation declaring `every "0 2 * * *" after "24h"` and a command reports exactly one
       diagnostic, positioned at the delay rather than at the automation's name or the keyword, whose
       message names `after` and `every` under `\b` bounding and states that a schedule is already
       absolute
-- [ ] An automation declaring `on RoomHeld after "24h"` alongside `every "5m"` reports exactly one
+- [x] An automation declaring `on RoomHeld after "24h"` alongside `every "5m"` reports exactly one
       diagnostic — the existing "cannot declare both on and every" — and not a second about the delay:
       the delay qualifies a stated `on`, so fixing the arity leaves it valid
-- [ ] An `after` whose value is a bare identifier rather than a quoted string, with a `command` entry
+- [x] An `after` whose value is a bare identifier rather than a quoted string, with a `command` entry
       on the following line, reports exactly one diagnostic naming `after` and `automation`, and the
       `command` entry on the following line is still parsed onto the automation
-- [ ] An `after` with nothing after it, written as the last entry of a block followed by a second
+- [x] An `after` with nothing after it, written as the last entry of a block followed by a second
       automation, reports exactly one diagnostic, and `require.NotZero` holds on the automation's, the
       slice's and the context's `ClosePos.Line` with the second automation parsed
-- [ ] An automation declaring `after` twice on one activation line keeps the value written last
-- [ ] `lexer.Keywords()` contains `after`, `lexer.Scan` yields a token for it whose `Kind` is not
+- [x] An automation declaring `after` twice on one activation line keeps the value written last
+- [x] `lexer.Keywords()` contains `after`, `lexer.Scan` yields a token for it whose `Kind` is not
       `Identifier`, and a field named `after` with type `after` and modifier `after` parses with no
       diagnostics — all from the subtests that range over `Keywords()`
       (`internal/lexer/tokenizer_test.go:13`, `internal/parser/parser_test.go:226`, `:242`,
       `internal/oracle/oracle_test.go:45`), which pass unedited
-- [ ] A model declaring an event named `After` and an automation activating on it parses with no
+- [x] A model declaring an event named `After` and an automation activating on it parses with no
       diagnostics, pinning that keyword lookup stays case-sensitive
-- [ ] `keywordDescriptions` (`internal/lsp/hover.go:10-49`) describes `after`, naming it as the delay
+- [x] `keywordDescriptions` (`internal/lsp/hover.go:10-49`) describes `after`, naming it as the delay
       qualifying an activation event rather than a schedule, and `TestKeywordCoverage/hover`
       (`internal/lsp/keywords_test.go:19-57`) passes for every spelling `lexer.Keywords()` reports
       with no edit to that test — hovering `after` returns non-nil hover with non-empty contents
-- [ ] `TestKeywordCoverage/completion` (`internal/lsp/keywords_test.go:59-75`) passes unedited with no
+- [x] `TestKeywordCoverage/completion` (`internal/lsp/keywords_test.go:59-75`) passes unedited with no
       `after` entry added to `valueSlots` or `keywordsFor` (`internal/lsp/completer.go:176`, `:223`):
       it requires every label a block offers to be a lexer keyword, not the reverse, so completion
       stays US-015's
-- [ ] `oracle.Check` returns the diagnostics it returns today for every fixture in
+- [x] `oracle.Check` returns the diagnostics it returns today for every fixture in
       `internal/test/fixtures.go`, with those fixtures unedited — no model in the repo states a delay
       yet
-- [ ] `mise exec -- task test:grammar` passes, which is the receipt that Task 1 gave all three editor
+- [x] `mise exec -- task test:grammar` passes, which is the receipt that Task 1 gave all three editor
       surfaces the spelling `TestEditorKeywordCoverage` now demands of them
 
 **Affected Files/Modules:**
