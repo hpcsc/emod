@@ -1536,6 +1536,107 @@ func TestValidate(t *testing.T) {
 		})
 	})
 
+	t.Run("activation delays", func(t *testing.T) {
+		const companionRejected = `reservations.emod:12: delay "24 hours" is not a Go duration such as "30m", "24h" or "1h30m"`
+
+		t.Run("a delay stated as a Go duration is accepted", func(t *testing.T) {
+			for _, duration := range []string{"30m", "24h", "72h", "1h30m"} {
+				t.Run(duration, func(t *testing.T) {
+					require.Empty(t, validator.Validate(modelDelayingAfter(duration)))
+					require.Equal(t, []string{companionRejected},
+						reportedLines(validator.Validate(modelDelayingAfter(duration, "24 hours"))))
+				})
+			}
+		})
+
+		t.Run("a duration the model does not evaluate is accepted for its syntax alone", func(t *testing.T) {
+			for _, duration := range []string{"0s", "-5m"} {
+				t.Run(duration, func(t *testing.T) {
+					require.Empty(t, validator.Validate(modelDelayingAfter(duration)))
+					require.Equal(t, []string{companionRejected},
+						reportedLines(validator.Validate(modelDelayingAfter(duration, "24 hours"))))
+				})
+			}
+		})
+
+		t.Run("a delay of no duration form is reported on the delay, not on the automation name", func(t *testing.T) {
+			for _, duration := range []string{"tomorrow", "24 hours", "24"} {
+				t.Run(duration, func(t *testing.T) {
+					diags := validator.Validate(modelDelayingAfter(duration))
+
+					require.Equal(t, []string{
+						fmt.Sprintf(`reservations.emod:7: delay %q is not a Go duration such as "30m", "24h" or "1h30m"`, duration),
+					}, reportedLines(diags))
+					require.Equal(t, 15, diags[0].Column)
+					require.Equal(t, diagnostic.Error, diags[0].Severity)
+					require.Empty(t, diags[0].RuleName)
+				})
+			}
+		})
+
+		t.Run("an automation stating no delay states nothing to reject", func(t *testing.T) {
+			model := modelDelayingAfter("", "24 hours")
+
+			require.Equal(t, []string{
+				`reservations.emod:12: delay "24 hours" is not a Go duration such as "30m", "24h" or "1h30m"`,
+			}, reportedLines(validator.Validate(model)))
+		})
+
+		t.Run("delays in both slice homes are reported in declaration order", func(t *testing.T) {
+			// The aggregate's slice is declared before the context's own, so a
+			// walk that visits either collection first comes out reversed here.
+			model := &ast.Model{
+				Contexts: []*ast.Context{
+					{
+						Name: "Availability",
+						Mode: "dcb",
+						Aggregates: []*ast.Aggregate{
+							{
+								Name: "Hold",
+								Slices: []*ast.Slice{
+									{
+										Name:    "Release Expired Hold",
+										NamePos: ast.Position{Filename: "availability.emod", Line: 10, Column: 9},
+										Events:  []*ast.Event{{Name: "RoomHeld", Source: "external"}},
+										Automations: []*ast.Automation{
+											{
+												Name:     "ExpiredHoldReleaser",
+												OnEvent:  "RoomHeld",
+												After:    "one day",
+												AfterPos: ast.Position{Filename: "availability.emod", Line: 12, Column: 30},
+											},
+										},
+									},
+								},
+							},
+						},
+						Slices: []*ast.Slice{
+							{
+								Name:    "Chase Unconfirmed Hold",
+								NamePos: ast.Position{Filename: "availability.emod", Line: 28, Column: 9},
+								Automations: []*ast.Automation{
+									{
+										Name:     "UnconfirmedHoldChaser",
+										OnEvent:  "RoomHeld",
+										After:    "30 minutes",
+										AfterPos: ast.Position{Filename: "availability.emod", Line: 30, Column: 30},
+									},
+								},
+							},
+						},
+					},
+				},
+			}
+
+			want := []string{
+				`availability.emod:12: delay "one day" is not a Go duration such as "30m", "24h" or "1h30m"`,
+				`availability.emod:30: delay "30 minutes" is not a Go duration such as "30m", "24h" or "1h30m"`,
+			}
+			require.Equal(t, want, reportedLines(validator.Validate(model)))
+			require.Equal(t, want, reportedLines(validator.Validate(model)))
+		})
+	})
+
 	t.Run("spec references", func(t *testing.T) {
 		t.Run("an event a given names but no construct declares is reported on that reference", func(t *testing.T) {
 			model := &ast.Model{
@@ -5352,6 +5453,44 @@ func modelSchedulingEvery(expressions ...string) *ast.Model {
 						Slices: []*ast.Slice{
 							{
 								Name:        "Expire Stale Holds",
+								Automations: automations,
+							},
+						},
+					},
+				},
+			},
+		},
+	}
+}
+
+// modelDelayingAfter builds one automation per delay, each activated by an
+// event so the block states an activation the delay can qualify. An empty
+// delay stands for an automation that states none.
+func modelDelayingAfter(delays ...string) *ast.Model {
+	automations := make([]*ast.Automation, 0, len(delays))
+	for i, delay := range delays {
+		line := 7 + i*5
+		automations = append(automations, &ast.Automation{
+			Name:       fmt.Sprintf("Processor%d", i+1),
+			NamePos:    ast.Position{Filename: "reservations.emod", Line: line - 1, Column: 18},
+			OnEvent:    "HoldPlaced",
+			OnEventPos: ast.Position{Filename: "reservations.emod", Line: line, Column: 12},
+			After:      delay,
+			AfterPos:   ast.Position{Filename: "reservations.emod", Line: line, Column: 15},
+		})
+	}
+
+	return &ast.Model{
+		Contexts: []*ast.Context{
+			{
+				Name: "Reservations",
+				Aggregates: []*ast.Aggregate{
+					{
+						Name: "Reservation",
+						Slices: []*ast.Slice{
+							{
+								Name:        "Expire Stale Holds",
+								Events:      []*ast.Event{{Name: "HoldPlaced", Source: "external"}},
 								Automations: automations,
 							},
 						},

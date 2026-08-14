@@ -3,7 +3,7 @@
 ## Progress
 - [x] Task 1: Accept and colour `after` across the three editor grammars
 - [x] Task 2: Parse `after "<duration>"` on an automation's activation line
-- [ ] Task 3: Reject an `after` value that is not a Go duration
+- [x] Task 3: Reject an `after` value that is not a Go duration
 - [ ] Task 4: Emit `after` from `emod fmt`
 - [ ] Task 5: Share a fixture whose automations fire after an elapsed delay
 - [ ] Task 6: Carry the delay into the JSON, CUE and embedded schema exports
@@ -599,27 +599,27 @@ negative duration is accepted the same way an out-of-range cron field already is
 delay that nothing here evaluates.
 
 **Acceptance Criteria:**
-- [ ] A model whose automation declares `after "30m"`, one declaring `after "24h"`, one declaring
+- [x] A model whose automation declares `after "30m"`, one declaring `after "24h"`, one declaring
       `after "72h"` and one declaring `after "1h30m"` validate with no diagnostics
-- [ ] A model whose automation declares `after "tomorrow"` reports exactly one diagnostic whose
+- [x] A model whose automation declares `after "tomorrow"` reports exactly one diagnostic whose
       message quotes `tomorrow` and names the Go duration form, positioned at the line and column of
       the delay's string token — not of the `after` keyword, the `on` keyword or the automation's name
-- [ ] A model whose automation declares `after "24 hours"` and one declaring `after "24"` are each
+- [x] A model whose automation declares `after "24 hours"` and one declaring `after "24"` are each
       reported the same way, so a near-miss on the duration form is not silently accepted
-- [ ] One model carrying an automation with `after "24h"` beside one with `after "24 hours"` produces
+- [x] One model carrying an automation with `after "24h"` beside one with `after "24 hours"` produces
       exactly one diagnostic, naming the second — the accepted and the rejected case are pinned in the
       same assertion
-- [ ] A model whose automation declares `after "0s"` and one declaring `after "-5m"` validate with no
+- [x] A model whose automation declares `after "0s"` and one declaring `after "-5m"` validate with no
       diagnostics, pinning that the duration's value is not judged, only its syntax
-- [ ] An automation stating `on` and no delay produces no diagnostic from this check, asserted on a
+- [x] An automation stating `on` and no delay produces no diagnostic from this check, asserted on a
       model that also carries a rejected delay so the check is proved to be running
-- [ ] A model with two malformed delays reports them in declaration order across both slice homes —
+- [x] A model with two malformed delays reports them in declaration order across both slice homes —
       an aggregate's slices before the slices a `mode dcb` context declares directly — identical
       across repeated runs of `validator.Validate` over the same model, asserted with one
       `require.Equal` over the reported lines
-- [ ] The printed diagnostic carries no `[rule]` bracket and no rule name resolvable through
+- [x] The printed diagnostic carries no `[rule]` bracket and no rule name resolvable through
       `emod lint --explain`: what no configuration can silence is a hard error, not a rule
-- [ ] `cli.RunValidate` on a file with a malformed delay returns an error whose message names the
+- [x] `cli.RunValidate` on a file with a malformed delay returns an error whose message names the
       offending text and the accepted form — the same distinguishing content the validator test one
       layer down asserts, not merely the path and a line number
 

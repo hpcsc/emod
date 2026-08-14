@@ -260,6 +260,48 @@ context "Reservations" {
 		require.Contains(t, err.Error(), `schedule expression "nightly" is neither a Go duration nor a five-field cron expression`)
 	})
 
+	t.Run("returns error naming the delay that is not a Go duration", func(t *testing.T) {
+		input := `model "Reservations"
+context "Reservations" {
+  aggregate "Reservation" {
+    slice "Release Expired Hold" {
+      command ReleaseHold {
+        fields {
+          holdId string required
+        }
+      }
+      event RoomHeld {
+        source external "Booking"
+        fields {
+          holdId string required
+        }
+      }
+      event HoldReleased {
+        fields {
+          holdId string required
+        }
+      }
+      automation ExpiredHoldReleaser {
+        on RoomHeld after "24 hours"
+        command ReleaseHold
+      }
+      flow {
+        command -> event: ReleaseHold -> HoldReleased
+      }
+    }
+  }
+}
+`
+		path := writeTemp(t, "malformed_delay.emod", input)
+
+		err := cli.RunValidate(path, "text")
+
+		var lintErr *cli.LintError
+		require.True(t, errors.As(err, &lintErr))
+		require.Equal(t, 1, lintErr.ExitCode)
+		require.Contains(t, err.Error(), `delay "24 hours" is not a Go duration such as "30m", "24h" or "1h30m"`)
+	})
+
 	t.Run("returns error naming the invariant an aggregate declares twice", func(t *testing.T) {
 		input := `model "Library Lending"
 context "Lending" {

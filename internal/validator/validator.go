@@ -30,6 +30,7 @@ func Validate(model *ast.Model) []*diagnostic.Entry {
 		diags = append(diags, decidesOnDiagnostics(slice, index)...)
 	}
 	diags = append(diags, scheduleExpressionDiagnostics(index.slices)...)
+	diags = append(diags, activationDelayDiagnostics(index.slices)...)
 	diags = append(diags, redeclaredInvariantDiagnostics(model)...)
 	diags = append(diags, duplicateWireTypeDiagnostics(model)...)
 	diags = append(diags, unresolvedRejectionDiagnostics(model)...)
@@ -678,6 +679,25 @@ func scheduleExpressionDiagnostics(modelSlices []*ast.Slice) []*diagnostic.Entry
 			}
 			diags = append(diags, errorAt(auto.SchedulePos,
 				"schedule expression %q is neither a Go duration nor a five-field cron expression", auto.Schedule))
+		}
+	}
+
+	return diags
+}
+
+// Only the syntax is judged, on the same line scheduleExpressionDiagnostics
+// draws for a cron field out of range: "0s" and "-5m" parse as durations and so
+// are accepted, and what either would mean to a timer is the runtime's question
+// rather than the model's.
+func activationDelayDiagnostics(modelSlices []*ast.Slice) []*diagnostic.Entry {
+	var diags []*diagnostic.Entry
+	for _, slice := range modelSlices {
+		for _, auto := range slice.Automations {
+			if auto.After == "" || isGoDuration(auto.After) {
+				continue
+			}
+			diags = append(diags, errorAt(auto.AfterPos,
+				`delay %q is not a Go duration such as "30m", "24h" or "1h30m"`, auto.After))
 		}
 	}
 
