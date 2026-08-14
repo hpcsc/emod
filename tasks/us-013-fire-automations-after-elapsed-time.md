@@ -1,7 +1,7 @@
 # US-013: Fire automations after elapsed time
 
 ## Progress
-- [ ] Task 1: Accept and colour `after` across the three editor grammars
+- [x] Task 1: Accept and colour `after` across the three editor grammars
 - [ ] Task 2: Parse `after "<duration>"` on an automation's activation line
 - [ ] Task 3: Reject an `after` value that is not a Go duration
 - [ ] Task 4: Emit `after` from `emod fmt`
@@ -387,38 +387,38 @@ surfaces first is what keeps every commit green: `TestEditorKeywordCoverage` req
 name every lexer keyword, so the commit that teaches the lexer `after` would otherwise be red.
 
 **Acceptance Criteria:**
-- [ ] `automation_definition` (`editors/tree-sitter-emod/grammar.js:301-312`) admits an `after` suffix
+- [x] `automation_definition` (`editors/tree-sitter-emod/grammar.js:301-312`) admits an `after` suffix
       taking a string on the `on` entry and on the `every` entry, written inside the entry's own `seq`
       rather than as a new item in the block body — the block stays unordered and unbounded
-- [ ] The one-line comment above that rule (`:300`) spells the construct out whole including the
+- [x] The one-line comment above that rule (`:300`) spells the construct out whole including the
       suffix, so the file's only description of an automation still lists everything it admits
-- [ ] A corpus case in `editors/tree-sitter-emod/test/corpus/slice.txt` covers an automation whose
+- [x] A corpus case in `editors/tree-sitter-emod/test/corpus/slice.txt` covers an automation whose
       `on` entry carries `after`, and its expected tree contains no `ERROR` or `MISSING` node
-- [ ] A second corpus case covers an `every` entry carrying `after`, which the Go parser will reject
+- [x] A second corpus case covers an `every` entry carrying `after`, which the Go parser will reject
       and the grammar must still parse — the grammar is never stricter than the language
-- [ ] A third corpus case covers an automation whose `on` entry carries no `after`, written ahead of a
+- [x] A third corpus case covers an automation whose `on` entry carries no `after`, written ahead of a
       further entry rather than last, and parses unchanged
-- [ ] The keyword-per-field corpus case in `editors/tree-sitter-emod/test/corpus/fields.txt` gains a
+- [x] The keyword-per-field corpus case in `editors/tree-sitter-emod/test/corpus/fields.txt` gains a
       field named `after`, one typed `after` and one modified `after`, all parsing as field lines
       rather than as activation suffixes
-- [ ] `editors/tree-sitter-emod/queries/highlights.scm` names `after` in its `@keyword` list
+- [x] `editors/tree-sitter-emod/queries/highlights.scm` names `after` in its `@keyword` list
       (`:18-60`), and `editors/tree-sitter-emod/test/highlight/unreserved-keywords.emod` asserts
       `after` in the three field positions it already asserts `on` and `every` in, each marked token
       followed by another highlighted token on the same line
-- [ ] `editors/vscode/syntaxes/emod.tmLanguage.json` colours `after` from the case-sensitive
+- [x] `editors/vscode/syntaxes/emod.tmLanguage.json` colours `after` from the case-sensitive
       `#activations` rule (`:67-84`) keyed on its operand, not from the positionless `#keywords`
       alternation (`:95-97`) — an automation named `After` and a field named `after` must both keep
       their own scopes
-- [ ] `editors/vscode/test/scopes/activations.emod` asserts the keyword scope on `after` in a
+- [x] `editors/vscode/test/scopes/activations.emod` asserts the keyword scope on `after` in a
       delayed automation and the string scope on the duration beside it, and
       `editors/vscode/test/scopes/unreserved-keywords.emod` asserts `after` carries no keyword scope
       as a field name, a field type or a field modifier
-- [ ] `mise exec -- task test:grammar` and `mise exec -- task test:vscode` both pass, and running
+- [x] `mise exec -- task test:grammar` and `mise exec -- task test:vscode` both pass, and running
       `task test:grammar` a second time leaves every tracked file under `editors/tree-sitter-emod/`
       byte-identical
-- [ ] `git ls-files editors/tree-sitter-emod/src` returns nothing — the generated parser stays
+- [x] `git ls-files editors/tree-sitter-emod/src` returns nothing — the generated parser stays
       untracked
-- [ ] `mise exec -- task test:unit` passes with no Go file changed by this task
+- [x] `mise exec -- task test:unit` passes with no Go file changed by this task
 
 **Affected Files/Modules:**
 - `editors/tree-sitter-emod/grammar.js` — `automation_definition` (`:301-312`) and its comment (`:300`)

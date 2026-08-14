@@ -8,8 +8,9 @@ context "Ordering" {
   aggregate "Order" {
     slice "Placement" {
       automation NotifyCustomer {
-        on OrderPlaced # an activation event carries no capture of its own
+        on OrderPlaced after "24h"
 #       ^ keyword
+#                      ^ keyword
         every "0 9 * * *"
 #       ^ keyword
         reads OrderSummary
@@ -28,6 +29,9 @@ context "Ordering" {
           every string required
 #         ^ variable.member
 
+          after string required
+#         ^ variable.member
+
           type string required
 #         ^ variable.member
 
@@ -35,6 +39,8 @@ context "Ordering" {
 #                  ^ type
           scheduled every required
 #                   ^ type
+          delayed after required
+#                 ^ type
           published type required
 #                   ^ type
 
@@ -42,6 +48,8 @@ context "Ordering" {
 #                        ^ type.qualifier
           repeats string every # a field's modifier is the line's last token
 #                        ^ type.qualifier
+          waits string after # a field's modifier is the line's last token
+#                      ^ type.qualifier
         }
       }
     }

@@ -63,6 +63,21 @@ function grammarWithFlatKeywordsExtended(words) {
   return JSON.stringify(grammar)
 }
 
+// The positional rules are deliberately case-sensitive, matching the lexer's
+// own keyword lookup. Nothing in a positive assertion says so, so the guard is
+// this mutation: make them case-insensitive and a construct named after one of
+// them must start reading as a keyword.
+function grammarWithPositionalKeywordsCaseInsensitive() {
+  const grammar = JSON.parse(readGrammar())
+  const patterns = grammar.repository['positional-keywords'].patterns
+  assert.ok(patterns.length > 0, 'the positional keyword rule no longer holds any pattern')
+  patterns.forEach((pattern) => {
+    assert.ok(!pattern.match.startsWith('(?i)'), `${pattern.match} is already case-insensitive`)
+    pattern.match = `(?i)${pattern.match}`
+  })
+  return JSON.stringify(grammar)
+}
+
 function assertionsWithScopeRenamed(name, { below, from, to }) {
   const lines = readAssertions(name).split('\n')
   const source = lines.findIndex((line) => line.trim() === below)
@@ -129,6 +144,7 @@ describe('emod TextMate scope assertions', () => {
 
   for (const { keywords, sourceLine } of [
     { keywords: ['on', 'every'], sourceLine: 'on string required' },
+    { keywords: ['after'], sourceLine: 'after string required' },
     { keywords: ['type'], sourceLine: 'type string required' },
   ]) {
     test(`a grammar that colours ${keywords.join(' and ')} by word alone paints a field named after one`, (t) => {
@@ -145,6 +161,20 @@ describe('emod TextMate scope assertions', () => {
       })
     })
   }
+
+  test('a grammar whose positional keywords ignore case paints a construct named after one', (t) => {
+    const config = extensionConfigFor(t, grammarWithPositionalKeywordsCaseInsensitive())
+    const activations = assertionPath('activations.emod')
+
+    const run = runScopeTest('--config', config, activations)
+
+    assertReportsMismatch(run, {
+      file: activations,
+      sourceLine: 'invariant After "A hold expires once"',
+      prohibited: 'keyword.control.emod',
+      produced: 'keyword.control.emod',
+    })
+  })
 
   test('an assertion naming a scope the grammar does not produce fails, naming the position and the scope produced', (t) => {
     const assertions = assertionsWithScopeRenamed('declarations.emod', {

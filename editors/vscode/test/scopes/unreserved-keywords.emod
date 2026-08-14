@@ -12,6 +12,10 @@ command RecordReminder {
 #   ^^^^^ - keyword.control.emod entity.name.function.emod
 #         ^^^^^^ storage.type.emod
 #                ^^^^^^^^ storage.modifier.emod
+    after string required
+#   ^^^^^ - keyword.control.emod entity.name.function.emod
+#         ^^^^^^ storage.type.emod
+#                ^^^^^^^^ storage.modifier.emod
     type string required
 #   ^^^^ - keyword.control.emod entity.name.function.emod
 #        ^^^^^^ storage.type.emod
@@ -28,6 +32,10 @@ command RecordReminder {
 #   ^^^^^^^^^ - keyword.control.emod
 #             ^^^^^ - keyword.control.emod entity.name.function.emod
 #                   ^^^^^^^^ storage.modifier.emod
+    delayed after required
+#   ^^^^^^^ - keyword.control.emod
+#           ^^^^^ - keyword.control.emod entity.name.function.emod
+#                 ^^^^^^^^ storage.modifier.emod
     flagged string on
 #   ^^^^^^^ - keyword.control.emod
 #           ^^^^^^ storage.type.emod
@@ -36,6 +44,10 @@ command RecordReminder {
 #   ^^^^^^^ - keyword.control.emod
 #           ^^^^^^ storage.type.emod
 #                  ^^^^^ - keyword.control.emod entity.name.function.emod
+    waits string after
+#   ^^^^^ - keyword.control.emod
+#         ^^^^^^ storage.type.emod
+#                ^^^^^ - keyword.control.emod entity.name.function.emod
 # The modifier is optional, so the two-token form is the same field line with
 # nothing after the type to mark the name as a field name.
     on int

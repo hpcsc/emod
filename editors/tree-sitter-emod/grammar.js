@@ -340,14 +340,20 @@ module.exports = grammar({
       ']',
     ),
 
-    // automation Name { on Event every "5m" reads View command Cmd target context Name }
+    // automation Name { on Event after "24h" every "5m" after "24h" reads View command Cmd target context Name }
+    // The delay is a suffix inside each activation entry, not a block item: an
+    // optional trailing token in a one-line entry is field_line's shape, while
+    // an optional item in a block body would re-impose an arity the language
+    // does not have. It rides on `every` too because the Go parser is what
+    // rejects the combination, and a grammar stricter than the language
+    // red-squiggles text emod reports on with a message of its own.
     automation_definition: $ => seq(
       'automation',
       $.identifier,
       buildDescribedBlock(
         $,
-        seq('on', $.any_identifier),
-        seq('every', $.string),
+        seq('on', $.any_identifier, optional(seq('after', $.string))),
+        seq('every', $.string, optional(seq('after', $.string))),
         seq('reads', $.any_identifier),
         seq('command', $.any_identifier),
         seq('target', 'context', $.any_identifier),

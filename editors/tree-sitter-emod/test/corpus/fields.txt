@@ -44,6 +44,7 @@ context "C" {
         rejected string required
         on string required
         every string required
+        after string required
         type string required
       }
     }
@@ -208,6 +209,44 @@ context "C" {
             (any_identifier)
             (any_identifier)
             (any_identifier))
+          (field_line
+            (any_identifier)
+            (any_identifier)
+            (any_identifier))
+          (field_line
+            (any_identifier)
+            (any_identifier)
+            (any_identifier))
+          (field_line
+            (any_identifier)
+            (any_identifier)
+            (any_identifier)))))))
+
+========================
+Field typed after and modified after inside a fields block
+========================
+
+context "C" {
+  aggregate "A" {
+    slice "Core" {
+      fields {
+        scheduled after required
+        delayed string after
+      }
+    }
+  }
+}
+
+---
+
+(source_file
+  (context_definition
+    (string)
+    (aggregate_definition
+      (string)
+      (slice_definition
+        (string)
+        (fields_block
           (field_line
             (any_identifier)
             (any_identifier)

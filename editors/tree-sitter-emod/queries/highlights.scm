@@ -44,6 +44,7 @@
   "target"
   "on"
   "every"
+  "after"
   "mode"
   "tags"
   "decides_on"

@@ -386,6 +386,72 @@ context "C" {
           (any_identifier))))))
 
 ========================
+Slice with automation declaring on with a delay
+========================
+
+context "C" {
+  aggregate "A" {
+    slice "Core" {
+      automation SendReminder {
+        on OrderPlaced after "24h"
+        reads AvailableRoomsView
+        command SendConfirmation
+        target context Notifications
+      }
+    }
+  }
+}
+
+---
+
+(source_file
+  (context_definition
+    (string)
+    (aggregate_definition
+      (string)
+      (slice_definition
+        (string)
+        (automation_definition
+          (identifier)
+          (any_identifier)
+          (string)
+          (any_identifier)
+          (any_identifier)
+          (any_identifier))))))
+
+========================
+Slice with automation declaring every with a delay
+========================
+
+context "C" {
+  aggregate "A" {
+    slice "Core" {
+      automation SendDigest {
+        every "0 2 * * *" after "24h"
+        reads AvailableRoomsView
+        command SendConfirmation
+      }
+    }
+  }
+}
+
+---
+
+(source_file
+  (context_definition
+    (string)
+    (aggregate_definition
+      (string)
+      (slice_definition
+        (string)
+        (automation_definition
+          (identifier)
+          (string)
+          (string)
+          (any_identifier)
+          (any_identifier))))))
+
+========================
 Slice with automation declaring every first
 ========================
 

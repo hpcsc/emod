@@ -15,3 +15,24 @@ automation DailyDigest { every "0 9 * * *" command SendDigest }
 #                              ^^^^^^^^^^^ string.quoted.double.emod - entity.name.function.emod
 #                                          ^^^^^^^ keyword.control.emod
 #                                                  ^^^^^^^^^^ entity.name.function.emod
+
+# The delay qualifying an activation event; the duration stays a string literal.
+automation SendReminder { on OrderPlaced after "24h" command SendReminderEmail }
+#                         ^^ keyword.control.emod
+#                            ^^^^^^^^^^^ entity.name.function.emod - keyword.control.emod
+#                                        ^^^^^ keyword.control.emod
+#                                              ^^^^^ string.quoted.double.emod - entity.name.function.emod
+#                                                    ^^^^^^^ keyword.control.emod
+#                                                            ^^^^^^^^^^^^^^^^^ entity.name.function.emod
+
+# The lexer's keyword lookup is case-sensitive, so the positional rule must be
+# too. An invariant named After is where that bites: its name is followed by a
+# quoted statement, which is exactly the operand the positional rule keys on, so
+# a case-insensitive rule paints the name as a keyword. An automation named
+# After would witness nothing — #keyword-entity consumes "automation After"
+# whole, and the brace after it never meets the rule's lookahead.
+context "Lending" {
+  invariant After "A hold expires once"
+#           ^^^^^ - keyword.control.emod
+#                 ^^^^^^^^^^^^^^^^^^^^^ string.quoted.double.emod
+}
