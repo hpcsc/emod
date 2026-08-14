@@ -75,7 +75,7 @@
         "internal/cli/fmt_test.go",
         "scheduledAutomationFormattedEmod"
       ],
-      "done": false
+      "done": true
     },
     {
       "n": 5,

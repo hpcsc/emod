@@ -4,7 +4,7 @@
 - [x] Task 1: Accept and colour `after` across the three editor grammars
 - [x] Task 2: Parse `after "<duration>"` on an automation's activation line
 - [x] Task 3: Reject an `after` value that is not a Go duration
-- [ ] Task 4: Emit `after` from `emod fmt`
+- [x] Task 4: Emit `after` from `emod fmt`
 - [ ] Task 5: Share a fixture whose automations fire after an elapsed delay
 - [ ] Task 6: Carry the delay into the JSON, CUE and embedded schema exports
 - [ ] Task 7: Carry the delay through the diagram document and back
@@ -665,28 +665,30 @@ combining `every` with a delay still round-trips rather than silently losing the
 wrote. An automation stating no delay produces exactly the bytes it produces today.
 
 **Acceptance Criteria:**
-- [ ] Formatting an automation that declares `on RoomHeld after "24h"` emits both on one line, single
+- [x] Formatting an automation that declares `on RoomHeld after "24h"` emits both on one line, single
       spaced, with the duration between plain quotes, at the same indent as the sibling entries and in
       the position `on` already occupies
-- [ ] An automation carrying a delay and a schedule but no activation event — the shape the parser
+- [x] An automation carrying a delay and a schedule but no activation event — the shape the parser
       rejects — still writes its delay, as a suffix on the `every` line, so formatting never deletes
       the clause
-- [ ] A model whose slice declares a delayed automation beside an automation stating `on` and no
+- [x] A model whose slice declares a delayed automation beside an automation stating `on` and no
       delay formats to canonical bytes for both, asserted against one expected whole-block output
       rather than by searching for a line
-- [ ] Formatting the same model twice produces identical bytes, and a duration containing a backslash,
-      a tab, a double quote, a `%` and a non-ASCII character survives parse → format → parse → format
-      with identical bytes, proving the text is never escaped
-- [ ] Parsing a delayed automation, formatting the model and reparsing the result yields a model equal
+- [x] Formatting the same model twice produces identical bytes, and a duration containing a backslash,
+      a tab, a `%` and a non-ASCII character survives parse → format → parse → format with identical
+      bytes, proving the text is never escaped. The double quote this criterion also named is
+      unsatisfiable and is deliberately not covered: an emod string runs from one quote to the next
+      with no escape sequences, so a duration containing one cannot be written in the language at all
+- [x] Parsing a delayed automation, formatting the model and reparsing the result yields a model equal
       to the original under the round-trip comparison at `internal/formatter/formatter_test.go:702` —
       the assertion class that catches a declaration running on into the next line, which no golden and
       no idempotence check can catch
-- [ ] A source file writing `after` with the author's own spacing, and one writing the activation entry
+- [x] A source file writing `after` with the author's own spacing, and one writing the activation entry
       after `command`, are both rewritten by `RunFmt` to the canonical position and settle there —
       pinned with a canonical `*FormattedEmod` constant passed to `requireFmtSettlesOn`
       (`internal/cli/fmt_test.go:629`), never by handing the input fixture back as the expectation
-- [ ] Every expected constant this task adds opens with the `emod <n>` version header
-- [ ] `git diff` shows no change to any existing expected constant in
+- [x] Every expected constant this task adds opens with the `emod <n>` version header
+- [x] `git diff` shows no change to any existing expected constant in
       `internal/formatter/formatter_test.go` or `internal/cli/fmt_test.go`: no automation in either
       file states a delay, so no byte of their output may move
 

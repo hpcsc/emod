@@ -62,6 +62,41 @@ func quoted(text string) string {
 	return `"` + text + `"`
 }
 
+func quotedIfSet(value string) string {
+	if value == "" {
+		return ""
+	}
+
+	return quoted(value)
+}
+
+// withDelay suffixes an already-rendered activation value with the delay
+// qualifying it. It answers "" for an activation the automation does not state,
+// so the caller's lineIfSet guard still tests the activation and a delay alone
+// invents no line. The delay is written as a suffix on whichever activation
+// form is stated, including the every the parser rejects it beside: dropping it
+// there would delete a clause the author wrote rather than let them read the
+// diagnostic and fix it.
+func withDelay(activation, after string) string {
+	if activation == "" || after == "" {
+		return activation
+	}
+
+	return activation + " after " + quoted(after)
+}
+
+// delayUnless withholds the delay from the every line when the automation also
+// states an on event. Such an automation is one the parser rejects, but it
+// reaches the formatter through the wasm export path, and writing the suffix on
+// both lines would hand the author back a second delay they never wrote.
+func delayUnless(after, onEvent string) string {
+	if onEvent != "" {
+		return ""
+	}
+
+	return after
+}
+
 func bracketed(names []string) string {
 	return "[" + strings.Join(names, ", ") + "]"
 }
@@ -353,8 +388,8 @@ func (w *writer) writeAutomation(auto *ast.Automation, level int) {
 	w.writeComments(auto.Comments, level)
 	w.line(level, "automation %s {", auto.Name)
 	w.writeDescription(auto.Description, level+1)
-	w.lineIfSet(level+1, "on %s", auto.OnEvent)
-	w.quotedLineIfSet(level+1, "every %s", auto.Schedule)
+	w.lineIfSet(level+1, "on %s", withDelay(auto.OnEvent, auto.After))
+	w.lineIfSet(level+1, "every %s", withDelay(quotedIfSet(auto.Schedule), delayUnless(auto.After, auto.OnEvent)))
 	w.lineIfSet(level+1, "reads %s", auto.Reads)
 	w.lineIfSet(level+1, "command %s", auto.Command)
 	w.lineIfSet(level+1, "target context %s", auto.TargetContext)

@@ -531,6 +531,169 @@ func TestFormat(t *testing.T) {
 			require.Equal(t, expected, result)
 		})
 
+		t.Run("writes a delay as a suffix on the activation line of the automation stating one", func(t *testing.T) {
+			model := &ast.Model{
+				Name: "Test",
+				Contexts: []*ast.Context{
+					{
+						Name: "Ctx",
+						Aggregates: []*ast.Aggregate{
+							{
+								Name: "Agg",
+								Slices: []*ast.Slice{
+									{
+										Name: "Notify",
+										Automations: []*ast.Automation{
+											{
+												Name:    "ExpiredHoldReleaser",
+												OnEvent: "RoomHeld",
+												After:   "24h",
+												Command: "ReleaseHold",
+											},
+											{
+												Name:    "OrderNotifier",
+												OnEvent: "OrderPlaced",
+												Command: "SendNotification",
+											},
+										},
+									},
+								},
+							},
+						},
+					},
+				},
+			}
+
+			result := formatter.Format(model)
+
+			expected := strings.Join([]string{
+				`emod 1`,
+				`model "Test"`,
+				``,
+				`context "Ctx" {`,
+				`  aggregate "Agg" {`,
+				`    slice "Notify" {`,
+				`      automation ExpiredHoldReleaser {`,
+				`        on RoomHeld after "24h"`,
+				`        command ReleaseHold`,
+				`      }`,
+				``,
+				`      automation OrderNotifier {`,
+				`        on OrderPlaced`,
+				`        command SendNotification`,
+				`      }`,
+				`    }`,
+				`  }`,
+				`}`,
+				``,
+			}, "\n")
+
+			require.Equal(t, expected, result)
+		})
+
+		t.Run("writes a delay stated beside a schedule rather than deleting the clause the author wrote", func(t *testing.T) {
+			model := &ast.Model{
+				Name: "Test",
+				Contexts: []*ast.Context{
+					{
+						Name: "Ctx",
+						Aggregates: []*ast.Aggregate{
+							{
+								Name: "Agg",
+								Slices: []*ast.Slice{
+									{
+										Name: "Notify",
+										Automations: []*ast.Automation{
+											{
+												Name:     "NightlyExpirySweep",
+												Schedule: "0 2 * * *",
+												After:    "24h",
+												Command:  "ReleaseExpiredHolds",
+											},
+										},
+									},
+								},
+							},
+						},
+					},
+				},
+			}
+
+			result := formatter.Format(model)
+
+			expected := strings.Join([]string{
+				`emod 1`,
+				`model "Test"`,
+				``,
+				`context "Ctx" {`,
+				`  aggregate "Agg" {`,
+				`    slice "Notify" {`,
+				`      automation NightlyExpirySweep {`,
+				`        every "0 2 * * *" after "24h"`,
+				`        command ReleaseExpiredHolds`,
+				`      }`,
+				`    }`,
+				`  }`,
+				`}`,
+				``,
+			}, "\n")
+
+			require.Equal(t, expected, result)
+		})
+
+		t.Run("writes a delay once for an automation stating both activation forms", func(t *testing.T) {
+			model := &ast.Model{
+				Name: "Test",
+				Contexts: []*ast.Context{
+					{
+						Name: "Ctx",
+						Aggregates: []*ast.Aggregate{
+							{
+								Name: "Agg",
+								Slices: []*ast.Slice{
+									{
+										Name: "Notify",
+										Automations: []*ast.Automation{
+											{
+												Name:     "ExpiredHoldReleaser",
+												OnEvent:  "RoomHeld",
+												Schedule: "5m",
+												After:    "24h",
+												Command:  "ReleaseHold",
+											},
+										},
+									},
+								},
+							},
+						},
+					},
+				},
+			}
+
+			result := formatter.Format(model)
+
+			expected := strings.Join([]string{
+				`emod 1`,
+				`model "Test"`,
+				``,
+				`context "Ctx" {`,
+				`  aggregate "Agg" {`,
+				`    slice "Notify" {`,
+				`      automation ExpiredHoldReleaser {`,
+				`        on RoomHeld after "24h"`,
+				`        every "5m"`,
+				`        command ReleaseHold`,
+				`      }`,
+				`    }`,
+				`  }`,
+				`}`,
+				``,
+			}, "\n")
+
+			require.Equal(t, expected, result,
+				"the author wrote one delay, so the formatter may not hand back two")
+		})
+
 		t.Run("formats an automation that reads a view between its activation event and its command", func(t *testing.T) {
 			model := &ast.Model{
 				Name: "Test",
@@ -1617,6 +1780,70 @@ func TestFormat(t *testing.T) {
 					Command: "SendNotification",
 				},
 			}, reparsed.Contexts[0].Aggregates[0].Slices[0].Automations, ignoreFormatterNormalizations)
+		})
+
+		t.Run("round-trip: the delay one automation fires after and the immediate activation of its sibling both survive formatting", func(t *testing.T) {
+			source := expirySweepSliceSource(
+				`      automation ExpiredHoldReleaser {`,
+				`        description "Releases the holds nobody paid for overnight"`,
+				`        on RoomHeld after "24h"`,
+				`        reads ExpiringHoldsView`,
+				`        command ReleaseExpiredHolds`,
+				`        target context Inventory`,
+				`      }`,
+				``,
+				`      automation OrderNotifier {`,
+				`        on OrderPlaced`,
+				`        command SendNotification`,
+				`      }`,
+			)
+			original := parseModel(t, source, "delayed-automation.emod")
+
+			reparsed := requireStableFormat(t, original)
+
+			test.RequireEqual(t, original, reparsed, ignoreFormatterNormalizations)
+			test.RequireEqual(t, []*ast.Automation{
+				{
+					Name:          "ExpiredHoldReleaser",
+					Description:   "Releases the holds nobody paid for overnight",
+					OnEvent:       "RoomHeld",
+					After:         "24h",
+					Reads:         "ExpiringHoldsView",
+					Command:       "ReleaseExpiredHolds",
+					TargetContext: "Inventory",
+				},
+				{
+					Name:    "OrderNotifier",
+					OnEvent: "OrderPlaced",
+					Command: "SendNotification",
+				},
+			}, reparsed.Contexts[0].Aggregates[0].Slices[0].Automations, ignoreFormatterNormalizations)
+		})
+
+		t.Run("round-trip: a delay survives text that quoting could mangle", func(t *testing.T) {
+			for _, testCase := range []struct {
+				hazard string
+				delay  string
+			}{
+				{"backslash", `24h per C:\ops\nightly`},
+				{"tab", "24h\tafter the hold"},
+				{"percent", "24h while under 10% load"},
+				{"non-ascii", "24h ≤ once a night"},
+			} {
+				t.Run(testCase.hazard, func(t *testing.T) {
+					source := expirySweepSliceSource(
+						`      automation ExpiredHoldReleaser {`,
+						`        on RoomHeld after "`+testCase.delay+`"`,
+						`        command ReleaseExpiredHolds`,
+						`      }`,
+					)
+
+					reparsed := requireStableFormat(t, parseModel(t, source, "delayed-automation.emod"))
+
+					require.Equal(t, testCase.delay,
+						reparsed.Contexts[0].Aggregates[0].Slices[0].Automations[0].After)
+				})
+			}
 		})
 
 		t.Run("round-trip: a schedule survives text that quoting could mangle", func(t *testing.T) {

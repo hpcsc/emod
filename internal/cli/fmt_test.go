@@ -678,6 +678,85 @@ context "Fulfilment" {
 }
 `
 
+const delayedAutomationEmod = `model "Order Fulfilment"
+
+context "Fulfilment" {
+  aggregate "Shipment" {
+    slice "Sweep Expired Holds" {
+      command ReleaseExpiredHolds {
+        fields {
+          holdId string required
+        }
+      }
+
+      event ExpiredHoldsReleased {
+        fields {
+          holdId string required
+          releasedAt timestamp required
+        }
+      }
+
+      event RoomHeld {
+        source external "Booking"
+        fields {
+          holdId string required
+        }
+      }
+
+      automation ExpiredHoldReleaser {
+        description "Releases the holds nobody paid for overnight"
+        command ReleaseExpiredHolds
+            on RoomHeld     after    "24h"
+      }
+
+      flow {
+        command -> event: ReleaseExpiredHolds -> ExpiredHoldsReleased
+      }
+    }
+  }
+}
+`
+
+const delayedAutomationFormattedEmod = `emod 1
+model "Order Fulfilment"
+
+context "Fulfilment" {
+  aggregate "Shipment" {
+    slice "Sweep Expired Holds" {
+      command ReleaseExpiredHolds {
+        fields {
+          holdId string required
+        }
+      }
+
+      event ExpiredHoldsReleased {
+        fields {
+          holdId     string    required
+          releasedAt timestamp required
+        }
+      }
+
+      event RoomHeld {
+        source external "Booking"
+        fields {
+          holdId string required
+        }
+      }
+
+      automation ExpiredHoldReleaser {
+        description "Releases the holds nobody paid for overnight"
+        on RoomHeld after "24h"
+        command ReleaseExpiredHolds
+      }
+
+      flow {
+        command -> event: ReleaseExpiredHolds -> ExpiredHoldsReleased
+      }
+    }
+  }
+}
+`
+
 const wireTypeEmod = `model "Reservations"
 
 context "Booking" {
@@ -1344,6 +1423,12 @@ func TestFmt(t *testing.T) {
 		path := writeTemp(t, "scheduled-automation.emod", scheduledAutomationEmod)
 
 		requireFmtSettlesOn(t, path, scheduledAutomationFormattedEmod)
+	})
+
+	t.Run("moves a delayed activation to its canonical line, single spaced, and settles after one run", func(t *testing.T) {
+		path := writeTemp(t, "delayed-automation.emod", delayedAutomationEmod)
+
+		requireFmtSettlesOn(t, path, delayedAutomationFormattedEmod)
 	})
 
 	t.Run("moves an event's wire type to its canonical line and settles after one run", func(t *testing.T) {
