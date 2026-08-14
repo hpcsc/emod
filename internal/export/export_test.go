@@ -10,6 +10,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"slices"
 	"strings"
 	"testing"
 
@@ -3514,6 +3515,36 @@ func TestExport(t *testing.T) {
 				"an undescribed model must not carry the key, not even empty-valued, or its bytes change")
 		})
 
+		t.Run("an automation node states the delay it fires after, beside the activation event and schedule of its siblings", func(t *testing.T) {
+			delaying := test.AutomationDelayLibraryLendingModel(t)
+
+			require.Equal(t, test.AutomationDelayLibraryLendingDelays, test.DeclaredDelays(delaying),
+				"the model has to state delays in both slice homes, or the read-back below says nothing")
+
+			automations := nodesOfType(diagramDocOf(t, delaying)["nodes"].([]any), "automation")
+
+			require.Equal(t, test.AutomationDelayLibraryLendingDelays, statedUnder(automations, "after"))
+			require.Equal(t, test.DeclaredActivationEvents(delaying), statedUnder(automations, "on_event"))
+			require.Equal(t, test.DeclaredSchedules(delaying), statedUnder(automations, "every"))
+		})
+
+		t.Run("the arrow to an automation carries no key of its own, whatever the automation fires after", func(t *testing.T) {
+			doc := diagramDocOf(t, test.AutomationDelayLibraryLendingModel(t))
+
+			var triggerEdges []map[string]any
+			for _, e := range doc["edges"].([]any) {
+				edge := e.(map[string]any)
+				if edge["type"] == "automation_trigger" {
+					triggerEdges = append(triggerEdges, edge)
+				}
+			}
+
+			require.NotEmpty(t, triggerEdges, "the fixture has to draw activation arrows, or finding no key on them proves nothing")
+			for _, edge := range triggerEdges {
+				require.Equal(t, []string{"source", "target", "type"}, sortedKeysOf(edge))
+			}
+		})
+
 		// jsonDiagramEvent forks jsonEvent precisely so a new AST field cannot
 		// leak into the node-and-edge contract, which is why the wire type has
 		// to be shown absent here rather than assumed absent.
@@ -4762,6 +4793,16 @@ func findNodeByType(nodes []any, typ string) map[string]any {
 		return nil
 	}
 	return matched[0]
+}
+
+func sortedKeysOf(object map[string]any) []string {
+	keys := make([]string, 0, len(object))
+	for key := range object {
+		keys = append(keys, key)
+	}
+	slices.Sort(keys)
+
+	return keys
 }
 
 // nodesOfType keeps the diagram nodes of one type, in the order the exporter

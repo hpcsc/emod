@@ -33,6 +33,7 @@ type jsonDiagramNode struct {
 	Subscribes     []string          `json:"subscribes,omitempty"`
 	OnEvent        string            `json:"on_event,omitempty"`
 	Schedule       string            `json:"every,omitempty"`
+	After          string            `json:"after,omitempty"`
 	Command        string            `json:"command,omitempty"`
 	TargetContext  string            `json:"target_context,omitempty"`
 	ExternalSystem string            `json:"external_system,omitempty"`
@@ -343,6 +344,7 @@ func (b *diagramBuilder) appendAutomations(automations []*ast.Automation, sliceI
 			Comments:      convertComments(a.Comments),
 			OnEvent:       a.OnEvent,
 			Schedule:      a.Schedule,
+			After:         a.After,
 			Reads:         a.Reads,
 			Command:       a.Command,
 			TargetContext: a.TargetContext,

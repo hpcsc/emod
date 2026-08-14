@@ -7,7 +7,7 @@
 - [x] Task 4: Emit `after` from `emod fmt`
 - [x] Task 5: Share a fixture whose automations fire after an elapsed delay
 - [x] Task 6: Carry the delay into the JSON, CUE and embedded schema exports
-- [ ] Task 7: Carry the delay through the diagram document and back
+- [x] Task 7: Carry the delay through the diagram document and back
 - [ ] Task 8: Label the `event -> automation` arrow with the delay in SVG and draw.io
 - [ ] Task 9: Name the delay in Mermaid, ASCII and `emod slices list`
 - [ ] Task 10: Show an automation's delay in the viewer
@@ -891,24 +891,24 @@ delay travels as node metadata rather than on the edge, which is the channel tha
 the user removes.
 
 **Acceptance Criteria:**
-- [ ] The diagram document's automation node states the delay the author wrote, read back for the
+- [x] The diagram document's automation node states the delay the author wrote, read back for the
       Task 5 fixture against the transcribed list, while the automations of the same document that
       state an activation event or a schedule still carry those
-- [ ] The node's delay key is the same spelling the model export uses, and `jsonDiagramEdge`
+- [x] The node's delay key is the same spelling the model export uses, and `jsonDiagramEdge`
       (`internal/export/diagram.go:41-45`) gains no field: the arrow stays `{source, target, type}`
-- [ ] Importing a document whose automation node states a delay yields a model whose automation
+- [x] Importing a document whose automation node states a delay yields a model whose automation
       carries it; importing the same document with the value moved to a key the importer does not read
       yields an automation with no delay, so the reader is proved not to accept two spellings
-- [ ] Exporting the Task 5 fixture to a diagram document and importing it back yields delays equal to
+- [x] Exporting the Task 5 fixture to a diagram document and importing it back yields delays equal to
       the transcribed list, and formatting that reimported model produces the fixture's canonical
       bytes — the viewer's save path is export → import → format, so this is the round-trip that
       matters
-- [ ] Importing a document whose automation node states a delay and *no* `automation_trigger` edge
+- [x] Importing a document whose automation node states a delay and *no* `automation_trigger` edge
       still yields that delay, so the delay is proved not to depend on the arrow existing
-- [ ] `foldEdges` (`internal/importer/importer.go:244-281`) is unchanged in what it folds: an
+- [x] `foldEdges` (`internal/importer/importer.go:244-281`) is unchanged in what it folds: an
       `automation_trigger` edge still fills the activation event only when the node states neither
       activation form, and a delayed automation keeps its delay through that fold
-- [ ] Re-scanning the formatted model produced from an imported document carrying a delay reports no
+- [x] Re-scanning the formatted model produced from an imported document carrying a delay reports no
       diagnostics from `oracle.Check`, so the save is proved to be text `emod validate` accepts rather
       than only field-equal to what went in
 

@@ -14,6 +14,7 @@ import (
 	"github.com/hpcsc/emod/internal/formatter"
 	"github.com/hpcsc/emod/internal/importer"
 	"github.com/hpcsc/emod/internal/lexer"
+	"github.com/hpcsc/emod/internal/oracle"
 	"github.com/hpcsc/emod/internal/parser"
 	"github.com/hpcsc/emod/internal/test"
 	"github.com/hpcsc/emod/internal/validator"
@@ -402,6 +403,87 @@ context "C" {
 			require.Equal(t, formatter.Format(carried), formatter.Format(imported))
 		})
 
+		t.Run("keeps the delay every automation fires after, from both slice homes, and saves text emod accepts", func(t *testing.T) {
+			delaying := test.AutomationDelayLibraryLendingModel(t)
+
+			require.Equal(t, test.AutomationDelayLibraryLendingDelays, test.DeclaredDelays(delaying),
+				"the model has to state delays in both slice homes, or the comparisons below run over a copy of itself")
+			require.NotEmpty(t, test.DeclaredActivationEvents(delaying),
+				"the model has to activate on an event beside those delays, or the comparisons below say nothing about the two travelling together")
+			require.NotEmpty(t, test.DeclaredSchedules(delaying),
+				"the model has to run one automation on a schedule, or a schedule dropped in transit goes unnoticed")
+
+			imported := importExported(t, delaying)
+
+			require.Equal(t, test.AutomationDelayLibraryLendingDelays, test.DeclaredDelays(imported))
+			require.Equal(t, test.DeclaredActivationEvents(delaying), test.DeclaredActivationEvents(imported))
+			require.Equal(t, test.DeclaredSchedules(delaying), test.DeclaredSchedules(imported))
+
+			carried := test.AutomationDelayLibraryLendingModel(t)
+			stripWhatDiagramJSONDrops(carried)
+			require.Equal(t, formatter.Format(carried), formatter.Format(imported))
+		})
+
+		t.Run("saving a delayed automation produces text emod accepts, not only a model field-equal to what went in", func(t *testing.T) {
+			source := `model "Reservations"
+
+context "Reservations" {
+  aggregate "Reservation" {
+    slice "Release Expired Hold" {
+      command ReleaseHold {
+        fields {
+          holdId string required
+        }
+      }
+
+      event RoomHeld {
+        source external "Booking"
+        fields {
+          holdId    string    required
+          roomId    string    required
+          heldUntil timestamp required
+        }
+      }
+
+      event HoldReleased {
+        fields {
+          holdId     string    required
+          roomId     string    required
+          releasedAt timestamp required
+        }
+      }
+
+      view UnreleasedHoldsView {
+        fields {
+          holdId    string    required
+          roomId    string    required
+          heldUntil timestamp required
+        }
+        subscribes [RoomHeld]
+      }
+
+      automation ExpiredHoldReleaser {
+        on RoomHeld after "24h"
+        reads UnreleasedHoldsView
+        command ReleaseHold
+      }
+
+      flow {
+        command -> event: ReleaseHold -> HoldReleased
+      }
+    }
+  }
+}
+`
+			require.Empty(t, oracle.Check(source, "source.emod"),
+				"the source has to be clean, or the save being clean says nothing about the round trip")
+
+			imported := importFrom(t, source)
+
+			require.Equal(t, "24h", imported.Contexts[0].Aggregates[0].Slices[0].Automations[0].After)
+			require.Empty(t, oracle.Check(formatter.Format(imported), "saved.emod"))
+		})
+
 		t.Run("keeps the view every automation reads and the event each activates on, from both slice homes", func(t *testing.T) {
 			reading := test.AutomationReadsLibraryLendingModel(t)
 			unread := test.WithoutAutomationReads(reading)
@@ -599,6 +681,65 @@ context "C" {
 			keyedSchedule := importDiagram(t, documentKeying("schedule"))
 			require.Empty(t, keyedSchedule.Contexts[0].Slices[0].Automations[0].Schedule,
 				"a document keyed by anything but every states no cadence, or the assertion above passes on a reader that takes both")
+		})
+
+		t.Run("an automation fires after the delay stated under after and after none stated under delay", func(t *testing.T) {
+			documentKeying := automationNodeKeying("ExpiredHoldReleaser", "24h")
+
+			keyedAfter := importDiagram(t, documentKeying("after"))
+			require.Equal(t, "24h", keyedAfter.Contexts[0].Slices[0].Automations[0].After)
+
+			keyedDelay := importDiagram(t, documentKeying("delay"))
+			require.Empty(t, keyedDelay.Contexts[0].Slices[0].Automations[0].After,
+				"a document keyed by anything but after states no delay, or the assertion above passes on a reader that takes both")
+		})
+
+		t.Run("an automation node states its delay with no automation_trigger edge drawn to it", func(t *testing.T) {
+			diagram := `{
+              "model_name": "M",
+              "nodes": [
+                {"id": "context-1", "type": "context", "label": "C", "parentId": null},
+                {"id": "slice-1", "type": "slice", "label": "S", "parentId": "context-1"},
+                {"id": "auto-1", "type": "automation", "label": "ExpiredHoldReleaser", "parentId": "slice-1",
+                 "on_event": "RoomHeld", "after": "24h"}
+              ],
+              "edges": []
+            }`
+
+			imported := importDiagram(t, diagram)
+
+			automation := imported.Contexts[0].Slices[0].Automations[0]
+			require.Equal(t, "24h", automation.After)
+			require.Equal(t, "RoomHeld", automation.OnEvent)
+		})
+
+		t.Run("a delayed automation keeps its delay through the fold that fills an activation event from an edge", func(t *testing.T) {
+			diagram := `{
+              "model_name": "M",
+              "nodes": [
+                {"id": "context-1", "type": "context", "label": "C", "parentId": null},
+                {"id": "slice-1", "type": "slice", "label": "S", "parentId": "context-1"},
+                {"id": "event-1", "type": "event", "label": "RoomReleased", "parentId": "slice-1"},
+                {"id": "auto-1", "type": "automation", "label": "Delayed", "parentId": "slice-1",
+                 "on_event": "RoomHeld", "after": "24h"},
+                {"id": "auto-2", "type": "automation", "label": "Undecided", "parentId": "slice-1",
+                 "after": "30m"}
+              ],
+              "edges": [
+                {"source": "event-1", "target": "auto-1", "type": "automation_trigger"},
+                {"source": "event-1", "target": "auto-2", "type": "automation_trigger"}
+              ]
+            }`
+
+			imported := importDiagram(t, diagram)
+
+			automations := imported.Contexts[0].Slices[0].Automations
+			require.Equal(t, "RoomHeld", automations[0].OnEvent,
+				"the node already states an activation, so the edge fills nothing")
+			require.Equal(t, "24h", automations[0].After)
+			require.Equal(t, "RoomReleased", automations[1].OnEvent,
+				"the node states neither activation form, so the edge still fills the event")
+			require.Equal(t, "30m", automations[1].After)
 		})
 	})
 
