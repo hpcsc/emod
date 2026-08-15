@@ -361,17 +361,44 @@ func columnWidth[T any](rows []T, cell func(T) string) int {
 	return widest
 }
 
+type flowEntry struct {
+	comments []*ast.Comment
+	prefix   string
+	edge     string
+}
+
 func (w *writer) writeFlowBlock(flows []*ast.Flow, rejections []*ast.Rejection, level int) {
+	entries := flowEntries(flows, rejections)
+	prefixWidth := columnWidth(entries, func(e flowEntry) string { return e.prefix })
+
 	w.line(level, "flow {")
-	for _, flow := range flows {
-		w.writeComments(flow.Comments, level+1)
-		w.line(level+1, "command -> event: %s -> %s", flow.CommandName, flow.EventName)
-	}
-	for _, rejection := range rejections {
-		w.writeComments(rejection.Comments, level+1)
-		w.line(level+1, "command -> rejected: %s -> %s", rejection.CommandName, rejection.InvariantName)
+	for _, entry := range entries {
+		w.writeComments(entry.comments, level+1)
+		w.line(level+1, "%-*s %s", prefixWidth, entry.prefix, entry.edge)
 	}
 	w.line(level, "}")
+}
+
+// flowEntries lists a flow block's entries, in canonical order: every event
+// entry, then every rejection entry. The prefix column is padded across this
+// list alone, so a block holding one entry kind is written with no padding.
+func flowEntries(flows []*ast.Flow, rejections []*ast.Rejection) []flowEntry {
+	entries := make([]flowEntry, 0, len(flows)+len(rejections))
+	for _, flow := range flows {
+		entries = append(entries, flowEntry{
+			comments: flow.Comments,
+			prefix:   "command -> event:",
+			edge:     fmt.Sprintf("%s -> %s", flow.CommandName, flow.EventName),
+		})
+	}
+	for _, rejection := range rejections {
+		entries = append(entries, flowEntry{
+			comments: rejection.Comments,
+			prefix:   "command -> rejected:",
+			edge:     fmt.Sprintf("%s -> %s", rejection.CommandName, rejection.InvariantName),
+		})
+	}
+	return entries
 }
 
 func (w *writer) writeView(view *ast.View, level int) {

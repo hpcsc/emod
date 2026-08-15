@@ -190,8 +190,8 @@ func TestFormat(t *testing.T) {
 				`  aggregate "Loan" {`,
 				`    slice "Borrow a Copy" {`,
 				`      flow {`,
-				`        command -> event: BorrowCopy -> CopyBorrowed`,
-				`        command -> event: BorrowCopy -> LoanOpened`,
+				`        command -> event:    BorrowCopy -> CopyBorrowed`,
+				`        command -> event:    BorrowCopy -> LoanOpened`,
 				`        command -> rejected: BorrowCopy -> OneCopyPerLoan`,
 				`        command -> rejected: BorrowCopy -> FiveCopiesPerMember`,
 				`      }`,
@@ -202,6 +202,62 @@ func TestFormat(t *testing.T) {
 			}, "\n")
 
 			require.Equal(t, expected, result)
+		})
+
+		t.Run("a flow block holding both entry kinds lands every colon in one column, and its siblings independently", func(t *testing.T) {
+			input := strings.Join([]string{
+				`model "Library Lending"`,
+				``,
+				`context "Lending" {`,
+				`  aggregate "Loan" {`,
+				`    invariant OneCopyPerLoan "A loan covers exactly one copy of one title"`,
+				``,
+				`    slice "Borrow a Copy" {`,
+				`      flow {`,
+				`        command -> event:    BorrowCopy -> CopyBorrowed`,
+				`        command -> rejected: BorrowCopy -> OneCopyPerLoan`,
+				`      }`,
+				`    }`,
+				``,
+				`    slice "Return a Copy" {`,
+				`      flow {`,
+				`        command -> event: ReturnCopy -> CopyReturned`,
+				`      }`,
+				`    }`,
+				`  }`,
+				`}`,
+				``,
+			}, "\n")
+			original := parseModel(t, input, "flows.emod")
+
+			result := formatter.Format(original)
+
+			expected := strings.Join([]string{
+				`emod 1`,
+				`model "Library Lending"`,
+				``,
+				`context "Lending" {`,
+				`  aggregate "Loan" {`,
+				`    invariant OneCopyPerLoan "A loan covers exactly one copy of one title"`,
+				`    slice "Borrow a Copy" {`,
+				`      flow {`,
+				`        command -> event:    BorrowCopy -> CopyBorrowed`,
+				`        command -> rejected: BorrowCopy -> OneCopyPerLoan`,
+				`      }`,
+				`    }`,
+				``,
+				`    slice "Return a Copy" {`,
+				`      flow {`,
+				`        command -> event: ReturnCopy -> CopyReturned`,
+				`      }`,
+				`    }`,
+				`  }`,
+				`}`,
+				``,
+			}, "\n")
+
+			require.Equal(t, expected, result)
+			test.RequireEqual(t, original, requireStableFormat(t, original), ignoreFormatterNormalizations)
 		})
 
 		t.Run("a slice stating only rejections still emits a flow block", func(t *testing.T) {
@@ -1390,7 +1446,7 @@ func TestFormat(t *testing.T) {
 				strings.Join([]string{
 					`      flow {`,
 					`        # the copy may already be out`,
-					`        command -> event: BorrowCopy -> CopyBorrowed`,
+					`        command -> event:    BorrowCopy -> CopyBorrowed`,
 					`        command -> rejected: BorrowCopy -> OneCopyPerLoan`,
 					`      }`,
 				}, "\n"))
@@ -5101,7 +5157,7 @@ context "Lending" {
       }
 
       flow {
-        command -> event: BorrowCopy -> CopyBorrowed
+        command -> event:    BorrowCopy -> CopyBorrowed
         command -> rejected: BorrowCopy -> OneBorrowerPerCopy
       }
 

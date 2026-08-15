@@ -402,24 +402,31 @@ ragged list. The width is computed per `flow` block over the entries that block 
 holding only one entry kind is unchanged — which is every `flow` block in the repo today.
 
 **Acceptance Criteria:**
-- [ ] A `flow` block holding both `command -> event:` and `command -> rejected:` entries formats with
+- [x] A `flow` block holding both `command -> event:` and `command -> rejected:` entries formats with
       every entry's `->` operand starting in the same column, the narrower prefix padded to the wider
-- [ ] A `flow` block holding only `command -> event:` entries, and one holding only
+- [x] A `flow` block holding only `command -> event:` entries, and one holding only
       `command -> rejected:` entries, each format with a single space after the `:` and no padding
-- [ ] The width is computed per `flow` block, not per slice or per file: two slices in one model, one
+- [x] The width is computed per `flow` block, not per slice or per file: two slices in one model, one
       with a mixed block and one with a single-kind block, are asserted together against one whole
       expected output and align independently
-- [ ] Padding is inserted before the operand only; no entry gains trailing whitespace, and no line in
-      the output ends in a space
-- [ ] Parsing a source stating both entry kinds, formatting it and re-parsing yields a model whose
+- [x] Padding is inserted before the operand only; no entry gains trailing whitespace, and no line in
+      the output ends in a space — proven by the whole-output expected value, which is compared byte
+      for byte and holds no trailing space, rather than by a separate absence assertion the equality
+      above it already subsumes
+- [x] Parsing a source stating both entry kinds, formatting it and re-parsing yields a model whose
       flow entries and rejection entries match the original in kind, order and both names — the
       comparison being against the original model, never against a second format run
-- [ ] Formatting the output again is byte-identical
-- [ ] `git diff` moves no existing expected value in `internal/formatter/formatter_test.go`,
-      `internal/cli/fmt_test.go`, `internal/cli/slices_arrange_test.go` or
-      `internal/wasm/pipeline_test.go`: every `flow` block in all four holds one entry kind, so no
-      byte of their output may move
-- [ ] `emod fmt --check` over a canonically formatted file whose flow block mixes both kinds reports
+- [x] Formatting the output again is byte-identical
+- [x] Existing expected values move only where a `flow` block states both entry kinds. When the walk
+      above was taken US-009 had not landed and no such block existed anywhere, so the criterion read
+      "moves no existing expected value"; on the branch this task ran against there are four — the
+      mixed-block golden in `internal/formatter/formatter_test.go`'s `"element formatting"` group, the
+      leading-comment leaf's expectation, task 1's canonical-order constant, and
+      `rejectionFormattedEmod` in `internal/cli/fmt_test.go`. Every single-kind block in all of
+      `internal/formatter/formatter_test.go`, `internal/cli/fmt_test.go`,
+      `internal/cli/slices_arrange_test.go` and `internal/wasm/pipeline_test.go` keeps its bytes, and
+      no input fixture moves
+- [x] `emod fmt --check` over a canonically formatted file whose flow block mixes both kinds reports
       no change needed and leaves the file on disk unchanged
 
 **Affected Files/Modules:**

@@ -55,7 +55,7 @@
         "internal/cli/fmt_test.go",
         "requireFmtSettlesOn"
       ],
-      "done": false
+      "done": true
     },
     {
       "n": 4,

@@ -852,7 +852,7 @@ context "Lending" {
       }
 
       flow {
-        command -> event: BorrowCopy -> CopyBorrowed
+        command -> event:    BorrowCopy -> CopyBorrowed
         command -> rejected: BorrowCopy -> OneCopyPerLoan
       }
 
@@ -885,7 +885,7 @@ context "Lending" {
       }
 
       flow {
-        command -> event: ReturnCopy -> CopyReturned
+        command -> event:    ReturnCopy -> CopyReturned
         command -> rejected: ReturnCopy -> OneCopyPerLoan
       }
 
@@ -939,7 +939,7 @@ context "Reading Room" mode dcb {
     }
 
     flow {
-      command -> event: ClaimDesk -> DeskClaimed
+      command -> event:    ClaimDesk -> DeskClaimed
       command -> rejected: ClaimDesk -> OneReaderPerDesk
     }
 
