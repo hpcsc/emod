@@ -69,7 +69,7 @@ func TestCheck(t *testing.T) {
 			require.Empty(t, diagnostics)
 		})
 
-		t.Run("returns an empty diagnostic list for the model stating every construct this batch adds", func(t *testing.T) {
+		t.Run("returns an empty diagnostic list for a model stating wire types, delays, rejections, spec payloads and every spec outcome", func(t *testing.T) {
 			diagnostics := oracle.Check(test.EveryConstructLibraryLending, "every-construct.emod")
 
 			require.Empty(t, diagnostics)

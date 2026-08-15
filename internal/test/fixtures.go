@@ -2168,10 +2168,9 @@ context "Reading Room" mode dcb {
 }
 `
 
-// EveryConstructLibraryLending states every construct this batch adds, beside
-// the ones the language already had, in one model — so the batch's formatter
-// tasks can be shown to compose rather than each proving its own construct
-// alone: a description on each kind of construct
+// EveryConstructLibraryLending gathers into one model every construct the
+// formatter writes, so the writers can be shown to compose rather than each
+// proving its own construct alone: a description on each kind of construct
 // that takes one, an invariant on an aggregate and on a DCB context, specs in
 // both slice homes covering all four then shapes, example payloads on given,
 // when and then, a flow block mixing both entry kinds, wire types, an event
@@ -2194,7 +2193,7 @@ context "Reading Room" mode dcb {
 // for a whole-language witness: a context in aggregate or mixed mode (it states
 // the default and dcb), and an or or not predicate (its one decides_on joins
 // with and).
-const EveryConstructLibraryLending = `# Lending a library's copies and seating its readers, stating every construct this batch adds
+const EveryConstructLibraryLending = `# Lending a library's copies and seating its readers, stating every construct the formatter writes
 model "Library Lending" {
   description "How the library lends its copies and seats its readers"
 }

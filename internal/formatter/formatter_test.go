@@ -1531,12 +1531,9 @@ func TestFormat(t *testing.T) {
 			require.Equal(t, test.SlicePatternLibraryLendingOutcomeKinds, test.DeclaredSpecOutcomeKinds(reparsed))
 		})
 
-		t.Run("round-trip: the model stating every construct this batch adds survives formatting with none of them lost", func(t *testing.T) {
+		t.Run("round-trip: a model stating wire types, delays, rejections, spec payloads and every spec outcome survives formatting with none of them lost", func(t *testing.T) {
 			original := test.EveryConstructLibraryLendingModel(t)
 
-			// The fixture is the whole of what makes this leaf cover the
-			// batch: each construct it carries is required to be in it before
-			// the comparison below is asked whether formatting kept it.
 			require.NotEmpty(t, test.DeclaredWireTypes(original))
 			require.NotEmpty(t, test.DeclaredDelays(original))
 			require.NotEmpty(t, test.DeclaredRejections(original))
@@ -4743,6 +4740,73 @@ func TestFormat(t *testing.T) {
 					`        when BorrowCopy {`,
 					`          shelfMark: "` + overrunning + `"`,
 					`        }`,
+				}, "\n"))
+		})
+
+		t.Run("the budget measures the padding the keyword column adds", func(t *testing.T) {
+			specMarked := func(mark string) string {
+				return strings.Join([]string{
+					`model "Library Lending"`,
+					``,
+					`context "Lending" {`,
+					`  aggregate "Loan" {`,
+					`    slice "Borrow Copy" {`,
+					`      spec "borrows a copy no one holds" {`,
+					`        given [CopyShelved]`,
+					`        when BorrowCopy { shelfMark: "` + mark + `" }`,
+					`      }`,
+					`    }`,
+					`  }`,
+					`}`,
+					``,
+				}, "\n")
+			}
+			fitting, overrunning := strings.Repeat("A", 58), strings.Repeat("A", 59)
+			atBudget := `        when  BorrowCopy { shelfMark: "` + fitting + `" }`
+			require.Len(t, atBudget, 100, "the fitting fixture must sit exactly on the budget once when is padded past given")
+
+			require.Contains(t,
+				formatter.Format(parseModel(t, specMarked(fitting), "specs.emod")),
+				atBudget+"\n")
+			require.Contains(t,
+				formatter.Format(parseModel(t, specMarked(overrunning), "specs.emod")),
+				strings.Join([]string{
+					`        when  BorrowCopy {`,
+					`          shelfMark: "` + overrunning + `"`,
+					`        }`,
+				}, "\n"))
+		})
+
+		t.Run("the budget measures a list element at its own indent, separator included", func(t *testing.T) {
+			specMarked := func(mark string) string {
+				return strings.Join([]string{
+					`model "Library Lending"`,
+					``,
+					`context "Lending" {`,
+					`  aggregate "Loan" {`,
+					`    slice "Borrow Copy" {`,
+					`      spec "borrows a copy no one holds" {`,
+					`        given [CopyReturned { copyId: "` + mark + `" }, CopyShelved]`,
+					`      }`,
+					`    }`,
+					`  }`,
+					`}`,
+					``,
+				}, "\n")
+			}
+			fitting, overrunning := strings.Repeat("A", 62), strings.Repeat("A", 63)
+			atBudget := `          CopyReturned { copyId: "` + fitting + `" },`
+			require.Len(t, atBudget, 100, "the fitting element must sit exactly on the budget with its separator counted")
+
+			require.Contains(t,
+				formatter.Format(parseModel(t, specMarked(fitting), "specs.emod")),
+				atBudget+"\n")
+			require.Contains(t,
+				formatter.Format(parseModel(t, specMarked(overrunning), "specs.emod")),
+				strings.Join([]string{
+					`          CopyReturned {`,
+					`            copyId: "` + overrunning + `"`,
+					`          },`,
 				}, "\n"))
 		})
 

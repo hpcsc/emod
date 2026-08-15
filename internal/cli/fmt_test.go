@@ -1039,7 +1039,7 @@ context "Reading Room" mode dcb {
 // to one colon column, and a payload past the column budget written one field
 // per line with its values aligned.
 const everyConstructFormattedEmod = `emod 1
-# Lending a library's copies and seating its readers, stating every construct this batch adds
+# Lending a library's copies and seating its readers, stating every construct the formatter writes
 model "Library Lending" {
   description "How the library lends its copies and seats its readers"
 }
@@ -1752,7 +1752,7 @@ func TestFmt(t *testing.T) {
 		require.Equal(t, modTimeBefore, infoAfter.ModTime(), "file should not be rewritten when already formatted")
 	})
 
-	t.Run("keeps every construct this batch adds and settles after one run", func(t *testing.T) {
+	t.Run("keeps a model's wire types, delays, rejections and spec payloads, and settles after one run", func(t *testing.T) {
 		path := writeTemp(t, "every-construct.emod", test.EveryConstructLibraryLending)
 
 		requireFmtSettlesOn(t, path, everyConstructFormattedEmod)
