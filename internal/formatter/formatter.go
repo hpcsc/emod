@@ -333,29 +333,32 @@ func (w *writer) writeFields(fields []*ast.Field, level int) {
 }
 
 func (w *writer) writeTags(tags []ast.TagEntry, level int) {
-	maxKey := 0
-	for _, t := range tags {
-		if len(t.Key) > maxKey {
-			maxKey = len(t.Key)
-		}
-	}
+	keyWidth := columnWidth(tags, func(t ast.TagEntry) string { return t.Key })
+
 	w.line(level, "tags {")
 	for _, t := range tags {
-		w.line(level+1, "%-*s: %s", maxKey, t.Key, t.FieldRef)
+		w.line(level+1, "%-*s: %s", keyWidth, t.Key, t.FieldRef)
 	}
 	w.line(level, "}")
 }
 
 func fieldColumnWidths(fields []*ast.Field) (nameWidth, typeWidth int) {
-	for _, f := range fields {
-		if len(f.Name) > nameWidth {
-			nameWidth = len(f.Name)
-		}
-		if len(f.Type) > typeWidth {
-			typeWidth = len(f.Type)
+	return columnWidth(fields, func(f *ast.Field) string { return f.Name }),
+		columnWidth(fields, func(f *ast.Field) string { return f.Type })
+}
+
+// columnWidth answers the width every row's cell must be padded to for the
+// column after it to start in one place. It is computed over the rows handed
+// to it and nothing else, so a block states its own alignment rather than
+// inheriting a width from its siblings.
+func columnWidth[T any](rows []T, cell func(T) string) int {
+	widest := 0
+	for _, row := range rows {
+		if len(cell(row)) > widest {
+			widest = len(cell(row))
 		}
 	}
-	return nameWidth, typeWidth
+	return widest
 }
 
 func (w *writer) writeFlowBlock(flows []*ast.Flow, rejections []*ast.Rejection, level int) {
