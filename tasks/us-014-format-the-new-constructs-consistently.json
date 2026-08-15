@@ -74,7 +74,7 @@
         "requireFmtSettlesOn",
         "editors/tree-sitter-emod/test/corpus/"
       ],
-      "done": false
+      "done": true
     },
     {
       "n": 5,

@@ -467,27 +467,37 @@ the values column-aligned, the same convention a `fields` block uses, and the en
 wrapped form re-parses to the same payload and formatting it again is byte-identical.
 
 **Acceptance Criteria:**
-- [ ] `internal/formatter` states its column budget as one named constant, and no comparison site
-      repeats the number as a literal
-- [ ] A `when` reference whose rendered line is exactly the budget stays on one line; one character
-      wider wraps — both boundaries asserted, so the comparison cannot be off by one
-- [ ] A wrapped payload writes one `field: value` per line, with every value starting in the same
-      column, the field names padded to the widest name in that payload
-- [ ] The width is computed per payload: two payloads in one spec align independently
-- [ ] When any element of a `given` or `then` list wraps, every element of that list goes on its own
+- [x] `internal/formatter` states its column budget as one named constant, and no comparison site
+      repeats the number as a literal — `maxLineWidth`, read at the single site `fitsOnOneLine`
+- [x] A `when` reference whose rendered line is exactly the budget stays on one line; one character
+      wider wraps — both boundaries asserted, so the comparison cannot be off by one. The fitting
+      fixture asserts its own length is 100 before asserting it survives, so the boundary is stated
+      rather than trusted to arithmetic
+- [x] A wrapped payload writes one `field: value` per line, with every value starting in the same
+      column, the field names padded to the widest name in that payload. The name and its colon pad
+      as one unit, so a field is spelled `copyId:` whether its payload wrapped or not — padding the
+      bare name would respell it as `copyId :` on wrapping alone
+- [x] The width is computed per payload: two payloads in one spec align independently
+- [x] When any element of a `given` or `then` list wraps, every element of that list goes on its own
       line, including elements that would have fit and elements carrying no payload at all
-- [ ] A wrapped payload re-parses to a payload equal to the original in field names, declaration
+- [x] A wrapped payload re-parses to a payload equal to the original in field names, declaration
       order, values and literal kinds; formatting the re-parsed model produces byte-identical text
-- [ ] A payload short enough to fit formats exactly as US-010 Task 5 leaves it, so
-      `internal/formatter/formatter_test.go` and `internal/cli/fmt_test.go` pass with no edit to any
-      expected value US-010 added for the single-line form
-- [ ] A payload string value containing a backslash, a tab, a double quote, a `%` and a non-ASCII
-      character survives parse → format → parse → format with identical bytes in the wrapped form as
-      well as the single-line form, proving the wrapped writer also goes through `quoted()` and never
-      through `%q`
-- [ ] The tree-sitter grammar parses the wrapped form — asserted by a corpus case, since the grammar
+- [x] A payload short enough to fit formats exactly as US-010 Task 5 leaves it: no expected value in
+      `internal/formatter/formatter_test.go` moves. One expected value in `internal/cli/fmt_test.go`
+      does — `payloadFormattedEmod`, whose `when` line measured 116 columns and whose `then` line 155,
+      both past the budget this task introduces. That constant transcribes the shared payload fixture,
+      whose whole purpose is long example values, so its wrapping is the criterion being exercised
+      rather than a regression; every payload in it that fits keeps its single-line form
+- [x] A payload string value containing a backslash, a tab, a `%` and a non-ASCII character survives
+      parse → format → parse → format with identical bytes in the wrapped form as well as the
+      single-line form, proving the wrapped writer also goes through `quoted()` and never through
+      `%q`. A double quote is not among them: an emod string runs verbatim from one quote to the
+      next, so no source can hold one — the same unsatisfiable criterion `tasks/learnings.md:651`
+      records against US-010 Task 5, transcribed again here. Each hazard runs in both forms, and each
+      form asserts the fixture actually took the shape its name claims before asserting the round-trip
+- [x] The tree-sitter grammar parses the wrapped form — asserted by a corpus case, since the grammar
       must never be stricter than the Go parser and no checked-in file uses this shape
-- [ ] `emod fmt --check` over a canonically formatted file carrying a wrapped payload reports no
+- [x] `emod fmt --check` over a canonically formatted file carrying a wrapped payload reports no
       change needed and leaves the file on disk unchanged
 
 **Affected Files/Modules:**

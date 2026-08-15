@@ -464,8 +464,21 @@ context "Lending" {
       }
 
       spec "borrows a copy no one holds" {
-        when BorrowCopy { memberId: "M-40817", copyId: "C-93204", dueOn: "2024-07-19", shelfMark: "AURELIA" }
-        then [CopyBorrowed { loanId: "7c9e6679-7425-40de-944b-e07fc1f90ae7", borrowedAt: "2024-07-05T14:32:00Z", catalogueNumber: 4821, lateFee: 12.50, expedited: true }]
+        when BorrowCopy {
+          memberId:  "M-40817"
+          copyId:    "C-93204"
+          dueOn:     "2024-07-19"
+          shelfMark: "AURELIA"
+        }
+        then [
+          CopyBorrowed {
+            loanId:          "7c9e6679-7425-40de-944b-e07fc1f90ae7"
+            borrowedAt:      "2024-07-05T14:32:00Z"
+            catalogueNumber: 4821
+            lateFee:         12.50
+            expedited:       true
+          }
+        ]
       }
 
       spec "refuses a copy already on loan" {
@@ -557,7 +570,13 @@ context "Reading Room" mode dcb {
     spec "seats a reader at a desk its last reader released" {
       given [DeskReleased { deskId: "D-5817", releasedAt: "2024-07-05T08:50:00Z" }]
       when  ClaimDesk { memberId: "M-40817", preferredZone: "north gallery" }
-      then  [DeskClaimed { sessionId: "b6f4a3d2-91c8-4e57-8f10-2d6a5c7e9b31", claimedAt: "2024-07-05T09:15:00Z", quietZone: true }]
+      then  [
+        DeskClaimed {
+          sessionId: "b6f4a3d2-91c8-4e57-8f10-2d6a5c7e9b31"
+          claimedAt: "2024-07-05T09:15:00Z"
+          quietZone: true
+        }
+      ]
     }
 
     spec "refuses a desk another reader is seated at" {
@@ -600,13 +619,27 @@ context "Reading Room" mode dcb {
 
     spec "frees the desk its reader is seated at" {
       given [DeskClaimed { deskId: "D-5817", memberId: "M-40817", quietZone: false }]
-      when  ReleaseDesk { sessionId: "b6f4a3d2-91c8-4e57-8f10-2d6a5c7e9b31", deskId: "D-5817", memberId: "M-40817" }
+      when  ReleaseDesk {
+        sessionId: "b6f4a3d2-91c8-4e57-8f10-2d6a5c7e9b31"
+        deskId:    "D-5817"
+        memberId:  "M-40817"
+      }
       then  [DeskReleased { releasedAt: "2024-07-05T11:40:00Z", seatedFor: 145.25 }]
     }
 
     spec "refuses to free a desk already empty" {
-      given [DeskClaimed { sessionId: "3f21c8a7-6d94-4b02-9e15-7c8a3d5f2b64", claimedAt: "2024-07-04T16:05:00Z", quietZone: true }]
-      when  ReleaseDesk { sessionId: "b6f4a3d2-91c8-4e57-8f10-2d6a5c7e9b31", deskId: "D-5817", memberId: "M-40817" }
+      given [
+        DeskClaimed {
+          sessionId: "3f21c8a7-6d94-4b02-9e15-7c8a3d5f2b64"
+          claimedAt: "2024-07-04T16:05:00Z"
+          quietZone: true
+        }
+      ]
+      when  ReleaseDesk {
+        sessionId: "b6f4a3d2-91c8-4e57-8f10-2d6a5c7e9b31"
+        deskId:    "D-5817"
+        memberId:  "M-40817"
+      }
       then  rejected OneReaderPerDesk
     }
   }

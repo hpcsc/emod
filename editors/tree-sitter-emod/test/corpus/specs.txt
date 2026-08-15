@@ -641,3 +641,55 @@ context "Lending" {
         (spec_then
           (spec_event_list
             (any_identifier)))))))
+
+========================
+Wrapped payload and broken list, verbatim as emod fmt writes them
+========================
+
+context "Lending" {
+  slice "Borrow a Copy" {
+    spec "borrows a copy" {
+      given [
+        CopyReturned {
+          copyId:          "C-93204-AURELIA-NORTH-GALLERY-UPPER-SHELF-7"
+          catalogueNumber: 4821
+        },
+        CopyShelved { copyId: "C-93204" },
+        CopyBorrowed
+      ]
+      when  BorrowCopy
+      then  [CopyBorrowed]
+    }
+  }
+}
+
+---
+
+(source_file
+  (context_definition
+    (string)
+    (slice_definition
+      (string)
+      (spec_definition
+        (string)
+        (spec_given
+          (spec_event_list
+            (any_identifier)
+            (payload
+              (payload_field
+                (any_identifier)
+                (string))
+              (payload_field
+                (any_identifier)
+                (number)))
+            (any_identifier)
+            (payload
+              (payload_field
+                (any_identifier)
+                (string)))
+            (any_identifier)))
+        (spec_when
+          (any_identifier))
+        (spec_then
+          (spec_event_list
+            (any_identifier)))))))

@@ -3,6 +3,7 @@ package formatter
 import (
 	"fmt"
 	"strings"
+	"unicode/utf8"
 
 	"github.com/hpcsc/emod/internal/ast"
 )
@@ -53,6 +54,11 @@ func (w *writer) blankLineBetweenBlocks() func() {
 func indent(level int) string {
 	return strings.Repeat("  ", level)
 }
+
+// maxLineWidth is the column budget a rendered line is measured against, its
+// leading indent counted. The language fixes no line width, so this is the one
+// place the formatter states one.
+const maxLineWidth = 100
 
 // quoted renders text as an emod string literal, which runs verbatim from one
 // quote to the next: the language has no escape sequences. %q would escape a
@@ -440,8 +446,10 @@ func (w *writer) writeTranslation(trans *ast.Translation, level int) {
 }
 
 type specEntry struct {
-	keyword string
-	value   string
+	keyword   string
+	value     string
+	elements  []*ast.SpecElement
+	bracketed bool
 }
 
 func (w *writer) writeSpec(spec *ast.Spec, level int) {
@@ -451,10 +459,75 @@ func (w *writer) writeSpec(spec *ast.Spec, level int) {
 	entries := specEntries(spec)
 	keywordWidth := columnWidth(entries, func(e specEntry) string { return e.keyword })
 	for _, entry := range entries {
-		w.line(level+1, "%-*s %s", keywordWidth, entry.keyword, entry.value)
+		w.writeSpecEntry(entry, keywordWidth, level+1)
 	}
 
 	w.line(level, "}")
+}
+
+// writeSpecEntry keeps the entry on one line while that line fits the budget.
+// Past it, the payload that made the line overrun is written one field per
+// line, and a list holding one goes one element per line so the brace block is
+// not buried inside a comma list. An entry stating no payload is left alone
+// however long it runs: it has nothing this rule knows how to break.
+func (w *writer) writeSpecEntry(entry specEntry, keywordWidth, level int) {
+	head := fmt.Sprintf("%-*s ", keywordWidth, entry.keyword)
+
+	if fitsOnOneLine(level, head+entry.value) || !statesPayload(entry.elements) {
+		w.line(level, "%s", head+entry.value)
+		return
+	}
+
+	if !entry.bracketed {
+		w.writeSpecElement(entry.elements[0], head, "", level)
+		return
+	}
+
+	w.line(level, "%s[", head)
+	for i, element := range entry.elements {
+		separator := ","
+		if i == len(entry.elements)-1 {
+			separator = ""
+		}
+		w.writeSpecElement(element, "", separator, level+1)
+	}
+	w.line(level, "]")
+}
+
+// writeSpecElement writes one reference and the payload qualifying it, wrapping
+// that payload one field per line when the reference does not fit the line it
+// sits on. The opening brace stays on the reference's own line, which is where
+// the parser requires it.
+func (w *writer) writeSpecElement(element *ast.SpecElement, head, separator string, level int) {
+	oneLine := head + specElementText(element) + separator
+	if len(element.Payload) == 0 || fitsOnOneLine(level, oneLine) {
+		w.line(level, "%s", oneLine)
+		return
+	}
+
+	labelWidth := columnWidth(element.Payload, func(f *ast.PayloadField) string { return payloadLabel(f) })
+
+	w.line(level, "%s%s {", head, element.Name)
+	for _, field := range element.Payload {
+		w.line(level+1, "%-*s %s", labelWidth, payloadLabel(field), payloadLiteral(field))
+	}
+	w.line(level, "}%s", separator)
+}
+
+// fitsOnOneLine counts characters rather than bytes, because the budget is a
+// column count: a payload value holding an accented letter or an em dash would
+// otherwise be charged two or three columns for one and wrap early.
+func fitsOnOneLine(level int, text string) bool {
+	return len(indent(level))+utf8.RuneCountInString(text) <= maxLineWidth
+}
+
+func statesPayload(elements []*ast.SpecElement) bool {
+	for _, element := range elements {
+		if len(element.Payload) > 0 {
+			return true
+		}
+	}
+	return false
 }
 
 // specEntries lists the lines a spec writes, in canonical order. The keyword
@@ -463,15 +536,39 @@ func (w *writer) writeSpec(spec *ast.Spec, level int) {
 func specEntries(spec *ast.Spec) []specEntry {
 	var entries []specEntry
 	if len(spec.Given) > 0 {
-		entries = append(entries, specEntry{"given", bracketed(specElementTexts(spec.Given))})
+		entries = append(entries, specEntry{
+			keyword:   "given",
+			value:     bracketed(specElementTexts(spec.Given)),
+			elements:  spec.Given,
+			bracketed: true,
+		})
 	}
 	if spec.When != nil {
-		entries = append(entries, specEntry{"when", specElementText(spec.When)})
+		entries = append(entries, specEntry{
+			keyword:  "when",
+			value:    specElementText(spec.When),
+			elements: []*ast.SpecElement{spec.When},
+		})
 	}
 	if outcome := formatOutcome(spec.Then); outcome != "" {
-		entries = append(entries, specEntry{"then", outcome})
+		entries = append(entries, specEntry{
+			keyword:   "then",
+			value:     outcome,
+			elements:  thenEvents(spec.Then),
+			bracketed: true,
+		})
 	}
 	return entries
+}
+
+// thenEvents answers the elements a then clause holds, which is none for the
+// three outcome shapes that name a single construct rather than a list. Those
+// carry no payload, so an over-long one is left on its line.
+func thenEvents(then ast.ThenClause) []*ast.SpecElement {
+	if events, ok := then.(*ast.ThenEvents); ok {
+		return events.Events
+	}
+	return nil
 }
 
 func formatOutcome(then ast.ThenClause) string {
@@ -516,10 +613,17 @@ func specElementText(element *ast.SpecElement) string {
 
 	fields := make([]string, 0, len(element.Payload))
 	for _, field := range element.Payload {
-		fields = append(fields, fmt.Sprintf("%s: %s", field.Name, payloadLiteral(field)))
+		fields = append(fields, fmt.Sprintf("%s %s", payloadLabel(field), payloadLiteral(field)))
 	}
 
 	return fmt.Sprintf("%s { %s }", element.Name, strings.Join(fields, ", "))
+}
+
+// payloadLabel is a payload field's first column: the name and the colon
+// binding it to its value. They pad as one, so a field is spelled the same
+// whether its payload was written on one line or wrapped over several.
+func payloadLabel(field *ast.PayloadField) string {
+	return field.Name + ":"
 }
 
 // payloadLiteral writes a number or a boolean as the source text it was read

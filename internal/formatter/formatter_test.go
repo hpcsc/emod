@@ -7,6 +7,7 @@ import (
 	"slices"
 	"strings"
 	"testing"
+	"unicode/utf8"
 
 	"github.com/google/go-cmp/cmp"
 	"github.com/google/go-cmp/cmp/cmpopts"
@@ -4669,15 +4670,160 @@ func TestFormat(t *testing.T) {
 				{"non-ascii", "salle de lecture — étage 2"},
 			} {
 				t.Run(testCase.hazard, func(t *testing.T) {
-					source := specModelWithGiven(`given [CopyReturned { shelfMark: "` + testCase.value + `" }]`)
-					original := parseModel(t, source, "specs.emod")
+					for _, form := range []struct {
+						name      string
+						companion string
+					}{
+						{"on one line", ""},
+						{"wrapped one field per line", `, catalogue: "` + strings.Repeat("A", 80) + `"`},
+					} {
+						t.Run(form.name, func(t *testing.T) {
+							source := specModelWithGiven(`given [CopyReturned { shelfMark: "` + testCase.value + `"` + form.companion + ` }]`)
+							original := parseModel(t, source, "specs.emod")
 
-					reparsed := requireStableFormat(t, original)
+							require.Equal(t, form.companion != "",
+								strings.Contains(formatter.Format(original), "CopyReturned {\n"),
+								"the fixture must exercise the form this subtest is named for")
 
-					test.RequireEqual(t, original, reparsed, ignoreFormatterNormalizations)
-					require.Equal(t, testCase.value, reparsed.Contexts[0].Aggregates[0].Slices[0].Specs[0].Given[0].Payload[0].Value)
+							reparsed := requireStableFormat(t, original)
+
+							test.RequireEqual(t, original, reparsed, ignoreFormatterNormalizations)
+							require.Equal(t, testCase.value, reparsed.Contexts[0].Aggregates[0].Slices[0].Specs[0].Given[0].Payload[0].Value)
+						})
+					}
 				})
 			}
+		})
+
+		t.Run("a payload stays on one line at exactly the column budget and wraps one character past it", func(t *testing.T) {
+			specMarked := func(mark string) string {
+				return strings.Join([]string{
+					`model "Library Lending"`,
+					``,
+					`context "Lending" {`,
+					`  aggregate "Loan" {`,
+					`    slice "Borrow Copy" {`,
+					`      spec "borrows a copy no one holds" {`,
+					`        when BorrowCopy { shelfMark: "` + mark + `" }`,
+					`      }`,
+					`    }`,
+					`  }`,
+					`}`,
+					``,
+				}, "\n")
+			}
+			fitting, overrunning := strings.Repeat("A", 59), strings.Repeat("A", 60)
+			atBudget := `        when BorrowCopy { shelfMark: "` + fitting + `" }`
+			require.Len(t, atBudget, 100, "the fitting fixture must sit exactly on the budget")
+
+			require.Contains(t,
+				formatter.Format(parseModel(t, specMarked(fitting), "specs.emod")),
+				atBudget+"\n")
+			require.Contains(t,
+				formatter.Format(parseModel(t, specMarked(overrunning), "specs.emod")),
+				strings.Join([]string{
+					`        when BorrowCopy {`,
+					`          shelfMark: "` + overrunning + `"`,
+					`        }`,
+				}, "\n"))
+		})
+
+		t.Run("the budget counts a multi-byte character as one column", func(t *testing.T) {
+			mark := strings.Repeat("—", 59)
+			atBudget := `        when BorrowCopy { shelfMark: "` + mark + `" }`
+			require.Equal(t, 100, utf8.RuneCountInString(atBudget), "the fixture must sit exactly on the budget")
+			require.Greater(t, len(atBudget), 100, "and must overrun it when counted in bytes")
+
+			source := strings.Join([]string{
+				`model "Library Lending"`,
+				``,
+				`context "Lending" {`,
+				`  aggregate "Loan" {`,
+				`    slice "Borrow Copy" {`,
+				`      spec "borrows a copy no one holds" {`,
+				`        when BorrowCopy { shelfMark: "` + mark + `" }`,
+				`      }`,
+				`    }`,
+				`  }`,
+				`}`,
+				``,
+			}, "\n")
+
+			require.Contains(t, formatter.Format(parseModel(t, source, "specs.emod")), atBudget+"\n")
+		})
+
+		t.Run("a wrapping payload puts every element of its list on its own line and aligns each payload on its own widest field", func(t *testing.T) {
+			input := strings.Join([]string{
+				`model "Library Lending"`,
+				``,
+				`context "Lending" {`,
+				`  aggregate "Loan" {`,
+				`    slice "Borrow Copy" {`,
+				`      spec "borrows a copy the member returned late" {`,
+				`        given [CopyReturned { copyId: "C-93204", returnedAt: "2024-07-05T14:32:00Z", catalogueNumber: 4821 }, CopyReserved { holdId: "b1f0c4d7-3e28-4a91-9c65-8d2f7a0e5b34", reservedAt: "2024-07-01T09:00:00Z" }, CopyShelved { copyId: "C-93204" }, CopyBorrowed]`,
+				`        when BorrowCopy`,
+				`        then [CopyBorrowed { loanId: "7c9e6679-7425-40de-944b-e07fc1f90ae7", borrowedAt: "2024-07-05T14:32:00Z" }]`,
+				`      }`,
+				`    }`,
+				`  }`,
+				`}`,
+				``,
+			}, "\n")
+			original := parseModel(t, input, "specs.emod")
+
+			result := formatter.Format(original)
+
+			expected := strings.Join([]string{
+				`emod 1`,
+				`model "Library Lending"`,
+				``,
+				`context "Lending" {`,
+				`  aggregate "Loan" {`,
+				`    slice "Borrow Copy" {`,
+				`      spec "borrows a copy the member returned late" {`,
+				`        given [`,
+				`          CopyReturned {`,
+				`            copyId:          "C-93204"`,
+				`            returnedAt:      "2024-07-05T14:32:00Z"`,
+				`            catalogueNumber: 4821`,
+				`          },`,
+				`          CopyReserved {`,
+				`            holdId:     "b1f0c4d7-3e28-4a91-9c65-8d2f7a0e5b34"`,
+				`            reservedAt: "2024-07-01T09:00:00Z"`,
+				`          },`,
+				`          CopyShelved { copyId: "C-93204" },`,
+				`          CopyBorrowed`,
+				`        ]`,
+				`        when  BorrowCopy`,
+				`        then  [`,
+				`          CopyBorrowed {`,
+				`            loanId:     "7c9e6679-7425-40de-944b-e07fc1f90ae7"`,
+				`            borrowedAt: "2024-07-05T14:32:00Z"`,
+				`          }`,
+				`        ]`,
+				`      }`,
+				`    }`,
+				`  }`,
+				`}`,
+				``,
+			}, "\n")
+
+			require.Equal(t, expected, result)
+			test.RequireEqual(t, original, requireStableFormat(t, original), ignoreFormatterNormalizations)
+		})
+
+		t.Run("an over-long list carrying no payload is left on its line", func(t *testing.T) {
+			names := []string{
+				"CopyBorrowedByAMemberWithAVeryLongName",
+				"CopyReturnedByAMemberWithAVeryLongName",
+				"CopyShelvedByALibrarianWithALongName",
+			}
+			oneLine := `        given [` + strings.Join(names, ", ") + `]`
+			require.Greater(t, len(oneLine), 100, "the fixture must overrun the budget")
+
+			result := formatter.Format(parseModel(t, specModelWithGiven(`given [`+strings.Join(names, ", ")+`]`), "specs.emod"))
+
+			require.Contains(t, result, oneLine+"\n")
 		})
 
 		t.Run("round-trip: the shared payload fixture survives formatting in both slice homes", func(t *testing.T) {
