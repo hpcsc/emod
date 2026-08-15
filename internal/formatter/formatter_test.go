@@ -4894,6 +4894,26 @@ func TestFormat(t *testing.T) {
 			test.RequireEqual(t, original, requireStableFormat(t, original), ignoreFormatterNormalizations)
 		})
 
+		t.Run("an over-long list breaks one element per line even when no element's payload wraps", func(t *testing.T) {
+			// The unit that wraps is a payload, but the unit that decides is the
+			// whole entry line: a list can overrun while every element still
+			// fits its own line, and the list breaks anyway. The story states
+			// only the payload half, so this leaf is what pins the other.
+			elements := `CopyReturnedFromTheNorthGallery { copyId: "C-93204" }, CopyShelvedInTheUpperStacks, CopyBorrowedByAMember`
+			oneLine := `        given [` + elements + `]`
+			require.Greater(t, len(oneLine), 100, "the fixture must overrun the budget as one line")
+
+			result := formatter.Format(parseModel(t, specModelWithGiven(`given [`+elements+`]`), "specs.emod"))
+
+			require.Contains(t, result, strings.Join([]string{
+				`        given [`,
+				`          CopyReturnedFromTheNorthGallery { copyId: "C-93204" },`,
+				`          CopyShelvedInTheUpperStacks,`,
+				`          CopyBorrowedByAMember`,
+				`        ]`,
+			}, "\n"))
+		})
+
 		t.Run("an over-long list carrying no payload is left on its line", func(t *testing.T) {
 			names := []string{
 				"CopyBorrowedByAMemberWithAVeryLongName",

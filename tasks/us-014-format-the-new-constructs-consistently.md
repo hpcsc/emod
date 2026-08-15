@@ -481,7 +481,12 @@ wrapped form re-parses to the same payload and formatting it again is byte-ident
       bare name would respell it as `copyId :` on wrapping alone
 - [x] The width is computed per payload: two payloads in one spec align independently
 - [x] When any element of a `given` or `then` list wraps, every element of that list goes on its own
-      line, including elements that would have fit and elements carrying no payload at all
+      line, including elements that would have fit and elements carrying no payload at all. The rule
+      shipped is slightly broader than the criterion, and deliberately: the unit that *wraps* is a
+      payload, but the unit that *decides* is the whole entry line, so a list that overruns while
+      every element still fits its own line breaks anyway. Leaving it at 120 columns to satisfy the
+      criterion literally would be worse output. A leaf pins that case, since the story describes
+      only the payload half
 - [x] A wrapped payload re-parses to a payload equal to the original in field names, declaration
       order, values and literal kinds; formatting the re-parsed model produces byte-identical text
 - [x] A payload short enough to fit formats exactly as US-010 Task 5 leaves it: no expected value in
