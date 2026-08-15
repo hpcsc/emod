@@ -69,6 +69,12 @@ func TestCheck(t *testing.T) {
 			require.Empty(t, diagnostics)
 		})
 
+		t.Run("returns an empty diagnostic list for the model stating every construct this batch adds", func(t *testing.T) {
+			diagnostics := oracle.Check(test.EveryConstructLibraryLending, "every-construct.emod")
+
+			require.Empty(t, diagnostics)
+		})
+
 		t.Run("returns an empty diagnostic list for a model stating a spec for every slice pattern in both homes", func(t *testing.T) {
 			diagnostics := oracle.Check(test.SlicePatternLibraryLending, "slice-patterns.emod")
 

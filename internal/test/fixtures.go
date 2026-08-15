@@ -2168,6 +2168,336 @@ context "Reading Room" mode dcb {
 }
 `
 
+// EveryConstructLibraryLending states every construct this batch adds, beside
+// the ones the language already had, in one model — so the batch's formatter
+// tasks can be shown to compose rather than each proving its own construct
+// alone: a description on each kind of construct
+// that takes one, an invariant on an aggregate and on a DCB context, specs in
+// both slice homes covering all four then shapes, example payloads on given,
+// when and then, a flow block mixing both entry kinds, wire types, an event
+// sourced externally, an automation naming a target context, and an automation
+// firing after an elapsed delay.
+//
+// Four things about its shape are load-bearing. Each optional part is omitted
+// at least once mid-block — LoanOpened states no wire type and no description
+// ahead of further slice entries, RecallOverdueCopy states no delay, the
+// "sanctions a member's loan" spec states no payload — because a part left out
+// at the end has nothing to run into. Its payloads come in both sizes, one
+// short enough to stay on the reference's line and one long enough to wrap. The
+// "Lending" context declares no invariant of its own: a rejection inside an
+// aggregate slice must name an invariant that aggregate declares, so a
+// context-level invariant is reachable only where slices hang off the context
+// directly, which is the DCB half. And its trigger reads MemberLoansView so
+// that view has a reader, keeping the fixture clean under view/never-read.
+//
+// What it deliberately leaves to other fixtures, so a reader does not take it
+// for a whole-language witness: a context in aggregate or mixed mode (it states
+// the default and dcb), and an or or not predicate (its one decides_on joins
+// with and).
+const EveryConstructLibraryLending = `# Lending a library's copies and seating its readers, stating every construct this batch adds
+model "Library Lending" {
+  description "How the library lends its copies and seats its readers"
+}
+
+actor "Member" {
+  description "Someone who holds a library card"
+}
+
+actor "Librarian"
+
+context "Lending" {
+  description "Everything the library knows about who holds which copy"
+
+  aggregate "Loan" {
+    description "One member holding one copy over one date range"
+    invariant OneCopyPerLoan "A loan covers exactly one copy of one title"
+
+    slice "Borrow Copy" {
+      description "A member takes a copy off the shelf"
+      trigger "Lending Desk" {
+        description "The counter a member borrows from"
+        actor Member
+        reads MemberLoansView
+      }
+      command BorrowCopy {
+        description "Ask the library to lend a copy"
+        fields {
+          memberId  string required
+          copyId    string required
+          shelfMark string optional
+          dueOn     date   required
+        }
+      }
+      event CopyBorrowed {
+        description "A copy left the shelf with a member"
+        type "com.library.lending.copy-borrowed"
+        fields {
+          loanId     uuid      required
+          memberId   string    required
+          copyId     string    required
+          dueOn      date      required
+          borrowedAt timestamp required
+          expedited  bool
+        }
+      }
+      event LoanOpened {
+        fields {
+          loanId   uuid   required
+          memberId string required
+        }
+      }
+      spec "borrows a copy no one holds" {
+        given []
+        when BorrowCopy { memberId: "M-40817", copyId: "C-93204", dueOn: "2024-07-19", shelfMark: "AURELIA" }
+        then [CopyBorrowed { loanId: "7c9e6679-7425-40de-944b-e07fc1f90ae7", borrowedAt: "2024-07-05T14:32:00Z", expedited: true }]
+      }
+      spec "refuses a copy already on loan" {
+        given [CopyBorrowed { copyId: "C-93204" }]
+        when BorrowCopy { copyId: "C-93204" }
+        then rejected OneCopyPerLoan
+      }
+      flow {
+        command -> event: BorrowCopy -> CopyBorrowed
+        command -> event: BorrowCopy -> LoanOpened
+        command -> rejected: BorrowCopy -> OneCopyPerLoan
+      }
+    }
+
+    slice "Review Member Loans" {
+      description "What a member currently holds"
+      view MemberLoansView {
+        description "Every open loan, by member"
+        fields {
+          loanId   uuid   required
+          memberId string required
+          dueOn    date   required
+        }
+        subscribes [CopyBorrowed, CopyReturned]
+      }
+      spec "lists the loans a member holds" {
+        then view MemberLoansView
+      }
+    }
+
+    slice "Chase Overdue Copy" {
+      description "Nudging a member whose copy is late"
+      view OverdueLoansView {
+        fields {
+          loanId   uuid   required
+          memberId string required
+        }
+        subscribes [CopyBorrowed, CopyReturned]
+      }
+      command RemindMember {
+        description "Ask the library to remind a member"
+        fields {
+          loanId   uuid   required
+          memberId string required
+        }
+      }
+      event MemberReminded {
+        fields {
+          loanId     uuid      required
+          memberId   string    required
+          remindedAt timestamp required
+        }
+      }
+      automation RemindOnDueDate {
+        description "Waits out the grace period, then nudges"
+        on CopyBorrowed after "72h"
+        reads OverdueLoansView
+        command RemindMember
+        target context Lending
+      }
+      flow {
+        command -> event: RemindMember -> MemberReminded
+      }
+      spec "reminds a member when a copy becomes due" {
+        when CopyBorrowed
+        then command RemindMember
+      }
+      spec "sanctions a member's loan" {
+        when RemindMember
+        then [MemberReminded]
+      }
+      spec "refuses to remind a member with no overdue loans" {
+        given [MemberReminded]
+        when RemindMember
+        then rejected OneCopyPerLoan
+      }
+    }
+
+    slice "Sweep Overdue Loans" {
+      command RecallCopy {
+        fields {
+          loanId uuid required
+          copyId string required
+        }
+      }
+      event CopyRecalled {
+        description "The library called a copy back in"
+        type "com.library.lending.copy-recalled"
+        fields {
+          loanId     uuid      required
+          copyId     string    required
+          recalledAt timestamp required
+        }
+      }
+      automation RecallOverdueCopy {
+        every "15m"
+        reads OverdueLoansView
+        command RecallCopy
+      }
+      flow {
+        command -> event: RecallCopy -> CopyRecalled
+      }
+      spec "recalls copies that are overdue" {
+        then command RecallCopy
+      }
+      spec "calls in a copy before its due date" {
+        when RecallCopy
+        then [CopyRecalled]
+      }
+      spec "refuses to recall a copy already returned" {
+        given [CopyReturned]
+        when RecallCopy
+        then rejected OneCopyPerLoan
+      }
+    }
+
+    slice "Return Copy" {
+      command ReturnCopy {
+        fields {
+          loanId uuid   required
+          copyId string required
+        }
+      }
+      event CopyReturned {
+        type "com.library.lending.copy-returned"
+        fields {
+          loanId     uuid      required
+          copyId     string    required
+          returnedAt timestamp required
+        }
+      }
+      flow {
+        command -> event: ReturnCopy -> CopyReturned
+      }
+      spec "returns a loaned copy to the library" {
+        when ReturnCopy
+        then [CopyReturned]
+      }
+      spec "refuses to return a copy already returned" {
+        given [CopyReturned]
+        when ReturnCopy
+        then rejected OneCopyPerLoan
+      }
+    }
+  }
+}
+
+context "Reading Room" mode dcb {
+  description "Who is sitting where, and for how long"
+  invariant OneReaderPerDesk "A desk seats at most one reader at any moment"
+
+  slice "Desk Occupancy" {
+    view DeskOccupancyView {
+      description "Which desks are taken"
+      fields {
+        deskId   string required
+        memberId string required
+      }
+      subscribes [DeskClaimed]
+    }
+  }
+
+  slice "Claim Desk" {
+    description "A reader takes a seat"
+    command ClaimDesk {
+      decides_on {
+        events [DeskClaimed]
+        where tag(desk = deskId) and tag(reader = memberId)
+      }
+      fields {
+        memberId      string required
+        deskId        string required
+        preferredZone string
+      }
+    }
+    event DeskClaimed {
+      description "A reader sat down"
+      type "com.library.reading-room.desk-claimed"
+      tags {
+        desk  : deskId
+        reader: memberId
+      }
+      fields {
+        sessionId uuid      required
+        deskId    string    required
+        memberId  string    required
+        claimedAt timestamp required
+        quietZone bool
+      }
+    }
+    spec "seats a reader at a free desk" {
+      given []
+      when ClaimDesk { memberId: "M-40817", preferredZone: "north gallery" }
+      then [DeskClaimed { sessionId: "b6f4a3d2-91c8-4e57-8f10-2d6a5c7e9b31", claimedAt: "2024-07-05T09:15:00Z", quietZone: true }]
+    }
+    spec "refuses a desk another reader is seated at" {
+      given [DeskClaimed { deskId: "D-5817", quietZone: false }]
+      when ClaimDesk { memberId: "M-63204", deskId: "D-5817" }
+      then rejected OneReaderPerDesk
+    }
+    flow {
+      command -> event: ClaimDesk -> DeskClaimed
+      command -> rejected: ClaimDesk -> OneReaderPerDesk
+    }
+  }
+
+  slice "Import External Desk Booking" {
+    description "A booking made outside the library's own system"
+    command ImportExternalDeskBooking {
+      fields {
+        externalRef string required
+        deskId      string required
+        memberId    string required
+      }
+    }
+    translation ExternalDeskBookingImport {
+      description "Turns a room-booking record into a desk claim"
+      external_system "Room Booking API"
+      reads DeskOccupancyView
+      command ImportExternalDeskBooking
+      event ExternalDeskBookingImported {
+        type "com.library.reading-room.external-desk-booking-imported"
+        source external "Room Booking API"
+        tags {
+          desk  : deskId
+          reader: memberId
+        }
+        fields {
+          externalRef string    required
+          deskId      string    required
+          memberId    string    required
+          importedAt  timestamp required
+        }
+      }
+    }
+    spec "imports a desk booking from an external system" {
+      given [DeskClaimed]
+      when ImportExternalDeskBooking
+      then [ExternalDeskBookingImported]
+    }
+    spec "refuses to import a booking for an occupied desk" {
+      given [DeskClaimed]
+      when ImportExternalDeskBooking
+      then rejected OneReaderPerDesk
+    }
+  }
+}
+`
+
 // SpecLibraryLendingSpecNames transcribes the name of every scenario
 // SpecLibraryLending states, both slice homes together and in declaration order,
 // so a walk or a strip that reaches only one of the homes reads back short

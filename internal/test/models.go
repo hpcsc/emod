@@ -34,6 +34,12 @@ func InvariantLibraryLendingModel(t *testing.T) *ast.Model {
 	return parseFixture(t, InvariantLibraryLending, "invariants.emod")
 }
 
+func EveryConstructLibraryLendingModel(t *testing.T) *ast.Model {
+	t.Helper()
+
+	return parseFixture(t, EveryConstructLibraryLending, "every-construct.emod")
+}
+
 func SpecLibraryLendingModel(t *testing.T) *ast.Model {
 	t.Helper()
 

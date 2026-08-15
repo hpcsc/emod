@@ -468,7 +468,9 @@ wrapped form re-parses to the same payload and formatting it again is byte-ident
 
 **Acceptance Criteria:**
 - [x] `internal/formatter` states its column budget as one named constant, and no comparison site
-      repeats the number as a literal — `maxLineWidth`, read at the single site `fitsOnOneLine`
+      repeats the number as a literal — `maxLineWidth`, read at the single site `fitsOnOneLine`,
+      which counts characters rather than bytes so a value holding an accented letter or an em dash
+      is charged one column per character and not two or three
 - [x] A `when` reference whose rendered line is exactly the budget stays on one line; one character
       wider wraps — both boundaries asserted, so the comparison cannot be off by one. The fitting
       fixture asserts its own length is 100 before asserting it survives, so the boundary is stated
@@ -496,7 +498,12 @@ wrapped form re-parses to the same payload and formatting it again is byte-ident
       records against US-010 Task 5, transcribed again here. Each hazard runs in both forms, and each
       form asserts the fixture actually took the shape its name claims before asserting the round-trip
 - [x] The tree-sitter grammar parses the wrapped form — asserted by a corpus case, since the grammar
-      must never be stricter than the Go parser and no checked-in file uses this shape
+      must never be stricter than the Go parser and no checked-in file uses this shape. What that
+      case can claim is narrower than its first name suggested, and it now says so: `grammar.js`
+      lists `/\s/` in `extras`, so newlines, one-element-per-line breaking and column padding are
+      lexically invisible and no grammar mutation kills a layout claim alone. The case pins that the
+      exact text `emod fmt` writes is accepted; layout being invisible is *why* the wrapped form
+      cannot be rejected, not a hole in the case
 - [x] `emod fmt --check` over a canonically formatted file carrying a wrapped payload reports no
       change needed and leaves the file on disk unchanged
 
@@ -542,41 +549,54 @@ displace another's, and that the canonicalisation Tasks 1-4 introduced did not d
 way through.
 
 **Acceptance Criteria:**
-- [ ] `internal/test/fixtures.go` gains one model constant stating, in one file: the `emod` version
+- [x] `internal/test/fixtures.go` gains one model constant stating, in one file: the `emod` version
       header; a `description` on the model, an actor, a context, an aggregate, a slice, a trigger, a
       command, an event, a view, an automation and a translation; a named `invariant` on an aggregate
       and on a DCB context; a `spec` in both slice homes covering all four `then` shapes — an event
       list, `rejected <name>`, `view <Name>` and `command <Name>`; example payloads on `given`, `when`
       and `then` references, at least one short enough to stay on one line and one long enough to
       wrap; a `flow` block mixing `command -> event:` and `command -> rejected:` entries; a wire
-      `type` on an event; and an automation firing `after` an elapsed duration
-- [ ] The fixture omits at least one instance of each optional construct *mid-block* rather than at
-      the end, so a writer that stops emitting after the first omission is caught
-- [ ] `internal/test/models.go` gains the parsing accessor for it, following the existing
+      `type` on an event; and an automation firing `after` an elapsed duration.
+      `EveryConstructLibraryLending`. It also states `source external` on an event and
+      `target context` on an automation — two writers the criterion's list omits but the fixture's
+      name promises, and each is guarded: deleting either emission fails the round-trip leaf. Note the invariant placement is not a free choice: a rejection
+      inside an aggregate slice must name an invariant that aggregate declares, so a context-level
+      invariant is reachable only where slices hang off the context directly. Declaring one on the
+      aggregate-mode `"Lending"` context makes the model unreferenceable and trips
+      `spec/invariant-never-exercised` — which is why the criterion says "on an aggregate and on a
+      DCB context" rather than "on a context"
+- [x] The fixture omits at least one instance of each optional construct *mid-block* rather than at
+      the end, so a writer that stops emitting after the first omission is caught — `LoanOpened`
+      states neither a wire type nor a description ahead of further slice entries,
+      `RecallOverdueCopy` states no delay, the `"sanctions a member's loan"` spec states no payload,
+      and `"Sweep Overdue Loans"` no description
+- [x] `internal/test/models.go` gains the parsing accessor for it, following the existing
       `SpecLibraryLendingModel(t)` shape (`:37`)
-- [ ] `internal/oracle/oracle_test.go`'s `"clean input"` group (`:24`) gains a leaf asserting
+- [x] `internal/oracle/oracle_test.go`'s `"clean input"` group (`:24`) gains a leaf asserting
       `oracle.Check` reports nothing for it, so the fixture is pinned as a model `emod validate` and
       `emod lint` both accept — the DCB half needs tags on its events and a `decides_on` reaching them
       or `dcb/untagged-event` and `dcb/orphan-tag-key` fire
-- [ ] Parsing the fixture, formatting it and re-parsing the output yields a model equal to the
+- [x] Parsing the fixture, formatting it and re-parsing the output yields a model equal to the
       original under `test.RequireEqual` with `ignoreFormatterNormalizations` — the comparison being
-      against the original model, never against a second format run
-- [ ] Deleting any one of the five upstream emissions — the view/command outcome, the rejection entry,
+      against the original model, never against a second format run. The leaf first requires the
+      fixture to state each construct, through the existing `Declared…` getters, so an edit that
+      quietly drops one from the fixture cannot leave the comparison passing over nothing
+- [x] Deleting any one of the five upstream emissions — the view/command outcome, the rejection entry,
       the payload, the wire type, the `after` suffix — makes that comparison fail rather than the
       output silently losing the construct, verified for each by removing the emission and observing
-      the failure
-- [ ] Formatting the formatter's own output of the fixture produces byte-identical text
-- [ ] `internal/cli/fmt_test.go` gains a canonical `*FormattedEmod` constant for the fixture, opening
+      the failure. All five were run and all five were caught
+- [x] Formatting the formatter's own output of the fixture produces byte-identical text
+- [x] `internal/cli/fmt_test.go` gains a canonical `*FormattedEmod` constant for the fixture, opening
       with the `emod` version header, written as the canonical text `emod fmt` produces rather than
       the fixture source re-indented, and fed to `requireFmtSettlesOn` (`:629`)
-- [ ] That constant shows all four canonicalisations at once: every spec's `given`/`when`/`then`
+- [x] That constant shows all four canonicalisations at once: every spec's `given`/`when`/`then`
       aligned, the mixed `flow` block's `:` aligned, `subscribes` above `fields` in the view, the
       wrapping payload one field per line with its values aligned
-- [ ] `emod fmt --check` over the canonical text reports no change needed and leaves the file on disk
+- [x] `emod fmt --check` over the canonical text reports no change needed and leaves the file on disk
       unchanged
-- [ ] `git diff` adds the fixture and its accessor without moving any existing constant in
+- [x] `git diff` adds the fixture and its accessor without moving any existing constant in
       `internal/test/fixtures.go`, and moves no existing golden or `*FormattedEmod` constant in
-      `internal/formatter` or `internal/cli`
+      `internal/formatter` or `internal/cli` — the change set is 710 insertions and no deletion
 
 **Affected Files/Modules:**
 - `internal/test/fixtures.go` — the new model constant

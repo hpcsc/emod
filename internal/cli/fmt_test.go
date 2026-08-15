@@ -1031,6 +1031,361 @@ context "Reading Room" mode dcb {
 }
 `
 
+// everyConstructFormattedEmod is what emod fmt writes for
+// test.EveryConstructLibraryLending, not that fixture re-indented. It is the
+// one place all four of this story's canonicalisations are visible together: a
+// view's subscribes above its fields, every spec's given/when/then padded to
+// the widest keyword that spec states, a mixed flow block's two prefixes padded
+// to one colon column, and a payload past the column budget written one field
+// per line with its values aligned.
+const everyConstructFormattedEmod = `emod 1
+# Lending a library's copies and seating its readers, stating every construct this batch adds
+model "Library Lending" {
+  description "How the library lends its copies and seats its readers"
+}
+
+actor "Member" {
+  description "Someone who holds a library card"
+}
+
+actor "Librarian"
+
+context "Lending" {
+  description "Everything the library knows about who holds which copy"
+  aggregate "Loan" {
+    description "One member holding one copy over one date range"
+    invariant OneCopyPerLoan "A loan covers exactly one copy of one title"
+    slice "Borrow Copy" {
+      description "A member takes a copy off the shelf"
+      trigger "Lending Desk" {
+        description "The counter a member borrows from"
+        actor Member
+        reads MemberLoansView
+      }
+
+      command BorrowCopy {
+        description "Ask the library to lend a copy"
+        fields {
+          memberId  string required
+          copyId    string required
+          shelfMark string optional
+          dueOn     date   required
+        }
+      }
+
+      event CopyBorrowed {
+        description "A copy left the shelf with a member"
+        type "com.library.lending.copy-borrowed"
+        fields {
+          loanId     uuid      required
+          memberId   string    required
+          copyId     string    required
+          dueOn      date      required
+          borrowedAt timestamp required
+          expedited  bool
+        }
+      }
+
+      event LoanOpened {
+        fields {
+          loanId   uuid   required
+          memberId string required
+        }
+      }
+
+      flow {
+        command -> event:    BorrowCopy -> CopyBorrowed
+        command -> event:    BorrowCopy -> LoanOpened
+        command -> rejected: BorrowCopy -> OneCopyPerLoan
+      }
+
+      spec "borrows a copy no one holds" {
+        when BorrowCopy {
+          memberId:  "M-40817"
+          copyId:    "C-93204"
+          dueOn:     "2024-07-19"
+          shelfMark: "AURELIA"
+        }
+        then [
+          CopyBorrowed {
+            loanId:     "7c9e6679-7425-40de-944b-e07fc1f90ae7"
+            borrowedAt: "2024-07-05T14:32:00Z"
+            expedited:  true
+          }
+        ]
+      }
+
+      spec "refuses a copy already on loan" {
+        given [CopyBorrowed { copyId: "C-93204" }]
+        when  BorrowCopy { copyId: "C-93204" }
+        then  rejected OneCopyPerLoan
+      }
+    }
+
+    slice "Review Member Loans" {
+      description "What a member currently holds"
+      view MemberLoansView {
+        description "Every open loan, by member"
+        subscribes [CopyBorrowed, CopyReturned]
+        fields {
+          loanId   uuid   required
+          memberId string required
+          dueOn    date   required
+        }
+      }
+
+      spec "lists the loans a member holds" {
+        then view MemberLoansView
+      }
+    }
+
+    slice "Chase Overdue Copy" {
+      description "Nudging a member whose copy is late"
+      command RemindMember {
+        description "Ask the library to remind a member"
+        fields {
+          loanId   uuid   required
+          memberId string required
+        }
+      }
+
+      event MemberReminded {
+        fields {
+          loanId     uuid      required
+          memberId   string    required
+          remindedAt timestamp required
+        }
+      }
+
+      view OverdueLoansView {
+        subscribes [CopyBorrowed, CopyReturned]
+        fields {
+          loanId   uuid   required
+          memberId string required
+        }
+      }
+
+      automation RemindOnDueDate {
+        description "Waits out the grace period, then nudges"
+        on CopyBorrowed after "72h"
+        reads OverdueLoansView
+        command RemindMember
+        target context Lending
+      }
+
+      flow {
+        command -> event: RemindMember -> MemberReminded
+      }
+
+      spec "reminds a member when a copy becomes due" {
+        when CopyBorrowed
+        then command RemindMember
+      }
+
+      spec "sanctions a member's loan" {
+        when RemindMember
+        then [MemberReminded]
+      }
+
+      spec "refuses to remind a member with no overdue loans" {
+        given [MemberReminded]
+        when  RemindMember
+        then  rejected OneCopyPerLoan
+      }
+    }
+
+    slice "Sweep Overdue Loans" {
+      command RecallCopy {
+        fields {
+          loanId uuid   required
+          copyId string required
+        }
+      }
+
+      event CopyRecalled {
+        description "The library called a copy back in"
+        type "com.library.lending.copy-recalled"
+        fields {
+          loanId     uuid      required
+          copyId     string    required
+          recalledAt timestamp required
+        }
+      }
+
+      automation RecallOverdueCopy {
+        every "15m"
+        reads OverdueLoansView
+        command RecallCopy
+      }
+
+      flow {
+        command -> event: RecallCopy -> CopyRecalled
+      }
+
+      spec "recalls copies that are overdue" {
+        then command RecallCopy
+      }
+
+      spec "calls in a copy before its due date" {
+        when RecallCopy
+        then [CopyRecalled]
+      }
+
+      spec "refuses to recall a copy already returned" {
+        given [CopyReturned]
+        when  RecallCopy
+        then  rejected OneCopyPerLoan
+      }
+    }
+
+    slice "Return Copy" {
+      command ReturnCopy {
+        fields {
+          loanId uuid   required
+          copyId string required
+        }
+      }
+
+      event CopyReturned {
+        type "com.library.lending.copy-returned"
+        fields {
+          loanId     uuid      required
+          copyId     string    required
+          returnedAt timestamp required
+        }
+      }
+
+      flow {
+        command -> event: ReturnCopy -> CopyReturned
+      }
+
+      spec "returns a loaned copy to the library" {
+        when ReturnCopy
+        then [CopyReturned]
+      }
+
+      spec "refuses to return a copy already returned" {
+        given [CopyReturned]
+        when  ReturnCopy
+        then  rejected OneCopyPerLoan
+      }
+    }
+  }
+}
+
+context "Reading Room" mode dcb {
+  description "Who is sitting where, and for how long"
+  invariant OneReaderPerDesk "A desk seats at most one reader at any moment"
+  slice "Desk Occupancy" {
+    view DeskOccupancyView {
+      description "Which desks are taken"
+      subscribes [DeskClaimed]
+      fields {
+        deskId   string required
+        memberId string required
+      }
+    }
+  }
+
+  slice "Claim Desk" {
+    description "A reader takes a seat"
+    command ClaimDesk {
+      decides_on {
+        events [DeskClaimed]
+        where tag(desk = deskId) and tag(reader = memberId)
+      }
+      fields {
+        memberId      string required
+        deskId        string required
+        preferredZone string
+      }
+    }
+
+    event DeskClaimed {
+      description "A reader sat down"
+      type "com.library.reading-room.desk-claimed"
+      tags {
+        desk  : deskId
+        reader: memberId
+      }
+      fields {
+        sessionId uuid      required
+        deskId    string    required
+        memberId  string    required
+        claimedAt timestamp required
+        quietZone bool
+      }
+    }
+
+    flow {
+      command -> event:    ClaimDesk -> DeskClaimed
+      command -> rejected: ClaimDesk -> OneReaderPerDesk
+    }
+
+    spec "seats a reader at a free desk" {
+      when ClaimDesk { memberId: "M-40817", preferredZone: "north gallery" }
+      then [
+        DeskClaimed {
+          sessionId: "b6f4a3d2-91c8-4e57-8f10-2d6a5c7e9b31"
+          claimedAt: "2024-07-05T09:15:00Z"
+          quietZone: true
+        }
+      ]
+    }
+
+    spec "refuses a desk another reader is seated at" {
+      given [DeskClaimed { deskId: "D-5817", quietZone: false }]
+      when  ClaimDesk { memberId: "M-63204", deskId: "D-5817" }
+      then  rejected OneReaderPerDesk
+    }
+  }
+
+  slice "Import External Desk Booking" {
+    description "A booking made outside the library's own system"
+    command ImportExternalDeskBooking {
+      fields {
+        externalRef string required
+        deskId      string required
+        memberId    string required
+      }
+    }
+
+    translation ExternalDeskBookingImport {
+      description "Turns a room-booking record into a desk claim"
+      external_system "Room Booking API"
+      reads DeskOccupancyView
+      command ImportExternalDeskBooking
+      event ExternalDeskBookingImported {
+        type "com.library.reading-room.external-desk-booking-imported"
+        tags {
+          desk  : deskId
+          reader: memberId
+        }
+        source external "Room Booking API"
+        fields {
+          externalRef string    required
+          deskId      string    required
+          memberId    string    required
+          importedAt  timestamp required
+        }
+      }
+    }
+
+    spec "imports a desk booking from an external system" {
+      given [DeskClaimed]
+      when  ImportExternalDeskBooking
+      then  [ExternalDeskBookingImported]
+    }
+
+    spec "refuses to import a booking for an occupied desk" {
+      given [DeskClaimed]
+      when  ImportExternalDeskBooking
+      then  rejected OneReaderPerDesk
+    }
+  }
+}
+`
+
 const slicePatternFormattedEmod = `emod 1
 # Lending a library's copies and seating its readers, with a spec for every slice pattern
 model "Library Lending"
@@ -1395,6 +1750,12 @@ func TestFmt(t *testing.T) {
 		infoAfter, statErr := os.Stat(path)
 		require.NoError(t, statErr)
 		require.Equal(t, modTimeBefore, infoAfter.ModTime(), "file should not be rewritten when already formatted")
+	})
+
+	t.Run("keeps every construct this batch adds and settles after one run", func(t *testing.T) {
+		path := writeTemp(t, "every-construct.emod", test.EveryConstructLibraryLending)
+
+		requireFmtSettlesOn(t, path, everyConstructFormattedEmod)
 	})
 
 	t.Run("leaves a formatted file whose field has no modifier untouched on every run", func(t *testing.T) {
