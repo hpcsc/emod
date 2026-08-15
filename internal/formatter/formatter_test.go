@@ -4354,8 +4354,8 @@ func TestFormat(t *testing.T) {
 				``,
 				`      spec "refuses a copy already on loan" {`,
 				`        given [CopyBorrowed]`,
-				`        when BorrowCopy`,
-				`        then rejected OneCopyPerLoan`,
+				`        when  BorrowCopy`,
+				`        then  rejected OneCopyPerLoan`,
 				`      }`,
 				`    }`,
 				`  }`,
@@ -4396,8 +4396,8 @@ func TestFormat(t *testing.T) {
 				`    slice "Return Copy" {`,
 				`      spec "returns a copy the member holds" {`,
 				`        given [CopyBorrowed]`,
-				`        when ReturnCopy`,
-				`        then [CopyReturned]`,
+				`        when  ReturnCopy`,
+				`        then  [CopyReturned]`,
 				`      }`,
 				`    }`,
 				`  }`,
@@ -4407,6 +4407,67 @@ func TestFormat(t *testing.T) {
 
 			require.Equal(t, expected, result)
 			test.RequireEqual(t, original, parseModel(t, result, "formatted.emod"), ignoreFormatterNormalizations)
+		})
+
+		t.Run("each spec pads its keywords to the widest one it states, and its siblings independently", func(t *testing.T) {
+			input := strings.Join([]string{
+				`model "Library Lending"`,
+				``,
+				`context "Lending" {`,
+				`  aggregate "Loan" {`,
+				`    slice "Borrow Copy" {`,
+				`      spec "borrows a copy the member before returned" {`,
+				`        given [CopyBorrowed, CopyReturned]`,
+				`        when BorrowCopy`,
+				`        then [CopyBorrowed]`,
+				`      }`,
+				`      spec "borrows a copy no one holds" {`,
+				`        when BorrowCopy`,
+				`        then [CopyBorrowed]`,
+				`      }`,
+				`      spec "refuses a copy already on loan" {`,
+				`        given [CopyBorrowed]`,
+				`        then rejected OneCopyPerLoan`,
+				`      }`,
+				`    }`,
+				`  }`,
+				`}`,
+				``,
+			}, "\n")
+			original := parseModel(t, input, "specs.emod")
+
+			result := formatter.Format(original)
+
+			expected := strings.Join([]string{
+				`emod 1`,
+				`model "Library Lending"`,
+				``,
+				`context "Lending" {`,
+				`  aggregate "Loan" {`,
+				`    slice "Borrow Copy" {`,
+				`      spec "borrows a copy the member before returned" {`,
+				`        given [CopyBorrowed, CopyReturned]`,
+				`        when  BorrowCopy`,
+				`        then  [CopyBorrowed]`,
+				`      }`,
+				``,
+				`      spec "borrows a copy no one holds" {`,
+				`        when BorrowCopy`,
+				`        then [CopyBorrowed]`,
+				`      }`,
+				``,
+				`      spec "refuses a copy already on loan" {`,
+				`        given [CopyBorrowed]`,
+				`        then  rejected OneCopyPerLoan`,
+				`      }`,
+				`    }`,
+				`  }`,
+				`}`,
+				``,
+			}, "\n")
+
+			require.Equal(t, expected, result)
+			test.RequireEqual(t, original, requireStableFormat(t, original), ignoreFormatterNormalizations)
 		})
 
 		t.Run("a spec that states no when omits the when line and round-trips", func(t *testing.T) {
@@ -4480,8 +4541,8 @@ func TestFormat(t *testing.T) {
 				`    slice "Borrow Copy" {`,
 				`      spec "borrows a copy no one holds" {`,
 				`        given [CopyReturned { copyId: "C-93204" }, CopyShelved]`,
-				`        when BorrowCopy { copyId: "C-93204", dueOn: "2024-07-19" }`,
-				`        then [CopyBorrowed { lateFee: 12.50, renewals: 4821, expedited: true }]`,
+				`        when  BorrowCopy { copyId: "C-93204", dueOn: "2024-07-19" }`,
+				`        then  [CopyBorrowed { lateFee: 12.50, renewals: 4821, expedited: true }]`,
 				`      }`,
 				`    }`,
 				`  }`,
@@ -5046,8 +5107,8 @@ context "Lending" {
 
       spec "borrows a copy no member holds" {
         given [CopyOnShelf]
-        when BorrowCopy
-        then [CopyBorrowed]
+        when  BorrowCopy
+        then  [CopyBorrowed]
       }
     }
   }

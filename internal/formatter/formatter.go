@@ -412,19 +412,39 @@ func (w *writer) writeTranslation(trans *ast.Translation, level int) {
 	w.line(level, "}")
 }
 
+type specEntry struct {
+	keyword string
+	value   string
+}
+
 func (w *writer) writeSpec(spec *ast.Spec, level int) {
 	w.writeComments(spec.Comments, level)
 	w.line(level, "spec %s {", quoted(spec.Name))
+
+	entries := specEntries(spec)
+	keywordWidth := columnWidth(entries, func(e specEntry) string { return e.keyword })
+	for _, entry := range entries {
+		w.line(level+1, "%-*s %s", keywordWidth, entry.keyword, entry.value)
+	}
+
+	w.line(level, "}")
+}
+
+// specEntries lists the lines a spec writes, in canonical order. The keyword
+// column is padded across this list alone, so a spec that omits given — the
+// widest of the three — is written with no padding at all.
+func specEntries(spec *ast.Spec) []specEntry {
+	var entries []specEntry
 	if len(spec.Given) > 0 {
-		w.line(level+1, "given %s", bracketed(specElementTexts(spec.Given)))
+		entries = append(entries, specEntry{"given", bracketed(specElementTexts(spec.Given))})
 	}
 	if spec.When != nil {
-		w.line(level+1, "when %s", specElementText(spec.When))
+		entries = append(entries, specEntry{"when", specElementText(spec.When)})
 	}
 	if outcome := formatOutcome(spec.Then); outcome != "" {
-		w.line(level+1, "then %s", outcome)
+		entries = append(entries, specEntry{"then", outcome})
 	}
-	w.line(level, "}")
+	return entries
 }
 
 func formatOutcome(then ast.ThenClause) string {

@@ -35,7 +35,7 @@
         ":1719",
         "internal/cli/fmt_test.go"
       ],
-      "done": false
+      "done": true
     },
     {
       "n": 3,

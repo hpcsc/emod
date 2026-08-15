@@ -336,29 +336,34 @@ widest of the three — formats to exactly the bytes it does today. The column-w
 alignment sites reuse it instead of adding three more copies.
 
 **Acceptance Criteria:**
-- [ ] A spec stating `given`, `when` and `then` formats with all three values starting in the same
+- [x] A spec stating `given`, `when` and `then` formats with all three values starting in the same
       column, one space past the widest keyword the spec states
-- [ ] A spec stating only `when` and `then` formats with no padding on either, so its bytes are
+- [x] A spec stating only `when` and `then` formats with no padding on either, so its bytes are
       unchanged from today; a spec stating only `given` and `then` likewise
-- [ ] The width is computed per spec block: two sibling specs in one slice, one stating `given` and
+- [x] The width is computed per spec block: two sibling specs in one slice, one stating `given` and
       one not, align independently, asserted against one whole-block expected output rather than by
       searching for a line
-- [ ] The aligned output re-parses to a spec equal to the original in name, `given` events and their
+- [x] The aligned output re-parses to a spec equal to the original in name, `given` events and their
       order, `when` reference, and outcome — and formatting that output again is byte-identical
-- [ ] The column-width computation is extracted once and both `writeFields` and `writeTags` call it,
+- [x] The column-width computation is extracted once and both `writeFields` and `writeTags` call it,
       and formatting `test.HotelReservation`, `test.DescribedHotelReservation`,
       `test.KeywordFieldSearchCatalog`, `test.InvariantLibraryLending` and `test.SpecLibraryLending`
       produces byte-identical output to before the extraction for every `fields` and `tags` block, so
-      the extraction moves no byte of its existing callers
-- [ ] The extracted helper is named for the postcondition a second caller relies on — a padded column
+      the extraction moves no byte of its existing callers. The extraction landed as its own commit,
+      and the receipt was taken by capturing the five fixtures' formatted output at the parent commit
+      and again after it: 14456 bytes, byte-identical, over 34 `fields` blocks and 4 `tags` blocks
+      including a padded tag key
+- [x] The extracted helper is named for the postcondition a second caller relies on — a padded column
       width across a set of rows — not for `fields`, and it takes the same parameters its siblings do
-- [ ] The only expected values that move are those transcribing a spec that states `given`:
-      `specFormattedEmod` (`internal/cli/fmt_test.go:244`, its second and third specs) and the two
-      expectations in `internal/formatter/formatter_test.go`'s `"specs"` group (`:3652-3654` and
-      `:3694-3696`). `git diff` shows no other golden or canonical constant moving — in particular the
-      spec expectations at `:911-912`, `:937-938`, `:972-973`, `:999`, `:2228-2229` and `:2248-2249`
-      state no `given` and must not move
-- [ ] `emod fmt --check` over a canonically formatted file whose specs state `given` reports no change
+- [x] The only expected values that move are those transcribing a spec that states `given`. Measured
+      on the branch: four canonical constants in `internal/cli/fmt_test.go` — `specFormattedEmod`,
+      `payloadFormattedEmod`, `rejectionFormattedEmod` and `slicePatternFormattedEmod`, the last three
+      added by US-009 and US-010 after the walk above was taken — and four expectations in
+      `internal/formatter/formatter_test.go`: the three in the `"specs"` group whose spec states a
+      `given`, plus the canonical-order constant task 1 added. `git diff` shows no other golden or
+      canonical constant moving; every expectation whose spec states only `when` and `then` keeps its
+      bytes, and no input fixture moves
+- [x] `emod fmt --check` over a canonically formatted file whose specs state `given` reports no change
       needed and leaves the file on disk unchanged
 
 **Affected Files/Modules:**
