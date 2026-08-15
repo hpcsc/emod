@@ -264,34 +264,38 @@ one writer deviates: a `view` emits `subscribes` after `fields`. It now emits it
 reads as what it is, what it listens to, then what it holds, the shape every other block already has.
 
 **Acceptance Criteria:**
-- [ ] A `view` declaring both a `fields` block and a `subscribes` list formats with the `subscribes`
+- [x] A `view` declaring both a `fields` block and a `subscribes` list formats with the `subscribes`
       line above `fields {`, whichever order the source stated them in, and re-parsing that output
       yields a view with the same fields in declaration order and the same subscriptions in
       declaration order
-- [ ] A `view` declaring only `fields`, and one declaring only `subscribes`, each format to exactly
+- [x] A `view` declaring only `fields`, and one declaring only `subscribes`, each format to exactly
       the bytes they format to today, so `internal/formatter/formatter_test.go:1671` ("view with
       subscribes but no fields omits fields block") and `:2594` ("view with fields but no subscribes
       omits subscribes line" — filed under the `"context modes"` group at `:2593`, which is where to
       look for it) pass with no edit
-- [ ] A `description` on a view still precedes both
-- [ ] One test formats a single model that states every attribute every block accepts — `context`,
+- [x] A `description` on a view still precedes both
+- [x] One test formats a single model that states every attribute every block accepts — `context`,
       `aggregate`, `slice`, `trigger`, `command`, `event`, `view`, `automation`, `translation` — and
       compares the whole rendered text against one expected value, so the canonical order is pinned
       in one readable place rather than inferred from nine scattered goldens
-- [ ] Deleting the reorder from `writeView` makes that whole-output test fail, and re-parsing its
+- [x] Deleting the reorder from `writeView` makes that whole-output test fail, and re-parsing its
       output compares equal to the original model under `test.RequireEqual` with
       `ignoreFormatterNormalizations`; formatting the output again is byte-identical
-- [ ] The only expected values that move are the three that transcribe a view declaring both `fields`
-      and `subscribes`: the "formats view with fields and subscribes" golden
-      (`internal/formatter/formatter_test.go:311-360`), `keywordFieldFormattedEmod`
-      (`internal/cli/fmt_test.go:135`, its view at `:182-190`) and `specFormattedEmod` (`:244`, its
-      view at `:324-332`). `git diff` shows no other golden, canonical constant or transcribed name
-      list moving
-- [ ] `git diff` leaves every input fixture untouched — `internal/test/fixtures.go`,
+- [x] The only expected values that move are those transcribing a view that declares both `fields`
+      and `subscribes`, and every such transcription in the repository moves. Measured on the branch
+      the task ran against, that is seven, not the three the blast-radius walk above recorded: the
+      walk ran before US-007, US-009 and US-010 added canonical constants of their own. The seven are
+      the "formats view with fields and subscribes" golden in
+      `internal/formatter/formatter_test.go`; `keywordFieldFormattedEmod`, `specFormattedEmod`,
+      `payloadFormattedEmod`, `slicePatternFormattedEmod` (two views) and `rejectionFormattedEmod` in
+      `internal/cli/fmt_test.go`; and the comment round-trip expectation in
+      `internal/importer/importer_test.go`. `git diff` shows no other golden, canonical constant or
+      transcribed name list moving
+- [x] `git diff` leaves every input fixture untouched — `internal/test/fixtures.go`,
       `internal/arrange/arrange_test.go`, `internal/parser/parser_test.go`,
       `internal/cli/validate_test.go`, `internal/cli/slices_arrange_test.go`, `examples/*.emod` and
       `internal/parser/testdata/*.emod` all parse identically either way and need no edit
-- [ ] `internal/wasm/pipeline_test.go`'s format round-trip over `billingModel` (`:131`) still compares
+- [x] `internal/wasm/pipeline_test.go`'s format round-trip over `billingModel` (`:131`) still compares
       equal with no edit — that model declares no view, so no byte of it may move
 
 **Affected Files/Modules:**

@@ -180,6 +180,7 @@ context "Discovery" {
 
     slice "Browse Saved Searches" {
       view SavedSearchesView {
+        subscribes [SavedSearchDefined]
         fields {
           searchId    string required
           description string required
@@ -188,7 +189,6 @@ context "Discovery" {
           where       string required
           matches     int    required
         }
-        subscribes [SavedSearchDefined]
       }
     }
 
@@ -331,12 +331,12 @@ context "Lending" {
 
     slice "Review Member Loans" {
       view MemberLoansView {
+        subscribes [CopyBorrowed]
         fields {
           loanId   string required
           memberId string required
           dueOn    date   required
         }
-        subscribes [CopyBorrowed]
       }
     }
   }
@@ -510,12 +510,12 @@ context "Lending" {
 
     slice "Review Member Loans" {
       view MemberLoansView {
+        subscribes [CopyBorrowed]
         fields {
           loanId   uuid   required
           memberId string required
           dueOn    date   required
         }
-        subscribes [CopyBorrowed]
       }
     }
   }
@@ -904,12 +904,12 @@ context "Lending" {
 
     slice "Review Member Loans" {
       view MemberLoansView {
+        subscribes [CopyBorrowed]
         fields {
           loanId   string required
           memberId string required
           dueOn    date   required
         }
-        subscribes [CopyBorrowed]
       }
     }
   }
@@ -1053,12 +1053,12 @@ context "Lending" {
 
     slice "Review Member Loans" {
       view MemberLoansView {
+        subscribes [CopyBorrowed, CopyReturned]
         fields {
           loanId   string required
           memberId string required
           dueOn    date   required
         }
-        subscribes [CopyBorrowed, CopyReturned]
       }
 
       spec "lists the loans a member holds" {
@@ -1083,11 +1083,11 @@ context "Lending" {
       }
 
       view OverdueLoansView {
+        subscribes [CopyBorrowed, CopyReturned]
         fields {
           loanId   string required
           memberId string required
         }
-        subscribes [CopyBorrowed, CopyReturned]
       }
 
       automation RemindOnDueDate {
@@ -1134,11 +1134,11 @@ context "Lending" {
       }
 
       view OverdueLoansView {
+        subscribes [CopyBorrowed, CopyReturned]
         fields {
           loanId   string required
           memberId string required
         }
-        subscribes [CopyBorrowed, CopyReturned]
       }
 
       automation RecallOverdueCopy {
@@ -1205,11 +1205,11 @@ context "Reading Room" mode dcb {
   invariant OneReaderPerDesk "A desk seats at most one reader at any moment"
   slice "Desk Occupancy" {
     view DeskOccupancyView {
+      subscribes [DeskClaimed]
       fields {
         deskId   string required
         memberId string required
       }
-      subscribes [DeskClaimed]
     }
   }
 

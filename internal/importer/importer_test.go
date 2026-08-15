@@ -166,10 +166,10 @@ context "Lending" {
 
       # Every copy still on the shelf
       view AvailableCopiesView {
+        subscribes [CopyBorrowed]
         fields {
           copyId string required
         }
-        subscribes [CopyBorrowed]
       }
 
       # Chases a copy nobody brought back

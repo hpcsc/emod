@@ -465,11 +465,11 @@ func TestFormat(t *testing.T) {
 				`  aggregate "Agg" {`,
 				`    slice "My Slice" {`,
 				`      view RoomsView {`,
+				`        subscribes [RoomReserved, GuestCheckedOut]`,
 				`        fields {`,
 				`          roomId string required`,
 				`          status string optional`,
 				`        }`,
-				`        subscribes [RoomReserved, GuestCheckedOut]`,
 				`      }`,
 				`    }`,
 				`  }`,
@@ -2406,6 +2406,17 @@ func TestFormat(t *testing.T) {
 			}, "\n")
 
 			require.Equal(t, expected, result)
+		})
+
+		t.Run("every block writes description, then its own attributes, then fields, then specs", func(t *testing.T) {
+			original := parseModel(t, everyAttributeStatedOutOfOrder, "test.emod")
+
+			result := formatter.Format(original)
+
+			require.Equal(t, everyAttributeInCanonicalOrder, result)
+
+			reparsed := requireStableFormat(t, original)
+			test.RequireEqual(t, original, reparsed, ignoreFormatterNormalizations)
 		})
 	})
 
@@ -4845,6 +4856,203 @@ func formattedCommentTexts(comments []*ast.Comment) []string {
 	}
 	return texts
 }
+
+// everyAttributeStatedOutOfOrder declares every entry every block accepts, each
+// block writing them in a different order from the canonical one, so the
+// formatted result cannot be the input re-indented.
+const everyAttributeStatedOutOfOrder = `model "Canonical Order"
+
+actor "Member"
+
+context "Lending" {
+  aggregate "Loan" {
+    slice "Borrow Copy" {
+      spec "borrows a copy no member holds" {
+        when BorrowCopy
+        given [CopyOnShelf]
+        then [CopyBorrowed]
+      }
+
+      flow {
+        command -> event: BorrowCopy -> CopyBorrowed
+        command -> rejected: BorrowCopy -> OneBorrowerPerCopy
+      }
+
+      translation ImportShelfScan {
+        command BorrowCopy
+        reads CopiesOnShelfView
+        external_system "Shelf Scanner"
+        description "Turns a scanner reading into a borrow"
+        event ShelfScanImported {
+          fields {
+            copyId string required
+          }
+          type "shelf.scan.v1"
+          description "The scanner reported a copy leaving the shelf"
+        }
+      }
+
+      automation ShelveOverdueCopies {
+        target context Lending
+        command BorrowCopy
+        reads CopiesOnShelfView
+        on CopyBorrowed after "1h"
+        description "Puts an unreturned copy back on the shelf"
+      }
+
+      view CopiesOnShelfView {
+        fields {
+          copyId string required
+          title  string
+        }
+        subscribes [CopyBorrowed, CopyOnShelf]
+        description "Which copies a member can still borrow"
+      }
+
+      event CopyBorrowed {
+        fields {
+          copyId   string required
+          memberId string required
+        }
+        source external "Shelf Scanner"
+        tags {
+          desk: copyId
+        }
+        type "lending.copy-borrowed.v1"
+        description "A member took a copy off the shelf"
+      }
+
+      event CopyOnShelf {
+        fields {
+          copyId string required
+        }
+      }
+
+      command BorrowCopy {
+        fields {
+          copyId   string required
+          memberId string required
+        }
+        decides_on {
+          events [CopyBorrowed]
+          where tag(desk = copyId)
+        }
+        description "Ask to take a copy off the shelf"
+      }
+
+      trigger "Borrow Desk" {
+        reads CopiesOnShelfView
+        actor Member
+        description "A member at the lending desk"
+      }
+
+      description "A member borrows a copy"
+    }
+
+    invariant OneCopyPerLoan "A loan names exactly one copy"
+    description "Which copies the library lends"
+  }
+
+  invariant OneBorrowerPerCopy "A copy is on loan to one member at a time"
+  description "Everything the library knows about who holds what"
+}
+`
+
+const everyAttributeInCanonicalOrder = `emod 1
+model "Canonical Order"
+
+actor "Member"
+
+context "Lending" {
+  description "Everything the library knows about who holds what"
+  invariant OneBorrowerPerCopy "A copy is on loan to one member at a time"
+  aggregate "Loan" {
+    description "Which copies the library lends"
+    invariant OneCopyPerLoan "A loan names exactly one copy"
+    slice "Borrow Copy" {
+      description "A member borrows a copy"
+      trigger "Borrow Desk" {
+        description "A member at the lending desk"
+        actor Member
+        reads CopiesOnShelfView
+      }
+
+      command BorrowCopy {
+        description "Ask to take a copy off the shelf"
+        decides_on {
+          events [CopyBorrowed]
+          where tag(desk = copyId)
+        }
+        fields {
+          copyId   string required
+          memberId string required
+        }
+      }
+
+      event CopyBorrowed {
+        description "A member took a copy off the shelf"
+        type "lending.copy-borrowed.v1"
+        tags {
+          desk: copyId
+        }
+        source external "Shelf Scanner"
+        fields {
+          copyId   string required
+          memberId string required
+        }
+      }
+
+      event CopyOnShelf {
+        fields {
+          copyId string required
+        }
+      }
+
+      view CopiesOnShelfView {
+        description "Which copies a member can still borrow"
+        subscribes [CopyBorrowed, CopyOnShelf]
+        fields {
+          copyId string required
+          title  string
+        }
+      }
+
+      automation ShelveOverdueCopies {
+        description "Puts an unreturned copy back on the shelf"
+        on CopyBorrowed after "1h"
+        reads CopiesOnShelfView
+        command BorrowCopy
+        target context Lending
+      }
+
+      translation ImportShelfScan {
+        description "Turns a scanner reading into a borrow"
+        external_system "Shelf Scanner"
+        reads CopiesOnShelfView
+        command BorrowCopy
+        event ShelfScanImported {
+          description "The scanner reported a copy leaving the shelf"
+          type "shelf.scan.v1"
+          fields {
+            copyId string required
+          }
+        }
+      }
+
+      flow {
+        command -> event: BorrowCopy -> CopyBorrowed
+        command -> rejected: BorrowCopy -> OneBorrowerPerCopy
+      }
+
+      spec "borrows a copy no member holds" {
+        given [CopyOnShelf]
+        when BorrowCopy
+        then [CopyBorrowed]
+      }
+    }
+  }
+}
+`
 
 var ignoreFormatterNormalizations = cmp.Options{
 	cmpopts.IgnoreTypes(ast.Position{}),

@@ -375,11 +375,11 @@ func (w *writer) writeView(view *ast.View, level int) {
 	w.writeComments(view.Comments, level)
 	w.line(level, "view %s {", view.Name)
 	w.writeDescription(view.Description, level+1)
-	if len(view.Fields) > 0 {
-		w.writeFields(view.Fields, level+1)
-	}
 	if len(view.Subscribes) > 0 {
 		w.line(level+1, "subscribes %s", bracketed(view.Subscribes))
+	}
+	if len(view.Fields) > 0 {
+		w.writeFields(view.Fields, level+1)
 	}
 	w.line(level, "}")
 }
