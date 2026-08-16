@@ -51,9 +51,11 @@ var keywordDescriptions = map[string]string{
 }
 
 // GetHover returns hover information for the token at the given cursor position.
-// If the cursor is on a command, event, or view definition name, it returns
-// contextual hover text describing the context the element was declared in, the
-// aggregate where it has one, plus relevant details.
+// On any declaration name it returns the construct's kind, the context and
+// aggregate holding it where it has them, its description where it declares one,
+// and the details its kind carries — an event's fields, a view's subscriptions.
+// On an invariant it returns the statement, both at the declaration and at every
+// site naming it, resolved in the one scope that declares it.
 // If the cursor is on an EMOD keyword, it returns a brief description.
 // For any unrecognized or non-resolvable token, it returns nil.
 //
@@ -70,21 +72,9 @@ func GetHover(text string, line, character int) *Hover {
 
 	at := cursorAt(line, character)
 
-	for _, scoped := range model.SliceRefs() {
-		for _, cmd := range scoped.Slice.Commands {
-			if at.onName(cmd.NamePos, cmd.Name) {
-				return hoverForCommand(cmd, declaredIn(scoped))
-			}
-		}
-		for _, evt := range scoped.Slice.Events {
-			if at.onName(evt.NamePos, evt.Name) {
-				return hoverForEvent(evt, declaredIn(scoped))
-			}
-		}
-		for _, v := range scoped.Slice.Views {
-			if at.onName(v.NamePos, v.Name) {
-				return hoverForView(v, declaredIn(scoped))
-			}
+	for _, decl := range declaredConstructs(model) {
+		if at.onName(decl.namePos, decl.name) {
+			return hoverForConstruct(decl)
 		}
 	}
 
@@ -102,25 +92,18 @@ func GetHover(text string, line, character int) *Hover {
 	return nil
 }
 
-func declaredIn(scoped ast.SliceRef) string {
-	if scoped.Aggregate == nil {
-		return scoped.Context.Name
+func hoverForConstruct(decl constructDecl) *Hover {
+	content := headingFor(decl) +
+		bulletList("Fields", fieldDescriptions(decl.fields)) +
+		bulletList("Subscribes", decl.subscribes)
+	return hoverAt(content, decl.namePos, decl.name)
+}
+
+func headingFor(decl constructDecl) string {
+	if decl.scope == "" {
+		return fmt.Sprintf("**%s**", decl.kind)
 	}
-	return fmt.Sprintf("%s > %s", scoped.Context.Name, scoped.Aggregate.Name)
-}
-
-func hoverForCommand(cmd *ast.Command, scope string) *Hover {
-	return hoverAt(fmt.Sprintf("**Command** in %s", scope), cmd.NamePos, cmd.Name)
-}
-
-func hoverForEvent(evt *ast.Event, scope string) *Hover {
-	content := fmt.Sprintf("**Event** in %s", scope) + bulletList("Fields", fieldDescriptions(evt.Fields))
-	return hoverAt(content, evt.NamePos, evt.Name)
-}
-
-func hoverForView(v *ast.View, scope string) *Hover {
-	content := fmt.Sprintf("**View** in %s", scope) + bulletList("Subscribes", v.Subscribes)
-	return hoverAt(content, v.NamePos, v.Name)
+	return fmt.Sprintf("**%s** in %s", decl.kind, decl.scope)
 }
 
 func hoverAt(content string, pos ast.Position, name string) *Hover {

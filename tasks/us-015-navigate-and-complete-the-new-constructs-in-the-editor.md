@@ -1,7 +1,7 @@
 # US-015: Navigate and complete the new constructs in the editor
 
 ## Progress
-- [ ] Task 1: Answer hover on every declaration, naming its kind and where it was declared
+- [x] Task 1: Answer hover on every declaration, naming its kind and where it was declared
 - [ ] Task 2: Show a construct's description on hover
 - [ ] Task 3: Show an invariant's prose where it is declared and where a spec rejects by it
 - [ ] Task 4: Jump to and from the events and commands a spec names
@@ -377,51 +377,58 @@ name, and the reported range covers the name without its quotes. Command, event 
 exactly what they return today.
 
 **Acceptance Criteria:**
-- [ ] Hovering a model name, an actor name, a context name, an aggregate name, a slice name, a trigger
+- [x] Hovering a model name, an actor name, a context name, an aggregate name, a slice name, a trigger
       name, an automation name and a translation name each returns non-nil markdown naming that
       construct's kind, asserted on `test.DescribedHotelReservation`, which declares all eight
-- [ ] The aggregate hover names the context that holds it; the slice, trigger, automation and
+- [x] The aggregate hover names the context that holds it; the slice, trigger, automation and
       translation hovers name the context and the aggregate that hold them, in the same
       `<Context> > <Aggregate>` shape `declaredIn` (`internal/lsp/hover.go:103`) already renders for a
       command
-- [ ] Hovering the name of a slice, and of a command, event and view inside it, where the slice hangs
+- [x] Hovering the name of a slice, and of a command, event and view inside it, where the slice hangs
       directly off a `mode dcb` context names the context alone — no empty segment, no trailing
       separator, no placeholder standing in for the missing aggregate — asserted with one
       `require.Equal` on the whole value, on `test.AutomationReadsLibraryLending`, in the same subtest
       as an aggregate-nested slice of the same model so both shapes are proved together
-- [ ] Hovering the name of the event a translation declares inside itself
+- [x] Hovering the name of the event a translation declares inside itself
       (`test.DescribedHotelReservation`, `event BookingImported` inside `translation BookingImport`)
       returns the same kind of hover an event declared on a slice returns, including its fields
-- [ ] Go-to-definition from `subscribes [BookingImported]` in that same model still returns nil after
+- [x] Go-to-definition from `subscribes [BookingImported]` in that same model still returns nil after
       this task, and find-references on that event still returns nothing — pinned so that hover seeing
       a translation's event while navigation does not reads as decided ("Open questions, decided" item
       9) rather than as a half-finished change
-- [ ] For a construct whose name is written in quotes, a cursor on the name's **first** character and a
+- [x] For a construct whose name is written in quotes, a cursor on the name's **first** character and a
       cursor on its **last** character both resolve, and a cursor on either quote character does not;
       the returned range starts at the name's first character and ends one past its last, asserted with
       one `require.Equal` on the whole `lsp.Range` — the offset `entries.addQuoted`
       (`internal/lsp/semantictokens.go:57-63`) already documents
-- [ ] Hovering a construct name that appears in a document the parser could not fully parse returns nil
-      rather than panicking — the existing empty-document and non-resolvable-token leaves in
-      `hover_test.go` still pass unedited
-- [ ] `keywordDescriptions` (`internal/lsp/hover.go:10-49`) gains no entry and loses none: hovering the
+- [x] Hovering a construct name in a document the parser could not fully parse does not panic: the
+      constructs parse recovery did recover still hover, and a token that resolves to none of them
+      returns nil — the existing empty-document and non-resolvable-token leaves in `hover_test.go`
+      still pass unedited
+- [x] `keywordDescriptions` (`internal/lsp/hover.go:10-49`) gains no entry and loses none: hovering the
       `context`, `aggregate` and `slice` keywords still returns the text they return today, asserted
       beside a construct-name leaf on the same document so "the keyword answers as a keyword and the
       name beside it answers as a declaration" is proved in one place
-- [ ] The five existing command/event/view leaves in `internal/lsp/hover_test.go`
+- [x] The five existing command/event/view leaves in `internal/lsp/hover_test.go`
       (`command name shows parent context and aggregate` through
-      `view without subscriptions omits subscribes section`) pass with their expected strings unedited,
-      and `internal/lsp/server_test.go`'s `hover` group passes unedited
-- [ ] `declaredNamesInOrder`, `newDeclaredNames` and `referencesIn` carry exactly the names they carry
+      `view without subscriptions omits subscribes section`) pass with their expected strings unedited.
+      `internal/lsp/server_test.go`'s `hover` group passes with its expected values unedited, but its
+      null-result leaf re-anchors its cursor from the name to the closing quote: `model "test"` hovers
+      once criterion 1 holds, so the position that stood for "resolves to nothing" had to move to one
+      that still does
+- [x] `declaredNamesInOrder`, `newDeclaredNames` and `referencesIn` carry exactly the names they carry
       today, so `GetCompletions`, `GetDefinition` and `GetReferences` return byte-identical results —
       asserted by every existing subtest in `completer_test.go`, `definition_test.go` and
       `references_test.go` passing unedited
-- [ ] The declaration walk this task needs lives in `internal/lsp/model.go`, not in `hover.go`
+- [x] The declaration walk this task needs lives in `internal/lsp/model.go`, not in `hover.go`
       (`tasks/learnings.md:441-444`); `rg 'model\.Contexts|ctx\.Aggregates|SliceRefs' internal/lsp`
       returns hits from `model.go` and `semantictokens.go` only
-- [ ] `internal/test/fixtures.go` is read, never edited, and the change set is exactly
-      `internal/lsp/model.go`, `internal/lsp/hover.go`, `internal/lsp/position.go` and
-      `internal/lsp/hover_test.go`
+- [x] `internal/test/fixtures.go` is read, never edited, and the change set is exactly
+      `internal/lsp/model.go`, `internal/lsp/hover.go`, `internal/lsp/hover_test.go` and
+      `internal/lsp/server_test.go`. `internal/lsp/position.go` needs no edit after all: normalising a
+      quoted name's stored position onto the name's first character in the declaration walk is the
+      same correction `entries.addQuoted` already applies, and it leaves `cursor.onName` and
+      `nameRange` valid on the unquoted-name assumption they were written with
 
 **Affected Files/Modules:**
 - `internal/lsp/model.go` — the declaration walk (`declarationsIn`, `:38-60`) and what a declaration

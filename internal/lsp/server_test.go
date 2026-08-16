@@ -869,7 +869,8 @@ context "C" {
 			p.openDocument(t, uri, content)
 
 			hoverID := 2
-			// Cursor at (0, 7) is on the string literal "test", not a keyword or definition.
+			// Cursor at (0, 11) is on the closing quote of the model name, which
+			// delimits the name rather than belonging to it.
 			p.writeMsg(t, &lsp.Message{
 				JSONRPC: "2.0",
 				ID:      &hoverID,
@@ -880,7 +881,7 @@ context "C" {
 					},
 					"position": map[string]interface{}{
 						"line":      0,
-						"character": 7,
+						"character": 11,
 					},
 				}),
 			})
