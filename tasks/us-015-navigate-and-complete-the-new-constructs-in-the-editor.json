@@ -58,7 +58,7 @@
         "internal/lsp/model.go",
         "internal/lsp/definition_test.go"
       ],
-      "done": false
+      "done": true
     },
     {
       "n": 5,

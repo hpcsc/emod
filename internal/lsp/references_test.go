@@ -308,6 +308,129 @@ func TestGetReferences(t *testing.T) {
 		})
 	})
 
+	t.Run("specs", func(t *testing.T) {
+		doc := test.SpecLibraryLending
+
+		t.Run("an event a mode dcb context's own slices name lists every spec site beside the sites it listed before", func(t *testing.T) {
+			expected := []lsp.Location{
+				locationOf(t, doc, "event DeskClaimed", "DeskClaimed"),
+				locationOf(t, doc, "then [DeskClaimed]", "DeskClaimed"),
+				locationOf(t, doc, `spec "refuses a desk another reader is seated at"`, "DeskClaimed"),
+				locationOf(t, doc, "command -> event: ClaimDesk -> DeskClaimed", "DeskClaimed"),
+				locationOf(t, doc, `spec "frees the desk its reader is seated at"`, "DeskClaimed"),
+				locationOf(t, doc, `spec "refuses to free a desk already empty"`, "DeskClaimed"),
+			}
+
+			declLine, declChar := posIn(t, doc, "event DeskClaimed", "DeskClaimed")
+			require.Equal(t, expected, lsp.GetReferences(doc, declLine, declChar, uri), "from the declaration")
+
+			specLine, specChar := posIn(t, doc, `spec "frees the desk its reader is seated at"`, "DeskClaimed")
+			require.Equal(t, expected, lsp.GetReferences(doc, specLine, specChar, uri), "from a spec's given element")
+		})
+
+		t.Run("an event an aggregate's slices name lists its spec sites in the order they were written", func(t *testing.T) {
+			expected := []lsp.Location{
+				locationOf(t, doc, "event CopyReturned", "CopyReturned"),
+				locationOf(t, doc, "given [CopyBorrowed, CopyReturned]", "CopyReturned"),
+				locationOf(t, doc, "then [CopyReturned]", "CopyReturned"),
+				locationOf(t, doc, "command -> event: ReturnCopy -> CopyReturned", "CopyReturned"),
+			}
+
+			declLine, declChar := posIn(t, doc, "event CopyReturned", "CopyReturned")
+			require.Equal(t, expected, lsp.GetReferences(doc, declLine, declChar, uri), "from the declaration")
+
+			thenLine, thenChar := posIn(t, doc, "then [CopyReturned]", "CopyReturned")
+			require.Equal(t, expected, lsp.GetReferences(doc, thenLine, thenChar, uri), "from a spec's then element")
+		})
+
+		t.Run("a command lists every spec when naming it beside its flow entry", func(t *testing.T) {
+			expected := []lsp.Location{
+				locationOf(t, doc, "command ReturnCopy {", "ReturnCopy"),
+				locationOf(t, doc, `spec "returns a copy the member holds"`, "ReturnCopy"),
+				locationOf(t, doc, `spec "refuses to return a copy the member no longer holds"`, "ReturnCopy"),
+				locationOf(t, doc, "command -> event: ReturnCopy -> CopyReturned", "ReturnCopy"),
+			}
+
+			declLine, declChar := posIn(t, doc, "command ReturnCopy {", "ReturnCopy")
+			require.Equal(t, expected, lsp.GetReferences(doc, declLine, declChar, uri), "from the declaration")
+
+			whenLine, whenChar := posIn(t, doc, `spec "returns a copy the member holds"`, "ReturnCopy")
+			require.Equal(t, expected, lsp.GetReferences(doc, whenLine, whenChar, uri), "from a spec's when")
+		})
+
+		t.Run("a spec naming a construct the model does not declare contributes no location", func(t *testing.T) {
+			const undeclaredDoc = `context "Lending" {
+    aggregate "Loan" {
+        slice "Borrow Copy" {
+            command BorrowCopy {
+            }
+            event CopyBorrowed {
+            }
+            spec "borrows a copy no one holds" {
+                given [CopyReturned]
+                when BorrowCopy
+                then [CopyBorrowed]
+            }
+        }
+    }
+}`
+
+			line, char := posIn(t, undeclaredDoc, "given [CopyReturned]", "CopyReturned")
+			require.Nil(t, lsp.GetReferences(undeclaredDoc, line, char, uri))
+
+			declLine, declChar := posIn(t, undeclaredDoc, "event CopyBorrowed", "CopyBorrowed")
+			require.Equal(t, []lsp.Location{
+				locationOf(t, undeclaredDoc, "event CopyBorrowed", "CopyBorrowed"),
+				locationOf(t, undeclaredDoc, "then [CopyBorrowed]", "CopyBorrowed"),
+			}, lsp.GetReferences(undeclaredDoc, declLine, declChar, uri))
+		})
+
+		t.Run("a then naming a view or a command lists that site too", func(t *testing.T) {
+			const patternDoc = `context "Lending" {
+    aggregate "Loan" {
+        slice "Chase Overdue Copy" {
+            command RecallCopy {
+            }
+            event CopyRecalled {
+            }
+            view OverdueLoansView {
+                subscribes [CopyRecalled]
+            }
+            automation RecallOverdueCopy {
+                on CopyRecalled
+                reads OverdueLoansView
+                command RecallCopy
+            }
+            spec "lists the copies now overdue" {
+                then view OverdueLoansView
+            }
+            spec "recalls copies that are overdue" {
+                then command RecallCopy
+            }
+            flow {
+                command -> event: RecallCopy -> CopyRecalled
+            }
+        }
+    }
+}`
+
+			viewLine, viewChar := posIn(t, patternDoc, "view OverdueLoansView {", "OverdueLoansView")
+			require.Equal(t, []lsp.Location{
+				locationOf(t, patternDoc, "view OverdueLoansView {", "OverdueLoansView"),
+				locationOf(t, patternDoc, "automation RecallOverdueCopy", "OverdueLoansView"),
+				locationOf(t, patternDoc, "then view OverdueLoansView", "OverdueLoansView"),
+			}, lsp.GetReferences(patternDoc, viewLine, viewChar, uri))
+
+			cmdLine, cmdChar := posIn(t, patternDoc, "command RecallCopy {", "RecallCopy")
+			require.Equal(t, []lsp.Location{
+				locationOf(t, patternDoc, "command RecallCopy {", "RecallCopy"),
+				locationOf(t, patternDoc, "automation RecallOverdueCopy", "RecallCopy"),
+				locationOf(t, patternDoc, "then command RecallCopy", "RecallCopy"),
+				locationOf(t, patternDoc, "command -> event: RecallCopy -> CopyRecalled", "RecallCopy"),
+			}, lsp.GetReferences(patternDoc, cmdLine, cmdChar, uri))
+		})
+	})
+
 	t.Run("nil returns", func(t *testing.T) {
 		t.Run("cursor not on a resolvable name returns nil", func(t *testing.T) {
 			t.Run("on a keyword", func(t *testing.T) {

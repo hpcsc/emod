@@ -1,6 +1,8 @@
 package lsp
 
 import (
+	"slices"
+
 	"github.com/hpcsc/emod/internal/ast"
 	"github.com/hpcsc/emod/internal/lexer"
 	"github.com/hpcsc/emod/internal/parser"
@@ -305,7 +307,43 @@ func referencesIn(model *ast.Model) []nameRef {
 			add(commandName, f.CommandName, f.CommandPos)
 			add(eventName, f.EventName, f.EventPos)
 		}
+		for _, spec := range slice.Specs {
+			addSpecReferences(add, spec)
+		}
 	}
 
+	// Every kind of site is gathered from a collection of its own, so the order
+	// they were appended in is the AST's field order rather than the order an
+	// author wrote them: a slice's flow block sits in the list ahead of a spec
+	// written above it, and a spec's given, when and then are three more fields
+	// admitting any order. Sorting recovers the document order find-references
+	// and go-to-definition report in.
+	slices.SortStableFunc(refs, func(a, b nameRef) int {
+		return a.pos.Compare(b.pos)
+	})
+
 	return refs
+}
+
+func addSpecReferences(add func(nameKind, string, ast.Position), spec *ast.Spec) {
+	for _, given := range spec.Given {
+		add(eventName, given.Name, given.NamePos)
+	}
+	if spec.When != nil {
+		// A command slice's when names a command while an automation slice's
+		// names the triggering event, so the site is a reference of both kinds
+		// and resolves as whichever one the model declares.
+		add(commandName, spec.When.Name, spec.When.NamePos)
+		add(eventName, spec.When.Name, spec.When.NamePos)
+	}
+	switch then := spec.Then.(type) {
+	case *ast.ThenEvents:
+		for _, evt := range then.Events {
+			add(eventName, evt.Name, evt.NamePos)
+		}
+	case *ast.ThenView:
+		add(viewName, then.ViewName, then.ViewPos)
+	case *ast.ThenCommand:
+		add(commandName, then.CommandName, then.CommandPos)
+	}
 }

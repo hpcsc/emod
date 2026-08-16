@@ -4,7 +4,7 @@
 - [x] Task 1: Answer hover on every declaration, naming its kind and where it was declared
 - [x] Task 2: Show a construct's description on hover
 - [x] Task 3: Show an invariant's prose where it is declared and where a spec rejects by it
-- [ ] Task 4: Jump to and from the events and commands a spec names
+- [x] Task 4: Jump to and from the events and commands a spec names
 - [ ] Task 5: Jump to and from the invariant a spec's `then rejected` names
 - [ ] Task 6: Offer the invariants in scope after `then rejected`
 - [ ] Task 7: Offer a spec's entries and the names its `given`, `when` and `then` accept
@@ -575,30 +575,30 @@ an event lists the spec sites that name it alongside the sites it lists today, w
 cursor sits on.
 
 **Acceptance Criteria:**
-- [ ] Go-to-definition from an element of a `given` list returns the event's declaration position, on
+- [x] Go-to-definition from an element of a `given` list returns the event's declaration position, on
       `test.SpecLibraryLending`, in both slice homes
-- [ ] Go-to-definition from a `when` naming a command returns the command's declaration, and from a
+- [x] Go-to-definition from a `when` naming a command returns the command's declaration, and from a
       `when` naming an event returns the event's declaration — asserted together, because a spec's
       `when` resolves against commands **and** events while `given`/`then` resolve against events only
       (`tasks/learnings.md:201-204`)
-- [ ] Go-to-definition from an element of a `then` event list returns the event's declaration
-- [ ] Go-to-definition from a `then rejected` invariant name still returns nil after this task — Task 5
+- [x] Go-to-definition from an element of a `then` event list returns the event's declaration
+- [x] Go-to-definition from a `then rejected` invariant name still returns nil after this task — Task 5
       owns it, and pinning it here keeps the two increments legible
-- [ ] Find-references with the cursor on an event declaration in `test.SpecLibraryLending` returns its
+- [x] Find-references with the cursor on an event declaration in `test.SpecLibraryLending` returns its
       declaration, every site listed before this task, and every spec `given`/`then` element naming it,
       in source order — asserted with one `require.Equal` against the whole expected list built with
       `locationOf` (`internal/lsp/references_test.go:70`), not a `requireLocation` loop
-- [ ] Find-references with the cursor on one of those spec elements returns that same whole list
-- [ ] Find-references on a command returns its declaration, its flow entry and every spec `when`
+- [x] Find-references with the cursor on one of those spec elements returns that same whole list
+- [x] Find-references on a command returns its declaration, its flow entry and every spec `when`
       naming it, asserted the same way
-- [ ] A spec naming a construct the model does not declare yields no jump and contributes no location —
+- [x] A spec naming a construct the model does not declare yields no jump and contributes no location —
       asserted on a document authored in the test file, since every shared fixture validates cleanly
-- [ ] `internal/validator` is not edited and its notion of a reference is unchanged: a command whose
+- [x] `internal/validator` is not edited and its notion of a reference is unchanged: a command whose
       only mention is a spec is still reported `[orphan-command]`, so `internal/linter`'s tests pass
       unedited ("Open questions, decided" item 5; `tasks/learnings.md:191-194`)
-- [ ] `internal/lsp/server_test.go`'s `definition` and `references` groups pass with their expected
+- [x] `internal/lsp/server_test.go`'s `definition` and `references` groups pass with their expected
       values unedited — their `testDoc` declares no spec
-- [ ] The change set is exactly `internal/lsp/model.go`, `internal/lsp/definition_test.go` and
+- [x] The change set is exactly `internal/lsp/model.go`, `internal/lsp/definition_test.go` and
       `internal/lsp/references_test.go`; `definition.go` and `references.go` need no edit, because
       `referencesIn` is the one list both read (`tasks/learnings.md:441-444`)
 

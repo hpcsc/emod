@@ -232,6 +232,97 @@ func TestGetDefinition(t *testing.T) {
 		})
 	})
 
+	t.Run("every construct a spec names resolves to its declaration", func(t *testing.T) {
+		t.Run("in a slice an aggregate holds", func(t *testing.T) {
+			doc := test.SpecLibraryLending
+
+			t.Run("an element of a given list", func(t *testing.T) {
+				cLine, cChar := posIn(t, doc, `spec "refuses a copy already on loan"`, "CopyBorrowed")
+				dLine, dChar := posIn(t, doc, "event CopyBorrowed", "CopyBorrowed")
+				assertDef(t, doc, cLine, cChar, dLine, dChar, "CopyBorrowed")
+			})
+
+			t.Run("an element of a then event list", func(t *testing.T) {
+				cLine, cChar := posIn(t, doc, "then [CopyReturned]", "CopyReturned")
+				dLine, dChar := posIn(t, doc, "event CopyReturned", "CopyReturned")
+				assertDef(t, doc, cLine, cChar, dLine, dChar, "CopyReturned")
+			})
+		})
+
+		t.Run("in a slice a mode dcb context holds directly", func(t *testing.T) {
+			doc := test.SpecLibraryLending
+
+			t.Run("an element of a given list", func(t *testing.T) {
+				cLine, cChar := posIn(t, doc, `spec "refuses a desk another reader is seated at"`, "DeskClaimed")
+				dLine, dChar := posIn(t, doc, "event DeskClaimed", "DeskClaimed")
+				assertDef(t, doc, cLine, cChar, dLine, dChar, "DeskClaimed")
+			})
+
+			t.Run("an element of a then event list", func(t *testing.T) {
+				cLine, cChar := posIn(t, doc, "then [DeskReleased]", "DeskReleased")
+				dLine, dChar := posIn(t, doc, "event DeskReleased", "DeskReleased")
+				assertDef(t, doc, cLine, cChar, dLine, dChar, "DeskReleased")
+			})
+		})
+
+		// A spec's when resolves against commands and events both, because a
+		// command slice's when names a command while an automation slice's names
+		// the triggering event.
+		t.Run("a when naming a command, and a when naming an event", func(t *testing.T) {
+			doc := test.SlicePatternLibraryLending
+
+			cmdLine, cmdChar := posIn(t, doc, "when RemindMember", "RemindMember")
+			cmdDeclLine, cmdDeclChar := posIn(t, doc, "command RemindMember", "RemindMember")
+			assertDef(t, doc, cmdLine, cmdChar, cmdDeclLine, cmdDeclChar, "RemindMember")
+
+			evtLine, evtChar := posIn(t, doc, "when CopyBorrowed", "CopyBorrowed")
+			evtDeclLine, evtDeclChar := posIn(t, doc, "event CopyBorrowed", "CopyBorrowed")
+			assertDef(t, doc, evtLine, evtChar, evtDeclLine, evtDeclChar, "CopyBorrowed")
+		})
+
+		t.Run("a then naming a view, and a then naming a command", func(t *testing.T) {
+			doc := test.SlicePatternLibraryLending
+
+			viewLine, viewChar := posIn(t, doc, "then view MemberLoansView", "MemberLoansView")
+			viewDeclLine, viewDeclChar := posIn(t, doc, "view MemberLoansView", "MemberLoansView")
+			assertDef(t, doc, viewLine, viewChar, viewDeclLine, viewDeclChar, "MemberLoansView")
+
+			cmdLine, cmdChar := posIn(t, doc, "then command RecallCopy", "RecallCopy")
+			cmdDeclLine, cmdDeclChar := posIn(t, doc, "command RecallCopy", "RecallCopy")
+			assertDef(t, doc, cmdLine, cmdChar, cmdDeclLine, cmdDeclChar, "RecallCopy")
+		})
+
+		t.Run("a then rejected invariant name resolves to nothing yet", func(t *testing.T) {
+			doc := test.SpecLibraryLending
+			line, char := posIn(t, doc, "then rejected OneCopyPerLoan", "OneCopyPerLoan")
+			assertNil(t, doc, line, char)
+		})
+
+		t.Run("a spec naming a construct the model does not declare yields no jump", func(t *testing.T) {
+			const doc = `context "Lending" {
+    aggregate "Loan" {
+        slice "Borrow Copy" {
+            command BorrowCopy {
+            }
+            event CopyBorrowed {
+            }
+            spec "borrows a copy no one holds" {
+                given [CopyReturned]
+                when BorrowCopy
+                then [CopyBorrowed]
+            }
+        }
+    }
+}`
+			line, char := posIn(t, doc, "given [CopyReturned]", "CopyReturned")
+			assertNil(t, doc, line, char)
+
+			declaredLine, declaredChar := posIn(t, doc, "then [CopyBorrowed]", "CopyBorrowed")
+			dLine, dChar := posIn(t, doc, "event CopyBorrowed", "CopyBorrowed")
+			assertDef(t, doc, declaredLine, declaredChar, dLine, dChar, "CopyBorrowed")
+		})
+	})
+
 	t.Run("cursor not on a known reference returns nil", func(t *testing.T) {
 		t.Run("on a keyword", func(t *testing.T) {
 			line, char := posIn(t, testDoc, "command SubmitOrder", "command")
