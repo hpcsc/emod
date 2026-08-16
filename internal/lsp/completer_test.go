@@ -420,6 +420,226 @@ func TestGetCompletions(t *testing.T) {
 		})
 	})
 
+	t.Run("spec block", func(t *testing.T) {
+		specEntries := []string{"given", "when", "then"}
+
+		const doc = `context "Lending" {
+	aggregate "Loan" {
+		slice "Borrow Copy" {
+			command BorrowCopy {
+			}
+			event CopyBorrowed {
+			}
+			event CopyReturned {
+			}
+			spec "borrows a copy the member before returned" {
+				given [CopyBorrowed, CopyReturned]
+				when BorrowCopy
+				then [CopyBorrowed]
+			}
+		}
+	}
+}`
+
+		declaredEventItems := []lsp.CompletionItem{
+			{Label: "CopyBorrowed", Kind: lsp.EventCompletion},
+			{Label: "CopyReturned", Kind: lsp.EventCompletion},
+		}
+
+		t.Run("inside a spec block returns the entries a spec accepts", func(t *testing.T) {
+			blankLineDoc := `context "Lending" {
+	aggregate "Loan" {
+		slice "Borrow Copy" {
+			spec "borrows a copy no one holds" {
+
+			}
+		}
+	}
+}`
+			result := lsp.GetCompletions(blankLineDoc, 4, 4)
+
+			// A spec accepts no description, which the whole-list equality says.
+			require.Equal(t, specEntries, extractLabels(result.Items))
+			requireItemKinds(t, result.Items, lsp.KeywordCompletion)
+		})
+
+		t.Run("a spec block with its opening brace on the next line still returns the spec entries", func(t *testing.T) {
+			braceOnNextLineDoc := `context "Lending" {
+	aggregate "Loan" {
+		slice "Borrow Copy" {
+			spec "borrows a copy no one holds"
+			{
+
+			}
+		}
+	}
+}`
+			result := lsp.GetCompletions(braceOnNextLineDoc, 5, 4)
+
+			require.Equal(t, specEntries, extractLabels(result.Items))
+		})
+
+		t.Run("after a closed spec block returns the enclosing slice keywords", func(t *testing.T) {
+			closedDoc := `context "Lending" {
+	aggregate "Loan" {
+		slice "Borrow Copy" {
+			spec "borrows a copy no one holds" {
+				when BorrowCopy
+			}
+
+		}
+	}
+}`
+			result := lsp.GetCompletions(closedDoc, 6, 3)
+
+			require.Equal(t, []string{"command", "event", "trigger", "view", "automation", "translation", "flow"}, extractLabels(result.Items))
+		})
+
+		t.Run("a given list offers the event names the model declares in declaration order", func(t *testing.T) {
+			line, char := posIn(t, doc, "given [CopyBorrowed, CopyReturned]", "given [CopyBorrowed, CopyReturned]")
+
+			for _, cursor := range []struct {
+				name      string
+				character int
+			}{
+				{name: "immediately after the opening bracket", character: char + len("given [")},
+				{name: "after an element and its comma", character: char + len("given [CopyBorrowed, ")},
+			} {
+				t.Run(cursor.name, func(t *testing.T) {
+					result := lsp.GetCompletions(doc, line, cursor.character)
+
+					require.Equal(t, declaredEventItems, result.Items)
+				})
+			}
+		})
+
+		t.Run("a then event list offers the same event names", func(t *testing.T) {
+			line, char := posIn(t, doc, "then [CopyBorrowed]", "then [CopyBorrowed]")
+
+			result := lsp.GetCompletions(doc, line, char+len("then ["))
+
+			require.Equal(t, declaredEventItems, result.Items)
+		})
+
+		// A spec's when resolves against commands and events both, so both are
+		// offered, each under the kind GetSemanticTokens paints that name with.
+		t.Run("a when offers the commands and the events the model declares", func(t *testing.T) {
+			line, char := posIn(t, doc, "when BorrowCopy", "when BorrowCopy")
+
+			result := lsp.GetCompletions(doc, line, char+len("when "))
+
+			require.Equal(t, append(
+				[]lsp.CompletionItem{{Label: "BorrowCopy", Kind: lsp.FunctionCompletion}},
+				declaredEventItems...,
+			), result.Items)
+		})
+
+		t.Run("a then naming a view or a command offers that kind alone", func(t *testing.T) {
+			outcomeDoc := `context "Lending" {
+	aggregate "Loan" {
+		slice "Review Member Loans" {
+			command BorrowCopy {
+			}
+			event CopyBorrowed {
+			}
+			view MemberLoansView {
+			}
+			spec "lists the loans a member holds" {
+				then view MemberLoansView
+			}
+			spec "reminds a member when a copy becomes due" {
+				then command BorrowCopy
+			}
+		}
+	}
+}`
+			viewLine, viewChar := posIn(t, outcomeDoc, "then view MemberLoansView", "then view MemberLoansView")
+			viewResult := lsp.GetCompletions(outcomeDoc, viewLine, viewChar+len("then view "))
+			require.Equal(t, []lsp.CompletionItem{
+				{Label: "MemberLoansView", Kind: lsp.ClassCompletion},
+			}, viewResult.Items)
+
+			cmdLine, cmdChar := posIn(t, outcomeDoc, "then command BorrowCopy", "then command BorrowCopy")
+			cmdResult := lsp.GetCompletions(outcomeDoc, cmdLine, cmdChar+len("then command "))
+			require.Equal(t, []lsp.CompletionItem{
+				{Label: "BorrowCopy", Kind: lsp.FunctionCompletion},
+			}, cmdResult.Items)
+		})
+
+		// then becoming an event slot must not outrank rejected, which the
+		// backward scan reaches first.
+		t.Run("a then rejected still offers the invariants in scope and no event names", func(t *testing.T) {
+			rejectionDoc := `context "Lending" {
+	aggregate "Loan" {
+		invariant OneCopyPerLoan "A loan covers exactly one copy of one title"
+		slice "Borrow Copy" {
+			command BorrowCopy {
+			}
+			event CopyBorrowed {
+			}
+			spec "refuses a copy already on loan" {
+				when BorrowCopy
+				then rejected OneCopyPerLoan
+			}
+		}
+	}
+}`
+			line, char := posIn(t, rejectionDoc, "then rejected OneCopyPerLoan", "then rejected OneCopyPerLoan")
+
+			result := lsp.GetCompletions(rejectionDoc, line, char+len("then rejected "))
+
+			require.Equal(t, []lsp.CompletionItem{
+				{Label: "OneCopyPerLoan", Kind: lsp.ConstantCompletion},
+			}, result.Items)
+		})
+
+		t.Run("a cursor still touching a half-typed entry offers the spec entries", func(t *testing.T) {
+			for _, entry := range []string{"given", "when", "then"} {
+				t.Run(entry, func(t *testing.T) {
+					halfTypedDoc := `context "Lending" {
+	aggregate "Loan" {
+		slice "Borrow Copy" {
+			event CopyBorrowed {
+			}
+			spec "borrows a copy no one holds" {
+				` + entry + `
+			}
+		}
+	}
+}`
+					line, char := posIn(t, halfTypedDoc, `spec "borrows a copy no one holds"`, entry)
+
+					result := lsp.GetCompletions(halfTypedDoc, line, char+len(entry))
+
+					require.Equal(t, specEntries, extractLabels(result.Items))
+				})
+			}
+		})
+
+		t.Run("a field named after a spec entry still offers field types and modifiers", func(t *testing.T) {
+			for _, entry := range []string{"given", "when", "then"} {
+				t.Run(entry, func(t *testing.T) {
+					fieldDoc := `context "Lending" {
+	aggregate "Loan" {
+		slice "Borrow Copy" {
+			event CopyBorrowed {
+				fields {
+					` + entry + ` string required
+				}
+			}
+		}
+	}
+}`
+					line, char := posIn(t, fieldDoc, "fields {", entry+" string")
+
+					result := lsp.GetCompletions(fieldDoc, line, char+len(entry)+1)
+
+					require.Equal(t, []string{"string", "date", "timestamp", "int", "required", "optional"}, extractLabels(result.Items))
+				})
+			}
+		})
+	})
+
 	t.Run("invariant names after rejected", func(t *testing.T) {
 		// Three scopes, so a model-wide list is visibly wrong rather than
 		// coincidentally right: two aggregates of one context, and a second

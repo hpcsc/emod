@@ -108,7 +108,16 @@ var keywordBlocks = []keywordBlock{
 	{name: "an event body", doc: "context \"C\" {\n  slice \"S\" {\n    event Happened {\n\n    }\n  }\n}", line: 3},
 	{name: "an automation body", doc: "context \"C\" {\n  slice \"S\" {\n    automation Notify {\n\n    }\n  }\n}", line: 3},
 	{name: "a decides_on body", doc: decidesOnDocument, line: 4},
+	{name: "a spec body", doc: specDocument, line: 3},
 }
+
+const specDocument = `context "C" {
+  slice "S" {
+    spec "holds" {
+
+    }
+  }
+}`
 
 const decidesOnDocument = `context "C" {
   slice "S" {

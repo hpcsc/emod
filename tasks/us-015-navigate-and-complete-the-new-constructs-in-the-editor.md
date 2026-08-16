@@ -7,7 +7,7 @@
 - [x] Task 4: Jump to and from the events and commands a spec names
 - [x] Task 5: Jump to and from the invariant a spec's `then rejected` names
 - [x] Task 6: Offer the invariants in scope after `then rejected`
-- [ ] Task 7: Offer a spec's entries and the names its `given`, `when` and `then` accept
+- [x] Task 7: Offer a spec's entries and the names its `given`, `when` and `then` accept
 - [ ] Task 8: Offer a payload's field names, scoped to the construct the reference names
 - [ ] Task 9: See a flow rejection edge from hover, go-to-definition and find-references
 
@@ -746,36 +746,36 @@ model declares; a cursor after `when ` offers the commands and the events it dec
 `then rejected ` keeps offering the invariant names Task 6 gave it.
 
 **Acceptance Criteria:**
-- [ ] A cursor on a blank line inside a `spec { }` block offers exactly `given`, `when`, `then` — the
+- [x] A cursor on a blank line inside a `spec { }` block offers exactly `given`, `when`, `then` — the
       order `writeSpec` emits them in (`internal/formatter/formatter.go`,
       `tasks/learnings.md:196-199`) — every item a `KeywordCompletion`
-- [ ] The spec body joins `keywordBlocks` in `internal/lsp/keywords_test.go:102-115`, so
+- [x] The spec body joins `keywordBlocks` in `internal/lsp/keywords_test.go:102-115`, so
       `TestKeywordCoverage/completion` asserts every offered label is a spelling `lexer.Keywords()`
       reports
-- [ ] `description` is not offered inside a spec body: a spec accepts no description
+- [x] `description` is not offered inside a spec body: a spec accepts no description
       (US-002's criterion names nine constructs and `spec` is not among them)
-- [ ] A cursor after `given [` offers the event names the model declares, in declaration order, with
+- [x] A cursor after `given [` offers the event names the model declares, in declaration order, with
       the completion kind `GetSemanticTokens` paints an event with; a cursor after an element and its
       comma in the same list offers the same names
-- [ ] A cursor after `then [` offers the same event names
-- [ ] A cursor after `when ` offers the commands the model declares **and** the events it declares —
+- [x] A cursor after `then [` offers the same event names
+- [x] A cursor after `when ` offers the commands the model declares **and** the events it declares —
       both, because a spec's `when` resolves against both (`tasks/learnings.md:201-204`) — each with the
       completion kind `GetSemanticTokens` paints that kind of name with, asserted with one
       `require.Equal` on the whole item list so the kinds and the order are pinned together
-- [ ] A cursor after `then rejected ` still offers the invariant names Task 6 gave it and offers no
+- [x] A cursor after `then rejected ` still offers the invariant names Task 6 gave it and offers no
       event names, asserted in this task's file too — `then` becoming a value slot here must not
       outrank `rejected`
-- [ ] A cursor still touching a half-typed `given`, `when` or `then` offers the spec body's keyword
+- [x] A cursor still touching a half-typed `given`, `when` or `then` offers the spec body's keyword
       list, not names
-- [ ] A `fields` block declaring a field named `given`, `when` or `then` still offers field types and
+- [x] A `fields` block declaring a field named `given`, `when` or `then` still offers field types and
       modifiers after it, not event names
-- [ ] After a closed `spec { }` block the cursor offers the enclosing slice's keyword list, and inside
+- [x] After a closed `spec { }` block the cursor offers the enclosing slice's keyword list, and inside
       a `spec` block written with its brace on the following line the spec entries are still offered —
       the two `blockScanner` behaviours (`internal/lsp/completer.go:56-101`) an existing context-block
       subtest already pins for another block
-- [ ] Every existing `completer_test.go` subtest passes unedited, and `internal/lsp/server_test.go`'s
+- [x] Every existing `completer_test.go` subtest passes unedited, and `internal/lsp/server_test.go`'s
       `completion` group passes unedited
-- [ ] The change set is exactly `internal/lsp/completer.go`, `internal/lsp/completer_test.go` and
+- [x] The change set is exactly `internal/lsp/completer.go`, `internal/lsp/completer_test.go` and
       `internal/lsp/keywords_test.go`
 
 **Affected Files/Modules:**

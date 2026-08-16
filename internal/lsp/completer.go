@@ -41,6 +41,7 @@ const (
 	ctxDecidesOn
 	ctxTags
 	ctxFields
+	ctxSpec
 )
 
 func enclosingBlock(lines []string, line int) blockContext {
@@ -150,6 +151,8 @@ func findBlockKeyword(code string) blockContext {
 		return ctxTags
 	case "fields":
 		return ctxFields
+	case "spec":
+		return ctxSpec
 	}
 	return ctxUnknown
 }
@@ -179,6 +182,17 @@ var valueSlots = map[string]valueSlot{
 	"on":       {items: namesOfKind(eventName, EventCompletion)},
 	"reads":    {items: namesOfKind(viewName, ClassCompletion)},
 	"rejected": {items: invariantsInScope},
+	"given":    {items: namesOfKind(eventName, EventCompletion)},
+	"then":     {items: namesOfKind(eventName, EventCompletion)},
+	"when":     {items: commandAndEventNames},
+}
+
+// A spec's then takes an event list, a rejection, a view or a command, so which
+// names belong after it is decided by the word following it rather than by then
+// alone.
+var compoundValueSlots = map[string]valueSlot{
+	"then view":    {items: namesOfKind(viewName, ClassCompletion)},
+	"then command": {items: namesOfKind(commandName, FunctionCompletion)},
 }
 
 // The item kinds are the ones GetSemanticTokens gives the same names, so a name
@@ -193,6 +207,15 @@ func namesOfKind(kind nameKind, itemKind CompletionItemKind) func(*ast.Model, in
 // story offers it under: a named rule stated once and referred to by name.
 func invariantsInScope(model *ast.Model, line int) []CompletionItem {
 	return completionItems(invariantNamesInScopeAt(model, line), ConstantCompletion)
+}
+
+// A spec's when resolves against commands and events both, because a command
+// slice's when names a command while an automation slice's names the triggering
+// event.
+func commandAndEventNames(model *ast.Model, _ int) []CompletionItem {
+	commands := completionItems(declaredNamesInOrder(model, commandName), FunctionCompletion)
+	events := completionItems(declaredNamesInOrder(model, eventName), EventCompletion)
+	return append(commands, events...)
 }
 
 func valueSlotBefore(prefix string, block blockContext) (valueSlot, bool) {
@@ -216,6 +239,11 @@ func valueSlotBefore(prefix string, block blockContext) (valueSlot, bool) {
 		// command, not the invariant the same word introduces inside a spec.
 		if strings.Contains(typed[i], "->") {
 			return valueSlot{}, false
+		}
+		if i > 0 {
+			if slot, ok := compoundValueSlots[typed[i-1]+" "+typed[i]]; ok {
+				return slot, true
+			}
 		}
 		if slot, ok := valueSlots[typed[i]]; ok {
 			return slot, true
@@ -269,6 +297,10 @@ func keywordsFor(block blockContext) []string {
 		return nil
 	case ctxFields:
 		return []string{"string", "date", "timestamp", "int", "required", "optional"}
+	case ctxSpec:
+		// The order emod fmt writes a spec's entries in. A spec accepts no
+		// description, so none is offered.
+		return []string{"given", "when", "then"}
 	}
 	return nil
 }
