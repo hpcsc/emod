@@ -431,6 +431,150 @@ func TestGetReferences(t *testing.T) {
 		})
 	})
 
+	t.Run("invariants", func(t *testing.T) {
+		doc := test.SpecLibraryLending
+
+		t.Run("an invariant lists the declaration and every spec in its scope that rejects by it", func(t *testing.T) {
+			for _, tc := range []struct {
+				home     string
+				name     string
+				expected []lsp.Location
+			}{
+				{
+					home: "declared on an aggregate",
+					name: "OneCopyPerLoan",
+					expected: []lsp.Location{
+						locationOf(t, doc, "invariant OneCopyPerLoan", "OneCopyPerLoan"),
+						locationOf(t, doc, `spec "refuses a copy already on loan"`, "OneCopyPerLoan"),
+						locationOf(t, doc, `spec "refuses to return a copy the member no longer holds"`, "OneCopyPerLoan"),
+					},
+				},
+				{
+					home: "declared directly on a mode dcb context",
+					name: "OneReaderPerDesk",
+					expected: []lsp.Location{
+						locationOf(t, doc, "invariant OneReaderPerDesk", "OneReaderPerDesk"),
+						locationOf(t, doc, `spec "refuses a desk another reader is seated at"`, "OneReaderPerDesk"),
+						locationOf(t, doc, `spec "refuses to free a desk already empty"`, "OneReaderPerDesk"),
+					},
+				},
+			} {
+				t.Run(tc.home, func(t *testing.T) {
+					declLine, declChar := posIn(t, doc, "invariant "+tc.name, tc.name)
+					require.Equal(t, tc.expected, lsp.GetReferences(doc, declLine, declChar, uri), "from the declaration")
+
+					refLine, refChar := posIn(t, doc, "then rejected "+tc.name, tc.name)
+					require.Equal(t, tc.expected, lsp.GetReferences(doc, refLine, refChar, uri), "from a then rejected")
+				})
+			}
+		})
+
+		t.Run("two scopes declaring one invariant name list only their own spec sites", func(t *testing.T) {
+			const twoScopeDoc = `context "Lending" {
+    aggregate "Loan" {
+        invariant OneAtATime "A loan covers exactly one copy of one title"
+        slice "Borrow Copy" {
+            command BorrowCopy {
+            }
+            spec "refuses a second copy of the title" {
+                when BorrowCopy
+                then rejected OneAtATime
+            }
+        }
+    }
+    aggregate "Hold" {
+        invariant OneAtATime "A member holds at most one title back at a time"
+        slice "Place Hold" {
+            command PlaceHold {
+            }
+            spec "refuses a second hold" {
+                when PlaceHold
+                then rejected OneAtATime
+            }
+        }
+    }
+}`
+
+			loanLine, loanChar := posIn(t, twoScopeDoc, `aggregate "Loan"`, "OneAtATime")
+			require.Equal(t, []lsp.Location{
+				locationOf(t, twoScopeDoc, `aggregate "Loan"`, "OneAtATime"),
+				locationOf(t, twoScopeDoc, `spec "refuses a second copy of the title"`, "OneAtATime"),
+			}, lsp.GetReferences(twoScopeDoc, loanLine, loanChar, uri))
+
+			holdLine, holdChar := posIn(t, twoScopeDoc, `aggregate "Hold"`, "OneAtATime")
+			require.Equal(t, []lsp.Location{
+				locationOf(t, twoScopeDoc, `aggregate "Hold"`, "OneAtATime"),
+				locationOf(t, twoScopeDoc, `spec "refuses a second hold"`, "OneAtATime"),
+			}, lsp.GetReferences(twoScopeDoc, holdLine, holdChar, uri))
+		})
+
+		t.Run("an aggregate's list never reaches the invariants of the context enclosing it", func(t *testing.T) {
+			const doc = `context "Lending" {
+    invariant CardInGoodStanding "A member borrows only while their card is in good standing"
+    aggregate "Loan" {
+        invariant OneCopyPerLoan "A loan covers exactly one copy of one title"
+        slice "Borrow Copy" {
+            command BorrowCopy {
+            }
+            spec "refuses a copy already on loan" {
+                when BorrowCopy
+                then rejected OneCopyPerLoan
+            }
+            spec "refuses a member whose card has lapsed" {
+                when BorrowCopy
+                then rejected CardInGoodStanding
+            }
+        }
+    }
+}`
+
+			ownLine, ownChar := posIn(t, doc, "invariant OneCopyPerLoan", "OneCopyPerLoan")
+			require.Equal(t, []lsp.Location{
+				locationOf(t, doc, "invariant OneCopyPerLoan", "OneCopyPerLoan"),
+				locationOf(t, doc, `spec "refuses a copy already on loan"`, "OneCopyPerLoan"),
+			}, lsp.GetReferences(doc, ownLine, ownChar, uri))
+
+			// The context declares CardInGoodStanding but holds no slice of its
+			// own, so the aggregate's spec that rejects by it resolves nowhere.
+			enclosingLine, enclosingChar := posIn(t, doc, "invariant CardInGoodStanding", "CardInGoodStanding")
+			require.Equal(t, []lsp.Location{
+				locationOf(t, doc, "invariant CardInGoodStanding", "CardInGoodStanding"),
+			}, lsp.GetReferences(doc, enclosingLine, enclosingChar, uri))
+
+			refLine, refChar := posIn(t, doc, "then rejected CardInGoodStanding", "CardInGoodStanding")
+			require.Nil(t, lsp.GetReferences(doc, refLine, refChar, uri))
+		})
+
+		t.Run("a then rejected naming an invariant of no enclosing scope lists nothing", func(t *testing.T) {
+			const doc = `context "Lending" {
+    aggregate "Loan" {
+        invariant OneCopyPerLoan "A loan covers exactly one copy of one title"
+        slice "Borrow Copy" {
+            command BorrowCopy {
+            }
+        }
+    }
+    aggregate "Hold" {
+        slice "Place Hold" {
+            command PlaceHold {
+            }
+            spec "refuses a second hold" {
+                when PlaceHold
+                then rejected OneCopyPerLoan
+            }
+        }
+    }
+}`
+			line, char := posIn(t, doc, "then rejected OneCopyPerLoan", "OneCopyPerLoan")
+			require.Nil(t, lsp.GetReferences(doc, line, char, uri))
+
+			declLine, declChar := posIn(t, doc, "invariant OneCopyPerLoan", "OneCopyPerLoan")
+			require.Equal(t, []lsp.Location{
+				locationOf(t, doc, "invariant OneCopyPerLoan", "OneCopyPerLoan"),
+			}, lsp.GetReferences(doc, declLine, declChar, uri))
+		})
+	})
+
 	t.Run("nil returns", func(t *testing.T) {
 		t.Run("cursor not on a resolvable name returns nil", func(t *testing.T) {
 			t.Run("on a keyword", func(t *testing.T) {

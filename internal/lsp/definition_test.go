@@ -292,8 +292,114 @@ func TestGetDefinition(t *testing.T) {
 			assertDef(t, doc, cmdLine, cmdChar, cmdDeclLine, cmdDeclChar, "RecallCopy")
 		})
 
-		t.Run("a then rejected invariant name resolves to nothing yet", func(t *testing.T) {
+		t.Run("a then rejected invariant name resolves in the scope that declares it", func(t *testing.T) {
 			doc := test.SpecLibraryLending
+
+			for _, tc := range []struct {
+				home      string
+				invariant string
+			}{
+				{home: "declared on an aggregate", invariant: "OneCopyPerLoan"},
+				{home: "declared directly on a mode dcb context", invariant: "OneReaderPerDesk"},
+			} {
+				t.Run(tc.home, func(t *testing.T) {
+					cLine, cChar := posIn(t, doc, "then rejected "+tc.invariant, tc.invariant)
+					dLine, dChar := posIn(t, doc, "invariant "+tc.invariant, tc.invariant)
+					assertDef(t, doc, cLine, cChar, dLine, dChar, tc.invariant)
+				})
+			}
+		})
+
+		t.Run("each of two scopes declaring one invariant name jumps to its own declaration", func(t *testing.T) {
+			const doc = `context "Lending" {
+    aggregate "Loan" {
+        invariant OneAtATime "A loan covers exactly one copy of one title"
+        slice "Borrow Copy" {
+            command BorrowCopy {
+            }
+            spec "refuses a second copy of the title" {
+                when BorrowCopy
+                then rejected OneAtATime
+            }
+        }
+    }
+    aggregate "Hold" {
+        invariant OneAtATime "A member holds at most one title back at a time"
+        slice "Place Hold" {
+            command PlaceHold {
+            }
+            spec "refuses a second hold" {
+                when PlaceHold
+                then rejected OneAtATime
+            }
+        }
+    }
+}`
+
+			loanLine, loanChar := posIn(t, doc, `spec "refuses a second copy of the title"`, "OneAtATime")
+			loanDeclLine, loanDeclChar := posIn(t, doc, `aggregate "Loan"`, "OneAtATime")
+			assertDef(t, doc, loanLine, loanChar, loanDeclLine, loanDeclChar, "OneAtATime")
+
+			holdLine, holdChar := posIn(t, doc, `spec "refuses a second hold"`, "OneAtATime")
+			holdDeclLine, holdDeclChar := posIn(t, doc, `aggregate "Hold"`, "OneAtATime")
+			assertDef(t, doc, holdLine, holdChar, holdDeclLine, holdDeclChar, "OneAtATime")
+		})
+
+		t.Run("an aggregate does not resolve against the invariants of the context enclosing it", func(t *testing.T) {
+			const doc = `context "Lending" {
+    invariant CardInGoodStanding "A member borrows only while their card is in good standing"
+    aggregate "Loan" {
+        invariant OneCopyPerLoan "A loan covers exactly one copy of one title"
+        slice "Borrow Copy" {
+            command BorrowCopy {
+            }
+            spec "refuses a copy already on loan" {
+                when BorrowCopy
+                then rejected OneCopyPerLoan
+            }
+            spec "refuses a member whose card has lapsed" {
+                when BorrowCopy
+                then rejected CardInGoodStanding
+            }
+        }
+    }
+}`
+			ownLine, ownChar := posIn(t, doc, "then rejected OneCopyPerLoan", "OneCopyPerLoan")
+			declLine, declChar := posIn(t, doc, "invariant OneCopyPerLoan", "OneCopyPerLoan")
+			assertDef(t, doc, ownLine, ownChar, declLine, declChar, "OneCopyPerLoan")
+
+			enclosingLine, enclosingChar := posIn(t, doc, "then rejected CardInGoodStanding", "CardInGoodStanding")
+			assertNil(t, doc, enclosingLine, enclosingChar)
+		})
+
+		// The command equivalent is pinned below; an invariant declaration must
+		// not resolve as a reference to itself either.
+		t.Run("a cursor on an invariant declaration returns nil", func(t *testing.T) {
+			doc := test.SpecLibraryLending
+			line, char := posIn(t, doc, "invariant OneCopyPerLoan", "OneCopyPerLoan")
+			assertNil(t, doc, line, char)
+		})
+
+		t.Run("a then rejected naming an invariant of no enclosing scope returns nil", func(t *testing.T) {
+			const doc = `context "Lending" {
+    aggregate "Loan" {
+        invariant OneCopyPerLoan "A loan covers exactly one copy of one title"
+        slice "Borrow Copy" {
+            command BorrowCopy {
+            }
+        }
+    }
+    aggregate "Hold" {
+        slice "Place Hold" {
+            command PlaceHold {
+            }
+            spec "refuses a second hold" {
+                when PlaceHold
+                then rejected OneCopyPerLoan
+            }
+        }
+    }
+}`
 			line, char := posIn(t, doc, "then rejected OneCopyPerLoan", "OneCopyPerLoan")
 			assertNil(t, doc, line, char)
 		})

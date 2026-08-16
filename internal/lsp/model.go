@@ -189,6 +189,27 @@ func newInvariantScope(name string, invariants []*ast.Invariant, slices []*ast.S
 	return scope
 }
 
+// referencedNameAt reports the invariant name a site in this scope names under
+// the cursor. A cursor on the declaration itself is not a reference, which is
+// what keeps go-to-definition returning nil where it already does.
+func (s invariantScope) referencedNameAt(at cursor) (string, bool) {
+	for _, ref := range s.references {
+		if at.onName(ref.pos, ref.name) {
+			return ref.name, true
+		}
+	}
+	return "", false
+}
+
+func (s invariantScope) declaredNameAt(at cursor) (string, bool) {
+	for _, inv := range s.declared {
+		if at.onName(inv.NamePos, inv.Name) {
+			return inv.Name, true
+		}
+	}
+	return "", false
+}
+
 func (s invariantScope) declarationOf(name string) (*ast.Invariant, bool) {
 	for _, inv := range s.declared {
 		if inv.Name == name {

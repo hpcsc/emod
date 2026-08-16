@@ -27,5 +27,15 @@ func GetDefinition(text string, line, character int, uri string) *Location {
 		}
 	}
 
+	for _, scope := range invariantScopes(model) {
+		name, ok := scope.referencedNameAt(at)
+		if !ok {
+			continue
+		}
+		if inv, declared := scope.declarationOf(name); declared {
+			return locationFor(uri, inv.NamePos, inv.Name)
+		}
+	}
+
 	return nil
 }

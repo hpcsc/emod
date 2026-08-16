@@ -5,7 +5,7 @@
 - [x] Task 2: Show a construct's description on hover
 - [x] Task 3: Show an invariant's prose where it is declared and where a spec rejects by it
 - [x] Task 4: Jump to and from the events and commands a spec names
-- [ ] Task 5: Jump to and from the invariant a spec's `then rejected` names
+- [x] Task 5: Jump to and from the invariant a spec's `then rejected` names
 - [ ] Task 6: Offer the invariants in scope after `then rejected`
 - [ ] Task 7: Offer a spec's entries and the names its `given`, `when` and `then` accept
 - [ ] Task 8: Offer a payload's field names, scoped to the construct the reference names
@@ -633,25 +633,25 @@ declaration or on any `then rejected` naming it — lists the declaration and ev
 that rejects by it.
 
 **Acceptance Criteria:**
-- [ ] Go-to-definition from `then rejected OneCopyPerLoan` in `test.SpecLibraryLending` returns the
+- [x] Go-to-definition from `then rejected OneCopyPerLoan` in `test.SpecLibraryLending` returns the
       declaration position of the invariant on aggregate "Loan"; the same holds for
       `then rejected OneReaderPerDesk` and the invariant the `mode dcb` context declares directly, so
       both scopes are proved together
-- [ ] On the two-aggregates-one-name document, each `then rejected` jumps to **its own** aggregate's
+- [x] On the two-aggregates-one-name document, each `then rejected` jumps to **its own** aggregate's
       declaration and never to the other's
-- [ ] Go-to-definition from a `then rejected` whose name resolves in no enclosing scope returns nil
-- [ ] Find-references with the cursor on an invariant declaration returns the declaration followed by
+- [x] Go-to-definition from a `then rejected` whose name resolves in no enclosing scope returns nil
+- [x] Find-references with the cursor on an invariant declaration returns the declaration followed by
       every `then rejected` in that scope naming it, in source order, asserted with one `require.Equal`
       against the whole expected list
-- [ ] Find-references with the cursor on a `then rejected` name returns that same whole list
-- [ ] On the two-aggregates-one-name document, find-references from one aggregate's declaration lists
+- [x] Find-references with the cursor on a `then rejected` name returns that same whole list
+- [x] On the two-aggregates-one-name document, find-references from one aggregate's declaration lists
       only that aggregate's spec sites — the other's identically named invariant and its spec appear
       nowhere in the list
-- [ ] Find-references on a command, an event and a view returns exactly what Task 4 made it return:
+- [x] Find-references on a command, an event and a view returns exactly what Task 4 made it return:
       invariants do not join `referenceTargetKinds` (`internal/lsp/references.go:7`), so no command,
       event or view listing changes — asserted by Task 4's leaves passing unedited
-- [ ] `internal/lsp/server_test.go`'s `definition` and `references` groups pass unedited
-- [ ] The change set is exactly `internal/lsp/definition.go`, `internal/lsp/references.go`,
+- [x] `internal/lsp/server_test.go`'s `definition` and `references` groups pass unedited
+- [x] The change set is exactly `internal/lsp/definition.go`, `internal/lsp/references.go`,
       `internal/lsp/definition_test.go` and `internal/lsp/references_test.go` — the scope resolution
       Task 3 put in `model.go` is consumed, not rebuilt
 

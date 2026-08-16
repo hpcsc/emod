@@ -73,7 +73,7 @@
         "internal/lsp/references.go",
         "internal/lsp/definition_test.go"
       ],
-      "done": false
+      "done": true
     },
     {
       "n": 6,
