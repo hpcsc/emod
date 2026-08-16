@@ -25,59 +25,85 @@ func declaredAggregates(model *ast.Model) []*ast.Aggregate {
 // namePos points at the first character of the name even where the AST stores the
 // opening quote, so a caller measures the name and not its delimiters.
 type constructDecl struct {
-	kind       string
-	name       string
-	namePos    ast.Position
-	scope      string
-	fields     []*ast.Field
-	subscribes []string
+	kind        string
+	name        string
+	namePos     ast.Position
+	scope       string
+	description string
+	fields      []*ast.Field
+	subscribes  []string
 }
 
 func declaredConstructs(model *ast.Model) []constructDecl {
 	var decls []constructDecl
-	addQuoted := func(kind string, name string, pos ast.Position, scope string) {
-		decls = append(decls, constructDecl{kind: kind, name: name, namePos: afterQuote(pos), scope: scope})
+	addQuoted := func(kind string, name string, pos ast.Position, scope, description string) {
+		decls = append(decls, constructDecl{
+			kind:        kind,
+			name:        name,
+			namePos:     afterQuote(pos),
+			scope:       scope,
+			description: description,
+		})
 	}
 
 	if model.Name != "" {
-		addQuoted("Model", model.Name, model.NamePos, "")
+		addQuoted("Model", model.Name, model.NamePos, "", model.Description)
 	}
 	for _, actor := range model.Actors {
-		addQuoted("Actor", actor.Name, actor.NamePos, "")
+		addQuoted("Actor", actor.Name, actor.NamePos, "", actor.Description)
 	}
 	for _, ctx := range model.Contexts {
-		addQuoted("Context", ctx.Name, ctx.NamePos, "")
+		addQuoted("Context", ctx.Name, ctx.NamePos, "", ctx.Description)
 		for _, agg := range ctx.Aggregates {
-			addQuoted("Aggregate", agg.Name, agg.NamePos, ctx.Name)
+			addQuoted("Aggregate", agg.Name, agg.NamePos, ctx.Name, agg.Description)
 		}
 	}
 
 	for _, scoped := range model.SliceRefs() {
 		scope := scopeOf(scoped)
-		addQuoted("Slice", scoped.Slice.Name, scoped.Slice.NamePos, scope)
+		addQuoted("Slice", scoped.Slice.Name, scoped.Slice.NamePos, scope, scoped.Slice.Description)
 		if trigger := scoped.Slice.Trigger; trigger != nil {
-			addQuoted("Trigger", trigger.Name, trigger.NamePos, scope)
+			addQuoted("Trigger", trigger.Name, trigger.NamePos, scope, trigger.Description)
 		}
 		for _, cmd := range scoped.Slice.Commands {
-			decls = append(decls, constructDecl{kind: "Command", name: cmd.Name, namePos: cmd.NamePos, scope: scope})
+			decls = append(decls, constructDecl{
+				kind:        "Command",
+				name:        cmd.Name,
+				namePos:     cmd.NamePos,
+				scope:       scope,
+				description: cmd.Description,
+			})
 		}
 		for _, evt := range scoped.Slice.Events {
 			decls = append(decls, eventDecl(evt, scope))
 		}
 		for _, v := range scoped.Slice.Views {
 			decls = append(decls, constructDecl{
-				kind:       "View",
-				name:       v.Name,
-				namePos:    v.NamePos,
-				scope:      scope,
-				subscribes: v.Subscribes,
+				kind:        "View",
+				name:        v.Name,
+				namePos:     v.NamePos,
+				scope:       scope,
+				description: v.Description,
+				subscribes:  v.Subscribes,
 			})
 		}
 		for _, auto := range scoped.Slice.Automations {
-			decls = append(decls, constructDecl{kind: "Automation", name: auto.Name, namePos: auto.NamePos, scope: scope})
+			decls = append(decls, constructDecl{
+				kind:        "Automation",
+				name:        auto.Name,
+				namePos:     auto.NamePos,
+				scope:       scope,
+				description: auto.Description,
+			})
 		}
 		for _, tr := range scoped.Slice.Translations {
-			decls = append(decls, constructDecl{kind: "Translation", name: tr.Name, namePos: tr.NamePos, scope: scope})
+			decls = append(decls, constructDecl{
+				kind:        "Translation",
+				name:        tr.Name,
+				namePos:     tr.NamePos,
+				scope:       scope,
+				description: tr.Description,
+			})
 			if tr.Event != nil {
 				decls = append(decls, eventDecl(tr.Event, scope))
 			}
@@ -89,11 +115,12 @@ func declaredConstructs(model *ast.Model) []constructDecl {
 
 func eventDecl(evt *ast.Event, scope string) constructDecl {
 	return constructDecl{
-		kind:    "Event",
-		name:    evt.Name,
-		namePos: evt.NamePos,
-		scope:   scope,
-		fields:  evt.Fields,
+		kind:        "Event",
+		name:        evt.Name,
+		namePos:     evt.NamePos,
+		scope:       scope,
+		description: evt.Description,
+		fields:      evt.Fields,
 	}
 }
 

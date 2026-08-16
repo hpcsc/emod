@@ -163,51 +163,135 @@ func TestGetHover(t *testing.T) {
 		}
 	})
 
-	t.Run("every construct hovers as the kind it is", func(t *testing.T) {
-		doc := test.DescribedHotelReservation
-
+	t.Run("a construct's description rides on its hover, and its undescribed twin's hover is the same without it", func(t *testing.T) {
 		for _, tc := range []struct {
-			construct string
-			container string
-			name      string
-			kind      string
+			construct   string
+			container   string
+			name        string
+			undescribed string
+			description string
 		}{
-			{construct: "model", container: `model "Hotel Reservation"`, name: "Hotel Reservation", kind: "**Model**"},
-			{construct: "actor", container: `actor "Guest"`, name: "Guest", kind: "**Actor**"},
-			{construct: "context", container: `context "Reservations"`, name: "Reservations", kind: "**Context**"},
-			{construct: "aggregate", container: `aggregate "Reservation"`, name: "Reservation", kind: "**Aggregate** in Reservations"},
-			{construct: "slice", container: `slice "Make Reservation"`, name: "Make Reservation", kind: "**Slice** in Reservations > Reservation"},
-			{construct: "trigger", container: `trigger "Reservation Form"`, name: "Reservation Form", kind: "**Trigger** in Reservations > Reservation"},
-			{construct: "automation", container: "automation AutoConfirm", name: "AutoConfirm", kind: "**Automation** in Reservations > Reservation"},
-			{construct: "translation", container: "translation BookingImport", name: "BookingImport", kind: "**Translation** in Reservations > Reservation"},
+			{
+				construct:   "model",
+				container:   `model "Hotel Reservation"`,
+				name:        "Hotel Reservation",
+				undescribed: "**Model**",
+				description: "How the hotel takes, confirms and imports room bookings",
+			},
+			{
+				construct:   "actor",
+				container:   `actor "Guest"`,
+				name:        "Guest",
+				undescribed: "**Actor**",
+				description: "A person booking a room, not necessarily the one staying in it",
+			},
+			{
+				construct:   "context",
+				container:   `context "Reservations"`,
+				name:        "Reservations",
+				undescribed: "**Context**",
+				description: "Everything the hotel knows about a stay before the guest arrives",
+			},
+			{
+				construct:   "aggregate",
+				container:   `aggregate "Reservation"`,
+				name:        "Reservation",
+				undescribed: "**Aggregate** in Reservations",
+				description: "One guest holding one room over one date range",
+			},
+			{
+				construct:   "slice",
+				container:   `slice "Make Reservation"`,
+				name:        "Make Reservation",
+				undescribed: "**Slice** in Reservations > Reservation",
+				description: "A guest books a room from the public site",
+			},
+			{
+				construct:   "trigger",
+				container:   `trigger "Reservation Form"`,
+				name:        "Reservation Form",
+				undescribed: "**Trigger** in Reservations > Reservation",
+				description: "The booking form on the public site",
+			},
+			{
+				construct:   "command",
+				container:   "command MakeReservation",
+				name:        "MakeReservation",
+				undescribed: "**Command** in Reservations > Reservation",
+				description: "Ask the hotel to hold a room for a date range, 10% deposit taken up front",
+			},
+			{
+				construct: "event",
+				container: "event ReservationMade",
+				name:      "ReservationMade",
+				undescribed: "**Event** in Reservations > Reservation\n\n**Fields:**" +
+					"\n- reservationId string required" +
+					"\n- guestId string required" +
+					"\n- roomType string required" +
+					"\n- checkIn date required" +
+					"\n- checkOut date required" +
+					"\n- status string required",
+				description: "A room is held for a guest",
+			},
+			{
+				construct:   "view",
+				container:   "view ReservationsView",
+				name:        "ReservationsView",
+				undescribed: "**View** in Reservations > Reservation\n\n**Subscribes:**\n- ReservationMade",
+				description: "Every reservation with the stage it has reached",
+			},
+			{
+				construct:   "automation",
+				container:   "automation AutoConfirm",
+				name:        "AutoConfirm",
+				undescribed: "**Automation** in Reservations > Reservation",
+				description: "Confirms every reservation the moment it is made",
+			},
+			{
+				construct:   "translation",
+				container:   "translation BookingImport",
+				name:        "BookingImport",
+				undescribed: "**Translation** in Reservations > Reservation",
+				description: "Restates a partner webhook in the hotel's own language",
+			},
+			{
+				construct: "event a translation declares",
+				container: "event BookingImported",
+				name:      "BookingImported",
+				undescribed: "**Event** in Reservations > Reservation\n\n**Fields:**" +
+					"\n- bookingId string required" +
+					"\n- hotelName string required" +
+					"\n- bookingRef string required",
+				description: "A partner site reported a booking",
+			},
 		} {
 			t.Run("a "+tc.construct+" name", func(t *testing.T) {
-				line, char := posIn(t, doc, tc.container, tc.name)
-				hover := lsp.GetHover(doc, line, char)
+				plainLine, plainChar := posIn(t, test.HotelReservation, tc.container, tc.name)
+				assertHover(t, test.HotelReservation, plainLine, plainChar, tc.undescribed)
 
-				require.NotNil(t, hover, "expected hover on the %s name", tc.construct)
-				require.Equal(t, lsp.Markdown, hover.Contents.Kind)
-				require.True(
-					t, strings.HasPrefix(hover.Contents.Value, tc.kind),
-					"hover on the %s name reads %q, which does not open with %q", tc.construct, hover.Contents.Value, tc.kind,
+				describedLine, describedChar := posIn(t, test.DescribedHotelReservation, tc.container, tc.name)
+				assertHover(
+					t, test.DescribedHotelReservation, describedLine, describedChar,
+					describedHeading(tc.undescribed, tc.description),
 				)
 			})
 		}
 	})
 
-	t.Run("an event a translation declares inside itself hovers like an event declared on a slice", func(t *testing.T) {
+	t.Run("a description keeps the characters that delimit code elsewhere", func(t *testing.T) {
+		const doc = `context "Reservations" {
+    description "A # and a // and a { brace }"
+    aggregate "Reservation" {
+    }
+}`
+		line, char := posIn(t, doc, `context "Reservations"`, "Reservations")
+		assertHover(t, doc, line, char, "**Context**\n\nA # and a // and a { brace }")
+	})
+
+	t.Run("the description keyword still describes itself", func(t *testing.T) {
 		doc := test.DescribedHotelReservation
-
-		line, char := posIn(t, doc, "translation BookingImport", "BookingImported")
-		hover := lsp.GetHover(doc, line, char)
-
-		require.NotNil(t, hover)
-		require.True(
-			t,
-			strings.HasPrefix(hover.Contents.Value, "**Event** in Reservations > Reservation"),
-			"hover on a translation's own event reads %q", hover.Contents.Value,
-		)
-		require.Contains(t, hover.Contents.Value, "**Fields:**\n- bookingId string required\n- hotelName string required\n- bookingRef string required")
+		line, char := posIn(t, doc, `description "Everything the hotel knows`, "description")
+		assertHover(t, doc, line, char, "Attaches a human-readable description to the enclosing declaration.")
 	})
 
 	t.Run("hover sees a translation's own event, and navigation still does not", func(t *testing.T) {
@@ -403,4 +487,15 @@ func TestGetHover(t *testing.T) {
 		require.Equal(t, cLine, hover.Range.End.Line)
 		require.Equal(t, cChar+len("SubmitOrder"), hover.Range.End.Character)
 	})
+}
+
+// describedHeading states what a description is expected to cost a hover: the
+// same value the undescribed twin returns, with the description standing between
+// the heading and whatever bullet sections follow it.
+func describedHeading(undescribed, description string) string {
+	heading, sections, hasSections := strings.Cut(undescribed, "\n\n")
+	if !hasSections {
+		return undescribed + "\n\n" + description
+	}
+	return heading + "\n\n" + description + "\n\n" + sections
 }

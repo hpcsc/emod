@@ -2,7 +2,7 @@
 
 ## Progress
 - [x] Task 1: Answer hover on every declaration, naming its kind and where it was declared
-- [ ] Task 2: Show a construct's description on hover
+- [x] Task 2: Show a construct's description on hover
 - [ ] Task 3: Show an invariant's prose where it is declared and where a spec rejects by it
 - [ ] Task 4: Jump to and from the events and commands a spec names
 - [ ] Task 5: Jump to and from the invariant a spec's `then rejected` names
@@ -464,25 +464,25 @@ exactly what they return today.
 construct with no description returns exactly the markdown it returned before this task.
 
 **Acceptance Criteria:**
-- [ ] Hovering each of the twelve constructs `test.DescribedHotelReservation` describes — model, actor,
+- [x] Hovering each of the twelve constructs `test.DescribedHotelReservation` describes — model, actor,
       context, aggregate, slice, trigger, command, event, view, automation, translation, and the event
       the translation declares — returns markdown carrying that construct's description text
-- [ ] Hovering each of the same constructs in `test.HotelReservation`, the undescribed twin of the same
+- [x] Hovering each of the same constructs in `test.HotelReservation`, the undescribed twin of the same
       model, returns markdown with no description section, no stray blank line and no placeholder —
       asserted with one `require.Equal` on the whole value per construct, and run as the same table as
       the leaf above so the only difference between the two models' hovers is the description
       (`tasks/learnings.md:96-99`: the differential's twin must be proved to differ)
-- [ ] An event carrying a description **and** fields returns one value holding both, and a view carrying
+- [x] An event carrying a description **and** fields returns one value holding both, and a view carrying
       a description **and** subscriptions returns one value holding both; the order the sections appear
       in is the same for both, asserted by the whole-value equality above rather than by a separate
       ordering check
-- [ ] A description containing a `#`, a `//` or a brace is carried through unchanged
-- [ ] Hovering the `description` keyword still returns its `keywordDescriptions` text, unedited
-- [ ] `internal/lsp/server_test.go`'s `hover` group passes with its expected values unedited — its
+- [x] A description containing a `#`, a `//` or a brace is carried through unchanged
+- [x] Hovering the `description` keyword still returns its `keywordDescriptions` text, unedited
+- [x] `internal/lsp/server_test.go`'s `hover` group passes with its expected values unedited — its
       documents declare no descriptions
-- [ ] `test.HotelReservation` and `test.DescribedHotelReservation` are read as input;
+- [x] `test.HotelReservation` and `test.DescribedHotelReservation` are read as input;
       `internal/test/fixtures.go` is not edited
-- [ ] The change set is exactly `internal/lsp/hover.go` and `internal/lsp/hover_test.go`
+- [x] The change set is exactly `internal/lsp/hover.go` and `internal/lsp/hover_test.go`
 
 **Affected Files/Modules:**
 - `internal/lsp/hover.go` — the content builders (`hoverForCommand`/`hoverForEvent`/`hoverForView`,

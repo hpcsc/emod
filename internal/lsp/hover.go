@@ -94,6 +94,7 @@ func GetHover(text string, line, character int) *Hover {
 
 func hoverForConstruct(decl constructDecl) *Hover {
 	content := headingFor(decl) +
+		paragraph(decl.description) +
 		bulletList("Fields", fieldDescriptions(decl.fields)) +
 		bulletList("Subscribes", decl.subscribes)
 	return hoverAt(content, decl.namePos, decl.name)
@@ -126,6 +127,13 @@ func fieldDescriptions(fields []*ast.Field) []string {
 		descriptions = append(descriptions, fmt.Sprintf("%s %s", f.Name, f.Type))
 	}
 	return descriptions
+}
+
+func paragraph(text string) string {
+	if text == "" {
+		return ""
+	}
+	return "\n\n" + text
 }
 
 func bulletList(title string, items []string) string {
