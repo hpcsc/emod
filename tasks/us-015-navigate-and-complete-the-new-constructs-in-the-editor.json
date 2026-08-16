@@ -121,7 +121,7 @@
         "declarationsIn",
         "internal/lsp/completer_test.go"
       ],
-      "done": false
+      "done": true
     },
     {
       "n": 9,

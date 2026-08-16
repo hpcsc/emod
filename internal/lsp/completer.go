@@ -6,10 +6,12 @@ import (
 	"github.com/hpcsc/emod/internal/ast"
 )
 
-// GetCompletions returns the completions available at the cursor. Where the
-// cursor sits in the value position of an entry naming something the model
-// declares, those names are offered; everywhere else it is the keywords the
-// enclosing block accepts.
+// GetCompletions returns the completions available at the cursor. Inside a spec
+// element's payload braces the declared field names of the construct that element
+// names are offered, and a name the model does not declare offers nothing rather
+// than falling back to the block around it. Where the cursor sits in the value
+// position of an entry naming something the model declares, those names are
+// offered; everywhere else it is the keywords the enclosing block accepts.
 //
 // Positions are 0-based LSP coordinates (line, character).
 func GetCompletions(text string, line, character int) CompletionList {
@@ -21,11 +23,19 @@ func GetCompletions(text string, line, character int) CompletionList {
 
 func completionsAt(text string, line, character int) []CompletionItem {
 	lines := strings.Split(text, "\n")
-	block := enclosingBlock(lines, line)
-	if slot, ok := valueSlotBefore(linePrefix(lines, line, character), block); ok {
+	at := enclosingBlock(lines, line, character)
+	if at.block.payload.owner != "" {
+		return payloadCompletions(text, at.block.payload)
+	}
+	if slot, ok := valueSlotBefore(linePrefix(lines, line, character), at.block.context); ok {
 		return valueCompletions(text, line, slot)
 	}
-	return keywordCompletions(block)
+	// A caret on a continuation line of a wrapped list has no keyword of its own
+	// to scan back to, so the entry whose brackets are still open decides.
+	if slot, ok := valueSlots[at.openEntry]; ok {
+		return valueCompletions(text, line, slot)
+	}
+	return keywordCompletions(at.block.context)
 }
 
 type blockContext int
@@ -44,47 +54,168 @@ const (
 	ctxSpec
 )
 
-func enclosingBlock(lines []string, line int) blockContext {
+// cursorContext is what the line scan knows about where the caret sits: the
+// innermost block open around it, and the spec entry whose bracketed list is
+// still open, if any.
+type cursorContext struct {
+	block     block
+	openEntry string
+}
+
+// enclosingBlock reads the document down to the cursor. The cursor line is read
+// only as far as the cursor, because a payload is usually written whole on one
+// line and reading past the caret would close the very block the caret sits in.
+func enclosingBlock(lines []string, line, character int) cursorContext {
 	if line >= len(lines) {
 		line = len(lines) - 1
 	}
 
 	var scanner blockScanner
-	for i := 0; i <= line; i++ {
+	for i := 0; i < line; i++ {
 		scanner.consume(lines[i])
 	}
-	return scanner.innermost()
+	if line >= 0 {
+		scanner.consume(linePrefix(lines, line, character))
+	}
+	return cursorContext{block: scanner.innermost(), openEntry: scanner.openEntry}
+}
+
+// block is one open pair of braces: the entries it accepts, and — where the
+// braces are a spec element's payload — the construct whose fields they admit.
+type block struct {
+	context blockContext
+	payload payloadRef
+}
+
+// payloadRef names the construct a payload's values belong to. A spec element's
+// payload opens on the line of the reference it qualifies, so the construct is
+// the identifier the brace follows and the kind is the spec entry that leads it.
+type payloadRef struct {
+	owner string
+	kinds []nameKind
+}
+
+// payloadEntries maps the spec entries that accept a payload to the kinds of
+// construct their element names, mirroring how each entry's name resolves: a
+// command slice's when names a command while an automation slice's names the
+// triggering event, so a when payload has to try both.
+var payloadEntries = map[string][]nameKind{
+	"when":  {commandName, eventName},
+	"given": {eventName},
+	"then":  {eventName},
 }
 
 type blockScanner struct {
-	blocks               []blockContext
+	blocks               []block
 	keywordAwaitingBrace blockContext
+	// openEntry is the spec entry whose bracketed list is still open, and
+	// listDepth how many brackets deep that list runs. emod fmt wraps an entry
+	// past the column budget, putting `given [` on one line and each element it
+	// qualifies on its own line below, so the entry has to outlive every line
+	// until the bracket that opened the list is closed — not merely the one line
+	// that stated it, which would lose the second element and any comment
+	// between the bracket and the first.
+	openEntry string
+	listDepth int
+	// listBlocks is how deep the block stack was when the open list started. A
+	// list belongs to the block that opened it, so once that block closes an
+	// unclosed bracket must stop claiming the lines below it — otherwise one
+	// stray `[` would arm the entry for the whole rest of the document.
+	listBlocks int
 }
 
 func (s *blockScanner) consume(line string) {
 	code := codeOutsideStringsAndComments(line)
 	keyword := findBlockKeyword(code)
-	opens := strings.Count(code, "{")
 
-	switch {
-	case opens > 0:
-		opener := keyword
-		if opener == ctxUnknown {
-			opener = s.keywordAwaitingBrace
+	entry := s.openEntry
+	var preceding string
+	opened := false
+
+	for _, token := range lineTokens(code) {
+		switch token {
+		case "{":
+			s.blocks = append(s.blocks, s.opening(keyword, entry, preceding, opened))
+			s.keywordAwaitingBrace = ctxUnknown
+			opened = true
+			preceding = ""
+		case "}":
+			s.closeBlocks(1)
+			preceding = ""
+		default:
+			preceding = token
+			// Only a token at statement position claims the list's entry. Inside
+			// an element's braces the same spelling is a payload field label,
+			// and letting it through would rewrite the list's own entry.
+			if _, ok := payloadEntries[token]; ok && s.innermost().payload.owner == "" {
+				entry = token
+			}
 		}
-		s.blocks = append(s.blocks, opener)
-		for i := 1; i < opens; i++ {
-			s.blocks = append(s.blocks, ctxUnknown)
-		}
-		s.keywordAwaitingBrace = ctxUnknown
-	case code != "":
+	}
+
+	startingList := s.listDepth == 0
+	s.listDepth += strings.Count(code, "[") - strings.Count(code, "]")
+	if s.listDepth < 0 {
+		s.listDepth = 0
+	}
+	if s.listDepth > 0 && startingList {
+		s.listBlocks = len(s.blocks)
+	}
+	if s.listDepth == 0 || len(s.blocks) < s.listBlocks {
+		s.listDepth = 0
+		s.openEntry = ""
+	} else {
+		s.openEntry = entry
+	}
+
+	if !opened && code != "" {
 		// A keyword holds its claim on an opening brace only until the next line that
 		// carries code, so `command Ship` inside an automation stays a reference to a
 		// command rather than opening a command block for the rest of the body.
 		s.keywordAwaitingBrace = keyword
 	}
+}
 
-	s.closeBlocks(strings.Count(code, "}"))
+func (s *blockScanner) opening(keyword blockContext, entry, preceding string, alreadyOpened bool) block {
+	if kinds, ok := payloadEntries[entry]; ok && preceding != "" && preceding != entry {
+		return block{payload: payloadRef{owner: preceding, kinds: kinds}}
+	}
+	if alreadyOpened {
+		return block{}
+	}
+	if keyword != ctxUnknown {
+		return block{context: keyword}
+	}
+	return block{context: s.keywordAwaitingBrace}
+}
+
+// lineTokens splits a line's code into its words and the braces between them, so
+// a brace can be read against the word it follows. Bracket, comma, colon and
+// quote separate words without being words themselves.
+func lineTokens(code string) []string {
+	var tokens []string
+	var word strings.Builder
+	flush := func() {
+		if word.Len() > 0 {
+			tokens = append(tokens, word.String())
+			word.Reset()
+		}
+	}
+
+	for i := 0; i < len(code); i++ {
+		switch ch := code[i]; ch {
+		case '{', '}':
+			flush()
+			tokens = append(tokens, string(ch))
+		case ' ', '\t', '[', ']', ',', ':', '"':
+			flush()
+		default:
+			word.WriteByte(ch)
+		}
+	}
+	flush()
+
+	return tokens
 }
 
 func (s *blockScanner) closeBlocks(braces int) {
@@ -94,9 +225,9 @@ func (s *blockScanner) closeBlocks(braces int) {
 	s.blocks = s.blocks[:len(s.blocks)-braces]
 }
 
-func (s *blockScanner) innermost() blockContext {
+func (s *blockScanner) innermost() block {
 	if len(s.blocks) == 0 {
-		return ctxUnknown
+		return block{}
 	}
 	return s.blocks[len(s.blocks)-1]
 }
@@ -262,6 +393,23 @@ func valueCompletions(text string, line int, slot valueSlot) []CompletionItem {
 
 func keywordCompletions(block blockContext) []CompletionItem {
 	return completionItems(keywordsFor(block), KeywordCompletion)
+}
+
+// payloadCompletions offers the fields of the construct the payload qualifies and
+// nothing else: a payload's values belong to that construct or to no one, so a
+// name the model does not declare offers an empty list rather than falling back
+// to the keywords of the block around it.
+func payloadCompletions(text string, payload payloadRef) []CompletionItem {
+	model, _ := parseModel(text, "")
+	if model == nil {
+		return []CompletionItem{}
+	}
+	for _, kind := range payload.kinds {
+		if names := declaredFieldNames(model, kind, payload.owner); names != nil {
+			return completionItems(names, FieldCompletion)
+		}
+	}
+	return []CompletionItem{}
 }
 
 func completionItems(labels []string, kind CompletionItemKind) []CompletionItem {

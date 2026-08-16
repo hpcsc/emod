@@ -302,6 +302,37 @@ func declaredNamesInOrder(model *ast.Model, kind nameKind) []string {
 	return names
 }
 
+// declaredFieldNames names the fields the command or event called name declares.
+// It reads the same declarations name resolution does, so a payload offers
+// nothing for a name go-to-definition would not resolve either.
+func declaredFieldNames(model *ast.Model, kind nameKind, name string) []string {
+	for _, slice := range model.AllSlices() {
+		if kind == commandName {
+			for _, cmd := range slice.Commands {
+				if cmd.Name == name {
+					return fieldNames(cmd.Fields)
+				}
+			}
+			continue
+		}
+		for _, evt := range slice.Events {
+			if evt.Name == name {
+				return fieldNames(evt.Fields)
+			}
+		}
+	}
+
+	return nil
+}
+
+func fieldNames(fields []*ast.Field) []string {
+	names := make([]string, 0, len(fields))
+	for _, f := range fields {
+		names = append(names, f.Name)
+	}
+	return names
+}
+
 type declaredNames map[nameKind]map[string]ast.Position
 
 func newDeclaredNames(model *ast.Model) declaredNames {

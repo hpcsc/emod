@@ -8,7 +8,7 @@
 - [x] Task 5: Jump to and from the invariant a spec's `then rejected` names
 - [x] Task 6: Offer the invariants in scope after `then rejected`
 - [x] Task 7: Offer a spec's entries and the names its `given`, `when` and `then` accept
-- [ ] Task 8: Offer a payload's field names, scoped to the construct the reference names
+- [x] Task 8: Offer a payload's field names, scoped to the construct the reference names
 - [ ] Task 9: See a flow rejection edge from hover, go-to-definition and find-references
 
 ---
@@ -818,31 +818,31 @@ opening brace must sit on the line of the reference it qualifies — is what mak
 recoverable from the lines up to the cursor by a scanner that never parses.
 
 **Acceptance Criteria:**
-- [ ] With the cursor between the braces of a payload on a `given` element, the labels offered are
+- [x] With the cursor between the braces of a payload on a `given` element, the labels offered are
       exactly the field names the referenced **event** declares, in declaration order, asserted with one
       `require.Equal` on the label list
-- [ ] With the cursor inside a payload on a `when` reference, the labels are exactly the referenced
+- [x] With the cursor inside a payload on a `when` reference, the labels are exactly the referenced
       **command**'s field names; inside a payload on a `then` event-list element, the referenced event's
-- [ ] Two constructs declaring different field sets in one model each offer only their own field names,
+- [x] Two constructs declaring different field sets in one model each offer only their own field names,
       asserted in one subtest so a list that ignores the enclosing element is visibly wrong
-- [ ] A payload spanning several lines offers the same field names with the cursor on a continuation
+- [x] A payload spanning several lines offers the same field names with the cursor on a continuation
       line, not only on the line carrying the opening brace
-- [ ] A payload whose element names a construct the model does not declare offers nothing at all — not
+- [x] A payload whose element names a construct the model does not declare offers nothing at all — not
       the enclosing block's keyword list, and not another construct's fields
-- [ ] A field name already written in the payload is still offered: the server returns the whole list
+- [x] A field name already written in the payload is still offered: the server returns the whole list
       and the client filters ("Open questions, decided" item 10)
-- [ ] A payload on a construct declaring a field named after a DSL keyword offers that field name — a
+- [x] A payload on a construct declaring a field named after a DSL keyword offers that field name — a
       payload's labels are field names, not keywords, which is why the payload block is deliberately
       **not** added to `keywordBlocks` in `internal/lsp/keywords_test.go`; `TestKeywordCoverage` passes
       with that table unedited
-- [ ] Outside a payload nothing changes: a `fields` block still offers types and modifiers, a `tags`
+- [x] Outside a payload nothing changes: a `fields` block still offers types and modifiers, a `tags`
       block still offers nothing, a `spec` body still offers Task 7's three entries, and
       `then rejected ` still offers Task 6's invariant names
-- [ ] A `{` on the line **after** a spec element opens no payload for completion, matching the parser
+- [x] A `{` on the line **after** a spec element opens no payload for completion, matching the parser
       (US-010 "Open questions, decided" item 5)
-- [ ] The fixture US-010 Task 2 adds to `internal/test/fixtures.go` is read as input and is not edited
-- [ ] Every existing `completer_test.go` subtest passes unedited
-- [ ] The change set is exactly `internal/lsp/completer.go`, `internal/lsp/model.go` and
+- [x] The fixture US-010 Task 2 adds to `internal/test/fixtures.go` is read as input and is not edited
+- [x] Every existing `completer_test.go` subtest passes unedited
+- [x] The change set is exactly `internal/lsp/completer.go`, `internal/lsp/model.go` and
       `internal/lsp/completer_test.go`
 
 **Affected Files/Modules:**
