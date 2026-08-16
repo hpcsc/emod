@@ -459,6 +459,142 @@ func TestGetHover(t *testing.T) {
 		assertHover(t, automationDoc, scheduleLine, scheduleChar, everyDescription)
 	})
 
+	t.Run("an invariant states its prose where it is declared and where a spec rejects by it", func(t *testing.T) {
+		doc := test.SpecLibraryLending
+
+		for _, tc := range []struct {
+			home      string
+			invariant string
+			expected  string
+		}{
+			{
+				home:      "declared on an aggregate",
+				invariant: "OneCopyPerLoan",
+				expected:  "**Invariant** in Lending > Loan\n\nA loan covers exactly one copy of one title",
+			},
+			{
+				home:      "declared directly on a mode dcb context",
+				invariant: "OneReaderPerDesk",
+				expected:  "**Invariant** in Reading Room\n\nA desk seats at most one reader at any moment",
+			},
+		} {
+			t.Run(tc.home, func(t *testing.T) {
+				declLine, declChar := posIn(t, doc, "invariant "+tc.invariant, tc.invariant)
+				assertHover(t, doc, declLine, declChar, tc.expected)
+
+				refLine, refChar := posIn(t, doc, "then rejected "+tc.invariant, tc.invariant)
+				reference := lsp.GetHover(doc, refLine, refChar)
+				require.NotNil(t, reference)
+				require.Equal(t, tc.expected, reference.Contents.Value)
+
+				// The prose comes from the declaration; the range must not, or
+				// the editor would highlight a span the caret is nowhere near.
+				require.Equal(t, &lsp.Range{
+					Start: lsp.Position{Line: refLine, Character: refChar},
+					End:   lsp.Position{Line: refLine, Character: refChar + len(tc.invariant)},
+				}, reference.Range)
+			})
+		}
+	})
+
+	t.Run("two scopes declaring one invariant name each answer with their own statement", func(t *testing.T) {
+		const doc = `context "Lending" {
+    aggregate "Loan" {
+        invariant OneAtATime "A loan covers exactly one copy of one title"
+        slice "Borrow Copy" {
+            command BorrowCopy {
+            }
+            spec "refuses a second copy of the title" {
+                when BorrowCopy
+                then rejected OneAtATime
+            }
+        }
+    }
+    aggregate "Hold" {
+        invariant OneAtATime "A member holds at most one title back at a time"
+        slice "Place Hold" {
+            command PlaceHold {
+            }
+            spec "refuses a second hold" {
+                when PlaceHold
+                then rejected OneAtATime
+            }
+        }
+    }
+}`
+
+		loanLine, loanChar := posIn(t, doc, `spec "refuses a second copy of the title"`, "OneAtATime")
+		assertHover(t, doc, loanLine, loanChar, "**Invariant** in Lending > Loan\n\nA loan covers exactly one copy of one title")
+
+		holdLine, holdChar := posIn(t, doc, `spec "refuses a second hold"`, "OneAtATime")
+		assertHover(t, doc, holdLine, holdChar, "**Invariant** in Lending > Hold\n\nA member holds at most one title back at a time")
+	})
+
+	t.Run("an aggregate does not resolve against the invariants of the context enclosing it", func(t *testing.T) {
+		const doc = `context "Lending" {
+    invariant CardInGoodStanding "A member borrows only while their card is in good standing"
+    aggregate "Loan" {
+        invariant OneCopyPerLoan "A loan covers exactly one copy of one title"
+        slice "Borrow Copy" {
+            command BorrowCopy {
+            }
+            spec "refuses a copy already on loan" {
+                when BorrowCopy
+                then rejected OneCopyPerLoan
+            }
+            spec "refuses a member whose card has lapsed" {
+                when BorrowCopy
+                then rejected CardInGoodStanding
+            }
+        }
+    }
+}`
+
+		ownLine, ownChar := posIn(t, doc, "then rejected OneCopyPerLoan", "OneCopyPerLoan")
+		assertHover(t, doc, ownLine, ownChar, "**Invariant** in Lending > Loan\n\nA loan covers exactly one copy of one title")
+
+		enclosingLine, enclosingChar := posIn(t, doc, "then rejected CardInGoodStanding", "CardInGoodStanding")
+		assertNil(t, doc, enclosingLine, enclosingChar)
+	})
+
+	t.Run("a rejection naming an invariant of another scope hovers nothing", func(t *testing.T) {
+		const doc = `context "Lending" {
+    aggregate "Loan" {
+        invariant OneCopyPerLoan "A loan covers exactly one copy of one title"
+        slice "Borrow Copy" {
+            command BorrowCopy {
+            }
+        }
+    }
+    aggregate "Hold" {
+        slice "Place Hold" {
+            command PlaceHold {
+            }
+            spec "refuses a second hold" {
+                when PlaceHold
+                then rejected OneCopyPerLoan
+            }
+        }
+    }
+}`
+
+		declLine, declChar := posIn(t, doc, "invariant OneCopyPerLoan", "OneCopyPerLoan")
+		assertHover(t, doc, declLine, declChar, "**Invariant** in Lending > Loan\n\nA loan covers exactly one copy of one title")
+
+		refLine, refChar := posIn(t, doc, "then rejected OneCopyPerLoan", "OneCopyPerLoan")
+		assertNil(t, doc, refLine, refChar)
+	})
+
+	t.Run("the rejected keyword and the invariant name beside it answer differently", func(t *testing.T) {
+		doc := test.SpecLibraryLending
+
+		keywordLine, keywordChar := posIn(t, doc, "then rejected OneCopyPerLoan", "rejected")
+		assertHover(t, doc, keywordLine, keywordChar, "States that a spec's command is rejected by the named invariant.")
+
+		nameLine, nameChar := posIn(t, doc, "then rejected OneCopyPerLoan", "OneCopyPerLoan")
+		assertHover(t, doc, nameLine, nameChar, "**Invariant** in Lending > Loan\n\nA loan covers exactly one copy of one title")
+	})
+
 	t.Run("cursor on non-resolvable token returns nil", func(t *testing.T) {
 		// Cursor on the identifier "required" which is a field modifier,
 		// not a resolvable definition name.

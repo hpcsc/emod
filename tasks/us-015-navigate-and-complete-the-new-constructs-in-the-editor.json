@@ -46,7 +46,7 @@
         "internal/lsp/hover.go",
         "internal/lsp/hover_test.go"
       ],
-      "done": false
+      "done": true
     },
     {
       "n": 4,

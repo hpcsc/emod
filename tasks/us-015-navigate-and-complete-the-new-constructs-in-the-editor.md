@@ -3,7 +3,7 @@
 ## Progress
 - [x] Task 1: Answer hover on every declaration, naming its kind and where it was declared
 - [x] Task 2: Show a construct's description on hover
-- [ ] Task 3: Show an invariant's prose where it is declared and where a spec rejects by it
+- [x] Task 3: Show an invariant's prose where it is declared and where a spec rejects by it
 - [ ] Task 4: Jump to and from the events and commands a spec names
 - [ ] Task 5: Jump to and from the invariant a spec's `then rejected` names
 - [ ] Task 6: Offer the invariants in scope after `then rejected`
@@ -513,34 +513,34 @@ kind, the scope that declares it, and its statement. Hovering the invariant name
 hangs directly off one — so a name declared only in a different scope answers nothing.
 
 **Acceptance Criteria:**
-- [ ] Hovering `OneCopyPerLoan` where `test.SpecLibraryLending` declares it on aggregate "Loan" returns
+- [x] Hovering `OneCopyPerLoan` where `test.SpecLibraryLending` declares it on aggregate "Loan" returns
       non-nil markdown naming the invariant kind, the scope that declares it, and the statement text
-- [ ] Hovering `OneCopyPerLoan` in that model's `then rejected OneCopyPerLoan` returns a value equal to
+- [x] Hovering `OneCopyPerLoan` in that model's `then rejected OneCopyPerLoan` returns a value equal to
       the declaration's, asserted with one `require.Equal` between the two hovers' contents so the two
       sites are proved to agree without transcribing the wording twice
-- [ ] The same declaration/reference pair holds for `OneReaderPerDesk`, which the `mode dcb` context
+- [x] The same declaration/reference pair holds for `OneReaderPerDesk`, which the `mode dcb` context
       "Reading Room" declares directly, so both scopes the language gives an invariant are proved in
       one subtest
-- [ ] On a document where two aggregates of one context each declare an invariant with the **same
+- [x] On a document where two aggregates of one context each declare an invariant with the **same
       name** and different statements, and each has a slice whose spec rejects by it, each
       `then rejected` hovers with **its own** aggregate's statement — the case a flat model-wide lookup
       answers wrongly and silently ("Open questions, decided" item 4). The document is authored in
       `internal/lsp/hover_test.go`; no shared fixture is edited
-- [ ] A `then rejected` naming an invariant declared only in another scope returns nil — the same input
+- [x] A `then rejected` naming an invariant declared only in another scope returns nil — the same input
       `emod validate` reports as `invariant %q is not declared in %s %q`
       (`internal/validator/validator.go:281`)
-- [ ] Hovering the `rejected` keyword on that same line still returns its `keywordDescriptions` text,
+- [x] Hovering the `rejected` keyword on that same line still returns its `keywordDescriptions` text,
       asserted in the same subtest as the invariant-name leaf so the two tokens are proved to answer
       differently
-- [ ] Hovering an identifier that is not an invariant name and not a declaration still returns nil, and
+- [x] Hovering an identifier that is not an invariant name and not a declaration still returns nil, and
       every existing `hover_test.go` leaf passes unedited
-- [ ] The scope resolution lives in `internal/lsp/model.go` and yields, for each invariant reference,
+- [x] The scope resolution lives in `internal/lsp/model.go` and yields, for each invariant reference,
       the reference's position and the invariants of the one scope it resolves in; it does **not** add
       a `nameKind` member and does not appear in `declaredNames`, `declaredNamesInOrder` or
       `referenceTargetKinds`, so `GetCompletions`, `GetDefinition` and `GetReferences` results are
       unchanged by this task — asserted by every existing `completer_test.go`, `definition_test.go` and
       `references_test.go` subtest passing unedited
-- [ ] The change set is exactly `internal/lsp/model.go`, `internal/lsp/hover.go` and
+- [x] The change set is exactly `internal/lsp/model.go`, `internal/lsp/hover.go` and
       `internal/lsp/hover_test.go`
 
 **Affected Files/Modules:**

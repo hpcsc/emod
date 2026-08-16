@@ -140,6 +140,62 @@ func afterQuote(pos ast.Position) ast.Position {
 	return pos
 }
 
+// invariantScope is one resolution scope for invariant names. A context's own
+// invariants and each of its aggregates' are separate scopes, exactly as
+// internal/validator resolves them: a name declared in one neither hides nor
+// resolves against the same name in another, not even between an aggregate and
+// the context enclosing it. A flat model-wide map cannot express that — one
+// declaration would silently win, and the editor would jump to a declaration
+// `emod validate` reports as unresolved.
+type invariantScope struct {
+	name       string
+	declared   []*ast.Invariant
+	references []invariantRef
+}
+
+// invariantRef is one site naming an invariant rather than declaring it.
+type invariantRef struct {
+	name string
+	pos  ast.Position
+}
+
+func invariantScopes(model *ast.Model) []invariantScope {
+	var scopes []invariantScope
+	for _, ctx := range model.Contexts {
+		scopes = append(scopes, newInvariantScope(ctx.Name, ctx.Invariants, ctx.Slices))
+		for _, agg := range ctx.Aggregates {
+			scopes = append(scopes, newInvariantScope(ctx.Name+" > "+agg.Name, agg.Invariants, agg.Slices))
+		}
+	}
+
+	return scopes
+}
+
+func newInvariantScope(name string, invariants []*ast.Invariant, slices []*ast.Slice) invariantScope {
+	scope := invariantScope{name: name, declared: invariants}
+	for _, slice := range slices {
+		for _, spec := range slice.Specs {
+			if rejected, ok := spec.Then.(*ast.ThenRejected); ok {
+				scope.references = append(scope.references, invariantRef{
+					name: rejected.InvariantName,
+					pos:  rejected.InvariantPos,
+				})
+			}
+		}
+	}
+
+	return scope
+}
+
+func (s invariantScope) declarationOf(name string) (*ast.Invariant, bool) {
+	for _, inv := range s.declared {
+		if inv.Name == name {
+			return inv, true
+		}
+	}
+	return nil, false
+}
+
 type nameKind int
 
 const (

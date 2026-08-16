@@ -78,6 +78,22 @@ func GetHover(text string, line, character int) *Hover {
 		}
 	}
 
+	for _, scope := range invariantScopes(model) {
+		for _, inv := range scope.declared {
+			if at.onName(inv.NamePos, inv.Name) {
+				return hoverForInvariant(inv, scope.name, inv.NamePos)
+			}
+		}
+		for _, ref := range scope.references {
+			if !at.onName(ref.pos, ref.name) {
+				continue
+			}
+			if inv, ok := scope.declarationOf(ref.name); ok {
+				return hoverForInvariant(inv, scope.name, ref.pos)
+			}
+		}
+	}
+
 	// Check for keywords — tokens with no AST definition name.
 	for _, tok := range tokens {
 		pos := ast.Position{Line: tok.Line, Column: tok.Column}
@@ -98,6 +114,16 @@ func hoverForConstruct(decl constructDecl) *Hover {
 		bulletList("Fields", fieldDescriptions(decl.fields)) +
 		bulletList("Subscribes", decl.subscribes)
 	return hoverAt(content, decl.namePos, decl.name)
+}
+
+func hoverForInvariant(inv *ast.Invariant, scope string, pos ast.Position) *Hover {
+	return hoverForConstruct(constructDecl{
+		kind:        "Invariant",
+		name:        inv.Name,
+		namePos:     pos,
+		scope:       scope,
+		description: inv.Statement,
+	})
 }
 
 func headingFor(decl constructDecl) string {
