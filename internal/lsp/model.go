@@ -110,6 +110,11 @@ func declaredConstructs(model *ast.Model) []constructDecl {
 				decls = append(decls, eventDecl(tr.Event, scope))
 			}
 		}
+		for _, spec := range scoped.Slice.Specs {
+			// A spec accepts no description, so its hover is kind and scope
+			// alone; it is a named declaration all the same.
+			addQuoted("Spec", spec.Name, spec.NamePos, scope, "")
+		}
 	}
 
 	return decls

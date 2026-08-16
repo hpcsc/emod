@@ -459,6 +459,19 @@ func TestGetHover(t *testing.T) {
 		assertHover(t, automationDoc, scheduleLine, scheduleChar, everyDescription)
 	})
 
+	// The story asks hover to answer on any construct, and a spec's quoted name is
+	// a declaration like a slice's. It carries no description, so kind and scope
+	// are the whole of it.
+	t.Run("a spec name hovers as a spec, in both homes a slice has", func(t *testing.T) {
+		doc := test.SpecLibraryLending
+
+		aggLine, aggChar := posIn(t, doc, `spec "borrows a copy no one holds"`, "borrows a copy no one holds")
+		assertHover(t, doc, aggLine, aggChar, "**Spec** in Lending > Loan")
+
+		dcbLine, dcbChar := posIn(t, doc, `spec "seats a reader at a free desk"`, "seats a reader at a free desk")
+		assertHover(t, doc, dcbLine, dcbChar, "**Spec** in Reading Room")
+	})
+
 	t.Run("an invariant states its prose where it is declared and where a spec rejects by it", func(t *testing.T) {
 		doc := test.SpecLibraryLending
 

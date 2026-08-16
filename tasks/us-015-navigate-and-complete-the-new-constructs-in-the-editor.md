@@ -379,7 +379,10 @@ exactly what they return today.
 **Acceptance Criteria:**
 - [x] Hovering a model name, an actor name, a context name, an aggregate name, a slice name, a trigger
       name, an automation name and a translation name each returns non-nil markdown naming that
-      construct's kind, asserted on `test.DescribedHotelReservation`, which declares all eight
+      construct's kind, asserted on `test.DescribedHotelReservation`, which declares all eight. A
+      spec's quoted name answers too: the story asks for "any construct", a spec is a named
+      declaration like a slice, and this enumeration of eight omitted it. It accepts no description,
+      so kind and scope are the whole of its hover
 - [x] The aggregate hover names the context that holds it; the slice, trigger, automation and
       translation hovers name the context and the aggregate that hold them, in the same
       `<Context> > <Aggregate>` shape `declaredIn` (`internal/lsp/hover.go:103`) already renders for a
