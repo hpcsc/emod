@@ -427,11 +427,12 @@ exactly what they return today.
       (`tasks/learnings.md:441-444`); `rg 'model\.Contexts|ctx\.Aggregates|SliceRefs' internal/lsp`
       returns hits from `model.go` and `semantictokens.go` only
 - [x] `internal/test/fixtures.go` is read, never edited, and the change set is exactly
-      `internal/lsp/model.go`, `internal/lsp/hover.go`, `internal/lsp/hover_test.go` and
-      `internal/lsp/server_test.go`. `internal/lsp/position.go` needs no edit after all: normalising a
-      quoted name's stored position onto the name's first character in the declaration walk is the
-      same correction `entries.addQuoted` already applies, and it leaves `cursor.onName` and
-      `nameRange` valid on the unquoted-name assumption they were written with
+      `internal/lsp/model.go`, `internal/lsp/hover.go`, `internal/lsp/position.go`,
+      `internal/lsp/hover_test.go` and `internal/lsp/server_test.go`. The quoted name's stored
+      position is moved onto the name's first character in the declaration walk — the same correction
+      `entries.addQuoted` already applies — so `cursor.onName` and `nameRange` keep the unquoted-name
+      assumption they were written with; what they did need is to measure a name in characters rather
+      than bytes, since a quoted name carries human prose and an LSP position counts characters
 
 **Affected Files/Modules:**
 - `internal/lsp/model.go` — the declaration walk (`declarationsIn`, `:38-60`) and what a declaration
@@ -906,9 +907,12 @@ and event until a story opts in. This task is that opt-in, and US-009's own out-
 - [x] Find-references on a command returns its declaration, its flow entries, its spec `when` sites and
       every rejection edge naming it
 - [x] Find-references on an **event** returns exactly what it returned before this task, on a model
-      carrying rejection edges: a rejection edge names no event, and an edge folded into the flow list
-      would make an invariant name resolve as one — the trap US-009 measured
-      (`tasks/us-009-show-rejection-paths-on-the-timeline.md:96-110`)
+      carrying rejection edges: a rejection edge names no event, so an event's listing must not move.
+      This is a non-regression pin rather than a detector of the fold US-009 measured
+      (`tasks/us-009-show-rejection-paths-on-the-timeline.md:96-110`) — no name a rejection edge
+      carries appears in an event's list, so folding an edge into the flow list would leave this
+      assertion green; what rules the fold out is that the edge's two names are added under their own
+      kinds
 - [x] Both slice homes are covered, using the fixture US-009 Task 2 adds to `internal/test/fixtures.go`,
       which states rejection edges in an aggregate's slice and in a `mode dcb` context's own slice; that
       fixture is read, not edited

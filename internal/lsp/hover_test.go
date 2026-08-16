@@ -363,6 +363,28 @@ func TestGetHover(t *testing.T) {
 		require.Nil(t, lsp.GetHover(doc, quoteLine, nameStart+len(name)), "cursor on the closing quote")
 	})
 
+	t.Run("a quoted name holding non-ASCII text measures itself in characters", func(t *testing.T) {
+		const doc = `context "Réservations" {
+    aggregate "Séjour" {
+    }
+}`
+		const name = "Réservations"
+
+		_, quoteChar := posIn(t, doc, `context "`, `"`)
+		nameStart := quoteChar + 1
+		lastChar := nameStart + len([]rune(name)) - 1
+
+		first := lsp.GetHover(doc, 0, nameStart)
+		require.NotNil(t, first, "cursor on the name's first character")
+		require.Equal(t, &lsp.Range{
+			Start: lsp.Position{Line: 0, Character: nameStart},
+			End:   lsp.Position{Line: 0, Character: lastChar + 1},
+		}, first.Range)
+
+		require.NotNil(t, lsp.GetHover(doc, 0, lastChar), "cursor on the name's last character")
+		require.Nil(t, lsp.GetHover(doc, 0, lastChar+1), "cursor on the closing quote")
+	})
+
 	t.Run("cursor on keyword returns description", func(t *testing.T) {
 		line, char := posIn(t, testDoc, "command SubmitOrder", "command")
 		assertHover(t, testDoc, line, char, "Defines a command that can be sent to an aggregate.")
@@ -679,11 +701,13 @@ func TestGetHover(t *testing.T) {
 		assertNil(t, testDoc, line, char)
 	})
 
-	t.Run("cursor not on any definition returns nil", func(t *testing.T) {
-		// The closing quote of `context "Orders"` delimits a name rather than
-		// belonging to it, so it resolves to no declaration and to no keyword.
-		_, quoteChar := posIn(t, testDoc, `context "Orders"`, `"`)
-		assertNil(t, testDoc, 0, quoteChar+1+len("Orders"))
+	t.Run("cursor on punctuation and whitespace returns nil", func(t *testing.T) {
+		// Neither the brace that opens a block nor the space before it belongs to
+		// any name or keyword. The quotes around a name are covered separately,
+		// by the leaf that pins a quoted name's boundaries.
+		_, braceChar := posIn(t, testDoc, `context "Orders" {`, `{`)
+		assertNil(t, testDoc, 0, braceChar)
+		assertNil(t, testDoc, 0, braceChar-1)
 	})
 
 	t.Run("empty document returns nil", func(t *testing.T) {
