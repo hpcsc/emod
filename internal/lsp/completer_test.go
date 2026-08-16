@@ -420,6 +420,215 @@ func TestGetCompletions(t *testing.T) {
 		})
 	})
 
+	t.Run("invariant names after rejected", func(t *testing.T) {
+		// Three scopes, so a model-wide list is visibly wrong rather than
+		// coincidentally right: two aggregates of one context, and a second
+		// context declaring its own invariants over a slice of its own.
+		const threeScopeDoc = `context "Lending" {
+	aggregate "Loan" {
+		invariant OneCopyPerLoan "A loan covers exactly one copy of one title"
+		invariant FiveCopiesPerMember "A member holds at most five copies at one time"
+		slice "Borrow Copy" {
+			command BorrowCopy {
+			}
+			event CopyBorrowed {
+			}
+			spec "borrows a copy no one holds" {
+				when BorrowCopy
+				then [CopyBorrowed]
+			}
+			spec "refuses a copy already on loan" {
+				when BorrowCopy
+				then rejected OneCopyPerLoan
+			}
+		}
+	}
+	aggregate "Hold" {
+		invariant OneHoldPerTitle "A member holds at most one copy of a title back"
+		slice "Place Hold" {
+			command PlaceHold {
+			}
+			spec "refuses a second hold" {
+				when PlaceHold
+				then rejected OneHoldPerTitle
+			}
+		}
+	}
+}
+
+context "Reading Room" mode dcb {
+	invariant OneReaderPerDesk "A desk seats at most one reader at any moment"
+	invariant DeskFreeAtClosing "No desk stays claimed past the closing hour"
+	slice "Claim Desk" {
+		command ClaimDesk {
+		}
+		spec "refuses a desk another reader is seated at" {
+			when ClaimDesk
+			then rejected OneReaderPerDesk
+		}
+	}
+}`
+
+		t.Run("offers exactly the invariants of the scope holding the spec", func(t *testing.T) {
+			for _, tc := range []struct {
+				scope     string
+				container string
+				invariant string
+				expected  []string
+			}{
+				{
+					scope:     "the aggregate holding the slice",
+					container: `spec "refuses a copy already on loan"`,
+					invariant: "OneCopyPerLoan",
+					expected:  []string{"OneCopyPerLoan", "FiveCopiesPerMember"},
+				},
+				{
+					scope:     "a sibling aggregate of the same context",
+					container: `spec "refuses a second hold"`,
+					invariant: "OneHoldPerTitle",
+					expected:  []string{"OneHoldPerTitle"},
+				},
+				{
+					scope:     "a mode dcb context declaring the slice directly",
+					container: `spec "refuses a desk another reader is seated at"`,
+					invariant: "OneReaderPerDesk",
+					expected:  []string{"OneReaderPerDesk", "DeskFreeAtClosing"},
+				},
+			} {
+				t.Run(tc.scope, func(t *testing.T) {
+					line, character := posIn(t, threeScopeDoc, tc.container, "then rejected "+tc.invariant)
+
+					result := lsp.GetCompletions(threeScopeDoc, line, character+len("then rejected "))
+
+					require.Equal(t, tc.expected, extractLabels(result.Items))
+					requireItemKinds(t, result.Items, lsp.ConstantCompletion)
+				})
+			}
+		})
+
+		t.Run("a then with no rejected on the line offers the event names, not the invariants", func(t *testing.T) {
+			line, char := posIn(t, threeScopeDoc, `spec "borrows a copy no one holds"`, "then [CopyBorrowed]")
+
+			result := lsp.GetCompletions(threeScopeDoc, line, char+len("then ["))
+
+			require.Equal(t, []string{"CopyBorrowed"}, extractLabels(result.Items))
+		})
+
+		// A half-typed word after `then ` is indistinguishable from a half-typed
+		// event name, so the then slot answers and the client filters `rejected`
+		// out of it. What matters here is that no invariant is offered until the
+		// keyword is finished and a space typed after it.
+		t.Run("a cursor still touching a half-typed rejected offers no invariant names", func(t *testing.T) {
+			line, char := posIn(t, threeScopeDoc, `spec "refuses a copy already on loan"`, "rejected OneCopyPerLoan")
+
+			result := lsp.GetCompletions(threeScopeDoc, line, char+len("rejected"))
+
+			require.Equal(t, []string{"CopyBorrowed"}, extractLabels(result.Items))
+		})
+
+		t.Run("a spec whose enclosing braces are not yet closed still offers the invariants in scope", func(t *testing.T) {
+			const truncatedDoc = `context "Lending" {
+	aggregate "Loan" {
+		invariant OneCopyPerLoan "A loan covers exactly one copy of one title"
+		invariant FiveCopiesPerMember "A member holds at most five copies at one time"
+		slice "Borrow Copy" {
+			command BorrowCopy {
+			}
+			spec "refuses a copy already on loan" {
+				when BorrowCopy
+				then rejected `
+			line := strings.Count(truncatedDoc, "\n")
+
+			result := lsp.GetCompletions(truncatedDoc, line, len("\t\t\t\tthen rejected "))
+
+			require.Equal(t, []string{"OneCopyPerLoan", "FiveCopiesPerMember"}, extractLabels(result.Items))
+		})
+
+		t.Run("an aggregate is not offered the invariants of the context enclosing it", func(t *testing.T) {
+			const nestedDoc = `context "Lending" {
+	invariant CardInGoodStanding "A member borrows only while their card is in good standing"
+	aggregate "Loan" {
+		invariant OneCopyPerLoan "A loan covers exactly one copy of one title"
+		slice "Borrow Copy" {
+			command BorrowCopy {
+			}
+			spec "refuses a copy already on loan" {
+				when BorrowCopy
+				then rejected OneCopyPerLoan
+			}
+		}
+	}
+}`
+			line, char := posIn(t, nestedDoc, "then rejected OneCopyPerLoan", "then rejected OneCopyPerLoan")
+
+			result := lsp.GetCompletions(nestedDoc, line, char+len("then rejected "))
+
+			require.Equal(t, []string{"OneCopyPerLoan"}, extractLabels(result.Items))
+		})
+
+		t.Run("a field named rejected still offers field types and modifiers", func(t *testing.T) {
+			const doc = `context "Lending" {
+	aggregate "Loan" {
+		invariant OneCopyPerLoan "A loan covers exactly one copy of one title"
+		slice "Borrow Copy" {
+			command BorrowCopy {
+				fields {
+					rejected string required
+				}
+			}
+		}
+	}
+}`
+			line, char := posIn(t, doc, "fields {", "rejected string")
+
+			result := lsp.GetCompletions(doc, line, char+len("rejected "))
+
+			require.Equal(t, []string{"string", "date", "timestamp", "int", "required", "optional"}, extractLabels(result.Items))
+		})
+
+		// The identifier immediately after `rejected` on a rejection edge is a
+		// command name and the invariant sits after a second arrow, so the line
+		// keeps offering what its enclosing flow block offers -- which is the top
+		// level list, a flow body having no entry list of its own -- whichever way
+		// the author spaces the colon.
+		t.Run("a rejection edge on a flow line offers no invariant names", func(t *testing.T) {
+			for _, entry := range []string{
+				"command -> rejected: BorrowCopy -> OneCopyPerLoan",
+				"command -> rejected : BorrowCopy -> OneCopyPerLoan",
+			} {
+				doc := `context "Lending" {
+	aggregate "Loan" {
+		invariant OneCopyPerLoan "A loan covers exactly one copy of one title"
+		slice "Borrow Copy" {
+			command BorrowCopy {
+			}
+			event CopyBorrowed {
+			}
+			flow {
+				` + entry + `
+			}
+		}
+	}
+}`
+				line, char := posIn(t, doc, entry, entry)
+
+				for _, cursor := range []struct {
+					name      string
+					character int
+				}{
+					{name: "at the end of the entry", character: char + len(entry)},
+					{name: "in the invariant's own position", character: char + len(entry) - len("OneCopyPerLoan")},
+				} {
+					t.Run(cursor.name, func(t *testing.T) {
+						result := lsp.GetCompletions(doc, line, cursor.character)
+
+						require.Equal(t, []string{"model", "actor", "context"}, extractLabels(result.Items), "entry %q", entry)
+					})
+				}
+			}
+		})
+	})
+
 	t.Run("quoted strings", func(t *testing.T) {
 		t.Run("string contents neither start a comment nor open or close a block", func(t *testing.T) {
 			for _, description := range []string{"plain text", "a # b", "a { b", "a } b", "a // b"} {

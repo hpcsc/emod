@@ -87,7 +87,7 @@
         "internal/lsp/model.go",
         "internal/lsp/completer_test.go"
       ],
-      "done": false
+      "done": true
     },
     {
       "n": 7,

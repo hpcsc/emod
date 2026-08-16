@@ -2,6 +2,8 @@ package lsp
 
 import (
 	"strings"
+
+	"github.com/hpcsc/emod/internal/ast"
 )
 
 // GetCompletions returns the completions available at the cursor. Where the
@@ -21,7 +23,7 @@ func completionsAt(text string, line, character int) []CompletionItem {
 	lines := strings.Split(text, "\n")
 	block := enclosingBlock(lines, line)
 	if slot, ok := valueSlotBefore(linePrefix(lines, line, character), block); ok {
-		return valueCompletions(text, slot)
+		return valueCompletions(text, line, slot)
 	}
 	return keywordCompletions(block)
 }
@@ -166,16 +168,31 @@ func linePrefix(lines []string, line, character int) string {
 	return current[:character]
 }
 
+// valueSlot names what an entry keyword accepts after it. A slot is handed the
+// cursor's line as well as the model, because an invariant name resolves in the
+// scope enclosing the line rather than model-wide.
 type valueSlot struct {
-	nameKind nameKind
-	itemKind CompletionItemKind
+	items func(model *ast.Model, line int) []CompletionItem
+}
+
+var valueSlots = map[string]valueSlot{
+	"on":       {items: namesOfKind(eventName, EventCompletion)},
+	"reads":    {items: namesOfKind(viewName, ClassCompletion)},
+	"rejected": {items: invariantsInScope},
 }
 
 // The item kinds are the ones GetSemanticTokens gives the same names, so a name
 // an editor paints as an event does not complete as something else.
-var valueSlots = map[string]valueSlot{
-	"on":    {nameKind: eventName, itemKind: EventCompletion},
-	"reads": {nameKind: viewName, itemKind: ClassCompletion},
+func namesOfKind(kind nameKind, itemKind CompletionItemKind) func(*ast.Model, int) []CompletionItem {
+	return func(model *ast.Model, _ int) []CompletionItem {
+		return completionItems(declaredNamesInOrder(model, kind), itemKind)
+	}
+}
+
+// GetSemanticTokens paints no invariant, so an invariant takes the one kind this
+// story offers it under: a named rule stated once and referred to by name.
+func invariantsInScope(model *ast.Model, line int) []CompletionItem {
+	return completionItems(invariantNamesInScopeAt(model, line), ConstantCompletion)
 }
 
 func valueSlotBefore(prefix string, block blockContext) (valueSlot, bool) {
@@ -193,6 +210,13 @@ func valueSlotBefore(prefix string, block blockContext) (valueSlot, bool) {
 	}
 
 	for i := len(typed) - 1; i >= 0; i-- {
+		// An arrow makes the line a flow or rejection entry, whose parts are
+		// positional rather than named by the keyword before them: the
+		// identifier after `rejected` on `command -> rejected: X -> Y` is a
+		// command, not the invariant the same word introduces inside a spec.
+		if strings.Contains(typed[i], "->") {
+			return valueSlot{}, false
+		}
 		if slot, ok := valueSlots[typed[i]]; ok {
 			return slot, true
 		}
@@ -200,12 +224,12 @@ func valueSlotBefore(prefix string, block blockContext) (valueSlot, bool) {
 	return valueSlot{}, false
 }
 
-func valueCompletions(text string, slot valueSlot) []CompletionItem {
+func valueCompletions(text string, line int, slot valueSlot) []CompletionItem {
 	model, _ := parseModel(text, "")
 	if model == nil {
 		return []CompletionItem{}
 	}
-	return completionItems(declaredNamesInOrder(model, slot.nameKind), slot.itemKind)
+	return slot.items(model, cursorAt(line, 0).line)
 }
 
 func keywordCompletions(block blockContext) []CompletionItem {

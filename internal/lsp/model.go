@@ -210,6 +210,40 @@ func (s invariantScope) declaredNameAt(at cursor) (string, bool) {
 	return "", false
 }
 
+// invariantNamesInScopeAt names the invariants an identifier written on the
+// given 1-based line resolves against: those of the aggregate holding the line,
+// or of the context itself where the line sits outside every aggregate.
+func invariantNamesInScopeAt(model *ast.Model, line int) []string {
+	for _, ctx := range model.Contexts {
+		if !blockHolds(ctx.OpenPos, ctx.ClosePos, line) {
+			continue
+		}
+		for _, agg := range ctx.Aggregates {
+			if blockHolds(agg.OpenPos, agg.ClosePos, line) {
+				return invariantNames(agg.Invariants)
+			}
+		}
+		return invariantNames(ctx.Invariants)
+	}
+
+	return nil
+}
+
+// blockHolds reports whether a line falls inside a block. A block the author has
+// not closed yet carries no closing position, and while it is being typed the
+// cursor is exactly what sits inside it, so it runs to the end of the document.
+func blockHolds(open, close ast.Position, line int) bool {
+	return open.Line <= line && (close.Line == 0 || line <= close.Line)
+}
+
+func invariantNames(invariants []*ast.Invariant) []string {
+	names := make([]string, 0, len(invariants))
+	for _, inv := range invariants {
+		names = append(names, inv.Name)
+	}
+	return names
+}
+
 func (s invariantScope) declarationOf(name string) (*ast.Invariant, bool) {
 	for _, inv := range s.declared {
 		if inv.Name == name {

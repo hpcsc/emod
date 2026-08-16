@@ -6,7 +6,7 @@
 - [x] Task 3: Show an invariant's prose where it is declared and where a spec rejects by it
 - [x] Task 4: Jump to and from the events and commands a spec names
 - [x] Task 5: Jump to and from the invariant a spec's `then rejected` names
-- [ ] Task 6: Offer the invariants in scope after `then rejected`
+- [x] Task 6: Offer the invariants in scope after `then rejected`
 - [ ] Task 7: Offer a spec's entries and the names its `given`, `when` and `then` accept
 - [ ] Task 8: Offer a payload's field names, scoped to the construct the reference names
 - [ ] Task 9: See a flow rejection edge from hover, go-to-definition and find-references
@@ -684,31 +684,32 @@ same scope `emod validate` resolves the name in, so every name offered validates
 another scope appears.
 
 **Acceptance Criteria:**
-- [ ] With the cursor after `then rejected ` in a spec inside an aggregate's slice, the labels offered
+- [x] With the cursor after `then rejected ` in a spec inside an aggregate's slice, the labels offered
       are exactly the invariant names that aggregate declares, in declaration order, asserted with one
       `require.Equal` on the label list
-- [ ] With the cursor after `then rejected ` in a spec inside a slice a `mode dcb` context declares
+- [x] With the cursor after `then rejected ` in a spec inside a slice a `mode dcb` context declares
       directly, the labels are exactly that context's own invariant names
-- [ ] An invariant declared by a different aggregate of the same context, and one declared by a
+- [x] An invariant declared by a different aggregate of the same context, and one declared by a
       different context, appear in neither list — asserted on one document declaring invariants in
       three scopes, so a model-wide list is visibly wrong rather than coincidentally right
-- [ ] The offered items carry a completion kind distinct from `KeywordCompletion`, and the same kind is
+- [x] The offered items carry a completion kind distinct from `KeywordCompletion`, and the same kind is
       used wherever this story offers an invariant name
-- [ ] A cursor after `then ` with no `rejected` on the line does not offer invariant names
-- [ ] A cursor still touching a half-typed `rejected` offers the enclosing block's keyword list, not
-      invariant names — the whitespace rule `valueSlotBefore` (`internal/lsp/completer.go:188-193`)
-      already applies
-- [ ] A `fields` block declaring a field named `rejected` still offers field types and modifiers after
+- [x] A cursor after `then ` with no `rejected` on the line does not offer invariant names
+- [x] A cursor still touching a half-typed `rejected` offers no invariant names — the whitespace rule
+      `valueSlotBefore` (`internal/lsp/completer.go:188-193`) already applies. Once Task 7 makes `then`
+      a value slot the half-typed word is indistinguishable from a half-typed event name, so that slot
+      answers and the client filters `rejected` out of it; the invariants stay out either way
+- [x] A `fields` block declaring a field named `rejected` still offers field types and modifiers after
       it, not invariant names — the `ctxFields` suppression (`internal/lsp/completer.go:183-186`) still
       covers the new slot
-- [ ] A cursor on a `command -> rejected: <Command> -> <invariant>` line offers the enclosing block's
+- [x] A cursor on a `command -> rejected: <Command> -> <invariant>` line offers the enclosing block's
       keyword list and no invariant names — pinned because the identifier immediately after `rejected`
       on that line is a **command** name ("Open questions, decided" item 7). The line is written into a
       test document as text; nothing here reads US-009's AST, so this task does not depend on it
-- [ ] `TestKeywordCoverage` (`internal/lsp/keywords_test.go`) passes with `keywordBlocks` unedited: this
+- [x] `TestKeywordCoverage` (`internal/lsp/keywords_test.go`) passes with `keywordBlocks` unedited: this
       task offers no keyword
-- [ ] Every existing `completer_test.go` subtest passes unedited
-- [ ] The change set is exactly `internal/lsp/completer.go`, `internal/lsp/model.go` and
+- [x] Every existing `completer_test.go` subtest passes unedited
+- [x] The change set is exactly `internal/lsp/completer.go`, `internal/lsp/model.go` and
       `internal/lsp/completer_test.go`
 
 **Affected Files/Modules:**
