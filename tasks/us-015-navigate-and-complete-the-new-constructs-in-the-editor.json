@@ -136,7 +136,7 @@
         "internal/lsp/model.go",
         "internal/lsp/hover_test.go"
       ],
-      "done": false
+      "done": true
     }
   ]
 }

@@ -9,7 +9,7 @@
 - [x] Task 6: Offer the invariants in scope after `then rejected`
 - [x] Task 7: Offer a spec's entries and the names its `given`, `when` and `then` accept
 - [x] Task 8: Offer a payload's field names, scoped to the construct the reference names
-- [ ] Task 9: See a flow rejection edge from hover, go-to-definition and find-references
+- [x] Task 9: See a flow rejection edge from hover, go-to-definition and find-references
 
 ---
 
@@ -886,34 +886,34 @@ and event until a story opts in. This task is that opt-in, and US-009's own out-
 (`tasks/us-009-show-rejection-paths-on-the-timeline.md:44-47`).
 
 **Acceptance Criteria:**
-- [ ] Hovering the invariant name on a `command -> rejected: <Command> -> <invariant>` entry returns a
+- [x] Hovering the invariant name on a `command -> rejected: <Command> -> <invariant>` entry returns a
       value equal to the hover Task 3 returns for that invariant's declaration, asserted with one
       `require.Equal` between the two so the wording is not transcribed twice
-- [ ] That resolution uses the same scope rule: an edge in an aggregate's slice resolves against that
+- [x] That resolution uses the same scope rule: an edge in an aggregate's slice resolves against that
       aggregate's invariants, one in a `mode dcb` context's own slice against that context's, and an
       edge naming an invariant declared only elsewhere hovers nothing
-- [ ] Go-to-definition from the invariant name on a rejection edge returns the declaration position in
+- [x] Go-to-definition from the invariant name on a rejection edge returns the declaration position in
       the resolving scope
-- [ ] Go-to-definition from the **command** name on a rejection edge returns the command's declaration
-- [ ] Find-references with the cursor on an invariant declaration returns the declaration, every
+- [x] Go-to-definition from the **command** name on a rejection edge returns the command's declaration
+- [x] Find-references with the cursor on an invariant declaration returns the declaration, every
       `then rejected` in scope naming it, and every rejection edge in scope naming it, in source order,
       asserted with one `require.Equal` on the whole list — this replaces Task 5's list assertion for
       the model that carries both, rather than sitting beside it (`tasks/learnings.md:401-404`)
-- [ ] Find-references with the cursor on a rejection edge's invariant name returns that same whole list
-- [ ] Find-references on a command returns its declaration, its flow entries, its spec `when` sites and
+- [x] Find-references with the cursor on a rejection edge's invariant name returns that same whole list
+- [x] Find-references on a command returns its declaration, its flow entries, its spec `when` sites and
       every rejection edge naming it
-- [ ] Find-references on an **event** returns exactly what it returned before this task, on a model
+- [x] Find-references on an **event** returns exactly what it returned before this task, on a model
       carrying rejection edges: a rejection edge names no event, and an edge folded into the flow list
       would make an invariant name resolve as one — the trap US-009 measured
       (`tasks/us-009-show-rejection-paths-on-the-timeline.md:96-110`)
-- [ ] Both slice homes are covered, using the fixture US-009 Task 2 adds to `internal/test/fixtures.go`,
+- [x] Both slice homes are covered, using the fixture US-009 Task 2 adds to `internal/test/fixtures.go`,
       which states rejection edges in an aggregate's slice and in a `mode dcb` context's own slice; that
       fixture is read, not edited
-- [ ] Completion is unchanged by this task: a cursor on a rejection-edge line still offers the enclosing
+- [x] Completion is unchanged by this task: a cursor on a rejection-edge line still offers the enclosing
       block's keyword list, as Task 6 pinned ("Open questions, decided" item 7)
-- [ ] `internal/lsp/server_test.go`'s `hover`, `definition` and `references` groups pass with their
+- [x] `internal/lsp/server_test.go`'s `hover`, `definition` and `references` groups pass with their
       expected values unedited
-- [ ] The change set is exactly `internal/lsp/model.go`, `internal/lsp/hover_test.go`,
+- [x] The change set is exactly `internal/lsp/model.go`, `internal/lsp/hover_test.go`,
       `internal/lsp/definition_test.go` and `internal/lsp/references_test.go` — `hover.go`,
       `definition.go` and `references.go` consume the walks Tasks 3 and 5 built and need no edit
 

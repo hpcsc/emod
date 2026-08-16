@@ -173,18 +173,28 @@ func invariantScopes(model *ast.Model) []invariantScope {
 	return scopes
 }
 
-func newInvariantScope(name string, invariants []*ast.Invariant, slices []*ast.Slice) invariantScope {
+func newInvariantScope(name string, invariants []*ast.Invariant, sliceList []*ast.Slice) invariantScope {
 	scope := invariantScope{name: name, declared: invariants}
-	for _, slice := range slices {
+	add := func(name string, pos ast.Position) {
+		scope.references = append(scope.references, invariantRef{name: name, pos: pos})
+	}
+
+	for _, slice := range sliceList {
 		for _, spec := range slice.Specs {
 			if rejected, ok := spec.Then.(*ast.ThenRejected); ok {
-				scope.references = append(scope.references, invariantRef{
-					name: rejected.InvariantName,
-					pos:  rejected.InvariantPos,
-				})
+				add(rejected.InvariantName, rejected.InvariantPos)
 			}
 		}
+		for _, rejection := range slice.Rejections {
+			add(rejection.InvariantName, rejection.InvariantPos)
+		}
 	}
+
+	// A slice's specs and its rejection edges are separate collections, so the
+	// order they were appended in is not the order they were written.
+	slices.SortStableFunc(scope.references, func(a, b invariantRef) int {
+		return a.pos.Compare(b.pos)
+	})
 
 	return scope
 }
@@ -395,6 +405,12 @@ func referencesIn(model *ast.Model) []nameRef {
 		}
 		for _, spec := range slice.Specs {
 			addSpecReferences(add, spec)
+		}
+		for _, rejection := range slice.Rejections {
+			// Only the command. The other name a rejection edge carries is an
+			// invariant, which resolves in one scope rather than model-wide and
+			// so is stated by invariantScopes instead.
+			add(commandName, rejection.CommandName, rejection.CommandPos)
 		}
 	}
 

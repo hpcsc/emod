@@ -429,6 +429,40 @@ func TestGetDefinition(t *testing.T) {
 		})
 	})
 
+	t.Run("both names a flow rejection edge carries resolve to their declarations", func(t *testing.T) {
+		doc := test.RejectionLibraryLending
+
+		for _, tc := range []struct {
+			home      string
+			edge      string
+			command   string
+			invariant string
+		}{
+			{
+				home:      "in a slice an aggregate holds",
+				edge:      "command -> rejected: BorrowCopy -> OneCopyPerLoan",
+				command:   "BorrowCopy",
+				invariant: "OneCopyPerLoan",
+			},
+			{
+				home:      "in a slice a mode dcb context holds directly",
+				edge:      "command -> rejected: ClaimDesk -> OneReaderPerDesk",
+				command:   "ClaimDesk",
+				invariant: "OneReaderPerDesk",
+			},
+		} {
+			t.Run(tc.home, func(t *testing.T) {
+				cmdLine, cmdChar := posIn(t, doc, tc.edge, tc.command)
+				cmdDeclLine, cmdDeclChar := posIn(t, doc, "command "+tc.command+" {", tc.command)
+				assertDef(t, doc, cmdLine, cmdChar, cmdDeclLine, cmdDeclChar, tc.command)
+
+				invLine, invChar := posIn(t, doc, tc.edge, tc.invariant)
+				invDeclLine, invDeclChar := posIn(t, doc, "invariant "+tc.invariant, tc.invariant)
+				assertDef(t, doc, invLine, invChar, invDeclLine, invDeclChar, tc.invariant)
+			})
+		}
+	})
+
 	t.Run("cursor not on a known reference returns nil", func(t *testing.T) {
 		t.Run("on a keyword", func(t *testing.T) {
 			line, char := posIn(t, testDoc, "command SubmitOrder", "command")

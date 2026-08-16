@@ -595,6 +595,70 @@ func TestGetHover(t *testing.T) {
 		assertHover(t, doc, nameLine, nameChar, "**Invariant** in Lending > Loan\n\nA loan covers exactly one copy of one title")
 	})
 
+	t.Run("a flow rejection edge names its invariant with the same prose its declaration carries", func(t *testing.T) {
+		doc := test.RejectionLibraryLending
+
+		for _, tc := range []struct {
+			home      string
+			invariant string
+			edge      string
+		}{
+			{
+				home:      "declared on an aggregate",
+				invariant: "OneCopyPerLoan",
+				edge:      "command -> rejected: BorrowCopy -> OneCopyPerLoan",
+			},
+			{
+				home:      "declared directly on a mode dcb context",
+				invariant: "OneReaderPerDesk",
+				edge:      "command -> rejected: ClaimDesk -> OneReaderPerDesk",
+			},
+		} {
+			t.Run(tc.home, func(t *testing.T) {
+				declLine, declChar := posIn(t, doc, "invariant "+tc.invariant, tc.invariant)
+				declaration := lsp.GetHover(doc, declLine, declChar)
+				require.NotNil(t, declaration)
+
+				edgeLine, edgeChar := posIn(t, doc, tc.edge, tc.invariant)
+				edge := lsp.GetHover(doc, edgeLine, edgeChar)
+				require.NotNil(t, edge, "expected hover on the rejection edge's invariant")
+
+				require.Equal(t, declaration.Contents, edge.Contents)
+			})
+		}
+	})
+
+	t.Run("a rejection edge naming an invariant of another scope hovers nothing", func(t *testing.T) {
+		const doc = `context "Lending" {
+    aggregate "Loan" {
+        invariant OneCopyPerLoan "A loan covers exactly one copy of one title"
+        slice "Borrow Copy" {
+            command BorrowCopy {
+            }
+            event CopyBorrowed {
+            }
+            flow {
+                command -> event: BorrowCopy -> CopyBorrowed
+            }
+        }
+    }
+    aggregate "Hold" {
+        slice "Place Hold" {
+            command PlaceHold {
+            }
+            event HoldPlaced {
+            }
+            flow {
+                command -> rejected: PlaceHold -> OneCopyPerLoan
+                command -> event: PlaceHold -> HoldPlaced
+            }
+        }
+    }
+}`
+		line, char := posIn(t, doc, "command -> rejected: PlaceHold -> OneCopyPerLoan", "OneCopyPerLoan")
+		assertNil(t, doc, line, char)
+	})
+
 	t.Run("cursor on non-resolvable token returns nil", func(t *testing.T) {
 		// Cursor on the identifier "required" which is a field modifier,
 		// not a resolvable definition name.

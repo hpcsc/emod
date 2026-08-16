@@ -575,6 +575,120 @@ func TestGetReferences(t *testing.T) {
 		})
 	})
 
+	t.Run("flow rejection edges", func(t *testing.T) {
+		doc := test.RejectionLibraryLending
+
+		t.Run("an invariant lists every spec and every rejection edge in its scope, in the order they were written", func(t *testing.T) {
+			for _, tc := range []struct {
+				home     string
+				name     string
+				edge     string
+				expected []lsp.Location
+			}{
+				{
+					home: "declared on an aggregate",
+					name: "OneCopyPerLoan",
+					edge: "command -> rejected: BorrowCopy -> OneCopyPerLoan",
+					expected: []lsp.Location{
+						locationOf(t, doc, "invariant OneCopyPerLoan", "OneCopyPerLoan"),
+						locationOf(t, doc, `spec "refuses a copy already on loan"`, "OneCopyPerLoan"),
+						locationOf(t, doc, "command -> rejected: BorrowCopy -> OneCopyPerLoan", "OneCopyPerLoan"),
+						locationOf(t, doc, `spec "refuses to return a copy the member no longer holds"`, "OneCopyPerLoan"),
+						locationOf(t, doc, "command -> rejected: ReturnCopy -> OneCopyPerLoan", "OneCopyPerLoan"),
+					},
+				},
+				{
+					home: "declared directly on a mode dcb context",
+					name: "OneReaderPerDesk",
+					edge: "command -> rejected: ClaimDesk -> OneReaderPerDesk",
+					expected: []lsp.Location{
+						locationOf(t, doc, "invariant OneReaderPerDesk", "OneReaderPerDesk"),
+						locationOf(t, doc, `spec "refuses a desk another reader is seated at"`, "OneReaderPerDesk"),
+						locationOf(t, doc, "command -> rejected: ClaimDesk -> OneReaderPerDesk", "OneReaderPerDesk"),
+						locationOf(t, doc, `spec "refuses to free a desk already empty"`, "OneReaderPerDesk"),
+					},
+				},
+			} {
+				t.Run(tc.home, func(t *testing.T) {
+					declLine, declChar := posIn(t, doc, "invariant "+tc.name, tc.name)
+					require.Equal(t, tc.expected, lsp.GetReferences(doc, declLine, declChar, uri), "from the declaration")
+
+					edgeLine, edgeChar := posIn(t, doc, tc.edge, tc.name)
+					require.Equal(t, tc.expected, lsp.GetReferences(doc, edgeLine, edgeChar, uri), "from the rejection edge")
+				})
+			}
+		})
+
+		// Every slice of the shared fixture writes its spec block above its flow
+		// block, so per-collection append order already equals document order
+		// there. Only an edge written above the spec that rejects by the same
+		// invariant can tell the sort apart from doing nothing.
+		t.Run("a rejection edge written above the spec rejecting by the same invariant is listed first", func(t *testing.T) {
+			const edgeFirstDoc = `context "Lending" {
+    aggregate "Loan" {
+        invariant OneCopyPerLoan "A loan covers exactly one copy of one title"
+        slice "Borrow Copy" {
+            command BorrowCopy {
+            }
+            event CopyBorrowed {
+            }
+            flow {
+                command -> rejected: BorrowCopy -> OneCopyPerLoan
+                command -> event: BorrowCopy -> CopyBorrowed
+            }
+            spec "refuses a copy already on loan" {
+                when BorrowCopy
+                then rejected OneCopyPerLoan
+            }
+        }
+    }
+}`
+
+			declLine, declChar := posIn(t, edgeFirstDoc, "invariant OneCopyPerLoan", "OneCopyPerLoan")
+
+			require.Equal(t, []lsp.Location{
+				locationOf(t, edgeFirstDoc, "invariant OneCopyPerLoan", "OneCopyPerLoan"),
+				locationOf(t, edgeFirstDoc, "command -> rejected: BorrowCopy -> OneCopyPerLoan", "OneCopyPerLoan"),
+				locationOf(t, edgeFirstDoc, `spec "refuses a copy already on loan"`, "OneCopyPerLoan"),
+			}, lsp.GetReferences(edgeFirstDoc, declLine, declChar, uri))
+		})
+
+		t.Run("a command lists its rejection edges beside its flow entries and spec whens", func(t *testing.T) {
+			expected := []lsp.Location{
+				locationOf(t, doc, "command BorrowCopy {", "BorrowCopy"),
+				locationOf(t, doc, `spec "borrows a copy no one holds"`, "BorrowCopy"),
+				locationOf(t, doc, `spec "refuses a copy already on loan"`, "BorrowCopy"),
+				locationOf(t, doc, "command -> rejected: BorrowCopy -> OneCopyPerLoan", "BorrowCopy"),
+				locationOf(t, doc, "command -> event: BorrowCopy -> CopyBorrowed", "BorrowCopy"),
+			}
+
+			declLine, declChar := posIn(t, doc, "command BorrowCopy {", "BorrowCopy")
+			require.Equal(t, expected, lsp.GetReferences(doc, declLine, declChar, uri), "from the declaration")
+
+			edgeLine, edgeChar := posIn(t, doc, "command -> rejected: BorrowCopy -> OneCopyPerLoan", "BorrowCopy")
+			require.Equal(t, expected, lsp.GetReferences(doc, edgeLine, edgeChar, uri), "from the rejection edge")
+		})
+
+		// A rejection edge names a command and an invariant, never an event, so an
+		// event's listing must be exactly what it was before edges were read at
+		// all. This is a non-regression pin on a model full of edges; it cannot
+		// see an edge wrongly folded into the flow list, because no name a
+		// rejection edge carries appears in any event's list to begin with.
+		t.Run("an event lists no rejection edge", func(t *testing.T) {
+			declLine, declChar := posIn(t, doc, "event CopyBorrowed", "CopyBorrowed")
+
+			require.Equal(t, []lsp.Location{
+				locationOf(t, doc, "event CopyBorrowed", "CopyBorrowed"),
+				locationOf(t, doc, `spec "borrows a copy no one holds"`, "CopyBorrowed"),
+				locationOf(t, doc, `spec "refuses a copy already on loan"`, "CopyBorrowed"),
+				locationOf(t, doc, "command -> event: BorrowCopy -> CopyBorrowed", "CopyBorrowed"),
+				locationOf(t, doc, `spec "returns a copy the member holds"`, "CopyBorrowed"),
+				locationOf(t, doc, `spec "refuses to return a copy the member no longer holds"`, "CopyBorrowed"),
+				locationOf(t, doc, "subscribes [CopyBorrowed]", "CopyBorrowed"),
+			}, lsp.GetReferences(doc, declLine, declChar, uri))
+		})
+	})
+
 	t.Run("nil returns", func(t *testing.T) {
 		t.Run("cursor not on a resolvable name returns nil", func(t *testing.T) {
 			t.Run("on a keyword", func(t *testing.T) {
