@@ -296,6 +296,35 @@ construct". `docs/architecture.md:196` is a one-row-per-command CLI table.
 
 ---
 
+## Theory
+
+`specCardLines` (`internal/diagram/labels.go`) turns a slice's specs into lines in the DSL's own
+spelling, and `specCards` / `specBandTop` / `specBandHeight` (`layout.go`) place and size them, so
+both picture writers consume one card and differ only in how each spells a line break. The rendering
+rides on a trailing variadic `diagram.Option` (`option.go`), which is what let it be added without
+moving a single existing call to `ExportSVG` or `ExportDrawio`. One non-obvious constraint holds that
+code in shape: a scenario is separated from the next by quoting its name, not by a blank line,
+because an empty line carries no glyph for either format to advance past and collapses into the line
+above it — the first version's blank separators did not exist in the rendered picture at all.
+
+The decision that was not forced is where a card goes. They sit in a `Specs` band below the lowest
+lane, in their slice's own column, rather than inside the lane the slice already occupies. Putting
+them in the lane would reflow the reactor row, and the whole off-by-default claim rests on a
+whole-list comparison — every shape the plain render draws is the featured render's leading shapes,
+byte for byte — that a reflow turns into an argument about coordinates.
+
+Check `specBandTop` and `specCardLineBudget` hardest, because both encode a measurement made
+elsewhere. `specBandTop` derives the band's top from the lowest edge anything was actually drawn at
+rather than from the lane's bottom, since a slice's external-system boxes stack downwards past the
+lane they start in and the band is opaque and drawn last; it therefore holds a second copy of the
+external-box geometry, which is why those literals are named constants. `specCardLineBudget` is a
+character count standing in for a text measurement neither format exposes — a line past it is drawn
+outside the card by SVG, which never wraps, and wrapped into more lines than the card was measured
+for by draw.io, which does. Both were wrong in the first version and both are guarded only by a
+fixture built to reach them: a four-translation slice, and a scenario named longer than a card holds.
+
+---
+
 ## Tasks
 
 ### Task 1: Draw a slice's specs as a card in the SVG diagram
