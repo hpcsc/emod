@@ -161,6 +161,8 @@ emod diagram reservation.emod --format drawio   # draw.io XML (default)
 emod diagram reservation.emod --format mermaid  # Mermaid markdown
 emod diagram reservation.emod --format svg      # standalone SVG
 emod diagram reservation.emod --format ascii    # terminal preview
+emod diagram --specs reservation.emod           # …with each slice's specs as a
+                                                # Given-When-Then card (drawio and svg only)
 ```
 
 ### Export

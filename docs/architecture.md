@@ -193,7 +193,7 @@ exactly one writer.
 | `emod validate` / `emod lint` | Full pipeline; identical diagnostics, text or JSON output |
 | `emod lint explain <rule>` | Describes any rule name the tool can print |
 | `emod fmt` | Parse + `formatter.Format`; `--check` for CI |
-| `emod diagram` | drawio / svg / ascii / mermaid; `--serve` starts the embedded viewer |
+| `emod diagram` | drawio / svg / ascii / mermaid; `--serve` starts the embedded viewer; `--specs` draws each slice's specs as a card, drawio and svg only |
 | `emod export` | json / diagram-json / cue |
 | `emod slices list` | Lists every slice with its detected pattern |
 | `emod slices arrange` | Reorders view slices so references read forward; `--check` for CI |

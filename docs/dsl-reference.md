@@ -538,6 +538,9 @@ Any other declared type is a domain type, opaque to the model, and accepts any l
 
 Specs and the payloads they state are carried through `emod fmt`, the JSON and CUE exports, and the embedded schema. A number reaches both exports as a number and a string as a string, digit for digit — a leading zero is dropped, since neither format has a literal for one, and everything else is written exactly as it was read.
 
+- **The drawn diagrams show them as a card, on request:** `emod diagram --specs` draws a slice's specs as a Given-When-Then card under that slice, in a `Specs` band below the lowest lane, for the `drawio` and `svg` formats. A card states each spec's name, its `given` events, its `when` and its `then` outcome — naming the invariant for a rejection, the view for a `then view` and the command for a `then command` — and states element names only, never a payload's values or an invariant's prose.
+- **The flag is off by default and refused where nothing draws a card:** without `--specs` every format renders exactly what it rendered before, and `emod diagram --specs` with `--format mermaid`, `--format ascii` or `--serve` exits 1 naming the flag and the two formats that do draw one, rather than writing a diagram missing what was asked for.
+
 ---
 
 ## 7. Flows

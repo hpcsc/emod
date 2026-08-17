@@ -4,7 +4,7 @@
 - [x] Task 1: Draw a slice's specs as a card in the SVG diagram
 - [x] Task 2: Draw the same card in the draw.io diagram
 - [x] Task 3: Render the cards from the command line behind `--specs`
-- [ ] Task 4: Document `--specs` where the diagram command is described
+- [x] Task 4: Document `--specs` where the diagram command is described
 
 ---
 
@@ -549,21 +549,22 @@ refuses with a message naming the flag and the formats that do.
 learns the option exists without reading `--help` or the source.
 
 **Acceptance Criteria:**
-- [ ] `README.md`'s "Generate diagrams" block (`:157-164`) gains a line showing `--specs` with the flag
+- [x] `README.md`'s "Generate diagrams" block (`:157-164`) gains a line showing `--specs` with the flag
       written before the file argument, and says which two formats draw the card
-- [ ] `docs/dsl-reference.md`'s `### spec` section (`:376`) gains a bullet stating that
+- [x] `docs/dsl-reference.md`'s `### spec` section (now `:412`; the file moved under the breakdown as
+      US-010 and US-014 landed) gains a bullet stating that
       `emod diagram --specs` draws a slice's specs as a Given-When-Then card under that slice in the
       draw.io and SVG outputs, and that the other formats do not — written in the shape §10's closing
       bullet (`:627`) uses for descriptions
-- [ ] `docs/architecture.md`'s CLI table row for `emod diagram` (`:196`) names the flag alongside
+- [x] `docs/architecture.md`'s CLI table row for `emod diagram` (`:196`) names the flag alongside
       `--serve`
-- [ ] No heading in `docs/dsl-reference.md` is added, renamed, renumbered or reordered, so no
+- [x] No heading in `docs/dsl-reference.md` is added, renamed, renumbered or reordered, so no
       `#<n>-` link and no `#spec`-style sub-heading link changes: the `^## [0-9]+\.` list reconciles
       against the `\(#[0-9]+-` list, and the `^### ` list against the `\(#[a-z]` list, exactly as they
       do before this task
-- [ ] No new ` ```emod ` fence is added by this task, and `internal/oracle`'s "documented models"
+- [x] No new ` ```emod ` fence is added by this task, and `internal/oracle`'s "documented models"
       subtest passes unchanged
-- [ ] The `Diagram Palette` table in §13 is untouched, and `TestExporterPaletteMatchesReference` passes
+- [x] The `Diagram Palette` table in §13 is untouched, and `TestExporterPaletteMatchesReference` passes
 
 **Affected Files/Modules:**
 - `README.md` — the "Generate diagrams" bash block
