@@ -37,7 +37,7 @@
         "internal/diagram/drawio_test.go",
         "internal/diagram/contract_test.go"
       ],
-      "done": false
+      "done": true
     },
     {
       "n": 3,

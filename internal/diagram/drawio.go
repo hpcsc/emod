@@ -22,10 +22,15 @@ const (
 	styleTranslation    = boxBase + "fillColor=" + fillTranslation + ";strokeColor=" + strokeTranslation + ";" + boxFont
 	styleExternalSystem = boxBase + "fillColor=" + fillExternal + ";strokeColor=" + strokeExternal + ";dashed=1;" + boxFont
 	styleRejection      = boxBase + "fillColor=" + fillRejection + ";strokeColor=" + strokeRejection + ";dashed=1;" + boxFont
+	// The size here must stay specCardFontSize: a card's height is derived from
+	// it, so a card left at draw.io's own default is drawn in a box measured for
+	// a size it is not painted at. A leaf compares this against the size the SVG
+	// card states, which is the same constant.
+	styleSpecCard = boxBase + "fillColor=" + fillSpecCard + ";strokeColor=" + strokeSpecCard + ";" + boxFont + "fontSize=10;"
 )
 
 // ExportDrawio converts a parsed AST model into draw.io XML (mxGraph format).
-func ExportDrawio(model *ast.Model, style Style) ([]byte, error) {
+func ExportDrawio(model *ast.Model, style Style, opts ...Option) ([]byte, error) {
 	if model == nil {
 		return []byte{}, nil
 	}
@@ -364,12 +369,12 @@ func ExportDrawio(model *ast.Model, style Style) ([]byte, error) {
 		// --- External system boxes (Translations) ---
 		for ti, tr := range s.Translations {
 			id := allocID()
-			extW := 100
-			extH := 45
+			extW := externalBoxWidth
+			extH := externalBoxHeight
 			extX := sliceX + (sliceWidth-extW)/2
 			extY := extRowY - extH/2
 			if ti > 0 {
-				extY += ti * (extH + 8)
+				extY += ti * (extH + externalBoxGap)
 			}
 			// An external system is only ever named by a translation and holds no
 			// prose of its own, so its box shows what that translation says.
@@ -511,6 +516,21 @@ func ExportDrawio(model *ast.Model, style Style) ([]byte, error) {
 					b.WriteString(edgeCell(allocID(), rejectionStyle, from.id, badges[i][rejected].id))
 				}
 				rejected++
+			}
+		}
+	}
+
+	// --- Spec cards (a band of their own, below the lowest lane) ---
+	// Written after every other cell so their ids are allocated last: a card is
+	// conditional twice over, on the option and on the slice stating a scenario,
+	// and an id taken before either guard renumbers every cell after it.
+	if resolveOptions(opts).specs {
+		specBandY := specBandTop(entries, extLaneY)
+		if cards := specCards(entries, sliceXs, specBandY, "\\n"); len(cards) > 0 {
+			b.WriteString(swimlaneCell(allocID(), "Specs", marginX, specBandY,
+				diagramW-2*marginX, specBandHeight(cards)))
+			for _, card := range cards {
+				b.WriteString(vertexCell(allocID(), card.label, "", card.x, card.y, card.w, card.h, styleSpecCard))
 			}
 		}
 	}

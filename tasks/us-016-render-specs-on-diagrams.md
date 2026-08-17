@@ -2,7 +2,7 @@
 
 ## Progress
 - [x] Task 1: Draw a slice's specs as a card in the SVG diagram
-- [ ] Task 2: Draw the same card in the draw.io diagram
+- [x] Task 2: Draw the same card in the draw.io diagram
 - [ ] Task 3: Render the cards from the command line behind `--specs`
 - [ ] Task 4: Document `--specs` where the diagram command is described
 
@@ -409,33 +409,37 @@ text for the same model, differing only in how each spells a line break, and the
 asserts the card once for both.
 
 **Acceptance Criteria:**
-- [ ] `ExportDrawio` takes options after the `Style` it already takes; every existing call to it in the
-      repository compiles unedited
-- [ ] Rendered with `WithSpecs()`, the four-pattern fixture draws one draw.io card per spec-stating
+- [x] `ExportDrawio` takes options after the `Style` it already takes; every existing call to it in the
+      repository compiles unedited — as with `ExportSVG` in Task 1, the one *assignment* of it as a
+      function value (the contract harness's `export` field) becomes `exportDrawioDefault`, which Go's
+      assignability rule forces and which no call site is affected by
+- [x] Rendered with `WithSpecs()`, the four-pattern fixture draws one draw.io card per spec-stating
       slice, and `drawioBoxes` reads their labels back naming every spec in the fixture's transcribed
       spec-name list, in declaration order
-- [ ] The card text draw.io states and the card text SVG states are equal once each format's line break
+- [x] The card text draw.io states and the card text SVG states are equal once each format's line break
       is normalised — one contract-level leaf comparing the two formats' card labels for one model, so
       a line added to one card and not the other fails
-- [ ] Under `StyleAuto`, `StyleDCB` and `StyleProjected`, the band is drawn below the lowest lane the
+- [x] Under `StyleAuto`, `StyleDCB` and `StyleProjected`, the band is drawn below the lowest lane the
       style draws, and no cell of any lane the style draws overlaps a card; this is asserted in
       draw.io only, because `ExportSVG` ignores the `Style` it is handed
       (`tasks/learnings.md`, "`ExportSVG` and `ExportASCII` ignore the `Style` they are handed")
-- [ ] Every cell the default render writes appears in the featured render with the same id, the same
+- [x] Every cell the default render writes appears in the featured render with the same id, the same
       geometry and the same style string — no card id is allocated before both the option and the
       "this slice states a spec" guard have been passed
-- [ ] `drawioEdges` over the featured render reports the same arrows, by source label, target label and
+- [x] `drawioEdges` over the featured render reports the same arrows, by source label, target label and
       paint, as over the default render
-- [ ] `internal/diagram/contract_test.go` gains a subtest, run for both picture exporters and skipped
+- [x] `internal/diagram/contract_test.go` gains a subtest, run for both picture exporters and skipped
       for the text ones by the existing `nil` guard, asserting that the featured render of a
       spec-stating model differs from its default render and that the only boxes it adds are the cards
       plus the band — the positive sibling of "stating specs leaves the picture untouched", which
       still passes with no edit
-- [ ] Without the option, `ExportDrawio` over `test.SpecLibraryLendingModel` and over its
-      `test.WithoutSpecs` twin returns identical bytes, with the twin proved empty of specs first
-- [ ] With the option, a model no slice of which states a spec renders byte-identically to the same
+- [x] Without the option, `ExportDrawio` over `test.SpecLibraryLendingModel` and over its
+      `test.WithoutSpecs` twin returns identical bytes, with the twin proved empty of specs first —
+      met by `contract_test.go`'s "stating specs leaves the picture untouched" passing unedited, which
+      already runs for the draw.io exporter, rather than by a second copy in `drawio_test.go`
+- [x] With the option, a model no slice of which states a spec renders byte-identically to the same
       model without it
-- [ ] The three palette tests pass with no edit and still see exactly six element types
+- [x] The three palette tests pass with no edit and still see exactly six element types
 
 **Affected Files/Modules:**
 - `internal/diagram/drawio.go` — `ExportDrawio` (`:27`) takes the option; the band and its cards are

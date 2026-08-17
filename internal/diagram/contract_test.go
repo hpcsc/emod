@@ -45,8 +45,11 @@ type exporter struct {
 	boxes func(t *testing.T, output string) []diagramBox
 	// connections returns the arrows the output draws between its boxes, in
 	// document order; nil for the text formats, which draw none.
-	connections       func(t *testing.T, output string) []diagramConnection
-	export            func(*ast.Model, diagram.Style) ([]byte, error)
+	connections func(t *testing.T, output string) []diagramConnection
+	export      func(*ast.Model, diagram.Style) ([]byte, error)
+	// exportWithSpecs renders with each spec-stating slice's scenarios drawn as
+	// a card; nil for the text formats, which draw none and take no option.
+	exportWithSpecs   func(*ast.Model, diagram.Style) ([]byte, error)
 	requireWellFormed func(t *testing.T, output string)
 }
 
@@ -102,11 +105,61 @@ func requireNonEmptyText(t *testing.T, output string) {
 	require.NotEmpty(t, strings.TrimSpace(output), "output must not be blank")
 }
 
-// exportSVGDefault renders what ExportSVG draws when given no option, so the
-// contract the four formats share stays one signature: mermaid and ASCII draw no
-// card and take no option, and the harness must not be able to hand them one.
+// laneHeightDrawn is the height every lane but the specs band is drawn at,
+// stated here rather than read from the production constant so a test compares
+// against a value written down independently of the code that emits it.
+const laneHeightDrawn = 190
+
+// stackedTranslationsModel gives one slice four translations, which the layout
+// stacks downwards past the bottom of the lane they start in, plus a scenario so
+// the band is drawn. The shared fixtures declare at most one translation per
+// slice, so none of them reaches past the lane.
+func stackedTranslationsModel() *ast.Model {
+	slice := &ast.Slice{
+		Name:  "Import Bookings",
+		Views: []*ast.View{{Name: "AvailableView", Subscribes: []string{"Imported0"}}},
+		Specs: []*ast.Spec{{
+			Name: "imports a record",
+			When: &ast.SpecElement{Name: "Import0"},
+			Then: &ast.ThenEvents{Events: []*ast.SpecElement{{Name: "Imported0"}}},
+		}},
+	}
+	for i := range 4 {
+		name := fmt.Sprintf("Import%d", i)
+		slice.Commands = append(slice.Commands, &ast.Command{Name: name})
+		slice.Translations = append(slice.Translations, &ast.Translation{
+			Name:           fmt.Sprintf("Importer%d", i),
+			ExternalSystem: fmt.Sprintf("System%d", i),
+			Reads:          "AvailableView",
+			Command:        name,
+			Event:          &ast.Event{Name: fmt.Sprintf("Imported%d", i)},
+		})
+	}
+
+	return &ast.Model{
+		Name:     "Bookings",
+		Contexts: []*ast.Context{{Name: "Booking", Aggregates: []*ast.Aggregate{{Name: "Booking", Slices: []*ast.Slice{slice}}}}},
+	}
+}
+
+// exportSVGDefault and exportDrawioDefault render what the two picture formats
+// draw when given no option, so the contract the four formats share stays one
+// signature: mermaid and ASCII draw no card and take no option, and the harness
+// must not be able to hand them one.
 func exportSVGDefault(model *ast.Model, style diagram.Style) ([]byte, error) {
 	return diagram.ExportSVG(model, style)
+}
+
+func exportDrawioDefault(model *ast.Model, style diagram.Style) ([]byte, error) {
+	return diagram.ExportDrawio(model, style)
+}
+
+func exportSVGWithSpecs(model *ast.Model, style diagram.Style) ([]byte, error) {
+	return diagram.ExportSVG(model, style, diagram.WithSpecs())
+}
+
+func exportDrawioWithSpecs(model *ast.Model, style diagram.Style) ([]byte, error) {
+	return diagram.ExportDrawio(model, style, diagram.WithSpecs())
 }
 
 func exporters() []exporter {
@@ -119,7 +172,8 @@ func exporters() []exporter {
 			countConnections:  func(output string) int { return strings.Count(output, `edge="1"`) },
 			boxes:             drawioBoxes,
 			connections:       drawioEdges,
-			export:            diagram.ExportDrawio,
+			export:            exportDrawioDefault,
+			exportWithSpecs:   exportDrawioWithSpecs,
 			requireWellFormed: requireValidXML,
 		},
 		{
@@ -131,6 +185,7 @@ func exporters() []exporter {
 			boxes:             svgBoxes,
 			connections:       svgConnections,
 			export:            exportSVGDefault,
+			exportWithSpecs:   exportSVGWithSpecs,
 			requireWellFormed: requireValidXML,
 		},
 		{
@@ -237,6 +292,77 @@ func (e exporter) run(t *testing.T, model *ast.Model, style diagram.Style) strin
 	require.NoError(t, err)
 
 	return string(raw)
+}
+
+func (e exporter) runWithSpecs(t *testing.T, model *ast.Model, style diagram.Style) string {
+	t.Helper()
+
+	raw, err := e.exportWithSpecs(model, style)
+	require.NoError(t, err)
+
+	return string(raw)
+}
+
+// specCardBoxesIn selects the scenario cards out of the boxes a picture draws.
+// Both picture formats name the card's fill in the appearance they read back —
+// `fill=` in SVG, `fillColor=` in draw.io — so one selector serves both.
+func specCardBoxesIn(t *testing.T, boxes []diagramBox) []diagramBox {
+	t.Helper()
+
+	var cards []diagramBox
+	for _, box := range boxes {
+		if strings.Contains(box.appearance, fillSpecCardHex) {
+			cards = append(cards, box)
+		}
+	}
+
+	return cards
+}
+
+// boxesOtherThanCards drops the scenario cards. A card's text names the very
+// constructs its slice declares, so a lookup by label finds the card as well as
+// the box it is meant to locate.
+func boxesOtherThanCards(t *testing.T, boxes, cards []diagramBox) []diagramBox {
+	t.Helper()
+
+	var kept []diagramBox
+	for _, box := range boxes {
+		if !slices.Contains(cards, box) {
+			kept = append(kept, box)
+		}
+	}
+
+	return kept
+}
+
+// specNamesOn returns the scenario names a card states, rejoining any name the
+// writer had to break across lines: a name opens with a quote and runs to the
+// line closing it, and no other line a card states is quoted.
+func specNamesOn(card string) []string {
+	var (
+		names   []string
+		current []string
+	)
+	for _, line := range cardLines(card) {
+		if len(current) == 0 && !strings.HasPrefix(line, `"`) {
+			continue
+		}
+		current = append(current, line)
+		if strings.HasSuffix(line, `"`) {
+			names = append(names, strings.Trim(strings.Join(current, " "), `"`))
+			current = nil
+		}
+	}
+
+	return names
+}
+
+// cardLines splits a card's label into the lines it states, whichever of the two
+// spellings of a line break the format drawing it used: SVG nests a tspan per
+// line and reads back with real newlines around them, draw.io writes a literal
+// backslash-n inside one value.
+func cardLines(label string) []string {
+	return strings.Split(strings.TrimSpace(strings.ReplaceAll(label, `\n`, "\n")), "\n")
 }
 
 func (e exporter) boxLabelled(t *testing.T, output, name string) diagramBox {
@@ -498,6 +624,147 @@ func TestExporterContract(t *testing.T) {
 			})
 		})
 	}
+}
+
+// TestExporterSpecCards covers the card the two picture formats draw for a
+// slice's scenarios. It is the positive sibling of "stating specs leaves the
+// picture untouched": that subtest proves the default render does not move, and
+// these prove the featured render does, and moves only by cards.
+func TestExporterSpecCards(t *testing.T) {
+	for _, e := range exporters() {
+		if e.exportWithSpecs == nil {
+			continue
+		}
+
+		t.Run(e.name, func(t *testing.T) {
+			t.Run("the featured render adds the band and one card per spec-stating slice, and no other box", func(t *testing.T) {
+				model := test.SlicePatternLibraryLendingModel(t)
+				plain := e.run(t, model, diagram.StyleAuto)
+				featured := e.runWithSpecs(t, model, diagram.StyleAuto)
+
+				require.NotEqual(t, plain, featured,
+					"the featured render has to differ, or the twin of this comparison is proving nothing")
+
+				plainBoxes := e.boxes(t, plain)
+				featuredBoxes := e.boxes(t, featured)
+				require.Greater(t, len(featuredBoxes), len(plainBoxes),
+					"the featured render has to add a box, or the slice below panics instead of failing")
+
+				require.Equal(t, plainBoxes, featuredBoxes[:len(plainBoxes)],
+					"every box the render without the option draws keeps its label, its appearance and its place")
+
+				added := featuredBoxes[len(plainBoxes):]
+				require.Equal(t, "Specs", added[0].label, "the band is the first thing the option adds")
+				require.Equal(t, specCardBoxesIn(t, added[1:]), added[1:],
+					"the option adds the band and cards, and no box that is not a card")
+			})
+
+			t.Run("each card is drawn in the column of the slice whose scenarios it states", func(t *testing.T) {
+				model := test.SlicePatternLibraryLendingModel(t)
+				output := e.runWithSpecs(t, model, diagram.StyleAuto)
+				boxes := e.boxes(t, output)
+
+				cards := specCardBoxesIn(t, boxes)
+				require.NotEmpty(t, cards)
+
+				// Naming the construct rather than the slice is deliberate: a
+				// card carries no slice name, so the only thing that ties it to
+				// one is sharing a column with a construct that slice declares.
+				// A leaf reading card labels alone cannot see two cards swapped.
+				plain := boxesOtherThanCards(t, boxes, cards)
+				for construct, scenario := range map[string]string{
+					"BorrowCopy":                  "borrows a copy no one holds",
+					"MemberLoansView":             "lists the loans a member holds",
+					"RemindMember":                "reminds a member when a copy becomes due",
+					"RecallCopy":                  "recalls copies that are overdue",
+					"ReturnCopy":                  "returns a loaned copy to the library",
+					"ClaimDesk":                   "seats a reader at a free desk",
+					"ExternalDeskBookingImported": "imports a desk booking from an external system",
+				} {
+					column := boxLabelled(t, plain, construct).rect.centre()[0]
+
+					var stated []string
+					for _, card := range cards {
+						if card.rect.x <= column && column < card.rect.x+card.rect.w {
+							stated = append(stated, specNamesOn(card.label)...)
+						}
+					}
+					require.Contains(t, stated, scenario,
+						"the card in %s's column has to state that slice's own scenarios", construct)
+				}
+			})
+
+			t.Run("the band clears the external system boxes a slice stacks past its lane", func(t *testing.T) {
+				model := stackedTranslationsModel()
+				output := e.runWithSpecs(t, model, diagram.StyleAuto)
+
+				boxes := e.boxes(t, output)
+				lowest := boxLabelled(t, boxes, "System3").rect
+				require.Greater(t, lowest.y+lowest.h, boxLabelled(t, boxes, "External Systems").rect.y+laneHeightDrawn,
+					"the fixture has to stack a box past its lane, or this asserts nothing about overflow")
+
+				cards := specCardBoxesIn(t, boxes)
+				require.Len(t, cards, 1)
+				band := boxLabelled(t, boxes, "Specs").rect
+				require.GreaterOrEqual(t, band.y, lowest.y+lowest.h,
+					"the band is opaque and written last, so a box it starts above is painted out")
+				require.False(t, cards[0].rect.overlaps(lowest), "a card is drawn over the box below the lane")
+			})
+
+			t.Run("a card names the constructs a scenario refers to and none of the example values it states", func(t *testing.T) {
+				model := test.PayloadLibraryLendingModel(t)
+				payloads := test.DeclaredSpecPayloads(model)
+				require.NotEmpty(t, payloads,
+					"the fixture has to state an example value, or the absence below is satisfied by there being none")
+
+				output := e.runWithSpecs(t, model, diagram.StyleAuto)
+				cards := specCardBoxesIn(t, e.boxes(t, output))
+				require.NotEmpty(t, cards,
+					"the render has to draw a card, or the absence below is satisfied by drawing nothing")
+
+				drawn := strings.Join(labelsOf(cards), "\n")
+				for _, payload := range payloads {
+					for _, value := range payload.Values {
+						require.NotContains(t, drawn, value.Value,
+							"a card states element names; the values a scenario runs on are US-010's, not the card's")
+					}
+				}
+			})
+
+			t.Run("with the option, a model stating no scenario draws what it draws without it", func(t *testing.T) {
+				stated := test.SpecLibraryLendingModel(t)
+				unstated := test.WithoutSpecs(stated)
+
+				require.Equal(t, test.SpecLibraryLendingSpecNames, test.DeclaredSpecNames(stated))
+				require.Empty(t, test.DeclaredSpecNames(unstated),
+					"the twin has to lose the specs of both slice homes, or the comparison below is answered by whichever home it kept")
+
+				require.Equal(t, e.run(t, unstated, diagram.StyleAuto), e.runWithSpecs(t, unstated, diagram.StyleAuto),
+					"no slice states a scenario, so there is no band to draw")
+			})
+		})
+	}
+
+	t.Run("both picture formats state the same card text", func(t *testing.T) {
+		model := test.SlicePatternLibraryLendingModel(t)
+
+		stated := make(map[string][][]string)
+		for _, e := range exporters() {
+			if e.exportWithSpecs == nil {
+				continue
+			}
+			var cards [][]string
+			for _, card := range specCardBoxesIn(t, e.boxes(t, e.runWithSpecs(t, model, diagram.StyleAuto))) {
+				cards = append(cards, cardLines(card.label))
+			}
+			stated[e.name] = cards
+		}
+
+		require.Len(t, stated, 2, "both picture formats have to be in the comparison")
+		require.NotEmpty(t, stated["svg"], "a card has to be drawn, or the two formats agree on nothing")
+		require.Equal(t, stated["svg"], stated["drawio"],
+			"a line added to one format's card and not the other's is a card the two pictures disagree about")
+	})
 }
 
 // TestExporterTranslationEdges covers the arrow a translation implies between

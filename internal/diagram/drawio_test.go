@@ -967,6 +967,94 @@ func TestExportDrawio(t *testing.T) {
 			}
 		})
 	})
+
+	t.Run("spec cards", func(t *testing.T) {
+		t.Run("a card breaks its lines the way draw.io breaks a line, inside one value", func(t *testing.T) {
+			output := drawioWithSpecs(t, test.SlicePatternLibraryLendingModel(t), diagram.StyleAuto)
+
+			cards := specCardBoxesIn(t, drawioBoxes(t, output))
+			require.NotEmpty(t, cards, "the render has to draw a card, or the assertions below say nothing")
+
+			for _, card := range cards {
+				require.Contains(t, card.label, `\n`,
+					"draw.io starts a new line on the two characters an author would type, not on a newline byte")
+				require.NotContains(t, card.label, "\n",
+					"a newline written into the value runs the whole card onto one line when draw.io opens it")
+			}
+		})
+
+		t.Run("a card states the font size the band's height was measured from, as the svg card does", func(t *testing.T) {
+			model := test.SlicePatternLibraryLendingModel(t)
+
+			var styles []string
+			for _, shape := range drawioShapes(t, drawioWithSpecs(t, model, diagram.StyleAuto)) {
+				if strings.Contains(shape.style, fillSpecCardHex) {
+					styles = append(styles, shape.style)
+				}
+			}
+			require.NotEmpty(t, styles, "the render has to draw a card, or the assertions below say nothing")
+
+			// Left at draw.io's own default, a card is drawn in a box measured
+			// for a size it is not painted at, and a tall one clips.
+			for _, style := range styles {
+				require.Contains(t, style, "fontSize="+svgSpecCardFontSize(t)+";")
+			}
+		})
+
+		t.Run("every cell the render without the option writes keeps its id, geometry and style", func(t *testing.T) {
+			model := test.SlicePatternLibraryLendingModel(t)
+
+			plain := drawioShapes(t, drawioOf(t, model, diagram.StyleAuto))
+			featured := drawioShapes(t, drawioWithSpecs(t, model, diagram.StyleAuto))
+			require.Greater(t, len(featured), len(plain), "the featured render has to add a cell, or this says nothing")
+
+			require.Equal(t, plain, featured[:len(plain)],
+				"a card id allocated before the option and the states-a-scenario guard renumbers every cell after it")
+		})
+
+		t.Run("the edges are the ones drawn without the option", func(t *testing.T) {
+			model := test.SlicePatternLibraryLendingModel(t)
+
+			plain := drawioEdges(t, drawioOf(t, model, diagram.StyleAuto))
+			require.NotEmpty(t, plain, "the model has to draw an edge, or the comparison below says nothing")
+
+			require.Equal(t, plain, drawioEdges(t, drawioWithSpecs(t, model, diagram.StyleAuto)),
+				"a card is drawn into no edge and captures no edge's endpoint")
+		})
+
+		for _, style := range []diagram.Style{diagram.StyleAuto, diagram.StyleDCB, diagram.StyleProjected} {
+			t.Run("the band is the lowest lane the "+style.String()+" layout draws, and its cards clear every other cell", func(t *testing.T) {
+				output := drawioWithSpecs(t, test.SlicePatternLibraryLendingModel(t), style)
+				requireValidXML(t, output)
+
+				lanes := drawioLanes(t, output)
+				require.Greater(t, len(lanes), 1, "the layout has to draw a lane besides the band")
+				require.Equal(t, "Specs", lanes[len(lanes)-1].label, "the band is the last lane written")
+
+				band := lanes[len(lanes)-1].rect
+				for _, lane := range lanes[:len(lanes)-1] {
+					require.Less(t, lane.rect.y+lane.rect.h, band.y,
+						"the band sits below %q rather than beside or over it", lane.label)
+				}
+
+				boxes := drawioBoxes(t, output)
+				cards := specCardBoxesIn(t, boxes)
+				require.NotEmpty(t, cards, "the render has to draw a card for the clearances below to mean anything")
+
+				for _, card := range cards {
+					require.True(t, card.rect.within(band), "a card is drawn inside the band that names it")
+					for _, box := range boxes {
+						if box.label == card.label || box.label == "Specs" {
+							continue
+						}
+						require.False(t, card.rect.overlaps(box.rect),
+							"a card is drawn over %q", box.label)
+					}
+				}
+			})
+		}
+
+	})
 }
 
 func drawioOf(t *testing.T, model *ast.Model, style diagram.Style) string {
@@ -976,6 +1064,30 @@ func drawioOf(t *testing.T, model *ast.Model, style diagram.Style) string {
 	require.NoError(t, err)
 
 	return string(raw)
+}
+
+func drawioWithSpecs(t *testing.T, model *ast.Model, style diagram.Style) string {
+	t.Helper()
+
+	raw, err := diagram.ExportDrawio(model, style, diagram.WithSpecs())
+	require.NoError(t, err)
+
+	return string(raw)
+}
+
+// drawioLanes returns the swimlanes the diagram draws, in the order it draws
+// them, with where each was placed.
+func drawioLanes(t *testing.T, output string) []diagramBox {
+	t.Helper()
+
+	var lanes []diagramBox
+	for _, shape := range drawioShapes(t, output) {
+		if strings.HasPrefix(shape.style, "swimlane;") {
+			lanes = append(lanes, diagramBox{label: shape.label, appearance: shape.style, rect: shape.rect})
+		}
+	}
+
+	return lanes
 }
 
 // rejectionEdgeStyleFor returns the style string the render paints its dashed

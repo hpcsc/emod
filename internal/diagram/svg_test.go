@@ -13,6 +13,7 @@ import (
 	"strconv"
 	"strings"
 	"testing"
+	"unicode/utf8"
 
 	"github.com/hpcsc/emod/internal/ast"
 	"github.com/hpcsc/emod/internal/diagram"
@@ -512,14 +513,12 @@ func TestExportSVG(t *testing.T) {
 			output := svgWithSpecs(t, test.SlicePatternLibraryLendingModel(t))
 
 			var drawn []string
-			for _, line := range strings.Split(strings.Join(svgSpecCards(t, output), "\n"), "\n") {
-				if name := strings.Trim(line, `"`); slices.Contains(test.SlicePatternLibraryLendingSpecNames, name) {
-					drawn = append(drawn, name)
-				}
+			for _, card := range svgSpecCards(t, output) {
+				drawn = append(drawn, specNamesOn(card)...)
 			}
 
 			require.Equal(t, test.SlicePatternLibraryLendingSpecNames, drawn,
-				"the cards name the scenarios of both slice homes, in the order they are written")
+				"the cards name the scenarios of both slice homes, in the order they are written, whether or not a name had to be wrapped")
 		})
 
 		t.Run("an events outcome names the events, under the given and when it follows", func(t *testing.T) {
@@ -602,6 +601,29 @@ func TestExportSVG(t *testing.T) {
 			}, svgSpecCardBlock(t, svgWithSpecs(t, model), "recalls copies that are overdue"))
 		})
 
+		t.Run("a scenario naming one unbroken word wider than a card is cut, not drawn past it", func(t *testing.T) {
+			// A name of ordinary words breaks at a space; this one has nowhere
+			// to break, which is the only path that cuts mid-word.
+			name := "refusesAReservationWhenTheRoomIsAlreadyBookedForEveryRequestedNight"
+			model := singleSpecModel("Reserve Room", &ast.Spec{
+				Name: name,
+				When: &ast.SpecElement{Name: "ReserveRoom"},
+				Then: &ast.ThenEvents{Events: []*ast.SpecElement{{Name: "RoomReserved"}}},
+			})
+
+			cards := svgSpecCards(t, svgWithSpecs(t, model))
+			require.Len(t, cards, 1)
+
+			lines := strings.Split(cards[0], "\n")
+			require.Greater(t, len(lines), 3, "the word has to have been cut, or this asserts nothing")
+			for _, line := range lines {
+				require.LessOrEqual(t, utf8.RuneCountInString(line), 44,
+					"an unbreakable word wider than the card is drawn outside it unless it is cut")
+			}
+			require.Equal(t, name, strings.ReplaceAll(strings.Trim(strings.Join(lines[:len(lines)-2], ""), `"`), " ", ""),
+				"the cut pieces have to still spell the name the author wrote")
+		})
+
 		t.Run("a card adds one shape and leaves every shape drawn without it exactly where it was", func(t *testing.T) {
 			model := test.SlicePatternLibraryLendingModel(t)
 			plain := svgOf(t, model)
@@ -658,18 +680,42 @@ func TestExportSVG(t *testing.T) {
 			featuredW, featuredH := svgCanvas(t, featured)
 			require.Equal(t, plainW, featuredW, "a card sits inside its slice's column, so nothing widens")
 			require.Greater(t, featuredH, plainH, "the band is drawn below the lowest lane, so the canvas grows")
+
+			// Growing is not the claim; holding the band is. A canvas that
+			// stops partway down the band satisfies "taller than before".
+			for label, rect := range drawnElementRects(t, featured) {
+				require.LessOrEqual(t, rect.x+rect.w, featuredW, "%s is drawn past the right edge of the canvas", label)
+				require.LessOrEqual(t, rect.y+rect.h, featuredH, "%s is drawn below the bottom of the canvas", label)
+			}
 		})
 
-		t.Run("with the option, a model stating no scenario draws what it draws without it", func(t *testing.T) {
-			stated := test.SpecLibraryLendingModel(t)
-			unstated := test.WithoutSpecs(stated)
+		t.Run("a scenario named longer than a card fits is wrapped, not drawn past the card", func(t *testing.T) {
+			name := "refuses a reservation when the room is already booked for every one of the requested nights"
+			model := singleSpecModel("Reserve Room", &ast.Spec{
+				Name: name,
+				When: &ast.SpecElement{Name: "ReserveRoom"},
+				Then: &ast.ThenEvents{Events: []*ast.SpecElement{{Name: "RoomReserved"}}},
+			})
 
-			require.Equal(t, test.SpecLibraryLendingSpecNames, test.DeclaredSpecNames(stated))
-			require.Empty(t, test.DeclaredSpecNames(unstated),
-				"the twin has to lose the specs of both slice homes, or the comparison below is answered by whichever home it kept")
+			output := svgWithSpecs(t, model)
+			cards := svgSpecCards(t, output)
+			require.Len(t, cards, 1)
 
-			require.Equal(t, svgOf(t, unstated), svgWithSpecs(t, unstated),
-				"no slice states a scenario, so there is no band to draw and no height to add")
+			lines := strings.Split(cards[0], "\n")
+			require.Greater(t, len(lines), 3,
+				"the name has to have been broken across lines, or this asserts nothing about wrapping")
+			for _, line := range lines {
+				require.LessOrEqual(t, utf8.RuneCountInString(line), 44,
+					"a line wider than the card is drawn outside it: svg never wraps and draw.io wraps into a height the card was not measured for")
+			}
+			require.Equal(t, name, strings.Trim(strings.Join(lines[:len(lines)-2], " "), `"`),
+				"the wrapped lines have to still read as the name the author wrote")
+
+			// The card must have been measured for the lines it actually holds.
+			card := svgSpecCardRects(t, output)[0]
+			_, canvasH := svgCanvas(t, output)
+			require.LessOrEqual(t, card.y+card.h, canvasH)
+			require.GreaterOrEqual(t, card.h, len(lines)*14, "the card is sized from the wrapped line count")
 		})
 	})
 }
@@ -757,10 +803,8 @@ func svgSpecCards(t *testing.T, output string) []string {
 	t.Helper()
 
 	var cards []string
-	for _, shape := range svgShapes(t, output) {
-		if strings.Contains(shape.attributes, fillSpecCardHex) {
-			cards = append(cards, strings.TrimSpace(shape.label))
-		}
+	for _, card := range specCardBoxesIn(t, svgBoxes(t, output)) {
+		cards = append(cards, strings.TrimSpace(card.label))
 	}
 
 	return cards
@@ -794,10 +838,8 @@ func svgSpecCardRects(t *testing.T, output string) []boxRect {
 	t.Helper()
 
 	var rects []boxRect
-	for _, shape := range svgShapes(t, output) {
-		if strings.Contains(shape.attributes, fillSpecCardHex) {
-			rects = append(rects, shape.rect)
-		}
+	for _, card := range specCardBoxesIn(t, svgBoxes(t, output)) {
+		rects = append(rects, card.rect)
 	}
 
 	return rects
