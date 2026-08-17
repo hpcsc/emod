@@ -847,3 +847,45 @@ in this repo; append only learnings that generalise beyond the task that surface
 - Observed: US-015 navigate and complete the new constructs in the editor
 - Learning: `clerk fixup` stages whole files and records a diff against the branch tip, and `--replay` applies that diff at the target commit — so a hunk whose surrounding lines were introduced by a *later* commit cannot apply, and the whole replay aborts. Two conflicts cost a rebuild each on one branch. The first was a test file carrying fixes for two tasks: a leaf added by task 8 was staged into task 7's fixup, and task 7's tree has no such leaf. The second was a new subtest anchored beside one a later task added. The rule is to group by the earliest commit at which every line the hunk touches already exists, which for a file several tasks edited means splitting the work into rounds — revert the later-owned hunks, fixup the early target, restore them, fixup the late one. Where a fix is genuinely new work rather than a correction, `clerk fixup` says so itself and refuses (`no commit in <range> touches <file>`), which is the cue to give it its own commit instead of forcing a fold.
 - Apply when: folding audit findings into the commits that introduced them, especially when one test file carries fixes belonging to more than one task
+
+## An empty line in a multi-line SVG or draw.io label does not exist
+- Type: constraint
+- Observed: task 1 — US-016 render specs on diagrams
+- Learning: A `<tspan>` with no character data carries no glyph, so its `dy` never advances the text position and the shift does not carry to the next tspan — the blank line simply is not drawn, and the box measured for it is that much too tall. Measured in Chrome against `svgMultilineText` (`internal/diagram/svg.go`): a 12-line card with two blank separators rendered its ink 11px from the top and 40px from the bottom of a box sized for 12 lines, with the scenarios running together. draw.io's `whiteSpace=wrap` value behaves the same way. Separate blocks inside one label with a mark that carries ink — the spec card quotes each scenario's name, which is also how the DSL writes it — and never with an empty string.
+- Apply when: Building a multi-line label for internal/diagram's SVG or draw.io writer, or sizing a box from a line count that includes blank lines
+
+## Looking at one rendered fixture proves nothing about text the fixture does not contain
+- Type: recurring-finding
+- Observed: task 1 — US-016 render specs on diagrams
+- Learning: Rendering `test.SlicePatternLibraryLending` in a browser and measuring every card showed 13px of horizontal clearance, which read as "no overflow". It was a fact about that fixture: its longest scenario name is 47 characters. An audit built a 92-character name and rasterised it — 416px of text in a 260px card, clipped at both viewBox edges. The same measurement then showed the rune budget chosen from prose (~4.6px/rune) was wrong for identifier lines, which run to ~5.7px/rune, so `then [SomeCamelCaseEvent, AnotherOne]` overflows while staying under budget. When the input is arbitrary author text, look at the extreme the fixture does not contain and calibrate any width budget against the widest glyph mix, not the average — and note that `font-family="sans-serif"` resolves to a wider face than Helvetica on Linux, so the margin is smaller than a macOS measurement suggests.
+- Apply when: Verifying a rendering by eye, or choosing a character budget that stands in for a text measurement
+
+## A per-slice shape needs its column asserted, not just its label and its count
+- Type: recurring-finding
+- Observed: task 2 — US-016 render specs on diagrams
+- Learning: "Draws one card per spec-stating slice" plus "the cards name every scenario in declaration order" leaves the binding between the two unasserted: swapping two cards' x inside `specCards` left every Go test in the repository green, so the story's headline criterion ("a card under the slice") would have survived cards drawn under the wrong slices. A card carries no slice name, so the only thing tying it to one is sharing a column with a construct that slice declares — assert that, by taking the centre x of a box the slice owns and requiring the card's x-span to contain it. The rejection badges added by US-009 already do exactly this and say why in their own message (`internal/diagram/svg_test.go`, "each slice's dashed arrow ends at the badge in its own column"); note the lookup must exclude the cards themselves, since `boxLabelled` matches on substring and a card's text names the very constructs its slice declares.
+- Apply when: Adding a per-slice shape to the SVG or draw.io exporter, or writing the receipt that it belongs to the slice it was drawn for
+
+## Never restore a mutation with git checkout while the feature is uncommitted
+- Type: constraint
+- Observed: US-016 render specs on diagrams
+- Learning: A mutation-test harness that ends each case with `git checkout -- <dir>` restores tracked files to HEAD — which, before the feature is committed, is the feature itself. One such loop erased a finished task's four tracked files in a second, leaving only the new untracked file behind; the surviving cases then reported "ok ... [no tests to run]", which reads like a caught mutation rather than a wiped tree. Mutate against a copy: back the files up to the scratchpad and restore with `/bin/cp -f`, or commit first and mutate afterwards. The same run also hit the recorded prezto trap from the other side — `rm` is aliased to `rm -i`, so deleting a scratch test file hung until the tool timeout.
+- Apply when: Writing a loop that mutates production code to prove a test can fail, or reaching for git checkout to undo a temporary edit
+
+## clerk verify reports every Test function as dead code
+- Type: constraint
+- Observed: task 3 — US-016 render specs on diagrams
+- Learning: The dead-code check reports "defined but referenced nowhere outside its own file and the tests", which is the defining property of a `Test…` function: `go test` discovers it by name and nothing ever references it. `TestExporterSpecCards` (`internal/diagram/contract_test.go`) blocked the gate while running 12 leaves across both picture exporters. This widens the recorded `internal/test` false positive from fixture symbols to any new top-level test function. Confirm with `go test -run '<Name>' -v` that it executes, record the judgement, and pass `--audit-accepted` to `clerk land`; do not delete or rename a live test to open the gate.
+- Apply when: clerk verify blocks on dead code for a symbol whose name starts with Test, or for anything in internal/test
+
+## A variadic option added to an exporter moves no call but breaks every function-value assignment
+- Type: convention
+- Observed: task 1 — US-016 render specs on diagrams
+- Learning: Giving `ExportSVG`/`ExportDrawio` a trailing `...Option` left all 111 call sites in `internal/diagram` and the four in `internal/cli` compiling unedited — which is the whole reason to prefer it over a positional parameter or a widened struct. What it does break is assignment: Go will not accept `func(*ast.Model, Style, ...Option)` where `func(*ast.Model, Style)` is declared, so `contract_test.go`'s `exporter.export` field needs a non-variadic wrapper (`exportSVGDefault`). Keep the shared field non-variadic and add a second `exportWithSpecs` field left nil for the text formats, rather than making the field variadic: a variadic field would let the harness hand mermaid and ASCII an option they cannot honour, which is the silent-ignore trap this repo already records against `Style`. A criterion phrased "every existing call compiles unedited" is satisfiable; "the diff in that file is additions only" is not.
+- Apply when: Adding a functional option to an existing exported function, or writing the change-set criterion for one
+
+## emod diagram declares no -f alias, and the README puts its flags where urfave discards them
+- Type: constraint
+- Observed: task 3 — US-016 render specs on diagrams
+- Learning: Only `glossary` declares `Aliases: []string{"f"}` (`internal/cli/app.go`); `diagram`, `validate`, `lint`, `export` and `slices list` declare `format` alone, so `emod diagram -f svg` exits 1 with "flag provided but not defined: -f" — verified. US-016's breakdown spelled `-f mermaid`/`-f svg` in three acceptance criteria and its Verification block, none of which could ever have run. Separately, `README.md`'s "Generate diagrams" block writes `--format` *after* the file argument on all four lines, where urfave/cli v2 discards it, so every one silently writes `.drawio`; the new `--specs` line is written before the file and is the only correct one in the block. Check a flag spelling against `app.go` before writing it into a criterion, and read a documented invocation as untested text.
+- Apply when: Writing an acceptance criterion or a doc example that invokes an emod subcommand with a flag
