@@ -809,12 +809,14 @@ func captureStdout(t *testing.T, fn func()) string {
 	r, w, err := os.Pipe()
 	require.NoError(t, err)
 	os.Stdout = w
+	// Deferred for the reason captureStderr's restore is: an assertion failing
+	// inside fn unwinds through runtime.Goexit, past any plain restore below.
+	defer func() { os.Stdout = old }()
 
 	fn()
 
 	err = w.Close()
 	require.NoError(t, err)
-	os.Stdout = old
 
 	var buf bytes.Buffer
 	_, err = io.Copy(&buf, r)

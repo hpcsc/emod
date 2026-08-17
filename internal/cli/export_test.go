@@ -22,12 +22,15 @@ func captureStderr(t *testing.T, fn func()) string {
 	r, w, err := os.Pipe()
 	require.NoError(t, err)
 	os.Stderr = w
+	// Deferred, because fn may fail an assertion: require's FailNow unwinds
+	// through runtime.Goexit, and a plain restore below it never runs, leaving
+	// every later test in the package writing into an orphaned pipe.
+	defer func() { os.Stderr = old }()
 
 	fn()
 
 	err = w.Close()
 	require.NoError(t, err)
-	os.Stderr = old
 
 	var buf bytes.Buffer
 	_, err = io.Copy(&buf, r)
