@@ -385,7 +385,9 @@ func TestDiagram(t *testing.T) {
 					err = cli.RunDiagram(path, "", format, diagram.StyleAuto, true)
 				})
 
-				require.ErrorIs(t, err, cli.ErrUnsupportedFormat)
+				require.ErrorIs(t, err, cli.ErrSpecCardsUnsupported)
+				require.NotErrorIs(t, err, cli.ErrUnsupportedFormat,
+					"%s is a format this command supports; what it cannot do is draw a card", format)
 				var lintErr *cli.LintError
 				require.True(t, errors.As(err, &lintErr))
 				require.Equal(t, 1, lintErr.ExitCode)

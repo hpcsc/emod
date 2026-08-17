@@ -136,7 +136,7 @@ func unsupportedSpecsSurface(surface string) error {
 	return &LintError{
 		Message:  fmt.Sprintf("--specs is not supported for %s; only drawio and svg draw spec cards", surface),
 		ExitCode: 1,
-		Cause:    ErrUnsupportedFormat,
+		Cause:    ErrSpecCardsUnsupported,
 	}
 }
 

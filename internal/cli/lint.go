@@ -17,6 +17,11 @@ var (
 	ErrMissingFileArgument = errors.New("requires exactly one file argument")
 	ErrUnsupportedFormat   = errors.New("unsupported format")
 	ErrUnknownRule         = errors.New("unknown rule")
+	// ErrSpecCardsUnsupported marks a refusal to draw spec cards where nothing
+	// draws them. It is deliberately not ErrUnsupportedFormat: mermaid and ascii
+	// are supported formats, and --serve names no format at all, so a caller
+	// branching on the cause would otherwise be told the format was wrong.
+	ErrSpecCardsUnsupported = errors.New("spec cards unsupported")
 )
 
 type LintError struct {
