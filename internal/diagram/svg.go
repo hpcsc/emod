@@ -9,7 +9,7 @@ import (
 )
 
 // ExportSVG generates a self-contained SVG diagram from a parsed AST model.
-func ExportSVG(model *ast.Model, _ Style) ([]byte, error) {
+func ExportSVG(model *ast.Model, _ Style, opts ...Option) ([]byte, error) {
 	if model == nil {
 		return []byte{}, nil
 	}
@@ -19,8 +19,23 @@ func ExportSVG(model *ast.Model, _ Style) ([]byte, error) {
 	sliceXs := sliceXPositions(entries)
 	ctxBounds := contextBounds(entries, sliceXs)
 
+	triggerLaneY := marginY
+	cmdViewLaneY := triggerLaneY + laneHeight + laneGap
+	eventLaneY := cmdViewLaneY + laneHeight + laneGap
+	extLaneY := eventLaneY + laneHeight + laneGap
+	specBandY := specBandTop(entries, extLaneY)
+
+	var cards []specCard
+	if resolveOptions(opts).specs {
+		cards = specCards(entries, sliceXs, specBandY, "\n")
+	}
+	bandHeight := specBandHeight(cards)
+
 	diagramW := layoutWidth(sliceXs) + marginX + 120
 	diagramH := 2*marginY + 4*laneHeight + 3*laneGap
+	if bandHeight > 0 {
+		diagramH = specBandY + bandHeight + marginY
+	}
 
 	var b strings.Builder
 	b.WriteString(svgHeader(diagramW, diagramH))
@@ -31,16 +46,11 @@ func ExportSVG(model *ast.Model, _ Style) ([]byte, error) {
 		return []byte(b.String()), nil
 	}
 
-	triggerLaneY := marginY
-	cmdViewLaneY := triggerLaneY + laneHeight + laneGap
-	eventLaneY := cmdViewLaneY + laneHeight + laneGap
-	extLaneY := eventLaneY + laneHeight + laneGap
-
 	laneW := diagramW - 2*marginX
-	b.WriteString(svgLane(triggerLaneY, laneW, "Wireframes"))
-	b.WriteString(svgLane(cmdViewLaneY, laneW, "Commands / Views"))
-	b.WriteString(svgLane(eventLaneY, laneW, "Events"))
-	b.WriteString(svgLane(extLaneY, laneW, "External Systems"))
+	b.WriteString(svgLane(triggerLaneY, laneW, laneHeight, "Wireframes"))
+	b.WriteString(svgLane(cmdViewLaneY, laneW, laneHeight, "Commands / Views"))
+	b.WriteString(svgLane(eventLaneY, laneW, laneHeight, "Events"))
+	b.WriteString(svgLane(extLaneY, laneW, laneHeight, "External Systems"))
 
 	for _, cb := range ctxBounds {
 		b.WriteString(svgRect(cb.x, marginY-30, cb.w-20, 22, fillExternal, strokeExternal, 0, cb.description))
@@ -151,12 +161,12 @@ func ExportSVG(model *ast.Model, _ Style) ([]byte, error) {
 
 		// --- External system boxes (Translations) ---
 		for ti, tr := range s.Translations {
-			extW := 100
-			extH := 45
+			extW := externalBoxWidth
+			extH := externalBoxHeight
 			extX := sliceX + (sliceWidth-extW)/2
 			extY := extRowY - extH/2
 			if ti > 0 {
-				extY += ti * (extH + 8)
+				extY += ti * (extH + externalBoxGap)
 			}
 			b.WriteString(svgDashedRoundedRect(extX, extY, extW, extH, fillExternal, strokeExternal, 5, tr.Description))
 			b.WriteString(svgText(extX+extW/2, extY+extH/2, tr.ExternalSystem, 11, strokeExternal))
@@ -228,6 +238,17 @@ func ExportSVG(model *ast.Model, _ Style) ([]byte, error) {
 		}
 	}
 
+	// --- Spec cards (a band of their own, below the lowest lane) ---
+	// Written after everything else so a card cannot capture the label of a box
+	// drawn before it: a reader binds each text to the last rect it saw.
+	if len(cards) > 0 {
+		b.WriteString(svgLane(specBandY, laneW, bandHeight, "Specs"))
+		for _, card := range cards {
+			b.WriteString(svgRoundedRect(card.x, card.y, card.w, card.h, fillSpecCard, strokeSpecCard, 5, ""))
+			b.WriteString(svgMultilineText(card.x+card.w/2, card.y+card.h/2, card.label, specCardFontSize, strokeSpecCard))
+		}
+	}
+
 	b.WriteString("</svg>\n")
 	return []byte(b.String()), nil
 }
@@ -289,8 +310,8 @@ func svgRectElement(attributes, description string) string {
 	return fmt.Sprintf("<rect %s>\n<title>%s</title>\n</rect>\n", attributes, escapeXML(description))
 }
 
-func svgLane(y, w int, label string) string {
-	return svgRect(marginX, y, w, laneHeight, "#ffffff", "#000000", 5, "") +
+func svgLane(y, w, h int, label string) string {
+	return svgRect(marginX, y, w, h, "#ffffff", "#000000", 5, "") +
 		svgLaneLabel(marginX+10, y+20, label)
 }
 

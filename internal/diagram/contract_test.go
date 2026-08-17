@@ -102,6 +102,13 @@ func requireNonEmptyText(t *testing.T, output string) {
 	require.NotEmpty(t, strings.TrimSpace(output), "output must not be blank")
 }
 
+// exportSVGDefault renders what ExportSVG draws when given no option, so the
+// contract the four formats share stays one signature: mermaid and ASCII draw no
+// card and take no option, and the harness must not be able to hand them one.
+func exportSVGDefault(model *ast.Model, style diagram.Style) ([]byte, error) {
+	return diagram.ExportSVG(model, style)
+}
+
 func exporters() []exporter {
 	return []exporter{
 		{
@@ -123,7 +130,7 @@ func exporters() []exporter {
 			countConnections:  arrowCount,
 			boxes:             svgBoxes,
 			connections:       svgConnections,
-			export:            diagram.ExportSVG,
+			export:            exportSVGDefault,
 			requireWellFormed: requireValidXML,
 		},
 		{

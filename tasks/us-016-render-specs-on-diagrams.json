@@ -18,7 +18,7 @@
         "internal/diagram/svg_test.go",
         ":19"
       ],
-      "done": false
+      "done": true
     },
     {
       "n": 2,

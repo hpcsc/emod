@@ -91,6 +91,29 @@ const (
 	// own; these name what it paints so it can be repainted apart from the six.
 	fillRejection   = "#f8cecc"
 	strokeRejection = "#b85450"
+
+	// A spec card is not an element type either, and likewise holds no palette
+	// entry: it states scenarios rather than standing for a construct a viewer
+	// draws.
+	fillSpecCard   = "#fff2cc"
+	strokeSpecCard = "#d6b656"
+)
+
+// Spec card geometry.
+const (
+	specCardFontSize   = 10
+	specCardLineHeight = specCardFontSize + 4
+	specCardPadding    = 10
+	// specBandGap separates a card from the edges of the band holding it.
+	specBandGap = 12
+)
+
+// External system box geometry. A slice's translations stack downwards from the
+// row they start on, so a slice declaring several reaches below the lane.
+const (
+	externalBoxWidth  = 100
+	externalBoxHeight = 45
+	externalBoxGap    = 8
 )
 
 type sliceEntry struct {
@@ -284,6 +307,75 @@ func translationBox(tr *ast.Translation) reactorBox {
 		label:       reactorLabel(tr.Name),
 		description: tr.Description,
 	}
+}
+
+// specCard is the card drawn for one slice's scenarios.
+type specCard struct {
+	label      string
+	x, y, w, h int
+}
+
+// specCards returns the card drawn under each slice that states at least one
+// scenario, in that slice's own column, all of them starting at the same y so
+// the band reads as one row. A slice stating none contributes no card, which is
+// what keeps a model without specs drawing exactly what it drew before.
+// lineBreak is how the format drawing them starts a new line.
+func specCards(entries []sliceEntry, sliceXs []int, bandY int, lineBreak string) []specCard {
+	cards := make([]specCard, 0, len(entries))
+	for i, entry := range entries {
+		lines := wrapCardLines(specCardLines(entry.slice.Specs))
+		if len(lines) == 0 {
+			continue
+		}
+		cards = append(cards, specCard{
+			label: strings.Join(lines, lineBreak),
+			x:     sliceXs[i] + 10,
+			y:     bandY + laneHeaderHeight + specBandGap,
+			w:     sliceWidth - 20,
+			h:     len(lines)*specCardLineHeight + 2*specCardPadding,
+		})
+	}
+
+	return cards
+}
+
+// externalBoxesBottom is the lowest edge the external system boxes reach. A
+// slice declaring more than two translations stacks them past the bottom of the
+// lane they start in, so this is not the lane's own edge.
+func externalBoxesBottom(entries []sliceEntry, extRowY int) int {
+	var most int
+	for _, entry := range entries {
+		most = max(most, len(entry.slice.Translations))
+	}
+	if most == 0 {
+		return 0
+	}
+
+	return extRowY - externalBoxHeight/2 + (most-1)*(externalBoxHeight+externalBoxGap) + externalBoxHeight
+}
+
+// specBandTop is where the band holding the cards starts: a lane gap below
+// whichever reaches lower, the lowest lane or a box that overflowed it. Taking
+// the lane's edge alone would draw the band, which is opaque and written last,
+// over any external system box that stacked past it.
+func specBandTop(entries []sliceEntry, extLaneY int) int {
+	return max(extLaneY+laneHeight, externalBoxesBottom(entries, laneRowY(extLaneY))) + laneGap
+}
+
+// specBandHeight is how tall the band holding the cards has to be: the tallest
+// card, the strip carrying the band's own label, and a gap above and below.
+// A card stating several scenarios will not fit the fixed laneHeight the lanes
+// above take, so the band is sized to its contents rather than to that constant.
+func specBandHeight(cards []specCard) int {
+	var tallest int
+	for _, card := range cards {
+		tallest = max(tallest, card.h)
+	}
+	if tallest == 0 {
+		return 0
+	}
+
+	return laneHeaderHeight + tallest + 2*specBandGap
 }
 
 // itemLayout computes item width and x position for elements within a slice.

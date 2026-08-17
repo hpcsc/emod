@@ -1,7 +1,7 @@
 # US-016: Render specs on diagrams
 
 ## Progress
-- [ ] Task 1: Draw a slice's specs as a card in the SVG diagram
+- [x] Task 1: Draw a slice's specs as a card in the SVG diagram
 - [ ] Task 2: Draw the same card in the draw.io diagram
 - [ ] Task 3: Render the cards from the command line behind `--specs`
 - [ ] Task 4: Document `--specs` where the diagram command is described
@@ -307,50 +307,56 @@ lowest lane, one per slice, in that slice's column; the picture grows downwards 
 drawn moves. Without the option, `ExportSVG` returns the bytes it returns today.
 
 **Acceptance Criteria:**
-- [ ] `internal/diagram` exports an `Option` type and a `WithSpecs()` constructor, and `ExportSVG`
+- [x] `internal/diagram` exports an `Option` type and a `WithSpecs()` constructor, and `ExportSVG`
       takes options after the `Style` it already takes; every existing call to `ExportSVG` in the
       repository compiles unedited, and `git diff` shows no line changed in
       `internal/diagram/mermaid.go`, `ascii.go`, `graph.go` or `internal/export/`
-- [ ] Rendered with `WithSpecs()`, the four-pattern fixture US-007 Task 2 adds draws one card for each
+      — with one forced exception: `contract_test.go` assigns `ExportSVG` as a *value* to the
+      harness's `export` field, and Go does not accept a variadic function where a non-variadic
+      function type is declared, so that one line becomes `exportSVGDefault`. Calls are unaffected
+- [x] Rendered with `WithSpecs()`, the four-pattern fixture US-007 Task 2 adds draws one card for each
       slice that states a spec and no card for a slice that states none; the cards' labels, read back
       through `svgBoxes`, name every spec in that fixture's transcribed spec-name list, in declaration
       order, across both slice homes
-- [ ] A card states, for each spec it lists: the spec's name; the names of its `given` events in the
+- [x] A card states, for each spec it lists: the spec's name; the names of its `given` events in the
       order written; the name its `when` states; and its `then` outcome — the event names for
       `ThenEvents`, the invariant's name for `ThenRejected`, the view's name for `ThenView`, the
       command's name for `ThenCommand`. One leaf per outcome kind, each failing if that kind's card
       line is empty or states another kind's text
-- [ ] A rejection's card line names the invariant and not its prose statement: rendering the
+- [x] A rejection's card line names the invariant and not its prose statement: rendering the
       four-pattern fixture with `WithSpecs()` produces output containing no invariant `statement`
       string declared anywhere in that fixture
-- [ ] A spec that omits `given` and a spec that writes `given []` produce the same card lines as each
+- [x] A spec that omits `given` and a spec that writes `given []` produce the same card lines as each
       other, and neither states an empty given
-- [ ] A spec that states no `when` — the view and schedule-driven automation shapes — produces a card
+- [x] A spec that states no `when` — the view and schedule-driven automation shapes — produces a card
       with no when line and with its given and then lines intact
-- [ ] `svgShapes` (`internal/diagram/svg_test.go:354-397`) over the featured render reports exactly one
+- [x] `svgShapes` (`internal/diagram/svg_test.go:354-397`) over the featured render reports exactly one
       more shape per card than the default render reports in total, and the label of every shape the
       default render produces is byte-identical in both — no card text attaches to a box drawn before
       it. A leaf asserts this as a whole-list comparison of the default render's shapes against the
       featured render's leading shapes, so a card emitting a stray `<text>` fails it
-- [ ] `svgConnections` over the featured render reports the same arrows, by source label, target label
+- [x] `svgConnections` over the featured render reports the same arrows, by source label, target label
       and paint, as over the default render — a card is drawn into no arrow and captures no arrow's
       endpoint
-- [ ] Every box the default render draws is drawn at the same `boxRect` in the featured render, and
+- [x] Every box the default render draws is drawn at the same `boxRect` in the featured render, and
       `boxesDrawnOver` reports no overlap among the featured render's boxes — cards included
-- [ ] The featured render's SVG is well-formed XML and its `viewBox` height is greater than the default
+- [x] The featured render's SVG is well-formed XML and its `viewBox` height is greater than the default
       render's, while its width is unchanged
-- [ ] Without `WithSpecs()`, `ExportSVG` over `test.SpecLibraryLendingModel` and over its
+- [x] Without `WithSpecs()`, `ExportSVG` over `test.SpecLibraryLendingModel` and over its
       `test.WithoutSpecs` twin returns identical bytes, with the twin first proved to have lost the
       specs of both homes (`test.DeclaredSpecNames` empty) and the stated model proved to read back
-      `test.SpecLibraryLendingSpecNames` in full
-- [ ] With `WithSpecs()`, a model no slice of which states a spec renders byte-identically to the same
+      `test.SpecLibraryLendingSpecNames` in full — this is exactly what `contract_test.go`'s "stating
+      specs leaves the picture untouched" already asserts for the SVG exporter, so it is met by that
+      subtest passing unedited rather than by a second copy of it in `svg_test.go`
+- [x] With `WithSpecs()`, a model no slice of which states a spec renders byte-identically to the same
       model without the option — no band, no label, no change in height
-- [ ] `internal/diagram/contract_test.go` "stating specs leaves the picture untouched" (`:441-453`)
+- [x] `internal/diagram/contract_test.go` "stating specs leaves the picture untouched" (`:441-453`)
       passes with no edit, and so do `TestExporterPalette`, `TestExporterPalettePinsViewer` and
       `TestExporterPaletteMatchesReference` — this task adds no element type, so
       `internal/viewer/static/config.js` and `docs/dsl-reference.md` are not in its change set
-- [ ] No existing expected value in `internal/diagram/svg_test.go`, `drawio_test.go`,
+- [x] No existing expected value in `internal/diagram/svg_test.go`, `drawio_test.go`,
       `mermaid_test.go`, `ascii_test.go` or `contract_test.go` moves; the diff there is additions only
+      apart from the one forced `export:` field noted above, which is not an expected value
 
 **Affected Files/Modules:**
 - `internal/diagram/svg.go` — `ExportSVG` (`:12`) takes the option; the band and its cards are drawn

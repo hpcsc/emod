@@ -492,6 +492,358 @@ func TestExportSVG(t *testing.T) {
 				"a badge takes a place in a row that already exists rather than growing the canvas")
 		})
 	})
+
+	t.Run("spec cards", func(t *testing.T) {
+		t.Run("draws a card under each slice stating a scenario and none under a slice stating none", func(t *testing.T) {
+			output := svgWithSpecs(t, test.SlicePatternLibraryLendingModel(t))
+
+			cards := svgSpecCards(t, output)
+			require.Len(t, cards, 7,
+				"seven of the fixture's eight slices state a scenario; Desk Occupancy states none")
+
+			column := boxLabelled(t, svgBoxes(t, output), "DeskOccupancyView").rect.centre()[0]
+			for _, card := range svgSpecCardRects(t, output) {
+				require.False(t, card.x <= column && column < card.x+card.w,
+					"a card is drawn in the column of the one slice stating no scenario")
+			}
+		})
+
+		t.Run("the cards name every scenario the model states, in declaration order", func(t *testing.T) {
+			output := svgWithSpecs(t, test.SlicePatternLibraryLendingModel(t))
+
+			var drawn []string
+			for _, line := range strings.Split(strings.Join(svgSpecCards(t, output), "\n"), "\n") {
+				if name := strings.Trim(line, `"`); slices.Contains(test.SlicePatternLibraryLendingSpecNames, name) {
+					drawn = append(drawn, name)
+				}
+			}
+
+			require.Equal(t, test.SlicePatternLibraryLendingSpecNames, drawn,
+				"the cards name the scenarios of both slice homes, in the order they are written")
+		})
+
+		t.Run("an events outcome names the events, under the given and when it follows", func(t *testing.T) {
+			output := svgWithSpecs(t, test.SlicePatternLibraryLendingModel(t))
+
+			require.Equal(t, []string{
+				`"borrows a copy the member before returned"`,
+				"given [CopyBorrowed, CopyReturned]",
+				"when BorrowCopy",
+				"then [CopyBorrowed]",
+			}, svgSpecCardBlock(t, output, "borrows a copy the member before returned"))
+		})
+
+		t.Run("a rejected outcome names the invariant", func(t *testing.T) {
+			output := svgWithSpecs(t, test.SlicePatternLibraryLendingModel(t))
+
+			require.Equal(t, []string{
+				`"refuses a copy already on loan"`,
+				"when BorrowCopy",
+				"then rejected OneCopyPerLoan",
+			}, svgSpecCardBlock(t, output, "refuses a copy already on loan"))
+		})
+
+		t.Run("a view outcome names the view", func(t *testing.T) {
+			output := svgWithSpecs(t, test.SlicePatternLibraryLendingModel(t))
+
+			require.Equal(t, []string{
+				`"lists the loans a member holds"`,
+				"then view MemberLoansView",
+			}, svgSpecCardBlock(t, output, "lists the loans a member holds"))
+		})
+
+		t.Run("a command outcome names the command", func(t *testing.T) {
+			output := svgWithSpecs(t, test.SlicePatternLibraryLendingModel(t))
+
+			require.Equal(t, []string{
+				`"reminds a member when a copy becomes due"`,
+				"when CopyBorrowed",
+				"then command RemindMember",
+			}, svgSpecCardBlock(t, output, "reminds a member when a copy becomes due"))
+		})
+
+		t.Run("a rejected outcome states the invariant's name and nowhere the prose it stands for", func(t *testing.T) {
+			model := test.SlicePatternLibraryLendingModel(t)
+			output := svgWithSpecs(t, model)
+
+			statements := invariantStatementsOf(model)
+			require.NotEmpty(t, statements,
+				"the fixture has to declare an invariant with prose, or the absence below is satisfied by there being none")
+			require.Contains(t, output, "then rejected OneCopyPerLoan",
+				"the rejection has to be drawn, or the absence below is satisfied by drawing no card at all")
+
+			for _, statement := range statements {
+				require.NotContains(t, output, statement,
+					"a card names an invariant; its prose is what a rejection edge carries on hover")
+			}
+		})
+
+		t.Run("a scenario omitting given and one writing an empty given state the same lines", func(t *testing.T) {
+			output := svgWithSpecs(t, twoGivenSpellingsModel())
+
+			cards := svgSpecCards(t, output)
+			require.Len(t, cards, 2)
+			require.Equal(t, cards[0], cards[1],
+				"emod fmt writes no given line for either spelling, so the card and the formatted source agree")
+			require.NotContains(t, cards[0], "given")
+		})
+
+		t.Run("a scenario stating no when keeps its given and its then", func(t *testing.T) {
+			model := singleSpecModel("Sweep Overdue Loans", &ast.Spec{
+				Name:  "recalls copies that are overdue",
+				Given: []*ast.SpecElement{{Name: "CopyBorrowed"}},
+				Then:  &ast.ThenCommand{CommandName: "RecallCopy"},
+			})
+
+			require.Equal(t, []string{
+				`"recalls copies that are overdue"`,
+				"given [CopyBorrowed]",
+				"then command RecallCopy",
+			}, svgSpecCardBlock(t, svgWithSpecs(t, model), "recalls copies that are overdue"))
+		})
+
+		t.Run("a card adds one shape and leaves every shape drawn without it exactly where it was", func(t *testing.T) {
+			model := test.SlicePatternLibraryLendingModel(t)
+			plain := svgOf(t, model)
+			featured := svgWithSpecs(t, model)
+
+			plainShapes := svgShapes(t, plain)
+			featuredShapes := svgShapes(t, featured)
+			cards := svgSpecCards(t, featured)
+			require.NotEmpty(t, cards, "the featured render has to draw a card, or the counts below agree trivially")
+
+			require.Len(t, featuredShapes, len(plainShapes)+len(cards)+1,
+				"a card is one rect, and the band holding them is one shape more")
+			require.Equal(t, plainShapes, featuredShapes[:len(plainShapes)],
+				"a text emitted before a card's own rect relabels the box drawn last, and a band that reflows moves one")
+
+			// svgShapes counts rects and lets a later text overwrite an earlier
+			// one, so it cannot see a card that draws its text twice — which is
+			// two labels painted over each other in the picture a reader opens.
+			require.Equal(t, strings.Count(plain, "<text")+len(cards)+1, strings.Count(featured, "<text"),
+				"a card draws one text element however many lines it states, and the band's own label is one more")
+		})
+
+		t.Run("the arrows are the ones drawn without the option", func(t *testing.T) {
+			model := test.SlicePatternLibraryLendingModel(t)
+
+			plain := svgConnections(t, svgOf(t, model))
+			require.NotEmpty(t, plain, "the model has to draw an arrow, or the comparison below says nothing")
+
+			require.Equal(t, plain, svgConnections(t, svgWithSpecs(t, model)),
+				"a card is drawn into no arrow and captures no arrow's endpoint")
+		})
+
+		t.Run("no two boxes the featured render draws overlap, cards included", func(t *testing.T) {
+			output := svgWithSpecs(t, test.SlicePatternLibraryLendingModel(t))
+			require.NotEmpty(t, svgSpecCards(t, output),
+				"the render has to draw a card for the cards to be in the comparison")
+
+			rects := drawnElementRects(t, output)
+			require.Empty(t, boxesDrawnOver(rects, slices.Sorted(maps.Keys(rects))))
+		})
+
+		t.Run("the band names a fifth lane and the picture grows downwards only", func(t *testing.T) {
+			model := test.SlicePatternLibraryLendingModel(t)
+			plain := svgOf(t, model)
+			featured := svgWithSpecs(t, model)
+
+			requireValidXML(t, featured)
+			require.Equal(t,
+				append(svgLaneLabels(t, plain), "Specs"),
+				svgLaneLabels(t, featured),
+				"the band spans the picture like a lane, so it reads back as one alongside the four")
+
+			plainW, plainH := svgCanvas(t, plain)
+			featuredW, featuredH := svgCanvas(t, featured)
+			require.Equal(t, plainW, featuredW, "a card sits inside its slice's column, so nothing widens")
+			require.Greater(t, featuredH, plainH, "the band is drawn below the lowest lane, so the canvas grows")
+		})
+
+		t.Run("with the option, a model stating no scenario draws what it draws without it", func(t *testing.T) {
+			stated := test.SpecLibraryLendingModel(t)
+			unstated := test.WithoutSpecs(stated)
+
+			require.Equal(t, test.SpecLibraryLendingSpecNames, test.DeclaredSpecNames(stated))
+			require.Empty(t, test.DeclaredSpecNames(unstated),
+				"the twin has to lose the specs of both slice homes, or the comparison below is answered by whichever home it kept")
+
+			require.Equal(t, svgOf(t, unstated), svgWithSpecs(t, unstated),
+				"no slice states a scenario, so there is no band to draw and no height to add")
+		})
+	})
+}
+
+// invariantStatementsOf collects the prose every invariant of the model states,
+// from both the aggregates and the contexts that declare one.
+func invariantStatementsOf(model *ast.Model) []string {
+	var statements []string
+	for _, ctx := range model.Contexts {
+		for _, inv := range ctx.Invariants {
+			statements = append(statements, inv.Statement)
+		}
+		for _, agg := range ctx.Aggregates {
+			for _, inv := range agg.Invariants {
+				statements = append(statements, inv.Statement)
+			}
+		}
+	}
+
+	return statements
+}
+
+// twoGivenSpellingsModel writes one scenario twice, once omitting given and once
+// writing it empty — the two spellings emod fmt collapses onto the same line-less
+// output. The shared fixture states both, but within one slice, so it cannot ask
+// whether the two cards agree.
+func twoGivenSpellingsModel() *ast.Model {
+	scenario := func(given []*ast.SpecElement) *ast.Spec {
+		return &ast.Spec{
+			Name:  "seats a reader at a free desk",
+			Given: given,
+			When:  &ast.SpecElement{Name: "ClaimDesk"},
+			Then:  &ast.ThenEvents{Events: []*ast.SpecElement{{Name: "DeskClaimed"}}},
+		}
+	}
+
+	return &ast.Model{
+		Name: "Reading Room",
+		Contexts: []*ast.Context{{
+			Name: "Reading Room",
+			Aggregates: []*ast.Aggregate{{
+				Name: "Desk",
+				Slices: []*ast.Slice{
+					{Name: "Claim Desk", Specs: []*ast.Spec{scenario(nil)}},
+					{Name: "Claim Another Desk", Specs: []*ast.Spec{scenario([]*ast.SpecElement{})}},
+				},
+			}},
+		}},
+	}
+}
+
+// singleSpecModel puts one scenario on a slice of its own, for the shapes the
+// shared fixture cannot state — a scenario naming a given and an outcome but no
+// when among them.
+func singleSpecModel(sliceName string, spec *ast.Spec) *ast.Model {
+	return &ast.Model{
+		Name: "Library Lending",
+		Contexts: []*ast.Context{{
+			Name: "Lending",
+			Aggregates: []*ast.Aggregate{{
+				Name:   "Loan",
+				Slices: []*ast.Slice{{Name: sliceName, Specs: []*ast.Spec{spec}}},
+			}},
+		}},
+	}
+}
+
+func svgWithSpecs(t *testing.T, model *ast.Model) string {
+	t.Helper()
+
+	raw, err := diagram.ExportSVG(model, diagram.StyleAuto, diagram.WithSpecs())
+	require.NoError(t, err)
+
+	return string(raw)
+}
+
+// fillSpecCardHex is stated here rather than read from the production constant,
+// so a test compares the bytes a reader sees against a value written down
+// independently of the code that emits them.
+const fillSpecCardHex = "#fff2cc"
+
+// svgSpecCards returns the text of each card the picture draws, in document
+// order, one string per card with its lines as the writer joined them.
+func svgSpecCards(t *testing.T, output string) []string {
+	t.Helper()
+
+	var cards []string
+	for _, shape := range svgShapes(t, output) {
+		if strings.Contains(shape.attributes, fillSpecCardHex) {
+			cards = append(cards, strings.TrimSpace(shape.label))
+		}
+	}
+
+	return cards
+}
+
+var svgFontSizeAttribute = regexp.MustCompile(`font-size="(\d+)"`)
+
+// svgSpecCardFontSize is the size the SVG card paints its text at, read out of a
+// render rather than restated, so the draw.io card can be required to state the
+// same one — it is the size both formats' band heights are measured from.
+func svgSpecCardFontSize(t *testing.T) string {
+	t.Helper()
+
+	lines := strings.Split(svgWithSpecs(t, test.SlicePatternLibraryLendingModel(t)), "\n")
+	for i, line := range lines {
+		if !strings.Contains(line, fillSpecCardHex) || i+1 >= len(lines) {
+			continue
+		}
+		found := svgFontSizeAttribute.FindStringSubmatch(lines[i+1])
+		require.NotNil(t, found, "the card's text states no font size: %s", lines[i+1])
+		return found[1]
+	}
+
+	require.FailNow(t, "the render draws no card to read a font size from")
+	return ""
+}
+
+// svgSpecCardRects returns where each card was drawn, in the order svgSpecCards
+// returns their text.
+func svgSpecCardRects(t *testing.T, output string) []boxRect {
+	t.Helper()
+
+	var rects []boxRect
+	for _, shape := range svgShapes(t, output) {
+		if strings.Contains(shape.attributes, fillSpecCardHex) {
+			rects = append(rects, shape.rect)
+		}
+	}
+
+	return rects
+}
+
+// svgSpecCardBlock returns the lines a card states for the scenario named name:
+// its quoted name and everything under it, up to the quoted name opening the
+// next scenario.
+func svgSpecCardBlock(t *testing.T, output, name string) []string {
+	t.Helper()
+
+	quoted := `"` + name + `"`
+	for _, card := range svgSpecCards(t, output) {
+		lines := strings.Split(card, "\n")
+		for i, line := range lines {
+			if line != quoted {
+				continue
+			}
+			block := []string{line}
+			for _, next := range lines[i+1:] {
+				if strings.HasPrefix(next, `"`) {
+					break
+				}
+				block = append(block, next)
+			}
+			return block
+		}
+	}
+
+	require.FailNowf(t, "no card states the scenario", "%q", name)
+	return nil
+}
+
+// svgCanvas is the width and height the diagram's viewBox declares.
+func svgCanvas(t *testing.T, output string) (int, int) {
+	t.Helper()
+
+	bounds := strings.Fields(svgViewBox(t, output))
+	require.Len(t, bounds, 4, "a viewBox states an origin and a size")
+
+	w, err := strconv.Atoi(bounds[2])
+	require.NoError(t, err, "a viewBox states a whole-number width")
+	h, err := strconv.Atoi(bounds[3])
+	require.NoError(t, err, "a viewBox states a whole-number height")
+
+	return w, h
 }
 
 // fillRejectionHex and fillEventHex are stated here rather than read from the
