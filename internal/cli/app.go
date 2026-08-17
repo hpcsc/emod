@@ -133,10 +133,18 @@ func NewApp() *urfave.App {
 						Name:  "serve",
 						Usage: "Start viewer server with diagram data",
 					},
+					&urfave.BoolFlag{
+						Name:  "specs",
+						Usage: "Draw each slice's specs as a Given-When-Then card (drawio and svg only)",
+					},
 				},
 				Action: func(c *urfave.Context) error {
 					path := c.Args().First()
+					specs := c.Bool("specs")
 					if c.Bool("serve") {
+						if specs {
+							return reportExitError(unsupportedSpecsSurface("--serve"))
+						}
 						return RunDiagramServe(c.Context, path, true)
 					}
 					format := c.String("format")
@@ -145,7 +153,7 @@ func NewApp() *urfave.App {
 					if err != nil {
 						return urfave.Exit(err.Error(), 1)
 					}
-					return reportExitError(RunDiagram(path, outputPath, format, style))
+					return reportExitError(RunDiagram(path, outputPath, format, style, specs))
 				},
 			},
 			{

@@ -3,7 +3,7 @@
 ## Progress
 - [x] Task 1: Draw a slice's specs as a card in the SVG diagram
 - [x] Task 2: Draw the same card in the draw.io diagram
-- [ ] Task 3: Render the cards from the command line behind `--specs`
+- [x] Task 3: Render the cards from the command line behind `--specs`
 - [ ] Task 4: Document `--specs` where the diagram command is described
 
 ---
@@ -483,23 +483,31 @@ unchanged. Asked for cards on a surface that draws none — mermaid, ASCII, or t
 refuses with a message naming the flag and the formats that do.
 
 **Acceptance Criteria:**
-- [ ] `emod diagram --specs <file>` with the default format writes a draw.io file whose content names
-      each spec the model states; the same invocation with `-f svg` writes an SVG that does
-- [ ] `emod diagram <file>` with no `--specs`, in each of the four formats, writes byte-identical
+- [x] `emod diagram --specs <file>` with the default format writes a draw.io file whose content names
+      each spec the model states; the same invocation with `--format svg` writes an SVG that does —
+      the criterion's `-f` spelling does not exist for this command and never has: only `glossary`
+      declares an `f` alias (`internal/cli/app.go`), so `emod diagram -f svg` exits 1 with
+      "flag provided but not defined: -f". Verified end to end with `--format`
+- [x] `emod diagram <file>` with no `--specs`, in each of the four formats, writes byte-identical
       output to what the same invocation writes before this task — asserted as a differential against
       the model's `WithoutSpecs` twin, so it is checkable from inside the working tree
-- [ ] `emod diagram --specs -f mermaid <file>` and `emod diagram --specs -f ascii <file>` each write no
-      output file, print nothing to stdout, and return an error whose exit code is 1 and whose message
-      names `--specs` and lists `drawio` and `svg`; the leaves assert those tokens, not merely a
-      non-zero code
-- [ ] `emod diagram --specs --serve <file>` returns the same shape of error and starts no server
-- [ ] The error is a `*LintError` carrying a cause callers can match with `errors.Is`, in the shape
+- [x] `emod diagram --specs --format mermaid <file>` and `emod diagram --specs --format ascii <file>`
+      each write no output file, print nothing to stdout, and return an error whose exit code is 1 and
+      whose message names `--specs` and lists `drawio` and `svg`; the leaves assert those tokens, not
+      merely a non-zero code. (`-f` as written above is not a flag this command declares.)
+- [x] `emod diagram --specs --serve <file>` returns the same shape of error and starts no server
+- [x] The error is a `*LintError` carrying a cause callers can match with `errors.Is`, in the shape
       `internal/cli/lint.go:18` and `internal/cli/diagram.go:58-64` already use, and it registers no
       rule name and no entry in `internal/linter/descriptions.go`
-- [ ] A model with parse or validation errors still exits 2 and writes no file whether or not `--specs`
+- [x] A model with parse or validation errors still exits 2 and writes no file whether or not `--specs`
       is given, and a model with lint warnings still writes its diagram and exits 1 either way
-- [ ] `--specs` appears in `emod diagram --help` with a usage string saying what it draws
-- [ ] Every existing subtest in `internal/cli/diagram_test.go` passes with no edit
+- [x] `--specs` appears in `emod diagram --help` with a usage string saying what it draws
+- [x] Every existing subtest in `internal/cli/diagram_test.go` passes with no edit — no assertion,
+      expected value or fixture of one moves. Go has no default arguments, so all 21 existing
+      `cli.RunDiagram(...)` calls gain a trailing `false`; the diff in that file is exactly those 21
+      call lines plus the new leaves. The alternative, a variadic `diagram.Option` the CLI cannot
+      inspect, would have to ignore `--specs` for mermaid and ASCII rather than refuse it, which is
+      the trap "Open questions, decided" item 7 rejects
 
 **Affected Files/Modules:**
 - `internal/cli/app.go` — the `--specs` flag on the `diagram` command (`:113-149`), alongside

@@ -26,7 +26,10 @@ import (
 // Errors produce diagnostics on stderr and a non-zero exit code.
 // Lint warnings still produce the diagram but with exit code 1.
 // style controls the layout strategy (auto, projected, dcb).
-func RunDiagram(path, outputPath, format string, style diagram.Style) error {
+// specs draws each slice's scenarios as a Given-When-Then card; only drawio and
+// svg render one, and asking for cards in another format is refused rather than
+// ignored, so a script cannot quietly write a diagram missing what it asked for.
+func RunDiagram(path, outputPath, format string, style diagram.Style, specs bool) error {
 	source, err := readSourceFile("diagram", path)
 	if err != nil {
 		return err
@@ -63,6 +66,15 @@ func RunDiagram(path, outputPath, format string, style diagram.Style) error {
 		}
 	}
 
+	if specs && (format == "mermaid" || format == "ascii") {
+		return unsupportedSpecsSurface(fmt.Sprintf("format %q", format))
+	}
+
+	var options []diagram.Option
+	if specs {
+		options = append(options, diagram.WithSpecs())
+	}
+
 	// Generate diagram
 	var output []byte
 	switch format {
@@ -71,9 +83,9 @@ func RunDiagram(path, outputPath, format string, style diagram.Style) error {
 	case "ascii":
 		output, err = diagram.ExportASCII(model, style)
 	case "svg":
-		output, err = diagram.ExportSVG(model, style)
+		output, err = diagram.ExportSVG(model, style, options...)
 	default:
-		output, err = diagram.ExportDrawio(model, style)
+		output, err = diagram.ExportDrawio(model, style, options...)
 	}
 	if err != nil {
 		return &LintError{
@@ -114,6 +126,18 @@ func RunDiagram(path, outputPath, format string, style diagram.Style) error {
 	}
 
 	return lintExit(hasWarnings)
+}
+
+// unsupportedSpecsSurface refuses to draw spec cards where nothing draws them,
+// naming the flag and the two formats that do. Turning this refusal into output
+// later breaks no one, where turning today's silence into output would change
+// what a working script writes.
+func unsupportedSpecsSurface(surface string) error {
+	return &LintError{
+		Message:  fmt.Sprintf("--specs is not supported for %s; only drawio and svg draw spec cards", surface),
+		ExitCode: 1,
+		Cause:    ErrUnsupportedFormat,
+	}
 }
 
 func lintExit(hasWarnings bool) error {

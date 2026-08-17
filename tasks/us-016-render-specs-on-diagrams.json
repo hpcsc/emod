@@ -56,7 +56,7 @@
         "internal/cli/diagram_test.go",
         "serve"
       ],
-      "done": false
+      "done": true
     },
     {
       "n": 4,
