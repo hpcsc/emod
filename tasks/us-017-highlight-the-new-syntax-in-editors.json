@@ -30,7 +30,7 @@
         "editors/vscode/test/scope-assertions.test.js",
         ":115-160"
       ],
-      "done": false
+      "done": true
     },
     {
       "n": 3,

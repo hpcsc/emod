@@ -4,19 +4,18 @@ command PlaceOrder {
   fields {
 # ^^^^^^ keyword.control.emod
     orderId string required
-#   ^^^^^^^ - keyword.control.emod entity.name.function.emod storage.type.emod storage.modifier.emod
+#   ^^^^^^^ variable.other.member.emod - keyword.control.emod entity.name.function.emod storage.type.emod storage.modifier.emod
 #           ^^^^^^ storage.type.emod
 #                  ^^^^^^^^ storage.modifier.emod - storage.type.emod
-# A field may be named after a keyword. The assertions below record what the
-# grammar produces for such a line today - a field name painted as though it
-# opened a declaration, and its type painted as the declared name - not what
-# it ought to produce.
+# A field may be named after a keyword, and it takes the same scope the ordinary
+# name above does: the treatment keys on the line's position inside the block, so
+# there is no spelling it can be wrong about.
     command string required
-#   ^^^^^^^ keyword.control.emod
-#           ^^^^^^ entity.name.function.emod - storage.type.emod
+#   ^^^^^^^ variable.other.member.emod - keyword.control.emod entity.name.function.emod
+#           ^^^^^^ storage.type.emod - entity.name.function.emod
 #                  ^^^^^^^^ storage.modifier.emod
     quantity int
-#   ^^^^^^^^ - keyword.control.emod entity.name.function.emod storage.type.emod storage.modifier.emod
+#   ^^^^^^^^ variable.other.member.emod - keyword.control.emod entity.name.function.emod storage.type.emod storage.modifier.emod
 #            ^^^ storage.type.emod
   }
 }

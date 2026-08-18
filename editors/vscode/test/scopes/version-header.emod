@@ -1,0 +1,6 @@
+# SYNTAX TEST "source.emod"
+
+# A file may open by naming the language version, and that keyword is the one
+# spelling of this story's eight that no other assertion file reaches.
+emod 1
+# <---- keyword.control.emod

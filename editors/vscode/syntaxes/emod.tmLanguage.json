@@ -32,9 +32,17 @@
       },
       "patterns": [
         { "include": "#comments" },
+        { "include": "#field-name" },
         { "include": "#keyword-entity" },
         { "include": "#standalone-tokens" }
       ]
+    },
+    "field-name": {
+      "comment": "A field line's first token, whatever it spells. Claiming it here is what keeps the flat alternation and #keyword-entity off a field named after a keyword: both match further along the line, and the leftmost match wins. A name position admits every spelling, so there is no per-spelling axis to key on and the rule is positional, like #positional-keywords, rather than an allowlist. It reaches only a name opening its own line — the block's opening line is already consumed by begin, which is why fields { command string required } is left as it was.",
+      "match": "^\\s*([A-Za-z_][A-Za-z0-9_]*)",
+      "captures": {
+        "1": { "name": "variable.other.member.emod" }
+      }
     },
     "keyword-entity": {
       "patterns": [

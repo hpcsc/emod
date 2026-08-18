@@ -1,0 +1,63 @@
+# SYNTAX TEST "source.emod"
+
+# A field name is claimed by where it sits inside the block, never by what it
+# spells, so every keyword the language defines reads as a field name here. The
+# eight that the spec and metadata constructs introduce come first.
+command RecordMetadata {
+  fields {
+    emod string required
+#   ^^^^ variable.other.member.emod - keyword.control.emod entity.name.function.emod
+#        ^^^^^^ storage.type.emod
+#               ^^^^^^^^ storage.modifier.emod
+    description string required
+#   ^^^^^^^^^^^ variable.other.member.emod - keyword.control.emod entity.name.function.emod
+#               ^^^^^^ storage.type.emod
+#                      ^^^^^^^^ storage.modifier.emod
+    invariant string required
+#   ^^^^^^^^^ variable.other.member.emod - keyword.control.emod entity.name.function.emod
+#             ^^^^^^ storage.type.emod
+#                    ^^^^^^^^ storage.modifier.emod
+    spec string required
+#   ^^^^ variable.other.member.emod - keyword.control.emod entity.name.function.emod
+#        ^^^^^^ storage.type.emod
+#               ^^^^^^^^ storage.modifier.emod
+    given string required
+#   ^^^^^ variable.other.member.emod - keyword.control.emod entity.name.function.emod
+#         ^^^^^^ storage.type.emod
+#                ^^^^^^^^ storage.modifier.emod
+    when string required
+#   ^^^^ variable.other.member.emod - keyword.control.emod entity.name.function.emod
+#        ^^^^^^ storage.type.emod
+#               ^^^^^^^^ storage.modifier.emod
+    then string required
+#   ^^^^ variable.other.member.emod - keyword.control.emod entity.name.function.emod
+#        ^^^^^^ storage.type.emod
+#               ^^^^^^^^ storage.modifier.emod
+    rejected string required
+#   ^^^^^^^^ variable.other.member.emod - keyword.control.emod entity.name.function.emod
+#            ^^^^^^ storage.type.emod
+#                   ^^^^^^^^ storage.modifier.emod
+# The rule has no per-spelling axis, so it reaches every keyword and not only the
+# eight above. These three belong to constructs this story never touches.
+    flow string required
+#   ^^^^ variable.other.member.emod - keyword.control.emod entity.name.function.emod
+#        ^^^^^^ storage.type.emod
+#               ^^^^^^^^ storage.modifier.emod
+    reads string required
+#   ^^^^^ variable.other.member.emod - keyword.control.emod entity.name.function.emod
+#         ^^^^^^ storage.type.emod
+#                ^^^^^^^^ storage.modifier.emod
+    decides_on string required
+#   ^^^^^^^^^^ variable.other.member.emod - keyword.control.emod entity.name.function.emod
+#              ^^^^^^ storage.type.emod
+#                     ^^^^^^^^ storage.modifier.emod
+  }
+}
+
+# A field written on the block's own opening line is out of the rule's reach: the
+# begin pattern has already consumed that line, and nothing anchors a name to the
+# text following a brace. The assertion states what the grammar produces, which
+# is not the multi-line treatment above. The form is legal input but never
+# formatter output - internal/formatter/formatter.go writes one field per line.
+command RecordInline { fields { description string required } }
+#                               ^^^^^^^^^^^ keyword.control.emod

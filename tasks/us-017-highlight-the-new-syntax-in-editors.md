@@ -2,7 +2,7 @@
 
 ## Progress
 - [x] Task 1: Assert the field-name and keyword captures for the spec and metadata keywords in tree-sitter
-- [ ] Task 2: Paint a keyword-named field as a field name in the VS Code grammar
+- [x] Task 2: Paint a keyword-named field as a field name in the VS Code grammar
 - [ ] Task 3: Capture payload numbers and booleans as literals in the tree-sitter highlight query
 - [ ] Task 4: Scope payload numbers and booleans as literals in the VS Code grammar
 
@@ -359,43 +359,52 @@ every keyword the language defines, because the treatment keys on the field line
 where it opens a file.
 
 **Acceptance Criteria:**
-- [ ] `mise exec -- task test:vscode` passes
-- [ ] Inside a `fields` block, a line whose name is any of `emod`, `description`, `invariant`, `spec`,
+- [x] `mise exec -- task test:vscode` passes
+- [x] Inside a `fields` block, a line whose name is any of `emod`, `description`, `invariant`, `spec`,
       `given`, `when`, `then` or `rejected` carries no `keyword.control.emod` on that name, asserted for
       each of the eight
-- [ ] Such a name carries the same scope a non-keyword field name carries, so the treatment is
+- [x] Such a name carries the same scope a non-keyword field name carries, so the treatment is
       positional rather than an allowlist — asserted on one keyword-named line and one ordinary line in
       the same file
-- [ ] `editors/vscode/test/scopes/fields.emod:10-17` no longer records a keyword scope as the observed
+- [x] `editors/vscode/test/scopes/fields.emod:10-17` no longer records a keyword scope as the observed
       treatment: `command string required` asserts a field name on `command` and `storage.type.emod` on
       `string`, and the comment explaining that the assertions state what the grammar produces rather
       than what it ought to is gone with the behaviour it described
-- [ ] The repair reaches every keyword and not only the eight: a `fields` line named `flow`, one named
+- [x] The repair reaches every keyword and not only the eight: a `fields` line named `flow`, one named
       `reads` and one named `decides_on` are asserted the same way, and no rule in
       `emod.tmLanguage.json` enumerates which spellings are exempt in field position
-- [ ] A field's *type* and *modifier* keep the scopes they carry today on every line the suite already
+- [x] A field's *type* and *modifier* keep the scopes they carry today on every line the suite already
       asserts — `storage.type.emod` on a built-in type, `storage.modifier.emod` on a modifier, and
       neither on a domain type — with `command string required` the one line that changes, because its
       type stops being painted as a declared entity name
-- [ ] Every assertion in `editors/vscode/test/scopes/unreserved-keywords.emod` passes unedited: `on`
+- [x] Every assertion in `editors/vscode/test/scopes/unreserved-keywords.emod` passes unedited: `on`
       and `every` are already correct in all three field positions and this task neither narrows nor
       widens their treatment
-- [ ] A version header's `emod` carries `keyword.control.emod`, asserted in an assertion file — the one
+- [x] A version header's `emod` carries `keyword.control.emod`, asserted in an assertion file — the one
       spelling of the eight that no scope file names today
-- [ ] The single-line form `fields { <keyword> string required }` is covered by an assertion stating
+- [x] The single-line form `fields { <keyword> string required }` is covered by an assertion stating
       the scope its name actually receives, and a comment beside it says whether that matches the
       multi-line treatment; the form is legal input but never formatter output, since
       `internal/formatter/formatter.go:285-311` writes one field per line
-- [ ] `scope-assertions.test.js` gains a negative control for the repair: a copy of the grammar with the
+- [x] `scope-assertions.test.js` gains a negative control for the repair: a copy of the grammar with the
       field-name treatment removed makes the keyword-named-field assertions fail, and the report names
       the position, the prohibited scope and the scope actually produced
 - [ ] The four negative controls already in `scope-assertions.test.js` (`:115`, `:134` twice, `:149`)
       still pass, the `on` / `every` one unedited — extending the flat alternation with those two
       spellings must still break the field-name assertions
-- [ ] `emod.tmLanguage.json` is valid JSON, `positional-keywords` (`:67-89`) is unchanged, and the flat
+      - Partly unmet, and unmeetable as written. There are five such controls, not four: US-012 and
+        US-013 each added a row to the keyword table. All five still pass and each still catches its
+        mutation. Three needed their `sourceLine` changed, the `on` / `every` one among them, because
+        claiming a field's name is exactly what stops a positionless alternation from reaching that
+        position — the repair this task exists to make. Those mutations are now witnessed one column
+        along, at a field's type and modifier, which the claim does not cover: `notified on required`,
+        `delayed after required` and `published type required`. Keeping `on string required` as the
+        witness would need the claim to exempt the four positional spellings, which is the
+        per-keyword allowlist this task's first decision rules out.
+- [x] `emod.tmLanguage.json` is valid JSON, `positional-keywords` (`:67-89`) is unchanged, and the flat
       `keywords` alternation (`:100-104`) still spells every lexer keyword other than `on`, `every` and
       `type`, so `mise exec -- task test:grammar` still passes `TestEditorKeywordCoverage`
-- [ ] `git diff` touches only `editors/vscode/syntaxes/emod.tmLanguage.json` and files under
+- [x] `git diff` touches only `editors/vscode/syntaxes/emod.tmLanguage.json` and files under
       `editors/vscode/test/`
 
 **Affected Files/Modules:**

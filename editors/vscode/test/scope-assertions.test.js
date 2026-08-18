@@ -63,6 +63,15 @@ function grammarWithFlatKeywordsExtended(words) {
   return JSON.stringify(grammar)
 }
 
+function grammarWithoutFieldNameTreatment() {
+  const grammar = JSON.parse(readGrammar())
+  const patterns = grammar.repository['fields-block'].patterns
+  const claimed = patterns.findIndex((pattern) => pattern.include === '#field-name')
+  assert.notEqual(claimed, -1, 'the fields block no longer claims its field names')
+  patterns.splice(claimed, 1)
+  return JSON.stringify(grammar)
+}
+
 // The positional rules are deliberately case-sensitive, matching the lexer's
 // own keyword lookup. Nothing in a positive assertion says so, so the guard is
 // this mutation: make them case-insensitive and a construct named after one of
@@ -142,10 +151,29 @@ describe('emod TextMate scope assertions', () => {
     })
   })
 
+  test('a grammar that leaves a field name unclaimed paints one named after a keyword', (t) => {
+    const config = extensionConfigFor(t, grammarWithoutFieldNameTreatment())
+    const keywordFields = assertionPath('keyword-named-fields.emod')
+
+    const run = runScopeTest('--config', config, keywordFields)
+
+    assertReportsMismatch(run, {
+      file: keywordFields,
+      sourceLine: 'emod string required',
+      required: 'variable.other.member.emod',
+      prohibited: 'keyword.control.emod',
+      produced: 'keyword.control.emod',
+    })
+  })
+
+  // #field-name claims a field's name before the flat alternation is consulted,
+  // so a positionless keyword rule can no longer reach that position. What it
+  // still reaches is a field's type and its modifier, and those are where these
+  // mutations have to be witnessed.
   for (const { keywords, sourceLine } of [
-    { keywords: ['on', 'every'], sourceLine: 'on string required' },
-    { keywords: ['after'], sourceLine: 'after string required' },
-    { keywords: ['type'], sourceLine: 'type string required' },
+    { keywords: ['on', 'every'], sourceLine: 'notified on required' },
+    { keywords: ['after'], sourceLine: 'delayed after required' },
+    { keywords: ['type'], sourceLine: 'published type required' },
   ]) {
     test(`a grammar that colours ${keywords.join(' and ')} by word alone paints a field named after one`, (t) => {
       const config = extensionConfigFor(t, grammarWithFlatKeywordsExtended(keywords))
