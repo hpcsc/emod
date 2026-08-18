@@ -264,6 +264,28 @@ which already run every suite this story writes into; `docs/`, `README.md`, `exa
 
 ---
 
+## Theory
+
+Two rules in `editors/vscode/syntaxes/emod.tmLanguage.json` carry this change: `#field-name`, which
+claims a field line's leading token by position so that no keyword rule can reach it, and
+`#payload-values`, which scopes a payload's numbers and booleans by keying on the colon that
+introduces them. Both are positional because TextMate has no parse to consult — the enclosing
+`begin`/`end` block is the only context it gets — and that is also why `#tags-block` exists: a tag
+entry's `entity: true` is textually identical to a payload's `flag: true`, so nothing but the block
+around them tells the two apart. Numbers could instead have been matched positionlessly as
+`\b\d+\b`, which the language would tolerate because no identifier may begin with a digit; keying
+them on the colon was chosen so that both literal rules rest on one idea rather than two, and so this
+surface agrees with the tree-sitter query, which leaves a version header's digits uncaptured. Nothing
+was added to the tree-sitter grammar itself, whose field-name and keyword captures are structural and
+were already correct: `editors/tree-sitter-emod/queries/highlights.scm` gains only `(number)` and
+`(boolean)`, and everything else on that side is assertion.
+
+Read the block rules' `begin` patterns hardest. An optional brace on `#tags-block` also opened it on
+a payload field *named* `tags`, silently stripping the literal scopes from everything up to the
+payload's closing brace; `#fields-block` still carries that same optional brace, load-bearing there
+because a block may be written with its brace on the following line, and harmless there only because
+that rule keeps the literal patterns `#tags-block` drops.
+
 ## Tasks
 
 ### Task 1: Assert the field-name and keyword captures for the spec and metadata keywords in tree-sitter
