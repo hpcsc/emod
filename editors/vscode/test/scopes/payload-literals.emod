@@ -22,6 +22,31 @@ context "Lending" {
   }
 }
 
+# A payload field's name is left alone on both surfaces - it matches the DCB tag
+# key beside it, which carries no scope either. Where that name is spelled like a
+# keyword the flat alternation still reaches it, which tree-sitter does not do.
+context "Named" {
+  slice "S" {
+    spec "s" {
+      when PlaceOrder { spec: 1, roomId: 2 }
+#                       ^^^^ keyword.control.emod
+#                                 ^^^^^^ - keyword.control.emod
+    }
+  }
+}
+
+# The parser compares a boolean value exactly (internal/parser), so a capitalised
+# one is not a literal. An editor paints text mid-edit, and painting True as a
+# boolean would report a value the language will reject as one it accepts.
+context "Recheck" {
+  slice "S" {
+    spec "s" {
+      when Recheck { expedited: True }
+#                               ^^^^ - constant.language.boolean.emod
+    }
+  }
+}
+
 # A field named true is a field name. Its name is claimed by #field-name before
 # any later rule is consulted, so the witness for a positionless boolean rule is
 # a field *typed* true, which nothing claims ahead of it.

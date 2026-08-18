@@ -1,7 +1,7 @@
 # SYNTAX TEST "source.emod"
 
-# A file may open by naming the language version, and that keyword is the one
-# spelling of this story's eight that no other assertion file reaches.
+# A file may open by naming the language version. No other assertion file
+# reaches that keyword, so this is where it is pinned.
 emod 1
 # <---- keyword.control.emod
 #    ^ - constant.numeric.emod

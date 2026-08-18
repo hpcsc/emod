@@ -6,6 +6,7 @@
   "patterns": [
     { "include": "#comments" },
     { "include": "#fields-block" },
+    { "include": "#tags-block" },
     { "include": "#keyword-entity" },
     { "include": "#positional-keywords" },
     { "include": "#standalone-tokens" }
@@ -21,10 +22,11 @@
     },
     "fields-block": {
       "comment": "A field name, type and modifier are all free identifiers, so an activation is unreadable from one field line alone; the block boundary is what tells the two apart.",
-      "begin": "(?i)\\b(fields)\\b\\s*(\\{)?",
+      "begin": "(?i)\\b(fields)\\b\\s*(\\{)?[ \\t]*([A-Za-z_][A-Za-z0-9_]*)?",
       "beginCaptures": {
         "1": { "name": "keyword.control.emod" },
-        "2": { "name": "keyword.operator.emod" }
+        "2": { "name": "keyword.operator.emod" },
+        "3": { "name": "variable.other.member.emod" }
       },
       "end": "\\}",
       "endCaptures": {
@@ -38,11 +40,30 @@
       ]
     },
     "field-name": {
-      "comment": "A field line's first token, whatever it spells. Claiming it here is what keeps the flat alternation and #keyword-entity off a field named after a keyword: both match further along the line, and the leftmost match wins. A name position admits every spelling, so there is no per-spelling axis to key on and the rule is positional, like #positional-keywords, rather than an allowlist. It reaches only a name opening its own line — the block's opening line is already consumed by begin, which is why fields { command string required } is left as it was.",
+      "comment": "A field line's first token, whatever it spells. Claiming it here is what keeps the flat alternation and #keyword-entity off a field named after a keyword: both match further along the line, and the leftmost match wins. A name position admits every spelling, so there is no per-spelling axis to key on and the rule is positional, like #positional-keywords, rather than an allowlist. It reaches only a name that opens its own line; a name written on the block's opening line is claimed by fields-block's own begin match instead.",
       "match": "^\\s*([A-Za-z_][A-Za-z0-9_]*)",
       "captures": {
         "1": { "name": "variable.other.member.emod" }
       }
+    },
+    "tags-block": {
+      "comment": "A tag entry's value is a reference to a field, never a literal, so a field named true must not read as one here. The block boundary is the only thing that separates `entity: true` from a payload's `flag: true`, the same way fields-block is the only thing that separates a field line from an activation. #payload-values is deliberately absent from the inner patterns for that reason.",
+      "begin": "(?i)\\b(tags)\\b\\s*(\\{)?",
+      "beginCaptures": {
+        "1": { "name": "keyword.control.emod" },
+        "2": { "name": "keyword.operator.emod" }
+      },
+      "end": "\\}",
+      "endCaptures": {
+        "0": { "name": "keyword.operator.emod" }
+      },
+      "patterns": [
+        { "include": "#comments" },
+        { "include": "#strings" },
+        { "include": "#keywords" },
+        { "include": "#operators" },
+        { "include": "#punctuation" }
+      ]
     },
     "keyword-entity": {
       "patterns": [

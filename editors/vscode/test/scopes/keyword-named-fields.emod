@@ -1,8 +1,7 @@
 # SYNTAX TEST "source.emod"
 
 # A field name is claimed by where it sits inside the block, never by what it
-# spells, so every keyword the language defines reads as a field name here. The
-# eight that the spec and metadata constructs introduce come first.
+# spells, so every keyword the language defines reads as a field name here.
 command RecordMetadata {
   fields {
     emod string required
@@ -37,8 +36,8 @@ command RecordMetadata {
 #   ^^^^^^^^ variable.other.member.emod - keyword.control.emod entity.name.function.emod
 #            ^^^^^^ storage.type.emod
 #                   ^^^^^^^^ storage.modifier.emod
-# The rule has no per-spelling axis, so it reaches every keyword and not only the
-# eight above. These three belong to constructs this story never touches.
+# The rule has no per-spelling axis, so it reaches every keyword. These three
+# name constructs that have nothing to do with specs or metadata.
     flow string required
 #   ^^^^ variable.other.member.emod - keyword.control.emod entity.name.function.emod
 #        ^^^^^^ storage.type.emod
@@ -54,10 +53,32 @@ command RecordMetadata {
   }
 }
 
-# A field written on the block's own opening line is out of the rule's reach: the
-# begin pattern has already consumed that line, and nothing anchors a name to the
-# text following a brace. The assertion states what the grammar produces, which
-# is not the multi-line treatment above. The form is legal input but never
-# formatter output - internal/formatter/formatter.go writes one field per line.
+# A field written on the block's own opening line reads the same way. Nothing
+# anchored to the start of a line can reach it, since begin has already consumed
+# that line, so the block's own opening match claims it instead. The form is
+# legal input but never formatter output - internal/formatter/formatter.go
+# writes one field per line.
 command RecordInline { fields { description string required } }
-#                               ^^^^^^^^^^^ keyword.control.emod
+#                               ^^^^^^^^^^^ variable.other.member.emod - keyword.control.emod
+#                                           ^^^^^^ storage.type.emod
+#                                                  ^^^^^^^^ storage.modifier.emod
+
+# Only the name is claimed. A keyword in a field's type or modifier position is
+# still painted as a keyword, which the tree-sitter query is not - it captures
+# all three positions structurally. Claiming the other two here would leave the
+# flat alternation with no witness anywhere inside a fields block, retiring
+# guards two other stories rely on, so the divergence is recorded rather than
+# repaired.
+command RecordTyped {
+  fields {
+    blurb description required
+#         ^^^^^^^^^^^ keyword.control.emod
+    versioned string emod
+#                    ^^^^ keyword.control.emod
+  }
+}
+
+# A tag entry's value names a field, so a field named true is not a literal here.
+event DeskClaimed { tags { entity: true } }
+#                          ^^^^^^ - constant.language.boolean.emod
+#                                  ^^^^ - constant.language.boolean.emod

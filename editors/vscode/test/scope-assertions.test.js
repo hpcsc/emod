@@ -72,6 +72,27 @@ function grammarWithoutFieldNameTreatment() {
   return JSON.stringify(grammar)
 }
 
+function grammarWithPayloadValuesCaseInsensitive() {
+  const grammar = JSON.parse(readGrammar())
+  const patterns = grammar.repository['payload-values'].patterns
+  assert.ok(patterns.length > 0, 'the payload value rule no longer holds any pattern')
+  patterns.forEach((pattern) => {
+    assert.ok(!pattern.match.startsWith('(?i)'), `${pattern.match} is already case-insensitive`)
+    pattern.match = `(?i)${pattern.match}`
+  })
+  return JSON.stringify(grammar)
+}
+
+function grammarWithNumbersByShapeAlone() {
+  const grammar = JSON.parse(readGrammar())
+  const numbers = grammar.repository['payload-values'].patterns.find((pattern) =>
+    pattern.match.includes('\\d+'),
+  )
+  assert.ok(numbers, 'the payload value rule no longer holds a numeric pattern')
+  numbers.match = '\\b(\\d+(?:\\.\\d+)?)\\b'
+  return JSON.stringify(grammar)
+}
+
 function grammarWithBooleansByWordAlone() {
   const grammar = JSON.parse(readGrammar())
   const patterns = grammar.repository['payload-values'].patterns
@@ -189,6 +210,34 @@ describe('emod TextMate scope assertions', () => {
     })
   })
 
+  test('a grammar whose payload values ignore case paints a capitalised one as a literal', (t) => {
+    const config = extensionConfigFor(t, grammarWithPayloadValuesCaseInsensitive())
+    const payloadLiterals = assertionPath('payload-literals.emod')
+
+    const run = runScopeTest('--config', config, payloadLiterals)
+
+    assertReportsMismatch(run, {
+      file: payloadLiterals,
+      sourceLine: 'when Recheck { expedited: True }',
+      prohibited: 'constant.language.boolean.emod',
+      produced: 'constant.language.boolean.emod',
+    })
+  })
+
+  test('a grammar that colours a number by its shape alone paints a version header', (t) => {
+    const config = extensionConfigFor(t, grammarWithNumbersByShapeAlone())
+    const versionHeader = assertionPath('version-header.emod')
+
+    const run = runScopeTest('--config', config, versionHeader)
+
+    assertReportsMismatch(run, {
+      file: versionHeader,
+      sourceLine: 'emod 1',
+      prohibited: 'constant.numeric.emod',
+      produced: 'constant.numeric.emod',
+    })
+  })
+
   // #field-name claims a field's name before the flat alternation is consulted,
   // so a positionless keyword rule can no longer reach that position. What it
   // still reaches is a field's type and its modifier, and those are where these
@@ -198,7 +247,7 @@ describe('emod TextMate scope assertions', () => {
     { keywords: ['after'], sourceLine: 'delayed after required' },
     { keywords: ['type'], sourceLine: 'published type required' },
   ]) {
-    test(`a grammar that colours ${keywords.join(' and ')} by word alone paints a field named after one`, (t) => {
+    test(`a grammar that colours ${keywords.join(' and ')} by word alone paints a field typed after one`, (t) => {
       const config = extensionConfigFor(t, grammarWithFlatKeywordsExtended(keywords))
       const keywordFieldAssertions = assertionPath('unreserved-keywords.emod')
 
