@@ -145,17 +145,32 @@ function extensionConfigFor(t, grammar) {
   return config
 }
 
+function reportedFailures(output) {
+  const starts = [...output.matchAll(/^\s*at \[[^\]]+:\d+:\d+:\d+\]:/gm)].map((match) => match.index)
+  return starts.map((start, n) => output.slice(start, starts[n + 1] ?? output.length))
+}
+
+// Every fragment is required of the one reported failure that quotes sourceLine.
+// Checked against the whole report instead, a mutation that reddens several
+// lines lets four fragments come from four different failures, so a control
+// passes while the line it names carries none of what it claims to witness.
 function assertReportsMismatch({ status, output }, { file, sourceLine, required, prohibited, produced }) {
   assert.notEqual(status, 0, output)
   assert.match(output, new RegExp(`${escapeForRegExp(file)}:\\d+:\\d+:\\d+`))
+
+  const quoting = reportedFailures(output).filter((failure) => failure.includes(sourceLine))
+  assert.equal(quoting.length, 1, `expected one reported failure quoting "${sourceLine}", got ${quoting.length}:\n${output}`)
+
   const named = [
-    sourceLine,
     required && `missing required scopes: ${required}`,
     prohibited && `prohibited scopes: ${prohibited}`,
     `actual: source.emod ${produced}`,
   ].filter(Boolean)
   for (const fragment of named) {
-    assert.ok(output.includes(fragment), `the failure report does not name "${fragment}":\n${output}`)
+    assert.ok(
+      quoting[0].includes(fragment),
+      `the failure reported for "${sourceLine}" does not name "${fragment}":\n${quoting[0]}`,
+    )
   }
 }
 

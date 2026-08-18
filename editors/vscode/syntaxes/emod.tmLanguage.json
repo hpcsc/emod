@@ -47,8 +47,8 @@
       }
     },
     "tags-block": {
-      "comment": "A tag entry's value is a reference to a field, never a literal, so a field named true must not read as one here. The block boundary is the only thing that separates `entity: true` from a payload's `flag: true`, the same way fields-block is the only thing that separates a field line from an activation. #payload-values is deliberately absent from the inner patterns for that reason.",
-      "begin": "(?i)\\b(tags)\\b\\s*(\\{)?",
+      "comment": "A tag entry's value is a reference to a field, never a literal, so a field named true must not read as one here. The block boundary is the only thing that separates `entity: true` from a payload's `flag: true`, the same way fields-block is the only thing that separates a field line from an activation. The brace is required, unlike fields-block's: leave it optional and this rule also opens on a payload field named tags, swallowing every literal after it. The inner patterns take #literal-free-tokens, which is the shared tail minus #payload-values, so excluding literals cannot silently drop anything else a tag value used to receive.",
+      "begin": "(?i)\\b(tags)\\b\\s*(\\{)",
       "beginCaptures": {
         "1": { "name": "keyword.control.emod" },
         "2": { "name": "keyword.operator.emod" }
@@ -60,9 +60,8 @@
       "patterns": [
         { "include": "#comments" },
         { "include": "#strings" },
-        { "include": "#keywords" },
-        { "include": "#operators" },
-        { "include": "#punctuation" }
+        { "include": "#keyword-entity" },
+        { "include": "#literal-free-tokens" }
       ]
     },
     "keyword-entity": {
@@ -125,6 +124,12 @@
       "patterns": [
         { "include": "#strings" },
         { "include": "#payload-values" },
+        { "include": "#literal-free-tokens" }
+      ]
+    },
+    "literal-free-tokens": {
+      "comment": "The tail every context shares, holding everything that is not a payload literal. #tags-block includes this rather than #standalone-tokens so a tag entry's value never meets #payload-values; routing both through one list is what stops the two tails drifting apart.",
+      "patterns": [
         { "include": "#keywords" },
         { "include": "#field-modifiers" },
         { "include": "#field-types" },
@@ -138,7 +143,7 @@
       "name": "keyword.control.emod"
     },
     "payload-values": {
-      "comment": "A payload's numeric and boolean values, keyed on the colon introducing them the way #positional-keywords keys its entries on their operand. Positionless would paint a field named true, and every digit the language writes outside a payload — a version header's among them, which the tree-sitter query leaves uncaptured too. #strings precedes this in #standalone-tokens, so neither pattern reaches inside a quoted value carrying digits. Case-sensitive, like the grammar's own boolean token.",
+      "comment": "A payload's numeric and boolean values, keyed on the colon introducing them the way #positional-keywords keys its entries on their operand. Positionless would paint a field named true, and every digit the language writes outside a payload — a version header's among them, which the tree-sitter query leaves uncaptured too. A quoted value carrying digits is safe because its opening quote sits earlier on the line than its digits and the leftmost match wins, not because of where this rule sits in #standalone-tokens. Case-sensitive, like the grammar's own boolean token.",
       "patterns": [
         {
           "match": "(?<=:)\\s*(\\d+(?:\\.\\d+)?)\\b",

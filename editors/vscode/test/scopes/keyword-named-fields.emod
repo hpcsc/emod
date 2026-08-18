@@ -53,11 +53,11 @@ command RecordMetadata {
   }
 }
 
-# A field written on the block's own opening line reads the same way. Nothing
-# anchored to the start of a line can reach it, since begin has already consumed
-# that line, so the block's own opening match claims it instead. The form is
-# legal input but never formatter output - internal/formatter/formatter.go
-# writes one field per line.
+# The block's own opening line claims one field name, in the same match that
+# claims the block: nothing anchored to the start of a line can reach it, since
+# begin has already consumed that line. A second field written on that line is
+# not covered and still reads as a keyword. Neither form is ever formatter
+# output - internal/formatter/formatter.go writes one field per line.
 command RecordInline { fields { description string required } }
 #                               ^^^^^^^^^^^ variable.other.member.emod - keyword.control.emod
 #                                           ^^^^^^ storage.type.emod
@@ -80,5 +80,5 @@ command RecordTyped {
 
 # A tag entry's value names a field, so a field named true is not a literal here.
 event DeskClaimed { tags { entity: true } }
-#                          ^^^^^^ - constant.language.boolean.emod
+#                          ^^^^^^ - constant.language.boolean.emod keyword.control.emod
 #                                  ^^^^ - constant.language.boolean.emod

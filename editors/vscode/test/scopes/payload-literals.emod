@@ -30,7 +30,21 @@ context "Named" {
     spec "s" {
       when PlaceOrder { spec: 1, roomId: 2 }
 #                       ^^^^ keyword.control.emod
-#                                 ^^^^^^ - keyword.control.emod
+#                                ^^^^^^ - keyword.control.emod
+    }
+  }
+}
+
+# A payload field may be named after a keyword that opens a block elsewhere. The
+# literals after it must survive, which they only do while #tags-block requires
+# its brace - without that it opens here and swallows the rest of the payload.
+context "BlockNamed" {
+  slice "S" {
+    spec "s" {
+      when Claim { tags: 1, amount: 42, ok: true }
+#                        ^ constant.numeric.emod
+#                                   ^^ constant.numeric.emod
+#                                           ^^^^ constant.language.boolean.emod
     }
   }
 }
@@ -63,8 +77,11 @@ event CopyReturned {
   }
 }
 
-# A digit inside an identifier is part of the identifier: the numeric rule keys
-# on a preceding colon, so no word boundary inside a name can reach it.
+# A digit inside an identifier is part of the identifier. Two things keep it that
+# way and only one of them is this rule's colon: there is also no word boundary
+# between a letter and the digit following it, so a shape-only numeric rule would
+# leave these alone too. The version header above is the case that separates the
+# two, and it is the one a de-positionalising mutation reddens.
 event Version2Placed {
 #     ^^^^^^^^^^^^^^ entity.name.function.emod - constant.numeric.emod
   fields {
