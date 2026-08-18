@@ -4,7 +4,7 @@
 - [x] Task 1: Assert the field-name and keyword captures for the spec and metadata keywords in tree-sitter
 - [x] Task 2: Paint a keyword-named field as a field name in the VS Code grammar
 - [x] Task 3: Capture payload numbers and booleans as literals in the tree-sitter highlight query
-- [ ] Task 4: Scope payload numbers and booleans as literals in the VS Code grammar
+- [x] Task 4: Scope payload numbers and booleans as literals in the VS Code grammar
 
 ---
 
@@ -516,35 +516,35 @@ what tree-sitter now shows, without painting a field named `true` or `false` and
 inside a quoted string that happens to carry digits.
 
 **Acceptance Criteria:**
-- [ ] `mise exec -- task test:vscode` passes, and an assertion file asserts a numeric scope on a payload
+- [x] `mise exec -- task test:vscode` passes, and an assertion file asserts a numeric scope on a payload
       value written without a fractional part and on one written with one, and a boolean scope on `true`
       and on `false`
-- [ ] The literal scopes are asserted on a `given` list element, on the `when` reference and on a `then`
+- [x] The literal scopes are asserted on a `given` list element, on the `when` reference and on a `then`
       event-list element
-- [ ] A quoted payload value keeps `string.quoted.double.emod`, asserted on the same line as a number,
+- [x] A quoted payload value keeps `string.quoted.double.emod`, asserted on the same line as a number,
       so the two treatments are proved distinct
-- [ ] Inside a `fields` block, a field named `true` and a field named `false` carry no boolean scope —
+- [x] Inside a `fields` block, a field named `true` and a field named `false` carry no boolean scope —
       the boolean treatment keys on payload position the way `positional-keywords` (`:67-89`) keys
       `on`, `every` and `type` on their operand, so it cannot be a positionless word alternation
-- [ ] `editors/vscode/test/scopes/strings.emod:14-17` passes unedited: a cron schedule keeps
+- [x] `editors/vscode/test/scopes/strings.emod:14-17` passes unedited: a cron schedule keeps
       `string.quoted.double.emod` across its whole span, with no numeric scope on the digits inside it
       — `standalone-tokens` (`:90-99`) lists `#strings` ahead of the rules that follow it, and that
       assertion is what holds the ordering
-- [ ] The treatment given to a version header's `1` is asserted either way, so the choice between a
+- [x] The treatment given to a version header's `1` is asserted either way, so the choice between a
       positionless numeric rule and a payload-keyed one is recorded in the suite rather than left to be
       re-derived from the grammar
-- [ ] An identifier carrying digits — an event named `Version2Placed`, a field named `line1` — carries
+- [x] An identifier carrying digits — an event named `Version2Placed`, a field named `line1` — carries
       no numeric scope
-- [ ] `scope-assertions.test.js` gains a negative control for the literal treatment: a copy of the
+- [x] `scope-assertions.test.js` gains a negative control for the literal treatment: a copy of the
       grammar with the boolean rule turned into a positionless word alternation makes the
       field-named-`true` assertion fail, and the report names the position, the prohibited scope and the
       scope actually produced
-- [ ] The four negative controls already in `scope-assertions.test.js` (`:115`, `:134` twice, `:149`)
+- [x] The four negative controls already in `scope-assertions.test.js` (`:115`, `:134` twice, `:149`)
       and the one Task 2 added still pass, unedited
-- [ ] `emod.tmLanguage.json` is valid JSON, its top-level `patterns` order (`:6-12`) still puts
+- [x] `emod.tmLanguage.json` is valid JSON, its top-level `patterns` order (`:6-12`) still puts
       `#comments` and `#fields-block` ahead of the rest, and `mise exec -- task test:grammar` still
       passes `TestEditorKeywordCoverage`
-- [ ] `git diff` touches only `editors/vscode/syntaxes/emod.tmLanguage.json` and files under
+- [x] `git diff` touches only `editors/vscode/syntaxes/emod.tmLanguage.json` and files under
       `editors/vscode/test/`
 
 **Affected Files/Modules:**

@@ -72,6 +72,15 @@ function grammarWithoutFieldNameTreatment() {
   return JSON.stringify(grammar)
 }
 
+function grammarWithBooleansByWordAlone() {
+  const grammar = JSON.parse(readGrammar())
+  const patterns = grammar.repository['payload-values'].patterns
+  const booleans = patterns.find((pattern) => pattern.match.includes('true|false'))
+  assert.ok(booleans, 'the payload value rule no longer holds a boolean pattern')
+  booleans.match = '\\b(true|false)\\b'
+  return JSON.stringify(grammar)
+}
+
 // The positional rules are deliberately case-sensitive, matching the lexer's
 // own keyword lookup. Nothing in a positive assertion says so, so the guard is
 // this mutation: make them case-insensitive and a construct named after one of
@@ -163,6 +172,20 @@ describe('emod TextMate scope assertions', () => {
       required: 'variable.other.member.emod',
       prohibited: 'keyword.control.emod',
       produced: 'keyword.control.emod',
+    })
+  })
+
+  test('a grammar that colours true and false by word alone paints a field typed after one', (t) => {
+    const config = extensionConfigFor(t, grammarWithBooleansByWordAlone())
+    const payloadLiterals = assertionPath('payload-literals.emod')
+
+    const run = runScopeTest('--config', config, payloadLiterals)
+
+    assertReportsMismatch(run, {
+      file: payloadLiterals,
+      sourceLine: 'flag true required',
+      prohibited: 'constant.language.boolean.emod',
+      produced: 'constant.language.boolean.emod',
     })
   })
 

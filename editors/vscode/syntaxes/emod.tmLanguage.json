@@ -103,6 +103,7 @@
     "standalone-tokens": {
       "patterns": [
         { "include": "#strings" },
+        { "include": "#payload-values" },
         { "include": "#keywords" },
         { "include": "#field-modifiers" },
         { "include": "#field-types" },
@@ -114,6 +115,23 @@
       "comment": "Every lexer keyword except on, every, after and type, which #positional-keywords colours case-sensitively so a field named after one stays a field. Longer spellings precede the shorter ones they contain (events before event, tags before tag) to keep the alternation readable; the surrounding \\b makes the order immaterial.",
       "match": "(?i)\\b(model|actor|context|aggregate|slice|command|events|event|fields|flow|trigger|view|automation|translation|subscribes|reads|source|external_system|external|target|mode|tags|tag|decides_on|where|and|or|not|emod|description|invariant|spec|given|when|then|rejected)\\b",
       "name": "keyword.control.emod"
+    },
+    "payload-values": {
+      "comment": "A payload's numeric and boolean values, keyed on the colon introducing them the way #positional-keywords keys its entries on their operand. Positionless would paint a field named true, and every digit the language writes outside a payload — a version header's among them, which the tree-sitter query leaves uncaptured too. #strings precedes this in #standalone-tokens, so neither pattern reaches inside a quoted value carrying digits. Case-sensitive, like the grammar's own boolean token.",
+      "patterns": [
+        {
+          "match": "(?<=:)\\s*(\\d+(?:\\.\\d+)?)\\b",
+          "captures": {
+            "1": { "name": "constant.numeric.emod" }
+          }
+        },
+        {
+          "match": "(?<=:)\\s*(true|false)\\b",
+          "captures": {
+            "1": { "name": "constant.language.boolean.emod" }
+          }
+        }
+      ]
     },
     "field-modifiers": {
       "match": "\\b(required|optional)\\b",

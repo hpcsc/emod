@@ -57,7 +57,7 @@
         "editors/vscode/test/scopes/",
         "editors/vscode/test/scope-assertions.test.js"
       ],
-      "done": false
+      "done": true
     }
   ]
 }

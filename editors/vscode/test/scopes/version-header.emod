@@ -4,3 +4,9 @@
 # spelling of this story's eight that no other assertion file reaches.
 emod 1
 # <---- keyword.control.emod
+#    ^ - constant.numeric.emod
+
+# The numeric rule keys on the colon that introduces a payload value, so a
+# header's version number is left as plain text. The tree-sitter query answers
+# the same way, for its own reason: those digits parse as (integer), and only
+# (number) carries a literal capture there.

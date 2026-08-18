@@ -1,0 +1,49 @@
+# SYNTAX TEST "source.emod"
+
+# A payload value is the only place the language writes a bare number or a bare
+# true, so both are keyed on the colon introducing them. Outside that position
+# each spelling is ordinary text - a field named true is a field name, and a
+# digit inside an identifier or a quoted string belongs to what encloses it.
+context "Lending" {
+  aggregate "Loan" {
+    slice "Borrow a Copy" {
+      spec "borrows a copy no one holds" {
+        given [CopyReturned { copyId: "C-93204", renewals: 4821 }]
+#                                     ^^^^^^^^^ string.quoted.double.emod - constant.numeric.emod
+#                                                          ^^^^ constant.numeric.emod - string.quoted.double.emod
+        when BorrowCopy { lateFee: 12.50, expedited: true }
+#                                  ^^^^^ constant.numeric.emod
+#                                                    ^^^^ constant.language.boolean.emod - entity.name.function.emod
+        then [CopyBorrowed { renewals: 0, expedited: false }]
+#                                      ^ constant.numeric.emod
+#                                                    ^^^^^ constant.language.boolean.emod - entity.name.function.emod
+      }
+    }
+  }
+}
+
+# A field named true is a field name. Its name is claimed by #field-name before
+# any later rule is consulted, so the witness for a positionless boolean rule is
+# a field *typed* true, which nothing claims ahead of it.
+event CopyReturned {
+  fields {
+    true bool required
+#   ^^^^ variable.other.member.emod - constant.language.boolean.emod
+    false bool required
+#   ^^^^^ variable.other.member.emod - constant.language.boolean.emod
+    flag true required
+#        ^^^^ - constant.language.boolean.emod keyword.control.emod
+    marked bool false
+#               ^^^^^ - constant.language.boolean.emod keyword.control.emod
+  }
+}
+
+# A digit inside an identifier is part of the identifier: the numeric rule keys
+# on a preceding colon, so no word boundary inside a name can reach it.
+event Version2Placed {
+#     ^^^^^^^^^^^^^^ entity.name.function.emod - constant.numeric.emod
+  fields {
+    line1 string required
+#   ^^^^^ variable.other.member.emod - constant.numeric.emod
+  }
+}
