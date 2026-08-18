@@ -3,7 +3,7 @@
 ## Progress
 - [x] Task 1: Assert the field-name and keyword captures for the spec and metadata keywords in tree-sitter
 - [x] Task 2: Paint a keyword-named field as a field name in the VS Code grammar
-- [ ] Task 3: Capture payload numbers and booleans as literals in the tree-sitter highlight query
+- [x] Task 3: Capture payload numbers and booleans as literals in the tree-sitter highlight query
 - [ ] Task 4: Scope payload numbers and booleans as literals in the VS Code grammar
 
 ---
@@ -456,28 +456,28 @@ than as unhighlighted text, distinct from the quoted strings beside them, while 
 `false` keeps its field-name treatment.
 
 **Acceptance Criteria:**
-- [ ] `mise exec -- task test:grammar` passes, and the highlight suite asserts a numeric capture on a
+- [x] `mise exec -- task test:grammar` passes, and the highlight suite asserts a numeric capture on a
       payload value written without a fractional part and on one written with one, and a boolean
       capture on `true` and on `false`
-- [ ] The literal captures are asserted in all three payload positions the payload grammar admits — on
+- [x] The literal captures are asserted in all three payload positions the payload grammar admits — on
       a `given` list element, on the `when` reference, and on a `then` event-list element
-- [ ] A quoted payload value keeps the string capture the query already gives every string, asserted on
+- [x] A quoted payload value keeps the string capture the query already gives every string, asserted on
       the same payload line as a number, so the two treatments are proved distinct rather than merged
-- [ ] A `fields` block declaring a field named `true` and one named `false` asserts the field-name
+- [x] A `fields` block declaring a field named `true` and one named `false` asserts the field-name
       capture on both, not the boolean capture — the field lines US-010 Task 7's corpus case parses as
       `any_identifier`
-- [ ] The capture names follow the convention the rest of `queries/highlights.scm` uses, and the new
+- [x] The capture names follow the convention the rest of `queries/highlights.scm` uses, and the new
       section carries a header comment describing what it captures the way the file's other seven
       sections do
-- [ ] Every new assertion can fail: deleting the numeric or boolean pattern from `highlights.scm` makes
+- [x] Every new assertion can fail: deleting the numeric or boolean pattern from `highlights.scm` makes
       `mise exec -- task test:grammar` fail on the corresponding assertions, naming the row, the column
       and the capture actually produced
-- [ ] Each marked literal is followed on its own line by a further highlighted token, so no assertion is
+- [x] Each marked literal is followed on its own line by a further highlighted token, so no assertion is
       satisfied by a capture found on a later line
-- [ ] `editors/tree-sitter-emod/grammar.js` and every file under `test/corpus/` are unchanged: the
+- [x] `editors/tree-sitter-emod/grammar.js` and every file under `test/corpus/` are unchanged: the
       payload rule and its corpus cases are US-010 Task 7's, and this task names the node types that
       task introduced rather than adding any
-- [ ] `git ls-files editors/tree-sitter-emod/src` returns nothing, and running
+- [x] `git ls-files editors/tree-sitter-emod/src` returns nothing, and running
       `mise exec -- task test:grammar` a second time leaves every tracked file under
       `editors/tree-sitter-emod/` byte-identical
 

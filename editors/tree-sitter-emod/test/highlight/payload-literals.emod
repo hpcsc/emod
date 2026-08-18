@@ -1,0 +1,33 @@
+# Marker lines name the highlight capture expected at the marked column of the
+# nearest source line above. An assertion only discriminates while another
+# highlighted token follows it on the same line; with none, the runner scans on
+# into later lines and accepts a capture found there. Every marked token below
+# is followed on its own line by a brace, a bracket, a comma, an operator or a
+# further literal, and that is what makes the assertion mean anything.
+
+context "Lending" {
+  aggregate "Loan" {
+    slice "Borrow a Copy" {
+      event CopyReturned {
+        fields {
+          true bool required
+#         ^ variable.member
+          false bool required
+#         ^ variable.member
+        }
+      }
+
+      spec "borrows a copy no one holds" {
+        given [CopyReturned { copyId: "C-93204", renewals: 4821 }]
+#                                     ^ string
+#                                                          ^ number
+        when BorrowCopy { lateFee: 12.50, expedited: true }
+#                                  ^ number
+#                                                    ^ boolean
+        then [CopyBorrowed { renewals: 0, expedited: false }]
+#                                      ^ number
+#                                                    ^ boolean
+      }
+    }
+  }
+}

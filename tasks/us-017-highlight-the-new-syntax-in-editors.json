@@ -43,7 +43,7 @@
         ":14-16",
         "editors/tree-sitter-emod/test/highlight/"
       ],
-      "done": false
+      "done": true
     },
     {
       "n": 4,

@@ -15,6 +15,14 @@
 ; Generic quoted strings; overridden for entity-name positions below.
 (string) @string
 
+; --- Literals ---
+; A spec payload's numeric and boolean values. Both nodes exist only in a
+; payload's value slot, so neither pattern needs a position to select on: the
+; version header's digits parse as (integer), and a field named true is an
+; any_identifier that keeps the field-name capture below.
+(number) @number
+(boolean) @boolean
+
 ; --- Keywords ---
 ; Every keyword this file colours, listed by hand: nothing derives the list from
 ; the grammar, so a keyword the grammar defines stays uncoloured until it is
