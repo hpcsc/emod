@@ -1,7 +1,7 @@
 # US-017: Highlight the new syntax in editors
 
 ## Progress
-- [ ] Task 1: Assert the field-name and keyword captures for the spec and metadata keywords in tree-sitter
+- [x] Task 1: Assert the field-name and keyword captures for the spec and metadata keywords in tree-sitter
 - [ ] Task 2: Paint a keyword-named field as a field name in the VS Code grammar
 - [ ] Task 3: Capture payload numbers and booleans as literals in the tree-sitter highlight query
 - [ ] Task 4: Scope payload numbers and booleans as literals in the VS Code grammar
@@ -277,37 +277,37 @@ in the repository says so, so this task is the story's third criterion becoming 
 tree-sitter side and its first criterion acquiring the receipt it has never had.
 
 **Acceptance Criteria:**
-- [ ] `mise exec -- task test:grammar` passes, and its `syntax highlighting:` section reports a
+- [x] `mise exec -- task test:grammar` passes, and its `syntax highlighting:` section reports a
       non-zero assertion count for each file under `editors/tree-sitter-emod/test/highlight/`, the new
       one included
-- [ ] The suite asserts the keyword capture on each of `emod` in a version header, `description` on a
+- [x] The suite asserts the keyword capture on each of `emod` in a version header, `description` on a
       construct, `invariant` on a context and on an aggregate, and `spec`, `given`, `when`, `then` and
       `rejected` inside a slice's spec — every one at its own row and column
-- [ ] The version-header assertion's marker column falls inside the capture the query actually
+- [x] The version-header assertion's marker column falls inside the capture the query actually
       produces, which is one character wider than the word: `grammar.js:27-28` folds the separator into
       the token, so the capture spans `emod ` and not `emod`
-- [ ] The suite asserts the field-name capture, and not the keyword capture, on a `fields` block line
+- [x] The suite asserts the field-name capture, and not the keyword capture, on a `fields` block line
       named after each of the same eight spellings
-- [ ] The same eight spellings are also asserted in a field's *type* position and in a field's
+- [x] The same eight spellings are also asserted in a field's *type* position and in a field's
       *modifier* position, so the criterion covers every position a keyword may legally occupy on a
       field line, matching the coverage `unreserved-keywords.emod:7-46` gives `on` and `every`
-- [ ] Every marked token is followed on its own line by a further highlighted token — a brace, an
+- [x] Every marked token is followed on its own line by a further highlighted token — a brace, an
       operator, another keyword or a trailing comment — so no assertion is satisfied by a capture the
       runner found on a later line, and the file's header says so the way the three existing files' do
-- [ ] Every assertion can fail: removing a spelling from the `@keyword` list at
+- [x] Every assertion can fail: removing a spelling from the `@keyword` list at
       `queries/highlights.scm:18-64` makes `mise exec -- task test:grammar` fail on that keyword's
       assertion, and removing the `@variable.member` capture at `:89-90` makes it fail on the
       field-name assertions, each run naming the row, the column and the capture actually produced
-- [ ] The assertion source is emod the parser accepts in its shape on main — no payload, no `type`
+- [x] The assertion source is emod the parser accepts in its shape on main — no payload, no `type`
       attribute and no `after` clause, none of which have landed
-- [ ] `editors/tree-sitter-emod/test/highlight/constructs.emod` gains no second line beginning
+- [x] `editors/tree-sitter-emod/test/highlight/constructs.emod` gains no second line beginning
       `fields {`, `trigger "Review orders"`, `automation NotifyCustomer` or `automation ArchiveOrders`:
       `sample_test.go:12` reads that file as `samplePath` and `headerRow` (`:38-49`) fails when a
       `sampleBlocks` header heads more than one line of it
-- [ ] `git diff` shows no change to `editors/tree-sitter-emod/grammar.js`, to any file under
+- [x] `git diff` shows no change to `editors/tree-sitter-emod/grammar.js`, to any file under
       `test/corpus/`, to `queries/folds.scm`, `indents.scm` or `textobjects.scm`, to `Taskfile.yml` or
       to `.github/workflows/ci.yml`
-- [ ] `git ls-files editors/tree-sitter-emod/src` returns nothing, and running
+- [x] `git ls-files editors/tree-sitter-emod/src` returns nothing, and running
       `mise exec -- task test:grammar` a second time leaves every tracked file under
       `editors/tree-sitter-emod/` byte-identical
 

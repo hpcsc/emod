@@ -14,7 +14,7 @@
         "unreserved-keywords.emod",
         "editors/tree-sitter-emod/queries/highlights.scm"
       ],
-      "done": false
+      "done": true
     },
     {
       "n": 2,

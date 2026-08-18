@@ -1,0 +1,94 @@
+# Marker lines name the highlight capture expected at the marked column of the
+# nearest source line above. An assertion only discriminates while another
+# highlighted token follows it on the same line; with none, the runner scans on
+# into later lines and accepts a capture found there. Every marked token below
+# is followed on its own line by a brace, a string, a further keyword or a
+# trailing comment, and that is what makes the assertion mean anything.
+
+emod 1 # a trailing token, so the marker below cannot drift onto a later line
+# <- keyword
+
+model "Order Management" {
+  description "Orders and their fulfilment." # prose, not an entity name
+# ^ keyword
+}
+
+context "Ordering" {
+  invariant OneOrderPerCart "A cart yields at most one order."
+# ^ keyword
+  aggregate "Order" {
+    invariant StockNeverNegative "Stock never drops below zero."
+#   ^ keyword
+    slice "Placement" {
+      command PlaceOrder {
+        fields {
+          emod string required
+#         ^ variable.member
+          description string required
+#         ^ variable.member
+          invariant string required
+#         ^ variable.member
+          spec string required
+#         ^ variable.member
+          given string required
+#         ^ variable.member
+          when string required
+#         ^ variable.member
+          then string required
+#         ^ variable.member
+          rejected string required
+#         ^ variable.member
+
+          headerVersion emod required
+#                       ^ type
+          blurb description required
+#               ^ type
+          rule invariant required
+#              ^ type
+          example spec required
+#                 ^ type
+          precondition given required
+#                      ^ type
+          moment when required
+#                ^ type
+          outcome then required
+#                 ^ type
+          denial rejected required
+#                ^ type
+
+          versioned string emod # a field's modifier is the line's last token
+#                          ^ type.qualifier
+          annotated string description # a field's modifier is the line's last token
+#                          ^ type.qualifier
+          checked string invariant # a field's modifier is the line's last token
+#                        ^ type.qualifier
+          illustrated string spec # a field's modifier is the line's last token
+#                            ^ type.qualifier
+          guarded string given # a field's modifier is the line's last token
+#                        ^ type.qualifier
+          awaited string when # a field's modifier is the line's last token
+#                        ^ type.qualifier
+          sequenced string then # a field's modifier is the line's last token
+#                          ^ type.qualifier
+          refused string rejected # a field's modifier is the line's last token
+#                        ^ type.qualifier
+        }
+      }
+
+      event OrderPlaced {}
+
+      spec "Placing an order" {
+#     ^ keyword
+        given [OrderPlaced]
+#       ^ keyword
+        when PlaceOrder # a spec element's reference takes no capture of its own
+#       ^ keyword
+        then [OrderPlaced]
+#       ^ keyword
+        then rejected StockNeverNegative # an invariant's name takes no capture
+#       ^ keyword
+#            ^ keyword
+      }
+    }
+  }
+}
