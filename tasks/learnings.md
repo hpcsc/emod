@@ -883,3 +883,45 @@ in this repo; append only learnings that generalise beyond the task that surface
 - Observed: task 1 — US-016 render specs on diagrams
 - Learning: Giving `ExportSVG`/`ExportDrawio` a trailing `...Option` left all 111 call sites in `internal/diagram` and the four in `internal/cli` compiling unedited — which is the whole reason to prefer it over a positional parameter or a widened struct. What it does break is assignment: Go will not accept `func(*ast.Model, Style, ...Option)` where `func(*ast.Model, Style)` is declared, so `contract_test.go`'s `exporter.export` field needs a non-variadic wrapper (`exportSVGDefault`). Keep the shared field non-variadic and add a second `exportWithSpecs` field left nil for the text formats, rather than making the field variadic: a variadic field would let the harness hand mermaid and ASCII an option they cannot honour, which is the silent-ignore trap this repo already records against `Style`. A criterion phrased "every existing call compiles unedited" is satisfiable; "the diff in that file is additions only" is not.
 - Apply when: Adding a functional option to an existing exported function, or writing the change-set criterion for one
+
+## A TextMate block rule with an optional brace also opens on a field named after its keyword
+- Type: constraint
+- Observed: task 4 — US-017 highlight the new syntax in editors
+- Learning: `#tags-block`'s begin was written `(?i)\\b(tags)\\b\\s*(\\{)?`, copied from `#fields-block`. The optional brace made it fire on a spec payload field *named* `tags`, and because the rule deliberately omits `#payload-values`, every literal from there to the payload's closing brace lost its scope — `when Claim { tags: 1, amount: 42, ok: true }` rendered all three unscoped, with the whole suite green. The optional brace is load-bearing in `#fields-block` (a block may put its brace on the next line) and harmless there only because that rule keeps the literal patterns. Any block keyword in emod is also a legal field and payload-field name, so a begin rule keyed on one must require its brace unless it keeps everything the enclosing context had.
+- Apply when: Adding a begin/end rule to editors/vscode/syntaxes/emod.tmLanguage.json keyed on a DSL keyword, or reviewing one whose begin makes the brace optional
+
+## Claiming a position in TextMate retires the mutation controls that witnessed there
+- Type: recurring-finding
+- Observed: task 4 — US-017 highlight the new syntax in editors
+- Learning: A rule that claims a token by position shields it from every later rule, which is the point — and which silently voids any negative control whose witness sat at that position. Adding `#field-name` moved all three flat-alternation controls off `on string required` onto `notified on required`, one column along; their titles still said 'a field named after one' and were then false rather than stale. It also left `unreserved-keywords.emod`'s fifteen bare-prohibition assertions satisfied by construction. After adding a positional rule, re-run each existing control and check it still fails on the line its `sourceLine` names, and give the newly-shielded assertions the positive scope so a mutation can still reach them.
+- Apply when: Adding a positional or block-scoped rule to the TextMate grammar, or finding that a negative control still passes after a grammar change
+
+## Editor-fixture marker columns must be generated, never counted
+- Type: recurring-finding
+- Observed: task 1 — US-017 highlight the new syntax in editors
+- Learning: Both assertion formats locate their claim by column — tree-sitter's `#   ^ capture` and vscode-tmgrammar-test's `#   ^^^^ scope` — and a marker one column off asserts against a different token, or against nothing, and passes forever. Three occurred in one story: a `- constant.numeric.emod` marker at column 6 of `emod 1` (the digit is at 5, so it asserted past end-of-line), a caret covering `oomId:` instead of `roomId`, and two payload literal markers. Every one was hand-counted; every generated one was correct. Derive the column from `line.index(token)` and sweep afterwards, asserting each caret run covers exactly one whole token — the check is ten lines and found two defects the suites and two audit rounds' worth of lenses did not.
+- Apply when: Writing or reviewing an assertion in editors/tree-sitter-emod/test/highlight/*.emod or editors/vscode/test/scopes/*.emod
+
+## A scope prohibition needs the positive scope beside it or it is satisfied by construction
+- Type: convention
+- Observed: task 2 — US-017 highlight the new syntax in editors
+- Learning: `- some.scope` passes whenever nothing could have produced that scope, so a prohibition on a token no rule can reach is unfalsifiable — it survives every mutation and reads as coverage. Two shipped this way in one story: the tag key `entity` prohibited a boolean scope it matches no spelling of, and fifteen field-name prohibitions in `unreserved-keywords.emod` became vacuous the moment `#field-name` guaranteed them. The fix is the same in both cases and costs one token: state the scope the position actually carries alongside the prohibition, so a mutation that changes the treatment reddens the line.
+- Apply when: Writing a `- scope` assertion in editors/vscode/test/scopes/*.emod, or reviewing one whose token no rule in the grammar could match
+
+## A mismatch helper must tie its fragments to one reported failure
+- Type: convention
+- Observed: task 4 — US-017 highlight the new syntax in editors
+- Learning: `assertReportsMismatch` in `editors/vscode/test/scope-assertions.test.js` checked its sourceLine, required, prohibited and produced fragments with independent `output.includes` over the whole harness report. A mutation that reddens several lines — the field-name one reddens eleven — therefore lets four fragments come from four different failures, so a control passes while the line it names carries none of what it claims. Demonstrated by dropping the field-name requirement from the exact line the field-name control names: green before, red after. Slice the report into its `at [file:line:col:col]` blocks, require exactly one to quote sourceLine, and check the rest against that block only.
+- Apply when: Writing or reviewing a helper that asserts an external tool's failure report names an expected position and scope
+
+## A criterion requiring existing guards to pass unedited is unsatisfiable when the repair is what they witnessed
+- Type: recurring-finding
+- Observed: US-017 highlight the new syntax in editors
+- Learning: US-017's Task 2 carried 'the four negative controls still pass, the on/every one unedited — extending the flat alternation must still break the field-name assertions'. Claiming a field's name is precisely what stops a positionless alternation reaching that position, so the task's own repair voided the witness the criterion demanded be preserved; satisfying it would have required the per-keyword allowlist the same task's first decision ruled out. The criterion also said 'four' where sibling stories had since made it five. A criterion that pins the *count* or the *exact wording* of guards a repair is about to change is asserting the repair does not work — pin what the guards must still catch instead, and let their witness lines move.
+- Apply when: Writing an acceptance criterion that requires existing tests to pass unedited, or one that counts the tests in a file the task will change
+
+## A decision that declines a repair by naming its cost owes that cost a measurement
+- Type: recurring-finding
+- Observed: US-017 highlight the new syntax in editors
+- Learning: US-017's decision 3 declined to repair the single-line `fields { name type modifier }` form, reasoning that TextMate 'has no anchor for the first token after the block's opening brace short of folding it into the begin pattern's captures', and required an assertion recording the defect instead. The fold cost one optional group and one capture, all twelve fixtures stayed green, and the story's criterion carried no layout qualifier — so a criterion was closed on a recorded defect that a one-line change removed. When a decision names the alternative it is rejecting, the alternative is usually cheap enough to try before the breakdown is written.
+- Apply when: Writing a decomposition decision that declines a repair on cost grounds, or implementing a task whose criterion records a defect rather than fixing it
