@@ -353,7 +353,7 @@ slice "<name>" {
 }
 ```
 
-`subscribes` references event names defined elsewhere in the model (see [Cross-References](#11-cross-references)).
+`subscribes` references event names declared **anywhere in the model** — in any slice, under any aggregate or context, the same scope an automation's `reads` resolves in (see [Cross-References](#11-cross-references)).
 
 - **`view/never-read` asks who acts on it:** the rule reports at warning severity when no `reads` anywhere in the model names the view — neither a trigger's, an automation's nor a translation's. A view takes one of two legitimate shapes: a trigger reads it, or a processor reads it as its todo list. The rule fires only once the model states at least one `reads`, so a model that has not adopted the concept reports nothing. It also stays silent for the whole model while some `reads` names a view no slice declares: that name is already reported where it is written (see [Cross-References](#11-cross-references)), and nothing here can tell which view it was meant to be, so one misspelling yields one diagnostic rather than a second one pointing at the view. Run `emod lint --explain view/never-read` for the full description.
 
@@ -389,7 +389,7 @@ slice "<name>" {
 
 - `reads`: the todo list — the view holding the work the processor has left to do. Optional. The name must resolve to a view declared **anywhere in the model** — in any slice, under any aggregate or context — and `emod validate` reports one that resolves to nothing.
 - `command`: the command the automation issues. Required.
-- `target context`: a context name (cross-reference, validated at `emod validate`).
+- `target context`: a context name (cross-reference, validated at `emod validate`). The command the automation issues is handled there, so the event acknowledging that work is declared there too — and a todo list only loses the row it acted on by observing that event. A `reads` view therefore `subscribes` across the context boundary, which is what keeps the loop closed when the two halves of it live in different contexts. [examples/all_patterns.emod](/examples/all_patterns.emod) shows the shape: `ConfirmationEmailReactor` sits in `Reservations`, issues `SendConfirmationEmail` into `Notifications`, and reads a view subscribing to the `ConfirmationEmailSent` that context declares.
 
 An automation states **exactly one** of `on` and `every`: declaring neither is an error, and declaring both is an error. Requiring the choice makes the wake-up explicit, so the model says whether the processor is woken by the event that adds to its todo list or polls on a cadence — two designs with different failure modes.
 
