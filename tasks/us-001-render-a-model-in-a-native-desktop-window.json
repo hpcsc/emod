@@ -158,7 +158,7 @@
     },
     {
       "n": 7,
-      "done": false,
+      "done": true,
       "title": "Add the desktop model service over `internal/pipeline`",
       "language": "Go",
       "testable": true,

@@ -699,25 +699,25 @@ both runtimes and `model.js` and `emod-export.js` need no per-runtime knowledge.
 imports no desktop framework, so it is testable wherever the rest of the repo is.
 
 **Acceptance Criteria:**
-- [ ] A `ModelService` type exposes `ParseEmod`, `ExportJSON` and `ExportEmod`, each taking and
+- [x] A `ModelService` type exposes `ParseEmod`, `ExportJSON` and `ExportEmod`, each taking and
       returning strings, mapping 1:1 onto `pipeline.RunPipelineExportDiagram`,
       `pipeline.RunPipelineExportJSON` and `pipeline.ExportEmodJSON`
       (`docs/proposals/emod-desktop-proposal.md:63-72`)
-- [ ] `ParseEmod` and `ExportJSON` take the `{"source": "..."}` envelope; `ExportEmod` takes the bare
+- [x] `ParseEmod` and `ExportJSON` take the `{"source": "..."}` envelope; `ExportEmod` takes the bare
       diagram document, keeping the asymmetry `cmd/emod-wasm/main.go:27-29` documents and the viewer
       already relies on
-- [ ] For source the pipeline accepts, `ParseEmod` returns exactly the bytes
+- [x] For source the pipeline accepts, `ParseEmod` returns exactly the bytes
       `pipeline.RunPipelineExportDiagram` returns — the `{diagnostics, diagram}` envelope, unwrapped
       and unreshaped
-- [ ] For input the pipeline rejects, each method returns exactly `pipeline.ErrorJSON`'s string for
+- [x] For input the pipeline rejects, each method returns exactly `pipeline.ErrorJSON`'s string for
       that error, so a caller cannot tell the two runtimes apart from the payload
-- [ ] `ExportEmod` returns the `{"emod": "..."}` envelope for a diagram document it can import, and
+- [x] `ExportEmod` returns the `{"emod": "..."}` envelope for a diagram document it can import, and
       `ErrorJSON`'s shape for one it cannot
-- [ ] Source with diagnostics still returns a diagram alongside them rather than an error, as it does
+- [x] Source with diagnostics still returns a diagram alongside them rather than an error, as it does
       through WASM today
-- [ ] The package imports nothing from the desktop framework, and `go build` of it succeeds with
+- [x] The package imports nothing from the desktop framework, and `go build` of it succeeds with
       `CGO_ENABLED=0`
-- [ ] `TestModelService` is a single umbrella test grouped by operation with `t.Run`, its scenario
+- [x] `TestModelService` is a single umbrella test grouped by operation with `t.Run`, its scenario
       subtests named as sentences about observed behaviour, `testify/require` assertions, and a fresh
       service per leaf — and it runs under `mise exec -- task test:unit`
 
