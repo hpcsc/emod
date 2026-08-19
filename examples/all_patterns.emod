@@ -10,7 +10,6 @@ actor "Guest" {
 
 context "Reservations" {
   description "Everything the hotel knows about who holds which room"
-
   aggregate "Reservation" {
     description "One guest holding one room over one date range"
     invariant RoomHeldOnce "A room holds at most one reservation over any overlapping stay"
@@ -18,7 +17,6 @@ context "Reservations" {
     invariant StayClosedOnce "A stay is closed exactly once"
     invariant OneReservationPerBooking "A partner's booking reference maps to at most one reservation"
     invariant OnlyUnstartedStaysExpire "Only a reservation whose stay never began is released by the overnight sweep"
-
     # Slice 1: Command Pattern
     slice "Reserve a Room" {
       description "A guest books a room for a stay"
@@ -56,20 +54,34 @@ context "Reservations" {
       }
 
       flow {
-        command -> event: ReserveRoom -> RoomReserved
+        command -> event:    ReserveRoom -> RoomReserved
         command -> rejected: ReserveRoom -> RoomHeldOnce
       }
 
       spec "holds a room nobody has booked" {
-        given []
-        when ReserveRoom { roomId: "R-204", guestName: "Ada Lovelace", checkIn: "2026-04-17", checkOut: "2026-04-20", guests: 2, accessible: true }
-        then [RoomReserved { reservationId: "RES-8814", roomId: "R-204", guests: 2, accessible: true, reservedAt: "2026-03-02T09:41:00Z" }]
+        when ReserveRoom {
+          roomId:     "R-204"
+          guestName:  "Ada Lovelace"
+          checkIn:    "2026-04-17"
+          checkOut:   "2026-04-20"
+          guests:     2
+          accessible: true
+        }
+        then [
+          RoomReserved {
+            reservationId: "RES-8814"
+            roomId:        "R-204"
+            guests:        2
+            accessible:    true
+            reservedAt:    "2026-03-02T09:41:00Z"
+          }
+        ]
       }
 
       spec "refuses a room already held over the same nights" {
         given [RoomReserved { roomId: "R-204", checkIn: "2026-04-17", checkOut: "2026-04-20" }]
-        when ReserveRoom { roomId: "R-204", checkIn: "2026-04-18", checkOut: "2026-04-21" }
-        then rejected RoomHeldOnce
+        when  ReserveRoom { roomId: "R-204", checkIn: "2026-04-18", checkOut: "2026-04-21" }
+        then  rejected RoomHeldOnce
       }
 
       spec "refuses a stay that ends before it begins" {
@@ -83,6 +95,7 @@ context "Reservations" {
       description "What a guest can still book"
       view AvailableRoomsView {
         description "Every room free to book, with the shape of stay it suits"
+        subscribes [RoomReserved, GuestCheckedOut]
         fields {
           roomId      string required
           roomNumber  string required
@@ -90,7 +103,6 @@ context "Reservations" {
           status      string required
           nextCheckIn date   optional
         }
-        subscribes [RoomReserved, GuestCheckedOut]
       }
 
       spec "lists the rooms a guest can still book" {
@@ -124,14 +136,23 @@ context "Reservations" {
 
       spec "closes a stay that is under way" {
         given [RoomReserved { reservationId: "RES-8814" }]
-        when CheckOutGuest { reservationId: "RES-8814" }
-        then [GuestCheckedOut { reservationId: "RES-8814", roomId: "R-204", checkedOutAt: "2026-04-20T10:05:00Z" }]
+        when  CheckOutGuest { reservationId: "RES-8814" }
+        then  [
+          GuestCheckedOut {
+            reservationId: "RES-8814"
+            roomId:        "R-204"
+            checkedOutAt:  "2026-04-20T10:05:00Z"
+          }
+        ]
       }
 
       spec "refuses to close a stay that already ended" {
-        given [RoomReserved { reservationId: "RES-8814" }, GuestCheckedOut { reservationId: "RES-8814" }]
-        when CheckOutGuest { reservationId: "RES-8814" }
-        then rejected StayClosedOnce
+        given [
+          RoomReserved { reservationId: "RES-8814" },
+          GuestCheckedOut { reservationId: "RES-8814" }
+        ]
+        when  CheckOutGuest { reservationId: "RES-8814" }
+        then  rejected StayClosedOnce
       }
     }
 
@@ -140,12 +161,12 @@ context "Reservations" {
       description "Confirming a booking once the guest has had time to correct it"
       view PendingConfirmationsView {
         description "Bookings still waiting on their confirmation email"
+        subscribes [RoomReserved]
         fields {
           reservationId string    required
           guestName     string    required
           reservedAt    timestamp required
         }
-        subscribes [RoomReserved]
       }
 
       automation ConfirmationEmailReactor {
@@ -197,14 +218,24 @@ context "Reservations" {
       }
 
       spec "records a booking a partner took" {
-        when ImportExternalReservation { externalRef: "BK-77213", roomId: "R-118", guestName: "Grace Hopper" }
-        then [ExternalReservationImported { reservationId: "RES-9042", externalRef: "BK-77213", source: "Booking.com" }]
+        when ImportExternalReservation {
+          externalRef: "BK-77213"
+          roomId:      "R-118"
+          guestName:   "Grace Hopper"
+        }
+        then [
+          ExternalReservationImported {
+            reservationId: "RES-9042"
+            externalRef:   "BK-77213"
+            source:        "Booking.com"
+          }
+        ]
       }
 
       spec "refuses a partner booking already recorded" {
         given [ExternalReservationImported { externalRef: "BK-77213" }]
-        when ImportExternalReservation { externalRef: "BK-77213" }
-        then rejected OneReservationPerBooking
+        when  ImportExternalReservation { externalRef: "BK-77213" }
+        then  rejected OneReservationPerBooking
       }
     }
 
@@ -244,14 +275,23 @@ context "Reservations" {
 
       spec "releases a room nobody confirmed" {
         given [RoomReserved { reservationId: "RES-8814" }]
-        when ExpireReservation { reservationId: "RES-8814" }
-        then [ReservationExpired { reservationId: "RES-8814", roomId: "R-204", expiredAt: "2026-03-03T02:00:00Z" }]
+        when  ExpireReservation { reservationId: "RES-8814" }
+        then  [
+          ReservationExpired {
+            reservationId: "RES-8814"
+            roomId:        "R-204"
+            expiredAt:     "2026-03-03T02:00:00Z"
+          }
+        ]
       }
 
       spec "refuses to release a stay that already ended" {
-        given [RoomReserved { reservationId: "RES-8814" }, GuestCheckedOut { reservationId: "RES-8814" }]
-        when ExpireReservation { reservationId: "RES-8814" }
-        then rejected OnlyUnstartedStaysExpire
+        given [
+          RoomReserved { reservationId: "RES-8814" },
+          GuestCheckedOut { reservationId: "RES-8814" }
+        ]
+        when  ExpireReservation { reservationId: "RES-8814" }
+        then  rejected OnlyUnstartedStaysExpire
       }
     }
 
@@ -260,12 +300,12 @@ context "Reservations" {
       description "What the overnight sweep has left to do"
       view UnconfirmedReservationsView {
         description "Bookings nobody has confirmed yet"
+        subscribes [RoomReserved, ReservationExpired]
         fields {
           reservationId string    required
           roomId        string    required
           reservedAt    timestamp required
         }
-        subscribes [RoomReserved, ReservationExpired]
       }
 
       spec "lists the bookings the sweep has left to do" {
@@ -277,11 +317,9 @@ context "Reservations" {
 
 context "Notifications" {
   description "How the hotel talks to its guests"
-
   aggregate "Notification" {
     description "One message sent to one guest"
     invariant OneConfirmationPerBooking "A booking is confirmed to its guest exactly once"
-
     slice "Send Confirmation" {
       description "Emailing a guest the booking they just made"
       command SendConfirmationEmail {
@@ -308,14 +346,24 @@ context "Notifications" {
       }
 
       spec "emails a guest the booking they just made" {
-        when SendConfirmationEmail { reservationId: "RES-8814", guestName: "Ada Lovelace", email: "ada@example.com" }
-        then [ConfirmationEmailSent { reservationId: "RES-8814", email: "ada@example.com", sentAt: "2026-03-02T09:56:00Z" }]
+        when SendConfirmationEmail {
+          reservationId: "RES-8814"
+          guestName:     "Ada Lovelace"
+          email:         "ada@example.com"
+        }
+        then [
+          ConfirmationEmailSent {
+            reservationId: "RES-8814"
+            email:         "ada@example.com"
+            sentAt:        "2026-03-02T09:56:00Z"
+          }
+        ]
       }
 
       spec "refuses to confirm a booking a second time" {
         given [ConfirmationEmailSent { reservationId: "RES-8814" }]
-        when SendConfirmationEmail { reservationId: "RES-8814" }
-        then rejected OneConfirmationPerBooking
+        when  SendConfirmationEmail { reservationId: "RES-8814" }
+        then  rejected OneConfirmationPerBooking
       }
     }
   }

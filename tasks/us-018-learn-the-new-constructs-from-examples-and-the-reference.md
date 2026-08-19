@@ -218,13 +218,18 @@ Six shapes the story does not pin down.
    specs and a `given` for each that its command's `decides_on` matches — a substantial edit no
    criterion asks for. US-008 Task 6 and US-011 both already carry criteria requiring it to keep
    returning zero diagnostics, which is the guarantee that matters.
-5. **`emod fmt` is not run over either example, and neither example is required to be
-   `fmt --check` clean.** Verified: `emod fmt --check examples/all_patterns.emod` fails today, before
-   any edit. Formatting it would insert the header, re-align every field column, hoist invariants,
-   move every spec to the end of its slice (`tasks/learnings.md:196-199`) and drop the file's blank
-   lines, producing a diff that buries the story's change. New content matches each file's existing
-   hand alignment. `emod fmt <file>` also writes in place (`tasks/learnings.md:336-339`), so no
-   verification step runs it against a tracked example.
+5. **Both examples are `emod fmt` canonical.** This overturns the decomposition's own answer, which
+   was that neither example would be formatted because `emod fmt --check examples/all_patterns.emod`
+   already failed and formatting it "would insert the header, re-align every field column, hoist
+   invariants, move every spec to the end of its slice and drop the file's blank lines, producing a
+   diff that buries the story's change". Measured against the tree rather than estimated, that is
+   wrong: the file's whole distance from canonical form was three lines, all of them `emod fmt`
+   hoisting a view's `subscribes` above its `fields`. No header is inserted (one is already there),
+   no field column moves and no flow is reordered. Hand-written spec, flow and payload blocks add
+   roughly ninety more lines of distance, so leaving the examples unformatted would have shipped a
+   flagship the project's own formatter immediately rewrites — in the one story whose purpose is that
+   a reader can learn the language from these files. `emod fmt <file>` writes in place
+   (`tasks/learnings.md:336-339`), so it is run deliberately rather than as a verification step.
 6. **The `after` documentation and the coherence pass are one task, not two.** `after` is a genuine
    gap and a story criterion, so a reference task exists on its own merits. Split off, the coherence
    half would be a task whose only content is "re-read the document", whose criteria would duplicate
@@ -399,9 +404,10 @@ error from `cli.RunValidate` after every one of them.
 - [x] `git diff` touches `examples/all_patterns.emod` and one test file, and nothing else — in
       particular `internal/parser/testdata/all_patterns.emod`, `examples/dcb_model.emod`,
       `examples/error_diagnostics_test.emod` and `README.md` are unchanged
-- [x] No field column in `examples/all_patterns.emod` re-aligns and no blank line moves except where
+- [ ] No field column in `examples/all_patterns.emod` re-aligns and no blank line moves except where
       this task's own additions require it: `emod fmt` is not run over the file, and the file is not
-      required to pass `emod fmt --check`, which it does not pass today either
+      required to pass `emod fmt --check`, which it does not pass today either — **superseded by
+      Open question 5's corrected answer: the file is formatted and passes `emod fmt --check`**
 - [x] `task test:unit` passes with no test skipped or weakened
 
 **Affected Files/Modules:**
@@ -498,7 +504,8 @@ declares, so a partial adoption does not validate.
       `examples/dcb_model.emod`, `examples/error_diagnostics_test.emod`,
       `internal/parser/testdata/*.emod`, `internal/test/fixtures.go` and every golden and canonical
       constant in the repository are unchanged
-- [x] `emod fmt` is not run over the file and the file is not required to pass `emod fmt --check`
+- [ ] `emod fmt` is not run over the file and the file is not required to pass `emod fmt --check`
+      — **superseded by Open question 5's corrected answer**
 - [x] `mise exec -- task test:unit` passes with no test skipped or weakened
 
 **Affected Files/Modules:**
@@ -578,7 +585,8 @@ moment it lands.
       red run points at one example
 - [x] `git diff` adds one file under `examples/` and changes nothing else: no Go file, no other
       example, no fixture, no golden
-- [x] The file is not required to pass `emod fmt --check`, and `emod fmt` is not run over it
+- [ ] The file is not required to pass `emod fmt --check`, and `emod fmt` is not run over it —
+      **superseded by Open question 5's corrected answer**
 - [x] `mise exec -- task test:unit` passes with no test skipped or weakened
 
 **Affected Files/Modules:**

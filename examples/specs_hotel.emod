@@ -8,12 +8,10 @@ actor "Guest" {
 
 context "Reservations" {
   description "Owns the reservation lifecycle from booking to checkout"
-
   aggregate "Reservation" {
     invariant RoomNotDoubleBooked "A room has at most one active reservation for any date range"
     invariant RoomHeldOnce "A room carries at most one outstanding hold"
     invariant HoldReleasedOnce "A hold is released exactly once"
-
     slice "Reserve a Room" {
       trigger "Reservation Form" {
         actor Guest
@@ -42,7 +40,7 @@ context "Reservations" {
       }
 
       flow {
-        command -> event: ReserveRoom -> RoomReserved
+        command -> event:    ReserveRoom -> RoomReserved
         command -> rejected: ReserveRoom -> RoomNotDoubleBooked
       }
 
@@ -53,8 +51,8 @@ context "Reservations" {
 
       spec "rejects a double booking" {
         given [RoomReserved { roomId: "101", checkIn: "2026-08-01", checkOut: "2026-08-03" }]
-        when ReserveRoom { roomId: "101", checkIn: "2026-08-02", checkOut: "2026-08-04" }
-        then rejected RoomNotDoubleBooked
+        when  ReserveRoom { roomId: "101", checkIn: "2026-08-02", checkOut: "2026-08-04" }
+        then  rejected RoomNotDoubleBooked
       }
     }
 
@@ -87,8 +85,8 @@ context "Reservations" {
 
       spec "rejects a hold on a room already held" {
         given [RoomHeld { roomId: "204" }]
-        when HoldRoom { roomId: "204" }
-        then rejected RoomHeldOnce
+        when  HoldRoom { roomId: "204" }
+        then  rejected RoomHeldOnce
       }
     }
 
@@ -114,42 +112,42 @@ context "Reservations" {
 
       spec "releases an outstanding hold" {
         given [RoomHeld { holdId: "H-3391" }]
-        when ReleaseHold { holdId: "H-3391" }
-        then [HoldReleased { holdId: "H-3391", roomId: "204", releasedAt: "2026-07-31T11:20:00Z" }]
+        when  ReleaseHold { holdId: "H-3391" }
+        then  [HoldReleased { holdId: "H-3391", roomId: "204", releasedAt: "2026-07-31T11:20:00Z" }]
       }
 
       spec "rejects releasing a hold already released" {
         given [HoldReleased { holdId: "H-3391" }]
-        when ReleaseHold { holdId: "H-3391" }
-        then rejected HoldReleasedOnce
+        when  ReleaseHold { holdId: "H-3391" }
+        then  rejected HoldReleasedOnce
       }
     }
 
     slice "Available Rooms" {
       view AvailableRoomsView {
         description "Rooms bookable right now — neither held nor reserved"
+        subscribes [RoomHeld, RoomReserved, HoldReleased]
         fields {
           roomId string required
           status string required
         }
-        subscribes [RoomHeld, RoomReserved, HoldReleased]
       }
 
       spec "a held room is not available" {
         given [RoomHeld { roomId: "204" }]
-        then view AvailableRoomsView
+        then  view AvailableRoomsView
       }
     }
 
     slice "Unreleased Holds" {
       view UnreleasedHoldsView {
         description "Holds still outstanding — the work the expirer has left to do"
+        subscribes [RoomHeld, RoomReserved, HoldReleased]
         fields {
           holdId string    required
           roomId string    required
           heldAt timestamp required
         }
-        subscribes [RoomHeld, RoomReserved, HoldReleased]
       }
     }
 
@@ -162,8 +160,8 @@ context "Reservations" {
 
       spec "hold expires after a day" {
         given [RoomHeld]
-        when RoomHeld
-        then command ReleaseHold
+        when  RoomHeld
+        then  command ReleaseHold
       }
     }
   }
