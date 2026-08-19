@@ -371,6 +371,358 @@ envelope unchanged; nothing outside the repository can observe it.
 
 ---
 
+**Phase 1 — Platform adapter** (~1d) | 3, 4, 5, 6 | CLI viewer and web bundle behave identically to today; no desktop code yet |
+| **Phase 2 — Wails v3 shell** (~1.5d) | 7, 8, 9, 10 | A desktop window renders a diagram from pasted source |
+
+---
+
+## Story Reference
+
+`user-stories/emod-desktop.md` → **US-001: Render a model in a native desktop window**
+(`:23-36`, first story of "emod Desktop App"). Design detail:
+`docs/proposals/emod-desktop-proposal.md`, of which this story spans three of the five phases
+in §10 (`:669-691`).
+
+The story's eight criteria and where they land:
+
+| Story criterion | Task |
+|---|---|
+| Window opens with the same viewer interface — source panel, canvas, minimap, visibility toggles, diagnostics badge | 9 |
+| Pasted `.emod` renders a diagram identical to the browser viewer's | 9, resting on 7 for the envelope equality |
+| Pan, zoom, fit-to-view, selection, detail panel, layout reset, context actions behave as in the browser | 9 |
+| Invalid source fills the badge and panel with the same messages, severities and locations | 9, resting on 7 |
+| No network access, no local HTTP server, no listening port | 9 |
+| `emod diagram --serve` and the published web viewer behave exactly as before | 1, 2, 3, 4, 5, 6 — each closes on the existing Go, vitest and Playwright suites |
+| A shared viewer UI file change appears in all three distributions without a second copy | 2, 3, 9 |
+| The framework version is pinned exactly in `go.mod` and the tool manifest | 8 |
+
+---
+
+## Boundaries
+
+**Out of scope** — the story's Non-Goals (`user-stories/emod-desktop.md:248-259`), carried verbatim:
+
+- **No code signing or notarization** on any platform — no Apple Developer account, no App Store, no Windows signing certificate. Users take a documented one-time step on first launch.
+- **No Linux distributions below the declared floor** — Ubuntu 22.04, Debian 12, RHEL 9 and other pre-GTK4 stacks are out of scope, with no legacy build variant.
+- **No auto-update.** New versions are downloaded manually.
+- **No replacement of existing distributions.** `emod diagram --serve` and the hosted web viewer keep working unchanged; desktop is a third option, not a migration.
+- **No desktop-only diagram features.** Anything added to the canvas stays available in all three distributions.
+- **No multi-window, tabs, or project workspaces.** One model per window.
+- **No full text editor.** The source panel gains validation, navigation, and highlighting — not find-and-replace, multi-cursor, or refactoring.
+- **No telemetry or crash reporting.**
+- **No automated tests driving the desktop window.** Manual smoke testing of the shell, backed by the existing Go and browser suites.
+- **No published package of the shared frontend.** It stays an internal asset assembled at build time.
+
+Also out of scope, from the proposal and this decomposition:
+
+- **`.goreleaser.yaml` and the existing cross-compile.** Untouched (§7.1, `:426-444`). The CLI and
+  WASM builds stay `CGO_ENABLED=0`; only `cmd/emod-desktop` links CGO.
+- **The string/envelope contract.** The desktop service hands JSON strings across the boundary and
+  wraps errors the way the WASM shims do (§4.6, `:314-333`), so `model.js` and `emod-export.js`
+  keep their bodies and only their import specifier changes.
+- **A desktop window driver.** §8.2 (`:603-615`) and the story's Non-Goals both rule it out.
+
+**Deferred** — wanted, but not here:
+
+- **Native open and save dialogs, and save-in-place** → US-002, US-003. Task 9 lands the contract's
+  file-open and file-save entry points on the desktop as an explicit "not available in this build"
+  result, so the window never throws an unhandled rejection at a user who presses Export. Those two
+  stories replace them.
+- **Drag-drop on the desktop with a real path** → US-005. Task 4 puts a place for the path in the
+  contract's result; the browser leaves it empty because a browser drop has none.
+- **Packaging (`wails3 package`, `.app` bundle)** → US-007, proposal Phase 4 (`:698-702`).
+- **CI desktop artifacts, the Linux runtime-dependency README section, the Ubuntu 24.04 floor** →
+  US-015, US-014, proposal Phase 5 (`:703-711`).
+- **Menu bar, recent files, file association, file watching** → US-004, US-006, US-008, US-013.
+- **Live validation, diagnostics navigation, syntax highlighting in the source panel** → US-009,
+  US-010, US-012. The desktop app renders on a Render click, exactly as the browser viewer does.
+- **Embedding the LSP in the desktop app.** Proposal open question 6 (`:665-667`) assumes
+  diagram-only; nothing here changes that.
+- **`internal/frontend` as a published npm package.** Proposal open question 7 (`:668`) assumes no;
+  copy-assembly is what Tasks 3 and 9 use.
+
+---
+
+## Codebase Context
+
+Verified against the working tree on 2026-08-19. The proposal was written 2026-07-26 against branch
+`us-002-construct-descriptions`; its inventory still holds, with line numbers shifted and the
+frontend grown.
+
+**Nothing has been started.** No `cmd/emod-desktop`, no `internal/frontend`, no `internal/pipeline`,
+no `platform*.js`. `internal/wasm` and `internal/viewer` are in their pre-split shape, and
+`go.mod` has no Wails requirement.
+
+**`internal/wasm`** is two files — `pipeline.go` (100 lines) and `pipeline_test.go`. Its doc comment
+(`:1-4`) already states it exists to be independent of `syscall/js`. Six exported functions:
+`ExtractSource`, `RunPipelineExportDiagram`, `RunPipelineExportJSON`, `ExportEmod`,
+`ExportEmodJSON`, `ErrorJSON`. One non-test importer: `cmd/emod-wasm/main.go:8`, which is 54 lines
+of `js.Value` marshalling over them and nothing else.
+
+**`internal/viewer`** conflates two concerns, as §5.2 says (`:351-368`):
+
+- shared frontend — `static/` (15 files, 4,302 lines of JS plus `viewer.html`), `tests/` (24 vitest
+  files), `embed.go`, `package.json`, `package-lock.json`, `vitest.config.js`, and the gitignored
+  `generated/` the WASM build writes into
+- CLI delivery — `serve.go` (101 lines) and `serve_test.go`
+
+`embed.go:7` is `//go:embed static/* generated/*`, so `generated/` has to sit beside `static/` in
+whichever package holds `embed.go`. §5.2's file list does not mention it. `serve.go` routes
+`/static/` and `/generated/` off that FS (`:31-40`) and injects `window.INITIAL_DATA` into the
+`<!--INITIAL_DATA-->` marker at `static/viewer.html:1162` through `buildHTML` (`:81-101`), escaping
+`</` so a model spelling `</script>` cannot end the block. `internal/cli/diagram.go:195` is the only
+caller of `ServeViewer`.
+
+**The seam, at today's lines.** Five touch points across three files, as §4.1 claims (`:142-154`):
+
+| # | What | Where |
+|---|---|---|
+| 1 | Go bridge | `static/wasm.js`, still exactly 71 lines: `fetch('generated/emod.wasm')` at `:15`, `instantiateStreaming` with an `arrayBuffer` fallback at `:22-32`, exports `parseEmod, exportEmod, ready, isReady` at `:71` |
+| 2 | Drag-drop open | `viewer.js:166-188` — `evt.dataTransfer.files[0]` (`:170`), the `.emod`/`.json` check and its message (`:172-177`), `new FileReader()` (`:178`), `readAsText` (`:187`) |
+| 3 | Export/save | `viewer.js:208-222` — `new Blob` (`:210`), `createObjectURL` (`:211`), `a.download` (`:214`), `revokeObjectURL` (`:218`) |
+| 4 | Initial state | `viewer.js:291-292` reads the `INITIAL_DATA` global that `serve.go:95-96` injects |
+| 5 | Readiness gate | `viewer.js:302` (`isReady`) and `:307` (`ready.then`), plus the deferred dynamic import at `model.js:104` |
+
+**Exactly three importers of `wasm.js`**, as §4.2 claims (`:155-170`): `viewer.js:12` and
+`emod-export.js:1` statically, `model.js:104` dynamically ("dynamic import to defer init side
+effects").
+
+**Seven test files reach the bridge**, as §8.1 claims (`:592-602`):
+
+- `wasm.test.js`, `wasm.fallback.test.js`, `wasm.init-success.test.js`, `wasm.init-http-error.test.js`
+  import `../static/wasm.js` directly and drive it through `vi.hoisted` globals — these four test
+  WASM fetch, instantiate and fallback specifically and are browser-only behaviour
+- `viewer.test.js:13` and `model.test.js:5` `vi.mock('../static/wasm.js', …)`
+- `emod-export.test.js:11` `vi.doMock`s it inside a `vi.resetModules()` helper so each test controls
+  when `ready` settles
+
+`viewer.test.js` also owns the drop path: `fireDrop` (`:65-72`) stubs `dataTransfer`, `MockFileReader`
+(`:93-102`) stands in for the browser read and is installed as `globalThis.FileReader` (`:132`), and
+three leaves at `:191-233` cover the rejected extension, a dropped `.emod` and a dropped `.json`.
+There is no vitest leaf for the export button.
+
+**What guards the browser end to end.** `e2e-viewer/` is Playwright over the real `task build:web`
+bundle with the real WASM module. `open()` (`helpers.js:96-100`) waits for
+`typeof globalThis.parseEmod === 'function'`, so it will still gate on the WASM global in the browser
+build. `exportEmod()` (`:129-137`) clicks Export and reads the download stream, and
+`export.spec.js:8-23` asserts both the exported bytes equal `SAMPLE` and the download is named
+`Billing.emod`. Nothing there drops a file. `task test:e2e:viewer` depends on `build:web`, so a
+broken web bundle fails CI before the Pages deploy job runs.
+
+**The build.** `Taskfile.yml`: `build` (`:7-15`, `CGO_ENABLED=0`, deps `build:wasm`), `build:wasm`
+(`:33-42`, writes `emod.wasm` and copies `wasm_exec.js` into `internal/viewer/generated/`),
+`build:web` (`:44-52`, copies `static/*` and `generated/*` into `web/` then
+`mv web/static/viewer.html web/index.html`), `test:unit` and `test:integration`
+(`:63-71`, `go test -tags <tag> $(go list ./... | grep -v /cmd/emod-wasm)` — the existing precedent
+for excluding a package that cannot be compiled in the default configuration), `test:viewer` and
+`test:viewer:deps` (`:73-91`, both `dir: internal/viewer`).
+
+`mise.toml` pins four tools exactly and nothing floats. `.gitignore` carries `/web` and
+`internal/viewer/generated/` — the generated-vs-source discipline §2.4 relies on (`:84-91`).
+`.github/workflows/ci.yml:31` reads `node-version-file: 'internal/viewer/package.json'`.
+`.goreleaser.yaml` builds `./cmd/emod` only, `CGO_ENABLED=0`, linux+darwin cross-compiled from one
+runner.
+
+**Documentation that names the moving paths.** `docs/architecture.md:213-241` (the browser-viewer
+section, its mermaid diagram and the `internal/wasm` paragraph) and `docs/wasm-architecture.md:9,19,50,59`.
+Both go stale the moment Tasks 1 and 2 land.
+
+---
+
+## Findings
+
+**F1 — The CLI's viewer flag is `--serve`.** It is spelled `--serve`
+(`internal/cli/app.go:132-135`, `Usage: "Start viewer server with diagram data"`) and has been
+since it was introduced; `emod diagram --viewer` names nothing the CLI accepts. Task criteria and
+verification commands here say `--serve`. Nothing in this story changes the flag, and renaming it
+is not in scope.
+
+**F2 — `generated/` has to move with `embed.go`, and §5.2 does not say so.** `embed.go:7` names
+`static/*` *and* `generated/*`, so splitting the package moves the WASM build's output directory
+too: `Taskfile.yml:36-38`'s three paths, `.gitignore`'s `internal/viewer/generated/` line, and
+`build:web`'s copy source (`:51`) all move with it. A split that moves only the files §5.2 lists
+leaves a package whose embed directive cannot resolve, and `//go:embed` fails at compile time when a
+pattern matches nothing — the same coupling `docs/architecture.md:238-240` already warns about
+("run `task build` (not bare `go build`)").
+
+**F3 — `cmd/emod-desktop` must be excluded from `test:unit` and `test:integration`, or CI breaks.**
+Both tasks run `go test` over `$(go list ./... | grep -v /cmd/emod-wasm)`. A new package that
+imports Wails needs CGO and the GTK4/WebKitGTK development headers to compile, which
+`ubuntu-latest` does not have and which §7.1 (`:426-444`) explicitly keeps out of the shared build
+paths. The package also embeds an assembled, gitignored frontend directory, so it cannot compile at
+all before its build task has run. The exclusion is the same shape `cmd/emod-wasm` already has, and
+it belongs in the task that creates the package.
+
+**F4 — `platform.js` must exist on disk for the vitest suite to resolve.** Once `viewer.js` does
+`import … from './platform.js'`, Vite resolves that specifier when the suite loads the module under
+test, and `vi.mock('../static/platform.js', factory)` does not create a file. So a `platform.js`
+that exists only after a build task has run makes `task test:viewer` depend on that build task —
+which today it does not (`Taskfile.yml:73-79` deps only on `test:viewer:deps`). See "Open questions,
+decided" Q1.
+
+**F5 — the desktop adapter must not ship to Pages, and `static/*` is copied wholesale.**
+`build:web` copies `./internal/viewer/static/*` (`Taskfile.yml:50`) and `embed.go` embeds `static/*`.
+If `platform.desktop.js` lives in that directory, the Pages deploy serves it and the CLI binary
+embeds it — the opposite of §4.5's stated result, "no desktop code in the Pages deploy" (`:250`).
+Task 3 closes on the outcome (`web/static/` carries exactly one platform implementation) rather than
+on a placement, because either excluding the file from the copy or keeping it outside `static/`
+achieves it.
+
+**F6 — §4.3's `openFile()` takes no argument, but the browser's only file source is a drop event.**
+The contract (`:171-188`) lists `openFile()` → `Promise<{path, content} | null>`, which fits a native
+dialog and US-002. In the browser today there is no Open control at all: the only way a file enters
+the viewer is `viewer.js:166-188`, which already holds the file object by the time it needs reading.
+Task 4 therefore decides the shape the drop handler calls through, and its criteria are written
+against the observable drop behaviour rather than against a signature.
+
+**F7 — a globally installed `wails3` would shadow the repo's pin.** `tasks/learnings.md:11-14`
+records this exact failure with `tree-sitter-cli`: a tool pinned in `mise.toml` loses to a global
+pin on `PATH` in a non-activated shell, silently, producing different output while the tree looks
+clean. A new pinned CLI whose output feeds a build is the same hazard. Every verification command
+in Phase 2 goes through `mise exec --`.
+
+**F8 — the desktop page must be derived from `viewer.html`, not written.** The story's seventh
+criterion is the one that keeps the three distributions from forking. `viewer.html` carries two
+browser-only lines — `<script src="generated/wasm_exec.js">` (`:1161`) and the
+`<!--INITIAL_DATA-->` marker (`:1162`) — so the desktop assembly has to produce its page from that
+file rather than beside it. `build:web` already does the same class of thing (`mv viewer.html
+index.html`, `Taskfile.yml:52`).
+
+---
+
+## Open questions, decided
+
+**Q1 — is `platform.js` a committed file or a build output?** *Decided: either, as long as
+`task test:viewer` passes from a checkout where no build task has run (F4), `task build` yields a
+CLI viewer that resolves it, and `web/static/` ends up with the browser implementation and nothing
+desktop-specific (F5).* Two shapes satisfy all three: a committed `platform.js` that re-exports the
+browser implementation, overwritten only inside the desktop app's own assembled directory; or a
+gitignored `platform.js` produced by an assembly step that `build`, `build:web` and `test:viewer`
+all depend on. §4.5 (`:231-251`) recommends assembly-time copy and rejects runtime detection; both
+shapes are assembly-time, and the choice between them is a Taskfile question, not a design one.
+Whichever is chosen, the desktop target's copy is assembled — Task 9's criteria require it.
+
+**Q2 — where does `ModelService` live?** *Decided: in `internal/`, not `cmd/emod-desktop/`.*
+§5.3 (`:369-392`) sketches it as `cmd/emod-desktop/service.go`. But a `package main` there cannot be
+built or tested without the framework, CGO and the assembled frontend, and F3 removes that package
+from `task test:unit` for exactly those reasons — which would take the service's tests with it. The
+service as §4.6 writes it (`:314-333`) imports nothing from the framework: it is `internal/pipeline`
+calls and string envelopes. Keeping it in `internal/` is what lets Task 7 land tested, ahead of and
+independent of the alpha dependency, and it does not weaken §9.1's containment claim
+(`:660-663`) — no v3-specific code moves out of `cmd/emod-desktop/`.
+
+**Q3 — what do the desktop's file-open and file-save entry points do in this story?** *Decided:
+exist, and report that they are not available in this build.* US-002 and US-003 own them.
+`platform.desktop.js` must export the same names as `platform.browser.js` or the shared modules
+break on import, and a silent no-op or an unhandled rejection when a user presses Export is worse
+than a status-area message. Task 9 states this and Boundaries records it as deferred.
+
+**Q4 — which Wails version?** *Decided: whatever is current at implementation time, pinned exactly
+in both places.* The proposal verified `v3.0.0-alpha2.117` on 8 Jul 2026 (`:629-631`); this
+breakdown is written 2026-08-19 and the alpha tags move nightly. Task 8's criterion is that the two
+pins name the same exact version and that neither floats — not that they name a particular one.
+Read the pinned version's own package docs for the Manager API surface; §9.1 (`:641-650`) records
+that earlier alphas' flat top-level functions are gone and that third-party tutorials are already
+stale.
+
+---
+
+## Theory
+
+The whole story is one structural move performed three times, and the reason it is cheap is that the
+repo already put a seam where the seam needs to go. `wasm.js` is 71 lines with three importers and
+seven test files mocking it; every test that stubs it is already stubbing *the boundary between the
+UI and the Go core*, not the browser. So Phase 1 is not "introduce an abstraction" — it is "rename
+the abstraction that exists to what it is, and move three more browser-shaped things behind it".
+Read Tasks 4, 5 and 6 as three small subtractions from `viewer.js`: after them that file names no
+browser API that a native shell cannot provide, and it is the only file that had any.
+
+Phase 0 is the part that looks like busywork and is not. `internal/viewer` currently means both "the
+UI every distribution shares" and "the localhost server one distribution uses"; a desktop app that
+imports it would be importing an HTTP server it must never start. Splitting it makes the dependency
+the desktop app is allowed to have expressible. The trap is `generated/` (F2): it is not in §5.2's
+list, it is gitignored, and `embed.go` names it — so the split is not "move four things", it is
+"move the assets *and* redirect the build output that lands among them", and a half-done version
+fails at `//go:embed` rather than at a test.
+
+The two places to read hardest are the ones nothing in the tree can catch. First, F5: `static/*` is
+copied wholesale by `build:web` and embedded wholesale by `embed.go`, so a desktop adapter parked in
+that directory is shipped to GitHub Pages and baked into the CLI binary, and no test anywhere would
+notice. Second, F3: `task test:unit` enumerates packages with `go list ./...`, so the moment
+`cmd/emod-desktop` exists it is in the set, and CI — which installs no WebKit headers — starts
+failing for reasons that read as unrelated to the commit that caused them. Both are one-line
+mistakes with no test surface, which is why both are acceptance criteria rather than notes.
+
+The alpha is the only genuine unknown, and it is deliberately isolated into Task 8: a pinned
+dependency and a window, with no adapter, no bindings and no shared assets in the commit. If the
+framework's API has moved since the proposal was written, that is where it surfaces — as a build
+failure in a task whose whole diff is a `go.mod` line, a `mise.toml` line, a Taskfile target and a
+`main.go`, rather than tangled into the frontend assembly. Task 9's blank-page risk is the mirror
+image: a webview that fails to import one module renders nothing and says nothing, so verify it by
+what the window *draws*, not by what the build exits with.
+
+---
+
+## Tasks
+
+---
+
+**Phase 0 — Restructure (~0.5d). Tasks 1 and 2. Exit: all existing tests green, zero behaviour
+change. Mergeable on its own.**
+
+### Task 1: Rename `internal/wasm` to `internal/pipeline`
+
+**Behavior:** The package that orchestrates lex → parse → validate → lint → export is named for what
+it does rather than for the first caller it happened to have, so a native caller can import it
+without importing a lie. Nothing observable changes: the same functions, the same JSON envelopes, the
+same three WASM globals.
+
+**Acceptance Criteria:**
+- [x] `internal/pipeline/` holds what `internal/wasm/` holds today, declaring `package pipeline`, and
+      `internal/wasm/` no longer exists
+- [x] The package doc comment names `pipeline` and describes what the package orchestrates rather
+      than which caller it was extracted for (current text at `internal/wasm/pipeline.go:1-4`)
+- [x] `cmd/emod-wasm/main.go` imports the renamed package and every `wasm.` qualifier in it reads
+      `pipeline.` (`:8`, `:20`, `:24`, `:32`, `:35`, `:43`, `:45`, `:50`)
+- [x] No exported identifier changes spelling — `ExtractSource`, `RunPipelineExportDiagram`,
+      `RunPipelineExportJSON`, `ExportEmod`, `ExportEmodJSON`, `ErrorJSON` — so no JSON envelope key
+      and no `js.Global()` name moves
+- [x] `internal/pipeline/pipeline_test.go` passes with no assertion weakened and no subtest skipped
+- [x] No Go file, no `Taskfile.yml` entry, no workflow and no file under `docs/` other than
+      `docs/proposals/` names `internal/wasm`
+- [x] `docs/architecture.md:222` and `:237` name the renamed package
+- [x] `mise exec -- task build` still produces `internal/viewer/generated/emod.wasm`
+
+**Affected Files/Modules:**
+- `internal/wasm/pipeline.go`, `internal/wasm/pipeline_test.go` → `internal/pipeline/` — package
+  clause, doc comment, test import and every qualifier
+- `cmd/emod-wasm/main.go` — the single non-test importer
+- `docs/architecture.md` — `:222` and `:237`
+
+**Patterns to Follow:**
+- `tasks/learnings.md:241-244` — the rename discipline this repo already applies: the Go identifier
+  moves, the wire name does not
+- `internal/wasm/pipeline.go:1-4` — the doc comment being replaced, and the reason it now misleads
+  (`docs/proposals/emod-desktop-proposal.md:345-350`)
+- `cmd/emod-wasm/main.go:19-54` — every call site, all in one file
+
+**Testable:** Yes — `internal/pipeline`'s six exported functions are exercised by the moved
+`pipeline_test.go`, which runs under `task test:unit`.
+
+**Certainty:** high — a compiler-proven rename with one non-test importer (`cmd/emod-wasm/main.go:8`),
+following the rename discipline `tasks/learnings.md:241-244` already records.
+
+**Blast radius:** low — an `internal/` package rename with every exported name and every JSON
+envelope unchanged; nothing outside the repository can observe it.
+
+**Verification:** `mise exec -- task build`; `mise exec -- task test:unit`;
+`mise exec -- task test:integration`;
+`rg -n 'internal/wasm' -g '!docs/proposals' -g '!tasks'` prints nothing.
+
+**Depends on:** None.
+
+---
+
 ### Task 2: Split `internal/viewer` into `internal/frontend` and `internal/viewer`
 
 **Behavior:** The frontend assets every distribution shares stop sharing a package with the localhost
@@ -383,7 +735,7 @@ the web bundle assembles identically, and the vitest suite collects the same 24 
       `package-lock.json` and `vitest.config.js`; `internal/viewer/` holds `serve.go` and
       `serve_test.go` and nothing else
 - [ ] `internal/frontend/embed.go` declares `package frontend` and its `//go:embed` directive reaches
-      the same two directories it reaches today (`internal/viewer/embed.go:7`)
+      the same two directories it reaches today (`internal/frontend/embed.go:7`)
 - [ ] The WASM build output lands beside the assets the same package embeds: `Taskfile.yml:36-38`'s
       three paths, `.gitignore`'s `internal/viewer/generated/` entry and `build:web`'s copy source
       (`:51`) all name the new location, and `mise exec -- task build` succeeds from a tree with no
@@ -399,8 +751,8 @@ the web bundle assembles identically, and the vitest suite collects the same 24 
 - [ ] `.github/workflows/ci.yml:31`'s `node-version-file` names the moved `package.json`
 - [ ] `docs/architecture.md:213-241` and `docs/wasm-architecture.md:9,19,50,59` name paths that exist
       in the tree after this task
-- [ ] No file outside `docs/proposals/` and `tasks/` names `internal/viewer/static`,
-      `internal/viewer/tests`, `internal/viewer/generated` or `internal/viewer/package.json`
+- [ ] No file outside `docs/proposals/` and `tasks/` names `internal/frontend/static`,
+      `internal/frontend/tests`, `internal/viewer/generated` or `internal/viewer/package.json`
 - [ ] `mise exec -- task test:e2e:viewer` passes — the web bundle still loads, instantiates the WASM
       module and renders
 
@@ -415,7 +767,7 @@ the web bundle assembles identically, and the vitest suite collects the same 24 
 - `docs/architecture.md`, `docs/wasm-architecture.md`
 
 **Patterns to Follow:**
-- `internal/viewer/embed.go:1-8` and `internal/viewer/serve.go:31-40` — what the embed directive
+- `internal/frontend/embed.go:1-8` and `internal/viewer/serve.go:31-40` — what the embed directive
   names and how `fs.Sub` reaches each half of it
 - `Taskfile.yml:44-52` — the copy-and-rename assembly idiom, which does not change here but which
   Task 3 and Task 9 both extend
@@ -426,7 +778,7 @@ the web bundle assembles identically, and the vitest suite collects the same 24 
 **Testable:** Yes — `internal/viewer/serve_test.go` drives `ServeViewer` over the moved FS through
 its exported entry point, and `task test:viewer` collects the moved vitest suite.
 
-**Certainty:** medium — the embed-and-serve arrangement (`internal/viewer/embed.go:1-8`,
+**Certainty:** medium — the embed-and-serve arrangement (`internal/frontend/embed.go:1-8`,
 `serve.go:31-40`) and the `build:web` copy (`Taskfile.yml:44-52`) are both in front of you, but no
 package in this repo has been split before and §5.2's file list omits `generated/`, which `embed.go`
 also names — so where the WASM build output lands, and the `.gitignore`, `build:wasm` and `build:web`
@@ -504,14 +856,14 @@ by sniffing the environment at runtime. Nothing a user can see changes.
 - `docs/proposals/emod-desktop-proposal.md:592-602` — §8.1 on redirecting the mocks and which four
   test files are browser-only
 - `Taskfile.yml:44-52` — the copy-and-rename idiom already in use
-- `internal/viewer/tests/viewer.test.js:1-18` — the comment stating that only the bridge is stubbed
+- `internal/frontend/tests/viewer.test.js:1-18` — the comment stating that only the bridge is stubbed
   because it is the module boundary; it names the boundary and must stay true of the new target
 - `tasks/learnings.md:226-229` — the vitest harness's shape and how it is run
 
 **Testable:** Yes — through the public module surface the seven redirected test files already drive.
 
 **Certainty:** medium — `wasm.js` moves verbatim and the suite already mocks at exactly this boundary
-(`internal/viewer/tests/viewer.test.js:13`, `model.test.js:5`, `emod-export.test.js:11`), but nothing
+(`internal/frontend/tests/viewer.test.js:13`, `model.test.js:5`, `emod-export.test.js:11`), but nothing
 in this repo assembles a *single module* per target: `build:web` copies whole trees
 (`Taskfile.yml:50`) and never substitutes one file for another, and the vitest suite has to resolve
 `./platform.js` in a tree where no build task has run (F4).
@@ -559,9 +911,9 @@ the same drag-over highlight, the same render.
 - `internal/frontend/tests/viewer.test.js:65-72`, `:93-102`, `:129-136`, `:191-233`
 
 **Patterns to Follow:**
-- `internal/viewer/static/viewer.js:166-188` — the handler being changed, including which parts are
+- `internal/frontend/static/viewer.js:166-188` — the handler being changed, including which parts are
   shared UI (the extension check, the status messages, the highlight) and which are the browser's
-- `internal/viewer/tests/viewer.test.js:65-72` and `:93-102` — `fireDrop` and `MockFileReader`, the
+- `internal/frontend/tests/viewer.test.js:65-72` and `:93-102` — `fireDrop` and `MockFileReader`, the
   two stubs the leaves rest on
 - `docs/proposals/emod-desktop-proposal.md:142-154` — §4.1 row 2, the touch point and what the
   desktop side of it will be
@@ -570,7 +922,7 @@ the same drag-over highlight, the same render.
 **Testable:** Yes — through the drop handler the three existing vitest leaves already drive.
 
 **Certainty:** medium — the path is pinned by three leaves and a `MockFileReader` that already stands
-in for the browser read (`internal/viewer/tests/viewer.test.js:93-102`, `:191-233`), but §4.3's
+in for the browser read (`internal/frontend/tests/viewer.test.js:93-102`, `:191-233`), but §4.3's
 `openFile()` takes no argument while the browser's only file source is the drop event, so the shape
 the handler calls through is decided here (F6).
 
@@ -610,14 +962,14 @@ so the same file with the same name and the same bytes still arrives in Download
 
 **Patterns to Follow:**
 - `docs/proposals/emod-desktop-proposal.md:189-230` — §4.4's before/after for this exact block
-- `internal/viewer/static/viewer.js:208-222` — the block being moved, verbatim
+- `internal/frontend/static/viewer.js:208-222` — the block being moved, verbatim
 - `e2e-viewer/tests/helpers.js:129-137` and `e2e-viewer/tests/export.spec.js:8-23` — the guard that
   already pins both the bytes and the download name
 
 **Testable:** Yes — through the Export button, which `e2e-viewer/tests/export.spec.js` drives against
 the real bundle.
 
-**Certainty:** high — the block moves whole from `internal/viewer/static/viewer.js:209-219`, and
+**Certainty:** high — the block moves whole from `internal/frontend/static/viewer.js:209-219`, and
 `e2e-viewer/tests/export.spec.js:8-23` already pins both the exported bytes and the download name
 through `exportEmod` (`e2e-viewer/tests/helpers.js:129-137`).
 
@@ -663,17 +1015,17 @@ After this task `viewer.js` names no browser API a native shell cannot provide.
 
 **Patterns to Follow:**
 - `internal/viewer/serve.go:81-101` — `buildHTML`, which produces the global and does not change
-- `internal/viewer/static/viewer.html:1161-1163` — the marker and the two browser-only lines around
+- `internal/frontend/static/viewer.html:1161-1163` — the marker and the two browser-only lines around
   it, which Task 9 has to derive a desktop page from
-- `internal/viewer/tests/viewer.test.js:138-190` — the leaves covering both outcomes and the
+- `internal/frontend/tests/viewer.test.js:138-190` — the leaves covering both outcomes and the
   readiness gate
 - `docs/proposals/emod-desktop-proposal.md:142-154` — §4.1 rows 4 and 5
 
 **Testable:** Yes — through the viewer's initial load, covered by the existing leaves for both the
 present and the absent case.
 
-**Certainty:** high — the read is one branch at `internal/viewer/static/viewer.js:291-292`, both its
-outcomes are already covered at `internal/viewer/tests/viewer.test.js:139-162`, and the injection
+**Certainty:** high — the read is one branch at `internal/frontend/static/viewer.js:291-292`, both its
+outcomes are already covered at `internal/frontend/tests/viewer.test.js:139-162`, and the injection
 that feeds it (`internal/viewer/serve.go:87-99`) does not move.
 
 **Blast radius:** low — one branch in the shared UI; the server-side injection, its escaping and the

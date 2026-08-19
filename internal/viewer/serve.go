@@ -10,6 +10,8 @@ import (
 	"strings"
 	"syscall"
 	"time"
+
+	"github.com/hpcsc/emod/internal/frontend"
 )
 
 const maxShutdownTime = 5 * time.Second
@@ -28,11 +30,11 @@ func ServeViewer(port int, diagramJSON []byte) (string, func(), error) {
 
 	mux := http.NewServeMux()
 
-	staticFS, err := fs.Sub(ViewerFS, "static")
+	staticFS, err := fs.Sub(frontend.FS, "static")
 	if err != nil {
 		return "", nil, fmt.Errorf("viewer: fs sub: %w", err)
 	}
-	generatedFS, err := fs.Sub(ViewerFS, "generated")
+	generatedFS, err := fs.Sub(frontend.FS, "generated")
 	if err != nil {
 		return "", nil, fmt.Errorf("viewer: fs sub: %w", err)
 	}
@@ -79,7 +81,7 @@ func ServeViewer(port int, diagramJSON []byte) (string, func(), error) {
 }
 
 func buildHTML(diagramJSON []byte) string {
-	data, err := ViewerFS.ReadFile("static/viewer.html")
+	data, err := frontend.FS.ReadFile("static/viewer.html")
 	if err != nil {
 		return ""
 	}

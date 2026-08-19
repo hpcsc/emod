@@ -10,7 +10,7 @@ tasks/.checkpoint
 .claude/worktrees/
 node_modules
 /web
-internal/viewer/generated/
+internal/frontend/generated/
 editors/vscode/out
 e2e-viewer/test-results/
 e2e-viewer/playwright-report/

@@ -28,7 +28,7 @@ jobs:
     - name: Setup Node.js
       uses: actions/setup-node@v4
       with:
-        node-version-file: 'internal/viewer/package.json'
+        node-version-file: 'internal/frontend/package.json'
     - name: Run Grammar Tests
       run: task test:grammar
     - name: Run VS Code Grammar Scope Tests

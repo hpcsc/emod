@@ -32,7 +32,7 @@ graph TD
     subgraph Frontends
         cli[cli<br/><i>commands</i>]
         lsp[lsp<br/><i>language server</i>]
-        wasm[wasm<br/><i>browser bridge</i>]
+        pipeline[pipeline<br/><i>transport-free orchestration</i>]
     end
 
     subgraph Orchestration
@@ -61,14 +61,14 @@ graph TD
 
     cli --> oracle
     lsp --> oracle
-    wasm --> oracle
+    pipeline --> oracle
     cli --> diagram
     cli --> export
     cli --> formatter
     cli --> glossary
-    wasm --> export
-    wasm --> importer
-    wasm --> formatter
+    pipeline --> export
+    pipeline --> importer
+    pipeline --> formatter
     lsp --> formatter
 
     oracle --> lexer
@@ -92,10 +92,11 @@ graph TD
     linter --> diagnostic
 ```
 
-Not shown: `internal/viewer` (the browser viewer's JS modules plus a small
-embed/serve wrapper, depending on nothing above), `internal/cue` (an embedded
-CUE schema the `emod schema` command prints and the export tests vet against)
-and `internal/test` (shared model fixtures used only by tests).
+Not shown: `internal/frontend` (the viewer's JS modules and the embed
+directive that reaches them, depending on nothing above), `internal/viewer`
+(the localhost HTTP delivery the CLI uses to serve them), `internal/cue` (an
+embedded CUE schema the `emod schema` command prints and the export tests vet
+against) and `internal/test` (shared model fixtures used only by tests).
 
 ## The language pipeline
 
@@ -210,7 +211,7 @@ that completion lists never offer a spelling the lexer doesn't define.
 
 ## The browser viewer
 
-The viewer is a plain-ES-module app living under `internal/viewer/static/`
+The viewer is a plain-ES-module app living under `internal/frontend/static/`
 (that location is what `//go:embed` can reach). The same pipeline runs in the
 browser via WebAssembly. `docs/wasm-architecture.md` covers this subsystem in
 detail.
@@ -218,27 +219,31 @@ detail.
 ```mermaid
 flowchart LR
     subgraph "Go build"
-        CW["cmd/emod-wasm"] -- "GOOS=js GOARCH=wasm" --> WASM["internal/viewer/generated/emod.wasm"]
+        CW["cmd/emod-wasm"] -- "GOOS=js GOARCH=wasm" --> WASM["internal/frontend/generated/emod.wasm"]
         WB["internal/pipeline<br/><i>transport-free orchestration</i>"] --> CW
     end
 
-    subgraph "internal/viewer"
+    subgraph "internal/frontend"
         STATIC["static/*.js + viewer.html"]
-        EMBED["embed.go + serve.go"]
+        EMBED["embed.go"]
     end
+    SERVE["internal/viewer<br/><i>localhost delivery</i>"]
     WASM --> EMBED
     STATIC --> EMBED
+    EMBED --> SERVE
 
-    EMBED -- "emod diagram --serve" --> LOCAL["local browser"]
+    SERVE -- "emod diagram --serve" --> LOCAL["local browser"]
     STATIC -- "task build:web → web/" --> PAGES["GitHub Pages"]
     WASM -- "task build:web → web/" --> PAGES
 ```
 
 `internal/pipeline` keeps the orchestration free of `syscall/js` so it is
 testable and so a non-browser caller can reach it; `cmd/emod-wasm` is only
-`js.Value` marshalling. Note the
-build coupling: `internal/viewer` embeds `generated/*`, which is gitignored —
-run `task build` (not bare `go build`), which depends on `build:wasm`.
+`js.Value` marshalling. `internal/frontend` holds the assets every
+distribution shares and `internal/viewer` holds only the CLI's HTTP delivery,
+so a caller that needs the assets does not depend on a server. Note the build
+coupling: `internal/frontend` embeds `generated/*`, which is gitignored — run
+`task build` (not bare `go build`), which depends on `build:wasm`.
 
 ## Editor tooling and the drift guards
 

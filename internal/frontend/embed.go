@@ -1,8 +1,8 @@
-package viewer
+package frontend
 
 import (
 	"embed"
 )
 
 //go:embed static/* generated/*
-var ViewerFS embed.FS
+var FS embed.FS

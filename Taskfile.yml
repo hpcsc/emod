@@ -33,9 +33,9 @@ tasks:
   build:wasm:
     desc: Build the WASM binary and copy runtime glue for the viewer
     cmds:
-      - mkdir -p ./internal/viewer/generated
-      - cp "$(go env GOROOT)/lib/wasm/wasm_exec.js" ./internal/viewer/generated/
-      - go build -o ./internal/viewer/generated/emod.wasm ./cmd/emod-wasm
+      - mkdir -p ./internal/frontend/generated
+      - cp "$(go env GOROOT)/lib/wasm/wasm_exec.js" ./internal/frontend/generated/
+      - go build -o ./internal/frontend/generated/emod.wasm ./cmd/emod-wasm
     env:
       CGO_ENABLED: '0'
       GOOS: 'js'
@@ -47,8 +47,8 @@ tasks:
       - build:wasm
     cmds:
       - mkdir -p ./web/generated ./web/static
-      - cp -r ./internal/viewer/static/* ./web/static/
-      - cp ./internal/viewer/generated/* ./web/generated/
+      - cp -r ./internal/frontend/static/* ./web/static/
+      - cp ./internal/frontend/generated/* ./web/generated/
       - mv ./web/static/viewer.html ./web/index.html
 
   test:
@@ -74,7 +74,7 @@ tasks:
     desc: Run viewer JS unit tests
     deps:
       - test:viewer:deps
-    dir: internal/viewer
+    dir: internal/frontend
     cmds:
       - npm test
 
@@ -82,7 +82,7 @@ tasks:
   # fingerprint is the lockfile, so an unchanged one skips the install entirely.
   test:viewer:deps:
     desc: Install viewer test dependencies when the lockfile has changed
-    dir: internal/viewer
+    dir: internal/frontend
     cmds:
       - npm ci
     sources:

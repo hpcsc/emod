@@ -25,14 +25,14 @@
     },
     {
       "n": 2,
-      "done": false,
+      "done": true,
       "title": "Split `internal/viewer` into `internal/frontend` and `internal/viewer`",
       "language": "Go",
       "testable": true,
       "certainty": "medium",
       "blast_radius": "low",
       "patterns_to_follow": [
-        "internal/viewer/embed.go:1-8",
+        "internal/frontend/embed.go:1-8",
         "internal/viewer/serve.go:31-40",
         "Taskfile.yml:44-52",
         "docs/proposals/emod-desktop-proposal.md:351-392",
@@ -66,7 +66,7 @@
         "docs/proposals/emod-desktop-proposal.md:231-251",
         "docs/proposals/emod-desktop-proposal.md:592-602",
         "Taskfile.yml:44-52",
-        "internal/viewer/tests/viewer.test.js:1-18",
+        "internal/frontend/tests/viewer.test.js:1-18",
         "tasks/learnings.md:226-229"
       ],
       "depends_on": [
@@ -94,9 +94,9 @@
       "certainty": "medium",
       "blast_radius": "low",
       "patterns_to_follow": [
-        "internal/viewer/static/viewer.js:166-188",
-        "internal/viewer/tests/viewer.test.js:65-72",
-        "internal/viewer/tests/viewer.test.js:93-102",
+        "internal/frontend/static/viewer.js:166-188",
+        "internal/frontend/tests/viewer.test.js:65-72",
+        "internal/frontend/tests/viewer.test.js:93-102",
         "docs/proposals/emod-desktop-proposal.md:142-154"
       ],
       "depends_on": [
@@ -119,7 +119,7 @@
       "blast_radius": "low",
       "patterns_to_follow": [
         "docs/proposals/emod-desktop-proposal.md:189-230",
-        "internal/viewer/static/viewer.js:208-222",
+        "internal/frontend/static/viewer.js:208-222",
         "e2e-viewer/tests/helpers.js:129-137",
         "e2e-viewer/tests/export.spec.js:8-23"
       ],
@@ -142,8 +142,8 @@
       "blast_radius": "low",
       "patterns_to_follow": [
         "internal/viewer/serve.go:81-101",
-        "internal/viewer/static/viewer.html:1161-1163",
-        "internal/viewer/tests/viewer.test.js:138-190",
+        "internal/frontend/static/viewer.html:1161-1163",
+        "internal/frontend/tests/viewer.test.js:138-190",
         "docs/proposals/emod-desktop-proposal.md:142-154"
       ],
       "depends_on": [
@@ -218,7 +218,7 @@
         "docs/proposals/emod-desktop-proposal.md:231-251",
         "docs/proposals/emod-desktop-proposal.md:603-615",
         "Taskfile.yml:44-52",
-        "internal/viewer/static/viewer.html:1161-1163",
+        "internal/frontend/static/viewer.html:1161-1163",
         "task:3"
       ],
       "depends_on": [

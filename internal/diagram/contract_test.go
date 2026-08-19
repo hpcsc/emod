@@ -1837,7 +1837,7 @@ func TestExporterTriggerScreen(t *testing.T) {
 func viewerNodePalette(t *testing.T) map[string]struct{ fill, stroke string } {
 	t.Helper()
 
-	raw, err := os.ReadFile("../viewer/static/config.js")
+	raw, err := os.ReadFile("../frontend/static/config.js")
 	require.NoError(t, err)
 	content := string(raw)
 

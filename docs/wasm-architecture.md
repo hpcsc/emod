@@ -6,7 +6,7 @@ flowchart TB
         A["cmd/emod-wasm/main.go<br/><i>registers parseEmod &amp; exportJSON</i>"]
         B["go build -o emod.wasm<br/>GOOS=js GOARCH=wasm"]
         C["cp $(go env GOROOT)/lib/wasm/wasm_exec.js"]
-        D["internal/viewer/generated/<br/>emod.wasm + wasm_exec.js"]
+        D["internal/frontend/generated/<br/>emod.wasm + wasm_exec.js"]
         A --> B --> D
         C --> D
     end
@@ -56,7 +56,7 @@ flowchart TB
 
 ## Flow Summary
 
-1. **Build**: `cmd/emod-wasm/main.go` is cross-compiled to Wasm, producing `emod.wasm` + `wasm_exec.js` into `internal/viewer/generated/`
+1. **Build**: `cmd/emod-wasm/main.go` is cross-compiled to Wasm, producing `emod.wasm` + `wasm_exec.js` into `internal/frontend/generated/`
 
 2. **Serve**: `emod diagram --serve` starts an HTTP server. If a file path is given, the CLI pre-parses it with the native Go pipeline and injects the diagram as `window.INITIAL_DATA` for an instant first render.
 
