@@ -241,13 +241,13 @@ and its contents — or with the reason it could not be read. It imports no GUI 
 compiles and is tested everywhere the rest of the repository is.
 
 **Acceptance Criteria:**
-- [ ] Given a path to a readable file, the service answers a JSON envelope carrying the file's base name, its absolute path, and its contents verbatim, including files whose contents are not valid `.emod`
-- [ ] Given a relative path, the answered path is absolute, so a later caller can act on it without knowing the process's working directory
-- [ ] A path that does not exist, a path the process may not read, and a path naming a directory each answer the `{"error": "…"}` envelope, and the message names which of those it was rather than a generic failure
-- [ ] No envelope ever carries both contents and an error
-- [ ] The new type lives in its own file in `internal/desktop`, and the package still imports no GUI framework and links no CGO — `go build ./internal/desktop` succeeds with `CGO_ENABLED=0`
+- [x] Given a path to a readable file, the service answers a JSON envelope carrying the file's base name, its absolute path, and its contents verbatim, including files whose contents are not valid `.emod`
+- [x] Given a relative path, the answered path is absolute, so a later caller can act on it without knowing the process's working directory
+- [x] A path that does not exist, a path the process may not read, and a path naming a directory each answer the `{"error": "…"}` envelope, and the message names which of those it was rather than a generic failure
+- [x] No envelope ever carries both contents and an error
+- [x] The new type lives in its own file in `internal/desktop`, and the package still imports no GUI framework and links no CGO — `go build ./internal/desktop` succeeds with `CGO_ENABLED=0`
 - [ ] The binding-name parity guard covers both services: renaming an exported method on either one, on either side of the boundary, fails a Go test
-- [ ] `task test:unit` and `task test:integration` are green from a checkout where `task build:desktop` has never run
+- [x] `task test:unit` and `task test:integration` are green from a checkout where `task build:desktop` has never run
 
 **Affected Files/Modules:**
 - `internal/desktop/` — a new file declaring the new file-reading service type and its method

@@ -4,7 +4,7 @@
   "tasks": [
     {
       "n": 1,
-      "done": false,
+      "done": true,
       "title": "Read a chosen file through a framework-free desktop service",
       "language": "Go",
       "testable": true,
