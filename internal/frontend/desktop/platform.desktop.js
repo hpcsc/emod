@@ -3,6 +3,7 @@
 // it wholesale, so a desktop module parked there would ship to the published
 // web viewer and into the CLI binary. The desktop build assembles it into its
 // own frontend directory as platform.js.
+import { Window } from '/wails/runtime.js';
 import { ModelService } from '../bindings/github.com/hpcsc/emod/internal/desktop/index.js';
 
 // The Go core is linked into the binary, so there is nothing to fetch and
@@ -60,10 +61,16 @@ function saveFile() {
   return Promise.reject(new Error('Saving is not available in this build yet'));
 }
 
+// document.title names a browser tab and nothing at all here: the shell's title
+// bar is the native window's, which only the host can rename.
+function setWindowTitle(title) {
+  Window.SetTitle(title);
+}
+
 // Nothing hands this window a model at startup, so it always opens empty. A
 // shell launched by opening a file has one to supply here.
 function initialState() {
   return Promise.resolve(null);
 }
 
-export { parseEmod, exportEmod, droppedFile, saveFile, initialState, ready, isReady };
+export { parseEmod, exportEmod, droppedFile, saveFile, setWindowTitle, initialState, ready, isReady };

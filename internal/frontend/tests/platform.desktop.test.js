@@ -6,13 +6,16 @@ import { describe, it, expect, beforeAll, beforeEach } from 'vitest';
 // or parseEmod sending an envelope shape the Go service does not accept.
 let desktop;
 let stub;
+let runtime;
 beforeAll(async () => {
   stub = await import('./bindings-stub.js');
+  runtime = await import('./wails-runtime-stub.js');
   desktop = await import('../desktop/platform.desktop.js');
 });
 
 beforeEach(() => {
   stub.calls.length = 0;
+  runtime.calls.length = 0;
   stub.answers.ParseEmod = '{"diagnostics":[],"diagram":{"nodes":[],"edges":[]}}';
   stub.answers.ExportEmod = '{"emod":"emod 1\\nmodel \\"Billing\\"\\n"}';
 });
@@ -57,6 +60,20 @@ describe('export', () => {
     stub.answers.ExportEmod = '{"error":"importer: invalid diagram JSON"}';
 
     await expect(desktop.exportEmod({})).rejects.toThrow('importer: invalid diagram JSON');
+  });
+});
+
+describe('window title', () => {
+  it('names the native window, which is the only title a desktop user can see', () => {
+    desktop.setWindowTitle('hotel.emod — Emod Diagram Viewer');
+
+    expect(runtime.calls).toEqual([['Window.SetTitle', 'hotel.emod — Emod Diagram Viewer']]);
+  });
+
+  it('passes the name through untouched, so the shared viewer alone decides what a window is called', () => {
+    desktop.setWindowTitle('Emod Diagram Viewer');
+
+    expect(runtime.calls[0][1]).toBe('Emod Diagram Viewer');
   });
 });
 

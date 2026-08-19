@@ -9,6 +9,10 @@ export default defineConfig({
       // tree cannot load that module without a stand-in.
       '../bindings/github.com/hpcsc/emod/internal/desktop/index.js':
         resolve(import.meta.dirname, 'tests/bindings-stub.js'),
+      // The Wails asset server answers /wails/runtime.js from a compiled-in
+      // constant, so the path resolves in the running app and nowhere else.
+      '/wails/runtime.js':
+        resolve(import.meta.dirname, 'tests/wails-runtime-stub.js'),
     },
   },
   test: {

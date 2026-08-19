@@ -40,3 +40,11 @@ describe('initialization failure', () => {
     await expect(browser.ready).rejects.toThrow('WASM initialization failed');
   });
 });
+
+describe('window title', () => {
+  it('names the document, which is the browser window title', () => {
+    browser.setWindowTitle('hotel.emod — Emod Diagram Viewer');
+
+    expect(document.title).toBe('hotel.emod — Emod Diagram Viewer');
+  });
+});

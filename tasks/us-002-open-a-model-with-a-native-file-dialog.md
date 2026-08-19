@@ -281,11 +281,11 @@ setting `document.title` exactly as today; the desktop host additionally retitle
 which no amount of `document.title` can do.
 
 **Acceptance Criteria:**
-- [ ] Rendering a named model still names the browser tab as it does today, and an unnamed model still falls back to the plain viewer name — the visible behaviour of the CLI and web distributions is unchanged
-- [ ] The desktop implementation asks the native window to take the same name it writes into `document.title`
-- [ ] The seam contract guard names the new function, and both implementations satisfy it
-- [ ] `platform.desktop.test.js` and `dropped-file.test.js` still load and pass with the desktop module importing the Wails JS runtime — a stand-in for that runtime exists and vitest resolves it
-- [ ] `task test:viewer` is green, and `task build:web` still produces a `web/static/` carrying exactly one platform implementation and no desktop module
+- [x] Rendering a named model still names the browser tab as it does today, and an unnamed model still falls back to the plain viewer name — the visible behaviour of the CLI and web distributions is unchanged
+- [x] The desktop implementation asks the native window to take the same name it writes into `document.title`
+- [x] The seam contract guard names the new function, and both implementations satisfy it
+- [x] `platform.desktop.test.js` and `dropped-file.test.js` still load and pass with the desktop module importing the Wails JS runtime — a stand-in for that runtime exists and vitest resolves it
+- [x] `task test:viewer` is green, and `task build:web` still produces a `web/static/` carrying exactly one platform implementation and no desktop module
 
 **Affected Files/Modules:**
 - `internal/frontend/static/platform.js` — the contract gains one name

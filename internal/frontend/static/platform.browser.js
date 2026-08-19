@@ -106,6 +106,10 @@ function saveFile(suggestedName, content) {
   return Promise.resolve();
 }
 
+function setWindowTitle(title) {
+  document.title = title;
+}
+
 // The CLI's server substitutes this global into the page before the frontend
 // loads, so it is already there by the time anything asks; the promise is for
 // the hosts that have to go and fetch their state instead.
@@ -116,4 +120,4 @@ function initialState() {
   return Promise.resolve(INITIAL_DATA);
 }
 
-export { parseEmod, exportEmod, droppedFile, saveFile, initialState, ready, isReady };
+export { parseEmod, exportEmod, droppedFile, saveFile, setWindowTitle, initialState, ready, isReady };

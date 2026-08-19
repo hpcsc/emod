@@ -14,6 +14,7 @@ let savedFile = null;
 let exportFails = false;
 let initialStateFails = false;
 let parseQueue = [];
+let windowTitle = '';
 
 vi.mock('../static/platform.js', () => ({
   get ready() { return platformReady; },
@@ -26,6 +27,7 @@ vi.mock('../static/platform.js', () => ({
     ? Promise.reject(new Error('host could not answer'))
     : Promise.resolve(typeof globalThis.INITIAL_DATA === 'undefined' ? null : globalThis.INITIAL_DATA)),
   saveFile: vi.fn((name, content) => { savedFile = { name, content }; return Promise.resolve(); }),
+  setWindowTitle: vi.fn((title) => { windowTitle = title; }),
   droppedFile: vi.fn((dataTransfer) => {
     const file = dataTransfer.files[0];
     if (!file) return null;
@@ -148,6 +150,25 @@ beforeEach(() => {
   exportFails = false;
   initialStateFails = false;
   parseQueue = [];
+  windowTitle = '';
+});
+
+describe('the window is named through the host, not by assigning document.title', () => {
+  it('names the window after the model that rendered', async () => {
+    globalThis.INITIAL_DATA = { diagram: billingDiagram() };
+
+    await startViewer();
+
+    expect(windowTitle).toBe('Billing — Emod Diagram Viewer');
+  });
+
+  it('falls back to the viewer name when the model has none', async () => {
+    globalThis.INITIAL_DATA = { diagram: { ...billingDiagram(), model_name: '' } };
+
+    await startViewer();
+
+    expect(windowTitle).toBe('Emod Diagram Viewer');
+  });
 });
 
 describe('viewer initial state', () => {
@@ -531,7 +552,8 @@ describe('the platform seam has one contract', () => {
 
   it('names every host operation the shared modules reach for', () => {
     expect(contract).toEqual(
-      ['droppedFile', 'exportEmod', 'initialState', 'isReady', 'parseEmod', 'ready', 'saveFile'],
+      ['droppedFile', 'exportEmod', 'initialState', 'isReady', 'parseEmod', 'ready', 'saveFile',
+       'setWindowTitle'],
     );
   });
 

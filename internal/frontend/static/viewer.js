@@ -9,7 +9,7 @@ import { CtxActions } from './ctx-actions.js';
 import { Model } from './model.js';
 import { bus } from './bus.js';
 import { Export } from './emod-export.js';
-import { ready, isReady, droppedFile, saveFile, initialState } from './platform.js';
+import { ready, isReady, droppedFile, saveFile, setWindowTitle, initialState } from './platform.js';
 
 // ─── Event subscriptions ─────────────────────────────────────────────
 bus.on('data:changed', function({ store: s }) {
@@ -18,7 +18,7 @@ bus.on('data:changed', function({ store: s }) {
 
 bus.on('model:updated', function({ store: s }) {
   s.dom.nameDisplay.textContent = s.modelName || "(unnamed)";
-  document.title = s.modelName ? s.modelName + " — Emod Diagram Viewer" : "Emod Diagram Viewer";
+  setWindowTitle(s.modelName ? s.modelName + " — Emod Diagram Viewer" : "Emod Diagram Viewer");
   UI.updateStats(s);
   const btn = s.dom.resetLayoutBtn;
   if (btn) btn.disabled = true;
