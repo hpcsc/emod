@@ -1,0 +1,122 @@
+{
+  "story": "US-003: Save a model back to the file it came from",
+  "tasks_file": "tasks/us-003-save-a-model-back-to-the-file-it-came-from.md",
+  "tasks": [
+    {
+      "n": 1,
+      "done": false,
+      "title": "Write a model back to disk through the desktop file service",
+      "language": "Go",
+      "testable": true,
+      "certainty": "low",
+      "blast_radius": "high",
+      "patterns_to_follow": [
+        "internal/desktop/file_service.go:25-57",
+        "internal/desktop/file_service.go:59-68",
+        "internal/desktop/file_service_test.go:43-168",
+        "internal/cli/fmt.go:42-47",
+        "internal/pipeline/pipeline.go:115-119",
+        "tasks/learnings.md:1001-1005",
+        "tasks/learnings.md:983-987"
+      ],
+      "depends_on": [],
+      "affected_files": [
+        "internal/desktop/file_service.go",
+        "internal/desktop/file_service_test.go"
+      ]
+    },
+    {
+      "n": 2,
+      "done": false,
+      "title": "Save the panel's source back to the file it came from",
+      "language": "JavaScript/TypeScript",
+      "testable": true,
+      "certainty": "medium",
+      "blast_radius": "high",
+      "patterns_to_follow": [
+        "internal/frontend/static/viewer.js:240-262",
+        "internal/frontend/static/viewer.js:282-293",
+        "internal/frontend/static/viewer.js:190-198",
+        "internal/frontend/static/ui.js:342-352",
+        "internal/frontend/static/platform.browser.js:94-116",
+        "internal/frontend/tests/viewer.test.js:20-44",
+        "internal/frontend/tests/viewer.test.js:318-367",
+        "internal/frontend/tests/viewer.test.js:626-645",
+        "e2e-viewer/tests/export.spec.js:15-22",
+        "tasks/learnings.md:989-993",
+        "tasks/learnings.md:1007-1011",
+        "tasks/learnings.md:965-969",
+        "tasks/learnings.md:1013-1017"
+      ],
+      "depends_on": [],
+      "affected_files": [
+        "internal/frontend/static/platform.js",
+        "internal/frontend/static/platform.browser.js",
+        "internal/frontend/desktop/platform.desktop.js",
+        "internal/frontend/static/viewer.js",
+        "internal/frontend/static/store.js",
+        "internal/frontend/static/ui.js",
+        "internal/frontend/static/viewer.html",
+        "internal/frontend/tests/viewer.test.js"
+      ]
+    },
+    {
+      "n": 3,
+      "done": false,
+      "title": "Raise Save and Save As from the desktop shell",
+      "language": "JavaScript/TypeScript",
+      "testable": true,
+      "certainty": "high",
+      "blast_radius": "high",
+      "patterns_to_follow": [
+        "internal/frontend/desktop/platform.desktop.js:76-118",
+        "internal/frontend/desktop/platform.desktop.js:55-62",
+        "cmd/emod-desktop/main.go:33-46",
+        "internal/desktop/event_names_test.go:20-30",
+        "internal/frontend/tests/wails-runtime-stub.js:22-29",
+        "internal/frontend/tests/bindings-stub.js:17-19",
+        "internal/frontend/tests/platform.desktop.test.js:88-197",
+        "Taskfile.yml:48-65",
+        "tasks/learnings.md:995-999",
+        "tasks/learnings.md:1031-1035",
+        "tasks/learnings.md:1013-1017",
+        "task:1",
+        "task:2"
+      ],
+      "depends_on": [
+        1,
+        2
+      ],
+      "affected_files": [
+        "cmd/emod-desktop/main.go",
+        "internal/frontend/desktop/platform.desktop.js",
+        "internal/frontend/tests/wails-runtime-stub.js",
+        "internal/frontend/tests/bindings-stub.js",
+        "internal/frontend/tests/platform.desktop.test.js"
+      ]
+    },
+    {
+      "n": 4,
+      "done": false,
+      "title": "Document save-in-place",
+      "language": "Generic",
+      "testable": false,
+      "certainty": "high",
+      "blast_radius": "low",
+      "patterns_to_follow": [
+        "README.md:385-402",
+        "docs/architecture.md:225-236",
+        "docs/architecture.md:265-277",
+        "tasks/completed/us-002-open-a-model-with-a-native-file-dialog.md",
+        "tasks/learnings.md:719-723"
+      ],
+      "depends_on": [
+        3
+      ],
+      "affected_files": [
+        "README.md",
+        "docs/architecture.md"
+      ]
+    }
+  ]
+}
