@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { readFileSync } from 'fs';
+import { readFileSync, readdirSync } from 'fs';
 import { resolve } from 'path';
 import { installSVGGeometry } from './svg-env.js';
 
@@ -54,7 +54,7 @@ function createRequiredElements() {
     <span id="stat-nodes"></span>
     <span id="stat-edges"></span>
     <span id="stat-canvas"></span>
-    <span id="stat-file" class="hidden">File: <span class="stat-value" id="stat-file-path"></span></span>
+    <span id="stat-file">File: <span class="stat-value" id="stat-file-path"></span></span>
     <div id="data-panel" class="collapsed"></div>
     <div id="data-panel-header"></div>
     <div id="data-panel-body"></div>
@@ -256,6 +256,34 @@ function diagramNamed(name) {
 }
 
 describe('viewer overlapping renders', () => {
+  it('keeps the newest render when an older parse fails after it', async () => {
+    globalThis.INITIAL_DATA = null;
+    await startViewer();
+
+    let rejectOlder;
+    parseQueue = [
+      new Promise(function(_, reject) { rejectOlder = reject; }),
+      Promise.resolve({ diagnostics: [], diagram: diagramNamed('Newer') }),
+    ];
+
+    document.getElementById('source-input').value = 'context Older {}';
+    document.getElementById('render-btn').click();
+    await flush();
+
+    document.getElementById('source-input').value = 'context Newer {}';
+    document.getElementById('render-btn').click();
+    await flush();
+
+    rejectOlder(new Error('older source is unparseable'));
+    await flush();
+
+    // The older parse failing must not report over the render that replaced it:
+    // the canvas holds Newer, so the status has to agree.
+    expect(document.getElementById('render-status').textContent).toBe('✓ Rendered');
+    expect(document.getElementById('render-status').className).not.toContain('error');
+    expect(document.getElementById('diagram-canvas').innerHTML).toContain('NewerCmd');
+  });
+
   it('keeps the newest render when an older parse answers after it', async () => {
     globalThis.INITIAL_DATA = null;
     await startViewer();
@@ -519,9 +547,184 @@ describe('a file the host opens', () => {
 
     await openFile({ name: 'billing.emod', path: '/Users/me/models/billing.emod', content: billingSource });
 
-    expect(document.getElementById('stat-file').textContent).toContain('/Users/me/models/billing.emod');
+    const bar = document.getElementById('stat-file');
+    expect(bar.textContent).toContain('/Users/me/models/billing.emod');
+    // The bar truncates a path wider than the space left in it, so the tooltip
+    // is the only place the whole path stays readable.
+    expect(bar.title).toBe('/Users/me/models/billing.emod');
+    // jsdom has no layout, so being on screen can only be checked through the
+    // class viewer.html styles as display:none. Asserting the text alone passes
+    // with the bar hidden.
+    expect(bar.classList.contains('hidden')).toBe(false);
   });
 
+  it('keeps the bar hidden until a file is open, so the browser viewer shows no empty stat', async () => {
+    globalThis.INITIAL_DATA = { diagram: billingDiagram() };
+
+    await startViewer();
+
+    expect(document.getElementById('stat-file').classList.contains('hidden')).toBe(true);
+  });
+
+});
+
+describe('what the window names', () => {
+  const billingSource = 'emod 1\nmodel "Billing"\n';
+
+  it('keeps naming the model on screen when a delivered file will not render', async () => {
+    globalThis.INITIAL_DATA = null;
+    parseResult = { diagnostics: [], diagram: billingDiagram() };
+    await startViewer();
+    deliverFile({ name: 'billing.emod', path: '/models/billing.emod', content: billingSource });
+    await flush();
+
+    deliverFile({ name: 'empty.emod', path: '/models/empty.emod', content: '   ' });
+    await flush();
+
+    expect(windowTitle).toBe('billing.emod — Emod Diagram Viewer');
+    expect(document.getElementById('stat-file').textContent).toContain('/models/billing.emod');
+    expect(document.getElementById('diagram-canvas').innerHTML).toContain('TakePayment');
+  });
+
+  it('stops naming the opened file once a dropped model replaces it', async () => {
+    globalThis.INITIAL_DATA = null;
+    parseResult = { diagnostics: [], diagram: billingDiagram() };
+    await startViewer();
+    deliverFile({ name: 'billing.emod', path: '/models/billing.emod', content: billingSource });
+    await flush();
+
+    const dropped = new File([''], 'hotel.emod');
+    dropped._content = 'emod 1\nmodel "Hotel"\n';
+    parseResult = { diagnostics: [], diagram: { ...billingDiagram(), model_name: 'Hotel' } };
+    fireDrop(document.getElementById('data-panel-body'), dropped);
+    await flush();
+    await flush();
+
+    expect(windowTitle).toBe('Hotel — Emod Diagram Viewer');
+    expect(document.getElementById('stat-file').classList.contains('hidden')).toBe(true);
+  });
+
+  // A file stays open across edits, the way it does in a text editor: the panel
+  // is that file's text, whatever has been typed into it, and Save writes back
+  // there. Only another file arriving replaces it.
+  it('keeps naming the opened file after its source is edited and re-rendered', async () => {
+    globalThis.INITIAL_DATA = null;
+    parseResult = { diagnostics: [], diagram: billingDiagram() };
+    await startViewer();
+    deliverFile({ name: 'billing.emod', path: '/models/billing.emod', content: billingSource });
+    await flush();
+
+    parseResult = { diagnostics: [], diagram: { ...billingDiagram(), model_name: 'Hotel' } };
+    document.getElementById('source-input').value = 'emod 1\nmodel "Hotel"\n';
+    document.getElementById('render-btn').click();
+    await flush();
+
+    expect(windowTitle).toBe('billing.emod — Emod Diagram Viewer');
+    expect(document.getElementById('stat-file').textContent).toContain('/models/billing.emod');
+  });
+
+  it('keeps naming a file whose line endings the panel rewrote', async () => {
+    globalThis.INITIAL_DATA = null;
+    parseResult = { diagnostics: [], diagram: billingDiagram() };
+    await startViewer();
+    const delivered = 'emod 1\r\nmodel "Billing"\r\n';
+    deliverFile({ name: 'crlf.emod', path: '/models/crlf.emod', content: delivered });
+    await flush();
+
+    // The panel normalises CR/CRLF to LF on the way in, so its text is no longer
+    // what the file delivered — which is exactly what an identity rule built on
+    // comparing the two would trip over.
+    expect(document.getElementById('source-input').value).not.toBe(delivered);
+    expect(document.getElementById('source-input').value).toBe('emod 1\nmodel "Billing"\n');
+
+    document.getElementById('render-btn').click();
+    await flush();
+
+    expect(windowTitle).toBe('crlf.emod — Emod Diagram Viewer');
+    expect(document.getElementById('stat-file').textContent).toContain('/models/crlf.emod');
+  });
+
+  it('stops naming a file whose failed open would otherwise have claimed the panel', async () => {
+    globalThis.INITIAL_DATA = null;
+    parseResult = { diagnostics: [], diagram: billingDiagram() };
+    await startViewer();
+    deliverFile({ name: 'billing.emod', path: '/models/billing.emod', content: billingSource });
+    await flush();
+
+    parseQueue = [Promise.reject(new Error('unparseable'))];
+    deliverFile({ name: 'broken.emod', path: '/models/broken.emod', content: 'emod 1\nnot a model\n' });
+    await flush();
+
+    parseResult = { diagnostics: [], diagram: { ...billingDiagram(), model_name: 'Hotel' } };
+    document.getElementById('render-btn').click();
+    await flush();
+
+    // broken.emod never rendered, so it never became the open file — the render
+    // that follows must not inherit its name.
+    expect(windowTitle).toBe('billing.emod — Emod Diagram Viewer');
+    expect(document.getElementById('stat-file').textContent).toContain('/models/billing.emod');
+  });
+});
+
+describe('a file the host read but the pipeline will not render', () => {
+  async function openThenDeliver(second, beforeSecond) {
+    globalThis.INITIAL_DATA = null;
+    parseResult = { diagnostics: [], diagram: billingDiagram() };
+    await startViewer();
+    deliverFile({ name: 'billing.emod', path: '/models/billing.emod', content: 'emod 1\nmodel "Billing"\n' });
+    await flush();
+    expect(document.getElementById('data-panel').classList.contains('collapsed')).toBe(true);
+    if (beforeSecond) beforeSecond();
+    deliverFile(second);
+    await flush();
+  }
+
+  it('opens the panel holding the reason, so choosing a file never looks like nothing happened', async () => {
+    await openThenDeliver({ name: 'empty.emod', path: '/models/empty.emod', content: '   ' });
+
+    expect(document.getElementById('data-panel').classList.contains('collapsed')).toBe(false);
+    expect(document.getElementById('render-status').className).toContain('error');
+  });
+
+  it('names the file rather than repeating a message written for someone who pressed Render', async () => {
+    await openThenDeliver({ name: 'empty.emod', path: '/models/empty.emod', content: '   ' });
+
+    expect(document.getElementById('render-status').textContent).toContain('empty.emod is empty');
+    expect(document.getElementById('render-status').textContent).not.toContain('no source');
+  });
+
+  it('holds its reason against a render still in flight when the failure arrives', async () => {
+    globalThis.INITIAL_DATA = null;
+    parseResult = { diagnostics: [], diagram: billingDiagram() };
+    await startViewer();
+
+    let answerSlow;
+    parseQueue = [new Promise(function(resolve) { answerSlow = resolve; })];
+    document.getElementById('source-input').value = 'context Slow {}';
+    document.getElementById('render-btn').click();
+    await flush();
+
+    deliverFile({ error: 'reading /models/gone.emod: no such file or directory' });
+    await flush();
+
+    answerSlow({ diagnostics: [], diagram: billingDiagram() });
+    await flush();
+
+    // The slow render resolving last must not paint over the failure, nor
+    // re-collapse the panel that is the only place it can be read.
+    expect(document.getElementById('render-status').textContent).toContain('no such file or directory');
+    expect(document.getElementById('data-panel').classList.contains('collapsed')).toBe(false);
+  });
+
+  it('leaves the panel holding the model on screen, which the title and the path still name', async () => {
+    await openThenDeliver({ name: 'broken.emod', path: '/models/broken.emod', content: 'emod 1\nnot a model\n' }, () => {
+      parseQueue = [Promise.reject(new Error('unparseable'))];
+    });
+
+    expect(document.getElementById('source-input').value).toBe('emod 1\nmodel "Billing"\n');
+    expect(windowTitle).toBe('billing.emod — Emod Diagram Viewer');
+    expect(document.getElementById('stat-file').textContent).toContain('/models/billing.emod');
+  });
 });
 
 describe('a file the host could not read', () => {
@@ -647,6 +850,35 @@ describe('viewer.html satisfies what init reads from it', () => {
 
   it.each([...new Set(required)])('declares id="%s"', (id) => {
     expect(viewerHtml).toContain(`id="${id}"`);
+  });
+});
+
+// The web bundle and the CLI binary ship static/ wholesale. A shared module
+// reaching the Wails runtime or the generated bindings compiles and tests fine
+// here, and gives the browser viewer a page that dies on a module it cannot
+// fetch — with every suite green, because the desktop stubs answer for both.
+describe('only the desktop implementation reaches the host', () => {
+  const shared = readdirSync(resolve(__dirname, '../static'))
+    .filter((f) => f.endsWith('.js'));
+
+  it('scans every shared module, so the check below is not scanning nothing', () => {
+    expect(shared).toContain('viewer.js');
+    expect(shared).toContain('model.js');
+    expect(shared.length).toBeGreaterThan(10);
+  });
+
+  it.each(shared)('%s imports neither the Wails runtime nor the generated bindings', (file) => {
+    const src = readFileSync(resolve(__dirname, '../static', file), 'utf-8');
+
+    expect(src).not.toContain('/wails/runtime.js');
+    expect(src).not.toContain('/bindings/');
+  });
+
+  it('is checking for text the desktop implementation actually contains', () => {
+    const src = readFileSync(resolve(__dirname, '../desktop/platform.desktop.js'), 'utf-8');
+
+    expect(src).toContain('/wails/runtime.js');
+    expect(src).toContain('/bindings/');
   });
 });
 

@@ -87,7 +87,7 @@
     },
     {
       "n": 4,
-      "done": false,
+      "done": true,
       "title": "Show the native file picker and hand over what it chose",
       "language": "JavaScript/TypeScript",
       "testable": true,

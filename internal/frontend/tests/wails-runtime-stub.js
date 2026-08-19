@@ -10,3 +10,20 @@ export const answers = {};
 export const Window = {
   SetTitle: (title) => { calls.push(['Window.SetTitle', title]); return Promise.resolve(); },
 };
+
+// A test fires a host event by calling what the module subscribed with, which
+// is the only path the shell itself has into the frontend.
+export const listeners = {};
+
+export const Events = {
+  On: (name, callback) => { listeners[name] = callback; return () => { delete listeners[name]; }; },
+};
+
+export const Dialogs = {
+  OpenFile: (options) => {
+    calls.push(['Dialogs.OpenFile', options]);
+    return answers.OpenFile instanceof Error
+      ? Promise.reject(answers.OpenFile)
+      : Promise.resolve(answers.OpenFile === undefined ? '' : answers.OpenFile);
+  },
+};

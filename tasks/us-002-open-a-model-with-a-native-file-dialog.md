@@ -246,7 +246,7 @@ compiles and is tested everywhere the rest of the repository is.
 - [x] A path that does not exist, a path the process may not read, and a path naming a directory each answer the `{"error": "…"}` envelope, and the message names which of those it was rather than a generic failure
 - [x] No envelope ever carries both contents and an error
 - [x] The new type lives in its own file in `internal/desktop`, and the package still imports no GUI framework and links no CGO — `go build ./internal/desktop` succeeds with `CGO_ENABLED=0`
-- [ ] The binding-name parity guard covers both services: renaming an exported method on either one, on either side of the boundary, fails a Go test
+- [x] The binding-name parity guard covers both services: renaming an exported method on either one, on either side of the boundary, fails a Go test
 - [x] `task test:unit` and `task test:integration` are green from a checkout where `task build:desktop` has never run
 
 **Affected Files/Modules:**
@@ -367,13 +367,13 @@ reported where the user can see it, with the model already on screen left alone.
 hands over nothing at all.
 
 **Acceptance Criteria:**
-- [ ] An open request shows the native picker, with a filter that names `.emod` and `.json` and a title naming what is being opened
-- [ ] Choosing a file reads it through the file service and delivers its name, path and contents to the handler the viewer registered
-- [ ] A cancelled picker — the host answering with no path — delivers nothing: the handler is not called, and nothing about the displayed model, its name, its path or the status area changes
-- [ ] A file the service reports it could not read delivers that reason instead of contents, so the viewer can report it
-- [ ] An open request arriving before any handler has been registered is discarded without throwing
-- [ ] The desktop implementation is the only module that imports the Wails runtime or the generated bindings
-- [ ] `task test:viewer` is green, and the binding-name parity guard passes with the JS now calling the file service
+- [x] An open request shows the native picker, with a filter that names `.emod` and `.json` and a title naming what is being opened
+- [x] Choosing a file reads it through the file service and delivers its name, path and contents to the handler the viewer registered
+- [x] A cancelled picker — the host answering with no path — delivers nothing: the handler is not called, and nothing about the displayed model, its name, its path or the status area changes
+- [x] A file the service reports it could not read delivers that reason instead of contents, so the viewer can report it
+- [x] An open request arriving before any handler has been registered is discarded without throwing
+- [x] The desktop implementation is the only module that imports the Wails runtime or the generated bindings
+- [x] `task test:viewer` is green, and the binding-name parity guard passes with the JS now calling the file service
 
 **Affected Files/Modules:**
 - `internal/frontend/desktop/platform.desktop.js` — subscribes to the host's open event, owns the dialog, reads through the service, delivers to the handler

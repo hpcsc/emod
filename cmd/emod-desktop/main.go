@@ -26,6 +26,7 @@ func main() {
 		Description: "Event model viewer",
 		Services: []application.Service{
 			application.NewService(&desktop.ModelService{}),
+			application.NewService(&desktop.FileService{}),
 		},
 		Assets: application.AssetOptions{
 			// Bundled rather than plain: the generated bindings import
