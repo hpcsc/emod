@@ -326,20 +326,20 @@ without importing a lie. Nothing observable changes: the same functions, the sam
 same three WASM globals.
 
 **Acceptance Criteria:**
-- [ ] `internal/pipeline/` holds what `internal/wasm/` holds today, declaring `package pipeline`, and
+- [x] `internal/pipeline/` holds what `internal/wasm/` holds today, declaring `package pipeline`, and
       `internal/wasm/` no longer exists
-- [ ] The package doc comment names `pipeline` and describes what the package orchestrates rather
+- [x] The package doc comment names `pipeline` and describes what the package orchestrates rather
       than which caller it was extracted for (current text at `internal/wasm/pipeline.go:1-4`)
-- [ ] `cmd/emod-wasm/main.go` imports the renamed package and every `wasm.` qualifier in it reads
+- [x] `cmd/emod-wasm/main.go` imports the renamed package and every `wasm.` qualifier in it reads
       `pipeline.` (`:8`, `:20`, `:24`, `:32`, `:35`, `:43`, `:45`, `:50`)
-- [ ] No exported identifier changes spelling — `ExtractSource`, `RunPipelineExportDiagram`,
+- [x] No exported identifier changes spelling — `ExtractSource`, `RunPipelineExportDiagram`,
       `RunPipelineExportJSON`, `ExportEmod`, `ExportEmodJSON`, `ErrorJSON` — so no JSON envelope key
       and no `js.Global()` name moves
-- [ ] `internal/pipeline/pipeline_test.go` passes with no assertion weakened and no subtest skipped
-- [ ] No Go file, no `Taskfile.yml` entry, no workflow and no file under `docs/` other than
+- [x] `internal/pipeline/pipeline_test.go` passes with no assertion weakened and no subtest skipped
+- [x] No Go file, no `Taskfile.yml` entry, no workflow and no file under `docs/` other than
       `docs/proposals/` names `internal/wasm`
-- [ ] `docs/architecture.md:222` and `:237` name the renamed package
-- [ ] `mise exec -- task build` still produces `internal/viewer/generated/emod.wasm`
+- [x] `docs/architecture.md:222` and `:237` name the renamed package
+- [x] `mise exec -- task build` still produces `internal/viewer/generated/emod.wasm`
 
 **Affected Files/Modules:**
 - `internal/wasm/pipeline.go`, `internal/wasm/pipeline_test.go` → `internal/pipeline/` — package
@@ -730,9 +730,9 @@ imports no desktop framework, so it is testable wherever the rest of the repo is
   takes, where `ErrorJSON` is applied, and the comment at `:27-29` explaining the asymmetry
 - `docs/proposals/emod-desktop-proposal.md:252-340` — §4.6's sketch, and its instruction to keep the
   string/envelope contract in v1 even though v3 could marshal real types (`:328-333`)
-- `internal/wasm/pipeline_test.go` — the umbrella shape, the `decodeEmodEnvelope` helper and the
+- `internal/pipeline/pipeline_test.go` — the umbrella shape, the `decodeEmodEnvelope` helper and the
   fixtures, post-Task-1
-- `internal/wasm/pipeline.go:79-100` — `ExportEmodJSON` and `ErrorJSON`, the two envelope writers the
+- `internal/pipeline/pipeline.go:79-100` — `ExportEmodJSON` and `ErrorJSON`, the two envelope writers the
   criteria compare against
 
 **Testable:** Yes — `ModelService`'s three methods are exported and take and return strings; nothing

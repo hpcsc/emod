@@ -1,7 +1,8 @@
-// Package wasm extracts the emod pipeline (lex → parse → validate → lint → export)
-// into functions that accept and return standard Go types, enabling testing
-// independent of syscall/js.
-package wasm
+// Package pipeline runs the emod pipeline (lex → parse → validate → lint → export)
+// behind functions that accept and return standard Go types, so every surface that
+// drives a model — the browser shim, the desktop shell, a test — shares one
+// orchestration and none of them imposes its transport on it.
+package pipeline
 
 import (
 	"encoding/json"

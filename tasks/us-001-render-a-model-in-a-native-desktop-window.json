@@ -4,7 +4,7 @@
   "tasks": [
     {
       "n": 1,
-      "done": false,
+      "done": true,
       "title": "Rename `internal/wasm` to `internal/pipeline`",
       "language": "Go",
       "testable": true,
@@ -12,7 +12,7 @@
       "blast_radius": "low",
       "patterns_to_follow": [
         "tasks/learnings.md:241-244",
-        "internal/wasm/pipeline.go:1-4",
+        "internal/pipeline/pipeline.go:1-4",
         "cmd/emod-wasm/main.go:19-54"
       ],
       "depends_on": [],
@@ -167,8 +167,8 @@
       "patterns_to_follow": [
         "cmd/emod-wasm/main.go:19-54",
         "docs/proposals/emod-desktop-proposal.md:252-340",
-        "internal/wasm/pipeline_test.go",
-        "internal/wasm/pipeline.go:79-100"
+        "internal/pipeline/pipeline_test.go",
+        "internal/pipeline/pipeline.go:79-100"
       ],
       "depends_on": [
         1

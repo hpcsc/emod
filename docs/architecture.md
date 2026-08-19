@@ -219,7 +219,7 @@ detail.
 flowchart LR
     subgraph "Go build"
         CW["cmd/emod-wasm"] -- "GOOS=js GOARCH=wasm" --> WASM["internal/viewer/generated/emod.wasm"]
-        WB["internal/wasm<br/><i>syscall/js-free bridge</i>"] --> CW
+        WB["internal/pipeline<br/><i>transport-free orchestration</i>"] --> CW
     end
 
     subgraph "internal/viewer"
@@ -234,8 +234,9 @@ flowchart LR
     WASM -- "task build:web → web/" --> PAGES
 ```
 
-`internal/wasm` keeps the browser-facing functions free of `syscall/js` so
-they are testable; `cmd/emod-wasm` is only `js.Value` marshalling. Note the
+`internal/pipeline` keeps the orchestration free of `syscall/js` so it is
+testable and so a non-browser caller can reach it; `cmd/emod-wasm` is only
+`js.Value` marshalling. Note the
 build coupling: `internal/viewer` embeds `generated/*`, which is gitignored —
 run `task build` (not bare `go build`), which depends on `build:wasm`.
 

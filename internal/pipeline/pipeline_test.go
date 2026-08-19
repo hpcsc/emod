@@ -1,12 +1,12 @@
 //go:build unit
 
-package wasm_test
+package pipeline_test
 
 import (
 	"encoding/json"
 	"testing"
 
-	"github.com/hpcsc/emod/internal/wasm"
+	"github.com/hpcsc/emod/internal/pipeline"
 	"github.com/stretchr/testify/require"
 )
 
@@ -39,14 +39,14 @@ context "Payments" {
 func TestPipeline(t *testing.T) {
 	t.Run("extract source", func(t *testing.T) {
 		t.Run("returns the source field", func(t *testing.T) {
-			source, err := wasm.ExtractSource(`{"source": "model MyModel"}`)
+			source, err := pipeline.ExtractSource(`{"source": "model MyModel"}`)
 
 			require.NoError(t, err)
 			require.Equal(t, "model MyModel", source)
 		})
 
 		t.Run("malformed JSON returns error", func(t *testing.T) {
-			_, err := wasm.ExtractSource(`not json`)
+			_, err := pipeline.ExtractSource(`not json`)
 
 			require.Error(t, err)
 			require.Contains(t, err.Error(), "invalid JSON")
@@ -54,7 +54,7 @@ func TestPipeline(t *testing.T) {
 
 		t.Run("a missing or empty source field returns error", func(t *testing.T) {
 			for _, input := range []string{`{}`, `{"source": ""}`} {
-				_, err := wasm.ExtractSource(input)
+				_, err := pipeline.ExtractSource(input)
 
 				require.Error(t, err, "input %s", input)
 				require.Contains(t, err.Error(), "missing source field")
@@ -64,7 +64,7 @@ func TestPipeline(t *testing.T) {
 
 	t.Run("export diagram", func(t *testing.T) {
 		t.Run("returns the model's nodes and edges with no diagnostics", func(t *testing.T) {
-			result, err := wasm.RunPipelineExportDiagram(billingModel)
+			result, err := pipeline.RunPipelineExportDiagram(billingModel)
 			require.NoError(t, err)
 
 			envelope := decodeDiagramEnvelope(t, result)
@@ -78,7 +78,7 @@ func TestPipeline(t *testing.T) {
 		})
 
 		t.Run("reports diagnostics for unparseable source and still returns an envelope", func(t *testing.T) {
-			result, err := wasm.RunPipelineExportDiagram("foobar {\n}\n")
+			result, err := pipeline.RunPipelineExportDiagram("foobar {\n}\n")
 			require.NoError(t, err)
 
 			envelope := decodeDiagramEnvelope(t, result)
@@ -88,7 +88,7 @@ func TestPipeline(t *testing.T) {
 		})
 
 		t.Run("empty source yields an envelope with no nodes", func(t *testing.T) {
-			result, err := wasm.RunPipelineExportDiagram("")
+			result, err := pipeline.RunPipelineExportDiagram("")
 			require.NoError(t, err)
 
 			envelope := decodeDiagramEnvelope(t, result)
@@ -99,7 +99,7 @@ func TestPipeline(t *testing.T) {
 
 	t.Run("export model json", func(t *testing.T) {
 		t.Run("returns the parsed model with no diagnostics", func(t *testing.T) {
-			result, err := wasm.RunPipelineExportJSON(billingModel)
+			result, err := pipeline.RunPipelineExportJSON(billingModel)
 			require.NoError(t, err)
 
 			var envelope struct {
@@ -117,7 +117,7 @@ func TestPipeline(t *testing.T) {
 
 	t.Run("export emod", func(t *testing.T) {
 		t.Run("diagram JSON round-trips back to the source it was parsed from", func(t *testing.T) {
-			parsed, err := wasm.RunPipelineExportDiagram(billingModel)
+			parsed, err := pipeline.RunPipelineExportDiagram(billingModel)
 			require.NoError(t, err)
 
 			var envelope struct {
@@ -125,14 +125,14 @@ func TestPipeline(t *testing.T) {
 			}
 			require.NoError(t, json.Unmarshal(parsed, &envelope))
 
-			result, err := wasm.ExportEmod(string(envelope.Diagram))
+			result, err := pipeline.ExportEmod(string(envelope.Diagram))
 			require.NoError(t, err)
 
 			require.Equal(t, billingModel, string(result))
 		})
 
 		t.Run("malformed diagram JSON returns error", func(t *testing.T) {
-			_, err := wasm.ExportEmod(`not json`)
+			_, err := pipeline.ExportEmod(`not json`)
 
 			require.Error(t, err)
 			require.Contains(t, err.Error(), "invalid diagram JSON")
@@ -141,14 +141,14 @@ func TestPipeline(t *testing.T) {
 
 	t.Run("export emod as json", func(t *testing.T) {
 		t.Run("wraps the formatted source in an emod field", func(t *testing.T) {
-			parsed := decodeEmodEnvelope(t, wasm.ExportEmodJSON(`{"model_name":"Billing","nodes":[],"edges":[]}`))
+			parsed := decodeEmodEnvelope(t, pipeline.ExportEmodJSON(`{"model_name":"Billing","nodes":[],"edges":[]}`))
 
 			require.Empty(t, parsed.Error)
 			require.Equal(t, "emod 1\nmodel \"Billing\"\n", parsed.Emod)
 		})
 
 		t.Run("reports a failure in an error field instead of an emod field", func(t *testing.T) {
-			parsed := decodeEmodEnvelope(t, wasm.ExportEmodJSON(`not json`))
+			parsed := decodeEmodEnvelope(t, pipeline.ExportEmodJSON(`not json`))
 
 			require.Empty(t, parsed.Emod)
 			require.Contains(t, parsed.Error, "invalid diagram JSON")
@@ -160,7 +160,7 @@ func TestPipeline(t *testing.T) {
 			var parsed struct {
 				Error string `json:"error"`
 			}
-			require.NoError(t, json.Unmarshal([]byte(wasm.ErrorJSON("something went wrong")), &parsed))
+			require.NoError(t, json.Unmarshal([]byte(pipeline.ErrorJSON("something went wrong")), &parsed))
 
 			require.Equal(t, "something went wrong", parsed.Error)
 		})

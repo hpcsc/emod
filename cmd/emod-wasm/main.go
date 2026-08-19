@@ -5,7 +5,7 @@ package main
 import (
 	"syscall/js"
 
-	"github.com/hpcsc/emod/internal/wasm"
+	"github.com/hpcsc/emod/internal/pipeline"
 )
 
 func main() {
@@ -17,11 +17,11 @@ func main() {
 }
 
 func jsParseEmod(this js.Value, args []js.Value) any {
-	return jsHandle(args, wasm.RunPipelineExportDiagram)
+	return jsHandle(args, pipeline.RunPipelineExportDiagram)
 }
 
 func jsExportJSON(this js.Value, args []js.Value) any {
-	return jsHandle(args, wasm.RunPipelineExportJSON)
+	return jsHandle(args, pipeline.RunPipelineExportJSON)
 }
 
 // jsExportEmod takes the diagram JSON document itself rather than the
@@ -29,25 +29,25 @@ func jsExportJSON(this js.Value, args []js.Value) any {
 // already holds that document as its state.
 func jsExportEmod(this js.Value, args []js.Value) any {
 	if len(args) != 1 {
-		return wasm.ErrorJSON("expected 1 argument")
+		return pipeline.ErrorJSON("expected 1 argument")
 	}
 
-	return wasm.ExportEmodJSON(args[0].String())
+	return pipeline.ExportEmodJSON(args[0].String())
 }
 
-func jsHandle(args []js.Value, pipeline func(string) ([]byte, error)) any {
+func jsHandle(args []js.Value, run func(string) ([]byte, error)) any {
 	if len(args) != 1 {
-		return wasm.ErrorJSON("expected 1 argument")
+		return pipeline.ErrorJSON("expected 1 argument")
 	}
 
-	source, err := wasm.ExtractSource(args[0].String())
+	source, err := pipeline.ExtractSource(args[0].String())
 	if err != nil {
-		return wasm.ErrorJSON(err.Error())
+		return pipeline.ErrorJSON(err.Error())
 	}
 
-	result, err := pipeline(source)
+	result, err := run(source)
 	if err != nil {
-		return wasm.ErrorJSON(err.Error())
+		return pipeline.ErrorJSON(err.Error())
 	}
 
 	return string(result)
