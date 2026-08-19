@@ -232,6 +232,38 @@ rather than more methods on the old one. A second `application.NewService(…)` 
 
 ---
 
+## Theory
+
+Opening a file runs the opposite way round from the rest of the platform seam. Every other seam
+operation is the shared viewer asking its host for something; this one is the host handing the viewer
+a file it did not ask for, through `onFileOpened` in `internal/frontend/static/platform.js`. That
+shape is deliberate: the native File menu lives in `cmd/emod-desktop/main.go` and emits an event, and
+one registration therefore serves the picker, a drop that carries a real path, a recent-files menu
+and a double-click alike — none of which is a dialog. `internal/desktop.FileService` answers a path
+with `{name, path, content}` or the shared error envelope, and refuses anything that is not valid
+UTF-8, because `json.Marshal` would otherwise rewrite what it cannot decode and a later save would
+write that corruption back to disk.
+
+The decision that was not forced is where the picker lives. The obvious alternative — the one the
+proposal sketches — raises the dialog inside the Go service; it was rejected because importing the
+GUI framework into `internal/desktop` drags CGO into a package `task test:unit` compiles on every
+checkout, and because `cmd/emod-desktop` belongs to no test target, so a picker in Go is a picker no
+suite can drive. The second unforced decision is that an opened file stays open across edits: the
+panel is that file's text whatever has been typed into it, and only another file arriving replaces
+it. The alternative — treating a paste that replaces the model as closing the file — reads reasonably
+until save-in-place lands, at which point editing a file and saving it would write somewhere else.
+
+Read the identity rule hardest. `renderPanelSource` in `internal/frontend/static/viewer.js` is the
+single point where the panel's text, the render sequence number and the current file all commit, and
+they commit only when the parse resolves — so every way of getting a model onto the canvas has to go
+through it or the window can end up naming a file whose model is not on screen. It is the part most
+likely to be wrong because the invariant is a convention about one function rather than anything the
+type system holds.
+
+Two things no suite covers. The menu item and its accelerator are observable only by running the app,
+which the story accepts; and `UseApplicationMenu` is what makes the menu exist on Windows at all,
+verified by reading the framework rather than by running it there.
+
 ## Tasks
 
 ### Task 1: Read a chosen file through a framework-free desktop service
