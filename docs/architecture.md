@@ -12,6 +12,7 @@ browser viewer; the editor grammars live beside it under `editors/`.
 |---|---|
 | `cmd/emod` | CLI entry point (thin; all logic in `internal/cli`) |
 | `cmd/emod-wasm` | WebAssembly entry point exposing the pipeline to the browser viewer |
+| `cmd/emod-desktop` | Native desktop shell (Wails); the one binary that links CGO |
 | `internal/` | The language pipeline, frontends and renderers (see below) |
 | `editors/tree-sitter-emod` | tree-sitter grammar + corpus/highlight tests |
 | `editors/vscode` | VS Code extension: TextMate grammar, language config, LSP client |
@@ -94,9 +95,11 @@ graph TD
 
 Not shown: `internal/frontend` (the viewer's JS modules and the embed
 directive that reaches them, depending on nothing above), `internal/viewer`
-(the localhost HTTP delivery the CLI uses to serve them), `internal/cue` (an
-embedded CUE schema the `emod schema` command prints and the export tests vet
-against) and `internal/test` (shared model fixtures used only by tests).
+(the localhost HTTP delivery the CLI uses to serve them), `internal/desktop`
+(the pipeline entry points the desktop shell binds to its frontend, importing
+no GUI framework so it stays testable), `internal/cue` (an embedded CUE schema
+the `emod schema` command prints and the export tests vet against) and
+`internal/test` (shared model fixtures used only by tests).
 
 ## The language pipeline
 
@@ -209,12 +212,26 @@ The **LSP** (`internal/lsp`) layers transport framing → dispatch
 `keywords_test.go` pins that every lexer keyword has a hover description and
 that completion lists never offer a spelling the lexer doesn't define.
 
-## The browser viewer
+## The viewer, and its three distributions
 
 The viewer is a plain-ES-module app living under `internal/frontend/static/`
-(that location is what `//go:embed` can reach). The same pipeline runs in the
-browser via WebAssembly. `docs/wasm-architecture.md` covers this subsystem in
-detail.
+(that location is what `//go:embed` can reach). One copy of it serves three
+distributions over two runtimes: the CLI serves it from localhost and the
+published web bundle is the same files hosted statically — both reaching the
+pipeline through WebAssembly, covered in depth by
+`docs/wasm-architecture.md` — while the desktop app calls the pipeline
+natively.
+
+What differs between the runtimes is confined to one module. Every shared
+module imports `./platform.js` for the things a host provides rather than the
+UI: reaching the Go core, reading a dropped file, saving an exported model, and
+answering what state the app opened with. `platform.browser.js` implements that
+over WebAssembly, `fetch` and the browser's download; `platform.desktop.js`
+implements it over Wails bindings. Which one a distribution gets is decided when
+it is assembled, not by sniffing the runtime — `build:web` copies the browser
+implementation, `build:desktop` copies the desktop one over it. No shared module
+branches on where it is running, which is what keeps the three distributions
+from drifting into three forks.
 
 ```mermaid
 flowchart LR
@@ -224,10 +241,12 @@ flowchart LR
     end
 
     subgraph "internal/frontend"
-        STATIC["static/*.js + viewer.html"]
+        STATIC["static/*.js + viewer.html<br/><i>one source of truth</i>"]
         EMBED["embed.go"]
+        PDESK["desktop/platform.desktop.js"]
     end
     SERVE["internal/viewer<br/><i>localhost delivery</i>"]
+    DESK["cmd/emod-desktop<br/><i>Wails shell, CGO</i>"]
     WASM --> EMBED
     STATIC --> EMBED
     EMBED --> SERVE
@@ -235,6 +254,9 @@ flowchart LR
     SERVE -- "emod diagram --serve" --> LOCAL["local browser"]
     STATIC -- "task build:web → web/" --> PAGES["GitHub Pages"]
     WASM -- "task build:web → web/" --> PAGES
+    STATIC -- "task build:desktop" --> DESK
+    PDESK -- "assembled as platform.js" --> DESK
+    DESK --> NATIVE["native window<br/><i>no WASM, no HTTP</i>"]
 ```
 
 `internal/pipeline` keeps the orchestration free of `syscall/js` so it is

@@ -27,14 +27,14 @@ flowchart TB
 
     subgraph Server["HTTP Server Routes"]
         K["GET /<br/>viewer.html<br/><i>+ INITIAL_DATA if provided</i>"]
-        L["GET /static/*<br/>viewer.js, model.js, wasm.js, ..."]
+        L["GET /static/*<br/>viewer.js, model.js, platform.js, ..."]
         M["GET /generated/*<br/>emod.wasm, wasm_exec.js"]
     end
 
     J --> Server
 
     subgraph Browser["Browser (Viewer)"]
-        N["wasm.js<br/>fetch → instantiateStreaming<br/>→ go.run(inst)"]
+        N["platform.browser.js<br/>fetch → instantiateStreaming<br/>→ go.run(inst)"]
         O["model.js<br/>sendParse(source)"]
         P["wasm.parseEmod(source)"]
         Q["globalThis.parseEmod(jsonStr)"]
@@ -47,7 +47,7 @@ flowchart TB
     O --> P --> Q --> R --> S
 
     subgraph Files["Embedded in binary (//go:embed)"]
-        T["internal/viewer/embed.go<br/>//go:embed static/* generated/*"]
+        T["internal/frontend/embed.go<br/>//go:embed static/* generated/*"]
     end
 
     D --> T
@@ -60,6 +60,16 @@ flowchart TB
 
 2. **Serve**: `emod diagram --serve` starts an HTTP server. If a file path is given, the CLI pre-parses it with the native Go pipeline and injects the diagram as `window.INITIAL_DATA` for an instant first render.
 
-3. **Browser**: The viewer loads `wasm_exec.js` (Go runtime), then `wasm.js` fetches and instantiates `emod.wasm`. When the user pastes source and clicks Render, `model.js` calls `wasm.parseEmod()` → the Go pipeline runs inside the browser → diagram renders as SVG.
+3. **Browser**: The viewer loads `wasm_exec.js` (Go runtime), then `platform.browser.js` fetches and instantiates `emod.wasm`. When the user pastes source and clicks Render, `model.js` calls `parseEmod()` through `platform.js` → the Go pipeline runs inside the browser → diagram renders as SVG.
 
 4. **Embedding**: Both `static/` (JS/CSS/HTML) and `generated/` (Wasm binary + runtime) are embedded into the Go binary via `//go:embed`, making the CLI fully self-contained.
+
+## What this subsystem is not
+
+WebAssembly is how the *browser* reaches the pipeline, not how the frontend
+reaches it in general. The desktop app (`cmd/emod-desktop`) loads the same
+`internal/frontend/static` modules but calls `internal/pipeline` natively
+through Wails bindings: it ships no `emod.wasm`, loads no `wasm_exec.js`, and
+starts no HTTP server. Which of the two a distribution gets is decided when it
+is assembled, by which implementation of `platform.js` is copied into place —
+see the platform seam in [architecture.md](./architecture.md).

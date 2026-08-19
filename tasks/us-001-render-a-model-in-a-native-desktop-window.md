@@ -941,15 +941,15 @@ rather than two distributions over one, and the README tells a reader how to bui
 desktop app and what it deliberately does not do yet.
 
 **Acceptance Criteria:**
-- [ ] `docs/architecture.md`'s viewer section names the platform seam and all three distributions,
+- [x] `docs/architecture.md`'s viewer section names the platform seam and all three distributions,
       and its diagram shows the desktop shell alongside the CLI and web paths (`:213-241` today)
-- [ ] `docs/wasm-architecture.md` states that the desktop app reaches Go natively and uses no WASM,
+- [x] `docs/wasm-architecture.md` states that the desktop app reaches Go natively and uses no WASM,
       so a reader does not conclude the WASM path is the only way the frontend reaches Go
-- [ ] The README documents `task build:desktop`, names where the framework version is pinned
+- [x] The README documents `task build:desktop`, names where the framework version is pinned
       (`go.mod` and `mise.toml`, which must agree), and states what the desktop build does not do
       yet — no file dialogs, no save, no packaged app, no prebuilt download
-- [ ] Every path, task name and file name the three documents state exists in the tree
-- [ ] This task changes documentation only: `git diff --stat` lists no file outside `docs/` and
+- [x] Every path, task name and file name the three documents state exists in the tree
+- [x] This task changes documentation only: `git diff --stat` lists no file outside `docs/` and
       `README.md`
 
 **Affected Files/Modules:**

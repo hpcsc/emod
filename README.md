@@ -368,7 +368,29 @@ go test -tags unit ./...  # unit tests
 go test -tags unit -count=1 ./...  # bypass cache
 ```
 
+### Desktop app
+
+The viewer also runs as a native window, with no browser and no local server:
+
+```bash
+task build:desktop   # assembles the frontend, generates bindings, builds
+./bin/emod-desktop
+```
+
+It renders the same diagrams the browser viewer does, from the same frontend
+files, but reaches the Go pipeline directly instead of through WebAssembly.
+Building it needs a C toolchain — it is the only binary here that links CGO —
+and on Linux the GTK4 and WebKitGTK development packages.
+
+The framework version is pinned in `go.mod`, which carries both the library
+requirement and a `tool` directive for the `wails3` CLI, so the two cannot
+drift and neither is resolved from `PATH`. Run the CLI as `go tool wails3`.
+
+What it does not do yet: no Open or Save dialogs and no saving at all — Export
+reports that it is unavailable rather than writing a file; no packaged `.app`
+or installer; and no prebuilt download, so it has to be built from source.
+
 How the repository fits together — packages, the language pipeline, renderers,
-the browser viewer and the editor grammars — is described in
+the viewer's three distributions and the editor grammars — is described in
 [docs/architecture.md](docs/architecture.md), with the WebAssembly subsystem
 covered in depth by [docs/wasm-architecture.md](docs/wasm-architecture.md).
