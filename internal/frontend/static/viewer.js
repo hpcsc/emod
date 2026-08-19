@@ -208,6 +208,10 @@ function init() {
     }).catch(function(err) {
       store.dom.statusEl.textContent = "✗ " + err.message;
       store.dom.statusEl.className = "status error";
+      // The status area lives in the panel, which a successful render collapses,
+      // and Export sits outside it — so without this the reason a save failed is
+      // written somewhere the user who pressed the button cannot see.
+      store.dom.panel.classList.remove("collapsed");
     });
   });
 

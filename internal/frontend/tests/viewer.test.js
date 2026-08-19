@@ -235,6 +235,18 @@ describe('viewer export', () => {
     expect(statusEl.className).toContain('error');
     expect(savedFile).toBeNull();
   });
+
+  it('reveals the panel so the reason a save failed can be read', async () => {
+    globalThis.INITIAL_DATA = { diagram: billingDiagram() };
+    exportFails = true;
+    await startViewer();
+    expect(document.getElementById('data-panel').classList.contains('collapsed')).toBe(true);
+
+    document.getElementById('export-emod').click();
+    await flush();
+
+    expect(document.getElementById('data-panel').classList.contains('collapsed')).toBe(false);
+  });
 });
 
 describe('viewer drag-and-drop', () => {
