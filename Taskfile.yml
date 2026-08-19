@@ -56,7 +56,11 @@ tasks:
       - sed -e '/generated\/wasm_exec.js/d' -e 's|<!--INITIAL_DATA--><!--BUILD_VERSION-->||' ./cmd/emod-desktop/frontend/static/viewer.html > ./cmd/emod-desktop/frontend/index.html
       - rm -f ./cmd/emod-desktop/frontend/static/viewer.html
       - go tool wails3 generate bindings -silent -b -d ./cmd/emod-desktop/frontend/bindings ./cmd/emod-desktop/...
-      - go build -o ./bin/emod-desktop ./cmd/emod-desktop
+      # -tags production compiles out the asset server's dev-server path, which
+      # otherwise proxies to whatever FRONTEND_DEVSERVER_URL names — a network
+      # reach the story says this app does not have — and swaps the debug
+      # webview runtime for the production one.
+      - go build -tags production -o ./bin/emod-desktop ./cmd/emod-desktop
     env:
       CGO_ENABLED: '1'
 
