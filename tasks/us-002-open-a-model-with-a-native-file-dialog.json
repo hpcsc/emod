@@ -1,0 +1,163 @@
+{
+  "story": "US-002: Open a model with a native file dialog",
+  "tasks_file": "tasks/us-002-open-a-model-with-a-native-file-dialog.md",
+  "tasks": [
+    {
+      "n": 1,
+      "done": false,
+      "title": "Read a chosen file through a framework-free desktop service",
+      "language": "Go",
+      "testable": true,
+      "certainty": "high",
+      "blast_radius": "low",
+      "patterns_to_follow": [
+        "internal/desktop/service.go:1-13",
+        "internal/desktop/service_test.go:24-40",
+        "internal/desktop/binding_names_test.go:24-33",
+        "internal/pipeline/pipeline.go:116-119",
+        "internal/cli/parse.go:22-28",
+        "tasks/learnings.md:983-987"
+      ],
+      "depends_on": [],
+      "affected_files": [
+        "internal/desktop",
+        "internal/desktop/binding_names_test.go"
+      ]
+    },
+    {
+      "n": 2,
+      "done": false,
+      "title": "Name the window through the platform seam",
+      "language": "JavaScript/TypeScript",
+      "testable": true,
+      "certainty": "medium",
+      "blast_radius": "low",
+      "patterns_to_follow": [
+        "internal/frontend/tests/bindings-stub.js",
+        "internal/frontend/vitest.config.js:5-13",
+        "internal/frontend/static/platform.browser.js:112-117",
+        "internal/frontend/desktop/platform.desktop.js:63-67",
+        "internal/frontend/tests/platform.desktop.test.js:1-25",
+        "internal/frontend/tests/viewer.test.js:511-546",
+        "internal/frontend/static/viewer.js:19-30"
+      ],
+      "depends_on": [],
+      "affected_files": [
+        "internal/frontend/static/platform.js",
+        "internal/frontend/static/platform.browser.js",
+        "internal/frontend/desktop/platform.desktop.js",
+        "internal/frontend/static/viewer.js",
+        "internal/frontend/vitest.config.js",
+        "internal/frontend/tests",
+        "internal/frontend/tests/platform.desktop.test.js",
+        "internal/frontend/tests/viewer.test.js"
+      ]
+    },
+    {
+      "n": 3,
+      "done": false,
+      "title": "Render a file the host opens, and report one it cannot read",
+      "language": "JavaScript/TypeScript",
+      "testable": true,
+      "certainty": "medium",
+      "blast_radius": "low",
+      "patterns_to_follow": [
+        "internal/frontend/static/viewer.js:174-193",
+        "internal/frontend/static/viewer.js:213-224",
+        "internal/frontend/static/viewer.js:19-30",
+        "internal/frontend/tests/viewer.test.js:265-315",
+        "internal/frontend/static/viewer.html:1154-1159",
+        "internal/frontend/static/store.js",
+        "tasks/learnings.md:989-993",
+        "tasks/learnings.md:965-969",
+        "task:2"
+      ],
+      "depends_on": [
+        2
+      ],
+      "affected_files": [
+        "internal/frontend/static/platform.js",
+        "internal/frontend/static/platform.browser.js",
+        "internal/frontend/desktop/platform.desktop.js",
+        "internal/frontend/static/viewer.js",
+        "internal/frontend/static/store.js",
+        "internal/frontend/static/viewer.html",
+        "internal/frontend/tests/viewer.test.js"
+      ]
+    },
+    {
+      "n": 4,
+      "done": false,
+      "title": "Show the native file picker and hand over what it chose",
+      "language": "JavaScript/TypeScript",
+      "testable": true,
+      "certainty": "medium",
+      "blast_radius": "low",
+      "patterns_to_follow": [
+        "internal/frontend/desktop/platform.desktop.js:15-33",
+        "internal/frontend/tests/bindings-stub.js",
+        "internal/frontend/tests/platform.desktop.test.js:26-70",
+        "internal/frontend/tests/dropped-file.test.js:13-20",
+        "task:1",
+        "task:2",
+        "task:3"
+      ],
+      "depends_on": [
+        1,
+        3
+      ],
+      "affected_files": [
+        "internal/frontend/desktop/platform.desktop.js",
+        "internal/frontend/tests/bindings-stub.js",
+        "internal/frontend/tests",
+        "internal/frontend/tests/platform.desktop.test.js"
+      ]
+    },
+    {
+      "n": 5,
+      "done": false,
+      "title": "Add File ▸ Open to the desktop menu bar",
+      "language": "Go",
+      "testable": true,
+      "certainty": "low",
+      "blast_radius": "low",
+      "patterns_to_follow": [
+        "cmd/emod-desktop/main.go:24-45",
+        "internal/desktop/binding_names_test.go:14-33",
+        "Taskfile.yml:48-64",
+        "tasks/learnings.md:971-975",
+        "tasks/learnings.md:959-963",
+        "task:4"
+      ],
+      "depends_on": [
+        4
+      ],
+      "affected_files": [
+        "cmd/emod-desktop/main.go",
+        "internal/desktop"
+      ]
+    },
+    {
+      "n": 6,
+      "done": false,
+      "title": "Document the native open workflow",
+      "language": "Generic",
+      "testable": false,
+      "certainty": "high",
+      "blast_radius": "low",
+      "patterns_to_follow": [
+        "README.md:371-388",
+        "docs/architecture.md:215-234",
+        "tasks/completed/us-001-render-a-model-in-a-native-desktop-window.md",
+        "tasks/learnings.md:719-723"
+      ],
+      "depends_on": [
+        5
+      ],
+      "affected_files": [
+        "README.md",
+        "docs/architecture.md"
+      ]
+    }
+  ]
+}
