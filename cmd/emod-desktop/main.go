@@ -28,7 +28,9 @@ func main() {
 			application.NewService(&desktop.ModelService{}),
 		},
 		Assets: application.AssetOptions{
-			Handler: application.AssetFileServerFS(frontend),
+			// Bundled rather than plain: the generated bindings import
+			// /wails/runtime.js, which only this server answers.
+			Handler: application.BundledAssetFileServer(frontend),
 		},
 	})
 

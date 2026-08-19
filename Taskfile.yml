@@ -41,14 +41,21 @@ tasks:
       GOOS: 'js'
       GOARCH: 'wasm'
 
-  # The page here is a placeholder the task writes: this target exists to prove
-  # the shell links and opens a window. Rendering the shared frontend is a
-  # separate concern and a separate task.
+  # The page is derived from the shared viewer.html rather than written here, so
+  # editing that one file changes what all three distributions load. The two
+  # lines dropped are the ones only a browser needs: the WebAssembly glue, and
+  # the marker the CLI's server substitutes its injected state into.
   build:desktop:
     desc: Build the native desktop app
     cmds:
-      - mkdir -p ./cmd/emod-desktop/frontend
-      - printf '%s\n' '<!doctype html>' '<title>emod</title>' '<h1>emod</h1>' > ./cmd/emod-desktop/frontend/index.html
+      - rm -rf ./cmd/emod-desktop/frontend
+      - mkdir -p ./cmd/emod-desktop/frontend/static
+      - cp -r ./internal/frontend/static/* ./cmd/emod-desktop/frontend/static/
+      - cp ./internal/frontend/desktop/platform.desktop.js ./cmd/emod-desktop/frontend/static/platform.js
+      - rm -f ./cmd/emod-desktop/frontend/static/platform.browser.js
+      - sed -e '/generated\/wasm_exec.js/d' -e 's|<!--INITIAL_DATA--><!--BUILD_VERSION-->||' ./cmd/emod-desktop/frontend/static/viewer.html > ./cmd/emod-desktop/frontend/index.html
+      - rm -f ./cmd/emod-desktop/frontend/static/viewer.html
+      - go tool wails3 generate bindings -silent -b -d ./cmd/emod-desktop/frontend/bindings ./cmd/emod-desktop/...
       - go build -o ./bin/emod-desktop ./cmd/emod-desktop
     env:
       CGO_ENABLED: '1'

@@ -207,7 +207,7 @@
     },
     {
       "n": 9,
-      "done": false,
+      "done": true,
       "title": "Render the shared frontend in the desktop window through `platform.desktop.js`",
       "language": "JavaScript/TypeScript",
       "testable": false,

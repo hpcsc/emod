@@ -854,36 +854,36 @@ load, with the desktop implementation of the platform contract in place of the b
 interactions as the browser viewer — with no WASM, no HTTP server and no listening port.
 
 **Acceptance Criteria:**
-- [ ] `build:desktop` assembles the desktop app's frontend from `internal/frontend/static/`: no file
+- [x] `build:desktop` assembles the desktop app's frontend from `internal/frontend/static/`: no file
       under that directory is edited by this task, and no file under it gains a desktop twin anywhere
       in the tree outside the gitignored assembly directory
-- [ ] The page the desktop app loads is derived from `internal/frontend/static/viewer.html` by the
+- [x] The page the desktop app loads is derived from `internal/frontend/static/viewer.html` by the
       build task rather than hand-written, so editing `viewer.html` changes what all three
       distributions load (F8)
-- [ ] `platform.desktop.js` is the only file that imports the generated bindings, and it exports the
+- [x] `platform.desktop.js` is the only file that imports the generated bindings, and it exports the
       same names `platform.browser.js` exports
-- [ ] The assembled frontend and the generated bindings are gitignored: after
+- [x] The assembled frontend and the generated bindings are gitignored: after
       `mise exec -- task build:desktop`, `git status --porcelain -- cmd/emod-desktop` reports nothing
       beyond this task's own source files
-- [ ] The desktop app loads no `.wasm` payload and no `wasm_exec.js`, and its window makes no request
+- [x] The desktop app loads no `.wasm` payload and no `wasm_exec.js`, and its window makes no request
       for either
-- [ ] The window opens showing the viewer interface: source panel, diagram canvas, minimap,
+- [x] The window opens showing the viewer interface: source panel, diagram canvas, minimap,
       visibility toggles and diagnostics badge, as `emod diagram --serve` shows them
-- [ ] Pasting the model at `e2e-viewer/tests/helpers.js:5-35` and rendering draws the same nodes and
+- [x] Pasting the model at `e2e-viewer/tests/helpers.js:5-35` and rendering draws the same nodes and
       edges the browser viewer draws for the same source
-- [ ] Source the pipeline reports on fills the diagnostics badge and panel with the same messages,
+- [x] Source the pipeline reports on fills the diagnostics badge and panel with the same messages,
       severities and locations the browser viewer shows for the same source —
       `examples/error_diagnostics_test.emod` is a source that produces some
-- [ ] Pan, zoom, fit-to-view, node selection, the detail panel, layout reset and the diagram context
+- [x] Pan, zoom, fit-to-view, node selection, the detail panel, layout reset and the diagram context
       actions behave as they do in the browser viewer
-- [ ] The running app opens no listening socket and issues no network request, checked against the
+- [x] The running app opens no listening socket and issues no network request, checked against the
       running process
-- [ ] The contract's file-open and file-save entry points exist in `platform.desktop.js` and report
+- [x] The contract's file-open and file-save entry points exist in `platform.desktop.js` and report
       in the status area that they are not available in this build, so pressing Export produces a
       message rather than silence or an unhandled rejection (Q3)
-- [ ] The desktop's initial state resolves to nothing, so the app opens on the same empty state the
+- [x] The desktop's initial state resolves to nothing, so the app opens on the same empty state the
       browser viewer shows with no injected data
-- [ ] `emod diagram --serve` and the web bundle behave exactly as before this task:
+- [x] `emod diagram --serve` and the web bundle behave exactly as before this task:
       `mise exec -- task test:viewer`, `test:unit`, `test:integration`, `test:e2e:viewer` and
       `test:e2e` all pass
 
