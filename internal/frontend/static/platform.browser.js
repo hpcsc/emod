@@ -106,4 +106,14 @@ function saveFile(suggestedName, content) {
   return Promise.resolve();
 }
 
-export { parseEmod, exportEmod, droppedFile, saveFile, ready, isReady };
+// The CLI's server substitutes this global into the page before the frontend
+// loads, so it is already there by the time anything asks; the promise is for
+// the hosts that have to go and fetch their state instead.
+function initialState() {
+  if (typeof INITIAL_DATA === 'undefined' || INITIAL_DATA === null) {
+    return Promise.resolve(null);
+  }
+  return Promise.resolve(INITIAL_DATA);
+}
+
+export { parseEmod, exportEmod, droppedFile, saveFile, initialState, ready, isReady };

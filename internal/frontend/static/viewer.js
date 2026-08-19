@@ -9,7 +9,7 @@ import { CtxActions } from './ctx-actions.js';
 import { Model } from './model.js';
 import { bus } from './bus.js';
 import { Export } from './emod-export.js';
-import { ready, isReady, droppedFile, saveFile } from './platform.js';
+import { ready, isReady, droppedFile, saveFile, initialState } from './platform.js';
 
 // ─── Event subscriptions ─────────────────────────────────────────────
 bus.on('data:changed', function({ store: s }) {
@@ -277,40 +277,41 @@ function init() {
   });
 
   // ─── Initial load ───────────────────────────────────────────────
-  if (typeof INITIAL_DATA !== 'undefined' && INITIAL_DATA !== null) {
-    const initData = INITIAL_DATA.diagram || INITIAL_DATA;
-    Model.setModelData(store, initData);
-  } else {
-    store.dom.sourceInput.placeholder = 'Paste .emod source or diagram JSON here';
-    store.dom.panel.classList.remove('collapsed');
-    store.dom.nameDisplay.textContent = '(no model)';
+  return initialState().then(function(state) {
+    if (state) {
+      Model.setModelData(store, state.diagram || state);
+    } else {
+      store.dom.sourceInput.placeholder = 'Paste .emod source or diagram JSON here';
+      store.dom.panel.classList.remove('collapsed');
+      store.dom.nameDisplay.textContent = '(no model)';
 
-    const instructions = document.getElementById('landing-instructions');
-    if (instructions) instructions.style.display = 'block';
+      const instructions = document.getElementById('landing-instructions');
+      if (instructions) instructions.style.display = 'block';
 
-    if (!isReady) {
-      store.dom.statusEl.textContent = '⏳ Loading parser...';
-      store.dom.statusEl.className = '';
+      if (!isReady) {
+        store.dom.statusEl.textContent = '⏳ Loading parser...';
+        store.dom.statusEl.className = '';
+      }
+
+      ready.then(function() {
+        if (store.dom.statusEl.textContent === '⏳ Loading parser...') {
+          store.dom.statusEl.textContent = '✓ Ready';
+          store.dom.statusEl.className = 'status success';
+          setTimeout(function() {
+            if (store.dom.statusEl.textContent === '✓ Ready') {
+              store.dom.statusEl.textContent = '';
+              store.dom.statusEl.className = 'status';
+            }
+          }, 1500);
+        }
+      }).catch(function(err) {
+        if (store.dom.statusEl.textContent === '⏳ Loading parser...') {
+          store.dom.statusEl.textContent = '✗ ' + (err.message || 'Parser failed to load');
+          store.dom.statusEl.className = 'status error';
+        }
+      });
     }
-
-    ready.then(function() {
-      if (store.dom.statusEl.textContent === '⏳ Loading parser...') {
-        store.dom.statusEl.textContent = '✓ Ready';
-        store.dom.statusEl.className = 'status success';
-        setTimeout(function() {
-          if (store.dom.statusEl.textContent === '✓ Ready') {
-            store.dom.statusEl.textContent = '';
-            store.dom.statusEl.className = 'status';
-          }
-        }, 1500);
-      }
-    }).catch(function(err) {
-      if (store.dom.statusEl.textContent === '⏳ Loading parser...') {
-        store.dom.statusEl.textContent = '✗ ' + (err.message || 'Parser failed to load');
-        store.dom.statusEl.className = 'status error';
-      }
-    });
-  }
+  });
 }
 
 export { init };

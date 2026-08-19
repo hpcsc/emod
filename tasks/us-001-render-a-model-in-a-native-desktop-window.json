@@ -134,7 +134,7 @@
     },
     {
       "n": 6,
-      "done": false,
+      "done": true,
       "title": "Read the injected initial state through the platform contract",
       "language": "JavaScript/TypeScript",
       "testable": true,

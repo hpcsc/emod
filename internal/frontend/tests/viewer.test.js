@@ -20,6 +20,8 @@ vi.mock('../static/platform.js', () => ({
   exportEmod: vi.fn((diagram) => exportFails
     ? Promise.reject(new Error('nothing to export'))
     : Promise.resolve('emod 1\nmodel "' + (diagram.model_name || '') + '"\n')),
+  initialState: vi.fn(() => Promise.resolve(
+    typeof globalThis.INITIAL_DATA === 'undefined' ? null : globalThis.INITIAL_DATA)),
   saveFile: vi.fn((name, content) => { savedFile = { name, content }; return Promise.resolve(); }),
   droppedFile: vi.fn((dataTransfer) => {
     const file = dataTransfer.files[0];
@@ -110,7 +112,7 @@ function fieldEditor() {
 async function startViewer() {
   createRequiredElements();
   const { init } = await import('../static/viewer.js');
-  init();
+  await init();
 }
 
 // billingDiagram is the node shape the exporter produces: a context holding a
