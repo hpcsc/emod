@@ -446,11 +446,11 @@ desktop section currently states the app has no Open dialog, and the architectur
 paragraph enumerates the four things the seam covers.
 
 **Acceptance Criteria:**
-- [ ] The README's desktop section names Open, its shortcut, and the file types the picker offers, and no longer claims the app has no Open dialog
-- [ ] It still names what the desktop app cannot do yet — saving, packaging, prebuilt downloads — with the list narrowed to what is actually still missing
-- [ ] The architecture document's platform-seam paragraph names every capability the seam now carries, and its diagram is still accurate
-- [ ] A grep for the superseded claims finds nothing, and no added text describes the documents' own history
-- [ ] No behaviour changes; every suite stays green
+- [x] The README's desktop section names Open, its shortcut, and the file types the picker offers, and no longer claims the app has no Open dialog
+- [x] It still names what the desktop app cannot do yet — saving, packaging, prebuilt downloads — with the list narrowed to what is actually still missing
+- [x] The architecture document's platform-seam paragraph names every capability the seam now carries, and its diagram is still accurate
+- [x] A grep for the superseded claims finds nothing, and no added text describes the documents' own history
+- [x] No behaviour changes; every suite stays green
 
 **Affected Files/Modules:**
 - `README.md:371-388` — the "Desktop app" section, including the "What it does not do yet" paragraph

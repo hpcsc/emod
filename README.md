@@ -382,13 +382,24 @@ files, but reaches the Go pipeline directly instead of through WebAssembly.
 Building it needs a C toolchain — it is the only binary here that links CGO —
 and on Linux the GTK4 and WebKitGTK development packages.
 
+**File ▸ Open** (⌘O on macOS, Ctrl+O elsewhere) opens a model through the
+operating system's own file picker, filtered to `.emod` and `.json`. The chosen
+file renders straight away — no paste, no Render click — and the window takes
+the file's name while the bar along the bottom shows its full path. A file that
+will not parse cleanly still opens: the diagram shows what it can and the
+diagnostics panel lists the same errors `emod validate` reports. A file that
+cannot be read at all says why and leaves the model already on screen alone.
+This is the one thing the browser viewer cannot do: a file it reads through a
+drop carries contents and never a location.
+
 The framework version is pinned in `go.mod`, which carries both the library
 requirement and a `tool` directive for the `wails3` CLI, so the two cannot
 drift and neither is resolved from `PATH`. Run the CLI as `go tool wails3`.
 
-What it does not do yet: no Open or Save dialogs and no saving at all — Export
-reports that it is unavailable rather than writing a file; no packaged `.app`
-or installer; and no prebuilt download, so it has to be built from source.
+What it does not do yet: no saving — Export reports that it is unavailable
+rather than writing a file, so a model can be opened and read but not written
+back; no packaged `.app` or installer; and no prebuilt download, so it has to be
+built from source.
 
 How the repository fits together — packages, the language pipeline, renderers,
 the viewer's three distributions and the editor grammars — is described in

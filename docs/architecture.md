@@ -224,10 +224,12 @@ natively.
 
 What differs between the runtimes is confined to one module. Every shared
 module imports `./platform.js` for the things a host provides rather than the
-UI: reaching the Go core, reading a dropped file, saving an exported model, and
-answering what state the app opened with. `platform.browser.js` implements that
-over WebAssembly, `fetch` and the browser's download; `platform.desktop.js`
-implements it over Wails bindings. Which one a distribution gets is decided when
+UI: reaching the Go core, reading a dropped file, saving an exported model,
+naming the window, delivering a file the host opened, and answering what state
+the app opened with. `platform.browser.js` implements that over WebAssembly,
+`fetch`, the browser's download and `document.title`; `platform.desktop.js`
+implements it over Wails bindings, the runtime's native file dialog and the
+native window title. Which one a distribution gets is decided when
 it is assembled, not by sniffing the runtime — `build:web` copies the browser
 implementation, `build:desktop` copies the desktop one over it. No shared module
 branches on where it is running, which is what keeps the three distributions
@@ -258,6 +260,19 @@ flowchart LR
     PDESK -- "assembled as platform.js" --> DESK
     DESK --> NATIVE["native window<br/><i>no WASM, no HTTP</i>"]
 ```
+
+Opening a file runs the other way round from the rest of the seam. The shell's
+File menu is native, so `cmd/emod-desktop` emits an event the desktop
+implementation subscribes to; that module raises the picker and reads the chosen
+path through `internal/desktop.FileService`, then hands the result to the
+handler the shared viewer registered. The picker lives in JavaScript rather than
+Go because `internal/desktop` imports no GUI framework — the constraint that
+keeps it compiling and testing everywhere the rest of the repository does — and
+because `cmd/emod-desktop` is in no test target, so the frontend is the only
+side of that seam a suite can drive. Two guards in `internal/desktop` hold the
+language boundary together: one requires every bound method the frontend calls
+to be exported by Go, the other requires the event names the shell emits and the
+frontend subscribes to be the same set.
 
 `internal/pipeline` keeps the orchestration free of `syscall/js` so it is
 testable and so a non-browser caller can reach it; `cmd/emod-wasm` is only

@@ -139,7 +139,7 @@
     },
     {
       "n": 6,
-      "done": false,
+      "done": true,
       "title": "Document the native open workflow",
       "language": "Generic",
       "testable": false,
