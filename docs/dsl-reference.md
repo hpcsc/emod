@@ -30,7 +30,7 @@ event  OrderPlaced       # OrderPlaced is an identifier
 
 ### Strings
 
-Double-quoted values. Most carry a human-readable name (`model`, `actor`, `slice`, `trigger`, `external_system`, `source external`) or prose (`description` text, an `invariant`'s statement); an automation's `every` schedule expression instead carries a machine-read value — a Go duration or a cron expression.
+Double-quoted values. Most carry a human-readable name (`model`, `actor`, `slice`, `trigger`, `spec`, `external_system`, `source external`) or prose (`description` text, an `invariant`'s statement). The rest carry a value read by something outside the prose: an automation's `every` schedule expression and its `after` delay, and an event's wire `type`.
 
 ```emod
 model "Hotel Reservation"
@@ -298,7 +298,7 @@ slice "<name>" {
   view        ...     # 0+ views (View Pattern)
   automation  ...     # 0+ automations (Automation Pattern)
   translation ...     # 0+ translations (Translation Pattern)
-  flow { ... }       # 0+ command→event wiring
+  flow { ... }       # 0+ command→event and command→rejection wiring
   spec "<name>" { ... }  # 0+ Given-When-Then specs
 }
 ```
@@ -359,13 +359,13 @@ slice "<name>" {
 
 ### Automation Pattern
 
-A processor woken by an event or by a schedule reads its outstanding work and issues a command, possibly in a different context.
+A processor woken by an event — at once, or a fixed duration after it — or by a schedule reads its outstanding work and issues a command, possibly in a different context.
 
 ```
 slice "<name>" {
   automation <Name> {
-    on <EventName>       # activation — exactly one of on and every
-    every "<expr>"       # activation — exactly one of on and every
+    on <EventName> after "<duration>"   # activation — exactly one of on and every; after is optional
+    every "<expr>"                      # activation — exactly one of on and every
     reads <ViewName>
     command <CommandName>
     target context <ContextName>
@@ -374,6 +374,13 @@ slice "<name>" {
 ```
 
 - `on`: the event whose arrival wakes the processor. The name must be an event declared in the model.
+- `after`: an optional delay on the `on` line, read as — the stated duration after each occurrence of the `on` event, issue the command. The quoted value is a Go duration (`"30m"`, `"24h"`, `"1h30m"`). Only the syntax is judged; a value that does not parse as one is a validation error naming the value and the form it wanted:
+
+  ```
+  reservation.emod:34: delay "1 day" is not a Go duration such as "30m", "24h" or "1h30m"
+  ```
+
+  Without `after` the automation reacts immediately. The delay qualifies an activation rather than standing on its own, so writing it on a line of its own is an error asking for it to be moved onto the activation line.
 - `every`: the schedule on which the processor wakes instead. The quoted expression is either a Go duration (`"5m"`, `"1h"`) for a fixed interval or a five-field cron expression (`"0 2 * * *"`) for a wall-clock schedule. Only the shape is checked; an expression that is neither is a validation error naming both forms:
 
   ```
@@ -385,6 +392,17 @@ slice "<name>" {
 - `target context`: a context name (cross-reference, validated at `emod validate`).
 
 An automation states **exactly one** of `on` and `every`: declaring neither is an error, and declaring both is an error. Requiring the choice makes the wake-up explicit, so the model says whether the processor is woken by the event that adds to its todo list or polls on a cadence — two designs with different failure modes.
+
+`after` qualifies the `on` half of that choice only, and stating it beside `every` is an error:
+
+```
+reservation.emod:41: automation block cannot declare after with every: an every schedule is already absolute, and after measures a delay from an on event
+```
+
+The two are one rule rather than two because they answer the same question in units that do not compose. A schedule is absolute — every hour, or at two in the morning — and names no occurrence to count from, while a delay is measured from an event a schedule-driven automation never receives. `every "0 2 * * *" after "24h"` therefore has no reading, and the error is reported on the delay.
+
+- **The drawn diagrams label the edge, not the box:** `emod diagram --format drawio` and `--format svg` write `after "<duration>"` on the arrow from the `on` event to the automation, and reserve the clock badge on the automation's own shape for an `every` schedule. A relative delay and a wall-clock cadence therefore read differently at a glance, and no automation carries both marks.
+- **The text formats state it beside the activation:** `emod diagram --format ascii` prints `(<EventName>) after "<duration>" -> ⚙ <Name> -> [<CommandName>]`, and `--format mermaid`, which draws no arrows, carries the delay inside the automation's own label.
 
 ### Translation Pattern
 

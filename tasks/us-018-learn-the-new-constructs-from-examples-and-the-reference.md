@@ -4,7 +4,7 @@
 - [x] Task 1: Pin the version, describe the constructs, bind wire types and delay an automation in the flagship example
 - [x] Task 2: State the invariants, specs and rejection path in the flagship example
 - [x] Task 3: Add `examples/specs_hotel.emod` as a model that validates
-- [ ] Task 4: Document the elapsed-time automation and close the reference's coverage of the batch
+- [x] Task 4: Document the elapsed-time automation and close the reference's coverage of the batch
 
 ---
 
@@ -619,50 +619,50 @@ true, every construct the batch adds is taught with at least one example, and ev
 resolves against the finished document.
 
 **Acceptance Criteria:**
-- [ ] `### Automation Pattern` (`docs/dsl-reference.md:324-351`) documents the delay: its skeleton
+- [x] `### Automation Pattern` (`docs/dsl-reference.md:324-351`) documents the delay: its skeleton
       writes it as the optional suffix on the `on` line, a bullet beside the existing `on`, `every`,
       `reads`, `command` and `target context` bullets describes it, states that the value is a Go
       duration and that a value which does not parse as one is a validation error with location, and
       states that without it the automation reacts immediately
-- [ ] That section states that the delay and the schedule never combine — a delay on a schedule-driven
+- [x] That section states that the delay and the schedule never combine — a delay on a schedule-driven
       automation is a validation error — and says why, so the exactly-one-of paragraph and the delay
       read as one rule rather than two
-- [ ] It states what the diagrams do with the delay: the duration rides on the `event -> automation`
+- [x] It states what the diagrams do with the delay: the duration rides on the `event -> automation`
       edge while the clock badge on the automation box stays reserved for the schedule, so a relative
       delay and a wall-clock schedule read differently
-- [ ] `### Automation Pattern` heading text is byte-identical to what it is now, so the six links
+- [x] `### Automation Pattern` heading text is byte-identical to what it is now, so the six links
       citing `#automation-pattern` still resolve
-- [ ] The Strings list (`docs/dsl-reference.md:33`) accounts for the quoted values this batch adds — a
+- [x] The Strings list (`docs/dsl-reference.md:33`) accounts for the quoted values this batch adds — a
       spec's name, an event's wire type and an automation's delay — either by naming each in the group
       it belongs to or by wording the sentence so it does not claim to enumerate every quoted value
-- [ ] The slice skeleton's `flow` annotation (`docs/dsl-reference.md:267`) describes what a `flow`
+- [x] The slice skeleton's `flow` annotation (`docs/dsl-reference.md:267`) describes what a `flow`
       block holds now that it accepts a second entry kind, rather than naming the command-to-event
       wiring alone
-- [ ] Every construct this batch adds is taught somewhere in the reference with at least one example,
+- [x] Every construct this batch adds is taught somewhere in the reference with at least one example,
       checked against the enumeration in this document's Story Reference: the version header, the
       `description` attribute and the two block forms, a keyword in field-name position, `invariant` in
       both scopes, `spec` with `given`/`when` and all four `then` shapes, payload literals, the
       rejection `flow` entry, an event's wire type, and the automation delay. A construct whose section
       an upstream story owns is checked as present, not rewritten
-- [ ] Every ` ```emod ` fence in `docs/dsl-reference.md` is a complete model `oracle.Check` reports
+- [x] Every ` ```emod ` fence in `docs/dsl-reference.md` is a complete model `oracle.Check` reports
       nothing for, and any fence this task adds is either such a model or carries a plain fence
       instead; `internal/oracle/oracle_test.go`'s "documented models" leaf passes over every block in
       both documents
-- [ ] No `## <n>.` heading is added, removed, renamed or reordered, and no `### ` heading is renamed:
+- [x] No `## <n>.` heading is added, removed, renamed or reordered, and no `### ` heading is renamed:
       the `^## [0-9]+\.` list is reconciled against the `\(#[0-9]+-` list and the `^### ` list against
       the `\(#[a-z]` list, both listed in full and compared against each other rather than spot-checked
       — this is the one reconciliation over the document after every upstream edit has landed
-- [ ] §13's `Diagram Palette` table is untouched and `TestExporterPaletteMatchesReference`
+- [x] §13's `Diagram Palette` table is untouched and `TestExporterPaletteMatchesReference`
       (`internal/diagram/contract_test.go`) passes: the section is machine-read, its heading locates it
       and its six rows are parsed
-- [ ] Any invocation this task writes or edits puts its flags ahead of the file path or takes no
+- [x] Any invocation this task writes or edits puts its flags ahead of the file path or takes no
       positional argument, matching every invocation the reference writes today — urfave/cli v2
       discards a flag written after the path
-- [ ] The document reads as if it had always described these constructs: no "now supports", no note of
+- [x] The document reads as if it had always described these constructs: no "now supports", no note of
       what a section used to say, no migration paragraph anywhere in it
-- [ ] `git diff` touches `docs/dsl-reference.md` only. `README.md`, `examples/`, `docs/proposals/`,
+- [x] `git diff` touches `docs/dsl-reference.md` only. `README.md`, `examples/`, `docs/proposals/`,
       `user-stories/` and every file under `internal/` are unchanged
-- [ ] `mise exec -- task test:unit` passes with no test skipped or weakened
+- [x] `mise exec -- task test:unit` passes with no test skipped or weakened
 
 **Affected Files/Modules:**
 - `docs/dsl-reference.md` — `### Strings` (`:31-37`), the slice skeleton in §5 (`:259-270`), and
