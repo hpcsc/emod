@@ -10,7 +10,10 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/hpcsc/emod/internal/ast"
 	"github.com/hpcsc/emod/internal/cli"
+	"github.com/hpcsc/emod/internal/lexer"
+	"github.com/hpcsc/emod/internal/parser"
 	"github.com/hpcsc/emod/internal/test"
 	"github.com/stretchr/testify/require"
 )
@@ -84,6 +87,93 @@ func TestValidate(t *testing.T) {
 					}
 				})
 			}
+		})
+
+		t.Run("all_patterns.emod", func(t *testing.T) {
+			t.Run("pins itself to a DSL version", func(t *testing.T) {
+				model := parseExample(t, "all_patterns.emod")
+
+				require.True(t, model.VersionDeclared,
+					"the flagship example must open with the version header a reader is meant to copy")
+			})
+
+			t.Run("describes at least one construct of every kind that accepts a description", func(t *testing.T) {
+				described := describedKinds(parseExample(t, "all_patterns.emod"))
+
+				var undescribed []string
+				for _, kind := range []string{
+					"model", "actor",
+					"context", "aggregate", "slice", "trigger",
+					"command", "event", "view", "automation", "translation",
+				} {
+					if !described[kind] {
+						undescribed = append(undescribed, kind)
+					}
+				}
+
+				require.Empty(t, undescribed,
+					"no construct of these kinds carries a description, so the example does not show one there")
+			})
+
+			t.Run("names a field after a DSL keyword", func(t *testing.T) {
+				model := parseExample(t, "all_patterns.emod")
+
+				reserved := make(map[string]bool)
+				for _, keyword := range lexer.Keywords() {
+					reserved[keyword] = true
+				}
+
+				var named []string
+				for _, field := range declaredFields(model) {
+					if reserved[field.Name] {
+						named = append(named, field.Name)
+					}
+				}
+
+				require.NotEmpty(t, named,
+					"no field is named after a keyword, so the example does not show that keywords stay usable as field names")
+			})
+
+			t.Run("binds a distinct wire type on some events and leaves another unbound", func(t *testing.T) {
+				model := parseExample(t, "all_patterns.emod")
+
+				bound := make(map[string]bool)
+				var boundEvents, unboundEvents []string
+				for _, event := range declaredEvents(model) {
+					if event.WireType == "" {
+						unboundEvents = append(unboundEvents, event.Name)
+						continue
+					}
+					boundEvents = append(boundEvents, event.Name)
+					bound[event.WireType] = true
+				}
+
+				require.GreaterOrEqual(t, len(boundEvents), 2,
+					"fewer than two events bind a wire type, so the example does not show the attribute")
+				require.Len(t, bound, len(boundEvents),
+					"two events bind the same wire type, so the example does not show that each is its own routing key")
+				require.NotEmpty(t, unboundEvents,
+					"every event binds a wire type, so the example does not show that the attribute is optional")
+			})
+
+			t.Run("delays one automation and schedules another that states no delay", func(t *testing.T) {
+				model := parseExample(t, "all_patterns.emod")
+
+				var delayed, scheduled []string
+				for _, automation := range declaredAutomations(model) {
+					if automation.After != "" {
+						delayed = append(delayed, automation.Name)
+					}
+					if automation.Schedule != "" && automation.After == "" {
+						scheduled = append(scheduled, automation.Name)
+					}
+				}
+
+				require.NotEmpty(t, delayed,
+					"no automation states a delay, so the example does not show `after`")
+				require.NotEmpty(t, scheduled,
+					"no schedule-driven automation stands without a delay, so the example does not show that the two never combine")
+			})
 		})
 	})
 
@@ -1090,6 +1180,109 @@ context "Orders" {
 		require.Contains(t, err.Error(), path)
 		require.Contains(t, err.Error(), ":1:")
 	})
+}
+
+func parseExample(t *testing.T, name string) *ast.Model {
+	t.Helper()
+	path := filepath.Join("../../examples", name)
+
+	source, err := os.ReadFile(path)
+	require.NoError(t, err)
+
+	tokens, lexDiags := lexer.Scan(string(source), path)
+	require.Empty(t, lexDiags)
+
+	model, parseDiags := parser.New(tokens, path).Parse()
+	require.Empty(t, parseDiags)
+
+	return model
+}
+
+func describedKinds(model *ast.Model) map[string]bool {
+	kinds := make(map[string]bool)
+	describe := func(kind, description string) {
+		if description != "" {
+			kinds[kind] = true
+		}
+	}
+
+	describe("model", model.Description)
+	for _, actor := range model.Actors {
+		describe("actor", actor.Description)
+	}
+	for _, context := range model.Contexts {
+		describe("context", context.Description)
+		for _, aggregate := range context.Aggregates {
+			describe("aggregate", aggregate.Description)
+		}
+		for _, slice := range context.AllSlices() {
+			describe("slice", slice.Description)
+			if slice.Trigger != nil {
+				describe("trigger", slice.Trigger.Description)
+			}
+			for _, command := range slice.Commands {
+				describe("command", command.Description)
+			}
+			for _, event := range slice.Events {
+				describe("event", event.Description)
+			}
+			for _, view := range slice.Views {
+				describe("view", view.Description)
+			}
+			for _, automation := range slice.Automations {
+				describe("automation", automation.Description)
+			}
+			for _, translation := range slice.Translations {
+				describe("translation", translation.Description)
+				if translation.Event != nil {
+					describe("event", translation.Event.Description)
+				}
+			}
+		}
+	}
+
+	return kinds
+}
+
+func declaredEvents(model *ast.Model) []*ast.Event {
+	var events []*ast.Event
+	for _, slice := range model.AllSlices() {
+		events = append(events, slice.Events...)
+		for _, translation := range slice.Translations {
+			if translation.Event != nil {
+				events = append(events, translation.Event)
+			}
+		}
+	}
+
+	return events
+}
+
+func declaredAutomations(model *ast.Model) []*ast.Automation {
+	var automations []*ast.Automation
+	for _, slice := range model.AllSlices() {
+		automations = append(automations, slice.Automations...)
+	}
+
+	return automations
+}
+
+func declaredFields(model *ast.Model) []*ast.Field {
+	var fields []*ast.Field
+	for _, slice := range model.AllSlices() {
+		fields = append(fields, slice.Fields...)
+		for _, command := range slice.Commands {
+			fields = append(fields, command.Fields...)
+		}
+		for _, view := range slice.Views {
+			fields = append(fields, view.Fields...)
+		}
+	}
+	for _, event := range declaredEvents(model) {
+		fields = append(fields, event.Fields...)
+	}
+
+	return fields
 }
 
 func examplePaths(t *testing.T) (authoredToValidate, authoredToFail []string) {

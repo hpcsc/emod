@@ -1,7 +1,7 @@
 # US-018: Learn the new constructs from examples and the reference
 
 ## Progress
-- [ ] Task 1: Pin the version, describe the constructs, bind wire types and delay an automation in the flagship example
+- [x] Task 1: Pin the version, describe the constructs, bind wire types and delay an automation in the flagship example
 - [ ] Task 2: State the invariants, specs and rejection path in the flagship example
 - [ ] Task 3: Add `examples/specs_hotel.emod` as a model that validates
 - [ ] Task 4: Document the elapsed-time automation and close the reference's coverage of the batch
@@ -365,44 +365,44 @@ asserted. Each of the four is independently valid: none opens a lint gate, and t
 error from `cli.RunValidate` after every one of them.
 
 **Acceptance Criteria:**
-- [ ] `examples/all_patterns.emod` declares the version header on its own line ahead of the `model`
+- [x] `examples/all_patterns.emod` declares the version header on its own line ahead of the `model`
       declaration, and the file's existing leading comment is preserved above it — verified acceptable:
       a header written below a leading comment parses and validates with exit 0
-- [ ] The `model` and the `actor` are written in their block forms, each carrying a `description`
-- [ ] Every construct kind in the file that accepts a `description` carries one somewhere in the file:
+- [x] The `model` and the `actor` are written in their block forms, each carrying a `description`
+- [x] Every construct kind in the file that accepts a `description` carries one somewhere in the file:
       `context`, `aggregate`, `slice`, `trigger`, `command`, `event`, `view`, `automation` and
       `translation` — so `emod glossary` over the example renders a vocabulary with no empty definition
       for a kind the file could have described
-- [ ] At least two events state a wire type, the two values differ, and each is two or more
+- [x] At least two events state a wire type, the two values differ, and each is two or more
       dot-separated segments built from lowercase letters, digits and hyphens with no empty segment and
       no segment opening or closing with a hyphen — the shape `wire/type-format` accepts, per US-012's
       Open question 4
-- [ ] At least one event states no wire type, so the example shows both halves of "events without a
+- [x] At least one event states no wire type, so the example shows both halves of "events without a
       wire type validate and export exactly as before"
-- [ ] The event-activated automation states a delay on its activation line, expressed as a value
+- [x] The event-activated automation states a delay on its activation line, expressed as a value
       `time.ParseDuration` accepts
-- [ ] The schedule-activated automation `UnconfirmedReservationExpirer` states no delay — `after` on a
+- [x] The schedule-activated automation `UnconfirmedReservationExpirer` states no delay — `after` on a
       schedule-driven automation is a validation error in US-013, and the example is where a reader
       learns the two never combine
-- [ ] `cli.RunValidate` returns no error for `examples/all_patterns.emod`, so no rule in the tree
+- [x] `cli.RunValidate` returns no error for `examples/all_patterns.emod`, so no rule in the tree
       fires: the delay changes no event's producer, and the descriptions and wire types are additive
-- [ ] A leaf reads `examples/all_patterns.emod` from disk, parses it, and requires: the version header
+- [x] A leaf reads `examples/all_patterns.emod` from disk, parses it, and requires: the version header
       declared; a description present on the model, on the actor, and on at least one construct of each
       of the nine kinds above; at least two distinct wire types and at least one event without one; and
       at least one automation stating a delay while at least one automation states a schedule and no
       delay. Presence only — the leaf names no construct, no wire type and no duration, so the example
       stays free to grow
-- [ ] That leaf runs under `task test:unit`, and its failure output names which construct kind was
+- [x] That leaf runs under `task test:unit`, and its failure output names which construct kind was
       missing rather than reporting a bare count
-- [ ] `internal/export/export_test.go` and `internal/cli/export_test.go` pass with no edit: the slice
+- [x] `internal/export/export_test.go` and `internal/cli/export_test.go` pass with no edit: the slice
       named "Reserve a Room" keeps its name and its trigger keeps its `actor` and `reads` entries
-- [ ] `git diff` touches `examples/all_patterns.emod` and one test file, and nothing else — in
+- [x] `git diff` touches `examples/all_patterns.emod` and one test file, and nothing else — in
       particular `internal/parser/testdata/all_patterns.emod`, `examples/dcb_model.emod`,
       `examples/error_diagnostics_test.emod` and `README.md` are unchanged
-- [ ] No field column in `examples/all_patterns.emod` re-aligns and no blank line moves except where
+- [x] No field column in `examples/all_patterns.emod` re-aligns and no blank line moves except where
       this task's own additions require it: `emod fmt` is not run over the file, and the file is not
       required to pass `emod fmt --check`, which it does not pass today either
-- [ ] `task test:unit` passes with no test skipped or weakened
+- [x] `task test:unit` passes with no test skipped or weakened
 
 **Affected Files/Modules:**
 - `examples/all_patterns.emod` — the header, the `model` (`:2`) and `actor` (`:4`) block forms,

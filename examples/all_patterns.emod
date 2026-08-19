@@ -1,19 +1,30 @@
 emod 1
 # Hotel Reservation System — exercises all four slice patterns
-model "Hotel Reservation"
+model "Hotel Reservation" {
+  description "How the hotel takes, confirms and closes a stay"
+}
 
-actor "Guest"
+actor "Guest" {
+  description "Someone booking a room or leaving one"
+}
 
 context "Reservations" {
+  description "Everything the hotel knows about who holds which room"
+
   aggregate "Reservation" {
+    description "One guest holding one room over one date range"
+
     # Slice 1: Command Pattern
     slice "Reserve a Room" {
+      description "A guest books a room for a stay"
       trigger "Reservation Form" {
+        description "The form a guest fills in to book a room"
         actor Guest
         reads AvailableRoomsView
       }
 
       command ReserveRoom {
+        description "Ask the hotel to hold a room for a stay"
         fields {
           roomId    string required
           guestName string required
@@ -23,6 +34,8 @@ context "Reservations" {
       }
 
       event RoomReserved {
+        description "A room was held for a guest over a date range"
+        type "com.hotel.reservations.room-reserved"
         fields {
           reservationId string    required
           roomId        string    required
@@ -40,10 +53,13 @@ context "Reservations" {
 
     # Slice 2: View Pattern
     slice "View Available Rooms" {
+      description "What a guest can still book"
       view AvailableRoomsView {
+        description "Every room free to book, with the shape of stay it suits"
         fields {
           roomId      string required
           roomNumber  string required
+          type        string required
           status      string required
           nextCheckIn date   optional
         }
@@ -53,13 +69,17 @@ context "Reservations" {
 
     # Slice 3: Command Pattern — Check Out
     slice "Check Out Guest" {
+      description "A guest settles up and leaves"
       command CheckOutGuest {
+        description "Ask the hotel to close a stay and free its room"
         fields {
           reservationId string required
         }
       }
 
       event GuestCheckedOut {
+        description "A guest left and the room came free"
+        type "com.hotel.reservations.guest-checked-out"
         fields {
           reservationId string    required
           roomId        string    required
@@ -74,7 +94,9 @@ context "Reservations" {
 
     # Slice 4: Automation Pattern
     slice "Send Confirmation Email" {
+      description "Confirming a booking once the guest has had time to correct it"
       view PendingConfirmationsView {
+        description "Bookings still waiting on their confirmation email"
         fields {
           reservationId string    required
           guestName     string    required
@@ -84,7 +106,8 @@ context "Reservations" {
       }
 
       automation ConfirmationEmailReactor {
-        on RoomReserved
+        description "Leaves a booking a quarter of an hour to be corrected, then confirms it"
+        on RoomReserved after "15m"
         reads PendingConfirmationsView
         command SendConfirmationEmail
         target context Notifications
@@ -93,7 +116,9 @@ context "Reservations" {
 
     # Slice 5: Translation Pattern
     slice "Import External Booking" {
+      description "A booking made on a partner's site"
       command ImportExternalReservation {
+        description "Ask the hotel to record a booking taken elsewhere"
         fields {
           externalRef string required
           roomId      string required
@@ -104,10 +129,13 @@ context "Reservations" {
       }
 
       translation BookingComImport {
+        description "Turns a partner's booking record into a reservation of ours"
         external_system "Booking.com API"
         reads AvailableRoomsView
         command ImportExternalReservation
         event ExternalReservationImported {
+          description "A partner's booking became a reservation here"
+          type "com.hotel.reservations.external-reservation-imported"
           fields {
             reservationId string required
             externalRef   string required
@@ -123,13 +151,16 @@ context "Reservations" {
 
     # Slice 6: Automation Pattern — woken by a schedule
     slice "Expire Unconfirmed Reservations" {
+      description "Releasing rooms nobody confirmed"
       command ExpireReservation {
+        description "Ask the hotel to release an unconfirmed reservation"
         fields {
           reservationId string required
         }
       }
 
       event ReservationExpired {
+        description "An unconfirmed reservation released its room"
         fields {
           reservationId string    required
           roomId        string    required
@@ -138,6 +169,7 @@ context "Reservations" {
       }
 
       automation UnconfirmedReservationExpirer {
+        description "Runs overnight and releases whatever nobody confirmed"
         every "0 2 * * *"
         reads UnconfirmedReservationsView
         command ExpireReservation
@@ -150,7 +182,9 @@ context "Reservations" {
 
     # Slice 7: View Pattern — the expirer's todo list
     slice "View Unconfirmed Reservations" {
+      description "What the overnight sweep has left to do"
       view UnconfirmedReservationsView {
+        description "Bookings nobody has confirmed yet"
         fields {
           reservationId string    required
           roomId        string    required
@@ -163,9 +197,15 @@ context "Reservations" {
 }
 
 context "Notifications" {
+  description "How the hotel talks to its guests"
+
   aggregate "Notification" {
+    description "One message sent to one guest"
+
     slice "Send Confirmation" {
+      description "Emailing a guest the booking they just made"
       command SendConfirmationEmail {
+        description "Ask the hotel to email a guest their confirmation"
         fields {
           reservationId string required
           guestName     string required
