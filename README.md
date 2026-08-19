@@ -382,7 +382,7 @@ files, but reaches the Go pipeline directly instead of through WebAssembly.
 Building it needs a C toolchain — it is the only binary here that links CGO —
 and on Linux the GTK4 and WebKitGTK development packages.
 
-**File ▸ Open** (⌘O on macOS, Ctrl+O elsewhere) opens a model through the
+**File ▸ Open** (⌘O on macOS, Ctrl+O on Linux and Windows) opens a model through the
 operating system's own file picker, filtered to `.emod` and `.json`. The chosen
 file renders straight away — no paste, no Render click — and the window takes
 the file's name while the bar along the bottom shows its full path. A file that

@@ -24,10 +24,12 @@ var frontend embed.FS
 // a menu built from scratch has no Quit, no Copy and no Paste, which on macOS
 // are the application's only bindings for them.
 //
-// Open reaches the frontend by event because that is where the picker lives —
-// internal/desktop imports no GUI framework, so the dialog cannot be raised
-// from Go. internal/desktop's event-name guard pins the name against the
-// frontend's subscription.
+// Open reaches the frontend by event because that is where the picker lives.
+// Raising it here instead would be the shorter path, and is rejected: the read
+// behind it belongs to internal/desktop, which imports no GUI framework so that
+// it stays testable, and this package is in no test target at all.
+// internal/desktop's event-name guard pins the name against the frontend's
+// subscription.
 func applicationMenu(window *application.WebviewWindow) *application.Menu {
 	menu := application.DefaultApplicationMenu()
 
@@ -62,6 +64,11 @@ func main() {
 		Title:  "emod",
 		Width:  1400,
 		Height: 900,
+		// Windows adopts an application menu into a window only on this flag.
+		// macOS and Linux find it without one — macOS because its menu is
+		// always global, Linux because a window with no menu of its own falls
+		// back to it — so leaving this off loses File ▸ Open on Windows alone.
+		UseApplicationMenu: true,
 	})
 
 	app.Menu.SetApplicationMenu(applicationMenu(window))
