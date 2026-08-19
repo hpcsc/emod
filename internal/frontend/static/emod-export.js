@@ -1,4 +1,4 @@
-import { ready, exportEmod } from './wasm.js';
+import { ready, exportEmod } from './platform.js';
 
 function exportToEmodString(store) {
   return ready.then(function() {

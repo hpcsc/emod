@@ -19,14 +19,14 @@ vi.hoisted(() => {
     Promise.resolve({ ok: true, arrayBuffer: () => Promise.resolve(new ArrayBuffer(0)) });
 });
 
-let wasm;
+let browser;
 beforeAll(async () => {
-  wasm = await import('../static/wasm.js');
+  browser = await import('../static/platform.browser.js');
 });
 
 describe('non-streaming fallback', () => {
   it('initializes via compile+instantiate when instantiateStreaming is absent', async () => {
-    await expect(wasm.ready).resolves.toBeUndefined();
-    expect(wasm.isReady).toBe(true);
+    await expect(browser.ready).resolves.toBeUndefined();
+    expect(browser.isReady).toBe(true);
   });
 });

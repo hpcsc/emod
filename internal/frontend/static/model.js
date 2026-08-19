@@ -100,10 +100,11 @@ function sendParse(store, source, statusEl) {
     // Not valid JSON — treat as raw .emod source below
   }
 
-  // Raw .emod source — parse via WASM (dynamic import to defer init side effects)
-  return import('./wasm.js').then(function(wasm) {
-    return wasm.ready.then(function() {
-      return wasm.parseEmod(source);
+  // Raw .emod source — dynamic import so the platform's init side effects are
+  // deferred until something actually needs parsing.
+  return import('./platform.js').then(function(platform) {
+    return platform.ready.then(function() {
+      return platform.parseEmod(source);
     });
   }).then(function(data) {
     if (data.error) {

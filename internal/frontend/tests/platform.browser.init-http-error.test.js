@@ -20,14 +20,14 @@ vi.hoisted(() => {
     });
 });
 
-let wasm;
+let browser;
 beforeAll(async () => {
-  wasm = await import('../static/wasm.js');
+  browser = await import('../static/platform.browser.js');
 });
 
 describe('initialization HTTP error', () => {
   it('rejects ready with descriptive message including HTTP status', async () => {
-    await expect(wasm.ready).rejects.toThrow(
+    await expect(browser.ready).rejects.toThrow(
       'WASM initialization failed: Failed to fetch WASM: 404 Not Found',
     );
   });

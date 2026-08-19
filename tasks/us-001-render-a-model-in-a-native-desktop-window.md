@@ -809,30 +809,30 @@ whole. Which implementation a distribution gets is decided when that distributio
 by sniffing the environment at runtime. Nothing a user can see changes.
 
 **Acceptance Criteria:**
-- [ ] `internal/frontend/static/platform.browser.js` holds what `wasm.js` holds today — the same
+- [x] `internal/frontend/static/platform.browser.js` holds what `wasm.js` holds today — the same
       `fetch` of the WASM module, the same `instantiateStreaming` path and `arrayBuffer` fallback,
       the same `WASM initialization failed` and `WASM not ready yet` messages — and exports
       `parseEmod`, `exportEmod`, `ready` and `isReady` under those names
-- [ ] A `platform.js` module carries the contract every implementation satisfies, named in
+- [x] A `platform.js` module carries the contract every implementation satisfies, named in
       `docs/proposals/emod-desktop-proposal.md:171-188`
-- [ ] No shared UI module branches on which platform it is running on: outside the `platform.*.js`
+- [x] No shared UI module branches on which platform it is running on: outside the `platform.*.js`
       files, nothing under `internal/frontend/static/` names the desktop framework, inspects
       `navigator`, or tests for a runtime global to choose a code path
-- [ ] No file under `internal/frontend/static/` names `wasm.js`; the modules that reached the bridge
+- [x] No file under `internal/frontend/static/` names `wasm.js`; the modules that reached the bridge
       reach `./platform.js` instead (today `viewer.js:12`, `emod-export.js:1`, `model.js:104`)
-- [ ] `model.js` keeps its deferred dynamic import — the platform module is still not loaded until a
+- [x] `model.js` keeps its deferred dynamic import — the platform module is still not loaded until a
       raw `.emod` source needs parsing
-- [ ] No file under `internal/frontend/tests/` imports or mocks `../static/wasm.js`. The four files
+- [x] No file under `internal/frontend/tests/` imports or mocks `../static/wasm.js`. The four files
       that drive WASM fetch, instantiate and fallback directly test `platform.browser.js` and are
       named for it; the three that stub the bridge while another module is under test stub
       `../static/platform.js`
-- [ ] `mise exec -- task test:viewer` passes from a checkout where no build task has run, with no
+- [x] `mise exec -- task test:viewer` passes from a checkout where no build task has run, with no
       test file skipped and no assertion removed (F4)
-- [ ] `mise exec -- task build` produces a CLI whose served viewer resolves `platform.js`, and
+- [x] `mise exec -- task build` produces a CLI whose served viewer resolves `platform.js`, and
       `emod diagram --serve` renders a model end to end
-- [ ] After `mise exec -- task build:web`, `web/static/` carries exactly one platform
+- [x] After `mise exec -- task build:web`, `web/static/` carries exactly one platform
       implementation — the browser one — and no module that imports desktop bindings (F5)
-- [ ] `mise exec -- task test:e2e:viewer` passes: the web bundle instantiates the WASM module,
+- [x] `mise exec -- task test:e2e:viewer` passes: the web bundle instantiates the WASM module,
       renders `SAMPLE` and exports it byte-identically
 
 **Affected Files/Modules:**

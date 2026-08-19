@@ -1,8 +1,8 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { Model } from '../static/model.js';
-import { parseEmod } from '../static/wasm.js';
+import { parseEmod } from '../static/platform.js';
 
-vi.mock('../static/wasm.js', () => ({
+vi.mock('../static/platform.js', () => ({
   parseEmod: vi.fn(),
   ready: Promise.resolve(),
   isReady: true,

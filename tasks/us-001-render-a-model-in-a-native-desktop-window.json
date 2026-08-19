@@ -55,7 +55,7 @@
     },
     {
       "n": 3,
-      "done": false,
+      "done": true,
       "title": "Put the Go bridge behind a `platform.js` contract",
       "language": "JavaScript/TypeScript",
       "testable": true,

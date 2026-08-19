@@ -1,6 +1,6 @@
 import { describe, it, expect, vi, beforeAll } from 'vitest';
 
-// Set up globals before wasm.js is imported — these cause init to fail,
+// Set up globals before platform.browser.js is imported — these cause init to fail,
 // which lets us test the module's initial state and error handling.
 vi.hoisted(() => {
   globalThis.Go = class Go {
@@ -14,29 +14,29 @@ vi.hoisted(() => {
 });
 
 // Dynamic import — vitest caches this within the file, but each test file
-// gets an isolated module registry, so the init() call inside wasm.js will
+// gets an isolated module registry, so the init() call inside platform.browser.js will
 // use the globals we set above.
-let wasm;
+let browser;
 beforeAll(async () => {
-  wasm = await import('../static/wasm.js');
+  browser = await import('../static/platform.browser.js');
 });
 
 describe('before the module is ready', () => {
   it('reports that it is not ready', () => {
-    expect(wasm.isReady).toBe(false);
+    expect(browser.isReady).toBe(false);
   });
 
   it('rejects a parse with a descriptive error', async () => {
-    await expect(wasm.parseEmod('test')).rejects.toThrow('WASM not ready yet');
+    await expect(browser.parseEmod('test')).rejects.toThrow('WASM not ready yet');
   });
 
   it('rejects an export with a descriptive error', async () => {
-    await expect(wasm.exportEmod({ nodes: [], edges: [] })).rejects.toThrow('WASM not ready yet');
+    await expect(browser.exportEmod({ nodes: [], edges: [] })).rejects.toThrow('WASM not ready yet');
   });
 });
 
 describe('initialization failure', () => {
   it('rejects ready on network error', async () => {
-    await expect(wasm.ready).rejects.toThrow('WASM initialization failed');
+    await expect(browser.ready).rejects.toThrow('WASM initialization failed');
   });
 });

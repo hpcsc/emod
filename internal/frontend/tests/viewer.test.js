@@ -3,14 +3,14 @@ import { readFileSync } from 'fs';
 import { resolve } from 'path';
 import { installSVGGeometry } from './svg-env.js';
 
-// Only the WASM parser is stubbed — it is the module boundary the viewer talks
-// to instead of a network or filesystem. Every other module is the real one, so
-// these tests assert what a user would see rather than which function ran.
+// Only the platform seam is stubbed — it is the module boundary the viewer talks
+// to instead of a network, a filesystem or a Go core. Every other module is the
+// real one, so these tests assert what a user would see rather than which ran.
 let wasmReady = Promise.resolve();
 let wasmIsReady = true;
 let parseResult = { diagnostics: [], diagram: { nodes: [], edges: [] } };
 
-vi.mock('../static/wasm.js', () => ({
+vi.mock('../static/platform.js', () => ({
   get ready() { return wasmReady; },
   get isReady() { return wasmIsReady; },
   parseEmod: vi.fn(() => Promise.resolve(parseResult)),

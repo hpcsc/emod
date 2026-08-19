@@ -9,7 +9,7 @@ import { CtxActions } from './ctx-actions.js';
 import { Model } from './model.js';
 import { bus } from './bus.js';
 import { Export } from './emod-export.js';
-import { ready, isReady } from './wasm.js';
+import { ready, isReady } from './platform.js';
 
 // ─── Event subscriptions ─────────────────────────────────────────────
 bus.on('data:changed', function({ store: s }) {

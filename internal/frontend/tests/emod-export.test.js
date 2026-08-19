@@ -1,6 +1,6 @@
 import { describe, it, expect, vi } from 'vitest';
 
-// Each test builds a fresh module graph so it controls when the WASM `ready`
+// Each test builds a fresh module graph so it controls when the platform `ready`
 // promise settles — resolving it is one-way, so a shared instance would leak
 // readiness between tests.
 async function freshExport() {
@@ -8,7 +8,7 @@ async function freshExport() {
   const exportEmod = vi.fn();
   let markReady;
   const ready = new Promise((resolve) => { markReady = resolve; });
-  vi.doMock('../static/wasm.js', () => ({ ready, exportEmod }));
+  vi.doMock('../static/platform.js', () => ({ ready, exportEmod }));
   const { Export } = await import('../static/emod-export.js');
   return { Export, exportEmod, markReady };
 }
