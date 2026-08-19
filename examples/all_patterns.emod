@@ -302,7 +302,7 @@ context "Reservations" {
       description "What the overnight sweep has left to do"
       view UnconfirmedReservationsView {
         description "Bookings nobody has confirmed yet"
-        subscribes [RoomReserved, ReservationExpired]
+        subscribes [RoomReserved, ConfirmationEmailSent, GuestCheckedOut, ReservationExpired]
         fields {
           reservationId string    required
           roomId        string    required

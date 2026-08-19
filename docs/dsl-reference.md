@@ -347,8 +347,8 @@ A read model projects from subscribed events.
 ```
 slice "<name>" {
   view <ViewName> {
-    fields { ... }
     subscribes [<EventName>, <EventName>, ...]
+    fields { ... }
   }
 }
 ```
@@ -476,8 +476,8 @@ spec "rejects a second borrow" {
 ```
 slice "Review Member Loans" {
   view MemberLoansView {
-    fields { loanId string required }
     subscribes [CopyBorrowed, CopyReturned]
+    fields { loanId string required }
   }
 
   spec "shows active member loans" {

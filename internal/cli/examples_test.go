@@ -8,9 +8,10 @@ import (
 	"testing"
 
 	"github.com/hpcsc/emod/internal/ast"
-	"github.com/hpcsc/emod/internal/formatter"
+	"github.com/hpcsc/emod/internal/cli"
 	"github.com/hpcsc/emod/internal/lexer"
 	"github.com/hpcsc/emod/internal/parser"
+	"github.com/hpcsc/emod/internal/test"
 	"github.com/stretchr/testify/require"
 )
 
@@ -66,16 +67,14 @@ func TestExamples(t *testing.T) {
 		t.Run("binds a wire type on some events and leaves another unbound", func(t *testing.T) {
 			model := parseExample(t, "all_patterns.emod")
 
-			var boundEvents, unboundEvents []string
+			var unboundEvents []string
 			for _, event := range declaredEvents(model) {
 				if event.WireType == "" {
 					unboundEvents = append(unboundEvents, event.Name)
-					continue
 				}
-				boundEvents = append(boundEvents, event.Name)
 			}
 
-			require.GreaterOrEqual(t, len(boundEvents), 2,
+			require.GreaterOrEqual(t, len(test.DeclaredWireTypes(model)), 2,
 				"fewer than two events bind a wire type, so the example does not show the attribute")
 			require.NotEmpty(t, unboundEvents,
 				"every event binds a wire type, so the example does not show that the attribute is optional")
@@ -84,19 +83,9 @@ func TestExamples(t *testing.T) {
 		t.Run("delays one automation and schedules another", func(t *testing.T) {
 			model := parseExample(t, "all_patterns.emod")
 
-			var delayed, scheduled []string
-			for _, automation := range declaredAutomations(model) {
-				if automation.After != "" {
-					delayed = append(delayed, automation.Name)
-				}
-				if automation.Schedule != "" {
-					scheduled = append(scheduled, automation.Name)
-				}
-			}
-
-			require.NotEmpty(t, delayed,
+			require.NotEmpty(t, test.DeclaredDelays(model),
 				"no automation states a delay, so the example does not show `after`")
-			require.NotEmpty(t, scheduled,
+			require.NotEmpty(t, test.DeclaredSchedules(model),
 				"no automation states a schedule, so the example shows only one of the two activation forms")
 		})
 
@@ -111,21 +100,12 @@ func TestExamples(t *testing.T) {
 			model := parseExample(t, "all_patterns.emod")
 
 			stated := make(map[string]bool)
-			for _, spec := range declaredSpecs(model) {
-				switch spec.Then.(type) {
-				case *ast.ThenEvents:
-					stated["events"] = true
-				case *ast.ThenRejected:
-					stated["rejected"] = true
-				case *ast.ThenView:
-					stated["view"] = true
-				case *ast.ThenCommand:
-					stated["command"] = true
-				}
+			for _, kind := range test.DeclaredSpecOutcomeKinds(model) {
+				stated[kind] = true
 			}
 
 			var unstated []string
-			for _, outcome := range []string{"events", "rejected", "view", "command"} {
+			for _, outcome := range []string{"events", "rejection", "view", "command"} {
 				if !stated[outcome] {
 					unstated = append(unstated, outcome)
 				}
@@ -172,9 +152,11 @@ func TestExamples(t *testing.T) {
 			model := parseExample(t, "all_patterns.emod")
 
 			var unquoted []string
-			for _, stated := range declaredPayloads(model) {
-				if stated.Kind != ast.StringLiteral {
-					unquoted = append(unquoted, stated.Name)
+			for _, payload := range test.DeclaredSpecPayloads(model) {
+				for _, stated := range payload.Values {
+					if stated.Kind != ast.StringLiteral {
+						unquoted = append(unquoted, stated.Field)
+					}
 				}
 			}
 
@@ -185,7 +167,7 @@ func TestExamples(t *testing.T) {
 		t.Run("refuses a command on the timeline", func(t *testing.T) {
 			model := parseExample(t, "all_patterns.emod")
 
-			require.NotEmpty(t, declaredRejections(model),
+			require.NotEmpty(t, test.DeclaredRejections(model),
 				"no flow states a rejection entry, so the example does not show a command an invariant refuses")
 		})
 
@@ -224,7 +206,7 @@ func TestExamples(t *testing.T) {
 				for _, given := range spec.Given {
 					for _, stated := range given.Payload {
 						for _, exercised := range spec.When.Payload {
-							if stated.Name == exercised.Name && stated.Value == exercised.Value {
+							if stated.Name == exercised.Name && stated.Value == exercised.Value && stated.Kind == exercised.Kind {
 								linked = append(linked, spec.Name)
 							}
 						}
@@ -239,21 +221,14 @@ func TestExamples(t *testing.T) {
 		t.Run("refuses a command on the timeline", func(t *testing.T) {
 			model := parseExample(t, "specs_hotel.emod")
 
-			require.NotEmpty(t, declaredRejections(model),
+			require.NotEmpty(t, test.DeclaredRejections(model),
 				"no flow states a rejection entry, so the worked example does not show a command an invariant refuses")
 		})
 
 		t.Run("binds a wire type on an event", func(t *testing.T) {
 			model := parseExample(t, "specs_hotel.emod")
 
-			bound := make(map[string]bool)
-			for _, event := range declaredEvents(model) {
-				if event.WireType != "" {
-					bound[event.WireType] = true
-				}
-			}
-
-			require.NotEmpty(t, bound,
+			require.NotEmpty(t, test.DeclaredWireTypes(model),
 				"no event binds a wire type, so the worked example does not show the attribute")
 		})
 
@@ -382,25 +357,6 @@ func declaredSpecs(model *ast.Model) []*ast.Spec {
 	return specs
 }
 
-func declaredPayloads(model *ast.Model) []*ast.PayloadField {
-	var stated []*ast.PayloadField
-	for _, spec := range declaredSpecs(model) {
-		for _, given := range spec.Given {
-			stated = append(stated, given.Payload...)
-		}
-		if spec.When != nil {
-			stated = append(stated, spec.When.Payload...)
-		}
-		if outcome, ok := spec.Then.(*ast.ThenEvents); ok {
-			for _, event := range outcome.Events {
-				stated = append(stated, event.Payload...)
-			}
-		}
-	}
-
-	return stated
-}
-
 func declaredFields(model *ast.Model) []*ast.Field {
 	var fields []*ast.Field
 	for _, slice := range model.AllSlices() {
@@ -421,12 +377,8 @@ func declaredFields(model *ast.Model) []*ast.Field {
 
 func requireCanonical(t *testing.T, name string) {
 	t.Helper()
-	path := filepath.Join("../../examples", name)
 
-	source, err := os.ReadFile(path)
-	require.NoError(t, err)
-
-	require.Equal(t, string(source), formatter.Format(parseExample(t, name)),
+	require.NoError(t, cli.RunFmt(filepath.Join("../../examples", name), true),
 		"the example the reference points a reader at is not what emod fmt writes, so it teaches a style the tool rewrites")
 }
 
@@ -446,17 +398,6 @@ func declaredInvariants(model *ast.Model) []string {
 	return declared
 }
 
-func declaredRejections(model *ast.Model) []string {
-	var refused []string
-	for _, slice := range model.AllSlices() {
-		for _, rejection := range slice.Rejections {
-			refused = append(refused, rejection.CommandName)
-		}
-	}
-
-	return refused
-}
-
 // todoListLoops splits the automations that read a view into those whose own
 // command produces an event that view subscribes to and those whose do not. An
 // automation in the second group never loses the row it just acted on, so its
@@ -467,6 +408,11 @@ func todoListLoops(model *ast.Model) (reading, open []string) {
 	for _, slice := range model.AllSlices() {
 		for _, flow := range slice.Flows {
 			produced[flow.CommandName] = append(produced[flow.CommandName], flow.EventName)
+		}
+		for _, translation := range slice.Translations {
+			if translation.Event != nil {
+				produced[translation.Command] = append(produced[translation.Command], translation.Event.Name)
+			}
 		}
 		for _, view := range slice.Views {
 			subscribers[view.Name] = append(subscribers[view.Name], view.Subscribes...)
