@@ -91,4 +91,19 @@ function droppedFile(dataTransfer) {
   };
 }
 
-export { parseEmod, exportEmod, droppedFile, ready, isReady };
+// A browser can only offer the file back as a download, so suggestedName is
+// all the say the caller gets over where it lands and the returned promise
+// says the download started, never that it was kept.
+function saveFile(suggestedName, content) {
+  const url = URL.createObjectURL(new Blob([content], { type: "text/plain" }));
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = suggestedName;
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  URL.revokeObjectURL(url);
+  return Promise.resolve();
+}
+
+export { parseEmod, exportEmod, droppedFile, saveFile, ready, isReady };

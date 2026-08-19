@@ -10,12 +10,17 @@ let wasmReady = Promise.resolve();
 let wasmIsReady = true;
 let parseResult = { diagnostics: [], diagram: { nodes: [], edges: [] } };
 let dropReadFails = false;
+let savedFile = null;
+let exportFails = false;
 
 vi.mock('../static/platform.js', () => ({
   get ready() { return wasmReady; },
   get isReady() { return wasmIsReady; },
   parseEmod: vi.fn(() => Promise.resolve(parseResult)),
-  exportEmod: vi.fn(() => Promise.resolve({ emod: '' })),
+  exportEmod: vi.fn((diagram) => exportFails
+    ? Promise.reject(new Error('nothing to export'))
+    : Promise.resolve('emod 1\nmodel "' + (diagram.model_name || '') + '"\n')),
+  saveFile: vi.fn((name, content) => { savedFile = { name, content }; return Promise.resolve(); }),
   droppedFile: vi.fn((dataTransfer) => {
     const file = dataTransfer.files[0];
     if (!file) return null;
@@ -134,6 +139,8 @@ beforeEach(() => {
   wasmIsReady = true;
   parseResult = { diagnostics: [], diagram: { nodes: [], edges: [] } };
   dropReadFails = false;
+  savedFile = null;
+  exportFails = false;
 });
 
 describe('viewer initial state', () => {
@@ -186,6 +193,45 @@ describe('viewer WASM loading indicator', () => {
     await flush();
 
     expect(document.getElementById('render-status').textContent).toBe('✓ Ready');
+  });
+});
+
+describe('viewer export', () => {
+  it('hands the platform the model name and the exported content', async () => {
+    globalThis.INITIAL_DATA = { diagram: billingDiagram() };
+    await startViewer();
+
+    document.getElementById('export-emod').click();
+    await flush();
+
+    expect(savedFile.name).toBe('Billing.emod');
+    expect(savedFile.content).toBe('emod 1\nmodel "Billing"\n');
+  });
+
+  it('falls back to diagram.emod when the model has no name', async () => {
+    const unnamed = billingDiagram();
+    unnamed.model_name = '';
+    globalThis.INITIAL_DATA = { diagram: unnamed };
+    await startViewer();
+
+    document.getElementById('export-emod').click();
+    await flush();
+
+    expect(savedFile.name).toBe('diagram.emod');
+  });
+
+  it('reports a failed export in the status area', async () => {
+    globalThis.INITIAL_DATA = { diagram: billingDiagram() };
+    exportFails = true;
+    await startViewer();
+
+    document.getElementById('export-emod').click();
+    await flush();
+
+    const statusEl = document.getElementById('render-status');
+    expect(statusEl.textContent).toContain('nothing to export');
+    expect(statusEl.className).toContain('error');
+    expect(savedFile).toBeNull();
   });
 });
 

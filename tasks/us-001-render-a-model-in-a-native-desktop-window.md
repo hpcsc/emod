@@ -944,16 +944,16 @@ of building a download itself. The browser implementation keeps the blob-and-anc
 so the same file with the same name and the same bytes still arrives in Downloads.
 
 **Acceptance Criteria:**
-- [ ] `viewer.js` names none of `Blob`, `URL.createObjectURL`, `URL.revokeObjectURL` or the anchor's
+- [x] `viewer.js` names none of `Blob`, `URL.createObjectURL`, `URL.revokeObjectURL` or the anchor's
       `download` attribute; the export handler calls the platform's save with a suggested name and
       the content (today `viewer.js:208-222`)
-- [ ] The suggested name is still the model name, or `diagram` when the model has none, with the
+- [x] The suggested name is still the model name, or `diagram` when the model has none, with the
       `.emod` suffix
-- [ ] An export that fails still puts its message in the status area, as it does today
+- [x] An export that fails still puts its message in the status area, as it does today
       (`viewer.js:219-221`)
-- [ ] `e2e-viewer/tests/export.spec.js` passes with no edit: the downloaded bytes still equal
+- [x] `e2e-viewer/tests/export.spec.js` passes with no edit: the downloaded bytes still equal
       `SAMPLE` (`:8-13`) and the download is still named `Billing.emod` (`:15-23`)
-- [ ] `mise exec -- task test:viewer` and `mise exec -- task test:e2e:viewer` pass
+- [x] `mise exec -- task test:viewer` and `mise exec -- task test:e2e:viewer` pass
 
 **Affected Files/Modules:**
 - `internal/frontend/static/viewer.js:208-222` — the export handler

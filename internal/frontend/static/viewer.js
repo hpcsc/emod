@@ -9,7 +9,7 @@ import { CtxActions } from './ctx-actions.js';
 import { Model } from './model.js';
 import { bus } from './bus.js';
 import { Export } from './emod-export.js';
-import { ready, isReady, droppedFile } from './platform.js';
+import { ready, isReady, droppedFile, saveFile } from './platform.js';
 
 // ─── Event subscriptions ─────────────────────────────────────────────
 bus.on('data:changed', function({ store: s }) {
@@ -204,15 +204,7 @@ function init() {
   // ─── Export .emod button ─────────────────────────────────────────
   store.dom.exportBtn.addEventListener("click", function() {
     Export.exportToEmodString(store).then(function(content) {
-      var blob = new Blob([content], { type: "text/plain" });
-      var url = URL.createObjectURL(blob);
-      var a = document.createElement("a");
-      a.href = url;
-      a.download = (store.modelName || "diagram") + ".emod";
-      document.body.appendChild(a);
-      a.click();
-      document.body.removeChild(a);
-      URL.revokeObjectURL(url);
+      return saveFile((store.modelName || "diagram") + ".emod", content);
     }).catch(function(err) {
       store.dom.statusEl.textContent = "✗ " + err.message;
       store.dom.statusEl.className = "status error";
