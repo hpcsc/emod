@@ -1,11 +1,11 @@
 # US-014: Format the new constructs consistently
 
 ## Progress
-- [ ] Task 1: Order a view's `subscribes` ahead of its `fields`
-- [ ] Task 2: Align a spec's `given`, `when` and `then` keywords
-- [ ] Task 3: Align the `:` across a flow block's entries
-- [ ] Task 4: Wrap a payload that does not fit onto one field per line
-- [ ] Task 5: Round-trip a model stating every new construct through `emod fmt`
+- [x] Task 1: Order a view's `subscribes` ahead of its `fields`
+- [x] Task 2: Align a spec's `given`, `when` and `then` keywords
+- [x] Task 3: Align the `:` across a flow block's entries
+- [x] Task 4: Wrap a payload that does not fit onto one field per line
+- [x] Task 5: Round-trip a model stating every new construct through `emod fmt`
 
 ---
 

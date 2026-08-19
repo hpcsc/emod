@@ -3,7 +3,7 @@
 Which story in each in-progress story file is delivered. Files under
 `user-stories/completed/` are finished in full and are not tracked here.
 
-**17 of 161 delivered.**
+**5 of 143 delivered.**
 
 ## [emod-desktop.md](./emod-desktop.md) — 0/16
 
@@ -23,37 +23,6 @@ Which story in each in-progress story file is delivered. Files under
 - [ ] US-014: Run the desktop app on Linux
 - [ ] US-015: Download a desktop build without building it
 - [ ] US-016: Run the desktop app on Windows
-
-## [specs-and-metadata.md](./specs-and-metadata.md) — 12/18
-
-Delivered on `main`: the `emod <n>` version header, `description` on every construct, keywords
-usable as field names, `emod glossary`, named invariants on aggregates and DCB contexts,
-Given-When-Then specs on every slice pattern with example payloads, spec-coverage and
-boundary lint rules, `command -> rejected:` edges on the timeline, value-aware boundary checking
-in DCB mode, and `type` binding a model event to its wire-level name.
-
-The six that remain are the tail of the story file and each has a breakdown waiting in `tasks/`,
-none of them started. US-013's `after` keyword is a precondition for US-017's keyword list, and
-US-018 depends on everything above it.
-
-- [x] US-001: Pin files to a DSL version
-- [x] US-002: Describe constructs where they are declared
-- [x] US-003: Use reserved words as field names
-- [x] US-004: Generate a glossary from the model
-- [x] US-005: Declare named invariants
-- [x] US-006: Write Given-When-Then specs on command slices
-- [x] US-007: Write specs for view, automation, and translation slices
-- [x] US-008: Lint spec coverage and boundary assumptions
-- [x] US-009: Show rejection paths on the timeline
-- [x] US-010: State example payloads in specs
-- [x] US-011: Value-aware boundary checking in DCB mode
-- [x] US-012: Bind model events to wire-level types
-- [ ] US-013: Fire automations after elapsed time
-- [ ] US-014: Format the new constructs consistently
-- [ ] US-015: Navigate and complete the new constructs in the editor
-- [ ] US-016: Render specs on diagrams
-- [ ] US-017: Highlight the new syntax in editors
-- [ ] US-018: Learn the new constructs from examples and the reference
 
 ## [00-llm-foundation.md](./ai/00-llm-foundation.md) — 5/10
 
