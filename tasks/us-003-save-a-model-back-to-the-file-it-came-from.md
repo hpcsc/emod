@@ -263,17 +263,17 @@ target holding a model that is neither the old one nor the new one. It imports n
 so it is tested everywhere the rest of the repository is.
 
 **Acceptance Criteria:**
-- [ ] Writing to a path that does not exist creates it holding exactly the bytes it was given
-- [ ] Writing over a file that exists leaves it holding exactly the bytes it was given, and holding the permission bits it held before
-- [ ] Contents this service reads and then writes back unedited leave the file byte-identical — for any file it will read, line endings, trailing blank lines and non-ASCII UTF-8 included
-- [ ] A target that exists and this process may not write is refused, with the reason naming the permission, and the file still holds what it held
-- [ ] A target whose directory this process may not write into is refused, and the target — writable in itself — still holds what it held, which is the shape a write that truncated its target first would fail
-- [ ] A path naming a directory, and a path whose parent does not exist, are each refused with a reason naming which it was
-- [ ] Every refusal answers the `{"error": "…"}` envelope and leaves the filesystem exactly as it found it, contents and mode alike
-- [ ] A completed write answers an envelope carrying no error, so a caller can tell the two apart without going to the filesystem
-- [ ] A reason names the path once, not twice the way the wrapped syscall error does
-- [ ] The new method lives beside `FileService`'s existing one, and the package still imports no GUI framework and links no CGO — `CGO_ENABLED=0 go build ./internal/desktop` succeeds
-- [ ] `task test:unit` and `task test:integration` are green from a checkout where `task build:desktop` has never run
+- [x] Writing to a path that does not exist creates it holding exactly the bytes it was given
+- [x] Writing over a file that exists leaves it holding exactly the bytes it was given, and holding the permission bits it held before
+- [x] Contents this service reads and then writes back unedited leave the file byte-identical — for any file it will read, line endings, trailing blank lines and non-ASCII UTF-8 included
+- [x] A target that exists and this process may not write is refused, with the reason naming the permission, and the file still holds what it held
+- [x] A target whose directory this process may not write into is refused, and the target — writable in itself — still holds what it held, which is the shape a write that truncated its target first would fail
+- [x] A path naming a directory, and a path whose parent does not exist, are each refused with a reason naming which it was
+- [x] Every refusal answers the `{"error": "…"}` envelope and leaves the filesystem exactly as it found it, contents and mode alike
+- [x] A completed write answers an envelope carrying no error, so a caller can tell the two apart without going to the filesystem
+- [x] A reason names the path once, not twice the way the wrapped syscall error does
+- [x] The new method lives beside `FileService`'s existing one, and the package still imports no GUI framework and links no CGO — `CGO_ENABLED=0 go build ./internal/desktop` succeeds
+- [x] `task test:unit` and `task test:integration` are green from a checkout where `task build:desktop` has never run
 
 **Affected Files/Modules:**
 - `internal/desktop/file_service.go` — the write method, beside the read it is the counterpart of

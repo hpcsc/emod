@@ -4,7 +4,7 @@
   "tasks": [
     {
       "n": 1,
-      "done": false,
+      "done": true,
       "title": "Write a model back to disk through the desktop file service",
       "language": "Go",
       "testable": true,
