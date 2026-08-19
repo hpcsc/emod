@@ -9,7 +9,7 @@ import { CtxActions } from './ctx-actions.js';
 import { Model } from './model.js';
 import { bus } from './bus.js';
 import { Export } from './emod-export.js';
-import { ready, isReady } from './platform.js';
+import { ready, isReady, droppedFile } from './platform.js';
 
 // ─── Event subscriptions ─────────────────────────────────────────────
 bus.on('data:changed', function({ store: s }) {
@@ -167,7 +167,7 @@ function init() {
     evt.preventDefault();
     evt.stopPropagation();
     store.dom.panelBody.classList.remove("drag-over");
-    const file = evt.dataTransfer.files[0];
+    const file = droppedFile(evt.dataTransfer);
     if (!file) return;
     const name = file.name.toLowerCase();
     if (!name.endsWith('.emod') && !name.endsWith('.json')) {
@@ -175,16 +175,13 @@ function init() {
       store.dom.statusEl.className = 'status error';
       return;
     }
-    const reader = new FileReader();
-    reader.onload = function(e) {
-      store.dom.sourceInput.value = e.target.result;
+    file.read().then(function(content) {
+      store.dom.sourceInput.value = content;
       store.dom.renderBtn.click();
-    };
-    reader.onerror = function() {
+    }).catch(function() {
       store.dom.statusEl.textContent = '✗ Failed to read file';
       store.dom.statusEl.className = 'status error';
-    };
-    reader.readAsText(file);
+    });
   });
 
   // ─── Panel toggle ─────────────────────────────────────────────────

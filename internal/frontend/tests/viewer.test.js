@@ -9,12 +9,24 @@ import { installSVGGeometry } from './svg-env.js';
 let wasmReady = Promise.resolve();
 let wasmIsReady = true;
 let parseResult = { diagnostics: [], diagram: { nodes: [], edges: [] } };
+let dropReadFails = false;
 
 vi.mock('../static/platform.js', () => ({
   get ready() { return wasmReady; },
   get isReady() { return wasmIsReady; },
   parseEmod: vi.fn(() => Promise.resolve(parseResult)),
   exportEmod: vi.fn(() => Promise.resolve({ emod: '' })),
+  droppedFile: vi.fn((dataTransfer) => {
+    const file = dataTransfer.files[0];
+    if (!file) return null;
+    return {
+      name: file.name,
+      path: '',
+      read: () => dropReadFails
+        ? Promise.reject(new Error('Failed to read file'))
+        : Promise.resolve(file._content || ''),
+    };
+  }),
 }));
 
 function createRequiredElements() {
@@ -90,17 +102,6 @@ function fieldEditor() {
   };
 }
 
-// MockFileReader stands in for the browser's async file read.
-class MockFileReader {
-  readAsText(file) {
-    this.result = file._content || '';
-    const self = this;
-    Promise.resolve().then(function() {
-      if (self.onload) self.onload({ target: self });
-    });
-  }
-}
-
 async function startViewer() {
   createRequiredElements();
   const { init } = await import('../static/viewer.js');
@@ -129,10 +130,10 @@ function flush() {
 beforeEach(() => {
   installSVGGeometry();
   document.body.innerHTML = '';
-  globalThis.FileReader = MockFileReader;
   wasmReady = Promise.resolve();
   wasmIsReady = true;
   parseResult = { diagnostics: [], diagram: { nodes: [], edges: [] } };
+  dropReadFails = false;
 });
 
 describe('viewer initial state', () => {
@@ -213,6 +214,22 @@ describe('viewer drag-and-drop', () => {
     await flush();
 
     expect(document.getElementById('source-input').value).toBe('context Test {}');
+    expect(document.getElementById('diagram-canvas').innerHTML).toContain('TakePayment');
+  });
+
+  it('reports a read that fails and leaves the current diagram on screen', async () => {
+    globalThis.INITIAL_DATA = { diagram: billingDiagram() };
+    await startViewer();
+    dropReadFails = true;
+
+    const file = new File(['context Test {}'], 'test.emod', { type: 'text/plain' });
+    fireDrop(document.getElementById('data-panel-body'), file);
+    await flush();
+
+    const statusEl = document.getElementById('render-status');
+    expect(statusEl.textContent).toContain('Failed to read file');
+    expect(statusEl.className).toContain('error');
+    expect(document.getElementById('source-input').value).toBe('');
     expect(document.getElementById('diagram-canvas').innerHTML).toContain('TakePayment');
   });
 

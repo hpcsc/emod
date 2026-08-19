@@ -68,4 +68,27 @@ function exportEmod(diagram) {
   }
 }
 
-export { parseEmod, exportEmod, ready, isReady };
+// Naming the file and reading it are separate so a caller can refuse one by
+// name without paying for its contents. path is always empty here: a file the
+// browser hands over through a drop is content without a location, which is
+// why the browser build can only ever offer a model back as a download.
+function droppedFile(dataTransfer) {
+  const file = dataTransfer.files[0];
+  if (!file) {
+    return null;
+  }
+  return {
+    name: file.name,
+    path: '',
+    read: function() {
+      return new Promise(function(resolve, reject) {
+        const reader = new FileReader();
+        reader.onload = function(e) { resolve(e.target.result); };
+        reader.onerror = function() { reject(new Error('Failed to read file')); };
+        reader.readAsText(file);
+      });
+    },
+  };
+}
+
+export { parseEmod, exportEmod, droppedFile, ready, isReady };

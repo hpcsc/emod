@@ -87,7 +87,7 @@
     },
     {
       "n": 4,
-      "done": false,
+      "done": true,
       "title": "Read a dropped file through the platform contract",
       "language": "JavaScript/TypeScript",
       "testable": true,

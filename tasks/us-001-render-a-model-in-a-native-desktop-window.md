@@ -889,20 +889,20 @@ same gesture. Unchanged from a user's seat: the same accepted extensions, the sa
 the same drag-over highlight, the same render.
 
 **Acceptance Criteria:**
-- [ ] `viewer.js` names neither `FileReader` nor `readAsText`; the drop handler obtains the dropped
+- [x] `viewer.js` names neither `FileReader` nor `readAsText`; the drop handler obtains the dropped
       file's contents from the platform module (today `viewer.js:166-188`)
-- [ ] What the platform hands back carries a place for the file's path as well as its contents — the
+- [x] What the platform hands back carries a place for the file's path as well as its contents — the
       shape `docs/proposals/emod-desktop-proposal.md:171-188` names — and the browser implementation
       leaves the path empty, because a browser drop has none (F6)
-- [ ] The extension check and its wording stay in the shared module: dropping a file with any other
+- [x] The extension check and its wording stay in the shared module: dropping a file with any other
       extension still shows `✗ Only .emod and .json files are supported` and leaves the current
       diagram on screen
-- [ ] A read that fails still shows `✗ Failed to read file` and leaves the current diagram on screen
-- [ ] The `drag-over` class is still added on `dragover` and removed on both `dragleave` and `drop`
-- [ ] The three drag-and-drop leaves in `internal/frontend/tests/viewer.test.js:191-233` pass, and
+- [x] A read that fails still shows `✗ Failed to read file` and leaves the current diagram on screen
+- [x] The `drag-over` class is still added on `dragover` and removed on both `dragleave` and `drop`
+- [x] The three drag-and-drop leaves in `internal/frontend/tests/viewer.test.js:191-233` pass, and
       what they install to stand in for the read is the platform module rather than
       `globalThis.FileReader` (`:93-102`, `:132`)
-- [ ] `mise exec -- task test:viewer` and `mise exec -- task test:e2e:viewer` pass
+- [x] `mise exec -- task test:viewer` and `mise exec -- task test:e2e:viewer` pass
 
 **Affected Files/Modules:**
 - `internal/frontend/static/viewer.js:166-188` — the drop handler
