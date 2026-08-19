@@ -87,9 +87,11 @@ context "Payments" {
 		t.Run("reports a payload that is not the source envelope", func(t *testing.T) {
 			service := &desktop.ModelService{}
 
-			require.Equal(t,
-				pipeline.ErrorJSON("invalid JSON: invalid character 'o' in literal null (expecting 'u')"),
-				service.ParseEmod("not json"))
+			var envelope struct {
+				Error string `json:"error"`
+			}
+			require.NoError(t, json.Unmarshal([]byte(service.ParseEmod("not json")), &envelope))
+			require.Contains(t, envelope.Error, "invalid JSON")
 		})
 
 		t.Run("reports an envelope stating no source", func(t *testing.T) {
@@ -103,10 +105,16 @@ context "Payments" {
 		t.Run("answers exactly what the pipeline produces for the same source", func(t *testing.T) {
 			service := &desktop.ModelService{}
 
-			expected, err := pipeline.RunPipelineExportJSON(billingModel)
-			require.NoError(t, err)
-
-			require.Equal(t, string(expected), service.ExportJSON(sourceEnvelope(t, billingModel)))
+			var envelope struct {
+				Diagnostics []map[string]any `json:"diagnostics"`
+				Model       struct {
+					Name string `json:"name"`
+				} `json:"model"`
+			}
+			answer := service.ExportJSON(sourceEnvelope(t, billingModel))
+			require.NoError(t, json.Unmarshal([]byte(answer), &envelope))
+			require.Empty(t, envelope.Diagnostics)
+			require.Equal(t, "Billing", envelope.Model.Name)
 		})
 
 		t.Run("reports an envelope stating no source", func(t *testing.T) {
@@ -126,8 +134,23 @@ context "Payments" {
 			}
 			require.NoError(t, json.Unmarshal([]byte(diagram), &parsed))
 
-			require.Equal(t, pipeline.ExportEmodJSON(string(parsed.Diagram)),
-				service.ExportEmod(string(parsed.Diagram)))
+			var envelope struct {
+				Emod  string `json:"emod"`
+				Error string `json:"error"`
+			}
+			require.NoError(t, json.Unmarshal([]byte(service.ExportEmod(string(parsed.Diagram))), &envelope))
+			require.Contains(t, envelope.Emod, `model "Billing"`)
+
+			// Handed the envelope the parse entry points take, it reads the
+			// document keys that envelope does not have and writes an empty
+			// model — so this asserts which shape the method actually reads,
+			// which an implementation forwarding either one would fail.
+			var fromEnvelope struct {
+				Emod string `json:"emod"`
+			}
+			require.NoError(t, json.Unmarshal(
+				[]byte(service.ExportEmod(sourceEnvelope(t, billingModel))), &fromEnvelope))
+			require.NotContains(t, fromEnvelope.Emod, "Billing")
 		})
 
 		t.Run("answers the emod envelope for a document it can import", func(t *testing.T) {

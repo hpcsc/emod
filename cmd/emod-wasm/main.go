@@ -40,15 +40,5 @@ func jsHandle(args []js.Value, run func(string) ([]byte, error)) any {
 		return pipeline.ErrorJSON("expected 1 argument")
 	}
 
-	source, err := pipeline.ExtractSource(args[0].String())
-	if err != nil {
-		return pipeline.ErrorJSON(err.Error())
-	}
-
-	result, err := run(source)
-	if err != nil {
-		return pipeline.ErrorJSON(err.Error())
-	}
-
-	return string(result)
+	return pipeline.RunOnSource(args[0].String(), run)
 }

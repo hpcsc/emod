@@ -17,13 +17,13 @@ type ModelService struct{}
 // {diagnostics, diagram} document. Source the pipeline reports on still yields a
 // diagram beside the diagnostics; only a malformed envelope is an error.
 func (s *ModelService) ParseEmod(request string) string {
-	return runOnSource(request, pipeline.RunPipelineExportDiagram)
+	return pipeline.RunOnSource(request, pipeline.RunPipelineExportDiagram)
 }
 
 // ExportJSON takes the {"source": "..."} envelope and answers the pipeline's
 // {diagnostics, model} document.
 func (s *ModelService) ExportJSON(request string) string {
-	return runOnSource(request, pipeline.RunPipelineExportJSON)
+	return pipeline.RunOnSource(request, pipeline.RunPipelineExportJSON)
 }
 
 // ExportEmod takes the diagram document itself rather than the {"source": "..."}
@@ -31,18 +31,4 @@ func (s *ModelService) ExportJSON(request string) string {
 // document as its state.
 func (s *ModelService) ExportEmod(diagramJSON string) string {
 	return pipeline.ExportEmodJSON(diagramJSON)
-}
-
-func runOnSource(request string, run func(string) ([]byte, error)) string {
-	source, err := pipeline.ExtractSource(request)
-	if err != nil {
-		return pipeline.ErrorJSON(err.Error())
-	}
-
-	result, err := run(source)
-	if err != nil {
-		return pipeline.ErrorJSON(err.Error())
-	}
-
-	return string(result)
 }

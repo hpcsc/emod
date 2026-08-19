@@ -94,6 +94,24 @@ func ExportEmodJSON(diagramJSON string) string {
 	return string(b)
 }
 
+// RunOnSource unwraps the {"source": "..."} envelope, runs one of the pipeline
+// entry points over it, and answers either that entry point's bytes or the
+// {"error": "..."} envelope. Both shells hand their frontend the same strings,
+// so this sequencing is theirs to share rather than to spell twice.
+func RunOnSource(request string, run func(string) ([]byte, error)) string {
+	source, err := ExtractSource(request)
+	if err != nil {
+		return ErrorJSON(err.Error())
+	}
+
+	result, err := run(source)
+	if err != nil {
+		return ErrorJSON(err.Error())
+	}
+
+	return string(result)
+}
+
 // ErrorJSON returns a JSON error string in the form {"error": "..."}.
 func ErrorJSON(msg string) string {
 	b, _ := json.Marshal(map[string]string{"error": msg})
