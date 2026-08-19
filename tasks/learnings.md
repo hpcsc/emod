@@ -991,3 +991,45 @@ in this repo; append only learnings that generalise beyond the task that surface
 - Observed: US-001 render a model in a native desktop window
 - Learning: `expect(statusEl.textContent).toContain(…)` passes on an element the user cannot see: jsdom has no layout, so a message written into a collapsed panel reads identically to one on screen. The viewer's export handler reported failures into `#render-status`, which sits inside the data panel that a successful render collapses, while the Export button sits outside it — so pressing Export after a render wrote the reason somewhere off screen, and a leaf asserting the text passed. It surfaced only when a human asked where the message was supposed to appear, and was measured by reading `getBoundingClientRect()` against `window.innerHeight` in a real browser. When a criterion is that a user is *told* something, a content assertion is a proxy; the thing itself needs either a layout-aware check or a look at the running page.
 - Apply when: writing or reviewing a jsdom leaf that asserts a user-facing message, or closing a criterion phrased as the user being informed
+
+## Wails adopts an application menu into a window only on UseApplicationMenu, and only Windows needs it
+- Type: constraint
+- Observed: US-002 open a model with a native file dialog
+- Learning: WebviewWindowOptions.UseApplicationMenu defaults to false 'for backwards compatibility'. On macOS the application menu is always global, and on Linux webview_window_linux.go:338-341 falls back to globalApplication.applicationMenu whenever the window declares none — so both find the menu without the flag and the omission is invisible on a Mac. Windows is the exception: webview_window_windows.go:458 adopts it only when the flag is true, so a menu built with app.Menu.SetApplicationMenu simply does not exist there. Setting it changes nothing on macOS, confirmed by reading the installed menu back at runtime before and after.
+- Apply when: adding or reviewing any menu in cmd/emod-desktop, or judging whether a desktop feature verified on macOS exists on the other platforms
+
+## json.Marshal rewrites invalid UTF-8 as U+FFFD, so a Go service cannot promise bytes verbatim over JSON
+- Type: recurring-finding
+- Observed: US-002 open a model with a native file dialog
+- Learning: encoding/json never errors on invalid UTF-8 — it substitutes U+FFFD per bad byte and reports success. Any Go service handing file contents to the frontend through a JSON envelope therefore alters a non-UTF-8 file silently, and no test notices because the round trip is self-consistent. desktop.FileService.Read refuses with 'reading <path>: not valid UTF-8' instead, which matters because US-003 writes the same string back to the path it came from: carried through, the first save on a Latin-1 model would destroy exactly the bytes that could not be read. Pair the refusal with a positive leaf on non-ASCII UTF-8, or the guard passes with the whole feature deleted.
+- Apply when: putting file contents, or any caller-supplied bytes, through encoding/json on the way to a frontend
+
+## text-overflow is inert on a flex container, and #stats span outranks a bare id selector
+- Type: constraint
+- Observed: US-002 open a model with a native file dialog
+- Learning: Adding a truncating element to the viewer's status bar needs two things that are easy to miss together. text-overflow: ellipsis applies only to a block container, and '#stats span { display: inline-flex }' blockifies any span inside the bar to display:flex — so the rule is silently dead. Overriding it with '#stat-file-path { display: block }' also fails: (0,1,0,1) beats (0,1,0,0), so the type-qualified rule wins and the computed value stays flex. '#stats #stat-file-path' is what takes it. Four attempts against Chromium were needed to get an ellipsis to render, and every one of them left the jsdom suite green, because jsdom has no layout: read getComputedStyle().display and compare scrollWidth to clientWidth in a real browser rather than trusting the CSS you wrote.
+- Apply when: adding or truncating an element inside #stats in internal/frontend/static/viewer.html, or overriding any rule that #stats span sets
+
+## A resolves assertion must await the promise the code produced, not the helper's tail
+- Type: recurring-finding
+- Observed: US-002 open a model with a native file dialog
+- Learning: A leaf shaped 'await expect(doIt()).resolves.toBeUndefined()' is vacuous whenever doIt ends in '.then(flush)' and the subscription it drives discards its own promise: flush resolves undefined unconditionally, and a throw inside the code under test is never observed. The fix is not more assertions but handing the promise back — 'Events.On(name, promptForFile)' instead of a wrapper that calls it and returns nothing — after which the same leaf fails on the exact defect it names. Two audit rounds disagreed about whether this leaf was vacuous; the deciding evidence was breaking the guard and re-running, not reading the code.
+- Apply when: writing or reviewing a vitest leaf that asserts an async entry point does not throw, especially one reached through an event subscription
+
+## A parity guard is vacuous until the far side of the boundary calls it, so it belongs to that task
+- Type: convention
+- Observed: US-002 open a model with a native file dialog
+- Learning: A breakdown that lands a Go service in one task and its JS caller in a later one will put the cross-boundary name guard on the earlier task, where it cannot yet assert anything: the guard's shape is 'the JS calls are a non-empty subset of the Go methods', and with no JS caller either the NotEmpty floor fails or dropping it makes the guard pass with the feature absent. Plan the guard onto the task that introduces the caller, and expect the same shape for service registrations and wire keys — each is only assertable once both sides exist. Ticking it early is the failure to avoid; splitting one guard's edit across two commits is the other.
+- Apply when: decomposing a story whose Go and frontend halves land in separate tasks, or deciding which task owns a guard that reads two files
+
+## Audit rounds can contradict each other on a question the story never settled
+- Type: convention
+- Observed: US-002 open a model with a native file dialog
+- Learning: One round asked for the open file's identity to be cleared when a paste replaces the model; the next called clearing it on any edit a defect. Both were 'confirmed' by reproduction, because each was right about its own scenario and the story decided neither. Taking each finding at face value oscillates the design. When two rounds pull opposite ways, the finding is really a product question: pick the reading the next story needs — here save-in-place, which requires the path to survive editing, giving text-editor semantics — state it in the Theory section and in the handover, and say which round's half you deliberately did not fix.
+- Apply when: working audit findings across more than one round, or hitting a finding about behaviour the user story does not specify
+
+## A low-certainty Wails shell task is routine once the framework API is read first
+- Type: convention
+- Observed: US-002 open a model with a native file dialog
+- Learning: The File-menu task was planned low certainty on the grounds that cmd/emod-desktop had never built a menu or emitted an event, and it landed first try with a clean lint. What made it routine was reading menu.go, roles.go, menuitem.go and the dialogs source out of the module cache during Phase 0, before any task started — which also produced the accelerator syntax, the DefaultApplicationMenu composition and the cancel-as-empty-string contract. Budget the API read once at the start rather than pausing per task; the pause buys nothing the reading has not already answered.
+- Apply when: assessing certainty for a task against an unfamiliar framework API, or deciding whether to pause on a low-certainty desktop-shell task
