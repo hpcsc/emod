@@ -94,7 +94,7 @@ slots in as a third assembly target using the identical pattern.
 CLI-viewer and web are **not** different platforms. Both are a browser loading the
 same WASM binary and the same JS. They differ only in *delivery*:
 
-- **CLI** (`emod diagram --viewer`): Go embeds the assets, serves them from
+- **CLI** (`emod diagram --serve`): Go embeds the assets, serves them from
   `127.0.0.1:<port>` via `internal/viewer/serve.go`, injects state server-side.
 - **Web** (GitHub Pages): the same assets copied to `/web`, hosted statically, no
   server-side injection.

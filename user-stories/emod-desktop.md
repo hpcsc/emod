@@ -2,7 +2,7 @@
 
 ## Overview
 
-Ship `emod` as a native desktop application alongside the CLI viewer and the hosted web viewer. Today a model author viewing a diagram either runs `emod diagram --viewer` (which starts a localhost server and opens a browser) or uses the web viewer, and in both cases the browser can never write back to the file the model came from — the best it can do is download a copy. The desktop app closes that gap: real file dialogs, save back to the file you opened, recent files, `.emod` files that open on double-click, and a source panel that validates as you type.
+Ship `emod` as a native desktop application alongside the CLI viewer and the hosted web viewer. Today a model author viewing a diagram either runs `emod diagram --serve` (which starts a localhost server and opens a browser) or uses the web viewer, and in both cases the browser can never write back to the file the model came from — the best it can do is download a copy. The desktop app closes that gap: real file dialogs, save back to the file you opened, recent files, `.emod` files that open on double-click, and a source panel that validates as you type.
 
 The three distributions share one frontend and one Go pipeline. Desktop is the only genuinely new runtime — no WASM, no HTTP server, real filesystem access. Design detail is in [`docs/proposals/emod-desktop-proposal.md`](../docs/proposals/emod-desktop-proposal.md).
 
@@ -24,15 +24,16 @@ Stories are listed in recommended implementation order: prove the runtime seam f
 **Description:** As a model author, I want a standalone emod app that renders my model so that I can work with diagrams without starting a local server or opening a browser.
 
 **Acceptance Criteria:**
-- [ ] Launching the app opens a window with the same viewer interface as `emod diagram --viewer` — source panel, diagram canvas, minimap, visibility toggles, diagnostics badge
+- [ ] Launching the app opens a window with the same viewer interface as `emod diagram --serve` — source panel, diagram canvas, minimap, visibility toggles, diagnostics badge
 - [ ] Pasting `.emod` source into the panel and rendering produces a diagram identical to the browser viewer's for the same source
 - [ ] Pan, zoom, fit-to-view, node selection, the detail panel, layout reset, and the diagram context actions behave as they do in the browser viewer
 - [ ] Invalid source fills the diagnostics badge and panel with the same messages, severities, and locations as the browser viewer
 - [ ] The app renders with no network access, no local HTTP server, and no listening port
-- [ ] `emod diagram --viewer` and the published web viewer behave exactly as before this story
+- [ ] `emod diagram --serve` and the published web viewer behave exactly as before this story
 - [ ] A change to a shared viewer UI file appears in all three distributions without editing a second copy of that file
+- [ ] The desktop framework version is pinned exactly in both `go.mod` and the tool manifest, with no floating or `latest` reference
 
-**Context:** This is the walking skeleton — done when the window renders, even though every native capability that justifies the app arrives later. It carries the whole structural cost: the viewer's browser-specific behaviour (loading the Go core, reading a dropped file, downloading an export, receiving injected initial state, waiting for readiness) has to move behind one seam so a native implementation can be swapped in. The proposal inventories that surface as five touch points across three files (§4.1) and phases the work in §10. The existing frontend unit tests already mock at exactly this boundary. The last criterion is the one that keeps the three distributions from drifting into three forks.
+**Context:** This is the walking skeleton — done when the window renders, even though every native capability that justifies the app arrives later. It carries the whole structural cost: the viewer's browser-specific behaviour (loading the Go core, reading a dropped file, downloading an export, receiving injected initial state, waiting for readiness) has to move behind one seam so a native implementation can be swapped in. The proposal inventories that surface as five touch points across three files (§4.1) and phases the work in §10. The existing frontend unit tests already mock at exactly this boundary. The single-source criterion is the one that keeps the three distributions from drifting into three forks; the pin is what keeps an alpha framework from moving underfoot between builds.
 
 ### US-002: Open a model with a native file dialog
 **Description:** As a model author, I want to open a `.emod` file through the operating system's file picker so that I can load models from anywhere on disk without pasting their contents in.
@@ -249,7 +250,7 @@ Stories are listed in recommended implementation order: prove the runtime seam f
 - **No code signing or notarization** on any platform — no Apple Developer account, no App Store, no Windows signing certificate. Users take a documented one-time step on first launch.
 - **No Linux distributions below the declared floor** — Ubuntu 22.04, Debian 12, RHEL 9 and other pre-GTK4 stacks are out of scope, with no legacy build variant.
 - **No auto-update.** New versions are downloaded manually.
-- **No replacement of existing distributions.** `emod diagram --viewer` and the hosted web viewer keep working unchanged; desktop is a third option, not a migration.
+- **No replacement of existing distributions.** `emod diagram --serve` and the hosted web viewer keep working unchanged; desktop is a third option, not a migration.
 - **No desktop-only diagram features.** Anything added to the canvas stays available in all three distributions.
 - **No multi-window, tabs, or project workspaces.** One model per window.
 - **No full text editor.** The source panel gains validation, navigation, and highlighting — not find-and-replace, multi-cursor, or refactoring.

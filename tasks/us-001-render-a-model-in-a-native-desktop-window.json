@@ -1,0 +1,260 @@
+{
+  "story": "US-001: Render a model in a native desktop window",
+  "tasks_file": "tasks/us-001-render-a-model-in-a-native-desktop-window.md",
+  "tasks": [
+    {
+      "n": 1,
+      "done": false,
+      "title": "Rename `internal/wasm` to `internal/pipeline`",
+      "language": "Go",
+      "testable": true,
+      "certainty": "high",
+      "blast_radius": "low",
+      "patterns_to_follow": [
+        "tasks/learnings.md:241-244",
+        "internal/wasm/pipeline.go:1-4",
+        "cmd/emod-wasm/main.go:19-54"
+      ],
+      "depends_on": [],
+      "affected_files": [
+        "internal/pipeline/pipeline.go",
+        "internal/pipeline/pipeline_test.go",
+        "cmd/emod-wasm/main.go",
+        "docs/architecture.md"
+      ]
+    },
+    {
+      "n": 2,
+      "done": false,
+      "title": "Split `internal/viewer` into `internal/frontend` and `internal/viewer`",
+      "language": "Go",
+      "testable": true,
+      "certainty": "medium",
+      "blast_radius": "low",
+      "patterns_to_follow": [
+        "internal/viewer/embed.go:1-8",
+        "internal/viewer/serve.go:31-40",
+        "Taskfile.yml:44-52",
+        "docs/proposals/emod-desktop-proposal.md:351-392",
+        "tasks/learnings.md:226-229"
+      ],
+      "depends_on": [],
+      "affected_files": [
+        "internal/frontend/embed.go",
+        "internal/frontend/static",
+        "internal/frontend/tests",
+        "internal/frontend/package.json",
+        "internal/frontend/vitest.config.js",
+        "internal/viewer/serve.go",
+        "Taskfile.yml",
+        ".gitignore",
+        ".github/workflows/ci.yml",
+        "docs/architecture.md",
+        "docs/wasm-architecture.md"
+      ]
+    },
+    {
+      "n": 3,
+      "done": false,
+      "title": "Put the Go bridge behind a `platform.js` contract",
+      "language": "JavaScript/TypeScript",
+      "testable": true,
+      "certainty": "medium",
+      "blast_radius": "low",
+      "patterns_to_follow": [
+        "docs/proposals/emod-desktop-proposal.md:171-230",
+        "docs/proposals/emod-desktop-proposal.md:231-251",
+        "docs/proposals/emod-desktop-proposal.md:592-602",
+        "Taskfile.yml:44-52",
+        "internal/viewer/tests/viewer.test.js:1-18",
+        "tasks/learnings.md:226-229"
+      ],
+      "depends_on": [
+        2
+      ],
+      "affected_files": [
+        "internal/frontend/static/platform.js",
+        "internal/frontend/static/platform.browser.js",
+        "internal/frontend/static/viewer.js",
+        "internal/frontend/static/emod-export.js",
+        "internal/frontend/static/model.js",
+        "internal/frontend/tests/viewer.test.js",
+        "internal/frontend/tests/model.test.js",
+        "internal/frontend/tests/emod-export.test.js",
+        "Taskfile.yml",
+        ".gitignore"
+      ]
+    },
+    {
+      "n": 4,
+      "done": false,
+      "title": "Read a dropped file through the platform contract",
+      "language": "JavaScript/TypeScript",
+      "testable": true,
+      "certainty": "medium",
+      "blast_radius": "low",
+      "patterns_to_follow": [
+        "internal/viewer/static/viewer.js:166-188",
+        "internal/viewer/tests/viewer.test.js:65-72",
+        "internal/viewer/tests/viewer.test.js:93-102",
+        "docs/proposals/emod-desktop-proposal.md:142-154"
+      ],
+      "depends_on": [
+        3
+      ],
+      "affected_files": [
+        "internal/frontend/static/viewer.js",
+        "internal/frontend/static/platform.browser.js",
+        "internal/frontend/static/platform.js",
+        "internal/frontend/tests/viewer.test.js"
+      ]
+    },
+    {
+      "n": 5,
+      "done": false,
+      "title": "Write an exported model through the platform contract",
+      "language": "JavaScript/TypeScript",
+      "testable": true,
+      "certainty": "high",
+      "blast_radius": "low",
+      "patterns_to_follow": [
+        "docs/proposals/emod-desktop-proposal.md:189-230",
+        "internal/viewer/static/viewer.js:208-222",
+        "e2e-viewer/tests/helpers.js:129-137",
+        "e2e-viewer/tests/export.spec.js:8-23"
+      ],
+      "depends_on": [
+        4
+      ],
+      "affected_files": [
+        "internal/frontend/static/viewer.js",
+        "internal/frontend/static/platform.browser.js",
+        "internal/frontend/static/platform.js"
+      ]
+    },
+    {
+      "n": 6,
+      "done": false,
+      "title": "Read the injected initial state through the platform contract",
+      "language": "JavaScript/TypeScript",
+      "testable": true,
+      "certainty": "high",
+      "blast_radius": "low",
+      "patterns_to_follow": [
+        "internal/viewer/serve.go:81-101",
+        "internal/viewer/static/viewer.html:1161-1163",
+        "internal/viewer/tests/viewer.test.js:138-190",
+        "docs/proposals/emod-desktop-proposal.md:142-154"
+      ],
+      "depends_on": [
+        5
+      ],
+      "affected_files": [
+        "internal/frontend/static/viewer.js",
+        "internal/frontend/static/platform.browser.js",
+        "internal/frontend/static/platform.js",
+        "internal/frontend/tests/viewer.test.js"
+      ]
+    },
+    {
+      "n": 7,
+      "done": false,
+      "title": "Add the desktop model service over `internal/pipeline`",
+      "language": "Go",
+      "testable": true,
+      "certainty": "high",
+      "blast_radius": "low",
+      "patterns_to_follow": [
+        "cmd/emod-wasm/main.go:19-54",
+        "docs/proposals/emod-desktop-proposal.md:252-340",
+        "internal/wasm/pipeline_test.go",
+        "internal/wasm/pipeline.go:79-100"
+      ],
+      "depends_on": [
+        1
+      ],
+      "affected_files": [
+        "internal/desktop/service.go",
+        "internal/desktop/service_test.go"
+      ]
+    },
+    {
+      "n": 8,
+      "done": false,
+      "title": "Pin Wails v3 exactly and open a desktop window",
+      "language": "Go",
+      "testable": false,
+      "certainty": "low",
+      "blast_radius": "low",
+      "patterns_to_follow": [
+        "docs/proposals/emod-desktop-proposal.md:252-312",
+        "docs/proposals/emod-desktop-proposal.md:627-668",
+        "docs/proposals/emod-desktop-proposal.md:426-444",
+        "Taskfile.yml:33-42",
+        "Taskfile.yml:63-71",
+        "mise.toml:1-7",
+        "tasks/learnings.md:11-14"
+      ],
+      "depends_on": [],
+      "affected_files": [
+        "go.mod",
+        "go.sum",
+        "mise.toml",
+        "cmd/emod-desktop/main.go",
+        "Taskfile.yml",
+        ".gitignore"
+      ]
+    },
+    {
+      "n": 9,
+      "done": false,
+      "title": "Render the shared frontend in the desktop window through `platform.desktop.js`",
+      "language": "JavaScript/TypeScript",
+      "testable": false,
+      "certainty": "low",
+      "blast_radius": "low",
+      "patterns_to_follow": [
+        "docs/proposals/emod-desktop-proposal.md:252-340",
+        "docs/proposals/emod-desktop-proposal.md:231-251",
+        "docs/proposals/emod-desktop-proposal.md:603-615",
+        "Taskfile.yml:44-52",
+        "internal/viewer/static/viewer.html:1161-1163",
+        "task:3"
+      ],
+      "depends_on": [
+        6,
+        7,
+        8
+      ],
+      "affected_files": [
+        "internal/frontend/static/platform.desktop.js",
+        "cmd/emod-desktop/main.go",
+        "Taskfile.yml",
+        ".gitignore"
+      ]
+    },
+    {
+      "n": 10,
+      "done": false,
+      "title": "Document the desktop distribution",
+      "language": "Generic",
+      "testable": false,
+      "certainty": "high",
+      "blast_radius": "low",
+      "patterns_to_follow": [
+        "docs/wasm-architecture.md:1-70",
+        "docs/architecture.md:211-241",
+        "docs/proposals/emod-desktop-proposal.md:92-139",
+        "tasks/learnings.md:36-39"
+      ],
+      "depends_on": [
+        9
+      ],
+      "affected_files": [
+        "docs/architecture.md",
+        "docs/wasm-architecture.md",
+        "README.md"
+      ]
+    }
+  ]
+}
