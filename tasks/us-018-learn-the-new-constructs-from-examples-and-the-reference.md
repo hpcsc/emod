@@ -3,7 +3,7 @@
 ## Progress
 - [x] Task 1: Pin the version, describe the constructs, bind wire types and delay an automation in the flagship example
 - [x] Task 2: State the invariants, specs and rejection path in the flagship example
-- [ ] Task 3: Add `examples/specs_hotel.emod` as a model that validates
+- [x] Task 3: Add `examples/specs_hotel.emod` as a model that validates
 - [ ] Task 4: Document the elapsed-time automation and close the reference's coverage of the batch
 
 ---
@@ -546,40 +546,40 @@ taken. It returns no error from `cli.RunValidate`, and the existing `examples/` 
 moment it lands.
 
 **Acceptance Criteria:**
-- [ ] `examples/specs_hotel.emod` exists, opens with the version header, and models the domain the
+- [x] `examples/specs_hotel.emod` exists, opens with the version header, and models the domain the
       proposal's Worked Example models — the reserve, hold and release-hold lifecycle with the views
       and the automation that closes its own loop
-- [ ] It declares at least one invariant, and every invariant it declares is named by a `then rejected`
+- [x] It declares at least one invariant, and every invariant it declares is named by a `then rejected`
       in a slice of the scope that declares it
-- [ ] Every command it declares is named by the `when` of at least one spec, and each of those commands
+- [x] Every command it declares is named by the `when` of at least one spec, and each of those commands
       has at least one spec whose `then` is a rejection — F1's arithmetic, which the Worked Example as
       written does not satisfy for `HoldRoom` and `ReleaseHold`
-- [ ] At least one spec states example payloads that link the scenario by repeating a value — the same
+- [x] At least one spec states example payloads that link the scenario by repeating a value — the same
       room id in `given` and in `when` — and every field a payload names is declared on the referenced
       construct's `fields`, with each literal satisfying that field's declared type
-- [ ] At least one `flow` block states a rejection entry, with its exercising spec on the same slice
+- [x] At least one `flow` block states a rejection entry, with its exercising spec on the same slice
       naming the same command and the same invariant
-- [ ] Every event it declares that states a wire type states a distinct one conforming to the shape
+- [x] Every event it declares that states a wire type states a distinct one conforming to the shape
       `wire/type-format` accepts
-- [ ] One automation fires a fixed duration after its activation event, reading a view of the work it
+- [x] One automation fires a fixed duration after its activation event, reading a view of the work it
       has left to do, and the event that automation ultimately causes is one that view subscribes to —
       the closed loop the proposal states as the point of the example's shape
-- [ ] Every view the file declares is named so `view-naming` accepts it, subscribes to fewer than five
+- [x] Every view the file declares is named so `view-naming` accepts it, subscribes to fewer than five
       events, and every event carries more than a single identifier field — the Worked Example's
       `UnreleasedHolds` does not satisfy the first of these and the name moves with every reference to
       it
-- [ ] Every command is named by a flow, an automation or a translation and every event is produced by
+- [x] Every command is named by a flow, an automation or a translation and every event is produced by
       a flow, an external source or a translation, so neither `orphan-command` nor `orphan-event`
       reports
-- [ ] `cli.RunValidate` and `cli.RunLint` both return no error for `examples/specs_hotel.emod`, and it
+- [x] `cli.RunValidate` and `cli.RunLint` both return no error for `examples/specs_hotel.emod`, and it
       is covered by `internal/cli/validate_test.go`'s `t.Run("examples", …)` group with no edit to
       `examplePaths` or to the `demonstrated` map — the guard enumerates the directory
-- [ ] `internal/cli/validate_test.go`'s examples group reports a subtest named after the new file, so a
+- [x] `internal/cli/validate_test.go`'s examples group reports a subtest named after the new file, so a
       red run points at one example
-- [ ] `git diff` adds one file under `examples/` and changes nothing else: no Go file, no other
+- [x] `git diff` adds one file under `examples/` and changes nothing else: no Go file, no other
       example, no fixture, no golden
-- [ ] The file is not required to pass `emod fmt --check`, and `emod fmt` is not run over it
-- [ ] `mise exec -- task test:unit` passes with no test skipped or weakened
+- [x] The file is not required to pass `emod fmt --check`, and `emod fmt` is not run over it
+- [x] `mise exec -- task test:unit` passes with no test skipped or weakened
 
 **Affected Files/Modules:**
 - `examples/specs_hotel.emod` — new

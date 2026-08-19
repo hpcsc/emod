@@ -1,0 +1,170 @@
+emod 1
+# Hotel holds and reservations — the scenarios each slice must satisfy
+model "Hotel Reservation"
+
+actor "Guest" {
+  description "A person booking a room"
+}
+
+context "Reservations" {
+  description "Owns the reservation lifecycle from booking to checkout"
+
+  aggregate "Reservation" {
+    invariant RoomNotDoubleBooked "A room has at most one active reservation for any date range"
+    invariant RoomHeldOnce "A room carries at most one outstanding hold"
+    invariant HoldReleasedOnce "A hold is released exactly once"
+
+    slice "Reserve a Room" {
+      trigger "Reservation Form" {
+        actor Guest
+        reads AvailableRoomsView
+      }
+
+      command ReserveRoom {
+        description "Guest books a specific room for a date range"
+        fields {
+          roomId    string required
+          guestName string required
+          checkIn   date   required
+          checkOut  date   required
+        }
+      }
+
+      event RoomReserved {
+        type "com.hotel.reservations.room-reserved"
+        fields {
+          reservationId string    required
+          roomId        string    required
+          checkIn       date      required
+          checkOut      date      required
+          reservedAt    timestamp required
+        }
+      }
+
+      flow {
+        command -> event: ReserveRoom -> RoomReserved
+        command -> rejected: ReserveRoom -> RoomNotDoubleBooked
+      }
+
+      spec "reserves a free room" {
+        when ReserveRoom { roomId: "204" }
+        then [RoomReserved { roomId: "204" }]
+      }
+
+      spec "rejects a double booking" {
+        given [RoomReserved { roomId: "101", checkIn: "2026-08-01", checkOut: "2026-08-03" }]
+        when ReserveRoom { roomId: "101", checkIn: "2026-08-02", checkOut: "2026-08-04" }
+        then rejected RoomNotDoubleBooked
+      }
+    }
+
+    slice "Hold a Room" {
+      command HoldRoom {
+        description "Guest reserves a room provisionally, pending confirmation"
+        fields {
+          roomId    string required
+          guestName string required
+        }
+      }
+
+      event RoomHeld {
+        type "com.hotel.reservations.room-held"
+        fields {
+          holdId string    required
+          roomId string    required
+          heldAt timestamp required
+        }
+      }
+
+      flow {
+        command -> event: HoldRoom -> RoomHeld
+      }
+
+      spec "holds a room nobody has booked" {
+        when HoldRoom { roomId: "204", guestName: "Ada Lovelace" }
+        then [RoomHeld { holdId: "H-3391", roomId: "204", heldAt: "2026-07-30T11:20:00Z" }]
+      }
+
+      spec "rejects a hold on a room already held" {
+        given [RoomHeld { roomId: "204" }]
+        when HoldRoom { roomId: "204" }
+        then rejected RoomHeldOnce
+      }
+    }
+
+    slice "Release Hold" {
+      command ReleaseHold {
+        fields {
+          holdId string required
+        }
+      }
+
+      event HoldReleased {
+        type "com.hotel.reservations.hold-released"
+        fields {
+          holdId     string    required
+          roomId     string    required
+          releasedAt timestamp required
+        }
+      }
+
+      flow {
+        command -> event: ReleaseHold -> HoldReleased
+      }
+
+      spec "releases an outstanding hold" {
+        given [RoomHeld { holdId: "H-3391" }]
+        when ReleaseHold { holdId: "H-3391" }
+        then [HoldReleased { holdId: "H-3391", roomId: "204", releasedAt: "2026-07-31T11:20:00Z" }]
+      }
+
+      spec "rejects releasing a hold already released" {
+        given [HoldReleased { holdId: "H-3391" }]
+        when ReleaseHold { holdId: "H-3391" }
+        then rejected HoldReleasedOnce
+      }
+    }
+
+    slice "Available Rooms" {
+      view AvailableRoomsView {
+        description "Rooms bookable right now — neither held nor reserved"
+        fields {
+          roomId string required
+          status string required
+        }
+        subscribes [RoomHeld, RoomReserved, HoldReleased]
+      }
+
+      spec "a held room is not available" {
+        given [RoomHeld { roomId: "204" }]
+        then view AvailableRoomsView
+      }
+    }
+
+    slice "Unreleased Holds" {
+      view UnreleasedHoldsView {
+        description "Holds still outstanding — the work the expirer has left to do"
+        fields {
+          holdId string    required
+          roomId string    required
+          heldAt timestamp required
+        }
+        subscribes [RoomHeld, RoomReserved, HoldReleased]
+      }
+    }
+
+    slice "Release Expired Hold" {
+      automation ExpiredHoldReleaser {
+        on RoomHeld after "24h"
+        reads UnreleasedHoldsView
+        command ReleaseHold
+      }
+
+      spec "hold expires after a day" {
+        given [RoomHeld]
+        when RoomHeld
+        then command ReleaseHold
+      }
+    }
+  }
+}

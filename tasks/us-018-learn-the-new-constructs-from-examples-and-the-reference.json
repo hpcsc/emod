@@ -43,7 +43,7 @@
       "affected_files": [
         "examples/specs_hotel.emod"
       ],
-      "done": false
+      "done": true
     },
     {
       "n": 4,
