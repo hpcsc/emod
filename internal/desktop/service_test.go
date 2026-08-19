@@ -8,34 +8,9 @@ import (
 
 	"github.com/hpcsc/emod/internal/desktop"
 	"github.com/hpcsc/emod/internal/pipeline"
+	"github.com/hpcsc/emod/internal/test"
 	"github.com/stretchr/testify/require"
 )
-
-const billingModel = `emod 1
-model "Billing"
-
-context "Payments" {
-  aggregate "Payment" {
-    slice "Take Payment" {
-      command TakePayment {
-        fields {
-          amount int required
-        }
-      }
-
-      event PaymentTaken {
-        fields {
-          amount int required
-        }
-      }
-
-      flow {
-        command -> event: TakePayment -> PaymentTaken
-      }
-    }
-  }
-}
-`
 
 func sourceEnvelope(t *testing.T, source string) string {
 	t.Helper()
@@ -48,13 +23,21 @@ func sourceEnvelope(t *testing.T, source string) string {
 
 func TestModelService(t *testing.T) {
 	t.Run("parse emod", func(t *testing.T) {
-		t.Run("answers exactly what the pipeline produces for the same source", func(t *testing.T) {
+		t.Run("answers the diagram document for source the pipeline accepts", func(t *testing.T) {
 			service := &desktop.ModelService{}
 
-			expected, err := pipeline.RunPipelineExportDiagram(billingModel)
-			require.NoError(t, err)
-
-			require.Equal(t, string(expected), service.ParseEmod(sourceEnvelope(t, billingModel)))
+			var envelope struct {
+				Diagnostics []map[string]any `json:"diagnostics"`
+				Diagram     struct {
+					ModelName string           `json:"model_name"`
+					Nodes     []map[string]any `json:"nodes"`
+				} `json:"diagram"`
+			}
+			answer := service.ParseEmod(sourceEnvelope(t, test.BillingPayments))
+			require.NoError(t, json.Unmarshal([]byte(answer), &envelope))
+			require.Empty(t, envelope.Diagnostics)
+			require.Equal(t, "Billing", envelope.Diagram.ModelName)
+			require.NotEmpty(t, envelope.Diagram.Nodes)
 		})
 
 		t.Run("returns a diagram alongside diagnostics rather than an error", func(t *testing.T) {
@@ -102,7 +85,7 @@ context "Payments" {
 	})
 
 	t.Run("export json", func(t *testing.T) {
-		t.Run("answers exactly what the pipeline produces for the same source", func(t *testing.T) {
+		t.Run("answers the model document for source the pipeline accepts", func(t *testing.T) {
 			service := &desktop.ModelService{}
 
 			var envelope struct {
@@ -111,7 +94,7 @@ context "Payments" {
 					Name string `json:"name"`
 				} `json:"model"`
 			}
-			answer := service.ExportJSON(sourceEnvelope(t, billingModel))
+			answer := service.ExportJSON(sourceEnvelope(t, test.BillingPayments))
 			require.NoError(t, json.Unmarshal([]byte(answer), &envelope))
 			require.Empty(t, envelope.Diagnostics)
 			require.Equal(t, "Billing", envelope.Model.Name)
@@ -128,7 +111,7 @@ context "Payments" {
 		t.Run("takes the diagram document itself, not the source envelope", func(t *testing.T) {
 			service := &desktop.ModelService{}
 
-			diagram := service.ParseEmod(sourceEnvelope(t, billingModel))
+			diagram := service.ParseEmod(sourceEnvelope(t, test.BillingPayments))
 			var parsed struct {
 				Diagram json.RawMessage `json:"diagram"`
 			}
@@ -149,14 +132,14 @@ context "Payments" {
 				Emod string `json:"emod"`
 			}
 			require.NoError(t, json.Unmarshal(
-				[]byte(service.ExportEmod(sourceEnvelope(t, billingModel))), &fromEnvelope))
+				[]byte(service.ExportEmod(sourceEnvelope(t, test.BillingPayments))), &fromEnvelope))
 			require.NotContains(t, fromEnvelope.Emod, "Billing")
 		})
 
 		t.Run("answers the emod envelope for a document it can import", func(t *testing.T) {
 			service := &desktop.ModelService{}
 
-			diagram := service.ParseEmod(sourceEnvelope(t, billingModel))
+			diagram := service.ParseEmod(sourceEnvelope(t, test.BillingPayments))
 			var parsed struct {
 				Diagram json.RawMessage `json:"diagram"`
 			}

@@ -323,6 +323,13 @@ function init() {
         }
       });
     }
+  }).catch(function(err) {
+    // A host that cannot answer what to open would otherwise leave the window
+    // blank and silent: no landing instructions, no placeholder, no status.
+    store.dom.sourceInput.placeholder = 'Paste .emod source or diagram JSON here';
+    store.dom.panel.classList.remove('collapsed');
+    store.dom.statusEl.textContent = '✗ ' + (err.message || 'Could not load the initial model');
+    store.dom.statusEl.className = 'status error';
   });
 }
 

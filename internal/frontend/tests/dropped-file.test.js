@@ -17,10 +17,6 @@ vi.hoisted(() => {
   globalThis.fetch = () => Promise.resolve({ ok: true });
 });
 
-vi.mock('../bindings/github.com/hpcsc/emod/internal/desktop/index.js', () => ({
-  ModelService: { ParseEmod: vi.fn(), ExportJSON: vi.fn(), ExportEmod: vi.fn() },
-}));
-
 const implementations = {};
 beforeAll(async () => {
   implementations.browser = (await import('../static/platform.browser.js')).droppedFile;

@@ -12,6 +12,7 @@ let parseResult = { diagnostics: [], diagram: { nodes: [], edges: [] } };
 let dropReadFails = false;
 let savedFile = null;
 let exportFails = false;
+let initialStateFails = false;
 let parseQueue = [];
 
 vi.mock('../static/platform.js', () => ({
@@ -21,8 +22,9 @@ vi.mock('../static/platform.js', () => ({
   exportEmod: vi.fn((diagram) => exportFails
     ? Promise.reject(new Error('nothing to export'))
     : Promise.resolve('emod 1\nmodel "' + (diagram.model_name || '') + '"\n')),
-  initialState: vi.fn(() => Promise.resolve(
-    typeof globalThis.INITIAL_DATA === 'undefined' ? null : globalThis.INITIAL_DATA)),
+  initialState: vi.fn(() => initialStateFails
+    ? Promise.reject(new Error('host could not answer'))
+    : Promise.resolve(typeof globalThis.INITIAL_DATA === 'undefined' ? null : globalThis.INITIAL_DATA)),
   saveFile: vi.fn((name, content) => { savedFile = { name, content }; return Promise.resolve(); }),
   droppedFile: vi.fn((dataTransfer) => {
     const file = dataTransfer.files[0];
@@ -144,6 +146,7 @@ beforeEach(() => {
   dropReadFails = false;
   savedFile = null;
   exportFails = false;
+  initialStateFails = false;
   parseQueue = [];
 });
 
@@ -172,6 +175,21 @@ describe('viewer initial state', () => {
   });
 });
 
+describe('viewer initial load failure', () => {
+  it('reports a host that cannot say what to open, rather than opening blank', async () => {
+    initialStateFails = true;
+
+    await startViewer();
+
+    const statusEl = document.getElementById('render-status');
+    expect(statusEl.textContent).toContain('host could not answer');
+    expect(statusEl.className).toContain('error');
+    expect(document.getElementById('data-panel').classList.contains('collapsed')).toBe(false);
+    expect(document.getElementById('source-input').placeholder)
+      .toBe('Paste .emod source or diagram JSON here');
+  });
+});
+
 describe('viewer parser loading indicator', () => {
   it('shows a loading indicator while the parser is still loading', async () => {
     platformReady = new Promise(function() {}); // never resolves
@@ -197,6 +215,50 @@ describe('viewer parser loading indicator', () => {
     await flush();
 
     expect(document.getElementById('render-status').textContent).toBe('✓ Ready');
+  });
+});
+
+function diagramNamed(name) {
+  return {
+    model_name: name,
+    nodes: [
+      { id: 'context-1', type: 'context', label: 'Payments', parentId: null },
+      { id: 'slice-1', type: 'slice', label: 'Take Payment', parentId: 'context-1' },
+      { id: 'command-1', type: 'command', label: name + 'Cmd', parentId: 'slice-1' },
+    ],
+    edges: [],
+  };
+}
+
+describe('viewer overlapping renders', () => {
+  it('keeps the newest render when an older parse answers after it', async () => {
+    globalThis.INITIAL_DATA = null;
+    await startViewer();
+
+    let answerOlder;
+    parseQueue = [
+      new Promise(function(resolve) { answerOlder = resolve; }),
+      Promise.resolve({ diagnostics: [], diagram: diagramNamed('Newer') }),
+    ];
+
+    document.getElementById('source-input').value = 'context Older {}';
+    document.getElementById('render-btn').click();
+    // Let the first render reach the platform before starting the second: both
+    // go through a dynamic import, and two racing at once resolve separately.
+    await flush();
+
+    document.getElementById('source-input').value = 'context Newer {}';
+    document.getElementById('render-btn').click();
+    await flush();
+
+    expect(document.getElementById('diagram-canvas').innerHTML).toContain('NewerCmd');
+
+    answerOlder({ diagnostics: [], diagram: diagramNamed('Older') });
+    await flush();
+
+    expect(document.getElementById('diagram-canvas').innerHTML).toContain('NewerCmd');
+    expect(document.getElementById('diagram-canvas').innerHTML).not.toContain('OlderCmd');
+    expect(document.getElementById('model-name-display').textContent).toBe('Newer');
   });
 });
 
@@ -423,15 +485,22 @@ describe('viewer diagnostics panel', () => {
 // the first miss, killing every listener wired after it — on the shipped page
 // only, with the suite green. This pins the page against the code that reads it.
 describe('viewer.html satisfies what init reads from it', () => {
-  const viewerJs = readFileSync(resolve(__dirname, '../static/viewer.js'), 'utf-8');
+  // init() also calls Minimap.initMinimap, which looks up two more ids and
+  // dereferences both, so scanning viewer.js alone leaves the page free to lose
+  // them and kill the app with the suite green.
+  const sources = ['../static/viewer.js', '../static/minimap.js']
+    .map((f) => readFileSync(resolve(__dirname, f), 'utf-8'))
+    .join('\n');
   const viewerHtml = readFileSync(resolve(__dirname, '../static/viewer.html'), 'utf-8');
-  const required = [...viewerJs.matchAll(/getElementById\((['"])([^'"]+)\1\)/g)].map((m) => m[2]);
+  const required = [...sources.matchAll(/getElementById\((['"])([^'"]+)\1\)/g)].map((m) => m[2]);
 
   it('reads more than a handful of ids, so the scan below is not matching nothing', () => {
     expect(required.length).toBeGreaterThan(10);
     expect(required).toContain('legend-close');
     // single-quoted, and the reason the pattern takes both quote styles
     expect(required).toContain('landing-instructions');
+    // reached through initMinimap, and the reason more than viewer.js is scanned
+    expect(required).toContain('minimap-handle');
   });
 
   it.each([...new Set(required)])('declares id="%s"', (id) => {

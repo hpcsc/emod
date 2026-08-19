@@ -22,7 +22,7 @@ function store() {
 }
 
 describe('Export.exportToEmodString', () => {
-  it('sends the store to the WASM exporter as a diagram document', async () => {
+  it('sends the store to the platform exporter as a diagram document', async () => {
     const { Export, exportEmod, markReady } = await freshExport();
     exportEmod.mockResolvedValue('model "Billing"\n');
     markReady();
@@ -52,7 +52,7 @@ describe('Export.exportToEmodString', () => {
     await expect(Export.exportToEmodString(store())).rejects.toThrow('invalid diagram JSON');
   });
 
-  it('waits for the WASM module before exporting', async () => {
+  it('waits for the platform before exporting', async () => {
     const { Export, exportEmod } = await freshExport();
     exportEmod.mockResolvedValue('model "Billing"\n');
 

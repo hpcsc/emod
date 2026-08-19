@@ -6,6 +6,36 @@ import (
 	"github.com/hpcsc/emod/internal/ast"
 )
 
+// BillingPayments is the smallest model that still carries a command, an event
+// and the flow joining them. Tests that need "a model the pipeline accepts"
+// without caring what is in it share this one rather than each transcribing
+// their own; HotelReservation below is the fixture for anything that does care.
+const BillingPayments = `emod 1
+model "Billing"
+
+context "Payments" {
+  aggregate "Payment" {
+    slice "Take Payment" {
+      command TakePayment {
+        fields {
+          amount int required
+        }
+      }
+
+      event PaymentTaken {
+        fields {
+          amount int required
+        }
+      }
+
+      flow {
+        command -> event: TakePayment -> PaymentTaken
+      }
+    }
+  }
+}
+`
+
 // HotelReservation exercises all four slice patterns — command, view,
 // automation and translation — and is valid input for every stage of the
 // pipeline. Packages that need "a realistic model" share this one so a change

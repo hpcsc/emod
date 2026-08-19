@@ -2,8 +2,11 @@ import { describe, it, expect, vi, beforeAll } from 'vitest';
 
 // Test non-streaming fallback when instantiateStreaming is not available
 vi.hoisted(() => {
+  // Distinctive so an assertion on it cannot be satisfied by any empty object:
+  // instantiating against a bare {} must be a different value, not an equal one.
+  globalThis.goImportObject = { env: { marker: 'from-the-go-runtime' } };
   globalThis.Go = function Go() {
-    this.importObject = {};
+    this.importObject = globalThis.goImportObject;
     this.run = function () {};
   };
 
@@ -45,6 +48,6 @@ describe('non-streaming fallback', () => {
   it('instantiates the compiled module against the Go import object', async () => {
     await browser.ready;
     expect(globalThis.instantiateCalls).toHaveLength(1);
-    expect(globalThis.instantiateCalls[0].importObject).toEqual({});
+    expect(globalThis.instantiateCalls[0].importObject).toBe(globalThis.goImportObject);
   });
 });

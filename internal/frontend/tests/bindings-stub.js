@@ -3,8 +3,13 @@
 // which resolves only once the build has copied that module into static/ with
 // the generated tree beside it — so from the source tree the module cannot load
 // at all without this. vitest.config.js aliases the generated path here.
+// Tests drive these: whatever a test assigns to `answers` is what the binding
+// returns, and `calls` records what the desktop platform sent across.
+export const calls = [];
+export const answers = { ParseEmod: '{}', ExportJSON: '{}', ExportEmod: '{}' };
+
 export const ModelService = {
-  ParseEmod: () => Promise.resolve('{"diagnostics":[],"diagram":{"nodes":[],"edges":[]}}'),
-  ExportJSON: () => Promise.resolve('{"diagnostics":[],"model":{}}'),
-  ExportEmod: () => Promise.resolve('{"emod":""}'),
+  ParseEmod: (arg) => { calls.push(['ParseEmod', arg]); return Promise.resolve(answers.ParseEmod); },
+  ExportJSON: (arg) => { calls.push(['ExportJSON', arg]); return Promise.resolve(answers.ExportJSON); },
+  ExportEmod: (arg) => { calls.push(['ExportEmod', arg]); return Promise.resolve(answers.ExportEmod); },
 };

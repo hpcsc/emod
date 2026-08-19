@@ -191,7 +191,7 @@ describe('Model', () => {
       expect(value).toEqual(result);
     });
 
-    it('sets parsing status on status element during WASM parse', async () => {
+    it('sets parsing status on status element during a platform parse', async () => {
       let resolvePromise;
       parseEmod.mockReturnValue(new Promise(function(resolve) { resolvePromise = resolve; }));
 
@@ -202,7 +202,7 @@ describe('Model', () => {
       await promise;
     });
 
-    it('propagates WASM errors', async () => {
+    it('propagates platform errors', async () => {
       parseEmod.mockRejectedValue(new Error('syntax error'));
 
       await expect(Model.sendParse(store, 'context Bad {}', statusEl)).rejects.toThrow('syntax error');

@@ -4,37 +4,13 @@ package pipeline_test
 
 import (
 	"encoding/json"
+	"errors"
 	"testing"
 
 	"github.com/hpcsc/emod/internal/pipeline"
+	"github.com/hpcsc/emod/internal/test"
 	"github.com/stretchr/testify/require"
 )
-
-const billingModel = `emod 1
-model "Billing"
-
-context "Payments" {
-  aggregate "Payment" {
-    slice "Take Payment" {
-      command TakePayment {
-        fields {
-          amount int required
-        }
-      }
-
-      event PaymentTaken {
-        fields {
-          amount int required
-        }
-      }
-
-      flow {
-        command -> event: TakePayment -> PaymentTaken
-      }
-    }
-  }
-}
-`
 
 func TestPipeline(t *testing.T) {
 	t.Run("extract source", func(t *testing.T) {
@@ -62,9 +38,43 @@ func TestPipeline(t *testing.T) {
 		})
 	})
 
+	t.Run("run on source", func(t *testing.T) {
+		t.Run("hands the unwrapped source to the entry point and returns its bytes", func(t *testing.T) {
+			var seen string
+			answer := pipeline.RunOnSource(`{"source": "model MyModel"}`, func(source string) ([]byte, error) {
+				seen = source
+				return []byte(`{"ok": true}`), nil
+			})
+
+			require.Equal(t, "model MyModel", seen)
+			require.Equal(t, `{"ok": true}`, answer)
+		})
+
+		t.Run("reports a malformed envelope without running the entry point", func(t *testing.T) {
+			called := false
+			answer := pipeline.RunOnSource("not json", func(string) ([]byte, error) {
+				called = true
+				return nil, nil
+			})
+
+			require.False(t, called)
+			require.Contains(t, answer, "invalid JSON")
+			require.NotContains(t, answer, `"ok"`)
+		})
+
+		t.Run("wraps a failure from the entry point in the error envelope", func(t *testing.T) {
+			answer := pipeline.RunOnSource(`{"source": "model MyModel"}`, func(string) ([]byte, error) {
+				return []byte("partial output"), errors.New("pipeline exploded")
+			})
+
+			require.Equal(t, pipeline.ErrorJSON("pipeline exploded"), answer)
+			require.NotContains(t, answer, "partial output")
+		})
+	})
+
 	t.Run("export diagram", func(t *testing.T) {
 		t.Run("returns the model's nodes and edges with no diagnostics", func(t *testing.T) {
-			result, err := pipeline.RunPipelineExportDiagram(billingModel)
+			result, err := pipeline.RunPipelineExportDiagram(test.BillingPayments)
 			require.NoError(t, err)
 
 			envelope := decodeDiagramEnvelope(t, result)
@@ -99,7 +109,7 @@ func TestPipeline(t *testing.T) {
 
 	t.Run("export model json", func(t *testing.T) {
 		t.Run("returns the parsed model with no diagnostics", func(t *testing.T) {
-			result, err := pipeline.RunPipelineExportJSON(billingModel)
+			result, err := pipeline.RunPipelineExportJSON(test.BillingPayments)
 			require.NoError(t, err)
 
 			var envelope struct {
@@ -117,7 +127,7 @@ func TestPipeline(t *testing.T) {
 
 	t.Run("export emod", func(t *testing.T) {
 		t.Run("diagram JSON round-trips back to the source it was parsed from", func(t *testing.T) {
-			parsed, err := pipeline.RunPipelineExportDiagram(billingModel)
+			parsed, err := pipeline.RunPipelineExportDiagram(test.BillingPayments)
 			require.NoError(t, err)
 
 			var envelope struct {
@@ -128,7 +138,7 @@ func TestPipeline(t *testing.T) {
 			result, err := pipeline.ExportEmod(string(envelope.Diagram))
 			require.NoError(t, err)
 
-			require.Equal(t, billingModel, string(result))
+			require.Equal(t, test.BillingPayments, string(result))
 		})
 
 		t.Run("malformed diagram JSON returns error", func(t *testing.T) {

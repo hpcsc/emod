@@ -42,9 +42,9 @@ tasks:
       GOARCH: 'wasm'
 
   # The page is derived from the shared viewer.html rather than written here, so
-  # editing that one file changes what all three distributions load. The two
-  # lines dropped are the ones only a browser needs: the WebAssembly glue, and
-  # the marker the CLI's server substitutes its injected state into.
+  # editing that one file changes what all three distributions load. What the sed
+  # removes is what only a browser needs: the line loading the WebAssembly glue,
+  # and the markers the CLI's server and the Pages deploy substitute into.
   build:desktop:
     desc: Build the native desktop app
     cmds:
