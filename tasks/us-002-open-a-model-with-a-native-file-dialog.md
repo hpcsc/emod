@@ -407,13 +407,13 @@ shortcut, and choosing it reaches the frontend's open path. This is the story's 
 suite can close: the menu and its accelerator are only observable by running the app.
 
 **Acceptance Criteria:**
-- [ ] The app installs an application menu built from the framework's default one, so the standard application, edit and window items it already had are still there
-- [ ] Its File menu carries an Open item bound to the platform's standard open accelerator
-- [ ] Choosing Open, or pressing the accelerator, emits the event on the window that the desktop platform module subscribes to
-- [ ] The file service is registered with the app, so its bindings are generated beside the model service's
-- [ ] A Go test fails if the event's name is changed on the Go side or the JS side alone
-- [ ] `task build:desktop` succeeds and the binary is still built with `-tags production`
-- [ ] `task test:unit` and `task test:integration` stay green from a checkout where `task build:desktop` has never run
+- [x] The app installs an application menu built from the framework's default one, so the standard application, edit and window items it already had are still there
+- [x] Its File menu carries an Open item bound to the platform's standard open accelerator
+- [x] Choosing Open, or pressing the accelerator, emits the event on the window that the desktop platform module subscribes to
+- [x] The file service is registered with the app, so its bindings are generated beside the model service's
+- [x] A Go test fails if the event's name is changed on the Go side or the JS side alone
+- [x] `task build:desktop` succeeds and the binary is still built with `-tags production`
+- [x] `task test:unit` and `task test:integration` stay green from a checkout where `task build:desktop` has never run
 
 **Affected Files/Modules:**
 - `cmd/emod-desktop/main.go:24-45` — the menu, the accelerator, the click handler that emits, and the second service registration

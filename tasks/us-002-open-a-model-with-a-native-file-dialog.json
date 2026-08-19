@@ -115,7 +115,7 @@
     },
     {
       "n": 5,
-      "done": false,
+      "done": true,
       "title": "Add File ▸ Open to the desktop menu bar",
       "language": "Go",
       "testable": true,

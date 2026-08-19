@@ -20,6 +20,29 @@ import (
 //go:embed all:frontend
 var frontend embed.FS
 
+// applicationMenu extends the framework's default menu rather than replacing it:
+// a menu built from scratch has no Quit, no Copy and no Paste, which on macOS
+// are the application's only bindings for them.
+//
+// Open reaches the frontend by event because that is where the picker lives —
+// internal/desktop imports no GUI framework, so the dialog cannot be raised
+// from Go. internal/desktop's event-name guard pins the name against the
+// frontend's subscription.
+func applicationMenu(window *application.WebviewWindow) *application.Menu {
+	menu := application.DefaultApplicationMenu()
+
+	openItems := application.NewMenu()
+	openItems.Add("Open…").
+		SetAccelerator("CmdOrCtrl+O").
+		OnClick(func(*application.Context) {
+			window.EmitEvent("file:open-requested")
+		})
+	openItems.AddSeparator()
+	menu.FindByLabel("File").GetSubmenu().Prepend(openItems)
+
+	return menu
+}
+
 func main() {
 	app := application.New(application.Options{
 		Name:        "emod",
@@ -35,11 +58,13 @@ func main() {
 		},
 	})
 
-	app.Window.NewWithOptions(application.WebviewWindowOptions{
+	window := app.Window.NewWithOptions(application.WebviewWindowOptions{
 		Title:  "emod",
 		Width:  1400,
 		Height: 900,
 	})
+
+	app.Menu.SetApplicationMenu(applicationMenu(window))
 
 	if err := app.Run(); err != nil {
 		log.Fatal(err)
