@@ -6,17 +6,18 @@ import { installSVGGeometry } from './svg-env.js';
 // Only the platform seam is stubbed — it is the module boundary the viewer talks
 // to instead of a network, a filesystem or a Go core. Every other module is the
 // real one, so these tests assert what a user would see rather than which ran.
-let wasmReady = Promise.resolve();
-let wasmIsReady = true;
+let platformReady = Promise.resolve();
+let platformIsReady = true;
 let parseResult = { diagnostics: [], diagram: { nodes: [], edges: [] } };
 let dropReadFails = false;
 let savedFile = null;
 let exportFails = false;
+let parseQueue = [];
 
 vi.mock('../static/platform.js', () => ({
-  get ready() { return wasmReady; },
-  get isReady() { return wasmIsReady; },
-  parseEmod: vi.fn(() => Promise.resolve(parseResult)),
+  get ready() { return platformReady; },
+  get isReady() { return platformIsReady; },
+  parseEmod: vi.fn(() => parseQueue.length ? parseQueue.shift() : Promise.resolve(parseResult)),
   exportEmod: vi.fn((diagram) => exportFails
     ? Promise.reject(new Error('nothing to export'))
     : Promise.resolve('emod 1\nmodel "' + (diagram.model_name || '') + '"\n')),
@@ -137,12 +138,13 @@ function flush() {
 beforeEach(() => {
   installSVGGeometry();
   document.body.innerHTML = '';
-  wasmReady = Promise.resolve();
-  wasmIsReady = true;
+  platformReady = Promise.resolve();
+  platformIsReady = true;
   parseResult = { diagnostics: [], diagram: { nodes: [], edges: [] } };
   dropReadFails = false;
   savedFile = null;
   exportFails = false;
+  parseQueue = [];
 });
 
 describe('viewer initial state', () => {
@@ -170,10 +172,10 @@ describe('viewer initial state', () => {
   });
 });
 
-describe('viewer WASM loading indicator', () => {
+describe('viewer parser loading indicator', () => {
   it('shows a loading indicator while the parser is still loading', async () => {
-    wasmReady = new Promise(function() {}); // never resolves
-    wasmIsReady = false;
+    platformReady = new Promise(function() {}); // never resolves
+    platformIsReady = false;
     globalThis.INITIAL_DATA = null;
 
     await startViewer();
@@ -183,15 +185,15 @@ describe('viewer WASM loading indicator', () => {
 
   it('clears the loading indicator once the parser is ready', async () => {
     let resolveReady;
-    wasmReady = new Promise(function(resolve) { resolveReady = resolve; });
-    wasmIsReady = false;
+    platformReady = new Promise(function(resolve) { resolveReady = resolve; });
+    platformIsReady = false;
     globalThis.INITIAL_DATA = null;
 
     await startViewer();
     expect(document.getElementById('render-status').textContent).toBe('⏳ Loading parser...');
 
     resolveReady();
-    await wasmReady;
+    await platformReady;
     await flush();
 
     expect(document.getElementById('render-status').textContent).toBe('✓ Ready');
@@ -387,7 +389,7 @@ describe('viewer diagnostics panel', () => {
       .toContain('unrecognized keyword');
   });
 
-  it('opens the panel when the badge is clicked and closes it again', async () => {
+  it('shows the panel on a render that reports, and toggles it from the badge', async () => {
     globalThis.INITIAL_DATA = null;
     parseResult = {
       diagnostics: [{ file: 'test.emod', line: 3, message: 'unrecognized keyword', severity: 'error' }],
@@ -395,10 +397,19 @@ describe('viewer diagnostics panel', () => {
     };
     await startViewer();
 
+    document.getElementById('source-input').value = 'foobar {}';
     document.getElementById('render-btn').click();
     await flush();
 
     const panel = document.getElementById('diagnostics-panel');
+    // A render that reports opens the panel itself, so the badge toggles from
+    // open. Without source the render rejects and none of this is reached.
+    expect(document.getElementById('diagnostics-badge').textContent).toBe('1 error');
+    expect(panel.classList.contains('hidden')).toBe(false);
+
+    document.getElementById('diagnostics-badge').click();
+    expect(panel.classList.contains('hidden')).toBe(true);
+
     document.getElementById('diagnostics-badge').click();
     expect(panel.classList.contains('hidden')).toBe(false);
 
@@ -414,15 +425,53 @@ describe('viewer diagnostics panel', () => {
 describe('viewer.html satisfies what init reads from it', () => {
   const viewerJs = readFileSync(resolve(__dirname, '../static/viewer.js'), 'utf-8');
   const viewerHtml = readFileSync(resolve(__dirname, '../static/viewer.html'), 'utf-8');
-  const required = [...viewerJs.matchAll(/getElementById\("([^"]+)"\)/g)].map((m) => m[1]);
+  const required = [...viewerJs.matchAll(/getElementById\((['"])([^'"]+)\1\)/g)].map((m) => m[2]);
 
   it('reads more than a handful of ids, so the scan below is not matching nothing', () => {
     expect(required.length).toBeGreaterThan(10);
     expect(required).toContain('legend-close');
+    // single-quoted, and the reason the pattern takes both quote styles
+    expect(required).toContain('landing-instructions');
   });
 
   it.each([...new Set(required)])('declares id="%s"', (id) => {
     expect(viewerHtml).toContain(`id="${id}"`);
+  });
+});
+
+// The seam is written three times — the contract and its two implementations —
+// and the shared modules import names from it by hand. A name added to one copy
+// and used by a shared module gives the distribution built from the other copy a
+// blank window, with every Go and JS suite green. This reads no window, so it
+// does not drive the desktop shell.
+describe('the platform seam has one contract', () => {
+  const exportsOf = (path) => {
+    const src = readFileSync(resolve(__dirname, path), 'utf-8');
+    const m = src.match(/export \{([^}]*)\}/);
+    expect(m, `${path} must declare a single export block`).not.toBeNull();
+    return m[1]
+      .split(',')
+      .map((t) => t.trim().split(/\s+/)[0])
+      .filter(Boolean)
+      .sort();
+  };
+
+  const contract = exportsOf('../static/platform.js');
+  const browser = exportsOf('../static/platform.browser.js');
+  const desktop = exportsOf('../desktop/platform.desktop.js');
+
+  it('names every host operation the shared modules reach for', () => {
+    expect(contract).toEqual(
+      ['droppedFile', 'exportEmod', 'initialState', 'isReady', 'parseEmod', 'ready', 'saveFile'],
+    );
+  });
+
+  it('is satisfied by the browser implementation', () => {
+    expect(browser).toEqual(contract);
+  });
+
+  it('is satisfied by the desktop implementation', () => {
+    expect(desktop).toEqual(contract);
   });
 });
 

@@ -129,10 +129,17 @@ function init() {
   Minimap.initMinimap(store);
 
   // ─── Render button click ──────────────────────────────────────────
+  // Renders are numbered because a parse is genuinely concurrent on a host that
+  // answers over RPC rather than in-process: without this, a slow earlier parse
+  // landing after a fast later one repaints the canvas with the older model
+  // while the panel shows the newer source.
+  let latestRender = 0;
   store.dom.renderBtn.addEventListener("click", function() {
     const source = store.dom.sourceInput.value.trim();
+    const render = ++latestRender;
     Model.sendParse(store, source, store.dom.statusEl)
       .then(function(data) {
+        if (render !== latestRender) return;
         store.diagnostics = data.diagnostics || [];
         bus.emit('diagnostics:changed', { store, diagnostics: store.diagnostics });
         Model.setModelData(store, data.diagram);
@@ -143,6 +150,7 @@ function init() {
         if (btn) btn.disabled = true;
       })
       .catch(function(err) {
+        if (render !== latestRender) return;
         store.dom.statusEl.textContent = "✗ " + err.message;
         store.dom.statusEl.className = "status error";
       });

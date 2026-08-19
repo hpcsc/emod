@@ -100,8 +100,10 @@ function sendParse(store, source, statusEl) {
     // Not valid JSON — treat as raw .emod source below
   }
 
-  // Raw .emod source — dynamic import so the platform's init side effects are
-  // deferred until something actually needs parsing.
+  // Raw .emod source. Reached through a dynamic import so this module can be
+  // loaded without the platform — a static import here would make every
+  // consumer of model.js pull the host implementation in too. It defers no
+  // work in the app itself: viewer.js imports the platform statically.
   return import('./platform.js').then(function(platform) {
     return platform.ready.then(function() {
       return platform.parseEmod(source);

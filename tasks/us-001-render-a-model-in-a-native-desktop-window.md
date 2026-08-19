@@ -259,6 +259,18 @@ calls and string envelopes. Keeping it in `internal/` is what lets Task 7 land t
 independent of the alpha dependency, and it does not weaken §9.1's containment claim
 (`:660-663`) — no v3-specific code moves out of `cmd/emod-desktop/`.
 
+**Deviation recorded during delivery — the export failure message became visible everywhere.**
+The export handler wrote its failure into `#render-status`, which sits inside the data panel that a
+successful render collapses, while the Export button sits outside it. Measured in the served viewer:
+the button is on screen and the status span is not, so a failed export reported into somewhere the
+user cannot see. That was always true of the browser viewer — export rarely fails there — and became
+the normal path on the desktop, which cannot save at all in this build. The handler now clears the
+collapsed class, which means the published web viewer and `emod diagram --serve` do one thing
+differently from before this story, against the sixth story criterion and Task 5's "still puts its
+message in the status area, as it does today". Taken deliberately, with the requester's agreement,
+because the alternative was a criterion ticked on a message nobody can read; pinned by
+`internal/frontend/tests/viewer.test.js`'s "reveals the panel so the reason a save failed can be read".
+
 **Q3 — what do the desktop's file-open and file-save entry points do in this story?** *Decided:
 exist, and report that they are not available in this build.* US-002 and US-003 own them.
 `platform.desktop.js` must export the same names as `platform.browser.js` or the shared modules
