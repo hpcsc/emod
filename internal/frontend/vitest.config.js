@@ -1,6 +1,16 @@
 import { defineConfig } from 'vitest/config'
+import { resolve } from 'path'
 
 export default defineConfig({
+  resolve: {
+    alias: {
+      // platform.desktop.js imports the bindings the desktop build generates
+      // beside it. They exist only in the assembled frontend, so the source
+      // tree cannot load that module without a stand-in.
+      '../bindings/github.com/hpcsc/emod/internal/desktop/index.js':
+        resolve(import.meta.dirname, 'tests/bindings-stub.js'),
+    },
+  },
   test: {
     environment: 'jsdom',
     include: ['**/*.test.js'],

@@ -8,11 +8,15 @@ vi.hoisted(() => {
   };
 
   const mockModule = {};
+  globalThis.compileCalls = [];
+  globalThis.instantiateCalls = [];
   globalThis.WebAssembly = {
     // No instantiateStreaming — forces fallback
-    compile: () => Promise.resolve(mockModule),
-    instantiate: (mod, importObject) =>
-      Promise.resolve({ instance: { exports: {} }, module: mod }),
+    compile: (bytes) => { globalThis.compileCalls.push(bytes); return Promise.resolve(mockModule); },
+    instantiate: (mod, importObject) => {
+      globalThis.instantiateCalls.push({ mod, importObject });
+      return Promise.resolve({ instance: { exports: {} }, module: mod });
+    },
   };
 
   globalThis.fetch = () =>
@@ -28,5 +32,19 @@ describe('non-streaming fallback', () => {
   it('initializes via compile+instantiate when instantiateStreaming is absent', async () => {
     await expect(browser.ready).resolves.toBeUndefined();
     expect(browser.isReady).toBe(true);
+  });
+
+  // Readiness alone is satisfied by any path that resolves, so it survives the
+  // fallback branch being deleted. These pin the branch the name claims.
+  it('reads the response body and compiles it itself', async () => {
+    await browser.ready;
+    expect(globalThis.compileCalls).toHaveLength(1);
+    expect(globalThis.compileCalls[0]).toBeInstanceOf(ArrayBuffer);
+  });
+
+  it('instantiates the compiled module against the Go import object', async () => {
+    await browser.ready;
+    expect(globalThis.instantiateCalls).toHaveLength(1);
+    expect(globalThis.instantiateCalls[0].importObject).toEqual({});
   });
 });
