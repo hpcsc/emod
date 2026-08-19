@@ -925,3 +925,33 @@ in this repo; append only learnings that generalise beyond the task that surface
 - Observed: US-017 highlight the new syntax in editors
 - Learning: US-017's decision 3 declined to repair the single-line `fields { name type modifier }` form, reasoning that TextMate 'has no anchor for the first token after the block's opening brace short of folding it into the begin pattern's captures', and required an assertion recording the defect instead. The fold cost one optional group and one capture, all twelve fixtures stayed green, and the story's criterion carried no layout qualifier — so a criterion was closed on a recorded defect that a one-line change removed. When a decision names the alternative it is rejecting, the alternative is usually cheap enough to try before the breakdown is written.
 - Apply when: Writing a decomposition decision that declines a repair on cost grounds, or implementing a task whose criterion records a defect rather than fixing it
+
+## A directory-enumerating guard asserts nothing about a file being there
+- Type: constraint
+- Observed: task 3 — US-018 learn the new constructs from examples and the reference
+- Learning: `examplePaths` (`internal/cli/validate_test.go`) reads `../../examples` and runs every non-`_test.emod` file through `cli.RunValidate`, so it asserts things about whatever files exist and never that a named one does. Deleting `examples/specs_hotel.emod` outright left the whole unit suite green, because `require.NotEmpty(t, authoredToValidate)` is satisfied by the siblings. Worse, `emod validate` exits 0 on a zero-byte and on a whitespace-only `.emod` (verified), so gutting an example to nothing also passes. A story criterion naming a specific example therefore needs a leaf that reads that file by name and asserts what it states; the enumerating guard is coverage for the directory, not for the artefact.
+- Apply when: citing `examplePaths` as the guard for a new file under `examples/`, or writing a criterion that says an existing directory-walking test covers a named artefact
+
+## A plan's claim about what a tool would do is an estimate until someone runs it
+- Type: recurring-finding
+- Observed: task 4 — US-018 learn the new constructs from examples and the reference
+- Learning: US-018's Open question 5 ruled out formatting the checked-in examples because `emod fmt` "would insert the header, re-align every field column, hoist invariants, move every spec to the end of its slice and drop the file's blank lines, producing a diff that buries the story's change". Measured by copying the file to a scratch path and running `emod fmt` over the copy, the whole distance was three lines — the formatter hoists a view's `subscribes` above its `fields`, and nothing else. No header was inserted (one was already there), no field column moved, no flow was reordered. The estimate was the entire basis for the decision, and it was wrong in the direction that avoided work. A decomposition that rules something out by describing a tool's output owes one run of that tool against a copy; `emod fmt <file>` writes in place, so the copy is what makes the measurement free.
+- Apply when: writing or reading a decomposition that declines a formatting, codegen or migration pass by describing how large the resulting diff would be
+
+## A mutation written against pre-format text proves nothing and looks like a passing guard
+- Type: constraint
+- Observed: task 2 — US-018 learn the new constructs from examples and the reference
+- Learning: After the examples were brought to `emod fmt` canonical form, a mutation loop kept matching the hand-written text: `then view AvailableRoomsView` where the formatter writes `then  view AvailableRoomsView` with two spaces, since it pads the given/when/then keyword column. The `perl -0pi -e` substitution silently matched nothing, the leaf passed, and the run read exactly like a guard that cannot fail — the failure mode a mutation proof exists to detect. Same trap for `command -> event:` (fmt pads to `command -> event:    `). Check the mutation actually changed the file (`grep -c` the old text, expect 0) before reading a green result as evidence, and write the pattern against the file as it is on disk, never against the form it was authored in.
+- Apply when: writing a mutation loop over a file a formatter has rewritten, or reading a mutation run where nothing failed
+
+## A loop-closure guard checks one edge, not that a todo list ever empties
+- Type: recurring-finding
+- Observed: task 2 — US-018 learn the new constructs from examples and the reference
+- Learning: `todoListLoops` (`internal/cli/examples_test.go`) checks that an automation reading a view issues a command producing an event that view subscribes to — the property the specs-and-metadata proposal states as the point of its worked example. It passed on `UnconfirmedReservationsView` while that view kept a row forever in two ways: a confirmed booking, because the view never observed `ConfirmationEmailSent`, and an ended stay, because the nightly sweep's command is refused by an invariant and a rejection appends nothing to observe. Two separate audit rounds found todo-list defects this guard was green on. Which events *retire* a row is a domain judgement; the mechanical check only sees the one edge the automation itself creates, so do not read it as a completeness check, and read every `subscribes` list against the view's own name when a model gains an event.
+- Apply when: adding a view or an event to a model that declares automations, or judging whether a loop-closure assertion covers a todo list emptying
+
+## A hand-written skeleton in the reference can disagree with emod fmt, and nothing checks it
+- Type: convention
+- Observed: task 4 — US-018 learn the new constructs from examples and the reference
+- Learning: `docs/dsl-reference.md`'s View Pattern skeleton wrote `fields { ... }` above `subscribes [...]` while `emod fmt` canonicalises `subscribes` first, so a reader copying the skeleton wrote what the formatter immediately rewrites. Only whole models behind an ```emod fence reach `internal/oracle`'s "documented models" leaf; every skeleton with `<placeholder>` names sits behind a plain fence and is checked by nothing, which is why the disagreement survived. When a change makes canonical form a deliverable for the examples the reference points at, the reference's own skeletons become part of that claim: check each one against what the formatter writes for the same construct. Verified by listing every `view … {` block in the document and comparing its entry order against `formatter.Format`.
+- Apply when: adding or editing a plain-fenced skeleton in `docs/dsl-reference.md`, or making `emod fmt` canonical form a requirement anywhere
