@@ -180,7 +180,7 @@
     },
     {
       "n": 8,
-      "done": false,
+      "done": true,
       "title": "Pin Wails v3 exactly and open a desktop window",
       "language": "Go",
       "testable": false,

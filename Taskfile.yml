@@ -41,6 +41,18 @@ tasks:
       GOOS: 'js'
       GOARCH: 'wasm'
 
+  # The page here is a placeholder the task writes: this target exists to prove
+  # the shell links and opens a window. Rendering the shared frontend is a
+  # separate concern and a separate task.
+  build:desktop:
+    desc: Build the native desktop app
+    cmds:
+      - mkdir -p ./cmd/emod-desktop/frontend
+      - printf '%s\n' '<!doctype html>' '<title>emod</title>' '<h1>emod</h1>' > ./cmd/emod-desktop/frontend/index.html
+      - go build -o ./bin/emod-desktop ./cmd/emod-desktop
+    env:
+      CGO_ENABLED: '1'
+
   build:web:
     desc: Assemble standalone deployment in web/
     deps:
@@ -63,12 +75,12 @@ tasks:
   test:unit:
     desc: Run unit tests
     cmds:
-      - go test -tags unit $(go list ./... | grep -v /cmd/emod-wasm)
+      - go test -tags unit $(go list -e ./... | grep -v -e /cmd/emod-wasm -e /cmd/emod-desktop)
 
   test:integration:
     desc: Run integration tests
     cmds:
-      - go test -tags integration $(go list ./... | grep -v /cmd/emod-wasm)
+      - go test -tags integration $(go list -e ./... | grep -v -e /cmd/emod-wasm -e /cmd/emod-desktop)
 
   test:viewer:
     desc: Run viewer JS unit tests

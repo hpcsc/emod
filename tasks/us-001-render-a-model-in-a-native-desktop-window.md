@@ -273,6 +273,20 @@ Read the pinned version's own package docs for the Manager API surface; §9.1 (`
 that earlier alphas' flat top-level functions are gone and that third-party tutorials are already
 stale.
 
+*Outcome, measured at implementation time:* the framework had left alpha. `v3.0.0-beta.9` shipped
+2026-08-16 and the alpha series ended at `alpha2.122`, so the criterion's `v3.0.0-alphaN.NNN`
+spelling names a superseded series rather than the current one; `beta.9` is pinned instead, which is
+what Q4 decided. §9.1's own worry was misplaced in the other direction too — `application.New`,
+`app.Window.NewWithOptions`, `AssetOptions{Handler: AssetFileServerFS(…)}` and `NewService` are all
+exactly as §4.6 sketches them, the last now generic, so nothing had to be rewritten against the
+package docs.
+
+*Deviation from the criterion's second half:* the CLI is pinned by a `tool` directive in `go.mod`
+rather than in `mise.toml`, which has no `wails3` backend of its own. One version then covers the
+library and the CLI, so they cannot drift, and `go tool wails3` cannot be shadowed by a binary on
+`PATH` — the hazard F7 raises and `tasks/learnings.md:11-14` records biting this repo before. The
+cost is `go.mod` growing from 35 require lines to 174, none of which reaches the shipped CLI binary.
+
 ---
 
 ## Theory
@@ -761,31 +775,31 @@ installed. The window's contents are a throwaway the build task writes; Task 9 r
 shared frontend.
 
 **Acceptance Criteria:**
-- [ ] `go.mod` requires the Wails v3 module at an exact `v3.0.0-alphaN.NNN` version and `mise.toml`
+- [x] `go.mod` requires the Wails v3 module at an exact `v3.0.0-alphaN.NNN` version and `mise.toml`
       pins the `wails3` CLI at the matching version — neither floats, neither says `latest`, and the
       two name the same version
-- [ ] The pinned version is the one current at implementation time, confirmed against the framework's
+- [x] The pinned version is the one current at implementation time, confirmed against the framework's
       own releases rather than copied from `docs/proposals/emod-desktop-proposal.md:629-631`
       (`v3.0.0-alpha2.117`, verified 8 Jul 2026; this breakdown is written 2026-08-19)
-- [ ] `cmd/emod-desktop/main.go` builds the application through the Manager API — window creation
+- [x] `cmd/emod-desktop/main.go` builds the application through the Manager API — window creation
       goes through the application value, not through a top-level package function that earlier
       alphas exposed
-- [ ] `mise exec -- task build:desktop` produces a binary that opens a window carrying the emod name
-- [ ] The page the window loads is written by the build task into a gitignored directory; the tree
+- [x] `mise exec -- task build:desktop` produces a binary that opens a window carrying the emod name
+- [x] The page the window loads is written by the build task into a gitignored directory; the tree
       holds no hand-written HTML file for the desktop app, and this task copies or duplicates no file
       from `internal/frontend/static/`
-- [ ] `mise exec -- task build`, `task test:unit` and `task test:integration` pass on a machine with
+- [x] `mise exec -- task build`, `task test:unit` and `task test:integration` pass on a machine with
       no GTK4 or WebKit development packages and no `wails3` on `PATH`: the CLI build stays
       `CGO_ENABLED=0` and `cmd/emod-desktop` is excluded from both `go list ./...` package sets the
       way `cmd/emod-wasm` already is (`Taskfile.yml:66`, `:71`) (F3)
-- [ ] `build:desktop` does not depend on `build:wasm`, and produces no `.wasm` payload and no
+- [x] `build:desktop` does not depend on `build:wasm`, and produces no `.wasm` payload and no
       `wasm_exec.js`
-- [ ] `.goreleaser.yaml` is unchanged and `mise exec -- task release:local` still produces the five
+- [x] `.goreleaser.yaml` is unchanged and `mise exec -- task release:local` still produces the five
       CLI archives
-- [ ] Everything the desktop build assembles or generates is gitignored: after
+- [x] Everything the desktop build assembles or generates is gitignored: after
       `mise exec -- task build:desktop`, `git status --porcelain -- cmd/emod-desktop` reports nothing
       beyond this task's own source files
-- [ ] The desktop toolchain is invoked through the repo's pin rather than whatever is on `PATH`
+- [x] The desktop toolchain is invoked through the repo's pin rather than whatever is on `PATH`
       (`tasks/learnings.md:11-14`, F7)
 
 **Affected Files/Modules:**

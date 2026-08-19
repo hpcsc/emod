@@ -11,6 +11,8 @@ tasks/.checkpoint
 node_modules
 /web
 internal/frontend/generated/
+cmd/emod-desktop/frontend/
+cmd/emod-desktop/bindings/
 editors/vscode/out
 e2e-viewer/test-results/
 e2e-viewer/playwright-report/
