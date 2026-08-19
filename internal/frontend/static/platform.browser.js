@@ -110,6 +110,11 @@ function setWindowTitle(title) {
   document.title = title;
 }
 
+// Nothing in a browser opens a file on the user's behalf. What a page can reach
+// arrives through the drop handler, which yields contents and never a location,
+// so this registers a handler that stays uncalled rather than being unfinished.
+function onFileOpened() {}
+
 // The CLI's server substitutes this global into the page before the frontend
 // loads, so it is already there by the time anything asks; the promise is for
 // the hosts that have to go and fetch their state instead.
@@ -120,4 +125,4 @@ function initialState() {
   return Promise.resolve(INITIAL_DATA);
 }
 
-export { parseEmod, exportEmod, droppedFile, saveFile, setWindowTitle, initialState, ready, isReady };
+export { parseEmod, exportEmod, droppedFile, saveFile, setWindowTitle, onFileOpened, initialState, ready, isReady };

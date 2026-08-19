@@ -323,14 +323,14 @@ straight away, names the window and shows its full path; one that arrives as a r
 reported where the user can see it, with the model already on screen left alone.
 
 **Acceptance Criteria:**
-- [ ] A file delivered through the seam renders with no further click, and produces the same diagram, model name and diagnostics the same text produces when pasted into the panel and rendered
-- [ ] A delivered file whose source has validation errors renders what it can and fills the diagnostics panel with the same messages, severities and locations the same pasted source produces
-- [ ] After a file opens, the window is named after that file rather than the model, and the file's full path is readable in the window without opening or expanding anything
-- [ ] A delivery that names a reason instead of contents writes that reason into the status area with the data panel open, so it is on screen and not behind a collapsed panel
-- [ ] After such a failure the diagram, the model name and the path indicator still show the model that was already open
-- [ ] The path of the open file is recorded on the store, where a later story can save back to it
-- [ ] Nothing about the browser distribution changes: no host delivers a file to it, the path indicator stays empty, the drop and paste paths behave as before, and `task test:e2e:viewer` is green
-- [ ] The seam contract guard names the new function, both implementations satisfy it, and the shared page declares every id the viewer now reads
+- [x] A file delivered through the seam renders with no further click, and produces the same diagram, model name and diagnostics the same text produces when pasted into the panel and rendered
+- [x] A delivered file whose source has validation errors renders what it can and fills the diagnostics panel with the same messages, severities and locations the same pasted source produces
+- [x] After a file opens, the window is named after that file rather than the model, and the file's full path is readable in the window without opening or expanding anything
+- [x] A delivery that names a reason instead of contents writes that reason into the status area with the data panel open, so it is on screen and not behind a collapsed panel
+- [x] After such a failure the diagram, the model name and the path indicator still show the model that was already open
+- [x] The path of the open file is recorded on the store, where a later story can save back to it
+- [x] Nothing about the browser distribution changes: no host delivers a file to it, the path indicator stays empty, the drop and paste paths behave as before, and `task test:e2e:viewer` is green
+- [x] The seam contract guard names the new function, both implementations satisfy it, and the shared page declares every id the viewer now reads
 
 **Affected Files/Modules:**
 - `internal/frontend/static/platform.js`, `platform.browser.js`, `internal/frontend/desktop/platform.desktop.js` — the contract gains the registration function; the browser accepts a handler nothing calls

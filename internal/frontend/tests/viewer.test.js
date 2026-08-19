@@ -15,6 +15,7 @@ let exportFails = false;
 let initialStateFails = false;
 let parseQueue = [];
 let windowTitle = '';
+let deliverFile = null;
 
 vi.mock('../static/platform.js', () => ({
   get ready() { return platformReady; },
@@ -28,6 +29,7 @@ vi.mock('../static/platform.js', () => ({
     : Promise.resolve(typeof globalThis.INITIAL_DATA === 'undefined' ? null : globalThis.INITIAL_DATA)),
   saveFile: vi.fn((name, content) => { savedFile = { name, content }; return Promise.resolve(); }),
   setWindowTitle: vi.fn((title) => { windowTitle = title; }),
+  onFileOpened: vi.fn((handler) => { deliverFile = handler; }),
   droppedFile: vi.fn((dataTransfer) => {
     const file = dataTransfer.files[0];
     if (!file) return null;
@@ -52,6 +54,7 @@ function createRequiredElements() {
     <span id="stat-nodes"></span>
     <span id="stat-edges"></span>
     <span id="stat-canvas"></span>
+    <span id="stat-file" class="hidden">File: <span class="stat-value" id="stat-file-path"></span></span>
     <div id="data-panel" class="collapsed"></div>
     <div id="data-panel-header"></div>
     <div id="data-panel-body"></div>
@@ -151,6 +154,7 @@ beforeEach(() => {
   initialStateFails = false;
   parseQueue = [];
   windowTitle = '';
+  deliverFile = null;
 });
 
 describe('the window is named through the host, not by assigning document.title', () => {
@@ -444,6 +448,123 @@ describe('viewer field editor', () => {
   });
 });
 
+describe('a file the host opens', () => {
+  const billingSource = 'emod 1\nmodel "Billing"\n';
+
+  async function openFile(file) {
+    await startViewer();
+    deliverFile(file);
+    await flush();
+  }
+
+  it('renders it with no further click, exactly as the same text pasted and rendered does', async () => {
+    globalThis.INITIAL_DATA = null;
+    parseResult = { diagnostics: [], diagram: billingDiagram() };
+
+    await openFile({ name: 'billing.emod', path: '/models/billing.emod', content: billingSource });
+    const opened = {
+      canvas: document.getElementById('diagram-canvas').innerHTML,
+      modelName: document.getElementById('model-name-display').textContent,
+      nodes: document.getElementById('stat-nodes').textContent,
+    };
+
+    document.body.innerHTML = '';
+    await startViewer();
+    document.getElementById('source-input').value = billingSource;
+    document.getElementById('render-btn').click();
+    await flush();
+
+    expect(opened.canvas).toBe(document.getElementById('diagram-canvas').innerHTML);
+    expect(opened.modelName).toBe(document.getElementById('model-name-display').textContent);
+    expect(opened.nodes).toBe(document.getElementById('stat-nodes').textContent);
+    expect(opened.canvas).toContain('TakePayment');
+  });
+
+  it('puts its source in the panel, so the panel and the canvas show one model', async () => {
+    globalThis.INITIAL_DATA = null;
+    parseResult = { diagnostics: [], diagram: billingDiagram() };
+
+    await openFile({ name: 'billing.emod', path: '/models/billing.emod', content: billingSource });
+
+    expect(document.getElementById('source-input').value).toBe(billingSource);
+  });
+
+  it('opens a file with validation errors, listing them as pasted source with the same errors does', async () => {
+    globalThis.INITIAL_DATA = null;
+    parseResult = {
+      diagnostics: [{ file: 'billing.emod', line: 3, message: 'unrecognized keyword', severity: 'error' }],
+      diagram: billingDiagram(),
+    };
+
+    await openFile({ name: 'billing.emod', path: '/models/billing.emod', content: billingSource });
+
+    expect(document.getElementById('diagram-canvas').innerHTML).toContain('TakePayment');
+    expect(document.getElementById('diagnostics-badge').textContent).toBe('1 error');
+    expect(document.getElementById('diagnostics-list').textContent).toContain('unrecognized keyword');
+    expect(document.getElementById('diagnostics-panel').classList.contains('hidden')).toBe(false);
+  });
+
+  it('names the window after the file rather than the model inside it', async () => {
+    globalThis.INITIAL_DATA = null;
+    parseResult = { diagnostics: [], diagram: billingDiagram() };
+
+    await openFile({ name: 'billing.emod', path: '/models/billing.emod', content: billingSource });
+
+    expect(windowTitle).toBe('billing.emod — Emod Diagram Viewer');
+  });
+
+  it('shows the full path in the bar that is always on screen', async () => {
+    globalThis.INITIAL_DATA = null;
+    parseResult = { diagnostics: [], diagram: billingDiagram() };
+
+    await openFile({ name: 'billing.emod', path: '/Users/me/models/billing.emod', content: billingSource });
+
+    expect(document.getElementById('stat-file').textContent).toContain('/Users/me/models/billing.emod');
+  });
+
+});
+
+describe('a file the host could not read', () => {
+  async function openThenFail() {
+    globalThis.INITIAL_DATA = null;
+    parseResult = { diagnostics: [], diagram: billingDiagram() };
+    await startViewer();
+    deliverFile({ name: 'billing.emod', path: '/models/billing.emod', content: 'emod 1\n' });
+    await flush();
+    deliverFile({ error: 'reading /models/gone.emod: no such file or directory' });
+    await flush();
+  }
+
+  it('reports the reason it was given, rather than a failure of its own wording', async () => {
+    await openThenFail();
+
+    expect(document.getElementById('render-status').textContent)
+      .toContain('reading /models/gone.emod: no such file or directory');
+    expect(document.getElementById('render-status').className).toContain('error');
+  });
+
+  it('opens the panel holding that reason, which a render had collapsed', async () => {
+    await openThenFail();
+
+    expect(document.getElementById('data-panel').classList.contains('collapsed')).toBe(false);
+  });
+
+  it('leaves the diagram, the model name and the path showing the model already open', async () => {
+    await openThenFail();
+
+    expect(document.getElementById('diagram-canvas').innerHTML).toContain('TakePayment');
+    expect(document.getElementById('model-name-display').textContent).toBe('Billing');
+    expect(document.getElementById('stat-file').textContent).toContain('/models/billing.emod');
+    expect(windowTitle).toBe('billing.emod — Emod Diagram Viewer');
+  });
+
+  it('leaves the source panel holding the model already open, not the file it could not read', async () => {
+    await openThenFail();
+
+    expect(document.getElementById('source-input').value).toBe('emod 1\n');
+  });
+});
+
 describe('viewer diagnostics panel', () => {
   it('stays hidden while the model has no diagnostics', async () => {
     globalThis.INITIAL_DATA = null;
@@ -552,8 +673,8 @@ describe('the platform seam has one contract', () => {
 
   it('names every host operation the shared modules reach for', () => {
     expect(contract).toEqual(
-      ['droppedFile', 'exportEmod', 'initialState', 'isReady', 'parseEmod', 'ready', 'saveFile',
-       'setWindowTitle'],
+      ['droppedFile', 'exportEmod', 'initialState', 'isReady', 'onFileOpened', 'parseEmod', 'ready',
+       'saveFile', 'setWindowTitle'],
     );
   });
 

@@ -9,16 +9,21 @@ import { CtxActions } from './ctx-actions.js';
 import { Model } from './model.js';
 import { bus } from './bus.js';
 import { Export } from './emod-export.js';
-import { ready, isReady, droppedFile, saveFile, setWindowTitle, initialState } from './platform.js';
+import { ready, isReady, droppedFile, saveFile, setWindowTitle, onFileOpened, initialState } from './platform.js';
 
 // ─── Event subscriptions ─────────────────────────────────────────────
 bus.on('data:changed', function({ store: s }) {
   renderDiagram(s);
 });
 
+function applyWindowTitle(s) {
+  const name = (s.currentFile && s.currentFile.name) || s.modelName;
+  setWindowTitle(name ? name + " — Emod Diagram Viewer" : "Emod Diagram Viewer");
+}
+
 bus.on('model:updated', function({ store: s }) {
   s.dom.nameDisplay.textContent = s.modelName || "(unnamed)";
-  setWindowTitle(s.modelName ? s.modelName + " — Emod Diagram Viewer" : "Emod Diagram Viewer");
+  applyWindowTitle(s);
   UI.updateStats(s);
   const btn = s.dom.resetLayoutBtn;
   if (btn) btn.disabled = true;
@@ -96,6 +101,8 @@ function init() {
   store.dom.statNodes = document.getElementById("stat-nodes");
   store.dom.statEdges = document.getElementById("stat-edges");
   store.dom.statCanvas = document.getElementById("stat-canvas");
+  store.dom.statFile = document.getElementById("stat-file");
+  store.dom.statFilePath = document.getElementById("stat-file-path");
   store.dom.panel = document.getElementById("data-panel");
   store.dom.panelHdr = document.getElementById("data-panel-header");
   store.dom.panelBody = document.getElementById("data-panel-body");
@@ -128,18 +135,36 @@ function init() {
   UI.initDiagnosticsDelegation(store);
   Minimap.initMinimap(store);
 
-  // ─── Render button click ──────────────────────────────────────────
+  // ─── Render ───────────────────────────────────────────────────────
   // Renders are numbered because a parse is genuinely concurrent on a host that
   // answers over RPC rather than in-process: without this, a slow earlier parse
   // landing after a fast later one repaints the canvas with the older model
   // while the panel shows the newer source.
   let latestRender = 0;
-  store.dom.renderBtn.addEventListener("click", function() {
+
+  // The panel's text and the render that reads it are claimed together, because
+  // a drop and a host delivery both arrive asynchronously and either can land
+  // mid-flight: writing the text outside this would let one entry point's source
+  // be rendered under the other's identity.
+  //
+  // file names where the panel's source came from — an object to adopt, null to
+  // forget the open file, undefined to leave it alone, which is what an ordinary
+  // Render does. It is committed only once the parse resolves: a render the
+  // parse rejects must leave the window naming the model still on screen, not
+  // one that never appeared.
+  function renderPanelSource(text, file) {
+    const previousText = store.dom.sourceInput.value;
+    if (text !== undefined) {
+      store.dom.sourceInput.value = text;
+    }
     const source = store.dom.sourceInput.value.trim();
     const render = ++latestRender;
-    Model.sendParse(store, source, store.dom.statusEl)
+    return Model.sendParse(store, source, store.dom.statusEl)
       .then(function(data) {
         if (render !== latestRender) return;
+        if (file !== undefined) {
+          store.currentFile = file;
+        }
         store.diagnostics = data.diagnostics || [];
         bus.emit('diagnostics:changed', { store, diagnostics: store.diagnostics });
         Model.setModelData(store, data.diagram);
@@ -151,9 +176,29 @@ function init() {
       })
       .catch(function(err) {
         if (render !== latestRender) return;
+        // The panel's text was replaced for a model that never rendered, and the
+        // window still names the one on screen — so putting it back is what keeps
+        // the panel, the title and the path stat naming one model.
+        if (text !== undefined) {
+          store.dom.sourceInput.value = previousText;
+        }
         store.dom.statusEl.textContent = "✗ " + err.message;
         store.dom.statusEl.className = "status error";
       });
+  }
+
+  // Reporting a host failure claims a render number for the same reason a render
+  // does: an older parse still in flight would otherwise resolve afterwards and
+  // paint over the reason, re-collapsing the panel holding it.
+  function reportOpenFailure(reason) {
+    latestRender++;
+    store.dom.statusEl.textContent = "✗ " + reason;
+    store.dom.statusEl.className = "status error";
+    store.dom.panel.classList.remove("collapsed");
+  }
+
+  store.dom.renderBtn.addEventListener("click", function() {
+    renderPanelSource();
   });
 
   // ─── File drag-and-drop ───────────────────────────────────────────
@@ -184,12 +229,36 @@ function init() {
       return;
     }
     file.read().then(function(content) {
-      store.dom.sourceInput.value = content;
-      store.dom.renderBtn.click();
+      renderPanelSource(content, null);
     }).catch(function() {
       store.dom.statusEl.textContent = '✗ Failed to read file';
       store.dom.statusEl.className = 'status error';
     });
+  });
+
+  // ─── A file the host opened ───────────────────────────────────────
+  onFileOpened(function(opened) {
+    // The status area lives in the panel a successful render collapses, and an
+    // open request comes from outside the page — so every failure here has to
+    // reveal that panel, or choosing a file from the OS dialog appears to do
+    // nothing at all.
+    if (opened.error) {
+      reportOpenFailure(opened.error);
+      return;
+    }
+    // A file with nothing in it reads successfully and then reaches the parser's
+    // own empty-source rejection, whose message is written for someone who
+    // pressed Render on an empty panel rather than someone who chose a file.
+    if (!opened.content.trim()) {
+      reportOpenFailure(opened.name + " is empty");
+      return;
+    }
+    renderPanelSource(opened.content, { name: opened.name, path: opened.path })
+      .then(function() {
+        if (store.dom.statusEl.className.indexOf("error") !== -1) {
+          store.dom.panel.classList.remove("collapsed");
+        }
+      });
   });
 
   // ─── Panel toggle ─────────────────────────────────────────────────

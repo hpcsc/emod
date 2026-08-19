@@ -67,10 +67,16 @@ function setWindowTitle(title) {
   Window.SetTitle(title);
 }
 
+let fileOpenedHandler = null;
+
+function onFileOpened(handler) {
+  fileOpenedHandler = handler;
+}
+
 // Nothing hands this window a model at startup, so it always opens empty. A
 // shell launched by opening a file has one to supply here.
 function initialState() {
   return Promise.resolve(null);
 }
 
-export { parseEmod, exportEmod, droppedFile, saveFile, setWindowTitle, initialState, ready, isReady };
+export { parseEmod, exportEmod, droppedFile, saveFile, setWindowTitle, onFileOpened, initialState, ready, isReady };

@@ -626,6 +626,30 @@ header .model-name span {
   color: #555;
 }
 
+/* The bar is a flex row with a gap, so leaving the label in place with no path
+   after it would spend a gap and read as a stat the viewer failed to fill —
+   which is every distribution with no file open. */
+#stat-file.hidden {
+  display: none;
+}
+/* A path is the one stat that can outgrow the bar. #stats span is inline-flex,
+   and text-overflow needs a shrinkable box that clips its own overflow — so both
+   the entry and the path inside it declare one, or the path runs off the edge
+   clipped mid-character with nothing to signal it. */
+#stat-file {
+  min-width: 0;
+  overflow: hidden;
+}
+/* Selector carries #stats so it outweighs `#stats span`, which would otherwise
+   leave this inline-flex — and text-overflow is inert on a flex container. */
+#stats #stat-file-path {
+  display: block;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 #diagram-canvas .command-block:hover rect {
   fill: #b8cce8 !important;
 }
@@ -1156,6 +1180,7 @@ header .model-name span {
   <span>Edges: <span class="stat-value" id="stat-edges">0</span></span>
   <span>Canvas: <span class="stat-value" id="stat-canvas">—</span></span>
   <span>Build: <span class="stat-value" id="stat-commit"></span></span>
+  <span id="stat-file" class="hidden">File: <span class="stat-value" id="stat-file-path"></span></span>
 </div>
 
 <script src="generated/wasm_exec.js"></script>

@@ -343,6 +343,12 @@ function updateStats(store, dims) {
   if (store.dom.statNodes) store.dom.statNodes.textContent = store.nodes.length;
   if (store.dom.statEdges) store.dom.statEdges.textContent = store.edges.length;
   if (store.dom.statCanvas && dims) store.dom.statCanvas.textContent = dims.width + " × " + dims.height;
+  if (store.dom.statFile && store.dom.statFilePath) {
+    const path = store.currentFile ? store.currentFile.path : "";
+    store.dom.statFilePath.textContent = path;
+    store.dom.statFile.classList.toggle("hidden", !path);
+    store.dom.statFile.title = path;
+  }
 }
 
 // ─── Detail panel ───────────────────────────────────────────────

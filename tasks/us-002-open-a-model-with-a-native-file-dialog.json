@@ -55,7 +55,7 @@
     },
     {
       "n": 3,
-      "done": false,
+      "done": true,
       "title": "Render a file the host opens, and report one it cannot read",
       "language": "JavaScript/TypeScript",
       "testable": true,
