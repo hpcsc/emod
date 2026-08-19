@@ -174,6 +174,114 @@ func TestValidate(t *testing.T) {
 				require.NotEmpty(t, scheduled,
 					"no schedule-driven automation stands without a delay, so the example does not show that the two never combine")
 			})
+
+			t.Run("declares the business rules its rejections name", func(t *testing.T) {
+				model := parseExample(t, "all_patterns.emod")
+
+				var declared []string
+				for _, context := range model.Contexts {
+					for _, invariant := range context.Invariants {
+						declared = append(declared, invariant.Name)
+					}
+					for _, aggregate := range context.Aggregates {
+						for _, invariant := range aggregate.Invariants {
+							declared = append(declared, invariant.Name)
+						}
+					}
+				}
+
+				require.NotEmpty(t, declared,
+					"no scope declares an invariant, so the example does not show where a business rule lives")
+			})
+
+			t.Run("concludes a spec with every outcome the language offers", func(t *testing.T) {
+				model := parseExample(t, "all_patterns.emod")
+
+				stated := make(map[string]bool)
+				for _, spec := range declaredSpecs(model) {
+					switch spec.Then.(type) {
+					case *ast.ThenEvents:
+						stated["events"] = true
+					case *ast.ThenRejected:
+						stated["rejected"] = true
+					case *ast.ThenView:
+						stated["view"] = true
+					case *ast.ThenCommand:
+						stated["command"] = true
+					}
+				}
+
+				var unstated []string
+				for _, outcome := range []string{"events", "rejected", "view", "command"} {
+					if !stated[outcome] {
+						unstated = append(unstated, outcome)
+					}
+				}
+
+				require.Empty(t, unstated,
+					"no spec concludes with these outcomes, so the example does not show them")
+			})
+
+			t.Run("states example payloads on a given, a when and a then reference", func(t *testing.T) {
+				model := parseExample(t, "all_patterns.emod")
+
+				carried := make(map[string]bool)
+				for _, spec := range declaredSpecs(model) {
+					for _, given := range spec.Given {
+						if len(given.Payload) > 0 {
+							carried["given"] = true
+						}
+					}
+					if spec.When != nil && len(spec.When.Payload) > 0 {
+						carried["when"] = true
+					}
+					if outcome, ok := spec.Then.(*ast.ThenEvents); ok {
+						for _, event := range outcome.Events {
+							if len(event.Payload) > 0 {
+								carried["then"] = true
+							}
+						}
+					}
+				}
+
+				var bare []string
+				for _, position := range []string{"given", "when", "then"} {
+					if !carried[position] {
+						bare = append(bare, position)
+					}
+				}
+
+				require.Empty(t, bare,
+					"no spec states an example payload in these positions")
+			})
+
+			t.Run("states a payload literal that is not a string", func(t *testing.T) {
+				model := parseExample(t, "all_patterns.emod")
+
+				var unquoted []string
+				for _, stated := range declaredPayloads(model) {
+					if stated.Kind != ast.StringLiteral {
+						unquoted = append(unquoted, stated.Name)
+					}
+				}
+
+				require.NotEmpty(t, unquoted,
+					"every payload value is quoted, so the example shows only one of the three literal forms")
+			})
+
+			t.Run("refuses a command on the timeline", func(t *testing.T) {
+				model := parseExample(t, "all_patterns.emod")
+
+				var refused []string
+				for _, slice := range model.AllSlices() {
+					for _, rejection := range slice.Rejections {
+						refused = append(refused, rejection.CommandName)
+					}
+				}
+
+				require.NotEmpty(t, refused,
+					"no flow states a rejection entry, so the example does not show a command an invariant refuses")
+			})
 		})
 	})
 
@@ -1265,6 +1373,34 @@ func declaredAutomations(model *ast.Model) []*ast.Automation {
 	}
 
 	return automations
+}
+
+func declaredSpecs(model *ast.Model) []*ast.Spec {
+	var specs []*ast.Spec
+	for _, slice := range model.AllSlices() {
+		specs = append(specs, slice.Specs...)
+	}
+
+	return specs
+}
+
+func declaredPayloads(model *ast.Model) []*ast.PayloadField {
+	var stated []*ast.PayloadField
+	for _, spec := range declaredSpecs(model) {
+		for _, given := range spec.Given {
+			stated = append(stated, given.Payload...)
+		}
+		if spec.When != nil {
+			stated = append(stated, spec.When.Payload...)
+		}
+		if outcome, ok := spec.Then.(*ast.ThenEvents); ok {
+			for _, event := range outcome.Events {
+				stated = append(stated, event.Payload...)
+			}
+		}
+	}
+
+	return stated
 }
 
 func declaredFields(model *ast.Model) []*ast.Field {

@@ -13,6 +13,11 @@ context "Reservations" {
 
   aggregate "Reservation" {
     description "One guest holding one room over one date range"
+    invariant RoomHeldOnce "A room holds at most one reservation over any overlapping stay"
+    invariant StayEndsAfterItBegins "A reservation's check-out date falls after its check-in date"
+    invariant StayClosedOnce "A stay is closed exactly once"
+    invariant OneReservationPerBooking "A partner's booking reference maps to at most one reservation"
+    invariant OnlyUnstartedStaysExpire "Only a reservation whose stay never began is released by the overnight sweep"
 
     # Slice 1: Command Pattern
     slice "Reserve a Room" {
@@ -26,10 +31,12 @@ context "Reservations" {
       command ReserveRoom {
         description "Ask the hotel to hold a room for a stay"
         fields {
-          roomId    string required
-          guestName string required
-          checkIn   date   required
-          checkOut  date   required
+          roomId     string required
+          guestName  string required
+          checkIn    date   required
+          checkOut   date   required
+          guests     int    required
+          accessible bool   optional
         }
       }
 
@@ -42,12 +49,32 @@ context "Reservations" {
           guestName     string    required
           checkIn       date      required
           checkOut      date      required
+          guests        int       required
+          accessible    bool      optional
           reservedAt    timestamp required
         }
       }
 
       flow {
         command -> event: ReserveRoom -> RoomReserved
+        command -> rejected: ReserveRoom -> RoomHeldOnce
+      }
+
+      spec "holds a room nobody has booked" {
+        given []
+        when ReserveRoom { roomId: "R-204", guestName: "Ada Lovelace", checkIn: "2026-04-17", checkOut: "2026-04-20", guests: 2, accessible: true }
+        then [RoomReserved { reservationId: "RES-8814", roomId: "R-204", guests: 2, accessible: true, reservedAt: "2026-03-02T09:41:00Z" }]
+      }
+
+      spec "refuses a room already held over the same nights" {
+        given [RoomReserved { roomId: "R-204", checkIn: "2026-04-17", checkOut: "2026-04-20" }]
+        when ReserveRoom { roomId: "R-204", checkIn: "2026-04-18", checkOut: "2026-04-21" }
+        then rejected RoomHeldOnce
+      }
+
+      spec "refuses a stay that ends before it begins" {
+        when ReserveRoom { roomId: "R-311", checkIn: "2026-04-20", checkOut: "2026-04-17" }
+        then rejected StayEndsAfterItBegins
       }
     }
 
@@ -64,6 +91,10 @@ context "Reservations" {
           nextCheckIn date   optional
         }
         subscribes [RoomReserved, GuestCheckedOut]
+      }
+
+      spec "lists the rooms a guest can still book" {
+        then view AvailableRoomsView
       }
     }
 
@@ -90,6 +121,18 @@ context "Reservations" {
       flow {
         command -> event: CheckOutGuest -> GuestCheckedOut
       }
+
+      spec "closes a stay that is under way" {
+        given [RoomReserved { reservationId: "RES-8814" }]
+        when CheckOutGuest { reservationId: "RES-8814" }
+        then [GuestCheckedOut { reservationId: "RES-8814", roomId: "R-204", checkedOutAt: "2026-04-20T10:05:00Z" }]
+      }
+
+      spec "refuses to close a stay that already ended" {
+        given [RoomReserved { reservationId: "RES-8814" }, GuestCheckedOut { reservationId: "RES-8814" }]
+        when CheckOutGuest { reservationId: "RES-8814" }
+        then rejected StayClosedOnce
+      }
     }
 
     # Slice 4: Automation Pattern
@@ -111,6 +154,11 @@ context "Reservations" {
         reads PendingConfirmationsView
         command SendConfirmationEmail
         target context Notifications
+      }
+
+      spec "asks for a confirmation once a booking has settled" {
+        when RoomReserved
+        then command SendConfirmationEmail
       }
     }
 
@@ -147,6 +195,17 @@ context "Reservations" {
           }
         }
       }
+
+      spec "records a booking a partner took" {
+        when ImportExternalReservation { externalRef: "BK-77213", roomId: "R-118", guestName: "Grace Hopper" }
+        then [ExternalReservationImported { reservationId: "RES-9042", externalRef: "BK-77213", source: "Booking.com" }]
+      }
+
+      spec "refuses a partner booking already recorded" {
+        given [ExternalReservationImported { externalRef: "BK-77213" }]
+        when ImportExternalReservation { externalRef: "BK-77213" }
+        then rejected OneReservationPerBooking
+      }
     }
 
     # Slice 6: Automation Pattern — woken by a schedule
@@ -178,6 +237,22 @@ context "Reservations" {
       flow {
         command -> event: ExpireReservation -> ReservationExpired
       }
+
+      spec "asks for a release on every overnight sweep" {
+        then command ExpireReservation
+      }
+
+      spec "releases a room nobody confirmed" {
+        given [RoomReserved { reservationId: "RES-8814" }]
+        when ExpireReservation { reservationId: "RES-8814" }
+        then [ReservationExpired { reservationId: "RES-8814", roomId: "R-204", expiredAt: "2026-03-03T02:00:00Z" }]
+      }
+
+      spec "refuses to release a stay that already ended" {
+        given [RoomReserved { reservationId: "RES-8814" }, GuestCheckedOut { reservationId: "RES-8814" }]
+        when ExpireReservation { reservationId: "RES-8814" }
+        then rejected OnlyUnstartedStaysExpire
+      }
     }
 
     # Slice 7: View Pattern — the expirer's todo list
@@ -192,6 +267,10 @@ context "Reservations" {
         }
         subscribes [RoomReserved, ReservationExpired]
       }
+
+      spec "lists the bookings the sweep has left to do" {
+        then view UnconfirmedReservationsView
+      }
     }
   }
 }
@@ -201,6 +280,7 @@ context "Notifications" {
 
   aggregate "Notification" {
     description "One message sent to one guest"
+    invariant OneConfirmationPerBooking "A booking is confirmed to its guest exactly once"
 
     slice "Send Confirmation" {
       description "Emailing a guest the booking they just made"
@@ -211,6 +291,31 @@ context "Notifications" {
           guestName     string required
           email         string required
         }
+      }
+
+      event ConfirmationEmailSent {
+        description "A guest was emailed the confirmation of their booking"
+        type "com.hotel.notifications.confirmation-email-sent"
+        fields {
+          reservationId string    required
+          email         string    required
+          sentAt        timestamp required
+        }
+      }
+
+      flow {
+        command -> event: SendConfirmationEmail -> ConfirmationEmailSent
+      }
+
+      spec "emails a guest the booking they just made" {
+        when SendConfirmationEmail { reservationId: "RES-8814", guestName: "Ada Lovelace", email: "ada@example.com" }
+        then [ConfirmationEmailSent { reservationId: "RES-8814", email: "ada@example.com", sentAt: "2026-03-02T09:56:00Z" }]
+      }
+
+      spec "refuses to confirm a booking a second time" {
+        given [ConfirmationEmailSent { reservationId: "RES-8814" }]
+        when SendConfirmationEmail { reservationId: "RES-8814" }
+        then rejected OneConfirmationPerBooking
       }
     }
   }

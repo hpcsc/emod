@@ -2,7 +2,7 @@
 
 ## Progress
 - [x] Task 1: Pin the version, describe the constructs, bind wire types and delay an automation in the flagship example
-- [ ] Task 2: State the invariants, specs and rejection path in the flagship example
+- [x] Task 2: State the invariants, specs and rejection path in the flagship example
 - [ ] Task 3: Add `examples/specs_hotel.emod` as a model that validates
 - [ ] Task 4: Document the elapsed-time automation and close the reference's coverage of the batch
 
@@ -453,53 +453,53 @@ the moment the file states its first spec, `spec/command-without-spec` opens on 
 declares, so a partial adoption does not validate.
 
 **Acceptance Criteria:**
-- [ ] Every aggregate that owns a slice stating a rejection declares at least one `invariant`, and
+- [x] Every aggregate that owns a slice stating a rejection declares at least one `invariant`, and
       every invariant the file declares is named by at least one `then rejected` in a slice of the
       scope that declares it — so `spec/invariant-never-exercised` reports nothing
-- [ ] Every command the file declares — the five under both contexts — is named by the `when` of at
+- [x] Every command the file declares — the five under both contexts — is named by the `when` of at
       least one spec, so `spec/command-without-spec` reports nothing. A `then command` outcome does not
       count, per US-008's Open question 2
-- [ ] Every command that any spec exercises has at least one spec among its own whose `then` is a
+- [x] Every command that any spec exercises has at least one spec among its own whose `then` is a
       rejection, so `spec/no-rejection-path` reports nothing
-- [ ] All four spec shapes appear in the file, each in a slice that declares the construct US-007's
+- [x] All four spec shapes appear in the file, each in a slice that declares the construct US-007's
       Open question 1 requires of it: a `then` event list and a `then rejected` in slices declaring a
       command; a `then view` outcome in a slice declaring a view; a `then command` outcome in a slice
       declaring an automation
-- [ ] Both automation spec shapes appear: one spec whose `when` names an event-activated automation's
+- [x] Both automation spec shapes appear: one spec whose `when` names an event-activated automation's
       activation event, and one in a schedule-activated automation's slice that omits `when` entirely
       — the two are told apart by the `then` shape, and the file is where a reader sees that
-- [ ] A spec in a view slice omits `when` and concludes with a `then view` outcome naming a view the
+- [x] A spec in a view slice omits `when` and concludes with a `then view` outcome naming a view the
       file declares
-- [ ] Every event named in a `given` list belongs to the aggregate enclosing the slice that states it,
+- [x] Every event named in a `given` list belongs to the aggregate enclosing the slice that states it,
       so `spec/given-outside-boundary`'s aggregate arm reports nothing. Aggregate "Notification"
       declares no event of its own, so the spec exercising `SendConfirmationEmail` states no `given`
       unless that slice first declares an event
-- [ ] At least one event reference in a `given`, at least one command reference in a `when`, and at
+- [x] At least one event reference in a `given`, at least one command reference in a `when`, and at
       least one event reference in a `then` list carry an example payload, and every field a payload
       names is declared on the referenced construct's `fields`
-- [ ] At least one payload states a literal that is not a string, and the field it names is declared
+- [x] At least one payload states a literal that is not a string, and the field it names is declared
       with a type that literal satisfies — so the example shows more than one of the three literal
       forms
-- [ ] At least one `flow` block states a rejection entry naming a command and an invariant declared in
+- [x] At least one `flow` block states a rejection entry naming a command and an invariant declared in
       the enclosing scope, and the slice declaring that entry also declares a spec whose `when` names
       that same command and whose `then` rejects that same invariant — both halves, on that slice, per
       US-009's Open question 5, so `flow/rejection-without-spec` reports nothing
-- [ ] `cli.RunValidate` returns no error for `examples/all_patterns.emod`, and `cli.RunLint` likewise:
+- [x] `cli.RunValidate` returns no error for `examples/all_patterns.emod`, and `cli.RunLint` likewise:
       the six rules this batch adds and the rules already in the tree are all quiet, including
       `orphan-command` and `orphan-event`, which a spec does not satisfy
       (`tasks/learnings.md:191-194`) — so every command keeps its flow, automation or translation and
       every event keeps its producer
-- [ ] The coverage leaf from Task 1 grows to require: at least one invariant declared; at least one
+- [x] The coverage leaf from Task 1 grows to require: at least one invariant declared; at least one
       spec stating each of the four `then` shapes; at least one spec carrying a payload on a `given`, a
       `when` and a `then` reference; and at least one rejection entry in a `flow`. Presence only, as
       before
-- [ ] `internal/export/export_test.go` and `internal/cli/export_test.go` pass with no edit
-- [ ] `git diff` touches `examples/all_patterns.emod` and the one test file and nothing else;
+- [x] `internal/export/export_test.go` and `internal/cli/export_test.go` pass with no edit
+- [x] `git diff` touches `examples/all_patterns.emod` and the one test file and nothing else;
       `examples/dcb_model.emod`, `examples/error_diagnostics_test.emod`,
       `internal/parser/testdata/*.emod`, `internal/test/fixtures.go` and every golden and canonical
       constant in the repository are unchanged
-- [ ] `emod fmt` is not run over the file and the file is not required to pass `emod fmt --check`
-- [ ] `mise exec -- task test:unit` passes with no test skipped or weakened
+- [x] `emod fmt` is not run over the file and the file is not required to pass `emod fmt --check`
+- [x] `mise exec -- task test:unit` passes with no test skipped or weakened
 
 **Affected Files/Modules:**
 - `examples/all_patterns.emod` — invariants on aggregates "Reservation" (`:7`) and "Notification"
