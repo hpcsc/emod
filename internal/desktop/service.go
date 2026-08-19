@@ -1,4 +1,5 @@
-// Package desktop exposes the emod pipeline to a native shell. It imports no
+// Package desktop is what a native shell binds to: the emod pipeline, and the
+// filesystem reads a shell needs to put a model in front of it. It imports no
 // GUI framework and links no CGO, so it is testable and buildable everywhere
 // the rest of the repository is, and the framework-specific shell stays a thin
 // binding layer over it.
