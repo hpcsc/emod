@@ -303,39 +303,33 @@ cost is `go.mod` growing from 35 require lines to 174, none of which reaches the
 
 ## Theory
 
-The whole story is one structural move performed three times, and the reason it is cheap is that the
-repo already put a seam where the seam needs to go. `wasm.js` is 71 lines with three importers and
-seven test files mocking it; every test that stubs it is already stubbing *the boundary between the
-UI and the Go core*, not the browser. So Phase 1 is not "introduce an abstraction" — it is "rename
-the abstraction that exists to what it is, and move three more browser-shaped things behind it".
-Read Tasks 4, 5 and 6 as three small subtractions from `viewer.js`: after them that file names no
-browser API that a native shell cannot provide, and it is the only file that had any.
+The viewer now runs as three distributions over two runtimes from one copy of its source, and the
+thing that makes that possible is a single module. `internal/frontend/static/platform.js` is the
+seam: every shared UI module imports it for the four things a host supplies rather than the UI —
+reaching the Go core, reading a dropped file, saving an exported model, and answering what state the
+app opened with — and nothing under `static/` branches on where it is running.
+`platform.browser.js` implements that over WebAssembly, `fetch` and a blob download;
+`desktop/platform.desktop.js` implements it over Wails bindings into `internal/desktop.ModelService`,
+which is deliberately framework-free so it stays testable and buildable everywhere the rest of the
+repository is. Below the seam, `internal/pipeline` (renamed from `internal/wasm`) is the one
+orchestration all of them share, and `internal/frontend` now holds the assets while `internal/viewer`
+holds only the CLI's localhost delivery, so a caller that needs the UI no longer depends on an HTTP
+server it must never start.
 
-Phase 0 is the part that looks like busywork and is not. `internal/viewer` currently means both "the
-UI every distribution shares" and "the localhost server one distribution uses"; a desktop app that
-imports it would be importing an HTTP server it must never start. Splitting it makes the dependency
-the desktop app is allowed to have expressible. The trap is `generated/` (F2): it is not in §5.2's
-list, it is gitignored, and `embed.go` names it — so the split is not "move four things", it is
-"move the assets *and* redirect the build output that lands among them", and a half-done version
-fails at `//go:embed` rather than at a test.
+The decision that was not forced is *when* a distribution's implementation is chosen. It is chosen
+when the distribution is assembled — `build:web` ships the browser file, `build:desktop` copies the
+desktop one over `platform.js` in its own gitignored tree — rather than at runtime by sniffing for a
+Wails global. Runtime detection was the cheaper option and was rejected: it ships both
+implementations to every host, puts environment sniffing in a hot path, and would have put desktop
+code on the public web bundle. The same reasoning keeps `platform.desktop.js` outside `static/`,
+because that directory is copied and embedded wholesale.
 
-The two places to read hardest are the ones nothing in the tree can catch. First, F5: `static/*` is
-copied wholesale by `build:web` and embedded wholesale by `embed.go`, so a desktop adapter parked in
-that directory is shipped to GitHub Pages and baked into the CLI binary, and no test anywhere would
-notice. Second, F3: `task test:unit` enumerates packages with `go list ./...`, so the moment
-`cmd/emod-desktop` exists it is in the set, and CI — which installs no WebKit headers — starts
-failing for reasons that read as unrelated to the commit that caused them. Both are one-line
-mistakes with no test surface, which is why both are acceptance criteria rather than notes.
-
-The alpha is the only genuine unknown, and it is deliberately isolated into Task 8: a pinned
-dependency and a window, with no adapter, no bindings and no shared assets in the commit. If the
-framework's API has moved since the proposal was written, that is where it surfaces — as a build
-failure in a task whose whole diff is a `go.mod` line, a `mise.toml` line, a Taskfile target and a
-`main.go`, rather than tangled into the frontend assembly. Task 9's blank-page risk is the mirror
-image: a webview that fails to import one module renders nothing and says nothing, so verify it by
-what the window *draws*, not by what the build exits with.
-
----
+Read the assembly step hardest. `build:desktop` derives the desktop page from the shared
+`viewer.html` with `sed`, and substitutes the platform implementation by filename convention; nothing
+verifies that the derived page still loads every module the shared frontend imports. A future edit
+to `viewer.html` that renames a script tag or moves the WebAssembly glue onto a different line
+produces a desktop page that no suite ever sees, and the failure mode is a window that renders
+nothing and reports nothing. That is the weakest joint in the claim that one source feeds all three.
 
 ## Tasks
 
