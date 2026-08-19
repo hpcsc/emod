@@ -358,6 +358,36 @@ carrying the coverage leaf; `editors/`; `README.md`; `docs/proposals/`; `user-st
 
 ---
 
+## Theory
+
+The branch adds two teaching models and the guard that turns them from files into claims.
+`examples/all_patterns.emod` is the model `docs/dsl-reference.md` sends a reader to, and it now states
+every construct the specs-and-metadata batch introduced; `examples/specs_hotel.emod` carries the
+design proposal's Worked Example in as source the pipeline accepts, which took three repairs the
+proposal's prose does not mention — a view renamed so `view-naming` accepts it, specs for the two
+commands that had none, and two more invariants so each of those commands can be refused. The guard is
+`TestExamples` in `internal/cli/examples_test.go`: nineteen presence-only leaves that parse each
+example from disk and require it to *state* each construct, naming no construct, wire type or duration
+so the examples stay free to grow; the alternative was transcribing each example's declared names into
+expected lists, the shape `internal/test/fixtures.go` uses for shared fixtures, which catches more but
+turns every future edit to a teaching file into an expected-value edit. Both examples are `emod fmt`
+canonical and a leaf holds them there, which is why one commit is a large reformat: a file the
+reference points readers at should not be one the project's own formatter immediately rewrites.
+
+Check the lint arithmetic in `all_patterns.emod` hardest. `spec/command-without-spec` fires only once a
+model states its first spec, so the file's spec adoption is one indivisible edit in which every command
+needs a spec whose `when` names it, every exercised command needs a rejection among its specs, every
+invariant needs a rejection exercising it, every `given` must name an event of its own aggregate, and
+any rejection edge on a flow needs its exercising spec on the same slice — five interlocking rules
+whose only guard is `cli.RunValidate` returning no error, so a later edit that adds a command breaks
+them in a way that reads as unrelated to the addition. The second thing to read closely is what each
+view subscribes to: a todo list that never observes the events retiring its rows is the anti-pattern
+this batch exists to make visible, and `todoListLoops` only checks that an automation's own command
+produces something the view observes — which events *retire* a row is a domain judgement no guard here
+makes.
+
+---
+
 ## Tasks
 
 ### Task 1: Pin the version, describe the constructs, bind wire types and delay an automation in the flagship example
