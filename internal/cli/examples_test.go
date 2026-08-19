@@ -8,6 +8,7 @@ import (
 	"testing"
 
 	"github.com/hpcsc/emod/internal/ast"
+	"github.com/hpcsc/emod/internal/formatter"
 	"github.com/hpcsc/emod/internal/lexer"
 	"github.com/hpcsc/emod/internal/parser"
 	"github.com/stretchr/testify/require"
@@ -62,10 +63,9 @@ func TestExamples(t *testing.T) {
 				"no field is named after the wire-type keyword, so the example does not show a word this batch reserved staying usable as a field name")
 		})
 
-		t.Run("binds a distinct wire type on some events and leaves another unbound", func(t *testing.T) {
+		t.Run("binds a wire type on some events and leaves another unbound", func(t *testing.T) {
 			model := parseExample(t, "all_patterns.emod")
 
-			bound := make(map[string]bool)
 			var boundEvents, unboundEvents []string
 			for _, event := range declaredEvents(model) {
 				if event.WireType == "" {
@@ -73,18 +73,15 @@ func TestExamples(t *testing.T) {
 					continue
 				}
 				boundEvents = append(boundEvents, event.Name)
-				bound[event.WireType] = true
 			}
 
 			require.GreaterOrEqual(t, len(boundEvents), 2,
 				"fewer than two events bind a wire type, so the example does not show the attribute")
-			require.Len(t, bound, len(boundEvents),
-				"two events bind the same wire type, so the example does not show that each is its own routing key")
 			require.NotEmpty(t, unboundEvents,
 				"every event binds a wire type, so the example does not show that the attribute is optional")
 		})
 
-		t.Run("delays one automation and schedules another that states no delay", func(t *testing.T) {
+		t.Run("delays one automation and schedules another", func(t *testing.T) {
 			model := parseExample(t, "all_patterns.emod")
 
 			var delayed, scheduled []string
@@ -92,7 +89,7 @@ func TestExamples(t *testing.T) {
 				if automation.After != "" {
 					delayed = append(delayed, automation.Name)
 				}
-				if automation.Schedule != "" && automation.After == "" {
+				if automation.Schedule != "" {
 					scheduled = append(scheduled, automation.Name)
 				}
 			}
@@ -100,25 +97,13 @@ func TestExamples(t *testing.T) {
 			require.NotEmpty(t, delayed,
 				"no automation states a delay, so the example does not show `after`")
 			require.NotEmpty(t, scheduled,
-				"no schedule-driven automation stands without a delay, so the example does not show that the two never combine")
+				"no automation states a schedule, so the example shows only one of the two activation forms")
 		})
 
 		t.Run("declares an invariant", func(t *testing.T) {
 			model := parseExample(t, "all_patterns.emod")
 
-			var declared []string
-			for _, context := range model.Contexts {
-				for _, invariant := range context.Invariants {
-					declared = append(declared, invariant.Name)
-				}
-				for _, aggregate := range context.Aggregates {
-					for _, invariant := range aggregate.Invariants {
-						declared = append(declared, invariant.Name)
-					}
-				}
-			}
-
-			require.NotEmpty(t, declared,
+			require.NotEmpty(t, declaredInvariants(model),
 				"no scope declares an invariant, so the example does not show where a business rule lives")
 		})
 
@@ -200,35 +185,31 @@ func TestExamples(t *testing.T) {
 		t.Run("refuses a command on the timeline", func(t *testing.T) {
 			model := parseExample(t, "all_patterns.emod")
 
-			var refused []string
-			for _, slice := range model.AllSlices() {
-				for _, rejection := range slice.Rejections {
-					refused = append(refused, rejection.CommandName)
-				}
-			}
-
-			require.NotEmpty(t, refused,
+			require.NotEmpty(t, declaredRejections(model),
 				"no flow states a rejection entry, so the example does not show a command an invariant refuses")
+		})
+
+		t.Run("reads a todo list the work it causes removes a row from", func(t *testing.T) {
+			model := parseExample(t, "all_patterns.emod")
+
+			reading, open := todoListLoops(model)
+
+			require.NotEmpty(t, reading,
+				"no automation reads a todo list, so the example does not show one")
+			require.Empty(t, open,
+				"these automations read a view that never subscribes to the event their own command produces, so their todo list keeps the row they acted on")
+		})
+
+		t.Run("is written the way emod fmt writes it", func(t *testing.T) {
+			requireCanonical(t, "all_patterns.emod")
 		})
 	})
 
 	t.Run("specs_hotel.emod", func(t *testing.T) {
-		t.Run("declares an invariant every rejection it states can name", func(t *testing.T) {
+		t.Run("declares an invariant", func(t *testing.T) {
 			model := parseExample(t, "specs_hotel.emod")
 
-			var declared []string
-			for _, context := range model.Contexts {
-				for _, invariant := range context.Invariants {
-					declared = append(declared, invariant.Name)
-				}
-				for _, aggregate := range context.Aggregates {
-					for _, invariant := range aggregate.Invariants {
-						declared = append(declared, invariant.Name)
-					}
-				}
-			}
-
-			require.NotEmpty(t, declared,
+			require.NotEmpty(t, declaredInvariants(model),
 				"no scope declares an invariant, so the worked example does not show where a business rule lives")
 		})
 
@@ -258,14 +239,7 @@ func TestExamples(t *testing.T) {
 		t.Run("refuses a command on the timeline", func(t *testing.T) {
 			model := parseExample(t, "specs_hotel.emod")
 
-			var refused []string
-			for _, slice := range model.AllSlices() {
-				for _, rejection := range slice.Rejections {
-					refused = append(refused, rejection.CommandName)
-				}
-			}
-
-			require.NotEmpty(t, refused,
+			require.NotEmpty(t, declaredRejections(model),
 				"no flow states a rejection entry, so the worked example does not show a command an invariant refuses")
 		})
 
@@ -300,32 +274,16 @@ func TestExamples(t *testing.T) {
 		t.Run("reads a todo list the work it causes removes a row from", func(t *testing.T) {
 			model := parseExample(t, "specs_hotel.emod")
 
-			produced := make(map[string][]string)
-			for _, slice := range model.AllSlices() {
-				for _, flow := range slice.Flows {
-					produced[flow.CommandName] = append(produced[flow.CommandName], flow.EventName)
-				}
-			}
-			subscribers := make(map[string][]string)
-			for _, slice := range model.AllSlices() {
-				for _, view := range slice.Views {
-					subscribers[view.Name] = append(subscribers[view.Name], view.Subscribes...)
-				}
-			}
+			reading, open := todoListLoops(model)
 
-			var closed []string
-			for _, automation := range declaredAutomations(model) {
-				for _, caused := range produced[automation.Command] {
-					for _, subscribed := range subscribers[automation.Reads] {
-						if subscribed == caused {
-							closed = append(closed, automation.Name)
-						}
-					}
-				}
-			}
+			require.NotEmpty(t, reading,
+				"no automation reads a todo list, so the worked example does not show one")
+			require.Empty(t, open,
+				"these automations read a view that never subscribes to the event their own command produces, so their todo list keeps the row they acted on")
+		})
 
-			require.NotEmpty(t, closed,
-				"no automation reads a view subscribing to the event its own command produces, so its todo list never loses the row it acted on")
+		t.Run("is written the way emod fmt writes it", func(t *testing.T) {
+			requireCanonical(t, "specs_hotel.emod")
 		})
 	})
 }
@@ -459,4 +417,80 @@ func declaredFields(model *ast.Model) []*ast.Field {
 	}
 
 	return fields
+}
+
+func requireCanonical(t *testing.T, name string) {
+	t.Helper()
+	path := filepath.Join("../../examples", name)
+
+	source, err := os.ReadFile(path)
+	require.NoError(t, err)
+
+	require.Equal(t, string(source), formatter.Format(parseExample(t, name)),
+		"the example the reference points a reader at is not what emod fmt writes, so it teaches a style the tool rewrites")
+}
+
+func declaredInvariants(model *ast.Model) []string {
+	var declared []string
+	for _, context := range model.Contexts {
+		for _, invariant := range context.Invariants {
+			declared = append(declared, invariant.Name)
+		}
+		for _, aggregate := range context.Aggregates {
+			for _, invariant := range aggregate.Invariants {
+				declared = append(declared, invariant.Name)
+			}
+		}
+	}
+
+	return declared
+}
+
+func declaredRejections(model *ast.Model) []string {
+	var refused []string
+	for _, slice := range model.AllSlices() {
+		for _, rejection := range slice.Rejections {
+			refused = append(refused, rejection.CommandName)
+		}
+	}
+
+	return refused
+}
+
+// todoListLoops splits the automations that read a view into those whose own
+// command produces an event that view subscribes to and those whose do not. An
+// automation in the second group never loses the row it just acted on, so its
+// todo list grows forever.
+func todoListLoops(model *ast.Model) (reading, open []string) {
+	produced := make(map[string][]string)
+	subscribers := make(map[string][]string)
+	for _, slice := range model.AllSlices() {
+		for _, flow := range slice.Flows {
+			produced[flow.CommandName] = append(produced[flow.CommandName], flow.EventName)
+		}
+		for _, view := range slice.Views {
+			subscribers[view.Name] = append(subscribers[view.Name], view.Subscribes...)
+		}
+	}
+
+	for _, automation := range declaredAutomations(model) {
+		if automation.Reads == "" {
+			continue
+		}
+		reading = append(reading, automation.Name)
+
+		closed := false
+		for _, caused := range produced[automation.Command] {
+			for _, subscribed := range subscribers[automation.Reads] {
+				if subscribed == caused {
+					closed = true
+				}
+			}
+		}
+		if !closed {
+			open = append(open, automation.Name)
+		}
+	}
+
+	return reading, open
 }

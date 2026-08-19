@@ -10,7 +10,7 @@ context "Reservations" {
   description "Owns the reservation lifecycle from booking to checkout"
   aggregate "Reservation" {
     invariant RoomNotDoubleBooked "A room has at most one active reservation for any date range"
-    invariant RoomHeldOnce "A room carries at most one outstanding hold"
+    invariant OneOutstandingHoldPerRoom "A room carries at most one outstanding hold"
     invariant HoldReleasedOnce "A hold is released exactly once"
     slice "Reserve a Room" {
       trigger "Reservation Form" {
@@ -86,7 +86,7 @@ context "Reservations" {
       spec "rejects a hold on a room already held" {
         given [RoomHeld { roomId: "204" }]
         when  HoldRoom { roomId: "204" }
-        then  rejected RoomHeldOnce
+        then  rejected OneOutstandingHoldPerRoom
       }
     }
 

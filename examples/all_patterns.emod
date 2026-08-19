@@ -12,7 +12,7 @@ context "Reservations" {
   description "Everything the hotel knows about who holds which room"
   aggregate "Reservation" {
     description "One guest holding one room over one date range"
-    invariant RoomHeldOnce "A room holds at most one reservation over any overlapping stay"
+    invariant RoomNotDoubleBooked "A room holds at most one reservation over any overlapping stay"
     invariant StayEndsAfterItBegins "A reservation's check-out date falls after its check-in date"
     invariant StayClosedOnce "A stay is closed exactly once"
     invariant OneReservationPerBooking "A partner's booking reference maps to at most one reservation"
@@ -55,7 +55,7 @@ context "Reservations" {
 
       flow {
         command -> event:    ReserveRoom -> RoomReserved
-        command -> rejected: ReserveRoom -> RoomHeldOnce
+        command -> rejected: ReserveRoom -> RoomNotDoubleBooked
       }
 
       spec "holds a room nobody has booked" {
@@ -81,7 +81,7 @@ context "Reservations" {
       spec "refuses a room already held over the same nights" {
         given [RoomReserved { roomId: "R-204", checkIn: "2026-04-17", checkOut: "2026-04-20" }]
         when  ReserveRoom { roomId: "R-204", checkIn: "2026-04-18", checkOut: "2026-04-21" }
-        then  rejected RoomHeldOnce
+        then  rejected RoomNotDoubleBooked
       }
 
       spec "refuses a stay that ends before it begins" {
@@ -106,7 +106,8 @@ context "Reservations" {
       }
 
       spec "lists the rooms a guest can still book" {
-        then view AvailableRoomsView
+        given [RoomReserved, GuestCheckedOut]
+        then  view AvailableRoomsView
       }
     }
 
@@ -161,7 +162,7 @@ context "Reservations" {
       description "Confirming a booking once the guest has had time to correct it"
       view PendingConfirmationsView {
         description "Bookings still waiting on their confirmation email"
-        subscribes [RoomReserved]
+        subscribes [RoomReserved, ConfirmationEmailSent]
         fields {
           reservationId string    required
           guestName     string    required
@@ -270,7 +271,8 @@ context "Reservations" {
       }
 
       spec "asks for a release on every overnight sweep" {
-        then command ExpireReservation
+        given [RoomReserved]
+        then  command ExpireReservation
       }
 
       spec "releases a room nobody confirmed" {
@@ -309,7 +311,8 @@ context "Reservations" {
       }
 
       spec "lists the bookings the sweep has left to do" {
-        then view UnconfirmedReservationsView
+        given [RoomReserved]
+        then  view UnconfirmedReservationsView
       }
     }
   }
