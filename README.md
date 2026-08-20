@@ -392,14 +392,28 @@ cannot be read at all says why and leaves the model already on screen alone.
 This is the one thing the browser viewer cannot do: a file it reads through a
 drop carries contents and never a location.
 
+**File ▸ Save** (⌘S, Ctrl+S) writes the model back to the file it was opened
+from — that exact path, no dialog — and confirms in the bar along the bottom.
+With no file open, and for **File ▸ Save As** (⇧⌘S, Ctrl+Shift+S), the operating
+system's save dialog asks where, and the file chosen becomes the target every
+later Save writes to. What Save writes is the source in the panel, so a file
+opened and saved with nothing edited is unchanged byte for byte, line endings
+included. A write the filesystem refuses — a read-only file, a directory that
+may not be written into — says why and leaves what is on disk untouched.
+
+Save and Export answer different questions. Export writes the model
+re-serialised from the diagram, which is canonically formatted and carries no
+comments; Save writes the text in the source panel. Reconciling the two, once
+the diagram and the panel can both be edited, is still to come.
+
 The framework version is pinned in `go.mod`, which carries both the library
 requirement and a `tool` directive for the `wails3` CLI, so the two cannot
 drift and neither is resolved from `PATH`. Run the CLI as `go tool wails3`.
 
-What it does not do yet: no saving — Export reports that it is unavailable
-rather than writing a file, so a model can be opened and read but not written
-back; no packaged `.app` or installer; and no prebuilt download, so it has to be
-built from source.
+What it does not do yet: nothing marks a model as having unsaved changes, so
+closing the window discards edits without asking, and a diagram edit does not
+reach the source panel and so is not what Save writes; no packaged `.app` or
+installer; and no prebuilt download, so it has to be built from source.
 
 How the repository fits together — packages, the language pipeline, renderers,
 the viewer's three distributions and the editor grammars — is described in

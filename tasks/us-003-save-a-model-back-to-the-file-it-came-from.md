@@ -445,11 +445,11 @@ desktop section states that the app cannot save; the architecture document's sea
 enumerates what the seam carries and describes only opening as running from the host inward.
 
 **Acceptance Criteria:**
-- [ ] The README's desktop section names Save and Save As, their shortcuts, what Save writes and where it writes it, and no longer says the app cannot save
-- [ ] It still names what the desktop app cannot do yet, narrowed to what is actually still missing
-- [ ] The architecture document's seam paragraph names every capability the seam now carries, and the paragraph describing the host-driven direction covers saving as well as opening; its diagram is still accurate
-- [ ] A grep for the superseded claims finds nothing, and no added text describes the documents' own history
-- [ ] No behaviour changes; every suite stays green
+- [x] The README's desktop section names Save and Save As, their shortcuts, what Save writes and where it writes it, and no longer says the app cannot save
+- [x] It still names what the desktop app cannot do yet, narrowed to what is actually still missing
+- [x] The architecture document's seam paragraph names every capability the seam now carries, and the paragraph describing the host-driven direction covers saving as well as opening; its diagram is still accurate
+- [x] A grep for the superseded claims finds nothing, and no added text describes the documents' own history
+- [x] No behaviour changes; every suite stays green
 
 **Affected Files/Modules:**
 - `README.md:371-402` — the "Desktop app" section, including the "What it does not do yet" paragraph
