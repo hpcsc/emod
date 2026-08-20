@@ -1033,3 +1033,57 @@ in this repo; append only learnings that generalise beyond the task that surface
 - Observed: US-002 open a model with a native file dialog
 - Learning: The File-menu task was planned low certainty on the grounds that cmd/emod-desktop had never built a menu or emitted an event, and it landed first try with a clean lint. What made it routine was reading menu.go, roles.go, menuitem.go and the dialogs source out of the module cache during Phase 0, before any task started — which also produced the accelerator syntax, the DefaultApplicationMenu composition and the cancel-as-empty-string contract. Budget the API read once at the start rather than pausing per task; the pause buys nothing the reading has not already answered.
 - Apply when: assessing certainty for a task against an unfamiliar framework API, or deciding whether to pause on a low-certainty desktop-shell task
+
+## A textarea normalises CRLF, so the panel is never the file's bytes
+- Type: constraint
+- Observed: task 2 — US-003 save a model back to the file it came from
+- Learning: internal/frontend/static/viewer.js's source panel is a <textarea>, and a textarea's .value returns the API value with every CRLF and lone CR normalised to LF — measured in this repo's jsdom, and the same in a browser. Writing what the panel holds back to the file it came from therefore rewrites every line ending in a CRLF model, with a green suite: viewer.test.js already asserted the panel's value differs from what was delivered, so the trap was load-bearing before anyone tried to save. sourceToSave (module scope in viewer.js, exported for direct tests) keeps the text the file arrived with on store.currentFile.content and hands it back untouched when the panel matches its normalisation, applying the file's own convention only once it has been edited. Any future surface that writes the panel's text to disk must go through it rather than reading .value.
+- Apply when: writing the source panel's text to a file, or judging whether what a textarea holds is what was read into it
+
+## The panel's text and the open file's identity are committed at different moments
+- Type: recurring-finding
+- Observed: task 2 — US-003 save a model back to the file it came from
+- Learning: renderPanelSource (viewer.js) sets the panel's text the instant a file arrives but commits store.currentFile only once the parse resolves — deliberately, so a render the parse rejects leaves the window naming the model still on screen. Any operation that reads both is therefore reading across a gap: a save taken between them writes the arriving model's source to the departing model's path, which three separate audit findings named. The fix is a saveQueue every save chains onto plus rendersSettled(), which re-checks latestRenderSettled after each wait because a file arriving during the wait starts another render — waiting once is not enough, and the partial fix was re-raised as HIGH in the next round. A completed save adopts its target only if store.currentFile is still the same object it captured.
+- Apply when: adding any host-driven operation to the viewer that reads store.dom.sourceInput together with store.currentFile — saving, unsaved-change marking, file watching, drop handling
+
+## A cleanup or ordering guard that asserts the request, not the landing, cannot fail
+- Type: recurring-finding
+- Observed: US-003 save a model back to the file it came from
+- Learning: Two guards written on this branch passed with the code they named deleted, in different languages and for the same reason: each asserted a proxy for the thing. 'leaves no working file beside the target' could not fail because os.Rename consumes the working file on success and the refusal chosen never reached os.CreateTemp — so the defer that removes it was deletable. 'writes the newer of two overlapping saves last' asserted the order saveFile was *called*, which is identical with and without the queue; the discriminating assertion is that the second write is not issued at all while the first is in flight. Both were found only by mutating. Before writing a guard for cleanup or ordering, name the single line whose deletion it must redden, delete that line, and run it.
+- Apply when: writing a test for a cleanup path, a queue, a serialisation, or anything whose effect is that something did NOT happen
+
+## A darwin deny-delete ACL is the only reachable failure after a working file exists
+- Type: constraint
+- Observed: task 1 — US-003 save a model back to the file it came from
+- Learning: internal/desktop's write completes into a working file and renames it over the target, and nothing between os.CreateTemp and os.Rename can be made to fail portably — which is why the cleanup path looked untestable. A rename over an existing target needs permission to DELETE that target, which prepareTarget's O_WRONLY open does not prove, and a macOS ACL separates the two: '/bin/chmod +a "davidnguyen deny delete" <target>' makes the rename fail with a *os.LinkError while the working file is still freely removable. That is what makes both the cleanup and the LinkError arm of failureReason testable at all. Two riders: invoke /bin/chmod by absolute path, because a GNU chmod earlier on PATH does not understand +a and fails the leaf for the wrong reason; and do NOT use file_inherit to reach the created-target rollback, because the working file inherits the same denial and cleanup is then refused by the very ACL under test.
+- Apply when: testing a failure that can only happen after a temporary file has been created, or covering an os.Rename error arm
+
+## A mode assertion cannot discriminate under the umask it was written on
+- Type: constraint
+- Observed: task 1 — US-003 save a model back to the file it came from
+- Learning: os.Chmod is not filtered by the umask, so a literal mode anywhere in a write path is invisible wherever the umask happens to agree with it — and 022, this machine's default and CI's, makes a hardcoded 0o644 identical to what 0o666 &^ umask produces. A leaf comparing the created file against an OS-created reference in the same directory is the right assertion and still cannot fail there; it was raised as vacuous by two audit rounds. Setting the umask inside the test is the only thing that decides it, and syscall.Umask does not exist on Windows, so that leaf lives in file_service_unix_test.go behind 'unit && !windows' rather than in the FileService umbrella. Verify any permission assertion by running it under a second umask before believing it guards anything.
+- Apply when: asserting the permission bits of a file the code creates, or reviewing a leaf that does
+
+## A Wails Menu can adopt pre-built items through NewMenuFromItems
+- Type: constraint
+- Observed: task 3 — US-003 save a model back to the file it came from
+- Learning: application.Menu exposes Add(label) but no method taking a *MenuItem, which reads as 'a Menu can only build its own items' — a comment in cmd/emod-desktop/main.go said exactly that and it is false. application.NewMenuFromItems(item, items...) (pkg/application/menu.go:236) builds a Menu from items already made, and Menu.Prepend/Append take that Menu. This matters beyond tidiness: it is what lets NewSaveMenuItem()/NewSaveAsMenuItem() (menuitem_roles.go:310-318) supply each platform's standard accelerator instead of the file restating 'CmdOrCtrl+S' by hand, so a story criterion about standard shortcuts is met by construction rather than by a string nothing checks. NewOpenMenuItem is the exception — it sets a Role, which the framework answers itself, so an Open that must reach the frontend is still built by hand.
+- Apply when: adding an item to the desktop app's menus, or hand-writing an accelerator the framework already defines
+
+## Certainty tracks whether the mechanism is decided, not how unfamiliar the API is
+- Type: convention
+- Observed: US-003 save a model back to the file it came from
+- Learning: This story's assessments inverted in practice. Task 1 was planned LOW certainty — nothing in the repo writes a file without truncating it, and the read-only refusal and the mid-write guarantee pull against each other — and it landed first try, green, with a clean lint, because the plan had already decided the mechanism (probe for writability, complete then replace, carry the mode). Task 3 was planned HIGH on the grounds that its framework API had been read up front, and it needed two corrections: the Menu builder it named does not take a pre-built item, and a later round showed the framework did support adoption after all, so the first correction was wrong too. What predicted difficulty was not familiarity but whether the plan had settled the mechanism; an API read only far enough to name the functions is not the same as one read far enough to know what they compose into.
+- Apply when: assessing certainty for a task, or deciding whether reading a framework's API up front has actually retired the risk
+
+## In this viewer, "the status area" is the bottom bar, not the element named for it
+- Type: convention
+- Observed: US-003 save a model back to the file it came from
+- Learning: A story criterion asking that something 'confirms in the status area' points, by name, at #render-status — and that element sits inside #data-panel, which a successful render collapses to a 40px header, so anything written there for a frequent action is off screen. The two readings are not equivalent: satisfying the literal one passes a jsdom textContent assertion while the user sees nothing. Save's confirmation went to a new #save-status in #stats instead, verified with elementFromPoint in a real browser; failures still reveal the panel, because a reason is worth interrupting for and does not fit in a bar. Read any criterion naming a status, message or confirmation surface in this app as 'where the user can read it', decide which of the two surfaces that is, and say so in the plan — and bound anything added to #stats, which does not wrap.
+- Apply when: decomposing or closing a criterion that says the user is told, confirmed, warned or informed of something in the viewer
+
+## A fix that captures a moving target once is re-raised by the next round
+- Type: recurring-finding
+- Observed: US-003 save a model back to the file it came from
+- Learning: Two of nineteen round-one fixes came back in round two, and both were partial rather than wrong. The HIGH one waited on latestRenderSettled once, which reads the newest render at that moment but not the one a file arriving during the wait starts — the fix has to re-check after each wait until the value stops moving. The other added a permission assertion that was correct and could not fail on the machine it ran on. Neither is caught by re-running the suite, because both pass. When a fix consists of reading a variable that other code reassigns, or of asserting a value the environment also supplies, ask what makes it settle and what makes it differ before calling it done — and expect a second round to be worth its cost specifically for these two shapes.
+- Apply when: fixing an audit finding about ordering or staleness, or deciding whether a second audit round will find anything
