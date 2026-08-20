@@ -253,6 +253,36 @@ last one is a story criterion, not an omission.
 
 ---
 
+## Theory
+
+Saving splits at the platform seam. `desktop.FileService.Write`
+(`internal/desktop/file_service.go`) owns the filesystem: `prepareTarget` resolves
+symlinks and opens the target purely to ask whether it may be written, then
+`replaceFile` writes a working file beside it and renames it over — so a failure
+part way through leaves the model on disk intact, and the target's own permission
+bits (or, for a new file, the umask's) come across. On the frontend, `sourceToSave`
+(`internal/frontend/static/viewer.js`, module scope so it is unit-testable) decides
+the bytes, and `saveModel` sequences the act: every save queues on `saveQueue` and
+drains `rendersSettled` first, because the panel's text and the open file's identity
+are committed at different moments and reading them from either side of that gap
+writes one model's source to another model's path.
+
+Two decisions were not forced. **What Save writes is the source panel's text, not
+the model the exporter re-serialises from the diagram** — the exporter canonicalises
+formatting and drops comments, so the rejected alternative would rewrite a file its
+author had not touched; Export still uses it, which is why the two now produce
+different text from the same model on purpose. And **the write completes before it
+replaces**, rather than truncating first: the cost is that a writable model inside a
+directory this process may not write can no longer be saved, where a plain
+`os.WriteFile` would have managed it. That trade buys the guarantee that no failure
+leaves a half-written model where a whole one was.
+
+Check the interleavings hardest. The single-save paths are pinned from both sides
+and were injected against; the ordering rules — the queue, the render drain, and the
+object-identity check that decides whether a completed save may adopt its target as
+the open file — are where the answers were least obvious, and where being wrong is
+silent: the window confirms a save while the bytes land in the wrong file.
+
 ## Tasks
 
 ### Task 1: Write a model back to disk through the desktop file service
