@@ -378,17 +378,17 @@ the native save dialog when there is none, and raising what the write refused so
 report it. Export stops saying saving is unavailable.
 
 **Acceptance Criteria:**
-- [ ] The app's File menu carries Save and Save As, each on the platform's standard accelerator for it, alongside the Open item already there and with the framework's default items still present
-- [ ] Choosing either, or pressing its accelerator, emits an event the desktop platform module subscribes to, and a Go test fails if either name is changed on one side alone
-- [ ] A save carrying a path writes through the file service to that exact path with no dialog, and answers that path
-- [ ] A save carrying no path shows the native save dialog, offering the suggested name it was given and filtered to the extensions a model comes in, and writes to what was chosen
-- [ ] A cancelled save dialog writes nothing and answers no path, so nothing is retargeted
-- [ ] A write the service refuses is raised carrying the reason the service gave, rather than a message of the frontend's own wording
-- [ ] A save request arriving before any handler has been registered is discarded without throwing
-- [ ] The Export button on the desktop build shows the save dialog and writes the exported model rather than reporting that saving is unavailable, and the path it chooses does not become the save target
-- [ ] The desktop implementation is still the only module that imports the Wails runtime or the generated bindings, and the binding-name guard passes with the frontend now calling the service's write
-- [ ] `task build:desktop` succeeds and the binary is still built with `-tags production`
-- [ ] `task test:unit`, `task test:integration` and `task test:viewer` are green from a checkout where `task build:desktop` has never run
+- [x] The app's File menu carries Save and Save As, each on the platform's standard accelerator for it, alongside the Open item already there and with the framework's default items still present
+- [x] Choosing either, or pressing its accelerator, emits an event the desktop platform module subscribes to, and a Go test fails if either name is changed on one side alone
+- [x] A save carrying a path writes through the file service to that exact path with no dialog, and answers that path
+- [x] A save carrying no path shows the native save dialog, offering the suggested name it was given and filtered to the extensions a model comes in, and writes to what was chosen
+- [x] A cancelled save dialog writes nothing and answers no path, so nothing is retargeted
+- [x] A write the service refuses is raised carrying the reason the service gave, rather than a message of the frontend's own wording
+- [x] A save request arriving before any handler has been registered is discarded without throwing
+- [x] The Export button on the desktop build shows the save dialog and writes the exported model rather than reporting that saving is unavailable, and the path it chooses does not become the save target
+- [x] The desktop implementation is still the only module that imports the Wails runtime or the generated bindings, and the binding-name guard passes with the frontend now calling the service's write
+- [x] `task build:desktop` succeeds and the binary is still built with `-tags production`
+- [x] `task test:unit`, `task test:integration` and `task test:viewer` are green from a checkout where `task build:desktop` has never run
 
 **Affected Files/Modules:**
 - `cmd/emod-desktop/main.go:33-46` — the two menu items, their accelerators and what they emit

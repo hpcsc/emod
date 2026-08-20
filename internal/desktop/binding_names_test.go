@@ -126,11 +126,14 @@ func methodsCalledBy(t *testing.T, path, receiver string) []string {
 	return uniqueMatches(t, path, regexp.MustCompile(receiver+`\.([A-Z]\w*)\(`))
 }
 
-// The frontend reads the answer's fields by name off a decoded object, and Go
+// The frontend reads each answer's fields by name off a decoded object, and Go
 // writes them from struct tags. Renaming a key on one side is invisible to both
-// compilers and to every suite: the viewer simply reads undefined and the window
-// renders nothing, which is the same silent failure the guards above exist for.
-func TestOpenedFileWireKeys(t *testing.T) {
+// compilers and to every suite: the reader simply gets undefined, and the window
+// renders nothing or saves nowhere, which is the same silent failure the guards
+// above exist for. Each pair is checked where the decode happens — the opened
+// file reaches viewer.js as an object, while the saved one is unwrapped by the
+// desktop platform module before the viewer ever sees it.
+func TestServiceWireKeys(t *testing.T) {
 	t.Run("every field the viewer reads off an opened file is a key the service writes", func(t *testing.T) {
 		written := jsonKeysWrittenFor(t, "file_service.go", "openedFile")
 		read := fieldsReadBy(t, "../frontend/static/viewer.js", "opened")
@@ -139,6 +142,16 @@ func TestOpenedFileWireKeys(t *testing.T) {
 		require.NotEmpty(t, read, "viewer.js must read the opened file's fields")
 		require.Subset(t, written, read,
 			"viewer.js reads a field of the opened file that file_service.go does not write")
+	})
+
+	t.Run("every field the desktop platform reads off a saved file is a key the service writes", func(t *testing.T) {
+		written := jsonKeysWrittenFor(t, "file_service.go", "savedFile")
+		read := fieldsReadBy(t, "../frontend/desktop/platform.desktop.js", "saved")
+
+		require.NotEmpty(t, written, "file_service.go must tag the fields it puts on the wire")
+		require.NotEmpty(t, read, "platform.desktop.js must read the saved file's fields")
+		require.Subset(t, written, read,
+			"platform.desktop.js reads a field of the saved file that file_service.go does not write")
 	})
 }
 

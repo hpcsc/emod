@@ -24,23 +24,37 @@ var frontend embed.FS
 // a menu built from scratch has no Quit, no Copy and no Paste, which on macOS
 // are the application's only bindings for them.
 //
-// Open reaches the frontend by event because that is where the picker lives.
-// Raising it here instead would be the shorter path, and is rejected: the read
-// behind it belongs to internal/desktop, which imports no GUI framework so that
-// it stays testable, and this package is in no test target at all.
-// internal/desktop's event-name guard pins the name against the frontend's
-// subscription.
+// Every item here reaches the frontend by event, because that is where the
+// pickers and the model's own source live. Raising them here instead would be
+// the shorter path, and is rejected: the reads and writes behind them belong to
+// internal/desktop, which imports no GUI framework so that it stays testable,
+// and this package is in no test target at all. internal/desktop's event-name
+// guard pins each name against the frontend's subscription.
 func applicationMenu(window *application.WebviewWindow) *application.Menu {
 	menu := application.DefaultApplicationMenu()
 
-	openItems := application.NewMenu()
-	openItems.Add("Open…").
+	open := application.NewMenuItem("Open…").
 		SetAccelerator("CmdOrCtrl+O").
 		OnClick(func(*application.Context) {
 			window.EmitEvent("file:open-requested")
 		})
-	openItems.AddSeparator()
-	menu.FindByLabel("File").GetSubmenu().Prepend(openItems)
+	// The framework's own items, so Save and Save As carry whatever each
+	// platform's standard accelerator for them is rather than this file's idea
+	// of it. Open is built by hand because the framework's carries a role, and
+	// a role is answered by the framework instead of reaching the frontend.
+	save := application.NewSaveMenuItem().
+		OnClick(func(*application.Context) {
+			window.EmitEvent("file:save-requested")
+		})
+	saveAs := application.NewSaveAsMenuItem().
+		SetLabel("Save As…").
+		OnClick(func(*application.Context) {
+			window.EmitEvent("file:save-as-requested")
+		})
+
+	fileItems := application.NewMenuFromItems(open, save, saveAs)
+	fileItems.AddSeparator()
+	menu.FindByLabel("File").GetSubmenu().Prepend(fileItems)
 
 	return menu
 }

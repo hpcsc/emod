@@ -52,13 +52,35 @@ function droppedFile(dataTransfer) {
   };
 }
 
-// Refusing is deliberate: writing the file to the host is the thing a native
-// shell can do and a browser cannot, and half-answering it with a download
-// would make the desktop build quietly worse than the one it replaces. It
-// rejects rather than returning silently so the export handler's catch puts
-// the reason on screen — a user who presses Export has to be told.
-function saveFile() {
-  return Promise.reject(new Error('Saving is not available in this build yet'));
+// Writing the file where the user keeps it is the thing a native shell can do
+// and a browser cannot. A path means the caller already knows where, so nothing
+// is asked; without one the picker decides, and a cancelled picker answers no
+// file rather than throwing, because cancelling is not a failure. The answer
+// carries the path the service resolved rather than the one handed in, so a
+// caller adopting it as its save target gets an absolute one.
+function saveFile(suggestedName, content, path) {
+  return (path ? Promise.resolve(path) : promptForSaveLocation(suggestedName))
+    .then(function(target) {
+      if (!target) {
+        return null;
+      }
+      return FileService.Write(target, content).then(function(raw) {
+        const saved = JSON.parse(raw);
+        if (saved.error) {
+          throw new Error(saved.error);
+        }
+        return { name: saved.name, path: saved.path };
+      });
+    });
+}
+
+function promptForSaveLocation(suggestedName) {
+  return Dialogs.SaveFile({
+    Title: 'Save model',
+    Filename: suggestedName,
+    CanCreateDirectories: true,
+    Filters: [{ DisplayName: 'emod models', Pattern: '*.emod;*.json' }],
+  });
 }
 
 // document.title names a browser tab and nothing at all here: the shell's title
@@ -77,6 +99,21 @@ let saveRequestedHandler = null;
 
 function onSaveRequested(handler) {
   saveRequestedHandler = handler;
+}
+
+// Save and Save As differ only in whether the file already open is written back
+// to, so one registration answers both and the request says which. Both names
+// are pinned against the shell by internal/desktop's event-name guard.
+Events.On('file:save-requested', function() { return requestSave(false); });
+Events.On('file:save-as-requested', function() { return requestSave(true); });
+
+// The handler's promise is handed back rather than dropped, so a failure inside
+// the viewer's own save surfaces instead of becoming an unhandled rejection.
+function requestSave(chooseLocation) {
+  if (!saveRequestedHandler) {
+    return undefined;
+  }
+  return saveRequestedHandler({ chooseLocation: chooseLocation });
 }
 
 // The shell's File menu carries the only Open control, so it reaches the

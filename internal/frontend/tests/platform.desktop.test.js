@@ -19,8 +19,11 @@ beforeEach(() => {
   stub.answers.ParseEmod = '{"diagnostics":[],"diagram":{"nodes":[],"edges":[]}}';
   stub.answers.ExportEmod = '{"emod":"emod 1\\nmodel \\"Billing\\"\\n"}';
   stub.answers.Read = '{"name":"billing.emod","path":"/models/billing.emod","content":"emod 1\\n"}';
+  stub.answers.Write = '{"name":"billing.emod","path":"/models/billing.emod"}';
   runtime.answers.OpenFile = '';
+  runtime.answers.SaveFile = '';
   desktop.onFileOpened(null);
+  desktop.onSaveRequested(null);
 });
 
 // The shell's menu is the only thing that asks for a file, and it asks by
@@ -28,6 +31,14 @@ beforeEach(() => {
 // not exercise the path the app takes.
 function requestOpen() {
   return Promise.resolve(runtime.listeners['file:open-requested']()).then(flush);
+}
+
+function requestSave() {
+  return Promise.resolve(runtime.listeners['file:save-requested']()).then(flush);
+}
+
+function requestSaveAs() {
+  return Promise.resolve(runtime.listeners['file:save-as-requested']()).then(flush);
 }
 
 function flush() {
@@ -196,12 +207,110 @@ describe('opening a file', () => {
   });
 });
 
-describe('the operations this build does not have', () => {
-  it('refuses to save, audibly, rather than resolving as though it had', async () => {
-    await expect(desktop.saveFile('Billing.emod', 'emod 1\n')).rejects
-      .toThrow('Saving is not available in this build yet');
+describe('saving a file', () => {
+  it('writes straight to the path it was given, showing no dialog', async () => {
+    const saved = await desktop.saveFile('billing.emod', 'emod 1\n', '/models/billing.emod');
+
+    expect(stub.calls).toEqual([['Write', '/models/billing.emod', 'emod 1\n']]);
+    expect(runtime.calls).toEqual([]);
+    expect(saved).toEqual({ name: 'billing.emod', path: '/models/billing.emod' });
   });
 
+  it('answers the path the service resolved, not the one it was handed', async () => {
+    stub.answers.Write = '{"name":"billing.emod","path":"/models/billing.emod"}';
+
+    const saved = await desktop.saveFile('billing.emod', 'emod 1\n', 'billing.emod');
+
+    expect(saved.path).toBe('/models/billing.emod');
+  });
+
+  it('shows the save dialog when it is given no path, offering the suggested name', async () => {
+    runtime.answers.SaveFile = '/models/hotel.emod';
+    stub.answers.Write = '{"name":"hotel.emod","path":"/models/hotel.emod"}';
+
+    await desktop.saveFile('hotel.emod', 'emod 1\n', '');
+
+    expect(runtime.calls).toEqual([['Dialogs.SaveFile', {
+      Title: 'Save model',
+      Filename: 'hotel.emod',
+      CanCreateDirectories: true,
+      Filters: [{ DisplayName: 'emod models', Pattern: '*.emod;*.json' }],
+    }]]);
+  });
+
+  it('writes to what the dialog chose, and answers that file', async () => {
+    runtime.answers.SaveFile = '/models/hotel.emod';
+    stub.answers.Write = '{"name":"hotel.emod","path":"/models/hotel.emod"}';
+
+    const saved = await desktop.saveFile('hotel.emod', 'emod 1\n', '');
+
+    expect(stub.calls).toEqual([['Write', '/models/hotel.emod', 'emod 1\n']]);
+    expect(saved).toEqual({ name: 'hotel.emod', path: '/models/hotel.emod' });
+  });
+
+  it('writes nothing and answers no file when the dialog is cancelled', async () => {
+    runtime.answers.SaveFile = '';
+
+    const saved = await desktop.saveFile('hotel.emod', 'emod 1\n', '');
+
+    expect(stub.calls).toEqual([]);
+    expect(saved).toBeNull();
+  });
+
+  it('raises the reason the service gave, rather than a wording of its own', async () => {
+    stub.answers.Write = '{"error":"writing /models/billing.emod: permission denied"}';
+
+    await expect(desktop.saveFile('billing.emod', 'emod 1\n', '/models/billing.emod'))
+      .rejects.toThrow('writing /models/billing.emod: permission denied');
+  });
+
+  it('raises the reason the dialog itself failed with', async () => {
+    runtime.answers.SaveFile = new Error('Dialog.SaveFile failed, error getting selection');
+
+    await expect(desktop.saveFile('hotel.emod', 'emod 1\n', ''))
+      .rejects.toThrow('Dialog.SaveFile failed, error getting selection');
+  });
+});
+
+describe('the shell asking for a save', () => {
+  function collectRequests() {
+    const asked = [];
+    desktop.onSaveRequested((options) => { asked.push(options); });
+    return asked;
+  }
+
+  it('passes on a Save as a request to reuse the open file', async () => {
+    const asked = collectRequests();
+
+    await requestSave();
+
+    expect(asked).toEqual([{ chooseLocation: false }]);
+  });
+
+  it('passes on a Save As as a request to choose a location', async () => {
+    const asked = collectRequests();
+
+    await requestSaveAs();
+
+    expect(asked).toEqual([{ chooseLocation: true }]);
+  });
+
+  // The listener's own return value, not the helper's tail: requestSave ends in
+  // .then(flush), which resolves undefined whatever the listener did.
+  it('discards a request that arrives before the viewer has registered, rather than throwing', async () => {
+    expect(runtime.listeners['file:save-requested']()).toBeUndefined();
+    expect(runtime.listeners['file:save-as-requested']()).toBeUndefined();
+  });
+
+  it('hands back what the viewer\'s save produced rather than swallowing it', async () => {
+    desktop.onSaveRequested(() => Promise.reject(new Error('a bug inside the viewer')));
+
+    await expect(Promise.resolve(runtime.listeners['file:save-requested']()))
+      .rejects.toThrow('a bug inside the viewer');
+  });
+});
+
+describe('starting up', () => {
   it('opens with no model, because nothing hands this window one at startup', async () => {
     await expect(desktop.initialState()).resolves.toBeNull();
   });

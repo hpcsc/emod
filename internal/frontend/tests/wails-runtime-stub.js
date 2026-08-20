@@ -26,4 +26,10 @@ export const Dialogs = {
       ? Promise.reject(answers.OpenFile)
       : Promise.resolve(answers.OpenFile === undefined ? '' : answers.OpenFile);
   },
+  SaveFile: (options) => {
+    calls.push(['Dialogs.SaveFile', options]);
+    return answers.SaveFile instanceof Error
+      ? Promise.reject(answers.SaveFile)
+      : Promise.resolve(answers.SaveFile === undefined ? '' : answers.SaveFile);
+  },
 };

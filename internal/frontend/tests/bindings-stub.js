@@ -6,7 +6,7 @@
 // Tests drive these: whatever a test assigns to `answers` is what the binding
 // returns, and `calls` records what the desktop platform sent across.
 export const calls = [];
-export const answers = { ParseEmod: '{}', ExportJSON: '{}', ExportEmod: '{}', Read: '{}' };
+export const answers = { ParseEmod: '{}', ExportJSON: '{}', ExportEmod: '{}', Read: '{}', Write: '{}' };
 
 export const ModelService = {
   ParseEmod: (arg) => { calls.push(['ParseEmod', arg]); return Promise.resolve(answers.ParseEmod); },
@@ -16,4 +16,5 @@ export const ModelService = {
 
 export const FileService = {
   Read: (arg) => { calls.push(['Read', arg]); return Promise.resolve(answers.Read); },
+  Write: (path, content) => { calls.push(['Write', path, content]); return Promise.resolve(answers.Write); },
 };
