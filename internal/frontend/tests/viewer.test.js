@@ -16,6 +16,11 @@ let initialStateFails = false;
 let parseQueue = [];
 let windowTitle = '';
 let deliverFile = null;
+let saveAnswer = null;
+let saveFails = null;
+let saveHangs = null;
+let savedContents = [];
+let requestSave = null;
 
 vi.mock('../static/platform.js', () => ({
   get ready() { return platformReady; },
@@ -27,7 +32,13 @@ vi.mock('../static/platform.js', () => ({
   initialState: vi.fn(() => initialStateFails
     ? Promise.reject(new Error('host could not answer'))
     : Promise.resolve(typeof globalThis.INITIAL_DATA === 'undefined' ? null : globalThis.INITIAL_DATA)),
-  saveFile: vi.fn((name, content) => { savedFile = { name, content }; return Promise.resolve(); }),
+  saveFile: vi.fn((name, content, path) => {
+    savedFile = { name, content, path };
+    savedContents.push(content);
+    const settle = () => (saveFails ? Promise.reject(new Error(saveFails)) : Promise.resolve(saveAnswer));
+    return saveHangs ? saveHangs.then(settle) : settle();
+  }),
+  onSaveRequested: vi.fn((handler) => { requestSave = handler; }),
   setWindowTitle: vi.fn((title) => { windowTitle = title; }),
   onFileOpened: vi.fn((handler) => { deliverFile = handler; }),
   droppedFile: vi.fn((dataTransfer) => {
@@ -55,6 +66,7 @@ function createRequiredElements() {
     <span id="stat-edges"></span>
     <span id="stat-canvas"></span>
     <span id="stat-file">File: <span class="stat-value" id="stat-file-path"></span></span>
+    <span id="save-status" class="hidden"></span>
     <div id="data-panel" class="collapsed"></div>
     <div id="data-panel-header"></div>
     <div id="data-panel-body"></div>
@@ -123,6 +135,34 @@ async function startViewer() {
   await init();
 }
 
+const { sourceToSave } = await import('../static/viewer.js');
+
+const billingSource = 'emod 1\nmodel "Billing"\n';
+const crlfSource = 'emod 1\r\nmodel "Billing"\r\n';
+
+async function openBilling(content) {
+  globalThis.INITIAL_DATA = null;
+  parseResult = { diagnostics: [], diagram: billingDiagram() };
+  await startViewer();
+  deliverFile({
+    name: 'billing.emod',
+    path: '/models/billing.emod',
+    content: content === undefined ? billingSource : content,
+  });
+  await flush();
+}
+
+async function startEmpty() {
+  globalThis.INITIAL_DATA = null;
+  parseResult = { diagnostics: [], diagram: billingDiagram() };
+  await startViewer();
+}
+
+function save(options) {
+  return Promise.resolve(requestSave(options || { chooseLocation: false })).then(flush);
+}
+
+
 // billingDiagram is the node shape the exporter produces: a context holding a
 // slice, which holds the elements.
 function billingDiagram() {
@@ -155,6 +195,11 @@ beforeEach(() => {
   parseQueue = [];
   windowTitle = '';
   deliverFile = null;
+  saveAnswer = null;
+  saveFails = null;
+  saveHangs = null;
+  savedContents = [];
+  requestSave = null;
 });
 
 describe('the window is named through the host, not by assigning document.title', () => {
@@ -325,6 +370,22 @@ describe('viewer export', () => {
 
     expect(savedFile.name).toBe('Billing.emod');
     expect(savedFile.content).toBe('emod 1\nmodel "Billing"\n');
+  });
+
+  // Export writes the model re-serialised from the diagram, which has dropped
+  // the author's comments. Handing it a path would overwrite the open file with
+  // that, which is the one thing Save exists not to do.
+  it('asks for a location rather than writing over the open file', async () => {
+    globalThis.INITIAL_DATA = null;
+    parseResult = { diagnostics: [], diagram: billingDiagram() };
+    await startViewer();
+    deliverFile({ name: 'billing.emod', path: '/models/billing.emod', content: 'emod 1\nmodel "Billing"\n' });
+    await flush();
+
+    document.getElementById('export-emod').click();
+    await flush();
+
+    expect(savedFile.path).toBeFalsy();
   });
 
   it('falls back to diagram.emod when the model has no name', async () => {
@@ -768,6 +829,447 @@ describe('a file the host could not read', () => {
   });
 });
 
+describe('saving the model', () => {
+  it('writes to the open file itself, asking the host for no location', async () => {
+    await openBilling();
+
+    await save();
+
+    expect(savedFile.path).toBe('/models/billing.emod');
+    expect(savedFile.content).toBe('emod 1\nmodel "Billing"\n');
+  });
+
+  it('hands over the panel source rather than the model re-serialised from the diagram', async () => {
+    await openBilling('emod 1\n// how a payment is taken\nmodel "Billing"\n');
+
+    await save();
+
+    expect(savedFile.content).toContain('// how a payment is taken');
+  });
+
+  // The panel is a textarea, whose value normalises every CRLF to a bare LF, so
+  // handing over what it holds would rewrite every line ending in the file.
+  it('gives back exactly the bytes a CRLF file arrived with when nothing was edited', async () => {
+    await openBilling(crlfSource);
+    expect(document.getElementById('source-input').value).not.toBe(crlfSource);
+
+    await save();
+
+    expect(savedFile.content).toBe(crlfSource);
+  });
+
+  it('asks the host for a location when no file is open, and suggests a name from the model', async () => {
+    await startEmpty();
+    document.getElementById('source-input').value = 'emod 1\nmodel "Billing"\n';
+    document.getElementById('render-btn').click();
+    await flush();
+    saveAnswer = { name: 'hotel.emod', path: '/models/hotel.emod' };
+
+    await save();
+
+    expect(savedFile.path).toBe('');
+    expect(savedFile.name).toBe('Billing.emod');
+  });
+
+  it('adopts the location the host chose as the open file, naming the window and the bar', async () => {
+    await startEmpty();
+    document.getElementById('source-input').value = 'emod 1\nmodel "Billing"\n';
+    saveAnswer = { name: 'hotel.emod', path: '/models/hotel.emod' };
+
+    await save();
+
+    expect(windowTitle).toBe('hotel.emod — Emod Diagram Viewer');
+    expect(document.getElementById('stat-file').textContent).toContain('/models/hotel.emod');
+    expect(document.getElementById('stat-file').classList.contains('hidden')).toBe(false);
+  });
+
+  it('writes to the adopted location without asking again', async () => {
+    await startEmpty();
+    document.getElementById('source-input').value = 'emod 1\nmodel "Billing"\n';
+    saveAnswer = { name: 'hotel.emod', path: '/models/hotel.emod' };
+    await save();
+
+    saveAnswer = null;
+    await save();
+
+    expect(savedFile.path).toBe('/models/hotel.emod');
+  });
+
+  it('asks for a location on a save-to-a-new-location even with a file open', async () => {
+    await openBilling();
+    saveAnswer = { name: 'copy.emod', path: '/models/copy.emod' };
+
+    await save({ chooseLocation: true });
+
+    expect(savedFile.path).toBe('');
+  });
+
+  it('retargets every later save to what a save-to-a-new-location chose', async () => {
+    await openBilling();
+    saveAnswer = { name: 'copy.emod', path: '/models/copy.emod' };
+    await save({ chooseLocation: true });
+
+    saveAnswer = null;
+    await save();
+
+    expect(savedFile.path).toBe('/models/copy.emod');
+    expect(windowTitle).toBe('copy.emod — Emod Diagram Viewer');
+  });
+
+  it('changes nothing when the host answers no location', async () => {
+    await openBilling();
+    saveAnswer = null;
+
+    await save({ chooseLocation: true });
+
+    expect(windowTitle).toBe('billing.emod — Emod Diagram Viewer');
+    expect(document.getElementById('stat-file').textContent).toContain('/models/billing.emod');
+    expect(document.getElementById('save-status').classList.contains('hidden')).toBe(true);
+  });
+
+  it('still writes to the file itself after a cancelled save-to-a-new-location', async () => {
+    await openBilling();
+    saveAnswer = null;
+    await save({ chooseLocation: true });
+
+    await save();
+
+    expect(savedFile.path).toBe('/models/billing.emod');
+  });
+
+  // The status area inside the source panel is off screen whenever a successful
+  // render has collapsed it, and collapsing or revealing the panel on the app's
+  // most frequent keystroke would rearrange the window under the user.
+  it('confirms in the bar that stays on screen, leaving the source panel as it was', async () => {
+    await openBilling();
+    saveAnswer = { name: 'billing.emod', path: '/models/billing.emod' };
+    expect(document.getElementById('data-panel').classList.contains('collapsed')).toBe(true);
+
+    await save();
+
+    const status = document.getElementById('save-status');
+    expect(status.textContent).toContain('Saved');
+    expect(status.classList.contains('hidden')).toBe(false);
+    expect(document.getElementById('data-panel').classList.contains('collapsed')).toBe(true);
+  });
+
+  it('stops claiming the model is saved once it has been rendered again', async () => {
+    await openBilling();
+    saveAnswer = { name: 'billing.emod', path: '/models/billing.emod' };
+    await save();
+    expect(document.getElementById('save-status').classList.contains('hidden')).toBe(false);
+
+    document.getElementById('source-input').value = 'emod 1\nmodel "Hotel"\n';
+    document.getElementById('render-btn').click();
+    await flush();
+
+    expect(document.getElementById('save-status').classList.contains('hidden')).toBe(true);
+  });
+
+  it('reveals the panel holding the reason a save was refused', async () => {
+    await openBilling();
+    saveFails = 'writing /models/billing.emod: permission denied';
+
+    await save();
+
+    expect(document.getElementById('data-panel').classList.contains('collapsed')).toBe(false);
+    const statusEl = document.getElementById('render-status');
+    expect(statusEl.textContent).toContain('permission denied');
+    expect(statusEl.className).toContain('error');
+  });
+
+  // The bar is the one place a save outcome can be read without expanding
+  // anything, so leaving a stale confirmation there would have the window
+  // confirming a save it is simultaneously reporting as refused.
+  it('refuses to write an empty panel over the open file, rather than emptying it', async () => {
+    await openBilling();
+    document.getElementById('source-input').value = '   ';
+
+    await save();
+
+    expect(savedFile).toBeNull();
+    expect(document.getElementById('save-status').classList.contains('failed')).toBe(true);
+    expect(document.getElementById('render-status').textContent).toContain('nothing to save');
+  });
+
+  it('refuses to ask for a location for an empty panel, so no chosen file is truncated', async () => {
+    globalThis.INITIAL_DATA = null;
+    parseResult = { diagnostics: [], diagram: billingDiagram() };
+    await startViewer();
+    saveAnswer = { name: 'chosen.emod', path: '/models/chosen.emod' };
+
+    await save();
+
+    expect(savedFile).toBeNull();
+  });
+
+  // The file adopted after a save has to remember the bytes that were written,
+  // or the save after it treats an unedited panel as edited and rewrites every
+  // line ending in a file the user never touched.
+  it('remembers the bytes it wrote, so the next unedited save reproduces them', async () => {
+    const crlf = 'emod 1\r\nmodel "Billing"\r\n';
+    globalThis.INITIAL_DATA = null;
+    parseResult = { diagnostics: [], diagram: billingDiagram() };
+    await startViewer();
+    deliverFile({ name: 'crlf.emod', path: '/models/crlf.emod', content: crlf });
+    await flush();
+    saveAnswer = { name: 'copy.emod', path: '/models/copy.emod' };
+    await save({ chooseLocation: true });
+
+    saveAnswer = { name: 'copy.emod', path: '/models/copy.emod' };
+    await save();
+
+    expect(savedFile.path).toBe('/models/copy.emod');
+    expect(savedFile.content).toBe(crlf);
+  });
+
+  it('replaces the confirmation in the bar with the refusal, rather than leaving both', async () => {
+    await openBilling();
+    saveAnswer = { name: 'billing.emod', path: '/models/billing.emod' };
+    await save();
+    expect(document.getElementById('save-status').textContent).toContain('Saved');
+
+    saveFails = 'writing /models/billing.emod: permission denied';
+    await save();
+
+    const bar = document.getElementById('save-status');
+    expect(bar.textContent).not.toContain('Saved');
+    expect(bar.textContent).toContain('permission denied');
+    expect(bar.classList.contains('failed')).toBe(true);
+    expect(bar.classList.contains('hidden')).toBe(false);
+  });
+
+  it('leaves the model, its name and the save target alone when a save is refused', async () => {
+    await openBilling();
+    saveFails = 'writing /models/billing.emod: permission denied';
+    await save();
+
+    saveFails = null;
+    await save();
+
+    expect(windowTitle).toBe('billing.emod — Emod Diagram Viewer');
+    expect(document.getElementById('source-input').value).toBe('emod 1\nmodel "Billing"\n');
+    expect(savedFile.path).toBe('/models/billing.emod');
+  });
+});
+
+describe('a save that overlaps something else', () => {
+  it('never writes the arriving file\'s source to the departing file\'s path', async () => {
+    await openBilling();
+    saveAnswer = { name: 'hotel.emod', path: '/models/hotel.emod' };
+
+    let releaseParse;
+    parseQueue = [new Promise((resolve) => { releaseParse = () => resolve({ diagnostics: [], diagram: billingDiagram() }); })];
+    deliverFile({ name: 'hotel.emod', path: '/models/hotel.emod', content: 'emod 1\nmodel "Hotel"\n' });
+    await flush();
+
+    const saving = save();
+    await flush();
+    releaseParse();
+    await saving;
+
+    expect(savedFile.content).toBe('emod 1\nmodel "Hotel"\n');
+    expect(savedFile.path).toBe('/models/hotel.emod');
+  });
+
+  it('does not let a save still in flight rename the window back to the file it was writing', async () => {
+    await openBilling();
+    let releaseWrite;
+    saveAnswer = { name: 'billing.emod', path: '/models/billing.emod' };
+    saveHangs = new Promise((resolve) => { releaseWrite = resolve; });
+
+    const saving = save();
+    await flush();
+    saveHangs = null;
+    deliverFile({ name: 'hotel.emod', path: '/models/hotel.emod', content: 'emod 1\nmodel "Hotel"\n' });
+    await flush();
+    releaseWrite();
+    await saving;
+    await flush();
+
+    expect(windowTitle).toBe('hotel.emod — Emod Diagram Viewer');
+    expect(document.getElementById('stat-file').textContent).toContain('/models/hotel.emod');
+  });
+
+  it('writes the newer of two overlapping saves last, so the older cannot land on top', async () => {
+    await openBilling();
+    saveAnswer = { name: 'billing.emod', path: '/models/billing.emod' };
+    let releaseFirst;
+    saveHangs = new Promise((resolve) => { releaseFirst = resolve; });
+
+    const first = save();
+    await flush();
+    saveHangs = null;
+    document.getElementById('source-input').value = 'emod 1\nmodel "Newer"\n';
+    const second = save();
+    await flush();
+
+    // The second write must not have been issued at all yet: two writes in
+    // flight together land in whichever order the host finishes them, so
+    // asserting only the order they were asked for would pass either way.
+    expect(savedContents).toEqual([billingSource]);
+
+    releaseFirst();
+    await Promise.all([first, second]);
+    await flush();
+
+    expect(savedContents).toEqual([billingSource, 'emod 1\nmodel "Newer"\n']);
+  });
+
+  // Waiting on a single render is not enough: the file that arrives while that
+  // render is in flight starts another, and resuming between the two reads the
+  // arriving text beside the departing file's path.
+  it('waits for a render that only started while it was already waiting', async () => {
+    await openBilling();
+    saveAnswer = { name: 'hotel.emod', path: '/models/hotel.emod' };
+
+    let releaseFirst;
+    parseQueue = [new Promise((resolve) => { releaseFirst = () => resolve({ diagnostics: [], diagram: billingDiagram() }); })];
+    document.getElementById('source-input').value = 'emod 1\nmodel "Edited"\n';
+    document.getElementById('render-btn').click();
+    await flush();
+
+    const saving = save();
+    await flush();
+
+    let releaseSecond;
+    parseQueue = [new Promise((resolve) => { releaseSecond = () => resolve({ diagnostics: [], diagram: billingDiagram() }); })];
+    deliverFile({ name: 'hotel.emod', path: '/models/hotel.emod', content: 'emod 1\nmodel "Hotel"\n' });
+    await flush();
+    releaseFirst();
+    await flush();
+    releaseSecond();
+    await saving;
+
+    expect(savedFile.path).toBe('/models/hotel.emod');
+    expect(savedFile.content).toBe('emod 1\nmodel "Hotel"\n');
+  });
+
+  it('does not reopen the panel for a save belonging to a file that is no longer on screen', async () => {
+    await openBilling();
+    let releaseWrite;
+    saveHangs = new Promise((resolve) => { releaseWrite = resolve; });
+    saveFails = 'writing /models/billing.emod: permission denied';
+
+    const saving = save();
+    await flush();
+    saveHangs = null;
+    saveFails = null;
+    deliverFile({ name: 'hotel.emod', path: '/models/hotel.emod', content: 'emod 1\nmodel "Hotel"\n' });
+    await flush();
+    expect(document.getElementById('data-panel').classList.contains('collapsed')).toBe(true);
+
+    saveFails = 'writing /models/billing.emod: permission denied';
+    releaseWrite();
+    await saving;
+    await flush();
+
+    // The bar still says the bytes did not land, naming the file they were for.
+    expect(document.getElementById('save-status').textContent).toContain('billing.emod');
+    expect(document.getElementById('save-status').classList.contains('failed')).toBe(true);
+    expect(document.getElementById('data-panel').classList.contains('collapsed')).toBe(true);
+  });
+
+  it('takes the refusal out of the panel once a later save succeeds', async () => {
+    await openBilling();
+    saveFails = 'writing /models/billing.emod: permission denied';
+    await save();
+    expect(document.getElementById('render-status').textContent).toContain('permission denied');
+
+    saveFails = null;
+    saveAnswer = { name: 'billing.emod', path: '/models/billing.emod' };
+    await save();
+
+    expect(document.getElementById('render-status').textContent).not.toContain('permission denied');
+    expect(document.getElementById('save-status').textContent).toContain('Saved');
+  });
+
+  // The save waits for renders before it starts, so the render it can still
+  // collide with is one the user asks for while the write is in flight.
+  it('leaves a render the user asked for running when a save is refused', async () => {
+    await openBilling();
+    let releaseWrite;
+    saveHangs = new Promise((resolve) => { releaseWrite = resolve; });
+
+    const saving = save();
+    await flush();
+    saveHangs = null;
+    saveFails = 'writing /models/billing.emod: permission denied';
+
+    let releaseRender;
+    parseQueue = [new Promise((resolve) => {
+      releaseRender = () => resolve({ diagnostics: [], diagram: { ...billingDiagram(), model_name: 'Rendered' } });
+    })];
+    document.getElementById('source-input').value = 'emod 1\nmodel "Rendered"\n';
+    document.getElementById('render-btn').click();
+    await flush();
+
+    releaseWrite();
+    await saving;
+    await flush();
+    releaseRender();
+    await flush();
+
+    // A save that claimed a render number would have discarded this render, and
+    // the canvas would still be naming Billing while the panel showed Rendered.
+    expect(document.getElementById('model-name-display').textContent).toBe('Rendered');
+  });
+});
+
+describe('what a save writes', () => {
+  const panel = (value, arrived) => ({
+    dom: { sourceInput: { value: value } },
+    currentFile: arrived === undefined ? null : { name: 'm.emod', path: '/m.emod', content: arrived },
+  });
+
+  it('hands back the bytes an unedited file arrived with, whatever the panel did to them', () => {
+    const arrived = 'emod 1\r\nmodel "Billing"\r\n';
+
+    expect(sourceToSave(panel('emod 1\nmodel "Billing"\n', arrived))).toBe(arrived);
+  });
+
+  it('keeps a CRLF file in its own convention once it has been edited', () => {
+    expect(sourceToSave(panel('emod 1\nmodel "Hotel"\n', 'emod 1\r\nmodel "Billing"\r\n')))
+      .toBe('emod 1\r\nmodel "Hotel"\r\n');
+  });
+
+  it('leaves an LF file alone once it has been edited', () => {
+    expect(sourceToSave(panel('emod 1\nmodel "Hotel"\n', 'emod 1\nmodel "Billing"\n')))
+      .toBe('emod 1\nmodel "Hotel"\n');
+  });
+
+  // A textarea normalises a lone CR to LF just as it does a CRLF, so an unedited
+  // classic-Mac file still round-trips exactly; only editing one converts it.
+  it('gives back a lone-CR file untouched when nothing was edited', () => {
+    const arrived = 'emod 1\rmodel "Billing"\r';
+
+    expect(sourceToSave(panel('emod 1\nmodel "Billing"\n', arrived))).toBe(arrived);
+  });
+
+  it('writes a lone-CR file with LF once it has been edited, having no CRLF to copy', () => {
+    expect(sourceToSave(panel('emod 1\nmodel "Hotel"\n', 'emod 1\rmodel "Billing"\r')))
+      .toBe('emod 1\nmodel "Hotel"\n');
+  });
+
+  it('settles a file of mixed endings on the CRLF it holds, once it has been edited', () => {
+    expect(sourceToSave(panel('a\nb\nedited\n', 'a\r\nb\nc\n'))).toBe('a\r\nb\r\nedited\r\n');
+  });
+
+  it('gives back a mixed file exactly as it arrived when nothing was edited', () => {
+    const arrived = 'a\r\nb\nc\n';
+
+    expect(sourceToSave(panel('a\nb\nc\n', arrived))).toBe(arrived);
+  });
+
+  it('hands over the panel as it stands when no file was ever opened', () => {
+    expect(sourceToSave(panel('emod 1\nmodel "Pasted"\n'))).toBe('emod 1\nmodel "Pasted"\n');
+  });
+
+  it('hands over what was typed into a file that arrived empty', () => {
+    expect(sourceToSave(panel('emod 1\nmodel "Billing"\n', ''))).toBe('emod 1\nmodel "Billing"\n');
+  });
+});
+
 describe('viewer diagnostics panel', () => {
   it('stays hidden while the model has no diagnostics', async () => {
     globalThis.INITIAL_DATA = null;
@@ -905,8 +1407,8 @@ describe('the platform seam has one contract', () => {
 
   it('names every host operation the shared modules reach for', () => {
     expect(contract).toEqual(
-      ['droppedFile', 'exportEmod', 'initialState', 'isReady', 'onFileOpened', 'parseEmod', 'ready',
-       'saveFile', 'setWindowTitle'],
+      ['droppedFile', 'exportEmod', 'initialState', 'isReady', 'onFileOpened', 'onSaveRequested',
+       'parseEmod', 'ready', 'saveFile', 'setWindowTitle'],
     );
   });
 

@@ -316,15 +316,15 @@ adopts what it is given, so the next save asks nothing. What comes back is repor
 can read it.
 
 **Acceptance Criteria:**
-- [ ] A save request with a file open hands the host that file's exact path together with the panel's source, and asks for no location
-- [ ] What is handed over is the panel's source in the line-ending convention the open file arrived with, so a file delivered with CRLF endings and saved with no edits hands back exactly the text that was delivered
-- [ ] A save request with no file open asks the host for a location, and what the host answers becomes the open file: the window takes its name, the bottom bar shows its path, and a second save writes there without asking again
-- [ ] A save-to-a-new-location request asks for a location even when a file is already open, and what the host answers replaces the open file for every later save
-- [ ] A host that answers no location writes nothing, and the open file, the window's name and the path on screen stay as they were
-- [ ] A completed save is reported where it is readable without opening or expanding anything, and the source panel is left collapsed or open exactly as it was
-- [ ] A save the host refuses reports the reason with the source panel revealed, and leaves the model, its name, the panel's source and the save target unchanged
-- [ ] The browser distribution is unchanged: the Export button hands the browser the same suggested name and the same content it does today, still reports a failed export in the revealed panel, and the browser suite's export leaves pass untouched
-- [ ] The seam contract guard names the new registration and both implementations satisfy it; the shared page declares every id the viewer now reads
+- [x] A save request with a file open hands the host that file's exact path together with the panel's source, and asks for no location
+- [x] What is handed over is the panel's source in the line-ending convention the open file arrived with, so a file delivered with CRLF endings and saved with no edits hands back exactly the text that was delivered
+- [x] A save request with no file open asks the host for a location, and what the host answers becomes the open file: the window takes its name, the bottom bar shows its path, and a second save writes there without asking again
+- [x] A save-to-a-new-location request asks for a location even when a file is already open, and what the host answers replaces the open file for every later save
+- [x] A host that answers no location writes nothing, and the open file, the window's name and the path on screen stay as they were
+- [x] A completed save is reported where it is readable without opening or expanding anything, and the source panel is left collapsed or open exactly as it was
+- [x] A save the host refuses reports the reason with the source panel revealed, and leaves the model, its name, the panel's source and the save target unchanged
+- [x] The browser distribution is unchanged: the Export button hands the browser the same suggested name and the same content it does today, still reports a failed export in the revealed panel, and the browser suite's export leaves pass untouched
+- [x] The seam contract guard names the new registration and both implementations satisfy it; the shared page declares every id the viewer now reads
 
 **Affected Files/Modules:**
 - `internal/frontend/static/platform.js` — the contract gains the save registration

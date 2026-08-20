@@ -4,6 +4,10 @@ export function createStore() {
     nodes: [],
     edges: [],
     modelName: '',
+    // {name, path, content} or null. content is the text the file arrived
+    // with, which a save gives back untouched when nothing has been edited —
+    // the panel cannot, because a textarea rewrites every line ending it is
+    // handed.
     currentFile: null,
     layoutPositions: {},
     arrowData: [],

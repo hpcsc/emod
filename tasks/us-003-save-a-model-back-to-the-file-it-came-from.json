@@ -27,7 +27,7 @@
     },
     {
       "n": 2,
-      "done": false,
+      "done": true,
       "title": "Save the panel's source back to the file it came from",
       "language": "JavaScript/TypeScript",
       "testable": true,

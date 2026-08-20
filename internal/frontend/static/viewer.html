@@ -632,6 +632,28 @@ header .model-name span {
 #stat-file.hidden {
   display: none;
 }
+/* A save reports here rather than in #render-status, which sits inside the
+   panel a successful render collapses off screen. The id is stated twice to
+   outweigh `#stats span`, which would otherwise leave this inline-flex — and
+   text-overflow is inert on a flex container. Bounded because the bar does not
+   wrap: a refused save's reason names a path, and left to its own width it
+   pushes the bar onto a second line and takes that height off the canvas. */
+#stats #save-status {
+  display: block;
+  max-width: 30ch;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: #27ae60;
+  font-weight: 600;
+}
+#stats #save-status.failed {
+  color: #e74c3c;
+}
+#stats #save-status.hidden {
+  display: none;
+}
 /* A path is the one stat that can outgrow the bar. #stats span is inline-flex,
    and text-overflow needs a shrinkable box that clips its own overflow — so both
    the entry and the path inside it declare one, or the path runs off the edge
@@ -1181,6 +1203,7 @@ header .model-name span {
   <span>Canvas: <span class="stat-value" id="stat-canvas">—</span></span>
   <span>Build: <span class="stat-value" id="stat-commit"></span></span>
   <span id="stat-file" class="hidden">File: <span class="stat-value" id="stat-file-path"></span></span>
+  <span id="save-status" class="hidden"></span>
 </div>
 
 <script src="generated/wasm_exec.js"></script>

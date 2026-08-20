@@ -9,12 +9,35 @@ import { CtxActions } from './ctx-actions.js';
 import { Model } from './model.js';
 import { bus } from './bus.js';
 import { Export } from './emod-export.js';
-import { ready, isReady, droppedFile, saveFile, setWindowTitle, onFileOpened, initialState } from './platform.js';
+import { ready, isReady, droppedFile, saveFile, setWindowTitle, onFileOpened, onSaveRequested, initialState } from './platform.js';
 
 // ─── Event subscriptions ─────────────────────────────────────────────
 bus.on('data:changed', function({ store: s }) {
   renderDiagram(s);
 });
+
+// What Save writes is the source in the panel, never the model the exporter
+// re-serialises from the diagram: that one canonicalises formatting and drops
+// comments, so saving a file the user had not edited would rewrite it.
+//
+// The panel is a textarea, though, and a textarea normalises every CRLF it is
+// handed to a bare LF — so its text is already not the file's bytes. The text
+// the file arrived with is kept beside it: unedited source hands that back
+// untouched, and edited source is put back into the same convention, so a file
+// written with CRLF never comes back with every one of its lines rewritten. A
+// file that mixes conventions is written wholly in the one it opened with, and
+// only once it has been edited.
+function sourceToSave(s) {
+  const shown = s.dom.sourceInput.value;
+  const arrived = s.currentFile && s.currentFile.content;
+  if (typeof arrived !== 'string') {
+    return shown;
+  }
+  if (shown === arrived.replace(/\r\n?/g, '\n')) {
+    return arrived;
+  }
+  return arrived.indexOf('\r\n') === -1 ? shown : shown.replace(/\n/g, '\r\n');
+}
 
 function applyWindowTitle(s) {
   const name = (s.currentFile && s.currentFile.name) || s.modelName;
@@ -103,6 +126,7 @@ function init() {
   store.dom.statCanvas = document.getElementById("stat-canvas");
   store.dom.statFile = document.getElementById("stat-file");
   store.dom.statFilePath = document.getElementById("stat-file-path");
+  store.dom.saveStatus = document.getElementById("save-status");
   store.dom.panel = document.getElementById("data-panel");
   store.dom.panelHdr = document.getElementById("data-panel-header");
   store.dom.panelBody = document.getElementById("data-panel-body");
@@ -142,6 +166,12 @@ function init() {
   // while the panel shows the newer source.
   let latestRender = 0;
 
+  // A save waits on this. The panel's text and the open file are committed at
+  // different moments — the text the instant a file arrives, its identity only
+  // once the parse resolves — so a save taken between the two would write the
+  // arriving model's source over the departing model's path.
+  let latestRenderSettled = Promise.resolve();
+
   // The panel's text and the render that reads it are claimed together, because
   // a drop and a host delivery both arrive asynchronously and either can land
   // mid-flight: writing the text outside this would let one entry point's source
@@ -153,13 +183,14 @@ function init() {
   // parse rejects must leave the window naming the model still on screen, not
   // one that never appeared.
   function renderPanelSource(text, file) {
+    clearSaveConfirmation();
     const previousText = store.dom.sourceInput.value;
     if (text !== undefined) {
       store.dom.sourceInput.value = text;
     }
     const source = store.dom.sourceInput.value.trim();
     const render = ++latestRender;
-    return Model.sendParse(store, source, store.dom.statusEl)
+    latestRenderSettled = Model.sendParse(store, source, store.dom.statusEl)
       .then(function(data) {
         if (render !== latestRender) return;
         if (file !== undefined) {
@@ -185,12 +216,14 @@ function init() {
         store.dom.statusEl.textContent = "✗ " + err.message;
         store.dom.statusEl.className = "status error";
       });
+
+    return latestRenderSettled;
   }
 
   // Reporting a host failure claims a render number for the same reason a render
   // does: an older parse still in flight would otherwise resolve afterwards and
   // paint over the reason, re-collapsing the panel holding it.
-  function reportOpenFailure(reason) {
+  function reportHostFailure(reason) {
     latestRender++;
     store.dom.statusEl.textContent = "✗ " + reason;
     store.dom.statusEl.className = "status error";
@@ -243,23 +276,138 @@ function init() {
     // reveal that panel, or choosing a file from the OS dialog appears to do
     // nothing at all.
     if (opened.error) {
-      reportOpenFailure(opened.error);
+      reportHostFailure(opened.error);
       return;
     }
     // A file with nothing in it reads successfully and then reaches the parser's
     // own empty-source rejection, whose message is written for someone who
     // pressed Render on an empty panel rather than someone who chose a file.
     if (!opened.content.trim()) {
-      reportOpenFailure(opened.name + " is empty");
+      reportHostFailure(opened.name + " is empty");
       return;
     }
-    renderPanelSource(opened.content, { name: opened.name, path: opened.path })
+    renderPanelSource(opened.content, { name: opened.name, path: opened.path, content: opened.content })
       .then(function() {
         if (store.dom.statusEl.className.indexOf("error") !== -1) {
           store.dom.panel.classList.remove("collapsed");
         }
       });
   });
+
+  // ─── Saving ───────────────────────────────────────────────────────
+  function clearSaveConfirmation() {
+    const el = store.dom.saveStatus;
+    if (!el) return;
+    el.textContent = '';
+    el.title = '';
+    el.classList.add('hidden');
+    el.classList.remove('failed');
+  }
+
+  function reportSaveOutcome(text, failed) {
+    const el = store.dom.saveStatus;
+    if (!el) return;
+    el.textContent = text;
+    el.title = text;
+    el.classList.remove('hidden');
+    el.classList.toggle('failed', failed);
+  }
+
+  // The bar keeps the outcome because it is the one place on screen a save can
+  // be read without expanding anything; the panel carries the reason in full,
+  // because a path plus a filesystem's wording does not fit in a status bar.
+  // Unlike an open, this claims no render number: a save is not a render, and
+  // cancelling one the user asked for would leave the canvas disagreeing with
+  // the panel with nothing to say so.
+  let saveFailureText = null;
+
+  function reportSaveFailure(reason, stillOpen) {
+    reportSaveOutcome('✗ ' + reason, true);
+    // A save whose file is no longer the one on screen still has to be reported,
+    // because its bytes did not land — but revealing the panel would interrupt a
+    // model the user has already moved on to, so only the bar carries it.
+    if (!stillOpen) {
+      return;
+    }
+    saveFailureText = "✗ " + reason;
+    store.dom.statusEl.textContent = saveFailureText;
+    store.dom.statusEl.className = "status error";
+    store.dom.panel.classList.remove("collapsed");
+  }
+
+  // A save that succeeds after one was refused has to take the refusal down with
+  // it, or the window reports the same file as both saved and unsaved at once.
+  function clearSaveFailure() {
+    if (saveFailureText !== null && store.dom.statusEl.textContent === saveFailureText) {
+      store.dom.statusEl.textContent = '';
+      store.dom.statusEl.className = 'status';
+    }
+    saveFailureText = null;
+  }
+
+  // Saves queue behind each other and behind any render still in flight. Two
+  // overlapping saves would otherwise let the slower one land last, putting
+  // older text on disk under a confirmation of the newer.
+  let saveQueue = Promise.resolve();
+
+  // chooseLocation is what separates Save from Save As: Save reuses the open
+  // file's path and shows no dialog, and both ask the host to choose when there
+  // is no open file to write back to.
+  function saveModel(options) {
+    const chooseLocation = Boolean(options && options.chooseLocation);
+    saveQueue = saveQueue
+      .then(rendersSettled)
+      .then(function() { return writeModel(chooseLocation); });
+    return saveQueue;
+  }
+
+  // Waiting on one render is not enough: a file arriving while that one is in
+  // flight starts another, and resuming between the two reads the panel's new
+  // text beside the old file's identity. Each wait is checked against what the
+  // latest render is by the time it finishes.
+  function rendersSettled() {
+    const waitingOn = latestRenderSettled;
+    return waitingOn.then(function() {
+      return waitingOn === latestRenderSettled ? undefined : rendersSettled();
+    });
+  }
+
+  function writeModel(chooseLocation) {
+    const openFile = store.currentFile;
+    const target = chooseLocation || !openFile ? '' : openFile.path;
+    const suggestedName = (openFile && openFile.name) || (store.modelName || 'diagram') + '.emod';
+    const content = sourceToSave(store);
+
+    // An empty panel is refused rather than written: the host would otherwise
+    // truncate whichever model the user picked in the save dialog to nothing,
+    // or empty the open file outright with no dialog at all, and confirm it.
+    if (!content.trim()) {
+      reportSaveFailure('There is nothing to save — the source panel is empty', true);
+      return Promise.resolve();
+    }
+
+    return saveFile(suggestedName, content, target).then(function(saved) {
+      // A host that answers no file is one whose dialog was cancelled, which has
+      // to leave the open file, the window's name and the path on screen alone.
+      if (!saved) {
+        return;
+      }
+      // A file opened while this was being written owns the window now, so
+      // adopting this save's target would name a model the panel is no longer
+      // showing — and the save after it would write over that model.
+      if (store.currentFile === openFile) {
+        store.currentFile = { name: saved.name, path: saved.path, content: content };
+        applyWindowTitle(store);
+        UI.updateStats(store);
+        clearSaveFailure();
+      }
+      reportSaveOutcome('✓ Saved ' + saved.name, false);
+    }).catch(function(err) {
+      reportSaveFailure(err.message || String(err), store.currentFile === openFile);
+    });
+  }
+
+  onSaveRequested(saveModel);
 
   // ─── Panel toggle ─────────────────────────────────────────────────
   store.dom.panelHdr.addEventListener("click", function() {
@@ -280,8 +428,13 @@ function init() {
 
   // ─── Export .emod button ─────────────────────────────────────────
   store.dom.exportBtn.addEventListener("click", function() {
-    Export.exportToEmodString(store).then(function(content) {
-      return saveFile((store.modelName || "diagram") + ".emod", content);
+    // On the same queue as Save: an Export aimed by its own dialog at the file a
+    // save is already writing would otherwise race it, and whichever landed last
+    // would silently discard the other.
+    saveQueue = saveQueue.then(function() {
+      return Export.exportToEmodString(store).then(function(content) {
+        return saveFile((store.modelName || "diagram") + ".emod", content);
+      });
     }).catch(function(err) {
       store.dom.statusEl.textContent = "✗ " + err.message;
       store.dom.statusEl.className = "status error";
@@ -290,6 +443,7 @@ function init() {
       // written somewhere the user who pressed the button cannot see.
       store.dom.panel.classList.remove("collapsed");
     });
+    return saveQueue;
   });
 
   // ─── Visibility toggle ────────────────────────────────────────────
@@ -402,7 +556,7 @@ function init() {
   });
 }
 
-export { init };
+export { init, sourceToSave };
 
 if (typeof process === 'undefined' || !process.env || !process.env.VITEST) {
   init();

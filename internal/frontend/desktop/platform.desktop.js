@@ -73,6 +73,12 @@ function onFileOpened(handler) {
   fileOpenedHandler = handler;
 }
 
+let saveRequestedHandler = null;
+
+function onSaveRequested(handler) {
+  saveRequestedHandler = handler;
+}
+
 // The shell's File menu carries the only Open control, so it reaches the
 // frontend by emitting this. The name is pinned against the Go side by
 // internal/desktop's event-name guard, because nothing else connects the two.
@@ -123,4 +129,4 @@ function initialState() {
   return Promise.resolve(null);
 }
 
-export { parseEmod, exportEmod, droppedFile, saveFile, setWindowTitle, onFileOpened, initialState, ready, isReady };
+export { parseEmod, exportEmod, droppedFile, saveFile, setWindowTitle, onFileOpened, onSaveRequested, initialState, ready, isReady };

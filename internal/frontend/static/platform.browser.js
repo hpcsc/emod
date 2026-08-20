@@ -93,7 +93,9 @@ function droppedFile(dataTransfer) {
 
 // A browser can only offer the file back as a download, so suggestedName is
 // all the say the caller gets over where it lands and the returned promise
-// says the download started, never that it was kept.
+// says the download started, never that it was kept. A host able to write to a
+// path is handed one; there is none here, which is why the answer names no file
+// for the caller to adopt as its own.
 function saveFile(suggestedName, content) {
   const url = URL.createObjectURL(new Blob([content], { type: "text/plain" }));
   const a = document.createElement("a");
@@ -115,6 +117,11 @@ function setWindowTitle(title) {
 // so this registers a handler that stays uncalled rather than being unfinished.
 function onFileOpened() {}
 
+// Nor does anything in a browser ask the page to save: there is no menu bar and
+// no shell behind one. As with onFileOpened the handler is accepted and never
+// called, so the shared viewer registers the same way whatever it runs on.
+function onSaveRequested() {}
+
 // The CLI's server substitutes this global into the page before the frontend
 // loads, so it is already there by the time anything asks; the promise is for
 // the hosts that have to go and fetch their state instead.
@@ -125,4 +132,4 @@ function initialState() {
   return Promise.resolve(INITIAL_DATA);
 }
 
-export { parseEmod, exportEmod, droppedFile, saveFile, setWindowTitle, onFileOpened, initialState, ready, isReady };
+export { parseEmod, exportEmod, droppedFile, saveFile, setWindowTitle, onFileOpened, onSaveRequested, initialState, ready, isReady };
