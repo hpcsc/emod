@@ -9,6 +9,11 @@ export const answers = {};
 
 export const Window = {
   SetTitle: (title) => { calls.push(['Window.SetTitle', title]); return Promise.resolve(); },
+  Close: () => { calls.push(['Window.Close']); return Promise.resolve(); },
+};
+
+export const Application = {
+  Quit: () => { calls.push(['Application.Quit']); return Promise.resolve(); },
 };
 
 // The real runtime reads the OS off a global the shell injects into the page,

@@ -461,6 +461,133 @@ describe('asking what to do about unsaved edits', () => {
   });
 });
 
+// The shell refuses a close or a quit while it holds unsaved work and asks
+// here instead, so leaving means answering and then telling the shell it may
+// go — otherwise it refuses the very close the answer authorised.
+describe('the shell asking to close or quit', () => {
+  const leaving = () => runtime.calls
+    .filter((call) => call[0] === 'Window.Close' || call[0] === 'Application.Quit')
+    .map((call) => call[0]);
+
+  const cleared = () => stub.calls.filter((call) => call[0] === 'SetModified' && call[1] === false);
+
+  function requestClose() {
+    return Promise.resolve(runtime.listeners['window:close-requested']()).then(flush);
+  }
+
+  function requestQuit() {
+    return Promise.resolve(runtime.listeners['app:quit-requested']()).then(flush);
+  }
+
+  beforeEach(() => {
+    stub.gateSetModified(null);
+    desktop.setWindowModified(true);
+    stub.calls.length = 0;
+    runtime.calls.length = 0;
+    desktop.onSaveRequested(() => Promise.resolve());
+  });
+
+  it('leaves the window open and writes nothing when the answer is cancel', async () => {
+    runtime.answers.Question = 'Cancel';
+
+    await requestClose();
+
+    expect(leaving()).toEqual([]);
+    expect(stub.calls).toEqual([]);
+  });
+
+  it('closes without writing when the answer is discard', async () => {
+    runtime.answers.Question = 'Discard';
+
+    await requestClose();
+
+    expect(leaving()).toEqual(['Window.Close']);
+    expect(cleared()).toHaveLength(1);
+    expect(stub.calls.filter((call) => call[0] === 'Write')).toEqual([]);
+  });
+
+  it('quits without writing when the answer is discard', async () => {
+    runtime.answers.Question = 'Discard';
+
+    await requestQuit();
+
+    expect(leaving()).toEqual(['Application.Quit']);
+    expect(cleared()).toHaveLength(1);
+    expect(stub.calls.filter((call) => call[0] === 'Write')).toEqual([]);
+  });
+
+  // The shell refused on the state it holds, so a close asked for before that
+  // state has actually reached it is refused again and the window never goes.
+  // Asking in the right order is not enough — the answer has to have landed.
+  it('waits for the shell to have heard there is nothing unsaved before asking it to close', async () => {
+    runtime.answers.Question = 'Discard';
+    let hearIt;
+    stub.gateSetModified(new Promise((resolve) => { hearIt = resolve; }));
+
+    const closing = requestClose();
+    await flush();
+    expect(cleared()).toHaveLength(1);
+    expect(leaving()).toEqual([]);
+
+    hearIt();
+    await closing;
+
+    expect(leaving()).toEqual(['Window.Close']);
+  });
+
+  it('asks the viewer to save, then closes, when the answer is save', async () => {
+    runtime.answers.Question = 'Save';
+    const asked = [];
+    desktop.onSaveRequested((options) => {
+      asked.push(options);
+      desktop.setWindowModified(false);
+      return Promise.resolve();
+    });
+
+    await requestClose();
+
+    expect(asked).toEqual([{ chooseLocation: false }]);
+    expect(leaving()).toEqual(['Window.Close']);
+  });
+
+  it('leaves the window open when the save it asked for did not land', async () => {
+    runtime.answers.Question = 'Save';
+    desktop.onSaveRequested(() => Promise.resolve());
+
+    await requestClose();
+
+    expect(leaving()).toEqual([]);
+  });
+
+  it('leaves the app running when the save it asked for did not land', async () => {
+    runtime.answers.Question = 'Save';
+    desktop.onSaveRequested(() => Promise.resolve());
+
+    await requestQuit();
+
+    expect(leaving()).toEqual([]);
+  });
+
+  // Nothing registered means no viewer to save through, and closing anyway
+  // would discard the very work the shell refused to close over.
+  it('leaves the window open when no viewer has registered to save', async () => {
+    runtime.answers.Question = 'Save';
+    desktop.onSaveRequested(null);
+
+    await requestClose();
+
+    expect(leaving()).toEqual([]);
+  });
+
+  it('leaves the window open for a dialog it could not show', async () => {
+    runtime.answers.Question = new Error('no window to attach to');
+
+    await requestClose();
+
+    expect(leaving()).toEqual([]);
+  });
+});
+
 describe('starting up', () => {
   it('opens with no model, because nothing hands this window one at startup', async () => {
     await expect(desktop.initialState()).resolves.toBeNull();

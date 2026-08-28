@@ -74,10 +74,44 @@ func TestServiceRegistrations(t *testing.T) {
 	})
 }
 
+// A service is registered either as a literal or as a variable holding one,
+// which is what the shell does for the service whose state its close hook and
+// its quit veto read back. Resolving the variable to the type it was declared
+// with is what keeps the second shape covered — and it is not optional: a
+// service the frontend imports that this cannot name fails the comparison
+// below rather than quietly losing its guards.
 func servicesRegisteredBy(t *testing.T, path string) []string {
 	t.Helper()
 
-	return uniqueMatches(t, path, regexp.MustCompile(`application\.NewService\(&desktop\.(\w+)\{`))
+	raw, err := os.ReadFile(path)
+	require.NoError(t, err)
+	source := string(raw)
+
+	declared := map[string]string{}
+	for _, m := range regexp.MustCompile(`(\w+)\s*:?=\s*(?:&desktop\.(\w+)\{|desktop\.New(\w+)\()`).FindAllStringSubmatch(source, -1) {
+		if m[2] != "" {
+			declared[m[1]] = m[2]
+		} else {
+			declared[m[1]] = m[3]
+		}
+	}
+
+	var names []string
+	seen := map[string]bool{}
+	for _, m := range regexp.MustCompile(`application\.NewService\((?:&desktop\.(\w+)\{|(\w+)\))`).FindAllStringSubmatch(source, -1) {
+		name := m[1]
+		if name == "" {
+			name = declared[m[2]]
+		}
+		if name == "" || seen[name] {
+			continue
+		}
+		seen[name] = true
+		names = append(names, name)
+	}
+	sort.Strings(names)
+
+	return names
 }
 
 func servicesImportedBy(t *testing.T, path string) []string {

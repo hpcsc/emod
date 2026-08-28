@@ -90,7 +90,7 @@
     },
     {
       "n": 4,
-      "done": false,
+      "done": true,
       "title": "Refuse to close or quit with unsaved edits",
       "language": "Go",
       "testable": true,

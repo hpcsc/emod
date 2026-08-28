@@ -463,15 +463,15 @@ leaves the window open, Discard closes and leaves the file untouched, Save write
 closes. With nothing unsaved, both go straight through.
 
 **Acceptance Criteria:**
-- [ ] Closing the window while the frontend has reported unsaved edits leaves the window open and asks the frontend instead
-- [ ] Quitting while the frontend has reported unsaved edits leaves the app running and asks the frontend instead
-- [ ] Closing and quitting with nothing unsaved each proceed with no prompt, and with no round trip to the frontend at all
-- [ ] The prompt raised is the same Save / Discard / Cancel confirmation the open path raises, from the same place
-- [ ] Cancel leaves the window open with the model, the panel's text and the marker exactly as they were, and writes nothing
-- [ ] Discard closes, or quits, and leaves the file on disk byte-for-byte as it was
-- [ ] Save writes the open file and then closes, or quits; a save that fails and one whose location dialog was cancelled each leave the window open
-- [ ] The shell's new events are subscribed by the frontend, so `TestShellEventNames`' both-directions comparison holds, and `task test:unit` is green
-- [ ] `task build:desktop` succeeds
+- [x] Closing the window while the frontend has reported unsaved edits leaves the window open and asks the frontend instead
+- [x] Quitting while the frontend has reported unsaved edits leaves the app running and asks the frontend instead
+- [x] Closing and quitting with nothing unsaved each proceed with no prompt, and with no round trip to the frontend at all
+- [x] The prompt raised is the same Save / Discard / Cancel confirmation the open path raises, from the same place
+- [x] Cancel leaves the window open with the model, the panel's text and the marker exactly as they were, and writes nothing
+- [x] Discard closes, or quits, and leaves the file on disk byte-for-byte as it was
+- [x] Save writes the open file and then closes, or quits; a save that fails and one whose location dialog was cancelled each leave the window open
+- [x] The shell's new events are subscribed by the frontend, so `TestShellEventNames`' both-directions comparison holds, and `task test:unit` is green
+- [x] `task build:desktop` succeeds
 
 **Affected Files/Modules:**
 - `internal/desktop/` — the document-state service gains the read the shell's veto uses

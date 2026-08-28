@@ -3,7 +3,7 @@
 // it wholesale, so a desktop module parked there would ship to the published
 // web viewer and into the CLI binary. The desktop build assembles it into its
 // own frontend directory as platform.js.
-import { Dialogs, Events, System, Window } from '/wails/runtime.js';
+import { Application, Dialogs, Events, System, Window } from '/wails/runtime.js';
 import { FileService, ModelService, WindowService } from '../bindings/github.com/hpcsc/emod/internal/desktop/index.js';
 
 // The Go core is linked into the binary, so there is nothing to fetch and
@@ -109,6 +109,10 @@ function setWindowModified(modified) {
   }
   windowModified = modified;
   WindowService.SetModified(modified);
+  showModifiedInTitle();
+}
+
+function showModifiedInTitle() {
   if (!marksItsOwnWindow()) {
     Window.SetTitle(markedTitle());
   }
@@ -176,6 +180,45 @@ function requestSave(chooseLocation) {
     return undefined;
   }
   return saveRequestedHandler({ chooseLocation: chooseLocation });
+}
+
+// The shell refuses a close or a quit while it holds unsaved work, and asks
+// here instead — it cannot ask and wait itself, because the answer comes from a
+// dialog and the veto it is inside has to answer immediately.
+Events.On('window:close-requested', function() { return leaveBy(Window.Close); });
+Events.On('app:quit-requested', function() { return leaveBy(Application.Quit); });
+
+function leaveBy(leave) {
+  return resolveUnsavedEdits().then(function(outcome) {
+    if (outcome === 'cancel') {
+      return undefined;
+    }
+    if (outcome === 'discard') {
+      return proceedTo(leave);
+    }
+    // Nothing registered means no viewer to save through, and going anyway
+    // would discard the very work the shell refused to leave over.
+    if (!saveRequestedHandler) {
+      return undefined;
+    }
+    return saveRequestedHandler({ chooseLocation: false }).then(function() {
+      // The viewer reports the answer again once the save settles, so a write
+      // the filesystem refused and a cancelled location dialog both leave this
+      // still set — and neither may cost the user the work they asked to keep.
+      return windowModified ? undefined : proceedTo(leave);
+    });
+  });
+}
+
+// The shell refused on the state it holds, so it has to have *heard* that the
+// state has changed before the close is asked for again — asking first is not
+// enough, and a close issued before it lands is refused by the very hook this
+// answer authorised, leaving a window that cannot be closed.
+function proceedTo(leave) {
+  windowModified = false;
+  showModifiedInTitle();
+
+  return WindowService.SetModified(false).then(leave);
 }
 
 // The shell's File menu carries the only Open control, so it reaches the

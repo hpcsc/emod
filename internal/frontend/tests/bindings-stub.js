@@ -19,6 +19,17 @@ export const FileService = {
   Write: (path, content) => { calls.push(['Write', path, content]); return Promise.resolve(answers.Write); },
 };
 
+// A test that has to see what happens between telling the shell something and
+// the shell hearing it holds the answer here until it releases the gate.
+let setModifiedGate = null;
+
+export function gateSetModified(gate) {
+  setModifiedGate = gate;
+}
+
 export const WindowService = {
-  SetModified: (modified) => { calls.push(['SetModified', modified]); return Promise.resolve(); },
+  SetModified: (modified) => {
+    calls.push(['SetModified', modified]);
+    return setModifiedGate ? setModifiedGate.then(() => undefined) : Promise.resolve();
+  },
 };

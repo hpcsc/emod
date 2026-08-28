@@ -8,6 +8,7 @@ import (
 	"log"
 
 	"github.com/wailsapp/wails/v3/pkg/application"
+	"github.com/wailsapp/wails/v3/pkg/events"
 
 	"github.com/hpcsc/emod/internal/desktop"
 )
@@ -60,6 +61,14 @@ func applicationMenu(window *application.WebviewWindow) *application.Menu {
 }
 
 func main() {
+	// Both are assigned below and read only from callbacks the framework runs
+	// after Run, which is what lets a quit veto built here consult a window and
+	// a service that do not exist yet. Nothing enforces that ordering, so the
+	// veto answers for itself rather than trusting it: a quit that somehow
+	// arrived first would have no window to have unsaved work in.
+	var window *application.WebviewWindow
+	var windowState *desktop.WindowService
+
 	app := application.New(application.Options{
 		Name:        "emod",
 		Description: "Event model viewer",
@@ -72,9 +81,21 @@ func main() {
 			// /wails/runtime.js, which only this server answers.
 			Handler: application.BundledAssetFileServer(frontend),
 		},
+		// A quit carrying unsaved work is refused rather than confirmed: the
+		// confirmation is a dialog the frontend raises, and this has to answer
+		// before one could be shown, let alone answered. The frontend asks to
+		// quit again once it has one, by which point this state has moved.
+		ShouldQuit: func() bool {
+			if windowState == nil || !windowState.Modified() {
+				return true
+			}
+			window.EmitEvent("app:quit-requested")
+
+			return false
+		},
 	})
 
-	window := app.Window.NewWithOptions(application.WebviewWindowOptions{
+	window = app.Window.NewWithOptions(application.WebviewWindowOptions{
 		Title:  "emod",
 		Width:  1400,
 		Height: 900,
@@ -88,9 +109,20 @@ func main() {
 	// Registered after the window rather than in Options.Services, because the
 	// marker needs the window and the window needs the app. Wails binds every
 	// service registered before Run.
-	app.RegisterService(application.NewService(&desktop.WindowService{
-		Marker: &windowMarker{window: window},
-	}))
+	windowState = desktop.NewWindowService(&windowMarker{window: window})
+	app.RegisterService(application.NewService(windowState))
+
+	// A hook runs ahead of the listener that destroys the window, and
+	// cancelling stops it — so this is where a close carrying unsaved work is
+	// refused. The frontend asks to close again once it has an answer, and by
+	// then this hook has nothing to refuse over and lets it through.
+	window.RegisterHook(events.Common.WindowClosing, func(event *application.WindowEvent) {
+		if !windowState.Modified() {
+			return
+		}
+		event.Cancel()
+		window.EmitEvent("window:close-requested")
+	})
 
 	app.Menu.SetApplicationMenu(applicationMenu(window))
 
