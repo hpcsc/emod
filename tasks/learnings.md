@@ -1087,3 +1087,45 @@ in this repo; append only learnings that generalise beyond the task that surface
 - Observed: US-003 save a model back to the file it came from
 - Learning: Two of nineteen round-one fixes came back in round two, and both were partial rather than wrong. The HIGH one waited on latestRenderSettled once, which reads the newest render at that moment but not the one a file arriving during the wait starts — the fix has to re-check after each wait until the value stops moving. The other added a permission assertion that was correct and could not fail on the machine it ran on. Neither is caught by re-running the suite, because both pass. When a fix consists of reading a variable that other code reassigns, or of asserting a value the environment also supplies, ask what makes it settle and what makes it differ before calling it done — and expect a second round to be worth its cost specifically for these two shapes.
 - Apply when: fixing an audit finding about ordering or staleness, or deciding whether a second audit round will find anything
+
+## A refutation built on a model of the mechanism is weaker than a reproduction on the real one
+- Type: recurring-finding
+- Observed: us-004-know-when-there-are-unsaved-changes
+- Learning: Audit round 2 refuted an out-of-order SetModified finding by modelling Wails' dispatch and sweeping a head start, measuring the reorder window at under 10 microseconds and calling it unreachable; on that evidence the serialising queue was removed. Round 3 reproduced the same claim against a real concurrent HTTP transport — Go net/http, a goroutine per request, which is what pkg/application/application.go:705 actually does — and got 61 divergences in 300 bursts, each one permanent because the frontend's de-duplication then reads the shell as already holding the value it does not. A refutation whose evidence is a simulation of the transport establishes only that the model does not reproduce it. Weigh a refuted finding by what the verifier ran against, not by how thorough the write-up reads, and prefer keeping cheap insurance over removing it on modelled evidence.
+- Apply when: acting on an audit's refuted list, especially a concurrency or ordering claim whose refutation rests on a measured window rather than on the real transport
+
+## The shell's copy of a fact outlives the page that reports it, so a decision the shell makes never trusts the page's record
+- Type: constraint
+- Observed: us-004-know-when-there-are-unsaved-changes
+- Learning: desktop.WindowService holds the unsaved-work answer for the life of the process while platform.desktop.js's record of what it has told the shell is reloaded with the page — Cmd+R is in the default Wails menu (roles.go NewViewMenu adds Reload unconditionally), so the two disagree routinely. Every audit round found a defect here: a failed call recorded as delivered suppressed its own repair, a reloaded page skipped the call that would have cleared a veto and made the window impossible to close, and two unserialised calls left the shell holding the older answer for good. The shape that works is: de-duplicate only the answers the page volunteers, start the record as nothing-delivered, serialise the calls so the last answer is the last written, and have any path the shell itself gates on send unconditionally.
+- Apply when: the frontend caches what it has told a Go service, or any shell decision is gated on state the page reports
+
+## sync.Once cannot hold a lock open for a test: Do makes every caller wait for the first
+- Type: constraint
+- Observed: us-004-know-when-there-are-unsaved-changes
+- Learning: A marker that blocks inside its callback to prove a lock is held across the call must not use sync.Once to block only the first invocation. Once.Do blocks every later caller until the first Do returns, which serialises the two goroutines by itself and makes the test pass whether the production code holds the lock or not — the mutation it exists to catch runs green. Guard the once-only behaviour with a plain flag under its own mutex and return immediately for later calls; then removing the lock from the code under test reddens the leaf, and keeping it makes the second call block on the lock and never arrive.
+- Apply when: writing a Go test double that blocks inside a callback to observe what another goroutine can do meanwhile
+
+## audit-implement works in the repo root whatever working directory it is given
+- Type: constraint
+- Observed: us-004-know-when-there-are-unsaved-changes
+- Learning: The recorded advice to run the audit from a throwaway git worktree does not protect the main checkout: passing working_dir in the skill args changed nothing. Across three rounds the verifiers created their own worktrees under .claude/worktrees, and one round detached the main checkout to the audit head and then left it on the default branch, so a session that had been on its feature branch came back to main with the branch still intact but not checked out. Each round also stranded a branch per verifier — 25 of them, all pointing at the base commit. Nothing was lost either time, but assume the audit will move the checkout: note the branch and HEAD before launching, check git branch and git worktree list afterwards, and delete the worktree-wf_* branches with git branch -d, which refuses anything carrying real work.
+- Apply when: launching audit-implement, or finding the checkout on an unexpected branch or the repo full of worktree-wf_* branches after one
+
+## A story that threads one operation through a shared seam makes every task touch the same files, so fold by mechanism not by file
+- Type: convention
+- Observed: us-004-know-when-there-are-unsaved-changes
+- Learning: US-004 added three operations to internal/frontend's platform seam, and the seam is written three times — the contract, the browser implementation and the desktop one — plus the viewer that consumes it and the two guards that scan them. Every task therefore edited the same four or five files, and five clerk fixup calls came back ambiguous because several commits in range touch each one. Splitting such a story by file is impossible and splitting the fixup by file is misleading; choose the fold target by which commit introduced the mechanism the correction is about, name it with --onto, and expect the cross-cutting design change an audit prompts to want its own commit rather than a fold, because a new seam operation belongs to no single task.
+- Apply when: decomposing a story that adds operations to internal/frontend's platform seam, or folding audit fixes on a branch whose tasks all edit the same modules
+
+## A criterion naming an entry point a later story delivers is closed by the seam, not by the branch
+- Type: constraint
+- Observed: us-004-know-when-there-are-unsaved-changes
+- Learning: US-004's fourth criterion reads 'Opening another model — dialog, recent files, or drop — with unsaved changes goes through the same prompt', and recent files is US-006: nothing in the app opens one, so the branch can neither satisfy nor violate that third of the criterion. What makes it answerable is putting the guard on the single function that hands a different file's model to renderPanelSource and pinning with a source scan that it is the only one, so the later entry point has nowhere unguarded to arrive. Write such a criterion against the seam rather than the list — and expect the validate step, not the audit, to surface it: every lens owns changed source files and judges intent from the diff, so a criterion naming something that does not exist is invisible to all of them.
+- Apply when: decomposing a story whose criteria enumerate entry points that later stories deliver, or validating a branch against a criterion listing a surface the app does not have
+
+## A vitest gate on a binding must still be in the answer bag when the deferred dispatch runs
+- Type: convention
+- Observed: us-004-know-when-there-are-unsaved-changes
+- Learning: Proving that calls to a Go service are serialised needs two things the obvious test gets wrong. The stub must record when a call lands, not when it was sent — dispatch order is identical with and without a queue, which is the 'asserts the request, not the landing' trap in transport clothing, so bindings-stub.js grew a landed array beside calls. And because both the queued and the unqueued implementation dispatch a microtask later, an answer swapped into the bag immediately after the first call reaches that first call too: flush once so it is actually dispatched under the gate, make the second call, flush again so an unqueued second lands ahead of it, and only then release. Without the second flush both implementations pass.
+- Apply when: writing a vitest leaf that pins the ordering of calls through internal/frontend/tests/bindings-stub.js or any promise-returning stub
