@@ -23,6 +23,8 @@ jobs:
       run: task build
     - name: Run Unit Test
       run: task test:unit
+    - name: Run Race Detector
+      run: task test:race
     - name: Run Integration Test
       run: task test:integration
     - name: Setup Node.js
