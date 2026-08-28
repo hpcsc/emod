@@ -9,7 +9,7 @@ import { CtxActions } from './ctx-actions.js';
 import { Model } from './model.js';
 import { bus } from './bus.js';
 import { Export } from './emod-export.js';
-import { ready, isReady, droppedFile, saveFile, setWindowTitle, setWindowModified, onFileOpened, onSaveRequested, initialState } from './platform.js';
+import { ready, isReady, droppedFile, saveFile, setWindowTitle, setWindowModified, resolveUnsavedEdits, onFileOpened, onSaveRequested, initialState } from './platform.js';
 
 // ─── Event subscriptions ─────────────────────────────────────────────
 bus.on('data:changed', function({ store: s }) {
@@ -257,6 +257,36 @@ function init() {
 
   store.dom.sourceInput.addEventListener("input", reportModified);
 
+  // The only place a different file's model is handed to renderPanelSource, so
+  // every way of opening one runs the guard below and a new one has nowhere
+  // else to arrive.
+  function openModel(text, file) {
+    return clearedToReplace().then(function(cleared) {
+      return cleared ? renderPanelSource(text, file) : undefined;
+    });
+  }
+
+  // Save writes the file the edits belong to before the model on screen is
+  // replaced, and the answer to whether that write landed is the marker: a
+  // refused save, and one whose location dialog was cancelled, both leave the
+  // model modified, and neither may cost the user the edits they asked to keep.
+  function clearedToReplace() {
+    if (!modelIsModified(store)) {
+      return Promise.resolve(true);
+    }
+    return resolveUnsavedEdits().then(function(outcome) {
+      if (outcome === 'cancel') {
+        return false;
+      }
+      if (outcome === 'discard') {
+        return true;
+      }
+      return saveModel({ chooseLocation: false }).then(function() {
+        return !modelIsModified(store);
+      });
+    });
+  }
+
   store.dom.renderBtn.addEventListener("click", function() {
     renderPanelSource();
   });
@@ -289,7 +319,7 @@ function init() {
       return;
     }
     file.read().then(function(content) {
-      renderPanelSource(content, null);
+      openModel(content, null);
     }).catch(function() {
       store.dom.statusEl.textContent = '✗ Failed to read file';
       store.dom.statusEl.className = 'status error';
@@ -313,7 +343,7 @@ function init() {
       reportHostFailure(opened.name + " is empty");
       return;
     }
-    renderPanelSource(opened.content, { name: opened.name, path: opened.path, content: opened.content })
+    openModel(opened.content, { name: opened.name, path: opened.path, content: opened.content })
       .then(function() {
         if (store.dom.statusEl.className.indexOf("error") !== -1) {
           store.dom.panel.classList.remove("collapsed");

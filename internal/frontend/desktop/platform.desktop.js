@@ -128,6 +128,29 @@ function markedTitle() {
   return windowName === '' ? '*' : '* ' + windowName;
 }
 
+// A question dialog answers with the label that was pressed, so the labels are
+// what the outcomes are read off. Anything else — a dialog dismissed some other
+// way, a platform that ignored the labels, a dialog that could not be shown at
+// all — is cancel, because it is the only outcome that neither writes the
+// user's file nor throws their edits away.
+const UNSAVED_EDIT_OUTCOMES = { Save: 'save', Discard: 'discard', Cancel: 'cancel' };
+
+function resolveUnsavedEdits() {
+  return Dialogs.Question({
+    Title: 'Unsaved changes',
+    Message: 'This model has changes that have not been saved.',
+    Buttons: [
+      { Label: 'Save', IsDefault: true },
+      { Label: 'Discard' },
+      { Label: 'Cancel', IsCancel: true },
+    ],
+  }).then(function(pressed) {
+    return UNSAVED_EDIT_OUTCOMES[pressed] || 'cancel';
+  }).catch(function() {
+    return 'cancel';
+  });
+}
+
 let fileOpenedHandler = null;
 
 function onFileOpened(handler) {
@@ -205,4 +228,4 @@ function initialState() {
   return Promise.resolve(null);
 }
 
-export { parseEmod, exportEmod, droppedFile, saveFile, setWindowTitle, setWindowModified, onFileOpened, onSaveRequested, initialState, ready, isReady };
+export { parseEmod, exportEmod, droppedFile, saveFile, setWindowTitle, setWindowModified, resolveUnsavedEdits, onFileOpened, onSaveRequested, initialState, ready, isReady };

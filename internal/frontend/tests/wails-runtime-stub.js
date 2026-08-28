@@ -39,4 +39,11 @@ export const Dialogs = {
       ? Promise.reject(answers.SaveFile)
       : Promise.resolve(answers.SaveFile === undefined ? '' : answers.SaveFile);
   },
+  // A question dialog answers with the label of the button that was pressed.
+  Question: (options) => {
+    calls.push(['Dialogs.Question', options]);
+    return answers.Question instanceof Error
+      ? Promise.reject(answers.Question)
+      : Promise.resolve(answers.Question === undefined ? '' : answers.Question);
+  },
 };

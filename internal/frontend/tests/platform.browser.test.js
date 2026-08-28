@@ -49,6 +49,14 @@ describe('window title', () => {
   });
 });
 
+describe('unsaved edits', () => {
+  // A page has no shell dialog whose Save writes anywhere, so there is nothing
+  // to ask: the browser viewer's drop replaces the model as it always has.
+  it('answers discard without asking, so a drop behaves exactly as it did', async () => {
+    await expect(browser.resolveUnsavedEdits()).resolves.toBe('discard');
+  });
+});
+
 describe('the unsaved-edits marker', () => {
   it('leaves the page exactly as it was, having no window of its own to mark', () => {
     browser.setWindowTitle('hotel.emod — Emod Diagram Viewer');

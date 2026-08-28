@@ -60,7 +60,7 @@
     },
     {
       "n": 3,
-      "done": false,
+      "done": true,
       "title": "Prompt before another model replaces unsaved edits",
       "language": "JavaScript",
       "testable": true,

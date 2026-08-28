@@ -22,6 +22,8 @@ let saveHangs = null;
 let savedContents = [];
 let requestSave = null;
 let modifiedReports = [];
+let unsavedEditsAnswer = 'discard';
+let unsavedEditsAsked = 0;
 
 vi.mock('../static/platform.js', () => ({
   get ready() { return platformReady; },
@@ -42,6 +44,10 @@ vi.mock('../static/platform.js', () => ({
   onSaveRequested: vi.fn((handler) => { requestSave = handler; }),
   setWindowTitle: vi.fn((title) => { windowTitle = title; }),
   setWindowModified: vi.fn((modified) => { modifiedReports.push(modified); }),
+  resolveUnsavedEdits: vi.fn(() => {
+    unsavedEditsAsked++;
+    return Promise.resolve(unsavedEditsAnswer);
+  }),
   onFileOpened: vi.fn((handler) => { deliverFile = handler; }),
   droppedFile: vi.fn((dataTransfer) => {
     const file = dataTransfer.files[0];
@@ -227,6 +233,8 @@ beforeEach(() => {
   savedContents = [];
   requestSave = null;
   modifiedReports = [];
+  unsavedEditsAnswer = 'discard';
+  unsavedEditsAsked = 0;
 });
 
 describe('the window is named through the host, not by assigning document.title', () => {
@@ -1451,6 +1459,198 @@ describe('the window says whether there are unsaved edits', () => {
   });
 });
 
+// Every way a different file's model reaches the screen runs one guard, so a
+// new way of opening one cannot arrive unguarded.
+describe('a model arriving over unsaved edits', () => {
+  const otherFile = { name: 'other.emod', path: '/models/other.emod', content: 'emod 1\nmodel "Other"\n' };
+  const editedSource = 'emod 1\nmodel "Billing Edited"\n';
+
+  function typeIntoPanel(text) {
+    const panel = document.getElementById('source-input');
+    panel.value = text;
+    panel.dispatchEvent(new Event('input', { bubbles: true }));
+  }
+
+  async function openBillingThenEdit() {
+    await openBilling();
+    typeIntoPanel(editedSource);
+  }
+
+  function dropOther() {
+    const file = new File([''], 'other.emod');
+    file._content = otherFile.content;
+    fireDrop(document.getElementById('data-panel-body'), file);
+    return flush();
+  }
+
+  function onScreen() {
+    return {
+      source: document.getElementById('source-input').value,
+      title: windowTitle,
+      path: document.getElementById('stat-file').textContent,
+      name: document.getElementById('model-name-display').textContent,
+    };
+  }
+
+  it('asks before a delivered model replaces anything on screen', async () => {
+    await openBillingThenEdit();
+    const before = onScreen();
+    unsavedEditsAnswer = 'cancel';
+
+    deliverFile(otherFile);
+    await flush();
+
+    expect(unsavedEditsAsked).toBe(1);
+    expect(onScreen()).toEqual(before);
+  });
+
+  it('asks before a dropped model replaces anything on screen', async () => {
+    await openBillingThenEdit();
+    const before = onScreen();
+    unsavedEditsAnswer = 'cancel';
+
+    await dropOther();
+
+    expect(unsavedEditsAsked).toBe(1);
+    expect(onScreen()).toEqual(before);
+  });
+
+  it('leaves the window still marked and writes nothing when the answer is cancel', async () => {
+    await openBillingThenEdit();
+    unsavedEditsAnswer = 'cancel';
+
+    deliverFile(otherFile);
+    await flush();
+
+    expect(savedFile).toBeNull();
+    expect(modifiedReports[modifiedReports.length - 1]).toBe(true);
+  });
+
+  it('replaces the model and writes nothing when the answer is discard', async () => {
+    await openBillingThenEdit();
+    unsavedEditsAnswer = 'discard';
+
+    deliverFile(otherFile);
+    await flush();
+
+    expect(savedFile).toBeNull();
+    expect(onScreen().source).toBe(otherFile.content);
+    expect(windowTitle).toBe('other.emod — Emod Diagram Viewer');
+  });
+
+  it('writes the edits to the file they belong to, then opens the arriving model', async () => {
+    await openBillingThenEdit();
+    unsavedEditsAnswer = 'save';
+    saveAnswer = { name: 'billing.emod', path: '/models/billing.emod' };
+
+    deliverFile(otherFile);
+    await flush();
+
+    expect(savedFile).toEqual({ name: 'billing.emod', content: editedSource, path: '/models/billing.emod' });
+    expect(onScreen().source).toBe(otherFile.content);
+  });
+
+  it('keeps the model on screen when the save it was asked for is refused', async () => {
+    await openBillingThenEdit();
+    unsavedEditsAnswer = 'save';
+    saveFails = 'permission denied';
+
+    deliverFile(otherFile);
+    await flush();
+
+    expect(onScreen().source).toBe(editedSource);
+    expect(windowTitle).toBe('billing.emod — Emod Diagram Viewer');
+  });
+
+  it('keeps the model on screen when the location dialog for that save is cancelled', async () => {
+    await startEmpty();
+    typeIntoPanel('emod 1\nmodel "Pasted"\n');
+    unsavedEditsAnswer = 'save';
+    saveAnswer = null;
+
+    deliverFile(otherFile);
+    await flush();
+
+    expect(onScreen().source).toBe('emod 1\nmodel "Pasted"\n');
+  });
+
+  it('asks nothing when there is nothing unsaved to lose', async () => {
+    await openBilling();
+
+    deliverFile(otherFile);
+    await flush();
+
+    expect(unsavedEditsAsked).toBe(0);
+    expect(onScreen().source).toBe(otherFile.content);
+  });
+
+  it('asks nothing when a dropped model replaces one with nothing unsaved', async () => {
+    await openBilling();
+
+    await dropOther();
+
+    expect(unsavedEditsAsked).toBe(0);
+    expect(onScreen().source).toBe(otherFile.content);
+  });
+
+  // Both are refused before anything would be replaced, so there is nothing to
+  // ask about — and asking would make an unreadable file interrupt twice.
+  it('reports a file it could not read without asking anything', async () => {
+    await openBillingThenEdit();
+
+    deliverFile({ error: 'reading /models/other.emod: permission denied' });
+    await flush();
+
+    expect(unsavedEditsAsked).toBe(0);
+    expect(document.getElementById('render-status').textContent).toContain('permission denied');
+    expect(onScreen().source).toBe(editedSource);
+  });
+
+  it('reports an empty file without asking anything', async () => {
+    await openBillingThenEdit();
+
+    deliverFile({ name: 'empty.emod', path: '/models/empty.emod', content: '   \n' });
+    await flush();
+
+    expect(unsavedEditsAsked).toBe(0);
+    expect(document.getElementById('render-status').textContent).toContain('empty.emod is empty');
+    expect(onScreen().source).toBe(editedSource);
+  });
+});
+
+// The guard above is only unskippable while one function is the only way a
+// different file's model reaches renderPanelSource. This reads viewer.js's own
+// source, in the style of the module scan already in this suite.
+describe('one function replaces the open model', () => {
+  const source = readFileSync(resolve(__dirname, '../static/viewer.js'), 'utf-8');
+  // The lookbehind drops the declaration, which takes the same two parameters
+  // every call that opens a model passes.
+  const calls = (text) => text.match(/(?<!function )renderPanelSource\(/g) || [];
+  const opens = (text) => text.match(/(?<!function )renderPanelSource\(\s*[^)\s]/g) || [];
+
+  // Each entry is one of init's own functions, so a call can be attributed to
+  // the one that makes it without slicing the file by hand.
+  const declarations = source.split(/\n  function /).slice(1);
+  const named = (name) => declarations.filter((d) => d.startsWith(name + '('));
+
+  it('splits into init\'s functions, so the attribution below is not reading one blob', () => {
+    expect(declarations.length).toBeGreaterThan(5);
+    expect(named('openModel')).toHaveLength(1);
+  });
+
+  it('re-renders the panel without a model too, so the count below means something', () => {
+    expect(calls(source).length).toBeGreaterThan(opens(source).length);
+  });
+
+  it('hands renderPanelSource a model to open from exactly one call', () => {
+    expect(opens(source)).toHaveLength(1);
+  });
+
+  it('makes that call from the function that runs the unsaved-edits guard', () => {
+    expect(opens(named('openModel')[0])).toHaveLength(1);
+  });
+});
+
 describe('viewer diagnostics panel', () => {
   it('stays hidden while the model has no diagnostics', async () => {
     globalThis.INITIAL_DATA = null;
@@ -1589,7 +1789,7 @@ describe('the platform seam has one contract', () => {
   it('names every host operation the shared modules reach for', () => {
     expect(contract).toEqual(
       ['droppedFile', 'exportEmod', 'initialState', 'isReady', 'onFileOpened', 'onSaveRequested',
-       'parseEmod', 'ready', 'saveFile', 'setWindowModified', 'setWindowTitle'],
+       'parseEmod', 'ready', 'resolveUnsavedEdits', 'saveFile', 'setWindowModified', 'setWindowTitle'],
     );
   });
 

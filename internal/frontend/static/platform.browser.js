@@ -117,6 +117,13 @@ function setWindowTitle(title) {
 // file a drop came from, only offer the model as a download.
 function setWindowModified() {}
 
+// Nothing here can offer a Save that writes where the edits came from, so there
+// is no question worth asking: the answer is the one the browser viewer has
+// always acted on, and a drop replaces the model exactly as it did.
+function resolveUnsavedEdits() {
+  return Promise.resolve('discard');
+}
+
 // Nothing in a browser opens a file on the user's behalf. What a page can reach
 // arrives through the drop handler, which yields contents and never a location,
 // so this registers a handler that stays uncalled rather than being unfinished.
@@ -137,4 +144,4 @@ function initialState() {
   return Promise.resolve(INITIAL_DATA);
 }
 
-export { parseEmod, exportEmod, droppedFile, saveFile, setWindowTitle, setWindowModified, onFileOpened, onSaveRequested, initialState, ready, isReady };
+export { parseEmod, exportEmod, droppedFile, saveFile, setWindowTitle, setWindowModified, resolveUnsavedEdits, onFileOpened, onSaveRequested, initialState, ready, isReady };

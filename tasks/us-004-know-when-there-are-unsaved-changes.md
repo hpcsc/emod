@@ -415,17 +415,17 @@ Save writes the open file and then replaces it. Every path that puts a different
 screen goes through one function, so the paths US-005 and US-006 add cannot skip it.
 
 **Acceptance Criteria:**
-- [ ] A model delivered by the host while the panel holds unsaved edits asks the host to confirm before the panel, the canvas, the window's name or the path in the bar changes
-- [ ] A model dropped on the panel while the panel holds unsaved edits asks the same way
-- [ ] Cancel leaves the panel's text, the diagram, the window's name, the path in the bar and the modified marker exactly as they were, and asks the host to save nothing
-- [ ] Discard replaces the model and asks the host to save nothing, so the file the edits belonged to is never written
-- [ ] Save writes the open file and then replaces the model; a save the host refuses, and one whose location dialog was cancelled, leave the model on screen and do not open the arriving one
-- [ ] With no unsaved edits, a delivered file and a dropped file each open exactly as they do today, asking the host to confirm nothing
-- [ ] A delivered file the host could not read, and one that is empty, still report their reason without asking anything
-- [ ] `renderPanelSource` is called with a file argument from exactly one function, which is the one that runs the guard — pinned by a scan of `viewer.js`'s own source in the style of the scans already in this suite
-- [ ] The desktop confirmation offers Save, Discard and Cancel, with Cancel designated the dialog's cancel button, and answers which of the three was chosen
-- [ ] The browser implementation asks nothing and answers discard, and a dropped file in the browser viewer opens exactly as it does today
-- [ ] The seam contract test names the new operation, and both implementations satisfy it
+- [x] A model delivered by the host while the panel holds unsaved edits asks the host to confirm before the panel, the canvas, the window's name or the path in the bar changes
+- [x] A model dropped on the panel while the panel holds unsaved edits asks the same way
+- [x] Cancel leaves the panel's text, the diagram, the window's name, the path in the bar and the modified marker exactly as they were, and asks the host to save nothing
+- [x] Discard replaces the model and asks the host to save nothing, so the file the edits belonged to is never written
+- [x] Save writes the open file and then replaces the model; a save the host refuses, and one whose location dialog was cancelled, leave the model on screen and do not open the arriving one
+- [x] With no unsaved edits, a delivered file and a dropped file each open exactly as they do today, asking the host to confirm nothing
+- [x] A delivered file the host could not read, and one that is empty, still report their reason without asking anything
+- [x] `renderPanelSource` is called with a file argument from exactly one function, which is the one that runs the guard — pinned by a scan of `viewer.js`'s own source in the style of the scans already in this suite
+- [x] The desktop confirmation offers Save, Discard and Cancel, with Cancel designated the dialog's cancel button, and answers which of the three was chosen
+- [x] The browser implementation asks nothing and answers discard, and a dropped file in the browser viewer opens exactly as it does today
+- [x] The seam contract test names the new operation, and both implementations satisfy it
 
 **Affected Files/Modules:**
 - `internal/frontend/static/viewer.js` — one function that guards and then replaces the open model, with the drop listener and the host delivery routed through it

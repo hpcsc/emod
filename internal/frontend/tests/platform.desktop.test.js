@@ -27,6 +27,7 @@ beforeEach(() => {
   stub.answers.Write = '{"name":"billing.emod","path":"/models/billing.emod"}';
   runtime.answers.OpenFile = '';
   runtime.answers.SaveFile = '';
+  runtime.answers.Question = '';
   runtime.answers.IsMac = false;
   desktop.onFileOpened(null);
   desktop.onSaveRequested(null);
@@ -407,6 +408,56 @@ describe('the shell asking for a save', () => {
 
     await expect(Promise.resolve(runtime.listeners['file:save-requested']()))
       .rejects.toThrow('a bug inside the viewer');
+  });
+});
+
+// Anything but the three the viewer knows has to answer cancel: an outcome the
+// user did not choose either writes their file or throws their edits away, and
+// both are past undoing from inside the app.
+describe('asking what to do about unsaved edits', () => {
+  const question = () => runtime.calls.find((call) => call[0] === 'Dialogs.Question')[1];
+
+  it('offers the three choices, with cancel as the button that backs out', async () => {
+    await desktop.resolveUnsavedEdits();
+
+    expect(question().Buttons.map((b) => b.Label)).toEqual(['Save', 'Discard', 'Cancel']);
+    expect(question().Buttons.find((b) => b.Label === 'Cancel').IsCancel).toBe(true);
+  });
+
+  it('answers save when Save was pressed', async () => {
+    runtime.answers.Question = 'Save';
+
+    await expect(desktop.resolveUnsavedEdits()).resolves.toBe('save');
+  });
+
+  it('answers discard when Discard was pressed', async () => {
+    runtime.answers.Question = 'Discard';
+
+    await expect(desktop.resolveUnsavedEdits()).resolves.toBe('discard');
+  });
+
+  it('answers cancel when Cancel was pressed', async () => {
+    runtime.answers.Question = 'Cancel';
+
+    await expect(desktop.resolveUnsavedEdits()).resolves.toBe('cancel');
+  });
+
+  it('answers cancel for a dialog dismissed without a choice', async () => {
+    runtime.answers.Question = '';
+
+    await expect(desktop.resolveUnsavedEdits()).resolves.toBe('cancel');
+  });
+
+  it('answers cancel for a label it does not recognise', async () => {
+    runtime.answers.Question = "Don't Save";
+
+    await expect(desktop.resolveUnsavedEdits()).resolves.toBe('cancel');
+  });
+
+  it('answers cancel when the dialog itself fails', async () => {
+    runtime.answers.Question = new Error('no window to attach to');
+
+    await expect(desktop.resolveUnsavedEdits()).resolves.toBe('cancel');
   });
 });
 
