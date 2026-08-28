@@ -9,7 +9,7 @@ import { CtxActions } from './ctx-actions.js';
 import { Model } from './model.js';
 import { bus } from './bus.js';
 import { Export } from './emod-export.js';
-import { ready, isReady, droppedFile, saveFile, setWindowTitle, onFileOpened, onSaveRequested, initialState } from './platform.js';
+import { ready, isReady, droppedFile, saveFile, setWindowTitle, setWindowModified, onFileOpened, onSaveRequested, initialState } from './platform.js';
 
 // ─── Event subscriptions ─────────────────────────────────────────────
 bus.on('data:changed', function({ store: s }) {
@@ -37,6 +37,19 @@ function sourceToSave(s) {
     return arrived;
   }
   return arrived.indexOf('\r\n') === -1 ? shown : shown.replace(/\n/g, '\r\n');
+}
+
+// Unsaved work is what Save would write differing from what the file holds, so
+// this asks sourceToSave rather than the panel: a textarea hands back LF for
+// the CRLF a file arrived with, and comparing that against the file's own bytes
+// would mark every CRLF model the instant it opened.
+//
+// A model with no file behind it is measured against nothing, so pasted source
+// counts as unsaved until it has been written somewhere — which is what it is:
+// Save asks it for a location, exactly as it does for a model that has never
+// been saved.
+function modelIsModified(s) {
+  return sourceToSave(s) !== ((s.currentFile && s.currentFile.content) || '');
 }
 
 function applyWindowTitle(s) {
@@ -204,6 +217,7 @@ function init() {
         store.dom.statusEl.className = "status success";
         const btn = store.dom.resetLayoutBtn;
         if (btn) btn.disabled = true;
+        reportModified();
       })
       .catch(function(err) {
         if (render !== latestRender) return;
@@ -215,6 +229,7 @@ function init() {
         }
         store.dom.statusEl.textContent = "✗ " + err.message;
         store.dom.statusEl.className = "status error";
+        reportModified();
       });
 
     return latestRenderSettled;
@@ -229,6 +244,18 @@ function init() {
     store.dom.statusEl.className = "status error";
     store.dom.panel.classList.remove("collapsed");
   }
+
+  // Called only where the panel's text and the open file's identity are known
+  // to describe one model: as the panel is typed into, once a render has
+  // committed which file it belongs to, and after a save has settled. Asking
+  // while a file is arriving would measure its source against the bytes of the
+  // model it is replacing, because renderPanelSource writes the text
+  // immediately and commits the identity only when the parse resolves.
+  function reportModified() {
+    setWindowModified(modelIsModified(store));
+  }
+
+  store.dom.sourceInput.addEventListener("input", reportModified);
 
   store.dom.renderBtn.addEventListener("click", function() {
     renderPanelSource();
@@ -390,6 +417,7 @@ function init() {
       // A host that answers no file is one whose dialog was cancelled, which has
       // to leave the open file, the window's name and the path on screen alone.
       if (!saved) {
+        reportModified();
         return;
       }
       // A file opened while this was being written owns the window now, so
@@ -402,8 +430,10 @@ function init() {
         clearSaveFailure();
       }
       reportSaveOutcome('✓ Saved ' + saved.name, false);
+      reportModified();
     }).catch(function(err) {
       reportSaveFailure(err.message || String(err), store.currentFile === openFile);
+      reportModified();
     });
   }
 

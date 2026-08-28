@@ -21,6 +21,7 @@ let saveFails = null;
 let saveHangs = null;
 let savedContents = [];
 let requestSave = null;
+let modifiedReports = [];
 
 vi.mock('../static/platform.js', () => ({
   get ready() { return platformReady; },
@@ -40,6 +41,7 @@ vi.mock('../static/platform.js', () => ({
   }),
   onSaveRequested: vi.fn((handler) => { requestSave = handler; }),
   setWindowTitle: vi.fn((title) => { windowTitle = title; }),
+  setWindowModified: vi.fn((modified) => { modifiedReports.push(modified); }),
   onFileOpened: vi.fn((handler) => { deliverFile = handler; }),
   droppedFile: vi.fn((dataTransfer) => {
     const file = dataTransfer.files[0];
@@ -114,6 +116,28 @@ function fireMouse(element, type) {
   element.dispatchEvent(new MouseEvent(type, { bubbles: true, cancelable: true }));
 }
 
+function fireMouseAt(element, type, x, y) {
+  element.dispatchEvent(new MouseEvent(type, {
+    bubbles: true, cancelable: true, button: 0, clientX: x, clientY: y,
+  }));
+}
+
+// The first move only crosses the threshold that tells a drag from a click; the
+// gesture's own distance is the second, so a caller's dx and dy are what lands.
+function dragBy(element, dx, dy) {
+  fireMouseAt(element, 'mousedown', 100, 100);
+  fireMouseAt(document, 'mousemove', 100 + DRAG_THRESHOLD + 1, 100);
+  fireMouseAt(document, 'mousemove', 100 + dx, 100 + dy);
+  fireMouseAt(document, 'mouseup', 100 + dx, 100 + dy);
+}
+
+function hideFromVisibilityTree(nodeId) {
+  const box = document.querySelector(
+    '#visibility-tree [data-node-id="' + nodeId + '"] input[type="checkbox"]');
+  box.checked = false;
+  box.dispatchEvent(new Event('change'));
+}
+
 function blockFor(nodeId) {
   return document.querySelector('.diagram-node[data-node-id="' + nodeId + '"]');
 }
@@ -136,6 +160,8 @@ async function startViewer() {
 }
 
 const { sourceToSave } = await import('../static/viewer.js');
+const platform = await import('../static/platform.js');
+const { DRAG_THRESHOLD } = await import('../static/config.js');
 
 const billingSource = 'emod 1\nmodel "Billing"\n';
 const crlfSource = 'emod 1\r\nmodel "Billing"\r\n';
@@ -200,6 +226,7 @@ beforeEach(() => {
   saveHangs = null;
   savedContents = [];
   requestSave = null;
+  modifiedReports = [];
 });
 
 describe('the window is named through the host, not by assigning document.title', () => {
@@ -1270,6 +1297,160 @@ describe('what a save writes', () => {
   });
 });
 
+// The marker answers one question: would what Save writes differ from what the
+// open file holds. Save writes the source panel, so these drive the panel and
+// the save, and the leaf below them drives everything that is not either.
+describe('the window says whether there are unsaved edits', () => {
+  function typeIntoPanel(text) {
+    const panel = document.getElementById('source-input');
+    panel.value = text;
+    panel.dispatchEvent(new Event('input', { bubbles: true }));
+  }
+
+  const marked = () => modifiedReports[modifiedReports.length - 1];
+
+  it('leaves an opened file unmarked, because nothing typed is nothing to save', async () => {
+    await openBilling();
+
+    expect(modifiedReports).toEqual([false]);
+  });
+
+  // The panel is a textarea, so it holds LF for a file that arrived with CRLF.
+  // Comparing what it holds against the file's own bytes would mark every such
+  // file the instant it opened.
+  it('leaves a CRLF file unmarked, though the panel rewrote every line ending it arrived with', async () => {
+    await openBilling(crlfSource);
+    expect(document.getElementById('source-input').value).not.toBe(crlfSource);
+
+    expect(modifiedReports).toEqual([false]);
+  });
+
+  it('marks the window as the panel is typed into, with no render asked for', async () => {
+    await openBilling();
+    const rendersBefore = platform.parseEmod.mock.calls.length;
+
+    typeIntoPanel('emod 1\nmodel "Billing Edited"\n');
+
+    expect(marked()).toBe(true);
+    expect(platform.parseEmod.mock.calls.length).toBe(rendersBefore);
+  });
+
+  it('unmarks the window when the panel is edited back to what the file held', async () => {
+    await openBilling();
+    typeIntoPanel('emod 1\nmodel "Billing Edited"\n');
+    expect(marked()).toBe(true);
+
+    typeIntoPanel(billingSource);
+
+    expect(marked()).toBe(false);
+  });
+
+  // A textarea hands back LF for the CRLF the file arrived with, so typing that
+  // text is typing the file back exactly, and the window has to say so.
+  it('unmarks a CRLF file edited back to the text the panel showed when it opened', async () => {
+    await openBilling(crlfSource);
+    typeIntoPanel('emod 1\nmodel "Billing Edited"\n');
+    expect(marked()).toBe(true);
+
+    typeIntoPanel(document.getElementById('source-input').value.replace('Billing Edited', 'Billing'));
+
+    expect(marked()).toBe(false);
+  });
+
+  it('unmarks the window when a save lands', async () => {
+    await openBilling();
+    typeIntoPanel('emod 1\nmodel "Billing Edited"\n');
+    saveAnswer = { name: 'billing.emod', path: '/models/billing.emod' };
+
+    await save();
+
+    expect(marked()).toBe(false);
+  });
+
+  it('leaves the window marked when the host refuses the save', async () => {
+    await openBilling();
+    typeIntoPanel('emod 1\nmodel "Billing Edited"\n');
+    saveFails = 'permission denied';
+
+    await save();
+
+    expect(marked()).toBe(true);
+  });
+
+  it('leaves the window marked when the location dialog is cancelled', async () => {
+    await startEmpty();
+    typeIntoPanel('emod 1\nmodel "Pasted"\n');
+    saveAnswer = null;
+
+    await save();
+
+    expect(marked()).toBe(true);
+  });
+
+  it('marks pasted source that has never been saved anywhere', async () => {
+    await startEmpty();
+
+    typeIntoPanel('emod 1\nmodel "Pasted"\n');
+
+    expect(marked()).toBe(true);
+  });
+
+  it('unmarks pasted source once it is saved to the location the host chose', async () => {
+    await startEmpty();
+    typeIntoPanel('emod 1\nmodel "Pasted"\n');
+    saveAnswer = { name: 'pasted.emod', path: '/models/pasted.emod' };
+
+    await save();
+
+    expect(marked()).toBe(false);
+  });
+
+  // The panel's text and the open file's identity are committed at different
+  // moments, so a marker taken while a file is arriving would describe the
+  // arriving model against the departing model's bytes.
+  it('keeps describing the model on screen when a delivered file will not render', async () => {
+    await openBilling();
+    typeIntoPanel('emod 1\nmodel "Billing Edited"\n');
+    parseQueue = [Promise.reject(new Error('parse failed'))];
+
+    deliverFile({ name: 'other.emod', path: '/models/other.emod', content: 'emod 1\nmodel "Other"\n' });
+    await flush();
+
+    expect(marked()).toBe(true);
+    expect(document.getElementById('source-input').value).toBe('emod 1\nmodel "Billing Edited"\n');
+  });
+
+  it('says nothing when only the diagram or the viewport moves, and marks the window when the panel is edited', async () => {
+    await openBilling();
+    const canvas = document.getElementById('diagram-canvas');
+    const nodesBefore = canvas.querySelectorAll('.diagram-node').length;
+    modifiedReports.length = 0;
+
+    fireMouse(canvas.querySelector('.slice-header'), 'contextmenu');
+    menuItemFor('add-command').click();
+    expect(canvas.querySelectorAll('.diagram-node').length).toBe(nodesBefore + 1);
+
+    dragBy(blockFor('command-1'), 40, 25);
+    expect(document.getElementById('reset-layout').disabled).toBe(false);
+
+    dragBy(canvas, 60, 60);
+    expect(canvas.querySelector('#viewport-group').getAttribute('transform')).not.toBe('translate(0, 0) scale(1)');
+
+    document.getElementById('visibility-toggle').click();
+    hideFromVisibilityTree('slice-1');
+    expect(blockFor('command-1')).toBeNull();
+
+    document.getElementById('data-panel-header').click();
+    expect(document.getElementById('data-panel').classList.contains('collapsed')).toBe(false);
+
+    expect(modifiedReports).toEqual([]);
+
+    typeIntoPanel('emod 1\nmodel "Billing Edited"\n');
+
+    expect(modifiedReports).toEqual([true]);
+  });
+});
+
 describe('viewer diagnostics panel', () => {
   it('stays hidden while the model has no diagnostics', async () => {
     globalThis.INITIAL_DATA = null;
@@ -1408,7 +1589,7 @@ describe('the platform seam has one contract', () => {
   it('names every host operation the shared modules reach for', () => {
     expect(contract).toEqual(
       ['droppedFile', 'exportEmod', 'initialState', 'isReady', 'onFileOpened', 'onSaveRequested',
-       'parseEmod', 'ready', 'saveFile', 'setWindowTitle'],
+       'parseEmod', 'ready', 'saveFile', 'setWindowModified', 'setWindowTitle'],
     );
   });
 

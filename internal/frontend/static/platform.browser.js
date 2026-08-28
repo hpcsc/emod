@@ -112,6 +112,11 @@ function setWindowTitle(title) {
   document.title = title;
 }
 
+// A page has no window of its own to mark, and marking the tab would announce
+// work the browser viewer offers no way to keep: it cannot write back to the
+// file a drop came from, only offer the model as a download.
+function setWindowModified() {}
+
 // Nothing in a browser opens a file on the user's behalf. What a page can reach
 // arrives through the drop handler, which yields contents and never a location,
 // so this registers a handler that stays uncalled rather than being unfinished.
@@ -132,4 +137,4 @@ function initialState() {
   return Promise.resolve(INITIAL_DATA);
 }
 
-export { parseEmod, exportEmod, droppedFile, saveFile, setWindowTitle, onFileOpened, onSaveRequested, initialState, ready, isReady };
+export { parseEmod, exportEmod, droppedFile, saveFile, setWindowTitle, setWindowModified, onFileOpened, onSaveRequested, initialState, ready, isReady };

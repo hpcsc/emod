@@ -14,6 +14,11 @@ beforeAll(async () => {
 });
 
 beforeEach(() => {
+  // The module is imported once and holds the window's name and its marker
+  // between tests, so both go back to what a window that has never been named
+  // or marked holds before the calls each test reads are cleared.
+  desktop.setWindowTitle('');
+  desktop.setWindowModified(false);
   stub.calls.length = 0;
   runtime.calls.length = 0;
   stub.answers.ParseEmod = '{"diagnostics":[],"diagram":{"nodes":[],"edges":[]}}';
@@ -93,6 +98,55 @@ describe('window title', () => {
     desktop.setWindowTitle('hotel.emod — Emod Diagram Viewer');
 
     expect(runtime.calls).toEqual([['Window.SetTitle', 'hotel.emod — Emod Diagram Viewer']]);
+  });
+});
+
+// The window carries one title and two facts reach it separately, so the name
+// and the marker are held here and the title is composed from both.
+describe('the unsaved-edits marker', () => {
+  const titles = () => runtime.calls
+    .filter((call) => call[0] === 'Window.SetTitle')
+    .map((call) => call[1]);
+
+  it('puts a star ahead of the name while there are unsaved edits, and takes it away again', () => {
+    desktop.setWindowTitle('hotel.emod — Emod Diagram Viewer');
+
+    desktop.setWindowModified(true);
+    desktop.setWindowModified(false);
+
+    expect(titles()).toEqual([
+      'hotel.emod — Emod Diagram Viewer',
+      '* hotel.emod — Emod Diagram Viewer',
+      'hotel.emod — Emod Diagram Viewer',
+    ]);
+  });
+
+  it('keeps the star when the window is renamed while it is marked', () => {
+    desktop.setWindowTitle('hotel.emod — Emod Diagram Viewer');
+    desktop.setWindowModified(true);
+
+    desktop.setWindowTitle('billing.emod — Emod Diagram Viewer');
+
+    expect(titles().pop()).toBe('* billing.emod — Emod Diagram Viewer');
+  });
+
+  it('still marks a window whose name has never been set', () => {
+    desktop.setWindowModified(true);
+
+    expect(titles()).toEqual(['*']);
+  });
+
+  // The viewer states the answer on every keystroke, so a window renamed once
+  // per character is what leaving this out costs.
+  it('leaves the window alone for an answer that has not moved', () => {
+    desktop.setWindowTitle('hotel.emod — Emod Diagram Viewer');
+    desktop.setWindowModified(true);
+    const settled = titles().length;
+
+    desktop.setWindowModified(true);
+    desktop.setWindowModified(true);
+
+    expect(titles().length).toBe(settled);
   });
 });
 

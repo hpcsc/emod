@@ -85,8 +85,33 @@ function promptForSaveLocation(suggestedName) {
 
 // document.title names a browser tab and nothing at all here: the shell's title
 // bar is the native window's, which only the host can rename.
+//
+// The name and the marker arrive separately and the window has one title to
+// hold both, so each is remembered and the title is composed rather than
+// overwritten by whichever was set last.
+let windowName = '';
+let windowModified = false;
+
 function setWindowTitle(title) {
-  Window.SetTitle(title);
+  windowName = title;
+  Window.SetTitle(markedTitle());
+}
+
+// The viewer states the answer whenever it is freshly known, which is on every
+// keystroke; the window is told only when it moves.
+function setWindowModified(modified) {
+  if (modified === windowModified) {
+    return;
+  }
+  windowModified = modified;
+  Window.SetTitle(markedTitle());
+}
+
+function markedTitle() {
+  if (!windowModified) {
+    return windowName;
+  }
+  return windowName === '' ? '*' : '* ' + windowName;
 }
 
 let fileOpenedHandler = null;
@@ -166,4 +191,4 @@ function initialState() {
   return Promise.resolve(null);
 }
 
-export { parseEmod, exportEmod, droppedFile, saveFile, setWindowTitle, onFileOpened, onSaveRequested, initialState, ready, isReady };
+export { parseEmod, exportEmod, droppedFile, saveFile, setWindowTitle, setWindowModified, onFileOpened, onSaveRequested, initialState, ready, isReady };

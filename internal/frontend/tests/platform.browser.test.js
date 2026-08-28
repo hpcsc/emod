@@ -48,3 +48,15 @@ describe('window title', () => {
     expect(document.title).toBe('hotel.emod — Emod Diagram Viewer');
   });
 });
+
+describe('the unsaved-edits marker', () => {
+  it('leaves the page exactly as it was, having no window of its own to mark', () => {
+    browser.setWindowTitle('hotel.emod — Emod Diagram Viewer');
+    const body = document.body.innerHTML;
+
+    browser.setWindowModified(true);
+
+    expect(document.title).toBe('hotel.emod — Emod Diagram Viewer');
+    expect(document.body.innerHTML).toBe(body);
+  });
+});

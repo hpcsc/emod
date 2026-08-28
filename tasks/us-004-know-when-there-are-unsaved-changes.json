@@ -1,0 +1,140 @@
+{
+  "story": "US-004: Know when there are unsaved changes",
+  "tasks_file": "tasks/us-004-know-when-there-are-unsaved-changes.md",
+  "tasks": [
+    {
+      "n": 1,
+      "done": true,
+      "title": "Mark the window when the panel stops matching the file it came from",
+      "language": "JavaScript",
+      "testable": true,
+      "certainty": "medium",
+      "blast_radius": "low",
+      "patterns_to_follow": [
+        "internal/frontend/static/viewer.js:30-45",
+        "internal/frontend/static/viewer.js:185-221",
+        "internal/frontend/static/platform.browser.js:111-124",
+        "internal/frontend/desktop/platform.desktop.js:88-92",
+        "internal/frontend/tests/viewer.test.js:205-221",
+        "internal/frontend/tests/viewer.test.js:1392-1421",
+        "internal/frontend/tests/platform.desktop.test.js:91-97"
+      ],
+      "depends_on": [],
+      "affected_files": [
+        "internal/frontend/static/viewer.js",
+        "internal/frontend/static/platform.js",
+        "internal/frontend/static/platform.browser.js",
+        "internal/frontend/desktop/platform.desktop.js",
+        "internal/frontend/tests/viewer.test.js",
+        "internal/frontend/tests/platform.desktop.test.js",
+        "internal/frontend/tests/wails-runtime-stub.js"
+      ]
+    },
+    {
+      "n": 2,
+      "done": false,
+      "title": "Show the marker as a document-edited window on macOS",
+      "language": "Go",
+      "testable": true,
+      "certainty": "low",
+      "blast_radius": "low",
+      "patterns_to_follow": [
+        "internal/desktop/service.go:1-22",
+        "internal/desktop/binding_names_test.go:22-36",
+        "internal/desktop/binding_names_test.go:61-75",
+        "cmd/emod-desktop/main.go:62-90",
+        "internal/frontend/desktop/platform.desktop.js:88-92",
+        "task:1"
+      ],
+      "depends_on": [
+        1
+      ],
+      "affected_files": [
+        "internal/desktop/service.go",
+        "cmd/emod-desktop/main.go",
+        "internal/frontend/desktop/platform.desktop.js",
+        "internal/frontend/tests/platform.desktop.test.js",
+        "internal/frontend/tests/wails-runtime-stub.js",
+        "internal/frontend/tests/bindings-stub.js"
+      ]
+    },
+    {
+      "n": 3,
+      "done": false,
+      "title": "Prompt before another model replaces unsaved edits",
+      "language": "JavaScript",
+      "testable": true,
+      "certainty": "medium",
+      "blast_radius": "high",
+      "patterns_to_follow": [
+        "internal/frontend/static/viewer.js:252-295",
+        "internal/frontend/static/viewer.js:356-408",
+        "internal/frontend/desktop/platform.desktop.js:130-160",
+        "internal/frontend/tests/viewer.test.js:430-487",
+        "internal/frontend/tests/viewer.test.js:1362-1385",
+        "internal/frontend/tests/wails-runtime-stub.js:22-35",
+        "task:1"
+      ],
+      "depends_on": [
+        1
+      ],
+      "affected_files": [
+        "internal/frontend/static/viewer.js",
+        "internal/frontend/static/platform.js",
+        "internal/frontend/static/platform.browser.js",
+        "internal/frontend/desktop/platform.desktop.js",
+        "internal/frontend/tests/viewer.test.js",
+        "internal/frontend/tests/platform.desktop.test.js",
+        "internal/frontend/tests/wails-runtime-stub.js"
+      ]
+    },
+    {
+      "n": 4,
+      "done": false,
+      "title": "Refuse to close or quit with unsaved edits",
+      "language": "Go",
+      "testable": true,
+      "certainty": "low",
+      "blast_radius": "high",
+      "patterns_to_follow": [
+        "cmd/emod-desktop/main.go:32-60",
+        "internal/desktop/event_names_test.go:20-42",
+        "internal/frontend/desktop/platform.desktop.js:105-120",
+        "internal/desktop/service.go:10-22",
+        "task:2",
+        "task:3"
+      ],
+      "depends_on": [
+        2,
+        3
+      ],
+      "affected_files": [
+        "internal/desktop/service.go",
+        "cmd/emod-desktop/main.go",
+        "internal/frontend/desktop/platform.desktop.js",
+        "internal/frontend/tests/platform.desktop.test.js",
+        "internal/frontend/tests/wails-runtime-stub.js"
+      ]
+    },
+    {
+      "n": 5,
+      "done": false,
+      "title": "Document unsaved-change marking",
+      "language": "Markdown",
+      "testable": false,
+      "certainty": "high",
+      "blast_radius": "low",
+      "patterns_to_follow": [
+        "README.md:371-417",
+        "docs/architecture.md:225-238"
+      ],
+      "depends_on": [
+        4
+      ],
+      "affected_files": [
+        "README.md",
+        "docs/architecture.md"
+      ]
+    }
+  ]
+}
