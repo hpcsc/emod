@@ -27,6 +27,7 @@ beforeEach(() => {
   stub.answers.Write = '{"name":"billing.emod","path":"/models/billing.emod"}';
   runtime.answers.OpenFile = '';
   runtime.answers.SaveFile = '';
+  runtime.answers.IsMac = false;
   desktop.onFileOpened(null);
   desktop.onSaveRequested(null);
 });
@@ -102,11 +103,32 @@ describe('window title', () => {
 });
 
 // The window carries one title and two facts reach it separately, so the name
-// and the marker are held here and the title is composed from both.
+// and the marker are held here and the title is composed from both — on the
+// platforms whose only convention for unsaved work is the title.
 describe('the unsaved-edits marker', () => {
   const titles = () => runtime.calls
     .filter((call) => call[0] === 'Window.SetTitle')
     .map((call) => call[1]);
+
+  const told = () => stub.calls
+    .filter((call) => call[0] === 'SetModified')
+    .map((call) => call[1]);
+
+  it('tells the shell every answer, so it knows whether closing would discard work', () => {
+    desktop.setWindowModified(true);
+    desktop.setWindowModified(false);
+
+    expect(told()).toEqual([true, false]);
+  });
+
+  it('asks the shell nothing for an answer that has not moved', () => {
+    desktop.setWindowModified(true);
+
+    desktop.setWindowModified(true);
+    desktop.setWindowModified(true);
+
+    expect(told()).toEqual([true]);
+  });
 
   it('puts a star ahead of the name while there are unsaved edits, and takes it away again', () => {
     desktop.setWindowTitle('hotel.emod — Emod Diagram Viewer');
@@ -147,6 +169,30 @@ describe('the unsaved-edits marker', () => {
     desktop.setWindowModified(true);
 
     expect(titles().length).toBe(settled);
+  });
+
+  // macOS marks an edited document with a dot in the close button, which the
+  // shell puts there itself, so a star in the title would say it twice.
+  describe('on macOS', () => {
+    beforeEach(() => { runtime.answers.IsMac = true; });
+
+    it('leaves the title to the name alone, and still tells the shell', () => {
+      desktop.setWindowTitle('hotel.emod — Emod Diagram Viewer');
+
+      desktop.setWindowModified(true);
+
+      expect(titles()).toEqual(['hotel.emod — Emod Diagram Viewer']);
+      expect(told()).toEqual([true]);
+    });
+
+    it('names a window renamed while it holds unsaved work without a star', () => {
+      desktop.setWindowTitle('hotel.emod — Emod Diagram Viewer');
+      desktop.setWindowModified(true);
+
+      desktop.setWindowTitle('billing.emod — Emod Diagram Viewer');
+
+      expect(titles().pop()).toBe('billing.emod — Emod Diagram Viewer');
+    });
   });
 });
 

@@ -3,8 +3,8 @@
 // it wholesale, so a desktop module parked there would ship to the published
 // web viewer and into the CLI binary. The desktop build assembles it into its
 // own frontend directory as platform.js.
-import { Dialogs, Events, Window } from '/wails/runtime.js';
-import { FileService, ModelService } from '../bindings/github.com/hpcsc/emod/internal/desktop/index.js';
+import { Dialogs, Events, System, Window } from '/wails/runtime.js';
+import { FileService, ModelService, WindowService } from '../bindings/github.com/hpcsc/emod/internal/desktop/index.js';
 
 // The Go core is linked into the binary, so there is nothing to fetch and
 // nothing to wait for. The browser implementation's ready/isReady exist to gate
@@ -98,17 +98,31 @@ function setWindowTitle(title) {
 }
 
 // The viewer states the answer whenever it is freshly known, which is on every
-// keystroke; the window is told only when it moves.
+// keystroke; the shell and the window are told only when it moves.
+//
+// The shell is told on every platform, because closing a window happens outside
+// the page and the decision about whether that would discard work cannot wait
+// on a round trip into it.
 function setWindowModified(modified) {
   if (modified === windowModified) {
     return;
   }
   windowModified = modified;
-  Window.SetTitle(markedTitle());
+  WindowService.SetModified(modified);
+  if (!marksItsOwnWindow()) {
+    Window.SetTitle(markedTitle());
+  }
+}
+
+// macOS puts a dot in the close button for an edited document, which the shell
+// does itself off the answer above — so a star in the title would say the same
+// thing twice, in a place macOS reserves for the document's name.
+function marksItsOwnWindow() {
+  return System.IsMac();
 }
 
 function markedTitle() {
-  if (!windowModified) {
+  if (!windowModified || marksItsOwnWindow()) {
     return windowName;
   }
   return windowName === '' ? '*' : '* ' + windowName;

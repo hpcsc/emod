@@ -11,6 +11,13 @@ export const Window = {
   SetTitle: (title) => { calls.push(['Window.SetTitle', title]); return Promise.resolve(); },
 };
 
+// The real runtime reads the OS off a global the shell injects into the page,
+// so a test picks which platform the module under test believes it is on by
+// assigning answers.IsMac.
+export const System = {
+  IsMac: () => answers.IsMac === true,
+};
+
 // A test fires a host event by calling what the module subscribed with, which
 // is the only path the shell itself has into the frontend.
 export const listeners = {};

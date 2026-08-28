@@ -32,7 +32,7 @@
     },
     {
       "n": 2,
-      "done": false,
+      "done": true,
       "title": "Show the marker as a document-edited window on macOS",
       "language": "Go",
       "testable": true,

@@ -371,14 +371,14 @@ carrying `*` ahead of its name. A successful save clears it; a diagram edit neve
 shows it — the dot in the close button — instead of a `*` in the title.
 
 **Acceptance Criteria:**
-- [ ] `internal/desktop` exposes a bound service the frontend tells that the model is modified, and it reports back the value it was last given
-- [ ] Every value the service is told is handed to the injected thing that shows a window as edited, so a test observes the sequence with no window in existence
-- [ ] Setting and reading the state from several goroutines is clean under `go test -race`
-- [ ] The desktop platform module tells the service on every change of the modified state, and asks for nothing when the state has not moved
-- [ ] On macOS the title carries no `*` and the window itself is marked as edited; on every other platform the title keeps the `*` Task 1 gave it
-- [ ] A non-darwin build compiles and its marker does nothing
-- [ ] `TestBindingNames` and `TestServiceRegistrations` both cover the new service, and `task test:unit` is green
-- [ ] `task build:desktop` succeeds
+- [x] `internal/desktop` exposes a bound service the frontend tells that the model is modified, and it reports back the value it was last given
+- [x] Every value the service is told is handed to the injected thing that shows a window as edited, so a test observes the sequence with no window in existence
+- [x] Setting and reading the state from several goroutines is clean under `go test -race`
+- [x] The desktop platform module tells the service on every change of the modified state, and asks for nothing when the state has not moved
+- [x] On macOS the title carries no `*` and the window itself is marked as edited; on every other platform the title keeps the `*` Task 1 gave it
+- [x] A non-darwin build compiles and its marker does nothing
+- [x] `TestBindingNames` and `TestServiceRegistrations` both cover the new service, and `task test:unit` is green
+- [x] `task build:desktop` succeeds
 
 **Affected Files/Modules:**
 - `internal/desktop/` — a new file for the new type, holding the modified state and the role it hands each change to

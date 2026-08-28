@@ -18,3 +18,7 @@ export const FileService = {
   Read: (arg) => { calls.push(['Read', arg]); return Promise.resolve(answers.Read); },
   Write: (path, content) => { calls.push(['Write', path, content]); return Promise.resolve(answers.Write); },
 };
+
+export const WindowService = {
+  SetModified: (modified) => { calls.push(['SetModified', modified]); return Promise.resolve(); },
+};

@@ -85,6 +85,13 @@ func main() {
 		UseApplicationMenu: true,
 	})
 
+	// Registered after the window rather than in Options.Services, because the
+	// marker needs the window and the window needs the app. Wails binds every
+	// service registered before Run.
+	app.RegisterService(application.NewService(&desktop.WindowService{
+		Marker: &windowMarker{window: window},
+	}))
+
 	app.Menu.SetApplicationMenu(applicationMenu(window))
 
 	if err := app.Run(); err != nil {
