@@ -225,11 +225,14 @@ natively.
 What differs between the runtimes is confined to one module. Every shared
 module imports `./platform.js` for the things a host provides rather than the
 UI: reaching the Go core, reading a dropped file, writing a model out, naming
-the window, delivering a file the host opened, asking the viewer to save, and
-answering what state the app opened with. `platform.browser.js` implements that
-over WebAssembly, `fetch`, the browser's download and `document.title`;
+the window, showing it as holding unsaved work, asking what to do about that
+work before it would be lost, delivering a file the host opened, asking the
+viewer to save, and answering what state the app opened with.
+`platform.browser.js` implements that over WebAssembly, `fetch`, the browser's
+download and `document.title` — with the last two inert, since a page has no
+window of its own to mark and no dialog whose Save writes anywhere.
 `platform.desktop.js` implements it over Wails bindings, the runtime's native
-file dialogs and the native window title. Writing is where the two differ most:
+file dialogs, the native window title and a native question dialog. Writing is where the two differ most:
 the browser is handed no path and can only offer a download, while the desktop
 is handed the path the file came from and replaces it. Which one a distribution gets is decided when
 it is assembled, not by sniffing the runtime — `build:web` copies the browser

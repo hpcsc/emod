@@ -406,14 +406,31 @@ re-serialised from the diagram, which is canonically formatted and carries no
 comments; Save writes the text in the source panel. Reconciling the two, once
 the diagram and the panel can both be edited, is still to come.
 
+**Unsaved changes** are what the source panel holds that the file behind it does
+not — Save writes the panel, so editing the panel is what raises the marker and
+a successful save is what clears it. Editing the panel back to exactly the text
+the file arrived with clears it too, line endings included. Source pasted into
+an empty window counts as unsaved until it has been written somewhere. macOS
+shows the marker as a dot in the window's close button; elsewhere the window's
+name carries a `*`.
+
+Closing the window, quitting, and opening another model each ask before they
+discard anything: **Save** writes the open file and then goes ahead, **Discard**
+goes ahead and leaves the file on disk untouched, and **Cancel** does nothing at
+all. A save the filesystem refuses, and one whose location dialog is cancelled,
+both leave the model where it was. With nothing unsaved, none of the three asks.
+This confirmation is a native three-button dialog, which macOS and Linux show as
+written; Windows is not there yet.
+
 The framework version is pinned in `go.mod`, which carries both the library
 requirement and a `tool` directive for the `wails3` CLI, so the two cannot
 drift and neither is resolved from `PATH`. Run the CLI as `go tool wails3`.
 
-What it does not do yet: nothing marks a model as having unsaved changes, so
-closing the window discards edits without asking, and a diagram edit does not
-reach the source panel and so is not what Save writes; no packaged `.app` or
-installer; and no prebuilt download, so it has to be built from source.
+What it does not do yet: a diagram edit does not reach the source panel and so
+is neither what Save writes nor what counts as an unsaved change; dropping a
+file on the window still reads its contents rather than its location, so it
+cannot be saved back to where it came from; no packaged `.app` or installer; and
+no prebuilt download, so it has to be built from source.
 
 How the repository fits together — packages, the language pipeline, renderers,
 the viewer's three distributions and the editor grammars — is described in

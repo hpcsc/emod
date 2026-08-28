@@ -118,7 +118,7 @@
     },
     {
       "n": 5,
-      "done": false,
+      "done": true,
       "title": "Document unsaved-change marking",
       "language": "Markdown",
       "testable": false,

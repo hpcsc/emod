@@ -506,13 +506,13 @@ now does — what marks a model as modified, what clears it, and what happens on
 open — and stop claiming it does not.
 
 **Acceptance Criteria:**
-- [ ] The README's desktop section says what raises the marker, what clears it, and how it is shown on each platform
-- [ ] It says what closing, quitting and opening another model do when edits are unsaved, naming all three buttons
-- [ ] The README's "What it does not do yet" paragraph no longer says nothing marks unsaved changes, and still says a diagram edit does not reach the source panel and so is not what Save writes
-- [ ] `docs/architecture.md`'s sentence listing what the platform seam provides names both operations added here
-- [ ] Neither document claims the three-button prompt works on Windows
-- [ ] Neither document describes drop-to-open or recent files as guarded, since neither exists yet
-- [ ] `git diff` touches no file outside `README.md` and `docs/architecture.md`
+- [x] The README's desktop section says what raises the marker, what clears it, and how it is shown on each platform
+- [x] It says what closing, quitting and opening another model do when edits are unsaved, naming all three buttons
+- [x] The README's "What it does not do yet" paragraph no longer says nothing marks unsaved changes, and still says a diagram edit does not reach the source panel and so is not what Save writes
+- [x] `docs/architecture.md`'s sentence listing what the platform seam provides names both operations added here
+- [x] Neither document claims the three-button prompt works on Windows
+- [x] Neither document describes drop-to-open or recent files as guarded, since neither exists yet
+- [x] `git diff` touches no file outside `README.md` and `docs/architecture.md`
 
 **Affected Files/Modules:**
 - `README.md` — the desktop section
