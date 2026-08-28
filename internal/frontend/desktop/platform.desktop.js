@@ -104,16 +104,62 @@ function setWindowTitle(title) {
 // the page and the decision about whether that would discard work cannot wait
 // on a round trip into it.
 function setWindowModified(modified) {
-  if (modified === windowModified) {
-    return;
-  }
+  const moved = modified !== windowModified;
   windowModified = modified;
-  WindowService.SetModified(modified);
-  showModifiedInTitle();
+  if (moved) {
+    showModifiedInTitle();
+  }
+
+  return tellShell(modified);
+}
+
+// What the shell was last asked to hold, and whether that ask has landed. Both
+// start as nothing-delivered: this record is the page's and the shell's is the
+// process's, so a reload resets one and not the other, and a page that assumed
+// its first answer already delivered would never send it — leaving the shell
+// holding whatever the page before it said.
+let shellAsked = false;
+let shellHeard = false;
+
+// Answers whether the shell now holds this value. Only for the answers the
+// viewer volunteers as the model changes; a decision the shell itself makes
+// goes to sendToShell, which never skips.
+function tellShell(modified) {
+  if (modified === shellAsked && shellHeard) {
+    return Promise.resolve(true);
+  }
+
+  return sendToShell(modified);
+}
+
+// Binding calls are separate HTTP requests the shell serves one goroutine each,
+// so two in flight at once land in whichever order they finish rather than the
+// order they were sent — and the loser is permanent, because the check above
+// then reads the shell as already holding the value it does not. Queuing is
+// what makes the last answer the last one written.
+let shellQueue = Promise.resolve();
+
+function sendToShell(modified) {
+  shellAsked = modified;
+  shellQueue = shellQueue.then(function() {
+    return WindowService.SetModified(modified).then(function() {
+      // Only the newest ask landing means the shell holds what the page last
+      // said; an older one arriving after it does not.
+      shellHeard = shellAsked === modified;
+
+      return shellHeard;
+    }, function() {
+      shellHeard = false;
+
+      return false;
+    });
+  });
+
+  return shellQueue;
 }
 
 function showModifiedInTitle() {
-  if (!marksItsOwnWindow()) {
+  if (!marksItsOwnWindow() && windowName !== '') {
     Window.SetTitle(markedTitle());
   }
 }
@@ -125,11 +171,14 @@ function marksItsOwnWindow() {
   return System.IsMac();
 }
 
+// A window this has never named carries whatever the shell called it, and
+// replacing that with a lone marker would destroy the only name it has.
 function markedTitle() {
-  if (!windowModified || marksItsOwnWindow()) {
+  if (!windowModified || marksItsOwnWindow() || windowName === '') {
     return windowName;
   }
-  return windowName === '' ? '*' : '* ' + windowName;
+
+  return '* ' + windowName;
 }
 
 // A question dialog answers with the label that was pressed, so the labels are
@@ -182,31 +231,30 @@ function requestSave(chooseLocation) {
   return saveRequestedHandler({ chooseLocation: chooseLocation });
 }
 
-// The shell refuses a close or a quit while it holds unsaved work, and asks
-// here instead — it cannot ask and wait itself, because the answer comes from a
-// dialog and the veto it is inside has to answer immediately.
+let leaveRequestedHandler = null;
+
+function onLeaveRequested(handler) {
+  leaveRequestedHandler = handler;
+}
+
+// The shell refuses a close or a quit while it holds unsaved work and asks here
+// instead, because it cannot raise a dialog and wait for it inside a veto that
+// has to answer immediately. What to do about the edits is the viewer's to
+// decide — it owns the policy an arriving model already goes through, and
+// deciding it again here would be a second copy reading this module's own
+// shadow of viewer state.
 Events.On('window:close-requested', function() { return leaveBy(Window.Close); });
 Events.On('app:quit-requested', function() { return leaveBy(Application.Quit); });
 
 function leaveBy(leave) {
-  return resolveUnsavedEdits().then(function(outcome) {
-    if (outcome === 'cancel') {
-      return undefined;
-    }
-    if (outcome === 'discard') {
-      return proceedTo(leave);
-    }
-    // Nothing registered means no viewer to save through, and going anyway
-    // would discard the very work the shell refused to leave over.
-    if (!saveRequestedHandler) {
-      return undefined;
-    }
-    return saveRequestedHandler({ chooseLocation: false }).then(function() {
-      // The viewer reports the answer again once the save settles, so a write
-      // the filesystem refused and a cancelled location dialog both leave this
-      // still set — and neither may cost the user the work they asked to keep.
-      return windowModified ? undefined : proceedTo(leave);
-    });
+  // No viewer registered means nobody can answer, and going anyway would
+  // discard the very work the shell refused to leave over.
+  if (!leaveRequestedHandler) {
+    return undefined;
+  }
+
+  return Promise.resolve(leaveRequestedHandler()).then(function(cleared) {
+    return cleared ? proceedTo(leave) : undefined;
   });
 }
 
@@ -214,11 +262,25 @@ function leaveBy(leave) {
 // state has changed before the close is asked for again — asking first is not
 // enough, and a close issued before it lands is refused by the very hook this
 // answer authorised, leaving a window that cannot be closed.
+//
+// Sent rather than told, so the de-duplication above cannot skip it: the shell
+// holds its answer for the life of the process while this module's record of it
+// is reloaded with the page, so after a reload the two disagree and the record
+// says the shell already knows. Skipping the call there vetoes the close, asks,
+// is authorised, and vetoes again — forever, with no way to shut the window.
 function proceedTo(leave) {
-  windowModified = false;
-  showModifiedInTitle();
+  return sendToShell(false).then(function(heard) {
+    // A shell that did not hear this still refuses, so asking would achieve
+    // nothing; the window stays open, still saying it holds unsaved work, and
+    // the next attempt tries again.
+    if (!heard) {
+      return undefined;
+    }
+    windowModified = false;
+    showModifiedInTitle();
 
-  return WindowService.SetModified(false).then(leave);
+    return leave();
+  });
 }
 
 // The shell's File menu carries the only Open control, so it reaches the
@@ -271,4 +333,4 @@ function initialState() {
   return Promise.resolve(null);
 }
 
-export { parseEmod, exportEmod, droppedFile, saveFile, setWindowTitle, setWindowModified, resolveUnsavedEdits, onFileOpened, onSaveRequested, initialState, ready, isReady };
+export { parseEmod, exportEmod, droppedFile, saveFile, setWindowTitle, setWindowModified, resolveUnsavedEdits, onFileOpened, onSaveRequested, onLeaveRequested, initialState, ready, isReady };

@@ -78,6 +78,7 @@ tasks:
     desc: Run all tests
     cmds:
       - task: test:unit
+      - task: test:race
       - task: test:integration
       - task: test:viewer
       - task: test:grammar
@@ -87,6 +88,15 @@ tasks:
     desc: Run unit tests
     cmds:
       - go test -tags unit $(go list -e ./... | grep -v -e /cmd/emod-wasm -e /cmd/emod-desktop)
+
+  # internal/desktop holds the one piece of state two goroutines reach at once —
+  # the frontend writes it over a binding while the shell reads it to decide
+  # whether closing would discard work. A mutex is the whole of the protection
+  # and nothing but the race detector can tell whether it is still there.
+  test:race:
+    desc: Run the race detector over the packages carrying shared state
+    cmds:
+      - go test -race -count=1 -tags unit ./internal/desktop/...
 
   test:integration:
     desc: Run integration tests

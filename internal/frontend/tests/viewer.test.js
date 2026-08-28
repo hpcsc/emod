@@ -24,6 +24,9 @@ let requestSave = null;
 let modifiedReports = [];
 let unsavedEditsAnswer = 'discard';
 let unsavedEditsAsked = 0;
+let requestLeave = null;
+// Set by a test that has to answer several dialogs out of order.
+let unsavedEditsAnswerer = null;
 
 vi.mock('../static/platform.js', () => ({
   get ready() { return platformReady; },
@@ -42,11 +45,14 @@ vi.mock('../static/platform.js', () => ({
     return saveHangs ? saveHangs.then(settle) : settle();
   }),
   onSaveRequested: vi.fn((handler) => { requestSave = handler; }),
+  onLeaveRequested: vi.fn((handler) => { requestLeave = handler; }),
   setWindowTitle: vi.fn((title) => { windowTitle = title; }),
   setWindowModified: vi.fn((modified) => { modifiedReports.push(modified); }),
   resolveUnsavedEdits: vi.fn(() => {
     unsavedEditsAsked++;
-    return Promise.resolve(unsavedEditsAnswer);
+    return unsavedEditsAnswerer
+      ? unsavedEditsAnswerer()
+      : Promise.resolve(unsavedEditsAnswer);
   }),
   onFileOpened: vi.fn((handler) => { deliverFile = handler; }),
   droppedFile: vi.fn((dataTransfer) => {
@@ -136,6 +142,14 @@ function dragBy(element, dx, dy) {
   fireMouseAt(document, 'mousemove', 100 + dx, 100 + dy);
   fireMouseAt(document, 'mouseup', 100 + dx, 100 + dy);
 }
+
+function typeIntoPanel(text) {
+  const panel = document.getElementById('source-input');
+  panel.value = text;
+  panel.dispatchEvent(new Event('input', { bubbles: true }));
+}
+
+const marked = () => modifiedReports[modifiedReports.length - 1];
 
 function hideFromVisibilityTree(nodeId) {
   const box = document.querySelector(
@@ -235,6 +249,8 @@ beforeEach(() => {
   modifiedReports = [];
   unsavedEditsAnswer = 'discard';
   unsavedEditsAsked = 0;
+  requestLeave = null;
+  unsavedEditsAnswerer = null;
 });
 
 describe('the window is named through the host, not by assigning document.title', () => {
@@ -682,7 +698,10 @@ describe('what the window names', () => {
     expect(document.getElementById('diagram-canvas').innerHTML).toContain('TakePayment');
   });
 
-  it('stops naming the opened file once a dropped model replaces it', async () => {
+  // A dropped file is a file the model came from, so the window takes its name
+  // — but the drop carries no location, so there is no path to show and none to
+  // save back to.
+  it('names the dropped file and hides the path, which a drop does not carry', async () => {
     globalThis.INITIAL_DATA = null;
     parseResult = { diagnostics: [], diagram: billingDiagram() };
     await startViewer();
@@ -696,7 +715,7 @@ describe('what the window names', () => {
     await flush();
     await flush();
 
-    expect(windowTitle).toBe('Hotel — Emod Diagram Viewer');
+    expect(windowTitle).toBe('hotel.emod — Emod Diagram Viewer');
     expect(document.getElementById('stat-file').classList.contains('hidden')).toBe(true);
   });
 
@@ -1309,14 +1328,6 @@ describe('what a save writes', () => {
 // open file holds. Save writes the source panel, so these drive the panel and
 // the save, and the leaf below them drives everything that is not either.
 describe('the window says whether there are unsaved edits', () => {
-  function typeIntoPanel(text) {
-    const panel = document.getElementById('source-input');
-    panel.value = text;
-    panel.dispatchEvent(new Event('input', { bubbles: true }));
-  }
-
-  const marked = () => modifiedReports[modifiedReports.length - 1];
-
   it('leaves an opened file unmarked, because nothing typed is nothing to save', async () => {
     await openBilling();
 
@@ -1329,6 +1340,22 @@ describe('the window says whether there are unsaved edits', () => {
   it('leaves a CRLF file unmarked, though the panel rewrote every line ending it arrived with', async () => {
     await openBilling(crlfSource);
     expect(document.getElementById('source-input').value).not.toBe(crlfSource);
+
+    expect(modifiedReports).toEqual([false]);
+  });
+
+  // A dropped file is on disk exactly as it arrived, so nothing about it is
+  // unsaved — the app just has no location to write it back to.
+  it('leaves a freshly dropped model unmarked, having changed nothing about it', async () => {
+    globalThis.INITIAL_DATA = null;
+    parseResult = { diagnostics: [], diagram: billingDiagram() };
+    await startViewer();
+
+    const dropped = new File([''], 'hotel.emod');
+    dropped._content = 'emod 1\nmodel "Hotel"\n';
+    fireDrop(document.getElementById('data-panel-body'), dropped);
+    await flush();
+    await flush();
 
     expect(modifiedReports).toEqual([false]);
   });
@@ -1379,20 +1406,25 @@ describe('the window says whether there are unsaved edits', () => {
     await openBilling();
     typeIntoPanel('emod 1\nmodel "Billing Edited"\n');
     saveFails = 'permission denied';
+    modifiedReports.length = 0;
 
     await save();
 
-    expect(marked()).toBe(true);
+    expect(savedFile.content).toBe('emod 1\nmodel "Billing Edited"\n');
+    expect(document.getElementById('save-status').textContent).toContain('permission denied');
+    expect(modifiedReports).toEqual([true]);
   });
 
   it('leaves the window marked when the location dialog is cancelled', async () => {
     await startEmpty();
     typeIntoPanel('emod 1\nmodel "Pasted"\n');
     saveAnswer = null;
+    modifiedReports.length = 0;
 
     await save();
 
-    expect(marked()).toBe(true);
+    expect(savedFile.content).toBe('emod 1\nmodel "Pasted"\n');
+    expect(modifiedReports).toEqual([true]);
   });
 
   it('marks pasted source that has never been saved anywhere', async () => {
@@ -1428,34 +1460,60 @@ describe('the window says whether there are unsaved edits', () => {
     expect(document.getElementById('source-input').value).toBe('emod 1\nmodel "Billing Edited"\n');
   });
 
-  it('says nothing when only the diagram or the viewport moves, and marks the window when the panel is edited', async () => {
-    await openBilling();
-    const canvas = document.getElementById('diagram-canvas');
-    const nodesBefore = canvas.querySelectorAll('.diagram-node').length;
-    modifiedReports.length = 0;
+  // Each of these is a change the user can make that Save would not write, so
+  // none of them may mark the window — and each ends by editing the panel,
+  // which must, so a leaf cannot pass with reporting broken altogether.
+  describe('a change Save would not write', () => {
+    async function silentThenAudible(gesture) {
+      await openBilling();
+      modifiedReports.length = 0;
 
-    fireMouse(canvas.querySelector('.slice-header'), 'contextmenu');
-    menuItemFor('add-command').click();
-    expect(canvas.querySelectorAll('.diagram-node').length).toBe(nodesBefore + 1);
+      await gesture(document.getElementById('diagram-canvas'));
+      expect(modifiedReports).toEqual([]);
 
-    dragBy(blockFor('command-1'), 40, 25);
-    expect(document.getElementById('reset-layout').disabled).toBe(false);
+      typeIntoPanel('emod 1\nmodel "Billing Edited"\n');
+      expect(modifiedReports).toEqual([true]);
+    }
 
-    dragBy(canvas, 60, 60);
-    expect(canvas.querySelector('#viewport-group').getAttribute('transform')).not.toBe('translate(0, 0) scale(1)');
+    // The story's own criterion: moving a node for layout alone.
+    it('says nothing when a node is dragged to a new position', async () => {
+      await silentThenAudible(async (canvas) => {
+        dragBy(blockFor('command-1'), 40, 25);
+        expect(document.getElementById('reset-layout').disabled).toBe(false);
+      });
+    });
 
-    document.getElementById('visibility-toggle').click();
-    hideFromVisibilityTree('slice-1');
-    expect(blockFor('command-1')).toBeNull();
+    it('says nothing when the canvas is panned', async () => {
+      await silentThenAudible(async (canvas) => {
+        dragBy(canvas, 60, 60);
+        expect(canvas.querySelector('#viewport-group').getAttribute('transform'))
+          .not.toBe('translate(0, 0) scale(1)');
+      });
+    });
 
-    document.getElementById('data-panel-header').click();
-    expect(document.getElementById('data-panel').classList.contains('collapsed')).toBe(false);
+    it('says nothing when the context menu adds a node to the diagram', async () => {
+      await silentThenAudible(async (canvas) => {
+        const before = canvas.querySelectorAll('.diagram-node').length;
+        fireMouse(canvas.querySelector('.slice-header'), 'contextmenu');
+        menuItemFor('add-command').click();
+        expect(canvas.querySelectorAll('.diagram-node').length).toBe(before + 1);
+      });
+    });
 
-    expect(modifiedReports).toEqual([]);
+    it('says nothing when a slice is hidden from the visibility tree', async () => {
+      await silentThenAudible(async () => {
+        document.getElementById('visibility-toggle').click();
+        hideFromVisibilityTree('slice-1');
+        expect(blockFor('command-1')).toBeNull();
+      });
+    });
 
-    typeIntoPanel('emod 1\nmodel "Billing Edited"\n');
-
-    expect(modifiedReports).toEqual([true]);
+    it('says nothing when the data panel is collapsed or reopened', async () => {
+      await silentThenAudible(async () => {
+        document.getElementById('data-panel-header').click();
+        expect(document.getElementById('data-panel').classList.contains('collapsed')).toBe(false);
+      });
+    });
   });
 });
 
@@ -1464,12 +1522,6 @@ describe('the window says whether there are unsaved edits', () => {
 describe('a model arriving over unsaved edits', () => {
   const otherFile = { name: 'other.emod', path: '/models/other.emod', content: 'emod 1\nmodel "Other"\n' };
   const editedSource = 'emod 1\nmodel "Billing Edited"\n';
-
-  function typeIntoPanel(text) {
-    const panel = document.getElementById('source-input');
-    panel.value = text;
-    panel.dispatchEvent(new Event('input', { bubbles: true }));
-  }
 
   async function openBillingThenEdit() {
     await openBilling();
@@ -1618,6 +1670,167 @@ describe('a model arriving over unsaved edits', () => {
   });
 });
 
+// The question and the act it authorises are separated by however long the user
+// takes to answer, so two of them in flight at once is the shape that loses
+// work: the save the first answer asks for reads the panel and the open file
+// when it runs, not when the question was put.
+describe('two models arriving at once', () => {
+  const editedSource = 'emod 1\nmodel "Billing Edited"\n';
+
+  // Each call gets its own deferred, so the dialogs can be answered in any
+  // order — which is what a user with two of them on screen can do.
+  function deferredDialogs() {
+    const pending = [];
+    unsavedEditsAnswerer = () => new Promise((resolve) => pending.push(resolve));
+    return pending;
+  }
+
+  it('never saves an arriving model under the answer given for the departing one', async () => {
+    await openBilling();
+    typeIntoPanel(editedSource);
+    const dialogs = deferredDialogs();
+    saveAnswer = { name: 'billing.emod', path: '/models/billing.emod' };
+
+    deliverFile({ name: 'b.emod', path: '/models/b.emod', content: 'emod 1\nmodel "B"\n' });
+    await flush();
+    deliverFile({ name: 'c.emod', path: '/models/c.emod', content: 'emod 1\nmodel "C"\n' });
+    await flush();
+
+    // Only the first ask may be on screen; the second waits its turn.
+    expect(dialogs).toHaveLength(1);
+
+    dialogs[0]('save');
+    await flush();
+    await flush();
+
+    expect(savedFile.content).toBe(editedSource);
+    expect(savedFile.path).toBe('/models/billing.emod');
+  });
+
+  // A rejected turn left on the queue would wedge every later open, drop, close
+  // and quit behind it, which is the whole app's file handling.
+  it('reports a question that could not be answered and keeps the model, then keeps answering', async () => {
+    await openBilling();
+    typeIntoPanel(editedSource);
+    unsavedEditsAnswerer = () => Promise.reject(new Error('the host dialog exploded'));
+
+    deliverFile({ name: 'b.emod', path: '/models/b.emod', content: 'emod 1\nmodel "B"\n' });
+    await flush();
+    await flush();
+
+    expect(document.getElementById('render-status').textContent).toContain('the host dialog exploded');
+    expect(document.getElementById('source-input').value).toBe(editedSource);
+
+    unsavedEditsAnswerer = null;
+    unsavedEditsAnswer = 'discard';
+    deliverFile({ name: 'c.emod', path: '/models/c.emod', content: 'emod 1\nmodel "C"\n' });
+    await flush();
+    await flush();
+
+    expect(document.getElementById('source-input').value).toBe('emod 1\nmodel "C"\n');
+  });
+
+  it('asks the second time against the model the first answer left on screen', async () => {
+    await openBilling();
+    typeIntoPanel(editedSource);
+    const dialogs = deferredDialogs();
+
+    deliverFile({ name: 'b.emod', path: '/models/b.emod', content: 'emod 1\nmodel "B"\n' });
+    await flush();
+    deliverFile({ name: 'c.emod', path: '/models/c.emod', content: 'emod 1\nmodel "C"\n' });
+    await flush();
+
+    dialogs[0]('discard');
+    await flush();
+    await flush();
+
+    // b replaced the edited model and is itself unedited, so the second open
+    // has nothing to lose and asks nothing further.
+    expect(dialogs).toHaveLength(1);
+    expect(document.getElementById('source-input').value).toBe('emod 1\nmodel "C"\n');
+    expect(savedFile).toBeNull();
+  });
+});
+
+// The host cannot raise this question and wait for it, so it asks the viewer,
+// which answers with the same policy an arriving model goes through.
+describe('the host asking whether it may close', () => {
+  const editedSource = 'emod 1\nmodel "Billing Edited"\n';
+
+  it('says yes straight away when there is nothing unsaved to lose', async () => {
+    await openBilling();
+
+    await expect(requestLeave()).resolves.toBe(true);
+    expect(unsavedEditsAsked).toBe(0);
+  });
+
+  // The answer a failed question gives is only observable here, and answering
+  // yes would let a broken dialog authorise the close it could not ask about.
+  it('says no when the question could not be put at all', async () => {
+    await openBilling();
+    typeIntoPanel(editedSource);
+    unsavedEditsAnswerer = () => Promise.reject(new Error('the host dialog exploded'));
+
+    await expect(requestLeave()).resolves.toBe(false);
+    expect(savedFile).toBeNull();
+  });
+
+  it('says no when the answer is cancel, and writes nothing', async () => {
+    await openBilling();
+    typeIntoPanel(editedSource);
+    unsavedEditsAnswer = 'cancel';
+
+    await expect(requestLeave()).resolves.toBe(false);
+    expect(savedFile).toBeNull();
+  });
+
+  it('says yes without writing when the answer is discard', async () => {
+    await openBilling();
+    typeIntoPanel(editedSource);
+    unsavedEditsAnswer = 'discard';
+
+    await expect(requestLeave()).resolves.toBe(true);
+    expect(savedFile).toBeNull();
+  });
+
+  it('writes the open file and then says yes when the answer is save', async () => {
+    await openBilling();
+    typeIntoPanel(editedSource);
+    unsavedEditsAnswer = 'save';
+    saveAnswer = { name: 'billing.emod', path: '/models/billing.emod' };
+
+    await expect(requestLeave()).resolves.toBe(true);
+    expect(savedFile).toEqual({ name: 'billing.emod', content: editedSource, path: '/models/billing.emod' });
+  });
+
+  it('says no when the save it was asked for is refused', async () => {
+    await openBilling();
+    typeIntoPanel(editedSource);
+    unsavedEditsAnswer = 'save';
+    saveFails = 'permission denied';
+
+    await expect(requestLeave()).resolves.toBe(false);
+  });
+
+  // A close arriving mid-open must answer about the model that open settles on,
+  // not the one it is replacing.
+  it('waits for a model already arriving before it answers', async () => {
+    await openBilling();
+    typeIntoPanel(editedSource);
+    unsavedEditsAnswer = 'discard';
+
+    deliverFile({ name: 'b.emod', path: '/models/b.emod', content: 'emod 1\nmodel "B"\n' });
+    const leaving = requestLeave();
+    await flush();
+    await flush();
+
+    await expect(leaving).resolves.toBe(true);
+    expect(document.getElementById('source-input').value).toBe('emod 1\nmodel "B"\n');
+    // b is unedited, so answering about it needed no second question.
+    expect(unsavedEditsAsked).toBe(1);
+  });
+});
+
 // The guard above is only unskippable while one function is the only way a
 // different file's model reaches renderPanelSource. This reads viewer.js's own
 // source, in the style of the module scan already in this suite.
@@ -1629,13 +1842,25 @@ describe('one function replaces the open model', () => {
   const opens = (text) => text.match(/(?<!function )renderPanelSource\(\s*[^)\s]/g) || [];
 
   // Each entry is one of init's own functions, so a call can be attributed to
-  // the one that makes it without slicing the file by hand.
+  // the one that makes it without slicing the file by hand. The guard's own
+  // function is found by what it does rather than by its name, so renaming it
+  // is a rename and not a failure.
+  // The split strips the `function ` keyword, so a declaration would match the
+  // lookbehind above as a call; each chunk is read from its second line on. It
+  // is also cut at its own closing brace — init's functions are at this indent,
+  // so a chunk otherwise runs to the *next* declaration and carries whatever
+  // top-level code sits between them, which would be attributed to it.
   const declarations = source.split(/\n  function /).slice(1);
-  const named = (name) => declarations.filter((d) => d.startsWith(name + '('));
+  const bodyOf = (declaration) => {
+    const body = declaration.slice(declaration.indexOf('\n'));
+    const close = body.indexOf('\n  }');
+
+    return close === -1 ? body : body.slice(0, close);
+  };
+  const opensAModel = declarations.filter((d) => opens(bodyOf(d)).length > 0);
 
   it('splits into init\'s functions, so the attribution below is not reading one blob', () => {
     expect(declarations.length).toBeGreaterThan(5);
-    expect(named('openModel')).toHaveLength(1);
   });
 
   it('re-renders the panel without a model too, so the count below means something', () => {
@@ -1646,8 +1871,12 @@ describe('one function replaces the open model', () => {
     expect(opens(source)).toHaveLength(1);
   });
 
-  it('makes that call from the function that runs the unsaved-edits guard', () => {
-    expect(opens(named('openModel')[0])).toHaveLength(1);
+  it('makes that call from exactly one of init\'s own functions', () => {
+    expect(opensAModel).toHaveLength(1);
+  });
+
+  it('makes it from a function that consults the unsaved-edits guard', () => {
+    expect(bodyOf(opensAModel[0])).toContain('clearedToReplace');
   });
 });
 
@@ -1788,8 +2017,9 @@ describe('the platform seam has one contract', () => {
 
   it('names every host operation the shared modules reach for', () => {
     expect(contract).toEqual(
-      ['droppedFile', 'exportEmod', 'initialState', 'isReady', 'onFileOpened', 'onSaveRequested',
-       'parseEmod', 'ready', 'resolveUnsavedEdits', 'saveFile', 'setWindowModified', 'setWindowTitle'],
+      ['droppedFile', 'exportEmod', 'initialState', 'isReady', 'onFileOpened', 'onLeaveRequested',
+       'onSaveRequested', 'parseEmod', 'ready', 'resolveUnsavedEdits', 'saveFile', 'setWindowModified',
+       'setWindowTitle'],
     );
   });
 

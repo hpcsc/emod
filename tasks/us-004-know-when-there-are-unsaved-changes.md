@@ -382,7 +382,7 @@ shows it — the dot in the close button — instead of a `*` in the title.
 
 **Affected Files/Modules:**
 - `internal/desktop/` — a new file for the new type, holding the modified state and the role it hands each change to
-- `cmd/emod-desktop/main.go` — registers the service through the struct-literal shape `TestServiceRegistrations` matches, and supplies the thing that marks the window
+- `cmd/emod-desktop/main.go` — registers the service in a shape `TestServiceRegistrations` can name, and supplies the thing that marks the window
 - `cmd/emod-desktop/` — a darwin-tagged cgo file reaching `NSWindow setDocumentEdited:` through `WebviewWindow.NativeWindow()`, and a build-tagged counterpart for everywhere else
 - `internal/frontend/desktop/platform.desktop.js` — calls the service, and stops adding `*` where the shell marks the window itself
 - `internal/desktop/` tests — the service's own umbrella

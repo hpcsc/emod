@@ -227,12 +227,21 @@ module imports `./platform.js` for the things a host provides rather than the
 UI: reaching the Go core, reading a dropped file, writing a model out, naming
 the window, showing it as holding unsaved work, asking what to do about that
 work before it would be lost, delivering a file the host opened, asking the
-viewer to save, and answering what state the app opened with.
-`platform.browser.js` implements that over WebAssembly, `fetch`, the browser's
-download and `document.title` — with the last two inert, since a page has no
-window of its own to mark and no dialog whose Save writes anywhere.
-`platform.desktop.js` implements it over Wails bindings, the runtime's native
-file dialogs, the native window title and a native question dialog. Writing is where the two differ most:
+viewer to save, asking whether the window may close, and answering what state
+the app opened with. `platform.browser.js` implements that over WebAssembly,
+`fetch`, the browser's download and `document.title`, with three of them inert:
+a page has no window of its own to mark, no dialog whose Save writes anywhere,
+and no close it can refuse asynchronously. `platform.desktop.js` implements it
+over Wails bindings, the runtime's native file dialogs, the native window title
+and a native question dialog.
+
+Which way a request travels is what the seam's two halves are for. The viewer
+calls out for anything it initiates; anything the *host* initiates — a menu
+item, a close the user asked for — arrives at a handler the viewer registered,
+and the viewer answers. That is why deciding what to do about unsaved work
+lives in the viewer for every entry point, including the shell's close and quit:
+the alternative is a second copy of that policy inside the adapter, reading its
+own shadow of state the viewer owns. Writing is where the two differ most:
 the browser is handed no path and can only offer a download, while the desktop
 is handed the path the file came from and replaces it. Which one a distribution gets is decided when
 it is assembled, not by sniffing the runtime — `build:web` copies the browser

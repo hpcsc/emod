@@ -134,6 +134,10 @@ function onFileOpened() {}
 // called, so the shared viewer registers the same way whatever it runs on.
 function onSaveRequested() {}
 
+// Closing a tab is the browser's to refuse, through its own unload prompt, and
+// a page cannot answer one asynchronously — so nothing here ever asks.
+function onLeaveRequested() {}
+
 // The CLI's server substitutes this global into the page before the frontend
 // loads, so it is already there by the time anything asks; the promise is for
 // the hosts that have to go and fetch their state instead.
@@ -144,4 +148,4 @@ function initialState() {
   return Promise.resolve(INITIAL_DATA);
 }
 
-export { parseEmod, exportEmod, droppedFile, saveFile, setWindowTitle, setWindowModified, resolveUnsavedEdits, onFileOpened, onSaveRequested, initialState, ready, isReady };
+export { parseEmod, exportEmod, droppedFile, saveFile, setWindowTitle, setWindowModified, resolveUnsavedEdits, onFileOpened, onSaveRequested, onLeaveRequested, initialState, ready, isReady };

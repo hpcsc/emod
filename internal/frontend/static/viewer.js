@@ -9,7 +9,7 @@ import { CtxActions } from './ctx-actions.js';
 import { Model } from './model.js';
 import { bus } from './bus.js';
 import { Export } from './emod-export.js';
-import { ready, isReady, droppedFile, saveFile, setWindowTitle, setWindowModified, resolveUnsavedEdits, onFileOpened, onSaveRequested, initialState } from './platform.js';
+import { ready, isReady, droppedFile, saveFile, setWindowTitle, setWindowModified, resolveUnsavedEdits, onFileOpened, onSaveRequested, onLeaveRequested, initialState } from './platform.js';
 
 // ─── Event subscriptions ─────────────────────────────────────────────
 bus.on('data:changed', function({ store: s }) {
@@ -257,14 +257,46 @@ function init() {
 
   store.dom.sourceInput.addEventListener("input", reportModified);
 
+  // Everything that asks about unsaved edits queues here. The question and the
+  // act it authorises are separated by however long the user takes to answer,
+  // and the save the answer asks for reads the panel and the open file when it
+  // runs rather than when the question was put — so two overlapping asks let
+  // the second one's model be saved under the first one's Save, losing the
+  // edits that Save existed to keep.
+  let guardQueue = Promise.resolve();
+
+  // A turn that throws must neither wedge every later one behind it nor escape
+  // as an unhandled rejection. The question is the user's own gesture, so the
+  // reason is shown; and the answer is that nothing may be replaced, because
+  // going ahead would discard the very work the question was about.
+  function guarded(work) {
+    const turn = guardQueue.then(work).catch(function(err) {
+      reportHostFailure(err.message || String(err));
+
+      return false;
+    });
+    guardQueue = turn;
+
+    return turn;
+  }
+
   // The only place a different file's model is handed to renderPanelSource, so
   // every way of opening one runs the guard below and a new one has nowhere
   // else to arrive.
   function openModel(text, file) {
-    return clearedToReplace().then(function(cleared) {
-      return cleared ? renderPanelSource(text, file) : undefined;
+    return guarded(function() {
+      return clearedToReplace().then(function(cleared) {
+        return cleared ? renderPanelSource(text, file) : undefined;
+      });
     });
   }
+
+  // The host asks before it closes the window or quits, because a shell cannot
+  // raise this question and wait for it — so the answer is decided here, on the
+  // same queue and by the same policy an arriving model goes through.
+  onLeaveRequested(function() {
+    return guarded(clearedToReplace);
+  });
 
   // Save writes the file the edits belong to before the model on screen is
   // replaced, and the answer to whether that write landed is the marker: a
@@ -319,7 +351,7 @@ function init() {
       return;
     }
     file.read().then(function(content) {
-      openModel(content, null);
+      openModel(content, { name: file.name, path: '', content: content });
     }).catch(function() {
       store.dom.statusEl.textContent = '✗ Failed to read file';
       store.dom.statusEl.className = 'status error';

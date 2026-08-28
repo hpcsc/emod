@@ -6,7 +6,10 @@
 // Tests drive these: whatever a test assigns to `answers` is what the binding
 // returns, and `calls` records what the desktop platform sent across.
 export const calls = [];
-export const answers = { ParseEmod: '{}', ExportJSON: '{}', ExportEmod: '{}', Read: '{}', Write: '{}' };
+export const answers = {
+  ParseEmod: '{}', ExportJSON: '{}', ExportEmod: '{}', Read: '{}', Write: '{}',
+  SetModified: undefined,
+};
 
 export const ModelService = {
   ParseEmod: (arg) => { calls.push(['ParseEmod', arg]); return Promise.resolve(answers.ParseEmod); },
@@ -19,17 +22,24 @@ export const FileService = {
   Write: (path, content) => { calls.push(['Write', path, content]); return Promise.resolve(answers.Write); },
 };
 
-// A test that has to see what happens between telling the shell something and
-// the shell hearing it holds the answer here until it releases the gate.
-let setModifiedGate = null;
-
-export function gateSetModified(gate) {
-  setModifiedGate = gate;
-}
+// SetModified is driven through the same bag as every other binding, the way
+// the sibling runtime stub does: an Error rejects the call, a promise holds it
+// open until the test releases it, and anything else resolves at once.
+// `calls` records what was sent, which for a binding is not the same question
+// as what arrived: the shell serves each call its own goroutine, so two in
+// flight at once land in whichever order they finish. `landed` is that second
+// order, and it is the only one a test can hold the frontend to.
+export const landed = [];
 
 export const WindowService = {
   SetModified: (modified) => {
     calls.push(['SetModified', modified]);
-    return setModifiedGate ? setModifiedGate.then(() => undefined) : Promise.resolve();
+    const answer = answers.SetModified;
+    if (answer instanceof Error) {
+      return Promise.reject(answer);
+    }
+    const held = answer instanceof Promise ? answer : Promise.resolve();
+
+    return held.then(() => { landed.push(modified); });
   },
 };

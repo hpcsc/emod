@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeAll, beforeEach } from 'vitest';
+import { describe, it, expect, vi, beforeAll, beforeEach } from 'vitest';
 
 // Drives the real desktop implementation against a stand-in for the bindings
 // the desktop build generates. Without this only droppedFile ran, so nothing
@@ -13,13 +13,17 @@ beforeAll(async () => {
   desktop = await import('../desktop/platform.desktop.js');
 });
 
-beforeEach(() => {
-  // The module is imported once and holds the window's name and its marker
-  // between tests, so both go back to what a window that has never been named
-  // or marked holds before the calls each test reads are cleared.
+beforeEach(async () => {
+  // The module is imported once and holds the window's name and its record of
+  // the shell between tests, so both go back to what a freshly loaded page
+  // holds — after the answer bag is clean, or the reset is answered by whatever
+  // the previous test left in it, and where the record starts then depends on
+  // the order the tests ran.
+  stub.answers.SetModified = undefined;
   desktop.setWindowTitle('');
-  desktop.setWindowModified(false);
+  await desktop.setWindowModified(false);
   stub.calls.length = 0;
+  stub.landed.length = 0;
   runtime.calls.length = 0;
   stub.answers.ParseEmod = '{"diagnostics":[],"diagram":{"nodes":[],"edges":[]}}';
   stub.answers.ExportEmod = '{"emod":"emod 1\\nmodel \\"Billing\\"\\n"}';
@@ -31,6 +35,7 @@ beforeEach(() => {
   runtime.answers.IsMac = false;
   desktop.onFileOpened(null);
   desktop.onSaveRequested(null);
+  desktop.onLeaveRequested(null);
 });
 
 // The shell's menu is the only thing that asks for a file, and it asks by
@@ -115,18 +120,18 @@ describe('the unsaved-edits marker', () => {
     .filter((call) => call[0] === 'SetModified')
     .map((call) => call[1]);
 
-  it('tells the shell every answer, so it knows whether closing would discard work', () => {
+  it('tells the shell every answer, so it knows whether closing would discard work', async () => {
     desktop.setWindowModified(true);
-    desktop.setWindowModified(false);
+    await desktop.setWindowModified(false);
 
     expect(told()).toEqual([true, false]);
   });
 
-  it('asks the shell nothing for an answer that has not moved', () => {
-    desktop.setWindowModified(true);
+  it('asks the shell nothing for an answer that has not moved', async () => {
+    await desktop.setWindowModified(true);
 
-    desktop.setWindowModified(true);
-    desktop.setWindowModified(true);
+    await desktop.setWindowModified(true);
+    await desktop.setWindowModified(true);
 
     expect(told()).toEqual([true]);
   });
@@ -153,10 +158,101 @@ describe('the unsaved-edits marker', () => {
     expect(titles().pop()).toBe('* billing.emod — Emod Diagram Viewer');
   });
 
-  it('still marks a window whose name has never been set', () => {
-    desktop.setWindowModified(true);
+  // A window this module has never named still carries whatever the shell
+  // called it, and a lone marker in place of that is the only name destroyed.
+  it('leaves the shell\'s own title alone until the window has a name', async () => {
+    await desktop.setWindowModified(true);
 
-    expect(titles()).toEqual(['*']);
+    expect(titles()).toEqual([]);
+    expect(told()).toEqual([true]);
+  });
+
+  // Two calls in flight at once are served a goroutine each and land in
+  // whichever order they finish, and the loser is permanent: the check that
+  // skips an unchanged answer then reads the shell as already holding what it
+  // does not, so every later repair is swallowed and the close guard goes quiet.
+  it('never lets an older answer land on the shell after a newer one', async () => {
+    let releaseFirst;
+    stub.answers.SetModified = new Promise((resolve) => { releaseFirst = resolve; });
+
+    const first = desktop.setWindowModified(true);
+    // The dispatch is a turn away, so the gate has to still be in the bag when
+    // it happens or the call it was meant to hold open sails straight through.
+    await flush();
+    stub.answers.SetModified = undefined;
+    const second = desktop.setWindowModified(false);
+    // A second call the queue does not hold back lands right here, ahead of the
+    // first; one it does hold back cannot be sent until the first has landed.
+    await flush();
+    releaseFirst();
+    await Promise.all([first, second]);
+
+    // Sent in this order either way; the question is which one the shell is
+    // left holding, and that is the order they arrive in.
+    expect(stub.landed).toEqual([true, false]);
+  });
+
+  // A fresh page has told the shell nothing, and the shell may still be holding
+  // what the page before it said — so the first answer always goes.
+  it('sends the first answer a freshly loaded page gives, unchanged though it looks', async () => {
+    // A reload is a fresh module registry, so the bindings it reaches are fresh
+    // too and have to be imported alongside it to be observed. Sequentially:
+    // two dynamic imports in flight at once resolve against different copies.
+    vi.resetModules();
+    const reloadedStub = await import('./bindings-stub.js');
+    const reloadedPage = await import('../desktop/platform.desktop.js');
+
+    await reloadedPage.setWindowModified(false);
+
+    expect(reloadedStub.calls.filter((call) => call[0] === 'SetModified'))
+      .toEqual([['SetModified', false]]);
+  });
+
+  // Three audit rounds each found a way for this record and the shell's to
+  // diverge, so the invariant is asserted over sequences rather than over the
+  // one interleaving a hand-written case happens to pick: whatever the page
+  // says and however long each call takes, the last thing the shell is left
+  // holding is the last thing the page said.
+  it('leaves the shell holding the page\'s last answer, whatever order the calls take', async () => {
+    // What the shell holds after the reset above, so a run whose answers are
+    // all the value it already holds — which correctly sends nothing — still
+    // has something to be judged against.
+    stub.landed.length = 0;
+    stub.landed.push(false);
+
+    for (let run = 0; run < 40; run++) {
+      const answers = [];
+      for (let i = 0; i < 5; i++) {
+        answers.push(Math.random() < 0.5);
+      }
+
+      const sent = answers.map((answer) => {
+        // Each call is held open for its own length, so a later one can finish
+        // its transport before an earlier one.
+        stub.answers.SetModified = new Promise((resolve) => {
+          setTimeout(resolve, Math.floor(Math.random() * 3));
+        });
+
+        return desktop.setWindowModified(answer);
+      });
+      await Promise.all(sent);
+
+      expect(stub.landed[stub.landed.length - 1]).toBe(answers[answers.length - 1]);
+    }
+    stub.answers.SetModified = undefined;
+  });
+
+  // The shell reads its own copy to decide whether closing would discard work,
+  // so a call it never heard must be retried — including when the answer has
+  // not moved since, which is the case the de-duplication above would swallow.
+  it('tells the shell the same answer again after a call it did not hear', async () => {
+    stub.answers.SetModified = new Error('the shell did not answer');
+    await desktop.setWindowModified(true);
+
+    stub.answers.SetModified = undefined;
+    await desktop.setWindowModified(true);
+
+    expect(told()).toEqual([true, true]);
   });
 
   // The viewer states the answer on every keystroke, so a window renamed once
@@ -177,10 +273,10 @@ describe('the unsaved-edits marker', () => {
   describe('on macOS', () => {
     beforeEach(() => { runtime.answers.IsMac = true; });
 
-    it('leaves the title to the name alone, and still tells the shell', () => {
+    it('leaves the title to the name alone, and still tells the shell', async () => {
       desktop.setWindowTitle('hotel.emod — Emod Diagram Viewer');
 
-      desktop.setWindowModified(true);
+      await desktop.setWindowModified(true);
 
       expect(titles()).toEqual(['hotel.emod — Emod Diagram Viewer']);
       expect(told()).toEqual([true]);
@@ -417,11 +513,17 @@ describe('the shell asking for a save', () => {
 describe('asking what to do about unsaved edits', () => {
   const question = () => runtime.calls.find((call) => call[0] === 'Dialogs.Question')[1];
 
-  it('offers the three choices, with cancel as the button that backs out', async () => {
+  // Which button the Return key presses is the whole of what a default means,
+  // so a default on Discard would throw the edits away on a keystroke meant to
+  // keep them.
+  it('offers the three choices, with save the default and cancel the way out', async () => {
     await desktop.resolveUnsavedEdits();
 
-    expect(question().Buttons.map((b) => b.Label)).toEqual(['Save', 'Discard', 'Cancel']);
-    expect(question().Buttons.find((b) => b.Label === 'Cancel').IsCancel).toBe(true);
+    expect(question().Buttons).toEqual([
+      { Label: 'Save', IsDefault: true },
+      { Label: 'Discard' },
+      { Label: 'Cancel', IsCancel: true },
+    ]);
   });
 
   it('answers save when Save was pressed', async () => {
@@ -462,8 +564,8 @@ describe('asking what to do about unsaved edits', () => {
 });
 
 // The shell refuses a close or a quit while it holds unsaved work and asks
-// here instead, so leaving means answering and then telling the shell it may
-// go — otherwise it refuses the very close the answer authorised.
+// here instead. What to do about the edits is the viewer's decision, so this
+// module only carries the request over and acts on the answer.
 describe('the shell asking to close or quit', () => {
   const leaving = () => runtime.calls
     .filter((call) => call[0] === 'Window.Close' || call[0] === 'Application.Quit')
@@ -479,16 +581,29 @@ describe('the shell asking to close or quit', () => {
     return Promise.resolve(runtime.listeners['app:quit-requested']()).then(flush);
   }
 
-  beforeEach(() => {
-    stub.gateSetModified(null);
-    desktop.setWindowModified(true);
+  function viewerAnswers(answer) {
+    const asked = [];
+    desktop.onLeaveRequested(() => { asked.push(true); return Promise.resolve(answer); });
+    return asked;
+  }
+
+  beforeEach(async () => {
+    await desktop.setWindowModified(true);
     stub.calls.length = 0;
     runtime.calls.length = 0;
-    desktop.onSaveRequested(() => Promise.resolve());
   });
 
-  it('leaves the window open and writes nothing when the answer is cancel', async () => {
-    runtime.answers.Question = 'Cancel';
+  it('asks the viewer rather than deciding what to do about the edits itself', async () => {
+    const asked = viewerAnswers(false);
+
+    await requestClose();
+
+    expect(asked).toEqual([true]);
+    expect(runtime.calls.filter((call) => call[0] === 'Dialogs.Question')).toEqual([]);
+  });
+
+  it('leaves the window open and tells the shell nothing when the viewer says no', async () => {
+    viewerAnswers(false);
 
     await requestClose();
 
@@ -496,33 +611,31 @@ describe('the shell asking to close or quit', () => {
     expect(stub.calls).toEqual([]);
   });
 
-  it('closes without writing when the answer is discard', async () => {
-    runtime.answers.Question = 'Discard';
+  it('closes when the viewer says it may', async () => {
+    viewerAnswers(true);
 
     await requestClose();
 
     expect(leaving()).toEqual(['Window.Close']);
     expect(cleared()).toHaveLength(1);
-    expect(stub.calls.filter((call) => call[0] === 'Write')).toEqual([]);
   });
 
-  it('quits without writing when the answer is discard', async () => {
-    runtime.answers.Question = 'Discard';
+  it('quits when the viewer says it may', async () => {
+    viewerAnswers(true);
 
     await requestQuit();
 
     expect(leaving()).toEqual(['Application.Quit']);
     expect(cleared()).toHaveLength(1);
-    expect(stub.calls.filter((call) => call[0] === 'Write')).toEqual([]);
   });
 
   // The shell refused on the state it holds, so a close asked for before that
   // state has actually reached it is refused again and the window never goes.
   // Asking in the right order is not enough — the answer has to have landed.
   it('waits for the shell to have heard there is nothing unsaved before asking it to close', async () => {
-    runtime.answers.Question = 'Discard';
+    viewerAnswers(true);
     let hearIt;
-    stub.gateSetModified(new Promise((resolve) => { hearIt = resolve; }));
+    stub.answers.SetModified = new Promise((resolve) => { hearIt = resolve; });
 
     const closing = requestClose();
     await flush();
@@ -535,52 +648,51 @@ describe('the shell asking to close or quit', () => {
     expect(leaving()).toEqual(['Window.Close']);
   });
 
-  it('asks the viewer to save, then closes, when the answer is save', async () => {
-    runtime.answers.Question = 'Save';
-    const asked = [];
-    desktop.onSaveRequested((options) => {
-      asked.push(options);
-      desktop.setWindowModified(false);
-      return Promise.resolve();
-    });
+  // A shell that never heard it still refuses, so asking would achieve nothing.
+  it('leaves the window open when the shell could not be told', async () => {
+    viewerAnswers(true);
+    stub.answers.SetModified = new Error('the shell did not answer');
 
     await requestClose();
 
-    expect(asked).toEqual([{ chooseLocation: false }]);
+    expect(leaving()).toEqual([]);
+  });
+
+  // The window still holds the work, so it must still say so — clearing the
+  // marker for a leave that never happened leaves the title lying about it.
+  it('keeps saying there is unsaved work when the leave it cleared for did not happen', async () => {
+    desktop.setWindowTitle('hotel.emod — Emod Diagram Viewer');
+    await desktop.setWindowModified(true);
+    runtime.calls.length = 0;
+    viewerAnswers(true);
+    stub.answers.SetModified = new Error('the shell did not answer');
+
+    await requestClose();
+
+    expect(runtime.calls.filter((call) => call[0] === 'Window.SetTitle')).toEqual([]);
+  });
+
+  // This module's record of what the shell holds is the page's and is reloaded
+  // with it; the shell's is the process's and is not. After a reload the two
+  // disagree, and a leave that trusts the record never tells the shell at all —
+  // so the veto fires, is answered, and fires again with nothing able to move.
+  it('tells the shell even when its own record says it already knows', async () => {
+    // What a page holds once it has told the shell there is nothing unsaved —
+    // which after a reload is not what the shell itself is holding.
+    await desktop.setWindowModified(false);
+    stub.calls.length = 0;
+    viewerAnswers(true);
+
+    await requestClose();
+
+    expect(cleared()).toHaveLength(1);
     expect(leaving()).toEqual(['Window.Close']);
   });
 
-  it('leaves the window open when the save it asked for did not land', async () => {
-    runtime.answers.Question = 'Save';
-    desktop.onSaveRequested(() => Promise.resolve());
-
-    await requestClose();
-
-    expect(leaving()).toEqual([]);
-  });
-
-  it('leaves the app running when the save it asked for did not land', async () => {
-    runtime.answers.Question = 'Save';
-    desktop.onSaveRequested(() => Promise.resolve());
-
-    await requestQuit();
-
-    expect(leaving()).toEqual([]);
-  });
-
-  // Nothing registered means no viewer to save through, and closing anyway
-  // would discard the very work the shell refused to close over.
-  it('leaves the window open when no viewer has registered to save', async () => {
-    runtime.answers.Question = 'Save';
-    desktop.onSaveRequested(null);
-
-    await requestClose();
-
-    expect(leaving()).toEqual([]);
-  });
-
-  it('leaves the window open for a dialog it could not show', async () => {
-    runtime.answers.Question = new Error('no window to attach to');
+  // Nobody can answer, and going anyway would discard the work the shell
+  // refused to leave over.
+  it('leaves the window open when no viewer has registered to answer', async () => {
+    desktop.onLeaveRequested(null);
 
     await requestClose();
 
