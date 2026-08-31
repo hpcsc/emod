@@ -104,6 +104,11 @@ func main() {
 		// always global, Linux because a window with no menu of its own falls
 		// back to it — so leaving this off loses File ▸ Open on Windows alone.
 		UseApplicationMenu: true,
+		// Without this the webview handles a file drag itself and hands the page
+		// contents with no location, which is what a browser can already do and
+		// is not what a drop on this window is for. With it, the platform's own
+		// drag destination takes the drag and answers the real paths below.
+		EnableFileDrop: true,
 	})
 
 	// Registered after the window rather than in Options.Services, because the
@@ -111,6 +116,18 @@ func main() {
 	// service registered before Run.
 	windowState = desktop.NewWindowService(&windowMarker{window: window})
 	app.RegisterService(application.NewService(windowState))
+
+	// A listener rather than a hook: the framework dispatches a resolved file
+	// drop only to the listeners OnWindowEvent appends to, so a hook registered
+	// for it — the shape the close veto below takes, for a different reason —
+	// would never be called at all.
+	//
+	// The paths go straight on to the frontend because everything that decides
+	// what to do with them is there: which of several files to open, what to say
+	// about one it cannot, and whether opening it would discard unsaved work.
+	window.OnWindowEvent(events.Common.WindowFilesDropped, func(event *application.WindowEvent) {
+		window.EmitEvent("file:dropped", event.Context().DroppedFiles())
+	})
 
 	// A hook runs ahead of the listener that destroys the window, and
 	// cancelling stops it — so this is where a close carrying unsaved work is

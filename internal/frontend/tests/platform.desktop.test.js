@@ -34,6 +34,7 @@ beforeEach(async () => {
   runtime.answers.Question = '';
   runtime.answers.IsMac = false;
   desktop.onFileOpened(null);
+  desktop.onFilesDropped(null);
   desktop.onSaveRequested(null);
   desktop.onLeaveRequested(null);
 });
@@ -401,6 +402,145 @@ describe('opening a file', () => {
     runtime.answers.OpenFile = '/models/billing.emod';
 
     await expect(requestOpen()).resolves.toBeUndefined();
+  });
+});
+
+// A drop is resolved by the shell, not by the page: the platform's own drag
+// destination consumes the drag, and what comes back is the real location of
+// each file — which is the whole reason a dropped model can be saved back to
+// where it came from. The shell emits them, so a test fires the subscription
+// the shell fires rather than calling anything exported.
+describe('files dropped on the window', () => {
+  function collectDrops() {
+    const dropped = [];
+    desktop.onFilesDropped((files) => { dropped.push(files); return Promise.resolve(); });
+    return dropped;
+  }
+
+  function dropPaths(...paths) {
+    return Promise.resolve(
+      runtime.listeners['file:dropped']({ name: 'file:dropped', data: paths }),
+    ).then(flush);
+  }
+
+  it('names each dropped file by the last part of its path, in the order they arrived', async () => {
+    const dropped = collectDrops();
+
+    await dropPaths('/models/hotel.emod', '/notes/shopping.txt', 'C:\\models\\diagram.json');
+
+    expect(dropped).toHaveLength(1);
+    expect(dropped[0].map((file) => file.name))
+      .toEqual(['hotel.emod', 'shopping.txt', 'diagram.json']);
+  });
+
+  // Naming a file and reading it are separate so the viewer can refuse a drop by
+  // name without the shell going to disk for a file it will not open.
+  it('reads nothing until a dropped file is asked for its contents', async () => {
+    collectDrops();
+
+    await dropPaths('/models/hotel.emod');
+
+    expect(stub.calls).toEqual([]);
+  });
+
+  it('answers the name, path and contents the service read back', async () => {
+    const dropped = collectDrops();
+    stub.answers.Read = '{"name":"hotel.emod","path":"/models/hotel.emod","content":"emod 1\\nmodel \\"Hotel\\"\\n"}';
+
+    await dropPaths('/models/hotel.emod');
+
+    await expect(dropped[0][0].read()).resolves.toEqual({
+      name: 'hotel.emod',
+      path: '/models/hotel.emod',
+      content: 'emod 1\nmodel "Hotel"\n',
+    });
+    expect(stub.calls).toEqual([['Read', '/models/hotel.emod']]);
+  });
+
+  it('answers the reason the service gave for a file it could not read', async () => {
+    const dropped = collectDrops();
+    stub.answers.Read = '{"error":"reading /models/hotel.emod: permission denied"}';
+
+    await dropPaths('/models/hotel.emod');
+
+    await expect(dropped[0][0].read())
+      .resolves.toEqual({ error: 'reading /models/hotel.emod: permission denied' });
+  });
+
+  // The viewer opens whatever a read answers without catching, because a reason
+  // is one of the answers — so a binding that fails has to arrive as one too.
+  it('answers a reason rather than rejecting when the read itself fails', async () => {
+    const dropped = collectDrops();
+    const realRead = stub.FileService.Read;
+    stub.FileService.Read = () => Promise.reject(new Error('binding call failed'));
+
+    try {
+      await dropPaths('/models/hotel.emod');
+
+      await expect(dropped[0][0].read()).resolves.toEqual({ error: 'binding call failed' });
+    } finally {
+      stub.FileService.Read = realRead;
+    }
+  });
+
+  it('delivers nothing when the drop resolved to no path at all', async () => {
+    const dropped = collectDrops();
+
+    await dropPaths();
+
+    expect(dropped).toEqual([]);
+  });
+
+  // The shell answers nil when it resolved no file, which reaches the page as
+  // null rather than as an empty list.
+  it('delivers nothing when the shell answers no paths at all', async () => {
+    const dropped = collectDrops();
+
+    await Promise.resolve(
+      runtime.listeners['file:dropped']({ name: 'file:dropped', data: null }),
+    ).then(flush);
+
+    expect(dropped).toEqual([]);
+  });
+
+  // An Open resolves a picker and a read before it can deliver; a drop delivers the
+  // moment the shell names the paths. Numbered apart, the Open requested first lands
+  // on top of the drop made after it — the model on screen, and the path a following
+  // Save writes to, decided by which read finished rather than what the user did last.
+  it('drops an Open whose read outlives a drop made after it', async () => {
+    const opened = [];
+    const dropped = [];
+    desktop.onFileOpened((file) => opened.push(file));
+    desktop.onFilesDropped((files) => { dropped.push(files); return Promise.resolve(); });
+
+    let releaseRead;
+    const realRead = stub.FileService.Read;
+    stub.FileService.Read = () => new Promise((resolve) => {
+      releaseRead = () => resolve('{"name":"chosen.emod","path":"/models/chosen.emod","content":"emod 1\\n"}');
+    });
+    runtime.answers.OpenFile = '/models/chosen.emod';
+
+    try {
+      const open = runtime.listeners['file:open-requested']();
+      await flush();
+      await dropPaths('/models/hotel.emod');
+      releaseRead();
+      await open;
+      await flush();
+    } finally {
+      stub.FileService.Read = realRead;
+    }
+
+    expect(dropped).toHaveLength(1);
+    expect(opened).toEqual([]);
+  });
+
+  // The listener's own answer, not the helper's: dropPaths ends in `.then(flush)`, which
+  // resolves undefined whatever the listener returned, so asserting on it proves nothing.
+  it('discards a drop that arrives before the viewer has registered, rather than throwing', () => {
+    expect(runtime.listeners['file:dropped'](
+      { name: 'file:dropped', data: ['/models/hotel.emod'] },
+    )).toBeUndefined();
   });
 });
 

@@ -1,11 +1,10 @@
 import { describe, it, expect, vi, beforeAll } from 'vitest';
 
-// The drop read is written once per platform implementation — extracting it
-// into a shared module would leave an import that resolves from static/ after
-// the desktop build assembles the file there but not from where it is kept, so
-// the copies are held together here instead. This is also the only place the
-// real FileReader path runs: viewer.test.js stubs the seam, and Playwright
-// never drops a file.
+// What each platform's drop reader answers, held side by side because the two
+// deliberately disagree: the browser reads the files the page was handed, and
+// the desktop answers none, since its shell consumes the drag and resolves the
+// real paths itself. This is also the only place the real FileReader path runs:
+// viewer.test.js stubs the seam, and Playwright never drops a file.
 vi.hoisted(() => {
   globalThis.Go = function Go() {
     this.importObject = {};
@@ -27,8 +26,8 @@ function transferOf(...files) {
   return { files };
 }
 
-describe.each(['browser', 'desktop'])('%s drop read', (name) => {
-  const droppedFiles = () => implementations[name];
+describe('browser drop read', () => {
+  const droppedFiles = () => implementations.browser;
 
   it('answers nothing when the drop carried no file', () => {
     expect(droppedFiles()(transferOf())).toEqual([]);
@@ -83,5 +82,21 @@ describe.each(['browser', 'desktop'])('%s drop read', (name) => {
     } finally {
       globalThis.FileReader = realFileReader;
     }
+  });
+});
+
+// The shell's own drag destination takes the drag before the webview sees it, so
+// on the platforms that behave that way there is nothing in the DOM event to
+// read. Windows is the exception and still delivers one — which is exactly why
+// this answers nothing there too, because the shell delivers those files as
+// paths as well and reading both would open the dropped model twice.
+describe('desktop drop read', () => {
+  const droppedFiles = () => implementations.desktop;
+
+  it('answers nothing, because the shell resolves a drop rather than the page', () => {
+    expect(droppedFiles()(transferOf(
+      new File(['emod 1\n'], 'hotel.emod'),
+      new File(['{}'], 'diagram.json'),
+    ))).toEqual([]);
   });
 });

@@ -173,6 +173,14 @@ function init() {
   Minimap.initMinimap(store);
 
   // ─── Render ───────────────────────────────────────────────────────
+  // Deliveries are numbered because a drop and a file the host opened are both
+  // read asynchronously, and nothing stops a second one arriving while the first
+  // is still being read — so without this the model that ends up open is the one
+  // whose read finished last rather than the one the user asked for last, and it
+  // is that model's path a following Save writes to. The number is claimed when
+  // the gesture arrives and checked before anything on screen is replaced.
+  let latestDelivery = 0;
+
   // Renders are numbered because a parse is genuinely concurrent on a host that
   // answers over RPC rather than in-process: without this, a slow earlier parse
   // landing after a fast later one repaints the canvas with the older model
@@ -340,9 +348,17 @@ function init() {
   });
   store.dom.panelBody.addEventListener("drop", function(evt) {
     evt.preventDefault();
-    evt.stopPropagation();
     store.dom.panelBody.classList.remove("drag-over");
-    openDroppedFiles(droppedFiles(evt.dataTransfer));
+    const files = droppedFiles(evt.dataTransfer);
+    // A host that resolves drops itself listens above this element and reads the
+    // paths its shell resolved rather than the files the page was handed, so an
+    // event this page took nothing from has to keep travelling. Stopping it here
+    // discards every file released over the panel on the one platform that
+    // still delivers a DOM drop and resolves its paths from it.
+    if (files.length > 0) {
+      evt.stopPropagation();
+    }
+    openDroppedFiles(files);
   });
 
   // A host that resolves a drop itself pushes the files here instead, because a
@@ -357,6 +373,18 @@ function init() {
   // of a supported one would make the order files happen to arrive in decide
   // whether the gesture works.
   function openDroppedFiles(files) {
+    // A drag carrying no file — selected text, a link, or a drop a host has
+    // already taken for itself and will deliver as paths — is not a model that
+    // was refused, so it is nothing to report.
+    if (files.length === 0) {
+      return Promise.resolve();
+    }
+
+    // Claimed before the name check, so a drop the user can see was refused still
+    // supersedes an older read: without it that read lands afterwards and opens
+    // its model over the refusal this gesture just caused.
+    const delivery = ++latestDelivery;
+
     const chosen = files.filter(namesAModel)[0];
     if (!chosen) {
       reportHostFailure('Only .emod and .json files are supported');
@@ -364,7 +392,9 @@ function init() {
       return Promise.resolve();
     }
 
-    return Promise.resolve(chosen.read()).then(openDeliveredFile);
+    return Promise.resolve(chosen.read()).then(function(opened) {
+      return openDeliveredFile(opened, delivery);
+    });
   }
 
   function namesAModel(file) {
@@ -374,9 +404,16 @@ function init() {
   }
 
   // ─── A file the host opened ───────────────────────────────────────
-  onFileOpened(openDeliveredFile);
+  onFileOpened(function(opened) {
+    return openDeliveredFile(opened, ++latestDelivery);
+  });
 
-  function openDeliveredFile(opened) {
+  function openDeliveredFile(opened, delivery) {
+    // A file the user has already asked past is not worth reporting on either:
+    // its reason would land on top of the model that superseded it.
+    if (delivery !== latestDelivery) {
+      return Promise.resolve();
+    }
     // The status area lives in the panel a successful render collapses, and a
     // file the host resolved arrives from outside the page — so every failure
     // here has to reveal that panel, or choosing a file from the OS dialog, or

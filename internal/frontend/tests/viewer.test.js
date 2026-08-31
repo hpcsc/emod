@@ -572,6 +572,56 @@ describe('viewer drag-and-drop', () => {
     expect(document.getElementById('diagram-canvas').innerHTML).toContain('TakePayment');
   });
 
+  // A drag carrying no file at all — selected text, a link — is not a model the
+  // page refused, so refusing it would put an error on screen for a gesture that
+  // was never aimed at opening anything. It is also what a drop looks like on a
+  // host whose shell resolves the files itself.
+  it('says nothing when the drop carried no file at all', async () => {
+    globalThis.INITIAL_DATA = { diagram: billingDiagram() };
+    await startViewer();
+
+    fireDrop(document.getElementById('data-panel-body'));
+    await flush();
+
+    expect(document.getElementById('render-status').textContent).toBe('');
+    expect(document.getElementById('data-panel').classList.contains('collapsed')).toBe(true);
+    expect(document.getElementById('diagram-canvas').innerHTML).toContain('TakePayment');
+  });
+
+  // A host whose shell resolves drops listens above this element and reads the
+  // paths it was given, not the files the page can see — so the page's own
+  // listener must let an event it took nothing from carry on up. Stopping it
+  // silently discards every file released over the panel on the one platform
+  // that still delivers a DOM drop and resolves its paths from it.
+  it('lets a drop it took no file from reach a listener above it', async () => {
+    globalThis.INITIAL_DATA = { diagram: billingDiagram() };
+    await startViewer();
+    const reachedAbove = [];
+    document.documentElement.addEventListener('drop', () => reachedAbove.push('drop'));
+
+    fireDrop(document.getElementById('data-panel-body'));
+    await flush();
+
+    expect(reachedAbove).toEqual(['drop']);
+  });
+
+  // ...and must stop one it did open, or a host listening above would open the
+  // same model a second time from its own copy of the drop.
+  it('stops a drop it opened a model from', async () => {
+    globalThis.INITIAL_DATA = null;
+    parseResult = { diagnostics: [], diagram: billingDiagram() };
+    await startViewer();
+    const reachedAbove = [];
+    document.documentElement.addEventListener('drop', () => reachedAbove.push('drop'));
+
+    const file = new File([''], 'hotel.emod');
+    file._content = 'emod 1\nmodel "Hotel"\n';
+    fireDrop(document.getElementById('data-panel-body'), file);
+    await flush();
+
+    expect(reachedAbove).toEqual([]);
+  });
+
   // The parser's own empty-source rejection is written for someone who pressed
   // Render on an empty panel, which is not what happened here.
   it('reports a dropped file with nothing in it by name, as the dialog route does', async () => {
@@ -633,59 +683,116 @@ describe('files a host drops on the window', () => {
     });
   });
 
-  it('opens the first model file pushed, past the ones it cannot open', async () => {
-    await startHotel();
+  // The rest of what a pushed drop does — which of several files it opens, what
+  // it says when none is a model, how it reports a read that failed, and the
+  // unsaved-edits question — is the page's own drop routine, reached through the
+  // same call, and is asserted where that routine is driven through the DOM.
+});
 
-    await deliverDroppedFiles([
-      handleFor('notes.txt', { name: 'notes.txt', path: '/notes.txt', content: 'plain' }),
-      handleFor('hotel.emod', hotelOnDisk),
-    ]);
-    await flush();
+// Both a drop and a file the host opened are read before anything is replaced,
+// and nothing stops a second one arriving while the first read is outstanding.
+describe('a second model asked for while the first is still being read', () => {
+  const held = (name, path, content) => {
+    let release;
+    const handle = {
+      name,
+      read: () => new Promise(function(resolve) {
+        release = () => resolve({ name, path, content });
+      }),
+    };
 
-    expect(windowTitle).toBe('hotel.emod — Emod Diagram Viewer');
+    return [handle, () => release()];
+  };
+
+  const settled = (name, path, content) => ({
+    name,
+    read: () => Promise.resolve({ name, path, content }),
   });
 
-  it('refuses a push carrying no model file and leaves the model on screen', async () => {
-    globalThis.INITIAL_DATA = { diagram: billingDiagram() };
-    await startViewer();
+  it('opens the file dropped last, not the one whose read happened to settle last', async () => {
+    await startEmpty();
+    const [alpha, releaseAlpha] = held('alpha.emod', '/m/alpha.emod', 'emod 1\nmodel "Alpha"\n');
 
-    await deliverDroppedFiles([
-      handleFor('notes.txt', { name: 'notes.txt', path: '/notes.txt', content: 'plain' }),
-    ]);
+    deliverDroppedFiles([alpha]);
+    await flush();
+    deliverDroppedFiles([settled('bravo.emod', '/m/bravo.emod', 'emod 1\nmodel "Bravo"\n')]);
+    await flush();
+    await flush();
+    releaseAlpha();
+    await flush();
+    await flush();
+
+    expect(windowTitle).toBe('bravo.emod — Emod Diagram Viewer');
+    expect(document.getElementById('stat-file-path').textContent).toBe('/m/bravo.emod');
+    expect(document.getElementById('source-input').value).toBe('emod 1\nmodel "Bravo"\n');
+  });
+
+  it('lets a file the host opened supersede a drop whose read is still held', async () => {
+    await startEmpty();
+    const [alpha, releaseAlpha] = held('alpha.emod', '/m/alpha.emod', 'emod 1\nmodel "Alpha"\n');
+
+    deliverDroppedFiles([alpha]);
+    await flush();
+    deliverFile({ name: 'chosen.emod', path: '/m/chosen.emod', content: 'emod 1\nmodel "Chosen"\n' });
+    await flush();
+    await flush();
+    releaseAlpha();
+    await flush();
+    await flush();
+
+    expect(windowTitle).toBe('chosen.emod — Emod Diagram Viewer');
+    expect(document.getElementById('stat-file-path').textContent).toBe('/m/chosen.emod');
+  });
+
+  // Only this direction is reachable here: a file the host opened arrives already
+  // read, so a drop cannot overlap one from the other side within the viewer. That
+  // overlap belongs to the host, which reads before it delivers, and is guarded in
+  // platform.desktop.test.js by 'drops an Open whose read outlives a drop made
+  // after it'.
+
+  // A drop the user can see was refused is still a gesture that moved on from
+  // whatever was being read, so the refusal has to survive that read landing.
+  it('keeps a refusal the user just caused, over an older read still outstanding', async () => {
+    await startEmpty();
+    const [alpha, releaseAlpha] = held('alpha.emod', '/m/alpha.emod', 'emod 1\nmodel "Alpha"\n');
+
+    deliverDroppedFiles([alpha]);
+    await flush();
+    deliverDroppedFiles([{ name: 'notes.txt', read: () => Promise.resolve({}) }]);
+    await flush();
+    releaseAlpha();
+    await flush();
     await flush();
 
     expect(document.getElementById('render-status').textContent)
       .toBe('✗ Only .emod and .json files are supported');
-    expect(document.getElementById('diagram-canvas').innerHTML).toContain('TakePayment');
+    expect(document.getElementById('source-input').value).toBe('');
+    expect(windowTitle).not.toContain('alpha.emod');
   });
 
-  // The reason a host could not read the file it resolved is the host's to give:
-  // a generic one would hide a permission or an encoding it already named.
-  it('reports the reason the host gave for a file it could not read', async () => {
-    globalThis.INITIAL_DATA = { diagram: billingDiagram() };
-    await startViewer();
+  // A superseded file's reason would otherwise land on top of the model that
+  // replaced it, blaming a file the user has already moved past.
+  it('says nothing about a superseded file the host could not read', async () => {
+    await startEmpty();
+    let refuseAlpha;
+    const alpha = {
+      name: 'alpha.emod',
+      read: () => new Promise(function(resolve) {
+        refuseAlpha = () => resolve({ error: 'reading /m/alpha.emod: permission denied' });
+      }),
+    };
 
-    await deliverDroppedFiles([
-      handleFor('hotel.emod', { error: 'reading /models/hotel.emod: permission denied' }),
-    ]);
+    deliverDroppedFiles([alpha]);
+    await flush();
+    deliverDroppedFiles([settled('bravo.emod', '/m/bravo.emod', 'emod 1\nmodel "Bravo"\n')]);
+    await flush();
+    await flush();
+    refuseAlpha();
+    await flush();
     await flush();
 
-    expect(document.getElementById('render-status').textContent)
-      .toContain('reading /models/hotel.emod: permission denied');
-    expect(document.getElementById('diagram-canvas').innerHTML).toContain('TakePayment');
-  });
-
-  it('asks about unsaved edits before it replaces the model on screen', async () => {
-    await openBilling();
-    typeIntoPanel('emod 1\nmodel "Billing Edited"\n');
-    unsavedEditsAnswer = 'cancel';
-
-    await deliverDroppedFiles([handleFor('hotel.emod', hotelOnDisk)]);
-    await flush();
-
-    expect(unsavedEditsAsked).toBe(1);
-    expect(document.getElementById('source-input').value).toBe('emod 1\nmodel "Billing Edited"\n');
-    expect(windowTitle).toBe('billing.emod — Emod Diagram Viewer');
+    expect(document.getElementById('render-status').textContent).not.toContain('permission denied');
+    expect(windowTitle).toBe('bravo.emod — Emod Diagram Viewer');
   });
 });
 
@@ -850,10 +957,12 @@ describe('what the window names', () => {
     expect(document.getElementById('diagram-canvas').innerHTML).toContain('TakePayment');
   });
 
-  // A dropped file is a file the model came from, so the window takes its name
-  // — but the drop carries no location, so there is no path to show and none to
-  // save back to.
-  it('names the dropped file and hides the path, which a drop does not carry', async () => {
+  // A dropped file is a file the model came from, so the window takes its name.
+  // A drop the page reads itself yields contents and no location, which is what
+  // the browser build gets — so there is no path to show and none to save back
+  // to. A host that resolves the drop supplies one, and the leaves above cover
+  // that.
+  it('names a file the page read from a drop, and hides the path such a drop lacks', async () => {
     globalThis.INITIAL_DATA = null;
     parseResult = { diagnostics: [], diagram: billingDiagram() };
     await startViewer();
@@ -1497,7 +1606,8 @@ describe('the window says whether there are unsaved edits', () => {
   });
 
   // A dropped file is on disk exactly as it arrived, so nothing about it is
-  // unsaved — the app just has no location to write it back to.
+  // unsaved — and when the page read it itself there is no location to write it
+  // back to either.
   it('leaves a freshly dropped model unmarked, having changed nothing about it', async () => {
     globalThis.INITIAL_DATA = null;
     parseResult = { diagnostics: [], diagram: billingDiagram() };
@@ -2181,6 +2291,24 @@ describe('the platform seam has one contract', () => {
 
   it('is satisfied by the desktop implementation', () => {
     expect(desktop).toEqual(contract);
+  });
+});
+
+// A shell that resolves drops natively finds its drop target by walking up from
+// whatever sits under the cursor, and discards the drop in silence when it finds
+// none — so the page has to say where one may be released, and the answer is
+// anywhere in the window. The panel body the browser listens on cannot be it: a
+// successful render collapses the panel, which takes its body off screen. The
+// attribute is inert in the builds no such shell serves.
+describe('the page says where a file may be dropped', () => {
+  const markup = readFileSync(resolve(__dirname, '../static/viewer.html'), 'utf-8');
+
+  it('marks the element every other one sits inside', () => {
+    expect(markup).toMatch(/<body[^>]*\sdata-file-drop-target[\s>]/);
+  });
+
+  it('marks nothing narrower, which would leave the rest of the window dead', () => {
+    expect(markup.match(/data-file-drop-target/g)).toHaveLength(1);
   });
 });
 

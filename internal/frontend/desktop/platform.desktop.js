@@ -29,31 +29,71 @@ function exportEmod(diagram) {
   });
 }
 
-// A webview reads a dropped file the same way a browser does, so this is the
-// browser implementation and path is left empty. A native drop can name the
-// file's real location, which is the thing worth adding here — the empty path
-// is a gap, not a property of the platform.
-function droppedFiles(dataTransfer) {
-  return Array.from(dataTransfer.files).map(function(file) {
-    return {
-      name: file.name,
-      read: function() {
-        return new Promise(function(resolve) {
-          const reader = new FileReader();
-          reader.onload = function(e) {
-            resolve({ name: file.name, path: '', content: e.target.result });
-          };
-          reader.onerror = function() { resolve({ error: 'Failed to read file' }); };
-          reader.readAsText(file);
-        });
-      },
-    };
-  });
+// The shell's own drag destination takes a file drag before the webview can see
+// it, so on the platforms that behave that way a DOM drop carries nothing to
+// read. Windows is the exception and still delivers one — and it is answered the
+// same way on purpose, because the shell resolves those files to paths as well
+// and reading both would open the dropped model twice.
+function droppedFiles() {
+  return [];
 }
 
-// The shell has no drop of its own to push yet, so the handler is accepted and
-// never called and a drop still arrives at the page's own listener.
-function onFilesDropped() {}
+// Every gesture that names a model to open is numbered — an Open and a drop
+// alike — because each is asynchronous and nothing stops a second arriving while
+// the first is in flight. Without this the file whose chain resolves last wins,
+// which is not necessarily the one the user asked for last.
+//
+// The two are numbered together rather than apart: an Open resolves a picker and
+// a read before it can deliver, a drop delivers as soon as the shell names the
+// paths, so a counter per entry point would let an Open requested first land on
+// top of a drop made after it.
+let latestGesture = 0;
+
+let filesDroppedHandler = null;
+
+function onFilesDropped(handler) {
+  filesDroppedHandler = handler;
+}
+
+// What the shell resolved a drop to, which is the thing a webview's own file
+// list cannot carry: the real location of each file, and so the location a
+// following Save writes back to. The name is pinned against the Go side by
+// internal/desktop's event-name guard.
+Events.On('file:dropped', function(event) { return deliverDrop(event.data); });
+
+function deliverDrop(paths) {
+  // The shell answers nothing when it resolved no file, and a drop it discarded
+  // is not one the viewer has to be told about.
+  if (!filesDroppedHandler || !paths || paths.length === 0) {
+    return undefined;
+  }
+  // Claimed even though nothing here is read: naming the model is the whole of
+  // this gesture, so it supersedes an Open still resolving its own.
+  latestGesture++;
+
+  return filesDroppedHandler(paths.map(droppedFileAt));
+}
+
+// Naming the file and reading it are separate so the viewer can refuse a drop by
+// name without the shell going to disk for a model it will not open. The read
+// answers the service's own record of the file rather than anything derived
+// here, so the path a save writes back to is the one the service resolved.
+function droppedFileAt(path) {
+  return {
+    name: baseName(path),
+    read: function() {
+      return FileService.Read(path).then(JSON.parse).catch(function(err) {
+        return { error: err.message || String(err) };
+      });
+    },
+  };
+}
+
+function baseName(path) {
+  const lastSeparator = Math.max(path.lastIndexOf('/'), path.lastIndexOf('\\'));
+
+  return lastSeparator === -1 ? path : path.slice(lastSeparator + 1);
+}
 
 // Writing the file where the user keeps it is the thing a native shell can do
 // and a browser cannot. A path means the caller already knows where, so nothing
@@ -291,14 +331,8 @@ function proceedTo(leave) {
 // internal/desktop's event-name guard, because nothing else connects the two.
 Events.On('file:open-requested', promptForFile);
 
-// Requests are numbered because the picker and the read are both asynchronous
-// and nothing stops a second Open being asked for while the first is still in
-// flight — without this the file whose chain resolves last wins, which is not
-// necessarily the one chosen last.
-let latestRequest = 0;
-
 function promptForFile() {
-  const request = ++latestRequest;
+  const gesture = ++latestGesture;
 
   return Dialogs.OpenFile({
     Title: 'Open model',
@@ -318,7 +352,7 @@ function promptForFile() {
     // message, reporting a frontend bug to the user as a file-read failure.
     return { error: err.message || String(err) };
   }).then(function(opened) {
-    if (opened && request === latestRequest) {
+    if (opened && gesture === latestGesture) {
       deliverFile(opened);
     }
   });

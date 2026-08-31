@@ -175,29 +175,29 @@ the DOM, since a native drop no longer arrives that way and, on Windows, doing b
 same file twice.
 
 **Acceptance Criteria:**
-- [ ] The window is built with native file drop enabled and a window-filling element carries the
+- [x] The window is built with native file drop enabled and a window-filling element carries the
       attribute the framework's drop handler looks for — so a drop lands wherever it is released in the
       window, including while the data panel is collapsed. The attribute is inert in the CLI and web
       builds, which load the same markup.
-- [ ] The shell listens for the framework's files-dropped window event and emits one event to the
+- [x] The shell listens for the framework's files-dropped window event and emits one event to the
       frontend carrying the dropped paths; the frontend subscribes to that name. `task test:unit`
       passes, which is what proves the two names are one set.
-- [ ] Delivering that event with a path answers the viewer a file whose name is the path's base name,
+- [x] Delivering that event with a path answers the viewer a file whose name is the path's base name,
       whose path is the path, and whose contents come from `FileService.Read` — driven through the
       subscription the shell would fire, not by calling an exported helper.
-- [ ] A delivered drop whose read the service refuses reports the service's own reason rather than a
+- [x] A delivered drop whose read the service refuses reports the service's own reason rather than a
       generic one.
-- [ ] A DOM drop event on the desktop build yields no file, so a build that receives both a native drop
+- [x] A DOM drop event on the desktop build yields no file, so a build that receives both a native drop
       and a DOM drop opens the file once.
-- [ ] With `task build:desktop` built and `./bin/emod-desktop` running: dragging a `.emod` file from
+- [x] With `task build:desktop` built and `./bin/emod-desktop` running: dragging a `.emod` file from
       the file manager onto the window renders it, the window title and the bottom bar name it and show
       its real path, and File ▸ Save then writes back to that file with no dialog and confirms in the
       bottom bar. (C1, C2)
-- [ ] In the same running app: dropping a file whose name ends in neither extension reports
+- [x] In the same running app: dropping a file whose name ends in neither extension reports
       `Only .emod and .json files are supported` and leaves the model on screen (C3); dropping several
       files at once opens the first supported one and names it (C5); dropping onto a window holding
       unsaved changes raises the unsaved-changes dialog and honours all three answers (C4).
-- [ ] In the same running app: dragging a node and panning the canvas still work with file drop enabled.
+- [x] In the same running app: dragging a node and panning the canvas still work with file drop enabled.
 
 **Affected Files/Modules:**
 - `cmd/emod-desktop/main.go` — the window option, and the listener that turns the framework's window event into the frontend event

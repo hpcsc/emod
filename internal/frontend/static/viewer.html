@@ -1104,7 +1104,13 @@ header .model-name span {
 }
 </style>
 </head>
-<body>
+<!-- A shell that resolves file drops natively looks for this attribute on an
+     ancestor of whatever sits under the cursor, and discards a drop that finds
+     none without saying so. It is on the body because a model may be released
+     anywhere in the window: the panel body the page's own drop listener watches
+     is off screen whenever the panel is collapsed, which it is after every
+     successful render. Nothing reads it in the CLI or web builds. -->
+<body data-file-drop-target>
 
 <header>
   <div>

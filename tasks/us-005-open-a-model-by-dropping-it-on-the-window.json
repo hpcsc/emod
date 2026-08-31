@@ -34,7 +34,7 @@
     },
     {
       "n": 2,
-      "done": false,
+      "done": true,
       "title": "Carry a native drop's real paths from the shell to the viewer",
       "language": "JavaScript",
       "testable": true,
