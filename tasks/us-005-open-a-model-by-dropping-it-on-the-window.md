@@ -238,15 +238,15 @@ target with its own class while a file is over it; the stylesheet answers that c
 the viewer already has.
 
 **Acceptance Criteria:**
-- [ ] The shared stylesheet paints the framework's active-drop-target class on the drop-target element
+- [x] The shared stylesheet paints the framework's active-drop-target class on the drop-target element
       with the same overlay text and the same border, tint and colour the existing drag-over rule uses;
       a leaf reads both rules out of `viewer.html` and requires them to agree, and fails if either
       drifts. (C6)
-- [ ] The overlay sits above the panels and the canvas and takes no pointer events, so it cannot
+- [x] The overlay sits above the panels and the canvas and takes no pointer events, so it cannot
       intercept the drop it is announcing.
-- [ ] The browser viewer's own drag-over overlay is unchanged — its rule, its wording and the element it
+- [x] The browser viewer's own drag-over overlay is unchanged — its rule, its wording and the element it
       paints on are the same as before this task.
-- [ ] With `./bin/emod-desktop` running: dragging a file over the window shows the overlay, moving the
+- [x] With `./bin/emod-desktop` running: dragging a file over the window shows the overlay, moving the
       drag out of the window clears it, and releasing the file clears it and opens the model. (C6)
 
 **Affected Files/Modules:**

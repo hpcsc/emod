@@ -65,7 +65,7 @@
     },
     {
       "n": 3,
-      "done": false,
+      "done": true,
       "title": "Paint the native drop target with the viewer's own drop overlay",
       "language": "JavaScript",
       "testable": true,

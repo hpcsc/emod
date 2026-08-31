@@ -525,9 +525,14 @@ header .model-name span {
   overflow-y: auto;
   flex: 1 1 auto;
 }
-#data-panel-body.drag-over::after {
+/* Two drop regions, one affordance. The page marks the panel body itself while
+   a file is dragged over it; a shell that resolves drops natively never lets
+   those events reach the page and marks its own drop target — the body — with a
+   class of its own instead. Painting both from one rule is what stops the two
+   surfaces drifting into overlays that look nothing alike. */
+#data-panel-body.drag-over::after,
+body.file-drop-target-active::after {
   content: "Drop .emod or .json file here";
-  position: absolute;
   inset: 0;
   display: flex;
   align-items: center;
@@ -538,8 +543,21 @@ header .model-name span {
   font-size: 15px;
   font-weight: 600;
   color: #3498db;
-  z-index: 1;
   pointer-events: none;
+}
+
+#data-panel-body.drag-over::after {
+  position: absolute;
+  z-index: 1;
+}
+
+/* Fixed rather than absolute because the body is a static flex container: an
+   absolutely positioned pseudo-element would take the initial containing block
+   and stay put while the window resized. Above everything so a drop is still
+   announced over an open menu, a tooltip or the detail panel. */
+body.file-drop-target-active::after {
+  position: fixed;
+  z-index: 3000;
 }
 
 #landing-instructions {

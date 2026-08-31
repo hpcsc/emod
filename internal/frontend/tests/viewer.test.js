@@ -2312,6 +2312,83 @@ describe('the page says where a file may be dropped', () => {
   });
 });
 
+// A shell that resolves drops natively marks its own drop target with a class of
+// its own while a file is over it, and the page's dragover listeners never run —
+// so the affordance a user sees over the window is painted off that class rather
+// than off the one the browser viewer sets. Both are painted by one rule, so the
+// two cannot drift into two different-looking overlays.
+describe('the drop affordance', () => {
+  const markup = readFileSync(resolve(__dirname, '../static/viewer.html'), 'utf-8');
+
+  // The stylesheet as a list of {selectors, declarations}, so a rule is found by
+  // the whole of what it selects rather than by the first place a selector's
+  // text happens to appear — which for these two is each other's selector list.
+  const rules = [...markup.matchAll(/([^{}]+)\{([^{}]*)\}/g)].map((m) => ({
+    selectors: m[1].trim(),
+    declarations: m[2],
+  }));
+  const ruleSelecting = (...required) => rules.filter(
+    (rule) => required.every((selector) => rule.selectors.includes(selector)),
+  );
+
+  const shared = ruleSelecting('#data-panel-body.drag-over::after', 'body.file-drop-target-active::after');
+  const windowWide = ruleSelecting('body.file-drop-target-active::after')
+    .filter((rule) => !rule.selectors.includes('#data-panel-body'));
+
+  it('splits the stylesheet into rules, so the lookups below are not reading one blob', () => {
+    expect(rules.length).toBeGreaterThan(50);
+  });
+
+  it('paints the window-wide overlay and the panel\'s from one rule', () => {
+    expect(shared).toHaveLength(1);
+  });
+
+  it('says what may be dropped, in the wording the browser viewer has always used', () => {
+    expect(shared[0].declarations).toContain('content: "Drop .emod or .json file here"');
+  });
+
+  it('lets the drop through rather than intercepting the one it announces', () => {
+    expect(shared[0].declarations).toContain('pointer-events: none');
+  });
+
+  // A static flex container is not a containing block, so absolute would hand
+  // the overlay the initial one and leave it behind on a resize.
+  it('covers the window rather than a block inside it', () => {
+    expect(windowWide).toHaveLength(1);
+    expect(windowWide[0].declarations).toContain('position: fixed');
+  });
+
+  // Named rather than compared against every z-index in the file: an unrelated
+  // rule in another stacking context gaining a higher value says nothing about
+  // whether a drop is still announced over the chrome it can be released on top
+  // of, and a leaf that failed for that would be blaming the wrong rule.
+  it('sits above the chrome a file can be released on top of', () => {
+    const depthOf = (declarations) => Number((declarations.match(/z-index:\s*(\d+)/) || [])[1]);
+    const overlayDepth = depthOf(windowWide[0].declarations);
+    const covered = ['#ctx-menu', '#detail-panel', '#tooltip', '#data-panel'];
+
+    covered.forEach((selector) => {
+      const owning = rules.filter(
+        (rule) => rule.selectors.split(',').some((one) => one.trim() === selector),
+      );
+      expect(owning, `${selector} must have a rule of its own`).toHaveLength(1);
+      expect(depthOf(owning[0].declarations), `${selector} must state a depth`).not.toBeNaN();
+      expect(overlayDepth).toBeGreaterThan(depthOf(owning[0].declarations));
+    });
+  });
+
+  // The browser viewer keeps its own drop region: the panel body is where its
+  // listeners are and where its highlight has always been.
+  it('leaves the panel body painting the browser viewer\'s own drop region', () => {
+    const panelOnly = ruleSelecting('#data-panel-body.drag-over::after')
+      .filter((rule) => !rule.selectors.includes('file-drop-target-active'));
+
+    expect(panelOnly).toHaveLength(1);
+    expect(panelOnly[0].declarations).toContain('position: absolute');
+    expect(shared[0].declarations).toContain('inset: 0');
+  });
+});
+
 describe('viewer legend', () => {
   it('opens and closes the legend from the toolbar, and closes it from the panel', async () => {
     await startViewer();
