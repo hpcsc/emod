@@ -16,6 +16,7 @@ let initialStateFails = false;
 let parseQueue = [];
 let windowTitle = '';
 let deliverFile = null;
+let deliverDroppedFiles = null;
 let saveAnswer = null;
 let saveFails = null;
 let saveHangs = null;
@@ -55,17 +56,13 @@ vi.mock('../static/platform.js', () => ({
       : Promise.resolve(unsavedEditsAnswer);
   }),
   onFileOpened: vi.fn((handler) => { deliverFile = handler; }),
-  droppedFile: vi.fn((dataTransfer) => {
-    const file = dataTransfer.files[0];
-    if (!file) return null;
-    return {
-      name: file.name,
-      path: '',
-      read: () => dropReadFails
-        ? Promise.reject(new Error('Failed to read file'))
-        : Promise.resolve(file._content || ''),
-    };
-  }),
+  onFilesDropped: vi.fn((handler) => { deliverDroppedFiles = handler; }),
+  droppedFiles: vi.fn((dataTransfer) => Array.from(dataTransfer.files).map((file) => ({
+    name: file.name,
+    read: () => Promise.resolve(dropReadFails
+      ? { error: 'Failed to read file' }
+      : { name: file.name, path: '', content: file._content || '' }),
+  }))),
 }));
 
 function createRequiredElements() {
@@ -115,11 +112,9 @@ function createRequiredElements() {
   return container;
 }
 
-function fireDrop(element, file) {
+function fireDrop(element, ...files) {
   const evt = new Event('drop', { bubbles: true, cancelable: true });
-  Object.defineProperty(evt, 'dataTransfer', {
-    value: { files: file ? [file] : [] },
-  });
+  Object.defineProperty(evt, 'dataTransfer', { value: { files } });
   element.dispatchEvent(evt);
   return evt;
 }
@@ -241,6 +236,7 @@ beforeEach(() => {
   parseQueue = [];
   windowTitle = '';
   deliverFile = null;
+  deliverDroppedFiles = null;
   saveAnswer = null;
   saveFails = null;
   saveHangs = null;
@@ -534,6 +530,162 @@ describe('viewer drag-and-drop', () => {
 
     expect(document.getElementById('source-input').value).toBe(jsonContent);
     expect(document.getElementById('diagram-canvas').innerHTML).toContain('TakePayment');
+  });
+
+  // A drop is one gesture and opens one model, so several files are a choice
+  // rather than an error — and the ones ahead of the chosen file are skipped
+  // rather than refusing the whole drop.
+  it('opens the first model file the drop carried, past the ones it cannot open', async () => {
+    globalThis.INITIAL_DATA = null;
+    parseResult = { diagnostics: [], diagram: { ...billingDiagram(), model_name: 'Hotel' } };
+    await startViewer();
+
+    const notes = new File([''], 'notes.txt');
+    notes._content = 'plain text';
+    const hotel = new File([''], 'hotel.emod');
+    hotel._content = 'emod 1\nmodel "Hotel"\n';
+    const other = new File([''], 'other.emod');
+    other._content = 'emod 1\nmodel "Other"\n';
+    fireDrop(document.getElementById('data-panel-body'), notes, hotel, other);
+    await flush();
+    await flush();
+
+    expect(document.getElementById('source-input').value).toBe('emod 1\nmodel "Hotel"\n');
+    expect(windowTitle).toBe('hotel.emod — Emod Diagram Viewer');
+  });
+
+  // The status area lives in the panel a successful render collapses, and a drop
+  // comes from outside the page — so a refusal written there without revealing it
+  // is a drop that appears to do nothing at all.
+  it('reveals the panel holding the reason a dropped file was refused', async () => {
+    globalThis.INITIAL_DATA = { diagram: billingDiagram() };
+    await startViewer();
+    expect(document.getElementById('data-panel').classList.contains('collapsed')).toBe(true);
+
+    const notes = new File([''], 'notes.txt');
+    notes._content = 'plain text';
+    fireDrop(document.getElementById('data-panel-body'), notes);
+
+    expect(document.getElementById('render-status').textContent)
+      .toBe('✗ Only .emod and .json files are supported');
+    expect(document.getElementById('data-panel').classList.contains('collapsed')).toBe(false);
+    expect(document.getElementById('diagram-canvas').innerHTML).toContain('TakePayment');
+  });
+
+  // The parser's own empty-source rejection is written for someone who pressed
+  // Render on an empty panel, which is not what happened here.
+  it('reports a dropped file with nothing in it by name, as the dialog route does', async () => {
+    globalThis.INITIAL_DATA = { diagram: billingDiagram() };
+    await startViewer();
+
+    const empty = new File([''], 'empty.emod');
+    empty._content = '   ';
+    fireDrop(document.getElementById('data-panel-body'), empty);
+    await flush();
+
+    expect(document.getElementById('render-status').textContent).toBe('✗ empty.emod is empty');
+    expect(document.getElementById('diagram-canvas').innerHTML).toContain('TakePayment');
+  });
+});
+
+// A host that resolves a drop itself pushes the files at the page, the way it
+// pushes a file its own dialog opened. Nothing pushes in the browser, so this
+// drives the handler the viewer registered — which is the same routine the
+// page's own drop listener feeds.
+describe('files a host drops on the window', () => {
+  const hotelOnDisk = {
+    name: 'hotel.emod',
+    path: '/models/hotel.emod',
+    content: 'emod 1\nmodel "Hotel"\n',
+  };
+
+  const handleFor = (name, opened) => ({ name, read: () => Promise.resolve(opened) });
+
+  async function startHotel() {
+    globalThis.INITIAL_DATA = null;
+    parseResult = { diagnostics: [], diagram: { ...billingDiagram(), model_name: 'Hotel' } };
+    await startViewer();
+  }
+
+  it('renders the dropped model and names the file it opened', async () => {
+    await startHotel();
+
+    await deliverDroppedFiles([handleFor('hotel.emod', hotelOnDisk)]);
+    await flush();
+
+    expect(document.getElementById('source-input').value).toBe(hotelOnDisk.content);
+    expect(windowTitle).toBe('hotel.emod — Emod Diagram Viewer');
+    expect(document.getElementById('stat-file-path').textContent).toBe('/models/hotel.emod');
+  });
+
+  it('writes a following save back to the dropped file with no location dialog', async () => {
+    await startHotel();
+    await deliverDroppedFiles([handleFor('hotel.emod', hotelOnDisk)]);
+    await flush();
+    saveAnswer = { name: 'hotel.emod', path: '/models/hotel.emod' };
+
+    await save();
+
+    expect(savedFile).toEqual({
+      name: 'hotel.emod',
+      content: hotelOnDisk.content,
+      path: '/models/hotel.emod',
+    });
+  });
+
+  it('opens the first model file pushed, past the ones it cannot open', async () => {
+    await startHotel();
+
+    await deliverDroppedFiles([
+      handleFor('notes.txt', { name: 'notes.txt', path: '/notes.txt', content: 'plain' }),
+      handleFor('hotel.emod', hotelOnDisk),
+    ]);
+    await flush();
+
+    expect(windowTitle).toBe('hotel.emod — Emod Diagram Viewer');
+  });
+
+  it('refuses a push carrying no model file and leaves the model on screen', async () => {
+    globalThis.INITIAL_DATA = { diagram: billingDiagram() };
+    await startViewer();
+
+    await deliverDroppedFiles([
+      handleFor('notes.txt', { name: 'notes.txt', path: '/notes.txt', content: 'plain' }),
+    ]);
+    await flush();
+
+    expect(document.getElementById('render-status').textContent)
+      .toBe('✗ Only .emod and .json files are supported');
+    expect(document.getElementById('diagram-canvas').innerHTML).toContain('TakePayment');
+  });
+
+  // The reason a host could not read the file it resolved is the host's to give:
+  // a generic one would hide a permission or an encoding it already named.
+  it('reports the reason the host gave for a file it could not read', async () => {
+    globalThis.INITIAL_DATA = { diagram: billingDiagram() };
+    await startViewer();
+
+    await deliverDroppedFiles([
+      handleFor('hotel.emod', { error: 'reading /models/hotel.emod: permission denied' }),
+    ]);
+    await flush();
+
+    expect(document.getElementById('render-status').textContent)
+      .toContain('reading /models/hotel.emod: permission denied');
+    expect(document.getElementById('diagram-canvas').innerHTML).toContain('TakePayment');
+  });
+
+  it('asks about unsaved edits before it replaces the model on screen', async () => {
+    await openBilling();
+    typeIntoPanel('emod 1\nmodel "Billing Edited"\n');
+    unsavedEditsAnswer = 'cancel';
+
+    await deliverDroppedFiles([handleFor('hotel.emod', hotelOnDisk)]);
+    await flush();
+
+    expect(unsavedEditsAsked).toBe(1);
+    expect(document.getElementById('source-input').value).toBe('emod 1\nmodel "Billing Edited"\n');
+    expect(windowTitle).toBe('billing.emod — Emod Diagram Viewer');
   });
 });
 
@@ -2017,9 +2169,9 @@ describe('the platform seam has one contract', () => {
 
   it('names every host operation the shared modules reach for', () => {
     expect(contract).toEqual(
-      ['droppedFile', 'exportEmod', 'initialState', 'isReady', 'onFileOpened', 'onLeaveRequested',
-       'onSaveRequested', 'parseEmod', 'ready', 'resolveUnsavedEdits', 'saveFile', 'setWindowModified',
-       'setWindowTitle'],
+      ['droppedFiles', 'exportEmod', 'initialState', 'isReady', 'onFileOpened', 'onFilesDropped',
+       'onLeaveRequested', 'onSaveRequested', 'parseEmod', 'ready', 'resolveUnsavedEdits', 'saveFile',
+       'setWindowModified', 'setWindowTitle'],
     );
   });
 

@@ -9,7 +9,7 @@ import { CtxActions } from './ctx-actions.js';
 import { Model } from './model.js';
 import { bus } from './bus.js';
 import { Export } from './emod-export.js';
-import { ready, isReady, droppedFile, saveFile, setWindowTitle, setWindowModified, resolveUnsavedEdits, onFileOpened, onSaveRequested, onLeaveRequested, initialState } from './platform.js';
+import { ready, isReady, droppedFiles, saveFile, setWindowTitle, setWindowModified, resolveUnsavedEdits, onFileOpened, onFilesDropped, onSaveRequested, onLeaveRequested, initialState } from './platform.js';
 
 // ─── Event subscriptions ─────────────────────────────────────────────
 bus.on('data:changed', function({ store: s }) {
@@ -342,46 +342,66 @@ function init() {
     evt.preventDefault();
     evt.stopPropagation();
     store.dom.panelBody.classList.remove("drag-over");
-    const file = droppedFile(evt.dataTransfer);
-    if (!file) return;
-    const name = file.name.toLowerCase();
-    if (!name.endsWith('.emod') && !name.endsWith('.json')) {
-      store.dom.statusEl.textContent = '✗ Only .emod and .json files are supported';
-      store.dom.statusEl.className = 'status error';
-      return;
-    }
-    file.read().then(function(content) {
-      openModel(content, { name: file.name, path: '', content: content });
-    }).catch(function() {
-      store.dom.statusEl.textContent = '✗ Failed to read file';
-      store.dom.statusEl.className = 'status error';
-    });
+    openDroppedFiles(droppedFiles(evt.dataTransfer));
   });
 
+  // A host that resolves a drop itself pushes the files here instead, because a
+  // native drop never reaches the page as a DOM event. Both arrive at the same
+  // routine, which is what makes a dropped model open exactly as a chosen one
+  // does rather than by a second copy of the policy agreeing with the first.
+  onFilesDropped(openDroppedFiles);
+
+  // A drop is one gesture and opens one model, so the files it carried are a
+  // choice rather than a list: the first that names a model is opened and the
+  // rest are left alone. Refusing the whole drop over an unsupported file ahead
+  // of a supported one would make the order files happen to arrive in decide
+  // whether the gesture works.
+  function openDroppedFiles(files) {
+    const chosen = files.filter(namesAModel)[0];
+    if (!chosen) {
+      reportHostFailure('Only .emod and .json files are supported');
+
+      return Promise.resolve();
+    }
+
+    return Promise.resolve(chosen.read()).then(openDeliveredFile);
+  }
+
+  function namesAModel(file) {
+    const name = file.name.toLowerCase();
+
+    return name.endsWith('.emod') || name.endsWith('.json');
+  }
+
   // ─── A file the host opened ───────────────────────────────────────
-  onFileOpened(function(opened) {
-    // The status area lives in the panel a successful render collapses, and an
-    // open request comes from outside the page — so every failure here has to
-    // reveal that panel, or choosing a file from the OS dialog appears to do
-    // nothing at all.
+  onFileOpened(openDeliveredFile);
+
+  function openDeliveredFile(opened) {
+    // The status area lives in the panel a successful render collapses, and a
+    // file the host resolved arrives from outside the page — so every failure
+    // here has to reveal that panel, or choosing a file from the OS dialog, or
+    // dropping one on the window, appears to do nothing at all.
     if (opened.error) {
       reportHostFailure(opened.error);
-      return;
+
+      return Promise.resolve();
     }
     // A file with nothing in it reads successfully and then reaches the parser's
     // own empty-source rejection, whose message is written for someone who
     // pressed Render on an empty panel rather than someone who chose a file.
     if (!opened.content.trim()) {
       reportHostFailure(opened.name + " is empty");
-      return;
+
+      return Promise.resolve();
     }
-    openModel(opened.content, { name: opened.name, path: opened.path, content: opened.content })
+
+    return openModel(opened.content, { name: opened.name, path: opened.path, content: opened.content })
       .then(function() {
         if (store.dom.statusEl.className.indexOf("error") !== -1) {
           store.dom.panel.classList.remove("collapsed");
         }
       });
-  });
+  }
 
   // ─── Saving ───────────────────────────────────────────────────────
   function clearSaveConfirmation() {

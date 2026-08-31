@@ -1,7 +1,7 @@
 import { describe, it, expect, vi, beforeAll, beforeEach } from 'vitest';
 
 // Drives the real desktop implementation against a stand-in for the bindings
-// the desktop build generates. Without this only droppedFile ran, so nothing
+// the desktop build generates. Without this only droppedFiles ran, so nothing
 // would notice saveFile resolving silently, exportEmod losing its error check,
 // or parseEmod sending an envelope shape the Go service does not accept.
 let desktop;

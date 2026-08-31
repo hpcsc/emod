@@ -1,0 +1,109 @@
+{
+  "story": "US-005: Open a model by dropping it on the window",
+  "tasks_file": "tasks/us-005-open-a-model-by-dropping-it-on-the-window.md",
+  "tasks": [
+    {
+      "n": 1,
+      "done": true,
+      "title": "Route every dropped file through the host-opened-file delivery",
+      "language": "JavaScript",
+      "testable": true,
+      "certainty": "medium",
+      "blast_radius": "low",
+      "patterns_to_follow": [
+        "internal/frontend/static/viewer.js:360-385",
+        "internal/frontend/static/viewer.js:286-293",
+        "internal/frontend/static/viewer.js:326-358",
+        "internal/frontend/static/platform.js",
+        "internal/frontend/static/platform.browser.js",
+        "internal/frontend/tests/viewer.test.js:1998-2033",
+        "internal/frontend/tests/viewer.test.js:1834-1880",
+        "internal/frontend/tests/viewer.test.js:481-540",
+        "internal/frontend/tests/dropped-file.test.js",
+        "tasks/learnings.md"
+      ],
+      "depends_on": [],
+      "affected_files": [
+        "internal/frontend/static/platform.js",
+        "internal/frontend/static/platform.browser.js",
+        "internal/frontend/desktop/platform.desktop.js",
+        "internal/frontend/static/viewer.js",
+        "internal/frontend/tests/viewer.test.js",
+        "internal/frontend/tests/dropped-file.test.js"
+      ]
+    },
+    {
+      "n": 2,
+      "done": false,
+      "title": "Carry a native drop's real paths from the shell to the viewer",
+      "language": "JavaScript",
+      "testable": true,
+      "certainty": "medium",
+      "blast_radius": "high",
+      "patterns_to_follow": [
+        "cmd/emod-desktop/main.go:100-125",
+        "internal/frontend/desktop/platform.desktop.js",
+        "internal/frontend/tests/platform.desktop.test.js:296-405",
+        "internal/desktop/event_names_test.go",
+        "internal/desktop/file_service.go",
+        "internal/frontend/static/viewer.html:1183-1195",
+        "internal/frontend/tests/wails-runtime-stub.js",
+        "tasks/learnings.md",
+        "task:1"
+      ],
+      "depends_on": [
+        1
+      ],
+      "affected_files": [
+        "cmd/emod-desktop/main.go",
+        "internal/frontend/static/viewer.html",
+        "internal/frontend/desktop/platform.desktop.js",
+        "internal/frontend/tests/platform.desktop.test.js",
+        "internal/frontend/tests/wails-runtime-stub.js",
+        "internal/frontend/tests/dropped-file.test.js"
+      ]
+    },
+    {
+      "n": 3,
+      "done": false,
+      "title": "Paint the native drop target with the viewer's own drop overlay",
+      "language": "JavaScript",
+      "testable": true,
+      "certainty": "high",
+      "blast_radius": "low",
+      "patterns_to_follow": [
+        "internal/frontend/static/viewer.html:522-544",
+        "internal/frontend/tests/legend.test.js:8",
+        "tasks/learnings.md"
+      ],
+      "depends_on": [
+        2
+      ],
+      "affected_files": [
+        "internal/frontend/static/viewer.html",
+        "internal/frontend/tests/viewer.test.js"
+      ]
+    },
+    {
+      "n": 4,
+      "done": false,
+      "title": "Document opening a model by dropping it",
+      "language": "Markdown",
+      "testable": false,
+      "certainty": "high",
+      "blast_radius": "low",
+      "patterns_to_follow": [
+        "README.md",
+        "docs/architecture.md",
+        "tasks/learnings.md"
+      ],
+      "depends_on": [
+        3
+      ],
+      "affected_files": [
+        "README.md",
+        "docs/architecture.md"
+      ]
+    }
+  ]
+}

@@ -33,24 +33,27 @@ function exportEmod(diagram) {
 // browser implementation and path is left empty. A native drop can name the
 // file's real location, which is the thing worth adding here — the empty path
 // is a gap, not a property of the platform.
-function droppedFile(dataTransfer) {
-  const file = dataTransfer.files[0];
-  if (!file) {
-    return null;
-  }
-  return {
-    name: file.name,
-    path: '',
-    read: function() {
-      return new Promise(function(resolve, reject) {
-        const reader = new FileReader();
-        reader.onload = function(e) { resolve(e.target.result); };
-        reader.onerror = function() { reject(new Error('Failed to read file')); };
-        reader.readAsText(file);
-      });
-    },
-  };
+function droppedFiles(dataTransfer) {
+  return Array.from(dataTransfer.files).map(function(file) {
+    return {
+      name: file.name,
+      read: function() {
+        return new Promise(function(resolve) {
+          const reader = new FileReader();
+          reader.onload = function(e) {
+            resolve({ name: file.name, path: '', content: e.target.result });
+          };
+          reader.onerror = function() { resolve({ error: 'Failed to read file' }); };
+          reader.readAsText(file);
+        });
+      },
+    };
+  });
 }
+
+// The shell has no drop of its own to push yet, so the handler is accepted and
+// never called and a drop still arrives at the page's own listener.
+function onFilesDropped() {}
 
 // Writing the file where the user keeps it is the thing a native shell can do
 // and a browser cannot. A path means the caller already knows where, so nothing
@@ -333,4 +336,4 @@ function initialState() {
   return Promise.resolve(null);
 }
 
-export { parseEmod, exportEmod, droppedFile, saveFile, setWindowTitle, setWindowModified, resolveUnsavedEdits, onFileOpened, onSaveRequested, onLeaveRequested, initialState, ready, isReady };
+export { parseEmod, exportEmod, droppedFiles, saveFile, setWindowTitle, setWindowModified, resolveUnsavedEdits, onFileOpened, onFilesDropped, onSaveRequested, onLeaveRequested, initialState, ready, isReady };

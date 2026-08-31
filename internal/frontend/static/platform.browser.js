@@ -68,27 +68,32 @@ function exportEmod(diagram) {
   }
 }
 
-// Naming the file and reading it are separate so a caller can refuse one by
-// name without paying for its contents. path is always empty here: a file the
-// browser hands over through a drop is content without a location, which is
-// why the browser build can only ever offer a model back as a download.
-function droppedFile(dataTransfer) {
-  const file = dataTransfer.files[0];
-  if (!file) {
-    return null;
-  }
-  return {
-    name: file.name,
-    path: '',
-    read: function() {
-      return new Promise(function(resolve, reject) {
-        const reader = new FileReader();
-        reader.onload = function(e) { resolve(e.target.result); };
-        reader.onerror = function() { reject(new Error('Failed to read file')); };
-        reader.readAsText(file);
-      });
-    },
-  };
+// Naming the files and reading one are separate so a caller can refuse a drop
+// by name without paying for its contents, and every file is answered because
+// which of them to open is the caller's choice.
+//
+// A read answers the same thing a host that opened a file answers — the file, or
+// the reason there is none — so one routine opens a dropped model and a chosen
+// one. It never rejects, because a reason is one of the answers. path is always
+// empty here: a file the browser hands over through a drop is content without a
+// location, which is why the browser build can only ever offer a model back as a
+// download.
+function droppedFiles(dataTransfer) {
+  return Array.from(dataTransfer.files).map(function(file) {
+    return {
+      name: file.name,
+      read: function() {
+        return new Promise(function(resolve) {
+          const reader = new FileReader();
+          reader.onload = function(e) {
+            resolve({ name: file.name, path: '', content: e.target.result });
+          };
+          reader.onerror = function() { resolve({ error: 'Failed to read file' }); };
+          reader.readAsText(file);
+        });
+      },
+    };
+  });
 }
 
 // A browser can only offer the file back as a download, so suggestedName is
@@ -129,6 +134,12 @@ function resolveUnsavedEdits() {
 // so this registers a handler that stays uncalled rather than being unfinished.
 function onFileOpened() {}
 
+// Nor does anything push a drop at the page: a browser delivers one to the
+// page's own listener, which reads it through droppedFiles. As with
+// onFileOpened the handler is accepted and never called, so the shared viewer
+// registers the same way whatever it runs on.
+function onFilesDropped() {}
+
 // Nor does anything in a browser ask the page to save: there is no menu bar and
 // no shell behind one. As with onFileOpened the handler is accepted and never
 // called, so the shared viewer registers the same way whatever it runs on.
@@ -148,4 +159,4 @@ function initialState() {
   return Promise.resolve(INITIAL_DATA);
 }
 
-export { parseEmod, exportEmod, droppedFile, saveFile, setWindowTitle, setWindowModified, resolveUnsavedEdits, onFileOpened, onSaveRequested, onLeaveRequested, initialState, ready, isReady };
+export { parseEmod, exportEmod, droppedFiles, saveFile, setWindowTitle, setWindowModified, resolveUnsavedEdits, onFileOpened, onFilesDropped, onSaveRequested, onLeaveRequested, initialState, ready, isReady };
