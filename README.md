@@ -389,8 +389,18 @@ the file's name while the bar along the bottom shows its full path. A file that
 will not parse cleanly still opens: the diagram shows what it can and the
 diagnostics panel lists the same errors `emod validate` reports. A file that
 cannot be read at all says why and leaves the model already on screen alone.
-This is the one thing the browser viewer cannot do: a file it reads through a
-drop carries contents and never a location.
+
+**Dragging a file onto the window** opens it exactly as choosing it through the
+picker does, from where it lives on disk: the window takes its name, the bar
+along the bottom shows its real path, and Save writes back there with no dialog.
+Release it anywhere in the window — an overlay says where it will land while a
+file is over it. A file whose name ends in neither extension reports `Only .emod
+and .json files are supported` and leaves the model on screen. Several files at
+once open the first `.emod` or `.json` among them, and the window names that one.
+A drop over unsaved changes goes through the same question every other way of
+replacing the model does. The browser viewer takes drops too, but reads them
+through the browser's own file reader, which yields contents and never a
+location — which is why it can only ever offer a model back as a download.
 
 **File ▸ Save** (⌘S, Ctrl+S) writes the model back to the file it was opened
 from — that exact path, no dialog — and confirms in the bar along the bottom.
@@ -427,10 +437,9 @@ requirement and a `tool` directive for the `wails3` CLI, so the two cannot
 drift and neither is resolved from `PATH`. Run the CLI as `go tool wails3`.
 
 What it does not do yet: a diagram edit does not reach the source panel and so
-is neither what Save writes nor what counts as an unsaved change; dropping a
-file on the window still reads its contents rather than its location, so it
-cannot be saved back to where it came from; no packaged `.app` or installer; and
-no prebuilt download, so it has to be built from source.
+is neither what Save writes nor what counts as an unsaved change; no packaged
+`.app` or installer; and no prebuilt download, so it has to be built from
+source.
 
 How the repository fits together — packages, the language pipeline, renderers,
 the viewer's three distributions and the editor grammars — is described in

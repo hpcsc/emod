@@ -224,11 +224,12 @@ natively.
 
 What differs between the runtimes is confined to one module. Every shared
 module imports `./platform.js` for the things a host provides rather than the
-UI: reaching the Go core, reading a dropped file, writing a model out, naming
-the window, showing it as holding unsaved work, asking what to do about that
-work before it would be lost, delivering a file the host opened, asking the
-viewer to save, asking whether the window may close, and answering what state
-the app opened with. `platform.browser.js` implements that over WebAssembly,
+UI: reaching the Go core, reading the files a drop handed the page, writing a
+model out, naming the window, showing it as holding unsaved work, asking what to
+do about that work before it would be lost, delivering a file the host opened,
+delivering the files a host resolved a drop to, asking the viewer to save,
+asking whether the window may close, and answering what state the app opened
+with. `platform.browser.js` implements that over WebAssembly,
 `fetch`, the browser's download and `document.title`, with three of them inert:
 a page has no window of its own to mark, no dialog whose Save writes anywhere,
 and no close it can refuse asynchronously. `platform.desktop.js` implements it
@@ -237,8 +238,8 @@ and a native question dialog.
 
 Which way a request travels is what the seam's two halves are for. The viewer
 calls out for anything it initiates; anything the *host* initiates — a menu
-item, a close the user asked for — arrives at a handler the viewer registered,
-and the viewer answers. That is why deciding what to do about unsaved work
+item, a file dropped on the window, a close the user asked for — arrives at a
+handler the viewer registered, and the viewer answers. That is why deciding what to do about unsaved work
 lives in the viewer for every entry point, including the shell's close and quit:
 the alternative is a second copy of that policy inside the adapter, reading its
 own shadow of state the viewer owns. Writing is where the two differ most:
@@ -275,11 +276,18 @@ flowchart LR
     DESK --> NATIVE["native window<br/><i>no WASM, no HTTP</i>"]
 ```
 
-Opening and saving run the other way round from the rest of the seam. The
-shell's File menu is native, so `cmd/emod-desktop` emits an event the desktop
-implementation subscribes to; that module raises the dialog where one is needed
-and reads or writes the path through `internal/desktop.FileService`, then hands
-the result to the handler the shared viewer registered. The dialogs live in
+Opening, dropping and saving run the other way round from the rest of the seam.
+The shell's File menu is native, so `cmd/emod-desktop` emits an event the desktop
+implementation subscribes to; a file dropped on the window arrives the same way,
+because the shell resolves the drag itself and answers real paths rather than
+handing the page contents — which is what lets a dropped model be saved back to
+where it came from, and why the desktop build reads nothing out of the page's own
+drop event, and why the page lets a drop it took nothing from travel on rather
+than consuming it. How the shell gets there differs by platform: some take the
+drag before the webview sees it at all, and the rest read it back out of the
+page's event. That module raises the dialog where one is needed and
+reads or writes the path through `internal/desktop.FileService`, then hands the
+result to the handler the shared viewer registered. The dialogs live in
 JavaScript rather than Go because `internal/desktop` imports no GUI framework —
 the constraint that keeps it compiling and testing everywhere the rest of the
 repository does — and because `cmd/emod-desktop` is in no test target, so the

@@ -279,16 +279,16 @@ delivery rather than as something the viewer reads out of a DOM event, and its c
 holding the language boundary together still matches what `internal/desktop` contains.
 
 **Acceptance Criteria:**
-- [ ] The README's desktop section says a `.emod` or `.json` file dropped on the window opens from where
+- [x] The README's desktop section says a `.emod` or `.json` file dropped on the window opens from where
       it lives and that Save then writes back there with no dialog, and states what happens to a drop of
       an unsupported file, a drop of several files, and a drop over unsaved changes.
-- [ ] The README no longer states that a dropped file cannot be saved back to where it came from; every
+- [x] The README no longer states that a dropped file cannot be saved back to where it came from; every
       remaining entry in its "what it does not do yet" list is still true of the working tree.
-- [ ] The architecture document's platform-seam section describes the drop as arriving at a handler the
+- [x] The architecture document's platform-seam section describes the drop as arriving at a handler the
       viewer registered, alongside the file the host opened, rather than as a dropped file the viewer
       reads; and its statement of how many guards hold the language boundary together agrees with the
       number of guard functions in `internal/desktop`.
-- [ ] Every ```emod fence added, if any, is a model `oracle.Check` reports nothing about — `task test:unit`
+- [x] Every ```emod fence added, if any, is a model `oracle.Check` reports nothing about — `task test:unit`
       passes.
 
 **Affected Files/Modules:**

@@ -86,7 +86,7 @@
     },
     {
       "n": 4,
-      "done": false,
+      "done": true,
       "title": "Document opening a model by dropping it",
       "language": "Markdown",
       "testable": false,
