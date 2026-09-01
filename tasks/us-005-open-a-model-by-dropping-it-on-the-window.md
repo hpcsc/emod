@@ -96,6 +96,31 @@ as scope breaches): once the browser and the desktop feed one routine, the brows
 route already gives. Both follow from C1 and C5 being satisfied without a second copy of the policy
 inside the desktop adapter.
 
+## Theory
+
+A drop and a file chosen from the File menu are the same event with two origins, so both
+arrive at one routine: `openDroppedFiles` picks the first file named `.emod` or `.json` and
+hands it to `openDeliveredFile` (`internal/frontend/static/viewer.js`), the same function the
+host's Open route already used — which is what makes a dropped model open exactly as a chosen
+one does rather than through a second copy of the policy. The seam gained `onFilesDropped`,
+the registration a host that resolves drops itself pushes through, beside the existing
+`onFileOpened`; `droppedFiles` still reads a drop the page was handed, and answers nothing on
+desktop because the shell resolves those paths instead.
+
+The decision that was not forced is where a file may be released. The browser viewer's drop
+target is its data panel, and copying that exactly would have been the literal reading — but a
+successful render collapses that panel off screen, and the framework discards in silence a drop
+that lands on no marked element, so the gesture would have failed in the state a user is
+normally in. The whole window carries the marker instead, and the affordance is kept identical
+by painting both regions from one stylesheet rule rather than two.
+
+Check the delivery ordering hardest. Two counters guard it and they sit on opposite sides of
+the boundary: `latestGesture` in `platform.desktop.js` numbers an Open and a drop together,
+because an Open reads before it can deliver while a drop delivers the moment the shell names
+the paths; `latestDelivery` in `viewer.js` numbers what the viewer itself reads. Getting either
+wrong puts an older model on screen and makes its path the one the next Save overwrites, and
+every window in which that can happen has looked closed twice already.
+
 ## Tasks
 
 ### Task 1: Route every dropped file through the host-opened-file delivery
