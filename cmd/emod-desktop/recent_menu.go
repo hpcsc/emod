@@ -2,7 +2,6 @@ package main
 
 import (
 	"log"
-	"sync"
 	"sync/atomic"
 
 	"github.com/wailsapp/wails/v3/pkg/application"
@@ -24,28 +23,43 @@ import (
 type recentMenu struct {
 	window    *application.WebviewWindow
 	items     *application.Menu
-	slots     []*application.MenuItem
+	shown     *desktop.RecentSlots
 	clear     *application.MenuItem
 	clearList func() error
 	running   atomic.Bool
-
-	mu    sync.Mutex
-	paths []string
 }
 
 var _ desktop.RecentMenu = (*recentMenu)(nil)
+var _ desktop.MenuSlot = menuSlot{}
 
-// clearList is called when Clear Menu is chosen, which can only be once the app
-// runs — so it may reach a service built after this menu, which it has to: the
-// service is constructed over this menu and shows it the saved list before
-// returning.
+// menuSlot is a framework item as desktop.MenuSlot sees it: the framework's
+// setters answer the item for chaining, and the interface's answer nothing.
+type menuSlot struct {
+	item *application.MenuItem
+}
+
+func (s menuSlot) SetLabel(label string) {
+	s.item.SetLabel(label)
+}
+
+func (s menuSlot) SetHidden(hidden bool) {
+	s.item.SetHidden(hidden)
+}
+
+// newRecentMenu builds the menu ahead of the service it clears through:
+// clearList is only called once the app runs, so it may reach a service built
+// after this menu, which it has to — the service is constructed over this menu
+// and shows it the saved list before returning.
 func newRecentMenu(window *application.WebviewWindow, clearList func() error) *recentMenu {
 	m := &recentMenu{window: window, items: application.NewMenu(), clearList: clearList}
+	var slots []desktop.MenuSlot
 	for slot := 0; slot < desktop.RecentFilesLimit; slot++ {
-		m.slots = append(m.slots, m.items.Add("").SetHidden(true).OnClick(func(*application.Context) {
+		item := m.items.Add("").SetHidden(true).OnClick(func(*application.Context) {
 			m.open(slot)
-		}))
+		})
+		slots = append(slots, menuSlot{item: item})
 	}
+	m.shown = desktop.NewRecentSlots(slots)
 	m.items.AddSeparator()
 	// A refused write leaves the list cleared and the menu showing it, and the
 	// next launch brings the entries back. Only the log can carry that from
@@ -80,35 +94,13 @@ func (m *recentMenu) Show(paths []string) {
 	application.InvokeAsync(func() { m.apply(paths) })
 }
 
-// The paths and the labels move together, in one turn of the main thread, so
-// the menu never shows one order over another. A click the main thread has
-// already dispatched when the list moves opens the entry now in that place;
-// the window's name says which.
 func (m *recentMenu) apply(paths []string) {
-	m.mu.Lock()
-	m.paths = append([]string(nil), paths...)
-	m.mu.Unlock()
-
-	labels := desktop.RecentLabels(paths)
-	for i, slot := range m.slots {
-		if i < len(labels) {
-			slot.SetLabel(labels[i])
-			slot.SetHidden(false)
-		} else {
-			slot.SetHidden(true)
-		}
-	}
+	m.shown.Show(paths)
 	m.clear.SetEnabled(len(paths) > 0)
 }
 
 func (m *recentMenu) open(slot int) {
-	m.mu.Lock()
-	path := ""
-	if slot < len(m.paths) {
-		path = m.paths[slot]
-	}
-	m.mu.Unlock()
-
+	path := m.shown.PathAt(slot)
 	if path == "" {
 		return
 	}
