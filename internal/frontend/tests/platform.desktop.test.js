@@ -20,10 +20,12 @@ beforeEach(async () => {
   // the previous test left in it, and where the record starts then depends on
   // the order the tests ran.
   stub.answers.SetModified = undefined;
+  stub.answers.Record = undefined;
   desktop.setWindowTitle('');
   await desktop.setWindowModified(false);
   stub.calls.length = 0;
   stub.landed.length = 0;
+  stub.recorded.length = 0;
   runtime.calls.length = 0;
   stub.answers.ParseEmod = '{"diagnostics":[],"diagram":{"nodes":[],"edges":[]}}';
   stub.answers.ExportEmod = '{"emod":"emod 1\\nmodel \\"Billing\\"\\n"}';
@@ -837,6 +839,55 @@ describe('the shell asking to close or quit', () => {
     await requestClose();
 
     expect(leaving()).toEqual([]);
+  });
+});
+
+// The shell keeps the list of what has been opened, and the page keeps no
+// record of what it has told the shell — so every file the viewer says it
+// opened is sent, in the order the viewer said so.
+describe('remembering an opened file', () => {
+  it('sends the file\'s path to the shell\'s list', async () => {
+    await desktop.rememberOpenedFile({ name: 'billing.emod', path: '/models/billing.emod' });
+
+    expect(stub.calls).toEqual([['Record', '/models/billing.emod']]);
+  });
+
+  it('sends the same file again when told again, keeping no record of its own', async () => {
+    await desktop.rememberOpenedFile({ name: 'billing.emod', path: '/models/billing.emod' });
+    await desktop.rememberOpenedFile({ name: 'billing.emod', path: '/models/billing.emod' });
+
+    expect(stub.recorded).toEqual(['/models/billing.emod', '/models/billing.emod']);
+  });
+
+  it('never lets a file remembered earlier land on the shell after one remembered later', async () => {
+    let releaseFirst;
+    stub.answers.Record = new Promise((resolve) => { releaseFirst = resolve; });
+
+    const first = desktop.rememberOpenedFile({ name: 'first.emod', path: '/models/first.emod' });
+    // The dispatch is a turn away, so the gate has to still be in the bag when
+    // it happens or the call it was meant to hold open sails straight through.
+    await flush();
+    stub.answers.Record = undefined;
+    const second = desktop.rememberOpenedFile({ name: 'second.emod', path: '/models/second.emod' });
+    // A second call the queue does not hold back lands right here, ahead of the
+    // first; one it does hold back cannot be sent until the first has landed.
+    await flush();
+    releaseFirst();
+    await Promise.all([first, second]);
+
+    expect(stub.recorded).toEqual(['/models/first.emod', '/models/second.emod']);
+  });
+
+  it('raises the shell\'s refusal to the caller, and still sends the file after it', async () => {
+    stub.answers.Record = new Error('writing recent-files.json: permission denied');
+
+    await expect(desktop.rememberOpenedFile({ name: 'first.emod', path: '/models/first.emod' }))
+      .rejects.toThrow('writing recent-files.json: permission denied');
+
+    stub.answers.Record = undefined;
+    await desktop.rememberOpenedFile({ name: 'second.emod', path: '/models/second.emod' });
+
+    expect(stub.recorded).toEqual(['/models/second.emod']);
   });
 });
 

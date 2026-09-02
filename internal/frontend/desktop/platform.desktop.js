@@ -4,7 +4,7 @@
 // web viewer and into the CLI binary. The desktop build assembles it into its
 // own frontend directory as platform.js.
 import { Application, Dialogs, Events, System, Window } from '/wails/runtime.js';
-import { FileService, ModelService, WindowService } from '../bindings/github.com/hpcsc/emod/internal/desktop/index.js';
+import { FileService, ModelService, RecentFiles, WindowService } from '../bindings/github.com/hpcsc/emod/internal/desktop/index.js';
 
 // The Go core is linked into the binary, so there is nothing to fetch and
 // nothing to wait for. The browser implementation's ready/isReady exist to gate
@@ -224,6 +224,24 @@ function markedTitle() {
   return '* ' + windowName;
 }
 
+// The shell keeps the list of models opened most recently, because the list
+// outlives this page: a reload starts the page over while the shell holds what
+// was opened for the life of the process. So nothing here remembers what the
+// shell has already been told, and every file is sent. The calls are queued,
+// because each is served its own goroutine and two in flight would land in
+// whichever order they finished — putting the model opened first at the top.
+// A refused recording is handed back to the viewer, which has somewhere to say
+// so; a refusal must not hold the next file behind it.
+let rememberQueue = Promise.resolve();
+
+function rememberOpenedFile(file) {
+  rememberQueue = rememberQueue.catch(function() {}).then(function() {
+    return RecentFiles.Record(file.path);
+  });
+
+  return rememberQueue;
+}
+
 // A question dialog answers with the label that was pressed, so the labels are
 // what the outcomes are read off. Anything else — a dialog dismissed some other
 // way, a platform that ignored the labels, a dialog that could not be shown at
@@ -370,4 +388,4 @@ function initialState() {
   return Promise.resolve(null);
 }
 
-export { parseEmod, exportEmod, droppedFiles, saveFile, setWindowTitle, setWindowModified, resolveUnsavedEdits, onFileOpened, onFilesDropped, onSaveRequested, onLeaveRequested, initialState, ready, isReady };
+export { parseEmod, exportEmod, droppedFiles, saveFile, setWindowTitle, setWindowModified, rememberOpenedFile, resolveUnsavedEdits, onFileOpened, onFilesDropped, onSaveRequested, onLeaveRequested, initialState, ready, isReady };

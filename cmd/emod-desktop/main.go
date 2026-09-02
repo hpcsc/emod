@@ -6,6 +6,8 @@ package main
 import (
 	"embed"
 	"log"
+	"os"
+	"path/filepath"
 
 	"github.com/wailsapp/wails/v3/pkg/application"
 	"github.com/wailsapp/wails/v3/pkg/events"
@@ -58,6 +60,23 @@ func applicationMenu(window *application.WebviewWindow) *application.Menu {
 	menu.FindByLabel("File").GetSubmenu().Prepend(fileItems)
 
 	return menu
+}
+
+// recentFilesPath is where the models opened most recently are listed between
+// runs: the platform's own per-user configuration directory, which is what the
+// CLI's ~/.config/emod resolves to on Linux and is somewhere else on macOS and
+// Windows. A machine that cannot name that directory keeps the list for this
+// run only rather than somewhere shared: a fixed path under the temporary
+// directory is one another user could plant a link at for the write to follow.
+func recentFilesPath() string {
+	dir, err := os.UserConfigDir()
+	if err != nil {
+		log.Printf("recent files: %s; keeping the list for this run only", err)
+
+		return ""
+	}
+
+	return filepath.Join(dir, "emod", "recent-files.json")
 }
 
 func main() {
@@ -116,6 +135,9 @@ func main() {
 	// service registered before Run.
 	windowState = desktop.NewWindowService(&windowMarker{window: window})
 	app.RegisterService(application.NewService(windowState))
+
+	recent := desktop.NewRecentFiles(recentFilesPath(), nil)
+	app.RegisterService(application.NewService(recent))
 
 	// A listener rather than a hook: the framework dispatches a resolved file
 	// drop only to the listeners OnWindowEvent appends to, so a hook registered

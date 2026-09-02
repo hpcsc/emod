@@ -4,4 +4,4 @@
 // file as it stands, while the desktop build overwrites it in its own assembled
 // copy. Importing platform.browser.js directly from a shared module would fork
 // the frontend into a browser-only one and a desktop one.
-export { parseEmod, exportEmod, droppedFiles, saveFile, setWindowTitle, setWindowModified, resolveUnsavedEdits, onFileOpened, onFilesDropped, onSaveRequested, onLeaveRequested, initialState, ready, isReady } from './platform.browser.js';
+export { parseEmod, exportEmod, droppedFiles, saveFile, setWindowTitle, setWindowModified, rememberOpenedFile, resolveUnsavedEdits, onFileOpened, onFilesDropped, onSaveRequested, onLeaveRequested, initialState, ready, isReady } from './platform.browser.js';

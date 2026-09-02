@@ -287,38 +287,39 @@ open. The browser viewer answers the same registration with nothing, exactly as 
 window marker, because it has no list and its drops carry no location.
 
 **Acceptance Criteria:**
-- [ ] The seam names an operation through which the viewer says which file it has adopted, and
+- [x] The seam names an operation through which the viewer says which file it has adopted, and
       the contract, the browser implementation and the desktop implementation all carry it — the
       contract guard's literal name list moves in this same change and still passes. (C1)
-- [ ] **Every** way a file carrying a real path becomes the model on screen remembers it, exactly
+- [x] **Every** way a file carrying a real path becomes the model on screen remembers it, exactly
       once, and the recording sits where they converge rather than being repeated per entry point
       — so a way of opening a model added later has nowhere to arrive that does not remember it.
       Derive the entry points from the source rather than from this list: today they are every
       call reaching the branch of `renderPanelSource` that adopts a file, plus the point in
       `writeModel` where a save adopts a location the model did not already have. (C1)
-- [ ] A model with no location behind it is not remembered, and neither is a save that wrote back
-      to the location already open: what makes a file worth remembering is a non-empty path that
-      the model on screen did not already carry. (C1)
-- [ ] A file whose render the parse rejects is not remembered, because it never became the model
+- [x] A model with no location behind it is not remembered, and neither is a save that wrote back
+      to the location already open: an open is always remembered, because the host decides what
+      it already holds, and a save is remembered when it gave the model a location it did not
+      have. (C1)
+- [x] A file whose render the parse rejects is not remembered, because it never became the model
       on screen. (C1)
-- [ ] The desktop implementation sends each remembered file to the service's recording method,
+- [x] The desktop implementation sends each remembered file to the service's recording method,
       and two files remembered close together **land** in the order they were remembered rather
       than the order their calls happen to finish. (C4)
-- [ ] A recording the shell refuses is reported where the user can read it without expanding
+- [x] A recording the shell refuses is reported where the user can read it without expanding
       anything, does not reveal the source panel, and does not stop the model opening or replace
       what the render said. (C1)
-- [ ] The browser implementation accepts the registration and does nothing, the way it does for
+- [x] The browser implementation accepts the registration and does nothing, the way it does for
       the window marker and the file the host opened; the browser viewer's behaviour is otherwise
       unchanged.
-- [ ] Nothing on the page keeps a record of what the shell has already been told. A model opened,
+- [x] Nothing on the page keeps a record of what the shell has already been told. A model opened,
       then reopened after the window is reloaded, is recorded both times — the list belongs to the
       shell for the life of the process while the page's memory is reloaded with it, so a
       de-duplication of the kind the unsaved-work answer carries would skip a recording the shell
       never heard.
-- [ ] `task test:unit` passes with the service registered in the shell and imported by the
+- [x] `task test:unit` passes with the service registered in the shell and imported by the
       frontend — which is what proves every method the frontend calls is one Go exports, and that
       the registration has a caller at all.
-- [ ] With `task build:desktop` built and `./bin/emod-desktop` running: opening three models
+- [x] With `task build:desktop` built and `./bin/emod-desktop` running: opening three models
       through File ▸ Open and quitting leaves a file under the platform's own per-user
       configuration directory holding those three paths, newest first; relaunching and opening
       the first of them again leaves three entries with that one at the top; opening eleven

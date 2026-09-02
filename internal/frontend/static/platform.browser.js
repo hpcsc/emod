@@ -122,6 +122,13 @@ function setWindowTitle(title) {
 // file a drop came from, only offer the model as a download.
 function setWindowModified() {}
 
+// A page keeps no list of what it has opened: nothing in a browser can open a
+// file by its location, and a file a drop hands over carries none to remember.
+// The registration is accepted and does nothing, the way the marker is.
+function rememberOpenedFile() {
+  return Promise.resolve();
+}
+
 // Nothing here can offer a Save that writes where the edits came from, so there
 // is no question worth asking: the answer is the one the browser viewer has
 // always acted on, and a drop replaces the model exactly as it did.
@@ -159,4 +166,4 @@ function initialState() {
   return Promise.resolve(INITIAL_DATA);
 }
 
-export { parseEmod, exportEmod, droppedFiles, saveFile, setWindowTitle, setWindowModified, resolveUnsavedEdits, onFileOpened, onFilesDropped, onSaveRequested, onLeaveRequested, initialState, ready, isReady };
+export { parseEmod, exportEmod, droppedFiles, saveFile, setWindowTitle, setWindowModified, rememberOpenedFile, resolveUnsavedEdits, onFileOpened, onFilesDropped, onSaveRequested, onLeaveRequested, initialState, ready, isReady };

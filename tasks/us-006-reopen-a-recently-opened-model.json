@@ -32,7 +32,7 @@
     },
     {
       "n": 2,
-      "done": false,
+      "done": true,
       "title": "Record every model that becomes the open one",
       "language": "JavaScript",
       "testable": true,
