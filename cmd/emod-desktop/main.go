@@ -33,7 +33,7 @@ var frontend embed.FS
 // internal/desktop, which imports no GUI framework so that it stays testable,
 // and this package is in no test target at all. internal/desktop's event-name
 // guard pins each name against the frontend's subscription.
-func applicationMenu(window *application.WebviewWindow) *application.Menu {
+func applicationMenu(window *application.WebviewWindow, openRecent *application.MenuItem) *application.Menu {
 	menu := application.DefaultApplicationMenu()
 
 	open := application.NewMenuItem("Open…").
@@ -55,7 +55,7 @@ func applicationMenu(window *application.WebviewWindow) *application.Menu {
 			window.EmitEvent("file:save-as-requested")
 		})
 
-	fileItems := application.NewMenuFromItems(open, save, saveAs)
+	fileItems := application.NewMenuFromItems(open, openRecent, save, saveAs)
 	fileItems.AddSeparator()
 	menu.FindByLabel("File").GetSubmenu().Prepend(fileItems)
 
@@ -136,8 +136,17 @@ func main() {
 	windowState = desktop.NewWindowService(&windowMarker{window: window})
 	app.RegisterService(application.NewService(windowState))
 
-	recent := desktop.NewRecentFiles(recentFilesPath(), nil)
+	// Built over the menu so the saved list is on it before the app runs, and
+	// the menu clears through a service that does not exist until then, the way
+	// the quit veto above reads state assigned after it. Wails binds every
+	// service registered before Run.
+	var recent *desktop.RecentFiles
+	openRecent := newRecentMenu(window, func() error { return recent.Clear() })
+	recent = desktop.NewRecentFiles(recentFilesPath(), openRecent)
 	app.RegisterService(application.NewService(recent))
+	app.Event.OnApplicationEvent(events.Common.ApplicationStarted, func(*application.ApplicationEvent) {
+		openRecent.started()
+	})
 
 	// A listener rather than a hook: the framework dispatches a resolved file
 	// drop only to the listeners OnWindowEvent appends to, so a hook registered
@@ -163,7 +172,7 @@ func main() {
 		window.EmitEvent("window:close-requested")
 	})
 
-	app.Menu.SetApplicationMenu(applicationMenu(window))
+	app.Menu.SetApplicationMenu(applicationMenu(window, application.NewSubmenu("Open Recent", openRecent.items)))
 
 	if err := app.Run(); err != nil {
 		log.Fatal(err)

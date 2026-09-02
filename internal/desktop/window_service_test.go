@@ -159,7 +159,7 @@ func (m *blockingMarker) MarkEdited(bool) {
 // than a failure and so would reach a user before it reached a test.
 func TestWindowMarkerImplementation(t *testing.T) {
 	t.Run("the shell's marker hands the window off rather than waiting on it", func(t *testing.T) {
-		body := markEditedBody(t, "../../cmd/emod-desktop/window_marker_darwin.go")
+		body := methodBody(t, "../../cmd/emod-desktop/window_marker_darwin.go", "windowMarker", "MarkEdited")
 
 		require.Contains(t, body, "application.InvokeAsync",
 			"MarkEdited must dispatch onto the main thread, not run on it")
@@ -168,15 +168,15 @@ func TestWindowMarkerImplementation(t *testing.T) {
 	})
 }
 
-func markEditedBody(t *testing.T, path string) string {
+func methodBody(t *testing.T, path, receiver, method string) string {
 	t.Helper()
 
 	raw, err := os.ReadFile(path)
 	require.NoError(t, err)
 
-	body := regexp.MustCompile(`(?s)func \(\w+ \*windowMarker\) MarkEdited\([^)]*\) \{(.*?)\n\}`).
+	body := regexp.MustCompile(`(?s)func \(\w+ \*` + receiver + `\) ` + method + `\([^)]*\) \{(.*?)\n\}`).
 		FindStringSubmatch(string(raw))
-	require.Len(t, body, 2, path+" must declare a windowMarker.MarkEdited method")
+	require.Len(t, body, 2, path+" must declare a "+receiver+"."+method+" method")
 
 	return body[1]
 }

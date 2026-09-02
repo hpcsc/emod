@@ -155,7 +155,10 @@ on the main thread, so an `Update()` issued from inside an `application.InvokeAs
 does not deadlock. The rebuild clears and re-walks the **root** menu's item tree — a submenu has
 no impl of its own, so telling the submenu is not enough. Menu click callbacks run on their own
 goroutine (`menuitem.go:243-270`, `go func()`), never on the main thread, which is what lets a
-click call into a locking Go service.
+click call into a locking Go service. Rebuilding is what the shell must not do, though: a rebuild
+discards the items AppKit adds to the application menu at launch — Start Dictation, Emoji &
+Symbols, AutoFill, Close All and the fullscreen toggle — so the submenu is built once with a slot
+for every entry the list can hold, and each change relabels and hides slots in place.
 
 ## Theory
 
@@ -379,43 +382,44 @@ under the configuration directory between runs.
 one opens it exactly as the file dialog does — through the same read, the same delivery and the
 same unsaved-changes question, so the window takes its name, the bar shows its real path, and
 Save writes back there with no dialog. An entry whose file has gone reports that and leaves the
-menu. Clear Menu empties the list and is greyed out when there is nothing to clear. The menu is
-rebuilt every time the list moves, so what it shows is never behind what the app remembers.
+menu. Clear Menu empties the list and is greyed out when there is nothing to clear. The menu
+shows every change the moment the list moves, so what it shows is never behind what the app
+remembers.
 
 **Acceptance Criteria:**
-- [ ] The File menu carries an Open Recent submenu between Open… and Save, holding one item per
+- [x] The File menu carries an Open Recent submenu between Open… and Save, holding one item per
       remembered model, newest first, then a separator, then a Clear Menu item that is greyed out
       while the list is empty. (C1, C6)
-- [ ] Two remembered models whose files have the same name are told apart in the menu. (C1)
-- [ ] Choosing an entry makes the shell emit an event naming that path, and the frontend
+- [x] Two remembered models whose files have the same name are told apart in the menu. (C1)
+- [x] Choosing an entry makes the shell emit an event naming that path, and the frontend
       subscribes to that name — `task test:unit` passes, which is what proves the two names are
       one set. (C2)
-- [ ] The frontend reads the chosen path through the service and hands the answer to the same
+- [x] The frontend reads the chosen path through the service and hands the answer to the same
       delivery a file chosen in the Open dialog goes through, so the model becomes the current
       file and the target of the next Save with no location dialog. (C2)
-- [ ] A menu choice and an Open still resolving its own read are numbered together, so whichever
+- [x] A menu choice and an Open still resolving its own read are numbered together, so whichever
       the user made last is the one that lands, whichever read finishes last. (C2)
-- [ ] Choosing an entry while the model on screen holds unsaved changes puts the unsaved-changes
+- [x] Choosing an entry while the model on screen holds unsaved changes puts the unsaved-changes
       question once and honours all three answers — and `renderPanelSource` is still handed a
       model to open from exactly one call, so the existing source scan passes unedited. (C2)
-- [ ] Choosing an entry whose file is no longer there reports the reason the service gave —
+- [x] Choosing an entry whose file is no longer there reports the reason the service gave —
       naming the file as gone and saying it has been taken off the list — leaves the model on
       screen, and leaves the submenu without that entry. (C5)
-- [ ] Choosing Clear Menu empties the list, and the submenu afterwards holds nothing but a greyed
+- [x] Choosing Clear Menu empties the list, and the submenu afterwards holds nothing but a greyed
       out Clear Menu. (C6)
-- [ ] The shell's display of the list hands its rebuild off to the main thread rather than
+- [x] The shell's display of the list hands its rebuild off to the main thread rather than
       waiting on it, so a rebuild issued while the service holds its lock cannot wedge every later
       change behind it — asserted by reading the shell's source, the way the window marker's is.
       (C1)
-- [ ] A request arriving before the viewer has registered is discarded rather than throwing, the
+- [x] A request arriving before the viewer has registered is discarded rather than throwing, the
       way the other host requests are.
-- [ ] With `task build:desktop` built and `./bin/emod-desktop` running: after opening three
+- [x] With `task build:desktop` built and `./bin/emod-desktop` running: after opening three
       models, File ▸ Open Recent lists all three newest first; choosing the second renders it,
       names the window, shows its real path in the bar, and File ▸ Save then writes back to that
       file with no dialog and confirms in the bar; choosing it again leaves three entries with
       that one at the top; quitting and relaunching shows the same three in the same order.
       (C1, C2, C3, C4)
-- [ ] In the same running app: deleting a listed file and then choosing it reports that it is no
+- [x] In the same running app: deleting a listed file and then choosing it reports that it is no
       longer there and takes it off the menu, leaving the model on screen (C5); Clear Menu empties
       the menu, and it is still empty after a relaunch (C6); the rest of the File menu, and Edit,
       View and Window, still work after several rebuilds.
@@ -560,12 +564,12 @@ deliberately differs from it on macOS. The alternative — sharing the CLI's dot
 everywhere — keeps one location per user across both binaries at the cost of putting application
 state where macOS does not keep it. Nothing else in this story depends on which is chosen.
 
-*Where the menu's labels are decided.* Telling two entries with the same file name apart is a
-rule about strings, and the mechanism puts it in the shell's display implementation — which lives
-in `cmd/emod-desktop`, a package no test target builds. Moving that rule into `internal/desktop`
-would make it testable at the cost of giving the service a presentation concern it otherwise has
-none of. The criterion is written against what the user can tell apart, so either answer
-satisfies it; the trade is a manual-only check versus a widened service.
+*Where the menu's bookkeeping lives.* Which slot shows which entry, how two entries sharing a
+file name are told apart, and which path a slot's click opens are decided in `internal/desktop`,
+as `RecentSlots` over a `MenuSlot` interface, leaving `cmd/emod-desktop` — a package no test
+target builds — an adapter over the framework's items. Keeping that logic in the shell would
+spare the service a presentation concern at the cost of leaving the feature's central mapping,
+the one a wrong answer to would have Save overwrite the wrong file, verified only by hand.
 
 *When a missing file leaves the list.* C5 removes an entry when it is chosen and found gone, so
 this breakdown checks nothing at startup and nothing when the menu opens. A list can therefore

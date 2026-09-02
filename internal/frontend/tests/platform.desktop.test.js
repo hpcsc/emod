@@ -21,6 +21,7 @@ beforeEach(async () => {
   // the order the tests ran.
   stub.answers.SetModified = undefined;
   stub.answers.Record = undefined;
+  stub.answers.Open = '{"name":"billing.emod","path":"/models/billing.emod","content":"emod 1\\n"}';
   desktop.setWindowTitle('');
   await desktop.setWindowModified(false);
   stub.calls.length = 0;
@@ -48,6 +49,13 @@ function requestOpen() {
   return Promise.resolve(runtime.listeners['file:open-requested']()).then(flush);
 }
 
+// A recent entry is chosen from the shell's native menu, which asks for it by
+// emitting this event with the path — so a test fires the subscription rather
+// than calling anything exported.
+function requestRecent(path) {
+  return Promise.resolve(runtime.listeners['file:open-recent-requested']({ data: path })).then(flush);
+}
+
 function requestSave() {
   return Promise.resolve(runtime.listeners['file:save-requested']()).then(flush);
 }
@@ -58,6 +66,12 @@ function requestSaveAs() {
 
 function flush() {
   return new Promise((resolve) => setTimeout(resolve, 0));
+}
+
+function collectDeliveries() {
+  const delivered = [];
+  desktop.onFileOpened((opened) => delivered.push(opened));
+  return delivered;
 }
 
 describe('readiness', () => {
@@ -297,12 +311,6 @@ describe('the unsaved-edits marker', () => {
 });
 
 describe('opening a file', () => {
-  function collectDeliveries() {
-    const delivered = [];
-    desktop.onFileOpened((opened) => delivered.push(opened));
-    return delivered;
-  }
-
   it('shows the picker filtered to the two extensions a model comes in', async () => {
     await requestOpen();
 
@@ -839,6 +847,110 @@ describe('the shell asking to close or quit', () => {
     await requestClose();
 
     expect(leaving()).toEqual([]);
+  });
+});
+
+// An entry chosen from File ▸ Open Recent has to open exactly as one chosen in
+// the dialog does — the same document, the same delivery, the same gesture
+// numbering — with the read going through the list's own service, which is the
+// only side that knows to forget a file that has gone.
+describe('opening a recent entry', () => {
+  it('reads the entry through the list\'s service and delivers its name, path and contents', async () => {
+    const delivered = collectDeliveries();
+    stub.answers.Open = '{"name":"billing.emod","path":"/models/billing.emod","content":"emod 1\\nmodel \\"Billing\\"\\n"}';
+
+    await requestRecent('/models/billing.emod');
+
+    expect(stub.calls).toEqual([['Open', '/models/billing.emod']]);
+    expect(runtime.calls).toEqual([]);
+    expect(delivered).toEqual([{
+      name: 'billing.emod',
+      path: '/models/billing.emod',
+      content: 'emod 1\nmodel "Billing"\n',
+    }]);
+  });
+
+  it('delivers the reason the service gave for an entry whose file has gone', async () => {
+    const delivered = collectDeliveries();
+    stub.answers.Open = '{"error":"gone.emod is no longer at /models/gone.emod; it has been removed from the recent files"}';
+
+    await requestRecent('/models/gone.emod');
+
+    expect(delivered).toEqual([{ error: 'gone.emod is no longer at /models/gone.emod; it has been removed from the recent files' }]);
+  });
+
+  it('delivers the reason when the service call itself fails', async () => {
+    const delivered = collectDeliveries();
+    stub.answers.Open = new Error('the shell did not answer');
+
+    await requestRecent('/models/billing.emod');
+
+    expect(delivered).toEqual([{ error: 'the shell did not answer' }]);
+  });
+
+  it('drops an Open whose read outlives a recent entry chosen after it', async () => {
+    const delivered = collectDeliveries();
+    const pending = [];
+    const realRead = stub.FileService.Read;
+    stub.FileService.Read = () => new Promise((resolve) => {
+      pending.push(() => resolve('{"name":"chosen.emod","path":"/models/chosen.emod","content":"chosen"}'));
+    });
+    stub.answers.Open = '{"name":"recent.emod","path":"/models/recent.emod","content":"recent"}';
+
+    try {
+      runtime.answers.OpenFile = '/models/chosen.emod';
+      const open = runtime.listeners['file:open-requested']();
+      await flush();
+      await requestRecent('/models/recent.emod');
+
+      // The dialog's read finishes last, which is the ordering the counter exists for.
+      pending[0]();
+      await open;
+      await flush();
+    } finally {
+      stub.FileService.Read = realRead;
+    }
+
+    expect(delivered.map((d) => d.name)).toEqual(['recent.emod']);
+  });
+
+  it('drops a recent entry whose read outlives an Open made after it', async () => {
+    const delivered = collectDeliveries();
+    let releaseRecent;
+    stub.answers.Open = new Promise((resolve) => { releaseRecent = resolve; });
+    runtime.answers.OpenFile = '/models/chosen.emod';
+    stub.answers.Read = '{"name":"chosen.emod","path":"/models/chosen.emod","content":"chosen"}';
+
+    const recent = runtime.listeners['file:open-recent-requested']({ data: '/models/recent.emod' });
+    await flush();
+    await requestOpen();
+
+    releaseRecent('{"name":"recent.emod","path":"/models/recent.emod","content":"recent"}');
+    await recent;
+    await flush();
+
+    expect(delivered.map((d) => d.name)).toEqual(['chosen.emod']);
+  });
+
+  it('never re-enters the viewer with the viewer\'s own error dressed up as a file failure', async () => {
+    const thrown = [];
+    desktop.onFileOpened((opened) => {
+      thrown.push(opened);
+      throw new Error('a bug inside the viewer');
+    });
+
+    await expect(requestRecent('/models/billing.emod')).rejects.toThrow('a bug inside the viewer');
+
+    expect(thrown).toHaveLength(1);
+    expect(thrown[0].error).toBeUndefined();
+  });
+
+  it('discards a request that arrives before the viewer has registered, rather than throwing', async () => {
+    // The listener's own answer, not the helper's: a helper ending in flush
+    // resolves undefined whatever the listener returned.
+    await expect(Promise.resolve(runtime.listeners['file:open-recent-requested']({ data: '/models/billing.emod' })))
+      .resolves.toBeUndefined();
+    await flush();
   });
 });
 
