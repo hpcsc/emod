@@ -350,22 +350,32 @@ function proceedTo(leave) {
 Events.On('file:open-requested', promptForFile);
 
 function promptForFile() {
+  return openNamedBy(function() {
+    return Dialogs.OpenFile({
+      Title: 'Open model',
+      CanChooseFiles: true,
+      CanChooseDirectories: false,
+      Filters: [{ DisplayName: 'emod models', Pattern: '*.emod;*.json' }],
+    }).then(function(path) {
+      // A cancelled picker answers with no path, and cancelling has to leave
+      // the model on screen exactly as it was — so nothing is delivered at all.
+      if (!path) {
+        return null;
+      }
+      return FileService.Read(path).then(JSON.parse);
+    });
+  });
+}
+
+// A gesture that has to name a model and then read it before it can deliver.
+// name answers the opened document, null for a gesture that named nothing, or
+// fails; what it read is delivered only if no later gesture has been made
+// meanwhile.
+function openNamedBy(name) {
   const gesture = ++latestGesture;
 
-  return Dialogs.OpenFile({
-    Title: 'Open model',
-    CanChooseFiles: true,
-    CanChooseDirectories: false,
-    Filters: [{ DisplayName: 'emod models', Pattern: '*.emod;*.json' }],
-  }).then(function(path) {
-    // A cancelled picker answers with no path, and cancelling has to leave the
-    // model on screen exactly as it was — so nothing is delivered at all.
-    if (!path) {
-      return null;
-    }
-    return FileService.Read(path).then(JSON.parse);
-  }).catch(function(err) {
-    // Only the picker and the read are caught here. Letting this cover the
+  return name().catch(function(err) {
+    // Only the naming and the read are caught here. Letting this cover the
     // delivery too would re-enter the viewer's own handler with its own thrown
     // message, reporting a frontend bug to the user as a file-read failure.
     return { error: err.message || String(err) };
