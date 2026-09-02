@@ -4,7 +4,7 @@
   "tasks": [
     {
       "n": 1,
-      "done": false,
+      "done": true,
       "title": "Remember which models have been opened, across runs",
       "language": "Go",
       "testable": true,

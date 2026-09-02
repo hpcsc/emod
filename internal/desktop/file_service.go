@@ -26,35 +26,61 @@ type openedFile struct {
 // Read answers the file at path with its base name, its absolute path and its
 // contents byte for byte — including contents no emod stage would accept,
 // because what is wrong with a model is the pipeline's answer to give, not this
-// one's. A file that is not valid UTF-8 is refused instead, because it is the
-// one thing this cannot carry unaltered. The path is resolved before it is read
-// so a caller holding the answer can act on it without knowing this process's
-// working directory.
+// one's.
 func (s *FileService) Read(path string) string {
+	absolute, err := resolveModelPath(path)
+	if err != nil {
+		return pipeline.ErrorJSON(err.Error())
+	}
+
+	opened, err := readModelFile(absolute)
+	if err != nil {
+		return pipeline.ErrorJSON(err.Error())
+	}
+
+	return opened.document()
+}
+
+func (f openedFile) document() string {
+	b, _ := json.Marshal(f)
+
+	return string(b)
+}
+
+// resolveModelPath answers path as absolute, so a caller holding the answer can
+// act on it without knowing this process's working directory.
+func resolveModelPath(path string) (string, error) {
 	absolute, err := filepath.Abs(path)
 	if err != nil {
-		return pipeline.ErrorJSON(fmt.Sprintf("resolving %s: %s", path, err))
+		return "", fmt.Errorf("resolving %s: %w", path, err)
 	}
 
+	return absolute, nil
+}
+
+// readModelFile is the one read behind every way a model reaches the frontend
+// from disk, so a file opens the same whichever way it was chosen. A file that
+// is not valid UTF-8 is refused, because it is the one thing this cannot carry
+// unaltered: json.Marshal rewrites every byte it cannot decode as U+FFFD, so
+// carrying such a file would hand the viewer altered text and, once Save writes
+// that text back, silently destroy what it could not read. The filesystem's own
+// reason is wrapped rather than flattened, so a caller can still ask
+// errors.Is(err, os.ErrNotExist) of the answer.
+func readModelFile(absolute string) (openedFile, error) {
 	content, err := os.ReadFile(absolute)
 	if err != nil {
-		return pipeline.ErrorJSON(fmt.Sprintf("reading %s: %s", absolute, failureReason(err)))
+		return openedFile{}, fmt.Errorf("reading %s: %w", absolute, failureReason(err))
 	}
 
-	// json.Marshal rewrites every byte it cannot decode as U+FFFD, so carrying
-	// such a file would hand the viewer altered text and, once Save writes that
-	// text back, silently destroy what it could not read.
 	if !utf8.Valid(content) {
-		return pipeline.ErrorJSON(fmt.Sprintf("reading %s: not valid UTF-8", absolute))
+		return openedFile{}, fmt.Errorf("reading %s: not valid UTF-8", absolute)
 	}
 
-	b, _ := json.Marshal(openedFile{
+	return openedFile{
 		Name:    filepath.Base(absolute),
 		Path:    absolute,
 		Content: string(content),
-	})
-
-	return string(b)
+	}, nil
 }
 
 type savedFile struct {
@@ -70,9 +96,9 @@ type savedFile struct {
 // permitted by the directory rather than by the file and would otherwise replace
 // a model the filesystem is refusing to let anyone write.
 func (s *FileService) Write(path string, content string) string {
-	absolute, err := filepath.Abs(path)
+	absolute, err := resolveModelPath(path)
 	if err != nil {
-		return pipeline.ErrorJSON(fmt.Sprintf("resolving %s: %s", path, err))
+		return pipeline.ErrorJSON(err.Error())
 	}
 
 	if err := replaceFile(absolute, content); err != nil {
