@@ -1,0 +1,129 @@
+{
+  "story": "US-006: Reopen a recently opened model",
+  "tasks_file": "tasks/us-006-reopen-a-recently-opened-model.md",
+  "tasks": [
+    {
+      "n": 1,
+      "done": false,
+      "title": "Remember which models have been opened, across runs",
+      "language": "Go",
+      "testable": true,
+      "certainty": "medium",
+      "blast_radius": "low",
+      "patterns_to_follow": [
+        "internal/desktop/window_service.go",
+        "internal/desktop/window_service_test.go:16-34",
+        "internal/desktop/window_service_test.go:71-122",
+        "internal/desktop/window_service_test.go:125-153",
+        "internal/desktop/file_service.go:26-58",
+        "internal/desktop/file_service.go:90-126",
+        "internal/desktop/file_service.go:228-242",
+        "internal/desktop/file_service_test.go:103-229",
+        "internal/desktop/binding_names_test.go:170-202",
+        "internal/desktop/service.go",
+        "tasks/learnings.md"
+      ],
+      "depends_on": [],
+      "affected_files": [
+        "internal/desktop/recent_files.go",
+        "internal/desktop/recent_files_test.go",
+        "internal/desktop/file_service.go"
+      ]
+    },
+    {
+      "n": 2,
+      "done": false,
+      "title": "Record every model that becomes the open one",
+      "language": "JavaScript",
+      "testable": true,
+      "certainty": "high",
+      "blast_radius": "low",
+      "patterns_to_follow": [
+        "internal/frontend/desktop/platform.desktop.js:143-202",
+        "internal/frontend/static/platform.browser.js:116-150",
+        "internal/frontend/static/viewer.js:206-244",
+        "internal/frontend/static/viewer.js:443-460",
+        "internal/frontend/static/viewer.js:521-557",
+        "internal/frontend/tests/viewer.test.js:31-66",
+        "internal/frontend/tests/viewer.test.js:2259-2295",
+        "internal/frontend/tests/bindings-stub.js:25-45",
+        "internal/frontend/tests/platform.desktop.test.js:1-60",
+        "cmd/emod-desktop/main.go:63-70",
+        "cmd/emod-desktop/main.go:114-118",
+        "internal/llm/config/config.go:93-100",
+        "tasks/learnings.md",
+        "task:1"
+      ],
+      "depends_on": [
+        1
+      ],
+      "affected_files": [
+        "internal/frontend/static/platform.js",
+        "internal/frontend/static/platform.browser.js",
+        "internal/frontend/desktop/platform.desktop.js",
+        "internal/frontend/static/viewer.js",
+        "internal/frontend/tests/viewer.test.js",
+        "internal/frontend/tests/platform.desktop.test.js",
+        "internal/frontend/tests/bindings-stub.js",
+        "cmd/emod-desktop/main.go"
+      ]
+    },
+    {
+      "n": 3,
+      "done": false,
+      "title": "Reopen a model from the File ▸ Open Recent menu",
+      "language": "Go",
+      "testable": true,
+      "certainty": "medium",
+      "blast_radius": "high",
+      "patterns_to_follow": [
+        "cmd/emod-desktop/main.go:34-61",
+        "cmd/emod-desktop/main.go:63-70",
+        "cmd/emod-desktop/main.go:120-130",
+        "cmd/emod-desktop/window_marker_darwin.go",
+        "internal/desktop/window_service_test.go:155-182",
+        "internal/desktop/event_names_test.go",
+        "internal/desktop/binding_names_test.go:22-75",
+        "internal/frontend/desktop/platform.desktop.js:41-75",
+        "internal/frontend/desktop/platform.desktop.js:329-365",
+        "internal/frontend/tests/platform.desktop.test.js:297-411",
+        "internal/frontend/tests/platform.desktop.test.js:413-545",
+        "internal/frontend/tests/viewer.test.js:2097-2140",
+        "tasks/learnings.md",
+        "task:2"
+      ],
+      "depends_on": [
+        2
+      ],
+      "affected_files": [
+        "cmd/emod-desktop/main.go",
+        "cmd/emod-desktop/recent_menu.go",
+        "internal/desktop/recent_files_test.go",
+        "internal/frontend/desktop/platform.desktop.js",
+        "internal/frontend/tests/platform.desktop.test.js",
+        "internal/frontend/tests/bindings-stub.js"
+      ]
+    },
+    {
+      "n": 4,
+      "done": false,
+      "title": "Document reopening a recently opened model",
+      "language": "Markdown",
+      "testable": false,
+      "certainty": "high",
+      "blast_radius": "low",
+      "patterns_to_follow": [
+        "README.md",
+        "docs/architecture.md",
+        "tasks/learnings.md"
+      ],
+      "depends_on": [
+        3
+      ],
+      "affected_files": [
+        "README.md",
+        "docs/architecture.md"
+      ]
+    }
+  ]
+}
