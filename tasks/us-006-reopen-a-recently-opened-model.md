@@ -481,23 +481,23 @@ and says which way it travels, and its account of the guards holding the languag
 together still matches what `internal/desktop` contains.
 
 **Acceptance Criteria:**
-- [ ] The README's desktop section says that File ▸ Open Recent lists the models opened most
+- [x] The README's desktop section says that File ▸ Open Recent lists the models opened most
       recently, newest first; that choosing one opens it exactly as the picker does and makes it
       what Save writes to; that the list holds at most ten and moves a reopened model to the top
       rather than listing it twice; that it survives quitting and relaunching; that an entry whose
       file has gone says so and leaves the list; and that Clear Menu empties it.
-- [ ] The README says where the list is kept, naming the platform's own per-user configuration
+- [x] The README says where the list is kept, naming the platform's own per-user configuration
       directory rather than one platform's path presented as the answer.
-- [ ] Every remaining entry in the README's "What it does not do yet" list is still true of the
+- [x] Every remaining entry in the README's "What it does not do yet" list is still true of the
       working tree.
-- [ ] The architecture document's platform-seam section names the operation through which the
+- [x] The architecture document's platform-seam section names the operation through which the
       viewer says which file it has adopted, alongside the others the seam provides, and says it
       travels out from the viewer rather than arriving at it; and its statement of how many guards
       hold the language boundary together agrees with the number of guard functions in
       `internal/desktop`.
-- [ ] The architecture document says the shell keeps the remembered list rather than the frontend,
+- [x] The architecture document says the shell keeps the remembered list rather than the frontend,
       and why — the same reason the unsaved-work answer lives there.
-- [ ] Every ```emod fence added, if any, is a model `oracle.Check` reports nothing about — `task
+- [x] Every ```emod fence added, if any, is a model `oracle.Check` reports nothing about — `task
       test:unit` passes.
 
 **Affected Files/Modules:**

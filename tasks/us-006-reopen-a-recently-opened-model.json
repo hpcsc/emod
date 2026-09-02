@@ -106,7 +106,7 @@
     },
     {
       "n": 4,
-      "done": false,
+      "done": true,
       "title": "Document reopening a recently opened model",
       "language": "Markdown",
       "testable": false,
