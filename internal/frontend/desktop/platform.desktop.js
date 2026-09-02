@@ -234,9 +234,9 @@ function markedTitle() {
 // so; a refusal must not hold the next file behind it.
 let rememberQueue = Promise.resolve();
 
-function rememberOpenedFile(file) {
+function rememberOpenedFile(path) {
   rememberQueue = rememberQueue.catch(function() {}).then(function() {
-    return RecentFiles.Record(file.path);
+    return RecentFiles.Record(path);
   });
 
   return rememberQueue;

@@ -53,10 +53,10 @@ vi.mock('../static/platform.js', () => ({
   onLeaveRequested: vi.fn((handler) => { requestLeave = handler; }),
   setWindowTitle: vi.fn((title) => { windowTitle = title; }),
   setWindowModified: vi.fn((modified) => { modifiedReports.push(modified); }),
-  rememberOpenedFile: vi.fn((file) => {
-    remembered.push(file);
+  rememberOpenedFile: vi.fn((path) => {
+    remembered.push(path);
     if (rememberAnswerer) {
-      return rememberAnswerer(file);
+      return rememberAnswerer(path);
     }
     return rememberFails ? Promise.reject(new Error(rememberFails)) : Promise.resolve();
   }),
@@ -2032,12 +2032,10 @@ describe('two models arriving at once', () => {
 // side that knows the moment a file becomes the model on screen — so it says so
 // through the seam, from the one branch every entry point already passes.
 describe('what the viewer says it has opened', () => {
-  const rememberedPaths = () => remembered.map((file) => file.path);
-
-  it('remembers a file the host opened, by its name and its path, once', async () => {
+  it('remembers a file the host opened, by its path, once', async () => {
     await openBilling();
 
-    expect(remembered).toEqual([{ name: 'billing.emod', path: '/models/billing.emod' }]);
+    expect(remembered).toEqual(['/models/billing.emod']);
   });
 
   it('remembers a file the host dropped, by the real path the host resolved', async () => {
@@ -2049,7 +2047,7 @@ describe('what the viewer says it has opened', () => {
     }]);
     await flush();
 
-    expect(rememberedPaths()).toEqual(['/models/hotel.emod']);
+    expect(remembered).toEqual(['/models/hotel.emod']);
   });
 
   it('remembers a file again when it is opened again, because the host decides what it already holds', async () => {
@@ -2058,7 +2056,7 @@ describe('what the viewer says it has opened', () => {
     deliverFile({ name: 'billing.emod', path: '/models/billing.emod', content: billingSource });
     await flush();
 
-    expect(rememberedPaths()).toEqual(['/models/billing.emod', '/models/billing.emod']);
+    expect(remembered).toEqual(['/models/billing.emod', '/models/billing.emod']);
   });
 
   it('remembers nothing for pasted source, which has no location behind it', async () => {
@@ -2102,7 +2100,7 @@ describe('what the viewer says it has opened', () => {
 
     await save({ chooseLocation: true });
 
-    expect(rememberedPaths()).toEqual(['/models/billing.emod', '/models/copy.emod']);
+    expect(remembered).toEqual(['/models/billing.emod', '/models/copy.emod']);
   });
 
   it('remembers where pasted source was first saved', async () => {
@@ -2112,7 +2110,7 @@ describe('what the viewer says it has opened', () => {
 
     await save();
 
-    expect(rememberedPaths()).toEqual(['/models/hotel.emod']);
+    expect(remembered).toEqual(['/models/hotel.emod']);
   });
 
   it('remembers nothing for a save back to the file already open', async () => {
@@ -2121,7 +2119,7 @@ describe('what the viewer says it has opened', () => {
 
     await save();
 
-    expect(rememberedPaths()).toEqual(['/models/billing.emod']);
+    expect(remembered).toEqual(['/models/billing.emod']);
   });
 
   it('remembers nothing for a save whose location dialog was cancelled', async () => {
@@ -2130,7 +2128,7 @@ describe('what the viewer says it has opened', () => {
 
     await save({ chooseLocation: true });
 
-    expect(rememberedPaths()).toEqual(['/models/billing.emod']);
+    expect(remembered).toEqual(['/models/billing.emod']);
   });
 
   it('keeps a save confirmation first when the recording the save prompted is refused', async () => {
@@ -2146,7 +2144,7 @@ describe('what the viewer says it has opened', () => {
     expect(bar.textContent).toContain('recent files not saved');
     expect(bar.title).toContain('permission denied');
     expect(bar.classList.contains('failed')).toBe(false);
-    expect(rememberedPaths()).toEqual(['/models/hotel.emod']);
+    expect(remembered).toEqual(['/models/hotel.emod']);
   });
 
   it('leaves a newer confirmation alone when an older recording is refused late', async () => {
