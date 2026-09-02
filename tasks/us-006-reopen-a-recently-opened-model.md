@@ -200,40 +200,40 @@ Whatever is showing the list is told on every change, while the service holds it
 nothing can display an order the service is not in.
 
 **Acceptance Criteria:**
-- [ ] A service built over a path where no file exists starts holding nothing, and tells its
+- [x] A service built over a path where no file exists starts holding nothing, and tells its
       display so before it answers anything else — a display built this way is populated before
       the app is running rather than after the first change. (C1)
-- [ ] Recording a path leaves it at the top of the list, and a service built afterwards over the
+- [x] Recording a path leaves it at the top of the list, and a service built afterwards over the
       same path answers the same list in the same order. (C1, C3)
-- [ ] Recording a path the list already holds moves it to the top instead of adding a second
+- [x] Recording a path the list already holds moves it to the top instead of adding a second
       entry; the list never holds more than ten, and recording an eleventh drops the one recorded
       longest ago. (C4)
-- [ ] Entries are absolute, so the same file recorded under a relative and an absolute spelling
+- [x] Entries are absolute, so the same file recorded under a relative and an absolute spelling
       is one entry rather than two. (C4)
-- [ ] Every change — a recording, an open that forgot a missing entry, a clear — reaches the
+- [x] Every change — a recording, an open that forgot a missing entry, a clear — reaches the
       display carrying the list as it now stands; and a display that blocks holds the next change
       behind it rather than being overtaken by it, so the order displayed and the order held can
       never disagree. (C1)
-- [ ] A service built with no display at all works unchanged, so a shell with no menu yet is a
+- [x] A service built with no display at all works unchanged, so a shell with no menu yet is a
       supported state rather than a crash. (C1)
-- [ ] Opening a listed path answers the same document `FileService.Read` answers for the same
+- [x] Opening a listed path answers the same document `FileService.Read` answers for the same
       file — the same base name, the same absolute path, the same bytes, and the same refusal for
       a file that is not valid UTF-8 — because one read serves both. (C2)
-- [ ] Opening a listed path whose file is no longer there answers a reason saying the file is not
+- [x] Opening a listed path whose file is no longer there answers a reason saying the file is not
       there any more and has been taken off the list, leaves the list without that entry, tells
       the display, and leaves the shortened list on disk. (C5)
-- [ ] Opening a listed path the filesystem refuses for any other reason answers that reason and
+- [x] Opening a listed path the filesystem refuses for any other reason answers that reason and
       leaves the entry where it was. (C5)
-- [ ] Clearing leaves the list empty, tells the display, and a service built afterwards over the
+- [x] Clearing leaves the list empty, tells the display, and a service built afterwards over the
       same path finds nothing. (C6)
-- [ ] A file at the path that is not the document this writes — truncated, not JSON at all, or
+- [x] A file at the path that is not the document this writes — truncated, not JSON at all, or
       JSON of another shape — is started from as an empty list rather than refused, and the next
       change replaces it. (C3)
-- [ ] A change persisted into a directory that is not there brings the directory into being
+- [x] A change persisted into a directory that is not there brings the directory into being
       rather than failing. (C3)
-- [ ] A change whose write the filesystem refuses answers that failure, while the list and the
+- [x] A change whose write the filesystem refuses answers that failure, while the list and the
       display already hold the new order. (C1)
-- [ ] `task test:race` passes: the frontend writes this over a binding while the shell reads it
+- [x] `task test:race` passes: the frontend writes this over a binding while the shell reads it
       from the thread that builds the menu, so the two reach it from different goroutines by
       construction.
 
