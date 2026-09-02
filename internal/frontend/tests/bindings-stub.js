@@ -8,7 +8,7 @@
 export const calls = [];
 export const answers = {
   ParseEmod: '{}', ExportJSON: '{}', ExportEmod: '{}', Read: '{}', Write: '{}',
-  SetModified: undefined,
+  SetModified: undefined, Record: undefined,
 };
 
 export const ModelService = {
@@ -41,5 +41,23 @@ export const WindowService = {
     const held = answer instanceof Promise ? answer : Promise.resolve();
 
     return held.then(() => { landed.push(modified); });
+  },
+};
+
+// Record is driven the same way as SetModified, and for the same reason keeps
+// its own landing order: `recorded` is the sequence of paths as the shell would
+// hold them, which is the only order a test can hold the frontend to.
+export const recorded = [];
+
+export const RecentFiles = {
+  Record: (path) => {
+    calls.push(['Record', path]);
+    const answer = answers.Record;
+    if (answer instanceof Error) {
+      return Promise.reject(answer);
+    }
+    const held = answer instanceof Promise ? answer : Promise.resolve();
+
+    return held.then(() => { recorded.push(path); });
   },
 };

@@ -9,7 +9,7 @@ import { CtxActions } from './ctx-actions.js';
 import { Model } from './model.js';
 import { bus } from './bus.js';
 import { Export } from './emod-export.js';
-import { ready, isReady, droppedFiles, saveFile, setWindowTitle, setWindowModified, resolveUnsavedEdits, onFileOpened, onFilesDropped, onSaveRequested, onLeaveRequested, initialState } from './platform.js';
+import { ready, isReady, droppedFiles, saveFile, setWindowTitle, setWindowModified, rememberOpenedFile, resolveUnsavedEdits, onFileOpened, onFilesDropped, onSaveRequested, onLeaveRequested, initialState } from './platform.js';
 
 // ─── Event subscriptions ─────────────────────────────────────────────
 bus.on('data:changed', function({ store: s }) {
@@ -216,6 +216,7 @@ function init() {
         if (render !== latestRender) return;
         if (file !== undefined) {
           store.currentFile = file;
+          rememberFile(file, reportRecordingRefusal);
         }
         store.diagnostics = data.diagnostics || [];
         bus.emit('diagnostics:changed', { store, diagnostics: store.diagnostics });
@@ -450,13 +451,52 @@ function init() {
     el.classList.remove('failed');
   }
 
-  function reportSaveOutcome(text, failed) {
+  function reportInBar(text, failed) {
     const el = store.dom.saveStatus;
     if (!el) return;
     el.textContent = text;
     el.title = text;
     el.classList.remove('hidden');
     el.classList.toggle('failed', failed);
+  }
+
+  // Only a file with somewhere on disk to be found again is worth remembering:
+  // pasted source has no location, and a drop the page read itself carries
+  // none. A recording the host refuses is not worth rearranging the window for
+  // — the model did open — and what to say about it is the caller's, because
+  // the bar it would go to may already be answering something the user asked
+  // for.
+  function rememberFile(file, onRefused) {
+    if (!file || !file.path) {
+      return;
+    }
+    rememberOpenedFile({ name: file.name, path: file.path }).catch(function(err) {
+      onRefused(err.message || String(err));
+    });
+  }
+
+  // A refused recording has one chance at the bar: the open that prompted it
+  // cleared the bar, so anything written there since is something the user
+  // asked for — a save's confirmation — and outranks it. The reason is back on
+  // the next open, since a directory that refused this recording refuses the
+  // next.
+  function reportRecordingRefusal(reason) {
+    const el = store.dom.saveStatus;
+    if (el && el.classList.contains('hidden')) {
+      reportInBar('✗ Recent files: ' + reason, true);
+    }
+  }
+
+  // A save's confirmation is the answer to what the user asked for, so a
+  // refused recording is added to it rather than written over it — and only
+  // while the bar still shows it. Anything newer there is something the user
+  // asked for since, and a directory that refused this recording refuses the
+  // next, so the reason is back on the next open.
+  function extendConfirmation(confirmation, reason) {
+    const el = store.dom.saveStatus;
+    if (el && el.textContent === confirmation) {
+      reportInBar(confirmation + ' · recent files not saved: ' + reason, false);
+    }
   }
 
   // The bar keeps the outcome because it is the one place on screen a save can
@@ -468,7 +508,7 @@ function init() {
   let saveFailureText = null;
 
   function reportSaveFailure(reason, stillOpen) {
-    reportSaveOutcome('✗ ' + reason, true);
+    reportInBar('✗ ' + reason, true);
     // A save whose file is no longer the one on screen still has to be reported,
     // because its bytes did not land — but revealing the panel would interrupt a
     // model the user has already moved on to, so only the bar carries it.
@@ -542,14 +582,24 @@ function init() {
       // A file opened while this was being written owns the window now, so
       // adopting this save's target would name a model the panel is no longer
       // showing — and the save after it would write over that model.
+      const confirmation = '✓ Saved ' + saved.name;
+      let newLocation = null;
       if (store.currentFile === openFile) {
         store.currentFile = { name: saved.name, path: saved.path, content: content };
         applyWindowTitle(store);
         UI.updateStats(store);
         clearSaveFailure();
+        // A save back to the file already open changes nothing about where the
+        // model lives; only a location it did not have before is a new one.
+        if (saved.path !== (openFile ? openFile.path : '')) {
+          newLocation = store.currentFile;
+        }
       }
-      reportSaveOutcome('✓ Saved ' + saved.name, false);
+      reportInBar(confirmation, false);
       reportModified();
+      rememberFile(newLocation, function(reason) {
+        extendConfirmation(confirmation, reason);
+      });
     }).catch(function(err) {
       reportSaveFailure(err.message || String(err), store.currentFile === openFile);
       reportModified();

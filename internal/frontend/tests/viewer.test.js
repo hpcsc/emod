@@ -28,6 +28,10 @@ let unsavedEditsAsked = 0;
 let requestLeave = null;
 // Set by a test that has to answer several dialogs out of order.
 let unsavedEditsAnswerer = null;
+let remembered = [];
+let rememberFails = null;
+// Set by a test that has to hold a recording's answer open.
+let rememberAnswerer = null;
 
 vi.mock('../static/platform.js', () => ({
   get ready() { return platformReady; },
@@ -49,6 +53,13 @@ vi.mock('../static/platform.js', () => ({
   onLeaveRequested: vi.fn((handler) => { requestLeave = handler; }),
   setWindowTitle: vi.fn((title) => { windowTitle = title; }),
   setWindowModified: vi.fn((modified) => { modifiedReports.push(modified); }),
+  rememberOpenedFile: vi.fn((file) => {
+    remembered.push(file);
+    if (rememberAnswerer) {
+      return rememberAnswerer(file);
+    }
+    return rememberFails ? Promise.reject(new Error(rememberFails)) : Promise.resolve();
+  }),
   resolveUnsavedEdits: vi.fn(() => {
     unsavedEditsAsked++;
     return unsavedEditsAnswerer
@@ -247,6 +258,9 @@ beforeEach(() => {
   unsavedEditsAsked = 0;
   requestLeave = null;
   unsavedEditsAnswerer = null;
+  remembered = [];
+  rememberFails = null;
+  rememberAnswerer = null;
 });
 
 describe('the window is named through the host, not by assigning document.title', () => {
@@ -2014,6 +2028,183 @@ describe('two models arriving at once', () => {
   });
 });
 
+// The host keeps the list of what has been opened, and the viewer is the only
+// side that knows the moment a file becomes the model on screen — so it says so
+// through the seam, from the one branch every entry point already passes.
+describe('what the viewer says it has opened', () => {
+  const rememberedPaths = () => remembered.map((file) => file.path);
+
+  it('remembers a file the host opened, by its name and its path, once', async () => {
+    await openBilling();
+
+    expect(remembered).toEqual([{ name: 'billing.emod', path: '/models/billing.emod' }]);
+  });
+
+  it('remembers a file the host dropped, by the real path the host resolved', async () => {
+    await startEmpty();
+
+    await deliverDroppedFiles([{
+      name: 'hotel.emod',
+      read: () => Promise.resolve({ name: 'hotel.emod', path: '/models/hotel.emod', content: 'emod 1\nmodel "Hotel"\n' }),
+    }]);
+    await flush();
+
+    expect(rememberedPaths()).toEqual(['/models/hotel.emod']);
+  });
+
+  it('remembers a file again when it is opened again, because the host decides what it already holds', async () => {
+    await openBilling();
+
+    deliverFile({ name: 'billing.emod', path: '/models/billing.emod', content: billingSource });
+    await flush();
+
+    expect(rememberedPaths()).toEqual(['/models/billing.emod', '/models/billing.emod']);
+  });
+
+  it('remembers nothing for pasted source, which has no location behind it', async () => {
+    await startEmpty();
+
+    document.getElementById('source-input').value = billingSource;
+    document.getElementById('render-btn').click();
+    await flush();
+
+    expect(remembered).toEqual([]);
+    expect(document.getElementById('render-status').textContent).toBe('✓ Rendered');
+  });
+
+  it('remembers nothing for a drop the page read itself, which carries no location', async () => {
+    await startEmpty();
+
+    const file = new File([''], 'hotel.emod');
+    file._content = 'emod 1\nmodel "Hotel"\n';
+    fireDrop(document.getElementById('data-panel-body'), file);
+    await flush();
+
+    expect(document.getElementById('source-input').value).toContain('Hotel');
+    expect(remembered).toEqual([]);
+  });
+
+  it('remembers nothing for a file whose render the parser rejects, because it never became the model on screen', async () => {
+    globalThis.INITIAL_DATA = null;
+    await startViewer();
+    parseQueue.push(Promise.reject(new Error('nothing to render')));
+
+    deliverFile({ name: 'broken.emod', path: '/models/broken.emod', content: 'emod 1\n' });
+    await flush();
+
+    expect(document.getElementById('render-status').textContent).toContain('nothing to render');
+    expect(remembered).toEqual([]);
+  });
+
+  it('remembers the location a save to a new location chose, and the model is that file now', async () => {
+    await openBilling();
+    saveAnswer = { name: 'copy.emod', path: '/models/copy.emod' };
+
+    await save({ chooseLocation: true });
+
+    expect(rememberedPaths()).toEqual(['/models/billing.emod', '/models/copy.emod']);
+  });
+
+  it('remembers where pasted source was first saved', async () => {
+    await startEmpty();
+    document.getElementById('source-input').value = billingSource;
+    saveAnswer = { name: 'hotel.emod', path: '/models/hotel.emod' };
+
+    await save();
+
+    expect(rememberedPaths()).toEqual(['/models/hotel.emod']);
+  });
+
+  it('remembers nothing for a save back to the file already open', async () => {
+    await openBilling();
+    saveAnswer = { name: 'billing.emod', path: '/models/billing.emod' };
+
+    await save();
+
+    expect(rememberedPaths()).toEqual(['/models/billing.emod']);
+  });
+
+  it('remembers nothing for a save whose location dialog was cancelled', async () => {
+    await openBilling();
+    saveAnswer = null;
+
+    await save({ chooseLocation: true });
+
+    expect(rememberedPaths()).toEqual(['/models/billing.emod']);
+  });
+
+  it('keeps a save confirmation first when the recording the save prompted is refused', async () => {
+    await startEmpty();
+    document.getElementById('source-input').value = billingSource;
+    saveAnswer = { name: 'hotel.emod', path: '/models/hotel.emod' };
+    rememberFails = 'writing /Users/me/Library/Application Support/emod/recent-files.json: permission denied';
+
+    await save();
+
+    const bar = document.getElementById('save-status');
+    expect(bar.textContent.startsWith('✓ Saved hotel.emod')).toBe(true);
+    expect(bar.textContent).toContain('recent files not saved');
+    expect(bar.title).toContain('permission denied');
+    expect(bar.classList.contains('failed')).toBe(false);
+    expect(rememberedPaths()).toEqual(['/models/hotel.emod']);
+  });
+
+  it('leaves a newer confirmation alone when an older recording is refused late', async () => {
+    await startEmpty();
+    document.getElementById('source-input').value = billingSource;
+    const refusals = [];
+    rememberAnswerer = () => new Promise((resolve, reject) => { refusals.push(reject); });
+
+    saveAnswer = { name: 'hotel.emod', path: '/models/hotel.emod' };
+    await save();
+    saveAnswer = { name: 'copy.emod', path: '/models/copy.emod' };
+    await save({ chooseLocation: true });
+    // The older recording's refusal lands last, which is the order a queue
+    // that answers in turn cannot produce but a slow write can.
+    refusals[1](new Error('writing recent-files.json: permission denied'));
+    await flush();
+    refusals[0](new Error('writing recent-files.json: permission denied'));
+    await flush();
+
+    const bar = document.getElementById('save-status');
+    expect(bar.textContent.startsWith('✓ Saved copy.emod')).toBe(true);
+    expect(bar.textContent).not.toContain('hotel.emod');
+    expect(bar.classList.contains('failed')).toBe(false);
+  });
+
+  it('leaves a save confirmation alone when the recording an earlier open prompted is refused late', async () => {
+    const refusals = [];
+    rememberAnswerer = () => new Promise((resolve, reject) => { refusals.push(reject); });
+    await openBilling();
+    saveAnswer = { name: 'billing.emod', path: '/models/billing.emod' };
+    await save();
+
+    refusals[0](new Error('writing recent-files.json: permission denied'));
+    await flush();
+
+    const bar = document.getElementById('save-status');
+    expect(bar.textContent).toBe('✓ Saved billing.emod');
+    expect(bar.classList.contains('failed')).toBe(false);
+  });
+
+  it('reports a recording the host refused in the bar, with the model open and the panel as it was', async () => {
+    rememberFails = 'writing /Users/me/Library/Application Support/emod/recent-files.json: permission denied';
+
+    await openBilling();
+
+    const bar = document.getElementById('save-status');
+    expect(bar.textContent).toContain('Recent files');
+    expect(bar.textContent).toContain('permission denied');
+    expect(bar.title).toContain('recent-files.json');
+    expect(bar.classList.contains('hidden')).toBe(false);
+    expect(bar.classList.contains('failed')).toBe(true);
+    expect(document.getElementById('diagram-canvas').innerHTML).toContain('TakePayment');
+    expect(document.getElementById('render-status').textContent).toBe('✓ Rendered');
+    expect(document.getElementById('data-panel').classList.contains('collapsed')).toBe(true);
+    expect(windowTitle).toBe('billing.emod — Emod Diagram Viewer');
+  });
+});
+
 // The host cannot raise this question and wait for it, so it asks the viewer,
 // which answers with the same policy an arriving model goes through.
 describe('the host asking whether it may close', () => {
@@ -2280,8 +2471,8 @@ describe('the platform seam has one contract', () => {
   it('names every host operation the shared modules reach for', () => {
     expect(contract).toEqual(
       ['droppedFiles', 'exportEmod', 'initialState', 'isReady', 'onFileOpened', 'onFilesDropped',
-       'onLeaveRequested', 'onSaveRequested', 'parseEmod', 'ready', 'resolveUnsavedEdits', 'saveFile',
-       'setWindowModified', 'setWindowTitle'],
+       'onLeaveRequested', 'onSaveRequested', 'parseEmod', 'ready', 'rememberOpenedFile',
+       'resolveUnsavedEdits', 'saveFile', 'setWindowModified', 'setWindowTitle'],
     );
   });
 
