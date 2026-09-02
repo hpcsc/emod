@@ -367,6 +367,20 @@ function promptForFile() {
   });
 }
 
+// An entry chosen from the shell's Open Recent menu, which reaches the frontend
+// the way Open does. The read goes through the list's own service rather than
+// FileService, because only it knows to forget a file that has gone and to say
+// so in its reason. Delivered exactly as a chosen file is, so the viewer cannot
+// tell the two apart — the same unsaved-edits question, the same save target.
+// The name is pinned against the shell by internal/desktop's event-name guard.
+Events.On('file:open-recent-requested', function(event) { return openRecent(event.data); });
+
+function openRecent(path) {
+  return openNamedBy(function() {
+    return RecentFiles.Open(path).then(JSON.parse);
+  });
+}
+
 // A gesture that has to name a model and then read it before it can deliver.
 // name answers the opened document, null for a gesture that named nothing, or
 // fails; what it read is delivered only if no later gesture has been made

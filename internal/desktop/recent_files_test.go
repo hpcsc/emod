@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"regexp"
 	"strings"
 	"sync"
 	"testing"
@@ -500,6 +501,55 @@ func TestRecentFiles(t *testing.T) {
 			desktop.NewRecentFiles(path, later)
 			require.Equal(t, menu.latest(), later.latest())
 		})
+	})
+}
+
+// The one hard requirement RecentMenu states is not something the compiler can
+// hold anyone to, and its only implementation lives in cmd/emod-desktop — a
+// package no test target builds and no other guard reads. Waiting on the main
+// thread there deadlocks every later change behind the service's lock, which is
+// a hang rather than a failure and so would reach a user before it reached a
+// test.
+func TestRecentMenuImplementation(t *testing.T) {
+	t.Run("the shell's menu changes its items on the main thread rather than waiting on it", func(t *testing.T) {
+		// The whole file rather than Show's body: a wait one call deeper, in a
+		// helper Show reaches, hangs the service exactly as one in Show would.
+		source, err := os.ReadFile("../../cmd/emod-desktop/recent_menu.go")
+		require.NoError(t, err)
+		require.NotContains(t, string(source), "InvokeSync",
+			"InvokeSync waits for the main thread while the service holds its lock")
+
+		body := methodBody(t, "../../cmd/emod-desktop/recent_menu.go", "recentMenu", "Show")
+		// Presence of the dispatch is not enough: a Show that changed the items on
+		// the caller's goroutine and dispatched something else would pass that
+		// and still touch the native menu off the main thread.
+		handedOff := regexp.MustCompile(`(?s)application\.InvokeAsync\(func\(\) \{(.*?)\}\)`).FindStringSubmatch(body)
+		require.Len(t, handedOff, 2, "Show must hand a closure to application.InvokeAsync")
+		require.Contains(t, handedOff[1], "apply(",
+			"the change must be applied inside the closure handed to the main thread")
+		// The one place the change may be applied where it is made is before the
+		// app runs, and only there: the branch has to be the not-running one, or
+		// an inverted test would apply every change off the main thread and hand
+		// off none.
+		beforeRun := regexp.MustCompile(`(?s)if !m\.running\.Load\(\) \{(.*?)\n\t\}`).FindStringSubmatch(body)
+		require.Len(t, beforeRun, 2, "Show must apply the change in place only while the app is not yet running")
+		require.Contains(t, beforeRun[1], "apply(")
+		require.NotContains(t, beforeRun[1], "InvokeAsync",
+			"before the app runs there is no main thread to hand to")
+	})
+}
+
+func TestRecentLabels(t *testing.T) {
+	t.Run("names each entry by its file name", func(t *testing.T) {
+		labels := desktop.RecentLabels([]string{"/models/billing.emod", "/archive/hotel.emod"})
+
+		require.Equal(t, []string{"billing.emod", "hotel.emod"}, labels)
+	})
+
+	t.Run("adds the directory to the entries that share a file name, and to those alone", func(t *testing.T) {
+		labels := desktop.RecentLabels([]string{"/work/model.emod", "/models/hotel.emod", "/archive/model.emod"})
+
+		require.Equal(t, []string{"model.emod — /work", "hotel.emod", "model.emod — /archive"}, labels)
 	})
 }
 

@@ -8,7 +8,7 @@
 export const calls = [];
 export const answers = {
   ParseEmod: '{}', ExportJSON: '{}', ExportEmod: '{}', Read: '{}', Write: '{}',
-  SetModified: undefined, Record: undefined,
+  SetModified: undefined, Record: undefined, Open: '{}',
 };
 
 export const ModelService = {
@@ -50,6 +50,10 @@ export const WindowService = {
 export const recorded = [];
 
 export const RecentFiles = {
+  Open: (path) => {
+    calls.push(['Open', path]);
+    return answers.Open instanceof Error ? Promise.reject(answers.Open) : Promise.resolve(answers.Open);
+  },
   Record: (path) => {
     calls.push(['Record', path]);
     const answer = answers.Record;

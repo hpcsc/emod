@@ -70,7 +70,7 @@
     },
     {
       "n": 3,
-      "done": false,
+      "done": true,
       "title": "Reopen a model from the File ▸ Open Recent menu",
       "language": "Go",
       "testable": true,

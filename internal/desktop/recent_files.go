@@ -112,6 +112,27 @@ func (s *RecentFiles) Clear() error {
 	return s.changed()
 }
 
+// RecentLabels names each listed model for a menu: by its file name, and by its
+// directory as well wherever two entries share a name — the one case a name
+// alone cannot tell apart.
+func RecentLabels(paths []string) []string {
+	sharing := map[string]int{}
+	for _, path := range paths {
+		sharing[filepath.Base(path)]++
+	}
+
+	labels := make([]string, len(paths))
+	for i, path := range paths {
+		name := filepath.Base(path)
+		if sharing[name] > 1 {
+			name += " — " + filepath.Dir(path)
+		}
+		labels[i] = name
+	}
+
+	return labels
+}
+
 // forget answers the reason a file that has gone could not be opened, having
 // taken it off the list if it was there. A refused write is folded into the
 // reason rather than lost: the answer has one channel back to the user, and a
