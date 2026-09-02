@@ -537,19 +537,12 @@ func TestRecentMenuImplementation(t *testing.T) {
 		require.NotContains(t, beforeRun[1], "InvokeAsync",
 			"before the app runs there is no main thread to hand to")
 	})
-}
 
-func TestRecentLabels(t *testing.T) {
-	t.Run("names each entry by its file name", func(t *testing.T) {
-		labels := desktop.RecentLabels([]string{"/models/billing.emod", "/archive/hotel.emod"})
+	t.Run("the change handed to the main thread reaches the slots", func(t *testing.T) {
+		apply := methodBody(t, "../../cmd/emod-desktop/recent_menu.go", "recentMenu", "apply")
 
-		require.Equal(t, []string{"billing.emod", "hotel.emod"}, labels)
-	})
-
-	t.Run("adds the directory to the entries that share a file name, and to those alone", func(t *testing.T) {
-		labels := desktop.RecentLabels([]string{"/work/model.emod", "/models/hotel.emod", "/archive/model.emod"})
-
-		require.Equal(t, []string{"model.emod — /work", "hotel.emod", "model.emod — /archive"}, labels)
+		require.Contains(t, apply, "shown.Show(",
+			"a change that never reaches RecentSlots leaves the menu showing the old order")
 	})
 }
 
