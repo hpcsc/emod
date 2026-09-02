@@ -68,3 +68,11 @@ describe('the unsaved-edits marker', () => {
     expect(document.body.innerHTML).toBe(body);
   });
 });
+
+// The viewer chains on the answer, so an implementation that returned nothing
+// would break every open in the browser build the moment a recording is made.
+describe('remembering an opened file', () => {
+  it('accepts the file and does nothing, answering a resolved promise', async () => {
+    await expect(browser.rememberOpenedFile('/models/billing.emod')).resolves.toBeUndefined();
+  });
+});
