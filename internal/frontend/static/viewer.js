@@ -470,7 +470,7 @@ function init() {
     if (!file || !file.path) {
       return;
     }
-    rememberOpenedFile({ name: file.name, path: file.path }).catch(function(err) {
+    rememberOpenedFile(file.path).catch(function(err) {
       onRefused(err.message || String(err));
     });
   }

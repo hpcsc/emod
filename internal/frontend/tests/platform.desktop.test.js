@@ -959,14 +959,14 @@ describe('opening a recent entry', () => {
 // opened is sent, in the order the viewer said so.
 describe('remembering an opened file', () => {
   it('sends the file\'s path to the shell\'s list', async () => {
-    await desktop.rememberOpenedFile({ name: 'billing.emod', path: '/models/billing.emod' });
+    await desktop.rememberOpenedFile('/models/billing.emod');
 
     expect(stub.calls).toEqual([['Record', '/models/billing.emod']]);
   });
 
   it('sends the same file again when told again, keeping no record of its own', async () => {
-    await desktop.rememberOpenedFile({ name: 'billing.emod', path: '/models/billing.emod' });
-    await desktop.rememberOpenedFile({ name: 'billing.emod', path: '/models/billing.emod' });
+    await desktop.rememberOpenedFile('/models/billing.emod');
+    await desktop.rememberOpenedFile('/models/billing.emod');
 
     expect(stub.recorded).toEqual(['/models/billing.emod', '/models/billing.emod']);
   });
@@ -975,12 +975,12 @@ describe('remembering an opened file', () => {
     let releaseFirst;
     stub.answers.Record = new Promise((resolve) => { releaseFirst = resolve; });
 
-    const first = desktop.rememberOpenedFile({ name: 'first.emod', path: '/models/first.emod' });
+    const first = desktop.rememberOpenedFile('/models/first.emod');
     // The dispatch is a turn away, so the gate has to still be in the bag when
     // it happens or the call it was meant to hold open sails straight through.
     await flush();
     stub.answers.Record = undefined;
-    const second = desktop.rememberOpenedFile({ name: 'second.emod', path: '/models/second.emod' });
+    const second = desktop.rememberOpenedFile('/models/second.emod');
     // A second call the queue does not hold back lands right here, ahead of the
     // first; one it does hold back cannot be sent until the first has landed.
     await flush();
@@ -993,11 +993,11 @@ describe('remembering an opened file', () => {
   it('raises the shell\'s refusal to the caller, and still sends the file after it', async () => {
     stub.answers.Record = new Error('writing recent-files.json: permission denied');
 
-    await expect(desktop.rememberOpenedFile({ name: 'first.emod', path: '/models/first.emod' }))
+    await expect(desktop.rememberOpenedFile('/models/first.emod'))
       .rejects.toThrow('writing recent-files.json: permission denied');
 
     stub.answers.Record = undefined;
-    await desktop.rememberOpenedFile({ name: 'second.emod', path: '/models/second.emod' });
+    await desktop.rememberOpenedFile('/models/second.emod');
 
     expect(stub.recorded).toEqual(['/models/second.emod']);
   });
