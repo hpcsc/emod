@@ -191,6 +191,22 @@ Check the ordering and the lock hardest. A menu that lags the list is the visibl
 `Show` that blocks is the invisible one, because it shows up as a frozen window rather than a red
 test.
 
+Two things the finished branch does that a reader of the framework's API would not predict. The
+submenu is never rebuilt: `Menu.Update()` on the application menu is the framework's only way to
+add or remove an item once the app runs, and on macOS it discards the items AppKit injected at
+launch — Start Dictation, Emoji & Symbols, AutoFill, Close All and the fullscreen toggle — so the
+menu is built once with a slot for every entry the list can hold, and each change relabels and
+hides slots in place through `desktop.RecentSlots`, which also answers which path a slot's click
+opens. And the hand-off to the main thread waits for the app to be running: `InvokeAsync` before
+`app.Run` is a nil dereference, and the service shows the saved list before that, so until
+`ApplicationStarted` a change is applied where it is made.
+
+The bar along the bottom now has two writers, a save's confirmation and a refused recording, and
+the second never outranks the first: the save path extends its own confirmation while the bar
+still shows it, and the open path reports only while the bar is still empty since the open cleared
+it. A leaf that pins this has to release the older refusal last; released in order, the newer write
+wins and hides the defect.
+
 ## Tasks
 
 ### Task 1: Remember which models have been opened, across runs
