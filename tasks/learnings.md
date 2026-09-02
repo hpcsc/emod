@@ -1154,8 +1154,62 @@ in this repo; append only learnings that generalise beyond the task that surface
 - Learning: jsdom has no cascade worth trusting and no layout, so a stylesheet rule can be pinned by reading `viewer.html` as text and still not paint. What settles it is asking the real engine: inject a probe module into the assembled frontend (`cmd/emod-desktop/frontend/`, gitignored, so nothing tracked is touched), drive the framework's own callbacks — `window._wails.handleDragEnter/handleDragOver/handlePlatformFileDrop` — and write `getComputedStyle(document.body, '::after')` back to disk through `FileService.Write`. That reported content, position, inset, z-index, pointer-events and the exact rgba fill, which is the cascade actually resolving. The trap that costs an hour: `task build:desktop` does `rm -rf cmd/emod-desktop/frontend`, so a probe injected before it is wiped, and one injected after a source edit without re-running it leaves the app serving stale markup — the probe then reports the class applied and no overlay painted, which reads exactly like a broken selector. Re-assemble, then inject, then `go build`.
 - Apply when: verifying a CSS rule, a pseudo-element or anything about layout in the desktop build, or writing a probe into cmd/emod-desktop/frontend
 
-## Never pipe clerk audit run into head, and never detach it with nohup
+## Rebuilding a Wails application menu discards the items AppKit injected at launch
 - Type: constraint
-- Observed: us-005-open-a-model-by-dropping-it-on-the-window
-- Learning: `clerk audit run` streams progress for fifteen to twenty-five minutes. Piping it into `head -30` kills it with SIGPIPE the moment the thirtieth line is written — the round died mid-review with the progress log at exactly 29 lines, having already paid for its scope agent, and the death looks like the harness reaping a background process. Detaching with `nohup ... &` is the wrong repair: the launching shell then returns at once, so the harness's completion notification fires at launch rather than at completion and stops meaning anything, which is how a finished round sat unrecorded until someone asked. Launch it with `run_in_background` and no pipe, and arm a watch on the ledger's `live.phase` at launch — including on a resume, which is the one everybody forgets.
-- Apply when: launching or resuming clerk audit run, or diagnosing a round that died mid-phase or finished without anyone noticing
+- Observed: task 3 — us-006-reopen-a-recently-opened-model
+- Learning: `Menu.Update()` on the root menu is the only way v3.0.0-beta.9 can add or remove an item once the app runs (a submenu has no native handle of its own), and on macOS it does `removeAllItems` and rebuilds the same NSMenu — which drops every item AppKit added at launch for the rest of the session: Start Dictation…, Emoji & Symbols and AutoFill from Edit, Close All from File, and the fullscreen toggle from View. Measured with a CGO probe walking `[NSApp mainMenu]`: Edit 18→11, View 9→8, File 7→6 after the first Update, with every suite green. Build a changing submenu once with a slot per entry it can hold and show changes with `SetLabel`/`SetHidden`/`SetEnabled` in place, which the framework applies natively without a rebuild; `desktop.RecentSlots` is the tested shape and `cmd/emod-desktop/recent_menu.go` the adapter.
+- Apply when: adding a menu whose contents change at runtime to cmd/emod-desktop, or calling Menu.Update() anywhere in the shell.
+
+## application.InvokeAsync panics before app.Run, and a collaborator the service shows at construction runs then
+- Type: constraint
+- Observed: task 3 — us-006-reopen-a-recently-opened-model
+- Learning: `dispatchOnMainThread` dereferences `a.impl`, which `Run` creates, so an `InvokeAsync` before `app.Run()` is a nil-pointer panic at application.go:975 — and a shell collaborator shaped like `WindowMarker`/`RecentMenu` is called before Run when the service shows it the saved list at construction. The app died at launch with every suite green, because cmd/emod-desktop is in no test target. Gate the hand-off on a flag set from `events.Common.ApplicationStarted` (mapped on darwin, linux and windows), and apply item state in place before it: state set on a `MenuItem` before Run is picked up when the menu is built, and no binding or click can arrive until the run loop exists.
+- Apply when: writing a shell collaborator a Go service may call before app.Run, or calling InvokeAsync/InvokeSync outside a framework callback.
+
+## Smoke-test a native menu with a CGO probe; AppleScript is refused from this harness
+- Type: convention
+- Observed: task 3 — us-006-reopen-a-recently-opened-model
+- Learning: `osascript` against System Events is refused ("Not authorised to send Apple events"), so menus can be neither read nor clicked that way. A temporary `probe_darwin.go` in cmd/emod-desktop — `init()` starting a goroutine that sleeps past launch, then `application.InvokeSync` around ObjC that walks `[NSApp mainMenu]` (title, enabled, hidden per item, item counts per top-level menu), fires the real item actions with `performActionForItemAtIndex:`, reads `[NSApp mainWindow].title`, writes a log to a path from an env var and calls `application.Get().Quit()` — verified reopen-by-menu, removal of a gone entry, Clear Menu and the menu bar's shape across changes in under a minute per run. Seed `~/Library/Application Support/emod/recent-files.json` by hand for the scenario, delete the probe before `clerk finish` (the event-name guard scans every non-test .go file there), rebuild without it, and remove the seeded directory at the end. Keep the probe in the scratchpad for reruns.
+- Apply when: verifying anything in the desktop shell's native menus or window state that no suite drives.
+
+## JS Events.Emit round-trips through Go to the page's own listeners, so a probe module can drive shell-emitted events
+- Type: convention
+- Observed: task 2 — us-006-reopen-a-recently-opened-model
+- Learning: A JS `Events.Emit(name, data)` is processed in Go (`EmitEvent`) and the EventProcessor sends it back to every window, so a temporary `probe.js` in the assembled `cmd/emod-desktop/frontend/static/`, loaded from `index.html` and emitting `file:dropped` with real paths on a timer, drives the shell→frontend path end to end in the built app: the viewer opened the file, the seam recorded it and the list landed on disk. `task build:desktop` wipes that directory, so inject after it and compile with `go build -tags production` rather than the task.
+- Apply when: verifying a shell-emitted event's frontend handling without native drag or dialogs.
+
+## Detach clerk audit run from the Bash tool and watch it with a Monitor, never pipe it into head
+- Type: constraint
+- Observed: us-006-reopen-a-recently-opened-model
+- Learning: A background Bash call is killed at 600s and a round takes 20–30 minutes, so the runner died mid-review with all six review lenses lost and re-run on resume. Launch with `nohup clerk audit run … >| <log> 2>&1 & disown` and arm a Monitor on the ledger's progress.log that polls `pgrep -f "clerk-audit ru[n]"` — the process is `clerk-audit run`, not `clerk audit run`, and the bracket stops pgrep matching the monitor's own shell — emitting phase headers and exiting when the runner exits; the completion signal is then the monitor's, which the nohup learning worried about. The report agent can also fail on the account's session limit; a bare `clerk audit run` resumes just that phase once it resets. And a refuter can leave a built binary at the repo root: `clerk audit round` refuses a dirty tree, so `git status --porcelain` and delete before recording. Piping the run into `head` kills it with SIGPIPE at the Nth line, mid-review, having already paid for its scope agent — the log stops at exactly N lines and looks like the harness reaping it.
+- Apply when: launching, resuming or recording clerk audit run from Claude Code.
+
+## A fixup whose hunk context was added by a later commit conflicts on replay
+- Type: constraint
+- Observed: us-006-reopen-a-recently-opened-model
+- Learning: `clerk fixup` stages whole files and takes the fold's diff against the tip, so a hunk whose three context lines were added by a commit after the target — a comment reworded beside a type the extraction commit inserted above it, a call-signature change inside tests a later commit sprinkled lines into — cannot apply at the target and aborts the whole replay ("conflicted", branch untouched). Before marking, ask whether the lines around the change existed at the target; fold onto the later commit when they did not, and land a seam-signature change as its own commit. Recovery is `git reset --soft <tip before the fixups>`, `git reset`, then re-mark with the right targets and replay — the tree hash before and after proves the fold lossless.
+- Apply when: marking fixups on a branch where later commits touched the same region, or after clerk fixup --replay reports conflicted.
+
+## A str.replace of a short indented line is a substring match and plants stray lines
+- Type: recurring-finding
+- Observed: task 2 — us-006-reopen-a-recently-opened-model
+- Learning: Replacing `"  stub.answers.Record = undefined;\n"` (two-space prefix) to add a line after it matched the four-space-indented occurrences inside two tests as well as the beforeEach, planting a stray assignment in each — surfaced by an audit lens as stray answer assignments. Anchor edits on a unique multi-line context, assert `s.count(old) == 1` before replacing, and read the diff before the suite; a green suite does not notice a harmless extra line.
+- Apply when: editing a file with python str.replace, especially a test file with repeated setup lines.
+
+## A recording refusal never outranks a save confirmation in the bar, and each path decides how it reports
+- Type: convention
+- Observed: task 2 — us-006-reopen-a-recently-opened-model
+- Learning: The bar has one slot and two writers now: a save confirmation and a refused recent-files recording. Two audit rounds each found a way for the refusal to land on top of a confirmation — issued before it in the save path, or late from an earlier open. The shape that holds is a `rememberFile(file, onRefused)` seam call where the caller decides: the save path extends its own confirmation only while the bar still shows it, and the open path reports only while the bar is still empty since the open cleared it; the reason is back on the next open because a directory that refuses one recording refuses the next. Pin ordering leaves by releasing the older refusal last — releasing in order lets the newer write win and hides the bug.
+- Apply when: adding a second writer to #save-status, or reporting any asynchronous host failure that can land after a user-initiated outcome.
+
+## Reading Wails' source settles what a call does, not what AppKit does around it
+- Type: convention
+- Observed: task 3 — us-006-reopen-a-recently-opened-model
+- Learning: US-003's learning that a shell task is routine once the framework API is read first held for menus built before Run and failed twice for one changed at runtime: reading `Menu.Update()` far enough to see it rebuilds the root did not show that the rebuild drops the items AppKit injects at launch, and reading `InvokeAsync` did not show it panics before Run — both were found only by running the built app and reading the native menu back with a probe. Plan a shell task that changes native state after launch as medium certainty at best, and budget the probe run into its verification rather than into the audit that follows.
+- Apply when: assessing certainty for a cmd/emod-desktop task that changes a menu, window or dialog after the app is running, or closing such a task on a green suite alone.
+
+## Logic a breakdown leaves in cmd/emod-desktop is moved into internal/desktop by the audit, so plan it there
+- Type: convention
+- Observed: us-006-reopen-a-recently-opened-model
+- Learning: US-006's breakdown recorded, as a deliberate trade, that the menu's label rule stayed in the shell because a package no test target builds keeps presentation out of the service; round one moved the label rule into internal/desktop and round three moved the slot-to-path and hide bookkeeping after it, each as a confirmed finding with a suggested interface. The shell's only defensible content is framework calls and adapters: every decision — what to label, which slot answers which path, what to enable — belongs behind a small interface in internal/desktop with a fake in its test, the shape `WindowMarker`, `RecentMenu` and `MenuSlot` now share. A breakdown that leaves a rule in the shell buys a round to move it.
+- Apply when: decomposing any story that adds behaviour to cmd/emod-desktop, or deciding where a rule about menu, window or dialog state lives.
