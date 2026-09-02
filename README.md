@@ -402,6 +402,19 @@ replacing the model does. The browser viewer takes drops too, but reads them
 through the browser's own file reader, which yields contents and never a
 location — which is why it can only ever offer a model back as a download.
 
+**File ▸ Open Recent** lists the models opened most recently, newest first and
+at most ten, and choosing one opens it exactly as the picker does: the window
+takes its name, the bar shows its path, and Save writes back to it with no
+dialog. A model opened again moves to the top rather than appearing twice, a
+model saved to a new location joins the list, and two files that share a name
+are told apart by their directory. The list is kept between runs as
+`recent-files.json` in the platform's own per-user configuration directory —
+`~/Library/Application Support/emod` on macOS, `~/.config/emod` on Linux,
+`%AppData%\emod` on Windows. An entry whose file is no longer there says so
+when chosen and leaves the list; one the filesystem refuses for any other
+reason says why and stays. **Clear Menu**, at the bottom of the list, empties
+it.
+
 **File ▸ Save** (⌘S, Ctrl+S) writes the model back to the file it was opened
 from — that exact path, no dialog — and confirms in the bar along the bottom.
 With no file open, and for **File ▸ Save As** (⇧⌘S, Ctrl+Shift+S), the operating
