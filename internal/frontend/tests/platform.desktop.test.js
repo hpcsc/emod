@@ -411,7 +411,10 @@ describe('opening a file', () => {
   it('discards a request that arrives before the viewer has registered, rather than throwing', async () => {
     runtime.answers.OpenFile = '/models/billing.emod';
 
-    await expect(requestOpen()).resolves.toBeUndefined();
+    // The listener's own answer, not the helper's: a helper ending in flush
+    // resolves undefined whatever the listener returned.
+    await expect(Promise.resolve(runtime.listeners['file:open-requested']())).resolves.toBeUndefined();
+    await flush();
   });
 });
 
