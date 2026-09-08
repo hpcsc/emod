@@ -206,12 +206,14 @@ The paragraph listing what the desktop app cannot do yet stops claiming there is
 packaged `.app`.
 
 **Acceptance Criteria:**
-- [ ] The existing `### Desktop app` section (README.md:371) documents the packaging command and the bundle it produces
-- [ ] It documents the first-launch step for a downloaded copy — **Open Anyway** under System Settings → Privacy & Security, or `xattr -dr com.apple.quarantine` against the bundle — and says that either one is enough
-- [ ] It says why the block appears: the app is unsigned and un-notarized, so Gatekeeper stops a copy carrying `com.apple.quarantine`, which is what a browser download attaches and what a locally-built bundle does not have
-- [ ] It says the step is one-time per machine
-- [ ] The "What it does not do yet" paragraph (README.md:452-455) no longer says there is no packaged `.app`
-- [ ] The only file this task changes is `README.md`
+- [x] The existing `### Desktop app` section (README.md:371) documents the packaging command and the bundle it produces
+- [x] It documents the first-launch step for a downloaded copy — **Open Anyway** under System Settings → Privacy & Security, or `xattr -dr com.apple.quarantine` against the bundle — and says that either one is enough
+- [x] It says why the block appears: the app is unsigned and un-notarized, so Gatekeeper stops a copy carrying `com.apple.quarantine`, which is what a browser download attaches and what a locally-built bundle does not have
+- [x] It says the step is done once for a downloaded copy rather than on every launch — the story's
+      "one-time per machine" reads as "not per launch", and the attribute lives on the copy, so a later
+      download arrives quarantined in its turn; the README says both rather than the looser claim
+- [x] The "What it does not do yet" paragraph (README.md:452-455) no longer says there is no packaged `.app`
+- [x] The only file this task changes is `README.md`
 
 **Affected Files/Modules:**
 - `README.md` — `### Desktop app` (371) and the closing paragraph (452-455)

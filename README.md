@@ -449,10 +449,44 @@ The framework version is pinned in `go.mod`, which carries both the library
 requirement and a `tool` directive for the `wails3` CLI, so the two cannot
 drift and neither is resolved from `PATH`. Run the CLI as `go tool wails3`.
 
+**Packaging it as a macOS app** wraps that binary in a double-clickable bundle:
+
+```bash
+task package:desktop   # builds, then assembles ./bin/emod.app
+open ./bin/emod.app
+```
+
+`bin/emod.app` is a normal macOS application. It carries the emod name and icon
+in Finder, the Dock and the app switcher, and it runs on a Mac with no Go
+toolchain, no Node and no emod CLI: the frontend is compiled into the binary and
+the only libraries it links are the ones macOS itself ships. Copy it to
+`/Applications`, or anywhere else, and it keeps working — nothing in it points
+back at the directory it was built in.
+
+**A copy that arrives through a browser needs one step before it will open.**
+The app is not signed with an Apple Developer certificate and is not notarized,
+which is a deliberate trade — see §7.3 of
+[docs/proposals/emod-desktop-proposal.md](docs/proposals/emod-desktop-proposal.md).
+Gatekeeper only
+asks about files carrying `com.apple.quarantine`, which is an attribute the
+browser attaches to what it downloads and which a bundle you built yourself
+never has. So a locally built `emod.app` opens with no ceremony, and a
+downloaded one is refused on its first launch. Either of these clears it:
+
+- Open **System Settings ▸ Privacy & Security**, find the message naming emod,
+  and press **Open Anyway**.
+- Or strip the attribute directly:
+  ```bash
+  xattr -dr com.apple.quarantine /Applications/emod.app
+  ```
+
+You do this once for a copy you have downloaded, not on every launch — after it,
+that copy opens like any other application. Downloading a later build gives you
+a new copy, which arrives quarantined in its turn.
+
 What it does not do yet: a diagram edit does not reach the source panel and so
-is neither what Save writes nor what counts as an unsaved change; no packaged
-`.app` or installer; and no prebuilt download, so it has to be built from
-source.
+is neither what Save writes nor what counts as an unsaved change; no installer;
+and no prebuilt download, so it has to be built from source.
 
 How the repository fits together — packages, the language pipeline, renderers,
 the viewer's three distributions and the editor grammars — is described in

@@ -49,7 +49,7 @@
     },
     {
       "n": 3,
-      "done": false,
+      "done": true,
       "title": "Document packaging and the first-launch quarantine step in the README",
       "language": "Markdown",
       "testable": false,
