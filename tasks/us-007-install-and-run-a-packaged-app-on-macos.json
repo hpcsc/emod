@@ -1,0 +1,71 @@
+{
+  "story": "Install and run a packaged app on macOS",
+  "tasks_file": "tasks/us-007-install-and-run-a-packaged-app-on-macos.md",
+  "tasks": [
+    {
+      "n": 1,
+      "done": true,
+      "title": "Assemble a launchable emod.app bundle from a single package command",
+      "language": "Go",
+      "testable": true,
+      "certainty": "medium",
+      "blast_radius": "high",
+      "patterns_to_follow": [
+        "Taskfile.yml:48-65",
+        "internal/desktop/event_names_test.go",
+        "internal/desktop/binding_names_test.go:1-36",
+        ".goreleaser.yaml"
+      ],
+      "depends_on": [],
+      "affected_files": [
+        "Taskfile.yml",
+        "build/darwin/Info.plist",
+        "internal/desktop/bundle_layout_test.go"
+      ]
+    },
+    {
+      "n": 2,
+      "done": false,
+      "title": "Give the bundle the emod icon",
+      "language": "Go",
+      "testable": true,
+      "certainty": "medium",
+      "blast_radius": "low",
+      "patterns_to_follow": [
+        "Taskfile.yml:58",
+        "internal/desktop/event_names_test.go",
+        "task:1"
+      ],
+      "depends_on": [
+        1
+      ],
+      "affected_files": [
+        "build/appicon.png",
+        "build/darwin/Info.plist",
+        "Taskfile.yml",
+        ".gitignore",
+        "internal/desktop/bundle_layout_test.go"
+      ]
+    },
+    {
+      "n": 3,
+      "done": false,
+      "title": "Document packaging and the first-launch quarantine step in the README",
+      "language": "Markdown",
+      "testable": false,
+      "certainty": "high",
+      "blast_radius": "low",
+      "patterns_to_follow": [
+        "README.md:371-455",
+        "docs/proposals/emod-desktop-proposal.md",
+        "task:1"
+      ],
+      "depends_on": [
+        1
+      ],
+      "affected_files": [
+        "README.md"
+      ]
+    }
+  ]
+}

@@ -64,6 +64,24 @@ tasks:
     env:
       CGO_ENABLED: '1'
 
+  # The layout and the closing signature are mirrored from `create:app:bundle` in
+  # the pinned Wails module, which is where a v3 project's bundle assembly is
+  # written down. The Go linker already ad-hoc signs the executable, but that
+  # signature covers the executable alone: the bundle-level codesign is what
+  # seals Info.plist and Contents/Resources, so a bundle assembled without it
+  # carries a plist and an icon nothing has stood behind.
+  package:desktop:
+    desc: Package the desktop app as a macOS .app bundle
+    platforms: [darwin]
+    deps:
+      - build:desktop
+    cmds:
+      - rm -rf ./bin/emod.app
+      - mkdir -p ./bin/emod.app/Contents/MacOS ./bin/emod.app/Contents/Resources
+      - cp ./bin/emod-desktop ./bin/emod.app/Contents/MacOS/emod-desktop
+      - cp ./build/darwin/Info.plist ./bin/emod.app/Contents/Info.plist
+      - codesign --force --deep --sign - ./bin/emod.app
+
   build:web:
     desc: Assemble standalone deployment in web/
     deps:
