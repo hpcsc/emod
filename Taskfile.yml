@@ -80,7 +80,12 @@ tasks:
       - mkdir -p ./bin/emod.app/Contents/MacOS ./bin/emod.app/Contents/Resources
       - cp ./bin/emod-desktop ./bin/emod.app/Contents/MacOS/emod-desktop
       - cp ./build/darwin/Info.plist ./bin/emod.app/Contents/Info.plist
-      - codesign --force --deep --sign - ./bin/emod.app
+      # Derived into the bundle rather than tracked beside the plist: the .icns
+      # is a repacking of appicon.png that nothing reads on its own, and /bin is
+      # already ignored, so generating it here keeps one image under version
+      # control instead of two that can disagree.
+      - go tool wails3 generate icons -input ./build/appicon.png -macfilename ./bin/emod.app/Contents/Resources/icons.icns -windowsfilename ""
+      - codesign --force --sign - ./bin/emod.app
 
   build:web:
     desc: Assemble standalone deployment in web/

@@ -162,19 +162,21 @@ keep showing the previous icon, so confirm from a freshly-copied path before con
 the icon is wrong.
 
 **Acceptance Criteria:**
-- [ ] A square PNG of at least 1024×1024 is tracked under `build/` and is the only image the packaging reads — `sips -g pixelWidth -g pixelHeight` on it reports both dimensions
-- [ ] `task package:desktop` derives the `.icns` from it with `go tool wails3 generate icons` and places it in `bin/emod.app/Contents/Resources/`
-- [ ] `build/darwin/Info.plist` names that file in `CFBundleIconFile`, and the Task 1 guard gains a subtest requiring the name in the plist and the name the package task writes to agree; changing either alone makes it fail (revert after checking)
-- [ ] The derived `.icns` is ignored by git — `git check-ignore` on its path exits 0
-- [ ] After `task package:desktop`, `bin/emod.app` shows the icon in Finder, and a launched copy shows it in the Dock and in the app switcher
-- [ ] `task test:unit` passes
-- [ ] The only files this task changes are the new tracked PNG, `build/darwin/Info.plist`, `Taskfile.yml`, `.gitignore`, and the guard file Task 1 added
+- [x] A square PNG of at least 1024×1024 is tracked under `build/` and is the only image the packaging reads — `sips -g pixelWidth -g pixelHeight` on it reports both dimensions
+- [x] `task package:desktop` derives the `.icns` from it with `go tool wails3 generate icons` and places it in `bin/emod.app/Contents/Resources/`
+- [x] `build/darwin/Info.plist` names that file in `CFBundleIconFile`, and the Task 1 guard gains a subtest requiring the name in the plist and the name the package task writes to agree; changing either alone makes it fail (revert after checking)
+- [x] The derived `.icns` is ignored by git — `git check-ignore` on its path exits 0
+- [x] After `task package:desktop`, `bin/emod.app` shows the icon in Finder, and a launched copy shows it in the Dock and in the app switcher
+- [x] `task test:unit` passes
+- [x] The only files this task changes are the new tracked `build/appicon.png`, `build/darwin/Info.plist`,
+      `Taskfile.yml`, and `internal/desktop/bundle_plist_test.go` — `.gitignore` needs no edit, because the
+      derived `.icns` is written inside `bin/emod.app`, which the existing `/bin` rule already ignores
 
 **Affected Files/Modules:**
 - `build/appicon.png` — new, tracked (name it for the `wails3 generate icons` default input if you keep that default)
 - `build/darwin/Info.plist` — gains `CFBundleIconFile`
 - `Taskfile.yml` — icon generation and the Resources copy inside `package:desktop`
-- `.gitignore` — the derived `.icns`
+- `.gitignore` — unchanged; the derived `.icns` lands under the already-ignored `/bin`
 - `internal/desktop/` — the guard file from Task 1 gains the icon subtest
 
 **Patterns to Follow:**

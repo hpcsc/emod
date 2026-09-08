@@ -25,7 +25,7 @@
     },
     {
       "n": 2,
-      "done": false,
+      "done": true,
       "title": "Give the bundle the emod icon",
       "language": "Go",
       "testable": true,
