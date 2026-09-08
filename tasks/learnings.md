@@ -746,12 +746,6 @@ in this repo; append only learnings that generalise beyond the task that surface
 - Learning: this session's zsh sets `noclobber`, so `cmd > /path/that/exists` is refused with `file exists:` and the shell returns 1 — while the pipeline's own exit status is lost. `mise exec -- task test > fullsuite.txt` reported `exit=1` with a green suite, which reads exactly like a failing test run, and a following `awk`/`grep` happily reads the *stale* file as though it were fresh output. Three commit agents hit the same trap on one run. Use `>|` to force, or a filename unique to the step. This is the same family as the `cp`/`mv`/`rm` prezto `-i` aliases already recorded under file operations.
 - Apply when: redirecting command output to a scratchpad path in this session, or diagnosing an exit code that disagrees with the output it captured.
 
-## `git stash pop` on a clean tree pops somebody else's stash
-- Type: constraint
-- Observed: US-013 phase 3 — comparing a render against the base commit
-- Learning: `git stash -u` saves nothing when the tree is already clean and exits 0 with "No local changes to save", so a later `git stash pop` in the same command targets whatever entry was already at `stash@{0}` — which in this repo is another session's `autostash`, since every worktree of one repo shares a stash stack. The pop conflicted in `tasks/learnings.md` and left `UU` in the index; only the conflict saved it, because a clean pop would have silently applied another run's work and then dropped the entry. Never pair `stash`/`stash pop` around a temporary checkout: use `git worktree add --detach <sha>` and build there instead. Two riders on that. The throwaway worktree cannot run `cmd/emod` until `internal/viewer/generated/` exists, because `embed.go` has `//go:embed generated/*` and those artefacts are gitignored — copy them in from the main checkout. And a before/after byte comparison must assert each render *succeeded*: comparing two CLI usage errors reports IDENTICAL and proves nothing, which is exactly what a wrong flag name produced here.
-- Apply when: rendering or building at a second commit to compare against the current one, or writing any command that stashes.
-
 ## An audit round's own fixes are the next round's findings, and test strength is where they land
 - Type: recurring-finding
 - Observed: US-013 phase 3 — three audit rounds over one branch
@@ -1213,3 +1207,59 @@ in this repo; append only learnings that generalise beyond the task that surface
 - Observed: us-006-reopen-a-recently-opened-model
 - Learning: US-006's breakdown recorded, as a deliberate trade, that the menu's label rule stayed in the shell because a package no test target builds keeps presentation out of the service; round one moved the label rule into internal/desktop and round three moved the slot-to-path and hide bookkeeping after it, each as a confirmed finding with a suggested interface. The shell's only defensible content is framework calls and adapters: every decision — what to label, which slot answers which path, what to enable — belongs behind a small interface in internal/desktop with a fake in its test, the shape `WindowMarker`, `RecentMenu` and `MenuSlot` now share. A breakdown that leaves a rule in the shell buys a round to move it.
 - Apply when: decomposing any story that adds behaviour to cmd/emod-desktop, or deciding where a rule about menu, window or dialog state lives.
+
+## wails3 package runs the project's own Taskfile, so a repo that never ran wails3 init cannot use it
+- Type: constraint
+- Recorded: 2026-09-08
+- Observed: us-007-install-and-run-a-packaged-app-on-macos
+- Learning: `commands.Package` (`internal/commands/task_wrapper.go:82` in wails/v3@v3.0.0-beta.9) does nothing but run the *project's* `package` task through the wails-patched task runner, dispatching to `darwin:package`. This repo was never scaffolded by `wails3 init`, so it has no such task and no `build/Taskfile.yml` tree — `go tool wails3 package` answers `task: Task "package" does not exist`. Adopting it would also collide with this repo's root `build` task, which produces the CLI. The proposal's §6 and §10 Phase 4 both assume `wails3 package` works, and they are wrong about it. What works instead is mirroring the framework's own `create:app:bundle` (`internal/commands/build_assets/darwin/Taskfile.yml` in the module cache) as ~8 shell lines: two Contents directories, the icns, the executable, the plist, then `codesign`. US-014 will hit the identical wall for AppImage, where the equivalent is `generate appimage`.
+- Apply when: planning any wails3 packaging step for this repo, or reading the desktop proposal's build-pipeline sections as though they were verified
+
+## macOS reports the same 32 icon representations whether or not a bundle supplies an icon
+- Type: constraint
+- Recorded: 2026-09-08
+- Observed: us-007-install-and-run-a-packaged-app-on-macos
+- Learning: A CGO probe reading `[[NSRunningApplication runningApplicationWithProcessIdentifier:] icon] representations` returned exactly 32 reps (16 through 2048, each doubled) for `bin/emod.app` both before and after `CFBundleIconFile` and the `.icns` existed — macOS synthesises a standard set around whatever it has, so a representation count, a non-nil check and a size list are all satisfied by the generic application icon. The only assertion that discriminates is the image itself: render it with `CGImageForProposedRect` into an `NSBitmapImageRep`, write a PNG, and look at it. The same trap applies to `[NSWorkspace iconForFile:]`.
+- Apply when: checking that a packaged app carries its own icon, or writing any assertion about an AppKit image whose fallback is a system placeholder
+
+## A standalone CGO probe reads native window and icon state without touching the repo
+- Type: convention
+- Recorded: 2026-09-08
+- Observed: us-007-install-and-run-a-packaged-app-on-macos
+- Learning: `osascript` is refused from this harness (recorded) and `screencapture` is too — "could not create image from display", no screen-recording permission — so neither Dock nor Finder can be inspected visually. Two things work. `/usr/bin/lsappinfo` reports a running app's `LSDisplayName`, `CFBundleIdentifier`, bundle path and `type="Foreground"` (which is what puts it in the Dock and ⌘-Tab), needs no build and no permission. And a probe compiled in the *scratchpad* — its own `go.mod`, taking a pid — reads `CGWindowListCopyWindowInfo` for on-screen windows (owner name, size, layer) and `NSRunningApplication.icon` / `NSWorkspace.iconForFile:` for what the Dock and Finder draw. Unlike the recorded `probe_darwin.go` shape it touches no tracked file, so nothing has to be deleted before `clerk finish` and no event-name guard sees it. `kCGWindowName` stays "(untitled)" without screen-recording permission; `kCGWindowOwnerName` does not.
+- Apply when: verifying a desktop story's claim about a window, a Dock tile, an app-switcher entry or a Finder icon
+
+## Objective-C in a cgo preamble is compiled as C and fails on the first @class
+- Type: constraint
+- Recorded: 2026-09-08
+- Observed: us-007-install-and-run-a-packaged-app-on-macos
+- Learning: Putting `#import <AppKit/AppKit.h>` and ObjC bodies inside the `/* */` preamble of a Go file fails with `NSObjCRuntime.h:617:1: error: expected identifier or '('` at `@class NSString, Protocol;`, followed by `could not determine what C.<fn> refers to` — cgo compiles the preamble as C, never as Objective-C. Split it: declarations in a `.h`, bodies in a `.m` beside the Go file, and let the preamble hold only `#include "probe.h"` plus the `#cgo LDFLAGS: -framework ...` line. The `.m` is picked up automatically by the go build of that directory. Cast CoreFoundation values with `(__bridge NSDictionary *)` under ARC-less compilation or the frameworks will not type-check.
+- Apply when: writing any cgo that calls AppKit, CoreGraphics or another Objective-C framework
+
+## A criterion satisfied in prose is unguarded until something reads the prose
+- Type: recurring-finding
+- Recorded: 2026-09-08
+- Observed: us-007-install-and-run-a-packaged-app-on-macos
+- Learning: US-007's criterion "The README documents that step — Open Anyway, or `xattr -dr com.apple.quarantine` — and explains why it appears" was delivered in full and guarded by nothing: deleting the entire Gatekeeper section from README.md left every suite green. Two adversarial audit rounds missed it for the reason their own coverage_gaps state — no lens owns a README — and the breakdown had classed the task "Testable: No — prose", which is true of the wording and false of the artefact. The distinction that matters is that prose contains *tokens that are not prose*: a command, a path, a flag, a menu label. Assert those (`xattr -dr com.apple.quarantine`, "Open Anyway") and the guard cannot pin the sentences a later edit should improve while still failing when the instruction itself goes. Found at the match-request step, which is the only step that reads the story rather than a restatement of it.
+- Apply when: closing a story criterion whose deliverable is documentation, or writing a task that declares itself untestable because it is prose
+
+## A guard over a copy chain must pin the source, not only the destination
+- Type: recurring-finding
+- Recorded: 2026-09-08
+- Observed: us-007-install-and-run-a-packaged-app-on-macos
+- Learning: The bundle guard compared `build:desktop`'s `-o` name against `CFBundleExecutable`, and the `Contents/MacOS/` destination name against `CFBundleExecutable` — and never read the `cp` line's *source*, so the chain was broken in the middle. Mutation confirmed it: `cp ./bin/emod ./bin/emod.app/Contents/MacOS/emod-desktop` bundles the CLI binary under the desktop binary's name with every subtest green, and deleting `deps: build:desktop` leaves the task bundling whatever `./bin` happens to hold. Two assertions that each pin one end to a third value do not compose into a chain. Pin every hop, and for a task that consumes another task's output pin the dependency too. The same shape caught the codesign step, whose assertion named neither its target nor its position, so a signature retargeted at the executable or moved above the copies it seals both stayed green.
+- Apply when: guarding a build recipe that renames or copies an artefact through more than one step, or asserting that a step happened without asserting what it acted on
+
+## PIPESTATUS is a bash-ism, and an empty clerk_exit refuses the receipt
+- Type: constraint
+- Recorded: 2026-09-08
+- Observed: us-007-install-and-run-a-packaged-app-on-macos
+- Learning: The suite step's documented capture, `<cmd> 2>&1 | tee log; echo "clerk_exit=${PIPESTATUS[0]}" >> log`, writes a bare `clerk_exit=` under this session's zsh — the array is `$pipestatus` and it is 1-indexed — and `clerk receipt` then refuses, correctly, because nothing behind the claim says the suite passed. The whole `task test` run (~3 minutes) is paid twice. Drop the pipe instead: `mise exec -- task test >| log 2>&1; echo "clerk_exit=$?" >> log` makes `$?` the task's own status in either shell, and `>|` is already required here because noclobber refuses a plain `>` onto a path that exists.
+- Apply when: capturing a suite run for clerk receipt, or copying any ${PIPESTATUS[n]} idiom into this session
+
+## git stash pop on a clean tree pops somebody else's stash
+- Type: constraint
+- Recorded: 2026-09-08
+- Observed: us-007-install-and-run-a-packaged-app-on-macos
+- Learning: `git stash -u` saves nothing when the tree is already clean and exits 0 with "No local changes to save", so a later `git stash pop` in the same command targets whatever entry was already at `stash@{0}` — which in this repo is another session's `autostash`, since every worktree of one repo shares a stash stack. The pop conflicted in `tasks/learnings.md` and left `UU` in the index; only the conflict saved it, because a clean pop would have silently applied another run's work and then dropped the entry. Never pair `stash`/`stash pop` around a temporary checkout: use `git worktree add --detach <sha>` and build there instead. Two riders on that. A throwaway worktree cannot build `cmd/emod` or run the `test:unit` set until `internal/frontend/generated/` exists — `internal/frontend/embed.go` has `//go:embed generated/*` and those artefacts are gitignored — so `go test -tags unit` fails 4 packages with `pattern generated/*: no matching files found` in any fresh clone or detached worktree; measured at the base commit as well, so it is a property of the repo rather than of a branch, and CI only escapes it because `task build` (which deps on `build:wasm`) runs before `task test:unit`. Copy the directory in from the main checkout, or run `task build:wasm` first. And a before/after byte comparison must assert each render *succeeded*: comparing two CLI usage errors reports IDENTICAL and proves nothing, which is exactly what a wrong flag name produced here.
+- Apply when: rendering or building at a second commit to compare against the current one, writing any command that stashes, or running a Go suite in a fresh worktree
