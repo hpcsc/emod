@@ -51,7 +51,7 @@ func TestBundlePlist(t *testing.T) {
 	})
 
 	t.Run("the bundle keeps the identifier macOS has already filed it under", func(t *testing.T) {
-		require.Equal(t, "io.github.hpcsc.emod", plistString(t, "CFBundleIdentifier"),
+		require.Equal(t, "au.pnguyen.emod", plistString(t, "CFBundleIdentifier"),
 			"every machine that has run the app has this identifier recorded in LaunchServices, "+
 				"and the file associations of a later story bind to it; changing it strands both")
 	})

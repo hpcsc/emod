@@ -9,7 +9,7 @@
 	<key>CFBundleExecutable</key>
 	<string>emod-desktop</string>
 	<key>CFBundleIdentifier</key>
-	<string>io.github.hpcsc.emod</string>
+	<string>au.pnguyen.emod</string>
 	<key>CFBundleVersion</key>
 	<string>0.0.0</string>
 	<key>CFBundleShortVersionString</key>
