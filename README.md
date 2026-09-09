@@ -484,6 +484,36 @@ You do this once for a copy you have downloaded, not on every launch — after i
 that copy opens like any other application. Downloading a later build gives you
 a new copy, which arrives quarantined in its turn.
 
+**Double-clicking a `.emod` file opens it in emod.** The bundle declares the
+`.emod` type as its own, so Finder draws models with the app's document icon and
+opens them here. If emod is already running the model opens in the window that is
+already there, rather than starting a second copy — and if that window holds
+unsaved edits, it asks the same Save, Discard or Cancel question every other way
+of replacing the model asks. Launching the app on its own still opens empty.
+
+macOS learns this from the bundle, and only once it has seen the bundle: move
+`emod.app` to your Applications folder, or open it once from wherever you built
+it. A bundle that has sat unopened in `bin/` is not registered, and
+double-clicking a model will not find it. To check that it has been:
+
+```bash
+mdls -name kMDItemContentType yourmodel.emod
+```
+
+Once emod is registered that reports `au.pnguyen.emod.model`. Before it, models
+are an anonymous `dyn.…` type belonging to no application.
+
+**emod offers itself for `.json` files without taking them over.** It appears in
+Finder's **Open With** menu for a `.json` file, below whatever already opens
+them, and the default is left exactly as it was — a machine where `.json` opens
+in an editor keeps opening it there. To send one file to emod instead, use
+**Get Info** on it and choose emod under **Open With**; the **Change All** button
+beside it does the same for every `.json` on the machine, which is a bigger
+change than it looks.
+
+The association is macOS-only today. The Linux and Windows builds are still to
+come, and neither registers a file type yet.
+
 What it does not do yet: a diagram edit does not reach the source panel and so
 is neither what Save writes nor what counts as an unsaved change; no installer;
 and no prebuilt download, so it has to be built from source.

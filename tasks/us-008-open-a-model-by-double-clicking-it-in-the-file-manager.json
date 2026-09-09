@@ -83,7 +83,7 @@
     },
     {
       "n": 4,
-      "done": false,
+      "done": true,
       "title": "Document the file association in the README",
       "language": "Markdown",
       "testable": true,

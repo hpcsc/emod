@@ -389,14 +389,14 @@ pinning sentences a later edit should be free to improve while still failing whe
 instruction itself goes.
 
 **Acceptance Criteria:**
-- [ ] The `### Desktop app` section describes double-clicking a `.emod` file: it opens in the app, in the window already open if one is, through the same unsaved-changes question every other way of replacing the model uses
-- [ ] It says what makes macOS aware of the association — the bundle registered by being moved to `/Applications` or opened once — since a bundle sitting unopened in `bin/` is not
-- [ ] It says emod appears under Finder's **Open With** for `.json` files without becoming their default, and names the Finder route a reader takes if they want it to be
-- [ ] It says the association is macOS-only today, with Linux and Windows still to come
-- [ ] A guard in `internal/desktop` asserts the Finder labels this section names — the tokens, not the sentences — and those labels are absent from `README.md` before this task, so the guard is empty until the prose lands
-- [ ] Deleting the double-click paragraph makes the guard fail; deleting the `.json` paragraph makes it fail separately (restore each after checking)
-- [ ] The existing README subtests in `internal/desktop/packaging_task_test.go` still pass unchanged
-- [ ] `task test:unit` passes
+- [x] The `### Desktop app` section describes double-clicking a `.emod` file: it opens in the app, in the window already open if one is, through the same unsaved-changes question every other way of replacing the model uses
+- [x] It says what makes macOS aware of the association — the bundle registered by being moved to `/Applications` or opened once — since a bundle sitting unopened in `bin/` is not
+- [x] It says emod appears under Finder's **Open With** for `.json` files without becoming their default, and names the Finder route a reader takes if they want it to be
+- [x] It says the association is macOS-only today, with Linux and Windows still to come
+- [x] A guard in `internal/desktop` asserts the Finder labels this section names — the tokens, not the sentences — and those labels are absent from `README.md` before this task, so the guard is empty until the prose lands
+- [x] Deleting the double-click paragraph makes the guard fail; deleting the `.json` paragraph makes it fail separately (restore each after checking)
+- [x] The existing README subtests in `internal/desktop/packaging_task_test.go` still pass unchanged
+- [x] `task test:unit` passes
 
 **Affected Files/Modules:**
 - `README.md` — the `### Desktop app` section, alongside the packaging and Gatekeeper prose

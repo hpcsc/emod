@@ -58,23 +58,36 @@ func TestPackagingTask(t *testing.T) {
 	})
 
 	t.Run("every icon is derived from an image the repository tracks", func(t *testing.T) {
-		sources := capturesIn(t, taskBody(t, "package:desktop"),
-			regexp.MustCompile(`generate icons [^\n]*-input \./(\S+)`),
-			"package:desktop must derive each icon from an image under version control")
-
-		for _, source := range sources {
+		for source := range iconDerivations(t) {
 			require.FileExists(t, repoPath(source))
 		}
 	})
 
 	t.Run("each icon is derived from its own image", func(t *testing.T) {
-		sources := capturesIn(t, taskBody(t, "package:desktop"),
-			regexp.MustCompile(`generate icons [^\n]*-input \./(\S+)`),
-			"package:desktop must derive each icon from an image under version control")
+		derivations := iconDerivations(t)
+		written := make([]string, 0, len(derivations))
+		for _, icon := range derivations {
+			written = append(written, icon)
+		}
 
-		require.Equal(t, sources, unique(sources),
+		// Keyed by input, so two commands reading one image collapse to a single
+		// entry and the count falls below the number of commands. Comparing the
+		// map against a slice built from the map itself cannot fail.
+		require.Len(t, derivations, strings.Count(taskBody(t, "package:desktop"), "generate icons"),
 			"two icons derived from one image are one picture under two names, "+
 				"and a document drawn with the application's icon says it is a program")
+		require.Equal(t, unique(written), written,
+			"two images written to one icon file leave whichever ran last as both icons")
+	})
+
+	// Reading each command's input and its output separately says both images are
+	// used and both icons are written while leaving unsaid which produces which,
+	// so the two -macfilename values can be exchanged with every assertion still
+	// passing while Finder and the Dock draw each other's picture.
+	t.Run("each image produces the icon named after it", func(t *testing.T) {
+		require.Equal(t,
+			map[string]string{"build/appicon.png": "icons", "build/docicon.png": "docicon"},
+			iconDerivations(t))
 	})
 
 	t.Run("the signature is the last thing applied to the bundle", func(t *testing.T) {
@@ -87,6 +100,48 @@ func TestPackagingTask(t *testing.T) {
 	t.Run("the README names the bundle the task builds", func(t *testing.T) {
 		require.Contains(t, readRepoFile(t, "README.md"), strings.TrimPrefix(bundlePath, "./"),
 			"the README tells a reader to open a bundle package:desktop does not build")
+	})
+
+	// The story's headline behaviour, and the paragraph a later edit is most
+	// likely to shorten away. Its tokens are the three button labels, read out of
+	// the frontend rather than written here, so the README cannot go on promising
+	// a question whose buttons have been renamed.
+	t.Run("the README says what a double-click does to a model already open", func(t *testing.T) {
+		// Scoped to the paragraph rather than the file: every label it names is
+		// also in the paragraph about dropping a file, so asserting them over the
+		// whole README passes with this paragraph deleted.
+		paragraph := captureIn(t, readRepoFile(t, "README.md"),
+			regexp.MustCompile(`(?s)(\*\*Double-clicking [^\n]*\n.*?)\n\n`),
+			"the README must tell a reader that double-clicking a model opens it in emod")
+
+		for _, label := range unsavedEditLabels(t) {
+			require.Contains(t, paragraph, label,
+				"a double-click onto unsaved edits asks this question, and a reader told nothing "+
+					"about it will not expect to be interrupted by it")
+		}
+	})
+
+	t.Run("the README says what makes macOS open a model in emod", func(t *testing.T) {
+		readme := readRepoFile(t, "README.md")
+
+		require.Contains(t, readme, exportedIdentifier(t),
+			"a reader whose double-click does nothing needs the type name to check against, and it is "+
+				"the one the bundle exports rather than a name this file could invent")
+		require.Contains(t, readme, "mdls -name kMDItemContentType",
+			"the association is invisible until macOS has seen the bundle, so the reader needs the one "+
+				"command that says whether it has")
+	})
+
+	t.Run("the README says how to reach emod for a JSON file, and what it costs", func(t *testing.T) {
+		readme := readRepoFile(t, "README.md")
+
+		require.Contains(t, readme, "Open With",
+			"emod is offered for .json rather than given it, so this menu is the only way to reach it")
+		require.Contains(t, readme, "Get Info",
+			"the Finder route that changes which application opens a file starts here")
+		require.Contains(t, readme, "Change All",
+			"and this is the button that changes it for every .json on the machine, which a reader "+
+				"must choose deliberately rather than meet by accident")
 	})
 
 	t.Run("the README gives a downloaded copy its way past Gatekeeper", func(t *testing.T) {
@@ -102,6 +157,42 @@ func TestPackagingTask(t *testing.T) {
 }
 
 const bundlePath = "./bin/emod.app"
+
+// The buttons the unsaved-edits question offers, read off the frontend that
+// raises it.
+func unsavedEditLabels(t *testing.T) []string {
+	t.Helper()
+
+	body := captureIn(t, readRepoFile(t, "internal/frontend/desktop/platform.desktop.js"),
+		regexp.MustCompile(`(?s)const UNSAVED_EDIT_OUTCOMES = \{(.*?)\}`),
+		"platform.desktop.js must map the question's button labels to outcomes")
+
+	labels := uniqueMatchesIn(body, regexp.MustCompile(`(\w+):`))
+	require.Len(t, labels, 3, "the question offers three buttons")
+
+	return labels
+}
+
+// Each `generate icons` command in package:desktop, as the tracked image it
+// reads against the icon name it writes. Paired per command rather than
+// collected as two lists, because two lists say both images are used and both
+// icons are written while leaving which produces which unsaid.
+func iconDerivations(t *testing.T) map[string]string {
+	t.Helper()
+
+	pattern := regexp.MustCompile(`generate icons [^\n]*-input \./(\S+)[^\n]*-macfilename ` +
+		regexp.QuoteMeta(bundlePath) + `/Contents/Resources/(\S+)\.icns`)
+	commands := pattern.FindAllStringSubmatch(taskBody(t, "package:desktop"), -1)
+	require.NotEmpty(t, commands,
+		"package:desktop must derive each icon from a tracked image into Contents/Resources")
+
+	derivations := map[string]string{}
+	for _, command := range commands {
+		derivations[command[1]] = command[2]
+	}
+
+	return derivations
+}
 
 func unique(values []string) []string {
 	seen := map[string]bool{}
