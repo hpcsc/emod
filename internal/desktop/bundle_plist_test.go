@@ -3,8 +3,10 @@
 package desktop_test
 
 import (
+	"encoding/xml"
 	"os"
 	"regexp"
+	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/require"
@@ -62,20 +64,118 @@ const (
 	taskfilePath = "Taskfile.yml"
 )
 
-// The value of a top-level plist key. Property lists put the value in the
-// element after the key rather than inside it, so the pairing is positional and
-// a key whose value moved reads here as a key that is not there at all.
+// The value of a top-level plist key.
 func plistString(t *testing.T, key string) string {
 	t.Helper()
 
-	pattern := regexp.MustCompile(`<key>` + regexp.QuoteMeta(key) + `</key>\s*<string>([^<]*)</string>`)
-	match := pattern.FindStringSubmatch(readRepoFile(t, plistPath))
-	require.Len(t, match, 2, plistPath+" declares no string value for "+key)
+	return dictString(t, bundlePlist(t), key, plistPath)
+}
 
-	value := match[1]
-	require.NotEmpty(t, value, plistPath+" leaves "+key+" empty")
+func dictString(t *testing.T, entries map[string]any, key string, where string) string {
+	t.Helper()
 
-	return value
+	value, declared := entries[key]
+	require.True(t, declared, where+" declares no value for "+key)
+
+	text, isString := value.(string)
+	require.True(t, isString, where+" declares "+key+" as something other than a string")
+	require.NotEmpty(t, text, where+" leaves "+key+" empty")
+
+	return text
+}
+
+// The bundle's plist as nested maps and slices. A property list puts a value in
+// the element after its key rather than inside it, so a search for `<key>X</key>`
+// followed by a value matches a key nested three dictionaries down as readily as
+// a top-level one — which is why this decodes the document instead.
+func bundlePlist(t *testing.T) map[string]any {
+	t.Helper()
+
+	decoder := xml.NewDecoder(strings.NewReader(readRepoFile(t, plistPath)))
+	for {
+		token, err := decoder.Token()
+		require.NoError(t, err, plistPath+" holds no dictionary")
+
+		if start, isElement := token.(xml.StartElement); isElement && start.Name.Local == "dict" {
+			return decodeDict(t, decoder)
+		}
+	}
+}
+
+func decodeDict(t *testing.T, decoder *xml.Decoder) map[string]any {
+	t.Helper()
+
+	entries := map[string]any{}
+	key := ""
+	awaitingValue := false
+	for {
+		token, err := decoder.Token()
+		require.NoError(t, err, "a plist dictionary ends before its closing tag")
+
+		switch element := token.(type) {
+		case xml.StartElement:
+			if element.Name.Local == "key" {
+				key = decodeText(t, decoder, element)
+				awaitingValue = true
+
+				continue
+			}
+			require.True(t, awaitingValue, "a plist dictionary holds a value with no key before it")
+			entries[key] = decodeValue(t, decoder, element)
+			awaitingValue = false
+		case xml.EndElement:
+			if element.Name.Local == "dict" {
+				require.False(t, awaitingValue, "a plist dictionary ends on the key "+key+" with no value after it")
+
+				return entries
+			}
+		}
+	}
+}
+
+func decodeArray(t *testing.T, decoder *xml.Decoder) []any {
+	t.Helper()
+
+	values := []any{}
+	for {
+		token, err := decoder.Token()
+		require.NoError(t, err, "a plist array ends before its closing tag")
+
+		switch element := token.(type) {
+		case xml.StartElement:
+			values = append(values, decodeValue(t, decoder, element))
+		case xml.EndElement:
+			if element.Name.Local == "array" {
+				return values
+			}
+		}
+	}
+}
+
+func decodeValue(t *testing.T, decoder *xml.Decoder, element xml.StartElement) any {
+	t.Helper()
+
+	switch element.Name.Local {
+	case "dict":
+		return decodeDict(t, decoder)
+	case "array":
+		return decodeArray(t, decoder)
+	case "true", "false":
+		require.NoError(t, decoder.Skip())
+
+		return element.Name.Local == "true"
+	default:
+		return decodeText(t, decoder, element)
+	}
+}
+
+func decodeText(t *testing.T, decoder *xml.Decoder, element xml.StartElement) string {
+	t.Helper()
+
+	var text string
+	require.NoError(t, decoder.DecodeElement(&text, &element))
+
+	return text
 }
 
 func binaryNameIn(t *testing.T, task string, pattern *regexp.Regexp) string {
