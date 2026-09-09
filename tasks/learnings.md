@@ -1263,3 +1263,52 @@ in this repo; append only learnings that generalise beyond the task that surface
 - Observed: us-007-install-and-run-a-packaged-app-on-macos
 - Learning: `git stash -u` saves nothing when the tree is already clean and exits 0 with "No local changes to save", so a later `git stash pop` in the same command targets whatever entry was already at `stash@{0}` — which in this repo is another session's `autostash`, since every worktree of one repo shares a stash stack. The pop conflicted in `tasks/learnings.md` and left `UU` in the index; only the conflict saved it, because a clean pop would have silently applied another run's work and then dropped the entry. Never pair `stash`/`stash pop` around a temporary checkout: use `git worktree add --detach <sha>` and build there instead. Two riders on that. A throwaway worktree cannot build `cmd/emod` or run the `test:unit` set until `internal/frontend/generated/` exists — `internal/frontend/embed.go` has `//go:embed generated/*` and those artefacts are gitignored — so `go test -tags unit` fails 4 packages with `pattern generated/*: no matching files found` in any fresh clone or detached worktree; measured at the base commit as well, so it is a property of the repo rather than of a branch, and CI only escapes it because `task build` (which deps on `build:wasm`) runs before `task test:unit`. Copy the directory in from the main checkout, or run `task build:wasm` first. And a before/after byte comparison must assert each render *succeeded*: comparing two CLI usage errors reports IDENTICAL and proves nothing, which is exactly what a wrong flag name produced here.
 - Apply when: rendering or building at a second commit to compare against the current one, writing any command that stashes, or running a Go suite in a fresh worktree
+
+## An OS-initiated open arrives before the page exists, so the shell holds it and the page takes it
+- Type: pattern
+- Recorded: 2026-09-09
+- Observed: task 2 — us-008-open-a-model-by-double-clicking-it-in-the-file-manager
+- Learning: events.Common.ApplicationOpenedWithFile fires on a launch the system started to open a file, which is before the webview has loaded and before platform.desktop.js has subscribed — window.EmitEvent then reaches nobody, and ExecJS's pendingJS queue may replay it later, so the same request can arrive twice or not at all. The shape that works is desktop.OpenRequests: the shell Holds the path and emits a bare nudge carrying no data, and the page Takes it at initialState and again on the event. Nothing records whether a page is listening, because Cmd+R reloads the page while the shell lives for the whole process, so such a record is wrong in exactly the window where the file is lost. A Take that answers nothing must claim no gesture number, or it supersedes the take holding the file.
+- Apply when: adding any entry point the operating system drives in cmd/emod-desktop — an open-with, a URL scheme, a service — or wondering why a file double-clicked on a cold launch never appears
+
+## A prose guard's tokens must be unique to the paragraph it guards
+- Type: recurring-finding
+- Recorded: 2026-09-09
+- Observed: task 4 — us-008-open-a-model-by-double-clicking-it-in-the-file-manager
+- Learning: Asserting README tokens over the whole file is not enough once a second paragraph uses the same words: a guard requiring Save, Discard and Cancel passed with the double-click paragraph deleted, because the drop paragraph already named all three, and 'double-click' matched inside 'double-clickable'. Extract the paragraph first — captureIn over a regexp anchored on its opening — and assert the tokens inside that. Check uniqueness with grep -c before choosing a token, and prefer one read out of the code it describes (the button labels come from UNSAVED_EDIT_OUTCOMES) so a rename on either side reddens.
+- Apply when: writing or reviewing a guard over README or docs prose, especially in a section that already documents a similar behaviour
+
+## openNamedBy calls its namer before attaching the catch, so a synchronous throw escapes
+- Type: constraint
+- Recorded: 2026-09-09
+- Observed: task 2 — us-008-open-a-model-by-double-clicking-it-in-the-file-manager
+- Learning: internal/frontend/desktop/platform.desktop.js's openNamedBy is name().catch(...), so name() runs before the handler exists: throwing inside it leaves the caller instead of reaching the viewer as an {error} envelope, and under vitest the rejection surfaces as the listener's own failure. Return Promise.reject(err) instead. Every existing caller happens to return a promise, which is why this only appears when a new caller reports a failure it already holds.
+- Apply when: adding a caller of openNamedBy that reports an error it already has, rather than one it discovers inside a promise chain
+
+## A criterion phrased as a category needs a guard that reads every route, not the two you thought of
+- Type: convention
+- Recorded: 2026-09-09
+- Observed: task 1 — us-008-open-a-model-by-double-clicking-it-in-the-file-manager
+- Learning: US-008 states 'the association does not take .json files away from other applications' as a category, and the breakdown turned it into two mechanisms — LSHandlerRank Alternate on the document type, and the exported type tagging only emod. UTImportedTypeDeclarations is a third route that neither assertion reads, so a plist growing one would claim .json with both still green; it was found at match-request, not by any audit lens. The guard that matches the criterion walks the whole decoded plist and requires every public.filename-extension tag it finds anywhere to be exactly the extensions the app owns.
+- Apply when: decomposing a criterion that forbids an outcome rather than naming a mechanism — 'does not take X away', 'never affects Y' — or reviewing a guard that enumerates the ways it knows about
+
+## recent-files.json is the cheap oracle for what the desktop window actually rendered
+- Type: convention
+- Recorded: 2026-09-09
+- Observed: task 2 — us-008-open-a-model-by-double-clicking-it-in-the-file-manager
+- Learning: screencapture and osascript are both refused from this harness, so nothing can look at the desktop window — but the viewer records a file into the recent list only inside renderPanelSource's resolved branch, from the same object it assigns to store.currentFile. So the list appearing on disk proves the model parsed, rendered and became the save target, for any entry point, with no probe and no build beyond the packaged app. Back up ~/Library/Application Support/emod/recent-files.json first and restore it after: it is the user's real list. To close the save-target claim properly, a probe.js that edits the panel and calls Events.Emit('file:save-requested') round-trips through Go and writes the file, so the bytes on disk are the assertion.
+- Apply when: verifying that a desktop entry point rendered a model or set the save target, or planning the verification of any cmd/emod-desktop story
+
+## clerk audit run must not be piped, and its review fan-out needs about two gigabytes free
+- Type: constraint
+- Recorded: 2026-09-09
+- Observed: us-008-open-a-model-by-double-clicking-it-in-the-file-manager
+- Learning: Piping clerk audit run into head kills the runner with SIGPIPE the moment the pipe closes, losing every review agent that had not landed — the round shows phase review with zero reviews and the log stops mid-list. Redirect to a file instead, and read the file. Separately, the review phase spawns eight lens agents at roughly 265 MB each, so on a 16 GB machine already under pressure the OS killed three consecutive rounds; check vm_stat before launching, and expect a resumed clerk audit run to re-spawn every agent because nothing had landed.
+- Apply when: launching or resuming clerk audit run, or diagnosing a round that reports zero reviews in the review phase
+
+## An OS-integration task is high certainty when the OS can be read back, whatever the repo has never done
+- Type: convention
+- Recorded: 2026-09-09
+- Observed: task 1 — us-008-open-a-model-by-double-clicking-it-in-the-file-manager
+- Learning: US-008's task 1 was planned LOW on the grounds that no declaration in this repo had ever reached LaunchServices, and it landed first try with a clean lint — as did every other task in the story. What retired the risk was not precedent but a reader: mdls -name kMDItemContentType, lsregister -u/-f and a scratchpad CGO probe over NSWorkspace give a before-and-after on the real database, so each plist key could be measured rather than guessed, and LSHandlerRank Alternate was confirmed to leave the .json default alone instead of being hoped about. This sharpens the existing rule that certainty tracks whether the mechanism is decided: for work whose behaviour lives in the OS, the mechanism counts as decided once you can name the command that reads the outcome back. Plan the read, then assess.
+- Apply when: assessing certainty for a task that declares something to the operating system — a file association, a URL scheme, a service registration — or deciding whether a repo having never done it before is itself a reason to pause
