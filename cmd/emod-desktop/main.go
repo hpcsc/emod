@@ -148,6 +148,16 @@ func main() {
 		openRecent.started()
 	})
 
+	// The emitted event carries no path: it only tells a page that already exists
+	// to come and take one. The path goes to the service instead, which answers
+	// whichever page asks and so can be given one before any page exists.
+	openRequests := &desktop.OpenRequests{}
+	app.RegisterService(application.NewService(openRequests))
+	app.Event.OnApplicationEvent(events.Common.ApplicationOpenedWithFile, func(event *application.ApplicationEvent) {
+		openRequests.Hold(event.Context().Filename())
+		window.EmitEvent("file:open-from-os-requested")
+	})
+
 	// A listener rather than a hook: the framework dispatches a resolved file
 	// drop only to the listeners OnWindowEvent appends to, so a hook registered
 	// for it — the shape the close veto below takes, for a different reason —

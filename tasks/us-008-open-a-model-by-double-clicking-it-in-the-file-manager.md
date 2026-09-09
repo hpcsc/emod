@@ -237,20 +237,20 @@ That is what gives criterion 3 its prompt, gives the model its save target and i
 title, and puts it in Open Recent — all without a second copy of any of that policy.
 
 **Acceptance Criteria:**
-- [ ] With the app not running, asking the OS to open an `.emod` file launches emod, renders that model, names the window after it, shows its path in the bar along the bottom, and makes it what Save writes to with no dialog
-- [ ] With the app already running and nothing unsaved, asking the OS to open a different `.emod` file renders it in the window that is already open; the process count for the app does not change and no second window appears
-- [ ] With the app running and the source panel edited, the same request raises the three-button unsaved-changes dialog: Cancel leaves the edited model on screen, Discard opens the new one, Save writes the edited file and then opens the new one
-- [ ] A model opened this way appears at the top of **File ▸ Open Recent**, as one opened through the picker does
-- [ ] A request naming a file that cannot be read reports the reason where a failed Open reports it and leaves the model on screen
-- [ ] Launching the app with no file shows the same empty state as before: the panel open, the landing instructions visible, `(no model)` as the name
-- [ ] A unit test in `internal/desktop` for the new type covers a request taken after being parked, a request that arrives with nothing waiting, a second request superseding a first that was never taken, and a second take answering nothing — with fresh fixtures per leaf and `require` assertions
-- [ ] Deleting the line that clears the parked request once it is handed over makes that unit test fail (restore after checking)
-- [ ] A vitest case in `internal/frontend/tests/platform.desktop.test.js` fires the new shell event through the runtime stub's `listeners` map and requires the model to reach the viewer through the handler `onFileOpened` registered; routing it anywhere else makes that case fail
-- [ ] A vitest case covers a take that answers no path: it delivers nothing and does not stop a later request from being delivered
-- [ ] `TestShellEventNames` passes with the new event, and fails if the name is changed on the shell side alone or the frontend side alone (restore after checking)
-- [ ] `TestBindingNames` and `TestServiceRegistrations` pass with the new service registered in `main.go` and imported in `platform.desktop.js`
-- [ ] `viewer.js` still hands `renderPanelSource` a model to open from exactly one call, from one function, and that function still consults the unsaved-edits guard — `viewer.test.js`'s existing scan says so
-- [ ] `task test:unit`, `task test:race` and `task test:viewer` pass; `task build`, `task build:wasm` and `task build:web` still succeed
+- [x] With the app not running, asking the OS to open an `.emod` file launches emod, renders that model, names the window after it, shows its path in the bar along the bottom, and makes it what Save writes to with no dialog
+- [x] With the app already running and nothing unsaved, asking the OS to open a different `.emod` file renders it in the window that is already open; the process count for the app does not change and no second window appears
+- [x] With the app running and the source panel edited, the same request raises the three-button unsaved-changes dialog: Cancel leaves the edited model on screen, Discard opens the new one, Save writes the edited file and then opens the new one
+- [x] A model opened this way appears at the top of **File ▸ Open Recent**, as one opened through the picker does
+- [x] A request naming a file that cannot be read reports the reason where a failed Open reports it and leaves the model on screen
+- [x] Launching the app with no file shows the same empty state as before: the panel open, the landing instructions visible, `(no model)` as the name
+- [x] A unit test in `internal/desktop` for the new type covers a request taken after being parked, a request that arrives with nothing waiting, a second request superseding a first that was never taken, and a second take answering nothing — with fresh fixtures per leaf and `require` assertions
+- [x] Deleting the line that clears the parked request once it is handed over makes that unit test fail (restore after checking)
+- [x] A vitest case in `internal/frontend/tests/platform.desktop.test.js` fires the new shell event through the runtime stub's `listeners` map and requires the model to reach the viewer through the handler `onFileOpened` registered; routing it anywhere else makes that case fail
+- [x] A vitest case covers a take that answers no path: it delivers nothing and does not stop a later request from being delivered
+- [x] `TestShellEventNames` passes with the new event, and fails if the name is changed on the shell side alone or the frontend side alone (restore after checking)
+- [x] `TestBindingNames` and `TestServiceRegistrations` pass with the new service registered in `main.go` and imported in `platform.desktop.js`
+- [x] `viewer.js` still hands `renderPanelSource` a model to open from exactly one call, from one function, and that function still consults the unsaved-edits guard — `viewer.test.js`'s existing scan says so
+- [x] `task test:unit`, `task test:race` and `task test:viewer` pass; `task build`, `task build:wasm` and `task build:web` still succeed
 
 **Affected Files/Modules:**
 - `internal/desktop/open_requests.go` — new; the type that parks a request and hands it over once. A new type means a new file; it has no collaborator to inject, so it needs no interface and no fake. `desktop.OpenRequests` is the proposal — a plural role noun in the shape `RecentFiles` and `RecentSlots` already take, reading as English after the package name — and any name meeting that rule is as good

@@ -24,7 +24,7 @@
     },
     {
       "n": 2,
-      "done": false,
+      "done": true,
       "title": "Open a model the file manager hands the app, running or not",
       "language": "Go",
       "testable": true,

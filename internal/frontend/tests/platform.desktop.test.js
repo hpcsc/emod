@@ -24,6 +24,7 @@ beforeEach(async () => {
   stub.answers.Open = '{"name":"billing.emod","path":"/models/billing.emod","content":"emod 1\\n"}';
   desktop.setWindowTitle('');
   await desktop.setWindowModified(false);
+  stub.answers.Take = '';
   stub.calls.length = 0;
   stub.landed.length = 0;
   stub.recorded.length = 0;
@@ -1006,8 +1007,181 @@ describe('remembering an opened file', () => {
   });
 });
 
+// The system itself asks the app to open a model when a file is double-clicked
+// in the file manager or chosen through Open With. The shell holds the path and
+// the page takes it, so a test drives the take the way the app does — through
+// the subscription on a page that is already running, and through initialState
+// on one that has just started.
+describe('a model the operating system asked to open', () => {
+  function requestFromOS() {
+    return Promise.resolve(runtime.listeners['file:open-from-os-requested']()).then(flush);
+  }
+
+  it('opens what the shell held, through the handler the viewer registered', async () => {
+    const delivered = collectDeliveries();
+    stub.answers.Take = '/models/billing.emod';
+
+    await requestFromOS();
+
+    expect(stub.calls).toEqual([['Read', '/models/billing.emod']]);
+    expect(delivered).toEqual([
+      { name: 'billing.emod', path: '/models/billing.emod', content: 'emod 1\n' },
+    ]);
+  });
+
+  it('reads nothing and delivers nothing when no request is waiting', async () => {
+    const delivered = collectDeliveries();
+    stub.answers.Take = '';
+
+    await requestFromOS();
+
+    expect(stub.calls).toEqual([]);
+    expect(delivered).toEqual([]);
+  });
+
+  it('takes again on a later request, so a second file opens over the first', async () => {
+    const delivered = collectDeliveries();
+    stub.answers.Take = '/models/first.emod';
+    stub.answers.Read = '{"name":"first.emod","path":"/models/first.emod","content":"first"}';
+    await requestFromOS();
+
+    stub.answers.Take = '/models/second.emod';
+    stub.answers.Read = '{"name":"second.emod","path":"/models/second.emod","content":"second"}';
+    await requestFromOS();
+
+    expect(delivered.map((d) => d.name)).toEqual(['first.emod', 'second.emod']);
+  });
+
+  // The page takes as it starts while the event tells it to take again. The
+  // shell gives the file to one of them and nothing to the other, and which is
+  // which is not decided here — so the one that found nothing must not claim a
+  // gesture number, or it supersedes the one holding the file.
+  it('does not let a take that found nothing supersede the one that got the file', async () => {
+    const delivered = collectDeliveries();
+    stub.answers.Take = '/models/billing.emod';
+    const pending = [];
+    const realRead = stub.FileService.Read;
+    stub.FileService.Read = (path) => {
+      stub.calls.push(['Read', path]);
+      return new Promise((resolve) => pending.push(() => resolve(stub.answers.Read)));
+    };
+
+    try {
+      const holdingTheFile = requestFromOS();
+      await flush();
+      stub.answers.Take = '';
+      const foundNothing = requestFromOS();
+      await flush();
+
+      // The take that found nothing must have read nothing. A read it issued
+      // would mean it claimed a gesture number first, and the number is what
+      // discards the delivery still in flight behind it.
+      expect(stub.calls.filter((call) => call[0] === 'Read'))
+        .toEqual([['Read', '/models/billing.emod']]);
+
+      pending.forEach((release) => release());
+      await Promise.all([holdingTheFile, foundNothing]);
+    } finally {
+      stub.FileService.Read = realRead;
+    }
+
+    expect(delivered.map((d) => d.name)).toEqual(['billing.emod']);
+  });
+
+  // Nothing else in this block fails if the delivery stops going through
+  // openNamedBy: every other case makes one request at a time, and one request
+  // lands the same way numbered or not. Two in flight is what tells them apart.
+  it('delivers only the newest request, whichever read resolves last', async () => {
+    const delivered = collectDeliveries();
+    const answers = {
+      '/models/first.emod': '{"name":"first.emod","path":"/models/first.emod","content":"first"}',
+      '/models/second.emod': '{"name":"second.emod","path":"/models/second.emod","content":"second"}',
+    };
+    const pending = [];
+    const realRead = stub.FileService.Read;
+    stub.FileService.Read = (path) => new Promise((resolve) => pending.push(() => resolve(answers[path])));
+
+    try {
+      stub.answers.Take = '/models/first.emod';
+      const first = requestFromOS();
+      await flush();
+      stub.answers.Take = '/models/second.emod';
+      const second = requestFromOS();
+      await flush();
+
+      // The first read finishes last, which is the ordering the counter exists for.
+      pending[1]();
+      pending[0]();
+      await Promise.all([first, second]);
+      await flush();
+    } finally {
+      stub.FileService.Read = realRead;
+    }
+
+    expect(delivered.map((d) => d.name)).toEqual(['second.emod']);
+  });
+
+  it('delivers a later request after one that found nothing waiting', async () => {
+    const delivered = collectDeliveries();
+    stub.answers.Take = '';
+    await requestFromOS();
+
+    stub.answers.Take = '/models/billing.emod';
+    await requestFromOS();
+
+    expect(delivered.map((d) => d.name)).toEqual(['billing.emod']);
+  });
+
+  it('reports a held file it cannot read, where a failed Open reports it', async () => {
+    const delivered = collectDeliveries();
+    stub.answers.Take = '/models/gone.emod';
+    stub.answers.Read = '{"error":"open /models/gone.emod: no such file or directory"}';
+
+    await requestFromOS();
+
+    expect(delivered).toEqual([{ error: 'open /models/gone.emod: no such file or directory' }]);
+  });
+
+  // The shell has just said a request is waiting, so a take that fails here has
+  // lost a file the user asked for. Answering "nothing was waiting" would drop
+  // a double-clicked model with nothing said anywhere.
+  it('reports a request the shell announced and then could not hand over', async () => {
+    const delivered = collectDeliveries();
+    stub.answers.Take = new Error('no such method');
+
+    await requestFromOS();
+
+    expect(delivered).toEqual([{ error: 'no such method' }]);
+  });
+});
+
 describe('starting up', () => {
-  it('opens with no model, because nothing hands this window one at startup', async () => {
+  it('opens with no model, because nothing hands this window one as state', async () => {
     await expect(desktop.initialState()).resolves.toBeNull();
+  });
+
+  it('takes the model the shell was launched to open', async () => {
+    const delivered = collectDeliveries();
+    stub.answers.Take = '/models/billing.emod';
+
+    await desktop.initialState();
+    await flush();
+
+    expect(delivered).toEqual([
+      { name: 'billing.emod', path: '/models/billing.emod', content: 'emod 1\n' },
+    ]);
+  });
+
+  // Nothing was announced to a page that is merely starting, so a take that
+  // fails has no file to have lost and says nothing — the opposite of the
+  // event path above.
+  it('says nothing when the take fails and no request was announced', async () => {
+    const delivered = collectDeliveries();
+    stub.answers.Take = new Error('no such method');
+
+    await desktop.initialState();
+    await flush();
+
+    expect(delivered).toEqual([]);
   });
 });

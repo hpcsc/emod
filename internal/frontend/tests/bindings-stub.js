@@ -8,7 +8,7 @@
 export const calls = [];
 export const answers = {
   ParseEmod: '{}', ExportJSON: '{}', ExportEmod: '{}', Read: '{}', Write: '{}',
-  SetModified: undefined, Record: undefined, Open: '{}',
+  SetModified: undefined, Record: undefined, Open: '{}', Take: '',
 };
 
 export const ModelService = {
@@ -20,6 +20,16 @@ export const ModelService = {
 export const FileService = {
   Read: (arg) => { calls.push(['Read', arg]); return Promise.resolve(answers.Read); },
   Write: (path, content) => { calls.push(['Write', path, content]); return Promise.resolve(answers.Write); },
+};
+
+// Take stays out of `calls` because it is asked rather than sent: every other
+// entry there is a gesture reaching the shell, and the two describes that drive
+// Take assert on what was delivered and what was read. An Error rejects the take
+// the way the other bindings reject theirs.
+export const OpenRequests = {
+  Take: () => (answers.Take instanceof Error
+    ? Promise.reject(answers.Take)
+    : Promise.resolve(answers.Take)),
 };
 
 // SetModified is driven through the same bag as every other binding, the way

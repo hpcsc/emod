@@ -4,7 +4,7 @@
 // web viewer and into the CLI binary. The desktop build assembles it into its
 // own frontend directory as platform.js.
 import { Application, Dialogs, Events, System, Window } from '/wails/runtime.js';
-import { FileService, ModelService, RecentFiles, WindowService } from '../bindings/github.com/hpcsc/emod/internal/desktop/index.js';
+import { FileService, ModelService, OpenRequests, RecentFiles, WindowService } from '../bindings/github.com/hpcsc/emod/internal/desktop/index.js';
 
 // The Go core is linked into the binary, so there is nothing to fetch and
 // nothing to wait for. The browser implementation's ready/isReady exist to gate
@@ -381,6 +381,46 @@ function openRecent(path) {
   });
 }
 
+// A model the system itself asked the app to open — a double-click in the file
+// manager, or Open With. The shell holds it rather than pushing it here, because
+// a launch the system started in order to open a file hands the path over before
+// this page exists. So the page takes it: as it starts, and again whenever the
+// shell says another is waiting. The name is pinned against the shell by
+// internal/desktop's event-name guard.
+Events.On('file:open-from-os-requested', function() { return takeOpenRequest(true); });
+
+// announced says whether the shell has stated that a request is waiting. It
+// decides what a take that fails means: the event says one is there, so failing
+// to hand it over has lost a file the user asked for and owes them the reason,
+// while a page starting has been promised nothing and has no file to have lost.
+function takeOpenRequest(announced) {
+  return OpenRequests.Take().then(function(path) {
+    // Two takes at once is the ordinary case — the page takes as it starts while
+    // the event tells it to take again — and only one of them is given the file.
+    // The one that found nothing must claim no gesture number, or it supersedes
+    // the one that got the file and the model is dropped without a word.
+    if (!path) {
+      return undefined;
+    }
+
+    return openNamedBy(function() {
+      return FileService.Read(path).then(JSON.parse);
+    });
+  }, function(err) {
+    if (!announced) {
+      return undefined;
+    }
+
+    // Reported the way a file that would not open is reported, and numbered with
+    // the gestures, so the reason cannot land on top of a model opened since.
+    // Rejected rather than thrown: openNamedBy calls this before it attaches a
+    // handler, so a throw here leaves the caller instead of reaching the viewer.
+    return openNamedBy(function() {
+      return Promise.reject(err);
+    });
+  });
+}
+
 // A gesture that has to name a model and then read it before it can deliver.
 // name answers the opened document, null for a gesture that named nothing, or
 // fails; what it read is delivered only if no later gesture has been made
@@ -406,9 +446,15 @@ function deliverFile(opened) {
   }
 }
 
-// Nothing hands this window a model at startup, so it always opens empty. A
-// shell launched by opening a file has one to supply here.
+// Nothing is handed to this window as state to render, so it always opens empty.
+// A model the shell was launched to open is taken here instead of answered here:
+// it arrives through the delivery every other gesture uses, which is what makes
+// it the save target and puts it through the unsaved-edits question. This is the
+// first moment it has anywhere to arrive, because the viewer registers its
+// handler before it asks for the initial state.
 function initialState() {
+  takeOpenRequest(false);
+
   return Promise.resolve(null);
 }
 
