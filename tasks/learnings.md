@@ -1303,9 +1303,8 @@ in this repo; append only learnings that generalise beyond the task that surface
 - Type: constraint
 - Recorded: 2026-09-09
 - Observed: us-008-open-a-model-by-double-clicking-it-in-the-file-manager
-- Learning: Piping clerk audit run into head kills the runner with SIGPIPE the moment the pipe closes, losing every review agent that had not landed — the round shows phase review with zero reviews and the log stops mid-list. Redirect to a file instead, and read the file. Separately, the review phase spawns eight lens agents at roughly 265 MB each, so on a 16 GB machine already under pressure the OS killed three consecutive rounds; check vm_stat before launching, and expect a resumed clerk audit run to re-spawn every agent because nothing had landed.
-- Apply when: launching or resuming clerk audit run, or diagnosing a round that reports zero reviews in the review phase
-
+- Learning: Piping clerk audit run into head kills the round: progress goes to stderr, so a 2>&1 | head closes the pipe and the next write raises BrokenPipeError out of the renderer, and the runner dies mid-review leaving its agents orphaned — they then hold the memory that OOM-kills the next attempt. That cascade cost 63 minutes across three dead rounds here. Redirect to a file and read the file. The review phase also spawns eight agents at roughly 265 MB each, so check vm_stat first on a loaded machine. But the larger cost was the waiting, not the deaths: the deaths took 2m20 and the remaining hour went on a Monitor whose emitted line carried free memory, so nearly every 20-second poll became a notification and a turn — and the backgrounded run already notifies on exit, so no monitor was needed at all.
+- Apply when: launching or resuming clerk audit run, diagnosing a round that reports zero reviews, or deciding how to wait for any long background command
 ## An OS-integration task is high certainty when the OS can be read back, whatever the repo has never done
 - Type: convention
 - Recorded: 2026-09-09
