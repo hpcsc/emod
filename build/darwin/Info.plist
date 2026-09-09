@@ -25,6 +25,8 @@
 			<string>au.pnguyen.emod.model</string>
 			<key>UTTypeDescription</key>
 			<string>emod model</string>
+			<key>UTTypeIconFile</key>
+			<string>docicon</string>
 			<key>UTTypeConformsTo</key>
 			<array>
 				<string>public.plain-text</string>
@@ -43,6 +45,8 @@
 		<dict>
 			<key>CFBundleTypeName</key>
 			<string>emod model</string>
+			<key>CFBundleTypeIconFile</key>
+			<string>docicon</string>
 			<key>CFBundleTypeRole</key>
 			<string>Editor</string>
 			<key>LSHandlerRank</key>

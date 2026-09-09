@@ -57,7 +57,7 @@
     },
     {
       "n": 3,
-      "done": false,
+      "done": true,
       "title": "Give .emod files a document icon in Finder",
       "language": "Go",
       "testable": true,

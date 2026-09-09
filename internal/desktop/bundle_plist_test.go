@@ -45,12 +45,24 @@ func TestBundlePlist(t *testing.T) {
 	})
 
 	t.Run("the packaging task writes the icon file the plist names", func(t *testing.T) {
-		written := captureIn(t, taskBody(t, "package:desktop"),
-			regexp.MustCompile(`Contents/Resources/(\S+)\.icns`),
-			"package:desktop must write the bundle's icon into Contents/Resources")
-
-		require.Equal(t, plistString(t, "CFBundleIconFile"), written,
+		require.Contains(t, iconsWrittenByPackaging(t), plistString(t, "CFBundleIconFile"),
 			"macOS shows the icon Info.plist names, and package:desktop writes a different one")
+	})
+
+	t.Run("the packaging task writes the document icon the .emod type names", func(t *testing.T) {
+		document := dictString(t, documentTypeFor(t, exportedIdentifier(t)), "CFBundleTypeIconFile", documentTypeIn)
+
+		require.Contains(t, iconsWrittenByPackaging(t), document,
+			"Finder draws the icon the document type names, and package:desktop writes a different one")
+		require.NotEqual(t, plistString(t, "CFBundleIconFile"), document,
+			"a folder of models drawn with the application's own icon says every one of them is a program")
+	})
+
+	t.Run("the document icon is named the same wherever macOS looks for it", func(t *testing.T) {
+		require.Equal(t,
+			dictString(t, exportedType(t), "UTTypeIconFile", exportedTypeIn),
+			dictString(t, documentTypeFor(t, exportedIdentifier(t)), "CFBundleTypeIconFile", documentTypeIn),
+			"the exported type and the document type must not point Finder at two different icons")
 	})
 
 	t.Run("the bundle keeps the identifier macOS has already filed it under", func(t *testing.T) {
@@ -128,6 +140,23 @@ func exportedType(t *testing.T) map[string]any {
 	require.Len(t, declared, 1, plistPath+" must export exactly one type")
 
 	return asDict(t, declared[0], exportedTypeIn)
+}
+
+// Every icon package:desktop writes into the bundle. All of them rather than
+// the first: the bundle carries the application's icon and the document's, and
+// a reader that stops at one leaves whichever comes second unguarded.
+func iconsWrittenByPackaging(t *testing.T) []string {
+	t.Helper()
+
+	return capturesIn(t, taskBody(t, "package:desktop"),
+		regexp.MustCompile(`Contents/Resources/(\S+)\.icns`),
+		"package:desktop must write the bundle's icons into Contents/Resources")
+}
+
+func exportedIdentifier(t *testing.T) string {
+	t.Helper()
+
+	return dictString(t, exportedType(t), "UTTypeIdentifier", exportedTypeIn)
 }
 
 // The entry that tells macOS this app opens contentType.
@@ -328,6 +357,21 @@ func captureIn(t *testing.T, text string, pattern *regexp.Regexp, missing string
 	require.NotEmpty(t, match[1], missing)
 
 	return match[1]
+}
+
+func capturesIn(t *testing.T, text string, pattern *regexp.Regexp, missing string) []string {
+	t.Helper()
+
+	matches := pattern.FindAllStringSubmatch(text, -1)
+	require.NotEmpty(t, matches, missing)
+
+	var captured []string
+	for _, match := range matches {
+		require.NotEmpty(t, match[1], missing)
+		captured = append(captured, match[1])
+	}
+
+	return captured
 }
 
 func readRepoFile(t *testing.T, path string) string {

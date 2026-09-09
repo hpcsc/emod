@@ -85,6 +85,10 @@ tasks:
       # already ignored, so generating it here keeps one image under version
       # control instead of two that can disagree.
       - go tool wails3 generate icons -input ./build/appicon.png -macfilename ./bin/emod.app/Contents/Resources/icons.icns -windowsfilename ""
+      # The document icon is its own picture, from its own tracked image: Finder
+      # draws it on every .emod file, and drawing the application's icon there
+      # would say each model is a program.
+      - go tool wails3 generate icons -input ./build/docicon.png -macfilename ./bin/emod.app/Contents/Resources/docicon.icns -windowsfilename ""
       - codesign --force --sign - ./bin/emod.app
 
   build:web:

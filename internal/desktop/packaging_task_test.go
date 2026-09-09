@@ -57,12 +57,24 @@ func TestPackagingTask(t *testing.T) {
 		require.FileExists(t, repoPath(plistPath))
 	})
 
-	t.Run("the icon is derived from an image the repository tracks", func(t *testing.T) {
-		source := captureIn(t, taskBody(t, "package:desktop"),
+	t.Run("every icon is derived from an image the repository tracks", func(t *testing.T) {
+		sources := capturesIn(t, taskBody(t, "package:desktop"),
 			regexp.MustCompile(`generate icons [^\n]*-input \./(\S+)`),
-			"package:desktop must derive the icon from an image under version control")
+			"package:desktop must derive each icon from an image under version control")
 
-		require.FileExists(t, repoPath(source))
+		for _, source := range sources {
+			require.FileExists(t, repoPath(source))
+		}
+	})
+
+	t.Run("each icon is derived from its own image", func(t *testing.T) {
+		sources := capturesIn(t, taskBody(t, "package:desktop"),
+			regexp.MustCompile(`generate icons [^\n]*-input \./(\S+)`),
+			"package:desktop must derive each icon from an image under version control")
+
+		require.Equal(t, sources, unique(sources),
+			"two icons derived from one image are one picture under two names, "+
+				"and a document drawn with the application's icon says it is a program")
 	})
 
 	t.Run("the signature is the last thing applied to the bundle", func(t *testing.T) {

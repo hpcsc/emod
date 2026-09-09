@@ -322,14 +322,14 @@ type declared in Task 1 names that file. The existing icon guard reads only the 
 at all unless the guard is widened to read every one.
 
 **Acceptance Criteria:**
-- [ ] A document image is tracked under `build/`, distinct from `build/appicon.png`
-- [ ] `package:desktop` derives an `.icns` from it into `bin/emod.app/Contents/Resources` under a name that is not the app icon's, and does so above the `codesign` line
-- [ ] The document type declared in Task 1 names that icon file, and the app icon key still names the app icon
-- [ ] `task package:desktop` succeeds and `codesign --verify --deep --strict bin/emod.app` still exits 0
-- [ ] After registering the bundle, the icon macOS draws for an `.emod` file is emod's document icon: rendered to an image file and looked at, it differs from the icon rendered the same way for a `.txt` file
-- [ ] The guard reads every `generate icons` line in `package:desktop`, not the first, and requires each named input to be a tracked file; deleting the tracked document image alone makes it fail, and so does changing the icon name on the packaging side alone (restore each after checking)
-- [ ] `task test:unit` passes and the guard still starts no subprocess and needs no macOS
-- [ ] `task build`, `task build:wasm` and `task build:web` still succeed
+- [x] A document image is tracked under `build/`, distinct from `build/appicon.png`
+- [x] `package:desktop` derives an `.icns` from it into `bin/emod.app/Contents/Resources` under a name that is not the app icon's, and does so above the `codesign` line
+- [x] The document type declared in Task 1 names that icon file, and the app icon key still names the app icon
+- [x] `task package:desktop` succeeds and `codesign --verify --deep --strict bin/emod.app` still exits 0
+- [x] After registering the bundle, the icon macOS draws for an `.emod` file is emod's document icon: rendered to an image file and looked at, it differs from the icon rendered the same way for a `.txt` file
+- [x] The guard reads every `generate icons` line in `package:desktop`, not the first, and requires each named input to be a tracked file; deleting the tracked document image alone makes it fail, and so does changing the icon name on the packaging side alone (restore each after checking)
+- [x] `task test:unit` passes and the guard still starts no subprocess and needs no macOS
+- [x] `task build`, `task build:wasm` and `task build:web` still succeed
 
 **Affected Files/Modules:**
 - `build/docicon.png` — new, tracked; named beside `build/appicon.png` so the pair says which is which
