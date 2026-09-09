@@ -111,6 +111,17 @@ func TestBundlePlist(t *testing.T) {
 				"reaching emod with nothing here to say so")
 	})
 
+	// The handler rank and the exported type's own tag are two routes to owning a
+	// type, and an imported type declaration is a third that neither of them
+	// reads. A plist that grew one later would claim .json outright with both of
+	// the assertions below still passing, so this reads every extension tag the
+	// file declares wherever it sits.
+	t.Run("the bundle tags no file extension but its own", func(t *testing.T) {
+		require.Equal(t, []string{"emod"}, filenameExtensionsIn(bundlePlist(t)),
+			"an extension tagged anywhere in this file is one emod declares a type for, "+
+				"whatever rank the document types give it")
+	})
+
 	t.Run("the app offers itself for JSON without taking it", func(t *testing.T) {
 		offered := documentTypeFor(t, "public.json")
 
@@ -157,6 +168,51 @@ func exportedIdentifier(t *testing.T) string {
 	t.Helper()
 
 	return dictString(t, exportedType(t), "UTTypeIdentifier", exportedTypeIn)
+}
+
+// Every filename extension the plist tags, at any depth. An exported type
+// declaration, an imported one and a document type entry each carry their own
+// tag specification, so a reader that opens one of them answers for one of them.
+func filenameExtensionsIn(value any) []string {
+	var found []string
+	switch typed := value.(type) {
+	case map[string]any:
+		for key, entry := range typed {
+			if key == "public.filename-extension" {
+				found = append(found, textsIn(entry)...)
+
+				continue
+			}
+			found = append(found, filenameExtensionsIn(entry)...)
+		}
+	case []any:
+		for _, entry := range typed {
+			found = append(found, filenameExtensionsIn(entry)...)
+		}
+	}
+	slices.Sort(found)
+
+	return found
+}
+
+func textsIn(value any) []string {
+	if text, isString := value.(string); isString {
+		return []string{text}
+	}
+
+	entries, isArray := value.([]any)
+	if !isArray {
+		return nil
+	}
+
+	var texts []string
+	for _, entry := range entries {
+		if text, isString := entry.(string); isString {
+			texts = append(texts, text)
+		}
+	}
+
+	return texts
 }
 
 // The entry that tells macOS this app opens contentType.
