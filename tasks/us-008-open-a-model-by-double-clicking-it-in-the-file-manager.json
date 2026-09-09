@@ -1,0 +1,110 @@
+{
+  "story": "Open a model by double-clicking it in the file manager",
+  "tasks_file": "tasks/us-008-open-a-model-by-double-clicking-it-in-the-file-manager.md",
+  "tasks": [
+    {
+      "n": 1,
+      "done": true,
+      "title": "Declare the .emod type and its association in the bundle plist",
+      "language": "Go",
+      "testable": true,
+      "certainty": "low",
+      "blast_radius": "high",
+      "patterns_to_follow": [
+        "internal/desktop/bundle_plist_test.go:23-58",
+        "internal/desktop/bundle_plist_test.go:60-79",
+        "internal/desktop/packaging_task_test.go:54-66",
+        "build/darwin/Info.plist"
+      ],
+      "depends_on": [],
+      "affected_files": [
+        "build/darwin/Info.plist",
+        "internal/desktop/bundle_plist_test.go"
+      ]
+    },
+    {
+      "n": 2,
+      "done": false,
+      "title": "Open a model the file manager hands the app, running or not",
+      "language": "Go",
+      "testable": true,
+      "certainty": "medium",
+      "blast_radius": "high",
+      "patterns_to_follow": [
+        "internal/desktop/window_service.go",
+        "internal/desktop/window_service_test.go",
+        "cmd/emod-desktop/main.go:133-161",
+        "internal/frontend/desktop/platform.desktop.js:58-96",
+        "internal/frontend/desktop/platform.desktop.js:376-407",
+        "internal/frontend/tests/platform.desktop.test.js:44-76",
+        "internal/frontend/tests/platform.desktop.test.js:369-425",
+        "internal/frontend/tests/viewer.test.js:2286-2330",
+        "internal/desktop/event_names_test.go",
+        "internal/desktop/binding_names_test.go",
+        "task:1"
+      ],
+      "depends_on": [
+        1
+      ],
+      "affected_files": [
+        "internal/desktop/open_requests.go",
+        "internal/desktop/open_requests_test.go",
+        "cmd/emod-desktop/main.go",
+        "internal/frontend/desktop/platform.desktop.js",
+        "internal/frontend/tests/bindings-stub.js",
+        "internal/frontend/tests/platform.desktop.test.js"
+      ]
+    },
+    {
+      "n": 3,
+      "done": false,
+      "title": "Give .emod files a document icon in Finder",
+      "language": "Go",
+      "testable": true,
+      "certainty": "medium",
+      "blast_radius": "low",
+      "patterns_to_follow": [
+        "internal/desktop/packaging_task_test.go:43-66",
+        "internal/desktop/bundle_plist_test.go:44-51",
+        "Taskfile.yml",
+        "build/appicon.png",
+        "task:1"
+      ],
+      "depends_on": [
+        1
+      ],
+      "affected_files": [
+        "build/docicon.png",
+        "Taskfile.yml",
+        "build/darwin/Info.plist",
+        "internal/desktop/packaging_task_test.go",
+        "internal/desktop/bundle_plist_test.go"
+      ]
+    },
+    {
+      "n": 4,
+      "done": false,
+      "title": "Document the file association in the README",
+      "language": "Markdown",
+      "testable": true,
+      "certainty": "high",
+      "blast_radius": "low",
+      "patterns_to_follow": [
+        "internal/desktop/packaging_task_test.go:75-89",
+        "README.md:452-490",
+        "task:1",
+        "task:2",
+        "task:3"
+      ],
+      "depends_on": [
+        1,
+        2,
+        3
+      ],
+      "affected_files": [
+        "README.md",
+        "internal/desktop/packaging_task_test.go"
+      ]
+    }
+  ]
+}

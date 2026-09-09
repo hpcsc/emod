@@ -6,6 +6,7 @@ import (
 	"encoding/xml"
 	"os"
 	"regexp"
+	"slices"
 	"strings"
 	"testing"
 
@@ -57,12 +58,92 @@ func TestBundlePlist(t *testing.T) {
 			"every machine that has run the app has this identifier recorded in LaunchServices, "+
 				"and the file associations of a later story bind to it; changing it strands both")
 	})
+
+	// What makes a .emod file open in emod is a chain: the bundle identifier
+	// names the exported type, the exported type tags the extension, and a
+	// document type entry names that same identifier back. Each hop is compared
+	// to the value it must agree with rather than to a literal, because two
+	// assertions that each tie one end to a third value leave the middle free.
+	t.Run("the exported type is filed under the bundle's own identifier", func(t *testing.T) {
+		bundleIdentifier := plistString(t, "CFBundleIdentifier")
+		exported := dictString(t, exportedType(t), "UTTypeIdentifier", exportedTypeIn)
+
+		require.True(t, strings.HasPrefix(exported, bundleIdentifier+"."),
+			exported+" is not under "+bundleIdentifier+"; a type identifier outside the bundle's own "+
+				"namespace is one any other vendor can declare too, and the last one registered wins")
+	})
+
+	t.Run("the exported type is what tags a .emod file", func(t *testing.T) {
+		exported := exportedType(t)
+
+		require.Contains(t, dictStrings(t, exported, "UTTypeConformsTo", exportedTypeIn), "public.plain-text",
+			"a model is text, and a type that conforms to nothing inherits none of the behaviour "+
+				"macOS gives text — Quick Look, and the editors offered beneath emod")
+		require.Equal(t, []string{"emod"},
+			dictStrings(t, dictEntries(t, exported, "UTTypeTagSpecification", exportedTypeIn),
+				"public.filename-extension", exportedTypeIn),
+			"the extension tag is the whole of what attaches the declared type to a file on disk: "+
+				"without emod macOS keeps reading .emod as an anonymous dyn. type, and a second "+
+				"extension here would claim that one outright, whatever rank the document types give it")
+	})
+
+	t.Run("the app claims the type it exports", func(t *testing.T) {
+		claimed := documentTypeFor(t, exportedIdentifier(t))
+
+		require.Equal(t, "Owner", dictString(t, claimed, "LSHandlerRank", documentTypeIn),
+			"the app that exports a type is the one that owns it; anything lower leaves .emod files "+
+				"opening in whatever else happens to claim plain text")
+		require.Equal(t, "Editor", dictString(t, claimed, "CFBundleTypeRole", documentTypeIn),
+			"the role is what says the app opens this type at all: None leaves the rank above "+
+				"declaring an ownership macOS never acts on, and double-clicking a model stops "+
+				"reaching emod with nothing here to say so")
+	})
+
+	t.Run("the app offers itself for JSON without taking it", func(t *testing.T) {
+		offered := documentTypeFor(t, "public.json")
+
+		require.Equal(t, "Alternate", dictString(t, offered, "LSHandlerRank", documentTypeIn),
+			"Owner or Default would make emod the default application for every .json file on the "+
+				"machine, which the story forbids; None would keep emod out of Open With altogether")
+		require.Equal(t, "Editor", dictString(t, offered, "CFBundleTypeRole", documentTypeIn),
+			"a rank of Alternate offers an application that the role must first say can open the "+
+				"type; None offers nothing, and emod never reaches Open With for a .json file")
+	})
 }
 
 const (
 	plistPath    = "build/darwin/Info.plist"
 	taskfilePath = "Taskfile.yml"
+
+	exportedTypeIn = plistPath + "'s exported type declaration"
+	documentTypeIn = plistPath + "'s document type entry"
 )
+
+// The type the bundle declares as its own. One, because a second would be a
+// second thing every document type entry has to be kept in step with.
+func exportedType(t *testing.T) map[string]any {
+	t.Helper()
+
+	declared := dictArray(t, bundlePlist(t), "UTExportedTypeDeclarations", plistPath)
+	require.Len(t, declared, 1, plistPath+" must export exactly one type")
+
+	return asDict(t, declared[0], exportedTypeIn)
+}
+
+// The entry that tells macOS this app opens contentType.
+func documentTypeFor(t *testing.T, contentType string) map[string]any {
+	t.Helper()
+
+	for _, entry := range dictArray(t, bundlePlist(t), "CFBundleDocumentTypes", plistPath) {
+		declared := asDict(t, entry, documentTypeIn)
+		if slices.Contains(dictStrings(t, declared, "LSItemContentTypes", documentTypeIn), contentType) {
+			return declared
+		}
+	}
+	require.FailNow(t, plistPath+" declares no document type naming "+contentType)
+
+	return nil
+}
 
 // The value of a top-level plist key.
 func plistString(t *testing.T, key string) string {
@@ -82,6 +163,50 @@ func dictString(t *testing.T, entries map[string]any, key string, where string) 
 	require.NotEmpty(t, text, where+" leaves "+key+" empty")
 
 	return text
+}
+
+func dictArray(t *testing.T, entries map[string]any, key string, where string) []any {
+	t.Helper()
+
+	value, declared := entries[key]
+	require.True(t, declared, where+" declares no "+key)
+
+	values, isArray := value.([]any)
+	require.True(t, isArray, where+" declares "+key+" as something other than an array")
+	require.NotEmpty(t, values, where+" leaves "+key+" empty")
+
+	return values
+}
+
+func dictStrings(t *testing.T, entries map[string]any, key string, where string) []string {
+	t.Helper()
+
+	var texts []string
+	for _, value := range dictArray(t, entries, key, where) {
+		text, isString := value.(string)
+		require.True(t, isString, where+" holds a non-string in "+key)
+		texts = append(texts, text)
+	}
+
+	return texts
+}
+
+func dictEntries(t *testing.T, entries map[string]any, key string, where string) map[string]any {
+	t.Helper()
+
+	value, declared := entries[key]
+	require.True(t, declared, where+" declares no "+key)
+
+	return asDict(t, value, where+"'s "+key)
+}
+
+func asDict(t *testing.T, value any, where string) map[string]any {
+	t.Helper()
+
+	entries, isDict := value.(map[string]any)
+	require.True(t, isDict, where+" is not a dictionary")
+
+	return entries
 }
 
 // The bundle's plist as nested maps and slices. A property list puts a value in
