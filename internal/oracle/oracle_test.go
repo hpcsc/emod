@@ -498,3 +498,36 @@ func findRule(diagnostics []*diagnostic.Entry, ruleName string) *diagnostic.Entr
 func hasRule(diagnostics []*diagnostic.Entry, ruleName string) bool {
 	return findRule(diagnostics, ruleName) != nil
 }
+
+func TestRunParsed(t *testing.T) {
+	t.Run("parse outcome", func(t *testing.T) {
+		t.Run("source the parser reports on has not parsed", func(t *testing.T) {
+			_, diagnostics, parsed := oracle.RunParsed(test.Unparseable, "broken.emod")
+
+			require.NotEmpty(t, diagnostics)
+			require.False(t, parsed)
+		})
+
+		t.Run("source that parses but reports validation errors has still parsed", func(t *testing.T) {
+			missingEvent := strings.Replace(test.BillingPayments,
+				"command -> event: TakePayment -> PaymentTaken",
+				"command -> event: TakePayment -> PaymentRefunded", 1)
+			require.NotEqual(t, test.BillingPayments, missingEvent)
+
+			_, diagnostics, parsed := oracle.RunParsed(missingEvent, "billing.emod")
+
+			require.NotEmpty(t, messagesAt(diagnostics, diagnostic.Error), "the model must report an error, or this cannot tell parsed from clean")
+			require.True(t, parsed)
+		})
+	})
+}
+
+func messagesAt(diagnostics []*diagnostic.Entry, severity diagnostic.Severity) []string {
+	var messages []string
+	for _, d := range diagnostics {
+		if d.Severity == severity {
+			messages = append(messages, d.Message)
+		}
+	}
+	return messages
+}

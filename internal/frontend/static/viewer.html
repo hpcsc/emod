@@ -217,6 +217,32 @@ header .model-name span {
   border-color: rgba(52,152,219,0.5);
 }
 
+#stale-notice {
+  position: absolute;
+  top: 12px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 25;
+  max-width: calc(100% - 32px);
+  padding: 6px 14px;
+  border: 1px solid #f0b37e;
+  border-radius: 14px;
+  background: #fff4e5;
+  color: #9a5b13;
+  font-size: 12px;
+  font-weight: 600;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  box-shadow: 0 2px 6px rgba(0,0,0,0.12);
+}
+#stale-notice.hidden {
+  display: none;
+}
+#diagram-canvas.stale #viewport-group {
+  opacity: 0.45;
+}
+
 #diagnostics-panel {
   position: absolute;
   left: 0;
@@ -1214,6 +1240,8 @@ body.file-drop-target-active::after {
     <div id="visibility-panel-header">Visibility</div>
     <div id="visibility-tree"></div>
   </div>
+
+  <div id="stale-notice" class="hidden" role="status"></div>
 
   <div id="diagnostics-panel" class="hidden">
     <div id="diagnostics-panel-header">

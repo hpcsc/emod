@@ -46,7 +46,7 @@
     },
     {
       "n": 2,
-      "done": false,
+      "done": true,
       "title": "Keep the last diagram on screen, marked stale, when the panel's source does not parse",
       "language": "JavaScript",
       "testable": true,

@@ -105,6 +105,19 @@ describe('clicking a diagnostic', () => {
     expect(elements.n1.classList.contains('hl')).toBe(false);
     expect(elements.n2.classList.contains('hl')).toBe(true);
   });
+
+  it('highlights nothing while the diagram is out of date, because it was not drawn from the lines the diagnostic counts', () => {
+    const { store } = setupPanel({ nodes: [cmdAtLine5], renderNodes: ['n1'] });
+    store.diagramStale = true;
+    const items = showDiagnostics(store, [
+      { file: 'test.cue', line: 5, message: 'Error on line 5', severity: 'error' },
+    ]);
+
+    items[0].click();
+
+    expect(store.interaction.highlighted).toEqual({});
+    expect(items[0].classList.contains('not-rendered')).toBe(true);
+  });
 });
 
 describe('closing the diagnostics panel', () => {

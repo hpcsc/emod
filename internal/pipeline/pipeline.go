@@ -19,6 +19,15 @@ import (
 // exportFunc is a function that serializes a model and diagnostics into JSON.
 type exportFunc func(*ast.Model, []*diagnostic.Entry) ([]byte, error)
 
+// diagramAnswer is what the viewer runtimes read back from a parse: the
+// document `emod export --format diagram-json` prints, and whether the source
+// parsed.
+type diagramAnswer struct {
+	Diagnostics json.RawMessage `json:"diagnostics"`
+	Diagram     json.RawMessage `json:"diagram"`
+	Parsed      bool            `json:"parsed"`
+}
+
 // Request is the envelope both viewer runtimes hand across their boundary: the
 // source to run, and the name of the file it came from for the diagnostics and
 // node positions to report.
@@ -45,29 +54,44 @@ func ExtractRequest(input string) (Request, error) {
 }
 
 // runPipeline runs the full emod pipeline (lex → parse → validate → lint)
-// and invokes the given export function on the result.
-func runPipeline(source, filename string, fn exportFunc) (result []byte, err error) {
+// and invokes the given export function on the result, answering beside it
+// whether the source parsed.
+func runPipeline(source, filename string, fn exportFunc) (result []byte, parsed bool, err error) {
 	defer func() {
 		if r := recover(); r != nil {
 			err = fmt.Errorf("pipeline panic: %v", r)
 		}
 	}()
 
-	model, diags := oracle.Run(source, filename)
+	model, diags, parsed := oracle.RunParsed(source, filename)
+	result, err = fn(model, diags)
 
-	return fn(model, diags)
+	return result, parsed, err
 }
 
-// RunPipelineExportDiagram runs the pipeline and wraps the result
-// in the diagram JSON diagnostics envelope { diagnostics, diagram }.
+// RunPipelineExportDiagram runs the pipeline and answers the viewer's
+// { diagnostics, diagram, parsed } document.
 func RunPipelineExportDiagram(source, filename string) ([]byte, error) {
-	return runPipeline(source, filename, export.ExportDiagramJSONDiagnostics)
+	document, parsed, err := runPipeline(source, filename, export.ExportDiagramJSONDiagnostics)
+	if err != nil {
+		return nil, err
+	}
+
+	var answer diagramAnswer
+	if err := json.Unmarshal(document, &answer); err != nil {
+		return nil, err
+	}
+	answer.Parsed = parsed
+
+	return json.Marshal(answer)
 }
 
 // RunPipelineExportJSON runs the pipeline and wraps the result
 // in the model JSON diagnostics envelope { diagnostics, model }.
 func RunPipelineExportJSON(source, filename string) ([]byte, error) {
-	return runPipeline(source, filename, export.ExportJSONDiagnostics)
+	document, _, err := runPipeline(source, filename, export.ExportJSONDiagnostics)
+
+	return document, err
 }
 
 // ExportEmod converts a diagram JSON document — the {model_name, nodes, edges}

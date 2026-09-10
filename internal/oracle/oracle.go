@@ -24,10 +24,18 @@ func Parse(source string, filename string) (*ast.Model, []*diagnostic.Entry) {
 // alongside the combined diagnostics. Run never reads from disk or performs
 // any I/O — the caller supplies the source text and filename.
 func Run(source string, filename string) (*ast.Model, []*diagnostic.Entry) {
-	model, diagnostics := Parse(source, filename)
+	model, diagnostics, _ := RunParsed(source, filename)
+	return model, diagnostics
+}
+
+// RunParsed runs the chain as Run does, and also reports whether the source
+// parsed: whether lexing and parsing reported nothing.
+func RunParsed(source string, filename string) (model *ast.Model, diagnostics []*diagnostic.Entry, parsed bool) {
+	model, diagnostics = Parse(source, filename)
+	parsed = len(diagnostics) == 0
 	diagnostics = append(diagnostics, validator.Validate(model)...)
 	diagnostics = append(diagnostics, linter.Lint(model)...)
-	return model, diagnostics
+	return model, diagnostics, parsed
 }
 
 // Check returns the combined diagnostics from the lex/parse/validate/lint

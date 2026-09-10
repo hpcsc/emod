@@ -365,16 +365,16 @@ and panel list what is wrong. Source that parses redraws and clears the mark. Op
 draws that model.
 
 **Acceptance Criteria:**
-- [ ] The viewer's parse answer states whether the source parsed — whether the lexer or the parser reported anything — identically in the browser and desktop builds
-- [ ] `emod export --format diagram-json` prints a document with exactly two top-level keys, `diagnostics` and `diagram`
-- [ ] Rendering the panel's source when it does not parse, with a diagram on screen, leaves that diagram node for node, lists the new source's diagnostics in the badge and panel, and marks the diagram stale — for every way such a render ends without a parsed model: the pipeline reporting a lexer or parser error, and each rejection `Model.sendParse` returns
-- [ ] Source that parses, including source with validation errors or lint findings, redraws the diagram and clears the mark
-- [ ] With no diagram on screen yet, source that does not parse draws what the pipeline recovered, unmarked
-- [ ] A model opened by any route — each reaches the screen through `openModel` — draws what the pipeline recovered even when it does not parse, clears the mark, names the window and becomes the save target; the departing model's diagram is never kept for it
-- [ ] While the diagram is marked stale, clicking a diagnostic highlights no node
-- [ ] In the browser build, driven by the e2e-viewer suite, `elementFromPoint` at the mark lands on it with the data panel collapsed and with it expanded, and with every panel the header's toggles open showing
-- [ ] The mark lives in the shared `viewer.html` and `viewer.js`, so the page `task build:desktop` derives from `viewer.html` carries it too
-- [ ] The key the viewer reads the parse outcome from is pinned against the key the pipeline writes, by the guard Task 1 introduced
+- [x] The viewer's parse answer states whether the source parsed — whether the lexer or the parser reported anything — identically in the browser and desktop builds
+- [x] `emod export --format diagram-json` prints a document with exactly two top-level keys, `diagnostics` and `diagram`
+- [x] Rendering the panel's source when it does not parse, with a diagram on screen, leaves that diagram node for node, lists the new source's diagnostics in the badge and panel, and marks the diagram stale — for every way such a render ends without a parsed model: the pipeline reporting a lexer or parser error, and each rejection `Model.sendParse` returns
+- [x] Source that parses, including source with validation errors or lint findings, redraws the diagram and clears the mark
+- [x] With no diagram on screen yet, source that does not parse draws what the pipeline recovered, unmarked
+- [x] A model opened by any route — each reaches the screen through `openModel` — draws what the pipeline recovered even when it does not parse, clears the mark, names the window and becomes the save target; the departing model's diagram is never kept for it
+- [x] While the diagram is marked stale, clicking a diagnostic highlights no node
+- [x] In the browser build, driven by the e2e-viewer suite, `elementFromPoint` at the mark lands on it with the data panel collapsed and with it expanded, and with every panel the header's toggles open showing
+- [x] The mark lives in the shared `viewer.html` and `viewer.js`, so the page `task build:desktop` derives from `viewer.html` carries it too
+- [x] The key the viewer reads the parse outcome from is pinned against the key the pipeline writes, by the guard Task 1 introduced
 
 **Affected Files/Modules:**
 - `internal/pipeline/pipeline.go` — the viewer's answer says whether the source parsed, leaving the export package's wrapper the CLI prints as it is

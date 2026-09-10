@@ -1,6 +1,7 @@
 export function createStore() {
   return {
     diagnostics: [],
+    diagramStale: false,
     nodes: [],
     edges: [],
     modelName: '',
@@ -57,6 +58,7 @@ export function createStore() {
       diagnosticsPanel: null,
       diagnosticsList: null,
       diagnosticsClose: null,
+      staleNotice: null,
     },
   };
 }

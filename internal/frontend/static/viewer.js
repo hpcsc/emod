@@ -165,6 +165,7 @@ function init() {
   store.dom.diagnosticsPanel = document.getElementById("diagnostics-panel");
   store.dom.diagnosticsList = document.getElementById("diagnostics-list");
   store.dom.diagnosticsClose = document.getElementById("diagnostics-close");
+  store.dom.staleNotice = document.getElementById("stale-notice");
 
   Interaction.initEventListeners(store);
   UI.initDelegation(store);
@@ -209,17 +210,25 @@ function init() {
     if (text !== undefined) {
       store.dom.sourceInput.value = text;
     }
-    const naming = file !== undefined ? file : store.currentFile;
+    const opening = file !== undefined;
+    const naming = opening ? file : store.currentFile;
     const render = ++latestRender;
     latestRenderSettled = Model.sendParse(store, store.dom.sourceInput.value, store.dom.statusEl, naming ? naming.name : undefined)
       .then(function(data) {
         if (render !== latestRender) return;
-        if (file !== undefined) {
+        if (!opening && data.parsed === false && diagramOnScreen()) {
+          store.diagnostics = data.diagnostics || [];
+          bus.emit('diagnostics:changed', { store, diagnostics: store.diagnostics });
+          keepStaleDiagram("the source does not parse", "✗ Not redrawn: the source does not parse");
+          return;
+        }
+        if (opening) {
           store.currentFile = file;
           rememberFile(file, reportRecordingRefusal);
         }
         store.diagnostics = data.diagnostics || [];
         bus.emit('diagnostics:changed', { store, diagnostics: store.diagnostics });
+        showDiagramStale(false);
         Model.setModelData(store, data.diagram);
         store.dom.panel.classList.add("collapsed");
         store.dom.statusEl.textContent = "✓ Rendered";
@@ -230,6 +239,10 @@ function init() {
       })
       .catch(function(err) {
         if (render !== latestRender) return;
+        if (!opening && diagramOnScreen()) {
+          keepStaleDiagram("the source could not be drawn", "✗ " + err.message);
+          return;
+        }
         // The panel's text was replaced for a model that never rendered, and the
         // window still names the one on screen — so putting it back is what keeps
         // the panel, the title and the path stat naming one model.
@@ -242,6 +255,24 @@ function init() {
       });
 
     return latestRenderSettled;
+  }
+
+  function diagramOnScreen() {
+    return store.nodes.length > 0;
+  }
+
+  function keepStaleDiagram(why, status) {
+    showDiagramStale(true);
+    store.dom.staleNotice.textContent = "Diagram out of date — " + why;
+    store.dom.statusEl.textContent = status;
+    store.dom.statusEl.className = "status error";
+    reportModified();
+  }
+
+  function showDiagramStale(stale) {
+    store.diagramStale = stale;
+    store.dom.staleNotice.classList.toggle("hidden", !stale);
+    store.dom.svg.classList.toggle("stale", stale);
   }
 
   // Reporting a host failure claims a render number for the same reason a render

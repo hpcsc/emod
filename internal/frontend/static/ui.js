@@ -314,8 +314,9 @@ function handleDiagnosticClick(store, evt) {
   const file = d.file;
   const line = d.line;
 
-  // Can't match without a specific file and line
-  if (!file || !line) {
+  // Can't match without a specific file and line, nor against a diagram drawn
+  // from other source, whose lines are not the ones this diagnostic counts
+  if (!file || !line || store.diagramStale) {
     item.classList.add('not-rendered');
     return;
   }

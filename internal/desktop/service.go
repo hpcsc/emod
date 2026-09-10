@@ -15,8 +15,9 @@ import "github.com/hpcsc/emod/internal/pipeline"
 type ModelService struct{}
 
 // ParseEmod takes the pipeline.Request envelope and answers the pipeline's
-// {diagnostics, diagram} document. Source the pipeline reports on still yields a
-// diagram beside the diagnostics; only a malformed envelope is an error.
+// {diagnostics, diagram, parsed} document. Source the pipeline reports on still
+// yields a diagram beside the diagnostics, and parsed says whether lexing and
+// parsing reported nothing; only a malformed envelope is an error.
 func (s *ModelService) ParseEmod(request string) string {
 	return pipeline.RunOnSource(request, pipeline.RunPipelineExportDiagram)
 }

@@ -118,6 +118,7 @@ function createRequiredElements() {
     <div id="diagnostics-panel" class="hidden"></div>
     <button id="diagnostics-close"></button>
     <div id="diagnostics-list"></div>
+    <div id="stale-notice" class="hidden"></div>
   `;
   document.body.appendChild(container);
   return container;
@@ -2420,6 +2421,140 @@ describe('what the diagnostics panel reports', () => {
     expect(items[0].textContent).toContain('[orphan-command] command "Ship" is never used');
     expect(items[1].textContent).toContain('unexpected "}"');
     expect(items[1].textContent).not.toContain('[');
+  });
+});
+
+describe('rendering the panel again when its source does not parse', () => {
+  const brokenSource = billingSource + 'context "Refunds" {\n';
+  const syntaxError = { file: 'billing.emod', line: 3, message: 'expected "}" to close context', severity: 'error' };
+
+  // What the parser recovers from a construct left open: the context and
+  // nothing inside it, which is what drawing it would replace the diagram with.
+  function recoveredFragment(name) {
+    return {
+      model_name: name,
+      nodes: [{ id: 'context-1', type: 'context', label: name + 'Context', parentId: null }],
+      edges: [],
+    };
+  }
+
+  function billingWith(label) {
+    const diagram = billingDiagram();
+    diagram.nodes.push({ id: 'command-2', type: 'command', label: label, parentId: 'slice-1' });
+    return diagram;
+  }
+
+  async function renderPanel(text, answer) {
+    parseQueue = answer === undefined ? [] : [answer];
+    typeIntoPanel(text);
+    document.getElementById('render-btn').click();
+    await flush();
+  }
+
+  const canvas = () => document.getElementById('diagram-canvas').innerHTML;
+  const markedStale = () => !document.getElementById('stale-notice').classList.contains('hidden');
+
+  it('leaves the diagram that was on screen, node for node', async () => {
+    await openBilling();
+
+    await renderPanel(brokenSource, Promise.resolve({ parsed: false, diagnostics: [syntaxError], diagram: recoveredFragment('Billing') }));
+
+    expect(canvas()).toContain('TakePayment');
+    expect(canvas()).not.toContain('BillingContext');
+    expect(document.getElementById('stat-nodes').textContent).toBe('3');
+  });
+
+  it("lists the new source's diagnostics in the badge and the panel", async () => {
+    await openBilling();
+
+    await renderPanel(brokenSource, Promise.resolve({ parsed: false, diagnostics: [syntaxError], diagram: recoveredFragment('Billing') }));
+
+    expect(document.getElementById('diagnostics-badge').textContent).toBe('1 error');
+    expect(document.getElementById('diagnostics-list').textContent).toContain('expected "}" to close context');
+  });
+
+  it('marks the diagram as out of date, saying why', async () => {
+    await openBilling();
+    expect(markedStale()).toBe(false);
+
+    await renderPanel(brokenSource, Promise.resolve({ parsed: false, diagnostics: [syntaxError], diagram: recoveredFragment('Billing') }));
+
+    expect(markedStale()).toBe(true);
+    expect(document.getElementById('stale-notice').textContent).toContain('the source does not parse');
+  });
+
+  it.each([
+    ['the panel emptied', '   \n', () => undefined],
+    ['the pipeline answering an error', brokenSource, () => Promise.resolve({ error: 'pipeline panic: index out of range' })],
+    ['an answer carrying no diagram', brokenSource, () => Promise.resolve({ diagnostics: [], diagram: {} })],
+    ['the host refusing the parse', brokenSource, () => Promise.reject(new Error('binding call failed'))],
+  ])('keeps the diagram and marks it out of date on %s', async (_, text, answer) => {
+    await openBilling();
+
+    await renderPanel(text, answer());
+
+    expect(canvas()).toContain('TakePayment');
+    expect(markedStale()).toBe(true);
+  });
+
+  it('redraws source that parses again and takes the mark down', async () => {
+    await openBilling();
+    await renderPanel(brokenSource, Promise.resolve({ parsed: false, diagnostics: [syntaxError], diagram: recoveredFragment('Billing') }));
+
+    await renderPanel(billingSource + '// fixed\n', Promise.resolve({ parsed: true, diagnostics: [], diagram: billingWith('RefundPayment') }));
+
+    expect(canvas()).toContain('RefundPayment');
+    expect(markedStale()).toBe(false);
+  });
+
+  it('redraws source that parses but fails validation, rather than keeping the old diagram', async () => {
+    await openBilling();
+
+    await renderPanel(billingSource + '// refunds\n', Promise.resolve({
+      parsed: true,
+      diagnostics: [{ file: 'billing.emod', line: 9, message: 'event "PaymentRefunded" does not exist', severity: 'error' }],
+      diagram: billingWith('RefundPayment'),
+    }));
+
+    expect(canvas()).toContain('RefundPayment');
+    expect(markedStale()).toBe(false);
+    expect(document.getElementById('diagnostics-badge').textContent).toBe('1 error');
+  });
+
+  it('draws what the pipeline recovered when no diagram is on screen yet, unmarked', async () => {
+    await startEmpty();
+
+    await renderPanel(brokenSource, Promise.resolve({ parsed: false, diagnostics: [syntaxError], diagram: recoveredFragment('Billing') }));
+
+    expect(canvas()).toContain('BillingContext');
+    expect(markedStale()).toBe(false);
+  });
+
+  it('draws a model opened over an out-of-date diagram from what the pipeline recovered, and takes the mark down', async () => {
+    await openBilling();
+    await renderPanel(brokenSource, Promise.resolve({ parsed: false, diagnostics: [syntaxError], diagram: recoveredFragment('Billing') }));
+
+    parseQueue = [Promise.resolve({ parsed: false, diagnostics: [syntaxError], diagram: recoveredFragment('Orders') })];
+    deliverFile({ name: 'orders.emod', path: '/models/orders.emod', content: 'emod 1\nmodel "Orders"\ncontext "Orders" {\n' });
+    await flush();
+
+    expect(canvas()).toContain('OrdersContext');
+    expect(canvas()).not.toContain('TakePayment');
+    expect(markedStale()).toBe(false);
+  });
+
+  it('names the window after a model opened that does not parse, and saves back to its file', async () => {
+    await openBilling();
+    await renderPanel(brokenSource, Promise.resolve({ parsed: false, diagnostics: [syntaxError], diagram: recoveredFragment('Billing') }));
+
+    parseQueue = [Promise.resolve({ parsed: false, diagnostics: [syntaxError], diagram: recoveredFragment('Orders') })];
+    deliverFile({ name: 'orders.emod', path: '/models/orders.emod', content: 'emod 1\nmodel "Orders"\ncontext "Orders" {\n' });
+    await flush();
+    saveAnswer = { name: 'orders.emod', path: '/models/orders.emod' };
+    await save();
+
+    expect(windowTitle).toBe('orders.emod — Emod Diagram Viewer');
+    expect(savedFile.path).toBe('/models/orders.emod');
   });
 });
 

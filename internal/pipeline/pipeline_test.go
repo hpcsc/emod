@@ -52,6 +52,18 @@ func TestPipeline(t *testing.T) {
 				require.Contains(t, err.Error(), "missing source field")
 			}
 		})
+
+		t.Run("both viewer runtimes send the source under the keys the request reads", func(t *testing.T) {
+			read := jsonKeysOf(reflect.TypeOf(pipeline.Request{}))
+			require.Equal(t, []string{"filename", "source"}, read)
+
+			for _, platform := range []string{
+				"../frontend/static/platform.browser.js",
+				"../frontend/desktop/platform.desktop.js",
+			} {
+				require.Equal(t, read, keysSentBy(t, platform, "parseEmod"), platform)
+			}
+		})
 	})
 
 	t.Run("run on source", func(t *testing.T) {
@@ -120,6 +132,47 @@ func TestPipeline(t *testing.T) {
 			envelope := decodeDiagramEnvelope(t, result)
 
 			require.Empty(t, envelope.Diagram.Nodes)
+		})
+
+		t.Run("says the source did not parse when the parser reported on it, while still answering what it recovered", func(t *testing.T) {
+			broken := test.BillingPayments + "context \"Refunds\" {\n"
+
+			result, err := pipeline.RunPipelineExportDiagram(broken, "billing.emod")
+			require.NoError(t, err)
+
+			envelope := decodeDiagramEnvelope(t, result)
+			require.False(t, envelope.Parsed)
+			require.Equal(t, []string{"TakePayment", "PaymentTaken"}, labelsOfType(envelope.Diagram.Nodes, "command", "event"))
+		})
+
+		t.Run("says the source parsed when it reports only validation and lint findings", func(t *testing.T) {
+			missingEvent := strings.Replace(test.BillingPayments,
+				"command -> event: TakePayment -> PaymentTaken",
+				"command -> event: TakePayment -> PaymentRefunded", 1)
+			require.NotEqual(t, test.BillingPayments, missingEvent)
+
+			result, err := pipeline.RunPipelineExportDiagram(missingEvent, "billing.emod")
+			require.NoError(t, err)
+
+			envelope := decodeDiagramEnvelope(t, result)
+			require.NotEmpty(t, envelope.Diagnostics, "the model must report something, or this cannot tell parsed from clean")
+			require.True(t, envelope.Parsed)
+		})
+
+		t.Run("every key the viewer reads off a parse's answer is one the answer carries", func(t *testing.T) {
+			result, err := pipeline.RunPipelineExportDiagram(test.BillingPayments, "billing.emod")
+			require.NoError(t, err)
+			var answer map[string]json.RawMessage
+			require.NoError(t, json.Unmarshal(result, &answer))
+			written := make([]string, 0, len(answer))
+			for key := range answer {
+				written = append(written, key)
+			}
+
+			read := fieldsReadBy(t, "../frontend/static/viewer.js", "renderPanelSource", "data")
+
+			require.Contains(t, read, "parsed", "viewer.js must read whether the source parsed")
+			require.Subset(t, written, read, "viewer.js reads a key of the parse answer the pipeline does not write")
 		})
 
 		t.Run("reports each diagnostic under the file name it was given", func(t *testing.T) {
@@ -227,20 +280,6 @@ func TestPipeline(t *testing.T) {
 		})
 	})
 
-	t.Run("request keys", func(t *testing.T) {
-		t.Run("both viewer runtimes send the source under the keys the request reads", func(t *testing.T) {
-			read := jsonKeysOf(reflect.TypeOf(pipeline.Request{}))
-			require.Equal(t, []string{"filename", "source"}, read)
-
-			for _, platform := range []string{
-				"../frontend/static/platform.browser.js",
-				"../frontend/desktop/platform.desktop.js",
-			} {
-				require.Equal(t, read, keysSentBy(t, platform, "parseEmod"), platform)
-			}
-		})
-	})
-
 	t.Run("error json", func(t *testing.T) {
 		t.Run("carries the message in an error field", func(t *testing.T) {
 			var parsed struct {
@@ -277,6 +316,7 @@ type edge struct {
 }
 
 type diagramEnvelope struct {
+	Parsed      bool         `json:"parsed"`
 	Diagnostics []diagnostic `json:"diagnostics"`
 	Diagram     struct {
 		ModelName string `json:"model_name"`
@@ -415,13 +455,34 @@ func keysSentBy(t *testing.T, path, function string) []string {
 	literal := regexp.MustCompile(`JSON\.stringify\(\{([^}]*)\}\)`).FindStringSubmatch(body)
 	require.Len(t, literal, 2, path+"'s "+function+" must hand JSON.stringify an object literal")
 
+	// Each entry's key leads it, written `key: value` or as the shorthand `key`.
 	var keys []string
-	for _, match := range regexp.MustCompile(`(\w+)\s*:`).FindAllStringSubmatch(literal[1], -1) {
-		keys = append(keys, match[1])
+	for _, entry := range strings.Split(literal[1], ",") {
+		if key := regexp.MustCompile(`^\s*(\w+)`).FindStringSubmatch(entry); key != nil {
+			keys = append(keys, key[1])
+		}
 	}
 	sort.Strings(keys)
 
 	return keys
+}
+
+func fieldsReadBy(t *testing.T, path, function, receiver string) []string {
+	t.Helper()
+
+	raw, err := os.ReadFile(path)
+	require.NoError(t, err)
+
+	var fields []string
+	seen := map[string]bool{}
+	for _, match := range regexp.MustCompile(`\b`+receiver+`\.(\w+)`).FindAllStringSubmatch(functionBody(t, string(raw), function, path), -1) {
+		if !seen[match[1]] {
+			seen[match[1]] = true
+			fields = append(fields, match[1])
+		}
+	}
+
+	return fields
 }
 
 func functionBody(t *testing.T, source, function, path string) string {

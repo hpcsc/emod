@@ -430,6 +430,24 @@ context "Orders" {
 		require.True(t, ok, "expected nodes in diagram output")
 	})
 
+	t.Run("diagram-json prints only the diagnostics and the diagram, whether or not the file parses", func(t *testing.T) {
+		for name, source := range map[string]string{"valid.emod": validEmod, "unparseable.emod": "foobar {\n}\n"} {
+			path := writeTemp(t, name, source)
+
+			output := captureStdout(t, func() {
+				_ = cli.RunExport(path, "diagram-json")
+			})
+
+			var doc map[string]json.RawMessage
+			require.NoError(t, json.Unmarshal([]byte(output), &doc), name)
+			keys := make([]string, 0, len(doc))
+			for key := range doc {
+				keys = append(keys, key)
+			}
+			require.ElementsMatch(t, []string{"diagnostics", "diagram"}, keys, name)
+		}
+	})
+
 	// --- CUE format tests ---
 
 	t.Run("valid file outputs CUE text to stdout with -f cue", func(t *testing.T) {
