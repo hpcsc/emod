@@ -3882,6 +3882,32 @@ func TestExport(t *testing.T) {
 			require.Equal(t, "unused-field", d1["rule_name"])
 		})
 
+		t.Run("the parsed envelope is the diagnostics envelope with whether the source parsed added", func(t *testing.T) {
+			model := &ast.Model{Name: "Test"}
+			diags := []*diagnostic.Entry{{Filename: "test.emod", Line: 3, Column: 1, Message: "unexpected \"}\"", Severity: diagnostic.Error}}
+
+			plain, err := export.ExportDiagramJSONDiagnostics(model, diags)
+			require.NoError(t, err)
+			unparsed, err := export.ExportDiagramJSONParsed(model, diags, false)
+			require.NoError(t, err)
+			parsed, err := export.ExportDiagramJSONParsed(model, diags, true)
+			require.NoError(t, err)
+
+			withParsed := func(value string) map[string]json.RawMessage {
+				var doc map[string]json.RawMessage
+				require.NoError(t, json.Unmarshal(plain, &doc))
+				doc["parsed"] = json.RawMessage(value)
+				return doc
+			}
+			decoded := func(raw []byte) map[string]json.RawMessage {
+				var doc map[string]json.RawMessage
+				require.NoError(t, json.Unmarshal(raw, &doc))
+				return doc
+			}
+			require.Equal(t, withParsed("false"), decoded(unparsed))
+			require.Equal(t, withParsed("true"), decoded(parsed))
+		})
+
 		t.Run("nil model produces diagram null", func(t *testing.T) {
 			raw, err := export.ExportDiagramJSONDiagnostics(nil, nil)
 			require.NoError(t, err)

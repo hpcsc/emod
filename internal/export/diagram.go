@@ -74,6 +74,11 @@ type jsonDiagramDiagnosticsWrapper struct {
 	Diagram     json.RawMessage        `json:"diagram"`
 }
 
+type jsonDiagramParsedWrapper struct {
+	jsonDiagramDiagnosticsWrapper
+	Parsed bool `json:"parsed"`
+}
+
 // ExportDiagramJSON serializes the given AST model to a diagram-oriented JSON byte slice.
 func ExportDiagramJSON(model *ast.Model) ([]byte, error) {
 	j := convertModelToDiagram(model)
@@ -83,17 +88,35 @@ func ExportDiagramJSON(model *ast.Model) ([]byte, error) {
 // ExportDiagramJSONDiagnostics wraps the diagram JSON and a diagnostics slice into a structured envelope
 // with top-level diagnostics array and diagram object.
 func ExportDiagramJSONDiagnostics(model *ast.Model, diagnostics []*diagnostic.Entry) ([]byte, error) {
-	diagramJSON, err := ExportDiagramJSON(model)
+	wrapper, err := diagramDiagnosticsWrapper(model, diagnostics)
 	if err != nil {
 		return nil, err
 	}
 
-	wrapper := jsonDiagramDiagnosticsWrapper{
-		Diagnostics: convertDiagnostics(diagnostics),
-		Diagram:     json.RawMessage(diagramJSON),
+	return json.Marshal(wrapper)
+}
+
+// ExportDiagramJSONParsed is the ExportDiagramJSONDiagnostics envelope with a
+// parsed key beside it, saying whether lexing and parsing reported nothing.
+func ExportDiagramJSONParsed(model *ast.Model, diagnostics []*diagnostic.Entry, parsed bool) ([]byte, error) {
+	wrapper, err := diagramDiagnosticsWrapper(model, diagnostics)
+	if err != nil {
+		return nil, err
 	}
 
-	return json.Marshal(wrapper)
+	return json.Marshal(jsonDiagramParsedWrapper{jsonDiagramDiagnosticsWrapper: wrapper, Parsed: parsed})
+}
+
+func diagramDiagnosticsWrapper(model *ast.Model, diagnostics []*diagnostic.Entry) (jsonDiagramDiagnosticsWrapper, error) {
+	diagramJSON, err := ExportDiagramJSON(model)
+	if err != nil {
+		return jsonDiagramDiagnosticsWrapper{}, err
+	}
+
+	return jsonDiagramDiagnosticsWrapper{
+		Diagnostics: convertDiagnostics(diagnostics),
+		Diagram:     json.RawMessage(diagramJSON),
+	}, nil
 }
 
 // diagramIDGenerator generates deterministic sequential IDs for diagram nodes.

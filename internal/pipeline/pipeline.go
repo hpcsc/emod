@@ -16,21 +16,10 @@ import (
 	"github.com/hpcsc/emod/internal/oracle"
 )
 
-// exportFunc is a function that serializes a model and diagnostics into JSON.
-type exportFunc func(*ast.Model, []*diagnostic.Entry) ([]byte, error)
+type exportFunc func(model *ast.Model, diagnostics []*diagnostic.Entry, parsed bool) ([]byte, error)
 
-// diagramAnswer is what the viewer runtimes read back from a parse: the
-// document `emod export --format diagram-json` prints, and whether the source
-// parsed.
-type diagramAnswer struct {
-	Diagnostics json.RawMessage `json:"diagnostics"`
-	Diagram     json.RawMessage `json:"diagram"`
-	Parsed      bool            `json:"parsed"`
-}
-
-// Request is the envelope both viewer runtimes hand across their boundary: the
-// source to run, and the name of the file it came from for the diagnostics and
-// node positions to report.
+// Request is the source to run and the name of the file it came from, which
+// the diagnostics and node positions report.
 type Request struct {
 	Source   string `json:"source"`
 	Filename string `json:"filename"`
@@ -54,9 +43,8 @@ func ExtractRequest(input string) (Request, error) {
 }
 
 // runPipeline runs the full emod pipeline (lex → parse → validate → lint)
-// and invokes the given export function on the result, answering beside it
-// whether the source parsed.
-func runPipeline(source, filename string, fn exportFunc) (result []byte, parsed bool, err error) {
+// and invokes the given export function on the result.
+func runPipeline(source, filename string, fn exportFunc) (result []byte, err error) {
 	defer func() {
 		if r := recover(); r != nil {
 			err = fmt.Errorf("pipeline panic: %v", r)
@@ -64,34 +52,22 @@ func runPipeline(source, filename string, fn exportFunc) (result []byte, parsed 
 	}()
 
 	model, diags, parsed := oracle.RunParsed(source, filename)
-	result, err = fn(model, diags)
 
-	return result, parsed, err
+	return fn(model, diags, parsed)
 }
 
-// RunPipelineExportDiagram runs the pipeline and answers the viewer's
+// RunPipelineExportDiagram runs the pipeline and answers the
 // { diagnostics, diagram, parsed } document.
 func RunPipelineExportDiagram(source, filename string) ([]byte, error) {
-	document, parsed, err := runPipeline(source, filename, export.ExportDiagramJSONDiagnostics)
-	if err != nil {
-		return nil, err
-	}
-
-	var answer diagramAnswer
-	if err := json.Unmarshal(document, &answer); err != nil {
-		return nil, err
-	}
-	answer.Parsed = parsed
-
-	return json.Marshal(answer)
+	return runPipeline(source, filename, export.ExportDiagramJSONParsed)
 }
 
 // RunPipelineExportJSON runs the pipeline and wraps the result
 // in the model JSON diagnostics envelope { diagnostics, model }.
 func RunPipelineExportJSON(source, filename string) ([]byte, error) {
-	document, _, err := runPipeline(source, filename, export.ExportJSONDiagnostics)
-
-	return document, err
+	return runPipeline(source, filename, func(model *ast.Model, diagnostics []*diagnostic.Entry, _ bool) ([]byte, error) {
+		return export.ExportJSONDiagnostics(model, diagnostics)
+	})
 }
 
 // ExportEmod converts a diagram JSON document — the {model_name, nodes, edges}
