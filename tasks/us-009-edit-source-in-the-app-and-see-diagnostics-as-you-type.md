@@ -465,16 +465,16 @@ nobody clicked never overtakes an open, a save or a reported failure, and typing
 on the largest example.
 
 **Acceptance Criteria:**
-- [ ] Every edit the user makes in the source panel — each change that fires its `input` event — revalidates the panel after a short pause, with no Render click; edits arriving within the pause produce one revalidation, and none starts before the pause ends
-- [ ] Each revalidation updates the badge and the diagnostics list as Task 1 describes, and does not re-open a diagnostics panel the user has closed
-- [ ] A revalidation leaves the data panel expanded, and leaves the source panel's text, caret and focus as the user left them
-- [ ] The Render control stays in the panel and renders at once when clicked; in the browser build, with the source panel expanded and diagnostics listed, `elementFromPoint` at the Render control and at the status beside it lands on them, not on the diagnostics panel
-- [ ] At any point in an open — queued behind another, waiting on the unsaved-edits question, or with its parse in flight — a revalidation waiting, parsing or starting never wins: once the open settles the canvas shows the opened model, the window names it, and the next Save writes to its path
-- [ ] A Save requested while a revalidation is waiting writes the panel's current text to the open file; a revalidation leaves the bar along the bottom as it is, so the save's confirmation survives the revalidation after it
-- [ ] A revalidation already waiting when the status area reports a failure — any reason a writer of `store.dom.statusEl` other than the render path puts there — does not replace that reason
-- [ ] A revalidation neither raises nor clears the unsaved-changes marker, and records nothing in the recent-files list
-- [ ] In the browser build, driven by the e2e-viewer suite, typing into the panel holding the largest model under `examples/`, once that model is on screen, records no main-thread task over 50 ms — the Long Tasks API threshold — across the keystrokes and the revalidations they start
-- [ ] The README's desktop section and `docs/wasm-architecture.md`'s flow summary describe revalidation as the panel is edited, the stale mark, and that the panel lists what `emod validate` reports; neither says the diagram waits for a Render click
+- [x] Every edit the user makes in the source panel — each change that fires its `input` event — revalidates the panel after a short pause, with no Render click; edits arriving within the pause produce one revalidation, and none starts before the pause ends
+- [x] Each revalidation updates the badge and the diagnostics list as Task 1 describes, and does not re-open a diagnostics panel the user has closed
+- [x] A revalidation leaves the data panel expanded, and leaves the source panel's text, caret and focus as the user left them
+- [x] The Render control stays in the panel and renders at once when clicked; in the browser build, with the source panel expanded and diagnostics listed, `elementFromPoint` at the Render control and at the status beside it lands on them, not on the diagnostics panel
+- [x] At any point in an open — queued behind another, waiting on the unsaved-edits question, or with its parse in flight — a revalidation waiting, parsing or starting never wins: once the open settles the canvas shows the opened model, the window names it, and the next Save writes to its path
+- [x] A Save requested while a revalidation is waiting writes the panel's current text to the open file; a revalidation leaves the bar along the bottom as it is, so the save's confirmation survives the revalidation after it
+- [x] A revalidation already waiting when the status area reports a failure — any reason a writer of `store.dom.statusEl` other than the render path puts there — does not replace that reason
+- [x] A revalidation neither raises nor clears the unsaved-changes marker, and records nothing in the recent-files list
+- [x] In the browser build, driven by the e2e-viewer suite, typing into the panel holding the largest model under `examples/`, once that model is on screen, records no main-thread task over 50 ms — the Long Tasks API threshold — across the keystrokes and the revalidations they start
+- [x] The README's desktop section and `docs/wasm-architecture.md`'s flow summary describe revalidation as the panel is edited, the stale mark, and that the panel lists what `emod validate` reports; neither says the diagram waits for a Render click
 
 **Affected Files/Modules:**
 - `internal/frontend/static/viewer.js` — the pause, the revalidation it starts, and its order against opens, saves and reported failures

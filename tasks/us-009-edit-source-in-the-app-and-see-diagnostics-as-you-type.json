@@ -115,7 +115,7 @@
     },
     {
       "n": 4,
-      "done": false,
+      "done": true,
       "title": "Revalidate the source panel automatically after a pause in typing",
       "language": "JavaScript",
       "testable": true,

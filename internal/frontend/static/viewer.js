@@ -9,6 +9,7 @@ import { CtxActions } from './ctx-actions.js';
 import { Model } from './model.js';
 import { bus } from './bus.js';
 import { Export } from './emod-export.js';
+import { REVALIDATE_PAUSE_MS } from './config.js';
 import { ready, isReady, droppedFiles, saveFile, setWindowTitle, setWindowModified, rememberOpenedFile, resolveUnsavedEdits, onFileOpened, onFilesDropped, onSaveRequested, onLeaveRequested, initialState } from './platform.js';
 
 // ─── Event subscriptions ─────────────────────────────────────────────
@@ -68,8 +69,8 @@ bus.on('model:updated', function({ store: s }) {
   }
 });
 
-bus.on('diagnostics:changed', function({ store: s, diagnostics }) {
-  UI.updateDiagnosticsPanel(s, diagnostics);
+bus.on('diagnostics:changed', function({ store: s, diagnostics, revalidation }) {
+  UI.updateDiagnosticsPanel(s, diagnostics, { reopen: !revalidation });
 });
 
 bus.on('node:delete', function({ store: s, nodeId }) {
@@ -194,6 +195,8 @@ function init() {
   // arriving model's source over the departing model's path.
   let latestRenderSettled = Promise.resolve();
 
+  let checkedSource = null;
+
   // The panel's text and the render that reads it are claimed together, because
   // a drop and a host delivery both arrive asynchronously and either can land
   // mid-flight: writing the text outside this would let one entry point's source
@@ -204,45 +207,61 @@ function init() {
   // Render does. It is committed only once the parse resolves: a render the
   // parse rejects must leave the window naming the model still on screen, not
   // one that never appeared.
-  function renderPanelSource(text, file) {
-    clearSaveConfirmation();
+  function renderPanelSource(text, file, options) {
+    const revalidation = Boolean(options && options.revalidation);
+    if (!revalidation) {
+      clearSaveConfirmation();
+    }
     const previousText = store.dom.sourceInput.value;
     if (text !== undefined) {
       store.dom.sourceInput.value = text;
     }
     const opening = file !== undefined;
-    const naming = opening ? file : store.currentFile;
+    const sourceFile = opening ? file : store.currentFile;
+    const source = store.dom.sourceInput.value;
     const render = ++latestRender;
-    latestRenderSettled = Model.sendParse(store, store.dom.sourceInput.value, store.dom.statusEl, naming ? naming.name : undefined)
+    if (!opening && !source.trim()) {
+      showEmptyPanel(source, revalidation);
+      latestRenderSettled = Promise.resolve();
+      return latestRenderSettled;
+    }
+    const overtaken = function() {
+      if (!opening) {
+        rendersSettled().then(revalidate);
+      }
+    };
+    const parsingStatus = revalidation ? null : store.dom.statusEl;
+    latestRenderSettled = Model.sendParse(store, source, parsingStatus, sourceFile ? sourceFile.name : undefined)
       .then(function(data) {
-        if (render !== latestRender) return;
+        if (render !== latestRender) return overtaken();
+        checkedSource = source;
         if (!opening && data.parsed === false && diagramOnScreen()) {
-          store.diagnostics = data.diagnostics || [];
-          bus.emit('diagnostics:changed', { store, diagnostics: store.diagnostics });
-          keepStaleDiagram("the source does not parse", "✗ Not redrawn: the source does not parse");
+          reportDiagnostics(data.diagnostics || [], revalidation);
+          keepStaleDiagram("the source does not parse", "✗ Not redrawn: the source does not parse", revalidation);
           return;
         }
         if (opening) {
           store.currentFile = file;
           rememberFile(file, reportRecordingRefusal);
         }
-        store.diagnostics = data.diagnostics || [];
-        bus.emit('diagnostics:changed', { store, diagnostics: store.diagnostics });
-        showDiagramStale(false);
+        reportDiagnostics(data.diagnostics || [], revalidation);
+        UI.hideDiagramStale(store);
         if (opening) {
           Model.setModelData(store, data.diagram);
         } else {
-          Model.updateModelData(store, data.diagram);
+          Model.setModelDataInPlace(store, data.diagram);
         }
-        store.dom.panel.classList.add("collapsed");
-        store.dom.statusEl.textContent = "✓ Rendered";
-        store.dom.statusEl.className = "status success";
-        reportModified();
+        showRenderOutcome("✓ Rendered", "status success", revalidation);
+        if (!revalidation) {
+          store.dom.panel.classList.add("collapsed");
+          reportModified();
+        }
       })
       .catch(function(err) {
-        if (render !== latestRender) return;
+        if (render !== latestRender) return overtaken();
         if (!opening && diagramOnScreen()) {
-          keepStaleDiagram("the source could not be drawn", "✗ " + err.message);
+          checkedSource = source;
+          keepStaleDiagram("the source could not be drawn", "✗ " + err.message, revalidation);
           return;
         }
         // The panel's text was replaced for a model that never rendered, and the
@@ -250,10 +269,15 @@ function init() {
         // the panel, the title and the path stat naming one model.
         if (text !== undefined) {
           store.dom.sourceInput.value = previousText;
+          showFailureReason("✗ " + err.message);
+          reportModified();
+          return;
         }
-        store.dom.statusEl.textContent = "✗ " + err.message;
-        store.dom.statusEl.className = "status error";
-        reportModified();
+        checkedSource = source;
+        showRenderOutcome("✗ " + err.message, "status error", revalidation);
+        if (!revalidation) {
+          reportModified();
+        }
       });
 
     return latestRenderSettled;
@@ -263,18 +287,45 @@ function init() {
     return store.nodes.length > 0;
   }
 
-  function keepStaleDiagram(why, status) {
-    showDiagramStale(true);
-    store.dom.staleNotice.textContent = "Diagram out of date — " + why;
-    store.dom.statusEl.textContent = status;
-    store.dom.statusEl.className = "status error";
-    reportModified();
+  function showEmptyPanel(source, revalidation) {
+    checkedSource = source;
+    reportDiagnostics([], revalidation);
+    if (diagramOnScreen()) {
+      keepStaleDiagram("the source panel is empty", "✗ The source panel is empty", revalidation);
+    } else if (!revalidation) {
+      showRenderOutcome("✗ Paste some .emod content first", "status error", false);
+      reportModified();
+    }
   }
 
-  function showDiagramStale(stale) {
-    store.diagramStale = stale;
-    store.dom.staleNotice.classList.toggle("hidden", !stale);
-    store.dom.svg.classList.toggle("stale", stale);
+  function reportDiagnostics(diagnostics, revalidation) {
+    store.diagnostics = diagnostics;
+    bus.emit('diagnostics:changed', { store, diagnostics, revalidation });
+  }
+
+  function keepStaleDiagram(why, status, revalidation) {
+    UI.showDiagramStale(store, why);
+    showRenderOutcome(status, "status error", revalidation);
+    if (!revalidation) {
+      reportModified();
+    }
+  }
+
+  let replaceableStatus = '';
+
+  function showRenderOutcome(text, className, revalidation) {
+    const shown = store.dom.statusEl.textContent;
+    if (revalidation && shown !== '' && shown !== replaceableStatus) {
+      return;
+    }
+    replaceableStatus = text;
+    store.dom.statusEl.textContent = text;
+    store.dom.statusEl.className = className;
+  }
+
+  function showFailureReason(text) {
+    store.dom.statusEl.textContent = text;
+    store.dom.statusEl.className = "status error";
   }
 
   // Reporting a host failure claims a render number for the same reason a render
@@ -297,7 +348,27 @@ function init() {
     setWindowModified(modelIsModified(store));
   }
 
-  store.dom.sourceInput.addEventListener("input", reportModified);
+  store.dom.sourceInput.addEventListener("input", function() {
+    reportModified();
+    scheduleRevalidation();
+  });
+
+  let pendingRevalidation = null;
+
+  function scheduleRevalidation() {
+    clearTimeout(pendingRevalidation);
+    pendingRevalidation = setTimeout(function() {
+      pendingRevalidation = null;
+      rendersSettled().then(revalidate);
+    }, REVALIDATE_PAUSE_MS);
+  }
+
+  function revalidate() {
+    if (store.dom.sourceInput.value === checkedSource) {
+      return;
+    }
+    renderPanelSource(undefined, undefined, { revalidation: true });
+  }
 
   // Everything that asks about unsaved edits queues here. The question and the
   // act it authorises are separated by however long the user takes to answer,
@@ -362,6 +433,7 @@ function init() {
   }
 
   store.dom.renderBtn.addEventListener("click", function() {
+    clearTimeout(pendingRevalidation);
     renderPanelSource();
   });
 

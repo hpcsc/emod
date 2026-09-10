@@ -230,11 +230,15 @@ function toggleVisibilityPanel(store, show) {
 }
 
 // ─── Diagnostics panel ──────────────────────────────────────────
-function updateDiagnosticsPanel(store, diagnostics) {
+function updateDiagnosticsPanel(store, diagnostics, options) {
   const badgeEl = store.dom.diagnosticsBadge;
   const panelEl = store.dom.diagnosticsPanel;
   const listEl = store.dom.diagnosticsList;
   if (!badgeEl || !panelEl || !listEl) return;
+
+  if (!options || options.reopen !== false) {
+    store.interaction.diagnosticsClosed = false;
+  }
 
   if (!diagnostics || diagnostics.length === 0) {
     badgeEl.style.display = "none";
@@ -248,7 +252,7 @@ function updateDiagnosticsPanel(store, diagnostics) {
   // is display:none — clearing the inline style just falls back to that and
   // the badge stays invisible.
   badgeEl.style.display = "inline-block";
-  badgeEl.textContent = countsBySeverity(diagnostics);
+  badgeEl.textContent = badgeTextFor(diagnostics);
   badgeEl.dataset.severity = mostSevere(diagnostics);
 
   let html = "";
@@ -267,7 +271,10 @@ function updateDiagnosticsPanel(store, diagnostics) {
   });
   listEl.innerHTML = html;
 
-  panelEl.classList.remove("hidden");
+  if (!store.interaction.diagnosticsClosed) {
+    panelEl.classList.remove("hidden");
+  }
+  badgeEl.classList.toggle("active", !panelEl.classList.contains("hidden"));
 }
 
 const SEVERITY_NOUNS = [
@@ -282,7 +289,7 @@ function severityOf(diagnostic) {
   return known ? diagnostic.severity : "error";
 }
 
-function countsBySeverity(diagnostics) {
+function badgeTextFor(diagnostics) {
   return SEVERITY_NOUNS.map(function(noun) {
     const count = diagnostics.filter(function(d) { return severityOf(d) === noun.severity; }).length;
     return count === 0 ? "" : count + " " + (count === 1 ? noun.one : noun.many);
@@ -314,9 +321,14 @@ function handleDiagnosticClick(store, evt) {
   const file = d.file;
   const line = d.line;
 
-  // Can't match without a specific file and line, nor against a diagram drawn
-  // from other source, whose lines are not the ones this diagnostic counts
-  if (!file || !line || store.diagramStale) {
+  // Can't match without a specific file and line
+  if (!file || !line) {
+    item.classList.add('not-rendered');
+    return;
+  }
+
+  if (store.diagramStale) {
+    clearHighlights(store);
     item.classList.add('not-rendered');
     return;
   }
@@ -351,6 +363,7 @@ function toggleDiagnosticsPanel(store) {
   const badgeEl = store.dom.diagnosticsBadge;
   if (!panelEl || !badgeEl) return;
   panelEl.classList.toggle("hidden");
+  store.interaction.diagnosticsClosed = panelEl.classList.contains("hidden");
   badgeEl.classList.toggle("active", !panelEl.classList.contains("hidden"));
 }
 
@@ -359,6 +372,7 @@ function hideDiagnosticsPanel(store) {
   const badgeEl = store.dom.diagnosticsBadge;
   if (!panelEl || !badgeEl) return;
   panelEl.classList.add("hidden");
+  store.interaction.diagnosticsClosed = true;
   badgeEl.classList.remove("active");
   clearHighlights(store);
   // Reset not-rendered markers on all items
@@ -367,6 +381,22 @@ function hideDiagnosticsPanel(store) {
       el.classList.remove('not-rendered');
     });
   }
+}
+
+// ─── Stale diagram ──────────────────────────────────────────────
+function showDiagramStale(store, why) {
+  store.diagramStale = true;
+  if (store.dom.staleNotice) {
+    store.dom.staleNotice.textContent = "Diagram out of date — " + why;
+    store.dom.staleNotice.classList.remove("hidden");
+  }
+  store.dom.svg.classList.add("stale");
+}
+
+function hideDiagramStale(store) {
+  store.diagramStale = false;
+  if (store.dom.staleNotice) store.dom.staleNotice.classList.add("hidden");
+  store.dom.svg.classList.remove("stale");
 }
 
 // ─── Stats ──────────────────────────────────────────────────────
@@ -1054,6 +1084,8 @@ export const UI = {
   initDiagnosticsDelegation,
   toggleDiagnosticsPanel,
   hideDiagnosticsPanel,
+  showDiagramStale,
+  hideDiagramStale,
   updateStats,
   showDetailPanel,
   showEdgeDetail,

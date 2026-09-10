@@ -26,6 +26,7 @@ export function createStore() {
       inlineEdit: null,
       ctxMenu: null,
       connect: null,
+      diagnosticsClosed: false,
     },
     dom: {
       svg: null,

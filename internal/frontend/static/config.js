@@ -31,6 +31,8 @@ export const PROSE_KINDS = ["description", "comments"];
 
 export const DRAG_THRESHOLD = 5;
 
+export const REVALIDATE_PAUSE_MS = 300;
+
 export const MINIMAP_W = 180;
 export const MINIMAP_H = 120;
 export const MINIMAP_PAD = 2;

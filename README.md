@@ -382,6 +382,18 @@ files, but reaches the Go pipeline directly instead of through WebAssembly.
 Building it needs a C toolchain — it is the only binary here that links CGO —
 and on Linux the GTK4 and WebKitGTK development packages.
 
+**The source panel** checks what is typed into it as it goes. Once typing
+pauses, the panel's text runs through the same lex, parse, validate and lint
+chain `emod validate` runs, and the badge and the diagnostics panel list what
+that reports — the same messages under the same rule names, at the same
+severities and lines. Source that parses redraws the diagram where it is,
+keeping pan, zoom, dragged nodes and whatever the visibility panel hides. Source
+that does not parse leaves the last diagram on screen, dimmed and marked out of
+date, until it parses again. **Render** stays below the panel and redraws at
+once. Because the diagram is redrawn from the panel, typing replaces any change
+made on the diagram itself since it was last drawn. The browser viewer and
+`emod diagram --serve` share the frontend and behave the same way.
+
 **File ▸ Open** (⌘O on macOS, Ctrl+O on Linux and Windows) opens a model through the
 operating system's own file picker, filtered to `.emod` and `.json`. The chosen
 file renders straight away — no paste, no Render click — and the window takes

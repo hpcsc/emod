@@ -222,7 +222,7 @@ header .model-name span {
   top: 12px;
   left: 50%;
   transform: translateX(-50%);
-  z-index: 25;
+  z-index: 35;
   max-width: calc(100% - 32px);
   padding: 6px 14px;
   border: 1px solid #f0b37e;
@@ -243,12 +243,22 @@ header .model-name span {
   opacity: 0.45;
 }
 
-#diagnostics-panel {
+#bottom-dock {
   position: absolute;
-  left: 0;
-  right: 0;
-  bottom: 0;
+  inset: 0;
   z-index: 30;
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-end;
+  pointer-events: none;
+}
+#bottom-dock > * {
+  pointer-events: auto;
+}
+
+#diagnostics-panel {
+  flex: 0 1 auto;
+  min-height: 0;
   background: #fff;
   border-top: 2px solid #e74c3c;
   box-shadow: 0 -2px 10px rgba(231,76,60,0.15);
@@ -526,22 +536,18 @@ header .model-name span {
 }
 
 #data-panel {
-  position: absolute;
-  bottom: 0;
-  left: 0;
-  right: 0;
-  z-index: 15;
+  flex: 0 1 auto;
+  min-height: 0;
   background: #fff;
   border-top: 1px solid #ddd;
   box-shadow: 0 -2px 10px rgba(0,0,0,0.08);
-  transition: transform 0.25s ease;
   display: flex;
   flex-direction: column;
   max-height: 50%;
 }
 
-#data-panel.collapsed {
-  transform: translateY(calc(100% - 40px));
+#data-panel.collapsed #data-panel-body {
+  display: none;
 }
 
 #data-panel-header {
@@ -569,6 +575,9 @@ header .model-name span {
   padding: 12px;
   overflow-y: auto;
   flex: 1 1 auto;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
 }
 /* Two drop regions, one affordance. The page marks the panel body itself while
    a file is dragged over it; a shell that resolves drops natively never lets
@@ -618,8 +627,10 @@ body.file-drop-target-active::after {
 }
 
 #source-input {
+  flex: 1 1 auto;
   width: 100%;
-  min-height: 200px;
+  height: 200px;
+  min-height: 72px;
   padding: 10px;
   font-family: "SF Mono", "Fira Code", "Fira Mono", Menlo, Consolas, monospace;
   font-size: 12px;
@@ -631,6 +642,7 @@ body.file-drop-target-active::after {
 }
 
 .data-panel-actions {
+  flex: 0 0 auto;
   display: flex;
   gap: 8px;
   margin-top: 10px;
@@ -1243,26 +1255,28 @@ body.file-drop-target-active::after {
 
   <div id="stale-notice" class="hidden" role="status"></div>
 
-  <div id="diagnostics-panel" class="hidden">
-    <div id="diagnostics-panel-header">
-      <span>Diagnostics</span>
-      <button id="diagnostics-close" title="Close diagnostics panel">&times;</button>
-    </div>
-    <div id="diagnostics-list"></div>
-  </div>
-
-  <div id="data-panel" class="collapsed">
-    <div id="data-panel-header">
-      <h2>☰ Data</h2>
-    </div>
-    <div id="data-panel-body">
-      <div id="landing-instructions" style="display: none;">
-        <p>Drop an <strong>.emod</strong> or <strong>.json</strong> file here, or paste content below.</p>
+  <div id="bottom-dock">
+    <div id="diagnostics-panel" class="hidden">
+      <div id="diagnostics-panel-header">
+        <span>Diagnostics</span>
+        <button id="diagnostics-close" title="Close diagnostics panel">&times;</button>
       </div>
-      <textarea id="source-input" spellcheck="false" placeholder="Paste .emod source or diagram JSON here"></textarea>
-      <div class="data-panel-actions">
-        <button id="render-btn">Render</button>
-        <span class="status" id="render-status"></span>
+      <div id="diagnostics-list"></div>
+    </div>
+
+    <div id="data-panel" class="collapsed">
+      <div id="data-panel-header">
+        <h2>☰ Data</h2>
+      </div>
+      <div id="data-panel-body">
+        <div id="landing-instructions" style="display: none;">
+          <p>Drop an <strong>.emod</strong> or <strong>.json</strong> file here, or paste content below.</p>
+        </div>
+        <textarea id="source-input" spellcheck="false" placeholder="Paste .emod source or diagram JSON here"></textarea>
+        <div class="data-panel-actions">
+          <button id="render-btn">Render</button>
+          <span class="status" id="render-status"></span>
+        </div>
       </div>
     </div>
   </div>

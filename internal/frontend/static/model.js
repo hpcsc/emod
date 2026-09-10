@@ -20,15 +20,16 @@ function setModelData(store, data) {
   loadModel(store, data, {}, {});
 }
 
-// The same model parsed again. Ids number each kind in document order, so an
-// edit ahead of a node renumbers it: what the user arranged follows each node by
-// what the source calls it instead.
-function updateModelData(store, data) {
-  const offsets = byIdentity(store.nodes, store.nodeOffsets);
-  const hidden = byIdentity(store.nodes, store.hiddenNodes);
+// Ids number each kind in document order, so an edit ahead of a node renumbers
+// it: what the user arranged follows each node by what the source calls it.
+function setModelDataInPlace(store, data) {
+  const outgoing = nodeIdentities(store.nodes);
+  const offsets = keyByIdentity(store.nodes, outgoing, store.nodeOffsets);
+  const hidden = keyByIdentity(store.nodes, outgoing, store.hiddenNodes);
   const nodes = data.nodes || [];
+  const incoming = nodeIdentities(nodes);
 
-  loadModel(store, data, byNodeId(nodes, offsets), byNodeId(nodes, hidden));
+  loadModel(store, data, keyByNodeId(nodes, incoming, offsets), keyByNodeId(nodes, incoming, hidden));
 }
 
 function loadModel(store, data, nodeOffsets, hiddenNodes) {
@@ -45,8 +46,7 @@ function loadModel(store, data, nodeOffsets, hiddenNodes) {
   bus.emit('data:changed', { store });
 }
 
-function byIdentity(nodes, valuesByNodeId) {
-  const identities = nodeIdentities(nodes);
+function keyByIdentity(nodes, identities, valuesByNodeId) {
   const values = new Map();
   nodes.forEach(function(n) {
     if (Object.prototype.hasOwnProperty.call(valuesByNodeId, n.id)) {
@@ -56,8 +56,7 @@ function byIdentity(nodes, valuesByNodeId) {
   return values;
 }
 
-function byNodeId(nodes, valuesByIdentity) {
-  const identities = nodeIdentities(nodes);
+function keyByNodeId(nodes, identities, valuesByIdentity) {
   const values = {};
   nodes.forEach(function(n) {
     const identity = identities.get(n.id);
@@ -135,12 +134,16 @@ function moveSlice(nodes, sliceId, targetPos) {
 
 function sendParse(store, source, statusEl, filename) {
   if (!source || !source.trim()) {
-    statusEl.textContent = "✗ Paste some .emod content first";
-    statusEl.className = "status error";
+    if (statusEl) {
+      statusEl.textContent = "✗ Paste some .emod content first";
+      statusEl.className = "status error";
+    }
     return Promise.reject(new Error("no source"));
   }
-  statusEl.textContent = "⏳ Parsing...";
-  statusEl.className = "";
+  if (statusEl) {
+    statusEl.textContent = "⏳ Parsing...";
+    statusEl.className = "";
+  }
 
   // Detect input format: try JSON, check for known shapes
   var parsed;
@@ -225,7 +228,7 @@ export const Model = {
   generateNodeId,
   generateLabel,
   setModelData,
-  updateModelData,
+  setModelDataInPlace,
   sendParse,
   moveSlice,
   addEdge,

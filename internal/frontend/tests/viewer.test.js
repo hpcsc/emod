@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { readFileSync, readdirSync } from 'fs';
 import { resolve } from 'path';
 import { installSVGGeometry } from './svg-env.js';
@@ -188,7 +188,7 @@ async function startViewer() {
 
 const { sourceToSave } = await import('../static/viewer.js');
 const platform = await import('../static/platform.js');
-const { DRAG_THRESHOLD } = await import('../static/config.js');
+const { DRAG_THRESHOLD, REVALIDATE_PAUSE_MS } = await import('../static/config.js');
 
 const billingSource = 'emod 1\nmodel "Billing"\n';
 const crlfSource = 'emod 1\r\nmodel "Billing"\r\n';
@@ -230,10 +230,40 @@ function billingDiagram() {
   };
 }
 
+function billingWith(label) {
+  const diagram = billingDiagram();
+  diagram.nodes.push({ id: 'command-2', type: 'command', label: label, parentId: 'slice-1' });
+  return diagram;
+}
+
+const canvasMarkup = () => document.getElementById('diagram-canvas').innerHTML;
+const lastParse = () => platform.parseEmod.mock.calls[platform.parseEmod.mock.calls.length - 1];
+const parses = () => platform.parseEmod.mock.calls.length;
+
 // flush lets queued microtasks — the file read and the parse promise — settle.
 function flush() {
   return new Promise(function(resolve) { setTimeout(resolve, 0); });
 }
+
+// A test that types into the panel ends with a revalidation still waiting on its
+// pause, and left alone it runs in the next test against the same platform mock,
+// asking it to parse and taking answers that test queued. Every timer a test
+// starts is cleared when it ends.
+const realSetTimeout = globalThis.setTimeout;
+const timersStarted = new Set();
+globalThis.setTimeout = function(callback, delay, ...args) {
+  const handle = realSetTimeout(function() {
+    timersStarted.delete(handle);
+    callback(...args);
+  }, delay);
+  timersStarted.add(handle);
+  return handle;
+};
+
+afterEach(() => {
+  timersStarted.forEach(clearTimeout);
+  timersStarted.clear();
+});
 
 beforeEach(() => {
   installSVGGeometry();
@@ -2291,7 +2321,27 @@ describe('one function replaces the open model', () => {
   // The lookbehind drops the declaration, which takes the same two parameters
   // every call that opens a model passes.
   const calls = (text) => text.match(/(?<!function )renderPanelSource\(/g) || [];
-  const opens = (text) => text.match(/(?<!function )renderPanelSource\(\s*[^)\s]/g) || [];
+  // A call opens a model when it passes a file, its second argument. The
+  // arguments are split at the commas outside any bracket, so a first argument
+  // holding a call or a literal of its own cannot hide the second.
+  const argumentsOf = (text, open) => {
+    const args = [];
+    let depth = 0;
+    let current = '';
+    for (let i = open + 1; i < text.length; i++) {
+      const c = text[i];
+      if (depth === 0 && c === ')') break;
+      if (depth === 0 && c === ',') { args.push(current.trim()); current = ''; continue; }
+      if ('([{'.includes(c)) depth++;
+      if (')]}'.includes(c)) depth--;
+      current += c;
+    }
+    if (current.trim() !== '') args.push(current.trim());
+    return args;
+  };
+  const opens = (text) => [...text.matchAll(/(?<!function )renderPanelSource\(/g)]
+    .map((m) => argumentsOf(text, m.index + m[0].length - 1))
+    .filter((args) => args.length > 1 && args[1] !== 'undefined');
 
   // Each entry is one of init's own functions, so a call can be attributed to
   // the one that makes it without slicing the file by hand. The guard's own
@@ -2428,20 +2478,12 @@ describe('rendering the panel again when its source does not parse', () => {
   const brokenSource = billingSource + 'context "Refunds" {\n';
   const syntaxError = { file: 'billing.emod', line: 3, message: 'expected "}" to close context', severity: 'error' };
 
-  // What the parser recovers from a construct left open: the context and
-  // nothing inside it, which is what drawing it would replace the diagram with.
   function recoveredFragment(name) {
     return {
       model_name: name,
       nodes: [{ id: 'context-1', type: 'context', label: name + 'Context', parentId: null }],
       edges: [],
     };
-  }
-
-  function billingWith(label) {
-    const diagram = billingDiagram();
-    diagram.nodes.push({ id: 'command-2', type: 'command', label: label, parentId: 'slice-1' });
-    return diagram;
   }
 
   async function renderPanel(text, answer) {
@@ -2451,7 +2493,6 @@ describe('rendering the panel again when its source does not parse', () => {
     await flush();
   }
 
-  const canvas = () => document.getElementById('diagram-canvas').innerHTML;
   const markedStale = () => !document.getElementById('stale-notice').classList.contains('hidden');
 
   it('leaves the diagram that was on screen, node for node', async () => {
@@ -2459,8 +2500,8 @@ describe('rendering the panel again when its source does not parse', () => {
 
     await renderPanel(brokenSource, Promise.resolve({ parsed: false, diagnostics: [syntaxError], diagram: recoveredFragment('Billing') }));
 
-    expect(canvas()).toContain('TakePayment');
-    expect(canvas()).not.toContain('BillingContext');
+    expect(canvasMarkup()).toContain('TakePayment');
+    expect(canvasMarkup()).not.toContain('BillingContext');
     expect(document.getElementById('stat-nodes').textContent).toBe('3');
   });
 
@@ -2471,6 +2512,27 @@ describe('rendering the panel again when its source does not parse', () => {
 
     expect(document.getElementById('diagnostics-badge').textContent).toBe('1 error');
     expect(document.getElementById('diagnostics-list').textContent).toContain('expected "}" to close context');
+  });
+
+  it('highlights no node when a diagnostic is clicked on an out-of-date diagram, and does again once it is redrawn', async () => {
+    const positioned = billingDiagram();
+    positioned.nodes[2].position = { filename: 'billing.emod', line: 3, column: 5 };
+    const atCommand = { file: 'billing.emod', line: 3, message: 'command "TakePayment" is orphaned', severity: 'error' };
+    globalThis.INITIAL_DATA = null;
+    parseResult = { parsed: true, diagnostics: [atCommand], diagram: positioned };
+    await startViewer();
+    deliverFile({ name: 'billing.emod', path: '/models/billing.emod', content: billingSource });
+    await flush();
+    document.querySelector('#diagnostics-list .diag-item').click();
+    expect(blockFor('command-1').classList.contains('hl')).toBe(true);
+
+    await renderPanel(brokenSource, Promise.resolve({ parsed: false, diagnostics: [atCommand], diagram: recoveredFragment('Billing') }));
+    document.querySelector('#diagnostics-list .diag-item').click();
+    expect(blockFor('command-1').classList.contains('hl')).toBe(false);
+
+    await renderPanel(billingSource, Promise.resolve({ parsed: true, diagnostics: [atCommand], diagram: positioned }));
+    document.querySelector('#diagnostics-list .diag-item').click();
+    expect(blockFor('command-1').classList.contains('hl')).toBe(true);
   });
 
   it('marks the diagram as out of date, saying why', async () => {
@@ -2493,8 +2555,22 @@ describe('rendering the panel again when its source does not parse', () => {
 
     await renderPanel(text, answer());
 
-    expect(canvas()).toContain('TakePayment');
+    expect(canvasMarkup()).toContain('TakePayment');
     expect(markedStale()).toBe(true);
+  });
+
+  it('lists nothing and says the panel is empty when Render is clicked on an emptied panel', async () => {
+    await openBilling();
+    await renderPanel(brokenSource, Promise.resolve({ parsed: false, diagnostics: [syntaxError], diagram: recoveredFragment('Billing') }));
+    expect(document.getElementById('diagnostics-badge').textContent).toBe('1 error');
+    const before = parses();
+
+    await renderPanel('', undefined);
+
+    expect(parses()).toBe(before);
+    expect(document.getElementById('diagnostics-badge').style.display).toBe('none');
+    expect(document.getElementById('stale-notice').textContent).toContain('the source panel is empty');
+    expect(document.getElementById('render-status').textContent).toBe('✗ The source panel is empty');
   });
 
   it('redraws source that parses again and takes the mark down', async () => {
@@ -2503,7 +2579,7 @@ describe('rendering the panel again when its source does not parse', () => {
 
     await renderPanel(billingSource + '// fixed\n', Promise.resolve({ parsed: true, diagnostics: [], diagram: billingWith('RefundPayment') }));
 
-    expect(canvas()).toContain('RefundPayment');
+    expect(canvasMarkup()).toContain('RefundPayment');
     expect(markedStale()).toBe(false);
   });
 
@@ -2516,7 +2592,7 @@ describe('rendering the panel again when its source does not parse', () => {
       diagram: billingWith('RefundPayment'),
     }));
 
-    expect(canvas()).toContain('RefundPayment');
+    expect(canvasMarkup()).toContain('RefundPayment');
     expect(markedStale()).toBe(false);
     expect(document.getElementById('diagnostics-badge').textContent).toBe('1 error');
   });
@@ -2526,7 +2602,7 @@ describe('rendering the panel again when its source does not parse', () => {
 
     await renderPanel(brokenSource, Promise.resolve({ parsed: false, diagnostics: [syntaxError], diagram: recoveredFragment('Billing') }));
 
-    expect(canvas()).toContain('BillingContext');
+    expect(canvasMarkup()).toContain('BillingContext');
     expect(markedStale()).toBe(false);
   });
 
@@ -2538,8 +2614,8 @@ describe('rendering the panel again when its source does not parse', () => {
     deliverFile({ name: 'orders.emod', path: '/models/orders.emod', content: 'emod 1\nmodel "Orders"\ncontext "Orders" {\n' });
     await flush();
 
-    expect(canvas()).toContain('OrdersContext');
-    expect(canvas()).not.toContain('TakePayment');
+    expect(canvasMarkup()).toContain('OrdersContext');
+    expect(canvasMarkup()).not.toContain('TakePayment');
     expect(markedStale()).toBe(false);
   });
 
@@ -2602,8 +2678,6 @@ describe('rendering the panel again in place', () => {
     return { x: Number(rect.getAttribute('x')), y: Number(rect.getAttribute('y')) };
   }
 
-  // Drags a block and answers how far it moved, which is the offset the drag
-  // recorded once the slice has had its say about where the block may go.
   function dragLabelled(label, dx, dy) {
     const before = boxOf(label);
     dragBy(blockLabelled(label), dx, dy);
@@ -2611,8 +2685,6 @@ describe('rendering the panel again in place', () => {
     return { dx: after.x - before.x, dy: after.y - before.y };
   }
 
-  // How far each block sits from where the layout alone puts it, read by letting
-  // Reset layout put it there.
   function offsetsFromLayout(labels) {
     const kept = Object.fromEntries(labels.map((label) => [label, boxOf(label)]));
     document.getElementById('reset-layout').click();
@@ -2654,7 +2726,6 @@ describe('rendering the panel again in place', () => {
       [label, label === 'TakePayment' ? dragged : unmoved])));
   });
 
-  // Which blocks Reset layout moves, which are the blocks carrying an offset.
   function movedByReset(ids) {
     const at = (id) => { const rect = blockFor(id).querySelector('rect'); return rect.getAttribute('x') + ',' + rect.getAttribute('y'); };
     const kept = Object.fromEntries(ids.map((id) => [id, at(id)]));
@@ -2751,10 +2822,465 @@ describe('rendering the panel again in place', () => {
   });
 });
 
-describe('the name a render asks the pipeline to report under', () => {
-  const lastParse = () => platform.parseEmod.mock.calls[platform.parseEmod.mock.calls.length - 1];
+describe('revalidating the source panel as it is edited', () => {
+  // Real time rather than fake timers: flush() and the platform import both lean
+  // on the real event loop, and faking timers stalls them.
+  function pastPause(ms = REVALIDATE_PAUSE_MS + 40) {
+    return new Promise((resolve) => setTimeout(resolve, ms));
+  }
 
-  it("is the arriving file's, not the file it replaces", async () => {
+  const status = () => document.getElementById('render-status').textContent;
+  const editedSource = billingSource + 'actor "Clerk"\n';
+
+  function answerNext(answer) {
+    parseQueue.push(Promise.resolve(Object.assign({ parsed: true, diagnostics: [] }, answer)));
+  }
+
+  function deferredParse() {
+    let answer;
+    parseQueue.push(new Promise((resolve) => { answer = resolve; }));
+    return (value) => answer(Object.assign({ parsed: true, diagnostics: [] }, value));
+  }
+
+  const orderingFinding = { file: 'billing.emod', line: 3, message: 'command "RefundPayment" is orphaned', severity: 'error', rule_name: 'orphan-command' };
+
+  describe('when it runs', () => {
+    it('draws what was typed once typing pauses, with no Render click', async () => {
+      await startEmpty();
+      answerNext({ diagram: billingDiagram() });
+
+      typeIntoPanel(billingSource);
+      await pastPause();
+
+      expect(canvasMarkup()).toContain('TakePayment');
+      expect(lastParse()[0]).toBe(billingSource);
+    });
+
+    it('starts nothing before the pause has passed', async () => {
+      await openBilling();
+      const before = parses();
+
+      typeIntoPanel(editedSource);
+      await pastPause(REVALIDATE_PAUSE_MS / 2);
+      expect(parses()).toBe(before);
+
+      await pastPause(REVALIDATE_PAUSE_MS / 2 + 40);
+      expect(parses()).toBe(before + 1);
+    });
+
+    it('starts the pause again on every edit, revalidating once and only after the last', async () => {
+      await openBilling();
+      const before = parses();
+
+      typeIntoPanel(billingSource + 'a');
+      await pastPause(REVALIDATE_PAUSE_MS * 2 / 3);
+      typeIntoPanel(billingSource + 'ac');
+      await pastPause(REVALIDATE_PAUSE_MS * 2 / 3);
+      typeIntoPanel(editedSource);
+      expect(parses()).toBe(before);
+
+      await pastPause();
+
+      expect(parses()).toBe(before + 1);
+      expect(lastParse()[0]).toBe(editedSource);
+    });
+
+    it('renders at once when Render is clicked mid-pause, and the pause then starts nothing more', async () => {
+      await openBilling();
+      const before = parses();
+
+      typeIntoPanel(editedSource);
+      document.getElementById('render-btn').click();
+      await flush();
+      expect(parses()).toBe(before + 1);
+
+      await pastPause();
+      expect(parses()).toBe(before + 1);
+    });
+
+    it('redraws in place, keeping a dragged node where the user left it', async () => {
+      await openBilling();
+      dragBy(blockFor('command-1'), 40, 25);
+      answerNext({ diagram: billingWith('RefundPayment') });
+
+      typeIntoPanel(editedSource);
+      await pastPause();
+
+      expect(canvasMarkup()).toContain('RefundPayment');
+      expect(document.getElementById('reset-layout').disabled).toBe(false);
+    });
+
+    it('keeps the diagram and marks it out of date when what was typed does not parse', async () => {
+      await openBilling();
+      answerNext({ parsed: false, diagnostics: [orderingFinding], diagram: { model_name: 'Billing', nodes: [], edges: [] } });
+
+      typeIntoPanel(billingSource + 'context "Refunds" {\n');
+      await pastPause();
+
+      expect(canvasMarkup()).toContain('TakePayment');
+      expect(document.getElementById('stale-notice').classList.contains('hidden')).toBe(false);
+    });
+
+    it('marks the diagram out of date and lists nothing when the panel is emptied, asking the pipeline nothing', async () => {
+      await openBilling();
+      answerNext({ diagnostics: [orderingFinding], diagram: billingDiagram() });
+      typeIntoPanel(editedSource);
+      await pastPause();
+      expect(document.getElementById('diagnostics-badge').textContent).toBe('1 error');
+      const before = parses();
+
+      typeIntoPanel('  \n');
+      await pastPause();
+
+      expect(parses()).toBe(before);
+      expect(canvasMarkup()).toContain('TakePayment');
+      expect(document.getElementById('stale-notice').textContent).toContain('the source panel is empty');
+      expect(document.getElementById('diagnostics-badge').style.display).toBe('none');
+    });
+  });
+
+  describe('what it reports', () => {
+    it('updates the badge and the diagnostics list on each revalidation', async () => {
+      await openBilling();
+
+      answerNext({ diagnostics: [orderingFinding], diagram: billingWith('RefundPayment') });
+      typeIntoPanel(editedSource + 'a');
+      await pastPause();
+      expect(document.getElementById('diagnostics-badge').textContent).toBe('1 error');
+      expect(document.getElementById('diagnostics-list').textContent).toContain('command "RefundPayment" is orphaned');
+
+      answerNext({ diagram: billingDiagram() });
+      typeIntoPanel(editedSource);
+      await pastPause();
+      expect(document.getElementById('diagnostics-badge').style.display).toBe('none');
+    });
+
+    it('says in the status area whether each revalidation redrew the diagram', async () => {
+      await openBilling();
+      expect(status()).toBe('✓ Rendered');
+
+      answerNext({ parsed: false, diagnostics: [orderingFinding], diagram: { model_name: 'Billing', nodes: [], edges: [] } });
+      typeIntoPanel(billingSource + 'context "Refunds" {\n');
+      await pastPause();
+      expect(status()).toBe('✗ Not redrawn: the source does not parse');
+
+      answerNext({ diagram: billingWith('RefundPayment') });
+      typeIntoPanel(editedSource);
+      await pastPause();
+      expect(status()).toBe('✓ Rendered');
+    });
+
+    it('opens the diagnostics panel on a revalidation that reports, while the user has not closed it', async () => {
+      await openBilling();
+      answerNext({ diagnostics: [orderingFinding], diagram: billingDiagram() });
+
+      typeIntoPanel(editedSource);
+      await pastPause();
+
+      expect(document.getElementById('diagnostics-panel').classList.contains('hidden')).toBe(false);
+    });
+
+    it('leaves a diagnostics panel the user closed closed, while the badge keeps counting', async () => {
+      await openBilling();
+      answerNext({ diagnostics: [orderingFinding], diagram: billingDiagram() });
+      typeIntoPanel(editedSource + 'a');
+      await pastPause();
+      document.getElementById('diagnostics-close').click();
+
+      answerNext({ diagnostics: [orderingFinding, { ...orderingFinding, line: 4 }], diagram: billingDiagram() });
+      typeIntoPanel(editedSource);
+      await pastPause();
+
+      expect(document.getElementById('diagnostics-panel').classList.contains('hidden')).toBe(true);
+      expect(document.getElementById('diagnostics-badge').textContent).toBe('2 errors');
+    });
+
+    it('leaves a diagnostics panel the user closed from the badge closed', async () => {
+      await openBilling();
+      answerNext({ diagnostics: [orderingFinding], diagram: billingDiagram() });
+      typeIntoPanel(editedSource + 'a');
+      await pastPause();
+      document.getElementById('diagnostics-badge').click();
+      expect(document.getElementById('diagnostics-panel').classList.contains('hidden')).toBe(true);
+
+      answerNext({ diagnostics: [orderingFinding], diagram: billingDiagram() });
+      typeIntoPanel(editedSource);
+      await pastPause();
+
+      expect(document.getElementById('diagnostics-panel').classList.contains('hidden')).toBe(true);
+    });
+
+    it('opens a diagnostics panel the user closed again when they click Render on source that reports', async () => {
+      await openBilling();
+      answerNext({ diagnostics: [orderingFinding], diagram: billingDiagram() });
+      typeIntoPanel(editedSource);
+      await pastPause();
+      document.getElementById('diagnostics-close').click();
+      expect(document.getElementById('diagnostics-panel').classList.contains('hidden')).toBe(true);
+
+      answerNext({ diagnostics: [orderingFinding], diagram: billingDiagram() });
+      document.getElementById('render-btn').click();
+      await flush();
+
+      expect(document.getElementById('diagnostics-panel').classList.contains('hidden')).toBe(false);
+    });
+
+    it('forgets that the user closed the diagnostics panel once another model opens', async () => {
+      await openBilling();
+      answerNext({ diagnostics: [orderingFinding], diagram: billingDiagram() });
+      typeIntoPanel(editedSource);
+      await pastPause();
+      document.getElementById('diagnostics-close').click();
+      answerNext({ diagram: diagramNamed('Orders') });
+      unsavedEditsAnswer = 'discard';
+      deliverFile({ name: 'orders.emod', path: '/models/orders.emod', content: 'emod 1\nmodel "Orders"\n' });
+      await flush();
+      await flush();
+
+      answerNext({ diagnostics: [orderingFinding], diagram: diagramNamed('Orders') });
+      typeIntoPanel('emod 1\nmodel "Orders"\nactor "Clerk"\n');
+      await pastPause();
+
+      expect(document.getElementById('diagnostics-panel').classList.contains('hidden')).toBe(false);
+    });
+
+    it('leaves the data panel open, and the text, caret and focus where the user left them', async () => {
+      await openBilling();
+      document.getElementById('data-panel-header').click();
+      const panel = document.getElementById('source-input');
+      panel.focus();
+      answerNext({ diagram: billingWith('RefundPayment') });
+
+      typeIntoPanel(editedSource);
+      panel.setSelectionRange(7, 7);
+      await pastPause();
+
+      expect(canvasMarkup()).toContain('RefundPayment');
+      expect(document.getElementById('data-panel').classList.contains('collapsed')).toBe(false);
+      expect({ text: panel.value, caret: panel.selectionStart, focused: document.activeElement === panel })
+        .toEqual({ text: editedSource, caret: 7, focused: true });
+    });
+
+    it('neither raises nor clears the unsaved-changes marker, and records nothing in recent files', async () => {
+      await openBilling();
+      typeIntoPanel(editedSource);
+      const reports = modifiedReports.length;
+      const recorded = remembered.length;
+      const before = parses();
+
+      await pastPause();
+
+      expect(parses()).toBe(before + 1);
+      expect({ reports: modifiedReports.length, recorded: remembered.length }).toEqual({ reports, recorded });
+    });
+  });
+
+  describe('against an open', () => {
+    const ordersFile = { name: 'orders.emod', path: '/models/orders.emod', content: 'emod 1\nmodel "Orders"\n' };
+
+    async function expectOrdersOpen() {
+      expect(canvasMarkup()).toContain('OrdersCmd');
+      expect(windowTitle).toBe('orders.emod — Emod Diagram Viewer');
+      saveAnswer = { name: 'orders.emod', path: '/models/orders.emod' };
+      await save();
+      expect(savedFile.path).toBe('/models/orders.emod');
+    }
+
+    it('never wins over an open waiting on the unsaved-edits question', async () => {
+      await openBilling();
+      const answers = [];
+      unsavedEditsAnswerer = () => new Promise((resolve) => answers.push(resolve));
+      answerNext({ diagram: billingWith('RefundPayment') });
+      typeIntoPanel(editedSource);
+
+      deliverFile(ordersFile);
+      await pastPause();
+      expect(answers).toHaveLength(1);
+
+      answerNext({ diagram: diagramNamed('Orders') });
+      answers[0]('discard');
+      await flush();
+      await flush();
+
+      await expectOrdersOpen();
+    });
+
+    it('never wins over an open queued behind another', async () => {
+      await openBilling();
+      const answers = [];
+      unsavedEditsAnswerer = () => new Promise((resolve) => answers.push(resolve));
+      typeIntoPanel(editedSource);
+
+      deliverFile({ name: 'b.emod', path: '/models/b.emod', content: 'emod 1\nmodel "B"\n' });
+      await flush();
+      deliverFile(ordersFile);
+      await flush();
+      answerNext({ diagram: billingWith('RefundPayment') });
+      await pastPause();
+
+      answerNext({ diagram: diagramNamed('B') });
+      answerNext({ diagram: diagramNamed('Orders') });
+      answers[0]('discard');
+      await flush();
+      await flush();
+      await flush();
+
+      await expectOrdersOpen();
+    });
+
+    it('never wins over an open whose parse is still in flight', async () => {
+      await openBilling();
+      typeIntoPanel(editedSource);
+      const answerOrders = deferredParse();
+
+      deliverFile(ordersFile);
+      await flush();
+      await pastPause();
+
+      answerOrders({ diagram: diagramNamed('Orders') });
+      await flush();
+
+      await expectOrdersOpen();
+    });
+
+    it('waits out an open in flight before revalidating what was typed into its source, under its name', async () => {
+      await openBilling();
+      const answerOrders = deferredParse();
+      answerNext({ diagram: diagramNamed('Orders') });
+      deliverFile(ordersFile);
+      await flush();
+
+      typeIntoPanel(ordersFile.content + 'actor "Clerk"\n');
+      await pastPause();
+      answerOrders({ diagram: diagramNamed('Orders') });
+      await flush();
+      await flush();
+
+      expect(lastParse())
+        .toEqual([ordersFile.content + 'actor "Clerk"\n', 'orders.emod']);
+      await expectOrdersOpen();
+    });
+  });
+
+  describe('against a save and a reported failure', () => {
+    it("leaves a save's confirmation in the bar", async () => {
+      await openBilling();
+      saveAnswer = { name: 'billing.emod', path: '/models/billing.emod' };
+      typeIntoPanel(editedSource);
+      await save();
+      expect(document.getElementById('save-status').textContent).toBe('✓ Saved billing.emod');
+      const before = parses();
+
+      await pastPause();
+
+      expect(parses()).toBe(before + 1);
+      expect(document.getElementById('save-status').textContent).toBe('✓ Saved billing.emod');
+      expect(document.getElementById('save-status').classList.contains('hidden')).toBe(false);
+    });
+
+    it.each([
+      ['a drop is refused', () => fireDrop(document.getElementById('data-panel-body'), new File(['text'], 'notes.txt', { type: 'text/plain' })),
+        '✗ Only .emod and .json files are supported'],
+      ['a file cannot be read', () => deliverFile({ error: 'reading /models/gone.emod: no such file or directory' }),
+        '✗ reading /models/gone.emod: no such file or directory'],
+      ['a file is empty', () => deliverFile({ name: 'empty.emod', path: '/models/empty.emod', content: '   ' }),
+        '✗ empty.emod is empty'],
+      ['a file will not open', () => {
+        parseQueue.unshift(Promise.reject(new Error('the host could not parse orders.emod')));
+        deliverFile({ name: 'orders.emod', path: '/models/orders.emod', content: 'emod 1\nmodel "Orders"\n' });
+      }, '✗ the host could not parse orders.emod'],
+    ])('still revalidates what was typed when %s during the pause, and leaves the reason in the status area', async (_, fail, reason) => {
+      await openBilling();
+      answerNext({ parsed: false, diagnostics: [orderingFinding], diagram: { model_name: 'Billing', nodes: [], edges: [] } });
+      typeIntoPanel(billingSource + 'context "Refunds" {\n');
+      fail();
+      await flush();
+      await flush();
+      expect(status()).toBe(reason);
+
+      await pastPause();
+
+      expect(document.getElementById('stale-notice').classList.contains('hidden')).toBe(false);
+      expect(status()).toBe(reason);
+    });
+
+    it.each([
+      ['a drop is refused', () => fireDrop(document.getElementById('data-panel-body'), new File(['text'], 'notes.txt', { type: 'text/plain' }))],
+      ['a file cannot be read', () => deliverFile({ error: 'reading /models/gone.emod: no such file or directory' })],
+      ['a file is empty', () => deliverFile({ name: 'empty.emod', path: '/models/empty.emod', content: '   ' })],
+    ])('revalidates what was typed again when %s while its parse is in flight', async (_, fail) => {
+      await openBilling();
+      const unparsed = { parsed: false, diagnostics: [orderingFinding], diagram: { model_name: 'Billing', nodes: [], edges: [] } };
+      const answerOvertaken = deferredParse();
+      answerNext(unparsed);
+      typeIntoPanel(billingSource + 'context "Refunds" {\n');
+      await pastPause();
+      const sent = parses();
+
+      fail();
+      await flush();
+      answerOvertaken(unparsed);
+      await flush();
+      await flush();
+
+      expect(parses()).toBe(sent + 1);
+      expect(document.getElementById('stale-notice').classList.contains('hidden')).toBe(false);
+    });
+
+    it('revalidates what was typed when a failure overtakes the parse of a Render click', async () => {
+      await openBilling();
+      const unparsed = { parsed: false, diagnostics: [orderingFinding], diagram: { model_name: 'Billing', nodes: [], edges: [] } };
+      typeIntoPanel(billingSource + 'context "Refunds" {\n');
+      const answerRender = deferredParse();
+      answerNext(unparsed);
+      document.getElementById('render-btn').click();
+      await flush();
+      const sent = parses();
+
+      fireDrop(document.getElementById('data-panel-body'), new File(['text'], 'notes.txt', { type: 'text/plain' }));
+      answerRender(unparsed);
+      await flush();
+      await flush();
+
+      expect(parses()).toBe(sent + 1);
+      expect(document.getElementById('stale-notice').classList.contains('hidden')).toBe(false);
+      expect(status()).toBe('✗ Only .emod and .json files are supported');
+    });
+
+    it('leaves the reason a save was refused in the status area, while still revalidating', async () => {
+      await openBilling();
+      typeIntoPanel(editedSource);
+      saveFails = 'writing /models/billing.emod: permission denied';
+      await save();
+      const before = parses();
+
+      await pastPause();
+
+      expect(parses()).toBe(before + 1);
+      expect(status()).toBe('✗ writing /models/billing.emod: permission denied');
+    });
+
+    it('leaves the reason an export failed in the status area, while still revalidating', async () => {
+      await openBilling();
+      typeIntoPanel(editedSource);
+      exportFails = true;
+      document.getElementById('export-emod').click();
+      await flush();
+      const reason = status();
+      expect(reason).toContain('✗');
+      const before = parses();
+
+      await pastPause();
+
+      expect(parses()).toBe(before + 1);
+      expect(status()).toBe(reason);
+    });
+  });
+});
+
+describe('what a render hands the pipeline', () => {
+
+  it("names the arriving file, not the file it replaces", async () => {
     await openBilling();
 
     deliverFile({ name: 'orders.emod', path: '/models/orders.emod', content: 'emod 1\nmodel "Orders"\n' });
@@ -2763,7 +3289,7 @@ describe('the name a render asks the pipeline to report under', () => {
     expect(lastParse()).toEqual(['emod 1\nmodel "Orders"\n', 'orders.emod']);
   });
 
-  it("is the open file's when its edited source is rendered again", async () => {
+  it("names the open file when its edited source is rendered again", async () => {
     await openBilling();
 
     typeIntoPanel(billingSource + 'actor "Clerk"\n');
@@ -2773,7 +3299,7 @@ describe('the name a render asks the pipeline to report under', () => {
     expect(lastParse()).toEqual([billingSource + 'actor "Clerk"\n', 'billing.emod']);
   });
 
-  it('is none for pasted source, which has no file behind it', async () => {
+  it('names no file for pasted source, which has no file behind it', async () => {
     await startEmpty();
 
     typeIntoPanel(billingSource);
@@ -2783,7 +3309,7 @@ describe('the name a render asks the pipeline to report under', () => {
     expect(lastParse()).toEqual([billingSource, undefined]);
   });
 
-  it("carries the panel's leading lines, so a diagnostic keeps the line emod validate gives it", async () => {
+  it("passes the panel's text with its leading lines, so a diagnostic keeps the line emod validate gives it", async () => {
     await startEmpty();
 
     typeIntoPanel('\n\n\n' + billingSource);
@@ -2791,6 +3317,25 @@ describe('the name a render asks the pipeline to report under', () => {
     await flush();
 
     expect(lastParse()[0]).toBe('\n\n\n' + billingSource);
+  });
+});
+
+describe('the documentation of the source panel', () => {
+  const read = (path) => readFileSync(resolve(__dirname, '../../..', path), 'utf-8').replace(/\s+/g, ' ');
+
+  it('says in the README that the panel revalidates once typing pauses, marks a stale diagram, and lists what emod validate reports', () => {
+    const paragraph = read('README.md').split('**The source panel**')[1].split('**')[0];
+
+    expect(paragraph).toContain('Once typing pauses');
+    expect(paragraph).toContain('`emod validate`');
+    expect(paragraph).toContain('marked out of date');
+  });
+
+  it('says in the flow summary that a pause in typing, not a Render click alone, reaches the pipeline', () => {
+    const step = read('docs/wasm-architecture.md').split('3. **Browser**')[1].split('4. **Embedding**')[0];
+
+    expect(step).toContain('Once typing in the source panel pauses');
+    expect(step).not.toContain('clicks Render');
   });
 });
 
@@ -2918,7 +3463,9 @@ describe('the drop affordance', () => {
   // The stylesheet as a list of {selectors, declarations}, so a rule is found by
   // the whole of what it selects rather than by the first place a selector's
   // text happens to appear — which for these two is each other's selector list.
-  const rules = [...markup.matchAll(/([^{}]+)\{([^{}]*)\}/g)].map((m) => ({
+  // Comments go first: one ahead of a rule would otherwise read as part of its
+  // selector list.
+  const rules = [...markup.replace(/\/\*[\s\S]*?\*\//g, '').matchAll(/([^{}]+)\{([^{}]*)\}/g)].map((m) => ({
     selectors: m[1].trim(),
     declarations: m[2],
   }));
@@ -2960,7 +3507,7 @@ describe('the drop affordance', () => {
   it('sits above the chrome a file can be released on top of', () => {
     const depthOf = (declarations) => Number((declarations.match(/z-index:\s*(\d+)/) || [])[1]);
     const overlayDepth = depthOf(windowWide[0].declarations);
-    const covered = ['#ctx-menu', '#detail-panel', '#tooltip', '#data-panel'];
+    const covered = ['#ctx-menu', '#detail-panel', '#tooltip', '#bottom-dock'];
 
     covered.forEach((selector) => {
       const owning = rules.filter(

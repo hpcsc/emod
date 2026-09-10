@@ -60,7 +60,7 @@ flowchart TB
 
 2. **Serve**: `emod diagram --serve` starts an HTTP server. If a file path is given, the CLI pre-parses it with the native Go pipeline and injects the diagram as `window.INITIAL_DATA` for an instant first render.
 
-3. **Browser**: The viewer loads `wasm_exec.js` (Go runtime), then `platform.browser.js` fetches and instantiates `emod.wasm`. When the user pastes source and clicks Render, `model.js` calls `parseEmod()` through `platform.js` → the Go pipeline runs inside the browser → diagram renders as SVG.
+3. **Browser**: The viewer loads `wasm_exec.js` (Go runtime), then `platform.browser.js` fetches and instantiates `emod.wasm`. Once typing in the source panel pauses — or at once when Render is clicked — `model.js` calls `parseEmod()` through `platform.js` with the panel's text and the open file's name → the Go pipeline runs inside the browser → the diagnostics panel lists what `emod validate` reports for the same text, and source that parses redraws as SVG in place while source that does not leaves the last diagram on screen, marked out of date.
 
 4. **Embedding**: Both `static/` (JS/CSS/HTML) and `generated/` (Wasm binary + runtime) are embedded into the Go binary via `//go:embed`, making the CLI fully self-contained.
 
