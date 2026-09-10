@@ -89,6 +89,13 @@ describe('parse', () => {
     expect(stub.calls).toEqual([['ParseEmod', JSON.stringify({ source: 'emod 1\nmodel "Billing"\n' })]]);
   });
 
+  it('sends the name of the file the source came from beside it', async () => {
+    await desktop.parseEmod('emod 1\nmodel "Billing"\n', 'billing.emod');
+
+    expect(stub.calls.map(([name, request]) => [name, JSON.parse(request)]))
+      .toEqual([['ParseEmod', { source: 'emod 1\nmodel "Billing"\n', filename: 'billing.emod' }]]);
+  });
+
   it('answers the decoded document rather than the raw string', async () => {
     stub.answers.ParseEmod = '{"diagnostics":[{"message":"x"}],"diagram":{"nodes":[1],"edges":[]}}';
 

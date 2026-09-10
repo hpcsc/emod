@@ -41,12 +41,12 @@ async function init() {
 
 init();
 
-function parseEmod(source) {
+function parseEmod(source, filename) {
   if (!isReady) {
     return Promise.reject(new Error('WASM not ready yet'));
   }
   try {
-    const jsonStr = globalThis.parseEmod(JSON.stringify({ source: source }));
+    const jsonStr = globalThis.parseEmod(JSON.stringify({ source: source, filename: filename }));
     return Promise.resolve(JSON.parse(jsonStr));
   } catch (err) {
     return Promise.reject(err);

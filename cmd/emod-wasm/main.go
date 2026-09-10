@@ -25,7 +25,7 @@ func jsExportJSON(this js.Value, args []js.Value) any {
 }
 
 // jsExportEmod takes the diagram JSON document itself rather than the
-// {"source": "..."} envelope the parse entry points use, because the viewer
+// pipeline.Request envelope the parse entry points use, because the viewer
 // already holds that document as its state.
 func jsExportEmod(this js.Value, args []js.Value) any {
 	if len(args) != 1 {
@@ -35,7 +35,7 @@ func jsExportEmod(this js.Value, args []js.Value) any {
 	return pipeline.ExportEmodJSON(args[0].String())
 }
 
-func jsHandle(args []js.Value, run func(string) ([]byte, error)) any {
+func jsHandle(args []js.Value, run func(source, filename string) ([]byte, error)) any {
 	if len(args) != 1 {
 		return pipeline.ErrorJSON("expected 1 argument")
 	}

@@ -209,9 +209,9 @@ function init() {
     if (text !== undefined) {
       store.dom.sourceInput.value = text;
     }
-    const source = store.dom.sourceInput.value.trim();
+    const naming = file !== undefined ? file : store.currentFile;
     const render = ++latestRender;
-    latestRenderSettled = Model.sendParse(store, source, store.dom.statusEl)
+    latestRenderSettled = Model.sendParse(store, store.dom.sourceInput.value, store.dom.statusEl, naming ? naming.name : undefined)
       .then(function(data) {
         if (render !== latestRender) return;
         if (file !== undefined) {

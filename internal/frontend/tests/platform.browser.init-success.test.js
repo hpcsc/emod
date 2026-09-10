@@ -44,6 +44,14 @@ describe('parseEmod after ready', () => {
     expect(result).toEqual(parseResult);
   });
 
+  it('sends the name of the file the source came from beside it', async () => {
+    globalThis.parseEmod = vi.fn().mockReturnValue(JSON.stringify({ diagnostics: [], diagram: { nodes: [], edges: [] } }));
+
+    await browser.parseEmod('test source', 'orders.emod');
+
+    expect(JSON.parse(globalThis.parseEmod.mock.calls[0][0])).toEqual({ source: 'test source', filename: 'orders.emod' });
+  });
+
   it('propagates errors from globalThis.parseEmod', async () => {
     globalThis.parseEmod = vi.fn().mockImplementation(() => {
       throw new Error('parse failed');

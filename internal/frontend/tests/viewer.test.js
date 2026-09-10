@@ -2388,6 +2388,84 @@ describe('viewer diagnostics panel', () => {
   });
 });
 
+describe('what the diagnostics panel reports', () => {
+  async function renderReporting(diagnostics) {
+    globalThis.INITIAL_DATA = null;
+    parseResult = { diagnostics, diagram: { nodes: [], edges: [] } };
+    await startViewer();
+    document.getElementById('source-input').value = 'emod 1\nmodel "Orders"\n';
+    document.getElementById('render-btn').click();
+    await flush();
+  }
+
+  it.each([
+    ['2 warnings, 1 info', ['warning', 'info', 'warning']],
+    ['2 errors, 1 warning', ['warning', 'error', 'error']],
+    ['1 info', ['info']],
+  ])('badges the model as "%s", counting each severity apart', async (badge, severities) => {
+    await renderReporting(severities.map((severity, i) => ({
+      file: 'orders.emod', line: i + 1, message: 'finding ' + i, severity, rule_name: 'some-rule',
+    })));
+
+    expect(document.getElementById('diagnostics-badge').textContent).toBe(badge);
+  });
+
+  it('shows each rule name ahead of its message, as emod validate prints it, and none where there is no rule', async () => {
+    await renderReporting([
+      { file: 'orders.emod', line: 4, message: 'command "Ship" is never used', severity: 'warning', rule_name: 'orphan-command' },
+      { file: 'orders.emod', line: 9, message: 'unexpected "}"', severity: 'error' },
+    ]);
+
+    const items = document.querySelectorAll('#diagnostics-list .diag-item');
+    expect(items[0].textContent).toContain('[orphan-command] command "Ship" is never used');
+    expect(items[1].textContent).toContain('unexpected "}"');
+    expect(items[1].textContent).not.toContain('[');
+  });
+});
+
+describe('the name a render asks the pipeline to report under', () => {
+  const lastParse = () => platform.parseEmod.mock.calls[platform.parseEmod.mock.calls.length - 1];
+
+  it("is the arriving file's, not the file it replaces", async () => {
+    await openBilling();
+
+    deliverFile({ name: 'orders.emod', path: '/models/orders.emod', content: 'emod 1\nmodel "Orders"\n' });
+    await flush();
+
+    expect(lastParse()).toEqual(['emod 1\nmodel "Orders"\n', 'orders.emod']);
+  });
+
+  it("is the open file's when its edited source is rendered again", async () => {
+    await openBilling();
+
+    typeIntoPanel(billingSource + 'actor "Clerk"\n');
+    document.getElementById('render-btn').click();
+    await flush();
+
+    expect(lastParse()).toEqual([billingSource + 'actor "Clerk"\n', 'billing.emod']);
+  });
+
+  it('is none for pasted source, which has no file behind it', async () => {
+    await startEmpty();
+
+    typeIntoPanel(billingSource);
+    document.getElementById('render-btn').click();
+    await flush();
+
+    expect(lastParse()).toEqual([billingSource, undefined]);
+  });
+
+  it("carries the panel's leading lines, so a diagnostic keeps the line emod validate gives it", async () => {
+    await startEmpty();
+
+    typeIntoPanel('\n\n\n' + billingSource);
+    document.getElementById('render-btn').click();
+    await flush();
+
+    expect(lastParse()[0]).toBe('\n\n\n' + billingSource);
+  });
+});
+
 // The fixture above is hand-written, so it cannot notice viewer.html losing an
 // element init() reaches for. `init` looks each one up unguarded and throws on
 // the first miss, killing every listener wired after it — on the shipped page

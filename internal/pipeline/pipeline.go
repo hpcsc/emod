@@ -19,44 +19,55 @@ import (
 // exportFunc is a function that serializes a model and diagnostics into JSON.
 type exportFunc func(*ast.Model, []*diagnostic.Entry) ([]byte, error)
 
-// ExtractSource parses the input JSON and returns the source field.
-func ExtractSource(input string) (string, error) {
-	var req struct {
-		Source string `json:"source"`
-	}
+// Request is the envelope both viewer runtimes hand across their boundary: the
+// source to run, and the name of the file it came from for the diagnostics and
+// node positions to report.
+type Request struct {
+	Source   string `json:"source"`
+	Filename string `json:"filename"`
+}
+
+const pastedSourceFilename = "input.emod"
+
+// ExtractRequest parses the input JSON into a Request.
+func ExtractRequest(input string) (Request, error) {
+	var req Request
 	if err := json.Unmarshal([]byte(input), &req); err != nil {
-		return "", fmt.Errorf("invalid JSON: %v", err)
+		return Request{}, fmt.Errorf("invalid JSON: %v", err)
 	}
 	if req.Source == "" {
-		return "", fmt.Errorf("missing source field")
+		return Request{}, fmt.Errorf("missing source field")
 	}
-	return req.Source, nil
+	if req.Filename == "" {
+		req.Filename = pastedSourceFilename
+	}
+	return req, nil
 }
 
 // runPipeline runs the full emod pipeline (lex → parse → validate → lint)
 // and invokes the given export function on the result.
-func runPipeline(source string, fn exportFunc) (result []byte, err error) {
+func runPipeline(source, filename string, fn exportFunc) (result []byte, err error) {
 	defer func() {
 		if r := recover(); r != nil {
 			err = fmt.Errorf("pipeline panic: %v", r)
 		}
 	}()
 
-	model, diags := oracle.Run(source, "input.emod")
+	model, diags := oracle.Run(source, filename)
 
 	return fn(model, diags)
 }
 
 // RunPipelineExportDiagram runs the pipeline and wraps the result
 // in the diagram JSON diagnostics envelope { diagnostics, diagram }.
-func RunPipelineExportDiagram(source string) ([]byte, error) {
-	return runPipeline(source, export.ExportDiagramJSONDiagnostics)
+func RunPipelineExportDiagram(source, filename string) ([]byte, error) {
+	return runPipeline(source, filename, export.ExportDiagramJSONDiagnostics)
 }
 
 // RunPipelineExportJSON runs the pipeline and wraps the result
 // in the model JSON diagnostics envelope { diagnostics, model }.
-func RunPipelineExportJSON(source string) ([]byte, error) {
-	return runPipeline(source, export.ExportJSONDiagnostics)
+func RunPipelineExportJSON(source, filename string) ([]byte, error) {
+	return runPipeline(source, filename, export.ExportJSONDiagnostics)
 }
 
 // ExportEmod converts a diagram JSON document — the {model_name, nodes, edges}
@@ -94,17 +105,17 @@ func ExportEmodJSON(diagramJSON string) string {
 	return string(b)
 }
 
-// RunOnSource unwraps the {"source": "..."} envelope, runs one of the pipeline
-// entry points over it, and answers either that entry point's bytes or the
+// RunOnSource unwraps the request envelope, runs one of the pipeline entry
+// points over it, and answers either that entry point's bytes or the
 // {"error": "..."} envelope. Both shells hand their frontend the same strings,
 // so this sequencing is theirs to share rather than to spell twice.
-func RunOnSource(request string, run func(string) ([]byte, error)) string {
-	source, err := ExtractSource(request)
+func RunOnSource(request string, run func(source, filename string) ([]byte, error)) string {
+	req, err := ExtractRequest(request)
 	if err != nil {
 		return ErrorJSON(err.Error())
 	}
 
-	result, err := run(source)
+	result, err := run(req.Source, req.Filename)
 	if err != nil {
 		return ErrorJSON(err.Error())
 	}

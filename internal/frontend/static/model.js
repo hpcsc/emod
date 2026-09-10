@@ -74,8 +74,8 @@ function moveSlice(nodes, sliceId, targetPos) {
   return true;
 }
 
-function sendParse(store, source, statusEl) {
-  if (!source) {
+function sendParse(store, source, statusEl, filename) {
+  if (!source || !source.trim()) {
     statusEl.textContent = "✗ Paste some .emod content first";
     statusEl.className = "status error";
     return Promise.reject(new Error("no source"));
@@ -106,7 +106,7 @@ function sendParse(store, source, statusEl) {
   // work in the app itself: viewer.js imports the platform statically.
   return import('./platform.js').then(function(platform) {
     return platform.ready.then(function() {
-      return platform.parseEmod(source);
+      return platform.parseEmod(source, filename);
     });
   }).then(function(data) {
     if (data.error) {

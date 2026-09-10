@@ -1,0 +1,169 @@
+{
+  "story": "Edit source in the app and see diagnostics as you type",
+  "tasks_file": "tasks/us-009-edit-source-in-the-app-and-see-diagnostics-as-you-type.md",
+  "tasks": [
+    {
+      "n": 1,
+      "done": true,
+      "title": "Report the diagnostics `emod validate` reports for the panel's source",
+      "language": "JavaScript",
+      "testable": true,
+      "certainty": "high",
+      "blast_radius": "low",
+      "patterns_to_follow": [
+        "internal/pipeline/pipeline.go:22-34",
+        "internal/pipeline/pipeline.go:97-113",
+        "internal/pipeline/pipeline_test.go:16-73",
+        "internal/cli/validate_test.go:1094-1117",
+        "internal/cli/lint.go:41-94",
+        "internal/frontend/static/ui.js:233-266",
+        "internal/frontend/tests/diagnostics-highlight.test.js:1-123",
+        "internal/frontend/tests/viewer.test.js:2334-2389",
+        "internal/frontend/tests/platform.desktop.test.js:85-100",
+        "internal/frontend/tests/platform.browser.init-success.test.js:36-59",
+        "internal/desktop/binding_names_test.go:170-217",
+        "tasks/learnings.md:1013-1018",
+        "tasks/learnings.md:166-170",
+        "tasks/learnings.md:226-230",
+        "tasks/learnings.md:1109-1114"
+      ],
+      "depends_on": [],
+      "affected_files": [
+        "internal/pipeline/pipeline.go",
+        "internal/pipeline/pipeline_test.go",
+        "internal/frontend/static/model.js",
+        "internal/frontend/static/viewer.js",
+        "internal/frontend/static/platform.browser.js",
+        "internal/frontend/desktop/platform.desktop.js",
+        "internal/frontend/static/ui.js",
+        "internal/frontend/static/viewer.html",
+        "internal/frontend/tests/viewer.test.js",
+        "internal/frontend/tests/diagnostics-highlight.test.js",
+        "internal/frontend/tests/model.test.js",
+        "internal/frontend/tests/platform.desktop.test.js",
+        "internal/frontend/tests/platform.browser.init-success.test.js"
+      ]
+    },
+    {
+      "n": 2,
+      "done": false,
+      "title": "Keep the last diagram on screen, marked stale, when the panel's source does not parse",
+      "language": "JavaScript",
+      "testable": true,
+      "certainty": "medium",
+      "blast_radius": "high",
+      "patterns_to_follow": [
+        "internal/frontend/static/viewer.js:206-245",
+        "internal/oracle/oracle.go:14-31",
+        "internal/pipeline/pipeline.go:50-54",
+        "internal/frontend/static/viewer.js:295-301",
+        "internal/frontend/tests/viewer.test.js:2288-2332",
+        "internal/frontend/tests/viewer.test.js:364-422",
+        "internal/frontend/tests/viewer.test.js:1059-1118",
+        "internal/frontend/static/viewer.html:69-73",
+        "e2e-viewer/tests/smoke.spec.js:19-25",
+        "e2e-viewer/tests/helpers.js:94-126",
+        "tasks/learnings.md:983-988",
+        "tasks/learnings.md:1073-1078",
+        "tasks/learnings.md:767-772",
+        "tasks/learnings.md:1037-1042",
+        "tasks/learnings.md:1145-1150",
+        "task:1"
+      ],
+      "depends_on": [
+        1
+      ],
+      "affected_files": [
+        "internal/pipeline/pipeline.go",
+        "internal/oracle/oracle.go",
+        "internal/pipeline/pipeline_test.go",
+        "internal/frontend/static/viewer.js",
+        "internal/frontend/static/store.js",
+        "internal/frontend/static/ui.js",
+        "internal/frontend/static/viewer.html",
+        "internal/frontend/tests/viewer.test.js",
+        "internal/frontend/tests/diagnostics-highlight.test.js",
+        "e2e-viewer/tests/"
+      ]
+    },
+    {
+      "n": 3,
+      "done": false,
+      "title": "Re-render the panel's source in place, keeping pan, zoom, node layout and visibility",
+      "language": "JavaScript",
+      "testable": true,
+      "certainty": "medium",
+      "blast_radius": "low",
+      "patterns_to_follow": [
+        "internal/frontend/static/model.js:19-31",
+        "internal/frontend/static/interaction.js:217-231",
+        "internal/frontend/static/layout.js:155-162",
+        "internal/frontend/static/viewer.js:617-621",
+        "internal/export/diagram.go:99-113",
+        "internal/frontend/tests/viewer.test.js:1742-1793",
+        "internal/frontend/tests/viewer.test.js:145-169",
+        "task:2"
+      ],
+      "depends_on": [
+        2
+      ],
+      "affected_files": [
+        "internal/frontend/static/viewer.js",
+        "internal/frontend/static/model.js",
+        "internal/frontend/tests/viewer.test.js"
+      ]
+    },
+    {
+      "n": 4,
+      "done": false,
+      "title": "Revalidate the source panel automatically after a pause in typing",
+      "language": "JavaScript",
+      "testable": true,
+      "certainty": "low",
+      "blast_radius": "high",
+      "patterns_to_follow": [
+        "internal/frontend/static/viewer.js:176-194",
+        "internal/frontend/static/viewer.js:206-245",
+        "internal/frontend/static/viewer.js:275-301",
+        "internal/frontend/static/viewer.js:534-559",
+        "internal/frontend/static/viewer.js:263-267",
+        "internal/frontend/static/viewer.js:445-452",
+        "internal/frontend/static/config.js:32",
+        "internal/frontend/tests/viewer.test.js:1385-1546",
+        "internal/frontend/tests/viewer.test.js:1953-2030",
+        "internal/frontend/tests/viewer.test.js:152-156",
+        "internal/frontend/tests/viewer.test.js:233-235",
+        "e2e-viewer/tests/helpers.js:94-126",
+        "e2e-viewer/tests/interaction.spec.js:41-70",
+        "README.md:385-391",
+        "docs/wasm-architecture.md:57-65",
+        "tasks/learnings.md:1037-1042",
+        "tasks/learnings.md:1079-1084",
+        "tasks/learnings.md:1133-1138",
+        "tasks/learnings.md:1043-1048",
+        "tasks/learnings.md:959-964",
+        "tasks/learnings.md:983-988",
+        "tasks/learnings.md:1193-1198",
+        "task:1",
+        "task:2",
+        "task:3"
+      ],
+      "depends_on": [
+        1,
+        2,
+        3
+      ],
+      "affected_files": [
+        "internal/frontend/static/viewer.js",
+        "internal/frontend/static/config.js",
+        "internal/frontend/static/store.js",
+        "internal/frontend/static/ui.js",
+        "internal/frontend/static/viewer.html",
+        "internal/frontend/tests/viewer.test.js",
+        "e2e-viewer/tests/",
+        "README.md",
+        "docs/wasm-architecture.md"
+      ]
+    }
+  ]
+}

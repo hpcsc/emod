@@ -206,6 +206,16 @@ header .model-name span {
   background: rgba(231,76,60,0.4);
   border-color: #e74c3c;
 }
+#diagnostics-badge[data-severity="warning"] {
+  background: rgba(243,156,18,0.2);
+  color: #f5b041;
+  border-color: rgba(243,156,18,0.5);
+}
+#diagnostics-badge[data-severity="info"] {
+  background: rgba(52,152,219,0.2);
+  color: #85c1e9;
+  border-color: rgba(52,152,219,0.5);
+}
 
 #diagnostics-panel {
   position: absolute;
@@ -283,6 +293,15 @@ header .model-name span {
 .diag-severity.warning {
   background: #fff3cd;
   color: #856404;
+}
+.diag-severity.info {
+  background: #e3f0fb;
+  color: #1f618d;
+}
+.diag-rule {
+  font-family: "SF Mono", "Fira Code", Menlo, Consolas, monospace;
+  font-size: 11px;
+  color: #666;
 }
 .diag-location {
   font-family: "SF Mono", "Fira Code", Menlo, Consolas, monospace;

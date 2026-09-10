@@ -181,14 +181,27 @@ describe('Model', () => {
       expect(statusEl.className).toBe('status error');
     });
 
-    it('calls parseEmod with raw .emod source', async () => {
+    it('calls parseEmod with raw .emod source and the name of the file it came from', async () => {
       const diagram = { nodes: [{ id: 'n1', type: 'command', label: 'Test' }], edges: [] };
       const result = { diagnostics: [], diagram };
       parseEmod.mockResolvedValue(result);
 
-      const value = await Model.sendParse(store, 'context Test {}', statusEl);
-      expect(parseEmod).toHaveBeenCalledWith('context Test {}');
+      const value = await Model.sendParse(store, 'context Test {}', statusEl, 'orders.emod');
+      expect(parseEmod).toHaveBeenCalledWith('context Test {}', 'orders.emod');
       expect(value).toEqual(result);
+    });
+
+    it('hands on the source with its leading lines, so a diagnostic keeps the line emod validate gives it', async () => {
+      await Model.sendParse(store, '\n\n\n  context Test {}\n', statusEl, 'orders.emod');
+
+      expect(parseEmod).toHaveBeenCalledWith('\n\n\n  context Test {}\n', 'orders.emod');
+    });
+
+    it('refuses source holding only whitespace, as it refuses none', async () => {
+      await expect(Model.sendParse(store, '  \n\t\n', statusEl)).rejects.toThrow('no source');
+
+      expect(statusEl.textContent).toContain('Paste some .emod content first');
+      expect(parseEmod).not.toHaveBeenCalled();
     });
 
     it('sets parsing status on status element during a platform parse', async () => {

@@ -14,20 +14,20 @@ import "github.com/hpcsc/emod/internal/pipeline"
 // per-runtime knowledge.
 type ModelService struct{}
 
-// ParseEmod takes the {"source": "..."} envelope and answers the pipeline's
+// ParseEmod takes the pipeline.Request envelope and answers the pipeline's
 // {diagnostics, diagram} document. Source the pipeline reports on still yields a
 // diagram beside the diagnostics; only a malformed envelope is an error.
 func (s *ModelService) ParseEmod(request string) string {
 	return pipeline.RunOnSource(request, pipeline.RunPipelineExportDiagram)
 }
 
-// ExportJSON takes the {"source": "..."} envelope and answers the pipeline's
+// ExportJSON takes the pipeline.Request envelope and answers the pipeline's
 // {diagnostics, model} document.
 func (s *ModelService) ExportJSON(request string) string {
 	return pipeline.RunOnSource(request, pipeline.RunPipelineExportJSON)
 }
 
-// ExportEmod takes the diagram document itself rather than the {"source": "..."}
+// ExportEmod takes the diagram document itself rather than the pipeline.Request
 // envelope the parse entry points use, because the frontend already holds that
 // document as its state.
 func (s *ModelService) ExportEmod(diagramJSON string) string {

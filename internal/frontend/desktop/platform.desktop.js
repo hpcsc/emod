@@ -13,8 +13,8 @@ import { FileService, ModelService, OpenRequests, RecentFiles, WindowService } f
 const ready = Promise.resolve();
 const isReady = true;
 
-function parseEmod(source) {
-  return ModelService.ParseEmod(JSON.stringify({ source: source })).then(function(raw) {
+function parseEmod(source, filename) {
+  return ModelService.ParseEmod(JSON.stringify({ source: source, filename: filename })).then(function(raw) {
     return JSON.parse(raw);
   });
 }
