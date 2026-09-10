@@ -421,13 +421,13 @@ by what the source names it, so an edit that adds or removes constructs elsewher
 user's arrangement onto other nodes. Opening a model still starts it fresh.
 
 **Acceptance Criteria:**
-- [ ] Rendering the panel's source again leaves pan and zoom as they were
-- [ ] A node dragged before the render keeps its offset after it, including when the edit adds, removes or reorders constructs of the same kind ahead of it
-- [ ] A node the edit removed takes its offset and its hidden state with it; neither passes to the node that takes its place in document order
-- [ ] A context, aggregate or slice hidden from the visibility tree stays hidden after the render, under the same edits, and the visibility tree shows it hidden
-- [ ] Reset layout stays enabled while a kept offset exists, and still restores the computed layout
-- [ ] Offsets and hidden state kept through a stale render apply when the source next parses
-- [ ] Opening a model by any route starts it with no offsets and nothing hidden
+- [x] Rendering the panel's source again leaves pan and zoom as they were
+- [x] A node dragged before the render keeps its offset after it, including when the edit adds, removes or reorders constructs of the same kind ahead of it
+- [x] A node the edit removed takes its offset and its hidden state with it; neither passes to the node that takes its place in document order
+- [x] A context, aggregate or slice hidden from the visibility tree stays hidden after the render, under the same edits, and the visibility tree shows it hidden
+- [x] Reset layout stays enabled while a kept offset exists, and still restores the computed layout
+- [x] Offsets and hidden state kept through a stale render apply when the source next parses
+- [x] Opening a model by any route starts it with no offsets and nothing hidden
 
 **Affected Files/Modules:**
 - `internal/frontend/static/viewer.js` — a render of the panel's own source keeps the view state; an open resets it; Reset layout's enabled state follows the kept offsets

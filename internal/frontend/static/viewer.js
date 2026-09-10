@@ -62,7 +62,7 @@ bus.on('model:updated', function({ store: s }) {
   applyWindowTitle(s);
   UI.updateStats(s);
   const btn = s.dom.resetLayoutBtn;
-  if (btn) btn.disabled = true;
+  if (btn) btn.disabled = Object.keys(s.nodeOffsets).length === 0;
   if (s.dom.visibilityPanel && !s.dom.visibilityPanel.classList.contains("hidden")) {
     UI.updateVisibilityTree(s);
   }
@@ -229,12 +229,14 @@ function init() {
         store.diagnostics = data.diagnostics || [];
         bus.emit('diagnostics:changed', { store, diagnostics: store.diagnostics });
         showDiagramStale(false);
-        Model.setModelData(store, data.diagram);
+        if (opening) {
+          Model.setModelData(store, data.diagram);
+        } else {
+          Model.updateModelData(store, data.diagram);
+        }
         store.dom.panel.classList.add("collapsed");
         store.dom.statusEl.textContent = "✓ Rendered";
         store.dom.statusEl.className = "status success";
-        const btn = store.dom.resetLayoutBtn;
-        if (btn) btn.disabled = true;
         reportModified();
       })
       .catch(function(err) {

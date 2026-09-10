@@ -17,17 +17,76 @@ function generateLabel(prefix, existing) {
 }
 
 function setModelData(store, data) {
+  loadModel(store, data, {}, {});
+}
+
+// The same model parsed again. Ids number each kind in document order, so an
+// edit ahead of a node renumbers it: what the user arranged follows each node by
+// what the source calls it instead.
+function updateModelData(store, data) {
+  const offsets = byIdentity(store.nodes, store.nodeOffsets);
+  const hidden = byIdentity(store.nodes, store.hiddenNodes);
+  const nodes = data.nodes || [];
+
+  loadModel(store, data, byNodeId(nodes, offsets), byNodeId(nodes, hidden));
+}
+
+function loadModel(store, data, nodeOffsets, hiddenNodes) {
   store.modelName = data.model_name || "";
   store.nodes = data.nodes || [];
   store.edges = data.edges || [];
   store.layoutPositions = {};
-  store.nodeOffsets = {};
-  store.hiddenNodes = {};
+  store.nodeOffsets = nodeOffsets;
+  store.hiddenNodes = hiddenNodes;
   store.arrowData = [];
   rebuildNodeIndex(store);
 
   bus.emit('model:updated', { store });
   bus.emit('data:changed', { store });
+}
+
+function byIdentity(nodes, valuesByNodeId) {
+  const identities = nodeIdentities(nodes);
+  const values = new Map();
+  nodes.forEach(function(n) {
+    if (Object.prototype.hasOwnProperty.call(valuesByNodeId, n.id)) {
+      values.set(identities.get(n.id), valuesByNodeId[n.id]);
+    }
+  });
+  return values;
+}
+
+function byNodeId(nodes, valuesByIdentity) {
+  const identities = nodeIdentities(nodes);
+  const values = {};
+  nodes.forEach(function(n) {
+    const identity = identities.get(n.id);
+    if (valuesByIdentity.has(identity)) {
+      values[n.id] = valuesByIdentity.get(identity);
+    }
+  });
+  return values;
+}
+
+function nodeIdentities(nodes) {
+  const byId = new Map(nodes.map(function(n) { return [n.id, n]; }));
+  const identities = new Map();
+  const alike = new Map();
+
+  function identityOf(node) {
+    if (identities.has(node.id)) return identities.get(node.id);
+    identities.set(node.id, "");
+    const parent = byId.get(node.parentId);
+    const named = (parent ? identityOf(parent) : "") + "\n" + node.type + "\t" + node.label;
+    const count = (alike.get(named) || 0) + 1;
+    alike.set(named, count);
+    const identity = named + "\t" + count;
+    identities.set(node.id, identity);
+    return identity;
+  }
+
+  nodes.forEach(identityOf);
+  return identities;
 }
 
 function moveSlice(nodes, sliceId, targetPos) {
@@ -166,6 +225,7 @@ export const Model = {
   generateNodeId,
   generateLabel,
   setModelData,
+  updateModelData,
   sendParse,
   moveSlice,
   addEdge,

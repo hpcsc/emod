@@ -2558,6 +2558,199 @@ describe('rendering the panel again when its source does not parse', () => {
   });
 });
 
+describe('rendering the panel again in place', () => {
+  // Ids number each kind of node in document order, as the exporter does, so an
+  // edit ahead of a node renumbers it exactly as the real pipeline would.
+  function paymentsDiagram(slices) {
+    const nodes = [{ id: 'context-1', type: 'context', label: 'Payments', parentId: null }];
+    let commands = 0;
+    slices.forEach(([label, ...commandLabels], i) => {
+      const sliceId = 'slice-' + (i + 1);
+      nodes.push({ id: sliceId, type: 'slice', label, parentId: 'context-1' });
+      commandLabels.forEach((commandLabel) => {
+        commands++;
+        nodes.push({ id: 'command-' + commands, type: 'command', label: commandLabel, parentId: sliceId });
+      });
+    });
+    return { model_name: 'Payments', nodes, edges: [] };
+  }
+
+  const paymentsSource = 'emod 1\nmodel "Payments"\n';
+
+  async function openPayments(slices) {
+    globalThis.INITIAL_DATA = null;
+    parseResult = { diagnostics: [], diagram: paymentsDiagram(slices) };
+    await startViewer();
+    deliverFile({ name: 'payments.emod', path: '/models/payments.emod', content: paymentsSource });
+    await flush();
+  }
+
+  async function renderAgain(slices, parsed = true) {
+    parseQueue = [Promise.resolve({ parsed, diagnostics: [], diagram: paymentsDiagram(slices) })];
+    typeIntoPanel(paymentsSource + '// edited\n');
+    document.getElementById('render-btn').click();
+    await flush();
+  }
+
+  function blockLabelled(label) {
+    return Array.from(document.querySelectorAll('#diagram-canvas .diagram-node'))
+      .find((block) => block.textContent.trim() === label);
+  }
+
+  function boxOf(label) {
+    const rect = blockLabelled(label).querySelector('rect');
+    return { x: Number(rect.getAttribute('x')), y: Number(rect.getAttribute('y')) };
+  }
+
+  // Drags a block and answers how far it moved, which is the offset the drag
+  // recorded once the slice has had its say about where the block may go.
+  function dragLabelled(label, dx, dy) {
+    const before = boxOf(label);
+    dragBy(blockLabelled(label), dx, dy);
+    const after = boxOf(label);
+    return { dx: after.x - before.x, dy: after.y - before.y };
+  }
+
+  // How far each block sits from where the layout alone puts it, read by letting
+  // Reset layout put it there.
+  function offsetsFromLayout(labels) {
+    const kept = Object.fromEntries(labels.map((label) => [label, boxOf(label)]));
+    document.getElementById('reset-layout').click();
+    return Object.fromEntries(labels.map((label) => {
+      const fresh = boxOf(label);
+      return [label, { dx: kept[label].x - fresh.x, dy: kept[label].y - fresh.y }];
+    }));
+  }
+
+  const unmoved = { dx: 0, dy: 0 };
+
+  it('leaves pan and zoom as they were', async () => {
+    await openPayments([['Take Payment', 'TakePayment']]);
+    const canvas = document.getElementById('diagram-canvas');
+    dragBy(canvas, 60, 60);
+    canvas.dispatchEvent(new WheelEvent('wheel', { deltaY: -300, clientX: 50, clientY: 50, bubbles: true, cancelable: true }));
+    const viewport = canvas.querySelector('#viewport-group').getAttribute('transform');
+    expect(viewport).not.toMatch(/scale\(1\)$/);
+    expect(viewport).not.toMatch(/^translate\(0, 0\)/);
+
+    await renderAgain([['Take Payment', 'IssueRefund', 'TakePayment']]);
+
+    expect(canvas.querySelector('#viewport-group').getAttribute('transform')).toBe(viewport);
+  });
+
+  it.each([
+    ['adds a command ahead of it', [['Take Payment', 'TakePayment']], [['Take Payment', 'IssueRefund', 'TakePayment']]],
+    ['removes a command ahead of it', [['Take Payment', 'IssueRefund', 'TakePayment']], [['Take Payment', 'TakePayment']]],
+    ['reorders the commands around it', [['Take Payment', 'IssueRefund', 'TakePayment']], [['Take Payment', 'TakePayment', 'IssueRefund']]],
+  ])('keeps the offset of a dragged node when the edit %s', async (_, opened, edited) => {
+    await openPayments(opened);
+    const dragged = dragLabelled('TakePayment', 40, 25);
+    expect(dragged).not.toEqual(unmoved);
+
+    await renderAgain(edited);
+
+    const labels = edited[0].slice(1);
+    expect(offsetsFromLayout(labels)).toEqual(Object.fromEntries(labels.map((label) =>
+      [label, label === 'TakePayment' ? dragged : unmoved])));
+  });
+
+  // Which blocks Reset layout moves, which are the blocks carrying an offset.
+  function movedByReset(ids) {
+    const at = (id) => { const rect = blockFor(id).querySelector('rect'); return rect.getAttribute('x') + ',' + rect.getAttribute('y'); };
+    const kept = Object.fromEntries(ids.map((id) => [id, at(id)]));
+    document.getElementById('reset-layout').click();
+    return Object.fromEntries(ids.map((id) => [id, at(id) !== kept[id]]));
+  }
+
+  it('follows a dragged node by the slice it sits in when another slice gains a node of the same name ahead of it', async () => {
+    await openPayments([['Take Payment', 'Notify'], ['Refunds', 'Notify']]);
+    dragBy(blockFor('command-2'), 40, 25);
+
+    await renderAgain([['Take Payment', 'Notify', 'Notify'], ['Refunds', 'Notify']]);
+
+    expect(movedByReset(['command-1', 'command-2', 'command-3']))
+      .toEqual({ 'command-1': false, 'command-2': false, 'command-3': true });
+  });
+
+  it('tells two nodes of one name in one slice apart by their order, moving only the one dragged', async () => {
+    await openPayments([['Take Payment', 'Notify', 'Notify']]);
+    dragBy(blockFor('command-2'), 40, 25);
+
+    await renderAgain([['Take Payment', 'Notify', 'Notify']]);
+
+    expect(movedByReset(['command-1', 'command-2'])).toEqual({ 'command-1': false, 'command-2': true });
+  });
+
+  it('lets a removed node take its offset with it, rather than pass it to the node now first in document order', async () => {
+    await openPayments([['Take Payment', 'TakePayment', 'IssueRefund']]);
+    expect(dragLabelled('TakePayment', 40, 25)).not.toEqual(unmoved);
+
+    await renderAgain([['Take Payment', 'IssueRefund']]);
+
+    expect(document.getElementById('reset-layout').disabled).toBe(true);
+    expect(offsetsFromLayout(['IssueRefund'])).toEqual({ IssueRefund: unmoved });
+  });
+
+  it('keeps a slice hidden from the visibility tree hidden when the edit adds a slice ahead of it, and the tree shows it hidden', async () => {
+    await openPayments([['Take Payment', 'TakePayment'], ['Refunds', 'IssueRefund']]);
+    document.getElementById('visibility-toggle').click();
+    hideFromVisibilityTree('slice-2');
+    expect(blockLabelled('IssueRefund')).toBeUndefined();
+
+    await renderAgain([['Disputes', 'RaiseDispute'], ['Take Payment', 'TakePayment'], ['Refunds', 'IssueRefund']]);
+
+    expect(blockLabelled('IssueRefund')).toBeUndefined();
+    expect(blockLabelled('RaiseDispute')).toBeDefined();
+    const shown = (id) => document.querySelector('#visibility-tree [data-node-id="' + id + '"] input[type="checkbox"]').checked;
+    expect({ disputes: shown('slice-1'), takePayment: shown('slice-2'), refunds: shown('slice-3') })
+      .toEqual({ disputes: true, takePayment: true, refunds: false });
+  });
+
+  it('lets a removed slice take its hidden state with it, rather than hide the slice now first in document order', async () => {
+    await openPayments([['Take Payment', 'TakePayment'], ['Refunds', 'IssueRefund']]);
+    document.getElementById('visibility-toggle').click();
+    hideFromVisibilityTree('slice-1');
+    expect(blockLabelled('TakePayment')).toBeUndefined();
+
+    await renderAgain([['Refunds', 'IssueRefund']]);
+
+    expect(blockLabelled('IssueRefund')).toBeDefined();
+  });
+
+  it('keeps Reset layout enabled while an offset it carried across exists', async () => {
+    await openPayments([['Take Payment', 'TakePayment']]);
+    dragLabelled('TakePayment', 40, 25);
+
+    await renderAgain([['Take Payment', 'IssueRefund', 'TakePayment']]);
+
+    expect(document.getElementById('reset-layout').disabled).toBe(false);
+  });
+
+  it('applies an offset kept through a render that did not parse once the source next parses', async () => {
+    await openPayments([['Take Payment', 'TakePayment']]);
+    const dragged = dragLabelled('TakePayment', 40, 25);
+
+    await renderAgain([['Take Payment']], false);
+    await renderAgain([['Take Payment', 'IssueRefund', 'TakePayment']]);
+
+    expect(offsetsFromLayout(['IssueRefund', 'TakePayment'])).toEqual({ IssueRefund: unmoved, TakePayment: dragged });
+  });
+
+  it('starts a model opened over an arrangement with no offsets and nothing hidden, even one naming the same nodes', async () => {
+    await openPayments([['Take Payment', 'TakePayment'], ['Refunds', 'IssueRefund']]);
+    dragLabelled('TakePayment', 40, 25);
+    document.getElementById('visibility-toggle').click();
+    hideFromVisibilityTree('slice-2');
+
+    parseQueue = [Promise.resolve({ parsed: true, diagnostics: [], diagram: paymentsDiagram([['Take Payment', 'TakePayment'], ['Refunds', 'IssueRefund']]) })];
+    deliverFile({ name: 'copy.emod', path: '/models/copy.emod', content: paymentsSource });
+    await flush();
+
+    expect(document.getElementById('reset-layout').disabled).toBe(true);
+    expect(blockLabelled('IssueRefund')).toBeDefined();
+  });
+});
+
 describe('the name a render asks the pipeline to report under', () => {
   const lastParse = () => platform.parseEmod.mock.calls[platform.parseEmod.mock.calls.length - 1];
 
