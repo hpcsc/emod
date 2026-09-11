@@ -1311,3 +1311,59 @@ in this repo; append only learnings that generalise beyond the task that surface
 - Observed: task 1 — us-008-open-a-model-by-double-clicking-it-in-the-file-manager
 - Learning: US-008's task 1 was planned LOW on the grounds that no declaration in this repo had ever reached LaunchServices, and it landed first try with a clean lint — as did every other task in the story. What retired the risk was not precedent but a reader: mdls -name kMDItemContentType, lsregister -u/-f and a scratchpad CGO probe over NSWorkspace give a before-and-after on the real database, so each plist key could be measured rather than guessed, and LSHandlerRank Alternate was confirmed to leave the .json default alone instead of being hoped about. This sharpens the existing rule that certainty tracks whether the mechanism is decided: for work whose behaviour lives in the OS, the mechanism counts as decided once you can name the command that reads the outcome back. Plan the read, then assess.
 - Apply when: assessing certainty for a task that declares something to the operating system — a file association, a URL scheme, a service registration — or deciding whether a repo having never done it before is itself a reason to pause
+
+## A host failure claims a render number without drawing, so a render that stands down on a moved number drops the user's edits
+- Type: constraint
+- Recorded: 2026-09-11
+- Observed: task 4 — us-009-edit-source-in-the-app-and-see-diagnostics-as-you-type
+- Learning: reportHostFailure (viewer.js) runs latestRender++ to stop an older render painting over its reason, and draws nothing. A timer-started revalidation that skipped whenever latestRender had moved, and a render whose answer was dropped as overtaken, both left typed text unchecked after a refused drop, an unreadable or empty file, or a failed open; three audit rounds found three such windows (during the pause, during the revalidation's parse, during a Render click's parse). What holds: skip only text the pipeline already answered for (checkedSource), and have any non-opening render that is overtaken revalidate once rendersSettled() resolves.
+- Apply when: adding a render the user did not start in internal/frontend (a timer, a watcher, a revalidation), or deciding what a render overtaken by a later claim should do
+
+## A timer the viewer arms outlives the vitest test that armed it
+- Type: pattern
+- Recorded: 2026-09-11
+- Observed: task 4 — us-009-edit-source-in-the-app-and-see-diagnostics-as-you-type
+- Learning: viewer.test.js drives every test through a fresh init() against one shared platform mock, so a debounced setTimeout left pending by a test that typed into the panel fired in the next test, calling parseEmod and consuming answers that test had queued; it showed as a failure only in the full-file run. The suite now wraps globalThis.setTimeout to record handles and clears them in afterEach; fake timers are no answer because flush() and the platform's dynamic import lean on the real event loop.
+- Apply when: adding any setTimeout-driven behaviour to internal/frontend/static, or a viewer test that passes alone and fails in the full file
+
+## An e2e-viewer test must open the data panel before filling the source, and type emod comments with #
+- Type: convention
+- Recorded: 2026-09-11
+- Observed: us-009-edit-source-in-the-app-and-see-diagnostics-as-you-type
+- Learning: Since US-009 the collapsed data panel hides its body (display:none) rather than sliding off, so Playwright's fill on #source-input times out with 'element is not visible' after any render has collapsed it; click #data-panel-header first. And emod comments start with #: a test that types a // line puts a lexer error in the source and the stale mark never clears.
+- Apply when: writing an e2e-viewer test that edits the source panel after a render, or typing text into it to exercise revalidation
+
+## clerk land read integrate as off despite --integrate in the request, then refused a second land
+- Type: constraint
+- Recorded: 2026-09-11
+- Observed: us-009-edit-source-in-the-app-and-see-diagnostics-as-you-type
+- Learning: facts.flags reported integrate true with source request, yet bare clerk land answered integrate false, integrate_source default, archived the breakdown and moved the run to learn; clerk land --integrate then refused because the run was past land. The fast-forward had to be done by hand with the to_land command it printed (git merge --ff-only from the default branch).
+- Apply when: landing an implement run whose request carries --integrate
+
+## clerk fixup replay squashes fixup! commits but leaves amend! rewords in place
+- Type: constraint
+- Recorded: 2026-09-11
+- Observed: us-009-edit-source-in-the-app-and-see-diagnostics-as-you-type
+- Learning: A git commit --allow-empty --fixup=reword:<sha> made to correct a task commit's message survived clerk fixup replay, which reported ok. GIT_SEQUENCE_EDITOR=true git rebase -i --autosquash <base> folds it, and the tree hash is unchanged, so the suite receipt still stands. Write the reword message with GIT_EDITOR='/bin/cp -f <file>' and a first line 'amend! <subject>'.
+- Apply when: rewording a task commit's message on a run branch after audit fixups made it inaccurate
+
+## Claude Code's low-memory guard stops a background audit run; a nohup-detached runner survives it
+- Type: constraint
+- Recorded: 2026-09-11
+- Observed: us-009-edit-source-in-the-app-and-see-diagnostics-as-you-type
+- Learning: Round 1 launched with run_in_background was stopped mid-review with 'the system is running low on memory' (a Claude Code decision, not the OS); a bare clerk audit run resumed only the unfinished agents. Detached with nohup … & disown, later rounds survived the same pressure while the lightweight until-loop waiting on pgrep 'clerk-audit ru[n]' was itself stopped once and had to be re-armed. When the account's session limit hits mid-round, refuters fail with 'no usable reply', a resumed run goes straight to report, and those findings arrive marked NOT EXECUTED.
+- Apply when: launching or waiting on clerk audit run on a machine running other Claude sessions, or reading a round whose refuters failed on the session limit
+
+## A render nobody asked for is low certainty for the audit, not the build
+- Type: convention
+- Recorded: 2026-09-11
+- Observed: task 4 — us-009-edit-source-in-the-app-and-see-diagnostics-as-you-type
+- Learning: US-009's timer-driven revalidation was assessed low certainty and went green first try with a clean lint, then each of three audit rounds upheld a medium runtime defect in its ordering against opens, saves and host failures. The assessment named the right risk and the wrong place for it: plan such a task for two or three audit rounds and enumerate every claim a render can lose to (open, Render click, host failure, save) before building, rather than pausing its build.
+- Apply when: assessing certainty, gears or the audit budget for a task that adds a render not started by a user gesture in internal/frontend
+
+## A desktop story's change to internal/frontend ships to the web viewer too, and the user reads 'keeps working exactly as today' as nothing stops working
+- Type: convention
+- Recorded: 2026-09-11
+- Observed: us-009-edit-source-in-the-app-and-see-diagnostics-as-you-type
+- Learning: US-009 asked for the desktop app's source panel to revalidate as you type; the frontend is one copy, so the web viewer and emod diagram --serve changed with it (live revalidation, Render keeping a stale diagram, a restacked bottom dock), against the story goal that the web viewer keep 'working exactly as they do today'. At match-request the user chose all three distributions, citing the non-goal that canvas features stay available everywhere. Decide the distribution explicitly in the breakdown and put the goal tension to the user there, not at landing.
+- Apply when: decomposing a user-stories/emod-desktop.md story whose behaviour lands in internal/frontend/static
