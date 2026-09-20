@@ -880,7 +880,7 @@ Each stage preserves source position (file, line, column) for error reporting.
 
 ## 13. Diagram Palette
 
-The renderers that draw the whole model use one palette for element types. The SVG, draw.io, and web viewer renderers all draw the same element type with the same fill and stroke, and the DSL reference itself is the source of truth for those values. `emod diagram --format event-flow` draws a different picture and paints it in a palette of its own, listed below.
+The renderers that draw the whole model use one palette for element types. The SVG, draw.io, and web viewer renderers all draw the same element type with the same fill and stroke, and the DSL reference itself is the source of truth for those values. `emod diagram --format event-flow` and `--format event-flow-mermaid` draw a different picture and paint it in a palette of their own, listed below.
 
 | Element     | Fill      | Stroke    | Notes                                   |
 |-------------|-----------|-----------|-----------------------------------------|
@@ -897,7 +897,8 @@ The renderers that draw the whole model use one palette for element types. The S
 and what starts a chain from outside them. It states both themes, because it is
 read on a page of either, and writes every colour out in full: a renderer
 outside a browser resolves no custom property and paints what it cannot resolve
-black.
+black. `--format event-flow-mermaid` paints the light column of the same table
+in its `classDef` lines, Mermaid's own theme carrying the dark one.
 
 | Element               | Light fill | Light stroke | Dark fill | Dark stroke |
 |-----------------------|------------|--------------|-----------|-------------|

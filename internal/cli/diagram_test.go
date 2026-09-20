@@ -250,6 +250,7 @@ func TestDiagram(t *testing.T) {
 		require.Contains(t, err.Error(), "svg")
 		require.Contains(t, err.Error(), "ascii")
 		require.Contains(t, err.Error(), "event-flow")
+		require.Contains(t, err.Error(), "event-flow-mermaid")
 	})
 
 	t.Run("svg: valid file uses default .svg output path", func(t *testing.T) {
@@ -367,6 +368,21 @@ func TestDiagram(t *testing.T) {
 		require.NotContains(t, flow, "RemindMember", "the command an automation issues is collapsed into the event it emits")
 	})
 
+	t.Run("event-flow-mermaid: prints a flowchart to stdout, naming no command", func(t *testing.T) {
+		path := writeTemp(t, "every-construct.emod", test.EveryConstructLibraryLending)
+
+		var err error
+		printed := captureStdout(t, func() {
+			err = cli.RunDiagram(path, "", "event-flow-mermaid", diagram.StyleAuto, false)
+		})
+		requireDiagramWasWritten(t, err)
+
+		require.Contains(t, printed, "flowchart TB")
+		require.Contains(t, printed, "CopyBorrowed")
+		require.Contains(t, printed, "RemindOnDueDate")
+		require.NotContains(t, printed, "RemindMember", "the command an automation issues is collapsed into the event it emits")
+	})
+
 	t.Run("event-flow: validation errors produce no file and exit code 2", func(t *testing.T) {
 		path := writeTemp(t, "invalid.emod", invalidEmod)
 
@@ -407,7 +423,7 @@ func TestDiagram(t *testing.T) {
 			require.NotEqual(t, stated, unstated,
 				"the twin has to lose the specs, or the comparison below says nothing")
 
-			for _, format := range []string{"drawio", "svg", "mermaid", "ascii", "event-flow"} {
+			for _, format := range []string{"drawio", "svg", "mermaid", "ascii", "event-flow", "event-flow-mermaid"} {
 				t.Run(format, func(t *testing.T) {
 					require.Equal(t,
 						diagramWritten(t, unstated, format),
@@ -417,7 +433,7 @@ func TestDiagram(t *testing.T) {
 			}
 		})
 
-		for _, format := range []string{"mermaid", "ascii", "event-flow"} {
+		for _, format := range []string{"mermaid", "ascii", "event-flow", "event-flow-mermaid"} {
 			t.Run("refuses "+format+", which draws no card, rather than writing one without them", func(t *testing.T) {
 				path := writeTemp(t, "specs.emod", specStatingEmod(t))
 

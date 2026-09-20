@@ -172,7 +172,8 @@ draws one question instead: which events the system appends, and what reacts to
 them.
 
 ```bash
-emod diagram reservation.emod --format event-flow  # writes reservation.event-flow.svg
+emod diagram reservation.emod --format event-flow          # writes reservation.event-flow.svg
+emod diagram reservation.emod --format event-flow-mermaid  # the same flow as Mermaid, on stdout
 ```
 
 The commands are collapsed away — an automation is joined straight to the events
@@ -185,10 +186,17 @@ is drawn dashed, so a reader is not left to assume something reacts to it. An
 event only a view reads carries no mark and no arrow onward, because the picture
 draws no views.
 
-The file carries its own colours and a dark-mode counterpart, so it reads on a
+The SVG carries its own colours and a dark-mode counterpart, so it reads on a
 page of either theme, and it is written beside the lane diagram rather than over
 it: `--format svg` writes `reservation.svg`, this writes
 `reservation.event-flow.svg`.
+
+`--format event-flow-mermaid` states the same graph as Mermaid, for a reader who
+wants to lay it out again or to keep it in a document beside the source. It asks
+for the ELK layout, which is what keeps a flow of this shape from tangling, and
+its gear is a plain glyph rather than an icon, so GitHub renders it too. Where
+the SVG writes a caption under a shape, Mermaid writes it as a second line
+inside the shape, Mermaid placing every node itself.
 
 ### Export
 
