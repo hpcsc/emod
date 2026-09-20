@@ -28,6 +28,24 @@ A release carries the tag it was built from. A build from source has no tag, so
 `emod version` prints the commit instead, and marks it `-dirty` when the working
 tree held changes.
 
+### Update
+
+`emod update` replaces the running binary with the latest release on GitHub. It
+checks the download against the release's `checksums.txt` before it writes, and
+it renames the new binary over the old one, so the binary on disk is never half
+written.
+
+```bash
+emod update               # install the latest release
+emod update --check       # say what an update installs, and install nothing
+emod update --prerelease  # install the latest build of main
+emod update --force       # replace a build from a commit
+```
+
+`emod update` stops on a build from a commit and names `--force` instead of
+replacing it. `GITHUB_TOKEN` or `GH_TOKEN` in the environment authorises the
+requests to GitHub.
+
 ### Write a model
 
 Create `reservation.emod`:

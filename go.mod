@@ -5,6 +5,7 @@ go 1.25.5
 require (
 	github.com/anthropics/anthropic-sdk-go v1.51.0
 	github.com/google/go-cmp v0.7.0
+	github.com/mattn/go-isatty v0.0.20
 	github.com/stretchr/testify v1.11.1
 	github.com/urfave/cli/v2 v2.27.7
 	github.com/wailsapp/wails/v3 v3.0.0-beta.9
@@ -115,7 +116,6 @@ require (
 	github.com/lmittmann/tint v1.1.3 // indirect
 	github.com/lucasb-eyer/go-colorful v1.3.0 // indirect
 	github.com/mattn/go-colorable v0.1.14 // indirect
-	github.com/mattn/go-isatty v0.0.20 // indirect
 	github.com/mattn/go-localereader v0.0.1 // indirect
 	github.com/mattn/go-runewidth v0.0.19 // indirect
 	github.com/mattn/go-zglob v0.0.6 // indirect

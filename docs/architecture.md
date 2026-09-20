@@ -99,8 +99,10 @@ directive that reaches them, depending on nothing above), `internal/viewer`
 (the pipeline entry points the desktop shell binds to its frontend, importing
 no GUI framework so it stays testable), `internal/cue` (an embedded CUE schema
 the `emod schema` command prints and the export tests vet against),
-`internal/version` (the tag or commit this build came from) and `internal/test`
-(shared model fixtures used only by tests).
+`internal/version` (the tag or commit this build came from), `internal/release`
+(the GitHub releases `emod update` reads, checks and installs over the running
+binary), `internal/progress` (the one-line report of a download) and
+`internal/test` (shared model fixtures used only by tests).
 
 ## The language pipeline
 

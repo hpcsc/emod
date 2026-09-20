@@ -6,6 +6,7 @@ import (
 	"os"
 
 	"github.com/hpcsc/emod/internal/diagram"
+	"github.com/hpcsc/emod/internal/release"
 	"github.com/hpcsc/emod/internal/version"
 	urfave "github.com/urfave/cli/v2"
 )
@@ -241,6 +242,31 @@ func NewApp() *urfave.App {
 				Usage: "Print the tag emod was built from, or its commit when it has no tag",
 				Action: func(c *urfave.Context) error {
 					return reportExitError(RunVersion())
+				},
+			},
+			{
+				Name:  "update",
+				Usage: "Replace emod with the latest release, or with the latest prerelease",
+				Flags: []urfave.Flag{
+					&urfave.BoolFlag{
+						Name:  "prerelease",
+						Usage: "Install the latest prerelease, a build of main, in place of the latest release",
+					},
+					&urfave.BoolFlag{
+						Name:  "check",
+						Usage: "Only report whether this build is the latest",
+					},
+					&urfave.BoolFlag{
+						Name:  "force",
+						Usage: "Replace a build from a commit, which is not a release or a prerelease",
+					},
+				},
+				Action: func(c *urfave.Context) error {
+					channel := release.Releases
+					if c.Bool("prerelease") {
+						channel = release.Prereleases
+					}
+					return reportExitError(RunUpdate(c.Context, channel, c.Bool("check"), c.Bool("force")))
 				},
 			},
 			{
