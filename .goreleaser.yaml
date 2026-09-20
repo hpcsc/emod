@@ -3,6 +3,10 @@ project_name: emod
 before:
   hooks:
     - go mod tidy
+    # cmd/emod embeds the viewer, and the viewer's WebAssembly half is built
+    # rather than tracked, so a fresh checkout holds nothing to embed until
+    # this runs.
+    - task build:wasm
 builds:
   - env:
       - CGO_ENABLED=0

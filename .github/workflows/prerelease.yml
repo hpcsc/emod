@@ -33,6 +33,13 @@ jobs:
         with:
           go-version-file: go.mod
 
+      # goreleaser builds the viewer before it builds the binary that embeds it
+      - name: Install Task
+        uses: arduino/setup-task@v2
+        with:
+          version: 3.x
+          repo-token: ${{ secrets.GITHUB_TOKEN }}
+
       # The tag is the next patch after the latest release, the run number and
       # the commit, for example v0.2.1-42.g4829f92. The g keeps a sha of digits
       # from starting with 0, which semver does not allow. A tag that this job
