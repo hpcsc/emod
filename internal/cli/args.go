@@ -1,10 +1,11 @@
 package cli
 
 import (
+	"context"
 	"slices"
 	"strings"
 
-	urfave "github.com/urfave/cli/v2"
+	urfave "github.com/urfave/cli/v3"
 )
 
 // Run executes the emod CLI over args, which are the process arguments with the
@@ -15,8 +16,8 @@ func Run(args []string) error {
 
 // RunApp is Run over a caller-supplied app, so a test can substitute an exit
 // handler and still go through the argument reordering the process does.
-func RunApp(app *urfave.App, args []string) error {
-	return app.Run(hoistFlags(app, args))
+func RunApp(app *urfave.Command, args []string) error {
+	return app.Run(context.Background(), hoistFlags(app, args))
 }
 
 // hoistFlags moves a command's flags ahead of its file argument. Go's flag
@@ -24,7 +25,7 @@ func RunApp(app *urfave.App, args []string) error {
 // offers no way to turn that off, so `emod export model.emod --format cue`
 // reaches the action with format still at its default and writes JSON — the
 // wrong format, quietly and with a zero exit code.
-func hoistFlags(app *urfave.App, args []string) []string {
+func hoistFlags(app *urfave.Command, args []string) []string {
 	if len(args) < 2 {
 		return args
 	}
@@ -41,7 +42,7 @@ func hoistFlags(app *urfave.App, args []string) []string {
 
 		names = append(names, rest[0])
 		rest = rest[1:]
-		flags, commands = command.Flags, command.Subcommands
+		flags, commands = command.Flags, command.Commands
 	}
 
 	hoisted, positional := partitionArgs(flags, rest)

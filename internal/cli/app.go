@@ -1,6 +1,7 @@
 package cli
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"os"
@@ -8,7 +9,7 @@ import (
 	"github.com/hpcsc/emod/internal/diagram"
 	"github.com/hpcsc/emod/internal/release"
 	"github.com/hpcsc/emod/internal/version"
-	urfave "github.com/urfave/cli/v2"
+	urfave "github.com/urfave/cli/v3"
 )
 
 func reportExitError(err error) error {
@@ -28,8 +29,8 @@ func reportExitError(err error) error {
 	return urfave.Exit("", 1)
 }
 
-func NewApp() *urfave.App {
-	return &urfave.App{
+func NewApp() *urfave.Command {
+	return &urfave.Command{
 		Name:    "emod",
 		Usage:   "Event modeling DSL tool",
 		Version: version.Current(),
@@ -45,9 +46,9 @@ func NewApp() *urfave.App {
 						Value: "text",
 					},
 				},
-				Action: func(c *urfave.Context) error {
-					path := c.Args().First()
-					format := c.String("format")
+				Action: func(ctx context.Context, cmd *urfave.Command) error {
+					path := cmd.Args().First()
+					format := cmd.String("format")
 					return reportExitError(RunValidate(path, format))
 				},
 			},
@@ -61,9 +62,9 @@ func NewApp() *urfave.App {
 						Usage: "Check if the file is already formatted (exit 1 if not)",
 					},
 				},
-				Action: func(c *urfave.Context) error {
-					path := c.Args().First()
-					check := c.Bool("check")
+				Action: func(ctx context.Context, cmd *urfave.Command) error {
+					path := cmd.Args().First()
+					check := cmd.Bool("check")
 					if err := RunFmt(path, check); err != nil {
 						fmt.Fprintln(os.Stderr, err)
 						return urfave.Exit("", 1)
@@ -86,13 +87,13 @@ func NewApp() *urfave.App {
 						Usage: "Print a description of a lint rule and exit",
 					},
 				},
-				Action: func(c *urfave.Context) error {
-					if explain := c.String("explain"); explain != "" {
+				Action: func(ctx context.Context, cmd *urfave.Command) error {
+					if explain := cmd.String("explain"); explain != "" {
 						return reportExitError(RunLintExplain(explain))
 					}
 
-					path := c.Args().First()
-					format := c.String("format")
+					path := cmd.Args().First()
+					format := cmd.String("format")
 					return reportExitError(RunLint(path, format))
 				},
 			},
@@ -107,9 +108,9 @@ func NewApp() *urfave.App {
 						Value: "json",
 					},
 				},
-				Action: func(c *urfave.Context) error {
-					path := c.Args().First()
-					format := c.String("format")
+				Action: func(ctx context.Context, cmd *urfave.Command) error {
+					path := cmd.Args().First()
+					format := cmd.String("format")
 					return reportExitError(RunExport(path, format))
 				},
 			},
@@ -141,18 +142,18 @@ func NewApp() *urfave.App {
 						Usage: "Draw each slice's specs as a Given-When-Then card (drawio and svg only)",
 					},
 				},
-				Action: func(c *urfave.Context) error {
-					path := c.Args().First()
-					specs := c.Bool("specs")
-					if c.Bool("serve") {
+				Action: func(ctx context.Context, cmd *urfave.Command) error {
+					path := cmd.Args().First()
+					specs := cmd.Bool("specs")
+					if cmd.Bool("serve") {
 						if specs {
 							return reportExitError(unsupportedSpecsSurface("--serve"))
 						}
-						return RunDiagramServe(c.Context, path, true)
+						return RunDiagramServe(ctx, path, true)
 					}
-					format := c.String("format")
-					outputPath := c.String("o")
-					style, err := diagram.ParseStyle(c.String("style"))
+					format := cmd.String("format")
+					outputPath := cmd.String("o")
+					style, err := diagram.ParseStyle(cmd.String("style"))
 					if err != nil {
 						return urfave.Exit(err.Error(), 1)
 					}
@@ -162,13 +163,13 @@ func NewApp() *urfave.App {
 			{
 				Name:  "slices",
 				Usage: "Inspect the slices in a model",
-				Action: func(c *urfave.Context) error {
-					if arg := c.Args().First(); arg != "" {
+				Action: func(ctx context.Context, cmd *urfave.Command) error {
+					if arg := cmd.Args().First(); arg != "" {
 						return reportExitError(fmt.Errorf("unknown slices subcommand %q; to list a model's slices run: emod slices list %s", arg, arg))
 					}
-					return urfave.ShowSubcommandHelp(c)
+					return urfave.ShowSubcommandHelp(cmd)
 				},
-				Subcommands: []*urfave.Command{
+				Commands: []*urfave.Command{
 					{
 						Name:      "list",
 						Usage:     "List all slices in a model with their pattern types",
@@ -180,9 +181,9 @@ func NewApp() *urfave.App {
 								Value: "text",
 							},
 						},
-						Action: func(c *urfave.Context) error {
-							path := c.Args().First()
-							format := c.String("format")
+						Action: func(ctx context.Context, cmd *urfave.Command) error {
+							path := cmd.Args().First()
+							format := cmd.String("format")
 							return reportExitError(RunSlicesList(path, format))
 						},
 					},
@@ -196,9 +197,9 @@ func NewApp() *urfave.App {
 								Usage: "Report whether the slices are already arranged (exit 1 if not)",
 							},
 						},
-						Action: func(c *urfave.Context) error {
-							path := c.Args().First()
-							check := c.Bool("check")
+						Action: func(ctx context.Context, cmd *urfave.Command) error {
+							path := cmd.Args().First()
+							check := cmd.Bool("check")
 							return reportExitError(RunSlicesArrange(path, check))
 						},
 					},
@@ -216,9 +217,9 @@ func NewApp() *urfave.App {
 						Value:   "markdown",
 					},
 				},
-				Action: func(c *urfave.Context) error {
-					path := c.Args().First()
-					format := c.String("format")
+				Action: func(ctx context.Context, cmd *urfave.Command) error {
+					path := cmd.Args().First()
+					format := cmd.String("format")
 					return reportExitError(RunGlossary(path, format))
 				},
 			},
@@ -232,15 +233,15 @@ func NewApp() *urfave.App {
 						Value: "cue",
 					},
 				},
-				Action: func(c *urfave.Context) error {
-					format := c.String("format")
+				Action: func(ctx context.Context, cmd *urfave.Command) error {
+					format := cmd.String("format")
 					return reportExitError(RunSchema(format))
 				},
 			},
 			{
 				Name:  "version",
 				Usage: "Print the tag emod was built from, or its commit when it has no tag",
-				Action: func(c *urfave.Context) error {
+				Action: func(ctx context.Context, cmd *urfave.Command) error {
 					return reportExitError(RunVersion())
 				},
 			},
@@ -261,18 +262,18 @@ func NewApp() *urfave.App {
 						Usage: "Replace a build from a commit, which is not a release or a prerelease",
 					},
 				},
-				Action: func(c *urfave.Context) error {
+				Action: func(ctx context.Context, cmd *urfave.Command) error {
 					channel := release.Releases
-					if c.Bool("prerelease") {
+					if cmd.Bool("prerelease") {
 						channel = release.Prereleases
 					}
-					return reportExitError(RunUpdate(c.Context, channel, c.Bool("check"), c.Bool("force")))
+					return reportExitError(RunUpdate(ctx, channel, cmd.Bool("check"), cmd.Bool("force")))
 				},
 			},
 			{
 				Name:  "lsp",
 				Usage: "Start the LSP server (stdin/stdout transport)",
-				Action: func(c *urfave.Context) error {
+				Action: func(ctx context.Context, cmd *urfave.Command) error {
 					if err := RunLSP(); err != nil {
 						fmt.Fprintln(os.Stderr, err)
 						return urfave.Exit("", 1)

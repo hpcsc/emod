@@ -3,13 +3,14 @@
 package cli_test
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
 	"testing"
 
 	"github.com/hpcsc/emod/internal/cli"
 	"github.com/stretchr/testify/require"
-	urfave "github.com/urfave/cli/v2"
+	urfave "github.com/urfave/cli/v3"
 )
 
 // The app terminates the process on an exit-coded error, which would take the
@@ -17,7 +18,7 @@ import (
 func runCommandLine(t *testing.T, args ...string) error {
 	t.Helper()
 	app := cli.NewApp()
-	app.ExitErrHandler = func(*urfave.Context, error) {}
+	app.ExitErrHandler = func(context.Context, *urfave.Command, error) {}
 	return cli.RunApp(app, args)
 }
 

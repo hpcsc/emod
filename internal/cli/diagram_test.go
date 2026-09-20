@@ -22,7 +22,7 @@ import (
 	"github.com/hpcsc/emod/internal/formatter"
 	"github.com/hpcsc/emod/internal/test"
 	"github.com/stretchr/testify/require"
-	urfave "github.com/urfave/cli/v2"
+	urfave "github.com/urfave/cli/v3"
 )
 
 // warningEmod is a model the linter warns about and the validator accepts, so a

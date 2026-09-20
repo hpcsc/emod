@@ -3,12 +3,13 @@
 package cli_test
 
 import (
+	"context"
 	"os"
 	"testing"
 
 	"github.com/hpcsc/emod/internal/cli"
 	"github.com/stretchr/testify/require"
-	urfave "github.com/urfave/cli/v2"
+	urfave "github.com/urfave/cli/v3"
 )
 
 func TestArgs(t *testing.T) {
@@ -91,7 +92,7 @@ func TestArgs(t *testing.T) {
 
 		t.Run("treats a word after -- as a file even when it looks like a flag", func(t *testing.T) {
 			app := cli.NewApp()
-			app.ExitErrHandler = func(*urfave.Context, error) {}
+			app.ExitErrHandler = func(context.Context, *urfave.Command, error) {}
 
 			err := cli.RunApp(app, []string{"emod", "validate", "--", "--format"})
 

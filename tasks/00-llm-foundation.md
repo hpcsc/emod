@@ -23,7 +23,7 @@ command. Features `01`–`10` themselves are out of scope.
 ## Codebase Context
 
 - **Module:** `github.com/hpcsc/emod`, Go 1.25.5. Dependencies are minimal
-  (`urfave/cli/v2`, `go-cmp`, `testify`); there is no provider SDK in `go.mod`/`go.sum`
+  (`urfave/cli/v3`, `go-cmp`, `testify`); there is no provider SDK in `go.mod`/`go.sum`
   today, and US-003 introduces the only new heavy dependency (the official Anthropic SDK).
 - **Deterministic pipeline (US-005):** assembled inline in two CLI commands.
   `internal/cli/validate.go` (`RunValidate`, lines 40–50) chains
@@ -39,7 +39,7 @@ command. Features `01`–`10` themselves are out of scope.
   policy lives in `internal/cli/lint.go` (`formatJSON`/`formatText`): non-empty diagnostics
   exit 1, presence of an `Error` severity exits 2.
 - **CLI:** `internal/cli/app.go` (`NewApp`) registers every command on a
-  `urfave/cli/v2` `App`. Each command's `Action` calls a `RunX` function in its own file
+  `urfave/cli/v3` root `Command`. Each command's `Action` calls a `RunX` function in its own file
   and unwraps `*LintError` (defined in `lint.go`) to map `Message`/`ExitCode` onto
   `urfave.Exit`. `cmd/emod/main.go` is the only entry point that calls `NewApp().Run`.
 - **WASM (US-009):** real target at `cmd/emod-wasm/main.go`; the build-tag-free,
