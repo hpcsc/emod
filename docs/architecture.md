@@ -98,8 +98,9 @@ directive that reaches them, depending on nothing above), `internal/viewer`
 (the localhost HTTP delivery the CLI uses to serve them), `internal/desktop`
 (the pipeline entry points the desktop shell binds to its frontend, importing
 no GUI framework so it stays testable), `internal/cue` (an embedded CUE schema
-the `emod schema` command prints and the export tests vet against) and
-`internal/test` (shared model fixtures used only by tests).
+the `emod schema` command prints and the export tests vet against),
+`internal/version` (the tag or commit this build came from) and `internal/test`
+(shared model fixtures used only by tests).
 
 ## The language pipeline
 

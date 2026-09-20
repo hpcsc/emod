@@ -3,6 +3,9 @@ version: '3'
 includes:
   release: Taskfile.release.yml
 
+vars:
+  E2E_TAG: v0.1.0
+
 tasks:
   build:
     desc: Build the emod binary
@@ -180,7 +183,7 @@ tasks:
   test:e2e:
     desc: Run e2e tests in Docker
     cmds:
-      - docker build -f ./e2e/Dockerfile --build-arg EXECUTABLE=${EXECUTABLE} -t emod-e2e .
-      - docker container run --rm -e EXECUTABLE=${EXECUTABLE} emod-e2e
+      - docker build -f ./e2e/Dockerfile --build-arg EXECUTABLE=${EXECUTABLE} --build-arg BUILD_TAG={{.E2E_TAG}} -t emod-e2e .
+      - docker container run --rm -e EXECUTABLE=${EXECUTABLE} -e BUILD_TAG={{.E2E_TAG}} emod-e2e
     env:
       EXECUTABLE: ./dist/emod

@@ -6,6 +6,7 @@ import (
 	"os"
 
 	"github.com/hpcsc/emod/internal/diagram"
+	"github.com/hpcsc/emod/internal/version"
 	urfave "github.com/urfave/cli/v2"
 )
 
@@ -28,8 +29,9 @@ func reportExitError(err error) error {
 
 func NewApp() *urfave.App {
 	return &urfave.App{
-		Name:  "emod",
-		Usage: "Event modeling DSL tool",
+		Name:    "emod",
+		Usage:   "Event modeling DSL tool",
+		Version: version.Current(),
 		Commands: []*urfave.Command{
 			{
 				Name:      "validate",
@@ -232,6 +234,13 @@ func NewApp() *urfave.App {
 				Action: func(c *urfave.Context) error {
 					format := c.String("format")
 					return reportExitError(RunSchema(format))
+				},
+			},
+			{
+				Name:  "version",
+				Usage: "Print the tag emod was built from, or its commit when it has no tag",
+				Action: func(c *urfave.Context) error {
+					return reportExitError(RunVersion())
 				},
 			},
 			{

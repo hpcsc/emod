@@ -10,6 +10,8 @@ builds:
       - linux
       - darwin
     main: ./cmd/emod
+    ldflags:
+      - -s -w -X github.com/hpcsc/emod/internal/version.releaseTag={{ .Tag }}
 archives:
   - formats:
       - tar.gz

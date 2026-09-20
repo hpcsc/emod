@@ -3,7 +3,8 @@ WORKDIR /app
 COPY go.mod go.sum ./
 RUN go mod download
 COPY . .
-RUN CGO_ENABLED=0 go build -o ./dist/emod ./cmd/emod
+ARG BUILD_TAG=v0.1.0
+RUN CGO_ENABLED=0 go build -ldflags "-X github.com/hpcsc/emod/internal/version.releaseTag=${BUILD_TAG}" -o ./dist/emod ./cmd/emod
 
 FROM node:24-slim
 WORKDIR /app

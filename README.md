@@ -18,6 +18,16 @@ cd emod
 go build -o ./bin/emod ./cmd/emod
 ```
 
+### Version
+
+```bash
+emod version   # print the tag this build came from
+```
+
+A release carries the tag it was built from. A build from source has no tag, so
+`emod version` prints the commit instead, and marks it `-dirty` when the working
+tree held changes.
+
 ### Write a model
 
 Create `reservation.emod`:
