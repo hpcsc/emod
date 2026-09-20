@@ -8,6 +8,7 @@ import (
 	"os/signal"
 	"path/filepath"
 	"runtime"
+	"slices"
 	"strings"
 	"syscall"
 
@@ -18,10 +19,23 @@ import (
 	"github.com/hpcsc/emod/internal/viewer"
 )
 
+// diagramFormats are the formats the command draws, and specCardFormats those
+// of them that draw a spec card.
+var (
+	diagramFormats  = []string{"drawio", "mermaid", "svg", "ascii", "event-flow"}
+	specCardFormats = []string{"drawio", "svg"}
+)
+
+// stdoutFormats are the formats that print to stdout when no output path is
+// given, the rest being pictures written to a file.
+var stdoutFormats = []string{"mermaid", "ascii"}
+
 // RunDiagram reads the file at path, lexes and parses it, validates and lints,
 // generates a diagram in the requested format, and writes it.
-// Supported formats: "drawio" (default), "mermaid", "svg", and "ascii".
-// For drawio and svg: output is written to a file; if outputPath is empty it defaults to .drawio or .svg.
+// Supported formats: "drawio" (default), "mermaid", "svg", "ascii" and
+// "event-flow".
+// For drawio, svg and event-flow: output is written to a file; if outputPath is
+// empty it defaults to .drawio, .svg or .event-flow.svg.
 // For mermaid and ascii: output goes to stdout unless outputPath is specified.
 // Errors produce diagnostics on stderr and a non-zero exit code.
 // Lint warnings still produce the diagram but with exit code 1.
@@ -58,15 +72,16 @@ func RunDiagram(path, outputPath, format string, style diagram.Style, specs bool
 	}
 
 	// Validate format
-	if format != "drawio" && format != "mermaid" && format != "svg" && format != "ascii" {
+	if !slices.Contains(diagramFormats, format) {
 		return &LintError{
-			Message:  fmt.Sprintf("unsupported format %q; supported formats: drawio, mermaid, svg, ascii", format),
+			Message: fmt.Sprintf("unsupported format %q; supported formats: %s",
+				format, strings.Join(diagramFormats, ", ")),
 			ExitCode: 1,
 			Cause:    ErrUnsupportedFormat,
 		}
 	}
 
-	if specs && (format == "mermaid" || format == "ascii") {
+	if specs && !slices.Contains(specCardFormats, format) {
 		return unsupportedSpecsSurface(fmt.Sprintf("format %q", format))
 	}
 
@@ -84,6 +99,8 @@ func RunDiagram(path, outputPath, format string, style diagram.Style, specs bool
 		output, err = diagram.ExportASCII(model, style)
 	case "svg":
 		output, err = diagram.ExportSVG(model, style, options...)
+	case "event-flow":
+		output, err = diagram.ExportEventFlow(model, style)
 	default:
 		output, err = diagram.ExportDrawio(model, style, options...)
 	}
@@ -94,7 +111,7 @@ func RunDiagram(path, outputPath, format string, style diagram.Style, specs bool
 		}
 	}
 
-	if (format == "mermaid" || format == "ascii") && outputPath == "" {
+	if slices.Contains(stdoutFormats, format) && outputPath == "" {
 		fmt.Println(string(output))
 		return lintExit(hasWarnings)
 	}
@@ -102,9 +119,13 @@ func RunDiagram(path, outputPath, format string, style diagram.Style, specs bool
 	if outputPath == "" {
 		switch format {
 		case "svg":
-			outputPath = defaultSVGPath(path)
+			outputPath = diagramPath(path, ".svg")
+		case "event-flow":
+			// Not .svg: a picture of the same model in the same extension would
+			// overwrite whichever of the two was written first.
+			outputPath = diagramPath(path, ".event-flow.svg")
 		default:
-			outputPath = defaultDrawioPath(path)
+			outputPath = diagramPath(path, ".drawio")
 		}
 	}
 
@@ -147,22 +168,13 @@ func lintExit(hasWarnings bool) error {
 	return nil
 }
 
-// defaultDrawioPath replaces the .emod extension with .drawio.
-// If the file has no .emod extension, .drawio is appended.
-func defaultDrawioPath(path string) string {
+// diagramPath replaces the .emod extension with the format's own.
+// If the file has no .emod extension, the extension is appended.
+func diagramPath(path, extension string) string {
 	if strings.HasSuffix(path, ".emod") {
-		return path[:len(path)-len(".emod")] + ".drawio"
+		return path[:len(path)-len(".emod")] + extension
 	}
-	return path + ".drawio"
-}
-
-// defaultSVGPath replaces the .emod extension with .svg.
-// If the file has no .emod extension, .svg is appended.
-func defaultSVGPath(path string) string {
-	if strings.HasSuffix(path, ".emod") {
-		return path[:len(path)-len(".emod")] + ".svg"
-	}
-	return path + ".svg"
+	return path + extension
 }
 
 // RunDiagramServe parses the file at path (if provided), generates diagram JSON,

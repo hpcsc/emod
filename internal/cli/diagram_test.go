@@ -249,6 +249,7 @@ func TestDiagram(t *testing.T) {
 		require.Contains(t, err.Error(), "mermaid")
 		require.Contains(t, err.Error(), "svg")
 		require.Contains(t, err.Error(), "ascii")
+		require.Contains(t, err.Error(), "event-flow")
 	})
 
 	t.Run("svg: valid file uses default .svg output path", func(t *testing.T) {
@@ -340,6 +341,46 @@ func TestDiagram(t *testing.T) {
 		_, statErr := os.Stat(customOutput)
 		require.NoError(t, statErr, "expected .svg file to be created in nested directory")
 	})
+	t.Run("event-flow: writes beside the lane diagram rather than over it", func(t *testing.T) {
+		path := writeTemp(t, "valid.emod", validEmod)
+		stem := path[:len(path)-len(".emod")]
+
+		require.NoError(t, cli.RunDiagram(path, "", "svg", diagram.StyleAuto, false))
+		require.NoError(t, cli.RunDiagram(path, "", "event-flow", diagram.StyleAuto, false))
+
+		lanes, flow := readFileContent(t, stem+".svg"), readFileContent(t, stem+".event-flow.svg")
+		require.NotEqual(t, lanes, flow, "the two pictures of one model must not be the same file")
+		_ = os.Remove(stem + ".svg")
+		_ = os.Remove(stem + ".event-flow.svg")
+	})
+
+	t.Run("event-flow: draws the events and the automations, and no command", func(t *testing.T) {
+		path := writeTemp(t, "every-construct.emod", test.EveryConstructLibraryLending)
+		output := filepath.Join(t.TempDir(), "flow.svg")
+
+		requireDiagramWasWritten(t, cli.RunDiagram(path, output, "event-flow", diagram.StyleAuto, false))
+
+		flow := readFileContent(t, output)
+		require.True(t, strings.HasPrefix(flow, `<svg xmlns="http://www.w3.org/2000/svg"`), "expected SVG declaration")
+		require.Contains(t, flow, "CopyBorrowed")
+		require.Contains(t, flow, "RemindOnDueDate")
+		require.NotContains(t, flow, "RemindMember", "the command an automation issues is collapsed into the event it emits")
+	})
+
+	t.Run("event-flow: validation errors produce no file and exit code 2", func(t *testing.T) {
+		path := writeTemp(t, "invalid.emod", invalidEmod)
+
+		var err error
+		captureStderr(t, func() {
+			err = cli.RunDiagram(path, "", "event-flow", diagram.StyleAuto, false)
+		})
+
+		var lintErr *cli.LintError
+		require.True(t, errors.As(err, &lintErr))
+		require.Equal(t, 2, lintErr.ExitCode)
+		requireNoDiagramWritten(t, path)
+	})
+
 	t.Run("spec cards", func(t *testing.T) {
 		t.Run("writes a draw.io file naming every scenario the model states", func(t *testing.T) {
 			path := writeTemp(t, "specs.emod", specStatingEmod(t))
@@ -366,7 +407,7 @@ func TestDiagram(t *testing.T) {
 			require.NotEqual(t, stated, unstated,
 				"the twin has to lose the specs, or the comparison below says nothing")
 
-			for _, format := range []string{"drawio", "svg", "mermaid", "ascii"} {
+			for _, format := range []string{"drawio", "svg", "mermaid", "ascii", "event-flow"} {
 				t.Run(format, func(t *testing.T) {
 					require.Equal(t,
 						diagramWritten(t, unstated, format),
@@ -376,7 +417,7 @@ func TestDiagram(t *testing.T) {
 			}
 		})
 
-		for _, format := range []string{"mermaid", "ascii"} {
+		for _, format := range []string{"mermaid", "ascii", "event-flow"} {
 			t.Run("refuses "+format+", which draws no card, rather than writing one without them", func(t *testing.T) {
 				path := writeTemp(t, "specs.emod", specStatingEmod(t))
 
@@ -739,12 +780,12 @@ func readFileContent(t *testing.T, path string) string {
 }
 
 // requireNoDiagramWritten fails when the command left a diagram beside the model
-// it refused to render, in either of the two names it defaults to.
+// it refused to render, under any of the names it defaults to.
 func requireNoDiagramWritten(t *testing.T, modelPath string) {
 	t.Helper()
 
 	stem := modelPath[:len(modelPath)-len(".emod")]
-	for _, extension := range []string{".drawio", ".svg"} {
+	for _, extension := range []string{".drawio", ".svg", ".event-flow.svg"} {
 		require.NoFileExists(t, stem+extension)
 	}
 }

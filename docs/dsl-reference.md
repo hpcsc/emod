@@ -880,7 +880,7 @@ Each stage preserves source position (file, line, column) for error reporting.
 
 ## 13. Diagram Palette
 
-All diagram renderers use the same palette for element types. The SVG, draw.io, and web viewer renderers all draw the same element type with the same fill and stroke, and the DSL reference itself is the source of truth for those values.
+The renderers that draw the whole model use one palette for element types. The SVG, draw.io, and web viewer renderers all draw the same element type with the same fill and stroke, and the DSL reference itself is the source of truth for those values. `emod diagram --format event-flow` draws a different picture and paints it in a palette of its own, listed below.
 
 | Element     | Fill      | Stroke    | Notes                                   |
 |-------------|-----------|-----------|-----------------------------------------|
@@ -890,5 +890,23 @@ All diagram renderers use the same palette for element types. The SVG, draw.io, 
 | View        | #d5e8d4   | #82b366   | Green sticky note.                      |
 | Automation  | #e1d5e7   | #9673a6   | Purple processor.                       |
 | Translation | #f5f5f5   | #666666   | Grey integration.                       |
+
+### Event Flow Palette
+
+`--format event-flow` collapses the commands away and draws events, automations
+and what starts a chain from outside them. It states both themes, because it is
+read on a page of either, and writes every colour out in full: a renderer
+outside a browser resolves no custom property and paints what it cannot resolve
+black.
+
+| Element               | Light fill | Light stroke | Dark fill | Dark stroke |
+|-----------------------|------------|--------------|-----------|-------------|
+| Event pill            | #FFE0C0    | #B44E12      | #40260F   | #F2A868     |
+| Event nothing reads   | #FFE0C0    | #A33A2A      | #40260F   | #E88C78     |
+| Automation gear       | #16201B    | —            | #E2E9E5   | —           |
+| Origin box            | #ECEFED    | #5A6861      | #1E2723   | #93A199     |
+| Invariant refusing it | #FFFFFF    | #A33A2A      | #16201B   | #E88C78     |
+| Arrow                 | —          | #16201B      | —         | #E2E9E5     |
+| Arrow to a refusal    | —          | #A33A2A      | —         | #E88C78     |
 
 

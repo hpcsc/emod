@@ -117,7 +117,7 @@ func NewApp() *urfave.App {
 				Flags: []urfave.Flag{
 					&urfave.StringFlag{
 						Name:  "format",
-						Usage: "Output format (drawio|mermaid|svg|ascii)",
+						Usage: "Output format (drawio|mermaid|svg|ascii|event-flow)",
 						Value: "drawio",
 					},
 					&urfave.StringFlag{

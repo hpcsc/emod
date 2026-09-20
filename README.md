@@ -165,6 +165,31 @@ emod diagram reservation.emod --specs           # …with each slice's specs as 
                                                 # Given-When-Then card (drawio and svg only)
 ```
 
+### Draw the event flow
+
+The four formats above draw the whole model, lane by lane. `--format event-flow`
+draws one question instead: which events the system appends, and what reacts to
+them.
+
+```bash
+emod diagram reservation.emod --format event-flow  # writes reservation.event-flow.svg
+```
+
+The commands are collapsed away — an automation is joined straight to the events
+its command emits — and the views are left out. What is left is an orange pill
+for each event, a bare gear for each automation and translation reactor, a
+rounded box for whatever issues a command from outside them (a trigger with the
+actor who works it, an external system, or a command nothing issues), and a
+dashed red box for an invariant that refuses a command. An event nothing reads
+is drawn dashed, so a reader is not left to assume something reacts to it. An
+event only a view reads carries no mark and no arrow onward, because the picture
+draws no views.
+
+The file carries its own colours and a dark-mode counterpart, so it reads on a
+page of either theme, and it is written beside the lane diagram rather than over
+it: `--format svg` writes `reservation.svg`, this writes
+`reservation.event-flow.svg`.
+
 ### Export
 
 ```bash
