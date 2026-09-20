@@ -59,6 +59,16 @@ func TestArgs(t *testing.T) {
 			require.Equal(t, unformatted, string(after))
 		})
 
+		t.Run("a subcommand's flag applies as a top-level command's does", func(t *testing.T) {
+			path := writeTemp(t, "model.emod", validEmod)
+
+			output := captureStdout(t, func() {
+				require.NoError(t, runCommandLine(t, "emod", "slices", "list", path, "--format", "json"))
+			})
+
+			require.Contains(t, output, "[")
+		})
+
 		t.Run("a flag the command does not declare is still reported as undefined", func(t *testing.T) {
 			path := writeTemp(t, "model.emod", validEmod)
 
@@ -69,8 +79,8 @@ func TestArgs(t *testing.T) {
 		})
 	})
 
-	t.Run("reordering", func(t *testing.T) {
-		t.Run("leaves a command line whose flags already precede the file alone", func(t *testing.T) {
+	t.Run("flags before the file argument", func(t *testing.T) {
+		t.Run("a long format written before the file selects that format", func(t *testing.T) {
 			path := writeTemp(t, "model.emod", validEmod)
 
 			output := captureStdout(t, func() {
@@ -79,18 +89,10 @@ func TestArgs(t *testing.T) {
 
 			require.Contains(t, output, "name: ")
 		})
+	})
 
-		t.Run("reaches a subcommand's flags, not only a top-level command's", func(t *testing.T) {
-			path := writeTemp(t, "model.emod", validEmod)
-
-			output := captureStdout(t, func() {
-				require.NoError(t, runCommandLine(t, "emod", "slices", "list", path, "--format", "json"))
-			})
-
-			require.Contains(t, output, "[")
-		})
-
-		t.Run("treats a word after -- as a file even when it looks like a flag", func(t *testing.T) {
+	t.Run("arguments after --", func(t *testing.T) {
+		t.Run("a word that looks like a flag is read as the file", func(t *testing.T) {
 			app := cli.NewApp()
 			app.ExitErrHandler = func(context.Context, *urfave.Command, error) {}
 

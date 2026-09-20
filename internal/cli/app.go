@@ -12,6 +12,18 @@ import (
 	urfave "github.com/urfave/cli/v3"
 )
 
+// Run executes the emod CLI over args, which are the process arguments with the
+// program name still at the front.
+func Run(args []string) error {
+	return RunApp(NewApp(), args)
+}
+
+// RunApp is Run over a caller-supplied app, so a test can substitute an exit
+// handler in place of the one that ends the process.
+func RunApp(app *urfave.Command, args []string) error {
+	return app.Run(context.Background(), args)
+}
+
 func reportExitError(err error) error {
 	if err == nil {
 		return nil
