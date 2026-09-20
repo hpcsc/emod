@@ -295,9 +295,11 @@ func TestFileService(t *testing.T) {
 				"the save replaced the link instead of writing through it")
 		})
 
+		// 125 is the longest name this can ask for: a name component holds 255
+		// bytes at most, and each é takes two of them.
 		t.Run("saves a model whose long name holds non-ASCII prose, cutting its working name on a rune", func(t *testing.T) {
 			dir := t.TempDir()
-			path := filepath.Join(dir, strings.Repeat("é", 130)+".emod")
+			path := filepath.Join(dir, strings.Repeat("é", 125)+".emod")
 
 			answer := saveFile(t, path, test.BillingPayments)
 
