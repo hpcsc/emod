@@ -43,7 +43,8 @@ emod update --force       # replace a build from a commit
 ```
 
 `emod update` stops on a build from a commit and names `--force` instead of
-replacing it. `GITHUB_TOKEN` or `GH_TOKEN` in the environment authorises the
+replacing it. Each push to main publishes a prerelease, and the repository keeps
+the 5 newest. `GITHUB_TOKEN` or `GH_TOKEN` in the environment authorises the
 requests to GitHub.
 
 ### Write a model
