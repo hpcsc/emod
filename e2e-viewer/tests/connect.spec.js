@@ -94,7 +94,7 @@ test.describe('drawing an edge from a port', () => {
       await portOf(page, 'event-1', 'right'),
       await dropPointIn(page.locator('.diagram-node[data-node-id="view-1"]')));
 
-    expect(await exportEmod(page)).toContain('subscribes [PaymentTaken]');
+    expect(await exportEmod(page)).toContain('subscribes = [PaymentTaken]');
   });
 
   // A block carries a port on each side so the arrow can be started from

@@ -63,8 +63,8 @@ test.describe('editing then exporting', () => {
     await page.locator('.ctx-menu-item[data-action="add-command"]').click();
 
     const exported = await exportEmod(page);
-    expect(exported).toContain('command new-command-2 {');
-    expect(exported).toContain('command TakePayment {');
+    expect(exported).toContain('command \"new-command-2\" {');
+    expect(exported).toContain('command \"TakePayment\" {');
   });
 
   test('includes a command, event and flow added by Add Flow', async ({ page }) => {
@@ -75,7 +75,7 @@ test.describe('editing then exporting', () => {
     await page.locator('.ctx-menu-item[data-action="add-flow"]').click();
 
     const exported = await exportEmod(page);
-    expect(exported).toContain('event new-event-2 {');
+    expect(exported).toContain('event \"new-event-2\" {');
     expect(exported).toContain('command -> event:    TakePayment -> new-event-2');
   });
 

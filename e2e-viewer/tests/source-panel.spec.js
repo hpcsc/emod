@@ -70,6 +70,28 @@ function largestExample() {
 
 const PARSES_WITH_UNDECLARED_EVENT = SAMPLE.replace('TakePayment -> PaymentTaken', 'TakePayment -> PaymentRefunded');
 
+// Enough findings to fill the diagnostics panel: every slice names an event no
+// slice declares, and every command it names is orphaned along with it.
+const MANY_DIAGNOSTICS = (function () {
+  const slices = [];
+  for (let i = 0; i < 8; i++) {
+    slices.push(
+      `    slice "Step ${i}" {\n` +
+      `      command "Cmd${i}" {\n` +
+      '        fields {\n' +
+      '          amount = required(int)\n' +
+      '        }\n' +
+      '      }\n' +
+      '\n' +
+      '      flow = <<-FLOW\n' +
+      `        command -> event:    Cmd${i} -> Missing${i}\n` +
+      '      FLOW\n' +
+      '    }');
+  }
+  return 'emod = 1\n\nmodel "Faulty" {\n}\n\ncontext "Ctx" {\n  aggregate "Agg" {\n' +
+    slices.join('\n\n') + '\n  }\n}\n';
+})();
+
 test.describe('the source panel revalidating as it is edited', () => {
   test('redraws what was typed once typing pauses, with no Render click', async ({ page }) => {
     await open(page);
@@ -106,7 +128,7 @@ test.describe('the source panel revalidating as it is edited', () => {
     await typePausing('\n# typed while the model revalidates');
     await typePausing('\nactor "Clerk');
     await expect(page.locator('#stale-notice')).toBeVisible();
-    await typePausing('"');
+    await typePausing('" {}');
     await expect(page.locator('#stale-notice')).toBeHidden();
     await typePausing('\n# and once more');
 
@@ -134,7 +156,7 @@ test.describe('the panels along the bottom of the canvas', () => {
   test("keeps the diagnostics panel's close control clickable over the minimap when both panels fill a short window", async ({ page }) => {
     await page.setViewportSize({ width: 1280, height: 620 });
     await open(page);
-    await page.locator('#source-input').fill(readFileSync(new URL('../../examples/error_diagnostics_test.emod', import.meta.url), 'utf8'));
+    await page.locator('#source-input').fill(MANY_DIAGNOSTICS);
     await page.locator('#render-btn').click();
     await expect(page.locator('#diagnostics-panel')).toBeVisible();
     await page.locator('#data-panel-header').click();
