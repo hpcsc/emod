@@ -11,10 +11,14 @@ import (
 	"github.com/hpcsc/emod/internal/validator"
 )
 
-// Parse runs the lex/parse chain and returns the model alongside any
-// diagnostics. The model is best-effort: it is non-nil even when diagnostics
-// are present, holding whatever the parser could recover.
+// Parse reads the source in whichever syntax it is written in and returns the
+// model alongside any diagnostics. The model is best-effort: it is non-nil
+// even when diagnostics are present, holding whatever the parser could
+// recover.
 func Parse(source string, filename string) (*ast.Model, []*diagnostic.Entry) {
+	if parser.IsHCL(source) {
+		return parser.ParseHCL(source, filename)
+	}
 	tokens, diagnostics := lexer.Scan(source, filename)
 	model, parserDiags := parser.New(tokens, filename).Parse()
 	return model, append(diagnostics, parserDiags...)

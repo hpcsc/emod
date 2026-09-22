@@ -10,8 +10,10 @@ import (
 	"testing"
 
 	"github.com/hpcsc/emod/internal/diagnostic"
+	"github.com/hpcsc/emod/internal/formatter"
 	"github.com/hpcsc/emod/internal/lexer"
 	"github.com/hpcsc/emod/internal/oracle"
+	"github.com/hpcsc/emod/internal/parser"
 	"github.com/hpcsc/emod/internal/test"
 	"github.com/stretchr/testify/require"
 )
@@ -23,6 +25,17 @@ const (
 )
 
 func TestCheck(t *testing.T) {
+	t.Run("syntax", func(t *testing.T) {
+		t.Run("a model written in HCL reaches the same verdict as the one it came from", func(t *testing.T) {
+			tokens, _ := lexer.Scan(validEmod, "valid.emod")
+			model, _ := parser.New(tokens, "valid.emod").Parse()
+
+			diagnostics := oracle.Check(formatter.FormatHCL(model), "valid.emod")
+
+			require.Empty(t, diagnostics)
+		})
+	})
+
 	t.Run("clean input", func(t *testing.T) {
 		t.Run("returns an empty diagnostic list for a fully valid model", func(t *testing.T) {
 			diagnostics := oracle.Check(validEmod, "valid.emod")

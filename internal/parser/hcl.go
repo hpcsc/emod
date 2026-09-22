@@ -925,3 +925,23 @@ func (r *hclReader) flow(slice *ast.Slice, a *hclsyntax.Attribute) {
 		leading = nil
 	}
 }
+
+// IsHCL reports whether the source is written in HCL rather than in the emod
+// grammar. A pinned file says so on its first line: `emod = 1` against
+// `emod 1`. A file with no header is read as HCL when HCL accepts the whole of
+// it, which the emod grammar's own field lines never are.
+func IsHCL(source string) bool {
+	for _, line := range strings.Split(source, "\n") {
+		trimmed := strings.TrimSpace(line)
+		if trimmed == "" || strings.HasPrefix(trimmed, "#") {
+			continue
+		}
+		rest, pinned := strings.CutPrefix(trimmed, "emod")
+		if !pinned {
+			break
+		}
+		return strings.HasPrefix(strings.TrimSpace(rest), "=")
+	}
+	_, diags := hclsyntax.ParseConfig([]byte(source), "", hcl.InitialPos)
+	return !diags.HasErrors()
+}

@@ -7,6 +7,7 @@ import (
 
 	"github.com/hpcsc/emod/internal/ast"
 	"github.com/hpcsc/emod/internal/parser"
+	"github.com/hpcsc/emod/internal/test"
 	"github.com/stretchr/testify/require"
 )
 
@@ -325,6 +326,23 @@ context "Reading Room" {
 			require.Equal(t, "# the whole system", model.Comments[0].Text)
 			require.Len(t, model.Actors[0].Comments, 1)
 			require.Equal(t, "# who books", model.Actors[0].Comments[0].Text)
+		})
+	})
+
+	t.Run("syntax", func(t *testing.T) {
+		t.Run("the header tells the two syntaxes apart", func(t *testing.T) {
+			require.True(t, parser.IsHCL("emod = 1\n"))
+			require.False(t, parser.IsHCL("emod 1\n"))
+		})
+
+		t.Run("a comment above the header does not hide it", func(t *testing.T) {
+			require.True(t, parser.IsHCL("# a model\n\nemod = 1\n"))
+			require.False(t, parser.IsHCL("# a model\n\nemod 1\n"))
+		})
+
+		t.Run("a file without a header is told by what HCL accepts", func(t *testing.T) {
+			require.True(t, parser.IsHCL(`model "Hotel" {}`))
+			require.False(t, parser.IsHCL(test.HotelReservation))
 		})
 	})
 
