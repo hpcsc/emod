@@ -47,15 +47,17 @@ func TestModelService(t *testing.T) {
 				Diagnostics []map[string]any `json:"diagnostics"`
 				Diagram     map[string]any   `json:"diagram"`
 			}
-			answer := service.ParseEmod(sourceEnvelope(t, `emod 1
-model "Billing"
+			answer := service.ParseEmod(sourceEnvelope(t, `emod = 1
+
+model "Billing" {
+}
 
 context "Payments" {
   aggregate "Payment" {
     slice "Take Payment" {
-      command TakePayment {
+      command "TakePayment" {
         fields {
-          amount int required
+          amount = required(int)
         }
       }
     }
@@ -122,7 +124,7 @@ context "Payments" {
 				Error string `json:"error"`
 			}
 			require.NoError(t, json.Unmarshal([]byte(service.ExportEmod(string(parsed.Diagram))), &envelope))
-			require.Contains(t, envelope.Emod, `model "Billing"`)
+			require.Contains(t, envelope.Emod, "model \"Billing\" {\n}")
 
 			// Handed the envelope the parse entry points take, it reads the
 			// document keys that envelope does not have and writes an empty
@@ -151,7 +153,7 @@ context "Payments" {
 			}
 			require.NoError(t, json.Unmarshal([]byte(service.ExportEmod(string(parsed.Diagram))), &envelope))
 			require.Empty(t, envelope.Error)
-			require.Contains(t, envelope.Emod, `model "Billing"`)
+			require.Contains(t, envelope.Emod, "model \"Billing\" {\n}")
 			require.Contains(t, envelope.Emod, "TakePayment")
 		})
 

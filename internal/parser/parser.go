@@ -3,1830 +3,939 @@ package parser
 import (
 	"fmt"
 	"sort"
-	"strconv"
 	"strings"
 
+	"github.com/hashicorp/hcl/v2"
+	"github.com/hashicorp/hcl/v2/hclsyntax"
 	"github.com/hpcsc/emod/internal/ast"
 	"github.com/hpcsc/emod/internal/diagnostic"
-	"github.com/hpcsc/emod/internal/lexer"
+	"github.com/zclconf/go-cty/cty"
 )
 
-const (
-	impliedVersion         = 1
-	expectedVersionInteger = `invalid version header: expected an integer after "emod"`
-)
+// Parse reads a model. It reports every fault as a diagnostic and returns
+// whatever it could recover.
+func Parse(source string, filename string) (*ast.Model, []*diagnostic.Entry) {
+	r := &hclReader{filename: filename, src: source, lines: strings.Split(source, "\n")}
 
-type topLevelHandler func(model *ast.Model)
+	file, diags := hclsyntax.ParseConfig([]byte(source), filename, hcl.InitialPos)
+	r.report(diags)
 
-type Instance struct {
-	tokens      []*lexer.Token
-	pos         int
-	diagnostics []*diagnostic.Entry
-	filename    string
-	handlers    map[lexer.Kind]topLevelHandler
-	pending     []*ast.Comment
+	tokens, lexDiags := hclsyntax.LexConfig([]byte(source), filename, hcl.InitialPos)
+	r.report(lexDiags)
+	r.collectComments(tokens)
+
+	if file == nil {
+		return &ast.Model{Version: ast.SupportedVersion}, r.diags
+	}
+	body, ok := file.Body.(*hclsyntax.Body)
+	if !ok {
+		return &ast.Model{Version: ast.SupportedVersion}, r.diags
+	}
+	return r.model(body), r.diags
 }
 
-func New(tokens []*lexer.Token, filename string) *Instance {
-	p := &Instance{
-		tokens:   tokens,
-		pos:      0,
-		filename: filename,
-	}
-	p.handlers = map[lexer.Kind]topLevelHandler{
-		lexer.KeywordModel:   p.parseModelInto,
-		lexer.KeywordActor:   p.parseActorInto,
-		lexer.KeywordContext: p.parseContextInto,
-	}
-	return p
+type hclReader struct {
+	filename string
+	src      string
+	lines    []string
+	diags    []*diagnostic.Entry
+	comments []*ast.Comment
+	taken    int
 }
 
-func (p *Instance) Parse() (*ast.Model, []*diagnostic.Entry) {
-	header := p.parseVersionHeader()
-	model := &ast.Model{Version: header.version, VersionDeclared: header.declared}
-
-	if header.declaresUnsupportedVersion() {
-		p.reportUnsupportedVersion(header)
-		return model, p.diagnostics
-	}
-
-	for !p.isAtEnd() {
-		if p.check(lexer.EOF) {
-			break
-		}
-
-		if p.check(lexer.KeywordEmod) {
-			p.reportMisplacedVersionHeader()
+func (r *hclReader) report(diags hcl.Diagnostics) {
+	for _, d := range diags {
+		if d.Severity != hcl.DiagError || d.Subject == nil {
 			continue
 		}
-
-		if handler, ok := p.handlers[p.peek().Type]; ok {
-			handler(model)
-		} else {
-			p.error(fmt.Sprintf("unrecognized keyword %q; expected one of: %s", p.peek().Value, p.expectedKeywords()))
-			p.advance()
-		}
-	}
-
-	return model, p.diagnostics
-}
-
-type versionHeader struct {
-	version  int
-	declared bool
-	keyword  *lexer.Token
-}
-
-func (h versionHeader) declaresUnsupportedVersion() bool {
-	return h.declared && h.version != ast.SupportedVersion
-}
-
-func (p *Instance) parseVersionHeader() versionHeader {
-	implied := versionHeader{version: impliedVersion}
-
-	if !p.check(lexer.KeywordEmod) {
-		return implied
-	}
-
-	keywordTok := p.advance()
-	if !p.checkSameLineAs(keywordTok) {
-		p.errorAt(keywordTok, expectedVersionInteger)
-		return implied
-	}
-
-	if !p.check(lexer.Integer) {
-		offending := p.peek()
-		p.errorAt(keywordTok, fmt.Sprintf("%s, got %q", expectedVersionInteger, offending.Value))
-		if _, startsTopLevelDeclaration := p.handlers[offending.Type]; !startsTopLevelDeclaration {
-			p.advance()
-		}
-		return implied
-	}
-
-	versionTok := p.advance()
-	version, err := strconv.Atoi(versionTok.Value)
-	if err != nil {
-		p.errorAt(versionTok, fmt.Sprintf("invalid version header: version %q is out of range", versionTok.Value))
-		return implied
-	}
-
-	return versionHeader{version: version, declared: true, keyword: keywordTok}
-}
-
-func (p *Instance) reportUnsupportedVersion(header versionHeader) {
-	p.errorAt(header.keyword, fmt.Sprintf("unsupported version %d: this tool supports emod version %d", header.version, ast.SupportedVersion))
-}
-
-func (p *Instance) reportMisplacedVersionHeader() {
-	keywordTok := p.advance()
-	p.errorAt(keywordTok, `misplaced version header: "emod" must appear before the "model" declaration`)
-	if p.checkSameLineAs(keywordTok) && p.check(lexer.Integer) {
-		p.advance()
+		r.fail(d.Subject.Start, "%s", strings.ToLower(strings.TrimSuffix(d.Summary, ".")))
 	}
 }
 
-func (p *Instance) expectedKeywords() string {
-	names := make([]string, 0, len(p.handlers))
-	for kind := range p.handlers {
-		names = append(names, kind.String())
-	}
-	sort.Strings(names)
-	return strings.Join(names, ", ")
-}
-
-func (p *Instance) parseModelInto(model *ast.Model) {
-	model.Comments = p.takePendingComments()
-	decl := p.parseDeclaration(lexer.KeywordModel)
-	if decl == nil {
-		return
-	}
-
-	model.Name, model.NamePos = decl.name, decl.namePos
-	model.Description, model.DescriptionPos = decl.description, decl.descriptionPos
-	model.OpenPos, model.ClosePos = decl.openPos, decl.closePos
-}
-
-func (p *Instance) parseActorInto(model *ast.Model) {
-	comments := p.takePendingComments()
-	decl := p.parseDeclaration(lexer.KeywordActor)
-	if decl == nil {
-		return
-	}
-
-	model.Actors = append(model.Actors, &ast.Actor{
-		Comments:       comments,
-		Name:           decl.name,
-		NamePos:        decl.namePos,
-		Description:    decl.description,
-		DescriptionPos: decl.descriptionPos,
-		OpenPos:        decl.openPos,
-		ClosePos:       decl.closePos,
+func (r *hclReader) fail(p hcl.Pos, format string, args ...any) {
+	r.diags = append(r.diags, &diagnostic.Entry{
+		Filename: r.filename,
+		Line:     p.Line,
+		Column:   p.Column,
+		Message:  fmt.Sprintf(format, args...),
 	})
 }
 
-func (p *Instance) parseContextInto(model *ast.Model) {
-	comments := p.takePendingComments()
-	if context := p.parseContext(); context != nil {
-		context.Comments = comments
-		model.Contexts = append(model.Contexts, context)
-	}
+func (r *hclReader) at(p hcl.Pos) ast.Position {
+	return ast.Position{Filename: r.filename, Line: p.Line, Column: p.Column}
 }
 
-type declaration struct {
-	name           string
-	namePos        ast.Position
-	description    string
-	descriptionPos ast.Position
-	openPos        ast.Position
-	closePos       ast.Position
-}
-
-func (p *Instance) parseDeclaration(keyword lexer.Kind) *declaration {
-	construct := keyword.String()
-	p.consume(keyword, "expected "+construct)
-	if !p.check(lexer.String) {
-		p.error(fmt.Sprintf("expected quoted string after %q, got %q", construct, p.peek().Value))
-		return nil
-	}
-
-	nameTok := p.advance()
-	decl := &declaration{name: nameTok.Value, namePos: p.position(nameTok)}
-
-	if !p.check(lexer.OpenBrace) {
-		return decl
-	}
-	openTok := p.advance()
-	decl.openPos = p.position(openTok)
-
-	for !p.check(lexer.CloseBrace) && !p.isAtEnd() {
-		if p.check(lexer.KeywordDescription) {
-			p.parseQuotedEntryInto(construct, &decl.description, &decl.descriptionPos)
-		} else {
-			p.error(fmt.Sprintf("expected description in %s, got %q", construct, p.peek().Value))
-			p.advance()
+func (r *hclReader) collectComments(tokens hclsyntax.Tokens) {
+	for _, t := range tokens {
+		if t.Type != hclsyntax.TokenComment {
+			continue
 		}
+		r.comments = append(r.comments, &ast.Comment{
+			Text:     strings.TrimRight(string(t.Bytes), "\r\n"),
+			Position: r.at(t.Range.Start),
+		})
 	}
-
-	if !p.check(lexer.CloseBrace) {
-		p.error(fmt.Sprintf("unclosed brace for %q block opened at line %d", construct, decl.openPos.Line))
-		return decl
-	}
-	closeTok := p.advance()
-	decl.closePos = p.position(closeTok)
-
-	return decl
 }
 
-func (p *Instance) parseContext() *ast.Context {
-	p.consume(lexer.KeywordContext, "expected context")
-	if !p.check(lexer.String) {
-		p.error(fmt.Sprintf("expected quoted string after \"context\", got %q", p.peek().Value))
-		return nil
+// commentsBefore hands over every comment written above the given line, in the
+// order they appear. A construct takes the comments that lead up to it, which
+// is what the formatter writes back above it.
+func (r *hclReader) commentsBefore(p hcl.Pos) []*ast.Comment {
+	var taken []*ast.Comment
+	for r.taken < len(r.comments) && r.comments[r.taken].Line < p.Line {
+		taken = append(taken, r.comments[r.taken])
+		r.taken++
 	}
+	return taken
+}
 
-	nameTok := p.advance()
-	context := &ast.Context{
-		Name:    nameTok.Value,
-		NamePos: p.position(nameTok),
+func hclAttrs(body *hclsyntax.Body) []*hclsyntax.Attribute {
+	ordered := make([]*hclsyntax.Attribute, 0, len(body.Attributes))
+	for _, a := range body.Attributes {
+		ordered = append(ordered, a)
 	}
+	sort.Slice(ordered, func(i, j int) bool {
+		return ordered[i].SrcRange.Start.Byte < ordered[j].SrcRange.Start.Byte
+	})
+	return ordered
+}
 
-	// Optional mode clause: mode dcb | mode aggregate | mode mixed
-	if p.check(lexer.KeywordMode) {
-		p.advance()
-		if p.checkIdentifierLike() {
-			modeTok := p.advance()
-			context.Mode = modeTok.Value
-			context.ModePos = p.position(modeTok)
-		} else {
-			p.error("expected mode value after 'mode'")
-		}
+// text reads a quoted string.
+func (r *hclReader) text(a *hclsyntax.Attribute) (string, ast.Position) {
+	start := a.Expr.Range().Start
+	value, diags := a.Expr.Value(nil)
+	if diags.HasErrors() || value.IsNull() || value.Type() != cty.String {
+		r.fail(start, "expected a quoted string after %s", a.Name)
+		return "", r.at(start)
 	}
+	return value.AsString(), r.at(start)
+}
 
-	if !p.check(lexer.OpenBrace) {
-		p.error("expected { after context name")
-		return nil
+// name reads an unquoted reference such as `reads = AvailableRoomsView`.
+func (r *hclReader) name(expr hcl.Expression) (string, ast.Position) {
+	start := expr.Range().Start
+	traversal, diags := hcl.AbsTraversalForExpr(expr)
+	if diags.HasErrors() || len(traversal) != 1 {
+		r.fail(start, "expected a name")
+		return "", r.at(start)
 	}
-	openTok := p.advance()
-	context.OpenPos = p.position(openTok)
+	return traversal.RootName(), r.at(start)
+}
 
-	for !p.check(lexer.CloseBrace) && !p.isAtEnd() {
+// names reads a list of unquoted references.
+func (r *hclReader) names(expr hcl.Expression) ([]string, []ast.Position) {
+	items, diags := hcl.ExprList(expr)
+	if diags.HasErrors() {
+		r.fail(expr.Range().Start, "expected a list of names")
+		return nil, nil
+	}
+	values := make([]string, 0, len(items))
+	positions := make([]ast.Position, 0, len(items))
+	for _, item := range items {
+		value, position := r.name(item)
+		values = append(values, value)
+		positions = append(positions, position)
+	}
+	return values, positions
+}
+
+func hclCall(expr hcl.Expression) (*hclsyntax.FunctionCallExpr, bool) {
+	call, ok := expr.(*hclsyntax.FunctionCallExpr)
+	return call, ok
+}
+
+func (r *hclReader) block(b *hclsyntax.Block, labels int) (*hclsyntax.Body, bool) {
+	if len(b.Labels) != labels {
+		r.fail(b.TypeRange.Start, "%s takes %d name(s), not %d", b.Type, labels, len(b.Labels))
+		return nil, false
+	}
+	return b.Body, true
+}
+
+func (r *hclReader) label(b *hclsyntax.Block) (string, ast.Position) {
+	if len(b.Labels) == 0 {
+		return "", r.at(b.TypeRange.Start)
+	}
+	return b.Labels[0], r.at(b.LabelRanges[0].Start)
+}
+
+// hclEntry is one entry of a block body: an attribute or a nested block. A
+// body is read in source order so that a comment lands on the construct it was
+// written above.
+type hclEntry struct {
+	attr  *hclsyntax.Attribute
+	block *hclsyntax.Block
+	start hcl.Pos
+}
+
+func hclEntries(body *hclsyntax.Body) []hclEntry {
+	entries := make([]hclEntry, 0, len(body.Attributes)+len(body.Blocks))
+	for _, a := range body.Attributes {
+		entries = append(entries, hclEntry{attr: a, start: a.SrcRange.Start})
+	}
+	for _, b := range body.Blocks {
+		entries = append(entries, hclEntry{block: b, start: b.TypeRange.Start})
+	}
+	sort.Slice(entries, func(i, j int) bool { return entries[i].start.Byte < entries[j].start.Byte })
+	return entries
+}
+
+func (r *hclReader) model(body *hclsyntax.Body) *ast.Model {
+	model := &ast.Model{Version: ast.SupportedVersion}
+
+	for _, entry := range hclEntries(body) {
 		switch {
-		case p.check(lexer.KeywordDescription):
-			p.parseQuotedEntryInto("context", &context.Description, &context.DescriptionPos)
-		case p.check(lexer.KeywordInvariant):
-			if invariant := p.parseInvariant(); invariant != nil {
-				context.Invariants = append(context.Invariants, invariant)
+		case entry.attr != nil && entry.attr.Name == "emod":
+			// A file this tool cannot read is reported on its header alone.
+			// Reading on would bury that line under diagnostics about a
+			// grammar the file was never written in.
+			if !r.version(model, entry.attr) {
+				return model
 			}
-		case p.check(lexer.KeywordAggregate):
-			if agg := p.parseAggregate(); agg != nil {
-				context.Aggregates = append(context.Aggregates, agg)
-			}
-		case p.check(lexer.KeywordSlice):
-			if slice := p.parseSlice(); slice != nil {
-				context.Slices = append(context.Slices, slice)
-			}
+		case entry.attr != nil:
+			r.fail(entry.attr.NameRange.Start, "unexpected %s at the top level", entry.attr.Name)
+		case entry.block.Type == "model":
+			r.modelBlock(model, entry.block)
+		case entry.block.Type == "actor":
+			model.Actors = append(model.Actors, r.actor(entry.block))
+		case entry.block.Type == "context":
+			model.Contexts = append(model.Contexts, r.context(entry.block))
 		default:
-			p.error(fmt.Sprintf("expected description, invariant, aggregate or slice in context, got %q", p.peek().Value))
-			p.advance()
+			r.fail(entry.block.TypeRange.Start,
+				"unexpected %q block; expected one of: model, actor, context", entry.block.Type)
 		}
 	}
+	return model
+}
 
-	if !p.check(lexer.CloseBrace) {
-		p.error(fmt.Sprintf("unclosed brace for \"context\" block opened at line %d", context.OpenPos.Line))
+func (r *hclReader) version(model *ast.Model, a *hclsyntax.Attribute) bool {
+	value, diags := a.Expr.Value(nil)
+	if diags.HasErrors() || value.IsNull() || value.Type() != cty.Number {
+		r.fail(a.Expr.Range().Start, "expected a whole number after emod")
+		return false
+	}
+	declared, _ := value.AsBigFloat().Int64()
+	model.Version = int(declared)
+	model.VersionDeclared = true
+	if model.Version != ast.SupportedVersion {
+		r.fail(a.NameRange.Start, "unsupported version %d: this tool supports emod version %d",
+			model.Version, ast.SupportedVersion)
+		return false
+	}
+	return true
+}
+
+func (r *hclReader) modelBlock(model *ast.Model, b *hclsyntax.Block) {
+	model.Comments = r.commentsBefore(b.TypeRange.Start)
+	model.Name, model.NamePos = r.label(b)
+	model.OpenPos = r.at(b.OpenBraceRange.Start)
+	model.ClosePos = r.at(b.CloseBraceRange.Start)
+
+	body, ok := r.block(b, 1)
+	if !ok {
+		return
+	}
+	for _, a := range hclAttrs(body) {
+		if a.Name == "description" {
+			model.Description, model.DescriptionPos = r.text(a)
+			continue
+		}
+		r.fail(a.NameRange.Start, "unexpected %s in model", a.Name)
+	}
+}
+
+func (r *hclReader) actor(b *hclsyntax.Block) *ast.Actor {
+	actor := &ast.Actor{Comments: r.commentsBefore(b.TypeRange.Start)}
+	actor.Name, actor.NamePos = r.label(b)
+	actor.OpenPos = r.at(b.OpenBraceRange.Start)
+	actor.ClosePos = r.at(b.CloseBraceRange.Start)
+
+	body, ok := r.block(b, 1)
+	if !ok {
+		return actor
+	}
+	for _, a := range hclAttrs(body) {
+		if a.Name == "description" {
+			actor.Description, actor.DescriptionPos = r.text(a)
+			continue
+		}
+		r.fail(a.NameRange.Start, "unexpected %s in actor", a.Name)
+	}
+	return actor
+}
+
+func (r *hclReader) context(b *hclsyntax.Block) *ast.Context {
+	context := &ast.Context{Comments: r.commentsBefore(b.TypeRange.Start)}
+	context.Name, context.NamePos = r.label(b)
+	context.OpenPos = r.at(b.OpenBraceRange.Start)
+	context.ClosePos = r.at(b.CloseBraceRange.Start)
+
+	body, ok := r.block(b, 1)
+	if !ok {
 		return context
 	}
-	closeTok := p.advance()
-	context.ClosePos = p.position(closeTok)
-
+	for _, entry := range hclEntries(body) {
+		if a := entry.attr; a != nil {
+			switch a.Name {
+			case "description":
+				context.Description, context.DescriptionPos = r.text(a)
+			case "mode":
+				context.Mode, context.ModePos = r.name(a.Expr)
+			default:
+				r.fail(a.NameRange.Start, "unexpected %s in context", a.Name)
+			}
+			continue
+		}
+		switch entry.block.Type {
+		case "invariants":
+			context.Invariants = append(context.Invariants, r.invariants(entry.block)...)
+		case "aggregate":
+			context.Aggregates = append(context.Aggregates, r.aggregate(entry.block))
+		case "slice":
+			context.Slices = append(context.Slices, r.slice(entry.block))
+		default:
+			r.fail(entry.block.TypeRange.Start, "unexpected %q block in context", entry.block.Type)
+		}
+	}
 	return context
 }
 
-func (p *Instance) parseAggregate() *ast.Aggregate {
-	comments := p.takePendingComments()
-	p.consume(lexer.KeywordAggregate, "expected aggregate")
-	if !p.check(lexer.String) {
-		p.error(fmt.Sprintf("expected quoted string after \"aggregate\", got %q", p.peek().Value))
-		return nil
-	}
+func (r *hclReader) aggregate(b *hclsyntax.Block) *ast.Aggregate {
+	aggregate := &ast.Aggregate{Comments: r.commentsBefore(b.TypeRange.Start)}
+	aggregate.Name, aggregate.NamePos = r.label(b)
+	aggregate.OpenPos = r.at(b.OpenBraceRange.Start)
+	aggregate.ClosePos = r.at(b.CloseBraceRange.Start)
 
-	nameTok := p.advance()
-	aggregate := &ast.Aggregate{
-		Comments: comments,
-		Name:     nameTok.Value,
-		NamePos:  p.position(nameTok),
-	}
-
-	if !p.check(lexer.OpenBrace) {
-		p.error("expected { after aggregate name")
-		return nil
-	}
-	openTok := p.advance()
-	aggregate.OpenPos = p.position(openTok)
-
-	for !p.check(lexer.CloseBrace) && !p.isAtEnd() {
-		if p.check(lexer.KeywordDescription) {
-			p.parseQuotedEntryInto("aggregate", &aggregate.Description, &aggregate.DescriptionPos)
-		} else if p.check(lexer.KeywordInvariant) {
-			if invariant := p.parseInvariant(); invariant != nil {
-				aggregate.Invariants = append(aggregate.Invariants, invariant)
-			}
-		} else if p.check(lexer.KeywordSlice) {
-			if slice := p.parseSlice(); slice != nil {
-				aggregate.Slices = append(aggregate.Slices, slice)
-			}
-		} else {
-			p.error("expected description, invariant or slice in aggregate")
-			p.advance()
-		}
-	}
-
-	if !p.check(lexer.CloseBrace) {
-		p.error(fmt.Sprintf("unclosed brace for \"aggregate\" block opened at line %d", aggregate.OpenPos.Line))
+	body, ok := r.block(b, 1)
+	if !ok {
 		return aggregate
 	}
-	closeTok := p.advance()
-	aggregate.ClosePos = p.position(closeTok)
-
+	for _, entry := range hclEntries(body) {
+		if a := entry.attr; a != nil {
+			if a.Name == "description" {
+				aggregate.Description, aggregate.DescriptionPos = r.text(a)
+				continue
+			}
+			r.fail(a.NameRange.Start, "unexpected %s in aggregate", a.Name)
+			continue
+		}
+		switch entry.block.Type {
+		case "invariants":
+			aggregate.Invariants = append(aggregate.Invariants, r.invariants(entry.block)...)
+		case "slice":
+			aggregate.Slices = append(aggregate.Slices, r.slice(entry.block))
+		default:
+			r.fail(entry.block.TypeRange.Start, "unexpected %q block in aggregate", entry.block.Type)
+		}
+	}
 	return aggregate
 }
 
-func (p *Instance) parseInvariant() *ast.Invariant {
-	comments := p.takePendingComments()
-	keywordTok := p.advance()
-
-	if !p.checkIdentifierLikeSameLineAs(keywordTok) {
-		p.errorAt(keywordTok, "expected identifier after invariant")
-		p.skipRestOfLineOrBlockEnd(keywordTok)
+func (r *hclReader) invariants(b *hclsyntax.Block) []*ast.Invariant {
+	leading := r.commentsBefore(b.TypeRange.Start)
+	body, ok := r.block(b, 0)
+	if !ok {
 		return nil
 	}
-	nameTok := p.advance()
-
-	if !p.checkSameLineAs(keywordTok) || !p.check(lexer.String) {
-		p.errorAt(keywordTok, "expected quoted statement after invariant name")
-		p.skipRestOfLineOrBlockEnd(keywordTok)
-		return nil
+	var invariants []*ast.Invariant
+	for _, a := range hclAttrs(body) {
+		invariant := &ast.Invariant{
+			Comments: append(leading, r.commentsBefore(a.NameRange.Start)...),
+			Name:     a.Name,
+			NamePos:  r.at(a.NameRange.Start),
+		}
+		leading = nil
+		invariant.Statement, invariant.StatementPos = r.text(a)
+		invariants = append(invariants, invariant)
 	}
-	statementTok := p.advance()
-
-	return &ast.Invariant{
-		Comments:     comments,
-		Name:         nameTok.Value,
-		NamePos:      p.position(nameTok),
-		Statement:    statementTok.Value,
-		StatementPos: p.position(statementTok),
-	}
+	return invariants
 }
 
-func (p *Instance) parseSlice() *ast.Slice {
-	comments := p.takePendingComments()
-	p.consume(lexer.KeywordSlice, "expected slice")
-	if !p.check(lexer.String) {
-		p.error(fmt.Sprintf("expected quoted string after \"slice\", got %q", p.peek().Value))
-		return nil
-	}
+func (r *hclReader) slice(b *hclsyntax.Block) *ast.Slice {
+	slice := &ast.Slice{Comments: r.commentsBefore(b.TypeRange.Start)}
+	slice.Name, slice.NamePos = r.label(b)
+	slice.OpenPos = r.at(b.OpenBraceRange.Start)
+	slice.ClosePos = r.at(b.CloseBraceRange.Start)
 
-	nameTok := p.advance()
-	slice := &ast.Slice{
-		Comments: comments,
-		Name:     nameTok.Value,
-		NamePos:  p.position(nameTok),
-	}
-
-	if !p.check(lexer.OpenBrace) {
-		p.error("expected { after slice name")
-		return nil
-	}
-	openTok := p.advance()
-	slice.OpenPos = p.position(openTok)
-
-	for !p.check(lexer.CloseBrace) && !p.isAtEnd() {
-		if p.check(lexer.KeywordDescription) {
-			p.parseQuotedEntryInto("slice", &slice.Description, &slice.DescriptionPos)
-		} else if p.check(lexer.KeywordCommand) {
-			if cmd := p.parseCommand(); cmd != nil {
-				slice.Commands = append(slice.Commands, cmd)
-			}
-		} else if p.check(lexer.KeywordEvent) {
-			if evt := p.parseEvent(); evt != nil {
-				slice.Events = append(slice.Events, evt)
-			}
-		} else if p.check(lexer.KeywordTrigger) {
-			if trigger := p.parseTrigger(); trigger != nil {
-				slice.Trigger = trigger
-			}
-		} else if p.check(lexer.KeywordFlow) {
-			flows, rejections := p.parseFlowBlock()
-			slice.Flows = append(slice.Flows, flows...)
-			slice.Rejections = append(slice.Rejections, rejections...)
-		} else if p.check(lexer.KeywordView) {
-			if view := p.parseView(); view != nil {
-				slice.Views = append(slice.Views, view)
-			}
-		} else if p.check(lexer.KeywordAutomation) {
-			if automation := p.parseAutomation(); automation != nil {
-				slice.Automations = append(slice.Automations, automation)
-			}
-		} else if p.check(lexer.KeywordTranslation) {
-			if translation := p.parseTranslation(); translation != nil {
-				slice.Translations = append(slice.Translations, translation)
-			}
-		} else if p.check(lexer.KeywordSpec) {
-			if spec := p.parseSpec(); spec != nil {
-				slice.Specs = append(slice.Specs, spec)
-			}
-		} else {
-			p.error("expected description, command, event, trigger, view, automation, translation, spec, or flow in slice")
-			p.advance()
-		}
-	}
-
-	if !p.check(lexer.CloseBrace) {
-		p.error(fmt.Sprintf("unclosed brace for \"slice\" block opened at line %d", slice.OpenPos.Line))
+	body, ok := r.block(b, 1)
+	if !ok {
 		return slice
 	}
-	closeTok := p.advance()
-	slice.ClosePos = p.position(closeTok)
-
+	for _, entry := range hclEntries(body) {
+		if a := entry.attr; a != nil {
+			switch a.Name {
+			case "description":
+				slice.Description, slice.DescriptionPos = r.text(a)
+			case "flow":
+				r.flow(slice, a)
+			default:
+				r.fail(a.NameRange.Start, "unexpected %s in slice", a.Name)
+			}
+			continue
+		}
+		switch entry.block.Type {
+		case "trigger":
+			slice.Trigger = r.trigger(entry.block)
+		case "command":
+			slice.Commands = append(slice.Commands, r.command(entry.block))
+		case "event":
+			slice.Events = append(slice.Events, r.event(entry.block))
+		case "view":
+			slice.Views = append(slice.Views, r.view(entry.block))
+		case "automation":
+			slice.Automations = append(slice.Automations, r.automation(entry.block))
+		case "translation":
+			slice.Translations = append(slice.Translations, r.translation(entry.block))
+		case "spec":
+			slice.Specs = append(slice.Specs, r.spec(entry.block))
+		default:
+			r.fail(entry.block.TypeRange.Start, "unexpected %q block in slice", entry.block.Type)
+		}
+	}
 	return slice
 }
 
-func (p *Instance) parseSpec() *ast.Spec {
-	comments := p.takePendingComments()
-	p.consume(lexer.KeywordSpec, "expected spec")
-	if !p.check(lexer.String) {
-		p.error(fmt.Sprintf("expected quoted string after \"spec\", got %q", p.peek().Value))
-		return nil
-	}
-
-	nameTok := p.advance()
-	spec := &ast.Spec{
-		Comments: comments,
-		Name:     nameTok.Value,
-		NamePos:  p.position(nameTok),
-	}
-
-	if !p.check(lexer.OpenBrace) {
-		p.error("expected { after spec name")
-		return nil
-	}
-	openTok := p.advance()
-	spec.OpenPos = p.position(openTok)
-
-	for !p.check(lexer.CloseBrace) && !p.isAtEnd() {
-		switch entryTok := p.peek(); entryTok.Type {
-		case lexer.KeywordGiven:
-			p.advance()
-			if history, ok := p.parseSpecEventList(entryTok); ok {
-				spec.Given = history
-			}
-		case lexer.KeywordWhen:
-			p.advance()
-			if command := p.parseSpecCommand(entryTok); command != nil {
-				spec.When = command
-			}
-		case lexer.KeywordThen:
-			p.advance()
-			if outcome := p.parseSpecOutcome(entryTok); outcome != nil {
-				spec.Then = outcome
-			}
-		default:
-			p.error("expected given, when or then in spec")
-			p.advance()
-		}
-	}
-
-	if !p.check(lexer.CloseBrace) {
-		p.error(fmt.Sprintf("unclosed brace for \"spec\" block opened at line %d", spec.OpenPos.Line))
-		return spec
-	}
-	closeTok := p.advance()
-	spec.ClosePos = p.position(closeTok)
-
-	return spec
-}
-
-func (p *Instance) parseSpecCommand(keywordTok *lexer.Token) *ast.SpecElement {
-	if !p.check(lexer.Identifier) {
-		p.errorAt(keywordTok, "expected command identifier after when in spec")
-		p.skipRestOfLineOrBlockEnd(keywordTok)
-		return nil
-	}
-
-	nameTok := p.advance()
-
-	return &ast.SpecElement{Name: nameTok.Value, NamePos: p.position(nameTok), Payload: p.parsePayload(nameTok)}
-}
-
-func (p *Instance) parseSpecOutcome(keywordTok *lexer.Token) ast.ThenClause {
-	switch {
-	case p.check(lexer.OpenBracket):
-		events, ok := p.parseSpecEventList(keywordTok)
-		if !ok {
-			return nil
-		}
-		return &ast.ThenEvents{Events: events}
-	case p.check(lexer.KeywordRejected):
-		rejectedTok := p.advance()
-		if !p.checkIdentifierLikeSameLineAs(rejectedTok) {
-			p.errorAt(keywordTok, "expected invariant name after rejected in spec")
-			p.skipRestOfLineOrBlockEnd(rejectedTok)
-			return nil
-		}
-		nameTok := p.advance()
-		return &ast.ThenRejected{InvariantName: nameTok.Value, InvariantPos: p.position(nameTok)}
-	case p.check(lexer.KeywordView):
-		viewTok := p.advance()
-		if !p.checkSameLineAs(viewTok) || !p.check(lexer.Identifier) {
-			p.errorAt(keywordTok, "expected view name after view in spec")
-			p.skipRestOfLineOrBlockEnd(viewTok)
-			return nil
-		}
-		nameTok := p.advance()
-		return &ast.ThenView{ViewName: nameTok.Value, ViewPos: p.position(nameTok)}
-	case p.check(lexer.KeywordCommand):
-		commandTok := p.advance()
-		if !p.checkSameLineAs(commandTok) || !p.check(lexer.Identifier) {
-			p.errorAt(keywordTok, "expected command name after command in spec")
-			p.skipRestOfLineOrBlockEnd(commandTok)
-			return nil
-		}
-		nameTok := p.advance()
-		return &ast.ThenCommand{CommandName: nameTok.Value, CommandPos: p.position(nameTok)}
-	default:
-		p.errorAt(keywordTok, "expected an event list, rejected, view or command after then in spec")
-		p.skipRestOfLineOrBlockEnd(keywordTok)
-		return nil
-	}
-}
-
-func (p *Instance) parseSpecEventList(keywordTok *lexer.Token) ([]*ast.SpecElement, bool) {
-	entry := keywordTok.Value
-	if !p.check(lexer.OpenBracket) {
-		p.errorAt(keywordTok, fmt.Sprintf("expected [ after %s in spec", entry))
-		p.skipRestOfLineOrBlockEnd(keywordTok)
-		return nil, false
-	}
-	p.advance()
-
-	events := p.parseSpecElementsUntilListEnd(entry)
-
-	if !p.check(lexer.CloseBracket) {
-		p.errorAt(keywordTok, fmt.Sprintf("expected ] to close %s list of spec", entry))
-		return nil, false
-	}
-	p.advance()
-
-	return events, true
-}
-
-// parseSpecElementsUntilListEnd reads the list itself rather than delegating to
-// parseIdentifiersUntil, because an element's payload closes on a CloseBrace,
-// which atSpecEventListEnd reads as the end of the list around it.
-func (p *Instance) parseSpecElementsUntilListEnd(entry string) []*ast.SpecElement {
-	var events []*ast.SpecElement
-	reported := false
-	for !p.atSpecEventListEnd() {
-		if !p.check(lexer.Identifier) {
-			// Report the first offending token only, but keep reading: an
-			// unclosed payload leaves the list scanning the construct below it,
-			// where a diagnostic per token buries the one that names the real
-			// problem, while draining to the end of the list would silently drop
-			// the elements written after the offending one.
-			if !reported {
-				p.error(fmt.Sprintf("expected event identifier in %s list of spec", entry))
-				reported = true
-			}
-			p.advance()
-			continue
-		}
-
-		nameTok := p.advance()
-		events = append(events, &ast.SpecElement{
-			Name:    nameTok.Value,
-			NamePos: p.position(nameTok),
-			Payload: p.parsePayload(nameTok),
-		})
-
-		if p.check(lexer.Comma) {
-			p.advance()
-		}
-	}
-
-	return events
-}
-
-func (p *Instance) atSpecEventListEnd() bool {
-	return p.isAtEnd() || p.checkAny(lexer.CloseBracket, lexer.CloseBrace, lexer.KeywordGiven, lexer.KeywordWhen, lexer.KeywordThen)
-}
-
-// parsePayload reads the optional { field: literal, ... } block qualifying a
-// spec reference. The opening brace must sit on the reference's own line, or a
-// brace opening the next construct is taken as this reference's payload.
-func (p *Instance) parsePayload(refTok *lexer.Token) []*ast.PayloadField {
-	if !p.checkSameLineAs(refTok) || !p.check(lexer.OpenBrace) {
-		return nil
-	}
-	openTok := p.advance()
-
-	var payload []*ast.PayloadField
-	for !p.atPayloadEnd() {
-		if field := p.parsePayloadField(); field != nil {
-			payload = append(payload, field)
-		}
-
-		if p.check(lexer.Comma) {
-			p.advance()
-		}
-	}
-
-	if !p.check(lexer.CloseBrace) {
-		p.errorAt(openTok, fmt.Sprintf("unclosed brace for payload opened at line %d", openTok.Line))
-		return payload
-	}
-	p.advance()
-
-	return payload
-}
-
-// atPayloadEnd stops an unclosed payload at whatever encloses it — the spec
-// list's bracket or a sibling spec entry — so one missing brace does not eat
-// the rest of the spec. A sibling keyword followed by a colon is a payload
-// field named after it, which stays legal, so only a bare one ends the payload.
-func (p *Instance) atPayloadEnd() bool {
-	if p.isAtEnd() || p.checkAny(lexer.CloseBrace, lexer.CloseBracket) {
-		return true
-	}
-	return p.checkAny(lexer.KeywordGiven, lexer.KeywordWhen, lexer.KeywordThen) && !p.currentIsFollowedByColon()
-}
-
-// skipRestOfPayloadEntry drains a malformed entry without crossing whatever
-// ends the payload, so a payload that is also unclosed still reports once.
-func (p *Instance) skipRestOfPayloadEntry(tok *lexer.Token) {
-	for p.checkSameLineAs(tok) && !p.atPayloadEnd() {
-		p.advance()
-	}
-}
-
-func (p *Instance) currentIsFollowedByColon() bool {
-	p.skipComments()
-	for next := p.pos + 1; next < len(p.tokens); next++ {
-		if p.tokens[next].Type == lexer.Comment {
-			continue
-		}
-		return p.tokens[next].Type == lexer.Colon
-	}
-	return false
-}
-
-func (p *Instance) parsePayloadField() *ast.PayloadField {
-	if !p.checkIdentifierLike() {
-		offending := p.peek()
-		p.errorAt(offending, fmt.Sprintf("expected payload field name, got %q", offending.Value))
-		p.advance()
-		p.skipRestOfPayloadEntry(offending)
-		return nil
-	}
-
-	nameTok := p.advance()
-
-	if !p.check(lexer.Colon) {
-		p.errorAt(nameTok, fmt.Sprintf("expected : after payload field %q", nameTok.Value))
-		p.skipRestOfPayloadEntry(nameTok)
-		return nil
-	}
-	p.advance()
-
-	kind, ok := p.payloadLiteralKind()
-	if !ok {
-		offending := p.peek()
-		p.errorAt(offending, fmt.Sprintf("expected a quoted string, number, true or false after payload field %q, got %q", nameTok.Value, offending.Value))
-		p.skipRestOfPayloadEntry(nameTok)
-		return nil
-	}
-	valueTok := p.advance()
-
-	return &ast.PayloadField{
-		Name:     nameTok.Value,
-		NamePos:  p.position(nameTok),
-		Value:    valueTok.Value,
-		ValuePos: p.position(valueTok),
-		Kind:     kind,
-	}
-}
-
-// payloadLiteralKind reads true and false by position rather than as keywords,
-// so both stay usable as identifiers everywhere else in the language.
-func (p *Instance) payloadLiteralKind() (ast.LiteralKind, bool) {
-	tok := p.peek()
-	switch tok.Type {
-	case lexer.String:
-		return ast.StringLiteral, true
-	case lexer.Integer:
-		return ast.IntegerLiteral, true
-	case lexer.Decimal:
-		return ast.DecimalLiteral, true
-	case lexer.Identifier:
-		if tok.Value == "true" || tok.Value == "false" {
-			return ast.BooleanLiteral, true
-		}
-	}
-
-	return 0, false
-}
-
-func (p *Instance) parseTrigger() *ast.Trigger {
-	comments := p.takePendingComments()
-	p.consume(lexer.KeywordTrigger, "expected trigger")
-	if !p.check(lexer.Identifier) && !p.check(lexer.String) {
-		p.errorAt(p.peek(), "expected quoted name after trigger")
-		if p.check(lexer.OpenBrace) {
-			p.advance()
-			p.skipTo(lexer.CloseBrace)
-			if p.check(lexer.CloseBrace) {
-				p.advance()
-			}
-		}
-		return nil
-	}
-
-	trigger := &ast.Trigger{
-		Comments: comments,
-	}
-
-	if p.check(lexer.Identifier) {
-		kindTok := p.advance()
-		p.errorAt(kindTok, retiredTriggerKindMessage(kindTok.Value))
-	}
-
-	if !p.check(lexer.String) {
-		p.errorAt(p.peek(), "expected quoted name after trigger")
-		if p.check(lexer.OpenBrace) {
-			p.advance()
-			p.skipTo(lexer.CloseBrace)
-			if p.check(lexer.CloseBrace) {
-				p.advance()
-			}
-		}
-		return trigger
-	}
-	nameTok := p.advance()
-	trigger.Name = nameTok.Value
-	trigger.NamePos = p.position(nameTok)
-
-	if !p.check(lexer.OpenBrace) {
-		p.error("expected { after trigger name")
-		return trigger
-	}
-	openTok := p.advance()
-	trigger.OpenPos = p.position(openTok)
-
-	for !p.check(lexer.CloseBrace) && !p.isAtEnd() {
-		if p.check(lexer.KeywordDescription) {
-			p.parseQuotedEntryInto("trigger", &trigger.Description, &trigger.DescriptionPos)
-		} else if p.check(lexer.KeywordActor) {
-			p.advance()
-			if !p.check(lexer.Identifier) {
-				p.error("expected identifier after actor in trigger")
-				p.advance()
-				continue
-			}
-			actorTok := p.advance()
-			trigger.Actor = actorTok.Value
-			trigger.ActorPos = p.position(actorTok)
-		} else if p.check(lexer.KeywordReads) {
-			p.advance()
-			if !p.check(lexer.Identifier) {
-				p.error("expected identifier after reads in trigger")
-				p.advance()
-				continue
-			}
-			readsTok := p.advance()
-			trigger.Reads = readsTok.Value
-			trigger.ReadsPos = p.position(readsTok)
-		} else {
-			p.error(fmt.Sprintf("expected description, actor or reads in trigger, got %q", p.peek().Value))
-			p.advance()
-		}
-	}
-
-	if !p.check(lexer.CloseBrace) {
-		p.error(fmt.Sprintf("unclosed brace for \"trigger\" block opened at line %d", trigger.OpenPos.Line))
-		return trigger
-	}
-	closeTok := p.advance()
-	trigger.ClosePos = p.position(closeTok)
-
-	return trigger
-}
-
-func retiredTriggerKindMessage(kind string) string {
+// retiredTriggerKind names the kinds a trigger once carried ahead of its name,
+// so a model written before they were retired is told what replaced them rather
+// than that a trigger takes one name.
+func retiredTriggerKind(kind string) string {
 	if kind == "Schedule" || kind == "Processor" {
 		return fmt.Sprintf("trigger %s is no longer supported: use an automation with every", kind)
 	}
 	return fmt.Sprintf("trigger %s is no longer supported: drop the word %s", kind, kind)
 }
 
-func (p *Instance) parseCommand() *ast.Command {
-	comments := p.takePendingComments()
-	p.consume(lexer.KeywordCommand, "expected command")
-	if !p.check(lexer.Identifier) {
-		p.error("expected identifier after command")
-		return nil
+func (r *hclReader) trigger(b *hclsyntax.Block) *ast.Trigger {
+	if len(b.Labels) == 2 {
+		r.fail(b.LabelRanges[0].Start, "%s", retiredTriggerKind(b.Labels[0]))
+		return &ast.Trigger{}
 	}
+	trigger := &ast.Trigger{Comments: r.commentsBefore(b.TypeRange.Start)}
+	trigger.Name, trigger.NamePos = r.label(b)
+	trigger.OpenPos = r.at(b.OpenBraceRange.Start)
+	trigger.ClosePos = r.at(b.CloseBraceRange.Start)
 
-	nameTok := p.advance()
-	command := &ast.Command{
-		Comments: comments,
-		Name:     nameTok.Value,
-		NamePos:  p.position(nameTok),
+	body, ok := r.block(b, 1)
+	if !ok {
+		return trigger
 	}
-
-	if !p.check(lexer.OpenBrace) {
-		p.error("expected { after command name")
-		return nil
-	}
-	openTok := p.advance()
-	command.OpenPos = p.position(openTok)
-
-	for !p.check(lexer.CloseBrace) && !p.isAtEnd() {
-		if p.check(lexer.KeywordDescription) {
-			p.parseQuotedEntryInto("command", &command.Description, &command.DescriptionPos)
-		} else if p.check(lexer.KeywordFields) {
-			command.Fields = p.parseFields()
-		} else if p.check(lexer.KeywordDecidesOn) {
-			command.DecidesOn = p.parseDecidesOn()
-		} else {
-			p.error("expected description, fields or decides_on in command")
-			p.advance()
+	for _, a := range hclAttrs(body) {
+		switch a.Name {
+		case "description":
+			trigger.Description, trigger.DescriptionPos = r.text(a)
+		case "actor":
+			trigger.Actor, trigger.ActorPos = r.name(a.Expr)
+		case "reads":
+			trigger.Reads, trigger.ReadsPos = r.name(a.Expr)
+		default:
+			r.fail(a.NameRange.Start, "unexpected %s in trigger", a.Name)
 		}
 	}
+	return trigger
+}
 
-	if !p.check(lexer.CloseBrace) {
-		p.error(fmt.Sprintf("unclosed brace for \"command\" block opened at line %d", command.OpenPos.Line))
+func (r *hclReader) command(b *hclsyntax.Block) *ast.Command {
+	command := &ast.Command{Comments: r.commentsBefore(b.TypeRange.Start)}
+	command.Name, command.NamePos = r.label(b)
+	command.OpenPos = r.at(b.OpenBraceRange.Start)
+	command.ClosePos = r.at(b.CloseBraceRange.Start)
+
+	body, ok := r.block(b, 1)
+	if !ok {
 		return command
 	}
-	closeTok := p.advance()
-	command.ClosePos = p.position(closeTok)
-
+	for _, entry := range hclEntries(body) {
+		if a := entry.attr; a != nil {
+			if a.Name == "description" {
+				command.Description, command.DescriptionPos = r.text(a)
+				continue
+			}
+			r.fail(a.NameRange.Start, "unexpected %s in command", a.Name)
+			continue
+		}
+		switch entry.block.Type {
+		case "fields":
+			command.Fields = r.fields(entry.block)
+		case "decides_on":
+			command.DecidesOn = r.decidesOn(entry.block)
+		default:
+			r.fail(entry.block.TypeRange.Start, "unexpected %q block in command", entry.block.Type)
+		}
+	}
 	return command
 }
 
-func (p *Instance) parseDecidesOn() *ast.DecidesOnClause {
-	comments := p.takePendingComments()
-	p.consume(lexer.KeywordDecidesOn, "expected decides_on")
+func (r *hclReader) event(b *hclsyntax.Block) *ast.Event {
+	event := &ast.Event{Comments: r.commentsBefore(b.TypeRange.Start)}
+	event.Name, event.NamePos = r.label(b)
+	event.OpenPos = r.at(b.OpenBraceRange.Start)
+	event.ClosePos = r.at(b.CloseBraceRange.Start)
 
-	if !p.check(lexer.OpenBrace) {
-		p.error("expected { after decides_on")
-		return nil
-	}
-	openTok := p.advance()
-
-	clause := &ast.DecidesOnClause{
-		Comments: comments,
-		OpenPos:  p.position(openTok),
-	}
-
-	for !p.check(lexer.CloseBrace) && !p.isAtEnd() {
-		if p.check(lexer.KeywordEvents) {
-			clause.Events, clause.EventsPos = p.parseIdentifierList(lexer.KeywordEvents)
-		} else if p.check(lexer.KeywordWhere) {
-			clause.Predicate = p.parsePredicate()
-		} else {
-			p.error("expected events or where in decides_on")
-			p.advance()
-		}
-	}
-
-	if !p.check(lexer.CloseBrace) {
-		p.error(fmt.Sprintf("unclosed brace for \"decides_on\" block opened at line %d", clause.OpenPos.Line))
-		return clause
-	}
-	closeTok := p.advance()
-	clause.ClosePos = p.position(closeTok)
-
-	if len(clause.Events) == 0 {
-		p.errorAtPosition(clause.OpenPos, "decides_on block requires an events clause")
-	}
-	if clause.Predicate == nil {
-		p.errorAtPosition(clause.OpenPos, "decides_on block requires a where clause")
-	}
-
-	return clause
-}
-
-func (p *Instance) parseIdentifierList(keyword lexer.Kind) ([]string, []ast.Position) {
-	entry := keyword.String()
-	p.consume(keyword, "expected "+entry)
-	if !p.check(lexer.OpenBracket) {
-		p.error("expected [ after " + entry)
-		return nil, nil
-	}
-	p.advance()
-
-	identifiers := p.parseIdentifiersUntil(
-		func() bool { return p.check(lexer.CloseBracket) || p.isAtEnd() },
-		"expected identifier in "+entry+" list",
-	)
-
-	var names []string
-	var positions []ast.Position
-	for _, tok := range identifiers {
-		names = append(names, tok.Value)
-		positions = append(positions, p.position(tok))
-	}
-
-	if !p.check(lexer.CloseBracket) {
-		p.error("expected ] to close " + entry + " list")
-		return names, positions
-	}
-	p.advance()
-
-	return names, positions
-}
-
-func (p *Instance) parseIdentifiersUntil(atEnd func() bool, invalidItemMsg string) []*lexer.Token {
-	var identifiers []*lexer.Token
-	for !atEnd() {
-		if !p.check(lexer.Identifier) {
-			p.error(invalidItemMsg)
-			p.advance()
-			continue
-		}
-		identifiers = append(identifiers, p.advance())
-
-		if p.check(lexer.Comma) {
-			p.advance()
-		}
-	}
-
-	return identifiers
-}
-
-func (p *Instance) parsePredicate() ast.PredicateExpr {
-	p.consume(lexer.KeywordWhere, "expected where")
-	return p.parseOrExpr()
-}
-
-func (p *Instance) parseOrExpr() ast.PredicateExpr {
-	left := p.parseAndExpr()
-	if left == nil {
-		return nil
-	}
-	for p.check(lexer.KeywordOr) {
-		opTok := p.advance()
-		right := p.parseAndExpr()
-		if right == nil {
-			p.error("expected expression after 'or'")
-			break
-		}
-		left = &ast.LogicalExpr{
-			Left:     left,
-			Operator: opTok.Value,
-			OpPos:    p.position(opTok),
-			Right:    right,
-		}
-	}
-	return left
-}
-
-func (p *Instance) parseAndExpr() ast.PredicateExpr {
-	left := p.parseNotExpr()
-	if left == nil {
-		return nil
-	}
-	for p.check(lexer.KeywordAnd) {
-		opTok := p.advance()
-		right := p.parseNotExpr()
-		if right == nil {
-			p.error("expected expression after 'and'")
-			break
-		}
-		left = &ast.LogicalExpr{
-			Left:     left,
-			Operator: opTok.Value,
-			OpPos:    p.position(opTok),
-			Right:    right,
-		}
-	}
-	return left
-}
-
-func (p *Instance) parseNotExpr() ast.PredicateExpr {
-	if p.check(lexer.KeywordNot) {
-		opTok := p.advance()
-		expr := p.parseNotExpr()
-		if expr == nil {
-			p.error("expected expression after 'not'")
-			return nil
-		}
-		return &ast.NotExpr{
-			OpPos: p.position(opTok),
-			Expr:  expr,
-		}
-	}
-	return p.parsePrimary()
-}
-
-func (p *Instance) parsePrimary() ast.PredicateExpr {
-	if p.check(lexer.CloseBrace) || p.check(lexer.EOF) {
-		return nil
-	}
-
-	if p.check(lexer.OpenParen) {
-		p.advance()
-		expr := p.parseOrExpr()
-		if !p.check(lexer.CloseParen) {
-			p.error("expected ) after predicate sub-expression")
-			return expr
-		}
-		p.advance()
-		return expr
-	}
-
-	if p.check(lexer.KeywordTag) {
-		return p.parseTagPredicate()
-	}
-
-	p.error("expected tag() or ( in predicate")
-	return nil
-}
-
-func (p *Instance) parseTagPredicate() ast.PredicateExpr {
-	p.consume(lexer.KeywordTag, "expected tag")
-	if !p.check(lexer.OpenParen) {
-		p.error("expected ( after tag")
-		return nil
-	}
-	p.advance()
-
-	if !p.checkIdentifierLike() {
-		p.error("expected tag key in tag()")
-		p.skipTo(lexer.CloseParen, lexer.CloseBrace)
-		if p.check(lexer.CloseParen) {
-			p.advance()
-		}
-		return nil
-	}
-	keyTok := p.advance()
-
-	if !p.check(lexer.Equals) {
-		p.error("expected = after tag key")
-		p.skipTo(lexer.CloseParen, lexer.CloseBrace)
-		if p.check(lexer.CloseParen) {
-			p.advance()
-		}
-		return nil
-	}
-	opTok := p.advance()
-
-	if !p.checkIdentifierLike() && !p.check(lexer.String) {
-		p.error("expected value in tag()")
-		p.skipTo(lexer.CloseParen, lexer.CloseBrace)
-		if p.check(lexer.CloseParen) {
-			p.advance()
-		}
-		return nil
-	}
-	valTok := p.advance()
-
-	if !p.check(lexer.CloseParen) {
-		p.error("expected ) after tag() arguments")
-		return &ast.TagPredicate{
-			Field:    keyTok.Value,
-			FieldPos: p.position(keyTok),
-			Operator: opTok.Value,
-			OpPos:    p.position(opTok),
-			Value:    valTok.Value,
-			ValuePos: p.position(valTok),
-		}
-	}
-	p.advance()
-
-	return &ast.TagPredicate{
-		Field:    keyTok.Value,
-		FieldPos: p.position(keyTok),
-		Operator: opTok.Value,
-		OpPos:    p.position(opTok),
-		Value:    valTok.Value,
-		ValuePos: p.position(valTok),
-	}
-}
-
-func (p *Instance) parseEvent() *ast.Event {
-	comments := p.takePendingComments()
-	p.consume(lexer.KeywordEvent, "expected event")
-	if !p.check(lexer.Identifier) {
-		p.error("expected identifier after event")
-		return nil
-	}
-
-	nameTok := p.advance()
-	event := &ast.Event{
-		Comments: comments,
-		Name:     nameTok.Value,
-		NamePos:  p.position(nameTok),
-	}
-
-	if !p.check(lexer.OpenBrace) {
-		p.error("expected { after event name")
-		return nil
-	}
-	openTok := p.advance()
-	event.OpenPos = p.position(openTok)
-
-	for !p.check(lexer.CloseBrace) && !p.isAtEnd() {
-		if p.check(lexer.KeywordDescription) {
-			p.parseQuotedEntryInto("event", &event.Description, &event.DescriptionPos)
-		} else if p.check(lexer.KeywordType) {
-			p.parseQuotedEntryInto("event", &event.WireType, &event.WireTypePos)
-		} else if p.check(lexer.KeywordFields) {
-			event.Fields = p.parseFields()
-		} else if p.check(lexer.KeywordSource) {
-			sourceTok := p.advance()
-			event.SourcePos = p.position(sourceTok)
-			if !p.check(lexer.KeywordExternal) {
-				p.error("expected external after source in event")
-				p.advance()
-				continue
-			}
-			p.advance()
-			event.Source = "external"
-			if !p.check(lexer.String) {
-				p.error("expected quoted string after source external in event")
-				if !p.check(lexer.CloseBrace) && !p.check(lexer.KeywordFields) && !p.check(lexer.KeywordSource) && !p.check(lexer.KeywordTags) {
-					p.advance()
-				}
-				continue
-			}
-			nameTok := p.advance()
-			event.ExternalName = nameTok.Value
-			event.ExternalNamePos = p.position(nameTok)
-		} else if p.check(lexer.KeywordTags) {
-			event.Tags = p.parseTags()
-		} else {
-			p.error("expected description, type, fields, source, or tags in event")
-			p.advance()
-		}
-	}
-
-	if !p.check(lexer.CloseBrace) {
-		p.error(fmt.Sprintf("unclosed brace for \"event\" block opened at line %d", event.OpenPos.Line))
+	body, ok := r.block(b, 1)
+	if !ok {
 		return event
 	}
-	closeTok := p.advance()
-	event.ClosePos = p.position(closeTok)
-
+	for _, entry := range hclEntries(body) {
+		if a := entry.attr; a != nil {
+			switch a.Name {
+			case "description":
+				event.Description, event.DescriptionPos = r.text(a)
+			case "type":
+				event.WireType, event.WireTypePos = r.text(a)
+			case "source":
+				r.source(event, a)
+			default:
+				r.fail(a.NameRange.Start, "unexpected %s in event", a.Name)
+			}
+			continue
+		}
+		switch entry.block.Type {
+		case "fields":
+			event.Fields = r.fields(entry.block)
+		case "tags":
+			event.Tags = r.tags(entry.block)
+		default:
+			r.fail(entry.block.TypeRange.Start, "unexpected %q block in event", entry.block.Type)
+		}
+	}
 	return event
 }
 
-func (p *Instance) parseView() *ast.View {
-	comments := p.takePendingComments()
-	p.consume(lexer.KeywordView, "expected view")
-	if !p.check(lexer.Identifier) {
-		p.error("expected identifier after view")
-		return nil
+// source reads `source = external("Partner Booking")`.
+func (r *hclReader) source(event *ast.Event, a *hclsyntax.Attribute) {
+	event.SourcePos = r.at(a.NameRange.Start)
+	call, ok := hclCall(a.Expr)
+	if !ok || call.Name != "external" || len(call.Args) != 1 {
+		r.fail(a.Expr.Range().Start, `expected external("<name>") after source in event`)
+		return
 	}
-
-	nameTok := p.advance()
-	view := &ast.View{
-		Comments: comments,
-		Name:     nameTok.Value,
-		NamePos:  p.position(nameTok),
+	event.Source = call.Name
+	value, diags := call.Args[0].Value(nil)
+	if diags.HasErrors() || value.IsNull() || value.Type() != cty.String {
+		r.fail(call.Args[0].Range().Start, "expected a quoted string after source external in event")
+		return
 	}
+	event.ExternalName = value.AsString()
+	event.ExternalNamePos = r.at(call.Args[0].Range().Start)
+}
 
-	if !p.check(lexer.OpenBrace) {
-		p.error("expected { after view name")
-		return nil
-	}
-	openTok := p.advance()
-	view.OpenPos = p.position(openTok)
+func (r *hclReader) view(b *hclsyntax.Block) *ast.View {
+	view := &ast.View{Comments: r.commentsBefore(b.TypeRange.Start)}
+	view.Name, view.NamePos = r.label(b)
+	view.OpenPos = r.at(b.OpenBraceRange.Start)
+	view.ClosePos = r.at(b.CloseBraceRange.Start)
 
-	for !p.check(lexer.CloseBrace) && !p.isAtEnd() {
-		if p.check(lexer.KeywordDescription) {
-			p.parseQuotedEntryInto("view", &view.Description, &view.DescriptionPos)
-		} else if p.check(lexer.KeywordFields) {
-			view.Fields = p.parseFields()
-		} else if p.check(lexer.KeywordSubscribes) {
-			view.Subscribes, view.SubscribesPos = p.parseIdentifierList(lexer.KeywordSubscribes)
-		} else {
-			p.error("expected description, fields or subscribes in view")
-			p.advance()
-		}
-	}
-
-	if !p.check(lexer.CloseBrace) {
-		p.error(fmt.Sprintf("unclosed brace for \"view\" block opened at line %d", view.OpenPos.Line))
+	body, ok := r.block(b, 1)
+	if !ok {
 		return view
 	}
-	closeTok := p.advance()
-	view.ClosePos = p.position(closeTok)
-
-	if len(view.Fields) == 0 && len(view.Subscribes) == 0 {
-		p.errorAtPosition(view.NamePos, "view block requires fields or subscribes")
+	for _, entry := range hclEntries(body) {
+		if a := entry.attr; a != nil {
+			switch a.Name {
+			case "description":
+				view.Description, view.DescriptionPos = r.text(a)
+			case "subscribes":
+				view.Subscribes, view.SubscribesPos = r.names(a.Expr)
+			default:
+				r.fail(a.NameRange.Start, "unexpected %s in view", a.Name)
+			}
+			continue
+		}
+		if entry.block.Type == "fields" {
+			view.Fields = r.fields(entry.block)
+			continue
+		}
+		r.fail(entry.block.TypeRange.Start, "unexpected %q block in view", entry.block.Type)
 	}
-
 	return view
 }
 
-func (p *Instance) parseAutomation() *ast.Automation {
-	comments := p.takePendingComments()
-	p.consume(lexer.KeywordAutomation, "expected automation")
-	if !p.check(lexer.Identifier) {
-		p.error("expected identifier after automation")
-		return nil
-	}
+func (r *hclReader) automation(b *hclsyntax.Block) *ast.Automation {
+	automation := &ast.Automation{Comments: r.commentsBefore(b.TypeRange.Start)}
+	automation.Name, automation.NamePos = r.label(b)
+	automation.OpenPos = r.at(b.OpenBraceRange.Start)
+	automation.ClosePos = r.at(b.CloseBraceRange.Start)
 
-	nameTok := p.advance()
-	automation := &ast.Automation{
-		Comments: comments,
-		Name:     nameTok.Value,
-		NamePos:  p.position(nameTok),
-	}
-
-	if !p.check(lexer.OpenBrace) {
-		p.error("expected { after automation name")
-		return nil
-	}
-	openTok := p.advance()
-	automation.OpenPos = p.position(openTok)
-
-	for !p.check(lexer.CloseBrace) && !p.isAtEnd() {
-		p.parseAutomationEntry(automation)
-	}
-
-	if !p.check(lexer.CloseBrace) {
-		p.error(fmt.Sprintf("unclosed brace for \"automation\" block opened at line %d", automation.OpenPos.Line))
+	body, ok := r.block(b, 1)
+	if !ok {
 		return automation
 	}
-	closeTok := p.advance()
-	automation.ClosePos = p.position(closeTok)
-
-	switch {
-	case automation.OnEvent != "" && automation.Schedule != "":
-		p.errorAtPosition(automation.NamePos, "automation block cannot declare both on and every")
-	case automation.OnEvent == "" && automation.Schedule == "":
-		p.errorAtPosition(automation.NamePos, "automation block requires either an on event or an every schedule")
-	case automation.Schedule != "" && automation.After != "":
-		p.errorAtPosition(automation.AfterPos, "automation block cannot declare after with every: an every schedule is already absolute, and after measures a delay from an on event")
+	for _, entry := range hclEntries(body) {
+		if a := entry.attr; a != nil {
+			switch a.Name {
+			case "description":
+				automation.Description, automation.DescriptionPos = r.text(a)
+			case "on":
+				automation.OnEvent, automation.OnEventPos = r.name(a.Expr)
+			case "every":
+				automation.Schedule, automation.SchedulePos = r.text(a)
+			case "after":
+				automation.After, automation.AfterPos = r.text(a)
+			case "reads":
+				automation.Reads, automation.ReadsPos = r.name(a.Expr)
+			case "command":
+				automation.Command, automation.CommandPos = r.name(a.Expr)
+			default:
+				r.fail(a.NameRange.Start, "unexpected %s in automation", a.Name)
+			}
+			continue
+		}
+		if entry.block.Type == "target" {
+			r.target(automation, entry.block)
+			continue
+		}
+		r.fail(entry.block.TypeRange.Start, "unexpected %q block in automation", entry.block.Type)
 	}
-	if automation.Command == "" {
-		p.errorAtPosition(automation.NamePos, "automation block requires a command")
-	}
-
 	return automation
 }
 
-func (p *Instance) parseAutomationEntry(automation *ast.Automation) {
-	switch p.peek().Type {
-	case lexer.KeywordDescription:
-		p.parseQuotedEntryInto("automation", &automation.Description, &automation.DescriptionPos)
-	case lexer.KeywordOn:
-		onTok := p.peek()
-		p.parseIdentifierEntryInto("automation", &automation.OnEvent, &automation.OnEventPos)
-		p.parseActivationDelay(automation, onTok)
-	case lexer.KeywordEvery:
-		everyTok := p.peek()
-		p.parseQuotedEntryInto("automation", &automation.Schedule, &automation.SchedulePos)
-		p.parseActivationDelay(automation, everyTok)
-	case lexer.KeywordAfter:
-		afterTok := p.advance()
-		p.errorAt(afterTok, "after qualifies an activation: write it on the same line as on or every")
-		p.skipRestOfLineOrBlockEnd(afterTok)
-	case lexer.KeywordTrigger:
-		triggerTok := p.advance()
-		p.errorAt(triggerTok, "trigger is not an automation entry: name the activation event with on")
-		p.skipRestOfLineOrBlockEnd(triggerTok)
-	case lexer.KeywordReads:
-		p.parseIdentifierEntryInto("automation", &automation.Reads, &automation.ReadsPos)
-	case lexer.KeywordCommand:
-		p.advance()
-		if !p.check(lexer.Identifier) {
-			p.error("expected identifier after command in automation")
-			p.advance()
-			return
+func (r *hclReader) target(automation *ast.Automation, b *hclsyntax.Block) {
+	body, ok := r.block(b, 0)
+	if !ok {
+		return
+	}
+	for _, a := range hclAttrs(body) {
+		if a.Name == "context" {
+			automation.TargetContext, automation.TargetContextPos = r.name(a.Expr)
+			continue
 		}
-		cmdTok := p.advance()
-		automation.Command = cmdTok.Value
-		automation.CommandPos = p.position(cmdTok)
-	case lexer.KeywordTarget:
-		p.advance()
-		if !p.check(lexer.KeywordContext) {
-			p.error("expected context after target in automation")
-			p.advance()
-			return
-		}
-		p.advance()
-		if !p.check(lexer.Identifier) {
-			p.error("expected identifier after target context in automation")
-			p.advance()
-			return
-		}
-		ctxTok := p.advance()
-		automation.TargetContext = ctxTok.Value
-		automation.TargetContextPos = p.position(ctxTok)
-	default:
-		p.error(fmt.Sprintf("expected description, on, every, reads, command, or target in automation, got %q", p.peek().Value))
-		p.advance()
+		r.fail(a.NameRange.Start, "unexpected %s in target", a.Name)
 	}
 }
 
-// parseActivationDelay reads the optional after suffix off an activation entry.
-// The line check is against the activation keyword rather than the value it
-// took, so an entry stating no delay cannot reach down and swallow an `after`
-// written as the next line's own entry — which has a diagnostic of its own.
-func (p *Instance) parseActivationDelay(automation *ast.Automation, activationTok *lexer.Token) {
-	for p.checkSameLineAs(activationTok) && p.check(lexer.KeywordAfter) {
-		p.parseQuotedEntryInto("automation", &automation.After, &automation.AfterPos)
-	}
-}
+func (r *hclReader) translation(b *hclsyntax.Block) *ast.Translation {
+	translation := &ast.Translation{Comments: r.commentsBefore(b.TypeRange.Start)}
+	translation.Name, translation.NamePos = r.label(b)
+	translation.OpenPos = r.at(b.OpenBraceRange.Start)
+	translation.ClosePos = r.at(b.CloseBraceRange.Start)
 
-func (p *Instance) parseTranslation() *ast.Translation {
-	comments := p.takePendingComments()
-	p.consume(lexer.KeywordTranslation, "expected translation")
-	if !p.check(lexer.Identifier) {
-		p.error("expected identifier after translation")
-		return nil
-	}
-
-	nameTok := p.advance()
-	translation := &ast.Translation{
-		Comments: comments,
-		Name:     nameTok.Value,
-		NamePos:  p.position(nameTok),
-	}
-
-	if !p.check(lexer.OpenBrace) {
-		p.error("expected { after translation name")
-		return nil
-	}
-	openTok := p.advance()
-	translation.OpenPos = p.position(openTok)
-
-	for !p.check(lexer.CloseBrace) && !p.isAtEnd() {
-		if p.check(lexer.KeywordDescription) {
-			p.parseQuotedEntryInto("translation", &translation.Description, &translation.DescriptionPos)
-		} else if p.check(lexer.KeywordExternalSystem) {
-			p.advance()
-			if !p.check(lexer.String) {
-				p.error("expected quoted string after external_system in translation")
-				p.advance()
-				continue
-			}
-			extTok := p.advance()
-			translation.ExternalSystem = extTok.Value
-			translation.ExternalPos = p.position(extTok)
-		} else if p.check(lexer.KeywordReads) {
-			p.advance()
-			if !p.check(lexer.Identifier) {
-				p.error("expected identifier after reads in translation")
-				p.advance()
-				continue
-			}
-			readsTok := p.advance()
-			translation.Reads = readsTok.Value
-			translation.ReadsPos = p.position(readsTok)
-		} else if p.check(lexer.KeywordCommand) {
-			p.advance()
-			if !p.check(lexer.Identifier) {
-				p.error("expected identifier after command in translation")
-				p.advance()
-				continue
-			}
-			cmdTok := p.advance()
-			translation.Command = cmdTok.Value
-			translation.CommandPos = p.position(cmdTok)
-		} else if p.check(lexer.KeywordEvent) {
-			translation.Event = p.parseEvent()
-		} else {
-			p.error(fmt.Sprintf("expected description, external_system, reads, command, or event in translation, got %q", p.peek().Value))
-			p.advance()
-		}
-	}
-
-	if !p.check(lexer.CloseBrace) {
-		p.error(fmt.Sprintf("unclosed brace for \"translation\" block opened at line %d", translation.OpenPos.Line))
+	body, ok := r.block(b, 1)
+	if !ok {
 		return translation
 	}
-	closeTok := p.advance()
-	translation.ClosePos = p.position(closeTok)
-
-	if translation.ExternalSystem == "" {
-		p.errorAtPosition(translation.NamePos, "translation block requires an external_system")
+	for _, entry := range hclEntries(body) {
+		if a := entry.attr; a != nil {
+			switch a.Name {
+			case "description":
+				translation.Description, translation.DescriptionPos = r.text(a)
+			case "external_system":
+				translation.ExternalSystem, translation.ExternalPos = r.text(a)
+			case "reads":
+				translation.Reads, translation.ReadsPos = r.name(a.Expr)
+			case "command":
+				translation.Command, translation.CommandPos = r.name(a.Expr)
+			default:
+				r.fail(a.NameRange.Start, "unexpected %s in translation", a.Name)
+			}
+			continue
+		}
+		if entry.block.Type == "event" {
+			translation.Event = r.event(entry.block)
+			continue
+		}
+		r.fail(entry.block.TypeRange.Start, "unexpected %q block in translation", entry.block.Type)
 	}
-	if translation.Reads == "" {
-		p.errorAtPosition(translation.NamePos, "translation block requires a reads view")
-	}
-	if translation.Command == "" {
-		p.errorAtPosition(translation.NamePos, "translation block requires a command")
-	}
-
 	return translation
 }
 
-func (p *Instance) parseFields() []*ast.Field {
+func (r *hclReader) fields(b *hclsyntax.Block) []*ast.Field {
+	body, ok := r.block(b, 0)
+	if !ok {
+		return nil
+	}
 	var fields []*ast.Field
-	p.consume(lexer.KeywordFields, "expected fields")
-	if !p.check(lexer.OpenBrace) {
-		p.error("expected { after fields")
-		return fields
-	}
-	openTok := p.advance()
-	openLine := openTok.Line
-
-	for !p.check(lexer.CloseBrace) && !p.isAtEnd() {
-		if p.checkIdentifierLike() {
-			if field := p.parseField(); field != nil {
-				fields = append(fields, field)
+	for _, a := range hclAttrs(body) {
+		field := &ast.Field{Name: a.Name, NamePos: r.at(a.NameRange.Start)}
+		if call, isCall := hclCall(a.Expr); isCall {
+			if call.Name != "required" && call.Name != "optional" {
+				r.fail(call.NameRange.Start, "expected required() or optional() around the type of %s", a.Name)
+				continue
 			}
+			if len(call.Args) != 1 {
+				r.fail(call.NameRange.Start, "%s takes one type", call.Name)
+				continue
+			}
+			field.Modifier = call.Name
+			field.ModPos = r.at(call.NameRange.Start)
+			field.Type, field.TypePos = r.name(call.Args[0])
 		} else {
-			p.error("expected field definition")
-			p.advance()
+			field.Type, field.TypePos = r.name(a.Expr)
 		}
+		fields = append(fields, field)
 	}
-
-	if !p.check(lexer.CloseBrace) {
-		p.error(fmt.Sprintf("unclosed brace for \"fields\" block opened at line %d", openLine))
-		return fields
-	}
-	p.advance()
-
 	return fields
 }
 
-func (p *Instance) parseField() *ast.Field {
-	if !p.checkIdentifierLike() {
+func (r *hclReader) tags(b *hclsyntax.Block) []ast.TagEntry {
+	body, ok := r.block(b, 0)
+	if !ok {
 		return nil
 	}
-
-	nameTok := p.advance()
-	field := &ast.Field{
-		Name:    nameTok.Value,
-		NamePos: p.position(nameTok),
-	}
-
-	if !p.checkIdentifierLikeSameLineAs(nameTok) {
-		p.errorAt(nameTok, "expected field type")
-		p.skipRestOfLineOrBlockEnd(nameTok)
-		return field
-	}
-	typeTok := p.advance()
-	field.Type = typeTok.Value
-	field.TypePos = p.position(typeTok)
-
-	if p.checkIdentifierLikeSameLineAs(nameTok) {
-		modTok := p.advance()
-		field.Modifier = modTok.Value
-		field.ModPos = p.position(modTok)
-	}
-
-	return field
-}
-
-func (p *Instance) parseTags() []ast.TagEntry {
 	var tags []ast.TagEntry
-	p.consume(lexer.KeywordTags, "expected tags")
-	if !p.check(lexer.OpenBrace) {
-		p.error("expected { after tags")
-		return tags
+	for _, a := range hclAttrs(body) {
+		tag := ast.TagEntry{Key: a.Name, KeyPos: r.at(a.NameRange.Start)}
+		tag.FieldRef, tag.FieldRefPos = r.name(a.Expr)
+		tags = append(tags, tag)
 	}
-	openTok := p.advance()
-	openLine := openTok.Line
-
-	for !p.check(lexer.CloseBrace) && !p.isAtEnd() {
-		if p.checkIdentifierLike() {
-			if tag := p.parseTagEntry(); tag != nil {
-				tags = append(tags, *tag)
-			}
-		} else {
-			p.error("expected tag entry")
-			p.advance()
-		}
-	}
-
-	if !p.check(lexer.CloseBrace) {
-		p.error(fmt.Sprintf("unclosed brace for \"tags\" block opened at line %d", openLine))
-		return tags
-	}
-	p.advance()
-
 	return tags
 }
 
-func (p *Instance) parseTagEntry() *ast.TagEntry {
-	if !p.checkIdentifierLike() {
-		return nil
+func (r *hclReader) decidesOn(b *hclsyntax.Block) *ast.DecidesOnClause {
+	clause := &ast.DecidesOnClause{
+		Comments: r.commentsBefore(b.TypeRange.Start),
+		OpenPos:  r.at(b.OpenBraceRange.Start),
+		ClosePos: r.at(b.CloseBraceRange.Start),
 	}
-
-	keyTok := p.advance()
-
-	if !p.check(lexer.Colon) {
-		p.error("expected : after tag key")
-		return nil
+	body, ok := r.block(b, 0)
+	if !ok {
+		return clause
 	}
-	p.advance()
-
-	if !p.checkIdentifierLike() {
-		p.error("expected field reference after : in tag")
-		p.advance()
-		return nil
+	for _, a := range hclAttrs(body) {
+		switch a.Name {
+		case "events":
+			clause.Events, clause.EventsPos = r.names(a.Expr)
+		case "where":
+			clause.Predicate = r.predicate(a.Expr)
+		default:
+			r.fail(a.NameRange.Start, "unexpected %s in decides_on", a.Name)
+		}
 	}
-	fieldRefTok := p.advance()
-
-	return &ast.TagEntry{
-		Key:         keyTok.Value,
-		KeyPos:      p.position(keyTok),
-		FieldRef:    fieldRefTok.Value,
-		FieldRefPos: p.position(fieldRefTok),
-	}
+	return clause
 }
 
-func (p *Instance) parseFlowBlock() ([]*ast.Flow, []*ast.Rejection) {
-	comments := p.takePendingComments()
-	var flows []*ast.Flow
-	var rejections []*ast.Rejection
-	p.consume(lexer.KeywordFlow, "expected flow")
-	if !p.check(lexer.OpenBrace) {
-		p.error("expected { after flow")
-		return flows, rejections
+// predicate reads a tag expression. HCL supplies the grouping and the
+// precedence, so the shape below is the expression it already parsed.
+func (r *hclReader) predicate(expr hcl.Expression) ast.PredicateExpr {
+	switch e := expr.(type) {
+	case *hclsyntax.ParenthesesExpr:
+		return r.predicate(e.Expression)
+	case *hclsyntax.UnaryOpExpr:
+		if e.Op != hclsyntax.OpLogicalNot {
+			r.fail(e.SymbolRange.Start, "expected ! before a tag expression")
+			return nil
+		}
+		return &ast.NotExpr{OpPos: r.at(e.SymbolRange.Start), Expr: r.predicate(e.Val)}
+	case *hclsyntax.BinaryOpExpr:
+		operator := ""
+		switch e.Op {
+		case hclsyntax.OpLogicalAnd:
+			operator = "and"
+		case hclsyntax.OpLogicalOr:
+			operator = "or"
+		default:
+			r.fail(e.SrcRange.Start, "expected && or || between tag expressions")
+			return nil
+		}
+		return &ast.LogicalExpr{
+			Left:     r.predicate(e.LHS),
+			Operator: operator,
+			OpPos:    r.at(e.LHS.Range().End),
+			Right:    r.predicate(e.RHS),
+		}
+	case *hclsyntax.FunctionCallExpr:
+		if e.Name != "tag" || len(e.Args) != 2 {
+			r.fail(e.NameRange.Start, "expected tag(<key>, <field>)")
+			return nil
+		}
+		key, keyPos := r.name(e.Args[0])
+		value, valuePos := r.name(e.Args[1])
+		return &ast.TagPredicate{
+			Field:    key,
+			FieldPos: keyPos,
+			Operator: "=",
+			OpPos:    keyPos,
+			Value:    value,
+			ValuePos: valuePos,
+		}
 	}
-	openTok := p.advance()
-	openLine := openTok.Line
+	r.fail(expr.Range().Start, "expected a tag expression")
+	return nil
+}
 
-	// Comments written inside the block are collected here rather than in
-	// parseFlowEntry, so that a malformed entry hands its comments on to the
-	// next one instead of dropping them. Every sibling construct takes its own
-	// comments at the top of its parse function; a flow entry cannot, because
-	// the keyword that opens one is also what the block loop dispatches on.
-	entryComments := p.takePendingComments()
-	attach := func(target *[]*ast.Comment) {
-		*target = entryComments
-		entryComments = nil
+func (r *hclReader) spec(b *hclsyntax.Block) *ast.Spec {
+	spec := &ast.Spec{Comments: r.commentsBefore(b.TypeRange.Start)}
+	spec.Name, spec.NamePos = r.label(b)
+	spec.OpenPos = r.at(b.OpenBraceRange.Start)
+	spec.ClosePos = r.at(b.CloseBraceRange.Start)
+
+	body, ok := r.block(b, 1)
+	if !ok {
+		return spec
 	}
+	for _, a := range hclAttrs(body) {
+		switch a.Name {
+		case "given":
+			spec.Given = r.specElements(a.Expr)
+		case "when":
+			spec.When = r.specElement(a.Expr)
+		case "then":
+			spec.Then = r.then(a.Expr)
+		default:
+			r.fail(a.NameRange.Start, "unexpected %s in spec", a.Name)
+		}
+	}
+	return spec
+}
 
-	for !p.check(lexer.CloseBrace) && !p.isAtEnd() {
-		if !p.check(lexer.KeywordCommand) {
-			p.error("expected command in flow")
-			p.skipToNextFlowEntry()
-			entryComments = append(entryComments, p.takePendingComments()...)
+func (r *hclReader) then(expr hcl.Expression) ast.ThenClause {
+	if call, ok := hclCall(expr); ok {
+		if len(call.Args) != 1 {
+			r.fail(call.NameRange.Start, "%s names one element", call.Name)
+			return nil
+		}
+		name, position := r.name(call.Args[0])
+		switch call.Name {
+		case "rejected":
+			return &ast.ThenRejected{InvariantName: name, InvariantPos: position}
+		case "view":
+			return &ast.ThenView{ViewName: name, ViewPos: position}
+		case "command":
+			return &ast.ThenCommand{CommandName: name, CommandPos: position}
+		}
+		r.fail(call.NameRange.Start, "expected a list of events, rejected(), view() or command() after then")
+		return nil
+	}
+	return &ast.ThenEvents{Events: r.specElements(expr)}
+}
+
+func (r *hclReader) specElements(expr hcl.Expression) []*ast.SpecElement {
+	items, diags := hcl.ExprList(expr)
+	if diags.HasErrors() {
+		r.fail(expr.Range().Start, "expected a list of events")
+		return nil
+	}
+	elements := make([]*ast.SpecElement, 0, len(items))
+	for _, item := range items {
+		elements = append(elements, r.specElement(item))
+	}
+	return elements
+}
+
+// specElement reads a reference, on its own or qualified by an example payload
+// such as ReserveRoom({ roomId = "R-204" }).
+func (r *hclReader) specElement(expr hcl.Expression) *ast.SpecElement {
+	call, ok := hclCall(expr)
+	if !ok {
+		name, position := r.name(expr)
+		return &ast.SpecElement{Name: name, NamePos: position}
+	}
+	element := &ast.SpecElement{Name: call.Name, NamePos: r.at(call.NameRange.Start)}
+	if len(call.Args) != 1 {
+		r.fail(call.NameRange.Start, "an example payload is one set of field values")
+		return element
+	}
+	element.Payload = r.payload(call.Args[0])
+	return element
+}
+
+func (r *hclReader) payload(expr hcl.Expression) []*ast.PayloadField {
+	pairs, diags := hcl.ExprMap(expr)
+	if diags.HasErrors() {
+		r.fail(expr.Range().Start, "expected a set of field values")
+		return nil
+	}
+	var fields []*ast.PayloadField
+	for _, pair := range pairs {
+		name := hcl.ExprAsKeyword(pair.Key)
+		if name == "" {
+			r.fail(pair.Key.Range().Start, "expected a field name")
 			continue
 		}
-		flow, rejection := p.parseFlowEntry()
-		switch {
-		case flow != nil:
-			attach(&flow.Comments)
-			flows = append(flows, flow)
-		case rejection != nil:
-			attach(&rejection.Comments)
-			rejections = append(rejections, rejection)
+		field := &ast.PayloadField{
+			Name:     name,
+			NamePos:  r.at(pair.Key.Range().Start),
+			ValuePos: r.at(pair.Value.Range().Start),
 		}
-		entryComments = append(entryComments, p.takePendingComments()...)
+		field.Value, field.Kind = r.literal(pair.Value)
+		fields = append(fields, field)
 	}
-
-	if !p.check(lexer.CloseBrace) {
-		p.error(fmt.Sprintf("unclosed brace for \"flow\" block opened at line %d", openLine))
-		return flows, rejections
-	}
-	p.advance()
-
-	// A comment written above `flow {` leads the first entry the formatter will
-	// write, which is a flow whenever the block states one: the formatter emits
-	// every flow ahead of every rejection, so leaving it on whichever entry came
-	// first in source would sink it below the entry it introduces. It goes ahead
-	// of that entry's own comments, which is the order the author wrote them in.
-	var first *[]*ast.Comment
-	switch {
-	case len(flows) > 0:
-		first = &flows[0].Comments
-	case len(rejections) > 0:
-		first = &rejections[0].Comments
-	}
-	if first != nil {
-		*first = append(comments, *first...)
-		comments = nil
-	}
-
-	// Anything left belongs to no entry: the block stated none, or the comments
-	// trail the last one. A flow block is not an AST node, so there is nowhere
-	// to hang those; they return to the pending list for the next construct
-	// rather than being dropped.
-	p.pending = append(comments, append(entryComments, p.pending...)...)
-
-	return flows, rejections
+	return fields
 }
 
-func (p *Instance) parseFlowEntry() (*ast.Flow, *ast.Rejection) {
-	commandTok := p.advance()
-
-	// A malformed entry is reported on the line it was written on: reporting at
-	// the offending token would name the line below whenever the entry runs out
-	// of tokens at end of line, and that line is usually blameless.
-	reject := func(msg string) {
-		if p.checkSameLineAs(commandTok) {
-			p.error(msg)
-		} else {
-			p.errorAt(commandTok, msg)
+func (r *hclReader) literal(expr hcl.Expression) (string, ast.LiteralKind) {
+	start := expr.Range().Start
+	value, diags := expr.Value(nil)
+	if diags.HasErrors() || value.IsNull() {
+		r.fail(start, "expected a string, a number or a boolean")
+		return "", 0
+	}
+	switch value.Type() {
+	case cty.String:
+		return value.AsString(), ast.StringLiteral
+	case cty.Bool:
+		if value.True() {
+			return "true", ast.BooleanLiteral
 		}
-		p.skipToNextFlowEntry()
-	}
-
-	if !p.check(lexer.Arrow) {
-		reject("expected -> after command in flow")
-		return nil, nil
-	}
-	p.advance()
-	if !p.checkAny(lexer.KeywordEvent, lexer.KeywordRejected) {
-		reject("expected event or rejected after -> in flow")
-		return nil, nil
-	}
-	kindTok := p.advance()
-	if !p.check(lexer.Colon) {
-		reject("expected : in flow")
-		return nil, nil
-	}
-	p.advance()
-	if !p.check(lexer.Identifier) {
-		reject("expected command identifier after : in flow")
-		return nil, nil
-	}
-	cmdTok := p.advance()
-
-	rejected := kindTok.Type == lexer.KeywordRejected
-	if !p.check(lexer.Arrow) {
-		if rejected {
-			reject("expected -> between command and invariant identifiers")
-		} else {
-			reject("expected -> between command and event identifiers")
+		return "false", ast.BooleanLiteral
+	case cty.Number:
+		// The digits are taken from the source so that a value reaches the
+		// exports exactly as it was written.
+		written := r.textAt(expr.Range())
+		if strings.Contains(written, ".") {
+			return written, ast.DecimalLiteral
 		}
-		return nil, nil
+		return written, ast.IntegerLiteral
 	}
-	p.advance()
-	// An invariant may be named after a keyword — parseInvariant declares one
-	// with checkIdentifierLike and a spec's `then rejected` names one the same
-	// way, so gating this slot on a bare identifier would leave an invariant
-	// that can be declared and rejected in a spec unnameable from the timeline.
-	// `command` is the exception: it opens the next entry of this block, so
-	// taking it here would swallow that entry whenever this one is truncated.
-	namesTarget := p.check(lexer.Identifier)
-	if rejected {
-		namesTarget = p.checkIdentifierLike() && !p.check(lexer.KeywordCommand)
+	r.fail(start, "expected a string, a number or a boolean")
+	return "", 0
+}
+
+func (r *hclReader) textAt(rng hcl.Range) string {
+	if rng.Start.Byte < 0 || rng.End.Byte > len(r.src) {
+		return ""
 	}
-	if !namesTarget {
-		if rejected {
-			reject("expected invariant identifier")
-		} else {
-			reject("expected event identifier")
+	return r.src[rng.Start.Byte:rng.End.Byte]
+}
+
+// flow reads the heredoc holding a slice's flow entries. The arrows have no
+// operator in HCL, so the lines are read as they are written.
+func (r *hclReader) flow(slice *ast.Slice, a *hclsyntax.Attribute) {
+	leading := r.commentsBefore(a.NameRange.Start)
+	first := a.Expr.Range().Start.Line + 1
+	last := a.Expr.Range().End.Line
+
+	for number := first; number <= last && number <= len(r.lines); number++ {
+		line := r.lines[number-1]
+		trimmed := strings.TrimSpace(line)
+		if trimmed == "" || strings.HasPrefix(trimmed, "#") || !strings.Contains(trimmed, "->") {
+			continue
 		}
-		return nil, nil
-	}
-	targetTok := p.advance()
-
-	if rejected {
-		return nil, &ast.Rejection{
-			CommandName:   cmdTok.Value,
-			CommandPos:    p.position(cmdTok),
-			InvariantName: targetTok.Value,
-			InvariantPos:  p.position(targetTok),
+		kind, rest, found := strings.Cut(trimmed, ":")
+		if !found {
+			r.fail(hcl.Pos{Line: number, Column: 1}, "expected command -> event: or command -> rejected: in flow")
+			continue
 		}
-	}
-
-	return &ast.Flow{
-		CommandName: cmdTok.Value,
-		CommandPos:  p.position(cmdTok),
-		EventName:   targetTok.Value,
-		EventPos:    p.position(targetTok),
-	}, nil
-}
-
-func (p *Instance) parseQuotedEntryInto(construct string, value *string, position *ast.Position) {
-	keywordTok := p.advance()
-	if !p.check(lexer.String) {
-		offending := p.peek()
-		p.errorAt(offending, fmt.Sprintf("expected quoted string after %s in %s, got %q", keywordTok.Value, construct, offending.Value))
-		p.skipRestOfLineOrBlockEnd(keywordTok)
-		return
-	}
-
-	tok := p.advance()
-	*value, *position = tok.Value, p.position(tok)
-}
-
-func (p *Instance) parseIdentifierEntryInto(construct string, name *string, position *ast.Position) {
-	keywordTok := p.advance()
-	if !p.check(lexer.Identifier) {
-		p.errorAt(keywordTok, fmt.Sprintf("expected identifier after %s in %s", keywordTok.Value, construct))
-		p.skipRestOfLineOrBlockEnd(keywordTok)
-		return
-	}
-
-	tok := p.advance()
-	*name, *position = tok.Value, p.position(tok)
-}
-
-func (p *Instance) position(tok *lexer.Token) ast.Position {
-	return ast.Position{
-		Filename: p.filename,
-		Line:     tok.Line,
-		Column:   tok.Column,
-	}
-}
-
-func (p *Instance) peek() *lexer.Token {
-	p.skipComments()
-	if p.pos >= len(p.tokens) {
-		return &lexer.Token{Type: lexer.EOF}
-	}
-	return p.tokens[p.pos]
-}
-
-func (p *Instance) skipComments() {
-	for p.pos < len(p.tokens) && p.tokens[p.pos].Type == lexer.Comment {
-		tok := p.tokens[p.pos]
-		p.pending = append(p.pending, &ast.Comment{
-			Text:     tok.Value,
-			Position: ast.Position{Filename: p.filename, Line: tok.Line, Column: tok.Column},
-		})
-		p.pos++
-	}
-}
-
-func (p *Instance) takePendingComments() []*ast.Comment {
-	p.skipComments()
-	comments := p.pending
-	p.pending = nil
-	return comments
-}
-
-func (p *Instance) advance() *lexer.Token {
-	tok := p.peek()
-	if !p.isAtEnd() {
-		p.pos++
-	}
-	return tok
-}
-
-func (p *Instance) check(typ lexer.Kind) bool {
-	if p.isAtEnd() {
-		return false
-	}
-	return p.tokens[p.pos].Type == typ
-}
-
-func (p *Instance) checkAny(types ...lexer.Kind) bool {
-	for _, typ := range types {
-		if p.check(typ) {
-			return true
+		left, right, split := strings.Cut(rest, "->")
+		if !split {
+			r.fail(hcl.Pos{Line: number, Column: 1}, "expected -> between the two names in flow")
+			continue
 		}
+		from := strings.TrimSpace(left)
+		to := strings.TrimSpace(right)
+		fromPos := r.at(hcl.Pos{Line: number, Column: strings.Index(line, from) + 1})
+		toPos := r.at(hcl.Pos{Line: number, Column: strings.LastIndex(line, to) + 1})
+
+		switch strings.Join(strings.Fields(kind), " ") {
+		case "command -> event":
+			slice.Flows = append(slice.Flows, &ast.Flow{
+				Comments:    leading,
+				CommandName: from,
+				CommandPos:  fromPos,
+				EventName:   to,
+				EventPos:    toPos,
+			})
+		case "command -> rejected":
+			slice.Rejections = append(slice.Rejections, &ast.Rejection{
+				Comments:      leading,
+				CommandName:   from,
+				CommandPos:    fromPos,
+				InvariantName: to,
+				InvariantPos:  toPos,
+			})
+		default:
+			r.fail(hcl.Pos{Line: number, Column: 1}, "unexpected flow entry %q", kind)
+			continue
+		}
+		leading = nil
 	}
-	return false
-}
-
-func (p *Instance) checkSameLineAs(tok *lexer.Token) bool {
-	return !p.isAtEnd() && p.peek().Line == tok.Line
-}
-
-func (p *Instance) checkIdentifierLike() bool {
-	if p.isAtEnd() {
-		return false
-	}
-	typ := p.tokens[p.pos].Type
-	return typ == lexer.Identifier || typ.IsKeyword()
-}
-
-func (p *Instance) checkIdentifierLikeSameLineAs(tok *lexer.Token) bool {
-	return p.checkSameLineAs(tok) && p.checkIdentifierLike()
-}
-
-func (p *Instance) consume(typ lexer.Kind, msg string) {
-	if !p.check(typ) {
-		p.error(msg)
-		return
-	}
-	p.advance()
-}
-
-// skipToNextFlowEntry drains a malformed flow entry up to whatever starts the
-// next one. An entry may wrap onto further lines, so draining by line leaves
-// the continuation behind for the block loop to report a second time; and every
-// entry opens on "command", which no entry can contain anywhere else, so that
-// keyword is an unambiguous place to resume.
-func (p *Instance) skipToNextFlowEntry() {
-	for !p.isAtEnd() && !p.check(lexer.KeywordCommand) && !p.check(lexer.CloseBrace) {
-		p.advance()
-	}
-}
-
-func (p *Instance) skipRestOfLineOrBlockEnd(tok *lexer.Token) {
-	for p.checkSameLineAs(tok) && !p.check(lexer.CloseBrace) {
-		p.advance()
-	}
-}
-
-// skipTo advances tokens until one of the given types is found, or the end
-// of input is reached. Used for error recovery.
-func (p *Instance) skipTo(types ...lexer.Kind) {
-	for !p.isAtEnd() && !p.checkAny(types...) {
-		p.advance()
-	}
-}
-
-func (p *Instance) isAtEnd() bool {
-	p.skipComments()
-	return p.pos >= len(p.tokens) || p.tokens[p.pos].Type == lexer.EOF
-}
-
-func (p *Instance) error(msg string) {
-	p.errorAt(p.peek(), msg)
-}
-
-func (p *Instance) errorAt(tok *lexer.Token, msg string) {
-	p.errorAtPosition(p.position(tok), msg)
-}
-
-func (p *Instance) errorAtPosition(pos ast.Position, msg string) {
-	p.diagnostics = append(p.diagnostics, &diagnostic.Entry{
-		Filename: pos.Filename,
-		Line:     pos.Line,
-		Column:   pos.Column,
-		Message:  msg,
-	})
 }

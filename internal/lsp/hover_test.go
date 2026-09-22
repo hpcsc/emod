@@ -15,46 +15,54 @@ func TestGetHover(t *testing.T) {
 	const testDoc = `context "Orders" {
     aggregate "Sales" {
         slice "OrderSlice" {
-            command SubmitOrder {
+            command "SubmitOrder" {
             }
-            event OrderSubmitted {
+            event "OrderSubmitted" {
                 fields {
-                    id String required
-                    amount Number required
+                    id     = required(String)
+                    amount = required(Number)
                 }
             }
-            event EmptyEvent {
+            event "EmptyEvent" {
             }
-            view OrderView {
-                subscribes [OrderSubmitted]
+            view "OrderView" {
+                subscribes = [OrderSubmitted]
             }
-            view NoSubscribeView {
+            view "NoSubscribeView" {
             }
         }
     }
 }
 `
 
-	const automationDoc = `context "Warehouse" {
-    aggregate "Hold" {
-        slice "Expire Holds" {
-            event HoldSwept {
-                fields {
-                    every string required
-                }
-            }
-            automation ReleaseOnPickup {
-                on ItemPickedUp
-                command ReleaseHold
-            }
-            automation SweepStaleHolds {
-                every "0 * * * *"
-                reads PendingExpiries
-                command ExpireHold
-            }
+	const automationDoc = `emod = 1
+
+model "" {
+}
+
+context "Warehouse" {
+  aggregate "Hold" {
+    slice "Expire Holds" {
+      event "HoldSwept" {
+        fields {
+          every = required(string)
         }
+      }
+
+      automation "ReleaseOnPickup" {
+        on      = ItemPickedUp
+        command = ReleaseHold
+      }
+
+      automation "SweepStaleHolds" {
+        every   = "0 * * * *"
+        reads   = PendingExpiries
+        command = ExpireHold
+      }
     }
-}`
+  }
+}
+`
 
 	const everyDescription = `Sets the schedule that activates the automation: a duration such as "5m", or a five-field cron expression such as "0 2 * * *".`
 
@@ -74,27 +82,27 @@ func TestGetHover(t *testing.T) {
 	}
 
 	t.Run("command name shows parent context and aggregate", func(t *testing.T) {
-		cLine, cChar := posIn(t, testDoc, "command SubmitOrder", "SubmitOrder")
+		cLine, cChar := posIn(t, testDoc, `command "SubmitOrder`, "SubmitOrder")
 		assertHover(t, testDoc, cLine, cChar, "**Command** in Orders > Sales")
 	})
 
 	t.Run("event name shows parent context, aggregate, and fields", func(t *testing.T) {
-		cLine, cChar := posIn(t, testDoc, "event OrderSubmitted", "OrderSubmitted")
+		cLine, cChar := posIn(t, testDoc, `event "OrderSubmitted`, "OrderSubmitted")
 		assertHover(t, testDoc, cLine, cChar, "**Event** in Orders > Sales\n\n**Fields:**\n- id String required\n- amount Number required")
 	})
 
 	t.Run("event without fields omits fields section", func(t *testing.T) {
-		cLine, cChar := posIn(t, testDoc, "event EmptyEvent", "EmptyEvent")
+		cLine, cChar := posIn(t, testDoc, `event "EmptyEvent`, "EmptyEvent")
 		assertHover(t, testDoc, cLine, cChar, "**Event** in Orders > Sales")
 	})
 
 	t.Run("view name shows parent context, aggregate, and subscribed events", func(t *testing.T) {
-		cLine, cChar := posIn(t, testDoc, "view OrderView", "OrderView")
+		cLine, cChar := posIn(t, testDoc, `view "OrderView`, "OrderView")
 		assertHover(t, testDoc, cLine, cChar, "**View** in Orders > Sales\n\n**Subscribes:**\n- OrderSubmitted")
 	})
 
 	t.Run("view without subscriptions omits subscribes section", func(t *testing.T) {
-		cLine, cChar := posIn(t, testDoc, "view NoSubscribeView", "NoSubscribeView")
+		cLine, cChar := posIn(t, testDoc, `view "NoSubscribeView`, "NoSubscribeView")
 		assertHover(t, testDoc, cLine, cChar, "**View** in Orders > Sales")
 	})
 
@@ -107,12 +115,12 @@ func TestGetHover(t *testing.T) {
 			expected  string
 		}{
 			{
-				container: "command ClaimDesk",
+				container: `command "ClaimDesk"`,
 				name:      "ClaimDesk",
 				expected:  "**Command** in Reading Room",
 			},
 			{
-				container: "event DeskClaimed",
+				container: `event "DeskClaimed"`,
 				name:      "DeskClaimed",
 				expected: "**Event** in Reading Room\n\n**Fields:**" +
 					"\n- sessionId string required" +
@@ -121,17 +129,17 @@ func TestGetHover(t *testing.T) {
 					"\n- claimedAt timestamp required",
 			},
 			{
-				container: "view DeskOccupancyView",
+				container: `view "DeskOccupancyView"`,
 				name:      "DeskOccupancyView",
 				expected:  "**View** in Reading Room\n\n**Subscribes:**\n- DeskClaimed\n- DeskReleased",
 			},
 			{
-				container: "command BorrowCopy",
+				container: `command "BorrowCopy"`,
 				name:      "BorrowCopy",
 				expected:  "**Command** in Lending > Loan",
 			},
 			{
-				container: "event CopyBorrowed",
+				container: `event "CopyBorrowed`,
 				name:      "CopyBorrowed",
 				expected: "**Event** in Lending > Loan\n\n**Fields:**" +
 					"\n- loanId string required" +
@@ -140,7 +148,7 @@ func TestGetHover(t *testing.T) {
 					"\n- dueOn date required",
 			},
 			{
-				container: "view MemberLoansView",
+				container: `view "MemberLoansView"`,
 				name:      "MemberLoansView",
 				expected:  "**View** in Lending > Loan\n\n**Subscribes:**\n- CopyBorrowed",
 			},
@@ -215,14 +223,14 @@ func TestGetHover(t *testing.T) {
 			},
 			{
 				construct:   "command",
-				container:   "command MakeReservation",
+				container:   `command "MakeReservation"`,
 				name:        "MakeReservation",
 				undescribed: "**Command** in Reservations > Reservation",
 				description: "Ask the hotel to hold a room for a date range, 10% deposit taken up front",
 			},
 			{
 				construct: "event",
-				container: "event ReservationMade",
+				container: `event "ReservationMade"`,
 				name:      "ReservationMade",
 				undescribed: "**Event** in Reservations > Reservation\n\n**Fields:**" +
 					"\n- reservationId string required" +
@@ -235,28 +243,28 @@ func TestGetHover(t *testing.T) {
 			},
 			{
 				construct:   "view",
-				container:   "view ReservationsView",
+				container:   `view "ReservationsView"`,
 				name:        "ReservationsView",
 				undescribed: "**View** in Reservations > Reservation\n\n**Subscribes:**\n- ReservationMade",
 				description: "Every reservation with the stage it has reached",
 			},
 			{
 				construct:   "automation",
-				container:   "automation AutoConfirm",
+				container:   `automation "AutoConfirm"`,
 				name:        "AutoConfirm",
 				undescribed: "**Automation** in Reservations > Reservation",
 				description: "Confirms every reservation the moment it is made",
 			},
 			{
 				construct:   "translation",
-				container:   "translation BookingImport",
+				container:   `translation "BookingImport"`,
 				name:        "BookingImport",
 				undescribed: "**Translation** in Reservations > Reservation",
 				description: "Restates a partner webhook in the hotel's own language",
 			},
 			{
 				construct: "event a translation declares",
-				container: "event BookingImported",
+				container: `event "BookingImported"`,
 				name:      "BookingImported",
 				undescribed: "**Event** in Reservations > Reservation\n\n**Fields:**" +
 					"\n- bookingId string required" +
@@ -279,18 +287,25 @@ func TestGetHover(t *testing.T) {
 	})
 
 	t.Run("a description keeps the characters that delimit code elsewhere", func(t *testing.T) {
-		const doc = `context "Reservations" {
-    description "A # and a // and a { brace }"
-    aggregate "Reservation" {
-    }
-}`
+		const doc = `emod = 1
+
+model "" {
+}
+
+context "Reservations" {
+  description = "A # and a // and a { brace }"
+
+  aggregate "Reservation" {
+  }
+}
+`
 		line, char := posIn(t, doc, `context "Reservations"`, "Reservations")
 		assertHover(t, doc, line, char, "**Context**\n\nA # and a // and a { brace }")
 	})
 
 	t.Run("the description keyword still describes itself", func(t *testing.T) {
 		doc := test.DescribedHotelReservation
-		line, char := posIn(t, doc, `description "Everything the hotel knows`, "description")
+		line, char := posIn(t, doc, `description = "Everything the hotel knows`, "description")
 		assertHover(t, doc, line, char, "Attaches a human-readable description to the enclosing declaration.")
 	})
 
@@ -298,14 +313,14 @@ func TestGetHover(t *testing.T) {
 		const doc = `context "Reservations" {
     aggregate "Reservation" {
         slice "Import External Booking" {
-            event ReservationMade {
+            event "ReservationMade" {
             }
-            view ImportsView {
-                subscribes [ReservationMade, BookingImported]
+            view "ImportsView" {
+                subscribes = [ReservationMade, BookingImported]
             }
-            translation BookingImport {
-                external_system "Booking.com API"
-                event BookingImported {
+            translation "BookingImport" {
+                external_system = "Booking.com API"
+                event "BookingImported" {
                 }
             }
         }
@@ -313,13 +328,13 @@ func TestGetHover(t *testing.T) {
 }`
 		uri := "file:///imports.emod"
 
-		madeLine, madeChar := posIn(t, doc, "subscribes [ReservationMade, BookingImported]", "ReservationMade")
+		madeLine, madeChar := posIn(t, doc, "subscribes = [ReservationMade, BookingImported", "ReservationMade")
 		require.NotNil(t, lsp.GetDefinition(doc, madeLine, madeChar, uri), "the slice-declared event is the control")
 
-		subLine, subChar := posIn(t, doc, "subscribes [ReservationMade, BookingImported]", "BookingImported")
+		subLine, subChar := posIn(t, doc, "subscribes = [ReservationMade, BookingImported", "BookingImported")
 		require.Nil(t, lsp.GetDefinition(doc, subLine, subChar, uri))
 
-		declLine, declChar := posIn(t, doc, "event BookingImported", "BookingImported")
+		declLine, declChar := posIn(t, doc, `event "BookingImported"`, "BookingImported")
 		require.NotNil(t, lsp.GetHover(doc, declLine, declChar), "hover answers where navigation does not")
 		require.Nil(t, lsp.GetReferences(doc, declLine, declChar, uri))
 	})
@@ -364,29 +379,35 @@ func TestGetHover(t *testing.T) {
 	})
 
 	t.Run("a quoted name holding non-ASCII text measures itself in characters", func(t *testing.T) {
-		const doc = `context "Réservations" {
-    aggregate "Séjour" {
-    }
-}`
+		const doc = `emod = 1
+
+model "" {
+}
+
+context "Réservations" {
+  aggregate "Séjour" {
+  }
+}
+`
 		const name = "Réservations"
 
-		_, quoteChar := posIn(t, doc, `context "`, `"`)
+		quoteLine, quoteChar := posIn(t, doc, `context "`, `"`)
 		nameStart := quoteChar + 1
 		lastChar := nameStart + len([]rune(name)) - 1
 
-		first := lsp.GetHover(doc, 0, nameStart)
+		first := lsp.GetHover(doc, quoteLine, nameStart)
 		require.NotNil(t, first, "cursor on the name's first character")
 		require.Equal(t, &lsp.Range{
-			Start: lsp.Position{Line: 0, Character: nameStart},
-			End:   lsp.Position{Line: 0, Character: lastChar + 1},
+			Start: lsp.Position{Line: quoteLine, Character: nameStart},
+			End:   lsp.Position{Line: quoteLine, Character: lastChar + 1},
 		}, first.Range)
 
-		require.NotNil(t, lsp.GetHover(doc, 0, lastChar), "cursor on the name's last character")
-		require.Nil(t, lsp.GetHover(doc, 0, lastChar+1), "cursor on the closing quote")
+		require.NotNil(t, lsp.GetHover(doc, quoteLine, lastChar), "cursor on the name's last character")
+		require.Nil(t, lsp.GetHover(doc, quoteLine, lastChar+1), "cursor on the closing quote")
 	})
 
 	t.Run("cursor on keyword returns description", func(t *testing.T) {
-		line, char := posIn(t, testDoc, "command SubmitOrder", "command")
+		line, char := posIn(t, testDoc, `command "SubmitOrder`, "command")
 		assertHover(t, testDoc, line, char, "Defines a command that can be sent to an aggregate.")
 	})
 
@@ -416,15 +437,15 @@ func TestGetHover(t *testing.T) {
 	})
 
 	t.Run("on and every each describe how the automation they sit in is activated", func(t *testing.T) {
-		onLine, onChar := posIn(t, automationDoc, "automation ReleaseOnPickup", "on ItemPickedUp")
+		onLine, onChar := posIn(t, automationDoc, `automation "ReleaseOnPickup`, "on      = ItemPickedUp")
 		assertHover(t, automationDoc, onLine, onChar, "Names the event whose occurrence activates the automation.")
 
-		everyLine, everyChar := posIn(t, automationDoc, "automation SweepStaleHolds", `every "0 * * * *"`)
+		everyLine, everyChar := posIn(t, automationDoc, `automation "SweepStaleHolds`, `every   = "0`)
 		assertHover(t, automationDoc, everyLine, everyChar, everyDescription)
 	})
 
 	t.Run("automation names its pattern, both activation forms and the view it reads", func(t *testing.T) {
-		line, char := posIn(t, automationDoc, "automation SweepStaleHolds", "automation")
+		line, char := posIn(t, automationDoc, `automation "SweepStaleHolds`, "automation")
 		content := assertHover(
 			t, automationDoc, line, char,
 			"Defines an automation, the reactive processor of the Automation pattern: activated by an on event or an every schedule, optionally reads a view, and sends a command.",
@@ -437,18 +458,25 @@ func TestGetHover(t *testing.T) {
 	})
 
 	t.Run("trigger names the Command pattern and no kind between the keyword and the name", func(t *testing.T) {
-		doc := `context "Warehouse" {
-    aggregate "Hold" {
-        slice "Place Hold" {
-            trigger "Hold Desk" {
-                actor Member
-                reads AvailableCopiesView
-            }
-            command PlaceHold {
-            }
-        }
+		doc := `emod = 1
+
+model "" {
+}
+
+context "Warehouse" {
+  aggregate "Hold" {
+    slice "Place Hold" {
+      trigger "Hold Desk" {
+        actor = Member
+        reads = AvailableCopiesView
+      }
+
+      command "PlaceHold" {
+      }
     }
-}`
+  }
+}
+`
 		line, char := posIn(t, doc, `trigger "Hold Desk"`, "trigger")
 		content := assertHover(
 			t, doc, line, char,
@@ -462,7 +490,7 @@ func TestGetHover(t *testing.T) {
 	})
 
 	t.Run("reads names every block that accepts it", func(t *testing.T) {
-		line, char := posIn(t, automationDoc, "reads PendingExpiries", "reads")
+		line, char := posIn(t, automationDoc, "reads   = PendingExpiries", "reads")
 		content := assertHover(
 			t, automationDoc, line, char,
 			"Defines the view a trigger, automation or translation reads from.",
@@ -474,10 +502,10 @@ func TestGetHover(t *testing.T) {
 	})
 
 	t.Run("a field named every hovers as the every keyword", func(t *testing.T) {
-		fieldLine, fieldChar := posIn(t, automationDoc, "fields {", "every string required")
+		fieldLine, fieldChar := posIn(t, automationDoc, "fields {", "every = required(string)")
 		assertHover(t, automationDoc, fieldLine, fieldChar, everyDescription)
 
-		scheduleLine, scheduleChar := posIn(t, automationDoc, "automation SweepStaleHolds", `every "0 * * * *"`)
+		scheduleLine, scheduleChar := posIn(t, automationDoc, `automation "SweepStaleHolds`, `every   = "0`)
 		assertHover(t, automationDoc, scheduleLine, scheduleChar, everyDescription)
 	})
 
@@ -514,10 +542,10 @@ func TestGetHover(t *testing.T) {
 			},
 		} {
 			t.Run(tc.home, func(t *testing.T) {
-				declLine, declChar := posIn(t, doc, "invariant "+tc.invariant, tc.invariant)
+				declLine, declChar := posIn(t, doc, tc.invariant+" = ", tc.invariant)
 				assertHover(t, doc, declLine, declChar, tc.expected)
 
-				refLine, refChar := posIn(t, doc, "then rejected "+tc.invariant, tc.invariant)
+				refLine, refChar := posIn(t, doc, "rejected("+tc.invariant, tc.invariant)
 				reference := lsp.GetHover(doc, refLine, refChar)
 				require.NotNil(t, reference)
 				require.Equal(t, tc.expected, reference.Contents.Value)
@@ -533,30 +561,45 @@ func TestGetHover(t *testing.T) {
 	})
 
 	t.Run("two scopes declaring one invariant name each answer with their own statement", func(t *testing.T) {
-		const doc = `context "Lending" {
-    aggregate "Loan" {
-        invariant OneAtATime "A loan covers exactly one copy of one title"
-        slice "Borrow Copy" {
-            command BorrowCopy {
-            }
-            spec "refuses a second copy of the title" {
-                when BorrowCopy
-                then rejected OneAtATime
-            }
-        }
+		const doc = `emod = 1
+
+model "" {
+}
+
+context "Lending" {
+  aggregate "Loan" {
+    invariants {
+      OneAtATime = "A loan covers exactly one copy of one title"
     }
-    aggregate "Hold" {
-        invariant OneAtATime "A member holds at most one title back at a time"
-        slice "Place Hold" {
-            command PlaceHold {
-            }
-            spec "refuses a second hold" {
-                when PlaceHold
-                then rejected OneAtATime
-            }
-        }
+
+    slice "Borrow Copy" {
+      command "BorrowCopy" {
+      }
+
+      spec "refuses a second copy of the title" {
+        when = BorrowCopy
+        then = rejected(OneAtATime)
+      }
     }
-}`
+  }
+
+  aggregate "Hold" {
+    invariants {
+      OneAtATime = "A member holds at most one title back at a time"
+    }
+
+    slice "Place Hold" {
+      command "PlaceHold" {
+      }
+
+      spec "refuses a second hold" {
+        when = PlaceHold
+        then = rejected(OneAtATime)
+      }
+    }
+  }
+}
+`
 
 		loanLine, loanChar := posIn(t, doc, `spec "refuses a second copy of the title"`, "OneAtATime")
 		assertHover(t, doc, loanLine, loanChar, "**Invariant** in Lending > Loan\n\nA loan covers exactly one copy of one title")
@@ -566,67 +609,92 @@ func TestGetHover(t *testing.T) {
 	})
 
 	t.Run("an aggregate does not resolve against the invariants of the context enclosing it", func(t *testing.T) {
-		const doc = `context "Lending" {
-    invariant CardInGoodStanding "A member borrows only while their card is in good standing"
-    aggregate "Loan" {
-        invariant OneCopyPerLoan "A loan covers exactly one copy of one title"
-        slice "Borrow Copy" {
-            command BorrowCopy {
-            }
-            spec "refuses a copy already on loan" {
-                when BorrowCopy
-                then rejected OneCopyPerLoan
-            }
-            spec "refuses a member whose card has lapsed" {
-                when BorrowCopy
-                then rejected CardInGoodStanding
-            }
-        }
-    }
-}`
+		const doc = `emod = 1
 
-		ownLine, ownChar := posIn(t, doc, "then rejected OneCopyPerLoan", "OneCopyPerLoan")
+model "" {
+}
+
+context "Lending" {
+  invariants {
+    CardInGoodStanding = "A member borrows only while their card is in good standing"
+  }
+
+  aggregate "Loan" {
+    invariants {
+      OneCopyPerLoan = "A loan covers exactly one copy of one title"
+    }
+
+    slice "Borrow Copy" {
+      command "BorrowCopy" {
+      }
+
+      spec "refuses a copy already on loan" {
+        when = BorrowCopy
+        then = rejected(OneCopyPerLoan)
+      }
+
+      spec "refuses a member whose card has lapsed" {
+        when = BorrowCopy
+        then = rejected(CardInGoodStanding)
+      }
+    }
+  }
+}
+`
+
+		ownLine, ownChar := posIn(t, doc, "rejected(OneCopyPerLoan", "OneCopyPerLoan")
 		assertHover(t, doc, ownLine, ownChar, "**Invariant** in Lending > Loan\n\nA loan covers exactly one copy of one title")
 
-		enclosingLine, enclosingChar := posIn(t, doc, "then rejected CardInGoodStanding", "CardInGoodStanding")
+		enclosingLine, enclosingChar := posIn(t, doc, "rejected(CardInGoodStanding", "CardInGoodStanding")
 		assertNil(t, doc, enclosingLine, enclosingChar)
 	})
 
 	t.Run("a rejection naming an invariant of another scope hovers nothing", func(t *testing.T) {
-		const doc = `context "Lending" {
-    aggregate "Loan" {
-        invariant OneCopyPerLoan "A loan covers exactly one copy of one title"
-        slice "Borrow Copy" {
-            command BorrowCopy {
-            }
-        }
-    }
-    aggregate "Hold" {
-        slice "Place Hold" {
-            command PlaceHold {
-            }
-            spec "refuses a second hold" {
-                when PlaceHold
-                then rejected OneCopyPerLoan
-            }
-        }
-    }
-}`
+		const doc = `emod = 1
 
-		declLine, declChar := posIn(t, doc, "invariant OneCopyPerLoan", "OneCopyPerLoan")
+model "" {
+}
+
+context "Lending" {
+  aggregate "Loan" {
+    invariants {
+      OneCopyPerLoan = "A loan covers exactly one copy of one title"
+    }
+
+    slice "Borrow Copy" {
+      command "BorrowCopy" {
+      }
+    }
+  }
+
+  aggregate "Hold" {
+    slice "Place Hold" {
+      command "PlaceHold" {
+      }
+
+      spec "refuses a second hold" {
+        when = PlaceHold
+        then = rejected(OneCopyPerLoan)
+      }
+    }
+  }
+}
+`
+
+		declLine, declChar := posIn(t, doc, "OneCopyPerLoan", "OneCopyPerLoan")
 		assertHover(t, doc, declLine, declChar, "**Invariant** in Lending > Loan\n\nA loan covers exactly one copy of one title")
 
-		refLine, refChar := posIn(t, doc, "then rejected OneCopyPerLoan", "OneCopyPerLoan")
+		refLine, refChar := posIn(t, doc, "rejected(OneCopyPerLoan", "OneCopyPerLoan")
 		assertNil(t, doc, refLine, refChar)
 	})
 
 	t.Run("the rejected keyword and the invariant name beside it answer differently", func(t *testing.T) {
 		doc := test.SpecLibraryLending
 
-		keywordLine, keywordChar := posIn(t, doc, "then rejected OneCopyPerLoan", "rejected")
+		keywordLine, keywordChar := posIn(t, doc, "rejected(OneCopyPerLoan", "rejected")
 		assertHover(t, doc, keywordLine, keywordChar, "States that a spec's command is rejected by the named invariant.")
 
-		nameLine, nameChar := posIn(t, doc, "then rejected OneCopyPerLoan", "OneCopyPerLoan")
+		nameLine, nameChar := posIn(t, doc, "rejected(OneCopyPerLoan", "OneCopyPerLoan")
 		assertHover(t, doc, nameLine, nameChar, "**Invariant** in Lending > Loan\n\nA loan covers exactly one copy of one title")
 	})
 
@@ -650,7 +718,7 @@ func TestGetHover(t *testing.T) {
 			},
 		} {
 			t.Run(tc.home, func(t *testing.T) {
-				declLine, declChar := posIn(t, doc, "invariant "+tc.invariant, tc.invariant)
+				declLine, declChar := posIn(t, doc, tc.invariant+" = ", tc.invariant)
 				declaration := lsp.GetHover(doc, declLine, declChar)
 				require.NotNil(t, declaration)
 
@@ -664,32 +732,46 @@ func TestGetHover(t *testing.T) {
 	})
 
 	t.Run("a rejection edge naming an invariant of another scope hovers nothing", func(t *testing.T) {
-		const doc = `context "Lending" {
-    aggregate "Loan" {
-        invariant OneCopyPerLoan "A loan covers exactly one copy of one title"
-        slice "Borrow Copy" {
-            command BorrowCopy {
-            }
-            event CopyBorrowed {
-            }
-            flow {
-                command -> event: BorrowCopy -> CopyBorrowed
-            }
-        }
+		const doc = `emod = 1
+
+model "" {
+}
+
+context "Lending" {
+  aggregate "Loan" {
+    invariants {
+      OneCopyPerLoan = "A loan covers exactly one copy of one title"
     }
-    aggregate "Hold" {
-        slice "Place Hold" {
-            command PlaceHold {
-            }
-            event HoldPlaced {
-            }
-            flow {
-                command -> rejected: PlaceHold -> OneCopyPerLoan
-                command -> event: PlaceHold -> HoldPlaced
-            }
-        }
+
+    slice "Borrow Copy" {
+      command "BorrowCopy" {
+      }
+
+      event "CopyBorrowed" {
+      }
+
+      flow = <<-FLOW
+        command -> event:    BorrowCopy -> CopyBorrowed
+      FLOW
     }
-}`
+  }
+
+  aggregate "Hold" {
+    slice "Place Hold" {
+      command "PlaceHold" {
+      }
+
+      event "HoldPlaced" {
+      }
+
+      flow = <<-FLOW
+        command -> event:    PlaceHold -> HoldPlaced
+        command -> rejected: PlaceHold -> OneCopyPerLoan
+      FLOW
+    }
+  }
+}
+`
 		line, char := posIn(t, doc, "command -> rejected: PlaceHold -> OneCopyPerLoan", "OneCopyPerLoan")
 		assertNil(t, doc, line, char)
 	})
@@ -697,7 +779,7 @@ func TestGetHover(t *testing.T) {
 	t.Run("cursor on non-resolvable token returns nil", func(t *testing.T) {
 		// Cursor on the identifier "String", a domain type: it names no
 		// declaration and the language gives it no meaning of its own.
-		line, char := posIn(t, testDoc, "id String required", "String")
+		line, char := posIn(t, testDoc, "id     = required(String)", "String")
 		assertNil(t, testDoc, line, char)
 	})
 
@@ -715,7 +797,7 @@ func TestGetHover(t *testing.T) {
 	})
 
 	t.Run("hover range covers definition name", func(t *testing.T) {
-		cLine, cChar := posIn(t, testDoc, "command SubmitOrder", "SubmitOrder")
+		cLine, cChar := posIn(t, testDoc, `command "SubmitOrder`, "SubmitOrder")
 		hover := lsp.GetHover(testDoc, cLine, cChar)
 		require.NotNil(t, hover)
 		require.NotNil(t, hover.Range)

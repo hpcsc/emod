@@ -13,7 +13,6 @@ import (
 	"github.com/hpcsc/emod/internal/export"
 	"github.com/hpcsc/emod/internal/formatter"
 	"github.com/hpcsc/emod/internal/importer"
-	"github.com/hpcsc/emod/internal/lexer"
 	"github.com/hpcsc/emod/internal/oracle"
 	"github.com/hpcsc/emod/internal/parser"
 	"github.com/hpcsc/emod/internal/test"
@@ -23,8 +22,7 @@ import (
 
 func parseModel(t *testing.T, source string) *ast.Model {
 	t.Helper()
-	tokens, _ := lexer.Scan(source, "test.emod")
-	model, _ := parser.New(tokens, "test.emod").Parse()
+	model, _ := parser.Parse(source, "test.emod")
 	require.NotNil(t, model)
 	return model
 }
@@ -83,9 +81,7 @@ func importDiagram(t *testing.T, document string) *ast.Model {
 // parseSaved reads back the text a save writes for model, so what the two
 // helpers below report on is the file the next open would see.
 func parseSaved(model *ast.Model) (*ast.Model, []*diagnostic.Entry) {
-	tokens, scanDiags := lexer.Scan(formatter.Format(model), "saved.emod")
-	saved, parseDiags := parser.New(tokens, "saved.emod").Parse()
-	return saved, append(scanDiags, parseDiags...)
+	return parser.Parse(formatter.Format(model), "saved.emod")
 }
 
 func savedTextDiagnostics(model *ast.Model) []*diagnostic.Entry {
@@ -130,11 +126,14 @@ func TestImportDiagram(t *testing.T) {
 		})
 
 		t.Run("re-emits every comment above the construct it was written on", func(t *testing.T) {
-			source := `emod 1
-model "Library Lending"
+			source := `emod = 1
+
+model "Library Lending" {
+}
 
 # Anyone holding a library card
-actor "Member"
+actor "Member" {
+}
 
 # Everything the library knows about a copy leaving the building
 context "Lending" {
@@ -144,64 +143,66 @@ context "Lending" {
     slice "Borrow Copy" {
       # The desk terminal the librarian types into
       trigger "Lending Desk" {
-        actor Member
-        reads AvailableCopiesView
+        actor = Member
+        reads = AvailableCopiesView
       }
 
       # Ask the library to hand a copy over
       # The deposit is taken at the desk, not here
-      command BorrowCopy {
+      command "BorrowCopy" {
         fields {
-          copyId string required
+          copyId = string
         }
       }
 
       # A copy left the building
-      event CopyBorrowed {
+      event "CopyBorrowed" {
         fields {
-          loanId string required
-          copyId string required
+          loanId = string
+          copyId = string
         }
       }
 
       # Every copy still on the shelf
-      view AvailableCopiesView {
-        subscribes [CopyBorrowed]
+      view "AvailableCopiesView" {
+        subscribes = [CopyBorrowed]
+
         fields {
-          copyId string required
+          copyId = string
         }
       }
 
       # Chases a copy nobody brought back
-      automation RecallOverdueCopy {
-        on CopyBorrowed
-        command BorrowCopy
+      automation "RecallOverdueCopy" {
+        on      = CopyBorrowed
+        command = BorrowCopy
       }
 
-      flow {
-        command -> event: BorrowCopy -> CopyBorrowed
-      }
+      flow = <<-FLOW
+        command -> event:    BorrowCopy -> CopyBorrowed
+      FLOW
     }
   }
 
   # A partner branch reports a loan of its own
   slice "Import Partner Loan" {
     # Record a loan taken at a partner branch
-    command ImportPartnerLoan {
+    command "ImportPartnerLoan" {
       fields {
-        externalRef string required
+        externalRef = string
       }
     }
 
     # Restates a partner branch's notice in the library's own language
-    translation PartnerLoanImport {
-      external_system "Partner Branch API"
-      command ImportPartnerLoan
+    translation "PartnerLoanImport" {
+      external_system = "Partner Branch API"
+      command         = ImportPartnerLoan
+
       # A partner branch reported a loan
-      event PartnerLoanImported {
+      event "PartnerLoanImported" {
         fields {
-          loanId      string required
-          externalRef string required
+          loanId      = string
+          externalRef = string
         }
       }
     }
@@ -212,23 +213,25 @@ context "Lending" {
 		})
 
 		t.Run("deleting a node takes its comments with it and leaves the ones beside it alone", func(t *testing.T) {
-			source := `emod 1
-model "Library Lending"
+			source := `emod = 1
+
+model "Library Lending" {
+}
 
 context "Lending" {
   slice "Borrow Copy" {
     # Ask the library to hand a copy over
-    command BorrowCopy {
+    command "BorrowCopy" {
       fields {
-        copyId string required
+        copyId = required(string)
       }
     }
 
     # Pull a copy back from a member who kept it too long
     # Only a librarian may run this
-    command RecallCopy {
+    command "RecallCopy" {
       fields {
-        loanId string required
+        loanId = required(string)
       }
     }
   }
@@ -236,15 +239,17 @@ context "Lending" {
 `
 			document := withoutNodeLabelled(t, exportedDiagram(t, parseModel(t, source)), "RecallCopy")
 
-			require.Equal(t, `emod 1
-model "Library Lending"
+			require.Equal(t, `emod = 1
+
+model "Library Lending" {
+}
 
 context "Lending" {
   slice "Borrow Copy" {
     # Ask the library to hand a copy over
-    command BorrowCopy {
+    command "BorrowCopy" {
       fields {
-        copyId string required
+        copyId = required(string)
       }
     }
   }
@@ -253,26 +258,28 @@ context "Lending" {
 		})
 
 		t.Run("preserves slices declared directly under a context", func(t *testing.T) {
-			source := `emod 1
-model "M"
+			source := `emod = 1
+
+model "M" {
+}
 
 context "C" {
   slice "Direct" {
-    command DoThing {
+    command "DoThing" {
       fields {
-        id string required
+        id = required(string)
       }
     }
 
-    event ThingDone {
+    event "ThingDone" {
       fields {
-        id string required
+        id = required(string)
       }
     }
 
-    flow {
-      command -> event: DoThing -> ThingDone
-    }
+    flow = <<-FLOW
+      command -> event:    DoThing -> ThingDone
+    FLOW
   }
 }
 `
@@ -280,24 +287,27 @@ context "C" {
 		})
 
 		t.Run("preserves a translation without duplicating its nested event", func(t *testing.T) {
-			source := `emod 1
-model "M"
+			source := `emod = 1
+
+model "M" {
+}
 
 context "C" {
   aggregate "A" {
     slice "S" {
-      command RecordPayment {
+      command "RecordPayment" {
         fields {
-          amount int required
+          amount = int
         }
       }
 
-      translation StripeWebhook {
-        external_system "Stripe"
-        command RecordPayment
-        event PaymentReceived {
+      translation "StripeWebhook" {
+        external_system = "Stripe"
+        command         = RecordPayment
+
+        event "PaymentReceived" {
           fields {
-            amount int required
+            amount = int
           }
         }
       }
@@ -309,35 +319,37 @@ context "C" {
 		})
 
 		t.Run("preserves the view an automation reads, leaving the one beside it reading nothing", func(t *testing.T) {
-			source := `emod 1
-model "M"
+			source := `emod = 1
+
+model "M" {
+}
 
 context "C" {
   aggregate "A" {
     slice "Review Member Loans" {
-      view MemberLoansView {
+      view "MemberLoansView" {
         fields {
-          loanId string required
+          loanId = required(string)
         }
       }
     }
 
     slice "Chase Overdue Copy" {
-      command RecallCopy {
+      command "RecallCopy" {
         fields {
-          loanId string required
+          loanId = required(string)
         }
       }
 
-      automation RecallOverdueCopy {
-        on CopyBorrowed
-        reads MemberLoansView
-        command RecallCopy
+      automation "RecallOverdueCopy" {
+        on      = CopyBorrowed
+        reads   = MemberLoansView
+        command = RecallCopy
       }
 
-      automation RemindMember {
-        on CopyBorrowed
-        command RecallCopy
+      automation "RemindMember" {
+        on      = CopyBorrowed
+        command = RecallCopy
       }
     }
   }
@@ -347,37 +359,39 @@ context "C" {
 		})
 
 		t.Run("preserves the cadence a scheduled automation runs on, beside the event the automation under it activates on", func(t *testing.T) {
-			source := `emod 1
-model "M"
+			source := `emod = 1
+
+model "M" {
+}
 
 context "C" {
   aggregate "A" {
     slice "Chase Overdue Copy" {
-      command RemindMember {
+      command "RemindMember" {
         fields {
-          loanId string required
+          loanId = required(string)
         }
       }
 
-      event MemberReminded {
+      event "MemberReminded" {
         fields {
-          loanId string required
+          loanId = required(string)
         }
       }
 
-      automation RemindMemberEachMorning {
-        every "0 9 * * *"
-        command RemindMember
+      automation "RemindMemberEachMorning" {
+        every   = "0 9 * * *"
+        command = RemindMember
       }
 
-      automation RecallOnSecondReminder {
-        on MemberReminded
-        command RemindMember
+      automation "RecallOnSecondReminder" {
+        on      = MemberReminded
+        command = RemindMember
       }
 
-      flow {
-        command -> event: RemindMember -> MemberReminded
-      }
+      flow = <<-FLOW
+        command -> event:    RemindMember -> MemberReminded
+      FLOW
     }
   }
 }
@@ -425,52 +439,58 @@ context "C" {
 		})
 
 		t.Run("saving a delayed automation produces text emod accepts, not only a model field-equal to what went in", func(t *testing.T) {
-			source := `model "Reservations"
+			source := `emod = 1
+
+model "Reservations" {
+}
 
 context "Reservations" {
   aggregate "Reservation" {
     slice "Release Expired Hold" {
-      command ReleaseHold {
+      command "ReleaseHold" {
         fields {
-          holdId string required
+          holdId = required(string)
         }
       }
 
-      event RoomHeld {
-        source external "Booking"
+      event "RoomHeld" {
+        source = external("Booking")
+
         fields {
-          holdId    string    required
-          roomId    string    required
-          heldUntil timestamp required
+          holdId    = required(string)
+          roomId    = required(string)
+          heldUntil = required(timestamp)
         }
       }
 
-      event HoldReleased {
+      event "HoldReleased" {
         fields {
-          holdId     string    required
-          roomId     string    required
-          releasedAt timestamp required
+          holdId     = required(string)
+          roomId     = required(string)
+          releasedAt = required(timestamp)
         }
       }
 
-      view UnreleasedHoldsView {
+      view "UnreleasedHoldsView" {
+        subscribes = [RoomHeld]
+
         fields {
-          holdId    string    required
-          roomId    string    required
-          heldUntil timestamp required
+          holdId    = required(string)
+          roomId    = required(string)
+          heldUntil = required(timestamp)
         }
-        subscribes [RoomHeld]
       }
 
-      automation ExpiredHoldReleaser {
-        on RoomHeld after "24h"
-        reads UnreleasedHoldsView
-        command ReleaseHold
+      automation "ExpiredHoldReleaser" {
+        on      = RoomHeld
+        after   = "24h"
+        reads   = UnreleasedHoldsView
+        command = ReleaseHold
       }
 
-      flow {
-        command -> event: ReleaseHold -> HoldReleased
-      }
+      flow = <<-FLOW
+        command -> event:    ReleaseHold -> HoldReleased
+      FLOW
     }
   }
 }
@@ -529,52 +549,54 @@ context "Reservations" {
 		})
 
 		t.Run("preserves the view a trigger and an automation read from a sibling slice, leaving the pair beside them reading nothing", func(t *testing.T) {
-			source := `emod 1
-model "M"
+			source := `emod = 1
+
+model "M" {
+}
 
 context "C" {
   aggregate "A" {
     slice "Review Member Loans" {
-      view MemberLoansView {
+      view "MemberLoansView" {
         fields {
-          loanId string required
+          loanId = required(string)
         }
       }
     }
 
     slice "Chase Overdue Copy" {
       trigger "Overdue Report" {
-        actor Librarian
-        reads MemberLoansView
+        actor = Librarian
+        reads = MemberLoansView
       }
 
-      command RecallCopy {
+      command "RecallCopy" {
         fields {
-          loanId string required
+          loanId = required(string)
         }
       }
 
-      automation RecallOverdueCopy {
-        on CopyBorrowed
-        reads MemberLoansView
-        command RecallCopy
+      automation "RecallOverdueCopy" {
+        on      = CopyBorrowed
+        reads   = MemberLoansView
+        command = RecallCopy
       }
     }
 
     slice "Return Copy" {
       trigger "Returns Counter" {
-        actor Member
+        actor = Member
       }
 
-      command ReturnCopy {
+      command "ReturnCopy" {
         fields {
-          loanId string required
+          loanId = required(string)
         }
       }
 
-      automation RemindMember {
-        on CopyBorrowed
-        command ReturnCopy
+      automation "RemindMember" {
+        on      = CopyBorrowed
+        command = ReturnCopy
       }
     }
   }
@@ -584,15 +606,17 @@ context "C" {
 		})
 
 		t.Run("preserves a trigger's name, actor and reads through the viewer save path", func(t *testing.T) {
-			source := `emod 1
-model "M"
+			source := `emod = 1
+
+model "M" {
+}
 
 context "C" {
   aggregate "A" {
     slice "S" {
       trigger "Reservation Form" {
-        actor Guest
-        reads AvailableRoomsView
+        actor = Guest
+        reads = AvailableRoomsView
       }
     }
   }
@@ -640,16 +664,19 @@ context "C" {
 		})
 
 		t.Run("preserves external event sources", func(t *testing.T) {
-			source := `emod 1
-model "M"
+			source := `emod = 1
+
+model "M" {
+}
 
 context "C" {
   aggregate "A" {
     slice "S" {
-      event PaymentSettled {
-        source external "Stripe"
+      event "PaymentSettled" {
+        source = external("Stripe")
+
         fields {
-          id string required
+          id = required(string)
         }
       }
     }

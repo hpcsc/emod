@@ -13,59 +13,62 @@ import (
 
 // unarrangedEmod trails BorrowView behind the slice whose trigger reads it, so
 // arranging has something to move.
-const unarrangedEmod = `emod 1
-model "Library Lending"
+const unarrangedEmod = `emod = 1
+
+model "Library Lending" {
+}
 
 context "Lending" {
   aggregate "Loan" {
     slice "Borrow a Copy" {
-      command BorrowCopy {
+      command "BorrowCopy" {
         fields {
-          copyId string required
+          copyId = required(string)
         }
       }
 
-      event CopyBorrowed {
+      event "CopyBorrowed" {
         fields {
-          copyId string required
+          copyId = required(string)
         }
       }
 
-      flow {
-        command -> event: BorrowCopy -> CopyBorrowed
-      }
+      flow = <<-FLOW
+        command -> event:    BorrowCopy -> CopyBorrowed
+      FLOW
     }
 
     slice "Return a Copy" {
       trigger "Return Desk" {
-        actor Member
-        reads BorrowView
+        actor = Member
+        reads = BorrowView
       }
 
-      command ReturnCopy {
+      command "ReturnCopy" {
         fields {
-          copyId string required
+          copyId = required(string)
         }
       }
 
-      event CopyReturned {
+      event "CopyReturned" {
         fields {
-          copyId string required
+          copyId = required(string)
         }
       }
 
-      flow {
-        command -> event: ReturnCopy -> CopyReturned
-      }
+      flow = <<-FLOW
+        command -> event:    ReturnCopy -> CopyReturned
+      FLOW
     }
 
     # The comment belongs to the view and has to travel with it.
     slice "Borrowed Copies" {
-      view BorrowView {
+      view "BorrowView" {
+        subscribes = [CopyBorrowed]
+
         fields {
-          copyId string required
+          copyId = required(string)
         }
-        subscribes [CopyBorrowed]
       }
     }
   }
@@ -112,39 +115,41 @@ func TestSlicesArrange(t *testing.T) {
 		t.Run("reports the references no ordering can turn forward", func(t *testing.T) {
 			// Two slices produce CopyBorrowed and both write, so the second
 			// producer points back at the declaration whatever the order.
-			path := writeTemp(t, "shared-event.emod", `emod 1
-model "Library Lending"
+			path := writeTemp(t, "shared-event.emod", `emod = 1
+
+model "Library Lending" {
+}
 
 context "Lending" {
   aggregate "Loan" {
     slice "Borrow a Copy" {
-      command BorrowCopy {
+      command "BorrowCopy" {
         fields {
-          copyId string required
+          copyId = required(string)
         }
       }
 
-      event CopyBorrowed {
+      event "CopyBorrowed" {
         fields {
-          copyId string required
+          copyId = required(string)
         }
       }
 
-      flow {
-        command -> event: BorrowCopy -> CopyBorrowed
-      }
+      flow = <<-FLOW
+        command -> event:    BorrowCopy -> CopyBorrowed
+      FLOW
     }
 
     slice "Renew a Copy" {
-      command RenewCopy {
+      command "RenewCopy" {
         fields {
-          copyId string required
+          copyId = required(string)
         }
       }
 
-      flow {
-        command -> event: RenewCopy -> CopyBorrowed
-      }
+      flow = <<-FLOW
+        command -> event:    RenewCopy -> CopyBorrowed
+      FLOW
     }
   }
 }

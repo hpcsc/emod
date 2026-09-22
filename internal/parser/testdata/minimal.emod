@@ -1,34 +1,38 @@
-# Hotel Reservation System
-model "Hotel Reservation"
+emod = 1
 
-actor "Guest"
+# Hotel Reservation System
+model "Hotel Reservation" {
+}
+
+actor "Guest" {
+}
 
 context "Reservations" {
   aggregate "Reservation" {
     slice "Make Reservation" {
-      command MakeReservation {
+      command "MakeReservation" {
         fields {
-          guestId     string required
-          roomType    string required
-          checkIn     date   required
-          checkOut    date   required
+          guestId  = required(string)
+          roomType = required(string)
+          checkIn  = required(date)
+          checkOut = required(date)
         }
       }
 
-      event ReservationMade {
+      event "ReservationMade" {
         fields {
-          reservationId string required
-          guestId       string required
-          roomType      string required
-          checkIn       date   required
-          checkOut      date   required
-          status        string required
+          reservationId = required(string)
+          guestId       = required(string)
+          roomType      = required(string)
+          checkIn       = required(date)
+          checkOut      = required(date)
+          status        = required(string)
         }
       }
 
-      flow {
-        command -> event: MakeReservation -> ReservationMade
-      }
+      flow = <<-FLOW
+        command -> event:    MakeReservation -> ReservationMade
+      FLOW
     }
   }
 }

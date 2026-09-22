@@ -17,51 +17,62 @@ import (
 // the event it activates on, and one whose automation names a delay beside that
 // event — the three shapes an automation has of stating when it runs, so no row
 // is checked in isolation.
-const automationCadenceEmod = `model "Library Lending"
+const automationCadenceEmod = `emod = 1
+
+model "Library Lending" {
+}
 
 context "Lending" {
   aggregate "Loan" {
     slice "Sweep Overdue Loans" {
-      command RecallCopy {
+      command "RecallCopy" {
         fields {
-          loanId string required
+          loanId = required(string)
         }
       }
-      automation SweepOverdueLoans {
-        every "15m"
-        command RecallCopy
+
+      automation "SweepOverdueLoans" {
+        every   = "15m"
+        command = RecallCopy
       }
     }
+
     slice "Chase Overdue Copy" {
-      command RemindMember {
+      command "RemindMember" {
         fields {
-          loanId string required
+          loanId = required(string)
         }
       }
-      event CopyBorrowed {
+
+      event "CopyBorrowed" {
         fields {
-          loanId string required
+          loanId = required(string)
         }
       }
-      automation RemindOnDueDate {
-        on CopyBorrowed
-        command RemindMember
+
+      automation "RemindOnDueDate" {
+        on      = CopyBorrowed
+        command = RemindMember
       }
     }
+
     slice "Release Expired Hold" {
-      command ReleaseHold {
+      command "ReleaseHold" {
         fields {
-          holdId string required
+          holdId = required(string)
         }
       }
-      event RoomHeld {
+
+      event "RoomHeld" {
         fields {
-          holdId string required
+          holdId = required(string)
         }
       }
-      automation ExpiredHoldReleaser {
-        on RoomHeld after "24h"
-        command ReleaseHold
+
+      automation "ExpiredHoldReleaser" {
+        on      = RoomHeld
+        after   = "24h"
+        command = ReleaseHold
       }
     }
   }
@@ -123,30 +134,39 @@ func TestSlicesList(t *testing.T) {
 		})
 
 		t.Run("lists slices a DCB context declares directly", func(t *testing.T) {
-			input := `model "Orders"
+			input := `emod = 1
 
-context "Fulfillment" mode dcb {
+model "Orders" {
+}
+
+context "Fulfillment" {
+  mode = dcb
+
   slice "Place Order" {
     trigger "Order Form" {
-      actor Customer
+      actor = Customer
     }
-    command PlaceOrder {
+
+    command "PlaceOrder" {
       fields {
-        customerId string required
+        customerId = required(string)
       }
     }
-    event OrderPlaced {
+
+    event "OrderPlaced" {
       tags {
-        entity: customerId
+        entity = customerId
       }
+
       fields {
-        orderId    string required
-        customerId string required
+        orderId    = required(string)
+        customerId = required(string)
       }
     }
-    flow {
-      command -> event: PlaceOrder -> OrderPlaced
-    }
+
+    flow = <<-FLOW
+      command -> event:    PlaceOrder -> OrderPlaced
+    FLOW
   }
 }
 `
@@ -179,42 +199,52 @@ context "Fulfillment" mode dcb {
 		})
 
 		t.Run("pattern detection prefers most specific match", func(t *testing.T) {
-			input := `model "Test"
+			input := `emod = 1
+
+model "Test" {
+}
+
 context "Orders" {
   aggregate "Order" {
     slice "Mixed Pattern" {
-      command PlaceOrder {
+      command "PlaceOrder" {
         fields {
-          orderId string required
+          orderId = required(string)
         }
       }
-      event OrderPlaced {
+
+      event "OrderPlaced" {
         fields {
-          orderId string required
+          orderId = required(string)
         }
       }
-      view OrderView {
+
+      view "OrderView" {
         fields {
-          orderId string required
+          orderId = required(string)
         }
       }
-      automation AutoProcess {
-        on OrderPlaced
-        command ProcessOrder
+
+      automation "AutoProcess" {
+        on      = OrderPlaced
+        command = ProcessOrder
       }
-      translation ExtIntegration {
-        external_system "External API"
-        reads OrderView
-        command PlaceOrder
-        event OrderPlaced {
+
+      translation "ExtIntegration" {
+        external_system = "External API"
+        reads           = OrderView
+        command         = PlaceOrder
+
+        event "OrderPlaced" {
           fields {
-            orderId string required
+            orderId = required(string)
           }
         }
       }
-      flow {
-        command -> event: PlaceOrder -> OrderPlaced
-      }
+
+      flow = <<-FLOW
+        command -> event:    PlaceOrder -> OrderPlaced
+      FLOW
     }
   }
 }
@@ -292,7 +322,7 @@ context "Orders" {
 		})
 
 		t.Run("empty model outputs empty JSON array", func(t *testing.T) {
-			input := `model "Empty"`
+			input := `model "Empty" {}`
 			path := writeTemp(t, "empty.emod", input)
 
 			output := captureStdout(t, func() {

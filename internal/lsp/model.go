@@ -94,7 +94,7 @@ func declaredConstructs(model *ast.Model) []constructDecl {
 			decls = append(decls, constructDecl{
 				kind:        "Command",
 				name:        cmd.Name,
-				namePos:     cmd.NamePos,
+				namePos:     afterQuote(cmd.NamePos),
 				scope:       scope,
 				description: cmd.Description,
 			})
@@ -106,7 +106,7 @@ func declaredConstructs(model *ast.Model) []constructDecl {
 			decls = append(decls, constructDecl{
 				kind:        "View",
 				name:        v.Name,
-				namePos:     v.NamePos,
+				namePos:     afterQuote(v.NamePos),
 				scope:       scope,
 				description: v.Description,
 				subscribes:  v.Subscribes,
@@ -116,7 +116,7 @@ func declaredConstructs(model *ast.Model) []constructDecl {
 			decls = append(decls, constructDecl{
 				kind:        "Automation",
 				name:        auto.Name,
-				namePos:     auto.NamePos,
+				namePos:     afterQuote(auto.NamePos),
 				scope:       scope,
 				description: auto.Description,
 			})
@@ -125,7 +125,7 @@ func declaredConstructs(model *ast.Model) []constructDecl {
 			decls = append(decls, constructDecl{
 				kind:        "Translation",
 				name:        tr.Name,
-				namePos:     tr.NamePos,
+				namePos:     afterQuote(tr.NamePos),
 				scope:       scope,
 				description: tr.Description,
 			})
@@ -147,7 +147,7 @@ func eventDecl(evt *ast.Event, scope string) constructDecl {
 	return constructDecl{
 		kind:        "Event",
 		name:        evt.Name,
-		namePos:     evt.NamePos,
+		namePos:     afterQuote(evt.NamePos),
 		scope:       scope,
 		description: evt.Description,
 		fields:      evt.Fields,
@@ -313,17 +313,17 @@ func declarationsIn(model *ast.Model) []nameDecl {
 	}
 
 	for _, ctx := range model.Contexts {
-		add(contextName, ctx.Name, ctx.NamePos)
+		add(contextName, ctx.Name, afterQuote(ctx.NamePos))
 	}
 	for _, slice := range model.AllSlices() {
 		for _, cmd := range slice.Commands {
-			add(commandName, cmd.Name, cmd.NamePos)
+			add(commandName, cmd.Name, afterQuote(cmd.NamePos))
 		}
 		for _, evt := range slice.Events {
-			add(eventName, evt.Name, evt.NamePos)
+			add(eventName, evt.Name, afterQuote(evt.NamePos))
 		}
 		for _, v := range slice.Views {
-			add(viewName, v.Name, v.NamePos)
+			add(viewName, v.Name, afterQuote(v.NamePos))
 		}
 	}
 

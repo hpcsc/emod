@@ -4,11 +4,11 @@ package parser_test
 
 import (
 	"os"
+	"strings"
 	"testing"
 
 	"github.com/google/go-cmp/cmp/cmpopts"
 	"github.com/hpcsc/emod/internal/ast"
-	"github.com/hpcsc/emod/internal/lexer"
 	"github.com/hpcsc/emod/internal/parser"
 	"github.com/hpcsc/emod/internal/test"
 	"github.com/hpcsc/emod/internal/validator"
@@ -72,10 +72,7 @@ func TestIntegration(t *testing.T) {
 		source, err := os.ReadFile("testdata/invalid.emod")
 		require.NoError(t, err)
 
-		tokens, _ := lexer.Scan(string(source), "testdata/invalid.emod")
-
-		p := parser.New(tokens, "testdata/invalid.emod")
-		_, diags := p.Parse()
+		_, diags := parser.Parse(string(source), "testdata/invalid.emod")
 
 		require.NotEmpty(t, diags)
 		for _, d := range diags {
@@ -84,9 +81,14 @@ func TestIntegration(t *testing.T) {
 			require.NotEmpty(t, d.Message)
 		}
 
-		// foobar on line 3 should produce an unrecognized keyword error
-		require.Contains(t, diags[0].Message, `"foobar"`)
-		require.Equal(t, 3, diags[0].Line)
+		// the foobar block on line 3 is a block kind the language does not have
+		var named bool
+		for _, d := range diags {
+			if d.Line == 3 && strings.Contains(d.Message, `"foobar"`) {
+				named = true
+			}
+		}
+		require.True(t, named, "a block kind the language does not have is named where it is written")
 	})
 
 	t.Run("parses all_patterns.emod fixture with zero errors and all four patterns populated", func(t *testing.T) {
@@ -337,10 +339,7 @@ func parseWithoutDiagnostics(t *testing.T, path string) *ast.Model {
 	source, err := os.ReadFile(path)
 	require.NoError(t, err)
 
-	tokens, lexDiags := lexer.Scan(string(source), path)
-	require.Empty(t, lexDiags)
-
-	model, parseDiags := parser.New(tokens, path).Parse()
+	model, parseDiags := parser.Parse(string(source), path)
 	require.Empty(t, parseDiags)
 
 	return model

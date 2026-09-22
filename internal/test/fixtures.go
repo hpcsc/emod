@@ -10,27 +10,29 @@ import (
 // and the flow joining them. Tests that need "a model the pipeline accepts"
 // without caring what is in it share this one rather than each transcribing
 // their own; HotelReservation below is the fixture for anything that does care.
-const BillingPayments = `emod 1
-model "Billing"
+const BillingPayments = `emod = 1
+
+model "Billing" {
+}
 
 context "Payments" {
   aggregate "Payment" {
     slice "Take Payment" {
-      command TakePayment {
+      command "TakePayment" {
         fields {
-          amount int required
+          amount = required(int)
         }
       }
 
-      event PaymentTaken {
+      event "PaymentTaken" {
         fields {
-          amount int required
+          amount = required(int)
         }
       }
 
-      flow {
-        command -> event: TakePayment -> PaymentTaken
-      }
+      flow = <<-FLOW
+        command -> event:    TakePayment -> PaymentTaken
+      FLOW
     }
   }
 }
@@ -40,86 +42,102 @@ context "Payments" {
 // automation and translation — and is valid input for every stage of the
 // pipeline. Packages that need "a realistic model" share this one so a change
 // to the language is reflected in a single place.
-const HotelReservation = `# Hotel Reservation System
-model "Hotel Reservation"
+const HotelReservation = `emod = 1
 
-actor "Guest"
+# Hotel Reservation System
+model "Hotel Reservation" {
+}
+
+actor "Guest" {
+}
 
 context "Reservations" {
   aggregate "Reservation" {
     slice "Make Reservation" {
       trigger "Reservation Form" {
-        actor Guest
-        reads ReservationsView
+        actor = Guest
+        reads = ReservationsView
       }
-      command MakeReservation {
+
+      command "MakeReservation" {
         fields {
-          guestId     string required
-          roomType    string required
-          checkIn     date   required
-          checkOut    date   required
+          guestId  = required(string)
+          roomType = required(string)
+          checkIn  = required(date)
+          checkOut = required(date)
         }
       }
-      event ReservationMade {
+
+      event "ReservationMade" {
         fields {
-          reservationId string required
-          guestId       string required
-          roomType      string required
-          checkIn       date   required
-          checkOut      date   required
-          status        string required
+          reservationId = required(string)
+          guestId       = required(string)
+          roomType      = required(string)
+          checkIn       = required(date)
+          checkOut      = required(date)
+          status        = required(string)
         }
       }
-      flow {
-        command -> event: MakeReservation -> ReservationMade
-      }
+
+      flow = <<-FLOW
+        command -> event:    MakeReservation -> ReservationMade
+      FLOW
     }
+
     slice "View Reservations" {
-      view ReservationsView {
+      view "ReservationsView" {
+        subscribes = [ReservationMade]
+
         fields {
-          reservationId string required
-          guestId       string required
-          status        string required
+          reservationId = required(string)
+          guestId       = required(string)
+          status        = required(string)
         }
-        subscribes [ReservationMade]
       }
     }
+
     slice "Auto Confirm Reservation" {
-      command ConfirmReservation {
+      command "ConfirmReservation" {
         fields {
-          reservationId string required
+          reservationId = required(string)
         }
       }
-      flow {
-        command -> event: ConfirmReservation -> ReservationMade
+
+      automation "AutoConfirm" {
+        on      = ReservationMade
+        reads   = ReservationsView
+        command = ConfirmReservation
       }
-      automation AutoConfirm {
-        on ReservationMade
-        reads ReservationsView
-        command ConfirmReservation
-      }
+
+      flow = <<-FLOW
+        command -> event:    ConfirmReservation -> ReservationMade
+      FLOW
     }
+
     slice "Import External Booking" {
-      command ImportBooking {
+      command "ImportBooking" {
         fields {
-          bookingRef string required
+          bookingRef = required(string)
         }
       }
-      flow {
-        command -> event: ImportBooking -> BookingImported
-      }
-      translation BookingImport {
-        external_system "Booking.com API"
-        reads ReservationsView
-        command ImportBooking
-        event BookingImported {
+
+      translation "BookingImport" {
+        external_system = "Booking.com API"
+        reads           = ReservationsView
+        command         = ImportBooking
+
+        event "BookingImported" {
           fields {
-            bookingId   string required
-            hotelName   string required
-            bookingRef  string required
+            bookingId  = required(string)
+            hotelName  = required(string)
+            bookingRef = required(string)
           }
         }
       }
+
+      flow = <<-FLOW
+        command -> event:    ImportBooking -> BookingImported
+      FLOW
     }
   }
 }
@@ -128,105 +146,130 @@ context "Reservations" {
 // DescribedHotelReservation mirrors HotelReservation and adds a description to
 // every construct that accepts one, so packages that carry descriptions through
 // the pipeline share one model.
-const DescribedHotelReservation = `# Hotel Reservation System
+const DescribedHotelReservation = `emod = 1
+
+# Hotel Reservation System
 model "Hotel Reservation" {
-  description "How the hotel takes, confirms and imports room bookings"
+  description = "How the hotel takes, confirms and imports room bookings"
 }
 
 actor "Guest" {
-  description "A person booking a room, not necessarily the one staying in it"
+  description = "A person booking a room, not necessarily the one staying in it"
 }
 
 context "Reservations" {
-  description "Everything the hotel knows about a stay before the guest arrives"
+  description = "Everything the hotel knows about a stay before the guest arrives"
+
   aggregate "Reservation" {
-    description "One guest holding one room over one date range"
+    description = "One guest holding one room over one date range"
+
     slice "Make Reservation" {
-      description "A guest books a room from the public site"
+      description = "A guest books a room from the public site"
+
       trigger "Reservation Form" {
-        description "The booking form on the public site"
-        actor Guest
-        reads ReservationsView
+        description = "The booking form on the public site"
+        actor       = Guest
+        reads       = ReservationsView
       }
-      command MakeReservation {
-        description "Ask the hotel to hold a room for a date range, 10% deposit taken up front"
+
+      command "MakeReservation" {
+        description = "Ask the hotel to hold a room for a date range, 10% deposit taken up front"
+
         fields {
-          guestId     string required
-          roomType    string required
-          checkIn     date   required
-          checkOut    date   required
+          guestId  = required(string)
+          roomType = required(string)
+          checkIn  = required(date)
+          checkOut = required(date)
         }
       }
-      event ReservationMade {
-        description "A room is held for a guest"
+
+      event "ReservationMade" {
+        description = "A room is held for a guest"
+
         fields {
-          reservationId string required
-          guestId       string required
-          roomType      string required
-          checkIn       date   required
-          checkOut      date   required
-          status        string required
+          reservationId = required(string)
+          guestId       = required(string)
+          roomType      = required(string)
+          checkIn       = required(date)
+          checkOut      = required(date)
+          status        = required(string)
         }
       }
-      flow {
-        command -> event: MakeReservation -> ReservationMade
-      }
+
+      flow = <<-FLOW
+        command -> event:    MakeReservation -> ReservationMade
+      FLOW
     }
+
     slice "View Reservations" {
-      description "A guest reviews the stays they have booked"
-      view ReservationsView {
-        description "Every reservation with the stage it has reached"
+      description = "A guest reviews the stays they have booked"
+
+      view "ReservationsView" {
+        description = "Every reservation with the stage it has reached"
+        subscribes  = [ReservationMade]
+
         fields {
-          reservationId string required
-          guestId       string required
-          status        string required
+          reservationId = required(string)
+          guestId       = required(string)
+          status        = required(string)
         }
-        subscribes [ReservationMade]
       }
     }
+
     slice "Auto Confirm Reservation" {
-      description "The hotel confirms a held room without a clerk touching it"
-      command ConfirmReservation {
-        description "Turn a held room into a confirmed stay"
+      description = "The hotel confirms a held room without a clerk touching it"
+
+      command "ConfirmReservation" {
+        description = "Turn a held room into a confirmed stay"
+
         fields {
-          reservationId string required
+          reservationId = required(string)
         }
       }
-      flow {
-        command -> event: ConfirmReservation -> ReservationMade
+
+      automation "AutoConfirm" {
+        description = "Confirms every reservation the moment it is made"
+        on          = ReservationMade
+        reads       = ReservationsView
+        command     = ConfirmReservation
       }
-      automation AutoConfirm {
-        description "Confirms every reservation the moment it is made"
-        on ReservationMade
-        reads ReservationsView
-        command ConfirmReservation
-      }
+
+      flow = <<-FLOW
+        command -> event:    ConfirmReservation -> ReservationMade
+      FLOW
     }
+
     slice "Import External Booking" {
-      description "A booking made on a partner site becomes a reservation here"
-      command ImportBooking {
-        description "Record a booking taken by a partner site"
+      description = "A booking made on a partner site becomes a reservation here"
+
+      command "ImportBooking" {
+        description = "Record a booking taken by a partner site"
+
         fields {
-          bookingRef string required
+          bookingRef = required(string)
         }
       }
-      flow {
-        command -> event: ImportBooking -> BookingImported
-      }
-      translation BookingImport {
-        description "Restates a partner webhook in the hotel's own language"
-        external_system "Booking.com API"
-        reads ReservationsView
-        command ImportBooking
-        event BookingImported {
-          description "A partner site reported a booking"
+
+      translation "BookingImport" {
+        description     = "Restates a partner webhook in the hotel's own language"
+        external_system = "Booking.com API"
+        reads           = ReservationsView
+        command         = ImportBooking
+
+        event "BookingImported" {
+          description = "A partner site reported a booking"
+
           fields {
-            bookingId   string required
-            hotelName   string required
-            bookingRef  string required
+            bookingId  = required(string)
+            hotelName  = required(string)
+            bookingRef = required(string)
           }
         }
       }
+
+      flow = <<-FLOW
+        command -> event:    ImportBooking -> BookingImported
+      FLOW
     }
   }
 }
@@ -237,99 +280,115 @@ context "Reservations" {
 // carrying no modifier sit mid-block ahead of a further field on purpose: give
 // every field a modifier and nothing here would catch the two running together
 // onto one line.
-const KeywordFieldSearchCatalog = `# Saved searches over a catalogue of emod models
-model "Model Search Catalog"
+const KeywordFieldSearchCatalog = `emod = 1
 
-actor "Analyst"
+# Saved searches over a catalogue of emod models
+model "Model Search Catalog" {
+}
+
+actor "Analyst" {
+}
 
 context "Discovery" {
   aggregate "Saved Search" {
     slice "Define Saved Search" {
       trigger "Search Builder" {
-        actor Analyst
-        reads SavedSearchesView
+        actor = Analyst
+        reads = SavedSearchesView
       }
-      command DefineSavedSearch {
+
+      command "DefineSavedSearch" {
         fields {
-          model       string required
-          source      string required
-          where       string required
-          and         string
-          not         string
-          fields      string required
-          description string optional
+          model       = required(string)
+          source      = required(string)
+          where       = required(string)
+          and         = string
+          not         = string
+          fields      = required(string)
+          description = optional(string)
         }
       }
-      event SavedSearchDefined {
+
+      event "SavedSearchDefined" {
         fields {
-          searchId    string required
-          model       string required
-          source      string required
-          where       string required
-          events      string required
-          tag         string required
-          emod        string
-          description string required
-          definedAt   date   required
+          searchId    = required(string)
+          model       = required(string)
+          source      = required(string)
+          where       = required(string)
+          events      = required(string)
+          tag         = required(string)
+          emod        = string
+          description = required(string)
+          definedAt   = required(date)
         }
       }
-      flow {
-        command -> event: DefineSavedSearch -> SavedSearchDefined
-      }
+
+      flow = <<-FLOW
+        command -> event:    DefineSavedSearch -> SavedSearchDefined
+      FLOW
     }
+
     slice "Browse Saved Searches" {
-      view SavedSearchesView {
+      view "SavedSearchesView" {
+        subscribes = [SavedSearchDefined]
+
         fields {
-          searchId    string required
-          description string required
-          tag         string required
-          model       string
-          where       string required
-          matches     int    required
+          searchId    = required(string)
+          description = required(string)
+          tag         = required(string)
+          model       = string
+          where       = required(string)
+          matches     = required(int)
         }
-        subscribes [SavedSearchDefined]
       }
     }
+
     slice "Auto Share Saved Search" {
-      command ShareSavedSearch {
+      command "ShareSavedSearch" {
         fields {
-          searchId string required
-          tag      string required
+          searchId = required(string)
+          tag      = required(string)
         }
       }
-      flow {
-        command -> event: ShareSavedSearch -> SavedSearchDefined
+
+      automation "AutoShare" {
+        on      = SavedSearchDefined
+        reads   = SavedSearchesView
+        command = ShareSavedSearch
       }
-      automation AutoShare {
-        on SavedSearchDefined
-        reads SavedSearchesView
-        command ShareSavedSearch
-      }
+
+      flow = <<-FLOW
+        command -> event:    ShareSavedSearch -> SavedSearchDefined
+      FLOW
     }
+
     slice "Import Vendor Search" {
-      command ImportVendorSearch {
+      command "ImportVendorSearch" {
         fields {
-          source string required
+          source = required(string)
         }
       }
-      flow {
-        command -> event: ImportVendorSearch -> VendorSearchImported
-      }
-      translation VendorSearchImport {
-        external_system "Metabase API"
-        reads SavedSearchesView
-        command ImportVendorSearch
-        event VendorSearchImported {
+
+      translation "VendorSearchImport" {
+        external_system = "Metabase API"
+        reads           = SavedSearchesView
+        command         = ImportVendorSearch
+
+        event "VendorSearchImported" {
           fields {
-            vendorSearchId string required
-            source         string required
-            emod           string required
-            where          string required
-            tag            string
-            model          string required
+            vendorSearchId = required(string)
+            source         = required(string)
+            emod           = required(string)
+            where          = required(string)
+            tag            = string
+            model          = required(string)
           }
         }
       }
+
+      flow = <<-FLOW
+        command -> event:    ImportVendorSearch -> VendorSearchImported
+      FLOW
     }
   }
 }
@@ -343,104 +402,129 @@ context "Discovery" {
 // declaration running on into what follows it. Its trigger reads
 // MemberLoansView, the view its own Review Member Loans slice declares, so that
 // view has a reader and the fixture stays clean under view/never-read.
-const InvariantLibraryLending = `# Lending a library's copies, and seating its readers
-model "Library Lending"
+const InvariantLibraryLending = `emod = 1
 
-actor "Member"
+# Lending a library's copies, and seating its readers
+model "Library Lending" {
+}
+
+actor "Member" {
+}
 
 context "Lending" {
   aggregate "Loan" {
-    invariant OneCopyPerLoan "A loan covers exactly one copy of one title"
+    invariants {
+      OneCopyPerLoan      = "A loan covers exactly one copy of one title"
+      FiveCopiesPerMember = "A member holds at most five copies at one time"
+    }
+
     slice "Borrow Copy" {
       trigger "Lending Desk" {
-        actor Member
-        reads MemberLoansView
+        actor = Member
+        reads = MemberLoansView
       }
-      command BorrowCopy {
+
+      command "BorrowCopy" {
         fields {
-          memberId string required
-          copyId   string required
-          dueOn    date   required
+          memberId = required(string)
+          copyId   = required(string)
+          dueOn    = required(date)
         }
       }
-      event CopyBorrowed {
+
+      event "CopyBorrowed" {
         fields {
-          loanId   string required
-          memberId string required
-          copyId   string required
-          dueOn    date   required
+          loanId   = required(string)
+          memberId = required(string)
+          copyId   = required(string)
+          dueOn    = required(date)
         }
       }
-      flow {
-        command -> event: BorrowCopy -> CopyBorrowed
-      }
+
+      flow = <<-FLOW
+        command -> event:    BorrowCopy -> CopyBorrowed
+      FLOW
     }
-    invariant FiveCopiesPerMember "A member holds at most five copies at one time"
+
     slice "Review Member Loans" {
-      view MemberLoansView {
+      view "MemberLoansView" {
+        subscribes = [CopyBorrowed]
+
         fields {
-          loanId   string required
-          memberId string required
-          dueOn    date   required
+          loanId   = required(string)
+          memberId = required(string)
+          dueOn    = required(date)
         }
-        subscribes [CopyBorrowed]
       }
     }
   }
 }
 
-context "Reading Room" mode dcb {
-  invariant OneReaderPerDesk "A desk seats at most one reader at any moment"
-  invariant OneDeskPerReader "A reader holds at most one desk for the length of a session"
-  slice "Claim Desk" {
-    command ClaimDesk {
-      fields {
-        memberId string required
-        deskId   string required
-      }
-    }
-    event DeskClaimed {
-      tags {
-        desk  : deskId
-        reader: memberId
-      }
-      fields {
-        sessionId string    required
-        deskId    string    required
-        memberId  string    required
-        claimedAt timestamp required
-      }
-    }
-    flow {
-      command -> event: ClaimDesk -> DeskClaimed
-    }
+context "Reading Room" {
+  mode = dcb
+
+  invariants {
+    OneReaderPerDesk  = "A desk seats at most one reader at any moment"
+    OneDeskPerReader  = "A reader holds at most one desk for the length of a session"
+    DeskFreeAtClosing = "No desk stays claimed past the closing hour"
   }
-  invariant DeskFreeAtClosing "No desk stays claimed past the closing hour"
-  slice "Release Desk" {
-    command ReleaseDesk {
-      decides_on {
-        events [DeskClaimed]
-        where tag(desk = deskId) and tag(reader = memberId)
-      }
+
+  slice "Claim Desk" {
+    command "ClaimDesk" {
       fields {
-        sessionId string required
+        memberId = required(string)
+        deskId   = required(string)
       }
     }
-    event DeskReleased {
+
+    event "DeskClaimed" {
       tags {
-        desk  : deskId
-        reader: memberId
+        desk   = deskId
+        reader = memberId
       }
+
       fields {
-        sessionId  string    required
-        deskId     string    required
-        memberId   string    required
-        releasedAt timestamp required
+        sessionId = required(string)
+        deskId    = required(string)
+        memberId  = required(string)
+        claimedAt = required(timestamp)
       }
     }
-    flow {
-      command -> event: ReleaseDesk -> DeskReleased
+
+    flow = <<-FLOW
+      command -> event:    ClaimDesk -> DeskClaimed
+    FLOW
+  }
+
+  slice "Release Desk" {
+    command "ReleaseDesk" {
+      fields {
+        sessionId = required(string)
+      }
+
+      decides_on {
+        events = [DeskClaimed]
+        where  = tag(desk, deskId) && tag(reader, memberId)
+      }
     }
+
+    event "DeskReleased" {
+      tags {
+        desk   = deskId
+        reader = memberId
+      }
+
+      fields {
+        sessionId  = required(string)
+        deskId     = required(string)
+        memberId   = required(string)
+        releasedAt = required(timestamp)
+      }
+    }
+
+    flow = <<-FLOW
+      command -> event:    ReleaseDesk -> DeskReleased
+    FLOW
   }
 }
 `
@@ -454,162 +538,198 @@ context "Reading Room" mode dcb {
 // follows it. Its trigger reads MemberLoansView, the view its own Review Member
 // Loans slice declares, so that view has a reader and the fixture stays clean
 // under view/never-read.
-const SpecLibraryLending = `# Lending a library's copies and seating its readers, with the scenarios each slice must satisfy
-model "Library Lending"
+const SpecLibraryLending = `emod = 1
 
-actor "Member"
+# Lending a library's copies and seating its readers, with the scenarios each slice must satisfy
+model "Library Lending" {
+}
+
+actor "Member" {
+}
 
 context "Lending" {
   aggregate "Loan" {
-    invariant OneCopyPerLoan "A loan covers exactly one copy of one title"
+    invariants {
+      OneCopyPerLoan = "A loan covers exactly one copy of one title"
+    }
+
     slice "Borrow Copy" {
       trigger "Lending Desk" {
-        actor Member
-        reads MemberLoansView
+        actor = Member
+        reads = MemberLoansView
       }
-      command BorrowCopy {
+
+      command "BorrowCopy" {
         fields {
-          memberId string required
-          copyId   string required
-          dueOn    date   required
+          memberId = required(string)
+          copyId   = required(string)
+          dueOn    = required(date)
         }
       }
+
+      event "CopyBorrowed" {
+        fields {
+          loanId   = required(string)
+          memberId = required(string)
+          copyId   = required(string)
+          dueOn    = required(date)
+        }
+      }
+
+      flow = <<-FLOW
+        command -> event:    BorrowCopy -> CopyBorrowed
+      FLOW
+
       spec "borrows a copy no one holds" {
-        when BorrowCopy
-        then [CopyBorrowed]
+        when = BorrowCopy
+        then = [CopyBorrowed]
       }
+
       spec "borrows a copy the member before returned" {
-        given [CopyBorrowed, CopyReturned]
-        when BorrowCopy
-        then [CopyBorrowed]
+        given = [CopyBorrowed, CopyReturned]
+        when  = BorrowCopy
+        then  = [CopyBorrowed]
       }
-      event CopyBorrowed {
-        fields {
-          loanId   string required
-          memberId string required
-          copyId   string required
-          dueOn    date   required
-        }
-      }
+
       spec "refuses a copy already on loan" {
-        given [CopyBorrowed]
-        when BorrowCopy
-        then rejected OneCopyPerLoan
-      }
-      flow {
-        command -> event: BorrowCopy -> CopyBorrowed
+        given = [CopyBorrowed]
+        when  = BorrowCopy
+        then  = rejected(OneCopyPerLoan)
       }
     }
+
     slice "Return Copy" {
-      command ReturnCopy {
+      command "ReturnCopy" {
         fields {
-          loanId string required
-          copyId string required
+          loanId = required(string)
+          copyId = required(string)
         }
       }
-      event CopyReturned {
+
+      event "CopyReturned" {
         fields {
-          loanId     string    required
-          copyId     string    required
-          returnedAt timestamp required
+          loanId     = required(string)
+          copyId     = required(string)
+          returnedAt = required(timestamp)
         }
       }
+
+      flow = <<-FLOW
+        command -> event:    ReturnCopy -> CopyReturned
+      FLOW
+
       spec "returns a copy the member holds" {
-        given [CopyBorrowed]
-        then [CopyReturned]
-        when ReturnCopy
+        given = [CopyBorrowed]
+        when  = ReturnCopy
+        then  = [CopyReturned]
       }
+
       spec "refuses to return a copy the member no longer holds" {
-        given [CopyBorrowed]
-        when ReturnCopy
-        then rejected OneCopyPerLoan
-      }
-      flow {
-        command -> event: ReturnCopy -> CopyReturned
+        given = [CopyBorrowed]
+        when  = ReturnCopy
+        then  = rejected(OneCopyPerLoan)
       }
     }
+
     slice "Review Member Loans" {
-      view MemberLoansView {
+      view "MemberLoansView" {
+        subscribes = [CopyBorrowed]
+
         fields {
-          loanId   string required
-          memberId string required
-          dueOn    date   required
+          loanId   = required(string)
+          memberId = required(string)
+          dueOn    = required(date)
         }
-        subscribes [CopyBorrowed]
       }
     }
   }
 }
 
-context "Reading Room" mode dcb {
-  invariant OneReaderPerDesk "A desk seats at most one reader at any moment"
+context "Reading Room" {
+  mode = dcb
+
+  invariants {
+    OneReaderPerDesk = "A desk seats at most one reader at any moment"
+  }
+
   slice "Claim Desk" {
-    command ClaimDesk {
+    command "ClaimDesk" {
       fields {
-        memberId string required
-        deskId   string required
+        memberId = required(string)
+        deskId   = required(string)
       }
     }
-    spec "seats a reader at a free desk" {
-      given []
-      when ClaimDesk
-      then [DeskClaimed]
-    }
-    event DeskClaimed {
+
+    event "DeskClaimed" {
       tags {
-        desk  : deskId
-        reader: memberId
+        desk   = deskId
+        reader = memberId
       }
+
       fields {
-        sessionId string    required
-        deskId    string    required
-        memberId  string    required
-        claimedAt timestamp required
+        sessionId = required(string)
+        deskId    = required(string)
+        memberId  = required(string)
+        claimedAt = required(timestamp)
       }
     }
-    spec "refuses a desk another reader is seated at" {
-      given [DeskClaimed]
-      when ClaimDesk
-      then rejected OneReaderPerDesk
+
+    flow = <<-FLOW
+      command -> event:    ClaimDesk -> DeskClaimed
+    FLOW
+
+    spec "seats a reader at a free desk" {
+      when = ClaimDesk
+      then = [DeskClaimed]
     }
-    flow {
-      command -> event: ClaimDesk -> DeskClaimed
+
+    spec "refuses a desk another reader is seated at" {
+      given = [DeskClaimed]
+      when  = ClaimDesk
+      then  = rejected(OneReaderPerDesk)
     }
   }
+
   slice "Release Desk" {
-    command ReleaseDesk {
+    command "ReleaseDesk" {
+      fields {
+        sessionId = required(string)
+      }
+
       decides_on {
-        events [DeskClaimed]
-        where tag(desk = deskId) and tag(reader = memberId)
-      }
-      fields {
-        sessionId string required
+        events = [DeskClaimed]
+        where  = tag(desk, deskId) && tag(reader, memberId)
       }
     }
-    event DeskReleased {
+
+    event "DeskReleased" {
       tags {
-        desk  : deskId
-        reader: memberId
+        desk   = deskId
+        reader = memberId
       }
+
       fields {
-        sessionId  string    required
-        deskId     string    required
-        memberId   string    required
-        releasedAt timestamp required
+        sessionId  = required(string)
+        deskId     = required(string)
+        memberId   = required(string)
+        releasedAt = required(timestamp)
       }
     }
+
+    flow = <<-FLOW
+      command -> event:    ReleaseDesk -> DeskReleased
+    FLOW
+
     spec "frees the desk its reader is seated at" {
-      given [DeskClaimed]
-      when ReleaseDesk
-      then [DeskReleased]
+      given = [DeskClaimed]
+      when  = ReleaseDesk
+      then  = [DeskReleased]
     }
+
     spec "refuses to free a desk already empty" {
-      given [DeskClaimed]
-      when ReleaseDesk
-      then rejected OneReaderPerDesk
-    }
-    flow {
-      command -> event: ReleaseDesk -> DeskReleased
+      given = [DeskClaimed]
+      when  = ReleaseDesk
+      then  = rejected(OneReaderPerDesk)
     }
   }
 }
@@ -627,160 +747,195 @@ context "Reading Room" mode dcb {
 // keyed by the invariant's name alone collapses into one box. And its trigger
 // reads MemberLoansView, the view its own "Review Member Loans" slice declares,
 // so that view has a reader and the fixture stays clean under view/never-read.
-const RejectionLibraryLending = `# Lending a library's copies and seating its readers, with the rejections each command can meet
-model "Library Lending"
+const RejectionLibraryLending = `emod = 1
 
-actor "Member"
+# Lending a library's copies and seating its readers, with the rejections each command can meet
+model "Library Lending" {
+}
+
+actor "Member" {
+}
 
 context "Lending" {
   aggregate "Loan" {
-    invariant OneCopyPerLoan "A loan covers exactly one copy of one title"
+    invariants {
+      OneCopyPerLoan = "A loan covers exactly one copy of one title"
+    }
+
     slice "Borrow Copy" {
       trigger "Lending Desk" {
-        actor Member
-        reads MemberLoansView
+        actor = Member
+        reads = MemberLoansView
       }
-      command BorrowCopy {
+
+      command "BorrowCopy" {
         fields {
-          memberId string required
-          copyId   string required
-          dueOn    date   required
+          memberId = required(string)
+          copyId   = required(string)
+          dueOn    = required(date)
         }
       }
-      spec "borrows a copy no one holds" {
-        when BorrowCopy
-        then [CopyBorrowed]
-      }
-      event CopyBorrowed {
+
+      event "CopyBorrowed" {
         fields {
-          loanId   string required
-          memberId string required
-          copyId   string required
-          dueOn    date   required
+          loanId   = required(string)
+          memberId = required(string)
+          copyId   = required(string)
+          dueOn    = required(date)
         }
       }
-      spec "refuses a copy already on loan" {
-        given [CopyBorrowed]
-        when BorrowCopy
-        then rejected OneCopyPerLoan
-      }
-      flow {
+
+      flow = <<-FLOW
+        command -> event:    BorrowCopy -> CopyBorrowed
         command -> rejected: BorrowCopy -> OneCopyPerLoan
-        command -> event: BorrowCopy -> CopyBorrowed
+      FLOW
+
+      spec "borrows a copy no one holds" {
+        when = BorrowCopy
+        then = [CopyBorrowed]
+      }
+
+      spec "refuses a copy already on loan" {
+        given = [CopyBorrowed]
+        when  = BorrowCopy
+        then  = rejected(OneCopyPerLoan)
       }
     }
+
     slice "Return Copy" {
-      command ReturnCopy {
+      command "ReturnCopy" {
         fields {
-          loanId string required
-          copyId string required
+          loanId = required(string)
+          copyId = required(string)
         }
       }
-      event CopyReturned {
+
+      event "CopyReturned" {
         fields {
-          loanId     string    required
-          copyId     string    required
-          returnedAt timestamp required
+          loanId     = required(string)
+          copyId     = required(string)
+          returnedAt = required(timestamp)
         }
       }
-      spec "returns a copy the member holds" {
-        given [CopyBorrowed]
-        when ReturnCopy
-        then [CopyReturned]
-      }
-      spec "refuses to return a copy the member no longer holds" {
-        given [CopyBorrowed]
-        when ReturnCopy
-        then rejected OneCopyPerLoan
-      }
-      flow {
-        command -> event: ReturnCopy -> CopyReturned
+
+      flow = <<-FLOW
+        command -> event:    ReturnCopy -> CopyReturned
         command -> rejected: ReturnCopy -> OneCopyPerLoan
+      FLOW
+
+      spec "returns a copy the member holds" {
+        given = [CopyBorrowed]
+        when  = ReturnCopy
+        then  = [CopyReturned]
+      }
+
+      spec "refuses to return a copy the member no longer holds" {
+        given = [CopyBorrowed]
+        when  = ReturnCopy
+        then  = rejected(OneCopyPerLoan)
       }
     }
+
     slice "Review Member Loans" {
-      view MemberLoansView {
+      view "MemberLoansView" {
+        subscribes = [CopyBorrowed]
+
         fields {
-          loanId   string required
-          memberId string required
-          dueOn    date   required
+          loanId   = required(string)
+          memberId = required(string)
+          dueOn    = required(date)
         }
-        subscribes [CopyBorrowed]
       }
     }
   }
 }
 
-context "Reading Room" mode dcb {
-  invariant OneReaderPerDesk "A desk seats at most one reader at any moment"
+context "Reading Room" {
+  mode = dcb
+
+  invariants {
+    OneReaderPerDesk = "A desk seats at most one reader at any moment"
+  }
+
   slice "Claim Desk" {
-    command ClaimDesk {
+    command "ClaimDesk" {
       fields {
-        memberId string required
-        deskId   string required
+        memberId = required(string)
+        deskId   = required(string)
       }
     }
-    spec "seats a reader at a free desk" {
-      given []
-      when ClaimDesk
-      then [DeskClaimed]
-    }
-    event DeskClaimed {
+
+    event "DeskClaimed" {
       tags {
-        desk  : deskId
-        reader: memberId
+        desk   = deskId
+        reader = memberId
       }
+
       fields {
-        sessionId string    required
-        deskId    string    required
-        memberId  string    required
-        claimedAt timestamp required
+        sessionId = required(string)
+        deskId    = required(string)
+        memberId  = required(string)
+        claimedAt = required(timestamp)
       }
     }
-    spec "refuses a desk another reader is seated at" {
-      given [DeskClaimed]
-      when ClaimDesk
-      then rejected OneReaderPerDesk
-    }
-    flow {
+
+    flow = <<-FLOW
+      command -> event:    ClaimDesk -> DeskClaimed
       command -> rejected: ClaimDesk -> OneReaderPerDesk
-      command -> event: ClaimDesk -> DeskClaimed
+    FLOW
+
+    spec "seats a reader at a free desk" {
+      when = ClaimDesk
+      then = [DeskClaimed]
+    }
+
+    spec "refuses a desk another reader is seated at" {
+      given = [DeskClaimed]
+      when  = ClaimDesk
+      then  = rejected(OneReaderPerDesk)
     }
   }
+
   slice "Release Desk" {
-    command ReleaseDesk {
+    command "ReleaseDesk" {
+      fields {
+        sessionId = required(string)
+      }
+
       decides_on {
-        events [DeskClaimed]
-        where tag(desk = deskId) and tag(reader = memberId)
-      }
-      fields {
-        sessionId string required
+        events = [DeskClaimed]
+        where  = tag(desk, deskId) && tag(reader, memberId)
       }
     }
-    event DeskReleased {
+
+    event "DeskReleased" {
       tags {
-        desk  : deskId
-        reader: memberId
+        desk   = deskId
+        reader = memberId
       }
+
       fields {
-        sessionId  string    required
-        deskId     string    required
-        memberId   string    required
-        releasedAt timestamp required
+        sessionId  = required(string)
+        deskId     = required(string)
+        memberId   = required(string)
+        releasedAt = required(timestamp)
       }
     }
+
+    flow = <<-FLOW
+      command -> event:    ReleaseDesk -> DeskReleased
+    FLOW
+
     spec "frees the desk its reader is seated at" {
-      given [DeskClaimed]
-      when ReleaseDesk
-      then [DeskReleased]
+      given = [DeskClaimed]
+      when  = ReleaseDesk
+      then  = [DeskReleased]
     }
+
     spec "refuses to free a desk already empty" {
-      given [DeskClaimed]
-      when ReleaseDesk
-      then rejected OneReaderPerDesk
-    }
-    flow {
-      command -> event: ReleaseDesk -> DeskReleased
+      given = [DeskClaimed]
+      when  = ReleaseDesk
+      then  = rejected(OneReaderPerDesk)
     }
   }
 }
@@ -794,270 +949,318 @@ context "Reading Room" mode dcb {
 // translation specs so both homes read back short against the transcriptions.
 // Its "Borrow Copy" trigger is there for one reason: it reads MemberLoansView,
 // so that view has a reader and the fixture stays clean under view/never-read.
-const SlicePatternLibraryLending = `# Lending a library's copies and seating its readers, with a spec for every slice pattern
-model "Library Lending"
+const SlicePatternLibraryLending = `emod = 1
 
-actor "Member"
+# Lending a library's copies and seating its readers, with a spec for every slice pattern
+model "Library Lending" {
+}
+
+actor "Member" {
+}
 
 context "Lending" {
   aggregate "Loan" {
-    invariant OneCopyPerLoan "A loan covers exactly one copy of one title"
+    invariants {
+      OneCopyPerLoan = "A loan covers exactly one copy of one title"
+    }
 
     slice "Borrow Copy" {
       trigger "Lending Desk" {
-        actor Member
-        reads MemberLoansView
+        actor = Member
+        reads = MemberLoansView
       }
-      command BorrowCopy {
+
+      command "BorrowCopy" {
         fields {
-          memberId string required
-          copyId   string required
-          dueOn    date   required
+          memberId = required(string)
+          copyId   = required(string)
+          dueOn    = required(date)
         }
       }
-      event CopyBorrowed {
+
+      event "CopyBorrowed" {
         fields {
-          loanId   string required
-          memberId string required
-          copyId   string required
-          dueOn    date   required
+          loanId   = required(string)
+          memberId = required(string)
+          copyId   = required(string)
+          dueOn    = required(date)
         }
       }
+
+      flow = <<-FLOW
+        command -> event:    BorrowCopy -> CopyBorrowed
+      FLOW
+
       spec "borrows a copy no one holds" {
-        given []
-        when BorrowCopy
-        then [CopyBorrowed]
+        when = BorrowCopy
+        then = [CopyBorrowed]
       }
+
       spec "refuses a copy already on loan" {
-        when BorrowCopy
-        then rejected OneCopyPerLoan
+        when = BorrowCopy
+        then = rejected(OneCopyPerLoan)
       }
+
       spec "borrows a copy the member before returned" {
-        given [CopyBorrowed, CopyReturned]
-        then [CopyBorrowed]
-        when BorrowCopy
-      }
-      flow {
-        command -> event: BorrowCopy -> CopyBorrowed
+        given = [CopyBorrowed, CopyReturned]
+        when  = BorrowCopy
+        then  = [CopyBorrowed]
       }
     }
 
     slice "Review Member Loans" {
-      view MemberLoansView {
+      view "MemberLoansView" {
+        subscribes = [CopyBorrowed, CopyReturned]
+
         fields {
-          loanId   string required
-          memberId string required
-          dueOn    date   required
+          loanId   = required(string)
+          memberId = required(string)
+          dueOn    = required(date)
         }
-        subscribes [CopyBorrowed, CopyReturned]
       }
+
       spec "lists the loans a member holds" {
-        then view MemberLoansView
+        then = view(MemberLoansView)
       }
     }
 
     slice "Chase Overdue Copy" {
-      view OverdueLoansView {
+      command "RemindMember" {
         fields {
-          loanId   string required
-          memberId string required
-        }
-        subscribes [CopyBorrowed, CopyReturned]
-      }
-      command RemindMember {
-        fields {
-          loanId   string required
-          memberId string required
+          loanId   = required(string)
+          memberId = required(string)
         }
       }
-      event MemberReminded {
+
+      event "MemberReminded" {
         fields {
-          loanId     string required
-          memberId   string required
-          remindedAt timestamp required
+          loanId     = required(string)
+          memberId   = required(string)
+          remindedAt = required(timestamp)
         }
       }
-      automation RemindOnDueDate {
-        on CopyBorrowed
-        reads OverdueLoansView
-        command RemindMember
+
+      view "OverdueLoansView" {
+        subscribes = [CopyBorrowed, CopyReturned]
+
+        fields {
+          loanId   = required(string)
+          memberId = required(string)
+        }
       }
-      flow {
-        command -> event: RemindMember -> MemberReminded
+
+      automation "RemindOnDueDate" {
+        on      = CopyBorrowed
+        reads   = OverdueLoansView
+        command = RemindMember
       }
+
+      flow = <<-FLOW
+        command -> event:    RemindMember -> MemberReminded
+      FLOW
+
       spec "reminds a member when a copy becomes due" {
-        when CopyBorrowed
-        then command RemindMember
+        when = CopyBorrowed
+        then = command(RemindMember)
       }
+
       spec "sanctions a member's loan" {
-        when RemindMember
-        then [MemberReminded]
+        when = RemindMember
+        then = [MemberReminded]
       }
+
       spec "refuses to remind a member with no overdue loans" {
-        given [MemberReminded]
-        when RemindMember
-        then rejected OneCopyPerLoan
+        given = [MemberReminded]
+        when  = RemindMember
+        then  = rejected(OneCopyPerLoan)
       }
     }
 
     slice "Sweep Overdue Loans" {
-      view OverdueLoansView {
+      command "RecallCopy" {
         fields {
-          loanId   string required
-          memberId string required
-        }
-        subscribes [CopyBorrowed, CopyReturned]
-      }
-      command RecallCopy {
-        fields {
-          loanId string required
-          copyId string required
+          loanId = required(string)
+          copyId = required(string)
         }
       }
-      event CopyRecalled {
+
+      event "CopyRecalled" {
         fields {
-          loanId     string required
-          copyId     string required
-          recalledAt timestamp required
+          loanId     = required(string)
+          copyId     = required(string)
+          recalledAt = required(timestamp)
         }
       }
-      automation RecallOverdueCopy {
-        every "15m"
-        reads OverdueLoansView
-        command RecallCopy
+
+      view "OverdueLoansView" {
+        subscribes = [CopyBorrowed, CopyReturned]
+
+        fields {
+          loanId   = required(string)
+          memberId = required(string)
+        }
       }
-      flow {
-        command -> event: RecallCopy -> CopyRecalled
+
+      automation "RecallOverdueCopy" {
+        every   = "15m"
+        reads   = OverdueLoansView
+        command = RecallCopy
       }
+
+      flow = <<-FLOW
+        command -> event:    RecallCopy -> CopyRecalled
+      FLOW
+
       spec "recalls copies that are overdue" {
-        then command RecallCopy
+        then = command(RecallCopy)
       }
+
       spec "calls in a copy before its due date" {
-        when RecallCopy
-        then [CopyRecalled]
+        when = RecallCopy
+        then = [CopyRecalled]
       }
+
       spec "refuses to recall a copy already returned" {
-        given [CopyReturned]
-        when RecallCopy
-        then rejected OneCopyPerLoan
+        given = [CopyReturned]
+        when  = RecallCopy
+        then  = rejected(OneCopyPerLoan)
       }
     }
 
     slice "Return Copy" {
-      command ReturnCopy {
+      command "ReturnCopy" {
         fields {
-          loanId string required
-          copyId string required
+          loanId = required(string)
+          copyId = required(string)
         }
       }
-      event CopyReturned {
+
+      event "CopyReturned" {
         fields {
-          loanId     string required
-          copyId     string required
-          returnedAt timestamp required
+          loanId     = required(string)
+          copyId     = required(string)
+          returnedAt = required(timestamp)
         }
       }
-      flow {
-        command -> event: ReturnCopy -> CopyReturned
-      }
+
+      flow = <<-FLOW
+        command -> event:    ReturnCopy -> CopyReturned
+      FLOW
+
       spec "returns a loaned copy to the library" {
-        when ReturnCopy
-        then [CopyReturned]
+        when = ReturnCopy
+        then = [CopyReturned]
       }
+
       spec "refuses to return a copy already returned" {
-        given [CopyReturned]
-        when ReturnCopy
-        then rejected OneCopyPerLoan
+        given = [CopyReturned]
+        when  = ReturnCopy
+        then  = rejected(OneCopyPerLoan)
       }
     }
   }
 }
 
-context "Reading Room" mode dcb {
-  invariant OneReaderPerDesk "A desk seats at most one reader at any moment"
+context "Reading Room" {
+  mode = dcb
+
+  invariants {
+    OneReaderPerDesk = "A desk seats at most one reader at any moment"
+  }
 
   slice "Desk Occupancy" {
-    view DeskOccupancyView {
+    view "DeskOccupancyView" {
+      subscribes = [DeskClaimed]
+
       fields {
-        deskId   string required
-        memberId string required
+        deskId   = required(string)
+        memberId = required(string)
       }
-      subscribes [DeskClaimed]
     }
   }
 
   slice "Claim Desk" {
-    command ClaimDesk {
+    command "ClaimDesk" {
+      fields {
+        memberId = required(string)
+        deskId   = required(string)
+      }
+
       decides_on {
-        events [DeskClaimed]
-        where tag(desk = deskId) and tag(reader = memberId)
-      }
-      fields {
-        memberId string required
-        deskId   string required
+        events = [DeskClaimed]
+        where  = tag(desk, deskId) && tag(reader, memberId)
       }
     }
-    event DeskClaimed {
+
+    event "DeskClaimed" {
       tags {
-        desk  : deskId
-        reader: memberId
+        desk   = deskId
+        reader = memberId
       }
+
       fields {
-        sessionId string    required
-        deskId    string    required
-        memberId  string    required
-        claimedAt timestamp required
+        sessionId = required(string)
+        deskId    = required(string)
+        memberId  = required(string)
+        claimedAt = required(timestamp)
       }
     }
+
+    flow = <<-FLOW
+      command -> event:    ClaimDesk -> DeskClaimed
+    FLOW
+
     spec "seats a reader at a free desk" {
-      given []
-      when ClaimDesk
-      then [DeskClaimed]
+      when = ClaimDesk
+      then = [DeskClaimed]
     }
+
     spec "refuses a desk another reader is seated at" {
-      given [DeskClaimed]
-      when ClaimDesk
-      then rejected OneReaderPerDesk
-    }
-    flow {
-      command -> event: ClaimDesk -> DeskClaimed
+      given = [DeskClaimed]
+      when  = ClaimDesk
+      then  = rejected(OneReaderPerDesk)
     }
   }
 
   slice "Import External Desk Booking" {
-    command ImportExternalDeskBooking {
+    command "ImportExternalDeskBooking" {
       fields {
-        externalRef string required
-        deskId      string required
-        memberId    string required
+        externalRef = required(string)
+        deskId      = required(string)
+        memberId    = required(string)
       }
     }
-    translation ExternalDeskBookingImport {
-      external_system "Room Booking API"
-      reads DeskOccupancyView
-      command ImportExternalDeskBooking
-      event ExternalDeskBookingImported {
+
+    translation "ExternalDeskBookingImport" {
+      external_system = "Room Booking API"
+      reads           = DeskOccupancyView
+      command         = ImportExternalDeskBooking
+
+      event "ExternalDeskBookingImported" {
         tags {
-          desk  : deskId
-          reader: memberId
+          desk   = deskId
+          reader = memberId
         }
+
         fields {
-          externalRef string    required
-          deskId      string    required
-          memberId    string    required
-          importedAt  timestamp required
+          externalRef = required(string)
+          deskId      = required(string)
+          memberId    = required(string)
+          importedAt  = required(timestamp)
         }
       }
     }
+
     spec "imports a desk booking from an external system" {
-      given [DeskClaimed]
-      when ImportExternalDeskBooking
-      then [ExternalDeskBookingImported]
+      given = [DeskClaimed]
+      when  = ImportExternalDeskBooking
+      then  = [ExternalDeskBookingImported]
     }
+
     spec "refuses to import a booking for an occupied desk" {
-      given [DeskClaimed]
-      when ImportExternalDeskBooking
-      then rejected OneReaderPerDesk
+      given = [DeskClaimed]
+      when  = ImportExternalDeskBooking
+      then  = rejected(OneReaderPerDesk)
     }
   }
 }
@@ -1070,161 +1273,191 @@ context "Reading Room" mode dcb {
 // model. One automation leaves its reads out ahead of a further automation on
 // purpose: write the omission last and nothing here would catch an automation
 // running on into what follows it.
-const AutomationReadsLibraryLending = `# Lending a library's copies and seating its readers, with the views its automations consult
-model "Library Lending"
+const AutomationReadsLibraryLending = `emod = 1
 
-actor "Member"
+# Lending a library's copies and seating its readers, with the views its automations consult
+model "Library Lending" {
+}
+
+actor "Member" {
+}
 
 context "Lending" {
   aggregate "Loan" {
     slice "Borrow Copy" {
       trigger "Lending Desk" {
-        actor Member
-        reads MemberLoansView
+        actor = Member
+        reads = MemberLoansView
       }
-      command BorrowCopy {
+
+      command "BorrowCopy" {
         fields {
-          memberId string required
-          copyId   string required
-          dueOn    date   required
+          memberId = required(string)
+          copyId   = required(string)
+          dueOn    = required(date)
         }
       }
-      event CopyBorrowed {
+
+      event "CopyBorrowed" {
         fields {
-          loanId   string required
-          memberId string required
-          copyId   string required
-          dueOn    date   required
+          loanId   = required(string)
+          memberId = required(string)
+          copyId   = required(string)
+          dueOn    = required(date)
         }
       }
-      flow {
-        command -> event: BorrowCopy -> CopyBorrowed
-      }
+
+      flow = <<-FLOW
+        command -> event:    BorrowCopy -> CopyBorrowed
+      FLOW
     }
+
     slice "Review Member Loans" {
-      view MemberLoansView {
+      view "MemberLoansView" {
+        subscribes = [CopyBorrowed]
+
         fields {
-          loanId   string required
-          memberId string required
-          dueOn    date   required
+          loanId   = required(string)
+          memberId = required(string)
+          dueOn    = required(date)
         }
-        subscribes [CopyBorrowed]
       }
     }
+
     slice "Chase Overdue Copy" {
-      command RemindMember {
+      command "RemindMember" {
         fields {
-          loanId   string required
-          memberId string required
+          loanId   = required(string)
+          memberId = required(string)
         }
       }
-      command RecallCopy {
+
+      command "RecallCopy" {
         fields {
-          loanId string required
-          copyId string required
+          loanId = required(string)
+          copyId = required(string)
         }
       }
-      event MemberReminded {
+
+      event "MemberReminded" {
         fields {
-          loanId     string    required
-          memberId   string    required
-          remindedAt timestamp required
+          loanId     = required(string)
+          memberId   = required(string)
+          remindedAt = required(timestamp)
         }
       }
-      event CopyRecalled {
+
+      event "CopyRecalled" {
         fields {
-          loanId     string    required
-          copyId     string    required
-          recalledAt timestamp required
+          loanId     = required(string)
+          copyId     = required(string)
+          recalledAt = required(timestamp)
         }
       }
-      automation RemindOnDueDate {
-        on CopyBorrowed
-        command RemindMember
+
+      automation "RemindOnDueDate" {
+        on      = CopyBorrowed
+        command = RemindMember
       }
-      automation RecallOverdueCopy {
-        on CopyBorrowed
-        reads MemberLoansView
-        command RecallCopy
+
+      automation "RecallOverdueCopy" {
+        on      = CopyBorrowed
+        reads   = MemberLoansView
+        command = RecallCopy
       }
-      flow {
-        command -> event: RemindMember -> MemberReminded
-        command -> event: RecallCopy -> CopyRecalled
-      }
+
+      flow = <<-FLOW
+        command -> event:    RemindMember -> MemberReminded
+        command -> event:    RecallCopy -> CopyRecalled
+      FLOW
     }
   }
 }
 
-context "Reading Room" mode dcb {
+context "Reading Room" {
+  mode = dcb
+
   slice "Claim Desk" {
-    command ClaimDesk {
+    command "ClaimDesk" {
       fields {
-        memberId string required
-        deskId   string required
+        memberId = required(string)
+        deskId   = required(string)
       }
     }
-    event DeskClaimed {
+
+    event "DeskClaimed" {
       tags {
-        desk  : deskId
-        reader: memberId
+        desk   = deskId
+        reader = memberId
       }
+
       fields {
-        sessionId string    required
-        deskId    string    required
-        memberId  string    required
-        claimedAt timestamp required
+        sessionId = required(string)
+        deskId    = required(string)
+        memberId  = required(string)
+        claimedAt = required(timestamp)
       }
     }
-    flow {
-      command -> event: ClaimDesk -> DeskClaimed
-    }
+
+    flow = <<-FLOW
+      command -> event:    ClaimDesk -> DeskClaimed
+    FLOW
   }
+
   slice "Release Desk" {
-    command ReleaseDesk {
+    command "ReleaseDesk" {
+      fields {
+        sessionId = required(string)
+      }
+
       decides_on {
-        events [DeskClaimed]
-        where tag(desk = deskId) and tag(reader = memberId)
-      }
-      fields {
-        sessionId string required
+        events = [DeskClaimed]
+        where  = tag(desk, deskId) && tag(reader, memberId)
       }
     }
-    event DeskReleased {
+
+    event "DeskReleased" {
       tags {
-        desk  : deskId
-        reader: memberId
+        desk   = deskId
+        reader = memberId
       }
+
       fields {
-        sessionId  string    required
-        deskId     string    required
-        memberId   string    required
-        releasedAt timestamp required
+        sessionId  = required(string)
+        deskId     = required(string)
+        memberId   = required(string)
+        releasedAt = required(timestamp)
       }
     }
-    flow {
-      command -> event: ReleaseDesk -> DeskReleased
-    }
+
+    flow = <<-FLOW
+      command -> event:    ReleaseDesk -> DeskReleased
+    FLOW
   }
+
   slice "Browse Desk Occupancy" {
-    view DeskOccupancyView {
+    view "DeskOccupancyView" {
+      subscribes = [DeskClaimed, DeskReleased]
+
       fields {
-        deskId    string    required
-        memberId  string    required
-        claimedAt timestamp required
+        deskId    = required(string)
+        memberId  = required(string)
+        claimedAt = required(timestamp)
       }
-      subscribes [DeskClaimed, DeskReleased]
     }
   }
+
   slice "Close Reading Room" {
-    automation FreeDeskAtClosing {
-      on DeskClaimed
-      reads DeskOccupancyView
-      command ReleaseDesk
+    automation "FreeDeskAtClosing" {
+      on      = DeskClaimed
+      reads   = DeskOccupancyView
+      command = ReleaseDesk
     }
-    automation RemindReaderOfLoans {
-      on DeskReleased
-      reads MemberLoansView
-      command RemindMember
+
+    automation "RemindReaderOfLoans" {
+      on      = DeskReleased
+      reads   = MemberLoansView
+      command = RemindMember
     }
   }
 }
@@ -1238,191 +1471,229 @@ context "Reading Room" mode dcb {
 // automation each leave their reads out ahead of further declarations on
 // purpose: write the omission last and nothing here would catch a declaration
 // running on into what follows it.
-const TriggerReadsLibraryLending = `# Lending a library's copies and seating its readers, with the views its triggers open on
-model "Library Lending"
+const TriggerReadsLibraryLending = `emod = 1
 
-actor "Member"
-actor "Librarian"
+# Lending a library's copies and seating its readers, with the views its triggers open on
+model "Library Lending" {
+}
+
+actor "Member" {
+}
+
+actor "Librarian" {
+}
 
 context "Lending" {
   aggregate "Loan" {
     slice "Borrow Copy" {
       trigger "Lending Desk" {
-        actor Member
-        reads MemberLoansView
+        actor = Member
+        reads = MemberLoansView
       }
-      command BorrowCopy {
+
+      command "BorrowCopy" {
         fields {
-          memberId string required
-          copyId   string required
-          dueOn    date   required
+          memberId = required(string)
+          copyId   = required(string)
+          dueOn    = required(date)
         }
       }
-      event CopyBorrowed {
+
+      event "CopyBorrowed" {
         fields {
-          loanId   string required
-          memberId string required
-          copyId   string required
-          dueOn    date   required
+          loanId   = required(string)
+          memberId = required(string)
+          copyId   = required(string)
+          dueOn    = required(date)
         }
       }
-      flow {
-        command -> event: BorrowCopy -> CopyBorrowed
-      }
+
+      flow = <<-FLOW
+        command -> event:    BorrowCopy -> CopyBorrowed
+      FLOW
     }
+
     slice "Review Member Loans" {
-      view MemberLoansView {
+      view "MemberLoansView" {
+        subscribes = [CopyBorrowed]
+
         fields {
-          loanId   string required
-          memberId string required
-          dueOn    date   required
+          loanId   = required(string)
+          memberId = required(string)
+          dueOn    = required(date)
         }
-        subscribes [CopyBorrowed]
       }
     }
+
     slice "Return Copy" {
       trigger "Returns Counter" {
-        actor Member
+        actor = Member
       }
-      command ReturnCopy {
+
+      command "ReturnCopy" {
         fields {
-          loanId string required
-          copyId string required
+          loanId = required(string)
+          copyId = required(string)
         }
       }
-      event CopyReturned {
+
+      event "CopyReturned" {
         fields {
-          loanId     string    required
-          copyId     string    required
-          returnedAt timestamp required
+          loanId     = required(string)
+          copyId     = required(string)
+          returnedAt = required(timestamp)
         }
       }
-      flow {
-        command -> event: ReturnCopy -> CopyReturned
-      }
+
+      flow = <<-FLOW
+        command -> event:    ReturnCopy -> CopyReturned
+      FLOW
     }
+
     slice "Chase Overdue Copy" {
       trigger "Overdue Report" {
-        actor Librarian
-        reads DeskOccupancyView
+        actor = Librarian
+        reads = DeskOccupancyView
       }
-      command RemindMember {
+
+      command "RemindMember" {
         fields {
-          loanId   string required
-          memberId string required
+          loanId   = required(string)
+          memberId = required(string)
         }
       }
-      command RecallCopy {
+
+      command "RecallCopy" {
         fields {
-          loanId string required
-          copyId string required
+          loanId = required(string)
+          copyId = required(string)
         }
       }
-      event MemberReminded {
+
+      event "MemberReminded" {
         fields {
-          loanId     string    required
-          memberId   string    required
-          remindedAt timestamp required
+          loanId     = required(string)
+          memberId   = required(string)
+          remindedAt = required(timestamp)
         }
       }
-      event CopyRecalled {
+
+      event "CopyRecalled" {
         fields {
-          loanId     string    required
-          copyId     string    required
-          recalledAt timestamp required
+          loanId     = required(string)
+          copyId     = required(string)
+          recalledAt = required(timestamp)
         }
       }
-      automation RemindOnDueDate {
-        on CopyBorrowed
-        command RemindMember
+
+      automation "RemindOnDueDate" {
+        on      = CopyBorrowed
+        command = RemindMember
       }
-      automation RecallOverdueCopy {
-        on CopyBorrowed
-        reads MemberLoansView
-        command RecallCopy
+
+      automation "RecallOverdueCopy" {
+        on      = CopyBorrowed
+        reads   = MemberLoansView
+        command = RecallCopy
       }
-      flow {
-        command -> event: RemindMember -> MemberReminded
-        command -> event: RecallCopy -> CopyRecalled
-      }
+
+      flow = <<-FLOW
+        command -> event:    RemindMember -> MemberReminded
+        command -> event:    RecallCopy -> CopyRecalled
+      FLOW
     }
   }
 }
 
-context "Reading Room" mode dcb {
+context "Reading Room" {
+  mode = dcb
+
   slice "Claim Desk" {
     trigger "Desk Kiosk" {
-      actor Member
-      reads DeskOccupancyView
+      actor = Member
+      reads = DeskOccupancyView
     }
-    command ClaimDesk {
+
+    command "ClaimDesk" {
       fields {
-        memberId string required
-        deskId   string required
+        memberId = required(string)
+        deskId   = required(string)
       }
     }
-    event DeskClaimed {
+
+    event "DeskClaimed" {
       tags {
-        desk  : deskId
-        reader: memberId
+        desk   = deskId
+        reader = memberId
       }
+
       fields {
-        sessionId string    required
-        deskId    string    required
-        memberId  string    required
-        claimedAt timestamp required
+        sessionId = required(string)
+        deskId    = required(string)
+        memberId  = required(string)
+        claimedAt = required(timestamp)
       }
     }
-    flow {
-      command -> event: ClaimDesk -> DeskClaimed
-    }
+
+    flow = <<-FLOW
+      command -> event:    ClaimDesk -> DeskClaimed
+    FLOW
   }
+
   slice "Release Desk" {
-    command ReleaseDesk {
+    command "ReleaseDesk" {
+      fields {
+        sessionId = required(string)
+      }
+
       decides_on {
-        events [DeskClaimed]
-        where tag(desk = deskId) and tag(reader = memberId)
-      }
-      fields {
-        sessionId string required
+        events = [DeskClaimed]
+        where  = tag(desk, deskId) && tag(reader, memberId)
       }
     }
-    event DeskReleased {
+
+    event "DeskReleased" {
       tags {
-        desk  : deskId
-        reader: memberId
+        desk   = deskId
+        reader = memberId
       }
+
       fields {
-        sessionId  string    required
-        deskId     string    required
-        memberId   string    required
-        releasedAt timestamp required
+        sessionId  = required(string)
+        deskId     = required(string)
+        memberId   = required(string)
+        releasedAt = required(timestamp)
       }
     }
-    flow {
-      command -> event: ReleaseDesk -> DeskReleased
-    }
+
+    flow = <<-FLOW
+      command -> event:    ReleaseDesk -> DeskReleased
+    FLOW
   }
+
   slice "Browse Desk Occupancy" {
-    view DeskOccupancyView {
+    view "DeskOccupancyView" {
+      subscribes = [DeskClaimed, DeskReleased]
+
       fields {
-        deskId    string    required
-        memberId  string    required
-        claimedAt timestamp required
+        deskId    = required(string)
+        memberId  = required(string)
+        claimedAt = required(timestamp)
       }
-      subscribes [DeskClaimed, DeskReleased]
     }
   }
+
   slice "Close Reading Room" {
-    automation FreeDeskAtClosing {
-      on DeskClaimed
-      reads DeskOccupancyView
-      command ReleaseDesk
+    automation "FreeDeskAtClosing" {
+      on      = DeskClaimed
+      reads   = DeskOccupancyView
+      command = ReleaseDesk
     }
-    automation RemindReaderOfLoans {
-      on DeskReleased
-      reads MemberLoansView
-      command RemindMember
+
+    automation "RemindReaderOfLoans" {
+      on      = DeskReleased
+      reads   = MemberLoansView
+      command = RemindMember
     }
   }
 }
@@ -1436,169 +1707,201 @@ context "Reading Room" mode dcb {
 // model. An automation stating an event and no schedule sits mid-block ahead of
 // a further automation on purpose: write the omission last and nothing here
 // would catch an automation running on into what follows it.
-const AutomationScheduleLibraryLending = `# Lending a library's copies and seating its readers, with the cadences its automations run on
-model "Library Lending"
+const AutomationScheduleLibraryLending = `emod = 1
 
-actor "Member"
+# Lending a library's copies and seating its readers, with the cadences its automations run on
+model "Library Lending" {
+}
+
+actor "Member" {
+}
 
 context "Lending" {
   aggregate "Loan" {
     slice "Borrow Copy" {
       trigger "Lending Desk" {
-        actor Member
-        reads MemberLoansView
+        actor = Member
+        reads = MemberLoansView
       }
-      command BorrowCopy {
+
+      command "BorrowCopy" {
         fields {
-          memberId string required
-          copyId   string required
-          dueOn    date   required
+          memberId = required(string)
+          copyId   = required(string)
+          dueOn    = required(date)
         }
       }
-      event CopyBorrowed {
+
+      event "CopyBorrowed" {
         fields {
-          loanId   string required
-          memberId string required
-          copyId   string required
-          dueOn    date   required
+          loanId   = required(string)
+          memberId = required(string)
+          copyId   = required(string)
+          dueOn    = required(date)
         }
       }
-      flow {
-        command -> event: BorrowCopy -> CopyBorrowed
-      }
+
+      flow = <<-FLOW
+        command -> event:    BorrowCopy -> CopyBorrowed
+      FLOW
     }
+
     slice "Review Member Loans" {
-      view MemberLoansView {
+      view "MemberLoansView" {
+        subscribes = [CopyBorrowed]
+
         fields {
-          loanId   string required
-          memberId string required
-          dueOn    date   required
+          loanId   = required(string)
+          memberId = required(string)
+          dueOn    = required(date)
         }
-        subscribes [CopyBorrowed]
       }
     }
+
     slice "Chase Overdue Copy" {
-      command RemindMember {
+      command "RemindMember" {
         fields {
-          loanId   string required
-          memberId string required
+          loanId   = required(string)
+          memberId = required(string)
         }
       }
-      command RecallCopy {
+
+      command "RecallCopy" {
         fields {
-          loanId string required
-          copyId string required
+          loanId = required(string)
+          copyId = required(string)
         }
       }
-      event MemberReminded {
+
+      event "MemberReminded" {
         fields {
-          loanId     string    required
-          memberId   string    required
-          remindedAt timestamp required
+          loanId     = required(string)
+          memberId   = required(string)
+          remindedAt = required(timestamp)
         }
       }
-      event CopyRecalled {
+
+      event "CopyRecalled" {
         fields {
-          loanId     string    required
-          copyId     string    required
-          recalledAt timestamp required
+          loanId     = required(string)
+          copyId     = required(string)
+          recalledAt = required(timestamp)
         }
       }
-      automation RemindMemberEachMorning {
-        every "0 9 * * *"
-        reads MemberLoansView
-        command RemindMember
+
+      automation "RemindMemberEachMorning" {
+        every   = "0 9 * * *"
+        reads   = MemberLoansView
+        command = RemindMember
       }
-      automation RecallOnSecondReminder {
-        on MemberReminded
-        command RecallCopy
+
+      automation "RecallOnSecondReminder" {
+        on      = MemberReminded
+        command = RecallCopy
       }
-      automation SweepOverdueLoans {
-        every "15m"
-        command RecallCopy
+
+      automation "SweepOverdueLoans" {
+        every   = "15m"
+        command = RecallCopy
       }
-      flow {
-        command -> event: RemindMember -> MemberReminded
-        command -> event: RecallCopy -> CopyRecalled
-      }
+
+      flow = <<-FLOW
+        command -> event:    RemindMember -> MemberReminded
+        command -> event:    RecallCopy -> CopyRecalled
+      FLOW
     }
   }
 }
 
-context "Reading Room" mode dcb {
+context "Reading Room" {
+  mode = dcb
+
   slice "Claim Desk" {
-    command ClaimDesk {
+    command "ClaimDesk" {
       fields {
-        memberId string required
-        deskId   string required
+        memberId = required(string)
+        deskId   = required(string)
       }
     }
-    event DeskClaimed {
+
+    event "DeskClaimed" {
       tags {
-        desk  : deskId
-        reader: memberId
+        desk   = deskId
+        reader = memberId
       }
+
       fields {
-        sessionId string    required
-        deskId    string    required
-        memberId  string    required
-        claimedAt timestamp required
+        sessionId = required(string)
+        deskId    = required(string)
+        memberId  = required(string)
+        claimedAt = required(timestamp)
       }
     }
-    flow {
-      command -> event: ClaimDesk -> DeskClaimed
-    }
+
+    flow = <<-FLOW
+      command -> event:    ClaimDesk -> DeskClaimed
+    FLOW
   }
+
   slice "Release Desk" {
-    command ReleaseDesk {
+    command "ReleaseDesk" {
+      fields {
+        sessionId = required(string)
+      }
+
       decides_on {
-        events [DeskClaimed]
-        where tag(desk = deskId) and tag(reader = memberId)
-      }
-      fields {
-        sessionId string required
+        events = [DeskClaimed]
+        where  = tag(desk, deskId) && tag(reader, memberId)
       }
     }
-    event DeskReleased {
+
+    event "DeskReleased" {
       tags {
-        desk  : deskId
-        reader: memberId
+        desk   = deskId
+        reader = memberId
       }
+
       fields {
-        sessionId  string    required
-        deskId     string    required
-        memberId   string    required
-        releasedAt timestamp required
+        sessionId  = required(string)
+        deskId     = required(string)
+        memberId   = required(string)
+        releasedAt = required(timestamp)
       }
     }
-    flow {
-      command -> event: ReleaseDesk -> DeskReleased
-    }
+
+    flow = <<-FLOW
+      command -> event:    ReleaseDesk -> DeskReleased
+    FLOW
   }
+
   slice "Browse Desk Occupancy" {
-    view DeskOccupancyView {
+    view "DeskOccupancyView" {
+      subscribes = [DeskClaimed, DeskReleased]
+
       fields {
-        deskId    string    required
-        memberId  string    required
-        claimedAt timestamp required
+        deskId    = required(string)
+        memberId  = required(string)
+        claimedAt = required(timestamp)
       }
-      subscribes [DeskClaimed, DeskReleased]
     }
   }
+
   slice "Close Reading Room" {
-    automation CloseDesksAtNight {
-      every "0 22 * * *"
-      reads DeskOccupancyView
-      command ReleaseDesk
+    automation "CloseDesksAtNight" {
+      every   = "0 22 * * *"
+      reads   = DeskOccupancyView
+      command = ReleaseDesk
     }
-    automation RemindReaderOfLoans {
-      on DeskReleased
-      reads MemberLoansView
-      command RemindMember
+
+    automation "RemindReaderOfLoans" {
+      on      = DeskReleased
+      reads   = MemberLoansView
+      command = RemindMember
     }
-    automation SweepIdleDesks {
-      every "45m"
-      command ReleaseDesk
+
+    automation "SweepIdleDesks" {
+      every   = "45m"
+      command = ReleaseDesk
     }
   }
 }
@@ -1615,172 +1918,206 @@ context "Reading Room" mode dcb {
 // stating an activation event and no delay sits mid-block ahead of a further
 // automation on purpose: write the omission last and nothing here would catch an
 // activation line running on into what follows it.
-const AutomationDelayLibraryLending = `# Lending a library's copies and seating its readers, with the delays its automations fire after
-model "Library Lending"
+const AutomationDelayLibraryLending = `emod = 1
 
-actor "Member"
+# Lending a library's copies and seating its readers, with the delays its automations fire after
+model "Library Lending" {
+}
+
+actor "Member" {
+}
 
 context "Lending" {
   aggregate "Loan" {
     slice "Borrow Copy" {
       trigger "Lending Desk" {
-        actor Member
-        reads MemberLoansView
+        actor = Member
+        reads = MemberLoansView
       }
-      command BorrowCopy {
+
+      command "BorrowCopy" {
         fields {
-          memberId string required
-          copyId   string required
-          dueOn    date   required
+          memberId = required(string)
+          copyId   = required(string)
+          dueOn    = required(date)
         }
       }
-      event CopyBorrowed {
+
+      event "CopyBorrowed" {
         fields {
-          loanId   string required
-          memberId string required
-          copyId   string required
-          dueOn    date   required
+          loanId   = required(string)
+          memberId = required(string)
+          copyId   = required(string)
+          dueOn    = required(date)
         }
       }
-      flow {
-        command -> event: BorrowCopy -> CopyBorrowed
-      }
+
+      flow = <<-FLOW
+        command -> event:    BorrowCopy -> CopyBorrowed
+      FLOW
     }
+
     slice "Review Member Loans" {
-      view MemberLoansView {
+      view "MemberLoansView" {
+        subscribes = [CopyBorrowed]
+
         fields {
-          loanId   string required
-          memberId string required
-          dueOn    date   required
+          loanId   = required(string)
+          memberId = required(string)
+          dueOn    = required(date)
         }
-        subscribes [CopyBorrowed]
       }
     }
+
     slice "Chase Overdue Copy" {
-      command RemindMember {
+      command "RemindMember" {
         fields {
-          loanId   string required
-          memberId string required
+          loanId   = required(string)
+          memberId = required(string)
         }
       }
-      command RecallCopy {
+
+      command "RecallCopy" {
         fields {
-          loanId string required
-          copyId string required
+          loanId = required(string)
+          copyId = required(string)
         }
       }
-      event MemberReminded {
+
+      event "MemberReminded" {
         fields {
-          loanId     string    required
-          memberId   string    required
-          remindedAt timestamp required
+          loanId     = required(string)
+          memberId   = required(string)
+          remindedAt = required(timestamp)
         }
       }
-      event CopyRecalled {
+
+      event "CopyRecalled" {
         fields {
-          loanId     string    required
-          copyId     string    required
-          recalledAt timestamp required
+          loanId     = required(string)
+          copyId     = required(string)
+          recalledAt = required(timestamp)
         }
       }
-      automation RemindAfterGracePeriod {
-        on CopyBorrowed after "72h"
-        reads MemberLoansView
-        command RemindMember
+
+      automation "RemindAfterGracePeriod" {
+        on      = CopyBorrowed
+        after   = "72h"
+        reads   = MemberLoansView
+        command = RemindMember
       }
-      automation RecallOnSecondReminder {
-        on MemberReminded
-        reads MemberLoansView
-        command RecallCopy
+
+      automation "RecallOnSecondReminder" {
+        on      = MemberReminded
+        reads   = MemberLoansView
+        command = RecallCopy
       }
-      automation SweepOverdueLoans {
-        every "15m"
-        reads MemberLoansView
-        command RecallCopy
+
+      automation "SweepOverdueLoans" {
+        every   = "15m"
+        reads   = MemberLoansView
+        command = RecallCopy
       }
-      flow {
-        command -> event: RemindMember -> MemberReminded
-        command -> event: RecallCopy -> CopyRecalled
-      }
+
+      flow = <<-FLOW
+        command -> event:    RemindMember -> MemberReminded
+        command -> event:    RecallCopy -> CopyRecalled
+      FLOW
     }
   }
 }
 
-context "Reading Room" mode dcb {
+context "Reading Room" {
+  mode = dcb
+
   slice "Claim Desk" {
-    command ClaimDesk {
+    command "ClaimDesk" {
       fields {
-        memberId string required
-        deskId   string required
+        memberId = required(string)
+        deskId   = required(string)
       }
     }
-    event DeskClaimed {
+
+    event "DeskClaimed" {
       tags {
-        desk  : deskId
-        reader: memberId
+        desk   = deskId
+        reader = memberId
       }
+
       fields {
-        sessionId string    required
-        deskId    string    required
-        memberId  string    required
-        claimedAt timestamp required
+        sessionId = required(string)
+        deskId    = required(string)
+        memberId  = required(string)
+        claimedAt = required(timestamp)
       }
     }
-    flow {
-      command -> event: ClaimDesk -> DeskClaimed
-    }
+
+    flow = <<-FLOW
+      command -> event:    ClaimDesk -> DeskClaimed
+    FLOW
   }
+
   slice "Release Desk" {
-    command ReleaseDesk {
+    command "ReleaseDesk" {
+      fields {
+        sessionId = required(string)
+      }
+
       decides_on {
-        events [DeskClaimed]
-        where tag(desk = deskId) and tag(reader = memberId)
-      }
-      fields {
-        sessionId string required
+        events = [DeskClaimed]
+        where  = tag(desk, deskId) && tag(reader, memberId)
       }
     }
-    event DeskReleased {
+
+    event "DeskReleased" {
       tags {
-        desk  : deskId
-        reader: memberId
+        desk   = deskId
+        reader = memberId
       }
+
       fields {
-        sessionId  string    required
-        deskId     string    required
-        memberId   string    required
-        releasedAt timestamp required
+        sessionId  = required(string)
+        deskId     = required(string)
+        memberId   = required(string)
+        releasedAt = required(timestamp)
       }
     }
-    flow {
-      command -> event: ReleaseDesk -> DeskReleased
-    }
+
+    flow = <<-FLOW
+      command -> event:    ReleaseDesk -> DeskReleased
+    FLOW
   }
+
   slice "Browse Desk Occupancy" {
-    view DeskOccupancyView {
+    view "DeskOccupancyView" {
+      subscribes = [DeskClaimed, DeskReleased]
+
       fields {
-        deskId    string    required
-        memberId  string    required
-        claimedAt timestamp required
+        deskId    = required(string)
+        memberId  = required(string)
+        claimedAt = required(timestamp)
       }
-      subscribes [DeskClaimed, DeskReleased]
     }
   }
+
   slice "Close Reading Room" {
-    automation ReleaseDeskLeftClaimed {
-      on DeskClaimed after "30m"
-      reads DeskOccupancyView
-      command ReleaseDesk
+    automation "ReleaseDeskLeftClaimed" {
+      on      = DeskClaimed
+      after   = "30m"
+      reads   = DeskOccupancyView
+      command = ReleaseDesk
     }
-    automation RemindReaderOfLoans {
-      on DeskReleased
-      reads MemberLoansView
-      command RemindMember
+
+    automation "RemindReaderOfLoans" {
+      on      = DeskReleased
+      reads   = MemberLoansView
+      command = RemindMember
     }
-    automation CloseDesksAtNight {
-      every "0 22 * * *"
-      reads DeskOccupancyView
-      command ReleaseDesk
+
+    automation "CloseDesksAtNight" {
+      every   = "0 22 * * *"
+      reads   = DeskOccupancyView
+      command = ReleaseDesk
     }
   }
 }
@@ -1810,168 +2147,203 @@ context "Reading Room" mode dcb {
 // reader released", from the given in "refuses to free a desk already empty" —
 // and both omissions sit mid-payload, ahead of a further field, because a part
 // left out at the end runs into nothing.
-const PayloadLibraryLending = `# Lending a library's copies and seating its readers, with example values on the scenarios each slice must satisfy
-model "Library Lending"
+const PayloadLibraryLending = `emod = 1
 
-actor "Member"
+# Lending a library's copies and seating its readers, with example values on the scenarios each slice must satisfy
+model "Library Lending" {
+}
+
+actor "Member" {
+}
 
 context "Lending" {
   aggregate "Loan" {
-    invariant OneCopyPerLoan "A loan covers exactly one copy of one title"
+    invariants {
+      OneCopyPerLoan = "A loan covers exactly one copy of one title"
+    }
+
     slice "Borrow Copy" {
-      command BorrowCopy {
+      command "BorrowCopy" {
         fields {
-          memberId  string    required
-          copyId    string    required
-          dueOn     date      required
-          shelfMark ShelfMark
+          memberId  = required(string)
+          copyId    = required(string)
+          dueOn     = required(date)
+          shelfMark = ShelfMark
         }
       }
+
+      event "CopyBorrowed" {
+        fields {
+          loanId          = required(uuid)
+          memberId        = required(string)
+          copyId          = required(string)
+          dueOn           = required(date)
+          borrowedAt      = required(timestamp)
+          catalogueNumber = int
+          lateFee         = decimal
+          expedited       = bool
+        }
+      }
+
+      flow = <<-FLOW
+        command -> event:    BorrowCopy -> CopyBorrowed
+      FLOW
+
       spec "borrows a copy no one holds" {
-        given []
-        when BorrowCopy { memberId: "M-40817", copyId: "C-93204", dueOn: "2024-07-19", shelfMark: "AURELIA" }
-        then [CopyBorrowed { loanId: "7c9e6679-7425-40de-944b-e07fc1f90ae7", borrowedAt: "2024-07-05T14:32:00Z", catalogueNumber: 4821, lateFee: 12.50, expedited: true }]
+        when = BorrowCopy({ memberId = "M-40817", copyId = "C-93204", dueOn = "2024-07-19", shelfMark = "AURELIA" })
+        then = [CopyBorrowed({ loanId = "7c9e6679-7425-40de-944b-e07fc1f90ae7", borrowedAt = "2024-07-05T14:32:00Z", catalogueNumber = 4821, lateFee = 12.50, expedited = true })]
       }
-      event CopyBorrowed {
-        fields {
-          loanId          uuid      required
-          memberId        string    required
-          copyId          string    required
-          dueOn           date      required
-          borrowedAt      timestamp required
-          catalogueNumber int
-          lateFee         decimal
-          expedited       bool
-        }
-      }
+
       spec "refuses a copy already on loan" {
-        given [CopyBorrowed { copyId: "C-93204", expedited: false }, CopyReturned]
-        when BorrowCopy { copyId: "C-93204" }
-        then rejected OneCopyPerLoan
-      }
-      flow {
-        command -> event: BorrowCopy -> CopyBorrowed
+        given = [CopyBorrowed({ copyId = "C-93204", expedited = false }), CopyReturned]
+        when  = BorrowCopy({ copyId = "C-93204" })
+        then  = rejected(OneCopyPerLoan)
       }
     }
+
     slice "Return Copy" {
-      command ReturnCopy {
+      command "ReturnCopy" {
         fields {
-          loanId uuid   required
-          copyId string required
+          loanId = required(uuid)
+          copyId = required(string)
         }
       }
-      event CopyReturned {
+
+      event "CopyReturned" {
         fields {
-          loanId     uuid      required
-          copyId     string    required
-          returnedAt timestamp required
+          loanId     = required(uuid)
+          copyId     = required(string)
+          returnedAt = required(timestamp)
         }
       }
+
+      flow = <<-FLOW
+        command -> event:    ReturnCopy -> CopyReturned
+      FLOW
+
       spec "returns a copy the member holds" {
-        given [CopyBorrowed]
-        when ReturnCopy
-        then [CopyReturned]
+        given = [CopyBorrowed]
+        when  = ReturnCopy
+        then  = [CopyReturned]
       }
+
       spec "refuses to return a copy the member no longer holds" {
-        given [CopyBorrowed]
-        when ReturnCopy
-        then rejected OneCopyPerLoan
-      }
-      flow {
-        command -> event: ReturnCopy -> CopyReturned
+        given = [CopyBorrowed]
+        when  = ReturnCopy
+        then  = rejected(OneCopyPerLoan)
       }
     }
+
     slice "Review Member Loans" {
-      view MemberLoansView {
+      view "MemberLoansView" {
+        subscribes = [CopyBorrowed]
+
         fields {
-          loanId   uuid   required
-          memberId string required
-          dueOn    date   required
+          loanId   = required(uuid)
+          memberId = required(string)
+          dueOn    = required(date)
         }
-        subscribes [CopyBorrowed]
       }
     }
   }
 }
 
-context "Reading Room" mode dcb {
-  invariant OneReaderPerDesk "A desk seats at most one reader at any moment"
+context "Reading Room" {
+  mode = dcb
+
+  invariants {
+    OneReaderPerDesk = "A desk seats at most one reader at any moment"
+  }
+
   slice "Claim Desk" {
-    command ClaimDesk {
+    command "ClaimDesk" {
+      fields {
+        memberId      = required(string)
+        deskId        = required(string)
+        preferredZone = string
+      }
+
       decides_on {
-        events [DeskClaimed, DeskReleased]
-        where tag(desk = deskId)
-      }
-      fields {
-        memberId      string required
-        deskId        string required
-        preferredZone string
+        events = [DeskClaimed, DeskReleased]
+        where  = tag(desk, deskId)
       }
     }
-    spec "seats a reader at a desk its last reader released" {
-      given [DeskReleased { deskId: "D-5817", releasedAt: "2024-07-05T08:50:00Z" }]
-      when ClaimDesk { memberId: "M-40817", preferredZone: "north gallery" }
-      then [DeskClaimed { sessionId: "b6f4a3d2-91c8-4e57-8f10-2d6a5c7e9b31", claimedAt: "2024-07-05T09:15:00Z", quietZone: true }]
-    }
-    event DeskClaimed {
+
+    event "DeskClaimed" {
       tags {
-        desk  : deskId
-        reader: memberId
+        desk   = deskId
+        reader = memberId
       }
+
       fields {
-        sessionId uuid      required
-        deskId    string    required
-        memberId  string    required
-        claimedAt timestamp required
-        quietZone bool
+        sessionId = required(uuid)
+        deskId    = required(string)
+        memberId  = required(string)
+        claimedAt = required(timestamp)
+        quietZone = bool
       }
     }
-    spec "refuses a desk another reader is seated at" {
-      given [DeskClaimed { deskId: "D-5817", quietZone: false }]
-      when ClaimDesk { memberId: "M-63204", deskId: "D-5817" }
-      then rejected OneReaderPerDesk
+
+    flow = <<-FLOW
+      command -> event:    ClaimDesk -> DeskClaimed
+    FLOW
+
+    spec "seats a reader at a desk its last reader released" {
+      given = [DeskReleased({ deskId = "D-5817", releasedAt = "2024-07-05T08:50:00Z" })]
+      when  = ClaimDesk({ memberId = "M-40817", preferredZone = "north gallery" })
+      then  = [DeskClaimed({ sessionId = "b6f4a3d2-91c8-4e57-8f10-2d6a5c7e9b31", claimedAt = "2024-07-05T09:15:00Z", quietZone = true })]
     }
-    flow {
-      command -> event: ClaimDesk -> DeskClaimed
+
+    spec "refuses a desk another reader is seated at" {
+      given = [DeskClaimed({ deskId = "D-5817", quietZone = false })]
+      when  = ClaimDesk({ memberId = "M-63204", deskId = "D-5817" })
+      then  = rejected(OneReaderPerDesk)
     }
   }
+
   slice "Release Desk" {
-    command ReleaseDesk {
+    command "ReleaseDesk" {
+      fields {
+        sessionId = required(uuid)
+        deskId    = required(string)
+        memberId  = required(string)
+      }
+
       decides_on {
-        events [DeskClaimed]
-        where tag(desk = deskId) and tag(reader = memberId)
-      }
-      fields {
-        sessionId uuid   required
-        deskId    string required
-        memberId  string required
+        events = [DeskClaimed]
+        where  = tag(desk, deskId) && tag(reader, memberId)
       }
     }
-    event DeskReleased {
+
+    event "DeskReleased" {
       tags {
-        desk  : deskId
-        reader: memberId
+        desk   = deskId
+        reader = memberId
       }
+
       fields {
-        sessionId  uuid      required
-        deskId     string    required
-        memberId   string    required
-        releasedAt timestamp required
-        seatedFor  decimal
+        sessionId  = required(uuid)
+        deskId     = required(string)
+        memberId   = required(string)
+        releasedAt = required(timestamp)
+        seatedFor  = decimal
       }
     }
+
+    flow = <<-FLOW
+      command -> event:    ReleaseDesk -> DeskReleased
+    FLOW
+
     spec "frees the desk its reader is seated at" {
-      given [DeskClaimed { deskId: "D-5817", memberId: "M-40817", quietZone: false }]
-      when ReleaseDesk { sessionId: "b6f4a3d2-91c8-4e57-8f10-2d6a5c7e9b31", deskId: "D-5817", memberId: "M-40817" }
-      then [DeskReleased { releasedAt: "2024-07-05T11:40:00Z", seatedFor: 145.25 }]
+      given = [DeskClaimed({ deskId = "D-5817", memberId = "M-40817", quietZone = false })]
+      when  = ReleaseDesk({ sessionId = "b6f4a3d2-91c8-4e57-8f10-2d6a5c7e9b31", deskId = "D-5817", memberId = "M-40817" })
+      then  = [DeskReleased({ releasedAt = "2024-07-05T11:40:00Z", seatedFor = 145.25 })]
     }
+
     spec "refuses to free a desk already empty" {
-      given [DeskClaimed { sessionId: "3f21c8a7-6d94-4b02-9e15-7c8a3d5f2b64", claimedAt: "2024-07-04T16:05:00Z", quietZone: true }]
-      when ReleaseDesk { sessionId: "b6f4a3d2-91c8-4e57-8f10-2d6a5c7e9b31", deskId: "D-5817", memberId: "M-40817" }
-      then rejected OneReaderPerDesk
-    }
-    flow {
-      command -> event: ReleaseDesk -> DeskReleased
+      given = [DeskClaimed({ sessionId = "3f21c8a7-6d94-4b02-9e15-7c8a3d5f2b64", claimedAt = "2024-07-04T16:05:00Z", quietZone = true })]
+      when  = ReleaseDesk({ sessionId = "b6f4a3d2-91c8-4e57-8f10-2d6a5c7e9b31", deskId = "D-5817", memberId = "M-40817" })
+      then  = rejected(OneReaderPerDesk)
     }
   }
 }
@@ -1988,209 +2360,247 @@ context "Reading Room" mode dcb {
 // clean under both the uniqueness error and the wire/type-format lint rule. And
 // its "Borrow Copy" trigger is there for one reason: it reads MemberLoansView,
 // so that view has a reader and the fixture stays clean under view/never-read.
-const WireTypeLibraryLending = `# Lending a library's copies and seating its readers, with the wire types its events bind
-model "Library Lending"
+const WireTypeLibraryLending = `emod = 1
 
-actor "Member"
+# Lending a library's copies and seating its readers, with the wire types its events bind
+model "Library Lending" {
+}
+
+actor "Member" {
+}
 
 context "Lending" {
   aggregate "Loan" {
     slice "Borrow Copy" {
       trigger "Lending Desk" {
-        actor Member
-        reads MemberLoansView
+        actor = Member
+        reads = MemberLoansView
       }
-      command BorrowCopy {
+
+      command "BorrowCopy" {
         fields {
-          memberId string required
-          copyId   string required
-          dueOn    date   required
+          memberId = required(string)
+          copyId   = required(string)
+          dueOn    = required(date)
         }
       }
-      event CopyBorrowed {
-        type "com.library.lending.copy-borrowed"
+
+      event "CopyBorrowed" {
+        type = "com.library.lending.copy-borrowed"
+
         fields {
-          loanId   string required
-          memberId string required
-          copyId   string required
-          dueOn    date   required
+          loanId   = required(string)
+          memberId = required(string)
+          copyId   = required(string)
+          dueOn    = required(date)
         }
       }
-      flow {
-        command -> event: BorrowCopy -> CopyBorrowed
-      }
+
+      flow = <<-FLOW
+        command -> event:    BorrowCopy -> CopyBorrowed
+      FLOW
     }
 
     slice "Review Member Loans" {
-      view MemberLoansView {
+      view "MemberLoansView" {
+        subscribes = [CopyBorrowed, CopyReturned]
+
         fields {
-          loanId   string required
-          memberId string required
-          dueOn    date   required
+          loanId   = required(string)
+          memberId = required(string)
+          dueOn    = required(date)
         }
-        subscribes [CopyBorrowed, CopyReturned]
       }
     }
 
     slice "Chase Overdue Copy" {
-      view OverdueLoansView {
+      command "RemindMember" {
         fields {
-          loanId   string required
-          memberId string required
-        }
-        subscribes [CopyBorrowed, CopyReturned]
-      }
-      command RemindMember {
-        fields {
-          loanId   string required
-          memberId string required
+          loanId   = required(string)
+          memberId = required(string)
         }
       }
-      command RecallCopy {
+
+      command "RecallCopy" {
         fields {
-          loanId string required
-          copyId string required
+          loanId = required(string)
+          copyId = required(string)
         }
       }
-      event MemberReminded {
+
+      event "MemberReminded" {
         fields {
-          loanId     string    required
-          memberId   string    required
-          remindedAt timestamp required
+          loanId     = required(string)
+          memberId   = required(string)
+          remindedAt = required(timestamp)
         }
       }
-      event CopyRecalled {
-        type "com.library.lending.copy-recalled"
+
+      event "CopyRecalled" {
+        type = "com.library.lending.copy-recalled"
+
         fields {
-          loanId     string    required
-          copyId     string    required
-          recalledAt timestamp required
+          loanId     = required(string)
+          copyId     = required(string)
+          recalledAt = required(timestamp)
         }
       }
-      automation RemindOnDueDate {
-        on CopyBorrowed
-        reads OverdueLoansView
-        command RemindMember
+
+      view "OverdueLoansView" {
+        subscribes = [CopyBorrowed, CopyReturned]
+
+        fields {
+          loanId   = required(string)
+          memberId = required(string)
+        }
       }
-      flow {
-        command -> event: RemindMember -> MemberReminded
-        command -> event: RecallCopy -> CopyRecalled
+
+      automation "RemindOnDueDate" {
+        on      = CopyBorrowed
+        reads   = OverdueLoansView
+        command = RemindMember
       }
+
+      flow = <<-FLOW
+        command -> event:    RemindMember -> MemberReminded
+        command -> event:    RecallCopy -> CopyRecalled
+      FLOW
     }
 
     slice "Return Copy" {
-      command ReturnCopy {
+      command "ReturnCopy" {
         fields {
-          loanId string required
-          copyId string required
+          loanId = required(string)
+          copyId = required(string)
         }
       }
-      event CopyReturned {
-        type "com.library.lending.copy-returned"
+
+      event "CopyReturned" {
+        type = "com.library.lending.copy-returned"
+
         fields {
-          loanId     string    required
-          copyId     string    required
-          returnedAt timestamp required
+          loanId     = required(string)
+          copyId     = required(string)
+          returnedAt = required(timestamp)
         }
       }
-      flow {
-        command -> event: ReturnCopy -> CopyReturned
-      }
+
+      flow = <<-FLOW
+        command -> event:    ReturnCopy -> CopyReturned
+      FLOW
     }
   }
 }
 
-context "Reading Room" mode dcb {
+context "Reading Room" {
+  mode = dcb
+
   slice "Desk Occupancy" {
-    view DeskOccupancyView {
+    view "DeskOccupancyView" {
+      subscribes = [DeskClaimed, DeskReleased]
+
       fields {
-        deskId   string required
-        memberId string required
+        deskId   = required(string)
+        memberId = required(string)
       }
-      subscribes [DeskClaimed, DeskReleased]
     }
   }
 
   slice "Claim Desk" {
-    command ClaimDesk {
+    command "ClaimDesk" {
+      fields {
+        memberId = required(string)
+        deskId   = required(string)
+      }
+
       decides_on {
-        events [DeskClaimed]
-        where tag(desk = deskId) and tag(reader = memberId)
-      }
-      fields {
-        memberId string required
-        deskId   string required
+        events = [DeskClaimed]
+        where  = tag(desk, deskId) && tag(reader, memberId)
       }
     }
-    command ReleaseDesk {
+
+    command "ReleaseDesk" {
+      fields {
+        memberId = required(string)
+        deskId   = required(string)
+      }
+
       decides_on {
-        events [DeskReleased]
-        where tag(desk = deskId) and tag(reader = memberId)
-      }
-      fields {
-        memberId string required
-        deskId   string required
+        events = [DeskReleased]
+        where  = tag(desk, deskId) && tag(reader, memberId)
       }
     }
-    event DeskClaimed {
-      type "com.library.reading-room.desk-claimed"
+
+    event "DeskClaimed" {
+      type = "com.library.reading-room.desk-claimed"
+
       tags {
-        desk  : deskId
-        reader: memberId
+        desk   = deskId
+        reader = memberId
       }
+
       fields {
-        sessionId string    required
-        deskId    string    required
-        memberId  string    required
-        claimedAt timestamp required
+        sessionId = required(string)
+        deskId    = required(string)
+        memberId  = required(string)
+        claimedAt = required(timestamp)
       }
     }
-    event DeskReleased {
-      type "com.library.reading-room.desk-released"
+
+    event "DeskReleased" {
+      type = "com.library.reading-room.desk-released"
+
       tags {
-        desk  : deskId
-        reader: memberId
+        desk   = deskId
+        reader = memberId
       }
+
       fields {
-        sessionId  string    required
-        deskId     string    required
-        memberId   string    required
-        releasedAt timestamp required
+        sessionId  = required(string)
+        deskId     = required(string)
+        memberId   = required(string)
+        releasedAt = required(timestamp)
       }
     }
-    flow {
-      command -> event: ClaimDesk -> DeskClaimed
-      command -> event: ReleaseDesk -> DeskReleased
-    }
+
+    flow = <<-FLOW
+      command -> event:    ClaimDesk -> DeskClaimed
+      command -> event:    ReleaseDesk -> DeskReleased
+    FLOW
   }
 
   slice "Import External Desk Booking" {
-    command ImportExternalDeskBooking {
-      decides_on {
-        events [ExternalDeskBookingImported]
-        where tag(desk = deskId) and tag(reader = memberId)
-      }
+    command "ImportExternalDeskBooking" {
       fields {
-        externalRef string required
-        deskId      string required
-        memberId    string required
+        externalRef = required(string)
+        deskId      = required(string)
+        memberId    = required(string)
+      }
+
+      decides_on {
+        events = [ExternalDeskBookingImported]
+        where  = tag(desk, deskId) && tag(reader, memberId)
       }
     }
-    translation ExternalDeskBookingImport {
-      external_system "Room Booking API"
-      reads DeskOccupancyView
-      command ImportExternalDeskBooking
-      event ExternalDeskBookingImported {
-        type "com.library.reading-room.external-desk-booking-imported"
+
+    translation "ExternalDeskBookingImport" {
+      external_system = "Room Booking API"
+      reads           = DeskOccupancyView
+      command         = ImportExternalDeskBooking
+
+      event "ExternalDeskBookingImported" {
+        type = "com.library.reading-room.external-desk-booking-imported"
+
         tags {
-          desk  : deskId
-          reader: memberId
+          desk   = deskId
+          reader = memberId
         }
+
         fields {
-          externalRef string    required
-          deskId      string    required
-          memberId    string    required
-          importedAt  timestamp required
+          externalRef = required(string)
+          deskId      = required(string)
+          memberId    = required(string)
+          importedAt  = required(timestamp)
         }
       }
     }
@@ -2223,305 +2633,367 @@ context "Reading Room" mode dcb {
 // for a whole-language witness: a context in aggregate or mixed mode (it states
 // the default and dcb), and an or or not predicate (its one decides_on joins
 // with and).
-const EveryConstructLibraryLending = `# Lending a library's copies and seating its readers, stating every construct the formatter writes
+const EveryConstructLibraryLending = `emod = 1
+
+# Lending a library's copies and seating its readers, stating every construct the formatter writes
 model "Library Lending" {
-  description "How the library lends its copies and seats its readers"
+  description = "How the library lends its copies and seats its readers"
 }
 
 actor "Member" {
-  description "Someone who holds a library card"
+  description = "Someone who holds a library card"
 }
 
-actor "Librarian"
+actor "Librarian" {
+}
 
 context "Lending" {
-  description "Everything the library knows about who holds which copy"
+  description = "Everything the library knows about who holds which copy"
 
   aggregate "Loan" {
-    description "One member holding one copy over one date range"
-    invariant OneCopyPerLoan "A loan covers exactly one copy of one title"
+    description = "One member holding one copy over one date range"
+
+    invariants {
+      OneCopyPerLoan = "A loan covers exactly one copy of one title"
+    }
 
     slice "Borrow Copy" {
-      description "A member takes a copy off the shelf"
+      description = "A member takes a copy off the shelf"
+
       trigger "Lending Desk" {
-        description "The counter a member borrows from"
-        actor Member
-        reads MemberLoansView
+        description = "The counter a member borrows from"
+        actor       = Member
+        reads       = MemberLoansView
       }
-      command BorrowCopy {
-        description "Ask the library to lend a copy"
+
+      command "BorrowCopy" {
+        description = "Ask the library to lend a copy"
+
         fields {
-          memberId  string required
-          copyId    string required
-          shelfMark string optional
-          dueOn     date   required
+          memberId  = required(string)
+          copyId    = required(string)
+          shelfMark = optional(string)
+          dueOn     = required(date)
         }
       }
-      event CopyBorrowed {
-        description "A copy left the shelf with a member"
-        type "com.library.lending.copy-borrowed"
+
+      event "CopyBorrowed" {
+        description = "A copy left the shelf with a member"
+        type        = "com.library.lending.copy-borrowed"
+
         fields {
-          loanId     uuid      required
-          memberId   string    required
-          copyId     string    required
-          dueOn      date      required
-          borrowedAt timestamp required
-          expedited  bool
+          loanId     = required(uuid)
+          memberId   = required(string)
+          copyId     = required(string)
+          dueOn      = required(date)
+          borrowedAt = required(timestamp)
+          expedited  = bool
         }
       }
-      event LoanOpened {
+
+      event "LoanOpened" {
         fields {
-          loanId   uuid   required
-          memberId string required
+          loanId   = required(uuid)
+          memberId = required(string)
         }
       }
-      spec "borrows a copy no one holds" {
-        given []
-        when BorrowCopy { memberId: "M-40817", copyId: "C-93204", dueOn: "2024-07-19", shelfMark: "AURELIA" }
-        then [CopyBorrowed { loanId: "7c9e6679-7425-40de-944b-e07fc1f90ae7", borrowedAt: "2024-07-05T14:32:00Z", expedited: true }]
-      }
-      spec "refuses a copy already on loan" {
-        given [CopyBorrowed { copyId: "C-93204" }]
-        when BorrowCopy { copyId: "C-93204" }
-        then rejected OneCopyPerLoan
-      }
-      flow {
-        command -> event: BorrowCopy -> CopyBorrowed
-        command -> event: BorrowCopy -> LoanOpened
+
+      flow = <<-FLOW
+        command -> event:    BorrowCopy -> CopyBorrowed
+        command -> event:    BorrowCopy -> LoanOpened
         command -> rejected: BorrowCopy -> OneCopyPerLoan
+      FLOW
+
+      spec "borrows a copy no one holds" {
+        when = BorrowCopy({ memberId = "M-40817", copyId = "C-93204", dueOn = "2024-07-19", shelfMark = "AURELIA" })
+        then = [CopyBorrowed({ loanId = "7c9e6679-7425-40de-944b-e07fc1f90ae7", borrowedAt = "2024-07-05T14:32:00Z", expedited = true })]
+      }
+
+      spec "refuses a copy already on loan" {
+        given = [CopyBorrowed({ copyId = "C-93204" })]
+        when  = BorrowCopy({ copyId = "C-93204" })
+        then  = rejected(OneCopyPerLoan)
       }
     }
 
     slice "Review Member Loans" {
-      description "What a member currently holds"
-      view MemberLoansView {
-        description "Every open loan, by member"
+      description = "What a member currently holds"
+
+      view "MemberLoansView" {
+        description = "Every open loan, by member"
+        subscribes  = [CopyBorrowed, CopyReturned]
+
         fields {
-          loanId   uuid   required
-          memberId string required
-          dueOn    date   required
+          loanId   = required(uuid)
+          memberId = required(string)
+          dueOn    = required(date)
         }
-        subscribes [CopyBorrowed, CopyReturned]
       }
+
       spec "lists the loans a member holds" {
-        then view MemberLoansView
+        then = view(MemberLoansView)
       }
     }
 
     slice "Chase Overdue Copy" {
-      description "Nudging a member whose copy is late"
-      view OverdueLoansView {
+      description = "Nudging a member whose copy is late"
+
+      command "RemindMember" {
+        description = "Ask the library to remind a member"
+
         fields {
-          loanId   uuid   required
-          memberId string required
-        }
-        subscribes [CopyBorrowed, CopyReturned]
-      }
-      command RemindMember {
-        description "Ask the library to remind a member"
-        fields {
-          loanId   uuid   required
-          memberId string required
+          loanId   = required(uuid)
+          memberId = required(string)
         }
       }
-      event MemberReminded {
+
+      event "MemberReminded" {
         fields {
-          loanId     uuid      required
-          memberId   string    required
-          remindedAt timestamp required
+          loanId     = required(uuid)
+          memberId   = required(string)
+          remindedAt = required(timestamp)
         }
       }
-      automation RemindOnDueDate {
-        description "Waits out the grace period, then nudges"
-        on CopyBorrowed after "72h"
-        reads OverdueLoansView
-        command RemindMember
-        target context Lending
+
+      view "OverdueLoansView" {
+        subscribes = [CopyBorrowed, CopyReturned]
+
+        fields {
+          loanId   = required(uuid)
+          memberId = required(string)
+        }
       }
-      flow {
-        command -> event: RemindMember -> MemberReminded
+
+      automation "RemindOnDueDate" {
+        description = "Waits out the grace period, then nudges"
+        on          = CopyBorrowed
+        after       = "72h"
+        reads       = OverdueLoansView
+        command     = RemindMember
+
+        target {
+          context = Lending
+        }
       }
+
+      flow = <<-FLOW
+        command -> event:    RemindMember -> MemberReminded
+      FLOW
+
       spec "reminds a member when a copy becomes due" {
-        when CopyBorrowed
-        then command RemindMember
+        when = CopyBorrowed
+        then = command(RemindMember)
       }
+
       spec "sanctions a member's loan" {
-        when RemindMember
-        then [MemberReminded]
+        when = RemindMember
+        then = [MemberReminded]
       }
+
       spec "refuses to remind a member with no overdue loans" {
-        given [MemberReminded]
-        when RemindMember
-        then rejected OneCopyPerLoan
+        given = [MemberReminded]
+        when  = RemindMember
+        then  = rejected(OneCopyPerLoan)
       }
     }
 
     slice "Sweep Overdue Loans" {
-      command RecallCopy {
+      command "RecallCopy" {
         fields {
-          loanId uuid required
-          copyId string required
+          loanId = required(uuid)
+          copyId = required(string)
         }
       }
-      event CopyRecalled {
-        description "The library called a copy back in"
-        type "com.library.lending.copy-recalled"
+
+      event "CopyRecalled" {
+        description = "The library called a copy back in"
+        type        = "com.library.lending.copy-recalled"
+
         fields {
-          loanId     uuid      required
-          copyId     string    required
-          recalledAt timestamp required
+          loanId     = required(uuid)
+          copyId     = required(string)
+          recalledAt = required(timestamp)
         }
       }
-      automation RecallOverdueCopy {
-        every "15m"
-        reads OverdueLoansView
-        command RecallCopy
+
+      automation "RecallOverdueCopy" {
+        every   = "15m"
+        reads   = OverdueLoansView
+        command = RecallCopy
       }
-      flow {
-        command -> event: RecallCopy -> CopyRecalled
-      }
+
+      flow = <<-FLOW
+        command -> event:    RecallCopy -> CopyRecalled
+      FLOW
+
       spec "recalls copies that are overdue" {
-        then command RecallCopy
+        then = command(RecallCopy)
       }
+
       spec "calls in a copy before its due date" {
-        when RecallCopy
-        then [CopyRecalled]
+        when = RecallCopy
+        then = [CopyRecalled]
       }
+
       spec "refuses to recall a copy already returned" {
-        given [CopyReturned]
-        when RecallCopy
-        then rejected OneCopyPerLoan
+        given = [CopyReturned]
+        when  = RecallCopy
+        then  = rejected(OneCopyPerLoan)
       }
     }
 
     slice "Return Copy" {
-      command ReturnCopy {
+      command "ReturnCopy" {
         fields {
-          loanId uuid   required
-          copyId string required
+          loanId = required(uuid)
+          copyId = required(string)
         }
       }
-      event CopyReturned {
-        type "com.library.lending.copy-returned"
+
+      event "CopyReturned" {
+        type = "com.library.lending.copy-returned"
+
         fields {
-          loanId     uuid      required
-          copyId     string    required
-          returnedAt timestamp required
+          loanId     = required(uuid)
+          copyId     = required(string)
+          returnedAt = required(timestamp)
         }
       }
-      flow {
-        command -> event: ReturnCopy -> CopyReturned
-      }
+
+      flow = <<-FLOW
+        command -> event:    ReturnCopy -> CopyReturned
+      FLOW
+
       spec "returns a loaned copy to the library" {
-        when ReturnCopy
-        then [CopyReturned]
+        when = ReturnCopy
+        then = [CopyReturned]
       }
+
       spec "refuses to return a copy already returned" {
-        given [CopyReturned]
-        when ReturnCopy
-        then rejected OneCopyPerLoan
+        given = [CopyReturned]
+        when  = ReturnCopy
+        then  = rejected(OneCopyPerLoan)
       }
     }
   }
 }
 
-context "Reading Room" mode dcb {
-  description "Who is sitting where, and for how long"
-  invariant OneReaderPerDesk "A desk seats at most one reader at any moment"
+context "Reading Room" {
+  description = "Who is sitting where, and for how long"
+  mode        = dcb
+
+  invariants {
+    OneReaderPerDesk = "A desk seats at most one reader at any moment"
+  }
 
   slice "Desk Occupancy" {
-    view DeskOccupancyView {
-      description "Which desks are taken"
+    view "DeskOccupancyView" {
+      description = "Which desks are taken"
+      subscribes  = [DeskClaimed]
+
       fields {
-        deskId   string required
-        memberId string required
+        deskId   = required(string)
+        memberId = required(string)
       }
-      subscribes [DeskClaimed]
     }
   }
 
   slice "Claim Desk" {
-    description "A reader takes a seat"
-    command ClaimDesk {
+    description = "A reader takes a seat"
+
+    command "ClaimDesk" {
+      fields {
+        memberId      = required(string)
+        deskId        = required(string)
+        preferredZone = string
+      }
+
       decides_on {
-        events [DeskClaimed]
-        where tag(desk = deskId) and tag(reader = memberId)
-      }
-      fields {
-        memberId      string required
-        deskId        string required
-        preferredZone string
+        events = [DeskClaimed]
+        where  = tag(desk, deskId) && tag(reader, memberId)
       }
     }
-    event DeskClaimed {
-      description "A reader sat down"
-      type "com.library.reading-room.desk-claimed"
+
+    event "DeskClaimed" {
+      description = "A reader sat down"
+      type        = "com.library.reading-room.desk-claimed"
+
       tags {
-        desk  : deskId
-        reader: memberId
+        desk   = deskId
+        reader = memberId
       }
+
       fields {
-        sessionId uuid      required
-        deskId    string    required
-        memberId  string    required
-        claimedAt timestamp required
-        quietZone bool
+        sessionId = required(uuid)
+        deskId    = required(string)
+        memberId  = required(string)
+        claimedAt = required(timestamp)
+        quietZone = bool
       }
     }
-    spec "seats a reader at a free desk" {
-      given []
-      when ClaimDesk { memberId: "M-40817", preferredZone: "north gallery" }
-      then [DeskClaimed { sessionId: "b6f4a3d2-91c8-4e57-8f10-2d6a5c7e9b31", claimedAt: "2024-07-05T09:15:00Z", quietZone: true }]
-    }
-    spec "refuses a desk another reader is seated at" {
-      given [DeskClaimed { deskId: "D-5817", quietZone: false }]
-      when ClaimDesk { memberId: "M-63204", deskId: "D-5817" }
-      then rejected OneReaderPerDesk
-    }
-    flow {
-      command -> event: ClaimDesk -> DeskClaimed
+
+    flow = <<-FLOW
+      command -> event:    ClaimDesk -> DeskClaimed
       command -> rejected: ClaimDesk -> OneReaderPerDesk
+    FLOW
+
+    spec "seats a reader at a free desk" {
+      when = ClaimDesk({ memberId = "M-40817", preferredZone = "north gallery" })
+      then = [DeskClaimed({ sessionId = "b6f4a3d2-91c8-4e57-8f10-2d6a5c7e9b31", claimedAt = "2024-07-05T09:15:00Z", quietZone = true })]
+    }
+
+    spec "refuses a desk another reader is seated at" {
+      given = [DeskClaimed({ deskId = "D-5817", quietZone = false })]
+      when  = ClaimDesk({ memberId = "M-63204", deskId = "D-5817" })
+      then  = rejected(OneReaderPerDesk)
     }
   }
 
   slice "Import External Desk Booking" {
-    description "A booking made outside the library's own system"
-    command ImportExternalDeskBooking {
+    description = "A booking made outside the library's own system"
+
+    command "ImportExternalDeskBooking" {
       fields {
-        externalRef string required
-        deskId      string required
-        memberId    string required
+        externalRef = required(string)
+        deskId      = required(string)
+        memberId    = required(string)
       }
     }
-    translation ExternalDeskBookingImport {
-      description "Turns a room-booking record into a desk claim"
-      external_system "Room Booking API"
-      reads DeskOccupancyView
-      command ImportExternalDeskBooking
-      event ExternalDeskBookingImported {
-        type "com.library.reading-room.external-desk-booking-imported"
-        source external "Room Booking API"
+
+    translation "ExternalDeskBookingImport" {
+      description     = "Turns a room-booking record into a desk claim"
+      external_system = "Room Booking API"
+      reads           = DeskOccupancyView
+      command         = ImportExternalDeskBooking
+
+      event "ExternalDeskBookingImported" {
+        type   = "com.library.reading-room.external-desk-booking-imported"
+        source = external("Room Booking API")
+
         tags {
-          desk  : deskId
-          reader: memberId
+          desk   = deskId
+          reader = memberId
         }
+
         fields {
-          externalRef string    required
-          deskId      string    required
-          memberId    string    required
-          importedAt  timestamp required
+          externalRef = required(string)
+          deskId      = required(string)
+          memberId    = required(string)
+          importedAt  = required(timestamp)
         }
       }
     }
+
     spec "imports a desk booking from an external system" {
-      given [DeskClaimed]
-      when ImportExternalDeskBooking
-      then [ExternalDeskBookingImported]
+      given = [DeskClaimed]
+      when  = ImportExternalDeskBooking
+      then  = [ExternalDeskBookingImported]
     }
+
     spec "refuses to import a booking for an occupied desk" {
-      given [DeskClaimed]
-      when ImportExternalDeskBooking
-      then rejected OneReaderPerDesk
+      given = [DeskClaimed]
+      when  = ImportExternalDeskBooking
+      then  = rejected(OneReaderPerDesk)
     }
   }
 }

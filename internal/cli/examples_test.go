@@ -9,7 +9,6 @@ import (
 
 	"github.com/hpcsc/emod/internal/ast"
 	"github.com/hpcsc/emod/internal/cli"
-	"github.com/hpcsc/emod/internal/lexer"
 	"github.com/hpcsc/emod/internal/oracle"
 	"github.com/hpcsc/emod/internal/test"
 	"github.com/stretchr/testify/require"
@@ -50,7 +49,7 @@ func TestExamples(t *testing.T) {
 			model := parseExample(t, "all_patterns.emod")
 
 			const attribute = "type"
-			require.Contains(t, lexer.Keywords(), attribute,
+			require.Contains(t, test.Keywords(), attribute,
 				"the collision this example demonstrates only exists while the word is a keyword")
 
 			var named []string
@@ -375,7 +374,7 @@ func declaredFields(model *ast.Model) []*ast.Field {
 func requireCanonical(t *testing.T, name string) {
 	t.Helper()
 
-	require.NoError(t, cli.RunFmt(filepath.Join("../../examples", name), true, false),
+	require.NoError(t, cli.RunFmt(filepath.Join("../../examples", name), true),
 		"the example the reference points a reader at is not what emod fmt writes, so it teaches a style the tool rewrites")
 }
 

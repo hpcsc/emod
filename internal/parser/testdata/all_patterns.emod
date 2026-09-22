@@ -1,121 +1,130 @@
-emod 1
-# Hotel Reservation System — exercises all four slice patterns
-model "Hotel Reservation"
+emod = 1
 
-actor "Guest"
+# Hotel Reservation System — exercises all four slice patterns
+model "Hotel Reservation" {
+}
+
+actor "Guest" {
+}
 
 context "Reservations" {
   aggregate "Reservation" {
     # Slice 1: Command Pattern
     slice "Reserve a Room" {
       trigger "Reservation Form" {
-        actor Guest
-        reads AvailableRoomsView
+        actor = Guest
+        reads = AvailableRoomsView
       }
 
-      command ReserveRoom {
+      command "ReserveRoom" {
         fields {
-          roomId    string required
-          guestName string required
-          checkIn   date   required
-          checkOut  date   required
+          roomId    = required(string)
+          guestName = required(string)
+          checkIn   = required(date)
+          checkOut  = required(date)
         }
       }
 
-      event RoomReserved {
+      event "RoomReserved" {
         fields {
-          reservationId string    required
-          roomId        string    required
-          guestName     string    required
-          checkIn       date      required
-          checkOut      date      required
-          reservedAt    timestamp required
+          reservationId = required(string)
+          roomId        = required(string)
+          guestName     = required(string)
+          checkIn       = required(date)
+          checkOut      = required(date)
+          reservedAt    = required(timestamp)
         }
       }
 
-      flow {
-        command -> event: ReserveRoom -> RoomReserved
-      }
+      flow = <<-FLOW
+        command -> event:    ReserveRoom -> RoomReserved
+      FLOW
     }
 
     # Slice 2: View Pattern
     slice "View Available Rooms" {
-      view AvailableRoomsView {
+      view "AvailableRoomsView" {
+        subscribes = [RoomReserved, GuestCheckedOut]
+
         fields {
-          roomId      string required
-          roomNumber  string required
-          status      string required
-          nextCheckIn date   optional
+          roomId      = required(string)
+          roomNumber  = required(string)
+          status      = required(string)
+          nextCheckIn = optional(date)
         }
-        subscribes [RoomReserved, GuestCheckedOut]
       }
     }
 
     # Slice 3: Command Pattern — Check Out
     slice "Check Out Guest" {
-      command CheckOutGuest {
+      command "CheckOutGuest" {
         fields {
-          reservationId string required
+          reservationId = required(string)
         }
       }
 
-      event GuestCheckedOut {
+      event "GuestCheckedOut" {
         fields {
-          reservationId string    required
-          roomId        string    required
-          checkedOutAt  timestamp required
+          reservationId = required(string)
+          roomId        = required(string)
+          checkedOutAt  = required(timestamp)
         }
       }
 
-      flow {
-        command -> event: CheckOutGuest -> GuestCheckedOut
-      }
+      flow = <<-FLOW
+        command -> event:    CheckOutGuest -> GuestCheckedOut
+      FLOW
     }
 
     # Slice 4: Automation Pattern
     slice "Send Confirmation Email" {
-      view PendingConfirmationsView {
+      view "PendingConfirmationsView" {
+        subscribes = [RoomReserved]
+
         fields {
-          reservationId string    required
-          guestName     string    required
-          reservedAt    timestamp required
+          reservationId = required(string)
+          guestName     = required(string)
+          reservedAt    = required(timestamp)
         }
-        subscribes [RoomReserved]
       }
 
-      automation ConfirmationEmailReactor {
-        on RoomReserved
-        reads PendingConfirmationsView
-        command SendConfirmationEmail
-        target context Notifications
+      automation "ConfirmationEmailReactor" {
+        on      = RoomReserved
+        reads   = PendingConfirmationsView
+        command = SendConfirmationEmail
+
+        target {
+          context = Notifications
+        }
       }
     }
 
     # Slice 5: Translation Pattern
     slice "Import External Booking" {
-      command ImportExternalReservation {
+      command "ImportExternalReservation" {
         fields {
-          externalRef string required
-          roomId      string required
-          guestName   string required
-          checkIn     date   required
-          checkOut    date   required
+          externalRef = required(string)
+          roomId      = required(string)
+          guestName   = required(string)
+          checkIn     = required(date)
+          checkOut    = required(date)
         }
       }
 
-      translation BookingComImport {
-        external_system "Booking.com API"
-        reads AvailableRoomsView
-        command ImportExternalReservation
-        event ExternalReservationImported {
+      translation "BookingComImport" {
+        external_system = "Booking.com API"
+        reads           = AvailableRoomsView
+        command         = ImportExternalReservation
+
+        event "ExternalReservationImported" {
           fields {
-            reservationId string required
-            externalRef   string required
-            source        string required
-            roomId        string required
-            guestName     string required
-            checkIn       date   required
-            checkOut      date   required
+            reservationId = required(string)
+            externalRef   = required(string)
+            source        = required(string)
+            roomId        = required(string)
+            guestName     = required(string)
+            checkIn       = required(date)
+            checkOut      = required(date)
           }
         }
       }
@@ -126,11 +135,11 @@ context "Reservations" {
 context "Notifications" {
   aggregate "Notification" {
     slice "Send Confirmation" {
-      command SendConfirmationEmail {
+      command "SendConfirmationEmail" {
         fields {
-          reservationId string required
-          guestName     string required
-          email         string required
+          reservationId = required(string)
+          guestName     = required(string)
+          email         = required(string)
         }
       }
     }

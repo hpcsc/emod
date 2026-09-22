@@ -27,25 +27,31 @@ import (
 
 // warningEmod is a model the linter warns about and the validator accepts, so a
 // command run over it still writes its output and still exits non-zero.
-const warningEmod = `model "Test"
+const warningEmod = `emod = 1
+
+model "Test" {
+}
+
 context "Orders" {
   aggregate "Order" {
     slice "Update Order" {
-      command PlaceOrder {
+      command "PlaceOrder" {
         fields {
-          orderId string required
-          reason  string required
+          orderId = required(string)
+          reason  = required(string)
         }
       }
-      event OrderUpdated {
+
+      event "OrderUpdated" {
         fields {
-          orderId string required
-          reason  string required
+          orderId = required(string)
+          reason  = required(string)
         }
       }
-      flow {
-        command -> event: PlaceOrder -> OrderUpdated
-      }
+
+      flow = <<-FLOW
+        command -> event:    PlaceOrder -> OrderUpdated
+      FLOW
     }
   }
 }

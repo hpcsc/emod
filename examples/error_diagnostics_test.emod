@@ -1,77 +1,70 @@
-# Test file for US-011 diagnostics feature
-# This file has intentional errors to test partial rendering
-model "Error Diagnostics Test"
+# This file carries intentional faults, so the viewer and the CLI have a model
+# whose partial rendering and diagnostics can be exercised.
+emod = 1
 
-actor "Guest"
+model "Error Diagnostics Test" {
+}
+
+actor "Guest" {
+}
 
 context "Reservations" {
   aggregate "Reservation" {
-
-    # Slice 1: Valid — should render fine
+    # Slice 1: valid, and renders on its own
     slice "Reserve a Room" {
-      command ReserveRoom {
+      command "ReserveRoom" {
         fields {
-          roomId     string required
-          guestName  string required
+          roomId    = string
+          guestName = string
         }
       }
 
-      event RoomReserved {
+      event "RoomReserved" {
         fields {
-          reservationId string required
-          roomId        string required
+          reservationId = string
+          roomId        = string
         }
       }
 
-      flow {
+      flow = <<-FLOW
         command -> event: ReserveRoom -> RoomReserved
-      }
+      FLOW
     }
 
-    # Slice 2: Has a syntax error — missing closing brace on command
+    # Slice 2: the flow names an event no slice declares
     slice "Check Out" {
-      command CheckOutGuest {
+      command "CheckOutGuest" {
         fields {
-          reservationId string required
-        }
-      # missing closing brace
-
-      event GuestCheckedOut {
-        fields {
-          reservationId string required
+          reservationId = string
         }
       }
 
-      flow {
+      flow = <<-FLOW
         command -> event: CheckOutGuest -> GuestCheckedOut
-      }
+      FLOW
     }
 
-    # Slice 3: Valid slice after error — tests error recovery
+    # Slice 3: valid, and renders after the fault above it
     slice "View Rooms" {
-      view AvailableRoomsView {
+      view "AvailableRoomsView" {
+        subscribes = [RoomReserved]
+
         fields {
-          roomId string required
+          roomId = string
         }
-        subscribes [RoomReserved]
       }
     }
-
   }
 }
 
-# Context 2: Has an unknown block type — parser should emit diagnostic
+# The command here is orphaned: no flow, automation or translation names it.
 context "Notifications" {
   aggregate "Notification" {
     slice "Send" {
-      command SendEmail {
+      command "SendEmail" {
         fields {
-          email string required
+          email = string
         }
-      }
-
-      weird_block unknown_type {
-        stuff
       }
     }
   }

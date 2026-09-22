@@ -76,20 +76,20 @@ func TestGetSemanticTokens(t *testing.T) {
 	const testDoc = `context "Orders" {
     aggregate "Sales" {
         slice "OrderSlice" {
-            command SubmitOrder {
+            command "SubmitOrder" {
             }
-            event OrderSubmitted {
+            event "OrderSubmitted" {
                 fields {
                     id String required
                     amount Number required
                 }
             }
-            event EmptyEvent {
+            event "EmptyEvent" {
             }
-            view OrderView {
-                subscribes [OrderSubmitted]
+            view "OrderView" {
+                subscribes = [OrderSubmitted]
             }
-            view NoSubscribeView {
+            view "NoSubscribeView" {
             }
         }
     }
@@ -97,7 +97,7 @@ func TestGetSemanticTokens(t *testing.T) {
 `
 
 	t.Run("command name receives TokenTypeFunction", func(t *testing.T) {
-		line, char := posIn(t, testDoc, "command SubmitOrder", "SubmitOrder")
+		line, char := posIn(t, testDoc, `command "SubmitOrder`, "SubmitOrder")
 		result := lsp.GetSemanticTokens(testDoc)
 		tokens := decodeTokens(result.Data)
 		found := false
@@ -113,7 +113,7 @@ func TestGetSemanticTokens(t *testing.T) {
 	})
 
 	t.Run("event name receives TokenTypeEvent", func(t *testing.T) {
-		line, char := posIn(t, testDoc, "event OrderSubmitted", "OrderSubmitted")
+		line, char := posIn(t, testDoc, `event "OrderSubmitted`, "OrderSubmitted")
 		result := lsp.GetSemanticTokens(testDoc)
 		tokens := decodeTokens(result.Data)
 		found := false
@@ -129,7 +129,7 @@ func TestGetSemanticTokens(t *testing.T) {
 	})
 
 	t.Run("view name receives TokenTypeClass", func(t *testing.T) {
-		line, char := posIn(t, testDoc, "view OrderView", "OrderView")
+		line, char := posIn(t, testDoc, `view "OrderView`, "OrderView")
 		result := lsp.GetSemanticTokens(testDoc)
 		tokens := decodeTokens(result.Data)
 		found := false
@@ -194,20 +194,26 @@ func TestGetSemanticTokens(t *testing.T) {
 		require.Len(t, tokens, 16,
 			"one token per declared actor, context, aggregate, command, event and view — 11 in the aggregate's slices and above, 5 on the dcb context")
 
-		line, char := posIn(t, doc, "view DeskOccupancyView", "DeskOccupancyView")
+		line, char := posIn(t, doc, `view "DeskOccupancyView"`, "DeskOccupancyView")
 		assertToken(t, tokens, 15, line, char, len("DeskOccupancyView"), legendTokenType(lsp.TokenTypeClass))
 	})
 
 	t.Run("delta-encodes multiple identifiers on same line", func(t *testing.T) {
-		const doc = `context "Orders" {
-    aggregate "Sales" {
-        slice "OrderSlice" {
-            command CmdOne {
-            }
-            command CmdTwo {
-            }
-        }
+		const doc = `emod = 1
+
+model "" {
+}
+
+context "Orders" {
+  aggregate "Sales" {
+    slice "OrderSlice" {
+      command "CmdOne" {
+      }
+
+      command "CmdTwo" {
+      }
     }
+  }
 }
 `
 		result := lsp.GetSemanticTokens(doc)

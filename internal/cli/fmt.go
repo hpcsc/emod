@@ -8,12 +8,9 @@ import (
 
 	"github.com/hpcsc/emod/internal/formatter"
 	"github.com/hpcsc/emod/internal/oracle"
-	"github.com/hpcsc/emod/internal/parser"
 )
 
-// RunFmt formats the file in the syntax it is written in. hcl converts a file
-// written in the emod grammar to HCL; a file already in HCL stays in HCL.
-func RunFmt(path string, check bool, hcl bool) error {
+func RunFmt(path string, check bool) error {
 	if path == "" {
 		return fmt.Errorf("fmt %w", ErrMissingFileArgument)
 	}
@@ -34,9 +31,6 @@ func RunFmt(path string, check bool, hcl bool) error {
 	}
 
 	formatted := formatter.Format(model)
-	if hcl || parser.IsHCL(string(source)) {
-		formatted = formatter.FormatHCL(model)
-	}
 
 	if check {
 		if formatted != string(source) {

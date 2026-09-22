@@ -11,7 +11,6 @@ import (
 
 	"github.com/hpcsc/emod/internal/diagnostic"
 	"github.com/hpcsc/emod/internal/formatter"
-	"github.com/hpcsc/emod/internal/lexer"
 	"github.com/hpcsc/emod/internal/oracle"
 	"github.com/hpcsc/emod/internal/parser"
 	"github.com/hpcsc/emod/internal/test"
@@ -27,10 +26,9 @@ const (
 func TestCheck(t *testing.T) {
 	t.Run("syntax", func(t *testing.T) {
 		t.Run("a model written in HCL reaches the same verdict as the one it came from", func(t *testing.T) {
-			tokens, _ := lexer.Scan(validEmod, "valid.emod")
-			model, _ := parser.New(tokens, "valid.emod").Parse()
+			model, _ := parser.Parse(validEmod, "valid.emod")
 
-			diagnostics := oracle.Check(formatter.FormatHCL(model), "valid.emod")
+			diagnostics := oracle.Check(formatter.Format(model), "valid.emod")
 
 			require.Empty(t, diagnostics)
 		})
@@ -62,7 +60,7 @@ func TestCheck(t *testing.T) {
 		})
 
 		t.Run("reports no errors for a model naming a field after every keyword", func(t *testing.T) {
-			keywords := lexer.Keywords()
+			keywords := test.Keywords()
 			require.NotEmpty(t, keywords)
 
 			diagnostics := oracle.Check(modelWithFieldPerKeyword(keywords), "keywords.emod")
@@ -137,7 +135,7 @@ func TestCheck(t *testing.T) {
 			diagnostics := oracle.Check(test.AutomationReadsLibraryLending, "automation-reads.emod")
 
 			require.Equal(t, []string{
-				`automation-reads.emod:69: [automation/missing-todo-list] automation "RemindOnDueDate" reads no view, so nothing in the model shows what work is outstanding; project a view of pending work and read it`,
+				`automation-reads.emod:83: [automation/missing-todo-list] automation "RemindOnDueDate" reads no view, so nothing in the model shows what work is outstanding; project a view of pending work and read it`,
 			}, reportedLines(diagnostics))
 		})
 
@@ -145,7 +143,7 @@ func TestCheck(t *testing.T) {
 			diagnostics := oracle.Check(test.TriggerReadsLibraryLending, "trigger-reads.emod")
 
 			require.Equal(t, []string{
-				`trigger-reads.emod:95: [automation/missing-todo-list] automation "RemindOnDueDate" reads no view, so nothing in the model shows what work is outstanding; project a view of pending work and read it`,
+				`trigger-reads.emod:116: [automation/missing-todo-list] automation "RemindOnDueDate" reads no view, so nothing in the model shows what work is outstanding; project a view of pending work and read it`,
 			}, reportedLines(diagnostics))
 		})
 
@@ -153,9 +151,9 @@ func TestCheck(t *testing.T) {
 			diagnostics := oracle.Check(test.AutomationScheduleLibraryLending, "automation-schedule.emod")
 
 			require.Equal(t, []string{
-				`automation-schedule.emod:74: [automation/missing-todo-list] automation "RecallOnSecondReminder" reads no view, so nothing in the model shows what work is outstanding; project a view of pending work and read it`,
-				`automation-schedule.emod:78: [automation/missing-todo-list] automation "SweepOverdueLoans" reads no view, so the model does not state what the processor acts on; project a view of pending work and read it`,
-				`automation-schedule.emod:161: [automation/missing-todo-list] automation "SweepIdleDesks" reads no view, so the model does not state what the processor acts on; project a view of pending work and read it`,
+				`automation-schedule.emod:89: [automation/missing-todo-list] automation "RecallOnSecondReminder" reads no view, so nothing in the model shows what work is outstanding; project a view of pending work and read it`,
+				`automation-schedule.emod:94: [automation/missing-todo-list] automation "SweepOverdueLoans" reads no view, so the model does not state what the processor acts on; project a view of pending work and read it`,
+				`automation-schedule.emod:193: [automation/missing-todo-list] automation "SweepIdleDesks" reads no view, so the model does not state what the processor acts on; project a view of pending work and read it`,
 			}, reportedLines(diagnostics))
 		})
 	})
@@ -165,11 +163,11 @@ func TestCheck(t *testing.T) {
 			diagnostics := oracle.Check(test.InvariantLibraryLending, "invariants.emod")
 
 			require.Equal(t, []string{
-				`invariants.emod:8: [spec/invariant-never-exercised] invariant "OneCopyPerLoan" in aggregate "Loan" is not referenced by any rejection`,
-				`invariants.emod:33: [spec/invariant-never-exercised] invariant "FiveCopiesPerMember" in aggregate "Loan" is not referenced by any rejection`,
-				`invariants.emod:48: [spec/invariant-never-exercised] invariant "OneReaderPerDesk" in context "Reading Room" is not referenced by any rejection`,
-				`invariants.emod:49: [spec/invariant-never-exercised] invariant "OneDeskPerReader" in context "Reading Room" is not referenced by any rejection`,
-				`invariants.emod:73: [spec/invariant-never-exercised] invariant "DeskFreeAtClosing" in context "Reading Room" is not referenced by any rejection`,
+				`invariants.emod:13: [spec/invariant-never-exercised] invariant "OneCopyPerLoan" in aggregate "Loan" is not referenced by any rejection`,
+				`invariants.emod:14: [spec/invariant-never-exercised] invariant "FiveCopiesPerMember" in aggregate "Loan" is not referenced by any rejection`,
+				`invariants.emod:63: [spec/invariant-never-exercised] invariant "OneReaderPerDesk" in context "Reading Room" is not referenced by any rejection`,
+				`invariants.emod:64: [spec/invariant-never-exercised] invariant "OneDeskPerReader" in context "Reading Room" is not referenced by any rejection`,
+				`invariants.emod:65: [spec/invariant-never-exercised] invariant "DeskFreeAtClosing" in context "Reading Room" is not referenced by any rejection`,
 			}, reportedLines(diagnostics))
 		})
 	})
@@ -179,42 +177,51 @@ func TestCheck(t *testing.T) {
 			// The model exists to trip one rule. Its event carries a domain field
 			// beside its identifier so clickbait-event stays quiet, and its command
 			// is flowed so neither orphan check fires.
-			const source = `model "Case Handling"
+			const source = `emod = 1
 
-actor "Worker"
+model "Case Handling" {
+}
+
+actor "Worker" {
+}
 
 context "Cases" {
   aggregate "Case" {
     slice "Review Case" {
       trigger "Case Desk" {
-        actor Worker
-        reads CaseWorkspacveView
+        actor = Worker
+        reads = CaseWorkspacveView
       }
-      view CaseWorkspaceView {
+
+      view "CaseWorkspaceView" {
+        subscribes = [CaseOpened]
+
         fields {
-          caseId   string required
-          openedBy string required
+          caseId   = required(string)
+          openedBy = required(string)
         }
-        subscribes [CaseOpened]
       }
     }
+
     slice "Open Case" {
-      command OpenCase {
+      command "OpenCase" {
         fields {
-          caseId   string required
-          openedBy string required
+          caseId   = required(string)
+          openedBy = required(string)
         }
       }
-      event CaseOpened {
+
+      event "CaseOpened" {
         fields {
-          caseId   string    required
-          openedBy string    required
-          openedAt timestamp required
+          caseId   = required(string)
+          openedBy = required(string)
+          openedAt = required(timestamp)
         }
       }
-      flow {
-        command -> event: OpenCase -> CaseOpened
-      }
+
+      flow = <<-FLOW
+        command -> event:    OpenCase -> CaseOpened
+      FLOW
     }
   }
 }
@@ -223,7 +230,7 @@ context "Cases" {
 			diagnostics := oracle.Check(source, "cases.emod")
 
 			require.Equal(t, []string{
-				`cases.emod:10: view "CaseWorkspacveView" does not exist`,
+				`cases.emod:14: view "CaseWorkspacveView" does not exist`,
 			}, reportedLines(diagnostics))
 		})
 	})
@@ -253,28 +260,36 @@ context "Cases" {
 
 	t.Run("unsupported version", func(t *testing.T) {
 		t.Run("reports the version error alone, leaving the validator and linter silent", func(t *testing.T) {
-			const source = `model "Test"
+			const source = `model "Test" {}
+
 context "Orders" {
   aggregate "Order" {
     slice "Process Order" {
-      command OrderPlaced {}
-      event OrderUpdated {}
-      view OrderList {}
-      automation OrderNotifier {
-        on OrderPlaced
-        command NotifyCustomer
-        target context NonExistent
+      command "OrderPlaced" {}
+
+      event "OrderUpdated" {}
+
+      view "OrderList" {}
+
+      automation "OrderNotifier" {
+        on      = OrderPlaced
+        command = NotifyCustomer
+
+        target {
+          context = NonExistent
+        }
       }
-      flow {
+
+      flow = <<-FLOW
         command -> event: OrderPlaced -> OrderUpdated
-      }
+      FLOW
     }
   }
 }
 `
 
-			rejected := oracle.Check("emod 2\n"+source, "unsupported.emod")
-			supported := oracle.Check("emod 1\n"+source, "supported.emod")
+			rejected := oracle.Check("emod = 2\n"+source, "unsupported.emod")
+			supported := oracle.Check("emod = 1\n"+source, "supported.emod")
 
 			require.NotNil(t, findMentioning(supported, "NonExistent"), "the same source under a supported version reports the missing context")
 			for _, rule := range []string{"command-past-tense", "state-obsession", "view-naming"} {
@@ -290,14 +305,21 @@ context "Orders" {
 
 	t.Run("validator faults", func(t *testing.T) {
 		t.Run("surface when a parseable model targets a nonexistent context", func(t *testing.T) {
-			input := `model "Test"
+			input := `emod = 1
+
+model "Test" {
+}
+
 context "Orders" {
   aggregate "Order" {
     slice "Process Order" {
-      automation OrderNotifier {
-        on OrderPlaced
-        command NotifyCustomer
-        target context NonExistent
+      automation "OrderNotifier" {
+        on      = OrderPlaced
+        command = NotifyCustomer
+
+        target {
+          context = NonExistent
+        }
       }
     }
   }
@@ -318,12 +340,12 @@ context "Orders" {
 context "Test" {
   aggregate "Test" {
     slice "Test" {
-      command OrderPlaced {}
-      event OrderUpdated {}
-      view OrderList {}
-      flow {
-        command -> event: OrderPlaced -> OrderUpdated
-      }
+      command "OrderPlaced" {}
+      event "OrderUpdated" {}
+      view "OrderList" {}
+      flow = <<-FLOW
+        command -> event:    OrderPlaced -> OrderUpdated
+      FLOW
     }
   }
 }
@@ -339,21 +361,29 @@ context "Test" {
 
 	t.Run("combined faults", func(t *testing.T) {
 		t.Run("surface both a validator error and linter warnings together", func(t *testing.T) {
-			input := `model "Test"
+			input := `model "Test" {}
+
 context "Orders" {
   aggregate "Order" {
     slice "Process Order" {
-      command OrderPlaced {}
-      event OrderUpdated {}
-      view OrderList {}
-      automation OrderNotifier {
-        on OrderPlaced
-        command NotifyCustomer
-        target context NonExistent
+      command "OrderPlaced" {}
+
+      event "OrderUpdated" {}
+
+      view "OrderList" {}
+
+      automation "OrderNotifier" {
+        on      = OrderPlaced
+        command = NotifyCustomer
+
+        target {
+          context = NonExistent
+        }
       }
-      flow {
+
+      flow = <<-FLOW
         command -> event: OrderPlaced -> OrderUpdated
-      }
+      FLOW
     }
   }
 }
@@ -372,23 +402,29 @@ context "Orders" {
 
 	t.Run("severity", func(t *testing.T) {
 		t.Run("reports a single-id event at error severity", func(t *testing.T) {
-			input := `model "Test"
+			input := `emod = 1
+
+model "Test" {
+}
+
 context "Orders" {
   aggregate "Order" {
     slice "Events" {
-      command PlaceOrder {
+      command "PlaceOrder" {
         fields {
-          orderId string required
+          orderId = required(string)
         }
       }
-      event SingleIdEvent {
+
+      event "SingleIdEvent" {
         fields {
-          orderId string required
+          orderId = required(string)
         }
       }
-      flow {
-        command -> event: PlaceOrder -> SingleIdEvent
-      }
+
+      flow = <<-FLOW
+        command -> event:    PlaceOrder -> SingleIdEvent
+      FLOW
     }
   }
 }
@@ -406,25 +442,27 @@ context "Orders" {
 func modelWithFieldPerKeyword(keywords []string) string {
 	var fields strings.Builder
 	for _, keyword := range keywords {
-		fmt.Fprintf(&fields, "          %s string required\n", keyword)
+		fmt.Fprintf(&fields, "          %s = string\n", keyword)
 	}
 
-	return fmt.Sprintf(`model "Keyword Fields"
+	return fmt.Sprintf(`model "Keyword Fields" {}
 
 context "Ctx" {
   aggregate "Agg" {
     slice "Slice" {
-      command DoThing {
+      command "DoThing" {
         fields {
 %s        }
       }
-      event ThingDone {
+
+      event "ThingDone" {
         fields {
 %s        }
       }
-      flow {
+
+      flow = <<-FLOW
         command -> event: DoThing -> ThingDone
-      }
+      FLOW
     }
   }
 }
@@ -523,8 +561,8 @@ func TestRunParsed(t *testing.T) {
 
 		t.Run("source that parses but reports validation errors has still parsed", func(t *testing.T) {
 			missingEvent := strings.Replace(test.BillingPayments,
-				"command -> event: TakePayment -> PaymentTaken",
-				"command -> event: TakePayment -> PaymentRefunded", 1)
+				"TakePayment -> PaymentTaken",
+				"TakePayment -> PaymentRefunded", 1)
 			require.NotEqual(t, test.BillingPayments, missingEvent)
 
 			_, diagnostics, parsed := oracle.RunParsed(missingEvent, "billing.emod")

@@ -33,25 +33,27 @@ func TestKeywordCoverage(t *testing.T) {
 		})
 
 		t.Run("a keyword inside a real document describes itself where it stands", func(t *testing.T) {
-			doc := `context "Fulfillment" mode dcb {
+			doc := `context "Fulfillment" {
+  mode = dcb
+
   slice "Authorize" {
-    command Authorize {
+    command "Authorize" {
       decides_on {
-        events [OrderPlaced]
-        where tag(entity = customerId)
+        events = [OrderPlaced]
+        where  = tag(entity, customerId)
       }
     }
   }
 }`
-			hover := lsp.GetHover(doc, 3, 6)
+			hover := lsp.GetHover(doc, 5, 6)
 
 			require.NotNil(t, hover)
 			require.NotEmpty(t, hover.Contents.Value)
 			// The range, not the wording, is what says the hover resolved this
 			// token: it spans exactly the ten characters of `decides_on`.
 			require.Equal(t, &lsp.Range{
-				Start: lsp.Position{Line: 3, Character: 6},
-				End:   lsp.Position{Line: 3, Character: 16},
+				Start: lsp.Position{Line: 5, Character: 6},
+				End:   lsp.Position{Line: 5, Character: 16},
 			}, hover.Range)
 		})
 	})
@@ -112,13 +114,18 @@ var keywordBlocks = []keywordBlock{
 	{name: "a spec body", doc: specDocument, line: 3},
 }
 
-const specDocument = `context "C" {
+const specDocument = `emod = 1
+
+model "" {
+}
+
+context "C" {
   slice "S" {
     spec "holds" {
-
     }
   }
-}`
+}
+`
 
 const decidesOnDocument = `context "C" {
   slice "S" {

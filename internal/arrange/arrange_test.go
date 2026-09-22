@@ -40,50 +40,61 @@ func TestArrange(t *testing.T) {
 			// Declared last it is read from behind; moved between the two slices
 			// it trails the event it projects and leads the trigger reading it,
 			// so neither reference points backward.
-			model := parse(t, `model "Library"
+			model := parse(t, `emod = 1
+
+model "Library" {
+}
 
 context "Lending" {
   aggregate "Loan" {
     slice "Borrow a Copy" {
-      command BorrowCopy {
+      command "BorrowCopy" {
         fields {
-          copyId string required
+          copyId = required(string)
         }
       }
-      event CopyBorrowed {
+
+      event "CopyBorrowed" {
         fields {
-          copyId string required
+          copyId = required(string)
         }
       }
-      flow {
-        command -> event: BorrowCopy -> CopyBorrowed
-      }
+
+      flow = <<-FLOW
+        command -> event:    BorrowCopy -> CopyBorrowed
+      FLOW
     }
+
     slice "Return a Copy" {
       trigger "Return Desk" {
-        actor Member
-        reads BorrowView
+        actor = Member
+        reads = BorrowView
       }
-      command ReturnCopy {
+
+      command "ReturnCopy" {
         fields {
-          copyId string required
+          copyId = required(string)
         }
       }
-      event CopyReturned {
+
+      event "CopyReturned" {
         fields {
-          copyId string required
+          copyId = required(string)
         }
       }
-      flow {
-        command -> event: ReturnCopy -> CopyReturned
-      }
+
+      flow = <<-FLOW
+        command -> event:    ReturnCopy -> CopyReturned
+      FLOW
     }
+
     slice "Borrowed Copies" {
-      view BorrowView {
+      view "BorrowView" {
+        subscribes = [CopyBorrowed]
+
         fields {
-          copyId string required
+          copyId = required(string)
         }
-        subscribes [CopyBorrowed]
       }
     }
   }
@@ -100,32 +111,39 @@ context "Lending" {
 		})
 
 		t.Run("a view read by nothing settles after the events it projects", func(t *testing.T) {
-			model := parse(t, `model "Library"
+			model := parse(t, `emod = 1
+
+model "Library" {
+}
 
 context "Lending" {
   aggregate "Loan" {
     slice "Export Loans" {
-      view LoanExportView {
+      view "LoanExportView" {
+        subscribes = [CopyBorrowed]
+
         fields {
-          copyId string required
+          copyId = required(string)
         }
-        subscribes [CopyBorrowed]
       }
     }
+
     slice "Borrow a Copy" {
-      command BorrowCopy {
+      command "BorrowCopy" {
         fields {
-          copyId string required
+          copyId = required(string)
         }
       }
-      event CopyBorrowed {
+
+      event "CopyBorrowed" {
         fields {
-          copyId string required
+          copyId = required(string)
         }
       }
-      flow {
-        command -> event: BorrowCopy -> CopyBorrowed
-      }
+
+      flow = <<-FLOW
+        command -> event:    BorrowCopy -> CopyBorrowed
+      FLOW
     }
   }
 }
@@ -142,55 +160,67 @@ context "Lending" {
 			// reference pointing forward, so the arrangement is available and
 			// declined: the slice also writes, which makes it a step of the
 			// process rather than a projection, and steps do not move.
-			model := parse(t, `model "Library"
+			model := parse(t, `emod = 1
+
+model "Library" {
+}
 
 context "Lending" {
   aggregate "Loan" {
     slice "Open the Shelf" {
-      command OpenShelf {
+      command "OpenShelf" {
         fields {
-          shelfId string required
+          shelfId = required(string)
         }
       }
-      event ShelfOpened {
+
+      event "ShelfOpened" {
         fields {
-          shelfId string required
+          shelfId = required(string)
         }
       }
-      flow {
-        command -> event: OpenShelf -> ShelfOpened
-      }
+
+      flow = <<-FLOW
+        command -> event:    OpenShelf -> ShelfOpened
+      FLOW
     }
+
     slice "Borrow a Copy" {
       trigger "Borrow Desk" {
-        actor Member
-        reads ShelfView
+        actor = Member
+        reads = ShelfView
       }
-      command BorrowCopy {
+
+      command "BorrowCopy" {
         fields {
-          copyId string required
+          copyId = required(string)
         }
       }
-      event CopyBorrowed {
+
+      event "CopyBorrowed" {
         fields {
-          copyId string required
+          copyId = required(string)
         }
       }
-      flow {
-        command -> event: BorrowCopy -> CopyBorrowed
-      }
+
+      flow = <<-FLOW
+        command -> event:    BorrowCopy -> CopyBorrowed
+      FLOW
     }
+
     slice "Shelve and Report" {
-      command ShelveCopy {
+      command "ShelveCopy" {
         fields {
-          copyId string required
+          copyId = required(string)
         }
       }
-      view ShelfView {
+
+      view "ShelfView" {
+        subscribes = [ShelfOpened]
+
         fields {
-          shelfId string required
+          shelfId = required(string)
         }
-        subscribes [ShelfOpened]
       }
     }
   }
@@ -211,34 +241,41 @@ context "Lending" {
 			// the other one points back at it. Both write, so neither is free to
 			// move and the reference stays — the shape a shared event always
 			// takes, not something an ordering can undo.
-			model := parse(t, `model "Library"
+			model := parse(t, `emod = 1
+
+model "Library" {
+}
 
 context "Lending" {
   aggregate "Loan" {
     slice "Borrow a Copy" {
-      command BorrowCopy {
+      command "BorrowCopy" {
         fields {
-          copyId string required
+          copyId = required(string)
         }
       }
-      event CopyBorrowed {
+
+      event "CopyBorrowed" {
         fields {
-          copyId string required
+          copyId = required(string)
         }
       }
-      flow {
-        command -> event: BorrowCopy -> CopyBorrowed
-      }
+
+      flow = <<-FLOW
+        command -> event:    BorrowCopy -> CopyBorrowed
+      FLOW
     }
+
     slice "Renew a Copy" {
-      command RenewCopy {
+      command "RenewCopy" {
         fields {
-          copyId string required
+          copyId = required(string)
         }
       }
-      flow {
-        command -> event: RenewCopy -> CopyBorrowed
-      }
+
+      flow = <<-FLOW
+        command -> event:    RenewCopy -> CopyBorrowed
+      FLOW
     }
   }
 }
@@ -255,24 +292,29 @@ context "Lending" {
 		})
 
 		t.Run("a reference into another context is left out, being unfixable by order", func(t *testing.T) {
-			model := parse(t, `model "Library"
+			model := parse(t, `emod = 1
+
+model "Library" {
+}
 
 context "Lending" {
   aggregate "Loan" {
     slice "Borrow a Copy" {
-      command BorrowCopy {
+      command "BorrowCopy" {
         fields {
-          copyId string required
+          copyId = required(string)
         }
       }
-      event CopyBorrowed {
+
+      event "CopyBorrowed" {
         fields {
-          copyId string required
+          copyId = required(string)
         }
       }
-      flow {
-        command -> event: BorrowCopy -> CopyBorrowed
-      }
+
+      flow = <<-FLOW
+        command -> event:    BorrowCopy -> CopyBorrowed
+      FLOW
     }
   }
 }
@@ -280,14 +322,15 @@ context "Lending" {
 context "Notifications" {
   aggregate "Notice" {
     slice "Announce the Borrow" {
-      automation AnnounceOnBorrow {
-        on CopyBorrowed
-        command SendNotice
-      }
-      command SendNotice {
+      command "SendNotice" {
         fields {
-          copyId string required
+          copyId = required(string)
         }
+      }
+
+      automation "AnnounceOnBorrow" {
+        on      = CopyBorrowed
+        command = SendNotice
       }
     }
   }
@@ -304,51 +347,62 @@ context "Notifications" {
 
 	t.Run("stability", func(t *testing.T) {
 		t.Run("arranging an arranged model changes nothing", func(t *testing.T) {
-			source := `model "Library"
+			source := `emod = 1
+
+model "Library" {
+}
 
 context "Lending" {
   aggregate "Loan" {
     slice "Borrow a Copy" {
-      command BorrowCopy {
+      command "BorrowCopy" {
         fields {
-          copyId string required
+          copyId = required(string)
         }
       }
-      event CopyBorrowed {
+
+      event "CopyBorrowed" {
         fields {
-          copyId string required
+          copyId = required(string)
         }
       }
-      flow {
-        command -> event: BorrowCopy -> CopyBorrowed
-      }
+
+      flow = <<-FLOW
+        command -> event:    BorrowCopy -> CopyBorrowed
+      FLOW
     }
+
     slice "Borrowed Copies" {
-      view BorrowView {
+      view "BorrowView" {
+        subscribes = [CopyBorrowed]
+
         fields {
-          copyId string required
+          copyId = required(string)
         }
-        subscribes [CopyBorrowed]
       }
     }
+
     slice "Return a Copy" {
       trigger "Return Desk" {
-        actor Member
-        reads BorrowView
+        actor = Member
+        reads = BorrowView
       }
-      command ReturnCopy {
+
+      command "ReturnCopy" {
         fields {
-          copyId string required
+          copyId = required(string)
         }
       }
-      event CopyReturned {
+
+      event "CopyReturned" {
         fields {
-          copyId string required
+          copyId = required(string)
         }
       }
-      flow {
-        command -> event: ReturnCopy -> CopyReturned
-      }
+
+      flow = <<-FLOW
+        command -> event:    ReturnCopy -> CopyReturned
+      FLOW
     }
   }
 }
@@ -364,14 +418,17 @@ context "Lending" {
 		})
 
 		t.Run("a model with no slices to weigh is left alone", func(t *testing.T) {
-			model := parse(t, `model "Library"
+			model := parse(t, `emod = 1
+
+model "Library" {
+}
 
 context "Lending" {
   aggregate "Loan" {
     slice "Borrow a Copy" {
-      command BorrowCopy {
+      command "BorrowCopy" {
         fields {
-          copyId string required
+          copyId = required(string)
         }
       }
     }

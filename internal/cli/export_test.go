@@ -206,25 +206,31 @@ func TestExport(t *testing.T) {
 	})
 
 	t.Run("file with only lint warnings outputs JSON with diagnostics on stdout and empty stderr", func(t *testing.T) {
-		input := `model "Test"
+		input := `emod = 1
+
+model "Test" {
+}
+
 context "Orders" {
   aggregate "Order" {
     slice "Update Order" {
-      command PlaceOrder {
+      command "PlaceOrder" {
         fields {
-          orderId string required
-          reason  string required
+          orderId = required(string)
+          reason  = required(string)
         }
       }
-      event OrderUpdated {
+
+      event "OrderUpdated" {
         fields {
-          orderId string required
-          reason  string required
+          orderId = required(string)
+          reason  = required(string)
         }
       }
-      flow {
-        command -> event: PlaceOrder -> OrderUpdated
-      }
+
+      flow = <<-FLOW
+        command -> event:    PlaceOrder -> OrderUpdated
+      FLOW
     }
   }
 }

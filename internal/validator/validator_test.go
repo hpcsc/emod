@@ -8,7 +8,6 @@ import (
 
 	"github.com/hpcsc/emod/internal/ast"
 	"github.com/hpcsc/emod/internal/diagnostic"
-	"github.com/hpcsc/emod/internal/lexer"
 	"github.com/hpcsc/emod/internal/parser"
 	"github.com/hpcsc/emod/internal/test"
 	"github.com/hpcsc/emod/internal/validator"
@@ -2932,54 +2931,54 @@ func TestValidate(t *testing.T) {
 				{
 					name: "on a given element, against the event's fields",
 					specs: `spec "borrows a copy the member returned" {
-        given [CopyReturned { copyIdd: "C-93204" }]
-        when BorrowCopy
-        then [CopyBorrowed]
+        given = [CopyReturned({ copyIdd = "C-93204" })]
+        when = BorrowCopy
+        then = [CopyBorrowed]
       }`,
-					want: []string{`lending.emod:33: payload field "copyIdd" is not declared on event "CopyReturned"`},
+					want: []string{`lending.emod:38: payload field "copyIdd" is not declared on event "CopyReturned"`},
 				},
 				{
 					name: "on the when reference, against the command's fields",
 					specs: `spec "borrows a copy no one holds" {
-        when BorrowCopy { copyIdd: "C-93204" }
-        then [CopyBorrowed]
+        when = BorrowCopy({ copyIdd = "C-93204" })
+        then = [CopyBorrowed]
       }`,
-					want: []string{`lending.emod:33: payload field "copyIdd" is not declared on command "BorrowCopy"`},
+					want: []string{`lending.emod:38: payload field "copyIdd" is not declared on command "BorrowCopy"`},
 				},
 				{
 					name: "on a then event, against the event's fields",
 					specs: `spec "borrows a copy no one holds" {
-        when BorrowCopy
-        then [CopyBorrowed { loanIdd: "L-771" }]
+        when = BorrowCopy
+        then = [CopyBorrowed({ loanIdd = "L-771" })]
       }`,
-					want: []string{`lending.emod:34: payload field "loanIdd" is not declared on event "CopyBorrowed"`},
+					want: []string{`lending.emod:39: payload field "loanIdd" is not declared on event "CopyBorrowed"`},
 				},
 				{
 					name: "on a when naming an event rather than a command",
 					specs: `spec "records a return the desk logged" {
-        when CopyReturned { copyIdd: "C-93204" }
-        then [CopyBorrowed]
+        when = CopyReturned({ copyIdd = "C-93204" })
+        then = [CopyBorrowed]
       }`,
-					want: []string{`lending.emod:33: payload field "copyIdd" is not declared on event "CopyReturned"`},
+					want: []string{`lending.emod:38: payload field "copyIdd" is not declared on event "CopyReturned"`},
 				},
 				{
 					name: "on a construct declaring no fields block at all, once per payload field",
 					specs: `spec "shelves a copy no one holds" {
-        when ShelveCopy { copyId: "C-93204", shelfMark: "AURELIA" }
-        then [CopyBorrowed]
+        when = ShelveCopy({ copyId = "C-93204", shelfMark = "AURELIA" })
+        then = [CopyBorrowed]
       }`,
 					want: []string{
-						`lending.emod:33: payload field "copyId" is not declared on command "ShelveCopy"`,
-						`lending.emod:33: payload field "shelfMark" is not declared on command "ShelveCopy"`,
+						`lending.emod:38: payload field "copyId" is not declared on command "ShelveCopy"`,
+						`lending.emod:38: payload field "shelfMark" is not declared on command "ShelveCopy"`,
 					},
 				},
 				{
 					name: "on a field named after a DSL keyword the construct does not declare",
 					specs: `spec "borrows a copy no one holds" {
-        when BorrowCopy { given: "C-93204" }
-        then [CopyBorrowed]
+        when = BorrowCopy({ given = "C-93204" })
+        then = [CopyBorrowed]
       }`,
-					want: []string{`lending.emod:33: payload field "given" is not declared on command "BorrowCopy"`},
+					want: []string{`lending.emod:38: payload field "given" is not declared on command "BorrowCopy"`},
 				},
 			}
 
@@ -3000,23 +2999,23 @@ func TestValidate(t *testing.T) {
 				{
 					name: "on every reference a spec accepts",
 					specs: `spec "borrows a copy the member returned" {
-        given [CopyReturned { copyId: "C-93204" }]
-        when BorrowCopy { copyId: "C-93204", shelfMark: "AURELIA" }
-        then [CopyBorrowed { loanId: "L-771" }]
+        given = [CopyReturned({ copyId = "C-93204" })]
+        when = BorrowCopy({ copyId = "C-93204", shelfMark = "AURELIA" })
+        then = [CopyBorrowed({ loanId = "L-771" })]
       }`,
 				},
 				{
 					name: "when every required field but one is omitted, because a payload is partial",
 					specs: `spec "borrows a copy no one holds" {
-        when BorrowCopy { copyId: "C-93204" }
-        then [CopyBorrowed]
+        when = BorrowCopy({ copyId = "C-93204" })
+        then = [CopyBorrowed]
       }`,
 				},
 				{
 					name: "on a field named after a DSL keyword the construct declares",
 					specs: `spec "borrows a copy no one holds" {
-        when BorrowCopy { where: "AURELIA" }
-        then [CopyBorrowed]
+        when = BorrowCopy({ where = "AURELIA" })
+        then = [CopyBorrowed]
       }`,
 				},
 			}
@@ -3030,32 +3029,32 @@ func TestValidate(t *testing.T) {
 
 		t.Run("a payload on a reference no construct declares reports only the missing reference", func(t *testing.T) {
 			diags := validateSource(t, lendingModelWithSpecs(`spec "borrows a copy no one holds" {
-        when BorrwoCopy { copyIdd: "C-93204" }
-        then [CopyBorrowed]
+        when = BorrwoCopy({ copyIdd = "C-93204" })
+        then = [CopyBorrowed]
       }`))
 
-			require.Equal(t, []string{`lending.emod:33: command "BorrwoCopy" does not exist`}, reportedLines(diags))
+			require.Equal(t, []string{`lending.emod:38: command "BorrwoCopy" does not exist`}, reportedLines(diags))
 		})
 
 		t.Run("several undeclared fields are reported in declaration order", func(t *testing.T) {
 			diags := validateSource(t, lendingModelWithSpecs(`spec "borrows a copy the member returned" {
-        given [CopyReturned { returnedAtt: "2024-07-19" }]
-        when BorrowCopy { copyIdd: "C-93204", shelfMarkk: "AURELIA" }
-        then [CopyBorrowed { loanIdd: "L-771" }]
+        given = [CopyReturned({ returnedAtt = "2024-07-19" })]
+        when = BorrowCopy({ copyIdd = "C-93204", shelfMarkk = "AURELIA" })
+        then = [CopyBorrowed({ loanIdd = "L-771" })]
       }`))
 
 			require.Equal(t, []string{
-				`lending.emod:33: payload field "returnedAtt" is not declared on event "CopyReturned"`,
-				`lending.emod:34: payload field "copyIdd" is not declared on command "BorrowCopy"`,
-				`lending.emod:34: payload field "shelfMarkk" is not declared on command "BorrowCopy"`,
-				`lending.emod:35: payload field "loanIdd" is not declared on event "CopyBorrowed"`,
+				`lending.emod:38: payload field "returnedAtt" is not declared on event "CopyReturned"`,
+				`lending.emod:39: payload field "copyIdd" is not declared on command "BorrowCopy"`,
+				`lending.emod:39: payload field "shelfMarkk" is not declared on command "BorrowCopy"`,
+				`lending.emod:40: payload field "loanIdd" is not declared on event "CopyBorrowed"`,
 			}, reportedLines(diags))
 		})
 
 		t.Run("the diagnostic carries no rule name, so emod lint --explain has nothing to answer for", func(t *testing.T) {
 			diags := validateSource(t, lendingModelWithSpecs(`spec "borrows a copy no one holds" {
-        when BorrowCopy { copyIdd: "C-93204" }
-        then [CopyBorrowed]
+        when = BorrowCopy({ copyIdd = "C-93204" })
+        then = [CopyBorrowed]
       }`))
 
 			require.Len(t, diags, 1)
@@ -3064,79 +3063,98 @@ func TestValidate(t *testing.T) {
 		})
 
 		t.Run("two commands sharing a name declare between them every field a payload may state", func(t *testing.T) {
-			source := `model "Library Lending"
+			source := `emod = 1
+
+model "Library Lending" {
+}
+
 context "Lending" {
   aggregate "Loan" {
     slice "Borrow Copy" {
-      command BorrowCopy {
+      command "BorrowCopy" {
         fields {
-          copyId string required
+          copyId = required(string)
         }
       }
-      event CopyBorrowed {
+
+      event "CopyBorrowed" {
         fields {
-          loanId string required
+          loanId = required(string)
         }
       }
+
+      flow = <<-FLOW
+        command -> event:    BorrowCopy -> CopyBorrowed
+      FLOW
+
       spec "borrows a copy no one holds" {
-        when BorrowCopy { copyId: "C-93204", dueOn: "2024-07-19" }
-        then [CopyBorrowed]
-      }
-      flow {
-        command -> event: BorrowCopy -> CopyBorrowed
+        when = BorrowCopy({ copyId = "C-93204", dueOn = "2024-07-19" })
+        then = [CopyBorrowed]
       }
     }
+
     slice "Shelve Copy" {
-      command BorrowCopy {
+      command "BorrowCopy" {
         fields {
-          dueOn date required
+          dueOn = required(date)
         }
       }
-      event CopyShelved {
+
+      event "CopyShelved" {
         fields {
-          shelfId string required
+          shelfId = required(string)
         }
       }
-      flow {
-        command -> event: BorrowCopy -> CopyShelved
-      }
+
+      flow = <<-FLOW
+        command -> event:    BorrowCopy -> CopyShelved
+      FLOW
     }
   }
-}`
+}
+`
 
 			require.Empty(t, validateSource(t, source),
 				"a second command of the same name has to add its fields to the first's, not replace them")
 		})
 
 		t.Run("a command and an event sharing a name keep their fields apart", func(t *testing.T) {
-			source := `model "Library Lending"
+			source := `emod = 1
+
+model "Library Lending" {
+}
+
 context "Lending" {
   aggregate "Loan" {
     slice "Borrow Copy" {
-      command Borrow {
+      command "Borrow" {
         fields {
-          copyId string required
+          copyId = required(string)
         }
       }
-      event Borrow {
+
+      event "Borrow" {
         fields {
-          loanId string required
+          loanId = required(string)
         }
       }
+
+      flow = <<-FLOW
+        command -> event:    Borrow -> Borrow
+      FLOW
+
       spec "borrows a copy no one holds" {
-        when Borrow { loanId: "L-771" }
-        then [Borrow { copyId: "C-93204" }]
-      }
-      flow {
-        command -> event: Borrow -> Borrow
+        when = Borrow({ loanId = "L-771" })
+        then = [Borrow({ copyId = "C-93204" })]
       }
     }
   }
-}`
+}
+`
 
 			require.Equal(t, []string{
-				`lending.emod:16: payload field "loanId" is not declared on command "Borrow"`,
-				`lending.emod:17: payload field "copyId" is not declared on event "Borrow"`,
+				`lending.emod:26: payload field "loanId" is not declared on command "Borrow"`,
+				`lending.emod:27: payload field "copyId" is not declared on event "Borrow"`,
 			}, reportedLines(validateSource(t, source)),
 				"a payload field has to be looked up on the kind its reference resolved to, not on both pooled together")
 		})
@@ -3152,19 +3170,19 @@ context "Lending" {
 				name    string
 				payload string
 			}{
-				{name: "a string for a string field", payload: `where: "AURELIA"`},
-				{name: "the empty string for a string field", payload: `where: ""`},
-				{name: "a YYYY-MM-DD value for a date field", payload: `dueOn: "2024-07-19"`},
-				{name: "a domain-typed field taking a string", payload: `shelfMark: "AURELIA"`},
-				{name: "a domain-typed field taking a number", payload: `shelfMark: 4821`},
-				{name: "a domain-typed field taking a boolean", payload: `shelfMark: true`},
+				{name: "a string for a string field", payload: `where = "AURELIA"`},
+				{name: "the empty string for a string field", payload: `where = ""`},
+				{name: "a YYYY-MM-DD value for a date field", payload: `dueOn = "2024-07-19"`},
+				{name: "a domain-typed field taking a string", payload: `shelfMark = "AURELIA"`},
+				{name: "a domain-typed field taking a number", payload: `shelfMark = 4821`},
+				{name: "a domain-typed field taking a boolean", payload: `shelfMark = true`},
 			}
 
 			for _, tc := range tests {
 				t.Run(tc.name, func(t *testing.T) {
 					require.Empty(t, validateSource(t, lendingModelWithSpecs(fmt.Sprintf(`spec "borrows a copy no one holds" {
-        when BorrowCopy { %s }
-        then [CopyBorrowed]
+        when = BorrowCopy({ %s })
+        then = [CopyBorrowed]
       }`, tc.payload))))
 				})
 			}
@@ -3175,19 +3193,19 @@ context "Lending" {
 				name    string
 				payload string
 			}{
-				{name: "an RFC 3339 value for a timestamp field", payload: `borrowedAt: "2024-07-05T14:32:00Z"`},
-				{name: "an integer for an int field", payload: `renewals: 4821`},
-				{name: "an integer for a decimal field", payload: `lateFee: 4821`},
-				{name: "a fractional number for a decimal field", payload: `lateFee: 12.50`},
-				{name: "true for a bool field", payload: `expedited: true`},
-				{name: "false for a bool field", payload: `expedited: false`},
+				{name: "an RFC 3339 value for a timestamp field", payload: `borrowedAt = "2024-07-05T14:32:00Z"`},
+				{name: "an integer for an int field", payload: `renewals = 4821`},
+				{name: "an integer for a decimal field", payload: `lateFee = 4821`},
+				{name: "a fractional number for a decimal field", payload: `lateFee = 12.50`},
+				{name: "true for a bool field", payload: `expedited = true`},
+				{name: "false for a bool field", payload: `expedited = false`},
 			}
 
 			for _, tc := range tests {
 				t.Run(tc.name, func(t *testing.T) {
 					require.Empty(t, validateSource(t, lendingModelWithSpecs(fmt.Sprintf(`spec "borrows a copy no one holds" {
-        when BorrowCopy
-        then [CopyBorrowed { %s }]
+        when = BorrowCopy
+        then = [CopyBorrowed({ %s })]
       }`, tc.payload))))
 				})
 			}
@@ -3197,9 +3215,9 @@ context "Lending" {
 			for _, value := range []string{"7c9e6679-7425-40de-944b-e07fc1f90ae7", "7C9E6679-7425-40DE-944B-E07FC1F90AE7"} {
 				t.Run(value, func(t *testing.T) {
 					require.Empty(t, validateSource(t, lendingModelWithSpecs(fmt.Sprintf(`spec "returns a copy the member holds" {
-        given [CopyReturned { returnId: "%s" }]
-        when BorrowCopy
-        then [CopyBorrowed]
+        given = [CopyReturned({ returnId = "%s" })]
+        when = BorrowCopy
+        then = [CopyBorrowed]
       }`, value))))
 				})
 			}
@@ -3213,27 +3231,27 @@ context "Lending" {
 			}{
 				{
 					name:    "a value that does not parse as a date",
-					payload: `dueOn: "19-07-2024"`,
+					payload: `dueOn = "19-07-2024"`,
 					want:    `payload value "19-07-2024" for field "dueOn" is not a valid date (expected YYYY-MM-DD)`,
 				},
 				{
 					name:    "a date-only value for a date field naming a month that does not exist",
-					payload: `dueOn: "2024-13-01"`,
+					payload: `dueOn = "2024-13-01"`,
 					want:    `payload value "2024-13-01" for field "dueOn" is not a valid date (expected YYYY-MM-DD)`,
 				},
 				{
 					name:    "a timestamp value for a date field",
-					payload: `dueOn: "2024-07-05T14:32:00Z"`,
+					payload: `dueOn = "2024-07-05T14:32:00Z"`,
 					want:    `payload value "2024-07-05T14:32:00Z" for field "dueOn" is not a valid date (expected YYYY-MM-DD)`,
 				},
 				{
 					name:    "a number for a string field",
-					payload: `where: 4821`,
+					payload: `where = 4821`,
 					want:    `payload value 4821 for field "where" is not a valid string`,
 				},
 				{
 					name:    "a boolean for a string field",
-					payload: `where: true`,
+					payload: `where = true`,
 					want:    `payload value true for field "where" is not a valid string`,
 				},
 			}
@@ -3241,11 +3259,11 @@ context "Lending" {
 			for _, tc := range tests {
 				t.Run(tc.name, func(t *testing.T) {
 					diags := validateSource(t, lendingModelWithSpecs(fmt.Sprintf(`spec "borrows a copy no one holds" {
-        when BorrowCopy { %s }
-        then [CopyBorrowed]
+        when = BorrowCopy({ %s })
+        then = [CopyBorrowed]
       }`, tc.payload)))
 
-					require.Equal(t, []string{"lending.emod:33: " + tc.want}, reportedLines(diags))
+					require.Equal(t, []string{"lending.emod:38: " + tc.want}, reportedLines(diags))
 				})
 			}
 		})
@@ -3258,37 +3276,37 @@ context "Lending" {
 			}{
 				{
 					name:    "a value that does not parse as a timestamp",
-					payload: `borrowedAt: "yesterday"`,
+					payload: `borrowedAt = "yesterday"`,
 					want:    `payload value "yesterday" for field "borrowedAt" is not a valid timestamp (expected an RFC 3339 timestamp)`,
 				},
 				{
 					name:    "a date-only value for a timestamp field",
-					payload: `borrowedAt: "2024-07-05"`,
+					payload: `borrowedAt = "2024-07-05"`,
 					want:    `payload value "2024-07-05" for field "borrowedAt" is not a valid timestamp (expected an RFC 3339 timestamp)`,
 				},
 				{
 					name:    "a fractional number for an int field",
-					payload: `renewals: 12.50`,
+					payload: `renewals = 12.50`,
 					want:    `payload value 12.50 for field "renewals" is not a valid int`,
 				},
 				{
 					name:    "a string for an int field",
-					payload: `renewals: "4821"`,
+					payload: `renewals = "4821"`,
 					want:    `payload value "4821" for field "renewals" is not a valid int`,
 				},
 				{
 					name:    "a string for a bool field",
-					payload: `expedited: "yes"`,
+					payload: `expedited = "yes"`,
 					want:    `payload value "yes" for field "expedited" is not a valid bool`,
 				},
 				{
 					name:    "a string for a decimal field",
-					payload: `lateFee: "12.50"`,
+					payload: `lateFee = "12.50"`,
 					want:    `payload value "12.50" for field "lateFee" is not a valid decimal`,
 				},
 				{
 					name:    "a boolean for a decimal field",
-					payload: `lateFee: true`,
+					payload: `lateFee = true`,
 					want:    `payload value true for field "lateFee" is not a valid decimal`,
 				},
 			}
@@ -3296,24 +3314,24 @@ context "Lending" {
 			for _, tc := range tests {
 				t.Run(tc.name, func(t *testing.T) {
 					diags := validateSource(t, lendingModelWithSpecs(fmt.Sprintf(`spec "borrows a copy no one holds" {
-        when BorrowCopy
-        then [CopyBorrowed { %s }]
+        when = BorrowCopy
+        then = [CopyBorrowed({ %s })]
       }`, tc.payload)))
 
-					require.Equal(t, []string{"lending.emod:34: " + tc.want}, reportedLines(diags))
+					require.Equal(t, []string{"lending.emod:39: " + tc.want}, reportedLines(diags))
 				})
 			}
 		})
 
 		t.Run("a value that is not a canonical uuid is reported", func(t *testing.T) {
 			diags := validateSource(t, lendingModelWithSpecs(`spec "returns a copy the member holds" {
-        given [CopyReturned { returnId: "7c9e6679742540de944be07fc1f90ae7" }]
-        when BorrowCopy
-        then [CopyBorrowed]
+        given = [CopyReturned({ returnId = "7c9e6679742540de944be07fc1f90ae7" })]
+        when = BorrowCopy
+        then = [CopyBorrowed]
       }`))
 
 			require.Equal(t, []string{
-				`lending.emod:33: payload value "7c9e6679742540de944be07fc1f90ae7" for field "returnId" is not a valid uuid (expected 8-4-4-4-12 hexadecimal digits)`,
+				`lending.emod:38: payload value "7c9e6679742540de944be07fc1f90ae7" for field "returnId" is not a valid uuid (expected 8-4-4-4-12 hexadecimal digits)`,
 			}, reportedLines(diags))
 		})
 
@@ -3321,9 +3339,9 @@ context "Lending" {
 			for _, value := range []string{`"AURELIA"`, "4821", "true"} {
 				t.Run(value, func(t *testing.T) {
 					require.Empty(t, validateSource(t, lendingModelWithSpecs(fmt.Sprintf(`spec "returns a copy the member holds" {
-        given [CopyReturned { shelf: %s }]
-        when BorrowCopy
-        then [CopyBorrowed]
+        given = [CopyReturned({ shelf = %s })]
+        when = BorrowCopy
+        then = [CopyBorrowed]
       }`, value))))
 				})
 			}
@@ -3331,23 +3349,23 @@ context "Lending" {
 
 		t.Run("several mismatched literals are reported in declaration order", func(t *testing.T) {
 			diags := validateSource(t, lendingModelWithSpecs(`spec "returns a copy the member holds" {
-        given [CopyReturned { returnedAt: "yesterday" }]
-        when BorrowCopy { dueOn: "19-07-2024", where: 4821 }
-        then [CopyBorrowed { renewals: 12.50 }]
+        given = [CopyReturned({ returnedAt = "yesterday" })]
+        when = BorrowCopy({ dueOn = "19-07-2024", where = 4821 })
+        then = [CopyBorrowed({ renewals = 12.50 })]
       }`))
 
 			require.Equal(t, []string{
-				`lending.emod:33: payload value "yesterday" for field "returnedAt" is not a valid timestamp (expected an RFC 3339 timestamp)`,
-				`lending.emod:34: payload value "19-07-2024" for field "dueOn" is not a valid date (expected YYYY-MM-DD)`,
-				`lending.emod:34: payload value 4821 for field "where" is not a valid string`,
-				`lending.emod:35: payload value 12.50 for field "renewals" is not a valid int`,
+				`lending.emod:38: payload value "yesterday" for field "returnedAt" is not a valid timestamp (expected an RFC 3339 timestamp)`,
+				`lending.emod:39: payload value "19-07-2024" for field "dueOn" is not a valid date (expected YYYY-MM-DD)`,
+				`lending.emod:39: payload value 4821 for field "where" is not a valid string`,
+				`lending.emod:40: payload value 12.50 for field "renewals" is not a valid int`,
 			}, reportedLines(diags))
 		})
 
 		t.Run("the diagnostic carries no rule name, so emod lint --explain has nothing to answer for", func(t *testing.T) {
 			diags := validateSource(t, lendingModelWithSpecs(`spec "borrows a copy no one holds" {
-        when BorrowCopy { dueOn: "19-07-2024" }
-        then [CopyBorrowed]
+        when = BorrowCopy({ dueOn = "19-07-2024" })
+        then = [CopyBorrowed]
       }`))
 
 			require.Len(t, diags, 1)
@@ -3357,8 +3375,8 @@ context "Lending" {
 
 		t.Run("stripping the payloads silences the check and leaves the rest of validation alone", func(t *testing.T) {
 			stated := parseSource(t, lendingModelWithSpecs(`spec "borrows a copy no one holds" {
-        when BorrowCopy { dueOn: "19-07-2024" }
-        then [CopyBorrowed { renewals: 12.50 }]
+        when = BorrowCopy({ dueOn = "19-07-2024" })
+        then = [CopyBorrowed({ renewals = 12.50 })]
       }`))
 
 			require.Len(t, validator.Validate(stated), 2)
@@ -5533,10 +5551,7 @@ func validateSource(t *testing.T, source string) []*diagnostic.Entry {
 func parseSource(t *testing.T, source string) *ast.Model {
 	t.Helper()
 
-	tokens, scanDiags := lexer.Scan(source, "lending.emod")
-	require.Empty(t, scanDiags)
-
-	model, parseDiags := parser.New(tokens, "lending.emod").Parse()
+	model, parseDiags := parser.Parse(source, "lending.emod")
 	require.Empty(t, parseDiags)
 
 	return model
@@ -5547,42 +5562,48 @@ func parseSource(t *testing.T, source string) *ast.Model {
 // wraps opens on line 32, which is what lets a caller name the line each
 // diagnostic reports on.
 func lendingModelWithSpecs(specs string) string {
-	return fmt.Sprintf(`model "Library Lending"
+	return fmt.Sprintf(`model "Library Lending" {}
+
 context "Lending" {
   aggregate "Loan" {
     slice "Borrow Copy" {
-      command BorrowCopy {
+      command "BorrowCopy" {
         fields {
-          copyId    string required
-          dueOn     date   required
-          where     string
-          shelfMark ShelfMark
+          copyId    = string
+          dueOn     = date
+          where     = string
+          shelfMark = ShelfMark
         }
       }
-      command ShelveCopy {
+
+      command "ShelveCopy" {
       }
-      event CopyBorrowed {
+
+      event "CopyBorrowed" {
         fields {
-          loanId     string    required
-          borrowedAt timestamp required
-          renewals   int
-          lateFee    decimal
-          expedited  bool
+          loanId     = string
+          borrowedAt = timestamp
+          renewals   = int
+          lateFee    = decimal
+          expedited  = bool
         }
       }
-      event CopyReturned {
+
+      event "CopyReturned" {
         fields {
-          copyId     string    required
-          returnedAt timestamp required
-          returnId   uuid      required
-          shelf      events
+          copyId     = string
+          returnedAt = timestamp
+          returnId   = uuid
+          shelf      = events
         }
       }
+
       %s
-      flow {
+
+      flow = <<-FLOW
         command -> event: BorrowCopy -> CopyBorrowed
         command -> event: ShelveCopy -> CopyReturned
-      }
+      FLOW
     }
   }
 }`, specs)

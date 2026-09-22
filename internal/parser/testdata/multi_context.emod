@@ -1,43 +1,52 @@
+emod = 1
+
 # Multi-context model with cross-context automation and external source event
-model "Order Management"
+model "Order Management" {
+}
 
 context "Orders" {
   aggregate "Order" {
     # A customer commits to buying and the shop records it
     slice "Place Order" {
-      command PlaceOrder {
+      command "PlaceOrder" {
         fields {
-          orderId    string required
-          customerId string required
+          orderId    = required(string)
+          customerId = required(string)
         }
       }
-      event OrderPlaced {
+
+      event "OrderPlaced" {
         fields {
-          orderId    string required
-          customerId string required
-          placedAt   timestamp required
+          orderId    = required(string)
+          customerId = required(string)
+          placedAt   = required(timestamp)
         }
       }
-      flow {
-        command -> event: PlaceOrder -> OrderPlaced
-      }
+
+      flow = <<-FLOW
+        command -> event:    PlaceOrder -> OrderPlaced
+      FLOW
     }
 
     slice "Notify On Order" {
-      view PendingNotificationsView {
+      view "PendingNotificationsView" {
+        subscribes = [OrderPlaced]
+
         fields {
-          orderId    string    required
-          customerId string    required
-          placedAt   timestamp required
+          orderId    = required(string)
+          customerId = required(string)
+          placedAt   = required(timestamp)
         }
-        subscribes [OrderPlaced]
       }
 
-      automation OrderNotifier {
-        on OrderPlaced
-        reads PendingNotificationsView
-        command SendNotification
-        target context Notifications
+      automation "OrderNotifier" {
+        on      = OrderPlaced
+        reads   = PendingNotificationsView
+        command = SendNotification
+
+        target {
+          context = Notifications
+        }
       }
     }
   }
@@ -47,21 +56,24 @@ context "Notifications" {
   aggregate "Notification" {
     # The notice the order side asked for leaves the building
     slice "Send Notification" {
-      command SendNotification {
+      command "SendNotification" {
         fields {
-          message string required
+          message = required(string)
         }
       }
-      flow {
-        command -> event: SendNotification -> NotificationReceived
-      }
-      event NotificationReceived {
-        source external "Email Provider"
+
+      event "NotificationReceived" {
+        source = external("Email Provider")
+
         fields {
-          notificationId string required
-          receivedAt     timestamp required
+          notificationId = required(string)
+          receivedAt     = required(timestamp)
         }
       }
+
+      flow = <<-FLOW
+        command -> event:    SendNotification -> NotificationReceived
+      FLOW
     }
   }
 }

@@ -6,7 +6,6 @@ import (
 	"testing"
 
 	"github.com/hpcsc/emod/internal/ast"
-	"github.com/hpcsc/emod/internal/lexer"
 	"github.com/hpcsc/emod/internal/parser"
 	"github.com/stretchr/testify/require"
 )
@@ -15,10 +14,8 @@ import (
 // traversal sorts by are the ones production models carry.
 func parseModel(t *testing.T, source string) *ast.Model {
 	t.Helper()
-	tokens, diags := lexer.Scan(source, "traverse_test.emod")
-	require.Empty(t, diags)
-	model, parserDiags := parser.New(tokens, "traverse_test.emod").Parse()
-	require.Empty(t, parserDiags)
+	model, diagnostics := parser.Parse(source, "traverse_test.emod")
+	require.Empty(t, diagnostics)
 	return model
 }
 
@@ -33,17 +30,26 @@ func sliceNames(refs []ast.SliceRef) []string {
 func TestModel(t *testing.T) {
 	t.Run("slice traversal", func(t *testing.T) {
 		t.Run("returns aggregate and direct context slices in source order", func(t *testing.T) {
-			model := parseModel(t, `model "Mixed"
-context "Lending" mode mixed {
+			model := parseModel(t, `emod = 1
+
+model "Mixed" {
+}
+
+context "Lending" {
+  mode = mixed
+
   slice "First Direct" {
   }
+
   aggregate "Loan" {
     slice "From Aggregate" {
     }
   }
+
   slice "Last Direct" {
   }
 }
+
 context "Billing" {
   aggregate "Invoice" {
     slice "Billing Slice" {
@@ -58,10 +64,17 @@ context "Billing" {
 		})
 
 		t.Run("pairs each slice with its declaring context and aggregate", func(t *testing.T) {
-			model := parseModel(t, `model "Mixed"
-context "Lending" mode mixed {
+			model := parseModel(t, `emod = 1
+
+model "Mixed" {
+}
+
+context "Lending" {
+  mode = mixed
+
   slice "Direct" {
   }
+
   aggregate "Loan" {
     slice "Nested" {
     }
@@ -90,14 +103,22 @@ context "Lending" mode mixed {
 func TestContext(t *testing.T) {
 	t.Run("slice traversal", func(t *testing.T) {
 		t.Run("interleaves direct and aggregate slices by position", func(t *testing.T) {
-			model := parseModel(t, `model "Mixed"
-context "Lending" mode mixed {
+			model := parseModel(t, `emod = 1
+
+model "Mixed" {
+}
+
+context "Lending" {
+  mode = mixed
+
   aggregate "Loan" {
     slice "Borrow" {
     }
   }
+
   slice "Between" {
   }
+
   aggregate "Copy" {
     slice "Acquire" {
     }
@@ -115,10 +136,17 @@ context "Lending" mode mixed {
 		})
 
 		t.Run("does not alias the context's own slice collection", func(t *testing.T) {
-			model := parseModel(t, `model "Mixed"
-context "Lending" mode mixed {
+			model := parseModel(t, `emod = 1
+
+model "Mixed" {
+}
+
+context "Lending" {
+  mode = mixed
+
   slice "Direct" {
   }
+
   aggregate "Loan" {
     slice "Nested" {
     }

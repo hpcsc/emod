@@ -13,413 +13,453 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-const emodWithoutVersionHeader = `model "Hotel Reservation"
-
-actor "Guest"
-
-context "Reservations" {
-  aggregate "Reservation" {
-    slice "Make Reservation" {
-      command MakeReservation {
-        fields {
-          guestId  string required
-          roomType string required
-        }
-      }
-
-      event ReservationMade {
-        fields {
-          reservationId string required
-          guestId       string required
-          roomType      string required
-          checkIn       date   required
-          checkOut      date   required
-          status        string required
-        }
-      }
-
-      flow {
-        command -> event: MakeReservation -> ReservationMade
-      }
-    }
-  }
-}
-`
-
-const formattedEmod = "emod 1\n" + emodWithoutVersionHeader
-
-const describedFormattedEmod = `emod 1
-model "Hotel Reservation" {
-  description "How the hotel takes and confirms room bookings"
+const emodWithoutVersionHeader = `model "Hotel Reservation" {
 }
 
 actor "Guest" {
-  description "A person booking a room"
 }
 
 context "Reservations" {
-  description "Everything the hotel knows about a stay before the guest arrives"
   aggregate "Reservation" {
-    description "One guest holding one room over one date range"
     slice "Make Reservation" {
-      description "A guest books a room from the public site"
-      command MakeReservation {
-        description "Ask the hotel to hold a room for a date range"
+      command "MakeReservation" {
         fields {
-          guestId  string required
-          roomType string required
+          guestId  = required(string)
+          roomType = required(string)
         }
       }
 
-      event ReservationMade {
-        description "A room is held for a guest"
+      event "ReservationMade" {
         fields {
-          reservationId string required
-          guestId       string required
-          roomType      string required
+          reservationId = required(string)
+          guestId       = required(string)
+          roomType      = required(string)
+          checkIn       = required(date)
+          checkOut      = required(date)
+          status        = required(string)
         }
       }
 
-      flow {
-        command -> event: MakeReservation -> ReservationMade
+      flow = <<-FLOW
+        command -> event:    MakeReservation -> ReservationMade
+      FLOW
+    }
+  }
+}
+`
+
+const formattedEmod = "emod = 1\n\n" + emodWithoutVersionHeader
+
+const describedFormattedEmod = `emod = 1
+
+model "Hotel Reservation" {
+  description = "How the hotel takes and confirms room bookings"
+}
+
+actor "Guest" {
+  description = "A person booking a room"
+}
+
+context "Reservations" {
+  description = "Everything the hotel knows about a stay before the guest arrives"
+
+  aggregate "Reservation" {
+    description = "One guest holding one room over one date range"
+
+    slice "Make Reservation" {
+      description = "A guest books a room from the public site"
+
+      command "MakeReservation" {
+        description = "Ask the hotel to hold a room for a date range"
+
+        fields {
+          guestId  = required(string)
+          roomType = required(string)
+        }
+      }
+
+      event "ReservationMade" {
+        description = "A room is held for a guest"
+
+        fields {
+          reservationId = required(string)
+          guestId       = required(string)
+          roomType      = required(string)
+        }
+      }
+
+      flow = <<-FLOW
+        command -> event:    MakeReservation -> ReservationMade
+      FLOW
+    }
+  }
+}
+`
+
+const unformattedEmod = `emod = 1
+
+
+
+model "Hotel Reservation" {
+}
+
+actor "Guest" {
+}
+
+context "Reservations" {
+  aggregate "Reservation" {
+    slice "Make Reservation" {
+      command "MakeReservation" {
+        fields {
+          guestId  = required(string)
+          roomType = required(string)
+        }
+      }
+
+      event "ReservationMade" {
+        fields {
+          reservationId = required(string)
+          guestId       = required(string)
+          roomType      = required(string)
+          checkIn       = required(date)
+          checkOut      = required(date)
+          status        = required(string)
+        }
+      }
+
+      flow = <<-FLOW
+        command -> event:    MakeReservation -> ReservationMade
+      FLOW
+    }
+  }
+}
+`
+
+const modifierlessFormattedEmod = `emod = 1
+
+model "Hotel Reservation" {
+}
+
+context "Reservations" {
+  aggregate "Reservation" {
+    slice "Make Reservation" {
+      command "MakeReservation" {
+        fields {
+          roomType = string
+          guestId  = required(string)
+        }
       }
     }
   }
 }
 `
 
-const unformattedEmod = `model "Hotel Reservation"
-actor "Guest"
-context "Reservations" {
-  aggregate "Reservation" {
-    slice "Make Reservation" {
-      command MakeReservation {
-        fields {
-          guestId string required
-          roomType string required
-        }
-      }
-      event ReservationMade {
-        fields {
-          reservationId string required
-          guestId string required
-          roomType string required
-          checkIn date required
-          checkOut date required
-          status string required
-        }
-      }
-      flow {
-        command -> event: MakeReservation -> ReservationMade
-      }
-    }
-  }
-}
-`
+const keywordFieldFormattedEmod = `emod = 1
 
-const modifierlessFormattedEmod = `emod 1
-model "Hotel Reservation"
-
-context "Reservations" {
-  aggregate "Reservation" {
-    slice "Make Reservation" {
-      command MakeReservation {
-        fields {
-          roomType string
-          guestId  string required
-        }
-      }
-    }
-  }
-}
-`
-
-const keywordFieldFormattedEmod = `emod 1
 # Saved searches over a catalogue of emod models
-model "Model Search Catalog"
+model "Model Search Catalog" {
+}
 
-actor "Analyst"
+actor "Analyst" {
+}
 
 context "Discovery" {
   aggregate "Saved Search" {
     slice "Define Saved Search" {
       trigger "Search Builder" {
-        actor Analyst
-        reads SavedSearchesView
+        actor = Analyst
+        reads = SavedSearchesView
       }
 
-      command DefineSavedSearch {
+      command "DefineSavedSearch" {
         fields {
-          model       string required
-          source      string required
-          where       string required
-          and         string
-          not         string
-          fields      string required
-          description string optional
+          model       = required(string)
+          source      = required(string)
+          where       = required(string)
+          and         = string
+          not         = string
+          fields      = required(string)
+          description = optional(string)
         }
       }
 
-      event SavedSearchDefined {
+      event "SavedSearchDefined" {
         fields {
-          searchId    string required
-          model       string required
-          source      string required
-          where       string required
-          events      string required
-          tag         string required
-          emod        string
-          description string required
-          definedAt   date   required
+          searchId    = required(string)
+          model       = required(string)
+          source      = required(string)
+          where       = required(string)
+          events      = required(string)
+          tag         = required(string)
+          emod        = string
+          description = required(string)
+          definedAt   = required(date)
         }
       }
 
-      flow {
-        command -> event: DefineSavedSearch -> SavedSearchDefined
-      }
+      flow = <<-FLOW
+        command -> event:    DefineSavedSearch -> SavedSearchDefined
+      FLOW
     }
 
     slice "Browse Saved Searches" {
-      view SavedSearchesView {
-        subscribes [SavedSearchDefined]
+      view "SavedSearchesView" {
+        subscribes = [SavedSearchDefined]
+
         fields {
-          searchId    string required
-          description string required
-          tag         string required
-          model       string
-          where       string required
-          matches     int    required
+          searchId    = required(string)
+          description = required(string)
+          tag         = required(string)
+          model       = string
+          where       = required(string)
+          matches     = required(int)
         }
       }
     }
 
     slice "Auto Share Saved Search" {
-      command ShareSavedSearch {
+      command "ShareSavedSearch" {
         fields {
-          searchId string required
-          tag      string required
+          searchId = required(string)
+          tag      = required(string)
         }
       }
 
-      automation AutoShare {
-        on SavedSearchDefined
-        reads SavedSearchesView
-        command ShareSavedSearch
+      automation "AutoShare" {
+        on      = SavedSearchDefined
+        reads   = SavedSearchesView
+        command = ShareSavedSearch
       }
 
-      flow {
-        command -> event: ShareSavedSearch -> SavedSearchDefined
-      }
+      flow = <<-FLOW
+        command -> event:    ShareSavedSearch -> SavedSearchDefined
+      FLOW
     }
 
     slice "Import Vendor Search" {
-      command ImportVendorSearch {
+      command "ImportVendorSearch" {
         fields {
-          source string required
+          source = required(string)
         }
       }
 
-      translation VendorSearchImport {
-        external_system "Metabase API"
-        reads SavedSearchesView
-        command ImportVendorSearch
-        event VendorSearchImported {
+      translation "VendorSearchImport" {
+        external_system = "Metabase API"
+        reads           = SavedSearchesView
+        command         = ImportVendorSearch
+
+        event "VendorSearchImported" {
           fields {
-            vendorSearchId string required
-            source         string required
-            emod           string required
-            where          string required
-            tag            string
-            model          string required
+            vendorSearchId = required(string)
+            source         = required(string)
+            emod           = required(string)
+            where          = required(string)
+            tag            = string
+            model          = required(string)
           }
         }
       }
 
-      flow {
-        command -> event: ImportVendorSearch -> VendorSearchImported
-      }
+      flow = <<-FLOW
+        command -> event:    ImportVendorSearch -> VendorSearchImported
+      FLOW
     }
   }
 }
 `
 
-const specFormattedEmod = `emod 1
-# Lending a library's copies and seating its readers, with the scenarios each slice must satisfy
-model "Library Lending"
+const specFormattedEmod = `emod = 1
 
-actor "Member"
+# Lending a library's copies and seating its readers, with the scenarios each slice must satisfy
+model "Library Lending" {
+}
+
+actor "Member" {
+}
 
 context "Lending" {
   aggregate "Loan" {
-    invariant OneCopyPerLoan "A loan covers exactly one copy of one title"
+    invariants {
+      OneCopyPerLoan = "A loan covers exactly one copy of one title"
+    }
+
     slice "Borrow Copy" {
       trigger "Lending Desk" {
-        actor Member
-        reads MemberLoansView
+        actor = Member
+        reads = MemberLoansView
       }
 
-      command BorrowCopy {
+      command "BorrowCopy" {
         fields {
-          memberId string required
-          copyId   string required
-          dueOn    date   required
+          memberId = required(string)
+          copyId   = required(string)
+          dueOn    = required(date)
         }
       }
 
-      event CopyBorrowed {
+      event "CopyBorrowed" {
         fields {
-          loanId   string required
-          memberId string required
-          copyId   string required
-          dueOn    date   required
+          loanId   = required(string)
+          memberId = required(string)
+          copyId   = required(string)
+          dueOn    = required(date)
         }
       }
 
-      flow {
-        command -> event: BorrowCopy -> CopyBorrowed
-      }
+      flow = <<-FLOW
+        command -> event:    BorrowCopy -> CopyBorrowed
+      FLOW
 
       spec "borrows a copy no one holds" {
-        when BorrowCopy
-        then [CopyBorrowed]
+        when = BorrowCopy
+        then = [CopyBorrowed]
       }
 
       spec "borrows a copy the member before returned" {
-        given [CopyBorrowed, CopyReturned]
-        when  BorrowCopy
-        then  [CopyBorrowed]
+        given = [CopyBorrowed, CopyReturned]
+        when  = BorrowCopy
+        then  = [CopyBorrowed]
       }
 
       spec "refuses a copy already on loan" {
-        given [CopyBorrowed]
-        when  BorrowCopy
-        then  rejected OneCopyPerLoan
+        given = [CopyBorrowed]
+        when  = BorrowCopy
+        then  = rejected(OneCopyPerLoan)
       }
     }
 
     slice "Return Copy" {
-      command ReturnCopy {
+      command "ReturnCopy" {
         fields {
-          loanId string required
-          copyId string required
+          loanId = required(string)
+          copyId = required(string)
         }
       }
 
-      event CopyReturned {
+      event "CopyReturned" {
         fields {
-          loanId     string    required
-          copyId     string    required
-          returnedAt timestamp required
+          loanId     = required(string)
+          copyId     = required(string)
+          returnedAt = required(timestamp)
         }
       }
 
-      flow {
-        command -> event: ReturnCopy -> CopyReturned
-      }
+      flow = <<-FLOW
+        command -> event:    ReturnCopy -> CopyReturned
+      FLOW
 
       spec "returns a copy the member holds" {
-        given [CopyBorrowed]
-        when  ReturnCopy
-        then  [CopyReturned]
+        given = [CopyBorrowed]
+        when  = ReturnCopy
+        then  = [CopyReturned]
       }
 
       spec "refuses to return a copy the member no longer holds" {
-        given [CopyBorrowed]
-        when  ReturnCopy
-        then  rejected OneCopyPerLoan
+        given = [CopyBorrowed]
+        when  = ReturnCopy
+        then  = rejected(OneCopyPerLoan)
       }
     }
 
     slice "Review Member Loans" {
-      view MemberLoansView {
-        subscribes [CopyBorrowed]
+      view "MemberLoansView" {
+        subscribes = [CopyBorrowed]
+
         fields {
-          loanId   string required
-          memberId string required
-          dueOn    date   required
+          loanId   = required(string)
+          memberId = required(string)
+          dueOn    = required(date)
         }
       }
     }
   }
 }
 
-context "Reading Room" mode dcb {
-  invariant OneReaderPerDesk "A desk seats at most one reader at any moment"
+context "Reading Room" {
+  mode = dcb
+
+  invariants {
+    OneReaderPerDesk = "A desk seats at most one reader at any moment"
+  }
+
   slice "Claim Desk" {
-    command ClaimDesk {
+    command "ClaimDesk" {
       fields {
-        memberId string required
-        deskId   string required
+        memberId = required(string)
+        deskId   = required(string)
       }
     }
 
-    event DeskClaimed {
+    event "DeskClaimed" {
       tags {
-        desk  : deskId
-        reader: memberId
+        desk   = deskId
+        reader = memberId
       }
+
       fields {
-        sessionId string    required
-        deskId    string    required
-        memberId  string    required
-        claimedAt timestamp required
+        sessionId = required(string)
+        deskId    = required(string)
+        memberId  = required(string)
+        claimedAt = required(timestamp)
       }
     }
 
-    flow {
-      command -> event: ClaimDesk -> DeskClaimed
-    }
+    flow = <<-FLOW
+      command -> event:    ClaimDesk -> DeskClaimed
+    FLOW
 
     spec "seats a reader at a free desk" {
-      when ClaimDesk
-      then [DeskClaimed]
+      when = ClaimDesk
+      then = [DeskClaimed]
     }
 
     spec "refuses a desk another reader is seated at" {
-      given [DeskClaimed]
-      when  ClaimDesk
-      then  rejected OneReaderPerDesk
+      given = [DeskClaimed]
+      when  = ClaimDesk
+      then  = rejected(OneReaderPerDesk)
     }
   }
 
   slice "Release Desk" {
-    command ReleaseDesk {
+    command "ReleaseDesk" {
+      fields {
+        sessionId = required(string)
+      }
+
       decides_on {
-        events [DeskClaimed]
-        where tag(desk = deskId) and tag(reader = memberId)
-      }
-      fields {
-        sessionId string required
+        events = [DeskClaimed]
+        where  = tag(desk, deskId) && tag(reader, memberId)
       }
     }
 
-    event DeskReleased {
+    event "DeskReleased" {
       tags {
-        desk  : deskId
-        reader: memberId
+        desk   = deskId
+        reader = memberId
       }
+
       fields {
-        sessionId  string    required
-        deskId     string    required
-        memberId   string    required
-        releasedAt timestamp required
+        sessionId  = required(string)
+        deskId     = required(string)
+        memberId   = required(string)
+        releasedAt = required(timestamp)
       }
     }
 
-    flow {
-      command -> event: ReleaseDesk -> DeskReleased
-    }
+    flow = <<-FLOW
+      command -> event:    ReleaseDesk -> DeskReleased
+    FLOW
 
     spec "frees the desk its reader is seated at" {
-      given [DeskClaimed]
-      when  ReleaseDesk
-      then  [DeskReleased]
+      given = [DeskClaimed]
+      when  = ReleaseDesk
+      then  = [DeskReleased]
     }
 
     spec "refuses to free a desk already empty" {
-      given [DeskClaimed]
-      when  ReleaseDesk
-      then  rejected OneReaderPerDesk
+      given = [DeskClaimed]
+      when  = ReleaseDesk
+      then  = rejected(OneReaderPerDesk)
     }
   }
 }
@@ -428,391 +468,392 @@ context "Reading Room" mode dcb {
 // payloadFormattedEmod is what emod fmt writes for test.PayloadLibraryLending:
 // each payload on the line of the reference it qualifies, as one canonical
 // comma-separated brace block, with 12.50 written back whole.
-const payloadFormattedEmod = `emod 1
-# Lending a library's copies and seating its readers, with example values on the scenarios each slice must satisfy
-model "Library Lending"
+const payloadFormattedEmod = `emod = 1
 
-actor "Member"
+# Lending a library's copies and seating its readers, with example values on the scenarios each slice must satisfy
+model "Library Lending" {
+}
+
+actor "Member" {
+}
 
 context "Lending" {
   aggregate "Loan" {
-    invariant OneCopyPerLoan "A loan covers exactly one copy of one title"
+    invariants {
+      OneCopyPerLoan = "A loan covers exactly one copy of one title"
+    }
+
     slice "Borrow Copy" {
-      command BorrowCopy {
+      command "BorrowCopy" {
         fields {
-          memberId  string    required
-          copyId    string    required
-          dueOn     date      required
-          shelfMark ShelfMark
+          memberId  = required(string)
+          copyId    = required(string)
+          dueOn     = required(date)
+          shelfMark = ShelfMark
         }
       }
 
-      event CopyBorrowed {
+      event "CopyBorrowed" {
         fields {
-          loanId          uuid      required
-          memberId        string    required
-          copyId          string    required
-          dueOn           date      required
-          borrowedAt      timestamp required
-          catalogueNumber int
-          lateFee         decimal
-          expedited       bool
+          loanId          = required(uuid)
+          memberId        = required(string)
+          copyId          = required(string)
+          dueOn           = required(date)
+          borrowedAt      = required(timestamp)
+          catalogueNumber = int
+          lateFee         = decimal
+          expedited       = bool
         }
       }
 
-      flow {
-        command -> event: BorrowCopy -> CopyBorrowed
-      }
+      flow = <<-FLOW
+        command -> event:    BorrowCopy -> CopyBorrowed
+      FLOW
 
       spec "borrows a copy no one holds" {
-        when BorrowCopy {
-          memberId:  "M-40817"
-          copyId:    "C-93204"
-          dueOn:     "2024-07-19"
-          shelfMark: "AURELIA"
-        }
-        then [
-          CopyBorrowed {
-            loanId:          "7c9e6679-7425-40de-944b-e07fc1f90ae7"
-            borrowedAt:      "2024-07-05T14:32:00Z"
-            catalogueNumber: 4821
-            lateFee:         12.50
-            expedited:       true
-          }
-        ]
+        when = BorrowCopy({ memberId = "M-40817", copyId = "C-93204", dueOn = "2024-07-19", shelfMark = "AURELIA" })
+        then = [CopyBorrowed({ loanId = "7c9e6679-7425-40de-944b-e07fc1f90ae7", borrowedAt = "2024-07-05T14:32:00Z", catalogueNumber = 4821, lateFee = 12.50, expedited = true })]
       }
 
       spec "refuses a copy already on loan" {
-        given [CopyBorrowed { copyId: "C-93204", expedited: false }, CopyReturned]
-        when  BorrowCopy { copyId: "C-93204" }
-        then  rejected OneCopyPerLoan
+        given = [CopyBorrowed({ copyId = "C-93204", expedited = false }), CopyReturned]
+        when  = BorrowCopy({ copyId = "C-93204" })
+        then  = rejected(OneCopyPerLoan)
       }
     }
 
     slice "Return Copy" {
-      command ReturnCopy {
+      command "ReturnCopy" {
         fields {
-          loanId uuid   required
-          copyId string required
+          loanId = required(uuid)
+          copyId = required(string)
         }
       }
 
-      event CopyReturned {
+      event "CopyReturned" {
         fields {
-          loanId     uuid      required
-          copyId     string    required
-          returnedAt timestamp required
+          loanId     = required(uuid)
+          copyId     = required(string)
+          returnedAt = required(timestamp)
         }
       }
 
-      flow {
-        command -> event: ReturnCopy -> CopyReturned
-      }
+      flow = <<-FLOW
+        command -> event:    ReturnCopy -> CopyReturned
+      FLOW
 
       spec "returns a copy the member holds" {
-        given [CopyBorrowed]
-        when  ReturnCopy
-        then  [CopyReturned]
+        given = [CopyBorrowed]
+        when  = ReturnCopy
+        then  = [CopyReturned]
       }
 
       spec "refuses to return a copy the member no longer holds" {
-        given [CopyBorrowed]
-        when  ReturnCopy
-        then  rejected OneCopyPerLoan
+        given = [CopyBorrowed]
+        when  = ReturnCopy
+        then  = rejected(OneCopyPerLoan)
       }
     }
 
     slice "Review Member Loans" {
-      view MemberLoansView {
-        subscribes [CopyBorrowed]
+      view "MemberLoansView" {
+        subscribes = [CopyBorrowed]
+
         fields {
-          loanId   uuid   required
-          memberId string required
-          dueOn    date   required
+          loanId   = required(uuid)
+          memberId = required(string)
+          dueOn    = required(date)
         }
       }
     }
   }
 }
 
-context "Reading Room" mode dcb {
-  invariant OneReaderPerDesk "A desk seats at most one reader at any moment"
+context "Reading Room" {
+  mode = dcb
+
+  invariants {
+    OneReaderPerDesk = "A desk seats at most one reader at any moment"
+  }
+
   slice "Claim Desk" {
-    command ClaimDesk {
+    command "ClaimDesk" {
+      fields {
+        memberId      = required(string)
+        deskId        = required(string)
+        preferredZone = string
+      }
+
       decides_on {
-        events [DeskClaimed, DeskReleased]
-        where tag(desk = deskId)
-      }
-      fields {
-        memberId      string required
-        deskId        string required
-        preferredZone string
+        events = [DeskClaimed, DeskReleased]
+        where  = tag(desk, deskId)
       }
     }
 
-    event DeskClaimed {
+    event "DeskClaimed" {
       tags {
-        desk  : deskId
-        reader: memberId
+        desk   = deskId
+        reader = memberId
       }
+
       fields {
-        sessionId uuid      required
-        deskId    string    required
-        memberId  string    required
-        claimedAt timestamp required
-        quietZone bool
+        sessionId = required(uuid)
+        deskId    = required(string)
+        memberId  = required(string)
+        claimedAt = required(timestamp)
+        quietZone = bool
       }
     }
 
-    flow {
-      command -> event: ClaimDesk -> DeskClaimed
-    }
+    flow = <<-FLOW
+      command -> event:    ClaimDesk -> DeskClaimed
+    FLOW
 
     spec "seats a reader at a desk its last reader released" {
-      given [DeskReleased { deskId: "D-5817", releasedAt: "2024-07-05T08:50:00Z" }]
-      when  ClaimDesk { memberId: "M-40817", preferredZone: "north gallery" }
-      then  [
-        DeskClaimed {
-          sessionId: "b6f4a3d2-91c8-4e57-8f10-2d6a5c7e9b31"
-          claimedAt: "2024-07-05T09:15:00Z"
-          quietZone: true
-        }
-      ]
+      given = [DeskReleased({ deskId = "D-5817", releasedAt = "2024-07-05T08:50:00Z" })]
+      when  = ClaimDesk({ memberId = "M-40817", preferredZone = "north gallery" })
+      then  = [DeskClaimed({ sessionId = "b6f4a3d2-91c8-4e57-8f10-2d6a5c7e9b31", claimedAt = "2024-07-05T09:15:00Z", quietZone = true })]
     }
 
     spec "refuses a desk another reader is seated at" {
-      given [DeskClaimed { deskId: "D-5817", quietZone: false }]
-      when  ClaimDesk { memberId: "M-63204", deskId: "D-5817" }
-      then  rejected OneReaderPerDesk
+      given = [DeskClaimed({ deskId = "D-5817", quietZone = false })]
+      when  = ClaimDesk({ memberId = "M-63204", deskId = "D-5817" })
+      then  = rejected(OneReaderPerDesk)
     }
   }
 
   slice "Release Desk" {
-    command ReleaseDesk {
+    command "ReleaseDesk" {
+      fields {
+        sessionId = required(uuid)
+        deskId    = required(string)
+        memberId  = required(string)
+      }
+
       decides_on {
-        events [DeskClaimed]
-        where tag(desk = deskId) and tag(reader = memberId)
-      }
-      fields {
-        sessionId uuid   required
-        deskId    string required
-        memberId  string required
+        events = [DeskClaimed]
+        where  = tag(desk, deskId) && tag(reader, memberId)
       }
     }
 
-    event DeskReleased {
+    event "DeskReleased" {
       tags {
-        desk  : deskId
-        reader: memberId
+        desk   = deskId
+        reader = memberId
       }
+
       fields {
-        sessionId  uuid      required
-        deskId     string    required
-        memberId   string    required
-        releasedAt timestamp required
-        seatedFor  decimal
+        sessionId  = required(uuid)
+        deskId     = required(string)
+        memberId   = required(string)
+        releasedAt = required(timestamp)
+        seatedFor  = decimal
       }
     }
 
-    flow {
-      command -> event: ReleaseDesk -> DeskReleased
-    }
+    flow = <<-FLOW
+      command -> event:    ReleaseDesk -> DeskReleased
+    FLOW
 
     spec "frees the desk its reader is seated at" {
-      given [DeskClaimed { deskId: "D-5817", memberId: "M-40817", quietZone: false }]
-      when  ReleaseDesk {
-        sessionId: "b6f4a3d2-91c8-4e57-8f10-2d6a5c7e9b31"
-        deskId:    "D-5817"
-        memberId:  "M-40817"
-      }
-      then  [DeskReleased { releasedAt: "2024-07-05T11:40:00Z", seatedFor: 145.25 }]
+      given = [DeskClaimed({ deskId = "D-5817", memberId = "M-40817", quietZone = false })]
+      when  = ReleaseDesk({ sessionId = "b6f4a3d2-91c8-4e57-8f10-2d6a5c7e9b31", deskId = "D-5817", memberId = "M-40817" })
+      then  = [DeskReleased({ releasedAt = "2024-07-05T11:40:00Z", seatedFor = 145.25 })]
     }
 
     spec "refuses to free a desk already empty" {
-      given [
-        DeskClaimed {
-          sessionId: "3f21c8a7-6d94-4b02-9e15-7c8a3d5f2b64"
-          claimedAt: "2024-07-04T16:05:00Z"
-          quietZone: true
-        }
-      ]
-      when  ReleaseDesk {
-        sessionId: "b6f4a3d2-91c8-4e57-8f10-2d6a5c7e9b31"
-        deskId:    "D-5817"
-        memberId:  "M-40817"
-      }
-      then  rejected OneReaderPerDesk
+      given = [DeskClaimed({ sessionId = "3f21c8a7-6d94-4b02-9e15-7c8a3d5f2b64", claimedAt = "2024-07-04T16:05:00Z", quietZone = true })]
+      when  = ReleaseDesk({ sessionId = "b6f4a3d2-91c8-4e57-8f10-2d6a5c7e9b31", deskId = "D-5817", memberId = "M-40817" })
+      then  = rejected(OneReaderPerDesk)
     }
   }
 }
 `
 
-const scheduledAutomationEmod = `model "Order Fulfilment"
+const scheduledAutomationEmod = `emod = 1
+
+model "Order Fulfilment" {
+}
 
 context "Fulfilment" {
   aggregate "Shipment" {
     slice "Sweep Expired Holds" {
-      command ReleaseExpiredHolds {
+      command "ReleaseExpiredHolds" {
         fields {
-          holdId string required
+          holdId = required(string)
         }
       }
 
-      event ExpiredHoldsReleased {
+      event "ExpiredHoldsReleased" {
         fields {
-          holdId string required
-          releasedAt timestamp required
+          holdId     = required(string)
+          releasedAt = required(timestamp)
         }
       }
 
-      automation NightlyExpirySweep {
-        description "Releases the holds nobody paid for overnight"
-        command ReleaseExpiredHolds
-            every "0 2 * * *"
+      automation "NightlyExpirySweep" {
+        description = "Releases the holds nobody paid for overnight"
+        every       = "0 2 * * *"
+        command     = ReleaseExpiredHolds
       }
 
-      flow {
-        command -> event: ReleaseExpiredHolds -> ExpiredHoldsReleased
-      }
+      flow = <<-FLOW
+        command -> event:    ReleaseExpiredHolds -> ExpiredHoldsReleased
+      FLOW
     }
   }
 }
 `
 
-const scheduledAutomationFormattedEmod = `emod 1
-model "Order Fulfilment"
+const scheduledAutomationFormattedEmod = `emod = 1
+
+model "Order Fulfilment" {
+}
 
 context "Fulfilment" {
   aggregate "Shipment" {
     slice "Sweep Expired Holds" {
-      command ReleaseExpiredHolds {
+      command "ReleaseExpiredHolds" {
         fields {
-          holdId string required
+          holdId = required(string)
         }
       }
 
-      event ExpiredHoldsReleased {
+      event "ExpiredHoldsReleased" {
         fields {
-          holdId     string    required
-          releasedAt timestamp required
+          holdId     = required(string)
+          releasedAt = required(timestamp)
         }
       }
 
-      automation NightlyExpirySweep {
-        description "Releases the holds nobody paid for overnight"
-        every "0 2 * * *"
-        command ReleaseExpiredHolds
+      automation "NightlyExpirySweep" {
+        description = "Releases the holds nobody paid for overnight"
+        every       = "0 2 * * *"
+        command     = ReleaseExpiredHolds
       }
 
-      flow {
-        command -> event: ReleaseExpiredHolds -> ExpiredHoldsReleased
-      }
+      flow = <<-FLOW
+        command -> event:    ReleaseExpiredHolds -> ExpiredHoldsReleased
+      FLOW
     }
   }
 }
 `
 
-const delayedAutomationEmod = `model "Order Fulfilment"
+const delayedAutomationEmod = `emod = 1
+
+model "Order Fulfilment" {
+}
 
 context "Fulfilment" {
   aggregate "Shipment" {
     slice "Sweep Expired Holds" {
-      command ReleaseExpiredHolds {
+      command "ReleaseExpiredHolds" {
         fields {
-          holdId string required
+          holdId = required(string)
         }
       }
 
-      event ExpiredHoldsReleased {
+      event "ExpiredHoldsReleased" {
         fields {
-          holdId string required
-          releasedAt timestamp required
+          holdId     = required(string)
+          releasedAt = required(timestamp)
         }
       }
 
-      event RoomHeld {
-        source external "Booking"
+      event "RoomHeld" {
+        source = external("Booking")
+
         fields {
-          holdId string required
+          holdId = required(string)
         }
       }
 
-      automation ExpiredHoldReleaser {
-        description "Releases the holds nobody paid for overnight"
-        command ReleaseExpiredHolds
-            on RoomHeld     after    "24h"
+      automation "ExpiredHoldReleaser" {
+        description = "Releases the holds nobody paid for overnight"
+        on          = RoomHeld
+        after       = "24h"
+        command     = ReleaseExpiredHolds
       }
 
-      flow {
-        command -> event: ReleaseExpiredHolds -> ExpiredHoldsReleased
-      }
+      flow = <<-FLOW
+        command -> event:    ReleaseExpiredHolds -> ExpiredHoldsReleased
+      FLOW
     }
   }
 }
 `
 
-const delayedAutomationFormattedEmod = `emod 1
-model "Order Fulfilment"
+const delayedAutomationFormattedEmod = `emod = 1
+
+model "Order Fulfilment" {
+}
 
 context "Fulfilment" {
   aggregate "Shipment" {
     slice "Sweep Expired Holds" {
-      command ReleaseExpiredHolds {
+      command "ReleaseExpiredHolds" {
         fields {
-          holdId string required
+          holdId = required(string)
         }
       }
 
-      event ExpiredHoldsReleased {
+      event "ExpiredHoldsReleased" {
         fields {
-          holdId     string    required
-          releasedAt timestamp required
+          holdId     = required(string)
+          releasedAt = required(timestamp)
         }
       }
 
-      event RoomHeld {
-        source external "Booking"
+      event "RoomHeld" {
+        source = external("Booking")
+
         fields {
-          holdId string required
+          holdId = required(string)
         }
       }
 
-      automation ExpiredHoldReleaser {
-        description "Releases the holds nobody paid for overnight"
-        on RoomHeld after "24h"
-        command ReleaseExpiredHolds
+      automation "ExpiredHoldReleaser" {
+        description = "Releases the holds nobody paid for overnight"
+        on          = RoomHeld
+        after       = "24h"
+        command     = ReleaseExpiredHolds
       }
 
-      flow {
-        command -> event: ReleaseExpiredHolds -> ExpiredHoldsReleased
-      }
+      flow = <<-FLOW
+        command -> event:    ReleaseExpiredHolds -> ExpiredHoldsReleased
+      FLOW
     }
   }
 }
 `
 
-const wireTypeEmod = `model "Reservations"
+const wireTypeEmod = `emod = 1
+
+model "Reservations" {
+}
 
 context "Booking" {
   aggregate "Reservation" {
     slice "Reserve Room" {
-      command ReserveRoom {
+      command "ReserveRoom" {
         fields {
-          guestId string required
+          guestId = required(string)
         }
       }
 
-      event RoomReserved {
+      event "RoomReserved" {
+        type = "com.acme.reservations.room-reserved"
+
         fields {
-          reservationId string required
-          guestId string required
+          reservationId = required(string)
+          guestId       = required(string)
         }
-            type "com.acme.reservations.room-reserved"
       }
 
-      flow {
-        command -> event: ReserveRoom -> RoomReserved
-      }
+      flow = <<-FLOW
+        command -> event:    ReserveRoom -> RoomReserved
+      FLOW
     }
   }
 }
@@ -821,29 +862,32 @@ context "Booking" {
 // wireTypeFormattedEmod is what emod fmt writes for wireTypeEmod, not that
 // fixture re-indented: the header is added, the wire type moves from below the
 // fields block to the event's first line, and the field columns align.
-const wireTypeFormattedEmod = `emod 1
-model "Reservations"
+const wireTypeFormattedEmod = `emod = 1
+
+model "Reservations" {
+}
 
 context "Booking" {
   aggregate "Reservation" {
     slice "Reserve Room" {
-      command ReserveRoom {
+      command "ReserveRoom" {
         fields {
-          guestId string required
+          guestId = required(string)
         }
       }
 
-      event RoomReserved {
-        type "com.acme.reservations.room-reserved"
+      event "RoomReserved" {
+        type = "com.acme.reservations.room-reserved"
+
         fields {
-          reservationId string required
-          guestId       string required
+          reservationId = required(string)
+          guestId       = required(string)
         }
       }
 
-      flow {
-        command -> event: ReserveRoom -> RoomReserved
-      }
+      flow = <<-FLOW
+        command -> event:    ReserveRoom -> RoomReserved
+      FLOW
     }
   }
 }
@@ -853,180 +897,195 @@ context "Booking" {
 // not that fixture re-indented: the header is added, each slice's specs move below
 // its flow block, an empty given history loses its line, and a flow block's two
 // entry kinds are written in canonical order.
-const rejectionFormattedEmod = `emod 1
-# Lending a library's copies and seating its readers, with the rejections each command can meet
-model "Library Lending"
+const rejectionFormattedEmod = `emod = 1
 
-actor "Member"
+# Lending a library's copies and seating its readers, with the rejections each command can meet
+model "Library Lending" {
+}
+
+actor "Member" {
+}
 
 context "Lending" {
   aggregate "Loan" {
-    invariant OneCopyPerLoan "A loan covers exactly one copy of one title"
+    invariants {
+      OneCopyPerLoan = "A loan covers exactly one copy of one title"
+    }
+
     slice "Borrow Copy" {
       trigger "Lending Desk" {
-        actor Member
-        reads MemberLoansView
+        actor = Member
+        reads = MemberLoansView
       }
 
-      command BorrowCopy {
+      command "BorrowCopy" {
         fields {
-          memberId string required
-          copyId   string required
-          dueOn    date   required
+          memberId = required(string)
+          copyId   = required(string)
+          dueOn    = required(date)
         }
       }
 
-      event CopyBorrowed {
+      event "CopyBorrowed" {
         fields {
-          loanId   string required
-          memberId string required
-          copyId   string required
-          dueOn    date   required
+          loanId   = required(string)
+          memberId = required(string)
+          copyId   = required(string)
+          dueOn    = required(date)
         }
       }
 
-      flow {
+      flow = <<-FLOW
         command -> event:    BorrowCopy -> CopyBorrowed
         command -> rejected: BorrowCopy -> OneCopyPerLoan
-      }
+      FLOW
 
       spec "borrows a copy no one holds" {
-        when BorrowCopy
-        then [CopyBorrowed]
+        when = BorrowCopy
+        then = [CopyBorrowed]
       }
 
       spec "refuses a copy already on loan" {
-        given [CopyBorrowed]
-        when  BorrowCopy
-        then  rejected OneCopyPerLoan
+        given = [CopyBorrowed]
+        when  = BorrowCopy
+        then  = rejected(OneCopyPerLoan)
       }
     }
 
     slice "Return Copy" {
-      command ReturnCopy {
+      command "ReturnCopy" {
         fields {
-          loanId string required
-          copyId string required
+          loanId = required(string)
+          copyId = required(string)
         }
       }
 
-      event CopyReturned {
+      event "CopyReturned" {
         fields {
-          loanId     string    required
-          copyId     string    required
-          returnedAt timestamp required
+          loanId     = required(string)
+          copyId     = required(string)
+          returnedAt = required(timestamp)
         }
       }
 
-      flow {
+      flow = <<-FLOW
         command -> event:    ReturnCopy -> CopyReturned
         command -> rejected: ReturnCopy -> OneCopyPerLoan
-      }
+      FLOW
 
       spec "returns a copy the member holds" {
-        given [CopyBorrowed]
-        when  ReturnCopy
-        then  [CopyReturned]
+        given = [CopyBorrowed]
+        when  = ReturnCopy
+        then  = [CopyReturned]
       }
 
       spec "refuses to return a copy the member no longer holds" {
-        given [CopyBorrowed]
-        when  ReturnCopy
-        then  rejected OneCopyPerLoan
+        given = [CopyBorrowed]
+        when  = ReturnCopy
+        then  = rejected(OneCopyPerLoan)
       }
     }
 
     slice "Review Member Loans" {
-      view MemberLoansView {
-        subscribes [CopyBorrowed]
+      view "MemberLoansView" {
+        subscribes = [CopyBorrowed]
+
         fields {
-          loanId   string required
-          memberId string required
-          dueOn    date   required
+          loanId   = required(string)
+          memberId = required(string)
+          dueOn    = required(date)
         }
       }
     }
   }
 }
 
-context "Reading Room" mode dcb {
-  invariant OneReaderPerDesk "A desk seats at most one reader at any moment"
+context "Reading Room" {
+  mode = dcb
+
+  invariants {
+    OneReaderPerDesk = "A desk seats at most one reader at any moment"
+  }
+
   slice "Claim Desk" {
-    command ClaimDesk {
+    command "ClaimDesk" {
       fields {
-        memberId string required
-        deskId   string required
+        memberId = required(string)
+        deskId   = required(string)
       }
     }
 
-    event DeskClaimed {
+    event "DeskClaimed" {
       tags {
-        desk  : deskId
-        reader: memberId
+        desk   = deskId
+        reader = memberId
       }
+
       fields {
-        sessionId string    required
-        deskId    string    required
-        memberId  string    required
-        claimedAt timestamp required
+        sessionId = required(string)
+        deskId    = required(string)
+        memberId  = required(string)
+        claimedAt = required(timestamp)
       }
     }
 
-    flow {
+    flow = <<-FLOW
       command -> event:    ClaimDesk -> DeskClaimed
       command -> rejected: ClaimDesk -> OneReaderPerDesk
-    }
+    FLOW
 
     spec "seats a reader at a free desk" {
-      when ClaimDesk
-      then [DeskClaimed]
+      when = ClaimDesk
+      then = [DeskClaimed]
     }
 
     spec "refuses a desk another reader is seated at" {
-      given [DeskClaimed]
-      when  ClaimDesk
-      then  rejected OneReaderPerDesk
+      given = [DeskClaimed]
+      when  = ClaimDesk
+      then  = rejected(OneReaderPerDesk)
     }
   }
 
   slice "Release Desk" {
-    command ReleaseDesk {
+    command "ReleaseDesk" {
+      fields {
+        sessionId = required(string)
+      }
+
       decides_on {
-        events [DeskClaimed]
-        where tag(desk = deskId) and tag(reader = memberId)
-      }
-      fields {
-        sessionId string required
+        events = [DeskClaimed]
+        where  = tag(desk, deskId) && tag(reader, memberId)
       }
     }
 
-    event DeskReleased {
+    event "DeskReleased" {
       tags {
-        desk  : deskId
-        reader: memberId
+        desk   = deskId
+        reader = memberId
       }
+
       fields {
-        sessionId  string    required
-        deskId     string    required
-        memberId   string    required
-        releasedAt timestamp required
+        sessionId  = required(string)
+        deskId     = required(string)
+        memberId   = required(string)
+        releasedAt = required(timestamp)
       }
     }
 
-    flow {
-      command -> event: ReleaseDesk -> DeskReleased
-    }
+    flow = <<-FLOW
+      command -> event:    ReleaseDesk -> DeskReleased
+    FLOW
 
     spec "frees the desk its reader is seated at" {
-      given [DeskClaimed]
-      when  ReleaseDesk
-      then  [DeskReleased]
+      given = [DeskClaimed]
+      when  = ReleaseDesk
+      then  = [DeskReleased]
     }
 
     spec "refuses to free a desk already empty" {
-      given [DeskClaimed]
-      when  ReleaseDesk
-      then  rejected OneReaderPerDesk
+      given = [DeskClaimed]
+      when  = ReleaseDesk
+      then  = rejected(OneReaderPerDesk)
     }
   }
 }
@@ -1039,647 +1098,684 @@ context "Reading Room" mode dcb {
 // the widest keyword that spec states, a mixed flow block's two prefixes padded
 // to one colon column, and a payload past the column budget written one field
 // per line with its values aligned.
-const everyConstructFormattedEmod = `emod 1
+const everyConstructFormattedEmod = `emod = 1
+
 # Lending a library's copies and seating its readers, stating every construct the formatter writes
 model "Library Lending" {
-  description "How the library lends its copies and seats its readers"
+  description = "How the library lends its copies and seats its readers"
 }
 
 actor "Member" {
-  description "Someone who holds a library card"
+  description = "Someone who holds a library card"
 }
 
-actor "Librarian"
+actor "Librarian" {
+}
 
 context "Lending" {
-  description "Everything the library knows about who holds which copy"
+  description = "Everything the library knows about who holds which copy"
+
   aggregate "Loan" {
-    description "One member holding one copy over one date range"
-    invariant OneCopyPerLoan "A loan covers exactly one copy of one title"
+    description = "One member holding one copy over one date range"
+
+    invariants {
+      OneCopyPerLoan = "A loan covers exactly one copy of one title"
+    }
+
     slice "Borrow Copy" {
-      description "A member takes a copy off the shelf"
+      description = "A member takes a copy off the shelf"
+
       trigger "Lending Desk" {
-        description "The counter a member borrows from"
-        actor Member
-        reads MemberLoansView
+        description = "The counter a member borrows from"
+        actor       = Member
+        reads       = MemberLoansView
       }
 
-      command BorrowCopy {
-        description "Ask the library to lend a copy"
+      command "BorrowCopy" {
+        description = "Ask the library to lend a copy"
+
         fields {
-          memberId  string required
-          copyId    string required
-          shelfMark string optional
-          dueOn     date   required
+          memberId  = required(string)
+          copyId    = required(string)
+          shelfMark = optional(string)
+          dueOn     = required(date)
         }
       }
 
-      event CopyBorrowed {
-        description "A copy left the shelf with a member"
-        type "com.library.lending.copy-borrowed"
+      event "CopyBorrowed" {
+        description = "A copy left the shelf with a member"
+        type        = "com.library.lending.copy-borrowed"
+
         fields {
-          loanId     uuid      required
-          memberId   string    required
-          copyId     string    required
-          dueOn      date      required
-          borrowedAt timestamp required
-          expedited  bool
+          loanId     = required(uuid)
+          memberId   = required(string)
+          copyId     = required(string)
+          dueOn      = required(date)
+          borrowedAt = required(timestamp)
+          expedited  = bool
         }
       }
 
-      event LoanOpened {
+      event "LoanOpened" {
         fields {
-          loanId   uuid   required
-          memberId string required
+          loanId   = required(uuid)
+          memberId = required(string)
         }
       }
 
-      flow {
+      flow = <<-FLOW
         command -> event:    BorrowCopy -> CopyBorrowed
         command -> event:    BorrowCopy -> LoanOpened
         command -> rejected: BorrowCopy -> OneCopyPerLoan
-      }
+      FLOW
 
       spec "borrows a copy no one holds" {
-        when BorrowCopy {
-          memberId:  "M-40817"
-          copyId:    "C-93204"
-          dueOn:     "2024-07-19"
-          shelfMark: "AURELIA"
-        }
-        then [
-          CopyBorrowed {
-            loanId:     "7c9e6679-7425-40de-944b-e07fc1f90ae7"
-            borrowedAt: "2024-07-05T14:32:00Z"
-            expedited:  true
-          }
-        ]
+        when = BorrowCopy({ memberId = "M-40817", copyId = "C-93204", dueOn = "2024-07-19", shelfMark = "AURELIA" })
+        then = [CopyBorrowed({ loanId = "7c9e6679-7425-40de-944b-e07fc1f90ae7", borrowedAt = "2024-07-05T14:32:00Z", expedited = true })]
       }
 
       spec "refuses a copy already on loan" {
-        given [CopyBorrowed { copyId: "C-93204" }]
-        when  BorrowCopy { copyId: "C-93204" }
-        then  rejected OneCopyPerLoan
+        given = [CopyBorrowed({ copyId = "C-93204" })]
+        when  = BorrowCopy({ copyId = "C-93204" })
+        then  = rejected(OneCopyPerLoan)
       }
     }
 
     slice "Review Member Loans" {
-      description "What a member currently holds"
-      view MemberLoansView {
-        description "Every open loan, by member"
-        subscribes [CopyBorrowed, CopyReturned]
+      description = "What a member currently holds"
+
+      view "MemberLoansView" {
+        description = "Every open loan, by member"
+        subscribes  = [CopyBorrowed, CopyReturned]
+
         fields {
-          loanId   uuid   required
-          memberId string required
-          dueOn    date   required
+          loanId   = required(uuid)
+          memberId = required(string)
+          dueOn    = required(date)
         }
       }
 
       spec "lists the loans a member holds" {
-        then view MemberLoansView
+        then = view(MemberLoansView)
       }
     }
 
     slice "Chase Overdue Copy" {
-      description "Nudging a member whose copy is late"
-      command RemindMember {
-        description "Ask the library to remind a member"
+      description = "Nudging a member whose copy is late"
+
+      command "RemindMember" {
+        description = "Ask the library to remind a member"
+
         fields {
-          loanId   uuid   required
-          memberId string required
+          loanId   = required(uuid)
+          memberId = required(string)
         }
       }
 
-      event MemberReminded {
+      event "MemberReminded" {
         fields {
-          loanId     uuid      required
-          memberId   string    required
-          remindedAt timestamp required
+          loanId     = required(uuid)
+          memberId   = required(string)
+          remindedAt = required(timestamp)
         }
       }
 
-      view OverdueLoansView {
-        subscribes [CopyBorrowed, CopyReturned]
+      view "OverdueLoansView" {
+        subscribes = [CopyBorrowed, CopyReturned]
+
         fields {
-          loanId   uuid   required
-          memberId string required
+          loanId   = required(uuid)
+          memberId = required(string)
         }
       }
 
-      automation RemindOnDueDate {
-        description "Waits out the grace period, then nudges"
-        on CopyBorrowed after "72h"
-        reads OverdueLoansView
-        command RemindMember
-        target context Lending
+      automation "RemindOnDueDate" {
+        description = "Waits out the grace period, then nudges"
+        on          = CopyBorrowed
+        after       = "72h"
+        reads       = OverdueLoansView
+        command     = RemindMember
+
+        target {
+          context = Lending
+        }
       }
 
-      flow {
-        command -> event: RemindMember -> MemberReminded
-      }
+      flow = <<-FLOW
+        command -> event:    RemindMember -> MemberReminded
+      FLOW
 
       spec "reminds a member when a copy becomes due" {
-        when CopyBorrowed
-        then command RemindMember
+        when = CopyBorrowed
+        then = command(RemindMember)
       }
 
       spec "sanctions a member's loan" {
-        when RemindMember
-        then [MemberReminded]
+        when = RemindMember
+        then = [MemberReminded]
       }
 
       spec "refuses to remind a member with no overdue loans" {
-        given [MemberReminded]
-        when  RemindMember
-        then  rejected OneCopyPerLoan
+        given = [MemberReminded]
+        when  = RemindMember
+        then  = rejected(OneCopyPerLoan)
       }
     }
 
     slice "Sweep Overdue Loans" {
-      command RecallCopy {
+      command "RecallCopy" {
         fields {
-          loanId uuid   required
-          copyId string required
+          loanId = required(uuid)
+          copyId = required(string)
         }
       }
 
-      event CopyRecalled {
-        description "The library called a copy back in"
-        type "com.library.lending.copy-recalled"
+      event "CopyRecalled" {
+        description = "The library called a copy back in"
+        type        = "com.library.lending.copy-recalled"
+
         fields {
-          loanId     uuid      required
-          copyId     string    required
-          recalledAt timestamp required
+          loanId     = required(uuid)
+          copyId     = required(string)
+          recalledAt = required(timestamp)
         }
       }
 
-      automation RecallOverdueCopy {
-        every "15m"
-        reads OverdueLoansView
-        command RecallCopy
+      automation "RecallOverdueCopy" {
+        every   = "15m"
+        reads   = OverdueLoansView
+        command = RecallCopy
       }
 
-      flow {
-        command -> event: RecallCopy -> CopyRecalled
-      }
+      flow = <<-FLOW
+        command -> event:    RecallCopy -> CopyRecalled
+      FLOW
 
       spec "recalls copies that are overdue" {
-        then command RecallCopy
+        then = command(RecallCopy)
       }
 
       spec "calls in a copy before its due date" {
-        when RecallCopy
-        then [CopyRecalled]
+        when = RecallCopy
+        then = [CopyRecalled]
       }
 
       spec "refuses to recall a copy already returned" {
-        given [CopyReturned]
-        when  RecallCopy
-        then  rejected OneCopyPerLoan
+        given = [CopyReturned]
+        when  = RecallCopy
+        then  = rejected(OneCopyPerLoan)
       }
     }
 
     slice "Return Copy" {
-      command ReturnCopy {
+      command "ReturnCopy" {
         fields {
-          loanId uuid   required
-          copyId string required
+          loanId = required(uuid)
+          copyId = required(string)
         }
       }
 
-      event CopyReturned {
-        type "com.library.lending.copy-returned"
+      event "CopyReturned" {
+        type = "com.library.lending.copy-returned"
+
         fields {
-          loanId     uuid      required
-          copyId     string    required
-          returnedAt timestamp required
+          loanId     = required(uuid)
+          copyId     = required(string)
+          returnedAt = required(timestamp)
         }
       }
 
-      flow {
-        command -> event: ReturnCopy -> CopyReturned
-      }
+      flow = <<-FLOW
+        command -> event:    ReturnCopy -> CopyReturned
+      FLOW
 
       spec "returns a loaned copy to the library" {
-        when ReturnCopy
-        then [CopyReturned]
+        when = ReturnCopy
+        then = [CopyReturned]
       }
 
       spec "refuses to return a copy already returned" {
-        given [CopyReturned]
-        when  ReturnCopy
-        then  rejected OneCopyPerLoan
+        given = [CopyReturned]
+        when  = ReturnCopy
+        then  = rejected(OneCopyPerLoan)
       }
     }
   }
 }
 
-context "Reading Room" mode dcb {
-  description "Who is sitting where, and for how long"
-  invariant OneReaderPerDesk "A desk seats at most one reader at any moment"
+context "Reading Room" {
+  description = "Who is sitting where, and for how long"
+  mode        = dcb
+
+  invariants {
+    OneReaderPerDesk = "A desk seats at most one reader at any moment"
+  }
+
   slice "Desk Occupancy" {
-    view DeskOccupancyView {
-      description "Which desks are taken"
-      subscribes [DeskClaimed]
+    view "DeskOccupancyView" {
+      description = "Which desks are taken"
+      subscribes  = [DeskClaimed]
+
       fields {
-        deskId   string required
-        memberId string required
+        deskId   = required(string)
+        memberId = required(string)
       }
     }
   }
 
   slice "Claim Desk" {
-    description "A reader takes a seat"
-    command ClaimDesk {
+    description = "A reader takes a seat"
+
+    command "ClaimDesk" {
+      fields {
+        memberId      = required(string)
+        deskId        = required(string)
+        preferredZone = string
+      }
+
       decides_on {
-        events [DeskClaimed]
-        where tag(desk = deskId) and tag(reader = memberId)
-      }
-      fields {
-        memberId      string required
-        deskId        string required
-        preferredZone string
+        events = [DeskClaimed]
+        where  = tag(desk, deskId) && tag(reader, memberId)
       }
     }
 
-    event DeskClaimed {
-      description "A reader sat down"
-      type "com.library.reading-room.desk-claimed"
+    event "DeskClaimed" {
+      description = "A reader sat down"
+      type        = "com.library.reading-room.desk-claimed"
+
       tags {
-        desk  : deskId
-        reader: memberId
+        desk   = deskId
+        reader = memberId
       }
+
       fields {
-        sessionId uuid      required
-        deskId    string    required
-        memberId  string    required
-        claimedAt timestamp required
-        quietZone bool
+        sessionId = required(uuid)
+        deskId    = required(string)
+        memberId  = required(string)
+        claimedAt = required(timestamp)
+        quietZone = bool
       }
     }
 
-    flow {
+    flow = <<-FLOW
       command -> event:    ClaimDesk -> DeskClaimed
       command -> rejected: ClaimDesk -> OneReaderPerDesk
-    }
+    FLOW
 
     spec "seats a reader at a free desk" {
-      when ClaimDesk { memberId: "M-40817", preferredZone: "north gallery" }
-      then [
-        DeskClaimed {
-          sessionId: "b6f4a3d2-91c8-4e57-8f10-2d6a5c7e9b31"
-          claimedAt: "2024-07-05T09:15:00Z"
-          quietZone: true
-        }
-      ]
+      when = ClaimDesk({ memberId = "M-40817", preferredZone = "north gallery" })
+      then = [DeskClaimed({ sessionId = "b6f4a3d2-91c8-4e57-8f10-2d6a5c7e9b31", claimedAt = "2024-07-05T09:15:00Z", quietZone = true })]
     }
 
     spec "refuses a desk another reader is seated at" {
-      given [DeskClaimed { deskId: "D-5817", quietZone: false }]
-      when  ClaimDesk { memberId: "M-63204", deskId: "D-5817" }
-      then  rejected OneReaderPerDesk
+      given = [DeskClaimed({ deskId = "D-5817", quietZone = false })]
+      when  = ClaimDesk({ memberId = "M-63204", deskId = "D-5817" })
+      then  = rejected(OneReaderPerDesk)
     }
   }
 
   slice "Import External Desk Booking" {
-    description "A booking made outside the library's own system"
-    command ImportExternalDeskBooking {
+    description = "A booking made outside the library's own system"
+
+    command "ImportExternalDeskBooking" {
       fields {
-        externalRef string required
-        deskId      string required
-        memberId    string required
+        externalRef = required(string)
+        deskId      = required(string)
+        memberId    = required(string)
       }
     }
 
-    translation ExternalDeskBookingImport {
-      description "Turns a room-booking record into a desk claim"
-      external_system "Room Booking API"
-      reads DeskOccupancyView
-      command ImportExternalDeskBooking
-      event ExternalDeskBookingImported {
-        type "com.library.reading-room.external-desk-booking-imported"
+    translation "ExternalDeskBookingImport" {
+      description     = "Turns a room-booking record into a desk claim"
+      external_system = "Room Booking API"
+      reads           = DeskOccupancyView
+      command         = ImportExternalDeskBooking
+
+      event "ExternalDeskBookingImported" {
+        type   = "com.library.reading-room.external-desk-booking-imported"
+        source = external("Room Booking API")
+
         tags {
-          desk  : deskId
-          reader: memberId
+          desk   = deskId
+          reader = memberId
         }
-        source external "Room Booking API"
+
         fields {
-          externalRef string    required
-          deskId      string    required
-          memberId    string    required
-          importedAt  timestamp required
+          externalRef = required(string)
+          deskId      = required(string)
+          memberId    = required(string)
+          importedAt  = required(timestamp)
         }
       }
     }
 
     spec "imports a desk booking from an external system" {
-      given [DeskClaimed]
-      when  ImportExternalDeskBooking
-      then  [ExternalDeskBookingImported]
+      given = [DeskClaimed]
+      when  = ImportExternalDeskBooking
+      then  = [ExternalDeskBookingImported]
     }
 
     spec "refuses to import a booking for an occupied desk" {
-      given [DeskClaimed]
-      when  ImportExternalDeskBooking
-      then  rejected OneReaderPerDesk
+      given = [DeskClaimed]
+      when  = ImportExternalDeskBooking
+      then  = rejected(OneReaderPerDesk)
     }
   }
 }
 `
 
-const slicePatternFormattedEmod = `emod 1
-# Lending a library's copies and seating its readers, with a spec for every slice pattern
-model "Library Lending"
+const slicePatternFormattedEmod = `emod = 1
 
-actor "Member"
+# Lending a library's copies and seating its readers, with a spec for every slice pattern
+model "Library Lending" {
+}
+
+actor "Member" {
+}
 
 context "Lending" {
   aggregate "Loan" {
-    invariant OneCopyPerLoan "A loan covers exactly one copy of one title"
+    invariants {
+      OneCopyPerLoan = "A loan covers exactly one copy of one title"
+    }
+
     slice "Borrow Copy" {
       trigger "Lending Desk" {
-        actor Member
-        reads MemberLoansView
+        actor = Member
+        reads = MemberLoansView
       }
 
-      command BorrowCopy {
+      command "BorrowCopy" {
         fields {
-          memberId string required
-          copyId   string required
-          dueOn    date   required
+          memberId = required(string)
+          copyId   = required(string)
+          dueOn    = required(date)
         }
       }
 
-      event CopyBorrowed {
+      event "CopyBorrowed" {
         fields {
-          loanId   string required
-          memberId string required
-          copyId   string required
-          dueOn    date   required
+          loanId   = required(string)
+          memberId = required(string)
+          copyId   = required(string)
+          dueOn    = required(date)
         }
       }
 
-      flow {
-        command -> event: BorrowCopy -> CopyBorrowed
-      }
+      flow = <<-FLOW
+        command -> event:    BorrowCopy -> CopyBorrowed
+      FLOW
 
       spec "borrows a copy no one holds" {
-        when BorrowCopy
-        then [CopyBorrowed]
+        when = BorrowCopy
+        then = [CopyBorrowed]
       }
 
       spec "refuses a copy already on loan" {
-        when BorrowCopy
-        then rejected OneCopyPerLoan
+        when = BorrowCopy
+        then = rejected(OneCopyPerLoan)
       }
 
       spec "borrows a copy the member before returned" {
-        given [CopyBorrowed, CopyReturned]
-        when  BorrowCopy
-        then  [CopyBorrowed]
+        given = [CopyBorrowed, CopyReturned]
+        when  = BorrowCopy
+        then  = [CopyBorrowed]
       }
     }
 
     slice "Review Member Loans" {
-      view MemberLoansView {
-        subscribes [CopyBorrowed, CopyReturned]
+      view "MemberLoansView" {
+        subscribes = [CopyBorrowed, CopyReturned]
+
         fields {
-          loanId   string required
-          memberId string required
-          dueOn    date   required
+          loanId   = required(string)
+          memberId = required(string)
+          dueOn    = required(date)
         }
       }
 
       spec "lists the loans a member holds" {
-        then view MemberLoansView
+        then = view(MemberLoansView)
       }
     }
 
     slice "Chase Overdue Copy" {
-      command RemindMember {
+      command "RemindMember" {
         fields {
-          loanId   string required
-          memberId string required
+          loanId   = required(string)
+          memberId = required(string)
         }
       }
 
-      event MemberReminded {
+      event "MemberReminded" {
         fields {
-          loanId     string    required
-          memberId   string    required
-          remindedAt timestamp required
+          loanId     = required(string)
+          memberId   = required(string)
+          remindedAt = required(timestamp)
         }
       }
 
-      view OverdueLoansView {
-        subscribes [CopyBorrowed, CopyReturned]
+      view "OverdueLoansView" {
+        subscribes = [CopyBorrowed, CopyReturned]
+
         fields {
-          loanId   string required
-          memberId string required
+          loanId   = required(string)
+          memberId = required(string)
         }
       }
 
-      automation RemindOnDueDate {
-        on CopyBorrowed
-        reads OverdueLoansView
-        command RemindMember
+      automation "RemindOnDueDate" {
+        on      = CopyBorrowed
+        reads   = OverdueLoansView
+        command = RemindMember
       }
 
-      flow {
-        command -> event: RemindMember -> MemberReminded
-      }
+      flow = <<-FLOW
+        command -> event:    RemindMember -> MemberReminded
+      FLOW
 
       spec "reminds a member when a copy becomes due" {
-        when CopyBorrowed
-        then command RemindMember
+        when = CopyBorrowed
+        then = command(RemindMember)
       }
 
       spec "sanctions a member's loan" {
-        when RemindMember
-        then [MemberReminded]
+        when = RemindMember
+        then = [MemberReminded]
       }
 
       spec "refuses to remind a member with no overdue loans" {
-        given [MemberReminded]
-        when  RemindMember
-        then  rejected OneCopyPerLoan
+        given = [MemberReminded]
+        when  = RemindMember
+        then  = rejected(OneCopyPerLoan)
       }
     }
 
     slice "Sweep Overdue Loans" {
-      command RecallCopy {
+      command "RecallCopy" {
         fields {
-          loanId string required
-          copyId string required
+          loanId = required(string)
+          copyId = required(string)
         }
       }
 
-      event CopyRecalled {
+      event "CopyRecalled" {
         fields {
-          loanId     string    required
-          copyId     string    required
-          recalledAt timestamp required
+          loanId     = required(string)
+          copyId     = required(string)
+          recalledAt = required(timestamp)
         }
       }
 
-      view OverdueLoansView {
-        subscribes [CopyBorrowed, CopyReturned]
+      view "OverdueLoansView" {
+        subscribes = [CopyBorrowed, CopyReturned]
+
         fields {
-          loanId   string required
-          memberId string required
+          loanId   = required(string)
+          memberId = required(string)
         }
       }
 
-      automation RecallOverdueCopy {
-        every "15m"
-        reads OverdueLoansView
-        command RecallCopy
+      automation "RecallOverdueCopy" {
+        every   = "15m"
+        reads   = OverdueLoansView
+        command = RecallCopy
       }
 
-      flow {
-        command -> event: RecallCopy -> CopyRecalled
-      }
+      flow = <<-FLOW
+        command -> event:    RecallCopy -> CopyRecalled
+      FLOW
 
       spec "recalls copies that are overdue" {
-        then command RecallCopy
+        then = command(RecallCopy)
       }
 
       spec "calls in a copy before its due date" {
-        when RecallCopy
-        then [CopyRecalled]
+        when = RecallCopy
+        then = [CopyRecalled]
       }
 
       spec "refuses to recall a copy already returned" {
-        given [CopyReturned]
-        when  RecallCopy
-        then  rejected OneCopyPerLoan
+        given = [CopyReturned]
+        when  = RecallCopy
+        then  = rejected(OneCopyPerLoan)
       }
     }
 
     slice "Return Copy" {
-      command ReturnCopy {
+      command "ReturnCopy" {
         fields {
-          loanId string required
-          copyId string required
+          loanId = required(string)
+          copyId = required(string)
         }
       }
 
-      event CopyReturned {
+      event "CopyReturned" {
         fields {
-          loanId     string    required
-          copyId     string    required
-          returnedAt timestamp required
+          loanId     = required(string)
+          copyId     = required(string)
+          returnedAt = required(timestamp)
         }
       }
 
-      flow {
-        command -> event: ReturnCopy -> CopyReturned
-      }
+      flow = <<-FLOW
+        command -> event:    ReturnCopy -> CopyReturned
+      FLOW
 
       spec "returns a loaned copy to the library" {
-        when ReturnCopy
-        then [CopyReturned]
+        when = ReturnCopy
+        then = [CopyReturned]
       }
 
       spec "refuses to return a copy already returned" {
-        given [CopyReturned]
-        when  ReturnCopy
-        then  rejected OneCopyPerLoan
+        given = [CopyReturned]
+        when  = ReturnCopy
+        then  = rejected(OneCopyPerLoan)
       }
     }
   }
 }
 
-context "Reading Room" mode dcb {
-  invariant OneReaderPerDesk "A desk seats at most one reader at any moment"
+context "Reading Room" {
+  mode = dcb
+
+  invariants {
+    OneReaderPerDesk = "A desk seats at most one reader at any moment"
+  }
+
   slice "Desk Occupancy" {
-    view DeskOccupancyView {
-      subscribes [DeskClaimed]
+    view "DeskOccupancyView" {
+      subscribes = [DeskClaimed]
+
       fields {
-        deskId   string required
-        memberId string required
+        deskId   = required(string)
+        memberId = required(string)
       }
     }
   }
 
   slice "Claim Desk" {
-    command ClaimDesk {
+    command "ClaimDesk" {
+      fields {
+        memberId = required(string)
+        deskId   = required(string)
+      }
+
       decides_on {
-        events [DeskClaimed]
-        where tag(desk = deskId) and tag(reader = memberId)
-      }
-      fields {
-        memberId string required
-        deskId   string required
+        events = [DeskClaimed]
+        where  = tag(desk, deskId) && tag(reader, memberId)
       }
     }
 
-    event DeskClaimed {
+    event "DeskClaimed" {
       tags {
-        desk  : deskId
-        reader: memberId
+        desk   = deskId
+        reader = memberId
       }
+
       fields {
-        sessionId string    required
-        deskId    string    required
-        memberId  string    required
-        claimedAt timestamp required
+        sessionId = required(string)
+        deskId    = required(string)
+        memberId  = required(string)
+        claimedAt = required(timestamp)
       }
     }
 
-    flow {
-      command -> event: ClaimDesk -> DeskClaimed
-    }
+    flow = <<-FLOW
+      command -> event:    ClaimDesk -> DeskClaimed
+    FLOW
 
     spec "seats a reader at a free desk" {
-      when ClaimDesk
-      then [DeskClaimed]
+      when = ClaimDesk
+      then = [DeskClaimed]
     }
 
     spec "refuses a desk another reader is seated at" {
-      given [DeskClaimed]
-      when  ClaimDesk
-      then  rejected OneReaderPerDesk
+      given = [DeskClaimed]
+      when  = ClaimDesk
+      then  = rejected(OneReaderPerDesk)
     }
   }
 
   slice "Import External Desk Booking" {
-    command ImportExternalDeskBooking {
+    command "ImportExternalDeskBooking" {
       fields {
-        externalRef string required
-        deskId      string required
-        memberId    string required
+        externalRef = required(string)
+        deskId      = required(string)
+        memberId    = required(string)
       }
     }
 
-    translation ExternalDeskBookingImport {
-      external_system "Room Booking API"
-      reads DeskOccupancyView
-      command ImportExternalDeskBooking
-      event ExternalDeskBookingImported {
+    translation "ExternalDeskBookingImport" {
+      external_system = "Room Booking API"
+      reads           = DeskOccupancyView
+      command         = ImportExternalDeskBooking
+
+      event "ExternalDeskBookingImported" {
         tags {
-          desk  : deskId
-          reader: memberId
+          desk   = deskId
+          reader = memberId
         }
+
         fields {
-          externalRef string    required
-          deskId      string    required
-          memberId    string    required
-          importedAt  timestamp required
+          externalRef = required(string)
+          deskId      = required(string)
+          memberId    = required(string)
+          importedAt  = required(timestamp)
         }
       }
     }
 
     spec "imports a desk booking from an external system" {
-      given [DeskClaimed]
-      when  ImportExternalDeskBooking
-      then  [ExternalDeskBookingImported]
+      given = [DeskClaimed]
+      when  = ImportExternalDeskBooking
+      then  = [ExternalDeskBookingImported]
     }
 
     spec "refuses to import a booking for an occupied desk" {
-      given [DeskClaimed]
-      when  ImportExternalDeskBooking
-      then  rejected OneReaderPerDesk
+      given = [DeskClaimed]
+      when  = ImportExternalDeskBooking
+      then  = rejected(OneReaderPerDesk)
     }
   }
 }
@@ -1694,7 +1790,7 @@ func TestFmt(t *testing.T) {
 		t.Run("writes a file in the emod grammar as HCL", func(t *testing.T) {
 			path := writeTemp(t, "model.emod", test.BillingPayments)
 
-			require.NoError(t, cli.RunFmt(path, false, true))
+			require.NoError(t, cli.RunFmt(path, false))
 
 			written := readFile(t, path)
 			require.Contains(t, written, "emod = 1")
@@ -1704,24 +1800,24 @@ func TestFmt(t *testing.T) {
 
 		t.Run("leaves a file already written in HCL in HCL", func(t *testing.T) {
 			path := writeTemp(t, "model.emod", test.BillingPayments)
-			require.NoError(t, cli.RunFmt(path, false, true))
+			require.NoError(t, cli.RunFmt(path, false))
 			converted := readFile(t, path)
 
-			require.NoError(t, cli.RunFmt(path, false, false))
+			require.NoError(t, cli.RunFmt(path, false))
 
 			require.Equal(t, converted, readFile(t, path))
 		})
 
 		t.Run("the converted file means the same as the one it came from", func(t *testing.T) {
 			path := writeTemp(t, "model.emod", test.BillingPayments)
-			require.NoError(t, cli.RunFmt(path, false, true))
+			require.NoError(t, cli.RunFmt(path, false))
 
 			require.Empty(t, oracle.Check(readFile(t, path), path))
 		})
 	})
 
 	t.Run("returns error when no file argument given", func(t *testing.T) {
-		err := cli.RunFmt("", false, false)
+		err := cli.RunFmt("", false)
 
 		require.ErrorIs(t, err, cli.ErrMissingFileArgument)
 	})
@@ -1729,7 +1825,7 @@ func TestFmt(t *testing.T) {
 	t.Run("returns error naming the file when it does not exist", func(t *testing.T) {
 		missing := filepath.Join(t.TempDir(), "nonexistent.emod")
 
-		err := cli.RunFmt(missing, false, false)
+		err := cli.RunFmt(missing, false)
 
 		require.Error(t, err)
 		require.Contains(t, err.Error(), missing)
@@ -1738,7 +1834,7 @@ func TestFmt(t *testing.T) {
 	t.Run("returns error and does not modify file with parse errors", func(t *testing.T) {
 		path := writeTemp(t, "broken.emod", unparsableEmod)
 
-		err := cli.RunFmt(path, false, false)
+		err := cli.RunFmt(path, false)
 
 		require.Error(t, err)
 		require.Contains(t, err.Error(), path)
@@ -1747,10 +1843,10 @@ func TestFmt(t *testing.T) {
 	})
 
 	t.Run("returns error and does not modify a file declaring an unsupported version", func(t *testing.T) {
-		source := "emod 2\n" + emodWithoutVersionHeader
+		source := "emod = 2\n\n" + emodWithoutVersionHeader
 		path := writeTemp(t, "unsupported.emod", source)
 
-		err := cli.RunFmt(path, false, false)
+		err := cli.RunFmt(path, false)
 
 		require.Error(t, err)
 		require.Contains(t, err.Error(), path)
@@ -1761,7 +1857,7 @@ func TestFmt(t *testing.T) {
 	t.Run("rewrites file in-place with formatted content", func(t *testing.T) {
 		path := writeTemp(t, "messy.emod", unformattedEmod)
 
-		err := cli.RunFmt(path, false, false)
+		err := cli.RunFmt(path, false)
 
 		require.NoError(t, err)
 		require.Equal(t, formattedEmod, readFile(t, path))
@@ -1773,7 +1869,7 @@ func TestFmt(t *testing.T) {
 		require.NoError(t, statErr)
 		modTimeBefore := info.ModTime()
 
-		err := cli.RunFmt(path, false, false)
+		err := cli.RunFmt(path, false)
 
 		require.NoError(t, err)
 		require.Equal(t, formattedEmod, readFile(t, path))
@@ -1804,15 +1900,15 @@ func TestFmt(t *testing.T) {
 	t.Run("keeps every declared invariant and settles after one run", func(t *testing.T) {
 		path := writeTemp(t, "library-lending.emod", invariantEmod)
 
-		require.NoError(t, cli.RunFmt(path, false, false))
+		require.NoError(t, cli.RunFmt(path, false))
 
 		formatted := readFile(t, path)
 		for _, declaration := range []string{
-			`invariant OneCopyPerLoan "A loan covers exactly one copy of one title"`,
-			`invariant FiveCopiesPerMember "A member holds at most five copies at one time"`,
-			`invariant OneReaderPerDesk "A desk seats at most one reader at any moment"`,
-			`invariant OneDeskPerReader "A reader holds at most one desk for the length of a session"`,
-			`invariant DeskFreeAtClosing "No desk stays claimed past the closing hour"`,
+			`OneCopyPerLoan      = "A loan covers exactly one copy of one title"`,
+			`FiveCopiesPerMember = "A member holds at most five copies at one time"`,
+			`OneReaderPerDesk  = "A desk seats at most one reader at any moment"`,
+			`OneDeskPerReader  = "A reader holds at most one desk for the length of a session"`,
+			`DeskFreeAtClosing = "No desk stays claimed past the closing hour"`,
 		} {
 			require.Contains(t, formatted, declaration)
 		}
@@ -1865,7 +1961,7 @@ func TestFmt(t *testing.T) {
 	t.Run("check mode returns nil when file is already formatted", func(t *testing.T) {
 		path := writeTemp(t, "clean.emod", formattedEmod)
 
-		err := cli.RunFmt(path, true, false)
+		err := cli.RunFmt(path, true)
 
 		require.NoError(t, err)
 		require.Equal(t, formattedEmod, readFile(t, path), "check mode should not modify the file")
@@ -1874,7 +1970,7 @@ func TestFmt(t *testing.T) {
 	t.Run("check mode returns nil when a file using descriptions is already formatted", func(t *testing.T) {
 		path := writeTemp(t, "described.emod", describedFormattedEmod)
 
-		err := cli.RunFmt(path, true, false)
+		err := cli.RunFmt(path, true)
 
 		require.NoError(t, err)
 		require.Equal(t, describedFormattedEmod, readFile(t, path), "check mode should not modify the file")
@@ -1883,7 +1979,7 @@ func TestFmt(t *testing.T) {
 	t.Run("check mode returns error when a file is canonical apart from a missing version header", func(t *testing.T) {
 		path := writeTemp(t, "headerless.emod", emodWithoutVersionHeader)
 
-		err := cli.RunFmt(path, true, false)
+		err := cli.RunFmt(path, true)
 
 		require.Error(t, err)
 		require.Contains(t, err.Error(), path)
@@ -1893,7 +1989,7 @@ func TestFmt(t *testing.T) {
 	t.Run("check mode returns error when file needs formatting", func(t *testing.T) {
 		path := writeTemp(t, "messy.emod", unformattedEmod)
 
-		err := cli.RunFmt(path, true, false)
+		err := cli.RunFmt(path, true)
 
 		require.Error(t, err)
 		require.Contains(t, err.Error(), path)
@@ -1904,13 +2000,13 @@ func TestFmt(t *testing.T) {
 func requireFmtSettlesOn(t *testing.T, path, formatted string) {
 	t.Helper()
 
-	require.NoError(t, cli.RunFmt(path, false, false))
+	require.NoError(t, cli.RunFmt(path, false))
 	require.Equal(t, formatted, readFile(t, path))
 
-	require.NoError(t, cli.RunFmt(path, false, false))
+	require.NoError(t, cli.RunFmt(path, false))
 	require.Equal(t, formatted, readFile(t, path), "a second run should not change the file")
 
-	require.NoError(t, cli.RunFmt(path, true, false), "check mode should report nothing to change")
+	require.NoError(t, cli.RunFmt(path, true), "check mode should report nothing to change")
 	require.Equal(t, formatted, readFile(t, path))
 }
 

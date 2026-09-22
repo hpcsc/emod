@@ -147,8 +147,8 @@ func TestPipeline(t *testing.T) {
 
 		t.Run("says the source parsed when it reports only validation and lint findings", func(t *testing.T) {
 			missingEvent := strings.Replace(test.BillingPayments,
-				"command -> event: TakePayment -> PaymentTaken",
-				"command -> event: TakePayment -> PaymentRefunded", 1)
+				"TakePayment -> PaymentTaken",
+				"TakePayment -> PaymentRefunded", 1)
 			require.NotEqual(t, test.BillingPayments, missingEvent)
 
 			result, err := pipeline.RunPipelineExportDiagram(missingEvent, "billing.emod")
@@ -269,7 +269,7 @@ func TestPipeline(t *testing.T) {
 			parsed := decodeEmodEnvelope(t, pipeline.ExportEmodJSON(`{"model_name":"Billing","nodes":[],"edges":[]}`))
 
 			require.Empty(t, parsed.Error)
-			require.Equal(t, "emod 1\nmodel \"Billing\"\n", parsed.Emod)
+			require.Equal(t, "emod = 1\n\nmodel \"Billing\" {\n}\n", parsed.Emod)
 		})
 
 		t.Run("reports a failure in an error field instead of an emod field", func(t *testing.T) {

@@ -20,29 +20,33 @@ import (
 // kebab-case, which wire/type-format reports at info severity and no other rule
 // reports. Its slice carries a full flow and its event real fields so that an
 // orphan or a clickbait event cannot ride along in the count.
-const nonConformingWireTypeEmod = `model "Reservations"
+const nonConformingWireTypeEmod = `emod = 1
+
+model "Reservations" {
+}
 
 context "Booking" {
   aggregate "Reservation" {
     slice "Reserve Room" {
-      command ReserveRoom {
+      command "ReserveRoom" {
         fields {
-          guestId  string required
-          roomType string required
+          guestId  = required(string)
+          roomType = required(string)
         }
       }
 
-      event RoomReserved {
-        type "RoomReserved"
+      event "RoomReserved" {
+        type = "RoomReserved"
+
         fields {
-          reservationId string required
-          guestId       string required
+          reservationId = required(string)
+          guestId       = required(string)
         }
       }
 
-      flow {
-        command -> event: ReserveRoom -> RoomReserved
-      }
+      flow = <<-FLOW
+        command -> event:    ReserveRoom -> RoomReserved
+      FLOW
     }
   }
 }
@@ -50,114 +54,118 @@ context "Booking" {
 
 // singleTagDCBEmod uses one tag key across every decides_on predicate, which
 // the dcb/single-tag-everywhere rule reports at info severity.
-const singleTagDCBEmod = `model "Orders"
+const singleTagDCBEmod = `model "Orders" {}
 
-context "Fulfillment" mode dcb {
+context "Fulfillment" {
+  mode = dcb
+
   slice "Place Order" {
-    command PlaceOrder {
+    command "PlaceOrder" {
       fields {
-        customerId string required
-        total      int    required
+        customerId = string
+        total = int
       }
     }
 
-    event OrderPlaced {
+    event "OrderPlaced" {
       tags {
-        entity: customerId
+        entity = customerId
       }
       fields {
-        orderId    string required
-        customerId string required
-        total      int    required
+        orderId = string
+        customerId = string
+        total = int
       }
     }
 
-    flow {
-      command -> event: PlaceOrder -> OrderPlaced
-    }
+    flow = <<-FLOW
+      command -> event:    PlaceOrder -> OrderPlaced
+    FLOW
   }
 
   slice "Authorize Payment" {
-    command AuthorizePayment {
+    command "AuthorizePayment" {
       decides_on {
-        events [OrderPlaced]
-        where tag(entity = customerId)
+        events = [OrderPlaced]
+        where  = tag(entity, customerId)
       }
       fields {
-        authCode string required
+        authCode = string
       }
     }
 
-    event PaymentAuthorized {
+    event "PaymentAuthorized" {
       tags {
-        entity: customerId
+        entity = customerId
       }
       fields {
-        paymentId  string required
-        customerId string required
-        authCode   string required
+        paymentId = string
+        customerId = string
+        authCode = string
       }
     }
 
-    flow {
-      command -> event: AuthorizePayment -> PaymentAuthorized
-    }
+    flow = <<-FLOW
+      command -> event:    AuthorizePayment -> PaymentAuthorized
+    FLOW
   }
 }
 `
 
 // singleTagWithClickbaitEmod adds a single-ID event to the same model, so the
 // info diagnostic above is joined by a clickbait-event error.
-const singleTagWithClickbaitEmod = `model "Orders"
+const singleTagWithClickbaitEmod = `model "Orders" {}
 
-context "Fulfillment" mode dcb {
+context "Fulfillment" {
+  mode = dcb
+
   slice "Place Order" {
-    command PlaceOrder {
+    command "PlaceOrder" {
       fields {
-        customerId string required
-        total      int    required
+        customerId = string
+        total = int
       }
     }
 
-    event OrderPlaced {
+    event "OrderPlaced" {
       tags {
-        entity: customerId
+        entity = customerId
       }
       fields {
-        orderId    string required
-        customerId string required
-        total      int    required
+        orderId = string
+        customerId = string
+        total = int
       }
     }
 
-    flow {
-      command -> event: PlaceOrder -> OrderPlaced
-    }
+    flow = <<-FLOW
+      command -> event:    PlaceOrder -> OrderPlaced
+    FLOW
   }
 
   slice "Authorize Payment" {
-    command AuthorizePayment {
+    command "AuthorizePayment" {
       decides_on {
-        events [OrderPlaced]
-        where tag(entity = customerId)
+        events = [OrderPlaced]
+        where  = tag(entity, customerId)
       }
       fields {
-        authCode string required
+        authCode = string
       }
     }
 
-    event PaymentAuthorized {
+    event "PaymentAuthorized" {
       tags {
-        entity: paymentId
+        entity = paymentId
       }
       fields {
-        paymentId string required
+        paymentId = string
       }
     }
 
-    flow {
-      command -> event: AuthorizePayment -> PaymentAuthorized
-    }
+    flow = <<-FLOW
+      command -> event:    AuthorizePayment -> PaymentAuthorized
+    FLOW
   }
 }
 `
@@ -165,65 +173,78 @@ context "Fulfillment" mode dcb {
 // viewNeverReadEmod declares MemberLoansView beside a view an automation reads,
 // which view/never-read reports and no other rule does. The read view is what
 // carries the model past the rule's own guard.
-const viewNeverReadEmod = `model "Lending"
+const viewNeverReadEmod = `emod = 1
+
+model "Lending" {
+}
 
 context "Lending" {
   aggregate "Loan" {
     slice "Borrow Copy" {
-      command BorrowCopy {
+      command "BorrowCopy" {
         fields {
-          memberId string required
-          copyId   string required
+          memberId = required(string)
+          copyId   = required(string)
         }
       }
-      event CopyBorrowed {
+
+      event "CopyBorrowed" {
         fields {
-          loanId   string required
-          memberId string required
-          copyId   string required
+          loanId   = required(string)
+          memberId = required(string)
+          copyId   = required(string)
         }
       }
-      flow {
-        command -> event: BorrowCopy -> CopyBorrowed
-      }
+
+      flow = <<-FLOW
+        command -> event:    BorrowCopy -> CopyBorrowed
+      FLOW
     }
+
     slice "Chase Overdue Copy" {
-      view OverdueLoansView {
+      command "RemindMember" {
         fields {
-          loanId   string required
-          memberId string required
-        }
-        subscribes [CopyBorrowed]
-      }
-      command RemindMember {
-        fields {
-          loanId   string required
-          memberId string required
+          loanId   = required(string)
+          memberId = required(string)
         }
       }
-      event MemberReminded {
+
+      event "MemberReminded" {
         fields {
-          loanId     string    required
-          memberId   string    required
-          remindedAt timestamp required
+          loanId     = required(string)
+          memberId   = required(string)
+          remindedAt = required(timestamp)
         }
       }
-      automation RemindOnDueDate {
-        on CopyBorrowed
-        reads OverdueLoansView
-        command RemindMember
+
+      view "OverdueLoansView" {
+        subscribes = [CopyBorrowed]
+
+        fields {
+          loanId   = required(string)
+          memberId = required(string)
+        }
       }
-      flow {
-        command -> event: RemindMember -> MemberReminded
+
+      automation "RemindOnDueDate" {
+        on      = CopyBorrowed
+        reads   = OverdueLoansView
+        command = RemindMember
       }
+
+      flow = <<-FLOW
+        command -> event:    RemindMember -> MemberReminded
+      FLOW
     }
+
     slice "Review Member Loans" {
-      view MemberLoansView {
+      view "MemberLoansView" {
+        subscribes = [MemberReminded]
+
         fields {
-          loanId   string required
-          memberId string required
+          loanId   = required(string)
+          memberId = required(string)
         }
-        subscribes [MemberReminded]
       }
     }
   }
@@ -232,268 +253,333 @@ context "Lending" {
 
 // automationWithoutViewEmod wires an automation straight from an event to a
 // command, which automation/missing-todo-list reports and no other rule does.
-const automationWithoutViewEmod = `model "Lending"
+const automationWithoutViewEmod = `emod = 1
+
+model "Lending" {
+}
 
 context "Lending" {
   aggregate "Loan" {
     slice "Borrow Copy" {
-      command BorrowCopy {
+      command "BorrowCopy" {
         fields {
-          memberId string required
-          copyId   string required
+          memberId = required(string)
+          copyId   = required(string)
         }
       }
-      event CopyBorrowed {
+
+      event "CopyBorrowed" {
         fields {
-          loanId   string required
-          memberId string required
-          copyId   string required
+          loanId   = required(string)
+          memberId = required(string)
+          copyId   = required(string)
         }
       }
-      flow {
-        command -> event: BorrowCopy -> CopyBorrowed
-      }
+
+      flow = <<-FLOW
+        command -> event:    BorrowCopy -> CopyBorrowed
+      FLOW
     }
+
     slice "Chase Overdue Copy" {
-      command RemindMember {
+      command "RemindMember" {
         fields {
-          loanId   string required
-          memberId string required
+          loanId   = required(string)
+          memberId = required(string)
         }
       }
-      event MemberReminded {
+
+      event "MemberReminded" {
         fields {
-          loanId     string    required
-          memberId   string    required
-          remindedAt timestamp required
+          loanId     = required(string)
+          memberId   = required(string)
+          remindedAt = required(timestamp)
         }
       }
-      automation RemindOnDueDate {
-        on CopyBorrowed
-        command RemindMember
+
+      automation "RemindOnDueDate" {
+        on      = CopyBorrowed
+        command = RemindMember
       }
-      flow {
-        command -> event: RemindMember -> MemberReminded
-      }
+
+      flow = <<-FLOW
+        command -> event:    RemindMember -> MemberReminded
+      FLOW
     }
   }
 }
 `
 
-const commandWithoutSpecEmod = `model "Lending"
+const commandWithoutSpecEmod = `emod = 1
+
+model "Lending" {
+}
 
 context "Lending" {
   aggregate "Loan" {
-    invariant OneCopyPerLoan "A loan covers exactly one copy"
+    invariants {
+      OneCopyPerLoan = "A loan covers exactly one copy"
+    }
+
     slice "Borrow Copy" {
-      command BorrowCopy {
+      command "BorrowCopy" {
         fields {
-          memberId string required
-          copyId   string required
+          memberId = required(string)
+          copyId   = required(string)
         }
       }
-      event CopyBorrowed {
+
+      event "CopyBorrowed" {
         fields {
-          loanId   string required
-          memberId string required
-          copyId   string required
+          loanId   = required(string)
+          memberId = required(string)
+          copyId   = required(string)
         }
       }
-      flow {
-        command -> event: BorrowCopy -> CopyBorrowed
-      }
+
+      flow = <<-FLOW
+        command -> event:    BorrowCopy -> CopyBorrowed
+      FLOW
+
       spec "borrows a copy no one holds" {
-        when BorrowCopy
-        then [CopyBorrowed]
+        when = BorrowCopy
+        then = [CopyBorrowed]
       }
+
       spec "refuses a copy already on loan" {
-        given [CopyBorrowed]
-        when BorrowCopy
-        then rejected OneCopyPerLoan
+        given = [CopyBorrowed]
+        when  = BorrowCopy
+        then  = rejected(OneCopyPerLoan)
       }
     }
+
     slice "Return Copy" {
-      command ReturnCopy {
+      command "ReturnCopy" {
         fields {
-          loanId string required
-          copyId string required
+          loanId = required(string)
+          copyId = required(string)
         }
       }
-      event CopyReturned {
+
+      event "CopyReturned" {
         fields {
-          loanId   string required
-          copyId   string required
-          returnedAt timestamp required
+          loanId     = required(string)
+          copyId     = required(string)
+          returnedAt = required(timestamp)
         }
       }
-      flow {
-        command -> event: ReturnCopy -> CopyReturned
-      }
+
+      flow = <<-FLOW
+        command -> event:    ReturnCopy -> CopyReturned
+      FLOW
     }
   }
 }
 `
 
-const noRejectionPathEmod = `model "Lending"
+const noRejectionPathEmod = `emod = 1
+
+model "Lending" {
+}
 
 context "Lending" {
   aggregate "Loan" {
-    invariant OneCopyPerLoan "A loan covers exactly one copy"
+    invariants {
+      OneCopyPerLoan = "A loan covers exactly one copy"
+    }
+
     slice "Borrow Copy" {
-      command BorrowCopy {
+      command "BorrowCopy" {
         fields {
-          memberId string required
-          copyId   string required
+          memberId = required(string)
+          copyId   = required(string)
         }
       }
-      event CopyBorrowed {
+
+      event "CopyBorrowed" {
         fields {
-          loanId   string required
-          memberId string required
-          copyId   string required
+          loanId   = required(string)
+          memberId = required(string)
+          copyId   = required(string)
         }
       }
-      flow {
-        command -> event: BorrowCopy -> CopyBorrowed
-      }
+
+      flow = <<-FLOW
+        command -> event:    BorrowCopy -> CopyBorrowed
+      FLOW
+
       spec "borrows a copy no one holds" {
-        when BorrowCopy
-        then [CopyBorrowed]
+        when = BorrowCopy
+        then = [CopyBorrowed]
       }
+
       spec "refuses a copy already on loan" {
-        given [CopyBorrowed]
-        when BorrowCopy
-        then rejected OneCopyPerLoan
+        given = [CopyBorrowed]
+        when  = BorrowCopy
+        then  = rejected(OneCopyPerLoan)
       }
     }
+
     slice "Return Copy" {
-      command ReturnCopy {
+      command "ReturnCopy" {
         fields {
-          loanId string required
-          copyId string required
+          loanId = required(string)
+          copyId = required(string)
         }
       }
-      event CopyReturned {
+
+      event "CopyReturned" {
         fields {
-          loanId   string required
-          copyId   string required
-          returnedAt timestamp required
+          loanId     = required(string)
+          copyId     = required(string)
+          returnedAt = required(timestamp)
         }
       }
-      flow {
-        command -> event: ReturnCopy -> CopyReturned
-      }
+
+      flow = <<-FLOW
+        command -> event:    ReturnCopy -> CopyReturned
+      FLOW
+
       spec "returns a copy the member holds" {
-        given [CopyBorrowed]
-        when ReturnCopy
-        then [CopyReturned]
+        given = [CopyBorrowed]
+        when  = ReturnCopy
+        then  = [CopyReturned]
       }
     }
   }
 }
 `
 
-const invariantNeverExercisedEmod = `model "Lending"
+const invariantNeverExercisedEmod = `emod = 1
+
+model "Lending" {
+}
 
 context "Lending" {
   aggregate "Loan" {
-    invariant OneCopyPerLoan "A loan covers exactly one copy"
-    invariant FiveCopiesPerMember "A member holds at most five copies at one time"
+    invariants {
+      OneCopyPerLoan      = "A loan covers exactly one copy"
+      FiveCopiesPerMember = "A member holds at most five copies at one time"
+    }
+
     slice "Borrow Copy" {
-      command BorrowCopy {
+      command "BorrowCopy" {
         fields {
-          memberId string required
-          copyId   string required
+          memberId = required(string)
+          copyId   = required(string)
         }
       }
-      event CopyBorrowed {
+
+      event "CopyBorrowed" {
         fields {
-          loanId   string required
-          memberId string required
-          copyId   string required
+          loanId   = required(string)
+          memberId = required(string)
+          copyId   = required(string)
         }
       }
-      flow {
-        command -> event: BorrowCopy -> CopyBorrowed
-      }
+
+      flow = <<-FLOW
+        command -> event:    BorrowCopy -> CopyBorrowed
+      FLOW
+
       spec "borrows a copy no one holds" {
-        when BorrowCopy
-        then [CopyBorrowed]
+        when = BorrowCopy
+        then = [CopyBorrowed]
       }
+
       spec "refuses a copy already on loan" {
-        given [CopyBorrowed]
-        when BorrowCopy
-        then rejected OneCopyPerLoan
+        given = [CopyBorrowed]
+        when  = BorrowCopy
+        then  = rejected(OneCopyPerLoan)
       }
     }
   }
 }
 `
 
-const givenOutsideBoundaryEmod = `model "Lending"
+const givenOutsideBoundaryEmod = `emod = 1
+
+model "Lending" {
+}
 
 context "Lending" {
   aggregate "Loan" {
-    invariant OneCopyPerLoan "A loan covers exactly one copy"
+    invariants {
+      OneCopyPerLoan = "A loan covers exactly one copy"
+    }
+
     slice "Borrow Copy" {
-      command BorrowCopy {
+      command "BorrowCopy" {
         fields {
-          memberId string required
-          copyId   string required
+          memberId = required(string)
+          copyId   = required(string)
         }
       }
-      event CopyBorrowed {
+
+      event "CopyBorrowed" {
         fields {
-          loanId   string required
-          memberId string required
-          copyId   string required
+          loanId   = required(string)
+          memberId = required(string)
+          copyId   = required(string)
         }
       }
-      flow {
-        command -> event: BorrowCopy -> CopyBorrowed
-      }
+
+      flow = <<-FLOW
+        command -> event:    BorrowCopy -> CopyBorrowed
+      FLOW
+
       spec "borrows a copy" {
-        when BorrowCopy
-        then [CopyBorrowed]
+        when = BorrowCopy
+        then = [CopyBorrowed]
       }
+
       spec "refuses a copy already on loan" {
-        given [CopyBorrowed]
-        when BorrowCopy
-        then rejected OneCopyPerLoan
+        given = [CopyBorrowed]
+        when  = BorrowCopy
+        then  = rejected(OneCopyPerLoan)
       }
     }
   }
+
   aggregate "Reader" {
-    invariant OneReaderPerFloor "A reader stays on one floor"
+    invariants {
+      OneReaderPerFloor = "A reader stays on one floor"
+    }
+
     slice "Claim Floor" {
-      command ClaimFloor {
+      command "ClaimFloor" {
         fields {
-          readerId string required
-          floorId  string required
+          readerId = required(string)
+          floorId  = required(string)
         }
       }
-      event FloorClaimed {
+
+      event "FloorClaimed" {
         fields {
-          claimId  string required
-          readerId string required
-          floorId  string required
+          claimId  = required(string)
+          readerId = required(string)
+          floorId  = required(string)
         }
       }
-      flow {
-        command -> event: ClaimFloor -> FloorClaimed
-      }
+
+      flow = <<-FLOW
+        command -> event:    ClaimFloor -> FloorClaimed
+      FLOW
+
       spec "claims a floor" {
-        when ClaimFloor
-        then [FloorClaimed]
+        when = ClaimFloor
+        then = [FloorClaimed]
       }
+
       spec "refuses a floor another reader holds" {
-        when ClaimFloor
-        then rejected OneReaderPerFloor
+        when = ClaimFloor
+        then = rejected(OneReaderPerFloor)
       }
+
       spec "refuses when the member already borrowed a copy" {
-        given [CopyBorrowed]
-        when ClaimFloor
-        then rejected OneReaderPerFloor
+        given = [CopyBorrowed]
+        when  = ClaimFloor
+        then  = rejected(OneReaderPerFloor)
       }
     }
   }
@@ -508,75 +594,80 @@ context "Lending" {
 // tag keys and every declared key is routed on, and each slice states a flow, so
 // the four dcb/* rules, the three sibling spec/* rules and the orphan checks all
 // stay quiet.
-const givenValueOutsideBoundaryEmod = `model "Library Lending"
+const givenValueOutsideBoundaryEmod = `model "Library Lending" {}
 
-context "Reading Room" mode dcb {
-  invariant OneDeskPerReader "A reader holds at most one desk"
+context "Reading Room" {
+  mode = dcb
+
+  invariants {
+    OneDeskPerReader = "A reader holds at most one desk"
+  }
+
   slice "Claim Desk" {
-    command ClaimDesk {
+    command "ClaimDesk" {
       decides_on {
-        events [DeskClaimed]
-        where tag(desk = deskId)
+        events = [DeskClaimed]
+        where  = tag(desk, deskId)
       }
       fields {
-        memberId string required
-        deskId   string required
+        memberId = string
+        deskId = string
       }
     }
-    event DeskClaimed {
+    event "DeskClaimed" {
       tags {
-        desk: deskId
+        desk = deskId
       }
       fields {
-        sessionId string required
-        deskId    string required
-        memberId  string required
+        sessionId = string
+        deskId = string
+        memberId = string
       }
     }
-    flow {
-      command -> event: ClaimDesk -> DeskClaimed
-    }
+    flow = <<-FLOW
+      command -> event:    ClaimDesk -> DeskClaimed
+    FLOW
     spec "claims a free desk" {
-      when ClaimDesk
-      then [DeskClaimed]
+      when = ClaimDesk
+      then = [DeskClaimed]
     }
     spec "refuses a desk another reader holds" {
-      given [DeskClaimed { deskId: "D-4210" }]
-      when ClaimDesk { deskId: "D-5817" }
-      then rejected OneDeskPerReader
+      given = [DeskClaimed({ deskId = "D-4210" })]
+      when = ClaimDesk({ deskId = "D-5817" })
+      then = rejected(OneDeskPerReader)
     }
   }
   slice "Release Desk" {
-    command ReleaseDesk {
+    command "ReleaseDesk" {
       decides_on {
-        events [DeskReleased]
-        where tag(reader = memberId)
+        events = [DeskReleased]
+        where  = tag(reader, memberId)
       }
       fields {
-        sessionId string required
-        memberId  string required
+        sessionId = string
+        memberId = string
       }
     }
-    event DeskReleased {
+    event "DeskReleased" {
       tags {
-        reader: memberId
+        reader = memberId
       }
       fields {
-        sessionId  string    required
-        memberId   string    required
-        releasedAt timestamp required
+        sessionId = string
+        memberId = string
+        releasedAt = timestamp
       }
     }
-    flow {
-      command -> event: ReleaseDesk -> DeskReleased
-    }
+    flow = <<-FLOW
+      command -> event:    ReleaseDesk -> DeskReleased
+    FLOW
     spec "frees a desk its reader holds" {
-      when ReleaseDesk
-      then [DeskReleased]
+      when = ReleaseDesk
+      then = [DeskReleased]
     }
     spec "refuses to free a desk nobody holds" {
-      when ReleaseDesk
-      then rejected OneDeskPerReader
+      when = ReleaseDesk
+      then = rejected(OneDeskPerReader)
     }
   }
 }
@@ -590,43 +681,48 @@ context "Reading Room" mode dcb {
 // has to stay silent while its sibling reports. Spending two tag keys on one
 // command is also what lets a single slice keep dcb/single-tag-everywhere and
 // dcb/orphan-tag-key quiet.
-const conjunctiveValueOutsideBoundaryEmod = `model "Library Lending"
+const conjunctiveValueOutsideBoundaryEmod = `model "Library Lending" {}
 
-context "Reading Room" mode dcb {
-  invariant OneDeskPerReader "A reader holds at most one desk"
+context "Reading Room" {
+  mode = dcb
+
+  invariants {
+    OneDeskPerReader = "A reader holds at most one desk"
+  }
+
   slice "Claim Desk" {
-    command ClaimDesk {
+    command "ClaimDesk" {
       decides_on {
-        events [DeskClaimed]
-        where tag(desk = deskId) and tag(reader = memberId)
+        events = [DeskClaimed]
+        where  = tag(desk, deskId) && tag(reader, memberId)
       }
       fields {
-        memberId string required
-        deskId   string required
+        memberId = string
+        deskId = string
       }
     }
-    event DeskClaimed {
+    event "DeskClaimed" {
       tags {
-        desk  : deskId
-        reader: memberId
+        desk = deskId
+        reader = memberId
       }
       fields {
-        sessionId string required
-        deskId    string required
-        memberId  string required
+        sessionId = string
+        deskId = string
+        memberId = string
       }
     }
-    flow {
-      command -> event: ClaimDesk -> DeskClaimed
-    }
+    flow = <<-FLOW
+      command -> event:    ClaimDesk -> DeskClaimed
+    FLOW
     spec "claims a free desk" {
-      when ClaimDesk
-      then [DeskClaimed]
+      when = ClaimDesk
+      then = [DeskClaimed]
     }
     spec "refuses a desk another reader holds" {
-      given [DeskClaimed { deskId: "D-4210", memberId: "M-40817" }]
-      when ClaimDesk { deskId: "D-5817", memberId: "M-40817" }
-      then rejected OneDeskPerReader
+      given = [DeskClaimed({ deskId = "D-4210", memberId = "M-40817" })]
+      when = ClaimDesk({ deskId = "D-5817", memberId = "M-40817" })
+      then = rejected(OneDeskPerReader)
     }
   }
 }
@@ -636,43 +732,48 @@ context "Reading Room" mode dcb {
 // redundant parentheses around each operand. parsePrimary returns a
 // parenthesised sub-expression unwrapped, so the two models are one tree and
 // must lint alike.
-const parenthesisedConjunctiveValueEmod = `model "Library Lending"
+const parenthesisedConjunctiveValueEmod = `model "Library Lending" {}
 
-context "Reading Room" mode dcb {
-  invariant OneDeskPerReader "A reader holds at most one desk"
+context "Reading Room" {
+  mode = dcb
+
+  invariants {
+    OneDeskPerReader = "A reader holds at most one desk"
+  }
+
   slice "Claim Desk" {
-    command ClaimDesk {
+    command "ClaimDesk" {
       decides_on {
-        events [DeskClaimed]
-        where (tag(desk = deskId)) and (tag(reader = memberId))
+        events = [DeskClaimed]
+        where  = (tag(desk, deskId)) && (tag(reader, memberId))
       }
       fields {
-        memberId string required
-        deskId   string required
+        memberId = string
+        deskId = string
       }
     }
-    event DeskClaimed {
+    event "DeskClaimed" {
       tags {
-        desk  : deskId
-        reader: memberId
+        desk = deskId
+        reader = memberId
       }
       fields {
-        sessionId string required
-        deskId    string required
-        memberId  string required
+        sessionId = string
+        deskId = string
+        memberId = string
       }
     }
-    flow {
-      command -> event: ClaimDesk -> DeskClaimed
-    }
+    flow = <<-FLOW
+      command -> event:    ClaimDesk -> DeskClaimed
+    FLOW
     spec "claims a free desk" {
-      when ClaimDesk
-      then [DeskClaimed]
+      when = ClaimDesk
+      then = [DeskClaimed]
     }
     spec "refuses a desk another reader holds" {
-      given [DeskClaimed { deskId: "D-4210", memberId: "M-40817" }]
-      when ClaimDesk { deskId: "D-5817", memberId: "M-40817" }
-      then rejected OneDeskPerReader
+      given = [DeskClaimed({ deskId = "D-4210", memberId = "M-40817" })]
+      when = ClaimDesk({ deskId = "D-5817", memberId = "M-40817" })
+      then = rejected(OneDeskPerReader)
     }
   }
 }
@@ -684,120 +785,128 @@ context "Reading Room" mode dcb {
 // the tokenizer, the literal kind the parser records and compareNumberLiterals
 // only compose here. whenFee is what the when payload states against it.
 func lateFeeValueEmod(whenFee string) string {
-	return `model "Library Lending"
+	return `model "Library Lending" {}
 
-context "Reading Room" mode dcb {
-  invariant OneFeePerLoan "A loan carries at most one late fee"
+context "Reading Room" {
+  mode = dcb
+
+  invariants {
+    OneFeePerLoan = "A loan carries at most one late fee"
+  }
+
   slice "Charge Late Fee" {
-    command ChargeLateFee {
+    command "ChargeLateFee" {
       decides_on {
-        events [LateFeeCharged]
-        where tag(fee = lateFee) and tag(member = memberId)
+        events = [LateFeeCharged]
+        where  = tag(fee, lateFee) && tag(member, memberId)
       }
       fields {
-        memberId string  required
-        lateFee  decimal required
+        memberId = string
+        lateFee = decimal
       }
     }
-    event LateFeeCharged {
+    event "LateFeeCharged" {
       tags {
-        fee   : lateFee
-        member: memberId
+        fee = lateFee
+        member = memberId
       }
       fields {
-        chargeId string  required
-        memberId string  required
-        lateFee  decimal required
+        chargeId = string
+        memberId = string
+        lateFee = decimal
       }
     }
-    flow {
-      command -> event: ChargeLateFee -> LateFeeCharged
-    }
+    flow = <<-FLOW
+      command -> event:    ChargeLateFee -> LateFeeCharged
+    FLOW
     spec "charges a fee no one has paid" {
-      when ChargeLateFee
-      then [LateFeeCharged]
+      when = ChargeLateFee
+      then = [LateFeeCharged]
     }
     spec "refuses a fee already charged" {
-      given [LateFeeCharged { lateFee: 12.50, memberId: "M-40817" }]
-      when ChargeLateFee { lateFee: ` + whenFee + `, memberId: "M-40817" }
-      then rejected OneFeePerLoan
+      given = [LateFeeCharged({ lateFee = 12.50, memberId = "M-40817" })]
+      when = ChargeLateFee({ lateFee = ` + whenFee + `, memberId = "M-40817" })
+      then = rejected(OneFeePerLoan)
     }
   }
 }
 `
 }
 
-const givenOutsideBoundaryDCBEmod = `model "Library Lending"
+const givenOutsideBoundaryDCBEmod = `model "Library Lending" {}
 
-context "Reading Room" mode dcb {
-  invariant OneDeskPerReader "A reader holds at most one desk"
+context "Reading Room" {
+  mode = dcb
+
+  invariants {
+    OneDeskPerReader = "A reader holds at most one desk"
+  }
+
   slice "Desk Operations" {
-    command ClaimDesk {
+    command "ClaimDesk" {
       decides_on {
-        events [DeskClaimed]
-        where tag(desk = deskId) and tag(region = regionId)
+        events = [DeskClaimed]
+        where  = tag(desk, deskId) && tag(region, regionId)
       }
       fields {
-        memberId string required
-        deskId   string required
+        memberId = string
+        deskId = string
       }
     }
-    command ReleaseDesk {
+    command "ReleaseDesk" {
       fields {
-        sessionId string required
+        sessionId = string
       }
     }
-    event DeskClaimed {
+    event "DeskClaimed" {
       tags {
-        desk  : deskId
-        region: regionId
+        desk = deskId
+        region = regionId
       }
       fields {
-        sessionId string required
-        deskId    string required
-        memberId  string required
-        regionId  string required
+        sessionId = string
+        deskId = string
+        memberId = string
+        regionId = string
       }
     }
-    event DeskReleased {
+    event "DeskReleased" {
       tags {
-        desk  : deskId
-        region: regionId
+        desk = deskId
+        region = regionId
       }
       fields {
-        sessionId  string    required
-        deskId     string    required
-        memberId   string    required
-        regionId   string    required
-        releasedAt timestamp required
+        sessionId = string
+        deskId = string
+        memberId = string
+        regionId = string
+        releasedAt = timestamp
       }
     }
-    flow {
-      command -> event: ClaimDesk -> DeskClaimed
-    }
-    flow {
-      command -> event: ReleaseDesk -> DeskReleased
-    }
+    flow = <<-FLOW
+      command -> event:    ClaimDesk -> DeskClaimed
+      command -> event:    ReleaseDesk -> DeskReleased
+    FLOW
     spec "claims a free desk" {
-      when ClaimDesk
-      then [DeskClaimed]
+      when = ClaimDesk
+      then = [DeskClaimed]
     }
     spec "refuses when reader is seated" {
-      when ClaimDesk
-      then rejected OneDeskPerReader
+      when = ClaimDesk
+      then = rejected(OneDeskPerReader)
     }
     spec "claims a desk after release" {
-      given [DeskReleased]
-      when ClaimDesk
-      then [DeskClaimed]
+      given = [DeskReleased]
+      when = ClaimDesk
+      then = [DeskClaimed]
     }
     spec "releases a desk" {
-      when ReleaseDesk
-      then [DeskReleased]
+      when = ReleaseDesk
+      then = [DeskReleased]
     }
     spec "refuses to release a free desk" {
-      when ReleaseDesk
-      then rejected OneDeskPerReader
+      when = ReleaseDesk
+      then = rejected(OneDeskPerReader)
     }
   }
 }
@@ -834,18 +943,23 @@ func TestLint(t *testing.T) {
 	})
 
 	t.Run("file with naming violations returns error with file path, line number, rule name, and explanation", func(t *testing.T) {
-		input := `model "Test"
+		input := `emod = 1
+
+model "Test" {
+}
+
 context "Orders" {
   aggregate "Order" {
     slice "Update Order" {
-      command UpdateOrder {
+      command "UpdateOrder" {
         fields {
-          orderId string required
+          orderId = required(string)
         }
       }
-      event OrderUpdated {
+
+      event "OrderUpdated" {
         fields {
-          orderId string required
+          orderId = required(string)
         }
       }
     }
@@ -858,7 +972,7 @@ context "Orders" {
 
 		require.Error(t, err)
 		require.Contains(t, err.Error(), path)
-		require.Contains(t, err.Error(), ":10:")
+		require.Contains(t, err.Error(), ":15:")
 		require.Contains(t, err.Error(), "state-obsession")
 		require.Contains(t, err.Error(), "OrderUpdated")
 	})
@@ -889,23 +1003,29 @@ context "Orders" {
 	})
 
 	t.Run("multiple lint violations are all reported", func(t *testing.T) {
-		input := `model "Test"
+		input := `emod = 1
+
+model "Test" {
+}
+
 context "Orders" {
   aggregate "Order" {
     slice "Bad Events" {
-      command UpdateOrder {
+      command "UpdateOrder" {
         fields {
-          orderId string required
+          orderId = required(string)
         }
       }
-      event OrderUpdated {
+
+      event "OrderUpdated" {
         fields {
-          orderId string required
+          orderId = required(string)
         }
       }
-      event PaymentInitiated {
+
+      event "PaymentInitiated" {
         fields {
-          paymentId string required
+          paymentId = required(string)
         }
       }
     }
@@ -930,63 +1050,68 @@ context "Orders" {
 		// have a flow, so neither command nor event is orphaned. What is missing
 		// is the one thing under test: nothing on "Borrow Copy" exercises the
 		// rejection its own flow block states.
-		const rejectionWithoutSpecEmod = `model "Library Lending"
+		const rejectionWithoutSpecEmod = `emod = 1
+
+model "Library Lending" {
+}
 
 context "Lending" {
   aggregate "Loan" {
-    invariant OneCopyPerLoan "A loan covers exactly one copy of one title"
-    invariant FiveCopiesPerMember "A member holds at most five copies at one time"
+    invariants {
+      OneCopyPerLoan      = "A loan covers exactly one copy of one title"
+      FiveCopiesPerMember = "A member holds at most five copies at one time"
+    }
 
     slice "Borrow Copy" {
-      command BorrowCopy {
+      command "BorrowCopy" {
         fields {
-          memberId string required
-          copyId   string required
+          memberId = required(string)
+          copyId   = required(string)
         }
       }
 
-      event CopyBorrowed {
+      event "CopyBorrowed" {
         fields {
-          loanId   string required
-          memberId string required
-          copyId   string required
+          loanId   = required(string)
+          memberId = required(string)
+          copyId   = required(string)
         }
       }
 
-      flow {
-        command -> event: BorrowCopy -> CopyBorrowed
+      flow = <<-FLOW
+        command -> event:    BorrowCopy -> CopyBorrowed
         command -> rejected: BorrowCopy -> FiveCopiesPerMember
-      }
+      FLOW
 
       spec "refuses a copy already on loan" {
-        when BorrowCopy
-        then rejected OneCopyPerLoan
+        when = BorrowCopy
+        then = rejected(OneCopyPerLoan)
       }
     }
 
     slice "Return Copy" {
-      command ReturnCopy {
+      command "ReturnCopy" {
         fields {
-          loanId string required
-          copyId string required
+          loanId = required(string)
+          copyId = required(string)
         }
       }
 
-      event CopyReturned {
+      event "CopyReturned" {
         fields {
-          loanId     string    required
-          copyId     string    required
-          returnedAt timestamp required
+          loanId     = required(string)
+          copyId     = required(string)
+          returnedAt = required(timestamp)
         }
       }
 
-      flow {
-        command -> event: ReturnCopy -> CopyReturned
-      }
+      flow = <<-FLOW
+        command -> event:    ReturnCopy -> CopyReturned
+      FLOW
 
       spec "refuses a return of a copy the member does not hold" {
-        when ReturnCopy
-        then rejected FiveCopiesPerMember
+        when = ReturnCopy
+        then = rejected(FiveCopiesPerMember)
       }
     }
   }
@@ -1004,7 +1129,7 @@ context "Lending" {
 			require.Contains(t, err.Error(), "flow/rejection-without-spec")
 			require.Contains(t, err.Error(), "BorrowCopy")
 			require.Contains(t, err.Error(), "FiveCopiesPerMember")
-			require.Contains(t, err.Error(), ":26:",
+			require.Contains(t, err.Error(), ":31:",
 				"the diagnostic sits on the rejection entry's invariant name")
 		})
 
@@ -1048,25 +1173,31 @@ context "Lending" {
 	})
 
 	t.Run("json format on warning-only file outputs warning severity and exit code 1", func(t *testing.T) {
-		input := `model "Test"
+		input := `emod = 1
+
+model "Test" {
+}
+
 context "Orders" {
   aggregate "Order" {
     slice "Update Order" {
-      command PlaceOrder {
+      command "PlaceOrder" {
         fields {
-          orderId string required
-          reason  string required
+          orderId = required(string)
+          reason  = required(string)
         }
       }
-      event OrderUpdated {
+
+      event "OrderUpdated" {
         fields {
-          orderId string required
-          reason  string required
+          orderId = required(string)
+          reason  = required(string)
         }
       }
-      flow {
-        command -> event: PlaceOrder -> OrderUpdated
-      }
+
+      flow = <<-FLOW
+        command -> event:    PlaceOrder -> OrderUpdated
+      FLOW
     }
   }
 }
@@ -1091,23 +1222,29 @@ context "Orders" {
 	})
 
 	t.Run("json format on error-only file outputs error severity and exit code 2", func(t *testing.T) {
-		input := `model "Test"
+		input := `emod = 1
+
+model "Test" {
+}
+
 context "Orders" {
   aggregate "Order" {
     slice "Events" {
-      command PlaceOrder {
+      command "PlaceOrder" {
         fields {
-          orderId string required
+          orderId = required(string)
         }
       }
-      event SingleIdEvent {
+
+      event "SingleIdEvent" {
         fields {
-          orderId string required
+          orderId = required(string)
         }
       }
-      flow {
-        command -> event: PlaceOrder -> SingleIdEvent
-      }
+
+      flow = <<-FLOW
+        command -> event:    PlaceOrder -> SingleIdEvent
+      FLOW
     }
   }
 }
@@ -1132,18 +1269,23 @@ context "Orders" {
 	})
 
 	t.Run("json format on mixed warnings and errors outputs both severities and exit code 2", func(t *testing.T) {
-		input := `model "Test"
+		input := `emod = 1
+
+model "Test" {
+}
+
 context "Orders" {
   aggregate "Order" {
     slice "Bad Events" {
-      command UpdateOrder {
+      command "UpdateOrder" {
         fields {
-          orderId string required
+          orderId = required(string)
         }
       }
-      event OrderUpdated {
+
+      event "OrderUpdated" {
         fields {
-          orderId string required
+          orderId = required(string)
         }
       }
     }
@@ -1182,13 +1324,17 @@ context "Orders" {
 	})
 
 	t.Run("json format reports all file and line fields", func(t *testing.T) {
-		input := `model "Test"
+		input := `emod = 1
+
+model "Test" {
+}
+
 context "Orders" {
   aggregate "Order" {
     slice "Bad Events" {
-      event OrderUpdated {
+      event "OrderUpdated" {
         fields {
-          orderId string required
+          orderId = required(string)
         }
       }
     }
@@ -1294,7 +1440,7 @@ context "Orders" {
 			require.Len(t, entries, 1)
 			require.Equal(t, "info", entries[0]["severity"])
 			require.Equal(t, "wire/type-format", entries[0]["rule"])
-			require.Equal(t, float64(14), entries[0]["line"])
+			require.Equal(t, float64(17), entries[0]["line"])
 			require.Contains(t, entries[0]["message"], "RoomReserved")
 		})
 
@@ -1336,7 +1482,7 @@ context "Orders" {
 			require.Equal(t, "warning", entries[0]["severity"])
 			require.Equal(t, "automation/missing-todo-list", entries[0]["rule"])
 			require.Equal(t, path, entries[0]["file"])
-			require.Equal(t, float64(37), entries[0]["line"])
+			require.Equal(t, float64(45), entries[0]["line"])
 			require.Contains(t, entries[0]["message"], "RemindOnDueDate")
 		})
 
@@ -1348,7 +1494,7 @@ context "Orders" {
 			var lintErr *cli.LintError
 			require.True(t, errors.As(err, &lintErr))
 			require.Equal(t, 1, lintErr.ExitCode)
-			require.Equal(t, path+`:37: [automation/missing-todo-list] automation "RemindOnDueDate" reads no view, so nothing in the model shows what work is outstanding; project a view of pending work and read it`, err.Error())
+			require.Equal(t, path+`:45: [automation/missing-todo-list] automation "RemindOnDueDate" reads no view, so nothing in the model shows what work is outstanding; project a view of pending work and read it`, err.Error())
 		})
 	})
 
@@ -1371,7 +1517,7 @@ context "Orders" {
 			require.Equal(t, "warning", entries[0]["severity"])
 			require.Equal(t, "view/never-read", entries[0]["rule"])
 			require.Equal(t, path, entries[0]["file"])
-			require.Equal(t, float64(54), entries[0]["line"])
+			require.Equal(t, float64(66), entries[0]["line"])
 		})
 
 		t.Run("text output names the rule, the view and the line it is declared on", func(t *testing.T) {
@@ -1382,7 +1528,7 @@ context "Orders" {
 			var lintErr *cli.LintError
 			require.True(t, errors.As(err, &lintErr))
 			require.Equal(t, 1, lintErr.ExitCode)
-			require.Equal(t, path+`:54: [view/never-read] view "MemberLoansView" is read by no trigger, automation or translation, so nothing in the model says who acts on it; give the trigger that opens on it a reads entry, or name it as a processor's todo list`, err.Error())
+			require.Equal(t, path+`:66: [view/never-read] view "MemberLoansView" is read by no trigger, automation or translation, so nothing in the model says who acts on it; give the trigger that opens on it a reads entry, or name it as a processor's todo list`, err.Error())
 		})
 	})
 
@@ -1405,7 +1551,7 @@ context "Orders" {
 			require.Equal(t, "info", entries[0]["severity"])
 			require.Equal(t, "spec/command-without-spec", entries[0]["rule"])
 			require.Equal(t, path, entries[0]["file"])
-			require.Equal(t, float64(34), entries[0]["line"])
+			require.Equal(t, float64(45), entries[0]["line"])
 			require.Contains(t, entries[0]["message"], "ReturnCopy")
 		})
 
@@ -1442,7 +1588,7 @@ context "Orders" {
 			require.Equal(t, "info", entries[0]["severity"])
 			require.Equal(t, "spec/no-rejection-path", entries[0]["rule"])
 			require.Equal(t, path, entries[0]["file"])
-			require.Equal(t, float64(34), entries[0]["line"])
+			require.Equal(t, float64(45), entries[0]["line"])
 			require.Contains(t, entries[0]["message"], "ReturnCopy")
 		})
 
@@ -1479,7 +1625,7 @@ context "Orders" {
 			require.Equal(t, "warning", entries[0]["severity"])
 			require.Equal(t, "spec/invariant-never-exercised", entries[0]["rule"])
 			require.Equal(t, path, entries[0]["file"])
-			require.Equal(t, float64(6), entries[0]["line"])
+			require.Equal(t, float64(10), entries[0]["line"])
 			require.Contains(t, entries[0]["message"], "FiveCopiesPerMember")
 			require.Contains(t, entries[0]["message"], "Loan")
 		})
@@ -1587,7 +1733,7 @@ context "Orders" {
 			require.Equal(t, "warning", entries[0]["severity"])
 			require.Equal(t, "spec/given-outside-boundary", entries[0]["rule"])
 			require.Equal(t, path, entries[0]["file"])
-			require.Equal(t, float64(34), entries[0]["line"],
+			require.Equal(t, float64(39), entries[0]["line"],
 				"the line the given payload is written on")
 			require.Equal(t, `given event "DeskClaimed" states deskId "D-4210" while command "ClaimDesk"'s `+
 				`when payload states deskId "D-5817", so tag "desk" excludes it from the query`, entries[0]["message"])
@@ -1601,7 +1747,7 @@ context "Orders" {
 			var lintErr *cli.LintError
 			require.True(t, errors.As(err, &lintErr))
 			require.Equal(t, 1, lintErr.ExitCode)
-			require.Equal(t, path+`:34: [spec/given-outside-boundary] given event "DeskClaimed" states deskId "D-4210" `+
+			require.Equal(t, path+`:39: [spec/given-outside-boundary] given event "DeskClaimed" states deskId "D-4210" `+
 				`while command "ClaimDesk"'s when payload states deskId "D-5817", so tag "desk" excludes it from the query`,
 				err.Error())
 		})
@@ -1636,7 +1782,7 @@ context "Orders" {
 				"the payloads agree on the field the second predicate tags, and the fixture trips no other rule")
 			require.Equal(t, "warning", entries[0]["severity"])
 			require.Equal(t, "spec/given-outside-boundary", entries[0]["rule"])
-			require.Equal(t, float64(35), entries[0]["line"])
+			require.Equal(t, float64(40), entries[0]["line"])
 			require.Equal(t, `given event "DeskClaimed" states deskId "D-4210" while command "ClaimDesk"'s `+
 				`when payload states deskId "D-5817", so tag "desk" excludes it from the query`, entries[0]["message"])
 		})
@@ -1649,7 +1795,7 @@ context "Orders" {
 			var lintErr *cli.LintError
 			require.True(t, errors.As(err, &lintErr))
 			require.Equal(t, 1, lintErr.ExitCode)
-			require.Equal(t, path+`:35: [spec/given-outside-boundary] given event "DeskClaimed" states deskId "D-4210" `+
+			require.Equal(t, path+`:40: [spec/given-outside-boundary] given event "DeskClaimed" states deskId "D-4210" `+
 				`while command "ClaimDesk"'s when payload states deskId "D-5817", so tag "desk" excludes it from the query`,
 				err.Error())
 		})
@@ -1667,7 +1813,7 @@ context "Orders" {
 				err := cli.RunLint(path, "text")
 
 				require.Error(t, err)
-				require.Equal(t, path+`:35: [spec/given-outside-boundary] given event "LateFeeCharged" states lateFee 12.50 `+
+				require.Equal(t, path+`:40: [spec/given-outside-boundary] given event "LateFeeCharged" states lateFee 12.50 `+
 					`while command "ChargeLateFee"'s when payload states lateFee 12.75, so tag "fee" excludes it from the query`,
 					err.Error())
 			})

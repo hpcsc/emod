@@ -6,7 +6,6 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/hpcsc/emod/internal/ast"
-	"github.com/hpcsc/emod/internal/lexer"
 	"github.com/hpcsc/emod/internal/parser"
 )
 
@@ -94,17 +93,14 @@ func WireTypeLibraryLendingModel(t *testing.T) *ast.Model {
 	return parseFixture(t, WireTypeLibraryLending, "wire-types.emod")
 }
 
-// parseFixture runs a fixture through the lexer and parser rather than handing
-// back a model built in Go, so what a test reads back cannot drift from what an
-// author writing that source would get.
+// parseFixture runs a fixture through the parser rather than handing back a
+// model built in Go, so what a test reads back cannot drift from what an author
+// writing that source would get.
 func parseFixture(t *testing.T, source, filename string) *ast.Model {
 	t.Helper()
 
-	tokens, scanErrs := lexer.Scan(source, filename)
-	require.Empty(t, scanErrs)
-
-	model, parseErrs := parser.New(tokens, filename).Parse()
-	require.Empty(t, parseErrs)
+	model, diagnostics := parser.Parse(source, filename)
+	require.Empty(t, diagnostics)
 
 	return model
 }

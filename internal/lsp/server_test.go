@@ -217,7 +217,7 @@ func TestServer(t *testing.T) {
 			p.readInitializeResult(t, 1)
 
 			uri := "file:///test.emod"
-			content := `model "test"`
+			content := `model "test" {}`
 
 			p.writeMsg(t, &lsp.Message{
 				JSONRPC: "2.0",
@@ -254,7 +254,7 @@ func TestServer(t *testing.T) {
 
 			uri := "file:///test.emod"
 
-			p.openDocument(t, uri, `model "test"`)
+			p.openDocument(t, uri, `model "test" {}`)
 
 			// Change to invalid content.
 			p.writeMsg(t, &lsp.Message{
@@ -345,26 +345,37 @@ func TestServer(t *testing.T) {
 			uri := "file:///linter.emod"
 			// A valid model with a view that doesn't end in "View" triggers the
 			// view-naming linter rule (warning).
-			content := `model "test"
-actor "A"
+			content := `emod = 1
+
+model "test" {
+}
+
+actor "A" {
+}
+
 context "C" {
   aggregate "Agg" {
     slice "Sl" {
-      command Cmd {}
-      event Evt {
+      command "Cmd" {
+      }
+
+      event "Evt" {
         fields {
-          id String
+          id = String
         }
       }
-      flow {
-        command -> event: Cmd -> Evt
+
+      view "Bad" {
+        subscribes = [Evt]
       }
-      view Bad {
-        subscribes [Evt]
-      }
+
+      flow = <<-FLOW
+        command -> event:    Cmd -> Evt
+      FLOW
     }
   }
-}`
+}
+`
 
 			params := p.openDocument(t, uri, content)
 			require.Equal(t, uri, params.URI)
@@ -389,7 +400,7 @@ context "C" {
 
 			uri := "file:///valid.emod"
 
-			params := p.openDocument(t, uri, `model "valid"`)
+			params := p.openDocument(t, uri, `model "valid" {}`)
 			require.Equal(t, uri, params.URI)
 			require.Empty(t, params.Diagnostics)
 		})
@@ -441,7 +452,7 @@ context "C" {
 			p.readInitializeResult(t, 1)
 
 			uri := "file:///test.emod"
-			p.openDocument(t, uri, `model "test"`)
+			p.openDocument(t, uri, `model "test" {}`)
 
 			completionID := p.writeCompletion(t, uri, 0, 5)
 
@@ -461,9 +472,9 @@ context "C" {
 
 			uri := "file:///automation.emod"
 			p.openDocument(t, uri, `context Ctx {
-	aggregate Agg {
-		slice Slc {
-			automation Auto {
+	aggregate "Agg" {
+		slice "Slc" {
+			automation "Auto" {
 
 			}
 		}
@@ -483,22 +494,30 @@ context "C" {
 			p.readInitializeResult(t, 1)
 
 			uri := "file:///values.emod"
-			p.openDocument(t, uri, `context "Lending" {
-	aggregate "Loan" {
-		slice "Borrow Copy" {
-			event CopyBorrowed {
-			}
-			event CopyReturned {
-			}
-			automation RemindOnDueDate {
-				on CopyBorrowed
-				command RemindMember
-			}
-		}
-	}
-}`)
+			p.openDocument(t, uri, `emod = 1
 
-			completionID := p.writeCompletion(t, uri, 8, 7)
+model "" {
+}
+
+context "Lending" {
+  aggregate "Loan" {
+    slice "Borrow Copy" {
+      event "CopyBorrowed" {
+      }
+
+      event "CopyReturned" {
+      }
+
+      automation "RemindOnDueDate" {
+        on      = CopyBorrowed
+        command = RemindMember
+      }
+    }
+  }
+}
+`)
+
+			completionID := p.writeCompletion(t, uri, 15, 18)
 
 			list := p.readCompletionResult(t, completionID)
 
@@ -548,23 +567,28 @@ context "C" {
 
 			uri := "file:///test.emod"
 			// A document with a view that subscribes to an event.
-			content := `context "Orders" {
-    aggregate "Sales" {
-        slice "OrderSlice" {
-            event OrderSubmitted {
-            }
-            view OrderView {
-                subscribes [OrderSubmitted]
-            }
-        }
+			content := `emod = 1
+
+model "" {
+}
+
+context "Orders" {
+  aggregate "Sales" {
+    slice "OrderSlice" {
+      event "OrderSubmitted" {
+      }
+
+      view "OrderView" {
+        subscribes = [OrderSubmitted]
+      }
     }
-}`
+  }
+}
+`
 			p.openDocument(t, uri, content)
 
 			defID := 2
 			// Position is on "OrderSubmitted" in the subscribes line.
-			// In the content, "subscribes [OrderSubmitted]" is at line 6 (0-based).
-			// The text "OrderSubmitted" starts at column 28 (0-based) on that line.
 			p.writeMsg(t, &lsp.Message{
 				JSONRPC: "2.0",
 				ID:      &defID,
@@ -574,8 +598,8 @@ context "C" {
 						"uri": uri,
 					},
 					"position": map[string]interface{}{
-						"line":      6,
-						"character": 28,
+						"line":      12,
+						"character": 22,
 					},
 				}),
 			})
@@ -590,12 +614,12 @@ context "C" {
 			err := json.Unmarshal(resp.Result, &loc)
 			require.NoError(t, err)
 			require.Equal(t, uri, loc.URI)
-			// The event "OrderSubmitted" definition is at line 3 (0-based),
-			// column 18 (0-based), in the content above.
-			require.Equal(t, 3, loc.Range.Start.Line)
-			require.Equal(t, 18, loc.Range.Start.Character)
-			require.Equal(t, 3, loc.Range.End.Line)
-			require.Equal(t, 32, loc.Range.End.Character)
+			// The event "OrderSubmitted" is declared on line 8, its name
+			// starting one column past the quote that opens it.
+			require.Equal(t, 8, loc.Range.Start.Line)
+			require.Equal(t, 13, loc.Range.Start.Character)
+			require.Equal(t, 8, loc.Range.End.Line)
+			require.Equal(t, 27, loc.Range.End.Character)
 		})
 
 		t.Run("returns null result when cursor not on a reference", func(t *testing.T) {
@@ -604,7 +628,7 @@ context "C" {
 			p.readInitializeResult(t, 1)
 
 			uri := "file:///test.emod"
-			content := `model "test"`
+			content := `model "test" {}`
 			p.openDocument(t, uri, content)
 
 			defID := 2
@@ -668,27 +692,36 @@ context "C" {
 			p.readInitializeResult(t, 1)
 
 			uri := "file:///test.emod"
-			content := `context "Orders" {
-    aggregate "Sales" {
-        slice "OrderSlice" {
-            command SubmitOrder {
-            }
-            event OrderSubmitted {
-            }
-            view OrderView {
-                subscribes [OrderSubmitted]
-            }
-            automation AutoSubmit {
-                on OrderSubmitted
-                command SubmitOrder
-            }
-        }
+			content := `emod = 1
+
+model "" {
+}
+
+context "Orders" {
+  aggregate "Sales" {
+    slice "OrderSlice" {
+      command "SubmitOrder" {
+      }
+
+      event "OrderSubmitted" {
+      }
+
+      view "OrderView" {
+        subscribes = [OrderSubmitted]
+      }
+
+      automation "AutoSubmit" {
+        on      = OrderSubmitted
+        command = SubmitOrder
+      }
     }
-}`
+  }
+}
+`
 			p.openDocument(t, uri, content)
 
 			refID := 2
-			// Cursor on "OrderSubmitted" in event definition: line 5, character 18.
+			// Cursor on "OrderSubmitted" where the event declares it.
 			p.writeMsg(t, &lsp.Message{
 				JSONRPC: "2.0",
 				ID:      &refID,
@@ -698,8 +731,8 @@ context "C" {
 						"uri": uri,
 					},
 					"position": map[string]interface{}{
-						"line":      5,
-						"character": 18,
+						"line":      11,
+						"character": 13,
 					},
 				}),
 			})
@@ -723,28 +756,37 @@ context "C" {
 			p.readInitializeResult(t, 1)
 
 			uri := "file:///test.emod"
-			content := `context "Orders" {
-    aggregate "Sales" {
-        slice "OrderSlice" {
-            command SubmitOrder {
-            }
-            event OrderSubmitted {
-            }
-            view OrderView {
-                subscribes [OrderSubmitted]
-            }
-            automation AutoSubmit {
-                on OrderSubmitted
-                reads OrderView
-                command SubmitOrder
-            }
-        }
+			content := `emod = 1
+
+model "" {
+}
+
+context "Orders" {
+  aggregate "Sales" {
+    slice "OrderSlice" {
+      command "SubmitOrder" {
+      }
+
+      event "OrderSubmitted" {
+      }
+
+      view "OrderView" {
+        subscribes = [OrderSubmitted]
+      }
+
+      automation "AutoSubmit" {
+        on      = OrderSubmitted
+        reads   = OrderView
+        command = SubmitOrder
+      }
     }
-}`
+  }
+}
+`
 			p.openDocument(t, uri, content)
 
 			refID := 2
-			// Cursor on "OrderView" in the view declaration: line 7, character 17.
+			// Cursor on "OrderView" where the view declares it.
 			p.writeMsg(t, &lsp.Message{
 				JSONRPC: "2.0",
 				ID:      &refID,
@@ -754,8 +796,8 @@ context "C" {
 						"uri": uri,
 					},
 					"position": map[string]interface{}{
-						"line":      7,
-						"character": 17,
+						"line":      14,
+						"character": 12,
 					},
 				}),
 			})
@@ -771,15 +813,15 @@ context "C" {
 				{
 					URI: uri,
 					Range: lsp.Range{
-						Start: lsp.Position{Line: 7, Character: 17},
-						End:   lsp.Position{Line: 7, Character: 26},
+						Start: lsp.Position{Line: 14, Character: 12},
+						End:   lsp.Position{Line: 14, Character: 21},
 					},
 				},
 				{
 					URI: uri,
 					Range: lsp.Range{
-						Start: lsp.Position{Line: 12, Character: 22},
-						End:   lsp.Position{Line: 12, Character: 31},
+						Start: lsp.Position{Line: 20, Character: 18},
+						End:   lsp.Position{Line: 20, Character: 27},
 					},
 				},
 			}, locs)
@@ -791,17 +833,24 @@ context "C" {
 			p.readInitializeResult(t, 1)
 
 			uri := "file:///test.emod"
-			content := `context "Orders" {
-    aggregate "Sales" {
-        slice "OrderSlice" {
-            event OrderSubmitted {
-            }
-            view OrderView {
-                subscribes [OrderSubmitted]
-            }
-        }
+			content := `emod = 1
+
+model "" {
+}
+
+context "Orders" {
+  aggregate "Sales" {
+    slice "OrderSlice" {
+      event "OrderSubmitted" {
+      }
+
+      view "OrderView" {
+        subscribes = [OrderSubmitted]
+      }
     }
-}`
+  }
+}
+`
 			p.openDocument(t, uri, content)
 
 			refID := 2
@@ -865,7 +914,7 @@ context "C" {
 			p.readInitializeResult(t, 1)
 
 			uri := "file:///hover.emod"
-			content := `model "test"`
+			content := `model "test" {}`
 			p.openDocument(t, uri, content)
 
 			hoverID := 2
@@ -899,20 +948,27 @@ context "C" {
 			p.readInitializeResult(t, 1)
 
 			uri := "file:///hover.emod"
-			content := `context "Orders" {
-    aggregate "Sales" {
-        slice "OrderSlice" {
-            automation ShipOnSubmit {
-                on OrderSubmitted
-                command ShipOrder
-            }
-            automation SweepStaleOrders {
-                every "5m"
-                command ExpireOrder
-            }
-        }
+			content := `emod = 1
+
+model "" {
+}
+
+context "Orders" {
+  aggregate "Sales" {
+    slice "OrderSlice" {
+      automation "ShipOnSubmit" {
+        on      = OrderSubmitted
+        command = ShipOrder
+      }
+
+      automation "SweepStaleOrders" {
+        every   = "5m"
+        command = ExpireOrder
+      }
     }
-}`
+  }
+}
+`
 			p.openDocument(t, uri, content)
 
 			for i, tc := range []struct {
@@ -923,20 +979,20 @@ context "C" {
 			}{
 				{
 					keyword:   "automation",
-					line:      3,
-					character: 12,
+					line:      8,
+					character: 6,
 					expected:  "Defines an automation, the reactive processor of the Automation pattern: activated by an on event or an every schedule, optionally reads a view, and sends a command.",
 				},
 				{
 					keyword:   "on",
-					line:      4,
-					character: 16,
+					line:      9,
+					character: 8,
 					expected:  "Names the event whose occurrence activates the automation.",
 				},
 				{
 					keyword:   "every",
-					line:      8,
-					character: 16,
+					line:      14,
+					character: 8,
 					expected:  `Sets the schedule that activates the automation: a duration such as "5m", or a five-field cron expression such as "0 2 * * *".`,
 				},
 			} {
@@ -1012,7 +1068,7 @@ context "C" {
 			p.readInitializeResult(t, 1)
 
 			uri := "file:///format.emod"
-			content := "emod 1\nmodel \"test\"\n\nactor \"Guest\"\n\ncontext \"Orders\" {\n  aggregate \"Order\" {\n  }\n}\n"
+			content := "emod = 1\n\nmodel \"test\" {\n}\n\nactor \"Guest\" {\n}\n\ncontext \"Orders\" {\n  aggregate \"Order\" {\n  }\n}\n"
 
 			p.openDocument(t, uri, content)
 
@@ -1041,7 +1097,7 @@ context "C" {
 			require.Equal(t, []lsp.TextEdit{{
 				Range: lsp.Range{
 					Start: lsp.Position{Line: 0, Character: 0},
-					End:   lsp.Position{Line: 9, Character: 0},
+					End:   lsp.Position{Line: 12, Character: 0},
 				},
 				NewText: content,
 			}}, edits)
@@ -1053,7 +1109,7 @@ context "C" {
 			p.readInitializeResult(t, 1)
 
 			uri := "file:///comments.emod"
-			content := "# System description\nmodel \"test\"\n"
+			content := "# System description\nmodel \"test\" {}\n"
 
 			p.openDocument(t, uri, content)
 
@@ -1145,15 +1201,21 @@ context "C" {
 			p.readInitializeResult(t, 1)
 
 			uri := "file:///st.emod"
-			content := `context "Orders" {
-    aggregate "Sales" {
-        slice "OrderSlice" {
-            command SubmitOrder {
-            }
-            event OrderSubmitted {
-            }
-        }
+			content := `emod = 1
+
+model "" {
+}
+
+context "Orders" {
+  aggregate "Sales" {
+    slice "OrderSlice" {
+      command "SubmitOrder" {
+      }
+
+      event "OrderSubmitted" {
+      }
     }
+  }
 }
 `
 			p.openDocument(t, uri, content)
@@ -1266,7 +1328,7 @@ context "C" {
 						"uri":        uri,
 						"languageId": "emod",
 						"version":    1,
-						"text":       `model "session"`,
+						"text":       `model "session" {}`,
 					},
 				}),
 			})

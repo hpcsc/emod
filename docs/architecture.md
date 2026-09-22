@@ -49,8 +49,7 @@ graph TD
     end
 
     subgraph Pipeline
-        lexer[lexer]
-        parser[parser]
+        parser[parser<br/><i>HCL → model</i>]
         validator[validator<br/><i>do names resolve?</i>]
         linter[linter<br/><i>is this good modeling?</i>]
     end
@@ -72,7 +71,6 @@ graph TD
     pipeline --> formatter
     lsp --> formatter
 
-    oracle --> lexer
     oracle --> parser
     oracle --> validator
     oracle --> linter
@@ -84,8 +82,7 @@ graph TD
     glossary --> ast
     importer --> ast
 
-    lexer --> diagnostic
-    parser --> lexer
+    parser --> diagnostic
     parser --> ast
     validator --> ast
     linter --> ast
@@ -112,26 +109,23 @@ cannot disagree about what a file means.
 
 ```mermaid
 flowchart LR
-    src[".emod source"] --> lexer
-    lexer -- "[]Token" --> parser
+    src[".emod source"] --> parser
     parser -- "*ast.Model" --> validator
     parser -- "*ast.Model" --> linter
 
-    lexer -. diagnostics .-> D
     parser -. diagnostics .-> D
     validator -. diagnostics .-> D
     linter -. diagnostics .-> D
     D["[]*diagnostic.Entry"]
 
     subgraph "oracle.Run"
-        lexer[lexer.Scan]
         parser[parser.Parse]
         validator[validator.Validate]
         linter[linter.Lint]
     end
 ```
 
-- **`oracle.Parse`** runs the lex/parse prefix and returns a best-effort model:
+- **`oracle.Parse`** runs the parse prefix and returns a best-effort model:
   non-nil even when diagnostics are present, holding whatever the parser could
   recover. Formatting and read-only commands use it.
 - **`oracle.Run`** runs the full chain. `emod validate` and `emod lint` both
@@ -212,8 +206,8 @@ The **LSP** (`internal/lsp`) layers transport framing → dispatch
 (`server.go`) → one pure function per feature (`GetCompletions`,
 `GetDefinition`, `GetReferences`, `GetHover`, `GetSemanticTokens`) taking
 `(text, line, character)`. Diagnostics and formatting go through the oracle.
-`keywords_test.go` pins that every lexer keyword has a hover description and
-that completion lists never offer a spelling the lexer doesn't define.
+`keywords_test.go` pins that every keyword has a hover description and that
+completion lists never offer a spelling the language does not define.
 
 ## The viewer, and its three distributions
 
@@ -329,12 +323,12 @@ coupling: `internal/frontend` embeds `generated/*`, which is gitignored — run
 
 ## Editor tooling and the drift guards
 
-The language is spelled in three grammar surfaces, with the Go lexer as the
-single source of truth:
+The language is spelled in three grammar surfaces, with the keyword list in
+`internal/test` as the single source of truth:
 
 ```mermaid
 flowchart TD
-    KW["internal/lexer keywords map<br/><i>canonical</i>"]
+    KW["internal/test keywords list<br/><i>canonical</i>"]
     KW --> TS["editors/tree-sitter-emod/grammar.js<br/>+ queries/highlights.scm"]
     KW --> TM["editors/vscode/syntaxes/emod.tmLanguage.json"]
     KW --> LSPK["internal/lsp hover descriptions<br/>+ completion lists"]
@@ -344,7 +338,7 @@ flowchart TD
     LSPT["internal/lsp/keywords_test.go<br/><i>build tag: unit</i>"] -. asserts coverage .-> LSPK
 ```
 
-Adding a keyword to the lexer without updating the editor grammars fails
+Adding a keyword to the list without updating the editor grammars fails
 `task test:grammar`; without a hover description it fails the unit suite. A
 standing constraint recorded in `tasks/learnings.md`: every keyword must stay
 usable as a field name, on both the Go and the grammar side.
@@ -354,7 +348,7 @@ usable as a field name, on both the Go and the grammar side.
 Go tests are tagged: `unit` (fast, most of the suite), `integration`
 (cross-stage runs over the docs and example fixtures) and `grammar` (drives
 the tree-sitter CLI from Go, run via `task test:grammar`). Shared parsed-model
-fixtures live in `internal/test` and go through the real lexer and parser so
+fixtures live in `internal/test` and go through the real parser so
 their positions match production models.
 
 `Taskfile.yml` is the build entry point — `task build` (CLI, including the

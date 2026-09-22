@@ -98,12 +98,13 @@ func TestValidate(t *testing.T) {
 	})
 
 	t.Run("returns error naming retired trigger kind replacement", func(t *testing.T) {
-		input := `model "Test"
+		input := `model "Test" {}
+
 context "Ctx" {
   aggregate "Agg" {
     slice "Slice" {
-      trigger Schedule "Nightly Sweep" {
-        reads PendingExpiries
+      trigger "Schedule" "Nightly Sweep" {
+        reads = PendingExpiries
       }
     }
   }
@@ -120,34 +121,40 @@ context "Ctx" {
 	})
 
 	t.Run("returns error naming both events and the wire type they share", func(t *testing.T) {
-		input := `model "Test"
+		input := `emod = 1
+
+model "Test" {
+}
+
 context "Reservations" {
   aggregate "Reservation" {
     slice "Reserve Room" {
-      command ReserveRoom {
+      command "ReserveRoom" {
         fields {
-          guestId string required
+          guestId = required(string)
         }
       }
 
-      event RoomReserved {
-        type "com.acme.reservations.room-reserved"
+      event "RoomReserved" {
+        type = "com.acme.reservations.room-reserved"
+
         fields {
-          reservationId string required
+          reservationId = required(string)
         }
       }
 
-      event RoomHeld {
-        type "com.acme.reservations.room-reserved"
+      event "RoomHeld" {
+        type = "com.acme.reservations.room-reserved"
+
         fields {
-          reservationId string required
+          reservationId = required(string)
         }
       }
 
-      flow {
-        command -> event: ReserveRoom -> RoomReserved
-        command -> event: ReserveRoom -> RoomHeld
-      }
+      flow = <<-FLOW
+        command -> event:    ReserveRoom -> RoomReserved
+        command -> event:    ReserveRoom -> RoomHeld
+      FLOW
     }
   }
 }
@@ -179,14 +186,21 @@ context "Reservations" {
 	})
 
 	t.Run("returns semantic error for automation targeting nonexistent context", func(t *testing.T) {
-		input := `model "Test"
+		input := `emod = 1
+
+model "Test" {
+}
+
 context "Orders" {
   aggregate "Order" {
     slice "Process Order" {
-      automation OrderNotifier {
-        on OrderPlaced
-        command NotifyCustomer
-        target context NonExistent
+      automation "OrderNotifier" {
+        on      = OrderPlaced
+        command = NotifyCustomer
+
+        target {
+          context = NonExistent
+        }
       }
     }
   }
@@ -202,13 +216,17 @@ context "Orders" {
 	})
 
 	t.Run("returns error for automation activation event referencing nonexistent event", func(t *testing.T) {
-		input := `model "Test"
+		input := `emod = 1
+
+model "Test" {
+}
+
 context "Orders" {
   aggregate "Order" {
     slice "Process Order" {
-      automation OrderNotifier {
-        on NonExistentEvent
-        command NotifyCustomer
+      automation "OrderNotifier" {
+        on      = NonExistentEvent
+        command = NotifyCustomer
       }
     }
   }
@@ -224,28 +242,35 @@ context "Orders" {
 	})
 
 	t.Run("returns error naming the schedule expression of neither accepted form", func(t *testing.T) {
-		input := `model "Reservations"
+		input := `emod = 1
+
+model "Reservations" {
+}
+
 context "Reservations" {
   aggregate "Reservation" {
     slice "Expire Stale Holds" {
-      command ExpireHold {
+      command "ExpireHold" {
         fields {
-          holdId string required
+          holdId = required(string)
         }
       }
-      event HoldExpired {
+
+      event "HoldExpired" {
         fields {
-          holdId    string    required
-          expiredAt timestamp required
+          holdId    = required(string)
+          expiredAt = required(timestamp)
         }
       }
-      automation StaleHoldExpirer {
-        every "nightly"
-        command ExpireHold
+
+      automation "StaleHoldExpirer" {
+        every   = "nightly"
+        command = ExpireHold
       }
-      flow {
-        command -> event: ExpireHold -> HoldExpired
-      }
+
+      flow = <<-FLOW
+        command -> event:    ExpireHold -> HoldExpired
+      FLOW
     }
   }
 }
@@ -261,33 +286,43 @@ context "Reservations" {
 	})
 
 	t.Run("returns error naming the delay that is not a Go duration", func(t *testing.T) {
-		input := `model "Reservations"
+		input := `emod = 1
+
+model "Reservations" {
+}
+
 context "Reservations" {
   aggregate "Reservation" {
     slice "Release Expired Hold" {
-      command ReleaseHold {
+      command "ReleaseHold" {
         fields {
-          holdId string required
+          holdId = required(string)
         }
       }
-      event RoomHeld {
-        source external "Booking"
+
+      event "RoomHeld" {
+        source = external("Booking")
+
         fields {
-          holdId string required
+          holdId = required(string)
         }
       }
-      event HoldReleased {
+
+      event "HoldReleased" {
         fields {
-          holdId string required
+          holdId = required(string)
         }
       }
-      automation ExpiredHoldReleaser {
-        on RoomHeld after "24 hours"
-        command ReleaseHold
+
+      automation "ExpiredHoldReleaser" {
+        on      = RoomHeld
+        after   = "24 hours"
+        command = ReleaseHold
       }
-      flow {
-        command -> event: ReleaseHold -> HoldReleased
-      }
+
+      flow = <<-FLOW
+        command -> event:    ReleaseHold -> HoldReleased
+      FLOW
     }
   }
 }
@@ -303,28 +338,40 @@ context "Reservations" {
 	})
 
 	t.Run("returns error naming the invariant an aggregate declares twice", func(t *testing.T) {
-		input := `model "Library Lending"
+		input := `emod = 1
+
+model "Library Lending" {
+}
+
 context "Lending" {
   aggregate "Loan" {
-    invariant OneCopyPerLoan "A loan covers exactly one copy of one title"
-    invariant OneCopyPerLoan "A loan is settled once"
+    invariants {
+      OneCopyPerLoan = "A loan covers exactly one copy"
+    }
+
+    invariants {
+      OneCopyPerLoan = "A loan is settled once"
+    }
+
     slice "Borrow Copy" {
-      command BorrowCopy {
+      command "BorrowCopy" {
         fields {
-          memberId string required
-          copyId   string required
+          memberId = required(string)
+          copyId   = required(string)
         }
       }
-      event CopyBorrowed {
+
+      event "CopyBorrowed" {
         fields {
-          loanId   string required
-          memberId string required
-          copyId   string required
+          loanId   = required(string)
+          memberId = required(string)
+          copyId   = required(string)
         }
       }
-      flow {
-        command -> event: BorrowCopy -> CopyBorrowed
-      }
+
+      flow = <<-FLOW
+        command -> event:    BorrowCopy -> CopyBorrowed
+      FLOW
     }
   }
 }
@@ -340,30 +387,37 @@ context "Lending" {
 	})
 
 	t.Run("returns error naming the event a spec misspells", func(t *testing.T) {
-		input := `model "Library Lending"
+		input := `emod = 1
+
+model "Library Lending" {
+}
+
 context "Lending" {
   aggregate "Loan" {
     slice "Borrow Copy" {
-      command BorrowCopy {
+      command "BorrowCopy" {
         fields {
-          memberId string required
-          copyId   string required
+          memberId = required(string)
+          copyId   = required(string)
         }
       }
-      event CopyBorrowed {
+
+      event "CopyBorrowed" {
         fields {
-          loanId   string required
-          memberId string required
-          copyId   string required
+          loanId   = required(string)
+          memberId = required(string)
+          copyId   = required(string)
         }
       }
+
+      flow = <<-FLOW
+        command -> event:    BorrowCopy -> CopyBorrowed
+      FLOW
+
       spec "borrows a copy the member returned" {
-        given [CopyBorroed]
-        when BorrowCopy
-        then [CopyBorrowed]
-      }
-      flow {
-        command -> event: BorrowCopy -> CopyBorrowed
+        given = [CopyBorroed]
+        when  = BorrowCopy
+        then  = [CopyBorrowed]
       }
     }
   }
@@ -380,29 +434,36 @@ context "Lending" {
 	})
 
 	t.Run("returns error naming the payload field a spec states and the construct that does not declare it", func(t *testing.T) {
-		input := `model "Library Lending"
+		input := `emod = 1
+
+model "Library Lending" {
+}
+
 context "Lending" {
   aggregate "Loan" {
     slice "Borrow Copy" {
-      command BorrowCopy {
+      command "BorrowCopy" {
         fields {
-          memberId string required
-          copyId   string required
+          memberId = required(string)
+          copyId   = required(string)
         }
       }
-      event CopyBorrowed {
+
+      event "CopyBorrowed" {
         fields {
-          loanId   string required
-          memberId string required
-          copyId   string required
+          loanId   = required(string)
+          memberId = required(string)
+          copyId   = required(string)
         }
       }
+
+      flow = <<-FLOW
+        command -> event:    BorrowCopy -> CopyBorrowed
+      FLOW
+
       spec "borrows a copy no one holds" {
-        when BorrowCopy { copyIdd: "C-93204" }
-        then [CopyBorrowed]
-      }
-      flow {
-        command -> event: BorrowCopy -> CopyBorrowed
+        when = BorrowCopy({ copyIdd = "C-93204" })
+        then = [CopyBorrowed]
       }
     }
   }
@@ -419,29 +480,36 @@ context "Lending" {
 	})
 
 	t.Run("returns error naming the payload value a spec states and the type its field declares", func(t *testing.T) {
-		input := `model "Library Lending"
+		input := `emod = 1
+
+model "Library Lending" {
+}
+
 context "Lending" {
   aggregate "Loan" {
     slice "Borrow Copy" {
-      command BorrowCopy {
+      command "BorrowCopy" {
         fields {
-          memberId string required
-          copyId   string required
+          memberId = required(string)
+          copyId   = required(string)
         }
       }
-      event CopyBorrowed {
+
+      event "CopyBorrowed" {
         fields {
-          loanId   string required
-          memberId string required
-          renewals int
+          loanId   = required(string)
+          memberId = required(string)
+          renewals = int
         }
       }
+
+      flow = <<-FLOW
+        command -> event:    BorrowCopy -> CopyBorrowed
+      FLOW
+
       spec "borrows a copy no one holds" {
-        when BorrowCopy
-        then [CopyBorrowed { renewals: 12.50 }]
-      }
-      flow {
-        command -> event: BorrowCopy -> CopyBorrowed
+        when = BorrowCopy
+        then = [CopyBorrowed({ renewals = 12.50 })]
       }
     }
   }
@@ -458,31 +526,41 @@ context "Lending" {
 	})
 
 	t.Run("returns error naming the invariant a spec rejects from outside the declaring scope", func(t *testing.T) {
-		input := `model "Library Lending"
+		input := `emod = 1
+
+model "Library Lending" {
+}
+
 context "Lending" {
-  invariant FiveCopiesPerMember "A member holds at most five copies at one time"
+  invariants {
+    FiveCopiesPerMember = "A member holds at most five copies at one time"
+  }
+
   aggregate "Loan" {
     slice "Borrow Copy" {
-      command BorrowCopy {
+      command "BorrowCopy" {
         fields {
-          memberId string required
-          copyId   string required
+          memberId = required(string)
+          copyId   = required(string)
         }
       }
-      event CopyBorrowed {
+
+      event "CopyBorrowed" {
         fields {
-          loanId   string required
-          memberId string required
-          copyId   string required
+          loanId   = required(string)
+          memberId = required(string)
+          copyId   = required(string)
         }
       }
+
+      flow = <<-FLOW
+        command -> event:    BorrowCopy -> CopyBorrowed
+      FLOW
+
       spec "refuses a member who already holds five copies" {
-        given [CopyBorrowed]
-        when BorrowCopy
-        then rejected FiveCopiesPerMember
-      }
-      flow {
-        command -> event: BorrowCopy -> CopyBorrowed
+        given = [CopyBorrowed]
+        when  = BorrowCopy
+        then  = rejected(FiveCopiesPerMember)
       }
     }
   }
@@ -499,37 +577,46 @@ context "Lending" {
 	})
 
 	t.Run("returns error naming the view a spec outcome names and the kind it was looked up as", func(t *testing.T) {
-		input := `model "Library Lending"
+		input := `emod = 1
+
+model "Library Lending" {
+}
+
 context "Lending" {
   aggregate "Loan" {
     slice "Review Member Loans" {
-      view MemberLoansView {
+      view "MemberLoansView" {
+        subscribes = [CopyBorrowed]
+
         fields {
-          loanId string required
+          loanId = required(string)
         }
-        subscribes [CopyBorrowed]
       }
+
       spec "lists loans no one holds" {
-        then view MissingView
+        then = view(MissingView)
       }
     }
+
     slice "Borrow Copy" {
-      command BorrowCopy {
+      command "BorrowCopy" {
         fields {
-          memberId string required
-          copyId   string required
+          memberId = required(string)
+          copyId   = required(string)
         }
       }
-      event CopyBorrowed {
+
+      event "CopyBorrowed" {
         fields {
-          loanId   string required
-          memberId string required
-          copyId   string required
+          loanId   = required(string)
+          memberId = required(string)
+          copyId   = required(string)
         }
       }
-      flow {
-        command -> event: BorrowCopy -> CopyBorrowed
-      }
+
+      flow = <<-FLOW
+        command -> event:    BorrowCopy -> CopyBorrowed
+      FLOW
     }
   }
 }
@@ -545,45 +632,55 @@ context "Lending" {
 	})
 
 	t.Run("returns error naming the view a trigger's reads misspells, at the line the reads is written on", func(t *testing.T) {
-		input := `model "Library Lending"
+		input := `emod = 1
 
-actor "Member"
+model "Library Lending" {
+}
+
+actor "Member" {
+}
 
 context "Lending" {
   aggregate "Loan" {
     slice "Review Member Loans" {
       trigger "Loans Board" {
-        actor Member
-        reads MemberLoansView
+        actor = Member
+        reads = MemberLoansView
       }
-      view MemberLoansView {
+
+      view "MemberLoansView" {
+        subscribes = [CopyBorrowed]
+
         fields {
-          loanId string required
+          loanId = required(string)
         }
-        subscribes [CopyBorrowed]
       }
     }
+
     slice "Borrow Copy" {
       trigger "Lending Desk" {
-        actor Member
-        reads MemberLoansVeiw
+        actor = Member
+        reads = MemberLoansVeiw
       }
-      command BorrowCopy {
+
+      command "BorrowCopy" {
         fields {
-          memberId string required
-          copyId   string required
+          memberId = required(string)
+          copyId   = required(string)
         }
       }
-      event CopyBorrowed {
+
+      event "CopyBorrowed" {
         fields {
-          loanId   string required
-          memberId string required
-          copyId   string required
+          loanId   = required(string)
+          memberId = required(string)
+          copyId   = required(string)
         }
       }
-      flow {
-        command -> event: BorrowCopy -> CopyBorrowed
-      }
+
+      flow = <<-FLOW
+        command -> event:    BorrowCopy -> CopyBorrowed
+      FLOW
     }
   }
 }
@@ -595,43 +692,54 @@ context "Lending" {
 		var lintErr *cli.LintError
 		require.True(t, errors.As(err, &lintErr))
 		require.Equal(t, 1, lintErr.ExitCode)
-		require.Equal(t, path+`:22: view "MemberLoansVeiw" does not exist`, err.Error())
+		require.Equal(t, path+`:29: view "MemberLoansVeiw" does not exist`, err.Error())
 	})
 
 	t.Run("returns error naming the outcome shape and construct kind for a view outcome inside a command slice", func(t *testing.T) {
-		input := `model "Library Lending"
+		input := `emod = 1
+
+model "Library Lending" {
+}
+
 context "Lending" {
   aggregate "Loan" {
     slice "Borrow Copy" {
-      command BorrowCopy {
+      command "BorrowCopy" {
         fields {
-          memberId string required
-          copyId   string required
+          memberId = required(string)
+          copyId   = required(string)
         }
       }
-      event CopyBorrowed {
+
+      event "CopyBorrowed" {
         fields {
-          loanId   string required
-          memberId string required
-          copyId   string required
+          loanId   = required(string)
+          memberId = required(string)
+          copyId   = required(string)
         }
       }
+
+      flow = <<-FLOW
+        command -> event:    BorrowCopy -> CopyBorrowed
+      FLOW
+
       spec "lists loans no one holds" {
-        then view MemberLoansView
-      }
-      flow {
-        command -> event: BorrowCopy -> CopyBorrowed
+        then = view(MemberLoansView)
       }
     }
   }
 }
-context "Reading Room" mode dcb {
+
+context "Reading Room" {
+  mode = dcb
+
   slice "Browse Desk Occupancy" {
-    view MemberLoansView {
+    view "MemberLoansView" {
+      subscribes = [DeskClaimed]
+
       fields {
-        deskId string required
+        deskId = required(string)
       }
-      subscribes [DeskClaimed]
     }
   }
 }
@@ -647,64 +755,79 @@ context "Reading Room" mode dcb {
 	})
 
 	t.Run("returns no error for valid multi-context model", func(t *testing.T) {
-		input := `model "Multi Context Test"
+		input := `emod = 1
+
+model "Multi Context Test" {
+}
 
 context "Orders" {
   aggregate "Order" {
     slice "Place Order" {
-      command PlaceOrder {
+      command "PlaceOrder" {
         fields {
-          orderId     string required
-          totalAmount string required
+          orderId     = required(string)
+          totalAmount = required(string)
         }
       }
-      event OrderPlaced {
+
+      event "OrderPlaced" {
         fields {
-          orderId     string required
-          totalAmount string required
+          orderId     = required(string)
+          totalAmount = required(string)
         }
       }
-      flow {
-        command -> event: PlaceOrder -> OrderPlaced
-      }
+
+      flow = <<-FLOW
+        command -> event:    PlaceOrder -> OrderPlaced
+      FLOW
     }
+
     slice "Browse Orders" {
-      view PlacedOrdersView {
+      view "PlacedOrdersView" {
+        subscribes = [OrderPlaced]
+
         fields {
-          orderId     string required
-          totalAmount string required
+          orderId     = required(string)
+          totalAmount = required(string)
         }
-        subscribes [OrderPlaced]
       }
     }
+
     slice "Notify On Order" {
-      automation OrderNotifier {
-        on OrderPlaced
-        reads PlacedOrdersView
-        command SendNotification
-        target context Notifications
+      automation "OrderNotifier" {
+        on      = OrderPlaced
+        reads   = PlacedOrdersView
+        command = SendNotification
+
+        target {
+          context = Notifications
+        }
       }
     }
   }
 }
+
 context "Notifications" {
   aggregate "Notification" {
     slice "Send Notification" {
-      command SendNotification {
+      command "SendNotification" {
         fields {
-          message string required
+          message = required(string)
         }
       }
-      flow {
-        command -> event: SendNotification -> NotificationReceived
-      }
-      event NotificationReceived {
-        source external "Email Provider"
+
+      event "NotificationReceived" {
+        source = external("Email Provider")
+
         fields {
-          notificationId string required
-          receivedAt     timestamp required
+          notificationId = required(string)
+          receivedAt     = required(timestamp)
         }
       }
+
+      flow = <<-FLOW
+        command -> event:    SendNotification -> NotificationReceived
+      FLOW
     }
   }
 }
@@ -717,75 +840,90 @@ context "Notifications" {
 	})
 
 	t.Run("returns no error for automation targeting existing context", func(t *testing.T) {
-		input := `model "Test"
+		input := `emod = 1
+
+model "Test" {
+}
+
 context "Orders" {
   aggregate "Order" {
     slice "Place Order" {
-      command PlaceOrder {
+      command "PlaceOrder" {
         fields {
-          orderId     string required
-          totalAmount string required
+          orderId     = required(string)
+          totalAmount = required(string)
         }
       }
-      event OrderPlaced {
+
+      event "OrderPlaced" {
         fields {
-          orderId     string required
-          totalAmount string required
+          orderId     = required(string)
+          totalAmount = required(string)
         }
       }
-      flow {
-        command -> event: PlaceOrder -> OrderPlaced
-      }
+
+      flow = <<-FLOW
+        command -> event:    PlaceOrder -> OrderPlaced
+      FLOW
     }
+
     slice "Browse Orders" {
-      view PlacedOrdersView {
+      view "PlacedOrdersView" {
+        subscribes = [OrderPlaced]
+
         fields {
-          orderId     string required
-          totalAmount string required
+          orderId     = required(string)
+          totalAmount = required(string)
         }
-        subscribes [OrderPlaced]
       }
     }
+
     slice "Notify On Order" {
-      automation OrderNotifier {
-        on OrderPlaced
-        reads PlacedOrdersView
-        command SendNotification
-        target context Notifications
+      automation "OrderNotifier" {
+        on      = OrderPlaced
+        reads   = PlacedOrdersView
+        command = SendNotification
+
+        target {
+          context = Notifications
+        }
       }
     }
   }
 }
+
 context "Notifications" {
   aggregate "Notification" {
     slice "Send Notification" {
-      command SendNotification {
+      command "SendNotification" {
         fields {
-          message string required
+          message = required(string)
         }
       }
-      command SendEmail {
+
+      command "SendEmail" {
         fields {
-          to string required
+          to = required(string)
         }
       }
-      flow {
-        command -> event: SendNotification -> NotificationRequested
-      }
-      flow {
-        command -> event: SendEmail -> NotificationRequested
-      }
-      event NotificationRequested {
+
+      event "NotificationRequested" {
         fields {
-          notificationId string required
-          message        string required
+          notificationId = required(string)
+          message        = required(string)
         }
       }
-      automation Sender {
-        on NotificationRequested
-        reads PlacedOrdersView
-        command SendEmail
+
+      automation "Sender" {
+        on      = NotificationRequested
+        reads   = PlacedOrdersView
+        command = SendEmail
       }
+
+      flow = <<-FLOW
+        command -> event:    SendNotification -> NotificationRequested
+        command -> event:    SendEmail -> NotificationRequested
+      FLOW
     }
   }
 }
@@ -802,16 +940,16 @@ context "Notifications" {
 context "Test" {
   aggregate "Test" {
     slice "Test" {
-      command OrderPlaced {}
-      event OrderUpdated {}
-      view OrderList {}
-      automation OrderNotifier {
-        on OrderUpdated
-        command OrderPlaced
+      command "OrderPlaced" {}
+      event "OrderUpdated" {}
+      view "OrderList" {}
+      automation "OrderNotifier" {
+        on = OrderUpdated
+        command = OrderPlaced
       }
-      flow {
-        command -> event: OrderPlaced -> OrderUpdated
-      }
+      flow = <<-FLOW
+        command -> event:    OrderPlaced -> OrderUpdated
+      FLOW
     }
   }
 }
@@ -842,21 +980,24 @@ context "Test" {
 	})
 
 	t.Run("returns both lint warnings and validation errors", func(t *testing.T) {
-		input := `model "Test"
+		input := `model "Test" {}
+
 context "Orders" {
   aggregate "Order" {
     slice "Process Order" {
-      command OrderPlaced {}
-      event OrderUpdated {}
-      view OrderList {}
-      automation OrderNotifier {
-        on OrderPlaced
-        command NotifyCustomer
-        target context NonExistent
+      command "OrderPlaced" {}
+      event "OrderUpdated" {}
+      view "OrderList" {}
+      automation "OrderNotifier" {
+        on = OrderPlaced
+        command = NotifyCustomer
+        target {
+          context = NonExistent
+        }
       }
-      flow {
-        command -> event: OrderPlaced -> OrderUpdated
-      }
+      flow = <<-FLOW
+        command -> event:    OrderPlaced -> OrderUpdated
+      FLOW
     }
   }
 }
@@ -876,7 +1017,7 @@ context "Orders" {
 	})
 
 	t.Run("rejects a file declaring an unsupported version", func(t *testing.T) {
-		const unsupportedVersionEmod = "emod 2\n" + validEmod
+		unsupportedVersionEmod := strings.Replace(validEmod, "emod = 1", "emod = 2", 1)
 
 		t.Run("text output is the version diagnostic and nothing else", func(t *testing.T) {
 			path := writeTemp(t, "unsupported.emod", unsupportedVersionEmod)
@@ -969,25 +1110,31 @@ context "Orders" {
 	})
 
 	t.Run("json format on warning-only file outputs warning severity and exit code 1", func(t *testing.T) {
-		input := `model "Test"
+		input := `emod = 1
+
+model "Test" {
+}
+
 context "Orders" {
   aggregate "Order" {
     slice "Update Order" {
-      command PlaceOrder {
+      command "PlaceOrder" {
         fields {
-          orderId string required
-          reason  string required
+          orderId = required(string)
+          reason  = required(string)
         }
       }
-      event OrderUpdated {
+
+      event "OrderUpdated" {
         fields {
-          orderId string required
-          reason  string required
+          orderId = required(string)
+          reason  = required(string)
         }
       }
-      flow {
-        command -> event: PlaceOrder -> OrderUpdated
-      }
+
+      flow = <<-FLOW
+        command -> event:    PlaceOrder -> OrderUpdated
+      FLOW
     }
   }
 }
@@ -1012,23 +1159,29 @@ context "Orders" {
 	})
 
 	t.Run("json format on file with errors outputs error severity and exit code 2", func(t *testing.T) {
-		input := `model "Test"
+		input := `emod = 1
+
+model "Test" {
+}
+
 context "Orders" {
   aggregate "Order" {
     slice "Events" {
-      command PlaceOrder {
+      command "PlaceOrder" {
         fields {
-          orderId string required
+          orderId = required(string)
         }
       }
-      event SingleIdEvent {
+
+      event "SingleIdEvent" {
         fields {
-          orderId string required
+          orderId = required(string)
         }
       }
-      flow {
-        command -> event: PlaceOrder -> SingleIdEvent
-      }
+
+      flow = <<-FLOW
+        command -> event:    PlaceOrder -> SingleIdEvent
+      FLOW
     }
   }
 }

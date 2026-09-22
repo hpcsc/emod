@@ -5,23 +5,16 @@ package oracle
 import (
 	"github.com/hpcsc/emod/internal/ast"
 	"github.com/hpcsc/emod/internal/diagnostic"
-	"github.com/hpcsc/emod/internal/lexer"
 	"github.com/hpcsc/emod/internal/linter"
 	"github.com/hpcsc/emod/internal/parser"
 	"github.com/hpcsc/emod/internal/validator"
 )
 
-// Parse reads the source in whichever syntax it is written in and returns the
-// model alongside any diagnostics. The model is best-effort: it is non-nil
-// even when diagnostics are present, holding whatever the parser could
-// recover.
+// Parse reads the source and returns the model alongside any diagnostics. The
+// model is best-effort: it is non-nil even when diagnostics are present,
+// holding whatever the parser could recover.
 func Parse(source string, filename string) (*ast.Model, []*diagnostic.Entry) {
-	if parser.IsHCL(source) {
-		return parser.ParseHCL(source, filename)
-	}
-	tokens, diagnostics := lexer.Scan(source, filename)
-	model, parserDiags := parser.New(tokens, filename).Parse()
-	return model, append(diagnostics, parserDiags...)
+	return parser.Parse(source, filename)
 }
 
 // Run runs the full lex/parse/validate/lint chain and returns the model
