@@ -10,7 +10,7 @@ import (
 	"github.com/hpcsc/emod/internal/ast"
 	"github.com/hpcsc/emod/internal/cli"
 	"github.com/hpcsc/emod/internal/lexer"
-	"github.com/hpcsc/emod/internal/parser"
+	"github.com/hpcsc/emod/internal/oracle"
 	"github.com/hpcsc/emod/internal/test"
 	"github.com/stretchr/testify/require"
 )
@@ -270,11 +270,8 @@ func parseExample(t *testing.T, name string) *ast.Model {
 	source, err := os.ReadFile(path)
 	require.NoError(t, err)
 
-	tokens, lexDiags := lexer.Scan(string(source), path)
-	require.Empty(t, lexDiags)
-
-	model, parseDiags := parser.New(tokens, path).Parse()
-	require.Empty(t, parseDiags)
+	model, diagnostics := oracle.Parse(string(source), path)
+	require.Empty(t, diagnostics)
 
 	return model
 }

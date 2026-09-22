@@ -1,167 +1,181 @@
-emod 1
+emod = 1
+
 # Hotel holds and reservations — the scenarios each slice must satisfy
-model "Hotel Reservation"
+model "Hotel Reservation" {
+}
 
 actor "Guest" {
-  description "A person booking a room"
+  description = "A person booking a room"
 }
 
 context "Reservations" {
-  description "Owns the reservation lifecycle from booking to checkout"
+  description = "Owns the reservation lifecycle from booking to checkout"
+
   aggregate "Reservation" {
-    invariant RoomNotDoubleBooked "A room has at most one active reservation for any date range"
-    invariant OneOutstandingHoldPerRoom "A room carries at most one outstanding hold"
-    invariant HoldReleasedOnce "A hold is released exactly once"
+    invariants {
+      RoomNotDoubleBooked       = "A room has at most one active reservation for any date range"
+      OneOutstandingHoldPerRoom = "A room carries at most one outstanding hold"
+      HoldReleasedOnce          = "A hold is released exactly once"
+    }
+
     slice "Reserve a Room" {
       trigger "Reservation Form" {
-        actor Guest
-        reads AvailableRoomsView
+        actor = Guest
+        reads = AvailableRoomsView
       }
 
-      command ReserveRoom {
-        description "Guest books a specific room for a date range"
+      command "ReserveRoom" {
+        description = "Guest books a specific room for a date range"
+
         fields {
-          roomId    string required
-          guestName string required
-          checkIn   date   required
-          checkOut  date   required
+          roomId    = required(string)
+          guestName = required(string)
+          checkIn   = required(date)
+          checkOut  = required(date)
         }
       }
 
-      event RoomReserved {
-        type "com.hotel.reservations.room-reserved"
+      event "RoomReserved" {
+        type = "com.hotel.reservations.room-reserved"
+
         fields {
-          reservationId string    required
-          roomId        string    required
-          checkIn       date      required
-          checkOut      date      required
-          reservedAt    timestamp required
+          reservationId = required(string)
+          roomId        = required(string)
+          checkIn       = required(date)
+          checkOut      = required(date)
+          reservedAt    = required(timestamp)
         }
       }
 
-      flow {
+      flow = <<-FLOW
         command -> event:    ReserveRoom -> RoomReserved
         command -> rejected: ReserveRoom -> RoomNotDoubleBooked
-      }
+      FLOW
 
       spec "reserves a free room" {
-        when ReserveRoom { roomId: "204" }
-        then [RoomReserved { roomId: "204" }]
+        when = ReserveRoom({ roomId = "204" })
+        then = [RoomReserved({ roomId = "204" })]
       }
 
       spec "rejects a double booking" {
-        given [RoomReserved { roomId: "101", checkIn: "2026-08-01", checkOut: "2026-08-03" }]
-        when  ReserveRoom { roomId: "101", checkIn: "2026-08-02", checkOut: "2026-08-04" }
-        then  rejected RoomNotDoubleBooked
+        given = [RoomReserved({ roomId = "101", checkIn = "2026-08-01", checkOut = "2026-08-03" })]
+        when  = ReserveRoom({ roomId = "101", checkIn = "2026-08-02", checkOut = "2026-08-04" })
+        then  = rejected(RoomNotDoubleBooked)
       }
     }
 
     slice "Hold a Room" {
-      command HoldRoom {
-        description "Guest reserves a room provisionally, pending confirmation"
+      command "HoldRoom" {
+        description = "Guest reserves a room provisionally, pending confirmation"
+
         fields {
-          roomId    string required
-          guestName string required
+          roomId    = required(string)
+          guestName = required(string)
         }
       }
 
-      event RoomHeld {
-        type "com.hotel.reservations.room-held"
+      event "RoomHeld" {
+        type = "com.hotel.reservations.room-held"
+
         fields {
-          holdId string    required
-          roomId string    required
-          heldAt timestamp required
+          holdId = required(string)
+          roomId = required(string)
+          heldAt = required(timestamp)
         }
       }
 
-      flow {
-        command -> event: HoldRoom -> RoomHeld
-      }
+      flow = <<-FLOW
+        command -> event:    HoldRoom -> RoomHeld
+      FLOW
 
       spec "holds a room nobody has booked" {
-        when HoldRoom { roomId: "204", guestName: "Ada Lovelace" }
-        then [RoomHeld { holdId: "H-3391", roomId: "204", heldAt: "2026-07-30T11:20:00Z" }]
+        when = HoldRoom({ roomId = "204", guestName = "Ada Lovelace" })
+        then = [RoomHeld({ holdId = "H-3391", roomId = "204", heldAt = "2026-07-30T11:20:00Z" })]
       }
 
       spec "rejects a hold on a room already held" {
-        given [RoomHeld { roomId: "204" }]
-        when  HoldRoom { roomId: "204" }
-        then  rejected OneOutstandingHoldPerRoom
+        given = [RoomHeld({ roomId = "204" })]
+        when  = HoldRoom({ roomId = "204" })
+        then  = rejected(OneOutstandingHoldPerRoom)
       }
     }
 
     slice "Release Hold" {
-      command ReleaseHold {
+      command "ReleaseHold" {
         fields {
-          holdId string required
+          holdId = required(string)
         }
       }
 
-      event HoldReleased {
-        type "com.hotel.reservations.hold-released"
+      event "HoldReleased" {
+        type = "com.hotel.reservations.hold-released"
+
         fields {
-          holdId     string    required
-          roomId     string    required
-          releasedAt timestamp required
+          holdId     = required(string)
+          roomId     = required(string)
+          releasedAt = required(timestamp)
         }
       }
 
-      flow {
-        command -> event: ReleaseHold -> HoldReleased
-      }
+      flow = <<-FLOW
+        command -> event:    ReleaseHold -> HoldReleased
+      FLOW
 
       spec "releases an outstanding hold" {
-        given [RoomHeld { holdId: "H-3391" }]
-        when  ReleaseHold { holdId: "H-3391" }
-        then  [HoldReleased { holdId: "H-3391", roomId: "204", releasedAt: "2026-07-31T11:20:00Z" }]
+        given = [RoomHeld({ holdId = "H-3391" })]
+        when  = ReleaseHold({ holdId = "H-3391" })
+        then  = [HoldReleased({ holdId = "H-3391", roomId = "204", releasedAt = "2026-07-31T11:20:00Z" })]
       }
 
       spec "rejects releasing a hold already released" {
-        given [HoldReleased { holdId: "H-3391" }]
-        when  ReleaseHold { holdId: "H-3391" }
-        then  rejected HoldReleasedOnce
+        given = [HoldReleased({ holdId = "H-3391" })]
+        when  = ReleaseHold({ holdId = "H-3391" })
+        then  = rejected(HoldReleasedOnce)
       }
     }
 
     slice "Available Rooms" {
-      view AvailableRoomsView {
-        description "Rooms bookable right now — neither held nor reserved"
-        subscribes [RoomHeld, RoomReserved, HoldReleased]
+      view "AvailableRoomsView" {
+        description = "Rooms bookable right now — neither held nor reserved"
+        subscribes  = [RoomHeld, RoomReserved, HoldReleased]
+
         fields {
-          roomId string required
-          status string required
+          roomId = required(string)
+          status = required(string)
         }
       }
 
       spec "a held room is not available" {
-        given [RoomHeld { roomId: "204" }]
-        then  view AvailableRoomsView
+        given = [RoomHeld({ roomId = "204" })]
+        then  = view(AvailableRoomsView)
       }
     }
 
     slice "Unreleased Holds" {
-      view UnreleasedHoldsView {
-        description "Holds still outstanding — the work the expirer has left to do"
-        subscribes [RoomHeld, RoomReserved, HoldReleased]
+      view "UnreleasedHoldsView" {
+        description = "Holds still outstanding — the work the expirer has left to do"
+        subscribes  = [RoomHeld, RoomReserved, HoldReleased]
+
         fields {
-          holdId string    required
-          roomId string    required
-          heldAt timestamp required
+          holdId = required(string)
+          roomId = required(string)
+          heldAt = required(timestamp)
         }
       }
     }
 
     slice "Release Expired Hold" {
-      automation ExpiredHoldReleaser {
-        on RoomHeld after "24h"
-        reads UnreleasedHoldsView
-        command ReleaseHold
+      automation "ExpiredHoldReleaser" {
+        on      = RoomHeld
+        after   = "24h"
+        reads   = UnreleasedHoldsView
+        command = ReleaseHold
       }
 
       spec "hold expires after a day" {
-        given [RoomHeld]
-        when  RoomHeld
-        then  command ReleaseHold
+        given = [RoomHeld]
+        when  = RoomHeld
+        then  = command(ReleaseHold)
       }
     }
   }

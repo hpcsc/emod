@@ -1,372 +1,356 @@
-emod 1
+emod = 1
+
 # Hotel Reservation System — exercises all four slice patterns
 model "Hotel Reservation" {
-  description "How the hotel takes, confirms and closes a stay"
+  description = "How the hotel takes, confirms and closes a stay"
 }
 
 actor "Guest" {
-  description "Someone booking a room or leaving one"
+  description = "Someone booking a room or leaving one"
 }
 
 context "Reservations" {
-  description "Everything the hotel knows about who holds which room"
+  description = "Everything the hotel knows about who holds which room"
+
   aggregate "Reservation" {
-    description "One guest holding one room over one date range"
-    invariant RoomNotDoubleBooked "A room holds at most one reservation over any overlapping stay"
-    invariant StayEndsAfterItBegins "A reservation's check-out date falls after its check-in date"
-    invariant StayClosedOnce "A stay is closed exactly once"
-    invariant OneReservationPerBooking "A partner's booking reference maps to at most one reservation"
-    invariant OnlyUnstartedStaysExpire "Only a reservation whose stay never began is released by the overnight sweep"
+    description = "One guest holding one room over one date range"
+
+    invariants {
+      RoomNotDoubleBooked      = "A room holds at most one reservation over any overlapping stay"
+      StayEndsAfterItBegins    = "A reservation's check-out date falls after its check-in date"
+      StayClosedOnce           = "A stay is closed exactly once"
+      OneReservationPerBooking = "A partner's booking reference maps to at most one reservation"
+      OnlyUnstartedStaysExpire = "Only a reservation whose stay never began is released by the overnight sweep"
+    }
+
     # Slice 1: Command Pattern
     slice "Reserve a Room" {
-      description "A guest books a room for a stay"
+      description = "A guest books a room for a stay"
+
       trigger "Reservation Form" {
-        description "The form a guest fills in to book a room"
-        actor Guest
-        reads AvailableRoomsView
+        description = "The form a guest fills in to book a room"
+        actor       = Guest
+        reads       = AvailableRoomsView
       }
 
-      command ReserveRoom {
-        description "Ask the hotel to hold a room for a stay"
+      command "ReserveRoom" {
+        description = "Ask the hotel to hold a room for a stay"
+
         fields {
-          roomId     string required
-          guestName  string required
-          checkIn    date   required
-          checkOut   date   required
-          guests     int    required
-          accessible bool   optional
+          roomId     = required(string)
+          guestName  = required(string)
+          checkIn    = required(date)
+          checkOut   = required(date)
+          guests     = required(int)
+          accessible = optional(bool)
         }
       }
 
-      event RoomReserved {
-        description "A room was held for a guest over a date range"
-        type "com.hotel.reservations.room-reserved"
+      event "RoomReserved" {
+        description = "A room was held for a guest over a date range"
+        type        = "com.hotel.reservations.room-reserved"
+
         fields {
-          reservationId string    required
-          roomId        string    required
-          guestName     string    required
-          checkIn       date      required
-          checkOut      date      required
-          guests        int       required
-          accessible    bool      optional
-          reservedAt    timestamp required
+          reservationId = required(string)
+          roomId        = required(string)
+          guestName     = required(string)
+          checkIn       = required(date)
+          checkOut      = required(date)
+          guests        = required(int)
+          accessible    = optional(bool)
+          reservedAt    = required(timestamp)
         }
       }
 
-      flow {
+      flow = <<-FLOW
         command -> event:    ReserveRoom -> RoomReserved
         command -> rejected: ReserveRoom -> RoomNotDoubleBooked
-      }
+      FLOW
 
       spec "holds a room nobody has booked" {
-        when ReserveRoom {
-          roomId:     "R-204"
-          guestName:  "Ada Lovelace"
-          checkIn:    "2026-04-17"
-          checkOut:   "2026-04-20"
-          guests:     2
-          accessible: true
-        }
-        then [
-          RoomReserved {
-            reservationId: "RES-8814"
-            roomId:        "R-204"
-            guests:        2
-            accessible:    true
-            reservedAt:    "2026-03-02T09:41:00Z"
-          }
-        ]
+        when = ReserveRoom({ roomId = "R-204", guestName = "Ada Lovelace", checkIn = "2026-04-17", checkOut = "2026-04-20", guests = 2, accessible = true })
+        then = [RoomReserved({ reservationId = "RES-8814", roomId = "R-204", guests = 2, accessible = true, reservedAt = "2026-03-02T09:41:00Z" })]
       }
 
       spec "refuses a room already held over the same nights" {
-        given [RoomReserved { roomId: "R-204", checkIn: "2026-04-17", checkOut: "2026-04-20" }]
-        when  ReserveRoom { roomId: "R-204", checkIn: "2026-04-18", checkOut: "2026-04-21" }
-        then  rejected RoomNotDoubleBooked
+        given = [RoomReserved({ roomId = "R-204", checkIn = "2026-04-17", checkOut = "2026-04-20" })]
+        when  = ReserveRoom({ roomId = "R-204", checkIn = "2026-04-18", checkOut = "2026-04-21" })
+        then  = rejected(RoomNotDoubleBooked)
       }
 
       spec "refuses a stay that ends before it begins" {
-        when ReserveRoom { roomId: "R-311", checkIn: "2026-04-20", checkOut: "2026-04-17" }
-        then rejected StayEndsAfterItBegins
+        when = ReserveRoom({ roomId = "R-311", checkIn = "2026-04-20", checkOut = "2026-04-17" })
+        then = rejected(StayEndsAfterItBegins)
       }
     }
 
     # Slice 2: View Pattern
     slice "View Available Rooms" {
-      description "What a guest can still book"
-      view AvailableRoomsView {
-        description "Every room free to book, with the shape of stay it suits"
-        subscribes [RoomReserved, GuestCheckedOut]
+      description = "What a guest can still book"
+
+      view "AvailableRoomsView" {
+        description = "Every room free to book, with the shape of stay it suits"
+        subscribes  = [RoomReserved, GuestCheckedOut]
+
         fields {
-          roomId      string required
-          roomNumber  string required
-          type        string required
-          status      string required
-          nextCheckIn date   optional
+          roomId      = required(string)
+          roomNumber  = required(string)
+          type        = required(string)
+          status      = required(string)
+          nextCheckIn = optional(date)
         }
       }
 
       spec "lists the rooms a guest can still book" {
-        given [RoomReserved, GuestCheckedOut]
-        then  view AvailableRoomsView
+        given = [RoomReserved, GuestCheckedOut]
+        then  = view(AvailableRoomsView)
       }
     }
 
     # Slice 3: Command Pattern — Check Out
     slice "Check Out Guest" {
-      description "A guest settles up and leaves"
-      command CheckOutGuest {
-        description "Ask the hotel to close a stay and free its room"
+      description = "A guest settles up and leaves"
+
+      command "CheckOutGuest" {
+        description = "Ask the hotel to close a stay and free its room"
+
         fields {
-          reservationId string required
+          reservationId = required(string)
         }
       }
 
-      event GuestCheckedOut {
-        description "A guest left and the room came free"
-        type "com.hotel.reservations.guest-checked-out"
+      event "GuestCheckedOut" {
+        description = "A guest left and the room came free"
+        type        = "com.hotel.reservations.guest-checked-out"
+
         fields {
-          reservationId string    required
-          roomId        string    required
-          checkedOutAt  timestamp required
+          reservationId = required(string)
+          roomId        = required(string)
+          checkedOutAt  = required(timestamp)
         }
       }
 
-      flow {
-        command -> event: CheckOutGuest -> GuestCheckedOut
-      }
+      flow = <<-FLOW
+        command -> event:    CheckOutGuest -> GuestCheckedOut
+      FLOW
 
       spec "closes a stay that is under way" {
-        given [RoomReserved { reservationId: "RES-8814" }]
-        when  CheckOutGuest { reservationId: "RES-8814" }
-        then  [
-          GuestCheckedOut {
-            reservationId: "RES-8814"
-            roomId:        "R-204"
-            checkedOutAt:  "2026-04-20T10:05:00Z"
-          }
-        ]
+        given = [RoomReserved({ reservationId = "RES-8814" })]
+        when  = CheckOutGuest({ reservationId = "RES-8814" })
+        then  = [GuestCheckedOut({ reservationId = "RES-8814", roomId = "R-204", checkedOutAt = "2026-04-20T10:05:00Z" })]
       }
 
       spec "refuses to close a stay that already ended" {
-        given [
-          RoomReserved { reservationId: "RES-8814" },
-          GuestCheckedOut { reservationId: "RES-8814" }
-        ]
-        when  CheckOutGuest { reservationId: "RES-8814" }
-        then  rejected StayClosedOnce
+        given = [RoomReserved({ reservationId = "RES-8814" }), GuestCheckedOut({ reservationId = "RES-8814" })]
+        when  = CheckOutGuest({ reservationId = "RES-8814" })
+        then  = rejected(StayClosedOnce)
       }
     }
 
     # Slice 4: Automation Pattern
     slice "Send Confirmation Email" {
-      description "Confirming a booking once the guest has had time to correct it"
-      view PendingConfirmationsView {
-        description "Bookings still waiting on their confirmation email"
-        subscribes [RoomReserved, ConfirmationEmailSent]
+      description = "Confirming a booking once the guest has had time to correct it"
+
+      view "PendingConfirmationsView" {
+        description = "Bookings still waiting on their confirmation email"
+        subscribes  = [RoomReserved, ConfirmationEmailSent]
+
         fields {
-          reservationId string    required
-          guestName     string    required
-          reservedAt    timestamp required
+          reservationId = required(string)
+          guestName     = required(string)
+          reservedAt    = required(timestamp)
         }
       }
 
-      automation ConfirmationEmailReactor {
-        description "Leaves a booking a quarter of an hour to be corrected, then confirms it"
-        on RoomReserved after "15m"
-        reads PendingConfirmationsView
-        command SendConfirmationEmail
-        target context Notifications
+      automation "ConfirmationEmailReactor" {
+        description = "Leaves a booking a quarter of an hour to be corrected, then confirms it"
+        on          = RoomReserved
+        after       = "15m"
+        reads       = PendingConfirmationsView
+        command     = SendConfirmationEmail
+
+        target {
+          context = Notifications
+        }
       }
 
       spec "asks for a confirmation once a booking has settled" {
-        when RoomReserved
-        then command SendConfirmationEmail
+        when = RoomReserved
+        then = command(SendConfirmationEmail)
       }
     }
 
     # Slice 5: Translation Pattern
     slice "Import External Booking" {
-      description "A booking made on a partner's site"
-      command ImportExternalReservation {
-        description "Ask the hotel to record a booking taken elsewhere"
+      description = "A booking made on a partner's site"
+
+      command "ImportExternalReservation" {
+        description = "Ask the hotel to record a booking taken elsewhere"
+
         fields {
-          externalRef string required
-          roomId      string required
-          guestName   string required
-          checkIn     date   required
-          checkOut    date   required
+          externalRef = required(string)
+          roomId      = required(string)
+          guestName   = required(string)
+          checkIn     = required(date)
+          checkOut    = required(date)
         }
       }
 
-      translation BookingComImport {
-        description "Turns a partner's booking record into a reservation of ours"
-        external_system "Booking.com API"
-        reads AvailableRoomsView
-        command ImportExternalReservation
-        event ExternalReservationImported {
-          description "A partner's booking became a reservation here"
-          type "com.hotel.reservations.external-reservation-imported"
+      translation "BookingComImport" {
+        description     = "Turns a partner's booking record into a reservation of ours"
+        external_system = "Booking.com API"
+        reads           = AvailableRoomsView
+        command         = ImportExternalReservation
+
+        event "ExternalReservationImported" {
+          description = "A partner's booking became a reservation here"
+          type        = "com.hotel.reservations.external-reservation-imported"
+
           fields {
-            reservationId string required
-            externalRef   string required
-            source        string required
-            roomId        string required
-            guestName     string required
-            checkIn       date   required
-            checkOut      date   required
+            reservationId = required(string)
+            externalRef   = required(string)
+            source        = required(string)
+            roomId        = required(string)
+            guestName     = required(string)
+            checkIn       = required(date)
+            checkOut      = required(date)
           }
         }
       }
 
       spec "records a booking a partner took" {
-        when ImportExternalReservation {
-          externalRef: "BK-77213"
-          roomId:      "R-118"
-          guestName:   "Grace Hopper"
-        }
-        then [
-          ExternalReservationImported {
-            reservationId: "RES-9042"
-            externalRef:   "BK-77213"
-            source:        "Booking.com"
-          }
-        ]
+        when = ImportExternalReservation({ externalRef = "BK-77213", roomId = "R-118", guestName = "Grace Hopper" })
+        then = [ExternalReservationImported({ reservationId = "RES-9042", externalRef = "BK-77213", source = "Booking.com" })]
       }
 
       spec "refuses a partner booking already recorded" {
-        given [ExternalReservationImported { externalRef: "BK-77213" }]
-        when  ImportExternalReservation { externalRef: "BK-77213" }
-        then  rejected OneReservationPerBooking
+        given = [ExternalReservationImported({ externalRef = "BK-77213" })]
+        when  = ImportExternalReservation({ externalRef = "BK-77213" })
+        then  = rejected(OneReservationPerBooking)
       }
     }
 
     # Slice 6: Automation Pattern — woken by a schedule
     slice "Expire Unconfirmed Reservations" {
-      description "Releasing rooms nobody confirmed"
-      command ExpireReservation {
-        description "Ask the hotel to release an unconfirmed reservation"
+      description = "Releasing rooms nobody confirmed"
+
+      command "ExpireReservation" {
+        description = "Ask the hotel to release an unconfirmed reservation"
+
         fields {
-          reservationId string required
+          reservationId = required(string)
         }
       }
 
-      event ReservationExpired {
-        description "An unconfirmed reservation released its room"
+      event "ReservationExpired" {
+        description = "An unconfirmed reservation released its room"
+
         fields {
-          reservationId string    required
-          roomId        string    required
-          expiredAt     timestamp required
+          reservationId = required(string)
+          roomId        = required(string)
+          expiredAt     = required(timestamp)
         }
       }
 
-      automation UnconfirmedReservationExpirer {
-        description "Runs overnight and releases whatever nobody confirmed"
-        every "0 2 * * *"
-        reads UnconfirmedReservationsView
-        command ExpireReservation
+      automation "UnconfirmedReservationExpirer" {
+        description = "Runs overnight and releases whatever nobody confirmed"
+        every       = "0 2 * * *"
+        reads       = UnconfirmedReservationsView
+        command     = ExpireReservation
       }
 
-      flow {
-        command -> event: ExpireReservation -> ReservationExpired
-      }
+      flow = <<-FLOW
+        command -> event:    ExpireReservation -> ReservationExpired
+      FLOW
 
       spec "asks for a release on every overnight sweep" {
-        given [RoomReserved]
-        then  command ExpireReservation
+        given = [RoomReserved]
+        then  = command(ExpireReservation)
       }
 
       spec "releases a room nobody confirmed" {
-        given [RoomReserved { reservationId: "RES-8814" }]
-        when  ExpireReservation { reservationId: "RES-8814" }
-        then  [
-          ReservationExpired {
-            reservationId: "RES-8814"
-            roomId:        "R-204"
-            expiredAt:     "2026-03-03T02:00:00Z"
-          }
-        ]
+        given = [RoomReserved({ reservationId = "RES-8814" })]
+        when  = ExpireReservation({ reservationId = "RES-8814" })
+        then  = [ReservationExpired({ reservationId = "RES-8814", roomId = "R-204", expiredAt = "2026-03-03T02:00:00Z" })]
       }
 
       spec "refuses to release a stay that already ended" {
-        given [
-          RoomReserved { reservationId: "RES-8814" },
-          GuestCheckedOut { reservationId: "RES-8814" }
-        ]
-        when  ExpireReservation { reservationId: "RES-8814" }
-        then  rejected OnlyUnstartedStaysExpire
+        given = [RoomReserved({ reservationId = "RES-8814" }), GuestCheckedOut({ reservationId = "RES-8814" })]
+        when  = ExpireReservation({ reservationId = "RES-8814" })
+        then  = rejected(OnlyUnstartedStaysExpire)
       }
     }
 
     # Slice 7: View Pattern — the expirer's todo list
     slice "View Unconfirmed Reservations" {
-      description "What the overnight sweep has left to do"
-      view UnconfirmedReservationsView {
-        description "Bookings nobody has confirmed yet"
-        subscribes [RoomReserved, ConfirmationEmailSent, GuestCheckedOut, ReservationExpired]
+      description = "What the overnight sweep has left to do"
+
+      view "UnconfirmedReservationsView" {
+        description = "Bookings nobody has confirmed yet"
+        subscribes  = [RoomReserved, ConfirmationEmailSent, GuestCheckedOut, ReservationExpired]
+
         fields {
-          reservationId string    required
-          roomId        string    required
-          reservedAt    timestamp required
+          reservationId = required(string)
+          roomId        = required(string)
+          reservedAt    = required(timestamp)
         }
       }
 
       spec "lists the bookings the sweep has left to do" {
-        given [RoomReserved]
-        then  view UnconfirmedReservationsView
+        given = [RoomReserved]
+        then  = view(UnconfirmedReservationsView)
       }
     }
   }
 }
 
 context "Notifications" {
-  description "How the hotel talks to its guests"
+  description = "How the hotel talks to its guests"
+
   aggregate "Notification" {
-    description "One message sent to one guest"
-    invariant OneConfirmationPerBooking "A booking is confirmed to its guest exactly once"
+    description = "One message sent to one guest"
+
+    invariants {
+      OneConfirmationPerBooking = "A booking is confirmed to its guest exactly once"
+    }
+
     slice "Send Confirmation" {
-      description "Emailing a guest the booking they just made"
-      command SendConfirmationEmail {
-        description "Ask the hotel to email a guest their confirmation"
+      description = "Emailing a guest the booking they just made"
+
+      command "SendConfirmationEmail" {
+        description = "Ask the hotel to email a guest their confirmation"
+
         fields {
-          reservationId string required
-          guestName     string required
-          email         string required
+          reservationId = required(string)
+          guestName     = required(string)
+          email         = required(string)
         }
       }
 
-      event ConfirmationEmailSent {
-        description "A guest was emailed the confirmation of their booking"
-        type "com.hotel.notifications.confirmation-email-sent"
+      event "ConfirmationEmailSent" {
+        description = "A guest was emailed the confirmation of their booking"
+        type        = "com.hotel.notifications.confirmation-email-sent"
+
         fields {
-          reservationId string    required
-          email         string    required
-          sentAt        timestamp required
+          reservationId = required(string)
+          email         = required(string)
+          sentAt        = required(timestamp)
         }
       }
 
-      flow {
-        command -> event: SendConfirmationEmail -> ConfirmationEmailSent
-      }
+      flow = <<-FLOW
+        command -> event:    SendConfirmationEmail -> ConfirmationEmailSent
+      FLOW
 
       spec "emails a guest the booking they just made" {
-        when SendConfirmationEmail {
-          reservationId: "RES-8814"
-          guestName:     "Ada Lovelace"
-          email:         "ada@example.com"
-        }
-        then [
-          ConfirmationEmailSent {
-            reservationId: "RES-8814"
-            email:         "ada@example.com"
-            sentAt:        "2026-03-02T09:56:00Z"
-          }
-        ]
+        when = SendConfirmationEmail({ reservationId = "RES-8814", guestName = "Ada Lovelace", email = "ada@example.com" })
+        then = [ConfirmationEmailSent({ reservationId = "RES-8814", email = "ada@example.com", sentAt = "2026-03-02T09:56:00Z" })]
       }
 
       spec "refuses to confirm a booking a second time" {
-        given [ConfirmationEmailSent { reservationId: "RES-8814" }]
-        when  SendConfirmationEmail { reservationId: "RES-8814" }
-        then  rejected OneConfirmationPerBooking
+        given = [ConfirmationEmailSent({ reservationId = "RES-8814" })]
+        when  = SendConfirmationEmail({ reservationId = "RES-8814" })
+        then  = rejected(OneConfirmationPerBooking)
       }
     }
   }

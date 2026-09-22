@@ -17,8 +17,7 @@ import (
 	"github.com/hpcsc/emod/internal/ast"
 	"github.com/hpcsc/emod/internal/diagnostic"
 	"github.com/hpcsc/emod/internal/export"
-	"github.com/hpcsc/emod/internal/lexer"
-	"github.com/hpcsc/emod/internal/parser"
+	"github.com/hpcsc/emod/internal/oracle"
 	"github.com/hpcsc/emod/internal/test"
 	"github.com/stretchr/testify/require"
 )
@@ -4758,11 +4757,8 @@ func TestExport(t *testing.T) {
 			source, err := os.ReadFile("../../examples/all_patterns.emod")
 			require.NoError(t, err)
 
-			tokens, lexDiags := lexer.Scan(string(source), "examples/all_patterns.emod")
-			require.Empty(t, lexDiags)
-
-			model, parseDiags := parser.New(tokens, "examples/all_patterns.emod").Parse()
-			require.Empty(t, parseDiags)
+			model, diagnostics := oracle.Parse(string(source), "examples/all_patterns.emod")
+			require.Empty(t, diagnostics)
 
 			jsonRaw, err := export.ExportJSON(model)
 			require.NoError(t, err)

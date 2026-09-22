@@ -52,67 +52,76 @@ requests to GitHub.
 Create `reservation.emod`:
 
 ```emod
-model "Hotel Reservation"
+emod = 1
 
-actor "Guest"
+model "Hotel Reservation" {
+}
+
+actor "Guest" {
+}
 
 context "Reservations" {
   aggregate "Reservation" {
     slice "Reserve a Room" {
       trigger "Reservation Form" {
-        actor Guest
-        reads AvailableRoomsView
+        actor = Guest
+        reads = AvailableRoomsView
       }
 
-      command ReserveRoom {
+      command "ReserveRoom" {
         fields {
-          roomId    string required
-          guestName string required
-          checkIn   date   required
-          checkOut  date   required
+          roomId    = required(string)
+          guestName = required(string)
+          checkIn   = required(date)
+          checkOut  = required(date)
         }
       }
 
-      event RoomReserved {
+      event "RoomReserved" {
         fields {
-          reservationId string required
-          roomId        string required
-          guestName     string required
-          reservedAt    timestamp required
+          reservationId = required(string)
+          roomId        = required(string)
+          guestName     = required(string)
+          reservedAt    = required(timestamp)
         }
       }
 
-      flow {
-        command -> event: ReserveRoom -> RoomReserved
-      }
+      flow = <<-FLOW
+        command -> event:    ReserveRoom -> RoomReserved
+      FLOW
     }
 
     slice "View Available Rooms" {
-      view AvailableRoomsView {
+      view "AvailableRoomsView" {
+        subscribes = [RoomReserved]
+
         fields {
-          roomId     string required
-          roomNumber string required
-          status     string required
+          roomId     = required(string)
+          roomNumber = required(string)
+          status     = required(string)
         }
-        subscribes [RoomReserved]
       }
     }
 
     slice "Send Confirmation Email" {
-      view PendingConfirmationsView {
+      view "PendingConfirmationsView" {
+        subscribes = [RoomReserved]
+
         fields {
-          reservationId string    required
-          guestName     string    required
-          reservedAt    timestamp required
+          reservationId = required(string)
+          guestName     = required(string)
+          reservedAt    = required(timestamp)
         }
-        subscribes [RoomReserved]
       }
 
-      automation ConfirmationEmailReactor {
-        on RoomReserved
-        reads PendingConfirmationsView
-        command SendConfirmationEmail
-        target context Notifications
+      automation "ConfirmationEmailReactor" {
+        on      = RoomReserved
+        reads   = PendingConfirmationsView
+        command = SendConfirmationEmail
+
+        target {
+          context = Notifications
+        }
       }
     }
   }
@@ -121,11 +130,11 @@ context "Reservations" {
 context "Notifications" {
   aggregate "Notification" {
     slice "Send Confirmation" {
-      command SendConfirmationEmail {
+      command "SendConfirmationEmail" {
         fields {
-          reservationId string required
-          guestName     string required
-          email         string required
+          reservationId = required(string)
+          guestName     = required(string)
+          email         = required(string)
         }
       }
     }
@@ -158,29 +167,42 @@ written in the emod grammar to HCL, and emod reads both.
 
 ### Dynamic Consistency Boundary (DCB) models
 
-For cross-cutting consistency boundaries, use `mode dcb` to define slices directly under a context with tagged events and tag-scoped decision queries:
+For cross-cutting consistency boundaries, use `mode = dcb` to define slices directly under a context with tagged events and tag-scoped decision queries:
 
 ```
-context "Fulfillment" mode dcb {
+context "Fulfillment" {
+  mode = dcb
+
   slice "Place Order" {
-    command PlaceOrder { ... }
-    event OrderPlaced {
-      tags { entity: customerId }
-      fields { orderId string required; customerId string required; ... }
+    command "PlaceOrder" { ... }
+
+    event "OrderPlaced" {
+      tags {
+        entity = customerId
+      }
+
+      fields {
+        orderId    = string
+        customerId = string
+      }
     }
-    flow { command -> event: PlaceOrder -> OrderPlaced }
+
+    flow = <<-FLOW
+      command -> event: PlaceOrder -> OrderPlaced
+    FLOW
   }
 
   slice "Authorize Payment" {
-    command AuthorizePayment {
+    command "AuthorizePayment" {
       decides_on {
-        events [OrderPlaced]
-        where tag(entity = customerId)
+        events = [OrderPlaced]
+        where  = tag(entity, customerId)
       }
+
       fields { ... }
     }
-    event PaymentAuthorized { ... }
-    flow { ... }
+
+    event "PaymentAuthorized" { ... }
   }
 }
 ```

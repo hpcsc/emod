@@ -1,123 +1,135 @@
-emod 1
+emod = 1
+
 # Order Processing — Dynamic Consistency Boundary model
 # Events carry tags so commands can express cross-cutting consistency
 # boundaries via tag-scoped queries
-model "Order Management"
+model "Order Management" {
+}
 
-actor "Customer"
+actor "Customer" {
+}
 
-context "Fulfillment" mode dcb {
+context "Fulfillment" {
+  mode = dcb
+
   slice "Place Order" {
-    command PlaceOrder {
+    command "PlaceOrder" {
       fields {
-        customerId string required
-        orderType  string required
-        total      int    required
+        customerId = required(string)
+        orderType  = required(string)
+        total      = required(int)
       }
     }
 
-    event OrderPlaced {
+    event "OrderPlaced" {
       tags {
-        entity  : customerId
-        category: orderType
+        entity   = customerId
+        category = orderType
       }
+
       fields {
-        orderId    string    required
-        customerId string    required
-        orderType  string    required
-        total      int       required
-        placedAt   timestamp required
+        orderId    = required(string)
+        customerId = required(string)
+        orderType  = required(string)
+        total      = required(int)
+        placedAt   = required(timestamp)
       }
     }
 
-    flow {
-      command -> event: PlaceOrder -> OrderPlaced
-    }
+    flow = <<-FLOW
+      command -> event:    PlaceOrder -> OrderPlaced
+    FLOW
   }
 
   slice "Authorize Payment" {
-    command AuthorizePayment {
+    command "AuthorizePayment" {
+      fields {
+        paymentId = required(string)
+        authCode  = required(string)
+      }
+
       decides_on {
-        events [OrderPlaced]
-        where tag(entity = customerId) and tag(category = orderType)
-      }
-      fields {
-        paymentId string required
-        authCode  string required
+        events = [OrderPlaced]
+        where  = tag(entity, customerId) && tag(category, orderType)
       }
     }
 
-    event PaymentAuthorized {
+    event "PaymentAuthorized" {
       tags {
-        entity  : customerId
-        category: orderType
+        entity   = customerId
+        category = orderType
       }
+
       fields {
-        paymentId  string required
-        orderId    string required
-        customerId string required
-        orderType  string required
-        authCode   string required
+        paymentId  = required(string)
+        orderId    = required(string)
+        customerId = required(string)
+        orderType  = required(string)
+        authCode   = required(string)
       }
     }
 
-    flow {
-      command -> event: AuthorizePayment -> PaymentAuthorized
-    }
+    flow = <<-FLOW
+      command -> event:    AuthorizePayment -> PaymentAuthorized
+    FLOW
   }
 
   slice "Ship Order" {
-    command ShipOrder {
+    command "ShipOrder" {
+      fields {
+        shipmentId = required(string)
+      }
+
       decides_on {
-        events [OrderPlaced]
-        where tag(entity = customerId)
-      }
-      fields {
-        shipmentId string required
+        events = [OrderPlaced]
+        where  = tag(entity, customerId)
       }
     }
 
-    event OrderShipped {
+    event "OrderShipped" {
       tags {
-        entity: customerId
+        entity = customerId
       }
+
       fields {
-        shipmentId string required
-        orderId    string required
-        customerId string required
+        shipmentId = required(string)
+        orderId    = required(string)
+        customerId = required(string)
       }
     }
 
-    flow {
-      command -> event: ShipOrder -> OrderShipped
-    }
+    flow = <<-FLOW
+      command -> event:    ShipOrder -> OrderShipped
+    FLOW
   }
 
   slice "Notify Customer" {
-    command SendNotification {
+    command "SendNotification" {
+      fields {
+        message = required(string)
+      }
+
       decides_on {
-        events [PaymentAuthorized, OrderShipped]
-        where tag(entity = customerId)
-      }
-      fields {
-        message string required
+        events = [PaymentAuthorized, OrderShipped]
+        where  = tag(entity, customerId)
       }
     }
 
-    event NotificationSent {
+    event "NotificationSent" {
       tags {
-        entity: customerId
+        entity = customerId
       }
+
       fields {
-        notificationId string required
-        orderId        string required
-        customerId     string required
-        message        string required
+        notificationId = required(string)
+        orderId        = required(string)
+        customerId     = required(string)
+        message        = required(string)
       }
     }
 
-    flow {
-      command -> event: SendNotification -> NotificationSent
-    }
+    flow = <<-FLOW
+      command -> event:    SendNotification -> NotificationSent
+    FLOW
   }
 }
