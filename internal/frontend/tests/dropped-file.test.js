@@ -57,13 +57,13 @@ describe('browser drop read', () => {
   // the browser hands over through a drop is content without a location.
   it('reads a file into the shape a host that opened one answers', async () => {
     const [handle] = droppedFiles()(transferOf(
-      new File(['emod 1\nmodel "Hotel"\n'], 'hotel.emod'),
+      new File(['emod = 1\n\nmodel "Hotel" {\n}\n'], 'hotel.emod'),
     ));
 
     await expect(handle.read()).resolves.toEqual({
       name: 'hotel.emod',
       path: '',
-      content: 'emod 1\nmodel "Hotel"\n',
+      content: 'emod = 1\n\nmodel "Hotel" {\n}\n',
     });
   });
 
@@ -95,7 +95,7 @@ describe('desktop drop read', () => {
 
   it('answers nothing, because the shell resolves a drop rather than the page', () => {
     expect(droppedFiles()(transferOf(
-      new File(['emod 1\n'], 'hotel.emod'),
+      new File(['emod = 1\n'], 'hotel.emod'),
       new File(['{}'], 'diagram.json'),
     ))).toEqual([]);
   });

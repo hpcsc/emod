@@ -39,7 +39,7 @@ vi.mock('../static/platform.js', () => ({
   parseEmod: vi.fn(() => parseQueue.length ? parseQueue.shift() : Promise.resolve(parseResult)),
   exportEmod: vi.fn((diagram) => exportFails
     ? Promise.reject(new Error('nothing to export'))
-    : Promise.resolve('emod 1\nmodel "' + (diagram.model_name || '') + '"\n')),
+    : Promise.resolve('emod = 1\n\nmodel "' + (diagram.model_name || '') + '" {\n}\n')),
   initialState: vi.fn(() => initialStateFails
     ? Promise.reject(new Error('host could not answer'))
     : Promise.resolve(typeof globalThis.INITIAL_DATA === 'undefined' ? null : globalThis.INITIAL_DATA)),
@@ -190,8 +190,8 @@ const { sourceToSave } = await import('../static/viewer.js');
 const platform = await import('../static/platform.js');
 const { DRAG_THRESHOLD, REVALIDATE_PAUSE_MS } = await import('../static/config.js');
 
-const billingSource = 'emod 1\nmodel "Billing"\n';
-const crlfSource = 'emod 1\r\nmodel "Billing"\r\n';
+const billingSource = 'emod = 1\n\nmodel "Billing" {\n}\n';
+const crlfSource = 'emod = 1\r\n\r\nmodel "Billing" {\r\n}\r\n';
 
 async function openBilling(content) {
   globalThis.INITIAL_DATA = null;
@@ -461,7 +461,7 @@ describe('viewer export', () => {
     await flush();
 
     expect(savedFile.name).toBe('Billing.emod');
-    expect(savedFile.content).toBe('emod 1\nmodel "Billing"\n');
+    expect(savedFile.content).toBe('emod = 1\n\nmodel "Billing" {\n}\n');
   });
 
   // Export writes the model re-serialised from the diagram, which has dropped
@@ -471,7 +471,7 @@ describe('viewer export', () => {
     globalThis.INITIAL_DATA = null;
     parseResult = { diagnostics: [], diagram: billingDiagram() };
     await startViewer();
-    deliverFile({ name: 'billing.emod', path: '/models/billing.emod', content: 'emod 1\nmodel "Billing"\n' });
+    deliverFile({ name: 'billing.emod', path: '/models/billing.emod', content: 'emod = 1\n\nmodel "Billing" {\n}\n' });
     await flush();
 
     document.getElementById('export-emod').click();
@@ -588,14 +588,14 @@ describe('viewer drag-and-drop', () => {
     const notes = new File([''], 'notes.txt');
     notes._content = 'plain text';
     const hotel = new File([''], 'hotel.emod');
-    hotel._content = 'emod 1\nmodel "Hotel"\n';
+    hotel._content = 'emod = 1\n\nmodel "Hotel" {\n}\n';
     const other = new File([''], 'other.emod');
-    other._content = 'emod 1\nmodel "Other"\n';
+    other._content = 'emod = 1\nmodel "Other"\n';
     fireDrop(document.getElementById('data-panel-body'), notes, hotel, other);
     await flush();
     await flush();
 
-    expect(document.getElementById('source-input').value).toBe('emod 1\nmodel "Hotel"\n');
+    expect(document.getElementById('source-input').value).toBe('emod = 1\n\nmodel "Hotel" {\n}\n');
     expect(windowTitle).toBe('hotel.emod — Emod Diagram Viewer');
   });
 
@@ -660,7 +660,7 @@ describe('viewer drag-and-drop', () => {
     document.documentElement.addEventListener('drop', () => reachedAbove.push('drop'));
 
     const file = new File([''], 'hotel.emod');
-    file._content = 'emod 1\nmodel "Hotel"\n';
+    file._content = 'emod = 1\n\nmodel "Hotel" {\n}\n';
     fireDrop(document.getElementById('data-panel-body'), file);
     await flush();
 
@@ -691,7 +691,7 @@ describe('files a host drops on the window', () => {
   const hotelOnDisk = {
     name: 'hotel.emod',
     path: '/models/hotel.emod',
-    content: 'emod 1\nmodel "Hotel"\n',
+    content: 'emod = 1\n\nmodel "Hotel" {\n}\n',
   };
 
   const handleFor = (name, opened) => ({ name, read: () => Promise.resolve(opened) });
@@ -756,11 +756,11 @@ describe('a second model asked for while the first is still being read', () => {
 
   it('opens the file dropped last, not the one whose read happened to settle last', async () => {
     await startEmpty();
-    const [alpha, releaseAlpha] = held('alpha.emod', '/m/alpha.emod', 'emod 1\nmodel "Alpha"\n');
+    const [alpha, releaseAlpha] = held('alpha.emod', '/m/alpha.emod', 'emod = 1\nmodel "Alpha"\n');
 
     deliverDroppedFiles([alpha]);
     await flush();
-    deliverDroppedFiles([settled('bravo.emod', '/m/bravo.emod', 'emod 1\nmodel "Bravo"\n')]);
+    deliverDroppedFiles([settled('bravo.emod', '/m/bravo.emod', 'emod = 1\nmodel "Bravo"\n')]);
     await flush();
     await flush();
     releaseAlpha();
@@ -769,16 +769,16 @@ describe('a second model asked for while the first is still being read', () => {
 
     expect(windowTitle).toBe('bravo.emod — Emod Diagram Viewer');
     expect(document.getElementById('stat-file-path').textContent).toBe('/m/bravo.emod');
-    expect(document.getElementById('source-input').value).toBe('emod 1\nmodel "Bravo"\n');
+    expect(document.getElementById('source-input').value).toBe('emod = 1\nmodel "Bravo"\n');
   });
 
   it('lets a file the host opened supersede a drop whose read is still held', async () => {
     await startEmpty();
-    const [alpha, releaseAlpha] = held('alpha.emod', '/m/alpha.emod', 'emod 1\nmodel "Alpha"\n');
+    const [alpha, releaseAlpha] = held('alpha.emod', '/m/alpha.emod', 'emod = 1\nmodel "Alpha"\n');
 
     deliverDroppedFiles([alpha]);
     await flush();
-    deliverFile({ name: 'chosen.emod', path: '/m/chosen.emod', content: 'emod 1\nmodel "Chosen"\n' });
+    deliverFile({ name: 'chosen.emod', path: '/m/chosen.emod', content: 'emod = 1\nmodel "Chosen"\n' });
     await flush();
     await flush();
     releaseAlpha();
@@ -799,7 +799,7 @@ describe('a second model asked for while the first is still being read', () => {
   // whatever was being read, so the refusal has to survive that read landing.
   it('keeps a refusal the user just caused, over an older read still outstanding', async () => {
     await startEmpty();
-    const [alpha, releaseAlpha] = held('alpha.emod', '/m/alpha.emod', 'emod 1\nmodel "Alpha"\n');
+    const [alpha, releaseAlpha] = held('alpha.emod', '/m/alpha.emod', 'emod = 1\nmodel "Alpha"\n');
 
     deliverDroppedFiles([alpha]);
     await flush();
@@ -829,7 +829,7 @@ describe('a second model asked for while the first is still being read', () => {
 
     deliverDroppedFiles([alpha]);
     await flush();
-    deliverDroppedFiles([settled('bravo.emod', '/m/bravo.emod', 'emod 1\nmodel "Bravo"\n')]);
+    deliverDroppedFiles([settled('bravo.emod', '/m/bravo.emod', 'emod = 1\nmodel "Bravo"\n')]);
     await flush();
     await flush();
     refuseAlpha();
@@ -893,7 +893,7 @@ describe('viewer field editor', () => {
 });
 
 describe('a file the host opens', () => {
-  const billingSource = 'emod 1\nmodel "Billing"\n';
+  const billingSource = 'emod = 1\n\nmodel "Billing" {\n}\n';
 
   async function openFile(file) {
     await startViewer();
@@ -985,7 +985,7 @@ describe('a file the host opens', () => {
 });
 
 describe('what the window names', () => {
-  const billingSource = 'emod 1\nmodel "Billing"\n';
+  const billingSource = 'emod = 1\n\nmodel "Billing" {\n}\n';
 
   it('keeps naming the model on screen when a delivered file will not render', async () => {
     globalThis.INITIAL_DATA = null;
@@ -1015,7 +1015,7 @@ describe('what the window names', () => {
     await flush();
 
     const dropped = new File([''], 'hotel.emod');
-    dropped._content = 'emod 1\nmodel "Hotel"\n';
+    dropped._content = 'emod = 1\n\nmodel "Hotel" {\n}\n';
     parseResult = { diagnostics: [], diagram: { ...billingDiagram(), model_name: 'Hotel' } };
     fireDrop(document.getElementById('data-panel-body'), dropped);
     await flush();
@@ -1036,7 +1036,7 @@ describe('what the window names', () => {
     await flush();
 
     parseResult = { diagnostics: [], diagram: { ...billingDiagram(), model_name: 'Hotel' } };
-    document.getElementById('source-input').value = 'emod 1\nmodel "Hotel"\n';
+    document.getElementById('source-input').value = 'emod = 1\n\nmodel "Hotel" {\n}\n';
     document.getElementById('render-btn').click();
     await flush();
 
@@ -1048,7 +1048,7 @@ describe('what the window names', () => {
     globalThis.INITIAL_DATA = null;
     parseResult = { diagnostics: [], diagram: billingDiagram() };
     await startViewer();
-    const delivered = 'emod 1\r\nmodel "Billing"\r\n';
+    const delivered = 'emod = 1\r\n\r\nmodel "Billing" {\r\n}\r\n';
     deliverFile({ name: 'crlf.emod', path: '/models/crlf.emod', content: delivered });
     await flush();
 
@@ -1056,7 +1056,7 @@ describe('what the window names', () => {
     // what the file delivered — which is exactly what an identity rule built on
     // comparing the two would trip over.
     expect(document.getElementById('source-input').value).not.toBe(delivered);
-    expect(document.getElementById('source-input').value).toBe('emod 1\nmodel "Billing"\n');
+    expect(document.getElementById('source-input').value).toBe('emod = 1\n\nmodel "Billing" {\n}\n');
 
     document.getElementById('render-btn').click();
     await flush();
@@ -1073,7 +1073,7 @@ describe('what the window names', () => {
     await flush();
 
     parseQueue = [Promise.reject(new Error('unparseable'))];
-    deliverFile({ name: 'broken.emod', path: '/models/broken.emod', content: 'emod 1\nnot a model\n' });
+    deliverFile({ name: 'broken.emod', path: '/models/broken.emod', content: 'emod = 1\nnot a model\n' });
     await flush();
 
     parseResult = { diagnostics: [], diagram: { ...billingDiagram(), model_name: 'Hotel' } };
@@ -1092,7 +1092,7 @@ describe('a file the host read but the pipeline will not render', () => {
     globalThis.INITIAL_DATA = null;
     parseResult = { diagnostics: [], diagram: billingDiagram() };
     await startViewer();
-    deliverFile({ name: 'billing.emod', path: '/models/billing.emod', content: 'emod 1\nmodel "Billing"\n' });
+    deliverFile({ name: 'billing.emod', path: '/models/billing.emod', content: 'emod = 1\n\nmodel "Billing" {\n}\n' });
     await flush();
     expect(document.getElementById('data-panel').classList.contains('collapsed')).toBe(true);
     if (beforeSecond) beforeSecond();
@@ -1138,11 +1138,11 @@ describe('a file the host read but the pipeline will not render', () => {
   });
 
   it('leaves the panel holding the model on screen, which the title and the path still name', async () => {
-    await openThenDeliver({ name: 'broken.emod', path: '/models/broken.emod', content: 'emod 1\nnot a model\n' }, () => {
+    await openThenDeliver({ name: 'broken.emod', path: '/models/broken.emod', content: 'emod = 1\nnot a model\n' }, () => {
       parseQueue = [Promise.reject(new Error('unparseable'))];
     });
 
-    expect(document.getElementById('source-input').value).toBe('emod 1\nmodel "Billing"\n');
+    expect(document.getElementById('source-input').value).toBe('emod = 1\n\nmodel "Billing" {\n}\n');
     expect(windowTitle).toBe('billing.emod — Emod Diagram Viewer');
     expect(document.getElementById('stat-file').textContent).toContain('/models/billing.emod');
   });
@@ -1153,7 +1153,7 @@ describe('a file the host could not read', () => {
     globalThis.INITIAL_DATA = null;
     parseResult = { diagnostics: [], diagram: billingDiagram() };
     await startViewer();
-    deliverFile({ name: 'billing.emod', path: '/models/billing.emod', content: 'emod 1\n' });
+    deliverFile({ name: 'billing.emod', path: '/models/billing.emod', content: 'emod = 1\n' });
     await flush();
     deliverFile({ error: 'reading /models/gone.emod: no such file or directory' });
     await flush();
@@ -1185,7 +1185,7 @@ describe('a file the host could not read', () => {
   it('leaves the source panel holding the model already open, not the file it could not read', async () => {
     await openThenFail();
 
-    expect(document.getElementById('source-input').value).toBe('emod 1\n');
+    expect(document.getElementById('source-input').value).toBe('emod = 1\n');
   });
 });
 
@@ -1196,11 +1196,11 @@ describe('saving the model', () => {
     await save();
 
     expect(savedFile.path).toBe('/models/billing.emod');
-    expect(savedFile.content).toBe('emod 1\nmodel "Billing"\n');
+    expect(savedFile.content).toBe('emod = 1\n\nmodel "Billing" {\n}\n');
   });
 
   it('hands over the panel source rather than the model re-serialised from the diagram', async () => {
-    await openBilling('emod 1\n// how a payment is taken\nmodel "Billing"\n');
+    await openBilling('emod = 1\n// how a payment is taken\nmodel "Billing"\n');
 
     await save();
 
@@ -1220,7 +1220,7 @@ describe('saving the model', () => {
 
   it('asks the host for a location when no file is open, and suggests a name from the model', async () => {
     await startEmpty();
-    document.getElementById('source-input').value = 'emod 1\nmodel "Billing"\n';
+    document.getElementById('source-input').value = 'emod = 1\n\nmodel "Billing" {\n}\n';
     document.getElementById('render-btn').click();
     await flush();
     saveAnswer = { name: 'hotel.emod', path: '/models/hotel.emod' };
@@ -1233,7 +1233,7 @@ describe('saving the model', () => {
 
   it('adopts the location the host chose as the open file, naming the window and the bar', async () => {
     await startEmpty();
-    document.getElementById('source-input').value = 'emod 1\nmodel "Billing"\n';
+    document.getElementById('source-input').value = 'emod = 1\n\nmodel "Billing" {\n}\n';
     saveAnswer = { name: 'hotel.emod', path: '/models/hotel.emod' };
 
     await save();
@@ -1245,7 +1245,7 @@ describe('saving the model', () => {
 
   it('writes to the adopted location without asking again', async () => {
     await startEmpty();
-    document.getElementById('source-input').value = 'emod 1\nmodel "Billing"\n';
+    document.getElementById('source-input').value = 'emod = 1\n\nmodel "Billing" {\n}\n';
     saveAnswer = { name: 'hotel.emod', path: '/models/hotel.emod' };
     await save();
 
@@ -1319,7 +1319,7 @@ describe('saving the model', () => {
     await save();
     expect(document.getElementById('save-status').classList.contains('hidden')).toBe(false);
 
-    document.getElementById('source-input').value = 'emod 1\nmodel "Hotel"\n';
+    document.getElementById('source-input').value = 'emod = 1\n\nmodel "Hotel" {\n}\n';
     document.getElementById('render-btn').click();
     await flush();
 
@@ -1367,7 +1367,7 @@ describe('saving the model', () => {
   // or the save after it treats an unedited panel as edited and rewrites every
   // line ending in a file the user never touched.
   it('remembers the bytes it wrote, so the next unedited save reproduces them', async () => {
-    const crlf = 'emod 1\r\nmodel "Billing"\r\n';
+    const crlf = 'emod = 1\r\n\r\nmodel "Billing" {\r\n}\r\n';
     globalThis.INITIAL_DATA = null;
     parseResult = { diagnostics: [], diagram: billingDiagram() };
     await startViewer();
@@ -1408,7 +1408,7 @@ describe('saving the model', () => {
     await save();
 
     expect(windowTitle).toBe('billing.emod — Emod Diagram Viewer');
-    expect(document.getElementById('source-input').value).toBe('emod 1\nmodel "Billing"\n');
+    expect(document.getElementById('source-input').value).toBe('emod = 1\n\nmodel "Billing" {\n}\n');
     expect(savedFile.path).toBe('/models/billing.emod');
   });
 });
@@ -1420,7 +1420,7 @@ describe('a save that overlaps something else', () => {
 
     let releaseParse;
     parseQueue = [new Promise((resolve) => { releaseParse = () => resolve({ diagnostics: [], diagram: billingDiagram() }); })];
-    deliverFile({ name: 'hotel.emod', path: '/models/hotel.emod', content: 'emod 1\nmodel "Hotel"\n' });
+    deliverFile({ name: 'hotel.emod', path: '/models/hotel.emod', content: 'emod = 1\n\nmodel "Hotel" {\n}\n' });
     await flush();
 
     const saving = save();
@@ -1428,7 +1428,7 @@ describe('a save that overlaps something else', () => {
     releaseParse();
     await saving;
 
-    expect(savedFile.content).toBe('emod 1\nmodel "Hotel"\n');
+    expect(savedFile.content).toBe('emod = 1\n\nmodel "Hotel" {\n}\n');
     expect(savedFile.path).toBe('/models/hotel.emod');
   });
 
@@ -1441,7 +1441,7 @@ describe('a save that overlaps something else', () => {
     const saving = save();
     await flush();
     saveHangs = null;
-    deliverFile({ name: 'hotel.emod', path: '/models/hotel.emod', content: 'emod 1\nmodel "Hotel"\n' });
+    deliverFile({ name: 'hotel.emod', path: '/models/hotel.emod', content: 'emod = 1\n\nmodel "Hotel" {\n}\n' });
     await flush();
     releaseWrite();
     await saving;
@@ -1460,7 +1460,7 @@ describe('a save that overlaps something else', () => {
     const first = save();
     await flush();
     saveHangs = null;
-    document.getElementById('source-input').value = 'emod 1\nmodel "Newer"\n';
+    document.getElementById('source-input').value = 'emod = 1\nmodel "Newer"\n';
     const second = save();
     await flush();
 
@@ -1473,7 +1473,7 @@ describe('a save that overlaps something else', () => {
     await Promise.all([first, second]);
     await flush();
 
-    expect(savedContents).toEqual([billingSource, 'emod 1\nmodel "Newer"\n']);
+    expect(savedContents).toEqual([billingSource, 'emod = 1\nmodel "Newer"\n']);
   });
 
   // Waiting on a single render is not enough: the file that arrives while that
@@ -1485,7 +1485,7 @@ describe('a save that overlaps something else', () => {
 
     let releaseFirst;
     parseQueue = [new Promise((resolve) => { releaseFirst = () => resolve({ diagnostics: [], diagram: billingDiagram() }); })];
-    document.getElementById('source-input').value = 'emod 1\nmodel "Edited"\n';
+    document.getElementById('source-input').value = 'emod = 1\nmodel "Edited"\n';
     document.getElementById('render-btn').click();
     await flush();
 
@@ -1494,7 +1494,7 @@ describe('a save that overlaps something else', () => {
 
     let releaseSecond;
     parseQueue = [new Promise((resolve) => { releaseSecond = () => resolve({ diagnostics: [], diagram: billingDiagram() }); })];
-    deliverFile({ name: 'hotel.emod', path: '/models/hotel.emod', content: 'emod 1\nmodel "Hotel"\n' });
+    deliverFile({ name: 'hotel.emod', path: '/models/hotel.emod', content: 'emod = 1\n\nmodel "Hotel" {\n}\n' });
     await flush();
     releaseFirst();
     await flush();
@@ -1502,7 +1502,7 @@ describe('a save that overlaps something else', () => {
     await saving;
 
     expect(savedFile.path).toBe('/models/hotel.emod');
-    expect(savedFile.content).toBe('emod 1\nmodel "Hotel"\n');
+    expect(savedFile.content).toBe('emod = 1\n\nmodel "Hotel" {\n}\n');
   });
 
   it('does not reopen the panel for a save belonging to a file that is no longer on screen', async () => {
@@ -1515,7 +1515,7 @@ describe('a save that overlaps something else', () => {
     await flush();
     saveHangs = null;
     saveFails = null;
-    deliverFile({ name: 'hotel.emod', path: '/models/hotel.emod', content: 'emod 1\nmodel "Hotel"\n' });
+    deliverFile({ name: 'hotel.emod', path: '/models/hotel.emod', content: 'emod = 1\n\nmodel "Hotel" {\n}\n' });
     await flush();
     expect(document.getElementById('data-panel').classList.contains('collapsed')).toBe(true);
 
@@ -1560,7 +1560,7 @@ describe('a save that overlaps something else', () => {
     parseQueue = [new Promise((resolve) => {
       releaseRender = () => resolve({ diagnostics: [], diagram: { ...billingDiagram(), model_name: 'Rendered' } });
     })];
-    document.getElementById('source-input').value = 'emod 1\nmodel "Rendered"\n';
+    document.getElementById('source-input').value = 'emod = 1\nmodel "Rendered"\n';
     document.getElementById('render-btn').click();
     await flush();
 
@@ -1583,32 +1583,32 @@ describe('what a save writes', () => {
   });
 
   it('hands back the bytes an unedited file arrived with, whatever the panel did to them', () => {
-    const arrived = 'emod 1\r\nmodel "Billing"\r\n';
+    const arrived = 'emod = 1\r\n\r\nmodel "Billing" {\r\n}\r\n';
 
-    expect(sourceToSave(panel('emod 1\nmodel "Billing"\n', arrived))).toBe(arrived);
+    expect(sourceToSave(panel('emod = 1\n\nmodel "Billing" {\n}\n', arrived))).toBe(arrived);
   });
 
   it('keeps a CRLF file in its own convention once it has been edited', () => {
-    expect(sourceToSave(panel('emod 1\nmodel "Hotel"\n', 'emod 1\r\nmodel "Billing"\r\n')))
-      .toBe('emod 1\r\nmodel "Hotel"\r\n');
+    expect(sourceToSave(panel('emod = 1\n\nmodel "Hotel" {\n}\n', 'emod = 1\r\n\r\nmodel "Billing" {\r\n}\r\n')))
+      .toBe('emod = 1\r\n\r\nmodel "Hotel" {\r\n}\r\n');
   });
 
   it('leaves an LF file alone once it has been edited', () => {
-    expect(sourceToSave(panel('emod 1\nmodel "Hotel"\n', 'emod 1\nmodel "Billing"\n')))
-      .toBe('emod 1\nmodel "Hotel"\n');
+    expect(sourceToSave(panel('emod = 1\n\nmodel "Hotel" {\n}\n', 'emod = 1\n\nmodel "Billing" {\n}\n')))
+      .toBe('emod = 1\n\nmodel "Hotel" {\n}\n');
   });
 
   // A textarea normalises a lone CR to LF just as it does a CRLF, so an unedited
   // classic-Mac file still round-trips exactly; only editing one converts it.
   it('gives back a lone-CR file untouched when nothing was edited', () => {
-    const arrived = 'emod 1\rmodel "Billing"\r';
+    const arrived = 'emod = 1\r\rmodel "Billing" {\r}\r';
 
-    expect(sourceToSave(panel('emod 1\nmodel "Billing"\n', arrived))).toBe(arrived);
+    expect(sourceToSave(panel('emod = 1\n\nmodel "Billing" {\n}\n', arrived))).toBe(arrived);
   });
 
   it('writes a lone-CR file with LF once it has been edited, having no CRLF to copy', () => {
-    expect(sourceToSave(panel('emod 1\nmodel "Hotel"\n', 'emod 1\rmodel "Billing"\r')))
-      .toBe('emod 1\nmodel "Hotel"\n');
+    expect(sourceToSave(panel('emod = 1\n\nmodel "Hotel" {\n}\n', 'emod = 1\r\rmodel "Billing" {\r}\r')))
+      .toBe('emod = 1\n\nmodel "Hotel" {\n}\n');
   });
 
   it('settles a file of mixed endings on the CRLF it holds, once it has been edited', () => {
@@ -1622,11 +1622,11 @@ describe('what a save writes', () => {
   });
 
   it('hands over the panel as it stands when no file was ever opened', () => {
-    expect(sourceToSave(panel('emod 1\nmodel "Pasted"\n'))).toBe('emod 1\nmodel "Pasted"\n');
+    expect(sourceToSave(panel('emod = 1\nmodel "Pasted"\n'))).toBe('emod = 1\nmodel "Pasted"\n');
   });
 
   it('hands over what was typed into a file that arrived empty', () => {
-    expect(sourceToSave(panel('emod 1\nmodel "Billing"\n', ''))).toBe('emod 1\nmodel "Billing"\n');
+    expect(sourceToSave(panel('emod = 1\n\nmodel "Billing" {\n}\n', ''))).toBe('emod = 1\n\nmodel "Billing" {\n}\n');
   });
 });
 
@@ -1659,7 +1659,7 @@ describe('the window says whether there are unsaved edits', () => {
     await startViewer();
 
     const dropped = new File([''], 'hotel.emod');
-    dropped._content = 'emod 1\nmodel "Hotel"\n';
+    dropped._content = 'emod = 1\n\nmodel "Hotel" {\n}\n';
     fireDrop(document.getElementById('data-panel-body'), dropped);
     await flush();
     await flush();
@@ -1671,7 +1671,7 @@ describe('the window says whether there are unsaved edits', () => {
     await openBilling();
     const rendersBefore = platform.parseEmod.mock.calls.length;
 
-    typeIntoPanel('emod 1\nmodel "Billing Edited"\n');
+    typeIntoPanel('emod = 1\n\nmodel "Billing Edited" {\n}\n');
 
     expect(marked()).toBe(true);
     expect(platform.parseEmod.mock.calls.length).toBe(rendersBefore);
@@ -1679,7 +1679,7 @@ describe('the window says whether there are unsaved edits', () => {
 
   it('unmarks the window when the panel is edited back to what the file held', async () => {
     await openBilling();
-    typeIntoPanel('emod 1\nmodel "Billing Edited"\n');
+    typeIntoPanel('emod = 1\n\nmodel "Billing Edited" {\n}\n');
     expect(marked()).toBe(true);
 
     typeIntoPanel(billingSource);
@@ -1691,7 +1691,7 @@ describe('the window says whether there are unsaved edits', () => {
   // text is typing the file back exactly, and the window has to say so.
   it('unmarks a CRLF file edited back to the text the panel showed when it opened', async () => {
     await openBilling(crlfSource);
-    typeIntoPanel('emod 1\nmodel "Billing Edited"\n');
+    typeIntoPanel('emod = 1\n\nmodel "Billing Edited" {\n}\n');
     expect(marked()).toBe(true);
 
     typeIntoPanel(document.getElementById('source-input').value.replace('Billing Edited', 'Billing'));
@@ -1701,7 +1701,7 @@ describe('the window says whether there are unsaved edits', () => {
 
   it('unmarks the window when a save lands', async () => {
     await openBilling();
-    typeIntoPanel('emod 1\nmodel "Billing Edited"\n');
+    typeIntoPanel('emod = 1\n\nmodel "Billing Edited" {\n}\n');
     saveAnswer = { name: 'billing.emod', path: '/models/billing.emod' };
 
     await save();
@@ -1711,40 +1711,40 @@ describe('the window says whether there are unsaved edits', () => {
 
   it('leaves the window marked when the host refuses the save', async () => {
     await openBilling();
-    typeIntoPanel('emod 1\nmodel "Billing Edited"\n');
+    typeIntoPanel('emod = 1\n\nmodel "Billing Edited" {\n}\n');
     saveFails = 'permission denied';
     modifiedReports.length = 0;
 
     await save();
 
-    expect(savedFile.content).toBe('emod 1\nmodel "Billing Edited"\n');
+    expect(savedFile.content).toBe('emod = 1\n\nmodel "Billing Edited" {\n}\n');
     expect(document.getElementById('save-status').textContent).toContain('permission denied');
     expect(modifiedReports).toEqual([true]);
   });
 
   it('leaves the window marked when the location dialog is cancelled', async () => {
     await startEmpty();
-    typeIntoPanel('emod 1\nmodel "Pasted"\n');
+    typeIntoPanel('emod = 1\nmodel "Pasted"\n');
     saveAnswer = null;
     modifiedReports.length = 0;
 
     await save();
 
-    expect(savedFile.content).toBe('emod 1\nmodel "Pasted"\n');
+    expect(savedFile.content).toBe('emod = 1\nmodel "Pasted"\n');
     expect(modifiedReports).toEqual([true]);
   });
 
   it('marks pasted source that has never been saved anywhere', async () => {
     await startEmpty();
 
-    typeIntoPanel('emod 1\nmodel "Pasted"\n');
+    typeIntoPanel('emod = 1\nmodel "Pasted"\n');
 
     expect(marked()).toBe(true);
   });
 
   it('unmarks pasted source once it is saved to the location the host chose', async () => {
     await startEmpty();
-    typeIntoPanel('emod 1\nmodel "Pasted"\n');
+    typeIntoPanel('emod = 1\nmodel "Pasted"\n');
     saveAnswer = { name: 'pasted.emod', path: '/models/pasted.emod' };
 
     await save();
@@ -1757,14 +1757,14 @@ describe('the window says whether there are unsaved edits', () => {
   // arriving model against the departing model's bytes.
   it('keeps describing the model on screen when a delivered file will not render', async () => {
     await openBilling();
-    typeIntoPanel('emod 1\nmodel "Billing Edited"\n');
+    typeIntoPanel('emod = 1\n\nmodel "Billing Edited" {\n}\n');
     parseQueue = [Promise.reject(new Error('parse failed'))];
 
-    deliverFile({ name: 'other.emod', path: '/models/other.emod', content: 'emod 1\nmodel "Other"\n' });
+    deliverFile({ name: 'other.emod', path: '/models/other.emod', content: 'emod = 1\nmodel "Other"\n' });
     await flush();
 
     expect(marked()).toBe(true);
-    expect(document.getElementById('source-input').value).toBe('emod 1\nmodel "Billing Edited"\n');
+    expect(document.getElementById('source-input').value).toBe('emod = 1\n\nmodel "Billing Edited" {\n}\n');
   });
 
   // Each of these is a change the user can make that Save would not write, so
@@ -1778,7 +1778,7 @@ describe('the window says whether there are unsaved edits', () => {
       await gesture(document.getElementById('diagram-canvas'));
       expect(modifiedReports).toEqual([]);
 
-      typeIntoPanel('emod 1\nmodel "Billing Edited"\n');
+      typeIntoPanel('emod = 1\n\nmodel "Billing Edited" {\n}\n');
       expect(modifiedReports).toEqual([true]);
     }
 
@@ -1827,8 +1827,8 @@ describe('the window says whether there are unsaved edits', () => {
 // Every way a different file's model reaches the screen runs one guard, so a
 // new way of opening one cannot arrive unguarded.
 describe('a model arriving over unsaved edits', () => {
-  const otherFile = { name: 'other.emod', path: '/models/other.emod', content: 'emod 1\nmodel "Other"\n' };
-  const editedSource = 'emod 1\nmodel "Billing Edited"\n';
+  const otherFile = { name: 'other.emod', path: '/models/other.emod', content: 'emod = 1\nmodel "Other"\n' };
+  const editedSource = 'emod = 1\n\nmodel "Billing Edited" {\n}\n';
 
   async function openBillingThenEdit() {
     await openBilling();
@@ -1923,14 +1923,14 @@ describe('a model arriving over unsaved edits', () => {
 
   it('keeps the model on screen when the location dialog for that save is cancelled', async () => {
     await startEmpty();
-    typeIntoPanel('emod 1\nmodel "Pasted"\n');
+    typeIntoPanel('emod = 1\nmodel "Pasted"\n');
     unsavedEditsAnswer = 'save';
     saveAnswer = null;
 
     deliverFile(otherFile);
     await flush();
 
-    expect(onScreen().source).toBe('emod 1\nmodel "Pasted"\n');
+    expect(onScreen().source).toBe('emod = 1\nmodel "Pasted"\n');
   });
 
   it('asks nothing when there is nothing unsaved to lose', async () => {
@@ -1982,7 +1982,7 @@ describe('a model arriving over unsaved edits', () => {
 // work: the save the first answer asks for reads the panel and the open file
 // when it runs, not when the question was put.
 describe('two models arriving at once', () => {
-  const editedSource = 'emod 1\nmodel "Billing Edited"\n';
+  const editedSource = 'emod = 1\n\nmodel "Billing Edited" {\n}\n';
 
   // Each call gets its own deferred, so the dialogs can be answered in any
   // order — which is what a user with two of them on screen can do.
@@ -1998,9 +1998,9 @@ describe('two models arriving at once', () => {
     const dialogs = deferredDialogs();
     saveAnswer = { name: 'billing.emod', path: '/models/billing.emod' };
 
-    deliverFile({ name: 'b.emod', path: '/models/b.emod', content: 'emod 1\nmodel "B"\n' });
+    deliverFile({ name: 'b.emod', path: '/models/b.emod', content: 'emod = 1\nmodel "B"\n' });
     await flush();
-    deliverFile({ name: 'c.emod', path: '/models/c.emod', content: 'emod 1\nmodel "C"\n' });
+    deliverFile({ name: 'c.emod', path: '/models/c.emod', content: 'emod = 1\nmodel "C"\n' });
     await flush();
 
     // Only the first ask may be on screen; the second waits its turn.
@@ -2021,7 +2021,7 @@ describe('two models arriving at once', () => {
     typeIntoPanel(editedSource);
     unsavedEditsAnswerer = () => Promise.reject(new Error('the host dialog exploded'));
 
-    deliverFile({ name: 'b.emod', path: '/models/b.emod', content: 'emod 1\nmodel "B"\n' });
+    deliverFile({ name: 'b.emod', path: '/models/b.emod', content: 'emod = 1\nmodel "B"\n' });
     await flush();
     await flush();
 
@@ -2030,11 +2030,11 @@ describe('two models arriving at once', () => {
 
     unsavedEditsAnswerer = null;
     unsavedEditsAnswer = 'discard';
-    deliverFile({ name: 'c.emod', path: '/models/c.emod', content: 'emod 1\nmodel "C"\n' });
+    deliverFile({ name: 'c.emod', path: '/models/c.emod', content: 'emod = 1\nmodel "C"\n' });
     await flush();
     await flush();
 
-    expect(document.getElementById('source-input').value).toBe('emod 1\nmodel "C"\n');
+    expect(document.getElementById('source-input').value).toBe('emod = 1\nmodel "C"\n');
   });
 
   it('asks the second time against the model the first answer left on screen', async () => {
@@ -2042,9 +2042,9 @@ describe('two models arriving at once', () => {
     typeIntoPanel(editedSource);
     const dialogs = deferredDialogs();
 
-    deliverFile({ name: 'b.emod', path: '/models/b.emod', content: 'emod 1\nmodel "B"\n' });
+    deliverFile({ name: 'b.emod', path: '/models/b.emod', content: 'emod = 1\nmodel "B"\n' });
     await flush();
-    deliverFile({ name: 'c.emod', path: '/models/c.emod', content: 'emod 1\nmodel "C"\n' });
+    deliverFile({ name: 'c.emod', path: '/models/c.emod', content: 'emod = 1\nmodel "C"\n' });
     await flush();
 
     dialogs[0]('discard');
@@ -2054,7 +2054,7 @@ describe('two models arriving at once', () => {
     // b replaced the edited model and is itself unedited, so the second open
     // has nothing to lose and asks nothing further.
     expect(dialogs).toHaveLength(1);
-    expect(document.getElementById('source-input').value).toBe('emod 1\nmodel "C"\n');
+    expect(document.getElementById('source-input').value).toBe('emod = 1\nmodel "C"\n');
     expect(savedFile).toBeNull();
   });
 });
@@ -2074,7 +2074,7 @@ describe('what the viewer says it has opened', () => {
 
     await deliverDroppedFiles([{
       name: 'hotel.emod',
-      read: () => Promise.resolve({ name: 'hotel.emod', path: '/models/hotel.emod', content: 'emod 1\nmodel "Hotel"\n' }),
+      read: () => Promise.resolve({ name: 'hotel.emod', path: '/models/hotel.emod', content: 'emod = 1\n\nmodel "Hotel" {\n}\n' }),
     }]);
     await flush();
 
@@ -2105,7 +2105,7 @@ describe('what the viewer says it has opened', () => {
     await startEmpty();
 
     const file = new File([''], 'hotel.emod');
-    file._content = 'emod 1\nmodel "Hotel"\n';
+    file._content = 'emod = 1\n\nmodel "Hotel" {\n}\n';
     fireDrop(document.getElementById('data-panel-body'), file);
     await flush();
 
@@ -2118,7 +2118,7 @@ describe('what the viewer says it has opened', () => {
     await startViewer();
     parseQueue.push(Promise.reject(new Error('nothing to render')));
 
-    deliverFile({ name: 'broken.emod', path: '/models/broken.emod', content: 'emod 1\n' });
+    deliverFile({ name: 'broken.emod', path: '/models/broken.emod', content: 'emod = 1\n' });
     await flush();
 
     expect(document.getElementById('render-status').textContent).toContain('nothing to render');
@@ -2237,7 +2237,7 @@ describe('what the viewer says it has opened', () => {
 // The host cannot raise this question and wait for it, so it asks the viewer,
 // which answers with the same policy an arriving model goes through.
 describe('the host asking whether it may close', () => {
-  const editedSource = 'emod 1\nmodel "Billing Edited"\n';
+  const editedSource = 'emod = 1\n\nmodel "Billing Edited" {\n}\n';
 
   it('says yes straight away when there is nothing unsaved to lose', async () => {
     await openBilling();
@@ -2301,13 +2301,13 @@ describe('the host asking whether it may close', () => {
     typeIntoPanel(editedSource);
     unsavedEditsAnswer = 'discard';
 
-    deliverFile({ name: 'b.emod', path: '/models/b.emod', content: 'emod 1\nmodel "B"\n' });
+    deliverFile({ name: 'b.emod', path: '/models/b.emod', content: 'emod = 1\nmodel "B"\n' });
     const leaving = requestLeave();
     await flush();
     await flush();
 
     await expect(leaving).resolves.toBe(true);
-    expect(document.getElementById('source-input').value).toBe('emod 1\nmodel "B"\n');
+    expect(document.getElementById('source-input').value).toBe('emod = 1\nmodel "B"\n');
     // b is unedited, so answering about it needed no second question.
     expect(unsavedEditsAsked).toBe(1);
   });
@@ -2444,7 +2444,7 @@ describe('what the diagnostics panel reports', () => {
     globalThis.INITIAL_DATA = null;
     parseResult = { diagnostics, diagram: { nodes: [], edges: [] } };
     await startViewer();
-    document.getElementById('source-input').value = 'emod 1\nmodel "Orders"\n';
+    document.getElementById('source-input').value = 'emod = 1\nmodel "Orders"\n';
     document.getElementById('render-btn').click();
     await flush();
   }
@@ -2611,7 +2611,7 @@ describe('rendering the panel again when its source does not parse', () => {
     await renderPanel(brokenSource, Promise.resolve({ parsed: false, diagnostics: [syntaxError], diagram: recoveredFragment('Billing') }));
 
     parseQueue = [Promise.resolve({ parsed: false, diagnostics: [syntaxError], diagram: recoveredFragment('Orders') })];
-    deliverFile({ name: 'orders.emod', path: '/models/orders.emod', content: 'emod 1\nmodel "Orders"\ncontext "Orders" {\n' });
+    deliverFile({ name: 'orders.emod', path: '/models/orders.emod', content: 'emod = 1\nmodel "Orders"\ncontext "Orders" {\n' });
     await flush();
 
     expect(canvasMarkup()).toContain('OrdersContext');
@@ -2624,7 +2624,7 @@ describe('rendering the panel again when its source does not parse', () => {
     await renderPanel(brokenSource, Promise.resolve({ parsed: false, diagnostics: [syntaxError], diagram: recoveredFragment('Billing') }));
 
     parseQueue = [Promise.resolve({ parsed: false, diagnostics: [syntaxError], diagram: recoveredFragment('Orders') })];
-    deliverFile({ name: 'orders.emod', path: '/models/orders.emod', content: 'emod 1\nmodel "Orders"\ncontext "Orders" {\n' });
+    deliverFile({ name: 'orders.emod', path: '/models/orders.emod', content: 'emod = 1\nmodel "Orders"\ncontext "Orders" {\n' });
     await flush();
     saveAnswer = { name: 'orders.emod', path: '/models/orders.emod' };
     await save();
@@ -2651,7 +2651,7 @@ describe('rendering the panel again in place', () => {
     return { model_name: 'Payments', nodes, edges: [] };
   }
 
-  const paymentsSource = 'emod 1\nmodel "Payments"\n';
+  const paymentsSource = 'emod = 1\nmodel "Payments"\n';
 
   async function openPayments(slices) {
     globalThis.INITIAL_DATA = null;
@@ -3033,12 +3033,12 @@ describe('revalidating the source panel as it is edited', () => {
       document.getElementById('diagnostics-close').click();
       answerNext({ diagram: diagramNamed('Orders') });
       unsavedEditsAnswer = 'discard';
-      deliverFile({ name: 'orders.emod', path: '/models/orders.emod', content: 'emod 1\nmodel "Orders"\n' });
+      deliverFile({ name: 'orders.emod', path: '/models/orders.emod', content: 'emod = 1\nmodel "Orders"\n' });
       await flush();
       await flush();
 
       answerNext({ diagnostics: [orderingFinding], diagram: diagramNamed('Orders') });
-      typeIntoPanel('emod 1\nmodel "Orders"\nactor "Clerk"\n');
+      typeIntoPanel('emod = 1\nmodel "Orders"\nactor "Clerk"\n');
       await pastPause();
 
       expect(document.getElementById('diagnostics-panel').classList.contains('hidden')).toBe(false);
@@ -3076,7 +3076,7 @@ describe('revalidating the source panel as it is edited', () => {
   });
 
   describe('against an open', () => {
-    const ordersFile = { name: 'orders.emod', path: '/models/orders.emod', content: 'emod 1\nmodel "Orders"\n' };
+    const ordersFile = { name: 'orders.emod', path: '/models/orders.emod', content: 'emod = 1\nmodel "Orders"\n' };
 
     async function expectOrdersOpen() {
       expect(canvasMarkup()).toContain('OrdersCmd');
@@ -3111,7 +3111,7 @@ describe('revalidating the source panel as it is edited', () => {
       unsavedEditsAnswerer = () => new Promise((resolve) => answers.push(resolve));
       typeIntoPanel(editedSource);
 
-      deliverFile({ name: 'b.emod', path: '/models/b.emod', content: 'emod 1\nmodel "B"\n' });
+      deliverFile({ name: 'b.emod', path: '/models/b.emod', content: 'emod = 1\nmodel "B"\n' });
       await flush();
       deliverFile(ordersFile);
       await flush();
@@ -3187,7 +3187,7 @@ describe('revalidating the source panel as it is edited', () => {
         '✗ empty.emod is empty'],
       ['a file will not open', () => {
         parseQueue.unshift(Promise.reject(new Error('the host could not parse orders.emod')));
-        deliverFile({ name: 'orders.emod', path: '/models/orders.emod', content: 'emod 1\nmodel "Orders"\n' });
+        deliverFile({ name: 'orders.emod', path: '/models/orders.emod', content: 'emod = 1\nmodel "Orders"\n' });
       }, '✗ the host could not parse orders.emod'],
     ])('still revalidates what was typed when %s during the pause, and leaves the reason in the status area', async (_, fail, reason) => {
       await openBilling();
@@ -3283,10 +3283,10 @@ describe('what a render hands the pipeline', () => {
   it("names the arriving file, not the file it replaces", async () => {
     await openBilling();
 
-    deliverFile({ name: 'orders.emod', path: '/models/orders.emod', content: 'emod 1\nmodel "Orders"\n' });
+    deliverFile({ name: 'orders.emod', path: '/models/orders.emod', content: 'emod = 1\nmodel "Orders"\n' });
     await flush();
 
-    expect(lastParse()).toEqual(['emod 1\nmodel "Orders"\n', 'orders.emod']);
+    expect(lastParse()).toEqual(['emod = 1\nmodel "Orders"\n', 'orders.emod']);
   });
 
   it("names the open file when its edited source is rendered again", async () => {

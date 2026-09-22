@@ -22,7 +22,7 @@ test.describe('drawing an edge from a port', () => {
 
     await dragBetween(page, await portOf(page, 'command-1', 'right'), await dropPointIn(added));
 
-    expect(await exportEmod(page)).toContain('command -> event: TakePayment -> new-event-2');
+    expect(await exportEmod(page)).toContain('command -> event:    TakePayment -> new-event-2');
   });
 
   test('keeps the flow the model already had', async ({ page }) => {
@@ -32,7 +32,7 @@ test.describe('drawing an edge from a port', () => {
 
     await dragBetween(page, await portOf(page, 'command-1', 'right'), await dropPointIn(added));
 
-    expect(await exportEmod(page)).toContain('command -> event: TakePayment -> PaymentTaken');
+    expect(await exportEmod(page)).toContain('command -> event:    TakePayment -> PaymentTaken');
   });
 
   test('does nothing when the drag ends on empty canvas', async ({ page }) => {
@@ -107,7 +107,7 @@ test.describe('drawing an edge from a port', () => {
 
       await dragBetween(page, await portOf(page, 'command-1', side), await dropPointIn(added));
 
-      expect(await exportEmod(page)).toContain('command -> event: TakePayment -> new-event-2');
+      expect(await exportEmod(page)).toContain('command -> event:    TakePayment -> new-event-2');
     });
   }
 
@@ -132,7 +132,7 @@ test.describe('repointing an arrow', () => {
     await dragBetween(page, grab, await dropPointIn(added));
 
     const exported = await exportEmod(page);
-    expect(exported).toContain('command -> event: TakePayment -> new-event-2');
+    expect(exported).toContain('command -> event:    TakePayment -> new-event-2');
     expect(exported).not.toContain('TakePayment -> PaymentTaken');
   });
 
@@ -153,7 +153,7 @@ test.describe('repointing an arrow', () => {
     await dragBetween(page, grab, await dropPointIn(added));
 
     const exported = await exportEmod(page);
-    expect(exported).toContain('command -> event: new-command-2 -> PaymentTaken');
+    expect(exported).toContain('command -> event:    new-command-2 -> PaymentTaken');
     expect(exported).not.toContain('TakePayment -> PaymentTaken');
   });
 
@@ -168,7 +168,7 @@ test.describe('repointing an arrow', () => {
     const grab = await grabPointFor(page, 'command-1', 'event-1', 'source');
     await dragBetween(page, grab, await centreOf(added));
 
-    expect(await exportEmod(page)).toContain('command -> event: new-command-2 -> PaymentTaken');
+    expect(await exportEmod(page)).toContain('command -> event:    new-command-2 -> PaymentTaken');
   });
 
   test('refuses to collapse an arrow onto its own other end', async ({ page }) => {

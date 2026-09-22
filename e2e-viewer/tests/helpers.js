@@ -2,33 +2,36 @@ import { expect } from '@playwright/test';
 
 // Canonical formatting, verified with `emod fmt --check`. Export tests assert
 // the viewer reproduces this byte for byte, so it must stay canonical.
-export const SAMPLE = `emod 1
-model "Billing"
+export const SAMPLE = `emod = 1
 
-actor "Customer"
+model "Billing" {
+}
+
+actor "Customer" {
+}
 
 context "Payments" {
   aggregate "Payment" {
     slice "Take Payment" {
       trigger "Checkout Form" {
-        actor Customer
+        actor = Customer
       }
 
-      command TakePayment {
+      command "TakePayment" {
         fields {
-          amount int required
+          amount = required(int)
         }
       }
 
-      event PaymentTaken {
+      event "PaymentTaken" {
         fields {
-          amount int required
+          amount = required(int)
         }
       }
 
-      flow {
-        command -> event: TakePayment -> PaymentTaken
-      }
+      flow = <<-FLOW
+        command -> event:    TakePayment -> PaymentTaken
+      FLOW
     }
   }
 }
@@ -42,48 +45,51 @@ export const WIDE = (function () {
   for (let i = 0; i < 12; i++) {
     slices.push(
       `    slice "Step ${i}" {\n` +
-      `      command Cmd${i} {\n` +
+      `      command "Cmd${i}" {\n` +
       '        fields {\n' +
-      '          amount int required\n' +
+      '          amount = required(int)\n' +
       '        }\n' +
       '      }\n' +
       '    }');
   }
-  return 'emod 1\nmodel "Wide"\n\ncontext "Ctx" {\n  aggregate "Agg" {\n' +
+  return 'emod = 1\n\nmodel "Wide" {\n}\n\ncontext "Ctx" {\n  aggregate "Agg" {\n' +
     slices.join('\n\n') + '\n  }\n}\n';
 })();
 
 // A second slice holding a view, for the edge types that need one. Also
 // canonical — `emod fmt --check` passes on it.
-export const SAMPLE_WITH_VIEW = `emod 1
-model "Billing"
+export const SAMPLE_WITH_VIEW = `emod = 1
 
-actor "Customer"
+model "Billing" {
+}
+
+actor "Customer" {
+}
 
 context "Payments" {
   aggregate "Payment" {
     slice "Take Payment" {
-      command TakePayment {
+      command "TakePayment" {
         fields {
-          amount int required
+          amount = required(int)
         }
       }
 
-      event PaymentTaken {
+      event "PaymentTaken" {
         fields {
-          amount int required
+          amount = required(int)
         }
       }
 
-      flow {
-        command -> event: TakePayment -> PaymentTaken
-      }
+      flow = <<-FLOW
+        command -> event:    TakePayment -> PaymentTaken
+      FLOW
     }
 
     slice "Payment History" {
-      view PaymentsView {
+      view "PaymentsView" {
         fields {
-          amount int required
+          amount = required(int)
         }
       }
     }

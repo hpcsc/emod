@@ -76,7 +76,7 @@ test.describe('editing then exporting', () => {
 
     const exported = await exportEmod(page);
     expect(exported).toContain('event new-event-2 {');
-    expect(exported).toContain('command -> event: TakePayment -> new-event-2');
+    expect(exported).toContain('command -> event:    TakePayment -> new-event-2');
   });
 
   test('includes a slice added from the context header menu', async ({ page }) => {
@@ -93,7 +93,7 @@ test.describe('editing then exporting', () => {
   test('drops an arrow deleted from its context menu', async ({ page }) => {
     await open(page);
     await render(page, SAMPLE);
-    expect(await exportEmod(page)).toContain('command -> event: TakePayment -> PaymentTaken');
+    expect(await exportEmod(page)).toContain('command -> event:    TakePayment -> PaymentTaken');
 
     // A straight arrow has a zero-width bounding box, which fails Playwright's
     // visibility check, so the click is forced onto its computed centre.

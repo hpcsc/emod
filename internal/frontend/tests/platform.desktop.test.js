@@ -21,7 +21,7 @@ beforeEach(async () => {
   // the order the tests ran.
   stub.answers.SetModified = undefined;
   stub.answers.Record = undefined;
-  stub.answers.Open = '{"name":"billing.emod","path":"/models/billing.emod","content":"emod 1\\n"}';
+  stub.answers.Open = '{"name":"billing.emod","path":"/models/billing.emod","content":"emod = 1\\n"}';
   desktop.setWindowTitle('');
   await desktop.setWindowModified(false);
   stub.answers.Take = '';
@@ -30,8 +30,8 @@ beforeEach(async () => {
   stub.recorded.length = 0;
   runtime.calls.length = 0;
   stub.answers.ParseEmod = '{"diagnostics":[],"diagram":{"nodes":[],"edges":[]}}';
-  stub.answers.ExportEmod = '{"emod":"emod 1\\nmodel \\"Billing\\"\\n"}';
-  stub.answers.Read = '{"name":"billing.emod","path":"/models/billing.emod","content":"emod 1\\n"}';
+  stub.answers.ExportEmod = '{"emod":"emod = 1\\n\\nmodel \\"Billing\\" {\\n}\\n"}';
+  stub.answers.Read = '{"name":"billing.emod","path":"/models/billing.emod","content":"emod = 1\\n"}';
   stub.answers.Write = '{"name":"billing.emod","path":"/models/billing.emod"}';
   runtime.answers.OpenFile = '';
   runtime.answers.SaveFile = '';
@@ -84,16 +84,16 @@ describe('readiness', () => {
 
 describe('parse', () => {
   it('sends the source envelope the Go service expects', async () => {
-    await desktop.parseEmod('emod 1\nmodel "Billing"\n');
+    await desktop.parseEmod('emod = 1\n\nmodel "Billing" {\n}\n');
 
-    expect(stub.calls).toEqual([['ParseEmod', JSON.stringify({ source: 'emod 1\nmodel "Billing"\n' })]]);
+    expect(stub.calls).toEqual([['ParseEmod', JSON.stringify({ source: 'emod = 1\n\nmodel "Billing" {\n}\n' })]]);
   });
 
   it('sends the name of the file the source came from beside it', async () => {
-    await desktop.parseEmod('emod 1\nmodel "Billing"\n', 'billing.emod');
+    await desktop.parseEmod('emod = 1\n\nmodel "Billing" {\n}\n', 'billing.emod');
 
     expect(stub.calls.map(([name, request]) => [name, JSON.parse(request)]))
-      .toEqual([['ParseEmod', { source: 'emod 1\nmodel "Billing"\n', filename: 'billing.emod' }]]);
+      .toEqual([['ParseEmod', { source: 'emod = 1\n\nmodel "Billing" {\n}\n', filename: 'billing.emod' }]]);
   });
 
   it('answers the decoded document rather than the raw string', async () => {
@@ -115,7 +115,7 @@ describe('export', () => {
   });
 
   it('unwraps the emod text', async () => {
-    await expect(desktop.exportEmod({})).resolves.toBe('emod 1\nmodel "Billing"\n');
+    await expect(desktop.exportEmod({})).resolves.toBe('emod = 1\n\nmodel "Billing" {\n}\n');
   });
 
   it('raises the error envelope rather than resolving with it', async () => {
@@ -333,7 +333,7 @@ describe('opening a file', () => {
   it('reads what was chosen and delivers its name, path and contents', async () => {
     const delivered = collectDeliveries();
     runtime.answers.OpenFile = '/models/billing.emod';
-    stub.answers.Read = '{"name":"billing.emod","path":"/models/billing.emod","content":"emod 1\\nmodel \\"Billing\\"\\n"}';
+    stub.answers.Read = '{"name":"billing.emod","path":"/models/billing.emod","content":"emod = 1\\n\\nmodel \\"Billing\\" {\\n}\\n"}';
 
     await requestOpen();
 
@@ -341,7 +341,7 @@ describe('opening a file', () => {
     expect(delivered).toEqual([{
       name: 'billing.emod',
       path: '/models/billing.emod',
-      content: 'emod 1\nmodel "Billing"\n',
+      content: 'emod = 1\n\nmodel "Billing" {\n}\n',
     }]);
   });
 
@@ -466,14 +466,14 @@ describe('files dropped on the window', () => {
 
   it('answers the name, path and contents the service read back', async () => {
     const dropped = collectDrops();
-    stub.answers.Read = '{"name":"hotel.emod","path":"/models/hotel.emod","content":"emod 1\\nmodel \\"Hotel\\"\\n"}';
+    stub.answers.Read = '{"name":"hotel.emod","path":"/models/hotel.emod","content":"emod = 1\\n\\nmodel \\"Hotel\\" {\\n}\\n"}';
 
     await dropPaths('/models/hotel.emod');
 
     await expect(dropped[0][0].read()).resolves.toEqual({
       name: 'hotel.emod',
       path: '/models/hotel.emod',
-      content: 'emod 1\nmodel "Hotel"\n',
+      content: 'emod = 1\n\nmodel "Hotel" {\n}\n',
     });
     expect(stub.calls).toEqual([['Read', '/models/hotel.emod']]);
   });
@@ -537,7 +537,7 @@ describe('files dropped on the window', () => {
     let releaseRead;
     const realRead = stub.FileService.Read;
     stub.FileService.Read = () => new Promise((resolve) => {
-      releaseRead = () => resolve('{"name":"chosen.emod","path":"/models/chosen.emod","content":"emod 1\\n"}');
+      releaseRead = () => resolve('{"name":"chosen.emod","path":"/models/chosen.emod","content":"emod = 1\\n"}');
     });
     runtime.answers.OpenFile = '/models/chosen.emod';
 
@@ -567,9 +567,9 @@ describe('files dropped on the window', () => {
 
 describe('saving a file', () => {
   it('writes straight to the path it was given, showing no dialog', async () => {
-    const saved = await desktop.saveFile('billing.emod', 'emod 1\n', '/models/billing.emod');
+    const saved = await desktop.saveFile('billing.emod', 'emod = 1\n', '/models/billing.emod');
 
-    expect(stub.calls).toEqual([['Write', '/models/billing.emod', 'emod 1\n']]);
+    expect(stub.calls).toEqual([['Write', '/models/billing.emod', 'emod = 1\n']]);
     expect(runtime.calls).toEqual([]);
     expect(saved).toEqual({ name: 'billing.emod', path: '/models/billing.emod' });
   });
@@ -577,7 +577,7 @@ describe('saving a file', () => {
   it('answers the path the service resolved, not the one it was handed', async () => {
     stub.answers.Write = '{"name":"billing.emod","path":"/models/billing.emod"}';
 
-    const saved = await desktop.saveFile('billing.emod', 'emod 1\n', 'billing.emod');
+    const saved = await desktop.saveFile('billing.emod', 'emod = 1\n', 'billing.emod');
 
     expect(saved.path).toBe('/models/billing.emod');
   });
@@ -586,7 +586,7 @@ describe('saving a file', () => {
     runtime.answers.SaveFile = '/models/hotel.emod';
     stub.answers.Write = '{"name":"hotel.emod","path":"/models/hotel.emod"}';
 
-    await desktop.saveFile('hotel.emod', 'emod 1\n', '');
+    await desktop.saveFile('hotel.emod', 'emod = 1\n', '');
 
     expect(runtime.calls).toEqual([['Dialogs.SaveFile', {
       Title: 'Save model',
@@ -600,16 +600,16 @@ describe('saving a file', () => {
     runtime.answers.SaveFile = '/models/hotel.emod';
     stub.answers.Write = '{"name":"hotel.emod","path":"/models/hotel.emod"}';
 
-    const saved = await desktop.saveFile('hotel.emod', 'emod 1\n', '');
+    const saved = await desktop.saveFile('hotel.emod', 'emod = 1\n', '');
 
-    expect(stub.calls).toEqual([['Write', '/models/hotel.emod', 'emod 1\n']]);
+    expect(stub.calls).toEqual([['Write', '/models/hotel.emod', 'emod = 1\n']]);
     expect(saved).toEqual({ name: 'hotel.emod', path: '/models/hotel.emod' });
   });
 
   it('writes nothing and answers no file when the dialog is cancelled', async () => {
     runtime.answers.SaveFile = '';
 
-    const saved = await desktop.saveFile('hotel.emod', 'emod 1\n', '');
+    const saved = await desktop.saveFile('hotel.emod', 'emod = 1\n', '');
 
     expect(stub.calls).toEqual([]);
     expect(saved).toBeNull();
@@ -618,14 +618,14 @@ describe('saving a file', () => {
   it('raises the reason the service gave, rather than a wording of its own', async () => {
     stub.answers.Write = '{"error":"writing /models/billing.emod: permission denied"}';
 
-    await expect(desktop.saveFile('billing.emod', 'emod 1\n', '/models/billing.emod'))
+    await expect(desktop.saveFile('billing.emod', 'emod = 1\n', '/models/billing.emod'))
       .rejects.toThrow('writing /models/billing.emod: permission denied');
   });
 
   it('raises the reason the dialog itself failed with', async () => {
     runtime.answers.SaveFile = new Error('Dialog.SaveFile failed, error getting selection');
 
-    await expect(desktop.saveFile('hotel.emod', 'emod 1\n', ''))
+    await expect(desktop.saveFile('hotel.emod', 'emod = 1\n', ''))
       .rejects.toThrow('Dialog.SaveFile failed, error getting selection');
   });
 });
@@ -868,7 +868,7 @@ describe('the shell asking to close or quit', () => {
 describe('opening a recent entry', () => {
   it('reads the entry through the list\'s service and delivers its name, path and contents', async () => {
     const delivered = collectDeliveries();
-    stub.answers.Open = '{"name":"billing.emod","path":"/models/billing.emod","content":"emod 1\\nmodel \\"Billing\\"\\n"}';
+    stub.answers.Open = '{"name":"billing.emod","path":"/models/billing.emod","content":"emod = 1\\n\\nmodel \\"Billing\\" {\\n}\\n"}';
 
     await requestRecent('/models/billing.emod');
 
@@ -877,7 +877,7 @@ describe('opening a recent entry', () => {
     expect(delivered).toEqual([{
       name: 'billing.emod',
       path: '/models/billing.emod',
-      content: 'emod 1\nmodel "Billing"\n',
+      content: 'emod = 1\n\nmodel "Billing" {\n}\n',
     }]);
   });
 
@@ -1032,7 +1032,7 @@ describe('a model the operating system asked to open', () => {
 
     expect(stub.calls).toEqual([['Read', '/models/billing.emod']]);
     expect(delivered).toEqual([
-      { name: 'billing.emod', path: '/models/billing.emod', content: 'emod 1\n' },
+      { name: 'billing.emod', path: '/models/billing.emod', content: 'emod = 1\n' },
     ]);
   });
 
@@ -1175,7 +1175,7 @@ describe('starting up', () => {
     await flush();
 
     expect(delivered).toEqual([
-      { name: 'billing.emod', path: '/models/billing.emod', content: 'emod 1\n' },
+      { name: 'billing.emod', path: '/models/billing.emod', content: 'emod = 1\n' },
     ]);
   });
 
