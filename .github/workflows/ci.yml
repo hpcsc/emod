@@ -34,10 +34,6 @@ jobs:
       uses: actions/setup-node@v4
       with:
         node-version-file: 'internal/frontend/package.json'
-    - name: Run Grammar Tests
-      run: task test:grammar
-    - name: Run VS Code Grammar Scope Tests
-      run: task test:vscode
     - name: Run Viewer JS Tests
       run: task test:viewer
     - name: Run Viewer Browser E2E Test

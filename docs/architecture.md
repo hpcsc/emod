@@ -14,8 +14,7 @@ browser viewer; the editor grammars live beside it under `editors/`.
 | `cmd/emod-wasm` | WebAssembly entry point exposing the pipeline to the browser viewer |
 | `cmd/emod-desktop` | Native desktop shell (Wails); the one binary that links CGO |
 | `internal/` | The language pipeline, frontends and renderers (see below) |
-| `editors/tree-sitter-emod` | tree-sitter grammar + corpus/highlight tests |
-| `editors/vscode` | VS Code extension: TextMate grammar, language config, LSP client |
+| `editors/vscode` | VS Code extension: language config and LSP client |
 | `examples/` | Showcase models (`*_test.emod` files are deliberately broken fixtures) |
 | `e2e/` | Docker-based CLI end-to-end tests (vitest + node-pty) |
 | `e2e-viewer/` | Playwright end-to-end tests against the built viewer bundle |
@@ -321,39 +320,26 @@ so a caller that needs the assets does not depend on a server. Note the build
 coupling: `internal/frontend` embeds `generated/*`, which is gitignored — run
 `task build` (not bare `go build`), which depends on `build:wasm`.
 
-## Editor tooling and the drift guards
+## Editor tooling
 
-The language is spelled in three grammar surfaces, with the keyword list in
-`internal/test` as the single source of truth:
+HCL is the syntax, so an editor that knows HCL colours an `.emod` file and
+nothing in this repository spells the grammar a second time. The VS Code
+extension contributes the language, its brackets and comments, and the LSP
+client; the colour of a name comes from the semantic tokens the server sends,
+which paint a context, an aggregate, a command, an event and a view.
 
-```mermaid
-flowchart TD
-    KW["internal/test keywords list<br/><i>canonical</i>"]
-    KW --> TS["editors/tree-sitter-emod/grammar.js<br/>+ queries/highlights.scm"]
-    KW --> TM["editors/vscode/syntaxes/emod.tmLanguage.json"]
-    KW --> LSPK["internal/lsp hover descriptions<br/>+ completion lists"]
-
-    DRIFT["editors/.../keywords_test.go<br/><i>build tag: grammar</i>"] -. asserts coverage .-> TS
-    DRIFT -. asserts coverage .-> TM
-    LSPT["internal/lsp/keywords_test.go<br/><i>build tag: unit</i>"] -. asserts coverage .-> LSPK
-```
-
-Adding a keyword to the list without updating the editor grammars fails
-`task test:grammar`; without a hover description it fails the unit suite. A
-standing constraint recorded in `tasks/learnings.md`: every keyword must stay
-usable as a field name, on both the Go and the grammar side.
+`internal/lsp/keywords_test.go` pins that every word in `internal/test`'s
+keyword list has a hover description, and that the completion lists never
+offer a spelling the language does not define.
 
 ## Tests and build orchestration
 
-Go tests are tagged: `unit` (fast, most of the suite), `integration`
-(cross-stage runs over the docs and example fixtures) and `grammar` (drives
-the tree-sitter CLI from Go, run via `task test:grammar`). Shared parsed-model
-fixtures live in `internal/test` and go through the real parser so
-their positions match production models.
+Go tests are tagged: `unit` (fast, most of the suite) and `integration`
+(cross-stage runs over the docs and example fixtures). Shared parsed-model
+fixtures live in `internal/test` and go through the real parser so their
+positions match production models.
 
 `Taskfile.yml` is the build entry point — `task build` (CLI, including the
 wasm embed), `task build:web` (assemble the Pages bundle), `task test`
-(unit + integration + viewer + grammar + vscode; the two e2e suites run in CI).
-Tool versions come from `mise.toml`; in particular tree-sitter-cli is pinned
-there — use the mise-provided binary, not npx, or the generated parser will
-produce phantom diffs.
+(unit + integration + viewer; the two e2e suites run in CI). Tool versions
+come from `mise.toml`.
