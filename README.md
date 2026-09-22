@@ -150,7 +150,11 @@ emod lint reservation.emod
 ```bash
 emod fmt reservation.emod          # format in place
 emod fmt --check reservation.emod  # check only (CI)
+emod fmt --hcl reservation.emod    # rewrite the file in HCL
 ```
+
+`emod fmt` keeps the syntax the file is written in. `--hcl` converts a file
+written in the emod grammar to HCL, and emod reads both.
 
 ### Dynamic Consistency Boundary (DCB) models
 

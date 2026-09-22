@@ -378,7 +378,7 @@ func declaredFields(model *ast.Model) []*ast.Field {
 func requireCanonical(t *testing.T, name string) {
 	t.Helper()
 
-	require.NoError(t, cli.RunFmt(filepath.Join("../../examples", name), true),
+	require.NoError(t, cli.RunFmt(filepath.Join("../../examples", name), true, false),
 		"the example the reference points a reader at is not what emod fmt writes, so it teaches a style the tool rewrites")
 }
 

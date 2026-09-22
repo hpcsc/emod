@@ -8,6 +8,7 @@ import (
 	"testing"
 
 	"github.com/hpcsc/emod/internal/cli"
+	"github.com/hpcsc/emod/internal/oracle"
 	"github.com/hpcsc/emod/internal/test"
 	"github.com/stretchr/testify/require"
 )
@@ -1689,8 +1690,38 @@ const unparsableEmod = `foobar {
 `
 
 func TestFmt(t *testing.T) {
+	t.Run("hcl", func(t *testing.T) {
+		t.Run("writes a file in the emod grammar as HCL", func(t *testing.T) {
+			path := writeTemp(t, "model.emod", test.BillingPayments)
+
+			require.NoError(t, cli.RunFmt(path, false, true))
+
+			written := readFile(t, path)
+			require.Contains(t, written, "emod = 1")
+			require.Contains(t, written, `command "TakePayment" {`)
+			require.Contains(t, written, "flow = <<-FLOW")
+		})
+
+		t.Run("leaves a file already written in HCL in HCL", func(t *testing.T) {
+			path := writeTemp(t, "model.emod", test.BillingPayments)
+			require.NoError(t, cli.RunFmt(path, false, true))
+			converted := readFile(t, path)
+
+			require.NoError(t, cli.RunFmt(path, false, false))
+
+			require.Equal(t, converted, readFile(t, path))
+		})
+
+		t.Run("the converted file means the same as the one it came from", func(t *testing.T) {
+			path := writeTemp(t, "model.emod", test.BillingPayments)
+			require.NoError(t, cli.RunFmt(path, false, true))
+
+			require.Empty(t, oracle.Check(readFile(t, path), path))
+		})
+	})
+
 	t.Run("returns error when no file argument given", func(t *testing.T) {
-		err := cli.RunFmt("", false)
+		err := cli.RunFmt("", false, false)
 
 		require.ErrorIs(t, err, cli.ErrMissingFileArgument)
 	})
@@ -1698,7 +1729,7 @@ func TestFmt(t *testing.T) {
 	t.Run("returns error naming the file when it does not exist", func(t *testing.T) {
 		missing := filepath.Join(t.TempDir(), "nonexistent.emod")
 
-		err := cli.RunFmt(missing, false)
+		err := cli.RunFmt(missing, false, false)
 
 		require.Error(t, err)
 		require.Contains(t, err.Error(), missing)
@@ -1707,7 +1738,7 @@ func TestFmt(t *testing.T) {
 	t.Run("returns error and does not modify file with parse errors", func(t *testing.T) {
 		path := writeTemp(t, "broken.emod", unparsableEmod)
 
-		err := cli.RunFmt(path, false)
+		err := cli.RunFmt(path, false, false)
 
 		require.Error(t, err)
 		require.Contains(t, err.Error(), path)
@@ -1719,7 +1750,7 @@ func TestFmt(t *testing.T) {
 		source := "emod 2\n" + emodWithoutVersionHeader
 		path := writeTemp(t, "unsupported.emod", source)
 
-		err := cli.RunFmt(path, false)
+		err := cli.RunFmt(path, false, false)
 
 		require.Error(t, err)
 		require.Contains(t, err.Error(), path)
@@ -1730,7 +1761,7 @@ func TestFmt(t *testing.T) {
 	t.Run("rewrites file in-place with formatted content", func(t *testing.T) {
 		path := writeTemp(t, "messy.emod", unformattedEmod)
 
-		err := cli.RunFmt(path, false)
+		err := cli.RunFmt(path, false, false)
 
 		require.NoError(t, err)
 		require.Equal(t, formattedEmod, readFile(t, path))
@@ -1742,7 +1773,7 @@ func TestFmt(t *testing.T) {
 		require.NoError(t, statErr)
 		modTimeBefore := info.ModTime()
 
-		err := cli.RunFmt(path, false)
+		err := cli.RunFmt(path, false, false)
 
 		require.NoError(t, err)
 		require.Equal(t, formattedEmod, readFile(t, path))
@@ -1773,7 +1804,7 @@ func TestFmt(t *testing.T) {
 	t.Run("keeps every declared invariant and settles after one run", func(t *testing.T) {
 		path := writeTemp(t, "library-lending.emod", invariantEmod)
 
-		require.NoError(t, cli.RunFmt(path, false))
+		require.NoError(t, cli.RunFmt(path, false, false))
 
 		formatted := readFile(t, path)
 		for _, declaration := range []string{
@@ -1834,7 +1865,7 @@ func TestFmt(t *testing.T) {
 	t.Run("check mode returns nil when file is already formatted", func(t *testing.T) {
 		path := writeTemp(t, "clean.emod", formattedEmod)
 
-		err := cli.RunFmt(path, true)
+		err := cli.RunFmt(path, true, false)
 
 		require.NoError(t, err)
 		require.Equal(t, formattedEmod, readFile(t, path), "check mode should not modify the file")
@@ -1843,7 +1874,7 @@ func TestFmt(t *testing.T) {
 	t.Run("check mode returns nil when a file using descriptions is already formatted", func(t *testing.T) {
 		path := writeTemp(t, "described.emod", describedFormattedEmod)
 
-		err := cli.RunFmt(path, true)
+		err := cli.RunFmt(path, true, false)
 
 		require.NoError(t, err)
 		require.Equal(t, describedFormattedEmod, readFile(t, path), "check mode should not modify the file")
@@ -1852,7 +1883,7 @@ func TestFmt(t *testing.T) {
 	t.Run("check mode returns error when a file is canonical apart from a missing version header", func(t *testing.T) {
 		path := writeTemp(t, "headerless.emod", emodWithoutVersionHeader)
 
-		err := cli.RunFmt(path, true)
+		err := cli.RunFmt(path, true, false)
 
 		require.Error(t, err)
 		require.Contains(t, err.Error(), path)
@@ -1862,7 +1893,7 @@ func TestFmt(t *testing.T) {
 	t.Run("check mode returns error when file needs formatting", func(t *testing.T) {
 		path := writeTemp(t, "messy.emod", unformattedEmod)
 
-		err := cli.RunFmt(path, true)
+		err := cli.RunFmt(path, true, false)
 
 		require.Error(t, err)
 		require.Contains(t, err.Error(), path)
@@ -1873,13 +1904,13 @@ func TestFmt(t *testing.T) {
 func requireFmtSettlesOn(t *testing.T, path, formatted string) {
 	t.Helper()
 
-	require.NoError(t, cli.RunFmt(path, false))
+	require.NoError(t, cli.RunFmt(path, false, false))
 	require.Equal(t, formatted, readFile(t, path))
 
-	require.NoError(t, cli.RunFmt(path, false))
+	require.NoError(t, cli.RunFmt(path, false, false))
 	require.Equal(t, formatted, readFile(t, path), "a second run should not change the file")
 
-	require.NoError(t, cli.RunFmt(path, true), "check mode should report nothing to change")
+	require.NoError(t, cli.RunFmt(path, true, false), "check mode should report nothing to change")
 	require.Equal(t, formatted, readFile(t, path))
 }
 

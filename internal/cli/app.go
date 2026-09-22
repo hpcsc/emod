@@ -73,11 +73,15 @@ func NewApp() *urfave.Command {
 						Name:  "check",
 						Usage: "Check if the file is already formatted (exit 1 if not)",
 					},
+					&urfave.BoolFlag{
+						Name:  "hcl",
+						Usage: "Write the file in HCL",
+					},
 				},
 				Action: func(ctx context.Context, cmd *urfave.Command) error {
 					path := cmd.Args().First()
 					check := cmd.Bool("check")
-					if err := RunFmt(path, check); err != nil {
+					if err := RunFmt(path, check, cmd.Bool("hcl")); err != nil {
 						fmt.Fprintln(os.Stderr, err)
 						return urfave.Exit("", 1)
 					}
