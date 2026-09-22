@@ -32,21 +32,20 @@ var keywordDescriptions = map[string]string{
 	"external":        "Declares an external reference.",
 	"emod":            "Declares the emod language version the file is written in.",
 	"description":     "Attaches a human-readable description to the enclosing declaration.",
-	"invariant":       "Declares a named business rule the enclosing context or aggregate must uphold.",
+	"invariants":      "Declares the named business rules the enclosing context or aggregate must uphold.",
 	"spec":            "Defines a given/when/then scenario a slice must satisfy.",
 	"given":           "Lists the events that have already occurred when a spec's scenario starts.",
 	"when":            "Names the command or event a spec exercises.",
 	"then":            "States a spec's outcome: the events produced, a rejection, a view, or a command.",
 	"rejected":        "States that a spec's command is rejected by the named invariant.",
-	"mode":            `Sets a context's modeling mode: "aggregate", "dcb", or "mixed".`,
+	"mode":            "Sets a context's modeling mode: aggregate, dcb, or mixed.",
 	"tags":            "Defines the tag entries on an event, each mapping a tag key to a field.",
-	"tag":             "References a tag key in a decides_on predicate, as tag(key = field).",
+	"tag":             "References a tag key in a decides_on predicate, as tag(key, field).",
 	"decides_on":      "Defines the events and predicate a command's decision is based on (DCB mode).",
 	"events":          "Lists the event types a decides_on clause reads.",
 	"where":           "Filters a decides_on clause with a tag predicate.",
-	"and":             "Combines two decides_on predicates; both must hold.",
-	"or":              "Combines two decides_on predicates; either may hold.",
-	"not":             "Negates a decides_on predicate.",
+	"required":        "States that the field must be present. A type on its own says the same thing.",
+	"optional":        "States that the field may be absent.",
 	"type":            `Binds the event to the type a consumer outside the model routes by, such as "com.acme.reservations.room-reserved". Two events may not share one.`,
 }
 
@@ -94,14 +93,13 @@ func GetHover(text string, line, character int) *Hover {
 		}
 	}
 
-	// Check for keywords — tokens with no AST definition name.
+	// Check for keywords — bare words with no AST definition name.
 	for _, tok := range tokens {
-		pos := ast.Position{Line: tok.Line, Column: tok.Column}
-		if !tok.Type.IsKeyword() || !at.onName(pos, tok.Value) {
+		if !at.onName(tok.pos, tok.text) {
 			continue
 		}
-		if desc, ok := keywordDescriptions[tok.Value]; ok {
-			return hoverAt(desc, pos, tok.Value)
+		if desc, ok := keywordDescriptions[tok.text]; ok {
+			return hoverAt(desc, tok.pos, tok.text)
 		}
 	}
 

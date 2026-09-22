@@ -3,15 +3,38 @@ package lsp
 import (
 	"slices"
 
+	"github.com/hashicorp/hcl/v2"
+	"github.com/hashicorp/hcl/v2/hclsyntax"
 	"github.com/hpcsc/emod/internal/ast"
-	"github.com/hpcsc/emod/internal/lexer"
-	"github.com/hpcsc/emod/internal/parser"
+	"github.com/hpcsc/emod/internal/oracle"
 )
 
-func parseModel(text, uri string) (*ast.Model, []*lexer.Token) {
-	tokens, _ := lexer.Scan(text, uri)
-	model, _ := parser.New(tokens, uri).Parse()
-	return model, tokens
+// word is one bare word in the source, which is how a keyword is written.
+type word struct {
+	text string
+	pos  ast.Position
+}
+
+func parseModel(text, uri string) (*ast.Model, []word) {
+	model, _ := oracle.Parse(text, uri)
+	return model, wordsIn(text, uri)
+}
+
+func wordsIn(text, uri string) []word {
+	tokens, _ := hclsyntax.LexConfig([]byte(text), uri, hcl.InitialPos)
+
+	var words []word
+	for _, token := range tokens {
+		if token.Type != hclsyntax.TokenIdent {
+			continue
+		}
+		words = append(words, word{
+			text: string(token.Bytes),
+			pos:  ast.Position{Line: token.Range.Start.Line, Column: token.Range.Start.Column},
+		})
+	}
+
+	return words
 }
 
 func declaredAggregates(model *ast.Model) []*ast.Aggregate {

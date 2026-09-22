@@ -27,6 +27,9 @@ func GetCompletions(text string, line, character int) CompletionList {
 func completionsAt(text string, line, character int) []CompletionItem {
 	lines := strings.Split(text, "\n")
 	at := enclosingBlock(lines, line, character)
+	if at.heredoc {
+		return []CompletionItem{}
+	}
 	if at.block.payload.owner != "" {
 		return payloadCompletions(text, at.block.payload)
 	}
@@ -55,6 +58,8 @@ const (
 	ctxTags
 	ctxFields
 	ctxSpec
+	ctxInvariants
+	ctxTarget
 )
 
 // cursorContext is what the line scan knows about where the caret sits: the
@@ -63,6 +68,9 @@ const (
 type cursorContext struct {
 	block     block
 	openEntry string
+	// heredoc says the cursor sits inside a flow block's text, which states
+	// its own relations rather than the entries of the block holding it.
+	heredoc bool
 }
 
 // enclosingBlock reads the document down to the cursor. The cursor line is read
@@ -74,10 +82,15 @@ func enclosingBlock(lines []string, line, character int) cursorContext {
 	}
 
 	var scanner blockScanner
-	for _, words := range wordsByLine(documentUpTo(lines, line, character)) {
+	read := wordsByLine(documentUpTo(lines, line, character))
+	for _, words := range read {
 		scanner.consume(words)
 	}
-	return cursorContext{block: scanner.innermost(), openEntry: scanner.openEntry}
+	return cursorContext{
+		block:     scanner.innermost(),
+		openEntry: scanner.openEntry,
+		heredoc:   len(read) > 0 && read[len(read)-1].heredoc,
+	}
 }
 
 // documentUpTo is the document the cursor sits in, cut at the cursor.
@@ -101,6 +114,7 @@ type lineWords struct {
 	words    []string
 	brackets int
 	hasCode  bool
+	heredoc  bool
 }
 
 // wordsByLine hands every line its words, taken from HCL's own scanner. The
@@ -109,6 +123,7 @@ type lineWords struct {
 func wordsByLine(text string) []lineWords {
 	lines := make([]lineWords, strings.Count(text, "\n")+1)
 
+	heredoc := false
 	tokens, _ := hclsyntax.LexConfig([]byte(text), "", hcl.InitialPos)
 	for _, token := range tokens {
 		index := token.Range.Start.Line - 1
@@ -116,7 +131,16 @@ func wordsByLine(text string) []lineWords {
 			continue
 		}
 		line := &lines[index]
+		line.heredoc = heredoc
 		switch token.Type {
+		case hclsyntax.TokenOHeredoc:
+			heredoc = true
+			line.hasCode = true
+			continue
+		case hclsyntax.TokenCHeredoc:
+			heredoc = false
+			line.hasCode = true
+			continue
 		case hclsyntax.TokenComment, hclsyntax.TokenNewline, hclsyntax.TokenEOF:
 			continue
 		case hclsyntax.TokenOBrace, hclsyntax.TokenCBrace,
@@ -260,31 +284,6 @@ func (s *blockScanner) innermost() block {
 	return s.blocks[len(s.blocks)-1]
 }
 
-// A string literal's contents are not code: a `#` inside one starts no comment and a
-// brace inside one delimits no block. The quotes themselves stay, so a line holding
-// only a string still reads as carrying code.
-func codeOutsideStringsAndComments(line string) string {
-	var code strings.Builder
-	inString := false
-	for i := 0; i < len(line); i++ {
-		switch ch := line[i]; {
-		case inString:
-			if ch == '"' {
-				inString = false
-				code.WriteByte(ch)
-			}
-		case ch == '"':
-			inString = true
-			code.WriteByte(ch)
-		case ch == '#', ch == '/' && i+1 < len(line) && line[i+1] == '/':
-			return strings.TrimSpace(code.String())
-		default:
-			code.WriteByte(ch)
-		}
-	}
-	return strings.TrimSpace(code.String())
-}
-
 func blockKeyword(word string) blockContext {
 	switch word {
 	case "context":
@@ -307,6 +306,10 @@ func blockKeyword(word string) blockContext {
 		return ctxFields
 	case "spec":
 		return ctxSpec
+	case "invariants":
+		return ctxInvariants
+	case "target":
+		return ctxTarget
 	}
 	return ctxUnknown
 }
@@ -344,9 +347,24 @@ var valueSlots = map[string]valueSlot{
 // A spec's then takes an event list, a rejection, a view or a command, so which
 // names belong after it is decided by the word following it rather than by then
 // alone.
+// A spec's then takes an event list or one of three calls, so which names
+// belong after it is decided by the call's own name rather than by then alone.
 var compoundValueSlots = map[string]valueSlot{
 	"then view":    {items: namesOfKind(viewName, ClassCompletion)},
 	"then command": {items: namesOfKind(commandName, FunctionCompletion)},
+}
+
+// slotFor reads a word against the block holding it. `context` names a context
+// inside a target block and opens one everywhere else.
+func slotFor(word string, block blockContext) (valueSlot, bool) {
+	if word == "context" {
+		if block != ctxTarget {
+			return valueSlot{}, false
+		}
+		return valueSlot{items: namesOfKind(contextName, ModuleCompletion)}, true
+	}
+	slot, ok := valueSlots[word]
+	return slot, ok
 }
 
 // The item kinds are the ones GetSemanticTokens gives the same names, so a name
@@ -373,37 +391,55 @@ func commandAndEventNames(model *ast.Model, _ int) []CompletionItem {
 }
 
 func valueSlotBefore(prefix string, block blockContext) (valueSlot, bool) {
-	// Keywords stay legal as field names, types and modifiers, so `id reads required`
-	// is a field line and names no view.
+	// Keywords stay legal as field names and as types, so `reads = required` is
+	// a field line and names no view.
 	if block == ctxFields {
 		return valueSlot{}, false
 	}
-
-	typed := strings.Fields(codeOutsideStringsAndComments(prefix))
-	// The word the cursor still touches is half-typed rather than finished, so
-	// `on` completes from the keyword list while `on ` opens the value slot.
-	if len(typed) > 0 && strings.HasSuffix(prefix, typed[len(typed)-1]) {
-		typed = typed[:len(typed)-1]
+	// An arrow makes the line a flow entry, whose parts are positional rather
+	// than named by the word before them.
+	if strings.Contains(prefix, "->") {
+		return valueSlot{}, false
 	}
 
+	typed := wordsBefore(prefix)
 	for i := len(typed) - 1; i >= 0; i-- {
-		// An arrow makes the line a flow or rejection entry, whose parts are
-		// positional rather than named by the keyword before them: the
-		// identifier after `rejected` on `command -> rejected: X -> Y` is a
-		// command, not the invariant the same word introduces inside a spec.
-		if strings.Contains(typed[i], "->") {
-			return valueSlot{}, false
-		}
 		if i > 0 {
 			if slot, ok := compoundValueSlots[typed[i-1]+" "+typed[i]]; ok {
 				return slot, true
 			}
 		}
-		if slot, ok := valueSlots[typed[i]]; ok {
+		if slot, ok := slotFor(typed[i], block); ok {
 			return slot, true
 		}
 	}
 	return valueSlot{}, false
+}
+
+// wordsBefore is the words the cursor's line states up to the cursor. A word the
+// caret still touches is half-typed rather than finished, so `on` completes from
+// the keyword list while `on ` opens the value slot.
+func wordsBefore(prefix string) []string {
+	tokens, _ := hclsyntax.LexConfig([]byte(prefix), "", hcl.InitialPos)
+
+	var words []string
+	touching := false
+	for _, token := range tokens {
+		switch token.Type {
+		case hclsyntax.TokenComment, hclsyntax.TokenNewline, hclsyntax.TokenEOF:
+			continue
+		case hclsyntax.TokenIdent, hclsyntax.TokenNumberLit:
+			words = append(words, string(token.Bytes))
+			touching = token.Range.End.Byte == len(prefix)
+		default:
+			touching = false
+		}
+	}
+	if touching && len(words) > 0 {
+		words = words[:len(words)-1]
+	}
+
+	return words
 }
 
 func valueCompletions(text string, line int, slot valueSlot) []CompletionItem {
@@ -448,9 +484,9 @@ func keywordsFor(block blockContext) []string {
 	case ctxUnknown:
 		return []string{"model", "actor", "context"}
 	case ctxContext:
-		return []string{"aggregate", "slice", "invariant"}
+		return []string{"aggregate", "slice", "invariants", "mode"}
 	case ctxAggregate:
-		return []string{"slice", "invariant"}
+		return []string{"slice", "invariants"}
 	case ctxSlice:
 		return []string{"command", "event", "trigger", "view", "automation", "translation", "flow"}
 	case ctxCommand:
@@ -458,9 +494,15 @@ func keywordsFor(block blockContext) []string {
 	case ctxEvent:
 		return []string{"fields", "tags"}
 	case ctxAutomation:
-		return []string{"on", "every", "reads", "command", "target context"}
+		return []string{"on", "every", "after", "reads", "command", "target"}
 	case ctxDecidesOn:
 		return []string{"events", "where"}
+	case ctxTarget:
+		return []string{"context"}
+	case ctxInvariants:
+		// An invariant is `Name = "statement"`, and the name is the author's
+		// own, so the block offers no keyword of its own.
+		return nil
 	case ctxTags:
 		// A tag entry is `key: fieldRef`, both of them free identifiers, so the
 		// block accepts no keyword of its own. Without an arm here the scanner

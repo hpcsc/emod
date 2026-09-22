@@ -8,7 +8,6 @@ import (
 
 	"github.com/hpcsc/emod/internal/formatter"
 
-	"github.com/hpcsc/emod/internal/lexer"
 	"github.com/hpcsc/emod/internal/lsp"
 	"github.com/hpcsc/emod/internal/parser"
 	"github.com/hpcsc/emod/internal/test"
@@ -16,7 +15,7 @@ import (
 )
 
 func TestGetCompletions(t *testing.T) {
-	automationEntries := []string{"on", "every", "reads", "command", "target context"}
+	automationEntries := []string{"on", "every", "after", "reads", "command", "target"}
 
 	t.Run("top level", func(t *testing.T) {
 		t.Run("empty document returns model actor and context", func(t *testing.T) {
@@ -42,21 +41,21 @@ func TestGetCompletions(t *testing.T) {
 	// cursor here
 }`
 			result := lsp.GetCompletions(doc, 1, 2)
-			require.Equal(t, []string{"aggregate", "slice", "invariant"}, extractLabels(result.Items))
+			require.Equal(t, []string{"aggregate", "slice", "invariants", "mode"}, extractLabels(result.Items))
 		})
 
 		t.Run("context block with opening brace on next line still works", func(t *testing.T) {
 			doc := "context MyContext\n{\n}"
 			// cursor inside the block
 			result := lsp.GetCompletions(doc, 1, 1)
-			require.Equal(t, []string{"aggregate", "slice", "invariant"}, extractLabels(result.Items))
+			require.Equal(t, []string{"aggregate", "slice", "invariants", "mode"}, extractLabels(result.Items))
 		})
 
 		t.Run("opening brace separated from the keyword by lines carrying no code still opens the block", func(t *testing.T) {
 			for _, separator := range []string{"", "  ", "  # a note"} {
 				doc := "context MyContext\n" + separator + "\n{\n}"
 				result := lsp.GetCompletions(doc, 2, 1)
-				require.Equal(t, []string{"aggregate", "slice", "invariant"}, extractLabels(result.Items), "separator %q", separator)
+				require.Equal(t, []string{"aggregate", "slice", "invariants", "mode"}, extractLabels(result.Items), "separator %q", separator)
 			}
 		})
 	})
@@ -64,20 +63,20 @@ func TestGetCompletions(t *testing.T) {
 	t.Run("aggregate block", func(t *testing.T) {
 		t.Run("inside aggregate block returns slice and invariant", func(t *testing.T) {
 			doc := `context Ctx {
-	aggregate Agg {
+	aggregate "Agg" {
 		// cursor here
 	}
 }`
 			result := lsp.GetCompletions(doc, 2, 3)
-			require.Equal(t, []string{"slice", "invariant"}, extractLabels(result.Items))
+			require.Equal(t, []string{"slice", "invariants"}, extractLabels(result.Items))
 		})
 	})
 
 	t.Run("slice block", func(t *testing.T) {
 		t.Run("inside slice block returns all slice keywords", func(t *testing.T) {
 			doc := `context Ctx {
-	aggregate Agg {
-		slice Slc {
+	aggregate "Agg" {
+		slice "Slc" {
 			// cursor here
 		}
 	}
@@ -90,9 +89,9 @@ func TestGetCompletions(t *testing.T) {
 	t.Run("automation block", func(t *testing.T) {
 		t.Run("inside automation block returns the entries an automation accepts", func(t *testing.T) {
 			doc := `context Ctx {
-	aggregate Agg {
-		slice Slc {
-			automation Auto {
+	aggregate "Agg" {
+		slice "Slc" {
+			automation "Auto" {
 				// cursor here
 			}
 		}
@@ -105,11 +104,11 @@ func TestGetCompletions(t *testing.T) {
 
 		t.Run("below a braceless command reference still returns automation entries", func(t *testing.T) {
 			doc := `context Ctx {
-	aggregate Agg {
-		slice Slc {
-			automation Auto {
-				on OrderPlaced
-				command ShipOrder
+	aggregate "Agg" {
+		slice "Slc" {
+			automation "Auto" {
+				on = OrderPlaced
+				command = ShipOrder
 				// cursor here
 			}
 		}
@@ -121,11 +120,11 @@ func TestGetCompletions(t *testing.T) {
 
 		t.Run("after a closed automation block returns the enclosing slice keywords", func(t *testing.T) {
 			doc := `context Ctx {
-	aggregate Agg {
-		slice Slc {
-			automation Auto {
-				on OrderPlaced
-				command ShipOrder
+	aggregate "Agg" {
+		slice "Slc" {
+			automation "Auto" {
+				on = OrderPlaced
+				command = ShipOrder
 			}
 			// cursor here
 		}
@@ -140,11 +139,11 @@ func TestGetCompletions(t *testing.T) {
 		for _, keyword := range []string{"trigger", "view", "translation"} {
 			t.Run("inside a "+keyword+" block beside an automation returns the top level keywords", func(t *testing.T) {
 				doc := `context Ctx {
-	aggregate Agg {
-		slice Slc {
-			automation Auto {
-				on OrderPlaced
-				command ShipOrder
+	aggregate "Agg" {
+		slice "Slc" {
+			automation "Auto" {
+				on = OrderPlaced
+				command = ShipOrder
 			}
 			` + keyword + ` Sibling {
 				// cursor here
@@ -161,9 +160,9 @@ func TestGetCompletions(t *testing.T) {
 	t.Run("command block", func(t *testing.T) {
 		t.Run("inside command block returns fields and decides_on", func(t *testing.T) {
 			doc := `context Ctx {
-	aggregate Agg {
-		slice Slc {
-			command Cmd {
+	aggregate "Agg" {
+		slice "Slc" {
+			command "Cmd" {
 				// cursor here
 			}
 		}
@@ -177,9 +176,9 @@ func TestGetCompletions(t *testing.T) {
 	t.Run("event block", func(t *testing.T) {
 		t.Run("inside event block returns fields and tags", func(t *testing.T) {
 			doc := `context Ctx {
-	aggregate Agg {
-		slice Slc {
-			event Evt {
+	aggregate "Agg" {
+		slice "Slc" {
+			event "Evt" {
 				// cursor here
 			}
 		}
@@ -193,9 +192,9 @@ func TestGetCompletions(t *testing.T) {
 	t.Run("fields block", func(t *testing.T) {
 		t.Run("inside fields block returns field types and modifiers", func(t *testing.T) {
 			doc := `context Ctx {
-	aggregate Agg {
-		slice Slc {
-			command Cmd {
+	aggregate "Agg" {
+		slice "Slc" {
+			command "Cmd" {
 				fields {
 					// cursor here
 				}
@@ -233,22 +232,29 @@ func TestGetCompletions(t *testing.T) {
 		})
 
 		t.Run("after reads returns the declared views of both slice homes", func(t *testing.T) {
-			translationDoc := `context "Shelving" {
-	aggregate "Catalog" {
-		slice "Browse Catalog" {
-			view CatalogView {
-				subscribes [BookShelved]
-			}
-		}
-		slice "Import Shelf" {
-			translation ShelfImport {
-				external_system "Partner API"
-				reads CatalogView
-				command ShelveBook
-			}
-		}
-	}
-}`
+			translationDoc := `emod = 1
+
+model "" {
+}
+
+context "Shelving" {
+  aggregate "Catalog" {
+    slice "Browse Catalog" {
+      view "CatalogView" {
+        subscribes = [BookShelved]
+      }
+    }
+
+    slice "Import Shelf" {
+      translation "ShelfImport" {
+        external_system = "Partner API"
+        reads           = CatalogView
+        command         = ShelveBook
+      }
+    }
+  }
+}
+`
 			for _, tc := range []struct {
 				block     string
 				doc       string
@@ -273,7 +279,7 @@ func TestGetCompletions(t *testing.T) {
 				{
 					block:     "translation",
 					doc:       translationDoc,
-					container: "translation ShelfImport",
+					container: `translation "ShelfImport`,
 					value:     "CatalogView",
 					expected:  []string{"CatalogView"},
 				},
@@ -290,25 +296,25 @@ func TestGetCompletions(t *testing.T) {
 		})
 
 		t.Run("an on entry naming nothing yet still returns the events of a document that does not parse cleanly", func(t *testing.T) {
-			doc := `context "Lending" {
+			doc := `emod = 1
+
+context "Lending" {
 	aggregate "Loan" {
 		slice "Chase Overdue Copy" {
-			event CopyBorrowed {
+			event "CopyBorrowed" {
 			}
-			event MemberReminded {
+			event "MemberReminded" {
 			}
-			automation RemindOnDueDate {
+			automation "RemindOnDueDate" {
 				on` + " " + `
 			}
 		}
 	}
 }`
-			tokens, scanErrs := lexer.Scan(doc, "half-written.emod")
-			require.Empty(t, scanErrs)
-			_, parseErrs := parser.New(tokens, "half-written.emod").Parse()
+			_, parseErrs := parser.ParseHCL(doc, "half-written.emod")
 			require.NotEmpty(t, parseErrs, "the document under test is expected to carry parse diagnostics")
 
-			result := lsp.GetCompletions(doc, 8, 7)
+			result := lsp.GetCompletions(doc, 10, 7)
 
 			require.Equal(t, []string{"CopyBorrowed", "MemberReminded"}, extractLabels(result.Items))
 		})
@@ -345,44 +351,54 @@ func TestGetCompletions(t *testing.T) {
 			doc := `context "Lending" {
 	aggregate "Loan" {
 		slice "Borrow Copy" {
-			command BorrowCopy {
+			command "BorrowCopy" {
 				fields {
-					id reads required
+					id = reads
 				}
 			}
-			view MemberLoansView {
+			view "MemberLoansView" {
 			}
 		}
 	}
 }`
-			result := lsp.GetCompletions(doc, 5, 14)
+			result := lsp.GetCompletions(doc, 5, 10)
 
 			require.Equal(t, []string{"string", "date", "timestamp", "int", "required", "optional"}, extractLabels(result.Items))
 		})
 
 		t.Run("of an automation's entries only on and reads name something the model declares", func(t *testing.T) {
-			doc := `context "Lending" {
-	aggregate "Loan" {
-		slice "Borrow Copy" {
-			event CopyBorrowed {
-			}
-			automation RemindOnDueDate {
-				on CopyBorrowed
-				command RemindMember
-				target context Notifications
-			}
-		}
-	}
-}`
+			doc := `emod = 1
+
+model "" {
+}
+
+context "Lending" {
+  aggregate "Loan" {
+    slice "Borrow Copy" {
+      event "CopyBorrowed" {
+      }
+
+      automation "RemindOnDueDate" {
+        on      = CopyBorrowed
+        command = RemindMember
+
+        target {
+          context = Notifications
+        }
+      }
+    }
+  }
+}
+`
 			for _, tc := range []struct {
 				entry     string
 				line      int
 				character int
 				expected  []string
 			}{
-				{entry: "on", line: 6, character: 7, expected: []string{"CopyBorrowed"}},
-				{entry: "command", line: 7, character: 12, expected: automationEntries},
-				{entry: "target context", line: 8, character: 19, expected: automationEntries},
+				{entry: "on", line: 12, character: 18, expected: []string{"CopyBorrowed"}},
+				{entry: "command", line: 13, character: 18, expected: automationEntries},
+				{entry: "context inside target", line: 16, character: 20, expected: []string{"Lending"}},
 			} {
 				t.Run("after "+tc.entry, func(t *testing.T) {
 					result := lsp.GetCompletions(doc, tc.line, tc.character)
@@ -393,26 +409,33 @@ func TestGetCompletions(t *testing.T) {
 		})
 
 		t.Run("a model declaring nothing of the kind an entry names returns an empty list", func(t *testing.T) {
-			doc := `context "Reading Room" {
-	aggregate "Desk" {
-		slice "Claim Desk" {
-			command ClaimDesk {
-			}
-			automation FreeDeskAtClosing {
-				on DeskClaimed
-				reads DeskOccupancyView
-				command ClaimDesk
-			}
-		}
-	}
-}`
+			doc := `emod = 1
+
+model "" {
+}
+
+context "Reading Room" {
+  aggregate "Desk" {
+    slice "Claim Desk" {
+      command "ClaimDesk" {
+      }
+
+      automation "FreeDeskAtClosing" {
+        on      = DeskClaimed
+        reads   = DeskOccupancyView
+        command = ClaimDesk
+      }
+    }
+  }
+}
+`
 			for _, tc := range []struct {
 				entry     string
 				line      int
 				character int
 			}{
-				{entry: "on", line: 6, character: 7},
-				{entry: "reads", line: 7, character: 10},
+				{entry: "on", line: 12, character: 18},
+				{entry: "reads", line: 13, character: 18},
 			} {
 				t.Run("after "+tc.entry, func(t *testing.T) {
 					result := lsp.GetCompletions(doc, tc.line, tc.character)
@@ -426,23 +449,32 @@ func TestGetCompletions(t *testing.T) {
 	t.Run("spec block", func(t *testing.T) {
 		specEntries := []string{"given", "when", "then"}
 
-		const doc = `context "Lending" {
-	aggregate "Loan" {
-		slice "Borrow Copy" {
-			command BorrowCopy {
-			}
-			event CopyBorrowed {
-			}
-			event CopyReturned {
-			}
-			spec "borrows a copy the member before returned" {
-				given [CopyBorrowed, CopyReturned]
-				when BorrowCopy
-				then [CopyBorrowed]
-			}
-		}
-	}
-}`
+		const doc = `emod = 1
+
+model "" {
+}
+
+context "Lending" {
+  aggregate "Loan" {
+    slice "Borrow Copy" {
+      command "BorrowCopy" {
+      }
+
+      event "CopyBorrowed" {
+      }
+
+      event "CopyReturned" {
+      }
+
+      spec "borrows a copy the member before returned" {
+        given = [CopyBorrowed, CopyReturned]
+        when  = BorrowCopy
+        then  = [CopyBorrowed]
+      }
+    }
+  }
+}
+`
 
 		declaredEventItems := []lsp.CompletionItem{
 			{Label: "CopyBorrowed", Kind: lsp.EventCompletion},
@@ -450,63 +482,59 @@ func TestGetCompletions(t *testing.T) {
 		}
 
 		t.Run("inside a spec block returns the entries a spec accepts", func(t *testing.T) {
-			blankLineDoc := `context "Lending" {
-	aggregate "Loan" {
-		slice "Borrow Copy" {
-			spec "borrows a copy no one holds" {
+			blankLineDoc := `emod = 1
 
-			}
-		}
-	}
-}`
-			result := lsp.GetCompletions(blankLineDoc, 4, 4)
+model "" {
+}
+
+context "Lending" {
+  aggregate "Loan" {
+    slice "Borrow Copy" {
+      spec "borrows a copy no one holds" {
+
+      }
+    }
+  }
+}
+`
+			result := lsp.GetCompletions(blankLineDoc, 9, 8)
 
 			// A spec accepts no description, which the whole-list equality says.
 			require.Equal(t, specEntries, extractLabels(result.Items))
 			requireItemKinds(t, result.Items, lsp.KeywordCompletion)
 		})
 
-		t.Run("a spec block with its opening brace on the next line still returns the spec entries", func(t *testing.T) {
-			braceOnNextLineDoc := `context "Lending" {
-	aggregate "Loan" {
-		slice "Borrow Copy" {
-			spec "borrows a copy no one holds"
-			{
-
-			}
-		}
-	}
-}`
-			result := lsp.GetCompletions(braceOnNextLineDoc, 5, 4)
-
-			require.Equal(t, specEntries, extractLabels(result.Items))
-		})
-
 		t.Run("after a closed spec block returns the enclosing slice keywords", func(t *testing.T) {
-			closedDoc := `context "Lending" {
-	aggregate "Loan" {
-		slice "Borrow Copy" {
-			spec "borrows a copy no one holds" {
-				when BorrowCopy
-			}
+			closedDoc := `emod = 1
 
-		}
-	}
-}`
-			result := lsp.GetCompletions(closedDoc, 6, 3)
+model "" {
+}
+
+context "Lending" {
+  aggregate "Loan" {
+    slice "Borrow Copy" {
+      spec "borrows a copy no one holds" {
+        when = BorrowCopy
+      }
+
+    }
+  }
+}
+`
+			result := lsp.GetCompletions(closedDoc, 11, 6)
 
 			require.Equal(t, []string{"command", "event", "trigger", "view", "automation", "translation", "flow"}, extractLabels(result.Items))
 		})
 
 		t.Run("a given list offers the event names the model declares in declaration order", func(t *testing.T) {
-			line, char := posIn(t, doc, "given [CopyBorrowed, CopyReturned]", "given [CopyBorrowed, CopyReturned]")
+			line, char := posIn(t, doc, "given = [CopyBorrowed, CopyReturned", "given = [CopyBorrowed, CopyReturned")
 
 			for _, cursor := range []struct {
 				name      string
 				character int
 			}{
-				{name: "immediately after the opening bracket", character: char + len("given [")},
-				{name: "after an element and its comma", character: char + len("given [CopyBorrowed, ")},
+				{name: "immediately after the opening bracket", character: char + len("given = [")},
+				{name: "after an element and its comma", character: char + len("given = [CopyBorrowed, ")},
 			} {
 				t.Run(cursor.name, func(t *testing.T) {
 					result := lsp.GetCompletions(doc, line, cursor.character)
@@ -517,9 +545,9 @@ func TestGetCompletions(t *testing.T) {
 		})
 
 		t.Run("a then event list offers the same event names", func(t *testing.T) {
-			line, char := posIn(t, doc, "then [CopyBorrowed]", "then [CopyBorrowed]")
+			line, char := posIn(t, doc, "then  = [CopyBorrowed", "then  = [CopyBorrowed")
 
-			result := lsp.GetCompletions(doc, line, char+len("then ["))
+			result := lsp.GetCompletions(doc, line, char+len("then  = ["))
 
 			require.Equal(t, declaredEventItems, result.Items)
 		})
@@ -527,9 +555,9 @@ func TestGetCompletions(t *testing.T) {
 		// A spec's when resolves against commands and events both, so both are
 		// offered, each under the kind GetSemanticTokens paints that name with.
 		t.Run("a when offers the commands and the events the model declares", func(t *testing.T) {
-			line, char := posIn(t, doc, "when BorrowCopy", "when BorrowCopy")
+			line, char := posIn(t, doc, "when  = BorrowCopy", "when  = BorrowCopy")
 
-			result := lsp.GetCompletions(doc, line, char+len("when "))
+			result := lsp.GetCompletions(doc, line, char+len("when  = "))
 
 			require.Equal(t, append(
 				[]lsp.CompletionItem{{Label: "BorrowCopy", Kind: lsp.FunctionCompletion}},
@@ -541,29 +569,29 @@ func TestGetCompletions(t *testing.T) {
 			outcomeDoc := `context "Lending" {
 	aggregate "Loan" {
 		slice "Review Member Loans" {
-			command BorrowCopy {
+			command "BorrowCopy" {
 			}
-			event CopyBorrowed {
+			event "CopyBorrowed" {
 			}
-			view MemberLoansView {
+			view "MemberLoansView" {
 			}
 			spec "lists the loans a member holds" {
-				then view MemberLoansView
+				then = view(MemberLoansView)
 			}
 			spec "reminds a member when a copy becomes due" {
-				then command BorrowCopy
+				then = command(BorrowCopy)
 			}
 		}
 	}
 }`
-			viewLine, viewChar := posIn(t, outcomeDoc, "then view MemberLoansView", "then view MemberLoansView")
-			viewResult := lsp.GetCompletions(outcomeDoc, viewLine, viewChar+len("then view "))
+			viewLine, viewChar := posIn(t, outcomeDoc, "then = view(MemberLoansView", "then = view(MemberLoansView")
+			viewResult := lsp.GetCompletions(outcomeDoc, viewLine, viewChar+len("then = view("))
 			require.Equal(t, []lsp.CompletionItem{
 				{Label: "MemberLoansView", Kind: lsp.ClassCompletion},
 			}, viewResult.Items)
 
-			cmdLine, cmdChar := posIn(t, outcomeDoc, "then command BorrowCopy", "then command BorrowCopy")
-			cmdResult := lsp.GetCompletions(outcomeDoc, cmdLine, cmdChar+len("then command "))
+			cmdLine, cmdChar := posIn(t, outcomeDoc, "then = command(BorrowCopy)", "then = command(BorrowCopy)")
+			cmdResult := lsp.GetCompletions(outcomeDoc, cmdLine, cmdChar+len("then = command("))
 			require.Equal(t, []lsp.CompletionItem{
 				{Label: "BorrowCopy", Kind: lsp.FunctionCompletion},
 			}, cmdResult.Items)
@@ -572,24 +600,35 @@ func TestGetCompletions(t *testing.T) {
 		// then becoming an event slot must not outrank rejected, which the
 		// backward scan reaches first.
 		t.Run("a then rejected still offers the invariants in scope and no event names", func(t *testing.T) {
-			rejectionDoc := `context "Lending" {
-	aggregate "Loan" {
-		invariant OneCopyPerLoan "A loan covers exactly one copy of one title"
-		slice "Borrow Copy" {
-			command BorrowCopy {
-			}
-			event CopyBorrowed {
-			}
-			spec "refuses a copy already on loan" {
-				when BorrowCopy
-				then rejected OneCopyPerLoan
-			}
-		}
-	}
-}`
-			line, char := posIn(t, rejectionDoc, "then rejected OneCopyPerLoan", "then rejected OneCopyPerLoan")
+			rejectionDoc := `emod = 1
 
-			result := lsp.GetCompletions(rejectionDoc, line, char+len("then rejected "))
+model "" {
+}
+
+context "Lending" {
+  aggregate "Loan" {
+    invariants {
+      OneCopyPerLoan = "A loan covers exactly one copy of one title"
+    }
+
+    slice "Borrow Copy" {
+      command "BorrowCopy" {
+      }
+
+      event "CopyBorrowed" {
+      }
+
+      spec "refuses a copy already on loan" {
+        when = BorrowCopy
+        then = rejected(OneCopyPerLoan)
+      }
+    }
+  }
+}
+`
+			line, char := posIn(t, rejectionDoc, "then = rejected(OneCopyPerLoan", "then = rejected(OneCopyPerLoan")
+
+			result := lsp.GetCompletions(rejectionDoc, line, char+len("then = rejected("))
 
 			require.Equal(t, []lsp.CompletionItem{
 				{Label: "OneCopyPerLoan", Kind: lsp.ConstantCompletion},
@@ -602,7 +641,7 @@ func TestGetCompletions(t *testing.T) {
 					halfTypedDoc := `context "Lending" {
 	aggregate "Loan" {
 		slice "Borrow Copy" {
-			event CopyBorrowed {
+			event "CopyBorrowed" {
 			}
 			spec "borrows a copy no one holds" {
 				` + entry + `
@@ -625,7 +664,7 @@ func TestGetCompletions(t *testing.T) {
 					fieldDoc := `context "Lending" {
 	aggregate "Loan" {
 		slice "Borrow Copy" {
-			event CopyBorrowed {
+			event "CopyBorrowed" {
 				fields {
 					` + entry + ` string required
 				}
@@ -647,50 +686,73 @@ func TestGetCompletions(t *testing.T) {
 		// Three scopes, so a model-wide list is visibly wrong rather than
 		// coincidentally right: two aggregates of one context, and a second
 		// context declaring its own invariants over a slice of its own.
-		const threeScopeDoc = `context "Lending" {
-	aggregate "Loan" {
-		invariant OneCopyPerLoan "A loan covers exactly one copy of one title"
-		invariant FiveCopiesPerMember "A member holds at most five copies at one time"
-		slice "Borrow Copy" {
-			command BorrowCopy {
-			}
-			event CopyBorrowed {
-			}
-			spec "borrows a copy no one holds" {
-				when BorrowCopy
-				then [CopyBorrowed]
-			}
-			spec "refuses a copy already on loan" {
-				when BorrowCopy
-				then rejected OneCopyPerLoan
-			}
-		}
-	}
-	aggregate "Hold" {
-		invariant OneHoldPerTitle "A member holds at most one copy of a title back"
-		slice "Place Hold" {
-			command PlaceHold {
-			}
-			spec "refuses a second hold" {
-				when PlaceHold
-				then rejected OneHoldPerTitle
-			}
-		}
-	}
+		const threeScopeDoc = `emod = 1
+
+model "" {
 }
 
-context "Reading Room" mode dcb {
-	invariant OneReaderPerDesk "A desk seats at most one reader at any moment"
-	invariant DeskFreeAtClosing "No desk stays claimed past the closing hour"
-	slice "Claim Desk" {
-		command ClaimDesk {
-		}
-		spec "refuses a desk another reader is seated at" {
-			when ClaimDesk
-			then rejected OneReaderPerDesk
-		}
-	}
-}`
+context "Lending" {
+  aggregate "Loan" {
+    invariants {
+      OneCopyPerLoan      = "A loan covers exactly one copy of one title"
+      FiveCopiesPerMember = "A member holds at most five copies at one time"
+    }
+
+    slice "Borrow Copy" {
+      command "BorrowCopy" {
+      }
+
+      event "CopyBorrowed" {
+      }
+
+      spec "borrows a copy no one holds" {
+        when = BorrowCopy
+        then = [CopyBorrowed]
+      }
+
+      spec "refuses a copy already on loan" {
+        when = BorrowCopy
+        then = rejected(OneCopyPerLoan)
+      }
+    }
+  }
+
+  aggregate "Hold" {
+    invariants {
+      OneHoldPerTitle = "A member holds at most one copy of a title back"
+    }
+
+    slice "Place Hold" {
+      command "PlaceHold" {
+      }
+
+      spec "refuses a second hold" {
+        when = PlaceHold
+        then = rejected(OneHoldPerTitle)
+      }
+    }
+  }
+}
+
+context "Reading Room" {
+  mode = dcb
+
+  invariants {
+    OneReaderPerDesk  = "A desk seats at most one reader at any moment"
+    DeskFreeAtClosing = "No desk stays claimed past the closing hour"
+  }
+
+  slice "Claim Desk" {
+    command "ClaimDesk" {
+    }
+
+    spec "refuses a desk another reader is seated at" {
+      when = ClaimDesk
+      then = rejected(OneReaderPerDesk)
+    }
+  }
+}
+`
 
 		t.Run("offers exactly the invariants of the scope holding the spec", func(t *testing.T) {
 			for _, tc := range []struct {
@@ -719,9 +781,9 @@ context "Reading Room" mode dcb {
 				},
 			} {
 				t.Run(tc.scope, func(t *testing.T) {
-					line, character := posIn(t, threeScopeDoc, tc.container, "then rejected "+tc.invariant)
+					line, character := posIn(t, threeScopeDoc, tc.container, "then = rejected("+tc.invariant)
 
-					result := lsp.GetCompletions(threeScopeDoc, line, character+len("then rejected "))
+					result := lsp.GetCompletions(threeScopeDoc, line, character+len("then = rejected("))
 
 					require.Equal(t, tc.expected, extractLabels(result.Items))
 					requireItemKinds(t, result.Items, lsp.ConstantCompletion)
@@ -730,9 +792,9 @@ context "Reading Room" mode dcb {
 		})
 
 		t.Run("a then with no rejected on the line offers the event names, not the invariants", func(t *testing.T) {
-			line, char := posIn(t, threeScopeDoc, `spec "borrows a copy no one holds"`, "then [CopyBorrowed]")
+			line, char := posIn(t, threeScopeDoc, `spec "borrows a copy no one holds"`, "then = [CopyBorrowed")
 
-			result := lsp.GetCompletions(threeScopeDoc, line, char+len("then ["))
+			result := lsp.GetCompletions(threeScopeDoc, line, char+len("then = ["))
 
 			require.Equal(t, []string{"CopyBorrowed"}, extractLabels(result.Items))
 		})
@@ -742,7 +804,7 @@ context "Reading Room" mode dcb {
 		// out of it. What matters here is that no invariant is offered until the
 		// keyword is finished and a space typed after it.
 		t.Run("a cursor still touching a half-typed rejected offers no invariant names", func(t *testing.T) {
-			line, char := posIn(t, threeScopeDoc, `spec "refuses a copy already on loan"`, "rejected OneCopyPerLoan")
+			line, char := posIn(t, threeScopeDoc, `spec "refuses a copy already on loan"`, "rejected(OneCopyPerLoan")
 
 			result := lsp.GetCompletions(threeScopeDoc, line, char+len("rejected"))
 
@@ -755,56 +817,78 @@ context "Reading Room" mode dcb {
 		invariant OneCopyPerLoan "A loan covers exactly one copy of one title"
 		invariant FiveCopiesPerMember "A member holds at most five copies at one time"
 		slice "Borrow Copy" {
-			command BorrowCopy {
+			command "BorrowCopy" {
 			}
 			spec "refuses a copy already on loan" {
-				when BorrowCopy
+				when = BorrowCopy
 				then rejected `
 			line := strings.Count(truncatedDoc, "\n")
 
-			result := lsp.GetCompletions(truncatedDoc, line, len("\t\t\t\tthen rejected "))
+			result := lsp.GetCompletions(truncatedDoc, line, len("\t\t\t\tthen = rejected("))
 
 			require.Equal(t, []string{"OneCopyPerLoan", "FiveCopiesPerMember"}, extractLabels(result.Items))
 		})
 
 		t.Run("an aggregate is not offered the invariants of the context enclosing it", func(t *testing.T) {
-			const nestedDoc = `context "Lending" {
-	invariant CardInGoodStanding "A member borrows only while their card is in good standing"
-	aggregate "Loan" {
-		invariant OneCopyPerLoan "A loan covers exactly one copy of one title"
-		slice "Borrow Copy" {
-			command BorrowCopy {
-			}
-			spec "refuses a copy already on loan" {
-				when BorrowCopy
-				then rejected OneCopyPerLoan
-			}
-		}
-	}
-}`
-			line, char := posIn(t, nestedDoc, "then rejected OneCopyPerLoan", "then rejected OneCopyPerLoan")
+			const nestedDoc = `emod = 1
 
-			result := lsp.GetCompletions(nestedDoc, line, char+len("then rejected "))
+model "" {
+}
+
+context "Lending" {
+  invariants {
+    CardInGoodStanding = "A member borrows only while their card is in good standing"
+  }
+
+  aggregate "Loan" {
+    invariants {
+      OneCopyPerLoan = "A loan covers exactly one copy of one title"
+    }
+
+    slice "Borrow Copy" {
+      command "BorrowCopy" {
+      }
+
+      spec "refuses a copy already on loan" {
+        when = BorrowCopy
+        then = rejected(OneCopyPerLoan)
+      }
+    }
+  }
+}
+`
+			line, char := posIn(t, nestedDoc, "then = rejected(OneCopyPerLoan", "then = rejected(OneCopyPerLoan")
+
+			result := lsp.GetCompletions(nestedDoc, line, char+len("then = rejected("))
 
 			require.Equal(t, []string{"OneCopyPerLoan"}, extractLabels(result.Items))
 		})
 
 		t.Run("a field named rejected still offers field types and modifiers", func(t *testing.T) {
-			const doc = `context "Lending" {
-	aggregate "Loan" {
-		invariant OneCopyPerLoan "A loan covers exactly one copy of one title"
-		slice "Borrow Copy" {
-			command BorrowCopy {
-				fields {
-					rejected string required
-				}
-			}
-		}
-	}
-}`
-			line, char := posIn(t, doc, "fields {", "rejected string")
+			const doc = `emod = 1
 
-			result := lsp.GetCompletions(doc, line, char+len("rejected "))
+model "" {
+}
+
+context "Lending" {
+  aggregate "Loan" {
+    invariants {
+      OneCopyPerLoan = "A loan covers exactly one copy of one title"
+    }
+
+    slice "Borrow Copy" {
+      command "BorrowCopy" {
+        fields {
+          rejected = required(string)
+        }
+      }
+    }
+  }
+}
+`
+			line, char := posIn(t, doc, "fields {", "rejected = required(string)")
+
+			result := lsp.GetCompletions(doc, line, char+len("rejected = "))
 
 			require.Equal(t, []string{"string", "date", "timestamp", "int", "required", "optional"}, extractLabels(result.Items))
 		})
@@ -823,9 +907,9 @@ context "Reading Room" mode dcb {
 	aggregate "Loan" {
 		invariant OneCopyPerLoan "A loan covers exactly one copy of one title"
 		slice "Borrow Copy" {
-			command BorrowCopy {
+			command "BorrowCopy" {
 			}
-			event CopyBorrowed {
+			event "CopyBorrowed" {
 			}
 			flow {
 				` + entry + `
@@ -855,35 +939,44 @@ context "Reading Room" mode dcb {
 	t.Run("payload field names", func(t *testing.T) {
 		// Two constructs declaring different field sets, so a list that ignores
 		// the element the payload hangs off is visibly wrong.
-		const doc = `context "Lending" {
-	aggregate "Loan" {
-		slice "Borrow Copy" {
-			command BorrowCopy {
-				fields {
-					memberId string required
-					copyId   string required
-				}
-			}
-			event CopyBorrowed {
-				fields {
-					loanId     string    required
-					borrowedAt timestamp required
-					reads      string
-				}
-			}
-			event CopyReturned {
-				fields {
-					returnedAt timestamp required
-				}
-			}
-			spec "borrows a copy the member before returned" {
-				given [CopyBorrowed { loanId: "L-1" }, CopyReturned { returnedAt: "2024-07-05T14:32:00Z" }]
-				when BorrowCopy { memberId: "M-40817", copyId: "C-93204" }
-				then [CopyBorrowed { loanId: "L-2" }]
-			}
-		}
-	}
-}`
+		const doc = `emod = 1
+
+model "" {
+}
+
+context "Lending" {
+  aggregate "Loan" {
+    slice "Borrow Copy" {
+      command "BorrowCopy" {
+        fields {
+          memberId = required(string)
+          copyId   = required(string)
+        }
+      }
+
+      event "CopyBorrowed" {
+        fields {
+          loanId     = required(string)
+          borrowedAt = required(timestamp)
+          reads      = string
+        }
+      }
+
+      event "CopyReturned" {
+        fields {
+          returnedAt = required(timestamp)
+        }
+      }
+
+      spec "borrows a copy the member before returned" {
+        given = [CopyBorrowed({ loanId = "L-1" }), CopyReturned({ returnedAt = "2024-07-05T14:32:00Z" })]
+        when  = BorrowCopy({ memberId = "M-40817", copyId = "C-93204" })
+        then  = [CopyBorrowed({ loanId = "L-2" })]
+      }
+    }
+  }
+}
+`
 
 		borrowCopyFields := []string{"memberId", "copyId"}
 		// CopyBorrowed's third field is named after a DSL keyword: a payload's
@@ -900,26 +993,26 @@ context "Reading Room" mode dcb {
 			}{
 				{
 					entry:    "given",
-					line:     `given [CopyBorrowed { loanId: "L-1" }, CopyReturned { returnedAt: "2024-07-05T14:32:00Z" }]`,
-					after:    `given [CopyBorrowed { `,
+					line:     `given = [CopyBorrowed({ loanId = "L-1" }), CopyReturned({ returnedAt = "2024-07-05T14:32:00Z`,
+					after:    `given = [CopyBorrowed({ `,
 					expected: copyBorrowedFields,
 				},
 				{
 					entry:    "a second element of the same given list",
-					line:     `given [CopyBorrowed { loanId: "L-1" }, CopyReturned { returnedAt: "2024-07-05T14:32:00Z" }]`,
-					after:    `given [CopyBorrowed { loanId: "L-1" }, CopyReturned { `,
+					line:     `given = [CopyBorrowed({ loanId = "L-1" }), CopyReturned({ returnedAt = "2024-07-05T14:32:00Z`,
+					after:    `given = [CopyBorrowed({ loanId = "L-1" }), CopyReturned({ `,
 					expected: []string{"returnedAt"},
 				},
 				{
 					entry:    "when",
-					line:     `when BorrowCopy { memberId: "M-40817", copyId: "C-93204" }`,
-					after:    `when BorrowCopy { `,
+					line:     `when  = BorrowCopy({ memberId = "M-40817", copyId = "C-93204`,
+					after:    `when  = BorrowCopy({ `,
 					expected: borrowCopyFields,
 				},
 				{
 					entry:    "then",
-					line:     `then [CopyBorrowed { loanId: "L-2" }]`,
-					after:    `then [CopyBorrowed { `,
+					line:     `then  = [CopyBorrowed({ loanId = "L-2`,
+					after:    `then  = [CopyBorrowed({ `,
 					expected: copyBorrowedFields,
 				},
 			} {
@@ -935,34 +1028,41 @@ context "Reading Room" mode dcb {
 		})
 
 		t.Run("a field name already written is still offered, the client filtering the list", func(t *testing.T) {
-			const whenLine = `when BorrowCopy { memberId: "M-40817", copyId: "C-93204" }`
+			const whenLine = `when  = BorrowCopy({ memberId = "M-40817", copyId = "C-93204`
 			line, char := posIn(t, doc, whenLine, whenLine)
 
-			result := lsp.GetCompletions(doc, line, char+len(`when BorrowCopy { memberId: "M-40817", `))
+			result := lsp.GetCompletions(doc, line, char+len(`when  = BorrowCopy({ memberId = "M-40817", `))
 
 			require.Equal(t, borrowCopyFields, extractLabels(result.Items))
 		})
 
 		t.Run("a payload spanning several lines offers the same names on a continuation line", func(t *testing.T) {
-			const multiLineDoc = `context "Lending" {
-	aggregate "Loan" {
-		slice "Borrow Copy" {
-			command BorrowCopy {
-				fields {
-					memberId string required
-					copyId   string required
-				}
-			}
-			spec "borrows a copy no one holds" {
-				when BorrowCopy {
-					memberId: "M-40817",
+			const multiLineDoc = `emod = 1
 
-				}
-			}
-		}
-	}
-}`
-			line, _ := posIn(t, multiLineDoc, `memberId: "M-40817",`, `memberId: "M-40817",`)
+model "" {
+}
+
+context "Lending" {
+  aggregate "Loan" {
+    slice "Borrow Copy" {
+      command "BorrowCopy" {
+        fields {
+          memberId = required(string)
+          copyId   = required(string)
+        }
+      }
+
+      spec "borrows a copy no one holds" {
+        when = BorrowCopy({
+          memberId = "M-40817"
+          copyId   = "C-93204"
+        })
+      }
+    }
+  }
+}
+`
+			line, _ := posIn(t, multiLineDoc, `memberId = "M-40817`, `memberId = "M-40817`)
 
 			result := lsp.GetCompletions(multiLineDoc, line+1, 5)
 
@@ -973,30 +1073,38 @@ context "Reading Room" mode dcb {
 		// one line and the element it qualifies on the next, so the entry keyword
 		// has to outlive the line that stated it.
 		t.Run("a payload on an element wrapped below its given keyword still offers that construct's fields", func(t *testing.T) {
-			const wrappedDoc = `context "Lending" {
-	aggregate "Loan" {
-		slice "Borrow Copy" {
-			command BorrowCopy {
-			}
-			event CopyBorrowed {
-				fields {
-					loanId     string    required
-					borrowedAt timestamp required
-				}
-			}
-			spec "borrows a copy no one holds" {
-				given [
-					CopyBorrowed {
-						loanId: "L-1",
+			const wrappedDoc = `emod = 1
 
-					}
-				]
-				when BorrowCopy
-			}
-		}
-	}
-}`
-			line, _ := posIn(t, wrappedDoc, `loanId: "L-1",`, `loanId: "L-1",`)
+model "" {
+}
+
+context "Lending" {
+  aggregate "Loan" {
+    slice "Borrow Copy" {
+      command "BorrowCopy" {
+      }
+
+      event "CopyBorrowed" {
+        fields {
+          loanId     = required(string)
+          borrowedAt = required(timestamp)
+        }
+      }
+
+      spec "borrows a copy no one holds" {
+        given = [
+          CopyBorrowed({
+            loanId     = "L-1"
+            borrowedAt = "2024-07-05T14:32:00Z"
+          })
+        ]
+        when = BorrowCopy
+      }
+    }
+  }
+}
+`
+			line, _ := posIn(t, wrappedDoc, `loanId     = "L-1`, `loanId     = "L-1`)
 
 			result := lsp.GetCompletions(wrappedDoc, line+1, 6)
 
@@ -1006,40 +1114,51 @@ context "Reading Room" mode dcb {
 		// An automation slice's when names the triggering event rather than a
 		// command, so the payload on it resolves against events too.
 		t.Run("a payload on a when naming an event offers that event's fields", func(t *testing.T) {
-			const automationDoc = `context "Lending" {
-	aggregate "Loan" {
-		slice "Chase Overdue Copy" {
-			event CopyBorrowed {
-				fields {
-					loanId string required
-					dueOn  date   required
-				}
-			}
-			command RemindMember {
-				fields {
-					memberId string required
-				}
-			}
-			event MemberReminded {
-			}
-			automation RemindOnDueDate {
-				on CopyBorrowed
-				command RemindMember
-			}
-			spec "reminds a member when a copy becomes due" {
-				when CopyBorrowed { loanId: "L-1" }
-				then [MemberReminded]
-			}
-			flow {
-				command -> event: RemindMember -> MemberReminded
-			}
-		}
-	}
-}`
-			const whenLine = `when CopyBorrowed { loanId: "L-1" }`
+			const automationDoc = `emod = 1
+
+model "" {
+}
+
+context "Lending" {
+  aggregate "Loan" {
+    slice "Chase Overdue Copy" {
+      command "RemindMember" {
+        fields {
+          memberId = required(string)
+        }
+      }
+
+      event "CopyBorrowed" {
+        fields {
+          loanId = required(string)
+          dueOn  = required(date)
+        }
+      }
+
+      event "MemberReminded" {
+      }
+
+      automation "RemindOnDueDate" {
+        on      = CopyBorrowed
+        command = RemindMember
+      }
+
+      flow = <<-FLOW
+        command -> event:    RemindMember -> MemberReminded
+      FLOW
+
+      spec "reminds a member when a copy becomes due" {
+        when = CopyBorrowed({ loanId = "L-1" })
+        then = [MemberReminded]
+      }
+    }
+  }
+}
+`
+			const whenLine = `when = CopyBorrowed({ loanId = "L-1`
 			line, char := posIn(t, automationDoc, whenLine, whenLine)
 
-			result := lsp.GetCompletions(automationDoc, line, char+len(`when CopyBorrowed { `))
+			result := lsp.GetCompletions(automationDoc, line, char+len(`when = CopyBorrowed({ `))
 
 			require.Equal(t, []string{"loanId", "dueOn"}, extractLabels(result.Items))
 			requireItemKinds(t, result.Items, lsp.FieldCompletion)
@@ -1049,46 +1168,56 @@ context "Reading Room" mode dcb {
 		// entry keyword has to outlive every line until the bracket that opened
 		// the list closes — not just the line that stated it.
 		t.Run("every element of a wrapped list resolves against its own construct", func(t *testing.T) {
-			const wrappedDoc = `context "Lending" {
-	aggregate "Loan" {
-		slice "Borrow Copy" {
-			command BorrowCopy {
-			}
-			event CopyBorrowed {
-				fields {
-					loanId     string    required
-					borrowedAt timestamp required
-				}
-			}
-			event CopyReturned {
-				fields {
-					returnedAt timestamp required
-				}
-			}
-			spec "borrows a copy the member before returned" {
-				given [
-					# the copy this member had out before
-					CopyBorrowed {
-						loanId: "L-1",
+			const wrappedDoc = `emod = 1
 
-					},
-					CopyReturned {
-						returnedAt: "2024-07-05T14:32:00Z",
+model "" {
+}
 
-					}
-				]
-				when BorrowCopy
-			}
-		}
-	}
-}`
+context "Lending" {
+  aggregate "Loan" {
+    slice "Borrow Copy" {
+      command "BorrowCopy" {
+      }
+
+      event "CopyBorrowed" {
+        fields {
+          loanId     = required(string)
+          borrowedAt = required(timestamp)
+        }
+      }
+
+      event "CopyReturned" {
+        fields {
+          returnedAt = required(timestamp)
+          returnedBy = required(string)
+        }
+      }
+
+      spec "borrows a copy the member before returned" {
+        given = [
+          # the copy this member had out before
+          CopyBorrowed({
+            loanId     = "L-1"
+            borrowedAt = "2024-07-01T09:00:00Z"
+          }),
+          CopyReturned({
+            returnedAt = "2024-07-05T14:32:00Z"
+            returnedBy = "M-40817"
+          })
+        ]
+        when = BorrowCopy
+      }
+    }
+  }
+}
+`
 			for _, tc := range []struct {
 				element  string
 				marker   string
 				expected []string
 			}{
-				{element: "the first", marker: `loanId: "L-1",`, expected: []string{"loanId", "borrowedAt"}},
-				{element: "the second", marker: `returnedAt: "2024-07-05T14:32:00Z",`, expected: []string{"returnedAt"}},
+				{element: "the first", marker: `loanId     = "L-1`, expected: []string{"loanId", "borrowedAt"}},
+				{element: "the second", marker: `returnedAt = "2024-07-05T14:32:00Z`, expected: []string{"returnedAt", "returnedBy"}},
 			} {
 				t.Run(tc.element+" element, on a continuation line", func(t *testing.T) {
 					line, _ := posIn(t, wrappedDoc, tc.marker, tc.marker)
@@ -1100,41 +1229,48 @@ context "Reading Room" mode dcb {
 			}
 
 			t.Run("a comment between the bracket and the first element does not lose the entry", func(t *testing.T) {
-				line, char := posIn(t, wrappedDoc, "# the copy this member had out before", "CopyBorrowed {")
+				line, char := posIn(t, wrappedDoc, "the copy this member had out before", "CopyBorrowed({")
 
-				result := lsp.GetCompletions(wrappedDoc, line, char+len("CopyBorrowed { "))
+				result := lsp.GetCompletions(wrappedDoc, line, char+len("CopyBorrowed({"))
 
 				require.Equal(t, []string{"loanId", "borrowedAt"}, extractLabels(result.Items))
 			})
 
 			t.Run("a caret past one element's closing brace offers the event names the list accepts", func(t *testing.T) {
-				line, _ := posIn(t, wrappedDoc, `loanId: "L-1",`, `loanId: "L-1",`)
+				line, _ := posIn(t, wrappedDoc, `loanId     = "L-1`, `loanId     = "L-1`)
 
-				result := lsp.GetCompletions(wrappedDoc, line+2, len("\t\t\t\t\t},"))
+				result := lsp.GetCompletions(wrappedDoc, line+2, len("          }),"))
 
 				require.Equal(t, []string{"CopyBorrowed", "CopyReturned"}, extractLabels(result.Items))
 			})
 		})
 
 		t.Run("a payload naming a construct the model does not declare offers nothing at all", func(t *testing.T) {
-			const undeclaredDoc = `context "Lending" {
-	aggregate "Loan" {
-		slice "Borrow Copy" {
-			command BorrowCopy {
-				fields {
-					memberId string required
-				}
-			}
-			spec "borrows a copy no one holds" {
-				given [CopyReturned { returnedAt: "2024-07-05" }]
-				when BorrowCopy
-			}
-		}
-	}
-}`
-			line, char := posIn(t, undeclaredDoc, `given [CopyReturned {`, `given [CopyReturned {`)
+			const undeclaredDoc = `emod = 1
 
-			result := lsp.GetCompletions(undeclaredDoc, line, char+len(`given [CopyReturned { `))
+model "" {
+}
+
+context "Lending" {
+  aggregate "Loan" {
+    slice "Borrow Copy" {
+      command "BorrowCopy" {
+        fields {
+          memberId = required(string)
+        }
+      }
+
+      spec "borrows a copy no one holds" {
+        given = [CopyReturned({ returnedAt = "2024-07-05" })]
+        when  = BorrowCopy
+      }
+    }
+  }
+}
+`
+			line, char := posIn(t, undeclaredDoc, `given = [CopyReturned({`, `given = [CopyReturned({`)
+
+			result := lsp.GetCompletions(undeclaredDoc, line, char+len(`given = [CopyReturned({ `))
 
 			require.Equal(t, []lsp.CompletionItem{}, result.Items)
 		})
@@ -1146,13 +1282,13 @@ context "Reading Room" mode dcb {
 			const braceBelowDoc = `context "Lending" {
 	aggregate "Loan" {
 		slice "Borrow Copy" {
-			command BorrowCopy {
+			command "BorrowCopy" {
 				fields {
-					memberId string required
+					memberId = string
 				}
 			}
 			spec "borrows a copy no one holds" {
-				when BorrowCopy
+				when = BorrowCopy
 				{
 
 				}
@@ -1177,7 +1313,7 @@ context "Reading Room" mode dcb {
 			}
 		}
 		slice "Return Copy" {
-			command ReturnCopy {
+			command "ReturnCopy" {
 
 			}
 		}
@@ -1194,7 +1330,7 @@ context "Reading Room" mode dcb {
 				expected []string
 			}{
 				{position: "a later sibling slice's command body", line: 10, expected: []string{"fields", "decides_on"}},
-				{position: "a later sibling aggregate body", line: 14, expected: []string{"slice", "invariant"}},
+				{position: "a later sibling aggregate body", line: 14, expected: []string{"slice", "invariants"}},
 				{position: "the top level below everything", line: 17, expected: []string{"model", "actor", "context"}},
 			} {
 				t.Run(tc.position, func(t *testing.T) {
@@ -1206,33 +1342,42 @@ context "Reading Room" mode dcb {
 		})
 
 		t.Run("a payload field spelled like a spec entry does not reclaim the list", func(t *testing.T) {
-			const hijackDoc = `context "Lending" {
-	aggregate "Loan" {
-		slice "Borrow Copy" {
-			command BorrowCopy {
-			}
-			event CopyBorrowed {
-				fields {
-					when   string required
-					loanId string required
-				}
-			}
-			event CopyReturned {
-			}
-			spec "borrows a copy no one holds" {
-				given [
-					CopyBorrowed {
-						when: "2024-07-05T14:32:00Z",
-					}
-				]
-				when BorrowCopy
-			}
-		}
-	}
-}`
-			line, _ := posIn(t, hijackDoc, `when: "2024-07-05T14:32:00Z",`, `when: "2024-07-05T14:32:00Z",`)
+			const hijackDoc = `emod = 1
 
-			result := lsp.GetCompletions(hijackDoc, line+1, len("\t\t\t\t\t}"))
+model "" {
+}
+
+context "Lending" {
+  aggregate "Loan" {
+    slice "Borrow Copy" {
+      command "BorrowCopy" {
+      }
+
+      event "CopyBorrowed" {
+        fields {
+          when   = required(string)
+          loanId = required(string)
+        }
+      }
+
+      event "CopyReturned" {
+      }
+
+      spec "borrows a copy no one holds" {
+        given = [
+          CopyBorrowed({
+            when = "2024-07-05T14:32:00Z"
+          })
+        ]
+        when = BorrowCopy
+      }
+    }
+  }
+}
+`
+			line, _ := posIn(t, hijackDoc, `when = "2024-07-05T14:32:00Z`, `when = "2024-07-05T14:32:00Z`)
+
+			result := lsp.GetCompletions(hijackDoc, line+1, len("          })"))
 
 			require.Equal(t, []string{"CopyBorrowed", "CopyReturned"}, extractLabels(result.Items))
 		})
@@ -1240,33 +1385,41 @@ context "Reading Room" mode dcb {
 		// given and then accept events only, while when accepts either kind, so
 		// a command named in a given list qualifies nothing.
 		t.Run("a given element naming a declared command offers nothing", func(t *testing.T) {
-			const kindDoc = `context "Lending" {
-	aggregate "Loan" {
-		slice "Borrow Copy" {
-			command BorrowCopy {
-				fields {
-					memberId string required
-				}
-			}
-			event CopyBorrowed {
-				fields {
-					loanId string required
-				}
-			}
-			spec "borrows a copy no one holds" {
-				given [BorrowCopy { memberId: "M-1" }]
-				when BorrowCopy { memberId: "M-1" }
-				then [CopyBorrowed { loanId: "L-1" }]
-			}
-		}
-	}
-}`
-			givenLine, givenChar := posIn(t, kindDoc, `given [BorrowCopy { memberId: "M-1" }]`, `given [BorrowCopy { memberId: "M-1" }]`)
-			givenResult := lsp.GetCompletions(kindDoc, givenLine, givenChar+len(`given [BorrowCopy { `))
+			const kindDoc = `emod = 1
+
+model "" {
+}
+
+context "Lending" {
+  aggregate "Loan" {
+    slice "Borrow Copy" {
+      command "BorrowCopy" {
+        fields {
+          memberId = required(string)
+        }
+      }
+
+      event "CopyBorrowed" {
+        fields {
+          loanId = required(string)
+        }
+      }
+
+      spec "borrows a copy no one holds" {
+        given = [BorrowCopy({ memberId = "M-1" })]
+        when  = BorrowCopy({ memberId = "M-1" })
+        then  = [CopyBorrowed({ loanId = "L-1" })]
+      }
+    }
+  }
+}
+`
+			givenLine, givenChar := posIn(t, kindDoc, `given = [BorrowCopy({ memberId = "M-1`, `given = [BorrowCopy({ memberId = "M-1`)
+			givenResult := lsp.GetCompletions(kindDoc, givenLine, givenChar+len(`given = [BorrowCopy({ `))
 			require.Equal(t, []lsp.CompletionItem{}, givenResult.Items)
 
-			whenLine, whenChar := posIn(t, kindDoc, `when BorrowCopy { memberId: "M-1" }`, `when BorrowCopy { memberId: "M-1" }`)
-			whenResult := lsp.GetCompletions(kindDoc, whenLine, whenChar+len(`when BorrowCopy { `))
+			whenLine, whenChar := posIn(t, kindDoc, `when  = BorrowCopy({ memberId = "M-1" })`, `when  = BorrowCopy({ memberId = "M-1" })`)
+			whenResult := lsp.GetCompletions(kindDoc, whenLine, whenChar+len(`when  = BorrowCopy({ `))
 			require.Equal(t, []string{"memberId"}, extractLabels(whenResult.Items))
 		})
 
@@ -1306,8 +1459,8 @@ context "Reading Room" mode dcb {
 				char     int
 				expected []string
 			}{
-				{position: "a blank line in the spec body", line: 22, char: 3, expected: []string{"given", "when", "then"}},
-				{position: "a blank line in the fields block", line: 6, char: 5, expected: []string{"string", "date", "timestamp", "int", "required", "optional"}},
+				{position: "a blank line in the spec body", line: 30, char: 8, expected: []string{"given", "when", "then"}},
+				{position: "a blank line in the fields block", line: 10, char: 10, expected: []string{"string", "date", "timestamp", "int", "required", "optional"}},
 			} {
 				t.Run(tc.position, func(t *testing.T) {
 					lines := strings.Split(doc, "\n")
@@ -1327,21 +1480,21 @@ context "Reading Room" mode dcb {
 		t.Run("string contents neither start a comment nor open or close a block", func(t *testing.T) {
 			for _, description := range []string{"plain text", "a # b", "a { b", "a } b", "a // b"} {
 				doc := `context Ctx {
-	aggregate Agg {
-		slice Slc {
-			view V { description "` + description + `" }
+	aggregate "Agg" {
+		slice "Slc" {
+			view "V" { description "` + description + `" }
 		}
 		// cursor here
 	}
 }`
 				result := lsp.GetCompletions(doc, 5, 2)
-				require.Equal(t, []string{"slice", "invariant"}, extractLabels(result.Items), "description %q", description)
+				require.Equal(t, []string{"slice", "invariants"}, extractLabels(result.Items), "description %q", description)
 			}
 		})
 
 		t.Run("a block comment opens and closes nothing", func(t *testing.T) {
 			doc := `context Ctx {
-	aggregate Agg {
+	aggregate "Agg" {
 		/* slice Slc {
 		   } */
 		// cursor here
@@ -1350,7 +1503,7 @@ context "Reading Room" mode dcb {
 
 			result := lsp.GetCompletions(doc, 4, 2)
 
-			require.Equal(t, []string{"slice", "invariant"}, extractLabels(result.Items))
+			require.Equal(t, []string{"slice", "invariants"}, extractLabels(result.Items))
 		})
 	})
 

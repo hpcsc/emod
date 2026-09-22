@@ -474,7 +474,7 @@ context "C" {
 
 			list := p.readCompletionResult(t, completionID)
 
-			require.Equal(t, []string{"on", "every", "reads", "command", "target context"}, extractLabels(list.Items))
+			require.Equal(t, []string{"on", "every", "after", "reads", "command", "target"}, extractLabels(list.Items))
 		})
 
 		t.Run("returns the open document's event names for a position after an automation's on", func(t *testing.T) {

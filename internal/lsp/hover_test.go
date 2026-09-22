@@ -695,9 +695,9 @@ func TestGetHover(t *testing.T) {
 	})
 
 	t.Run("cursor on non-resolvable token returns nil", func(t *testing.T) {
-		// Cursor on the identifier "required" which is a field modifier,
-		// not a resolvable definition name.
-		line, char := posIn(t, testDoc, "id String required", "required")
+		// Cursor on the identifier "String", a domain type: it names no
+		// declaration and the language gives it no meaning of its own.
+		line, char := posIn(t, testDoc, "id String required", "String")
 		assertNil(t, testDoc, line, char)
 	})
 

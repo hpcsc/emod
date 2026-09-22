@@ -6,29 +6,29 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/hpcsc/emod/internal/lexer"
 	"github.com/hpcsc/emod/internal/lsp"
+	"github.com/hpcsc/emod/internal/test"
 	"github.com/stretchr/testify/require"
 )
 
 // The hover descriptions and the completer's per-block lists are both written by
-// hand and neither is derived from internal/lexer, so a keyword added to the
+// hand and neither is derived from the keyword list, so a keyword added to the
 // language reaches them only if someone remembers. These are the assertions that
 // remember.
 func TestKeywordCoverage(t *testing.T) {
 	t.Run("hover", func(t *testing.T) {
-		require.NotEmpty(t, lexer.Keywords(), "the lexer reports no keywords at all")
+		require.NotEmpty(t, test.Keywords(), "the language reports no keywords at all")
 
-		for _, keyword := range lexer.Keywords() {
+		for _, keyword := range test.Keywords() {
 			t.Run(keyword+" describes itself on hover", func(t *testing.T) {
 				hover := lsp.GetHover(keyword, 0, 0)
 
-				require.NotNil(t, hover, "the lexer defines %q but no hover text describes it", keyword)
+				require.NotNil(t, hover, "the language defines %q but no hover text describes it", keyword)
 				require.NotEmpty(t, hover.Contents.Value)
 			})
 		}
 
-		t.Run("a spelling the lexer does not define describes nothing", func(t *testing.T) {
+		t.Run("a spelling the language does not define describes nothing", func(t *testing.T) {
 			require.Nil(t, lsp.GetHover("decides_upon", 0, 0))
 		})
 
@@ -58,7 +58,7 @@ func TestKeywordCoverage(t *testing.T) {
 
 	t.Run("completion", func(t *testing.T) {
 		for _, block := range keywordBlocks {
-			t.Run(block.name+" offers only spellings the lexer defines", func(t *testing.T) {
+			t.Run(block.name+" offers only spellings the language defines", func(t *testing.T) {
 				labels := completionLabels(t, block.doc, block.line)
 
 				require.NotEmpty(t, labels, "%s offers nothing, so this leaf asserts nothing", block.name)
@@ -66,23 +66,24 @@ func TestKeywordCoverage(t *testing.T) {
 					// `target context` is two keywords offered as one entry.
 					for _, word := range strings.Fields(label) {
 						require.Contains(
-							t, lexer.Keywords(), word,
-							"%s offers %q, which the lexer does not define", block.name, label,
+							t, test.Keywords(), word,
+							"%s offers %q, which the language does not define", block.name, label,
 						)
 					}
 				}
 			})
 		}
 
-		// The counterpart of the rule above: the DSL reserves nothing, so the
-		// types and modifiers a field line accepts must not be keywords.
-		t.Run("a fields block offers types and modifiers, none of them keywords", func(t *testing.T) {
+		// A field line is `name = type`, so the block offers the types a payload
+		// literal is checked against and the two calls that qualify one. That
+		// none of these is reserved is proven where a model names a field after
+		// every one of them.
+		t.Run("a fields block offers the checked types and the two modifiers", func(t *testing.T) {
 			labels := completionLabels(t, fieldsDocument, 4)
 
-			require.NotEmpty(t, labels)
-			for _, label := range labels {
-				require.NotContains(t, lexer.Keywords(), label)
-			}
+			require.Equal(t,
+				[]string{"string", "date", "timestamp", "int", "required", "optional"},
+				labels)
 		})
 
 		t.Run("a tags block offers nothing, its keys being free identifiers", func(t *testing.T) {
@@ -104,9 +105,9 @@ var keywordBlocks = []keywordBlock{
 	{name: "a context body", doc: "context \"C\" {\n\n}", line: 1},
 	{name: "an aggregate body", doc: "context \"C\" {\n  aggregate \"A\" {\n\n  }\n}", line: 2},
 	{name: "a slice body", doc: "context \"C\" {\n  slice \"S\" {\n\n  }\n}", line: 2},
-	{name: "a command body", doc: "context \"C\" {\n  slice \"S\" {\n    command Decide {\n\n    }\n  }\n}", line: 3},
-	{name: "an event body", doc: "context \"C\" {\n  slice \"S\" {\n    event Happened {\n\n    }\n  }\n}", line: 3},
-	{name: "an automation body", doc: "context \"C\" {\n  slice \"S\" {\n    automation Notify {\n\n    }\n  }\n}", line: 3},
+	{name: "a command body", doc: "context \"C\" {\n  slice \"S\" {\n    command \"Decide\" {\n\n    }\n  }\n}", line: 3},
+	{name: "an event body", doc: "context \"C\" {\n  slice \"S\" {\n    event \"Happened\" {\n\n    }\n  }\n}", line: 3},
+	{name: "an automation body", doc: "context \"C\" {\n  slice \"S\" {\n    automation \"Notify\" {\n\n    }\n  }\n}", line: 3},
 	{name: "a decides_on body", doc: decidesOnDocument, line: 4},
 	{name: "a spec body", doc: specDocument, line: 3},
 }
@@ -121,7 +122,7 @@ const specDocument = `context "C" {
 
 const decidesOnDocument = `context "C" {
   slice "S" {
-    command Decide {
+    command "Decide" {
       decides_on {
 
       }
@@ -131,7 +132,7 @@ const decidesOnDocument = `context "C" {
 
 const tagsDocument = `context "C" {
   slice "S" {
-    event Happened {
+    event "Happened" {
       tags {
 
       }
@@ -141,7 +142,7 @@ const tagsDocument = `context "C" {
 
 const fieldsDocument = `context "C" {
   slice "S" {
-    command Decide {
+    command "Decide" {
       fields {
 
       }
