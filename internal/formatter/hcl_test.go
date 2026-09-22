@@ -3,6 +3,8 @@
 package formatter_test
 
 import (
+	"os"
+	"path/filepath"
 	"testing"
 
 	"github.com/google/go-cmp/cmp/cmpopts"
@@ -48,6 +50,32 @@ func TestFormatHCL(t *testing.T) {
 				}
 				require.Empty(t, readDiags)
 
+				test.RequireEqual(t, written, read,
+					cmpopts.IgnoreTypes(ast.Position{}),
+					cmpopts.IgnoreFields(ast.Model{}, "VersionDeclared"))
+			})
+		}
+	})
+
+	t.Run("the repository's own examples", func(t *testing.T) {
+		paths, err := filepath.Glob(filepath.Join("..", "..", "examples", "*.emod"))
+		require.NoError(t, err)
+		require.NotEmpty(t, paths)
+
+		for _, path := range paths {
+			t.Run(filepath.Base(path)+" means the same after it is written as HCL and read back", func(t *testing.T) {
+				source, err := os.ReadFile(path)
+				require.NoError(t, err)
+
+				tokens, lexDiags := lexer.Scan(string(source), path)
+				written, parseDiags := parser.New(tokens, path).Parse()
+				if len(lexDiags) > 0 || len(parseDiags) > 0 {
+					t.Skip("the example is the fixture for diagnostics, so it does not parse")
+				}
+
+				read, readDiags := parser.ParseHCL(formatter.FormatHCL(written), path)
+
+				require.Empty(t, readDiags)
 				test.RequireEqual(t, written, read,
 					cmpopts.IgnoreTypes(ast.Position{}),
 					cmpopts.IgnoreFields(ast.Model{}, "VersionDeclared"))
