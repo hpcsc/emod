@@ -3,6 +3,9 @@ package lsp
 import (
 	"strings"
 
+	"github.com/hashicorp/hcl/v2"
+	"github.com/hashicorp/hcl/v2/hclsyntax"
+
 	"github.com/hpcsc/emod/internal/ast"
 )
 
@@ -71,13 +74,65 @@ func enclosingBlock(lines []string, line, character int) cursorContext {
 	}
 
 	var scanner blockScanner
-	for i := 0; i < line; i++ {
-		scanner.consume(lines[i])
-	}
-	if line >= 0 {
-		scanner.consume(linePrefix(lines, line, character))
+	for _, words := range wordsByLine(documentUpTo(lines, line, character)) {
+		scanner.consume(words)
 	}
 	return cursorContext{block: scanner.innermost(), openEntry: scanner.openEntry}
+}
+
+// documentUpTo is the document the cursor sits in, cut at the cursor.
+func documentUpTo(lines []string, line, character int) string {
+	if line < 0 {
+		return ""
+	}
+	var b strings.Builder
+	for i := 0; i < line && i < len(lines); i++ {
+		b.WriteString(lines[i])
+		b.WriteByte('\n')
+	}
+	b.WriteString(linePrefix(lines, line, character))
+	return b.String()
+}
+
+// lineWords is what one line carries: the words and braces the scanner reads
+// against each other, how far its brackets open or close, and whether it holds
+// any code at all.
+type lineWords struct {
+	words    []string
+	brackets int
+	hasCode  bool
+}
+
+// wordsByLine hands every line its words, taken from HCL's own scanner. The
+// scanner never fails and it marks strings and comments, so a brace inside a
+// string delimits no block and a word inside a comment is no keyword.
+func wordsByLine(text string) []lineWords {
+	lines := make([]lineWords, strings.Count(text, "\n")+1)
+
+	tokens, _ := hclsyntax.LexConfig([]byte(text), "", hcl.InitialPos)
+	for _, token := range tokens {
+		index := token.Range.Start.Line - 1
+		if index < 0 || index >= len(lines) {
+			continue
+		}
+		line := &lines[index]
+		switch token.Type {
+		case hclsyntax.TokenComment, hclsyntax.TokenNewline, hclsyntax.TokenEOF:
+			continue
+		case hclsyntax.TokenOBrace, hclsyntax.TokenCBrace,
+			hclsyntax.TokenIdent, hclsyntax.TokenNumberLit:
+			line.words = append(line.words, string(token.Bytes))
+		case hclsyntax.TokenOBrack:
+			line.brackets++
+		case hclsyntax.TokenCBrack:
+			line.brackets--
+		}
+		// A line holding nothing but a string still carries code, so the
+		// keyword above it loses its claim on an opening brace.
+		line.hasCode = true
+	}
+
+	return lines
 }
 
 // block is one open pair of braces: the entries it accepts, and — where the
@@ -124,15 +179,17 @@ type blockScanner struct {
 	listBlocks int
 }
 
-func (s *blockScanner) consume(line string) {
-	code := codeOutsideStringsAndComments(line)
-	keyword := findBlockKeyword(code)
+func (s *blockScanner) consume(line lineWords) {
+	keyword := ctxUnknown
+	if len(line.words) > 0 {
+		keyword = blockKeyword(line.words[0])
+	}
 
 	entry := s.openEntry
 	var preceding string
 	opened := false
 
-	for _, token := range lineTokens(code) {
+	for _, token := range line.words {
 		switch token {
 		case "{":
 			s.blocks = append(s.blocks, s.opening(keyword, entry, preceding, opened))
@@ -154,7 +211,7 @@ func (s *blockScanner) consume(line string) {
 	}
 
 	startingList := s.listDepth == 0
-	s.listDepth += strings.Count(code, "[") - strings.Count(code, "]")
+	s.listDepth += line.brackets
 	if s.listDepth < 0 {
 		s.listDepth = 0
 	}
@@ -168,7 +225,7 @@ func (s *blockScanner) consume(line string) {
 		s.openEntry = entry
 	}
 
-	if !opened && code != "" {
+	if !opened && line.hasCode {
 		// A keyword holds its claim on an opening brace only until the next line that
 		// carries code, so `command Ship` inside an automation stays a reference to a
 		// command rather than opening a command block for the rest of the body.
@@ -187,35 +244,6 @@ func (s *blockScanner) opening(keyword blockContext, entry, preceding string, al
 		return block{context: keyword}
 	}
 	return block{context: s.keywordAwaitingBrace}
-}
-
-// lineTokens splits a line's code into its words and the braces between them, so
-// a brace can be read against the word it follows. Bracket, comma, colon and
-// quote separate words without being words themselves.
-func lineTokens(code string) []string {
-	var tokens []string
-	var word strings.Builder
-	flush := func() {
-		if word.Len() > 0 {
-			tokens = append(tokens, word.String())
-			word.Reset()
-		}
-	}
-
-	for i := 0; i < len(code); i++ {
-		switch ch := code[i]; ch {
-		case '{', '}':
-			flush()
-			tokens = append(tokens, string(ch))
-		case ' ', '\t', '[', ']', ',', ':', '"':
-			flush()
-		default:
-			word.WriteByte(ch)
-		}
-	}
-	flush()
-
-	return tokens
 }
 
 func (s *blockScanner) closeBlocks(braces int) {
@@ -257,13 +285,8 @@ func codeOutsideStringsAndComments(line string) string {
 	return strings.TrimSpace(code.String())
 }
 
-func findBlockKeyword(code string) blockContext {
-	fields := strings.Fields(code)
-	if len(fields) == 0 {
-		return ctxUnknown
-	}
-
-	switch fields[0] {
+func blockKeyword(word string) blockContext {
+	switch word {
 	case "context":
 		return ctxContext
 	case "aggregate":

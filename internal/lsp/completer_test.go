@@ -1338,6 +1338,20 @@ context "Reading Room" mode dcb {
 				require.Equal(t, []string{"slice", "invariant"}, extractLabels(result.Items), "description %q", description)
 			}
 		})
+
+		t.Run("a block comment opens and closes nothing", func(t *testing.T) {
+			doc := `context Ctx {
+	aggregate Agg {
+		/* slice Slc {
+		   } */
+		// cursor here
+	}
+}`
+
+			result := lsp.GetCompletions(doc, 4, 2)
+
+			require.Equal(t, []string{"slice", "invariant"}, extractLabels(result.Items))
+		})
 	})
 
 	t.Run("completion items use keyword kind", func(t *testing.T) {
