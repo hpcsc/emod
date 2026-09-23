@@ -46,8 +46,8 @@ tasks:
 
   # The page is derived from the shared viewer.html rather than written here, so
   # editing that one file changes what all three distributions load. What the sed
-  # removes is what only a browser needs: the line loading the WebAssembly glue,
-  # and the markers the CLI's server and the Pages deploy substitute into.
+  # removes is what only a browser needs: the markers the CLI's server and the
+  # Pages deploy substitute into.
   build:desktop:
     desc: Build the native desktop app
     cmds:
@@ -55,8 +55,8 @@ tasks:
       - mkdir -p ./cmd/emod-desktop/frontend/static
       - cp -r ./internal/frontend/static/* ./cmd/emod-desktop/frontend/static/
       - cp ./internal/frontend/desktop/platform.desktop.js ./cmd/emod-desktop/frontend/static/platform.js
-      - rm -f ./cmd/emod-desktop/frontend/static/platform.browser.js
-      - sed -e '/generated\/wasm_exec.js/d' -e 's|<!--INITIAL_DATA--><!--BUILD_VERSION-->||' ./cmd/emod-desktop/frontend/static/viewer.html > ./cmd/emod-desktop/frontend/index.html
+      - rm -f ./cmd/emod-desktop/frontend/static/platform.browser.js ./cmd/emod-desktop/frontend/static/wasm-worker.js
+      - sed -e 's|<!--INITIAL_DATA--><!--BUILD_VERSION-->||' ./cmd/emod-desktop/frontend/static/viewer.html > ./cmd/emod-desktop/frontend/index.html
       - rm -f ./cmd/emod-desktop/frontend/static/viewer.html
       - go tool wails3 generate bindings -silent -b -d ./cmd/emod-desktop/frontend/bindings ./cmd/emod-desktop/...
       # -tags production compiles out the asset server's dev-server path, which

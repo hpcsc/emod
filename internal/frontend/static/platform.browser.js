@@ -7,65 +7,73 @@ const ready = new Promise((resolve, reject) => {
   readyReject = reject;
 });
 
-async function init() {
+let worker;
+let lastCall = 0;
+const waitingCalls = new Map();
+
+function startWorker() {
   try {
-    const go = new Go();
-    let inst;
-
-    const response = await fetch('generated/emod.wasm');
-    if (!response.ok) {
-      throw new Error(
-        'Failed to fetch WASM: ' + response.status + ' ' + response.statusText
-      );
-    }
-
-    if (WebAssembly.instantiateStreaming) {
-      const result = await WebAssembly.instantiateStreaming(
-        response,
-        go.importObject,
-      );
-      inst = result.instance;
-    } else {
-      const bytes = await response.arrayBuffer();
-      const mod = await WebAssembly.compile(bytes);
-      inst = (await WebAssembly.instantiate(mod, go.importObject)).instance;
-    }
-
-    go.run(inst);
-    isReady = true;
-    readyResolve();
+    worker = new Worker(new URL('./wasm-worker.js', import.meta.url), { type: 'module' });
   } catch (err) {
     readyReject(new Error('WASM initialization failed: ' + (err.message || err)));
+    return;
   }
+
+  worker.onmessage = function(e) {
+    const message = e.data;
+    if (message.id === undefined) {
+      if (message.started) {
+        isReady = true;
+        readyResolve();
+      } else {
+        readyReject(new Error('WASM initialization failed: ' + message.error));
+      }
+      return;
+    }
+    const waiting = waitingCalls.get(message.id);
+    waitingCalls.delete(message.id);
+    if (message.error !== undefined) {
+      waiting.reject(new Error(message.error));
+    } else {
+      waiting.resolve(message.output);
+    }
+  };
+
+  worker.onerror = function(e) {
+    readyReject(new Error('WASM initialization failed: ' + (e.message || 'the worker did not load')));
+  };
 }
 
-init();
+startWorker();
+
+function callWasm(name, request) {
+  return new Promise(function(resolve, reject) {
+    const input = JSON.stringify(request);
+    lastCall++;
+    waitingCalls.set(lastCall, { resolve: resolve, reject: reject });
+    worker.postMessage({ id: lastCall, name: name, input: input });
+  }).then(function(output) {
+    return JSON.parse(output);
+  });
+}
 
 function parseEmod(source, filename) {
   if (!isReady) {
     return Promise.reject(new Error('WASM not ready yet'));
   }
-  try {
-    const jsonStr = globalThis.parseEmod(JSON.stringify({ source: source, filename: filename }));
-    return Promise.resolve(JSON.parse(jsonStr));
-  } catch (err) {
-    return Promise.reject(err);
-  }
+  return callWasm('parseEmod', { source: source, filename: filename });
 }
 
 function exportEmod(diagram) {
   if (!isReady) {
     return Promise.reject(new Error('WASM not ready yet'));
   }
-  try {
-    const result = JSON.parse(globalThis.exportEmod(JSON.stringify(diagram)));
+  return callWasm('exportEmod', diagram).then(function(result) {
     if (result.error) {
-      return Promise.reject(new Error(result.error));
+      throw new Error(result.error);
     }
-    return Promise.resolve(result.emod);
-  } catch (err) {
-    return Promise.reject(err);
-  }
+    return result.emod;
+  });
 }
 
 // Naming the files and reading one are separate so a caller can refuse a drop

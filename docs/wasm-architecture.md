@@ -34,17 +34,20 @@ flowchart TB
     J --> Server
 
     subgraph Browser["Browser (Viewer)"]
-        N["platform.browser.js<br/>fetch → instantiateStreaming<br/>→ go.run(inst)"]
         O["model.js<br/>sendParse(source)"]
-        P["wasm.parseEmod(source)"]
-        Q["globalThis.parseEmod(jsonStr)"]
-        R["emod.wasm (Go runtime)<br/>lex → parse → validate<br/>→ lint → export"]
+        P["platform.browser.js<br/>parseEmod(source)<br/>→ worker.postMessage"]
+        subgraph Worker["wasm-worker.js (Web Worker)"]
+            N["import wasm_exec.js<br/>fetch → instantiateStreaming<br/>→ go.run(inst)"]
+            Q["globalThis.parseEmod(jsonStr)"]
+            R["emod.wasm (Go runtime)<br/>lex → parse → validate<br/>→ lint → export"]
+        end
         S["Render SVG Diagram"]
     end
 
     M --> N
     N --> Q
-    O --> P --> Q --> R --> S
+    O --> P --> Q --> R
+    R -- "answer by postMessage" --> S
 
     subgraph Files["Embedded in binary (//go:embed)"]
         T["internal/frontend/embed.go<br/>//go:embed static/* generated/*"]
@@ -60,7 +63,9 @@ flowchart TB
 
 2. **Serve**: `emod diagram --serve` starts an HTTP server. If a file path is given, the CLI pre-parses it with the native Go pipeline and injects the diagram as `window.INITIAL_DATA` for an instant first render.
 
-3. **Browser**: The viewer loads `wasm_exec.js` (Go runtime), then `platform.browser.js` fetches and instantiates `emod.wasm`. Once typing in the source panel pauses — or at once when Render is clicked — `model.js` calls `parseEmod()` through `platform.js` with the panel's text and the open file's name → the Go pipeline runs inside the browser → the diagnostics panel lists what `emod validate` reports for the same text, and source that parses redraws as SVG in place while source that does not leaves the last diagram on screen, marked out of date.
+3. **Browser**: `platform.browser.js` starts `wasm-worker.js` as a Web Worker. The worker loads `wasm_exec.js` (Go runtime), then fetches and instantiates `emod.wasm`. Once typing in the source panel pauses — or at once when Render is clicked — `model.js` calls `parseEmod()` through `platform.js` with the panel's text and the open file's name → the Go pipeline runs in the worker → the diagnostics panel lists what `emod validate` reports for the same text, and source that parses redraws as SVG in place while source that does not leaves the last diagram on screen, marked out of date.
+
+   The pipeline runs in a worker, not on the page's main thread. At a 4× CPU slowdown in Chrome, a parse of `examples/all_patterns.emod` takes 30–50 ms. On the main thread, the parse and the redraw together go above the 50 ms limit for a long task, and a key that the user types during a parse waits for the parse to end. With the worker, the main thread does only the redraw.
 
 4. **Embedding**: Both `static/` (JS/CSS/HTML) and `generated/` (Wasm binary + runtime) are embedded into the Go binary via `//go:embed`, making the CLI fully self-contained.
 
@@ -69,7 +74,7 @@ flowchart TB
 WebAssembly is how the *browser* reaches the pipeline, not how the frontend
 reaches it in general. The desktop app (`cmd/emod-desktop`) loads the same
 `internal/frontend/static` modules but calls `internal/pipeline` natively
-through Wails bindings: it ships no `emod.wasm`, loads no `wasm_exec.js`, and
-starts no HTTP server. Which of the two a distribution gets is decided when it
-is assembled, by which implementation of `platform.js` is copied into place —
-see the platform seam in [architecture.md](./architecture.md).
+through Wails bindings: it ships no `emod.wasm`, starts no worker, loads no
+`wasm_exec.js`, and starts no HTTP server. Which of the two a distribution gets
+is decided when it is assembled, by which implementation of `platform.js` is
+copied into place — see the platform seam in [architecture.md](./architecture.md).

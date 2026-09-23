@@ -13,6 +13,10 @@ export default defineConfig({
       // constant, so the path resolves in the running app and nowhere else.
       '/wails/runtime.js':
         resolve(import.meta.dirname, 'tests/wails-runtime-stub.js'),
+      // wasm-worker.js imports the Go glue that `task build:wasm` copies into
+      // generated/. The real glue replaces the Go class the tests supply.
+      '../generated/wasm_exec.js':
+        resolve(import.meta.dirname, 'tests/wasm-exec-stub.js'),
     },
   },
   test: {

@@ -6,14 +6,9 @@ import { describe, it, expect, vi, beforeAll } from 'vitest';
 // real paths itself. This is also the only place the real FileReader path runs:
 // viewer.test.js stubs the seam, and Playwright never drops a file.
 vi.hoisted(() => {
-  globalThis.Go = function Go() {
-    this.importObject = {};
-    this.run = function () {};
+  globalThis.Worker = class Worker {
+    postMessage() {}
   };
-  globalThis.WebAssembly = {
-    instantiateStreaming: () => Promise.resolve({ instance: { exports: {} }, module: {} }),
-  };
-  globalThis.fetch = () => Promise.resolve({ ok: true });
 });
 
 const implementations = {};

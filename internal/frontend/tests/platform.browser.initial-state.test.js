@@ -1,18 +1,13 @@
 import { describe, it, expect, vi, beforeAll, beforeEach } from 'vitest';
 
-// Drives the real platform.browser.js, as the four sibling files do. The
+// Drives the real platform.browser.js, as platform.browser.test.js does. The
 // viewer's own tests mock the seam and re-implement this lookup inside the
 // mock, so without this file nothing exercises the read that gives
 // `emod diagram --serve` its first paint.
 vi.hoisted(() => {
-  globalThis.Go = function Go() {
-    this.importObject = {};
-    this.run = function () {};
+  globalThis.Worker = class Worker {
+    postMessage() {}
   };
-  globalThis.WebAssembly = {
-    instantiateStreaming: () => Promise.resolve({ instance: { exports: {} }, module: {} }),
-  };
-  globalThis.fetch = () => Promise.resolve({ ok: true });
 });
 
 let browser;

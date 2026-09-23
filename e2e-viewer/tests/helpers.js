@@ -97,12 +97,14 @@ context "Payments" {
 }
 `;
 
-// open loads the viewer and waits for the WASM parser to report ready, so a
-// test never races the module fetch.
+// open loads the viewer and waits for the WASM parser in its worker to report
+// ready, so a test never races the module fetch.
 export async function open(page) {
+  const worker = page.waitForEvent('worker');
   await page.goto('/');
   await expect(page.locator('#render-btn')).toBeEnabled();
-  await page.waitForFunction(() => typeof globalThis.parseEmod === 'function');
+  const parser = await worker;
+  await expect.poll(() => parser.evaluate(() => typeof globalThis.parseEmod)).toBe('function');
 }
 
 // render pastes .emod source and renders it, leaving the diagram on screen.

@@ -172,6 +172,12 @@ per keystroke plus a revalidation well inside one long task is enough, and movin
 the main thread is not needed. The check is the browser's own Long Tasks threshold, 50 ms, in the
 browser build.
 
+**Reversed on 2026-09-23.** The HCL parser made the pipeline about 4.5 times slower in WASM: over
+the same example, measured in Node 23, the median went from 1.9 ms to 8.5 ms. On the GitHub runner,
+two revalidations took 53 ms and 66 ms, and the long-task check failed. The browser build now runs
+`emod.wasm` in a Web Worker (`internal/frontend/static/wasm-worker.js`), and the main thread does
+only the redraw.
+
 ### Decision 8 — the Render control stays, and follows the same rules
 
 It stays where it is and renders at once. It follows the keep-last and in-place rules a revalidation

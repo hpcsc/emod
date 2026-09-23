@@ -226,10 +226,10 @@ file it has adopted, asking what to do about that work before it would be lost,
 delivering a file the host opened, delivering the files a host resolved a drop
 to, asking the viewer to save, asking whether the window may close, and
 answering what state the app opened with. `platform.browser.js` implements that
-over WebAssembly, `fetch`, the browser's download and `document.title`, with
-four of them inert: a page has no window of its own to mark, no list of what it
-has opened, no dialog whose Save writes anywhere, and no close it can refuse
-asynchronously. `platform.desktop.js` implements it over Wails bindings, the
+over WebAssembly in a Web Worker, the browser's download and `document.title`,
+with four of them inert: a page has no window of its own to mark, no list of
+what it has opened, no dialog whose Save writes anywhere, and no close it can
+refuse asynchronously. `platform.desktop.js` implements it over Wails bindings, the
 runtime's native file dialogs, the native window title, a native question
 dialog and the shell's list of recently opened models.
 
