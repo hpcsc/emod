@@ -46,9 +46,8 @@ function startWorker() {
 
 startWorker();
 
-function callWasm(name, request) {
+function callWasm(name, input) {
   return new Promise(function(resolve, reject) {
-    const input = JSON.stringify(request);
     lastCall++;
     waitingCalls.set(lastCall, { resolve: resolve, reject: reject });
     worker.postMessage({ id: lastCall, name: name, input: input });
@@ -61,14 +60,14 @@ function parseEmod(source, filename) {
   if (!isReady) {
     return Promise.reject(new Error('WASM not ready yet'));
   }
-  return callWasm('parseEmod', { source: source, filename: filename });
+  return callWasm('parseEmod', JSON.stringify({ source: source, filename: filename }));
 }
 
 function exportEmod(diagram) {
   if (!isReady) {
     return Promise.reject(new Error('WASM not ready yet'));
   }
-  return callWasm('exportEmod', diagram).then(function(result) {
+  return callWasm('exportEmod', JSON.stringify(diagram)).then(function(result) {
     if (result.error) {
       throw new Error(result.error);
     }
