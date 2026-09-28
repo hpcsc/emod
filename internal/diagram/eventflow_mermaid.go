@@ -11,17 +11,55 @@ import (
 // ExportEventFlowMermaid writes the event flow ExportEventFlow draws, as
 // Mermaid someone else can lay out and edit. The shape carries what the drawn
 // picture carries in colour as well: a stadium for an event, a rounded box for
-// an origin, a square box for an automation and for an invariant refusing a
-// command.
+// an origin, a gear icon for an automation and a square box for an invariant
+// refusing a command. The gear is mdi:cog, and the renderer must load its icon
+// set: mmdc --iconPacks @iconify-json/mdi.
 func ExportEventFlowMermaid(model *ast.Model, _ Style) ([]byte, error) {
+	return exportEventFlowMermaid(model, mermaidGearIcon)
+}
+
+// ExportEventFlowMermaidNoIcons writes the same flow for a renderer that loads
+// no icon set, such as GitHub's: each automation is a purple box.
+func ExportEventFlowMermaidNoIcons(model *ast.Model, _ Style) ([]byte, error) {
+	return exportEventFlowMermaid(model, mermaidAutomationBox)
+}
+
+// mermaidAutomationDrawing is what one Mermaid event flow writes for an
+// automation, and the frontmatter and notes that drawing needs.
+type mermaidAutomationDrawing struct {
+	header   string
+	notes    string
+	shape    func(label string) string
+	classDef string
+}
+
+var mermaidGearIcon = mermaidAutomationDrawing{
+	header: mermaidFlowIconHeader,
+	notes:  mermaidFlowIconNotes,
+	shape: func(label string) string {
+		return `@{ icon: "mdi:cog", label: "` + label + `", pos: "b", h: 36 }`
+	},
+	classDef: "    classDef automation fill:none,stroke:none,color:#16201B\n",
+}
+
+var mermaidAutomationBox = mermaidAutomationDrawing{
+	header: mermaidFlowHeader,
+	notes:  mermaidFlowBoxNotes,
+	shape: func(label string) string {
+		return `["` + label + `"]`
+	},
+	classDef: "    classDef automation fill:#E1D5E7,stroke:#9673A6,color:#16201B\n",
+}
+
+func exportEventFlowMermaid(model *ast.Model, automation mermaidAutomationDrawing) ([]byte, error) {
 	flow := CollapseEventFlow(model)
 
 	var b strings.Builder
-	b.WriteString(mermaidFlowHeader)
+	b.WriteString(automation.header)
 	if model != nil && model.Name != "" {
 		fmt.Fprintf(&b, "%%%% %s\n", model.Name)
 	}
-	b.WriteString(mermaidFlowNotes)
+	b.WriteString(automation.notes)
 
 	if len(flow.Nodes) == 0 {
 		return []byte(b.String()), nil
@@ -31,7 +69,7 @@ func ExportEventFlowMermaid(model *ast.Model, _ Style) ([]byte, error) {
 	kinds := make(map[string]NodeKind, len(flow.Nodes))
 	for _, node := range flow.Nodes {
 		kinds[node.ID] = node.Kind
-		fmt.Fprintf(&b, "    %s%s\n", ids[node.ID], mermaidFlowShape(node))
+		fmt.Fprintf(&b, "    %s%s\n", ids[node.ID], mermaidFlowShape(node, automation))
 	}
 
 	b.WriteString(mermaidFlowRule)
@@ -54,6 +92,7 @@ func ExportEventFlowMermaid(model *ast.Model, _ Style) ([]byte, error) {
 
 	b.WriteString(mermaidFlowRule)
 	b.WriteString(mermaidFlowClassDefs)
+	b.WriteString(automation.classDef)
 	for _, group := range mermaidFlowGroups(flow.Nodes, ids) {
 		fmt.Fprintf(&b, "    class %s %s\n", strings.Join(group.members, ","), group.class)
 	}
@@ -64,13 +103,15 @@ func ExportEventFlowMermaid(model *ast.Model, _ Style) ([]byte, error) {
 	return []byte(b.String()), nil
 }
 
-func mermaidFlowShape(node Node) string {
+func mermaidFlowShape(node Node, automation mermaidAutomationDrawing) string {
 	label := mermaidFlowLabel(node)
 	switch node.Kind {
 	case NodeEvent:
 		return `(["` + label + `"])`
 	case NodeOrigin:
 		return `("` + label + `")`
+	case NodeAutomation:
+		return automation.shape(label)
 	default:
 		return `["` + label + `"]`
 	}
@@ -80,11 +121,7 @@ func mermaidFlowShape(node Node) string {
 // it, one line to a row: Mermaid places every node itself and leaves nowhere to
 // put a caption of its own.
 func mermaidFlowLabel(node Node) string {
-	var lines []string
-	if node.Kind == NodeAutomation {
-		lines = append(lines, gearMarking)
-	}
-	lines = append(lines, mermaidFlowText(node.Label))
+	lines := []string{mermaidFlowText(node.Label)}
 	if node.Caption != "" {
 		lines = append(lines, mermaidFlowText(node.Caption))
 	}
@@ -150,7 +187,7 @@ func mermaidFlowClass(node Node) string {
 		}
 		return "event"
 	case NodeAutomation:
-		return "gear"
+		return "automation"
 	case NodeRejection:
 		return "reject"
 	default:
@@ -217,7 +254,7 @@ var mermaidReservedWords = map[string]struct{}{
 	"direction": {},
 }
 
-var mermaidFlowClasses = []string{"event", "dead", "gear", "origin", "reject"}
+var mermaidFlowClasses = []string{"event", "dead", "automation", "origin", "reject"}
 
 // ELK is what keeps a flow of this shape readable; the default renderer tangles
 // it. TB rather than LR: a chain drawn left to right measures a ribbon no
@@ -232,11 +269,32 @@ config:
 flowchart TB
 `
 
+// Mermaid paints an icon's caption in the edge label background, a grey box by
+// default, and ignores a themeCSS rule written in the frontmatter.
+const mermaidFlowIconHeader = `---
+config:
+  layout: elk
+  themeVariables:
+    edgeLabelBackground: "#FFFFFF"
+  elk:
+    mergeEdges: false
+    nodePlacementStrategy: BRANDES_KOEPF
+---
+flowchart TB
+`
+
 // A comment between the frontmatter and the diagram type fails to parse, so
 // every comment here follows the flowchart line. A bare %% line draws a node
 // saying %%, which is why each separator carries a dash.
-const mermaidFlowNotes = `%% The gear is a plain glyph rather than an icon: GitHub bundles no icon font
-%% and prints the icon's name where the icon would be.
+const mermaidFlowIconNotes = `%% Each automation is the mdi:cog icon, which the renderer must load:
+%% mmdc --iconPacks @iconify-json/mdi. GitHub loads no icon set; for GitHub,
+%% write --format event-flow-mermaid-no-icons.
+%% The colours are the light theme, Mermaid's own theme carrying the dark one.
+%% ---
+`
+
+const mermaidFlowBoxNotes = `%% Each automation is a purple box, so no icon set has to load, which GitHub
+%% cannot do.
 %% The colours are the light theme, Mermaid's own theme carrying the dark one.
 %% ---
 `
@@ -250,7 +308,6 @@ const mermaidFlowAlert = "#A33A2A"
 
 const mermaidFlowClassDefs = `    classDef event fill:#FFE0C0,stroke:#B44E12,color:#16201B
     classDef dead fill:#FFE0C0,stroke:#A33A2A,stroke-dasharray:6 4,color:#A33A2A
-    classDef gear fill:none,stroke:none,color:#16201B
     classDef origin fill:#ECEFED,stroke:#5A6861,color:#16201B
     classDef reject fill:#FFFFFF,stroke:#A33A2A,stroke-dasharray:6 4,color:#A33A2A
 `

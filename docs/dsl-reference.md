@@ -845,7 +845,7 @@ The decoder reads what HCL parsed rather than evaluating it: `hcl.AbsTraversalFo
 
 ## 13. Diagram Palette
 
-The renderers that draw the whole model use one palette for element types. The SVG, draw.io, and web viewer renderers all draw the same element type with the same fill and stroke, and the DSL reference itself is the source of truth for those values. `emod diagram --format event-flow` and `--format event-flow-mermaid` draw a different picture and paint it in a palette of their own, listed below.
+The renderers that draw the whole model use one palette for element types. The SVG, draw.io, and web viewer renderers all draw the same element type with the same fill and stroke, and the DSL reference itself is the source of truth for those values. `emod diagram --format event-flow`, `--format event-flow-mermaid` and `--format event-flow-mermaid-no-icons` draw a different picture and paint it in a palette of their own, listed below.
 
 | Element     | Fill      | Stroke    | Notes                                   |
 |-------------|-----------|-----------|-----------------------------------------|
@@ -862,14 +862,17 @@ The renderers that draw the whole model use one palette for element types. The S
 and what starts a chain from outside them. It states both themes, because it is
 read on a page of either, and writes every colour out in full: a renderer
 outside a browser resolves no custom property and paints what it cannot resolve
-black. `--format event-flow-mermaid` paints the light column of the same table
-in its `classDef` lines, Mermaid's own theme carrying the dark one.
+black. The two Mermaid formats paint the light column of the same table in
+their `classDef` lines, Mermaid's own theme carrying the dark one.
+`--format event-flow-mermaid-no-icons` draws each automation as a box in place
+of the gear icon, and it is the only format that paints the automation box.
 
 | Element               | Light fill | Light stroke | Dark fill | Dark stroke |
 |-----------------------|------------|--------------|-----------|-------------|
 | Event pill            | #FFE0C0    | #B44E12      | #40260F   | #F2A868     |
 | Event nothing reads   | #FFE0C0    | #A33A2A      | #40260F   | #E88C78     |
 | Automation gear       | #16201B    | —            | #E2E9E5   | —           |
+| Automation box        | #E1D5E7    | #9673A6      | —         | —           |
 | Origin box            | #ECEFED    | #5A6861      | #1E2723   | #93A199     |
 | Invariant refusing it | #FFFFFF    | #A33A2A      | #16201B   | #E88C78     |
 | Arrow                 | —          | #16201B      | —         | #E2E9E5     |

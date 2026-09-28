@@ -11,7 +11,7 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-// The two event flow formats each write their colours out in full, and the DSL
+// The event flow formats each write their colours out in full, and the DSL
 // reference documents them. Three copies of one palette drift, so each element
 // is checked against what the reference says rather than against the other
 // format.
@@ -70,8 +70,16 @@ func TestEventFlowPalette(t *testing.T) {
 				require.Equal(t, documented[row].lightStroke, classes[class]["stroke"], "stroke of class %s", class)
 			}
 
-			require.Equal(t, documented["Automation gear"].lightFill, classes["gear"]["color"],
-				"a gear Mermaid draws as text takes the colour the drawn gear is filled with")
+			require.Equal(t, documented["Automation gear"].lightFill, classes["automation"]["color"],
+				"the caption under the gear icon takes the colour the drawn gear is filled with")
+		})
+
+		t.Run("paints the automation box of the file with no icons in the colours the reference documents", func(t *testing.T) {
+			documented := documentedEventFlowPalette(t)
+			classes := mermaidClassDefs(t, mermaidFlowNoIconsOf(t, everyConstructModel(t)))
+
+			require.Equal(t, documented["Automation box"].lightFill, classes["automation"]["fill"])
+			require.Equal(t, documented["Automation box"].lightStroke, classes["automation"]["stroke"])
 		})
 
 		t.Run("restyles a refusal's arrow in the colour the reference documents", func(t *testing.T) {
@@ -118,7 +126,7 @@ func documentedEventFlowPalette(t *testing.T) map[string]eventFlowColours {
 	require.NotEqual(t, -1, start, "docs/dsl-reference.md must document the event flow palette")
 
 	rows := documentedPaletteRow.FindAllStringSubmatch(content[start:], -1)
-	require.Len(t, rows, 7, "the palette must document every element the two formats paint")
+	require.Len(t, rows, 8, "the palette must document every element the event flow formats paint")
 
 	palette := make(map[string]eventFlowColours, len(rows))
 	for _, row := range rows {

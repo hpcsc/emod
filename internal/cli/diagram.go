@@ -22,21 +22,21 @@ import (
 // diagramFormats are the formats the command draws, and specCardFormats those
 // of them that draw a spec card.
 var (
-	diagramFormats  = []string{"drawio", "mermaid", "svg", "ascii", "event-flow", "event-flow-mermaid"}
+	diagramFormats  = []string{"drawio", "mermaid", "svg", "ascii", "event-flow", "event-flow-mermaid", "event-flow-mermaid-no-icons"}
 	specCardFormats = []string{"drawio", "svg"}
 )
 
 // stdoutFormats are the formats that print to stdout when no output path is
 // given, the rest being pictures written to a file.
-var stdoutFormats = []string{"mermaid", "ascii", "event-flow-mermaid"}
+var stdoutFormats = []string{"mermaid", "ascii", "event-flow-mermaid", "event-flow-mermaid-no-icons"}
 
 // RunDiagram reads the file at path, lexes and parses it, validates and lints,
 // generates a diagram in the requested format, and writes it.
 // Supported formats: "drawio" (default), "mermaid", "svg", "ascii",
-// "event-flow" and "event-flow-mermaid".
+// "event-flow", "event-flow-mermaid" and "event-flow-mermaid-no-icons".
 // For drawio, svg and event-flow: output is written to a file; if outputPath is
 // empty it defaults to .drawio, .svg or .event-flow.svg.
-// For mermaid, ascii and event-flow-mermaid: output goes to stdout unless
+// For mermaid, ascii and both event-flow-mermaid formats: output goes to stdout unless
 // outputPath is specified.
 // Errors produce diagnostics on stderr and a non-zero exit code.
 // Lint warnings still produce the diagram but with exit code 1.
@@ -104,6 +104,8 @@ func RunDiagram(path, outputPath, format string, style diagram.Style, specs bool
 		output, err = diagram.ExportEventFlow(model, style)
 	case "event-flow-mermaid":
 		output, err = diagram.ExportEventFlowMermaid(model, style)
+	case "event-flow-mermaid-no-icons":
+		output, err = diagram.ExportEventFlowMermaidNoIcons(model, style)
 	default:
 		output, err = diagram.ExportDrawio(model, style, options...)
 	}

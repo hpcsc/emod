@@ -29,18 +29,23 @@ func TestExportEventFlowMermaid(t *testing.T) {
 			require.Contains(t, mermaidFlowOf(t, model), "    class CopyBorrowed dead")
 		})
 
-		t.Run("an automation is its gear above its name", func(t *testing.T) {
+		t.Run("an automation is the gear icon with its name under it", func(t *testing.T) {
 			output := mermaidFlowOf(t, everyConstructModel(t))
 
-			require.Contains(t, output, `    RemindOnDueDate["⚙<br/>RemindOnDueDate"]`)
-			require.Contains(t, output, "    class RemindOnDueDate,RecallOverdueCopy,ExternalDeskBookingImport gear")
+			require.Contains(t, output, `    RemindOnDueDate@{ icon: "mdi:cog", label: "RemindOnDueDate", pos: "b", h: 36 }`)
+			require.Contains(t, output, "    class RemindOnDueDate,RecallOverdueCopy,ExternalDeskBookingImport automation")
+			require.Contains(t, output, "    classDef automation fill:none,stroke:none,")
 		})
 
 		t.Run("a schedule is a line under the name it wakes", func(t *testing.T) {
 			output := mermaidFlowOf(t, everyConstructModel(t))
 
-			require.Contains(t, output, `RecallOverdueCopy["⚙<br/>RecallOverdueCopy<br/>every #quot;15m#quot;"]`,
+			require.Contains(t, output, `RecallOverdueCopy@{ icon: "mdi:cog", label: "RecallOverdueCopy<br/>every #quot;15m#quot;", pos: "b", h: 36 }`,
 				"the quotes the DSL spells a cadence with are written as the entity code Mermaid resolves")
+		})
+
+		t.Run("an icon's caption is drawn on a white label background, not Mermaid's grey box", func(t *testing.T) {
+			require.Contains(t, mermaidFlowOf(t, everyConstructModel(t)), `    edgeLabelBackground: "#FFFFFF"`)
 		})
 
 		t.Run("an origin says under its name what it is", func(t *testing.T) {
@@ -85,6 +90,29 @@ func TestExportEventFlowMermaid(t *testing.T) {
 		})
 	})
 
+	t.Run("no icons", func(t *testing.T) {
+		t.Run("an automation is a purple box holding its name and its schedule, with no icon", func(t *testing.T) {
+			output := mermaidFlowNoIconsOf(t, everyConstructModel(t))
+
+			require.Contains(t, output, `    RemindOnDueDate["RemindOnDueDate"]`)
+			require.Contains(t, output, `    RecallOverdueCopy["RecallOverdueCopy<br/>every #quot;15m#quot;"]`)
+			require.Contains(t, output, "    class RemindOnDueDate,RecallOverdueCopy,ExternalDeskBookingImport automation")
+			require.Contains(t, output, "    classDef automation fill:#E1D5E7,stroke:#9673A6,")
+			require.NotContains(t, output, "icon:")
+		})
+
+		t.Run("the label background is left to Mermaid's theme, which carries the dark one", func(t *testing.T) {
+			require.NotContains(t, mermaidFlowNoIconsOf(t, everyConstructModel(t)), "edgeLabelBackground")
+		})
+
+		t.Run("every other node and arrow is the one the icon file writes", func(t *testing.T) {
+			model := everyConstructModel(t)
+
+			require.Equal(t, mermaidFlowArrows(mermaidFlowOf(t, model)), mermaidFlowArrows(mermaidFlowNoIconsOf(t, model)))
+			require.Contains(t, mermaidFlowNoIconsOf(t, model), `    CopyBorrowed(["CopyBorrowed"])`)
+		})
+	})
+
 	t.Run("arrows", func(t *testing.T) {
 		t.Run("every hop the flow states is one arrow", func(t *testing.T) {
 			model := everyConstructModel(t)
@@ -114,36 +142,38 @@ func TestExportEventFlowMermaid(t *testing.T) {
 	})
 
 	t.Run("parsing", func(t *testing.T) {
-		t.Run("the diagram type follows the frontmatter with no comment between them", func(t *testing.T) {
-			lines := strings.Split(mermaidFlowOf(t, everyConstructModel(t)), "\n")
+		for _, export := range mermaidFlowExports {
+			t.Run(export.name+": the diagram type follows the frontmatter with no comment between them", func(t *testing.T) {
+				lines := strings.Split(export.of(t, everyConstructModel(t)), "\n")
 
-			frontmatter := 0
-			for i, line := range lines[1:] {
-				if line == "---" {
-					frontmatter = i + 1
-					break
+				frontmatter := 0
+				for i, line := range lines[1:] {
+					if line == "---" {
+						frontmatter = i + 1
+						break
+					}
 				}
-			}
-			require.Positive(t, frontmatter, "the file must open with frontmatter")
-			require.Equal(t, "flowchart TB", lines[frontmatter+1],
-				"a comment between the frontmatter and the diagram type fails to parse")
-		})
+				require.Positive(t, frontmatter, "the file must open with frontmatter")
+				require.Equal(t, "flowchart TB", lines[frontmatter+1],
+					"a comment between the frontmatter and the diagram type fails to parse")
+			})
 
-		t.Run("no comment line is left bare, which Mermaid draws as a node", func(t *testing.T) {
-			for _, line := range strings.Split(mermaidFlowOf(t, everyConstructModel(t)), "\n") {
-				require.NotEqual(t, "%%", strings.TrimSpace(line))
-			}
-		})
+			t.Run(export.name+": no comment line is left bare, which Mermaid draws as a node", func(t *testing.T) {
+				for _, line := range strings.Split(export.of(t, everyConstructModel(t)), "\n") {
+					require.NotEqual(t, "%%", strings.TrimSpace(line))
+				}
+			})
 
-		t.Run("no label carries a quote that would end it", func(t *testing.T) {
-			for _, line := range mermaidFlowLabels(mermaidFlowOf(t, everyConstructModel(t))) {
-				require.NotContains(t, line, `"`, "a quote inside a label ends it")
-			}
-		})
+			t.Run(export.name+": no label carries a quote that would end it", func(t *testing.T) {
+				for _, line := range mermaidFlowLabels(export.of(t, everyConstructModel(t))) {
+					require.NotContains(t, line, `"`, "a quote inside a label ends it")
+				}
+			})
 
-		t.Run("the file asks for the layout that keeps a flow readable", func(t *testing.T) {
-			require.Contains(t, mermaidFlowOf(t, everyConstructModel(t)), "layout: elk")
-		})
+			t.Run(export.name+": the file asks for the layout that keeps a flow readable", func(t *testing.T) {
+				require.Contains(t, export.of(t, everyConstructModel(t)), "layout: elk")
+			})
+		}
 
 		t.Run("an empty model writes a diagram with no node in it", func(t *testing.T) {
 			output := mermaidFlowOf(t, &ast.Model{Name: "Empty"})
@@ -169,6 +199,23 @@ func mermaidFlowOf(t *testing.T, model *ast.Model) string {
 	require.NoError(t, err)
 
 	return string(raw)
+}
+
+func mermaidFlowNoIconsOf(t *testing.T, model *ast.Model) string {
+	t.Helper()
+
+	raw, err := diagram.ExportEventFlowMermaidNoIcons(model, diagram.StyleAuto)
+	require.NoError(t, err)
+
+	return string(raw)
+}
+
+var mermaidFlowExports = []struct {
+	name string
+	of   func(*testing.T, *ast.Model) string
+}{
+	{name: "icons", of: mermaidFlowOf},
+	{name: "no icons", of: mermaidFlowNoIconsOf},
 }
 
 var mermaidFlowArrow = regexp.MustCompile(`(?m)^ {4}\w+ -\.?->`)
