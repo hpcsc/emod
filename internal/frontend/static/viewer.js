@@ -449,11 +449,14 @@ function init() {
   // ─── Diagram edits ────────────────────────────────────────────────
   // Every init has a store of its own and the bus outlives it, so an edit is
   // applied only by the init whose store it changed.
-  bus.on('model:edited', function({ store: s }) {
+  function countDiagramEdit({ store: s }) {
     if (s !== store || drawnSource === null) return;
     latestDiagramEdit++;
     applyPendingDiagramEdits();
-  });
+  }
+
+  bus.on('model:edited', countDiagramEdit);
+  bus.on('fields:edited', countDiagramEdit);
 
   // A panel that no longer holds the drawn source has an edit the diagram does
   // not show, and writing the applied edit over it would discard that.
@@ -565,7 +568,12 @@ function init() {
       drawnSource = answer.emod;
       drawnDiagramText = JSON.stringify(answer.diagram);
       UI.hideDiagramStale(store);
+      const editor = UI.readFieldEditor(store);
+      const outgoing = store.nodes;
       Model.setModelDataInPlace(store, answer.diagram);
+      const ids = Model.matchNodeIds(outgoing, store.nodes);
+      UI.followNodeIds(store, ids);
+      UI.restoreFieldEditor(store, editor, ids);
       showRenderOutcome("✓ Rendered", "status success", true);
     }
     reportModified();

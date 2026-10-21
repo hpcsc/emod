@@ -43,7 +43,7 @@ vi.mock('../static/platform.js', () => ({
     : Promise.resolve('emod = 1\n\nmodel "' + (diagram.model_name || '') + '" {\n}\n')),
   applyDiagram: vi.fn((source, filename, diagram) => applyQueue.length
     ? applyQueue.shift()
-    : Promise.resolve(appliedAnswer(JSON.parse(JSON.stringify(diagram))))),
+    : Promise.resolve(appliedAnswer(withoutUnnamedFields(JSON.parse(JSON.stringify(diagram)))))),
   initialState: vi.fn(() => initialStateFails
     ? Promise.reject(new Error('host could not answer'))
     : Promise.resolve(typeof globalThis.INITIAL_DATA === 'undefined' ? null : globalThis.INITIAL_DATA)),
@@ -204,6 +204,15 @@ const { DRAG_THRESHOLD, REVALIDATE_PAUSE_MS } = await import('../static/config.j
 
 const billingSource = 'emod = 1\n\nmodel "Billing" {\n}\n';
 const appliedSource = 'emod = 1\n\nmodel "Billing" {\n}\n\ncontext "Payments" {\n}\n';
+
+// The Go apply writes no field that has no name, so a parse of what it wrote
+// draws none.
+function withoutUnnamedFields(diagram) {
+  diagram.nodes.forEach((n) => {
+    if (n.fields) n.fields = n.fields.filter((f) => f.name);
+  });
+  return diagram;
+}
 
 // What the pipeline answers for an applied diagram edit: the source it wrote,
 // and what a parse of that source answers.
@@ -2949,6 +2958,273 @@ describe('a diagram edit reaching the source panel', () => {
         expect(unsavedEditsAsked).toBe(1);
         expect(panelText()).toBe(appliedSource);
       });
+    });
+  });
+
+  describe('the field editor', () => {
+    function diagramWithFields() {
+      const diagram = editableDiagram();
+      diagram.nodes[3].fields = [
+        { name: 'amount', type: 'int', modifier: 'required' },
+        { name: 'currency', type: 'string' },
+      ];
+      return diagram;
+    }
+
+    async function openFieldEditorOnTakePayment() {
+      globalThis.INITIAL_DATA = null;
+      parseResult = { diagnostics: [], diagram: diagramWithFields() };
+      await startViewer();
+      deliverFile({ name: 'billing.emod', path: '/models/billing.emod', content: billingSource });
+      await flush();
+      fromMenu(blockFor('command-1'), 'open-field-editor');
+    }
+
+    const fieldInput = (idx, field) =>
+      document.querySelector('#dp-content .dp-field-input[data-idx="' + idx + '"][data-field="' + field + '"]');
+    const sentFields = () => sentNodes().find((n) => n.id === 'command-1').fields;
+
+    function leave(input, value) {
+      input.focus();
+      input.value = value;
+      input.blur();
+    }
+
+    it.each([
+      ['renaming a field', 0, 'name', 'total', [{ name: 'total', type: 'int', modifier: 'required' }, { name: 'currency', type: 'string' }]],
+      ['retyping a field', 0, 'type', 'float', [{ name: 'amount', type: 'float', modifier: 'required' }, { name: 'currency', type: 'string' }]],
+      ['setting a modifier', 1, 'modifier', 'optional', [{ name: 'amount', type: 'int', modifier: 'required' }, { name: 'currency', type: 'string', modifier: 'optional' }]],
+    ])('%s and leaving the input writes the change into the panel', async (_, idx, field, value, fields) => {
+      await openFieldEditorOnTakePayment();
+      const before = applies();
+
+      leave(fieldInput(idx, field), value);
+      await settle();
+
+      expect(applies()).toBe(before + 1);
+      expect(sentFields()).toEqual(fields);
+      expect(panelText()).toBe(appliedSource);
+    });
+
+    it('clearing the name of a field and leaving the input writes the change into the panel, and keeps the row open', async () => {
+      await openFieldEditorOnTakePayment();
+      const before = applies();
+
+      leave(fieldInput(0, 'name'), '');
+      await settle();
+
+      expect(applies()).toBe(before + 1);
+      expect(sentFields()).toEqual([{ name: '', type: 'int', modifier: 'required' }, { name: 'currency', type: 'string' }]);
+      expect(panelText()).toBe(appliedSource);
+      expect(fieldInput(1, 'name').value).toBe('');
+      expect(fieldInput(1, 'type').value).toBe('int');
+    });
+
+    it('leaving an input whose value did not change asks the pipeline nothing', async () => {
+      await openFieldEditorOnTakePayment();
+      const before = applies();
+
+      leave(fieldInput(0, 'name'), 'amount');
+      leave(fieldInput(1, 'modifier'), '');
+      await settle();
+
+      expect(applies()).toBe(before);
+      expect(panelText()).toBe(billingSource);
+    });
+
+    it('deleting a field with its button writes the change into the panel and keeps the editor open on the rest', async () => {
+      await openFieldEditorOnTakePayment();
+      const held = heldApply();
+
+      document.querySelector('#dp-content .dp-field-delete[data-idx="0"]').click();
+      await settle();
+      expect(fieldEditor().open).toBe(true);
+      expect(fieldInput(0, 'name').value).toBe('currency');
+      expect(fieldInput(1, 'name')).toBeNull();
+      held.answer(appliedAnswer(JSON.parse(JSON.stringify(lastApply()[2]))));
+      await settle();
+
+      expect(sentFields()).toEqual([{ name: 'currency', type: 'string' }]);
+      expect(panelText()).toBe(appliedSource);
+      expect(fieldEditor().open).toBe(true);
+      expect(fieldInput(0, 'name').value).toBe('currency');
+    });
+
+    it('adding a row changes nothing in the panel until the row has a name, and then writes the field', async () => {
+      await openFieldEditorOnTakePayment();
+      const before = applies();
+
+      document.querySelector('#dp-content .dp-add-field').click();
+      await settle();
+
+      expect(applies()).toBe(before);
+      expect(panelText()).toBe(billingSource);
+      expect(document.activeElement).toBe(fieldInput(2, 'name'));
+
+      leave(fieldInput(2, 'name'), 'note');
+      await settle();
+
+      expect(applies()).toBe(before + 1);
+      expect(sentFields()).toEqual([
+        { name: 'amount', type: 'int', modifier: 'required' },
+        { name: 'currency', type: 'string' },
+        { name: 'note', type: 'string', modifier: '' },
+      ]);
+      expect(panelText()).toBe(appliedSource);
+    });
+
+    it('editing the type of a row with no name, or deleting it, asks the pipeline nothing', async () => {
+      await openFieldEditorOnTakePayment();
+      const before = applies();
+      document.querySelector('#dp-content .dp-add-field').click();
+
+      leave(fieldInput(2, 'type'), 'int');
+      leave(fieldInput(2, 'modifier'), 'optional');
+      await settle();
+      expect(applies()).toBe(before);
+      expect(fieldInput(2, 'type').value).toBe('int');
+
+      document.querySelector('#dp-content .dp-field-delete[data-idx="2"]').click();
+      await settle();
+
+      expect(applies()).toBe(before);
+      expect(fieldInput(2, 'name')).toBeNull();
+      expect(panelText()).toBe(billingSource);
+    });
+
+    it('keeps a row with no name, the focus in it and what is typed there when another edit reaches the panel', async () => {
+      await openFieldEditorOnTakePayment();
+      const held = heldApply();
+      document.querySelector('#dp-content .dp-add-field').click();
+      leave(fieldInput(0, 'type'), 'float');
+      await settle();
+      const sent = JSON.parse(JSON.stringify(lastApply()[2]));
+      fieldInput(2, 'type').focus();
+      fieldInput(2, 'type').value = 'bool';
+
+      held.answer(appliedAnswer(withoutUnnamedFields(sent)));
+      await settle();
+
+      expect(panelText()).toBe(appliedSource);
+      expect(fieldInput(0, 'type').value).toBe('float');
+      expect(fieldInput(2, 'name').value).toBe('');
+      expect(document.activeElement).toBe(fieldInput(2, 'type'));
+      expect(fieldInput(2, 'type').value).toBe('bool');
+    });
+
+    describe('on a node the parse of the applied source numbers anew', () => {
+      // A command added to the first slice comes before the second slice's in
+      // the document, so the parse gives it the id the second slice's had.
+      function diagramWithRefund() {
+        const diagram = editableDiagram();
+        diagram.nodes.push({ id: 'command-2', type: 'command', label: 'RefundPayment', parentId: 'slice-2', fields: [{ name: 'reason', type: 'string' }] });
+        return diagram;
+      }
+
+      async function addCommandHeldThen(gesture) {
+        globalThis.INITIAL_DATA = null;
+        parseResult = { diagnostics: [], diagram: diagramWithRefund() };
+        await startViewer();
+        deliverFile({ name: 'billing.emod', path: '/models/billing.emod', content: billingSource });
+        await flush();
+        const held = heldApply();
+        fromMenu(sliceHeader('slice-1'), 'add-command');
+        await settle();
+        const added = nodeIdLabelled('new-command-2');
+        const renumbered = JSON.parse(JSON.stringify(lastApply()[2]).split('"command-2"').join('"command-3"').split(added).join('command-2'));
+        gesture();
+        held.answer(appliedAnswer(renumbered));
+        await settle();
+      }
+
+      it('reopens the field editor on the node it was open on, not on the one that took its id', async () => {
+        await addCommandHeldThen(() => fromMenu(blockFor('command-2'), 'open-field-editor'));
+
+        expect(fieldEditor().open).toBe(true);
+        expect(fieldEditor().text).toContain('RefundPayment');
+        expect(fieldEditor().text).not.toContain('new-command-2');
+      });
+
+      it('renames the node a rename box was opened on', async () => {
+        await addCommandHeldThen(() => {
+          fireMouse(blockFor('command-2'), 'dblclick');
+          document.querySelector('body > input[type="text"]').value = 'IssueRefund';
+        });
+
+        document.querySelector('body > input[type="text"]').dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true, cancelable: true }));
+        await settle();
+
+        expect(sentNodes().find((n) => n.id === 'command-3').label).toBe('IssueRefund');
+        expect(sentNodes().find((n) => n.id === 'command-2').label).toBe('new-command-2');
+      });
+
+      it('opens the field editor from a context menu raised before the redraw on the node it was raised over', async () => {
+        await addCommandHeldThen(() => fireMouse(blockFor('command-2'), 'contextmenu'));
+
+        menuItemFor('open-field-editor').click();
+
+        expect(fieldEditor().text).toContain('RefundPayment');
+      });
+    });
+
+    it('puts the window in conflict when the panel holds text the diagram does not show', async () => {
+      await openFieldEditorOnTakePayment();
+      typeIntoPanel(billingSource + '# typed\n');
+      const before = applies();
+
+      leave(fieldInput(0, 'type'), 'float');
+      await settle();
+
+      expect(applies()).toBe(before);
+      expect(conflictShown()).toBe(true);
+      expect(panelText()).toBe(billingSource + '# typed\n');
+    });
+
+    it('stays open on a node the canvas added once the parse of the applied source gives that node its own id', async () => {
+      await openEditable();
+      const held = heldApply();
+      fromMenu(sliceHeader('slice-1'), 'add-command');
+      await settle();
+      const added = nodeIdLabelled('new-command-2');
+      fromMenu(blockFor(added), 'open-field-editor');
+      expect(fieldEditor().text).toContain('new-command-2');
+
+      const renumbered = JSON.parse(JSON.stringify(lastApply()[2]).split(added).join('command-2'));
+      held.answer(appliedAnswer(renumbered));
+      await settle();
+
+      expect(blockFor('command-2')).not.toBeNull();
+      expect(fieldEditor().open).toBe(true);
+      expect(fieldEditor().text).toContain('new-command-2');
+    });
+
+    it('keeps the editor, the focus and what is typed in the next input when the first edit reaches the panel', async () => {
+      await openFieldEditorOnTakePayment();
+      const held = heldApply();
+
+      fieldInput(0, 'type').focus();
+      fieldInput(0, 'type').value = 'float';
+      fieldInput(0, 'modifier').focus();
+      await settle();
+      const sent = JSON.parse(JSON.stringify(lastApply()[2]));
+      fieldInput(0, 'modifier').value = 'opt';
+      fieldInput(0, 'modifier').setSelectionRange(1, 1);
+      held.answer(appliedAnswer(sent));
+      await settle();
+
+      expect(panelText()).toBe(appliedSource);
+      expect(fieldEditor().open).toBe(true);
+      expect(fieldEditor().text).toContain('TakePayment');
+      expect(document.activeElement).toBe(fieldInput(0, 'modifier'));
+      expect(fieldInput(0, 'modifier').value).toBe('opt');
+      expect(fieldInput(0, 'modifier').selectionStart).toBe(1);
+      expect(fieldInput(0, 'type').value).toBe('float');
+
+      fieldInput(0, 'modifier').value = 'optional';
+      fieldInput(0, 'modifier').blur();
+      await settle();
+
+      expect(sentFields()[0]).toEqual({ name: 'amount', type: 'float', modifier: 'optional' });
     });
   });
 

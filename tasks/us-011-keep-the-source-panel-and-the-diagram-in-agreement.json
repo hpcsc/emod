@@ -199,7 +199,7 @@
     },
     {
       "n": 5,
-      "done": false,
+      "done": true,
       "title": "Write field editor edits into the source panel without losing what is typed",
       "language": "JavaScript",
       "testable": true,

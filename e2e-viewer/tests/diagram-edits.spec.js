@@ -1,6 +1,6 @@
 import { test, expect } from '@playwright/test';
 import { readFileSync } from 'node:fs';
-import { open, render } from './helpers.js';
+import { open, render, SAMPLE } from './helpers.js';
 
 const specsHotel = readFileSync(new URL('../../examples/specs_hotel.emod', import.meta.url), 'utf-8');
 
@@ -128,5 +128,28 @@ test.describe('a conflict between the diagram and the source panel through the r
     await expect(page.locator('.diagram-node', { hasText: 'new-command-2' })).toHaveCount(0);
     await expect(page.locator('.diagram-node', { hasText: 'ReleaseHold' })).toHaveCount(1);
     await expect(page.locator('#source-input')).toHaveValue(typed);
+  });
+});
+
+test.describe('the field editor through the real pipeline', () => {
+  test('writes a retyped field and a modifier typed after Tab into the panel', async ({ page }) => {
+    await open(page);
+    await render(page, SAMPLE);
+
+    await page.locator('.diagram-node[data-node-id="command-1"]').click({ button: 'right' });
+    await page.locator('.ctx-menu-item[data-action="open-field-editor"]').click();
+    const type = page.locator('#dp-content .dp-field-type-input').first();
+    await type.fill('string');
+    await type.press('Tab');
+    await expect(page.locator('#dp-content .dp-field-modifier-input').first()).toBeFocused();
+    await page.keyboard.press('ControlOrMeta+a');
+    await page.keyboard.type('optional');
+    await page.keyboard.press('Tab');
+
+    const edited = SAMPLE.replace('          amount = required(int)\n        }\n      }\n\n      event',
+      '          amount = optional(string)\n        }\n      }\n\n      event');
+    expect(edited).not.toBe(SAMPLE);
+    await expect(page.locator('#source-input')).toHaveValue(edited);
+    await expect(page.locator('#detail-panel')).toBeVisible();
   });
 });

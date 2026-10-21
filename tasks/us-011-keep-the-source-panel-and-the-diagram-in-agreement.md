@@ -870,20 +870,20 @@ the next input of the same editor. The redraw that follows must not lose the edi
 typed into it.
 
 **Acceptance Criteria:**
-- [ ] Changing a field's name, type or modifier and leaving the input writes the change into the
+- [x] Changing a field's name, type or modifier and leaving the input writes the change into the
   panel. It goes through the same path as Task 3, and through the conflict of Task 4 when the panel
   has an unapplied edit.
-- [ ] Deleting a field with its × button writes the change into the panel.
-- [ ] A row added with **+ Add Field** changes nothing in the panel until the row has a name. Leaving
+- [x] Deleting a field with its × button writes the change into the panel.
+- [x] A row added with **+ Add Field** changes nothing in the panel until the row has a name. Leaving
   its name input with a name typed writes the field.
-- [ ] Leaving an input whose value did not change calls no `applyDiagram` and changes nothing.
-- [ ] Nothing typed into the field editor is lost to a redraw. A user can tab from one field's input
+- [x] Leaving an input whose value did not change calls no `applyDiagram` and changes nothing.
+- [x] Nothing typed into the field editor is lost to a redraw. A user can tab from one field's input
   to the next and type there. After the first edit reaches the panel, the editor is still open on
   the same element, with focus in the input it moved to and the text typed there since. When focus
   leaves the second input, both edits are in the panel.
-- [ ] The field editor's other behaviour is as before. The existing `'viewer field editor'` tests
+- [x] The field editor's other behaviour is as before. The existing `'viewer field editor'` tests
   (`viewer.test.js:846-895`) and `detail-panel.test.js` pass.
-- [ ] In a real browser with the real pipeline, the field editor is opened on a command. One field's
+- [x] In a real browser with the real pipeline, the field editor is opened on a command. One field's
   type is changed, Tab moves to its modifier, and a modifier is typed there. The panel then holds
   both changes.
 - [ ] `task test:viewer` and `task test:e2e:viewer` pass.

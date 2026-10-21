@@ -528,6 +528,8 @@ function showDetailPanel(store, node) {
 
   content.innerHTML = html;
 
+  // A field edit is not a diagram edit that redraws: the canvas draws no fields,
+  // and a redraw would close this editor.
   if (isFieldNode) {
     content.querySelectorAll('.dp-field-input').forEach(function(input) {
       input.addEventListener('blur', function() {
@@ -535,7 +537,11 @@ function showDetailPanel(store, node) {
         const field = this.dataset.field;
         const n = store.nodeById.get( store.interaction.selectedNodeId);
         if (!n || !n.fields || !n.fields[idx]) return;
-        n.fields[idx][field] = this.value;
+        const row = n.fields[idx];
+        if ((row[field] || '') === this.value) return;
+        const wasField = Boolean(row.name);
+        row[field] = this.value;
+        if (wasField || row.name) bus.emit('fields:edited', { store });
       });
     });
 
@@ -545,8 +551,9 @@ function showDetailPanel(store, node) {
         const idx = parseInt(this.dataset.idx);
         const n = store.nodeById.get( store.interaction.selectedNodeId);
         if (!n || !n.fields) return;
-        n.fields.splice(idx, 1);
-        bus.emit('data:changed', { store });
+        const removed = n.fields.splice(idx, 1)[0];
+        showDetailPanel(store, n);
+        if (removed && removed.name) bus.emit('fields:edited', { store });
       });
     });
 
@@ -558,7 +565,9 @@ function showDetailPanel(store, node) {
         if (!n) return;
         if (!n.fields) n.fields = [];
         n.fields.push({name: '', type: 'string', modifier: ''});
-        bus.emit('data:changed', { store });
+        showDetailPanel(store, n);
+        const added = content.querySelector('.dp-field-name-input[data-idx="' + (n.fields.length - 1) + '"]');
+        if (added) added.focus();
       });
     }
   }
@@ -578,6 +587,82 @@ function showDetailPanel(store, node) {
 
   el.style.display = "block";
   hideTooltip(store);
+}
+
+function readFieldEditor(store) {
+  const panel = store.dom.detailPanel;
+  const node = store.nodeById.get(store.interaction.selectedNodeId);
+  if (!panel || panel.style.display !== "block" || !node) return null;
+
+  const rows = node.fields || [];
+  const active = document.activeElement;
+  let focused = null;
+  if (active && store.dom.dpContent.contains(active) && active.classList.contains("dp-field-input")) {
+    const row = rows[parseInt(active.dataset.idx)];
+    const alike = rows.filter(function(r) { return Boolean(r.name) === Boolean(row && row.name); });
+    focused = {
+      named: Boolean(row && row.name),
+      ordinal: alike.indexOf(row),
+      field: active.dataset.field,
+      value: active.value,
+      start: active.selectionStart,
+      end: active.selectionEnd,
+    };
+  }
+  return {
+    nodeId: node.id,
+    unnamed: rows.filter(function(r) { return !r.name; }).map(function(r) { return Object.assign({}, r); }),
+    focused: focused,
+  };
+}
+
+function restoreFieldEditor(store, editor, ids) {
+  if (!editor) return;
+  const node = store.nodeById.get(ids.get(editor.nodeId));
+  if (!node) return;
+
+  const named = (node.fields || []).length;
+  if (editor.unnamed.length > 0) {
+    node.fields = (node.fields || []).concat(editor.unnamed);
+  }
+  showDetailPanel(store, node);
+  if (!editor.focused) return;
+  const idx = editor.focused.named ? editor.focused.ordinal : named + editor.focused.ordinal;
+  const input = store.dom.dpContent.querySelector(
+    '.dp-field-input[data-idx="' + idx + '"][data-field="' + editor.focused.field + '"]');
+  if (!input) return;
+  input.value = editor.focused.value;
+  input.focus();
+  input.setSelectionRange(editor.focused.start, editor.focused.end);
+}
+
+function followNodeIds(store, ids) {
+  const edit = store.interaction.inlineEdit;
+  if (edit) {
+    if (ids.has(edit.nodeId)) {
+      edit.nodeId = ids.get(edit.nodeId);
+    } else {
+      cancelInlineEdit(store);
+    }
+  }
+
+  const menu = store.interaction.ctxMenu;
+  if (menu) {
+    const keys = ["targetNodeId", "targetSliceId", "targetAggId", "targetCtxId", "edgeSource", "edgeTarget"]
+      .filter(function(key) { return menu[key]; });
+    if (keys.every(function(key) { return ids.has(menu[key]); })) {
+      keys.forEach(function(key) { menu[key] = ids.get(menu[key]); });
+    } else {
+      hideContextMenu(store);
+    }
+  }
+
+  const edge = store.interaction.selectedEdge;
+  if (edge) {
+    store.interaction.selectedEdge = ids.has(edge.source) && ids.has(edge.target)
+      ? { source: ids.get(edge.source), target: ids.get(edge.target), type: edge.type }
+      : null;
+  }
 }
 
 function showEdgeDetail(store) {
@@ -1096,6 +1181,9 @@ export const UI = {
   hideConflict,
   updateStats,
   showDetailPanel,
+  readFieldEditor,
+  restoreFieldEditor,
+  followNodeIds,
   showEdgeDetail,
   hideDetailPanel,
   clearHighlights,

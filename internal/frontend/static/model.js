@@ -46,6 +46,18 @@ function loadModel(store, data, nodeOffsets, hiddenNodes) {
   bus.emit('data:changed', { store });
 }
 
+function matchNodeIds(outgoing, incoming) {
+  const before = nodeIdentities(outgoing);
+  const after = nodeIdentities(incoming);
+  const idByIdentity = new Map(incoming.map(function(n) { return [after.get(n.id), n.id]; }));
+  const ids = new Map();
+  outgoing.forEach(function(n) {
+    const id = idByIdentity.get(before.get(n.id));
+    if (id) ids.set(n.id, id);
+  });
+  return ids;
+}
+
 function keyByIdentity(nodes, identities, valuesByNodeId) {
   const values = new Map();
   nodes.forEach(function(n) {
@@ -226,6 +238,7 @@ export const Model = {
   generateLabel,
   setModelData,
   setModelDataInPlace,
+  matchNodeIds,
   sendParse,
   readDiagramJson,
   moveSlice,
