@@ -153,6 +153,35 @@ function readDiagramJson(source) {
   }
 }
 
+function moveToSlice(nodes, nodeId, sliceId) {
+  const node = nodes.find(function(n) { return n.id === nodeId; });
+  if (!node) return [];
+  const fromSlice = node.parentId;
+  const nested = nestedEventNames(nodes, fromSlice);
+  const refused = (node.type === "trigger" && nodes.some(function(n) { return n.type === "trigger" && n.parentId === sliceId; })) ||
+    (node.type === "event" && nested[node.label]);
+  if (refused) return [];
+
+  const moving = [node];
+  if (node.type === "translation" && node.event && node.event.name) {
+    nodes.forEach(function(n) {
+      if (n.type === "event" && n.parentId === fromSlice && n.label === node.event.name) moving.push(n);
+    });
+  }
+  moving.forEach(function(n) { n.parentId = sliceId; });
+  return moving.map(function(n) { return n.id; });
+}
+
+function nestedEventNames(nodes, sliceId) {
+  const names = {};
+  nodes.forEach(function(n) {
+    if (n.type === "translation" && n.parentId === sliceId && n.event && n.event.name) {
+      names[n.event.name] = true;
+    }
+  });
+  return names;
+}
+
 function sendParse(store, source, statusEl, filename) {
   if (!source || !source.trim()) {
     if (statusEl) {
@@ -242,6 +271,7 @@ export const Model = {
   sendParse,
   readDiagramJson,
   moveSlice,
+  moveToSlice,
   addEdge,
   removeEdge,
   autoDetectEdgeType,

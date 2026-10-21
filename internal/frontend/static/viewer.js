@@ -13,6 +13,8 @@ import { Export } from './emod-export.js';
 import { REVALIDATE_PAUSE_MS } from './config.js';
 import { ready, isReady, applyDiagram, droppedFiles, saveFile, setWindowTitle, setWindowModified, rememberOpenedFile, resolveUnsavedEdits, onFileOpened, onFilesDropped, onSaveRequested, onLeaveRequested, initialState } from './platform.js';
 
+const DRAG_RELEASE_CHECK_MS = 50;
+
 // ─── Event subscriptions ─────────────────────────────────────────────
 bus.on('data:changed', function({ store: s }) {
   renderDiagram(s);
@@ -483,12 +485,26 @@ function init() {
     return ready.then(function() {
       return applyDiagram(source, filename, diagram);
     }).then(function(answer) {
-      return settleDiagramEdit(edit, source, panelTextToReplace, function() { writeAppliedSource(answer, edit); });
+      return dragReleased().then(function() {
+        return settleDiagramEdit(edit, source, panelTextToReplace, function() { writeAppliedSource(answer, edit); });
+      });
     }, function(err) {
       return settleDiagramEdit(edit, source, panelTextToReplace, function() { reportApplyRefusal(err.message || String(err)); });
     }).catch(function(err) {
       applyingDiagramEdit = false;
       reportApplyRefusal(err.message || String(err));
+    });
+  }
+
+  function dragReleased() {
+    return new Promise(function(resolve) {
+      (function check() {
+        if (store.interaction.drag) {
+          setTimeout(check, DRAG_RELEASE_CHECK_MS);
+        } else {
+          resolve();
+        }
+      })();
     });
   }
 

@@ -1,6 +1,6 @@
 import { test, expect } from '@playwright/test';
 import { readFileSync } from 'node:fs';
-import { open, render, SAMPLE } from './helpers.js';
+import { open, render, centreOf, dragBetween, SAMPLE, SAMPLE_WITH_VIEW } from './helpers.js';
 
 const specsHotel = readFileSync(new URL('../../examples/specs_hotel.emod', import.meta.url), 'utf-8');
 
@@ -151,5 +151,43 @@ test.describe('the field editor through the real pipeline', () => {
     expect(edited).not.toBe(SAMPLE);
     await expect(page.locator('#source-input')).toHaveValue(edited);
     await expect(page.locator('#detail-panel')).toBeVisible();
+  });
+});
+
+test.describe('moving a block to another slice through the real pipeline', () => {
+  test('declares a command dragged onto the next slice in that slice, and draws it there', async ({ page }) => {
+    await open(page);
+    await render(page, SAMPLE_WITH_VIEW);
+
+    const command = page.locator('.diagram-node[data-node-id="command-1"]');
+    await dragBetween(page, await centreOf(command), await centreOf(page.locator('.slice-box[data-slice-id="slice-2"]')));
+
+    const moved = SAMPLE_WITH_VIEW
+      .replace(`    slice "Take Payment" {
+      command "TakePayment" {
+        fields {
+          amount = required(int)
+        }
+      }
+
+      event`, `    slice "Take Payment" {
+      event`)
+      .replace(`    slice "Payment History" {
+      view`, `    slice "Payment History" {
+      command "TakePayment" {
+        fields {
+          amount = required(int)
+        }
+      }
+
+      view`);
+    expect(moved).not.toBe(SAMPLE_WITH_VIEW);
+    await expect(page.locator('#source-input')).toHaveValue(moved);
+
+    const slice = await page.locator('.slice-box[data-slice-id="slice-2"]').boundingBox();
+    // The block's own box: the ports drawn around it stand a few pixels outside it.
+    const block = await page.locator('.diagram-node', { hasText: 'TakePayment' }).locator('rect').first().boundingBox();
+    expect(block.x).toBeGreaterThanOrEqual(slice.x);
+    expect(block.x + block.width).toBeLessThanOrEqual(slice.x + slice.width);
   });
 });

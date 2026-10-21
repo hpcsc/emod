@@ -197,10 +197,25 @@ function resizeSliceParts(store, sliceId, w, h) {
   if (sp) Renderer.placeSliceHeaderTexts(svgEl, sliceId, sp.x, w);
 }
 
+function otherSliceUnderBlock(store, nodeId, x, y) {
+  const node = store.nodeById.get(nodeId);
+  const pos = store.layoutPositions[nodeId];
+  if (!node || !pos) return null;
+  const cx = x + pos.w / 2;
+  const cy = y + pos.h / 2;
+  return store.nodes.find(function(n) {
+    const sp = n.type === "slice" && n.id !== node.parentId && store.layoutPositions[n.id];
+    return sp && cx >= sp.x && cx <= sp.x + sp.w && cy >= sp.y && cy <= sp.y + sp.h;
+  }) || null;
+}
+
 function dragNodeTo(store, drag, dx, dy) {
   const base = store.layoutPositions[drag.nodeId];
   if (!base) return;
-  const target = clampIntoSlice(store, drag.nodeId, base.x + dx, base.y + dy);
+  const over = otherSliceUnderBlock(store, drag.nodeId, base.x + dx, base.y + dy);
+  const target = over
+    ? { x: base.x + dx, y: base.y + dy }
+    : clampIntoSlice(store, drag.nodeId, base.x + dx, base.y + dy);
 
   const blockEl = store.dom.svg.querySelector('.diagram-node[data-node-id="' + drag.nodeId + '"]');
   if (blockEl) {
@@ -210,13 +225,21 @@ function dragNodeTo(store, drag, dx, dy) {
   updateArrowsForNode(store, drag.nodeId, { x: target.x, y: target.y, w: base.w, h: base.h });
 
   const node = store.nodeById.get(drag.nodeId);
-  const box = node && sliceBoxFor(store, node.parentId, drag.nodeId, target);
+  const sp = node && store.layoutPositions[node.parentId];
+  const box = node && (over ? sp && { w: sp.w, h: sp.h } : sliceBoxFor(store, node.parentId, drag.nodeId, target));
   if (box) resizeSliceParts(store, node.parentId, box.w, box.h);
 }
 
 function commitDrag(store, nodeId, dx, dy) {
   const base = store.layoutPositions[nodeId];
   if (!base) return;
+  const over = otherSliceUnderBlock(store, nodeId, base.x + dx, base.y + dy);
+  if (over) {
+    const moved = Model.moveToSlice(store.nodes, nodeId, over.id);
+    moved.forEach(function(id) { delete store.nodeOffsets[id]; });
+    bus.emit(moved.length > 0 ? 'model:edited' : 'data:changed', { store });
+    return;
+  }
   const target = clampIntoSlice(store, nodeId, base.x + dx, base.y + dy);
   const existing = store.nodeOffsets[nodeId] || { dx: 0, dy: 0 };
   store.nodeOffsets[nodeId] = {

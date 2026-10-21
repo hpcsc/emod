@@ -227,7 +227,7 @@
     },
     {
       "n": 6,
-      "done": false,
+      "done": true,
       "title": "Move a block to another slice by dragging it there",
       "language": "JavaScript",
       "testable": true,

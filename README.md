@@ -415,8 +415,11 @@ view; a diagnostic that applies to the whole file says so in the list and
 leaves the caret where it is. With the caret on a line that carries
 diagnostics, a line under the text shows each of them, most severe first. A
 change made on the diagram — adding, deleting or renaming an element,
-reordering slices, or drawing, repointing or deleting an arrow — is written
-into the source panel, and Save writes it. The change is applied to the source
+editing its fields, reordering slices, or drawing, repointing or deleting an
+arrow — is written into the source panel, and Save writes it. Dragging a block
+onto another slice moves it there, in the diagram and in the source; a slice
+takes one trigger, and the event a translation nests moves only with its
+translation. The change is applied to the source
 the diagram was drawn from, so comments, invariants, specs and the other text
 the diagram does not show stay where they are. A file not in the `emod fmt`
 layout takes that layout on its first diagram edit, and the bar along the

@@ -3228,14 +3228,104 @@ describe('a diagram edit reaching the source panel', () => {
     });
   });
 
+  describe('moving a block to another slice', () => {
+    function towards(nodeId, sliceId) {
+      const rect = blockFor(nodeId).querySelector('rect');
+      const slice = document.querySelector('.slice-box[data-slice-id="' + sliceId + '"]');
+      const centre = (el) => ({
+        x: Number(el.getAttribute('x')) + Number(el.getAttribute('width')) / 2,
+        y: Number(el.getAttribute('y')) + Number(el.getAttribute('height')) / 2,
+      });
+      return { dx: centre(slice).x - centre(rect).x, dy: centre(slice).y - centre(rect).y };
+    }
+
+    function dragOnto(nodeId, sliceId) {
+      const { dx, dy } = towards(nodeId, sliceId);
+      dragBy(blockFor(nodeId), dx, dy);
+    }
+
+    it('writes a block dragged onto another slice into the panel, declared in that slice', async () => {
+      await openEditable();
+      const before = applies();
+
+      dragOnto('command-1', 'slice-2');
+      await settle();
+
+      expect(applies()).toBe(before + 1);
+      expect(sentNodes().find((n) => n.id === 'command-1').parentId).toBe('slice-2');
+      expect(panelText()).toBe(appliedSource);
+    });
+
+    it('moves a block whose drag is open when an earlier edit is answered, and applies both edits', async () => {
+      await openEditable();
+      const held = heldApply();
+      rename(blockFor('event-2'), 'PaymentReversed');
+      await settle();
+      const sent = JSON.parse(JSON.stringify(lastApply()[2]));
+      const before = applies();
+      const { dx, dy } = towards('command-1', 'slice-2');
+
+      fireMouseAt(blockFor('command-1'), 'mousedown', 100, 100);
+      fireMouseAt(document, 'mousemove', 100 + DRAG_THRESHOLD + 1, 100);
+      fireMouseAt(document, 'mousemove', 100 + dx, 100 + dy);
+      held.answer(appliedAnswer(sent));
+      await settle();
+      fireMouseAt(document, 'mouseup', 100 + dx, 100 + dy);
+      await vi.waitFor(() => expect(applies()).toBe(before + 1));
+      await settle();
+
+      expect(sentNodes().find((n) => n.id === 'command-1').parentId).toBe('slice-2');
+      expect(sentNodes().find((n) => n.id === 'event-2').label).toBe('PaymentReversed');
+      expect(panelText()).toBe(appliedSource);
+    });
+
+    it('asks the pipeline nothing for a trigger dragged onto a slice that has one', async () => {
+      const diagram = editableDiagram();
+      diagram.nodes.push(
+        { id: 'trigger-1', type: 'trigger', label: 'Checkout Form', parentId: 'slice-1' },
+        { id: 'trigger-2', type: 'trigger', label: 'Refund Form', parentId: 'slice-2' });
+      globalThis.INITIAL_DATA = null;
+      parseResult = { diagnostics: [], diagram: diagram };
+      await startViewer();
+      deliverFile({ name: 'billing.emod', path: '/models/billing.emod', content: billingSource });
+      await flush();
+      const before = applies();
+
+      dragOnto('trigger-1', 'slice-2');
+      await settle();
+
+      expect(applies()).toBe(before);
+      expect(panelText()).toBe(billingSource);
+      expect(blockFor('trigger-1')).not.toBeNull();
+    });
+
+    it('moves a block on a diagram with no source behind it, and Export writes the move', async () => {
+      globalThis.INITIAL_DATA = { diagram: editableDiagram() };
+      await startViewer();
+      const before = applies();
+      modifiedReports.length = 0;
+
+      dragOnto('command-1', 'slice-2');
+      await settle();
+      document.getElementById('export-emod').click();
+      await settle();
+
+      expect(applies()).toBe(before);
+      expect(conflictShown()).toBe(false);
+      expect(modifiedReports).toEqual([]);
+      const exported = platform.exportEmod.mock.calls[platform.exportEmod.mock.calls.length - 1][0];
+      expect(exported.nodes.find((n) => n.id === 'command-1').parentId).toBe('slice-2');
+    });
+  });
+
   describe('visual state', () => {
     const visualGestures = [
-      ['dragging a block inside its slice', () => dragBy(blockFor('command-1'), 30, 20)],
+      ['dragging a block inside its slice', () => dragBy(blockFor('command-1'), 0, 20)],
       ['panning', () => dragBy(document.getElementById('diagram-canvas'), 60, 60)],
       ['zooming', () => document.getElementById('diagram-canvas').dispatchEvent(new WheelEvent('wheel', { deltaY: -120, bubbles: true, cancelable: true }))],
       ['fitting the diagram to the view', () => document.getElementById('fit-view').click()],
       ['resetting the layout', () => {
-        dragBy(blockFor('command-1'), 30, 20);
+        dragBy(blockFor('command-1'), 0, 20);
         document.getElementById('reset-layout').click();
       }],
       ['hiding a slice from the visibility tree', () => {
@@ -5079,6 +5169,7 @@ describe('the documentation of the source panel', () => {
     const paragraph = read('README.md').split('**The source panel**')[1].split('**')[0];
 
     expect(paragraph).toContain('is written into the source panel, and Save writes it');
+    expect(paragraph).toContain('Dragging a block onto another slice moves it there, in the diagram and in the source');
     expect(paragraph).toContain('takes that layout on its first diagram edit, and the bar along the bottom says so');
   });
 

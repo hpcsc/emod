@@ -672,7 +672,7 @@ window is marked modified. Save then writes that text. Visual state never reache
 - [x] The README's Save-versus-Export paragraph (`README.md:464-467`) and its "What it does not do
   yet" line (`:554-556`) no longer say that the two are not reconciled. Each claim is pinned the way
   `viewer.test.js:3574-3610` pins the source-panel paragraph.
-- [ ] `task test:viewer`, `task test:unit` and `task test:e2e:viewer` pass.
+- [x] `task test:viewer`, `task test:unit` and `task test:e2e:viewer` pass.
 
 **Affected Files/Modules:**
 - `internal/frontend/static/viewer.js` — the drawn source, applying a diagram edit, the redraw in
@@ -805,7 +805,7 @@ unsaved.
   context menu before typing pauses shows the notice. **Keep diagram edits** then leaves the panel
   holding the command and not the typed text. Doing the same and choosing **Keep source edits** leaves
   the panel holding the typed text and the diagram drawn from it.
-- [ ] `task test:viewer` and `task test:e2e:viewer` pass.
+- [x] `task test:viewer` and `task test:e2e:viewer` pass.
 
 **Affected Files/Modules:**
 - `internal/frontend/static/viewer.js` — when a conflict starts, how it holds off revalidation, its
@@ -886,7 +886,7 @@ typed into it.
 - [x] In a real browser with the real pipeline, the field editor is opened on a command. One field's
   type is changed, Tab moves to its modifier, and a modifier is typed there. The panel then holds
   both changes.
-- [ ] `task test:viewer` and `task test:e2e:viewer` pass.
+- [x] `task test:viewer` and `task test:e2e:viewer` pass.
 
 **Affected Files/Modules:**
 - `internal/frontend/static/ui.js` — the field editor's inputs, × button and **+ Add Field** announce
@@ -933,32 +933,32 @@ slice as a visual offset. A slice refuses a second trigger, and the event a tran
 only with its translation.
 
 **Acceptance Criteria:**
-- [ ] A block of each kind the viewer drags, released with its centre over another slice, moves to
+- [x] A block of each kind the viewer drags, released with its centre over another slice, moves to
   that slice. The slice can be left or right of the block's own, in the same or another aggregate or
   context. The diagram draws the block inside its new slice, at its laid-out place, with no offset
   from the old slice. On a diagram drawn from source, the panel then declares it in that slice, as
   Task 1 places it.
-- [ ] A block released over its own slice, or over no slice, keeps today's behaviour, and that
+- [x] A block released over its own slice, or over no slice, keeps today's behaviour, and that
   behaviour calls no `applyDiagram`: the slice grows to hold it, it is held at the slice's top and
   left edges, and its offset accumulates and survives a redraw. `drag-containment.test.js` still
   pins this, using drags that stay within the slice. A test whose release lands over another slice
   now pins the move (`tasks/learnings.md:905-909`).
-- [ ] While a block is dragged, it is held inside its own slice only while its centre is not over
+- [x] While a block is dragged, it is held inside its own slice only while its centre is not over
   another slice. So a block can be dragged across its slice's left edge onto the slice before it.
-- [ ] A trigger released over a slice that already has a trigger goes back to where it was before the
+- [x] A trigger released over a slice that already has a trigger goes back to where it was before the
   drag. The panel does not change and no `applyDiagram` is called. The same holds for the node of an
   event a translation nests, released over another slice. A translation released over another slice
   moves with its nested event.
-- [ ] A one-finger touch drag behaves as the mouse drag does.
-- [ ] A slice dragged over another context or aggregate is still only reordered among its own
+- [x] A one-finger touch drag behaves as the mouse drag does.
+- [x] A slice dragged over another context or aggregate is still only reordered among its own
   siblings.
-- [ ] On a diagram with no source behind it, the move changes the diagram only, and Export .emod
+- [x] On a diagram with no source behind it, the move changes the diagram only, and Export .emod
   writes the block in its new slice.
-- [ ] In a real browser with the real pipeline, a command is dragged onto the next slice. The panel
+- [x] In a real browser with the real pipeline, a command is dragged onto the next slice. The panel
   then declares it in that slice and the block is drawn inside that slice.
-- [ ] The README's source-panel paragraph says that dragging a block onto another slice moves it
+- [x] The README's source-panel paragraph says that dragging a block onto another slice moves it
   there, in the diagram and in the source. The `viewer.test.js:3574-3610` pattern pins this.
-- [ ] `task test:viewer` and `task test:e2e:viewer` pass.
+- [x] `task test:viewer` and `task test:e2e:viewer` pass.
 
 **Affected Files/Modules:**
 - `internal/frontend/static/interaction.js` — which slice a release lands over, the hold inside the
