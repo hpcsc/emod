@@ -75,6 +75,12 @@ bus.on('diagnostics:changed', function({ store: s, diagnostics, revalidation }) 
   SourcePanel.showGutter(s, diagnostics);
 });
 
+bus.on('diagnostic:clicked', function({ store: s, diagnostic }) {
+  if (!diagnostic.line) return;
+  s.dom.panel.classList.remove("collapsed");
+  SourcePanel.moveCaretTo(s, diagnostic);
+});
+
 bus.on('node:delete', function({ store: s, nodeId }) {
   for (let i = 0; i < s.nodes.length; i++) {
     if (s.nodes[i].id === nodeId) {

@@ -39,6 +39,72 @@ function buildGutterEntry(line, diagnostics) {
   return entry;
 }
 
+function offsetOf(text, location) {
+  let lineStart = 0;
+  for (let line = 1; line < location.line; line++) {
+    const lineEnd = text.indexOf("\n", lineStart);
+    if (lineEnd === -1) return text.length;
+    lineStart = lineEnd + 1;
+  }
+  const lineEnd = text.indexOf("\n", lineStart);
+  const lineText = text.slice(lineStart, lineEnd === -1 ? text.length : lineEnd);
+
+  // HCL counts a column in grapheme clusters, not in code units.
+  const graphemes = new Intl.Segmenter(undefined, { granularity: "grapheme" });
+  let offset = lineStart;
+  let column = 1;
+  for (const { segment } of graphemes.segment(lineText)) {
+    if (column >= (location.column || 1)) break;
+    offset += segment.length;
+    column++;
+  }
+  return offset;
+}
+
+function scrollToCaret(sourceInput, offset) {
+  const style = getComputedStyle(sourceInput);
+  const lineHeight = parseFloat(style.lineHeight);
+  // jsdom lays nothing out, so it reports no row height.
+  if (!lineHeight) return;
+
+  const before = sourceInput.value.slice(0, offset);
+  const lineIndex = before.split("\n").length - 1;
+  const top = parseFloat(style.paddingTop) + lineIndex * lineHeight;
+  if (top < sourceInput.scrollTop || top + lineHeight > sourceInput.scrollTop + sourceInput.clientHeight) {
+    sourceInput.scrollTop = top + lineHeight / 2 - sourceInput.clientHeight / 2;
+  }
+
+  const lineBefore = expandTabs(before.slice(before.lastIndexOf("\n") + 1), parseInt(style.tabSize, 10));
+  const left = parseFloat(style.paddingLeft) + measureTextWidth(lineBefore, style);
+  if (left < sourceInput.scrollLeft || left > sourceInput.scrollLeft + sourceInput.clientWidth) {
+    sourceInput.scrollLeft = left - sourceInput.clientWidth / 2;
+  }
+}
+
+// A canvas draws a tab as one space, where the textarea draws it to the next
+// tab stop.
+function expandTabs(text, tabSize) {
+  let expanded = "";
+  for (const char of text) {
+    expanded += char === "\t" ? " ".repeat(tabSize - (expanded.length % tabSize)) : char;
+  }
+  return expanded;
+}
+
+function measureTextWidth(text, style) {
+  const context = document.createElement("canvas").getContext("2d");
+  context.font = style.fontStyle + " " + style.fontWeight + " " + style.fontSize + " " + style.fontFamily;
+  return context.measureText(text).width;
+}
+
+function moveCaretTo(store, location) {
+  const sourceInput = store.dom.sourceInput;
+  const offset = offsetOf(sourceInput.value, location);
+  sourceInput.focus();
+  sourceInput.setSelectionRange(offset, offset);
+  scrollToCaret(sourceInput, offset);
+}
+
 function showGutter(store, diagnostics) {
   const gutterEl = store.dom.sourceGutter;
   if (!gutterEl) return;
@@ -53,5 +119,6 @@ function showGutter(store, diagnostics) {
 
 export const SourcePanel = {
   initSourcePanel,
+  moveCaretTo,
   showGutter,
 };

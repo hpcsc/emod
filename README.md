@@ -409,10 +409,14 @@ date, until it parses again. A gutter beside the text marks each line that
 carries a diagnostic, coloured for the most severe one there: red for an error,
 dark yellow for a warning, blue for info. The panel scrolls a long line sideways
 rather than wrapping it, so each gutter entry stays level with its line.
-**Render** stays below the panel and redraws at once. Because the diagram is
-redrawn from the panel, typing replaces any change made on the diagram itself
-since it was last drawn. The browser viewer and `emod diagram --serve` share
-the frontend and behave the same way.
+Clicking a diagnostic opens the data panel if it is collapsed and puts the
+source panel's caret at the line and column the diagnostic names, scrolled into
+view; a diagnostic that applies to the whole file says so in the list and
+leaves the caret where it is. **Render** stays
+below the panel and redraws at once. Because the diagram is redrawn from the
+panel, typing replaces any change made on the diagram itself since it was last
+drawn. The browser viewer and `emod diagram --serve` share the frontend and
+behave the same way.
 
 **File ▸ Open** (⌘O on macOS, Ctrl+O on Linux and Windows) opens a model through the
 operating system's own file picker, filtered to `.emod` and `.json`. The chosen

@@ -68,7 +68,7 @@
     },
     {
       "n": 3,
-      "done": false,
+      "done": true,
       "title": "Move the source panel's caret to a diagnostic when it is clicked",
       "language": "JavaScript",
       "testable": true,

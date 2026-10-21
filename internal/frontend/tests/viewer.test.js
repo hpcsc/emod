@@ -2508,6 +2508,129 @@ describe('what the diagnostics panel reports', () => {
   });
 });
 
+describe('clicking a diagnostic', () => {
+  const atModel = { file: 'billing.emod', line: 3, column: 7, message: 'model "Billing" declares no context', severity: 'warning' };
+  const wholeFile = { file: 'billing.emod', line: 0, column: 0, message: 'the file declares no version', severity: 'error' };
+
+  async function openBillingReporting(diagnostics, diagram) {
+    globalThis.INITIAL_DATA = null;
+    parseResult = { parsed: true, diagnostics, diagram: diagram || billingDiagram() };
+    await startViewer();
+    deliverFile({ name: 'billing.emod', path: '/models/billing.emod', content: billingSource });
+    await flush();
+  }
+
+  const itemFor = (diagnostic) => Array.from(document.querySelectorAll('#diagnostics-list .diag-item'))
+    .find((item) => item.textContent.includes(diagnostic.message));
+
+  function caret() {
+    const panel = document.getElementById('source-input');
+    return { start: panel.selectionStart, end: panel.selectionEnd, focused: document.activeElement === panel };
+  }
+
+  const dataPanelOpen = () => !document.getElementById('data-panel').classList.contains('collapsed');
+
+  it("opens the collapsed data panel and puts the source panel's caret at the diagnostic, with focus", async () => {
+    await openBillingReporting([atModel]);
+    expect(dataPanelOpen()).toBe(false);
+
+    itemFor(atModel).click();
+
+    const quoted = billingSource.indexOf('"Billing"');
+    expect(dataPanelOpen()).toBe(true);
+    expect(caret()).toEqual({ start: quoted, end: quoted, focused: true });
+  });
+
+  it('still highlights the diagram element declared at that line', async () => {
+    const positioned = billingDiagram();
+    positioned.nodes[2].position = { filename: 'billing.emod', line: 3, column: 7 };
+    await openBillingReporting([atModel], positioned);
+
+    itemFor(atModel).click();
+
+    expect(blockFor('command-1').classList.contains('hl')).toBe(true);
+    expect(caret().start).toBe(billingSource.indexOf('"Billing"'));
+  });
+
+  it('moves the caret while the diagram is out of date, though it highlights nothing', async () => {
+    const brokenSource = billingSource + 'context "Refunds" {\n';
+    const syntaxError = { file: 'billing.emod', line: 5, column: 19, message: 'expected "}" to close context', severity: 'error' };
+    const positioned = billingDiagram();
+    positioned.nodes[2].position = { filename: 'billing.emod', line: 5, column: 1 };
+    await openBillingReporting([], positioned);
+    parseQueue = [Promise.resolve({ parsed: false, diagnostics: [syntaxError], diagram: { model_name: 'Billing', nodes: [], edges: [] } })];
+    typeIntoPanel(brokenSource);
+    document.getElementById('render-btn').click();
+    await flush();
+
+    itemFor(syntaxError).click();
+
+    expect(caret().start).toBe(brokenSource.indexOf('{\n', brokenSource.indexOf('Refunds')));
+    expect(document.querySelectorAll('#diagram-canvas .hl')).toHaveLength(0);
+  });
+
+  it('leaves the caret and the data panel as they were for a diagnostic that applies to the whole file', async () => {
+    await openBillingReporting([wholeFile, atModel]);
+    const panel = document.getElementById('source-input');
+    panel.setSelectionRange(4, 4);
+
+    itemFor(wholeFile).click();
+
+    expect(dataPanelOpen()).toBe(false);
+    expect({ start: panel.selectionStart, end: panel.selectionEnd }).toEqual({ start: 4, end: 4 });
+  });
+});
+
+describe('Delete and Backspace with a diagram element selected', () => {
+  async function openBillingWithCommandSelected() {
+    const withField = billingDiagram();
+    withField.nodes[2].fields = [{ name: 'amount', type: 'int', modifier: 'required' }];
+    globalThis.INITIAL_DATA = null;
+    parseResult = { diagnostics: [], diagram: withField };
+    await startViewer();
+    deliverFile({ name: 'billing.emod', path: '/models/billing.emod', content: billingSource });
+    await flush();
+    fireMouse(blockFor('command-1'), 'contextmenu');
+    menuItemFor('open-field-editor').click();
+  }
+
+  function press(target, key) {
+    const evt = new KeyboardEvent('keydown', { key, bubbles: true, cancelable: true });
+    target.dispatchEvent(evt);
+    return evt;
+  }
+
+  it.each(['Backspace', 'Delete'])('edit the source panel rather than delete the element when %s is typed into it', async (key) => {
+    await openBillingWithCommandSelected();
+    const panel = document.getElementById('source-input');
+    panel.focus();
+
+    const evt = press(panel, key);
+
+    expect(evt.defaultPrevented).toBe(false);
+    expect(blockFor('command-1')).not.toBeNull();
+  });
+
+  it('edit a field of the element in the field editor rather than delete the element', async () => {
+    await openBillingWithCommandSelected();
+    const field = document.querySelector('#dp-content input');
+    field.focus();
+
+    const evt = press(field, 'Backspace');
+
+    expect(evt.defaultPrevented).toBe(false);
+    expect(blockFor('command-1')).not.toBeNull();
+  });
+
+  it.each(['Backspace', 'Delete'])('delete the element when %s is pressed with focus outside any text field', async (key) => {
+    await openBillingWithCommandSelected();
+
+    press(document.body, key);
+
+    expect(blockFor('command-1')).toBeNull();
+  });
+});
+
 describe('rendering the panel again when its source does not parse', () => {
   const brokenSource = billingSource + 'context "Refunds" {\n';
   const syntaxError = { file: 'billing.emod', line: 3, message: 'expected "}" to close context', severity: 'error' };
@@ -3401,6 +3524,13 @@ describe('the documentation of the source panel', () => {
     const paragraph = read('README.md').split('**The source panel**')[1].split('**')[0];
 
     expect(paragraph).toContain('marks each line that carries a diagnostic, coloured for the most severe one there');
+  });
+
+  it('says in the README that clicking a diagnostic puts the caret at its line and column', () => {
+    const paragraph = read('README.md').split('**The source panel**')[1].split('**')[0];
+
+    expect(paragraph).toContain("puts the source panel's caret at the line and column the diagnostic names");
+    expect(paragraph).toContain('applies to the whole file');
   });
 
   it('says in the flow summary that a pause in typing, not a Render click alone, reaches the pipeline', () => {

@@ -277,3 +277,134 @@ test.describe('the gutter beside the source panel', () => {
     expect(overflowsSideways).toBe(true);
   });
 });
+
+// Where the source panel's caret is, and whether the browser shows it: its line
+// and column are counted from the text, and its place on screen from the
+// panel's own computed style and a run of characters drawn in the panel's font.
+async function caretInView(page) {
+  return page.evaluate(() => {
+    const panel = document.getElementById('source-input');
+    const style = getComputedStyle(panel);
+    const before = panel.value.slice(0, panel.selectionStart);
+    const line = before.split('\n').length;
+    const column = before.length - before.lastIndexOf('\n');
+
+    const probe = document.createElement('span');
+    probe.style.fontFamily = style.fontFamily;
+    probe.style.fontSize = style.fontSize;
+    probe.style.whiteSpace = 'pre';
+    probe.style.position = 'absolute';
+    probe.textContent = 'x'.repeat(100);
+    document.body.appendChild(probe);
+    const charWidth = probe.getBoundingClientRect().width / 100;
+    probe.remove();
+
+    const tabSize = Number(style.tabSize);
+    let drawnColumns = 0;
+    for (const char of before.slice(before.lastIndexOf('\n') + 1)) {
+      drawnColumns = char === '\t' ? (Math.floor(drawnColumns / tabSize) + 1) * tabSize : drawnColumns + 1;
+    }
+
+    const lineHeight = parseFloat(style.lineHeight);
+    const top = parseFloat(style.paddingTop) + (line - 1) * lineHeight - panel.scrollTop;
+    const left = parseFloat(style.paddingLeft) + drawnColumns * charWidth - panel.scrollLeft;
+    return {
+      line,
+      column,
+      shown: top >= 0 && top + lineHeight <= panel.clientHeight && left >= 0 && left <= panel.clientWidth,
+    };
+  });
+}
+
+async function locationOf(item) {
+  const [, line, column] = /:(\d+):(\d+)/.exec(await item.locator('.diag-location').textContent());
+  return { line: Number(line), column: Number(column) };
+}
+
+test.describe('clicking a diagnostic', () => {
+  test('opens the source panel with the caret at the location the real pipeline reports, scrolled into view', async ({ page }) => {
+    const source = LARGEST_WITH_FINDINGS_NEAR_ITS_END;
+    await open(page);
+    await page.locator('#source-input').fill(source);
+    await page.locator('#render-btn').click();
+    const item = page.locator('#diagnostics-list .diag-item', { hasText: 'NoSuchRule' });
+    const reported = await locationOf(item);
+    expect(reported.line).toBe(lineOf(source, 'rejected(NoSuchRule)'));
+    await page.locator('#data-panel-header').click();
+    await page.locator('#source-input').evaluate((panel) => {
+      panel.setSelectionRange(0, 0);
+      panel.scrollTop = 0;
+    });
+    expect(await caretInView(page)).toEqual({ line: 1, column: 1, shown: true });
+    await page.locator('#data-panel-header').click();
+    await expect(page.locator('#data-panel')).toHaveClass(/collapsed/);
+
+    await item.click();
+
+    await expect(page.locator('#source-input')).toBeFocused();
+    expect(await caretInView(page)).toEqual({ ...reported, shown: true });
+  });
+
+  test('scrolls the source panel back up to a location above the rows it shows', async ({ page }) => {
+    const source = largestExample().replace('emod = 1\n', 'emod = 1\noops = 1\n');
+    expect(source).not.toBe(largestExample());
+    await open(page);
+    await page.locator('#source-input').fill(source);
+    await page.locator('#render-btn').click();
+    const item = page.locator('#diagnostics-list .diag-item', { hasText: 'oops' });
+    const reported = await locationOf(item);
+    expect(reported.line).toBe(2);
+    await page.locator('#data-panel-header').click();
+    await page.locator('#source-input').evaluate((panel) => {
+      panel.setSelectionRange(panel.value.length, panel.value.length);
+      panel.scrollTop = panel.scrollHeight;
+    });
+    expect((await caretInView(page)).shown).toBe(true);
+
+    await item.click();
+
+    expect(await caretInView(page)).toEqual({ ...reported, shown: true });
+  });
+
+  test('scrolls the source panel sideways to a location past its width', async ({ page }) => {
+    await page.setViewportSize({ width: 900, height: 800 });
+    const source = SAMPLE.replace(
+      'command -> event:    TakePayment -> PaymentTaken',
+      'command -> event:' + ' '.repeat(140) + 'TakePayment -> PaymentRefunded');
+    expect(source).not.toBe(SAMPLE);
+    await open(page);
+    await page.locator('#source-input').fill(source);
+    await page.locator('#render-btn').click();
+    const item = page.locator('#diagnostics-list .diag-item', { hasText: 'PaymentRefunded' });
+    const reported = await locationOf(item);
+    expect(reported.column).toBeGreaterThan(150);
+
+    await item.click();
+
+    expect(await caretInView(page)).toEqual({ ...reported, shown: true });
+    expect(await page.locator('#source-input').evaluate((panel) => panel.scrollLeft)).toBeGreaterThan(0);
+
+    const nearTheLeft = page.locator('#diagnostics-list .diag-item', { hasText: 'PaymentTaken' });
+    const nearTheLeftReported = await locationOf(nearTheLeft);
+    await nearTheLeft.click();
+
+    expect(await caretInView(page)).toEqual({ ...nearTheLeftReported, shown: true });
+  });
+
+  test('scrolls the source panel sideways to a location that tabs push past its width', async ({ page }) => {
+    await page.setViewportSize({ width: 900, height: 800 });
+    const source = SAMPLE.replace(
+      'command -> event:    TakePayment -> PaymentTaken',
+      'command -> event:' + '\t'.repeat(20) + 'TakePayment -> PaymentRefunded');
+    expect(source).not.toBe(SAMPLE);
+    await open(page);
+    await page.locator('#source-input').fill(source);
+    await page.locator('#render-btn').click();
+    const item = page.locator('#diagnostics-list .diag-item', { hasText: 'PaymentRefunded' });
+    const reported = await locationOf(item);
+
+    await item.click();
+
+    expect(await caretInView(page)).toEqual({ ...reported, shown: true });
+  });
+});

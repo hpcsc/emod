@@ -301,6 +301,7 @@ function handleDiagnosticClick(store, evt) {
   if (!diagnostics || idx >= diagnostics.length) return;
 
   const d = diagnostics[idx];
+  bus.emit('diagnostic:clicked', { store, diagnostic: d });
   const file = d.file;
   const line = d.line;
 
@@ -1019,6 +1020,12 @@ function initDelegation(store) {
 }
 
 // ─── Keyboard handler ──────────────────────────────────────────
+const TEXT_INPUT_TYPES = ["text", "search", "url", "email", "password", "tel", "number"];
+
+function isTextField(el) {
+  return el.tagName === "TEXTAREA" || (el.tagName === "INPUT" && TEXT_INPUT_TYPES.indexOf(el.type) !== -1);
+}
+
 function initKeyboard(store) {
   document.addEventListener("keydown", function(evt) {
     if (evt.key === "Escape") {
@@ -1037,7 +1044,7 @@ function initKeyboard(store) {
         hideDetailPanel(store);
         clearHighlights(store);
       }
-    } else if (evt.key === "Delete" || evt.key === "Backspace") {
+    } else if ((evt.key === "Delete" || evt.key === "Backspace") && !isTextField(evt.target)) {
       if (store.interaction.selectedEdge) {
         evt.preventDefault();
         var edge = store.interaction.selectedEdge;

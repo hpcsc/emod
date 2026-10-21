@@ -80,4 +80,55 @@ describe('SourcePanel', () => {
       expect(gutterEntries()).toEqual([]);
     });
   });
+
+  describe('caret', () => {
+    const ordersSource = 'emod = 1\n\nmodel "Orders" {\n  oops\n}\n';
+
+    function caretIn(store) {
+      const panel = store.dom.sourceInput;
+      return { start: panel.selectionStart, end: panel.selectionEnd, focused: document.activeElement === panel };
+    }
+
+    it('puts the caret before the character a location names, with nothing selected, and gives the source panel focus', () => {
+      const store = setupSourcePanel(ordersSource);
+
+      SourcePanel.moveCaretTo(store, { line: 4, column: 3 });
+
+      const oops = ordersSource.indexOf('oops');
+      expect(caretIn(store)).toEqual({ start: oops, end: oops, focused: true });
+    });
+
+    it.each([0, undefined])('puts the caret at the start of the line when the column is %s, which is not known', (column) => {
+      const store = setupSourcePanel(ordersSource);
+
+      SourcePanel.moveCaretTo(store, { line: 4, column });
+
+      expect(caretIn(store).start).toBe(ordersSource.indexOf('  oops'));
+    });
+
+    it('counts a column in the characters a reader sees, as HCL does, not in code units', () => {
+      const source = 'emod = 1\nactor "Cáfe\u{1F469}‍\u{1F4BB}" { 7 }\n';
+      const store = setupSourcePanel(source);
+
+      SourcePanel.moveCaretTo(store, { line: 2, column: 17 });
+
+      expect(caretIn(store).start).toBe(source.indexOf('7'));
+    });
+
+    it('stops at the end of the line when the column is past it', () => {
+      const store = setupSourcePanel(ordersSource);
+
+      SourcePanel.moveCaretTo(store, { line: 4, column: 40 });
+
+      expect(caretIn(store).start).toBe(ordersSource.indexOf('oops') + 'oops'.length);
+    });
+
+    it('puts the caret at the end of the text when the line is past its end', () => {
+      const store = setupSourcePanel(ordersSource);
+
+      SourcePanel.moveCaretTo(store, { line: 40, column: 2 });
+
+      expect(caretIn(store).start).toBe(ordersSource.length);
+    });
+  });
 });

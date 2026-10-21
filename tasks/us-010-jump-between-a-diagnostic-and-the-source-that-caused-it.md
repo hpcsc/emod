@@ -408,31 +408,31 @@ panel then edit the text. They do not delete a diagram element that happens to b
 (Decision 6).
 
 **Acceptance Criteria:**
-- [ ] Clicking a diagnostic at line L, column C places the caret, with nothing selected, before the
+- [x] Clicking a diagnostic at line L, column C places the caret, with nothing selected, before the
   C-th character of line L of the panel's text. A column of 0, or no column, places it at the start of
   line L
-- [ ] A column counts user-perceived characters, as HCL's columns do (Decision 5). On the line
+- [x] A column counts user-perceived characters, as HCL's columns do (Decision 5). On the line
   `actor "Cáfe👩‍💻" { 7 }`, a diagnostic at column 17 places the caret immediately before the `7`
-- [ ] The click opens a collapsed data panel and gives the source panel focus, so the caret can be
+- [x] The click opens a collapsed data panel and gives the source panel focus, so the caret can be
   seen
-- [ ] In a real browser with the real pipeline, the largest bundled example has a diagnostic near
+- [x] In a real browser with the real pipeline, the largest bundled example has a diagnostic near
   its end. Clicking that diagnostic scrolls the source panel so the caret's line is visible. Clicking
   a diagnostic whose column is past the panel's width scrolls the panel horizontally to it
-- [ ] Clicking a diagnostic still highlights the diagram element declared at its line, and still
+- [x] Clicking a diagnostic still highlights the diagram element declared at its line, and still
   marks it not-rendered when no element matches. The existing tests in
   `diagnostics-highlight.test.js` pass
-- [ ] While the diagram is out of date, a click still moves the caret to the diagnostic. It
+- [x] While the diagram is out of date, a click still moves the caret to the diagnostic. It
   highlights nothing, as today
-- [ ] Clicking a diagnostic that applies to the whole file leaves the caret position and the source
+- [x] Clicking a diagnostic that applies to the whole file leaves the caret position and the source
   panel's scroll unchanged. It does not move to line 1
-- [ ] A diagnostic whose line is past the end of the panel's current text places the caret at the end
+- [x] A diagnostic whose line is past the end of the panel's current text places the caret at the end
   of the text (Decision 4)
-- [ ] With a diagram element or connection selected, Delete and Backspace typed in the source panel
+- [x] With a diagram element or connection selected, Delete and Backspace typed in the source panel
   edit its text, and the selection stays on the diagram. With focus outside any text field, the two
   keys still delete the selected element or connection, as before
-- [ ] The README's source-panel paragraph says that clicking a diagnostic moves the caret to the
+- [x] The README's source-panel paragraph says that clicking a diagnostic moves the caret to the
   source that caused it
-- [ ] `task test:viewer` and `task test:e2e:viewer` pass
+- [x] `task test:viewer` and `task test:e2e:viewer` pass
 
 **Affected Files/Modules:**
 - `internal/frontend/static/source-panel.js` — moving the caret to a location
