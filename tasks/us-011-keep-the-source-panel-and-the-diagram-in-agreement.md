@@ -765,43 +765,43 @@ is chosen, nothing redraws the diagram from the panel, and the window counts the
 unsaved.
 
 **Acceptance Criteria:**
-- [ ] A diagram edit made while the panel has an unapplied edit puts the window in conflict. This
+- [x] A diagram edit made while the panel has an unapplied edit puts the window in conflict. This
   holds whatever the unapplied edit is: typing in the pause, a parse in flight, text that does not
   parse, or an empty panel. Neither the panel's text nor the diagram changes. This replaces Task 3's
   interim behaviour.
-- [ ] Typing while a diagram edit is being applied puts the window in conflict. The apply's answer is
+- [x] Typing while a diagram edit is being applied puts the window in conflict. The apply's answer is
   not written into the panel.
-- [ ] The notice says that the diagram and the source panel disagree, and offers the two choices. In
+- [x] The notice says that the diagram and the source panel disagree, and offers the two choices. In
   a real browser, both the notice and its buttons can be reached with the data panel collapsed
   and with it open. This is checked with `elementFromPoint`. While the notice is shown, it takes the
   place of the out-of-date notice.
-- [ ] While the conflict stands:
+- [x] While the conflict stands:
   - A pause in typing lists the panel's diagnostics and updates the gutter, but leaves the diagram
     as edited.
   - Further diagram edits are kept, and do not change the panel.
   - The window is marked modified, even when the panel's text matches the file.
-- [ ] **Keep diagram edits** applies every diagram edit made since the drawing onto the drawn source.
+- [x] **Keep diagram edits** applies every diagram edit made since the drawing onto the drawn source.
   The result replaces the panel's text, and the diagram is redrawn from it in place. The notice
   closes, and the bar notice from Task 3 appears when the apply answers `reformatted`. When the apply
   fails, the reason is shown and the conflict stays.
-- [ ] **Keep source edits** redraws the diagram in place from the panel's text, and does not touch
+- [x] **Keep source edits** redraws the diagram in place from the panel's text, and does not touch
   that text. When the text does not parse, or the panel is empty, the diagram is redrawn from the
   drawn source and keeps the out-of-date mark. The notice closes.
-- [ ] A Render click during a conflict resolves it as **Keep source edits** does.
-- [ ] Save during a conflict writes exactly the panel's text, and leaves the window marked modified
+- [x] A Render click during a conflict resolves it as **Keep source edits** does.
+- [x] Save during a conflict writes exactly the panel's text, and leaves the window marked modified
   with the notice still shown.
-- [ ] Closing, quitting or opening another model during a conflict asks Save, Discard or Cancel:
+- [x] Closing, quitting or opening another model during a conflict asks Save, Discard or Cancel:
   - **Save** writes the panel and leaves the window open, with the conflict still standing.
   - **Discard** goes ahead.
   - **Cancel** does nothing.
 
   Once another model is open, it has no conflict.
-- [ ] A resolution chosen while something else is in flight keeps to the ordering rules of Task 3:
+- [x] A resolution chosen while something else is in flight keeps to the ordering rules of Task 3:
   Save waits for it, and an open asks as if it had landed.
-- [ ] The README's source-panel paragraph describes the conflict and its two resolutions. It no
+- [x] The README's source-panel paragraph describes the conflict and its two resolutions. It no
   longer says that typing replaces changes made on the diagram (`README.md:418-419`). The
   `viewer.test.js:3574-3610` pattern pins this.
-- [ ] In a real browser with the real pipeline, typing into the panel and adding a command from the
+- [x] In a real browser with the real pipeline, typing into the panel and adding a command from the
   context menu before typing pauses shows the notice. **Keep diagram edits** then leaves the panel
   holding the command and not the typed text. Doing the same and choosing **Keep source edits** leaves
   the panel holding the typed text and the diagram drawn from it.

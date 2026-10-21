@@ -156,7 +156,7 @@
     },
     {
       "n": 4,
-      "done": false,
+      "done": true,
       "title": "Say when the diagram and the source panel disagree, and let the user choose",
       "language": "JavaScript",
       "testable": true,

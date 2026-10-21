@@ -124,6 +124,11 @@ function createRequiredElements() {
     <div id="diagnostics-panel" class="hidden"></div>
     <button id="diagnostics-close"></button>
     <div id="diagnostics-list"></div>
+    <div id="conflict-notice" class="hidden">
+      <span id="conflict-message"></span>
+      <button id="keep-diagram-edits"></button>
+      <button id="keep-source-edits"></button>
+    </div>
     <div id="stale-notice" class="hidden"></div>
   `;
   document.body.appendChild(container);
@@ -163,6 +168,7 @@ function typeIntoPanel(text) {
 }
 
 const marked = () => modifiedReports[modifiedReports.length - 1];
+const markedStale = () => !document.getElementById('stale-notice').classList.contains('hidden');
 
 function hideFromVisibilityTree(nodeId) {
   const box = document.querySelector(
@@ -1880,6 +1886,7 @@ describe('a diagram edit reaching the source panel', () => {
   const arrowHit = (source, target) => document.querySelector('.arrow-hit[data-source="' + source + '"][data-target="' + target + '"]');
   const arrowHandle = (edgeId, end) => document.querySelector('.arrow-handle[data-edge-id="' + edgeId + '"][data-arrow-handle="' + end + '"]');
   const portOf = (nodeId) => blockFor(nodeId).querySelector('[data-port]');
+  const conflictShown = () => !document.getElementById('conflict-notice').classList.contains('hidden');
 
   function fromMenu(target, action) {
     fireMouse(target, 'contextmenu');
@@ -2146,7 +2153,7 @@ describe('a diagram edit reaching the source panel', () => {
 
       expect(panelText()).toBe(broken);
       expect(document.getElementById('diagnostics-list').textContent).toContain('expected "}" to close context');
-      expect(document.getElementById('stale-notice').classList.contains('hidden')).toBe(false);
+      expect(markedStale()).toBe(true);
       expect(canvasMarkup()).toContain('new-command-2');
     });
 
@@ -2160,20 +2167,68 @@ describe('a diagram edit reaching the source panel', () => {
       await settle();
 
       expect(panelText()).toBe(billingSource);
-      expect(document.getElementById('stale-notice').classList.contains('hidden')).toBe(false);
+      expect(markedStale()).toBe(true);
       expect(document.getElementById('stale-notice').textContent).toContain('the diagram edit cannot be applied: billing.emod does not parse');
       expect(canvasMarkup()).toContain('new-command-2');
     });
 
-    it('redraws from the panel as typing pauses once the edit has reached it', async () => {
+    it('redraws from the panel as typing pauses once the edit has reached it, with no conflict', async () => {
       await openEditable();
       fromMenu(sliceHeader('slice-1'), 'add-command');
       await settle();
+      const typedDiagram = editableDiagram();
+      typedDiagram.nodes[3].label = 'ChargePayment';
+      parseQueue = [Promise.resolve({ parsed: true, diagnostics: [], diagram: typedDiagram })];
 
       typeIntoPanel(appliedSource + '# typed\n');
       await new Promise((resolve) => setTimeout(resolve, REVALIDATE_PAUSE_MS + 40));
 
       expect(lastParse()[0]).toBe(appliedSource + '# typed\n');
+      expect(conflictShown()).toBe(false);
+      expect(canvasMarkup()).toContain('ChargePayment');
+    });
+
+    it('leaves the window unmarked once a save writes an applied edit', async () => {
+      await openEditable();
+      saveAnswer = { name: 'billing.emod', path: '/models/billing.emod' };
+      fromMenu(sliceHeader('slice-1'), 'add-command');
+      await settle();
+      expect(marked()).toBe(true);
+
+      await save();
+
+      expect(marked()).toBe(false);
+    });
+
+    it('discards an edit that cannot be applied on a Render click, which leaves the window unmarked and the panel free to type into', async () => {
+      await openEditable();
+      applyQueue = [Promise.reject(new Error('the diagram edit cannot be applied: billing.emod does not parse'))];
+      fromMenu(sliceHeader('slice-1'), 'add-command');
+      await settle();
+      expect(marked()).toBe(true);
+      parseQueue = [Promise.resolve({ parsed: true, diagnostics: [], diagram: editableDiagram() })];
+
+      document.getElementById('render-btn').click();
+      await settle();
+      expect(marked()).toBe(false);
+      typeIntoPanel(billingSource + '# typed\n');
+
+      expect(canvasMarkup()).not.toContain('new-command-2');
+      expect(conflictShown()).toBe(false);
+    });
+
+    it('marks the window modified when the edit cannot be applied, because Save would not write it', async () => {
+      await openEditable();
+      modifiedReports.length = 0;
+      const held = heldApply();
+
+      fromMenu(sliceHeader('slice-1'), 'add-command');
+      await settle();
+      held.refuse(new Error('the diagram edit cannot be applied: billing.emod does not parse'));
+      await settle();
+
+      expect(panelText()).toBe(billingSource);
+      expect(marked()).toBe(true);
     });
   });
 
@@ -2226,12 +2281,16 @@ describe('a diagram edit reaching the source panel', () => {
       await startViewer();
       const before = applies();
 
+      modifiedReports.length = 0;
+
       fromMenu(sliceHeader('slice-1'), 'add-command');
       await settle();
 
       expect(canvasMarkup()).toContain('new-command-2');
       expect(applies()).toBe(before);
       expect(panelText()).toBe('');
+      expect(conflictShown()).toBe(false);
+      expect(modifiedReports).toEqual([]);
     });
 
     it('takes edits on a diagram drawn from diagram JSON in the panel without writing the panel', async () => {
@@ -2241,6 +2300,7 @@ describe('a diagram edit reaching the source panel', () => {
       document.getElementById('render-btn').click();
       await settle();
       const before = applies();
+      modifiedReports.length = 0;
 
       fromMenu(sliceHeader('slice-1'), 'add-command');
       await settle();
@@ -2248,6 +2308,12 @@ describe('a diagram edit reaching the source panel', () => {
       expect(canvasMarkup()).toContain('new-command-2');
       expect(applies()).toBe(before);
       expect(panelText()).toBe(pasted);
+      expect(conflictShown()).toBe(false);
+      expect(modifiedReports).toEqual([]);
+
+      document.getElementById('render-btn').click();
+      await settle();
+      expect(canvasMarkup()).not.toContain('new-command-2');
     });
   });
 
@@ -2269,15 +2335,17 @@ describe('a diagram edit reaching the source panel', () => {
         await flush();
       }],
       ['when it is empty', async () => typeIntoPanel('')],
-    ])('keeps its text and calls no applyDiagram %s', async (_, unappliedEdit) => {
+    ])('puts the window in conflict, keeping its text and the edited diagram and asking the pipeline nothing, %s', async (_, unappliedEdit) => {
       await openEditable();
       await unappliedEdit();
       const holding = panelText();
       const before = applies();
+      expect(conflictShown()).toBe(false);
 
       fromMenu(sliceHeader('slice-1'), 'add-command');
       await settle();
 
+      expect(conflictShown()).toBe(true);
       expect(canvasMarkup()).toContain('new-command-2');
       expect(applies()).toBe(before);
       expect(panelText()).toBe(holding);
@@ -2285,7 +2353,7 @@ describe('a diagram edit reaching the source panel', () => {
   });
 
   describe('an edit being applied when something else happens', () => {
-    it('never writes its answer over text typed while it was applied, and the typed text revalidates', async () => {
+    it('puts the window in conflict when the panel is typed into while an edit is applied, and never writes its answer over the typing', async () => {
       await openEditable();
       const held = heldApply();
       const typed = billingSource + '# typed\n';
@@ -2293,12 +2361,13 @@ describe('a diagram edit reaching the source panel', () => {
       fromMenu(sliceHeader('slice-1'), 'add-command');
       await settle();
       typeIntoPanel(typed);
+      expect(conflictShown()).toBe(true);
       held.answer(appliedAnswer(editableDiagram()));
       await settle();
-      expect(panelText()).toBe(typed);
 
-      await new Promise((resolve) => setTimeout(resolve, REVALIDATE_PAUSE_MS + 40));
-      expect(lastParse()[0]).toBe(typed);
+      expect(panelText()).toBe(typed);
+      expect(conflictShown()).toBe(true);
+      expect(canvasMarkup()).toContain('new-command-2');
     });
 
     it('applies the diagram holding both edits when a second is made, and never writes the older answer', async () => {
@@ -2322,40 +2391,109 @@ describe('a diagram edit reaching the source panel', () => {
       expect(panelText()).toBe(appliedSource);
     });
 
-    it('keeps the edit through a Render click', async () => {
+    it('waits for the edit before a Render click draws the panel, which then holds the edit', async () => {
       await openEditable();
       const held = heldApply();
 
       fromMenu(sliceHeader('slice-1'), 'add-command');
       await settle();
       const sent = JSON.parse(JSON.stringify(lastApply()[2]));
+      const before = parses();
       document.getElementById('render-btn').click();
       await settle();
+
+      expect(parses()).toBe(before);
+      expect(canvasMarkup()).toContain('new-command-2');
+
+      parseQueue = [Promise.resolve({ parsed: true, diagnostics: [], diagram: sent })];
       held.answer(appliedAnswer(sent));
       await settle();
 
+      expect(lastParse()[0]).toBe(appliedSource);
       expect(panelText()).toBe(appliedSource);
       expect(canvasMarkup()).toContain('new-command-2');
     });
 
-    it('keeps the edit through a Render whose parse lands after the edit does', async () => {
+    it('applies both edits when a second is made while a Render click waits for the first', async () => {
       await openEditable();
       const held = heldApply();
-      let releaseRender;
-      parseQueue = [new Promise((resolve) => { releaseRender = () => resolve({ diagnostics: [], diagram: editableDiagram() }); })];
 
       fromMenu(sliceHeader('slice-1'), 'add-command');
       await settle();
-      const sent = JSON.parse(JSON.stringify(lastApply()[2]));
+      parseQueue = [Promise.resolve({ parsed: true, diagnostics: [], diagram: editableDiagram() })];
       document.getElementById('render-btn').click();
       await settle();
-      held.answer(appliedAnswer(sent));
+      fromMenu(sliceHeader('slice-1'), 'add-event');
       await settle();
-      releaseRender();
+      held.answer(appliedAnswer(editableDiagram(), { emod: 'emod = 1\n\nmodel "Older" {\n}\n' }));
       await settle();
 
+      expect(labelsUnder('slice-1', 'command')).toEqual(['TakePayment', 'new-command-2']);
+      expect(labelsUnder('slice-1', 'event')).toEqual(['PaymentTaken', 'new-event-2']);
       expect(panelText()).toBe(appliedSource);
+    });
+
+    it('keeps an edit made while the parse of a Render click is in flight, and applies it with the next edit', async () => {
+      await openEditable();
+      let answerParse;
+      parseQueue = [new Promise((resolve) => { answerParse = resolve; })];
+      document.getElementById('render-btn').click();
+      await settle();
+      const held = heldApply();
+
+      fromMenu(sliceHeader('slice-1'), 'add-command');
+      await settle();
+      answerParse({ parsed: true, diagnostics: [], diagram: editableDiagram() });
+      await settle();
+
       expect(canvasMarkup()).toContain('new-command-2');
+
+      fromMenu(sliceHeader('slice-1'), 'add-event');
+      await settle();
+      held.answer(appliedAnswer(editableDiagram(), { emod: 'emod = 1\n\nmodel "Older" {\n}\n' }));
+      await settle();
+
+      expect(labelsUnder('slice-1', 'command')).toEqual(['TakePayment', 'new-command-2']);
+      expect(labelsUnder('slice-1', 'event')).toEqual(['PaymentTaken', 'new-event-2']);
+      expect(panelText()).toBe(appliedSource);
+    });
+
+    it('leaves a conflict that typing raises while a Render click waits for the edit', async () => {
+      await openEditable();
+      const held = heldApply();
+      const typed = billingSource + '# typed\n';
+
+      fromMenu(sliceHeader('slice-1'), 'add-command');
+      await settle();
+      document.getElementById('render-btn').click();
+      await settle();
+      typeIntoPanel(typed);
+      held.answer(appliedAnswer(editableDiagram()));
+      await settle();
+
+      expect(conflictShown()).toBe(true);
+      expect(panelText()).toBe(typed);
+      expect(canvasMarkup()).toContain('new-command-2');
+    });
+
+    it.each([
+      ['is written', () => {}, '✓ Rendered'],
+      ['cannot be applied', () => { applyQueue = [Promise.reject(new Error('the diagram edit cannot be applied: billing.emod does not parse'))]; },
+        '✗ the diagram edit cannot be applied: billing.emod does not parse'],
+    ])('says in the status, and not that a parse runs, that an edit made during the parse of a Render click %s', async (_, answerEdit, status) => {
+      await openEditable();
+      let answerParse;
+      parseQueue = [new Promise((resolve) => { answerParse = resolve; })];
+      document.getElementById('render-btn').click();
+      await settle();
+      answerEdit();
+
+      fromMenu(sliceHeader('slice-1'), 'add-command');
+      await settle();
+      answerParse({ parsed: true, diagnostics: [], diagram: editableDiagram() });
+      await settle();
+
+      expect(document.getElementById('render-status').textContent).toBe(status);
     });
 
     it('keeps the edit through a host failure, and leaves the reason on screen', async () => {
@@ -2394,6 +2532,423 @@ describe('a diagram edit reaching the source panel', () => {
 
       expect(unsavedEditsAsked).toBe(1);
       expect(panelText()).toBe(appliedSource);
+    });
+  });
+
+  describe('a conflict between the diagram and the source panel', () => {
+    const typed = billingSource + '# typed\n';
+
+    async function openInConflict() {
+      await openEditable();
+      typeIntoPanel(typed);
+      fromMenu(sliceHeader('slice-1'), 'add-command');
+      await settle();
+      expect(conflictShown()).toBe(true);
+    }
+
+    const pause = () => new Promise((resolve) => setTimeout(resolve, REVALIDATE_PAUSE_MS + 40));
+
+    it('says the two disagree and offers to keep either side', async () => {
+      await openInConflict();
+
+      expect(document.getElementById('conflict-message').textContent)
+        .toBe('The diagram and the source panel disagree — each has edits the other does not show');
+      const page = new DOMParser().parseFromString(readFileSync(resolve(__dirname, '../static/viewer.html'), 'utf-8'), 'text/html');
+      expect(page.getElementById('keep-diagram-edits').textContent).toBe('Keep diagram edits');
+      expect(page.getElementById('keep-source-edits').textContent).toBe('Keep source edits');
+      expect(page.getElementById('conflict-notice').contains(page.getElementById('keep-source-edits'))).toBe(true);
+    });
+
+    it('lists the panel diagnostics and its gutter as typing pauses, and leaves the diagram as edited', async () => {
+      await openInConflict();
+      const warning = { file: 'billing.emod', line: 5, message: 'a warning about the typed text', severity: 'warning' };
+      parseQueue = [Promise.resolve({ parsed: true, diagnostics: [warning], diagram: editableDiagram() })];
+      typeIntoPanel(typed + '# more\n');
+
+      await pause();
+
+      expect(lastParse()[0]).toBe(typed + '# more\n');
+      expect(document.getElementById('diagnostics-list').textContent).toContain('a warning about the typed text');
+      expect(document.querySelectorAll('#source-gutter .gutter-entry')).toHaveLength(1);
+      expect(canvasMarkup()).toContain('new-command-2');
+      expect(conflictShown()).toBe(true);
+    });
+
+    it.each([
+      ['is emptied', () => typeIntoPanel(''), () => {}],
+      ['holds text the pipeline refuses to draw', () => typeIntoPanel(typed + '# more\n'), () => {
+        parseQueue = [{ then: (resolve, reject) => reject(new Error('pipeline panic')) }];
+      }],
+    ])('leaves the diagram as edited, and not marked out of date, when the panel %s', async (_, type, answer) => {
+      await openInConflict();
+      answer();
+      type();
+
+      await pause();
+
+      expect(canvasMarkup()).toContain('new-command-2');
+      expect(markedStale()).toBe(false);
+      expect(conflictShown()).toBe(true);
+    });
+
+    it.each([
+      ['a parse that a diagram edit overtook into the conflict', async () => {
+        typeIntoPanel(typed);
+        let answerParse;
+        parseQueue = [new Promise((resolve) => { answerParse = resolve; })];
+        document.getElementById('render-btn').click();
+        await settle();
+        fromMenu(sliceHeader('slice-1'), 'add-command');
+        await settle();
+        parseQueue = [Promise.resolve({ parsed: true, diagnostics: [], diagram: editableDiagram() })];
+        answerParse({ parsed: true, diagnostics: [], diagram: editableDiagram() });
+        await settle();
+      }],
+      ['text that did not parse, then typed into a fix', async () => {
+        typeIntoPanel(typed + 'context "Refunds" {\n');
+        parseQueue = [Promise.resolve({ parsed: false, diagnostics: [{ file: 'billing.emod', line: 7, message: 'unexpected', severity: 'error' }], diagram: { nodes: [], edges: [] } })];
+        document.getElementById('render-btn').click();
+        await settle();
+        fromMenu(sliceHeader('slice-1'), 'add-command');
+        await settle();
+        parseQueue = [Promise.resolve({ parsed: true, diagnostics: [], diagram: editableDiagram() })];
+        typeIntoPanel(typed);
+        await pause();
+        await settle();
+      }],
+    ])('says in the status that the diagram is not redrawn after %s', async (_, steps) => {
+      await openEditable();
+
+      await steps();
+
+      expect(conflictShown()).toBe(true);
+      expect(document.getElementById('render-status').textContent).toBe('✗ Not redrawn: the diagram and the panel disagree');
+    });
+
+    it('says in the status that the panel is empty, in place of a parse that an edit overtook, when the panel is emptied during a conflict', async () => {
+      await openEditable();
+      typeIntoPanel(typed);
+      let answerParse;
+      parseQueue = [new Promise((resolve) => { answerParse = resolve; })];
+      document.getElementById('render-btn').click();
+      await settle();
+      fromMenu(sliceHeader('slice-1'), 'add-command');
+      await settle();
+      expect(conflictShown()).toBe(true);
+
+      typeIntoPanel('');
+      answerParse({ parsed: true, diagnostics: [], diagram: editableDiagram() });
+      await pause();
+      await settle();
+
+      expect(document.getElementById('render-status').textContent).toBe('✗ The source panel is empty');
+    });
+
+    it('keeps further diagram edits without changing the panel', async () => {
+      await openInConflict();
+      const before = applies();
+
+      fromMenu(sliceHeader('slice-1'), 'add-event');
+      await settle();
+
+      expect(applies()).toBe(before);
+      expect(panelText()).toBe(typed);
+      expect(canvasMarkup()).toContain('new-command-2');
+      expect(canvasMarkup()).toContain('new-event-2');
+    });
+
+    it('marks the window modified even when the panel is typed back to what the file holds', async () => {
+      await openInConflict();
+
+      typeIntoPanel(billingSource);
+
+      expect(panelText()).toBe(billingSource);
+      expect(marked()).toBe(true);
+    });
+
+    describe('keeping the diagram edits', () => {
+      it('applies every edit since the drawing onto the drawn source and replaces the panel text with it', async () => {
+        await openInConflict();
+        fromMenu(sliceHeader('slice-1'), 'add-event');
+        await settle();
+        const before = applies();
+
+        document.getElementById('keep-diagram-edits').click();
+        await settle();
+
+        expect(applies()).toBe(before + 1);
+        expect(lastApply()[0]).toBe(billingSource);
+        expect(labelsUnder('slice-1', 'command')).toEqual(['TakePayment', 'new-command-2']);
+        expect(labelsUnder('slice-1', 'event')).toEqual(['PaymentTaken', 'new-event-2']);
+        expect(panelText()).toBe(appliedSource);
+        expect(conflictShown()).toBe(false);
+      });
+
+      it('keeps the applied diagram when the parse of a pause in typing that began before the click lands after the answer', async () => {
+        await openInConflict();
+        let answerParse;
+        parseQueue = [new Promise((resolve) => { answerParse = resolve; })];
+        typeIntoPanel(typed + '# more\n');
+        await pause();
+
+        document.getElementById('keep-diagram-edits').click();
+        await settle();
+        const typedDiagram = editableDiagram();
+        typedDiagram.nodes[3].label = 'ChargePayment';
+        answerParse({ parsed: true, diagnostics: [], diagram: typedDiagram });
+        await settle();
+
+        expect(panelText()).toBe(appliedSource);
+        expect(canvasMarkup()).toContain('new-command-2');
+        expect(canvasMarkup()).not.toContain('ChargePayment');
+      });
+
+      it('takes away the out-of-date notice that a Render of text that does not parse put up', async () => {
+        await openEditable();
+        typeIntoPanel(typed);
+        parseQueue = [Promise.resolve({ parsed: false, diagnostics: [{ file: 'billing.emod', line: 5, message: 'unexpected', severity: 'error' }], diagram: { nodes: [], edges: [] } })];
+        document.getElementById('render-btn').click();
+        await settle();
+        expect(markedStale()).toBe(true);
+        fromMenu(sliceHeader('slice-1'), 'add-command');
+        await settle();
+
+        document.getElementById('keep-diagram-edits').click();
+        await settle();
+
+        expect(panelText()).toBe(appliedSource);
+        expect(markedStale()).toBe(false);
+        expect(conflictShown()).toBe(false);
+      });
+
+      it('says in the bar when the kept edits reformatted the source', async () => {
+        await openInConflict();
+        applyQueue = [Promise.resolve(appliedAnswer(editableDiagram(), { reformatted: true, dropped_comments: 1 }))];
+
+        document.getElementById('keep-diagram-edits').click();
+        await settle();
+
+        expect(document.getElementById('save-status').textContent).toBe('Source rewritten in the emod fmt layout · 1 comment dropped');
+      });
+
+      it('leaves the conflict standing with the reason when the edits cannot be applied', async () => {
+        await openInConflict();
+        const held = heldApply();
+
+        document.getElementById('keep-diagram-edits').click();
+        await settle();
+        held.refuse(new Error('the diagram edit cannot be applied: billing.emod does not parse'));
+        await settle();
+
+        expect(conflictShown()).toBe(true);
+        expect(document.getElementById('conflict-message').textContent)
+          .toBe('The diagram edits could not be applied — the diagram edit cannot be applied: billing.emod does not parse');
+        expect(document.getElementById('conflict-message').title)
+          .toBe(document.getElementById('conflict-message').textContent);
+        expect(panelText()).toBe(typed);
+      });
+
+      it('applies them once an apply already in flight settles, over what the panel holds then', async () => {
+        await openEditable();
+        const held = heldApply();
+        fromMenu(sliceHeader('slice-1'), 'add-command');
+        await settle();
+        typeIntoPanel(typed);
+        const before = applies();
+
+        document.getElementById('keep-diagram-edits').click();
+        await settle();
+        expect(applies()).toBe(before);
+        held.answer(appliedAnswer(editableDiagram(), { emod: 'emod = 1\n\nmodel "Older" {\n}\n' }));
+        await settle();
+
+        expect(applies()).toBe(before + 1);
+        expect(panelText()).toBe(appliedSource);
+        expect(conflictShown()).toBe(false);
+      });
+    });
+
+    describe('keeping the source edits', () => {
+      it('redraws the diagram from the panel when it parses, and leaves the panel text alone', async () => {
+        await openInConflict();
+        parseQueue = [Promise.resolve({ parsed: true, diagnostics: [], diagram: editableDiagram() })];
+
+        document.getElementById('keep-source-edits').click();
+        await settle();
+
+        expect(lastParse()[0]).toBe(typed);
+        expect(panelText()).toBe(typed);
+        expect(canvasMarkup()).not.toContain('new-command-2');
+        expect(canvasMarkup()).toContain('TakePayment');
+        expect(conflictShown()).toBe(false);
+        expect(markedStale()).toBe(false);
+      });
+
+      it.each([
+        ['does not parse', typed, [Promise.resolve({ parsed: false, diagnostics: [{ file: 'billing.emod', line: 5, message: 'unexpected', severity: 'error' }], diagram: { nodes: [], edges: [] } })]],
+        ['is empty', '', []],
+      ])('redraws the diagram from the drawn source and keeps it marked out of date when the panel %s', async (_, panel, answers) => {
+        await openEditable();
+        typeIntoPanel(panel);
+        fromMenu(sliceHeader('slice-1'), 'add-command');
+        await settle();
+        expect(conflictShown()).toBe(true);
+        parseQueue = answers;
+
+        document.getElementById('keep-source-edits').click();
+        await settle();
+
+        expect(panelText()).toBe(panel);
+        expect(canvasMarkup()).not.toContain('new-command-2');
+        expect(canvasMarkup()).toContain('TakePayment');
+        expect(markedStale()).toBe(true);
+        expect(conflictShown()).toBe(false);
+      });
+
+      it.each([
+        ['Keep source edits', 'keep-source-edits'],
+        ['a Render click', 'render-btn'],
+      ])('%s puts back the diagram the last applied edit drew when the panel does not parse', async (_, button) => {
+        await openEditable();
+        fromMenu(sliceHeader('slice-1'), 'add-command');
+        await settle();
+        expect(panelText()).toBe(appliedSource);
+        typeIntoPanel(appliedSource + 'context "Refunds" {\n');
+        fromMenu(sliceHeader('slice-1'), 'add-event');
+        await settle();
+        expect(conflictShown()).toBe(true);
+        parseQueue = [Promise.resolve({ parsed: false, diagnostics: [{ file: 'billing.emod', line: 9, message: 'unexpected', severity: 'error' }], diagram: { nodes: [], edges: [] } })];
+
+        document.getElementById(button).click();
+        await settle();
+
+        expect(canvasMarkup()).toContain('new-command-2');
+        expect(canvasMarkup()).not.toContain('new-event');
+        expect(markedStale()).toBe(true);
+        expect(conflictShown()).toBe(false);
+      });
+
+      it('is what a Render click during the conflict does', async () => {
+        await openInConflict();
+        parseQueue = [Promise.resolve({ parsed: true, diagnostics: [], diagram: editableDiagram() })];
+
+        document.getElementById('render-btn').click();
+        await settle();
+
+        expect(lastParse()[0]).toBe(typed);
+        expect(panelText()).toBe(typed);
+        expect(canvasMarkup()).not.toContain('new-command-2');
+        expect(conflictShown()).toBe(false);
+      });
+
+      it('never writes the answer of kept diagram edits that a Render click discarded while they were applied', async () => {
+        await openInConflict();
+        const held = heldApply();
+        document.getElementById('keep-diagram-edits').click();
+        await settle();
+        parseQueue = [Promise.resolve({ parsed: false, diagnostics: [{ file: 'billing.emod', line: 5, message: 'unexpected', severity: 'error' }], diagram: { nodes: [], edges: [] } })];
+
+        document.getElementById('render-btn').click();
+        await settle();
+        held.answer(appliedAnswer(editableDiagram()));
+        await settle();
+
+        expect(panelText()).toBe(typed);
+        expect(canvasMarkup()).not.toContain('new-command-2');
+        expect(markedStale()).toBe(true);
+        expect(conflictShown()).toBe(false);
+      });
+
+      it('takes the diagram edits out of what counts as unsaved', async () => {
+        await openInConflict();
+        typeIntoPanel(billingSource);
+        expect(marked()).toBe(true);
+
+        document.getElementById('keep-source-edits').click();
+        await settle();
+
+        expect(marked()).toBe(false);
+      });
+    });
+
+    describe('saving and leaving during a conflict', () => {
+      it('saves exactly the panel text, and leaves the window marked with the notice shown', async () => {
+        await openInConflict();
+        saveAnswer = { name: 'billing.emod', path: '/models/billing.emod' };
+
+        await save();
+
+        expect(savedFile.content).toBe(typed);
+        expect(marked()).toBe(true);
+        expect(conflictShown()).toBe(true);
+      });
+
+      it.each([
+        ['save', 'writes the panel and keeps the window open', false, 1],
+        ['discard', 'lets the window close without saving', true, 0],
+        ['cancel', 'keeps the window open with nothing saved', false, 0],
+      ])('answering %s to the close question %s, with the conflict still standing', async (answer, _, leaves, saves) => {
+        await openInConflict();
+        typeIntoPanel(billingSource);
+        saveAnswer = { name: 'billing.emod', path: '/models/billing.emod' };
+        unsavedEditsAnswer = answer;
+        const savedBefore = savedContents.length;
+
+        const left = await requestLeave();
+        await settle();
+
+        expect(unsavedEditsAsked).toBe(1);
+        expect(left).toBe(leaves);
+        expect(savedContents.length - savedBefore).toBe(saves);
+        expect(conflictShown()).toBe(true);
+      });
+
+      it('has no conflict once another model is open', async () => {
+        await openInConflict();
+        unsavedEditsAnswer = 'discard';
+
+        deliverFile({ name: 'other.emod', path: '/models/other.emod', content: 'emod = 1\n\nmodel "Other" {\n}\n' });
+        await settle();
+
+        expect(unsavedEditsAsked).toBe(1);
+        expect(panelText()).toBe('emod = 1\n\nmodel "Other" {\n}\n');
+        expect(conflictShown()).toBe(false);
+        expect(marked()).toBe(false);
+      });
+
+      it('waits for the kept diagram edits being applied before it saves', async () => {
+        await openInConflict();
+        saveAnswer = { name: 'billing.emod', path: '/models/billing.emod' };
+        const held = heldApply();
+
+        document.getElementById('keep-diagram-edits').click();
+        await settle();
+        const saving = save();
+        await settle();
+        expect(savedContents).toEqual([]);
+        held.answer(appliedAnswer(editableDiagram()));
+        await saving;
+        await settle();
+
+        expect(savedContents).toEqual([appliedSource]);
+      });
+
+      it('asks about another model only once the kept diagram edits being applied have landed', async () => {
+        await openInConflict();
+        const held = heldApply();
+        unsavedEditsAnswer = 'cancel';
+
+        document.getElementById('keep-diagram-edits').click();
+        await settle();
+        deliverFile({ name: 'other.emod', path: '/models/other.emod', content: 'emod = 1\n\nmodel "Other" {\n}\n' });
+        await settle();
+        expect(unsavedEditsAsked).toBe(0);
+        held.answer(appliedAnswer(editableDiagram()));
+        await settle();
+
+        expect(unsavedEditsAsked).toBe(1);
+        expect(panelText()).toBe(appliedSource);
+      });
     });
   });
 
@@ -3356,7 +3911,6 @@ describe('rendering the panel again when its source does not parse', () => {
     await flush();
   }
 
-  const markedStale = () => !document.getElementById('stale-notice').classList.contains('hidden');
 
   it('leaves the diagram that was on screen, node for node', async () => {
     await openBilling();
@@ -4259,6 +4813,15 @@ describe('the documentation of the source panel', () => {
     expect(paragraph).toContain('where every diagram edit has already been written');
     expect(paragraph).not.toContain('still to come');
     expect(readme.split('What it does not do yet:')[1].split('.')[0]).not.toContain('diagram edit');
+  });
+
+  it('says in the README that a conflict between the diagram and the panel offers either side, and not that typing replaces a diagram edit', () => {
+    const readme = read('README.md');
+    const afterRender = readme.split('**Render** stays below the panel')[1].split('**')[0];
+
+    expect(afterRender).toContain('says that the two disagree and offers Keep diagram edits and Keep source edits');
+    expect(afterRender).toContain('counts the diagram edits as unsaved');
+    expect(readme).not.toContain('typing replaces any change made on the diagram');
   });
 
   it('says in the flow summary that a pause in typing, not a Render click alone, reaches the pipeline', () => {

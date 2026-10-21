@@ -181,6 +181,10 @@ function init() {
   store.dom.diagnosticsList = document.getElementById("diagnostics-list");
   store.dom.diagnosticsClose = document.getElementById("diagnostics-close");
   store.dom.staleNotice = document.getElementById("stale-notice");
+  store.dom.conflictNotice = document.getElementById("conflict-notice");
+  store.dom.conflictMessage = document.getElementById("conflict-message");
+  store.dom.keepDiagramEditsBtn = document.getElementById("keep-diagram-edits");
+  store.dom.keepSourceEditsBtn = document.getElementById("keep-source-edits");
 
   Interaction.initEventListeners(store);
   UI.initDelegation(store);
@@ -215,14 +219,18 @@ function init() {
   // The text the diagram on screen was drawn from, or null when no .emod source
   // in the panel drew it — diagram JSON, or a model the host handed the page. A
   // diagram edit is applied onto this text rather than onto the panel's, because
-  // the edited nodes carry the ids a parse of this text gave them.
+  // the edited nodes carry the ids a parse of this text gave them. The diagram
+  // of that parse is kept as text, because diagram edits change the nodes on
+  // screen in place.
   let drawnSource = null;
+  let drawnDiagramText = null;
 
-  // Diagram edits are numbered because an apply is answered asynchronously: an
-  // answer that a newer edit overtook is not written, and the newer diagram is
-  // applied instead.
+  // Diagram edits are numbered because an apply is answered asynchronously.
   let latestDiagramEdit = 0;
+  let handledDiagramEdit = 0;
+  let discardedDiagramEdit = 0;
   let applyingDiagramEdit = false;
+  let keepDiagramEditsAsked = false;
   let latestApplySettled = Promise.resolve();
 
   // The panel's text and the render that reads it are claimed together, because
@@ -248,6 +256,7 @@ function init() {
     const sourceFile = opening ? file : store.currentFile;
     const source = store.dom.sourceInput.value;
     const render = ++latestRender;
+    const diagramEditAtStart = latestDiagramEdit;
     if (!opening && !source.trim()) {
       showEmptyPanel(source, revalidation);
       latestRenderSettled = Promise.resolve();
@@ -262,7 +271,15 @@ function init() {
     latestRenderSettled = Model.sendParse(store, source, parsingStatus, sourceFile ? sourceFile.name : undefined)
       .then(function(data) {
         if (render !== latestRender) return overtaken();
+        if (!opening && latestDiagramEdit !== diagramEditAtStart) return overtaken();
         checkedSource = source;
+        // A redraw would discard the diagram edits the user has not chosen
+        // between yet, so only the panel's own diagnostics change.
+        if (!opening && store.conflict) {
+          reportDiagnostics(data.diagnostics || [], revalidation);
+          showRenderOutcome("✗ Not redrawn: the diagram and the panel disagree", "status error", revalidation);
+          return;
+        }
         if (!opening && data.parsed === false && diagramOnScreen()) {
           reportDiagnostics(data.diagnostics || [], revalidation);
           keepStaleDiagram("the source does not parse", "✗ Not redrawn: the source does not parse", revalidation);
@@ -271,10 +288,12 @@ function init() {
         if (opening) {
           store.currentFile = file;
           rememberFile(file, reportRecordingRefusal);
+          discardDiagramEdits();
         }
         reportDiagnostics(data.diagnostics || [], revalidation);
         UI.hideDiagramStale(store);
         drawnSource = Model.readDiagramJson(source) ? null : source;
+        drawnDiagramText = JSON.stringify(data.diagram);
         if (opening) {
           Model.setModelData(store, data.diagram);
         } else {
@@ -288,6 +307,11 @@ function init() {
       })
       .catch(function(err) {
         if (render !== latestRender) return overtaken();
+        if (!opening && store.conflict) {
+          checkedSource = source;
+          showRenderOutcome("✗ " + err.message, "status error", revalidation);
+          return;
+        }
         if (!opening && diagramOnScreen()) {
           checkedSource = source;
           keepStaleDiagram("the source could not be drawn", "✗ " + err.message, revalidation);
@@ -308,6 +332,9 @@ function init() {
           reportModified();
         }
       });
+    if (parsingStatus) {
+      replaceableStatus = parsingStatus.textContent;
+    }
 
     return latestRenderSettled;
   }
@@ -319,6 +346,10 @@ function init() {
   function showEmptyPanel(source, revalidation) {
     checkedSource = source;
     reportDiagnostics([], revalidation);
+    if (store.conflict) {
+      showRenderOutcome("✗ The source panel is empty", "status error", revalidation);
+      return;
+    }
     if (diagramOnScreen()) {
       keepStaleDiagram("the source panel is empty", "✗ The source panel is empty", revalidation);
     } else if (!revalidation) {
@@ -374,10 +405,26 @@ function init() {
   // model it is replacing, because renderPanelSource writes the text
   // immediately and commits the identity only when the parse resolves.
   function reportModified() {
-    setWindowModified(modelIsModified(store));
+    setWindowModified(unsavedEdits());
   }
 
+  // A diagram edit the panel does not hold is not in the file Save writes
+  // either, so it counts as unsaved even when the panel matches the file.
+  function unsavedEdits() {
+    return modelIsModified(store) || diagramHasUnappliedEdit();
+  }
+
+  function diagramHasUnappliedEdit() {
+    return latestDiagramEdit !== handledDiagramEdit;
+  }
+
+  // Typing over a diagram edit the panel does not hold yet puts both surfaces
+  // in conflict at once, before the pause in typing redraws the diagram from
+  // the panel and discards that edit.
   store.dom.sourceInput.addEventListener("input", function() {
+    if (diagramHasUnappliedEdit()) {
+      enterConflict();
+    }
     reportModified();
     scheduleRevalidation();
   });
@@ -403,68 +450,120 @@ function init() {
   // Every init has a store of its own and the bus outlives it, so an edit is
   // applied only by the init whose store it changed.
   bus.on('model:edited', function({ store: s }) {
-    if (s === store) applyDiagramEdit();
+    if (s !== store || drawnSource === null) return;
+    latestDiagramEdit++;
+    applyPendingDiagramEdits();
   });
 
   // A panel that no longer holds the drawn source has an edit the diagram does
   // not show, and writing the applied edit over it would discard that.
-  function applyDiagramEdit() {
-    if (drawnSource === null || store.dom.sourceInput.value !== drawnSource) {
-      return;
+  function applyPendingDiagramEdits() {
+    if (applyingDiagramEdit || store.conflict || !diagramHasUnappliedEdit()) {
+      return undefined;
     }
-    latestDiagramEdit++;
-    if (!applyingDiagramEdit) {
-      latestApplySettled = sendDiagramEdit();
+    if (store.dom.sourceInput.value !== drawnSource) {
+      enterConflict();
+      return undefined;
     }
+    latestApplySettled = sendDiagramEdit(drawnSource);
+    return latestApplySettled;
   }
 
-  function sendDiagramEdit() {
+  function sendDiagramEdit(panelTextToReplace) {
     applyingDiagramEdit = true;
+    keepDiagramEditsAsked = false;
     const edit = latestDiagramEdit;
-    const base = drawnSource;
+    const source = drawnSource;
     const filename = store.currentFile ? store.currentFile.name : undefined;
     const diagram = { model_name: store.modelName, nodes: store.nodes, edges: store.edges };
 
     return ready.then(function() {
-      return applyDiagram(base, filename, diagram);
+      return applyDiagram(source, filename, diagram);
     }).then(function(answer) {
-      return settleDiagramEdit(edit, base, function() { writeAppliedSource(answer); });
+      return settleDiagramEdit(edit, source, panelTextToReplace, function() { writeAppliedSource(answer, edit); });
     }, function(err) {
-      return settleDiagramEdit(edit, base, function() { reportUnappliedEdit(err.message || String(err)); });
+      return settleDiagramEdit(edit, source, panelTextToReplace, function() { reportApplyRefusal(err.message || String(err)); });
     }).catch(function(err) {
       applyingDiagramEdit = false;
-      reportUnappliedEdit(err.message || String(err));
+      reportApplyRefusal(err.message || String(err));
     });
   }
 
-  function settleDiagramEdit(edit, base, land) {
+  function settleDiagramEdit(edit, source, panelTextToReplace, writeAnswer) {
     applyingDiagramEdit = false;
-    if (store.dom.sourceInput.value !== base) {
-      return;
+    if (edit <= discardedDiagramEdit || source !== drawnSource) {
+      return applyPendingDiagramEdits();
+    }
+    if (keepDiagramEditsAsked) {
+      return sendDiagramEdit(store.dom.sourceInput.value);
+    }
+    if (store.dom.sourceInput.value !== panelTextToReplace) {
+      return undefined;
     }
     if (edit !== latestDiagramEdit) {
-      return sendDiagramEdit();
+      return sendDiagramEdit(panelTextToReplace);
     }
-    land();
+    writeAnswer();
+    return undefined;
   }
 
-  // The applied source is a render nobody asked for, so it claims a render
-  // number — an older parse still in flight stands down rather than drawing the
-  // source the edit replaced — and it writes nothing a render the user started
-  // would not.
-  function writeAppliedSource(answer) {
+  function enterConflict() {
+    if (!store.conflict) {
+      UI.showConflict(store);
+    }
+    reportModified();
+  }
+
+  function keepDiagramEdits() {
+    if (applyingDiagramEdit) {
+      keepDiagramEditsAsked = true;
+      return;
+    }
+    latestApplySettled = sendDiagramEdit(store.dom.sourceInput.value);
+  }
+
+  // Keep source edits puts the drawn diagram back at once, so text that does not
+  // parse leaves it on screen marked out of date, and then redraws from the
+  // panel the way a pause in typing does.
+  function keepSourceEdits() {
+    restoreDrawnDiagram();
+    reportModified();
+    return renderPanelSource(undefined, undefined, { revalidation: true });
+  }
+
+  function restoreDrawnDiagram() {
+    discardDiagramEdits();
+    Model.setModelDataInPlace(store, JSON.parse(drawnDiagramText));
+  }
+
+  function discardDiagramEdits() {
+    discardedDiagramEdit = latestDiagramEdit;
+    handledDiagramEdit = latestDiagramEdit;
+    keepDiagramEditsAsked = false;
+    UI.hideConflict(store);
+  }
+
+  store.dom.keepDiagramEditsBtn.addEventListener("click", keepDiagramEdits);
+  store.dom.keepSourceEditsBtn.addEventListener("click", keepSourceEdits);
+
+  // The applied source claims a render number, so an older parse still in flight
+  // does not draw the source that the edit replaced.
+  function writeAppliedSource(answer, edit) {
     const panel = store.dom.sourceInput;
     const scrollTop = panel.scrollTop;
     panel.value = answer.emod;
     panel.scrollTop = scrollTop;
     checkedSource = answer.emod;
     latestRender++;
+    handledDiagramEdit = edit;
+    UI.hideConflict(store);
 
     reportDiagnostics(answer.diagnostics || [], true);
     if (answer.parsed === false) {
       keepStaleDiagram("the source does not parse", "✗ Not redrawn: the source does not parse", true);
     } else {
       drawnSource = answer.emod;
+      drawnDiagramText = JSON.stringify(answer.diagram);
       UI.hideDiagramStale(store);
       Model.setModelDataInPlace(store, answer.diagram);
       showRenderOutcome("✓ Rendered", "status success", true);
@@ -475,15 +574,20 @@ function init() {
     }
   }
 
+  function reportApplyRefusal(reason) {
+    if (store.conflict) {
+      UI.showConflict(store, reason);
+      return;
+    }
+    keepStaleDiagram("the diagram edit is not in the source: " + reason, "✗ " + reason, true);
+    reportModified();
+  }
+
   function reportReformat(droppedComments) {
     const dropped = droppedComments > 0
       ? ' · ' + droppedComments + (droppedComments === 1 ? ' comment' : ' comments') + ' dropped'
       : '';
     reportInBar('Source rewritten in the emod fmt layout' + dropped, false);
-  }
-
-  function reportUnappliedEdit(reason) {
-    keepStaleDiagram("the diagram edit is not in the source: " + reason, "✗ " + reason, true);
   }
 
   // Everything that asks about unsaved edits queues here. The question and the
@@ -536,7 +640,7 @@ function init() {
   // reached the panel yet, and the panel is what Save would write.
   function clearedToReplace() {
     return appliesSettled().then(function() {
-      if (!modelIsModified(store)) {
+      if (!unsavedEdits()) {
         return true;
       }
       return resolveUnsavedEdits().then(function(outcome) {
@@ -547,16 +651,31 @@ function init() {
           return true;
         }
         return saveModel({ chooseLocation: false }).then(function() {
-          return !modelIsModified(store);
+          return !unsavedEdits();
         });
       });
     });
   }
 
-  store.dom.renderBtn.addEventListener("click", function() {
+  // Render means "draw the panel", so it discards a diagram edit the panel does
+  // not hold. An edit being applied with no conflict is on its way into the
+  // panel, so Render waits for it: drawing the panel first would take the edit
+  // off the canvas, and the next canvas edit would be sent without it.
+  function renderClicked() {
     clearTimeout(pendingRevalidation);
+    if (applyingDiagramEdit && !store.conflict) {
+      appliesSettled().then(function() {
+        if (!store.conflict) renderClicked();
+      });
+      return;
+    }
+    if (store.conflict || diagramHasUnappliedEdit()) {
+      restoreDrawnDiagram();
+    }
     renderPanelSource();
-  });
+  }
+
+  store.dom.renderBtn.addEventListener("click", renderClicked);
 
   // ─── File drag-and-drop ───────────────────────────────────────────
   store.dom.panelBody.addEventListener("dragenter", function(evt) {

@@ -2,6 +2,7 @@ export function createStore() {
   return {
     diagnostics: [],
     diagramStale: false,
+    conflict: false,
     nodes: [],
     edges: [],
     modelName: '',
@@ -62,6 +63,10 @@ export function createStore() {
       diagnosticsList: null,
       diagnosticsClose: null,
       staleNotice: null,
+      conflictNotice: null,
+      conflictMessage: null,
+      keepDiagramEditsBtn: null,
+      keepSourceEditsBtn: null,
     },
   };
 }

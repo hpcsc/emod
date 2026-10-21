@@ -421,10 +421,18 @@ the diagram was drawn from, so comments, invariants, specs and the other text
 the diagram does not show stay where they are. A file not in the `emod fmt`
 layout takes that layout on its first diagram edit, and the bar along the
 bottom says so, with the number of comments that layout dropped.
-**Render** stays below the panel and redraws at once. Because the diagram is
-redrawn from the panel, typing replaces any change made on the diagram itself
-since it was last drawn. The browser viewer and `emod diagram --serve` share
-the frontend and behave the same way.
+**Render** stays below the panel and redraws at once. When the diagram and the
+panel both hold edits the other does not show — a diagram edit made while the
+panel holds text that has not been drawn, or text typed while a diagram edit is
+being written — a notice over the diagram says that the two disagree and offers
+Keep diagram edits and Keep source edits. Keep diagram edits writes every
+diagram edit into the source the diagram was drawn from, in place of the
+panel's text; Keep source edits redraws the diagram from the panel, and Render
+does the same. Until one is chosen, a pause in typing lists the panel's
+diagnostics without redrawing, Save writes the panel as it is, and the window
+counts the diagram edits as unsaved. The browser viewer and `emod diagram --serve` share
+the frontend and behave the same way, except that the diagram `emod diagram --serve`
+opens with has no source in the panel, so its diagram edits reach only Export.
 
 **File ▸ Open** (⌘O on macOS, Ctrl+O on Linux and Windows) opens a model through the
 operating system's own file picker, filtered to `.emod` and `.json`. The chosen

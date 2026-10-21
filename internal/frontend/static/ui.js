@@ -383,6 +383,22 @@ function hideDiagramStale(store) {
   store.dom.svg.classList.remove("stale");
 }
 
+// ─── Conflict ───────────────────────────────────────────────────
+function showConflict(store, reason) {
+  store.conflict = true;
+  if (!store.dom.conflictNotice) return;
+  store.dom.conflictMessage.textContent = reason
+    ? "The diagram edits could not be applied — " + reason
+    : "The diagram and the source panel disagree — each has edits the other does not show";
+  store.dom.conflictMessage.title = store.dom.conflictMessage.textContent;
+  store.dom.conflictNotice.classList.remove("hidden");
+}
+
+function hideConflict(store) {
+  store.conflict = false;
+  if (store.dom.conflictNotice) store.dom.conflictNotice.classList.add("hidden");
+}
+
 // ─── Stats ──────────────────────────────────────────────────────
 function updateStats(store, dims) {
   if (store.dom.statNodes) store.dom.statNodes.textContent = store.nodes.length;
@@ -1076,6 +1092,8 @@ export const UI = {
   hideDiagnosticsPanel,
   showDiagramStale,
   hideDiagramStale,
+  showConflict,
+  hideConflict,
   updateStats,
   showDetailPanel,
   showEdgeDetail,
