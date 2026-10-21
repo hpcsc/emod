@@ -32,6 +32,7 @@ let remembered = [];
 let rememberFails = null;
 // Set by a test that has to hold a recording's answer open.
 let rememberAnswerer = null;
+let applyQueue = [];
 
 vi.mock('../static/platform.js', () => ({
   get ready() { return platformReady; },
@@ -40,6 +41,9 @@ vi.mock('../static/platform.js', () => ({
   exportEmod: vi.fn((diagram) => exportFails
     ? Promise.reject(new Error('nothing to export'))
     : Promise.resolve('emod = 1\n\nmodel "' + (diagram.model_name || '') + '" {\n}\n')),
+  applyDiagram: vi.fn((source, filename, diagram) => applyQueue.length
+    ? applyQueue.shift()
+    : Promise.resolve(appliedAnswer(JSON.parse(JSON.stringify(diagram))))),
   initialState: vi.fn(() => initialStateFails
     ? Promise.reject(new Error('host could not answer'))
     : Promise.resolve(typeof globalThis.INITIAL_DATA === 'undefined' ? null : globalThis.INITIAL_DATA)),
@@ -193,6 +197,15 @@ const platform = await import('../static/platform.js');
 const { DRAG_THRESHOLD, REVALIDATE_PAUSE_MS } = await import('../static/config.js');
 
 const billingSource = 'emod = 1\n\nmodel "Billing" {\n}\n';
+const appliedSource = 'emod = 1\n\nmodel "Billing" {\n}\n\ncontext "Payments" {\n}\n';
+
+// What the pipeline answers for an applied diagram edit: the source it wrote,
+// and what a parse of that source answers.
+function appliedAnswer(diagram, overrides) {
+  return Object.assign({
+    emod: appliedSource, diagnostics: [], diagram: diagram, parsed: true, reformatted: false, dropped_comments: 0,
+  }, overrides);
+}
 const crlfSource = 'emod = 1\r\n\r\nmodel "Billing" {\r\n}\r\n';
 
 async function openBilling(content) {
@@ -294,6 +307,7 @@ beforeEach(() => {
   remembered = [];
   rememberFails = null;
   rememberAnswerer = null;
+  applyQueue = [];
 });
 
 describe('the window is named through the host, not by assigning document.title', () => {
@@ -1800,15 +1814,6 @@ describe('the window says whether there are unsaved edits', () => {
       });
     });
 
-    it('says nothing when the context menu adds a node to the diagram', async () => {
-      await silentThenAudible(async (canvas) => {
-        const before = canvas.querySelectorAll('.diagram-node').length;
-        fireMouse(canvas.querySelector('.slice-header'), 'contextmenu');
-        menuItemFor('add-command').click();
-        expect(canvas.querySelectorAll('.diagram-node').length).toBe(before + 1);
-      });
-    });
-
     it('says nothing when a slice is hidden from the visibility tree', async () => {
       await silentThenAudible(async () => {
         document.getElementById('visibility-toggle').click();
@@ -1822,6 +1827,645 @@ describe('the window says whether there are unsaved edits', () => {
         document.getElementById('data-panel-header').click();
         expect(document.getElementById('data-panel').classList.contains('collapsed')).toBe(false);
       });
+    });
+  });
+});
+
+describe('a diagram edit reaching the source panel', () => {
+  function editableDiagram() {
+    return {
+      model_name: 'Billing',
+      nodes: [
+        { id: 'context-1', type: 'context', label: 'Payments', parentId: null },
+        { id: 'aggregate-1', type: 'aggregate', label: 'Payment', parentId: 'context-1' },
+        { id: 'slice-1', type: 'slice', label: 'Take Payment', parentId: 'aggregate-1' },
+        { id: 'command-1', type: 'command', label: 'TakePayment', parentId: 'slice-1' },
+        { id: 'event-1', type: 'event', label: 'PaymentTaken', parentId: 'slice-1' },
+        { id: 'slice-2', type: 'slice', label: 'Review Payments', parentId: 'aggregate-1' },
+        { id: 'event-2', type: 'event', label: 'PaymentRefunded', parentId: 'slice-2' },
+        { id: 'view-1', type: 'view', label: 'PaymentsView', parentId: 'slice-2' },
+        { id: 'auto-1', type: 'automation', label: 'RefundReminder', parentId: 'slice-2' },
+      ],
+      edges: [
+        { source: 'command-1', target: 'event-1', type: 'flow' },
+        { source: 'event-1', target: 'view-1', type: 'subscription' },
+      ],
+    };
+  }
+
+  async function openEditable(content) {
+    globalThis.INITIAL_DATA = null;
+    parseResult = { diagnostics: [], diagram: editableDiagram() };
+    await startViewer();
+    deliverFile({ name: 'billing.emod', path: '/models/billing.emod', content: content === undefined ? billingSource : content });
+    await flush();
+  }
+
+  afterEach(() => {
+    delete document.elementsFromPoint;
+  });
+
+  const panelText = () => document.getElementById('source-input').value;
+  const applies = () => platform.applyDiagram.mock.calls.length;
+  const lastApply = () => platform.applyDiagram.mock.calls[applies() - 1];
+  const sentNodes = () => lastApply()[2].nodes;
+  const labelsUnder = (parentId, type) => sentNodes()
+    .filter((n) => n.parentId === parentId && n.type === type)
+    .map((n) => n.label);
+  const sentEdge = (source, target, type) => lastApply()[2].edges
+    .some((e) => e.source === source && e.target === target && (!type || e.type === type));
+  const nodeIdLabelled = (label) => sentNodes().find((n) => n.label === label).id;
+
+  const sliceHeader = (id) => document.querySelector('.slice-header[data-slice-id="' + id + '"]');
+  const arrowHit = (source, target) => document.querySelector('.arrow-hit[data-source="' + source + '"][data-target="' + target + '"]');
+  const arrowHandle = (edgeId, end) => document.querySelector('.arrow-handle[data-edge-id="' + edgeId + '"][data-arrow-handle="' + end + '"]');
+  const portOf = (nodeId) => blockFor(nodeId).querySelector('[data-port]');
+
+  function fromMenu(target, action) {
+    fireMouse(target, 'contextmenu');
+    menuItemFor(action).click();
+  }
+
+  function pressKey(key) {
+    document.body.dispatchEvent(new KeyboardEvent('keydown', { key, bubbles: true, cancelable: true }));
+  }
+
+  function rename(target, label, commit) {
+    fireMouse(target, 'dblclick');
+    const box = document.querySelector('body > input[type="text"]');
+    box.value = label;
+    if (commit === 'blur') {
+      box.dispatchEvent(new Event('blur'));
+    } else {
+      box.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true, cancelable: true }));
+    }
+  }
+
+  // jsdom does no hit-testing, and a connection or a repoint is resolved by what
+  // lies under the point it is released at.
+  function releaseOver(nodeId) {
+    document.elementsFromPoint = () => (nodeId ? [blockFor(nodeId)] : []);
+  }
+
+  function dragFrom(element) {
+    fireMouseAt(element, 'mousedown', 100, 100);
+    fireMouseAt(document, 'mousemove', 100 + DRAG_THRESHOLD + 1, 100);
+    fireMouseAt(document, 'mousemove', 160, 140);
+    fireMouseAt(document, 'mouseup', 160, 140);
+  }
+
+  function heldApply() {
+    const held = {};
+    applyQueue.push(new Promise((resolve, reject) => { held.answer = resolve; held.refuse = reject; }));
+    return held;
+  }
+
+  async function settle() {
+    await flush();
+    await flush();
+  }
+
+  describe('each canvas edit', () => {
+    it.each([
+      ['adding a command from a slice menu', () => fromMenu(sliceHeader('slice-1'), 'add-command'),
+        () => expect(labelsUnder('slice-1', 'command')).toEqual(['TakePayment', 'new-command-2'])],
+      ['adding an event from a slice menu', () => fromMenu(sliceHeader('slice-1'), 'add-event'),
+        () => expect(labelsUnder('slice-1', 'event')).toEqual(['PaymentTaken', 'new-event-2'])],
+      ['adding a flow from a slice menu', () => fromMenu(sliceHeader('slice-1'), 'add-flow'), () => {
+        expect(labelsUnder('slice-1', 'event')).toEqual(['PaymentTaken', 'new-event-2']);
+        expect(sentEdge('command-1', nodeIdLabelled('new-event-2'), 'flow')).toBe(true);
+      }],
+      ['adding a slice from an aggregate menu', () => fromMenu(document.querySelector('.agg-label[data-agg-id="aggregate-1"]'), 'add-slice'),
+        () => expect(labelsUnder('aggregate-1', 'slice')).toEqual(['Take Payment', 'Review Payments', 'new-slice-3'])],
+      ['deleting an arrow from its menu', () => fromMenu(arrowHit('command-1', 'event-1'), 'delete-arrow'),
+        () => expect(sentEdge('command-1', 'event-1')).toBe(false)],
+      ['moving a slice right from its menu', () => fromMenu(sliceHeader('slice-1'), 'move-slice-right'),
+        () => expect(labelsUnder('aggregate-1', 'slice')).toEqual(['Review Payments', 'Take Payment'])],
+      ['moving a slice left from its menu', () => fromMenu(sliceHeader('slice-2'), 'move-slice-left'),
+        () => expect(labelsUnder('aggregate-1', 'slice')).toEqual(['Review Payments', 'Take Payment'])],
+      ['deleting a block from the detail panel', () => {
+        fromMenu(blockFor('command-1'), 'open-field-editor');
+        document.querySelector('.dp-delete-btn').click();
+      }, () => {
+        expect(labelsUnder('slice-1', 'command')).toEqual([]);
+        expect(sentEdge('command-1', 'event-1')).toBe(false);
+      }],
+      ['deleting a block with Delete', () => {
+        fromMenu(blockFor('command-1'), 'open-field-editor');
+        pressKey('Delete');
+      }, () => expect(labelsUnder('slice-1', 'command')).toEqual([])],
+      ['deleting an arrow from the detail panel', () => {
+        fireMouse(arrowHit('event-1', 'view-1'), 'click');
+        document.getElementById('dp-delete-edge').click();
+      }, () => expect(sentEdge('event-1', 'view-1')).toBe(false)],
+      ['deleting an arrow with Backspace', () => {
+        fireMouse(arrowHit('event-1', 'view-1'), 'click');
+        pressKey('Backspace');
+      }, () => expect(sentEdge('event-1', 'view-1')).toBe(false)],
+      ['renaming a block with Enter', () => rename(blockFor('command-1'), 'ChargePayment'),
+        () => expect(labelsUnder('slice-1', 'command')).toEqual(['ChargePayment'])],
+      ['renaming a block by leaving the box', () => rename(blockFor('command-1'), 'ChargePayment', 'blur'),
+        () => expect(labelsUnder('slice-1', 'command')).toEqual(['ChargePayment'])],
+      ['renaming a context', () => rename(document.querySelector('.ctx-label[data-ctx-id="context-1"]'), 'Billing'),
+        () => expect(sentNodes().find((n) => n.id === 'context-1').label).toBe('Billing')],
+      ['renaming an aggregate', () => rename(document.querySelector('.agg-label[data-agg-id="aggregate-1"]'), 'Charge'),
+        () => expect(sentNodes().find((n) => n.id === 'aggregate-1').label).toBe('Charge')],
+      ['renaming a slice', () => rename(sliceHeader('slice-1'), 'Charge Payment'),
+        () => expect(labelsUnder('aggregate-1', 'slice')).toEqual(['Charge Payment', 'Review Payments'])],
+      ['drawing an arrow from a port', () => {
+        releaseOver('auto-1');
+        dragFrom(portOf('event-1'));
+      }, () => expect(sentEdge('event-1', 'auto-1', 'automation_trigger')).toBe(true)],
+      ['repointing an arrow', () => {
+        releaseOver('event-2');
+        dragFrom(arrowHandle('command-1--event-1', 'target'));
+      }, () => {
+        expect(sentEdge('command-1', 'event-2', 'flow')).toBe(true);
+        expect(sentEdge('command-1', 'event-1')).toBe(false);
+      }],
+      ['dragging a slice past its sibling', () => dragBy(sliceHeader('slice-1'), 3000, 0),
+        () => expect(labelsUnder('aggregate-1', 'slice')).toEqual(['Review Payments', 'Take Payment'])],
+    ])('%s writes the applied source into the panel', async (_, gesture, expectSent) => {
+      await openEditable();
+      const before = applies();
+
+      gesture();
+      await settle();
+
+      expect(applies()).toBe(before + 1);
+      expect(lastApply()[0]).toBe(billingSource);
+      expect(lastApply()[1]).toBe('billing.emod');
+      expectSent();
+      expect(panelText()).toBe(appliedSource);
+    });
+
+    it.each([
+      ['a rename to the label it already has', () => rename(blockFor('command-1'), 'TakePayment')],
+      ['a connection released over no block', () => {
+        releaseOver(null);
+        dragFrom(portOf('event-1'));
+      }],
+      ['a repoint released over no block', () => {
+        releaseOver(null);
+        dragFrom(arrowHandle('command-1--event-1', 'target'));
+      }],
+      ['a repoint released back over the block the arrow already points to', () => {
+        releaseOver('event-1');
+        dragFrom(arrowHandle('command-1--event-1', 'target'));
+      }],
+      ['a repoint released back over the block the arrow already comes from', () => {
+        releaseOver('command-1');
+        dragFrom(arrowHandle('command-1--event-1', 'source'));
+      }],
+      ['an arrow drawn where one already is', () => {
+        releaseOver('view-1');
+        dragFrom(portOf('event-1'));
+      }],
+      ['a slice dropped back where it was', () => dragBy(sliceHeader('slice-1'), DRAG_THRESHOLD + 4, 0)],
+      ['moving the first slice left', () => fromMenu(sliceHeader('slice-1'), 'move-slice-left')],
+    ])('%s asks the pipeline nothing and leaves the panel and the marker alone', async (_, gesture) => {
+      await openEditable();
+      const before = applies();
+      modifiedReports.length = 0;
+
+      gesture();
+      await settle();
+
+      expect(applies()).toBe(before);
+      expect(panelText()).toBe(billingSource);
+      expect(modifiedReports).toEqual([]);
+    });
+  });
+
+  describe('what the window shows once an edit is applied', () => {
+    it('redraws the diagram from the applied answer, keeping dragged offsets, hidden nodes and the viewport', async () => {
+      await openEditable();
+      dragBy(blockFor('command-1'), 40, 25);
+      document.getElementById('visibility-toggle').click();
+      hideFromVisibilityTree('slice-2');
+      const canvas = document.getElementById('diagram-canvas');
+      dragBy(canvas, 60, 60);
+      const viewport = canvas.querySelector('#viewport-group').getAttribute('transform');
+      const held = heldApply();
+
+      fromMenu(sliceHeader('slice-1'), 'add-command');
+      await settle();
+      const added = nodeIdLabelled('new-command-2');
+      held.answer(appliedAnswer(JSON.parse(JSON.stringify(lastApply()[2]).split(added).join('command-2'))));
+      await settle();
+
+      expect(panelText()).toBe(appliedSource);
+      expect(blockFor(added)).toBeNull();
+      expect(blockFor('command-2').textContent).toContain('new-command-2');
+      expect(document.getElementById('reset-layout').disabled).toBe(false);
+      expect(blockFor('view-1')).toBeNull();
+      expect(canvas.querySelector('#viewport-group').getAttribute('transform')).toBe(viewport);
+    });
+
+    it("lists the applied source's diagnostics in the panel and the gutter", async () => {
+      await openEditable();
+      const warning = { file: 'billing.emod', line: 4, message: 'command "new-command-2" is not exercised by any spec', severity: 'warning' };
+      applyQueue = [Promise.resolve(appliedAnswer(editableDiagram(), { diagnostics: [warning] }))];
+
+      fromMenu(sliceHeader('slice-1'), 'add-command');
+      await settle();
+
+      expect(document.getElementById('diagnostics-list').textContent).toContain('command "new-command-2" is not exercised by any spec');
+      expect(document.querySelectorAll('#source-gutter .gutter-entry')).toHaveLength(1);
+    });
+
+    it('leaves the data panel collapsed or open as it was', async () => {
+      await openEditable();
+      const dataPanel = document.getElementById('data-panel');
+      expect(dataPanel.classList.contains('collapsed')).toBe(true);
+
+      fromMenu(sliceHeader('slice-1'), 'add-command');
+      await settle();
+      expect(dataPanel.classList.contains('collapsed')).toBe(true);
+
+      document.getElementById('data-panel-header').click();
+      fromMenu(sliceHeader('slice-1'), 'add-event');
+      await settle();
+      expect(dataPanel.classList.contains('collapsed')).toBe(false);
+    });
+
+    it('marks the window modified once the edit reaches the panel, and not before', async () => {
+      await openEditable();
+      modifiedReports.length = 0;
+      const held = heldApply();
+
+      fromMenu(sliceHeader('slice-1'), 'add-command');
+      await settle();
+      expect(modifiedReports).toEqual([]);
+
+      held.answer(appliedAnswer(editableDiagram()));
+      await settle();
+      expect(marked()).toBe(true);
+    });
+
+    it.each([
+      [0, 'Source rewritten in the emod fmt layout'],
+      [1, 'Source rewritten in the emod fmt layout · 1 comment dropped'],
+      [2, 'Source rewritten in the emod fmt layout · 2 comments dropped'],
+    ])('says in the bar that the source was reformatted, with %i comments dropped, until a save confirms', async (dropped, said) => {
+      await openEditable();
+      applyQueue = [Promise.resolve(appliedAnswer(editableDiagram(), { reformatted: true, dropped_comments: dropped }))];
+      const bar = document.getElementById('save-status');
+
+      fromMenu(sliceHeader('slice-1'), 'add-command');
+      await settle();
+
+      expect(bar.classList.contains('hidden')).toBe(false);
+      expect(bar.textContent).toBe(said);
+      expect(bar.title).toBe(said);
+
+      saveAnswer = { name: 'billing.emod', path: '/models/billing.emod' };
+      await save();
+      expect(bar.textContent).toBe('✓ Saved billing.emod');
+    });
+
+    it('says nothing in the bar for a source already in the emod fmt layout', async () => {
+      await openEditable();
+
+      fromMenu(sliceHeader('slice-1'), 'add-command');
+      await settle();
+
+      expect(panelText()).toBe(appliedSource);
+      expect(document.getElementById('save-status').classList.contains('hidden')).toBe(true);
+      expect(document.getElementById('save-status').textContent).toBe('');
+    });
+
+    it('writes the applied source when its result does not parse, lists why and marks the diagram out of date', async () => {
+      await openEditable();
+      const broken = appliedSource + 'context "Refunds" {\n';
+      const syntaxError = { file: 'billing.emod', line: 9, message: 'expected "}" to close context', severity: 'error' };
+      applyQueue = [Promise.resolve(appliedAnswer(editableDiagram(), { emod: broken, parsed: false, diagnostics: [syntaxError] }))];
+
+      fromMenu(sliceHeader('slice-1'), 'add-command');
+      await settle();
+
+      expect(panelText()).toBe(broken);
+      expect(document.getElementById('diagnostics-list').textContent).toContain('expected "}" to close context');
+      expect(document.getElementById('stale-notice').classList.contains('hidden')).toBe(false);
+      expect(canvasMarkup()).toContain('new-command-2');
+    });
+
+    it('leaves the panel alone and keeps the edit on a diagram marked out of date with the reason, when the edit cannot be applied', async () => {
+      await openEditable();
+      const held = heldApply();
+
+      fromMenu(sliceHeader('slice-1'), 'add-command');
+      await settle();
+      held.refuse(new Error('the diagram edit cannot be applied: billing.emod does not parse'));
+      await settle();
+
+      expect(panelText()).toBe(billingSource);
+      expect(document.getElementById('stale-notice').classList.contains('hidden')).toBe(false);
+      expect(document.getElementById('stale-notice').textContent).toContain('the diagram edit cannot be applied: billing.emod does not parse');
+      expect(canvasMarkup()).toContain('new-command-2');
+    });
+
+    it('redraws from the panel as typing pauses once the edit has reached it', async () => {
+      await openEditable();
+      fromMenu(sliceHeader('slice-1'), 'add-command');
+      await settle();
+
+      typeIntoPanel(appliedSource + '# typed\n');
+      await new Promise((resolve) => setTimeout(resolve, REVALIDATE_PAUSE_MS + 40));
+
+      expect(lastParse()[0]).toBe(appliedSource + '# typed\n');
+    });
+  });
+
+  describe('what Save writes after a diagram edit', () => {
+    it('writes the text the edit put in the panel', async () => {
+      await openEditable();
+      saveAnswer = { name: 'billing.emod', path: '/models/billing.emod' };
+
+      fromMenu(sliceHeader('slice-1'), 'add-command');
+      await settle();
+      await save();
+
+      expect(savedFile).toEqual({ name: 'billing.emod', content: appliedSource, path: '/models/billing.emod' });
+    });
+
+    it('writes a file that arrived with CRLF line endings back with CRLF', async () => {
+      await openEditable(crlfSource);
+      saveAnswer = { name: 'billing.emod', path: '/models/billing.emod' };
+
+      fromMenu(sliceHeader('slice-1'), 'add-command');
+      await settle();
+      await save();
+
+      expect(lastApply()[0]).toBe(billingSource);
+      expect(savedFile.content).toBe(appliedSource.replace(/\n/g, '\r\n'));
+    });
+
+    it('waits for an edit still being applied, and writes the text with it', async () => {
+      await openEditable();
+      saveAnswer = { name: 'billing.emod', path: '/models/billing.emod' };
+      const held = heldApply();
+
+      fromMenu(sliceHeader('slice-1'), 'add-command');
+      await settle();
+      const saving = save();
+      await settle();
+      expect(savedContents).toEqual([]);
+
+      held.answer(appliedAnswer(editableDiagram()));
+      await saving;
+      await settle();
+
+      expect(savedContents).toEqual([appliedSource]);
+    });
+  });
+
+  describe('a diagram with no source behind it', () => {
+    it('takes edits on a diagram the host handed the page without writing the panel', async () => {
+      globalThis.INITIAL_DATA = { diagram: editableDiagram() };
+      await startViewer();
+      const before = applies();
+
+      fromMenu(sliceHeader('slice-1'), 'add-command');
+      await settle();
+
+      expect(canvasMarkup()).toContain('new-command-2');
+      expect(applies()).toBe(before);
+      expect(panelText()).toBe('');
+    });
+
+    it('takes edits on a diagram drawn from diagram JSON in the panel without writing the panel', async () => {
+      await startEmpty();
+      const pasted = JSON.stringify(editableDiagram());
+      typeIntoPanel(pasted);
+      document.getElementById('render-btn').click();
+      await settle();
+      const before = applies();
+
+      fromMenu(sliceHeader('slice-1'), 'add-command');
+      await settle();
+
+      expect(canvasMarkup()).toContain('new-command-2');
+      expect(applies()).toBe(before);
+      expect(panelText()).toBe(pasted);
+    });
+  });
+
+  describe('a panel with an edit the diagram does not show', () => {
+    const typed = billingSource + '# typed\n';
+
+    it.each([
+      ['while typing pauses', async () => typeIntoPanel(typed)],
+      ['while its parse is in flight', async () => {
+        parseQueue = [new Promise(() => {})];
+        typeIntoPanel(typed);
+        document.getElementById('render-btn').click();
+        await flush();
+      }],
+      ['when its text does not parse', async () => {
+        parseQueue = [Promise.resolve({ parsed: false, diagnostics: [{ file: 'billing.emod', line: 5, message: 'unexpected', severity: 'error' }], diagram: editableDiagram() })];
+        typeIntoPanel(typed);
+        document.getElementById('render-btn').click();
+        await flush();
+      }],
+      ['when it is empty', async () => typeIntoPanel('')],
+    ])('keeps its text and calls no applyDiagram %s', async (_, unappliedEdit) => {
+      await openEditable();
+      await unappliedEdit();
+      const holding = panelText();
+      const before = applies();
+
+      fromMenu(sliceHeader('slice-1'), 'add-command');
+      await settle();
+
+      expect(canvasMarkup()).toContain('new-command-2');
+      expect(applies()).toBe(before);
+      expect(panelText()).toBe(holding);
+    });
+  });
+
+  describe('an edit being applied when something else happens', () => {
+    it('never writes its answer over text typed while it was applied, and the typed text revalidates', async () => {
+      await openEditable();
+      const held = heldApply();
+      const typed = billingSource + '# typed\n';
+
+      fromMenu(sliceHeader('slice-1'), 'add-command');
+      await settle();
+      typeIntoPanel(typed);
+      held.answer(appliedAnswer(editableDiagram()));
+      await settle();
+      expect(panelText()).toBe(typed);
+
+      await new Promise((resolve) => setTimeout(resolve, REVALIDATE_PAUSE_MS + 40));
+      expect(lastParse()[0]).toBe(typed);
+    });
+
+    it('applies the diagram holding both edits when a second is made, and never writes the older answer', async () => {
+      await openEditable();
+      const before = applies();
+      const held = heldApply();
+
+      fromMenu(sliceHeader('slice-1'), 'add-command');
+      await settle();
+      fromMenu(sliceHeader('slice-1'), 'add-event');
+      await settle();
+      expect(applies()).toBe(before + 1);
+
+      held.answer(appliedAnswer(editableDiagram(), { emod: 'emod = 1\n\nmodel "Older" {\n}\n' }));
+      await settle();
+
+      expect(applies()).toBe(before + 2);
+      expect(labelsUnder('slice-1', 'command')).toEqual(['TakePayment', 'new-command-2']);
+      expect(labelsUnder('slice-1', 'event')).toEqual(['PaymentTaken', 'new-event-2']);
+      expect(lastApply()[0]).toBe(billingSource);
+      expect(panelText()).toBe(appliedSource);
+    });
+
+    it('keeps the edit through a Render click', async () => {
+      await openEditable();
+      const held = heldApply();
+
+      fromMenu(sliceHeader('slice-1'), 'add-command');
+      await settle();
+      const sent = JSON.parse(JSON.stringify(lastApply()[2]));
+      document.getElementById('render-btn').click();
+      await settle();
+      held.answer(appliedAnswer(sent));
+      await settle();
+
+      expect(panelText()).toBe(appliedSource);
+      expect(canvasMarkup()).toContain('new-command-2');
+    });
+
+    it('keeps the edit through a Render whose parse lands after the edit does', async () => {
+      await openEditable();
+      const held = heldApply();
+      let releaseRender;
+      parseQueue = [new Promise((resolve) => { releaseRender = () => resolve({ diagnostics: [], diagram: editableDiagram() }); })];
+
+      fromMenu(sliceHeader('slice-1'), 'add-command');
+      await settle();
+      const sent = JSON.parse(JSON.stringify(lastApply()[2]));
+      document.getElementById('render-btn').click();
+      await settle();
+      held.answer(appliedAnswer(sent));
+      await settle();
+      releaseRender();
+      await settle();
+
+      expect(panelText()).toBe(appliedSource);
+      expect(canvasMarkup()).toContain('new-command-2');
+    });
+
+    it('keeps the edit through a host failure, and leaves the reason on screen', async () => {
+      await openEditable();
+      const held = heldApply();
+
+      fromMenu(sliceHeader('slice-1'), 'add-command');
+      await settle();
+      const sent = JSON.parse(JSON.stringify(lastApply()[2]));
+      fireDrop(document.getElementById('data-panel-body'), { name: 'notes.txt', _content: 'hello' });
+      await settle();
+      held.answer(appliedAnswer(sent));
+      await settle();
+
+      expect(panelText()).toBe(appliedSource);
+      expect(canvasMarkup()).toContain('new-command-2');
+      expect(document.getElementById('render-status').textContent).toContain('Only .emod and .json files are supported');
+    });
+
+    it.each([
+      ['a file the host delivers', () => deliverFile({ name: 'other.emod', path: '/models/other.emod', content: 'emod = 1\n\nmodel "Other" {\n}\n' })],
+      ['a file dropped on the panel', () => fireDrop(document.getElementById('data-panel-body'), { name: 'other.emod', _content: 'emod = 1\n\nmodel "Other" {\n}\n' })],
+    ])('asks about unsaved edits for %s as if the edit had reached the panel', async (_, open) => {
+      await openEditable();
+      const held = heldApply();
+      unsavedEditsAnswer = 'cancel';
+
+      fromMenu(sliceHeader('slice-1'), 'add-command');
+      await settle();
+      open();
+      await settle();
+      expect(unsavedEditsAsked).toBe(0);
+
+      held.answer(appliedAnswer(editableDiagram()));
+      await settle();
+
+      expect(unsavedEditsAsked).toBe(1);
+      expect(panelText()).toBe(appliedSource);
+    });
+  });
+
+  describe('visual state', () => {
+    const visualGestures = [
+      ['dragging a block inside its slice', () => dragBy(blockFor('command-1'), 30, 20)],
+      ['panning', () => dragBy(document.getElementById('diagram-canvas'), 60, 60)],
+      ['zooming', () => document.getElementById('diagram-canvas').dispatchEvent(new WheelEvent('wheel', { deltaY: -120, bubbles: true, cancelable: true }))],
+      ['fitting the diagram to the view', () => document.getElementById('fit-view').click()],
+      ['resetting the layout', () => {
+        dragBy(blockFor('command-1'), 30, 20);
+        document.getElementById('reset-layout').click();
+      }],
+      ['hiding a slice from the visibility tree', () => {
+        document.getElementById('visibility-toggle').click();
+        hideFromVisibilityTree('slice-2');
+      }],
+      ['collapsing and expanding the data panel', () => document.getElementById('data-panel-header').click()],
+      ['opening the minimap, the legend and the diagnostics panel', () => {
+        document.getElementById('minimap-toggle').click();
+        document.getElementById('legend-toggle').click();
+        document.getElementById('diagnostics-badge').click();
+      }],
+      ['selecting a block and highlighting an aggregate', () => {
+        fireMouse(blockFor('command-1'), 'click');
+        fireMouse(document.querySelector('.agg-label[data-agg-id="aggregate-1"]'), 'click');
+      }],
+    ];
+
+    it.each(visualGestures)('%s asks the pipeline nothing and leaves the panel alone', async (_, gesture) => {
+      await openEditable();
+      const before = applies();
+
+      gesture();
+      await settle();
+
+      expect(applies()).toBe(before);
+      expect(panelText()).toBe(billingSource);
+    });
+
+    // A node the viewer adds carries an id made from the clock, so two runs of
+    // the same gesture are compared with that id taken out.
+    function sentWithoutNewIds() {
+      const diagram = JSON.parse(JSON.stringify(lastApply()[2]));
+      const renamed = new Map();
+      diagram.nodes.forEach((n) => {
+        if (n.id.startsWith('_')) {
+          renamed.set(n.id, 'new:' + n.label);
+          n.id = 'new:' + n.label;
+        }
+      });
+      diagram.edges.forEach((e) => {
+        e.source = renamed.get(e.source) || e.source;
+        e.target = renamed.get(e.target) || e.target;
+      });
+      return diagram;
+    }
+
+    it('sends a diagram edit made after all of them exactly as it sends the same edit made without them', async () => {
+      await openEditable();
+      fromMenu(sliceHeader('slice-1'), 'add-flow');
+      await settle();
+      const withoutVisualState = sentWithoutNewIds();
+
+      document.body.innerHTML = '';
+      await openEditable();
+      visualGestures.forEach(([, gesture]) => gesture());
+      await settle();
+      fromMenu(sliceHeader('slice-1'), 'add-flow');
+      await settle();
+
+      expect(sentWithoutNewIds()).toEqual(withoutVisualState);
     });
   });
 });
@@ -3599,6 +4243,22 @@ describe('the documentation of the source panel', () => {
     const paragraph = read('README.md').split('**The source panel**')[1].split('**')[0];
 
     expect(paragraph).toContain('With the caret on a line that carries diagnostics, a line under the text shows each of them');
+  });
+
+  it('says in the README that a diagram edit is written into the panel, that Save writes it, and that the first one lays out a file in the emod fmt layout', () => {
+    const paragraph = read('README.md').split('**The source panel**')[1].split('**')[0];
+
+    expect(paragraph).toContain('is written into the source panel, and Save writes it');
+    expect(paragraph).toContain('takes that layout on its first diagram edit, and the bar along the bottom says so');
+  });
+
+  it('says in the README that Save writes the diagram edits and Export the diagram alone, and not that the two are still to be reconciled', () => {
+    const readme = read('README.md');
+    const paragraph = readme.split('Save and Export answer different questions.')[1].split('**')[0];
+
+    expect(paragraph).toContain('where every diagram edit has already been written');
+    expect(paragraph).not.toContain('still to come');
+    expect(readme.split('What it does not do yet:')[1].split('.')[0]).not.toContain('diagram edit');
   });
 
   it('says in the flow summary that a pause in typing, not a Render click alone, reaches the pipeline', () => {

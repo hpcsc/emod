@@ -132,6 +132,15 @@ function moveSlice(nodes, sliceId, targetPos) {
   return true;
 }
 
+function readDiagramJson(source) {
+  try {
+    const parsed = JSON.parse(source);
+    return parsed && (Array.isArray(parsed.nodes) || parsed.model) ? parsed : null;
+  } catch (e) {
+    return null;
+  }
+}
+
 function sendParse(store, source, statusEl, filename) {
   if (!source || !source.trim()) {
     if (statusEl) {
@@ -145,21 +154,9 @@ function sendParse(store, source, statusEl, filename) {
     statusEl.className = "";
   }
 
-  // Detect input format: try JSON, check for known shapes
-  var parsed;
-  try {
-    parsed = JSON.parse(source);
-    // Valid JSON — check for well-known formats
-    if (Array.isArray(parsed.nodes)) {
-      // Diagram-oriented JSON — use directly
-      return Promise.resolve({ diagnostics: parsed.diagnostics || [], diagram: parsed });
-    }
-    if (parsed.model) {
-      // Raw AST JSON — use directly
-      return Promise.resolve({ diagnostics: parsed.diagnostics || [], diagram: parsed });
-    }
-  } catch (e) {
-    // Not valid JSON — treat as raw .emod source below
+  const diagramJson = readDiagramJson(source);
+  if (diagramJson) {
+    return Promise.resolve({ diagnostics: diagramJson.diagnostics || [], diagram: diagramJson });
   }
 
   // Raw .emod source. Reached through a dynamic import so this module can be
@@ -230,6 +227,7 @@ export const Model = {
   setModelData,
   setModelDataInPlace,
   sendParse,
+  readDiagramJson,
   moveSlice,
   addEdge,
   removeEdge,

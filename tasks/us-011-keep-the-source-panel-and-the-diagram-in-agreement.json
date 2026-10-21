@@ -93,7 +93,7 @@
     },
     {
       "n": 3,
-      "done": false,
+      "done": true,
       "title": "Write diagram edits into the source panel",
       "language": "JavaScript",
       "testable": true,

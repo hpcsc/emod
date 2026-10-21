@@ -89,6 +89,7 @@ beforeEach(() => {
 
   rerender = ({ store: s }) => { if (s === store) render(); };
   bus.on('data:changed', rerender);
+  bus.on('model:edited', rerender);
 
   render();
   Interaction.initEventListeners(store);
@@ -96,6 +97,7 @@ beforeEach(() => {
 
 afterEach(() => {
   bus.off('data:changed', rerender);
+  bus.off('model:edited', rerender);
   delete document.elementsFromPoint;
 });
 

@@ -413,7 +413,14 @@ Clicking a diagnostic opens the data panel if it is collapsed and puts the
 source panel's caret at the line and column the diagnostic names, scrolled into
 view; a diagnostic that applies to the whole file says so in the list and
 leaves the caret where it is. With the caret on a line that carries
-diagnostics, a line under the text shows each of them, most severe first.
+diagnostics, a line under the text shows each of them, most severe first. A
+change made on the diagram — adding, deleting or renaming an element,
+reordering slices, or drawing, repointing or deleting an arrow — is written
+into the source panel, and Save writes it. The change is applied to the source
+the diagram was drawn from, so comments, invariants, specs and the other text
+the diagram does not show stay where they are. A file not in the `emod fmt`
+layout takes that layout on its first diagram edit, and the bar along the
+bottom says so, with the number of comments that layout dropped.
 **Render** stays below the panel and redraws at once. Because the diagram is
 redrawn from the panel, typing replaces any change made on the diagram itself
 since it was last drawn. The browser viewer and `emod diagram --serve` share
@@ -462,9 +469,9 @@ included. A write the filesystem refuses — a read-only file, a directory that
 may not be written into — says why and leaves what is on disk untouched.
 
 Save and Export answer different questions. Export writes the model
-re-serialised from the diagram, which is canonically formatted and carries no
-comments; Save writes the text in the source panel. Reconciling the two, once
-the diagram and the panel can both be edited, is still to come.
+re-serialised from the diagram alone, in the `emod fmt` layout and without the
+invariants, specs and other text the diagram does not show; Save writes the
+text in the source panel, where every diagram edit has already been written.
 
 **Unsaved changes** are what the source panel holds that the file behind it does
 not — Save writes the panel, so editing the panel is what raises the marker and
@@ -551,9 +558,8 @@ change than it looks.
 The association is macOS-only today. The Linux and Windows builds are still to
 come, and neither registers a file type yet.
 
-What it does not do yet: a diagram edit does not reach the source panel and so
-is neither what Save writes nor what counts as an unsaved change; no installer;
-and no prebuilt download, so it has to be built from source.
+What it does not do yet: no installer, and no prebuilt download, so it has to
+be built from source.
 
 How the repository fits together — packages, the language pipeline, renderers,
 the viewer's three distributions and the editor grammars — is described in

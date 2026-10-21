@@ -597,7 +597,7 @@ function showEdgeDetail(store) {
         Model.removeEdge(store, e.source, e.target);
         store.interaction.selectedEdge = null;
         hideDetailPanel(store);
-        bus.emit('data:changed', { store });
+        bus.emit('model:edited', { store });
       }
     });
   }
@@ -700,14 +700,8 @@ function startInlineEdit(store, nodeId) {
     if (evt.key === "Enter") {
       evt.preventDefault();
       if (!store.interaction.inlineEdit) return;
-      const newLabel = input.value.trim() || store.interaction.inlineEdit.originalLabel;
-      const n = store.nodeById.get( store.interaction.inlineEdit.nodeId);
-      if (n && newLabel !== n.label) {
-        n.label = newLabel;
-      }
-      document.body.removeChild(input);
-      store.interaction.inlineEdit = null;
-      bus.emit('data:changed', { store });
+      const renamed = commitInlineEdit(store, input);
+      bus.emit(renamed ? 'model:edited' : 'data:changed', { store });
     } else if (evt.key === "Escape") {
       evt.preventDefault();
       cancelInlineEdit(store);
@@ -716,19 +710,25 @@ function startInlineEdit(store, nodeId) {
 
   input.addEventListener("blur", function() {
     if (!store.interaction.inlineEdit) return;
-    const newLabel = input.value.trim() || store.interaction.inlineEdit.originalLabel;
-    const n = store.nodeById.get( store.interaction.inlineEdit.nodeId);
-    if (n && newLabel !== n.label) {
-      n.label = newLabel;
-    }
-    document.body.removeChild(input);
-    store.interaction.inlineEdit = null;
-    setTimeout(function() { bus.emit('data:changed', { store }); }, 0);
+    const renamed = commitInlineEdit(store, input);
+    setTimeout(function() { bus.emit(renamed ? 'model:edited' : 'data:changed', { store }); }, 0);
   });
 
   document.body.appendChild(input);
   input.focus();
   input.select();
+}
+
+function commitInlineEdit(store, input) {
+  const newLabel = input.value.trim() || store.interaction.inlineEdit.originalLabel;
+  const n = store.nodeById.get(store.interaction.inlineEdit.nodeId);
+  const renamed = Boolean(n) && newLabel !== n.label;
+  if (renamed) {
+    n.label = newLabel;
+  }
+  document.body.removeChild(input);
+  store.interaction.inlineEdit = null;
+  return renamed;
 }
 
 function cancelInlineEdit(store) {
@@ -1051,7 +1051,7 @@ function initKeyboard(store) {
         Model.removeEdge(store, edge.source, edge.target);
         store.interaction.selectedEdge = null;
         hideDetailPanel(store);
-        bus.emit('data:changed', { store });
+        bus.emit('model:edited', { store });
       } else if (store.interaction.selectedNodeId) {
         const delNode = store.nodeById.get( store.interaction.selectedNodeId);
         if (delNode && isDeletableNodeType(delNode.type)) {

@@ -11,10 +11,14 @@ import { Model } from './model.js';
 import { bus } from './bus.js';
 import { Export } from './emod-export.js';
 import { REVALIDATE_PAUSE_MS } from './config.js';
-import { ready, isReady, droppedFiles, saveFile, setWindowTitle, setWindowModified, rememberOpenedFile, resolveUnsavedEdits, onFileOpened, onFilesDropped, onSaveRequested, onLeaveRequested, initialState } from './platform.js';
+import { ready, isReady, applyDiagram, droppedFiles, saveFile, setWindowTitle, setWindowModified, rememberOpenedFile, resolveUnsavedEdits, onFileOpened, onFilesDropped, onSaveRequested, onLeaveRequested, initialState } from './platform.js';
 
 // ─── Event subscriptions ─────────────────────────────────────────────
 bus.on('data:changed', function({ store: s }) {
+  renderDiagram(s);
+});
+
+bus.on('model:edited', function({ store: s }) {
   renderDiagram(s);
 });
 
@@ -97,7 +101,7 @@ bus.on('node:delete', function({ store: s, nodeId }) {
   UI.hideDetailPanel(s);
   const hasOffsets = Object.keys(s.nodeOffsets).length > 0;
   if (s.dom.resetLayoutBtn) s.dom.resetLayoutBtn.disabled = !hasOffsets;
-  renderDiagram(s);
+  bus.emit('model:edited', { store: s });
 });
 
 // ─── Render orchestration ────────────────────────────────────────────
@@ -208,6 +212,19 @@ function init() {
 
   let checkedSource = null;
 
+  // The text the diagram on screen was drawn from, or null when no .emod source
+  // in the panel drew it — diagram JSON, or a model the host handed the page. A
+  // diagram edit is applied onto this text rather than onto the panel's, because
+  // the edited nodes carry the ids a parse of this text gave them.
+  let drawnSource = null;
+
+  // Diagram edits are numbered because an apply is answered asynchronously: an
+  // answer that a newer edit overtook is not written, and the newer diagram is
+  // applied instead.
+  let latestDiagramEdit = 0;
+  let applyingDiagramEdit = false;
+  let latestApplySettled = Promise.resolve();
+
   // The panel's text and the render that reads it are claimed together, because
   // a drop and a host delivery both arrive asynchronously and either can land
   // mid-flight: writing the text outside this would let one entry point's source
@@ -257,6 +274,7 @@ function init() {
         }
         reportDiagnostics(data.diagnostics || [], revalidation);
         UI.hideDiagramStale(store);
+        drawnSource = Model.readDiagramJson(source) ? null : source;
         if (opening) {
           Model.setModelData(store, data.diagram);
         } else {
@@ -381,6 +399,93 @@ function init() {
     renderPanelSource(undefined, undefined, { revalidation: true });
   }
 
+  // ─── Diagram edits ────────────────────────────────────────────────
+  // Every init has a store of its own and the bus outlives it, so an edit is
+  // applied only by the init whose store it changed.
+  bus.on('model:edited', function({ store: s }) {
+    if (s === store) applyDiagramEdit();
+  });
+
+  // A panel that no longer holds the drawn source has an edit the diagram does
+  // not show, and writing the applied edit over it would discard that.
+  function applyDiagramEdit() {
+    if (drawnSource === null || store.dom.sourceInput.value !== drawnSource) {
+      return;
+    }
+    latestDiagramEdit++;
+    if (!applyingDiagramEdit) {
+      latestApplySettled = sendDiagramEdit();
+    }
+  }
+
+  function sendDiagramEdit() {
+    applyingDiagramEdit = true;
+    const edit = latestDiagramEdit;
+    const base = drawnSource;
+    const filename = store.currentFile ? store.currentFile.name : undefined;
+    const diagram = { model_name: store.modelName, nodes: store.nodes, edges: store.edges };
+
+    return ready.then(function() {
+      return applyDiagram(base, filename, diagram);
+    }).then(function(answer) {
+      return settleDiagramEdit(edit, base, function() { writeAppliedSource(answer); });
+    }, function(err) {
+      return settleDiagramEdit(edit, base, function() { reportUnappliedEdit(err.message || String(err)); });
+    }).catch(function(err) {
+      applyingDiagramEdit = false;
+      reportUnappliedEdit(err.message || String(err));
+    });
+  }
+
+  function settleDiagramEdit(edit, base, land) {
+    applyingDiagramEdit = false;
+    if (store.dom.sourceInput.value !== base) {
+      return;
+    }
+    if (edit !== latestDiagramEdit) {
+      return sendDiagramEdit();
+    }
+    land();
+  }
+
+  // The applied source is a render nobody asked for, so it claims a render
+  // number — an older parse still in flight stands down rather than drawing the
+  // source the edit replaced — and it writes nothing a render the user started
+  // would not.
+  function writeAppliedSource(answer) {
+    const panel = store.dom.sourceInput;
+    const scrollTop = panel.scrollTop;
+    panel.value = answer.emod;
+    panel.scrollTop = scrollTop;
+    checkedSource = answer.emod;
+    latestRender++;
+
+    reportDiagnostics(answer.diagnostics || [], true);
+    if (answer.parsed === false) {
+      keepStaleDiagram("the source does not parse", "✗ Not redrawn: the source does not parse", true);
+    } else {
+      drawnSource = answer.emod;
+      UI.hideDiagramStale(store);
+      Model.setModelDataInPlace(store, answer.diagram);
+      showRenderOutcome("✓ Rendered", "status success", true);
+    }
+    reportModified();
+    if (answer.reformatted) {
+      reportReformat(answer.dropped_comments);
+    }
+  }
+
+  function reportReformat(droppedComments) {
+    const dropped = droppedComments > 0
+      ? ' · ' + droppedComments + (droppedComments === 1 ? ' comment' : ' comments') + ' dropped'
+      : '';
+    reportInBar('Source rewritten in the emod fmt layout' + dropped, false);
+  }
+
+  function reportUnappliedEdit(reason) {
+    keepStaleDiagram("the diagram edit is not in the source: " + reason, "✗ " + reason, true);
+  }
+
   // Everything that asks about unsaved edits queues here. The question and the
   // act it authorises are separated by however long the user takes to answer,
   // and the save the answer asks for reads the panel and the open file when it
@@ -426,19 +531,24 @@ function init() {
   // replaced, and the answer to whether that write landed is the marker: a
   // refused save, and one whose location dialog was cancelled, both leave the
   // model modified, and neither may cost the user the edits they asked to keep.
+  //
+  // It is asked once no diagram edit is still being applied: that edit has not
+  // reached the panel yet, and the panel is what Save would write.
   function clearedToReplace() {
-    if (!modelIsModified(store)) {
-      return Promise.resolve(true);
-    }
-    return resolveUnsavedEdits().then(function(outcome) {
-      if (outcome === 'cancel') {
-        return false;
-      }
-      if (outcome === 'discard') {
+    return appliesSettled().then(function() {
+      if (!modelIsModified(store)) {
         return true;
       }
-      return saveModel({ chooseLocation: false }).then(function() {
-        return !modelIsModified(store);
+      return resolveUnsavedEdits().then(function(outcome) {
+        if (outcome === 'cancel') {
+          return false;
+        }
+        if (outcome === 'discard') {
+          return true;
+        }
+        return saveModel({ chooseLocation: false }).then(function() {
+          return !modelIsModified(store);
+        });
       });
     });
   }
@@ -666,11 +776,20 @@ function init() {
   // Waiting on one render is not enough: a file arriving while that one is in
   // flight starts another, and resuming between the two reads the panel's new
   // text beside the old file's identity. Each wait is checked against what the
-  // latest render is by the time it finishes.
+  // latest render and the latest applied diagram edit are by the time it
+  // finishes.
   function rendersSettled() {
-    const waitingOn = latestRenderSettled;
-    return waitingOn.then(function() {
-      return waitingOn === latestRenderSettled ? undefined : rendersSettled();
+    const rendering = latestRenderSettled;
+    const applying = latestApplySettled;
+    return Promise.all([rendering, applying]).then(function() {
+      return rendering === latestRenderSettled && applying === latestApplySettled ? undefined : rendersSettled();
+    });
+  }
+
+  function appliesSettled() {
+    const applying = latestApplySettled;
+    return applying.then(function() {
+      return applying === latestApplySettled ? undefined : appliesSettled();
     });
   }
 
@@ -809,7 +928,7 @@ function init() {
     // A deleted edge may still be the one the detail panel is showing, and
     // re-rendering alone does not clear the selection behind it.
     if (action === "delete-arrow") UI.hideDetailPanel(store);
-    bus.emit('data:changed', { store });
+    bus.emit('model:edited', { store });
   });
 
   // ─── Dismiss context menu on outside click ──────────────────────

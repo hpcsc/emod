@@ -426,6 +426,21 @@ context "Payments" {
 			})
 		}
 
+		t.Run("every key the viewer reads off an applied edit's answer is one the answer carries", func(t *testing.T) {
+			answer := pipeline.ApplyDiagramJSON(applyRequest(t, test.BillingPayments, "billing.emod", drawnDiagram(t, test.BillingPayments, "billing.emod")))
+			var keys map[string]json.RawMessage
+			require.NoError(t, json.Unmarshal([]byte(answer), &keys))
+			written := make([]string, 0, len(keys))
+			for key := range keys {
+				written = append(written, key)
+			}
+
+			read := fieldsReadBy(t, "../frontend/static/viewer.js", "writeAppliedSource", "answer")
+
+			require.Contains(t, read, "emod", "viewer.js must read the applied source")
+			require.Subset(t, written, read, "viewer.js reads a key of the applied edit's answer the pipeline does not write")
+		})
+
 		t.Run("both viewer runtimes send the envelope under the keys it reads", func(t *testing.T) {
 			for _, platform := range []string{
 				"../frontend/static/platform.browser.js",

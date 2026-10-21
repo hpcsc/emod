@@ -296,10 +296,10 @@ function applyRepoint(store, connect, targetId) {
     if (e.source !== connect.edgeSource || e.target !== connect.edgeTarget) continue;
     if (e.type !== connect.edgeType) continue;
     if (connect.handleEnd === "source") {
-      if (targetId === connect.edgeTarget) return false;
+      if (targetId === connect.edgeTarget || targetId === e.source) return false;
       e.source = targetId;
     } else {
-      if (targetId === connect.edgeSource) return false;
+      if (targetId === connect.edgeSource || targetId === e.target) return false;
       e.target = targetId;
     }
     return true;
@@ -330,7 +330,10 @@ function settleConnect(store, connect, clientX, clientY) {
   var targetId = targetBlock && targetBlock.getAttribute("data-node-id");
 
   if (connect.repoint) {
-    if (targetId) applyRepoint(store, connect, targetId);
+    if (targetId && applyRepoint(store, connect, targetId)) {
+      bus.emit('model:edited', { store });
+      return;
+    }
     // Redraw whatever the drop decided: the arrow is currently bent to the
     // cursor, so an abandoned repoint would otherwise stay hanging there.
     bus.emit('data:changed', { store });
@@ -338,7 +341,7 @@ function settleConnect(store, connect, clientX, clientY) {
   }
 
   if (targetId && addEdge(store, connect.sourceId, targetId)) {
-    bus.emit('data:changed', { store });
+    bus.emit('model:edited', { store });
   }
 }
 
@@ -382,7 +385,7 @@ function tryReorderSliceOnDrop(store, sliceId, dx) {
 
   var moved = Model.moveSlice(store.nodes, sliceId, targetPos);
   if (moved) {
-    bus.emit('data:changed', { store });
+    bus.emit('model:edited', { store });
   }
   return moved;
 }

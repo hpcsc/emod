@@ -595,7 +595,7 @@ is Task 6. The diagram is redrawn in place from the new text, its diagnostics ar
 window is marked modified. Save then writes that text. Visual state never reaches the panel.
 
 **Acceptance Criteria:**
-- [ ] Every edit that changes the diagram's nodes or edges reaches the panel. The sites that make one
+- [x] Every edit that changes the diagram's nodes or edges reaches the panel. The sites that make one
   today were found from where the canvas changes `store.nodes` or `store.edges`. They are:
   - add slice, add command, add event, add flow, delete arrow, and move slice left or right, from the
     context menu;
@@ -607,48 +607,48 @@ window is marked modified. Save then writes that text. Visual state never reache
   - dragging a slice to a new place among its siblings.
 
   Each site has a test that asserts the panel's text afterwards.
-- [ ] An edit that changes nothing leaves the panel and the marker as they were and calls no
+- [x] An edit that changes nothing leaves the panel and the marker as they were and calls no
   `applyDiagram`. Examples are a rename to the same label, an abandoned connect or repoint, a
   refused duplicate arrow, a slice dropped back where it was, and move-left on the first slice.
-- [ ] After an edit, the panel shows the text the apply answered. The diagram is redrawn from that
+- [x] After an edit, the panel shows the text the apply answered. The diagram is redrawn from that
   text in place, keeping dragged offsets, hidden nodes, pan and zoom as revalidation keeps them. The
   diagnostics panel and the gutter show that text's diagnostics. The data panel stays open or
   collapsed as it was.
-- [ ] The window is marked modified once a diagram edit reaches the panel. The existing test
+- [x] The window is marked modified once a diagram edit reaches the panel. The existing test
   `'says nothing when the context menu adds a node to the diagram'` (`viewer.test.js:1803-1810`) is
   replaced by one that pins the opposite: Save now writes an added node.
-- [ ] Save after a diagram edit writes the panel's text. A file that arrived with CRLF line endings
+- [x] Save after a diagram edit writes the panel's text. A file that arrived with CRLF line endings
   is written with CRLF, and one with LF is written with LF.
-- [ ] Save pressed while a diagram edit is being applied writes the text with that edit.
-- [ ] When the apply answers `reformatted`, the bar says the source was rewritten in the `emod fmt`
+- [x] Save pressed while a diagram edit is being applied writes the text with that edit.
+- [x] When the apply answers `reformatted`, the bar says the source was rewritten in the `emod fmt`
   layout. When `dropped_comments` is above zero, it also says how many comments the layout dropped.
   The full text is in the hover title. A later save confirmation replaces it. An edit on a source
   that was already fmt-clean shows no such notice.
-- [ ] A diagram with no `.emod` source behind it takes diagram edits as it does today: the panel does
+- [x] A diagram with no `.emod` source behind it takes diagram edits as it does today: the panel does
   not change and no `applyDiagram` is called. This covers diagram JSON pasted into the panel and the
   diagram `emod diagram --serve` hands the page.
-- [ ] When the panel has an unapplied edit, a diagram edit leaves the panel's text alone and calls no
+- [x] When the panel has an unapplied edit, a diagram edit leaves the panel's text alone and calls no
   `applyDiagram`, as before this story. The panel has an unapplied edit when its text differs from
   the drawn source: while typing pauses, while a parse is in flight, when the text does not parse,
   and when the panel is empty. Task 4 replaces this behaviour.
-- [ ] An apply whose answer lands after the panel's text changed never replaces that text. The typed
+- [x] An apply whose answer lands after the panel's text changed never replaces that text. The typed
   text revalidates as in US-009.
-- [ ] A second diagram edit made while the first is being applied leaves the panel holding both
+- [x] A second diagram edit made while the first is being applied leaves the panel holding both
   edits. An older answer that lands after a newer one never replaces the newer one.
-- [ ] Each of these, arriving while a diagram edit is being applied, keeps that edit:
+- [x] Each of these, arriving while a diagram edit is being applied, keeps that edit:
   - A Render click.
   - A host failure, such as a refused drop or an unreadable or empty file.
   - An open from the dialog, recent files, a drop or a host delivery. It asks the unsaved-edits
     question as if the edit had already reached the panel.
-- [ ] A diagram edit whose result does not parse (for example a name typed that is not an
+- [x] A diagram edit whose result does not parse (for example a name typed that is not an
   identifier) still writes the result into the panel. The diagnostics list why, and the diagram is
   marked out of date, as when the same text is typed.
-- [ ] When `applyDiagram` fails, the panel's text does not change, and the diagram keeps the edit
+- [x] When `applyDiagram` fails, the panel's text does not change, and the diagram keeps the edit
   with the out-of-date mark giving the reason. A failure includes a diagram drawn from a file that
   opened with parse errors.
-- [ ] After a diagram edit has reached the panel, typing into the panel and pausing redraws the
+- [x] After a diagram edit has reached the panel, typing into the panel and pausing redraws the
   diagram from the typed text, as in US-009.
-- [ ] No gesture that changes only visual state calls `applyDiagram` or changes the panel. The
+- [x] No gesture that changes only visual state calls `applyDiagram` or changes the panel. The
   gestures are taken from the state outside `store.nodes` and `store.edges` in `createStore` and
   from the toolbar:
   - dragging a block inside its own slice;
@@ -659,17 +659,17 @@ window is marked modified. Save then writes that text. Visual state never reache
   - selecting and highlighting.
 
   A diagram edit made after any of them writes the same text as the same edit made without them.
-- [ ] Every key `viewer.js` reads off the apply's answer is one the Go answer writes. The pattern is
+- [x] Every key `viewer.js` reads off the apply's answer is one the Go answer writes. The pattern is
   `pipeline_test.go:162-176`.
-- [ ] In a real browser with the real pipeline, `examples/specs_hotel.emod` is rendered and a
+- [x] In a real browser with the real pipeline, `examples/specs_hotel.emod` is rendered and a
   command is added from a slice's context menu. The panel then holds exactly the file plus that
   command's declaration, with its comments, invariants, specs, rejections and `type =` lines intact.
   Deleting an arrow from its context menu then removes its line. The `export.spec.js` specs pass
   unchanged.
-- [ ] The README's source-panel paragraph says that a change made on the diagram is written into the
+- [x] The README's source-panel paragraph says that a change made on the diagram is written into the
   source panel, and that Save writes it. It also says that a file not in the `emod fmt` layout takes
   that layout on its first diagram edit, and that the bar says so.
-- [ ] The README's Save-versus-Export paragraph (`README.md:464-467`) and its "What it does not do
+- [x] The README's Save-versus-Export paragraph (`README.md:464-467`) and its "What it does not do
   yet" line (`:554-556`) no longer say that the two are not reconciled. Each claim is pinned the way
   `viewer.test.js:3574-3610` pins the source-panel paragraph.
 - [ ] `task test:viewer`, `task test:unit` and `task test:e2e:viewer` pass.
