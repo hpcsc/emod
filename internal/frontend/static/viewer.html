@@ -324,14 +324,23 @@ header .model-name span {
 }
 .diag-severity.error {
   background: #fde8e8;
-  color: #e74c3c;
 }
 .diag-severity.warning {
   background: #fff3cd;
-  color: #856404;
 }
 .diag-severity.info {
   background: #e3f0fb;
+}
+.diag-severity.error,
+.gutter-entry[data-severity="error"] {
+  color: #e74c3c;
+}
+.diag-severity.warning,
+.gutter-entry[data-severity="warning"] {
+  color: #856404;
+}
+.diag-severity.info,
+.gutter-entry[data-severity="info"] {
   color: #1f618d;
 }
 .diag-rule {
@@ -626,19 +635,58 @@ body.file-drop-target-active::after {
   color: #2c3e50;
 }
 
+/* The gutter places an entry by its line number alone, so the panel must not
+   wrap a line onto a second row, and both read the row height from here. */
+#source-area {
+  --source-line-height: 18px;
+  --source-padding: 10px;
+  --source-border: 1px;
+  --gutter-width: 14px;
+  --gutter-dot: 8px;
+  position: relative;
+  flex: 1 1 auto;
+  min-height: 72px;
+  display: flex;
+  flex-direction: column;
+  padding-left: var(--gutter-width);
+}
+
+#source-gutter {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: 0;
+  width: var(--gutter-width);
+  overflow: hidden;
+}
+
+.gutter-entry {
+  position: absolute;
+  left: calc((var(--gutter-width) - var(--gutter-dot)) / 2);
+  top: calc(var(--source-border) + var(--source-padding) - var(--source-scroll, 0px) +
+    (var(--line) - 1) * var(--source-line-height) + (var(--source-line-height) - var(--gutter-dot)) / 2);
+  width: var(--gutter-dot);
+  height: var(--gutter-dot);
+  border-radius: 50%;
+  background: currentColor;
+}
+
 #source-input {
   flex: 1 1 auto;
   width: 100%;
   height: 200px;
   min-height: 72px;
-  padding: 10px;
+  padding: var(--source-padding);
   font-family: "SF Mono", "Fira Code", "Fira Mono", Menlo, Consolas, monospace;
   font-size: 12px;
-  line-height: 1.5;
-  border: 1px solid #ccc;
+  line-height: var(--source-line-height);
+  border: var(--source-border) solid #ccc;
   border-radius: 4px;
   resize: vertical;
   box-sizing: border-box;
+  white-space: pre;
+  overflow-wrap: normal;
+  overflow-x: auto;
 }
 
 .data-panel-actions {
@@ -1272,7 +1320,10 @@ body.file-drop-target-active::after {
         <div id="landing-instructions" style="display: none;">
           <p>Drop an <strong>.emod</strong> or <strong>.json</strong> file here, or paste content below.</p>
         </div>
-        <textarea id="source-input" spellcheck="false" placeholder="Paste .emod source or diagram JSON here"></textarea>
+        <div id="source-area">
+          <div id="source-gutter"></div>
+          <textarea id="source-input" wrap="off" spellcheck="false" placeholder="Paste .emod source or diagram JSON here"></textarea>
+        </div>
         <div class="data-panel-actions">
           <button id="render-btn">Render</button>
           <span class="status" id="render-status"></span>

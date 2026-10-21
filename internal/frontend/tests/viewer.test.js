@@ -81,6 +81,7 @@ function createRequiredElements() {
   container.innerHTML = `
     <svg id="diagram-canvas"></svg>
     <div id="model-name-display"></div>
+    <div id="source-gutter"></div>
     <textarea id="source-input"></textarea>
     <button id="render-btn"></button>
     <span id="render-status"></span>
@@ -2988,6 +2989,38 @@ describe('revalidating the source panel as it is edited', () => {
       expect(document.getElementById('diagnostics-badge').style.display).toBe('none');
     });
 
+    it('marks the lines each revalidation reports, keeping them while typing until the next one replaces them', async () => {
+      const gutter = () => Array.from(document.querySelectorAll('#source-gutter [title]')).map((entry) => entry.title);
+      await openBilling();
+
+      answerNext({ diagnostics: [orderingFinding], diagram: billingWith('RefundPayment') });
+      typeIntoPanel(editedSource + 'a');
+      await pastPause();
+      expect(gutter()).toEqual(['Line 3: 1 error']);
+
+      answerNext({ diagnostics: [{ ...orderingFinding, line: 4, severity: 'warning' }], diagram: billingWith('RefundPayment') });
+      typeIntoPanel('\n' + editedSource + 'a');
+      expect(gutter()).toEqual(['Line 3: 1 error']);
+      await pastPause();
+      expect(gutter()).toEqual(['Line 4: 1 warning']);
+
+      answerNext({ diagram: billingDiagram() });
+      typeIntoPanel(editedSource);
+      await pastPause();
+      expect(gutter()).toEqual([]);
+    });
+
+    it('marks the lines a revalidation reports when the source does not parse', async () => {
+      await openBilling();
+      answerNext({ parsed: false, diagnostics: [orderingFinding], diagram: { model_name: 'Billing', nodes: [], edges: [] } });
+
+      typeIntoPanel(billingSource + 'context "Refunds" {\n');
+      await pastPause();
+
+      expect(Array.from(document.querySelectorAll('#source-gutter [title]')).map((entry) => entry.title))
+        .toEqual(['Line 3: 1 error']);
+    });
+
     it('says in the status area whether each revalidation redrew the diagram', async () => {
       await openBilling();
       expect(status()).toBe('✓ Rendered');
@@ -3362,6 +3395,12 @@ describe('the documentation of the source panel', () => {
     expect(paragraph).toContain('Once typing pauses');
     expect(paragraph).toContain('`emod validate`');
     expect(paragraph).toContain('marked out of date');
+  });
+
+  it('says in the README that a gutter marks each line carrying a diagnostic by its severity', () => {
+    const paragraph = read('README.md').split('**The source panel**')[1].split('**')[0];
+
+    expect(paragraph).toContain('marks each line that carries a diagnostic, coloured for the most severe one there');
   });
 
   it('says in the flow summary that a pause in typing, not a Render click alone, reaches the pipeline', () => {

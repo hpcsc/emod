@@ -32,6 +32,7 @@ export function createStore() {
       svg: null,
       nameDisplay: null,
       sourceInput: null,
+      sourceGutter: null,
       renderBtn: null,
       statusEl: null,
       statNodes: null,

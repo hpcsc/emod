@@ -5,6 +5,7 @@ import { Interaction } from './interaction.js';
 import { UI } from './ui.js';
 import { Minimap } from './minimap.js';
 import { Legend } from './legend.js';
+import { SourcePanel } from './source-panel.js';
 import { CtxActions } from './ctx-actions.js';
 import { Model } from './model.js';
 import { bus } from './bus.js';
@@ -71,6 +72,7 @@ bus.on('model:updated', function({ store: s }) {
 
 bus.on('diagnostics:changed', function({ store: s, diagnostics, revalidation }) {
   UI.updateDiagnosticsPanel(s, diagnostics, { reopen: !revalidation });
+  SourcePanel.showGutter(s, diagnostics);
 });
 
 bus.on('node:delete', function({ store: s, nodeId }) {
@@ -133,6 +135,7 @@ function init() {
   store.dom.svg = document.getElementById("diagram-canvas");
   store.dom.nameDisplay = document.getElementById("model-name-display");
   store.dom.sourceInput = document.getElementById("source-input");
+  store.dom.sourceGutter = document.getElementById("source-gutter");
   store.dom.renderBtn = document.getElementById("render-btn");
   store.dom.statusEl = document.getElementById("render-status");
   store.dom.statNodes = document.getElementById("stat-nodes");
@@ -172,6 +175,7 @@ function init() {
   UI.initDelegation(store);
   UI.initKeyboard(store);
   UI.initDiagnosticsDelegation(store);
+  SourcePanel.initSourcePanel(store);
   Minimap.initMinimap(store);
 
   // ─── Render ───────────────────────────────────────────────────────

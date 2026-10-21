@@ -405,10 +405,14 @@ that reports — the same messages under the same rule names, at the same
 severities and lines. Source that parses redraws the diagram where it is,
 keeping pan, zoom, dragged nodes and whatever the visibility panel hides. Source
 that does not parse leaves the last diagram on screen, dimmed and marked out of
-date, until it parses again. **Render** stays below the panel and redraws at
-once. Because the diagram is redrawn from the panel, typing replaces any change
-made on the diagram itself since it was last drawn. The browser viewer and
-`emod diagram --serve` share the frontend and behave the same way.
+date, until it parses again. A gutter beside the text marks each line that
+carries a diagnostic, coloured for the most severe one there: red for an error,
+dark yellow for a warning, blue for info. The panel scrolls a long line sideways
+rather than wrapping it, so each gutter entry stays level with its line.
+**Render** stays below the panel and redraws at once. Because the diagram is
+redrawn from the panel, typing replaces any change made on the diagram itself
+since it was last drawn. The browser viewer and `emod diagram --serve` share
+the frontend and behave the same way.
 
 **File ▸ Open** (⌘O on macOS, Ctrl+O on Linux and Windows) opens a model through the
 operating system's own file picker, filtered to `.emod` and `.json`. The chosen

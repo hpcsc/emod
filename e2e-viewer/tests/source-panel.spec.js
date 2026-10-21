@@ -172,3 +172,108 @@ test.describe('the panels along the bottom of the canvas', () => {
     expect(await landsOn(page, '#diagnostics-close')).toBe(true);
   });
 });
+
+const LARGEST_WITH_FINDINGS_NEAR_ITS_END = largestExample()
+  .replace('then  = rejected(OneConfirmationPerBooking)', 'then  = rejected(NoSuchRule)');
+
+function lineOf(source, needle) {
+  return source.split('\n').findIndex((line) => line.includes(needle)) + 1;
+}
+
+// How far a gutter entry's centre sits from the centre of the line it names,
+// where the line is placed from the source panel's own computed style and
+// scroll rather than from anything the gutter is styled with.
+async function gutterOffsetFrom(page, line) {
+  return page.evaluate((n) => {
+    const panel = document.getElementById('source-input');
+    const style = getComputedStyle(panel);
+    const lineHeight = parseFloat(style.lineHeight);
+    const lineTop = panel.getBoundingClientRect().top + parseFloat(style.borderTopWidth) +
+      parseFloat(style.paddingTop) + (n - 1) * lineHeight - panel.scrollTop;
+    const entry = document.querySelector(`#source-gutter [title^="Line ${n}:"]`).getBoundingClientRect();
+    return Math.abs((entry.top + entry.height / 2) - (lineTop + lineHeight / 2));
+  }, line);
+}
+
+test.describe('the gutter beside the source panel', () => {
+  test('marks each line the real pipeline reports, level with that line before and after the panel scrolls', async ({ page }) => {
+    const source = LARGEST_WITH_FINDINGS_NEAR_ITS_END;
+    expect(source).not.toBe(largestExample());
+    const errorLine = lineOf(source, 'rejected(NoSuchRule)');
+    const warningLine = lineOf(source, 'OneConfirmationPerBooking = ');
+    expect(errorLine).toBeGreaterThan(300);
+    expect(warningLine).toBeGreaterThan(300);
+
+    await open(page);
+    await page.locator('#source-input').fill(source);
+    await page.locator('#render-btn').click();
+    await expect(page.locator('#diagnostics-badge')).toHaveText('1 error, 1 warning');
+    await page.locator('#data-panel-header').click();
+
+    await expect(page.locator('#source-gutter [title]')).toHaveCount(2);
+    await expect(page.locator(`#source-gutter [title="Line ${errorLine}: 1 error"]`)).toHaveAttribute('data-severity', 'error');
+    await expect(page.locator(`#source-gutter [title="Line ${warningLine}: 1 warning"]`)).toHaveAttribute('data-severity', 'warning');
+    const colours = await page.evaluate(() => {
+      const colourOf = (selector, property) => getComputedStyle(document.querySelector(selector))[property];
+      return {
+        errorEntry: colourOf('#source-gutter [data-severity="error"]', 'backgroundColor'),
+        errorPill: colourOf('#diagnostics-list .diag-severity.error', 'color'),
+        warningEntry: colourOf('#source-gutter [data-severity="warning"]', 'backgroundColor'),
+        warningPill: colourOf('#diagnostics-list .diag-severity.warning', 'color'),
+      };
+    });
+    expect(colours.errorEntry).toBe(colours.errorPill);
+    expect(colours.warningEntry).toBe(colours.warningPill);
+    expect(colours.errorEntry).not.toBe(colours.warningEntry);
+    expect(await gutterOffsetFrom(page, errorLine)).toBeLessThan(1);
+
+    await page.evaluate((n) => {
+      const panel = document.getElementById('source-input');
+      panel.scrollTop = (n - 3) * parseFloat(getComputedStyle(panel).lineHeight);
+    }, errorLine);
+
+    await expect.poll(() => gutterOffsetFrom(page, errorLine)).toBeLessThan(1);
+    expect(await gutterOffsetFrom(page, warningLine)).toBeLessThan(1);
+    expect(await landsOn(page, `#source-gutter [title^="Line ${errorLine}:"]`)).toBe(true);
+  });
+
+  test('keeps each entry level with its line when the source is revalidated while the data panel is collapsed', async ({ page }) => {
+    const source = LARGEST_WITH_FINDINGS_NEAR_ITS_END;
+    const errorLine = lineOf(source, 'rejected(NoSuchRule)');
+    await open(page);
+    await page.locator('#source-input').fill(source);
+    await page.locator('#render-btn').click();
+    await expect(page.locator('#diagnostics-badge')).toHaveText('1 error, 1 warning');
+    await page.locator('#data-panel-header').click();
+    await page.evaluate((n) => {
+      const panel = document.getElementById('source-input');
+      panel.scrollTop = (n - 3) * parseFloat(getComputedStyle(panel).lineHeight);
+    }, errorLine);
+    await expect.poll(() => gutterOffsetFrom(page, errorLine)).toBeLessThan(1);
+
+    await page.locator('#data-panel-header').click();
+    await expect(page.locator('#data-panel')).toHaveClass(/collapsed/);
+    await page.evaluate(() => {
+      const panel = document.getElementById('source-input');
+      panel.value = panel.value + '\n# revalidated while collapsed\n';
+      panel.dispatchEvent(new Event('input', { bubbles: true }));
+    });
+    await page.waitForTimeout(REVALIDATE_PAUSE_MS + 400);
+    await page.locator('#data-panel-header').click();
+
+    await expect.poll(() => gutterOffsetFrom(page, errorLine)).toBeLessThan(1);
+  });
+
+  test('scrolls a line longer than the panel sideways rather than wrapping it', async ({ page }) => {
+    await page.setViewportSize({ width: 900, height: 800 });
+    await open(page);
+    await page.locator('#source-input').fill(largestExample());
+
+    const overflowsSideways = await page.evaluate(() => {
+      const panel = document.getElementById('source-input');
+      return panel.scrollWidth > panel.clientWidth;
+    });
+
+    expect(overflowsSideways).toBe(true);
+  });
+});

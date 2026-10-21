@@ -312,31 +312,31 @@ source panel no longer soft-wraps, so each source line is one row and lines up w
 parse.
 
 **Acceptance Criteria:**
-- [ ] After a render or revalidation that reports diagnostics on several lines, the gutter marks
+- [x] After a render or revalidation that reports diagnostics on several lines, the gutter marks
   exactly those lines, and no others
-- [ ] Each gutter entry names its line's severity in text that a hover or a screen reader can read.
+- [x] Each gutter entry names its line's severity in text that a hover or a screen reader can read.
   This is in addition to its colour
-- [ ] Error, warning and info entries are drawn in three different colours: the colours the
+- [x] Error, warning and info entries are drawn in three different colours: the colours the
   diagnostics panel's severity pills use (`viewer.html:325-336`)
-- [ ] A line that carries diagnostics of more than one severity shows the most severe. A severity the
+- [x] A line that carries diagnostics of more than one severity shows the most severe. A severity the
   viewer does not know counts as an error. The gutter uses the same ranking the badge uses
   (`ui.js:280-303`), not a second copy of it
-- [ ] A diagnostic with no line marks no line
-- [ ] A revalidation that reports nothing on a line removes that line's entry. A clean revalidation
+- [x] A diagnostic with no line marks no line
+- [x] A revalidation that reports nothing on a line removes that line's entry. A clean revalidation
   and an empty panel clear the gutter. A revalidation whose source does not parse still marks the
   lines it reports
-- [ ] Typing does not move or clear the gutter entries. The revalidation after the pause replaces
+- [x] Typing does not move or clear the gutter entries. The revalidation after the pause replaces
   them (Decision 4)
-- [ ] The source panel does not soft-wrap. A line longer than the panel scrolls horizontally, and the
+- [x] The source panel does not soft-wrap. A line longer than the panel scrolls horizontally, and the
   text that Save writes is unchanged
-- [ ] In a real browser with the real pipeline, the largest bundled example with diagnostics far down
+- [x] In a real browser with the real pipeline, the largest bundled example with diagnostics far down
   the file is scrolled in the source panel. After the scroll, each gutter entry is level with its
   line's text
-- [ ] The existing e2e specs `source-panel.spec.js` and `smoke.spec.js` pass unchanged. These cover
+- [x] The existing e2e specs `source-panel.spec.js` and `smoke.spec.js` pass unchanged. These cover
   the source, Render and status staying in reach while diagnostics are listed, and no main-thread
   task over 50 ms while the largest example is typed into
-- [ ] The README's source-panel paragraph says that lines carrying diagnostics are marked by severity
-- [ ] `task test:viewer` and `task test:e2e:viewer` pass
+- [x] The README's source-panel paragraph says that lines carrying diagnostics are marked by severity
+- [x] `task test:viewer` and `task test:e2e:viewer` pass
 
 **Affected Files/Modules:**
 - `internal/frontend/static/source-panel.js` — new: the `SourcePanel` module (see the planned design)

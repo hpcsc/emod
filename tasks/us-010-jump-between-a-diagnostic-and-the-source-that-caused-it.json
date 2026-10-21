@@ -25,7 +25,7 @@
     },
     {
       "n": 2,
-      "done": false,
+      "done": true,
       "title": "Mark the lines that carry diagnostics in a gutter beside the source panel",
       "language": "JavaScript",
       "testable": true,
