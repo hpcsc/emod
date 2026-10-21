@@ -1,0 +1,88 @@
+design: planned
+types:
+  - name: diagramEdit
+    package: internal/importer   # diagram_edit.go
+    change: new
+    does: compares the diagram the exporter drew from a model with that diagram as the viewer edited it, and makes the model say what the edited one says
+    owns:
+      - a node stands for the construct it was exported as for as long as the edited diagram keeps its id; a node whose id the export never gave is a new construct
+      - a removed edge clears the relationship it was drawn from; an edge that no text of its own states (a trigger's command, the flow a translation implies) clears nothing
+      - a renamed construct takes its new name in every relationship an edge to or from it was drawn from, and nowhere else
+      - a field with no name is left out
+      - the node of an event a translation nests stands for that nested event, and moves only with its translation
+      - a block moved to another slice is declared after the blocks of its kind already there, and a slice keeps one trigger
+      - the slices of one context or aggregate follow the order the diagram lists them in
+    fields: [base, edited]
+    methods: [applyTo]
+  - name: builder
+    package: internal/importer   # importer.go
+    change: changed
+    does: builds model constructs from diagram nodes and folds the edges between them into those constructs
+    owns:
+      - an edge folds into the model the same way for ImportDiagram and for an applied diagram edit
+    methods: [foldEdges]
+  - name: ModelService
+    package: internal/desktop   # service.go
+    change: changed
+    does: binds the emod pipeline to the desktop frontend over JSON strings
+    methods: [ApplyDiagram]
+  - name: viewer
+    package: internal/frontend/static   # viewer.js
+    change: changed
+    does: keeps the source panel and the diagram drawn from it in agreement
+    owns:
+      - a diagram edit is applied onto the drawn source, and reaches the panel only while the panel still holds that source
+      - only a diagram drawn from .emod source in the panel is applied; a diagram from diagram JSON or from emod diagram --serve is not
+      - an answer that lands after the panel's text changed never replaces that text
+      - Save, an open, a Render click and a host failure never lose a diagram edit that is being applied
+      - visual state never starts an apply
+      - while a conflict stands the diagram is redrawn only by a choice the user makes, and its diagram edits count as unsaved
+      - Keep source edits redraws from the panel, or from the drawn source when the panel does not parse
+    methods: [init]
+  - name: UI
+    package: internal/frontend/static   # ui.js
+    change: changed
+    does: shows the conflict notice over the canvas, where the out-of-date notice sits
+    owns:
+      - the conflict notice can be read and pressed with the data panel collapsed
+      - a field row with no name is not a diagram edit, and a field edit never loses what is typed into the field editor
+    methods: [showConflict, hideConflict]
+  - name: Interaction
+    package: internal/frontend/static   # interaction.js
+    change: changed
+    does: turns pointer and touch gestures on the canvas into diagram edits and visual state
+    owns:
+      - a block released with its centre over another slice moves to that slice; released anywhere else it keeps the drag as an offset
+      - a slice refuses a second trigger, and the event a translation nests moves only with its translation
+      - a slice moves only among the slices of its own context or aggregate
+functions:
+  - importer.ApplyDiagram(model *ast.Model, diagram []byte) error   # pipeline calls it
+  - pipeline.ApplyDiagramJSON(request string) string   # cmd/emod-wasm and internal/desktop call it; {source, filename, diagram} in, {emod, diagnostics, diagram, parsed, reformatted, dropped_comments} or {error} out
+  - applyDiagram(source, filename, diagram)   # the platform contract in platform.js, platform.browser.js and platform.desktop.js; viewer.js calls it
+words:
+  - concept: a change made on the canvas to what the model says (adding, deleting or renaming an element, moving a block to another slice, reordering slices, editing fields, drawing, repointing or deleting an arrow)
+    word: diagram edit
+    not: [structural edit, model edit, canvas change]
+  - concept: what the canvas shows that the model does not say (node offsets, hidden nodes, pan, zoom, which panels are open, the selection)
+    word: visual state
+    not: [view state, layout]   # a view is a construct, and layout names the computed positions
+  - concept: the source the diagram on screen was drawn from
+    word: drawn source
+    not: [base source, checked source, original source]   # checkedSource is the last text the pipeline answered for, parsed or not
+  - concept: an edit on one surface that the other surface does not show yet
+    word: unapplied edit
+    not: [pending edit, dirty, unsynced]
+  - concept: both surfaces holding unapplied edits at once
+    word: conflict
+    not: [divergence, mismatch, disagreement]
+  - concept: turning a diagram edit into the source it describes, starting from the drawn source
+    word: apply
+    not: [sync, export, merge, write back]   # Export re-serialises the whole diagram and is a different path
+  - concept: the source rewritten in the emod fmt layout beyond what the diagram edit changed
+    word: reformatted
+    not: [normalised, canonicalised, prettified]
+  - concept: putting a block into a different slice
+    word: move to another slice
+    not: [reparent, transfer]   # moveSlice and move-slice-left already mean reordering a slice among its siblings
+dependencies:
+  - internal/importer -> internal/export

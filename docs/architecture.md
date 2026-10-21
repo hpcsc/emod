@@ -184,7 +184,11 @@ model mirror for tooling), `diagram.go` (the `{model_name, nodes, edges}`
 graph the web viewer consumes) and `cue.go` (schema-conformant CUE text).
 `internal/importer` is the inverse of the diagram JSON — the viewer's edits
 come back through it and are written out by `formatter`, so `.emod` text has
-exactly one writer.
+exactly one writer. It works two ways. `ImportDiagram` builds a model from the
+diagram alone, which is what Export .emod writes. `ApplyDiagram` applies a
+diagram edit onto the model the diagram was drawn from: it changes only what
+the edit changed, so the comments, invariants, specs and other text the
+diagram does not carry stay in the source.
 
 ## Frontends
 

@@ -257,6 +257,10 @@ context "Lending" {
 `, formatter.Format(importDiagram(t, document)))
 		})
 
+		t.Run("reproduces two of every block kind a slice declares, with what a node records when no arrow is drawn for it", func(t *testing.T) {
+			require.Equal(t, everyKindTwiceModel, formatter.Format(importFrom(t, everyKindTwiceModel)))
+		})
+
 		t.Run("preserves slices declared directly under a context", func(t *testing.T) {
 			source := `emod = 1
 
@@ -1014,6 +1018,23 @@ context "C" {
 
 			require.Contains(t, formatted, "trigger \"Form\" {")
 			require.Empty(t, savedTextDiagnostics(model))
+		})
+
+		t.Run("a null node, a child node with no id and a null edge are skipped", func(t *testing.T) {
+			diagram := `{
+              "model_name": "M",
+              "nodes": [
+                null,
+                {"id": "context-1", "type": "context", "label": "C", "parentId": null},
+                {"id": "slice-1", "type": "slice", "label": "S", "parentId": "context-1"},
+                {"type": "command", "label": "Stray", "parentId": "slice-1"}
+              ],
+              "edges": [null]
+            }`
+
+			require.Equal(t,
+				&ast.Model{Name: "M", Contexts: []*ast.Context{{Name: "C", Slices: []*ast.Slice{{Name: "S"}}}}},
+				importDiagram(t, diagram))
 		})
 
 		t.Run("an empty document yields a model with no contexts", func(t *testing.T) {

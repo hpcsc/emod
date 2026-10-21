@@ -25,6 +25,7 @@ type diagramNode struct {
 	Label          string            `json:"label"`
 	Description    string            `json:"description,omitempty"`
 	ParentID       *string           `json:"parentId"`
+	Position       *ast.Position     `json:"position,omitempty"`
 	Fields         []*diagramField   `json:"fields,omitempty"`
 	Comments       []*diagramComment `json:"comments,omitempty"`
 	Actor          string            `json:"actor,omitempty"`
@@ -41,6 +42,104 @@ type diagramNode struct {
 	Event          *diagramEvent     `json:"event,omitempty"`
 }
 
+func (n *diagramNode) asActor() *ast.Actor {
+	return &ast.Actor{
+		Name:        n.Label,
+		Description: n.Description,
+		Comments:    convertComments(n.Comments),
+	}
+}
+
+func (n *diagramNode) asContext() *ast.Context {
+	return &ast.Context{
+		Name:        n.Label,
+		Description: n.Description,
+		Comments:    convertComments(n.Comments),
+	}
+}
+
+func (n *diagramNode) asAggregate() *ast.Aggregate {
+	return &ast.Aggregate{
+		Name:        n.Label,
+		Description: n.Description,
+		Comments:    convertComments(n.Comments),
+	}
+}
+
+func (n *diagramNode) asSlice() *ast.Slice {
+	return &ast.Slice{
+		Name:        n.Label,
+		Description: n.Description,
+		Comments:    convertComments(n.Comments),
+	}
+}
+
+func (n *diagramNode) asTrigger() *ast.Trigger {
+	return &ast.Trigger{
+		Name:        n.Label,
+		Description: n.Description,
+		Comments:    convertComments(n.Comments),
+		Actor:       n.Actor,
+		Reads:       n.Reads,
+	}
+}
+
+func (n *diagramNode) asCommand() *ast.Command {
+	return &ast.Command{
+		Name:        n.Label,
+		Description: n.Description,
+		Comments:    convertComments(n.Comments),
+		Fields:      convertFields(n.Fields),
+	}
+}
+
+func (n *diagramNode) asEvent() *ast.Event {
+	return &ast.Event{
+		Name:         n.Label,
+		Description:  n.Description,
+		Comments:     convertComments(n.Comments),
+		Source:       n.Source,
+		ExternalName: n.ExternalName,
+		Fields:       convertFields(n.Fields),
+	}
+}
+
+func (n *diagramNode) asView() *ast.View {
+	return &ast.View{
+		Name:        n.Label,
+		Description: n.Description,
+		Comments:    convertComments(n.Comments),
+		Fields:      convertFields(n.Fields),
+		Subscribes:  append([]string(nil), n.Subscribes...),
+	}
+}
+
+func (n *diagramNode) asAutomation() *ast.Automation {
+	return &ast.Automation{
+		Name:          n.Label,
+		Description:   n.Description,
+		Comments:      convertComments(n.Comments),
+		OnEvent:       n.OnEvent,
+		Schedule:      n.Schedule,
+		After:         n.After,
+		Reads:         n.Reads,
+		Command:       n.Command,
+		TargetContext: n.TargetContext,
+	}
+}
+
+func (n *diagramNode) asTranslation() *ast.Translation {
+	return &ast.Translation{
+		Name:           n.Label,
+		Description:    n.Description,
+		Comments:       convertComments(n.Comments),
+		ExternalSystem: n.ExternalSystem,
+		Reads:          n.Reads,
+		Command:        n.Command,
+		Event:          n.Event.asEvent(),
+	}
+}
+
 type diagramEvent struct {
 	Name         string            `json:"name"`
 	Description  string            `json:"description,omitempty"`
@@ -48,6 +147,20 @@ type diagramEvent struct {
 	Source       string            `json:"source,omitempty"`
 	ExternalName string            `json:"external_name,omitempty"`
 	Fields       []*diagramField   `json:"fields,omitempty"`
+}
+
+func (e *diagramEvent) asEvent() *ast.Event {
+	if e == nil {
+		return nil
+	}
+	return &ast.Event{
+		Name:         e.Name,
+		Description:  e.Description,
+		Comments:     convertComments(e.Comments),
+		Source:       e.Source,
+		ExternalName: e.ExternalName,
+		Fields:       convertFields(e.Fields),
+	}
 }
 
 // diagramComment drops the position the exporter writes beside each comment: it
@@ -82,23 +195,7 @@ func ImportDiagram(data []byte) (*ast.Model, error) {
 		return nil, fmt.Errorf("importer: invalid diagram JSON: %w", err)
 	}
 
-	b := &builder{
-		nodeByID:   make(map[string]*diagramNode, len(doc.Nodes)),
-		childrenOf: make(map[string][]*diagramNode),
-		sliceOf:    make(map[string]*ast.Slice),
-		byNode:     make(map[string]any),
-	}
-
-	for _, n := range doc.Nodes {
-		if n == nil || n.ID == "" {
-			continue
-		}
-		b.nodeByID[n.ID] = n
-		if n.ParentID != nil {
-			b.childrenOf[*n.ParentID] = append(b.childrenOf[*n.ParentID], n)
-		}
-	}
-
+	b := newBuilder(&doc)
 	model := &ast.Model{Name: doc.ModelName, Description: doc.ModelDescription}
 
 	for _, n := range doc.Nodes {
@@ -107,11 +204,7 @@ func ImportDiagram(data []byte) (*ast.Model, error) {
 		}
 		switch n.Type {
 		case "actor":
-			model.Actors = append(model.Actors, &ast.Actor{
-				Name:        n.Label,
-				Description: n.Description,
-				Comments:    convertComments(n.Comments),
-			})
+			model.Actors = append(model.Actors, n.asActor())
 		case "context":
 			model.Contexts = append(model.Contexts, b.buildContext(n))
 		}
@@ -134,6 +227,27 @@ type builder struct {
 	byNode map[string]any
 }
 
+func newBuilder(doc *diagramDocument) *builder {
+	b := &builder{
+		nodeByID:   make(map[string]*diagramNode, len(doc.Nodes)),
+		childrenOf: make(map[string][]*diagramNode),
+		sliceOf:    make(map[string]*ast.Slice),
+		byNode:     make(map[string]any),
+	}
+
+	for _, n := range doc.Nodes {
+		if n == nil || n.ID == "" {
+			continue
+		}
+		b.nodeByID[n.ID] = n
+		if n.ParentID != nil {
+			b.childrenOf[*n.ParentID] = append(b.childrenOf[*n.ParentID], n)
+		}
+	}
+
+	return b
+}
+
 func (b *builder) children(parentID, typ string) []*diagramNode {
 	var out []*diagramNode
 	for _, n := range b.childrenOf[parentID] {
@@ -145,11 +259,7 @@ func (b *builder) children(parentID, typ string) []*diagramNode {
 }
 
 func (b *builder) buildContext(n *diagramNode) *ast.Context {
-	ctx := &ast.Context{
-		Name:        n.Label,
-		Description: n.Description,
-		Comments:    convertComments(n.Comments),
-	}
+	ctx := n.asContext()
 	for _, aggNode := range b.children(n.ID, "aggregate") {
 		ctx.Aggregates = append(ctx.Aggregates, b.buildAggregate(aggNode))
 	}
@@ -160,11 +270,7 @@ func (b *builder) buildContext(n *diagramNode) *ast.Context {
 }
 
 func (b *builder) buildAggregate(n *diagramNode) *ast.Aggregate {
-	agg := &ast.Aggregate{
-		Name:        n.Label,
-		Description: n.Description,
-		Comments:    convertComments(n.Comments),
-	}
+	agg := n.asAggregate()
 	for _, sliceNode := range b.children(n.ID, "slice") {
 		agg.Slices = append(agg.Slices, b.buildSlice(sliceNode))
 	}
@@ -172,11 +278,7 @@ func (b *builder) buildAggregate(n *diagramNode) *ast.Aggregate {
 }
 
 func (b *builder) buildSlice(n *diagramNode) *ast.Slice {
-	slice := &ast.Slice{
-		Name:        n.Label,
-		Description: n.Description,
-		Comments:    convertComments(n.Comments),
-	}
+	slice := n.asSlice()
 
 	b.appendTrigger(slice, n.ID)
 	b.appendCommands(slice, n.ID)
@@ -195,24 +297,13 @@ func (b *builder) appendTrigger(slice *ast.Slice, sliceID string) {
 		return
 	}
 	t := triggers[0]
-	slice.Trigger = &ast.Trigger{
-		Name:        t.Label,
-		Description: t.Description,
-		Comments:    convertComments(t.Comments),
-		Actor:       t.Actor,
-		Reads:       t.Reads,
-	}
+	slice.Trigger = t.asTrigger()
 	b.register(t.ID, slice, slice.Trigger)
 }
 
 func (b *builder) appendCommands(slice *ast.Slice, sliceID string) {
 	for _, c := range b.children(sliceID, "command") {
-		cmd := &ast.Command{
-			Name:        c.Label,
-			Description: c.Description,
-			Comments:    convertComments(c.Comments),
-			Fields:      convertFields(c.Fields),
-		}
+		cmd := c.asCommand()
 		slice.Commands = append(slice.Commands, cmd)
 		b.register(c.ID, slice, cmd)
 	}
@@ -226,14 +317,7 @@ func (b *builder) appendEvents(slice *ast.Slice, sliceID string) {
 			b.register(e.ID, slice, nil)
 			continue
 		}
-		evt := &ast.Event{
-			Name:         e.Label,
-			Description:  e.Description,
-			Comments:     convertComments(e.Comments),
-			Source:       e.Source,
-			ExternalName: e.ExternalName,
-			Fields:       convertFields(e.Fields),
-		}
+		evt := e.asEvent()
 		slice.Events = append(slice.Events, evt)
 		b.register(e.ID, slice, evt)
 	}
@@ -255,13 +339,7 @@ func (b *builder) translationEventNames(sliceID string) map[string]bool {
 
 func (b *builder) appendViews(slice *ast.Slice, sliceID string) {
 	for _, v := range b.children(sliceID, "view") {
-		view := &ast.View{
-			Name:        v.Label,
-			Description: v.Description,
-			Comments:    convertComments(v.Comments),
-			Fields:      convertFields(v.Fields),
-			Subscribes:  append([]string(nil), v.Subscribes...),
-		}
+		view := v.asView()
 		slice.Views = append(slice.Views, view)
 		b.register(v.ID, slice, view)
 	}
@@ -269,17 +347,7 @@ func (b *builder) appendViews(slice *ast.Slice, sliceID string) {
 
 func (b *builder) appendAutomations(slice *ast.Slice, sliceID string) {
 	for _, a := range b.children(sliceID, "automation") {
-		auto := &ast.Automation{
-			Name:          a.Label,
-			Description:   a.Description,
-			Comments:      convertComments(a.Comments),
-			OnEvent:       a.OnEvent,
-			Schedule:      a.Schedule,
-			After:         a.After,
-			Reads:         a.Reads,
-			Command:       a.Command,
-			TargetContext: a.TargetContext,
-		}
+		auto := a.asAutomation()
 		slice.Automations = append(slice.Automations, auto)
 		b.register(a.ID, slice, auto)
 	}
@@ -287,24 +355,7 @@ func (b *builder) appendAutomations(slice *ast.Slice, sliceID string) {
 
 func (b *builder) appendTranslations(slice *ast.Slice, sliceID string) {
 	for _, t := range b.children(sliceID, "translation") {
-		trans := &ast.Translation{
-			Name:           t.Label,
-			Description:    t.Description,
-			Comments:       convertComments(t.Comments),
-			ExternalSystem: t.ExternalSystem,
-			Reads:          t.Reads,
-			Command:        t.Command,
-		}
-		if t.Event != nil {
-			trans.Event = &ast.Event{
-				Name:         t.Event.Name,
-				Description:  t.Event.Description,
-				Comments:     convertComments(t.Event.Comments),
-				Source:       t.Event.Source,
-				ExternalName: t.Event.ExternalName,
-				Fields:       convertFields(t.Event.Fields),
-			}
-		}
+		trans := t.asTranslation()
 		slice.Translations = append(slice.Translations, trans)
 		b.register(t.ID, slice, trans)
 	}
