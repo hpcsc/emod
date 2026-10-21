@@ -490,21 +490,21 @@ message line is reserved, so the text does not move when the message appears or 
 (Decision 3).
 
 **Acceptance Criteria:**
-- [ ] Moving the caret onto a line that carries a diagnostic shows that diagnostic's severity and
+- [x] Moving the caret onto a line that carries a diagnostic shows that diagnostic's severity and
   message under the source panel. The `[rule]` prefix appears as the diagnostics panel shows it. This
   holds when the caret is moved by the keyboard, by a click in the text, and by a click on the
   diagnostic in the diagnostics panel
-- [ ] A line that carries several diagnostics shows all of them, most severe first, ranked as the
+- [x] A line that carries several diagnostics shows all of them, most severe first, ranked as the
   badge ranks them
-- [ ] Moving the caret to a line that carries no diagnostics clears the message
-- [ ] A revalidation that adds or removes a diagnostic on the caret's line updates the message, and
+- [x] Moving the caret to a line that carries no diagnostics clears the message
+- [x] A revalidation that adds or removes a diagnostic on the caret's line updates the message, and
   the caret does not move
-- [ ] A diagnostic that applies to the whole file is never shown as the message of a line
-- [ ] In a real browser, the source panel's text keeps the same position and size when the message
+- [x] A diagnostic that applies to the whole file is never shown as the message of a line
+- [x] In a real browser, the source panel's text keeps the same position and size when the message
   appears and when it clears
-- [ ] The README's source-panel paragraph says that the caret's line shows its diagnostics under the
+- [x] The README's source-panel paragraph says that the caret's line shows its diagnostics under the
   panel
-- [ ] `task test:viewer` and `task test:e2e:viewer` pass
+- [x] `task test:viewer` and `task test:e2e:viewer` pass
 
 **Affected Files/Modules:**
 - `internal/frontend/static/source-panel.js` — showing the caret line's diagnostics, and following the

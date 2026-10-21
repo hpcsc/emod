@@ -33,6 +33,7 @@ export function createStore() {
       nameDisplay: null,
       sourceInput: null,
       sourceGutter: null,
+      caretLineDiagnostics: null,
       renderBtn: null,
       statusEl: null,
       statNodes: null,

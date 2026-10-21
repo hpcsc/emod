@@ -689,6 +689,22 @@ body.file-drop-target-active::after {
   overflow-x: auto;
 }
 
+#caret-line-diagnostics {
+  flex: 0 0 auto;
+  height: 40px;
+  margin-top: 6px;
+  overflow-y: auto;
+  font-size: 12px;
+  color: #333;
+}
+
+.caret-line-row {
+  line-height: 20px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
 .data-panel-actions {
   flex: 0 0 auto;
   display: flex;
@@ -1324,6 +1340,7 @@ body.file-drop-target-active::after {
           <div id="source-gutter"></div>
           <textarea id="source-input" wrap="off" spellcheck="false" placeholder="Paste .emod source or diagram JSON here"></textarea>
         </div>
+        <div id="caret-line-diagnostics" role="status" aria-live="polite"></div>
         <div class="data-panel-actions">
           <button id="render-btn">Render</button>
           <span class="status" id="render-status"></span>

@@ -408,3 +408,28 @@ test.describe('clicking a diagnostic', () => {
     expect(await caretInView(page)).toEqual({ ...reported, shown: true });
   });
 });
+
+test.describe("the diagnostics of the caret's line", () => {
+  test('appear under the source panel and clear again without moving or resizing its text', async ({ page }) => {
+    await open(page);
+    await render(page, PARSES_WITH_UNDECLARED_EVENT);
+    await page.locator('#data-panel-header').click();
+    const message = page.locator('#caret-line-diagnostics');
+    const source = page.locator('#source-input');
+    await source.evaluate((panel) => {
+      panel.focus();
+      panel.setSelectionRange(0, 0);
+      panel.dispatchEvent(new Event('keyup'));
+    });
+    await expect(message).toHaveText('');
+    const before = await source.boundingBox();
+
+    await page.locator('#diagnostics-list .diag-item', { hasText: 'PaymentRefunded' }).click();
+    await expect(message).toContainText('event "PaymentRefunded" does not exist');
+    expect(await source.boundingBox()).toEqual(before);
+
+    await page.keyboard.press('ArrowUp');
+    await expect(message).toHaveText('');
+    expect(await source.boundingBox()).toEqual(before);
+  });
+});

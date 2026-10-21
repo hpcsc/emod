@@ -412,11 +412,12 @@ rather than wrapping it, so each gutter entry stays level with its line.
 Clicking a diagnostic opens the data panel if it is collapsed and puts the
 source panel's caret at the line and column the diagnostic names, scrolled into
 view; a diagnostic that applies to the whole file says so in the list and
-leaves the caret where it is. **Render** stays
-below the panel and redraws at once. Because the diagram is redrawn from the
-panel, typing replaces any change made on the diagram itself since it was last
-drawn. The browser viewer and `emod diagram --serve` share the frontend and
-behave the same way.
+leaves the caret where it is. With the caret on a line that carries
+diagnostics, a line under the text shows each of them, most severe first.
+**Render** stays below the panel and redraws at once. Because the diagram is
+redrawn from the panel, typing replaces any change made on the diagram itself
+since it was last drawn. The browser viewer and `emod diagram --serve` share
+the frontend and behave the same way.
 
 **File ▸ Open** (⌘O on macOS, Ctrl+O on Linux and Windows) opens a model through the
 operating system's own file picker, filtered to `.emod` and `.json`. The chosen

@@ -107,7 +107,7 @@
     },
     {
       "n": 4,
-      "done": false,
+      "done": true,
       "title": "Show the diagnostics of the caret's line under the source panel",
       "language": "JavaScript",
       "testable": true,

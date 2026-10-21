@@ -83,6 +83,7 @@ function createRequiredElements() {
     <div id="model-name-display"></div>
     <div id="source-gutter"></div>
     <textarea id="source-input"></textarea>
+    <div id="caret-line-diagnostics"></div>
     <button id="render-btn"></button>
     <span id="render-status"></span>
     <span id="stat-nodes"></span>
@@ -2581,6 +2582,67 @@ describe('clicking a diagnostic', () => {
   });
 });
 
+describe("the diagnostics of the caret's line", () => {
+  const atModel = { file: 'billing.emod', line: 3, column: 7, message: 'model "Billing" declares no context', severity: 'warning' };
+  const modelLineStart = billingSource.indexOf('model');
+
+  async function openBillingWithDataPanelOpen(diagnostics) {
+    globalThis.INITIAL_DATA = null;
+    parseResult = { parsed: true, diagnostics, diagram: billingDiagram() };
+    await startViewer();
+    deliverFile({ name: 'billing.emod', path: '/models/billing.emod', content: billingSource });
+    await flush();
+    document.getElementById('data-panel-header').click();
+  }
+
+  const shown = () => document.getElementById('caret-line-diagnostics').textContent;
+  const panel = () => document.getElementById('source-input');
+
+  it.each([
+    ['the keyboard', 'keyup'],
+    ['a click in the text', 'mouseup'],
+    ['an edit', 'input'],
+    ['a selection change', 'selectionchange'],
+  ])('shows them when the caret is moved onto the line by %s, and clears them when it moves off', async (_, eventType) => {
+    await openBillingWithDataPanelOpen([atModel]);
+
+    panel().setSelectionRange(modelLineStart + 2, modelLineStart + 2);
+    panel().dispatchEvent(new Event(eventType, { bubbles: true }));
+    expect(shown()).toContain('model "Billing" declares no context');
+
+    panel().setSelectionRange(0, 0);
+    panel().dispatchEvent(new Event(eventType, { bubbles: true }));
+    expect(shown()).toBe('');
+  });
+
+  it('shows them when the diagnostic is clicked in the diagnostics panel', async () => {
+    await openBillingWithDataPanelOpen([atModel]);
+    panel().setSelectionRange(0, 0);
+
+    document.querySelector('#diagnostics-list .diag-item').click();
+
+    expect(shown()).toContain('model "Billing" declares no context');
+  });
+
+  it("follows a revalidation that changes what the caret's line carries, leaving the caret where it is", async () => {
+    await openBillingWithDataPanelOpen([]);
+    const edited = billingSource + 'actor "Clerk"\n';
+
+    parseQueue = [Promise.resolve({ parsed: true, diagnostics: [atModel], diagram: billingDiagram() })];
+    typeIntoPanel(edited);
+    panel().setSelectionRange(modelLineStart + 2, modelLineStart + 2);
+    await new Promise((resolve) => setTimeout(resolve, REVALIDATE_PAUSE_MS + 40));
+    expect(shown()).toContain('model "Billing" declares no context');
+
+    parseQueue = [Promise.resolve({ parsed: true, diagnostics: [], diagram: billingDiagram() })];
+    typeIntoPanel(edited + '\n');
+    panel().setSelectionRange(modelLineStart + 2, modelLineStart + 2);
+    await new Promise((resolve) => setTimeout(resolve, REVALIDATE_PAUSE_MS + 40));
+    expect(shown()).toBe('');
+    expect(panel().selectionStart).toBe(modelLineStart + 2);
+  });
+});
+
 describe('Delete and Backspace with a diagram element selected', () => {
   async function openBillingWithCommandSelected() {
     const withField = billingDiagram();
@@ -3531,6 +3593,12 @@ describe('the documentation of the source panel', () => {
 
     expect(paragraph).toContain("puts the source panel's caret at the line and column the diagnostic names");
     expect(paragraph).toContain('applies to the whole file');
+  });
+
+  it("says in the README that the caret's line shows its diagnostics under the text", () => {
+    const paragraph = read('README.md').split('**The source panel**')[1].split('**')[0];
+
+    expect(paragraph).toContain('With the caret on a line that carries diagnostics, a line under the text shows each of them');
   });
 
   it('says in the flow summary that a pause in typing, not a Render click alone, reaches the pipeline', () => {

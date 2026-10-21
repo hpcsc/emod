@@ -72,7 +72,7 @@ bus.on('model:updated', function({ store: s }) {
 
 bus.on('diagnostics:changed', function({ store: s, diagnostics, revalidation }) {
   UI.updateDiagnosticsPanel(s, diagnostics, { reopen: !revalidation });
-  SourcePanel.showGutter(s, diagnostics);
+  SourcePanel.showDiagnostics(s);
 });
 
 bus.on('diagnostic:clicked', function({ store: s, diagnostic }) {
@@ -142,6 +142,7 @@ function init() {
   store.dom.nameDisplay = document.getElementById("model-name-display");
   store.dom.sourceInput = document.getElementById("source-input");
   store.dom.sourceGutter = document.getElementById("source-gutter");
+  store.dom.caretLineDiagnostics = document.getElementById("caret-line-diagnostics");
   store.dom.renderBtn = document.getElementById("render-btn");
   store.dom.statusEl = document.getElementById("render-status");
   store.dom.statNodes = document.getElementById("stat-nodes");

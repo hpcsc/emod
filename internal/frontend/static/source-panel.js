@@ -1,5 +1,7 @@
 import { Severity } from './severity.js';
 
+const CARET_MOVES = ["keyup", "mouseup", "input", "selectionchange"];
+
 function initSourcePanel(store) {
   // A hidden textarea reports no scroll, and showing it again restores its
   // scroll without a scroll event.
@@ -8,6 +10,11 @@ function initSourcePanel(store) {
   }
   store.dom.sourceInput.addEventListener("scroll", function() {
     followScroll(store);
+  });
+  CARET_MOVES.forEach(function(type) {
+    store.dom.sourceInput.addEventListener(type, function() {
+      showCaretLineDiagnostics(store);
+    });
   });
 }
 
@@ -67,13 +74,12 @@ function scrollToCaret(sourceInput, offset) {
   // jsdom lays nothing out, so it reports no row height.
   if (!lineHeight) return;
 
-  const before = sourceInput.value.slice(0, offset);
-  const lineIndex = before.split("\n").length - 1;
-  const top = parseFloat(style.paddingTop) + lineIndex * lineHeight;
+  const top = parseFloat(style.paddingTop) + (lineAt(sourceInput.value, offset) - 1) * lineHeight;
   if (top < sourceInput.scrollTop || top + lineHeight > sourceInput.scrollTop + sourceInput.clientHeight) {
     sourceInput.scrollTop = top + lineHeight / 2 - sourceInput.clientHeight / 2;
   }
 
+  const before = sourceInput.value.slice(0, offset);
   const lineBefore = expandTabs(before.slice(before.lastIndexOf("\n") + 1), parseInt(style.tabSize, 10));
   const left = parseFloat(style.paddingLeft) + measureTextWidth(lineBefore, style);
   if (left < sourceInput.scrollLeft || left > sourceInput.scrollLeft + sourceInput.clientWidth) {
@@ -103,22 +109,78 @@ function moveCaretTo(store, location) {
   sourceInput.focus();
   sourceInput.setSelectionRange(offset, offset);
   scrollToCaret(sourceInput, offset);
+  showCaretLineDiagnostics(store);
 }
 
-function showGutter(store, diagnostics) {
+function lineAt(text, offset) {
+  let line = 1;
+  for (let i = text.indexOf("\n"); i !== -1 && i < offset; i = text.indexOf("\n", i + 1)) {
+    line++;
+  }
+  return line;
+}
+
+function caretOffset(sourceInput) {
+  return sourceInput.selectionDirection === "backward" ? sourceInput.selectionStart : sourceInput.selectionEnd;
+}
+
+function buildCaretLineRow(diagnostic) {
+  const row = document.createElement("div");
+  row.className = "caret-line-row";
+
+  const severity = Severity.of(diagnostic);
+  const pill = document.createElement("span");
+  pill.className = "diag-severity " + severity;
+  pill.textContent = severity;
+  row.appendChild(pill);
+  row.appendChild(document.createTextNode(" "));
+
+  if (diagnostic.rule_name) {
+    const rule = document.createElement("span");
+    rule.className = "diag-rule";
+    rule.textContent = "[" + diagnostic.rule_name + "]";
+    row.appendChild(rule);
+    row.appendChild(document.createTextNode(" "));
+  }
+  row.appendChild(document.createTextNode(diagnostic.message));
+  row.title = row.textContent;
+  return row;
+}
+
+function showCaretLineDiagnostics(store) {
+  const caretLineEl = store.dom.caretLineDiagnostics;
+  if (!caretLineEl) return;
+
+  const sourceInput = store.dom.sourceInput;
+  const located = store.diagnostics.filter(function(d) { return d.line; });
+  const line = located.length ? lineAt(sourceInput.value, caretOffset(sourceInput)) : 0;
+  const onLine = located.filter(function(d) { return d.line === line; });
+  const rows = Severity.sortMostSevereFirst(onLine).map(buildCaretLineRow);
+
+  const text = rows.map(function(row) { return row.textContent; }).join("");
+  if (text === caretLineEl.textContent) return;
+  caretLineEl.replaceChildren(...rows);
+}
+
+function showGutter(store) {
   const gutterEl = store.dom.sourceGutter;
   if (!gutterEl) return;
 
   gutterEl.textContent = "";
-  const byLine = groupByLine(diagnostics || []);
+  const byLine = groupByLine(store.diagnostics);
   Array.from(byLine.keys()).sort(function(a, b) { return a - b; }).forEach(function(line) {
     gutterEl.appendChild(buildGutterEntry(line, byLine.get(line)));
   });
   followScroll(store);
 }
 
+function showDiagnostics(store) {
+  showGutter(store);
+  showCaretLineDiagnostics(store);
+}
+
 export const SourcePanel = {
   initSourcePanel,
   moveCaretTo,
-  showGutter,
+  showDiagnostics,
 };
