@@ -28,6 +28,13 @@ func (s *ModelService) ExportJSON(request string) string {
 	return pipeline.RunOnSource(request, pipeline.RunPipelineExportJSON)
 }
 
+// ApplyDiagram takes the {source, filename, diagram} envelope and answers the
+// edited source beside what a parse of it answers, as pipeline.ApplyDiagramJSON
+// documents.
+func (s *ModelService) ApplyDiagram(request string) string {
+	return pipeline.ApplyDiagramJSON(request)
+}
+
 // ExportEmod takes the diagram document itself rather than the pipeline.Request
 // envelope the parse entry points use, because the frontend already holds that
 // document as its state.

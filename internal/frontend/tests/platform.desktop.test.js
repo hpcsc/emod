@@ -125,6 +125,32 @@ describe('export', () => {
   });
 });
 
+describe('applying a diagram edit', () => {
+  it('sends the source, its file name and the diagram in the envelope the Go service expects', async () => {
+    stub.answers.ApplyDiagram = '{"emod":"emod = 1\\n"}';
+    const diagram = { model_name: 'Billing', nodes: [], edges: [] };
+
+    await desktop.applyDiagram('emod = 1\n', 'billing.emod', diagram);
+
+    expect(stub.calls.map(([name, request]) => [name, JSON.parse(request)]))
+      .toEqual([['ApplyDiagram', { source: 'emod = 1\n', filename: 'billing.emod', diagram: diagram }]]);
+  });
+
+  it('answers the decoded document rather than the raw string', async () => {
+    stub.answers.ApplyDiagram = '{"emod":"emod = 1\\n","diagnostics":[],"diagram":{"nodes":[],"edges":[]},"parsed":true,"reformatted":true,"dropped_comments":2}';
+
+    await expect(desktop.applyDiagram('src', 'billing.emod', {})).resolves.toEqual({
+      emod: 'emod = 1\n', diagnostics: [], diagram: { nodes: [], edges: [] }, parsed: true, reformatted: true, dropped_comments: 2,
+    });
+  });
+
+  it('raises the error envelope rather than resolving with it', async () => {
+    stub.answers.ApplyDiagram = '{"error":"the diagram edit cannot be applied: billing.emod does not parse"}';
+
+    await expect(desktop.applyDiagram('src', 'billing.emod', {})).rejects.toThrow('the diagram edit cannot be applied: billing.emod does not parse');
+  });
+});
+
 describe('window title', () => {
   it('names the native window, which is the only title a desktop user can see', () => {
     desktop.setWindowTitle('hotel.emod — Emod Diagram Viewer');

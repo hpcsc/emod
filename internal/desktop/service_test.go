@@ -109,6 +109,28 @@ context "Payments" {
 		})
 	})
 
+	t.Run("apply diagram", func(t *testing.T) {
+		t.Run("answers what the pipeline answers for the same envelope", func(t *testing.T) {
+			service := &desktop.ModelService{}
+
+			var parsed struct {
+				Diagram json.RawMessage `json:"diagram"`
+			}
+			require.NoError(t, json.Unmarshal([]byte(service.ParseEmod(sourceEnvelope(t, test.BillingPayments))), &parsed))
+			request, err := json.Marshal(map[string]any{"source": test.BillingPayments, "filename": "billing.emod", "diagram": parsed.Diagram})
+			require.NoError(t, err)
+
+			answer := service.ApplyDiagram(string(request))
+
+			require.Equal(t, pipeline.ApplyDiagramJSON(string(request)), answer)
+			var edited struct {
+				Emod string `json:"emod"`
+			}
+			require.NoError(t, json.Unmarshal([]byte(answer), &edited))
+			require.Equal(t, test.BillingPayments, edited.Emod)
+		})
+	})
+
 	t.Run("export emod", func(t *testing.T) {
 		t.Run("takes the diagram document itself, not the source envelope", func(t *testing.T) {
 			service := &desktop.ModelService{}

@@ -491,7 +491,7 @@ the layout of a source that was not in `emod fmt` layout, and how many comments 
 Nothing in the viewer calls it yet.
 
 **Acceptance Criteria:**
-- [ ] `pipeline.ApplyDiagramJSON` takes the envelope `{source, filename, diagram}`. It answers
+- [x] `pipeline.ApplyDiagramJSON` takes the envelope `{source, filename, diagram}`. It answers
   `{emod, diagnostics, diagram, parsed, reformatted, dropped_comments}`:
   - `emod` is the source with the edit applied (Task 1) and formatted.
   - `diagnostics`, `diagram` and `parsed` are exactly what `parseEmod` answers for `emod` under the
@@ -499,33 +499,33 @@ Nothing in the viewer calls it yet.
   - `reformatted` is true only when `emod fmt` would have changed the source given.
   - `dropped_comments` is the number of the source's comments that the `emod fmt` layout does not
     keep. It is 0 whenever `reformatted` is false.
-- [ ] Deleting a construct that has comments does not count those comments in `dropped_comments`. A
+- [x] Deleting a construct that has comments does not count those comments in `dropped_comments`. A
   source that is not fmt-clean but keeps all its comments, such as
   `examples/error_diagnostics_test.emod`, answers `reformatted` true and `dropped_comments` 0.
-- [ ] A missing file name gives `input.emod`, as a parse does.
-- [ ] Each of these answers `{error}` with a reason, and each reason is tested: a malformed
+- [x] A missing file name gives `input.emod`, as a parse does.
+- [x] Each of these answers `{error}` with a reason, and each reason is tested: a malformed
   envelope, a missing or empty `source`, a missing `diagram`, a diagram that is not a document, and
   a source that does not parse. The last reason says that the diagram edit cannot be applied
   because the source does not parse.
-- [ ] Non-ASCII text in labels, descriptions and comments comes back unchanged through the
+- [x] Non-ASCII text in labels, descriptions and comments comes back unchanged through the
   envelope and the answer.
-- [ ] The WASM module registers `applyDiagram`. `platform.browser.js`'s `applyDiagram` sends
+- [x] The WASM module registers `applyDiagram`. `platform.browser.js`'s `applyDiagram` sends
   `{source, filename, diagram}` to the worker under that name. It resolves with the answer. It
   rejects with the error's reason, as `exportEmod` does. Before the module is ready it rejects with
   `WASM not ready yet`.
-- [ ] `ModelService.ApplyDiagram` answers the same document as `pipeline.ApplyDiagramJSON` for the
+- [x] `ModelService.ApplyDiagram` answers the same document as `pipeline.ApplyDiagramJSON` for the
   same envelope. `platform.desktop.js`'s `applyDiagram` calls it and resolves or rejects as the
   browser does.
-- [ ] Each seam guard covers the new operation:
+- [x] Each seam guard covers the new operation:
   - The contract in `platform.js` names `applyDiagram`, and both implementations satisfy it
     (`viewer.test.js:3674-3711`).
   - The binding-names guard finds `ApplyDiagram` among `ModelService`'s exported methods.
   - The bindings stub answers it.
   - Both runtimes send exactly the keys the apply envelope reads (the pattern at
     `pipeline_test.go:56-67`).
-- [ ] `parseEmod`, `exportEmod` and every existing seam test behave as before.
-- [ ] `docs/wasm-architecture.md` names `applyDiagram` among the functions the WASM module registers.
-- [ ] `task test:unit`, `task test:viewer` and `task build:web` pass.
+- [x] `parseEmod`, `exportEmod` and every existing seam test behave as before.
+- [x] `docs/wasm-architecture.md` names `applyDiagram` among the functions the WASM module registers.
+- [x] `task test:unit`, `task test:viewer` and `task build:web` pass.
 
 **Affected Files/Modules:**
 - `internal/pipeline/pipeline.go` — `ApplyDiagramJSON`

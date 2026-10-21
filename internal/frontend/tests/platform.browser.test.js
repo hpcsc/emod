@@ -51,6 +51,10 @@ describe('before the worker reports it started', () => {
   it('rejects an export with a descriptive error', async () => {
     await expect(browser.exportEmod({ nodes: [], edges: [] })).rejects.toThrow('WASM not ready yet');
   });
+
+  it('rejects an applied diagram edit with a descriptive error', async () => {
+    await expect(browser.applyDiagram('src', 'billing.emod', { nodes: [], edges: [] })).rejects.toThrow('WASM not ready yet');
+  });
 });
 
 describe('starting the worker', () => {
@@ -155,6 +159,30 @@ describe('exporting', () => {
     worker.answer({ id: worker.sent[0].id, output: JSON.stringify({ error: 'no model name' }) });
 
     await expect(exporting).rejects.toThrow('no model name');
+  });
+});
+
+describe('applying a diagram edit', () => {
+  it('sends the worker the source, its file name and the diagram, and answers what the edit wrote', async () => {
+    await started();
+    const diagram = { model_name: 'Billing', nodes: [{ id: 'context-1' }], edges: [] };
+    const written = { emod: 'emod = 1\n', diagnostics: [], diagram: diagram, parsed: true, reformatted: false, dropped_comments: 0 };
+
+    const applying = browser.applyDiagram('emod = 1\n', 'billing.emod', diagram);
+    worker.answer({ id: worker.sent[0].id, output: JSON.stringify(written) });
+
+    expect(worker.sent[0].name).toBe('applyDiagram');
+    expect(JSON.parse(worker.sent[0].input)).toEqual({ source: 'emod = 1\n', filename: 'billing.emod', diagram: diagram });
+    await expect(applying).resolves.toEqual(written);
+  });
+
+  it('rejects with the reason the edit could not be applied', async () => {
+    await started();
+
+    const applying = browser.applyDiagram('foobar {', 'billing.emod', { nodes: [], edges: [] });
+    worker.answer({ id: worker.sent[0].id, output: JSON.stringify({ error: 'the diagram edit cannot be applied: billing.emod does not parse' }) });
+
+    await expect(applying).rejects.toThrow('the diagram edit cannot be applied: billing.emod does not parse');
   });
 });
 

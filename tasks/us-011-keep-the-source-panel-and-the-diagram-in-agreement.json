@@ -41,7 +41,7 @@
     },
     {
       "n": 2,
-      "done": false,
+      "done": true,
       "title": "Answer an applied diagram edit through the platform seam",
       "language": "Go",
       "testable": true,

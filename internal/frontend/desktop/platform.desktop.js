@@ -29,6 +29,16 @@ function exportEmod(diagram) {
   });
 }
 
+function applyDiagram(source, filename, diagram) {
+  return ModelService.ApplyDiagram(JSON.stringify({ source: source, filename: filename, diagram: diagram })).then(function(raw) {
+    const result = JSON.parse(raw);
+    if (result.error) {
+      throw new Error(result.error);
+    }
+    return result;
+  });
+}
+
 // The shell's own drag destination takes a file drag before the webview can see
 // it, so on the platforms that behave that way a DOM drop carries nothing to
 // read. Windows is the exception and still delivers one — and it is answered the
@@ -458,4 +468,4 @@ function initialState() {
   return Promise.resolve(null);
 }
 
-export { parseEmod, exportEmod, droppedFiles, saveFile, setWindowTitle, setWindowModified, rememberOpenedFile, resolveUnsavedEdits, onFileOpened, onFilesDropped, onSaveRequested, onLeaveRequested, initialState, ready, isReady };
+export { parseEmod, exportEmod, applyDiagram, droppedFiles, saveFile, setWindowTitle, setWindowModified, rememberOpenedFile, resolveUnsavedEdits, onFileOpened, onFilesDropped, onSaveRequested, onLeaveRequested, initialState, ready, isReady };

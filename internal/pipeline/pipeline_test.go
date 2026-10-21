@@ -240,6 +240,218 @@ func TestPipeline(t *testing.T) {
 		})
 	})
 
+	t.Run("apply diagram", func(t *testing.T) {
+		t.Run("answers the edited source beside what a parse of that source answers", func(t *testing.T) {
+			diagram := drawnDiagram(t, test.BillingPayments, "billing.emod", map[string]any{
+				"id": "_cmd_1", "type": "command", "label": "RefundPayment", "parentId": "slice-1",
+			})
+
+			answer := decodeApplyAnswer(t, pipeline.ApplyDiagramJSON(applyRequest(t, test.BillingPayments, "billing.emod", diagram)))
+
+			edited := strings.Replace(test.BillingPayments, `      event "PaymentTaken" {`, `      command "RefundPayment" {
+      }
+
+      event "PaymentTaken" {`, 1)
+			require.Equal(t, edited, answer.Emod)
+			require.Contains(t, string(answer.Diagram), `"label":"RefundPayment"`)
+
+			parsed := decodeApplyAnswer(t, pipeline.RunOnSource(requestFor(t, edited, "billing.emod"), pipeline.RunPipelineExportDiagram))
+			require.JSONEq(t, string(parsed.Diagnostics), string(answer.Diagnostics))
+			require.JSONEq(t, string(parsed.Diagram), string(answer.Diagram))
+			require.Equal(t, parsed.Parsed, answer.Parsed)
+			require.False(t, answer.Reformatted)
+			require.Zero(t, answer.DroppedComments)
+		})
+
+		t.Run("says a source not in the emod fmt layout was reformatted, and counts the comments that layout drops", func(t *testing.T) {
+			source := strings.Replace(test.BillingPayments, "      FLOW\n    }\n", "      FLOW\n      # after the slice's last entry\n    }\n", 1) +
+				"# at the end of the file\n"
+			require.Contains(t, source, "# after the slice's last entry")
+
+			answer := decodeApplyAnswer(t, pipeline.ApplyDiagramJSON(applyRequest(t, source, "billing.emod", drawnDiagram(t, source, "billing.emod"))))
+
+			require.Equal(t, test.BillingPayments, answer.Emod)
+			require.True(t, answer.Reformatted)
+			require.Equal(t, 2, answer.DroppedComments)
+		})
+
+		t.Run("says a source was reformatted with no comment dropped when the layout keeps every comment", func(t *testing.T) {
+			raw, err := os.ReadFile("../../examples/error_diagnostics_test.emod")
+			require.NoError(t, err)
+			source := string(raw)
+
+			answer := decodeApplyAnswer(t, pipeline.ApplyDiagramJSON(applyRequest(t, source, "errors.emod", drawnDiagram(t, source, "errors.emod"))))
+
+			require.Empty(t, answer.Error)
+			require.True(t, answer.Reformatted)
+			require.Zero(t, answer.DroppedComments)
+		})
+
+		t.Run("counts no comment dropped for the blank lines the layout takes out", func(t *testing.T) {
+			source := strings.Replace(test.BillingPayments, "      }\n\n      event", "      }\n\n\n\n      event", 1)
+			require.NotEqual(t, test.BillingPayments, source)
+
+			answer := decodeApplyAnswer(t, pipeline.ApplyDiagramJSON(applyRequest(t, source, "billing.emod", drawnDiagram(t, source, "billing.emod"))))
+
+			require.True(t, answer.Reformatted)
+			require.Zero(t, answer.DroppedComments)
+		})
+
+		t.Run("counts a comment on a line of a flow block, which the emod fmt layout drops", func(t *testing.T) {
+			source := strings.Replace(test.BillingPayments, "      flow = <<-FLOW\n", "      flow = <<-FLOW\n        # the card is charged at once\n\n", 1)
+			require.NotEqual(t, test.BillingPayments, source)
+
+			answer := decodeApplyAnswer(t, pipeline.ApplyDiagramJSON(applyRequest(t, source, "billing.emod", drawnDiagram(t, source, "billing.emod"))))
+
+			require.Equal(t, test.BillingPayments, answer.Emod)
+			require.True(t, answer.Reformatted)
+			require.Equal(t, 1, answer.DroppedComments)
+		})
+
+		t.Run("does not count a # line of a description written after a flow block", func(t *testing.T) {
+			source := `emod = 1
+
+model "Billing" {
+}
+
+context "Payments" {
+  aggregate "Payment" {
+    slice "Take Payment" {
+      command "TakePayment" {
+        fields {
+          amount = required(int)
+        }
+      }
+
+      flow = <<-FLOW
+        command -> event:    TakePayment -> PaymentTaken
+      FLOW
+
+      event "PaymentTaken" {
+        description = <<-EOT
+          # charged in full
+        EOT
+
+        fields {
+          amount = required(int)
+        }
+      }
+    }
+  }
+}
+`
+
+			answer := decodeApplyAnswer(t, pipeline.ApplyDiagramJSON(applyRequest(t, source, "billing.emod", drawnDiagram(t, source, "billing.emod"))))
+
+			require.Empty(t, answer.Error)
+			require.Contains(t, answer.Emod, "# charged in full")
+			require.True(t, answer.Reformatted)
+			require.Zero(t, answer.DroppedComments)
+		})
+
+		t.Run("does not count the comments of a construct the edit deletes as dropped", func(t *testing.T) {
+			source := strings.Replace(test.BillingPayments, `      command "TakePayment" {`, "      # Take the money\n      command \"TakePayment\" {", 1)
+
+			diagram := withoutNode(t, drawnDiagram(t, source, "billing.emod"), "command-1")
+			answer := decodeApplyAnswer(t, pipeline.ApplyDiagramJSON(applyRequest(t, source, "billing.emod", diagram)))
+
+			require.Empty(t, answer.Error)
+			require.Equal(t, `emod = 1
+
+model "Billing" {
+}
+
+context "Payments" {
+  aggregate "Payment" {
+    slice "Take Payment" {
+      event "PaymentTaken" {
+        fields {
+          amount = required(int)
+        }
+      }
+    }
+  }
+}
+`, answer.Emod)
+			require.False(t, answer.Reformatted)
+			require.Zero(t, answer.DroppedComments)
+		})
+
+		t.Run("places the edited source in input.emod when the envelope names no file", func(t *testing.T) {
+			answer := decodeApplyAnswer(t, pipeline.ApplyDiagramJSON(applyRequest(t, test.BillingPayments, "", drawnDiagram(t, test.BillingPayments, "input.emod"))))
+
+			require.Contains(t, string(answer.Diagram), `"filename":"input.emod"`)
+			require.NotContains(t, string(answer.Diagram), `"filename":""`)
+		})
+
+		t.Run("carries non-ASCII text in labels, descriptions and comments through unchanged", func(t *testing.T) {
+			source := `emod = 1
+
+# Zahlungen — über alles ✓
+model "Café Billing" {
+  description = "Größe zählt"
+}
+
+context "Payments" {
+  slice "Take Payment" {
+    command "TakePayment" {
+    }
+  }
+}
+`
+			diagram := withLabel(t, drawnDiagram(t, source, "café.emod"), "slice-1", "Zahlung annehmen ✓")
+
+			answer := decodeApplyAnswer(t, pipeline.ApplyDiagramJSON(applyRequest(t, source, "café.emod", diagram)))
+
+			require.Equal(t, strings.Replace(source, `slice "Take Payment" {`, `slice "Zahlung annehmen ✓" {`, 1), answer.Emod)
+		})
+
+		for _, refusal := range []struct {
+			name, request, reason string
+		}{
+			{"an envelope that is not JSON", `not json`, "invalid JSON"},
+			{"an envelope with no source", `{"diagram": {"nodes": [], "edges": []}}`, "missing source field"},
+			{"an envelope with an empty source", `{"source": "", "diagram": {"nodes": [], "edges": []}}`, "missing source field"},
+			{"an envelope with no diagram", `{"source": "model \"M\" {\n}\n"}`, "missing diagram field"},
+			{"an envelope with a null diagram", `{"source": "model \"M\" {\n}\n", "diagram": null}`, "missing diagram field"},
+			{"a diagram that is not a document", `{"source": "model \"M\" {\n}\n", "diagram": "a picture"}`, "invalid diagram JSON"},
+			{"a source that does not parse", `{"source": "model \"M\" {\n", "filename": "orders.emod", "diagram": {"nodes": [], "edges": []}}`,
+				"the diagram edit cannot be applied: orders.emod does not parse"},
+		} {
+			t.Run("refuses "+refusal.name+" with the reason", func(t *testing.T) {
+				answer := decodeApplyAnswer(t, pipeline.ApplyDiagramJSON(refusal.request))
+
+				require.Contains(t, answer.Error, refusal.reason)
+				require.Empty(t, answer.Emod)
+			})
+		}
+
+		t.Run("both viewer runtimes send the envelope under the keys it reads", func(t *testing.T) {
+			for _, platform := range []string{
+				"../frontend/static/platform.browser.js",
+				"../frontend/desktop/platform.desktop.js",
+			} {
+				require.Equal(t, []string{"diagram", "filename", "source"}, keysSentBy(t, platform, "applyDiagram"), platform)
+			}
+		})
+	})
+
+	t.Run("documentation", func(t *testing.T) {
+		t.Run("the WASM architecture page names every function the WASM module registers", func(t *testing.T) {
+			main, err := os.ReadFile("../../cmd/emod-wasm/main.go")
+			require.NoError(t, err)
+			registered := regexp.MustCompile(`js\.Global\(\)\.Set\("(\w+)"`).FindAllStringSubmatch(string(main), -1)
+			require.NotEmpty(t, registered, "cmd/emod-wasm/main.go must register functions on the global object")
+			page, err := os.ReadFile("../../docs/wasm-architecture.md")
+			require.NoError(t, err)
+			build := strings.Split(strings.Split(string(page), "1. **Build**")[1], "2. **Serve**")[0]
+
+			for _, name := range registered {
+				require.Contains(t, build, "`"+name[1]+"`", "the Build step must name %s", name[1])
+			}
+		})
+	})
+
 	t.Run("export emod", func(t *testing.T) {
 		t.Run("diagram JSON round-trips back to the source it was parsed from", func(t *testing.T) {
 			parsed, err := pipeline.RunPipelineExportDiagram(test.BillingPayments, "billing.emod")
@@ -421,6 +633,92 @@ func examplePaths(t *testing.T) []string {
 	require.NotEmpty(t, paths)
 
 	return paths
+}
+
+type applyAnswer struct {
+	Error           string          `json:"error"`
+	Emod            string          `json:"emod"`
+	Diagnostics     json.RawMessage `json:"diagnostics"`
+	Diagram         json.RawMessage `json:"diagram"`
+	Parsed          bool            `json:"parsed"`
+	Reformatted     bool            `json:"reformatted"`
+	DroppedComments int             `json:"dropped_comments"`
+}
+
+func decodeApplyAnswer(t *testing.T, raw string) applyAnswer {
+	t.Helper()
+
+	var answer applyAnswer
+	require.NoError(t, json.Unmarshal([]byte(raw), &answer), "the answer must be JSON")
+
+	return answer
+}
+
+// drawnDiagram answers the diagram a parse of source draws, with added appended
+// to its nodes the way the viewer adds one.
+func drawnDiagram(t *testing.T, source, filename string, added ...map[string]any) map[string]any {
+	t.Helper()
+
+	var answer struct {
+		Diagram map[string]any `json:"diagram"`
+	}
+	require.NoError(t, json.Unmarshal([]byte(pipeline.RunOnSource(requestFor(t, source, filename), pipeline.RunPipelineExportDiagram)), &answer))
+	require.NotNil(t, answer.Diagram)
+
+	for _, node := range added {
+		answer.Diagram["nodes"] = append(answer.Diagram["nodes"].([]any), node)
+	}
+
+	return answer.Diagram
+}
+
+// withoutNode takes the node with id out of diagram, and every edge that
+// touches it, as the viewer's delete does.
+func withoutNode(t *testing.T, diagram map[string]any, id string) map[string]any {
+	t.Helper()
+
+	var nodes, edges []any
+	for _, n := range diagram["nodes"].([]any) {
+		if n.(map[string]any)["id"] != id {
+			nodes = append(nodes, n)
+		}
+	}
+	require.Less(t, len(nodes), len(diagram["nodes"].([]any)), "the diagram has to hold a node %s", id)
+	for _, e := range diagram["edges"].([]any) {
+		if edge := e.(map[string]any); edge["source"] != id && edge["target"] != id {
+			edges = append(edges, e)
+		}
+	}
+	diagram["nodes"], diagram["edges"] = nodes, edges
+
+	return diagram
+}
+
+func withLabel(t *testing.T, diagram map[string]any, id, label string) map[string]any {
+	t.Helper()
+
+	for _, n := range diagram["nodes"].([]any) {
+		if node := n.(map[string]any); node["id"] == id {
+			node["label"] = label
+			return diagram
+		}
+	}
+	require.Failf(t, "no node", "the diagram has to hold a node %s", id)
+
+	return diagram
+}
+
+func applyRequest(t *testing.T, source, filename string, diagram map[string]any) string {
+	t.Helper()
+
+	envelope := map[string]any{"source": source, "diagram": diagram}
+	if filename != "" {
+		envelope["filename"] = filename
+	}
+	raw, err := json.Marshal(envelope)
+	require.NoError(t, err)
+
+	return string(raw)
 }
 
 func requestFor(t *testing.T, source, filename string) string {

@@ -3689,7 +3689,7 @@ describe('the platform seam has one contract', () => {
 
   it('names every host operation the shared modules reach for', () => {
     expect(contract).toEqual(
-      ['droppedFiles', 'exportEmod', 'initialState', 'isReady', 'onFileOpened', 'onFilesDropped',
+      ['applyDiagram', 'droppedFiles', 'exportEmod', 'initialState', 'isReady', 'onFileOpened', 'onFilesDropped',
        'onLeaveRequested', 'onSaveRequested', 'parseEmod', 'ready', 'rememberOpenedFile',
        'resolveUnsavedEdits', 'saveFile', 'setWindowModified', 'setWindowTitle'],
     );

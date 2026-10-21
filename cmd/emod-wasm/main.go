@@ -12,6 +12,7 @@ func main() {
 	js.Global().Set("parseEmod", js.FuncOf(jsParseEmod))
 	js.Global().Set("exportJSON", js.FuncOf(jsExportJSON))
 	js.Global().Set("exportEmod", js.FuncOf(jsExportEmod))
+	js.Global().Set("applyDiagram", js.FuncOf(jsApplyDiagram))
 
 	select {}
 }
@@ -33,6 +34,14 @@ func jsExportEmod(this js.Value, args []js.Value) any {
 	}
 
 	return pipeline.ExportEmodJSON(args[0].String())
+}
+
+func jsApplyDiagram(this js.Value, args []js.Value) any {
+	if len(args) != 1 {
+		return pipeline.ErrorJSON("expected 1 argument")
+	}
+
+	return pipeline.ApplyDiagramJSON(args[0].String())
 }
 
 func jsHandle(args []js.Value, run func(source, filename string) ([]byte, error)) any {

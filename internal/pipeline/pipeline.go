@@ -7,7 +7,10 @@ package pipeline
 import (
 	"encoding/json"
 	"fmt"
+	"strings"
 
+	"github.com/hashicorp/hcl/v2"
+	"github.com/hashicorp/hcl/v2/hclsyntax"
 	"github.com/hpcsc/emod/internal/ast"
 	"github.com/hpcsc/emod/internal/diagnostic"
 	"github.com/hpcsc/emod/internal/export"
@@ -103,6 +106,88 @@ func ExportEmodJSON(diagramJSON string) string {
 	}
 
 	return string(b)
+}
+
+// ApplyDiagramJSON takes the {source, filename, diagram} envelope, where diagram
+// is the document a parse of source drew, edited in the viewer. It answers the
+// source with that edit applied, under emod, beside the diagnostics, diagram and
+// parsed flag a parse of the edited source answers. reformatted says whether
+// emod fmt would have changed the source it was given, and dropped_comments how
+// many of that source's comments the emod fmt layout does not keep.
+func ApplyDiagramJSON(request string) string {
+	req, err := ExtractRequest(request)
+	if err != nil {
+		return ErrorJSON(err.Error())
+	}
+
+	var envelope struct {
+		Diagram json.RawMessage `json:"diagram"`
+	}
+	if err := json.Unmarshal([]byte(request), &envelope); err != nil || len(envelope.Diagram) == 0 || string(envelope.Diagram) == "null" {
+		return ErrorJSON("missing diagram field")
+	}
+
+	result, err := applyDiagram(req, envelope.Diagram)
+	if err != nil {
+		return ErrorJSON(err.Error())
+	}
+
+	return string(result)
+}
+
+func applyDiagram(req Request, diagram []byte) (result []byte, err error) {
+	defer func() {
+		if r := recover(); r != nil {
+			err = fmt.Errorf("apply panic: %v", r)
+		}
+	}()
+
+	model, diagnostics := oracle.Parse(req.Source, req.Filename)
+	if len(diagnostics) > 0 {
+		return nil, fmt.Errorf("the diagram edit cannot be applied: %s does not parse", req.Filename)
+	}
+	laidOut := formatter.Format(model)
+
+	if err := importer.ApplyDiagram(model, diagram); err != nil {
+		return nil, err
+	}
+	edited := formatter.Format(model)
+
+	parsed, err := RunPipelineExportDiagram(edited, req.Filename)
+	if err != nil {
+		return nil, err
+	}
+	var answer map[string]any
+	if err := json.Unmarshal(parsed, &answer); err != nil {
+		return nil, err
+	}
+	answer["emod"] = edited
+	answer["reformatted"] = laidOut != req.Source
+	answer["dropped_comments"] = commentsIn(req.Source) - commentsIn(laidOut)
+
+	return json.Marshal(answer)
+}
+
+// commentsIn also counts the # lines of a flow block: HCL reads them as heredoc
+// text, and the parser skips them.
+func commentsIn(source string) int {
+	tokens, _ := hclsyntax.LexConfig([]byte(source), "", hcl.InitialPos)
+
+	count := 0
+	inFlow := false
+	for i, token := range tokens {
+		switch token.Type {
+		case hclsyntax.TokenComment:
+			count++
+		case hclsyntax.TokenOHeredoc:
+			inFlow = string(tokens[i-2].Bytes) == "flow"
+		case hclsyntax.TokenStringLit:
+			if inFlow && strings.HasPrefix(strings.TrimSpace(string(token.Bytes)), "#") {
+				count++
+			}
+		}
+	}
+	return count
 }
 
 // RunOnSource unwraps the request envelope, runs one of the pipeline entry
