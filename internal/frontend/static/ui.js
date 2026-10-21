@@ -1,4 +1,5 @@
 import { PROSE_KINDS } from './config.js';
+import { Severity } from './severity.js';
 import { Renderer } from './renderer.js';
 import { Layout } from './layout.js';
 import { Model } from './model.js';
@@ -252,12 +253,12 @@ function updateDiagnosticsPanel(store, diagnostics, options) {
   // is display:none — clearing the inline style just falls back to that and
   // the badge stays invisible.
   badgeEl.style.display = "inline-block";
-  badgeEl.textContent = badgeTextFor(diagnostics);
-  badgeEl.dataset.severity = mostSevere(diagnostics);
+  badgeEl.textContent = Severity.buildCountText(diagnostics);
+  badgeEl.dataset.severity = Severity.mostSevere(diagnostics);
 
   let html = "";
   diagnostics.forEach(function(d, idx) {
-    var sev = severityOf(d);
+    var sev = Severity.of(d);
     html += '<div class="diag-item" data-diagnostics-idx="' + idx + '">';
     html += '<span class="diag-severity ' + sev + '">' + Renderer.esc(sev) + '</span>';
     html += '<span class="diag-location">' + Renderer.esc(buildLocationText(d)) + '</span>';
@@ -282,31 +283,6 @@ function buildLocationText(diagnostic) {
   }
   const lineText = (diagnostic.file || "?") + ":" + diagnostic.line;
   return diagnostic.column ? lineText + ":" + diagnostic.column : lineText;
-}
-
-const SEVERITY_NOUNS = [
-  { severity: "error", one: "error", many: "errors" },
-  { severity: "warning", one: "warning", many: "warnings" },
-  { severity: "info", one: "info", many: "info" },
-];
-
-function severityOf(diagnostic) {
-  const known = SEVERITY_NOUNS.some(function(noun) { return noun.severity === diagnostic.severity; });
-
-  return known ? diagnostic.severity : "error";
-}
-
-function badgeTextFor(diagnostics) {
-  return SEVERITY_NOUNS.map(function(noun) {
-    const count = diagnostics.filter(function(d) { return severityOf(d) === noun.severity; }).length;
-    return count === 0 ? "" : count + " " + (count === 1 ? noun.one : noun.many);
-  }).filter(Boolean).join(", ");
-}
-
-function mostSevere(diagnostics) {
-  return SEVERITY_NOUNS.find(function(noun) {
-    return diagnostics.some(function(d) { return severityOf(d) === noun.severity; });
-  }).severity;
 }
 
 function handleDiagnosticClick(store, evt) {
