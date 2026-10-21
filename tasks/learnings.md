@@ -818,12 +818,6 @@ in this repo; append only learnings that generalise beyond the task that surface
 - Learning: The implement method says that with in_place on you create a feature branch if you are on the default branch and build in the main checkout. Running US-014 with '--in-place --integrate' from main, the branch step was skipped and all nine commits landed straight on main, so 'clerk land --integrate' answered 'already on main — nothing to integrate' and there was never a reviewable branch. The end state matches what the correct process would have produced only because integrate was also on; with '--no-integrate' the same miss would have put unreviewed work permanently on the default branch. It also means both audit rounds and their aborted fixup replays ran against main rather than a branch. Create the branch first — the flag turns off the worktree, not the branch.
 - Apply when: starting an implement run with --in-place while the checkout is on the default branch
 
-## A quoted name is where non-ASCII actually reaches the toolchain
-- Type: constraint
-- Observed: US-015 navigate and complete the new constructs in the editor
-- Learning: The recorded formatter learning calls the rune/byte divergence unreachable because `internal/lexer` admits only ASCII identifiers and every padded column holds an identifier or keyword. That reasoning does not carry to any surface handling *quoted* names: a model, actor, context, aggregate, slice, trigger or spec name is a string literal holding arbitrary prose, so `context "Réservations"` is 12 characters in 13 bytes today, with no lexer change needed. `internal/lsp/position.go` measures a name with `nameWidth` (utf8.RuneCountInString) for exactly this reason — measured before the fix, hover on that context reported the range 9..22 for a name occupying 9..20 and resolved with the cursor on the closing quote. The *origin* is still byte-based and unfixed: `advance` (`internal/lexer/tokenizer.go`) does `c.column++` per byte, so any position sitting after non-ASCII on the same line is off, and LSP's default encoding is UTF-16 code units rather than runes in any case. Fixing a width and believing positions are now correct is the trap.
-- Apply when: measuring or emitting a position, column or width for a construct whose name is quoted, or judging whether the lexer's ASCII-identifier rule makes a byte/rune divergence unreachable
-
 ## State the completer's line scanner carries across lines must be bounded by the block that opened it
 - Type: constraint
 - Observed: US-015 navigate and complete the new constructs in the editor
@@ -1367,3 +1361,31 @@ in this repo; append only learnings that generalise beyond the task that surface
 - Observed: us-009-edit-source-in-the-app-and-see-diagnostics-as-you-type
 - Learning: US-009 asked for the desktop app's source panel to revalidate as you type; the frontend is one copy, so the web viewer and emod diagram --serve changed with it (live revalidation, Render keeping a stale diagram, a restacked bottom dock), against the story goal that the web viewer keep 'working exactly as they do today'. At match-request the user chose all three distributions, citing the non-goal that canvas features stay available everywhere. Decide the distribution explicitly in the breakdown and put the goal tension to the user there, not at landing.
 - Apply when: decomposing a user-stories/emod-desktop.md story whose behaviour lands in internal/frontend/static
+
+## Chromium reveals a focused textarea's caret only vertically, and WebKit not at all
+- Type: constraint
+- Recorded: 2026-10-21
+- Observed: task 3 — diagnostic-source-jump
+- Learning: After focus() and setSelectionRange() on a textarea, Chromium scrolls to the caret's line (it reveals the cached selection on focus) but never sideways, and WebKit, the desktop app's engine, scrolls in neither direction; SourcePanel.scrollToCaret sets scrollTop and scrollLeft itself for that reason. The e2e config runs Chromium only, so a caret-scroll test passes there with the scroll code deleted unless it first moves the panel's scroll and selection away from the target; run the spec once under Playwright's WebKit too (npx playwright install webkit, and a temporary config that spreads playwright.config.js with a devices['Desktop Safari'] project).
+- Apply when: moving or revealing a caret in the source panel, or writing an e2e test in e2e-viewer that asserts something is scrolled into view
+
+## The source panel does not wrap, and anything level with its lines reads shared CSS variables and re-syncs on resize
+- Type: constraint
+- Recorded: 2026-10-21
+- Observed: task 2 — diagnostic-source-jump
+- Learning: #source-input is wrap=off with white-space: pre, so a line's place follows from its number: the gutter places each entry from --source-line-height, --source-padding and --source-border on #source-area, minus --source-scroll copied from the textarea's scrollTop. A textarea under the collapsed data panel reports scrollTop 0 and the browser restores its scroll on show with no scroll event, so source-panel.js also re-syncs from a ResizeObserver; without it the entries sat 6300px off their lines. Built this way the gutter was routine although the breakdown called it low certainty, and gutterOffsetFrom in e2e-viewer/tests/source-panel.spec.js is the alignment check to copy.
+- Apply when: changing the source panel's font, padding, line height or wrapping, or adding a layer level with its lines, such as US-012's highlighting
+
+## A criterion about what the user sees in colour needs a computed-style assertion, not an attribute one
+- Type: recurring-finding
+- Recorded: 2026-10-21
+- Observed: task 2 — diagnostic-source-jump
+- Learning: US-010's criterion 'visually distinguishing error, warning, and info severities' was planned and tested through a data-severity attribute, which stays green when the CSS rule that colours it breaks; match-request had to add an e2e check that each gutter entry's computed colour equals its severity pill's and that the two severities differ. When a breakdown turns a visual criterion into a class or attribute assertion, give the same task a real-browser getComputedStyle assertion.
+- Apply when: decomposing or closing a criterion that says something in the viewer is shown, coloured or told apart visually
+
+## Diagnostic columns count grapheme clusters, except a flow entry's, which counts bytes
+- Type: constraint
+- Recorded: 2026-10-21
+- Observed: task 3 — diagnostic-source-jump
+- Learning: internal/lexer is gone: positions come from HCL, whose columns count grapheme clusters from 1 (an accent with a combining mark, or a ZWJ emoji, is one column), except a flow entry's name column, which internal/parser/parser.go takes from strings.Index, a byte index. A JavaScript caret offset counts UTF-16 units, so the viewer converts a column with Intl.Segmenter (offsetOf in static/source-panel.js), built when it is used because a browser without it would otherwise fail to load the module.
+- Apply when: turning a diagnostic's line and column into a position in text (the viewer, the LSP, an editor), or fixing the flow-entry column in internal/parser
