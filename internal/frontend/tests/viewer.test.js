@@ -2472,6 +2472,39 @@ describe('what the diagnostics panel reports', () => {
     expect(items[1].textContent).toContain('unexpected "}"');
     expect(items[1].textContent).not.toContain('[');
   });
+
+  it('shows each diagnostic at its file, line and column, and at its file and line where the column is not known', async () => {
+    await renderReporting([
+      { file: 'orders.emod', line: 12, column: 5, message: 'unexpected "}"', severity: 'error' },
+      { file: 'orders.emod', line: 9, column: 0, message: 'command "Ship" is never used', severity: 'warning' },
+    ]);
+
+    const items = document.querySelectorAll('#diagnostics-list .diag-item');
+    expect(items[0].textContent).toContain('orders.emod:12:5');
+    expect(items[1].textContent).toContain('orders.emod:9');
+    expect(items[1].textContent).not.toContain('orders.emod:9:');
+  });
+
+  it('says a diagnostic with no line applies to the whole file, showing no line number', async () => {
+    await renderReporting([
+      { file: 'orders.emod', line: 0, column: 0, message: 'the model declares no context', severity: 'warning' },
+    ]);
+
+    const item = document.querySelector('#diagnostics-list .diag-item');
+    expect(item.textContent).toContain('orders.emod (whole file)');
+    expect(item.textContent).not.toContain(':0');
+    expect(item.textContent).not.toContain('?');
+  });
+
+  it('says a diagnostic with neither a file nor a line applies to the whole file', async () => {
+    await renderReporting([
+      { file: '', line: 0, column: 0, message: 'the model declares no context', severity: 'warning' },
+    ]);
+
+    const item = document.querySelector('#diagnostics-list .diag-item');
+    expect(item.textContent).toContain('whole file');
+    expect(item.textContent).not.toContain('?');
+  });
 });
 
 describe('rendering the panel again when its source does not parse', () => {

@@ -258,10 +258,9 @@ function updateDiagnosticsPanel(store, diagnostics, options) {
   let html = "";
   diagnostics.forEach(function(d, idx) {
     var sev = severityOf(d);
-    var loc = (d.file || "?") + ":" + (d.line || "?");
     html += '<div class="diag-item" data-diagnostics-idx="' + idx + '">';
     html += '<span class="diag-severity ' + sev + '">' + Renderer.esc(sev) + '</span>';
-    html += '<span class="diag-location">' + Renderer.esc(loc) + '</span>';
+    html += '<span class="diag-location">' + Renderer.esc(buildLocationText(d)) + '</span>';
     html += '<span class="diag-message">';
     if (d.rule_name) {
       html += '<span class="diag-rule">[' + Renderer.esc(d.rule_name) + ']</span> ';
@@ -275,6 +274,14 @@ function updateDiagnosticsPanel(store, diagnostics, options) {
     panelEl.classList.remove("hidden");
   }
   badgeEl.classList.toggle("active", !panelEl.classList.contains("hidden"));
+}
+
+function buildLocationText(diagnostic) {
+  if (!diagnostic.line) {
+    return diagnostic.file ? diagnostic.file + " (whole file)" : "whole file";
+  }
+  const lineText = (diagnostic.file || "?") + ":" + diagnostic.line;
+  return diagnostic.column ? lineText + ":" + diagnostic.column : lineText;
 }
 
 const SEVERITY_NOUNS = [

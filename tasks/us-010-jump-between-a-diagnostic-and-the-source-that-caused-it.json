@@ -1,0 +1,145 @@
+{
+  "story": "Jump between a diagnostic and the source that caused it",
+  "tasks_file": "tasks/us-010-jump-between-a-diagnostic-and-the-source-that-caused-it.md",
+  "tasks": [
+    {
+      "n": 1,
+      "done": true,
+      "title": "Show each diagnostic's line and column, or that it applies to the whole file",
+      "language": "JavaScript",
+      "testable": true,
+      "certainty": "high",
+      "blast_radius": "low",
+      "patterns_to_follow": [
+        "internal/frontend/static/ui.js:259-271",
+        "internal/frontend/tests/viewer.test.js:2442-2475",
+        "internal/frontend/tests/diagnostics-highlight.test.js:77-87",
+        "internal/export/json.go:244-252"
+      ],
+      "depends_on": [],
+      "affected_files": [
+        "internal/frontend/static/ui.js",
+        "internal/frontend/tests/viewer.test.js",
+        "internal/frontend/tests/diagnostics-highlight.test.js"
+      ]
+    },
+    {
+      "n": 2,
+      "done": false,
+      "title": "Mark the lines that carry diagnostics in a gutter beside the source panel",
+      "language": "JavaScript",
+      "testable": true,
+      "certainty": "low",
+      "blast_radius": "low",
+      "patterns_to_follow": [
+        "internal/frontend/static/viewer.js:72-74",
+        "internal/frontend/static/minimap.js:124-160",
+        "internal/frontend/static/ui.js:280-303",
+        "internal/frontend/static/ui.js:233-278",
+        "internal/frontend/static/viewer.html:259-360",
+        "internal/frontend/static/viewer.html:573-582",
+        "internal/frontend/static/viewer.html:629-642",
+        "internal/frontend/static/viewer.html:1267-1281",
+        "internal/frontend/static/store.js:1-65",
+        "internal/frontend/tests/viewer.test.js:79-125",
+        "internal/frontend/tests/viewer.test.js:2825-2860",
+        "internal/frontend/tests/viewer.test.js:3346-3372",
+        "e2e-viewer/tests/source-panel.spec.js:13-20",
+        "e2e-viewer/tests/source-panel.spec.js:62-93",
+        "e2e-viewer/tests/source-panel.spec.js:107-136",
+        "README.md:401-410",
+        "tasks/learnings.md:767-771",
+        "tasks/learnings.md:1329-1333",
+        "tasks/learnings.md:1322-1328"
+      ],
+      "depends_on": [],
+      "affected_files": [
+        "internal/frontend/static/source-panel.js",
+        "internal/frontend/static/viewer.html",
+        "internal/frontend/static/viewer.js",
+        "internal/frontend/static/store.js",
+        "internal/frontend/static/config.js",
+        "internal/frontend/static/ui.js",
+        "internal/frontend/tests/source-panel.test.js",
+        "internal/frontend/tests/viewer.test.js",
+        "e2e-viewer/tests/source-panel.spec.js",
+        "README.md"
+      ]
+    },
+    {
+      "n": 3,
+      "done": false,
+      "title": "Move the source panel's caret to a diagnostic when it is clicked",
+      "language": "JavaScript",
+      "testable": true,
+      "certainty": "medium",
+      "blast_radius": "low",
+      "patterns_to_follow": [
+        "internal/frontend/static/ui.js:305-359",
+        "internal/frontend/static/ui.js:1039-1073",
+        "internal/frontend/static/viewer.js:334-339",
+        "internal/frontend/static/viewer.js:206-233",
+        "internal/frontend/tests/diagnostics-highlight.test.js:1-136",
+        "internal/frontend/tests/viewer.test.js:2477-2540",
+        "internal/frontend/tests/viewer.test.js:153-157",
+        "internal/parser/parser.go:47-66",
+        "e2e-viewer/tests/source-panel.spec.js:62-69",
+        "e2e-viewer/tests/helpers.js:102-121",
+        "tasks/learnings.md:1031-1036",
+        "tasks/learnings.md:1329-1333",
+        "task:1",
+        "task:2"
+      ],
+      "depends_on": [
+        1,
+        2
+      ],
+      "affected_files": [
+        "internal/frontend/static/source-panel.js",
+        "internal/frontend/static/ui.js",
+        "internal/frontend/static/viewer.js",
+        "internal/frontend/tests/diagnostics-highlight.test.js",
+        "internal/frontend/tests/viewer.test.js",
+        "internal/frontend/tests/source-panel.test.js",
+        "e2e-viewer/tests/source-panel.spec.js",
+        "README.md"
+      ]
+    },
+    {
+      "n": 4,
+      "done": false,
+      "title": "Show the diagnostics of the caret's line under the source panel",
+      "language": "JavaScript",
+      "testable": true,
+      "certainty": "medium",
+      "blast_radius": "low",
+      "patterns_to_follow": [
+        "internal/frontend/static/viewer.js:351-354",
+        "internal/frontend/static/ui.js:259-271",
+        "internal/frontend/static/ui.js:280-303",
+        "internal/frontend/static/viewer.html:644-680",
+        "internal/frontend/tests/viewer.test.js:2825-2860",
+        "e2e-viewer/tests/source-panel.spec.js:139-174",
+        "tasks/learnings.md:1073-1078",
+        "tasks/learnings.md:1037-1042",
+        "task:2",
+        "task:3"
+      ],
+      "depends_on": [
+        2,
+        3
+      ],
+      "affected_files": [
+        "internal/frontend/static/source-panel.js",
+        "internal/frontend/static/viewer.html",
+        "internal/frontend/static/viewer.js",
+        "internal/frontend/static/store.js",
+        "internal/frontend/tests/viewer.test.js",
+        "internal/frontend/tests/source-panel.test.js",
+        "e2e-viewer/tests/source-panel.spec.js",
+        "README.md"
+      ]
+    }
+  ],
+  "design_file": "tasks/us-010-jump-between-a-diagnostic-and-the-source-that-caused-it.design.yaml"
+}

@@ -1,0 +1,48 @@
+design: planned
+types:
+  - name: SourcePanel
+    package: internal/frontend/static   # source-panel.js, exported as one namespace object like Minimap and Legend
+    change: new
+    does: shows where the reported diagnostics sit in the source panel's text
+    owns:
+      - a column counts user-perceived characters, as HCL's columns do, so the caret lands before the character a diagnostic names
+      - a line in the gutter shows its most severe diagnostic, ranked as the badge ranks them
+      - a diagnostic with no line marks no line, shows on no line and moves no caret
+      - a line past the end of the panel's text puts the caret at the end of the text
+      - the gutter and the caret line's message keep the last reported line numbers until the next revalidation replaces them
+    methods: [initSourcePanel, moveCaretTo, showGutter, showCaretLineDiagnostics]
+  - name: UI
+    package: internal/frontend/static   # ui.js
+    change: changed
+    does: lists each diagnostic at its location, where a click on it sends the source panel
+    owns:
+      - a diagnostic whose line is 0 or absent applies to the whole file
+      - Delete and Backspace typed in a text field edit the text, never the diagram's selection
+    methods: [updateDiagnosticsPanel, handleDiagnosticClick, initKeyboard]
+words:
+  - concept: the insertion point in the source panel's text
+    word: caret
+    not: [cursor, position, selection]
+  - concept: the line the caret is on
+    word: caret line
+    not: [current line, active line]
+  - concept: the strip beside the source panel's text where each line carrying a diagnostic shows its severity
+    word: gutter
+    not: [mark, marking, marker, margin, annotation, highlight]
+  - concept: where a diagnostic points in the source, as file, line and column
+    word: location
+    not: [position, range, place]
+  - concept: a diagnostic with no line, which applies to all of the source
+    word: whole file
+    not: [global, unlocated, file-level]
+  - concept: error, warning or info
+    word: severity
+    not: [level, kind]
+  - concept: the textarea holding the model's source, inside the data panel
+    word: source panel
+    not: [editor, data panel, textarea]
+dependencies:
+  - internal/frontend/static/ui.js -> internal/frontend/static/source-panel.js
+  - internal/frontend/static/viewer.js -> internal/frontend/static/source-panel.js
+  - internal/frontend/static/source-panel.js -> internal/frontend/static/config.js
+  - internal/frontend/static/ui.js -> internal/frontend/static/config.js
