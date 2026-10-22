@@ -20,7 +20,7 @@ bus.on('data:changed', function({ store: s }) {
   renderDiagram(s);
 });
 
-bus.on('model:edited', function({ store: s }) {
+bus.on('diagram:edited', function({ store: s }) {
   renderDiagram(s);
 });
 
@@ -103,7 +103,7 @@ bus.on('node:delete', function({ store: s, nodeId }) {
   UI.hideDetailPanel(s);
   const hasOffsets = Object.keys(s.nodeOffsets).length > 0;
   if (s.dom.resetLayoutBtn) s.dom.resetLayoutBtn.disabled = !hasOffsets;
-  bus.emit('model:edited', { store: s });
+  bus.emit('diagram:edited', { store: s });
 });
 
 // ─── Render orchestration ────────────────────────────────────────────
@@ -457,7 +457,7 @@ function init() {
     applyPendingDiagramEdits();
   }
 
-  bus.on('model:edited', countDiagramEdit);
+  bus.on('diagram:edited', countDiagramEdit);
   bus.on('fields:edited', countDiagramEdit);
 
   // A panel that no longer holds the drawn source has an edit the diagram does
@@ -1071,7 +1071,7 @@ function init() {
     // A deleted edge may still be the one the detail panel is showing, and
     // re-rendering alone does not clear the selection behind it.
     if (action === "delete-arrow") UI.hideDetailPanel(store);
-    bus.emit('model:edited', { store });
+    bus.emit('diagram:edited', { store });
   });
 
   // ─── Dismiss context menu on outside click ──────────────────────

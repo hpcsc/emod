@@ -237,7 +237,7 @@ function commitDrag(store, nodeId, dx, dy) {
   if (over) {
     const moved = Model.moveToSlice(store.nodes, nodeId, over.id);
     moved.forEach(function(id) { delete store.nodeOffsets[id]; });
-    bus.emit(moved.length > 0 ? 'model:edited' : 'data:changed', { store });
+    bus.emit(moved.length > 0 ? 'diagram:edited' : 'data:changed', { store });
     return;
   }
   const target = clampIntoSlice(store, nodeId, base.x + dx, base.y + dy);
@@ -354,7 +354,7 @@ function settleConnect(store, connect, clientX, clientY) {
 
   if (connect.repoint) {
     if (targetId && applyRepoint(store, connect, targetId)) {
-      bus.emit('model:edited', { store });
+      bus.emit('diagram:edited', { store });
       return;
     }
     // Redraw whatever the drop decided: the arrow is currently bent to the
@@ -364,7 +364,7 @@ function settleConnect(store, connect, clientX, clientY) {
   }
 
   if (targetId && addEdge(store, connect.sourceId, targetId)) {
-    bus.emit('model:edited', { store });
+    bus.emit('diagram:edited', { store });
   }
 }
 
@@ -408,7 +408,7 @@ function tryReorderSliceOnDrop(store, sliceId, dx) {
 
   var moved = Model.moveSlice(store.nodes, sliceId, targetPos);
   if (moved) {
-    bus.emit('model:edited', { store });
+    bus.emit('diagram:edited', { store });
   }
   return moved;
 }

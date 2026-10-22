@@ -698,7 +698,7 @@ function showEdgeDetail(store) {
         Model.removeEdge(store, e.source, e.target);
         store.interaction.selectedEdge = null;
         hideDetailPanel(store);
-        bus.emit('model:edited', { store });
+        bus.emit('diagram:edited', { store });
       }
     });
   }
@@ -802,7 +802,7 @@ function startInlineEdit(store, nodeId) {
       evt.preventDefault();
       if (!store.interaction.inlineEdit) return;
       const renamed = commitInlineEdit(store, input);
-      bus.emit(renamed ? 'model:edited' : 'data:changed', { store });
+      bus.emit(renamed ? 'diagram:edited' : 'data:changed', { store });
     } else if (evt.key === "Escape") {
       evt.preventDefault();
       cancelInlineEdit(store);
@@ -812,7 +812,7 @@ function startInlineEdit(store, nodeId) {
   input.addEventListener("blur", function() {
     if (!store.interaction.inlineEdit) return;
     const renamed = commitInlineEdit(store, input);
-    setTimeout(function() { bus.emit(renamed ? 'model:edited' : 'data:changed', { store }); }, 0);
+    setTimeout(function() { bus.emit(renamed ? 'diagram:edited' : 'data:changed', { store }); }, 0);
   });
 
   document.body.appendChild(input);
@@ -1152,7 +1152,7 @@ function initKeyboard(store) {
         Model.removeEdge(store, edge.source, edge.target);
         store.interaction.selectedEdge = null;
         hideDetailPanel(store);
-        bus.emit('model:edited', { store });
+        bus.emit('diagram:edited', { store });
       } else if (store.interaction.selectedNodeId) {
         const delNode = store.nodeById.get( store.interaction.selectedNodeId);
         if (delNode && isDeletableNodeType(delNode.type)) {

@@ -97,8 +97,8 @@ beforeEach(() => {
   rerender = ({ store: s }) => { if (s === store) render(); };
   edits = 0;
   bus.on('data:changed', rerender);
-  bus.on('model:edited', rerender);
-  bus.on('model:edited', countEdit);
+  bus.on('diagram:edited', rerender);
+  bus.on('diagram:edited', countEdit);
 
   render();
   Interaction.initEventListeners(store);
@@ -106,8 +106,8 @@ beforeEach(() => {
 
 afterEach(() => {
   bus.off('data:changed', rerender);
-  bus.off('model:edited', rerender);
-  bus.off('model:edited', countEdit);
+  bus.off('diagram:edited', rerender);
+  bus.off('diagram:edited', countEdit);
 });
 
 function countEdit({ store: s }) {
