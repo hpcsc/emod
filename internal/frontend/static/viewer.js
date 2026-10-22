@@ -415,12 +415,10 @@ function init() {
   // model it is replacing, because renderPanelSource writes the text
   // immediately and commits the identity only when the parse resolves.
   function reportModified() {
-    setWindowModified(unsavedEdits());
+    setWindowModified(hasUnsavedEdits());
   }
 
-  // A diagram edit the panel does not hold is not in the file Save writes
-  // either, so it counts as unsaved even when the panel matches the file.
-  function unsavedEdits() {
+  function hasUnsavedEdits() {
     return modelIsModified(store) || diagramHasUnappliedEdit();
   }
 
@@ -462,7 +460,7 @@ function init() {
   function countDiagramEdit({ store: s }) {
     if (s !== store || drawnSource === null) return;
     latestDiagramEdit++;
-    applyPendingDiagramEdits();
+    applyUnappliedDiagramEdits();
   }
 
   bus.on('diagram:edited', countDiagramEdit);
@@ -470,7 +468,7 @@ function init() {
 
   // A panel that no longer holds the drawn source has an edit the diagram does
   // not show, and writing the applied edit over it would discard that.
-  function applyPendingDiagramEdits() {
+  function applyUnappliedDiagramEdits() {
     if (applyingDiagramEdit || store.conflict || !diagramHasUnappliedEdit()) {
       return undefined;
     }
@@ -519,7 +517,7 @@ function init() {
   function settleDiagramEdit(edit, source, panelTextToReplace, writeAnswer) {
     applyingDiagramEdit = false;
     if (edit <= discardedDiagramEdit || source !== drawnSource) {
-      return applyPendingDiagramEdits();
+      return applyUnappliedDiagramEdits();
     }
     if (keepDiagramEditsAsked) {
       return sendDiagramEdit(store.dom.sourceInput.value);
@@ -668,7 +666,7 @@ function init() {
   // reached the panel yet, and the panel is what Save would write.
   function clearedToReplace() {
     return appliesSettled().then(function() {
-      if (!unsavedEdits()) {
+      if (!hasUnsavedEdits()) {
         return true;
       }
       return resolveUnsavedEdits().then(function(outcome) {
@@ -679,7 +677,7 @@ function init() {
           return true;
         }
         return saveModel({ chooseLocation: false }).then(function() {
-          return !unsavedEdits();
+          return !hasUnsavedEdits();
         });
       });
     });
