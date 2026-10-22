@@ -245,3 +245,15 @@ export async function emptyCanvasPoint(page) {
   if (!point) throw new Error('no empty canvas point found — the diagram fills the viewport');
   return point;
 }
+
+// landsOn asks the browser what a click at an element's centre would reach,
+// which is what a user reading or pressing it depends on: a jsdom assertion
+// cannot see an overlay drawn over it.
+export async function landsOn(page, selector) {
+  return page.evaluate((sel) => {
+    const target = document.querySelector(sel);
+    const box = target.getBoundingClientRect();
+    const hit = document.elementFromPoint(box.left + box.width / 2, box.top + box.height / 2);
+    return box.width > 0 && box.height > 0 && target.contains(hit);
+  }, selector);
+}

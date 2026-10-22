@@ -1,23 +1,11 @@
 import { test, expect } from '@playwright/test';
 import { readdirSync, readFileSync, statSync } from 'node:fs';
-import { open, render, SAMPLE, SAMPLE_WITH_VIEW } from './helpers.js';
+import { open, render, landsOn, SAMPLE, SAMPLE_WITH_VIEW } from './helpers.js';
 import { REVALIDATE_PAUSE_MS } from '../../internal/frontend/static/config.js';
 
 // A context left open is the smallest edit that stops the source parsing, and
 // the parser recovers only what comes before it.
 const UNPARSEABLE = SAMPLE + 'context "Refunds" {\n';
-
-// landsOn asks the browser what a click at an element's centre would reach,
-// which is what a user reading or pressing it depends on: a jsdom assertion
-// cannot see an overlay drawn over it.
-async function landsOn(page, selector) {
-  return page.evaluate((sel) => {
-    const target = document.querySelector(sel);
-    const box = target.getBoundingClientRect();
-    const hit = document.elementFromPoint(box.left + box.width / 2, box.top + box.height / 2);
-    return box.width > 0 && box.height > 0 && target.contains(hit);
-  }, selector);
-}
 
 test.describe('a diagram the source panel no longer parses into', () => {
   test('stays on screen with every node, marked out of date by the real pipeline', async ({ page }) => {

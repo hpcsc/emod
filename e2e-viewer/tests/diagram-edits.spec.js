@@ -1,19 +1,8 @@
 import { test, expect } from '@playwright/test';
 import { readFileSync } from 'node:fs';
-import { open, render, centreOf, dragBetween, SAMPLE, SAMPLE_WITH_VIEW } from './helpers.js';
+import { open, render, centreOf, dragBetween, landsOn, SAMPLE, SAMPLE_WITH_VIEW } from './helpers.js';
 
 const specsHotel = readFileSync(new URL('../../examples/specs_hotel.emod', import.meta.url), 'utf-8');
-
-// landsOn asks the browser what a press at an element's centre reaches, which
-// is what a user reading or pressing it depends on.
-async function landsOn(page, selector) {
-  return page.evaluate((sel) => {
-    const target = document.querySelector(sel);
-    const box = target.getBoundingClientRect();
-    const hit = document.elementFromPoint(box.left + box.width / 2, box.top + box.height / 2);
-    return box.width > 0 && box.height > 0 && target.contains(hit);
-  }, selector);
-}
 
 // Types into the panel and adds a command from a slice menu in one task, so the
 // diagram edit lands before the pause that would redraw from the typed text.
