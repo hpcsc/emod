@@ -13,7 +13,7 @@ import { Export } from './emod-export.js';
 import { REVALIDATE_PAUSE_MS } from './config.js';
 import { ready, isReady, applyDiagram, droppedFiles, saveFile, setWindowTitle, setWindowModified, rememberOpenedFile, resolveUnsavedEdits, onFileOpened, onFilesDropped, onSaveRequested, onLeaveRequested, initialState } from './platform.js';
 
-const DRAG_RELEASE_CHECK_MS = 50;
+const POINTER_RELEASE_CHECK_MS = 50;
 
 // ─── Event subscriptions ─────────────────────────────────────────────
 bus.on('data:changed', function({ store: s }) {
@@ -299,7 +299,7 @@ function init() {
         if (opening) {
           Model.setModelData(store, data.diagram);
         } else {
-          Model.setModelDataInPlace(store, data.diagram);
+          redrawInPlace(data.diagram);
         }
         showRenderOutcome("✓ Rendered", "status success", revalidation);
         if (!revalidation) {
@@ -343,6 +343,14 @@ function init() {
 
   function diagramOnScreen() {
     return store.nodes.length > 0;
+  }
+
+  function redrawInPlace(diagram) {
+    const outgoing = store.nodes;
+    Model.setModelDataInPlace(store, diagram);
+    const ids = Model.matchNodeIds(outgoing, store.nodes);
+    UI.followNodeIds(store, ids);
+    return ids;
   }
 
   function showEmptyPanel(source, revalidation) {
@@ -485,7 +493,7 @@ function init() {
     return ready.then(function() {
       return applyDiagram(source, filename, diagram);
     }).then(function(answer) {
-      return dragReleased().then(function() {
+      return pointerReleased().then(function() {
         return settleDiagramEdit(edit, source, panelTextToReplace, function() { writeAppliedSource(answer, edit); });
       });
     }, function(err) {
@@ -496,11 +504,11 @@ function init() {
     });
   }
 
-  function dragReleased() {
+  function pointerReleased() {
     return new Promise(function(resolve) {
       (function check() {
-        if (store.interaction.drag) {
-          setTimeout(check, DRAG_RELEASE_CHECK_MS);
+        if (store.interaction.drag || store.interaction.connect) {
+          setTimeout(check, POINTER_RELEASE_CHECK_MS);
         } else {
           resolve();
         }
@@ -552,7 +560,7 @@ function init() {
 
   function restoreDrawnDiagram() {
     discardDiagramEdits();
-    Model.setModelDataInPlace(store, JSON.parse(drawnDiagramText));
+    redrawInPlace(JSON.parse(drawnDiagramText));
   }
 
   function discardDiagramEdits() {
@@ -585,11 +593,7 @@ function init() {
       drawnDiagramText = JSON.stringify(answer.diagram);
       UI.hideDiagramStale(store);
       const editor = UI.readFieldEditor(store);
-      const outgoing = store.nodes;
-      Model.setModelDataInPlace(store, answer.diagram);
-      const ids = Model.matchNodeIds(outgoing, store.nodes);
-      UI.followNodeIds(store, ids);
-      UI.restoreFieldEditor(store, editor, ids);
+      UI.restoreFieldEditor(store, editor, redrawInPlace(answer.diagram));
       showRenderOutcome("✓ Rendered", "status success", true);
     }
     reportModified();

@@ -192,11 +192,28 @@ function fieldEditor() {
   };
 }
 
+// Every viewer adds its listeners to the one document, so without this a key
+// pressed in one test also reaches the viewers that earlier tests started.
+const documentListeners = [];
+
 async function startViewer() {
   createRequiredElements();
   const { init } = await import('../static/viewer.js');
-  await init();
+  const add = document.addEventListener;
+  document.addEventListener = function(type, listener, options) {
+    documentListeners.push([type, listener, options]);
+    return add.call(this, type, listener, options);
+  };
+  try {
+    await init();
+  } finally {
+    document.addEventListener = add;
+  }
 }
+
+afterEach(() => {
+  documentListeners.splice(0).forEach(([type, listener, options]) => document.removeEventListener(type, listener, options));
+});
 
 const { sourceToSave } = await import('../static/viewer.js');
 const platform = await import('../static/platform.js');
@@ -1925,6 +1942,10 @@ describe('a diagram edit reaching the source panel', () => {
 
   function dragFrom(element) {
     fireMouseAt(element, 'mousedown', 100, 100);
+    finishDrag();
+  }
+
+  function finishDrag() {
     fireMouseAt(document, 'mousemove', 100 + DRAG_THRESHOLD + 1, 100);
     fireMouseAt(document, 'mousemove', 160, 140);
     fireMouseAt(document, 'mouseup', 160, 140);
@@ -2503,6 +2524,23 @@ describe('a diagram edit reaching the source panel', () => {
       await settle();
 
       expect(document.getElementById('render-status').textContent).toBe(status);
+    });
+
+    it('keeps a rename ended by leaving the box when an earlier edit is answered before the rename is counted', async () => {
+      await openEditable();
+      const held = heldApply();
+      fromMenu(sliceHeader('slice-1'), 'add-command');
+      await settle();
+      const sent = JSON.parse(JSON.stringify(lastApply()[2]));
+
+      rename(blockFor('command-1'), 'ChargePayment', 'blur');
+      held.answer(appliedAnswer(sent));
+      for (let i = 0; i < 50; i++) await Promise.resolve();
+      await settle();
+      await settle();
+
+      expect(sentNodes().find((n) => n.id === 'command-1').label).toBe('ChargePayment');
+      expect(blockFor('command-1').textContent).toContain('ChargePayment');
     });
 
     it('keeps the edit through a host failure, and leaves the reason on screen', async () => {
@@ -3112,61 +3150,6 @@ describe('a diagram edit reaching the source panel', () => {
       expect(fieldInput(2, 'type').value).toBe('bool');
     });
 
-    describe('on a node the parse of the applied source numbers anew', () => {
-      // A command added to the first slice comes before the second slice's in
-      // the document, so the parse gives it the id the second slice's had.
-      function diagramWithRefund() {
-        const diagram = editableDiagram();
-        diagram.nodes.push({ id: 'command-2', type: 'command', label: 'RefundPayment', parentId: 'slice-2', fields: [{ name: 'reason', type: 'string' }] });
-        return diagram;
-      }
-
-      async function addCommandHeldThen(gesture) {
-        globalThis.INITIAL_DATA = null;
-        parseResult = { diagnostics: [], diagram: diagramWithRefund() };
-        await startViewer();
-        deliverFile({ name: 'billing.emod', path: '/models/billing.emod', content: billingSource });
-        await flush();
-        const held = heldApply();
-        fromMenu(sliceHeader('slice-1'), 'add-command');
-        await settle();
-        const added = nodeIdLabelled('new-command-2');
-        const renumbered = JSON.parse(JSON.stringify(lastApply()[2]).split('"command-2"').join('"command-3"').split(added).join('command-2'));
-        gesture();
-        held.answer(appliedAnswer(renumbered));
-        await settle();
-      }
-
-      it('reopens the field editor on the node it was open on, not on the one that took its id', async () => {
-        await addCommandHeldThen(() => fromMenu(blockFor('command-2'), 'open-field-editor'));
-
-        expect(fieldEditor().open).toBe(true);
-        expect(fieldEditor().text).toContain('RefundPayment');
-        expect(fieldEditor().text).not.toContain('new-command-2');
-      });
-
-      it('renames the node a rename box was opened on', async () => {
-        await addCommandHeldThen(() => {
-          fireMouse(blockFor('command-2'), 'dblclick');
-          document.querySelector('body > input[type="text"]').value = 'IssueRefund';
-        });
-
-        document.querySelector('body > input[type="text"]').dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true, cancelable: true }));
-        await settle();
-
-        expect(sentNodes().find((n) => n.id === 'command-3').label).toBe('IssueRefund');
-        expect(sentNodes().find((n) => n.id === 'command-2').label).toBe('new-command-2');
-      });
-
-      it('opens the field editor from a context menu raised before the redraw on the node it was raised over', async () => {
-        await addCommandHeldThen(() => fireMouse(blockFor('command-2'), 'contextmenu'));
-
-        menuItemFor('open-field-editor').click();
-
-        expect(fieldEditor().text).toContain('RefundPayment');
-      });
-    });
-
     it('puts the window in conflict when the panel holds text the diagram does not show', async () => {
       await openFieldEditorOnTakePayment();
       typeIntoPanel(billingSource + '# typed\n');
@@ -3178,24 +3161,6 @@ describe('a diagram edit reaching the source panel', () => {
       expect(applies()).toBe(before);
       expect(conflictShown()).toBe(true);
       expect(panelText()).toBe(billingSource + '# typed\n');
-    });
-
-    it('stays open on a node the canvas added once the parse of the applied source gives that node its own id', async () => {
-      await openEditable();
-      const held = heldApply();
-      fromMenu(sliceHeader('slice-1'), 'add-command');
-      await settle();
-      const added = nodeIdLabelled('new-command-2');
-      fromMenu(blockFor(added), 'open-field-editor');
-      expect(fieldEditor().text).toContain('new-command-2');
-
-      const renumbered = JSON.parse(JSON.stringify(lastApply()[2]).split(added).join('command-2'));
-      held.answer(appliedAnswer(renumbered));
-      await settle();
-
-      expect(blockFor('command-2')).not.toBeNull();
-      expect(fieldEditor().open).toBe(true);
-      expect(fieldEditor().text).toContain('new-command-2');
     });
 
     it('keeps the editor, the focus and what is typed in the next input when the first edit reaches the panel', async () => {
@@ -3225,6 +3190,218 @@ describe('a diagram edit reaching the source panel', () => {
       await settle();
 
       expect(sentFields()[0]).toEqual({ name: 'amount', type: 'float', modifier: 'optional' });
+    });
+  });
+
+  describe('on a node a redraw numbers anew', () => {
+    // A command added to the first slice comes before the second slice's in
+    // the document, so the parse gives it the id the second slice's had.
+    function diagramWithRefund() {
+      const diagram = editableDiagram();
+      diagram.nodes.push(
+        { id: 'command-2', type: 'command', label: 'RefundPayment', parentId: 'slice-2', fields: [{ name: 'reason', type: 'string' }] },
+        { id: 'event-3', type: 'event', label: 'RefundIssued', parentId: 'slice-2' },
+      );
+      diagram.edges.push({ source: 'command-2', target: 'event-2', type: 'flow' });
+      return diagram;
+    }
+
+    async function addCommandHeldThen(gesture) {
+      globalThis.INITIAL_DATA = null;
+      parseResult = { diagnostics: [], diagram: diagramWithRefund() };
+      await startViewer();
+      deliverFile({ name: 'billing.emod', path: '/models/billing.emod', content: billingSource });
+      await flush();
+      const held = heldApply();
+      fromMenu(sliceHeader('slice-1'), 'add-command');
+      await settle();
+      const added = nodeIdLabelled('new-command-2');
+      const renumbered = JSON.parse(JSON.stringify(lastApply()[2]).split('"command-2"').join('"command-3"').split(added).join('command-2'));
+      gesture();
+      held.answer(appliedAnswer(renumbered));
+      await settle();
+    }
+
+    it('reopens the field editor on the node it was open on, not on the one that took its id', async () => {
+      await addCommandHeldThen(() => fromMenu(blockFor('command-2'), 'open-field-editor'));
+
+      expect(fieldEditor().open).toBe(true);
+      expect(fieldEditor().text).toContain('RefundPayment');
+      expect(fieldEditor().text).not.toContain('new-command-2');
+    });
+
+    it('renames the node a rename box was opened on', async () => {
+      await addCommandHeldThen(() => {
+        fireMouse(blockFor('command-2'), 'dblclick');
+        document.querySelector('body > input[type="text"]').value = 'IssueRefund';
+      });
+
+      document.querySelector('body > input[type="text"]').dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true, cancelable: true }));
+      await settle();
+
+      expect(sentNodes().find((n) => n.id === 'command-3').label).toBe('IssueRefund');
+      expect(sentNodes().find((n) => n.id === 'command-2').label).toBe('new-command-2');
+    });
+
+    it('opens the field editor from a context menu raised before the redraw on the node it was raised over', async () => {
+      await addCommandHeldThen(() => fireMouse(blockFor('command-2'), 'contextmenu'));
+
+      menuItemFor('open-field-editor').click();
+
+      expect(fieldEditor().text).toContain('RefundPayment');
+    });
+    it('keeps the guide line of an arrow begun from a port before an earlier edit is answered, and draws the arrow from that node', async () => {
+      await addCommandHeldThen(() => fireMouseAt(portOf('command-2'), 'mousedown', 100, 100));
+      const before = applies();
+
+      expect(document.querySelector('.connect-preview')).not.toBeNull();
+
+      releaseOver('event-3');
+      finishDrag();
+      await vi.waitFor(() => expect(applies()).toBe(before + 1));
+      await settle();
+
+      expect(sentEdge(nodeIdLabelled('RefundPayment'), 'event-3', 'flow')).toBe(true);
+      expect(sentEdge(nodeIdLabelled('new-command-2'), 'event-3')).toBe(false);
+    });
+
+    it('repoints the arrow whose handle was pressed before an earlier edit is answered', async () => {
+      await addCommandHeldThen(() => fireMouseAt(arrowHandle('command-2--event-2', 'target'), 'mousedown', 100, 100));
+      const before = applies();
+
+      releaseOver('event-3');
+      finishDrag();
+      await vi.waitFor(() => expect(applies()).toBe(before + 1));
+      await settle();
+
+      expect(sentEdge(nodeIdLabelled('RefundPayment'), 'event-3', 'flow')).toBe(true);
+      expect(sentEdge(nodeIdLabelled('RefundPayment'), 'event-2')).toBe(false);
+    });
+
+    it('adds a command to the slice whose menu was raised before the redraw that numbers the slices anew', async () => {
+      await openEditable();
+      const held = heldApply();
+      fromMenu(sliceHeader('slice-1'), 'move-slice-right');
+      await settle();
+      const swapped = JSON.parse(JSON.stringify(lastApply()[2])
+        .split('"slice-1"').join('"slice-x"').split('"slice-2"').join('"slice-1"').split('"slice-x"').join('"slice-2"'));
+      fireMouse(sliceHeader('slice-2'), 'contextmenu');
+      held.answer(appliedAnswer(swapped));
+      await settle();
+
+      menuItemFor('add-command').click();
+      await settle();
+
+      const added = sentNodes().find((n) => n.type === 'command' && n.label.startsWith('new-command'));
+      expect(sentNodes().find((n) => n.id === added.parentId).label).toBe('Review Payments');
+    });
+
+    it('deletes the arrow selected before the redraw', async () => {
+      await addCommandHeldThen(() => fireMouse(arrowHit('command-2', 'event-2'), 'click'));
+      const before = applies();
+
+      pressKey('Backspace');
+      await settle();
+
+      expect(applies()).toBe(before + 1);
+      expect(sentEdge('command-3', 'event-2')).toBe(false);
+      expect(sentEdge('command-1', 'event-1', 'flow')).toBe(true);
+    });
+
+    it('deletes the arrow a context menu raised before the redraw was raised over', async () => {
+      await addCommandHeldThen(() => fireMouse(arrowHit('command-2', 'event-2'), 'contextmenu'));
+      const before = applies();
+
+      menuItemFor('delete-arrow').click();
+      await settle();
+
+      expect(applies()).toBe(before + 1);
+      expect(sentEdge('command-3', 'event-2')).toBe(false);
+      expect(sentEdge('command-1', 'event-1', 'flow')).toBe(true);
+    });
+
+    it('draws an arrow begun before a pause in typing redraws the diagram from the node it was begun on', async () => {
+      globalThis.INITIAL_DATA = null;
+      parseResult = { diagnostics: [], diagram: diagramWithRefund() };
+      await startViewer();
+      deliverFile({ name: 'billing.emod', path: '/models/billing.emod', content: billingSource });
+      await flush();
+      const typedDiagram = JSON.parse(JSON.stringify(diagramWithRefund()).split('"command-2"').join('"command-3"'));
+      typedDiagram.nodes.push({ id: 'command-2', type: 'command', label: 'VoidPayment', parentId: 'slice-1' });
+      parseQueue = [Promise.resolve({ parsed: true, diagnostics: [], diagram: typedDiagram })];
+
+      typeIntoPanel(billingSource + '# typed\n');
+      fireMouseAt(portOf('command-2'), 'mousedown', 100, 100);
+      await new Promise((resolve) => setTimeout(resolve, REVALIDATE_PAUSE_MS + 40));
+      releaseOver('event-3');
+      finishDrag();
+      await settle();
+
+      expect(lastApply()[0]).toBe(billingSource + '# typed\n');
+      expect(sentEdge('command-3', 'event-3', 'flow')).toBe(true);
+      expect(sentEdge('command-2', 'event-3')).toBe(false);
+    });
+
+    it('stays open on a node the canvas added once the parse of the applied source gives that node its own id', async () => {
+      await openEditable();
+      const held = heldApply();
+      fromMenu(sliceHeader('slice-1'), 'add-command');
+      await settle();
+      const added = nodeIdLabelled('new-command-2');
+      fromMenu(blockFor(added), 'open-field-editor');
+      expect(fieldEditor().text).toContain('new-command-2');
+
+      const renumbered = JSON.parse(JSON.stringify(lastApply()[2]).split(added).join('command-2'));
+      held.answer(appliedAnswer(renumbered));
+      await settle();
+
+      expect(blockFor('command-2')).not.toBeNull();
+      expect(fieldEditor().open).toBe(true);
+      expect(fieldEditor().text).toContain('new-command-2');
+    });
+
+    it('repoints the arrow whose handle was pressed before a pause in typing redraws the diagram', async () => {
+      globalThis.INITIAL_DATA = null;
+      parseResult = { diagnostics: [], diagram: diagramWithRefund() };
+      await startViewer();
+      deliverFile({ name: 'billing.emod', path: '/models/billing.emod', content: billingSource });
+      await flush();
+      const typedDiagram = JSON.parse(JSON.stringify(diagramWithRefund()).split('"command-2"').join('"command-3"'));
+      typedDiagram.nodes.push({ id: 'command-2', type: 'command', label: 'VoidPayment', parentId: 'slice-1' });
+      parseQueue = [Promise.resolve({ parsed: true, diagnostics: [], diagram: typedDiagram })];
+      const before = applies();
+
+      typeIntoPanel(billingSource + '# typed\n');
+      fireMouseAt(arrowHandle('command-2--event-2', 'target'), 'mousedown', 100, 100);
+      await new Promise((resolve) => setTimeout(resolve, REVALIDATE_PAUSE_MS + 40));
+      releaseOver('event-3');
+      finishDrag();
+      await settle();
+
+      expect(applies()).toBe(before + 1);
+      expect(sentEdge('command-3', 'event-3', 'flow')).toBe(true);
+      expect(sentEdge('command-3', 'event-2')).toBe(false);
+    });
+
+    it('drops an arrow begun from a node that a pause in typing takes out of the diagram, and draws nothing from the node that took its id', async () => {
+      globalThis.INITIAL_DATA = null;
+      parseResult = { diagnostics: [], diagram: diagramWithRefund() };
+      await startViewer();
+      deliverFile({ name: 'billing.emod', path: '/models/billing.emod', content: billingSource });
+      await flush();
+      const typedDiagram = editableDiagram();
+      typedDiagram.nodes.push({ id: 'command-2', type: 'command', label: 'VoidPayment', parentId: 'slice-1' });
+      parseQueue = [Promise.resolve({ parsed: true, diagnostics: [], diagram: typedDiagram })];
+      const before = applies();
+
+      typeIntoPanel(billingSource + '# typed\n');
+      fireMouseAt(portOf('command-2'), 'mousedown', 100, 100);
+      await new Promise((resolve) => setTimeout(resolve, REVALIDATE_PAUSE_MS + 40));
+      releaseOver('event-1');
+      finishDrag();
+      await settle();
+
+      expect(applies()).toBe(before);
     });
   });
 

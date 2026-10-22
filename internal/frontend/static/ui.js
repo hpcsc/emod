@@ -637,32 +637,27 @@ function restoreFieldEditor(store, editor, ids) {
 }
 
 function followNodeIds(store, ids) {
-  const edit = store.interaction.inlineEdit;
-  if (edit) {
-    if (ids.has(edit.nodeId)) {
-      edit.nodeId = ids.get(edit.nodeId);
-    } else {
-      cancelInlineEdit(store);
-    }
+  const interaction = store.interaction;
+  if (interaction.inlineEdit && !followIds(interaction.inlineEdit, ["nodeId"], ids)) {
+    cancelInlineEdit(store);
   }
+  const menuKeys = ["targetNodeId", "targetSliceId", "targetAggId", "targetCtxId", "edgeSource", "edgeTarget"];
+  if (interaction.ctxMenu && !followIds(interaction.ctxMenu, menuKeys, ids)) {
+    hideContextMenu(store);
+  }
+  if (interaction.selectedEdge && !followIds(interaction.selectedEdge, ["source", "target"], ids)) {
+    interaction.selectedEdge = null;
+  }
+  if (interaction.connect && !followIds(interaction.connect, ["sourceId", "edgeSource", "edgeTarget"], ids)) {
+    interaction.connect = null;
+  }
+}
 
-  const menu = store.interaction.ctxMenu;
-  if (menu) {
-    const keys = ["targetNodeId", "targetSliceId", "targetAggId", "targetCtxId", "edgeSource", "edgeTarget"]
-      .filter(function(key) { return menu[key]; });
-    if (keys.every(function(key) { return ids.has(menu[key]); })) {
-      keys.forEach(function(key) { menu[key] = ids.get(menu[key]); });
-    } else {
-      hideContextMenu(store);
-    }
-  }
-
-  const edge = store.interaction.selectedEdge;
-  if (edge) {
-    store.interaction.selectedEdge = ids.has(edge.source) && ids.has(edge.target)
-      ? { source: ids.get(edge.source), target: ids.get(edge.target), type: edge.type }
-      : null;
-  }
+function followIds(gesture, keys, ids) {
+  const named = keys.filter(function(key) { return gesture[key]; });
+  if (!named.every(function(key) { return ids.has(gesture[key]); })) return false;
+  named.forEach(function(key) { gesture[key] = ids.get(gesture[key]); });
+  return true;
 }
 
 function showEdgeDetail(store) {
@@ -810,9 +805,13 @@ function startInlineEdit(store, nodeId) {
   });
 
   input.addEventListener("blur", function() {
-    if (!store.interaction.inlineEdit) return;
-    const renamed = commitInlineEdit(store, input);
-    setTimeout(function() { bus.emit(renamed ? 'diagram:edited' : 'data:changed', { store }); }, 0);
+    const edit = store.interaction.inlineEdit;
+    if (!edit) return;
+    setTimeout(function() {
+      if (store.interaction.inlineEdit !== edit) return;
+      const renamed = commitInlineEdit(store, input);
+      bus.emit(renamed ? 'diagram:edited' : 'data:changed', { store });
+    }, 0);
   });
 
   document.body.appendChild(input);
