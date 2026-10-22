@@ -394,7 +394,7 @@ func heredocTokens(marker string, lines []string) hclwrite.Tokens {
 // gap separates one entry from the one before it, and writes nothing at the
 // head of a block.
 func gap(body *hclwrite.Body) {
-	if len(body.BuildTokens(nil)) > 0 {
+	if len(body.Blocks()) > 0 || len(body.Attributes()) > 0 {
 		body.AppendNewline()
 	}
 }
