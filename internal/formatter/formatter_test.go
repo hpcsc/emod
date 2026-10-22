@@ -90,6 +90,32 @@ func TestFormatHCL(t *testing.T) {
 			require.Contains(t, rendered, "      FLOW\n")
 		})
 
+		t.Run("puts one blank line between the entries of a body, and none before the first", func(t *testing.T) {
+			source := `emod = 1
+
+model "Library Lending" {
+}
+
+context "Lending" {
+  slice "Import Partner Loan" {
+    command "ImportPartnerLoan" {
+    }
+
+    translation "PartnerLoanImport" {
+      external_system = "Partner Branch API"
+
+      event "PartnerLoanImported" {
+      }
+    }
+  }
+}
+`
+			model, diags := parser.Parse(source, "test.emod")
+			require.Empty(t, diags)
+
+			require.Equal(t, source, formatter.Format(model))
+		})
+
 		t.Run("a model built rather than read is still pinned to the supported version", func(t *testing.T) {
 			rendered := formatter.Format(&ast.Model{Name: "Built"})
 
