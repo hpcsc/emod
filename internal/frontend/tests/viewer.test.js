@@ -940,6 +940,116 @@ describe('viewer field editor', () => {
   });
 });
 
+describe('the arrows around a view', () => {
+  // PaymentsView reads PaymentTaken and RefundsView reads PaymentRefunded. The
+  // flow arrow touches neither view.
+  function twoViewsDiagram() {
+    return {
+      model_name: 'Billing',
+      nodes: [
+        { id: 'context-1', type: 'context', label: 'Payments', parentId: null },
+        { id: 'aggregate-1', type: 'aggregate', label: 'Payment', parentId: 'context-1' },
+        { id: 'slice-1', type: 'slice', label: 'Take Payment', parentId: 'aggregate-1' },
+        { id: 'command-1', type: 'command', label: 'TakePayment', parentId: 'slice-1' },
+        { id: 'event-1', type: 'event', label: 'PaymentTaken', parentId: 'slice-1' },
+        { id: 'event-2', type: 'event', label: 'PaymentRefunded', parentId: 'slice-1' },
+        { id: 'slice-2', type: 'slice', label: 'Review Payments', parentId: 'aggregate-1' },
+        { id: 'view-1', type: 'view', label: 'PaymentsView', parentId: 'slice-2' },
+        { id: 'view-2', type: 'view', label: 'RefundsView', parentId: 'slice-2' },
+      ],
+      edges: [
+        { source: 'command-1', target: 'event-1', type: 'flow' },
+        { source: 'event-1', target: 'view-1', type: 'subscription' },
+        { source: 'event-2', target: 'view-2', type: 'subscription' },
+      ],
+    };
+  }
+
+  const everyArrow = ['command-1--event-1', 'event-1--view-1', 'event-2--view-2'];
+
+  async function showTwoViews() {
+    globalThis.INITIAL_DATA = { diagram: twoViewsDiagram() };
+    await startViewer();
+  }
+
+  function openFieldEditorFor(nodeId) {
+    fireMouse(blockFor(nodeId), 'contextmenu');
+    menuItemFor('open-field-editor').click();
+  }
+
+  // The arrows the canvas draws at full strength, by edge id.
+  function arrowsAtFullStrength() {
+    const canvas = document.getElementById('diagram-canvas');
+    return [...canvas.querySelectorAll('path.arrow')]
+      .filter((arrow) => !canvas.classList.contains('dims-arrows') || arrow.classList.contains('touches-view'))
+      .map((arrow) => arrow.getAttribute('data-edge-id'));
+  }
+
+  it('draws every arrow at full strength while no view is hovered or selected', async () => {
+    await showTwoViews();
+
+    expect(arrowsAtFullStrength()).toEqual(everyArrow);
+  });
+
+  it('keeps only the arrows into a view at full strength while the pointer is over it', async () => {
+    await showTwoViews();
+
+    fireMouse(blockFor('view-1'), 'pointerover');
+
+    expect(arrowsAtFullStrength()).toEqual(['event-1--view-1']);
+  });
+
+  it('draws every arrow at full strength again once the pointer moves to a block that is no view', async () => {
+    await showTwoViews();
+    fireMouse(blockFor('view-1'), 'pointerover');
+
+    fireMouse(blockFor('command-1'), 'pointerover');
+
+    expect(arrowsAtFullStrength()).toEqual(everyArrow);
+  });
+
+  it('keeps only the arrows into a view at full strength while its field editor is open', async () => {
+    await showTwoViews();
+
+    openFieldEditorFor('view-1');
+
+    expect(arrowsAtFullStrength()).toEqual(['event-1--view-1']);
+  });
+
+  it('goes back to the view whose field editor is open once the pointer leaves another view', async () => {
+    await showTwoViews();
+    openFieldEditorFor('view-1');
+    fireMouse(blockFor('view-2'), 'pointerover');
+
+    fireMouse(document.getElementById('diagram-canvas'), 'pointerleave');
+
+    expect(arrowsAtFullStrength()).toEqual(['event-1--view-1']);
+  });
+
+  it('draws every arrow at full strength once the field editor closes', async () => {
+    await showTwoViews();
+    openFieldEditorFor('view-1');
+
+    fireMouse(document.getElementById('diagram-canvas'), 'click');
+
+    expect(arrowsAtFullStrength()).toEqual(everyArrow);
+  });
+
+  it('draws every arrow at full strength while the field editor of a block that is no view is open', async () => {
+    await showTwoViews();
+
+    openFieldEditorFor('command-1');
+
+    expect(arrowsAtFullStrength()).toEqual(everyArrow);
+  });
+
+  it('paints an arrow it dims faint', () => {
+    const css = readFileSync(resolve(__dirname, '../static/viewer.html'), 'utf-8');
+
+    expect(css).toMatch(/#diagram-canvas\.dims-arrows \.arrow:not\(\.touches-view\)[^{]*\{\s*opacity: 0\.15;/);
+  });
+});
+
 describe('a file the host opens', () => {
   const billingSource = 'emod = 1\n\nmodel "Billing" {\n}\n';
 

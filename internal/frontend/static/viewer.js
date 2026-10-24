@@ -130,7 +130,7 @@ bus.on('diagram:before-render', function({ store: s }) {
   s.interaction.drag = null;
   const dp = s.dom.detailPanel;
   if (dp) dp.style.display = "none";
-  s.dom.svg.classList.remove("has-highlights");
+  s.dom.svg.classList.remove("has-highlights", "dims-arrows");
   Renderer.clearSVG(s.dom.svg);
 });
 

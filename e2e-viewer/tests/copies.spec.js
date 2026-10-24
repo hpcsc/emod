@@ -74,6 +74,10 @@ function paintOf(locator) {
   });
 }
 
+function opacityOf(page, edgeId) {
+  return page.locator('path.arrow[data-edge-id="' + edgeId + '"]').evaluate((arrow) => getComputedStyle(arrow).opacity);
+}
+
 test.describe('a copy of an event', () => {
   test('is drawn for each event a view reads from other slices', async ({ page }) => {
     await open(page);
@@ -116,5 +120,26 @@ test.describe('a copy of an event', () => {
     const event = await block(page, 'event-4').locator('rect').first().boundingBox();
     expect(event.x + event.width / 2).toBeCloseTo(canvas.x + canvas.width / 2, -1);
     expect(event.y + event.height / 2).toBeCloseTo(canvas.y + canvas.height / 2, -1);
+  });
+});
+
+test.describe('the arrows around a view', () => {
+  test('dim where they do not touch the view under the pointer', async ({ page }) => {
+    await open(page);
+    await render(page, VIEW_READING_FAR);
+
+    await block(page, 'view-1').hover();
+
+    expect(await opacityOf(page, 'command-1--event-1')).toBe('0.15');
+    expect(await opacityOf(page, 'event_copy-1--view-1')).toBe('1');
+  });
+
+  test('stay at full strength while no view is under the pointer', async ({ page }) => {
+    await open(page);
+    await render(page, VIEW_READING_FAR);
+
+    await block(page, 'command-1').hover();
+
+    expect(await opacityOf(page, 'command-1--event-1')).toBe('1');
   });
 });

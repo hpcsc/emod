@@ -105,6 +105,24 @@ function markOriginalOf(store, node) {
   if (original) original.classList.add("copy-original");
 }
 
+function dimArrowsNotTouching(store, viewId) {
+  const svgEl = store.dom.svg;
+  svgEl.querySelectorAll(".touches-view").forEach(function(el) {
+    el.classList.remove("touches-view");
+  });
+  const view = viewId ? store.nodeById.get(viewId) : null;
+  if (!view || view.type !== "view") {
+    svgEl.classList.remove("dims-arrows");
+    return;
+  }
+  svgEl.querySelectorAll('.arrow[data-source="' + viewId + '"], .arrow[data-target="' + viewId + '"]').forEach(function(arrow) {
+    svgEl.querySelectorAll('[data-edge-id="' + arrow.getAttribute("data-edge-id") + '"]').forEach(function(el) {
+      el.classList.add("touches-view");
+    });
+  });
+  svgEl.classList.add("dims-arrows");
+}
+
 function showOriginalOf(store, copy) {
   if (!store.nodeById.get(copy.copy_of)) return;
   if (store.interaction.selectedNodeId) hideDetailPanel(store);
@@ -452,6 +470,7 @@ function showDetailPanel(store, node) {
 
   store.interaction.selectedNodeId = node.id;
   clearHighlights(store);
+  dimArrowsNotTouching(store, node.id);
 
   const deletable = isDeletableNodeType(node.type);
   let html = '<div class="dp-header">' + Renderer.esc(node.label) + ' <span class="dp-type">(' + node.type + ')</span></div>';
@@ -698,6 +717,7 @@ function showEdgeDetail(store) {
 
   store.interaction.selectedNodeId = null;
   clearHighlights(store);
+  dimArrowsNotTouching(store, null);
 
   var srcLabel = srcNode ? Renderer.esc(srcNode.label) : edge.source;
   var tgtLabel = tgtNode ? Renderer.esc(tgtNode.label) : edge.target;
@@ -735,6 +755,7 @@ function hideDetailPanel(store) {
   store.interaction.selectedNodeId = null;
   store.interaction.selectedEdge = null;
   clearHighlights(store);
+  dimArrowsNotTouching(store, null);
 }
 
 // ─── Highlighting ──────────────────────────────────────────────
@@ -958,11 +979,14 @@ function initDelegation(store) {
 
   svgEl.addEventListener("pointerover", function(evt) {
     const block = evt.target.closest(".diagram-node");
-    markOriginalOf(store, block ? store.nodeById.get(block.getAttribute("data-node-id")) : null);
+    const node = block ? store.nodeById.get(block.getAttribute("data-node-id")) : null;
+    markOriginalOf(store, node);
+    dimArrowsNotTouching(store, node && node.type === "view" ? node.id : store.interaction.selectedNodeId);
   });
 
   svgEl.addEventListener("pointerleave", function() {
     markOriginalOf(store, null);
+    dimArrowsNotTouching(store, store.interaction.selectedNodeId);
   });
 
   // Arrow handle visibility on hover
