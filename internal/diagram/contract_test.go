@@ -362,12 +362,11 @@ func specNamesOn(card string) []string {
 	return names
 }
 
-// cardLines splits a card's label into the lines it states, whichever of the two
-// spellings of a line break the format drawing it used: SVG nests a tspan per
-// line and reads back with real newlines around them, draw.io writes a literal
-// backslash-n inside one value.
+// cardLines splits a card's label into the lines it states. SVG nests a tspan
+// per line and reads back with newlines around them, so the label is trimmed
+// first.
 func cardLines(label string) []string {
-	return strings.Split(strings.TrimSpace(strings.ReplaceAll(label, `\n`, "\n")), "\n")
+	return strings.Split(strings.TrimSpace(label), "\n")
 }
 
 func (e exporter) boxLabelled(t *testing.T, output, name string) diagramBox {
@@ -2153,7 +2152,7 @@ func TestExporterRejectionEdge(t *testing.T) {
 			var text []string
 			for _, box := range boxes {
 				if strings.Contains(box.appearance, fill) {
-					text = append(text, strings.ReplaceAll(box.label, `\n`, "\n"))
+					text = append(text, box.label)
 				}
 			}
 			return text

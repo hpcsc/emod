@@ -208,6 +208,21 @@ func TestExportDrawio(t *testing.T) {
 				drawioConnections(t, string(raw)))
 		})
 
+		t.Run("breaks the label of a scheduled automation and of an event with an external name into lines draw.io shows", func(t *testing.T) {
+			model := singleSliceModel("Lending", "Chase Overdue Copy",
+				command("RecallCopy"), eventWithSource("CopyReturned", "external", "LoanRegistry"),
+				&ast.Automation{Name: "SweepOverdueLoans", Schedule: "0 9 * * *", Command: "RecallCopy"})
+
+			raw, err := diagram.ExportDrawio(model, diagram.StyleAuto)
+			require.NoError(t, err)
+			output := string(raw)
+
+			boxes := drawioBoxes(t, output)
+			require.Equal(t, "SweepOverdueLoans\n⏱ 0 9 * * *", boxLabelled(t, boxes, "SweepOverdueLoans").label)
+			require.Equal(t, "CopyReturned\n[LoanRegistry]", boxLabelled(t, boxes, "CopyReturned").label)
+			requireLineBreaksDrawioReads(t, output)
+		})
+
 		t.Run("renders external system as gray dashed box", func(t *testing.T) {
 			model := &ast.Model{
 				Name: "Test",
@@ -968,18 +983,17 @@ func TestExportDrawio(t *testing.T) {
 	})
 
 	t.Run("spec cards", func(t *testing.T) {
-		t.Run("a card breaks its lines the way draw.io breaks a line, inside one value", func(t *testing.T) {
+		t.Run("a card breaks its lines with a newline reference, which draw.io reads as a line break", func(t *testing.T) {
 			output := drawioWithSpecs(t, test.SlicePatternLibraryLendingModel(t), diagram.StyleAuto)
 
 			cards := specCardBoxesIn(t, drawioBoxes(t, output))
 			require.NotEmpty(t, cards, "the render has to draw a card, or the assertions below say nothing")
 
 			for _, card := range cards {
-				require.Contains(t, card.label, `\n`,
-					"draw.io starts a new line on the two characters an author would type, not on a newline byte")
-				require.NotContains(t, card.label, "\n",
-					"a newline written into the value runs the whole card onto one line when draw.io opens it")
+				require.Contains(t, card.label, "\n")
+				require.NotContains(t, card.label, `\n`, "draw.io shows the two characters of a backslash-n as they are")
 			}
+			requireLineBreaksDrawioReads(t, output)
 		})
 
 		t.Run("a card states the font size the band's height was measured from, as the svg card does", func(t *testing.T) {
@@ -1372,6 +1386,17 @@ func drawioBoxes(t *testing.T, output string) []diagramBox {
 	}
 
 	return boxes
+}
+
+// requireLineBreaksDrawioReads checks the bytes draw.io reads rather than the
+// decoded labels: Go's XML reader keeps a raw newline inside an attribute, where
+// draw.io's turns it into a space.
+func requireLineBreaksDrawioReads(t *testing.T, output string) {
+	t.Helper()
+
+	require.Contains(t, output, "&#xa;", "the output has to break a label, or the check below says nothing")
+	require.NotRegexp(t, `(?:value|label)="[^"]*\n`, output, "a raw newline inside a label runs its lines into one")
+	require.NotContains(t, output, `\n`, "draw.io shows the two characters of a backslash-n as they are")
 }
 
 func drawioDrawnAsGear(box diagramBox) bool {

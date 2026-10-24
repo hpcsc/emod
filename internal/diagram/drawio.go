@@ -269,7 +269,7 @@ func ExportDrawio(model *ast.Model, style Style, opts ...Option) ([]byte, error)
 			if useDCB && cmd.DecidesOn != nil {
 				ann := formatDecidesOnAnnotation(cmd.DecidesOn)
 				if ann != "" {
-					label = cmd.Name + "\\n" + ann
+					label = cmd.Name + "\n" + ann
 				}
 			}
 			b.WriteString(vertexCell(id, label, cmd.Description, x, cmdViewRowY, itemW, boxHeight, styleCommand))
@@ -299,13 +299,13 @@ func ExportDrawio(model *ast.Model, style Style, opts ...Option) ([]byte, error)
 		for _, evt := range s.Events {
 			label := evt.Name
 			if evt.ExternalName != "" {
-				label = fmt.Sprintf("%s\\n[%s]", evt.Name, evt.ExternalName)
+				label = fmt.Sprintf("%s\n[%s]", evt.Name, evt.ExternalName)
 			}
 			// For DCB mode, add tag badges to the event label
 			if useDCB && len(evt.Tags) > 0 {
 				tagText := formatEventTagBadges(evt.Tags)
 				if tagText != "" {
-					label = fmt.Sprintf("%s\\n%s", label, tagText)
+					label = fmt.Sprintf("%s\n%s", label, tagText)
 				}
 			}
 			if useProjected && entry.fromDCB && len(evt.Tags) > 0 {
@@ -362,7 +362,7 @@ func ExportDrawio(model *ast.Model, style Style, opts ...Option) ([]byte, error)
 		}
 
 		// --- Automations and translation reactors (middle lane) ---
-		for _, reactor := range reactorBoxes(s, cmdViewLaneY, sliceX, "\\n") {
+		for _, reactor := range reactorBoxes(s, cmdViewLaneY, sliceX, "\n") {
 			id := allocID()
 			style := styleTranslation
 			if reactor.isAutomation {
@@ -532,7 +532,7 @@ func ExportDrawio(model *ast.Model, style Style, opts ...Option) ([]byte, error)
 	// and an id taken before either guard renumbers every cell after it.
 	if resolveOptions(opts).specs {
 		specBandY := specBandTop(entries, extLaneY)
-		if cards := specCards(entries, sliceXs, specBandY, "\\n"); len(cards) > 0 {
+		if cards := specCards(entries, sliceXs, specBandY, "\n"); len(cards) > 0 {
 			b.WriteString(swimlaneCell(allocID(), "Specs", marginX, specBandY,
 				diagramW-2*marginX, specBandHeight(cards)))
 			for _, card := range cards {
@@ -599,14 +599,21 @@ func vertexCell(id int, value, tooltip string, x, y, w, h int, style string) str
 	if tooltip == "" {
 		return fmt.Sprintf(`        <mxCell id="%d" value="%s" style="%s" vertex="1" parent="1">`+"\n"+
 			`          %s`+"\n"+
-			`        </mxCell>`+"\n", id, escapeXML(value), style, geometry)
+			`        </mxCell>`+"\n", id, escapeLabel(value), style, geometry)
 	}
 
 	return fmt.Sprintf(`        <object label="%s" tooltip="%s" id="%d">`+"\n"+
 		`          <mxCell style="%s" vertex="1" parent="1">`+"\n"+
 		`            %s`+"\n"+
 		`          </mxCell>`+"\n"+
-		`        </object>`+"\n", escapeXML(value), escapeXML(tooltip), id, style, geometry)
+		`        </object>`+"\n", escapeLabel(value), escapeXML(tooltip), id, style, geometry)
+}
+
+// escapeLabel writes each line break as a character reference: an XML reader
+// turns a raw newline inside an attribute into a space, and draw.io shows the
+// two characters of a backslash-n as they are.
+func escapeLabel(label string) string {
+	return strings.ReplaceAll(escapeXML(label), "\n", "&#xa;")
 }
 
 // triggerFramingCell draws the screen framing that distinguishes a trigger box
