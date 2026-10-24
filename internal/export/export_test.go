@@ -3788,6 +3788,44 @@ func TestExport(t *testing.T) {
 			require.Equal(t, []string{"RecallOnSecondReminder", "RemindReaderOfLoans"}, activationEdgeTargets(doc),
 				"an activation edge needs a source node, and a cadence is not one")
 		})
+
+		t.Run("a copy of a subscribed event", func(t *testing.T) {
+			t.Run("is drawn in the slice of each view that subscribes to more than three events from other slices, naming the event it copies", func(t *testing.T) {
+				doc := diagramDocOf(t, test.SubscribedEventsHotelStaysModel(t))
+
+				require.Equal(t, []string{
+					"RoomReserved in See Stay History copies event RoomReserved in Reserve Room",
+					"GuestCheckedIn in See Stay History copies event GuestCheckedIn in Check In",
+					"BreakfastOrdered in See Stay History copies event BreakfastOrdered in Import Breakfast Orders",
+					"GuestCheckedOut in See Stay History copies event GuestCheckedOut in Check Out",
+					"RoomReserved in Plan Cleaning copies event RoomReserved in Reserve Room",
+					"GuestCheckedIn in Plan Cleaning copies event GuestCheckedIn in Check In",
+					"GuestCheckedOut in Plan Cleaning copies event GuestCheckedOut in Check Out",
+					"RoomCleaned in Plan Cleaning copies event RoomCleaned in Clean Room",
+				}, eventCopiesIn(doc))
+			})
+
+			t.Run("starts the subscription edges into a view past the threshold", func(t *testing.T) {
+				doc := diagramDocOf(t, test.SubscribedEventsHotelStaysModel(t))
+
+				require.Equal(t, []string{
+					"event_copy RoomReserved",
+					"event_copy GuestCheckedIn",
+					"event_copy BreakfastOrdered",
+					"event_copy GuestCheckedOut",
+				}, subscriptionSourcesInto(doc, "StayHistoryView"))
+			})
+
+			t.Run("leaves the subscription edges into a view at the threshold starting at the events", func(t *testing.T) {
+				doc := diagramDocOf(t, test.SubscribedEventsHotelStaysModel(t))
+
+				require.Equal(t, []string{
+					"event RoomReserved",
+					"event GuestCheckedIn",
+					"event GuestCheckedOut",
+				}, subscriptionSourcesInto(doc, "OccupancyView"))
+			})
+		})
 	})
 
 	t.Run("diagram json with diagnostics", func(t *testing.T) {
@@ -5879,6 +5917,52 @@ func nodeLabelsByID(doc map[string]any) map[string]string {
 		labels[node["id"].(string)] = node["label"].(string)
 	}
 	return labels
+}
+
+// eventCopiesIn states each event_copy node of a decoded diagram document by its
+// label, the slice it is drawn in, and the type, label and slice of the node its
+// copy_of names, in the order the exporter wrote the copies.
+func eventCopiesIn(doc map[string]any) []string {
+	byID := make(map[string]map[string]any)
+	for _, node := range objectsUnder(doc, "nodes") {
+		byID[node["id"].(string)] = node
+	}
+	sliceOf := func(node map[string]any) any {
+		if node == nil {
+			return nil
+		}
+		parentID, _ := node["parentId"].(string)
+		return byID[parentID]["label"]
+	}
+
+	var copies []string
+	for _, node := range objectsUnder(doc, "nodes") {
+		if node["type"] != "event_copy" {
+			continue
+		}
+		copyOf, _ := node["copy_of"].(string)
+		original := byID[copyOf]
+		copies = append(copies, fmt.Sprintf("%s in %s copies %v %v in %v",
+			node["label"], sliceOf(node), original["type"], original["label"], sliceOf(original)))
+	}
+	return copies
+}
+
+// subscriptionSourcesInto names the node each subscription edge into the view
+// labelled view starts at, by its type and label, in the order the edges were
+// emitted.
+func subscriptionSourcesInto(doc map[string]any, view string) []string {
+	labels := nodeLabelsByID(doc)
+	types := nodeTypesByID(doc)
+
+	var sources []string
+	for _, edge := range objectsUnder(doc, "edges") {
+		if edge["type"] == "subscription" && labels[edge["target"].(string)] == view {
+			source := edge["source"].(string)
+			sources = append(sources, types[source]+" "+labels[source])
+		}
+	}
+	return sources
 }
 
 func nodeTypesByID(doc map[string]any) map[string]string {

@@ -15,6 +15,7 @@ import (
 	"github.com/hpcsc/emod/internal/formatter"
 	"github.com/hpcsc/emod/internal/importer"
 	"github.com/hpcsc/emod/internal/parser"
+	"github.com/hpcsc/emod/internal/test"
 	"github.com/stretchr/testify/require"
 )
 
@@ -323,11 +324,13 @@ func drawnDiagram(t *testing.T, model *ast.Model) *viewerDiagram {
 	return d
 }
 
+// node finds the node a gesture names by its label. A copy of an event repeats
+// the event's label, and no gesture names a copy, so the copies are passed over.
 func (d *viewerDiagram) node(label string) map[string]any {
 	d.t.Helper()
 	var found []map[string]any
 	for _, n := range d.Nodes {
-		if n["label"] == label {
+		if n["label"] == label && n["type"] != "event_copy" {
 			found = append(found, n)
 		}
 	}
@@ -338,6 +341,19 @@ func (d *viewerDiagram) node(label string) map[string]any {
 func (d *viewerDiagram) idOf(label string) string {
 	d.t.Helper()
 	return d.node(label)["id"].(string)
+}
+
+// copyID answers the id of the copy of event that the slice labelled slice draws.
+func (d *viewerDiagram) copyID(event, slice string) string {
+	d.t.Helper()
+	sliceID := d.idOf(slice)
+	for _, n := range d.Nodes {
+		if n["type"] == "event_copy" && n["label"] == event && n["parentId"] == sliceID {
+			return n["id"].(string)
+		}
+	}
+	require.Failf(d.t, "no copy", "the diagram has to draw a copy of %s in %s", event, slice)
+	return ""
 }
 
 // add appends a node the way the context menu does: an id the exporter never
@@ -419,14 +435,18 @@ func (d *viewerDiagram) connect(from, to, typ string) {
 
 func (d *viewerDiagram) disconnect(from, to string) {
 	d.t.Helper()
-	source, target := d.idOf(from), d.idOf(to)
+	d.disconnectIDs(d.idOf(from), d.idOf(to))
+}
+
+func (d *viewerDiagram) disconnectIDs(source, target string) {
+	d.t.Helper()
 	var edges []map[string]any
 	for _, e := range d.Edges {
 		if e["source"] != source || e["target"] != target {
 			edges = append(edges, e)
 		}
 	}
-	require.Less(d.t, len(edges), len(d.Edges), "the diagram has to draw an arrow from %s to %s", from, to)
+	require.Less(d.t, len(edges), len(d.Edges), "the diagram has to draw an arrow from %s to %s", source, target)
 	d.Edges = edges
 }
 
@@ -434,14 +454,18 @@ func (d *viewerDiagram) disconnect(from, to string) {
 // handle does: newFrom and newTo name its ends afterwards.
 func (d *viewerDiagram) repoint(from, to, newFrom, newTo string) {
 	d.t.Helper()
-	source, target := d.idOf(from), d.idOf(to)
+	d.repointIDs(d.idOf(from), d.idOf(to), d.idOf(newFrom), d.idOf(newTo))
+}
+
+func (d *viewerDiagram) repointIDs(source, target, newSource, newTarget string) {
+	d.t.Helper()
 	for _, e := range d.Edges {
 		if e["source"] == source && e["target"] == target {
-			e["source"], e["target"] = d.idOf(newFrom), d.idOf(newTo)
+			e["source"], e["target"] = newSource, newTarget
 			return
 		}
 	}
-	require.Failf(d.t, "no arrow", "the diagram has to draw an arrow from %s to %s", from, to)
+	require.Failf(d.t, "no arrow", "the diagram has to draw an arrow from %s to %s", source, target)
 }
 
 func (d *viewerDiagram) document() []byte {
@@ -2060,6 +2084,75 @@ context "C" {
 
 			require.ErrorContains(t, err, "carries no position")
 			require.Equal(t, before, formatter.Format(model))
+		})
+	})
+
+	t.Run("copies of subscribed events", func(t *testing.T) {
+		t.Run("a diagram that draws copies, unedited, leaves the model as it was written", func(t *testing.T) {
+			require.Equal(t, test.SubscribedEventsHotelStays, applied(t, test.SubscribedEventsHotelStays, func(*viewerDiagram) {}))
+		})
+
+		t.Run("renaming an event renames it in the views that subscribe to it through a copy", func(t *testing.T) {
+			result := applied(t, test.SubscribedEventsHotelStays, func(d *viewerDiagram) {
+				d.rename("RoomReserved", "RoomBooked")
+			})
+
+			require.Equal(t, strings.ReplaceAll(test.SubscribedEventsHotelStays, "RoomReserved", "RoomBooked"), result)
+		})
+
+		t.Run("deleting an event unsubscribes the views that read it through a copy", func(t *testing.T) {
+			source := test.SubscribedEventsHotelStays
+
+			result := applied(t, source, func(d *viewerDiagram) {
+				d.remove("GuestCheckedIn")
+			})
+
+			expected := replaced(t, source, "\n\n"+
+				"      event \"GuestCheckedIn\" {\n"+
+				"        fields {\n"+
+				"          stayId     = required(string)\n"+
+				"          roomNumber = required(string)\n"+
+				"        }\n"+
+				"      }\n"+
+				"\n"+
+				"      flow = <<-FLOW\n"+
+				"        command -> event:    CheckIn -> GuestCheckedIn\n"+
+				"      FLOW", "")
+			expected = replaced(t, expected,
+				"[RoomReserved, GuestCheckedIn, BreakfastOrdered, GuestCheckedOut]", "[RoomReserved, BreakfastOrdered, GuestCheckedOut]")
+			expected = replaced(t, expected,
+				"[RoomReserved, GuestCheckedIn, GuestCheckedOut, RoomCleaned]", "[RoomReserved, GuestCheckedOut, RoomCleaned]")
+			expected = replaced(t, expected,
+				"[RoomReserved, GuestCheckedIn, GuestCheckedOut]", "[RoomReserved, GuestCheckedOut]")
+			require.Equal(t, expected, result)
+		})
+
+		t.Run("deleting the arrow from a copy unsubscribes its view from the event", func(t *testing.T) {
+			source := test.SubscribedEventsHotelStays
+
+			result := applied(t, source, func(d *viewerDiagram) {
+				d.disconnectIDs(d.copyID("RoomReserved", "See Stay History"), d.idOf("StayHistoryView"))
+			})
+
+			require.Equal(t, replaced(t, source,
+				"[RoomReserved, GuestCheckedIn, BreakfastOrdered, GuestCheckedOut]",
+				"[GuestCheckedIn, BreakfastOrdered, GuestCheckedOut]"), result)
+		})
+
+		t.Run("moving the arrow from a copy onto another view moves the subscription to that view", func(t *testing.T) {
+			source := test.SubscribedEventsHotelStays
+
+			result := applied(t, source, func(d *viewerDiagram) {
+				copied := d.copyID("BreakfastOrdered", "See Stay History")
+				d.repointIDs(copied, d.idOf("StayHistoryView"), copied, d.idOf("OccupancyView"))
+			})
+
+			expected := replaced(t, source,
+				"[RoomReserved, GuestCheckedIn, BreakfastOrdered, GuestCheckedOut]", "[RoomReserved, GuestCheckedIn, GuestCheckedOut]")
+			expected = replaced(t, expected,
+				"subscribes = [RoomReserved, GuestCheckedIn, GuestCheckedOut]\n\n        fields {\n          roomNumber",
+				"subscribes = [RoomReserved, GuestCheckedIn, GuestCheckedOut, BreakfastOrdered]\n\n        fields {\n          roomNumber")
+			require.Equal(t, expected, result)
 		})
 	})
 }

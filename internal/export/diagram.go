@@ -40,6 +40,7 @@ type jsonDiagramNode struct {
 	Source         string            `json:"source,omitempty"`
 	ExternalName   string            `json:"external_name,omitempty"`
 	Event          *jsonDiagramEvent `json:"event,omitempty"`
+	CopyOf         string            `json:"copy_of,omitempty"`
 }
 
 type jsonDiagramEdge struct {
@@ -150,9 +151,18 @@ type diagramBuilder struct {
 	viewIDs        map[string]string
 	automationIDs  map[string]string
 	translationIDs map[string]string
+
+	// firstEventIDs keeps the node of the first event declared under each name,
+	// which is the event diagram.EventCopies copies; eventIDs keeps the last.
+	firstEventIDs map[string]string
+	copies        map[*ast.Slice][]diagram.EventCopy
+	// copyIDs files the node drawn for each copy by the slice it is drawn in and
+	// the event it copies.
+	copyIDs   map[*ast.Slice]map[string]string
+	copyNodes []*jsonDiagramNode
 }
 
-func newDiagramBuilder(modelName, modelDescription string) *diagramBuilder {
+func newDiagramBuilder(modelName, modelDescription string, copies map[*ast.Slice][]diagram.EventCopy) *diagramBuilder {
 	return &diagramBuilder{
 		doc: &jsonDiagramDocument{
 			ModelName:        modelName,
@@ -167,6 +177,9 @@ func newDiagramBuilder(modelName, modelDescription string) *diagramBuilder {
 		viewIDs:        make(map[string]string),
 		automationIDs:  make(map[string]string),
 		translationIDs: make(map[string]string),
+		firstEventIDs:  make(map[string]string),
+		copies:         copies,
+		copyIDs:        make(map[*ast.Slice]map[string]string),
 	}
 }
 
@@ -253,6 +266,36 @@ func (b *diagramBuilder) appendSlice(s *ast.Slice, parentID string) {
 	b.appendViews(s.Views, sliceID)
 	b.appendAutomations(s.Automations, sliceID)
 	b.appendTranslations(s.Translations, sliceID)
+	b.appendEventCopies(s, sliceID)
+}
+
+func (b *diagramBuilder) appendEventCopies(s *ast.Slice, sliceID string) {
+	copies := b.copies[s]
+	if len(copies) == 0 {
+		return
+	}
+
+	b.copyIDs[s] = make(map[string]string, len(copies))
+	for _, c := range copies {
+		node := &jsonDiagramNode{
+			ID:       b.ids.next("event_copy"),
+			Type:     "event_copy",
+			Label:    c.Event,
+			ParentID: &sliceID,
+		}
+		b.copyIDs[s][c.Event] = node.ID
+		b.copyNodes = append(b.copyNodes, node)
+		b.appendNode(node)
+	}
+}
+
+// pointCopiesAtOriginals fills in the event each copy stands for. A copy can be
+// drawn in a slice declared before the one that declares its event, so this
+// waits until every event has a node.
+func (b *diagramBuilder) pointCopiesAtOriginals() {
+	for _, node := range b.copyNodes {
+		node.CopyOf = b.firstEventIDs[node.Label]
+	}
 }
 
 func (b *diagramBuilder) appendCommands(commands []*ast.Command, sliceID string) {
@@ -290,6 +333,9 @@ func (b *diagramBuilder) appendEvent(evt *ast.Event, sliceID string) {
 	}
 	evtID := b.ids.next("event")
 	b.eventIDs[evt.Name] = evtID
+	if _, seen := b.firstEventIDs[evt.Name]; !seen {
+		b.firstEventIDs[evt.Name] = evtID
+	}
 	node := &jsonDiagramNode{
 		ID:           evtID,
 		Type:         "event",
@@ -428,7 +474,11 @@ func (b *diagramBuilder) appendEdges(m *ast.Model) {
 				b.link(b.triggerIDs, e.From, b.commandIDs, e.To, "trigger_command")
 
 			case diagram.EdgeSubscription:
-				b.link(b.eventIDs, e.From, b.viewIDs, e.To, "subscription")
+				if copyID, copied := b.copyIDs[ref.Slice][e.From]; copied {
+					b.link(map[string]string{e.From: copyID}, e.From, b.viewIDs, e.To, "subscription")
+				} else {
+					b.link(b.eventIDs, e.From, b.viewIDs, e.To, "subscription")
+				}
 
 			case diagram.EdgeAutomationTrigger:
 				b.link(b.eventIDs, e.From, b.automationIDs, e.To, "automation_trigger")
@@ -476,13 +526,14 @@ func convertModelToDiagram(m *ast.Model) *jsonDiagramDocument {
 		return nil
 	}
 
-	b := newDiagramBuilder(m.Name, m.Description)
+	b := newDiagramBuilder(m.Name, m.Description, diagram.EventCopies(m))
 	for _, a := range m.Actors {
 		b.appendActor(a)
 	}
 	for _, c := range m.Contexts {
 		b.appendContext(c)
 	}
+	b.pointCopiesAtOriginals()
 	b.appendEdges(m)
 
 	return b.doc

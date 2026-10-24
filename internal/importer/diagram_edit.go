@@ -67,9 +67,24 @@ func newDiagramEdit(model *ast.Model, diagram []byte) (*diagramEdit, error) {
 		return nil, err
 	}
 	e.builder = newBuilder(e.edited)
+	e.nameCopiesAfterOriginals()
 	e.placeBlocks()
 
 	return e, nil
+}
+
+// nameCopiesAfterOriginals gives each copy the name its event has now. The
+// viewer renames the event and never its copies, and a view that subscribes
+// through a copy reads the name off the copy.
+func (e *diagramEdit) nameCopiesAfterOriginals() {
+	for _, n := range e.edited.Nodes {
+		if !n.isEventCopy() {
+			continue
+		}
+		if original := e.builder.nodeByID[n.CopyOf]; original != nil && !original.isEventCopy() {
+			n.Label = original.Label
+		}
+	}
 }
 
 func (e *diagramEdit) applyTo(model *ast.Model) {
@@ -226,6 +241,10 @@ func (e *diagramEdit) matchDrawnNodes(model *ast.Model) error {
 	e.nestedIn = make(map[string]string)
 	e.nestedEventOf = make(map[*ast.Translation]string)
 	for _, n := range e.drawn.Nodes {
+		if n.isEventCopy() {
+			e.drawnNodes[n.ID] = n
+			continue
+		}
 		if n.Position == nil {
 			return fmt.Errorf("importer: the diagram node %s carries no position", n.ID)
 		}
@@ -512,9 +531,20 @@ func (e *diagramEdit) edgeChanges() (removed, kept, added []*diagramEdge) {
 	return removed, kept, added
 }
 
+// inResult reports whether the node stands in the edited diagram. A copy stands
+// only while the event it copies does: deleting the event takes away every
+// subscription drawn from its copies, as it takes away those drawn from itself.
 func (e *diagramEdit) inResult(id string) bool {
+	n := e.builder.nodeByID[id]
+	if n == nil {
+		return false
+	}
+	if n.isEventCopy() {
+		original := e.builder.nodeByID[n.CopyOf]
+		return original != nil && !original.isEventCopy() && e.inResult(original.ID)
+	}
 	translation, nested := e.nestedIn[id]
-	return e.builder.nodeByID[id] != nil && (!nested || e.builder.nodeByID[translation] != nil)
+	return !nested || e.builder.nodeByID[translation] != nil
 }
 
 func (e *diagramEdit) clearRelationship(model *ast.Model, edge *diagramEdge) {

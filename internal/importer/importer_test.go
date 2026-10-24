@@ -774,6 +774,25 @@ context "C" {
 		})
 	})
 
+	t.Run("copies of subscribed events", func(t *testing.T) {
+		stayHistory := func(t *testing.T) *ast.Slice {
+			t.Helper()
+			slice := importExported(t, test.SubscribedEventsHotelStaysModel(t)).Contexts[0].Aggregates[0].Slices[4]
+			require.Equal(t, "See Stay History", slice.Name)
+			return slice
+		}
+
+		t.Run("a copy declares no event in the slice it is drawn in", func(t *testing.T) {
+			require.Empty(t, stayHistory(t).Events)
+		})
+
+		t.Run("a view keeps the subscriptions drawn from its copies", func(t *testing.T) {
+			require.Equal(t,
+				[]string{"RoomReserved", "GuestCheckedIn", "BreakfastOrdered", "GuestCheckedOut"},
+				stayHistory(t).Views[0].Subscribes)
+		})
+	})
+
 	t.Run("edges", func(t *testing.T) {
 		t.Run("a flow edge drawn in the viewer becomes a flow entry", func(t *testing.T) {
 			diagram := `{

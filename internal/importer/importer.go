@@ -40,6 +40,13 @@ type diagramNode struct {
 	Source         string            `json:"source,omitempty"`
 	ExternalName   string            `json:"external_name,omitempty"`
 	Event          *diagramEvent     `json:"event,omitempty"`
+	CopyOf         string            `json:"copy_of,omitempty"`
+}
+
+// isEventCopy reports whether the node draws again an event that another slice
+// declares.
+func (n *diagramNode) isEventCopy() bool {
+	return n.Type == "event_copy"
 }
 
 func (n *diagramNode) asActor() *ast.Actor {
