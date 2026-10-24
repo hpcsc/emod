@@ -8,7 +8,7 @@ installSVGGeometry();
 
 const { Renderer } = await import('../static/renderer.js');
 const { Layout } = await import('../static/layout.js');
-const { nodePalette } = await import('../static/config.js');
+const { nodePalette, GEAR_PATH, GEAR_SIZE } = await import('../static/config.js');
 
 const viewerHtml = readFileSync(resolve(__dirname, '../static/viewer.html'), 'utf-8');
 
@@ -190,7 +190,6 @@ function describedThroughout() {
 const clockMarking = '⏱';
 const cronExpression = '0 9 * * 1-5';
 const cadenceBadge = clockMarking + ' ' + cronExpression;
-const automationFill = '#e1d5e7';
 
 // An automation woken by a clock beside one woken by an event and a command, all
 // in one slice, so a single render draws the marked case, the unmarked case and
@@ -538,6 +537,11 @@ function rightEdgeOf(el) {
   return numeric(el, 'x') + drawnWidth(el);
 }
 
+function gearCentreX(group) {
+  const translate = /translate\(([-\d.]+),/.exec(group.querySelector('path.gear').getAttribute('transform'));
+  return Number(translate[1]);
+}
+
 function nodeGroup(svg, nodeId) {
   return svg.querySelector('.diagram-node[data-node-id="' + nodeId + '"]');
 }
@@ -583,14 +587,15 @@ const placements = (els) => els.map((el) => [el.textContent, numeric(el, 'x'), n
 const leftEdgeOfCentred = (el) => numeric(el, 'x') - Layout.labelWidth(el.textContent) / 2;
 const rightEdgeOfCentred = (el) => numeric(el, 'x') + Layout.labelWidth(el.textContent) / 2;
 
-// What a centred string actually paints: its font size vertically and its drawn
-// width horizontally, half of each either side of the point it is centred on.
-function inkOfCentred(el) {
+// What a string actually paints: its font size vertically, centred on its y,
+// and its drawn width horizontally, from wherever its text-anchor puts it.
+function inkOfText(el) {
   const half = numeric(el, 'font-size') / 2;
-  const reach = drawnWidth(el) / 2;
+  const width = drawnWidth(el);
+  const left = el.getAttribute('text-anchor') === 'start' ? numeric(el, 'x') : numeric(el, 'x') - width / 2;
   return {
-    left: numeric(el, 'x') - reach,
-    right: numeric(el, 'x') + reach,
+    left,
+    right: left + width,
     top: numeric(el, 'y') - half,
     bottom: numeric(el, 'y') + half,
   };
@@ -972,7 +977,6 @@ describe('Renderer.buildSVG', () => {
       expect(numeric(badge, 'y')).toBeGreaterThan(Number(box.y));
       expect(numeric(badge, 'y')).toBeLessThan(Number(box.y) + Number(box.height));
 
-      expect(box.fill).toBe(automationFill);
       expect(box.height).toBe(boxes.cmd1.height);
       expect(boxes).toEqual(drawnBoxes(eventActivated.svg));
     });
@@ -1050,6 +1054,53 @@ describe('Renderer.buildSVG', () => {
     });
   });
 
+  describe('automation gear', () => {
+    it('draws an automation as the gear, in its palette fill', () => {
+      const { svg } = render(allElementTypes());
+
+      const gear = nodeGroup(svg, 'auto1').querySelector('path.gear');
+      expect(gear.getAttribute('d')).toBe(GEAR_PATH);
+      expect(gear.getAttribute('fill')).toBe(nodePalette.automation.fill);
+    });
+
+    it('leaves the box behind the gear unpainted until the block is hovered or selected', () => {
+      const { svg } = render(allElementTypes());
+
+      const box = nodeGroup(svg, 'auto1').querySelector('rect');
+      expect([box.getAttribute('fill'), box.getAttribute('stroke')]).toEqual(['transparent', 'none']);
+    });
+
+    it('dims the gear with the boxes of the blocks a highlight leaves out', () => {
+      expect(viewerHtml).toMatch(/\.has-highlights \.diagram-node:not\(\.hl\) \.gear\s*[,{]/);
+    });
+
+    it.each([
+      ['a name alone', pairedAutomations(), 'autoOnEvent'],
+      ['a name and a cadence', pairedAutomations(cronExpression), 'autoScheduled'],
+    ])('writes %s to the right of the gear, in the gear\'s fill', (shape, nodes, id) => {
+      const { svg } = render(nodes);
+
+      const group = nodeGroup(svg, id);
+      const gearRight = gearCentreX(group) + GEAR_SIZE / 2;
+      for (const label of drawnLabels(group)) {
+        expect(label.getAttribute('text-anchor')).toBe('start');
+        expect(numeric(label, 'x')).toBeGreaterThan(gearRight);
+        expect(label.getAttribute('fill')).toBe(nodePalette.automation.fill);
+      }
+    });
+
+    it('centres the gear and the widest line beside it together in the box', () => {
+      const { svg } = render(pairedAutomations(cronExpression));
+
+      const group = nodeGroup(svg, 'autoScheduled');
+      const box = drawnBoxes(svg).autoScheduled;
+      const left = gearCentreX(group) - GEAR_SIZE / 2;
+      const right = Math.max(...drawnLabels(group).map(rightEdgeOf));
+
+      expect(left - Number(box.x)).toBeCloseTo(Number(box.x) + Number(box.width) - right, 5);
+    });
+  });
+
   describe('marks on documented constructs', () => {
     it.each([
       ['description', describedAndPlainCommands],
@@ -1077,7 +1128,7 @@ describe('Renderer.buildSVG', () => {
       expect(rightEdgeOfCentred(comments)).toBeLessThan(leftEdgeOfCentred(description));
 
       expect(textOf(rows)).toEqual(['ProposePlan']);
-      expect(inkOfCentred(comments).left).toBeGreaterThan(inkOfCentred(rows[0]).right);
+      expect(inkOfText(comments).left).toBeGreaterThan(inkOfText(rows[0]).right);
     });
 
     it('closes both marks into the corner of a block a row has left a fraction of a stacked one', () => {
@@ -1093,11 +1144,11 @@ describe('Renderer.buildSVG', () => {
 
       marks.forEach((mark) => {
         expect(cornerOf(box, mark)).toBe('top-right');
-        expect(inkOfCentred(mark).left).toBeGreaterThan(box.x + box.w / 2);
-        expect(inkOfCentred(mark).right).toBeLessThan(box.x + box.w);
-        expect(overlapArea(inkOfCentred(mark), inkOfCentred(label))).toBe(0);
+        expect(inkOfText(mark).left).toBeGreaterThan(box.x + box.w / 2);
+        expect(inkOfText(mark).right).toBeLessThan(box.x + box.w);
+        expect(overlapArea(inkOfText(mark), inkOfText(label))).toBe(0);
       });
-      expect(inkOfCentred(marks[1]).right).toBeLessThan(inkOfCentred(marks[0]).left);
+      expect(inkOfText(marks[1]).right).toBeLessThan(inkOfText(marks[0]).left);
     });
 
     it.each([
@@ -1113,7 +1164,7 @@ describe('Renderer.buildSVG', () => {
       expect(marks.length).toBe(2);
       expect(rows.length).toBe(2);
       marks.forEach((mark) => rows.forEach((row) => {
-        expect(inkOfCentred(mark).left).toBeGreaterThan(inkOfCentred(row).right);
+        expect(overlapArea(inkOfText(mark), inkOfText(row))).toBe(0);
       }));
     });
 
@@ -1126,7 +1177,7 @@ describe('Renderer.buildSVG', () => {
 
       expect(marks.length).toBe(2);
       marks.forEach((mark) => {
-        expect(overlapArea(inkOfCentred(mark), inkOfRect(screenBar))).toBe(0);
+        expect(overlapArea(inkOfText(mark), inkOfRect(screenBar))).toBe(0);
         expect(cornerOf(positions.trg1, mark)).toBe('top-right');
       });
     });
@@ -1231,9 +1282,9 @@ describe('Renderer.buildSVG', () => {
       const [mark] = marksIn(svg, 'comments');
 
       expect(textOf([name, description])).toEqual(['Arrangement', aggregateDescription]);
-      expect(rightEdgeOf(name)).toBeLessThan(inkOfCentred(mark).left);
-      expect(rightEdgeOf(description)).toBeLessThanOrEqual(inkOfCentred(mark).left);
-      expect(inkOfCentred(mark).right).toBeLessThanOrEqual(numeric(rowFor(svg, 'agg2'), 'x'));
+      expect(rightEdgeOf(name)).toBeLessThan(inkOfText(mark).left);
+      expect(rightEdgeOf(description)).toBeLessThanOrEqual(inkOfText(mark).left);
+      expect(inkOfText(mark).right).toBeLessThanOrEqual(numeric(rowFor(svg, 'agg2'), 'x'));
     });
 
     it.each([
@@ -1261,7 +1312,7 @@ describe('Renderer.buildSVG', () => {
         const [mark] = marksIn(svg, 'comments');
         expect(crowded.textContent.length).toBeLessThan(overlong.length);
         expect(crowded.textContent.endsWith(ellipsis)).toBe(true);
-        expect(rightEdgeOf(crowded)).toBeLessThanOrEqual(inkOfCentred(mark).left);
+        expect(rightEdgeOf(crowded)).toBeLessThanOrEqual(inkOfText(mark).left);
 
         const [, whole] = withoutMarks(textsOf(svg, roomy.id));
         expect(whole.textContent).toBe(roomy.description);
@@ -1275,7 +1326,7 @@ describe('Renderer.buildSVG', () => {
       const [mark] = marksIn(svg, 'comments');
       expect(marked.textContent.length).toBeLessThan(crowdingAggregateName.length);
       expect(marked.textContent.endsWith(ellipsis)).toBe(true);
-      expect(rightEdgeOf(marked)).toBeLessThanOrEqual(inkOfCentred(mark).left);
+      expect(rightEdgeOf(marked)).toBeLessThanOrEqual(inkOfText(mark).left);
 
       // The mark is the only thing that cuts a name: the row beside it carries
       // none, and its name is left to reach past its own edge.
@@ -1397,16 +1448,16 @@ describe('Renderer.buildSVG', () => {
       const painted = {};
       svg.querySelectorAll('.diagram-node').forEach((group) => {
         const type = group.getAttribute('class').split(' ')[0].replace(/-block$/, '');
-        const rect = group.querySelector('rect');
+        const shape = group.querySelector('path.gear') || group.querySelector('rect');
         painted[type] = {
-          fill: rect.getAttribute('fill'),
-          stroke: rect.getAttribute('stroke'),
+          fill: shape.getAttribute('fill'),
+          stroke: shape.getAttribute('stroke'),
         };
       });
 
       const expected = {};
       for (const [type, palette] of Object.entries(nodePalette)) {
-        expected[type] = { fill: palette.fill, stroke: palette.stroke };
+        expected[type] = { fill: palette.fill, stroke: palette.stroke ?? null };
       }
       expect(painted).toEqual(expected);
     });

@@ -40,6 +40,9 @@ func ExportSVG(model *ast.Model, _ Style, opts ...Option) ([]byte, error) {
 	var b strings.Builder
 	b.WriteString(svgHeader(diagramW, diagramH))
 	b.WriteString(svgDefs())
+	if drawsAutomation(entries) {
+		b.WriteString(svgGearDefs())
+	}
 
 	if len(entries) == 0 {
 		b.WriteString("</svg>\n")
@@ -150,12 +153,14 @@ func ExportSVG(model *ast.Model, _ Style, opts ...Option) ([]byte, error) {
 
 		// --- Automations and translation reactors (middle lane) ---
 		for _, reactor := range reactorBoxes(s, cmdViewLaneY, sliceX, "\n") {
-			fill, stroke := fillTranslation, strokeTranslation
 			if reactor.isAutomation {
-				fill, stroke = fillAutomation, strokeAutomation
+				b.WriteString(svgGear(reactor.x, reactor.y, reactor.w, reactor.description))
+				b.WriteString(svgAnchoredText(reactor.x+reactor.w+gearLabelGap, reactor.y+reactor.h/2,
+					reactor.label, reactorFontSize, fillAutomation, "start"))
+			} else {
+				b.WriteString(svgRoundedRect(reactor.x, reactor.y, reactor.w, reactor.h, fillTranslation, strokeTranslation, 3, reactor.description))
+				b.WriteString(svgMultilineText(reactor.x+reactor.w/2, reactor.y+reactor.h/2, reactor.label, reactorFontSize, strokeTranslation))
 			}
-			b.WriteString(svgRoundedRect(reactor.x, reactor.y, reactor.w, reactor.h, fill, stroke, 3, reactor.description))
-			b.WriteString(svgMultilineText(reactor.x+reactor.w/2, reactor.y+reactor.h/2, reactor.label, 10, stroke))
 			nameToBox[reactor.name] = svgBox{x: reactor.x, y: reactor.y, w: reactor.w, h: reactor.h}
 		}
 
@@ -268,6 +273,29 @@ func svgDefs() string {
 `
 }
 
+func drawsAutomation(entries []sliceEntry) bool {
+	for _, entry := range entries {
+		if len(entry.slice.Automations) > 0 {
+			return true
+		}
+	}
+	return false
+}
+
+func svgGearDefs() string {
+	return fmt.Sprintf(`<defs>
+<symbol id="gear" viewBox="%d %d %d %d">
+<path d="%s"/>
+</symbol>
+</defs>
+`, -gearExtent, -gearExtent, 2*gearExtent, 2*gearExtent, gearPathData)
+}
+
+func svgGear(x, y, size int, description string) string {
+	return svgElement("use", fmt.Sprintf(`href="#gear" x="%d" y="%d" width="%d" height="%d" fill="%s"`,
+		x, y, size, size, fillAutomation), description)
+}
+
 func svgRect(x, y, w, h int, fill, stroke string, rx int, description string) string {
 	return svgRectElement(svgRectAttributes(x, y, w, h, fill, stroke, rx), description)
 }
@@ -298,16 +326,20 @@ func svgRectAttributes(x, y, w, h int, fill, stroke string, rx int) string {
 		x, y, w, h, fill, stroke, rx)
 }
 
+func svgRectElement(attributes, description string) string {
+	return svgElement("rect", attributes, description)
+}
+
 // A browser shows a description as a tooltip only when the <title> holding it is
-// nested inside the shape, which a self-closing rect has no room for. A shape
+// nested inside the shape, which a self-closing element has no room for. A shape
 // with nothing to say stays self-closing: opening those too would rewrite the
 // diagram of every model that carries no prose.
-func svgRectElement(attributes, description string) string {
+func svgElement(name, attributes, description string) string {
 	if description == "" {
-		return fmt.Sprintf("<rect %s/>\n", attributes)
+		return fmt.Sprintf("<%s %s/>\n", name, attributes)
 	}
 
-	return fmt.Sprintf("<rect %s>\n<title>%s</title>\n</rect>\n", attributes, escapeXML(description))
+	return fmt.Sprintf("<%s %s>\n<title>%s</title>\n</%s>\n", name, attributes, escapeXML(description), name)
 }
 
 func svgLane(y, w, h int, label string) string {
@@ -321,19 +353,27 @@ func svgLaneLabel(x, y int, text string) string {
 }
 
 func svgText(x, y int, text string, fontSize int, color string) string {
-	return fmt.Sprintf(`<text x="%d" y="%d" text-anchor="middle" dominant-baseline="middle" font-family="sans-serif" font-size="%d" fill="%s">%s</text>`+"\n",
-		x, y, fontSize, color, escapeXML(text))
+	return svgTextLine(x, y, text, fontSize, color, "middle")
+}
+
+func svgTextLine(x, y int, text string, fontSize int, color, anchor string) string {
+	return fmt.Sprintf(`<text x="%d" y="%d" text-anchor="%s" dominant-baseline="middle" font-family="sans-serif" font-size="%d" fill="%s">%s</text>`+"\n",
+		x, y, anchor, fontSize, color, escapeXML(text))
 }
 
 func svgMultilineText(x, y int, text string, fontSize int, color string) string {
+	return svgAnchoredText(x, y, text, fontSize, color, "middle")
+}
+
+func svgAnchoredText(x, y int, text string, fontSize int, color, anchor string) string {
 	lines := strings.Split(text, "\n")
 	if len(lines) <= 1 {
-		return svgText(x, y, text, fontSize, color)
+		return svgTextLine(x, y, text, fontSize, color, anchor)
 	}
 
 	var b strings.Builder
-	b.WriteString(fmt.Sprintf(`<text x="%d" y="%d" text-anchor="middle" dominant-baseline="middle" font-family="sans-serif" font-size="%d" fill="%s">`+"\n",
-		x, y, fontSize, color))
+	b.WriteString(fmt.Sprintf(`<text x="%d" y="%d" text-anchor="%s" dominant-baseline="middle" font-family="sans-serif" font-size="%d" fill="%s">`+"\n",
+		x, y, anchor, fontSize, color))
 
 	lineHeight := fontSize + 4
 	totalH := (len(lines) - 1) * lineHeight

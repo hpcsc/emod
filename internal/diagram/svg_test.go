@@ -147,7 +147,7 @@ func TestExportSVG(t *testing.T) {
 		require.Equal(t, 1, arrowCount(output), "event to view is one arrow")
 	})
 
-	t.Run("renders automation with gear icon indicator", func(t *testing.T) {
+	t.Run("renders automation as the gear with its name beside it", func(t *testing.T) {
 		model := &ast.Model{
 			Name: "Test",
 			Contexts: []*ast.Context{{
@@ -169,9 +169,7 @@ func TestExportSVG(t *testing.T) {
 		raw, err := diagram.ExportSVG(model, diagram.StyleAuto)
 		require.NoError(t, err)
 
-		output := string(raw)
-		require.Contains(t, output, "Notifier")
-		require.Contains(t, output, "\u2699") // gear character
+		require.True(t, svgDrawnAsGear(boxLabelled(t, svgBoxes(t, string(raw)), "Notifier")))
 	})
 
 	t.Run("connects event to automation to command", func(t *testing.T) {
@@ -1069,8 +1067,9 @@ type svgShape struct {
 	tooltip    string
 }
 
-// svgShapes returns the diagram's boxes in document order, decoded through an
-// XML parser so a test sees the text a reader sees rather than its escaped form.
+// svgShapes returns the diagram's boxes, and the gear an automation is drawn as,
+// in document order, decoded through an XML parser so a test sees the text a
+// reader sees rather than its escaped form.
 // A browser shows only the title nested inside the box being hovered, so a title
 // written anywhere else belongs to no box here either; labels are drawn as text
 // siblings, so those attach to the nearest box before them.
@@ -1095,7 +1094,7 @@ func svgShapes(t *testing.T, output string) []svgShape {
 		switch element := token.(type) {
 		case xml.StartElement:
 			switch element.Name.Local {
-			case "rect":
+			case "rect", "use":
 				shapes = append(shapes, svgShape{attributes: svgAttributes(element), rect: svgRectOf(t, element)})
 				inRect = true
 			case "title":
@@ -1108,7 +1107,7 @@ func svgShapes(t *testing.T, output string) []svgShape {
 			text.Write(element)
 		case xml.EndElement:
 			switch element.Name.Local {
-			case "rect":
+			case "rect", "use":
 				inRect = false
 			case "title":
 				if inRect {
@@ -1138,6 +1137,10 @@ func svgBoxes(t *testing.T, output string) []diagramBox {
 	}
 
 	return boxes
+}
+
+func svgDrawnAsGear(box diagramBox) bool {
+	return strings.Contains(box.appearance, "href=#gear")
 }
 
 // svgLaneLabels names the swimlanes the diagram draws, in the order it draws

@@ -18,7 +18,6 @@ const (
 	styleCommand        = boxBase + "fillColor=" + fillCommand + ";strokeColor=" + strokeCommand + ";" + boxFont
 	styleView           = boxBase + "fillColor=" + fillView + ";strokeColor=" + strokeView + ";" + boxFont
 	styleEvent          = boxBase + "fillColor=" + fillEvent + ";strokeColor=" + strokeEvent + ";" + boxFont
-	styleAutomation     = boxBase + "fillColor=" + fillAutomation + ";strokeColor=" + strokeAutomation + ";" + boxFont
 	styleTranslation    = boxBase + "fillColor=" + fillTranslation + ";strokeColor=" + strokeTranslation + ";" + boxFont
 	styleExternalSystem = boxBase + "fillColor=" + fillExternal + ";strokeColor=" + strokeExternal + ";dashed=1;" + boxFont
 	styleRejection      = boxBase + "fillColor=" + fillRejection + ";strokeColor=" + strokeRejection + ";dashed=1;" + boxFont
@@ -28,6 +27,13 @@ const (
 	// card states, which is the same constant.
 	styleSpecCard = boxBase + "fillColor=" + fillSpecCard + ";strokeColor=" + strokeSpecCard + ";" + boxFont + "fontSize=10;"
 )
+
+// styleAutomation draws an automation as the gear, with its label outside the
+// cell to the right. The size must stay reactorFontSize: placeGear centres the
+// gear and the label together by the width of the label at that size.
+var styleAutomation = "shape=" + drawioGearShape + ";aspect=fixed;html=1;fillColor=" + fillAutomation + ";strokeColor=none;" +
+	"labelPosition=right;verticalLabelPosition=middle;align=left;verticalAlign=middle;" +
+	fmt.Sprintf("spacingLeft=%d;", gearLabelGap) + boxFont + "fontColor=" + fillAutomation + fmt.Sprintf(";fontSize=%d;", reactorFontSize)
 
 // ExportDrawio converts a parsed AST model into draw.io XML (mxGraph format).
 func ExportDrawio(model *ast.Model, style Style, opts ...Option) ([]byte, error) {

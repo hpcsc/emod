@@ -42,9 +42,15 @@ export const nodePalette = {
   command:     { fill: '#dae8fc', stroke: '#6c8ebf', hoverFill: '#b8cce8', highlightFill: '#d4e4f7' },
   event:       { fill: '#ffe6cc', stroke: '#d79b00', hoverFill: '#f5d0b0', highlightFill: '#ffe5c2' },
   view:        { fill: '#d5e8d4', stroke: '#82b366', hoverFill: '#bfd8be', highlightFill: '#d2e6d1' },
-  automation:  { fill: '#e1d5e7', stroke: '#9673a6', hoverFill: '#c0b0cc', highlightFill: '#d5c8da' },
+  automation:  { fill: '#16201b', hoverFill: '#e2e9e5', highlightFill: '#ecefed' },
   translation: { fill: '#f5f5f5', stroke: '#666666', hoverFill: '#d0d0d0', highlightFill: '#e0e0e0' },
 };
+
+// The gear an automation is drawn as, in a 30px square centred on the origin.
+// The Go exporters trace the same gear, and a Go test compares the two.
+export const GEAR_PATH = "M -2.9 -7.88 L -2.9 -12.9 A 1.3 1.3 0 0 1 -1.6 -14.2 L 1.6 -14.2 A 1.3 1.3 0 0 1 2.9 -12.9 L 2.9 -7.88 A 8.4 8.4 0 0 1 3.52 -7.63 L 7.07 -11.17 A 1.3 1.3 0 0 1 8.91 -11.17 L 11.17 -8.91 A 1.3 1.3 0 0 1 11.17 -7.07 L 7.63 -3.52 A 8.4 8.4 0 0 1 7.88 -2.9 L 12.9 -2.9 A 1.3 1.3 0 0 1 14.2 -1.6 L 14.2 1.6 A 1.3 1.3 0 0 1 12.9 2.9 L 7.88 2.9 A 8.4 8.4 0 0 1 7.63 3.52 L 11.17 7.07 A 1.3 1.3 0 0 1 11.17 8.91 L 8.91 11.17 A 1.3 1.3 0 0 1 7.07 11.17 L 3.52 7.63 A 8.4 8.4 0 0 1 2.9 7.88 L 2.9 12.9 A 1.3 1.3 0 0 1 1.6 14.2 L -1.6 14.2 A 1.3 1.3 0 0 1 -2.9 12.9 L -2.9 7.88 A 8.4 8.4 0 0 1 -3.52 7.63 L -7.07 11.17 A 1.3 1.3 0 0 1 -8.91 11.17 L -11.17 8.91 A 1.3 1.3 0 0 1 -11.17 7.07 L -7.63 3.52 A 8.4 8.4 0 0 1 -7.88 2.9 L -12.9 2.9 A 1.3 1.3 0 0 1 -14.2 1.6 L -14.2 -1.6 A 1.3 1.3 0 0 1 -12.9 -2.9 L -7.88 -2.9 A 8.4 8.4 0 0 1 -7.63 -3.52 L -11.17 -7.07 A 1.3 1.3 0 0 1 -11.17 -8.91 L -8.91 -11.17 A 1.3 1.3 0 0 1 -7.07 -11.17 L -3.52 -7.63 A 8.4 8.4 0 0 1 -2.9 -7.88 Z M 0 -3.4 A 3.4 3.4 0 0 0 0 3.4 A 3.4 3.4 0 0 0 0 -3.4 Z";
+export const GEAR_SIZE = 30;
+export const GEAR_LABEL_GAP = 8;
 
 export const edgeConfig = {
   flow:               { cls: "flow-arrow",      marker: "url(#arrowhead)",         stroke: "#666666", dash: "" },

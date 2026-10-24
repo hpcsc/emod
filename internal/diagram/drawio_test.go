@@ -156,7 +156,7 @@ func TestExportDrawio(t *testing.T) {
 			require.Equal(t, []string{"OrderPlaced -> OrderList"}, drawioConnections(t, string(raw)))
 		})
 
-		t.Run("renders automation with gear icon indicator", func(t *testing.T) {
+		t.Run("renders automation as the gear with its name beside it", func(t *testing.T) {
 			model := &ast.Model{
 				Name: "Test",
 				Contexts: []*ast.Context{{
@@ -178,10 +178,9 @@ func TestExportDrawio(t *testing.T) {
 			raw, err := diagram.ExportDrawio(model, diagram.StyleAuto)
 			require.NoError(t, err)
 
-			output := string(raw)
-			require.Contains(t, output, "Notifier")
-			// Verify gear indicator is present
-			require.Contains(t, output, "\u2699")
+			gear := boxLabelled(t, drawioBoxes(t, string(raw)), "Notifier")
+			require.True(t, drawioDrawnAsGear(gear))
+			require.Contains(t, gear.appearance, "labelPosition=right;", "the name is written beside the gear, not inside it")
 		})
 
 		t.Run("connects event to automation to command", func(t *testing.T) {
@@ -205,7 +204,7 @@ func TestExportDrawio(t *testing.T) {
 			require.NoError(t, err)
 
 			require.Equal(t,
-				[]string{"OrderPlaced -> \u2699 Notifier", "\u2699 Notifier -> SendEmail"},
+				[]string{"OrderPlaced -> Notifier", "Notifier -> SendEmail"},
 				drawioConnections(t, string(raw)))
 		})
 
@@ -265,8 +264,8 @@ func TestExportDrawio(t *testing.T) {
 				"CreateOrder -> OrderCreated",
 				"ValidatePayment -> PaymentValidated",
 				"OrderCreated -> OrderSummary",
-				"OrderCreated -> \u2699 InventoryUpdater",
-				"\u2699 InventoryUpdater -> CreateOrder",
+				"OrderCreated -> InventoryUpdater",
+				"InventoryUpdater -> CreateOrder",
 				"Stripe -> \u2699 PaymentGW",
 				"\u2699 PaymentGW -> ValidatePayment",
 				"ShipTimer -> ShipOrder",
@@ -1193,11 +1192,11 @@ func taggedOnlyRejectionModel() *ast.Model {
 	}
 }
 
-// dcbReactorLabels labels the box drawn for each automation and each translation
-// reactor sharedLaneModel declares.
+// dcbReactorLabels labels the gear drawn for each automation and the box drawn
+// for each translation reactor sharedLaneModel declares.
 var dcbReactorLabels = []string{
-	gearMarking + " RemindOnDueDate",
-	gearMarking + " RecallOverdueCopy",
+	"RemindOnDueDate",
+	"RecallOverdueCopy",
 	gearMarking + " PartnerImport",
 }
 
@@ -1373,6 +1372,10 @@ func drawioBoxes(t *testing.T, output string) []diagramBox {
 	}
 
 	return boxes
+}
+
+func drawioDrawnAsGear(box diagramBox) bool {
+	return strings.Contains(box.appearance, "shape=stencil(")
 }
 
 // drawioLaneLabels names the swimlanes the diagram draws, in the order it draws

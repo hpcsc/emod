@@ -1,4 +1,4 @@
-import { nodePalette, edgeConfig } from './config.js';
+import { nodePalette, edgeConfig, GEAR_PATH, GEAR_SIZE } from './config.js';
 
 const NS = "http://www.w3.org/2000/svg";
 
@@ -38,8 +38,14 @@ function createSvgEl(tag, attrs) {
   return node;
 }
 
-function buildElementSwatch(palette) {
+function buildElementSwatch(type, palette) {
   const swatch = createSvgEl('svg', { class: 'lg-swatch', width: 40, height: 18 });
+  if (type === 'automation') {
+    swatch.appendChild(createSvgEl('path', {
+      d: GEAR_PATH, transform: 'translate(15,9) scale(' + 16 / GEAR_SIZE + ')', fill: palette.fill,
+    }));
+    return swatch;
+  }
   swatch.appendChild(createSvgEl('rect', {
     x: 1, y: 1, width: 28, height: 16, rx: 3,
     fill: palette.fill, stroke: palette.stroke, 'stroke-width': 1.5,
@@ -83,7 +89,7 @@ function renderLegend(container) {
   container.textContent = '';
 
   const elements = Object.keys(nodePalette).map(function(type) {
-    return buildRow(buildElementSwatch(nodePalette[type]), ELEMENT_NAMES[type] || type);
+    return buildRow(buildElementSwatch(type, nodePalette[type]), ELEMENT_NAMES[type] || type);
   });
   const connections = Object.keys(edgeConfig).map(function(type) {
     return buildRow(buildConnectionSwatch(edgeConfig[type]), CONNECTION_NAMES[type] || type);

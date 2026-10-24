@@ -3,7 +3,7 @@ import { readFileSync } from 'fs';
 import { resolve } from 'path';
 
 const { Legend } = await import('../static/legend.js');
-const { nodePalette, edgeConfig } = await import('../static/config.js');
+const { nodePalette, edgeConfig, GEAR_PATH } = await import('../static/config.js');
 
 const viewerHtml = readFileSync(resolve(__dirname, '../static/viewer.html'), 'utf-8');
 
@@ -50,6 +50,11 @@ function namesUnder(root, title) {
 
 function swatchesUnder(root, title) {
   return rowsUnder(root, title).map((row) => row.querySelector('.lg-swatch'));
+}
+
+// The shape a swatch paints: a box for most types, and the gear for an automation.
+function swatchShape(swatch) {
+  return swatch.querySelector('rect, path');
 }
 
 describe('Legend', () => {
@@ -110,20 +115,30 @@ describe('Legend', () => {
       Legend.renderLegend(store.dom.legendContent);
 
       const drawn = swatchesUnder(store.dom.legendContent, 'Elements').map((swatch) => {
-        const rect = swatch.querySelector('rect');
-        return [rect.getAttribute('fill'), rect.getAttribute('stroke')];
+        const shape = swatchShape(swatch);
+        return [shape.getAttribute('fill'), shape.getAttribute('stroke')];
       });
 
       expect(drawn).toEqual(
-        Object.values(nodePalette).map((p) => [p.fill, p.stroke]),
+        Object.values(nodePalette).map((p) => [p.fill, p.stroke ?? null]),
       );
+    });
+
+    it('draws the automation swatch as the gear the canvas draws', () => {
+      Legend.renderLegend(store.dom.legendContent);
+
+      const row = rowsUnder(store.dom.legendContent, 'Elements')
+        .find((r) => r.querySelector('.lg-name').textContent === 'Automation');
+
+      expect(row.querySelector('.lg-swatch rect')).toBeNull();
+      expect(row.querySelector('.lg-swatch path').getAttribute('d')).toBe(GEAR_PATH);
     });
 
     it('gives the six element types six distinct fills, as the canvas does', () => {
       Legend.renderLegend(store.dom.legendContent);
 
       const fills = swatchesUnder(store.dom.legendContent, 'Elements')
-        .map((swatch) => swatch.querySelector('rect').getAttribute('fill'));
+        .map((swatch) => swatchShape(swatch).getAttribute('fill'));
 
       expect(new Set(fills).size).toBe(fills.length);
     });
@@ -219,6 +234,7 @@ describe('Legend', () => {
         Object.values(nodePalette)
           .flatMap((p) => [p.fill, p.stroke, p.hoverFill, p.highlightFill])
           .concat(Object.values(edgeConfig).map((c) => c.stroke))
+          .filter(Boolean)
           .map((c) => c.toLowerCase()),
       );
 

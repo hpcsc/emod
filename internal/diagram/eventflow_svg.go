@@ -4,7 +4,6 @@ import (
 	"fmt"
 	"sort"
 	"strings"
-	"unicode/utf8"
 
 	"github.com/hpcsc/emod/internal/ast"
 )
@@ -276,7 +275,7 @@ func measureFlowNode(node Node) placedNode {
 		p.w, p.h = flowGearSize, flowGearSize
 		p.captions = append(p.captions, flowCaption{text: node.Label, class: "gear-name", size: flowNameFontSize})
 	} else {
-		p.w = flowTextWidth(node.Label, flowNameFontSize) + flowNodePadding
+		p.w = estimatedTextWidth(node.Label, flowNameFontSize) + flowNodePadding
 		if p.w < flowMinNodeWidth {
 			p.w = flowMinNodeWidth
 		}
@@ -287,19 +286,12 @@ func measureFlowNode(node Node) placedNode {
 
 	p.slot = p.w
 	for _, caption := range p.captions {
-		if width := flowTextWidth(caption.text, caption.size); width > p.slot {
+		if width := estimatedTextWidth(caption.text, caption.size); width > p.slot {
 			p.slot = width
 		}
 	}
 
 	return p
-}
-
-// flowTextWidth estimates how wide a label is drawn, standing in for a text
-// measurement no exporter has. The ratio is the one specCardLineBudget was
-// calibrated against: about 0.57em for a line of CamelCase construct names.
-func flowTextWidth(text string, fontSize int) int {
-	return utf8.RuneCountInString(text) * fontSize * 57 / 100
 }
 
 // flowRows groups the nodes into rows by how far each sits from an origin: a

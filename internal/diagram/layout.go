@@ -64,6 +64,10 @@ const (
 	reactorHeight = boxHeight * 3 / 4
 	reactorGap    = 6
 
+	reactorFontSize = 10
+	laneGearSize    = 28
+	gearLabelGap    = 6
+
 	waypointMargin = 40
 )
 
@@ -79,8 +83,7 @@ const (
 	strokeTrigger     = "#333333"
 	fillExternal      = "#f5f5f5"
 	strokeExternal    = "#666666"
-	fillAutomation    = "#e1d5e7"
-	strokeAutomation  = "#9673a6"
+	fillAutomation    = "#16201b"
 	fillTranslation   = "#f5f5f5"
 	strokeTranslation = "#666666"
 	strokePurpleUp    = "#9B59B6"
@@ -259,10 +262,12 @@ func laneRowY(laneY int) int {
 	return laneY + laneHeaderHeight + (laneHeight-laneHeaderHeight-boxHeight)/2
 }
 
-// reactorBox is the box drawn for an automation or for a translation reactor.
+// reactorBox is the box drawn for a translation reactor, or the square the gear
+// of an automation is drawn in.
 type reactorBox struct {
 	name         string
 	label        string
+	labelWidth   int
 	description  string
 	isAutomation bool
 	x, y, w, h   int
@@ -285,16 +290,36 @@ func reactorBoxes(s *ast.Slice, cmdViewLaneY, sliceX int, lineBreak string) []re
 	for i := range boxes {
 		boxes[i].w, boxes[i].x = itemLayout(sliceWidth-20, len(boxes), i, sliceX)
 		boxes[i].y, boxes[i].h = rowY, reactorHeight
+		if boxes[i].isAutomation {
+			boxes[i].placeGear()
+		}
 	}
 
 	return boxes
 }
 
+// placeGear shrinks an automation's box to the square its gear is drawn in, so
+// that the gear and the label to its right are centred together in the box.
+func (r *reactorBox) placeGear() {
+	drawnWidth := laneGearSize + gearLabelGap + r.labelWidth
+	r.x += max(0, (r.w-drawnWidth)/2)
+	r.y += (r.h - laneGearSize) / 2
+	r.w, r.h = laneGearSize, laneGearSize
+}
+
 // automationBox returns the reactor box for an automation.
 func automationBox(auto *ast.Automation, lineBreak string) reactorBox {
+	lines := automationLabelLines(auto)
+
+	labelWidth := 0
+	for _, line := range lines {
+		labelWidth = max(labelWidth, estimatedTextWidth(line, reactorFontSize))
+	}
+
 	return reactorBox{
 		name:         auto.Name,
-		label:        automationLabel(auto, lineBreak),
+		label:        strings.Join(lines, lineBreak),
+		labelWidth:   labelWidth,
 		description:  auto.Description,
 		isAutomation: true,
 	}

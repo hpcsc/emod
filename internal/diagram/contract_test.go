@@ -3,8 +3,12 @@
 package diagram_test
 
 import (
+	"bytes"
+	"compress/flate"
+	"encoding/base64"
 	"encoding/xml"
 	"fmt"
+	"io"
 	"maps"
 	"math"
 	"os"
@@ -43,6 +47,9 @@ type exporter struct {
 	// boxes returns the boxes the output draws, in document order; nil for the
 	// text formats, which draw none.
 	boxes func(t *testing.T, output string) []diagramBox
+	// drawnAsGear reports whether a box is the gear an automation is drawn as;
+	// nil for the text formats, which draw no shapes.
+	drawnAsGear func(box diagramBox) bool
 	// connections returns the arrows the output draws between its boxes, in
 	// document order; nil for the text formats, which draw none.
 	connections func(t *testing.T, output string) []diagramConnection
@@ -171,6 +178,7 @@ func exporters() []exporter {
 			strokeOfLabel:     drawioStrokeOfLabel,
 			countConnections:  func(output string) int { return strings.Count(output, `edge="1"`) },
 			boxes:             drawioBoxes,
+			drawnAsGear:       drawioDrawnAsGear,
 			connections:       drawioEdges,
 			export:            exportDrawioDefault,
 			exportWithSpecs:   exportDrawioWithSpecs,
@@ -183,6 +191,7 @@ func exporters() []exporter {
 			strokeOfLabel:     svgStrokeOfLabel,
 			countConnections:  arrowCount,
 			boxes:             svgBoxes,
+			drawnAsGear:       svgDrawnAsGear,
 			connections:       svgConnections,
 			export:            exportSVGDefault,
 			exportWithSpecs:   exportSVGWithSpecs,
@@ -205,68 +214,60 @@ func exporters() []exporter {
 var (
 	drawioStyleFill   = regexp.MustCompile(`fillColor=(#[0-9a-fA-F]{6})`)
 	drawioStyleStroke = regexp.MustCompile(`strokeColor=(#[0-9a-fA-F]{6})`)
-	svgRectFill       = regexp.MustCompile(`<rect[^>]*\bfill="(#[0-9a-fA-F]{6})"`)
-	svgRectStroke     = regexp.MustCompile(`<rect[^>]*\bstroke="(#[0-9a-fA-F]{6})"`)
+	svgShapeStart     = regexp.MustCompile(`^<(rect|use)\b`)
+	svgShapeFill      = regexp.MustCompile(`\bfill="(#[0-9a-fA-F]{6})"`)
+	svgShapeStroke    = regexp.MustCompile(`\bstroke="(#[0-9a-fA-F]{6})"`)
 )
 
 // drawioFillOfLabel returns the fill of the shape whose label contains label.
 func drawioFillOfLabel(t *testing.T, output, label string) string {
 	t.Helper()
 
-	for _, shape := range drawioShapes(t, output) {
-		if !strings.Contains(shape.label, label) {
-			continue
-		}
-		if m := drawioStyleFill.FindStringSubmatch(shape.style); m != nil {
-			return strings.ToLower(m[1])
-		}
-	}
-
-	require.Fail(t, fmt.Sprintf("no drawio cell labelled %q in output", label))
-	return ""
+	return drawioColourOfLabel(t, output, label, drawioStyleFill)
 }
 
-// drawioStrokeOfLabel returns the stroke of the shape whose label contains label.
+// drawioStrokeOfLabel returns the stroke of the shape whose label contains
+// label, or "" for a shape drawn with no stroke.
 func drawioStrokeOfLabel(t *testing.T, output, label string) string {
 	t.Helper()
 
+	return drawioColourOfLabel(t, output, label, drawioStyleStroke)
+}
+
+func drawioColourOfLabel(t *testing.T, output, label string, colour *regexp.Regexp) string {
+	t.Helper()
+
 	for _, shape := range drawioShapes(t, output) {
 		if !strings.Contains(shape.label, label) {
 			continue
 		}
-		if m := drawioStyleStroke.FindStringSubmatch(shape.style); m != nil {
+		if m := colour.FindStringSubmatch(shape.style); m != nil {
 			return strings.ToLower(m[1])
 		}
+		return ""
 	}
 
 	require.Fail(t, fmt.Sprintf("no drawio cell labelled %q in output", label))
 	return ""
 }
 
-// svgFillOfLabel returns the fill of the rect drawn immediately before the text
-// element carrying label — the shape that label sits inside.
+// svgFillOfLabel returns the fill of the shape drawn immediately before the
+// text element carrying label — the shape that label sits inside or beside.
 func svgFillOfLabel(t *testing.T, output, label string) string {
 	t.Helper()
 
-	lines := strings.Split(output, "\n")
-	for i, line := range lines {
-		if !strings.Contains(line, "<text") || !strings.Contains(line, label) {
-			continue
-		}
-		for j := i - 1; j >= 0; j-- {
-			if m := svgRectFill.FindStringSubmatch(lines[j]); m != nil {
-				return strings.ToLower(m[1])
-			}
-		}
-	}
-
-	require.Fail(t, fmt.Sprintf("no svg shape labelled %q in output", label))
-	return ""
+	return svgColourOfLabel(t, output, label, svgShapeFill)
 }
 
-// svgStrokeOfLabel returns the stroke of the rect drawn immediately before the text
-// element carrying label — the shape that label sits inside.
+// svgStrokeOfLabel returns the stroke of the shape drawn immediately before the
+// text element carrying label, or "" for a shape drawn with no stroke.
 func svgStrokeOfLabel(t *testing.T, output, label string) string {
+	t.Helper()
+
+	return svgColourOfLabel(t, output, label, svgShapeStroke)
+}
+
+func svgColourOfLabel(t *testing.T, output, label string, colour *regexp.Regexp) string {
 	t.Helper()
 
 	lines := strings.Split(output, "\n")
@@ -275,9 +276,13 @@ func svgStrokeOfLabel(t *testing.T, output, label string) string {
 			continue
 		}
 		for j := i - 1; j >= 0; j-- {
-			if m := svgRectStroke.FindStringSubmatch(lines[j]); m != nil {
+			if !svgShapeStart.MatchString(lines[j]) {
+				continue
+			}
+			if m := colour.FindStringSubmatch(lines[j]); m != nil {
 				return strings.ToLower(m[1])
 			}
+			return ""
 		}
 	}
 
@@ -415,17 +420,31 @@ func boxesDrawnOver(rects map[string]boxRect, names []string) []string {
 	return collisions
 }
 
-// gearedBoxes returns the boxes drawn for a model's automations and translation
-// reactors, which the picture tells apart from every other box by the gear.
-func gearedBoxes(boxes []diagramBox) []diagramBox {
+// gearedBoxes returns the boxes drawn for a model's automations, which are
+// drawn as the gear, and for its translation reactors, which carry the gear
+// marking in their label.
+func (e exporter) gearedBoxes(boxes []diagramBox) []diagramBox {
 	var geared []diagramBox
 	for _, box := range boxes {
-		if strings.Contains(box.label, gearMarking) {
+		if e.drawnAsGear(box) || strings.Contains(box.label, gearMarking) {
 			geared = append(geared, box)
 		}
 	}
 
 	return geared
+}
+
+// gearsIn returns the boxes the picture draws as the gear, which are its
+// automations and nothing else.
+func (e exporter) gearsIn(boxes []diagramBox) []diagramBox {
+	var gears []diagramBox
+	for _, box := range boxes {
+		if e.drawnAsGear(box) {
+			gears = append(gears, box)
+		}
+	}
+
+	return gears
 }
 
 func labelsOf(boxes []diagramBox) []string {
@@ -1159,9 +1178,9 @@ func TestExporterAutomationSchedule(t *testing.T) {
 				e.requireWellFormed(t, output)
 				var shown []string
 				for _, name := range scheduledLibraryLendingAutomations {
-					label := e.boxLabelled(t, output, name).label
-					require.Contains(t, label, gearMarking, "a cadence joins the marking the box already carried")
-					shown = append(shown, scheduleShown(label))
+					gear := e.boxLabelled(t, output, name)
+					require.True(t, e.drawnAsGear(gear), "the cadence is written beside the gear the automation is drawn as")
+					shown = append(shown, scheduleShown(gear.label))
 				}
 
 				require.Equal(t, test.AutomationScheduleLibraryLendingSchedules, shown,
@@ -1287,7 +1306,7 @@ func TestExporterAutomationDelay(t *testing.T) {
 					"each arrow says the delay of the automation it ends at")
 			})
 
-			t.Run("the arrow to an automation stating no delay carries nothing, and its box says what an undelayed one's does", func(t *testing.T) {
+			t.Run("the arrow to an automation stating no delay carries nothing, and its gear says what an undelayed one's does", func(t *testing.T) {
 				output := e.run(t, test.AutomationDelayLibraryLendingModel(t), diagram.StyleAuto)
 				connections := e.connections(t, output)
 
@@ -1301,19 +1320,18 @@ func TestExporterAutomationDelay(t *testing.T) {
 				}
 
 				for _, a := range delayedLibraryLendingActivations {
-					require.Equal(t, gearMarking+" "+a.automation,
-						e.boxLabelled(t, output, gearMarking+" "+a.automation).label,
-						"a delay belongs on the arrow, so the box says exactly what an undelayed automation's says — the gear and the name, and no clock")
+					require.Equal(t, a.automation, e.boxLabelled(t, output, a.automation).label,
+						"a delay belongs on the arrow, so the gear says exactly what an undelayed automation's says — the name, and no clock")
 				}
 			})
 
-			t.Run("a scheduled automation beside a delayed one keeps its cadence on its box and draws no activation arrow", func(t *testing.T) {
+			t.Run("a scheduled automation beside a delayed one keeps its cadence beside its gear and draws no activation arrow", func(t *testing.T) {
 				output := e.run(t, test.AutomationDelayLibraryLendingModel(t), diagram.StyleAuto)
 				connections := e.connections(t, output)
 
 				for _, name := range scheduledDelayFixtureAutomations {
-					label := e.boxLabelled(t, output, gearMarking+" "+name).label
-					require.Contains(t, label, clockMarking, "a schedule is drawn on the box, not on an arrow")
+					label := e.boxLabelled(t, output, name).label
+					require.Contains(t, label, clockMarking, "a schedule is drawn beside the gear, not on an arrow")
 					require.NotEmpty(t, scheduleShown(label))
 
 					// The view it reads does reach it, so the arrows into its box
@@ -1414,7 +1432,7 @@ func labelOfActivationArrow(t *testing.T, connections []diagramConnection, a act
 
 	var found []diagramConnection
 	for _, connection := range connections {
-		if connection.source == a.event && connection.target == gearMarking+" "+a.automation {
+		if connection.source == a.event && connection.target == a.automation {
 			found = append(found, connection)
 		}
 	}
@@ -1446,25 +1464,25 @@ func withoutArrowLabels(connections []diagramConnection) []diagramConnection {
 	return stripped
 }
 
-// reactiveModelReactors labels the box drawn for each automation and each
-// translation reactor reactiveModel declares, both slices together and in the
-// order the picture draws them.
+// reactiveModelReactors labels the gear drawn for each automation and the box
+// drawn for each translation reactor reactiveModel declares, both slices
+// together and in the order the picture draws them.
 var reactiveModelReactors = []string{
-	gearMarking + " NotifyWarehouse",
-	gearMarking + " ChargeCard",
+	"NotifyWarehouse",
+	"ChargeCard",
 	gearMarking + " PaymentGateway",
-	gearMarking + " BookPickup",
-	gearMarking + " ArchiveOrder",
+	"BookPickup",
+	"ArchiveOrder",
 	gearMarking + " LabelFeed",
 }
 
-// reactiveModelAutomations labels the boxes of its automations alone — what a
+// reactiveModelAutomations labels the gears of its automations alone — what a
 // twin of it declaring no translation still draws.
 var reactiveModelAutomations = []string{
-	gearMarking + " NotifyWarehouse",
-	gearMarking + " ChargeCard",
-	gearMarking + " BookPickup",
-	gearMarking + " ArchiveOrder",
+	"NotifyWarehouse",
+	"ChargeCard",
+	"BookPickup",
+	"ArchiveOrder",
 }
 
 // reactiveModelCommands labels the boxes on the row the reactive boxes have to
@@ -1486,17 +1504,17 @@ var reactiveModelElements = slices.Concat(reactiveModelCommands, reactiveModelRe
 // each automation, the view one of them reads, the command each issues, and the
 // external system each translation restates.
 var reactiveModelReactorEdges = []string{
-	"OrderPlaced -> " + gearMarking + " NotifyWarehouse",
-	gearMarking + " NotifyWarehouse -> ReserveStock",
-	"OrderPlaced -> " + gearMarking + " ChargeCard",
-	"OrderStatusView -> " + gearMarking + " ChargeCard",
-	gearMarking + " ChargeCard -> PlaceOrder",
+	"OrderPlaced -> NotifyWarehouse",
+	"NotifyWarehouse -> ReserveStock",
+	"OrderPlaced -> ChargeCard",
+	"OrderStatusView -> ChargeCard",
+	"ChargeCard -> PlaceOrder",
 	"Stripe -> " + gearMarking + " PaymentGateway",
 	gearMarking + " PaymentGateway -> PlaceOrder",
-	"OrderShipped -> " + gearMarking + " BookPickup",
-	gearMarking + " BookPickup -> ShipOrder",
-	"OrderShipped -> " + gearMarking + " ArchiveOrder",
-	gearMarking + " ArchiveOrder -> PrintLabel",
+	"OrderShipped -> BookPickup",
+	"BookPickup -> ShipOrder",
+	"OrderShipped -> ArchiveOrder",
+	"ArchiveOrder -> PrintLabel",
 	"DHL -> " + gearMarking + " LabelFeed",
 	gearMarking + " LabelFeed -> PrintLabel",
 }
@@ -1602,11 +1620,11 @@ func TestExporterReactorPlacement(t *testing.T) {
 
 				e.requireWellFormed(t, output)
 				boxes := e.boxes(t, output)
-				geared := gearedBoxes(boxes)
+				geared := e.gearedBoxes(boxes)
 				lane := boxLabelled(t, boxes, "Commands / Views").rect
 
 				require.Equal(t, reactiveModelReactors, labelsOf(geared),
-					"every automation and every translation reactor is drawn one box, marked with the gear")
+					"every automation is drawn one gear, and every translation reactor one box marked with the gear")
 				require.Equal(t, reactiveModelReactors, labelsWithin(geared, lane),
 					"each of those boxes lies wholly inside the command and view lane")
 				require.Equal(t, reactiveModelReactors,
@@ -1652,9 +1670,9 @@ func TestExporterReactorPlacement(t *testing.T) {
 				e.requireWellFormed(t, stripped)
 				featuredBoxes, strippedBoxes := e.boxes(t, featured), e.boxes(t, stripped)
 
-				require.Equal(t, reactiveModelAutomations, labelsOf(gearedBoxes(featuredBoxes)),
+				require.Equal(t, reactiveModelAutomations, labelsOf(e.gearsIn(featuredBoxes)),
 					"the twin compared from has to draw every automation, or the comparison below is two identical pictures agreeing")
-				require.Empty(t, gearedBoxes(strippedBoxes),
+				require.Empty(t, e.gearsIn(strippedBoxes),
 					"and the twin compared against has to draw none")
 
 				require.Equal(t, strippedBoxes, boxesExcept(featuredBoxes, reactiveModelAutomations),
@@ -1833,7 +1851,8 @@ func TestExporterTriggerScreen(t *testing.T) {
 
 // viewerNodePalette parses the node palette declared in the viewer's config.js
 // and returns, for each element type, the fill and stroke the viewer paints it
-// with. The map keys are the node type names used in the viewer.
+// with, the stroke "" for a type it draws unstroked. The map keys are the node
+// type names used in the viewer.
 func viewerNodePalette(t *testing.T) map[string]struct{ fill, stroke string } {
 	t.Helper()
 
@@ -1850,7 +1869,7 @@ func viewerNodePalette(t *testing.T) map[string]struct{ fill, stroke string } {
 	require.NotEqual(t, -1, end, "nodePalette block does not end with }; in config.js")
 	block = block[:end+2]
 
-	entryRe := regexp.MustCompile(`(?m)^\s*(\w+):\s*\{\s*fill:\s*['"]?(#[0-9a-fA-F]{6})['"]?\s*,\s*stroke:\s*['"]?(#[0-9a-fA-F]{6})['"]?`)
+	entryRe := regexp.MustCompile(`(?m)^\s*(\w+):\s*\{\s*fill:\s*['"]?(#[0-9a-fA-F]{6})['"]?(?:\s*,\s*stroke:\s*['"]?(#[0-9a-fA-F]{6})['"]?)?`)
 	matches := entryRe.FindAllStringSubmatch(block, -1)
 	require.Len(t, matches, 6, "nodePalette must list exactly six element types, got %d", len(matches))
 
@@ -1877,7 +1896,8 @@ var viewerTypeToModelLabel = map[string]string{
 }
 
 // dslReferencePalette parses the diagram palette table from the DSL reference
-// docs and returns a map from element type to the documented fill and stroke.
+// docs and returns a map from element type to the documented fill and stroke,
+// the stroke "" for a type the table states none for.
 func dslReferencePalette(t *testing.T) map[string]struct{ fill, stroke string } {
 	t.Helper()
 
@@ -1900,7 +1920,7 @@ func dslReferencePalette(t *testing.T) map[string]struct{ fill, stroke string } 
 	}
 	block = block[:end]
 
-	rowRe := regexp.MustCompile(`\|\s*(Trigger|Command|Event|View|Automation|Translation)\s*\|\s*(#[0-9a-fA-F]{6})\s*\|\s*(#[0-9a-fA-F]{6})\s*\|`)
+	rowRe := regexp.MustCompile(`\|\s*(Trigger|Command|Event|View|Automation|Translation)\s*\|\s*(#[0-9a-fA-F]{6})\s*\|\s*(#[0-9a-fA-F]{6}|—)\s*\|`)
 	matches := rowRe.FindAllStringSubmatch(block, -1)
 	require.Len(t, matches, 6, "palette table must list exactly six element types, got %d", len(matches))
 
@@ -1908,7 +1928,7 @@ func dslReferencePalette(t *testing.T) map[string]struct{ fill, stroke string } 
 	for _, m := range matches {
 		palette[strings.ToLower(m[1])] = struct{ fill, stroke string }{
 			fill:   strings.ToLower(m[2]),
-			stroke: strings.ToLower(m[3]),
+			stroke: strings.ToLower(strings.TrimPrefix(m[3], "—")),
 		}
 	}
 
@@ -1939,6 +1959,149 @@ func TestExporterPalettePinsViewer(t *testing.T) {
 			}
 		})
 	}
+}
+
+// TestExporterAutomationGear covers the gear each picture format draws an
+// automation as.
+func TestExporterAutomationGear(t *testing.T) {
+	for _, e := range exporters() {
+		if e.boxes == nil {
+			continue
+		}
+
+		t.Run(e.name, func(t *testing.T) {
+			t.Run("an automation is drawn as one gear and no box", func(t *testing.T) {
+				featured := e.boxes(t, e.run(t, paletteModel(), diagram.StyleAuto))
+				stripped := e.boxes(t, e.run(t, withoutAutomations(paletteModel()), diagram.StyleAuto))
+
+				require.Equal(t, []string{"Auto"}, labelsOf(e.gearsIn(featured)))
+				require.Len(t, featured, len(stripped)+1, "the gear is the only shape an automation adds")
+			})
+		})
+	}
+
+	t.Run("svg draws the gear the viewer draws", func(t *testing.T) {
+		raw, err := os.ReadFile("../frontend/static/config.js")
+		require.NoError(t, err)
+		viewerGear := regexp.MustCompile(`GEAR_PATH = "([^"]*)"`).FindStringSubmatch(string(raw))
+		require.NotNil(t, viewerGear, "the viewer must declare GEAR_PATH")
+
+		require.Equal(t, viewerGear[1], svgGearPath(t, svgOf(t, paletteModel())))
+	})
+
+	t.Run("draw.io draws the gear svg draws", func(t *testing.T) {
+		drawio, err := diagram.ExportDrawio(paletteModel(), diagram.StyleAuto)
+		require.NoError(t, err)
+
+		svgCommands, svgNumbers := svgPathSteps(t, svgGearPath(t, svgOf(t, paletteModel())))
+		drawioCommands, drawioNumbers := drawioGearSteps(t, string(drawio))
+
+		require.Equal(t, svgCommands, drawioCommands)
+		require.InDeltaSlice(t, svgNumbers, drawioNumbers, 0.01)
+	})
+
+	t.Run("a model with no automation draws no gear", func(t *testing.T) {
+		model := singleSliceModel("Lending", "Borrow Copy", command("BorrowCopy"), event("CopyBorrowed"))
+		drawio, err := diagram.ExportDrawio(model, diagram.StyleAuto)
+		require.NoError(t, err)
+
+		require.NotContains(t, svgOf(t, model), `id="gear"`,
+			"a model with no automation keeps the SVG it was drawn before automations were gears")
+		require.NotContains(t, string(drawio), "shape=stencil(")
+	})
+}
+
+var svgGearSymbol = regexp.MustCompile(`<symbol id="gear" viewBox="-15 -15 30 30">\s*<path d="([^"]*)"/>`)
+
+func svgGearPath(t *testing.T, output string) string {
+	t.Helper()
+
+	m := svgGearSymbol.FindStringSubmatch(output)
+	require.NotNil(t, m, "the svg must define the gear it draws")
+
+	return m[1]
+}
+
+// svgPathSteps splits SVG path data into its commands and, in order, every
+// number those commands carry.
+func svgPathSteps(t *testing.T, data string) ([]string, []float64) {
+	t.Helper()
+
+	var (
+		commands []string
+		numbers  []float64
+	)
+	for _, field := range strings.Fields(data) {
+		if value, err := strconv.ParseFloat(field, 64); err == nil {
+			numbers = append(numbers, value)
+			continue
+		}
+		commands = append(commands, field)
+	}
+
+	return commands, numbers
+}
+
+var drawioStencil = regexp.MustCompile(`shape=stencil\(([^)]*)\)`)
+
+// drawioGearSteps reads the stencil draw.io draws the gear with back into the
+// steps of SVG path data, moved so the gear is centred on the origin as it is
+// in the SVG symbol.
+func drawioGearSteps(t *testing.T, output string) ([]string, []float64) {
+	t.Helper()
+
+	m := drawioStencil.FindStringSubmatch(output)
+	require.NotNil(t, m, "the automation must be drawn with a stencil")
+
+	deflated, err := base64.StdEncoding.DecodeString(m[1])
+	require.NoError(t, err)
+	inflated, err := io.ReadAll(flate.NewReader(bytes.NewReader(deflated)))
+	require.NoError(t, err)
+
+	var shape struct {
+		W          float64 `xml:"w,attr"`
+		H          float64 `xml:"h,attr"`
+		Foreground struct {
+			Path struct {
+				Steps []struct {
+					XMLName xml.Name
+					X       float64 `xml:"x,attr"`
+					Y       float64 `xml:"y,attr"`
+					Rx      float64 `xml:"rx,attr"`
+					Ry      float64 `xml:"ry,attr"`
+					Turn    float64 `xml:"x-axis-rotation,attr"`
+					Large   float64 `xml:"large-arc-flag,attr"`
+					Sweep   float64 `xml:"sweep-flag,attr"`
+				} `xml:",any"`
+			} `xml:"path"`
+		} `xml:"foreground"`
+	}
+	require.NoError(t, xml.Unmarshal(inflated, &shape))
+
+	var (
+		commands []string
+		numbers  []float64
+	)
+	for _, step := range shape.Foreground.Path.Steps {
+		x, y := step.X-shape.W/2, step.Y-shape.H/2
+		switch step.XMLName.Local {
+		case "move":
+			commands = append(commands, "M")
+			numbers = append(numbers, x, y)
+		case "line":
+			commands = append(commands, "L")
+			numbers = append(numbers, x, y)
+		case "arc":
+			commands = append(commands, "A")
+			numbers = append(numbers, step.Rx, step.Ry, step.Turn, step.Large, step.Sweep, x, y)
+		case "close":
+			commands = append(commands, "Z")
+		default:
+			require.Fail(t, "the gear stencil holds a step svg path data has no command for: "+step.XMLName.Local)
+		}
+	}
+
+	return commands, numbers
 }
 
 // requireRejectionTwinDiffers hands back the shared rejection fixture and its
@@ -2035,10 +2198,10 @@ func TestExporterPaletteMatchesReference(t *testing.T) {
 	}
 }
 
-// TestExporterPalette pins the event-modeling sticky-note convention — orange
-// events, blue commands, green read models, white triggers, purple automations,
-// grey translations — without pinning the exact palette values, which are free to
-// change.
+// TestExporterPalette pins the event-modeling colour convention — orange events,
+// blue commands, green read models, white triggers, a black gear for each
+// automation, grey translations — without pinning the exact palette values,
+// which are free to change.
 func TestExporterPalette(t *testing.T) {
 	for _, e := range exporters() {
 		if e.fillOfLabel == nil {
@@ -2046,7 +2209,7 @@ func TestExporterPalette(t *testing.T) {
 		}
 
 		t.Run(e.name, func(t *testing.T) {
-			t.Run("follows the sticky-note colour convention", func(t *testing.T) {
+			t.Run("follows the event modeling colour convention", func(t *testing.T) {
 				models := []struct {
 					name  string
 					model func() *ast.Model
@@ -2065,7 +2228,7 @@ func TestExporterPalette(t *testing.T) {
 						require.Equal(t, "blue", colorFamily(t, e.fillOfLabel(t, output, "Cmd")))
 						require.Equal(t, "green", colorFamily(t, e.fillOfLabel(t, output, "Rmo")))
 						require.Equal(t, "white", colorFamily(t, e.fillOfLabel(t, output, "Form")))
-						require.Equal(t, "purple", colorFamily(t, e.fillOfLabel(t, output, "Auto")))
+						require.Equal(t, "black", colorFamily(t, e.fillOfLabel(t, output, "Auto")))
 						require.Equal(t, "grey", colorFamily(t, e.fillOfLabel(t, output, "Import")))
 						require.Equal(t, "grey", colorFamily(t, e.fillOfLabel(t, output, "Stripe")))
 					})
@@ -2087,7 +2250,7 @@ func TestExporterPalette(t *testing.T) {
 				require.Len(t, unique(fills), len(fills), "each element type needs its own fill")
 			})
 
-			t.Run("gives each element type a distinguishable stroke", func(t *testing.T) {
+			t.Run("gives each element type drawn as a box a distinguishable stroke", func(t *testing.T) {
 				output := e.run(t, paletteModel(), diagram.StyleAuto)
 
 				strokes := []string{
@@ -2095,11 +2258,16 @@ func TestExporterPalette(t *testing.T) {
 					e.strokeOfLabel(t, output, "Cmd"),
 					e.strokeOfLabel(t, output, "Rmo"),
 					e.strokeOfLabel(t, output, "Form"),
-					e.strokeOfLabel(t, output, "Auto"),
 					e.strokeOfLabel(t, output, "Import"),
 				}
 
 				require.Len(t, unique(strokes), len(strokes), "each element type needs its own stroke")
+			})
+
+			t.Run("draws the automation's gear with no stroke", func(t *testing.T) {
+				output := e.run(t, paletteModel(), diagram.StyleAuto)
+
+				require.Empty(t, e.strokeOfLabel(t, output, "Auto"))
 			})
 
 			t.Run("fills fall in six distinct colour families", func(t *testing.T) {
@@ -2167,6 +2335,8 @@ func colorFamily(t *testing.T, hex string) string {
 
 	hue, saturation, value := hsv(t, hex)
 	switch {
+	case value < 0.25:
+		return "black"
 	case saturation < 0.05 && value >= 0.99:
 		return "white"
 	case saturation < 0.05:

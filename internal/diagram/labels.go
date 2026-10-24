@@ -32,13 +32,21 @@ func delayLabel(after string) string {
 	return `after "` + after + `"`
 }
 
-func automationLabel(auto *ast.Automation, lineBreak string) string {
-	label := reactorLabel(auto.Name)
+// automationLabelLines states an automation beside the gear it is drawn as, so
+// the label carries no gear marking of its own.
+func automationLabelLines(auto *ast.Automation) []string {
 	if auto.Schedule == "" {
-		return label
+		return []string{auto.Name}
 	}
 
-	return label + lineBreak + clockMarking + " " + auto.Schedule
+	return []string{auto.Name, clockMarking + " " + auto.Schedule}
+}
+
+// estimatedTextWidth estimates how wide a label is drawn, in place of a text
+// measurement no exporter has. The ratio is the one specCardLineBudget was
+// calibrated against: about 0.57em for a line of CamelCase construct names.
+func estimatedTextWidth(text string, fontSize int) int {
+	return utf8.RuneCountInString(text) * fontSize * 57 / 100
 }
 
 // specCardLines states each of a slice's scenarios in the DSL's own spelling —

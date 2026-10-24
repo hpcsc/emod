@@ -1,4 +1,4 @@
-import { L, nodePalette, edgeConfig, arrowClassMap, PORT_DIRECTIONS, PROSE_KINDS } from './config.js';
+import { L, nodePalette, edgeConfig, arrowClassMap, PORT_DIRECTIONS, PROSE_KINDS, GEAR_PATH, GEAR_SIZE, GEAR_LABEL_GAP } from './config.js';
 import { Layout } from './layout.js';
 
 var NS = "http://www.w3.org/2000/svg";
@@ -20,6 +20,10 @@ var markingStep = 26;
 // which are written nowhere on the diagram — leave it anything to open.
 var headerMarkingKinds = ["comments"];
 var screenBar = { inset: 8, top: 6, height: 6, stroke: 1 };
+var blockLabelSize = 13;
+var cadenceSize = 10;
+var cadenceLineStep = 14;
+var markClearance = 2;
 var ellipsis = "…";
 var descriptionSize = 11;
 var headerTextInset = 16;
@@ -436,49 +440,89 @@ function buildSwimlane(nodes, positions, ctx, cp) {
   return swimlane;
 }
 
-function appendBlockLabels(blockG, node, pos, stroke) {
+function appendBlockLabels(blockG, node, pos, ink) {
   var midX = pos.x + pos.w / 2;
   var midY = pos.y + pos.h / 2;
 
   if (node.type === "translation") {
     if (node.external_system) {
-      blockG.appendChild(centeredText(midX, pos.y + 16, node.external_system, 12, stroke));
-      blockG.appendChild(centeredText(midX, pos.y + 32, node.label, 10, stroke));
+      blockG.appendChild(centeredText(midX, pos.y + 16, node.external_system, 12, ink));
+      blockG.appendChild(centeredText(midX, pos.y + 32, node.label, 10, ink));
     } else {
-      blockG.appendChild(centeredText(midX, pos.y + 18, node.label, 12, stroke));
+      blockG.appendChild(centeredText(midX, pos.y + 18, node.label, 12, ink));
     }
     if (node.reads) {
-      blockG.appendChild(centeredText(midX, pos.y + 46, "Reads: " + node.reads, 9, stroke));
+      blockG.appendChild(centeredText(midX, pos.y + 46, "Reads: " + node.reads, 9, ink));
     }
     return;
   }
 
-  if (node.type === "automation" && node.every) {
+  if (node.type === "automation") {
+    var at = gearPlacement(node, pos);
+    var startAnchored = "text-anchor=\"start\" dominant-baseline=\"middle\"";
+    blockG.appendChild(svgText(at.labelX, at.nameY, node.label, blockLabelSize, ink, startAnchored));
+    if (!node.every) return;
     // A group's tooltip is its first <title> child, and it carries the cadence a
     // second time so a cron expression wider than the box stays readable on hover.
     blockG.insertBefore(svgTitle(node.every), blockG.firstChild);
-    blockG.appendChild(centeredText(midX, midY - 9, node.label, 13, stroke));
-    blockG.appendChild(centeredText(midX, midY + 11, clockMarking + " " + node.every, 10, stroke));
+    blockG.appendChild(svgText(at.labelX, at.nameY + cadenceLineStep, cadenceText(node), cadenceSize, ink, startAnchored));
     return;
   }
 
-  blockG.appendChild(centeredText(midX, midY, node.label, 13, stroke));
+  blockG.appendChild(centeredText(midX, midY, node.label, blockLabelSize, ink));
+}
+
+function cadenceText(node) {
+  return clockMarking + " " + node.every;
+}
+
+function gearPlacement(node, pos) {
+  var labelWidth = Layout.textWidth(node.label, blockLabelSize);
+  if (node.every) labelWidth = Math.max(labelWidth, Layout.textWidth(cadenceText(node), cadenceSize));
+  var left = pos.x + Math.max(0, (pos.w - GEAR_SIZE - GEAR_LABEL_GAP - labelWidth) / 2);
+  var placement = { gearX: left + GEAR_SIZE / 2, labelX: left + GEAR_SIZE + GEAR_LABEL_GAP };
+
+  var midY = pos.y + pos.h / 2;
+  if (!node.every) return Object.assign(placement, { gearY: midY, nameY: midY });
+
+  var nameY = blockMarkingBand(node, pos).y + (markingSize + blockLabelSize) / 2 + markClearance;
+  return Object.assign(placement, { gearY: nameY + cadenceLineStep / 2, nameY: nameY });
+}
+
+function gearShape(x, y, fill) {
+  var el = document.createElementNS(NS, "path");
+  el.setAttribute("d", GEAR_PATH);
+  el.setAttribute("transform", "translate(" + x + "," + y + ")");
+  el.setAttribute("fill", fill);
+  el.setAttribute("class", "gear");
+  return el;
 }
 
 function buildBlock(node, pos, palette) {
-  var stroke = palette.stroke;
-
   var blockG = g(node.type + "-block diagram-node");
   blockG.setAttribute("data-node-id", node.id);
-  blockG.appendChild(svgRect(pos.x, pos.y, pos.w, pos.h, palette.fill, stroke,
-    "rx=\"4\" stroke-width=\"1.5\""));
+
+  var ink;
+  if (node.type === "automation") {
+    ink = palette.fill;
+    // An automation is the gear and its name, so its box is drawn clear: it is
+    // still what the pointer, the ports and a selection's outline reach.
+    blockG.appendChild(svgRect(pos.x, pos.y, pos.w, pos.h, "transparent", "none",
+      "rx=\"4\" stroke-width=\"1.5\""));
+    var at = gearPlacement(node, pos);
+    blockG.appendChild(gearShape(at.gearX, at.gearY, ink));
+  } else {
+    ink = palette.stroke;
+    blockG.appendChild(svgRect(pos.x, pos.y, pos.w, pos.h, palette.fill, ink,
+      "rx=\"4\" stroke-width=\"1.5\""));
+  }
 
   if (node.type === "trigger") {
     // A trigger is drawn as a screen: a small header bar inside the top edge
     // of the box, matching the Go renderers. The main rect stays first so
     // drawnBoxes(svg) keeps reading the box itself.
     blockG.appendChild(svgRect(pos.x + screenBar.inset, pos.y + screenBar.top,
-      pos.w - screenBar.inset * 2, screenBar.height, stroke, stroke,
+      pos.w - screenBar.inset * 2, screenBar.height, ink, ink,
       "rx=\"0\" stroke-width=\"" + screenBar.stroke + "\""));
   }
 
@@ -486,8 +530,8 @@ function buildBlock(node, pos, palette) {
     blockG.appendChild(connectPort(node.id, dir, pos));
   });
 
-  appendBlockLabels(blockG, node, pos, stroke);
-  appendMarkings(blockG, node, blockMarkingBand(node, pos), stroke);
+  appendBlockLabels(blockG, node, pos, ink);
+  appendMarkings(blockG, node, blockMarkingBand(node, pos), ink);
   return blockG;
 }
 
