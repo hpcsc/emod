@@ -1275,7 +1275,9 @@ func requireReactorsClearOfSharedLane(t *testing.T, style diagram.Style, laneLab
 var drawioEdge = regexp.MustCompile(`<mxCell id="\d+" style="([^"]*)" edge="1"[^>]*source="(\d+)" target="(\d+)"(?: value="([^"]*)")?`)
 
 // drawioShape is a box the diagram draws, as draw.io reads it back: what it is
-// called, what it says when hovered, and how it is painted and placed.
+// called, what it says when hovered, and how it is painted and placed. Its rect
+// is where draw.io draws it on the page: the geometry of a cell inside another
+// box is relative to that box, and geometry is the attributes as written.
 type drawioShape struct {
 	id       string
 	parentID string
@@ -1304,6 +1306,7 @@ func drawioShapes(t *testing.T, output string) []drawioShape {
 		shapes   []drawioShape
 		wrapper  *drawioShape
 		inVertex bool
+		rectOf   = map[string]boxRect{}
 	)
 
 	decoder := xml.NewDecoder(strings.NewReader(output))
@@ -1344,12 +1347,18 @@ func drawioShapes(t *testing.T, output string) []drawioShape {
 				}
 				shapes[len(shapes)-1].geometry = fmt.Sprintf("%s,%s %sx%s",
 					attr(element, "x"), attr(element, "y"), attr(element, "width"), attr(element, "height"))
-				shapes[len(shapes)-1].rect = boxRect{
+				shape := &shapes[len(shapes)-1]
+				shape.rect = boxRect{
 					x: drawioMeasure(t, attr(element, "x")),
 					y: drawioMeasure(t, attr(element, "y")),
 					w: drawioMeasure(t, attr(element, "width")),
 					h: drawioMeasure(t, attr(element, "height")),
 				}
+				if parent, inBox := rectOf[shape.parentID]; inBox {
+					shape.rect.x += parent.x
+					shape.rect.y += parent.y
+				}
+				rectOf[shape.id] = shape.rect
 			}
 		case xml.EndElement:
 			switch element.Name.Local {

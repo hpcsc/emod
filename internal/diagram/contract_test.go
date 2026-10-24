@@ -1846,6 +1846,20 @@ func TestExporterTriggerScreen(t *testing.T) {
 			})
 		})
 	}
+
+	t.Run("draws the screen bar in the same place in svg and draw.io", func(t *testing.T) {
+		bars := map[string]boxRect{}
+		for _, e := range exporters() {
+			if e.fillOfLabel == nil {
+				continue
+			}
+			bar, framed := triggerScreenFraming(t, e, e.run(t, paletteModel(), diagram.StyleAuto), "Form")
+			require.True(t, framed, "%s must draw the trigger a screen bar", e.name)
+			bars[e.name] = bar
+		}
+
+		require.Equal(t, bars["svg"], bars["drawio"])
+	})
 }
 
 // viewerNodePalette parses the node palette declared in the viewer's config.js

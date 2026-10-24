@@ -255,7 +255,7 @@ func ExportDrawio(model *ast.Model, style Style, opts ...Option) ([]byte, error)
 				label = fmt.Sprintf("%s (%s)", s.Trigger.Name, s.Trigger.Actor)
 			}
 			b.WriteString(vertexCell(id, label, s.Trigger.Description, x, triggerRowY, boxWidth, boxHeight, styleTrigger))
-			b.WriteString(triggerFramingCell(framingID, id, x, triggerRowY, boxWidth, boxHeight, strokeTrigger))
+			b.WriteString(triggerFramingCell(framingID, id, boxWidth, strokeTrigger))
 			elems = append(elems, namedElem{name: s.Trigger.Name, id: id, x: x, y: triggerRowY, w: boxWidth, h: boxHeight})
 		}
 
@@ -618,15 +618,16 @@ func escapeLabel(label string) string {
 
 // triggerFramingCell draws the screen framing that distinguishes a trigger box
 // from a plain rectangle in draw.io: a small header bar inside the top edge of
-// the parent trigger cell.
-func triggerFramingCell(id, parentID, x, y, w, h int, stroke string) string {
+// the parent trigger cell. draw.io places a cell relative to its parent, so the
+// bar's geometry is measured from the trigger's corner.
+func triggerFramingCell(id, parentID, w int, stroke string) string {
 	const headerMargin = 8
 	const headerTop = 6
 	const headerHeight = 6
 
 	style := "rounded=0;whiteSpace=wrap;html=1;fillColor=" + stroke + ";strokeColor=" + stroke + ";"
 	geometry := fmt.Sprintf(`<mxGeometry x="%d" y="%d" width="%d" height="%d" as="geometry" />`,
-		x+headerMargin, y+headerTop, w-2*headerMargin, headerHeight)
+		headerMargin, headerTop, w-2*headerMargin, headerHeight)
 
 	return fmt.Sprintf(`        <mxCell id="%d" value="" style="%s" vertex="1" parent="%d">`+"\n"+
 		`          %s`+"\n"+
