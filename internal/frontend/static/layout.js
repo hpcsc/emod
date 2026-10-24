@@ -126,7 +126,9 @@ function computeLayout(store) {
           node: item,
         };
       });
-      blockY += height + gap;
+      // A taller row reaches into the gap under it rather than pushing the next
+      // row down, so the rows of neighbouring slices stay level.
+      blockY += L.boxHeight + gap;
     }
 
     placeColumn(triggers);

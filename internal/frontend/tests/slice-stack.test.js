@@ -57,6 +57,21 @@ function render(nodes, edges) {
   return { svg: Renderer.buildSVG(store), positions: store.layoutPositions };
 }
 
+// Two slices side by side, one started by a trigger and one by an automation,
+// each issuing a command.
+function commandsUnderATriggerAndAnAutomation() {
+  return [
+    { id: 'ctx1', type: 'context', label: 'Collections' },
+    { id: 'agg1', type: 'aggregate', label: 'Arrangement', parentId: 'ctx1' },
+    { id: 'sl1', type: 'slice', label: 'Chase invoice', parentId: 'agg1' },
+    { id: 'trg1', type: 'trigger', label: 'CollectorScreen', parentId: 'sl1' },
+    { id: 'cmd1', type: 'command', label: 'ChaseInvoice', parentId: 'sl1' },
+    { id: 'sl2', type: 'slice', label: 'Chase overdue', parentId: 'agg1' },
+    { id: 'auto1', type: 'automation', label: 'ChaseOverdue', parentId: 'sl2', every: '0 9 * * 1-5' },
+    { id: 'cmd2', type: 'command', label: 'SendReminder', parentId: 'sl2' },
+  ];
+}
+
 const CHILD_IDS = ['trg1', 'trans1', 'auto1', 'cmd1', 'evt1', 'view1'];
 
 function boxesOf(positions, ids) {
@@ -191,6 +206,14 @@ describe('a slice stacked top to bottom', () => {
     });
   });
 
+  describe('beside another slice', () => {
+    it('keeps the command under an automation level with the command under a trigger', () => {
+      const positions = layOut(commandsUnderATriggerAndAnAutomation());
+
+      expect(positions.cmd2.y).toBe(positions.cmd1.y);
+    });
+  });
+
   describe('declaring neither an automation nor a translation', () => {
     it('stacks the trigger, then the command, then the event, then the view, leaving no band where the row would sit', () => {
       const positions = layOut(sliceWithoutProcessors());
@@ -200,9 +223,7 @@ describe('a slice stacked top to bottom', () => {
       expect(idsByY(positions, ['view1', 'evt1', 'cmd1', 'trg1'])).toEqual(['trg1', 'cmd1', 'evt1', 'view1']);
       expect(plain[0]).toBe(plain[1]);
       expect(plain[1]).toBe(plain[2]);
-      // The row holds an automation, so it is 24px taller than a block, to stack
-      // the gear, the name and the cadence.
-      expect(withRow).toEqual([plain[0], plain[0] + 24]);
+      expect(withRow).toEqual([plain[0], plain[0]]);
     });
   });
 });
