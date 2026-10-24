@@ -19,7 +19,8 @@ func ExportEventFlowMermaid(model *ast.Model, _ Style) ([]byte, error) {
 }
 
 // ExportEventFlowMermaidNoIcons writes the same flow for a renderer that loads
-// no icon set, such as GitHub's: each automation is a purple box.
+// no icon set, such as GitHub's: each automation is a box in the colour of the
+// gear it stands for.
 func ExportEventFlowMermaidNoIcons(model *ast.Model, _ Style) ([]byte, error) {
 	return exportEventFlowMermaid(model, mermaidAutomationBox)
 }
@@ -48,7 +49,7 @@ var mermaidAutomationBox = mermaidAutomationDrawing{
 	shape: func(label string) string {
 		return `["` + label + `"]`
 	},
-	classDef: "    classDef automation fill:#E1D5E7,stroke:#9673A6,color:#16201B\n",
+	classDef: "    classDef automation fill:#16201B,stroke:#16201B,color:#FFFFFF\n",
 }
 
 func exportEventFlowMermaid(model *ast.Model, automation mermaidAutomationDrawing) ([]byte, error) {
@@ -293,8 +294,8 @@ const mermaidFlowIconNotes = `%% Each automation is the mdi:cog icon, which the 
 %% ---
 `
 
-const mermaidFlowBoxNotes = `%% Each automation is a purple box, so no icon set has to load, which GitHub
-%% cannot do.
+const mermaidFlowBoxNotes = `%% Each automation is a box in the colour of the gear, so no icon set has to
+%% load, which GitHub cannot do.
 %% The colours are the light theme, Mermaid's own theme carrying the dark one.
 %% ---
 `

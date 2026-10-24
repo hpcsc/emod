@@ -82,6 +82,12 @@ func TestEventFlowPalette(t *testing.T) {
 			require.Equal(t, documented["Automation box"].lightStroke, classes["automation"]["stroke"])
 		})
 
+		t.Run("paints the automation box of the file with no icons in the colour of the gear it stands for", func(t *testing.T) {
+			documented := documentedEventFlowPalette(t)
+
+			require.Equal(t, documented["Automation gear"].lightFill, documented["Automation box"].lightFill)
+		})
+
 		t.Run("restyles a refusal's arrow in the colour the reference documents", func(t *testing.T) {
 			documented := documentedEventFlowPalette(t)
 

@@ -865,14 +865,15 @@ outside a browser resolves no custom property and paints what it cannot resolve
 black. The two Mermaid formats paint the light column of the same table in
 their `classDef` lines, Mermaid's own theme carrying the dark one.
 `--format event-flow-mermaid-no-icons` draws each automation as a box in place
-of the gear icon, and it is the only format that paints the automation box.
+of the gear icon, and it is the only format that paints the automation box. The
+box takes the colour of the gear, and the name in it is white.
 
 | Element               | Light fill | Light stroke | Dark fill | Dark stroke |
 |-----------------------|------------|--------------|-----------|-------------|
 | Event pill            | #FFE0C0    | #B44E12      | #40260F   | #F2A868     |
 | Event nothing reads   | #FFE0C0    | #A33A2A      | #40260F   | #E88C78     |
 | Automation gear       | #16201B    | —            | #E2E9E5   | —           |
-| Automation box        | #E1D5E7    | #9673A6      | —         | —           |
+| Automation box        | #16201B    | #16201B      | —         | —           |
 | Origin box            | #ECEFED    | #5A6861      | #1E2723   | #93A199     |
 | Invariant refusing it | #FFFFFF    | #A33A2A      | #16201B   | #E88C78     |
 | Arrow                 | —          | #16201B      | —         | #E2E9E5     |

@@ -253,7 +253,8 @@ Its gear is the `mdi:cog` icon, with the automation's name under it. Mermaid
 draws an icon only when the renderer loads its icon set, so render the file with
 `mmdc --iconPacks @iconify-json/mdi`, which fetches the set from unpkg.com.
 GitHub loads no icon set. For GitHub, `--format event-flow-mermaid-no-icons`
-writes the same flow with each automation drawn as a purple box.
+writes the same flow with each automation drawn as a box in the colour of the
+gear.
 
 ### Export
 

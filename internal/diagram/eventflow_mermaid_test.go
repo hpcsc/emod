@@ -91,13 +91,13 @@ func TestExportEventFlowMermaid(t *testing.T) {
 	})
 
 	t.Run("no icons", func(t *testing.T) {
-		t.Run("an automation is a purple box holding its name and its schedule, with no icon", func(t *testing.T) {
+		t.Run("an automation is a dark box holding its name and its schedule in white, with no icon", func(t *testing.T) {
 			output := mermaidFlowNoIconsOf(t, everyConstructModel(t))
 
 			require.Contains(t, output, `    RemindOnDueDate["RemindOnDueDate"]`)
 			require.Contains(t, output, `    RecallOverdueCopy["RecallOverdueCopy<br/>every #quot;15m#quot;"]`)
 			require.Contains(t, output, "    class RemindOnDueDate,RecallOverdueCopy,ExternalDeskBookingImport automation")
-			require.Contains(t, output, "    classDef automation fill:#E1D5E7,stroke:#9673A6,")
+			require.Contains(t, output, "    classDef automation fill:#16201B,stroke:#16201B,color:#FFFFFF")
 			require.NotContains(t, output, "icon:")
 		})
 
