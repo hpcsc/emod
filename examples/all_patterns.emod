@@ -111,6 +111,11 @@ context "Reservations" {
     slice "Check Out Guest" {
       description = "A guest settles up and leaves"
 
+      trigger "Check Out Screen" {
+        description = "The screen where a guest settles the bill and leaves"
+        actor       = Guest
+      }
+
       command "CheckOutGuest" {
         description = "Ask the hotel to close a stay and free its room"
 
