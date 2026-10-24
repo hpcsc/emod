@@ -261,7 +261,7 @@ Stories are listed in recommended implementation order: prove the runtime seam f
 ## Open Questions
 
 1. **What happens to comments and formatting when a diagram edit rewrites the source (US-011)?** Turning a diagram back into text may not preserve hand-written comments or layout. If it cannot, the fallback is to warn before the first diagram edit on a file that has comments — but that needs deciding before US-011 starts.
-2. **Should the app expose the CLI's other outputs** — `export -f json` / `-f cue`, draw.io and SVG diagrams — through native save dialogs? Not currently storied; it is a natural fit once native saving exists.
+2. **Should the app expose the CLI's other outputs** — `export -f json` / `-f cue`, SVG diagrams — through native save dialogs? Not currently storied; it is a natural fit once native saving exists.
 3. **Where do recent files, window geometry, and preferences live?** A config location shared with the CLI, or a desktop-only one.
 4. **Is there a Windows machine available to verify US-016?** If not, that artifact ships built-but-unverified, and the story should say so rather than imply it was tested.
 5. **Does US-013 survive US-009?** File watching assumes editing happens elsewhere. If the in-app source panel becomes good enough, external editing may stop being the common case.

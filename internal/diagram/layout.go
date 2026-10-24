@@ -73,8 +73,6 @@ const (
 	laneBottomInset  = 4
 
 	laneHeight = laneHeaderHeight + laneRowInset + boxHeight + reactorGap + automationHeight + laneBottomInset
-
-	waypointMargin = 40
 )
 
 // Color constants for element types.
@@ -92,9 +90,6 @@ const (
 	fillAutomation    = "#16201b"
 	fillTranslation   = "#f5f5f5"
 	strokeTranslation = "#666666"
-	strokePurpleUp    = "#9B59B6"
-	strokeGreenUp     = "#82b366"
-	strokeStandard    = "#333333"
 
 	// A rejection badge is not an element type and holds no palette entry of its
 	// own; these name what it paints so it can be repainted apart from the six.
@@ -182,8 +177,9 @@ func eventRowItems(s *ast.Slice) int {
 	return len(declaredEvents(s)) + len(s.Rejections)
 }
 
-// copyMeasureFontSize is draw.io's default font size, the larger of the sizes
-// the two picture formats draw an event's label at.
+// copyMeasureFontSize is the size a copy's label is measured at. It is 1 px
+// above the 11 px the SVG draws an event's label at, so the box is measured a
+// little wider than its text.
 const copyMeasureFontSize = 12
 
 // copyLabelPadding keeps the longest line of a copy clear of its outline.
@@ -297,16 +293,6 @@ func collectTagKeys(entries []sliceEntry) []string {
 	}
 	sort.Strings(keys)
 	return keys
-}
-
-// hasTranslationEvents reports whether a slice has translation events.
-func hasTranslationEvents(s *ast.Slice) bool {
-	for _, tr := range s.Translations {
-		if tr.Event != nil && tr.Event.Name != "" {
-			return true
-		}
-	}
-	return false
 }
 
 // laneRowY is where a lane's row of boxes starts, below the strip carrying the

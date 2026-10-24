@@ -354,7 +354,7 @@ slice "<name>" {
 `subscribes` references event names declared **anywhere in the model** — in any slice, under any aggregate or context, the same scope an automation's `reads` resolves in (see [Cross-References](#11-cross-references)).
 
 - **`view/never-read` asks who acts on it:** the rule reports at warning severity when no `reads` anywhere in the model names the view. A view takes one of two legitimate shapes: a trigger reads it, or a processor reads it as its todo list. The rule fires only once the model states at least one `reads`. Run `emod lint --explain view/never-read` for the full description.
-- **The drawn diagrams copy the events of a view that reads far:** when a view subscribes to more than three events that other slices declare, `emod diagram --format drawio` and `--format svg` draw each of those events again in the view's own slice, and the view's arrows start at these copies. A copy has a dashed outline in the event's stroke, a white fill, and a second line `from <slice>` that names the slice that declares the event. A slice draws one copy of an event, however many of its views subscribe to it. At three events or fewer, the arrows start at the events themselves. The Mermaid and ASCII formats draw no subscription arrows, so they draw no copies.
+- **The drawn diagrams copy the events of a view that reads far:** when a view subscribes to more than three events that other slices declare, `emod diagram --format svg` draws each of those events again in the view's own slice, and the view's arrows start at these copies. A copy has a dashed outline in the event's stroke, a white fill, and a second line `from <slice>` that names the slice that declares the event. A slice draws one copy of an event, however many of its views subscribe to it. At three events or fewer, the arrows start at the events themselves. The Mermaid and ASCII formats draw no subscription arrows, so they draw no copies.
 
 ### Automation Pattern
 
@@ -404,7 +404,7 @@ reservation.emod:41: automation block cannot declare after with every: an every 
 
 A schedule is absolute and names no occurrence to count from, while a delay is measured from an event a schedule-driven automation never receives.
 
-- **The drawn diagrams label the edge, not the gear:** `emod diagram --format drawio` and `--format svg` write `after "<duration>"` on the arrow from the `on` event to the automation, and reserve the clock badge under the automation's gear for an `every` schedule.
+- **The drawn diagrams label the edge, not the gear:** `emod diagram --format svg` writes `after "<duration>"` on the arrow from the `on` event to the automation, and reserve the clock badge under the automation's gear for an `every` schedule.
 - **The text formats state it beside the activation:** `emod diagram --format ascii` prints `(<EventName>) after "<duration>" -> ⚙ <Name> -> [<CommandName>]`, and `--format mermaid` carries the delay inside the automation's own label.
 
 ### Translation Pattern
@@ -533,7 +533,7 @@ Any other declared type is a domain type, opaque to the model, and accepts any l
 
 Specs and the payloads they state are carried through `emod fmt`, the JSON and CUE exports, and the embedded schema. A number reaches both exports as a number and a string as a string, digit for digit.
 
-- **The drawn diagrams show them as a card, on request:** `emod diagram --specs` draws a slice's specs as a Given-When-Then card under that slice, in a `Specs` band below the lowest lane, for the `drawio` and `svg` formats.
+- **The drawn diagrams show them as a card, on request:** `emod diagram --specs` draws a slice's specs as a Given-When-Then card under that slice, in a `Specs` band below the lowest lane, for the `svg` format.
 - **The flag is off by default and refused where nothing draws a card:** `emod diagram --specs` with `--format mermaid`, `--format ascii` or `--serve` exits 1 naming the flag and the two formats that do draw one.
 
 ---
@@ -557,7 +557,7 @@ Flow declaration is optional for patterns where the wiring is implicit: an autom
 
 The invariant name resolves against the enclosing aggregate, or for a slice declared directly on a `mode dcb` context, that context. The command name is left unchecked.
 
-- **The drawn diagrams show it as a dashed edge into a rejection badge:** `emod diagram --format drawio` and `--format svg` draw a dashed arrow from the command to a badge carrying the invariant's name. The badge carries the invariant's statement as a tooltip.
+- **The drawn diagrams show it as a dashed edge into a rejection badge:** `emod diagram --format svg` draws a dashed arrow from the command to a badge carrying the invariant's name. The badge carries the invariant's statement as a tooltip.
 - **The ASCII preview states the relation as a line:** `emod diagram --format ascii` prints `[<CommandName>] -> ✗ <invariantName>`. The `mermaid` format draws no arrows at all.
 - **`emod lint` asks for the scenario:** `flow/rejection-without-spec` reports at info severity when the slice holding the entry states no spec exercising it.
 
@@ -785,8 +785,8 @@ context "Reservations" {
 - **Position inside the body is free:** the parser accepts `description` before or after the construct's other entries.
 - **`emod fmt` moves it to the first line of the body**, ahead of the construct's other attributes and its nested blocks.
 - **Exports carry the text:** `emod export --format json` and `emod export --format cue` emit a `description` key on the model, on each actor and on each described construct.
-- **Diagrams surface it on the shape:** `emod diagram --format drawio` attaches the description to the construct's shape as a tooltip, and `--format svg` emits it as a `<title>` element.
-- **A construct without a shape stays off the diagrams:** `model`, `actor`, `aggregate` and `slice` own no shape in either renderer. The `mermaid` and `ascii` formats carry no descriptions at all.
+- **Diagrams surface it on the shape:** `emod diagram --format svg` emits the description as a `<title>` element on the construct's shape.
+- **A construct without a shape stays off the diagrams:** `model`, `actor`, `aggregate` and `slice` own no shape in the SVG. The `mermaid` and `ascii` formats carry no descriptions at all.
 - **The glossary reads it as the definition:** `emod glossary` prints the description beneath the name it defines.
 - **A construct that defines no term stays out of the glossary:** `slice`, `trigger`, `automation` and `translation` contribute no term of their own.
 
@@ -846,7 +846,7 @@ The decoder reads what HCL parsed rather than evaluating it: `hcl.AbsTraversalFo
 
 ## 13. Diagram Palette
 
-The renderers that draw the whole model use one palette for element types. The SVG, draw.io, and web viewer renderers all draw the same element type with the same fill and stroke, and the DSL reference itself is the source of truth for those values. An automation is drawn as a gear with no box and no stroke, and its name is written under the gear in the gear's fill. `emod diagram --format event-flow`, `--format event-flow-mermaid` and `--format event-flow-mermaid-no-icons` draw a different picture and paint it in a palette of their own, listed below.
+The renderers that draw the whole model use one palette for element types. The SVG and web viewer renderers both draw the same element type with the same fill and stroke, and the DSL reference itself is the source of truth for those values. An automation is drawn as a gear with no box and no stroke, and its name is written under the gear in the gear's fill. `emod diagram --format event-flow`, `--format event-flow-mermaid` and `--format event-flow-mermaid-no-icons` draw a different picture and paint it in a palette of their own, listed below.
 
 | Element     | Fill      | Stroke    | Notes                                   |
 |-------------|-----------|-----------|-----------------------------------------|

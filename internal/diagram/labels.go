@@ -102,14 +102,13 @@ func specOutcomeLine(then ast.ThenClause) string {
 }
 
 // specCardLineBudget is how many characters a card's line may hold, standing in
-// for a text measurement neither format exposes. A card is sliceWidth-20 = 260px
+// for a text measurement the SVG does not expose. A card is sliceWidth-20 = 260px
 // and its text is drawn at specCardFontSize, where the widest mix a card states
 // measures about 5.7px per character — a line of CamelCase construct names, not
 // the prose of a scenario's own name, which runs nearer 4.6px. 44 therefore
 // occupies about 250px at the wide end and leaves the card a margin. Calibrate
-// against the wide end, not the average: a line past the card is drawn outside
-// it by the SVG writer, which never wraps, and wrapped into more lines than the
-// card was measured for by draw.io, which does. The figures come from Helvetica;
+// against the wide end, not the average: the SVG writer never wraps, so a line
+// past the card is drawn outside it. The figures come from Helvetica;
 // a viewer resolving sans-serif to a wider face has less margin, which is the
 // other reason the budget is short of the arithmetic.
 const specCardLineBudget = 44

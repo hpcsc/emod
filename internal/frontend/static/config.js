@@ -53,7 +53,7 @@ export const nodePalette = {
 };
 
 // A copy of an event is no element type of its own: it takes the event's stroke,
-// and this fill and dash, which the SVG and draw.io exports draw it with too.
+// and this fill and dash, which the SVG export draws it with too.
 export const eventCopyStyle = { fill: '#ffffff', dash: '5,3' };
 
 // The gear an automation is drawn as, in a 30px square centred on the origin.

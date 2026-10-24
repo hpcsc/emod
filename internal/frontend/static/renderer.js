@@ -577,7 +577,7 @@ function arrowHandle(end, point, edge, edgeId) {
 }
 
 // The delay an automation fires after is drawn on the arrow from the event it is
-// measured from, matching where the SVG and draw.io exports put it. It rides on
+// measured from, matching where the SVG export puts it. It rides on
 // the automation's node rather than on the edge, so an arrow the user redraws
 // still finds it; the clock badge on the box keeps meaning `every` alone.
 function edgeLabelText(store, edge) {

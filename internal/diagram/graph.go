@@ -48,8 +48,7 @@ type Edge struct {
 	From string
 	To   string
 	// Label is the text a renderer paints on the arrow, empty for an arrow that
-	// carries none. It is derived here rather than in each format so the two
-	// picture formats cannot disagree about what an arrow says.
+	// carries none.
 	Label string
 }
 

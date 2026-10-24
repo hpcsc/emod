@@ -388,3 +388,51 @@ func exportMermaidDCB(b *strings.Builder, modelName string, entries []sliceEntry
 		}
 	}
 }
+
+// formatDecidesOnAnnotation formats a command's decides_on clause for display.
+func formatDecidesOnAnnotation(d *ast.DecidesOnClause) string {
+	if d == nil || len(d.Events) == 0 {
+		return ""
+	}
+	var sb strings.Builder
+	sb.WriteString("decides_on: ")
+	sb.WriteString(strings.Join(d.Events, ", "))
+	if d.Predicate != nil {
+		sb.WriteString(" where ")
+		sb.WriteString(formatPredicateExpr(d.Predicate))
+	}
+	return sb.String()
+}
+
+// formatPredicateExpr formats a predicate expression for display.
+func formatPredicateExpr(p ast.PredicateExpr) string {
+	if p == nil {
+		return ""
+	}
+	switch expr := p.(type) {
+	case *ast.TagPredicate:
+		return fmt.Sprintf("tag(%s %s %s)", expr.Field, expr.Operator, expr.Value)
+	case *ast.LogicalExpr:
+		return fmt.Sprintf("(%s %s %s)", formatPredicateExpr(expr.Left), expr.Operator, formatPredicateExpr(expr.Right))
+	case *ast.NotExpr:
+		return fmt.Sprintf("not(%s)", formatPredicateExpr(expr.Expr))
+	default:
+		return ""
+	}
+}
+
+// formatEventTagBadges formats event tags as badge indicators for display.
+func formatEventTagBadges(tags []ast.TagEntry) string {
+	if len(tags) == 0 {
+		return ""
+	}
+	var parts []string
+	for _, tag := range tags {
+		if tag.FieldRef != "" {
+			parts = append(parts, fmt.Sprintf("[%s: %s]", tag.Key, tag.FieldRef))
+		} else {
+			parts = append(parts, fmt.Sprintf("[%s]", tag.Key))
+		}
+	}
+	return strings.Join(parts, " ")
+}

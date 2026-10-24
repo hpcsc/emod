@@ -241,8 +241,8 @@ Notes on fidelity to existing behavior:
   `RunValidate`; `emod_lint` runs only `linter.Lint` after a clean parse, matching
   `RunLint`. Both return the same `{file,line,rule,severity,message}` records the
   CLI's `--format json` already emits.
-- `emod_diagram` deliberately omits `drawio` file output and the `--serve` viewer —
-  those write files / start servers. It returns the inline-renderable formats
+- `emod_diagram` deliberately omits the `--serve` viewer, which starts a server.
+  It returns the inline-renderable formats
   (`mermaid`, `ascii`, `svg`) the model can embed or reason over. `style` accepts
   the same `auto|projected|dcb` values as `diagram.ParseStyle`.
 - Exit codes do not cross the MCP boundary. Severity is conveyed *in* the result
@@ -452,9 +452,6 @@ only if a non-local host needs it.
   implementation time, the fallback is to frame MCP JSON-RPC directly on top of
   the `internal/lsp/transport.go` machinery, which already does Content-Length
   framing — at the cost of owning the protocol envelope ourselves.
-- **Should `emod_diagram` ever return `drawio`?** drawio is XML the model can't
-  render inline but the user might want saved. Return it as text, or keep diagram
-  file output strictly CLI-only? Current proposal: text formats only over MCP.
 - **One `emod_check` super-tool vs. separate `validate`/`lint`?** A single tool is
   fewer round-trips for the model; separate tools match the CLI and let a host
   call just the linter. Current proposal keeps them separate for CLI parity.

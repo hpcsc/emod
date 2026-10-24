@@ -133,8 +133,8 @@ func NewApp() *urfave.Command {
 				Flags: []urfave.Flag{
 					&urfave.StringFlag{
 						Name:  "format",
-						Usage: "Output format (drawio|mermaid|svg|ascii|event-flow|event-flow-mermaid|event-flow-mermaid-no-icons)",
-						Value: "drawio",
+						Usage: "Output format (svg|mermaid|ascii|event-flow|event-flow-mermaid|event-flow-mermaid-no-icons)",
+						Value: "svg",
 					},
 					&urfave.StringFlag{
 						Name:  "style",
@@ -151,7 +151,7 @@ func NewApp() *urfave.Command {
 					},
 					&urfave.BoolFlag{
 						Name:  "specs",
-						Usage: "Draw each slice's specs as a Given-When-Then card (drawio and svg only)",
+						Usage: "Draw each slice's specs as a Given-When-Then card (svg only)",
 					},
 				},
 				Action: func(ctx context.Context, cmd *urfave.Command) error {

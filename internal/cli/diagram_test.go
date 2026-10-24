@@ -58,71 +58,8 @@ context "Orders" {
 `
 
 func TestDiagram(t *testing.T) {
-	t.Run("valid file uses default output path", func(t *testing.T) {
-		path := writeTemp(t, "valid.emod", validEmod)
-		defaultOutput := path[:len(path)-len(".emod")] + ".drawio"
-
-		err := cli.RunDiagram(path, "", "drawio", diagram.StyleAuto, false)
-		require.NoError(t, err)
-
-		_, statErr := os.Stat(defaultOutput)
-		require.NoError(t, statErr, "expected .drawio file to exist at default path")
-		_ = os.Remove(defaultOutput)
-	})
-
-	t.Run("valid file uses custom -o output path", func(t *testing.T) {
-		path := writeTemp(t, "valid.emod", validEmod)
-		customOutput := filepath.Join(t.TempDir(), "custom.drawio")
-
-		err := cli.RunDiagram(path, customOutput, "drawio", diagram.StyleAuto, false)
-		require.NoError(t, err)
-
-		_, statErr := os.Stat(customOutput)
-		require.NoError(t, statErr, "expected .drawio file to exist at custom path")
-	})
-
-	t.Run("validation errors produce no .drawio file and exit code 2", func(t *testing.T) {
-		path := writeTemp(t, "invalid.emod", invalidEmod)
-		defaultOutput := path[:len(path)-len(".emod")] + ".drawio"
-
-		var err error
-		stderr := captureStderr(t, func() {
-			err = cli.RunDiagram(path, "", "drawio", diagram.StyleAuto, false)
-		})
-
-		require.Error(t, err)
-		var lintErr *cli.LintError
-		require.True(t, errors.As(err, &lintErr))
-		require.Equal(t, 2, lintErr.ExitCode)
-
-		_, statErr := os.Stat(defaultOutput)
-		require.True(t, os.IsNotExist(statErr), "expected no .drawio file to be created")
-		require.Contains(t, stderr, path)
-		require.Contains(t, stderr, ":1:")
-	})
-
-	t.Run("lint warnings produce .drawio with exit code 1", func(t *testing.T) {
-		path := writeTemp(t, "warnings.emod", warningEmod)
-		defaultOutput := path[:len(path)-len(".emod")] + ".drawio"
-
-		var err error
-		stderr := captureStderr(t, func() {
-			err = cli.RunDiagram(path, "", "drawio", diagram.StyleAuto, false)
-		})
-
-		require.Error(t, err)
-		var lintErr *cli.LintError
-		require.True(t, errors.As(err, &lintErr))
-		require.Equal(t, 1, lintErr.ExitCode)
-
-		_, statErr := os.Stat(defaultOutput)
-		require.NoError(t, statErr, "expected .drawio to be created despite warnings")
-		require.Contains(t, stderr, "state-obsession")
-		_ = os.Remove(defaultOutput)
-	})
-
 	t.Run("missing file argument returns error", func(t *testing.T) {
-		err := cli.RunDiagram("", "", "drawio", diagram.StyleAuto, false)
+		err := cli.RunDiagram("", "", "svg", diagram.StyleAuto, false)
 
 		require.ErrorIs(t, err, cli.ErrMissingFileArgument)
 	})
@@ -130,38 +67,10 @@ func TestDiagram(t *testing.T) {
 	t.Run("nonexistent file returns error naming the file", func(t *testing.T) {
 		missing := filepath.Join(t.TempDir(), "nonexistent.emod")
 
-		err := cli.RunDiagram(missing, "", "drawio", diagram.StyleAuto, false)
+		err := cli.RunDiagram(missing, "", "svg", diagram.StyleAuto, false)
 
 		require.Error(t, err)
 		require.Contains(t, err.Error(), missing)
-	})
-
-	t.Run("output file is well-formed draw.io XML", func(t *testing.T) {
-		path := writeTemp(t, "valid.emod", validEmod)
-		defaultOutput := path[:len(path)-len(".emod")] + ".drawio"
-		defer os.Remove(defaultOutput)
-
-		err := cli.RunDiagram(path, "", "drawio", diagram.StyleAuto, false)
-		require.NoError(t, err)
-
-		content, err := os.ReadFile(defaultOutput)
-		require.NoError(t, err)
-
-		xml := string(content)
-		require.True(t, strings.HasPrefix(xml, `<?xml version="1.0"`), "expected XML declaration")
-		require.Contains(t, xml, "<mxfile")
-		require.Contains(t, xml, "</mxfile>")
-	})
-
-	t.Run("custom -o path with nested directories creates the directory", func(t *testing.T) {
-		path := writeTemp(t, "valid.emod", validEmod)
-		customOutput := filepath.Join(t.TempDir(), "nested", "dir", "out.drawio")
-
-		err := cli.RunDiagram(path, customOutput, "drawio", diagram.StyleAuto, false)
-		require.NoError(t, err)
-
-		_, statErr := os.Stat(customOutput)
-		require.NoError(t, statErr, "expected .drawio file to be created in nested directory")
 	})
 
 	t.Run("mermaid output is printed to stdout and starts with eventmodeling", func(t *testing.T) {
@@ -251,7 +160,6 @@ func TestDiagram(t *testing.T) {
 
 		err := cli.RunDiagram(path, "", "bogus", diagram.StyleAuto, false)
 		require.ErrorIs(t, err, cli.ErrUnsupportedFormat)
-		require.Contains(t, err.Error(), "drawio")
 		require.Contains(t, err.Error(), "mermaid")
 		require.Contains(t, err.Error(), "svg")
 		require.Contains(t, err.Error(), "ascii")
@@ -419,16 +327,6 @@ func TestDiagram(t *testing.T) {
 	})
 
 	t.Run("spec cards", func(t *testing.T) {
-		t.Run("writes a draw.io file naming every scenario the model states", func(t *testing.T) {
-			path := writeTemp(t, "specs.emod", specStatingEmod(t))
-			output := path[:len(path)-len(".emod")] + ".drawio"
-			defer os.Remove(output)
-
-			require.NoError(t, cli.RunDiagram(path, "", "drawio", diagram.StyleAuto, true))
-
-			requireNamesEveryScenario(t, readFileContent(t, output))
-		})
-
 		t.Run("writes an svg naming every scenario the model states", func(t *testing.T) {
 			path := writeTemp(t, "specs.emod", specStatingEmod(t))
 			output := path[:len(path)-len(".emod")] + ".svg"
@@ -444,7 +342,7 @@ func TestDiagram(t *testing.T) {
 			require.NotEqual(t, stated, unstated,
 				"the twin has to lose the specs, or the comparison below says nothing")
 
-			for _, format := range []string{"drawio", "svg", "mermaid", "ascii", "event-flow", "event-flow-mermaid", "event-flow-mermaid-no-icons"} {
+			for _, format := range []string{"svg", "mermaid", "ascii", "event-flow", "event-flow-mermaid", "event-flow-mermaid-no-icons"} {
 				t.Run(format, func(t *testing.T) {
 					require.Equal(t,
 						diagramWritten(t, unstated, format),
@@ -470,7 +368,6 @@ func TestDiagram(t *testing.T) {
 				require.True(t, errors.As(err, &lintErr))
 				require.Equal(t, 1, lintErr.ExitCode)
 				require.Contains(t, err.Error(), "--specs")
-				require.Contains(t, err.Error(), "drawio")
 				require.Contains(t, err.Error(), "svg")
 				require.Contains(t, err.Error(), format)
 
@@ -507,7 +404,6 @@ func TestDiagram(t *testing.T) {
 			// reportExitError prints a LintError's wording and returns an
 			// exit code carrying none, so stderr is where the refusal reads.
 			require.Contains(t, stderr, "--specs")
-			require.Contains(t, stderr, "drawio")
 			require.Contains(t, stderr, "svg")
 			require.Contains(t, stderr, "--serve")
 		})
@@ -534,11 +430,11 @@ func TestDiagram(t *testing.T) {
 
 			t.Run(fmt.Sprintf("a model the linter warns about still writes its diagram and exits 1, specs=%t", specs), func(t *testing.T) {
 				path := writeTemp(t, "warnings.emod", warningEmod)
-				output := path[:len(path)-len(".emod")] + ".drawio"
+				output := path[:len(path)-len(".emod")] + ".svg"
 
 				var err error
 				captureStderr(t, func() {
-					err = cli.RunDiagram(path, "", "drawio", diagram.StyleAuto, specs)
+					err = cli.RunDiagram(path, "", "svg", diagram.StyleAuto, specs)
 				})
 
 				var lintErr *cli.LintError
@@ -551,7 +447,7 @@ func TestDiagram(t *testing.T) {
 
 		t.Run("the flag reaches the exporters through the command line, not only through RunDiagram", func(t *testing.T) {
 			path := writeTemp(t, "specs.emod", specStatingEmod(t))
-			output := path[:len(path)-len(".emod")] + ".drawio"
+			output := path[:len(path)-len(".emod")] + ".svg"
 			defer os.Remove(output)
 
 			// Driving the real command line is what pins the argument the
@@ -786,21 +682,15 @@ var (
 	diagramWhitespace = regexp.MustCompile(`\s+`)
 )
 
-// requireNamesEveryScenario checks a written diagram names every scenario the
-// fixture states. Markup, escaping and the line break each format inserts all
-// become spaces first, so a name the writer had to wrap still reads as written.
+// requireNamesEveryScenario checks a written SVG names every scenario the
+// fixture states. SVG draws a card's text between tags, one tspan per line, so
+// markup and escaping become spaces first, and a name the writer had to wrap
+// still reads as written.
 func requireNamesEveryScenario(t *testing.T, written string) {
 	t.Helper()
 
-	text := written
-	if strings.Contains(text, "<svg") {
-		// SVG draws a card's text between tags, one tspan per line, so the tags
-		// have to go for the lines to read as one string. draw.io writes the
-		// same text inside an attribute, where stripping tags would take it too.
-		text = diagramMarkup.ReplaceAllString(text, " ")
-	}
-	text = html.UnescapeString(text)
-	text = diagramWhitespace.ReplaceAllString(strings.ReplaceAll(text, `\n`, " "), " ")
+	text := html.UnescapeString(diagramMarkup.ReplaceAllString(written, " "))
+	text = diagramWhitespace.ReplaceAllString(text, " ")
 
 	for _, name := range test.SlicePatternLibraryLendingSpecNames {
 		require.Contains(t, text, name, "the diagram has to name every scenario, wrapped or not")
@@ -822,7 +712,7 @@ func requireNoDiagramWritten(t *testing.T, modelPath string) {
 	t.Helper()
 
 	stem := modelPath[:len(modelPath)-len(".emod")]
-	for _, extension := range []string{".drawio", ".svg", ".event-flow.svg"} {
+	for _, extension := range []string{".svg", ".event-flow.svg"} {
 		require.NoFileExists(t, stem+extension)
 	}
 }

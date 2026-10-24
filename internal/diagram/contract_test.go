@@ -3,12 +3,8 @@
 package diagram_test
 
 import (
-	"bytes"
-	"compress/flate"
-	"encoding/base64"
 	"encoding/xml"
 	"fmt"
-	"io"
 	"maps"
 	"math"
 	"os"
@@ -27,7 +23,7 @@ import (
 
 // Every exporter turns the same AST into a different rendering of it. The
 // behaviour they share — nothing is dropped, order is preserved, output is
-// well-formed — belongs to all four, so it is asserted once here against each
+// well-formed — belongs to all three, so it is asserted once here against each
 // of them rather than copied into every format's file.
 type exporter struct {
 	name string
@@ -149,41 +145,19 @@ func stackedTranslationsModel() *ast.Model {
 	}
 }
 
-// exportSVGDefault and exportDrawioDefault render what the two picture formats
-// draw when given no option, so the contract the four formats share stays one
-// signature: mermaid and ASCII draw no card and take no option, and the harness
-// must not be able to hand them one.
+// exportSVGDefault renders what the SVG draws when given no option, so the
+// contract the three formats share stays one signature: mermaid and ASCII draw
+// no card and take no option, and the harness must not be able to hand them one.
 func exportSVGDefault(model *ast.Model, style diagram.Style) ([]byte, error) {
 	return diagram.ExportSVG(model, style)
-}
-
-func exportDrawioDefault(model *ast.Model, style diagram.Style) ([]byte, error) {
-	return diagram.ExportDrawio(model, style)
 }
 
 func exportSVGWithSpecs(model *ast.Model, style diagram.Style) ([]byte, error) {
 	return diagram.ExportSVG(model, style, diagram.WithSpecs())
 }
 
-func exportDrawioWithSpecs(model *ast.Model, style diagram.Style) ([]byte, error) {
-	return diagram.ExportDrawio(model, style, diagram.WithSpecs())
-}
-
 func exporters() []exporter {
 	return []exporter{
-		{
-			name:              "drawio",
-			arrowTextTrace:    regexp.MustCompile(`target="\d+" value="`),
-			fillOfLabel:       drawioFillOfLabel,
-			strokeOfLabel:     drawioStrokeOfLabel,
-			countConnections:  func(output string) int { return strings.Count(output, `edge="1"`) },
-			boxes:             drawioBoxes,
-			drawnAsGear:       drawioDrawnAsGear,
-			connections:       drawioEdges,
-			export:            exportDrawioDefault,
-			exportWithSpecs:   exportDrawioWithSpecs,
-			requireWellFormed: requireValidXML,
-		},
 		{
 			name:              "svg",
 			arrowTextTrace:    regexp.MustCompile(`class="edge-label"`),
@@ -212,44 +186,10 @@ func exporters() []exporter {
 }
 
 var (
-	drawioStyleFill   = regexp.MustCompile(`fillColor=(#[0-9a-fA-F]{6})`)
-	drawioStyleStroke = regexp.MustCompile(`strokeColor=(#[0-9a-fA-F]{6})`)
-	svgShapeStart     = regexp.MustCompile(`^<(rect|use)\b`)
-	svgShapeFill      = regexp.MustCompile(`\bfill="(#[0-9a-fA-F]{6})"`)
-	svgShapeStroke    = regexp.MustCompile(`\bstroke="(#[0-9a-fA-F]{6})"`)
+	svgShapeStart  = regexp.MustCompile(`^<(rect|use)\b`)
+	svgShapeFill   = regexp.MustCompile(`\bfill="(#[0-9a-fA-F]{6})"`)
+	svgShapeStroke = regexp.MustCompile(`\bstroke="(#[0-9a-fA-F]{6})"`)
 )
-
-// drawioFillOfLabel returns the fill of the shape whose label contains label.
-func drawioFillOfLabel(t *testing.T, output, label string) string {
-	t.Helper()
-
-	return drawioColourOfLabel(t, output, label, drawioStyleFill)
-}
-
-// drawioStrokeOfLabel returns the stroke of the shape whose label contains
-// label, or "" for a shape drawn with no stroke.
-func drawioStrokeOfLabel(t *testing.T, output, label string) string {
-	t.Helper()
-
-	return drawioColourOfLabel(t, output, label, drawioStyleStroke)
-}
-
-func drawioColourOfLabel(t *testing.T, output, label string, colour *regexp.Regexp) string {
-	t.Helper()
-
-	for _, shape := range drawioShapes(t, output) {
-		if !strings.Contains(shape.label, label) {
-			continue
-		}
-		if m := colour.FindStringSubmatch(shape.style); m != nil {
-			return strings.ToLower(m[1])
-		}
-		return ""
-	}
-
-	require.Fail(t, fmt.Sprintf("no drawio cell labelled %q in output", label))
-	return ""
-}
 
 // svgFillOfLabel returns the fill of the shape drawn immediately before the
 // text element carrying label — the shape that label sits inside or beside.
@@ -308,9 +248,8 @@ func (e exporter) runWithSpecs(t *testing.T, model *ast.Model, style diagram.Sty
 	return string(raw)
 }
 
-// specCardBoxesIn selects the scenario cards out of the boxes a picture draws.
-// Both picture formats name the card's fill in the appearance they read back —
-// `fill=` in SVG, `fillColor=` in draw.io — so one selector serves both.
+// specCardBoxesIn selects the scenario cards out of the boxes a picture draws,
+// by the card's fill in the appearance the SVG reads back.
 func specCardBoxesIn(t *testing.T, boxes []diagramBox) []diagramBox {
 	t.Helper()
 
@@ -644,7 +583,7 @@ func TestExporterContract(t *testing.T) {
 	}
 }
 
-// TestExporterSpecCards covers the card the two picture formats draw for a
+// TestExporterSpecCards covers the card the SVG draws for a
 // slice's scenarios. It is the positive sibling of "stating specs leaves the
 // picture untouched": that subtest proves the default render does not move, and
 // these prove the featured render does, and moves only by cards.
@@ -762,27 +701,6 @@ func TestExporterSpecCards(t *testing.T) {
 			})
 		})
 	}
-
-	t.Run("both picture formats state the same card text", func(t *testing.T) {
-		model := test.SlicePatternLibraryLendingModel(t)
-
-		stated := make(map[string][][]string)
-		for _, e := range exporters() {
-			if e.exportWithSpecs == nil {
-				continue
-			}
-			var cards [][]string
-			for _, card := range specCardBoxesIn(t, e.boxes(t, e.runWithSpecs(t, model, diagram.StyleAuto))) {
-				cards = append(cards, cardLines(card.label))
-			}
-			stated[e.name] = cards
-		}
-
-		require.Len(t, stated, 2, "both picture formats have to be in the comparison")
-		require.NotEmpty(t, stated["svg"], "a card has to be drawn, or the two formats agree on nothing")
-		require.Equal(t, stated["svg"], stated["drawio"],
-			"a line added to one format's card and not the other's is a card the two pictures disagree about")
-	})
 }
 
 // TestExporterTranslationEdges covers the arrow a translation implies between
@@ -1730,11 +1648,9 @@ func boxesExcept(boxes []diagramBox, names []string) []diagramBox {
 	return kept
 }
 
-// triggerScreenFraming returns the framing rectangle drawn inside a trigger box
-// for the two formats that draw shapes, and a boolean that is true only when the
-// box labelled label actually carries a screen framing. In SVG the framing is the
-// label-less rect inside the main rect; in draw.io it is the child cell whose
-// parent is the trigger cell.
+// triggerScreenFraming returns the framing rectangle drawn inside a trigger box,
+// and a boolean that is true only when the box labelled label actually carries a
+// screen framing. The framing is the label-less rect inside the main rect.
 func triggerScreenFraming(t *testing.T, e exporter, output, label string) (boxRect, bool) {
 	t.Helper()
 
@@ -1751,23 +1667,6 @@ func triggerScreenFraming(t *testing.T, e exporter, output, label string) (boxRe
 		require.NotEmpty(t, main.label, "expected a trigger shape labelled %q", label)
 		for _, shape := range shapes {
 			if shape.label == "" && shape.rect.within(main.rect) {
-				return shape.rect, true
-			}
-		}
-		return boxRect{}, false
-
-	case "drawio":
-		shapes := drawioShapes(t, output)
-		var trigger drawioShape
-		for _, shape := range shapes {
-			if shape.label == label {
-				trigger = shape
-				break
-			}
-		}
-		require.NotEmpty(t, trigger.id, "expected a drawio cell labelled %q", label)
-		for _, shape := range shapes {
-			if shape.parentID == trigger.id && shape.rect.within(trigger.rect) {
 				return shape.rect, true
 			}
 		}
@@ -1818,11 +1717,7 @@ func TestExporterTriggerScreen(t *testing.T) {
 
 			t.Run("is still distinguishable when every fill is normalised to one colour", func(t *testing.T) {
 				output := e.run(t, paletteModel(), diagram.StyleAuto)
-				if e.name == "svg" {
-					output = regexp.MustCompile(`fill="#[0-9a-fA-F]{6}"`).ReplaceAllString(output, `fill="#888888"`)
-				} else {
-					output = regexp.MustCompile(`fillColor=#[0-9a-fA-F]{6}`).ReplaceAllString(output, `fillColor=#888888`)
-				}
+				output = regexp.MustCompile(`fill="#[0-9a-fA-F]{6}"`).ReplaceAllString(output, `fill="#888888"`)
 
 				// Normalising must not break the structural distinction: the trigger
 				// still has a framing and no other element type does.
@@ -1837,29 +1732,11 @@ func TestExporterTriggerScreen(t *testing.T) {
 			t.Run("keeps the trigger tooltip and fill on the trigger's own shape", func(t *testing.T) {
 				output := e.run(t, paletteModel(), diagram.StyleAuto)
 
-				if e.name == "svg" {
-					require.Equal(t, "Where the order is placed", svgTooltipOf(t, output, "Form"))
-				} else {
-					require.Equal(t, "Where the order is placed", drawioTooltipOf(t, output, "Form"))
-				}
+				require.Equal(t, "Where the order is placed", svgTooltipOf(t, output, "Form"))
 				require.Equal(t, "#ffffff", e.fillOfLabel(t, output, "Form"))
 			})
 		})
 	}
-
-	t.Run("draws the screen bar in the same place in svg and draw.io", func(t *testing.T) {
-		bars := map[string]boxRect{}
-		for _, e := range exporters() {
-			if e.fillOfLabel == nil {
-				continue
-			}
-			bar, framed := triggerScreenFraming(t, e, e.run(t, paletteModel(), diagram.StyleAuto), "Form")
-			require.True(t, framed, "%s must draw the trigger a screen bar", e.name)
-			bars[e.name] = bar
-		}
-
-		require.Equal(t, bars["svg"], bars["drawio"])
-	})
 }
 
 // viewerNodePalette parses the node palette declared in the viewer's config.js
@@ -2002,25 +1879,11 @@ func TestExporterAutomationGear(t *testing.T) {
 		require.Equal(t, viewerGear[1], svgGearPath(t, svgOf(t, paletteModel())))
 	})
 
-	t.Run("draw.io draws the gear svg draws", func(t *testing.T) {
-		drawio, err := diagram.ExportDrawio(paletteModel(), diagram.StyleAuto)
-		require.NoError(t, err)
-
-		svgCommands, svgNumbers := svgPathSteps(t, svgGearPath(t, svgOf(t, paletteModel())))
-		drawioCommands, drawioNumbers := drawioGearSteps(t, string(drawio))
-
-		require.Equal(t, svgCommands, drawioCommands)
-		require.InDeltaSlice(t, svgNumbers, drawioNumbers, 0.01)
-	})
-
 	t.Run("a model with no automation draws no gear", func(t *testing.T) {
 		model := singleSliceModel("Lending", "Borrow Copy", command("BorrowCopy"), event("CopyBorrowed"))
-		drawio, err := diagram.ExportDrawio(model, diagram.StyleAuto)
-		require.NoError(t, err)
 
 		require.NotContains(t, svgOf(t, model), `id="gear"`,
 			"a model with no automation keeps the SVG it was drawn before automations were gears")
-		require.NotContains(t, string(drawio), "shape=stencil(")
 	})
 }
 
@@ -2033,88 +1896,6 @@ func svgGearPath(t *testing.T, output string) string {
 	require.NotNil(t, m, "the svg must define the gear it draws")
 
 	return m[1]
-}
-
-// svgPathSteps splits SVG path data into its commands and, in order, every
-// number those commands carry.
-func svgPathSteps(t *testing.T, data string) ([]string, []float64) {
-	t.Helper()
-
-	var (
-		commands []string
-		numbers  []float64
-	)
-	for _, field := range strings.Fields(data) {
-		if value, err := strconv.ParseFloat(field, 64); err == nil {
-			numbers = append(numbers, value)
-			continue
-		}
-		commands = append(commands, field)
-	}
-
-	return commands, numbers
-}
-
-var drawioStencil = regexp.MustCompile(`shape=stencil\(([^)]*)\)`)
-
-// drawioGearSteps reads the stencil draw.io draws the gear with back into the
-// steps of SVG path data, moved so the gear is centred on the origin as it is
-// in the SVG symbol.
-func drawioGearSteps(t *testing.T, output string) ([]string, []float64) {
-	t.Helper()
-
-	m := drawioStencil.FindStringSubmatch(output)
-	require.NotNil(t, m, "the automation must be drawn with a stencil")
-
-	deflated, err := base64.StdEncoding.DecodeString(m[1])
-	require.NoError(t, err)
-	inflated, err := io.ReadAll(flate.NewReader(bytes.NewReader(deflated)))
-	require.NoError(t, err)
-
-	var shape struct {
-		W          float64 `xml:"w,attr"`
-		H          float64 `xml:"h,attr"`
-		Foreground struct {
-			Path struct {
-				Steps []struct {
-					XMLName xml.Name
-					X       float64 `xml:"x,attr"`
-					Y       float64 `xml:"y,attr"`
-					Rx      float64 `xml:"rx,attr"`
-					Ry      float64 `xml:"ry,attr"`
-					Turn    float64 `xml:"x-axis-rotation,attr"`
-					Large   float64 `xml:"large-arc-flag,attr"`
-					Sweep   float64 `xml:"sweep-flag,attr"`
-				} `xml:",any"`
-			} `xml:"path"`
-		} `xml:"foreground"`
-	}
-	require.NoError(t, xml.Unmarshal(inflated, &shape))
-
-	var (
-		commands []string
-		numbers  []float64
-	)
-	for _, step := range shape.Foreground.Path.Steps {
-		x, y := step.X-shape.W/2, step.Y-shape.H/2
-		switch step.XMLName.Local {
-		case "move":
-			commands = append(commands, "M")
-			numbers = append(numbers, x, y)
-		case "line":
-			commands = append(commands, "L")
-			numbers = append(numbers, x, y)
-		case "arc":
-			commands = append(commands, "A")
-			numbers = append(numbers, step.Rx, step.Ry, step.Turn, step.Large, step.Sweep, x, y)
-		case "close":
-			commands = append(commands, "Z")
-		default:
-			require.Fail(t, "the gear stencil holds a step svg path data has no command for: "+step.XMLName.Local)
-		}
-	}
-
-	return commands, numbers
 }
 
 // requireRejectionTwinDiffers hands back the shared rejection fixture and its
@@ -2152,32 +1933,6 @@ func TestExporterRejectionEdge(t *testing.T) {
 			require.Equal(t, string(unstatedOut), string(statedOut),
 				"mermaid draws no arrows in any layout, so a rejection edge has nothing to join")
 		}
-	})
-
-	t.Run("both picture formats state the same badge text for the same model", func(t *testing.T) {
-		stated, _ := requireRejectionTwinDiffers(t)
-
-		svgOutput, err := diagram.ExportSVG(stated, diagram.StyleAuto)
-		require.NoError(t, err)
-		drawioOutput, err := diagram.ExportDrawio(stated, diagram.StyleAuto)
-		require.NoError(t, err)
-
-		badgeText := func(boxes []diagramBox, fill string) []string {
-			var text []string
-			for _, box := range boxes {
-				if strings.Contains(box.appearance, fill) {
-					text = append(text, box.label)
-				}
-			}
-			return text
-		}
-
-		fromSVG := badgeText(svgBoxes(t, string(svgOutput)), "fill="+fillRejectionHex)
-		fromDrawio := badgeText(drawioBoxes(t, string(drawioOutput)), "fillColor="+fillRejectionHex)
-
-		require.NotEmpty(t, fromSVG, "neither list says anything if the badges were not found")
-		require.Equal(t, fromSVG, fromDrawio,
-			"a change to one format's badge label and not the other's fails here")
 	})
 }
 
@@ -2226,8 +1981,8 @@ func TestExporterEventCopies(t *testing.T) {
 			t.Run("draws each copy wide enough for its longest line", func(t *testing.T) {
 				boxes := e.boxes(t, e.run(t, test.SubscribedEventsHotelStaysModel(t), diagram.StyleAuto))
 
-				// 6 px a character is about half an em of Helvetica at the 11 and
-				// 12 px the two formats draw an event's label at.
+				// 6 px a character is about half an em of Helvetica at the 11 px
+				// the SVG draws an event's label at.
 				const pxPerCharacter = 6
 				for _, copied := range copyBoxesIn(boxes) {
 					longest := 0
@@ -2280,11 +2035,10 @@ func TestExporterEventCopies(t *testing.T) {
 	}
 }
 
-// strokePaint and fillPaint read a colour out of a box's appearance in either
-// picture format: SVG spells it stroke="#…", draw.io strokeColor=#….
+// strokePaint and fillPaint read a colour out of a box's appearance.
 var (
-	strokePaint = regexp.MustCompile(`\bstroke(?:Color)?="?(#[0-9a-fA-F]{6})`)
-	fillPaint   = regexp.MustCompile(`\bfill(?:Color)?="?(#[0-9a-fA-F]{6})`)
+	strokePaint = regexp.MustCompile(`\bstroke=(#[0-9a-fA-F]{6})`)
+	fillPaint   = regexp.MustCompile(`\bfill=(#[0-9a-fA-F]{6})`)
 )
 
 func paintOf(t *testing.T, paint *regexp.Regexp, box diagramBox) string {
@@ -2327,8 +2081,7 @@ func boxNamed(t *testing.T, boxes []diagramBox, label string) diagramBox {
 }
 
 // lineText reads a label back as its lines joined by one line break. SVG reads a
-// label of several lines back with a line break around each line, and draw.io
-// without, so the two read back alike only through here.
+// label of several lines back with a line break around each line.
 func lineText(label string) string {
 	return strings.Join(cardLines(label), "\n")
 }

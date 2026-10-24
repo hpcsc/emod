@@ -40,7 +40,7 @@ graph TD
     end
 
     subgraph Outputs
-        diagram[diagram<br/><i>drawio / svg / ascii / mermaid</i>]
+        diagram[diagram<br/><i>svg / ascii / mermaid</i>]
         export[export<br/><i>model JSON / diagram JSON / CUE</i>]
         formatter[formatter<br/><i>canonical .emod writer</i>]
         glossary[glossary<br/><i>domain glossary</i>]
@@ -161,10 +161,8 @@ flowchart TD
     M["*ast.Model"] --> SE["diagram.SliceEdges<br/><i>one edge derivation</i>"]
     M --> LAY["diagram/layout.go<br/><i>slice order, lanes, geometry</i>"]
 
-    SE --> DRAWIO["drawio renderer<br/>(mxGraph XML)"]
     SE --> SVG["svg renderer"]
     SE --> DJSON["export: diagram JSON<br/><i>the viewer's feed</i>"]
-    LAY --> DRAWIO
     LAY --> SVG
     LAY --> MERMAID
     LAY --> ASCII
@@ -197,7 +195,7 @@ diagram does not carry stay in the source.
 | `emod validate` / `emod lint` | Full pipeline; identical diagnostics, text or JSON output |
 | `emod lint explain <rule>` | Describes any rule name the tool can print |
 | `emod fmt` | Parse + `formatter.Format`; `--check` for CI |
-| `emod diagram` | drawio / svg / ascii / mermaid; `--serve` starts the embedded viewer; `--specs` draws each slice's specs as a card, drawio and svg only |
+| `emod diagram` | svg / ascii / mermaid; `--serve` starts the embedded viewer; `--specs` draws each slice's specs as a card, svg only |
 | `emod export` | json / diagram-json / cue |
 | `emod slices list` | Lists every slice with its detected pattern |
 | `emod slices arrange` | Reorders view slices so references read forward; `--check` for CI |

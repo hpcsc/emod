@@ -208,17 +208,16 @@ See [examples/dcb_model.emod](/examples/dcb_model.emod) for a complete DCB examp
 ### Generate diagrams
 
 ```bash
-emod diagram reservation.emod --format drawio   # draw.io XML (default)
+emod diagram reservation.emod --format svg      # standalone SVG (default)
 emod diagram reservation.emod --format mermaid  # Mermaid markdown
-emod diagram reservation.emod --format svg      # standalone SVG
 emod diagram reservation.emod --format ascii    # terminal preview
 emod diagram reservation.emod --specs           # …with each slice's specs as a
-                                                # Given-When-Then card (drawio and svg only)
+                                                # Given-When-Then card (svg only)
 ```
 
 ### Draw the event flow
 
-The four formats above draw the whole model, lane by lane. `--format event-flow`
+The three formats above draw the whole model, lane by lane. `--format event-flow`
 draws one question instead: which events the system appends, and what reacts to
 them.
 

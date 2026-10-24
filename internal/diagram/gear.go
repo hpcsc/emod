@@ -1,16 +1,13 @@
 package diagram
 
 import (
-	"bytes"
-	"compress/flate"
-	"encoding/base64"
 	"fmt"
 	"math"
 	"strconv"
 	"strings"
 )
 
-// The gear an automation is drawn as in the lane pictures and the viewer. Its
+// The gear an automation is drawn as in the lane picture and the viewer. Its
 // measures are those of the gear eventFlowDefs builds from a circle and eight
 // rects, centred on the origin, so the two pictures draw one gear.
 const (
@@ -98,46 +95,6 @@ var gearPathData = func() string {
 	}
 
 	return strings.Join(commands, " ")
-}()
-
-// drawioGearShape is the gear as a draw.io shape: a stencil, which draw.io reads
-// only deflated and base64-encoded. The stencil fills with the cell's own
-// fillColor, so a user can repaint the gear in draw.io.
-var drawioGearShape = func() string {
-	var stencil strings.Builder
-	fmt.Fprintf(&stencil, `<shape name="gear" w="%d" h="%d" aspect="fixed" strokewidth="inherit"><connections/><foreground><path>`,
-		2*gearExtent, 2*gearExtent)
-	for _, contour := range gearContours() {
-		for _, step := range contour {
-			x, y := gearNumber(step.x+gearExtent), gearNumber(step.y+gearExtent)
-			switch {
-			case step.move:
-				fmt.Fprintf(&stencil, `<move x="%s" y="%s"/>`, x, y)
-			case step.arc():
-				r := gearNumber(step.radius)
-				fmt.Fprintf(&stencil, `<arc rx="%s" ry="%s" x-axis-rotation="0" large-arc-flag="0" sweep-flag="%d" x="%s" y="%s"/>`,
-					r, r, gearSweep(step), x, y)
-			default:
-				fmt.Fprintf(&stencil, `<line x="%s" y="%s"/>`, x, y)
-			}
-		}
-		stencil.WriteString("<close/>")
-	}
-	stencil.WriteString("</path><fillstroke/></foreground></shape>")
-
-	var deflated bytes.Buffer
-	writer, err := flate.NewWriter(&deflated, flate.BestCompression)
-	if err != nil {
-		panic(err)
-	}
-	if _, err := writer.Write([]byte(stencil.String())); err != nil {
-		panic(err)
-	}
-	if err := writer.Close(); err != nil {
-		panic(err)
-	}
-
-	return "stencil(" + base64.StdEncoding.EncodeToString(deflated.Bytes()) + ")"
 }()
 
 func gearSweep(step gearStep) int {

@@ -161,11 +161,11 @@ This makes emod **AI-consumable** rather than **AI-powered**. It adds **no LLM p
 - [ ] A tool (e.g. `emod_diagram`) accepts either a file `path` or inline `content`, plus a `format` of `mermaid`, `svg`, or `ascii`
 - [ ] The result is the diagram text for the requested format, matching what `emod diagram` produces for that format
 - [ ] An optional `style` accepts the same values as the CLI (`auto`, `projected`, `dcb`)
-- [ ] The tool does not produce drawio file output and does not start the diagram viewer/server
+- [ ] The tool does not start the diagram viewer/server
 - [ ] The tool never writes to disk
 - [ ] An unsupported `format` or `style` value returns a clear error listing the accepted values
 
-**Context:** Only the inline-renderable formats (`mermaid`, `ascii`, `svg`) are exposed — formats a model can embed or reason over. The drawio output and the `--serve` viewer are intentionally excluded because they write files / start servers and are not useful to an in-context model.
+**Context:** Only the inline-renderable formats (`mermaid`, `ascii`, `svg`) are exposed — formats a model can embed or reason over. The `--serve` viewer is intentionally excluded because it starts a server and is not useful to an in-context model.
 
 **Depends on:** US-MCP-001
 
@@ -332,7 +332,7 @@ This makes emod **AI-consumable** rather than **AI-powered**. It adds **no LLM p
 - **No LLM provider code in emod.** The server never builds, imports, or calls a language model; it never authenticates to a model, holds credentials, or makes a network call to a provider. The host brings the model. (This is the defining contrast with proposals `01`/`02`/`03`+.)
 - **No repair loop inside emod.** The generate → validate → lint → repair loop lives in the host's agent turn; emod only provides the oracle each iteration calls.
 - **No HTTP/SSE or multi-tenant hosted transport.** Stdio, launched per session by the host, is the only transport in scope (an opt-in HTTP/SSE transport is deferred until a non-local host needs it).
-- **No drawio file output or diagram viewer over MCP.** Only the inline-renderable diagram formats (`mermaid`, `ascii`, `svg`) are exposed; file-writing and server-starting diagram modes stay CLI-only.
+- **No diagram viewer over MCP.** Only the inline-renderable diagram formats (`mermaid`, `ascii`, `svg`) are exposed; file-writing and server-starting diagram modes stay CLI-only.
 - **No new modeling logic.** Every tool delegates to an existing emod capability; the MCP layer re-presents results and adds no new validator rules, lint rules, or export formats.
 - **No re-implementation of CLI flag parsing.** The MCP tool input schemas are the contract; they delegate to the same capabilities the CLI uses.
 - **No effect on the WASM/browser build.** The MCP capability is excluded from the browser bundle.
@@ -346,5 +346,4 @@ Clarifying questions were not raised; the following assumptions were made from t
 - **Example resource granularity.** Assumed one resource per example model (US-MCP-011). An alternative is a single index resource the model lists then fetches, which scales better as the example set grows.
 - **Schema versioning.** Open whether the schema resource should carry the emod version so a model caching it across sessions knows when the grammar changed.
 - **Prompt ownership.** Assumed prompts ship with emod for consistency (US-MCP-012), with hosts free to override them. Whether the canonical home is emod or per-team host config is unresolved.
-- **drawio over MCP.** Assumed drawio is not exposed (US-MCP-009); revisit if users want the XML returned as text for saving even though a model cannot render it inline.
 - **Workspace-level operations.** Whether any tool should operate over all `.emod` files in the root, rather than a single path/content per call, is out of scope for now but may be requested.

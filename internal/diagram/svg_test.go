@@ -726,7 +726,7 @@ func TestExportSVG(t *testing.T) {
 				"the name has to have been broken across lines, or this asserts nothing about wrapping")
 			for _, line := range lines {
 				require.LessOrEqual(t, utf8.RuneCountInString(line), 44,
-					"a line wider than the card is drawn outside it: svg never wraps and draw.io wraps into a height the card was not measured for")
+					"a line wider than the card is drawn outside it: svg never wraps")
 			}
 			require.Equal(t, name, strings.Trim(strings.Join(lines[:len(lines)-2], " "), `"`),
 				"the wrapped lines have to still read as the name the author wrote")
@@ -830,28 +830,6 @@ func svgSpecCards(t *testing.T, output string) []string {
 	return cards
 }
 
-var svgFontSizeAttribute = regexp.MustCompile(`font-size="(\d+)"`)
-
-// svgSpecCardFontSize is the size the SVG card paints its text at, read out of a
-// render rather than restated, so the draw.io card can be required to state the
-// same one — it is the size both formats' band heights are measured from.
-func svgSpecCardFontSize(t *testing.T) string {
-	t.Helper()
-
-	lines := strings.Split(svgWithSpecs(t, test.SlicePatternLibraryLendingModel(t)), "\n")
-	for i, line := range lines {
-		if !strings.Contains(line, fillSpecCardHex) || i+1 >= len(lines) {
-			continue
-		}
-		found := svgFontSizeAttribute.FindStringSubmatch(lines[i+1])
-		require.NotNil(t, found, "the card's text states no font size: %s", lines[i+1])
-		return found[1]
-	}
-
-	require.FailNow(t, "the render draws no card to read a font size from")
-	return ""
-}
-
 // svgSpecCardRects returns where each card was drawn, in the order svgSpecCards
 // returns their text.
 func svgSpecCardRects(t *testing.T, output string) []boxRect {
@@ -908,14 +886,10 @@ func svgCanvas(t *testing.T, output string) (int, int) {
 	return w, h
 }
 
-// fillRejectionHex and fillEventHex are stated here rather than read from the
-// production constants, so a test compares the bytes a reader sees against a
-// value written down independently of the code that emits it.
-const (
-	fillRejectionHex   = "#f8cecc"
-	strokeRejectionHex = "#b85450"
-	fillEventHex       = "#ffe6cc"
-)
+// fillRejectionHex is stated here rather than read from the production
+// constants, so a test compares the bytes a reader sees against a value written
+// down independently of the code that emits it.
+const fillRejectionHex = "#f8cecc"
 
 // twoRejectionsOneSliceModel gives a single slice two rejection edges, the shape
 // that tells a per-edge badge index apart from one that always reaches the
