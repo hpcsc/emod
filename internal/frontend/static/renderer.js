@@ -1,4 +1,4 @@
-import { L, nodePalette, edgeConfig, arrowClassMap, PORT_DIRECTIONS, PROSE_KINDS, GEAR_PATH, GEAR_SIZE, GEAR_LABEL_GAP } from './config.js';
+import { L, nodePalette, edgeConfig, arrowClassMap, PORT_DIRECTIONS, PROSE_KINDS, GEAR_PATH, GEAR_SIZE } from './config.js';
 import { Layout } from './layout.js';
 
 var NS = "http://www.w3.org/2000/svg";
@@ -22,8 +22,9 @@ var headerMarkingKinds = ["comments"];
 var screenBar = { inset: 8, top: 6, height: 6, stroke: 1 };
 var blockLabelSize = 13;
 var cadenceSize = 10;
-var cadenceLineStep = 14;
-var markClearance = 2;
+var blockGearSize = 26;
+var gearLabelGap = 3;
+var cadenceGap = 2;
 var ellipsis = "…";
 var descriptionSize = 11;
 var headerTextInset = 16;
@@ -459,13 +460,12 @@ function appendBlockLabels(blockG, node, pos, ink) {
 
   if (node.type === "automation") {
     var at = gearPlacement(node, pos);
-    var startAnchored = "text-anchor=\"start\" dominant-baseline=\"middle\"";
-    blockG.appendChild(svgText(at.labelX, at.nameY, node.label, blockLabelSize, ink, startAnchored));
+    blockG.appendChild(centeredText(midX, at.nameY, node.label, blockLabelSize, ink));
     if (!node.every) return;
     // A group's tooltip is its first <title> child, and it carries the cadence a
     // second time so a cron expression wider than the box stays readable on hover.
     blockG.insertBefore(svgTitle(node.every), blockG.firstChild);
-    blockG.appendChild(svgText(at.labelX, at.nameY + cadenceLineStep, cadenceText(node), cadenceSize, ink, startAnchored));
+    blockG.appendChild(centeredText(midX, at.cadenceY, cadenceText(node), cadenceSize, ink));
     return;
   }
 
@@ -477,22 +477,21 @@ function cadenceText(node) {
 }
 
 function gearPlacement(node, pos) {
-  var labelWidth = Layout.textWidth(node.label, blockLabelSize);
-  if (node.every) labelWidth = Math.max(labelWidth, Layout.textWidth(cadenceText(node), cadenceSize));
-  var left = pos.x + Math.max(0, (pos.w - GEAR_SIZE - GEAR_LABEL_GAP - labelWidth) / 2);
-  var placement = { gearX: left + GEAR_SIZE / 2, labelX: left + GEAR_SIZE + GEAR_LABEL_GAP };
-
-  var midY = pos.y + pos.h / 2;
-  if (!node.every) return Object.assign(placement, { gearY: midY, nameY: midY });
-
-  var nameY = blockMarkingBand(node, pos).y + (markingSize + blockLabelSize) / 2 + markClearance;
-  return Object.assign(placement, { gearY: nameY + cadenceLineStep / 2, nameY: nameY });
+  var cadenceHeight = node.every ? cadenceGap + cadenceSize : 0;
+  var top = pos.y + (pos.h - blockGearSize - gearLabelGap - blockLabelSize - cadenceHeight) / 2;
+  var nameY = top + blockGearSize + gearLabelGap + blockLabelSize / 2;
+  return {
+    gearX: pos.x + pos.w / 2,
+    gearY: top + blockGearSize / 2,
+    nameY: nameY,
+    cadenceY: nameY + blockLabelSize / 2 + cadenceGap + cadenceSize / 2,
+  };
 }
 
 function gearShape(x, y, fill) {
   var el = document.createElementNS(NS, "path");
   el.setAttribute("d", GEAR_PATH);
-  el.setAttribute("transform", "translate(" + x + "," + y + ")");
+  el.setAttribute("transform", "translate(" + x + "," + y + ") scale(" + blockGearSize / GEAR_SIZE + ")");
   el.setAttribute("fill", fill);
   el.setAttribute("class", "gear");
   return el;

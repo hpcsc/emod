@@ -155,8 +155,8 @@ func ExportSVG(model *ast.Model, _ Style, opts ...Option) ([]byte, error) {
 		for _, reactor := range reactorBoxes(s, cmdViewLaneY, sliceX, "\n") {
 			if reactor.isAutomation {
 				b.WriteString(svgGear(reactor.x, reactor.y, reactor.w, reactor.description))
-				b.WriteString(svgAnchoredText(reactor.x+reactor.w+gearLabelGap, reactor.y+reactor.h/2,
-					reactor.label, reactorFontSize, fillAutomation, "start"))
+				b.WriteString(svgMultilineText(reactor.x+reactor.w/2, svgUnderGear(reactor),
+					reactor.label, reactorFontSize, fillAutomation))
 			} else {
 				b.WriteString(svgRoundedRect(reactor.x, reactor.y, reactor.w, reactor.h, fillTranslation, strokeTranslation, 3, reactor.description))
 				b.WriteString(svgMultilineText(reactor.x+reactor.w/2, reactor.y+reactor.h/2, reactor.label, reactorFontSize, strokeTranslation))
@@ -291,6 +291,13 @@ func svgGearDefs() string {
 `, -gearExtent, -gearExtent, 2*gearExtent, 2*gearExtent, gearPathData)
 }
 
+// svgUnderGear is the y the label of an automation is centred on: its lines are
+// centred together, so the first line starts just under the gear.
+func svgUnderGear(gear reactorBox) int {
+	lines := strings.Count(gear.label, "\n") + 1
+	return gear.y + gear.h + gearLabelGap + reactorFontSize/2 + (lines-1)*(reactorFontSize+4)/2
+}
+
 func svgGear(x, y, size int, description string) string {
 	return svgElement("use", fmt.Sprintf(`href="#gear" x="%d" y="%d" width="%d" height="%d" fill="%s"`,
 		x, y, size, size, fillAutomation), description)
@@ -353,27 +360,19 @@ func svgLaneLabel(x, y int, text string) string {
 }
 
 func svgText(x, y int, text string, fontSize int, color string) string {
-	return svgTextLine(x, y, text, fontSize, color, "middle")
-}
-
-func svgTextLine(x, y int, text string, fontSize int, color, anchor string) string {
-	return fmt.Sprintf(`<text x="%d" y="%d" text-anchor="%s" dominant-baseline="middle" font-family="sans-serif" font-size="%d" fill="%s">%s</text>`+"\n",
-		x, y, anchor, fontSize, color, escapeXML(text))
+	return fmt.Sprintf(`<text x="%d" y="%d" text-anchor="middle" dominant-baseline="middle" font-family="sans-serif" font-size="%d" fill="%s">%s</text>`+"\n",
+		x, y, fontSize, color, escapeXML(text))
 }
 
 func svgMultilineText(x, y int, text string, fontSize int, color string) string {
-	return svgAnchoredText(x, y, text, fontSize, color, "middle")
-}
-
-func svgAnchoredText(x, y int, text string, fontSize int, color, anchor string) string {
 	lines := strings.Split(text, "\n")
 	if len(lines) <= 1 {
-		return svgTextLine(x, y, text, fontSize, color, anchor)
+		return svgText(x, y, text, fontSize, color)
 	}
 
 	var b strings.Builder
-	b.WriteString(fmt.Sprintf(`<text x="%d" y="%d" text-anchor="%s" dominant-baseline="middle" font-family="sans-serif" font-size="%d" fill="%s">`+"\n",
-		x, y, anchor, fontSize, color))
+	b.WriteString(fmt.Sprintf(`<text x="%d" y="%d" text-anchor="middle" dominant-baseline="middle" font-family="sans-serif" font-size="%d" fill="%s">`+"\n",
+		x, y, fontSize, color))
 
 	lineHeight := fontSize + 4
 	totalH := (len(lines) - 1) * lineHeight

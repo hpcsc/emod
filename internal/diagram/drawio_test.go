@@ -156,7 +156,7 @@ func TestExportDrawio(t *testing.T) {
 			require.Equal(t, []string{"OrderPlaced -> OrderList"}, drawioConnections(t, string(raw)))
 		})
 
-		t.Run("renders automation as the gear with its name beside it", func(t *testing.T) {
+		t.Run("renders automation as the gear with its name under it", func(t *testing.T) {
 			model := &ast.Model{
 				Name: "Test",
 				Contexts: []*ast.Context{{
@@ -180,7 +180,8 @@ func TestExportDrawio(t *testing.T) {
 
 			gear := boxLabelled(t, drawioBoxes(t, string(raw)), "Notifier")
 			require.True(t, drawioDrawnAsGear(gear))
-			require.Contains(t, gear.appearance, "labelPosition=right;", "the name is written beside the gear, not inside it")
+			require.Contains(t, gear.appearance, "labelPosition=center;verticalLabelPosition=bottom;align=center;verticalAlign=top;",
+				"the name is written centred under the gear, not inside it")
 		})
 
 		t.Run("connects event to automation to command", func(t *testing.T) {

@@ -32,7 +32,7 @@ func delayLabel(after string) string {
 	return `after "` + after + `"`
 }
 
-// automationLabelLines states an automation beside the gear it is drawn as, so
+// automationLabelLines states an automation under the gear it is drawn as, so
 // the label carries no gear marking of its own.
 func automationLabelLines(auto *ast.Automation) []string {
 	if auto.Schedule == "" {

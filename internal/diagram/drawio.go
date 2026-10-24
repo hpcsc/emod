@@ -29,11 +29,12 @@ const (
 )
 
 // styleAutomation draws an automation as the gear, with its label outside the
-// cell to the right. The size must stay reactorFontSize: placeGear centres the
-// gear and the label together by the width of the label at that size.
+// cell and under it. The lane leaves room under the gear for two lines at
+// reactorFontSize and no more, so the label keeps that size and takes none of
+// draw.io's default spacing.
 var styleAutomation = "shape=" + drawioGearShape + ";aspect=fixed;html=1;fillColor=" + fillAutomation + ";strokeColor=none;" +
-	"labelPosition=right;verticalLabelPosition=middle;align=left;verticalAlign=middle;" +
-	fmt.Sprintf("spacingLeft=%d;", gearLabelGap) + boxFont + "fontColor=" + fillAutomation + fmt.Sprintf(";fontSize=%d;", reactorFontSize)
+	"labelPosition=center;verticalLabelPosition=bottom;align=center;verticalAlign=top;" +
+	"spacing=0;" + boxFont + "fontColor=" + fillAutomation + fmt.Sprintf(";fontSize=%d;", reactorFontSize)
 
 // ExportDrawio converts a parsed AST model into draw.io XML (mxGraph format).
 func ExportDrawio(model *ast.Model, style Style, opts ...Option) ([]byte, error) {

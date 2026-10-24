@@ -115,7 +115,7 @@ func requireNonEmptyText(t *testing.T, output string) {
 // laneHeightDrawn is the height every lane but the specs band is drawn at,
 // stated here rather than read from the production constant so a test compares
 // against a value written down independently of the code that emits it.
-const laneHeightDrawn = 190
+const laneHeightDrawn = 202
 
 // stackedTranslationsModel gives one slice four translations, which the layout
 // stacks downwards past the bottom of the lane they start in, plus a scenario so
@@ -1171,14 +1171,14 @@ func TestExporterAutomationSchedule(t *testing.T) {
 		}
 
 		t.Run(e.name, func(t *testing.T) {
-			t.Run("a scheduled automation is drawn with its own cadence beside the gear and its name", func(t *testing.T) {
+			t.Run("a scheduled automation is drawn with its own cadence under its gear and its name", func(t *testing.T) {
 				output := e.run(t, test.AutomationScheduleLibraryLendingModel(t), diagram.StyleAuto)
 
 				e.requireWellFormed(t, output)
 				var shown []string
 				for _, name := range scheduledLibraryLendingAutomations {
 					gear := e.boxLabelled(t, output, name)
-					require.True(t, e.drawnAsGear(gear), "the cadence is written beside the gear the automation is drawn as")
+					require.True(t, e.drawnAsGear(gear), "the cadence is written under the gear the automation is drawn as")
 					shown = append(shown, scheduleShown(gear.label))
 				}
 
@@ -1324,13 +1324,13 @@ func TestExporterAutomationDelay(t *testing.T) {
 				}
 			})
 
-			t.Run("a scheduled automation beside a delayed one keeps its cadence beside its gear and draws no activation arrow", func(t *testing.T) {
+			t.Run("a scheduled automation beside a delayed one keeps its cadence under its gear and draws no activation arrow", func(t *testing.T) {
 				output := e.run(t, test.AutomationDelayLibraryLendingModel(t), diagram.StyleAuto)
 				connections := e.connections(t, output)
 
 				for _, name := range scheduledDelayFixtureAutomations {
 					label := e.boxLabelled(t, output, name).label
-					require.Contains(t, label, clockMarking, "a schedule is drawn beside the gear, not on an arrow")
+					require.Contains(t, label, clockMarking, "a schedule is drawn under the gear, not on an arrow")
 					require.NotEmpty(t, scheduleShown(label))
 
 					// The view it reads does reach it, so the arrows into its box

@@ -403,7 +403,7 @@ reservation.emod:41: automation block cannot declare after with every: an every 
 
 A schedule is absolute and names no occurrence to count from, while a delay is measured from an event a schedule-driven automation never receives.
 
-- **The drawn diagrams label the edge, not the gear:** `emod diagram --format drawio` and `--format svg` write `after "<duration>"` on the arrow from the `on` event to the automation, and reserve the clock badge beside the automation's gear for an `every` schedule.
+- **The drawn diagrams label the edge, not the gear:** `emod diagram --format drawio` and `--format svg` write `after "<duration>"` on the arrow from the `on` event to the automation, and reserve the clock badge under the automation's gear for an `every` schedule.
 - **The text formats state it beside the activation:** `emod diagram --format ascii` prints `(<EventName>) after "<duration>" -> ⚙ <Name> -> [<CommandName>]`, and `--format mermaid` carries the delay inside the automation's own label.
 
 ### Translation Pattern
@@ -845,7 +845,7 @@ The decoder reads what HCL parsed rather than evaluating it: `hcl.AbsTraversalFo
 
 ## 13. Diagram Palette
 
-The renderers that draw the whole model use one palette for element types. The SVG, draw.io, and web viewer renderers all draw the same element type with the same fill and stroke, and the DSL reference itself is the source of truth for those values. An automation is drawn as a gear with no box and no stroke, and its name is written to the right of the gear in the gear's fill. `emod diagram --format event-flow`, `--format event-flow-mermaid` and `--format event-flow-mermaid-no-icons` draw a different picture and paint it in a palette of their own, listed below.
+The renderers that draw the whole model use one palette for element types. The SVG, draw.io, and web viewer renderers all draw the same element type with the same fill and stroke, and the DSL reference itself is the source of truth for those values. An automation is drawn as a gear with no box and no stroke, and its name is written under the gear in the gear's fill. `emod diagram --format event-flow`, `--format event-flow-mermaid` and `--format event-flow-mermaid-no-icons` draw a different picture and paint it in a palette of their own, listed below.
 
 | Element     | Fill      | Stroke    | Notes                                   |
 |-------------|-----------|-----------|-----------------------------------------|
@@ -853,7 +853,7 @@ The renderers that draw the whole model use one palette for element types. The S
 | Command     | #dae8fc   | #6c8ebf   | Blue sticky note.                       |
 | Event       | #ffe6cc   | #d79b00   | Orange sticky note.                     |
 | View        | #d5e8d4   | #82b366   | Green sticky note.                      |
-| Automation  | #16201b   | —         | Dark gear beside its name.              |
+| Automation  | #16201b   | —         | Dark gear above its name.               |
 | Translation | #f5f5f5   | #666666   | Grey integration.                       |
 
 ### Event Flow Palette

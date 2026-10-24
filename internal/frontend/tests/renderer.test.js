@@ -537,9 +537,12 @@ function rightEdgeOf(el) {
   return numeric(el, 'x') + drawnWidth(el);
 }
 
-function gearCentreX(group) {
-  const translate = /translate\(([-\d.]+),/.exec(group.querySelector('path.gear').getAttribute('transform'));
-  return Number(translate[1]);
+// Where a gear is drawn: the centre it is moved to, and the side of the square
+// its path fills once scaled.
+function gearDrawn(group) {
+  const transform = group.querySelector('path.gear').getAttribute('transform');
+  const [, x, y, scale] = /translate\(([-\d.]+),([-\d.]+)\) scale\(([-\d.]+)\)/.exec(transform);
+  return { x: Number(x), y: Number(y), size: GEAR_SIZE * Number(scale) };
 }
 
 function nodeGroup(svg, nodeId) {
@@ -977,7 +980,6 @@ describe('Renderer.buildSVG', () => {
       expect(numeric(badge, 'y')).toBeGreaterThan(Number(box.y));
       expect(numeric(badge, 'y')).toBeLessThan(Number(box.y) + Number(box.height));
 
-      expect(box.height).toBe(boxes.cmd1.height);
       expect(boxes).toEqual(drawnBoxes(eventActivated.svg));
     });
   });
@@ -1077,27 +1079,33 @@ describe('Renderer.buildSVG', () => {
     it.each([
       ['a name alone', pairedAutomations(), 'autoOnEvent'],
       ['a name and a cadence', pairedAutomations(cronExpression), 'autoScheduled'],
-    ])('writes %s to the right of the gear, in the gear\'s fill', (shape, nodes, id) => {
+    ])('writes %s centred under the gear, in the gear\'s fill', (shape, nodes, id) => {
       const { svg } = render(nodes);
 
       const group = nodeGroup(svg, id);
-      const gearRight = gearCentreX(group) + GEAR_SIZE / 2;
+      const gear = gearDrawn(group);
       for (const label of drawnLabels(group)) {
-        expect(label.getAttribute('text-anchor')).toBe('start');
-        expect(numeric(label, 'x')).toBeGreaterThan(gearRight);
+        expect(label.getAttribute('text-anchor')).toBe('middle');
+        expect(numeric(label, 'x')).toBe(gear.x);
+        expect(inkOfText(label).top).toBeGreaterThanOrEqual(gear.y + gear.size / 2);
         expect(label.getAttribute('fill')).toBe(nodePalette.automation.fill);
       }
     });
 
-    it('centres the gear and the widest line beside it together in the box', () => {
-      const { svg } = render(pairedAutomations(cronExpression));
+    it.each([
+      ['a name alone', pairedAutomations(), 'autoOnEvent'],
+      ['a name and a cadence', pairedAutomations(cronExpression), 'autoScheduled'],
+    ])('centres the gear and %s under it together in the box, inside its edges', (shape, nodes, id) => {
+      const { svg } = render(nodes);
 
-      const group = nodeGroup(svg, 'autoScheduled');
-      const box = drawnBoxes(svg).autoScheduled;
-      const left = gearCentreX(group) - GEAR_SIZE / 2;
-      const right = Math.max(...drawnLabels(group).map(rightEdgeOf));
+      const group = nodeGroup(svg, id);
+      const box = drawnBoxes(svg)[id];
+      const gear = gearDrawn(group);
+      const above = gear.y - gear.size / 2 - Number(box.y);
+      const below = Number(box.y) + Number(box.height) - Math.max(...drawnLabels(group).map((el) => inkOfText(el).bottom));
 
-      expect(left - Number(box.x)).toBeCloseTo(Number(box.x) + Number(box.width) - right, 5);
+      expect(above).toBeGreaterThanOrEqual(0);
+      expect(above).toBeCloseTo(below, 5);
     });
   });
 

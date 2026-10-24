@@ -200,7 +200,9 @@ describe('a slice stacked top to bottom', () => {
       expect(idsByY(positions, ['view1', 'evt1', 'cmd1', 'trg1'])).toEqual(['trg1', 'cmd1', 'evt1', 'view1']);
       expect(plain[0]).toBe(plain[1]);
       expect(plain[1]).toBe(plain[2]);
-      expect(withRow).toEqual([plain[0], plain[0]]);
+      // The row holds an automation, so it is 24px taller than a block, to stack
+      // the gear, the name and the cadence.
+      expect(withRow).toEqual([plain[0], plain[0] + 24]);
     });
   });
 });

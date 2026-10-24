@@ -1,4 +1,4 @@
-import { L, PORT_DIRECTIONS, GEAR_SIZE, GEAR_LABEL_GAP } from './config.js';
+import { L, PORT_DIRECTIONS } from './config.js';
 
 // The size the hidden measurer draws at, and the gap labelWidth adds so two
 // measured labels laid side by side do not touch. Private: a caller needing
@@ -65,11 +65,6 @@ function processorLabel(node) {
   return node.external_system || node.label;
 }
 
-function blockWidth(node) {
-  var width = labelWidth(processorLabel(node));
-  return node.type === "automation" ? width + GEAR_SIZE + GEAR_LABEL_GAP : width;
-}
-
 function rowSpanWidth(itemWidths) {
   const total = itemWidths.reduce(function(sum, w) { return sum + w; }, 0);
   return total + 20 + (itemWidths.length - 1) * L.sideGap - 40;
@@ -96,12 +91,12 @@ function computeLayout(store) {
     const processors = translations.concat(childrenOfType(sl.children, "automation"));
 
     const allLabelWidths = sl.children.map(function(c) { return labelWidth(c.label); });
-    processors.forEach(function(p) { allLabelWidths.push(blockWidth(p)); });
+    translations.forEach(function(t) { allLabelWidths.push(labelWidth(processorLabel(t))); });
     if (events.length > 1) {
       allLabelWidths.push(rowSpanWidth(events.map(function(e) { return labelWidth(e.label); })));
     }
     if (processors.length > 1) {
-      allLabelWidths.push(rowSpanWidth(processors.map(blockWidth)));
+      allLabelWidths.push(rowSpanWidth(processors.map(function(p) { return labelWidth(processorLabel(p)); })));
     }
     const sBoxWidth = Math.max(180, ...allLabelWidths);
     const sSliceWidth = sBoxWidth + 40;
@@ -119,7 +114,7 @@ function computeLayout(store) {
       });
     }
 
-    function placeRow(items) {
+    function placeRow(items, height) {
       if (!items.length) return;
       const count = items.length;
       const itemWidth = count > 1 ? (sSliceWidth - 20 - (count - 1) * L.sideGap) / count : sBoxWidth;
@@ -127,17 +122,17 @@ function computeLayout(store) {
       items.forEach(function(item, idx) {
         positions[item.id] = {
           x: startX + idx * (itemWidth + L.sideGap), y: blockY,
-          w: itemWidth, h: L.boxHeight,
+          w: itemWidth, h: height,
           node: item,
         };
       });
-      blockY += L.boxHeight + gap;
+      blockY += height + gap;
     }
 
     placeColumn(triggers);
-    placeRow(processors);
+    placeRow(processors, childrenOfType(sl.children, "automation").length ? L.automationRowHeight : L.boxHeight);
     placeColumn(commands);
-    placeRow(events);
+    placeRow(events, L.boxHeight);
     placeColumn(views);
 
     const childBoxes = [];

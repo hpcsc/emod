@@ -1,6 +1,9 @@
 export const L = {
   marginX: 40, marginY: 60,
   sliceWidth: 280, boxWidth: 240, boxHeight: 55,
+  // A row holding an automation stacks its gear, name and cadence, and keeps
+  // them clear of an arrowhead reaching in from the top or bottom edge.
+  automationRowHeight: 79,
   sliceGap: 40, contextGap: 70,
   laneHeight: 190, laneGap: 30,
   swimlaneHdr: 44, swimlanePad: 10,
@@ -50,7 +53,6 @@ export const nodePalette = {
 // The Go exporters trace the same gear, and a Go test compares the two.
 export const GEAR_PATH = "M -2.9 -7.88 L -2.9 -12.9 A 1.3 1.3 0 0 1 -1.6 -14.2 L 1.6 -14.2 A 1.3 1.3 0 0 1 2.9 -12.9 L 2.9 -7.88 A 8.4 8.4 0 0 1 3.52 -7.63 L 7.07 -11.17 A 1.3 1.3 0 0 1 8.91 -11.17 L 11.17 -8.91 A 1.3 1.3 0 0 1 11.17 -7.07 L 7.63 -3.52 A 8.4 8.4 0 0 1 7.88 -2.9 L 12.9 -2.9 A 1.3 1.3 0 0 1 14.2 -1.6 L 14.2 1.6 A 1.3 1.3 0 0 1 12.9 2.9 L 7.88 2.9 A 8.4 8.4 0 0 1 7.63 3.52 L 11.17 7.07 A 1.3 1.3 0 0 1 11.17 8.91 L 8.91 11.17 A 1.3 1.3 0 0 1 7.07 11.17 L 3.52 7.63 A 8.4 8.4 0 0 1 2.9 7.88 L 2.9 12.9 A 1.3 1.3 0 0 1 1.6 14.2 L -1.6 14.2 A 1.3 1.3 0 0 1 -2.9 12.9 L -2.9 7.88 A 8.4 8.4 0 0 1 -3.52 7.63 L -7.07 11.17 A 1.3 1.3 0 0 1 -8.91 11.17 L -11.17 8.91 A 1.3 1.3 0 0 1 -11.17 7.07 L -7.63 3.52 A 8.4 8.4 0 0 1 -7.88 2.9 L -12.9 2.9 A 1.3 1.3 0 0 1 -14.2 1.6 L -14.2 -1.6 A 1.3 1.3 0 0 1 -12.9 -2.9 L -7.88 -2.9 A 8.4 8.4 0 0 1 -7.63 -3.52 L -11.17 -7.07 A 1.3 1.3 0 0 1 -11.17 -8.91 L -8.91 -11.17 A 1.3 1.3 0 0 1 -7.07 -11.17 L -3.52 -7.63 A 8.4 8.4 0 0 1 -2.9 -7.88 Z M 0 -3.4 A 3.4 3.4 0 0 0 0 3.4 A 3.4 3.4 0 0 0 0 -3.4 Z";
 export const GEAR_SIZE = 30;
-export const GEAR_LABEL_GAP = 8;
 
 export const edgeConfig = {
   flow:               { cls: "flow-arrow",      marker: "url(#arrowhead)",         stroke: "#666666", dash: "" },

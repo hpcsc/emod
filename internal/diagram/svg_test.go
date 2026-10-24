@@ -147,7 +147,7 @@ func TestExportSVG(t *testing.T) {
 		require.Equal(t, 1, arrowCount(output), "event to view is one arrow")
 	})
 
-	t.Run("renders automation as the gear with its name beside it", func(t *testing.T) {
+	t.Run("renders automation as the gear with its name under it", func(t *testing.T) {
 		model := &ast.Model{
 			Name: "Test",
 			Contexts: []*ast.Context{{
@@ -170,6 +170,28 @@ func TestExportSVG(t *testing.T) {
 		require.NoError(t, err)
 
 		require.True(t, svgDrawnAsGear(boxLabelled(t, svgBoxes(t, string(raw)), "Notifier")))
+	})
+
+	t.Run("writes the name and the cadence of an automation centred under its gear", func(t *testing.T) {
+		output := svgOf(t, sweepingModel(&ast.Automation{Name: "SweepOverdueCopies", Schedule: "0 9 * * *", Command: "RecallCopy"}))
+
+		gear := boxLabelled(t, svgBoxes(t, output), "SweepOverdueCopies").rect
+		label := svgGearLabel(t, output, "SweepOverdueCopies")
+
+		require.Equal(t, []string{"SweepOverdueCopies", "⏱ 0 9 * * *"}, label.lines)
+		require.Equal(t, "middle", label.anchor)
+		require.Equal(t, gear.x+gear.w/2, label.x)
+		require.GreaterOrEqual(t, label.top, gear.y+gear.h, "the name starts under the gear, not over it")
+	})
+
+	t.Run("keeps the name and the cadence of an automation inside the command and view lane", func(t *testing.T) {
+		output := svgOf(t, sweepingModel(&ast.Automation{Name: "SweepOverdueCopies", Schedule: "0 9 * * *", Command: "RecallCopy"}))
+
+		lane := boxLabelled(t, svgBoxes(t, output), "Commands / Views").rect
+		label := svgGearLabel(t, output, "SweepOverdueCopies")
+
+		require.Len(t, label.lines, 2, "the label has to carry the cadence, or the room it takes is one line short")
+		require.Less(t, label.bottom, lane.y+lane.h)
 	})
 
 	t.Run("connects event to automation to command", func(t *testing.T) {
@@ -1137,6 +1159,95 @@ func svgBoxes(t *testing.T, output string) []diagramBox {
 	}
 
 	return boxes
+}
+
+// svgLabel is the text the SVG writes under a gear: where its lines are centred
+// across, and how far down its first line starts and its last line ends.
+type svgLabel struct {
+	lines       []string
+	anchor      string
+	x           int
+	top, bottom int
+}
+
+// svgGearLabel reads the text written after the gear whose label carries name,
+// adding up the dy of each line to find where the lines are drawn.
+func svgGearLabel(t *testing.T, output, name string) svgLabel {
+	t.Helper()
+
+	measure := func(element xml.StartElement, attribute string) int {
+		value, err := strconv.Atoi(svgAttributeValue(element, attribute))
+		require.NoError(t, err, "%s of %s must be a whole number", attribute, element.Name.Local)
+		return value
+	}
+
+	var (
+		afterGear bool
+		inLabel   bool
+		label     svgLabel
+		y, size   int
+		lineY     []int
+		text      strings.Builder
+	)
+
+	decoder := xml.NewDecoder(strings.NewReader(output))
+	for {
+		token, err := decoder.Token()
+		if errors.Is(err, io.EOF) {
+			break
+		}
+		require.NoError(t, err, "output must be well-formed XML")
+
+		switch element := token.(type) {
+		case xml.StartElement:
+			switch element.Name.Local {
+			case "use":
+				afterGear = true
+			case "rect":
+				afterGear = false
+			case "text":
+				if afterGear {
+					inLabel = true
+					label = svgLabel{anchor: svgAttributeValue(element, "text-anchor"), x: measure(element, "x")}
+					y, size, lineY = measure(element, "y"), measure(element, "font-size"), nil
+					text.Reset()
+				}
+			case "tspan":
+				if inLabel {
+					at := y
+					if len(lineY) > 0 {
+						at = lineY[len(lineY)-1]
+					}
+					lineY = append(lineY, at+measure(element, "dy"))
+					text.Reset()
+				}
+			}
+		case xml.CharData:
+			if inLabel {
+				text.Write(element)
+			}
+		case xml.EndElement:
+			switch element.Name.Local {
+			case "tspan":
+				label.lines = append(label.lines, text.String())
+			case "text":
+				if !inLabel {
+					continue
+				}
+				if len(lineY) == 0 {
+					label.lines, lineY = []string{text.String()}, []int{y}
+				}
+				if label.lines[0] == name {
+					label.top, label.bottom = lineY[0]-size/2, lineY[len(lineY)-1]+size/2
+					return label
+				}
+				inLabel, afterGear = false, false
+			}
+		}
+	}
+
+	require.Fail(t, "no text is written under a gear named "+name)
+	return svgLabel{}
 }
 
 func svgDrawnAsGear(box diagramBox) bool {

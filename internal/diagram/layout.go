@@ -56,17 +56,23 @@ const (
 	boxHeight  = 55
 	sliceGap   = 40
 	contextGap = 70
-	laneHeight = 190
 	laneGap    = 30
 
 	laneHeaderHeight = 30
+	laneRowInset     = 52
 
 	reactorHeight = boxHeight * 3 / 4
 	reactorGap    = 6
 
 	reactorFontSize = 10
 	laneGearSize    = 28
-	gearLabelGap    = 6
+	gearLabelGap    = 3
+	// automationHeight is a gear and the two lines a scheduled automation
+	// writes under it, svgMultilineText's line height apart.
+	automationHeight = laneGearSize + gearLabelGap + 2*reactorFontSize + 4
+	laneBottomInset  = 4
+
+	laneHeight = laneHeaderHeight + laneRowInset + boxHeight + reactorGap + automationHeight + laneBottomInset
 
 	waypointMargin = 40
 )
@@ -256,10 +262,10 @@ func hasTranslationEvents(s *ast.Slice) bool {
 	return false
 }
 
-// laneRowY is where a lane's row of boxes starts: centred in what the lane has
-// left below the strip carrying its own label.
+// laneRowY is where a lane's row of boxes starts, below the strip carrying the
+// lane's own label.
 func laneRowY(laneY int) int {
-	return laneY + laneHeaderHeight + (laneHeight-laneHeaderHeight-boxHeight)/2
+	return laneY + laneHeaderHeight + laneRowInset
 }
 
 // reactorBox is the box drawn for a translation reactor, or the square the gear
@@ -267,7 +273,6 @@ func laneRowY(laneY int) int {
 type reactorBox struct {
 	name         string
 	label        string
-	labelWidth   int
 	description  string
 	isAutomation bool
 	x, y, w, h   int
@@ -298,28 +303,18 @@ func reactorBoxes(s *ast.Slice, cmdViewLaneY, sliceX int, lineBreak string) []re
 	return boxes
 }
 
-// placeGear shrinks an automation's box to the square its gear is drawn in, so
-// that the gear and the label to its right are centred together in the box.
+// placeGear shrinks an automation's box to the square its gear is drawn in, at
+// the top of the box and centred across it, with the label under the gear.
 func (r *reactorBox) placeGear() {
-	drawnWidth := laneGearSize + gearLabelGap + r.labelWidth
-	r.x += max(0, (r.w-drawnWidth)/2)
-	r.y += (r.h - laneGearSize) / 2
+	r.x += (r.w - laneGearSize) / 2
 	r.w, r.h = laneGearSize, laneGearSize
 }
 
 // automationBox returns the reactor box for an automation.
 func automationBox(auto *ast.Automation, lineBreak string) reactorBox {
-	lines := automationLabelLines(auto)
-
-	labelWidth := 0
-	for _, line := range lines {
-		labelWidth = max(labelWidth, estimatedTextWidth(line, reactorFontSize))
-	}
-
 	return reactorBox{
 		name:         auto.Name,
-		label:        strings.Join(lines, lineBreak),
-		labelWidth:   labelWidth,
+		label:        strings.Join(automationLabelLines(auto), lineBreak),
 		description:  auto.Description,
 		isAutomation: true,
 	}
