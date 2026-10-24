@@ -151,8 +151,8 @@ function computeLayout(store) {
       blockY += L.boxHeight + gap;
     }
 
-    const viewsOnly = views.length > 0 && views.length + copies.length === sl.children.length;
-    if (viewsOnly) blockY += L.boxHeight + gap;
+    const topRowEmpty = sl.children.length > 0 && triggers.length === 0 && processors.length === 0;
+    if (topRowEmpty) blockY += L.boxHeight + gap;
 
     placeColumn(triggers);
     placeRow(processors, childrenOfType(sl.children, "automation").length ? L.automationRowHeight : L.boxHeight);

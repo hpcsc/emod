@@ -72,6 +72,33 @@ function viewOnlySliceBesideStateChange() {
   ];
 }
 
+// A slice of a command and its event alone beside a slice a trigger starts, as a
+// command slice sits when an automation in another slice issues its command.
+function commandOnlySliceBesideStateChange() {
+  return [
+    { id: 'ctx1', type: 'context', label: 'Collections' },
+    { id: 'agg1', type: 'aggregate', label: 'Arrangement', parentId: 'ctx1' },
+    { id: 'sl1', type: 'slice', label: 'Chase invoice', parentId: 'agg1' },
+    { id: 'trg1', type: 'trigger', label: 'CollectorScreen', parentId: 'sl1' },
+    { id: 'cmd1', type: 'command', label: 'ChaseInvoice', parentId: 'sl1' },
+    { id: 'evt1', type: 'event', label: 'InvoiceChased', parentId: 'sl1' },
+    { id: 'sl2', type: 'slice', label: 'Send reminder', parentId: 'agg1' },
+    { id: 'cmd2', type: 'command', label: 'SendReminder', parentId: 'sl2' },
+    { id: 'evt2', type: 'event', label: 'ReminderSent', parentId: 'sl2' },
+  ];
+}
+
+// A slice that holds nothing yet beside a slice that holds only its trigger.
+function emptySliceBesideTriggerOnlySlice() {
+  return [
+    { id: 'ctx1', type: 'context', label: 'Collections' },
+    { id: 'agg1', type: 'aggregate', label: 'Arrangement', parentId: 'ctx1' },
+    { id: 'sl1', type: 'slice', label: 'Chase invoice', parentId: 'agg1' },
+    { id: 'trg1', type: 'trigger', label: 'CollectorScreen', parentId: 'sl1' },
+    { id: 'sl2', type: 'slice', label: 'Send reminder', parentId: 'agg1' },
+  ];
+}
+
 // Two slices side by side, one started by a trigger and one by an automation,
 // each issuing a command.
 function commandsUnderATriggerAndAnAutomation() {
@@ -241,6 +268,35 @@ describe('a slice stacked top to bottom', () => {
 
       const slice = positions.sl2;
       expect(positions.view1.y + positions.view1.h).toBeLessThan(slice.y + slice.h);
+    });
+  });
+
+  describe('declaring a command and its event, and nothing that issues the command', () => {
+    it('puts the command level with the command a trigger stands over in the slice beside it', () => {
+      const positions = layOut(commandOnlySliceBesideStateChange());
+
+      expect(positions.cmd2.y).toBe(positions.cmd1.y);
+    });
+
+    it('puts the event level with the event in the slice beside it', () => {
+      const positions = layOut(commandOnlySliceBesideStateChange());
+
+      expect(positions.evt2.y).toBe(positions.evt1.y);
+    });
+
+    it('keeps the event inside its own slice', () => {
+      const positions = layOut(commandOnlySliceBesideStateChange());
+
+      const slice = positions.sl2;
+      expect(positions.evt2.y + positions.evt2.h).toBeLessThan(slice.y + slice.h);
+    });
+  });
+
+  describe('declaring nothing', () => {
+    it('leaves no empty row, so the slice is shorter than a slice that holds only a trigger', () => {
+      const positions = layOut(emptySliceBesideTriggerOnlySlice());
+
+      expect(positions.sl2.minH).toBeLessThan(positions.sl1.minH);
     });
   });
 
