@@ -180,6 +180,25 @@ describe('aiming at an arrow', () => {
 
       expect(showingEnds()).toBe(0);
     });
+
+    it('shows them again when a redraw replaces the arrow the pointer is on', () => {
+      hover(hitPath());
+
+      render();
+      bus.emit('diagram:rendered', { store });
+
+      expect(showingEnds()).toBe(2);
+    });
+
+    it('leaves them away after a redraw once the pointer has left the arrow', () => {
+      hover(hitPath());
+      hover(partOf('evt1', 'rect'));
+
+      render();
+      bus.emit('diagram:rendered', { store });
+
+      expect(showingEnds()).toBe(0);
+    });
   });
 
   describe('moving a block', () => {

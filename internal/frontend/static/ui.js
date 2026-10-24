@@ -941,13 +941,22 @@ function initDelegation(store) {
       });
     }
     arrowHovered = edgeId;
-    if (!edgeId) return;
+    if (edgeId) showArrowHandles(svg, edgeId);
+  }
+
+  function showArrowHandles(svg, edgeId) {
     svg.querySelectorAll('.arrow-handle[data-edge-id="' + edgeId + '"]').forEach(function(h) {
       h.classList.add("visible");
     });
     var arrowEl = svg.querySelector('path.arrow[data-edge-id="' + edgeId + '"]');
     if (arrowEl) arrowEl.classList.add("arrow-hover");
   }
+
+  // A redraw replaces the handles of the arrow under the pointer with hidden
+  // ones, and no pointerover shows them while the pointer stays on that arrow.
+  bus.on('diagram:rendered', function({ store: s }) {
+    if (s === store && arrowHovered) showArrowHandles(s.dom.svg, arrowHovered);
+  });
 
   svgEl.addEventListener("pointerover", function(evt) {
     var arrow = evt.target.closest(".arrow-hit");
