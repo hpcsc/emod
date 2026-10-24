@@ -32,6 +32,38 @@ const withCommandInReleaseHold = (text) => text.replace(`      command "ReleaseH
       }
 `);
 
+// Holds the answers of the parser worker while parserAnswers.holding is true,
+// until parserAnswers.release() lets them through, so an answer can arrive
+// between two keys.
+async function holdParserAnswers(page) {
+  await page.addInitScript(() => {
+    const held = [];
+    window.parserAnswers = {
+      holding: false,
+      release() {
+        this.holding = false;
+        held.splice(0).forEach((deliver) => deliver());
+      },
+    };
+    const RealWorker = window.Worker;
+    window.Worker = class extends RealWorker {
+      set onmessage(handler) {
+        super.onmessage = (event) => {
+          if (window.parserAnswers.holding) {
+            held.push(() => handler.call(this, event));
+          } else {
+            handler.call(this, event);
+          }
+        };
+      }
+
+      get onmessage() {
+        return super.onmessage;
+      }
+    };
+  });
+}
+
 function replacedOnce(text, old, replacement) {
   expect(text.split(old)).toHaveLength(2);
   return text.replace(old, replacement);
@@ -140,6 +172,30 @@ test.describe('the field editor through the real pipeline', () => {
     expect(edited).not.toBe(SAMPLE);
     await expect(page.locator('#source-input')).toHaveValue(edited);
     await expect(page.locator('#detail-panel')).toBeVisible();
+  });
+
+  test('keeps every key of a modifier typed while the answer to the edit before it arrives', async ({ page }) => {
+    await holdParserAnswers(page);
+    await open(page);
+    await render(page, SAMPLE);
+
+    await page.locator('.diagram-node[data-node-id="command-1"]').click({ button: 'right' });
+    await page.locator('.ctx-menu-item[data-action="open-field-editor"]').click();
+    const type = page.locator('#dp-content .dp-field-type-input').first();
+    await type.fill('string');
+    await page.evaluate(() => { window.parserAnswers.holding = true; });
+    await type.press('Tab');
+    await expect(page.locator('#dp-content .dp-field-modifier-input').first()).toBeFocused();
+    await page.keyboard.press('ControlOrMeta+a');
+    await page.keyboard.type('opt');
+    await page.evaluate(() => window.parserAnswers.release());
+    await expect(page.locator('#source-input')).not.toHaveValue(SAMPLE);
+    await page.keyboard.type('ional');
+    await page.keyboard.press('Tab');
+
+    await expect(page.locator('#source-input')).toHaveValue(SAMPLE.replace(
+      '          amount = required(int)\n        }\n      }\n\n      event',
+      '          amount = optional(string)\n        }\n      }\n\n      event'));
   });
 });
 

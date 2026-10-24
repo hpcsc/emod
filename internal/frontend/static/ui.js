@@ -463,6 +463,8 @@ function isDeletableNodeType(type) {
          type === "view" || type === "automation" || type === "translation";
 }
 
+const fieldBlurListeners = new WeakMap();
+
 function showDetailPanel(store, node) {
   const el = store.dom.detailPanel;
   const content = store.dom.dpContent;
@@ -572,6 +574,12 @@ function showDetailPanel(store, node) {
     html += '</div>';
   }
 
+  // Chrome blurs the focused input that the rebuild removes, and that blur
+  // must not save a half-typed value.
+  const previousBlurListeners = fieldBlurListeners.get(content);
+  if (previousBlurListeners) previousBlurListeners.abort();
+  const blurListeners = new AbortController();
+  fieldBlurListeners.set(content, blurListeners);
   content.innerHTML = html;
 
   // A field edit is not a diagram edit that redraws: the canvas draws no fields,
@@ -588,7 +596,7 @@ function showDetailPanel(store, node) {
         const wasField = Boolean(row.name);
         row[field] = this.value;
         if (wasField || row.name) bus.emit('fields:edited', { store });
-      });
+      }, { signal: blurListeners.signal });
     });
 
     content.querySelectorAll('.dp-field-delete').forEach(function(btn) {
