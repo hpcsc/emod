@@ -1115,7 +1115,9 @@ function initDelegation(store) {
       const nodeId = block.getAttribute("data-node-id");
       if (nodeId) {
         evt.preventDefault();
-        showContextMenu(store, evt.clientX, evt.clientY, { nodeId: nodeId });
+        if (!Model.isEventCopy(store.nodeById.get(nodeId))) {
+          showContextMenu(store, evt.clientX, evt.clientY, { nodeId: nodeId });
+        }
       }
       return;
     }

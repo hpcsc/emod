@@ -2074,6 +2074,63 @@ describe('a diagram edit reaching the source panel', () => {
     });
   });
 
+  describe('on a copy of an event', () => {
+    // PaymentTaken is declared in Take Payment and drawn again in Review
+    // Payments, where PaymentsView subscribes to it through the copy.
+    function diagramWithCopy() {
+      const diagram = editableDiagram();
+      diagram.nodes.push({ id: 'event_copy-1', type: 'event_copy', label: 'PaymentTaken', parentId: 'slice-2', copy_of: 'event-1' });
+      diagram.edges.push({ source: 'event_copy-1', target: 'view-1', type: 'subscription' });
+      return diagram;
+    }
+
+    async function openWithCopy() {
+      globalThis.INITIAL_DATA = null;
+      parseResult = { diagnostics: [], diagram: diagramWithCopy() };
+      await startViewer();
+      deliverFile({ name: 'billing.emod', path: '/models/billing.emod', content: billingSource });
+      await flush();
+    }
+
+    it.each([
+      ['a double click', () => fireMouse(blockFor('event_copy-1'), 'dblclick')],
+      ['a connection released over it', () => {
+        releaseOver('event_copy-1');
+        dragFrom(portOf('command-1'));
+      }],
+      ['a repoint released over it', () => {
+        releaseOver('event_copy-1');
+        dragFrom(arrowHandle('command-1--event-1', 'target'));
+      }],
+    ])('%s asks the pipeline nothing', async (_, gesture) => {
+      await openWithCopy();
+      const before = applies();
+
+      gesture();
+      await settle();
+
+      expect(applies()).toBe(before);
+      expect(panelText()).toBe(billingSource);
+    });
+
+    it('opens no rename box on a double click', async () => {
+      await openWithCopy();
+
+      fireMouse(blockFor('event_copy-1'), 'dblclick');
+
+      expect(document.querySelector('body > input[type="text"]')).toBeNull();
+    });
+
+    it('opens no menu when right-clicked', async () => {
+      await openWithCopy();
+
+      fireMouse(blockFor('event_copy-1'), 'contextmenu');
+
+      expect(document.getElementById('ctx-menu').style.display).not.toBe('block');
+      expect(menuItemFor('open-field-editor')).toBeNull();
+    });
+  });
+
   describe('what the window shows once an edit is applied', () => {
     it('redraws the diagram from the applied answer, keeping dragged offsets, hidden nodes and the viewport', async () => {
       await openEditable();

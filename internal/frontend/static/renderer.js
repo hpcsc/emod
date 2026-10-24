@@ -1,4 +1,4 @@
-import { L, nodePalette, edgeConfig, arrowClassMap, PORT_DIRECTIONS, PROSE_KINDS, GEAR_PATH, GEAR_SIZE } from './config.js';
+import { L, nodePalette, eventCopyStyle, edgeConfig, arrowClassMap, PORT_DIRECTIONS, PROSE_KINDS, GEAR_PATH, GEAR_SIZE } from './config.js';
 import { Layout } from './layout.js';
 
 var NS = "http://www.w3.org/2000/svg";
@@ -534,6 +534,30 @@ function buildBlock(node, pos, palette) {
   return blockG;
 }
 
+// A copy stands for an event another slice declares, so it takes no port to
+// draw a connection from and no mark to read prose off: both belong to the
+// event itself.
+function buildCopyBlock(store, node, pos) {
+  var stroke = nodePalette.event.stroke;
+  var blockG = g("event-copy-block diagram-node");
+  blockG.setAttribute("data-node-id", node.id);
+  blockG.appendChild(svgRect(pos.x, pos.y, pos.w, pos.h, eventCopyStyle.fill, stroke,
+    "rx=\"4\" stroke-width=\"1.5\" stroke-dasharray=\"" + eventCopyStyle.dash + "\""));
+
+  var midX = pos.x + pos.w / 2;
+  var midY = pos.y + pos.h / 2;
+  var fromLine = Layout.copyFromLine(store, node);
+  if (!fromLine) {
+    blockG.appendChild(centeredText(midX, midY, node.label, blockLabelSize, stroke));
+    return blockG;
+  }
+  var lineGap = 3;
+  var top = midY - (blockLabelSize + lineGap + L.copyFromSize) / 2;
+  blockG.appendChild(centeredText(midX, top + blockLabelSize / 2, node.label, blockLabelSize, stroke));
+  blockG.appendChild(centeredText(midX, top + blockLabelSize + lineGap + L.copyFromSize / 2, fromLine, L.copyFromSize, stroke));
+  return blockG;
+}
+
 function arrowHandle(end, point, edge, edgeId) {
   var el = document.createElementNS(NS, "circle");
   el.setAttribute("cx", point.x);
@@ -617,7 +641,9 @@ function buildSVG(store) {
   nodes.forEach(function(n) {
     var palette = nodePalette[n.type];
     var np = positions[n.id];
-    if (palette && np) vg.appendChild(buildBlock(n, np, palette));
+    if (!np) return;
+    if (n.type === "event_copy") vg.appendChild(buildCopyBlock(store, n, np));
+    else if (palette) vg.appendChild(buildBlock(n, np, palette));
   });
 
   store.arrowData = [];

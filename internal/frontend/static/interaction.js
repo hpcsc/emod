@@ -351,6 +351,7 @@ function settleConnect(store, connect, clientX, clientY) {
 
   var targetBlock = dragged ? nodeAtPoint(clientX, clientY) : null;
   var targetId = targetBlock && targetBlock.getAttribute("data-node-id");
+  if (Model.isEventCopy(store.nodeById.get(targetId))) targetId = null;
 
   if (connect.repoint) {
     if (targetId && applyRepoint(store, connect, targetId)) {

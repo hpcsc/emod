@@ -159,7 +159,8 @@ function moveToSlice(nodes, nodeId, sliceId) {
   const fromSlice = node.parentId;
   const nested = nestedEventNames(nodes, fromSlice);
   const refused = (node.type === "trigger" && nodes.some(function(n) { return n.type === "trigger" && n.parentId === sliceId; })) ||
-    (node.type === "event" && nested[node.label]);
+    (node.type === "event" && nested[node.label]) ||
+    isEventCopy(node);
   if (refused) return [];
 
   const moving = [node];
@@ -219,6 +220,20 @@ function sendParse(store, source, statusEl, filename) {
   });
 }
 
+// A copy draws an event again in the slice of a view that subscribes to it. The
+// exporter decides which slices hold one, so the viewer never moves, connects or
+// edits a copy: each of those is an edit of the event it copies.
+function isEventCopy(node) {
+  return Boolean(node) && node.type === "event_copy";
+}
+
+// The slice that declares the event a copy stands for, or null once the diagram
+// no longer holds that event.
+function sliceDeclaring(store, copy) {
+  const original = store.nodeById.get(copy.copy_of);
+  return (original && store.nodeById.get(original.parentId)) || null;
+}
+
 function addEdge(store, source, target, type) {
   store.edges.push({ source: source, target: target, type: type });
 }
@@ -272,6 +287,8 @@ export const Model = {
   readDiagramJson,
   moveSlice,
   moveToSlice,
+  isEventCopy,
+  sliceDeclaring,
   addEdge,
   removeEdge,
   autoDetectEdgeType,

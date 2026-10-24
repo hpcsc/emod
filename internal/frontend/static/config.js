@@ -4,6 +4,9 @@ export const L = {
   // A row holding an automation stacks its gear, name and cadence, and keeps
   // them clear of an arrowhead reaching in from the top or bottom edge.
   automationRowHeight: 79,
+  // The size a copy of an event writes the slice that declares the event at,
+  // under the event's name.
+  copyFromSize: 10,
   sliceGap: 40, contextGap: 70,
   laneHeight: 190, laneGap: 30,
   swimlaneHdr: 44, swimlanePad: 10,
@@ -48,6 +51,10 @@ export const nodePalette = {
   automation:  { fill: '#16201b', hoverFill: '#e2e9e5', highlightFill: '#ecefed' },
   translation: { fill: '#f5f5f5', stroke: '#666666', hoverFill: '#d0d0d0', highlightFill: '#e0e0e0' },
 };
+
+// A copy of an event is no element type of its own: it takes the event's stroke,
+// and this fill and dash, which the SVG and draw.io exports draw it with too.
+export const eventCopyStyle = { fill: '#ffffff', dash: '5,3' };
 
 // The gear an automation is drawn as, in a 30px square centred on the origin.
 // The Go exporters trace the same gear, and a Go test compares the two.

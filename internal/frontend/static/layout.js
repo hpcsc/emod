@@ -1,4 +1,5 @@
 import { L, PORT_DIRECTIONS } from './config.js';
+import { Model } from './model.js';
 
 // The size the hidden measurer draws at, and the gap labelWidth adds so two
 // measured labels laid side by side do not touch. Private: a caller needing
@@ -65,6 +66,13 @@ function processorLabel(node) {
   return node.external_system || node.label;
 }
 
+// The line a copy of an event writes under the event's name: the slice that
+// declares the event. Empty when the diagram no longer holds that event.
+function copyFromLine(store, copy) {
+  const slice = Model.sliceDeclaring(store, copy);
+  return slice ? "from " + slice.label : "";
+}
+
 function rowSpanWidth(itemWidths) {
   const total = itemWidths.reduce(function(sum, w) { return sum + w; }, 0);
   return total + 20 + (itemWidths.length - 1) * L.sideGap - 40;
@@ -89,11 +97,23 @@ function computeLayout(store) {
     const views = childrenOfType(sl.children, "view");
     const translations = childrenOfType(sl.children, "translation");
     const processors = translations.concat(childrenOfType(sl.children, "automation"));
+    const copies = childrenOfType(sl.children, "event_copy");
+
+    function copyWidth(copy) {
+      return Math.max(labelWidth(copy.label), labelAdvance(copyFromLine(store, copy), L.copyFromSize));
+    }
 
     const allLabelWidths = sl.children.map(function(c) { return labelWidth(c.label); });
     translations.forEach(function(t) { allLabelWidths.push(labelWidth(processorLabel(t))); });
+    copies.forEach(function(c) { allLabelWidths.push(copyWidth(c)); });
     if (events.length > 1) {
       allLabelWidths.push(rowSpanWidth(events.map(function(e) { return labelWidth(e.label); })));
+    }
+    // A row gives each of its boxes an equal share of the slice, so the slice has
+    // to be wide enough for the widest copy as many times as there are copies.
+    if (copies.length > 1) {
+      const widest = Math.max(...copies.map(copyWidth));
+      allLabelWidths.push(rowSpanWidth(copies.map(function() { return widest; })));
     }
     if (processors.length > 1) {
       allLabelWidths.push(rowSpanWidth(processors.map(function(p) { return labelWidth(processorLabel(p)); })));
@@ -131,7 +151,7 @@ function computeLayout(store) {
       blockY += L.boxHeight + gap;
     }
 
-    const viewsOnly = views.length > 0 && views.length === sl.children.length;
+    const viewsOnly = views.length > 0 && views.length + copies.length === sl.children.length;
     if (viewsOnly) blockY += L.boxHeight + gap;
 
     placeColumn(triggers);
@@ -139,6 +159,7 @@ function computeLayout(store) {
     placeColumn(commands);
     placeRow(events, L.boxHeight);
     placeColumn(views);
+    placeRow(copies, L.boxHeight);
 
     const childBoxes = [];
     sl.children.forEach(function(c) {
@@ -294,7 +315,7 @@ function getConnectedEdges(edges, nodeId) {
 function getSliceChildNodeIds(nodes, sliceId) {
   const ids = [];
   nodes.forEach(function(n) {
-    if (n.parentId === sliceId && (n.type === "command" || n.type === "event" || n.type === "trigger" || n.type === "view" || n.type === "automation" || n.type === "translation")) {
+    if (n.parentId === sliceId && (n.type === "command" || n.type === "event" || n.type === "trigger" || n.type === "view" || n.type === "automation" || n.type === "translation" || n.type === "event_copy")) {
       ids.push(n.id);
     }
   });
@@ -427,6 +448,7 @@ export const Layout = {
   labelWidth,
   textWidth,
   labelAdvance,
+  copyFromLine,
   portAnchor,
   buildTree,
   computeLayout,
