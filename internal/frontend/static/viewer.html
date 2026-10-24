@@ -953,6 +953,11 @@ body.file-drop-target-active::after {
   margin-bottom: 6px;
   overflow-wrap: break-word;
 }
+#tooltip .tt-copy {
+  color: #6b7a86;
+  margin-bottom: 6px;
+  overflow-wrap: break-word;
+}
 #tooltip .tt-comment {
   color: #6b7a86;
   font-style: italic;
@@ -1207,9 +1212,13 @@ body.file-drop-target-active::after {
 #diagram-canvas.has-highlights .diagram-node:not(.hl) .gear {
   opacity: 0.3;
 }
-#diagram-canvas .hl rect {
+#diagram-canvas .hl rect,
+#diagram-canvas .copy-original rect {
   stroke: #3498db !important;
   stroke-width: 2.5px !important;
+}
+#diagram-canvas .event-copy-block {
+  cursor: pointer;
 }
 #diagram-canvas .hl.command-block rect {
   fill: #d4e4f7 !important;

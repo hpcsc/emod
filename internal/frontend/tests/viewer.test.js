@@ -2129,6 +2129,76 @@ describe('a diagram edit reaching the source panel', () => {
       expect(document.getElementById('ctx-menu').style.display).not.toBe('block');
       expect(menuItemFor('open-field-editor')).toBeNull();
     });
+
+    const markedAsOriginal = (nodeId) => blockFor(nodeId).classList.contains('copy-original');
+
+    it('marks the event it copies while the pointer is over it', async () => {
+      await openWithCopy();
+
+      fireMouse(blockFor('event_copy-1'), 'pointerover');
+
+      expect(markedAsOriginal('event-1')).toBe(true);
+      expect(markedAsOriginal('event-2')).toBe(false);
+    });
+
+    it('takes the mark off the event once the pointer moves to another block', async () => {
+      await openWithCopy();
+      fireMouse(blockFor('event_copy-1'), 'pointerover');
+
+      fireMouse(blockFor('command-1'), 'pointerover');
+
+      expect(markedAsOriginal('event-1')).toBe(false);
+    });
+
+    it('paints the marked event in the stroke a highlighted block is painted in', () => {
+      const css = readFileSync(resolve(__dirname, '../static/viewer.html'), 'utf-8');
+
+      expect(css).toMatch(/#diagram-canvas \.hl rect,\s*#diagram-canvas \.copy-original rect\s*\{[^}]*stroke: #3498db/);
+    });
+
+    it('names the slice that declares the event in its tooltip', async () => {
+      await openWithCopy();
+
+      fireMouse(blockFor('event_copy-1'), 'pointerover');
+
+      expect(document.getElementById('tooltip').textContent)
+        .toContain('A copy of the event in Take Payment. Click to show that event.');
+    });
+
+    it('highlights the event it copies when clicked', async () => {
+      await openWithCopy();
+
+      fireMouse(blockFor('event_copy-1'), 'click');
+
+      expect(blockFor('event-1').classList.contains('hl')).toBe(true);
+      expect(blockFor('event_copy-1').classList.contains('hl')).toBe(false);
+    });
+
+    it('moves the canvas until the event it copies sits in the middle of it when clicked', async () => {
+      await openWithCopy();
+      const canvas = document.getElementById('diagram-canvas');
+
+      fireMouse(blockFor('event_copy-1'), 'click');
+
+      const [, offsetX, offsetY, scale] = /translate\(([-\d.]+), ([-\d.]+)\) scale\(([-\d.]+)\)/
+        .exec(canvas.querySelector('#viewport-group').getAttribute('transform')).map(Number);
+      const box = blockFor('event-1').querySelector('rect');
+      const [vx, vy, vw, vh] = canvas.getAttribute('viewBox').split(' ').map(Number);
+      const centreX = (Number(box.getAttribute('x')) + Number(box.getAttribute('width')) / 2) * scale + offsetX;
+      const centreY = (Number(box.getAttribute('y')) + Number(box.getAttribute('height')) / 2) * scale + offsetY;
+      expect(centreX).toBeCloseTo(vx + vw / 2);
+      expect(centreY).toBeCloseTo(vy + vh / 2);
+    });
+
+    it('asks the pipeline nothing when clicked', async () => {
+      await openWithCopy();
+      const before = applies();
+
+      fireMouse(blockFor('event_copy-1'), 'click');
+      await settle();
+
+      expect(applies()).toBe(before);
+    });
   });
 
   describe('what the window shows once an edit is applied', () => {

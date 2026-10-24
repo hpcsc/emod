@@ -140,6 +140,10 @@ bus.on('diagram:rendered', function({ store: s }) {
   UI.renderActorAnnotations(s);
 });
 
+bus.on('node:show', function({ store: s, nodeId }) {
+  Interaction.centreOn(s, nodeId);
+});
+
 // ─── Init ───────────────────────────────────────────────────────────
 function init() {
   // ─── Create store and wire DOM references ────────────────────────────

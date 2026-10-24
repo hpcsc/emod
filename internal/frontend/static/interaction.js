@@ -86,6 +86,20 @@ function fitToView(store) {
   applyViewport(store);
 }
 
+// Pans the canvas, at the zoom it is at, until the block sits in the middle of
+// what the canvas shows. The offset is in the SVG's own units, and the middle of
+// the viewBox is drawn in the middle of the canvas.
+function centreOn(store, nodeId) {
+  const pos = store.layoutPositions[nodeId];
+  const viewBox = (store.dom.svg.getAttribute("viewBox") || "").split(/\s+/).map(Number);
+  if (!pos || viewBox.length !== 4) return;
+
+  const scale = store.viewport.zoomScale;
+  store.viewport.offsetX = viewBox[0] + viewBox[2] / 2 - (pos.x + pos.w / 2) * scale;
+  store.viewport.offsetY = viewBox[1] + viewBox[3] / 2 - (pos.y + pos.h / 2) * scale;
+  applyViewport(store);
+}
+
 function getConnectedEdges(store, nodeId) {
   return Layout.getConnectedEdges(store.edges, nodeId);
 }
@@ -1095,4 +1109,5 @@ export const Interaction = {
   clampZoom,
   applyViewport,
   fitToView,
+  centreOn,
 };

@@ -80,9 +80,36 @@ function hoveredNode(store, target) {
 function tooltipHtmlFor(store, target) {
   const node = hoveredNode(store, target);
   if (!node) return "";
+  if (Model.isEventCopy(node)) return buildCopyHtml(store, node);
 
   const body = buildBodyHtml(node, target.dataset.marker);
   return body ? buildHeadingHtml(node) + body : "";
+}
+
+function buildCopyHtml(store, copy) {
+  const slice = Model.sliceDeclaring(store, copy);
+  if (!slice) {
+    return buildHeadingHtml(copy) + '<div class="tt-copy">A copy of an event the diagram no longer holds</div>';
+  }
+  return buildHeadingHtml(copy) +
+    '<div class="tt-copy">A copy of the event in ' + Renderer.esc(slice.label) + '. Click to show that event.</div>' +
+    buildBodyHtml(store.nodeById.get(copy.copy_of));
+}
+
+function markOriginalOf(store, node) {
+  store.dom.svg.querySelectorAll(".copy-original").forEach(function(el) {
+    el.classList.remove("copy-original");
+  });
+  if (!Model.isEventCopy(node)) return;
+  const original = store.dom.svg.querySelector('.diagram-node[data-node-id="' + node.copy_of + '"]');
+  if (original) original.classList.add("copy-original");
+}
+
+function showOriginalOf(store, copy) {
+  if (!store.nodeById.get(copy.copy_of)) return;
+  if (store.interaction.selectedNodeId) hideDetailPanel(store);
+  highlightElements(store, [copy.copy_of]);
+  bus.emit('node:show', { store, nodeId: copy.copy_of });
 }
 
 function updateTooltipFor(store, target, evt) {
@@ -929,6 +956,15 @@ function initDelegation(store) {
     if (hovered) positionTooltip(store, evt.clientX, evt.clientY);
   });
 
+  svgEl.addEventListener("pointerover", function(evt) {
+    const block = evt.target.closest(".diagram-node");
+    markOriginalOf(store, block ? store.nodeById.get(block.getAttribute("data-node-id")) : null);
+  });
+
+  svgEl.addEventListener("pointerleave", function() {
+    markOriginalOf(store, null);
+  });
+
   // Arrow handle visibility on hover
   var arrowHovered = null;
 
@@ -1020,6 +1056,15 @@ function initDelegation(store) {
           }
           showEdgeDetail(store);
         }
+      }
+    }
+
+    if (!interactive) {
+      const block = target.closest(".diagram-node");
+      const node = block && store.nodeById.get(block.getAttribute("data-node-id"));
+      if (Model.isEventCopy(node)) {
+        interactive = true;
+        showOriginalOf(store, node);
       }
     }
 
