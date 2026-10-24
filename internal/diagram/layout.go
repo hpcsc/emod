@@ -168,10 +168,16 @@ func collectSlices(model *ast.Model) []sliceEntry {
 	return entries
 }
 
-// sliceXPositions returns the x each slice is drawn at, left to right, with a
+// sliceColumn is the band of the layout a slice is drawn in: the x it starts at,
+// and how wide it runs from there.
+type sliceColumn struct {
+	x, w int
+}
+
+// sliceColumns returns the column each slice is drawn in, left to right, with a
 // wider gap wherever one context gives way to the next.
-func sliceXPositions(entries []sliceEntry) []int {
-	positions := make([]int, len(entries))
+func sliceColumns(entries []sliceEntry) []sliceColumn {
+	columns := make([]sliceColumn, len(entries))
 	x := marginX
 
 	for i, entry := range entries {
@@ -182,11 +188,11 @@ func sliceXPositions(entries []sliceEntry) []int {
 				x += contextGap
 			}
 		}
-		positions[i] = x
-		x += sliceWidth
+		columns[i] = sliceColumn{x: x, w: sliceWidth}
+		x += columns[i].w
 	}
 
-	return positions
+	return columns
 }
 
 // contextBound is the horizontal band a context occupies, spanning the slices
@@ -198,10 +204,10 @@ type contextBound struct {
 	w           int
 }
 
-// contextBounds returns one band per context, laid over the slices at the given
-// positions. A band stops short of the gap separating it from the next context;
+// contextBounds returns one band per context, laid over the slices in the given
+// columns. A band stops short of the gap separating it from the next context;
 // only the last one runs to the right edge of the layout.
-func contextBounds(entries []sliceEntry, sliceXs []int) []contextBound {
+func contextBounds(entries []sliceEntry, columns []sliceColumn) []contextBound {
 	var bounds []contextBound
 
 	for i, entry := range entries {
@@ -209,23 +215,24 @@ func contextBounds(entries []sliceEntry, sliceXs []int) []contextBound {
 			continue
 		}
 		if len(bounds) > 0 {
-			bounds[len(bounds)-1].w = sliceXs[i-1] + sliceWidth - contextGap - bounds[len(bounds)-1].x
+			bounds[len(bounds)-1].w = columns[i-1].x + columns[i-1].w - contextGap - bounds[len(bounds)-1].x
 		}
-		bounds = append(bounds, contextBound{name: entry.ctxName, description: entry.ctxDescription, x: sliceXs[i]})
+		bounds = append(bounds, contextBound{name: entry.ctxName, description: entry.ctxDescription, x: columns[i].x})
 	}
 	if len(bounds) > 0 {
-		bounds[len(bounds)-1].w = layoutWidth(sliceXs) - bounds[len(bounds)-1].x
+		bounds[len(bounds)-1].w = layoutWidth(columns) - bounds[len(bounds)-1].x
 	}
 
 	return bounds
 }
 
 // layoutWidth returns the x the rightmost slice ends at.
-func layoutWidth(sliceXs []int) int {
-	if len(sliceXs) == 0 {
+func layoutWidth(columns []sliceColumn) int {
+	if len(columns) == 0 {
 		return marginX
 	}
-	return sliceXs[len(sliceXs)-1] + sliceWidth
+	last := columns[len(columns)-1]
+	return last.x + last.w
 }
 
 // collectTagKeys returns unique tag keys across all DCB events, sorted alphabetically.
@@ -282,7 +289,7 @@ type reactorBox struct {
 // for each of its translation reactors: a row of their own under the commands
 // and views they wire to, sharing that lane and laid out across the slice the
 // way that row is. lineBreak is how the format drawing them starts a new line.
-func reactorBoxes(s *ast.Slice, cmdViewLaneY, sliceX int, lineBreak string) []reactorBox {
+func reactorBoxes(s *ast.Slice, cmdViewLaneY int, column sliceColumn, lineBreak string) []reactorBox {
 	boxes := make([]reactorBox, 0, len(s.Automations)+len(s.Translations))
 	for _, auto := range s.Automations {
 		boxes = append(boxes, automationBox(auto, lineBreak))
@@ -293,7 +300,7 @@ func reactorBoxes(s *ast.Slice, cmdViewLaneY, sliceX int, lineBreak string) []re
 
 	rowY := laneRowY(cmdViewLaneY) + boxHeight + reactorGap
 	for i := range boxes {
-		boxes[i].w, boxes[i].x = itemLayout(sliceWidth-20, len(boxes), i, sliceX)
+		boxes[i].w, boxes[i].x = itemLayout(column.w-20, len(boxes), i, column.x)
 		boxes[i].y, boxes[i].h = rowY, reactorHeight
 		if boxes[i].isAutomation {
 			boxes[i].placeGear()
@@ -340,7 +347,7 @@ type specCard struct {
 // the band reads as one row. A slice stating none contributes no card, which is
 // what keeps a model without specs drawing exactly what it drew before.
 // lineBreak is how the format drawing them starts a new line.
-func specCards(entries []sliceEntry, sliceXs []int, bandY int, lineBreak string) []specCard {
+func specCards(entries []sliceEntry, columns []sliceColumn, bandY int, lineBreak string) []specCard {
 	cards := make([]specCard, 0, len(entries))
 	for i, entry := range entries {
 		lines := wrapCardLines(specCardLines(entry.slice.Specs))
@@ -349,9 +356,9 @@ func specCards(entries []sliceEntry, sliceXs []int, bandY int, lineBreak string)
 		}
 		cards = append(cards, specCard{
 			label: strings.Join(lines, lineBreak),
-			x:     sliceXs[i] + 10,
+			x:     columns[i].x + 10,
 			y:     bandY + laneHeaderHeight + specBandGap,
-			w:     sliceWidth - 20,
+			w:     columns[i].w - 20,
 			h:     len(lines)*specCardLineHeight + 2*specCardPadding,
 		})
 	}

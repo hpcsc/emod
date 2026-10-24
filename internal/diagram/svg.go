@@ -16,8 +16,8 @@ func ExportSVG(model *ast.Model, _ Style, opts ...Option) ([]byte, error) {
 
 	entries := collectSlices(model)
 
-	sliceXs := sliceXPositions(entries)
-	ctxBounds := contextBounds(entries, sliceXs)
+	columns := sliceColumns(entries)
+	ctxBounds := contextBounds(entries, columns)
 
 	triggerLaneY := marginY
 	cmdViewLaneY := triggerLaneY + laneHeight + laneGap
@@ -27,11 +27,11 @@ func ExportSVG(model *ast.Model, _ Style, opts ...Option) ([]byte, error) {
 
 	var cards []specCard
 	if resolveOptions(opts).specs {
-		cards = specCards(entries, sliceXs, specBandY, "\n")
+		cards = specCards(entries, columns, specBandY, "\n")
 	}
 	bandHeight := specBandHeight(cards)
 
-	diagramW := layoutWidth(sliceXs) + marginX + 120
+	diagramW := layoutWidth(columns) + marginX + 120
 	diagramH := 2*marginY + 4*laneHeight + 3*laneGap
 	if bandHeight > 0 {
 		diagramH = specBandY + bandHeight + marginY
@@ -78,11 +78,12 @@ func ExportSVG(model *ast.Model, _ Style, opts ...Option) ([]byte, error) {
 	// Place elements per slice
 	for i, entry := range entries {
 		s := entry.slice
-		sliceX := sliceXs[i]
+		column := columns[i]
+		sliceX := column.x
 
 		// --- Trigger (top lane) ---
 		if s.Trigger != nil {
-			x := sliceX + (sliceWidth-boxWidth)/2
+			x := sliceX + (column.w-boxWidth)/2
 			y := triggerRowY
 			label := s.Trigger.Name
 			if s.Trigger.Actor != "" {
@@ -95,7 +96,7 @@ func ExportSVG(model *ast.Model, _ Style, opts ...Option) ([]byte, error) {
 
 		// --- Commands (middle lane) ---
 		totalMid := len(s.Commands) + len(s.Views)
-		usableW := sliceWidth - 20
+		usableW := column.w - 20
 		for ci, cmd := range s.Commands {
 			itemW, x := itemLayout(usableW, totalMid, ci, sliceX)
 			b.WriteString(svgRoundedRect(x, cmdViewRowY, itemW, boxHeight, fillCommand, strokeCommand, 5, cmd.Description))
@@ -152,7 +153,7 @@ func ExportSVG(model *ast.Model, _ Style, opts ...Option) ([]byte, error) {
 		}
 
 		// --- Automations and translation reactors (middle lane) ---
-		for _, reactor := range reactorBoxes(s, cmdViewLaneY, sliceX, "\n") {
+		for _, reactor := range reactorBoxes(s, cmdViewLaneY, column, "\n") {
 			if reactor.isAutomation {
 				b.WriteString(svgGear(reactor.x, reactor.y, reactor.w, reactor.description))
 				b.WriteString(svgMultilineText(reactor.x+reactor.w/2, svgUnderGear(reactor),
@@ -168,7 +169,7 @@ func ExportSVG(model *ast.Model, _ Style, opts ...Option) ([]byte, error) {
 		for ti, tr := range s.Translations {
 			extW := externalBoxWidth
 			extH := externalBoxHeight
-			extX := sliceX + (sliceWidth-extW)/2
+			extX := sliceX + (column.w-extW)/2
 			extY := extRowY - extH/2
 			if ti > 0 {
 				extY += ti * (extH + externalBoxGap)

@@ -70,9 +70,9 @@ func ExportDrawio(model *ast.Model, style Style, opts ...Option) ([]byte, error)
 		return id
 	}
 
-	sliceXs := sliceXPositions(entries)
-	ctxBounds := contextBounds(entries, sliceXs)
-	diagramW := layoutWidth(sliceXs) + marginX
+	columns := sliceColumns(entries)
+	ctxBounds := contextBounds(entries, columns)
+	diagramW := layoutWidth(columns) + marginX
 
 	// --- Calculate swim lane positions ---
 	var (
@@ -244,13 +244,14 @@ func ExportDrawio(model *ast.Model, style Style, opts ...Option) ([]byte, error)
 	// Place elements per slice
 	for i, entry := range entries {
 		s := entry.slice
-		sliceX := sliceXs[i]
+		column := columns[i]
+		sliceX := column.x
 
 		// --- Trigger (triggers/commands lane in projected, top lane in standard) ---
 		if s.Trigger != nil {
 			id := allocID()
 			framingID := allocID()
-			x := sliceX + (sliceWidth-boxWidth)/2
+			x := sliceX + (column.w-boxWidth)/2
 			label := s.Trigger.Name
 			if s.Trigger.Actor != "" {
 				label = fmt.Sprintf("%s (%s)", s.Trigger.Name, s.Trigger.Actor)
@@ -262,7 +263,7 @@ func ExportDrawio(model *ast.Model, style Style, opts ...Option) ([]byte, error)
 
 		// --- Commands (middle lane) ---
 		totalMid := len(s.Commands) + len(s.Views)
-		usableW := sliceWidth - 20
+		usableW := column.w - 20
 		for ci, cmd := range s.Commands {
 			id := allocID()
 			itemW, x := itemLayout(usableW, totalMid, ci, sliceX)
@@ -289,7 +290,6 @@ func ExportDrawio(model *ast.Model, style Style, opts ...Option) ([]byte, error)
 		// --- Events ---
 		// In projected style, DCB events go to tag lanes; aggregate events go to Events lane.
 		// In standard style, all events go to the Events lane.
-		usableW = sliceWidth - 20
 		totalEvts := len(s.Events) + len(s.Rejections)
 		for _, tr := range s.Translations {
 			if tr.Event != nil && tr.Event.Name != "" {
@@ -363,7 +363,7 @@ func ExportDrawio(model *ast.Model, style Style, opts ...Option) ([]byte, error)
 		}
 
 		// --- Automations and translation reactors (middle lane) ---
-		for _, reactor := range reactorBoxes(s, cmdViewLaneY, sliceX, "\n") {
+		for _, reactor := range reactorBoxes(s, cmdViewLaneY, column, "\n") {
 			id := allocID()
 			style := styleTranslation
 			if reactor.isAutomation {
@@ -378,7 +378,7 @@ func ExportDrawio(model *ast.Model, style Style, opts ...Option) ([]byte, error)
 			id := allocID()
 			extW := externalBoxWidth
 			extH := externalBoxHeight
-			extX := sliceX + (sliceWidth-extW)/2
+			extX := sliceX + (column.w-extW)/2
 			extY := extRowY - extH/2
 			if ti > 0 {
 				extY += ti * (extH + externalBoxGap)
@@ -533,7 +533,7 @@ func ExportDrawio(model *ast.Model, style Style, opts ...Option) ([]byte, error)
 	// and an id taken before either guard renumbers every cell after it.
 	if resolveOptions(opts).specs {
 		specBandY := specBandTop(entries, extLaneY)
-		if cards := specCards(entries, sliceXs, specBandY, "\n"); len(cards) > 0 {
+		if cards := specCards(entries, columns, specBandY, "\n"); len(cards) > 0 {
 			b.WriteString(swimlaneCell(allocID(), "Specs", marginX, specBandY,
 				diagramW-2*marginX, specBandHeight(cards)))
 			for _, card := range cards {
