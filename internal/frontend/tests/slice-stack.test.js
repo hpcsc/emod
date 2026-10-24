@@ -57,6 +57,21 @@ function render(nodes, edges) {
   return { svg: Renderer.buildSVG(store), positions: store.layoutPositions };
 }
 
+// A slice of views alone beside a slice a trigger starts, as a state view sits
+// beside the state change whose events it reads.
+function viewOnlySliceBesideStateChange() {
+  return [
+    { id: 'ctx1', type: 'context', label: 'Collections' },
+    { id: 'agg1', type: 'aggregate', label: 'Arrangement', parentId: 'ctx1' },
+    { id: 'sl1', type: 'slice', label: 'Chase invoice', parentId: 'agg1' },
+    { id: 'trg1', type: 'trigger', label: 'CollectorScreen', parentId: 'sl1' },
+    { id: 'cmd1', type: 'command', label: 'ChaseInvoice', parentId: 'sl1' },
+    { id: 'evt1', type: 'event', label: 'InvoiceChased', parentId: 'sl1' },
+    { id: 'sl2', type: 'slice', label: 'See arrears', parentId: 'agg1' },
+    { id: 'view1', type: 'view', label: 'ArrearsView', parentId: 'sl2' },
+  ];
+}
+
 // Two slices side by side, one started by a trigger and one by an automation,
 // each issuing a command.
 function commandsUnderATriggerAndAnAutomation() {
@@ -211,6 +226,21 @@ describe('a slice stacked top to bottom', () => {
       const positions = layOut(commandsUnderATriggerAndAnAutomation());
 
       expect(positions.cmd2.y).toBe(positions.cmd1.y);
+    });
+  });
+
+  describe('declaring only views', () => {
+    it('puts the view level with the command a trigger stands over in the slice beside it', () => {
+      const positions = layOut(viewOnlySliceBesideStateChange());
+
+      expect(positions.view1.y).toBe(positions.cmd1.y);
+    });
+
+    it('keeps the view inside its own slice', () => {
+      const positions = layOut(viewOnlySliceBesideStateChange());
+
+      const slice = positions.sl2;
+      expect(positions.view1.y + positions.view1.h).toBeLessThan(slice.y + slice.h);
     });
   });
 
