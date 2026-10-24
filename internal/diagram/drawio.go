@@ -21,6 +21,7 @@ const (
 	styleTranslation    = boxBase + "fillColor=" + fillTranslation + ";strokeColor=" + strokeTranslation + ";" + boxFont
 	styleExternalSystem = boxBase + "fillColor=" + fillExternal + ";strokeColor=" + strokeExternal + ";dashed=1;" + boxFont
 	styleRejection      = boxBase + "fillColor=" + fillRejection + ";strokeColor=" + strokeRejection + ";dashed=1;" + boxFont
+	styleEventCopy      = boxBase + "fillColor=" + fillEventCopy + ";strokeColor=" + strokeEvent + ";dashed=1;" + boxFont
 	// The size here must stay specCardFontSize: a card's height is derived from
 	// it, so a card left at draw.io's own default is drawn in a box measured for
 	// a size it is not painted at. A leaf compares this against the size the SVG
@@ -106,11 +107,11 @@ func ExportDrawio(model *ast.Model, style Style, opts ...Option) ([]byte, error)
 		// - aggregate events, or
 		// - untagged DCB events, or
 		// - translation events (from any slice), or
-		// - rejection badges, which are drawn in the events row
+		// - rejection badges or copies of events, which are drawn in the events row
 		hasEventsLane = hasAggEvents
 		if !hasEventsLane {
 			for _, e := range entries {
-				if len(e.slice.Rejections) > 0 {
+				if len(e.slice.Rejections) > 0 || len(e.copies) > 0 {
 					hasEventsLane = true
 					break
 				}
@@ -226,6 +227,10 @@ func ExportDrawio(model *ast.Model, style Style, opts ...Option) ([]byte, error)
 	// whichever slice was drawn first.
 	badges := make([][]namedElem, len(entries))
 
+	// A copy is filed per slice, by the event it copies: nameToElem keeps the
+	// original, which every slice but this one draws its arrows from.
+	copyElems := make([]map[string]namedElem, len(entries))
+
 	type pendingBadge struct {
 		sliceIndex int
 		name       string
@@ -290,12 +295,7 @@ func ExportDrawio(model *ast.Model, style Style, opts ...Option) ([]byte, error)
 		// --- Events ---
 		// In projected style, DCB events go to tag lanes; aggregate events go to Events lane.
 		// In standard style, all events go to the Events lane.
-		totalEvts := len(s.Events) + len(s.Rejections)
-		for _, tr := range s.Translations {
-			if tr.Event != nil && tr.Event.Name != "" {
-				totalEvts++
-			}
-		}
+		totalEvts := eventRowItems(s) + len(entry.copies)
 		ei := 0
 		for _, evt := range s.Events {
 			label := evt.Name
@@ -362,6 +362,16 @@ func ExportDrawio(model *ast.Model, style Style, opts ...Option) ([]byte, error)
 			})
 		}
 
+		// --- Copies of events a view here subscribes to from other slices (events row) ---
+		copyElems[i] = make(map[string]namedElem, len(entry.copies))
+		for _, c := range entry.copies {
+			id := allocID()
+			itemW, x := itemLayout(usableW, totalEvts, ei, sliceX)
+			ei++
+			b.WriteString(vertexCell(id, strings.Join(c.labelLines(), "\n"), "", x, eventRowY, itemW, boxHeight, styleEventCopy))
+			copyElems[i][c.Event] = namedElem{name: c.Event, id: id, x: x, y: eventRowY, w: itemW, h: boxHeight}
+		}
+
 		// --- Automations and translation reactors (middle lane) ---
 		for _, reactor := range reactorBoxes(s, cmdViewLaneY, column, "\n") {
 			id := allocID()
@@ -404,6 +414,7 @@ func ExportDrawio(model *ast.Model, style Style, opts ...Option) ([]byte, error)
 	greenUpStyle := "edgeStyle=orthogonalEdgeStyle;html=1;fontFamily=Helvetica;strokeColor=" + strokeGreenUp + ";fontSize=10;endArrow=classic;exitX=1;exitY=0.5;exitDx=0;exitDy=0;entryX=0;entryY=1;entryDx=0;entryDy=0;curved=1;"
 	extStyle := "edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;fontFamily=Helvetica;strokeColor=" + strokeExternal + ";dashed=1;endArrow=classic;fontSize=10;"
 	rejectionStyle := "edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;fontFamily=Helvetica;strokeColor=" + strokeRejection + ";dashed=1;endArrow=classic;"
+	copyStyle := "edgeStyle=orthogonalEdgeStyle;html=1;fontFamily=Helvetica;strokeColor=" + strokeGreenUp + ";endArrow=classic;exitX=0.5;exitY=0;exitDx=0;exitDy=0;entryX=0.5;entryY=1;entryDx=0;entryDy=0;"
 
 	// Global element lookup across all slices (needed for cross-slice references)
 	// For multi-tag events, only the first representation is stored in nameToElem
@@ -487,7 +498,11 @@ func ExportDrawio(model *ast.Model, style Style, opts ...Option) ([]byte, error)
 				}
 
 			case EdgeSubscription:
-				if from != nil && to != nil {
+				if copied, ok := copyElems[i][edge.From]; ok && to != nil {
+					// A copy sits under the view in its own slice, so the arrow
+					// climbs straight from the copy's top into the view.
+					b.WriteString(edgeCell(allocID(), copyStyle, copied.id, to.id))
+				} else if from != nil && to != nil {
 					// The green subscription arrow runs horizontally into the
 					// view's left edge at the event's height.
 					rightX := from.x + from.w + waypointMargin

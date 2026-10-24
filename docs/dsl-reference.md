@@ -354,6 +354,7 @@ slice "<name>" {
 `subscribes` references event names declared **anywhere in the model** — in any slice, under any aggregate or context, the same scope an automation's `reads` resolves in (see [Cross-References](#11-cross-references)).
 
 - **`view/never-read` asks who acts on it:** the rule reports at warning severity when no `reads` anywhere in the model names the view. A view takes one of two legitimate shapes: a trigger reads it, or a processor reads it as its todo list. The rule fires only once the model states at least one `reads`. Run `emod lint --explain view/never-read` for the full description.
+- **The drawn diagrams copy the events of a view that reads far:** when a view subscribes to more than three events that other slices declare, `emod diagram --format drawio` and `--format svg` draw each of those events again in the view's own slice, and the view's arrows start at these copies. A copy has a dashed outline in the event's stroke, a white fill, and a second line `from <slice>` that names the slice that declares the event. A slice draws one copy of an event, however many of its views subscribe to it. At three events or fewer, the arrows start at the events themselves. The Mermaid and ASCII formats draw no subscription arrows, so they draw no copies.
 
 ### Automation Pattern
 
@@ -855,6 +856,8 @@ The renderers that draw the whole model use one palette for element types. The S
 | View        | #d5e8d4   | #82b366   | Green sticky note.                      |
 | Automation  | #16201b   | —         | Dark gear above its name.               |
 | Translation | #f5f5f5   | #666666   | Grey integration.                       |
+
+A copy of an event, drawn in the slice of a view that subscribes to many events from other slices (see [View Pattern](#view-pattern)), is not an element type. It takes the event's stroke #d79b00 with a dashed outline, and a white #ffffff fill.
 
 ### Event Flow Palette
 

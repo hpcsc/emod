@@ -2999,6 +2999,169 @@ context "Reading Room" {
 }
 `
 
+// SubscribedEventsHotelStays has views that subscribe to events from other
+// slices on either side of the threshold for copies. StayHistoryView, under an
+// aggregate, and CleaningPlanView, in a DCB context, each subscribe to four,
+// and StayHistoryView's four include an event a translation nests.
+// OccupancyView subscribes to three.
+const SubscribedEventsHotelStays = `emod = 1
+
+# A hotel stay, whose history reads every step a stay takes
+model "Hotel Stays" {
+}
+
+actor "Guest" {
+}
+
+context "Stays" {
+  aggregate "Stay" {
+    slice "Reserve Room" {
+      command "ReserveRoom" {
+        fields {
+          stayId     = required(string)
+          roomNumber = required(string)
+        }
+      }
+
+      event "RoomReserved" {
+        fields {
+          stayId     = required(string)
+          roomNumber = required(string)
+        }
+      }
+
+      flow = <<-FLOW
+        command -> event:    ReserveRoom -> RoomReserved
+      FLOW
+    }
+
+    slice "Check In" {
+      command "CheckIn" {
+        fields {
+          stayId     = required(string)
+          roomNumber = required(string)
+        }
+      }
+
+      event "GuestCheckedIn" {
+        fields {
+          stayId     = required(string)
+          roomNumber = required(string)
+        }
+      }
+
+      flow = <<-FLOW
+        command -> event:    CheckIn -> GuestCheckedIn
+      FLOW
+    }
+
+    slice "Import Breakfast Orders" {
+      command "RecordBreakfast" {
+        fields {
+          stayId = required(string)
+          dish   = required(string)
+        }
+      }
+
+      translation "BreakfastImporter" {
+        external_system = "Kitchen POS"
+        command         = RecordBreakfast
+
+        event "BreakfastOrdered" {
+          fields {
+            stayId = required(string)
+            dish   = required(string)
+          }
+        }
+      }
+    }
+
+    slice "Check Out" {
+      command "CheckOut" {
+        fields {
+          stayId     = required(string)
+          roomNumber = required(string)
+        }
+      }
+
+      event "GuestCheckedOut" {
+        fields {
+          stayId     = required(string)
+          roomNumber = required(string)
+        }
+      }
+
+      flow = <<-FLOW
+        command -> event:    CheckOut -> GuestCheckedOut
+      FLOW
+    }
+
+    slice "See Stay History" {
+      view "StayHistoryView" {
+        subscribes = [RoomReserved, GuestCheckedIn, BreakfastOrdered, GuestCheckedOut]
+
+        fields {
+          stayId = required(string)
+        }
+      }
+    }
+
+    slice "See Occupancy" {
+      view "OccupancyView" {
+        subscribes = [RoomReserved, GuestCheckedIn, GuestCheckedOut]
+
+        fields {
+          roomNumber = required(string)
+        }
+      }
+    }
+  }
+}
+
+context "Housekeeping" {
+  mode = dcb
+
+  slice "Clean Room" {
+    command "CleanRoom" {
+      fields {
+        roomNumber = required(string)
+        cleanedBy  = required(string)
+      }
+
+      decides_on {
+        events = [RoomCleaned]
+        where  = tag(room, roomNumber)
+      }
+    }
+
+    event "RoomCleaned" {
+      tags {
+        room = roomNumber
+      }
+
+      fields {
+        roomNumber = required(string)
+        cleanedBy  = required(string)
+      }
+    }
+
+    flow = <<-FLOW
+      command -> event:    CleanRoom -> RoomCleaned
+    FLOW
+  }
+
+  slice "Plan Cleaning" {
+    view "CleaningPlanView" {
+      subscribes = [RoomReserved, GuestCheckedIn, GuestCheckedOut, RoomCleaned]
+
+      fields {
+        roomNumber = required(string)
+      }
+    }
+  }
+}
+`
+
 // SpecLibraryLendingSpecNames transcribes the name of every scenario
 // SpecLibraryLending states, both slice homes together and in declaration order,
 // so a walk or a strip that reaches only one of the homes reads back short

@@ -75,6 +75,10 @@ func ExportSVG(model *ast.Model, _ Style, opts ...Option) ([]byte, error) {
 	// whichever slice was drawn last.
 	badges := make([][]svgBox, len(entries))
 
+	// A copy is filed per slice, by the event it copies: nameToBox keeps the
+	// original, which every slice but this one draws its arrows from.
+	copyBoxes := make([]map[string]svgBox, len(entries))
+
 	// Place elements per slice
 	for i, entry := range entries {
 		s := entry.slice
@@ -113,13 +117,8 @@ func ExportSVG(model *ast.Model, _ Style, opts ...Option) ([]byte, error) {
 			nameToBox[view.Name] = svgBox{x: x, y: cmdViewRowY, w: itemW, h: boxHeight}
 		}
 
-		// --- Events (bottom lane, including translation events and rejection badges) ---
-		totalEvts := len(s.Events) + len(s.Rejections)
-		for _, tr := range s.Translations {
-			if tr.Event != nil && tr.Event.Name != "" {
-				totalEvts++
-			}
-		}
+		// --- Events (bottom lane, including translation events, rejection badges and copies) ---
+		totalEvts := eventRowItems(s) + len(entry.copies)
 		ei := 0
 		for me, evt := range s.Events {
 			itemW, x := itemLayout(usableW, totalEvts, me, sliceX)
@@ -150,6 +149,16 @@ func ExportSVG(model *ast.Model, _ Style, opts ...Option) ([]byte, error) {
 				entry.invariantStatement(rejection.InvariantName)))
 			b.WriteString(svgText(x+itemW/2, eventRowY+boxHeight/2, rejection.InvariantName, 11, strokeRejection))
 			badges[i] = append(badges[i], svgBox{x: x, y: eventRowY, w: itemW, h: boxHeight})
+		}
+
+		// --- Copies of events a view here subscribes to from other slices (event row) ---
+		copyBoxes[i] = make(map[string]svgBox, len(entry.copies))
+		for _, c := range entry.copies {
+			itemW, x := itemLayout(usableW, totalEvts, ei, sliceX)
+			ei++
+			b.WriteString(svgDashedRoundedRect(x, eventRowY, itemW, boxHeight, fillEventCopy, strokeEvent, 5, ""))
+			b.WriteString(svgMultilineText(x+itemW/2, eventRowY+boxHeight/2, strings.Join(c.labelLines(), "\n"), 11, strokeEvent))
+			copyBoxes[i][c.Event] = svgBox{x: x, y: eventRowY, w: itemW, h: boxHeight}
 		}
 
 		// --- Automations and translation reactors (middle lane) ---
@@ -233,6 +242,16 @@ func ExportSVG(model *ast.Model, _ Style, opts ...Option) ([]byte, error) {
 					b.WriteString(svgDashedArrowBetween(from, badges[i][rejected]))
 				}
 				rejected++
+
+			case EdgeSubscription:
+				from, fromDrawn := copyBoxes[i][edge.From]
+				if !fromDrawn {
+					from, fromDrawn = nameToBox[edge.From]
+				}
+				to, toDrawn := nameToBox[edge.To]
+				if fromDrawn && toDrawn {
+					b.WriteString(svgArrowBetween(from, to))
+				}
 
 			default:
 				from, fromDrawn := nameToBox[edge.From]

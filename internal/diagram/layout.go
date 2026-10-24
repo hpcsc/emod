@@ -106,6 +106,10 @@ const (
 	// draws.
 	fillSpecCard   = "#fff2cc"
 	strokeSpecCard = "#d6b656"
+
+	// A copy of an event takes the event's stroke, so it reads as that event,
+	// and a fill of its own, so it does not read as a second declaration.
+	fillEventCopy = "#ffffff"
 )
 
 // Spec card geometry.
@@ -134,6 +138,7 @@ type sliceEntry struct {
 	// for a slice declared directly on a context, that context's — the scope
 	// rule the validator resolves a rejection against.
 	invariants []*ast.Invariant
+	copies     []EventCopy
 }
 
 // invariantStatement returns the prose of the named invariant, or "" when the
@@ -151,6 +156,8 @@ func (e sliceEntry) invariantStatement(name string) string {
 // collectSlices flattens all slices from the model into a list, in source
 // order within each context.
 func collectSlices(model *ast.Model) []sliceEntry {
+	copies := EventCopies(model)
+
 	var entries []sliceEntry
 	for _, ref := range model.SliceRefs() {
 		invariants := ref.Context.Invariants
@@ -163,9 +170,42 @@ func collectSlices(model *ast.Model) []sliceEntry {
 			ctxDescription: ref.Context.Description,
 			fromDCB:        ref.Aggregate == nil,
 			invariants:     invariants,
+			copies:         copies[ref.Slice],
 		})
 	}
 	return entries
+}
+
+// eventRowItems counts the boxes a slice draws in its events row other than its
+// copies: its events, the events its translations nest, and its rejection badges.
+func eventRowItems(s *ast.Slice) int {
+	return len(declaredEvents(s)) + len(s.Rejections)
+}
+
+// copyMeasureFontSize is draw.io's default font size, the larger of the sizes
+// the two picture formats draw an event's label at.
+const copyMeasureFontSize = 12
+
+// copyLabelPadding keeps the longest line of a copy clear of its outline.
+const copyLabelPadding = 16
+
+// columnWidth is how wide a slice is drawn. A slice that draws copies is widened
+// until every box in its events row is as wide as the longest line of a copy.
+func columnWidth(entry sliceEntry) int {
+	if len(entry.copies) == 0 {
+		return sliceWidth
+	}
+
+	var longest int
+	for _, c := range entry.copies {
+		for _, line := range c.labelLines() {
+			longest = max(longest, estimatedTextWidth(line, copyMeasureFontSize))
+		}
+	}
+	items := eventRowItems(entry.slice) + len(entry.copies)
+	itemW := min(longest+copyLabelPadding, boxWidth)
+
+	return max(sliceWidth, 20+items*itemW+(items-1)*8)
 }
 
 // sliceColumn is the band of the layout a slice is drawn in: the x it starts at,
@@ -188,7 +228,7 @@ func sliceColumns(entries []sliceEntry) []sliceColumn {
 				x += contextGap
 			}
 		}
-		columns[i] = sliceColumn{x: x, w: sliceWidth}
+		columns[i] = sliceColumn{x: x, w: columnWidth(entry)}
 		x += columns[i].w
 	}
 

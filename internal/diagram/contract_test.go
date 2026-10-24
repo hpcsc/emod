@@ -2181,6 +2181,167 @@ func TestExporterRejectionEdge(t *testing.T) {
 	})
 }
 
+// TestExporterEventCopies covers the copy each picture format draws of an event
+// a view subscribes to from another slice, once the view subscribes to more than
+// three such events.
+func TestExporterEventCopies(t *testing.T) {
+	for _, e := range exporters() {
+		if e.boxes == nil {
+			continue
+		}
+
+		t.Run(e.name, func(t *testing.T) {
+			t.Run("draws a copy of each event the view subscribes to, naming the slice that declares it", func(t *testing.T) {
+				output := e.run(t, test.SubscribedEventsHotelStaysModel(t), diagram.StyleAuto)
+
+				require.Equal(t, []string{
+					"RoomReserved\nfrom Reserve Room",
+					"GuestCheckedIn\nfrom Check In",
+					"BreakfastOrdered\nfrom Import Breakfast Orders",
+					"GuestCheckedOut\nfrom Check Out",
+					"RoomReserved\nfrom Reserve Room",
+					"GuestCheckedIn\nfrom Check In",
+					"GuestCheckedOut\nfrom Check Out",
+					"RoomCleaned\nfrom Clean Room",
+				}, labelsOf(copyBoxesIn(e.boxes(t, output))))
+			})
+
+			t.Run("draws the copies in the column of the view's slice, between the slices on either side", func(t *testing.T) {
+				boxes := e.boxes(t, e.run(t, test.SubscribedEventsHotelStaysModel(t), diagram.StyleAuto))
+				copies := copyBoxesIn(boxes)
+
+				before := boxNamed(t, boxes, "GuestCheckedOut").rect
+				after := boxNamed(t, boxes, "OccupancyView").rect
+				for _, copied := range copies[:4] {
+					require.Greater(t, copied.rect.x, before.x+before.w, "%q starts before the slice ahead of it ends", copied.label)
+					require.Less(t, copied.rect.x+copied.rect.w, after.x, "%q runs into the slice after it", copied.label)
+				}
+
+				cleaned := boxNamed(t, boxes, "RoomCleaned").rect
+				for _, copied := range copies[4:] {
+					require.Greater(t, copied.rect.x, cleaned.x+cleaned.w, "%q starts before the slice ahead of it ends", copied.label)
+				}
+			})
+
+			t.Run("draws each copy wide enough for its longest line", func(t *testing.T) {
+				boxes := e.boxes(t, e.run(t, test.SubscribedEventsHotelStaysModel(t), diagram.StyleAuto))
+
+				// 6 px a character is about half an em of Helvetica at the 11 and
+				// 12 px the two formats draw an event's label at.
+				const pxPerCharacter = 6
+				for _, copied := range copyBoxesIn(boxes) {
+					longest := 0
+					for _, line := range cardLines(copied.label) {
+						longest = max(longest, len(line))
+					}
+					require.GreaterOrEqual(t, copied.rect.w, longest*pxPerCharacter, "%q is drawn too narrow for its text", copied.label)
+				}
+			})
+
+			t.Run("the arrows into a view past the threshold start at its copies", func(t *testing.T) {
+				output := e.run(t, test.SubscribedEventsHotelStaysModel(t), diagram.StyleAuto)
+
+				require.Equal(t, []string{
+					"RoomReserved\nfrom Reserve Room",
+					"GuestCheckedIn\nfrom Check In",
+					"BreakfastOrdered\nfrom Import Breakfast Orders",
+					"GuestCheckedOut\nfrom Check Out",
+				}, linesOf(sourcesInto(e.connections(t, output), "StayHistoryView")))
+			})
+
+			t.Run("the arrows into a view at the threshold start at the events themselves", func(t *testing.T) {
+				output := e.run(t, test.SubscribedEventsHotelStaysModel(t), diagram.StyleAuto)
+
+				require.Equal(t, []string{"RoomReserved", "GuestCheckedIn", "GuestCheckedOut"},
+					linesOf(sourcesInto(e.connections(t, output), "OccupancyView")))
+			})
+
+			t.Run("a copy is outlined in the stroke of the event it copies", func(t *testing.T) {
+				boxes := e.boxes(t, e.run(t, test.SubscribedEventsHotelStaysModel(t), diagram.StyleAuto))
+
+				require.Equal(t,
+					paintOf(t, strokePaint, boxNamed(t, boxes, "RoomCleaned")),
+					paintOf(t, strokePaint, boxNamed(t, boxes, "RoomCleaned\nfrom Clean Room")))
+			})
+
+			t.Run("a copy is filled white", func(t *testing.T) {
+				boxes := e.boxes(t, e.run(t, test.SubscribedEventsHotelStaysModel(t), diagram.StyleAuto))
+
+				require.Equal(t, "white", colorFamily(t, paintOf(t, fillPaint, boxNamed(t, boxes, "RoomCleaned\nfrom Clean Room"))))
+			})
+
+			t.Run("a copy is outlined dashed where the event it copies is not", func(t *testing.T) {
+				boxes := e.boxes(t, e.run(t, test.SubscribedEventsHotelStaysModel(t), diagram.StyleAuto))
+
+				require.NotContains(t, boxNamed(t, boxes, "RoomCleaned").appearance, "dash")
+				require.Contains(t, boxNamed(t, boxes, "RoomCleaned\nfrom Clean Room").appearance, "dash")
+			})
+		})
+	}
+}
+
+// strokePaint and fillPaint read a colour out of a box's appearance in either
+// picture format: SVG spells it stroke="#…", draw.io strokeColor=#….
+var (
+	strokePaint = regexp.MustCompile(`\bstroke(?:Color)?="?(#[0-9a-fA-F]{6})`)
+	fillPaint   = regexp.MustCompile(`\bfill(?:Color)?="?(#[0-9a-fA-F]{6})`)
+)
+
+func paintOf(t *testing.T, paint *regexp.Regexp, box diagramBox) string {
+	t.Helper()
+
+	m := paint.FindStringSubmatch(box.appearance)
+	require.NotNil(t, m, "box %q states no %s", box.label, paint)
+
+	return strings.ToLower(m[1])
+}
+
+// copyBoxesIn selects the copies of events out of the boxes a picture draws:
+// the boxes whose second line names the slice the event is declared in.
+func copyBoxesIn(boxes []diagramBox) []diagramBox {
+	var copies []diagramBox
+	for _, box := range boxes {
+		if lines := cardLines(box.label); len(lines) == 2 && strings.HasPrefix(lines[1], "from ") {
+			copies = append(copies, diagramBox{label: lineText(box.label), appearance: box.appearance, rect: box.rect})
+		}
+	}
+
+	return copies
+}
+
+// boxNamed returns the one box whose label, line breaks and all, is label. A
+// copy's first line names its event, so a match on a substring of the label
+// finds the copies as well as the event.
+func boxNamed(t *testing.T, boxes []diagramBox, label string) diagramBox {
+	t.Helper()
+
+	var matched []diagramBox
+	for _, box := range boxes {
+		if lineText(box.label) == label {
+			matched = append(matched, box)
+		}
+	}
+	require.Len(t, matched, 1, "expected one box labelled %q", label)
+
+	return matched[0]
+}
+
+// lineText reads a label back as its lines joined by one line break. SVG reads a
+// label of several lines back with a line break around each line, and draw.io
+// without, so the two read back alike only through here.
+func lineText(label string) string {
+	return strings.Join(cardLines(label), "\n")
+}
+
+func linesOf(labels []string) []string {
+	joined := make([]string, len(labels))
+	for i, label := range labels {
+		joined[i] = lineText(label)
+	}
+
+	return joined
+}
+
 // TestExporterPaletteMatchesReference checks that the documented palette in the
 // DSL reference is the same palette used by the viewer and the Go renderers.
 func TestExporterPaletteMatchesReference(t *testing.T) {

@@ -93,6 +93,12 @@ func WireTypeLibraryLendingModel(t *testing.T) *ast.Model {
 	return parseFixture(t, WireTypeLibraryLending, "wire-types.emod")
 }
 
+func SubscribedEventsHotelStaysModel(t *testing.T) *ast.Model {
+	t.Helper()
+
+	return parseFixture(t, SubscribedEventsHotelStays, "subscribed-events.emod")
+}
+
 // parseFixture runs a fixture through the parser rather than handing back a
 // model built in Go, so what a test reads back cannot drift from what an author
 // writing that source would get.
