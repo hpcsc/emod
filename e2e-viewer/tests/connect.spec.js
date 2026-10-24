@@ -11,7 +11,16 @@ async function addSecondEvent(page) {
   await page.locator('.ctx-menu-item[data-action="add-event"]').click();
   const added = page.locator('.diagram-node').filter({ hasText: 'new-event-2' });
   await expect(added).toBeVisible();
+  await editLanded(page, 'event "new-event-2"');
   return added;
+}
+
+// The added block is drawn at once, but the edit comes back from the worker
+// later and redraws the diagram, with any arrow the model adds for the block.
+// A test that aims at an arrow before then aims at a picture that changes
+// under the pointer.
+async function editLanded(page, declaration) {
+  await expect(page.locator('#source-input')).toHaveValue(new RegExp(declaration));
 }
 
 test.describe('drawing an edge from a port', () => {
@@ -141,6 +150,7 @@ test.describe('repointing an arrow', () => {
     await page.locator('.ctx-menu-item[data-action="add-command"]').click();
     const added = page.locator('.diagram-node').filter({ hasText: 'new-command-2' });
     await expect(added).toBeVisible();
+    await editLanded(page, 'command "new-command-2"');
     return added;
   }
 
