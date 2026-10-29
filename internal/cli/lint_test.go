@@ -112,9 +112,9 @@ context "Fulfillment" {
 }
 `
 
-// singleTagWithClickbaitEmod adds a single-ID event to the same model, so the
-// info diagnostic above is joined by a clickbait-event error.
-const singleTagWithClickbaitEmod = `model "Orders" {}
+// singleTagWithUntaggedEmod drops the tags of one event in the same model, so
+// the info diagnostic above is joined by a dcb/untagged-event error.
+const singleTagWithUntaggedEmod = `model "Orders" {}
 
 context "Fulfillment" {
   mode = dcb
@@ -155,11 +155,9 @@ context "Fulfillment" {
     }
 
     event "PaymentAuthorized" {
-      tags {
-        entity = paymentId
-      }
       fields {
         paymentId = string
+        authCode = string
       }
     }
 
@@ -1228,24 +1226,26 @@ model "Test" {
 }
 
 context "Orders" {
-  aggregate "Order" {
-    slice "Events" {
-      command "PlaceOrder" {
-        fields {
-          orderId = required(string)
-        }
-      }
+  mode = dcb
 
-      event "SingleIdEvent" {
-        fields {
-          orderId = required(string)
-        }
+  slice "Events" {
+    command "PlaceOrder" {
+      fields {
+        orderId = required(string)
+        total   = required(int)
       }
-
-      flow = <<-FLOW
-        command -> event:    PlaceOrder -> SingleIdEvent
-      FLOW
     }
+
+    event "OrderPlaced" {
+      fields {
+        orderId = required(string)
+        total   = required(int)
+      }
+    }
+
+    flow = <<-FLOW
+      command -> event:    PlaceOrder -> OrderPlaced
+    FLOW
   }
 }
 `
@@ -1265,7 +1265,7 @@ context "Orders" {
 		require.NoError(t, err)
 		require.Len(t, entries, 1)
 		require.Equal(t, "error", entries[0]["severity"])
-		require.Equal(t, "clickbait-event", entries[0]["rule"])
+		require.Equal(t, "dcb/untagged-event", entries[0]["rule"])
 	})
 
 	t.Run("json format on mixed warnings and errors outputs both severities and exit code 2", func(t *testing.T) {
@@ -1393,7 +1393,7 @@ context "Orders" {
 		})
 
 		t.Run("an error alongside info entries raises the exit code to 2", func(t *testing.T) {
-			path := writeTemp(t, "info_and_error.emod", singleTagWithClickbaitEmod)
+			path := writeTemp(t, "info_and_error.emod", singleTagWithUntaggedEmod)
 
 			var err error
 			output := captureStdout(t, func() {

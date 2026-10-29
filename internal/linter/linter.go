@@ -669,7 +669,7 @@ func checkNeverRead(view *ast.View, readViews map[string]bool, readsUnresolved b
 
 func checkGodView(view *ast.View) *diagnostic.Entry {
 	if len(view.Subscribes) >= 5 {
-		return errorEntry(view.NamePos, "god-view", fmt.Sprintf("view %q subscribes to %d events; consider splitting into smaller focused views", view.Name, len(view.Subscribes)))
+		return warning(view.NamePos, "god-view", fmt.Sprintf("view %q subscribes to %d events; consider splitting into smaller focused views", view.Name, len(view.Subscribes)))
 	}
 	return nil
 }
@@ -682,7 +682,7 @@ func isIDField(name string) bool {
 
 func checkClickbaitEvent(evt *ast.Event) *diagnostic.Entry {
 	if len(evt.Fields) == 1 && isIDField(evt.Fields[0].Name) {
-		return errorEntry(evt.NamePos, "clickbait-event", fmt.Sprintf("event %q has a single ID field %q; consider adding domain-relevant fields or inlining the identifier", evt.Name, evt.Fields[0].Name))
+		return warning(evt.NamePos, "clickbait-event", fmt.Sprintf("event %q has a single ID field %q; consider adding domain-relevant fields or inlining the identifier", evt.Name, evt.Fields[0].Name))
 	}
 	return nil
 }

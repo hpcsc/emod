@@ -683,7 +683,7 @@ func TestLint(t *testing.T) {
 
 			require.Len(t, diags, 1)
 			require.Equal(t, "god-view", diags[0].RuleName)
-			require.Equal(t, diagnostic.Error, diags[0].Severity)
+			require.Equal(t, diagnostic.Warning, diags[0].Severity)
 			require.Equal(t, "orders.emod", diags[0].Filename)
 			require.Equal(t, 20, diags[0].Line)
 			require.Contains(t, diags[0].Message, "OrderSummaryView")
@@ -791,7 +791,7 @@ func TestLint(t *testing.T) {
 
 			require.Len(t, diags, 1)
 			require.Equal(t, "clickbait-event", diags[0].RuleName)
-			require.Equal(t, diagnostic.Error, diags[0].Severity)
+			require.Equal(t, diagnostic.Warning, diags[0].Severity)
 			require.Equal(t, "orders.emod", diags[0].Filename)
 			require.Equal(t, 30, diags[0].Line)
 			require.Contains(t, diags[0].Message, "OrderItemSelected")
@@ -1022,10 +1022,10 @@ func TestLint(t *testing.T) {
 			require.True(t, ruleNames["god-view"])
 			require.True(t, ruleNames["clickbait-event"])
 
-			// Structural rules produce Error severity
+			// left-chair is the one structural rule at Error severity
 			for _, d := range diags {
 				switch d.RuleName {
-				case "left-chair", "god-view", "clickbait-event":
+				case "left-chair":
 					require.Equal(t, diagnostic.Error, d.Severity, "rule %q should have Error severity", d.RuleName)
 				default:
 					require.Equal(t, diagnostic.Warning, d.Severity, "rule %q should have Warning severity", d.RuleName)

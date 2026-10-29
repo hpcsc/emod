@@ -1165,24 +1165,26 @@ model "Test" {
 }
 
 context "Orders" {
-  aggregate "Order" {
-    slice "Events" {
-      command "PlaceOrder" {
-        fields {
-          orderId = required(string)
-        }
-      }
+  mode = dcb
 
-      event "SingleIdEvent" {
-        fields {
-          orderId = required(string)
-        }
+  slice "Events" {
+    command "PlaceOrder" {
+      fields {
+        orderId = required(string)
+        total   = required(int)
       }
-
-      flow = <<-FLOW
-        command -> event:    PlaceOrder -> SingleIdEvent
-      FLOW
     }
+
+    event "OrderPlaced" {
+      fields {
+        orderId = required(string)
+        total   = required(int)
+      }
+    }
+
+    flow = <<-FLOW
+      command -> event:    PlaceOrder -> OrderPlaced
+    FLOW
   }
 }
 `
@@ -1202,7 +1204,7 @@ context "Orders" {
 		require.NoError(t, err)
 		require.Len(t, entries, 1)
 		require.Equal(t, "error", entries[0]["severity"])
-		require.Equal(t, "clickbait-event", entries[0]["rule"])
+		require.Equal(t, "dcb/untagged-event", entries[0]["rule"])
 	})
 
 	t.Run("json format reports all file and line fields", func(t *testing.T) {

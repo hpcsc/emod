@@ -401,7 +401,7 @@ context "Orders" {
 	})
 
 	t.Run("severity", func(t *testing.T) {
-		t.Run("reports a single-id event at error severity", func(t *testing.T) {
+		t.Run("reports a single-id event at warning severity", func(t *testing.T) {
 			input := `emod = 1
 
 model "Test" {
@@ -434,7 +434,7 @@ context "Orders" {
 
 			found := findRule(diagnostics, "clickbait-event")
 			require.NotNil(t, found, "expected a clickbait-event diagnostic")
-			require.Equal(t, diagnostic.Error, found.Severity)
+			require.Equal(t, diagnostic.Warning, found.Severity)
 		})
 	})
 }
