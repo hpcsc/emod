@@ -1,0 +1,180 @@
+{
+  "story": "US-012: Read source with syntax highlighting",
+  "tasks_file": "tasks/us-012-source-syntax-highlighting.md",
+  "tasks": [
+    {
+      "n": 1,
+      "done": true,
+      "title": "Classify a document's text into the categories an editor colours it with",
+      "language": "Go",
+      "testable": true,
+      "certainty": "low",
+      "blast_radius": "high",
+      "patterns_to_follow": [
+        "internal/lsp/semantictokens.go:77-156",
+        "internal/lsp/model.go:18-46",
+        "internal/parser/parser.go:17-35",
+        "internal/parser/parser.go:706-752",
+        "internal/lsp/semantictokens_test.go:39-100",
+        "internal/lsp/cursor_test.go:14",
+        "internal/pipeline/pipeline_test.go:636-650",
+        "tasks/learnings.md:431-435",
+        "tasks/learnings.md:1376-1381",
+        "tasks/learnings.md:496-500"
+      ],
+      "depends_on": [],
+      "affected_files": [
+        "internal/lsp/token.go",
+        "internal/lsp/token_test.go",
+        "internal/lsp/semantictokens.go",
+        "internal/lsp/model.go",
+        "docs/architecture.md"
+      ]
+    },
+    {
+      "n": 2,
+      "done": false,
+      "title": "Answer a source's tokens through the platform seam in every distribution",
+      "language": "Go",
+      "testable": true,
+      "certainty": "high",
+      "blast_radius": "low",
+      "patterns_to_follow": [
+        "internal/pipeline/pipeline.go:94-123",
+        "internal/pipeline/pipeline.go:193-215",
+        "cmd/emod-wasm/main.go:11-46",
+        "internal/desktop/service.go:32-43",
+        "internal/frontend/static/platform.browser.js:78-89",
+        "internal/frontend/desktop/platform.desktop.js:32-40",
+        "internal/frontend/tests/platform.browser.test.js:164-187",
+        "internal/frontend/tests/platform.desktop.test.js:127-153",
+        "internal/desktop/service_test.go:112-133",
+        "internal/pipeline/pipeline_test.go:446-468",
+        "tasks/learnings.md:1093-1098",
+        "tasks/learnings.md:961-966"
+      ],
+      "depends_on": [
+        1
+      ],
+      "affected_files": [
+        "internal/pipeline/pipeline.go",
+        "internal/pipeline/pipeline_test.go",
+        "cmd/emod-wasm/main.go",
+        "internal/desktop/service.go",
+        "internal/desktop/service_test.go",
+        "internal/frontend/static/platform.js",
+        "internal/frontend/static/platform.browser.js",
+        "internal/frontend/desktop/platform.desktop.js",
+        "internal/frontend/tests/platform.browser.test.js",
+        "internal/frontend/tests/platform.desktop.test.js",
+        "internal/frontend/tests/bindings-stub.js",
+        "docs/wasm-architecture.md"
+      ]
+    },
+    {
+      "n": 3,
+      "done": false,
+      "title": "Draw the source panel's text under a transparent textarea, level with its lines",
+      "language": "JavaScript",
+      "testable": true,
+      "certainty": "medium",
+      "blast_radius": "low",
+      "patterns_to_follow": [
+        "internal/frontend/static/source-panel.js:5-25",
+        "internal/frontend/static/viewer.html:683-735",
+        "e2e-viewer/tests/source-panel.spec.js:174-253",
+        "e2e-viewer/tests/source-panel.spec.js:255-268",
+        "e2e-viewer/tests/source-panel.spec.js:272-310",
+        "internal/frontend/static/viewer.js:252-262",
+        "internal/frontend/static/viewer.js:325-333",
+        "internal/frontend/static/viewer.js:580-590",
+        "internal/frontend/tests/source-panel.test.js:5-18",
+        "internal/frontend/tests/viewer.test.js:5616-5640",
+        "tasks/learnings.md:1362-1367",
+        "tasks/learnings.md:1355-1360",
+        "tasks/learnings.md:1313-1318",
+        "tasks/learnings.md:757-762",
+        "tasks/learnings.md:1129-1134"
+      ],
+      "depends_on": [],
+      "affected_files": [
+        "internal/frontend/static/viewer.html",
+        "internal/frontend/static/source-panel.js",
+        "internal/frontend/static/viewer.js",
+        "internal/frontend/static/store.js",
+        "internal/frontend/tests/source-panel.test.js",
+        "internal/frontend/tests/viewer.test.js",
+        "e2e-viewer/tests/source-panel.spec.js"
+      ]
+    },
+    {
+      "n": 4,
+      "done": false,
+      "title": "Colour the source panel's text by the tokens the Go core answers",
+      "language": "JavaScript",
+      "testable": true,
+      "certainty": "medium",
+      "blast_radius": "low",
+      "patterns_to_follow": [
+        "internal/frontend/static/viewer.js:252-345",
+        "internal/frontend/static/viewer.js:487-505",
+        "e2e-viewer/tests/source-panel.spec.js:204-214",
+        "e2e-viewer/tests/source-panel.spec.js:7",
+        "internal/frontend/tests/renderer.test.js:16-25",
+        "internal/frontend/tests/renderer.test.js:1510-1523",
+        "internal/pipeline/pipeline_test.go:160-176",
+        "internal/frontend/tests/viewer.test.js:37-81",
+        "task:1",
+        "task:3",
+        "tasks/learnings.md:1369-1374",
+        "tasks/learnings.md:426-430",
+        "tasks/learnings.md:997-1002",
+        "tasks/learnings.md:943-948"
+      ],
+      "depends_on": [
+        2,
+        3
+      ],
+      "affected_files": [
+        "internal/frontend/static/viewer.js",
+        "internal/frontend/static/source-panel.js",
+        "internal/frontend/static/store.js",
+        "internal/frontend/static/viewer.html",
+        "internal/frontend/tests/viewer.test.js",
+        "internal/frontend/tests/source-panel.test.js",
+        "e2e-viewer/tests/source-panel.spec.js",
+        "internal/pipeline/pipeline_test.go",
+        "docs/architecture.md"
+      ]
+    },
+    {
+      "n": 5,
+      "done": false,
+      "title": "Keep the colours on the text while it is typed",
+      "language": "JavaScript",
+      "testable": true,
+      "certainty": "low",
+      "blast_radius": "low",
+      "patterns_to_follow": [
+        "internal/frontend/static/viewer.js:203-247",
+        "internal/frontend/desktop/platform.desktop.js:187-211",
+        "e2e-viewer/tests/source-panel.spec.js:95-124",
+        "internal/frontend/tests/viewer.test.js:290-312",
+        "task:4",
+        "tasks/learnings.md:1306-1311",
+        "tasks/learnings.md:1341-1346"
+      ],
+      "depends_on": [
+        4
+      ],
+      "affected_files": [
+        "internal/frontend/static/source-panel.js",
+        "internal/frontend/static/viewer.js",
+        "internal/frontend/tests/source-panel.test.js",
+        "internal/frontend/tests/viewer.test.js",
+        "e2e-viewer/tests/source-panel.spec.js"
+      ]
+    }
+  ],
+  "design_file": "tasks/us-012-source-syntax-highlighting.design.yaml"
+}

@@ -3,6 +3,7 @@
 package lsp_test
 
 import (
+	"encoding/json"
 	"testing"
 
 	"github.com/hpcsc/emod/internal/lsp"
@@ -250,6 +251,35 @@ actor "Admin"
 		require.Equal(t, 1, tokens[1].line)
 		require.Equal(t, legendTokenType(lsp.TokenTypeParameter), tokens[1].typeIdx)
 		require.Equal(t, len("Admin"), tokens[1].length)
+	})
+
+	t.Run("marks no token with a modifier, since the legend declares none", func(t *testing.T) {
+		data := lsp.GetSemanticTokens(testDoc).Data
+		require.NotEmpty(t, data)
+		require.Empty(t, lsp.GetSemanticTokensLegend().TokenModifiers)
+
+		var modifiers []uint
+		for i := 4; i < len(data); i += 5 {
+			modifiers = append(modifiers, data[i])
+		}
+		require.Equal(t, make([]uint, len(data)/5), modifiers)
+	})
+
+	t.Run("gives an empty name no token", func(t *testing.T) {
+		const doc = "context \"\" {\n}\n\nactor \"Customer\" {\n}\n"
+		line, char := posIn(t, doc, `actor "Customer"`, "Customer")
+
+		tokens := decodeTokens(lsp.GetSemanticTokens(doc).Data)
+
+		require.Len(t, tokens, 1)
+		assertToken(t, tokens, 0, line, char, len("Customer"), legendTokenType(lsp.TokenTypeParameter))
+	})
+
+	t.Run("answers an empty array, not null, for a document that declares no names", func(t *testing.T) {
+		encoded, err := json.Marshal(lsp.GetSemanticTokens(`model "TestModel" {}`))
+		require.NoError(t, err)
+
+		require.JSONEq(t, `{"data":[]}`, string(encoded))
 	})
 
 	t.Run("empty document returns empty tokens", func(t *testing.T) {

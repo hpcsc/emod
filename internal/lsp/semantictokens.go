@@ -1,9 +1,10 @@
 package lsp
 
 import (
-	"sort"
+	"slices"
 
 	"github.com/hpcsc/emod/internal/ast"
+	"github.com/hpcsc/emod/internal/oracle"
 )
 
 // tokenTypeIndex returns the legend index for a given semantic token type.
@@ -42,42 +43,16 @@ func GetSemanticTokensLegend() SemanticTokensLegend {
 	}
 }
 
-// tokenEntry represents one semantic token with 0-based LSP coordinates.
-type tokenEntry struct {
-	line      int
-	character int
-	length    int
-	typeIndex uint
-}
-
-type tokenEntries []tokenEntry
-
-func (e *tokenEntries) addIdentifier(pos ast.Position, name string, t SemanticTokenTypes) {
-	e.add(pos.Line-1, pos.Column-1, name, t)
-}
-
-// addQuoted adds a name written in double quotes, whose position points at the
-// opening quote rather than at the first character of the name.
-func (e *tokenEntries) addQuoted(pos ast.Position, name string, t SemanticTokenTypes) {
-	e.add(pos.Line-1, pos.Column, name, t)
-}
-
-func (e *tokenEntries) add(line, character int, name string, t SemanticTokenTypes) {
-	if name == "" {
-		return
-	}
-	*e = append(*e, tokenEntry{
-		line:      line,
-		character: character,
-		length:    len(name),
-		typeIndex: tokenTypeIndex(t),
-	})
+type semanticDecl struct {
+	nameStart ast.Position
+	name      string
+	tokenType SemanticTokenTypes
 }
 
 // GetSemanticTokens parses an emod document and returns delta-encoded semantic
-// token data mapping named identifiers to their token types.
+// token data mapping declared names to their token types.
 //
-// Named identifiers receive the following token types:
+// Declared names receive the following token types:
 //   - Commands → TokenTypeFunction
 //   - Events → TokenTypeEvent
 //   - Views → TokenTypeClass
@@ -85,72 +60,69 @@ func (e *tokenEntries) add(line, character int, name string, t SemanticTokenType
 //   - Contexts → TokenTypeNamespace
 //   - Aggregates → TokenTypeStruct
 //
-// Documents with parse errors or no named identifiers return empty semantic
-// tokens (zero tokens in the data array).
+// A document that declares no names, including text the parser recovers nothing
+// from, returns empty semantic tokens (zero tokens in the data array).
 func GetSemanticTokens(doc string) *SemanticTokens {
-	if doc == "" {
-		return &SemanticTokens{Data: []uint{}}
-	}
-
-	model, _ := parseModel(doc, "")
-	if model == nil {
-		return &SemanticTokens{Data: []uint{}}
-	}
-
-	var entries tokenEntries
-
-	for _, ctx := range model.Contexts {
-		entries.addQuoted(ctx.NamePos, ctx.Name, TokenTypeNamespace)
-	}
-
-	for _, agg := range declaredAggregates(model) {
-		entries.addQuoted(agg.NamePos, agg.Name, TokenTypeStruct)
-	}
-
-	for _, slice := range model.AllSlices() {
-		for _, cmd := range slice.Commands {
-			entries.addQuoted(cmd.NamePos, cmd.Name, TokenTypeFunction)
-		}
-		for _, evt := range slice.Events {
-			entries.addQuoted(evt.NamePos, evt.Name, TokenTypeEvent)
-		}
-		for _, v := range slice.Views {
-			entries.addQuoted(v.NamePos, v.Name, TokenTypeClass)
-		}
-	}
-
-	for _, actor := range model.Actors {
-		entries.addQuoted(actor.NamePos, actor.Name, TokenTypeParameter)
-	}
-
-	if len(entries) == 0 {
-		return &SemanticTokens{Data: []uint{}}
-	}
-
-	// Sort by position: line first, then character.
-	sort.Slice(entries, func(i, j int) bool {
-		if entries[i].line != entries[j].line {
-			return entries[i].line < entries[j].line
-		}
-		return entries[i].character < entries[j].character
+	decls := semanticDeclsOf(doc)
+	slices.SortFunc(decls, func(a, b semanticDecl) int {
+		return a.nameStart.Compare(b.nameStart)
 	})
 
 	// Delta-encode per LSP semantic tokens spec.
 	// First token uses absolute position from (0,0).
 	// Subsequent tokens use relative deltas from the previous token.
-	data := make([]uint, 0, len(entries)*5)
+	data := []uint{}
 	var prevLine, prevChar int
 
-	for _, e := range entries {
-		deltaLine := e.line - prevLine
-		deltaChar := e.character
+	for _, decl := range decls {
+		line, char := decl.nameStart.Line-1, decl.nameStart.Column-1
+		deltaLine := line - prevLine
+		deltaChar := char
 		if deltaLine == 0 {
-			deltaChar = e.character - prevChar
+			deltaChar = char - prevChar
 		}
-		data = append(data, uint(deltaLine), uint(deltaChar), uint(e.length), e.typeIndex, 0)
-		prevLine = e.line
-		prevChar = e.character
+		data = append(data, uint(deltaLine), uint(deltaChar), uint(len(decl.name)), tokenTypeIndex(decl.tokenType), 0)
+		prevLine = line
+		prevChar = char
 	}
 
 	return &SemanticTokens{Data: data}
+}
+
+func semanticDeclsOf(doc string) []semanticDecl {
+	model, _ := oracle.Parse(doc, "")
+
+	var decls []semanticDecl
+	add := func(pos ast.Position, name string, t SemanticTokenTypes) {
+		if name == "" {
+			return
+		}
+		decls = append(decls, semanticDecl{nameStart: afterQuote(pos), name: name, tokenType: t})
+	}
+
+	for _, ctx := range model.Contexts {
+		add(ctx.NamePos, ctx.Name, TokenTypeNamespace)
+	}
+
+	for _, agg := range declaredAggregates(model) {
+		add(agg.NamePos, agg.Name, TokenTypeStruct)
+	}
+
+	for _, slice := range model.AllSlices() {
+		for _, cmd := range slice.Commands {
+			add(cmd.NamePos, cmd.Name, TokenTypeFunction)
+		}
+		for _, evt := range slice.Events {
+			add(evt.NamePos, evt.Name, TokenTypeEvent)
+		}
+		for _, v := range slice.Views {
+			add(v.NamePos, v.Name, TokenTypeClass)
+		}
+	}
+
+	for _, actor := range model.Actors {
+		add(actor.NamePos, actor.Name, TokenTypeParameter)
+	}
+
+	return decls
 }

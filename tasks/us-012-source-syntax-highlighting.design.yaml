@@ -1,0 +1,70 @@
+design: planned
+types:
+  - name: Token
+    package: internal/lsp   # token.go
+    change: new
+    does: names a stretch of a document and the category an editor colours it with
+    owns:
+      - an HCL element takes the capture that nvim-treesitter's HCL highlights query gives it, and an element the query gives no capture has no token
+      - a declared construct's name takes lsp.type.<type>, for the type that emod lsp's semantic tokens give it, in place of the string category of its label; the quotes stay string
+      - construct names are read through the walk that GetSemanticTokens uses, so the two cannot disagree
+      - tokens come in document order and never overlap
+      - Start and End count UTF-16 code units of the document, the unit that the viewer's text is indexed in
+      - a document that does not parse still answers each token that HCL's lexer reads, and the names of the constructs the parser recovered
+    fields: [Start, End, Category]
+  - name: ModelService
+    package: internal/desktop   # service.go
+    change: changed
+    does: binds the emod pipeline to the desktop frontend over JSON strings
+    methods: [TokenizeEmod]
+  - name: SourcePanel
+    package: internal/frontend/static   # source-panel.js
+    change: changed
+    does: draws the source panel's text in the colours of its tokens, level with the textarea that edits it
+    owns:
+      - the textarea is the only surface that edits the text, and the colouring never writes its value
+      - the source colours always read exactly the textarea's value
+      - a token's colour lands only on characters its answer classified, moved across the edits made since that answer
+      - a category with no colour of its own paints as plain text
+    methods: [initSourcePanel, showText]
+  - name: viewer
+    package: internal/frontend/static   # viewer.js
+    change: changed
+    does: keeps the source panel, its colours and the diagram drawn from it in agreement
+    owns:
+      - each change to the panel's text, typed or written by the viewer, is tokenized once the Go core is ready
+      - at most one tokenize request is open, and the panel's newest text is the next one asked for
+      - an answer for older text never replaces the colours of an answer for newer text
+    methods: [init]
+  - name: store
+    package: internal/frontend/static   # store.js
+    change: changed
+    does: holds the viewer's state
+    fields: [tokens]
+functions:
+  - lsp.GetTokens(doc string) []Token   # internal/pipeline calls it
+  - pipeline.TokenizeEmodJSON(request string) string   # cmd/emod-wasm and internal/desktop call it; {source, filename} in, {tokens - [{start, end, category}]} or {error} out
+  - tokenizeEmod(source)   # the platform.js contract, implemented by platform.browser.js and platform.desktop.js; viewer.js calls it and receives {tokens}
+words:
+  - concept: a stretch of the source and the category an editor colours it with
+    word: token
+    not: [span, run, segment, highlight]
+  - concept: what an editor colours a token as, a capture of the HCL highlights query or lsp.type.<type> for a construct's name
+    word: category
+    not: [kind, scope, class, style, colour]
+  - concept: a token whose category comes from emod lsp's semantic tokens
+    word: semantic token
+    not: [name token, construct token]
+  - concept: asking the Go core for the tokens of a text
+    word: tokenize
+    not: [classify, highlight, lex, colourise, parse]
+  - concept: the source panel's text drawn in colour under the transparent textarea
+    word: source colours
+    not: [overlay, mirror, backdrop, copy, highlight, layer]
+  - concept: the textarea holding the model's source, inside the data panel
+    word: source panel
+    not: [editor, textarea, data panel]
+dependencies:
+  - internal/pipeline -> internal/lsp
+  - internal/frontend/static/viewer.js -> internal/frontend/static/platform.js
+  - internal/frontend/static/viewer.js -> internal/frontend/static/source-panel.js

@@ -206,7 +206,11 @@ diagram does not carry stay in the source.
 The **LSP** (`internal/lsp`) layers transport framing → dispatch
 (`server.go`) → one pure function per feature (`GetCompletions`,
 `GetDefinition`, `GetReferences`, `GetHover`, `GetSemanticTokens`) taking
-`(text, line, character)`. Diagnostics and formatting go through the oracle.
+`(text, line, character)`. Diagnostics and formatting go through the oracle. `GetTokens` is
+for the viewer's source panel rather than for an editor: it gives each stretch
+of a document the category that an HCL editor running `emod lsp` colours it
+with, and it reads construct names through the walk `GetSemanticTokens` uses,
+so the panel and an editor cannot disagree about a name.
 `keywords_test.go` pins that every keyword has a hover description and that
 completion lists never offer a spelling the language does not define.
 
