@@ -3,6 +3,8 @@ import { Severity } from './severity.js';
 const CARET_MOVES = ["keyup", "mouseup", "input", "selectionchange"];
 
 function initSourcePanel(store) {
+  showEveryWrite(store);
+  showText(store);
   // A hidden textarea reports no scroll, and showing it again restores its
   // scroll without a scroll event.
   if (typeof ResizeObserver === "function") {
@@ -11,6 +13,9 @@ function initSourcePanel(store) {
   store.dom.sourceInput.addEventListener("scroll", function() {
     followScroll(store);
   });
+  store.dom.sourceInput.addEventListener("input", function() {
+    showText(store);
+  });
   CARET_MOVES.forEach(function(type) {
     store.dom.sourceInput.addEventListener(type, function() {
       showCaretLineDiagnostics(store);
@@ -18,10 +23,39 @@ function initSourcePanel(store) {
   });
 }
 
+// The viewer writes the panel's text itself when a model opens or a diagram
+// edit rewrites the source, and a write from a script fires no input event.
+function showEveryWrite(store) {
+  const textValue = Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, "value");
+  Object.defineProperty(store.dom.sourceInput, "value", {
+    configurable: true,
+    get: function() {
+      return textValue.get.call(this);
+    },
+    set: function(text) {
+      textValue.set.call(this, text);
+      showText(store);
+    },
+  });
+}
+
+function showText(store) {
+  const coloursEl = store.dom.sourceColours;
+  if (!coloursEl) return;
+  coloursEl.textContent = store.dom.sourceInput.value;
+}
+
 function followScroll(store) {
+  const sourceInput = store.dom.sourceInput;
   const gutterEl = store.dom.sourceGutter;
-  if (!gutterEl) return;
-  gutterEl.style.setProperty("--source-scroll", store.dom.sourceInput.scrollTop + "px");
+  if (gutterEl) {
+    gutterEl.style.setProperty("--source-scroll", sourceInput.scrollTop + "px");
+  }
+  const coloursEl = store.dom.sourceColours;
+  if (coloursEl) {
+    coloursEl.style.setProperty("--source-scroll", sourceInput.scrollTop + "px");
+    coloursEl.style.setProperty("--source-scroll-left", sourceInput.scrollLeft + "px");
+  }
 }
 
 function groupByLine(diagnostics) {

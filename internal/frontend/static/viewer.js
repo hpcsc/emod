@@ -152,6 +152,7 @@ function init() {
   store.dom.nameDisplay = document.getElementById("model-name-display");
   store.dom.sourceInput = document.getElementById("source-input");
   store.dom.sourceGutter = document.getElementById("source-gutter");
+  store.dom.sourceColours = document.getElementById("source-colours");
   store.dom.caretLineDiagnostics = document.getElementById("caret-line-diagnostics");
   store.dom.renderBtn = document.getElementById("render-btn");
   store.dom.statusEl = document.getElementById("render-status");

@@ -716,22 +716,67 @@ body.file-drop-target-active::after {
   background: currentColor;
 }
 
+/* The source colours draw the text under the textarea, which draws only its
+   caret and selection. A property that moves a glyph belongs here, for both. */
+#source-input,
+#source-colours {
+  font-family: "SF Mono", "Fira Code", "Fira Mono", Menlo, Consolas, monospace;
+  font-size: 12px;
+  font-kerning: none;
+  font-variant-ligatures: none;
+  letter-spacing: normal;
+  line-height: var(--source-line-height);
+  tab-size: 8;
+  white-space: pre;
+  overflow-wrap: normal;
+}
+
 #source-input {
+  position: relative;
   flex: 1 1 auto;
   width: 100%;
   height: 200px;
   min-height: 72px;
   padding: var(--source-padding);
-  font-family: "SF Mono", "Fira Code", "Fira Mono", Menlo, Consolas, monospace;
-  font-size: 12px;
-  line-height: var(--source-line-height);
   border: var(--source-border) solid #ccc;
   border-radius: 4px;
   resize: vertical;
   box-sizing: border-box;
-  white-space: pre;
-  overflow-wrap: normal;
   overflow-x: auto;
+  background: transparent;
+  color: transparent;
+  caret-color: #000;
+}
+
+#source-input::placeholder {
+  color: #757575;
+}
+
+#source-input::selection {
+  color: transparent;
+  background: rgba(0, 117, 255, 0.25);
+}
+
+/* Sits over the textarea's padding box, where the textarea clips its own text. */
+.source-colours-frame {
+  position: absolute;
+  top: var(--source-border);
+  bottom: var(--source-border);
+  left: calc(var(--gutter-width) + var(--source-border));
+  right: var(--source-border);
+  overflow: hidden;
+  border-radius: 3px;
+  background: #fff;
+  pointer-events: none;
+}
+
+/* Moved rather than scrolled: a scroll box stops at the end of its own content,
+   and the textarea, whose scrollbars take room, scrolls further. */
+#source-colours {
+  margin: 0;
+  padding: var(--source-padding);
+  color: #000;
+  transform: translate(calc(-1 * var(--source-scroll-left, 0px)), calc(-1 * var(--source-scroll, 0px)));
 }
 
 #caret-line-diagnostics {
@@ -1402,6 +1447,7 @@ body.file-drop-target-active::after {
         </div>
         <div id="source-area">
           <div id="source-gutter"></div>
+          <div class="source-colours-frame" aria-hidden="true"><pre id="source-colours"></pre></div>
           <textarea id="source-input" wrap="off" spellcheck="false" placeholder="Paste .emod source or diagram JSON here"></textarea>
         </div>
         <div id="caret-line-diagnostics" role="status" aria-live="polite"></div>

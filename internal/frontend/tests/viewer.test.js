@@ -86,6 +86,7 @@ function createRequiredElements() {
     <svg id="diagram-canvas"></svg>
     <div id="model-name-display"></div>
     <div id="source-gutter"></div>
+    <div aria-hidden="true"><pre id="source-colours"></pre></div>
     <textarea id="source-input"></textarea>
     <div id="caret-line-diagnostics"></div>
     <button id="render-btn"></button>
@@ -2312,6 +2313,16 @@ describe('a diagram edit reaching the source panel', () => {
   });
 
   describe('what the window shows once an edit is applied', () => {
+    it("draws the applied source in the source panel's colours", async () => {
+      await openEditable();
+
+      fromMenu(sliceHeader('slice-1'), 'add-command');
+      await settle();
+
+      expect(panelText()).toBe(appliedSource);
+      expect(document.getElementById('source-colours').textContent).toBe(appliedSource);
+    });
+
     it('redraws the diagram from the applied answer, keeping dragged offsets, hidden nodes and the viewport', async () => {
       await openEditable();
       dragBy(blockFor('command-1'), 40, 25);
@@ -5610,6 +5621,48 @@ describe('the documentation of the source panel', () => {
 
     expect(step).toContain('Once typing in the source panel pauses');
     expect(step).not.toContain('clicks Render');
+  });
+});
+
+describe("the source panel's text drawn in its colours", () => {
+  const coloursText = () => document.getElementById('source-colours').textContent;
+
+  it('draws the text the user types, which reaches the panel without a script writing it', async () => {
+    await startEmpty();
+    const panel = document.getElementById('source-input');
+
+    Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, 'value').set.call(panel, billingSource);
+    panel.dispatchEvent(new Event('input', { bubbles: true }));
+
+    expect(coloursText()).toBe(billingSource);
+  });
+
+  it('draws the source of a model the host opens', async () => {
+    await openBilling('emod = 1\n\nmodel "Opened" {\n}\n');
+
+    expect(coloursText()).toBe('emod = 1\n\nmodel "Opened" {\n}\n');
+  });
+
+  it('draws the text put back when the pipeline refuses a model the host delivers', async () => {
+    await openBilling();
+    let refuse;
+    parseQueue = [new Promise((_, reject) => { refuse = reject; })];
+
+    deliverFile({ name: 'broken.emod', path: '/models/broken.emod', content: 'emod = 1\nnot a model\n' });
+    await flush();
+    expect(coloursText()).toBe('emod = 1\nnot a model\n');
+    refuse(new Error('unparseable'));
+    await flush();
+
+    expect(document.getElementById('source-input').value).toBe(billingSource);
+    expect(coloursText()).toBe(billingSource);
+  });
+
+  it('hides the drawn text from assistive technology, which reads the textarea alone', () => {
+    const page = new DOMParser().parseFromString(readFileSync(resolve(__dirname, '../static/viewer.html'), 'utf-8'), 'text/html');
+
+    expect(page.getElementById('source-colours').closest('[aria-hidden="true"]')).not.toBeNull();
+    expect(page.getElementById('source-input').closest('[aria-hidden="true"]')).toBeNull();
   });
 });
 

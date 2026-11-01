@@ -421,3 +421,207 @@ test.describe("the diagnostics of the caret's line", () => {
     expect(await source.boundingBox()).toEqual(before);
   });
 });
+
+// How far the source colours draw the text from where the textarea draws it,
+// read off the screen: the panel is photographed once with only the textarea's
+// own text showing and once with only the colours. The shift that best lays one
+// picture over the other is the distance between them, in CSS pixels, and the
+// share of ink that still differs there catches a single line out of place.
+// The colours are hidden by a transparent colour rather than taken away: WebKit
+// draws a colour emoji in transparent text, so then both pictures draw it twice.
+async function drawnOffset(page) {
+  const panel = page.locator('#source-input');
+  await panel.evaluate((p) => p.blur());
+  const clip = await panel.boundingBox();
+  const photograph = async (css) => {
+    const style = await page.addStyleTag({ content: css });
+    const png = await page.screenshot({ clip });
+    await style.evaluate((element) => element.remove());
+    return png.toString('base64');
+  };
+  const textarea = await photograph('#source-input { color: #000 !important; caret-color: transparent !important; } ' +
+    '#source-colours, #source-colours * { color: transparent !important; }');
+  const colours = await photograph('#source-input { caret-color: transparent !important; }');
+
+  return page.evaluate(async ([first, second]) => {
+    const inkOf = async (base64) => {
+      const image = new Image();
+      image.src = 'data:image/png;base64,' + base64;
+      await image.decode();
+      const canvas = document.createElement('canvas');
+      canvas.width = image.width;
+      canvas.height = image.height;
+      const context = canvas.getContext('2d');
+      context.drawImage(image, 0, 0);
+      const { data, width, height } = context.getImageData(0, 0, image.width, image.height);
+      const ink = new Uint8Array(width * height);
+      for (let i = 0; i < ink.length; i++) {
+        ink[i] = data[i * 4] + data[i * 4 + 1] + data[i * 4 + 2] < 3 * 160 ? 1 : 0;
+      }
+      return { ink, width, height };
+    };
+    const a = await inkOf(first);
+    const b = await inkOf(second);
+    const scale = a.width / Math.round(document.getElementById('source-input').getBoundingClientRect().width);
+    const reach = Math.ceil(2 * scale);
+
+    let best = null;
+    for (let dy = -reach; dy <= reach; dy++) {
+      for (let dx = -reach; dx <= reach; dx++) {
+        let differing = 0;
+        for (let y = reach; y < a.height - reach; y++) {
+          for (let x = reach; x < a.width - reach; x++) {
+            differing += a.ink[y * a.width + x] !== b.ink[(y + dy) * b.width + x + dx] ? 1 : 0;
+          }
+        }
+        if (!best || differing < best.differing) best = { dx, dy, differing };
+      }
+    }
+    const inked = a.ink.reduce((sum, value) => sum + value, 0);
+    return { x: Math.abs(best.dx) / scale, y: Math.abs(best.dy) / scale, inked, differing: best.differing / inked };
+  }, [textarea, colours]);
+}
+
+async function openSource(page, source) {
+  await open(page);
+  await page.locator('#source-input').fill(source);
+  await page.locator('#render-btn').click();
+  await expect(page.locator('#render-status')).toHaveText('✓ Rendered');
+  await page.locator('#data-panel-header').click();
+  await expect(page.locator('#data-panel')).not.toHaveClass(/collapsed/);
+}
+
+test.describe("the source panel's text drawn under the textarea", () => {
+  test('lands each character within 1 px of the textarea at the top, at the last line, past the longest line, after a resize and after the data panel opens again', async ({ page }) => {
+    await page.setViewportSize({ width: 900, height: 800 });
+    await openSource(page, largestExample());
+    const panel = page.locator('#source-input');
+    const assertLevel = async () => {
+      const offset = await drawnOffset(page);
+      expect(offset.inked).toBeGreaterThan(500);
+      expect({ x: offset.x <= 1, y: offset.y <= 1, differing: offset.differing <= 0.05 }).toEqual({ x: true, y: true, differing: true });
+    };
+
+    await assertLevel();
+
+    await panel.evaluate((p) => { p.scrollTop = p.scrollHeight; });
+    await assertLevel();
+
+    await panel.evaluate((p) => { p.scrollLeft = p.scrollWidth; });
+    expect(await panel.evaluate((p) => p.scrollLeft)).toBeGreaterThan(0);
+    await assertLevel();
+
+    await panel.evaluate((p) => { p.style.height = '320px'; });
+    await assertLevel();
+
+    await page.locator('#data-panel-header').click();
+    await expect(page.locator('#data-panel')).toHaveClass(/collapsed/);
+    await page.locator('#data-panel-header').click();
+    await assertLevel();
+  });
+
+  test('lands the characters after a tab, a combining mark, a ZWJ emoji and a CJK character within 1 px of the textarea', async ({ page }) => {
+    const line = '# a\tb e\u0301 \u{1F469}\u200D\u{1F4BB} \u6F22\u5B57 end';
+    const source = SAMPLE.replace('model "Billing" {', line + '\nmodel "Billing" {');
+    expect(source).not.toBe(SAMPLE);
+    await openSource(page, source);
+    await page.locator('#source-input').evaluate((p) => { p.scrollTop = 0; p.scrollLeft = 0; });
+
+    const offset = await drawnOffset(page);
+
+    expect(offset.inked).toBeGreaterThan(500);
+    expect({ x: offset.x <= 1, y: offset.y <= 1, differing: offset.differing <= 0.05 }).toEqual({ x: true, y: true, differing: true });
+  });
+
+  test('leaves the textarea drawing only its caret, shows the placeholder of an empty panel, and the selected text through a translucent selection', async ({ page }) => {
+    await open(page);
+    const panel = page.locator('#source-input');
+    const alphaOf = (colour) => {
+      const parts = /rgba?\(([^)]*)\)/.exec(colour)[1].split(',').map(Number);
+      return parts.length === 4 ? parts[3] : 1;
+    };
+
+    const own = await panel.evaluate((p) => ({ text: getComputedStyle(p).color, caret: getComputedStyle(p).caretColor }));
+    expect(alphaOf(own.text)).toBe(0);
+    expect(alphaOf(own.caret)).toBe(1);
+
+    const placeholder = await panel.evaluate((p) => getComputedStyle(p, '::placeholder').color);
+    expect(alphaOf(placeholder)).toBe(1);
+
+    await panel.fill(SAMPLE);
+    const selection = await panel.evaluate((p) => getComputedStyle(p, '::selection').backgroundColor);
+    expect(alphaOf(selection)).toBeGreaterThan(0);
+    expect(alphaOf(selection)).toBeLessThan(1);
+  });
+
+  test('copies exactly the selected source, with no markup, whether the keyboard or the mouse selected it', async ({ page, context, browserName }) => {
+    test.skip(browserName === 'webkit', 'Playwright grants no clipboard permission in WebKit');
+    await context.grantPermissions(['clipboard-read', 'clipboard-write']);
+    await openSource(page, SAMPLE);
+    const panel = page.locator('#source-input');
+    const copied = async () => {
+      await page.keyboard.press('ControlOrMeta+KeyC');
+      return page.evaluate(() => navigator.clipboard.readText());
+    };
+    const selected = () => panel.evaluate((p) => p.value.slice(p.selectionStart, p.selectionEnd));
+
+    await panel.evaluate((p) => { p.focus(); p.setSelectionRange(0, 0); p.scrollTop = 0; });
+    await page.keyboard.press('Shift+ArrowDown');
+    await page.keyboard.press('Shift+ArrowDown');
+    await page.keyboard.press('Shift+ArrowDown');
+    expect(await selected()).toBe('emod = 1\n\nmodel "Billing" {\n');
+    expect(await copied()).toBe('emod = 1\n\nmodel "Billing" {\n');
+
+    await panel.evaluate((p) => { p.setSelectionRange(p.value.length, p.value.length); p.scrollTop = 0; });
+    const box = await panel.boundingBox();
+    await page.mouse.move(box.x + 20, box.y + 14);
+    await page.mouse.down();
+    await page.mouse.move(box.x + 120, box.y + 86, { steps: 5 });
+    await page.mouse.up();
+    const bySelection = await selected();
+    expect(bySelection.length).toBeGreaterThan(10);
+    expect(await copied()).toBe(bySelection);
+  });
+
+  test('pastes at the caret, and undoes and redoes typing and a paste one step at a time, while the drawn text follows', async ({ page, context, browserName }) => {
+    test.skip(browserName === 'webkit', 'Playwright grants no clipboard permission in WebKit');
+    await context.grantPermissions(['clipboard-read', 'clipboard-write']);
+    await openSource(page, SAMPLE);
+    const panel = page.locator('#source-input');
+    const caret = SAMPLE.indexOf('model "Billing"');
+    const shown = () => page.evaluate(() => ({
+      panel: document.getElementById('source-input').value,
+      drawn: document.getElementById('source-colours').textContent,
+    }));
+    const expectShown = async (text) => {
+      await expect.poll(shown).toEqual({ panel: text, drawn: text });
+    };
+
+    await panel.evaluate((p, at) => { p.focus(); p.setSelectionRange(at, at); }, caret);
+    await page.keyboard.type('# typed ');
+    const typed = SAMPLE.slice(0, caret) + '# typed ' + SAMPLE.slice(caret);
+    await expectShown(typed);
+
+    await page.evaluate(() => navigator.clipboard.writeText('and pasted\n'));
+    await page.keyboard.press('ControlOrMeta+KeyV');
+    const pasted = SAMPLE.slice(0, caret) + '# typed and pasted\n' + SAMPLE.slice(caret);
+    await expectShown(pasted);
+
+    await page.keyboard.press('ControlOrMeta+KeyZ');
+    await expectShown(typed);
+
+    // The browser decides how many steps typing takes, so the steps are counted
+    // and only their end is pinned.
+    const stepUntil = async (keys, text) => {
+      for (let step = 0; step < 10 && (await shown()).panel !== text; step++) {
+        await page.keyboard.press(keys);
+      }
+      await expectShown(text);
+    };
+    await stepUntil('ControlOrMeta+KeyZ', SAMPLE);
+    await stepUntil('ControlOrMeta+Shift+KeyZ', typed);
+    await page.keyboard.press('ControlOrMeta+Shift+KeyZ');
+    await expectShown(pasted);
+  });
+});
+

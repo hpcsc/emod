@@ -73,7 +73,7 @@
     },
     {
       "n": 3,
-      "done": false,
+      "done": true,
       "title": "Draw the source panel's text under a transparent textarea, level with its lines",
       "language": "JavaScript",
       "testable": true,

@@ -5,11 +5,13 @@ import { createStore } from '../static/store.js';
 function setupSourcePanel(text) {
   document.body.innerHTML = `
     <div id="source-gutter"></div>
+    <pre id="source-colours"></pre>
     <textarea id="source-input"></textarea>
     <div id="caret-line-diagnostics"></div>
   `;
   const store = createStore();
   store.dom.sourceGutter = document.getElementById('source-gutter');
+  store.dom.sourceColours = document.getElementById('source-colours');
   store.dom.sourceInput = document.getElementById('source-input');
   store.dom.caretLineDiagnostics = document.getElementById('caret-line-diagnostics');
   store.dom.sourceInput.value = text || '';
@@ -33,7 +35,36 @@ beforeEach(() => {
   document.body.innerHTML = '';
 });
 
+// A browser changes the text it is typed into without running the value setter
+// that a script calls, and announces the change with an input event.
+function typeAsTheBrowserDoes(panel, text) {
+  Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, 'value').set.call(panel, text);
+  panel.dispatchEvent(new Event('input', { bubbles: true }));
+}
+
 describe('SourcePanel', () => {
+  describe('source colours', () => {
+    const coloursText = () => document.getElementById('source-colours').textContent;
+
+    it('draw the text typed into the panel', () => {
+      const store = setupSourcePanel('emod = 1\n');
+
+      typeAsTheBrowserDoes(store.dom.sourceInput, 'emod = 1\n\nmodel "Orders" {\n}\n');
+
+      expect(coloursText()).toBe('emod = 1\n\nmodel "Orders" {\n}\n');
+    });
+
+    it('draw the text a script writes into the panel, which fires no input event', () => {
+      const store = setupSourcePanel('emod = 1\n');
+      expect(coloursText()).toBe('emod = 1\n');
+
+      store.dom.sourceInput.value = 'emod = 1\n\nactor "Clerk" {\n}\n';
+
+      expect(coloursText()).toBe('emod = 1\n\nactor "Clerk" {\n}\n');
+      expect(store.dom.sourceInput.value).toBe('emod = 1\n\nactor "Clerk" {\n}\n');
+    });
+  });
+
   describe('gutter', () => {
     it('marks each line that carries a diagnostic, and no other, naming its severity', () => {
       const store = setupSourcePanel();
