@@ -421,10 +421,10 @@ open, and the panel's newest text is always the next text asked for. On the larg
 colours follow the typing and do not slow it.
 
 **Acceptance Criteria:**
-- [ ] While the answer for the current text is still to come, the panel shows the newest answer it holds, moved across the edits made since. A token completely outside the edited stretch keeps its colour on its own characters. Text typed inside a token takes that token's colour. No colour lands on a character that its answer did not classify
-- [ ] At most one `tokenizeEmod` request is open at a time. When that request settles, the panel's text at that moment is asked for next, if it is not the text that was answered. An answer for older text never replaces the colours of an answer for newer text
-- [ ] In the web bundle, typing into the largest bundled example at 20 ms per key: every main-thread task stays under 50 ms. Within 100 ms of the last key, the colours describe the final text exactly: each token on screen is a token that `tokenizeEmod` gives that text. The colours do not wait for the revalidation pause
-- [ ] A new text that arrives while a request is open (a model opened, or a diagram edit that rewrites the source) is coloured from its own answer as soon as that answer arrives
+- [x] While the answer for the current text is still to come, the panel shows the newest answer it holds, moved across the edits made since. A token completely outside the edited stretch keeps its colour on its own characters. Text typed inside a token takes that token's colour. No colour lands on a character that its answer did not classify
+- [x] At most one `tokenizeEmod` request is open at a time. When that request settles, the panel's text at that moment is asked for next, if it is not the text that was answered. An answer for older text never replaces the colours of an answer for newer text
+- [x] In the web bundle, typing into the largest bundled example at 20 ms per key: every main-thread task stays under 50 ms. Within 100 ms of the last key, the colours describe the final text exactly: each token on screen is a token that `tokenizeEmod` gives that text. The colours do not wait for the revalidation pause
+- [x] A new text that arrives while a request is open (a model opened, or a diagram edit that rewrites the source) is coloured from its own answer as soon as that answer arrives
 
 **Affected Files/Modules:**
 - `internal/frontend/static/source-panel.js` — moves the tokens of an answer across the edits made since it was asked for

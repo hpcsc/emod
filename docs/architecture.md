@@ -268,9 +268,11 @@ textarea whose own text is transparent, and under it `source-panel.js` draws
 the same text, level with its lines, with each token in the colour of its
 category: the category `lsp.GetTokens` gives that stretch of the source, which
 is the one an HCL editor running `emod lsp` colours it with. The viewer asks
-the platform's `tokenizeEmod` after each change of the text, and an answer
-paints only the text it was asked for. No module of the frontend decides what
-is a keyword, a string or a construct's name.
+the platform's `tokenizeEmod` after each change of the text, with one request
+open at a time. Until the answer for the newest text arrives, the panel moves
+the last answer across the edits made since: a token keeps the characters the
+edit left alone, and text typed inside a token takes its colour. No module of
+the frontend decides what is a keyword, a string or a construct's name.
 
 ```mermaid
 flowchart LR

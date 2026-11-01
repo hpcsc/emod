@@ -164,9 +164,11 @@ function dragBy(element, dx, dy) {
   fireMouseAt(document, 'mouseup', 100 + dx, 100 + dy);
 }
 
+// A browser changes the text it is typed into without running the value setter
+// that a script calls, and announces the change with an input event.
 function typeIntoPanel(text) {
   const panel = document.getElementById('source-input');
-  panel.value = text;
+  Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, 'value').set.call(panel, text);
   panel.dispatchEvent(new Event('input', { bubbles: true }));
 }
 
@@ -5628,6 +5630,17 @@ describe('the documentation of the source panel', () => {
     expect(readme).not.toContain('typing replaces any change made on the diagram');
   });
 
+  it("says in the architecture page that GetTokens is the source panel's, and that the panel's colours come from it through tokenizeEmod", () => {
+    const page = read('docs/architecture.md');
+    const lsp = page.split('The **LSP**')[1].split('##')[0];
+    const viewer = page.split("The source panel's colours come from the Go core")[1].split('```')[0];
+
+    expect(lsp).toContain("`GetTokens` is for the viewer's source panel");
+    expect(viewer).toContain('`lsp.GetTokens`');
+    expect(viewer).toContain('`tokenizeEmod`');
+    expect(viewer).toContain('one request open at a time');
+  });
+
   it('says in the flow summary that a pause in typing, not a Render click alone, reaches the pipeline', () => {
     const step = read('docs/wasm-architecture.md').split('3. **Browser**')[1].split('4. **Embedding**')[0];
 
@@ -5642,12 +5655,6 @@ describe("the source panel's text drawn in its colours", () => {
   const painted = () => Array.from(document.getElementById('source-colours').childNodes)
     .map((node) => [node.textContent, node.dataset ? node.dataset.category : null]);
 
-  function typeAsTheBrowserDoes(text) {
-    const panel = document.getElementById('source-input');
-    Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, 'value').set.call(panel, text);
-    panel.dispatchEvent(new Event('input', { bubbles: true }));
-  }
-
   function heldTokens() {
     const held = {};
     tokenizeQueue.push(new Promise((resolve, reject) => { held.answer = resolve; held.refuse = reject; }));
@@ -5656,16 +5663,6 @@ describe("the source panel's text drawn in its colours", () => {
 
   beforeEach(() => {
     platform.tokenizeEmod.mockClear();
-  });
-
-  it('asks the Go core for the tokens of each text the user types', async () => {
-    await startEmpty();
-
-    typeAsTheBrowserDoes('emod = 1\n');
-    typeAsTheBrowserDoes('emod = 1\n# a\n');
-    await flush();
-
-    expect(tokenized()).toEqual(['emod = 1\n', 'emod = 1\n# a\n']);
   });
 
   it('asks for the tokens of a model the host opens, and of the text put back when the pipeline refuses the next one', async () => {
@@ -5687,7 +5684,7 @@ describe("the source panel's text drawn in its colours", () => {
     platformIsReady = false;
     await startEmpty();
 
-    typeAsTheBrowserDoes('emod = 1\n');
+    typeIntoPanel('emod = 1\n');
     await flush();
     expect(tokenized()).toEqual([]);
 
@@ -5701,9 +5698,9 @@ describe("the source panel's text drawn in its colours", () => {
     await startEmpty();
     const first = heldTokens();
 
-    typeAsTheBrowserDoes('emod = 1\n');
-    typeAsTheBrowserDoes('emod = 1\n#\n');
-    typeAsTheBrowserDoes('emod = 1\n# a\n');
+    typeIntoPanel('emod = 1\n');
+    typeIntoPanel('emod = 1\n#\n');
+    typeIntoPanel('emod = 1\n# a\n');
     await flush();
     expect(tokenized()).toEqual(['emod = 1\n']);
 
@@ -5717,9 +5714,9 @@ describe("the source panel's text drawn in its colours", () => {
     await startEmpty();
     const first = heldTokens();
 
-    typeAsTheBrowserDoes('emod = 1\n');
-    typeAsTheBrowserDoes('emod = 1\n#\n');
-    typeAsTheBrowserDoes('emod = 1\n');
+    typeIntoPanel('emod = 1\n');
+    typeIntoPanel('emod = 1\n#\n');
+    typeIntoPanel('emod = 1\n');
     first.answer({ tokens: [{ start: 7, end: 8, category: 'number' }] });
     await flush();
 
@@ -5727,11 +5724,30 @@ describe("the source panel's text drawn in its colours", () => {
     expect(painted()).toEqual([['emod = ', null], ['1', 'number'], ['\n', null]]);
   });
 
+  it('colours a model that arrives while a request is open from its own answer', async () => {
+    await startEmpty();
+    const typed = heldTokens();
+    typeIntoPanel('emod = 1\n');
+    await flush();
+
+    parseResult = { diagnostics: [], diagram: billingDiagram() };
+    deliverFile({ name: 'billing.emod', path: '/models/billing.emod', content: billingSource });
+    await flush();
+    tokenizeQueue.push(Promise.resolve({ tokens: [{ start: 10, end: 15, category: 'keyword' }, { start: 16, end: 25, category: 'string' }] }));
+    typed.answer({ tokens: [{ start: 0, end: 4, category: 'variable.member' }] });
+    await flush();
+
+    expect(tokenized()).toEqual(['emod = 1\n', billingSource]);
+    expect(painted()).toEqual([
+      ['emod = 1\n\n', null], ['model', 'keyword'], [' ', null], ['"Billing"', 'string'], [' {\n}\n', null],
+    ]);
+  });
+
   it('sends no request for an empty panel', async () => {
     await startEmpty();
 
-    typeAsTheBrowserDoes('x');
-    typeAsTheBrowserDoes('');
+    typeIntoPanel('x');
+    typeIntoPanel('');
     await flush();
 
     expect(tokenized()).toEqual(['x']);
@@ -5745,23 +5761,23 @@ describe("the source panel's text drawn in its colours", () => {
       { start: 7, end: 8, category: 'comment' },
     ] })];
 
-    typeAsTheBrowserDoes('emod = 1\n');
+    typeIntoPanel('emod = 1\n');
     await flush();
 
     expect(painted()).toEqual([['emod', 'string'], [' = ', null], ['1', 'comment'], ['\n', null]]);
   });
 
-  it('never paints an answer onto text that changed after it was asked for', async () => {
+  it('paints an answer for text that changed since only on the characters it read, until the newest answer arrives', async () => {
     await startEmpty();
     const first = heldTokens();
     const second = heldTokens();
 
-    typeAsTheBrowserDoes('emod = 1\n');
-    typeAsTheBrowserDoes('emod = 2\n');
+    typeIntoPanel('emod = 1\n');
+    typeIntoPanel('emod = 2\n');
     await flush();
     first.answer({ tokens: [{ start: 0, end: 4, category: 'variable.member' }, { start: 7, end: 8, category: 'number' }] });
     await flush();
-    expect(painted()).toEqual([['emod = 2\n', null]]);
+    expect(painted()).toEqual([['emod', 'variable.member'], [' = 2\n', null]]);
 
     second.answer({ tokens: [{ start: 7, end: 8, category: 'number' }] });
     await flush();
@@ -5773,15 +5789,33 @@ describe("the source panel's text drawn in its colours", () => {
     await startEmpty();
     tokenizeQueue = [Promise.reject(new Error('tokenize panic: index out of range'))];
 
-    typeAsTheBrowserDoes('emod = 1\n');
+    typeIntoPanel('emod = 1\n');
     await flush();
     expect(painted()).toEqual([['emod = 1\n', null]]);
 
     tokenizeQueue = [Promise.resolve({ tokens: [{ start: 7, end: 8, category: 'number' }] })];
-    typeAsTheBrowserDoes('emod = 2\n');
+    typeIntoPanel('emod = 2\n');
     await flush();
 
     expect(painted()).toEqual([['emod = ', null], ['2', 'number'], ['\n', null]]);
+  });
+
+  it('shows plain text, not the colours of an earlier answer, when the Go core refuses the newest text', async () => {
+    await startEmpty();
+    tokenizeQueue = [
+      Promise.resolve({ tokens: [{ start: 0, end: 4, category: 'variable.member' }, { start: 7, end: 8, category: 'number' }] }),
+    ];
+    typeIntoPanel('emod = 1\n');
+    await flush();
+    expect(painted()).toEqual([['emod', 'variable.member'], [' = ', null], ['1', 'number'], ['\n', null]]);
+    const refused = heldTokens();
+
+    typeIntoPanel('emod = 1\n\n');
+    await flush();
+    refused.refuse(new Error('tokenize panic: index out of range'));
+    await flush();
+
+    expect(painted()).toEqual([['emod = 1\n\n', null]]);
   });
 
   it('shows plain text when the Go core never loads, and asks for no tokens', async () => {
@@ -5790,42 +5824,11 @@ describe("the source panel's text drawn in its colours", () => {
     platformIsReady = false;
     await startEmpty();
 
-    typeAsTheBrowserDoes('emod = 1\n');
+    typeIntoPanel('emod = 1\n');
     await flush();
 
     expect(tokenized()).toEqual([]);
     expect(painted()).toEqual([['emod = 1\n', null]]);
-  });
-
-  it('draws the text the user types, which reaches the panel without a script writing it', async () => {
-    await startEmpty();
-    const panel = document.getElementById('source-input');
-
-    Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, 'value').set.call(panel, billingSource);
-    panel.dispatchEvent(new Event('input', { bubbles: true }));
-
-    expect(coloursText()).toBe(billingSource);
-  });
-
-  it('draws the source of a model the host opens', async () => {
-    await openBilling('emod = 1\n\nmodel "Opened" {\n}\n');
-
-    expect(coloursText()).toBe('emod = 1\n\nmodel "Opened" {\n}\n');
-  });
-
-  it('draws the text put back when the pipeline refuses a model the host delivers', async () => {
-    await openBilling();
-    let refuse;
-    parseQueue = [new Promise((_, reject) => { refuse = reject; })];
-
-    deliverFile({ name: 'broken.emod', path: '/models/broken.emod', content: 'emod = 1\nnot a model\n' });
-    await flush();
-    expect(coloursText()).toBe('emod = 1\nnot a model\n');
-    refuse(new Error('unparseable'));
-    await flush();
-
-    expect(document.getElementById('source-input').value).toBe(billingSource);
-    expect(coloursText()).toBe(billingSource);
   });
 
   it('hides the drawn text from assistive technology, which reads the textarea alone', () => {

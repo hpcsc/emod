@@ -469,36 +469,6 @@ function init() {
   }
 
   bus.on('diagram:edited', countDiagramEdit);
-
-  // ─── Source colours ───────────────────────────────────────────────
-  // One request at a time, because the Go core answers them in turn and a
-  // paste or a fill can change the text hundreds of times at once.
-  let tokenizing = false;
-
-  function tokenizeChangedText({ store: s }) {
-    if (s !== store || tokenizing) return;
-    tokenizePanelText();
-  }
-
-  function tokenizePanelText() {
-    const source = store.dom.sourceInput.value;
-    if (!source) return;
-    tokenizing = true;
-    ready.then(function() {
-      return tokenizeEmod(source);
-    }).then(function(answer) {
-      SourcePanel.showTokens(store, source, answer.tokens);
-    }, function() {
-      SourcePanel.showTokens(store, source, []);
-    }).then(function() {
-      tokenizing = false;
-      if (store.dom.sourceInput.value !== source) {
-        tokenizePanelText();
-      }
-    });
-  }
-
-  bus.on('source:changed', tokenizeChangedText);
   bus.on('fields:edited', countDiagramEdit);
 
   // A panel that no longer holds the drawn source has an edit the diagram does
@@ -737,6 +707,37 @@ function init() {
   }
 
   store.dom.renderBtn.addEventListener("click", renderClicked);
+
+  // ─── Source colours ───────────────────────────────────────────────
+  // One request is open at a time. A tokenize can take as long as the gap
+  // between two keys, and on the desktop two calls in flight can finish in
+  // either order.
+  let tokenizing = false;
+
+  function tokenizeChangedText({ store: s }) {
+    if (s !== store || tokenizing) return;
+    tokenizePanelText();
+  }
+
+  function tokenizePanelText() {
+    const source = store.dom.sourceInput.value;
+    if (!source) return;
+    tokenizing = true;
+    ready.then(function() {
+      return tokenizeEmod(source);
+    }).then(function(answer) {
+      SourcePanel.showTokens(store, source, answer.tokens);
+    }, function() {
+      SourcePanel.showTokens(store, source, []);
+    }).then(function() {
+      tokenizing = false;
+      if (store.dom.sourceInput.value !== source) {
+        tokenizePanelText();
+      }
+    });
+  }
+
+  bus.on('source:changed', tokenizeChangedText);
 
   // ─── File drag-and-drop ───────────────────────────────────────────
   store.dom.panelBody.addEventListener("dragenter", function(evt) {

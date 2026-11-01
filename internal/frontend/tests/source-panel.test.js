@@ -38,7 +38,7 @@ beforeEach(() => {
 
 // A browser changes the text it is typed into without running the value setter
 // that a script calls, and announces the change with an input event.
-function typeAsTheBrowserDoes(panel, text) {
+function typeIntoPanel(panel, text) {
   Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, 'value').set.call(panel, text);
   panel.dispatchEvent(new Event('input', { bubbles: true }));
 }
@@ -50,7 +50,7 @@ describe('SourcePanel', () => {
     it('draw the text typed into the panel', () => {
       const store = setupSourcePanel('emod = 1\n');
 
-      typeAsTheBrowserDoes(store.dom.sourceInput, 'emod = 1\n\nmodel "Orders" {\n}\n');
+      typeIntoPanel(store.dom.sourceInput, 'emod = 1\n\nmodel "Orders" {\n}\n');
 
       expect(coloursText()).toBe('emod = 1\n\nmodel "Orders" {\n}\n');
     });
@@ -69,38 +69,87 @@ describe('SourcePanel', () => {
       expect(painted()).toEqual([['emod', 'variable.member'], [' = ', null], ['1', 'number'], ['\n', null]]);
     });
 
-    it('paint nothing from an answer for text the panel no longer holds', () => {
-      const store = setupSourcePanel('emod = 2\n');
+    describe('while the answer for the newest text is still to come', () => {
+      const source = 'emod = 1\n# a note\nx = 22\n';
+      const answered = (store) => SourcePanel.showTokens(store, source, [
+        { start: 0, end: 4, category: 'variable.member' },
+        { start: 7, end: 8, category: 'number' },
+        { start: 9, end: 17, category: 'comment' },
+        { start: 18, end: 19, category: 'variable.member' },
+        { start: 22, end: 24, category: 'number' },
+      ]);
 
-      SourcePanel.showTokens(store, 'emod = 1\n', [{ start: 7, end: 8, category: 'number' }]);
+      it('keep the colour of each token outside the edited stretch on its own characters', () => {
+        const store = setupSourcePanel(source);
+        answered(store);
 
-      expect(painted()).toEqual([['emod = 2\n', null]]);
-    });
+        typeIntoPanel(store.dom.sourceInput, 'emod = 1\ny = 3\n# a note\nx = 22\n');
 
-    it('drop the tokens of the text that was replaced', () => {
-      const store = setupSourcePanel('emod = 1\n');
-      SourcePanel.showTokens(store, 'emod = 1\n', [{ start: 7, end: 8, category: 'number' }]);
+        expect(painted()).toEqual([
+          ['emod', 'variable.member'], [' = ', null], ['1', 'number'], ['\ny = 3\n', null],
+          ['# a note', 'comment'], ['\n', null], ['x', 'variable.member'], [' = ', null], ['22', 'number'], ['\n', null],
+        ]);
+      });
 
-      typeAsTheBrowserDoes(store.dom.sourceInput, 'emod = 1\n\n');
+      it('move the tokens after a deletion back onto their characters', () => {
+        const store = setupSourcePanel(source);
+        answered(store);
 
-      expect(painted()).toEqual([['emod = 1\n\n', null]]);
-    });
+        typeIntoPanel(store.dom.sourceInput, 'emod = 1\nx = 22\n');
 
-    it('announce each change of the text, typed or written by a script, and only for the panel that changed', () => {
-      const store = setupSourcePanel('emod = 1\n');
-      const announced = [];
-      const listen = ({ store: changed }) => announced.push(changed === store ? changed.dom.sourceInput.value : 'another panel');
-      bus.on('source:changed', listen);
+        expect(painted()).toEqual([
+          ['emod', 'variable.member'], [' = ', null], ['1', 'number'], ['\n', null],
+          ['x', 'variable.member'], [' = ', null], ['22', 'number'], ['\n', null],
+        ]);
+      });
 
-      try {
-        typeAsTheBrowserDoes(store.dom.sourceInput, 'emod = 2\n');
-        store.dom.sourceInput.value = 'emod = 3\n';
-        SourcePanel.showTokens(store, 'emod = 3\n', []);
-      } finally {
-        bus.off('source:changed', listen);
-      }
+      it("give text typed inside a token that token's colour", () => {
+        const store = setupSourcePanel(source);
+        answered(store);
 
-      expect(announced).toEqual(['emod = 2\n', 'emod = 3\n']);
+        typeIntoPanel(store.dom.sourceInput, 'emod = 1\n# a long note\nx = 22\n');
+
+        expect(painted()).toContainEqual(['# a long note', 'comment']);
+      });
+
+      it('leave text typed at the edge of a token plain, and keep the token', () => {
+        const store = setupSourcePanel(source);
+        answered(store);
+
+        typeIntoPanel(store.dom.sourceInput, 'emod = 1\n# a note\nx = 222\n');
+
+        expect(painted().slice(-2)).toEqual([['22', 'number'], ['2\n', null]]);
+      });
+
+      it('drop a token that the edit changes part of, so no colour lands on a character no answer read', () => {
+        const store = setupSourcePanel(source);
+        answered(store);
+
+        typeIntoPanel(store.dom.sourceInput, 'emod = 1\n# a note\nx = 2y\n');
+
+        expect(painted().slice(-2)).toEqual([['x', 'variable.member'], [' = 2y\n', null]]);
+      });
+
+      it('drop a token whose first character the edit replaces', () => {
+        const store = setupSourcePanel(source);
+        answered(store);
+
+        typeIntoPanel(store.dom.sourceInput, 'emod = 1\n# a note\nx = 32\n');
+
+        expect(painted().slice(-2)).toEqual([['x', 'variable.member'], [' = 32\n', null]]);
+      });
+
+      it("give a character typed inside a token that token's colour when it repeats the one before it", () => {
+        const store = setupSourcePanel('x = 1b\n');
+        SourcePanel.showTokens(store, 'x = 1b\n', [
+          { start: 0, end: 1, category: 'variable.member' },
+          { start: 4, end: 6, category: 'string' },
+        ]);
+
+        typeIntoPanel(store.dom.sourceInput, 'x = 11b\n');
+
+        expect(painted()).toEqual([['x', 'variable.member'], [' = ', null], ['11b', 'string'], ['\n', null]]);
+      });
     });
 
     it('draw the text a script writes into the panel, which fires no input event', () => {
@@ -111,6 +160,25 @@ describe('SourcePanel', () => {
 
       expect(coloursText()).toBe('emod = 1\n\nactor "Clerk" {\n}\n');
       expect(store.dom.sourceInput.value).toBe('emod = 1\n\nactor "Clerk" {\n}\n');
+    });
+  });
+
+  describe('the text', () => {
+    it('is announced on each change, typed or written by a script, and not when only its colours change', () => {
+      const store = setupSourcePanel('emod = 1\n');
+      const announced = [];
+      const listen = ({ store: changed }) => announced.push(changed === store ? changed.dom.sourceInput.value : 'another panel');
+      bus.on('source:changed', listen);
+
+      try {
+        typeIntoPanel(store.dom.sourceInput, 'emod = 2\n');
+        store.dom.sourceInput.value = 'emod = 3\n';
+        SourcePanel.showTokens(store, 'emod = 3\n', []);
+      } finally {
+        bus.off('source:changed', listen);
+      }
+
+      expect(announced).toEqual(['emod = 2\n', 'emod = 3\n']);
     });
   });
 

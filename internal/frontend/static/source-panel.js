@@ -4,7 +4,7 @@ import { bus } from './bus.js';
 const CARET_MOVES = ["keyup", "mouseup", "input", "selectionchange"];
 
 function initSourcePanel(store) {
-  showEveryWrite(store);
+  followValueWrites(store);
   showText(store);
   // A hidden textarea reports no scroll, and showing it again restores its
   // scroll without a scroll event.
@@ -15,7 +15,7 @@ function initSourcePanel(store) {
     followScroll(store);
   });
   store.dom.sourceInput.addEventListener("input", function() {
-    changeText(store);
+    reportTextChange(store);
   });
   CARET_MOVES.forEach(function(type) {
     store.dom.sourceInput.addEventListener(type, function() {
@@ -24,29 +24,28 @@ function initSourcePanel(store) {
   });
 }
 
-// The viewer writes the panel's text itself when a model opens or a diagram
-// edit rewrites the source, and a write from a script fires no input event.
-function showEveryWrite(store) {
-  const textValue = Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, "value");
+// A write from a script fires no input event.
+function followValueWrites(store) {
+  const valueDescriptor = Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, "value");
   Object.defineProperty(store.dom.sourceInput, "value", {
     configurable: true,
     get: function() {
-      return textValue.get.call(this);
+      return valueDescriptor.get.call(this);
     },
     set: function(text) {
-      textValue.set.call(this, text);
-      changeText(store);
+      valueDescriptor.set.call(this, text);
+      reportTextChange(store);
     },
   });
 }
 
-function changeText(store) {
+function reportTextChange(store) {
   showText(store);
   bus.emit("source:changed", { store });
 }
 
 function showTokens(store, source, tokens) {
-  store.tokenized = { source, tokens };
+  store.sourceTokens = { source, tokens };
   showText(store);
 }
 
@@ -54,15 +53,45 @@ function showText(store) {
   const coloursEl = store.dom.sourceColours;
   if (!coloursEl) return;
   const text = store.dom.sourceInput.value;
-  const tokenized = store.tokenized;
-  if (!tokenized || tokenized.source !== text) {
+  const tokens = store.sourceTokens ? tokensMovedOnto(store.sourceTokens, text) : [];
+  if (tokens.length === 0) {
     coloursEl.textContent = text;
     return;
   }
-  coloursEl.replaceChildren(colouredRuns(text, tokenized.tokens));
+  coloursEl.replaceChildren(buildColouredRuns(text, tokens));
 }
 
-function colouredRuns(text, tokens) {
+function tokensMovedOnto(sourceTokens, text) {
+  const before = sourceTokens.source;
+  if (before === text) return sourceTokens.tokens;
+
+  const shorter = Math.min(before.length, text.length);
+  let editStart = 0;
+  while (editStart < shorter && before[editStart] === text[editStart]) {
+    editStart++;
+  }
+  let unchangedEnd = 0;
+  while (unchangedEnd < shorter - editStart &&
+    before[before.length - 1 - unchangedEnd] === text[text.length - 1 - unchangedEnd]) {
+    unchangedEnd++;
+  }
+  const editEnd = before.length - unchangedEnd;
+  const shift = text.length - before.length;
+
+  const moved = [];
+  sourceTokens.tokens.forEach(function(token) {
+    if (token.end <= editStart) {
+      moved.push(token);
+    } else if (token.start >= editEnd) {
+      moved.push({ start: token.start + shift, end: token.end + shift, category: token.category });
+    } else if (token.start < editStart && editEnd < token.end) {
+      moved.push({ start: token.start, end: token.end + shift, category: token.category });
+    }
+  });
+  return moved;
+}
+
+function buildColouredRuns(text, tokens) {
   const runs = document.createDocumentFragment();
   let plainFrom = 0;
   tokens.forEach(function(token) {

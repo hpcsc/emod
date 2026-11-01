@@ -12,7 +12,7 @@ export function createStore() {
     // handed.
     currentFile: null,
     // {source, tokens}: the Go core's last answer and the text it was asked for.
-    tokenized: null,
+    sourceTokens: null,
     layoutPositions: {},
     arrowData: [],
     nodeById: new Map(),

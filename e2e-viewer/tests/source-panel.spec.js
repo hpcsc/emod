@@ -422,32 +422,25 @@ test.describe("the diagnostics of the caret's line", () => {
   });
 });
 
-// How far the source colours draw the text from where the textarea draws it,
-// read off the screen: the panel is photographed once with only the textarea's
-// own text showing and once with only the colours. The shift that best lays one
-// picture over the other is the distance between them, in CSS pixels, and the
-// share of ink that still differs there catches a single line out of place. A
-// coloured token is a run of its own, which Chromium can place a fraction of a
-// pixel off, so a few edge pixels differ even when every glyph is in place.
-// The colours are hidden by a transparent colour rather than taken away: WebKit
-// draws a colour emoji in transparent text, so then both pictures draw it twice.
+// WebKit draws a colour emoji even in transparent text, so each screenshot hides
+// a layer with a transparent colour, not with visibility.
 async function drawnOffset(page) {
   const panel = page.locator('#source-input');
   await panel.evaluate((p) => p.blur());
   const clip = await panel.boundingBox();
-  const photograph = async (css) => {
+  const screenshot = async (css) => {
     const style = await page.addStyleTag({ content: css });
     const png = await page.screenshot({ clip });
     await style.evaluate((element) => element.remove());
     return png.toString('base64');
   };
-  const textarea = await photograph('#source-input { color: #000 !important; caret-color: transparent !important; } ' +
+  const textarea = await screenshot('#source-input { color: #000 !important; caret-color: transparent !important; } ' +
     '#source-colours, #source-colours * { color: transparent !important; }');
-  const colours = await photograph('#source-input { caret-color: transparent !important; } ' +
+  const colours = await screenshot('#source-input { caret-color: transparent !important; } ' +
     '#source-colours, #source-colours * { color: #000 !important; }');
 
   return page.evaluate(async ([first, second]) => {
-    const inkOf = async (base64) => {
+    const darkPixelsOf = async (base64) => {
       const image = new Image();
       image.src = 'data:image/png;base64,' + base64;
       await image.decode();
@@ -457,14 +450,14 @@ async function drawnOffset(page) {
       const context = canvas.getContext('2d');
       context.drawImage(image, 0, 0);
       const { data, width, height } = context.getImageData(0, 0, image.width, image.height);
-      const ink = new Uint8Array(width * height);
-      for (let i = 0; i < ink.length; i++) {
-        ink[i] = data[i * 4] + data[i * 4 + 1] + data[i * 4 + 2] < 3 * 160 ? 1 : 0;
+      const dark = new Uint8Array(width * height);
+      for (let i = 0; i < dark.length; i++) {
+        dark[i] = data[i * 4] + data[i * 4 + 1] + data[i * 4 + 2] < 3 * 160 ? 1 : 0;
       }
-      return { ink, width, height };
+      return { dark, width, height };
     };
-    const a = await inkOf(first);
-    const b = await inkOf(second);
+    const a = await darkPixelsOf(first);
+    const b = await darkPixelsOf(second);
     const scale = a.width / Math.round(document.getElementById('source-input').getBoundingClientRect().width);
     const reach = Math.ceil(2 * scale);
 
@@ -474,22 +467,20 @@ async function drawnOffset(page) {
         let differing = 0;
         for (let y = reach; y < a.height - reach; y++) {
           for (let x = reach; x < a.width - reach; x++) {
-            differing += a.ink[y * a.width + x] !== b.ink[(y + dy) * b.width + x + dx] ? 1 : 0;
+            differing += a.dark[y * a.width + x] !== b.dark[(y + dy) * b.width + x + dx] ? 1 : 0;
           }
         }
         if (!best || differing < best.differing) best = { dx, dy, differing };
       }
     }
-    const inked = a.ink.reduce((sum, value) => sum + value, 0);
-    return { x: Math.abs(best.dx) / scale, y: Math.abs(best.dy) / scale, inked, differing: best.differing / inked };
+    const darkPixels = a.dark.reduce((sum, value) => sum + value, 0);
+    return { x: Math.abs(best.dx) / scale, y: Math.abs(best.dy) / scale, darkPixels, differing: best.differing / darkPixels };
   }, [textarea, colours]);
 }
 
 async function openSource(page, source) {
   await open(page);
-  await page.locator('#source-input').fill(source);
-  await page.locator('#render-btn').click();
-  await expect(page.locator('#render-status')).toHaveText('✓ Rendered');
+  await render(page, source);
   await page.locator('#data-panel-header').click();
   await expect(page.locator('#data-panel')).not.toHaveClass(/collapsed/);
 }
@@ -499,28 +490,35 @@ test.describe("the source panel's text drawn under the textarea", () => {
     await page.setViewportSize({ width: 900, height: 800 });
     await openSource(page, largestExample());
     const panel = page.locator('#source-input');
-    const assertLevel = async () => {
+    const expectAligned = async () => {
       const offset = await drawnOffset(page);
-      expect(offset.inked).toBeGreaterThan(500);
+      expect(offset.darkPixels).toBeGreaterThan(500);
+      // Chromium can place a coloured token a fraction of a pixel off, so a few
+      // edge pixels differ even when every glyph is in place.
       expect({ x: offset.x <= 1, y: offset.y <= 1, differing: offset.differing <= 0.15 }).toEqual({ x: true, y: true, differing: true });
     };
 
-    await assertLevel();
+    await expectAligned();
 
     await panel.evaluate((p) => { p.scrollTop = p.scrollHeight; });
-    await assertLevel();
+    await expectAligned();
 
     await panel.evaluate((p) => { p.scrollLeft = p.scrollWidth; });
     expect(await panel.evaluate((p) => p.scrollLeft)).toBeGreaterThan(0);
-    await assertLevel();
+    await expectAligned();
 
     await panel.evaluate((p) => { p.style.height = '320px'; });
-    await assertLevel();
+    await expectAligned();
 
     await page.locator('#data-panel-header').click();
     await expect(page.locator('#data-panel')).toHaveClass(/collapsed/);
+    await panel.evaluate((p) => {
+      p.value = p.value + '\n# revalidated while collapsed\n';
+      p.dispatchEvent(new Event('input', { bubbles: true }));
+    });
+    await page.waitForTimeout(REVALIDATE_PAUSE_MS + 400);
     await page.locator('#data-panel-header').click();
-    await assertLevel();
+    await expectAligned();
   });
 
   test('lands the characters after a tab, a combining mark, a ZWJ emoji and a CJK character within 1 px of the textarea', async ({ page }) => {
@@ -532,7 +530,9 @@ test.describe("the source panel's text drawn under the textarea", () => {
 
     const offset = await drawnOffset(page);
 
-    expect(offset.inked).toBeGreaterThan(500);
+    expect(offset.darkPixels).toBeGreaterThan(500);
+    // Chromium can place a coloured token a fraction of a pixel off, so a few edge
+    // pixels differ even when every glyph is in place.
     expect({ x: offset.x <= 1, y: offset.y <= 1, differing: offset.differing <= 0.15 }).toEqual({ x: true, y: true, differing: true });
   });
 
@@ -555,6 +555,15 @@ test.describe("the source panel's text drawn under the textarea", () => {
     const selection = await panel.evaluate((p) => getComputedStyle(p, '::selection').backgroundColor);
     expect(alphaOf(selection)).toBeGreaterThan(0);
     expect(alphaOf(selection)).toBeLessThan(1);
+  });
+
+  test('draws the text once, in the textarea, when the system forces its own colours', async ({ page }) => {
+    await page.emulateMedia({ forcedColors: 'active' });
+    await openSource(page, SAMPLE);
+
+    expect(await page.locator('.source-colours-frame').isVisible()).toBe(false);
+    const own = await page.locator('#source-input').evaluate((p) => getComputedStyle(p).color);
+    expect(/rgba\(.*,\s*0\)$/.test(own) || own === 'transparent').toBe(false);
   });
 
   test('copies exactly the selected source, with no markup, whether the keyboard or the mouse selected it', async ({ page, context, browserName }) => {
@@ -628,7 +637,6 @@ test.describe("the source panel's text drawn under the textarea", () => {
   });
 });
 
-// The computed colour of the drawn character at each offset of the panel's text.
 async function coloursAt(page, offsets) {
   return page.evaluate((targets) => targets.map((at) => {
     const walker = document.createTreeWalker(document.getElementById('source-colours'), NodeFilter.SHOW_TEXT);
@@ -641,8 +649,6 @@ async function coloursAt(page, offsets) {
   }), offsets);
 }
 
-// The colour each category's rule in the page's stylesheet names, as the
-// browser computes it.
 async function categoryColours(page) {
   return page.evaluate(() => {
     const probe = document.createElement('span');
@@ -666,7 +672,7 @@ async function openColoured(page, source) {
   await expect.poll(() => page.locator('#source-colours [data-category]').count()).toBeGreaterThan(0);
 }
 
-const CLOSED_CONTEXT_MISSING = largestExample() + '\ncontext "Unclosed" {\n  slice "Never Closed" {\n';
+const LARGEST_UNPARSEABLE = largestExample() + '\ncontext "Unclosed" {\n  slice "Never Closed" {\n';
 
 test.describe("the source panel's colours", () => {
   test('tell a block type, a bare identifier, a string, a number and a comment apart, and paint every token in the colour its category names', async ({ page }) => {
@@ -695,17 +701,27 @@ test.describe("the source panel's colours", () => {
     expect(await page.locator('#source-colours [data-category^="punctuation"]').count()).toBeGreaterThan(0);
   });
 
-  test("paint a declared construct's name in the colour of its kind, and keep its quotes and a slice's label in the string colour", async ({ page }) => {
+  test("paint each declared construct's name in a colour of its own kind, and keep its quotes and a slice's label in the string colour", async ({ page }) => {
     const source = largestExample();
     await openColoured(page, source);
     const rules = await categoryColours(page);
-    const command = source.indexOf('command "ReserveRoom"') + 'command "'.length;
+    const nameOf = (declaration) => source.indexOf(declaration) + declaration.indexOf('"') + 1;
+    const kinds = {
+      'lsp.type.parameter': 'actor "Guest"',
+      'lsp.type.namespace': 'context "Reservations"',
+      'lsp.type.struct': 'aggregate "Reservation"',
+      'lsp.type.function': 'command "ReserveRoom"',
+      'lsp.type.event': 'event "RoomReserved"',
+      'lsp.type.class': 'view "AvailableRoomsView"',
+    };
     const slice = source.indexOf('slice "') + 'slice "'.length;
 
-    const [name, quote, sliceLabel] = await coloursAt(page, [command, command - 1, slice]);
+    const names = await coloursAt(page, Object.values(kinds).map(nameOf));
+    const [quote, sliceLabel] = await coloursAt(page, [nameOf(kinds['lsp.type.function']) - 1, slice]);
 
-    expect({ name, quote, sliceLabel }).toEqual({ name: rules['lsp.type.function'], quote: rules.string, sliceLabel: rules.string });
-    expect(rules['lsp.type.function']).not.toBe(rules.string);
+    expect(names).toEqual(Object.keys(kinds).map((kind) => rules[kind]));
+    expect(new Set([...names, rules.string]).size).toBe(7);
+    expect({ quote, sliceLabel }).toEqual({ quote: rules.string, sliceLabel: rules.string });
   });
 
   test('give every category a colour that contrasts at least 4.5:1 with the panel', async ({ page }) => {
@@ -727,7 +743,7 @@ test.describe("the source panel's colours", () => {
   });
 
   test('colour source that does not parse as far as the answer goes, and keep the panel editing', async ({ page }) => {
-    const source = CLOSED_CONTEXT_MISSING;
+    const source = LARGEST_UNPARSEABLE;
     await openColoured(page, source);
     const rules = await categoryColours(page);
 
@@ -752,6 +768,7 @@ test.describe("the source panel's colours", () => {
     page.on('pageerror', (error) => errors.push(error.message));
     await page.route('**/emod.wasm', (route) => route.abort());
     await page.goto('/');
+    await expect(page.locator('#render-status')).toContainText('✗ ');
     await page.locator('#source-input').fill(SAMPLE);
     await page.locator('#source-input').press('End');
     await page.keyboard.type('# typed');
@@ -759,6 +776,47 @@ test.describe("the source panel's colours", () => {
     await expect.poll(() => page.locator('#source-colours').textContent()).toBe(SAMPLE + '# typed');
     expect(await page.locator('#source-colours [data-category]').count()).toBe(0);
     expect(errors).toEqual([]);
+  });
+});
+
+async function paintedTokens(page) {
+  return page.evaluate(() => {
+    const tokens = [];
+    let at = 0;
+    for (const node of document.getElementById('source-colours').childNodes) {
+      if (node.dataset && node.dataset.category) {
+        tokens.push({ start: at, end: at + node.textContent.length, category: node.dataset.category });
+      }
+      at += node.textContent.length;
+    }
+    return tokens;
+  });
+}
+
+test.describe("the source panel's colours while it is typed into", () => {
+  test('describe the final text exactly within 100 ms of the last key at 20 ms a key, with every main-thread task under 50 ms', async ({ page }) => {
+    const worker = page.waitForEvent('worker');
+    await openColoured(page, largestExample());
+    const parser = await worker;
+    await page.evaluate(() => {
+      window.longTasks = [];
+      new PerformanceObserver((list) => {
+        list.getEntries().forEach((entry) => window.longTasks.push(Math.round(entry.duration)));
+      }).observe({ type: 'longtask' });
+      const panel = document.getElementById('source-input');
+      panel.focus();
+      panel.setSelectionRange(panel.value.indexOf('context "Notifications"'), panel.value.indexOf('context "Notifications"'));
+    });
+
+    await page.keyboard.type('actor "Clerk" {\n}\n\n# typed while colouring', { delay: 20 });
+    await page.waitForTimeout(100);
+
+    const shown = await paintedTokens(page);
+    const final = await page.locator('#source-input').inputValue();
+    const answer = JSON.parse(await parser.evaluate((source) => globalThis.tokenizeEmod(JSON.stringify({ source })), final));
+    expect(final).toContain('actor "Clerk" {\n}\n\n# typed while colouringcontext "Notifications"');
+    expect(shown).toEqual(answer.tokens);
+    expect(await page.evaluate(() => window.longTasks)).toEqual([]);
   });
 });
 

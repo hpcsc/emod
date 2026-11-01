@@ -475,7 +475,7 @@ context "Payments" {
 			require.NotEmpty(t, tokens)
 
 			readOffAnswer := fieldsReadBy(t, "../frontend/static/viewer.js", "tokenizePanelText", "answer")
-			readOffToken := fieldsReadBy(t, "../frontend/static/source-panel.js", "colouredRuns", "token")
+			readOffToken := fieldsReadBy(t, "../frontend/static/source-panel.js", "buildColouredRuns", "token")
 
 			require.Contains(t, readOffAnswer, "tokens", "viewer.js must read the tokens of the answer")
 			require.Subset(t, keysOf(answer), readOffAnswer, "viewer.js reads a key of the tokenize answer the pipeline does not write")

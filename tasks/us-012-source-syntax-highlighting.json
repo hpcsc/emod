@@ -149,7 +149,7 @@
     },
     {
       "n": 5,
-      "done": false,
+      "done": true,
       "title": "Keep the colours on the text while it is typed",
       "language": "JavaScript",
       "testable": true,

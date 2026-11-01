@@ -790,6 +790,17 @@ body.file-drop-target-active::after {
 #source-colours [data-category="lsp.type.class"] { color: #1a7f37; }
 #source-colours [data-category="lsp.type.parameter"] { color: #7d4e00; }
 
+/* A forced palette would draw the textarea's own text over the colours. */
+@media (forced-colors: active) {
+  .source-colours-frame {
+    display: none;
+  }
+
+  #source-input {
+    color: CanvasText;
+  }
+}
+
 /* Moved rather than scrolled: a scroll box stops at the end of its own content,
    and the textarea, whose scrollbars take room, scrolls further. */
 #source-colours {
