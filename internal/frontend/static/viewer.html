@@ -770,6 +770,26 @@ body.file-drop-target-active::after {
   pointer-events: none;
 }
 
+#source-colours [data-category="comment"] { color: #59636e; }
+#source-colours [data-category="string"] { color: #0a3069; }
+#source-colours [data-category="number"],
+#source-colours [data-category="boolean"],
+#source-colours [data-category="constant"] { color: #0550ae; }
+#source-colours [data-category="keyword"],
+#source-colours [data-category="keyword.repeat"],
+#source-colours [data-category="keyword.conditional"],
+#source-colours [data-category="operator"] { color: #cf222e; }
+#source-colours [data-category="type"],
+#source-colours [data-category="variable.builtin"] { color: #953800; }
+#source-colours [data-category="function"] { color: #8250df; }
+#source-colours [data-category="variable.member"] { color: #116329; }
+#source-colours [data-category="lsp.type.namespace"] { color: #6639ba; }
+#source-colours [data-category="lsp.type.struct"] { color: #9a3412; }
+#source-colours [data-category="lsp.type.function"] { color: #0969da; }
+#source-colours [data-category="lsp.type.event"] { color: #bc4c00; }
+#source-colours [data-category="lsp.type.class"] { color: #1a7f37; }
+#source-colours [data-category="lsp.type.parameter"] { color: #7d4e00; }
+
 /* Moved rather than scrolled: a scroll box stops at the end of its own content,
    and the textarea, whose scrollbars take room, scrolls further. */
 #source-colours {

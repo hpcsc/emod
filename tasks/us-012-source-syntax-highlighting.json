@@ -109,7 +109,7 @@
     },
     {
       "n": 4,
-      "done": false,
+      "done": true,
       "title": "Colour the source panel's text by the tokens the Go core answers",
       "language": "JavaScript",
       "testable": true,

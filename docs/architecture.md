@@ -263,6 +263,15 @@ implementation, `build:desktop` copies the desktop one over it. No shared module
 branches on where it is running, which is what keeps the three distributions
 from drifting into three forks.
 
+The source panel's colours come from the Go core as well. The panel is a
+textarea whose own text is transparent, and under it `source-panel.js` draws
+the same text, level with its lines, with each token in the colour of its
+category: the category `lsp.GetTokens` gives that stretch of the source, which
+is the one an HCL editor running `emod lsp` colours it with. The viewer asks
+the platform's `tokenizeEmod` after each change of the text, and an answer
+paints only the text it was asked for. No module of the frontend decides what
+is a keyword, a string or a construct's name.
+
 ```mermaid
 flowchart LR
     subgraph "Go build"
@@ -338,7 +347,7 @@ HCL is the syntax, so an editor that knows HCL colours an `.emod` file and
 nothing in this repository spells the grammar a second time. The VS Code
 extension contributes the language, its brackets and comments, and the LSP
 client; the colour of a name comes from the semantic tokens the server sends,
-which paint a context, an aggregate, a command, an event and a view.
+which paint a context, an aggregate, a command, an event, a view and an actor.
 
 `internal/lsp/keywords_test.go` pins that every word in `internal/test`'s
 keyword list has a hover description, and that the completion lists never

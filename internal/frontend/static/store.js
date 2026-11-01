@@ -11,6 +11,8 @@ export function createStore() {
     // the panel cannot, because a textarea rewrites every line ending it is
     // handed.
     currentFile: null,
+    // {source, tokens}: the Go core's last answer and the text it was asked for.
+    tokenized: null,
     layoutPositions: {},
     arrowData: [],
     nodeById: new Map(),

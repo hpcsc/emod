@@ -426,7 +426,9 @@ test.describe("the diagnostics of the caret's line", () => {
 // read off the screen: the panel is photographed once with only the textarea's
 // own text showing and once with only the colours. The shift that best lays one
 // picture over the other is the distance between them, in CSS pixels, and the
-// share of ink that still differs there catches a single line out of place.
+// share of ink that still differs there catches a single line out of place. A
+// coloured token is a run of its own, which Chromium can place a fraction of a
+// pixel off, so a few edge pixels differ even when every glyph is in place.
 // The colours are hidden by a transparent colour rather than taken away: WebKit
 // draws a colour emoji in transparent text, so then both pictures draw it twice.
 async function drawnOffset(page) {
@@ -441,7 +443,8 @@ async function drawnOffset(page) {
   };
   const textarea = await photograph('#source-input { color: #000 !important; caret-color: transparent !important; } ' +
     '#source-colours, #source-colours * { color: transparent !important; }');
-  const colours = await photograph('#source-input { caret-color: transparent !important; }');
+  const colours = await photograph('#source-input { caret-color: transparent !important; } ' +
+    '#source-colours, #source-colours * { color: #000 !important; }');
 
   return page.evaluate(async ([first, second]) => {
     const inkOf = async (base64) => {
@@ -499,7 +502,7 @@ test.describe("the source panel's text drawn under the textarea", () => {
     const assertLevel = async () => {
       const offset = await drawnOffset(page);
       expect(offset.inked).toBeGreaterThan(500);
-      expect({ x: offset.x <= 1, y: offset.y <= 1, differing: offset.differing <= 0.05 }).toEqual({ x: true, y: true, differing: true });
+      expect({ x: offset.x <= 1, y: offset.y <= 1, differing: offset.differing <= 0.15 }).toEqual({ x: true, y: true, differing: true });
     };
 
     await assertLevel();
@@ -530,7 +533,7 @@ test.describe("the source panel's text drawn under the textarea", () => {
     const offset = await drawnOffset(page);
 
     expect(offset.inked).toBeGreaterThan(500);
-    expect({ x: offset.x <= 1, y: offset.y <= 1, differing: offset.differing <= 0.05 }).toEqual({ x: true, y: true, differing: true });
+    expect({ x: offset.x <= 1, y: offset.y <= 1, differing: offset.differing <= 0.15 }).toEqual({ x: true, y: true, differing: true });
   });
 
   test('leaves the textarea drawing only its caret, shows the placeholder of an empty panel, and the selected text through a translucent selection', async ({ page }) => {
@@ -622,6 +625,140 @@ test.describe("the source panel's text drawn under the textarea", () => {
     await stepUntil('ControlOrMeta+Shift+KeyZ', typed);
     await page.keyboard.press('ControlOrMeta+Shift+KeyZ');
     await expectShown(pasted);
+  });
+});
+
+// The computed colour of the drawn character at each offset of the panel's text.
+async function coloursAt(page, offsets) {
+  return page.evaluate((targets) => targets.map((at) => {
+    const walker = document.createTreeWalker(document.getElementById('source-colours'), NodeFilter.SHOW_TEXT);
+    let passed = 0;
+    for (let node = walker.nextNode(); node; node = walker.nextNode()) {
+      if (at < passed + node.length) return getComputedStyle(node.parentElement).color;
+      passed += node.length;
+    }
+    return null;
+  }), offsets);
+}
+
+// The colour each category's rule in the page's stylesheet names, as the
+// browser computes it.
+async function categoryColours(page) {
+  return page.evaluate(() => {
+    const probe = document.createElement('span');
+    document.body.appendChild(probe);
+    const colours = {};
+    for (const sheet of document.styleSheets) {
+      for (const rule of sheet.cssRules) {
+        for (const [, category] of (rule.selectorText || '').matchAll(/\[data-category="([^"]+)"\]/g)) {
+          probe.style.color = rule.style.color;
+          colours[category] = getComputedStyle(probe).color;
+        }
+      }
+    }
+    probe.remove();
+    return colours;
+  });
+}
+
+async function openColoured(page, source) {
+  await openSource(page, source);
+  await expect.poll(() => page.locator('#source-colours [data-category]').count()).toBeGreaterThan(0);
+}
+
+const CLOSED_CONTEXT_MISSING = largestExample() + '\ncontext "Unclosed" {\n  slice "Never Closed" {\n';
+
+test.describe("the source panel's colours", () => {
+  test('tell a block type, a bare identifier, a string, a number and a comment apart, and paint every token in the colour its category names', async ({ page }) => {
+    const source = largestExample();
+    await openColoured(page, source);
+    const rules = await categoryColours(page);
+    const plain = await page.locator('#source-colours').evaluate((pre) => getComputedStyle(pre).color);
+
+    const [blockType, identifier, string, number, comment] = await coloursAt(page, [
+      source.indexOf('context "Reservations"'),
+      source.indexOf('required(string)') + 'required('.length,
+      source.indexOf('"Hotel Reservation"') + 1,
+      source.indexOf('emod = 1') + 'emod = '.length,
+      source.indexOf('# Hotel'),
+    ]);
+
+    expect(new Set([blockType, identifier, string, number, comment]).size).toBe(5);
+    expect({ blockType, string, number, comment }).toEqual({
+      blockType: rules.keyword, string: rules.string, number: rules.number, comment: rules.comment,
+    });
+    const mismatched = await page.evaluate(([colours, plainColour]) => Array.from(
+      document.querySelectorAll('#source-colours [data-category]'),
+    ).filter((run) => getComputedStyle(run).color !== (colours[run.dataset.category] || plainColour))
+      .map((run) => run.dataset.category + ': ' + run.textContent), [rules, plain]);
+    expect(mismatched).toEqual([]);
+    expect(await page.locator('#source-colours [data-category^="punctuation"]').count()).toBeGreaterThan(0);
+  });
+
+  test("paint a declared construct's name in the colour of its kind, and keep its quotes and a slice's label in the string colour", async ({ page }) => {
+    const source = largestExample();
+    await openColoured(page, source);
+    const rules = await categoryColours(page);
+    const command = source.indexOf('command "ReserveRoom"') + 'command "'.length;
+    const slice = source.indexOf('slice "') + 'slice "'.length;
+
+    const [name, quote, sliceLabel] = await coloursAt(page, [command, command - 1, slice]);
+
+    expect({ name, quote, sliceLabel }).toEqual({ name: rules['lsp.type.function'], quote: rules.string, sliceLabel: rules.string });
+    expect(rules['lsp.type.function']).not.toBe(rules.string);
+  });
+
+  test('give every category a colour that contrasts at least 4.5:1 with the panel', async ({ page }) => {
+    await open(page);
+    const rules = await categoryColours(page);
+    const background = await page.locator('.source-colours-frame').evaluate((frame) => getComputedStyle(frame).backgroundColor);
+    const luminance = (colour) => {
+      const [r, g, b] = /rgba?\(([^)]*)\)/.exec(colour)[1].split(',').map(Number).map((c) => {
+        const s = c / 255;
+        return s <= 0.03928 ? s / 12.92 : ((s + 0.055) / 1.055) ** 2.4;
+      });
+      return 0.2126 * r + 0.7152 * g + 0.0722 * b;
+    };
+    const contrast = (a, b) => (Math.max(luminance(a), luminance(b)) + 0.05) / (Math.min(luminance(a), luminance(b)) + 0.05);
+
+    expect(Object.keys(rules).length).toBeGreaterThan(10);
+    const low = Object.entries(rules).filter(([, colour]) => contrast(colour, background) < 4.5);
+    expect(low).toEqual([]);
+  });
+
+  test('colour source that does not parse as far as the answer goes, and keep the panel editing', async ({ page }) => {
+    const source = CLOSED_CONTEXT_MISSING;
+    await openColoured(page, source);
+    const rules = await categoryColours(page);
+
+    const [comment, string, number, name] = await coloursAt(page, [
+      source.indexOf('# Hotel'),
+      source.indexOf('"Hotel Reservation"') + 1,
+      source.indexOf('emod = 1') + 'emod = '.length,
+      source.indexOf('command "ReserveRoom"') + 'command "'.length,
+    ]);
+    expect({ comment, string, number, name }).toEqual({
+      comment: rules.comment, string: rules.string, number: rules.number, name: rules['lsp.type.function'],
+    });
+
+    const panel = page.locator('#source-input');
+    await panel.evaluate((p) => { p.focus(); p.setSelectionRange(p.value.length, p.value.length); });
+    await page.keyboard.type('# still typing');
+    await expect.poll(() => page.locator('#source-colours').textContent()).toBe(source + '# still typing');
+  });
+
+  test('show plain text, keep the panel editing and raise no error when the WebAssembly module does not load', async ({ page }) => {
+    const errors = [];
+    page.on('pageerror', (error) => errors.push(error.message));
+    await page.route('**/emod.wasm', (route) => route.abort());
+    await page.goto('/');
+    await page.locator('#source-input').fill(SAMPLE);
+    await page.locator('#source-input').press('End');
+    await page.keyboard.type('# typed');
+
+    await expect.poll(() => page.locator('#source-colours').textContent()).toBe(SAMPLE + '# typed');
+    expect(await page.locator('#source-colours [data-category]').count()).toBe(0);
+    expect(errors).toEqual([]);
   });
 });
 

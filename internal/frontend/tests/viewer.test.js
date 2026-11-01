@@ -33,6 +33,7 @@ let rememberFails = null;
 // Set by a test that has to hold a recording's answer open.
 let rememberAnswerer = null;
 let applyQueue = [];
+let tokenizeQueue = [];
 
 vi.mock('../static/platform.js', () => ({
   get ready() { return platformReady; },
@@ -44,6 +45,7 @@ vi.mock('../static/platform.js', () => ({
   applyDiagram: vi.fn((source, filename, diagram) => applyQueue.length
     ? applyQueue.shift()
     : Promise.resolve(appliedAnswer(withoutUnnamedFields(JSON.parse(JSON.stringify(diagram)))))),
+  tokenizeEmod: vi.fn(() => tokenizeQueue.length ? tokenizeQueue.shift() : Promise.resolve({ tokens: [] })),
   initialState: vi.fn(() => initialStateFails
     ? Promise.reject(new Error('host could not answer'))
     : Promise.resolve(typeof globalThis.INITIAL_DATA === 'undefined' ? null : globalThis.INITIAL_DATA)),
@@ -341,6 +343,7 @@ beforeEach(() => {
   rememberFails = null;
   rememberAnswerer = null;
   applyQueue = [];
+  tokenizeQueue = [];
 });
 
 describe('the window is named through the host, not by assigning document.title', () => {
@@ -2313,14 +2316,16 @@ describe('a diagram edit reaching the source panel', () => {
   });
 
   describe('what the window shows once an edit is applied', () => {
-    it("draws the applied source in the source panel's colours", async () => {
+    it("draws the applied source in the source panel's colours, and asks for its tokens", async () => {
       await openEditable();
+      platform.tokenizeEmod.mockClear();
 
       fromMenu(sliceHeader('slice-1'), 'add-command');
       await settle();
 
       expect(panelText()).toBe(appliedSource);
       expect(document.getElementById('source-colours').textContent).toBe(appliedSource);
+      expect(platform.tokenizeEmod.mock.calls.map(([source]) => source)).toEqual([appliedSource]);
     });
 
     it('redraws the diagram from the applied answer, keeping dragged offsets, hidden nodes and the viewport', async () => {
@@ -5584,6 +5589,13 @@ describe('the documentation of the source panel', () => {
     expect(paragraph).toContain('applies to the whole file');
   });
 
+  it('says in the README that the panel colours its text as an editor running emod lsp does, and edits as a text field', () => {
+    const paragraph = read('README.md').split('**The source panel**')[1].split('**')[0];
+
+    expect(paragraph).toContain('The text is coloured as an editor running `emod lsp` colours it');
+    expect(paragraph).toContain('Selecting, copying, pasting and undo work as in any text field');
+  });
+
   it("says in the README that the caret's line shows its diagnostics under the text", () => {
     const paragraph = read('README.md').split('**The source panel**')[1].split('**')[0];
 
@@ -5626,6 +5638,164 @@ describe('the documentation of the source panel', () => {
 
 describe("the source panel's text drawn in its colours", () => {
   const coloursText = () => document.getElementById('source-colours').textContent;
+  const tokenized = () => platform.tokenizeEmod.mock.calls.map(([source]) => source);
+  const painted = () => Array.from(document.getElementById('source-colours').childNodes)
+    .map((node) => [node.textContent, node.dataset ? node.dataset.category : null]);
+
+  function typeAsTheBrowserDoes(text) {
+    const panel = document.getElementById('source-input');
+    Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, 'value').set.call(panel, text);
+    panel.dispatchEvent(new Event('input', { bubbles: true }));
+  }
+
+  function heldTokens() {
+    const held = {};
+    tokenizeQueue.push(new Promise((resolve, reject) => { held.answer = resolve; held.refuse = reject; }));
+    return held;
+  }
+
+  beforeEach(() => {
+    platform.tokenizeEmod.mockClear();
+  });
+
+  it('asks the Go core for the tokens of each text the user types', async () => {
+    await startEmpty();
+
+    typeAsTheBrowserDoes('emod = 1\n');
+    typeAsTheBrowserDoes('emod = 1\n# a\n');
+    await flush();
+
+    expect(tokenized()).toEqual(['emod = 1\n', 'emod = 1\n# a\n']);
+  });
+
+  it('asks for the tokens of a model the host opens, and of the text put back when the pipeline refuses the next one', async () => {
+    await openBilling();
+    let refuse;
+    parseQueue = [new Promise((_, reject) => { refuse = reject; })];
+
+    deliverFile({ name: 'broken.emod', path: '/models/broken.emod', content: 'emod = 1\nnot a model\n' });
+    await flush();
+    refuse(new Error('unparseable'));
+    await flush();
+
+    expect(tokenized()).toEqual([billingSource, 'emod = 1\nnot a model\n', billingSource]);
+  });
+
+  it('waits for the Go core, then asks for the text the panel holds', async () => {
+    let coreReady;
+    platformReady = new Promise((resolve) => { coreReady = resolve; });
+    platformIsReady = false;
+    await startEmpty();
+
+    typeAsTheBrowserDoes('emod = 1\n');
+    await flush();
+    expect(tokenized()).toEqual([]);
+
+    coreReady();
+    await flush();
+
+    expect(tokenized()).toEqual(['emod = 1\n']);
+  });
+
+  it('keeps one request open at a time, and asks for the newest text when it settles', async () => {
+    await startEmpty();
+    const first = heldTokens();
+
+    typeAsTheBrowserDoes('emod = 1\n');
+    typeAsTheBrowserDoes('emod = 1\n#\n');
+    typeAsTheBrowserDoes('emod = 1\n# a\n');
+    await flush();
+    expect(tokenized()).toEqual(['emod = 1\n']);
+
+    first.answer({ tokens: [] });
+    await flush();
+
+    expect(tokenized()).toEqual(['emod = 1\n', 'emod = 1\n# a\n']);
+  });
+
+  it('asks for no more once the text the open request was for is still the text in the panel', async () => {
+    await startEmpty();
+    const first = heldTokens();
+
+    typeAsTheBrowserDoes('emod = 1\n');
+    typeAsTheBrowserDoes('emod = 1\n#\n');
+    typeAsTheBrowserDoes('emod = 1\n');
+    first.answer({ tokens: [{ start: 7, end: 8, category: 'number' }] });
+    await flush();
+
+    expect(tokenized()).toEqual(['emod = 1\n']);
+    expect(painted()).toEqual([['emod = ', null], ['1', 'number'], ['\n', null]]);
+  });
+
+  it('sends no request for an empty panel', async () => {
+    await startEmpty();
+
+    typeAsTheBrowserDoes('x');
+    typeAsTheBrowserDoes('');
+    await flush();
+
+    expect(tokenized()).toEqual(['x']);
+    expect(coloursText()).toBe('');
+  });
+
+  it('paints each token in the category its answer names, also where the text reads as another, and leaves the rest plain', async () => {
+    await startEmpty();
+    tokenizeQueue = [Promise.resolve({ tokens: [
+      { start: 0, end: 4, category: 'string' },
+      { start: 7, end: 8, category: 'comment' },
+    ] })];
+
+    typeAsTheBrowserDoes('emod = 1\n');
+    await flush();
+
+    expect(painted()).toEqual([['emod', 'string'], [' = ', null], ['1', 'comment'], ['\n', null]]);
+  });
+
+  it('never paints an answer onto text that changed after it was asked for', async () => {
+    await startEmpty();
+    const first = heldTokens();
+    const second = heldTokens();
+
+    typeAsTheBrowserDoes('emod = 1\n');
+    typeAsTheBrowserDoes('emod = 2\n');
+    await flush();
+    first.answer({ tokens: [{ start: 0, end: 4, category: 'variable.member' }, { start: 7, end: 8, category: 'number' }] });
+    await flush();
+    expect(painted()).toEqual([['emod = 2\n', null]]);
+
+    second.answer({ tokens: [{ start: 7, end: 8, category: 'number' }] });
+    await flush();
+
+    expect(painted()).toEqual([['emod = ', null], ['2', 'number'], ['\n', null]]);
+  });
+
+  it('shows plain text, and still edits, when the Go core refuses to tokenize', async () => {
+    await startEmpty();
+    tokenizeQueue = [Promise.reject(new Error('tokenize panic: index out of range'))];
+
+    typeAsTheBrowserDoes('emod = 1\n');
+    await flush();
+    expect(painted()).toEqual([['emod = 1\n', null]]);
+
+    tokenizeQueue = [Promise.resolve({ tokens: [{ start: 7, end: 8, category: 'number' }] })];
+    typeAsTheBrowserDoes('emod = 2\n');
+    await flush();
+
+    expect(painted()).toEqual([['emod = ', null], ['2', 'number'], ['\n', null]]);
+  });
+
+  it('shows plain text when the Go core never loads, and asks for no tokens', async () => {
+    platformReady = Promise.reject(new Error('WASM initialization failed: the worker did not load'));
+    platformReady.catch(() => {});
+    platformIsReady = false;
+    await startEmpty();
+
+    typeAsTheBrowserDoes('emod = 1\n');
+    await flush();
+
+    expect(tokenized()).toEqual([]);
+    expect(painted()).toEqual([['emod = 1\n', null]]);
+  });
 
   it('draws the text the user types, which reaches the panel without a script writing it', async () => {
     await startEmpty();

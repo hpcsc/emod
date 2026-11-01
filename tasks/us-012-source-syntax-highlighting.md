@@ -368,17 +368,17 @@ colours. Source that does not parse is coloured as far as the answer goes. When 
 the text is plain.
 
 **Acceptance Criteria:**
-- [ ] Each change to the panel's text, of every kind that Task 3 keeps the source colours in step with, asks `tokenizeEmod` for the new text once the Go core is ready. Text that arrives before the core is ready is coloured when the core is ready
-- [ ] Keywords, identifiers, strings, numbers and comments are visually distinguished. In a real browser on the largest example, a block type, a bare identifier, a string, a number and a comment each have a computed colour that differs from the other four. Each token's computed colour is the colour that its category's CSS rule names
-- [ ] Each category's colour contrasts at least 4.5:1 with the panel's background
-- [ ] In the web bundle, with the real pipeline, a declared construct's name shows the colour of its `lsp.type` category, not the string colour. Its quotes, and the label of a block that `emod lsp` does not colour (a `slice` or `spec` label), show the string colour
-- [ ] The frontend holds no category rule. A token gets the colour of the category its answer names, also where the text suggests a different category. A category that has no colour of its own paints as plain text
-- [ ] An answer paints only the text it was asked for. An answer for text that has changed since never colours the new text
-- [ ] Source that fails to parse degrades. With an unclosed context at the end of the largest example, its comments, strings and numbers keep their colours, the construct names above the error keep theirs, and the panel still edits. When `tokenizeEmod` refuses or fails (an error envelope, or a WebAssembly module that did not load), the panel shows its text plain, still edits, and raises no uncaught error
-- [ ] An empty panel sends no request and shows its placeholder
-- [ ] Each key that the frontend reads off a tokenize answer and off a token is a key the Go side writes. A guard in `internal/pipeline/pipeline_test.go` checks this
-- [ ] `docs/architecture.md`'s viewer section says where the source panel's colours come from
-- [ ] Task 3's alignment checks pass with the colours painted, and every main-thread task stays under 50 ms while the largest example is typed into
+- [x] Each change to the panel's text, of every kind that Task 3 keeps the source colours in step with, asks `tokenizeEmod` for the new text once the Go core is ready. Text that arrives before the core is ready is coloured when the core is ready
+- [x] Keywords, identifiers, strings, numbers and comments are visually distinguished. In a real browser on the largest example, a block type, a bare identifier, a string, a number and a comment each have a computed colour that differs from the other four. Each token's computed colour is the colour that its category's CSS rule names
+- [x] Each category's colour contrasts at least 4.5:1 with the panel's background
+- [x] In the web bundle, with the real pipeline, a declared construct's name shows the colour of its `lsp.type` category, not the string colour. Its quotes, and the label of a block that `emod lsp` does not colour (a `slice` or `spec` label), show the string colour
+- [x] The frontend holds no category rule. A token gets the colour of the category its answer names, also where the text suggests a different category. A category that has no colour of its own paints as plain text
+- [x] An answer paints only the text it was asked for. An answer for text that has changed since never colours the new text
+- [x] Source that fails to parse degrades. With an unclosed context at the end of the largest example, its comments, strings and numbers keep their colours, the construct names above the error keep theirs, and the panel still edits. When `tokenizeEmod` refuses or fails (an error envelope, or a WebAssembly module that did not load), the panel shows its text plain, still edits, and raises no uncaught error
+- [x] An empty panel sends no request and shows its placeholder
+- [x] Each key that the frontend reads off a tokenize answer and off a token is a key the Go side writes. A guard in `internal/pipeline/pipeline_test.go` checks this
+- [x] `docs/architecture.md`'s viewer section says where the source panel's colours come from
+- [x] Task 3's alignment checks pass with the colours painted, and every main-thread task stays under 50 ms while the largest example is typed into
 
 **Affected Files/Modules:**
 - `internal/frontend/static/viewer.js` — asks `tokenizeEmod` after each change to the panel's text, and keeps the answer

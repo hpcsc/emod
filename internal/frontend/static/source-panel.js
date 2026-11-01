@@ -1,4 +1,5 @@
 import { Severity } from './severity.js';
+import { bus } from './bus.js';
 
 const CARET_MOVES = ["keyup", "mouseup", "input", "selectionchange"];
 
@@ -14,7 +15,7 @@ function initSourcePanel(store) {
     followScroll(store);
   });
   store.dom.sourceInput.addEventListener("input", function() {
-    showText(store);
+    changeText(store);
   });
   CARET_MOVES.forEach(function(type) {
     store.dom.sourceInput.addEventListener(type, function() {
@@ -34,15 +35,50 @@ function showEveryWrite(store) {
     },
     set: function(text) {
       textValue.set.call(this, text);
-      showText(store);
+      changeText(store);
     },
   });
+}
+
+function changeText(store) {
+  showText(store);
+  bus.emit("source:changed", { store });
+}
+
+function showTokens(store, source, tokens) {
+  store.tokenized = { source, tokens };
+  showText(store);
 }
 
 function showText(store) {
   const coloursEl = store.dom.sourceColours;
   if (!coloursEl) return;
-  coloursEl.textContent = store.dom.sourceInput.value;
+  const text = store.dom.sourceInput.value;
+  const tokenized = store.tokenized;
+  if (!tokenized || tokenized.source !== text) {
+    coloursEl.textContent = text;
+    return;
+  }
+  coloursEl.replaceChildren(colouredRuns(text, tokenized.tokens));
+}
+
+function colouredRuns(text, tokens) {
+  const runs = document.createDocumentFragment();
+  let plainFrom = 0;
+  tokens.forEach(function(token) {
+    if (token.start > plainFrom) {
+      runs.append(text.slice(plainFrom, token.start));
+    }
+    const run = document.createElement("span");
+    run.dataset.category = token.category;
+    run.textContent = text.slice(token.start, token.end);
+    runs.append(run);
+    plainFrom = token.end;
+  });
+  if (plainFrom < text.length) {
+    runs.append(text.slice(plainFrom));
+  }
+  return runs;
 }
 
 function followScroll(store) {
@@ -217,4 +253,5 @@ export const SourcePanel = {
   initSourcePanel,
   moveCaretTo,
   showDiagnostics,
+  showTokens,
 };

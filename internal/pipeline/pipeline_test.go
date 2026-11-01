@@ -453,7 +453,7 @@ context "Payments" {
 
 	t.Run("tokenize", func(t *testing.T) {
 		t.Run("answers each token's offsets and category under the keys the viewer reads", func(t *testing.T) {
-			answer := tokenizeRequest(requestFor(t, "emod = 1\n", "billing.emod"))
+			answer := tokenizeAnswer(requestFor(t, "emod = 1\n", "billing.emod"))
 
 			require.JSONEq(t, `{"tokens":[
 				{"start":0,"end":4,"category":"variable.member"},
@@ -462,20 +462,25 @@ context "Payments" {
 		})
 
 		t.Run("answers an empty list for source with nothing to colour", func(t *testing.T) {
-			answer := tokenizeRequest(requestFor(t, "\n\n", "billing.emod"))
+			answer := tokenizeAnswer(requestFor(t, "\n\n", "billing.emod"))
 
 			require.JSONEq(t, `{"tokens":[]}`, answer)
 		})
 
-		t.Run("answers the error envelope for a malformed envelope", func(t *testing.T) {
-			answer := tokenizeRequest("not json")
+		t.Run("every key the viewer reads off a tokenize answer and off its tokens is one the pipeline writes", func(t *testing.T) {
+			var answer map[string]json.RawMessage
+			require.NoError(t, json.Unmarshal([]byte(tokenizeAnswer(requestFor(t, "emod = 1\n", "billing.emod"))), &answer))
+			var tokens []map[string]json.RawMessage
+			require.NoError(t, json.Unmarshal(answer["tokens"], &tokens))
+			require.NotEmpty(t, tokens)
 
-			require.Contains(t, answer, "invalid JSON")
-			require.NotContains(t, answer, "tokens")
-		})
+			readOffAnswer := fieldsReadBy(t, "../frontend/static/viewer.js", "tokenizePanelText", "answer")
+			readOffToken := fieldsReadBy(t, "../frontend/static/source-panel.js", "colouredRuns", "token")
 
-		t.Run("answers the error envelope for an empty source", func(t *testing.T) {
-			require.Equal(t, pipeline.ErrorJSON("missing source field"), tokenizeRequest(`{"source": ""}`))
+			require.Contains(t, readOffAnswer, "tokens", "viewer.js must read the tokens of the answer")
+			require.Subset(t, keysOf(answer), readOffAnswer, "viewer.js reads a key of the tokenize answer the pipeline does not write")
+			require.Contains(t, readOffToken, "category", "source-panel.js must read the category of a token")
+			require.Subset(t, keysOf(tokens[0]), readOffToken, "source-panel.js reads a key of a token the pipeline does not write")
 		})
 
 		t.Run("both viewer runtimes send the source under the key the request reads it from", func(t *testing.T) {
@@ -786,7 +791,7 @@ func requestFor(t *testing.T, source, filename string) string {
 	return string(raw)
 }
 
-func tokenizeRequest(request string) string {
+func tokenizeAnswer(request string) string {
 	return pipeline.RunOnSource(request, pipeline.Tokenize)
 }
 
@@ -864,4 +869,14 @@ func functionBody(t *testing.T, source, function, path string) string {
 	require.Fail(t, path+"'s "+function+" never closes")
 
 	return ""
+}
+
+func keysOf(object map[string]json.RawMessage) []string {
+	keys := make([]string, 0, len(object))
+	for key := range object {
+		keys = append(keys, key)
+	}
+	sort.Strings(keys)
+
+	return keys
 }

@@ -306,7 +306,7 @@ from the language server:
 - **Go-to-definition** — jump from references to their definition
 - **Find references** — find all usages of a command, event, or view
 - **Hover** — contextual information on names and keywords
-- **Semantic highlighting** — a context, an aggregate, a command, an event and a view, each painted as what it is
+- **Semantic highlighting** — a context, an aggregate, a command, an event, a view and an actor, each painted as what it is
 - **Format on save** — auto-format via `emod fmt`
 
 ### VS Code — symlink (recommended)
@@ -408,7 +408,11 @@ that does not parse leaves the last diagram on screen, dimmed and marked out of
 date, until it parses again. A gutter beside the text marks each line that
 carries a diagnostic, coloured for the most severe one there: red for an error,
 dark yellow for a warning, blue for info. The panel scrolls a long line sideways
-rather than wrapping it, so each gutter entry stays level with its line.
+rather than wrapping it, so each gutter entry stays level with its line. The
+text is coloured as an editor running `emod lsp` colours it: HCL's keywords,
+names, strings, numbers and comments, and the name of each context, aggregate,
+command, event, view and actor in a colour of its own. Selecting, copying,
+pasting and undo work as in any text field.
 Clicking a diagnostic opens the data panel if it is collapsed and puts the
 source panel's caret at the line and column the diagnostic names, scrolled into
 view; a diagnostic that applies to the whole file says so in the list and

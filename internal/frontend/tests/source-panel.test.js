@@ -1,6 +1,7 @@
 import { describe, it, expect, beforeEach } from 'vitest';
 import { SourcePanel } from '../static/source-panel.js';
 import { createStore } from '../static/store.js';
+import { bus } from '../static/bus.js';
 
 function setupSourcePanel(text) {
   document.body.innerHTML = `
@@ -52,6 +53,54 @@ describe('SourcePanel', () => {
       typeAsTheBrowserDoes(store.dom.sourceInput, 'emod = 1\n\nmodel "Orders" {\n}\n');
 
       expect(coloursText()).toBe('emod = 1\n\nmodel "Orders" {\n}\n');
+    });
+
+    const painted = () => Array.from(document.getElementById('source-colours').childNodes)
+      .map((node) => [node.textContent, node.dataset ? node.dataset.category : null]);
+
+    it('paint the tokens of an answer for the text the panel holds', () => {
+      const store = setupSourcePanel('emod = 1\n');
+
+      SourcePanel.showTokens(store, 'emod = 1\n', [
+        { start: 0, end: 4, category: 'variable.member' },
+        { start: 7, end: 8, category: 'number' },
+      ]);
+
+      expect(painted()).toEqual([['emod', 'variable.member'], [' = ', null], ['1', 'number'], ['\n', null]]);
+    });
+
+    it('paint nothing from an answer for text the panel no longer holds', () => {
+      const store = setupSourcePanel('emod = 2\n');
+
+      SourcePanel.showTokens(store, 'emod = 1\n', [{ start: 7, end: 8, category: 'number' }]);
+
+      expect(painted()).toEqual([['emod = 2\n', null]]);
+    });
+
+    it('drop the tokens of the text that was replaced', () => {
+      const store = setupSourcePanel('emod = 1\n');
+      SourcePanel.showTokens(store, 'emod = 1\n', [{ start: 7, end: 8, category: 'number' }]);
+
+      typeAsTheBrowserDoes(store.dom.sourceInput, 'emod = 1\n\n');
+
+      expect(painted()).toEqual([['emod = 1\n\n', null]]);
+    });
+
+    it('announce each change of the text, typed or written by a script, and only for the panel that changed', () => {
+      const store = setupSourcePanel('emod = 1\n');
+      const announced = [];
+      const listen = ({ store: changed }) => announced.push(changed === store ? changed.dom.sourceInput.value : 'another panel');
+      bus.on('source:changed', listen);
+
+      try {
+        typeAsTheBrowserDoes(store.dom.sourceInput, 'emod = 2\n');
+        store.dom.sourceInput.value = 'emod = 3\n';
+        SourcePanel.showTokens(store, 'emod = 3\n', []);
+      } finally {
+        bus.off('source:changed', listen);
+      }
+
+      expect(announced).toEqual(['emod = 2\n', 'emod = 3\n']);
     });
 
     it('draw the text a script writes into the panel, which fires no input event', () => {
