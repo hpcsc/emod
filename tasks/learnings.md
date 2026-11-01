@@ -13,11 +13,6 @@ in this repo; append only learnings that generalise beyond the task that surface
 - Learning: `/Users/davidnguyen/Personal/Code/emod/mise.toml` pins `cargo:tree-sitter-cli = "0.26.9"`, but the user's global `~/.config/mise/config.toml` pins a separate `tree-sitter = "0.25.10"` that wins on PATH in a non-activated shell. The two CLIs emit different generated output (0.26.x drops the version suffix from the `parser.c` banner and rewrites `src/tree_sitter/array.h`; `grammar.json` and `node-types.json` are identical), so a bare `task test:grammar` can leave the tree looking clean while `mise exec -- task test:grammar` produces a ~111/72-line diff. CI (`jdx/mise-action@v4`) sees only the repo pin, so the repo-pinned resolution is the one that matters. CI has no dirty-tree gate, so this drift stays green and is only caught by checking `git diff --exit-code` yourself.
 - Apply when: running any Taskfile target whose output is committed (notably `task test:grammar`), or verifying that generated files in a diff are reproducible.
 
-## Generated tree-sitter `src/` stays gitignored
-- Type: constraint
-- Learning: `editors/tree-sitter-emod/.gitignore` ignores `src/` alongside `bindings/node/` and `node_modules/` — the repo does not track generated artefacts. A grammar change commits `grammar.js` and its corpus tests only. Do not un-ignore `src/` to satisfy a "regenerated output is committed" criterion: it would make every grammar change carry a ~3k-line diff whose bytes depend on which CLI generated it, and `task test:grammar` runs `tree-sitter generate` first so nothing depends on those files being tracked.
-- Apply when: touching `editors/tree-sitter-emod/grammar.js`, or reviewing a diff that changes the grammar.
-
 ## A task criterion requiring "committed" output cannot close
 - Type: constraint
 - Learning: implement-flow commits a task only *after* it closes, so an acceptance criterion phrased as "... and the output is committed" is unsatisfiable from inside the task — the audit re-checks `git log`/`git ls-tree`, finds nothing, and reports the criterion unmet on every attempt until `maxResolve` is exhausted. This burned all 5 attempts on US-001 Task 4. Phrase the criterion against the working tree instead — "regenerating leaves the tracked files byte-identical", "the file exists and matches X". Note that "`git status` is clean" is *also* unusable: a task under review always has uncommitted work.
@@ -38,11 +33,6 @@ in this repo; append only learnings that generalise beyond the task that surface
 - Learning: every heading in `docs/dsl-reference.md` is `## <n>. <Title>`, so its in-document links are number-prefixed slugs (`[Slice Patterns](#6-slice-patterns)`, `[Flows](#7-flows)`, `[Cross-References](#10-cross-references)`). Inserting, removing or reordering a section renumbers every heading below it *and* invalidates each link that cites one of those numbers — four such links exist today. Nothing catches the drift: neither `Taskfile.yml` nor `.github/workflows/ci.yml` runs a markdown link check, and a stale `#7-cross-references` link (pointing at "7. Fields") survived an earlier insertion unnoticed. After editing the section list, re-derive the anchors by listing `^## [0-9]+\.` and `\(#[0-9]+-` and reconciling the two.
 - Apply when: adding, removing or reordering a numbered section in `docs/dsl-reference.md` (or any doc using `## <n>. Title` headings).
 
-## Keyword surfaces fan out past the lexer, parser and tree-sitter grammar
-- Type: pattern
-- Learning: a new emod keyword touches several hand-maintained lists that no test cross-checks against `internal/lexer/token.go`: the TextMate alternation at `editors/vscode/syntaxes/emod.tmLanguage.json:63`, `keywordDescriptions` in `internal/lsp/hover.go:13`, and the per-context lists in `internal/lsp/completer.go`. `isKeyword` (`internal/lsp/hover.go:37`) is an *ordinal range* — `k >= lexer.KeywordModel && k <= lexer.KeywordExternal` — so every `Kind` appended after `KeywordExternal` (`mode`, `tags`, `decides_on`, `where`, `and`, `or`, `not`, `tag`, `events`, `emod`) is silently invisible to hover no matter what the description map contains. Decide per keyword whether each surface should cover it; do not assume adding the token propagates.
-- Apply when: adding a keyword to `internal/lexer/token.go`, or auditing why a valid keyword has no VS Code highlighting, hover text or completion.
-
 ## Never write emod source with `%q` — the language has no escape sequences
 - Type: constraint
 - Learning: an emod string literal runs verbatim from one quote to the next; the lexer performs no unescaping. `%q`/`strconv.Quote` therefore breaks formatter idempotence — a backslash or tab in the text is written as two characters that read back as themselves, so `C:\hotel` becomes `C:\\hotel` then `C:\\\\hotel` on successive `emod fmt` runs. `formatter.go` has `quoted(text)` (`internal/formatter/formatter.go:47`) for this; every name and every description goes through it. The counterpart obligation is a round-trip subtest per hazard character (backslash, tab, quote, `%`, non-ASCII) asserting a second `Format` of the output produces identical bytes — `internal/formatter/formatter_test.go` has that table, and note the JSON/CUE exporters do the opposite (they must escape, and have their own export-then-decode subtests pinning that the text survives).
@@ -58,11 +48,6 @@ in this repo; append only learnings that generalise beyond the task that surface
 - Learning: two subtests couple the three surfaces. "CUE and JSON exports describe the same model" (`internal/export/export_test.go:3317`) decodes both exports of one fixture and `require.Equal`s the documents, so teaching one format about a field fails immediately; "output conforms to the schema's Model definition" runs `cue vet -d '#Model'` against `internal/cue/schema.cue`, so the embedded schema must gain the field too. The diagram JSON document is deliberately *not* coupled: `jsonDiagramEvent` (`internal/export/diagram.go`) forks `jsonEvent` precisely so a new AST field cannot leak through a translation's inline event into the node-and-edge contract, and a subtest walks the whole diagram document asserting the key appears nowhere. Do not re-merge those two structs.
 - Apply when: adding a field to the JSON or CUE export, or wondering why the diagram document has its own event type.
 
-## The tree-sitter grammar must never be stricter than the Go parser
-- Type: constraint
-- Learning: `editors/tree-sitter-emod/grammar.js` is a deliberately looser mirror — a grammar stricter than the language red-squiggles files `emod validate` accepts, which is the one failure direction that matters. Every block body in `internal/parser/parser.go` is an unbounded `for !p.check(lexer.CloseBrace)` loop with no arity restriction, so `command X { fields {…} fields {…} }` is valid emod (verified: `go run ./cmd/emod validate` exits 0). Constructs therefore use `buildDescribedBlock($, …)` — `'{' repeat(choice($.description, ...items)) '}'` — and an `optional($.rule)` in a block body is a bug, not a constraint. Re-imposing at-most-one would also need an ambiguous `repeat($.description) optional(...) repeat($.description)`.
-- Apply when: editing `grammar.js`, or reviewing a grammar diff that appears to "widen" a rule from `optional` to `repeat`.
-
 ## Shared fixtures come in an unfeatured/featured pair, guarded by a walk that must be extended
 - Type: pattern
 - Learning: `internal/test/fixtures.go` holds `HotelReservation` (uses no optional feature, witnesses that plain files still parse and still render byte-identically) alongside `DescribedHotelReservation` (exercises the feature everywhere it can appear, and is the one model the formatter, export and diagram packages assert against). Keep both roles when adding the next optional feature. The guard subtest "the shared described model describes every construct that accepts one" (`internal/parser/parser_test.go:3157`) only guards what `describableConstructs` (`:4050`) actually visits — the model, its actors, then every context and the slices below it — and what its `require.Subset` list names. A construct that gains the field but is not added to both is silently unguarded: dropping its description leaves the test green while the downstream round-trip tests quietly lose that input. Verify an extension by deleting the description from the fixture and confirming the test fails.
@@ -77,11 +62,6 @@ in this repo; append only learnings that generalise beyond the task that surface
 - Type: pattern
 - Learning: (1) every construct's `default:`/`else` branch spells out the entries it accepts — eight messages read `expected description, … in <construct>` — so a new entry means editing all of them, and the tests assert that text. (2) A keyword whose value is malformed must report once: recover by draining the rest of the line with `p.checkSameLineAs(keywordTok)` and stopping at `lexer.CloseBrace` (see `parseDescriptionInto`, `internal/parser/parser.go:1288`), not with a single `p.advance()` — one unquoted description otherwise emits five diagnostics as each remaining word fails to match a block entry. (3) Pin it with `require.Len(t, diags, 1)`; that assertion appears throughout `internal/parser/parser_test.go` and is what makes the cascade a test failure.
 - Apply when: adding a keyword that may appear inside a block construct in `internal/parser/parser.go`.
-
-## Ask the lexer which keywords exist; never restate the set and never range over `Kind`
-- Type: convention
-- Learning: `internal/lexer/token.go` exports `Keywords() []string` (the thirty spellings, sorted, from the `keywords` map) and `Kind.IsKeyword()` (a lookup in the `keywordNames` inversion). Every keyword-coverage test iterates `lexer.Keywords()` — `internal/lexer/tokenizer_test.go:14`, `internal/parser/parser_test.go:225` and `:243`, `internal/oracle/oracle_test.go:44` — so a keyword added to the map is covered on the day the lexer learns it. The two failure modes this replaced both went unnoticed for a long time: a hand-written list drifts (the tokenizer's named twenty-one of thirty, silently omitting `mode`, `tags`, `decides_on`, `where`, `and`, `or`, `not`, `tag`, `events`), and an ordinal range over the iota block silently excludes everything declared past its bound (`checkIdentifierLike` was `typ < lexer.Identifier`; `isKeyword` in `internal/lsp/hover.go:37` is still `k >= lexer.KeywordModel && k <= lexer.KeywordExternal` and should be `k.IsKeyword()`).
-- Apply when: writing any code or test that must treat "every keyword" uniformly, or adding a keyword to `internal/lexer/token.go`.
 
 ## A line-oriented declaration must gate every optional trailing token on the first token's line
 - Type: constraint
@@ -247,11 +227,6 @@ in this repo; append only learnings that generalise beyond the task that surface
 - Type: constraint
 - Learning: this file asks differential receipts to be stated in the commit message, and decomposition transcribed that straight into a criterion — "No line other than the automation's activation line moves in any golden or canonical constant — state the diff in the commit message". implement-flow commits a task only after it closes, so the diff half verified from `git diff HEAD` while the commit-message half closed with no evidence available at any point (the same root cause as "A task criterion requiring 'committed' output cannot close", reached by a phrasing that reads perfectly natural). Criteria must be checkable against the working tree — "`git diff` moves exactly one line per golden" — and the commit-message wording belongs to the commit step, not to the criterion list.
 - Apply when: writing an acceptance criterion whose proof is a diff, a receipt, or anything else that lands in a commit message.
-
-## Every `grammar.js` rule carries a one-line example of its full shape
-- Type: convention
-- Learning: `editors/tree-sitter-emod/grammar.js` puts a comment above each construct rule spelling the construct out whole — `// slice "name" { ... }` (`:77`), `// trigger Kind "Name" { actor Id reads Id }` (`:168`), `// view Name { fields { ... } subscribes [...] }` (`:199`), `// automation Name { trigger Event reads View command Cmd target context Name }` (`:217`) — sixteen of them. They are the only place the admitted entries are listed in order, because the rule body itself is an unordered `buildDescribedBlock`/`repeat(choice(...))` that deliberately imposes none. Adding an item without editing the comment leaves the file's one description of that construct under-stating it, which a reviewer flagged when `on` joined `automation_definition`; nothing tests the comments, so only the diff catches it.
-- Apply when: adding or removing an item in a rule in `editors/tree-sitter-emod/grammar.js`.
 
 ## A `Declared…` getter answers `nil` for a fixture that declares none of the construct
 - Type: recurring-finding
@@ -473,26 +448,6 @@ in this repo; append only learnings that generalise beyond the task that surface
 - Learning: US-008 Task 1 shipped with "`git diff` touches no golden, no `*FormattedEmod` constant and no transcribed name list", which cost a mid-run amendment (commit `e6970e1`) because the canonical constants *are* transcriptions of the fixtures: `keywordFieldFormattedEmod` (`internal/cli/fmt_test.go`) restates `test.KeywordFieldSearchCatalog` line for line, and the round-trip table's `activationEvents`/`triggerReads`/`automationReads` rows (`internal/formatter/formatter_test.go`) transcribe the names each fixture declares. Adding one `reads` line to a fixture necessarily moves both. Word the criterion as the amendment does — "the only expected values that move are those that restate a changed fixture's own text", naming each — so the guard still catches a golden in another package moving while staying satisfiable.
 - Apply when: writing an acceptance criterion for a task that edits `internal/test/fixtures.go` or an `.emod` file a golden or transcribed list mirrors.
 
-## Every editor-highlight surface now has an executable suite, and each is run a different way
-- Type: pattern
-- Learning: the three surfaces that decide what an editor paints are each pinned now, and they are wired differently. (a) `editors/tree-sitter-emod/queries/highlights.scm` is asserted by `editors/tree-sitter-emod/test/highlight/*.emod` — `tree-sitter test` picks these up automatically through the `highlights` entry in `tree-sitter.json`, so a new file there is a gate the moment it exists and needs no Taskfile or CI change. (b) `queries/folds.scm`, `indents.scm` and `textobjects.scm` are asserted by `editors/tree-sitter-emod/test/queries/*_test.go` — Go under `//go:build grammar`, driving the `tree-sitter query` CLI, run by `task test:grammar` (a plain `go test ./...` skips it, so it never requires the CLI). (c) `editors/vscode/syntaxes/emod.tmLanguage.json` is asserted by `editors/vscode/test/scopes/*.emod` through `vscode-tmgrammar-test`, run by `task test:vscode`. The last of the three needed adding to *both* the `test` aggregate in `Taskfile.yml` and a step in `.github/workflows/ci.yml` — a target in the Taskfile alone never runs on CI. This supersedes the older note that nothing cross-checks the TextMate alternation: it is checked now, and a scope change without a matching assertion file update fails.
-- Apply when: adding or renaming a keyword, editing any `.scm` query, editing the VS Code TextMate grammar, or adding a test suite that `go test ./...` does not reach.
-
-## A tree-sitter highlight marker only discriminates while another highlighted token follows it on the same line
-- Type: constraint
-- Learning: in `editors/tree-sitter-emod/test/highlight/*.emod`, a `# ^ capture` marker asserts against the nearest source line above — but if no further highlighted token follows the marked column on that line, the runner scans on into later lines and accepts a capture found there, so the assertion passes on anything. The guard is a trailing token on the same line: `constructs.emod` puts a trailing `# comment` after the description, the field line and the external system precisely for this, and both files' headers say so. Delete one of those trailing comments and its assertion silently stops discriminating while still reporting green.
-- Apply when: adding an assertion to a `test/highlight/*.emod` file, or reviewing one that marks the last highlighted token on its line.
-
-## `highlights.scm` field patterns select by anchor, never by `#match?` on the token's text
-- Type: convention
-- Learning: a field line's name, type and modifier are all `any_identifier`, so the three captures are distinguished by position, using leading `.` anchors — `(field_line . (any_identifier) @variable.member)`, then one more anchored `(any_identifier)` step per position. The previous `(#match? @type "^(string|date|timestamp|int)$")` form was wrong in both directions: it left a domain-typed field (`orderId RoomID`) uncoloured, and it could never colour a field typed `on`. Two traps sit in the anchored form. Unanchored, each pattern also matches every *later* identifier on the line, so one token collects up to three captures and the consumer's precedence rule — not this file — picks the winner. And an anchor skips only *anonymous* nodes, while a comment written mid-line parses as a named child of `field_line`, so every anchored step needs a `(comment)*` before it; the comment-split field line in `constructs.emod` is what holds that honest. The keyword list in the same file is hand-kept — nothing derives it from the grammar, and a keyword absent from it is simply uncoloured.
-- Apply when: editing `editors/tree-sitter-emod/queries/highlights.scm`, especially anything touching `field_line` or the keyword alternation.
-
-## A keyword that is only a keyword in one position never joins the flat TextMate alternation
-- Type: constraint
-- Learning: `repository.keywords` in `editors/vscode/syntaxes/emod.tmLanguage.json` is a positionless `\b(model|actor|…)\b` alternation, so anything added to it is coloured at *every* occurrence, including a field named after it. `on`, `every` and `type` therefore live in a separate `positional-keywords` rule keyed on their operand — `on` before an identifier (which takes the entity-name scope), `every` and `type` before a quoted string (which stays a string literal). Two further constraints ride along. That rule is deliberately case-sensitive where the surrounding rules use `(?i)`, because the lexer's keyword lookup is case-sensitive, so an event named `On`, `Every` or `Type` must keep its name scope. And a field line settles nothing on its own — `on RoomID` inside `fields` is the same text as an activation — so `fields` is a `begin`/`end` block rule whose inner `patterns` deliberately omit `#positional-keywords`; the shared `standalone-tokens` list exists so the file-level and block-level tails cannot drift apart. The other twenty-eight keywords keep the positionless treatment.
-- Apply when: adding a keyword to the VS Code grammar, or explaining why a token is coloured inside a `fields` block when it should not be.
-
 ## A suite that pins another tool's output owes a mutated-input negative control
 - Type: convention
 - Learning: three tasks in one story each closed with a case that breaks a *copy* of the input and requires the run to fail, naming what it failed on — `queries_test.go` renames `trigger_definition` to `trigger_declaration` in a copy of `folds.scm` and requires the error to name both the file and the node type; `scope-assertions.test.js` mutates in both directions (rename `storage.type.emod` in a copy of the grammar, rename an expected scope in a copy of an assertion file) and additionally extends the flat keyword alternation with `on`/`every` to require the field-name assertions to fail on the *prohibited* scope. Without this, a query that compiles but captures nothing, or a grammar loaded from the wrong path, reports green and the suite proves nothing — which is the exact failure the suites were written to end. The mismatch helper asserts the position, the required scope and the scope actually produced, not just a non-zero exit.
@@ -668,11 +623,6 @@ in this repo; append only learnings that generalise beyond the task that surface
 - Learning: two rounds of audit killed two versions of the same guard. First, a "comes back in declaration order" leaf whose fixture spanned two contexts could not fail — `Model.SliceRefs` walks contexts in declaration order and `Context.SliceRefs` already sorts each context's slices by position, so the entries were ascending before any sort ran; deleting the sort left the whole repo green. Second, the replacement interleaved a translation-nested binding between a slice's own events but still put the earliest binding in the slice's own list, so both implementations agreed on who bound first and only the line order differed — restoring the defective shape passed. What discriminates is a fixture whose *earliest* element is the one collection order yields *last*, asserted as whole formatted lines so the prior-binder name is pinned alongside the position.
 - Apply when: writing the receipt for a check that sorts, or reviewing a leaf whose name claims order.
 
-## A TextMate positional rule's qualifiers are pinned by prohibitions, never by its positive assertion
-- Type: convention
-- Learning: `\btype(?=\s+")` in `editors/vscode/syntaxes/emod.tmLanguage.json` carries two qualifiers a positive assertion cannot see. Asserting that `type` *is* `keyword.control.emod` before a quoted string still passes when the rule is broadened to `\btype\b` or made case-insensitive with `(?i)` — both mutations left all nine `test/scopes/*.emod` green. Each qualifier needs a case that must *not* paint: a tag key (`tags { type: deskId }`) for the lookahead, and a capitalised name that *is* followed by a quoted string (`invariant Type "…"`) for the case-sensitivity. Both then fail reporting `prohibited scopes: keyword.control.emod`. Note the asymmetry with tree-sitter, where anonymous keyword literals are exact-match: no grammar edit can make `Type` read as the `type` keyword, so the same case-sensitivity assertion is filler there and load-bearing here. Do not mirror the two surfaces' assertions.
-- Apply when: adding a keyword to `#positional-keywords`, or writing case-sensitivity assertions across both editor surfaces.
-
 ## `clerk verify`'s dead-code check false-positives on every symbol in `internal/test`
 - Type: constraint
 - Learning: the check reports "defined but referenced nowhere outside its own file and the tests", which is the defining property of a fixture package — `internal/test` exists to be consumed by `_test.go` files and nothing else. US-012's `WireTypeLibraryLendingModel`, `WithoutWireTypes` and `DeclaredWireTypes` were all blocked despite having three and four cross-package consumers each, and every pre-existing kit member (`SpecLibraryLendingModel`, `WithoutSpecs`, `DeclaredSpecNames`, `DeclaredAutomationReads`) has the identical shape. The six-part fixture kit the repo mandates cannot satisfy this check by construction. Confirm the consumers with `rg -l 'test\.<Symbol>\b' --type go` and record the judgement; do not delete a live fixture to open the gate.
@@ -682,11 +632,6 @@ in this repo; append only learnings that generalise beyond the task that surface
 - Type: constraint
 - Learning: `tasks/us-013-*.md` and `tasks/us-017-*.md` name the VS Code grammar's `#activations` key and its `:67-84` line range inside acceptance criteria and codebase-context sections, and US-017 carries a criterion asserting that rule is unchanged. US-012 renamed the key to `#positional-keywords` — sanctioned by its own criterion, since the group had grown past activations — and silently invalidated those references; nothing links a breakdown to the file it cites. The assertion *file* `test/scopes/activations.emod` was not renamed, so `.json` affected-file lists survived and only the prose drifted. Before renaming a repository key, a query name or a rule group, grep `tasks/*.md` for it and either hold the name or report the drift; a planner reads those files as ground truth long after the rename.
 - Apply when: renaming a key, group or rule in a file that unstarted breakdowns describe, or reconciling a breakdown against a tree that moved under it.
-
-## The exhaustive keyword corpus case must gain every new keyword, not a dedicated case beside it
-- Type: convention
-- Learning: `editors/tree-sitter-emod/test/corpus/fields.txt` holds "Field named after each keyword inside a fields block", which lists every spelling `lexer.Keywords()` reports. US-012 left `type` out of it — to avoid touching an existing expectation — and added a dedicated single-keyword case in `wire_type.txt` instead, which made `type` the only keyword the exhaustive case omitted and its stated scope false. Extending the list is one source line plus one `(field_line (any_identifier) x3)` triple, and the source-line count and the node count must move together. A dedicated case is right only for a *position* the exhaustive one does not cover, such as a field *typed* after the keyword.
-- Apply when: adding a keyword to `internal/lexer/token.go` and writing its tree-sitter corpus coverage.
 
 ## A set that doubles as a rule's adoption guard needs the emptiness check mutated, not the collection arm
 - Type: recurring-finding
@@ -748,12 +693,6 @@ in this repo; append only learnings that generalise beyond the task that surface
 - Learning: two different defects hide behind "the label is on the arrow", and one assertion sees only one of them. `Layout.edgeLabelPoint` interpolating an arrow's endpoints while `computeArrowD` draws a cubic Bézier puts the label *off* the line — a perpendicular error, caught by measuring distance to the emitted path (measured 3.6px for sibling slices, 8.2px across contexts; an audit's "~25px" was an overstatement worth checking rather than repeating). A drag that reshapes the arrow without moving the label puts it at the wrong point *along* the line — a parameter error, which a distance check often cannot see at all, and which a bounding-box check never can. The straight-segment case is the trap: a stale point frequently still lies within a pixel of the moved line. Guard the two separately — distance to the path for placement, and for tracking either an exact expected point or a gesture whose delta is perpendicular to the arrow. The derived fix is to make one function own the route (`arrowCurve`) and have the renderer and the sampler both read it, so the two can never disagree about a curve again.
 - Apply when: asserting where a diagram or viewer paints text relative to a line, or reviewing a geometry assertion phrased as "is on the arrow".
 
-## A positional TextMate rule is only witnessed by a construct that reaches its operand
-- Type: recurring-finding
-- Observed: US-013 task 1 — colouring `after` case-sensitively
-- Learning: `#positional-keywords` keys each entry on its operand (`\bafter(?=\s+")`), so an assertion meant to prove the rule is case-sensitive only proves it if the construct under test actually reaches that lookahead *and* no earlier rule has already consumed it. `automation After { every "5m" ... }` fails both ways — `#keyword-entity` matches `automation After` whole before `#positional-keywords` is consulted, and the brace after `After` is not a quoted string — so making the rule `(?i)` left the whole scope suite green. `invariant After "A hold expires once"` is the witness: `invariant` is in the flat alternation, so the name is left for the positional rule, and its quoted statement is exactly the operand. Pair any such fixture with a mutation guard that makes the positional rules case-insensitive and requires the assertion to fail, which is the only thing that keeps the claim honest.
-- Apply when: adding a keyword to `editors/vscode/syntaxes/emod.tmLanguage.json`, or asserting that a scope rule is case-sensitive.
-
 ## Look at the rendered page: it finds what a green viewer suite cannot
 - Type: convention
 - Observed: US-013 task 10 — drawing an automation's delay in the viewer
@@ -777,12 +716,6 @@ in this repo; append only learnings that generalise beyond the task that surface
 - Observed: task 4 — US-014 format the new constructs consistently
 - Learning: US-014's payload budget was pinned exactly-at and one-past for a single shape — a spec stating nothing but 'when', whose keyword takes no padding and which sits in no list — and the criterion read 'both boundaries asserted, so the comparison cannot be off by one'. It could: three off-by-one measurement errors each left the entire unit suite green while changing real 'emod fmt' output, because the formatter measures three different texts. Dropping the keyword column's padding from the measured head, dropping a list element's trailing separator, and measuring an element one indent level too deep were all invisible. Count the shapes the comparison actually measures — what the head contributes, what the separator contributes, which indent level applies — and give each its own exactly-at/one-past pair; asserting the fixture's own length before asserting it survives is what keeps the arithmetic honest.
 - Apply when: writing or reviewing the boundary tests for any width, length or size threshold whose measured text is assembled from more than one part
-
-## A tree-sitter corpus case cannot discriminate layout, but can discriminate token adjacency
-- Type: constraint
-- Observed: task 4 — US-014 format the new constructs consistently
-- Learning: 'editors/tree-sitter-emod/grammar.js' declares extras: [/\s/, $.comment], so newlines, indentation and column padding are lexically invisible: a corpus case named for a wrapped or aligned shape cannot fail for that shape, and collapsing its source onto one line leaves it green. US-014 wrote one, renamed it to claim layout, and only a second audit round caught that the name outran the case. What a case still discriminates is which tokens may sit next to which: a third round proved the wrapped case is the only one of 93 that dies when a list comma is required to be followed by same-line whitespace, because it is the only spec_event_list in the corpus broken across lines. So name such a case for the token sequence it pins, and note that nothing holds a case claiming to be formatter output to that claim — no Go test reads the corpus and re-formats it, so the source is a snapshot that drifts silently when the formatter's shape moves.
-- Apply when: adding a tree-sitter corpus case for output whose shape is a matter of layout, or reviewing one whose name claims a wrapped, aligned or broken form
 
 ## A context-level invariant is only reachable from a DCB context's own slices
 - Type: constraint
@@ -861,24 +794,6 @@ in this repo; append only learnings that generalise beyond the task that surface
 - Observed: task 1 — US-016 render specs on diagrams
 - Learning: Giving `ExportSVG` a trailing `...Option` left every call site in `internal/diagram` and `internal/cli` compiling unedited — which is the whole reason to prefer it over a positional parameter or a widened struct. What it does break is assignment: Go will not accept `func(*ast.Model, Style, ...Option)` where `func(*ast.Model, Style)` is declared, so `contract_test.go`'s `exporter.export` field needs a non-variadic wrapper (`exportSVGDefault`). Keep the shared field non-variadic and add a second `exportWithSpecs` field left nil for the text formats, rather than making the field variadic: a variadic field would let the harness hand mermaid and ASCII an option they cannot honour, which is the silent-ignore trap this repo already records against `Style`. A criterion phrased "every existing call compiles unedited" is satisfiable; "the diff in that file is additions only" is not.
 - Apply when: Adding a functional option to an existing exported function, or writing the change-set criterion for one
-
-## A TextMate block rule with an optional brace also opens on a field named after its keyword
-- Type: constraint
-- Observed: task 4 — US-017 highlight the new syntax in editors
-- Learning: `#tags-block`'s begin was written `(?i)\\b(tags)\\b\\s*(\\{)?`, copied from `#fields-block`. The optional brace made it fire on a spec payload field *named* `tags`, and because the rule deliberately omits `#payload-values`, every literal from there to the payload's closing brace lost its scope — `when Claim { tags: 1, amount: 42, ok: true }` rendered all three unscoped, with the whole suite green. The optional brace is load-bearing in `#fields-block` (a block may put its brace on the next line) and harmless there only because that rule keeps the literal patterns. Any block keyword in emod is also a legal field and payload-field name, so a begin rule keyed on one must require its brace unless it keeps everything the enclosing context had.
-- Apply when: Adding a begin/end rule to editors/vscode/syntaxes/emod.tmLanguage.json keyed on a DSL keyword, or reviewing one whose begin makes the brace optional
-
-## Claiming a position in TextMate retires the mutation controls that witnessed there
-- Type: recurring-finding
-- Observed: task 4 — US-017 highlight the new syntax in editors
-- Learning: A rule that claims a token by position shields it from every later rule, which is the point — and which silently voids any negative control whose witness sat at that position. Adding `#field-name` moved all three flat-alternation controls off `on string required` onto `notified on required`, one column along; their titles still said 'a field named after one' and were then false rather than stale. It also left `unreserved-keywords.emod`'s fifteen bare-prohibition assertions satisfied by construction. After adding a positional rule, re-run each existing control and check it still fails on the line its `sourceLine` names, and give the newly-shielded assertions the positive scope so a mutation can still reach them.
-- Apply when: Adding a positional or block-scoped rule to the TextMate grammar, or finding that a negative control still passes after a grammar change
-
-## Editor-fixture marker columns must be generated, never counted
-- Type: recurring-finding
-- Observed: task 1 — US-017 highlight the new syntax in editors
-- Learning: Both assertion formats locate their claim by column — tree-sitter's `#   ^ capture` and vscode-tmgrammar-test's `#   ^^^^ scope` — and a marker one column off asserts against a different token, or against nothing, and passes forever. Three occurred in one story: a `- constant.numeric.emod` marker at column 6 of `emod 1` (the digit is at 5, so it asserted past end-of-line), a caret covering `oomId:` instead of `roomId`, and two payload literal markers. Every one was hand-counted; every generated one was correct. Derive the column from `line.index(token)` and sweep afterwards, asserting each caret run covers exactly one whole token — the check is ten lines and found two defects the suites and two audit rounds' worth of lenses did not.
-- Apply when: Writing or reviewing an assertion in editors/tree-sitter-emod/test/highlight/*.emod or editors/vscode/test/scopes/*.emod
 
 ## A scope prohibition needs the positive scope beside it or it is satisfied by construction
 - Type: convention
@@ -1379,3 +1294,66 @@ in this repo; append only learnings that generalise beyond the task that surface
 - Observed: task 3 — diagnostic-source-jump
 - Learning: internal/lexer is gone: positions come from HCL, whose columns count grapheme clusters from 1 (an accent with a combining mark, or a ZWJ emoji, is one column), except a flow entry's name column, which internal/parser/parser.go takes from strings.Index, a byte index. A JavaScript caret offset counts UTF-16 units, so the viewer converts a column with Intl.Segmenter (offsetOf in static/source-panel.js), built when it is used because a browser without it would otherwise fail to load the module.
 - Apply when: turning a diagnostic's line and column into a position in text (the viewer, the LSP, an editor), or fixing the flow-entry column in internal/parser
+
+## HCL answers an unfinished value as unknown with no error, so every parser reader checks IsKnown
+- Type: constraint
+- Recorded: 2026-11-01
+- Observed: task 1 — source-syntax-highlighting
+- Learning: For an unfinished header or attribute (emod = -, description = "a ${}"), Value(nil) answers an unknown value and no diagnostic, and once one unfinished interpolation puts HCL in recovery, later payload values reach internal/parser the same way. AsString, AsBigFloat and True panic on it, which stopped emod lsp, the pipeline and the source panel's tokenize; the version, text, source and literal readers now reject !value.IsKnown() with their usual message.
+- Apply when: adding or changing code in internal/parser that evaluates an HCL expression with Value(nil) and reads the result
+
+## Fuzz Go code the source panel runs on every keystroke, and keep the failing input
+- Type: pattern
+- Recorded: 2026-11-01
+- Observed: task 1 — source-syntax-highlighting
+- Learning: A short go test -fuzz of lsp.GetTokens seeded with examples/*.emod, asserting no panic and ordered non-empty tokens, found two defects that the tests and three audit rounds missed: the emod = - parser panic and a bare label (context A{}) that put a construct colour on the next token. A failure can take minutes to find again, so copy testdata/fuzz/<Fuzz>/ out before removing the probe file.
+- Apply when: adding or changing Go code that the viewer runs on unfinished source as it is typed: tokenize, parse, revalidate
+
+## A Playwright fill of the largest example fires 657 input events
+- Type: constraint
+- Recorded: 2026-11-01
+- Observed: task 4 — source-syntax-highlighting
+- Learning: Filling examples/all_patterns.emod into #source-input with Playwright fires one input event per line. Work that the panel's input or source:changed event sends to the WebAssembly worker must keep one request open and ask for the newest text when it settles: one tokenize request per event queued about 12 s of work ahead of the parse, and every e2e test that fills the largest example hung on Parsing.
+- Apply when: adding work to the source panel's input or source:changed event that calls the Go core, or diagnosing an e2e test that stays on Parsing after a fill
+
+## Check a layer drawn level with the source panel by comparing screenshots, not Range rects
+- Type: convention
+- Recorded: 2026-11-01
+- Observed: task 3 — source-syntax-highlighting
+- Learning: WebKit rounds Range.getBoundingClientRect to whole pixels, so a canvas-measured place misses by more than 1 px there even when the layer is exact. drawnOffset in e2e-viewer/tests/source-panel.spec.js screenshots the panel once with only the textarea's text and once with only the drawn text, decodes both through a canvas in the page, and requires a best shift of at most 1 px with at most 15% of dark pixels differing, because Chromium places a coloured span a fraction of a pixel off. Hide a layer with a transparent colour, not visibility: WebKit draws a colour emoji in transparent text.
+- Apply when: verifying that anything drawn under or over the source panel lines up with its text, in Chromium or WebKit
+
+## Playwright's WebKit matches forced-colors without forcing colours
+- Type: constraint
+- Recorded: 2026-11-01
+- Observed: source-syntax-highlighting
+- Learning: Under page.emulateMedia({ forcedColors: 'active' }) WebKit matches the media query but keeps author colours, so a textarea whose text is color: transparent stays invisible; the forced-colors rule in viewer.html hides the source colours and sets the textarea's colour to CanvasText, and only WebKit fails without the second part.
+- Apply when: writing CSS or a browser test for forced-colours mode in the viewer
+
+## Moving colours across an edit of the source panel is routine with a common start and end
+- Type: convention
+- Recorded: 2026-11-01
+- Observed: task 5 — source-syntax-highlighting
+- Learning: Keeping ranges on the panel's text while it is typed needs only the common prefix and suffix of the old and new text: a range wholly outside the edited stretch moves by the change in length, a range the edit falls strictly inside grows over it, and any other is dropped. Bound the common end by the common start, or a typed character that repeats its neighbour moves a range off its characters. US-012 planned this low certainty and it built clean in one attempt.
+- Apply when: assessing certainty for a task that keeps colours, marks or other ranges on the source panel's text while it is edited
+
+## A seam operation that follows ec9a239 stays routine; a design check's rename refuses the next clerk finish
+- Type: recurring-finding
+- Recorded: 2026-11-01
+- Observed: task 2 — source-syntax-highlighting
+- Learning: US-012's tokenizeEmod task was planned high certainty and was: its two refusals were clerk finish's design gate, which reads every type on the branch, flagging types that a design check had renamed in task 1 (semanticName to semanticDecl). Record the new name with clerk design note before the next finish, and point its design check at the earlier one.
+- Apply when: fixing a design-check finding that renames or merges a type while later tasks are still open, or assessing certainty for a task that adds a platform seam operation
+
+## Audit renames that cross task commits fold into the tip, named in its message
+- Type: recurring-finding
+- Recorded: 2026-11-01
+- Observed: task 4 — source-syntax-highlighting
+- Learning: A seam operation's tests share internal/pipeline/pipeline_test.go across tasks (the entry point, then the key guard), and the frontend tasks share viewer.test.js and e2e-viewer/tests/source-panel.spec.js, so clerk fixup mark could not pick a commit, and a fold split between two tasks conflicted in replay. Folding such renames into the tip kept every commit building; the run verifier then asks the tip message to name the earlier tasks' code it changes.
+- Apply when: folding audit fixes on a branch whose tasks share test files, or drawing task boundaries for a story that adds a seam operation and its viewer caller
+
+## An editor colours emod with its own HCL grammar plus emod lsp's semantic tokens
+- Type: constraint
+- Recorded: 2026-11-01
+- Observed: task 1 — source-syntax-highlighting
+- Learning: Since commit 79a28f8 the repo has no grammar of its own. lsp.GetTokens gives the viewer an editor's categories: for HCL it follows nvim-treesitter's queries/hcl/highlights.scm at 692b051 (a top-level block type is keyword, a nested one is type), and for a declared construct's quoted name the lsp.type.<type> from GetSemanticTokens' own walk. Anything in the viewer that must colour like an editor reads categories from it rather than restating them.
+- Apply when: planning or building anything in the viewer or the desktop app that must colour emod source as an editor does
