@@ -104,7 +104,7 @@ func hclAttrs(body *hclsyntax.Body) []*hclsyntax.Attribute {
 func (r *hclReader) text(a *hclsyntax.Attribute) (string, ast.Position) {
 	start := a.Expr.Range().Start
 	value, diags := a.Expr.Value(nil)
-	if diags.HasErrors() || value.IsNull() || value.Type() != cty.String {
+	if diags.HasErrors() || value.IsNull() || !value.IsKnown() || value.Type() != cty.String {
 		r.fail(start, "expected a quoted string after %s", a.Name)
 		return "", r.at(start)
 	}
@@ -210,7 +210,7 @@ func (r *hclReader) model(body *hclsyntax.Body) *ast.Model {
 
 func (r *hclReader) version(model *ast.Model, a *hclsyntax.Attribute) bool {
 	value, diags := a.Expr.Value(nil)
-	if diags.HasErrors() || value.IsNull() || value.Type() != cty.Number {
+	if diags.HasErrors() || value.IsNull() || !value.IsKnown() || value.Type() != cty.Number {
 		r.fail(a.Expr.Range().Start, "expected a whole number after emod")
 		return false
 	}
@@ -511,7 +511,7 @@ func (r *hclReader) source(event *ast.Event, a *hclsyntax.Attribute) {
 	}
 	event.Source = call.Name
 	value, diags := call.Args[0].Value(nil)
-	if diags.HasErrors() || value.IsNull() || value.Type() != cty.String {
+	if diags.HasErrors() || value.IsNull() || !value.IsKnown() || value.Type() != cty.String {
 		r.fail(call.Args[0].Range().Start, "expected a quoted string after source external in event")
 		return
 	}
@@ -855,7 +855,7 @@ func (r *hclReader) payload(expr hcl.Expression) []*ast.PayloadField {
 func (r *hclReader) literal(expr hcl.Expression) (string, ast.LiteralKind) {
 	start := expr.Range().Start
 	value, diags := expr.Value(nil)
-	if diags.HasErrors() || value.IsNull() {
+	if diags.HasErrors() || value.IsNull() || !value.IsKnown() {
 		r.fail(start, "expected a string, a number or a boolean")
 		return "", 0
 	}

@@ -6,6 +6,7 @@ import (
 	"testing"
 
 	"github.com/hpcsc/emod/internal/ast"
+	"github.com/hpcsc/emod/internal/diagnostic"
 	"github.com/hpcsc/emod/internal/parser"
 	"github.com/stretchr/testify/require"
 )
@@ -36,6 +37,19 @@ func TestParseHCL(t *testing.T) {
 			require.Equal(t, "unsupported version 2: this tool supports emod version 1", diags[0].Message)
 		})
 
+		for name, version := range map[string]string{
+			"a version still being typed":             "-",
+			"a quoted version":                        `"1"`,
+			"a version that is null":                  "true ? null : 1",
+			"a version whose expression has an error": "[1, foo][0]",
+		} {
+			t.Run(name+" is reported as not a whole number", func(t *testing.T) {
+				_, diags := parser.Parse("emod = "+version+"\n", "test.emod")
+
+				require.Contains(t, messagesOf(diags), "expected a whole number after emod")
+			})
+		}
+
 		t.Run("an unsupported version is reported alone", func(t *testing.T) {
 			_, diags := parser.Parse("emod = 2\n\nprocess \"Nope\" {}\n", "test.emod")
 
@@ -45,6 +59,20 @@ func TestParseHCL(t *testing.T) {
 	})
 
 	t.Run("model and actor", func(t *testing.T) {
+		for name, value := range map[string]string{
+			"still being typed":             `"a ${}"`,
+			"that is a number":              "1",
+			"that is a null string":         `true ? null : "a"`,
+			"whose expression has an error": `["a", foo][0]`,
+		} {
+			t.Run("a description "+name+" is reported and not read", func(t *testing.T) {
+				model, diags := parser.Parse("model \"M\" {\n  description = "+value+"\n}\n", "test.emod")
+
+				require.Contains(t, messagesOf(diags), "expected a quoted string after description")
+				require.Empty(t, model.Description)
+			})
+		}
+
 		t.Run("the name is the label and the description is an attribute", func(t *testing.T) {
 			source := `
 model "Hotel Reservation" {
@@ -133,6 +161,21 @@ context "Lending" {
 	})
 
 	t.Run("event", func(t *testing.T) {
+		for name, value := range map[string]string{
+			"still being typed":             `"a ${}"`,
+			"that is a number":              "1",
+			"that is a null string":         `true ? null : "a"`,
+			"whose expression has an error": `["a", foo][0]`,
+		} {
+			t.Run("an external name "+name+" is reported and not read", func(t *testing.T) {
+				source := "context \"C\" {\n  slice \"S\" {\n    event \"E\" {\n      source = external(" + value + ")\n    }\n  }\n}\n"
+				model, diags := parser.Parse(source, "test.emod")
+
+				require.Contains(t, messagesOf(diags), "expected a quoted string after source external in event")
+				require.Empty(t, model.Contexts[0].Slices[0].Events[0].ExternalName)
+			})
+		}
+
 		t.Run("the wire type and the external source are read", func(t *testing.T) {
 			source := `
 context "Reservations" {
@@ -218,6 +261,33 @@ context "Reservations" {
 	})
 
 	t.Run("spec", func(t *testing.T) {
+		for name, value := range map[string]string{
+			"null":                          "null",
+			"that is a null string":         `true ? null : "a"`,
+			"whose expression has an error": `["a", foo][0]`,
+		} {
+			t.Run("a payload value "+name+" is reported", func(t *testing.T) {
+				source := "context \"C\" {\n  slice \"S\" {\n    spec \"s\" {\n      when = Do({ id = " + value + " })\n    }\n  }\n}\n"
+
+				_, diags := parser.Parse(source, "test.emod")
+
+				require.Contains(t, messagesOf(diags), "expected a string, a number or a boolean")
+			})
+		}
+
+		for name, value := range map[string]string{
+			"a string":  `"b ${}"`,
+			"a boolean": `!"${}"`,
+		} {
+			t.Run("a payload value that is "+name+" still being typed after an earlier one is reported, not a panic", func(t *testing.T) {
+				source := "model \"M\" {\n  description = \"a ${}\"\n}\n\ncontext \"C\" {\n  aggregate \"A\" {\n    slice \"S\" {\n      spec \"s\" {\n        when = Do({ id = " + value + " })\n      }\n    }\n  }\n}\n"
+
+				_, diags := parser.Parse(source, "test.emod")
+
+				require.Contains(t, messagesOf(diags), "expected a string, a number or a boolean")
+			})
+		}
+
 		t.Run("a list of events is the success outcome", func(t *testing.T) {
 			spec := specOf(t, "given = [CopyReturned]\n      when  = BorrowCopy\n      then  = [CopyBorrowed, LoanOpened]")
 
@@ -385,4 +455,12 @@ context "C" {
 	model, diags := parser.Parse(source, "test.emod")
 	require.Empty(t, diags)
 	return model.Contexts[0].Slices[0].Specs[0]
+}
+
+func messagesOf(diags []*diagnostic.Entry) []string {
+	messages := make([]string, 0, len(diags))
+	for _, d := range diags {
+		messages = append(messages, d.Message)
+	}
+	return messages
 }
