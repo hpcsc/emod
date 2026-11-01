@@ -55,6 +55,10 @@ describe('before the worker reports it started', () => {
   it('rejects an applied diagram edit with a descriptive error', async () => {
     await expect(browser.applyDiagram('src', 'billing.emod', { nodes: [], edges: [] })).rejects.toThrow('WASM not ready yet');
   });
+
+  it('rejects tokenizing with a descriptive error', async () => {
+    await expect(browser.tokenizeEmod('emod = 1\n')).rejects.toThrow('WASM not ready yet');
+  });
 });
 
 describe('starting the worker', () => {
@@ -183,6 +187,29 @@ describe('applying a diagram edit', () => {
     worker.answer({ id: worker.sent[0].id, output: JSON.stringify({ error: 'the diagram edit cannot be applied: billing.emod does not parse' }) });
 
     await expect(applying).rejects.toThrow('the diagram edit cannot be applied: billing.emod does not parse');
+  });
+});
+
+describe('tokenizing', () => {
+  it('sends the worker the source, and answers its tokens', async () => {
+    await started();
+    const tokenized = { tokens: [{ start: 0, end: 4, category: 'variable.member' }, { start: 7, end: 8, category: 'number' }] };
+
+    const tokenizing = browser.tokenizeEmod('emod = 1\n');
+    worker.answer({ id: worker.sent[0].id, output: JSON.stringify(tokenized) });
+
+    expect(worker.sent[0].name).toBe('tokenizeEmod');
+    expect(JSON.parse(worker.sent[0].input)).toEqual({ source: 'emod = 1\n' });
+    await expect(tokenizing).resolves.toEqual(tokenized);
+  });
+
+  it('rejects with the reason the source could not be tokenized', async () => {
+    await started();
+
+    const tokenizing = browser.tokenizeEmod('');
+    worker.answer({ id: worker.sent[0].id, output: JSON.stringify({ error: 'missing source field' }) });
+
+    await expect(tokenizing).rejects.toThrow('missing source field');
   });
 });
 

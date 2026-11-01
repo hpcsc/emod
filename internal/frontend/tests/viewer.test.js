@@ -5695,7 +5695,7 @@ describe('the platform seam has one contract', () => {
     expect(contract).toEqual(
       ['applyDiagram', 'droppedFiles', 'exportEmod', 'initialState', 'isReady', 'onFileOpened', 'onFilesDropped',
        'onLeaveRequested', 'onSaveRequested', 'parseEmod', 'ready', 'rememberOpenedFile',
-       'resolveUnsavedEdits', 'saveFile', 'setWindowModified', 'setWindowTitle'],
+       'resolveUnsavedEdits', 'saveFile', 'setWindowModified', 'setWindowTitle', 'tokenizeEmod'],
     );
   });
 

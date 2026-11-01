@@ -278,12 +278,12 @@ tree-sitter HCL grammar and `emod lsp`. Construct names come from the same walk 
 (the web viewer and `emod diagram --serve`). The desktop runtime answers it from `ModelService`.
 
 **Acceptance Criteria:**
-- [ ] `tokenizeEmod(source)` is part of the contract in `internal/frontend/static/platform.js`. Both runtimes resolve with the same decoded `{tokens}` document, and each token carries `start`, `end` and `category`
-- [ ] Both runtimes send the source in the `{source, filename}` envelope that `pipeline.Request` reads. The keys guard at `internal/pipeline/pipeline_test.go:56-66` covers `tokenizeEmod`
-- [ ] An error envelope rejects with its reason in both runtimes. The browser runtime rejects with "WASM not ready yet" before the module is ready, as its other operations do
-- [ ] The Go entry point answers the error envelope for a malformed envelope and for an empty source, and never panics
-- [ ] `ModelService.TokenizeEmod` answers what the pipeline answers for the same envelope
-- [ ] The Build step of `docs/wasm-architecture.md` names `tokenizeEmod`, so the documentation guard passes. Every `ModelService` method that `platform.desktop.js` calls is exported by Go (the existing binding-name guard passes)
+- [x] `tokenizeEmod(source)` is part of the contract in `internal/frontend/static/platform.js`. Both runtimes resolve with the same decoded `{tokens}` document, and each token carries `start`, `end` and `category`
+- [x] Both runtimes send the source in the `{source, filename}` envelope that `pipeline.Request` reads. The keys guard at `internal/pipeline/pipeline_test.go:56-66` covers `tokenizeEmod`
+- [x] An error envelope rejects with its reason in both runtimes. The browser runtime rejects with "WASM not ready yet" before the module is ready, as its other operations do
+- [x] The Go entry point answers the error envelope for a malformed envelope and for an empty source, and never panics
+- [x] `ModelService.TokenizeEmod` answers what the pipeline answers for the same envelope
+- [x] The Build step of `docs/wasm-architecture.md` names `tokenizeEmod`, so the documentation guard passes. Every `ModelService` method that `platform.desktop.js` calls is exported by Go (the existing binding-name guard passes)
 
 **Affected Files/Modules:**
 - `internal/pipeline/pipeline.go` — `TokenizeEmodJSON`

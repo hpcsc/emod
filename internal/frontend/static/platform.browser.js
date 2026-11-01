@@ -87,6 +87,18 @@ function applyDiagram(source, filename, diagram) {
   });
 }
 
+function tokenizeEmod(source) {
+  if (!isReady) {
+    return Promise.reject(new Error('WASM not ready yet'));
+  }
+  return callWasm('tokenizeEmod', JSON.stringify({ source: source })).then(function(result) {
+    if (result.error) {
+      throw new Error(result.error);
+    }
+    return result;
+  });
+}
+
 // Naming the files and reading one are separate so a caller can refuse a drop
 // by name without paying for its contents, and every file is answered because
 // which of them to open is the caller's choice.
@@ -185,4 +197,4 @@ function initialState() {
   return Promise.resolve(INITIAL_DATA);
 }
 
-export { parseEmod, exportEmod, applyDiagram, droppedFiles, saveFile, setWindowTitle, setWindowModified, rememberOpenedFile, resolveUnsavedEdits, onFileOpened, onFilesDropped, onSaveRequested, onLeaveRequested, initialState, ready, isReady };
+export { parseEmod, exportEmod, applyDiagram, tokenizeEmod, droppedFiles, saveFile, setWindowTitle, setWindowModified, rememberOpenedFile, resolveUnsavedEdits, onFileOpened, onFilesDropped, onSaveRequested, onLeaveRequested, initialState, ready, isReady };

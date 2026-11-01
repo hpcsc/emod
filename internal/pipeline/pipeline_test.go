@@ -451,6 +451,47 @@ context "Payments" {
 		})
 	})
 
+	t.Run("tokenize", func(t *testing.T) {
+		t.Run("answers each token's offsets and category under the keys the viewer reads", func(t *testing.T) {
+			answer := tokenizeRequest(requestFor(t, "emod = 1\n", "billing.emod"))
+
+			require.JSONEq(t, `{"tokens":[
+				{"start":0,"end":4,"category":"variable.member"},
+				{"start":7,"end":8,"category":"number"}
+			]}`, answer)
+		})
+
+		t.Run("answers an empty list for source with nothing to colour", func(t *testing.T) {
+			answer := tokenizeRequest(requestFor(t, "\n\n", "billing.emod"))
+
+			require.JSONEq(t, `{"tokens":[]}`, answer)
+		})
+
+		t.Run("answers the error envelope for a malformed envelope", func(t *testing.T) {
+			answer := tokenizeRequest("not json")
+
+			require.Contains(t, answer, "invalid JSON")
+			require.NotContains(t, answer, "tokens")
+		})
+
+		t.Run("answers the error envelope for an empty source", func(t *testing.T) {
+			require.Equal(t, pipeline.ErrorJSON("missing source field"), tokenizeRequest(`{"source": ""}`))
+		})
+
+		t.Run("both viewer runtimes send the source under the key the request reads it from", func(t *testing.T) {
+			read := jsonKeysOf(reflect.TypeOf(pipeline.Request{}))
+
+			for _, platform := range []string{
+				"../frontend/static/platform.browser.js",
+				"../frontend/desktop/platform.desktop.js",
+			} {
+				sent := keysSentBy(t, platform, "tokenizeEmod")
+				require.Equal(t, []string{"source"}, sent, platform)
+				require.Subset(t, read, sent, platform)
+			}
+		})
+	})
+
 	t.Run("documentation", func(t *testing.T) {
 		t.Run("the WASM architecture page names every function the WASM module registers", func(t *testing.T) {
 			main, err := os.ReadFile("../../cmd/emod-wasm/main.go")
@@ -743,6 +784,10 @@ func requestFor(t *testing.T, source, filename string) string {
 	require.NoError(t, err)
 
 	return string(raw)
+}
+
+func tokenizeRequest(request string) string {
+	return pipeline.RunOnSource(request, pipeline.Tokenize)
 }
 
 func jsonKeysOf(typ reflect.Type) []string {

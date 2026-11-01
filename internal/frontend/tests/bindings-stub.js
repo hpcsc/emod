@@ -7,7 +7,7 @@
 // returns, and `calls` records what the desktop platform sent across.
 export const calls = [];
 export const answers = {
-  ParseEmod: '{}', ExportJSON: '{}', ExportEmod: '{}', ApplyDiagram: '{}', Read: '{}', Write: '{}',
+  ParseEmod: '{}', ExportJSON: '{}', ExportEmod: '{}', ApplyDiagram: '{}', TokenizeEmod: '{}', Read: '{}', Write: '{}',
   SetModified: undefined, Record: undefined, Open: '{}', Take: '',
 };
 
@@ -16,6 +16,7 @@ export const ModelService = {
   ExportJSON: (arg) => { calls.push(['ExportJSON', arg]); return Promise.resolve(answers.ExportJSON); },
   ExportEmod: (arg) => { calls.push(['ExportEmod', arg]); return Promise.resolve(answers.ExportEmod); },
   ApplyDiagram: (arg) => { calls.push(['ApplyDiagram', arg]); return Promise.resolve(answers.ApplyDiagram); },
+  TokenizeEmod: (arg) => { calls.push(['TokenizeEmod', arg]); return Promise.resolve(answers.TokenizeEmod); },
 };
 
 export const FileService = {

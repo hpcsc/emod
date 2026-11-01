@@ -35,6 +35,12 @@ func (s *ModelService) ApplyDiagram(request string) string {
 	return pipeline.ApplyDiagramJSON(request)
 }
 
+// TokenizeEmod takes the pipeline.Request envelope and answers the {tokens}
+// document pipeline.Tokenize documents.
+func (s *ModelService) TokenizeEmod(request string) string {
+	return pipeline.RunOnSource(request, pipeline.Tokenize)
+}
+
 // ExportEmod takes the diagram document itself rather than the pipeline.Request
 // envelope the parse entry points use, because the frontend already holds that
 // document as its state.

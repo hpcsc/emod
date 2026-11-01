@@ -16,6 +16,7 @@ import (
 	"github.com/hpcsc/emod/internal/export"
 	"github.com/hpcsc/emod/internal/formatter"
 	"github.com/hpcsc/emod/internal/importer"
+	"github.com/hpcsc/emod/internal/lsp"
 	"github.com/hpcsc/emod/internal/oracle"
 )
 
@@ -188,6 +189,18 @@ func commentsIn(source string) int {
 		}
 	}
 	return count
+}
+
+// Tokenize answers the {tokens} document: each stretch of the source, and the
+// category an editor colours it with, as lsp.GetTokens gives them.
+func Tokenize(source, _ string) (result []byte, err error) {
+	defer func() {
+		if r := recover(); r != nil {
+			err = fmt.Errorf("tokenize panic: %v", r)
+		}
+	}()
+
+	return json.Marshal(map[string][]lsp.Token{"tokens": lsp.GetTokens(source)})
 }
 
 // RunOnSource unwraps the request envelope, runs one of the pipeline entry

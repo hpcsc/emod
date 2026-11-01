@@ -131,6 +131,22 @@ context "Payments" {
 		})
 	})
 
+	t.Run("tokenize emod", func(t *testing.T) {
+		t.Run("answers what the pipeline answers for the same envelope", func(t *testing.T) {
+			service := &desktop.ModelService{}
+			request := sourceEnvelope(t, test.BillingPayments)
+
+			answer := service.TokenizeEmod(request)
+
+			require.Equal(t, pipeline.RunOnSource(request, pipeline.Tokenize), answer)
+			var tokenized struct {
+				Tokens []map[string]any `json:"tokens"`
+			}
+			require.NoError(t, json.Unmarshal([]byte(answer), &tokenized))
+			require.Contains(t, tokenized.Tokens, map[string]any{"start": float64(0), "end": float64(4), "category": "variable.member"})
+		})
+	})
+
 	t.Run("export emod", func(t *testing.T) {
 		t.Run("takes the diagram document itself, not the source envelope", func(t *testing.T) {
 			service := &desktop.ModelService{}

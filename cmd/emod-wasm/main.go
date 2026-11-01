@@ -13,6 +13,7 @@ func main() {
 	js.Global().Set("exportJSON", js.FuncOf(jsExportJSON))
 	js.Global().Set("exportEmod", js.FuncOf(jsExportEmod))
 	js.Global().Set("applyDiagram", js.FuncOf(jsApplyDiagram))
+	js.Global().Set("tokenizeEmod", js.FuncOf(jsTokenizeEmod))
 
 	select {}
 }
@@ -42,6 +43,10 @@ func jsApplyDiagram(this js.Value, args []js.Value) any {
 	}
 
 	return pipeline.ApplyDiagramJSON(args[0].String())
+}
+
+func jsTokenizeEmod(this js.Value, args []js.Value) any {
+	return jsHandle(args, pipeline.Tokenize)
 }
 
 func jsHandle(args []js.Value, run func(source, filename string) ([]byte, error)) any {

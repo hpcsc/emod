@@ -151,6 +151,31 @@ describe('applying a diagram edit', () => {
   });
 });
 
+describe('tokenizing', () => {
+  it('sends the source in the envelope the Go service expects', async () => {
+    stub.answers.TokenizeEmod = '{"tokens":[]}';
+
+    await desktop.tokenizeEmod('emod = 1\n');
+
+    expect(stub.calls.map(([name, request]) => [name, JSON.parse(request)]))
+      .toEqual([['TokenizeEmod', { source: 'emod = 1\n' }]]);
+  });
+
+  it('answers the decoded document rather than the raw string', async () => {
+    stub.answers.TokenizeEmod = '{"tokens":[{"start":0,"end":4,"category":"variable.member"},{"start":7,"end":8,"category":"number"}]}';
+
+    await expect(desktop.tokenizeEmod('emod = 1\n')).resolves.toEqual({
+      tokens: [{ start: 0, end: 4, category: 'variable.member' }, { start: 7, end: 8, category: 'number' }],
+    });
+  });
+
+  it('raises the error envelope rather than resolving with it', async () => {
+    stub.answers.TokenizeEmod = '{"error":"missing source field"}';
+
+    await expect(desktop.tokenizeEmod('')).rejects.toThrow('missing source field');
+  });
+});
+
 describe('window title', () => {
   it('names the native window, which is the only title a desktop user can see', () => {
     desktop.setWindowTitle('hotel.emod — Emod Diagram Viewer');

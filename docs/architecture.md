@@ -68,6 +68,7 @@ graph TD
     pipeline --> export
     pipeline --> importer
     pipeline --> formatter
+    pipeline --> lsp
     lsp --> formatter
 
     oracle --> parser
@@ -88,6 +89,11 @@ graph TD
     validator --> diagnostic
     linter --> diagnostic
 ```
+
+`pipeline` imports `lsp` because the viewer's source panel takes its colours
+from `lsp.GetTokens`, which reads construct names through the walk `emod lsp`
+uses for its semantic tokens, so the panel and an editor cannot disagree about
+a name.
 
 Not shown: `internal/frontend` (the viewer's JS modules and the embed
 directive that reaches them, depending on nothing above), `internal/viewer`
