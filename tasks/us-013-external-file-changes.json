@@ -1,0 +1,208 @@
+{
+  "story": "US-013: Notice when the open file changes on disk",
+  "tasks_file": "tasks/us-013-external-file-changes.md",
+  "tasks": [
+    {
+      "n": 1,
+      "done": true,
+      "title": "Report what happens on disk to a watched file",
+      "language": "Go",
+      "testable": true,
+      "certainty": "low",
+      "blast_radius": "low",
+      "patterns_to_follow": [
+        "internal/desktop/window_service.go:5-38",
+        "internal/desktop/recent_files.go:14-58",
+        "internal/desktop/file_service.go:189-214",
+        "internal/desktop/window_service_test.go:16-34",
+        "internal/desktop/window_service_test.go:71-90",
+        "internal/desktop/recent_files_test.go:23-60",
+        "internal/desktop/file_service_test.go:283-320",
+        "tasks/learnings.md:942-947",
+        "tasks/learnings.md:876-881"
+      ],
+      "depends_on": [],
+      "affected_files": [
+        "go.mod",
+        "go.sum",
+        "internal/desktop/open_file_watch.go",
+        "internal/desktop/open_file_watch_test.go"
+      ]
+    },
+    {
+      "n": 2,
+      "done": false,
+      "title": "Tell the shell which file the window has open",
+      "language": "JavaScript",
+      "testable": true,
+      "certainty": "medium",
+      "blast_radius": "low",
+      "patterns_to_follow": [
+        "internal/frontend/static/viewer.js:295-299",
+        "internal/frontend/static/viewer.js:998-1018",
+        "internal/frontend/static/viewer.js:870-907",
+        "internal/frontend/desktop/platform.desktop.js:247-263",
+        "internal/frontend/desktop/platform.desktop.js:179-222",
+        "internal/frontend/static/platform.browser.js:156-161",
+        "cmd/emod-desktop/main.go:133-159",
+        "internal/desktop/binding_names_test.go:76-115",
+        "internal/frontend/tests/viewer.test.js:4064-4237",
+        "internal/frontend/tests/platform.desktop.test.js:1022-1072",
+        "internal/frontend/tests/platform.desktop.test.js:250-335",
+        "internal/frontend/tests/bindings-stub.js:44-79",
+        "tasks/learnings.md:990-995",
+        "tasks/learnings.md:912-917",
+        "tasks/learnings.md:1092-1097",
+        "task:1"
+      ],
+      "depends_on": [
+        1
+      ],
+      "affected_files": [
+        "internal/frontend/static/viewer.js",
+        "internal/frontend/static/platform.js",
+        "internal/frontend/static/platform.browser.js",
+        "internal/frontend/desktop/platform.desktop.js",
+        "cmd/emod-desktop/main.go",
+        "internal/frontend/tests/viewer.test.js",
+        "internal/frontend/tests/platform.desktop.test.js",
+        "internal/frontend/tests/bindings-stub.js"
+      ]
+    },
+    {
+      "n": 3,
+      "done": false,
+      "title": "Reload the open file when it changes on disk with nothing unsaved",
+      "language": "JavaScript",
+      "testable": true,
+      "certainty": "low",
+      "blast_radius": "high",
+      "patterns_to_follow": [
+        "internal/frontend/static/viewer.js:243-347",
+        "internal/frontend/static/viewer.js:353-359",
+        "internal/frontend/static/viewer.js:579-606",
+        "internal/frontend/static/viewer.js:941-975",
+        "internal/frontend/static/viewer.js:977-1023",
+        "internal/frontend/static/viewer.js:624-689",
+        "internal/frontend/static/viewer.js:814-849",
+        "internal/frontend/desktop/platform.desktop.js:78-110",
+        "internal/frontend/desktop/platform.desktop.js:61-70",
+        "cmd/emod-desktop/main.go:161-171",
+        "cmd/emod-desktop/window_marker_darwin.go:24-44",
+        "internal/desktop/event_names_test.go:23-33",
+        "internal/frontend/tests/viewer.test.js:4852-5039",
+        "internal/frontend/tests/viewer.test.js:1580-1742",
+        "internal/frontend/tests/viewer.test.js:3983-4063",
+        "internal/frontend/tests/viewer.test.js:5325-5527",
+        "internal/frontend/tests/platform.desktop.test.js:485-617",
+        "task:2",
+        "tasks/learnings.md:930-941",
+        "tasks/learnings.md:894-899",
+        "tasks/learnings.md:1214-1220",
+        "tasks/learnings.md:1256-1262",
+        "tasks/learnings.md:1032-1037",
+        "tasks/learnings.md:1068-1073",
+        "tasks/learnings.md:1194-1200"
+      ],
+      "depends_on": [
+        2
+      ],
+      "affected_files": [
+        "cmd/emod-desktop/main.go",
+        "cmd/emod-desktop/open_file_events.go",
+        "internal/frontend/desktop/platform.desktop.js",
+        "internal/frontend/static/platform.js",
+        "internal/frontend/static/platform.browser.js",
+        "internal/frontend/static/viewer.js",
+        "internal/frontend/tests/viewer.test.js",
+        "internal/frontend/tests/platform.desktop.test.js"
+      ]
+    },
+    {
+      "n": 4,
+      "done": false,
+      "title": "Ask whether to keep the app's version or reload when the file changes under unsaved edits",
+      "language": "JavaScript",
+      "testable": true,
+      "certainty": "medium",
+      "blast_radius": "high",
+      "patterns_to_follow": [
+        "internal/frontend/desktop/platform.desktop.js:265-286",
+        "internal/frontend/static/viewer.js:624-689",
+        "internal/frontend/static/viewer.js:564-574",
+        "internal/frontend/static/platform.browser.js:163-168",
+        "internal/frontend/tests/viewer.test.js:3828-3982",
+        "internal/frontend/tests/viewer.test.js:4238-4317",
+        "internal/frontend/tests/platform.desktop.test.js:725-780",
+        "internal/frontend/tests/wails-runtime-stub.js:36-53",
+        "task:3",
+        "tasks/learnings.md:1032-1037"
+      ],
+      "depends_on": [
+        3
+      ],
+      "affected_files": [
+        "internal/frontend/static/viewer.js",
+        "internal/frontend/static/platform.js",
+        "internal/frontend/static/platform.browser.js",
+        "internal/frontend/desktop/platform.desktop.js",
+        "internal/frontend/tests/viewer.test.js",
+        "internal/frontend/tests/platform.desktop.test.js"
+      ]
+    },
+    {
+      "n": 5,
+      "done": false,
+      "title": "Report a missing open file and keep its model saveable elsewhere",
+      "language": "JavaScript",
+      "testable": true,
+      "certainty": "medium",
+      "blast_radius": "high",
+      "patterns_to_follow": [
+        "internal/frontend/static/viewer.js:416-432",
+        "internal/frontend/static/viewer.js:977-1023",
+        "internal/frontend/static/viewer.js:624-689",
+        "internal/frontend/tests/viewer.test.js:1800-1981",
+        "internal/frontend/tests/viewer.test.js:1356-1579",
+        "internal/frontend/tests/viewer.test.js:4238-4317",
+        "task:3",
+        "task:4",
+        "tasks/learnings.md:972-977"
+      ],
+      "depends_on": [
+        3,
+        4
+      ],
+      "affected_files": [
+        "internal/frontend/static/viewer.js",
+        "internal/frontend/tests/viewer.test.js"
+      ]
+    },
+    {
+      "n": 6,
+      "done": false,
+      "title": "Document how the app follows the open file on disk",
+      "language": "Markdown",
+      "testable": true,
+      "certainty": "high",
+      "blast_radius": "low",
+      "patterns_to_follow": [
+        "README.md:387-509",
+        "docs/architecture.md:233-247",
+        "docs/architecture.md:303-336",
+        "internal/desktop/packaging_task_test.go:100-122",
+        "tasks/learnings.md:1138-1144",
+        "tasks/learnings.md:1173-1179"
+      ],
+      "depends_on": [
+        5
+      ],
+      "affected_files": [
+        "README.md",
+        "docs/architecture.md",
+        "internal/desktop/packaging_task_test.go"
+      ]
+    }
+  ],
+  "design_file": "tasks/us-013-external-file-changes.design.yaml"
+}

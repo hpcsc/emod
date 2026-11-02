@@ -1,0 +1,78 @@
+design: planned
+types:
+  - name: OpenFileWatch
+    package: internal/desktop   # open_file_watch.go
+    change: new
+    does: reports what happens on disk to the file the window has open
+    owns:
+      - the watch is on the file's directory and picks the file out by name, so an atomic save that replaces the file is a change and the watch carries on through it
+      - what happened is decided once the platform's events for the file pause — a path that names a file then is a change, and a path that does not is missing
+      - one write that raises several platform events is reported once, and events for any other file in the directory are reported nowhere
+      - a watch begins with one report of the file as it is, so a change made before the watch started is not lost
+      - a path reached through a symbolic link is watched where its bytes live, the file a save writes, and every report names the path the watch was asked for
+      - watching a second path ends the watch on the first, and once Stop returns nothing more is reported
+      - a path whose directory cannot be watched answers the reason
+    methods: [Watch, Stop]
+  - name: OpenFileListener
+    package: internal/desktop   # open_file_watch.go
+    change: new
+    does: hears each report about the open file; the shell supplies it
+    methods: [ChangedOnDisk, MissingFromDisk]
+  - name: openFileEvents
+    package: cmd/emod-desktop   # open_file_events.go
+    change: new
+    does: emits each report about the open file to the page as a shell event
+    owns:
+      - a change is emitted as file:changed-on-disk and a missing file as file:missing-from-disk, each carrying the path, and platform.desktop.js subscribes to both
+    fields: [window]
+    methods: [ChangedOnDisk, MissingFromDisk]
+  - name: viewer
+    package: internal/frontend/static   # viewer.js
+    change: changed
+    does: keeps the panel, the diagram and the open file in agreement with the file on disk
+    owns:
+      - the host watches the open file's path from the moment a render or a save commits it, and nothing once the open file has no location or the page starts over
+      - a change on disk is real only when the file's bytes differ from the bytes the app last read from it or wrote to it, compared after every save queued before the change arrived
+      - no write by any caller of the viewer's save reloads anything, and an Export is not a save
+      - with nothing unsaved a change is reloaded in place and the bar says so
+      - with unsaved edits the user chooses between keeping the app's version and reloading
+      - a reload keeps pan and zoom, and the offset and hidden state of every node the reloaded file still has
+      - a reloaded file that does not parse leaves the last diagram on screen marked out of date
+      - a missing open file is reported in the bar, its model stays, the window counts it as unsaved work, and Save asks where to write it
+      - a file that appears at the open file's path again with the bytes the app last held ends the missing state
+      - a change applies only to the file it was about, claims no gesture number, and is never asked about while another question is on screen
+      - a Save asked for while the keep-or-reload question is on screen writes only after it is answered
+    methods: [init]
+functions:
+  - desktop.NewOpenFileWatch(listener OpenFileListener) *OpenFileWatch   # cmd/emod-desktop calls it; a nil listener reports to nobody
+  - watchOpenFile(path)   # the platform.js contract, implemented by platform.browser.js and platform.desktop.js; viewer.js calls it with the open file's path, or with none when the open file has no location
+  - onOpenFileChanged(handler)   # the platform.js contract; the handler receives {path, missing, read}, where read answers the opened-file document or {error}
+  - resolveExternalChange(name)   # the platform.js contract; viewer.js calls it and receives 'keep' or 'reload'
+words:
+  - concept: the file whose model is on screen and which Save writes to
+    word: open file
+    not: [document, active file]   # store.currentFile holds it
+  - concept: keeping track of the open file's path for writes made by other programs
+    word: watch
+    not: [monitor, observe, follow, track, poll]
+  - concept: what the shell tells the page when the open file may hold bytes other than the ones the app has
+    word: change on disk
+    not: [notice, alert, signal]   # a notice is a panel over the canvas (the out-of-date and conflict notices)
+  - concept: the open file no longer at its path, because it was deleted or renamed away
+    word: missing
+    not: [gone, deleted, removed, moved]
+  - concept: a change to the open file that this app did not make
+    word: external change
+    not: [conflict, foreign change, outside edit]   # conflict names the diagram and the source panel disagreeing
+  - concept: putting the open file's new text on screen in place of what is shown
+    word: reload
+    not: [refresh, revert, re-read, sync]   # Cmd+R reloads the page, which comments call a page reload
+  - concept: the user's choice to leave the app's version on screen when the open file changed under unsaved edits
+    word: keep
+    not: [ignore, dismiss, override]
+  - concept: the time the watch waits after the platform's last event for the file before it decides what happened
+    word: pause
+    not: [debounce, settle, quiet period, grace]   # pause is the word REVALIDATE_PAUSE_MS already uses for the same wait; settled names a finished promise
+dependencies:
+  - internal/desktop -> github.com/fsnotify/fsnotify
+  - cmd/emod-desktop -> internal/desktop
