@@ -422,11 +422,24 @@ function init() {
   // model it is replacing, because renderPanelSource writes the text
   // immediately and commits the identity only when the parse resolves.
   function reportModified() {
-    setWindowModified(hasUnsavedEdits());
+    setWindowModified(hasUnsavedWork());
   }
 
-  function hasUnsavedEdits() {
+  function hasUnsavedWork() {
+    return windowDiffersFromFile() || openFileIsMissing();
+  }
+
+  function windowDiffersFromFile() {
     return modelIsModified(store) || diagramHasUnappliedEdit();
+  }
+
+  // The open file the host reported missing, for as long as it is the open
+  // file: a save, an open or a reload replaces store.currentFile, and with it
+  // whatever was missing.
+  let missingFile = null;
+
+  function openFileIsMissing() {
+    return missingFile !== null && missingFile === store.currentFile;
   }
 
   function diagramHasUnappliedEdit() {
@@ -673,7 +686,7 @@ function init() {
   // reached the panel yet, and the panel is what Save would write.
   function clearedToReplace() {
     return appliesSettled().then(function() {
-      if (!hasUnsavedEdits()) {
+      if (!hasUnsavedWork()) {
         return true;
       }
       return resolveUnsavedEdits().then(function(outcome) {
@@ -684,7 +697,7 @@ function init() {
           return true;
         }
         return saveModel({ chooseLocation: false }).then(function() {
-          return !hasUnsavedEdits();
+          return !hasUnsavedWork();
         });
       });
     });
@@ -866,7 +879,11 @@ function init() {
 
   function followChangeOnDisk(change) {
     const file = store.currentFile;
-    if (!file || file.path !== change.path || change.missing) {
+    if (!file || file.path !== change.path) {
+      return undefined;
+    }
+    if (change.missing) {
+      reportMissing(file);
       return undefined;
     }
 
@@ -879,13 +896,14 @@ function init() {
         return undefined;
       }
       if (opened.content === file.content) {
+        endMissing(file);
         return undefined;
       }
       if (!opened.content.trim()) {
         reportEmpty(file);
         return undefined;
       }
-      if (hasUnsavedEdits()) {
+      if (windowDiffersFromFile()) {
         return askAboutChange(file, opened.content, change);
       }
 
@@ -939,6 +957,24 @@ function init() {
     store.currentFile = { name: file.name, path: file.path, content: onDisk };
     reportModified();
     reportInBar('⚠ ' + file.name + ' differs on disk: this window\'s version kept', false);
+  }
+
+  // The model stays as it is, and the window is now its only copy, so it counts
+  // as unsaved work, and Save asks where to put it rather than bringing back a
+  // file the user deleted, or a second copy of one they moved.
+  function reportMissing(file) {
+    missingFile = file;
+    reportModified();
+    reportInBar('✗ ' + file.name + ' was moved or deleted: Save asks where to keep this model', true);
+  }
+
+  function endMissing(file) {
+    if (missingFile !== file) {
+      return;
+    }
+    missingFile = null;
+    reportModified();
+    reportInBar('↻ ' + file.name + ' is back on disk', false);
   }
 
   function reportUnreadable(file, reason) {
@@ -1106,7 +1142,7 @@ function init() {
 
   function writeModel(chooseLocation) {
     const openFile = store.currentFile;
-    const target = chooseLocation || !openFile ? '' : openFile.path;
+    const target = chooseLocation || !openFile || openFileIsMissing() ? '' : openFile.path;
     const suggestedName = (openFile && openFile.name) || (store.modelName || 'diagram') + '.emod';
     const content = sourceToSave(store);
 

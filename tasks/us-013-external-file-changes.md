@@ -629,15 +629,15 @@ quitting and opening another model ask first, and Save asks where to write rathe
 putting the file back where it was. A file that appears at the path again ends that state.
 
 **Acceptance Criteria:**
-- [ ] A report that the open file is missing says in the bar, in its failed style, that the file was moved or deleted, leading with its name; the panel, the diagram, the window's name and the path in the bar stay as they were
-- [ ] From then the window counts as holding unsaved work even with nothing typed: the marker shows it, and closing, quitting and opening another model each ask the unsaved-changes question first
-- [ ] Save asks for a location, offering the file's own name, and does not write to where the file was; the location chosen becomes the open file, the window takes its name, the marker clears, and the host is told to watch it
-- [ ] A Save whose dialog is cancelled leaves everything as it was, the file still missing
-- [ ] Discard in the unsaved-changes question goes ahead and writes nothing
-- [ ] A file that appears at the open file's path again with the bytes the app last read or wrote ends the missing state: the marker goes back to what the panel says, and Save writes there with no dialog
-- [ ] A file that appears there with other bytes is a change on disk to the open file: reloaded when the panel holds no edits of its own, asked about when it does
-- [ ] A report that a path other than the open file's is missing changes nothing
-- [ ] `task test:viewer` is green
+- [x] A report that the open file is missing says in the bar, in its failed style, that the file was moved or deleted, leading with its name; the panel, the diagram, the window's name and the path in the bar stay as they were
+- [x] From then the window counts as holding unsaved work even with nothing typed: the marker shows it, and closing, quitting and opening another model each ask the unsaved-changes question first
+- [x] Save asks for a location, offering the file's own name, and does not write to where the file was; the location chosen becomes the open file, the window takes its name, the marker clears, and the host is told to watch it
+- [x] A Save whose dialog is cancelled leaves everything as it was, the file still missing
+- [x] Discard in the unsaved-changes question goes ahead and writes nothing
+- [x] A file that appears at the open file's path again with the bytes the app last read or wrote ends the missing state: the marker goes back to what the panel says, and Save writes there with no dialog
+- [x] A file that appears there with other bytes is a change on disk to the open file: reloaded when the panel holds no edits of its own, asked about when it does
+- [x] A report that a path other than the open file's is missing changes nothing
+- [x] `task test:viewer` is green
 
 **Affected Files/Modules:**
 - `internal/frontend/static/viewer.js` — the missing state, its report, what it does to unsaved work and to Save, and its end

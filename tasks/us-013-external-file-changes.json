@@ -152,7 +152,7 @@
     },
     {
       "n": 5,
-      "done": false,
+      "done": true,
       "title": "Report a missing open file and keep its model saveable elsewhere",
       "language": "JavaScript",
       "testable": true,

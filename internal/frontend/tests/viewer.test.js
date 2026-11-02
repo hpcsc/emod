@@ -39,6 +39,9 @@ let tokenizeQueue = [];
 let watchRequests = [];
 let watchFails = null;
 let reportChangeOnDisk = null;
+// How many reads the reports of a change on disk were asked for, so a test can
+// tell a report that read nothing from one whose read found nothing new.
+let reads = 0;
 let externalChangeAsked = [];
 let externalChangeAnswer = 'keep';
 // Set by a test that has to hold the keep-or-reload question open.
@@ -371,6 +374,7 @@ beforeEach(() => {
   watchRequests = [];
   watchFails = null;
   reportChangeOnDisk = null;
+  reads = 0;
   externalChangeAsked = [];
   externalChangeAnswer = 'keep';
   externalChangeAnswerer = null;
@@ -4450,11 +4454,6 @@ describe('what the viewer asks the host to watch', () => {
   });
 });
 
-// The host reports that the open file may hold bytes other than the ones the
-// viewer has, and the viewer reads it again and decides. reads counts the reads
-// a report was asked for, so a test can tell a report that read nothing from
-// one whose read found nothing new.
-let reads = 0;
 
 function readAnswering(answer) {
   return () => {
@@ -4474,8 +4473,6 @@ function changedBilling(content) {
 const billingOnDisk = 'emod = 1\n\nmodel "Billing" {\n}\n\ncontext "Payments" {\n}\n';
 
 describe('a change on disk to the open file with nothing unsaved', () => {
-  beforeEach(() => { reads = 0; });
-
   it('puts the file\'s new text in the panel and draws it, with the window still naming the file', async () => {
     await openBilling();
     parseResult = { diagnostics: [], diagram: billingWith('IssueRefund') };
@@ -4626,18 +4623,6 @@ describe('a change on disk to the open file with nothing unsaved', () => {
     expect(document.getElementById('save-status').classList.contains('hidden')).toBe(true);
   });
 
-  it('replaces nothing while the panel holds edits of its own', async () => {
-    await openBilling();
-    typeIntoPanel(billingSource + '# mine\n');
-    const parsesBefore = parses();
-
-    await changeOnDisk('/models/billing.emod', changedBilling(billingOnDisk));
-
-    expect(document.getElementById('source-input').value).toBe(billingSource + '# mine\n');
-    expect(parses()).toBe(parsesBefore);
-    expect(marked()).toBe(true);
-  });
-
   it('says in the bar why a file that cannot be read was not reloaded, and leaves the model as it was', async () => {
     await openBilling();
 
@@ -4757,64 +4742,6 @@ describe('a change on disk to the open file with nothing unsaved', () => {
     expect(document.getElementById('save-status').textContent).toBe('✓ Saved copy.emod');
   });
 
-  it('replaces nothing while the diagram holds an edit the panel does not', async () => {
-    await openBilling();
-    applyQueue.push(Promise.reject(new Error('billing.emod does not parse')));
-    fireMouse(document.querySelector('.slice-header[data-slice-id="slice-1"]'), 'contextmenu');
-    menuItemFor('add-command').click();
-    await flush();
-    expect(document.getElementById('source-input').value).toBe(billingSource);
-    expect(marked()).toBe(true);
-    const parsesBefore = parses();
-
-    await changeOnDisk('/models/billing.emod', changedBilling(billingOnDisk));
-
-    expect(document.getElementById('source-input').value).toBe(billingSource);
-    expect(parses()).toBe(parsesBefore);
-    expect(marked()).toBe(true);
-  });
-
-  it('waits for an unsaved-changes question on screen, and then follows whatever is open', async () => {
-    await openBilling();
-    typeIntoPanel(billingSource + '# mine\n');
-    let answer;
-    unsavedEditsAnswerer = () => new Promise((resolve) => { answer = resolve; });
-    const hotel = 'emod = 1\n\nmodel "Hotel" {\n}\n';
-    deliverFile({ name: 'hotel.emod', path: '/models/hotel.emod', content: hotel });
-    await flush();
-
-    const change = changeOnDisk('/models/billing.emod', changedBilling(billingOnDisk));
-    await flush();
-    expect(reads).toBe(0);
-    answer('discard');
-    await change;
-    await flush();
-
-    expect(reads).toBe(0);
-    expect(document.getElementById('source-input').value).toBe(hotel);
-  });
-
-  it('waits for a diagram edit being applied, which then counts as unsaved', async () => {
-    await openBilling();
-    let releaseApply;
-    applyQueue.push(new Promise((resolve) => { releaseApply = resolve; }));
-    fireMouse(document.querySelector('.slice-header[data-slice-id="slice-1"]'), 'contextmenu');
-    menuItemFor('add-command').click();
-    await flush();
-    expect(platform.applyDiagram).toHaveBeenCalled();
-
-    const change = changeOnDisk('/models/billing.emod', changedBilling(billingSource + '# from another program\n'));
-    await flush();
-    expect(reads).toBe(0);
-    releaseApply(appliedAnswer(billingDiagram()));
-    await change;
-    await flush();
-
-    expect(document.getElementById('source-input').value).toBe(appliedSource);
-    expect(externalChangeAsked).toEqual(['billing.emod']);
-    expect(marked()).toBe(true);
-  });
-
   it('keeps text typed while the reload is drawn, and measures it against the reloaded file', async () => {
     await openBilling();
     let releaseParse;
@@ -4833,23 +4760,9 @@ describe('a change on disk to the open file with nothing unsaved', () => {
     expect(marked()).toBe(false);
   });
 
-  it('changes nothing on screen for a report that the open file is missing', async () => {
-    await openBilling();
-    const parsesBefore = parses();
-
-    await Promise.resolve(reportChangeOnDisk({ path: '/models/billing.emod', missing: true })).then(flush);
-
-    expect(document.getElementById('source-input').value).toBe(billingSource);
-    expect(parses()).toBe(parsesBefore);
-    expect(marked()).toBe(false);
-    expect(document.getElementById('render-status').textContent).toBe('✓ Rendered');
-    expect(document.getElementById('data-panel').classList.contains('collapsed')).toBe(true);
-  });
 });
 
 describe('a change on disk to the open file over unsaved edits', () => {
-  beforeEach(() => { reads = 0; });
-
   const mine = billingSource + '# mine\n';
 
   // A change whose read answers what is on disk now, which a later read can
@@ -5115,24 +5028,6 @@ describe('a change on disk to the open file over unsaved edits', () => {
     expect(marked()).toBe(true);
   });
 
-  it('asks only after an unsaved-changes question on screen is answered, and not at all once its file is no longer open', async () => {
-    await openBilling();
-    typeIntoPanel(mine);
-    let answer;
-    unsavedEditsAnswerer = () => new Promise((resolve) => { answer = resolve; });
-    deliverFile({ name: 'hotel.emod', path: '/models/hotel.emod', content: 'emod = 1\n\nmodel "Hotel" {\n}\n' });
-    await flush();
-
-    const change = changeOnDisk('/models/billing.emod', changedBilling(billingOnDisk));
-    await flush();
-    expect(externalChangeAsked).toEqual([]);
-    answer('discard');
-    await change;
-    await flush();
-
-    expect(externalChangeAsked).toEqual([]);
-  });
-
   it('asks once an unsaved-changes question on screen is answered and its file is still open', async () => {
     await openBilling();
     typeIntoPanel(mine);
@@ -5222,6 +5117,240 @@ describe('a change on disk to the open file over unsaved edits', () => {
 
     expect(externalChangeAsked).toEqual([]);
     expect(document.getElementById('source-input').value).toBe(billingOnDisk);
+  });
+
+  it('replaces nothing while the diagram holds an edit the panel does not', async () => {
+    await openBilling();
+    applyQueue.push(Promise.reject(new Error('billing.emod does not parse')));
+    fireMouse(document.querySelector('.slice-header[data-slice-id="slice-1"]'), 'contextmenu');
+    menuItemFor('add-command').click();
+    await flush();
+    expect(document.getElementById('source-input').value).toBe(billingSource);
+    expect(marked()).toBe(true);
+    const parsesBefore = parses();
+
+    await changeOnDisk('/models/billing.emod', changedBilling(billingOnDisk));
+
+    expect(document.getElementById('source-input').value).toBe(billingSource);
+    expect(parses()).toBe(parsesBefore);
+    expect(marked()).toBe(true);
+  });
+
+  it('waits for an unsaved-changes question on screen, and then follows whatever is open', async () => {
+    await openBilling();
+    typeIntoPanel(billingSource + '# mine\n');
+    let answer;
+    unsavedEditsAnswerer = () => new Promise((resolve) => { answer = resolve; });
+    const hotel = 'emod = 1\n\nmodel "Hotel" {\n}\n';
+    deliverFile({ name: 'hotel.emod', path: '/models/hotel.emod', content: hotel });
+    await flush();
+
+    const change = changeOnDisk('/models/billing.emod', changedBilling(billingOnDisk));
+    await flush();
+    expect(reads).toBe(0);
+    answer('discard');
+    await change;
+    await flush();
+
+    expect(reads).toBe(0);
+    expect(document.getElementById('source-input').value).toBe(hotel);
+  });
+
+  it('waits for a diagram edit being applied, which then counts as unsaved', async () => {
+    await openBilling();
+    let releaseApply;
+    applyQueue.push(new Promise((resolve) => { releaseApply = resolve; }));
+    fireMouse(document.querySelector('.slice-header[data-slice-id="slice-1"]'), 'contextmenu');
+    menuItemFor('add-command').click();
+    await flush();
+    expect(platform.applyDiagram).toHaveBeenCalled();
+
+    const change = changeOnDisk('/models/billing.emod', changedBilling(billingSource + '# from another program\n'));
+    await flush();
+    expect(reads).toBe(0);
+    releaseApply(appliedAnswer(billingDiagram()));
+    await change;
+    await flush();
+
+    expect(document.getElementById('source-input').value).toBe(appliedSource);
+    expect(externalChangeAsked).toEqual(['billing.emod']);
+    expect(marked()).toBe(true);
+  });
+});
+
+describe('the open file missing from disk', () => {
+  function missingFromDisk(path) {
+    return Promise.resolve(reportChangeOnDisk({ path, missing: true })).then(flush);
+  }
+
+  it('says in the bar that the file was moved or deleted, and leaves the model, the name and the path as they were', async () => {
+    await openBilling();
+    const canvasBefore = canvasMarkup();
+
+    await missingFromDisk('/models/billing.emod');
+
+    const bar = document.getElementById('save-status');
+    expect(bar.textContent.startsWith('✗ billing.emod')).toBe(true);
+    expect(bar.title).toContain('moved or deleted');
+    expect(bar.classList.contains('failed')).toBe(true);
+    expect(document.getElementById('source-input').value).toBe(billingSource);
+    expect(canvasMarkup()).toBe(canvasBefore);
+    expect(windowTitle).toBe('billing.emod — Emod Diagram Viewer');
+    expect(document.getElementById('stat-file-path').textContent).toBe('/models/billing.emod');
+  });
+
+  it('counts as unsaved work with nothing typed', async () => {
+    await openBilling();
+    expect(marked()).toBe(false);
+
+    await missingFromDisk('/models/billing.emod');
+
+    expect(marked()).toBe(true);
+  });
+
+  it('asks before the window closes', async () => {
+    await openBilling();
+    await missingFromDisk('/models/billing.emod');
+    unsavedEditsAnswer = 'cancel';
+
+    const cleared = await requestLeave();
+
+    expect(unsavedEditsAsked).toBe(1);
+    expect(cleared).toBe(false);
+  });
+
+  it('asks before another model replaces it', async () => {
+    await openBilling();
+    await missingFromDisk('/models/billing.emod');
+    unsavedEditsAnswer = 'cancel';
+
+    deliverFile({ name: 'hotel.emod', path: '/models/hotel.emod', content: 'emod = 1\n\nmodel "Hotel" {\n}\n' });
+    await flush();
+
+    expect(unsavedEditsAsked).toBe(1);
+    expect(document.getElementById('source-input').value).toBe(billingSource);
+  });
+
+  it('says no to a close when Save was answered and its location dialog was cancelled', async () => {
+    await openBilling();
+    await missingFromDisk('/models/billing.emod');
+    unsavedEditsAnswer = 'save';
+    saveAnswer = null;
+
+    const cleared = await requestLeave();
+
+    expect(cleared).toBe(false);
+    expect(savedFile.path).toBe('');
+    expect(windowTitle).toBe('billing.emod — Emod Diagram Viewer');
+  });
+
+  it('lets Discard in that question go ahead, writing nothing', async () => {
+    await openBilling();
+    await missingFromDisk('/models/billing.emod');
+    unsavedEditsAnswer = 'discard';
+    const hotel = 'emod = 1\n\nmodel "Hotel" {\n}\n';
+
+    deliverFile({ name: 'hotel.emod', path: '/models/hotel.emod', content: hotel });
+    await flush();
+
+    expect(unsavedEditsAsked).toBe(1);
+    expect(savedContents).toEqual([]);
+    expect(document.getElementById('source-input').value).toBe(hotel);
+  });
+
+  it('asks where to save rather than writing where the file was, offering its own name', async () => {
+    await openBilling();
+    await missingFromDisk('/models/billing.emod');
+    saveAnswer = { name: 'billing.emod', path: '/archive/billing.emod' };
+
+    await save();
+
+    expect(savedFile).toEqual({ name: 'billing.emod', content: billingSource, path: '' });
+  });
+
+  it('makes the location Save chose the open file, watched, named and with nothing unsaved', async () => {
+    await openBilling();
+    await missingFromDisk('/models/billing.emod');
+    saveAnswer = { name: 'kept.emod', path: '/archive/kept.emod' };
+
+    await save();
+
+    expect(windowTitle).toBe('kept.emod — Emod Diagram Viewer');
+    expect(document.getElementById('stat-file-path').textContent).toBe('/archive/kept.emod');
+    expect(marked()).toBe(false);
+    expect(watchRequests[watchRequests.length - 1]).toBe('/archive/kept.emod');
+    saveAnswer = { name: 'kept.emod', path: '/archive/kept.emod' };
+    await save();
+    expect(savedFile.path).toBe('/archive/kept.emod');
+  });
+
+  it('leaves everything as it was when the Save dialog is cancelled, the file still missing', async () => {
+    await openBilling();
+    await missingFromDisk('/models/billing.emod');
+    saveAnswer = null;
+
+    await save();
+
+    expect(marked()).toBe(true);
+    expect(windowTitle).toBe('billing.emod — Emod Diagram Viewer');
+    saveAnswer = { name: 'billing.emod', path: '/archive/billing.emod' };
+    await save();
+    expect(savedFile.path).toBe('');
+  });
+
+  it('ends when the file comes back with the bytes the window last read, and Save writes there again', async () => {
+    await openBilling();
+    await missingFromDisk('/models/billing.emod');
+
+    await changeOnDisk('/models/billing.emod', changedBilling(billingSource));
+
+    expect(marked()).toBe(false);
+    expect(document.getElementById('save-status').classList.contains('failed')).toBe(false);
+    saveAnswer = { name: 'billing.emod', path: '/models/billing.emod' };
+    await save();
+    expect(savedFile.path).toBe('/models/billing.emod');
+  });
+
+  it('reloads a file that comes back with other bytes when the panel holds no edits of its own', async () => {
+    await openBilling();
+    await missingFromDisk('/models/billing.emod');
+
+    await changeOnDisk('/models/billing.emod', changedBilling(billingOnDisk));
+
+    expect(externalChangeAsked).toEqual([]);
+    expect(document.getElementById('source-input').value).toBe(billingOnDisk);
+    expect(marked()).toBe(false);
+  });
+
+  it('asks about a file that comes back with other bytes when the panel holds edits of its own', async () => {
+    await openBilling();
+    typeIntoPanel(billingSource + '# mine\n');
+    await missingFromDisk('/models/billing.emod');
+
+    await changeOnDisk('/models/billing.emod', changedBilling(billingOnDisk));
+
+    expect(externalChangeAsked).toEqual(['billing.emod']);
+  });
+
+  it('changes nothing for a path that is not the open file\'s', async () => {
+    await openBilling();
+
+    await missingFromDisk('/models/invoicing.emod');
+
+    expect(marked()).toBe(false);
+    expect(document.getElementById('save-status').classList.contains('hidden')).toBe(true);
+  });
+
+  it('changes nothing on screen for a report that the open file is missing', async () => {
+    await openBilling();
+    const parsesBefore = parses();
+
+    await missingFromDisk('/models/billing.emod');
+
+    expect(document.getElementById('source-input').value).toBe(billingSource);
+    expect(parses()).toBe(parsesBefore);
+    expect(document.getElementById('render-status').textContent).toBe('✓ Rendered');
+    expect(document.getElementById('data-panel').classList.contains('collapsed')).toBe(true);
   });
 });
 
