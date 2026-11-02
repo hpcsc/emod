@@ -504,6 +504,25 @@ both leave the model where it was. With nothing unsaved, none of the three asks.
 This confirmation is a native three-button dialog, which macOS and Linux show as
 written; Windows is not there yet.
 
+**A change another program makes to the open file** reaches the window with no
+click. The app checks the open file once a second. When another program writes
+the file and the window holds nothing unsaved, the window reloads it: the panel
+takes the new text, the viewer draws the diagram again in place with the pan,
+the zoom and every dragged node kept, and the bar along the bottom says that the
+file was reloaded. A file that no longer parses keeps the last diagram on
+screen, marked out of date. When the window holds unsaved changes, a question
+asks which version to keep. **Keep My Version** keeps the window's edits, and
+the next Save writes them over the other program's change. **Reload from Disk**
+discards the edits and shows the file as it is on disk. The app's own saves
+reload nothing, because the window compares the bytes on disk with the bytes it
+last read from the file or wrote to it. When the open file is moved or deleted,
+the bar says so and the model stays on screen. The window is then the only copy
+of the model, so it counts as unsaved, and Save asks where to keep it instead of
+writing it back to where it was. A file that comes back to its path ends this.
+The app does not follow a renamed file to its new name: it reports the rename as
+it reports a delete. The browser viewer and `emod diagram --serve` do not watch
+their file, because neither knows where the file it shows is on disk.
+
 The framework version is pinned in `go.mod`, which carries both the library
 requirement and a `tool` directive for the `wails3` CLI, so the two cannot
 drift and neither is resolved from `PATH`. Run the CLI as `go tool wails3`.

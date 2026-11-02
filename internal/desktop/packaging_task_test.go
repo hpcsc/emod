@@ -121,6 +121,18 @@ func TestPackagingTask(t *testing.T) {
 		}
 	})
 
+	t.Run("the README says what a change on disk does to the open file", func(t *testing.T) {
+		paragraph := captureIn(t, readRepoFile(t, "README.md"),
+			regexp.MustCompile(`(?s)(\*\*A change another program makes to the open file\*\*.*?)\n\n`),
+			"the README must tell a reader what the app does when another program changes the open file")
+
+		for _, label := range externalChangeLabels(t) {
+			require.Contains(t, paragraph, label,
+				"a change over unsaved edits asks this question, and a reader told nothing about it "+
+					"will not know which button keeps their edits")
+		}
+	})
+
 	t.Run("the README says what makes macOS open a model in emod", func(t *testing.T) {
 		readme := readRepoFile(t, "README.md")
 
@@ -169,6 +181,19 @@ func unsavedEditLabels(t *testing.T) []string {
 
 	labels := uniqueMatchesIn(body, regexp.MustCompile(`(\w+):`))
 	require.Len(t, labels, 3, "the question offers three buttons")
+
+	return labels
+}
+
+func externalChangeLabels(t *testing.T) []string {
+	t.Helper()
+
+	body := captureIn(t, readRepoFile(t, "internal/frontend/desktop/platform.desktop.js"),
+		regexp.MustCompile(`(?s)const EXTERNAL_CHANGE_OUTCOMES = \{(.*?)\}`),
+		"platform.desktop.js must map the question's button labels to outcomes")
+
+	labels := uniqueMatchesIn(body, regexp.MustCompile(`'([^']+)':`))
+	require.Len(t, labels, 2, "the question offers two buttons")
 
 	return labels
 }

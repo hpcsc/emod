@@ -235,15 +235,19 @@ module imports `./platform.js` for the things a host provides rather than the
 UI: reaching the Go core, reading the files a drop handed the page, writing a
 model out, naming the window, showing it as holding unsaved work, saying which
 file it has adopted, asking what to do about that work before it would be lost,
-delivering a file the host opened, delivering the files a host resolved a drop
-to, asking the viewer to save, asking whether the window may close, and
-answering what state the app opened with. `platform.browser.js` implements that
-over WebAssembly in a Web Worker, the browser's download and `document.title`,
-with four of them inert: a page has no window of its own to mark, no list of
-what it has opened, no dialog whose Save writes anywhere, and no close it can
-refuse asynchronously. `platform.desktop.js` implements it over Wails bindings, the
-runtime's native file dialogs, the native window title, a native question
-dialog and the shell's list of recently opened models.
+watching the open file for another program's writes, delivering a change the
+watch finds, asking which version to keep after such a change, delivering a
+file the host opened, delivering the files a host resolved a drop to, asking the
+viewer to save, asking whether the window may close, and answering what state
+the app opened with. `platform.browser.js` implements that over WebAssembly in a
+Web Worker, the browser's download and `document.title`, with several of them
+inert: a page has no window of its own to mark, no list of what it has opened,
+no file with a location to watch, no dialog whose Save writes anywhere, and no
+close it can refuse asynchronously. So its watch does nothing, it never delivers
+a change, and its question answers keep. `platform.desktop.js` implements the
+seam over Wails bindings, the runtime's native file dialogs, the native window
+title, native question dialogs, the shell's list of recently opened models and
+the shell's watch on the open file.
 
 Which way a request travels is what the seam's two halves are for. The viewer
 calls out for anything it initiates; anything the *host* initiates — a menu
@@ -320,7 +324,16 @@ outlives the page, which a reload starts over, and the menu that shows it is
 native — and is kept between runs as JSON in the platform's per-user
 configuration directory; every change moves the list, writes it and shows the
 menu under one lock, so the menu never shows an order the list is not in.
-The dialogs live in
+A change to the open file on disk also starts in the shell.
+`internal/desktop.OpenFileWatch` checks the path of the file the viewer says it
+has open once a second, and compares what it finds with what the last check
+found by identity, size and modification time, so an editor's atomic save
+counts as a change. A path with no file on two checks in a row is missing. The
+shell emits `file:changed-on-disk` or `file:missing-from-disk` with the path,
+and the viewer decides what the change means: it reads the file again and
+compares the bytes with the bytes it last read from the file or wrote to it.
+That comparison, made after every queued save, is what keeps the app's own saves
+from reloading the file. The dialogs live in
 JavaScript rather than Go because `internal/desktop` imports no GUI framework —
 the constraint that keeps it compiling and testing everywhere the rest of the
 repository does — and because `cmd/emod-desktop` is in no test target, so the

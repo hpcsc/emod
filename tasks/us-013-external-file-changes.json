@@ -180,7 +180,7 @@
     },
     {
       "n": 6,
-      "done": false,
+      "done": true,
       "title": "Document how the app follows the open file on disk",
       "language": "Markdown",
       "testable": true,

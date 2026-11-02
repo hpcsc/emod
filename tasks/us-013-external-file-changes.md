@@ -670,14 +670,14 @@ app now does when the open file changes, disappears or is saved by the app itsel
 holds the README's paragraph to the labels the question shows.
 
 **Acceptance Criteria:**
-- [ ] The README's desktop section gains a paragraph saying that a change another program makes to the open file is reloaded when nothing is unsaved, keeping pan, zoom and dragged nodes, and that the bar says so
-- [ ] That paragraph says that over unsaved edits the app asks, naming both choices by the labels the dialog shows, and that the app's own saves reload nothing
-- [ ] It says that a moved or deleted file is reported, that its model stays and counts as unsaved, and that Save asks where to put it
-- [ ] It says that the browser viewer and `emod diagram --serve` do not watch their file
-- [ ] A guard captures that paragraph by its opening rather than reading the whole README, and requires it to name the two labels read out of the desktop module's own table of outcomes, so renaming a button fails it
-- [ ] `docs/architecture.md`'s list of what a host provides names watching the open file, delivering its changes, and asking what to do about one, and says how the browser answers each; its paragraph on the shell names `OpenFileWatch` and the two events the event-name guard covers
-- [ ] Neither document says the question works on Windows, or that a renamed file is followed to its new name
-- [ ] The diff touches `README.md`, `docs/architecture.md` and the one test file that holds the guard, and nothing else
+- [x] The README's desktop section gains a paragraph saying that a change another program makes to the open file is reloaded when nothing is unsaved, keeping pan, zoom and dragged nodes, and that the bar says so
+- [x] That paragraph says that over unsaved edits the app asks, naming both choices by the labels the dialog shows, and that the app's own saves reload nothing
+- [x] It says that a moved or deleted file is reported, that its model stays and counts as unsaved, and that Save asks where to put it
+- [x] It says that the browser viewer and `emod diagram --serve` do not watch their file
+- [x] A guard captures that paragraph by its opening rather than reading the whole README, and requires it to name the two labels read out of the desktop module's own table of outcomes, so renaming a button fails it
+- [x] `docs/architecture.md`'s list of what a host provides names watching the open file, delivering its changes, and asking what to do about one, and says how the browser answers each; its paragraph on the shell names `OpenFileWatch` and the two events the event-name guard covers
+- [x] Neither document says the question works on Windows, or that a renamed file is followed to its new name
+- [x] The diff touches `README.md`, `docs/architecture.md` and the one test file that holds the guard, and nothing else
 
 **Affected Files/Modules:**
 - `README.md` — the desktop section, beside the unsaved-changes paragraph
