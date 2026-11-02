@@ -71,7 +71,7 @@
     },
     {
       "n": 3,
-      "done": false,
+      "done": true,
       "title": "Reload the open file when it changes on disk with nothing unsaved",
       "language": "JavaScript",
       "testable": true,

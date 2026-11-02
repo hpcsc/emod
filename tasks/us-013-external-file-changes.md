@@ -510,25 +510,25 @@ why the app's own saves never reload. With unsaved edits nothing is replaced: Ta
 missing file changes nothing on screen: Task 5 reports it.
 
 **Acceptance Criteria:**
-- [ ] A change on disk to the open file, with nothing unsaved, puts the file's new text in the panel and redraws the diagram from it with no click; the window's name and the path in the bar stay the file's
-- [ ] The bar says the open file was reloaded, leading with its name; the data panel stays open or collapsed as it was, and the source panel keeps its scroll position
-- [ ] After a reload the marker shows nothing unsaved, and a Save with nothing typed leaves the file byte-for-byte as the other program wrote it, line endings included
-- [ ] Pan and zoom stay exactly as they were; a node the reloaded file still has keeps its dragged offset and stays hidden if it was hidden; a node the file no longer has takes both with it
-- [ ] A reloaded file that does not parse leaves the last diagram on screen marked out of date, with the panel holding the file's text and listing its diagnostics, and it is still the open file Save compares against
-- [ ] A change whose bytes equal what the app last read or wrote changes nothing: no redraw, and nothing new in the bar
-- [ ] No write by any caller of the viewer's save reloads anything — witnessed by the shell's Save, its Save As back onto the open file, and the Save answered in the unsaved-changes question — including when the change its write raised is delivered before the save's answer has been adopted
-- [ ] A change to a path that is not the open file's — a file opened since, or none open — reads nothing and changes nothing
-- [ ] With unsaved edits — anything the unsaved marker counts — a change replaces nothing: the panel, the diagram and the marker stay as they were
-- [ ] A file that cannot be read when its change arrives — refused, or not valid UTF-8 — or that is now empty leaves the model as it is and says why in the bar; a later change is still compared against what the app last held
-- [ ] A change is never applied over a model the user opened, dropped or chose from recent files after it arrived, and it is handled only after an unsaved-changes question already on screen has been answered, against whatever is open then
-- [ ] A diagram edit being applied when a change arrives is waited for, and the change is then one made over unsaved edits
-- [ ] Text typed while a reload is being drawn is kept, on top of the reloaded text, and the marker measures it against the reloaded file
-- [ ] A report that the open file is missing changes nothing on screen
-- [ ] The desktop implementation delivers both shell events to the handler the viewer registered — a change with a read that goes through `FileService.Read` and answers a reason rather than rejecting, a missing file with none — and discards either one that arrives before the viewer has registered, without throwing
-- [ ] Neither event claims a gesture number, so an Open, a drop or a recent entry in flight is still delivered
-- [ ] The shell gives the watch a listener that emits both events, and `TestShellEventNames` holds in both directions
-- [ ] The browser implementation accepts the handler and never calls it; the seam contract test names the operation and both implementations satisfy it
-- [ ] `task test:viewer` and `task test:unit` are green, and `task build:desktop` succeeds
+- [x] A change on disk to the open file, with nothing unsaved, puts the file's new text in the panel and redraws the diagram from it with no click; the window's name and the path in the bar stay the file's
+- [x] The bar says the open file was reloaded, leading with its name; the data panel stays open or collapsed as it was, and the source panel keeps its scroll position
+- [x] After a reload the marker shows nothing unsaved, and a Save with nothing typed leaves the file byte-for-byte as the other program wrote it, line endings included
+- [x] Pan and zoom stay exactly as they were; a node the reloaded file still has keeps its dragged offset and stays hidden if it was hidden; a node the file no longer has takes both with it
+- [x] A reloaded file that does not parse leaves the last diagram on screen marked out of date, with the panel holding the file's text and listing its diagnostics, and it is still the open file Save compares against
+- [x] A change whose bytes equal what the app last read or wrote changes nothing: no redraw, and nothing new in the bar
+- [x] No write by any caller of the viewer's save reloads anything — witnessed by the shell's Save, its Save As back onto the open file, and the Save answered in the unsaved-changes question — including when the change its write raised is delivered before the save's answer has been adopted
+- [x] A change to a path that is not the open file's — a file opened since, or none open — reads nothing and changes nothing
+- [x] With unsaved edits — anything the unsaved marker counts — a change replaces nothing: the panel, the diagram and the marker stay as they were
+- [x] A file that cannot be read when its change arrives — refused, or not valid UTF-8 — or that is now empty leaves the model as it is and says why in the bar; a later change is still compared against what the app last held
+- [x] A change is never applied over a model the user opened, dropped or chose from recent files after it arrived, and it is handled only after an unsaved-changes question already on screen has been answered, against whatever is open then
+- [x] A diagram edit being applied when a change arrives is waited for, and the change is then one made over unsaved edits
+- [x] Text typed while a reload is being drawn is kept, on top of the reloaded text, and the marker measures it against the reloaded file
+- [x] A report that the open file is missing changes nothing on screen
+- [x] The desktop implementation delivers both shell events to the handler the viewer registered — a change with a read that goes through `FileService.Read` and answers a reason rather than rejecting, a missing file with none — and discards either one that arrives before the viewer has registered, without throwing
+- [x] Neither event claims a gesture number, so an Open, a drop or a recent entry in flight is still delivered
+- [x] The shell gives the watch a listener that emits both events, and `TestShellEventNames` holds in both directions
+- [x] The browser implementation accepts the handler and never calls it; the seam contract test names the operation and both implementations satisfy it
+- [x] `task test:viewer` and `task test:unit` are green, and `task build:desktop` succeeds
 
 **Affected Files/Modules:**
 - `cmd/emod-desktop/open_file_events.go` — new: the listener that emits the two events

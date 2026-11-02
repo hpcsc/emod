@@ -194,6 +194,11 @@ function onSaveRequested() {}
 // a page cannot answer one asynchronously — so nothing here ever asks.
 function onLeaveRequested() {}
 
+// Nor is anything watched here for another program's writes, because no file
+// a page opens has a location. As with onFileOpened the handler is accepted and
+// never called, so the shared viewer registers the same way whatever it runs on.
+function onOpenFileChanged() {}
+
 // The CLI's server substitutes this global into the page before the frontend
 // loads, so it is already there by the time anything asks; the promise is for
 // the hosts that have to go and fetch their state instead.
@@ -204,4 +209,4 @@ function initialState() {
   return Promise.resolve(INITIAL_DATA);
 }
 
-export { parseEmod, exportEmod, applyDiagram, tokenizeEmod, droppedFiles, saveFile, setWindowTitle, setWindowModified, rememberOpenedFile, watchOpenFile, resolveUnsavedEdits, onFileOpened, onFilesDropped, onSaveRequested, onLeaveRequested, initialState, ready, isReady };
+export { parseEmod, exportEmod, applyDiagram, tokenizeEmod, droppedFiles, saveFile, setWindowTitle, setWindowModified, rememberOpenedFile, watchOpenFile, resolveUnsavedEdits, onFileOpened, onFilesDropped, onSaveRequested, onLeaveRequested, onOpenFileChanged, initialState, ready, isReady };

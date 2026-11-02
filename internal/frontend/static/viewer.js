@@ -11,7 +11,7 @@ import { Model } from './model.js';
 import { bus } from './bus.js';
 import { Export } from './emod-export.js';
 import { REVALIDATE_PAUSE_MS } from './config.js';
-import { ready, isReady, applyDiagram, tokenizeEmod, droppedFiles, saveFile, setWindowTitle, setWindowModified, rememberOpenedFile, watchOpenFile, resolveUnsavedEdits, onFileOpened, onFilesDropped, onSaveRequested, onLeaveRequested, initialState } from './platform.js';
+import { ready, isReady, applyDiagram, tokenizeEmod, droppedFiles, saveFile, setWindowTitle, setWindowModified, rememberOpenedFile, watchOpenFile, resolveUnsavedEdits, onFileOpened, onFilesDropped, onSaveRequested, onLeaveRequested, onOpenFileChanged, initialState } from './platform.js';
 
 const POINTER_RELEASE_CHECK_MS = 50;
 
@@ -305,7 +305,8 @@ function init() {
         if (opening) {
           Model.setModelData(store, data.diagram);
         } else {
-          redrawInPlace(data.diagram);
+          const editor = UI.readFieldEditor(store);
+          UI.restoreFieldEditor(store, editor, redrawInPlace(data.diagram));
         }
         showRenderOutcome("✓ Rendered", "status success", revalidation);
         if (!revalidation) {
@@ -847,6 +848,66 @@ function init() {
           store.dom.panel.classList.remove("collapsed");
         }
       });
+  }
+
+  // ─── A change on disk to the open file ────────────────────────────
+  // The comparison waits for every save already queued, and each of those
+  // adopts the bytes it wrote before it settles, so the write a save made never
+  // reloads anything. It takes a turn on the same queue as the unsaved-changes
+  // question, so a model the user is opening is open before the change is
+  // looked at.
+  onOpenFileChanged(function(change) {
+    return guarded(function() {
+      return saveQueue.then(rendersSettled).then(function() {
+        return followChangeOnDisk(change);
+      });
+    });
+  });
+
+  function followChangeOnDisk(change) {
+    const file = store.currentFile;
+    if (!file || file.path !== change.path || change.missing) {
+      return undefined;
+    }
+
+    return Promise.resolve(change.read()).then(function(opened) {
+      if (store.currentFile !== file) {
+        return undefined;
+      }
+      if (opened.error) {
+        reportInBar('✗ ' + file.name + ' changed on disk and could not be read: ' + opened.error, true);
+        return undefined;
+      }
+      if (opened.content === file.content) {
+        return undefined;
+      }
+      if (!opened.content.trim()) {
+        reportInBar('✗ ' + file.name + ' changed on disk and is now empty, so it was not reloaded', true);
+        return undefined;
+      }
+      if (hasUnsavedEdits()) {
+        return undefined;
+      }
+
+      return reloadFile(file, opened.content);
+    });
+  }
+
+  // A reload replaces the panel's text with the file's and redraws the diagram
+  // in place, so pan, zoom and the arrangement of every node the file still has
+  // stay as they were. It is drawn the way a pause in typing draws, which keeps
+  // the last diagram on screen marked out of date when the file does not parse.
+  function reloadFile(file, content) {
+    store.currentFile = { name: file.name, path: file.path, content: content };
+    discardDiagramEdits();
+    const panel = store.dom.sourceInput;
+    const scrollTop = panel.scrollTop;
+    panel.value = content;
+    panel.scrollTop = scrollTop;
+    reportModified();
+    reportInBar('↻ ' + file.name + ' reloaded: it changed on disk', false);
+
+    return renderPanelSource(undefined, undefined, { revalidation: true });
   }
 
   // ─── Saving ───────────────────────────────────────────────────────

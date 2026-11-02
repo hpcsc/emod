@@ -44,6 +44,7 @@ beforeEach(async () => {
   desktop.onFilesDropped(null);
   desktop.onSaveRequested(null);
   desktop.onLeaveRequested(null);
+  desktop.onOpenFileChanged(null);
 });
 
 // The shell's menu is the only thing that asks for a file, and it asks by
@@ -1115,6 +1116,97 @@ describe('watching the open file', () => {
     await desktop.watchOpenFile('/models/second.emod');
 
     expect(stub.watched).toEqual(['/models/second.emod']);
+  });
+});
+
+// The shell's watch reports what it found at the open file's path by emitting
+// one of two events, so a test fires the subscription the way the shell does.
+describe('a change on disk to the open file', () => {
+  function reportFromShell(event, path) {
+    return Promise.resolve(runtime.listeners[event]({ data: path })).then(flush);
+  }
+
+  function collectChanges() {
+    const changes = [];
+    desktop.onOpenFileChanged((change) => changes.push(change));
+    return changes;
+  }
+
+  it('hands the viewer a change with the path the shell named, reading nothing yet', async () => {
+    const changes = collectChanges();
+
+    await reportFromShell('file:changed-on-disk', '/models/billing.emod');
+
+    expect(changes.map(({ path, missing }) => ({ path, missing }))).toEqual([{ path: '/models/billing.emod', missing: false }]);
+    expect(stub.calls).toEqual([]);
+  });
+
+  it('reads the file through the service every open uses, when the viewer asks', async () => {
+    const changes = collectChanges();
+    stub.answers.Read = '{"name":"billing.emod","path":"/models/billing.emod","content":"emod = 2\\n"}';
+    await reportFromShell('file:changed-on-disk', '/models/billing.emod');
+
+    const opened = await changes[0].read();
+
+    expect(stub.calls).toEqual([['Read', '/models/billing.emod']]);
+    expect(opened).toEqual({ name: 'billing.emod', path: '/models/billing.emod', content: 'emod = 2\n' });
+  });
+
+  it('answers the reason the service gave for a file it could not read', async () => {
+    const changes = collectChanges();
+    stub.answers.Read = '{"error":"reading /models/billing.emod: not valid UTF-8"}';
+    await reportFromShell('file:changed-on-disk', '/models/billing.emod');
+
+    await expect(changes[0].read()).resolves.toEqual({ error: 'reading /models/billing.emod: not valid UTF-8' });
+  });
+
+  it('answers a reason rather than rejecting when the read itself fails', async () => {
+    const changes = collectChanges();
+    const realRead = stub.FileService.Read;
+    stub.FileService.Read = () => Promise.reject(new Error('the binding is gone'));
+    try {
+      await reportFromShell('file:changed-on-disk', '/models/billing.emod');
+
+      await expect(changes[0].read()).resolves.toEqual({ error: 'the binding is gone' });
+    } finally {
+      stub.FileService.Read = realRead;
+    }
+  });
+
+  it('hands the viewer a missing file with the path the shell named, and nothing to read', async () => {
+    const changes = collectChanges();
+
+    await reportFromShell('file:missing-from-disk', '/models/billing.emod');
+
+    expect(changes).toEqual([{ path: '/models/billing.emod', missing: true }]);
+  });
+
+  it('discards a report that arrives before the viewer has registered, rather than throwing', async () => {
+    await expect(Promise.resolve(runtime.listeners['file:changed-on-disk']({ data: '/models/billing.emod' })))
+      .resolves.toBeUndefined();
+    await expect(Promise.resolve(runtime.listeners['file:missing-from-disk']({ data: '/models/billing.emod' })))
+      .resolves.toBeUndefined();
+    await flush();
+
+    expect(stub.calls).toEqual([]);
+  });
+
+  it('claims no gesture number, so an Open still being read is still delivered', async () => {
+    const delivered = collectDeliveries();
+    desktop.onOpenFileChanged(() => {});
+    runtime.answers.OpenFile = '/models/billing.emod';
+    let releaseRead;
+    stub.answers.Read = new Promise((resolve) => { releaseRead = resolve; });
+
+    const opening = requestOpen();
+    await flush();
+    await reportFromShell('file:changed-on-disk', '/models/billing.emod');
+    await reportFromShell('file:missing-from-disk', '/models/billing.emod');
+    releaseRead('{"name":"billing.emod","path":"/models/billing.emod","content":"emod = 1\\n"}');
+    await opening;
+    await flush();
+
+    expect(delivered).toEqual([{ name: 'billing.emod', path: '/models/billing.emod', content: 'emod = 1\n' }]);
   });
 });
 

@@ -8,6 +8,7 @@ import (
 	"log"
 	"os"
 	"path/filepath"
+	"time"
 
 	"github.com/wailsapp/wails/v3/pkg/application"
 	"github.com/wailsapp/wails/v3/pkg/events"
@@ -61,6 +62,8 @@ func applicationMenu(window *application.WebviewWindow, openRecent *application.
 
 	return menu
 }
+
+const openFileCheckInterval = time.Second
 
 // recentFilesPath is where the models opened most recently are listed between
 // runs: the platform's own per-user configuration directory, which is what the
@@ -158,10 +161,13 @@ func main() {
 		window.EmitEvent("file:open-from-os-requested")
 	})
 
-	// The page says which file it has open, and that file is what is watched for
-	// another program's writes.
-	openFileWatch := desktop.NewOpenFileWatch(nil)
+	openFileWatch := desktop.NewOpenFileWatch(&openFileEvents{window: window})
 	app.RegisterService(application.NewService(openFileWatch))
+	go func() {
+		for range time.Tick(openFileCheckInterval) {
+			openFileWatch.Check()
+		}
+	}()
 
 	// A listener rather than a hook: the framework dispatches a resolved file
 	// drop only to the listeners OnWindowEvent appends to, so a hook registered

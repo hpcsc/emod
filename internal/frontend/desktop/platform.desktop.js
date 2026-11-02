@@ -277,6 +277,45 @@ function watchOpenFile(path) {
   return watchQueue;
 }
 
+let openFileChangedHandler = null;
+
+function onOpenFileChanged(handler) {
+  openFileChangedHandler = handler;
+}
+
+// What the shell's watch found at the open file's path. A change is handed over
+// with a read rather than with the bytes, so the viewer reads the file only once
+// the saves it has queued are on disk. Neither claims a gesture number: no user
+// asked for this, so it must never supersede an Open, a drop or a recent file
+// the user did ask for. Both names are pinned against the shell by
+// internal/desktop's event-name guard.
+Events.On('file:changed-on-disk', function(event) { return deliverChangeOnDisk(event.data); });
+Events.On('file:missing-from-disk', function(event) { return deliverMissingFromDisk(event.data); });
+
+function deliverMissingFromDisk(path) {
+  if (!openFileChangedHandler || !path) {
+    return undefined;
+  }
+
+  return openFileChangedHandler({ path: path, missing: true });
+}
+
+function deliverChangeOnDisk(path) {
+  if (!openFileChangedHandler || !path) {
+    return undefined;
+  }
+
+  return openFileChangedHandler({
+    path: path,
+    missing: false,
+    read: function() {
+      return FileService.Read(path).then(JSON.parse).catch(function(err) {
+        return { error: err.message || String(err) };
+      });
+    },
+  });
+}
+
 // A question dialog answers with the label that was pressed, so the labels are
 // what the outcomes are read off. Anything else — a dialog dismissed some other
 // way, a platform that ignored the labels, a dialog that could not be shown at
@@ -493,4 +532,4 @@ function initialState() {
   return Promise.resolve(null);
 }
 
-export { parseEmod, exportEmod, applyDiagram, tokenizeEmod, droppedFiles, saveFile, setWindowTitle, setWindowModified, rememberOpenedFile, watchOpenFile, resolveUnsavedEdits, onFileOpened, onFilesDropped, onSaveRequested, onLeaveRequested, initialState, ready, isReady };
+export { parseEmod, exportEmod, applyDiagram, tokenizeEmod, droppedFiles, saveFile, setWindowTitle, setWindowModified, rememberOpenedFile, watchOpenFile, resolveUnsavedEdits, onFileOpened, onFilesDropped, onSaveRequested, onLeaveRequested, onOpenFileChanged, initialState, ready, isReady };
