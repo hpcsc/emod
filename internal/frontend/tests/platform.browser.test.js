@@ -229,6 +229,12 @@ describe('unsaved edits', () => {
   });
 });
 
+describe('asking which version to keep after a change on disk', () => {
+  it('answers keep without asking, the answer that throws nothing away', async () => {
+    await expect(browser.resolveExternalChange('billing.emod')).resolves.toBe('keep');
+  });
+});
+
 describe('the unsaved-edits marker', () => {
   it('leaves the page exactly as it was, having no window of its own to mark', () => {
     browser.setWindowTitle('hotel.emod — Emod Diagram Viewer');

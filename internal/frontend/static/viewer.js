@@ -11,7 +11,7 @@ import { Model } from './model.js';
 import { bus } from './bus.js';
 import { Export } from './emod-export.js';
 import { REVALIDATE_PAUSE_MS } from './config.js';
-import { ready, isReady, applyDiagram, tokenizeEmod, droppedFiles, saveFile, setWindowTitle, setWindowModified, rememberOpenedFile, watchOpenFile, resolveUnsavedEdits, onFileOpened, onFilesDropped, onSaveRequested, onLeaveRequested, onOpenFileChanged, initialState } from './platform.js';
+import { ready, isReady, applyDiagram, tokenizeEmod, droppedFiles, saveFile, setWindowTitle, setWindowModified, rememberOpenedFile, watchOpenFile, resolveUnsavedEdits, resolveExternalChange, onFileOpened, onFilesDropped, onSaveRequested, onLeaveRequested, onOpenFileChanged, initialState } from './platform.js';
 
 const POINTER_RELEASE_CHECK_MS = 50;
 
@@ -875,22 +875,78 @@ function init() {
         return undefined;
       }
       if (opened.error) {
-        reportInBar('✗ ' + file.name + ' changed on disk and could not be read: ' + opened.error, true);
+        reportUnreadable(file, opened.error);
         return undefined;
       }
       if (opened.content === file.content) {
         return undefined;
       }
       if (!opened.content.trim()) {
-        reportInBar('✗ ' + file.name + ' changed on disk and is now empty, so it was not reloaded', true);
+        reportEmpty(file);
         return undefined;
       }
       if (hasUnsavedEdits()) {
+        return askAboutChange(file, opened.content, change);
+      }
+
+      return reloadFile(file, opened.content);
+    });
+  }
+
+  // Saves queue behind the question, because a Save made while it is on screen
+  // would write over the other program's change before the user has chosen
+  // between the two versions. A save that started before it can still adopt
+  // another file while it is on screen, so the answer acts only on the file it
+  // was about.
+  function askAboutChange(file, onDisk, change) {
+    const answered = resolveExternalChange(file.name).then(function(outcome) {
+      if (store.currentFile !== file) {
+        return undefined;
+      }
+      if (outcome === 'reload') {
+        return reloadAsItIsNow(file, change);
+      }
+      keepVersion(file, onDisk);
+      return undefined;
+    });
+    saveQueue = saveQueue.then(function() { return answered; }).catch(function() {});
+
+    return answered;
+  }
+
+  function reloadAsItIsNow(file, change) {
+    return Promise.resolve(change.read()).then(function(opened) {
+      if (store.currentFile !== file) {
+        return undefined;
+      }
+      if (opened.error) {
+        reportUnreadable(file, opened.error);
+        return undefined;
+      }
+      if (!opened.content.trim()) {
+        reportEmpty(file);
         return undefined;
       }
 
       return reloadFile(file, opened.content);
     });
+  }
+
+  // The window's version stays, measured against what is on disk now: the
+  // marker keeps showing unsaved work, a later report of the same bytes asks
+  // nothing, and Save writes this version over the other program's.
+  function keepVersion(file, onDisk) {
+    store.currentFile = { name: file.name, path: file.path, content: onDisk };
+    reportModified();
+    reportInBar('⚠ ' + file.name + ' differs on disk: this window\'s version kept', false);
+  }
+
+  function reportUnreadable(file, reason) {
+    reportInBar('✗ ' + file.name + ' changed on disk and could not be read: ' + reason, true);
+  }
+
+  function reportEmpty(file) {
+    reportInBar('✗ ' + file.name + ' changed on disk and is now empty, so it was not reloaded', true);
   }
 
   // A reload replaces the panel's text with the file's and redraws the diagram
@@ -899,7 +955,11 @@ function init() {
   // the last diagram on screen marked out of date when the file does not parse.
   function reloadFile(file, content) {
     store.currentFile = { name: file.name, path: file.path, content: content };
-    discardDiagramEdits();
+    if (store.conflict || diagramHasUnappliedEdit()) {
+      restoreDrawnDiagram();
+    } else {
+      discardDiagramEdits();
+    }
     const panel = store.dom.sourceInput;
     const scrollTop = panel.scrollTop;
     panel.value = content;

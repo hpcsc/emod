@@ -339,6 +339,26 @@ function resolveUnsavedEdits() {
   });
 }
 
+// Read off the label pressed, as the unsaved-edits question is. Anything else
+// is keep, because it is the only outcome that throws nothing away: the window
+// keeps its edits, and the other program's bytes stay on disk.
+const EXTERNAL_CHANGE_OUTCOMES = { 'Keep My Version': 'keep', 'Reload from Disk': 'reload' };
+
+function resolveExternalChange(name) {
+  return Dialogs.Question({
+    Title: name + ' changed on disk',
+    Message: 'Another program changed ' + name + ' while this window holds edits that are not saved.',
+    Buttons: [
+      { Label: 'Keep My Version', IsDefault: true, IsCancel: true },
+      { Label: 'Reload from Disk' },
+    ],
+  }).then(function(pressed) {
+    return EXTERNAL_CHANGE_OUTCOMES[pressed] || 'keep';
+  }).catch(function() {
+    return 'keep';
+  });
+}
+
 let fileOpenedHandler = null;
 
 function onFileOpened(handler) {
@@ -532,4 +552,4 @@ function initialState() {
   return Promise.resolve(null);
 }
 
-export { parseEmod, exportEmod, applyDiagram, tokenizeEmod, droppedFiles, saveFile, setWindowTitle, setWindowModified, rememberOpenedFile, watchOpenFile, resolveUnsavedEdits, onFileOpened, onFilesDropped, onSaveRequested, onLeaveRequested, onOpenFileChanged, initialState, ready, isReady };
+export { parseEmod, exportEmod, applyDiagram, tokenizeEmod, droppedFiles, saveFile, setWindowTitle, setWindowModified, rememberOpenedFile, watchOpenFile, resolveUnsavedEdits, resolveExternalChange, onFileOpened, onFilesDropped, onSaveRequested, onLeaveRequested, onOpenFileChanged, initialState, ready, isReady };

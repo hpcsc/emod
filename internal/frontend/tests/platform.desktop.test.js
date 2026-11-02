@@ -779,6 +779,53 @@ describe('asking what to do about unsaved edits', () => {
   });
 });
 
+describe('asking which version to keep after a change on disk', () => {
+  it('names the file and offers the two choices, with keeping this version the default and the way out', async () => {
+    runtime.answers.Question = 'Keep My Version';
+
+    await desktop.resolveExternalChange('billing.emod');
+
+    expect(runtime.calls).toEqual([['Dialogs.Question', {
+      Title: 'billing.emod changed on disk',
+      Message: 'Another program changed billing.emod while this window holds edits that are not saved.',
+      Buttons: [
+        { Label: 'Keep My Version', IsDefault: true, IsCancel: true },
+        { Label: 'Reload from Disk' },
+      ],
+    }]]);
+  });
+
+  it('answers keep when Keep My Version was pressed', async () => {
+    runtime.answers.Question = 'Keep My Version';
+
+    await expect(desktop.resolveExternalChange('billing.emod')).resolves.toBe('keep');
+  });
+
+  it('answers reload when Reload from Disk was pressed', async () => {
+    runtime.answers.Question = 'Reload from Disk';
+
+    await expect(desktop.resolveExternalChange('billing.emod')).resolves.toBe('reload');
+  });
+
+  it('answers keep for a dialog dismissed without a choice', async () => {
+    runtime.answers.Question = '';
+
+    await expect(desktop.resolveExternalChange('billing.emod')).resolves.toBe('keep');
+  });
+
+  it('answers keep for a label it does not recognise', async () => {
+    runtime.answers.Question = 'OK';
+
+    await expect(desktop.resolveExternalChange('billing.emod')).resolves.toBe('keep');
+  });
+
+  it('answers keep when the dialog itself fails', async () => {
+    runtime.answers.Question = new Error('no window to attach the dialog to');
+
+    await expect(desktop.resolveExternalChange('billing.emod')).resolves.toBe('keep');
+  });
+});
+
 // The shell refuses a close or a quit while it holds unsaved work and asks
 // here instead. What to do about the edits is the viewer's decision, so this
 // module only carries the request over and acts on the answer.

@@ -120,7 +120,7 @@
     },
     {
       "n": 4,
-      "done": false,
+      "done": true,
       "title": "Ask whether to keep the app's version or reload when the file changes under unsaved edits",
       "language": "JavaScript",
       "testable": true,

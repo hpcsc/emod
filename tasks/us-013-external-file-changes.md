@@ -578,18 +578,18 @@ as Task 3 draws, and writes nothing. The question is never on screen beside anot
 Save asked for while it is waits for the answer.
 
 **Acceptance Criteria:**
-- [ ] A change on disk to the open file while the window holds unsaved edits — anything the unsaved marker counts — asks the host to choose between keeping the app's version and reloading, naming the file; nothing on screen changes before the answer
-- [ ] Reload replaces the panel and the diagram with the file as it is when the answer is given, drawn in place as Task 3 draws, clears the marker and any disagreement between the diagram and the panel, writes nothing, and says in the bar that the file was reloaded
-- [ ] A file that cannot be read when Reload is chosen, or that is now empty, leaves the model and the marker as they were and says why in the bar
-- [ ] Keep leaves the panel, the diagram and the marker exactly as they were, writes nothing, and says in the bar that the app's version was kept while the file differs
-- [ ] After Keep, a further report of the same bytes asks nothing, a later change to other bytes asks again, and a Save writes the app's version
-- [ ] A change that arrives while the unsaved-changes question is on screen is asked about only after that question is answered, and not at all once the file it was about is no longer the open file
-- [ ] A model opened, dropped, chosen from recent files or asked for by the system while this question is on screen raises its own question only after this one is answered
-- [ ] A Save asked for while this question is on screen writes only after it is answered
-- [ ] When the edits are no longer unsaved by the time the question's turn comes — saved, or typed back to the file's text — the change is handled as Task 3 handles one, and nothing is asked
-- [ ] The desktop question names the file and says it changed on disk while the window holds unsaved edits; it offers Keep my version, as the default and the way out, and Reload from disk, and reads a dismissed dialog, a label it does not recognise and a failed dialog as Keep
-- [ ] The browser implementation asks nothing and answers keep; the seam contract test names the operation and both implementations satisfy it
-- [ ] `task test:viewer` is green, and `task build:desktop` succeeds
+- [x] A change on disk to the open file while the window holds unsaved edits — anything the unsaved marker counts — asks the host to choose between keeping the app's version and reloading, naming the file; nothing on screen changes before the answer
+- [x] Reload replaces the panel and the diagram with the file as it is when the answer is given, drawn in place as Task 3 draws, clears the marker and any disagreement between the diagram and the panel, writes nothing, and says in the bar that the file was reloaded
+- [x] A file that cannot be read when Reload is chosen, or that is now empty, leaves the model and the marker as they were and says why in the bar
+- [x] Keep leaves the panel, the diagram and the marker exactly as they were, writes nothing, and says in the bar that the app's version was kept while the file differs
+- [x] After Keep, a further report of the same bytes asks nothing, a later change to other bytes asks again, and a Save writes the app's version
+- [x] A change that arrives while the unsaved-changes question is on screen is asked about only after that question is answered, and not at all once the file it was about is no longer the open file
+- [x] A model opened, dropped, chosen from recent files or asked for by the system while this question is on screen raises its own question only after this one is answered
+- [x] A Save asked for while this question is on screen writes only after it is answered
+- [x] When the edits are no longer unsaved by the time the question's turn comes — saved, or typed back to the file's text — the change is handled as Task 3 handles one, and nothing is asked
+- [x] The desktop question names the file and says it changed on disk while the window holds unsaved edits; it offers Keep my version, as the default and the way out, and Reload from disk, and reads a dismissed dialog, a label it does not recognise and a failed dialog as Keep
+- [x] The browser implementation asks nothing and answers keep; the seam contract test names the operation and both implementations satisfy it
+- [x] `task test:viewer` is green, and `task build:desktop` succeeds
 
 **Affected Files/Modules:**
 - `internal/frontend/static/viewer.js` — the question in its turn, and what each answer does

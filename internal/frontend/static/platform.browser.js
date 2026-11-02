@@ -174,6 +174,13 @@ function resolveUnsavedEdits() {
   return Promise.resolve('discard');
 }
 
+// Nor is this question ever reached, because nothing here reports a change on
+// disk. Were it reached, keeping the page's version is the answer that loses
+// nothing: the file on disk is still there.
+function resolveExternalChange() {
+  return Promise.resolve('keep');
+}
+
 // Nothing in a browser opens a file on the user's behalf. What a page can reach
 // arrives through the drop handler, which yields contents and never a location,
 // so this registers a handler that stays uncalled rather than being unfinished.
@@ -209,4 +216,4 @@ function initialState() {
   return Promise.resolve(INITIAL_DATA);
 }
 
-export { parseEmod, exportEmod, applyDiagram, tokenizeEmod, droppedFiles, saveFile, setWindowTitle, setWindowModified, rememberOpenedFile, watchOpenFile, resolveUnsavedEdits, onFileOpened, onFilesDropped, onSaveRequested, onLeaveRequested, onOpenFileChanged, initialState, ready, isReady };
+export { parseEmod, exportEmod, applyDiagram, tokenizeEmod, droppedFiles, saveFile, setWindowTitle, setWindowModified, rememberOpenedFile, watchOpenFile, resolveUnsavedEdits, resolveExternalChange, onFileOpened, onFilesDropped, onSaveRequested, onLeaveRequested, onOpenFileChanged, initialState, ready, isReady };
