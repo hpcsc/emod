@@ -21,6 +21,8 @@ beforeEach(async () => {
   // the order the tests ran.
   stub.answers.SetModified = undefined;
   stub.answers.Record = undefined;
+  stub.answers.Watch = undefined;
+  stub.answers.Stop = undefined;
   stub.answers.Open = '{"name":"billing.emod","path":"/models/billing.emod","content":"emod = 1\\n"}';
   desktop.setWindowTitle('');
   await desktop.setWindowModified(false);
@@ -28,6 +30,7 @@ beforeEach(async () => {
   stub.calls.length = 0;
   stub.landed.length = 0;
   stub.recorded.length = 0;
+  stub.watched.length = 0;
   runtime.calls.length = 0;
   stub.answers.ParseEmod = '{"diagnostics":[],"diagram":{"nodes":[],"edges":[]}}';
   stub.answers.ExportEmod = '{"emod":"emod = 1\\n\\nmodel \\"Billing\\" {\\n}\\n"}';
@@ -1062,6 +1065,56 @@ describe('remembering an opened file', () => {
     await desktop.rememberOpenedFile('/models/second.emod');
 
     expect(stub.recorded).toEqual(['/models/second.emod']);
+  });
+});
+
+// The shell's watch outlives the page, and the page keeps no record of what it
+// has asked the shell to watch — so every request is sent, in the order the
+// viewer made them.
+describe('watching the open file', () => {
+  it('asks the shell to watch the path it is given', async () => {
+    await desktop.watchOpenFile('/models/billing.emod');
+
+    expect(stub.calls).toEqual([['Watch', '/models/billing.emod']]);
+  });
+
+  it('asks the shell to stop watching when it is given no path', async () => {
+    await desktop.watchOpenFile('');
+
+    expect(stub.calls).toEqual([['Stop']]);
+  });
+
+  it('sends the same request again when asked again, keeping no record of its own', async () => {
+    await desktop.watchOpenFile('/models/billing.emod');
+    await desktop.watchOpenFile('/models/billing.emod');
+
+    expect(stub.watched).toEqual(['/models/billing.emod', '/models/billing.emod']);
+  });
+
+  it('never lets an earlier request land on the shell after a later one', async () => {
+    let releaseFirst;
+    stub.answers.Watch = new Promise((resolve) => { releaseFirst = resolve; });
+
+    const first = desktop.watchOpenFile('/models/first.emod');
+    await flush();
+    stub.answers.Watch = undefined;
+    const second = desktop.watchOpenFile('');
+    await flush();
+    releaseFirst();
+    await Promise.all([first, second]);
+
+    expect(stub.watched).toEqual(['/models/first.emod', '']);
+  });
+
+  it('raises the shell\'s refusal to the caller, and still sends the request after it', async () => {
+    stub.answers.Watch = new Error('the shell is not running');
+
+    await expect(desktop.watchOpenFile('/models/first.emod')).rejects.toThrow('the shell is not running');
+
+    stub.answers.Watch = undefined;
+    await desktop.watchOpenFile('/models/second.emod');
+
+    expect(stub.watched).toEqual(['/models/second.emod']);
   });
 });
 

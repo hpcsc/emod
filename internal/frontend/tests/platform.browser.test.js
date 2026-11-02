@@ -248,3 +248,9 @@ describe('remembering an opened file', () => {
     await expect(browser.rememberOpenedFile('/models/billing.emod')).resolves.toBeUndefined();
   });
 });
+
+describe('watching the open file', () => {
+  it('accepts the path and does nothing, answering a resolved promise', async () => {
+    await expect(browser.watchOpenFile('/models/billing.emod')).resolves.toBeUndefined();
+  });
+});

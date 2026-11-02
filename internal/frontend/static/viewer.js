@@ -11,7 +11,7 @@ import { Model } from './model.js';
 import { bus } from './bus.js';
 import { Export } from './emod-export.js';
 import { REVALIDATE_PAUSE_MS } from './config.js';
-import { ready, isReady, applyDiagram, tokenizeEmod, droppedFiles, saveFile, setWindowTitle, setWindowModified, rememberOpenedFile, resolveUnsavedEdits, onFileOpened, onFilesDropped, onSaveRequested, onLeaveRequested, initialState } from './platform.js';
+import { ready, isReady, applyDiagram, tokenizeEmod, droppedFiles, saveFile, setWindowTitle, setWindowModified, rememberOpenedFile, watchOpenFile, resolveUnsavedEdits, onFileOpened, onFilesDropped, onSaveRequested, onLeaveRequested, initialState } from './platform.js';
 
 const POINTER_RELEASE_CHECK_MS = 50;
 
@@ -294,7 +294,8 @@ function init() {
         }
         if (opening) {
           store.currentFile = file;
-          rememberFile(file, reportRecordingRefusal);
+          rememberFile(file, reportRefusalAfterOpen);
+          watchFile(file, reportRefusalAfterOpen);
           discardDiagramEdits();
         }
         reportDiagnostics(data.diagnostics || [], revalidation);
@@ -878,31 +879,39 @@ function init() {
       return;
     }
     rememberOpenedFile(file.path).catch(function(err) {
-      onRefused(err.message || String(err));
+      onRefused('recent files not saved', err.message || String(err));
     });
   }
 
-  // A refused recording has one chance at the bar: the open that prompted it
+  // The open file's path is what the host watches for other programs' writes, so
+  // it is told each time one is committed — and told to watch nothing for a
+  // model with no location, or it goes on watching the file this one replaced.
+  function watchFile(file, onRefused) {
+    watchOpenFile((file && file.path) || '').catch(function(err) {
+      onRefused('changes on disk not watched', err.message || String(err));
+    });
+  }
+
+  // A refused host request has one chance at the bar: the open that prompted it
   // cleared the bar, so anything written there since is something the user
   // asked for — a save's confirmation — and outranks it. The reason is back on
-  // the next open, since a directory that refused this recording refuses the
-  // next.
-  function reportRecordingRefusal(reason) {
+  // the next open, since a host that refused this request refuses the next.
+  function reportRefusalAfterOpen(what, reason) {
     const el = store.dom.saveStatus;
     if (el && el.classList.contains('hidden')) {
-      reportInBar('✗ Recent files: ' + reason, true);
+      reportInBar('✗ ' + what.charAt(0).toUpperCase() + what.slice(1) + ': ' + reason, true);
     }
   }
 
   // A save's confirmation is the answer to what the user asked for, so a
-  // refused recording is added to it rather than written over it — and only
+  // refused host request is added to it rather than written over it — and only
   // while the bar still shows it. Anything newer there is something the user
-  // asked for since, and a directory that refused this recording refuses the
-  // next, so the reason is back on the next open.
-  function extendConfirmation(confirmation, reason) {
+  // asked for since, and a host that refused this request refuses the next, so
+  // the reason is back on the next open.
+  function extendConfirmation(confirmation, what, reason) {
     const el = store.dom.saveStatus;
     if (el && el.textContent === confirmation) {
-      reportInBar(confirmation + ' · recent files not saved: ' + reason, false);
+      reportInBar(confirmation + ' · ' + what + ': ' + reason, false);
     }
   }
 
@@ -1013,9 +1022,11 @@ function init() {
       }
       reportInBar(confirmation, false);
       reportModified();
-      rememberFile(newLocation, function(reason) {
-        extendConfirmation(confirmation, reason);
-      });
+      if (newLocation) {
+        const onRefused = function(what, reason) { extendConfirmation(confirmation, what, reason); };
+        rememberFile(newLocation, onRefused);
+        watchFile(newLocation, onRefused);
+      }
     }).catch(function(err) {
       reportSaveFailure(err.message || String(err), store.currentFile === openFile);
       reportModified();
@@ -1127,6 +1138,10 @@ function init() {
   });
 
   // ─── Initial load ───────────────────────────────────────────────
+  // The host's watch outlives a page that is loaded again, and this page has
+  // opened nothing yet.
+  watchOpenFile('').catch(function() {});
+
   return initialState().then(function(state) {
     if (state) {
       Model.setModelData(store, state.diagram || state);

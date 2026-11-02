@@ -32,8 +32,12 @@ let remembered = [];
 let rememberFails = null;
 // Set by a test that has to hold a recording's answer open.
 let rememberAnswerer = null;
+// Set by a test that has to hold a watch request's answer open.
+let watchAnswerer = null;
 let applyQueue = [];
 let tokenizeQueue = [];
+let watchRequests = [];
+let watchFails = null;
 
 vi.mock('../static/platform.js', () => ({
   get ready() { return platformReady; },
@@ -71,6 +75,13 @@ vi.mock('../static/platform.js', () => ({
     return unsavedEditsAnswerer
       ? unsavedEditsAnswerer()
       : Promise.resolve(unsavedEditsAnswer);
+  }),
+  watchOpenFile: vi.fn((path) => {
+    watchRequests.push(path);
+    if (watchAnswerer) {
+      return watchAnswerer(path);
+    }
+    return watchFails ? Promise.reject(new Error(watchFails)) : Promise.resolve();
   }),
   onFileOpened: vi.fn((handler) => { deliverFile = handler; }),
   onFilesDropped: vi.fn((handler) => { deliverDroppedFiles = handler; }),
@@ -344,8 +355,11 @@ beforeEach(() => {
   remembered = [];
   rememberFails = null;
   rememberAnswerer = null;
+  watchAnswerer = null;
   applyQueue = [];
   tokenizeQueue = [];
+  watchRequests = [];
+  watchFails = null;
 });
 
 describe('the window is named through the host, not by assigning document.title', () => {
@@ -4233,6 +4247,177 @@ describe('what the viewer says it has opened', () => {
   });
 });
 
+// The host watches one file for other programs' writes, and only the viewer
+// knows which file is open: it says so every time it commits one.
+describe('what the viewer asks the host to watch', () => {
+  it('asks the host to watch nothing as the page starts, before it asks for the initial state', async () => {
+    await startEmpty();
+
+    expect(watchRequests).toEqual(['']);
+    expect(platform.watchOpenFile.mock.invocationCallOrder[0])
+      .toBeLessThan(platform.initialState.mock.invocationCallOrder[0]);
+  });
+
+  it('watches a file the host opened once its render has committed it', async () => {
+    await openBilling();
+
+    expect(watchRequests).toEqual(['', '/models/billing.emod']);
+  });
+
+  it('watches nothing new while a file the host opened is still being parsed', async () => {
+    globalThis.INITIAL_DATA = null;
+    await startViewer();
+    let releaseParse;
+    parseQueue.push(new Promise((resolve) => { releaseParse = resolve; }));
+
+    deliverFile({ name: 'billing.emod', path: '/models/billing.emod', content: billingSource });
+    await flush();
+    expect(watchRequests).toEqual(['']);
+
+    releaseParse({ diagnostics: [], diagram: billingDiagram() });
+    await flush();
+    expect(watchRequests).toEqual(['', '/models/billing.emod']);
+  });
+
+  it('watches a file the host dropped, by the real path the host resolved', async () => {
+    await startEmpty();
+
+    await deliverDroppedFiles([{
+      name: 'hotel.emod',
+      read: () => Promise.resolve({ name: 'hotel.emod', path: '/models/hotel.emod', content: 'emod = 1\n\nmodel "Hotel" {\n}\n' }),
+    }]);
+    await flush();
+
+    expect(watchRequests).toEqual(['', '/models/hotel.emod']);
+  });
+
+  it('keeps watching the file open before one whose render the parser rejects', async () => {
+    await openBilling();
+    parseQueue.push(Promise.reject(new Error('nothing to render')));
+
+    deliverFile({ name: 'broken.emod', path: '/models/broken.emod', content: 'emod = 1\n' });
+    await flush();
+
+    expect(document.getElementById('render-status').textContent).toContain('nothing to render');
+    expect(watchRequests).toEqual(['', '/models/billing.emod']);
+  });
+
+  it('watches nothing once a model with no location is opened, so the file open before it is no longer watched', async () => {
+    await openBilling();
+
+    const file = new File([''], 'hotel.emod');
+    file._content = 'emod = 1\n\nmodel "Hotel" {\n}\n';
+    fireDrop(document.getElementById('data-panel-body'), file);
+    await flush();
+
+    expect(document.getElementById('source-input').value).toContain('Hotel');
+    expect(watchRequests).toEqual(['', '/models/billing.emod', '']);
+  });
+
+  it('watches the location a save to a new location chose', async () => {
+    await openBilling();
+    saveAnswer = { name: 'copy.emod', path: '/models/copy.emod' };
+
+    await save({ chooseLocation: true });
+
+    expect(watchRequests).toEqual(['', '/models/billing.emod', '/models/copy.emod']);
+  });
+
+  it('watches where pasted source was first saved', async () => {
+    await startEmpty();
+    document.getElementById('source-input').value = billingSource;
+    saveAnswer = { name: 'hotel.emod', path: '/models/hotel.emod' };
+
+    await save();
+
+    expect(watchRequests).toEqual(['', '/models/hotel.emod']);
+  });
+
+  it('asks nothing new for a save back to the file already open', async () => {
+    await openBilling();
+    saveAnswer = { name: 'billing.emod', path: '/models/billing.emod' };
+
+    await save();
+
+    expect(watchRequests).toEqual(['', '/models/billing.emod']);
+  });
+
+  it('asks nothing new for a save whose location dialog was cancelled', async () => {
+    await openBilling();
+    saveAnswer = null;
+
+    await save({ chooseLocation: true });
+
+    expect(watchRequests).toEqual(['', '/models/billing.emod']);
+  });
+
+  it('asks nothing new for a save whose file another open replaced while it was written', async () => {
+    await openBilling();
+    let releaseSave;
+    saveHangs = new Promise((resolve) => { releaseSave = resolve; });
+    saveAnswer = { name: 'copy.emod', path: '/models/copy.emod' };
+    const saving = save({ chooseLocation: true });
+
+    deliverFile({ name: 'hotel.emod', path: '/models/hotel.emod', content: 'emod = 1\n\nmodel "Hotel" {\n}\n' });
+    await flush();
+    releaseSave();
+    await saving;
+
+    expect(watchRequests).toEqual(['', '/models/billing.emod', '/models/hotel.emod']);
+  });
+
+  it('reports a watch the host refused in the bar, with the model open', async () => {
+    watchFails = 'the shell is not running';
+
+    await openBilling();
+
+    const bar = document.getElementById('save-status');
+    expect(bar.textContent).toContain('the shell is not running');
+    expect(bar.textContent).toContain('Changes on disk not watched');
+    expect(bar.classList.contains('failed')).toBe(true);
+    expect(document.getElementById('diagram-canvas').innerHTML).toContain('TakePayment');
+    expect(windowTitle).toBe('billing.emod — Emod Diagram Viewer');
+  });
+
+  it('reports nothing when the page start\'s request to watch nothing is refused', async () => {
+    watchFails = 'the shell is not running';
+
+    await startEmpty();
+
+    expect(document.getElementById('save-status').classList.contains('hidden')).toBe(true);
+  });
+
+  it('adds a watch the host refused after a save to the save\'s confirmation', async () => {
+    await startEmpty();
+    document.getElementById('source-input').value = billingSource;
+    saveAnswer = { name: 'hotel.emod', path: '/models/hotel.emod' };
+    watchFails = 'the shell is not running';
+
+    await save();
+
+    const bar = document.getElementById('save-status');
+    expect(bar.textContent.startsWith('✓ Saved hotel.emod')).toBe(true);
+    expect(bar.textContent).toContain('changes on disk not watched');
+    expect(bar.title).toContain('the shell is not running');
+    expect(bar.classList.contains('failed')).toBe(false);
+  });
+
+  it('leaves a save confirmation alone when the watch an earlier open asked for is refused late', async () => {
+    const refusals = [];
+    watchAnswerer = (path) => (path ? new Promise((resolve, reject) => { refusals.push(reject); }) : Promise.resolve());
+    await openBilling();
+    saveAnswer = { name: 'billing.emod', path: '/models/billing.emod' };
+    await save();
+
+    refusals[0](new Error('the shell is not running'));
+    await flush();
+
+    const bar = document.getElementById('save-status');
+    expect(bar.textContent).toBe('✓ Saved billing.emod');
+    expect(bar.classList.contains('failed')).toBe(false);
+  });
+});
+
 // The host cannot raise this question and wait for it, so it asks the viewer,
 // which answers with the same policy an arriving model goes through.
 describe('the host asking whether it may close', () => {
@@ -5921,7 +6106,7 @@ describe('the platform seam has one contract', () => {
     expect(contract).toEqual(
       ['applyDiagram', 'droppedFiles', 'exportEmod', 'initialState', 'isReady', 'onFileOpened', 'onFilesDropped',
        'onLeaveRequested', 'onSaveRequested', 'parseEmod', 'ready', 'rememberOpenedFile',
-       'resolveUnsavedEdits', 'saveFile', 'setWindowModified', 'setWindowTitle', 'tokenizeEmod'],
+       'resolveUnsavedEdits', 'saveFile', 'setWindowModified', 'setWindowTitle', 'tokenizeEmod', 'watchOpenFile'],
     );
   });
 

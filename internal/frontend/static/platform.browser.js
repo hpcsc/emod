@@ -160,6 +160,13 @@ function rememberOpenedFile() {
   return Promise.resolve();
 }
 
+// Nor does a page have a file to watch: no file it opens has a location, so no
+// other program's write to one can ever be found. The request is accepted and
+// does nothing, the way the recording is.
+function watchOpenFile() {
+  return Promise.resolve();
+}
+
 // Nothing here can offer a Save that writes where the edits came from, so there
 // is no question worth asking: the answer is the one the browser viewer has
 // always acted on, and a drop replaces the model exactly as it did.
@@ -197,4 +204,4 @@ function initialState() {
   return Promise.resolve(INITIAL_DATA);
 }
 
-export { parseEmod, exportEmod, applyDiagram, tokenizeEmod, droppedFiles, saveFile, setWindowTitle, setWindowModified, rememberOpenedFile, resolveUnsavedEdits, onFileOpened, onFilesDropped, onSaveRequested, onLeaveRequested, initialState, ready, isReady };
+export { parseEmod, exportEmod, applyDiagram, tokenizeEmod, droppedFiles, saveFile, setWindowTitle, setWindowModified, rememberOpenedFile, watchOpenFile, resolveUnsavedEdits, onFileOpened, onFilesDropped, onSaveRequested, onLeaveRequested, initialState, ready, isReady };

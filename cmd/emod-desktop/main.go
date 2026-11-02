@@ -158,6 +158,11 @@ func main() {
 		window.EmitEvent("file:open-from-os-requested")
 	})
 
+	// The page says which file it has open, and that file is what is watched for
+	// another program's writes.
+	openFileWatch := desktop.NewOpenFileWatch(nil)
+	app.RegisterService(application.NewService(openFileWatch))
+
 	// A listener rather than a hook: the framework dispatches a resolved file
 	// drop only to the listeners OnWindowEvent appends to, so a hook registered
 	// for it — the shape the close veto below takes, for a different reason —

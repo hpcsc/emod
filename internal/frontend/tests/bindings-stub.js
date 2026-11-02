@@ -8,7 +8,7 @@
 export const calls = [];
 export const answers = {
   ParseEmod: '{}', ExportJSON: '{}', ExportEmod: '{}', ApplyDiagram: '{}', TokenizeEmod: '{}', Read: '{}', Write: '{}',
-  SetModified: undefined, Record: undefined, Open: '{}', Take: '',
+  SetModified: undefined, Record: undefined, Open: '{}', Take: '', Watch: undefined, Stop: undefined,
 };
 
 export const ModelService = {
@@ -76,4 +76,24 @@ export const RecentFiles = {
 
     return held.then(() => { recorded.push(path); });
   },
+};
+
+// Watch and Stop are driven the same way as Record, and keep their own landing
+// order for the same reason: `watched` is the sequence of requests as the shell
+// would hold them, a path for a Watch and '' for a Stop.
+export const watched = [];
+
+function watchRequest(name, request, answer) {
+  calls.push(request === '' ? [name] : [name, request]);
+  if (answer instanceof Error) {
+    return Promise.reject(answer);
+  }
+  const held = answer instanceof Promise ? answer : Promise.resolve();
+
+  return held.then(() => { watched.push(request); });
+}
+
+export const OpenFileWatch = {
+  Watch: (path) => watchRequest('Watch', path, answers.Watch),
+  Stop: () => watchRequest('Stop', '', answers.Stop),
 };

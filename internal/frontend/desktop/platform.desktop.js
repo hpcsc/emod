@@ -4,7 +4,7 @@
 // web viewer and into the CLI binary. The desktop build assembles it into its
 // own frontend directory as platform.js.
 import { Application, Dialogs, Events, System, Window } from '/wails/runtime.js';
-import { FileService, ModelService, OpenRequests, RecentFiles, WindowService } from '../bindings/github.com/hpcsc/emod/internal/desktop/index.js';
+import { FileService, ModelService, OpenFileWatch, OpenRequests, RecentFiles, WindowService } from '../bindings/github.com/hpcsc/emod/internal/desktop/index.js';
 
 // The Go core is linked into the binary, so there is nothing to fetch and
 // nothing to wait for. The browser implementation's ready/isReady exist to gate
@@ -262,6 +262,21 @@ function rememberOpenedFile(path) {
   return rememberQueue;
 }
 
+// The shell checks one file for writes another program makes, and like the list
+// of recent files the watch outlives this page — so nothing here remembers what
+// the shell is watching, and every request is sent. The calls are queued for the
+// same reason the recordings are: two in flight would land in whichever order
+// they finished, leaving the shell watching the file the viewer left first.
+let watchQueue = Promise.resolve();
+
+function watchOpenFile(path) {
+  watchQueue = watchQueue.catch(function() {}).then(function() {
+    return path ? OpenFileWatch.Watch(path) : OpenFileWatch.Stop();
+  });
+
+  return watchQueue;
+}
+
 // A question dialog answers with the label that was pressed, so the labels are
 // what the outcomes are read off. Anything else — a dialog dismissed some other
 // way, a platform that ignored the labels, a dialog that could not be shown at
@@ -478,4 +493,4 @@ function initialState() {
   return Promise.resolve(null);
 }
 
-export { parseEmod, exportEmod, applyDiagram, tokenizeEmod, droppedFiles, saveFile, setWindowTitle, setWindowModified, rememberOpenedFile, resolveUnsavedEdits, onFileOpened, onFilesDropped, onSaveRequested, onLeaveRequested, initialState, ready, isReady };
+export { parseEmod, exportEmod, applyDiagram, tokenizeEmod, droppedFiles, saveFile, setWindowTitle, setWindowModified, rememberOpenedFile, watchOpenFile, resolveUnsavedEdits, onFileOpened, onFilesDropped, onSaveRequested, onLeaveRequested, initialState, ready, isReady };

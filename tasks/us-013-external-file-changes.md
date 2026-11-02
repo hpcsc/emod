@@ -449,18 +449,18 @@ which the shell now registers; the browser accepts it and does nothing. Nothing 
 what the watch sees.
 
 **Acceptance Criteria:**
-- [ ] A file the host opened is watched once its render has committed it, and not before: a file whose render the pipeline rejects is never watched, and the file open before it stays watched
-- [ ] The request is made from the branch that commits an opened file, so every entry point that delivers a file reaches it with no request of its own — witnessed by a file the host opened and a file the host dropped with a real path
-- [ ] Opening a model with no location — a drop the page read itself — tells the host to watch nothing, so the file open before it is no longer watched
-- [ ] A save that adopts a new location — Save As, and pasted source saved for the first time — tells the host to watch the new path; a save back to the open file, and a save whose dialog was cancelled, tell it nothing
-- [ ] As the page starts it tells the host to watch nothing, before it asks for its initial state
-- [ ] A watch the host refuses is reported in the bar by the rule a refused recording follows — after an open only while the bar is still empty, after a save added to its confirmation while the bar still shows it — and the model stays open either way
-- [ ] The desktop implementation sends a path to `OpenFileWatch.Watch` and no path to `Stop`, sends every request with no record of what the shell already holds, and leaves the shell holding the last request whatever order the calls finish in — asserted on the order they land
-- [ ] A refused request is raised to the caller and does not hold the next request behind it
-- [ ] The browser implementation resolves and does nothing, with its reason beside it
-- [ ] The seam contract test names the new operation, and both implementations satisfy it
-- [ ] The shell registers `OpenFileWatch` in a shape `TestServiceRegistrations` resolves, with no listener yet; `TestBindingNames` covers `Watch` and `Stop`
-- [ ] `task test:viewer`, `task test:unit` and `task test:race` are green, and `task build:desktop` succeeds
+- [x] A file the host opened is watched once its render has committed it, and not before: a file whose render the pipeline rejects is never watched, and the file open before it stays watched
+- [x] The request is made from the branch that commits an opened file, so every entry point that delivers a file reaches it with no request of its own — witnessed by a file the host opened and a file the host dropped with a real path
+- [x] Opening a model with no location — a drop the page read itself — tells the host to watch nothing, so the file open before it is no longer watched
+- [x] A save that adopts a new location — Save As, and pasted source saved for the first time — tells the host to watch the new path; a save back to the open file, and a save whose dialog was cancelled, tell it nothing
+- [x] As the page starts it tells the host to watch nothing, before it asks for its initial state
+- [x] A watch the host refuses is reported in the bar by the rule a refused recording follows — after an open only while the bar is still empty, after a save added to its confirmation while the bar still shows it — and the model stays open either way
+- [x] The desktop implementation sends a path to `OpenFileWatch.Watch` and no path to `Stop`, sends every request with no record of what the shell already holds, and leaves the shell holding the last request whatever order the calls finish in — asserted on the order they land
+- [x] A refused request is raised to the caller and does not hold the next request behind it
+- [x] The browser implementation resolves and does nothing, with its reason beside it
+- [x] The seam contract test names the new operation, and both implementations satisfy it
+- [x] The shell registers `OpenFileWatch` in a shape `TestServiceRegistrations` resolves, with no listener yet; `TestBindingNames` covers `Watch` and `Stop`
+- [x] `task test:viewer`, `task test:unit` and `task test:race` are green, and `task build:desktop` succeeds
 
 **Affected Files/Modules:**
 - `internal/frontend/static/viewer.js` — the request beside the two places an opened file is remembered, and once as the page starts
