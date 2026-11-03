@@ -2,6 +2,9 @@ version: '3'
 
 includes:
   release: Taskfile.release.yml
+  site:
+    taskfile: site/Taskfile.yml
+    dir: site
 
 vars:
   E2E_TAG: v0.1.0

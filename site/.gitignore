@@ -1,0 +1,7 @@
+# Hugo output
+public/
+resources/
+.hugo_build.lock
+
+# The viewer is built by `task build:web` and copied here by the deploy workflow.
+static/viewer/

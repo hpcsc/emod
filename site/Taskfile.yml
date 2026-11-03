@@ -1,0 +1,19 @@
+version: '3'
+
+vars:
+  BASE_URL:
+    sh: 'printf %s "${BASE_URL:-https://emod.saphix.app/}"'
+
+tasks:
+  run:
+    desc: run the site locally with live reload
+    cmds:
+      - hugo server
+
+  build:
+    desc: build the site for production
+    env:
+      HUGO_ENVIRONMENT: production
+      HUGO_ENV: production
+    cmds:
+      - hugo --gc --minify --baseURL "{{.BASE_URL}}"

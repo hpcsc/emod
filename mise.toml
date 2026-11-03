@@ -4,3 +4,6 @@
 cue = "0.14.1"
 goreleaser = "2.15.4"
 task = "3.51.1"
+# Hugo resolves the Hextra theme as a Go module, so the site needs both pinned.
+hugo-extended = "0.156.0"
+go = "1.27.3"
