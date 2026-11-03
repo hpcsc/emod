@@ -102,6 +102,8 @@ tasks:
     deps:
       - build:wasm
     cmds:
+      # web/ is a build output; a clean copy keeps files removed upstream from lingering.
+      - rm -rf ./web
       - mkdir -p ./web/generated ./web/static
       - cp -r ./internal/frontend/static/* ./web/static/
       - cp ./internal/frontend/generated/* ./web/generated/

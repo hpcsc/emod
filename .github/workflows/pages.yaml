@@ -47,19 +47,10 @@ jobs:
         run: |
           wget -O ${{ runner.temp }}/hugo.deb https://github.com/gohugoio/hugo/releases/download/v${HUGO_VERSION}/hugo_extended_${HUGO_VERSION}_linux-amd64.deb \
           && sudo dpkg -i ${{ runner.temp }}/hugo.deb
-      - name: Build the web viewer
-        run: task build:web
-      - name: Inject build version
-        run: |
-          SHA7="${GITHUB_SHA:0:7}"
-          sed -i "s|<!--BUILD_VERSION-->|<script>document.getElementById('stat-commit').textContent='${SHA7}'</script>|" ./web/index.html
-      - name: Copy viewer into the site
-        run: |
-          mkdir -p ./site/static/viewer
-          cp -r ./web/. ./site/static/viewer/
-      - name: Build with Hugo
+      - name: Build the site (and viewer)
         env:
           BASE_URL: "${{ steps.pages.outputs.base_url }}/"
+          BUILD_VERSION: "${GITHUB_SHA:0:7}"
         run: task site:build
       - name: Upload artifact
         uses: actions/upload-pages-artifact@v3

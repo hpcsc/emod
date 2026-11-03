@@ -5,13 +5,29 @@ vars:
     sh: 'printf %s "${BASE_URL:-https://emod.saphix.app/}"'
 
 tasks:
+  viewer:
+    desc: build the web viewer and copy it into static/viewer
+    dir: ..
+    cmds:
+      - task build:web
+      - |
+        if [ -n "${BUILD_VERSION:-}" ]; then
+          sed -i.bak "s|<!--BUILD_VERSION-->|<script>document.getElementById('stat-commit').textContent='${BUILD_VERSION}'</script>|" ./web/index.html
+          rm -f ./web/index.html.bak
+        fi
+      - rm -rf ./site/static/viewer
+      - mkdir -p ./site/static/viewer
+      - cp -r ./web/. ./site/static/viewer/
+
   run:
     desc: run the site locally with live reload
+    deps: [viewer]
     cmds:
       - hugo server
 
   build:
     desc: build the site for production
+    deps: [viewer]
     env:
       HUGO_ENVIRONMENT: production
       HUGO_ENV: production
