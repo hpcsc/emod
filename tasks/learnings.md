@@ -1429,8 +1429,8 @@ in this repo; append only learnings that generalise beyond the task that surface
 ## task build:wasm cannot show that the WASM build excludes the provider SDK
 - Type: constraint
 - Recorded: 2026-11-06
-- Observed: task 9 — llm-foundation
-- Learning: The Anthropic Go SDK compiles for GOOS=js GOARCH=wasm, so a green build:wasm says nothing about what the WASM binary links. internal/llm/isolation_test.go walks the imports of cmd/emod-wasm and of internal/llm/repair with go/build and fails when internal/llm, the bedrock adapter or the SDK is reached; extend it for a new boundary.
+- Observed: mcp-check-draft
+- Learning: The Anthropic Go SDK compiles for GOOS=js GOARCH=wasm, so a green build:wasm says nothing about what the WASM binary links. The import walk with go/build is in internal/test (ImportsReachedFrom, RequireNoneWithPrefix, PackagesImporting), and each package keeps the guard of its own boundary: internal/llm/isolation_test.go for the AI packages and the provider SDK, internal/mcp/isolation_test.go for the MCP server and the MCP SDK. Add a new boundary as a guard in the package that owns it, and prove it with a probe file that adds the forbidden import.
 - Apply when: planning or checking a criterion that a build or package stays free of a dependency
 
 ## emod reports AI usage in tokens, with no price
@@ -1453,3 +1453,38 @@ in this repo; append only learnings that generalise beyond the task that surface
 - Observed: llm-foundation
 - Learning: With --in-place, other sessions edit the same checkout, and their uncommitted files make clerk audit round, fixup replay and land refuse. Coordinate through ListAgents and SendMessage until that session says its files are final, then run git stash push -u -- <their paths>, note the stash SHA, land, and pop that SHA; never stash while its agents still write.
 - Apply when: a run finds files it did not write dirty in the tree mid-run, especially in an in-place run
+
+## A diagnostic record has `rule` only when a rule name goes with it
+- Type: constraint
+- Recorded: 2026-11-06
+- Observed: mcp-check-draft
+- Learning: The records of `emod validate --format json`, `emod lint --format json` and `emod_check` are one type, `diagnostic.Record`, and its `rule` key is omitempty: parse errors and most validator errors have no `rule` key. A story criterion that lists `rule` as a field of every record contradicts a criterion that asks for the same records as the CLI; US-001 of user-stories/mcp-server.md had both until AC2 was reworded.
+- Apply when: writing or decomposing a story that returns diagnostics as JSON records (an MCP tool, an export, a new --format json), or asserting the keys of such a record
+
+## An MCP tool over the go-sdk typed AddTool is routine, not low certainty
+- Type: convention
+- Recorded: 2026-11-06
+- Observed: task 2 — mcp-check-draft
+- Learning: internal/mcp/server.go registers a tool with sdk.AddTool over an input struct and an output struct: the SDK infers the input schema (a field without omitempty is required), returns a schema failure such as a missing argument as an isError result, puts the output in structuredContent and writes the same JSON, with sorted keys, into the text block. internal/mcp/server_test.go drives the server through an sdk client over io.Pipe (connect). Keep the output an object for hosts on older protocol versions, and pass ServerOptions with an empty Capabilities, because nil options advertise logging.
+- Apply when: assessing certainty for a task that adds a tool, a resource or a prompt to internal/mcp, or writing its tests
+
+## clerk mutants runs only the unit tests, so a CLI entry needs a unit leaf beside its integration test
+- Type: constraint
+- Recorded: 2026-11-06
+- Observed: task 3 — mcp-check-draft
+- Learning: A command entry in internal/cli/app.go that only the integration test in cmd/emod reaches leaves its Name, Usage and Action mutants alive, because clerk mutants runs the unit-tagged tests. internal/cli/mcp_test.go kills them with a help-line regexp and one stdio exchange with os.Stdin and os.Stdout swapped for pipes, under a context deadline so that a missing server fails in seconds instead of timing out.
+- Apply when: adding or changing a command in internal/cli/app.go, especially a long-running stdio command, or planning the tests of a CLI task
+
+## emod mcp answers nothing to a pipe that closes stdin before the replies
+- Type: constraint
+- Recorded: 2026-11-06
+- Observed: task 3 — mcp-check-draft
+- Learning: When stdin ends, the go-sdk server returns at once and drops the replies it has not written, so `printf '<requests>' | emod mcp` prints nothing even for a valid initialize. A host keeps stdin open, so this is not a defect: a smoke test must hold stdin open until the replies arrive, as `(printf ...; sleep 1) | emod mcp` or sdk.CommandTransport does.
+- Apply when: smoke-testing emod mcp from a shell, or debugging an MCP exchange that returns no output
+
+## cmd/emod/main_test.go builds emod once and drives it as an MCP host
+- Type: pattern
+- Recorded: 2026-11-06
+- Observed: task 3 — mcp-check-draft
+- Learning: The integration test in cmd/emod/main_test.go builds the binary from the working tree in TestMain, starts `emod mcp` through sdk.CommandTransport with no EMOD_AI_* variable, no provider key and an empty HOME, and compares each tool result with what the same binary prints for the CLI command. task test:integration runs with -count=1, so a changed binary cannot keep a cached pass.
+- Apply when: adding an end-to-end check of emod mcp or of any emod command as a spawned process, such as the path and --root tests of US-002
