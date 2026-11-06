@@ -80,14 +80,14 @@ resolves its directory once, with symbolic links followed. It reads the text of 
 relative to the root or absolute, and refuses every other path with an error that names the root.
 
 **Acceptance Criteria:**
-- [ ] A root made from a directory reads a file under it by a relative path and by an absolute path.
-- [ ] A root made from a symbolic link to a directory reads the files of that directory.
-- [ ] A root made from a path that does not exist, or from a file, gives an error that names the path.
-- [ ] A read of `../outside.emod`, of an absolute path in another folder, and of a symbolic link under the
+- [x] A root made from a directory reads a file under it by a relative path and by an absolute path.
+- [x] A root made from a symbolic link to a directory reads the files of that directory.
+- [x] A root made from a path that does not exist, or from a file, gives an error that names the path.
+- [x] A read of `../outside.emod`, of an absolute path in another folder, and of a symbolic link under the
   root to a file outside it gives an error that names the root. The error holds no text from the file.
-- [ ] A read of a path under the root that does not exist gives an error that names the path and says that
+- [x] A read of a path under the root that does not exist gives an error that names the path and says that
   the file does not exist. A read of a file with no read permission names the path and the cause.
-- [ ] A read changes neither the bytes nor the modification time of the file.
+- [x] A read changes neither the bytes nor the modification time of the file.
 
 **Affected Files/Modules:**
 - `internal/mcp/root.go` (new): the root

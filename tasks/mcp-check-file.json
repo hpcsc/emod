@@ -4,7 +4,7 @@
   "tasks": [
     {
       "n": 1,
-      "done": false,
+      "done": true,
       "title": "Read a model file only from under a root",
       "language": "Go",
       "testable": true,
