@@ -118,14 +118,14 @@ the file through the root of the server and checks it, and the records carry the
 tool checks `content` and does not read `path`. A call with neither is an error result.
 
 **Acceptance Criteria:**
-- [ ] `tools/list` shows `content`, `path` and `name` as strings, and none of them is required.
-- [ ] A call with `path` and no `content` returns the records of that file, each with the path as its
+- [x] `tools/list` shows `content`, `path` and `name` as strings, and none of them is required.
+- [x] A call with `path` and no `content` returns the records of that file, each with the path as its
   `file`, with no `isError`.
-- [ ] A call with `path` and `content` checks `content`. With no `name`, its records carry the path.
-- [ ] A call with a path outside the root returns an error result that names the root.
-- [ ] A call with neither `content` nor `path` returns an error result that names both.
-- [ ] A call with a path that does not exist returns an error result that names the path.
-- [ ] The description of `emod_check` says what `path` and `content` do, and that `content` wins.
+- [x] A call with `path` and `content` checks `content`. With no `name`, its records carry the path.
+- [x] A call with a path outside the root returns an error result that names the root.
+- [x] A call with neither `content` nor `path` returns an error result that names both.
+- [x] A call with a path that does not exist returns an error result that names the path.
+- [x] The description of `emod_check` says what `path` and `content` do, and that `content` wins.
 
 **Affected Files/Modules:**
 - `internal/mcp/server.go`: the input, the schema, the handler and the root of the server

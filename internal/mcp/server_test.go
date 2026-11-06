@@ -7,6 +7,7 @@ import (
 	"encoding/json"
 	"io"
 	"os"
+	"path/filepath"
 	"testing"
 
 	sdk "github.com/modelcontextprotocol/go-sdk/mcp"
@@ -80,13 +81,21 @@ context "Orders" {
 func connect(t *testing.T) *sdk.ClientSession {
 	t.Helper()
 
+	return connectAt(t, t.TempDir())
+}
+
+func connectAt(t *testing.T, dir string) *sdk.ClientSession {
+	t.Helper()
+
+	root, err := mcp.NewRoot(dir)
+	require.NoError(t, err)
 	clientReads, serverWrites := io.Pipe()
 	serverReads, clientWrites := io.Pipe()
 
 	ctx, cancel := context.WithCancel(context.Background())
 	served := make(chan error, 1)
 	go func() {
-		served <- mcp.NewServer(serverReads, serverWrites).Run(ctx)
+		served <- mcp.NewServer(serverReads, serverWrites, root).Run(ctx)
 	}()
 
 	client := sdk.NewClient(&sdk.Implementation{Name: "test-host", Version: "1"}, nil)
@@ -151,7 +160,7 @@ func TestServer(t *testing.T) {
 	})
 
 	t.Run("list tools", func(t *testing.T) {
-		t.Run("lists emod_check as the one tool, with content required and name optional", func(t *testing.T) {
+		t.Run("lists emod_check as the one tool, with content, path and name as optional strings and no other input", func(t *testing.T) {
 			session := connect(t)
 
 			listed, err := session.ListTools(context.Background(), nil)
@@ -162,11 +171,31 @@ func TestServer(t *testing.T) {
 			require.Equal(t, "emod_check", tool.Name)
 			schema, ok := tool.InputSchema.(map[string]any)
 			require.True(t, ok)
-			require.Equal(t, []any{"content"}, schema["required"])
+			require.Nil(t, schema["required"])
+			require.Equal(t, false, schema["additionalProperties"])
 			properties, ok := schema["properties"].(map[string]any)
 			require.True(t, ok)
+			require.Len(t, properties, 3)
 			require.Equal(t, map[string]any{"type": "string"}, typeOf(properties["content"]))
+			require.Equal(t, map[string]any{"type": "string"}, typeOf(properties["path"]))
 			require.Equal(t, map[string]any{"type": "string"}, typeOf(properties["name"]))
+		})
+
+		t.Run("describes each input: the source, the path under the root, and the name of the records", func(t *testing.T) {
+			session := connect(t)
+
+			listed, err := session.ListTools(context.Background(), nil)
+
+			require.NoError(t, err)
+			require.Len(t, listed.Tools, 1)
+			schema, ok := listed.Tools[0].InputSchema.(map[string]any)
+			require.True(t, ok)
+			properties, ok := schema["properties"].(map[string]any)
+			require.True(t, ok)
+			require.Contains(t, descriptionOf(properties["content"]), "The .emod source text to check")
+			require.Contains(t, descriptionOf(properties["path"]), "under the root of the server")
+			require.Contains(t, descriptionOf(properties["path"]), "only when the call gives no content")
+			require.Contains(t, descriptionOf(properties["name"]), "The default is path, else inline.emod")
 		})
 
 		t.Run("the description says that an empty list passes and that a warning is a finding to fix", func(t *testing.T) {
@@ -178,6 +207,7 @@ func TestServer(t *testing.T) {
 			require.Len(t, listed.Tools, 1)
 			require.Contains(t, listed.Tools[0].Description, "An empty list means that the source passes the check")
 			require.Contains(t, listed.Tools[0].Description, "A warning is a finding to fix, not a failure of the tool")
+			require.Contains(t, listed.Tools[0].Description, "When a call gives both, the tool checks content and does not read path")
 		})
 	})
 
@@ -241,14 +271,94 @@ func TestServer(t *testing.T) {
 			require.Equal(t, map[string]any{"diagnostics": []any{}}, result.StructuredContent)
 		})
 
-		t.Run("a call with no content gives an error result that names content", func(t *testing.T) {
+		t.Run("a call with neither content nor path gives an error result that names both", func(t *testing.T) {
 			session := connect(t)
 
 			result := callCheck(t, session, map[string]any{"name": "ordering.emod"})
 
 			require.True(t, result.IsError)
 			require.Nil(t, result.StructuredContent)
-			require.Contains(t, textOf(t, result), "content")
+			require.Equal(t, "emod_check needs content or path", textOf(t, result))
+		})
+
+		t.Run("a path under the root gives the records of the file, each with the path as its file", func(t *testing.T) {
+			dir := t.TempDir()
+			writeFile(t, filepath.Join(dir, "models", "ordering.emod"), warningSource)
+			session := connectAt(t, dir)
+
+			result := callCheck(t, session, map[string]any{"path": "models/ordering.emod"})
+
+			require.False(t, result.IsError)
+			records := recordsOf(t, result)
+			require.Len(t, records, 1)
+			require.Equal(t, "models/ordering.emod", records[0].File)
+			require.Equal(t, "state-obsession", records[0].Rule)
+		})
+
+		t.Run("a call with path and name and no content gives its records the path, because name applies only to content", func(t *testing.T) {
+			dir := t.TempDir()
+			writeFile(t, filepath.Join(dir, "models", "ordering.emod"), warningSource)
+			session := connectAt(t, dir)
+
+			result := callCheck(t, session, map[string]any{"path": "models/ordering.emod", "name": "draft.emod"})
+
+			require.Equal(t, []string{"models/ordering.emod"}, filesOf(recordsOf(t, result)))
+		})
+
+		t.Run("a call with path and content checks content, does not read path, and gives its records the path", func(t *testing.T) {
+			dir := t.TempDir()
+			writeFile(t, filepath.Join(dir, "models", "new.emod"), cleanSource)
+			session := connectAt(t, dir)
+
+			result := callCheck(t, session, map[string]any{"content": warningSource, "path": "models/new.emod"})
+
+			require.False(t, result.IsError)
+			records := recordsOf(t, result)
+			require.Len(t, records, 1)
+			require.Equal(t, "models/new.emod", records[0].File)
+			require.Equal(t, "state-obsession", records[0].Rule)
+		})
+
+		t.Run("a call with content and a path outside the root checks content, and gives its records the path", func(t *testing.T) {
+			outside := filepath.Join(t.TempDir(), "drafts", "ordering.emod")
+			session := connect(t)
+
+			result := callCheck(t, session, map[string]any{"content": warningSource, "path": outside})
+
+			require.False(t, result.IsError)
+			require.Equal(t, []string{outside}, filesOf(recordsOf(t, result)))
+		})
+
+		t.Run("a call with name, path and content gives the records of content the name", func(t *testing.T) {
+			session := connect(t)
+
+			result := callCheck(t, session, map[string]any{"content": warningSource, "path": "models/new.emod", "name": "draft.emod"})
+
+			require.Equal(t, []string{"draft.emod"}, filesOf(recordsOf(t, result)))
+		})
+
+		t.Run("a path outside the root gives an error result that names the root", func(t *testing.T) {
+			base := t.TempDir()
+			project := filepath.Join(base, "project")
+			require.NoError(t, os.Mkdir(project, 0o755))
+			require.NoError(t, os.WriteFile(filepath.Join(base, "secret.emod"), []byte("SECRET-TEXT"), 0o644))
+			session := connectAt(t, project)
+
+			result := callCheck(t, session, map[string]any{"path": "../secret.emod"})
+
+			require.True(t, result.IsError)
+			require.Nil(t, result.StructuredContent)
+			require.Contains(t, textOf(t, result), "is outside the root "+project)
+			require.NotContains(t, textOf(t, result), "SECRET-TEXT")
+		})
+
+		t.Run("a path that does not exist gives an error result that names the path and the cause", func(t *testing.T) {
+			session := connect(t)
+
+			result := callCheck(t, session, map[string]any{"path": "missing.emod"})
+
+			require.True(t, result.IsError)
+			require.Equal(t, "reading missing.emod: no such file or directory", textOf(t, result))
 		})
 
 		t.Run("each record carries inline.emod when the call gives no name", func(t *testing.T) {
@@ -275,6 +385,12 @@ func TestServer(t *testing.T) {
 			require.Equal(t, []string{"café/commandes.emod"}, filesOf(recordsOf(t, result)))
 		})
 	})
+}
+
+func descriptionOf(property any) string {
+	fields, _ := property.(map[string]any)
+	description, _ := fields["description"].(string)
+	return description
 }
 
 func typeOf(property any) map[string]any {

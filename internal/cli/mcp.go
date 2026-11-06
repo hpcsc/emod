@@ -8,5 +8,9 @@ import (
 )
 
 func RunMCP(ctx context.Context) error {
-	return mcp.NewServer(os.Stdin, os.Stdout).Run(ctx)
+	root, err := mcp.NewRoot(".")
+	if err != nil {
+		return err
+	}
+	return mcp.NewServer(os.Stdin, os.Stdout, root).Run(ctx)
 }

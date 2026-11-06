@@ -22,7 +22,7 @@
     },
     {
       "n": 2,
-      "done": false,
+      "done": true,
       "title": "Let `emod_check` take a `path`",
       "language": "Go",
       "testable": true,
