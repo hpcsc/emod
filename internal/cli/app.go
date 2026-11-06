@@ -285,7 +285,7 @@ func NewApp() *urfave.Command {
 			},
 			{
 				Name:  "ai",
-				Usage: "Check that AI is configured",
+				Usage: "Check that AI is configured and turns a prompt into an emod model that passes the checks",
 				Flags: []urfave.Flag{
 					&urfave.StringFlag{Name: "ai-region", Usage: "AWS region of the Bedrock account (EMOD_AI_REGION)"},
 					&urfave.StringFlag{Name: "ai-model", Usage: "Bedrock model ID for AI work (EMOD_AI_MODEL)"},
@@ -294,7 +294,7 @@ func NewApp() *urfave.Command {
 					&urfave.StringFlag{Name: "ai-endpoint", Usage: "Gateway URL to send model calls through (EMOD_AI_ENDPOINT)"},
 				},
 				Action: func(ctx context.Context, cmd *urfave.Command) error {
-					settings := func() (config.Config, error) {
+					loadConfig := func() (config.Config, error) {
 						return config.Load(config.Flags{
 							Region:     cmd.String("ai-region"),
 							Model:      cmd.String("ai-model"),
@@ -303,7 +303,7 @@ func NewApp() *urfave.Command {
 							Endpoint:   cmd.String("ai-endpoint"),
 						})
 					}
-					return reportExitError(RunAI(settings))
+					return reportExitError(RunAI(ctx, loadConfig, connectBedrock))
 				},
 			},
 			{

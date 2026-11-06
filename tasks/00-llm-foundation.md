@@ -10,7 +10,7 @@
 - [x] Task 7: Add cost and token usage reporting
 - [x] Task 8: Build the generate → validate → lint → repair loop
 - [x] Task 9: Gate AI as opt-in and keep WASM provider-free
-- [ ] Task 10: Add the `emod ai` end-to-end smoke command
+- [x] Task 10: Add the `emod ai` end-to-end smoke command
 
 ## Story Reference
 
@@ -481,12 +481,12 @@ non-error "not configured" outcome without affecting other commands.
 **Acceptance Criteria:**
 - [ ] With AI configured, the command makes one real round-trip and reports success, the
   model used, and the token usage and cost.
-- [ ] The command runs one generate → validate → repair round on a built-in trivial prompt
+- [x] The command runs one generate → validate → repair round on a built-in trivial prompt
   and shows whether the result passed the oracle or did not converge (default attempt bound
   is a small number such as 3).
-- [ ] With no AI configuration, the command prints a clear setup message and a non-error
+- [x] With no AI configuration, the command prints a clear setup message and a non-error
   "not configured" outcome, without affecting other commands.
-- [ ] The command is a health/smoke check only and implements no real authoring feature.
+- [x] The command is a health/smoke check only and implements no real authoring feature.
 
 **Affected Files/Modules:**
 - `internal/cli/ai.go` — extend: the `RunAI` smoke action that resolves config (Task 5),

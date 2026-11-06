@@ -165,7 +165,7 @@
         "internal/cli/ai_test.go",
         "llm.Model"
       ],
-      "done": false
+      "done": true
     }
   ]
 }
