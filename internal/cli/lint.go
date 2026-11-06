@@ -78,15 +78,15 @@ func formatText(diagnostics []*diagnostic.Entry) error {
 }
 
 func RunLintExplain(ruleName string) error {
-	desc, ok := linter.RuleDescription(ruleName)
-	if !ok {
+	description, err := linter.RuleDescription(ruleName)
+	if err != nil {
 		return &LintError{
-			Message:  fmt.Sprintf("unknown rule %q", ruleName),
+			Message:  err.Error(),
 			ExitCode: 1,
 			Cause:    ErrUnknownRule,
 		}
 	}
-	fmt.Println(desc)
+	fmt.Println(description)
 	return nil
 }
 

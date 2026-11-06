@@ -73,13 +73,13 @@ that they report, and requires that the set is the same as `RuleNames()`. So a n
 description fails the unit suite, and a description with no rule fails it too.
 
 **Acceptance Criteria:**
-- [ ] `RuleNames()` returns 24 names in alphabetical order, which include `orphan-command`, `dcb/orphan-tag-key`
+- [x] `RuleNames()` returns 24 names in alphabetical order, which include `orphan-command`, `dcb/orphan-tag-key`
   and `spec/given-outside-boundary`.
-- [ ] Each name that `RuleNames()` returns has a description from `RuleDescription`.
-- [ ] The guard collects the rule names from each call of `info`, `warning` and `errorEntry` in
+- [x] Each name that `RuleNames()` returns has a description from `RuleDescription`.
+- [x] The guard collects the rule names from each call of `info`, `warning` and `errorEntry` in
   `internal/linter/linter.go`, and of `orphanDiagnostics` in `internal/validator/validator.go`.
-- [ ] The guard fails when a rule argument is not a string literal, so that a rule name cannot pass by it.
-- [ ] The guard fails when it finds no call of one of the four functions, so that a rename does not empty it.
+- [x] The guard fails when a rule argument is not a string literal, so that a rule name cannot pass by it.
+- [x] The guard fails when it finds no call of one of the four functions, so that a rename does not empty it.
 
 **Patterns to follow:**
 - `internal/linter/descriptions.go`

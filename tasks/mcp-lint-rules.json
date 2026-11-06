@@ -4,7 +4,7 @@
   "tasks": [
     {
       "n": 1,
-      "done": false,
+      "done": true,
       "title": "List the names of the lint rules, and guard that each reported rule has a description",
       "language": "Go",
       "testable": true,

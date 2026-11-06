@@ -1,10 +1,32 @@
 package linter
 
+import (
+	"fmt"
+	"maps"
+	"slices"
+)
+
+type Rule struct {
+	Name        string
+	Description string
+}
+
 // RuleDescription returns a human-readable description of the named lint rule.
-// The second return value is false when no rule with that name exists.
-func RuleDescription(name string) (string, bool) {
-	d, ok := ruleDescriptions[name]
-	return d, ok
+// The error names the rule when no rule with that name exists.
+func RuleDescription(name string) (string, error) {
+	description, found := ruleDescriptions[name]
+	if !found {
+		return "", fmt.Errorf("unknown rule %q", name)
+	}
+	return description, nil
+}
+
+func Rules() []Rule {
+	rules := make([]Rule, 0, len(ruleDescriptions))
+	for _, name := range slices.Sorted(maps.Keys(ruleDescriptions)) {
+		rules = append(rules, Rule{Name: name, Description: ruleDescriptions[name]})
+	}
+	return rules
 }
 
 var ruleDescriptions = map[string]string{
