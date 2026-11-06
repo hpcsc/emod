@@ -157,11 +157,11 @@ cannot use stops the command with an error that names the directory. The integra
 fixture file by its path through the built binary and compares the records with `emod validate`.
 
 **Acceptance Criteria:**
-- [ ] `emod mcp --help` lists `--root`, and says that the default is the working directory.
-- [ ] `emod mcp --root <dir>` reads a path relative to that directory.
-- [ ] `emod mcp --root <a path that does not exist>` ends with exit code 1 and a message that names the
+- [x] `emod mcp --help` lists `--root`, and says that the default is the working directory.
+- [x] `emod mcp --root <dir>` reads a path relative to that directory.
+- [x] `emod mcp --root <a path that does not exist>` ends with exit code 1 and a message that names the
   path.
-- [ ] The integration test calls `emod_check` with the path of each `.emod` file under `examples/` and
+- [x] The integration test calls `emod_check` with the path of each `.emod` file under `examples/` and
   `internal/parser/testdata/`, relative to the repository root, and gets the records that the same binary
   prints for `emod validate --format json <path>`.
 

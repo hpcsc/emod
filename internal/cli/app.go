@@ -332,8 +332,14 @@ func NewApp() *urfave.Command {
 			{
 				Name:  "mcp",
 				Usage: "Start the MCP server (stdin/stdout transport)",
+				Flags: []urfave.Flag{
+					&urfave.StringFlag{
+						Name:  "root",
+						Usage: "Read model files only under this directory (default: the working directory)",
+					},
+				},
 				Action: func(ctx context.Context, cmd *urfave.Command) error {
-					return reportExitError(RunMCP(ctx))
+					return reportExitError(RunMCP(ctx, cmd.String("root")))
 				},
 			},
 		},

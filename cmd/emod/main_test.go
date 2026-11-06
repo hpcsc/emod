@@ -120,6 +120,22 @@ func TestMCP(t *testing.T) {
 	})
 
 	t.Run("check", func(t *testing.T) {
+		t.Run("the binary refuses a path outside its working directory, and names the root", func(t *testing.T) {
+			session, _ := startServer(t)
+
+			result, err := session.CallTool(context.Background(), &sdk.CallToolParams{
+				Name:      "emod_check",
+				Arguments: map[string]any{"path": "../outside.emod"},
+			})
+
+			require.NoError(t, err)
+			require.True(t, result.IsError)
+			require.Len(t, result.Content, 1)
+			text, ok := result.Content[0].(*sdk.TextContent)
+			require.True(t, ok)
+			require.Equal(t, `path "../outside.emod" is outside the root `+repoRoot(t), text.Text)
+		})
+
 		root := repoRoot(t)
 		var paths []string
 		for _, pattern := range []string{"examples/*.emod", "internal/parser/testdata/*.emod"} {
@@ -134,7 +150,24 @@ func TestMCP(t *testing.T) {
 		require.Contains(t, paths, "examples/error_diagnostics_test.emod", "the files must include one with diagnostics")
 
 		for _, path := range paths {
-			t.Run("gives the records of emod validate for "+path, func(t *testing.T) {
+			t.Run("gives the records of emod validate for the path "+path, func(t *testing.T) {
+				session, _ := startServer(t)
+
+				result, err := session.CallTool(context.Background(), &sdk.CallToolParams{
+					Name:      "emod_check",
+					Arguments: map[string]any{"path": path},
+				})
+
+				require.NoError(t, err)
+				require.False(t, result.IsError, "the call must succeed: %v", result.Content)
+				structured, ok := result.StructuredContent.(map[string]any)
+				require.True(t, ok, "the structured result must be an object, but it is %T", result.StructuredContent)
+				records, err := json.Marshal(structured["diagnostics"])
+				require.NoError(t, err)
+				require.JSONEq(t, validateJSON(t, path), string(records))
+			})
+
+			t.Run("gives the records of emod validate for the content of "+path, func(t *testing.T) {
 				source, err := os.ReadFile(filepath.Join(root, path))
 				require.NoError(t, err)
 				session, _ := startServer(t)

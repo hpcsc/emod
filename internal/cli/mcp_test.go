@@ -5,6 +5,7 @@ package cli_test
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"os"
 	"path/filepath"
 	"testing"
@@ -12,6 +13,7 @@ import (
 
 	sdk "github.com/modelcontextprotocol/go-sdk/mcp"
 	"github.com/stretchr/testify/require"
+	urfave "github.com/urfave/cli/v3"
 
 	"github.com/hpcsc/emod/internal/diagnostic"
 )
@@ -61,6 +63,16 @@ func TestMCP(t *testing.T) {
 			require.NoError(t, err)
 			require.Regexp(t, `(?m)^\s+mcp\s+Start the MCP server \(stdin/stdout transport\)$`, stdout)
 		})
+
+		t.Run("lists --root for mcp, with the working directory as its default", func(t *testing.T) {
+			var err error
+			stdout := captureStdout(t, func() {
+				err = runCommandLine(t, "emod", "mcp", "--help")
+			})
+
+			require.NoError(t, err)
+			require.Regexp(t, `(?m)^\s+--root string\s+Read model files only under this directory \(default: the working directory\)$`, stdout)
+		})
 	})
 
 	t.Run("serve", func(t *testing.T) {
@@ -82,6 +94,45 @@ func TestMCP(t *testing.T) {
 			require.Len(t, records, 1)
 			require.Equal(t, "ordering.emod", records[0].File)
 			require.Equal(t, "state-obsession", records[0].Rule)
+		})
+
+		t.Run("reads an absolute path under the working directory when no --root is given", func(t *testing.T) {
+			dir := t.TempDir()
+			require.NoError(t, os.WriteFile(filepath.Join(dir, "ordering.emod"), []byte(warningEmod), 0o644))
+			t.Chdir(dir)
+			path := filepath.Join(dir, "ordering.emod")
+
+			records := checkOverStdio(t, []string{"emod", "mcp"}, map[string]any{"path": path})
+
+			require.Len(t, records, 1)
+			require.Equal(t, path, records[0].File)
+			require.Equal(t, "state-obsession", records[0].Rule)
+		})
+
+		t.Run("reads a path relative to the directory that --root names", func(t *testing.T) {
+			dir := t.TempDir()
+			require.NoError(t, os.MkdirAll(filepath.Join(dir, "models"), 0o755))
+			require.NoError(t, os.WriteFile(filepath.Join(dir, "models", "ordering.emod"), []byte(warningEmod), 0o644))
+
+			records := checkOverStdio(t, []string{"emod", "mcp", "--root", dir}, map[string]any{"path": "models/ordering.emod"})
+
+			require.Len(t, records, 1)
+			require.Equal(t, "models/ordering.emod", records[0].File)
+			require.Equal(t, "state-obsession", records[0].Rule)
+		})
+
+		t.Run("a root that does not exist ends the command with exit code 1 and a message that names it", func(t *testing.T) {
+			missing := filepath.Join(t.TempDir(), "missing")
+
+			var err error
+			stderr := captureStderr(t, func() {
+				err = runCommandLine(t, "emod", "mcp", "--root", missing)
+			})
+
+			var exitErr urfave.ExitCoder
+			require.True(t, errors.As(err, &exitErr))
+			require.Equal(t, 1, exitErr.ExitCode())
+			require.Contains(t, stderr, "root "+missing+": no such file or directory")
 		})
 	})
 }
