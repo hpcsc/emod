@@ -1464,8 +1464,8 @@ in this repo; append only learnings that generalise beyond the task that surface
 ## An MCP tool over the go-sdk typed AddTool is routine, not low certainty
 - Type: convention
 - Recorded: 2026-11-06
-- Observed: task 2 — mcp-check-draft
-- Learning: internal/mcp/server.go registers a tool with sdk.AddTool over an input struct and an output struct: the SDK infers the input schema (a field without omitempty is required), returns a schema failure such as a missing argument as an isError result, puts the output in structuredContent and writes the same JSON, with sorted keys, into the text block. internal/mcp/server_test.go drives the server through an sdk client over io.Pipe (connect). Keep the output an object for hosts on older protocol versions, and pass ServerOptions with an empty Capabilities, because nil options advertise logging.
+- Observed: mcp-check-file
+- Learning: internal/mcp/server.go registers a tool with sdk.AddTool over an input struct and an output struct: the SDK infers the input schema (a field without omitempty is required), returns a schema failure such as a missing argument as an isError result, puts the output in structuredContent and writes the same JSON, with sorted keys, into the text block. A pointer field, which tells an absent input from an empty one, infers the type ["null","string"], so emod_check gives AddTool its own jsonschema.Schema (sourceSchema) with plain string types and additionalProperties false. internal/mcp/server_test.go drives the server through an sdk client over io.Pipe (connect, connectAt with a root). Keep the output an object for hosts on older protocol versions, and pass ServerOptions with an empty Capabilities, because nil options advertise logging.
 - Apply when: assessing certainty for a task that adds a tool, a resource or a prompt to internal/mcp, or writing its tests
 
 ## clerk mutants runs only the unit tests, so a CLI entry needs a unit leaf beside its integration test
@@ -1488,3 +1488,17 @@ in this repo; append only learnings that generalise beyond the task that surface
 - Observed: task 3 — mcp-check-draft
 - Learning: The integration test in cmd/emod/main_test.go builds the binary from the working tree in TestMain, starts `emod mcp` through sdk.CommandTransport with no EMOD_AI_* variable, no provider key and an empty HOME, and compares each tool result with what the same binary prints for the CLI command. task test:integration runs with -count=1, so a changed binary cannot keep a cached pass.
 - Apply when: adding an end-to-end check of emod mcp or of any emod command as a spawned process, such as the path and --root tests of US-002
+
+## Read a caller's path under a root through os.Root, and match the root by file identity
+- Type: recurring-finding
+- Recorded: 2026-11-06
+- Observed: task 1 — mcp-check-file
+- Learning: A containment check on path text failed three audit rounds in internal/mcp/root.go: it leaked which files exist behind a link to outside, cleaned `..` before links, blocked on a named pipe, read files of any size, and refused `/` as a root, `<root>//x` and a root spelled in another letter case. internal/mcp/root.go now reads through os.Root (one relative name, no cleaning), opens with O_NONBLOCK and refuses a file that is not regular or is over 1 MiB, and maps an absolute path to the root by os.SameFile of its longest prefix. os.Root follows only relative links and keeps its escape error unexported (text "path escapes from parent"). Plan such a task as low certainty, and put each of these cases in its criteria.
+- Apply when: decomposing or building any tool or command that reads, or writes, a path that a caller gives under a directory: the later MCP tools, the --allow-write mode, an import or export by path
+
+## t.TempDir is under a link on macOS and under none on Linux CI, so a link leaf makes its own link
+- Type: constraint
+- Recorded: 2026-11-06
+- Observed: task 1 — mcp-check-file
+- Learning: On macOS t.TempDir() is under /var, a link to /private/var; CI runs the tests on ubuntu-latest, where it is under no link. A leaf that depends on that link passes for the wrong reason on one platform: in internal/mcp/root_test.go, the only pin of link resolution was the macOS /var link until round 3 added leaves that make their own link with os.Symlink. A path that compares with a root must also be built in the same spelling as the root, or the leaf tests another branch.
+- Apply when: writing a test about symbolic links, path aliases or path containment, or reading a test that passes on macOS and must also prove something on Linux CI
