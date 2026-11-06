@@ -82,7 +82,7 @@
     },
     {
       "n": 4,
-      "done": false,
+      "done": true,
       "title": "Document the registration of `emod mcp` with Claude Code",
       "language": "Go",
       "testable": false,

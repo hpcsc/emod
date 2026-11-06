@@ -307,6 +307,18 @@ emod also works with OpenAI, and with local servers such as Ollama, through the 
 [AI page](https://emod.saphix.app/docs/ai/) of the docs tells how to set up each provider, and what each
 command sends.
 
+### Check models from an agent (MCP)
+
+`emod mcp` starts a Model Context Protocol (MCP) server on stdin and stdout. An agent such as Claude Code
+calls its tool `emod_check` to check a draft model before it writes the file. The agent brings the model,
+so the server needs no API key and no `EMOD_AI_*` setting.
+
+```bash
+claude mcp add emod -- emod mcp
+```
+
+The [MCP page](https://emod.saphix.app/docs/mcp/) of the docs tells what the tool takes and returns.
+
 ## Editor Setup
 
 The `emod` binary must be on your `PATH` for editor integrations to work.

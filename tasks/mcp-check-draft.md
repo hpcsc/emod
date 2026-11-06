@@ -348,15 +348,15 @@ server with Claude Code. The docs also tell the person what `emod_check` takes a
 the server needs no AI setup.
 
 **Acceptance Criteria:**
-- [ ] The README has a section, next to "Use AI (optional)", that shows
+- [x] The README has a section, next to "Use AI (optional)", that shows
   `claude mcp add emod -- emod mcp`. The section says that the server needs no API key and no
   `EMOD_AI_*` setting, and links to the docs page.
-- [ ] A new page under `site/content/docs/` shows the same command. It names the tool `emod_check` and
+- [x] A new page under `site/content/docs/` shows the same command. It names the tool `emod_check` and
   its inputs, `content` and `name`, with `inline.emod` as the default name. It says that the records are
   those of `emod validate --format json`, and that errors and warnings are normal results. It says that
   an empty list means that the draft passes, and that the server needs no API key, no `EMOD_AI_*`
   setting and no network access.
-- [ ] Neither the README nor the page documents `path`, `--root`, `--allow-write`, `.mcp.json`, or a
+- [x] Neither the README nor the page documents `path`, `--root`, `--allow-write`, `.mcp.json`, or a
   host other than Claude Code. Later stories document them.
 
 **Affected Files/Modules:**
