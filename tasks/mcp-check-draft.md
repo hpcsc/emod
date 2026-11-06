@@ -214,31 +214,31 @@ reads only text sees the same records. The tool's description tells the model wh
 that an agent does not stop at the first warning.
 
 **Acceptance Criteria:**
-- [ ] `go.mod` requires `github.com/modelcontextprotocol/go-sdk` directly, at one pinned version, and
+- [x] `go.mod` requires `github.com/modelcontextprotocol/go-sdk` directly, at one pinned version, and
   the `go` directive does not change. `mise exec -- go mod tidy` leaves `go.mod` and `go.sum` unchanged.
   The `wails3` tool still builds (`mise exec -- go build -o /dev/null github.com/wailsapp/wails/v3/cmd/wails3`),
   because it shares the version of the SDK.
-- [ ] A client that connects to the server over a pair of pipes completes `initialize`. `tools/list`
+- [x] A client that connects to the server over a pair of pipes completes `initialize`. `tools/list`
   then lists exactly one tool, `emod_check`. Its input schema requires `content`, a string, and accepts
   an optional `name`, a string.
-- [ ] The description of `emod_check` tells the model that an empty list means the source passes the
+- [x] The description of `emod_check` tells the model that an empty list means the source passes the
   check. It also tells the model that a warning is a finding to fix, not a failure of the tool.
-- [ ] A call with a clean source in `content` returns a result with no `isError`, and its `diagnostics`
+- [x] A call with a clean source in `content` returns a result with no `isError`, and its `diagnostics`
   is an empty list, not `null`.
-- [ ] A call with the text of `examples/error_diagnostics_test.emod` returns a result with no `isError`.
+- [x] A call with the text of `examples/error_diagnostics_test.emod` returns a result with no `isError`.
   It holds two error records: line 43, with no `rule` key, with a message that names
   `GuestCheckedOut`; and line 64, with the rule `orphan-command` and a message that names `SendEmail`.
-- [ ] A call with a warning-only source returns a result with no `isError`, whose records are
+- [x] A call with a warning-only source returns a result with no `isError`, whose records are
   warnings. For example, the source of `internal/cli/validate_test.go:1112-1159` gives one
   `state-obsession` record.
-- [ ] Each record carries `name` as its `file`. With no `name`, or an empty `name`, each record carries
+- [x] Each record carries `name` as its `file`. With no `name`, or an empty `name`, each record carries
   `inline.emod`. A `name` with non-ASCII characters, such as `café.emod`, comes back unchanged. The tool
   refuses no input on encoding grounds.
-- [ ] A call with no `content` returns an `isError` result whose text names `content`, and does no
+- [x] A call with no `content` returns an `isError` result whose text names `content`, and does no
   check. An empty string in `content` is a source, the same as an empty file: it returns an empty list
   with no `isError`.
-- [ ] The text block of each successful result holds the same records as its structured result.
-- [ ] `internal/llm/isolation_test.go` has these new leaves, and each leaf fails when its forbidden
+- [x] The text block of each successful result holds the same records as its structured result.
+- [x] `internal/llm/isolation_test.go` has these new leaves, and each leaf fails when its forbidden
   import is added:
   - The walk from `internal/mcp` reaches `internal/oracle`, and reaches no `internal/llm` package and no
     provider SDK.

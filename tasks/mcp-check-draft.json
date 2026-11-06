@@ -27,7 +27,7 @@
     },
     {
       "n": 2,
-      "done": false,
+      "done": true,
       "title": "Serve `emod_check` over MCP from `internal/mcp`",
       "language": "Go",
       "testable": true,
