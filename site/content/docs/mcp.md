@@ -4,8 +4,9 @@ weight: 7
 ---
 
 `emod mcp` starts a server that speaks the Model Context Protocol (MCP) over stdin and stdout. An MCP host,
-such as Claude Code, starts the server and gives its tools to the model that the host runs. The agent then
-checks a draft model with emod before it writes the file.
+such as Claude Code, starts the server and gives its tools and resources to the model that the host runs.
+The agent then checks a draft model with emod before it writes the file, and reads why a lint rule exists
+before it fixes a finding.
 
 The server calls no model. The host brings the model, so the server needs no API key, no `EMOD_AI_*`
 setting and no network access.
@@ -54,13 +55,59 @@ The result holds a list of diagnostics under `diagnostics`. Each record is the s
 
 - An empty list means that the draft passes the check.
 - Errors and warnings are normal results, not failures of the tool. A record has a `rule` key only when a
-  rule name goes with the diagnostic, as with each lint finding. `emod lint --explain <rule>` describes a
-  lint rule.
+  rule name goes with the diagnostic, as with each lint finding. `emod_explain_rule` describes the rule.
 - The tool returns an error result only when it cannot do the check: for example, when the call gives
   neither `content` nor `path`, or a path that the server cannot read.
 
 The agent drafts a model, calls `emod_check`, fixes the cause of each record, and calls the tool again until
 the list is empty. Then the agent writes the file with its own file tool.
+
+## The `emod_explain_rule` tool
+
+`emod_explain_rule` tells why a lint rule exists and how to fix a finding of the rule. The call gives the
+name from the `rule` key of a record in `rule`:
+
+| Input | Required | What it is |
+| --- | --- | --- |
+| `rule` | Yes | The name of a lint rule, for example `state-obsession` or `dcb/untagged-event` |
+
+The result holds the name under `rule` and its text under `description`. The text is the same text that
+`emod lint --explain <rule>` prints:
+
+```json
+{
+  "rule": "state-obsession",
+  "description": "Events named with generic state-change suffixes like \"Updated\", \"Changed\", or \"Modified\" hide the business meaning of what happened. Prefer names that describe a specific business fact (e.g. \"OrderShipped\" instead of \"OrderUpdated\")."
+}
+```
+
+A name that is not a lint rule gives an error result, for example `unknown rule "dcb/nonexistent"`.
+
+So for a record with the rule `state-obsession` on the event `OrderUpdated`, the agent reads that the name
+must tell the business fact, and it names the event `OrderShipped` in its next draft.
+
+## The `emod://rules` resource
+
+The resource `emod://rules` lists each lint rule that emod can report, with its description. This
+includes the `dcb/*` and `spec/*` rules, and `orphan-command` and `orphan-event`, which the validator
+reports. The agent reads the list before its first draft, to keep the draft free of the findings.
+
+The resource is JSON, with the MIME type `application/json`. Each entry has the same keys as the result of
+`emod_explain_rule`, and the entries are in the alphabetical order of the names:
+
+```json
+{
+  "rules": [
+    {
+      "rule": "aggregate-in-dcb-mode",
+      "description": "Aggregate blocks contain slices and represent the traditional aggregate modeling style. ..."
+    }
+  ]
+}
+```
+
+Some hosts do not read a resource unless the person asks for it. The agent can then call
+`emod_explain_rule` for each rule in its records.
 
 ## The root
 

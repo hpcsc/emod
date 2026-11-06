@@ -134,10 +134,10 @@ and the resource API is in the SDK. **Blast radius:** low. Both are read-only an
 **Behavior:** The MCP page of the docs describes the tool and the resource, and the README names them.
 
 **Acceptance Criteria:**
-- [ ] `site/content/docs/mcp.md` has a section on `emod_explain_rule` (input, result, error) and on
+- [x] `site/content/docs/mcp.md` has a section on `emod_explain_rule` (input, result, error) and on
   `emod://rules` (the JSON shape), and says that an agent reads the description of a rule before it fixes a
   finding.
-- [ ] The README section "Check models from an agent (MCP)" names the tool and the resource.
+- [x] The README section "Check models from an agent (MCP)" names the tool and the resource.
 
 **Patterns to follow:**
 - `site/content/docs/mcp.md`

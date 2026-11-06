@@ -45,7 +45,7 @@
     },
     {
       "n": 3,
-      "done": false,
+      "done": true,
       "title": "Document `emod_explain_rule` and `emod://rules`",
       "language": "Go",
       "testable": false,
