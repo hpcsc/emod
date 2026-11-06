@@ -1,0 +1,106 @@
+{
+  "story": "US-001: Check a draft model from an agent",
+  "tasks_file": "tasks/mcp-check-draft.md",
+  "tasks": [
+    {
+      "n": 1,
+      "done": false,
+      "title": "Give the diagnostic record of `--format json` one home in `internal/diagnostic`",
+      "language": "Go",
+      "testable": true,
+      "certainty": "high",
+      "blast_radius": "high",
+      "patterns_to_follow": [
+        "internal/cli/lint.go:41-83",
+        "internal/export/json.go:270-292",
+        "internal/diagnostic/entry_test.go",
+        "internal/cli/validate_test.go:1112-1159"
+      ],
+      "depends_on": [],
+      "affected_files": [
+        "internal/diagnostic/record.go",
+        "internal/diagnostic/record_test.go",
+        "internal/cli/lint.go",
+        "internal/cli/validate_test.go",
+        "internal/cli/lint_test.go"
+      ]
+    },
+    {
+      "n": 2,
+      "done": false,
+      "title": "Serve `emod_check` over MCP from `internal/mcp`",
+      "language": "Go",
+      "testable": true,
+      "certainty": "low",
+      "blast_radius": "high",
+      "patterns_to_follow": [
+        "internal/lsp/server.go:15-55",
+        "internal/lsp/server_test.go:16-55",
+        "internal/llm/isolation_test.go:19-78",
+        "internal/oracle/oracle.go:38-43",
+        "internal/cli/validate_test.go:1112-1159",
+        "task:1"
+      ],
+      "depends_on": [
+        1
+      ],
+      "affected_files": [
+        "go.mod",
+        "go.sum",
+        "internal/mcp/server.go",
+        "internal/mcp/server_test.go",
+        "internal/llm/isolation_test.go"
+      ]
+    },
+    {
+      "n": 3,
+      "done": false,
+      "title": "Start the server with `emod mcp` and check the handshake with the built binary",
+      "language": "Go",
+      "testable": true,
+      "certainty": "medium",
+      "blast_radius": "low",
+      "patterns_to_follow": [
+        "internal/cli/app.go:28-43",
+        "internal/cli/app.go:74-78",
+        "internal/cli/app.go:321-331",
+        "internal/cli/lsp.go",
+        "internal/export/export_test.go:1728-1735",
+        "internal/parser/integration_test.go",
+        "Taskfile.yml:132",
+        "task:2"
+      ],
+      "depends_on": [
+        2
+      ],
+      "affected_files": [
+        "internal/cli/app.go",
+        "internal/cli/mcp.go",
+        "cmd/emod/main_test.go",
+        "Taskfile.yml"
+      ]
+    },
+    {
+      "n": 4,
+      "done": false,
+      "title": "Document the registration of `emod mcp` with Claude Code",
+      "language": "Go",
+      "testable": false,
+      "certainty": "high",
+      "blast_radius": "low",
+      "patterns_to_follow": [
+        "README.md:296-308",
+        "site/content/docs/ai.md",
+        "site/content/docs/editor-setup.md"
+      ],
+      "depends_on": [
+        3
+      ],
+      "affected_files": [
+        "README.md",
+        "site/content/docs/mcp.md"
+      ]
+    }
+  ],
+  "design_file": "tasks/mcp-check-draft.design.yaml"
+}

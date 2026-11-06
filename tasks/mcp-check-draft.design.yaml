@@ -1,0 +1,59 @@
+design: planned
+types:
+  - name: Record
+    package: internal/diagnostic
+    change: new
+    does: holds one diagnostic in the JSON shape that emod validate --format json prints and emod_check returns
+    owns:
+      - the keys are file, line, rule, severity and message, in that order
+      - a diagnostic with no rule name has no rule key
+      - the records of no diagnostics are an empty list, never null
+    fields: [File, Line, Rule, Severity, Message]
+  - name: Server
+    package: internal/mcp   # mirrors lsp.Server: built over an injected reader and writer, so tests drive it over pipes
+    change: new
+    does: answers the MCP requests that a host sends over one reader and one writer
+    owns:
+      - the server lists one tool, emod_check, in this story
+      - emod_check returns errors and warnings as a normal result
+      - emod_check returns an error result only when it cannot check the source, for example with no content
+    methods: [Run]
+  - name: sourceInput
+    package: internal/mcp   # every tool that reads a model takes this input
+    change: new
+    does: names the model source that a tool call gives
+    owns:
+      - a source with no name, or an empty name, carries the name inline.emod
+      - an empty content is a source, the same as an empty file
+    fields: [Content, Name]
+  - name: checkResult
+    package: internal/mcp
+    change: new
+    does: carries the records of one check to the host
+    owns:
+      - the records sit in a list under diagnostics, because MCP structured content must be an object
+    fields: [Diagnostics]
+functions:
+  - diagnostic.Records(entries []*diagnostic.Entry) []diagnostic.Record
+  - mcp.NewServer(in io.Reader, out io.Writer) *mcp.Server
+  - cli.RunMCP(ctx context.Context) error   # exported like RunLSP and every other command entry point in internal/cli
+words:
+  - concept: one diagnostic in the JSON shape that emod validate --format json prints and emod_check returns
+    word: record
+    not: [entry, jsonEntry, finding, item]
+  - concept: the .emod text that a tool call gives inline, in place of a path
+    word: content
+    not: [draft, text, body]
+  - concept: the file name that the records of inline content carry
+    word: name
+    not: [label, filename input, path]
+  - concept: an MCP tool result with isError set, for a call the tool cannot do
+    word: error result
+    not: [failure, tool error, exception]
+dependencies:
+  - internal/cli -> internal/mcp
+  - internal/cli -> internal/diagnostic
+  - internal/mcp -> internal/oracle
+  - internal/mcp -> internal/diagnostic
+  - internal/mcp -> internal/version
+  - internal/mcp -> github.com/modelcontextprotocol/go-sdk/mcp
