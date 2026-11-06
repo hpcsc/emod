@@ -1394,7 +1394,62 @@ in this repo; append only learnings that generalise beyond the task that surface
 
 ## An audit test in a file no task commit touched still folds, by git and not by clerk fixup
 - Type: convention
-- Recorded: 2026-11-02
-- Observed: us-013-external-file-changes
-- Learning: clerk fixup mark refuses a file that no commit in base..HEAD touches ('untouched'), but a commit titled 'fixup! <task subject>' folds into that task's commit with GIT_SEQUENCE_EDITOR=: git rebase -i --autosquash <base> all the same; split such a test file's additions into one fixup per task first. The same rebase with an exec git commit --amend -F <file> line after a task's pick rewrites a message an audit fold made untrue.
-- Apply when: folding audit fixes when clerk fixup mark answers untouched or a fold leaves a task's commit message describing code it no longer has
+- Recorded: 2026-11-06
+- Observed: llm-foundation
+- Learning: clerk fixup mark refuses a file that no commit in base..HEAD touches ('untouched'), and it cannot stage a deleted file at all ('pathspec did not match'). In both cases stage the change by hand (git add, or git rm for a deletion) and commit it as 'fixup! <task subject>'; GIT_SEQUENCE_EDITOR=: git rebase -i --autosquash <base> folds it all the same. Split such a file's additions into one fixup per task first. The same rebase with an exec git commit --amend -F <file> line after a task's pick rewrites a message an audit fold made untrue.
+- Apply when: folding audit fixes when clerk fixup mark answers untouched or cannot stage a deletion, or a fold leaves a task's commit message describing code it no longer has
+## On Linux ~/.config/emod is the desktop app's folder, so a CLI config file lives inside it
+- Type: constraint
+- Recorded: 2026-11-06
+- Observed: task 9 — llm-foundation
+- Learning: emod-desktop keeps recent-files.json in os.UserConfigDir()/emod, which on Linux without XDG_CONFIG_HOME is ~/.config/emod, so a file at that path cannot exist there and reading it fails with 'is a directory'. The AI settings therefore live at ~/.config/emod/config (config.Load); the story text 'an ~/.config/emod file' was wrong for Linux.
+- Apply when: planning or adding any file the CLI reads or writes under ~/.config, or a story that names ~/.config/emod as a file
+
+## The repair loop replays blank answers, so every llm.Model adapter must send blank content as non-blank text
+- Type: constraint
+- Recorded: 2026-11-06
+- Observed: task 8 — llm-foundation
+- Learning: repair.Generate sends the model's answer back as an assistant turn as it is, and an answer can be empty. The Anthropic Messages API rejects an empty or whitespace-only text block, so bedrock.toMessageParams sends '(empty)' in its place; a new adapter, such as the proposed OpenAI-compatible one, needs the same guard in its own wire format.
+- Apply when: adding or changing an llm.Model adapter, or changing what repair.Generate replays to the model
+
+## emod ai runs end to end offline through --ai-endpoint pointed at an httptest server
+- Type: pattern
+- Recorded: 2026-11-06
+- Observed: task 10 — llm-foundation
+- Learning: bedrockGateway in internal/cli/ai_test.go is an httptest server that answers Messages API calls. With EMOD_AI_ENDPOINT or --ai-endpoint set to its URL and fake AWS_ACCESS_KEY_ID and AWS_SECRET_ACCESS_KEY, the real Bedrock Mantle adapter signs with SigV4 and calls it over plain http, so the flags, config, adapter, repair loop and output all run with no network, and each request body and Authorization header is recorded for assertions.
+- Apply when: testing an AI command or feature through the CLI, or tempted to check adapter wiring with a live call
+
+## Tests that pin the wording or layout of a prompt are raised as change detectors
+- Type: recurring-finding
+- Recorded: 2026-11-06
+- Observed: task 8 — llm-foundation
+- Learning: Three audit rounds raised tests that matched the repair feedback's sentences, then its line layout, then the smoke prompt's literal names. Assert what reaches the model instead: each diagnostic.String() is in the feedback, and the user turn names none of the example names read from the system prompt; accept the mutants on the wording itself with that reason.
+- Apply when: writing a test for text that a model reads: a system prompt, a user prompt, or repair feedback
+
+## task build:wasm cannot show that the WASM build excludes the provider SDK
+- Type: constraint
+- Recorded: 2026-11-06
+- Observed: task 9 — llm-foundation
+- Learning: The Anthropic Go SDK compiles for GOOS=js GOARCH=wasm, so a green build:wasm says nothing about what the WASM binary links. internal/llm/isolation_test.go walks the imports of cmd/emod-wasm and of internal/llm/repair with go/build and fails when internal/llm, the bedrock adapter or the SDK is reached; extend it for a new boundary.
+- Apply when: planning or checking a criterion that a build or package stays free of a dependency
+
+## emod reports AI usage in tokens, with no price
+- Type: constraint
+- Recorded: 2026-11-06
+- Observed: task 7 — llm-foundation
+- Learning: On 2026-11-06 the user removed the price estimate from emod ai for simplicity, and internal/llm/cost is gone, after the bedrock-cost tool's table turned out to price every Opus model at the old 15/75 rate. The two cost criteria of US-008 stay unticked on purpose.
+- Apply when: planning a story or task that reports what an AI run costs, or reading US-008 in user-stories/ai/00-llm-foundation.md
+
+## A criterion that needs the user's cloud credentials cannot be closed by a run
+- Type: constraint
+- Recorded: 2026-11-06
+- Observed: task 10 — llm-foundation
+- Learning: US-010's 'makes one real round-trip' needs the user's AWS credentials and spends money, so the run could only prove it offline through a local gateway and left the criterion unticked. Write such a check in the breakdown as a manual step for the user, with the exact command, not as a criterion that a task closes.
+- Apply when: decomposing a story whose criterion needs a live call to Bedrock or another paid or credentialed service
+
+## Another session's uncommitted edits in an in-place checkout: stash only their paths, pop after landing
+- Type: pattern
+- Recorded: 2026-11-06
+- Observed: llm-foundation
+- Learning: With --in-place, other sessions edit the same checkout, and their uncommitted files make clerk audit round, fixup replay and land refuse. Coordinate through ListAgents and SendMessage until that session says its files are final, then run git stash push -u -- <their paths>, note the stash SHA, land, and pop that SHA; never stash while its agents still write.
+- Apply when: a run finds files it did not write dirty in the tree mid-run, especially in an in-place run
