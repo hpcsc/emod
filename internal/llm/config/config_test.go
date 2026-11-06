@@ -206,12 +206,66 @@ func TestResolve(t *testing.T) {
 	})
 
 	t.Run("provider validation", func(t *testing.T) {
-		t.Run("rejects a provider other than anthropic and names the accepted provider", func(t *testing.T) {
-			getenv := mapEnv(map[string]string{"EMOD_AI_PROVIDER": "openai", "EMOD_AI_API_KEY": "test-key"})
+		t.Run("rejects a provider that is not anthropic or openai and names the accepted providers", func(t *testing.T) {
+			getenv := mapEnv(map[string]string{"EMOD_AI_PROVIDER": "bedrock", "EMOD_AI_API_KEY": "test-key"})
 
 			_, err := config.Resolve(config.Flags{}, getenv, missingFile(t))
 
-			require.ErrorContains(t, err, `EMOD_AI_PROVIDER has an invalid value "openai": the accepted provider is anthropic`)
+			require.ErrorContains(t, err, `EMOD_AI_PROVIDER has an invalid value "bedrock": accepted providers are anthropic and openai`)
+		})
+	})
+
+	t.Run("openai provider", func(t *testing.T) {
+		t.Run("takes the key from OPENAI_API_KEY when EMOD_AI_API_KEY is not set", func(t *testing.T) {
+			getenv := mapEnv(map[string]string{"EMOD_AI_PROVIDER": "openai", "EMOD_AI_MODEL": "gpt-test", "OPENAI_API_KEY": "openai-key"})
+
+			cfg, err := config.Resolve(config.Flags{}, getenv, missingFile(t))
+
+			require.NoError(t, err)
+			require.Equal(t, "openai-key", cfg.APIKey)
+			require.Equal(t, "OPENAI_API_KEY", cfg.APIKeySource)
+		})
+
+		t.Run("needs no API key, because a local server needs none", func(t *testing.T) {
+			getenv := mapEnv(map[string]string{"EMOD_AI_PROVIDER": "openai", "EMOD_AI_MODEL": "llama3.1", "EMOD_AI_ENDPOINT": "http://localhost:11434/v1"})
+
+			cfg, err := config.Resolve(config.Flags{}, getenv, missingFile(t))
+
+			require.NoError(t, err)
+			require.Equal(t, config.Config{
+				Provider:     "openai",
+				Model:        "llama3.1",
+				CheapModel:   "llama3.1",
+				Effort:       llm.EffortMedium,
+				Endpoint:     "http://localhost:11434/v1",
+				APIKey:       "",
+				APIKeySource: "",
+			}, cfg)
+		})
+
+		t.Run("does not send ANTHROPIC_API_KEY to an OpenAI-compatible server", func(t *testing.T) {
+			getenv := mapEnv(map[string]string{"EMOD_AI_PROVIDER": "openai", "EMOD_AI_MODEL": "gpt-test", "ANTHROPIC_API_KEY": "anthropic-key"})
+
+			cfg, err := config.Resolve(config.Flags{}, getenv, missingFile(t))
+
+			require.NoError(t, err)
+			require.Empty(t, cfg.APIKey)
+		})
+
+		t.Run("requires a model and names EMOD_AI_MODEL", func(t *testing.T) {
+			getenv := mapEnv(map[string]string{"EMOD_AI_PROVIDER": "openai"})
+
+			_, err := config.Resolve(config.Flags{}, getenv, missingFile(t))
+
+			require.ErrorContains(t, err, "EMOD_AI_MODEL is required for the openai provider")
+		})
+
+		t.Run("OPENAI_API_KEY alone does not turn AI on", func(t *testing.T) {
+			getenv := mapEnv(map[string]string{"OPENAI_API_KEY": "key-for-another-tool"})
+
+			_, err := config.Resolve(config.Flags{}, getenv, missingFile(t))
+
+			require.ErrorIs(t, err, config.ErrNotConfigured)
 		})
 	})
 

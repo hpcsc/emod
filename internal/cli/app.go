@@ -299,14 +299,14 @@ func NewApp() *urfave.Command {
 				Name:  "ai",
 				Usage: "Check that AI is configured and turns a prompt into an emod model that passes the checks",
 				Flags: []urfave.Flag{
-					&urfave.StringFlag{Name: "ai-provider", Usage: "AI provider: anthropic (EMOD_AI_PROVIDER)"},
+					&urfave.StringFlag{Name: "ai-provider", Usage: "AI provider: anthropic or openai (EMOD_AI_PROVIDER)"},
 					&urfave.StringFlag{Name: "ai-model", Usage: "Model ID for AI work (EMOD_AI_MODEL)"},
 					&urfave.StringFlag{Name: "ai-model-cheap", Usage: "Model ID for low-stakes AI work (EMOD_AI_MODEL_CHEAP)"},
 					&urfave.StringFlag{Name: "ai-effort", Usage: "Effort level: low, medium, high or xhigh (EMOD_AI_EFFORT)"},
 					&urfave.StringFlag{Name: "ai-endpoint", Usage: "Gateway URL to send model calls through (EMOD_AI_ENDPOINT)"},
 				},
 				Action: func(ctx context.Context, cmd *urfave.Command) error {
-					return reportExitError(RunAI(ctx, aiConfigLoader(cmd), connectAnthropic))
+					return reportExitError(RunAI(ctx, aiConfigLoader(cmd), connectModel))
 				},
 				Commands: []*urfave.Command{
 					{

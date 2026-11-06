@@ -19,12 +19,17 @@ const (
 	keyEffort     = "EMOD_AI_EFFORT"
 	keyEndpoint   = "EMOD_AI_ENDPOINT"
 
-	anthropicAPIKey = "ANTHROPIC_API_KEY"
+	ProviderAnthropic = "anthropic"
+	ProviderOpenAI    = "openai"
 
-	providerAnthropic = "anthropic"
-	defaultModel      = "claude-opus-4-8"
-	defaultCheapModel = "claude-haiku-4-5"
+	defaultAnthropicModel      = "claude-opus-4-8"
+	defaultAnthropicCheapModel = "claude-haiku-4-5"
 )
+
+var apiKeyVariables = map[string]string{
+	ProviderAnthropic: "ANTHROPIC_API_KEY",
+	ProviderOpenAI:    "OPENAI_API_KEY",
+}
 
 var ErrNotConfigured = errors.New("AI is not configured")
 
@@ -82,18 +87,22 @@ func Resolve(flags Flags, getenv func(string) string, filePath string) (Config, 
 	}
 
 	if provider == "" {
-		provider = providerAnthropic
+		provider = ProviderAnthropic
 	}
-	if provider != providerAnthropic {
-		return Config{}, fmt.Errorf("%s has an invalid value %q: the accepted provider is %s", keyProvider, provider, providerAnthropic)
+	providerAPIKey, known := apiKeyVariables[provider]
+	if !known {
+		return Config{}, fmt.Errorf("%s has an invalid value %q: accepted providers are %s and %s", keyProvider, provider, ProviderAnthropic, ProviderOpenAI)
 	}
 
 	apiKeySource := keyAPIKey
 	if apiKey == "" {
-		apiKey, apiKeySource = getenv(anthropicAPIKey), anthropicAPIKey
+		apiKey, apiKeySource = getenv(providerAPIKey), providerAPIKey
 	}
 	if apiKey == "" {
-		return Config{}, fmt.Errorf("an API key is required: set %s or %s in the environment", keyAPIKey, anthropicAPIKey)
+		apiKeySource = ""
+	}
+	if apiKey == "" && provider == ProviderAnthropic {
+		return Config{}, fmt.Errorf("an API key is required: set %s or %s in the environment", keyAPIKey, providerAPIKey)
 	}
 
 	effort, err := parseEffort(effortLevel)
@@ -101,12 +110,21 @@ func Resolve(flags Flags, getenv func(string) string, filePath string) (Config, 
 		return Config{}, err
 	}
 
-	if model == "" {
-		model = defaultModel
-	}
-
-	if cheapModel == "" {
-		cheapModel = defaultCheapModel
+	switch provider {
+	case ProviderAnthropic:
+		if model == "" {
+			model = defaultAnthropicModel
+		}
+		if cheapModel == "" {
+			cheapModel = defaultAnthropicCheapModel
+		}
+	case ProviderOpenAI:
+		if model == "" {
+			return Config{}, fmt.Errorf("%s is required for the %s provider: set it with the --ai-model flag, the %s environment variable, or the ~/.config/emod/config file", keyModel, ProviderOpenAI, keyModel)
+		}
+		if cheapModel == "" {
+			cheapModel = model
+		}
 	}
 
 	return Config{

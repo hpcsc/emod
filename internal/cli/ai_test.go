@@ -30,7 +30,7 @@ func withoutAISettings(t *testing.T) string {
 
 	home := t.TempDir()
 	t.Setenv("HOME", home)
-	for _, key := range []string{"EMOD_AI_PROVIDER", "EMOD_AI_API_KEY", "EMOD_AI_MODEL", "EMOD_AI_MODEL_CHEAP", "EMOD_AI_EFFORT", "EMOD_AI_ENDPOINT", "ANTHROPIC_API_KEY"} {
+	for _, key := range []string{"EMOD_AI_PROVIDER", "EMOD_AI_API_KEY", "EMOD_AI_MODEL", "EMOD_AI_MODEL_CHEAP", "EMOD_AI_EFFORT", "EMOD_AI_ENDPOINT", "ANTHROPIC_API_KEY", "OPENAI_API_KEY"} {
 		t.Setenv(key, "")
 	}
 
@@ -152,6 +152,53 @@ func (g *apiGateway) answer(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
+type chatGateway struct {
+	server *httptest.Server
+
+	mu             sync.Mutex
+	answers        []string
+	paths          []string
+	bodies         []map[string]any
+	authorizations []string
+}
+
+func newChatGateway(t *testing.T, answers ...string) *chatGateway {
+	t.Helper()
+
+	gateway := &chatGateway{answers: answers}
+	gateway.server = httptest.NewServer(http.HandlerFunc(gateway.answer))
+	t.Cleanup(gateway.server.Close)
+
+	return gateway
+}
+
+func (g *chatGateway) answer(w http.ResponseWriter, r *http.Request) {
+	g.mu.Lock()
+	defer g.mu.Unlock()
+
+	raw, _ := io.ReadAll(r.Body)
+	var body map[string]any
+	_ = json.Unmarshal(raw, &body)
+	g.paths = append(g.paths, r.URL.Path)
+	g.bodies = append(g.bodies, body)
+	g.authorizations = append(g.authorizations, r.Header.Get("Authorization"))
+
+	if len(g.answers) == 0 {
+		http.Error(w, `{"error":{"message":"no answer queued"}}`, http.StatusInternalServerError)
+		return
+	}
+	text := g.answers[0]
+	g.answers = g.answers[1:]
+
+	w.Header().Set("Content-Type", "application/json")
+	_ = json.NewEncoder(w).Encode(map[string]any{
+		"id":      "chatcmpl-test",
+		"object":  "chat.completion",
+		"choices": []map[string]any{{"index": 0, "message": map[string]any{"role": "assistant", "content": text}, "finish_reason": "stop"}},
+		"usage":   map[string]any{"prompt_tokens": 700, "completion_tokens": 150},
+	})
+}
+
 func TestAI(t *testing.T) {
 	t.Run("not configured", func(t *testing.T) {
 		t.Run("prints how to turn AI on and succeeds without connecting", func(t *testing.T) {
@@ -251,6 +298,18 @@ func TestAI(t *testing.T) {
 			requireExitCode(t, 1, err)
 			require.Contains(t, stderr, `EMOD_AI_EFFORT has an invalid value "highest"`)
 		})
+
+		t.Run("emod ai with the openai provider and no model exits 1 and names the model", func(t *testing.T) {
+			withoutAISettings(t)
+
+			var err error
+			stderr := captureStderr(t, func() {
+				err = runCommandLine(t, "emod", "ai", "--ai-provider", "openai")
+			})
+
+			requireExitCode(t, 1, err)
+			require.Contains(t, stderr, "EMOD_AI_MODEL is required for the openai provider")
+		})
 	})
 
 	t.Run("settings", func(t *testing.T) {
@@ -278,6 +337,30 @@ func TestAI(t *testing.T) {
 			require.Equal(t, "claude-opus-5-5", gateway.bodies[0]["model"])
 			require.Equal(t, map[string]any{"effort": "high"}, gateway.bodies[0]["output_config"])
 			require.Equal(t, []string{"test-api-key"}, gateway.apiKeys)
+			require.NotContains(t, output, "Notice:")
+		})
+
+		t.Run("emod ai sends the call to an OpenAI-compatible server with no key, and says that the model is outside the tested tier", func(t *testing.T) {
+			withoutAISettings(t)
+			gateway := newChatGateway(t, test.BillingPayments)
+
+			output := captureStdout(t, func() {
+				require.NoError(t, runCommandLine(t, "emod", "ai",
+					"--ai-provider", "openai",
+					"--ai-model", "llama3.1",
+					"--ai-endpoint", gateway.server.URL+"/v1",
+				))
+			})
+
+			requireSetting(t, output, "Provider", "openai")
+			requireSetting(t, output, "Cheap model", "llama3.1")
+			requireSetting(t, output, "API key", "none")
+			require.Contains(t, output, "Notice: emod tests its AI features on Claude through the anthropic provider.")
+			require.Contains(t, output, "The source passed the oracle on attempt 1 of 3.\n")
+			require.Contains(t, output, "Tokens: 700 input, 150 output\n")
+			require.Equal(t, []string{"/v1/chat/completions"}, gateway.paths)
+			require.Equal(t, "llama3.1", gateway.bodies[0]["model"])
+			require.Equal(t, []string{""}, gateway.authorizations)
 		})
 
 		t.Run("emod ai reads its settings from ~/.config/emod/config and the key from ANTHROPIC_API_KEY", func(t *testing.T) {
@@ -349,6 +432,21 @@ func TestAI(t *testing.T) {
 			})
 
 			requireSetting(t, output, "API key", "from ANTHROPIC_API_KEY")
+		})
+
+		t.Run("emod ai status names OPENAI_API_KEY and the OpenAI API for the openai provider", func(t *testing.T) {
+			withoutAISettings(t)
+			t.Setenv("EMOD_AI_PROVIDER", "openai")
+			t.Setenv("EMOD_AI_MODEL", "gpt-test")
+			t.Setenv("OPENAI_API_KEY", "openai-api-key")
+
+			output := captureStdout(t, func() {
+				require.NoError(t, runCommandLine(t, "emod", "ai", "status"))
+			})
+
+			requireSetting(t, output, "Endpoint", "the OpenAI API")
+			requireSetting(t, output, "API key", "from OPENAI_API_KEY")
+			require.NotContains(t, output, "openai-api-key")
 		})
 
 		t.Run("emod ai status exits 1 and names the key variables when AI is on but no key is set", func(t *testing.T) {
