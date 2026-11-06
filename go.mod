@@ -6,10 +6,12 @@ require (
 	github.com/anthropics/anthropic-sdk-go v1.51.0
 	github.com/google/go-cmp v0.7.0
 	github.com/google/jsonschema-go v0.4.3
+	github.com/hashicorp/hcl/v2 v2.23.0
 	github.com/mattn/go-isatty v0.0.20
 	github.com/stretchr/testify v1.12.1
 	github.com/urfave/cli/v3 v3.12.0
 	github.com/wailsapp/wails/v3 v3.0.0-beta.9
+	github.com/zclconf/go-cty v1.13.0
 )
 
 require (
@@ -83,7 +85,6 @@ require (
 	github.com/goreleaser/fileglob v1.4.0 // indirect
 	github.com/goreleaser/nfpm/v2 v2.44.1 // indirect
 	github.com/gorilla/css v1.0.1 // indirect
-	github.com/hashicorp/hcl/v2 v2.23.0 // indirect
 	github.com/huandu/xstrings v1.5.0 // indirect
 	github.com/invopop/jsonschema v0.14.0 // indirect
 	github.com/jackmordaunt/icns/v2 v2.2.7 // indirect
@@ -149,7 +150,6 @@ require (
 	github.com/yuin/goldmark-emoji v1.0.6 // indirect
 	github.com/yusufpapurcu/wmi v1.2.4 // indirect
 	github.com/zalando/go-keyring v0.2.6 // indirect
-	github.com/zclconf/go-cty v1.13.0 // indirect
 	github.com/zeebo/xxh3 v1.1.0 // indirect
 	gitlab.com/digitalxero/go-conventional-commit v1.0.7 // indirect
 	go.yaml.in/yaml/v3 v3.0.5 // indirect
