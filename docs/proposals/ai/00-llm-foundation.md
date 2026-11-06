@@ -253,8 +253,8 @@ One configuration serves the CLI, the LSP and the desktop app:
 
 emod reads the keys from the flags, then the environment, then `~/.config/emod/config`, then the built-in
 defaults. The first source that sets a key wins. The file holds one `KEY=VALUE` line for each key. emod
-removes the spaces around the key and the value, and a pair of matching quotes, `"` or `'`, around the
-value.
+removes the spaces around the key and the value, and a pair of quotes of the same kind, `"` or `'`,
+around the value.
 
 The API key has its own rules:
 

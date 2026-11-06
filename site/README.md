@@ -27,7 +27,7 @@ viewer locally, run `task build:web` and serve `web/` with any static file serve
 | --- | --- |
 | `hugo.yaml` | Site config: title, `baseURL`, Hextra theme, nav menu. |
 | `content/_index.md` | The marketing homepage. |
-| `content/docs/` | The docs section (getting started, DSL reference, diagrams, editors, viewer). |
+| `content/docs/` | The docs section (getting started, DSL reference, diagrams, editors, viewer, AI). |
 | `static/CNAME` | The custom domain `emod.saphix.app`. |
 | `static/images/` | Homepage artwork. |
 | `assets/css/` | Homepage layout overrides. |

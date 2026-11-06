@@ -293,6 +293,20 @@ emod glossary reservation.emod                # markdown (default)
 emod glossary reservation.emod --format json  # JSON
 ```
 
+### Use AI (optional)
+
+AI is opt-in. With no AI setting, emod makes no model call.
+
+```bash
+export EMOD_AI_API_KEY=<your Anthropic API key>
+emod ai status   # show the AI settings and the source of the key, and call no model
+emod ai          # check the setup with one round of model calls
+```
+
+emod also works with OpenAI, and with local servers such as Ollama, through the `openai` provider. The
+[AI page](https://emod.saphix.app/docs/ai/) of the docs tells how to set up each provider, and what each
+command sends.
+
 ## Editor Setup
 
 The `emod` binary must be on your `PATH` for editor integrations to work.

@@ -163,3 +163,4 @@ emod fmt --check reservation.emod  # check only (CI)
 - [Diagrams](/docs/diagrams/) — SVG, Mermaid, ASCII, and event-flow.
 - [Editor setup](/docs/editor-setup/) — language server integration.
 - [Web viewer](/docs/viewer/) — open and edit diagrams in the browser.
+- [AI](/docs/ai/) — set up a model provider for `emod ai`.
