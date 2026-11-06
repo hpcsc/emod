@@ -77,7 +77,7 @@ emod before it writes the file, so that I see only models that pass the check.
 - [ ] `emod mcp` starts a server that speaks MCP over stdin and stdout. An MCP host that starts the server
   lists the tool `emod_check`.
 - [ ] `emod_check` takes `.emod` text in `content` and returns a list of diagnostics. Each record has
-  `file`, `line`, `rule`, `severity` and `message`.
+  `file`, `line`, `severity` and `message`, and `rule` when a rule name goes with the diagnostic.
 - [ ] For the same source, `emod_check` returns the same records as `emod validate --format json`. A clean
   draft returns an empty list.
 - [ ] The records carry the file name from the `name` input, or `inline.emod` when the call gives no `name`.
