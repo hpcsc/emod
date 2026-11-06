@@ -45,6 +45,13 @@ type Usage struct {
 	OutputTokens int
 }
 
+func (u Usage) Add(other Usage) Usage {
+	return Usage{
+		InputTokens:  u.InputTokens + other.InputTokens,
+		OutputTokens: u.OutputTokens + other.OutputTokens,
+	}
+}
+
 type Response struct {
 	Text  string
 	Usage Usage

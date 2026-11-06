@@ -25,3 +25,14 @@ func TestEffort(t *testing.T) {
 		})
 	})
 }
+
+func TestUsage(t *testing.T) {
+	t.Run("add", func(t *testing.T) {
+		t.Run("sums input and output tokens separately", func(t *testing.T) {
+			first := llm.Usage{InputTokens: 100, OutputTokens: 20}
+			second := llm.Usage{InputTokens: 30, OutputTokens: 7}
+
+			require.Equal(t, llm.Usage{InputTokens: 130, OutputTokens: 27}, first.Add(second))
+		})
+	})
+}

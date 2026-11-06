@@ -7,7 +7,7 @@
 - [x] Task 4: Add the Bedrock-backed `llm.Model` adapter
 - [x] Task 5: Add the single AI configuration block
 - [x] Task 6: Support schema-conformant structured output in the adapter
-- [ ] Task 7: Add cost and token usage reporting
+- [x] Task 7: Add cost and token usage reporting
 - [ ] Task 8: Build the generate → validate → lint → repair loop
 - [ ] Task 9: Gate AI as opt-in and keep WASM provider-free
 - [ ] Task 10: Add the `emod ai` end-to-end smoke command
@@ -337,11 +337,11 @@ turned into a reported tokens-used figure and an estimated cost that reflects th
 actually used.
 
 **Acceptance Criteria:**
-- [ ] Every `Response` carries input and output token counts (confirmed from Task 1's
+- [x] Every `Response` carries input and output token counts (confirmed from Task 1's
   contract and Task 4's population of it).
 - [ ] A reporting function turns token counts plus the model used into an estimated cost.
 - [ ] The reported cost reflects the model actually used for the run.
-- [ ] Usage from every attempt of a run can be accumulated, so a later repair loop reports
+- [x] Usage from every attempt of a run can be accumulated, so a later repair loop reports
   the sum across attempts, not just the final attempt.
 
 **Affected Files/Modules:**

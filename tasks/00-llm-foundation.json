@@ -109,7 +109,7 @@
         "internal/llm/cost/cost.go",
         "internal/llm/cost/cost_test.go"
       ],
-      "done": false
+      "done": true
     },
     {
       "n": 8,
