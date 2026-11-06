@@ -6,7 +6,7 @@
 - [x] Task 3: Add a mock `llm.Model` for network-free tests
 - [x] Task 4: Add the Bedrock-backed `llm.Model` adapter
 - [x] Task 5: Add the single AI configuration block
-- [ ] Task 6: Support schema-conformant structured output in the adapter
+- [x] Task 6: Support schema-conformant structured output in the adapter
 - [ ] Task 7: Add cost and token usage reporting
 - [ ] Task 8: Build the generate → validate → lint → repair loop
 - [ ] Task 9: Gate AI as opt-in and keep WASM provider-free
@@ -296,12 +296,12 @@ output and returns content conforming to that schema; non-conforming output surf
 error; requests without a schema continue to return plain text.
 
 **Acceptance Criteria:**
-- [ ] A `GenerateRequest` carrying a schema causes the adapter to request structured output
+- [x] A `GenerateRequest` carrying a schema causes the adapter to request structured output
   and return content conforming to that schema.
-- [ ] Output that does not conform to the schema is surfaced as an error, not silently
+- [x] Output that does not conform to the schema is surfaced as an error, not silently
   returned.
-- [ ] A feature can supply a schema and receive a validated object it consumes directly.
-- [ ] Requests without a schema continue to return plain text.
+- [x] A feature can supply a schema and receive a validated object it consumes directly.
+- [x] Requests without a schema continue to return plain text.
 
 **Affected Files/Modules:**
 - `internal/llm/bedrock/adapter.go` — extend `Generate` to take the strict-tool-use /

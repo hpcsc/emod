@@ -94,7 +94,7 @@
         "GenerateRequest.Schema",
         "internal/llm/bedrock/adapter_test.go"
       ],
-      "done": false
+      "done": true
     },
     {
       "n": 7,
@@ -113,7 +113,7 @@
     },
     {
       "n": 8,
-      "title": "Build the generate → validate → lint → repair loop",
+      "title": "Build the generate \u2192 validate \u2192 lint \u2192 repair loop",
       "language": "Go",
       "testable": true,
       "depends_on": [

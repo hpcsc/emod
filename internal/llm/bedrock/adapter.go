@@ -102,20 +102,34 @@ func (a *Adapter) Generate(ctx context.Context, request llm.GenerateRequest) (ll
 		params.System = []anthropic.TextBlockParam{{Text: request.System}}
 	}
 
-	// request.Schema is intentionally unwired: structured output is not supported yet, so the request returns plain text.
+	var schema *outputSchema
+	if len(request.Schema) > 0 {
+		var err error
+		schema, err = newOutputSchema(request.Schema)
+		if err != nil {
+			return llm.Response{}, err
+		}
+		params.OutputConfig.Format = anthropic.JSONOutputFormatParam{Schema: schema.document}
+	}
 
 	message, err := a.messages.New(ctx, params)
 	if err != nil {
 		return llm.Response{}, err
 	}
 
-	return llm.Response{
-		Text: extractText(message),
-		Usage: llm.Usage{
-			InputTokens:  int(message.Usage.InputTokens),
-			OutputTokens: int(message.Usage.OutputTokens),
-		},
-	}, nil
+	text := extractText(message)
+	usage := llm.Usage{
+		InputTokens:  int(message.Usage.InputTokens),
+		OutputTokens: int(message.Usage.OutputTokens),
+	}
+
+	if schema != nil {
+		if err := schema.check(text); err != nil {
+			return llm.Response{Usage: usage}, err
+		}
+	}
+
+	return llm.Response{Text: text, Usage: usage}, nil
 }
 
 func resolveEffort(requested, fallback llm.Effort) llm.Effort {

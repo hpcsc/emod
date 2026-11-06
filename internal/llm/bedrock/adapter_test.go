@@ -224,6 +224,138 @@ func TestAdapter(t *testing.T) {
 		}
 	})
 
+	t.Run("structured output", func(t *testing.T) {
+		eventSchema := `{
+			"type": "object",
+			"properties": {
+				"name": {"type": "string"},
+				"fields": {"type": "array", "items": {"type": "string"}}
+			},
+			"required": ["name", "fields"],
+			"additionalProperties": false
+		}`
+
+		t.Run("asks for the request schema as the JSON output format", func(t *testing.T) {
+			transport := &capturingTransport{resp: cannedResponse(`{"name":"OrderPlaced","fields":[]}`, 1, 1)}
+			adapter := newAdapter(t, newSettings(), transport)
+
+			_, err := adapter.Generate(context.Background(), llm.GenerateRequest{
+				Messages: []llm.Message{{Role: "user", Content: "describe the event"}},
+				Schema:   json.RawMessage(eventSchema),
+			})
+			require.NoError(t, err)
+
+			var expectedSchema map[string]any
+			require.NoError(t, json.Unmarshal([]byte(eventSchema), &expectedSchema))
+			outputConfig, ok := decodeBody(t, transport.body)["output_config"].(map[string]any)
+			require.True(t, ok, "request must carry an output_config")
+			require.Equal(t, map[string]any{"type": "json_schema", "schema": expectedSchema}, outputConfig["format"])
+		})
+
+		t.Run("returns conforming output that a feature decodes into its own type", func(t *testing.T) {
+			transport := &capturingTransport{resp: cannedResponse(`{"name":"OrderPlaced","fields":["orderId","total"]}`, 1, 1)}
+			adapter := newAdapter(t, newSettings(), transport)
+
+			response, err := adapter.Generate(context.Background(), llm.GenerateRequest{
+				Messages: []llm.Message{{Role: "user", Content: "describe the event"}},
+				Schema:   json.RawMessage(eventSchema),
+			})
+			require.NoError(t, err)
+
+			var event struct {
+				Name   string   `json:"name"`
+				Fields []string `json:"fields"`
+			}
+			require.NoError(t, json.Unmarshal([]byte(response.Text), &event))
+			require.Equal(t, "OrderPlaced", event.Name)
+			require.Equal(t, []string{"orderId", "total"}, event.Fields)
+		})
+
+		t.Run("reports output that does not conform to the schema as an error", func(t *testing.T) {
+			transport := &capturingTransport{resp: cannedResponse(`{"name":"OrderPlaced"}`, 1, 1)}
+			adapter := newAdapter(t, newSettings(), transport)
+
+			response, err := adapter.Generate(context.Background(), llm.GenerateRequest{
+				Messages: []llm.Message{{Role: "user", Content: "describe the event"}},
+				Schema:   json.RawMessage(eventSchema),
+			})
+
+			require.ErrorContains(t, err, "does not conform to the request schema")
+			require.ErrorContains(t, err, "fields")
+			require.Empty(t, response.Text)
+		})
+
+		t.Run("reports output that is not JSON as an error", func(t *testing.T) {
+			transport := &capturingTransport{resp: cannedResponse("OrderPlaced has two fields", 1, 1)}
+			adapter := newAdapter(t, newSettings(), transport)
+
+			response, err := adapter.Generate(context.Background(), llm.GenerateRequest{
+				Messages: []llm.Message{{Role: "user", Content: "describe the event"}},
+				Schema:   json.RawMessage(eventSchema),
+			})
+
+			require.ErrorContains(t, err, "is not JSON")
+			require.Empty(t, response.Text)
+		})
+
+		t.Run("still reports the tokens that a non-conforming answer spent", func(t *testing.T) {
+			transport := &capturingTransport{resp: cannedResponse(`{"name":"OrderPlaced"}`, 120, 30)}
+			adapter := newAdapter(t, newSettings(), transport)
+
+			response, err := adapter.Generate(context.Background(), llm.GenerateRequest{
+				Messages: []llm.Message{{Role: "user", Content: "describe the event"}},
+				Schema:   json.RawMessage(eventSchema),
+			})
+
+			require.Error(t, err)
+			require.Equal(t, llm.Usage{InputTokens: 120, OutputTokens: 30}, response.Usage)
+		})
+
+		t.Run("rejects an unusable schema without calling the model", func(t *testing.T) {
+			cases := []struct {
+				name   string
+				schema string
+			}{
+				{name: "a schema that is not JSON", schema: `{"type": "object"`},
+				{name: "a schema that is a bare number", schema: `1`},
+				{name: "a schema that is a bare boolean", schema: `true`},
+				{name: "a schema that is null", schema: `null`},
+				{name: "a keyword with a value of the wrong type", schema: `{"type": 12}`},
+				{name: "a reference to a definition that does not exist", schema: `{"$ref": "#/$defs/missing"}`},
+			}
+
+			for _, tc := range cases {
+				t.Run(tc.name, func(t *testing.T) {
+					transport := &capturingTransport{}
+					adapter := newAdapter(t, newSettings(), transport)
+
+					_, err := adapter.Generate(context.Background(), llm.GenerateRequest{
+						Messages: []llm.Message{{Role: "user", Content: "describe the event"}},
+						Schema:   json.RawMessage(tc.schema),
+					})
+
+					require.ErrorContains(t, err, "not a valid JSON Schema")
+					require.Empty(t, transport.url, "no request must reach the model")
+				})
+			}
+		})
+
+		t.Run("keeps a request without a schema on the plain-text path", func(t *testing.T) {
+			transport := &capturingTransport{resp: cannedResponse("OrderPlaced has two fields", 1, 1)}
+			adapter := newAdapter(t, newSettings(), transport)
+
+			response, err := adapter.Generate(context.Background(), llm.GenerateRequest{
+				Messages: []llm.Message{{Role: "user", Content: "describe the event"}},
+			})
+			require.NoError(t, err)
+
+			require.Equal(t, "OrderPlaced has two fields", response.Text)
+			outputConfig, _ := decodeBody(t, transport.body)["output_config"].(map[string]any)
+			_, formatPresent := outputConfig["format"]
+			require.False(t, formatPresent, "a request without a schema must not ask for a JSON output format")
+		})
+	})
+
 	t.Run("endpoint", func(t *testing.T) {
 		t.Run("routes through the configured gateway base URL", func(t *testing.T) {
 			settings := newSettings()
