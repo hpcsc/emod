@@ -129,6 +129,13 @@ The `openai` adapter uses `net/http` and no SDK. emod needs one call, `POST /cha
 messages, an optional `response_format` and an optional `reasoning_effort`. An SDK adds many dependencies
 and ties the adapter to the features of one vendor, but the adapter must work with many servers.
 
+- The adapter sends the key as a bearer token. With no key, it sends no `Authorization` header, because a
+  local server needs none.
+- It sends no limit on the output tokens. Servers name that field in different ways, such as `max_tokens`
+  and `max_completion_tokens`, and a wrong name gives an HTTP 400.
+- A fallback runs only after an HTTP 400 whose message names the field. A 400 for another reason, such as
+  a prompt that is too long, ends the call with that error.
+
 ### Why two protocols
 
 - **One protocol is not enough.** The Anthropic protocol reaches only Claude. Users of Azure OpenAI, Gemini
@@ -149,18 +156,18 @@ Some features need data that conforms to a schema: a list of findings, a list of
 | Adapter | How it asks for the schema | If the server does not support it |
 | --- | --- | --- |
 | `anthropic` | `output_config.format` with the schema | Not applicable. The Anthropic API supports it. |
-| `openai` | `response_format` of type `json_schema`, with `strict: true` | The adapter puts the schema in the system prompt and tries again one time |
+| `openai` | `response_format` of type `json_schema`, with `strict: true` | After an HTTP 400 that names `response_format` or `json_schema`, the adapter puts the schema in the system prompt and tries again one time. It takes the JSON out of a fenced block before the check. |
 
-Both adapters check the answer against the schema locally before they return it. An answer that does not
-conform is an error, and the feature decides to retry or to stop. Therefore a weak server cannot give a
-feature data of the wrong shape.
+Both adapters check the answer against the schema locally before they return it, with the shared check in
+`internal/llm/schema`. An answer that does not conform is an error, and the feature decides to retry or to
+stop. Therefore a weak server cannot give a feature data of the wrong shape.
 
 ### Effort
 
 | Adapter | How it sends the effort |
 | --- | --- |
 | `anthropic` | Adaptive thinking and `output_config.effort`. emod does not set `budget_tokens` or sampling parameters. |
-| `openai` | `reasoning_effort`: `low`, `medium` or `high`. `xhigh` becomes `high`. If the server rejects the field, the adapter removes it and tries again one time. |
+| `openai` | `reasoning_effort`: `low`, `medium` or `high`. `xhigh` becomes `high`. After an HTTP 400 that names the field, the adapter removes it and tries again one time. |
 
 ### Support tiers
 
@@ -233,8 +240,8 @@ One configuration serves the CLI, the LSP and the desktop app:
 | Key | Flag | Used by | Meaning |
 | --- | --- | --- | --- |
 | `EMOD_AI_PROVIDER` | `--ai-provider` | All | `anthropic` or `openai`. When it is not set, the provider is `anthropic`. |
-| `EMOD_AI_API_KEY` | none | `anthropic`, `openai` | The API key. When it is not set, emod reads `ANTHROPIC_API_KEY` or `OPENAI_API_KEY`. A local server such as Ollama needs no key. |
-| `EMOD_AI_ENDPOINT` | `--ai-endpoint` | All | The base URL. For `openai`, it names the server, for example `http://localhost:11434/v1` for Ollama. For `anthropic`, it names a proxy that speaks the Messages API. |
+| `EMOD_AI_API_KEY` | none | `anthropic`, `openai` | The API key. When it is not set, emod reads `ANTHROPIC_API_KEY` for `anthropic` or `OPENAI_API_KEY` for `openai`. The `anthropic` provider needs a key. A local server such as Ollama needs none. |
+| `EMOD_AI_ENDPOINT` | `--ai-endpoint` | All | The base URL. For `openai`, it names the server, for example `http://localhost:11434/v1` for Ollama, and it is the OpenAI API, `https://api.openai.com/v1`, when it is not set. For `anthropic`, it names a proxy that speaks the Messages API. |
 | `EMOD_AI_MODEL` | `--ai-model` | All | The main model. The `anthropic` provider has a default Claude model. The `openai` provider has no default, so the user must set it. |
 | `EMOD_AI_MODEL_CHEAP` | `--ai-model-cheap` | All | The model for small passes, such as a name suggestion. When it is not set for `openai`, emod uses `EMOD_AI_MODEL`. |
 | `EMOD_AI_EFFORT` | `--ai-effort` | All | The default effort: `low`, `medium`, `high` or `xhigh`. |
@@ -250,9 +257,10 @@ The API key has its own rules:
 - [03](./03-desktop-ai-panel.md#key-storage) adds the OS credential store as the third source, after the
   two environment variables.
 
-**Opt-in.** AI is on when one `EMOD_AI_*` key is set. `ANTHROPIC_API_KEY` alone does not turn AI on,
-because a user can hold it for another tool. That user sets `EMOD_AI_PROVIDER=anthropic`, and emod then
-uses the key.
+**Opt-in.** AI is on when one `EMOD_AI_*` key is set. `ANTHROPIC_API_KEY` or `OPENAI_API_KEY` alone does
+not turn AI on, because a user can hold it for another tool. That user sets `EMOD_AI_PROVIDER`, and emod
+then uses the key of that provider. emod does not send `ANTHROPIC_API_KEY` to an `openai` server, or
+`OPENAI_API_KEY` to the Anthropic API.
 
 The desktop app has a settings dialog. The dialog writes the settings to the same file with mode `0600`,
 and the API key to the key store of [03](./03-desktop-ai-panel.md#key-storage). It shows the provider, the
