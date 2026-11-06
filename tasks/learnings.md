@@ -1234,11 +1234,10 @@ in this repo; append only learnings that generalise beyond the task that surface
 
 ## clerk land read integrate as off despite --integrate in the request, then refused a second land
 - Type: constraint
-- Recorded: 2026-09-11
-- Observed: us-009-edit-source-in-the-app-and-see-diagnostics-as-you-type
-- Learning: facts.flags reported integrate true with source request, yet bare clerk land answered integrate false, integrate_source default, archived the breakdown and moved the run to learn; clerk land --integrate then refused because the run was past land. The fast-forward had to be done by hand with the to_land command it printed (git merge --ff-only from the default branch).
-- Apply when: landing an implement run whose request carries --integrate
-
+- Recorded: 2026-11-02
+- Observed: us-013-external-file-changes
+- Learning: Bare clerk land reads only the repo's integrate setting: in us-009 and again in us-013, facts.flags said integrate true with source request, land answered integrate_source default, archived the breakdown and moved the run to learn, after which land refused to run again. Run clerk land --integrate whenever facts.flags.integrate is true; once it has slipped, fast-forward by hand (git switch main; git merge --ff-only <branch>) and then git branch -d <branch>, which is what clerk step asks for before learn.
+- Apply when: landing an implement run whose request carries --integrate, or any run whose facts.flags.integrate is true
 ## clerk fixup replay squashes fixup! commits but leaves amend! rewords in place
 - Type: constraint
 - Recorded: 2026-09-11
@@ -1357,3 +1356,45 @@ in this repo; append only learnings that generalise beyond the task that surface
 - Observed: task 1 — source-syntax-highlighting
 - Learning: Since commit 79a28f8 the repo has no grammar of its own. lsp.GetTokens gives the viewer an editor's categories: for HCL it follows nvim-treesitter's queries/hcl/highlights.scm at 692b051 (a top-level block type is keyword, a nested one is type), and for a declared construct's quoted name the lsp.type.<type> from GetSemanticTokens' own walk. Anything in the viewer that must colour like an editor reads categories from it rather than restating them.
 - Apply when: planning or building anything in the viewer or the desktop app that must colour emod source as an editor does
+
+## A stat-polled file watch trusts a size-and-time match only a coarse time step away from the write, on both sides
+- Type: pattern
+- Recorded: 2026-11-02
+- Observed: task 1 — us-013-external-file-changes
+- Learning: internal/desktop.OpenFileWatch polls the open file's path once a second and compares identity, size and modification time with the last report; that is cheaper and wider than fsnotify, whose kqueue backend holds one descriptor per file in a watched directory and which sees nothing on network mounts. The comparison is only sound with git's racy-clean rule: a match proves nothing while the report that recorded it came less than coarsestTimeStep (2 s, FAT) from the modification time, before or after it, and two audit rounds each found a same-size write lost on one side of that window. Missing needs two checks in a row, for editors that rename the original away before writing.
+- Apply when: planning or changing anything in cmd/emod-desktop or internal/desktop that watches a file on disk, or comparing os.FileInfo values to decide whether a file was written
+
+## A watch leaf whose fixture was written just now passes without the behaviour it names
+- Type: recurring-finding
+- Recorded: 2026-11-02
+- Observed: task 1 — us-013-external-file-changes
+- Learning: Under the racy-clean rule a file written by the test is inside the coarse time step, so the next check reports a change whether or not the code under test saw a write, and four OpenFileWatch leaves passed with their behaviour removed until the audit's mutants showed it. Write fixtures with writeOldFile (modification time an hour back) wherever a later check must stay quiet, and set times explicitly with setModTime where the leaf is about the step itself.
+- Apply when: writing or reviewing a leaf in internal/desktop/open_file_watch_test.go, or any test of code that compares modification times
+
+## An in-place redraw closes the field editor unless it reads it before and restores it after
+- Type: constraint
+- Recorded: 2026-11-02
+- Observed: task 3 — us-013-external-file-changes
+- Learning: renderDiagram's before-render hook hides #detail-panel, so any redrawInPlace that does not wrap itself in UI.readFieldEditor and UI.restoreFieldEditor drops the field editor the user is typing in, with its unblurred text and unnamed rows; a reload from disk did exactly that until round two. renderPanelSource's in-place branch and writeAppliedSource both wrap it now; a new in-place redraw must too.
+- Apply when: adding a redraw of the diagram in internal/frontend/static/viewer.js that keeps the model rather than opening one
+
+## A question raised from the guard queue can still lose the open file to a save already in flight
+- Type: recurring-finding
+- Recorded: 2026-11-02
+- Observed: task 4 — us-013-external-file-changes
+- Learning: The keep-or-reload question takes a turn on guardQueue and queues later saves behind its answer, which reads as nothing being able to replace store.currentFile while it is on screen; but a Save As that started during the change's read is already past saveQueue and adopts its new file while the question is up, so an answer acting on the captured file reverted that adoption. Every act that follows a question must re-check store.currentFile against the file it asked about.
+- Apply when: adding a question the viewer asks the user and then acts on, or claiming that nothing can change the open file while something waits
+
+## A CGO probe can answer an NSAlert by its button titles, but must cancel an NSSavePanel through the panel
+- Type: convention
+- Recorded: 2026-11-02
+- Observed: task 5 — us-013-external-file-changes
+- Learning: Dialogs.Question shows an NSAlert whose NSButtons are in the app's own view tree, so a probe_darwin.go goroutine can find them by title under [NSApp windows] and their attachedSheet and call performClick:; Return is bound to the IsDefault button and Escape only to a button that has IsCancel alone. An NSSavePanel draws its buttons in another process, so a search for 'Cancel' finds nothing and the panel holds the viewer's save queue open; find the window that isKindOfClass NSSavePanel and call [panel cancel:nil].
+- Apply when: verifying a desktop flow that raises a native question or a save or open panel, with a probe in cmd/emod-desktop
+
+## An audit test in a file no task commit touched still folds, by git and not by clerk fixup
+- Type: convention
+- Recorded: 2026-11-02
+- Observed: us-013-external-file-changes
+- Learning: clerk fixup mark refuses a file that no commit in base..HEAD touches ('untouched'), but a commit titled 'fixup! <task subject>' folds into that task's commit with GIT_SEQUENCE_EDITOR=: git rebase -i --autosquash <base> all the same; split such a test file's additions into one fixup per task first. The same rebase with an exec git commit --amend -F <file> line after a task's pick rewrites a message an audit fold made untrue.
+- Apply when: folding audit fixes when clerk fixup mark answers untouched or a fold leaves a task's commit message describing code it no longer has
