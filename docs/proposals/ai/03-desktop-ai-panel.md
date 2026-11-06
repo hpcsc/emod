@@ -96,8 +96,8 @@ registers it with `application.NewService`, as it registers `ModelService` and `
 
 | Method | What it calls | Proposal |
 | --- | --- | --- |
-| `Status()` | `config.Load`. It returns the provider, the model, the host of the endpoint and the support tier, or "not configured". | [00](./00-llm-foundation.md) |
-| `Settings()`, `SaveSettings(request)` | Read and write `~/.config/emod/config` with mode `0600` | [00](./00-llm-foundation.md) |
+| `Status()` | `config.Load` and the source of the credential, as `emod ai status` does. It returns the provider, the model, the host of the endpoint, the support tier and the source of the credential, or "not configured". It makes no model call. | [00](./00-llm-foundation.md) |
+| `Settings()`, `SaveSettings(request)` | Read and write the settings in `~/.config/emod/config`, and the API key in the key store of [Key storage](#key-storage) | [00](./00-llm-foundation.md) |
 | `CheckSettings(ctx, request)` | One small call with the settings in the dialog, as `emod ai` does | [00](./00-llm-foundation.md) |
 | `Review(ctx, request)` | `internal/ai/review` | [02](./02-semantic-model-review.md) |
 | `Edit(ctx, request)` | `internal/ai/edit`, which calls `repair.Generate` | This proposal |
@@ -230,20 +230,64 @@ in shape. The result is a normal edit: a list of changes, a diff, Accept and Rej
 ### The settings dialog and the header
 
 AI ▸ Settings… opens the dialog. It holds the keys of the configuration in [00](./00-llm-foundation.md):
-the provider (`anthropic`, `bedrock` or `openai`), the API key, the region, the endpoint, the model, the
-cheap model and the effort. A field shows only for the providers that use it. The Check button calls
+the provider (`anthropic` or `openai`), the API key, the endpoint, the model, the cheap model and the
+effort. A field shows only for the providers that use it. The Check button calls
 `AIService.CheckSettings`, which sends one small request and shows the result and its tokens. Save writes
-`~/.config/emod/config` with mode `0600`.
+the settings to `~/.config/emod/config` with mode `0600`, and the API key to the key store of
+[Key storage](#key-storage). The file never holds the key.
 
 An app that starts from the Finder or the Dock has no environment of a shell, so the file is the usual
-source of the settings. When an environment variable sets a key, it wins over the file. The dialog then
-shows that field as read-only, with the name of the variable. For `bedrock`, the AWS SDK reads the
-credentials from `~/.aws`, so it works from the Finder too.
+source of the settings, and the key store is the usual source of the API key. The app does not get
+`ANTHROPIC_API_KEY` from the shell. When an environment variable sets a key, it wins over the file. The
+dialog then shows that field as read-only, with the name of the variable.
+
+Below the fields, the dialog shows the source of the API key from `AIService.Status`, but never the key.
+Examples are `the OS credential store`, `EMOD_AI_API_KEY` and `ANTHROPIC_API_KEY`. The source tells the
+user which key a call uses, also when an environment variable wins over the dialog.
 
 The header of the panel shows the provider, the model and the host of the endpoint, for example
 `openai · llama3.1 · localhost:11434`. Before the first call of a session, the panel states that the model
 source goes to that host. For a model outside the tested tier, the header shows the notice of
 [00](./00-llm-foundation.md). The header also shows the tokens of the session.
+
+### Key storage
+
+The API key of the `anthropic` and `openai` providers goes to the OS credential store, through
+`github.com/zalando/go-keyring`:
+
+| Platform | Store |
+| --- | --- |
+| macOS | The Keychain, through `/usr/bin/security`, so emod needs no cgo for it |
+| Windows | The Credential Manager |
+| Linux | The Secret Service, through D-Bus |
+
+`go-keyring` is already in `go.mod`, through the `wails3` command of Wails v3, so the key store adds no new
+module.
+
+A Linux machine with no desktop often has no Secret Service. When the OS credential store fails, the key
+goes to `~/.config/emod/credentials.json` with mode `0600`, and the dialog names that file after Save.
+When the OS credential store works again, the next Save removes the copy from the file.
+
+**One key for each provider and host.** The store keeps each key under the provider and the host of the
+endpoint, for example `anthropic/api.anthropic.com` or `openai/openrouter.ai`. A user who changes the
+endpoint to a proxy or to a local server does not send the key of the old host to the new host. For a new
+host, the dialog asks for a key. A local server, such as Ollama, needs no key.
+
+**The order of the sources.** emod takes the API key from the first of these that gives one:
+
+1. `EMOD_AI_API_KEY`
+2. `ANTHROPIC_API_KEY` or `OPENAI_API_KEY`, for the chosen provider
+3. The key store, for the provider and the host of the endpoint
+
+One configuration serves the CLI, the LSP and the desktop app, so the CLI and the LSP read the same key
+store. A key that a user saves in the dialog therefore also works in `emod ai`.
+
+**Clear.** The Clear button removes the key of the provider and the host from the OS credential store and
+from the file.
+
+**Tests.** The Go tests replace the OS credential store with `keyring.MockInit` and
+`keyring.MockInitWithError`, so no test changes the keychain of the developer. A test that runs the binary
+sets `EMOD_AI_KEY_STORE=file`, which makes emod use only the file.
 
 ## Interface
 
@@ -303,7 +347,7 @@ reports nothing for it. The domain expert says: "A guest can extend a hold once,
 facilitator selects the event `RoomHeld` and types the sentence into the panel.
 
 ```
-bedrock · anthropic.claude-opus-4-8 · us-east-1
+anthropic · claude-opus-4-8 · api.anthropic.com
 attempt 1 of 4: adds 2 findings
   [spec/no-rejection-path] command "ExtendHold" is exercised by specs but none states a rejection
   [flow/rejection-without-spec] command "ExtendHold" can be rejected by invariant "HoldExtendedOnce", but no spec on this slice exercises that rejection
@@ -383,9 +427,10 @@ After the group accepts it, the facilitator clicks Review Model, then saves with
 ## Implementation Plan
 
 **Phase 1: settings and status (S).** `desktop.AIService` with `Status`, `Settings`, `SaveSettings` and
-`CheckSettings`. The settings dialog, the AI menu, the platform function `mountAiPanel`, the panel header,
-and the `build:desktop` step that copies `ai-panel.js`. It depends on the provider work of
-[00](./00-llm-foundation.md) for providers other than `bedrock`.
+`CheckSettings`. The key store of [Key storage](#key-storage). The settings dialog, the AI menu, the
+platform function `mountAiPanel`, the panel header, and the `build:desktop` step that copies
+`ai-panel.js`. `Status` reuses the work of `emod ai status`. The phase depends on the provider work of
+[00](./00-llm-foundation.md) for the `openai` provider.
 
 **Phase 2: review (S).** `AIService.Review` and the Review button, on top of `internal/ai/review` from
 [02](./02-semantic-model-review.md). Findings in the diagnostics panel and marks on the diagram.
@@ -423,8 +468,10 @@ Given-When-Then cards.
 - **A long call blocks the workshop.** Each call shows the progress of each attempt, and Cancel stops the
   HTTP request through the context. The binding of Wails v3 passes the cancel of the promise to the
   context. The implementation must confirm this on each upgrade of Wails, because Wails v3 is a beta.
-- **The key leaks.** The key stays in the Go process and in a file with mode `0600`. The page never gets
-  it: `Settings()` returns only whether a key is set.
+- **The key leaks.** The key stays in the Go process and in the OS credential store, or in a file with mode
+  `0600` on a machine with no credential store. The page never gets it: `Settings()` returns only whether
+  a key is set, and its source. The key belongs to one provider and one host, so a change of the endpoint
+  does not send it to another server.
 - **The model source goes to a remote provider.** The header names the host, and the panel states it
   before the first call of a session. A team with confidential models uses a local server through the
   `openai` provider.
@@ -434,8 +481,10 @@ Given-When-Then cards.
 
 ## Open Questions
 
-- **Key storage.** The dialog writes the key to a file with mode `0600`. The OS keychain is safer, but it
-  adds a dependency on each platform. This question is open in [00](./00-llm-foundation.md) too.
+- **A command that prints the key.** A setting such as `EMOD_AI_API_KEY_COMMAND` can run a command, for
+  example `op read op://Private/emod/api-key`, and use its output as the key. Then the key stays in a
+  password manager. The key store covers most users, so add the command when a user asks for it. The
+  command must come only from `~/.config/emod/config`, never from a file in a repository.
 - **A CLI for edits.** `internal/ai/edit` has no surface in the CLI. An `emod ai edit <file> "<instruction>"`
   command can reuse it for scripts. Agent users already edit through the MCP server, so wait for a request.
 - **Chat history.** The chat of a session lives in the page and goes away with the window. A team can want

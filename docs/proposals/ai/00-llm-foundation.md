@@ -9,11 +9,10 @@ The AI features of emod all call a language model, turn its answer into somethin
 that answer against the rules of emod. If each feature does this in its own way, each feature gets its own
 client, its own retry logic and its own tie to one vendor. No test of that code can run without a network.
 
-The users of emod also use different providers. One team runs Claude through AWS Bedrock. A user outside
-AWS has an Anthropic API key. Another team can only use Azure OpenAI or Gemini. A team with confidential
-domains runs a local model with Ollama, so that the model of their business does not leave the machine. A
-foundation that speaks only to Bedrock excludes most of these users, and most of the people who use the
-desktop app.
+The users of emod also use different providers. One team has an Anthropic API key. Another team can only
+use Azure OpenAI or Gemini. A team with confidential domains runs a local model with Ollama, so that the
+model of their business does not leave the machine. A foundation that speaks only to one vendor excludes
+most of these users, and most of the people who use the desktop app.
 
 This document records the decisions: one small port that emod owns, two protocol adapters behind it, one
 configuration, and one repair loop. The deterministic check of emod, not the model, is the engine.
@@ -21,7 +20,7 @@ configuration, and one repair loop. The deterministic check of emod, not the mod
 ## Goals
 
 - One interface, `llm.Model`, that every AI feature depends on.
-- Access to Claude through the Anthropic API and through AWS Bedrock.
+- Access to Claude through the Anthropic API, with an API key.
 - Access to any provider that speaks the OpenAI-compatible Chat Completions API: OpenAI, Azure OpenAI,
   Gemini, OpenRouter, LiteLLM, Ollama, LM Studio and vLLM.
 - No framework and no new heavy dependency.
@@ -36,6 +35,9 @@ configuration, and one repair loop. The deterministic check of emod, not the mod
 - Provider code or credentials in the WASM build.
 - AI in the static web viewer.
 - A promise of equal quality on every model. See [Support tiers](#support-tiers).
+- A provider for each cloud platform of Claude, such as AWS Bedrock or Google Vertex AI. Each platform adds
+  its own credentials and settings. A user of such a platform sets `EMOD_AI_ENDPOINT` to a gateway, such as
+  LiteLLM, that speaks the Messages API or the OpenAI-compatible API.
 
 ## The key point: emod has its own check
 
@@ -114,12 +116,14 @@ Most providers speak one of two HTTP protocols. emod has one adapter for each pr
 
 | Protocol | Package | Providers it reaches |
 | --- | --- | --- |
-| Anthropic Messages API | `internal/llm/anthropic` | The Anthropic API with an API key; AWS Bedrock; a proxy that speaks the Messages API |
+| Anthropic Messages API | `internal/llm/anthropic` | The Anthropic API with an API key; a proxy that speaks the Messages API |
 | OpenAI-compatible Chat Completions API | `internal/llm/openai` | OpenAI, Azure OpenAI, Gemini through its OpenAI-compatible endpoint, OpenRouter, LiteLLM, Ollama, LM Studio, vLLM |
 
-The `bedrock` provider and the `anthropic` provider share the adapter. Both use `anthropic-sdk-go`, and the
-SDK sends the same `Messages.New` call to the Anthropic API or to Bedrock. The Bedrock adapter in
-`internal/llm/bedrock` moves into `internal/llm/anthropic` and gets a second constructor for an API key.
+The `anthropic` adapter uses `anthropic-sdk-go`. It passes `option.WithoutEnvironmentDefaults()` to the
+client, so the SDK reads no credential and no base URL from the environment. Without it, the SDK reads
+`ANTHROPIC_AUTH_TOKEN`, a profile of `ant auth login` and `ANTHROPIC_BASE_URL`, and a call can then use a
+credential or a host that the settings of emod do not name. emod resolves the API key and the endpoint
+itself, as [Configuration](#configuration) describes, and gives both to the client.
 
 The `openai` adapter uses `net/http` and no SDK. emod needs one call, `POST /chat/completions`, with
 messages, an optional `response_format` and an optional `reasoning_effort`. An SDK adds many dependencies
@@ -144,7 +148,7 @@ Some features need data that conforms to a schema: a list of findings, a list of
 
 | Adapter | How it asks for the schema | If the server does not support it |
 | --- | --- | --- |
-| `anthropic` | `output_config.format` with the schema | Not applicable. Bedrock and the Anthropic API support it. |
+| `anthropic` | `output_config.format` with the schema | Not applicable. The Anthropic API supports it. |
 | `openai` | `response_format` of type `json_schema`, with `strict: true` | The adapter puts the schema in the system prompt and tries again one time |
 
 Both adapters check the answer against the schema locally before they return it. An answer that does not
@@ -165,7 +169,7 @@ review from a small local model can be noisy, and a suggested name can be poor. 
 
 | Tier | Models | What emod promises |
 | --- | --- | --- |
-| Tested | Claude models through the `anthropic` and `bedrock` providers | The evaluation corpus of [02](./02-semantic-model-review.md) and [04](./04-model-from-conversation.md) runs on them. emod sets their defaults. |
+| Tested | Claude models through the `anthropic` provider | The evaluation corpus of [02](./02-semantic-model-review.md) and [04](./04-model-from-conversation.md) runs on them. emod sets their defaults. |
 | Compatible | Any model behind the `openai` provider that supports JSON Schema output | The adapter works, and the check applies to all `.emod` output. emod does not measure the quality of the judgement. |
 
 When the configured model is not in the tested tier, the CLI prints one notice for each run, and the
@@ -228,27 +232,38 @@ One configuration serves the CLI, the LSP and the desktop app:
 
 | Key | Flag | Used by | Meaning |
 | --- | --- | --- | --- |
-| `EMOD_AI_PROVIDER` | `--ai-provider` | All | `anthropic`, `bedrock` or `openai`. When it is not set and `EMOD_AI_REGION` is set, the provider is `bedrock`. |
+| `EMOD_AI_PROVIDER` | `--ai-provider` | All | `anthropic` or `openai`. When it is not set, the provider is `anthropic`. |
 | `EMOD_AI_API_KEY` | none | `anthropic`, `openai` | The API key. When it is not set, emod reads `ANTHROPIC_API_KEY` or `OPENAI_API_KEY`. A local server such as Ollama needs no key. |
-| `EMOD_AI_REGION` | `--ai-region` | `bedrock` | The AWS region. The AWS credentials come from the standard AWS credential chain. |
-| `EMOD_AI_ENDPOINT` | `--ai-endpoint` | All | The base URL. For `openai`, it names the server, for example `http://localhost:11434/v1` for Ollama. For the other providers, it names a proxy. |
-| `EMOD_AI_MODEL` | `--ai-model` | All | The main model. The `anthropic` and `bedrock` providers have a default Claude model. The `openai` provider has no default, so the user must set it. |
+| `EMOD_AI_ENDPOINT` | `--ai-endpoint` | All | The base URL. For `openai`, it names the server, for example `http://localhost:11434/v1` for Ollama. For `anthropic`, it names a proxy that speaks the Messages API. |
+| `EMOD_AI_MODEL` | `--ai-model` | All | The main model. The `anthropic` provider has a default Claude model. The `openai` provider has no default, so the user must set it. |
 | `EMOD_AI_MODEL_CHEAP` | `--ai-model-cheap` | All | The model for small passes, such as a name suggestion. When it is not set for `openai`, emod uses `EMOD_AI_MODEL`. |
 | `EMOD_AI_EFFORT` | `--ai-effort` | All | The default effort: `low`, `medium`, `high` or `xhigh`. |
-
-The API key has no flag, because a flag shows in the process list and in the shell history.
 
 emod reads the keys from the flags, then the environment, then `~/.config/emod/config`, then the built-in
 defaults. The first source that sets a key wins. The file holds one `KEY=VALUE` line for each key.
 
-The desktop app has a settings dialog. The dialog writes the same file with mode `0600`, and it shows the
-provider, the endpoint and the model in the header of the AI panel. Therefore a user of the desktop app
-does not edit a file or set an environment variable.
+The API key has its own rules:
 
-`emod ai` with no subcommand checks the configuration and runs one round of the repair loop. Each AI
-feature adds a subcommand, for example `emod ai review`. With no provider configured, `emod ai` prints the
-setup steps for each provider and exits with code 0. The
-LSP shows no AI actions, and the desktop app hides the AI panel. No other command changes.
+- It has no flag, because a flag shows in the process list and in the shell history.
+- It never comes from `~/.config/emod/config`. When the file holds `EMOD_AI_API_KEY`, emod stops and tells
+  the user to remove the line, so that the key does not stay in a plain file.
+- [03](./03-desktop-ai-panel.md#key-storage) adds the OS credential store as the third source, after the
+  two environment variables.
+
+**Opt-in.** AI is on when one `EMOD_AI_*` key is set. `ANTHROPIC_API_KEY` alone does not turn AI on,
+because a user can hold it for another tool. That user sets `EMOD_AI_PROVIDER=anthropic`, and emod then
+uses the key.
+
+The desktop app has a settings dialog. The dialog writes the settings to the same file with mode `0600`,
+and the API key to the key store of [03](./03-desktop-ai-panel.md#key-storage). It shows the provider, the
+endpoint and the model in the header of the AI panel. Therefore a user of the desktop app does not edit a
+file or set an environment variable.
+
+`emod ai` with no subcommand checks the configuration and runs one round of the repair loop. `emod ai status`
+shows the settings and the source of the API key, but not the key, and calls no model. Each AI feature adds
+a subcommand, for example `emod ai review`. With no provider configured, `emod ai` prints the setup steps
+and exits with code 0. The LSP shows no AI actions, and the desktop app hides the AI panel. No other command
+changes.
 
 ## Data that leaves the machine
 
@@ -270,6 +285,8 @@ of the repair loop, and `maxAttempts` limits each loop. A small pass, such as a 
 
 - Each feature has unit tests against `llm.Fake`, with canned responses, and against `llm.Broken`. No unit
   test calls a live model.
+- The `anthropic` adapter has tests against an HTTP transport that records each request. The tests cover the
+  request shape, the key in the `x-api-key` header, and that the SDK reads no setting from the environment.
 - The `openai` adapter has tests against an `httptest` server. The tests cover the fallback for
   `response_format`, the fallback for `reasoning_effort`, and the local schema check.
 - `internal/llm/isolation_test.go` makes sure that the WASM build and the core packages do not import a
@@ -292,9 +309,8 @@ of the repair loop, and `maxAttempts` limits each loop. A small pass, such as a 
 
 ## Open questions
 
-- **Vertex AI.** `anthropic-sdk-go` also reaches Claude on Google Vertex AI. Add a `vertex` provider when a
-  user asks for it. It needs a project ID and a region.
-- **Key storage in the desktop app.** The settings dialog writes the key to a file with mode `0600`, as
-  `~/.aws/credentials` does. The OS keychain is safer, but it adds a dependency on each platform.
+- **Cloud platforms.** `anthropic-sdk-go` also reaches Claude on AWS Bedrock and Google Vertex AI. Add a
+  provider for one of them when a user asks for it and a gateway does not serve that user. Each one needs
+  its own settings: a region for Bedrock, and a project ID and a region for Vertex AI.
 - **AI in `emod diagram --serve`.** The served viewer runs from a local Go process, which can hold the
   credentials. Decide after the desktop panel ships if the served viewer gets the same panel.

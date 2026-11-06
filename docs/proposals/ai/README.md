@@ -97,7 +97,7 @@ The numbers follow the order of delivery.
 
 | # | Proposal | What the user gets | Surfaces | Phase |
 | --- | --- | --- | --- | --- |
-| 00 | [AI foundation](./00-llm-foundation.md) | The model port, two protocol adapters, the repair loop, one configuration | All AI surfaces | Bedrock part built; the `openai` adapter in phase 2 |
+| 00 | [AI foundation](./00-llm-foundation.md) | The model port, two protocol adapters, the repair loop, one configuration | All AI surfaces | `anthropic` part built; the `openai` adapter in phase 2 |
 | 01 | [MCP server](./01-mcp-server.md) | Any MCP host can check, draw and query a model, and gets prompts for the workflow | Claude Code, Cursor, Zed, other MCP hosts | 1 |
 | 02 | [Semantic model review](./02-semantic-model-review.md) | Findings that lint cannot give: absent failure events, a command that does two jobs, words that differ across contexts, specs that do not cover a rule. In a DCB context, suggestions for `tags` and `decides_on`. | CLI, CI, MCP prompt, desktop app, LSP | 2 |
 | 03 | [AI panel in the desktop app](./03-desktop-ai-panel.md) | A review button, then chat edits with a diff, accept, reject and undo | Desktop app | 3 |
@@ -111,7 +111,7 @@ The numbers follow the order of delivery.
 | Phase | Work | Why in this place |
 | --- | --- | --- |
 | 1 | 01 MCP server | Small, and needs no provider code. It gives agent users generation, edits and questions through the host model at once. |
-| 2 | 02 semantic review, and the `openai` adapter of 00 | The review gives the value that only AI can give. The second adapter opens the AI features to users outside AWS and Anthropic. |
+| 2 | 02 semantic review, and the `openai` adapter of 00 | The review gives the value that only AI can give. The second adapter opens the AI features to users outside Anthropic. |
 | 3 | 03 AI panel in the desktop app | It is the only feature for people who do not use an editor or an agent. It reuses the review of 02 and the repair loop of 00. |
 | 4 | 04 model from a conversation, 05 spec suggestions, AI part of 06 | They make the first draft and the specs faster. MCP hosts already cover them for agent users. |
 | Any time | LSP rename of 06, converters of 07, exact model queries | They need no LLM, so they do not wait for the AI work. |
