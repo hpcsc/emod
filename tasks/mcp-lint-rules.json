@@ -1,0 +1,67 @@
+{
+  "story": "US-003: Give the agent the lint rules",
+  "tasks_file": "tasks/mcp-lint-rules.md",
+  "tasks": [
+    {
+      "n": 1,
+      "done": false,
+      "title": "List the names of the lint rules, and guard that each reported rule has a description",
+      "language": "Go",
+      "testable": true,
+      "certainty": "high",
+      "blast_radius": "low",
+      "patterns_to_follow": [
+        "internal/linter/descriptions.go",
+        "internal/linter/linter_test.go"
+      ],
+      "depends_on": [],
+      "affected_files": [
+        "internal/linter/descriptions.go",
+        "internal/linter/descriptions_test.go"
+      ]
+    },
+    {
+      "n": 2,
+      "done": false,
+      "title": "Explain a rule with `emod_explain_rule`, and list the rules in `emod://rules`",
+      "language": "Go",
+      "testable": true,
+      "certainty": "high",
+      "blast_radius": "low",
+      "patterns_to_follow": [
+        "internal/mcp/server.go",
+        "internal/mcp/server_test.go",
+        "cmd/emod/main_test.go",
+        "task:1"
+      ],
+      "depends_on": [
+        1
+      ],
+      "affected_files": [
+        "internal/mcp/server.go",
+        "internal/mcp/server_test.go",
+        "cmd/emod/main_test.go"
+      ]
+    },
+    {
+      "n": 3,
+      "done": false,
+      "title": "Document `emod_explain_rule` and `emod://rules`",
+      "language": "Go",
+      "testable": false,
+      "certainty": "high",
+      "blast_radius": "low",
+      "patterns_to_follow": [
+        "site/content/docs/mcp.md"
+      ],
+      "depends_on": [
+        2
+      ],
+      "affected_files": [
+        "site/content/docs/mcp.md",
+        "README.md"
+      ]
+    }
+  ],
+  "design_file": "tasks/mcp-lint-rules.design.yaml"
+}

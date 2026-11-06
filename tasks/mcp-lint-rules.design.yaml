@@ -1,0 +1,37 @@
+design: planned
+types:
+  - name: Server
+    package: internal/mcp
+    change: changed
+    does: answers the MCP requests that a host sends over one reader and one writer
+    owns:
+      - emod_explain_rule gives the description of one lint rule, or the error unknown rule for a name with no description
+      - the resource emod://rules gives each lint rule with its description, as JSON in the order of the names
+    fields: [in, out, root]
+    methods: [Run]
+  - name: rule
+    package: internal/mcp
+    change: new
+    does: names one lint rule and its description, as the tool and the resource give them
+    owns:
+      - the keys rule and description
+    fields: [Name, Description]
+  - name: ruleInput
+    package: internal/mcp
+    change: new
+    does: names the lint rule that a call of emod_explain_rule asks for
+    owns:
+      - rule is a required string
+    fields: [Rule]
+functions:
+  - linter.RuleNames() []string
+  - linter.RuleDescription(name string) (string, bool)
+words:
+  - concept: a check of the linter or the validator that has a name, which a diagnostic record carries in its rule key
+    word: rule
+    not: [check, lint, finding type]
+  - concept: the text that says why a rule exists and how to fix a finding
+    word: description
+    not: [explanation, help, doc]
+dependencies:
+  - internal/mcp -> internal/linter
