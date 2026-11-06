@@ -1,0 +1,88 @@
+{
+  "story": "US-002: Check a model file in the project",
+  "tasks_file": "tasks/mcp-check-file.md",
+  "tasks": [
+    {
+      "n": 1,
+      "done": false,
+      "title": "Read a model file only from under a root",
+      "language": "Go",
+      "testable": true,
+      "certainty": "high",
+      "blast_radius": "high",
+      "patterns_to_follow": [
+        "internal/cli/parse.go:13-31",
+        "internal/desktop/file_service.go:188-213"
+      ],
+      "depends_on": [],
+      "affected_files": [
+        "internal/mcp/root.go",
+        "internal/mcp/root_test.go"
+      ]
+    },
+    {
+      "n": 2,
+      "done": false,
+      "title": "Let `emod_check` take a `path`",
+      "language": "Go",
+      "testable": true,
+      "certainty": "high",
+      "blast_radius": "high",
+      "patterns_to_follow": [
+        "internal/mcp/server.go",
+        "internal/mcp/server_test.go",
+        "task:1"
+      ],
+      "depends_on": [
+        1
+      ],
+      "affected_files": [
+        "internal/mcp/server.go",
+        "internal/mcp/server_test.go"
+      ]
+    },
+    {
+      "n": 3,
+      "done": false,
+      "title": "Set the root with `emod mcp --root`, and check a path through the built binary",
+      "language": "Go",
+      "testable": true,
+      "certainty": "high",
+      "blast_radius": "low",
+      "patterns_to_follow": [
+        "internal/cli/app.go",
+        "internal/cli/mcp_test.go",
+        "cmd/emod/main_test.go",
+        "task:2"
+      ],
+      "depends_on": [
+        2
+      ],
+      "affected_files": [
+        "internal/cli/app.go",
+        "internal/cli/mcp.go",
+        "internal/cli/mcp_test.go",
+        "cmd/emod/main_test.go"
+      ]
+    },
+    {
+      "n": 4,
+      "done": false,
+      "title": "Document the `path` input and the root",
+      "language": "Go",
+      "testable": false,
+      "certainty": "high",
+      "blast_radius": "low",
+      "patterns_to_follow": [
+        "site/content/docs/mcp.md"
+      ],
+      "depends_on": [
+        3
+      ],
+      "affected_files": [
+        "site/content/docs/mcp.md"
+      ]
+    }
+  ],
+  "design_file": "tasks/mcp-check-file.design.yaml"
+}

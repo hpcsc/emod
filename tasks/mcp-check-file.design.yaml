@@ -1,0 +1,44 @@
+design: planned
+types:
+  - name: Root
+    package: internal/mcp
+    change: new
+    does: reads the files under the one directory that the server may read
+    owns:
+      - the directory is resolved once, with symbolic links followed
+      - a path relative to the root, or absolute, reads only when it resolves to a file under the root
+      - a path outside the root, also through a symbolic link, gives an error that names the root and holds no text from the file
+      - a read error names the path and the cause
+    fields: [dir, given]
+    methods: [Read]
+  - name: Server
+    package: internal/mcp
+    change: changed
+    does: answers the MCP requests that a host sends over one reader and one writer
+    owns:
+      - emod_check reads a path through the root of the server, and only when the call gives no content
+      - the records of content carry name, else path, else inline.emod
+      - a call with neither content nor path gets an error result
+    fields: [in, out, root]
+    methods: [Run]
+  - name: sourceInput
+    package: internal/mcp
+    change: changed
+    does: names the model source that a tool call gives
+    owns:
+      - content is a pointer, so that an absent content and an empty content differ
+    fields: [Content, Path, Name]
+functions:
+  - mcp.NewRoot(dir string) (mcp.Root, error)
+  - mcp.NewServer(in io.ReadCloser, out io.WriteCloser, root mcp.Root) *mcp.Server
+  - cli.RunMCP(ctx context.Context, root string) error
+words:
+  - concept: the one directory under which the server reads files
+    word: root
+    not: [base, workspace, sandbox, project dir]
+  - concept: the location of a model file that a tool call gives, relative to the root or absolute
+    word: path
+    not: [file, location, filename]
+dependencies:
+  - internal/cli -> internal/mcp
+  - internal/mcp -> github.com/google/jsonschema-go/jsonschema
