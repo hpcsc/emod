@@ -1,4 +1,4 @@
-package anthropic
+package schema
 
 import (
 	"encoding/json"
@@ -8,12 +8,12 @@ import (
 	"github.com/google/jsonschema-go/jsonschema"
 )
 
-type outputSchema struct {
+type Output struct {
 	document map[string]any
 	resolved *jsonschema.Resolved
 }
 
-func newOutputSchema(raw json.RawMessage) (*outputSchema, error) {
+func Parse(raw json.RawMessage) (*Output, error) {
 	var document map[string]any
 	if err := json.Unmarshal(raw, &document); err != nil {
 		return nil, fmt.Errorf("the request schema is not a valid JSON Schema: %w", err)
@@ -32,10 +32,14 @@ func newOutputSchema(raw json.RawMessage) (*outputSchema, error) {
 		return nil, fmt.Errorf("the request schema is not a valid JSON Schema: %w", err)
 	}
 
-	return &outputSchema{document: document, resolved: resolved}, nil
+	return &Output{document: document, resolved: resolved}, nil
 }
 
-func (s *outputSchema) check(text string) error {
+func (s *Output) Document() map[string]any {
+	return s.document
+}
+
+func (s *Output) Check(text string) error {
 	var instance any
 	if err := json.Unmarshal([]byte(text), &instance); err != nil {
 		return fmt.Errorf("the structured output is not JSON: %w", err)

@@ -8,6 +8,7 @@ import (
 	"github.com/anthropics/anthropic-sdk-go"
 	"github.com/anthropics/anthropic-sdk-go/option"
 	"github.com/hpcsc/emod/internal/llm"
+	"github.com/hpcsc/emod/internal/llm/schema"
 )
 
 // defaultMaxTokens caps a non-streaming generation so a long response cannot stall on an HTTP timeout.
@@ -103,14 +104,14 @@ func (a *Adapter) Generate(ctx context.Context, request llm.GenerateRequest) (ll
 		params.System = []anthropic.TextBlockParam{{Text: request.System}}
 	}
 
-	var schema *outputSchema
+	var output *schema.Output
 	if len(request.Schema) > 0 {
 		var err error
-		schema, err = newOutputSchema(request.Schema)
+		output, err = schema.Parse(request.Schema)
 		if err != nil {
 			return llm.Response{}, err
 		}
-		params.OutputConfig.Format = anthropic.JSONOutputFormatParam{Schema: schema.document}
+		params.OutputConfig.Format = anthropic.JSONOutputFormatParam{Schema: output.Document()}
 	}
 
 	message, err := a.messages.New(ctx, params)
@@ -124,8 +125,8 @@ func (a *Adapter) Generate(ctx context.Context, request llm.GenerateRequest) (ll
 		OutputTokens: int(message.Usage.OutputTokens),
 	}
 
-	if schema != nil {
-		if err := schema.check(text); err != nil {
+	if output != nil {
+		if err := output.Check(text); err != nil {
 			return llm.Response{Usage: usage}, err
 		}
 	}
