@@ -101,13 +101,15 @@ unknown: the MCP handshake with a real host.
 by its path, so that the agent checks the file on disk and does not copy its text into the call.
 
 **Acceptance Criteria:**
-- [ ] `emod_check` accepts `path` in place of `content`. For a file under the root, it returns the same
-  records as `emod validate --format json` for that file.
+- [ ] `emod_check` accepts `path` in place of `content`. For a regular file under the root of at most
+  1 MiB, it returns the same records as `emod validate --format json` for that file. A larger file, a
+  directory or a named pipe returns an error result.
 - [ ] When a call gives both `path` and `content`, the tool checks `content`.
 - [ ] The root is the working directory of the server. `emod mcp --root <dir>` sets a different root.
 - [ ] The tool refuses a path outside the root, for example `../../etc/passwd`, an absolute path to another
-  folder, or a symbolic link to a file outside the root. The error result names the root and holds no text
-  from the file.
+  folder, or a symbolic link to a file outside the root. Under the root, the tool follows only relative
+  symbolic links, so it also refuses an absolute symbolic link. The error result names the root and holds
+  no text from the file.
 - [ ] A path that does not exist, or that the server cannot read, returns an error result that names the
   path and the cause.
 - [ ] The tool never writes to the file.
@@ -341,8 +343,6 @@ before a user does.
   `emod_check`, for both. The prompts of those proposals must name `emod_check`.
 - Proposal 01 lists the four prompts and the three query and spec tools in its own plan. It must name the
   proposal that delivers each one, so that the proposals agree with these stories.
-- When a call gives `path` and `content` but no `name`, the diagnostics carry `inline.emod`. The name in
-  `path` can tell the agent more.
 - One resource for each example works for three files. An index resource that the agent lists, then reads,
   scales better when `examples/` grows.
 - Must `emod://schema` carry the emod version, so that a host that keeps the schema across sessions knows
