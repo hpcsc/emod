@@ -22,7 +22,7 @@
     },
     {
       "n": 2,
-      "done": false,
+      "done": true,
       "title": "Explain a rule with `emod_explain_rule`, and list the rules in `emod://rules`",
       "language": "Go",
       "testable": true,

@@ -96,6 +96,16 @@ func validateJSON(t *testing.T, path string) string {
 	return string(output)
 }
 
+func explainRule(t *testing.T, rule string) string {
+	t.Helper()
+
+	explain := exec.Command(emodBinary, "lint", "--explain", rule)
+	explain.Env = withoutAISettings(t)
+	output, err := explain.Output()
+	require.NoError(t, err)
+	return strings.TrimSuffix(string(output), "\n")
+}
+
 func TestMCP(t *testing.T) {
 	t.Run("handshake", func(t *testing.T) {
 		t.Run("the binary names itself emod, with the version that emod version prints", func(t *testing.T) {
@@ -108,14 +118,55 @@ func TestMCP(t *testing.T) {
 			require.Equal(t, &sdk.Implementation{Name: "emod", Version: strings.TrimSpace(string(printed))}, info)
 		})
 
-		t.Run("the binary lists emod_check", func(t *testing.T) {
+		t.Run("the binary lists emod_check and emod_explain_rule", func(t *testing.T) {
 			session, _ := startServer(t)
 
 			listed, err := session.ListTools(context.Background(), nil)
 
 			require.NoError(t, err)
-			require.Len(t, listed.Tools, 1)
-			require.Equal(t, "emod_check", listed.Tools[0].Name)
+			names := make([]string, 0, len(listed.Tools))
+			for _, tool := range listed.Tools {
+				names = append(names, tool.Name)
+			}
+			require.ElementsMatch(t, []string{"emod_check", "emod_explain_rule"}, names)
+		})
+	})
+
+	t.Run("explain rule", func(t *testing.T) {
+		t.Run("the binary gives the description that emod lint --explain prints", func(t *testing.T) {
+			session, _ := startServer(t)
+
+			result, err := session.CallTool(context.Background(), &sdk.CallToolParams{
+				Name:      "emod_explain_rule",
+				Arguments: map[string]any{"rule": "state-obsession"},
+			})
+
+			require.NoError(t, err)
+			require.False(t, result.IsError)
+			require.Equal(t, map[string]any{"rule": "state-obsession", "description": explainRule(t, "state-obsession")},
+				result.StructuredContent)
+		})
+	})
+
+	t.Run("read rules", func(t *testing.T) {
+		t.Run("the binary lists each rule with the description that emod lint --explain prints for it", func(t *testing.T) {
+			session, _ := startServer(t)
+
+			read, err := session.ReadResource(context.Background(), &sdk.ReadResourceParams{URI: "emod://rules"})
+
+			require.NoError(t, err)
+			require.Len(t, read.Contents, 1)
+			var listed struct {
+				Rules []struct {
+					Rule        string `json:"rule"`
+					Description string `json:"description"`
+				} `json:"rules"`
+			}
+			require.NoError(t, json.Unmarshal([]byte(read.Contents[0].Text), &listed))
+			require.Len(t, listed.Rules, 24)
+			for _, rule := range listed.Rules {
+				require.Equal(t, explainRule(t, rule.Rule), rule.Description, "rule %s", rule.Rule)
+			}
 		})
 	})
 

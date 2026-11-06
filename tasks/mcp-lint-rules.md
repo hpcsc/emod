@@ -101,16 +101,16 @@ low. Nothing reads `RuleNames()` yet.
 resource `emod://rules`, which returns each name of `RuleNames()` with its description as JSON.
 
 **Acceptance Criteria:**
-- [ ] `tools/list` lists `emod_check` and `emod_explain_rule`. The input of `emod_explain_rule` is one
+- [x] `tools/list` lists `emod_check` and `emod_explain_rule`. The input of `emod_explain_rule` is one
   required string, `rule`, and no other input.
-- [ ] `emod_explain_rule` with `state-obsession` returns `{"rule":"state-obsession","description":...}`
+- [x] `emod_explain_rule` with `state-obsession` returns `{"rule":"state-obsession","description":...}`
   with the description of the linter, in the structured content and in the text block.
-- [ ] `emod_explain_rule` with an unknown name returns an error result with the text `unknown rule "<name>"`.
-- [ ] `resources/list` lists `emod://rules` with the MIME type `application/json` and a description.
-- [ ] `resources/read` of `emod://rules` returns the 24 rules, each with its description, in the order of
+- [x] `emod_explain_rule` with an unknown name returns an error result with the text `unknown rule "<name>"`.
+- [x] `resources/list` lists `emod://rules` with the MIME type `application/json` and a description.
+- [x] `resources/read` of `emod://rules` returns the 24 rules, each with its description, in the order of
   the names.
-- [ ] The initialize result offers tools and resources, and no logging.
-- [ ] Through the built binary, the description of `emod_explain_rule` for `state-obsession` is the text
+- [x] The initialize result offers tools and resources, and no logging.
+- [x] Through the built binary, the description of `emod_explain_rule` for `state-obsession` is the text
   that `emod lint --explain state-obsession` prints, with no trailing newline.
 
 **Patterns to follow:**

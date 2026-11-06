@@ -1,8 +1,10 @@
 package mcp
 
 import (
+	"bytes"
 	"cmp"
 	"context"
+	"encoding/json"
 	"errors"
 	"io"
 
@@ -10,6 +12,7 @@ import (
 	sdk "github.com/modelcontextprotocol/go-sdk/mcp"
 
 	"github.com/hpcsc/emod/internal/diagnostic"
+	"github.com/hpcsc/emod/internal/linter"
 	"github.com/hpcsc/emod/internal/oracle"
 	"github.com/hpcsc/emod/internal/version"
 )
@@ -58,6 +61,31 @@ var checkTool = &sdk.Tool{
 	InputSchema: sourceSchema,
 }
 
+type rule struct {
+	Name        string `json:"rule"`
+	Description string `json:"description"`
+}
+
+type ruleInput struct {
+	Rule string `json:"rule" jsonschema:"The name of a lint rule, as the rule key of a diagnostic record gives it, for example state-obsession."`
+}
+
+var explainRuleTool = &sdk.Tool{
+	Name: "emod_explain_rule",
+	Description: "Explain a lint rule of emod: why the rule exists and how to fix a finding of the rule. " +
+		"Give the name from the rule key of a diagnostic record of emod_check. " +
+		"The result has rule and description, and the description is the text that `emod lint --explain <rule>` prints. " +
+		"The resource emod://rules lists each rule with its description.",
+}
+
+var rulesResource = &sdk.Resource{
+	URI:         "emod://rules",
+	Name:        "rules",
+	Title:       "Lint rules of emod",
+	MIMEType:    "application/json",
+	Description: `Each lint rule that emod can report, with its description, as {"rules":[{"rule":...,"description":...}]}.`,
+}
+
 type Server struct {
 	in   io.ReadCloser
 	out  io.WriteCloser
@@ -74,6 +102,8 @@ func (s *Server) Run(ctx context.Context) error {
 		&sdk.ServerOptions{Capabilities: &sdk.ServerCapabilities{}},
 	)
 	sdk.AddTool(server, checkTool, s.check)
+	sdk.AddTool(server, explainRuleTool, s.explainRule)
+	server.AddResource(rulesResource, s.readRules)
 	return server.Run(ctx, &sdk.IOTransport{Reader: s.in, Writer: s.out})
 }
 
@@ -94,4 +124,42 @@ func (s *Server) source(input sourceInput) (source string, name string, err erro
 	}
 	source, err = s.root.Read(input.Path)
 	return source, input.Path, err
+}
+
+func (s *Server) explainRule(_ context.Context, _ *sdk.CallToolRequest, input ruleInput) (*sdk.CallToolResult, rule, error) {
+	description, err := linter.RuleDescription(input.Rule)
+	if err != nil {
+		return nil, rule{}, err
+	}
+	explained := rule{Name: input.Rule, Description: description}
+	text, err := s.jsonText(explained)
+	if err != nil {
+		return nil, rule{}, err
+	}
+	return &sdk.CallToolResult{Content: []sdk.Content{&sdk.TextContent{Text: text}}}, explained, nil
+}
+
+func (s *Server) readRules(_ context.Context, _ *sdk.ReadResourceRequest) (*sdk.ReadResourceResult, error) {
+	described := linter.Rules()
+	rules := make([]rule, 0, len(described))
+	for _, r := range described {
+		rules = append(rules, rule{Name: r.Name, Description: r.Description})
+	}
+	text, err := s.jsonText(struct {
+		Rules []rule `json:"rules"`
+	}{rules})
+	if err != nil {
+		return nil, err
+	}
+	return &sdk.ReadResourceResult{Contents: []*sdk.ResourceContents{{Text: text}}}, nil
+}
+
+func (s *Server) jsonText(value any) (string, error) {
+	var text bytes.Buffer
+	encoder := json.NewEncoder(&text)
+	encoder.SetEscapeHTML(false)
+	if err := encoder.Encode(value); err != nil {
+		return "", err
+	}
+	return text.String(), nil
 }
