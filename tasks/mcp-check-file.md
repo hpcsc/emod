@@ -196,11 +196,11 @@ fixture file by its path through the built binary and compares the records with 
 records carry, and how the root and `--root` limit the files that the server reads.
 
 **Acceptance Criteria:**
-- [ ] `site/content/docs/mcp.md` lists `path` in the input table, and says that `content` wins when a call
+- [x] `site/content/docs/mcp.md` lists `path` in the input table, and says that `content` wins when a call
   gives both.
-- [ ] The page says that the server reads only files under its root, that the root is the working
+- [x] The page says that the server reads only files under its root, that the root is the working
   directory, and that `emod mcp --root <dir>` sets another root.
-- [ ] The page documents no `--allow-write`, no `.mcp.json`, and no host other than Claude Code.
+- [x] The page documents no `--allow-write`, no `.mcp.json`, and no host other than Claude Code.
 
 **Affected Files/Modules:**
 - `site/content/docs/mcp.md`
