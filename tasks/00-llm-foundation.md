@@ -8,7 +8,7 @@
 - [x] Task 5: Add the single AI configuration block
 - [x] Task 6: Support schema-conformant structured output in the adapter
 - [x] Task 7: Add cost and token usage reporting
-- [ ] Task 8: Build the generate → validate → lint → repair loop
+- [x] Task 8: Build the generate → validate → lint → repair loop
 - [ ] Task 9: Gate AI as opt-in and keep WASM provider-free
 - [ ] Task 10: Add the `emod ai` end-to-end smoke command
 
@@ -379,14 +379,14 @@ and diagnostics back for another attempt, and stops with a clear "did not conver
 after the maximum attempts — depending only on `llm.Model` and the oracle.
 
 **Acceptance Criteria:**
-- [ ] Given a prompt and a maximum attempt count, the loop calls the model, runs output
+- [x] Given a prompt and a maximum attempt count, the loop calls the model, runs output
   through the oracle, and returns the source as soon as there are no diagnostics.
-- [ ] When diagnostics remain, the loop feeds the offending source and the diagnostics back
+- [x] When diagnostics remain, the loop feeds the offending source and the diagnostics back
   to the model for another attempt.
-- [ ] After the maximum attempts the loop returns a clear "did not converge" outcome.
-- [ ] The loop imports only `internal/llm` and the oracle — no provider SDK and no bedrock
+- [x] After the maximum attempts the loop returns a clear "did not converge" outcome.
+- [x] The loop imports only `internal/llm` and the oracle — no provider SDK and no bedrock
   subpackage.
-- [ ] Both convergence and non-convergence are demonstrated with the mock model and no
+- [x] Both convergence and non-convergence are demonstrated with the mock model and no
   network.
 
 **Affected Files/Modules:**

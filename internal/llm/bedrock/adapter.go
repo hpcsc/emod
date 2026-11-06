@@ -142,7 +142,12 @@ func resolveEffort(requested, fallback llm.Effort) llm.Effort {
 func toMessageParams(messages []llm.Message) []anthropic.MessageParam {
 	params := make([]anthropic.MessageParam, 0, len(messages))
 	for _, message := range messages {
-		block := anthropic.NewTextBlock(message.Content)
+		content := message.Content
+		// the Messages API rejects a text block that is empty or holds only whitespace
+		if strings.TrimSpace(content) == "" {
+			content = "(empty)"
+		}
+		block := anthropic.NewTextBlock(content)
 		if message.Role == "assistant" {
 			params = append(params, anthropic.NewAssistantMessage(block))
 			continue

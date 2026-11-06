@@ -123,6 +123,28 @@ func TestAdapter(t *testing.T) {
 			require.Equal(t, defaultModelID, decodeBody(t, transport.body)["model"])
 		})
 
+		t.Run("sends a blank message as a text block that is not blank", func(t *testing.T) {
+			transport := &capturingTransport{}
+			adapter := newAdapter(t, newSettings(), transport)
+
+			_, err := adapter.Generate(context.Background(), llm.GenerateRequest{
+				Messages: []llm.Message{
+					{Role: "user", Content: "describe the event"},
+					{Role: "assistant", Content: "  \n"},
+					{Role: "user", Content: "the answer holds no source"},
+				},
+			})
+			require.NoError(t, err)
+
+			messages, ok := decodeBody(t, transport.body)["messages"].([]any)
+			require.True(t, ok)
+			require.Len(t, messages, 3)
+			blank := messages[1].(map[string]any)
+			require.Equal(t, "assistant", blank["role"])
+			text := blank["content"].([]any)[0].(map[string]any)["text"].(string)
+			require.NotEmpty(t, strings.TrimSpace(text), "the Messages API rejects a blank text block")
+		})
+
 		t.Run("parses canned response text and token usage", func(t *testing.T) {
 			transport := &capturingTransport{resp: cannedResponse("generated answer", 137, 42)}
 			adapter := newAdapter(t, newSettings(), transport)

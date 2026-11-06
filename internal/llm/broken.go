@@ -12,7 +12,8 @@ import (
 var ErrBroken = errors.New("llm: broken model")
 
 type Broken struct {
-	err error
+	err   error
+	usage Usage
 }
 
 func NewBroken() *Broken {
@@ -24,8 +25,13 @@ func (b *Broken) WithError(err error) *Broken {
 	return b
 }
 
+func (b *Broken) WithUsage(usage Usage) *Broken {
+	b.usage = usage
+	return b
+}
+
 func (b *Broken) Generate(_ context.Context, _ GenerateRequest) (Response, error) {
-	return Response{}, b.err
+	return Response{Usage: b.usage}, b.err
 }
 
 var _ Model = (*Broken)(nil)
