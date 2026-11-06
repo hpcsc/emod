@@ -329,6 +329,13 @@ func NewApp() *urfave.Command {
 					return nil
 				},
 			},
+			{
+				Name:  "mcp",
+				Usage: "Start the MCP server (stdin/stdout transport)",
+				Action: func(ctx context.Context, cmd *urfave.Command) error {
+					return reportExitError(RunMCP(ctx))
+				},
+			},
 		},
 	}
 }

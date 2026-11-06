@@ -54,7 +54,7 @@
     },
     {
       "n": 3,
-      "done": false,
+      "done": true,
       "title": "Start the server with `emod mcp` and check the handshake with the built binary",
       "language": "Go",
       "testable": true,

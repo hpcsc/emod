@@ -134,7 +134,7 @@ tasks:
   test:integration:
     desc: Run integration tests
     cmds:
-      - go test -tags integration $(go list -e ./... | grep -v -e /cmd/emod-wasm -e /cmd/emod-desktop)
+      - go test -count=1 -tags integration $(go list -e ./... | grep -v -e /cmd/emod-wasm -e /cmd/emod-desktop)
 
   test:viewer:
     desc: Run viewer JS unit tests

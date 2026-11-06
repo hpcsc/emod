@@ -291,21 +291,21 @@ binary that it builds from the working tree, completes the handshake, lists the 
 from the binary.
 
 **Acceptance Criteria:**
-- [ ] `internal/cli/app.go` has an `mcp` command. Its action is one line that passes the result of
+- [x] `internal/cli/app.go` has an `mcp` command. Its action is one line that passes the result of
   `RunMCP` to `reportExitError`, as the other commands do (learning 1). `emod --help` lists `mcp`, with a
   usage that says that it starts the MCP server on stdin and stdout.
-- [ ] An integration test (`//go:build integration`) spawns the `emod` binary, built from the working
+- [x] An integration test (`//go:build integration`) spawns the `emod` binary, built from the working
   tree, with the argument `mcp`. Over the stdin and stdout of the process, the test completes
   `initialize`, sends `notifications/initialized`, finds `emod_check` in `tools/list`, and gets records
   from `tools/call`.
-- [ ] For each `.emod` file under `examples/` and under `internal/parser/testdata/`, the test calls
+- [x] For each `.emod` file under `examples/` and under `internal/parser/testdata/`, the test calls
   `emod_check` with the text of the file as `content` and its path as `name`. Each call returns the same
   records, field for field, that the same binary prints for `emod validate --format json <path>`. For
   each clean file, both are empty lists.
-- [ ] The spawned processes have no `EMOD_AI_*` variable, no `ANTHROPIC_API_KEY`, no
+- [x] The spawned processes have no `EMOD_AI_*` variable, no `ANTHROPIC_API_KEY`, no
   `OPENAI_API_KEY`, and a `HOME` with no emod config file, and the calls above still succeed.
-- [ ] When the test closes the stdin of the server, the process ends.
-- [ ] `task test:integration` runs the Go tests with `-count=1`, so a change to the binary cannot leave
+- [x] When the test closes the stdin of the server, the process ends.
+- [x] `task test:integration` runs the Go tests with `-count=1`, so a change to the binary cannot leave
   a cached pass (learning 4). The package list of the target stays on `go list -e`.
 
 **Affected Files/Modules:**
