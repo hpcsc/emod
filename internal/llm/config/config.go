@@ -187,11 +187,18 @@ func readFile(filePath string) (map[string]string, error) {
 		if !ok {
 			return nil, fmt.Errorf("config file %s could not be parsed: line %d %q is missing a '=' separator", filePath, lineNo, raw)
 		}
-		values[strings.TrimSpace(key)] = strings.TrimRight(value, " \t\r\n")
+		values[strings.TrimSpace(key)] = withoutQuotes(strings.TrimSpace(value))
 	}
 	if err := scanner.Err(); err != nil {
 		return nil, fmt.Errorf("reading config file %s: %w", filePath, err)
 	}
 
 	return values, nil
+}
+
+func withoutQuotes(value string) string {
+	if len(value) >= 2 && (value[0] == '"' || value[0] == '\'') && value[len(value)-1] == value[0] {
+		return value[1 : len(value)-1]
+	}
+	return value
 }

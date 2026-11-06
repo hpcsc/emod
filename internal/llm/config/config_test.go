@@ -340,6 +340,43 @@ func TestResolve(t *testing.T) {
 			require.Equal(t, "claude-opus-4-8", cfg.Model)
 		})
 
+		t.Run("reads a value without the spaces and the pair of quotes around it", func(t *testing.T) {
+			cases := []struct {
+				name  string
+				line  string
+				model string
+			}{
+				{name: "spaces around the key and the value", line: "  EMOD_AI_MODEL  =   file-opus  ", model: "file-opus"},
+				{name: "double quotes", line: `EMOD_AI_MODEL="file-opus"`, model: "file-opus"},
+				{name: "single quotes", line: `EMOD_AI_MODEL='file-opus'`, model: "file-opus"},
+				{name: "spaces outside the quotes", line: `EMOD_AI_MODEL = "file-opus" `, model: "file-opus"},
+				{name: "spaces inside the quotes stay", line: `EMOD_AI_MODEL=" file opus "`, model: " file opus "},
+				{name: "a quote with no match at the other end stays", line: `EMOD_AI_MODEL="file-opus`, model: `"file-opus`},
+				{name: "two different quotes stay", line: `EMOD_AI_MODEL="file-opus'`, model: `"file-opus'`},
+			}
+
+			for _, tc := range cases {
+				t.Run(tc.name, func(t *testing.T) {
+					path := writeFile(t, tc.line+"\n")
+					getenv := mapEnv(map[string]string{"EMOD_AI_API_KEY": "test-key"})
+
+					cfg, err := config.Resolve(config.Flags{}, getenv, path)
+
+					require.NoError(t, err)
+					require.Equal(t, tc.model, cfg.Model)
+				})
+			}
+		})
+
+		t.Run("refuses an API key in the file also with spaces and quotes", func(t *testing.T) {
+			path := writeFile(t, ` EMOD_AI_API_KEY = "secret-in-the-file"`+"\n")
+
+			_, err := config.Resolve(config.Flags{}, mapEnv(map[string]string{}), path)
+
+			require.ErrorContains(t, err, "holds EMOD_AI_API_KEY")
+			require.NotContains(t, err.Error(), "secret-in-the-file")
+		})
+
 		t.Run("returns a clear error when the file is malformed", func(t *testing.T) {
 			path := writeFile(t, "EMOD_AI_MODEL=file-opus\nthis line has no equals sign\n")
 			getenv := mapEnv(map[string]string{})
