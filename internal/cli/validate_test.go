@@ -1207,6 +1207,22 @@ context "Orders" {
 		require.Equal(t, "dcb/untagged-event", entries[0]["rule"])
 	})
 
+	t.Run("json format on the error example prints each record with its keys in order", func(t *testing.T) {
+		path := "../../examples/error_diagnostics_test.emod"
+
+		output := captureStdout(t, func() {
+			err := cli.RunValidate(path, "json")
+			var lintErr *cli.LintError
+			require.True(t, errors.As(err, &lintErr))
+			require.Equal(t, 2, lintErr.ExitCode)
+		})
+
+		require.Equal(t,
+			`[{"file":"../../examples/error_diagnostics_test.emod","line":43,"severity":"error","message":"event \"GuestCheckedOut\" does not exist"},`+
+				`{"file":"../../examples/error_diagnostics_test.emod","line":64,"rule":"orphan-command","severity":"error","message":"command \"SendEmail\" is orphaned (no flow references it)"}]`+"\n",
+			output)
+	})
+
 	t.Run("json format reports all file and line fields", func(t *testing.T) {
 		path := writeTemp(t, "invalid.emod", invalidEmod)
 

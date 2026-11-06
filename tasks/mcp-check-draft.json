@@ -4,7 +4,7 @@
   "tasks": [
     {
       "n": 1,
-      "done": false,
+      "done": true,
       "title": "Give the diagnostic record of `--format json` one home in `internal/diagnostic`",
       "language": "Go",
       "testable": true,

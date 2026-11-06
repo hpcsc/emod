@@ -151,19 +151,19 @@ returns the same type from `emod_check`, so the CLI and the MCP tool give the sa
 construction. The output of the CLI does not change.
 
 **Acceptance Criteria:**
-- [ ] `internal/diagnostic` exports the record of one diagnostic, with the JSON keys `file`, `line`,
+- [x] `internal/diagnostic` exports the record of one diagnostic, with the JSON keys `file`, `line`,
   `rule`, `severity` and `message` in that order. It also turns a list of entries into a list of records.
-- [ ] No entries give an empty list of records that encodes as `[]`, never as `null`.
-- [ ] An entry with no rule name gives a record with no `rule` key. An entry with a rule name gives a
+- [x] No entries give an empty list of records that encodes as `[]`, never as `null`.
+- [x] An entry with no rule name gives a record with no `rule` key. An entry with a rule name gives a
   record whose `rule` is that name.
-- [ ] `internal/cli` declares no record type of its own. `formatJSON` builds its output from the
+- [x] `internal/cli` declares no record type of its own. `formatJSON` builds its output from the
   `internal/diagnostic` record.
-- [ ] `emod validate --format json examples/error_diagnostics_test.emod` prints two records with their
+- [x] `emod validate --format json examples/error_diagnostics_test.emod` prints two records with their
   keys in the order `file`, `line`, `rule`, `severity`, `message`, and exits 2. The first record is
   line 43, with no `rule` key and the message `event "GuestCheckedOut" does not exist`. The second
   record is line 64, with the rule `orphan-command` and the message
   `command "SendEmail" is orphaned (no flow references it)`.
-- [ ] `emod validate --format json` on a clean file prints `[]` and exits 0. On the warning-only source
+- [x] `emod validate --format json` on a clean file prints `[]` and exits 0. On the warning-only source
   of `internal/cli/validate_test.go:1112-1159`, it prints one `state-obsession` warning and exits 1.
   `emod lint --format json` prints the same records as `emod validate --format json` for each of these
   sources.

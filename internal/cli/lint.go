@@ -38,30 +38,14 @@ func (e *LintError) Unwrap() error {
 	return e.Cause
 }
 
-type jsonEntry struct {
-	File     string `json:"file"`
-	Line     int    `json:"line"`
-	Rule     string `json:"rule,omitempty"`
-	Severity string `json:"severity"`
-	Message  string `json:"message"`
-}
-
 func formatJSON(diagnostics []*diagnostic.Entry) error {
-	entries := make([]jsonEntry, 0, len(diagnostics))
 	hasErrors := false
 	for _, d := range diagnostics {
 		if d.Severity == diagnostic.Error {
 			hasErrors = true
 		}
-		entries = append(entries, jsonEntry{
-			File:     d.Filename,
-			Line:     d.Line,
-			Rule:     d.RuleName,
-			Severity: d.Severity.String(),
-			Message:  d.Message,
-		})
 	}
-	out, err := json.Marshal(entries)
+	out, err := json.Marshal(diagnostic.Records(diagnostics))
 	if err != nil {
 		return &LintError{
 			Message:  fmt.Sprintf("json encoding: %s", err),
