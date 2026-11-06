@@ -78,10 +78,11 @@ func RunAI(ctx context.Context, loadConfig func() (config.Config, error), connec
 		return err
 	}
 
+	fmt.Println("emod asks the model for an emod source. Each attempt can take many seconds.")
 	outcome, err := repair.Generate(ctx, model, llm.GenerateRequest{
 		System:   smokeSystem,
 		Messages: []llm.Message{{Role: "user", Content: smokePrompt}},
-	}, smokeAttempts)
+	}, smokeAttempts, repair.WithProgress(printAttempt))
 	if err != nil {
 		printTokens(outcome.Usage)
 		return err
@@ -102,6 +103,26 @@ func RunAI(ctx context.Context, loadConfig func() (config.Config, error), connec
 		return &LintError{Message: "AI did not converge: no answer passed the oracle", ExitCode: 1}
 	}
 	return nil
+}
+
+func printAttempt(attempt repair.Attempt) {
+	tokens := fmt.Sprintf("Tokens: %d input, %d output.", attempt.Usage.InputTokens, attempt.Usage.OutputTokens)
+	count := len(attempt.Diagnostics)
+	switch {
+	case count == 0:
+		fmt.Printf("Attempt %d of %d: the source passes the oracle. %s\n", attempt.Number, attempt.MaxAttempts, tokens)
+	case attempt.Number < attempt.MaxAttempts:
+		fmt.Printf("Attempt %d of %d: the source has %s. emod asks the model again. %s\n", attempt.Number, attempt.MaxAttempts, diagnosticCount(count), tokens)
+	default:
+		fmt.Printf("Attempt %d of %d: the source has %s. %s\n", attempt.Number, attempt.MaxAttempts, diagnosticCount(count), tokens)
+	}
+}
+
+func diagnosticCount(count int) string {
+	if count == 1 {
+		return "1 diagnostic"
+	}
+	return fmt.Sprintf("%d diagnostics", count)
 }
 
 func RunAIStatus(loadConfig func() (config.Config, error)) error {

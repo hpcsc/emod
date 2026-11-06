@@ -212,6 +212,47 @@ func TestGenerate(t *testing.T) {
 		})
 	})
 
+	t.Run("progress", func(t *testing.T) {
+		t.Run("reports each attempt with its number, the attempt bound, its diagnostics and its usage", func(t *testing.T) {
+			model := llm.NewFake(
+				llm.Response{Text: unparseableSource, Usage: llm.Usage{InputTokens: 100, OutputTokens: 20}},
+				llm.Response{Text: cleanSource, Usage: llm.Usage{InputTokens: 50, OutputTokens: 7}},
+			)
+			var attempts []repair.Attempt
+
+			_, err := repair.Generate(context.Background(), model, newRequest(), 3,
+				repair.WithProgress(func(attempt repair.Attempt) { attempts = append(attempts, attempt) }))
+
+			require.NoError(t, err)
+			require.Equal(t, []repair.Attempt{
+				{Number: 1, MaxAttempts: 3, Diagnostics: oracle.Check(unparseableSource, "generated.emod"), Usage: llm.Usage{InputTokens: 100, OutputTokens: 20}},
+				{Number: 2, MaxAttempts: 3, Diagnostics: oracle.Check(cleanSource, "generated.emod"), Usage: llm.Usage{InputTokens: 50, OutputTokens: 7}},
+			}, attempts)
+		})
+
+		t.Run("reports every attempt up to the bound when no answer converges", func(t *testing.T) {
+			model := llm.NewFake(answer(unparseableSource), answer(unparseableSource), answer(unparseableSource))
+			var numbers []int
+
+			_, err := repair.Generate(context.Background(), model, newRequest(), 3,
+				repair.WithProgress(func(attempt repair.Attempt) { numbers = append(numbers, attempt.Number) }))
+
+			require.NoError(t, err)
+			require.Equal(t, []int{1, 2, 3}, numbers)
+		})
+
+		t.Run("reports no attempt for a model call that fails", func(t *testing.T) {
+			model := llm.NewBroken().WithError(errors.New("the provider is unavailable"))
+			var attempts []repair.Attempt
+
+			_, err := repair.Generate(context.Background(), model, newRequest(), 3,
+				repair.WithProgress(func(attempt repair.Attempt) { attempts = append(attempts, attempt) }))
+
+			require.Error(t, err)
+			require.Empty(t, attempts)
+		})
+	})
+
 	t.Run("usage", func(t *testing.T) {
 		t.Run("sums the usage of every attempt", func(t *testing.T) {
 			model := llm.NewFake(

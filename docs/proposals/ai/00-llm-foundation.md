@@ -217,6 +217,11 @@ func Generate(ctx context.Context, model llm.Model, request llm.GenerateRequest,
 The outcome carries the usage of every call, also when a call fails. A feature never shows a source that
 did not converge as a success. It shows the diagnostics that the last attempt left.
 
+`repair.WithProgress(func(repair.Attempt))` reports each attempt when its check ends: the number of the
+attempt, `maxAttempts`, the diagnostics, and the usage of that attempt. It reports nothing for a model call
+that fails. `emod ai` prints one line for each attempt, and the desktop panel of
+[03](./03-desktop-ai-panel.md) sends the same data as the `ai:progress` event.
+
 ### Options for edits
 
 The loop above suits a new model, which must have no diagnostic. An edit starts from a model that can

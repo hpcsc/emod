@@ -21,10 +21,34 @@ type Outcome struct {
 	Usage       llm.Usage
 }
 
+type Attempt struct {
+	Number      int
+	MaxAttempts int
+	Diagnostics []*diagnostic.Entry
+	Usage       llm.Usage
+}
+
+type Option func(*options)
+
+type options struct {
+	progress func(Attempt)
+}
+
+func WithProgress(report func(Attempt)) Option {
+	return func(o *options) {
+		o.progress = report
+	}
+}
+
 // On an error, the outcome still carries the usage of every call, the failed one included.
-func Generate(ctx context.Context, model llm.Model, request llm.GenerateRequest, maxAttempts int) (Outcome, error) {
+func Generate(ctx context.Context, model llm.Model, request llm.GenerateRequest, maxAttempts int, opts ...Option) (Outcome, error) {
 	if maxAttempts < 1 {
 		return Outcome{}, fmt.Errorf("the attempt bound must be at least 1, got %d", maxAttempts)
+	}
+
+	settings := options{progress: func(Attempt) {}}
+	for _, opt := range opts {
+		opt(&settings)
 	}
 
 	request.Messages = slices.Clip(request.Messages)
@@ -40,6 +64,7 @@ func Generate(ctx context.Context, model llm.Model, request llm.GenerateRequest,
 		outcome.Attempts++
 		outcome.Source = sourceOf(response.Text)
 		outcome.Diagnostics = check(outcome.Source)
+		settings.progress(Attempt{Number: outcome.Attempts, MaxAttempts: maxAttempts, Diagnostics: outcome.Diagnostics, Usage: response.Usage})
 		if len(outcome.Diagnostics) == 0 {
 			outcome.Converged = true
 			return outcome, nil

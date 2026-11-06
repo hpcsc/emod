@@ -490,6 +490,30 @@ func TestAI(t *testing.T) {
 			require.Contains(t, output, "Tokens: 1500 input, 300 output\n")
 		})
 
+		t.Run("reports each attempt as it ends, with its diagnostics and its tokens", func(t *testing.T) {
+			invalid := strings.Replace(test.BillingPayments, "TakePayment -> PaymentTaken", "TakePayment -> PaymentRefunded", 1)
+			model := llm.NewFake(usedAnswer(invalid, 1000, 200), usedAnswer(test.BillingPayments, 500, 100))
+
+			output := captureStdout(t, func() {
+				require.NoError(t, cli.RunAI(context.Background(), configLoader(configured, nil), connectTo(model)))
+			})
+
+			require.Regexp(t, `(?m)^emod asks the model for an emod source\. Each attempt can take many seconds\.\n`+
+				`Attempt 1 of 3: the source has 2 diagnostics\. emod asks the model again\. Tokens: 1000 input, 200 output\.\n`+
+				`Attempt 2 of 3: the source passes the oracle\. Tokens: 500 input, 100 output\.\n`+
+				`The source passed the oracle on attempt 2 of 3\.$`, output)
+		})
+
+		t.Run("names one diagnostic in the singular", func(t *testing.T) {
+			model := llm.NewFake(usedAnswer("", 10, 0), usedAnswer(test.BillingPayments, 10, 5))
+
+			output := captureStdout(t, func() {
+				require.NoError(t, cli.RunAI(context.Background(), configLoader(configured, nil), connectTo(model)))
+			})
+
+			require.Contains(t, output, "Attempt 1 of 3: the source has 1 diagnostic. emod asks the model again.")
+		})
+
 		t.Run("emod ai asks again with no blank turn when the model answers with no source", func(t *testing.T) {
 			withoutAISettings(t)
 			gateway := newAPIGateway(t, "", test.BillingPayments)
@@ -519,6 +543,7 @@ func TestAI(t *testing.T) {
 			})
 
 			require.Contains(t, output, "The source did not pass the oracle in 3 attempts. The last answer has these diagnostics:\n")
+			require.Regexp(t, `(?m)^Attempt 3 of 3: the source has 2 diagnostics\. Tokens: 1 input, 1 output\.$`, output)
 			diagnostics := oracle.Check(invalid, "generated.emod")
 			require.Len(t, diagnostics, 2)
 			for _, diagnostic := range diagnostics {
