@@ -12,30 +12,36 @@ import (
 )
 
 const (
-	keyRegion     = "EMOD_AI_REGION"
+	keyProvider   = "EMOD_AI_PROVIDER"
+	keyAPIKey     = "EMOD_AI_API_KEY"
 	keyModel      = "EMOD_AI_MODEL"
 	keyCheapModel = "EMOD_AI_MODEL_CHEAP"
 	keyEffort     = "EMOD_AI_EFFORT"
 	keyEndpoint   = "EMOD_AI_ENDPOINT"
 
-	defaultModel      = "anthropic.claude-opus-4-8"
-	defaultCheapModel = "anthropic.claude-haiku-4-5"
+	anthropicAPIKey = "ANTHROPIC_API_KEY"
+
+	providerAnthropic = "anthropic"
+	defaultModel      = "claude-opus-4-8"
+	defaultCheapModel = "claude-haiku-4-5"
 )
 
 var ErrNotConfigured = errors.New("AI is not configured")
 
 type Config struct {
-	Region     string
-	Model      string
-	CheapModel string
-	Effort     llm.Effort
-	Endpoint   string
+	Provider     string
+	Model        string
+	CheapModel   string
+	Effort       llm.Effort
+	Endpoint     string
+	APIKey       string
+	APIKeySource string
 }
 
 // Flags carries string overrides supplied on the command line. An empty string
 // means the flag was not provided and the next source in precedence is used.
 type Flags struct {
-	Region     string
+	Provider   string
 	Model      string
 	CheapModel string
 	Effort     string
@@ -43,11 +49,15 @@ type Flags struct {
 }
 
 // Resolve merges sources in order default -> file -> env -> flags so the net
-// precedence is flags > env > file > built-in default.
+// precedence is flags > env > file > built-in default. The API key comes only
+// from the environment.
 func Resolve(flags Flags, getenv func(string) string, filePath string) (Config, error) {
 	fileValues, err := readFile(filePath)
 	if err != nil {
 		return Config{}, err
+	}
+	if _, ok := fileValues[keyAPIKey]; ok {
+		return Config{}, fmt.Errorf("config file %s holds %s: remove the line, and set the key in the environment", filePath, keyAPIKey)
 	}
 
 	pick := func(flag, key string) string {
@@ -60,18 +70,30 @@ func Resolve(flags Flags, getenv func(string) string, filePath string) (Config, 
 		return fileValues[key]
 	}
 
-	region := pick(flags.Region, keyRegion)
+	provider := pick(flags.Provider, keyProvider)
 	model := pick(flags.Model, keyModel)
 	cheapModel := pick(flags.CheapModel, keyCheapModel)
 	effortLevel := pick(flags.Effort, keyEffort)
 	endpoint := pick(flags.Endpoint, keyEndpoint)
+	apiKey := getenv(keyAPIKey)
 
-	if region+model+cheapModel+effortLevel+endpoint == "" {
+	if provider+model+cheapModel+effortLevel+endpoint+apiKey == "" {
 		return Config{}, ErrNotConfigured
 	}
 
-	if region == "" {
-		return Config{}, fmt.Errorf("%s is required: set it via the --ai-region flag, the %s environment variable, or the ~/.config/emod/config file", keyRegion, keyRegion)
+	if provider == "" {
+		provider = providerAnthropic
+	}
+	if provider != providerAnthropic {
+		return Config{}, fmt.Errorf("%s has an invalid value %q: the accepted provider is %s", keyProvider, provider, providerAnthropic)
+	}
+
+	apiKeySource := keyAPIKey
+	if apiKey == "" {
+		apiKey, apiKeySource = getenv(anthropicAPIKey), anthropicAPIKey
+	}
+	if apiKey == "" {
+		return Config{}, fmt.Errorf("an API key is required: set %s or %s in the environment", keyAPIKey, anthropicAPIKey)
 	}
 
 	effort, err := parseEffort(effortLevel)
@@ -88,11 +110,13 @@ func Resolve(flags Flags, getenv func(string) string, filePath string) (Config, 
 	}
 
 	return Config{
-		Region:     region,
-		Model:      model,
-		CheapModel: cheapModel,
-		Effort:     effort,
-		Endpoint:   endpoint,
+		Provider:     provider,
+		Model:        model,
+		CheapModel:   cheapModel,
+		Effort:       effort,
+		Endpoint:     endpoint,
+		APIKey:       apiKey,
+		APIKeySource: apiKeySource,
 	}, nil
 }
 

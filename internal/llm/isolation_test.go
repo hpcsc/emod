@@ -72,7 +72,7 @@ func TestIsolation(t *testing.T) {
 			reached := importsReachedFrom(t, build.Default.GOOS, build.Default.GOARCH, module+"/internal/llm/repair")
 
 			require.True(t, reached[module+"/internal/oracle"], "the walk must reach the packages the repair loop uses")
-			requireNoneWithPrefix(t, reached, module+"/internal/llm/bedrock", providerSDK)
+			requireNoneWithPrefix(t, reached, module+"/internal/llm/anthropic", providerSDK)
 		})
 	})
 }

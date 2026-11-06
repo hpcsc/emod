@@ -248,7 +248,7 @@ func TestGenerate(t *testing.T) {
 
 	t.Run("failure", func(t *testing.T) {
 		t.Run("returns the error of a failed model call", func(t *testing.T) {
-			unavailable := errors.New("bedrock unavailable")
+			unavailable := errors.New("the provider is unavailable")
 			model := llm.NewBroken().WithError(unavailable)
 
 			_, err := repair.Generate(context.Background(), model, newRequest(), 3)

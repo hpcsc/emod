@@ -1,6 +1,6 @@
 //go:build unit
 
-package bedrock_test
+package anthropic_test
 
 import (
 	"context"
@@ -11,13 +11,14 @@ import (
 	"testing"
 
 	"github.com/hpcsc/emod/internal/llm"
-	"github.com/hpcsc/emod/internal/llm/bedrock"
+	"github.com/hpcsc/emod/internal/llm/anthropic"
 	"github.com/stretchr/testify/require"
 )
 
 const (
-	defaultModelID = "anthropic.claude-opus-4-8"
-	cheapModelID   = "anthropic.claude-haiku-4-5"
+	defaultModelID = "claude-opus-4-8"
+	cheapModelID   = "claude-haiku-4-5"
+	testAPIKey     = "test-api-key"
 )
 
 // capturingTransport short-circuits the network: it records the outgoing
@@ -26,13 +27,15 @@ const (
 // the injection seam the adapter exposes for offline testing; it is not a mock
 // of the SDK.
 type capturingTransport struct {
-	url  string
-	body []byte
-	resp string
+	url    string
+	header http.Header
+	body   []byte
+	resp   string
 }
 
 func (c *capturingTransport) RoundTrip(req *http.Request) (*http.Response, error) {
 	c.url = req.URL.String()
+	c.header = req.Header.Clone()
 	if req.Body != nil {
 		body, err := io.ReadAll(req.Body)
 		if err != nil {
@@ -76,25 +79,19 @@ func cannedResponse(text string, inputTokens, outputTokens int) string {
 	return string(encoded)
 }
 
-func newSettings() bedrock.Settings {
-	return bedrock.Settings{
-		Region:        "us-east-1",
+func newSettings() anthropic.Settings {
+	return anthropic.Settings{
+		APIKey:        testAPIKey,
 		DefaultModel:  defaultModelID,
 		CheapModel:    cheapModelID,
 		DefaultEffort: llm.EffortMedium,
 	}
 }
 
-func newAdapter(t *testing.T, settings bedrock.Settings, transport http.RoundTripper) *bedrock.Adapter {
+func newAdapter(t *testing.T, settings anthropic.Settings, transport http.RoundTripper) *anthropic.Adapter {
 	t.Helper()
 
-	// The Mantle client signs with SigV4; static fake credentials keep signing
-	// offline and credential-free while the injected transport blocks the call.
-	t.Setenv("AWS_ACCESS_KEY_ID", "test-access-key")
-	t.Setenv("AWS_SECRET_ACCESS_KEY", "test-secret-key")
-	t.Setenv("AWS_REGION", settings.Region)
-
-	adapter, err := bedrock.New(context.Background(), settings, bedrock.WithHTTPClient(&http.Client{Transport: transport}))
+	adapter, err := anthropic.New(settings, anthropic.WithHTTPClient(&http.Client{Transport: transport}))
 	require.NoError(t, err)
 
 	return adapter
@@ -394,7 +391,7 @@ func TestAdapter(t *testing.T) {
 				"expected request to target the gateway, got %q", transport.url)
 		})
 
-		t.Run("targets the default Bedrock host when no endpoint is configured", func(t *testing.T) {
+		t.Run("targets the Anthropic API when no endpoint is configured", func(t *testing.T) {
 			transport := &capturingTransport{}
 			adapter := newAdapter(t, newSettings(), transport)
 
@@ -403,7 +400,46 @@ func TestAdapter(t *testing.T) {
 			})
 			require.NoError(t, err)
 
-			require.Contains(t, transport.url, "bedrock-mantle.us-east-1.api.aws")
+			require.True(t, strings.HasPrefix(transport.url, "https://api.anthropic.com/v1/messages"),
+				"expected request to target the Anthropic API, got %q", transport.url)
+		})
+	})
+
+	t.Run("credentials", func(t *testing.T) {
+		t.Run("sends the API key of the settings in the x-api-key header", func(t *testing.T) {
+			transport := &capturingTransport{}
+			adapter := newAdapter(t, newSettings(), transport)
+
+			_, err := adapter.Generate(context.Background(), llm.GenerateRequest{
+				Messages: []llm.Message{{Role: "user", Content: "hello"}},
+			})
+			require.NoError(t, err)
+
+			require.Equal(t, testAPIKey, transport.header.Get("X-Api-Key"))
+		})
+
+		t.Run("ignores the token and the base URL that the Anthropic SDK reads from the environment", func(t *testing.T) {
+			t.Setenv("ANTHROPIC_AUTH_TOKEN", "token-from-the-environment")
+			t.Setenv("ANTHROPIC_BASE_URL", "https://elsewhere.example")
+			transport := &capturingTransport{}
+			adapter := newAdapter(t, newSettings(), transport)
+
+			_, err := adapter.Generate(context.Background(), llm.GenerateRequest{
+				Messages: []llm.Message{{Role: "user", Content: "hello"}},
+			})
+			require.NoError(t, err)
+
+			require.True(t, strings.HasPrefix(transport.url, "https://api.anthropic.com/"), "got %q", transport.url)
+			require.Empty(t, transport.header.Get("Authorization"))
+		})
+
+		t.Run("refuses settings with no API key", func(t *testing.T) {
+			settings := newSettings()
+			settings.APIKey = ""
+
+			_, err := anthropic.New(settings)
+
+			require.ErrorContains(t, err, "no API key")
 		})
 	})
 }

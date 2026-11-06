@@ -30,7 +30,7 @@ func withoutAISettings(t *testing.T) string {
 
 	home := t.TempDir()
 	t.Setenv("HOME", home)
-	for _, key := range []string{"EMOD_AI_REGION", "EMOD_AI_MODEL", "EMOD_AI_MODEL_CHEAP", "EMOD_AI_EFFORT", "EMOD_AI_ENDPOINT"} {
+	for _, key := range []string{"EMOD_AI_PROVIDER", "EMOD_AI_API_KEY", "EMOD_AI_MODEL", "EMOD_AI_MODEL_CHEAP", "EMOD_AI_EFFORT", "EMOD_AI_ENDPOINT", "ANTHROPIC_API_KEY"} {
 		t.Setenv(key, "")
 	}
 
@@ -104,31 +104,26 @@ func usedAnswer(text string, inputTokens, outputTokens int) llm.Response {
 	return llm.Response{Text: text, Usage: llm.Usage{InputTokens: inputTokens, OutputTokens: outputTokens}}
 }
 
-type bedrockGateway struct {
+type apiGateway struct {
 	server *httptest.Server
 
-	mu             sync.Mutex
-	answers        []string
-	bodies         []map[string]any
-	authorizations []string
+	mu      sync.Mutex
+	answers []string
+	bodies  []map[string]any
+	apiKeys []string
 }
 
-func newBedrockGateway(t *testing.T, answers ...string) *bedrockGateway {
+func newAPIGateway(t *testing.T, answers ...string) *apiGateway {
 	t.Helper()
 
-	t.Setenv("AWS_ACCESS_KEY_ID", "test-access-key")
-	t.Setenv("AWS_SECRET_ACCESS_KEY", "test-secret-key")
-	t.Setenv("AWS_SESSION_TOKEN", "")
-	t.Setenv("AWS_PROFILE", "")
-
-	gateway := &bedrockGateway{answers: answers}
+	gateway := &apiGateway{answers: answers}
 	gateway.server = httptest.NewServer(http.HandlerFunc(gateway.answer))
 	t.Cleanup(gateway.server.Close)
 
 	return gateway
 }
 
-func (g *bedrockGateway) answer(w http.ResponseWriter, r *http.Request) {
+func (g *apiGateway) answer(w http.ResponseWriter, r *http.Request) {
 	g.mu.Lock()
 	defer g.mu.Unlock()
 
@@ -136,7 +131,7 @@ func (g *bedrockGateway) answer(w http.ResponseWriter, r *http.Request) {
 	var body map[string]any
 	_ = json.Unmarshal(raw, &body)
 	g.bodies = append(g.bodies, body)
-	g.authorizations = append(g.authorizations, r.Header.Get("Authorization"))
+	g.apiKeys = append(g.apiKeys, r.Header.Get("X-Api-Key"))
 
 	if len(g.answers) == 0 {
 		http.Error(w, `{"type":"error","error":{"type":"api_error","message":"no answer queued"}}`, http.StatusInternalServerError)
@@ -171,7 +166,7 @@ func TestAI(t *testing.T) {
 			})
 
 			require.Contains(t, output, "AI is not configured")
-			require.Contains(t, output, "EMOD_AI_REGION")
+			require.Contains(t, output, "EMOD_AI_API_KEY")
 			require.False(t, connected)
 		})
 
@@ -231,9 +226,9 @@ func TestAI(t *testing.T) {
 			require.False(t, connected)
 		})
 
-		t.Run("emod ai with an AI setting but no region exits 1 and names the region", func(t *testing.T) {
+		t.Run("emod ai with an AI setting but no API key exits 1 and names the key variables", func(t *testing.T) {
 			withoutAISettings(t)
-			t.Setenv("EMOD_AI_MODEL", "anthropic.claude-opus-4-8")
+			t.Setenv("EMOD_AI_MODEL", "claude-opus-4-8")
 
 			var err error
 			stderr := captureStderr(t, func() {
@@ -241,15 +236,16 @@ func TestAI(t *testing.T) {
 			})
 
 			requireExitCode(t, 1, err)
-			require.Contains(t, stderr, "EMOD_AI_REGION is required")
+			require.Contains(t, stderr, "an API key is required: set EMOD_AI_API_KEY or ANTHROPIC_API_KEY in the environment")
 		})
 
 		t.Run("emod ai with an effort flag that is not a level exits 1 and names the effort", func(t *testing.T) {
 			withoutAISettings(t)
+			t.Setenv("EMOD_AI_API_KEY", "test-api-key")
 
 			var err error
 			stderr := captureStderr(t, func() {
-				err = runCommandLine(t, "emod", "ai", "--ai-region", "eu-west-1", "--ai-effort", "highest")
+				err = runCommandLine(t, "emod", "ai", "--ai-effort", "highest")
 			})
 
 			requireExitCode(t, 1, err)
@@ -258,63 +254,121 @@ func TestAI(t *testing.T) {
 	})
 
 	t.Run("settings", func(t *testing.T) {
-		t.Run("emod ai reports each setting that its flags give and sends the call through the gateway", func(t *testing.T) {
+		t.Run("emod ai reports each setting that its flags give and sends the call with the key through the gateway", func(t *testing.T) {
 			withoutAISettings(t)
-			gateway := newBedrockGateway(t, test.BillingPayments)
+			gateway := newAPIGateway(t, test.BillingPayments)
+			t.Setenv("EMOD_AI_API_KEY", "test-api-key")
 
 			output := captureStdout(t, func() {
 				require.NoError(t, runCommandLine(t, "emod", "ai",
-					"--ai-region", "eu-west-1",
-					"--ai-model", "anthropic.claude-opus-5-5",
-					"--ai-model-cheap", "anthropic.claude-sonnet-5-5",
+					"--ai-provider", "anthropic",
+					"--ai-model", "claude-opus-5-5",
+					"--ai-model-cheap", "claude-sonnet-5-5",
 					"--ai-effort", "high",
 					"--ai-endpoint", gateway.server.URL,
 				))
 			})
 
-			requireSetting(t, output, "Region", "eu-west-1")
-			requireSetting(t, output, "Model", "anthropic.claude-opus-5-5")
-			requireSetting(t, output, "Cheap model", "anthropic.claude-sonnet-5-5")
+			requireSetting(t, output, "Provider", "anthropic")
+			requireSetting(t, output, "Model", "claude-opus-5-5")
+			requireSetting(t, output, "Cheap model", "claude-sonnet-5-5")
 			requireSetting(t, output, "Effort", "high")
 			requireSetting(t, output, "Endpoint", gateway.server.URL)
 			require.Len(t, gateway.bodies, 1)
-			require.Equal(t, "anthropic.claude-opus-5-5", gateway.bodies[0]["model"])
+			require.Equal(t, "claude-opus-5-5", gateway.bodies[0]["model"])
 			require.Equal(t, map[string]any{"effort": "high"}, gateway.bodies[0]["output_config"])
-			require.Contains(t, gateway.authorizations[0], "/eu-west-1/")
+			require.Equal(t, []string{"test-api-key"}, gateway.apiKeys)
 		})
 
-		t.Run("emod ai reads its settings from ~/.config/emod/config", func(t *testing.T) {
+		t.Run("emod ai reads its settings from ~/.config/emod/config and the key from ANTHROPIC_API_KEY", func(t *testing.T) {
 			home := withoutAISettings(t)
-			gateway := newBedrockGateway(t, test.BillingPayments)
-			writeAIConfig(t, home, "EMOD_AI_REGION=ap-southeast-2\nEMOD_AI_ENDPOINT="+gateway.server.URL+"\n")
+			gateway := newAPIGateway(t, test.BillingPayments)
+			t.Setenv("ANTHROPIC_API_KEY", "anthropic-api-key")
+			writeAIConfig(t, home, "EMOD_AI_PROVIDER=anthropic\nEMOD_AI_ENDPOINT="+gateway.server.URL+"\n")
 
 			output := captureStdout(t, func() {
 				require.NoError(t, runCommandLine(t, "emod", "ai"))
 			})
 
-			requireSetting(t, output, "Region", "ap-southeast-2")
+			requireSetting(t, output, "Provider", "anthropic")
+			requireSetting(t, output, "API key", "from ANTHROPIC_API_KEY")
 			require.Contains(t, output, "The source passed the oracle on attempt 1 of 3.\n")
-			require.Len(t, gateway.bodies, 1)
+			require.Equal(t, []string{"anthropic-api-key"}, gateway.apiKeys)
 		})
 
-		t.Run("names the defaults and the Bedrock endpoint of the region when no gateway is set", func(t *testing.T) {
+		t.Run("names the defaults and the Anthropic API when no gateway is set", func(t *testing.T) {
 			withoutAISettings(t)
-			t.Setenv("EMOD_AI_REGION", "us-east-1")
+			t.Setenv("EMOD_AI_API_KEY", "test-api-key")
 			loadConfig := func() (config.Config, error) { return config.Load(config.Flags{}) }
 
 			output := captureStdout(t, func() {
 				require.NoError(t, cli.RunAI(context.Background(), loadConfig, connectTo(llm.NewFake(usedAnswer(test.BillingPayments, 1, 1)))))
 			})
 
-			requireSetting(t, output, "Model", "anthropic.claude-opus-4-8")
-			requireSetting(t, output, "Cheap model", "anthropic.claude-haiku-4-5")
+			requireSetting(t, output, "Provider", "anthropic")
+			requireSetting(t, output, "Model", "claude-opus-4-8")
+			requireSetting(t, output, "Cheap model", "claude-haiku-4-5")
 			requireSetting(t, output, "Effort", "medium")
-			requireSetting(t, output, "Endpoint", "the Bedrock endpoint of the region")
+			requireSetting(t, output, "Endpoint", "the Anthropic API")
+			requireSetting(t, output, "API key", "from EMOD_AI_API_KEY")
+		})
+	})
+
+	t.Run("status", func(t *testing.T) {
+		t.Run("emod ai status prints how to turn AI on when AI is not configured", func(t *testing.T) {
+			withoutAISettings(t)
+
+			output := captureStdout(t, func() {
+				require.NoError(t, runCommandLine(t, "emod", "ai", "status"))
+			})
+
+			require.Contains(t, output, "AI is not configured")
+		})
+
+		t.Run("emod ai status names the variable that holds the API key, hides the key and calls no model", func(t *testing.T) {
+			withoutAISettings(t)
+			gateway := newAPIGateway(t, test.BillingPayments)
+			t.Setenv("EMOD_AI_API_KEY", "secret-api-key")
+
+			output := captureStdout(t, func() {
+				require.NoError(t, runCommandLine(t, "emod", "ai", "status", "--ai-endpoint", gateway.server.URL))
+			})
+
+			requireSetting(t, output, "API key", "from EMOD_AI_API_KEY")
+			require.NotContains(t, output, "secret-api-key")
+			require.Empty(t, gateway.bodies)
+		})
+
+		t.Run("emod ai status names ANTHROPIC_API_KEY when it gives the key", func(t *testing.T) {
+			withoutAISettings(t)
+			t.Setenv("EMOD_AI_PROVIDER", "anthropic")
+			t.Setenv("ANTHROPIC_API_KEY", "anthropic-api-key")
+
+			output := captureStdout(t, func() {
+				require.NoError(t, runCommandLine(t, "emod", "ai", "status"))
+			})
+
+			requireSetting(t, output, "API key", "from ANTHROPIC_API_KEY")
+		})
+
+		t.Run("emod ai status exits 1 and names the key variables when AI is on but no key is set", func(t *testing.T) {
+			withoutAISettings(t)
+			t.Setenv("EMOD_AI_PROVIDER", "anthropic")
+
+			var err error
+			stderr := captureStderr(t, func() {
+				captureStdout(t, func() {
+					err = runCommandLine(t, "emod", "ai", "status")
+				})
+			})
+
+			requireExitCode(t, 1, err)
+			require.Contains(t, stderr, "an API key is required: set EMOD_AI_API_KEY or ANTHROPIC_API_KEY in the environment")
 		})
 	})
 
 	t.Run("round trip", func(t *testing.T) {
-		configured := config.Config{Region: "us-east-1", Model: "anthropic.claude-opus-4-8", CheapModel: "anthropic.claude-haiku-4-5", Effort: llm.EffortMedium}
+		configured := config.Config{Provider: "anthropic", Model: "claude-opus-4-8", CheapModel: "claude-haiku-4-5", Effort: llm.EffortMedium, APIKey: "test-api-key", APIKeySource: "EMOD_AI_API_KEY"}
 
 		t.Run("reports an answer that passes the oracle with its tokens", func(t *testing.T) {
 			model := llm.NewFake(usedAnswer(test.BillingPayments, 1200, 300))
@@ -340,8 +394,8 @@ func TestAI(t *testing.T) {
 
 		t.Run("emod ai asks again with no blank turn when the model answers with no source", func(t *testing.T) {
 			withoutAISettings(t)
-			gateway := newBedrockGateway(t, "", test.BillingPayments)
-			t.Setenv("EMOD_AI_REGION", "us-east-1")
+			gateway := newAPIGateway(t, "", test.BillingPayments)
+			t.Setenv("EMOD_AI_API_KEY", "test-api-key")
 			t.Setenv("EMOD_AI_ENDPOINT", gateway.server.URL)
 
 			output := captureStdout(t, func() {
@@ -381,8 +435,8 @@ func TestAI(t *testing.T) {
 
 		t.Run("emod ai teaches the model with an example that passes the oracle", func(t *testing.T) {
 			withoutAISettings(t)
-			gateway := newBedrockGateway(t, test.BillingPayments)
-			t.Setenv("EMOD_AI_REGION", "us-east-1")
+			gateway := newAPIGateway(t, test.BillingPayments)
+			t.Setenv("EMOD_AI_API_KEY", "test-api-key")
 			t.Setenv("EMOD_AI_ENDPOINT", gateway.server.URL)
 
 			captureStdout(t, func() {
@@ -427,7 +481,7 @@ func TestAI(t *testing.T) {
 		})
 
 		t.Run("returns the error of a connection that fails", func(t *testing.T) {
-			unreachable := errors.New("no AWS credentials")
+			unreachable := errors.New("the provider is unreachable")
 			connect := func(context.Context, config.Config) (llm.Model, error) { return nil, unreachable }
 
 			var err error
@@ -438,33 +492,10 @@ func TestAI(t *testing.T) {
 			require.ErrorIs(t, err, unreachable)
 		})
 
-		t.Run("emod ai exits 1 when the Bedrock connection cannot be set up", func(t *testing.T) {
-			home := withoutAISettings(t)
-			gateway := newBedrockGateway(t)
-			t.Setenv("EMOD_AI_REGION", "us-east-1")
-			t.Setenv("EMOD_AI_ENDPOINT", gateway.server.URL)
-			t.Setenv("AWS_ACCESS_KEY_ID", "")
-			t.Setenv("AWS_SECRET_ACCESS_KEY", "")
-			t.Setenv("AWS_PROFILE", "emod-missing-profile")
-			t.Setenv("AWS_CONFIG_FILE", filepath.Join(home, "aws-config"))
-			t.Setenv("AWS_SHARED_CREDENTIALS_FILE", filepath.Join(home, "aws-credentials"))
-
-			var err error
-			stderr := captureStderr(t, func() {
-				captureStdout(t, func() {
-					err = runCommandLine(t, "emod", "ai")
-				})
-			})
-
-			requireExitCode(t, 1, err)
-			require.Contains(t, stderr, "emod-missing-profile")
-			require.Empty(t, gateway.bodies)
-		})
-
 		t.Run("emod ai repairs an answer through the gateway and reports the run", func(t *testing.T) {
 			withoutAISettings(t)
-			gateway := newBedrockGateway(t, test.Unparseable, test.BillingPayments)
-			t.Setenv("EMOD_AI_REGION", "us-east-1")
+			gateway := newAPIGateway(t, test.Unparseable, test.BillingPayments)
+			t.Setenv("EMOD_AI_API_KEY", "test-api-key")
 			t.Setenv("EMOD_AI_ENDPOINT", gateway.server.URL)
 
 			output := captureStdout(t, func() {

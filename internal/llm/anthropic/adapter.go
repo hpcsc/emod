@@ -1,11 +1,11 @@
-package bedrock
+package anthropic
 
 import (
 	"context"
+	"errors"
 	"strings"
 
 	"github.com/anthropics/anthropic-sdk-go"
-	"github.com/anthropics/anthropic-sdk-go/bedrock"
 	"github.com/anthropics/anthropic-sdk-go/option"
 	"github.com/hpcsc/emod/internal/llm"
 )
@@ -13,11 +13,8 @@ import (
 // defaultMaxTokens caps a non-streaming generation so a long response cannot stall on an HTTP timeout.
 const defaultMaxTokens int64 = 16384
 
-// Settings holds the resolved adapter configuration. Model IDs must be the
-// Bedrock-prefixed strings (e.g. "anthropic.claude-opus-4-8"); the bare SDK
-// constants are rejected by Bedrock.
 type Settings struct {
-	Region        string
+	APIKey        string
 	DefaultModel  string
 	CheapModel    string
 	DefaultEffort llm.Effort
@@ -51,24 +48,28 @@ type Adapter struct {
 	maxTokens  int64
 }
 
-func New(ctx context.Context, settings Settings, opts ...Option) (*Adapter, error) {
+func New(settings Settings, opts ...Option) (*Adapter, error) {
+	if settings.APIKey == "" {
+		return nil, errors.New("no API key for the Anthropic API")
+	}
+
 	cfg := config{maxTokens: defaultMaxTokens}
 	for _, opt := range opts {
 		opt(&cfg)
 	}
 
-	var requestOptions []option.RequestOption
+	requestOptions := []option.RequestOption{
+		option.WithoutEnvironmentDefaults(),
+		option.WithAPIKey(settings.APIKey),
+	}
+	if settings.Endpoint != "" {
+		requestOptions = append(requestOptions, option.WithBaseURL(settings.Endpoint))
+	}
 	if cfg.httpClient != nil {
 		requestOptions = append(requestOptions, option.WithHTTPClient(cfg.httpClient))
 	}
 
-	client, err := bedrock.NewMantleClient(ctx, bedrock.MantleClientConfig{
-		AWSRegion: settings.Region,
-		BaseURL:   settings.Endpoint,
-	}, requestOptions...)
-	if err != nil {
-		return nil, err
-	}
+	client := anthropic.NewClient(requestOptions...)
 
 	return &Adapter{
 		messages:   client.Messages,

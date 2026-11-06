@@ -42,6 +42,18 @@ func reportExitError(err error) error {
 	return urfave.Exit("", 1)
 }
 
+func aiConfigLoader(cmd *urfave.Command) func() (config.Config, error) {
+	return func() (config.Config, error) {
+		return config.Load(config.Flags{
+			Provider:   cmd.String("ai-provider"),
+			Model:      cmd.String("ai-model"),
+			CheapModel: cmd.String("ai-model-cheap"),
+			Effort:     cmd.String("ai-effort"),
+			Endpoint:   cmd.String("ai-endpoint"),
+		})
+	}
+}
+
 func NewApp() *urfave.Command {
 	return &urfave.Command{
 		Name:    "emod",
@@ -287,23 +299,23 @@ func NewApp() *urfave.Command {
 				Name:  "ai",
 				Usage: "Check that AI is configured and turns a prompt into an emod model that passes the checks",
 				Flags: []urfave.Flag{
-					&urfave.StringFlag{Name: "ai-region", Usage: "AWS region of the Bedrock account (EMOD_AI_REGION)"},
-					&urfave.StringFlag{Name: "ai-model", Usage: "Bedrock model ID for AI work (EMOD_AI_MODEL)"},
-					&urfave.StringFlag{Name: "ai-model-cheap", Usage: "Bedrock model ID for low-stakes AI work (EMOD_AI_MODEL_CHEAP)"},
+					&urfave.StringFlag{Name: "ai-provider", Usage: "AI provider: anthropic (EMOD_AI_PROVIDER)"},
+					&urfave.StringFlag{Name: "ai-model", Usage: "Model ID for AI work (EMOD_AI_MODEL)"},
+					&urfave.StringFlag{Name: "ai-model-cheap", Usage: "Model ID for low-stakes AI work (EMOD_AI_MODEL_CHEAP)"},
 					&urfave.StringFlag{Name: "ai-effort", Usage: "Effort level: low, medium, high or xhigh (EMOD_AI_EFFORT)"},
 					&urfave.StringFlag{Name: "ai-endpoint", Usage: "Gateway URL to send model calls through (EMOD_AI_ENDPOINT)"},
 				},
 				Action: func(ctx context.Context, cmd *urfave.Command) error {
-					loadConfig := func() (config.Config, error) {
-						return config.Load(config.Flags{
-							Region:     cmd.String("ai-region"),
-							Model:      cmd.String("ai-model"),
-							CheapModel: cmd.String("ai-model-cheap"),
-							Effort:     cmd.String("ai-effort"),
-							Endpoint:   cmd.String("ai-endpoint"),
-						})
-					}
-					return reportExitError(RunAI(ctx, loadConfig, connectBedrock))
+					return reportExitError(RunAI(ctx, aiConfigLoader(cmd), connectAnthropic))
+				},
+				Commands: []*urfave.Command{
+					{
+						Name:  "status",
+						Usage: "Show the AI settings and the source of the API key, but not the key, and call no model",
+						Action: func(_ context.Context, cmd *urfave.Command) error {
+							return reportExitError(RunAIStatus(aiConfigLoader(cmd)))
+						},
+					},
 				},
 			},
 			{
