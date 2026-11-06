@@ -144,7 +144,7 @@
         "internal/wasm",
         "internal/cli/ai_test.go"
       ],
-      "done": false
+      "done": true
     },
     {
       "n": 10,

@@ -106,13 +106,54 @@ func TestResolve(t *testing.T) {
 		})
 	})
 
-	t.Run("required region", func(t *testing.T) {
-		t.Run("returns an error naming EMOD_AI_REGION when absent from all sources", func(t *testing.T) {
+	t.Run("opt-in", func(t *testing.T) {
+		t.Run("reports that AI is not configured when no source sets any AI setting", func(t *testing.T) {
 			cfg, err := config.Resolve(config.Flags{}, mapEnv(map[string]string{}), missingFile(t))
 
-			require.Error(t, err)
-			require.Contains(t, err.Error(), "EMOD_AI_REGION")
+			require.ErrorIs(t, err, config.ErrNotConfigured)
 			require.Equal(t, config.Config{}, cfg)
+		})
+
+		t.Run("reports that AI is not configured when the file sets nothing", func(t *testing.T) {
+			path := writeFile(t, "# AI settings\n\n")
+
+			_, err := config.Resolve(config.Flags{}, mapEnv(map[string]string{}), path)
+
+			require.ErrorIs(t, err, config.ErrNotConfigured)
+		})
+
+		t.Run("any one AI setting from any source turns AI on", func(t *testing.T) {
+			cases := []struct {
+				name  string
+				flags config.Flags
+				env   map[string]string
+				file  string
+			}{
+				{name: "the model flag", flags: config.Flags{Model: "flag-opus"}},
+				{name: "the cheap model flag", flags: config.Flags{CheapModel: "flag-haiku"}},
+				{name: "the effort flag", flags: config.Flags{Effort: "high"}},
+				{name: "the endpoint flag", flags: config.Flags{Endpoint: "https://flag.example"}},
+				{name: "the model variable", env: map[string]string{"EMOD_AI_MODEL": "env-opus"}},
+				{name: "the cheap model variable", env: map[string]string{"EMOD_AI_MODEL_CHEAP": "env-haiku"}},
+				{name: "the effort variable", env: map[string]string{"EMOD_AI_EFFORT": "low"}},
+				{name: "the endpoint variable", env: map[string]string{"EMOD_AI_ENDPOINT": "https://env.example"}},
+				{name: "the model in the file", file: "EMOD_AI_MODEL=file-opus\n"},
+			}
+
+			for _, tc := range cases {
+				t.Run(tc.name, func(t *testing.T) {
+					path := missingFile(t)
+					if tc.file != "" {
+						path = writeFile(t, tc.file)
+					}
+
+					_, err := config.Resolve(tc.flags, mapEnv(tc.env), path)
+
+					require.Error(t, err)
+					require.NotErrorIs(t, err, config.ErrNotConfigured)
+					require.Contains(t, err.Error(), "EMOD_AI_REGION is required")
+				})
+			}
 		})
 	})
 
@@ -191,6 +232,18 @@ func TestResolve(t *testing.T) {
 
 			require.Error(t, err)
 			require.Contains(t, err.Error(), path)
+		})
+	})
+}
+
+func TestLoad(t *testing.T) {
+	t.Run("home", func(t *testing.T) {
+		t.Run("reports that the config file cannot be found without a home directory", func(t *testing.T) {
+			t.Setenv("HOME", "")
+
+			_, err := config.Load(config.Flags{Region: "us-east-1"})
+
+			require.ErrorContains(t, err, "determining home directory for ~/.config/emod/config")
 		})
 	})
 }

@@ -9,7 +9,7 @@
 - [x] Task 6: Support schema-conformant structured output in the adapter
 - [x] Task 7: Add cost and token usage reporting
 - [x] Task 8: Build the generate → validate → lint → repair loop
-- [ ] Task 9: Gate AI as opt-in and keep WASM provider-free
+- [x] Task 9: Gate AI as opt-in and keep WASM provider-free
 - [ ] Task 10: Add the `emod ai` end-to-end smoke command
 
 ## Story Reference
@@ -427,13 +427,13 @@ the provider SDK and credentials and still builds; no existing non-AI path gains
 dependency on an LLM or the network.
 
 **Acceptance Criteria:**
-- [ ] With no AI configuration, `validate`, `lint`, `diagram`, `export`, and `lsp` behave
+- [x] With no AI configuration, `validate`, `lint`, `diagram`, `export`, and `lsp` behave
   exactly as today.
-- [ ] With no AI configuration, AI commands are absent or clearly report that AI is not
+- [x] With no AI configuration, AI commands are absent or clearly report that AI is not
   configured, and never break the other commands.
-- [ ] The WASM build (`GOOS=js GOARCH=wasm`) excludes the provider SDK and credentials and
+- [x] The WASM build (`GOOS=js GOARCH=wasm`) excludes the provider SDK and credentials and
   builds successfully.
-- [ ] No existing non-AI code path imports an LLM package or the network.
+- [x] No existing non-AI code path imports an LLM package or the network.
 
 **Affected Files/Modules:**
 - `internal/cli/ai.go` — new (or extend `app.go`): wiring that constructs the adapter only

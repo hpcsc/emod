@@ -1,6 +1,3 @@
-// Package config resolves AI settings from flags, environment variables, and an
-// ~/.config/emod file into a single neutral Config value. It stays free of any
-// LLM SDK dependency.
 package config
 
 import (
@@ -24,6 +21,8 @@ const (
 	defaultModel      = "anthropic.claude-opus-4-8"
 	defaultCheapModel = "anthropic.claude-haiku-4-5"
 )
+
+var ErrNotConfigured = errors.New("AI is not configured")
 
 type Config struct {
 	Region     string
@@ -62,21 +61,28 @@ func Resolve(flags Flags, getenv func(string) string, filePath string) (Config, 
 	}
 
 	region := pick(flags.Region, keyRegion)
-	if region == "" {
-		return Config{}, fmt.Errorf("%s is required: set it via the --ai-region flag, the %s environment variable, or the ~/.config/emod file", keyRegion, keyRegion)
+	model := pick(flags.Model, keyModel)
+	cheapModel := pick(flags.CheapModel, keyCheapModel)
+	effortLevel := pick(flags.Effort, keyEffort)
+	endpoint := pick(flags.Endpoint, keyEndpoint)
+
+	if region+model+cheapModel+effortLevel+endpoint == "" {
+		return Config{}, ErrNotConfigured
 	}
 
-	effort, err := parseEffort(pick(flags.Effort, keyEffort))
+	if region == "" {
+		return Config{}, fmt.Errorf("%s is required: set it via the --ai-region flag, the %s environment variable, or the ~/.config/emod/config file", keyRegion, keyRegion)
+	}
+
+	effort, err := parseEffort(effortLevel)
 	if err != nil {
 		return Config{}, err
 	}
 
-	model := pick(flags.Model, keyModel)
 	if model == "" {
 		model = defaultModel
 	}
 
-	cheapModel := pick(flags.CheapModel, keyCheapModel)
 	if cheapModel == "" {
 		cheapModel = defaultCheapModel
 	}
@@ -86,17 +92,16 @@ func Resolve(flags Flags, getenv func(string) string, filePath string) (Config, 
 		Model:      model,
 		CheapModel: cheapModel,
 		Effort:     effort,
-		Endpoint:   pick(flags.Endpoint, keyEndpoint),
+		Endpoint:   endpoint,
 	}, nil
 }
 
-// Load wires the real environment and the default ~/.config/emod path.
 func Load(flags Flags) (Config, error) {
 	home, err := os.UserHomeDir()
 	if err != nil {
-		return Config{}, fmt.Errorf("determining home directory for ~/.config/emod: %w", err)
+		return Config{}, fmt.Errorf("determining home directory for ~/.config/emod/config: %w", err)
 	}
-	return Resolve(flags, os.Getenv, filepath.Join(home, ".config", "emod"))
+	return Resolve(flags, os.Getenv, filepath.Join(home, ".config", "emod", "config"))
 }
 
 func parseEffort(value string) (llm.Effort, error) {
