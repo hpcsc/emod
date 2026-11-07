@@ -14,7 +14,7 @@ Claude Code, starts the server and gives its tools to the model that it runs. Th
 reads the grammar, and lists, exports, draws, formats and arranges a model with the same code as the CLI.
 emod calls no model. The host brings the model, so emod needs no provider, no API key and no network access.
 
-The design is in [`docs/proposals/ai/01-mcp-server.md`](../docs/proposals/ai/01-mcp-server.md). The
+The design is in [`docs/proposals/ai/01-mcp-server.md`](../../docs/proposals/ai/01-mcp-server.md). The
 workflow prompts and the query tools of that proposal are in other story sets. See Non-Goals.
 
 ## Goals
@@ -347,15 +347,15 @@ before a user does.
 ## Non-Goals
 
 - **The workflow prompts.** Each prompt goes to the server with the proposal that writes its text:
-  - `model-domain` with [04 model from a conversation](../docs/proposals/ai/04-model-from-conversation.md)
-  - `review-model` with [02 semantic model review](../docs/proposals/ai/02-semantic-model-review.md)
-  - `import-from-code` with [07 model import](../docs/proposals/ai/07-model-import.md)
-  - `suggest-specs` with [05 spec suggestions](../docs/proposals/ai/05-spec-suggestions.md)
+  - `model-domain` with [04 model from a conversation](../../docs/proposals/ai/04-model-from-conversation.md)
+  - `review-model` with [02 semantic model review](../../docs/proposals/ai/02-semantic-model-review.md)
+  - `import-from-code` with [07 model import](../../docs/proposals/ai/07-model-import.md)
+  - `suggest-specs` with [05 spec suggestions](../../docs/proposals/ai/05-spec-suggestions.md)
 - **The query tools.** `emod_references` and `emod_trace` go to the server with
-  [exact model queries](../docs/proposals/model-queries-proposal.md), which builds `emod references` and
+  [exact model queries](../../docs/proposals/model-queries-proposal.md), which builds `emod references` and
   `emod trace`.
 - **Spec export.** `emod_specs_export` goes to the server with
-  [05 spec suggestions](../docs/proposals/ai/05-spec-suggestions.md), which builds `emod specs export`.
+  [05 spec suggestions](../../docs/proposals/ai/05-spec-suggestions.md), which builds `emod specs export`.
 - No call to a model from emod. emod adds no provider, no API key and no network access.
 - No tool that writes `.emod` text from a call to disk. The host writes files with its own file tools.
 - No HTTP or SSE transport, and no hosted server for many users.
