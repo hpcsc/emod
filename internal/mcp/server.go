@@ -11,6 +11,8 @@ import (
 	"github.com/google/jsonschema-go/jsonschema"
 	sdk "github.com/modelcontextprotocol/go-sdk/mcp"
 
+	"github.com/hpcsc/emod/docs"
+	"github.com/hpcsc/emod/examples"
 	"github.com/hpcsc/emod/internal/cue"
 	"github.com/hpcsc/emod/internal/diagnostic"
 	"github.com/hpcsc/emod/internal/linter"
@@ -101,6 +103,15 @@ var schemaResource = &sdk.Resource{
 	Description: "The CUE schema of emod, the same text that `emod schema` prints.",
 }
 
+var dslReferenceResource = &sdk.Resource{
+	URI:      "emod://docs/dsl-reference",
+	Name:     "dsl-reference.md",
+	Title:    "DSL reference of emod",
+	MIMEType: "text/markdown",
+	Description: "The reference of the emod language: each construct, its syntax, the slice patterns and the specs, " +
+		"for the version of emod that serves it.",
+}
+
 type Server struct {
 	in   io.ReadCloser
 	out  io.WriteCloser
@@ -120,7 +131,17 @@ func (s *Server) Run(ctx context.Context) error {
 	sdk.AddTool(server, explainRuleTool, s.explainRule)
 	server.AddResource(rulesResource, s.readRules)
 	sdk.AddTool(server, schemaTool, s.schema)
-	server.AddResource(schemaResource, s.readSchema)
+	server.AddResource(schemaResource, s.readText(cue.Schema))
+	for _, example := range examples.All() {
+		server.AddResource(&sdk.Resource{
+			URI:         "emod://examples/" + example.Name,
+			Name:        example.Name + ".emod",
+			Title:       "Example " + example.Name,
+			MIMEType:    "text/plain",
+			Description: example.Description,
+		}, s.readText(example.Source))
+	}
+	server.AddResource(dslReferenceResource, s.readText(docs.DSLReference))
 	return server.Run(ctx, &sdk.IOTransport{Reader: s.in, Writer: s.out})
 }
 
@@ -175,8 +196,10 @@ func (s *Server) schema(_ context.Context, _ *sdk.CallToolRequest, _ struct{}) (
 	return &sdk.CallToolResult{Content: []sdk.Content{&sdk.TextContent{Text: cue.Schema}}}, nil, nil
 }
 
-func (s *Server) readSchema(_ context.Context, _ *sdk.ReadResourceRequest) (*sdk.ReadResourceResult, error) {
-	return &sdk.ReadResourceResult{Contents: []*sdk.ResourceContents{{Text: cue.Schema}}}, nil
+func (s *Server) readText(text string) sdk.ResourceHandler {
+	return func(context.Context, *sdk.ReadResourceRequest) (*sdk.ReadResourceResult, error) {
+		return &sdk.ReadResourceResult{Contents: []*sdk.ResourceContents{{Text: text}}}, nil
+	}
 }
 
 func (s *Server) jsonText(value any) (string, error) {

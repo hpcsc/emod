@@ -13,6 +13,7 @@ import (
 	sdk "github.com/modelcontextprotocol/go-sdk/mcp"
 	"github.com/stretchr/testify/require"
 
+	"github.com/hpcsc/emod/examples"
 	"github.com/hpcsc/emod/internal/cue"
 	"github.com/hpcsc/emod/internal/diagnostic"
 	"github.com/hpcsc/emod/internal/linter"
@@ -343,6 +344,50 @@ func TestServer(t *testing.T) {
 	})
 
 	t.Run("list resources", func(t *testing.T) {
+		t.Run("lists the rules, the schema, the three examples and the DSL reference, and no other resource", func(t *testing.T) {
+			session := connect(t)
+
+			listed, err := session.ListResources(context.Background(), nil)
+
+			require.NoError(t, err)
+			uris := make([]string, 0, len(listed.Resources))
+			for _, resource := range listed.Resources {
+				uris = append(uris, resource.URI)
+			}
+			require.ElementsMatch(t, []string{
+				"emod://rules",
+				"emod://schema",
+				"emod://examples/all_patterns",
+				"emod://examples/dcb_model",
+				"emod://examples/specs_hotel",
+				"emod://docs/dsl-reference",
+			}, uris)
+		})
+
+		t.Run("lists each example as text, with the description of the example", func(t *testing.T) {
+			session := connect(t)
+
+			for _, example := range examples.All() {
+				resource := resourceAt(t, session, "emod://examples/"+example.Name)
+
+				require.Equal(t, example.Name+".emod", resource.Name, "example %s", example.Name)
+				require.Equal(t, "Example "+example.Name, resource.Title, "example %s", example.Name)
+				require.Equal(t, "text/plain", resource.MIMEType, "example %s", example.Name)
+				require.Equal(t, example.Description, resource.Description, "example %s", example.Name)
+			}
+		})
+
+		t.Run("lists the DSL reference as Markdown, with a description", func(t *testing.T) {
+			session := connect(t)
+
+			resource := resourceAt(t, session, "emod://docs/dsl-reference")
+
+			require.Equal(t, "dsl-reference.md", resource.Name)
+			require.Equal(t, "DSL reference of emod", resource.Title)
+			require.Equal(t, "text/markdown", resource.MIMEType)
+			require.Contains(t, resource.Description, "slice patterns")
+		})
+
 		t.Run("lists emod://rules as JSON, with a description", func(t *testing.T) {
 			session := connect(t)
 
@@ -390,6 +435,58 @@ func TestServer(t *testing.T) {
 			require.Len(t, read.Contents, 1)
 			require.Equal(t, "text/plain", read.Contents[0].MIMEType)
 			require.Equal(t, cue.Schema, read.Contents[0].Text)
+		})
+	})
+
+	t.Run("read examples", func(t *testing.T) {
+		for _, name := range []string{"all_patterns", "dcb_model", "specs_hotel"} {
+			t.Run("gives the text of the file of "+name, func(t *testing.T) {
+				source, err := os.ReadFile("../../examples/" + name + ".emod")
+				require.NoError(t, err)
+				session := connect(t)
+
+				read, err := session.ReadResource(context.Background(), &sdk.ReadResourceParams{URI: "emod://examples/" + name})
+
+				require.NoError(t, err)
+				require.Len(t, read.Contents, 1)
+				require.Equal(t, "text/plain", read.Contents[0].MIMEType)
+				require.Equal(t, string(source), read.Contents[0].Text)
+			})
+
+			t.Run("gives a text of "+name+" that passes emod_check", func(t *testing.T) {
+				session := connect(t)
+				read, err := session.ReadResource(context.Background(), &sdk.ReadResourceParams{URI: "emod://examples/" + name})
+				require.NoError(t, err)
+				require.Len(t, read.Contents, 1)
+
+				result := callCheck(t, session, map[string]any{"content": read.Contents[0].Text, "name": name + ".emod"})
+
+				require.False(t, result.IsError)
+				require.Equal(t, map[string]any{"diagnostics": []any{}}, result.StructuredContent)
+			})
+		}
+
+		t.Run("does not serve the example that has errors on purpose", func(t *testing.T) {
+			session := connect(t)
+
+			_, err := session.ReadResource(context.Background(), &sdk.ReadResourceParams{URI: "emod://examples/error_diagnostics_test"})
+
+			require.ErrorContains(t, err, "not found")
+		})
+	})
+
+	t.Run("read DSL reference", func(t *testing.T) {
+		t.Run("gives the text of docs/dsl-reference.md as Markdown", func(t *testing.T) {
+			reference, err := os.ReadFile("../../docs/dsl-reference.md")
+			require.NoError(t, err)
+			session := connect(t)
+
+			read, err := session.ReadResource(context.Background(), &sdk.ReadResourceParams{URI: "emod://docs/dsl-reference"})
+
+			require.NoError(t, err)
+			require.Len(t, read.Contents, 1)
+			require.Equal(t, "text/markdown", read.Contents[0].MIMEType)
+			require.Equal(t, string(reference), read.Contents[0].Text)
 		})
 	})
 

@@ -130,15 +130,15 @@ radius:** low.
 description, and `emod://docs/dsl-reference` with `docs.DSLReference`.
 
 **Acceptance Criteria:**
-- [ ] `resources/list` lists `emod://rules`, `emod://schema`, `emod://examples/all_patterns`,
+- [x] `resources/list` lists `emod://rules`, `emod://schema`, `emod://examples/all_patterns`,
   `emod://examples/dcb_model`, `emod://examples/specs_hotel` and `emod://docs/dsl-reference`, and no other
   resource.
-- [ ] Each example resource returns the text of its file in `examples/`, with the MIME type `text/plain`, and
+- [x] Each example resource returns the text of its file in `examples/`, with the MIME type `text/plain`, and
   its description is the description of the example.
-- [ ] `emod_check` with the text of each example resource returns an empty list.
-- [ ] `emod://docs/dsl-reference` returns the text of `docs/dsl-reference.md`, with the MIME type
+- [x] `emod_check` with the text of each example resource returns an empty list.
+- [x] `emod://docs/dsl-reference` returns the text of `docs/dsl-reference.md`, with the MIME type
   `text/markdown`.
-- [ ] `resources/read` of `emod://examples/error_diagnostics_test` returns an error.
+- [x] `resources/read` of `emod://examples/error_diagnostics_test` returns an error.
 
 **Patterns to follow:**
 - `internal/mcp/server.go`

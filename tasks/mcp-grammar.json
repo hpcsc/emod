@@ -44,7 +44,7 @@
     },
     {
       "n": 3,
-      "done": false,
+      "done": true,
       "title": "Serve the examples and the DSL reference as resources",
       "language": "Go",
       "testable": true,
