@@ -4,7 +4,7 @@
   "tasks": [
     {
       "n": 1,
-      "done": false,
+      "done": true,
       "title": "Pick the renderer of a diagram format in `internal/diagram`",
       "language": "Go",
       "testable": true,

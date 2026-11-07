@@ -19,13 +19,6 @@ import (
 	"github.com/hpcsc/emod/internal/viewer"
 )
 
-// diagramFormats are the formats the command draws, and specCardFormats those
-// of them that draw a spec card.
-var (
-	diagramFormats  = []string{"svg", "mermaid", "ascii", "event-flow", "event-flow-mermaid", "event-flow-mermaid-no-icons"}
-	specCardFormats = []string{"svg"}
-)
-
 // stdoutFormats are the formats that print to stdout when no output path is
 // given, the rest being pictures written to a file.
 var stdoutFormats = []string{"mermaid", "ascii", "event-flow-mermaid", "event-flow-mermaid-no-icons"}
@@ -73,16 +66,16 @@ func RunDiagram(path, outputPath, format string, style diagram.Style, specs bool
 	}
 
 	// Validate format
-	if !slices.Contains(diagramFormats, format) {
+	if !slices.Contains(diagram.Formats(), format) {
 		return &LintError{
 			Message: fmt.Sprintf("unsupported format %q; supported formats: %s",
-				format, strings.Join(diagramFormats, ", ")),
+				format, strings.Join(diagram.Formats(), ", ")),
 			ExitCode: 1,
 			Cause:    ErrUnsupportedFormat,
 		}
 	}
 
-	if specs && !slices.Contains(specCardFormats, format) {
+	if specs && !diagram.DrawsSpecCards(format) {
 		return unsupportedSpecsSurface(fmt.Sprintf("format %q", format))
 	}
 
@@ -91,22 +84,7 @@ func RunDiagram(path, outputPath, format string, style diagram.Style, specs bool
 		options = append(options, diagram.WithSpecs())
 	}
 
-	// Generate diagram
-	var output []byte
-	switch format {
-	case "mermaid":
-		output, err = diagram.ExportMermaid(model, style)
-	case "ascii":
-		output, err = diagram.ExportASCII(model, style)
-	case "event-flow":
-		output, err = diagram.ExportEventFlow(model, style)
-	case "event-flow-mermaid":
-		output, err = diagram.ExportEventFlowMermaid(model, style)
-	case "event-flow-mermaid-no-icons":
-		output, err = diagram.ExportEventFlowMermaidNoIcons(model, style)
-	default:
-		output, err = diagram.ExportSVG(model, style, options...)
-	}
+	output, err := diagram.Export(model, format, style, options...)
 	if err != nil {
 		return &LintError{
 			Message:  fmt.Sprintf("diagram generation: %s", err),

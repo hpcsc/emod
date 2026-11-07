@@ -74,13 +74,13 @@ output of the renderer of the format, or an error that lists the formats for an 
 uses them and keeps the file output, the stdout rule and its messages.
 
 **Acceptance Criteria:**
-- [ ] `diagram.Formats()` gives `svg`, `mermaid`, `ascii`, `event-flow`, `event-flow-mermaid` and
+- [x] `diagram.Formats()` gives `svg`, `mermaid`, `ascii`, `event-flow`, `event-flow-mermaid` and
   `event-flow-mermaid-no-icons`.
-- [ ] `diagram.Export` gives, for each format, the output of its renderer, with the style and the options
+- [x] `diagram.Export` gives, for each format, the output of its renderer, with the style and the options
   that the call gives.
-- [ ] `diagram.Export` gives an error that names the unknown format and each format.
-- [ ] `diagram.DrawsSpecCards` is true for `svg` only.
-- [ ] `internal/cli` has no `diagramFormats`, `specCardFormats` or switch over the renderers, and each
+- [x] `diagram.Export` gives an error that names the unknown format and each format.
+- [x] `diagram.DrawsSpecCards` is true for `svg` only.
+- [x] `internal/cli` has no `diagramFormats`, `specCardFormats` or switch over the renderers, and each
   existing leaf of `internal/cli/diagram_test.go` passes with no change to an existing leaf.
 
 **Patterns to follow:**
