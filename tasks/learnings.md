@@ -1463,9 +1463,9 @@ in this repo; append only learnings that generalise beyond the task that surface
 
 ## An MCP tool over the go-sdk typed AddTool is routine, not low certainty
 - Type: convention
-- Recorded: 2026-11-06
-- Observed: mcp-check-file
-- Learning: internal/mcp/server.go registers a tool with sdk.AddTool over an input struct and an output struct: the SDK infers the input schema (a field without omitempty is required), returns a schema failure such as a missing argument as an isError result, puts the output in structuredContent and writes the same JSON, with sorted keys, into the text block. A pointer field, which tells an absent input from an empty one, infers the type ["null","string"], so emod_check gives AddTool its own jsonschema.Schema (sourceSchema) with plain string types and additionalProperties false. internal/mcp/server_test.go drives the server through an sdk client over io.Pipe (connect, connectAt with a root). Keep the output an object for hosts on older protocol versions, and pass ServerOptions with an empty Capabilities, because nil options advertise logging.
+- Recorded: 2026-11-07
+- Observed: mcp-lint-rules
+- Learning: internal/mcp/server.go registers a tool with sdk.AddTool over an input struct and an output struct: the SDK infers the input schema (a field without omitempty is required), returns a schema failure such as a missing argument as an isError result, puts the output in structuredContent and writes the same JSON, with sorted keys, into the text block. A pointer field, which tells an absent input from an empty one, infers the type ["null","string"], so emod_check gives AddTool its own jsonschema.Schema (sourceSchema) with plain string types and additionalProperties false. The SDK writes that text block with json.Marshal, which escapes < > and & as \u003c, so a tool whose text holds them (a rule description, the schema) returns its own TextContent from Server.jsonText, which turns the escape off; the SDK keeps given content and still fills structuredContent. For a resource, the SDK fills an empty URI and MIMEType of each ResourceContents from the request and the Resource, so a handler sets only Text. internal/mcp/server_test.go drives the server through an sdk client over io.Pipe (connect, connectAt with a root). Keep the output an object for hosts on older protocol versions, and pass ServerOptions with an empty Capabilities, because nil options advertise logging; AddResource still adds the resources capability.
 - Apply when: assessing certainty for a task that adds a tool, a resource or a prompt to internal/mcp, or writing its tests
 
 ## clerk mutants runs only the unit tests, so a CLI entry needs a unit leaf beside its integration test
@@ -1502,3 +1502,10 @@ in this repo; append only learnings that generalise beyond the task that surface
 - Observed: task 1 — mcp-check-file
 - Learning: On macOS t.TempDir() is under /var, a link to /private/var; CI runs the tests on ubuntu-latest, where it is under no link. A leaf that depends on that link passes for the wrong reason on one platform: in internal/mcp/root_test.go, the only pin of link resolution was the macOS /var link until round 3 added leaves that make their own link with os.Symlink. A path that compares with a root must also be built in the same spelling as the root, or the leaf tests another branch.
 - Apply when: writing a test about symbolic links, path aliases or path containment, or reading a test that passes on macOS and must also prove something on Linux CI
+
+## A guard that parses Go source reads the whole package, not the files that hold the code today
+- Type: constraint
+- Recorded: 2026-11-07
+- Observed: mcp-lint-rules
+- Learning: The rule-name guard in internal/linter/descriptions_test.go parses each non-test .go file of internal/linter and internal/validator, not linter.go and validator.go by name: the audit of mcp-lint-rules showed that a guard over named files stays green when a new rule lands in a new file. It also fails when code other than the four helpers (info, warning, errorEntry, orphanDiagnostics) sets RuleName, and when a helper has no call, so a rename cannot empty it.
+- Apply when: writing a test that parses Go source with go/parser to collect names, calls or literals, or adding a lint rule in a new file of internal/linter or a rule name in internal/validator
