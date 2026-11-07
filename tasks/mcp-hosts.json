@@ -1,0 +1,63 @@
+{
+  "story": "US-011: Register the server for a team and for other MCP hosts",
+  "tasks_file": "tasks/mcp-hosts.md",
+  "tasks": [
+    {
+      "n": 1,
+      "done": false,
+      "title": "Register `emod mcp` in the `.mcp.json` of the repository",
+      "language": "Go",
+      "testable": true,
+      "certainty": "medium",
+      "blast_radius": "low",
+      "patterns_to_follow": [
+        "cmd/emod/main_test.go"
+      ],
+      "depends_on": [],
+      "affected_files": [
+        ".mcp.json",
+        "cmd/emod/main_test.go"
+      ]
+    },
+    {
+      "n": 2,
+      "done": false,
+      "title": "Check the server with the MCP Inspector",
+      "language": "Go",
+      "testable": false,
+      "certainty": "medium",
+      "blast_radius": "low",
+      "patterns_to_follow": [
+        "Taskfile.yml",
+        "e2e/entrypoint.sh"
+      ],
+      "depends_on": [
+        1
+      ],
+      "affected_files": [
+        "scripts/mcp-inspector.sh",
+        "Taskfile.yml"
+      ]
+    },
+    {
+      "n": 3,
+      "done": false,
+      "title": "Document the registration in each host",
+      "language": "Go",
+      "testable": false,
+      "certainty": "medium",
+      "blast_radius": "low",
+      "patterns_to_follow": [
+        "site/content/docs/mcp.md"
+      ],
+      "depends_on": [
+        1
+      ],
+      "affected_files": [
+        "site/content/docs/mcp.md",
+        "README.md"
+      ]
+    }
+  ],
+  "design_file": "tasks/mcp-hosts.design.yaml"
+}

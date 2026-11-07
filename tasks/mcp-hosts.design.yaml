@@ -1,0 +1,12 @@
+design: none
+reason: the story adds a registration file, a check script and docs; it changes no type, function or package
+types: []
+functions: []
+words:
+  - concept: tell an MCP host which command starts the server
+    word: register
+    not: [install, configure, add]
+  - concept: the file in a project that registers MCP servers for each person who opens the project
+    word: project file
+    not: [workspace config, shared config]
+dependencies: []
