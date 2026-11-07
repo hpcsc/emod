@@ -4,7 +4,7 @@
   "tasks": [
     {
       "n": 1,
-      "done": false,
+      "done": true,
       "title": "Replace the text of a file under the root",
       "language": "Go",
       "testable": true,

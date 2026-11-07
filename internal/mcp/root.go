@@ -8,6 +8,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"sync"
 	"syscall"
 )
 
@@ -17,7 +18,8 @@ const maxModelSize = 1 << 20
 const escapeMessage = "path escapes from parent"
 
 type Root struct {
-	absolute string
+	absolute  string
+	replacing *sync.RWMutex
 }
 
 func NewRoot(dir string) (Root, error) {
@@ -32,38 +34,18 @@ func NewRoot(dir string) (Root, error) {
 	if !info.IsDir() {
 		return Root{}, fmt.Errorf("root %s is not a directory", dir)
 	}
-	return Root{absolute: absolute}, nil
+	return Root{absolute: absolute, replacing: &sync.RWMutex{}}, nil
 }
 
 func (r Root) Read(path string) (string, error) {
-	relative, inside := r.relativeOf(path)
-	if !inside {
-		return "", r.outside(path)
-	}
+	r.replacing.RLock()
+	defer r.replacing.RUnlock()
 
-	root, err := os.OpenRoot(r.absolute)
+	file, err := r.open(path, os.O_RDONLY, "reading")
 	if err != nil {
-		return "", fmt.Errorf("reading %s: %w", path, causeOf(err))
-	}
-	defer root.Close()
-
-	file, err := root.OpenFile(relative, os.O_RDONLY|syscall.O_NONBLOCK, 0)
-	if err != nil {
-		var pathErr *fs.PathError
-		if errors.As(err, &pathErr) && pathErr.Err.Error() == escapeMessage {
-			return "", r.outside(path)
-		}
-		return "", fmt.Errorf("reading %s: %w", path, causeOf(err))
+		return "", err
 	}
 	defer file.Close()
-
-	info, err := file.Stat()
-	if err != nil {
-		return "", fmt.Errorf("reading %s: %w", path, causeOf(err))
-	}
-	if !info.Mode().IsRegular() {
-		return "", fmt.Errorf("reading %s: not a regular file", path)
-	}
 
 	var text strings.Builder
 	if _, err := io.Copy(&text, io.LimitReader(file, maxModelSize+1)); err != nil {
@@ -73,6 +55,73 @@ func (r Root) Read(path string) (string, error) {
 		return "", fmt.Errorf("reading %s: the file is larger than 1 MiB", path)
 	}
 	return text.String(), nil
+}
+
+func (r Root) Replace(path, old, new string) error {
+	r.replacing.Lock()
+	defer r.replacing.Unlock()
+
+	file, err := r.open(path, os.O_RDWR, "writing")
+	if err != nil {
+		return err
+	}
+	defer file.Close()
+
+	held, err := io.ReadAll(io.LimitReader(file, int64(len(old))+1))
+	if err != nil {
+		return fmt.Errorf("writing %s: %w", path, causeOf(err))
+	}
+	if string(held) != old {
+		return fmt.Errorf("writing %s: the file changed after the tool read it", path)
+	}
+
+	// Write before the truncate, so that a failed write never leaves an empty file.
+	if _, err := file.WriteAt([]byte(new), 0); err != nil {
+		return fmt.Errorf("writing %s: %w", path, causeOf(err))
+	}
+	if err := file.Truncate(int64(len(new))); err != nil {
+		return fmt.Errorf("writing %s: %w", path, causeOf(err))
+	}
+	if err := file.Close(); err != nil {
+		return fmt.Errorf("writing %s: %w", path, causeOf(err))
+	}
+	return nil
+}
+
+func (r Root) open(path string, flag int, verb string) (*os.File, error) {
+	relative, inside := r.relativeOf(path)
+	if !inside {
+		return nil, r.outside(path)
+	}
+
+	root, err := os.OpenRoot(r.absolute)
+	if err != nil {
+		return nil, fmt.Errorf("%s %s: %w", verb, path, causeOf(err))
+	}
+	defer root.Close()
+
+	file, err := root.OpenFile(relative, flag|syscall.O_NONBLOCK, 0)
+	if err != nil {
+		var pathErr *fs.PathError
+		if errors.As(err, &pathErr) && pathErr.Err.Error() == escapeMessage {
+			return nil, r.outside(path)
+		}
+		if errors.Is(err, syscall.EISDIR) {
+			return nil, fmt.Errorf("%s %s: not a regular file", verb, path)
+		}
+		return nil, fmt.Errorf("%s %s: %w", verb, path, causeOf(err))
+	}
+
+	info, err := file.Stat()
+	if err != nil {
+		file.Close()
+		return nil, fmt.Errorf("%s %s: %w", verb, path, causeOf(err))
+	}
+	if !info.Mode().IsRegular() {
+		file.Close()
+		return nil, fmt.Errorf("%s %s: not a regular file", verb, path)
+	}
+	return file, nil
 }
 
 func (r Root) relativeOf(path string) (string, bool) {

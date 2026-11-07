@@ -74,16 +74,16 @@ when the file still holds `old`. It follows the rules of `Root.Read` for the pat
 file.
 
 **Acceptance Criteria:**
-- [ ] Replaces the text of a file under the root by a relative path and by an absolute path, and keeps the
+- [x] Replaces the text of a file under the root by a relative path and by an absolute path, and keeps the
   mode of the file.
-- [ ] Refuses a path that climbs out of the root, an absolute path in another directory, and a symbolic link
+- [x] Refuses a path that climbs out of the root, an absolute path in another directory, and a symbolic link
   to a file outside the root, as outside the root, and changes no file.
-- [ ] Refuses a missing file and does not create it.
-- [ ] Refuses a directory and a named pipe as not a regular file, and does not wait for a reader.
-- [ ] Refuses a file that no longer holds `old`, with an error that says that the file changed, and the file
+- [x] Refuses a missing file and does not create it.
+- [x] Refuses a directory and a named pipe as not a regular file, and does not wait for a reader.
+- [x] Refuses a file that no longer holds `old`, with an error that says that the file changed, and the file
   keeps its text.
-- [ ] Writes the file that a relative symbolic link under the root points to, as `Root.Read` reads it.
-- [ ] A file with no write permission gives an error that names the path and the cause.
+- [x] Writes the file that a relative symbolic link under the root points to, as `Root.Read` reads it.
+- [x] A file with no write permission gives an error that names the path and the cause.
 
 **Patterns to follow:**
 - `internal/mcp/root.go`
