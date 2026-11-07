@@ -168,11 +168,11 @@ whether a server for all projects can write.
 them.
 
 **Acceptance Criteria:**
-- [ ] `site/content/docs/mcp.md` describes `--allow-write`, `write: true`, the rules for a call with `write`,
+- [x] `site/content/docs/mcp.md` describes `--allow-write`, `write: true`, the rules for a call with `write`,
   the refusal of a file that changed after the read, and that no other tool writes.
-- [ ] The section "The root" of the MCP page no longer says that the server never writes to a file, and says
+- [x] The section "The root" of the MCP page no longer says that the server never writes to a file, and says
   when it writes.
-- [ ] The README section "Check models from an agent (MCP)" names `--allow-write`.
+- [x] The README section "Check models from an agent (MCP)" names `--allow-write`.
 
 **Patterns to follow:**
 - `site/content/docs/mcp.md`

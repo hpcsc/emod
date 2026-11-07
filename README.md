@@ -315,10 +315,11 @@ list the slices of a model with their patterns. `emod_export` gives the model as
 CUE, `emod_glossary` gives the terms of the model, and `emod_diagram` draws it as SVG, Mermaid or ASCII.
 `emod_fmt` gives the model in the layout of `emod fmt`, and `emod_slices_arrange` puts its slices in the
 order of `emod slices arrange` and lists the backward references that stay, so that the files of the agent
-pass both checks. The resources `emod://schema`, `emod://examples/*` and `emod://docs/dsl-reference`, and
-the tool `emod_schema`, give the agent the grammar of emod before its first draft. The tool
-`emod_explain_rule` and the resource `emod://rules` tell the agent why a lint rule exists, so the agent fixes
-the cause of a finding. The agent brings the model, so the server needs no API key and no `EMOD_AI_*`
+pass both checks. With `emod mcp --allow-write`, these two tools also write their result to the file for a
+call with `write: true`. The resources `emod://schema`, `emod://examples/*` and `emod://docs/dsl-reference`,
+and the tool `emod_schema`, give the agent the grammar of emod before its first draft. The tool
+`emod_explain_rule` and the resource `emod://rules` tell the agent why a lint rule exists, so the agent
+fixes the cause of a finding. The agent brings the model, so the server needs no API key and no `EMOD_AI_*`
 setting.
 
 ```bash

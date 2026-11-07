@@ -191,7 +191,8 @@ The result holds the text under `formatted`, and the answer of the check under `
 - `formatted` is the same text that `emod fmt` writes for the source. The text block holds the same JSON.
 - `changed` is true when `formatted` differs from the source, and false when the source is already in the
   canonical layout. It gives the same answer as the exit code of `emod fmt --check`.
-- The tool does not write the file. The agent writes `formatted` with the file tool of the host.
+- The tool writes the file only in the [write mode](#the-write-mode). Else the agent writes `formatted` with
+  the file tool of the host.
 - A source that does not parse gives its parse diagnostics under `diagnostics`, as the records of
   `emod_check`, and no `formatted`. This is a normal result, not an error result. A lint warning or a
   validation error does not stop the tool.
@@ -240,9 +241,44 @@ The result holds the arranged text and the report of the arrange:
   empty when no reference points backward. Because only view slices move, the arrange cannot fix such a
   reference, for example a reference between two slices that are not views. The agent does not try a new
   order for it.
-- The tool does not write the file. The agent writes `arranged` with the file tool of the host.
+- The tool writes the file only in the [write mode](#the-write-mode). Else the agent writes `arranged` with
+  the file tool of the host.
 - A source that does not parse gives its parse diagnostics under `diagnostics`, as the records of
   `emod_check`, and no report. A lint warning or a validation error does not stop the tool.
+
+## The write mode
+
+By default, the server writes no file, so you can register it for all projects. When you trust the agent in
+one project, start the server with `--allow-write`:
+
+```sh
+claude mcp add emod -- emod mcp --allow-write
+```
+
+Then `emod_fmt` and `emod_slices_arrange` write their result to the file in `path` for a call that gives
+`write: true`, so the agent fixes the layout of a file in one call:
+
+```json
+{ "path": "ordering.emod", "write": true }
+```
+
+- You decide about writes when you start the server, not the model. Without `--allow-write`, a call with
+  `write: true` gives an error result that names the flag, and the file does not change.
+- A call with `write: true` must give `path` and no `content`. The tool writes only a new layout of the file
+  on disk, never text from the call. The host has its own file tools for other writes.
+- The tool writes the file only when `changed` is true. When the file is already in the canonical layout, or
+  when no slice moves, the tool writes nothing, and the modification time of the file does not change.
+- The result is the same as for a call without `write`.
+- The tool never writes a source that does not parse. It gives the parse diagnostics.
+- The write follows the rules of [the root](#the-root). The tool refuses a path outside the root and writes
+  nothing.
+- The tool writes only a file that exists, in place, so the file keeps its mode.
+- Just before it writes, the tool checks that the file still holds the text that it read. If a person saved
+  the file after the read, for example in the desktop app, the tool gives an error result, and the file keeps
+  the text of the person. The check does not see a save in the short time between the check and the write.
+- One server writes one file at a time, and a read never sees half of a write. When two calls write one file,
+  a call that read the file before the other call wrote it gives the error result for a file that changed.
+- No other tool writes to disk, with or without `--allow-write`.
 
 ## The `emod_explain_rule` tool
 
@@ -309,4 +345,5 @@ claude mcp add emod -- emod mcp --root /path/to/project
   file.
 - A path under the root that does not exist, or that the server cannot read, gives an error result that
   names the path and the cause.
-- The server never writes to a file.
+- The server writes to a file only in the [write mode](#the-write-mode), and only to a regular file under the
+  root that exists.
