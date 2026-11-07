@@ -74,22 +74,22 @@ The story's acceptance criteria, numbered for the Summary:
 The package `docs` (in `docs/`) embeds `dsl-reference.md` as `docs.DSLReference`.
 
 **Acceptance Criteria:**
-- [ ] `examples.All()` returns `all_patterns`, `dcb_model` and `specs_hotel`, in that order.
-- [ ] The source of each example is the text of `examples/<name>.emod`.
-- [ ] The names are the `.emod` files of `examples/` that do not end in `_test.emod`, so a new example fails
+- [x] `examples.All()` returns `all_patterns`, `dcb_model` and `specs_hotel`, in that order.
+- [x] The source of each example is the text of `examples/<name>.emod`.
+- [x] The names are the `.emod` files of `examples/` that do not end in `_test.emod`, so a new example fails
   the guard until it gets a description.
-- [ ] Each example has a description that is not empty.
-- [ ] `docs.DSLReference` is the text of `docs/dsl-reference.md`.
+- [x] Each example has a description that is not empty.
+- [x] `docs.DSLReference` is the text of `docs/dsl-reference.md`.
 
 **Patterns to follow:**
 - `internal/cue/embed.go`
 - `internal/cli/validate_test.go` (`examplePaths`)
 
 **Affected files:**
-- `examples/examples.go` (new)
-- `examples/examples_test.go` (new)
-- `docs/docs.go` (new)
-- `docs/docs_test.go` (new)
+- `examples/example.go` (new)
+- `examples/example_test.go` (new)
+- `docs/dsl_reference.go` (new)
+- `docs/dsl_reference_test.go` (new)
 
 **Certainty:** high. `internal/cue/embed.go` is the precedent for an embedded file. **Blast radius:** low.
 The binary gets about 57 KB, and nothing else changes.

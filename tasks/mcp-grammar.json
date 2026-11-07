@@ -4,7 +4,7 @@
   "tasks": [
     {
       "n": 1,
-      "done": false,
+      "done": true,
       "title": "Put the examples and the DSL reference into the binary",
       "language": "Go",
       "testable": true,
@@ -16,10 +16,10 @@
       ],
       "depends_on": [],
       "affected_files": [
-        "examples/examples.go",
-        "examples/examples_test.go",
-        "docs/docs.go",
-        "docs/docs_test.go"
+        "examples/example.go",
+        "examples/example_test.go",
+        "docs/dsl_reference.go",
+        "docs/dsl_reference_test.go"
       ]
     },
     {
