@@ -1,7 +1,7 @@
 # emod MCP Server
 
-> Part of the [emod AI proposals](./README.md). Phase 1. This proposal adds **no LLM dependency** to emod:
-> the MCP host brings the model. See the [AI foundation](completed/00-llm-foundation.md) for where this fits.
+> Part of the [emod AI proposals](../README.md). Phase 1. This proposal adds **no LLM dependency** to emod:
+> the MCP host brings the model. See the [AI foundation](00-llm-foundation.md) for where this fits.
 
 ## Problem
 
@@ -27,15 +27,15 @@ needs no provider, no credentials and no cost for this.
 - **G3:** Each tool accepts a **file path** or **inline `.emod` text**. An assistant can check a draft before it
   writes the draft to disk.
 - **G4:** Structured results: diagnostics as JSON records with `rule`, `severity` and `line`, not columns of text.
-- **G5:** Exact query tools ([exact model queries](../model-queries-proposal.md)), so that the agent answers
+- **G5:** Exact query tools ([exact model queries](../../model-queries-proposal.md)), so that the agent answers
   questions from facts, not from a guess (moved to `docs/proposals/model-queries-proposal.md`)
 - **G6:** Resources for the schema, the examples, the rules and the DSL reference, so that a new host knows the
   grammar with no text pasted by the user.
-- **G7:** The `model-domain` prompt for the capture step of the workflow in the [README](./README.md)
+- **G7:** The `model-domain` prompt for the capture step of the workflow in the [README](../README.md)
   (moved to `docs/proposals/ai/04-model-from-conversation.md`)
 - **G8:** **No** LLM code, provider code, credentials or network access in emod. Read-only by default, so that a
   user can register the server for all projects.
-- **G9:** Spec export ([05](./05-spec-suggestions.md)), so that the agent answers questions from facts, not from a
+- **G9:** Spec export ([05](../05-spec-suggestions.md)), so that the agent answers questions from facts, not from a
   guess (moved to `docs/proposals/ai/05-spec-suggestions.md`)
 - **G10:** The `review-model` prompt for the challenge step (moved to `docs/proposals/ai/02-semantic-model-review.md`)
 - **G11:** The `import-from-code` prompt for the import step (moved to `docs/proposals/ai/07-model-import.md`)
@@ -44,7 +44,7 @@ needs no provider, no credentials and no cost for this.
 ## Non-Goals
 
 - A call to `llm.Model`. This server never calls a model. It only answers the tool calls of a model.
-- The repair loop of the [foundation](completed/00-llm-foundation.md) inside emod. The loop runs in the agent turn
+- The repair loop of the [foundation](00-llm-foundation.md) inside emod. The loop runs in the agent turn
   of the host. emod gives the check that each step of the loop calls.
 - A tool that writes `.emod` content to disk. The host writes files with its own file tools, under the
   permissions that the user gives the host.
@@ -129,21 +129,21 @@ does not copy the map. `examples/error_diagnostics_test.emod` is a test fixture,
 ### Prompts
 
 A prompt gives the host a workflow, so that the user does not have to know it. Each prompt matches one
-step of the workflow in the [README](./README.md):
+step of the workflow in the [README](../README.md):
 
 | Prompt | Arguments | Workflow step | What it tells the host model to do |
 | --- | --- | --- | --- |
-| `model-domain` | `description`, `output` | Capture ([04](./04-model-from-conversation.md)) | Read `emod://schema`, `emod://rules` and one example. Ask the user questions about actors, outcomes, boundaries, order, external systems and failures, with lettered options, before any draft. List the assumptions. Then draft, call `emod_check` until it reports nothing, and write the file. |
-| `review-model` | `path` | Challenge ([02](./02-semantic-model-review.md)) | Call `emod_check` and `emod_explain_rule` for each finding. Then read the model and give semantic findings in the taxonomy of 02, each with a location, a direction and a confidence. Do not edit the file until the user accepts a finding. |
-| `import-from-code` | `path`, `output` | Capture from code ([07](./07-model-import.md)) | Find the event, command, handler and projection definitions with the search tools of the host. Make an inventory with `file:line` for each item. Draft the model with a `DRAFT` header, call `emod_check` until clean, and list each item that has no source. |
-| `suggest-specs` | `path`, `slice` | Specify ([05](./05-spec-suggestions.md)) | Read the slice, its invariants and the result of `emod_references` for its events. Suggest the specs that the slice does not have: one rejection spec for each invariant, and one spec for each branch. Call `emod_check` on the result, show a diff, and write only after the user accepts. |
+| `model-domain` | `description`, `output` | Capture ([04](../04-model-from-conversation.md)) | Read `emod://schema`, `emod://rules` and one example. Ask the user questions about actors, outcomes, boundaries, order, external systems and failures, with lettered options, before any draft. List the assumptions. Then draft, call `emod_check` until it reports nothing, and write the file. |
+| `review-model` | `path` | Challenge ([02](../02-semantic-model-review.md)) | Call `emod_check` and `emod_explain_rule` for each finding. Then read the model and give semantic findings in the taxonomy of 02, each with a location, a direction and a confidence. Do not edit the file until the user accepts a finding. |
+| `import-from-code` | `path`, `output` | Capture from code ([07](../07-model-import.md)) | Find the event, command, handler and projection definitions with the search tools of the host. Make an inventory with `file:line` for each item. Draft the model with a `DRAFT` header, call `emod_check` until clean, and list each item that has no source. |
+| `suggest-specs` | `path`, `slice` | Specify ([05](../05-spec-suggestions.md)) | Read the slice, its invariants and the result of `emod_references` for its events. Suggest the specs that the slice does not have: one rejection spec for each invariant, and one spec for each branch. Call `emod_check` on the result, show a diff, and write only after the user accepts. |
 
 The prompts state that a `warning` is a signal to repair, not a reason to stop. A host can override a
 prompt. emod ships a default so that each team starts from the same workflow.
 
 ### The repair loop runs in the host
 
-The [foundation](completed/00-llm-foundation.md) runs the repair loop inside emod: `repair.Generate` calls
+The [foundation](00-llm-foundation.md) runs the repair loop inside emod: `repair.Generate` calls
 `llm.Model.Generate` and `oracle.Check` in a Go loop. The MCP server turns this around. emod gives only the
 check, as the `emod_check` tool. The loop is the agent turn of the host.
 
@@ -196,9 +196,9 @@ the name in `name`, or under `inline.emod` when the call gives no `name`. Output
 | `emod_export` | `oracle.Run`, then `export.ExportJSONDiagnostics`, `export.ExportDiagramJSONDiagnostics` or `export.ExportCUE`, the body of `RunExport` | `{path?, content?, format: "json" \| "diagram-json" \| "cue"}` | The export and its diagnostics | No |
 | `emod_diagram` | `oracle.Run`, then the `diagram.Export*` function for the format, the body of `RunDiagram` | `{path?, content?, format, style?, specs?}` | The diagram as text | No |
 | `emod_glossary` | `oracle.Parse`, then `glossary.RenderMarkdown` or `glossary.RenderJSON`, the body of `RunGlossary` | `{path?, content?, format: "markdown" \| "json"}` | The glossary | No |
-| `emod_references` | `query.References` ([exact model queries](../model-queries-proposal.md)) | `{path?, content?, name}` | The declaration and each reference, grouped by role | No |
-| `emod_trace` | `query.Trace` ([exact model queries](../model-queries-proposal.md)) | `{path?, content?, from, to?, upstream?, withViews?}` | The paths, each as a list of steps | No |
-| `emod_specs_export` | The function behind `emod specs export` ([05](./05-spec-suggestions.md)) | `{path?, content?, format?, slice?}` | The exported specs | No |
+| `emod_references` | `query.References` ([exact model queries](../../model-queries-proposal.md)) | `{path?, content?, name}` | The declaration and each reference, grouped by role | No |
+| `emod_trace` | `query.Trace` ([exact model queries](../../model-queries-proposal.md)) | `{path?, content?, from, to?, upstream?, withViews?}` | The paths, each as a list of steps | No |
+| `emod_specs_export` | The function behind `emod specs export` ([05](../05-spec-suggestions.md)) | `{path?, content?, format?, slice?}` | The exported specs | No |
 | `emod_schema` | `cue.Schema`, the body of `RunSchema` | `{}` | The CUE schema as text | No |
 
 Notes on the match with the CLI:
@@ -416,8 +416,8 @@ and the resources.
 Claude Desktop, Cursor and Zed. Check in a `.mcp.json` for this repository.
 
 **Phase 4: query and spec tools (S each).** Add `emod_references` and `emod_trace` when
-The [model queries proposal](../model-queries-proposal.md) ships `internal/query`. Add `emod_specs_export` when
-[05](./05-spec-suggestions.md) ships `emod specs export`. Each tool is one handler over a function that
+The [model queries proposal](../../model-queries-proposal.md) ships `internal/query`. Add `emod_specs_export` when
+[05](../05-spec-suggestions.md) ships `emod specs export`. Each tool is one handler over a function that
 the CLI already calls.
 
 **Phase 5: conformance (M, optional).** Run the server against the MCP Inspector and the reference

@@ -23,7 +23,7 @@ structural:
 - "Convert this context to DCB."
 
 Each of these changes touches many elements in many slices, and the result must stay valid. A person who
-uses an agent such as Claude Code gets this through the MCP server ([01](./01-mcp-server.md)): the agent
+uses an agent such as Claude Code gets this through the MCP server ([01](completed/01-mcp-server.md)): the agent
 edits the file, and the desktop app reloads it. But domain experts, and many facilitators, do not use an
 agent. They have no AI in the place where they work.
 

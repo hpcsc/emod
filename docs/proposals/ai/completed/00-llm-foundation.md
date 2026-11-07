@@ -314,7 +314,7 @@ of the repair loop, and `maxAttempts` limits each loop. A small pass, such as a 
 
 | Proposal | Uses `llm.Model` | Uses the repair loop | Notes |
 | --- | :---: | :---: | --- |
-| [01 MCP server](../01-mcp-server.md) | No | No | The host brings the model and runs the loop |
+| [01 MCP server](01-mcp-server.md) | No | No | The host brings the model and runs the loop |
 | [02 Semantic model review](../02-semantic-model-review.md) | Yes | No | Findings with structured output. Its DCB knowledge also serves 03, 04 and 06. |
 | [03 AI panel in the desktop app](../03-desktop-ai-panel.md) | Yes | Yes, with a baseline | In the process of the desktop app |
 | [04 Model from a conversation](../04-model-from-conversation.md) | Yes | Yes | Questions, then a draft |

@@ -127,7 +127,7 @@ The system prompt lives in `internal/ai/generate/prompt` and is embedded with `g
 - **The house rules of the draft.** The assumption and rule comments, no specs, aggregate style by default,
   and one sentence of `description` on each slice.
 
-The MCP prompt `model-domain` of [01](./01-mcp-server.md) serves the same files, so the CLI, the desktop
+The MCP prompt `model-domain` of [01](completed/01-mcp-server.md) serves the same files, so the CLI, the desktop
 app and the MCP host teach one style.
 
 ### Step 3: the check and the repair loop
@@ -154,7 +154,7 @@ comment `# DRAFT DID NOT PASS THE CHECK: <n> diagnostics` at the top. It prints 
 | --- | --- | --- |
 | CLI | `emod ai generate` prints the questions and reads the answers | The full flow in this document |
 | Desktop app | "New model from description" in the AI panel of [03](./03-desktop-ai-panel.md). The panel shows the questions as a form with option buttons. | The same `internal/ai/generate` code. The panel shows the draft as a diagram with the assumptions beside it. The user accepts it and picks a file name. |
-| MCP host | The prompt `model-domain` of [01](./01-mcp-server.md). The host model asks the questions in its own chat. | Only the prompt text and the tools. The host model writes the draft and calls `emod_validate` until the check is clean. |
+| MCP host | The prompt `model-domain` of [01](completed/01-mcp-server.md). The host model asks the questions in its own chat. | Only the prompt text and the tools. The host model writes the draft and calls `emod_validate` until the check is clean. |
 
 ## Interface
 
@@ -375,7 +375,7 @@ answers from a file, convergence after N attempts, no convergence, and a `llm.Br
 `--json`, the token line, and the exit codes. `arrange.Model` and
 `formatter.Format` run on the converged source.
 
-**Phase 3: the other surfaces (S).** The MCP prompt `model-domain` in [01](./01-mcp-server.md) serves the
+**Phase 3: the other surfaces (S).** The MCP prompt `model-domain` in [01](completed/01-mcp-server.md) serves the
 embedded prompt files. The AI panel of [03](./03-desktop-ai-panel.md) calls
 `internal/ai/generate` and shows the questions as a form.
 

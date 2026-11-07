@@ -1,6 +1,6 @@
 # emod MCP Server
 
-**Proposal:** `docs/proposals/ai/01-mcp-server.md`
+**Proposal:** `docs/proposals/ai/completed/01-mcp-server.md`
 
 ## Overview
 
@@ -14,7 +14,7 @@ Claude Code, starts the server and gives its tools to the model that it runs. Th
 reads the grammar, and lists, exports, draws, formats and arranges a model with the same code as the CLI.
 emod calls no model. The host brings the model, so emod needs no provider, no API key and no network access.
 
-The design is in [`docs/proposals/ai/01-mcp-server.md`](../../docs/proposals/ai/01-mcp-server.md). The
+The design is in [`docs/proposals/ai/completed/01-mcp-server.md`](../../docs/proposals/ai/completed/01-mcp-server.md). The
 workflow prompts and the query tools of that proposal are in other story sets. See Non-Goals.
 
 ## Goals

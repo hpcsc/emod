@@ -49,7 +49,7 @@ decides if each suggestion is valid. A spec export with no AI closes the second 
 - **G5:** A person sees a diff. Nothing changes the file until the person gives `--apply` or accepts the suggestion
   in the desktop app.
 - **G6:** The same suggestions reach the facilitator in the desktop app ([03](./03-desktop-ai-panel.md))
-  and an agent through the MCP server ([01](./01-mcp-server.md)).
+  and an agent through the MCP server ([01](completed/01-mcp-server.md)).
 - **G7:** `emod specs export <file> --format gherkin|json` writes the specs of the model as Gherkin features or JSON
   fixtures, with no AI. The output is deterministic, so CI can check it for drift.
 
@@ -277,7 +277,7 @@ Flags:
 
 - **Desktop app.** "Suggest specs" on the context menu of a slice opens the AI panel with the gaps and the
   suggestions of that slice ([03](./03-desktop-ai-panel.md)).
-- **MCP server.** The `suggest-specs` prompt of [01](./01-mcp-server.md) tells the host model to read the
+- **MCP server.** The `suggest-specs` prompt of [01](completed/01-mcp-server.md) tells the host model to read the
   gaps from `emod_lint`, to write the `spec` blocks, and to check the result with `emod_validate` until it
   adds no diagnostic. The host model does the work, and emod gives the check.
 
@@ -419,7 +419,7 @@ answers: a name outside the enum, a payload with a wrong literal, a spec that do
 
 **Phase 5: other surfaces (S).** Add the "Suggest specs" action of the desktop panel with
 [03](./03-desktop-ai-panel.md), and the `suggest-specs` prompt with
-[01](./01-mcp-server.md).
+[01](completed/01-mcp-server.md).
 
 **Phase 6: evaluation (M).** Build a corpus from the example models with their specs removed. Measure the
 rate of convergence, and the share of suggestions that a person keeps with no change. Run it on the tested

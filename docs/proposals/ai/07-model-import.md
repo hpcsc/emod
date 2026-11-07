@@ -1,7 +1,7 @@
 # Model Import
 
 > Part of the [emod AI proposals](./README.md). The converters in this document use no language model. The
-> import of code runs in an MCP host through the server of [01](./01-mcp-server.md). See the
+> import of code runs in an MCP host through the server of [01](completed/01-mcp-server.md). See the
 > [AI foundation](completed/00-llm-foundation.md) for where AI runs.
 
 ## Problem
@@ -19,7 +19,7 @@ The inputs are of two kinds, and each kind needs a different tool:
 - **Code states its content across many files and languages.** A handler class, a Kafka listener and a
   projection show the process only to a reader who understands the code. An agent for code, such as
   Claude Code or Cursor, reads code better than a set of heuristic extractors in emod. The agent already
-  has access to the files and is already where developers work. With the MCP server of [01](./01-mcp-server.md), the agent
+  has access to the files and is already where developers work. With the MCP server of [01](completed/01-mcp-server.md), the agent
   checks its own draft against emod.
 
 Therefore emod adds deterministic converters for the structured artifacts, and an MCP prompt for the import
@@ -40,7 +40,7 @@ what the artifact does not say, and the group fills the gaps in the Shape step.
   comment.
 - **G5:** After the write, the command runs `oracle.Check` and prints the lint findings. These findings are smells
   that the draft inherits from the artifact, for example a message named `InvoiceStatusUpdated`.
-- **G6:** The MCP prompt `import-from-code` of [01](./01-mcp-server.md) guides an MCP host through the import of
+- **G6:** The MCP prompt `import-from-code` of [01](completed/01-mcp-server.md) guides an MCP host through the import of
   code.
 
 ## Non-Goals
@@ -59,7 +59,7 @@ what the artifact does not say, and the group fills the gaps in the Shape step.
 | Input | Path | Who reads it | What emod adds |
 | --- | --- | --- | --- |
 | emlang files, an EventCatalog folder, AsyncAPI documents | `emod import` | A converter in emod | The converters and the CLI command |
-| Source code | An MCP host with the prompt `import-from-code` | The host model | The prompt text and the MCP tools of [01](./01-mcp-server.md) |
+| Source code | An MCP host with the prompt `import-from-code` | The host model | The prompt text and the MCP tools of [01](completed/01-mcp-server.md) |
 
 ### The converters
 
@@ -182,7 +182,7 @@ gives `decimal`, `true` or `false` gives `bool`, and any other value gives `stri
 
 ### The import of code through an agent
 
-The MCP prompt `import-from-code` of [01](./01-mcp-server.md) tells the host model what to do:
+The MCP prompt `import-from-code` of [01](completed/01-mcp-server.md) tells the host model what to do:
 
 1. Find the signals in the code: event types, command types and their handlers, handlers that take an
    event and send a command, projections that fold events into a read model, topics, and calls to external
@@ -362,7 +362,7 @@ exceptions. The golden tests use the examples of the emlang project. When a test
 the validator rejects, the converter writes the test as a comment with a `# DRAFT:` note.
 
 **Phase 4: the prompt for code (S).** The text of `import-from-code` in the prompt set of
-[01](./01-mcp-server.md). A unit test makes sure that each tool that the prompt names exists in the server.
+[01](completed/01-mcp-server.md). A unit test makes sure that each tool that the prompt names exists in the server.
 
 ## Risks and Mitigations
 

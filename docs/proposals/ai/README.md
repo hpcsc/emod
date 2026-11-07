@@ -49,7 +49,7 @@ flowchart LR
 ```
 
 1. **Capture.** The facilitator gives the requirements, the workshop notes or a codebase to an agent that
-   has `emod mcp` ([01](./01-mcp-server.md)). The agent asks questions, then writes the first `.emod`
+   has `emod mcp` ([01](completed/01-mcp-server.md)). The agent asks questions, then writes the first `.emod`
    ([04](./04-model-from-conversation.md)). The desktop app has the file open. It reloads the file when the
    file changes on disk, so the group sees the diagram change after each write. A team with an event
    catalog, AsyncAPI or emlang files imports them with no LLM ([07](./07-model-import.md)).
@@ -98,7 +98,7 @@ The numbers follow the order of delivery.
 | # | Proposal | What the user gets | Surfaces | Phase |
 | --- | --- | --- | --- | --- |
 | 00 | [AI foundation](completed/00-llm-foundation.md) | The model port, two protocol adapters, the repair loop, one configuration | All AI surfaces | Built |
-| 01 | [MCP server](./01-mcp-server.md) | Any MCP host can check, draw and query a model, and gets prompts for the workflow | Claude Code, Cursor, Zed, other MCP hosts | 1 |
+| 01 | [MCP server](completed/01-mcp-server.md) | Any MCP host can check, draw and query a model, and gets prompts for the workflow | Claude Code, Cursor, Zed, other MCP hosts | 1 |
 | 02 | [Semantic model review](./02-semantic-model-review.md) | Findings that lint cannot give: absent failure events, a command that does two jobs, words that differ across contexts, specs that do not cover a rule. In a DCB context, suggestions for `tags` and `decides_on`. | CLI, CI, MCP prompt, desktop app, LSP | 2 |
 | 03 | [AI panel in the desktop app](./03-desktop-ai-panel.md) | A review button, then chat edits with a diff, accept, reject and undo | Desktop app | 3 |
 | 04 | [Model from a conversation](./04-model-from-conversation.md) | Questions first, then a draft with its assumptions | CLI, desktop app, MCP prompt | 4 |

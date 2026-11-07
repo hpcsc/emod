@@ -49,7 +49,7 @@ package, `internal/ai/dcb`, gives them the same answers. See [DCB knowledge](#dc
 
 - **G1:** `emod ai review <file>` reads a model and reports semantic findings that lint cannot report.
 - **G2:** The same review is available in each surface where people work on the model: the CLI, CI, the MCP prompt
-  `review-model` of [01](./01-mcp-server.md), the Review button in the AI panel of the desktop app
+  `review-model` of [01](completed/01-mcp-server.md), the Review button in the AI panel of the desktop app
   ([03](./03-desktop-ai-panel.md)), and an LSP command.
 - **G3:** Findings go through `internal/diagnostic` as lint findings do: the same `diagnostic.Entry`, the same
   severities and the same JSON shape, with more fields.
@@ -78,7 +78,7 @@ package, `internal/ai/dcb`, gives them the same answers. See [DCB knowledge](#dc
   predicates reach the person as a code action of [06](./06-rename-and-fix-suggestions.md) or as a
   conversion in [03](./03-desktop-ai-panel.md).
 - **A DCB command.** No `emod ai dcb` command exists. An agent user asks the MCP host for a DCB change, and
-  the MCP server of [01](./01-mcp-server.md) checks the result.
+  the MCP server of [01](completed/01-mcp-server.md) checks the result.
 - **Changes to DCB.** The DCB knowledge uses the DSL and the rules as `docs/dsl-reference.md` and
   `internal/linter` define them. An event store and its append conditions are out of scope.
 - **A replacement for lint.** The lint rules stay. `emod lint` works with no provider configured.
@@ -138,7 +138,7 @@ model, not a part of it. `internal/ai/review` puts the prompt together in Go:
    `translation`, `flow`, `spec`, `tags` and `decides_on`.
 
 The review uses `EMOD_AI_MODEL` at effort `high`. The MCP prompt `review-model` of
-[01](./01-mcp-server.md) serves the same system prompt and taxonomy from this package, so a host model
+[01](completed/01-mcp-server.md) serves the same system prompt and taxonomy from this package, so a host model
 reviews with the same rules.
 
 ### The finding schema
@@ -550,7 +550,7 @@ The review in CI is advisory. Lint gates the build, and the review adds notes:
 
 ### MCP prompt `review-model`
 
-The MCP server of [01](./01-mcp-server.md) serves the prompt `review-model`. The prompt gives the host model
+The MCP server of [01](completed/01-mcp-server.md) serves the prompt `review-model`. The prompt gives the host model
 three steps:
 
 1. Call `emod_lint`.
@@ -785,7 +785,7 @@ decides on the events of one customer, but the rule that it protects is about on
 
 ### Phase 5: MCP prompt (S)
 
-- The prompt `review-model` in [01](./01-mcp-server.md) takes its text from `internal/ai/review`.
+- The prompt `review-model` in [01](completed/01-mcp-server.md) takes its text from `internal/ai/review`.
 
 ### Phase 6: desktop app (M)
 
@@ -853,5 +853,5 @@ decides on the events of one customer, but the rule that it protects is about on
   `Suggest` and the conversion read across contexts, or stay in one context.
 - **The meaning of an aggregate.** A team can attach a snapshot or a projection to an aggregate. The
   conversion removes the aggregate. Decide if the panel warns when an aggregate has such a meaning.
-- **The DCB brief for MCP hosts.** The MCP server of [01](./01-mcp-server.md) can serve the brief as a
+- **The DCB brief for MCP hosts.** The MCP server of [01](completed/01-mcp-server.md) can serve the brief as a
   resource, so an agent converts a context with the same knowledge.

@@ -2,7 +2,7 @@
 
 > This proposal adds **no LLM**. It gives exact answers to the questions that a group asks about a model.
 > The [AI proposals](./ai/README.md) use these answers. Free questions go to an MCP host
-> ([01](./ai/01-mcp-server.md)) or to the ask mode of the AI panel in the desktop app
+> ([01](ai/completed/01-mcp-server.md)) or to the ask mode of the AI panel in the desktop app
 > ([03](./ai/03-desktop-ai-panel.md)). Both use these exact answers as their facts.
 
 ## Problem
@@ -37,7 +37,7 @@ it.
   Therefore each surface gives the same answer.
 - **G4:** In the web viewer and the desktop app: a selection highlights the producers and the consumers of any
   element. Two actions highlight the chain that follows from an element and the chain that leads to it.
-- **G5:** The MCP tools `emod_references` and `emod_trace` ([01](./ai/01-mcp-server.md)).
+- **G5:** The MCP tools `emod_references` and `emod_trace` ([01](ai/completed/01-mcp-server.md)).
 - **G6:** `--format json` on each command, for scripts and for the facts of AI answers.
 
 ## Non-Goals
@@ -150,7 +150,7 @@ A question such as "how does a booking lead to an email?" needs words, not only 
 the words, and both use the exact answer as the facts:
 
 - **An MCP host** calls `emod_trace` and `emod_references`, then writes the answer. The `review-model` and
-  `suggest-specs` prompts of [01](./ai/01-mcp-server.md) tell the host to call them.
+  `suggest-specs` prompts of [01](ai/completed/01-mcp-server.md) tell the host to call them.
 - **The ask mode of the AI panel** ([03](./ai/03-desktop-ai-panel.md)) calls `query.References`
   and `query.Trace` in the process of the desktop app for each model name in the question. It puts the
   results in the prompt. The model then only orders and phrases facts that emod computed. The panel flags
@@ -250,7 +250,7 @@ panel and the context menu, and the Shift-click path. Add the vitest contract te
 `emod trace --format json`.
 
 **Phase 4: MCP tools (S).** Add `emod_references` and `emod_trace` to the MCP server
-([01](./ai/01-mcp-server.md)).
+([01](ai/completed/01-mcp-server.md)).
 
 Tests follow the Go test rules of the repository: one umbrella `TestReferences` and one `TestTrace`,
 `t.Run` groups for each operation, scenario names that describe behaviour, and `testify/require`.
