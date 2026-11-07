@@ -1539,3 +1539,17 @@ in this repo; append only learnings that generalise beyond the task that surface
 - Observed: task 2 — mcp-slices
 - Learning: oracle.RunParsed runs the validator and the linter on the best-effort model also when parsing failed, so for a source that does not parse emod validate --format json can add findings such as orphan-command to the parse errors. A command that stops at the parse step (slices list, glossary, fmt, slices arrange) prints only oracle.Parse diagnostics; a parity test of an MCP tool against it must compare with that command's own stderr, and a fixture must have a validator finding in its recovered part, or both lists look the same.
 - Apply when: building or testing an MCP tool or CLI command that returns the parse diagnostics of a source that does not parse, or choosing the reference output of a parity test
+
+## The JSON export fails on a payload number that a JSON number cannot hold, also for a model that the check calls clean
+- Type: constraint
+- Recorded: 2026-11-07
+- Observed: task 1 — mcp-export
+- Learning: export.ExportJSON writes a spec payload number through json.Number, and canonicalNumber does not trim zeros after a minus sign, while the parser keeps a number expression as written, so a payload such as guests = -007 or guests = 1 + 2 gives zero diagnostics and still makes emod export --format json and emod_export fail with: cannot parse "-007" as JSON number. So the error branch after ExportJSONDiagnostics is reachable from a real source and needs a test, not an accepted mutant; internal/mcp/server_test.go has the leaf. The defect itself is in internal/export and is not fixed.
+- Apply when: accepting a mutant on an error branch after an internal/export call as unreachable, or working on number literals in spec payloads, canonicalNumber or the JSON and CUE exports
+
+## task test runs no gofmt, so run gofmt -l on the files of a task before clerk finish
+- Type: convention
+- Recorded: 2026-11-07
+- Observed: task 2 — mcp-export
+- Learning: The suite of task test builds and tests but does not check formatting, and clerk finish lints the staged set for guideline rules, not for gofmt, so a mis-indented line from a scripted edit reached a commit in US-006 and only the commit agent saw it. Run mise exec -- gofmt -l on the changed Go files before clerk finish. internal/linter/descriptions.go and internal/lsp/transport.go are not gofmt-clean on main, from before the MCP work, so a whole-tree gofmt -l lists them too.
+- Apply when: finishing a task that changes Go files, especially after a scripted or sed edit of a Go file
