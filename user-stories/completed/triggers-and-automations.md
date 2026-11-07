@@ -182,6 +182,8 @@ US-001 is the other story to start early. It is independent of the whole rename 
 **Depends on:** US-001, US-003
 
 ### US-009: Complete and navigate automations in the editor
+**Goals:** G7
+
 **Description:** As a model author using an LSP-capable editor, I want hover, completion, and navigation for the new entries so that I can author automations without consulting the reference.
 
 **Acceptance Criteria:**
@@ -197,6 +199,8 @@ US-001 is the other story to start early. It is independent of the whole rename 
 **Depends on:** US-001, US-003
 
 ### US-010: Highlight the realigned syntax
+**Goals:** G7
+
 **Description:** As a model author, I want the new keywords highlighted so that an automation's activation reads as structure rather than prose.
 
 **Acceptance Criteria:**
@@ -208,6 +212,8 @@ US-001 is the other story to start early. It is independent of the whole rename 
 **Depends on:** US-004
 
 ### US-011: Learn the realignment from examples and the reference
+**Goals:** G7
+
 **Description:** As a model author new to these patterns, I want the examples and reference to show the realigned forms so that I learn them from working models instead of the grammar.
 
 **Acceptance Criteria:**

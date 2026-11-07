@@ -35,6 +35,7 @@ Three further consequences follow from the split.
 - **G4:** Retire the `trigger` keyword overload so one token has one meaning.
 - **G5:** Make the top lane exclusively human-facing across every exporter, and settle one palette.
 - **G6:** Draw the `view → processor` and `view → trigger` edges the model already carries.
+- **G7:** The LSP, the editor highlighters, the examples and the DSL reference support each realigned form.
 
 ## Non-Goals
 
@@ -415,7 +416,7 @@ The wireframe lane holds only the guest-facing reservation form.
 
 ## Interaction With the Specs Proposal
 
-`docs/proposals/specs-and-metadata-proposal.md:287-306` proposes timer triggers for automations — `trigger RoomHeld after "24h"` — and explicitly defers cron-style standalone schedules to its open questions. The two proposals meet at exactly that deferral.
+`docs/proposals/specs-and-metadata-proposal.md:288-307` proposes timer triggers for automations — `trigger RoomHeld after "24h"` — and explicitly defers cron-style standalone schedules to its open questions. The two proposals meet at exactly that deferral.
 
 - That proposal's `trigger <Event> after "<duration>"` becomes `on <Event> after "<duration>"` under the rename in section 3. The `after` clause is orthogonal to this proposal and composes with `on` unchanged.
 - Its deferred cron-style schedule is section 3's `every`. Whichever proposal lands second should treat `every` as already specified rather than re-deriving it.

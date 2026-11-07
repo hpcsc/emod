@@ -25,7 +25,7 @@ Three further consequences follow.
 
 **`actor` is a concept the model captures and never uses.** The cross-reference table claims `actor "<name>"` is referenced by `trigger { actor <Name> }`, but the validator package contains no actor check at all, so `actor NobodyDeclared` passes. Nothing else consumes it: every other use across the codebase is declaration plumbing — parse, format, export, import — and the single semantic consumer is `internal/glossary/glossary.go:115-123`, which walks triggers to group actors by context. Every `.emod` file in the repository declares exactly one actor, so in practice the attribute distinguishes nothing. A screen already says a human is present; `automation` says one is not. Naming *which* human is the only information `actor` adds, and no rule, diagram or lane consumes it.
 
-**The mockup asset has nowhere to live.** `docs/proposals/triggers-and-automations-proposal.md:123-135` specified a `wireframe "<path>"` attribute on the trigger and it was never implemented — no keyword in the lexer, no field in the AST. As an attribute of a slice-local trigger it would have to be restated at every appearance of the page, which is the wrong place for a fact about the page.
+**The mockup asset has nowhere to live.** `docs/proposals/triggers-and-automations-proposal.md:124-136` specified a `wireframe "<path>"` attribute on the trigger and it was never implemented — no keyword in the lexer, no field in the AST. As an attribute of a slice-local trigger it would have to be restated at every appearance of the page, which is the wrong place for a fact about the page.
 
 ## Goals
 

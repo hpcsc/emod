@@ -24,6 +24,7 @@ ESDM (esdm.io) addresses most of these in its YAML-based DSL: a Given-When-Then 
 - **G6:** Annotate events with their wire-level type.
 - **G7:** Fire automations on elapsed time relative to an event, completing the absolute schedules the grammar already carries.
 - **G8:** Keep every existing `.emod` file valid and unchanged in meaning.
+- **G9:** `emod fmt`, the LSP, the editor highlighters, the diagrams, the examples and the DSL reference support each new construct.
 
 ## Non-Goals
 

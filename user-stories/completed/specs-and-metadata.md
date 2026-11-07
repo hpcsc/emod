@@ -207,6 +207,8 @@ Stories are listed in recommended implementation order, following the proposal's
 **Context:** `after` is the relative half of automation timing — `every` covers the absolute half and is a precondition for this story. The two never combine. How the timer is implemented — durable scheduling, delivery guarantees, idempotency — is a runtime concern and stays out of the model, the same line the DCB proposal drew for append-condition checking.
 
 ### US-014: Format the new constructs consistently
+**Goals:** G9
+
 **Description:** As a model author, I want `emod fmt` to canonicalise all the new syntax so that team models stay uniform without style debates.
 
 **Acceptance Criteria:**
@@ -219,6 +221,8 @@ Stories are listed in recommended implementation order, following the proposal's
 **Depends on:** US-001, US-002, US-006, US-009, US-010
 
 ### US-015: Navigate and complete the new constructs in the editor
+**Goals:** G9
+
 **Description:** As a model author using an LSP-capable editor, I want hover, completion, and navigation for specs and invariants so that I can author them without switching to documentation.
 
 **Acceptance Criteria:**
@@ -231,6 +235,8 @@ Stories are listed in recommended implementation order, following the proposal's
 **Depends on:** US-002, US-006, US-009, US-010
 
 ### US-016: Render specs on diagrams
+**Goals:** G9
+
 **Description:** As a model author, I want the option to render a slice's specs on the diagram so that a workshop artefact can show behaviour alongside structure when the audience needs it.
 
 **Acceptance Criteria:**
@@ -242,6 +248,8 @@ Stories are listed in recommended implementation order, following the proposal's
 **Depends on:** US-006, US-007
 
 ### US-017: Highlight the new syntax in editors
+**Goals:** G9
+
 **Description:** As a model author, I want syntax highlighting for the new keywords so that specs and invariants read as structure, not prose.
 
 **Acceptance Criteria:**
@@ -252,6 +260,8 @@ Stories are listed in recommended implementation order, following the proposal's
 **Depends on:** US-006, US-010
 
 ### US-018: Learn the new constructs from examples and the reference
+**Goals:** G9
+
 **Description:** As a model author new to these features, I want the examples and DSL reference to cover every new construct so that I can learn them from working models instead of the grammar.
 
 **Acceptance Criteria:**
