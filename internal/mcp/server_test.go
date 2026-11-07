@@ -191,6 +191,82 @@ func recordsOf(t *testing.T, result *sdk.CallToolResult) []diagnostic.Record {
 	return decoded.Diagnostics
 }
 
+func callTool(t *testing.T, session *sdk.ClientSession, name string, arguments map[string]any) *sdk.CallToolResult {
+	t.Helper()
+
+	result, err := session.CallTool(context.Background(), &sdk.CallToolParams{Name: name, Arguments: arguments})
+	require.NoError(t, err)
+	return result
+}
+
+func objectOf(t *testing.T, value any) map[string]any {
+	t.Helper()
+
+	object, ok := value.(map[string]any)
+	require.True(t, ok, "the value must be an object, but it is %T", value)
+	return object
+}
+
+func keysOf(object map[string]any) []string {
+	keys := make([]string, 0, len(object))
+	for key := range object {
+		keys = append(keys, key)
+	}
+	return keys
+}
+
+func jsonOf(t *testing.T, value any) string {
+	t.Helper()
+
+	encoded, err := json.Marshal(value)
+	require.NoError(t, err)
+	return string(encoded)
+}
+
+func rulesIn(t *testing.T, diagnostics any) []string {
+	t.Helper()
+
+	var records []diagnostic.Record
+	require.NoError(t, json.Unmarshal([]byte(jsonOf(t, diagnostics)), &records))
+	rules := make([]string, 0, len(records))
+	for _, record := range records {
+		rules = append(rules, record.Rule)
+	}
+	return rules
+}
+
+func exportedRules(t *testing.T, diagnostics any) []string {
+	t.Helper()
+
+	var records []struct {
+		RuleName string `json:"rule_name"`
+	}
+	require.NoError(t, json.Unmarshal([]byte(jsonOf(t, diagnostics)), &records))
+	rules := make([]string, 0, len(records))
+	for _, record := range records {
+		rules = append(rules, record.RuleName)
+	}
+	return rules
+}
+
+func filesUnder(t *testing.T, dir string) map[string]string {
+	t.Helper()
+
+	files := map[string]string{}
+	require.NoError(t, filepath.WalkDir(dir, func(path string, entry os.DirEntry, err error) error {
+		if err != nil || entry.IsDir() {
+			return err
+		}
+		info, err := entry.Info()
+		if err != nil {
+			return err
+		}
+		files[path] = info.ModTime().String()
+		return nil
+	}))
+	return files
+}
+
 func callSlicesList(t *testing.T, session *sdk.ClientSession, arguments map[string]any) *sdk.CallToolResult {
 	t.Helper()
 
@@ -252,7 +328,7 @@ func TestServer(t *testing.T) {
 	})
 
 	t.Run("list tools", func(t *testing.T) {
-		t.Run("lists emod_check, emod_explain_rule, emod_schema and emod_slices_list, and no other tool", func(t *testing.T) {
+		t.Run("lists emod_check, emod_explain_rule, emod_export, emod_schema and emod_slices_list, and no other tool", func(t *testing.T) {
 			session := connect(t)
 
 			listed, err := session.ListTools(context.Background(), nil)
@@ -262,7 +338,36 @@ func TestServer(t *testing.T) {
 			for _, tool := range listed.Tools {
 				names = append(names, tool.Name)
 			}
-			require.ElementsMatch(t, []string{"emod_check", "emod_explain_rule", "emod_schema", "emod_slices_list"}, names)
+			require.ElementsMatch(t, []string{"emod_check", "emod_explain_rule", "emod_export", "emod_schema", "emod_slices_list"}, names)
+		})
+
+		t.Run("gives emod_export the input of emod_check and a format of json, diagram-json or cue, with json as the default", func(t *testing.T) {
+			session := connect(t)
+
+			tool := toolNamed(t, session, "emod_export")
+
+			schema, ok := tool.InputSchema.(map[string]any)
+			require.True(t, ok)
+			require.Nil(t, schema["required"])
+			require.Equal(t, false, schema["additionalProperties"])
+			properties, ok := schema["properties"].(map[string]any)
+			require.True(t, ok)
+			require.ElementsMatch(t, []string{"content", "path", "name", "format"}, keysOf(properties))
+			format, ok := properties["format"].(map[string]any)
+			require.True(t, ok)
+			require.Equal(t, "string", format["type"])
+			require.Equal(t, []any{"json", "diagram-json", "cue"}, format["enum"])
+			require.Equal(t, "json", format["default"])
+			require.Contains(t, format["description"], "The default is json")
+		})
+
+		t.Run("the description of emod_export names the command with the same output and the rule of cue", func(t *testing.T) {
+			session := connect(t)
+
+			tool := toolNamed(t, session, "emod_export")
+
+			require.Contains(t, tool.Description, "emod export --format <format>")
+			require.Contains(t, tool.Description, "a source with any diagnostic, also a warning, gives the diagnostics")
 		})
 
 		t.Run("gives emod_slices_list content, path and name as optional strings and no other input", func(t *testing.T) {
@@ -585,6 +690,121 @@ foobar "Stray" {
 
 			require.True(t, result.IsError)
 			require.Contains(t, textOf(t, result), "is outside the root "+project)
+		})
+	})
+
+	t.Run("export", func(t *testing.T) {
+		t.Run("a call with no format gives the json document, with the diagnostics in it", func(t *testing.T) {
+			session := connect(t)
+
+			result := callTool(t, session, "emod_export", map[string]any{"content": warningSource, "name": "ordering.emod"})
+
+			require.False(t, result.IsError)
+			document := objectOf(t, result.StructuredContent)
+			require.ElementsMatch(t, []string{"diagnostics", "model"}, keysOf(document))
+			require.Equal(t, "Test", objectOf(t, document["model"])["name"])
+			require.Equal(t, []string{"state-obsession"}, exportedRules(t, document["diagnostics"]))
+			require.JSONEq(t, jsonOf(t, result.StructuredContent), textOf(t, result))
+		})
+
+		t.Run("json gives the document also for a source with errors", func(t *testing.T) {
+			source, err := os.ReadFile("../../examples/error_diagnostics_test.emod")
+			require.NoError(t, err)
+			session := connect(t)
+
+			result := callTool(t, session, "emod_export", map[string]any{"content": string(source), "format": "json"})
+
+			require.False(t, result.IsError)
+			document := objectOf(t, result.StructuredContent)
+			require.Contains(t, document, "model")
+			require.Equal(t, []string{"", "orphan-command"}, exportedRules(t, document["diagnostics"]))
+		})
+
+		t.Run("diagram-json gives the diagram document, with the diagnostics in it", func(t *testing.T) {
+			session := connect(t)
+
+			result := callTool(t, session, "emod_export", map[string]any{"content": warningSource, "format": "diagram-json"})
+
+			require.False(t, result.IsError)
+			document := objectOf(t, result.StructuredContent)
+			require.ElementsMatch(t, []string{"diagnostics", "diagram"}, keysOf(document))
+			require.Equal(t, []string{"state-obsession"}, exportedRules(t, document["diagnostics"]))
+			require.Contains(t, jsonOf(t, document["diagram"]), "OrderUpdated")
+		})
+
+		t.Run("cue gives the CUE text of a clean source as one text block, with no structured content", func(t *testing.T) {
+			session := connect(t)
+
+			result := callTool(t, session, "emod_export", map[string]any{"content": cleanSource, "format": "cue"})
+
+			require.False(t, result.IsError)
+			require.Nil(t, result.StructuredContent)
+			require.Contains(t, textOf(t, result), `name: "Ordering"`)
+			require.Contains(t, textOf(t, result), `name: "PlaceOrder"`)
+		})
+
+		t.Run("cue gives the diagnostics and no CUE for a source with only a warning", func(t *testing.T) {
+			session := connect(t)
+
+			result := callTool(t, session, "emod_export", map[string]any{"content": warningSource, "format": "cue", "name": "ordering.emod"})
+
+			require.False(t, result.IsError)
+			require.Equal(t, []string{"diagnostics"}, keysOf(objectOf(t, result.StructuredContent)))
+			require.Equal(t, []string{"state-obsession"}, rulesIn(t, objectOf(t, result.StructuredContent)["diagnostics"]))
+			require.NotContains(t, textOf(t, result), `name: "Test"`)
+		})
+
+		t.Run("an unknown format gives an error result that names the three formats", func(t *testing.T) {
+			session := connect(t)
+
+			result := callTool(t, session, "emod_export", map[string]any{"content": cleanSource, "format": "yaml"})
+
+			require.True(t, result.IsError)
+			require.Contains(t, textOf(t, result), "json")
+			require.Contains(t, textOf(t, result), "diagram-json")
+			require.Contains(t, textOf(t, result), "cue")
+		})
+
+		t.Run("a model that the export cannot encode gives an error result that names the value", func(t *testing.T) {
+			source := strings.Replace(cleanSource, `      flow = <<-FLOW`, `      spec "places an order for a party" {
+        when = PlaceOrder({ orderId = -007 })
+        then = [OrderPlaced({ orderId = -007 })]
+      }
+
+      flow = <<-FLOW`, 1)
+			session := connect(t)
+
+			result := callTool(t, session, "emod_export", map[string]any{"content": source, "format": "json"})
+
+			require.True(t, result.IsError)
+			require.Contains(t, textOf(t, result), `"-007"`)
+		})
+
+		t.Run("a path outside the root gives an error result that names the root", func(t *testing.T) {
+			base := t.TempDir()
+			project := filepath.Join(base, "project")
+			require.NoError(t, os.Mkdir(project, 0o755))
+			writeFile(t, filepath.Join(base, "ordering.emod"), cleanSource)
+			session := connectAt(t, project)
+
+			result := callTool(t, session, "emod_export", map[string]any{"path": "../ordering.emod"})
+
+			require.True(t, result.IsError)
+			require.Contains(t, textOf(t, result), "is outside the root "+project)
+		})
+
+		t.Run("a call with a path writes no file under the root, in any format", func(t *testing.T) {
+			dir := t.TempDir()
+			writeFile(t, filepath.Join(dir, "ordering.emod"), cleanSource)
+			before := filesUnder(t, dir)
+			session := connectAt(t, dir)
+
+			for _, format := range []string{"json", "diagram-json", "cue"} {
+				result := callTool(t, session, "emod_export", map[string]any{"path": "ordering.emod", "format": format})
+				require.False(t, result.IsError, "format %s", format)
+			}
+
+			require.Equal(t, before, filesUnder(t, dir))
 		})
 	})
 

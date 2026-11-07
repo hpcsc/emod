@@ -7,6 +7,7 @@ import (
 	"encoding/json"
 	"errors"
 	"io"
+	"maps"
 
 	"github.com/google/jsonschema-go/jsonschema"
 	sdk "github.com/modelcontextprotocol/go-sdk/mcp"
@@ -16,6 +17,7 @@ import (
 	"github.com/hpcsc/emod/internal/ast"
 	"github.com/hpcsc/emod/internal/cue"
 	"github.com/hpcsc/emod/internal/diagnostic"
+	"github.com/hpcsc/emod/internal/export"
 	"github.com/hpcsc/emod/internal/linter"
 	"github.com/hpcsc/emod/internal/oracle"
 	"github.com/hpcsc/emod/internal/version"
@@ -47,6 +49,11 @@ var sourceSchema = &jsonschema.Schema{
 		},
 	},
 	AdditionalProperties: &jsonschema.Schema{Not: &jsonschema.Schema{}},
+}
+
+type formatInput struct {
+	sourceInput
+	Format string `json:"format,omitempty"`
 }
 
 type checkResult struct {
@@ -132,6 +139,16 @@ var slicesListTool = &sdk.Tool{
 	OutputSchema: oneOf[slicesResult, parseDiagnostics](),
 }
 
+var exportTool = &sdk.Tool{
+	Name: "emod_export",
+	Description: "Export an .emod model, the same output as `emod export --format <format>`. " +
+		"Give the source in content, or give the path of an .emod file under the root of the server in path, as for emod_check. " +
+		"json is the document of the model, and diagram-json holds each node and each edge of the diagram; " +
+		"both carry the diagnostics of the check, also for a source with errors. " +
+		"cue gives the CUE text of a source with no diagnostic; a source with any diagnostic, also a warning, gives the diagnostics in diagnostics and no CUE.",
+	InputSchema: formatSchema("json", "diagram-json", "cue"),
+}
+
 type Server struct {
 	in   io.ReadCloser
 	out  io.WriteCloser
@@ -163,6 +180,7 @@ func (s *Server) Run(ctx context.Context) error {
 	}
 	server.AddResource(dslReferenceResource, s.readText(docs.DSLReference))
 	sdk.AddTool(server, slicesListTool, s.listSlices)
+	sdk.AddTool(server, exportTool, s.exportModel)
 	return server.Run(ctx, &sdk.IOTransport{Reader: s.in, Writer: s.out})
 }
 
@@ -208,6 +226,36 @@ func (s *Server) listSlices(_ context.Context, _ *sdk.CallToolRequest, input sou
 		return s.structuredResult(parseDiagnostics{Diagnostics: diagnostic.Records(diagnostics)})
 	}
 	return s.structuredResult(slicesResult{Slices: ast.SliceRecords(model)})
+}
+
+func (s *Server) exportModel(_ context.Context, _ *sdk.CallToolRequest, input formatInput) (*sdk.CallToolResult, any, error) {
+	source, name, err := s.source(input.sourceInput)
+	if err != nil {
+		return nil, nil, err
+	}
+	model, diagnostics := oracle.Run(source, name)
+	switch input.Format {
+	case "diagram-json":
+		return s.documentResult(export.ExportDiagramJSONDiagnostics(model, diagnostics))
+	case "cue":
+		if len(diagnostics) > 0 {
+			return s.structuredResult(checkResult{Diagnostics: diagnostic.Records(diagnostics)})
+		}
+		text, err := export.ExportCUE(model)
+		if err != nil {
+			return nil, nil, err
+		}
+		return &sdk.CallToolResult{Content: []sdk.Content{&sdk.TextContent{Text: string(text)}}}, nil, nil
+	default:
+		return s.documentResult(export.ExportJSONDiagnostics(model, diagnostics))
+	}
+}
+
+func (s *Server) documentResult(document []byte, err error) (*sdk.CallToolResult, any, error) {
+	if err != nil {
+		return nil, nil, err
+	}
+	return s.structuredResult(json.RawMessage(document))
 }
 
 func (s *Server) structuredResult(value any) (*sdk.CallToolResult, any, error) {
@@ -271,4 +319,23 @@ func oneOf[First, Second any]() *jsonschema.Schema {
 		panic(err)
 	}
 	return &jsonschema.Schema{Type: "object", OneOf: []*jsonschema.Schema{first, second}}
+}
+
+func formatSchema(defaultFormat string, otherFormats ...string) *jsonschema.Schema {
+	formats := []any{defaultFormat}
+	for _, format := range otherFormats {
+		formats = append(formats, format)
+	}
+	properties := maps.Clone(sourceSchema.Properties)
+	properties["format"] = &jsonschema.Schema{
+		Type:        "string",
+		Description: "The output format. The default is " + defaultFormat + ".",
+		Enum:        formats,
+		Default:     json.RawMessage(`"` + defaultFormat + `"`),
+	}
+	return &jsonschema.Schema{
+		Type:                 "object",
+		Properties:           properties,
+		AdditionalProperties: sourceSchema.AdditionalProperties,
+	}
 }

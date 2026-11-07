@@ -77,15 +77,15 @@ The story's acceptance criteria, numbered for the Summary:
 above name.
 
 **Acceptance Criteria:**
-- [ ] `tools/list` lists `emod_export`, and its input schema has `content`, `path`, `name` and `format`, with
+- [x] `tools/list` lists `emod_export`, and its input schema has `content`, `path`, `name` and `format`, with
   the enum `json`, `diagram-json`, `cue` and the default `json`.
-- [ ] A call with no `format` gives the `json` document.
-- [ ] `json` and `diagram-json` give the export document with its diagnostics, also for a source with errors.
-- [ ] `cue` gives the CUE text for a clean source, and `{"diagnostics":[...]}` and no CUE for a source with
+- [x] A call with no `format` gives the `json` document.
+- [x] `json` and `diagram-json` give the export document with its diagnostics, also for a source with errors.
+- [x] `cue` gives the CUE text for a clean source, and `{"diagnostics":[...]}` and no CUE for a source with
   only a warning.
-- [ ] An unknown format gives an error result that names `json`, `diagram-json` and `cue`.
-- [ ] A call with a `path` writes no file under the root.
-- [ ] Through the built binary, for each file in `examples/` and `internal/parser/testdata/`, each format
+- [x] An unknown format gives an error result that names `json`, `diagram-json` and `cue`.
+- [x] A call with a `path` writes no file under the root.
+- [x] Through the built binary, for each file in `examples/` and `internal/parser/testdata/`, each format
   gives what `emod export --format <format>` prints for that file, or for `cue` with diagnostics, the
   records of `emod validate --format json`.
 

@@ -132,6 +132,57 @@ func listSlicesCLI(t *testing.T, path string) (listed string, parseDiagnostics s
 	return stdout.String(), ""
 }
 
+func modelPaths(t *testing.T) []string {
+	t.Helper()
+
+	root := repoRoot(t)
+	var paths []string
+	for _, pattern := range []string{"examples/*.emod", "internal/parser/testdata/*.emod"} {
+		matches, err := filepath.Glob(filepath.Join(root, pattern))
+		require.NoError(t, err)
+		for _, match := range matches {
+			relative, err := filepath.Rel(root, match)
+			require.NoError(t, err)
+			paths = append(paths, filepath.ToSlash(relative))
+		}
+	}
+	require.NotEmpty(t, paths)
+	return paths
+}
+
+func exportCLI(t *testing.T, path, format string) (string, int) {
+	t.Helper()
+
+	command := exec.Command(emodBinary, "export", "--format", format, path)
+	command.Dir = repoRoot(t)
+	command.Env = withoutAISettings(t)
+	output, err := command.Output()
+	var exitErr *exec.ExitError
+	if errors.As(err, &exitErr) {
+		require.LessOrEqual(t, exitErr.ExitCode(), 2, "emod export failed: %s", exitErr.Stderr)
+		return string(output), exitErr.ExitCode()
+	}
+	require.NoError(t, err)
+	return string(output), 0
+}
+
+func callBinaryTool(t *testing.T, session *sdk.ClientSession, name string, arguments map[string]any) *sdk.CallToolResult {
+	t.Helper()
+
+	result, err := session.CallTool(context.Background(), &sdk.CallToolParams{Name: name, Arguments: arguments})
+	require.NoError(t, err)
+	return result
+}
+
+func textOfBinary(t *testing.T, result *sdk.CallToolResult) string {
+	t.Helper()
+
+	require.Len(t, result.Content, 1)
+	text, ok := result.Content[0].(*sdk.TextContent)
+	require.True(t, ok, "the content must be a text block, but it is %T", result.Content[0])
+	return text.Text
+}
+
 func printedSchema(t *testing.T) string {
 	t.Helper()
 
@@ -155,7 +206,7 @@ func TestMCP(t *testing.T) {
 			require.Equal(t, &sdk.Implementation{Name: "emod", Version: strings.TrimSpace(string(printed))}, info)
 		})
 
-		t.Run("the binary lists emod_check, emod_explain_rule, emod_schema and emod_slices_list", func(t *testing.T) {
+		t.Run("the binary lists each tool", func(t *testing.T) {
 			session, _ := startServer(t)
 
 			listed, err := session.ListTools(context.Background(), nil)
@@ -165,7 +216,7 @@ func TestMCP(t *testing.T) {
 			for _, tool := range listed.Tools {
 				names = append(names, tool.Name)
 			}
-			require.ElementsMatch(t, []string{"emod_check", "emod_explain_rule", "emod_schema", "emod_slices_list"}, names)
+			require.ElementsMatch(t, []string{"emod_check", "emod_explain_rule", "emod_export", "emod_schema", "emod_slices_list"}, names)
 		})
 	})
 
@@ -366,6 +417,44 @@ func TestMCP(t *testing.T) {
 					lines = append(lines, fmt.Sprintf("%s:%d: %s", record.File, record.Line, record.Message))
 				}
 				require.Equal(t, parseDiagnostics, strings.Join(lines, "\n"))
+			})
+		}
+	})
+
+	t.Run("export", func(t *testing.T) {
+		for _, path := range modelPaths(t) {
+			for _, format := range []string{"json", "diagram-json"} {
+				t.Run("gives the "+format+" document of emod export for the path "+path, func(t *testing.T) {
+					session, _ := startServer(t)
+					printed, _ := exportCLI(t, path, format)
+
+					result := callBinaryTool(t, session, "emod_export", map[string]any{"path": path, "format": format})
+
+					require.False(t, result.IsError, "the call must succeed: %v", result.Content)
+					document, err := json.Marshal(result.StructuredContent)
+					require.NoError(t, err)
+					require.JSONEq(t, printed, string(document))
+				})
+			}
+
+			t.Run("gives the cue of emod export, or the records of emod validate, for the path "+path, func(t *testing.T) {
+				session, _ := startServer(t)
+				printed, exitCode := exportCLI(t, path, "cue")
+
+				result := callBinaryTool(t, session, "emod_export", map[string]any{"path": path, "format": "cue"})
+
+				require.False(t, result.IsError, "the call must succeed: %v", result.Content)
+				if exitCode == 0 {
+					require.Nil(t, result.StructuredContent)
+					require.Equal(t, printed, textOfBinary(t, result)+"\n")
+					return
+				}
+				require.Empty(t, printed)
+				structured, ok := result.StructuredContent.(map[string]any)
+				require.True(t, ok, "the structured result must be an object, but it is %T", result.StructuredContent)
+				records, err := json.Marshal(structured["diagnostics"])
+				require.NoError(t, err)
+				require.JSONEq(t, validateJSON(t, path), string(records))
 			})
 		}
 	})
