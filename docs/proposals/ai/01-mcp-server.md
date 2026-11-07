@@ -1,7 +1,7 @@
 # emod MCP Server
 
 > Part of the [emod AI proposals](./README.md). Phase 1. This proposal adds **no LLM dependency** to emod:
-> the MCP host brings the model. See the [AI foundation](./00-llm-foundation.md) for where this fits.
+> the MCP host brings the model. See the [AI foundation](completed/00-llm-foundation.md) for where this fits.
 
 ## Problem
 
@@ -44,7 +44,7 @@ needs no provider, no credentials and no cost for this.
 ## Non-Goals
 
 - A call to `llm.Model`. This server never calls a model. It only answers the tool calls of a model.
-- The repair loop of the [foundation](./00-llm-foundation.md) inside emod. The loop runs in the agent turn
+- The repair loop of the [foundation](completed/00-llm-foundation.md) inside emod. The loop runs in the agent turn
   of the host. emod gives the check that each step of the loop calls.
 - A tool that writes `.emod` content to disk. The host writes files with its own file tools, under the
   permissions that the user gives the host.
@@ -143,7 +143,7 @@ prompt. emod ships a default so that each team starts from the same workflow.
 
 ### The repair loop runs in the host
 
-The [foundation](./00-llm-foundation.md) runs the repair loop inside emod: `repair.Generate` calls
+The [foundation](completed/00-llm-foundation.md) runs the repair loop inside emod: `repair.Generate` calls
 `llm.Model.Generate` and `oracle.Check` in a Go loop. The MCP server turns this around. emod gives only the
 check, as the `emod_check` tool. The loop is the agent turn of the host.
 

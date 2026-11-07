@@ -1,7 +1,7 @@
 # Rename and Fix Suggestions in the LSP
 
 > Part of the [emod AI proposals](./README.md). Part 1 needs no AI. Part 2 uses the
-> [AI foundation](./00-llm-foundation.md): the `llm.Model` port, the providers and the configuration. This
+> [AI foundation](completed/00-llm-foundation.md): the `llm.Model` port, the providers and the configuration. This
 > document does not specify them again.
 
 ## Problem

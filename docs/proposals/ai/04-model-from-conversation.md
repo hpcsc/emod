@@ -1,6 +1,6 @@
 # Model from a Conversation
 
-> Part of the [emod AI proposals](./README.md). Uses the [AI foundation](./00-llm-foundation.md): the
+> Part of the [emod AI proposals](./README.md). Uses the [AI foundation](completed/00-llm-foundation.md): the
 > `llm.Model` port, the providers, the configuration and the repair loop. This document does not specify
 > them again.
 
@@ -28,7 +28,7 @@ the domain experts.
 emod suits this task because it has its own check. A model that writes `.emod` text makes subtle errors: an
 event named in the imperative, a view that subscribes to everything, a flow that names an event that does
 not exist. `oracle.Check` finds all of them. The model does not have to be correct in one step. It has to
-converge against the check in the repair loop of [00](./00-llm-foundation.md).
+converge against the check in the repair loop of [00](completed/00-llm-foundation.md).
 
 ## Goals
 
@@ -90,7 +90,7 @@ the tags and the queries in shape during the repair loop.
 ### Step 2: the draft
 
 The second call sends the description, the questions and the answers. It asks for one fenced `.emod`
-block. `repair.Generate` takes the source from the fenced block, as [00](./00-llm-foundation.md) describes.
+block. `repair.Generate` takes the source from the fenced block, as [00](completed/00-llm-foundation.md) describes.
 
 The draft holds:
 
@@ -159,7 +159,7 @@ comment `# DRAFT DID NOT PASS THE CHECK: <n> diagnostics` at the top. It prints 
 ## Interface
 
 `generate` is a subcommand of `emod ai`. `emod ai` with no subcommand runs the configuration check of
-[00](./00-llm-foundation.md).
+[00](completed/00-llm-foundation.md).
 
 ```
 emod ai generate [<description>] [flags]
@@ -382,7 +382,7 @@ embedded prompt files. The AI panel of [03](./03-desktop-ai-panel.md) calls
 **Phase 4: the evaluation corpus (M).** A folder of about 30 descriptions, each with a recorded set of
 answers and a short list of expectations: the contexts, the events that the draft must name, and the
 assumptions that it must state. A task runs the corpus against the tested tier of
-[00](./00-llm-foundation.md) before each release and reports the rate of convergence, the mean number of
+[00](completed/00-llm-foundation.md) before each release and reports the rate of convergence, the mean number of
 attempts, and the expectations that failed. The corpus needs a network, so it is not part of the unit
 tests. Recorded responses from the corpus also feed `llm.Fake` in a regression test that runs with no
 network.
@@ -399,7 +399,7 @@ network.
   grammar comes from `cue.Schema`, and the examples are files that the tests check. The corpus of Phase 4
   finds the drift that stays.
 - **A weaker model.** The check catches structural errors from any provider. The questions and the names
-  are weaker on a model of the compatible tier of [00](./00-llm-foundation.md), and the CLI prints the
+  are weaker on a model of the compatible tier of [00](completed/00-llm-foundation.md), and the CLI prints the
   notice of that tier.
 - **Data and cost.** The description and the answers go to the provider, and each attempt adds tokens. The
   command prints the tokens of each run. A team with a confidential domain uses a local server through the

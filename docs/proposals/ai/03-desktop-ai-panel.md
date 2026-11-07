@@ -1,6 +1,6 @@
 # AI Panel in the Desktop App
 
-> Part of the [emod AI proposals](./README.md). Uses the [AI foundation](./00-llm-foundation.md): the
+> Part of the [emod AI proposals](./README.md). Uses the [AI foundation](completed/00-llm-foundation.md): the
 > `llm.Model` port, the providers, the configuration and the repair loop. The panel is the desktop surface
 > of [02](./02-semantic-model-review.md), [04](./04-model-from-conversation.md),
 > [05](./05-spec-suggestions.md) and [02](./02-semantic-model-review.md#dcb-knowledge), and it uses the exact queries
@@ -34,7 +34,7 @@ the desktop app, and the web viewer stays free of AI.
 ## Goals
 
 - **G1:** One AI panel in the desktop app, with these parts, in this order of delivery:
-  1. The settings dialog for the provider ([00](./00-llm-foundation.md)).
+  1. The settings dialog for the provider ([00](completed/00-llm-foundation.md)).
   2. The Review button ([02](./02-semantic-model-review.md)).
   3. The chat, with an edit mode (repair loop, diff, accept, reject, undo) and an ask mode (answers from the
      JSON export and the exact queries of the [model queries proposal](../model-queries-proposal.md)).
@@ -55,7 +55,7 @@ the desktop app, and the web viewer stays free of AI.
 ## Non-Goals
 
 - AI in the static web viewer. AI in the viewer of `emod diagram --serve` is an open question of
-  [00](./00-llm-foundation.md).
+  [00](completed/00-llm-foundation.md).
 - An agent that edits in many steps with no accept between them. Each change is one proposal and one
   decision.
 - A general chat. The chat is about the open model only.
@@ -96,9 +96,9 @@ registers it with `application.NewService`, as it registers `ModelService` and `
 
 | Method | What it calls | Proposal |
 | --- | --- | --- |
-| `Status()` | `config.Load` and the source of the credential, as `emod ai status` does. It returns the provider, the model, the host of the endpoint, the support tier and the source of the credential, or "not configured". It makes no model call. | [00](./00-llm-foundation.md) |
-| `Settings()`, `SaveSettings(request)` | Read and write the settings in `~/.config/emod/config`, and the API key in the key store of [Key storage](#key-storage) | [00](./00-llm-foundation.md) |
-| `CheckSettings(ctx, request)` | One small call with the settings in the dialog, as `emod ai` does | [00](./00-llm-foundation.md) |
+| `Status()` | `config.Load` and the source of the credential, as `emod ai status` does. It returns the provider, the model, the host of the endpoint, the support tier and the source of the credential, or "not configured". It makes no model call. | [00](completed/00-llm-foundation.md) |
+| `Settings()`, `SaveSettings(request)` | Read and write the settings in `~/.config/emod/config`, and the API key in the key store of [Key storage](#key-storage) | [00](completed/00-llm-foundation.md) |
+| `CheckSettings(ctx, request)` | One small call with the settings in the dialog, as `emod ai` does | [00](completed/00-llm-foundation.md) |
 | `Review(ctx, request)` | `internal/ai/review` | [02](./02-semantic-model-review.md) |
 | `Edit(ctx, request)` | `internal/ai/edit`, which calls `repair.Generate` | This proposal |
 | `Ask(ctx, request)` | `query.References`, `query.Trace` and one model call | [Exact model queries](../model-queries-proposal.md) |
@@ -134,7 +134,7 @@ registers it with `application.NewService`, as it registers `ModelService` and `
    `pipeline.RunPipelineExportJSON`, the source, the focus and the instruction. For a model with a DCB
    context, the prompt also holds the DCB knowledge of [02](./02-semantic-model-review.md#dcb-knowledge).
 4. It runs `repair.Generate` with `repair.WithBaseline`, an option of the
-   [repair loop](./00-llm-foundation.md#the-repair-loop) that this proposal adds. The loop converges when the result adds no diagnostic to the
+   [repair loop](completed/00-llm-foundation.md#the-repair-loop) that this proposal adds. The loop converges when the result adds no diagnostic to the
    baseline. Each attempt sends one `ai:progress` event.
 5. `AIService.Edit` returns the new source, a unified diff, the list of changes, the diagnostics that the
    change adds and the diagnostics that it removes, the notes of the model, and the usage.
@@ -229,7 +229,7 @@ in shape. The result is a normal edit: a list of changes, a diff, Accept and Rej
 
 ### The settings dialog and the header
 
-AI ▸ Settings… opens the dialog. It holds the keys of the configuration in [00](./00-llm-foundation.md):
+AI ▸ Settings… opens the dialog. It holds the keys of the configuration in [00](completed/00-llm-foundation.md):
 the provider (`anthropic` or `openai`), the API key, the endpoint, the model, the cheap model and the
 effort. A field shows only for the providers that use it. The Check button calls
 `AIService.CheckSettings`, which sends one small request and shows the result and its tokens. Save writes
@@ -248,7 +248,7 @@ user which key a call uses, also when an environment variable wins over the dial
 The header of the panel shows the provider, the model and the host of the endpoint, for example
 `openai · llama3.1 · localhost:11434`. Before the first call of a session, the panel states that the model
 source goes to that host. For a model outside the tested tier, the header shows the notice of
-[00](./00-llm-foundation.md). The header also shows the tokens of the session.
+[00](completed/00-llm-foundation.md). The header also shows the tokens of the session.
 
 ### Key storage
 
@@ -430,7 +430,7 @@ After the group accepts it, the facilitator clicks Review Model, then saves with
 `CheckSettings`. The key store of [Key storage](#key-storage). The settings dialog, the AI menu, the
 platform function `mountAiPanel`, the panel header, and the `build:desktop` step that copies
 `ai-panel.js`. `Status` reuses the work of `emod ai status`. The phase depends on the provider work of
-[00](./00-llm-foundation.md) for the `openai` provider.
+[00](completed/00-llm-foundation.md) for the `openai` provider.
 
 **Phase 2: review (S).** `AIService.Review` and the Review button, on top of `internal/ai/review` from
 [02](./02-semantic-model-review.md). Findings in the diagnostics panel and marks on the diagram.

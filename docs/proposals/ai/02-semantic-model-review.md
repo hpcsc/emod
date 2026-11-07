@@ -1,6 +1,6 @@
 # Semantic Model Review
 
-> Part of the [emod AI proposals](./README.md). Uses the [AI foundation](./00-llm-foundation.md): the
+> Part of the [emod AI proposals](./README.md). Uses the [AI foundation](completed/00-llm-foundation.md): the
 > `llm.Model` port, the providers, the support tiers, the configuration and the repair loop. This document
 > does not specify them again. It also holds the [DCB knowledge](#dcb-knowledge) that the AI panel of the
 > desktop app ([03](./03-desktop-ai-panel.md)) and the rename and fix suggestions

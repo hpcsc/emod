@@ -1,6 +1,6 @@
 # AI Foundation: the Model Port, the Providers and the Repair Loop
 
-> Part of the [emod AI proposals](./README.md). Each feature proposal uses the structure in this document
+> Part of the [emod AI proposals](../README.md). Each feature proposal uses the structure in this document
 > and does not specify it again.
 
 ## Problem
@@ -176,7 +176,7 @@ review from a small local model can be noisy, and a suggested name can be poor. 
 
 | Tier | Models | What emod promises |
 | --- | --- | --- |
-| Tested | Claude models through the `anthropic` provider | The evaluation corpus of [02](./02-semantic-model-review.md) and [04](./04-model-from-conversation.md) runs on them. emod sets their defaults. |
+| Tested | Claude models through the `anthropic` provider | The evaluation corpus of [02](../02-semantic-model-review.md) and [04](../04-model-from-conversation.md) runs on them. emod sets their defaults. |
 | Compatible | Any model behind the `openai` provider that supports JSON Schema output | The adapter works, and the check applies to all `.emod` output. emod does not measure the quality of the judgement. |
 
 When the configured model is not in the tested tier, the CLI prints one notice for each run, and the
@@ -220,7 +220,7 @@ did not converge as a success. It shows the diagnostics that the last attempt le
 `repair.WithProgress(func(repair.Attempt))` reports each attempt when its check ends: the number of the
 attempt, `maxAttempts`, the diagnostics, and the usage of that attempt. It reports nothing for a model call
 that fails. `emod ai` prints one line for each attempt, and the desktop panel of
-[03](./03-desktop-ai-panel.md) sends the same data as the `ai:progress` event.
+[03](../03-desktop-ai-panel.md) sends the same data as the `ai:progress` event.
 
 ### Options for edits
 
@@ -230,12 +230,12 @@ never converges. The features that edit a model add three things to `internal/ll
 
 | Addition | What it does | Added by |
 | --- | --- | --- |
-| `repair.WithBaseline(diagnostics)` | The loop converges when the result adds no diagnostic to the baseline. It sends back only the diagnostics that the result adds. | [03](./03-desktop-ai-panel.md) |
-| `Outcome.Answer` | The text of the last answer, so that a feature can read the notes of the model outside the fenced source | [03](./03-desktop-ai-panel.md) |
-| `repair.WithAssemble(func(answer string) (string, error))` | The loop turns the answer into the whole file before the check. A feature that asks for structured data renders the file from it. | [05](./05-spec-suggestions.md) |
+| `repair.WithBaseline(diagnostics)` | The loop converges when the result adds no diagnostic to the baseline. It sends back only the diagnostics that the result adds. | [03](../03-desktop-ai-panel.md) |
+| `Outcome.Answer` | The text of the last answer, so that a feature can read the notes of the model outside the fenced source | [03](../03-desktop-ai-panel.md) |
+| `repair.WithAssemble(func(answer string) (string, error))` | The loop turns the answer into the whole file before the check. A feature that asks for structured data renders the file from it. | [05](../05-spec-suggestions.md) |
 
-Proposals [03](./03-desktop-ai-panel.md), [04](./04-model-from-conversation.md) and
-[05](./05-spec-suggestions.md) use this loop. The MCP server does not: there, the host model
+Proposals [03](../03-desktop-ai-panel.md), [04](../04-model-from-conversation.md) and
+[05](../05-spec-suggestions.md) use this loop. The MCP server does not: there, the host model
 runs the loop, and emod gives the check as a tool.
 
 ## Configuration
@@ -261,7 +261,7 @@ The API key has its own rules:
 - It has no flag, because a flag shows in the process list and in the shell history.
 - It never comes from `~/.config/emod/config`. When the file holds `EMOD_AI_API_KEY`, emod stops and tells
   the user to remove the line, so that the key does not stay in a plain file.
-- [03](./03-desktop-ai-panel.md#key-storage) adds the OS credential store as the third source, after the
+- [03](../03-desktop-ai-panel.md#key-storage) adds the OS credential store as the third source, after the
   two environment variables.
 
 **Opt-in.** AI is on when one `EMOD_AI_*` key is set. `ANTHROPIC_API_KEY` or `OPENAI_API_KEY` alone does
@@ -270,7 +270,7 @@ then uses the key of that provider. emod does not send `ANTHROPIC_API_KEY` to an
 `OPENAI_API_KEY` to the Anthropic API.
 
 The desktop app has a settings dialog. The dialog writes the settings to the same file with mode `0600`,
-and the API key to the key store of [03](./03-desktop-ai-panel.md#key-storage). It shows the provider, the
+and the API key to the key store of [03](../03-desktop-ai-panel.md#key-storage). It shows the provider, the
 endpoint and the model in the header of the AI panel. Therefore a user of the desktop app does not edit a
 file or set an environment variable.
 
@@ -314,13 +314,13 @@ of the repair loop, and `maxAttempts` limits each loop. A small pass, such as a 
 
 | Proposal | Uses `llm.Model` | Uses the repair loop | Notes |
 | --- | :---: | :---: | --- |
-| [01 MCP server](./01-mcp-server.md) | No | No | The host brings the model and runs the loop |
-| [02 Semantic model review](./02-semantic-model-review.md) | Yes | No | Findings with structured output. Its DCB knowledge also serves 03, 04 and 06. |
-| [03 AI panel in the desktop app](./03-desktop-ai-panel.md) | Yes | Yes, with a baseline | In the process of the desktop app |
-| [04 Model from a conversation](./04-model-from-conversation.md) | Yes | Yes | Questions, then a draft |
-| [05 Spec suggestions](./05-spec-suggestions.md) | Suggestions only | Yes, with a baseline and assembly | Spec export has no AI |
-| [06 Rename and fix suggestions](./06-rename-and-fix-suggestions.md) | AI part only | No | Rename has no AI. The check runs on each suggested edit. |
-| [07 Model import](./07-model-import.md) | No | No | Converters with no LLM. Code import runs in an MCP host. |
+| [01 MCP server](../01-mcp-server.md) | No | No | The host brings the model and runs the loop |
+| [02 Semantic model review](../02-semantic-model-review.md) | Yes | No | Findings with structured output. Its DCB knowledge also serves 03, 04 and 06. |
+| [03 AI panel in the desktop app](../03-desktop-ai-panel.md) | Yes | Yes, with a baseline | In the process of the desktop app |
+| [04 Model from a conversation](../04-model-from-conversation.md) | Yes | Yes | Questions, then a draft |
+| [05 Spec suggestions](../05-spec-suggestions.md) | Suggestions only | Yes, with a baseline and assembly | Spec export has no AI |
+| [06 Rename and fix suggestions](../06-rename-and-fix-suggestions.md) | AI part only | No | Rename has no AI. The check runs on each suggested edit. |
+| [07 Model import](../07-model-import.md) | No | No | Converters with no LLM. Code import runs in an MCP host. |
 
 ## Open questions
 

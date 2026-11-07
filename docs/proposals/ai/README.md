@@ -4,7 +4,7 @@ These proposals add AI to emod. Each AI feature uses the deterministic check of 
 `emod validate`, `emod lint` and the CUE schema. The model proposes a change. The check decides if the
 change is valid. A person decides if the change is true for the domain.
 
-Read [`00-llm-foundation.md`](./00-llm-foundation.md) first. It defines the model port, the providers, the
+Read [`00-llm-foundation.md`](completed/00-llm-foundation.md) first. It defines the model port, the providers, the
 configuration and the repair loop that the other proposals use.
 
 ## Who models events
@@ -89,7 +89,7 @@ Every proposal follows these rules:
    screens, slice descriptions, and the DCB `tags` and `decides_on`. The prompts take the rules from
    `internal/linter/descriptions.go` and the grammar from `emod schema`, so they stay current.
 6. **The user brings the provider.** emod speaks two protocols: the Anthropic Messages API and the
-   OpenAI-compatible Chat Completions API. See [00](./00-llm-foundation.md).
+   OpenAI-compatible Chat Completions API. See [00](completed/00-llm-foundation.md).
 
 ## Proposals
 
@@ -97,7 +97,7 @@ The numbers follow the order of delivery.
 
 | # | Proposal | What the user gets | Surfaces | Phase |
 | --- | --- | --- | --- | --- |
-| 00 | [AI foundation](./00-llm-foundation.md) | The model port, two protocol adapters, the repair loop, one configuration | All AI surfaces | Built |
+| 00 | [AI foundation](completed/00-llm-foundation.md) | The model port, two protocol adapters, the repair loop, one configuration | All AI surfaces | Built |
 | 01 | [MCP server](./01-mcp-server.md) | Any MCP host can check, draw and query a model, and gets prompts for the workflow | Claude Code, Cursor, Zed, other MCP hosts | 1 |
 | 02 | [Semantic model review](./02-semantic-model-review.md) | Findings that lint cannot give: absent failure events, a command that does two jobs, words that differ across contexts, specs that do not cover a rule. In a DCB context, suggestions for `tags` and `decides_on`. | CLI, CI, MCP prompt, desktop app, LSP | 2 |
 | 03 | [AI panel in the desktop app](./03-desktop-ai-panel.md) | A review button, then chat edits with a diff, accept, reject and undo | Desktop app | 3 |

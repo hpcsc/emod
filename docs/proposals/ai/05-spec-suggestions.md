@@ -1,6 +1,6 @@
 # Spec Suggestions
 
-> Part of the [emod AI proposals](./README.md). Uses the [AI foundation](./00-llm-foundation.md): the
+> Part of the [emod AI proposals](./README.md). Uses the [AI foundation](completed/00-llm-foundation.md): the
 > `llm.Model` port, the providers, the configuration and the repair loop. It does not specify them again.
 
 ## Problem
@@ -185,7 +185,7 @@ literal that the declared type does not allow:
 | `bool` | `true` or `false` |
 | A domain type | Any literal. The validator does not check it. |
 
-The loop is the repair loop of the [foundation](./00-llm-foundation.md#the-repair-loop), `repair.Generate`,
+The loop is the repair loop of the [foundation](completed/00-llm-foundation.md#the-repair-loop), `repair.Generate`,
 with two of its options:
 
 - `repair.WithAssemble` turns the answer into the whole file before the check. Here, the function renders

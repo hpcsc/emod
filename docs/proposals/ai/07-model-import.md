@@ -2,7 +2,7 @@
 
 > Part of the [emod AI proposals](./README.md). The converters in this document use no language model. The
 > import of code runs in an MCP host through the server of [01](./01-mcp-server.md). See the
-> [AI foundation](./00-llm-foundation.md) for where AI runs.
+> [AI foundation](completed/00-llm-foundation.md) for where AI runs.
 
 ## Problem
 

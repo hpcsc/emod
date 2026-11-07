@@ -1,6 +1,6 @@
 # AI Foundation — LLM Integration Seam
 
-**Proposal:** `docs/proposals/ai/00-llm-foundation.md`
+**Proposal:** `docs/proposals/ai/completed/00-llm-foundation.md`
 
 ## Overview
 
