@@ -1,0 +1,27 @@
+design: planned
+types:
+  - name: fmtResult
+    package: internal/mcp
+    change: new
+    does: holds the text that emod fmt writes for a source that parses, and whether that text differs from the source
+    owns:
+      - the keys formatted and changed
+    fields: [Formatted, Changed]
+  - name: Server
+    package: internal/mcp
+    change: changed
+    does: answers the MCP requests that a host sends over one reader and one writer
+    owns:
+      - emod_fmt gives the formatted text and changed of a source that parses, and the parse diagnostics of one that does not
+    fields: [in, out, root]
+    methods: [Run]
+functions: []
+words:
+  - concept: the text of a model in the canonical layout, as emod fmt writes it
+    word: formatted
+    not: [canonical, normalized, pretty]
+  - concept: whether the formatted text differs from the source, the answer of the exit code of emod fmt --check
+    word: changed
+    not: [dirty, modified, differs]
+dependencies:
+  - internal/mcp -> internal/formatter

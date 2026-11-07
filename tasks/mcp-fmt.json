@@ -1,0 +1,46 @@
+{
+  "story": "US-008: Format a model from an agent",
+  "tasks_file": "tasks/mcp-fmt.md",
+  "tasks": [
+    {
+      "n": 1,
+      "done": false,
+      "title": "Format a model with `emod_fmt`",
+      "language": "Go",
+      "testable": true,
+      "certainty": "high",
+      "blast_radius": "low",
+      "patterns_to_follow": [
+        "internal/mcp/server.go",
+        "internal/mcp/server_test.go",
+        "cmd/emod/main_test.go"
+      ],
+      "depends_on": [],
+      "affected_files": [
+        "internal/mcp/server.go",
+        "internal/mcp/server_test.go",
+        "cmd/emod/main_test.go"
+      ]
+    },
+    {
+      "n": 2,
+      "done": false,
+      "title": "Document `emod_fmt`",
+      "language": "Go",
+      "testable": false,
+      "certainty": "high",
+      "blast_radius": "low",
+      "patterns_to_follow": [
+        "site/content/docs/mcp.md"
+      ],
+      "depends_on": [
+        1
+      ],
+      "affected_files": [
+        "site/content/docs/mcp.md",
+        "README.md"
+      ]
+    }
+  ],
+  "design_file": "tasks/mcp-fmt.design.yaml"
+}
