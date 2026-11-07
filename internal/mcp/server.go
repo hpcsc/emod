@@ -13,6 +13,7 @@ import (
 
 	"github.com/hpcsc/emod/docs"
 	"github.com/hpcsc/emod/examples"
+	"github.com/hpcsc/emod/internal/ast"
 	"github.com/hpcsc/emod/internal/cue"
 	"github.com/hpcsc/emod/internal/diagnostic"
 	"github.com/hpcsc/emod/internal/linter"
@@ -33,7 +34,7 @@ var sourceSchema = &jsonschema.Schema{
 	Properties: map[string]*jsonschema.Schema{
 		"content": {
 			Type:        "string",
-			Description: "The .emod source text to check.",
+			Description: "The .emod source text.",
 		},
 		"path": {
 			Type: "string",
@@ -42,7 +43,7 @@ var sourceSchema = &jsonschema.Schema{
 		},
 		"name": {
 			Type:        "string",
-			Description: "The file name that the records of content carry. The default is path, else inline.emod.",
+			Description: "The file name that the diagnostics of content carry. The default is path, else inline.emod.",
 		},
 	},
 	AdditionalProperties: &jsonschema.Schema{Not: &jsonschema.Schema{}},
@@ -112,6 +113,25 @@ var dslReferenceResource = &sdk.Resource{
 		"for the version of emod that serves it.",
 }
 
+type slicesResult struct {
+	Slices []ast.SliceRecord `json:"slices"`
+}
+
+type parseDiagnostics struct {
+	Diagnostics []diagnostic.Record `json:"diagnostics"`
+}
+
+var slicesListTool = &sdk.Tool{
+	Name: "emod_slices_list",
+	Description: "List the slices of an .emod model: one record for each slice in source order, with name, pattern, context and keyElements, " +
+		"the same records as `emod slices list --format json`. " +
+		"Give the source in content, or give the path of an .emod file under the root of the server in path, as for emod_check. " +
+		"The pattern is command, view, automation, translation or unknown, and keyElements names the parts that make the slice that pattern. " +
+		"A source that does not parse gives its parse diagnostics in diagnostics, with no slices.",
+	InputSchema:  sourceSchema,
+	OutputSchema: oneOf[slicesResult, parseDiagnostics](),
+}
+
 type Server struct {
 	in   io.ReadCloser
 	out  io.WriteCloser
@@ -142,6 +162,7 @@ func (s *Server) Run(ctx context.Context) error {
 		}, s.readText(example.Source))
 	}
 	server.AddResource(dslReferenceResource, s.readText(docs.DSLReference))
+	sdk.AddTool(server, slicesListTool, s.listSlices)
 	return server.Run(ctx, &sdk.IOTransport{Reader: s.in, Writer: s.out})
 }
 
@@ -158,7 +179,7 @@ func (s *Server) source(input sourceInput) (source string, name string, err erro
 		return *input.Content, cmp.Or(input.Name, input.Path, inlineName), nil
 	}
 	if input.Path == "" {
-		return "", "", errors.New("emod_check needs content or path")
+		return "", "", errors.New("the call needs content or path")
 	}
 	source, err = s.root.Read(input.Path)
 	return source, input.Path, err
@@ -170,11 +191,31 @@ func (s *Server) explainRule(_ context.Context, _ *sdk.CallToolRequest, input ru
 		return nil, rule{}, err
 	}
 	explained := rule{Name: input.Rule, Description: description}
-	text, err := s.jsonText(explained)
+	result, err := s.jsonResult(explained)
 	if err != nil {
 		return nil, rule{}, err
 	}
-	return &sdk.CallToolResult{Content: []sdk.Content{&sdk.TextContent{Text: text}}}, explained, nil
+	return result, explained, nil
+}
+
+func (s *Server) listSlices(_ context.Context, _ *sdk.CallToolRequest, input sourceInput) (*sdk.CallToolResult, any, error) {
+	source, name, err := s.source(input)
+	if err != nil {
+		return nil, nil, err
+	}
+	model, diagnostics := oracle.Parse(source, name)
+	if len(diagnostics) > 0 {
+		return s.structuredResult(parseDiagnostics{Diagnostics: diagnostic.Records(diagnostics)})
+	}
+	return s.structuredResult(slicesResult{Slices: ast.SliceRecords(model)})
+}
+
+func (s *Server) structuredResult(value any) (*sdk.CallToolResult, any, error) {
+	result, err := s.jsonResult(value)
+	if err != nil {
+		return nil, nil, err
+	}
+	return result, value, nil
 }
 
 func (s *Server) readRules(_ context.Context, _ *sdk.ReadResourceRequest) (*sdk.ReadResourceResult, error) {
@@ -202,6 +243,14 @@ func (s *Server) readText(text string) sdk.ResourceHandler {
 	}
 }
 
+func (s *Server) jsonResult(value any) (*sdk.CallToolResult, error) {
+	text, err := s.jsonText(value)
+	if err != nil {
+		return nil, err
+	}
+	return &sdk.CallToolResult{Content: []sdk.Content{&sdk.TextContent{Text: text}}}, nil
+}
+
 func (s *Server) jsonText(value any) (string, error) {
 	var text bytes.Buffer
 	encoder := json.NewEncoder(&text)
@@ -210,4 +259,16 @@ func (s *Server) jsonText(value any) (string, error) {
 		return "", err
 	}
 	return text.String(), nil
+}
+
+func oneOf[First, Second any]() *jsonschema.Schema {
+	first, err := jsonschema.For[First](nil)
+	if err != nil {
+		panic(err)
+	}
+	second, err := jsonschema.For[Second](nil)
+	if err != nil {
+		panic(err)
+	}
+	return &jsonschema.Schema{Type: "object", OneOf: []*jsonschema.Schema{first, second}}
 }

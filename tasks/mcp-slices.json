@@ -25,7 +25,7 @@
     },
     {
       "n": 2,
-      "done": false,
+      "done": true,
       "title": "List the slices with `emod_slices_list`",
       "language": "Go",
       "testable": true,

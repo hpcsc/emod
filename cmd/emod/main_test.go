@@ -112,6 +112,26 @@ func explainRule(t *testing.T, rule string) string {
 	return strings.TrimSuffix(string(output), "\n")
 }
 
+func listSlicesCLI(t *testing.T, path string) (listed string, parseDiagnostics string) {
+	t.Helper()
+
+	list := exec.Command(emodBinary, "slices", "list", "--format", "json", path)
+	list.Dir = repoRoot(t)
+	list.Env = withoutAISettings(t)
+	var stdout, stderr strings.Builder
+	list.Stdout = &stdout
+	list.Stderr = &stderr
+	err := list.Run()
+	var exitErr *exec.ExitError
+	if errors.As(err, &exitErr) {
+		require.Equal(t, 1, exitErr.ExitCode(), "emod slices list failed: %s", stderr.String())
+		require.NotEmpty(t, stderr.String())
+		return "", strings.TrimSpace(stderr.String())
+	}
+	require.NoError(t, err)
+	return stdout.String(), ""
+}
+
 func printedSchema(t *testing.T) string {
 	t.Helper()
 
@@ -135,7 +155,7 @@ func TestMCP(t *testing.T) {
 			require.Equal(t, &sdk.Implementation{Name: "emod", Version: strings.TrimSpace(string(printed))}, info)
 		})
 
-		t.Run("the binary lists emod_check, emod_explain_rule and emod_schema", func(t *testing.T) {
+		t.Run("the binary lists emod_check, emod_explain_rule, emod_schema and emod_slices_list", func(t *testing.T) {
 			session, _ := startServer(t)
 
 			listed, err := session.ListTools(context.Background(), nil)
@@ -145,7 +165,7 @@ func TestMCP(t *testing.T) {
 			for _, tool := range listed.Tools {
 				names = append(names, tool.Name)
 			}
-			require.ElementsMatch(t, []string{"emod_check", "emod_explain_rule", "emod_schema"}, names)
+			require.ElementsMatch(t, []string{"emod_check", "emod_explain_rule", "emod_schema", "emod_slices_list"}, names)
 		})
 	})
 
@@ -293,6 +313,59 @@ func TestMCP(t *testing.T) {
 				records, err := json.Marshal(structured["diagnostics"])
 				require.NoError(t, err)
 				require.JSONEq(t, validateJSON(t, path), string(records))
+			})
+		}
+	})
+
+	t.Run("list slices", func(t *testing.T) {
+		root := repoRoot(t)
+		var paths []string
+		for _, pattern := range []string{"examples/*.emod", "internal/parser/testdata/*.emod"} {
+			matches, err := filepath.Glob(filepath.Join(root, pattern))
+			require.NoError(t, err)
+			for _, match := range matches {
+				relative, err := filepath.Rel(root, match)
+				require.NoError(t, err)
+				paths = append(paths, filepath.ToSlash(relative))
+			}
+		}
+		require.Contains(t, paths, "internal/parser/testdata/invalid.emod", "the files must include one that does not parse")
+
+		for _, path := range paths {
+			t.Run("gives the slices or the parse diagnostics that emod slices list gives for the path "+path, func(t *testing.T) {
+				session, _ := startServer(t)
+
+				result, err := session.CallTool(context.Background(), &sdk.CallToolParams{
+					Name:      "emod_slices_list",
+					Arguments: map[string]any{"path": path},
+				})
+
+				require.NoError(t, err)
+				require.False(t, result.IsError, "the call must succeed: %v", result.Content)
+				structured, ok := result.StructuredContent.(map[string]any)
+				require.True(t, ok, "the structured result must be an object, but it is %T", result.StructuredContent)
+				listed, parseDiagnostics := listSlicesCLI(t, path)
+				if parseDiagnostics == "" {
+					require.NotContains(t, structured, "diagnostics")
+					slices, err := json.Marshal(structured["slices"])
+					require.NoError(t, err)
+					require.JSONEq(t, listed, string(slices))
+					return
+				}
+				require.NotContains(t, structured, "slices")
+				encoded, err := json.Marshal(structured["diagnostics"])
+				require.NoError(t, err)
+				var records []struct {
+					File    string `json:"file"`
+					Line    int    `json:"line"`
+					Message string `json:"message"`
+				}
+				require.NoError(t, json.Unmarshal(encoded, &records))
+				lines := make([]string, 0, len(records))
+				for _, record := range records {
+					lines = append(lines, fmt.Sprintf("%s:%d: %s", record.File, record.Line, record.Message))
+				}
+				require.Equal(t, parseDiagnostics, strings.Join(lines, "\n"))
 			})
 		}
 	})

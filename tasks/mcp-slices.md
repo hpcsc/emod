@@ -95,19 +95,19 @@ low. Only `emod slices list` uses the logic.
 ### Task 2: List the slices with `emod_slices_list`
 
 **Behavior:** The server registers `emod_slices_list` with the input of `emod_check`. A source that parses
-gives `{"slices": Model.SliceRecords()}`. A source that does not parse gives `{"diagnostics": ...}` with
+gives `{"slices": ast.SliceRecords(model)}`. A source that does not parse gives `{"diagnostics": ...}` with
 the parse diagnostics.
 
 **Acceptance Criteria:**
-- [ ] `tools/list` lists `emod_slices_list` with `content`, `path` and `name` as optional strings, and a
+- [x] `tools/list` lists `emod_slices_list` with `content`, `path` and `name` as optional strings, and a
   description that names `emod slices list --format json`.
-- [ ] A source with slices gives one record for each slice, with `name`, `pattern`, `context` and
+- [x] A source with slices gives one record for each slice, with `name`, `pattern`, `context` and
   `keyElements`, in source order, for slices in a DCB context and under an aggregate.
-- [ ] A source with no slice gives `{"slices":[]}`.
-- [ ] A source that does not parse gives `{"diagnostics":[...]}` with the parse diagnostics and no `slices`
+- [x] A source with no slice gives `{"slices":[]}`.
+- [x] A source that does not parse gives `{"diagnostics":[...]}` with the parse diagnostics and no `slices`
   key, and the result is not an error result.
-- [ ] A path outside the root gives the error result of `emod_check`.
-- [ ] Through the built binary, for each file in `examples/` and `internal/parser/testdata/` that parses, the
+- [x] A path outside the root gives the error result of `emod_check`.
+- [x] Through the built binary, for each file in `examples/` and `internal/parser/testdata/` that parses, the
   `slices` of a `path` call are the output of `emod slices list --format json` for that file.
 
 **Patterns to follow:**

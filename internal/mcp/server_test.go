@@ -8,6 +8,7 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	sdk "github.com/modelcontextprotocol/go-sdk/mcp"
@@ -18,6 +19,7 @@ import (
 	"github.com/hpcsc/emod/internal/diagnostic"
 	"github.com/hpcsc/emod/internal/linter"
 	"github.com/hpcsc/emod/internal/mcp"
+	"github.com/hpcsc/emod/internal/oracle"
 	"github.com/hpcsc/emod/internal/version"
 )
 
@@ -81,6 +83,62 @@ context "Orders" {
 }
 `
 
+const slicesSource = `emod = 1
+
+model "Ordering" {
+}
+
+context "Orders" {
+  aggregate "Order" {
+    slice "Place Order" {
+      trigger "Checkout" {
+      }
+
+      command "PlaceOrder" {
+        fields {
+          orderId = required(string)
+        }
+      }
+
+      event "OrderPlaced" {
+        fields {
+          orderId = required(string)
+        }
+      }
+
+      flow = <<-FLOW
+        command -> event:    PlaceOrder -> OrderPlaced
+      FLOW
+    }
+
+    slice "Show Orders" {
+      view "OrdersView" {
+        fields {
+          orderId = required(string)
+        }
+      }
+    }
+  }
+}
+
+context "Stock" {
+  mode = dcb
+
+  slice "Reserve Stock" {
+    command "ReserveStock" {
+      fields {
+        orderId = required(string)
+      }
+    }
+
+    automation "StockReserver" {
+      on      = OrderPlaced
+      command = ReserveStock
+    }
+  }
+}
+`
+
 func connect(t *testing.T) *sdk.ClientSession {
 	t.Helper()
 
@@ -131,6 +189,14 @@ func recordsOf(t *testing.T, result *sdk.CallToolResult) []diagnostic.Record {
 	}
 	require.NoError(t, json.Unmarshal(encoded, &decoded))
 	return decoded.Diagnostics
+}
+
+func callSlicesList(t *testing.T, session *sdk.ClientSession, arguments map[string]any) *sdk.CallToolResult {
+	t.Helper()
+
+	result, err := session.CallTool(context.Background(), &sdk.CallToolParams{Name: "emod_slices_list", Arguments: arguments})
+	require.NoError(t, err)
+	return result
 }
 
 func callExplainRule(t *testing.T, session *sdk.ClientSession, arguments map[string]any) *sdk.CallToolResult {
@@ -186,7 +252,7 @@ func TestServer(t *testing.T) {
 	})
 
 	t.Run("list tools", func(t *testing.T) {
-		t.Run("lists emod_check, emod_explain_rule and emod_schema, and no other tool", func(t *testing.T) {
+		t.Run("lists emod_check, emod_explain_rule, emod_schema and emod_slices_list, and no other tool", func(t *testing.T) {
 			session := connect(t)
 
 			listed, err := session.ListTools(context.Background(), nil)
@@ -196,7 +262,54 @@ func TestServer(t *testing.T) {
 			for _, tool := range listed.Tools {
 				names = append(names, tool.Name)
 			}
-			require.ElementsMatch(t, []string{"emod_check", "emod_explain_rule", "emod_schema"}, names)
+			require.ElementsMatch(t, []string{"emod_check", "emod_explain_rule", "emod_schema", "emod_slices_list"}, names)
+		})
+
+		t.Run("gives emod_slices_list content, path and name as optional strings and no other input", func(t *testing.T) {
+			session := connect(t)
+
+			tool := toolNamed(t, session, "emod_slices_list")
+
+			schema, ok := tool.InputSchema.(map[string]any)
+			require.True(t, ok)
+			require.Nil(t, schema["required"])
+			require.Equal(t, false, schema["additionalProperties"])
+			properties, ok := schema["properties"].(map[string]any)
+			require.True(t, ok)
+			require.Len(t, properties, 3)
+			require.Equal(t, map[string]any{"type": "string"}, typeOf(properties["content"]))
+			require.Equal(t, map[string]any{"type": "string"}, typeOf(properties["path"]))
+			require.Equal(t, map[string]any{"type": "string"}, typeOf(properties["name"]))
+		})
+
+		t.Run("gives emod_slices_list an output schema of one of two objects: the slices, or the parse diagnostics", func(t *testing.T) {
+			session := connect(t)
+
+			tool := toolNamed(t, session, "emod_slices_list")
+
+			schema, ok := tool.OutputSchema.(map[string]any)
+			require.True(t, ok, "the tool must give an output schema, but it is %T", tool.OutputSchema)
+			require.Equal(t, "object", schema["type"])
+			choices, ok := schema["oneOf"].([]any)
+			require.True(t, ok)
+			var required [][]any
+			for _, choice := range choices {
+				fields, ok := choice.(map[string]any)
+				require.True(t, ok)
+				keys, _ := fields["required"].([]any)
+				required = append(required, keys)
+			}
+			require.Equal(t, [][]any{{"slices"}, {"diagnostics"}}, required)
+		})
+
+		t.Run("the description of emod_slices_list names the command with the same records and the result of a parse error", func(t *testing.T) {
+			session := connect(t)
+
+			tool := toolNamed(t, session, "emod_slices_list")
+
+			require.Contains(t, tool.Description, "emod slices list --format json")
+			require.Contains(t, tool.Description, "command, view, automation, translation or unknown")
+			require.Contains(t, tool.Description, "A source that does not parse gives its parse diagnostics")
 		})
 
 		t.Run("gives emod_schema no input", func(t *testing.T) {
@@ -246,7 +359,7 @@ func TestServer(t *testing.T) {
 			require.True(t, ok)
 			properties, ok := schema["properties"].(map[string]any)
 			require.True(t, ok)
-			require.Contains(t, descriptionOf(properties["content"]), "The .emod source text to check")
+			require.Contains(t, descriptionOf(properties["content"]), "The .emod source text")
 			require.Contains(t, descriptionOf(properties["path"]), "under the root of the server")
 			require.Contains(t, descriptionOf(properties["path"]), "only when the call gives no content")
 			require.Contains(t, descriptionOf(properties["name"]), "The default is path, else inline.emod")
@@ -340,6 +453,138 @@ func TestServer(t *testing.T) {
 
 			require.True(t, result.IsError)
 			require.Contains(t, textOf(t, result), "rule")
+		})
+	})
+
+	t.Run("list slices", func(t *testing.T) {
+		t.Run("gives one record for each slice in source order, for a slice in a dcb context and one under an aggregate", func(t *testing.T) {
+			session := connect(t)
+
+			result := callSlicesList(t, session, map[string]any{"content": slicesSource})
+
+			require.False(t, result.IsError)
+			require.Equal(t, map[string]any{"slices": []any{
+				map[string]any{"name": "Place Order", "pattern": "command", "context": "Orders", "keyElements": "PlaceOrder, OrderPlaced"},
+				map[string]any{"name": "Show Orders", "pattern": "view", "context": "Orders", "keyElements": "OrdersView"},
+				map[string]any{"name": "Reserve Stock", "pattern": "automation", "context": "Stock", "keyElements": "OrderPlaced, ReserveStock"},
+			}}, result.StructuredContent)
+		})
+
+		t.Run("the text block holds the same records, with an ampersand as it is", func(t *testing.T) {
+			session := connect(t)
+
+			result := callSlicesList(t, session, map[string]any{"content": strings.Replace(slicesSource, "Show Orders", "Show Orders & Returns", 1)})
+
+			require.JSONEq(t, `{"slices":[`+
+				`{"name":"Place Order","pattern":"command","context":"Orders","keyElements":"PlaceOrder, OrderPlaced"},`+
+				`{"name":"Show Orders & Returns","pattern":"view","context":"Orders","keyElements":"OrdersView"},`+
+				`{"name":"Reserve Stock","pattern":"automation","context":"Stock","keyElements":"OrderPlaced, ReserveStock"}]}`,
+				textOf(t, result))
+			require.Contains(t, textOf(t, result), "Show Orders & Returns")
+		})
+
+		t.Run("a model with no slice gives an empty list", func(t *testing.T) {
+			session := connect(t)
+
+			result := callSlicesList(t, session, map[string]any{"content": "emod = 1\n\nmodel \"Empty\" {\n}\n"})
+
+			require.False(t, result.IsError)
+			require.Equal(t, map[string]any{"slices": []any{}}, result.StructuredContent)
+		})
+
+		t.Run("a source that does not parse gives its parse diagnostics and no slices, as a normal result", func(t *testing.T) {
+			session := connect(t)
+
+			result := callSlicesList(t, session, map[string]any{"content": "emod = 1\n\nmodel \"Broken\" {\n", "name": "broken.emod"})
+
+			require.False(t, result.IsError)
+			structured, ok := result.StructuredContent.(map[string]any)
+			require.True(t, ok)
+			require.NotContains(t, structured, "slices")
+			records, err := json.Marshal(structured["diagnostics"])
+			require.NoError(t, err)
+			var diagnostics []diagnostic.Record
+			require.NoError(t, json.Unmarshal(records, &diagnostics))
+			require.NotEmpty(t, diagnostics)
+			for _, d := range diagnostics {
+				require.Equal(t, "broken.emod", d.File)
+				require.Equal(t, "error", d.Severity)
+			}
+		})
+
+		t.Run("a source that does not parse gives only its parse diagnostics, not the findings of the validator on what the parser recovered", func(t *testing.T) {
+			source := `emod = 1
+
+model "Broken" {
+}
+
+context "Orders" {
+  aggregate "Order" {
+    slice "Place Order" {
+      command "PlaceOrder" {
+        fields {
+          orderId = required(string)
+        }
+      }
+    }
+  }
+}
+
+foobar "Stray" {
+}
+`
+			require.Contains(t, rulesOf(oracle.Check(source, "broken.emod")), "orphan-command",
+				"the recovered model must have a validator finding, or the leaf cannot tell the two lists apart")
+			session := connect(t)
+
+			result := callSlicesList(t, session, map[string]any{"content": source, "name": "broken.emod"})
+
+			require.False(t, result.IsError)
+			require.Equal(t, map[string]any{"diagnostics": []any{
+				map[string]any{
+					"file":     "broken.emod",
+					"line":     float64(18),
+					"severity": "error",
+					"message":  `unexpected "foobar" block; expected one of: model, actor, context`,
+				},
+			}}, result.StructuredContent)
+		})
+
+		t.Run("a source with a lint warning still gives its slices, because only a parse error stops the list", func(t *testing.T) {
+			session := connect(t)
+
+			result := callSlicesList(t, session, map[string]any{"content": warningSource})
+
+			require.False(t, result.IsError)
+			require.Equal(t, map[string]any{"slices": []any{
+				map[string]any{"name": "Update Order", "pattern": "unknown", "context": "Orders", "keyElements": ""},
+			}}, result.StructuredContent)
+		})
+
+		t.Run("a path under the root gives the slices of the file", func(t *testing.T) {
+			dir := t.TempDir()
+			writeFile(t, filepath.Join(dir, "models", "orders.emod"), slicesSource)
+			session := connectAt(t, dir)
+
+			result := callSlicesList(t, session, map[string]any{"path": "models/orders.emod"})
+
+			require.False(t, result.IsError)
+			structured, ok := result.StructuredContent.(map[string]any)
+			require.True(t, ok)
+			require.Len(t, structured["slices"], 3)
+		})
+
+		t.Run("a path outside the root gives an error result that names the root", func(t *testing.T) {
+			base := t.TempDir()
+			project := filepath.Join(base, "project")
+			require.NoError(t, os.Mkdir(project, 0o755))
+			writeFile(t, filepath.Join(base, "orders.emod"), slicesSource)
+			session := connectAt(t, project)
+
+			result := callSlicesList(t, session, map[string]any{"path": "../orders.emod"})
+
+			require.True(t, result.IsError)
+			require.Contains(t, textOf(t, result), "is outside the root "+project)
 		})
 	})
 
@@ -598,7 +843,7 @@ func TestServer(t *testing.T) {
 
 			require.True(t, result.IsError)
 			require.Nil(t, result.StructuredContent)
-			require.Equal(t, "emod_check needs content or path", textOf(t, result))
+			require.Equal(t, "the call needs content or path", textOf(t, result))
 		})
 
 		t.Run("a path under the root gives the records of the file, each with the path as its file", func(t *testing.T) {
@@ -737,6 +982,14 @@ func readRules(t *testing.T, session *sdk.ClientSession) []listedRule {
 	}
 	require.NoError(t, json.Unmarshal([]byte(read.Contents[0].Text), &decoded))
 	return decoded.Rules
+}
+
+func rulesOf(entries []*diagnostic.Entry) []string {
+	rules := make([]string, 0, len(entries))
+	for _, entry := range entries {
+		rules = append(rules, entry.RuleName)
+	}
+	return rules
 }
 
 func descriptionOf(property any) string {
