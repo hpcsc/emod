@@ -17,6 +17,7 @@ import (
 
 	"github.com/hpcsc/emod/docs"
 	"github.com/hpcsc/emod/examples"
+	"github.com/hpcsc/emod/internal/arrange"
 	"github.com/hpcsc/emod/internal/ast"
 	"github.com/hpcsc/emod/internal/cue"
 	"github.com/hpcsc/emod/internal/diagnostic"
@@ -204,6 +205,36 @@ var fmtTool = &sdk.Tool{
 	OutputSchema: oneOf[fmtResult, parseDiagnostics](),
 }
 
+type arrangeResult struct {
+	Arranged       string              `json:"arranged"`
+	Changed        bool                `json:"changed"`
+	Moved          int                 `json:"moved"`
+	BackwardBefore int                 `json:"backwardBefore"`
+	BackwardAfter  int                 `json:"backwardAfter"`
+	Backward       []backwardReference `json:"backward"`
+}
+
+type backwardReference struct {
+	Kind  string `json:"kind"`
+	Label string `json:"label"`
+	From  string `json:"from"`
+	To    string `json:"to"`
+}
+
+var slicesArrangeTool = &sdk.Tool{
+	Name: "emod_slices_arrange",
+	Description: "Arrange the slices of an .emod model so that each reference points forward, the same text that `emod slices arrange` writes. " +
+		"Give the source in content, or give the path of an .emod file under the root of the server in path, as for emod_check. " +
+		"Only view slices move. arranged is the text with the slices in the new order, in the canonical layout; when no slice moves, arranged is the source as it is. " +
+		"changed is true when a slice moves, the same answer as the exit code of `emod slices arrange --check`. " +
+		"moved, backwardBefore and backwardAfter are the counts of the report that the command prints, and backward lists each reference that still points backward, " +
+		"with kind, label, and the names of the slices in from and to. Only view slices move, so the arrange cannot fix such a reference, for example a reference between two slices that are not views. " +
+		"The tool does not write the file: write arranged with the file tool of the host. " +
+		"A source that does not parse gives its parse diagnostics in diagnostics, with no report.",
+	InputSchema:  sourceSchema,
+	OutputSchema: oneOf[arrangeResult, parseDiagnostics](),
+}
+
 type Server struct {
 	in   io.ReadCloser
 	out  io.WriteCloser
@@ -239,6 +270,7 @@ func (s *Server) Run(ctx context.Context) error {
 	sdk.AddTool(server, glossaryTool, s.renderGlossary)
 	sdk.AddTool(server, diagramTool, s.drawDiagram)
 	sdk.AddTool(server, fmtTool, s.formatModel)
+	sdk.AddTool(server, slicesArrangeTool, s.arrangeSlices)
 	return server.Run(ctx, &sdk.IOTransport{Reader: s.in, Writer: s.out})
 }
 
@@ -375,6 +407,34 @@ func (s *Server) formatModel(_ context.Context, _ *sdk.CallToolRequest, input so
 	}
 	formatted := formatter.Format(model)
 	return s.structuredResult(fmtResult{Formatted: formatted, Changed: formatted != source})
+}
+
+func (s *Server) arrangeSlices(_ context.Context, _ *sdk.CallToolRequest, input sourceInput) (*sdk.CallToolResult, any, error) {
+	source, name, err := s.source(input)
+	if err != nil {
+		return nil, nil, err
+	}
+	model, diagnostics := oracle.Parse(source, name)
+	if len(diagnostics) > 0 {
+		return s.structuredResult(parseDiagnostics{Diagnostics: diagnostic.Records(diagnostics)})
+	}
+	report := arrange.Model(model)
+	arranged := source
+	if report.Changed() {
+		arranged = formatter.Format(model)
+	}
+	backward := make([]backwardReference, 0, len(report.Backward))
+	for _, r := range report.Backward {
+		backward = append(backward, backwardReference{Kind: r.Kind, Label: r.Label, From: r.From.Name, To: r.To.Name})
+	}
+	return s.structuredResult(arrangeResult{
+		Arranged:       arranged,
+		Changed:        report.Changed(),
+		Moved:          report.Moved,
+		BackwardBefore: report.BackwardBefore,
+		BackwardAfter:  report.BackwardAfter,
+		Backward:       backward,
+	})
 }
 
 func (s *Server) documentResult(document []byte, err error) (*sdk.CallToolResult, any, error) {

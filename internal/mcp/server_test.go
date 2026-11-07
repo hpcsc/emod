@@ -188,6 +188,91 @@ context "Stock" {
 }
 `
 
+const borrowSlice = `    slice "Borrow a Copy" {
+      command "BorrowCopy" {
+        fields {
+          copyId = required(string)
+        }
+      }
+
+      event "CopyBorrowed" {
+        fields {
+          copyId = required(string)
+        }
+      }
+
+      flow = <<-FLOW
+        command -> event:    BorrowCopy -> CopyBorrowed
+      FLOW
+    }
+`
+
+const returnSlice = `    slice "Return a Copy" {
+      trigger "Return Desk" {
+        reads = BorrowView
+      }
+
+      command "ReturnCopy" {
+        fields {
+          copyId = required(string)
+        }
+      }
+
+      event "CopyReturned" {
+        fields {
+          copyId = required(string)
+        }
+      }
+
+      flow = <<-FLOW
+        command -> event:    ReturnCopy -> CopyReturned
+      FLOW
+    }
+`
+
+const borrowedCopiesSlice = `    slice "Borrowed Copies" {
+      view "BorrowView" {
+        subscribes = [CopyBorrowed]
+
+        fields {
+          copyId = required(string)
+        }
+      }
+    }
+`
+
+const renewSlice = `    slice "Renew a Copy" {
+      command "RenewCopy" {
+        fields {
+          copyId = required(string)
+        }
+      }
+
+      flow = <<-FLOW
+        command -> event:    RenewCopy -> CopyBorrowed
+      FLOW
+    }
+`
+
+const extendSlice = `    slice "Extend a Copy" {
+      command "ExtendCopy" {
+        fields {
+          copyId = required(string)
+        }
+      }
+
+      flow = <<-FLOW
+        command -> event:    ExtendCopy -> CopyBorrowed
+      FLOW
+    }
+`
+
+func lendingSource(slices ...string) string {
+	return "emod = 1\n\nmodel \"Library Lending\" {\n}\n\ncontext \"Lending\" {\n  aggregate \"Loan\" {\n" +
+		strings.Join(slices, "\n") +
+		"  }\n}\n"
+}
+
 func connect(t *testing.T) *sdk.ClientSession {
 	t.Helper()
 
@@ -363,7 +448,56 @@ func TestServer(t *testing.T) {
 			for _, tool := range listed.Tools {
 				names = append(names, tool.Name)
 			}
-			require.ElementsMatch(t, []string{"emod_check", "emod_diagram", "emod_explain_rule", "emod_export", "emod_fmt", "emod_glossary", "emod_schema", "emod_slices_list"}, names)
+			require.ElementsMatch(t, []string{"emod_check", "emod_diagram", "emod_explain_rule", "emod_export", "emod_fmt", "emod_glossary", "emod_schema", "emod_slices_arrange", "emod_slices_list"}, names)
+		})
+
+		t.Run("gives emod_slices_arrange content, path and name as optional strings and no other input", func(t *testing.T) {
+			session := connect(t)
+
+			tool := toolNamed(t, session, "emod_slices_arrange")
+
+			schema, ok := tool.InputSchema.(map[string]any)
+			require.True(t, ok)
+			require.Nil(t, schema["required"])
+			require.Equal(t, false, schema["additionalProperties"])
+			properties, ok := schema["properties"].(map[string]any)
+			require.True(t, ok)
+			require.ElementsMatch(t, []string{"content", "path", "name"}, keysOf(properties))
+			for _, key := range []string{"content", "path", "name"} {
+				require.Equal(t, map[string]any{"type": "string"}, typeOf(properties[key]), "input %s", key)
+			}
+		})
+
+		t.Run("gives emod_slices_arrange an output schema of one of two objects: the arranged text and the report, or the parse diagnostics", func(t *testing.T) {
+			session := connect(t)
+
+			tool := toolNamed(t, session, "emod_slices_arrange")
+
+			schema, ok := tool.OutputSchema.(map[string]any)
+			require.True(t, ok, "the tool must give an output schema, but it is %T", tool.OutputSchema)
+			require.Equal(t, "object", schema["type"])
+			choices, ok := schema["oneOf"].([]any)
+			require.True(t, ok)
+			var required [][]any
+			for _, choice := range choices {
+				fields, ok := choice.(map[string]any)
+				require.True(t, ok)
+				keys, _ := fields["required"].([]any)
+				required = append(required, keys)
+			}
+			require.Equal(t, [][]any{{"arranged", "changed", "moved", "backwardBefore", "backwardAfter", "backward"}, {"diagnostics"}}, required)
+		})
+
+		t.Run("the description of emod_slices_arrange names the command with the same text, the answer of --check, why a backward reference stays, that the tool writes no file, and the result of a parse error", func(t *testing.T) {
+			session := connect(t)
+
+			tool := toolNamed(t, session, "emod_slices_arrange")
+
+			require.Contains(t, tool.Description, "the same text that `emod slices arrange` writes")
+			require.Contains(t, tool.Description, "`emod slices arrange --check`")
+			require.Contains(t, tool.Description, "Only view slices move, so the arrange cannot fix such a reference")
+			require.Contains(t, tool.Description, "The tool does not write the file")
+			require.Contains(t, tool.Description, "A source that does not parse gives its parse diagnostics")
 		})
 
 		t.Run("gives emod_fmt content, path and name as optional strings and no other input", func(t *testing.T) {
@@ -1252,6 +1386,161 @@ func TestServer(t *testing.T) {
 			session := connectAt(t, project)
 
 			result := callTool(t, session, "emod_fmt", map[string]any{"path": "../ordering.emod"})
+
+			require.True(t, result.IsError)
+			require.Contains(t, textOf(t, result), "is outside the root "+project)
+		})
+	})
+
+	t.Run("arrange slices", func(t *testing.T) {
+		t.Run("a view after the slice that reads it moves before that slice, and the report counts the move", func(t *testing.T) {
+			session := connect(t)
+
+			result := callTool(t, session, "emod_slices_arrange", map[string]any{"content": lendingSource(borrowSlice, returnSlice, borrowedCopiesSlice)})
+
+			require.False(t, result.IsError, "the call must succeed: %v", result.Content)
+			require.Equal(t, map[string]any{
+				"arranged":       lendingSource(borrowSlice, borrowedCopiesSlice, returnSlice),
+				"changed":        true,
+				"moved":          float64(1),
+				"backwardBefore": float64(1),
+				"backwardAfter":  float64(0),
+				"backward":       []any{},
+			}, result.StructuredContent)
+		})
+
+		t.Run("a source in another layout in which a slice moves gives the new order in the canonical layout", func(t *testing.T) {
+			unformatted := strings.ReplaceAll(lendingSource(borrowSlice, returnSlice, borrowedCopiesSlice), "command -> event:    ", "command -> event: ")
+			session := connect(t)
+
+			result := callTool(t, session, "emod_slices_arrange", map[string]any{"content": unformatted})
+
+			require.False(t, result.IsError, "the call must succeed: %v", result.Content)
+			structured := objectOf(t, result.StructuredContent)
+			require.Equal(t, lendingSource(borrowSlice, borrowedCopiesSlice, returnSlice), structured["arranged"])
+			require.Equal(t, true, structured["changed"])
+		})
+
+		t.Run("a source in which no slice moves gives the source as it is, not the formatted text, and changed false", func(t *testing.T) {
+			session := connect(t)
+
+			result := callTool(t, session, "emod_slices_arrange", map[string]any{"content": unformattedSource})
+
+			require.False(t, result.IsError, "the call must succeed: %v", result.Content)
+			require.Equal(t, map[string]any{
+				"arranged":       unformattedSource,
+				"changed":        false,
+				"moved":          float64(0),
+				"backwardBefore": float64(0),
+				"backwardAfter":  float64(0),
+				"backward":       []any{},
+			}, result.StructuredContent)
+		})
+
+		t.Run("gives each reference between two slices that are not views, which the arrange does not move, with its kind, its label and the names of its two slices", func(t *testing.T) {
+			session := connect(t)
+
+			result := callTool(t, session, "emod_slices_arrange", map[string]any{"content": lendingSource(borrowSlice, renewSlice, extendSlice)})
+
+			require.False(t, result.IsError, "the call must succeed: %v", result.Content)
+			require.Equal(t, map[string]any{
+				"arranged":       lendingSource(borrowSlice, renewSlice, extendSlice),
+				"changed":        false,
+				"moved":          float64(0),
+				"backwardBefore": float64(2),
+				"backwardAfter":  float64(2),
+				"backward": []any{
+					map[string]any{"kind": "flow", "label": "RenewCopy -> CopyBorrowed", "from": "Renew a Copy", "to": "Borrow a Copy"},
+					map[string]any{"kind": "flow", "label": "ExtendCopy -> CopyBorrowed", "from": "Extend a Copy", "to": "Borrow a Copy"},
+				},
+			}, result.StructuredContent)
+		})
+
+		t.Run("the text block holds the same result, with the angle brackets of the flow as they are", func(t *testing.T) {
+			session := connect(t)
+
+			result := callTool(t, session, "emod_slices_arrange", map[string]any{"content": lendingSource(borrowSlice, renewSlice)})
+
+			require.JSONEq(t, jsonOf(t, map[string]any{
+				"arranged":       lendingSource(borrowSlice, renewSlice),
+				"changed":        false,
+				"moved":          0,
+				"backwardBefore": 1,
+				"backwardAfter":  1,
+				"backward": []any{
+					map[string]any{"kind": "flow", "label": "RenewCopy -> CopyBorrowed", "from": "Renew a Copy", "to": "Borrow a Copy"},
+				},
+			}), textOf(t, result))
+			require.Contains(t, textOf(t, result), `"RenewCopy -> CopyBorrowed"`)
+		})
+
+		t.Run("a source that does not parse gives only its parse diagnostics and no report, as a normal result", func(t *testing.T) {
+			require.Contains(t, rulesOfEntries(oracle.Check(brokenSource, "broken.emod")), "orphan-command",
+				"the recovered model must have a validator finding, or the leaf cannot tell the two lists apart")
+			session := connect(t)
+
+			result := callTool(t, session, "emod_slices_arrange", map[string]any{"content": brokenSource, "name": "broken.emod"})
+
+			require.False(t, result.IsError)
+			require.Equal(t, map[string]any{"diagnostics": []any{
+				map[string]any{
+					"file":     "broken.emod",
+					"line":     float64(18),
+					"severity": "error",
+					"message":  `unexpected "foobar" block; expected one of: model, actor, context`,
+				},
+			}}, result.StructuredContent)
+		})
+
+		t.Run("a source with a validation error still gives its report, because only a parse error stops the tool", func(t *testing.T) {
+			unknownEvent := strings.Replace(lendingSource(borrowSlice, returnSlice, borrowedCopiesSlice), "ReturnCopy -> CopyReturned", "ReturnCopy -> CopyLost", 1)
+			require.True(t, slices.ContainsFunc(oracle.Check(unknownEvent, "lending.emod"), func(d *diagnostic.Entry) bool {
+				return d.Severity == diagnostic.Error && d.Message == `event "CopyLost" does not exist`
+			}), "the source must have a validation error, or the leaf proves nothing")
+			session := connect(t)
+
+			result := callTool(t, session, "emod_slices_arrange", map[string]any{"content": unknownEvent})
+
+			require.False(t, result.IsError, "the call must succeed: %v", result.Content)
+			require.Equal(t, map[string]any{
+				"arranged": strings.Replace(lendingSource(borrowSlice, borrowedCopiesSlice, returnSlice),
+					"ReturnCopy -> CopyReturned", "ReturnCopy -> CopyLost", 1),
+				"changed":        true,
+				"moved":          float64(1),
+				"backwardBefore": float64(1),
+				"backwardAfter":  float64(0),
+				"backward":       []any{},
+			}, result.StructuredContent)
+		})
+
+		t.Run("a call with a path gives the arranged text of the file, and does not change the file or write another file", func(t *testing.T) {
+			dir := t.TempDir()
+			path := filepath.Join(dir, "models", "lending.emod")
+			unarranged := lendingSource(borrowSlice, returnSlice, borrowedCopiesSlice)
+			writeFile(t, path, unarranged)
+			before := filesUnder(t, dir)
+			session := connectAt(t, dir)
+
+			result := callTool(t, session, "emod_slices_arrange", map[string]any{"path": "models/lending.emod"})
+
+			require.False(t, result.IsError, "the call must succeed: %v", result.Content)
+			structured := objectOf(t, result.StructuredContent)
+			require.Equal(t, lendingSource(borrowSlice, borrowedCopiesSlice, returnSlice), structured["arranged"])
+			require.Equal(t, true, structured["changed"])
+			require.Equal(t, before, filesUnder(t, dir))
+			onDisk, err := os.ReadFile(path)
+			require.NoError(t, err)
+			require.Equal(t, unarranged, string(onDisk))
+		})
+
+		t.Run("a path outside the root gives an error result that names the root", func(t *testing.T) {
+			base := t.TempDir()
+			project := filepath.Join(base, "project")
+			require.NoError(t, os.Mkdir(project, 0o755))
+			writeFile(t, filepath.Join(base, "lending.emod"), lendingSource(borrowSlice, returnSlice, borrowedCopiesSlice))
+			session := connectAt(t, project)
+
+			result := callTool(t, session, "emod_slices_arrange", map[string]any{"path": "../lending.emod"})
 
 			require.True(t, result.IsError)
 			require.Contains(t, textOf(t, result), "is outside the root "+project)

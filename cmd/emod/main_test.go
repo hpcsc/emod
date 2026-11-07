@@ -11,6 +11,8 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"regexp"
+	"strconv"
 	"strings"
 	"testing"
 	"time"
@@ -221,6 +223,75 @@ func fmtCLI(t *testing.T, path string) (formatted string, changed bool, parseDia
 	return string(written), changed, ""
 }
 
+var (
+	movedLine    = regexp.MustCompile(`^moved (\d+) slices?; backward references (\d+) -> (\d+)$`)
+	unmovedLine  = regexp.MustCompile(`^already arranged; (\d+) backward references?$`)
+	backwardLine = regexp.MustCompile(`^  \[([a-z]+)\] (.+) \((.+) -> (.+)\)$`)
+)
+
+func arrangeCLI(t *testing.T, path string) (fromCLI map[string]any, parseDiagnostics string) {
+	t.Helper()
+
+	check := exec.Command(emodBinary, "slices", "arrange", "--check", path)
+	check.Dir = repoRoot(t)
+	check.Env = withoutAISettings(t)
+	var stderr strings.Builder
+	check.Stderr = &stderr
+	err := check.Run()
+	changed := false
+	var exitErr *exec.ExitError
+	if errors.As(err, &exitErr) {
+		require.Equal(t, 1, exitErr.ExitCode(), "emod slices arrange --check failed: %s", stderr.String())
+		if stderr.String() != path+" is not arranged\n" {
+			require.NotEmpty(t, stderr.String())
+			return nil, strings.TrimSpace(stderr.String())
+		}
+		changed = true
+	} else {
+		require.NoError(t, err)
+	}
+
+	source, err := os.ReadFile(filepath.Join(repoRoot(t), path))
+	require.NoError(t, err)
+	copied := filepath.Join(t.TempDir(), filepath.Base(path))
+	require.NoError(t, os.WriteFile(copied, source, 0o644))
+	write := exec.Command(emodBinary, "slices", "arrange", copied)
+	write.Env = withoutAISettings(t)
+	printed, err := write.Output()
+	require.NoError(t, err, "emod slices arrange failed")
+	written, err := os.ReadFile(copied)
+	require.NoError(t, err)
+
+	fromCLI = map[string]any{"arranged": string(written), "changed": changed, "backward": []any{}}
+	lines := strings.Split(strings.TrimSuffix(string(printed), "\n"), "\n")
+	if counts := movedLine.FindStringSubmatch(lines[0]); counts != nil {
+		fromCLI["moved"], fromCLI["backwardBefore"], fromCLI["backwardAfter"] = number(t, counts[1]), number(t, counts[2]), number(t, counts[3])
+	} else {
+		counts := unmovedLine.FindStringSubmatch(lines[0])
+		require.NotNil(t, counts, "the first line of the report must give the counts: %q", lines[0])
+		unchangedCount := number(t, counts[1])
+		fromCLI["moved"], fromCLI["backwardBefore"], fromCLI["backwardAfter"] = float64(0), unchangedCount, unchangedCount
+	}
+	var backward []any
+	for _, line := range lines[1:] {
+		reference := backwardLine.FindStringSubmatch(line)
+		require.NotNil(t, reference, "each line after the counts must name a backward reference: %q", line)
+		backward = append(backward, map[string]any{"kind": reference[1], "label": reference[2], "from": reference[3], "to": reference[4]})
+	}
+	if backward != nil {
+		fromCLI["backward"] = backward
+	}
+	return fromCLI, ""
+}
+
+func number(t *testing.T, digits string) float64 {
+	t.Helper()
+
+	n, err := strconv.Atoi(digits)
+	require.NoError(t, err)
+	return float64(n)
+}
+
 func diagnosticLines(t *testing.T, diagnostics any) string {
 	t.Helper()
 
@@ -346,7 +417,7 @@ func TestMCP(t *testing.T) {
 			for _, tool := range listed.Tools {
 				names = append(names, tool.Name)
 			}
-			require.ElementsMatch(t, []string{"emod_check", "emod_diagram", "emod_explain_rule", "emod_export", "emod_fmt", "emod_glossary", "emod_schema", "emod_slices_list"}, names)
+			require.ElementsMatch(t, []string{"emod_check", "emod_diagram", "emod_explain_rule", "emod_export", "emod_fmt", "emod_glossary", "emod_schema", "emod_slices_arrange", "emod_slices_list"}, names)
 		})
 	})
 
@@ -629,6 +700,35 @@ func TestMCP(t *testing.T) {
 					return
 				}
 				require.Equal(t, map[string]any{"formatted": formatted, "changed": changed}, structured)
+			})
+		}
+	})
+
+	t.Run("arrange slices", func(t *testing.T) {
+		paths := modelPaths(t)
+		require.Contains(t, paths, "internal/parser/testdata/invalid.emod", "the files must include one that does not parse")
+		movedFile, _ := arrangeCLI(t, "examples/all_patterns.emod")
+		require.Equal(t, true, movedFile["changed"], "the files must include one in which a slice moves")
+		keptFile, _ := arrangeCLI(t, "examples/specs_hotel.emod")
+		require.Equal(t, false, keptFile["changed"], "the files must include one in which no slice moves")
+		require.NotEmpty(t, keptFile["backward"], "the files must include one with a reference that stays backward")
+
+		for _, path := range paths {
+			t.Run("gives the text that emod slices arrange writes, the report that it prints and the answer of --check, or the parse diagnostics, for the path "+path, func(t *testing.T) {
+				session, _ := startServer(t)
+				fromCLI, parseDiagnostics := arrangeCLI(t, path)
+
+				result := callTool(t, session, "emod_slices_arrange", map[string]any{"path": path})
+
+				require.False(t, result.IsError, "the call must succeed: %v", result.Content)
+				structured, ok := result.StructuredContent.(map[string]any)
+				require.True(t, ok, "the structured result must be an object, but it is %T", result.StructuredContent)
+				if parseDiagnostics != "" {
+					require.NotContains(t, structured, "arranged")
+					require.Equal(t, parseDiagnostics, diagnosticLines(t, structured["diagnostics"]))
+					return
+				}
+				require.Equal(t, fromCLI, structured)
 			})
 		}
 	})

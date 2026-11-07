@@ -4,7 +4,7 @@
   "tasks": [
     {
       "n": 1,
-      "done": false,
+      "done": true,
       "title": "Arrange the slices with `emod_slices_arrange`",
       "language": "Go",
       "testable": true,

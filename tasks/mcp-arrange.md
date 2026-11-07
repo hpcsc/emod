@@ -75,17 +75,17 @@ is the formatted text when a slice moves and the source when none moves, and the
 `arrange.Model`. A source that does not parse gives only its parse diagnostics. The tool writes no file.
 
 **Acceptance Criteria:**
-- [ ] `tools/list` lists `emod_slices_arrange`, with the input of `emod_check` and an output schema of one of
+- [x] `tools/list` lists `emod_slices_arrange`, with the input of `emod_check` and an output schema of one of
   the arrange result and the parse diagnostics.
-- [ ] A source with a view after its reader gives the text with the view first, `changed: true`, and the
+- [x] A source with a view after its reader gives the text with the view first, `changed: true`, and the
   counts of the move.
-- [ ] A source in which no slice moves gives the source as it is, also when it is not in the canonical
+- [x] A source in which no slice moves gives the source as it is, also when it is not in the canonical
   format, and `changed: false`.
-- [ ] Each reference that stays backward is one item with its kind, its label, and the names of the two
+- [x] Each reference that stays backward is one item with its kind, its label, and the names of the two
   slices, and `backward` is an empty list when none stays.
-- [ ] A source that does not parse gives its parse diagnostics and no report, as a normal result.
-- [ ] A call with a path does not change the file, and writes no other file under the root.
-- [ ] Through the built binary, for each file in `examples/` and `internal/parser/testdata/`, `arranged` is
+- [x] A source that does not parse gives its parse diagnostics and no report, as a normal result.
+- [x] A call with a path does not change the file, and writes no other file under the root.
+- [x] Through the built binary, for each file in `examples/` and `internal/parser/testdata/`, `arranged` is
   the text that `emod slices arrange` writes to a copy of the file, the report matches the report that it
   prints, and `changed` matches the exit code of `emod slices arrange --check`. A file that does not parse
   gives the lines that the CLI prints.
