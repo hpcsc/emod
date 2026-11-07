@@ -102,11 +102,11 @@ The binary gets about 57 KB, and nothing else changes.
 `emod://schema`. Both return `cue.Schema`, the text that `emod schema` prints.
 
 **Acceptance Criteria:**
-- [ ] `tools/list` lists `emod_schema` with no input property, and with a description that names
+- [x] `tools/list` lists `emod_schema` with no input property, and with a description that names
   `emod://schema`.
-- [ ] `emod_schema` returns one text block with the text of `cue.Schema`, with `<`, `>` and `&` as they are.
-- [ ] `resources/read` of `emod://schema` returns the text of `cue.Schema`, with the MIME type `text/plain`.
-- [ ] Through the built binary, the text of `emod_schema` and of `emod://schema` is the text that
+- [x] `emod_schema` returns one text block with the text of `cue.Schema`, with `<`, `>` and `&` as they are.
+- [x] `resources/read` of `emod://schema` returns the text of `cue.Schema`, with the MIME type `text/plain`.
+- [x] Through the built binary, the text of `emod_schema` and of `emod://schema` is the text that
   `emod schema` prints.
 
 **Patterns to follow:**

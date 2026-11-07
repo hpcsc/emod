@@ -11,6 +11,7 @@ import (
 	"github.com/google/jsonschema-go/jsonschema"
 	sdk "github.com/modelcontextprotocol/go-sdk/mcp"
 
+	"github.com/hpcsc/emod/internal/cue"
 	"github.com/hpcsc/emod/internal/diagnostic"
 	"github.com/hpcsc/emod/internal/linter"
 	"github.com/hpcsc/emod/internal/oracle"
@@ -86,6 +87,20 @@ var rulesResource = &sdk.Resource{
 	Description: `Each lint rule that emod can report, with its description, as {"rules":[{"rule":...,"description":...}]}.`,
 }
 
+var schemaTool = &sdk.Tool{
+	Name: "emod_schema",
+	Description: "Give the CUE schema of emod, the same text that `emod schema` prints. " +
+		"The resource emod://schema gives the same text.",
+}
+
+var schemaResource = &sdk.Resource{
+	URI:         "emod://schema",
+	Name:        "schema",
+	Title:       "CUE schema of emod",
+	MIMEType:    "text/plain",
+	Description: "The CUE schema of emod, the same text that `emod schema` prints.",
+}
+
 type Server struct {
 	in   io.ReadCloser
 	out  io.WriteCloser
@@ -104,6 +119,8 @@ func (s *Server) Run(ctx context.Context) error {
 	sdk.AddTool(server, checkTool, s.check)
 	sdk.AddTool(server, explainRuleTool, s.explainRule)
 	server.AddResource(rulesResource, s.readRules)
+	sdk.AddTool(server, schemaTool, s.schema)
+	server.AddResource(schemaResource, s.readSchema)
 	return server.Run(ctx, &sdk.IOTransport{Reader: s.in, Writer: s.out})
 }
 
@@ -152,6 +169,14 @@ func (s *Server) readRules(_ context.Context, _ *sdk.ReadResourceRequest) (*sdk.
 		return nil, err
 	}
 	return &sdk.ReadResourceResult{Contents: []*sdk.ResourceContents{{Text: text}}}, nil
+}
+
+func (s *Server) schema(_ context.Context, _ *sdk.CallToolRequest, _ struct{}) (*sdk.CallToolResult, any, error) {
+	return &sdk.CallToolResult{Content: []sdk.Content{&sdk.TextContent{Text: cue.Schema}}}, nil, nil
+}
+
+func (s *Server) readSchema(_ context.Context, _ *sdk.ReadResourceRequest) (*sdk.ReadResourceResult, error) {
+	return &sdk.ReadResourceResult{Contents: []*sdk.ResourceContents{{Text: cue.Schema}}}, nil
 }
 
 func (s *Server) jsonText(value any) (string, error) {

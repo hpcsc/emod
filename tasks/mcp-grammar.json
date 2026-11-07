@@ -24,7 +24,7 @@
     },
     {
       "n": 2,
-      "done": false,
+      "done": true,
       "title": "Give the schema with `emod_schema` and `emod://schema`",
       "language": "Go",
       "testable": true,

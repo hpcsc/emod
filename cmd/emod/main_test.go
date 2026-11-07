@@ -106,6 +106,17 @@ func explainRule(t *testing.T, rule string) string {
 	return strings.TrimSuffix(string(output), "\n")
 }
 
+func printedSchema(t *testing.T) string {
+	t.Helper()
+
+	schema := exec.Command(emodBinary, "schema")
+	schema.Env = withoutAISettings(t)
+	output, err := schema.Output()
+	require.NoError(t, err)
+	require.NotEmpty(t, output)
+	return string(output)
+}
+
 func TestMCP(t *testing.T) {
 	t.Run("handshake", func(t *testing.T) {
 		t.Run("the binary names itself emod, with the version that emod version prints", func(t *testing.T) {
@@ -118,7 +129,7 @@ func TestMCP(t *testing.T) {
 			require.Equal(t, &sdk.Implementation{Name: "emod", Version: strings.TrimSpace(string(printed))}, info)
 		})
 
-		t.Run("the binary lists emod_check and emod_explain_rule", func(t *testing.T) {
+		t.Run("the binary lists emod_check, emod_explain_rule and emod_schema", func(t *testing.T) {
 			session, _ := startServer(t)
 
 			listed, err := session.ListTools(context.Background(), nil)
@@ -128,7 +139,7 @@ func TestMCP(t *testing.T) {
 			for _, tool := range listed.Tools {
 				names = append(names, tool.Name)
 			}
-			require.ElementsMatch(t, []string{"emod_check", "emod_explain_rule"}, names)
+			require.ElementsMatch(t, []string{"emod_check", "emod_explain_rule", "emod_schema"}, names)
 		})
 	})
 
@@ -145,6 +156,33 @@ func TestMCP(t *testing.T) {
 			require.False(t, result.IsError)
 			require.Equal(t, map[string]any{"rule": "state-obsession", "description": explainRule(t, "state-obsession")},
 				result.StructuredContent)
+		})
+	})
+
+	t.Run("schema", func(t *testing.T) {
+		t.Run("the binary gives the text that emod schema prints", func(t *testing.T) {
+			session, _ := startServer(t)
+
+			result, err := session.CallTool(context.Background(), &sdk.CallToolParams{Name: "emod_schema", Arguments: map[string]any{}})
+
+			require.NoError(t, err)
+			require.False(t, result.IsError)
+			require.Len(t, result.Content, 1)
+			text, ok := result.Content[0].(*sdk.TextContent)
+			require.True(t, ok)
+			require.Equal(t, printedSchema(t), text.Text)
+		})
+	})
+
+	t.Run("read schema", func(t *testing.T) {
+		t.Run("the binary gives the text that emod schema prints", func(t *testing.T) {
+			session, _ := startServer(t)
+
+			read, err := session.ReadResource(context.Background(), &sdk.ReadResourceParams{URI: "emod://schema"})
+
+			require.NoError(t, err)
+			require.Len(t, read.Contents, 1)
+			require.Equal(t, printedSchema(t), read.Contents[0].Text)
 		})
 	})
 

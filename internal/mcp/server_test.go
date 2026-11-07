@@ -13,6 +13,7 @@ import (
 	sdk "github.com/modelcontextprotocol/go-sdk/mcp"
 	"github.com/stretchr/testify/require"
 
+	"github.com/hpcsc/emod/internal/cue"
 	"github.com/hpcsc/emod/internal/diagnostic"
 	"github.com/hpcsc/emod/internal/linter"
 	"github.com/hpcsc/emod/internal/mcp"
@@ -184,7 +185,7 @@ func TestServer(t *testing.T) {
 	})
 
 	t.Run("list tools", func(t *testing.T) {
-		t.Run("lists emod_check and emod_explain_rule, and no other tool", func(t *testing.T) {
+		t.Run("lists emod_check, emod_explain_rule and emod_schema, and no other tool", func(t *testing.T) {
 			session := connect(t)
 
 			listed, err := session.ListTools(context.Background(), nil)
@@ -194,7 +195,28 @@ func TestServer(t *testing.T) {
 			for _, tool := range listed.Tools {
 				names = append(names, tool.Name)
 			}
-			require.ElementsMatch(t, []string{"emod_check", "emod_explain_rule"}, names)
+			require.ElementsMatch(t, []string{"emod_check", "emod_explain_rule", "emod_schema"}, names)
+		})
+
+		t.Run("gives emod_schema no input", func(t *testing.T) {
+			session := connect(t)
+
+			tool := toolNamed(t, session, "emod_schema")
+
+			schema, ok := tool.InputSchema.(map[string]any)
+			require.True(t, ok)
+			require.Equal(t, "object", schema["type"])
+			require.Empty(t, schema["properties"])
+			require.Equal(t, false, schema["additionalProperties"])
+		})
+
+		t.Run("the description of emod_schema names the command with the same text and the resource", func(t *testing.T) {
+			session := connect(t)
+
+			tool := toolNamed(t, session, "emod_schema")
+
+			require.Contains(t, tool.Description, "emod schema")
+			require.Contains(t, tool.Description, "emod://schema")
 		})
 
 		t.Run("gives emod_check content, path and name as optional strings and no other input", func(t *testing.T) {
@@ -324,16 +346,50 @@ func TestServer(t *testing.T) {
 		t.Run("lists emod://rules as JSON, with a description", func(t *testing.T) {
 			session := connect(t)
 
-			listed, err := session.ListResources(context.Background(), nil)
+			resource := resourceAt(t, session, "emod://rules")
 
-			require.NoError(t, err)
-			require.Len(t, listed.Resources, 1)
-			resource := listed.Resources[0]
-			require.Equal(t, "emod://rules", resource.URI)
 			require.Equal(t, "rules", resource.Name)
 			require.Equal(t, "Lint rules of emod", resource.Title)
 			require.Equal(t, "application/json", resource.MIMEType)
 			require.Contains(t, resource.Description, "Each lint rule")
+		})
+
+		t.Run("lists emod://schema as text, with a description that names the command with the same text", func(t *testing.T) {
+			session := connect(t)
+
+			resource := resourceAt(t, session, "emod://schema")
+
+			require.Equal(t, "schema", resource.Name)
+			require.Equal(t, "CUE schema of emod", resource.Title)
+			require.Equal(t, "text/plain", resource.MIMEType)
+			require.Contains(t, resource.Description, "emod schema")
+		})
+	})
+
+	t.Run("schema", func(t *testing.T) {
+		t.Run("gives the CUE schema as one text block, with no structured content", func(t *testing.T) {
+			session := connect(t)
+
+			result, err := session.CallTool(context.Background(), &sdk.CallToolParams{Name: "emod_schema"})
+
+			require.NoError(t, err)
+			require.False(t, result.IsError)
+			require.Nil(t, result.StructuredContent)
+			require.Equal(t, cue.Schema, textOf(t, result))
+			require.Contains(t, textOf(t, result), "#Command: {")
+		})
+	})
+
+	t.Run("read schema", func(t *testing.T) {
+		t.Run("gives the CUE schema as text", func(t *testing.T) {
+			session := connect(t)
+
+			read, err := session.ReadResource(context.Background(), &sdk.ReadResourceParams{URI: "emod://schema"})
+
+			require.NoError(t, err)
+			require.Len(t, read.Contents, 1)
+			require.Equal(t, "text/plain", read.Contents[0].MIMEType)
+			require.Equal(t, cue.Schema, read.Contents[0].Text)
 		})
 	})
 
@@ -552,6 +608,20 @@ func TestServer(t *testing.T) {
 			require.Equal(t, []string{"café/commandes.emod"}, filesOf(recordsOf(t, result)))
 		})
 	})
+}
+
+func resourceAt(t *testing.T, session *sdk.ClientSession, uri string) *sdk.Resource {
+	t.Helper()
+
+	listed, err := session.ListResources(context.Background(), nil)
+	require.NoError(t, err)
+	for _, resource := range listed.Resources {
+		if resource.URI == uri {
+			return resource
+		}
+	}
+	require.FailNow(t, "the server must list the resource", "resource %s", uri)
+	return nil
 }
 
 type listedRule struct {
