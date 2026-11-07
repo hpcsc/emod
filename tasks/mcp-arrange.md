@@ -108,10 +108,10 @@ is the formatted text when a slice moves and the source when none moves, and the
 **Behavior:** The MCP page of the docs describes the tool, and the README names it.
 
 **Acceptance Criteria:**
-- [ ] `site/content/docs/mcp.md` has a section on `emod_slices_arrange`: its result, the meaning of a
+- [x] `site/content/docs/mcp.md` has a section on `emod_slices_arrange`: its result, the meaning of a
   reference that stays backward, the result of a parse error, and that the host writes `arranged` with its
   own file tool.
-- [ ] The README section "Check models from an agent (MCP)" names the tool.
+- [x] The README section "Check models from an agent (MCP)" names the tool.
 
 **Patterns to follow:**
 - `README.md`

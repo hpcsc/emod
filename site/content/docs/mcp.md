@@ -196,6 +196,54 @@ The result holds the text under `formatted`, and the answer of the check under `
   `emod_check`, and no `formatted`. This is a normal result, not an error result. A lint warning or a
   validation error does not stop the tool.
 
+## The `emod_slices_arrange` tool
+
+`emod_slices_arrange` puts the slices of each context and each aggregate in an order in which each reference
+points forward, as `emod slices arrange` does. So a file that the agent writes passes
+`emod slices arrange --check` in CI. It takes the same `content`, `path` and `name` as `emod_check`.
+
+The result holds the arranged text and the report of the arrange:
+
+```json
+{
+  "arranged": "emod = 1\n\n# Hotel Reservation System — exercises all four slice patterns\nmodel \"Hotel Reservation\" {\n...",
+  "changed": true,
+  "moved": 1,
+  "backwardBefore": 3,
+  "backwardAfter": 2,
+  "backward": [
+    {
+      "kind": "reads",
+      "label": "AvailableRoomsView -> trigger Reservation Form",
+      "from": "View Available Rooms",
+      "to": "Reserve a Room"
+    },
+    {
+      "kind": "reads",
+      "label": "UnconfirmedReservationsView -> UnconfirmedReservationExpirer",
+      "from": "View Unconfirmed Reservations",
+      "to": "Expire Unconfirmed Reservations"
+    }
+  ]
+}
+```
+
+- Only view slices move. Each other slice stays where its author put it.
+- `arranged` is the same text that `emod slices arrange` writes. When a slice moves, it is the whole model in
+  the layout of `emod fmt`. When no slice moves, it is the source as it is.
+- `changed` is true when a slice moves. It gives the same answer as the exit code of
+  `emod slices arrange --check`.
+- `moved`, `backwardBefore` and `backwardAfter` are the counts of the report that `emod slices arrange`
+  prints.
+- `backward` lists each reference that points backward after the arrange, with its `kind` (`subscribes`,
+  `reads`, `on` or `flow`), its `label`, and the names of its two slices in `from` and `to`. The list is
+  empty when no reference points backward. Because only view slices move, the arrange cannot fix such a
+  reference, for example a reference between two slices that are not views. The agent does not try a new
+  order for it.
+- The tool does not write the file. The agent writes `arranged` with the file tool of the host.
+- A source that does not parse gives its parse diagnostics under `diagnostics`, as the records of
+  `emod_check`, and no report. A lint warning or a validation error does not stop the tool.
+
 ## The `emod_explain_rule` tool
 
 `emod_explain_rule` tells why a lint rule exists and how to fix a finding of the rule. The call gives the

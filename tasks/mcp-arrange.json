@@ -23,7 +23,7 @@
     },
     {
       "n": 2,
-      "done": false,
+      "done": true,
       "title": "Document `emod_slices_arrange`",
       "language": "Go",
       "testable": false,
