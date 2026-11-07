@@ -27,13 +27,19 @@ needs no provider, no credentials and no cost for this.
 - **G3:** Each tool accepts a **file path** or **inline `.emod` text**. An assistant can check a draft before it
   writes the draft to disk.
 - **G4:** Structured results: diagnostics as JSON records with `rule`, `severity` and `line`, not columns of text.
-- **G5:** Exact query tools ([exact model queries](../model-queries-proposal.md)) and spec export ([05](./05-spec-suggestions.md)),
-  so that the agent answers questions from facts, not from a guess.
+- **G5:** Exact query tools ([exact model queries](../model-queries-proposal.md)), so that the agent answers
+  questions from facts, not from a guess (moved to `docs/proposals/model-queries-proposal.md`)
 - **G6:** Resources for the schema, the examples, the rules and the DSL reference, so that a new host knows the
   grammar with no text pasted by the user.
-- **G7:** Prompts for the workflow steps in the [README](./README.md): capture, challenge, import and specify.
+- **G7:** The `model-domain` prompt for the capture step of the workflow in the [README](./README.md)
+  (moved to `docs/proposals/ai/04-model-from-conversation.md`)
 - **G8:** **No** LLM code, provider code, credentials or network access in emod. Read-only by default, so that a
   user can register the server for all projects.
+- **G9:** Spec export ([05](./05-spec-suggestions.md)), so that the agent answers questions from facts, not from a
+  guess (moved to `docs/proposals/ai/05-spec-suggestions.md`)
+- **G10:** The `review-model` prompt for the challenge step (moved to `docs/proposals/ai/02-semantic-model-review.md`)
+- **G11:** The `import-from-code` prompt for the import step (moved to `docs/proposals/ai/07-model-import.md`)
+- **G12:** The `suggest-specs` prompt for the specify step (moved to `docs/proposals/ai/05-spec-suggestions.md`)
 
 ## Non-Goals
 
