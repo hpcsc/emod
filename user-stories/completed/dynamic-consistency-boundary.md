@@ -1,5 +1,7 @@
 # Dynamic Consistency Boundary Support
 
+**Proposal:** `docs/proposals/completed/dcb-proposal.md`
+
 ## Overview
 
 Allow `.emod` files to express Dynamic Consistency Boundary (DCB) models — where events carry tags rather than belonging to a single aggregate, and each command declares its own consistency boundary via a query over the tag space. Aggregate-style models remain valid and idiomatic; DCB is additive.

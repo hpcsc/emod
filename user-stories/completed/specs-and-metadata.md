@@ -1,5 +1,7 @@
 # Specs, Invariants, and Model Metadata
 
+**Proposal:** `docs/proposals/specs-and-metadata-proposal.md`
+
 ## Overview
 
 Let `.emod` files describe behaviour and meaning, not just structure. Slices gain Given-When-Then specs (with optional example payloads), aggregates and DCB contexts declare named invariants that rejections reference by name, flows and diagrams show rejection paths, every construct can carry a description feeding a generated glossary, files pin themselves to a DSL version, events bind to their wire-level type, and automations can fire on elapsed time. Every existing `.emod` file stays valid with unchanged meaning.

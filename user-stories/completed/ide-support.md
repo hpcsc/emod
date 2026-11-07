@@ -1,5 +1,7 @@
 # IDE Support for `.emod` Files
 
+**Proposal:** `docs/proposals/completed/ide-support-proposal.md`
+
 ## Overview
 
 `.emod` files have no IDE recognition — editors treat them as plain text with no highlighting, error reporting, or navigation. This feature adds progressively richer editor support: syntax highlighting via TextMate and Tree-sitter grammars, and intelligent editing via a Language Server Protocol (LSP) server. The goal is broad editor coverage (VS Code, JetBrains, Neovim, Zed, Helix) and syntax highlighting on GitHub.

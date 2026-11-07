@@ -1,5 +1,7 @@
 # AI Foundation — LLM Integration Seam
 
+**Proposal:** `docs/proposals/ai/00-llm-foundation.md`
+
 ## Overview
 
 The emod AI proposals (`01`–`10`) all need to call an LLM, turn its output into

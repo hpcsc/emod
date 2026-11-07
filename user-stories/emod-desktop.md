@@ -1,5 +1,7 @@
 # emod Desktop App
 
+**Proposal:** `docs/proposals/emod-desktop-proposal.md`
+
 ## Overview
 
 Ship `emod` as a native desktop application alongside the CLI viewer and the hosted web viewer. Today a model author viewing a diagram either runs `emod diagram --serve` (which starts a localhost server and opens a browser) or uses the web viewer, and in both cases the browser can never write back to the file the model came from — the best it can do is download a copy. The desktop app closes that gap: real file dialogs, save back to the file you opened, recent files, `.emod` files that open on double-click, and a source panel that validates as you type.

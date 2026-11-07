@@ -1,5 +1,7 @@
 # Triggers and Automations
 
+**Proposal:** `docs/proposals/triggers-and-automations-proposal.md`
+
 ## Overview
 
 Event Modeling's Automation pattern wires a processor to a view — the "todo list" of outstanding work — and then to a command. `emod` has two elements in this space and they are swapped relative to that pattern: `automation` activates on an event and cannot name a view at all, while `trigger Processor` can name a view but sits in the lane reserved for human-facing screens. The result is that the element named after the pattern cannot express the pattern, schedule-driven work has to masquerade as a user interaction, and `trigger` means two unrelated things depending on where it appears.

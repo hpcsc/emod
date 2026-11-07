@@ -1,5 +1,7 @@
 # emod — Event Modeling DSL & Diagram Generation
 
+**Proposal:** `docs/proposals/completed/proposal.md`
+
 ## Overview
 
 emod is a CLI tool that provides a domain-specific language (`.emod` files) for modeling event-driven architectures. Authors — both humans and AI agents — write declarative models capturing actors, bounded contexts, aggregates, slices, commands, events, views, and reactors. The tool parses these files, validates them against known event modeling anti-patterns, and generates visual diagrams (draw.io, Mermaid, SVG). The DSL uses a custom human-readable syntax, with CUE as the intermediate validated representation.

@@ -1,5 +1,7 @@
 # emod MCP Server
 
+**Proposal:** `docs/proposals/ai/01-mcp-server.md`
+
 ## Overview
 
 Many facilitators and developers work with an agent such as Claude Code or Cursor. When an agent drafts a
