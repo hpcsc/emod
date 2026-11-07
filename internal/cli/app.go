@@ -186,6 +186,27 @@ func NewApp() *urfave.Command {
 				},
 			},
 			{
+				Name:      "references",
+				Usage:     "List the declaration of a name and each reference to it, grouped by role",
+				ArgsUsage: "<file> <name>",
+				Flags: []urfave.Flag{
+					&urfave.StringFlag{
+						Name:  "kind",
+						Usage: "The kind of the name, when the model declares it as two kinds (command|event|view|invariant)",
+					},
+					&urfave.StringFlag{
+						Name:  "format",
+						Usage: "Output format (text|json)",
+						Value: "text",
+					},
+				},
+				Action: func(ctx context.Context, cmd *urfave.Command) error {
+					path := cmd.Args().Get(0)
+					name := cmd.Args().Get(1)
+					return reportExitError(RunReferences(path, name, cmd.String("kind"), cmd.String("format")))
+				},
+			},
+			{
 				Name:  "slices",
 				Usage: "Inspect the slices in a model",
 				Action: func(ctx context.Context, cmd *urfave.Command) error {

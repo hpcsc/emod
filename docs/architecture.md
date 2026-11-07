@@ -66,6 +66,7 @@ graph TD
     cli --> export
     cli --> formatter
     cli --> glossary
+    cli --> query
     lsp --> query
     pipeline --> export
     pipeline --> importer
@@ -208,6 +209,7 @@ diagram does not carry stay in the source.
 | `emod fmt` | Parse + `formatter.Format`; `--check` for CI |
 | `emod diagram` | svg / ascii / mermaid; `--serve` starts the embedded viewer; `--specs` draws each slice's specs as a card, svg only |
 | `emod export` | json / diagram-json / cue |
+| `emod references` | The declaration of a name and each reference to it, grouped by role; text or JSON |
 | `emod slices list` | Lists every slice with its detected pattern |
 | `emod slices arrange` | Reorders view slices so references read forward; `--check` for CI |
 | `emod glossary` | Domain glossary as markdown or JSON |
@@ -219,8 +221,8 @@ The **LSP** (`internal/lsp`) layers transport framing → dispatch
 `GetDefinition`, `GetReferences`, `GetHover`, `GetSemanticTokens`) taking
 `(text, line, character)`. Diagnostics and formatting go through the oracle.
 Go-to-definition, find-references and completion resolve names through
-`internal/query`, so the editor and each other caller of that package find the
-same declaration and the same references for a name. `GetTokens` is
+`internal/query`, the same code as `emod references`, so the editor and the
+CLI find the same declaration and the same references for a name. `GetTokens` is
 for the viewer's source panel rather than for an editor: it gives each stretch
 of a document the category that an HCL editor running `emod lsp` colours it
 with, and it reads construct names through the walk `GetSemanticTokens` uses,

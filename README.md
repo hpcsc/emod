@@ -268,6 +268,38 @@ emod export reservation.emod --format cue   # CUE schema
 emod slices list reservation.emod
 ```
 
+### Find the references of a name
+
+`emod references` prints the declaration of a command, an event, a view or an invariant, then each
+reference to it in a group for its role: what produces an event and what reads it, what issues a
+command and what refuses it, and the specs that name it.
+
+```bash
+emod references reservation.emod RoomReserved                # text
+emod references reservation.emod RoomReserved --format json  # JSON
+emod references reservation.emod CheckIn --kind event        # one kind, when two kinds share the name
+```
+
+For `examples/all_patterns.emod`:
+
+```
+$ emod references examples/all_patterns.emod ReserveRoom
+command ReserveRoom   Reservations > Reservation, slice "Reserve a Room"   :36
+
+issued by
+  :30  issues    trigger "Reservation Form"          "Reserve a Room"
+produces
+  :66  flow      ReserveRoom -> RoomReserved         "Reserve a Room"
+refused by
+  :67  rejected  ReserveRoom -> RoomNotDoubleBooked  "Reserve a Room"
+named in specs
+  :71  when  "holds a room nobody has booked"
+  :77  when  "refuses a room already held over the same nights"
+  :82  when  "refuses a stay that ends before it begins"
+```
+
+A name that the model does not declare exits with code 1 and lists the declared names closest to it.
+
 ### Arrange slices
 
 Reorders each container's slices so the model reads forward — as far as

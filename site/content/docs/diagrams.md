@@ -53,6 +53,18 @@ emod slices arrange reservation.emod         # reorder slices so the model reads
 emod slices arrange --check reservation.emod # exit 1 if a view is out of place
 ```
 
+## Find the references of a name
+
+```sh
+emod references reservation.emod RoomReserved                # who produces and who reads RoomReserved
+emod references reservation.emod RoomReserved --format json  # the same answer as JSON
+emod references reservation.emod CheckIn --kind event        # one kind, when two kinds share the name
+```
+
+The output groups each reference to the name by its role: what produces an event and what reads
+it, what issues a command and what refuses it, and the specs that name it. Your editor finds the
+same references with find-references.
+
 ## Render a glossary
 
 ```sh
