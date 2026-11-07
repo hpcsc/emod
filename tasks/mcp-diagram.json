@@ -1,0 +1,68 @@
+{
+  "story": "US-007: Draw a diagram from an agent",
+  "tasks_file": "tasks/mcp-diagram.md",
+  "tasks": [
+    {
+      "n": 1,
+      "done": false,
+      "title": "Pick the renderer of a diagram format in `internal/diagram`",
+      "language": "Go",
+      "testable": true,
+      "certainty": "medium",
+      "blast_radius": "low",
+      "patterns_to_follow": [
+        "internal/cli/diagram.go",
+        "internal/diagram/option.go"
+      ],
+      "depends_on": [],
+      "affected_files": [
+        "internal/diagram/format.go",
+        "internal/diagram/format_test.go",
+        "internal/cli/diagram.go"
+      ]
+    },
+    {
+      "n": 2,
+      "done": false,
+      "title": "Draw a diagram with `emod_diagram`",
+      "language": "Go",
+      "testable": true,
+      "certainty": "high",
+      "blast_radius": "low",
+      "patterns_to_follow": [
+        "internal/mcp/server.go",
+        "internal/mcp/server_test.go",
+        "cmd/emod/main_test.go",
+        "task:1"
+      ],
+      "depends_on": [
+        1
+      ],
+      "affected_files": [
+        "internal/mcp/server.go",
+        "internal/mcp/server_test.go",
+        "cmd/emod/main_test.go"
+      ]
+    },
+    {
+      "n": 3,
+      "done": false,
+      "title": "Document `emod_diagram`",
+      "language": "Go",
+      "testable": false,
+      "certainty": "high",
+      "blast_radius": "low",
+      "patterns_to_follow": [
+        "site/content/docs/mcp.md"
+      ],
+      "depends_on": [
+        2
+      ],
+      "affected_files": [
+        "site/content/docs/mcp.md",
+        "README.md"
+      ]
+    }
+  ],
+  "design_file": "tasks/mcp-diagram.design.yaml"
+}

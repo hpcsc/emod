@@ -1,0 +1,40 @@
+design: planned
+types:
+  - name: diagramInput
+    package: internal/mcp
+    change: new
+    does: names the model source, the format, the style and the spec cards that a call of emod_diagram asks for
+    owns:
+      - the fields of sourceInput, and format, style and specs
+    fields: [sourceInput, Format, Style, Specs]
+  - name: diagramResult
+    package: internal/mcp
+    change: new
+    does: holds the diagram text of a source with no error, and its warnings
+    owns:
+      - the keys diagram and diagnostics
+    fields: [Diagram, Diagnostics]
+  - name: Server
+    package: internal/mcp
+    change: changed
+    does: answers the MCP requests that a host sends over one reader and one writer
+    owns:
+      - emod_diagram gives the diagnostics of a source with an error, else the diagram of the format and its warnings
+    fields: [in, out, root]
+    methods: [Run]
+functions:
+  - diagram.Formats() []string
+  - diagram.DrawsSpecCards(format string) bool
+  - diagram.Export(model *ast.Model, format string, style diagram.Style, options ...diagram.Option) ([]byte, error)
+words:
+  - concept: the shape of a diagram, svg, mermaid, ascii, event-flow and the two event-flow-mermaid
+    word: format
+    not: [kind, type, renderer]
+  - concept: the layout strategy of a diagram, auto, projected or dcb
+    word: style
+    not: [mode, layout]
+  - concept: the Given-When-Then cards that svg draws for the specs of each slice
+    word: spec cards
+    not: [scenarios, cards]
+dependencies:
+  - internal/mcp -> internal/diagram
