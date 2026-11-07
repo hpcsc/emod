@@ -1567,3 +1567,17 @@ in this repo; append only learnings that generalise beyond the task that surface
 - Observed: task 1 — MCP fmt
 - Learning: clerk audit gives the lenses at most 2000 lines of the files under patterns_to_follow, in total. At the base of US-008, internal/mcp/server.go and internal/mcp/server_test.go held about 1970 lines, so the audit held back cmd/emod/main_test.go and site/content/docs/mcp.md, and no lens compared the parity group or the docs section with its precedent.
 - Apply when: writing patterns_to_follow for a task in internal/mcp or cmd/emod, or reading held_back in an audit round of an MCP tool
+
+## A backward reference that stays after the arrange is one the arrange cannot fix, not one no order can fix
+- Type: constraint
+- Recorded: 2026-11-07
+- Observed: task 1 — MCP arrange
+- Learning: internal/arrange moves only view slices and leaves out each reference into another container. So an item of arrange.Report.Backward is a reference between two slices that do not move, or one of a view that has no slot that turns all its references forward; another order of the process slices often fixes it. The story of US-009 and internal/cli/slices_arrange_test.go say 'no order can fix'; this run copied that wording into the tool description, a commit message and a test name, and the audit refuted the test name.
+- Apply when: writing a description, a docs page, an acceptance criterion or a test name about the backward references of emod slices arrange or emod_slices_arrange
+
+## The two all_patterns.emod fixtures start the same and arrange differently
+- Type: constraint
+- Recorded: 2026-11-07
+- Observed: task 2 — MCP arrange
+- Learning: examples/all_patterns.emod (362 lines) and internal/parser/testdata/all_patterns.emod (147 lines) begin with the same comment and model name, but their slices differ: emod slices arrange reports 3 -> 2 backward references for the first and 2 -> 1 for the second. In US-009 the docs example quoted the start of one and the counts of the other, and no test reads site/content/docs, so only the audit found it.
+- Apply when: quoting the output of a tool or command for a fixture in site/content/docs or README.md, or naming an all_patterns fixture in a test or a guard
