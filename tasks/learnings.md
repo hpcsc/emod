@@ -1560,3 +1560,10 @@ in this repo; append only learnings that generalise beyond the task that surface
 - Observed: task 2 — mcp-diagram
 - Learning: When an MCP tool and its CLI command call one shared function, such as diagram.Export, ast.SliceRecords or the export functions, the binary parity leaves in cmd/emod/main_test.go compare two callers of that function and stay green when it is wrong: in US-007 a swap of the mermaid renderer in diagram.Export failed TestFormat, TestServer and the CLI tests, and no parity leaf. So a lifted or shared function needs its own tests of each case in its package, and the parity leaves only prove that the tool passes its input on as the CLI does.
 - Apply when: planning the tests of an MCP tool whose CLI command shares code with it, or lifting code from internal/cli into a shared package and choosing what proves it right
+
+## The audit shares 2000 lines of precedents, and the MCP server files spend them
+- Type: constraint
+- Recorded: 2026-11-07
+- Observed: task 1 — MCP fmt
+- Learning: clerk audit gives the lenses at most 2000 lines of the files under patterns_to_follow, in total. At the base of US-008, internal/mcp/server.go and internal/mcp/server_test.go held about 1970 lines, so the audit held back cmd/emod/main_test.go and site/content/docs/mcp.md, and no lens compared the parity group or the docs section with its precedent.
+- Apply when: writing patterns_to_follow for a task in internal/mcp or cmd/emod, or reading held_back in an audit round of an MCP tool
