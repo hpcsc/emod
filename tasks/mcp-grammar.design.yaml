@@ -1,0 +1,34 @@
+design: planned
+types:
+  - name: Example
+    package: examples
+    change: new
+    does: names one model of examples/ that validates, with a description for a reader who chooses one
+    owns:
+      - the name is the file name with no .emod
+      - the source is the text of the file, embedded in the binary
+    fields: [Name, Description, Source]
+  - name: Server
+    package: internal/mcp
+    change: changed
+    does: answers the MCP requests that a host sends over one reader and one writer
+    owns:
+      - emod_schema and emod://schema give the text that emod schema prints
+      - emod://examples/<name> gives the source of each example, and no file that ends in _test.emod
+      - emod://docs/dsl-reference gives the text of docs/dsl-reference.md
+    fields: [in, out, root]
+    methods: [Run]
+functions:
+  - examples.All() []examples.Example
+  - docs.DSLReference string
+words:
+  - concept: a model file under examples/ that validates, which the server gives to an agent to learn from
+    word: example
+    not: [sample, demo, fixture]
+  - concept: the document docs/dsl-reference.md, which describes each construct of the language
+    word: DSL reference
+    not: [manual, guide, spec]
+dependencies:
+  - internal/mcp -> examples
+  - internal/mcp -> docs
+  - internal/mcp -> internal/cue

@@ -1,0 +1,90 @@
+{
+  "story": "US-004: Give the agent the grammar of emod",
+  "tasks_file": "tasks/mcp-grammar.md",
+  "tasks": [
+    {
+      "n": 1,
+      "done": false,
+      "title": "Put the examples and the DSL reference into the binary",
+      "language": "Go",
+      "testable": true,
+      "certainty": "high",
+      "blast_radius": "low",
+      "patterns_to_follow": [
+        "internal/cue/embed.go",
+        "internal/cli/validate_test.go"
+      ],
+      "depends_on": [],
+      "affected_files": [
+        "examples/examples.go",
+        "examples/examples_test.go",
+        "docs/docs.go",
+        "docs/docs_test.go"
+      ]
+    },
+    {
+      "n": 2,
+      "done": false,
+      "title": "Give the schema with `emod_schema` and `emod://schema`",
+      "language": "Go",
+      "testable": true,
+      "certainty": "high",
+      "blast_radius": "low",
+      "patterns_to_follow": [
+        "internal/mcp/server.go",
+        "internal/mcp/server_test.go",
+        "cmd/emod/main_test.go"
+      ],
+      "depends_on": [],
+      "affected_files": [
+        "internal/mcp/server.go",
+        "internal/mcp/server_test.go",
+        "cmd/emod/main_test.go"
+      ]
+    },
+    {
+      "n": 3,
+      "done": false,
+      "title": "Serve the examples and the DSL reference as resources",
+      "language": "Go",
+      "testable": true,
+      "certainty": "high",
+      "blast_radius": "low",
+      "patterns_to_follow": [
+        "internal/mcp/server.go",
+        "internal/mcp/server_test.go",
+        "task:1"
+      ],
+      "depends_on": [
+        1,
+        2
+      ],
+      "affected_files": [
+        "internal/mcp/server.go",
+        "internal/mcp/server_test.go"
+      ]
+    },
+    {
+      "n": 4,
+      "done": false,
+      "title": "Serve each resource from any working directory, and document the resources",
+      "language": "Go",
+      "testable": true,
+      "certainty": "high",
+      "blast_radius": "low",
+      "patterns_to_follow": [
+        "cmd/emod/main_test.go",
+        "site/content/docs/mcp.md"
+      ],
+      "depends_on": [
+        3
+      ],
+      "affected_files": [
+        "cmd/emod/main_test.go",
+        "site/content/docs/mcp.md",
+        "README.md"
+      ]
+    }
+  ],
+  "design_file": "tasks/mcp-grammar.design.yaml"
+}
