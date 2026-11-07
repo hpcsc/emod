@@ -140,11 +140,11 @@ The gate is what keeps the default server read-only.
 the server allows no write.
 
 **Acceptance Criteria:**
-- [ ] `emod mcp --help` lists `--allow-write` with a usage that names `emod_fmt` and `emod_slices_arrange`.
-- [ ] Through the built binary, `emod mcp --allow-write` writes the text that `emod fmt` writes to an
+- [x] `emod mcp --help` lists `--allow-write` with a usage that names `emod_fmt` and `emod_slices_arrange`.
+- [x] Through the built binary, `emod mcp --allow-write` writes the text that `emod fmt` writes to an
   unformatted copy of a model, and the text that `emod slices arrange` writes to an unarranged copy, for a
   call with `write: true`.
-- [ ] Through the built binary, `emod mcp` with no flag gives an error result that names `--allow-write` for
+- [x] Through the built binary, `emod mcp` with no flag gives an error result that names `--allow-write` for
   a call with `write: true`, and the file does not change.
 
 **Patterns to follow:**

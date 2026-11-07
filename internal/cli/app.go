@@ -337,9 +337,13 @@ func NewApp() *urfave.Command {
 						Name:  "root",
 						Usage: "Read model files only under this directory (default: the working directory)",
 					},
+					&urfave.BoolFlag{
+						Name:  "allow-write",
+						Usage: "Let emod_fmt and emod_slices_arrange write the result to the file for a call with write: true",
+					},
 				},
 				Action: func(ctx context.Context, cmd *urfave.Command) error {
-					return reportExitError(RunMCP(ctx, cmd.String("root")))
+					return reportExitError(RunMCP(ctx, cmd.String("root"), cmd.Bool("allow-write")))
 				},
 			},
 		},

@@ -15,10 +15,11 @@ import (
 	"github.com/stretchr/testify/require"
 	urfave "github.com/urfave/cli/v3"
 
+	"github.com/hpcsc/emod/internal/cli"
 	"github.com/hpcsc/emod/internal/diagnostic"
 )
 
-func checkOverStdio(t *testing.T, commandLine []string, arguments map[string]any) []diagnostic.Record {
+func callOverStdio(t *testing.T, commandLine []string, name string, arguments map[string]any) *sdk.CallToolResult {
 	t.Helper()
 
 	serverReads, hostWrites, err := os.Pipe()
@@ -37,10 +38,17 @@ func checkOverStdio(t *testing.T, commandLine []string, arguments map[string]any
 	client := sdk.NewClient(&sdk.Implementation{Name: "test-host", Version: "1"}, nil)
 	session, err := client.Connect(ctx, &sdk.IOTransport{Reader: hostReads, Writer: hostWrites}, nil)
 	require.NoError(t, err)
-	result, err := session.CallTool(ctx, &sdk.CallToolParams{Name: "emod_check", Arguments: arguments})
+	result, err := session.CallTool(ctx, &sdk.CallToolParams{Name: name, Arguments: arguments})
 	require.NoError(t, err)
 	require.NoError(t, session.Close())
 	require.NoError(t, <-served)
+	return result
+}
+
+func checkOverStdio(t *testing.T, commandLine []string, arguments map[string]any) []diagnostic.Record {
+	t.Helper()
+
+	result := callOverStdio(t, commandLine, "emod_check", arguments)
 	require.False(t, result.IsError, "the call must succeed: %v", result.Content)
 
 	encoded, err := json.Marshal(result.StructuredContent)
@@ -72,6 +80,16 @@ func TestMCP(t *testing.T) {
 
 			require.NoError(t, err)
 			require.Regexp(t, `(?m)^\s+--root string\s+Read model files only under this directory \(default: the working directory\)$`, stdout)
+		})
+
+		t.Run("lists --allow-write for mcp, with a usage that names the two tools that can write", func(t *testing.T) {
+			var err error
+			stdout := captureStdout(t, func() {
+				err = runCommandLine(t, "emod", "mcp", "--help")
+			})
+
+			require.NoError(t, err)
+			require.Regexp(t, `(?m)^\s+--allow-write\s+Let emod_fmt and emod_slices_arrange write the result to the file for a call with write: true$`, stdout)
 		})
 	})
 
@@ -119,6 +137,55 @@ func TestMCP(t *testing.T) {
 			require.Len(t, records, 1)
 			require.Equal(t, "models/ordering.emod", records[0].File)
 			require.Equal(t, "state-obsession", records[0].Rule)
+		})
+
+		t.Run("with --allow-write, emod_fmt with write writes the text that emod fmt writes to the file", func(t *testing.T) {
+			dir := t.TempDir()
+			path := filepath.Join(dir, "hotel.emod")
+			require.NoError(t, os.WriteFile(path, []byte(emodWithoutVersionHeader), 0o644))
+
+			result := callOverStdio(t, []string{"emod", "mcp", "--root", dir, "--allow-write"}, "emod_fmt", map[string]any{"path": "hotel.emod", "write": true})
+
+			require.False(t, result.IsError, "the call must succeed: %v", result.Content)
+			written, err := os.ReadFile(path)
+			require.NoError(t, err)
+			require.Equal(t, formattedEmod, string(written))
+		})
+
+		t.Run("with --allow-write, emod_slices_arrange with write writes the text that emod slices arrange writes to the file", func(t *testing.T) {
+			dir := t.TempDir()
+			path := filepath.Join(dir, "lending.emod")
+			require.NoError(t, os.WriteFile(path, []byte(unarrangedEmod), 0o644))
+			arrangedByCLI := writeTemp(t, "lending.emod", unarrangedEmod)
+			captureStdout(t, func() {
+				require.NoError(t, cli.RunSlicesArrange(arrangedByCLI, false))
+			})
+			expected, err := os.ReadFile(arrangedByCLI)
+			require.NoError(t, err)
+			require.NotEqual(t, unarrangedEmod, string(expected), "the fixture must have a slice to move")
+
+			result := callOverStdio(t, []string{"emod", "mcp", "--root", dir, "--allow-write"}, "emod_slices_arrange", map[string]any{"path": "lending.emod", "write": true})
+
+			require.False(t, result.IsError, "the call must succeed: %v", result.Content)
+			written, err := os.ReadFile(path)
+			require.NoError(t, err)
+			require.Equal(t, string(expected), string(written))
+		})
+
+		t.Run("without --allow-write, a call with write gives an error result that names the flag, and the file does not change", func(t *testing.T) {
+			dir := t.TempDir()
+			path := filepath.Join(dir, "hotel.emod")
+			require.NoError(t, os.WriteFile(path, []byte(emodWithoutVersionHeader), 0o644))
+
+			result := callOverStdio(t, []string{"emod", "mcp", "--root", dir}, "emod_fmt", map[string]any{"path": "hotel.emod", "write": true})
+
+			require.True(t, result.IsError)
+			text, ok := result.Content[0].(*sdk.TextContent)
+			require.True(t, ok)
+			require.Contains(t, text.Text, "emod mcp --allow-write")
+			unchanged, err := os.ReadFile(path)
+			require.NoError(t, err)
+			require.Equal(t, emodWithoutVersionHeader, string(unchanged))
 		})
 
 		t.Run("a root that does not exist ends the command with exit code 1 and a message that names it", func(t *testing.T) {

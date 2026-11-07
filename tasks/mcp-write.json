@@ -41,7 +41,7 @@
     },
     {
       "n": 3,
-      "done": false,
+      "done": true,
       "title": "Allow the writes with `emod mcp --allow-write`",
       "language": "Go",
       "testable": true,

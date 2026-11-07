@@ -74,10 +74,10 @@ func startServer(t *testing.T) (*sdk.ClientSession, *exec.Cmd) {
 	return startServerIn(t, repoRoot(t))
 }
 
-func startServerIn(t *testing.T, dir string) (*sdk.ClientSession, *exec.Cmd) {
+func startServerIn(t *testing.T, dir string, flags ...string) (*sdk.ClientSession, *exec.Cmd) {
 	t.Helper()
 
-	server := exec.Command(emodBinary, "mcp")
+	server := exec.Command(emodBinary, append([]string{"mcp"}, flags...)...)
 	server.Dir = dir
 	server.Env = withoutAISettings(t)
 	server.Stderr = os.Stderr
@@ -290,6 +290,24 @@ func number(t *testing.T, digits string) float64 {
 	n, err := strconv.Atoi(digits)
 	require.NoError(t, err)
 	return float64(n)
+}
+
+func copyModel(t *testing.T, path, dir string) string {
+	t.Helper()
+
+	source, err := os.ReadFile(filepath.Join(repoRoot(t), path))
+	require.NoError(t, err)
+	copied := filepath.Join(dir, filepath.Base(path))
+	require.NoError(t, os.WriteFile(copied, source, 0o644))
+	return copied
+}
+
+func fileText(t *testing.T, path string) string {
+	t.Helper()
+
+	text, err := os.ReadFile(path)
+	require.NoError(t, err)
+	return string(text)
 }
 
 func diagnosticLines(t *testing.T, diagnostics any) string {
@@ -729,6 +747,52 @@ func TestMCP(t *testing.T) {
 					return
 				}
 				require.Equal(t, fromCLI, structured)
+			})
+		}
+	})
+
+	t.Run("write", func(t *testing.T) {
+		t.Run("the binary with --allow-write writes the text that emod fmt writes to an unformatted copy of a model", func(t *testing.T) {
+			formatted, changed, _ := fmtCLI(t, "examples/error_diagnostics_test.emod")
+			require.True(t, changed, "the fixture must not be formatted, or the leaf proves nothing")
+			dir := t.TempDir()
+			copied := copyModel(t, "examples/error_diagnostics_test.emod", dir)
+			session, _ := startServerIn(t, dir, "--allow-write")
+
+			result := callTool(t, session, "emod_fmt", map[string]any{"path": "error_diagnostics_test.emod", "write": true})
+
+			require.False(t, result.IsError, "the call must succeed: %v", result.Content)
+			require.Equal(t, formatted, fileText(t, copied))
+		})
+
+		t.Run("the binary with --allow-write writes the text that emod slices arrange writes to an unarranged copy of a model", func(t *testing.T) {
+			fromCLI, _ := arrangeCLI(t, "examples/all_patterns.emod")
+			require.Equal(t, true, fromCLI["changed"], "the fixture must not be arranged, or the leaf proves nothing")
+			dir := t.TempDir()
+			copied := copyModel(t, "examples/all_patterns.emod", dir)
+			session, _ := startServerIn(t, dir, "--allow-write")
+
+			result := callTool(t, session, "emod_slices_arrange", map[string]any{"path": "all_patterns.emod", "write": true})
+
+			require.False(t, result.IsError, "the call must succeed: %v", result.Content)
+			require.Equal(t, fromCLI["arranged"], fileText(t, copied))
+		})
+
+		for _, call := range []struct{ name, path string }{
+			{"emod_fmt", "examples/error_diagnostics_test.emod"},
+			{"emod_slices_arrange", "examples/all_patterns.emod"},
+		} {
+			t.Run("the binary with no flag gives an error result that names --allow-write for a call of "+call.name+" with write on a file that it changes, and the file does not change", func(t *testing.T) {
+				dir := t.TempDir()
+				copied := copyModel(t, call.path, dir)
+				before := fileText(t, copied)
+				session, _ := startServerIn(t, dir)
+
+				result := callTool(t, session, call.name, map[string]any{"path": filepath.Base(call.path), "write": true})
+
+				require.True(t, result.IsError)
+				require.Contains(t, textOf(t, result), "emod mcp --allow-write")
+				require.Equal(t, before, fileText(t, copied))
 			})
 		}
 	})
