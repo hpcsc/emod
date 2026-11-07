@@ -8,6 +8,7 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 	"testing"
 
@@ -78,6 +79,32 @@ context "Orders" {
 
       flow = <<-FLOW
         command -> event:    PlaceOrder -> OrderUpdated
+      FLOW
+    }
+  }
+}
+`
+
+const unformattedSource = `emod = 1
+model "Ordering" {
+}
+context "Orders" {
+  aggregate "Order" {
+    slice "Place Order" {
+      command "PlaceOrder" {
+        fields {
+          orderId = required(string)
+          customerId = required(string)
+        }
+      }
+      event "OrderPlaced" {
+        fields {
+          orderId = required(string)
+          customerId = required(string)
+        }
+      }
+      flow = <<-FLOW
+        command -> event: PlaceOrder -> OrderPlaced
       FLOW
     }
   }
@@ -336,7 +363,55 @@ func TestServer(t *testing.T) {
 			for _, tool := range listed.Tools {
 				names = append(names, tool.Name)
 			}
-			require.ElementsMatch(t, []string{"emod_check", "emod_diagram", "emod_explain_rule", "emod_export", "emod_glossary", "emod_schema", "emod_slices_list"}, names)
+			require.ElementsMatch(t, []string{"emod_check", "emod_diagram", "emod_explain_rule", "emod_export", "emod_fmt", "emod_glossary", "emod_schema", "emod_slices_list"}, names)
+		})
+
+		t.Run("gives emod_fmt content, path and name as optional strings and no other input", func(t *testing.T) {
+			session := connect(t)
+
+			tool := toolNamed(t, session, "emod_fmt")
+
+			schema, ok := tool.InputSchema.(map[string]any)
+			require.True(t, ok)
+			require.Nil(t, schema["required"])
+			require.Equal(t, false, schema["additionalProperties"])
+			properties, ok := schema["properties"].(map[string]any)
+			require.True(t, ok)
+			require.ElementsMatch(t, []string{"content", "path", "name"}, keysOf(properties))
+			for _, key := range []string{"content", "path", "name"} {
+				require.Equal(t, map[string]any{"type": "string"}, typeOf(properties[key]), "input %s", key)
+			}
+		})
+
+		t.Run("gives emod_fmt an output schema of one of two objects: the formatted text and changed, or the parse diagnostics", func(t *testing.T) {
+			session := connect(t)
+
+			tool := toolNamed(t, session, "emod_fmt")
+
+			schema, ok := tool.OutputSchema.(map[string]any)
+			require.True(t, ok, "the tool must give an output schema, but it is %T", tool.OutputSchema)
+			require.Equal(t, "object", schema["type"])
+			choices, ok := schema["oneOf"].([]any)
+			require.True(t, ok)
+			var required [][]any
+			for _, choice := range choices {
+				fields, ok := choice.(map[string]any)
+				require.True(t, ok)
+				keys, _ := fields["required"].([]any)
+				required = append(required, keys)
+			}
+			require.Equal(t, [][]any{{"formatted", "changed"}, {"diagnostics"}}, required)
+		})
+
+		t.Run("the description of emod_fmt names the command with the same text, the answer of --check, that the tool writes no file, and the result of a parse error", func(t *testing.T) {
+			session := connect(t)
+
+			tool := toolNamed(t, session, "emod_fmt")
+
+			require.Contains(t, tool.Description, "the same text that `emod fmt` writes")
+			require.Contains(t, tool.Description, "`emod fmt --check`")
+			require.Contains(t, tool.Description, "The tool does not write the file")
+			require.Contains(t, tool.Description, "A source that does not parse gives its parse diagnostics")
 		})
 
 		t.Run("gives emod_diagram the formats of the diagram package with svg as the default, the three styles with auto as the default, and specs", func(t *testing.T) {
@@ -1087,6 +1162,99 @@ func TestServer(t *testing.T) {
 			}
 
 			require.Equal(t, before, filesUnder(t, dir))
+		})
+	})
+
+	t.Run("fmt", func(t *testing.T) {
+		t.Run("a source in another layout gives the canonical text and changed true", func(t *testing.T) {
+			session := connect(t)
+
+			result := callTool(t, session, "emod_fmt", map[string]any{"content": unformattedSource})
+
+			require.False(t, result.IsError, "the call must succeed: %v", result.Content)
+			require.Equal(t, map[string]any{"formatted": cleanSource, "changed": true}, result.StructuredContent)
+		})
+
+		t.Run("a source in the canonical format gives the same text and changed false", func(t *testing.T) {
+			session := connect(t)
+
+			result := callTool(t, session, "emod_fmt", map[string]any{"content": cleanSource})
+
+			require.False(t, result.IsError, "the call must succeed: %v", result.Content)
+			require.Equal(t, map[string]any{"formatted": cleanSource, "changed": false}, result.StructuredContent)
+		})
+
+		t.Run("the text block holds the same result, with the angle brackets of the flow as they are", func(t *testing.T) {
+			session := connect(t)
+
+			result := callTool(t, session, "emod_fmt", map[string]any{"content": unformattedSource})
+
+			require.JSONEq(t, jsonOf(t, map[string]any{"formatted": cleanSource, "changed": true}), textOf(t, result))
+			require.Contains(t, textOf(t, result), "<<-FLOW")
+		})
+
+		t.Run("a source that does not parse gives only its parse diagnostics and no formatted text, as a normal result", func(t *testing.T) {
+			require.Contains(t, rulesOfEntries(oracle.Check(brokenSource, "broken.emod")), "orphan-command",
+				"the recovered model must have a validator finding, or the leaf cannot tell the two lists apart")
+			session := connect(t)
+
+			result := callTool(t, session, "emod_fmt", map[string]any{"content": brokenSource, "name": "broken.emod"})
+
+			require.False(t, result.IsError)
+			require.Equal(t, map[string]any{"diagnostics": []any{
+				map[string]any{
+					"file":     "broken.emod",
+					"line":     float64(18),
+					"severity": "error",
+					"message":  `unexpected "foobar" block; expected one of: model, actor, context`,
+				},
+			}}, result.StructuredContent)
+		})
+
+		t.Run("a source with a validation error still gives its formatted text, because only a parse error stops the tool", func(t *testing.T) {
+			unknownEvent := strings.Replace(unformattedSource, "-> OrderPlaced\n", "-> OrderShipped\n", 1)
+			require.True(t, slices.ContainsFunc(oracle.Check(unknownEvent, "ordering.emod"), func(d *diagnostic.Entry) bool {
+				return d.Severity == diagnostic.Error && d.Message == `event "OrderShipped" does not exist`
+			}), "the source must have a validation error, or the leaf proves nothing")
+			session := connect(t)
+
+			result := callTool(t, session, "emod_fmt", map[string]any{"content": unknownEvent})
+
+			require.False(t, result.IsError, "the call must succeed: %v", result.Content)
+			require.Equal(t, map[string]any{
+				"formatted": strings.Replace(cleanSource, "-> OrderPlaced\n", "-> OrderShipped\n", 1),
+				"changed":   true,
+			}, result.StructuredContent)
+		})
+
+		t.Run("a call with a path gives the formatted text of the file, and does not change the file or write another file", func(t *testing.T) {
+			dir := t.TempDir()
+			path := filepath.Join(dir, "models", "ordering.emod")
+			writeFile(t, path, unformattedSource)
+			before := filesUnder(t, dir)
+			session := connectAt(t, dir)
+
+			result := callTool(t, session, "emod_fmt", map[string]any{"path": "models/ordering.emod"})
+
+			require.False(t, result.IsError, "the call must succeed: %v", result.Content)
+			require.Equal(t, map[string]any{"formatted": cleanSource, "changed": true}, result.StructuredContent)
+			require.Equal(t, before, filesUnder(t, dir))
+			onDisk, err := os.ReadFile(path)
+			require.NoError(t, err)
+			require.Equal(t, unformattedSource, string(onDisk))
+		})
+
+		t.Run("a path outside the root gives an error result that names the root", func(t *testing.T) {
+			base := t.TempDir()
+			project := filepath.Join(base, "project")
+			require.NoError(t, os.Mkdir(project, 0o755))
+			writeFile(t, filepath.Join(base, "ordering.emod"), unformattedSource)
+			session := connectAt(t, project)
+
+			result := callTool(t, session, "emod_fmt", map[string]any{"path": "../ordering.emod"})
+
+			require.True(t, result.IsError)
+			require.Contains(t, textOf(t, result), "is outside the root "+project)
 		})
 	})
 

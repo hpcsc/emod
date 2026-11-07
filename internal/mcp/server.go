@@ -22,6 +22,7 @@ import (
 	"github.com/hpcsc/emod/internal/diagnostic"
 	"github.com/hpcsc/emod/internal/diagram"
 	"github.com/hpcsc/emod/internal/export"
+	"github.com/hpcsc/emod/internal/formatter"
 	"github.com/hpcsc/emod/internal/glossary"
 	"github.com/hpcsc/emod/internal/linter"
 	"github.com/hpcsc/emod/internal/oracle"
@@ -186,6 +187,23 @@ var diagramTool = &sdk.Tool{
 	OutputSchema: oneOf[diagramResult, checkResult](),
 }
 
+type fmtResult struct {
+	Formatted string `json:"formatted"`
+	Changed   bool   `json:"changed"`
+}
+
+var fmtTool = &sdk.Tool{
+	Name: "emod_fmt",
+	Description: "Format an .emod model in the canonical layout, the same text that `emod fmt` writes. " +
+		"Give the source in content, or give the path of an .emod file under the root of the server in path, as for emod_check. " +
+		"formatted is the text in the canonical layout, and changed is true when formatted differs from the source, " +
+		"the same answer as the exit code of `emod fmt --check`. " +
+		"The tool does not write the file: write formatted with the file tool of the host. " +
+		"A source that does not parse gives its parse diagnostics in diagnostics, with no formatted text.",
+	InputSchema:  sourceSchema,
+	OutputSchema: oneOf[fmtResult, parseDiagnostics](),
+}
+
 type Server struct {
 	in   io.ReadCloser
 	out  io.WriteCloser
@@ -220,6 +238,7 @@ func (s *Server) Run(ctx context.Context) error {
 	sdk.AddTool(server, exportTool, s.exportModel)
 	sdk.AddTool(server, glossaryTool, s.renderGlossary)
 	sdk.AddTool(server, diagramTool, s.drawDiagram)
+	sdk.AddTool(server, fmtTool, s.formatModel)
 	return server.Run(ctx, &sdk.IOTransport{Reader: s.in, Writer: s.out})
 }
 
@@ -343,6 +362,19 @@ func (s *Server) drawDiagram(_ context.Context, _ *sdk.CallToolRequest, input di
 		result.Content = append(result.Content, &sdk.TextContent{Text: strings.Join(lines, "\n")})
 	}
 	return result, diagramResult{Diagram: string(drawn), Diagnostics: diagnostic.Records(diagnostics)}, nil
+}
+
+func (s *Server) formatModel(_ context.Context, _ *sdk.CallToolRequest, input sourceInput) (*sdk.CallToolResult, any, error) {
+	source, name, err := s.source(input)
+	if err != nil {
+		return nil, nil, err
+	}
+	model, diagnostics := oracle.Parse(source, name)
+	if len(diagnostics) > 0 {
+		return s.structuredResult(parseDiagnostics{Diagnostics: diagnostic.Records(diagnostics)})
+	}
+	formatted := formatter.Format(model)
+	return s.structuredResult(fmtResult{Formatted: formatted, Changed: formatted != source})
 }
 
 func (s *Server) documentResult(document []byte, err error) (*sdk.CallToolResult, any, error) {

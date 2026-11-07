@@ -62,14 +62,14 @@ the formatted result and the parse diagnostics. A source that parses gives `form
 not parse gives only its parse diagnostics. The tool writes no file.
 
 **Acceptance Criteria:**
-- [ ] `tools/list` lists `emod_fmt`, with the input of `emod_check` and an output schema of one of the
+- [x] `tools/list` lists `emod_fmt`, with the input of `emod_check` and an output schema of one of the
   formatted result and the parse diagnostics.
-- [ ] A source in another layout gives the canonical text and `changed: true`.
-- [ ] A source in the canonical format gives the same text and `changed: false`.
-- [ ] A source that does not parse gives its parse diagnostics and no `formatted`, as a normal result.
-- [ ] A source with a validation error still gives its formatted text.
-- [ ] A call with a path does not change the file, and writes no other file under the root.
-- [ ] Through the built binary, for each file in `examples/` and `internal/parser/testdata/`, `formatted` is
+- [x] A source in another layout gives the canonical text and `changed: true`.
+- [x] A source in the canonical format gives the same text and `changed: false`.
+- [x] A source that does not parse gives its parse diagnostics and no `formatted`, as a normal result.
+- [x] A source with a validation error still gives its formatted text.
+- [x] A call with a path does not change the file, and writes no other file under the root.
+- [x] Through the built binary, for each file in `examples/` and `internal/parser/testdata/`, `formatted` is
   the text that `emod fmt` writes to a copy of the file, and `changed` matches the exit code of
   `emod fmt --check`. A file that does not parse gives the lines that `emod fmt` prints.
 

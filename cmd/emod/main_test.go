@@ -187,6 +187,40 @@ func glossaryCLI(t *testing.T, path, format string) (printed string, parseDiagno
 	return stdout.String(), ""
 }
 
+func fmtCLI(t *testing.T, path string) (formatted string, changed bool, parseDiagnostics string) {
+	t.Helper()
+
+	check := exec.Command(emodBinary, "fmt", "--check", path)
+	check.Dir = repoRoot(t)
+	check.Env = withoutAISettings(t)
+	var stderr strings.Builder
+	check.Stderr = &stderr
+	err := check.Run()
+	var exitErr *exec.ExitError
+	if errors.As(err, &exitErr) {
+		require.Equal(t, 1, exitErr.ExitCode(), "emod fmt --check failed: %s", stderr.String())
+		if stderr.String() != path+" is not formatted\n" {
+			require.NotEmpty(t, stderr.String())
+			return "", false, strings.TrimSpace(stderr.String())
+		}
+		changed = true
+	} else {
+		require.NoError(t, err)
+	}
+
+	source, err := os.ReadFile(filepath.Join(repoRoot(t), path))
+	require.NoError(t, err)
+	copied := filepath.Join(t.TempDir(), filepath.Base(path))
+	require.NoError(t, os.WriteFile(copied, source, 0o644))
+	write := exec.Command(emodBinary, "fmt", copied)
+	write.Env = withoutAISettings(t)
+	output, err := write.CombinedOutput()
+	require.NoError(t, err, "emod fmt failed: %s", output)
+	written, err := os.ReadFile(copied)
+	require.NoError(t, err)
+	return string(written), changed, ""
+}
+
 func diagnosticLines(t *testing.T, diagnostics any) string {
 	t.Helper()
 
@@ -312,7 +346,7 @@ func TestMCP(t *testing.T) {
 			for _, tool := range listed.Tools {
 				names = append(names, tool.Name)
 			}
-			require.ElementsMatch(t, []string{"emod_check", "emod_diagram", "emod_explain_rule", "emod_export", "emod_glossary", "emod_schema", "emod_slices_list"}, names)
+			require.ElementsMatch(t, []string{"emod_check", "emod_diagram", "emod_explain_rule", "emod_export", "emod_fmt", "emod_glossary", "emod_schema", "emod_slices_list"}, names)
 		})
 	})
 
@@ -569,6 +603,34 @@ func TestMCP(t *testing.T) {
 		t.Run("gives the svg of emod diagram --specs for a model with specs", func(t *testing.T) {
 			requireDiagramParity(t, "examples/specs_hotel.emod", map[string]any{"format": "svg", "specs": true})
 		})
+	})
+
+	t.Run("fmt", func(t *testing.T) {
+		paths := modelPaths(t)
+		require.Contains(t, paths, "internal/parser/testdata/invalid.emod", "the files must include one that does not parse")
+		_, changed, _ := fmtCLI(t, "examples/error_diagnostics_test.emod")
+		require.True(t, changed, "the files must include one that is not formatted, or no leaf sees changed true")
+		_, changed, _ = fmtCLI(t, "examples/all_patterns.emod")
+		require.False(t, changed, "the files must include one that is formatted, or no leaf sees changed false")
+
+		for _, path := range paths {
+			t.Run("gives the text that emod fmt writes and the answer of emod fmt --check, or the parse diagnostics, for the path "+path, func(t *testing.T) {
+				session, _ := startServer(t)
+				formatted, changed, parseDiagnostics := fmtCLI(t, path)
+
+				result := callTool(t, session, "emod_fmt", map[string]any{"path": path})
+
+				require.False(t, result.IsError, "the call must succeed: %v", result.Content)
+				structured, ok := result.StructuredContent.(map[string]any)
+				require.True(t, ok, "the structured result must be an object, but it is %T", result.StructuredContent)
+				if parseDiagnostics != "" {
+					require.NotContains(t, structured, "formatted")
+					require.Equal(t, parseDiagnostics, diagnosticLines(t, structured["diagnostics"]))
+					return
+				}
+				require.Equal(t, map[string]any{"formatted": formatted, "changed": changed}, structured)
+			})
+		}
 	})
 
 	t.Run("shutdown", func(t *testing.T) {
