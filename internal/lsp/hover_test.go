@@ -309,7 +309,7 @@ context "Reservations" {
 		assertHover(t, doc, line, char, "Attaches a human-readable description to the enclosing declaration.")
 	})
 
-	t.Run("hover sees a translation's own event, and navigation still does not", func(t *testing.T) {
+	t.Run("a translation's own event hovers and navigates like an event of the slice", func(t *testing.T) {
 		const doc = `context "Reservations" {
     aggregate "Reservation" {
         slice "Import External Booking" {
@@ -332,11 +332,27 @@ context "Reservations" {
 		require.NotNil(t, lsp.GetDefinition(doc, madeLine, madeChar, uri), "the slice-declared event is the control")
 
 		subLine, subChar := posIn(t, doc, "subscribes = [ReservationMade, BookingImported", "BookingImported")
-		require.Nil(t, lsp.GetDefinition(doc, subLine, subChar, uri))
-
 		declLine, declChar := posIn(t, doc, `event "BookingImported"`, "BookingImported")
-		require.NotNil(t, lsp.GetHover(doc, declLine, declChar), "hover answers where navigation does not")
-		require.Nil(t, lsp.GetReferences(doc, declLine, declChar, uri))
+		declaration := lsp.Location{
+			URI: uri,
+			Range: lsp.Range{
+				Start: lsp.Position{Line: declLine, Character: declChar},
+				End:   lsp.Position{Line: declLine, Character: declChar + len("BookingImported")},
+			},
+		}
+		require.Equal(t, &declaration, lsp.GetDefinition(doc, subLine, subChar, uri))
+
+		require.NotNil(t, lsp.GetHover(doc, declLine, declChar))
+		require.Equal(t, []lsp.Location{
+			declaration,
+			{
+				URI: uri,
+				Range: lsp.Range{
+					Start: lsp.Position{Line: subLine, Character: subChar},
+					End:   lsp.Position{Line: subLine, Character: subChar + len("BookingImported")},
+				},
+			},
+		}, lsp.GetReferences(doc, declLine, declChar, uri))
 	})
 
 	t.Run("a construct name in a document the parser could not finish still hovers", func(t *testing.T) {

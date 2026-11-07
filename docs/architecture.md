@@ -45,6 +45,7 @@ graph TD
         formatter[formatter<br/><i>canonical .emod writer</i>]
         glossary[glossary<br/><i>domain glossary</i>]
         importer[importer<br/><i>diagram JSON → model</i>]
+        query[query<br/><i>names and their references</i>]
     end
 
     subgraph Pipeline
@@ -65,6 +66,7 @@ graph TD
     cli --> export
     cli --> formatter
     cli --> glossary
+    lsp --> query
     pipeline --> export
     pipeline --> importer
     pipeline --> formatter
@@ -81,6 +83,7 @@ graph TD
     formatter --> ast
     glossary --> ast
     importer --> ast
+    query --> ast
 
     parser --> diagnostic
     parser --> ast
@@ -214,7 +217,10 @@ diagram does not carry stay in the source.
 The **LSP** (`internal/lsp`) layers transport framing → dispatch
 (`server.go`) → one pure function per feature (`GetCompletions`,
 `GetDefinition`, `GetReferences`, `GetHover`, `GetSemanticTokens`) taking
-`(text, line, character)`. Diagnostics and formatting go through the oracle. `GetTokens` is
+`(text, line, character)`. Diagnostics and formatting go through the oracle.
+Go-to-definition, find-references and completion resolve names through
+`internal/query`, so the editor and each other caller of that package find the
+same declaration and the same references for a name. `GetTokens` is
 for the viewer's source panel rather than for an editor: it gives each stretch
 of a document the category that an HCL editor running `emod lsp` colours it
 with, and it reads construct names through the walk `GetSemanticTokens` uses,

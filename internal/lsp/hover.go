@@ -5,6 +5,7 @@ import (
 	"strings"
 
 	"github.com/hpcsc/emod/internal/ast"
+	"github.com/hpcsc/emod/internal/query"
 )
 
 var keywordDescriptions = map[string]string{
@@ -77,18 +78,18 @@ func GetHover(text string, line, character int) *Hover {
 		}
 	}
 
-	for _, scope := range invariantScopes(model) {
-		for _, inv := range scope.declared {
+	for _, scope := range query.InvariantScopes(model) {
+		for _, inv := range scope.Declared {
 			if at.onName(inv.NamePos, inv.Name) {
-				return hoverForInvariant(inv, scope.name, inv.NamePos)
+				return hoverForInvariant(inv, scope.Name(), inv.NamePos)
 			}
 		}
-		for _, ref := range scope.references {
-			if !at.onName(ref.pos, ref.name) {
+		for _, site := range scope.Sites {
+			if !at.onName(site.Pos, site.Name) {
 				continue
 			}
-			if inv, ok := scope.declarationOf(ref.name); ok {
-				return hoverForInvariant(inv, scope.name, ref.pos)
+			if inv, ok := scope.DeclarationOf(site.Name); ok {
+				return hoverForInvariant(inv, scope.Name(), site.Pos)
 			}
 		}
 	}

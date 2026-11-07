@@ -7,6 +7,7 @@ import (
 	"github.com/hashicorp/hcl/v2/hclsyntax"
 
 	"github.com/hpcsc/emod/internal/ast"
+	"github.com/hpcsc/emod/internal/query"
 )
 
 // GetCompletions returns the completions available at the cursor. Inside a spec
@@ -171,17 +172,17 @@ type block struct {
 // the identifier the brace follows and the kind is the spec entry that leads it.
 type payloadRef struct {
 	owner string
-	kinds []nameKind
+	kinds []query.Kind
 }
 
 // payloadEntries maps the spec entries that accept a payload to the kinds of
 // construct their element names, mirroring how each entry's name resolves: a
 // command slice's when names a command while an automation slice's names the
 // triggering event, so a when payload has to try both.
-var payloadEntries = map[string][]nameKind{
-	"when":  {commandName, eventName},
-	"given": {eventName},
-	"then":  {eventName},
+var payloadEntries = map[string][]query.Kind{
+	"when":  {query.KindCommand, query.KindEvent},
+	"given": {query.KindEvent},
+	"then":  {query.KindEvent},
 }
 
 type blockScanner struct {
@@ -336,11 +337,11 @@ type valueSlot struct {
 }
 
 var valueSlots = map[string]valueSlot{
-	"on":       {items: namesOfKind(eventName, EventCompletion)},
-	"reads":    {items: namesOfKind(viewName, ClassCompletion)},
+	"on":       {items: namesOfKind(query.KindEvent, EventCompletion)},
+	"reads":    {items: namesOfKind(query.KindView, ClassCompletion)},
 	"rejected": {items: invariantsInScope},
-	"given":    {items: namesOfKind(eventName, EventCompletion)},
-	"then":     {items: namesOfKind(eventName, EventCompletion)},
+	"given":    {items: namesOfKind(query.KindEvent, EventCompletion)},
+	"then":     {items: namesOfKind(query.KindEvent, EventCompletion)},
 	"when":     {items: commandAndEventNames},
 }
 
@@ -350,8 +351,8 @@ var valueSlots = map[string]valueSlot{
 // A spec's then takes an event list or one of three calls, so which names
 // belong after it is decided by the call's own name rather than by then alone.
 var compoundValueSlots = map[string]valueSlot{
-	"then view":    {items: namesOfKind(viewName, ClassCompletion)},
-	"then command": {items: namesOfKind(commandName, FunctionCompletion)},
+	"then view":    {items: namesOfKind(query.KindView, ClassCompletion)},
+	"then command": {items: namesOfKind(query.KindCommand, FunctionCompletion)},
 }
 
 // slotFor reads a word against the block holding it. `context` names a context
@@ -361,7 +362,7 @@ func slotFor(word string, block blockContext) (valueSlot, bool) {
 		if block != ctxTarget {
 			return valueSlot{}, false
 		}
-		return valueSlot{items: namesOfKind(contextName, ModuleCompletion)}, true
+		return valueSlot{items: namesOfKind(query.KindContext, ModuleCompletion)}, true
 	}
 	slot, ok := valueSlots[word]
 	return slot, ok
@@ -369,7 +370,7 @@ func slotFor(word string, block blockContext) (valueSlot, bool) {
 
 // The item kinds are the ones GetSemanticTokens gives the same names, so a name
 // an editor paints as an event does not complete as something else.
-func namesOfKind(kind nameKind, itemKind CompletionItemKind) func(*ast.Model, int) []CompletionItem {
+func namesOfKind(kind query.Kind, itemKind CompletionItemKind) func(*ast.Model, int) []CompletionItem {
 	return func(model *ast.Model, _ int) []CompletionItem {
 		return completionItems(declaredNamesInOrder(model, kind), itemKind)
 	}
@@ -385,8 +386,8 @@ func invariantsInScope(model *ast.Model, line int) []CompletionItem {
 // slice's when names a command while an automation slice's names the triggering
 // event.
 func commandAndEventNames(model *ast.Model, _ int) []CompletionItem {
-	commands := completionItems(declaredNamesInOrder(model, commandName), FunctionCompletion)
-	events := completionItems(declaredNamesInOrder(model, eventName), EventCompletion)
+	commands := completionItems(declaredNamesInOrder(model, query.KindCommand), FunctionCompletion)
+	events := completionItems(declaredNamesInOrder(model, query.KindEvent), EventCompletion)
 	return append(commands, events...)
 }
 
