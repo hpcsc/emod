@@ -35,6 +35,8 @@ this set builds only the shared plumbing plus the smoke check.
 ## User Stories
 
 ### US-001: Define the `llm.Model` port
+**Goals:** G1, G4
+
 **Description:** As an emod feature developer, I want a small interface that emod core owns for talking to a model, so that I can build AI features without coupling them to any vendor SDK.
 
 **Acceptance Criteria:**
@@ -47,6 +49,8 @@ this set builds only the shared plumbing plus the smoke check.
 **Context:** emod core must depend on an interface it owns, never on a concrete SDK, so the client can change without touching feature logic. The interface is intentionally tiny (~20 lines) — it exists to make features testable and the provider swappable, not to model the whole provider surface.
 
 ### US-002: Mock model for network-free tests
+**Goals:** G6
+
 **Description:** As an emod feature developer, I want a mock implementation of `llm.Model` that returns canned responses, so that I can unit-test AI features and the repair loop without any network call.
 
 **Acceptance Criteria:**
@@ -61,6 +65,8 @@ this set builds only the shared plumbing plus the smoke check.
 **Depends on:** US-001
 
 ### US-003: Concrete Bedrock adapter
+**Goals:** G2
+
 **Description:** As an emod maintainer, I want a concrete `llm.Model` backed by the official Anthropic Go SDK over Bedrock, so that AI features can call a real Claude model through the existing Bedrock setup.
 
 **Acceptance Criteria:**
@@ -76,6 +82,8 @@ this set builds only the shared plumbing plus the smoke check.
 **Depends on:** US-001
 
 ### US-004: Single AI configuration block
+**Goals:** G2
+
 **Description:** As an operator, I want to configure the AI backend in one place, so that I can point emod at the right account and models without code changes.
 
 **Acceptance Criteria:**
@@ -90,6 +98,8 @@ this set builds only the shared plumbing plus the smoke check.
 **Depends on:** US-003
 
 ### US-005: Single deterministic correctness oracle
+**Goals:** G5
+
 **Description:** As an emod feature developer, I want one call that runs parse → validate → lint over an emod source and returns all diagnostics, so that the repair loop and other consumers share one deterministic correctness oracle.
 
 **Acceptance Criteria:**
@@ -101,6 +111,8 @@ this set builds only the shared plumbing plus the smoke check.
 **Context:** Today the pipeline is assembled inline in each CLI command (for example, `RunValidate` chains the lexer, parser, `validator.Validate`, and `linter.Lint`, all producing `[]*diagnostic.Entry`). Consolidating that into one reusable call gives the repair loop the "deterministic oracle" the foundation describes, and lets the existing commands reuse it unchanged.
 
 ### US-006: Generate → validate → lint → repair loop
+**Goals:** G5, G6
+
 **Description:** As an emod feature developer, I want a reusable loop that asks the model for an emod source and repairs it against the oracle until it is clean or attempts run out, so that features get correct output without the model having to be right on the first try.
 
 **Acceptance Criteria:**
@@ -115,6 +127,8 @@ this set builds only the shared plumbing plus the smoke check.
 **Depends on:** US-001, US-002, US-005
 
 ### US-007: Schema-conformant structured output
+**Goals:** G1
+
 **Description:** As an emod feature developer, I want to ask the model for output that conforms to a JSON Schema and get a validated object back, so that features can consume structured results without brittle string parsing.
 
 **Acceptance Criteria:**
@@ -141,6 +155,8 @@ this set builds only the shared plumbing plus the smoke check.
 **Depends on:** US-001, US-003
 
 ### US-009: AI stays opt-in; existing paths and WASM stay provider-free
+**Goals:** G4, G7
+
 **Description:** As an emod user, I want AI to be entirely optional, so that the existing commands and the browser/WASM build keep working with no credentials and no extra dependencies.
 
 **Acceptance Criteria:**
@@ -154,6 +170,8 @@ this set builds only the shared plumbing plus the smoke check.
 **Depends on:** US-003, US-004
 
 ### US-010: End-to-end smoke command proving the seam
+**Goals:** G7
+
 **Description:** As an emod CLI user, I want a small `emod ai` command that exercises the whole seam end to end, so that I can confirm AI is configured and the repair loop works before relying on any real feature.
 
 **Acceptance Criteria:**

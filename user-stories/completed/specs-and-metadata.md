@@ -22,6 +22,8 @@ Stories are listed in recommended implementation order, following the proposal's
 ## User Stories
 
 ### US-001: Pin files to a DSL version
+**Goals:** G5
+
 **Description:** As a model author, I want my file to declare which DSL version it targets so that a future breaking grammar change fails with a clear versioning message instead of a confusing parse error deep in the file.
 
 **Acceptance Criteria:**
@@ -34,6 +36,8 @@ Stories are listed in recommended implementation order, following the proposal's
 **Context:** Versioning follows the Kubernetes convention: additive grammar changes (new optional keywords) do not bump the version; breaking changes do. This is the cheapest item in the proposal and the most expensive to retrofit later — header adoption is driven entirely by `emod fmt`.
 
 ### US-002: Describe constructs where they are declared
+**Goals:** G4
+
 **Description:** As a model author, I want to attach a `description` to any construct so that the model itself carries the ubiquitous language instead of a wiki page that drifts.
 
 **Acceptance Criteria:**
@@ -44,6 +48,8 @@ Stories are listed in recommended implementation order, following the proposal's
 - [ ] A file with no descriptions parses, validates, exports, and renders exactly as before
 
 ### US-003: Use reserved words as field names
+**Goals:** G8
+
 **Description:** As a model author, I want fields named `type`, `description`, or any other DSL keyword to remain valid so that new grammar keywords never force me to rename my domain's fields.
 
 **Acceptance Criteria:**
@@ -54,6 +60,8 @@ Stories are listed in recommended implementation order, following the proposal's
 **Context:** `fields { type string required }` is a plausible declaration in existing models. Adding `type` and `description` as keywords must not break it — the fix is general, so every current and future keyword gets the same courtesy, including ones added by later grammar work.
 
 ### US-004: Generate a glossary from the model
+**Goals:** G4
+
 **Description:** As a team member, I want `emod glossary` to render the ubiquitous language from the model so that the whole team shares one vocabulary that cannot drift from the source.
 
 **Acceptance Criteria:**
@@ -65,6 +73,8 @@ Stories are listed in recommended implementation order, following the proposal's
 **Depends on:** US-002
 
 ### US-005: Declare named invariants
+**Goals:** G2
+
 **Description:** As a model author, I want aggregates and DCB contexts to declare the business rules they protect so that a rejection is a checkable reference to a declared rule, not free text.
 
 **Acceptance Criteria:**
@@ -79,6 +89,8 @@ Stories are listed in recommended implementation order, following the proposal's
 **Depends on:** US-004 (for the glossary criterion only)
 
 ### US-006: Write Given-When-Then specs on command slices
+**Goals:** G1
+
 **Description:** As a model author, I want to write named Given-When-Then specs inside a slice so that the behaviour discovered in workshops lives next to the structure it describes instead of drifting in wiki pages or test files.
 
 **Acceptance Criteria:**
@@ -92,6 +104,8 @@ Stories are listed in recommended implementation order, following the proposal's
 **Depends on:** US-005
 
 ### US-007: Write specs for view, automation, and translation slices
+**Goals:** G1
+
 **Description:** As a model author, I want spec shapes matched to each slice pattern so that all four patterns — not just commands — can state their expected behaviour.
 
 **Acceptance Criteria:**
@@ -105,6 +119,8 @@ Stories are listed in recommended implementation order, following the proposal's
 **Depends on:** US-006
 
 ### US-008: Lint spec coverage and boundary assumptions
+**Goals:** G1
+
 **Description:** As a model author, I want lint rules that flag missing specs and specs assuming impossible history so that coverage gaps and boundary violations surface before implementation starts.
 
 **Acceptance Criteria:**
@@ -120,6 +136,8 @@ Stories are listed in recommended implementation order, following the proposal's
 **Depends on:** US-006, US-007
 
 ### US-009: Show rejection paths on the timeline
+**Goals:** G3
+
 **Description:** As a model author, I want a flow entry from a command to an invariant so that a command that can be rejected no longer renders identically to one that cannot, and the error handling discovered in workshops has somewhere to land.
 
 **Acceptance Criteria:**
@@ -134,6 +152,8 @@ Stories are listed in recommended implementation order, following the proposal's
 **Depends on:** US-005, US-008 (for the lint interplay)
 
 ### US-010: State example payloads in specs
+**Goals:** G1
+
 **Description:** As a model author, I want event and command references in a spec to carry example field values so that the scenario's meaning — the repeated room id, the overlapping dates — is stated in the spec itself.
 
 **Acceptance Criteria:**
@@ -147,6 +167,8 @@ Stories are listed in recommended implementation order, following the proposal's
 **Depends on:** US-006
 
 ### US-011: Value-aware boundary checking in DCB mode
+**Goals:** G1
+
 **Description:** As a model author working in DCB mode, I want `spec/given-outside-boundary` to compare tagged field values so that a spec assuming history outside the command's boundary is caught even when the event type alone would pass.
 
 **Acceptance Criteria:**
@@ -159,6 +181,8 @@ Stories are listed in recommended implementation order, following the proposal's
 **Depends on:** US-008, US-010
 
 ### US-012: Bind model events to wire-level types
+**Goals:** G6
+
 **Description:** As a developer consuming exports, I want each event to declare the type it is published under so that JSON and CUE exports become usable input to schema registries and code generation.
 
 **Acceptance Criteria:**
@@ -169,6 +193,8 @@ Stories are listed in recommended implementation order, following the proposal's
 - [ ] Events without a wire type validate and export exactly as before
 
 ### US-013: Fire automations after elapsed time
+**Goals:** G7
+
 **Description:** As a model author, I want an automation to fire a fixed duration after an event so that time-driven behaviour like "release the hold 24 hours after `RoomHeld`" is expressible in the model.
 
 **Acceptance Criteria:**

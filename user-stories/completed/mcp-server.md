@@ -72,6 +72,8 @@ Two chains of four tie, because US-010 needs both US-008 and US-009.
 
 ### US-001: Check a draft model from an agent
 
+**Goals:** G1, G2, G3, G4, G8
+
 **Description:** As a facilitator who drafts models with an agent, I want the agent to check each draft with
 emod before it writes the file, so that I see only models that pass the check.
 
@@ -99,6 +101,8 @@ unknown: the MCP handshake with a real host.
 
 ### US-002: Check a model file in the project
 
+**Goals:** G3, G4, G8
+
 **Description:** As a developer who uses an agent in a repository, I want the agent to check a `.emod` file
 by its path, so that the agent checks the file on disk and does not copy its text into the call.
 
@@ -124,6 +128,8 @@ the same `path` or `content` input and follows these rules.
 
 ### US-003: Give the agent the lint rules
 
+**Goals:** G2, G6
+
 **Description:** As a facilitator who drafts models with an agent, I want the agent to read why a lint rule
 exists, so that the agent fixes the cause of a finding and does not guess.
 
@@ -143,6 +149,8 @@ rules lets the agent avoid the findings in its first draft.
 **Depends on:** US-001
 
 ### US-004: Give the agent the grammar of emod
+
+**Goals:** G2, G6
 
 **Description:** As a facilitator who drafts models with an agent, I want the agent to read the emod grammar
 and examples from emod itself, so that its first draft uses valid syntax and I paste no reference.
@@ -168,6 +176,8 @@ binary, so the agent learns the grammar of the emod version that it calls.
 
 ### US-005: List the slices of a model
 
+**Goals:** G2, G3
+
 **Description:** As a facilitator who works with an agent, I want the agent to list the slices of a model
 with their patterns, so that the agent answers questions about the structure from facts.
 
@@ -184,6 +194,8 @@ elements are the parts that make the slice that pattern, for example the command
 **Depends on:** US-002
 
 ### US-006: Export a model and its glossary
+
+**Goals:** G2, G3
 
 **Description:** As a developer who uses an agent, I want the agent to get the model as JSON, CUE or a
 glossary, so that the agent reads the structure and the words of the model and does not parse the text.
@@ -209,6 +221,8 @@ the words of the model when it writes documents or answers questions.
 
 ### US-007: Draw a diagram from an agent
 
+**Goals:** G2, G3
+
 **Description:** As a facilitator who works with an agent in a chat, I want the agent to draw the model, so
 that I see the shape of a change in the chat before I open the viewer.
 
@@ -233,6 +247,8 @@ starts a viewer server, so the tool has no such option.
 
 ### US-008: Format a model from an agent
 
+**Goals:** G2, G3
+
 **Description:** As a developer who uses an agent, I want the agent to get the canonical format of a model,
 so that the files that the agent writes pass `emod fmt --check` in CI.
 
@@ -251,6 +267,8 @@ the file itself.
 **Depends on:** US-002
 
 ### US-009: Arrange the slices of a model from an agent
+
+**Goals:** G2, G3
 
 **Description:** As a developer who uses an agent, I want the agent to arrange the slices and to see the
 references that no order can fix, so that the model passes `emod slices arrange --check`.
@@ -277,6 +295,8 @@ request.
 
 ### US-010: Let a trusted agent write the formatted and arranged model
 
+**Goals:** G8
+
 **Description:** As a developer who trusts the agent in one repository, I want `emod_fmt` and
 `emod_slices_arrange` to write their result to the file, so that the agent fixes the layout of a file in one
 call.
@@ -302,6 +322,8 @@ and the host already has its own file tools for that, under the permissions that
 **Depends on:** US-008, US-009
 
 ### US-011: Register the server for a team and for other MCP hosts
+
+**Goals:** G1, G8
 
 **Description:** As a developer on a team that uses Claude Desktop, Cursor or Zed, I want instructions and a
 project configuration for the emod server, so that each person on the team gets the same tools.

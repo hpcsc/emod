@@ -56,6 +56,8 @@ US-001 is the other story to start early. It is independent of the whole rename 
 ## User Stories
 
 ### US-001: Declare the view an automation reads
+**Goals:** G2
+
 **Description:** As a model author, I want an automation to name the view it reads so that the pending work it acts on is visible in the model instead of implied.
 
 **Acceptance Criteria:**
@@ -69,6 +71,8 @@ US-001 is the other story to start early. It is independent of the whole rename 
 **Context:** The Automation pattern wires a processor to a view, not directly to an event. That view is the backlog of outstanding work, and making it explicit is what gives retries, idempotency, and "how much is pending" somewhere to live in the model rather than only in an implementation. Without this entry an automation can only express the direct event-to-command shortcut the pattern exists to avoid.
 
 ### US-002: Name an automation's activation event with `on`
+**Goals:** G1, G4
+
 **Description:** As a model author, I want an automation's activation event introduced by `on` so that `trigger` means one thing in the DSL instead of two.
 
 **Acceptance Criteria:**
@@ -82,6 +86,8 @@ US-001 is the other story to start early. It is independent of the whole rename 
 **Context:** `trigger` currently introduces a wireframe at slice level and an activation event inside an automation — one word for two unrelated things, told apart only by where it sits. Readers disambiguate by context and so does the parser.
 
 ### US-003: Activate an automation on a schedule
+**Goals:** G3
+
 **Description:** As a model author, I want an automation to activate on a schedule so that nightly and periodic work is modelled as the processor it is, with its cadence stated.
 
 **Acceptance Criteria:**
@@ -97,6 +103,8 @@ US-001 is the other story to start early. It is independent of the whole rename 
 **Depends on:** US-002
 
 ### US-004: Drop the trigger kind slot
+**Goals:** G1, G3
+
 **Description:** As a model author, I want `trigger` to take just a name so that the top-lane element stops claiming to describe machine-driven activation.
 
 **Acceptance Criteria:**
@@ -112,6 +120,8 @@ US-001 is the other story to start early. It is independent of the whole rename 
 **Depends on:** US-003
 
 ### US-005: Draw the view a trigger or automation reads
+**Goals:** G6
+
 **Description:** As a model author, I want the view a trigger or automation reads drawn as an edge so that the diagram shows a wire the model already declares.
 
 **Acceptance Criteria:**
@@ -126,6 +136,8 @@ US-001 is the other story to start early. It is independent of the whole rename 
 **Depends on:** US-001
 
 ### US-006: Read the top lane as human-only
+**Goals:** G5
+
 **Description:** As a model author, I want the top lane to hold only human entry points so that the diagram teaches the same pattern the model expresses.
 
 **Acceptance Criteria:**
@@ -141,6 +153,8 @@ US-001 is the other story to start early. It is independent of the whole rename 
 **Depends on:** US-004
 
 ### US-007: One palette for element types
+**Goals:** G5
+
 **Description:** As a model author, I want each element type to have one colour everywhere so that a colour means the same thing whichever command produced the diagram.
 
 **Acceptance Criteria:**
@@ -152,6 +166,8 @@ US-001 is the other story to start early. It is independent of the whole rename 
 **Context:** One fill colour currently names automations in SVG and draw.io and triggers in the viewer, so the same swatch identifies a different element depending on which command was run. Command, event, and view already follow Event Modeling's three sticky colours; the disagreement is confined to the elements this feature realigns.
 
 ### US-008: Flag automations with no todo list
+**Goals:** G2
+
 **Description:** As a model author, I want a lint warning when an automation declares no view so that direct event-to-command coupling is visible rather than silent.
 
 **Acceptance Criteria:**
