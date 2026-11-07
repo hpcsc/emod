@@ -49,7 +49,7 @@
     },
     {
       "n": 3,
-      "done": false,
+      "done": true,
       "title": "Document `emod_export` and `emod_glossary`",
       "language": "Go",
       "testable": false,

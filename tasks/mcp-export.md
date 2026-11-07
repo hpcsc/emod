@@ -144,9 +144,9 @@ diagnostics.
 **Behavior:** The MCP page of the docs describes both tools, and the README names them.
 
 **Acceptance Criteria:**
-- [ ] `site/content/docs/mcp.md` has a section on each tool: its formats, its default, and what each format
+- [x] `site/content/docs/mcp.md` has a section on each tool: its formats, its default, and what each format
   gives, with the rule for diagnostics.
-- [ ] The README section "Check models from an agent (MCP)" names both tools.
+- [x] The README section "Check models from an agent (MCP)" names both tools.
 
 **Patterns to follow:**
 - `site/content/docs/mcp.md`

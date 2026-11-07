@@ -114,6 +114,43 @@ that `emod slices list --format json` prints for the same model:
   `emod_check`, and no `slices`. This is a normal result, not an error result. A lint warning or a
   validation error does not stop the list.
 
+## The `emod_export` tool
+
+`emod_export` gives the model as a document, so that the agent reads the structure of the model and does not
+parse the text. It takes the same `content`, `path` and `name` as `emod_check`, and a `format`:
+
+| `format` | What the tool gives |
+| --- | --- |
+| `json` (the default) | The JSON document of the model, with the diagnostics of the check in it |
+| `diagram-json` | Each node and each edge of the diagram, with the diagnostics of the check in it |
+| `cue` | The CUE text of the model, for a source with no diagnostic |
+
+- Each format gives the same output as `emod export --format <format>`.
+- `json` and `diagram-json` give the document also for a source with errors. The document is the structured
+  content of the result, and the text block holds the same JSON.
+- `cue` gives the CUE text as one text block. A source with any diagnostic, also a warning, gives the
+  diagnostics under `diagnostics`, as the records of `emod_check`, and no CUE.
+- An unknown format gives an error result that lists the three formats.
+- `emod://schema` gives the CUE schema of the model: the document under `model` in `json`, and the text of
+  `cue`. It does not describe the `diagram-json` document.
+
+## The `emod_glossary` tool
+
+`emod_glossary` gives the terms that the model defines, so that the agent uses the words of the model when
+it writes a document or answers a question. It takes the same `content`, `path` and `name` as `emod_check`,
+and a `format`:
+
+| `format` | What the tool gives |
+| --- | --- |
+| `markdown` (the default) | The glossary as one text block |
+| `json` | The same terms as a document: the structured content, with the same JSON in the text block |
+
+- Each format gives the same text as `emod glossary --format <format>`.
+- A source that does not parse gives its parse diagnostics under `diagnostics`, and no glossary.
+- An unknown format gives an error result that lists the two formats.
+
+Neither `emod_export` nor `emod_glossary` writes a file.
+
 ## The `emod_explain_rule` tool
 
 `emod_explain_rule` tells why a lint rule exists and how to fix a finding of the rule. The call gives the
