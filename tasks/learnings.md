@@ -1609,3 +1609,10 @@ in this repo; append only learnings that generalise beyond the task that surface
 - Observed: task 2 — MCP hosts
 - Learning: scripts/mcp-inspector.sh runs npx --yes @modelcontextprotocol/inspector@2.14.0 --cli <emod> mcp --root <dir> -- --method tools/list. With the server command first, everything before -- goes to the server as it is, and everything after it is for the Inspector, so a server flag such as --root cannot reach the Inspector. tools/call takes --tool-name and --tool-args-json '<object>' (no key=value coercion), resources/read takes --uri, and an isError result makes the Inspector exit with code 5. The Inspector also prints schema portability warnings, 8 of them for the output schemas of emod, which are not errors.
 - Apply when: changing scripts/mcp-inspector.sh, adding a tool or a resource that task check:mcp must call, or reading its output
+
+## A test that compares the text of a Go standard-library error depends on the Go version
+- Type: constraint
+- Recorded: 2026-11-07
+- Observed: task 1 — MCP export
+- Learning: mise.toml pins Go 1.27.3 and go.mod says go 1.25.5. The emod_export leaf for the payload number -007 required the encoding/json text 'cannot parse "-007" as JSON number', which Go 1.27 gives; Go 1.25 gives 'json: invalid number literal "-007"', so the leaf failed in a golang:1.25 container. The leaf now requires only the value, '"-007"'. Assert the part of an error that emod writes, or the value that it names, not the words of the standard library.
+- Apply when: asserting on an error that wraps an error of the Go standard library (encoding/json, os, io/fs, strconv), or running the tests with a Go version other than the one of mise.toml
