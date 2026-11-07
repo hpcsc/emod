@@ -1,6 +1,6 @@
 # Specs, Invariants, and Model Metadata
 
-**Proposal:** `docs/proposals/specs-and-metadata-proposal.md`
+**Proposal:** `docs/proposals/completed/specs-and-metadata-proposal.md`
 
 ## Overview
 
