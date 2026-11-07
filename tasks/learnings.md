@@ -1581,3 +1581,17 @@ in this repo; append only learnings that generalise beyond the task that surface
 - Observed: task 2 — MCP arrange
 - Learning: examples/all_patterns.emod (362 lines) and internal/parser/testdata/all_patterns.emod (147 lines) begin with the same comment and model name, but their slices differ: emod slices arrange reports 3 -> 2 backward references for the first and 2 -> 1 for the second. In US-009 the docs example quoted the start of one and the counts of the other, and no test reads site/content/docs, so only the audit found it.
 - Apply when: quoting the output of a tool or command for a fixture in site/content/docs or README.md, or naming an all_patterns fixture in a test or a guard
+
+## The go-sdk runs the tool calls of one session in parallel, so a tool that writes needs a lock
+- Type: constraint
+- Recorded: 2026-11-07
+- Observed: task 1 — MCP write
+- Learning: go-sdk v1.8.0 dispatches each request except initialize with jsonrpc2.Async (mcp/server.go:2000-2005), so two tool calls of one session run at the same time. In US-010 two write calls passed the old-text check of Root.Replace together and left NUL bytes or lost one write, and a read in parallel with a write got the new start and the old end of a file. internal/mcp/root.go now holds a *sync.RWMutex that all copies of a Root share: Read takes RLock across the open and the copy, and Replace takes Lock across the compare and the write.
+- Apply when: adding a tool, a resource or a handler in internal/mcp that writes a file or changes state that another call reads
+
+## A leaf that says emod_fmt or emod_slices_arrange did not write needs a fixture that the tool changes
+- Type: recurring-finding
+- Recorded: 2026-11-07
+- Observed: task 2 — MCP write
+- Learning: Both tools write only when their text differs from the source, so a refusal leaf that ends with 'the file does not change' passes with the gate removed when the tool would leave the fixture as it is; the audit of US-010 raised three such leaves. cleanSource and lendingSource(borrowSlice, returnSlice, borrowedCopiesSlice) are canonical; unformattedSource and examples/error_diagnostics_test.emod are not formatted but are arranged; examples/all_patterns.emod is formatted but not arranged; unformattedLendingSource() in internal/mcp/server_test.go changes for both tools. The shape is the one of 'A leaf that pairs the feature with something independently satisfying the same rule cannot see the feature'.
+- Apply when: writing a leaf of emod_fmt or emod_slices_arrange, or of a later tool that writes, whose assertion is that a file did not change
