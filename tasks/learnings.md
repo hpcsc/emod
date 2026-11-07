@@ -475,7 +475,9 @@ in this repo; append only learnings that generalise beyond the task that surface
 
 ## `examples/` is enumerated by its guard, and `_test.emod` means authored to fail
 - Type: convention
-- Learning: `internal/cli/validate_test.go` stopped naming example paths by hand. `examplePaths` reads `../../examples`, splits on the `_test.emod` suffix, requires both sides non-empty, and runs each file in a subtest named after it: every file without the suffix must return no error from `cli.RunValidate`, and every file with it must return one *and* have its expected diagnostics listed in the `demonstrated` map keyed by base name, or the leaf fails with "list the diagnostics %s is authored to demonstrate". The sibling leaf, previously "returns no error for each model the repository ships as valid" and naming two examples inline, now covers `internal/parser/testdata/*.emod` only. A new example is therefore guarded the moment it lands with no list to edit, and a deliberately broken one is guarded by asserting the diagnostics it demonstrates rather than by a skip entry that silently starts passing.
+- Recorded: 2026-11-07
+- Observed: mcp-grammar
+- Learning: `internal/cli/validate_test.go` stopped naming example paths by hand. `examplePaths` reads `../../examples`, splits on the `_test.emod` suffix, requires both sides non-empty, and runs each file in a subtest named after it: every file without the suffix must return no error from `cli.RunValidate`, and every file with it must return one *and* have its expected diagnostics listed in the `demonstrated` map keyed by base name, or the leaf fails with "list the diagnostics %s is authored to demonstrate". The sibling leaf, previously "returns no error for each model the repository ships as valid" and naming two examples inline, now covers `internal/parser/testdata/*.emod` only. A deliberately broken example is guarded by asserting the diagnostics it demonstrates rather than by a skip entry that silently starts passing. A new example without the suffix has one list to edit: `examples/example.go` embeds each one and `examples.All()` gives it a description, because the MCP server serves it as `emod://examples/<name>`; the guard in `examples/example_test.go` fails until the file has an entry there, and `internal/mcp/server_test.go` and the README and MCP docs page name the three that exist.
 - Apply when: adding, repairing or deleting a file under `examples/`.
 
 ## The live proposals under `docs/proposals/ai/` are now the emod surface no test reaches
@@ -1509,3 +1511,10 @@ in this repo; append only learnings that generalise beyond the task that surface
 - Observed: mcp-lint-rules
 - Learning: The rule-name guard in internal/linter/descriptions_test.go parses each non-test .go file of internal/linter and internal/validator, not linter.go and validator.go by name: the audit of mcp-lint-rules showed that a guard over named files stays green when a new rule lands in a new file. It also fails when code other than the four helpers (info, warning, errorEntry, orphanDiagnostics) sets RuleName, and when a helper has no call, so a rename cannot empty it.
 - Apply when: writing a test that parses Go source with go/parser to collect names, calls or literals, or adding a lint rule in a new file of internal/linter or a rule name in internal/validator
+
+## Text under examples/ or docs/ reaches the binary only through the Go package beside it
+- Type: constraint
+- Recorded: 2026-11-07
+- Observed: mcp-grammar
+- Learning: //go:embed takes only paths under the folder of its package, so internal/mcp cannot embed ../../examples. examples/example.go embeds the three valid examples (examples.All()) and docs/dsl_reference.go embeds docs/dsl-reference.md (docs.DSLReference), as internal/cue/embed.go embeds schema.cue. A file that another package needs at run time from an installed binary goes into one of these packages, or into a new package in its own folder, never into a read from the disk, which works in the tests only because the repository is on disk.
+- Apply when: serving or printing the text of a file under examples/, docs/ or another folder outside internal/ from emod at run time: an MCP resource or prompt, a CLI command, the LSP, or the desktop app
