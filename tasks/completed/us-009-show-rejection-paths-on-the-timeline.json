@@ -1,5 +1,6 @@
 {
   "story": "US-009: Show rejection paths on the timeline",
+  "story_id": "specs-and-metadata/US-009",
   "tasks": [
     {
       "n": 1,

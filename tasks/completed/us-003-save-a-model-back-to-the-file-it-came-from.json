@@ -1,5 +1,6 @@
 {
   "story": "US-003: Save a model back to the file it came from",
+  "story_id": "emod-desktop/US-003",
   "tasks_file": "tasks/us-003-save-a-model-back-to-the-file-it-came-from.md",
   "tasks": [
     {

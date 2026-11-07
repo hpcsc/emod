@@ -1,5 +1,6 @@
 {
   "story": "US-001: Check a draft model from an agent",
+  "story_id": "mcp-server/US-001",
   "tasks_file": "tasks/mcp-check-draft.md",
   "tasks": [
     {

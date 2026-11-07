@@ -1,5 +1,6 @@
 {
   "story": "us-002-resolve-a-triggers-and-a-translations-reads",
+  "story_id": "lint-unread-view/US-002",
   "tasks_file": "tasks/us-002-resolve-a-triggers-and-a-translations-reads.md",
   "tasks": [
     {

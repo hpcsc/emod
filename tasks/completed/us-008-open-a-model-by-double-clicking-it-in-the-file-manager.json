@@ -1,5 +1,6 @@
 {
   "story": "Open a model by double-clicking it in the file manager",
+  "story_id": "emod-desktop/US-008",
   "tasks_file": "tasks/us-008-open-a-model-by-double-clicking-it-in-the-file-manager.md",
   "tasks": [
     {

@@ -1,5 +1,6 @@
 {
   "story": "US-002: Check a model file in the project",
+  "story_id": "mcp-server/US-002",
   "tasks_file": "tasks/mcp-check-file.md",
   "tasks": [
     {

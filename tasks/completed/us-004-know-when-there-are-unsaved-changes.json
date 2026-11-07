@@ -1,5 +1,6 @@
 {
   "story": "US-004: Know when there are unsaved changes",
+  "story_id": "emod-desktop/US-004",
   "tasks_file": "tasks/us-004-know-when-there-are-unsaved-changes.md",
   "tasks": [
     {

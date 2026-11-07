@@ -1,5 +1,6 @@
 {
   "story": "US-013: Notice when the open file changes on disk",
+  "story_id": "emod-desktop/US-013",
   "tasks_file": "tasks/us-013-external-file-changes.md",
   "tasks": [
     {

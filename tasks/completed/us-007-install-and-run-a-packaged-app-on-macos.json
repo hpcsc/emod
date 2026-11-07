@@ -1,5 +1,6 @@
 {
   "story": "Install and run a packaged app on macOS",
+  "story_id": "emod-desktop/US-007",
   "tasks_file": "tasks/us-007-install-and-run-a-packaged-app-on-macos.md",
   "tasks": [
     {

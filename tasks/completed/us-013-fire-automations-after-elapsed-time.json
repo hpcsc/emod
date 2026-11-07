@@ -1,5 +1,6 @@
 {
   "story": "us-013-fire-automations-after-elapsed-time",
+  "story_id": "specs-and-metadata/US-013",
   "tasks_file": "tasks/us-013-fire-automations-after-elapsed-time.md",
   "recovered_from": "sections",
   "tasks": [

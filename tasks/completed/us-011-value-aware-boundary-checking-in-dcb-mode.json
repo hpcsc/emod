@@ -1,5 +1,6 @@
 {
   "story": "us-011-value-aware-boundary-checking-in-dcb-mode",
+  "story_id": "specs-and-metadata/US-011",
   "tasks_file": "tasks/us-011-value-aware-boundary-checking-in-dcb-mode.md",
   "recovered_from": "sections",
   "tasks": [

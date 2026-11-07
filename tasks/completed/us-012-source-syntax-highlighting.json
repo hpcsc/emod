@@ -1,5 +1,6 @@
 {
   "story": "US-012: Read source with syntax highlighting",
+  "story_id": "emod-desktop/US-012",
   "tasks_file": "tasks/us-012-source-syntax-highlighting.md",
   "tasks": [
     {

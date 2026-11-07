@@ -1,5 +1,6 @@
 {
   "story": "US-007: Draw a diagram from an agent",
+  "story_id": "mcp-server/US-007",
   "tasks_file": "tasks/mcp-diagram.md",
   "tasks": [
     {

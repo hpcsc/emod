@@ -1,5 +1,6 @@
 {
   "story": "US-009: Arrange the slices of a model from an agent",
+  "story_id": "mcp-server/US-009",
   "tasks_file": "tasks/mcp-arrange.md",
   "tasks": [
     {

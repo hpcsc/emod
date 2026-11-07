@@ -1,5 +1,6 @@
 {
   "story": "US-011: Register the server for a team and for other MCP hosts",
+  "story_id": "mcp-server/US-011",
   "tasks_file": "tasks/mcp-hosts.md",
   "tasks": [
     {

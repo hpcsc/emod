@@ -1,5 +1,6 @@
 {
   "story": "US-002: Open a model with a native file dialog",
+  "story_id": "emod-desktop/US-002",
   "tasks_file": "tasks/us-002-open-a-model-with-a-native-file-dialog.md",
   "tasks": [
     {

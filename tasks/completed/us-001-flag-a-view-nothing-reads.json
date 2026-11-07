@@ -1,5 +1,6 @@
 {
   "story": "us-001-flag-a-view-nothing-reads",
+  "story_id": "lint-unread-view/US-001",
   "tasks_file": "tasks/us-001-flag-a-view-nothing-reads.md",
   "tasks": [
     {

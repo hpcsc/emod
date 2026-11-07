@@ -1,5 +1,6 @@
 {
   "story": "Edit source in the app and see diagnostics as you type",
+  "story_id": "emod-desktop/US-009",
   "tasks_file": "tasks/us-009-edit-source-in-the-app-and-see-diagnostics-as-you-type.md",
   "tasks": [
     {

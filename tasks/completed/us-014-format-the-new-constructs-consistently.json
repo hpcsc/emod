@@ -1,5 +1,6 @@
 {
   "story": "us-014-format-the-new-constructs-consistently",
+  "story_id": "specs-and-metadata/US-014",
   "tasks_file": "tasks/us-014-format-the-new-constructs-consistently.md",
   "recovered_from": "sections",
   "tasks": [

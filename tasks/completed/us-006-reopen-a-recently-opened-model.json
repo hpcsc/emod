@@ -1,5 +1,6 @@
 {
   "story": "US-006: Reopen a recently opened model",
+  "story_id": "emod-desktop/US-006",
   "tasks_file": "tasks/us-006-reopen-a-recently-opened-model.md",
   "tasks": [
     {

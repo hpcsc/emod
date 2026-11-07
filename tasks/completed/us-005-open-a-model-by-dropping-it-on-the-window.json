@@ -1,5 +1,6 @@
 {
   "story": "US-005: Open a model by dropping it on the window",
+  "story_id": "emod-desktop/US-005",
   "tasks_file": "tasks/us-005-open-a-model-by-dropping-it-on-the-window.md",
   "tasks": [
     {

@@ -1,5 +1,6 @@
 {
   "story": "us-016-render-specs-on-diagrams",
+  "story_id": "specs-and-metadata/US-016",
   "tasks_file": "tasks/us-016-render-specs-on-diagrams.md",
   "recovered_from": "sections",
   "tasks": [

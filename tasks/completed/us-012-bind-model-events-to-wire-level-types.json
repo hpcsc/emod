@@ -1,5 +1,6 @@
 {
   "story": "us-012-bind-model-events-to-wire-level-types",
+  "story_id": "specs-and-metadata/US-012",
   "tasks_file": "tasks/us-012-bind-model-events-to-wire-level-types.md",
   "recovered_from": "sections",
   "tasks": [

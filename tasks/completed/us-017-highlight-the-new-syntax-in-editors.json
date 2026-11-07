@@ -1,5 +1,6 @@
 {
   "story": "us-017-highlight-the-new-syntax-in-editors",
+  "story_id": "specs-and-metadata/US-017",
   "tasks_file": "tasks/us-017-highlight-the-new-syntax-in-editors.md",
   "recovered_from": "sections",
   "tasks": [

@@ -1,5 +1,6 @@
 {
   "story": "us-010-state-example-payloads-in-specs",
+  "story_id": "specs-and-metadata/US-010",
   "tasks_file": "tasks/us-010-state-example-payloads-in-specs.md",
   "recovered_from": "sections",
   "tasks": [

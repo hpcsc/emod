@@ -1,5 +1,6 @@
 {
   "story": "US-001: Render a model in a native desktop window",
+  "story_id": "emod-desktop/US-001",
   "tasks_file": "tasks/us-001-render-a-model-in-a-native-desktop-window.md",
   "tasks": [
     {

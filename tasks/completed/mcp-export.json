@@ -1,5 +1,6 @@
 {
   "story": "US-006: Export a model and its glossary",
+  "story_id": "mcp-server/US-006",
   "tasks_file": "tasks/mcp-export.md",
   "tasks": [
     {

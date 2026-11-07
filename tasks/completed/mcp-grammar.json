@@ -1,5 +1,6 @@
 {
   "story": "US-004: Give the agent the grammar of emod",
+  "story_id": "mcp-server/US-004",
   "tasks_file": "tasks/mcp-grammar.md",
   "tasks": [
     {

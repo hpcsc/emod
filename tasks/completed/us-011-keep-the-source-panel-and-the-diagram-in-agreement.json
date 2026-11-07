@@ -1,5 +1,6 @@
 {
   "story": "Keep the source panel and the diagram in agreement",
+  "story_id": "emod-desktop/US-011",
   "tasks_file": "tasks/us-011-keep-the-source-panel-and-the-diagram-in-agreement.md",
   "tasks": [
     {

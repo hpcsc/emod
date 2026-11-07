@@ -1,5 +1,6 @@
 {
   "story": "US-003: Give the agent the lint rules",
+  "story_id": "mcp-server/US-003",
   "tasks_file": "tasks/mcp-lint-rules.md",
   "tasks": [
     {

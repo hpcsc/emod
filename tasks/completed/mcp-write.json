@@ -1,5 +1,6 @@
 {
   "story": "US-010: Let a trusted agent write the formatted and arranged model",
+  "story_id": "mcp-server/US-010",
   "tasks_file": "tasks/mcp-write.md",
   "tasks": [
     {

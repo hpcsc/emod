@@ -1,5 +1,6 @@
 {
   "story": "Jump between a diagnostic and the source that caused it",
+  "story_id": "emod-desktop/US-010",
   "tasks_file": "tasks/us-010-jump-between-a-diagnostic-and-the-source-that-caused-it.md",
   "tasks": [
     {

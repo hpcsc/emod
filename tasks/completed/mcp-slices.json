@@ -1,5 +1,6 @@
 {
   "story": "US-005: List the slices of a model",
+  "story_id": "mcp-server/US-005",
   "tasks_file": "tasks/mcp-slices.md",
   "tasks": [
     {
