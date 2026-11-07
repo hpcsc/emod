@@ -97,7 +97,9 @@ The command groups each reference by its role:
 `emod trace` walks the graph from one element:
 
 - **With `<to>`:** it lists the simple paths from `<from>` to `<to>`, shortest first, up to `--max-paths`
-  (default 5). A simple path visits each node one time, so a cycle cannot make the list endless.
+  (default 5). A simple path visits each node one time, so a cycle cannot make the list endless. When the
+  model has more paths than the limit, the output says that it left out more paths. When no path goes from
+  `<from>` to `<to>`, the output says so and the command exits with code 0, because "no path" is an answer.
 - **Without `<to>`:** it lists each element that follows from `<from>`, as a tree in breadth-first order.
   Each element shows one time, under the first element that reaches it.
 - **`--upstream`:** it walks the edges backward, so it lists what leads to `<from>`.
@@ -128,8 +130,9 @@ This proposal builds on these two functions:
 2. **Show what follows** and **Show what leads here.** The detail panel and the context menu
    (`ctx-actions.js`) get two actions. Each action highlights the nodes and the arrows of the chain, and
    dims the rest.
-3. **Show the path between two nodes.** The user selects one node, then Shift-clicks a second node. The
-   viewer highlights the paths between them, shortest first, as `emod trace` does.
+3. **Show the paths between two nodes.** The user selects one node, then Shift-clicks a second node. The
+   viewer highlights each path from the first node to the second at the same time, up to the default limit
+   of `emod trace` (5). It shows the number of paths, and says when it left out more paths.
 4. **Event copies.** A copy (`event_copy`, with `copy_of`) stands for its original. The walk treats the
    copy as the original and highlights both.
 5. **Escape** clears the highlight.
@@ -169,12 +172,14 @@ emod trace <file> <from> [<to>] [flags]
       --upstream         walk the edges backward
       --no-views         leave out the subscribes and reads edges
       --max-paths <n>    the most paths to list when <to> is given (default 5)
+      --kind <kind>      the kind of <from> and <to> (when a name has two kinds)
       --format <format>  text | json (default: text)
 ```
 
 Both commands parse the file with `oracle.Parse` and stop on a parse error, as `emod slices list` does.
 A name that the model does not declare exits with code 1 and lists the declared names that are closest to
-it.
+it. For a name with two kinds, `emod references` lists each kind, and `emod trace` exits with code 1 and
+lists the kinds. On both commands, `--kind` picks one kind.
 
 ## Worked Example
 
@@ -243,7 +248,7 @@ there, and its find-references tests stay unchanged and pass. Add `query.Referen
 `emod references` command.
 
 **Phase 2: trace (M).** Add `query.Graph` over `diagram.SliceEdges`, `query.Trace`, and the `emod trace`
-command with `--upstream`, `--no-views` and `--max-paths`.
+command with `--upstream`, `--no-views`, `--max-paths` and `--kind`.
 
 **Phase 3: highlights (M).** Make the dim work for each kind of node. Add the two actions to the detail
 panel and the context menu, and the Shift-click path. Add the vitest contract test against
@@ -262,8 +267,8 @@ Tests follow the Go test rules of the repository: one umbrella `TestReferences` 
 - **The Go walk and the JavaScript walk give different answers.** *Mitigation:* both walk edges from
   `diagram.SliceEdges`, and the contract test compares them on each example.
 - **One name, two kinds.** A spec `when` can name a command or an event, and a model can declare a command
-  and an event with the same name. *Mitigation:* the output lists each kind that matches, and `--kind`
-  picks one.
+  and an event with the same name. *Mitigation:* `emod references` lists each kind that matches, and
+  `emod trace` stops and lists the kinds. On both commands, `--kind` picks one.
 - **One invariant name in two scopes.** *Mitigation:* the output groups an invariant by its scope, as the
   LSP does.
 - **A highlight hides the rest of the model.** *Mitigation:* the viewer dims the rest and does not remove
@@ -271,8 +276,6 @@ Tests follow the Go test rules of the repository: one umbrella `TestReferences` 
 
 ## Open Questions
 
-- **Command names.** `emod references` and `emod trace` are top-level commands. An `emod query` group with
-  two subcommands keeps the top level small.
 - **External systems as nodes.** If the diagram-json export gets a node for an external system, the
   viewer can highlight `from` edges too.
 - **A path through a schedule.** A scheduled automation starts from the clock, not from an event. A trace
