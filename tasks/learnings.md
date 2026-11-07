@@ -1595,3 +1595,17 @@ in this repo; append only learnings that generalise beyond the task that surface
 - Observed: task 2 — MCP write
 - Learning: Both tools write only when their text differs from the source, so a refusal leaf that ends with 'the file does not change' passes with the gate removed when the tool would leave the fixture as it is; the audit of US-010 raised three such leaves. cleanSource and lendingSource(borrowSlice, returnSlice, borrowedCopiesSlice) are canonical; unformattedSource and examples/error_diagnostics_test.emod are not formatted but are arranged; examples/all_patterns.emod is formatted but not arranged; unformattedLendingSource() in internal/mcp/server_test.go changes for both tools. The shape is the one of 'A leaf that pairs the feature with something independently satisfying the same rule cannot see the feature'.
 - Apply when: writing a leaf of emod_fmt or emod_slices_arrange, or of a later tool that writes, whose assertion is that a file did not change
+
+## Claude Code asks a person to approve the servers of a project .mcp.json, so claude mcp list cannot check a new entry
+- Type: constraint
+- Recorded: 2026-11-07
+- Observed: task 1 — MCP hosts
+- Learning: claude mcp list shows a new server of the .mcp.json of the repository as 'Pending approval (run claude to approve)' until a person approves it, and the approval writes to the settings of that person, so a run must not give it. To check the entry with no approval, run claude -p --mcp-config .mcp.json --strict-mcp-config --allowedTools mcp__emod__emod_check with a short prompt; in US-011 it gave {"diagnostics":[]}. The emod on the PATH of a machine can also be an older release with no mcp command, so put a fresh build first on PATH for the check.
+- Apply when: checking or changing the .mcp.json of the repository, or writing a criterion that Claude Code starts a server from a project file
+
+## The MCP Inspector CLI takes the server command before -- and its own options after it
+- Type: pattern
+- Recorded: 2026-11-07
+- Observed: task 2 — MCP hosts
+- Learning: scripts/mcp-inspector.sh runs npx --yes @modelcontextprotocol/inspector@2.14.0 --cli <emod> mcp --root <dir> -- --method tools/list. With the server command first, everything before -- goes to the server as it is, and everything after it is for the Inspector, so a server flag such as --root cannot reach the Inspector. tools/call takes --tool-name and --tool-args-json '<object>' (no key=value coercion), resources/read takes --uri, and an isError result makes the Inspector exit with code 5. The Inspector also prints schema portability warnings, 8 of them for the output schemas of emod, which are not errors.
+- Apply when: changing scripts/mcp-inspector.sh, adding a tool or a resource that task check:mcp must call, or reading its output
