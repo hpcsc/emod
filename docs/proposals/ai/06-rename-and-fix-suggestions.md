@@ -38,25 +38,25 @@ exist.
 
 ### Part 1: rename, with no AI
 
-- `textDocument/prepareRename` and `textDocument/rename` for commands, events, views and invariants.
-- One `WorkspaceEdit` that changes the definition and every reference. The sites come from the same
+- **G1:** `textDocument/prepareRename` and `textDocument/rename` for commands, events, views and invariants.
+- **G2:** One `WorkspaceEdit` that changes the definition and every reference. The sites come from the same
   resolution as `GetReferences`, never from a text search.
-- The server runs `oracle.Check` on the renamed text. It refuses a rename that adds an error, for example a
+- **G3:** The server runs `oracle.Check` on the renamed text. It refuses a rename that adds an error, for example a
   name that the model already declares.
-- The `events` of a `decides_on` become references, for rename and for find references.
+- **G4:** The `events` of a `decides_on` become references, for rename and for find references.
 
 ### Part 2: AI suggestions on lint findings
 
-- Code actions on the findings of the name rules suggest up to three names. The cheap model
+- **G5:** Code actions on the findings of the name rules suggest up to three names. The cheap model
   (`EMOD_AI_MODEL_CHEAP`) proposes them. The rename of part 1 and `oracle.Check` test each name. The
   developer picks one.
-- Code actions on the `dcb/*` findings offer the suggestions of the DCB knowledge in
+- **G6:** Code actions on the `dcb/*` findings offer the suggestions of the DCB knowledge in
   [02](./02-semantic-model-review.md#dcb-knowledge).
-- Each action is anchored to one lint finding. The LSP `Diagnostic` carries the rule name in `code` and the
+- **G7:** Each action is anchored to one lint finding. The LSP `Diagnostic` carries the rule name in `code` and the
   element in `data`.
-- The editor stays responsive. The light bulb shows at once, and the server calls the model only after the
+- **G8:** The editor stays responsive. The light bulb shows at once, and the server calls the model only after the
   developer picks an action.
-- With no provider configured, the AI actions are absent. Rename, the action that explains a rule, and the
+- **G9:** With no provider configured, the AI actions are absent. Rename, the action that explains a rule, and the
   fixes with no AI stay.
 
 ## Non-Goals

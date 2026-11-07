@@ -16,14 +16,14 @@ ESDM (esdm.io) addresses most of these in its YAML-based DSL: a Given-When-Then 
 
 ## Goals
 
-- Attach Given-When-Then specs to slices, covering all four slice patterns, with optional example payload data.
-- Declare named invariants on aggregates and DCB contexts; let spec rejections reference them by name.
-- Show invariant rejection paths in `flow` blocks and on diagrams.
-- Add `description` to model constructs and generate a glossary from them.
-- Pin files to a DSL version with a one-line header.
-- Annotate events with their wire-level type.
-- Fire automations on elapsed time relative to an event, completing the absolute schedules the grammar already carries.
-- Keep every existing `.emod` file valid and unchanged in meaning.
+- **G1:** Attach Given-When-Then specs to slices, covering all four slice patterns, with optional example payload data.
+- **G2:** Declare named invariants on aggregates and DCB contexts; let spec rejections reference them by name.
+- **G3:** Show invariant rejection paths in `flow` blocks and on diagrams.
+- **G4:** Add `description` to model constructs and generate a glossary from them.
+- **G5:** Pin files to a DSL version with a one-line header.
+- **G6:** Annotate events with their wire-level type.
+- **G7:** Fire automations on elapsed time relative to an event, completing the absolute schedules the grammar already carries.
+- **G8:** Keep every existing `.emod` file valid and unchanged in meaning.
 
 ## Non-Goals
 

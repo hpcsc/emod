@@ -41,16 +41,16 @@ decides if each suggestion is valid. A spec export with no AI closes the second 
 
 ## Goals
 
-- `emod ai specs <file>` suggests the specs that the gap list names, as `spec` blocks in their slices.
-- Each suggestion closes the gap it targets and adds no diagnostic that the file did not have before.
-- Each suggestion uses only names that the model declares. emod writes the `spec` block from structured
+- **G1:** `emod ai specs <file>` suggests the specs that the gap list names, as `spec` blocks in their slices.
+- **G2:** Each suggestion closes the gap it targets and adds no diagnostic that the file did not have before.
+- **G3:** Each suggestion uses only names that the model declares. emod writes the `spec` block from structured
   output. The model never writes `.emod` text into the file.
-- Each payload conforms to the declared field types, and the values agree across one spec.
-- A person sees a diff. Nothing changes the file until the person gives `--apply` or accepts the suggestion
+- **G4:** Each payload conforms to the declared field types, and the values agree across one spec.
+- **G5:** A person sees a diff. Nothing changes the file until the person gives `--apply` or accepts the suggestion
   in the desktop app.
-- The same suggestions reach the facilitator in the desktop app ([03](./03-desktop-ai-panel.md))
+- **G6:** The same suggestions reach the facilitator in the desktop app ([03](./03-desktop-ai-panel.md))
   and an agent through the MCP server ([01](./01-mcp-server.md)).
-- `emod specs export <file> --format gherkin|json` writes the specs of the model as Gherkin features or JSON
+- **G7:** `emod specs export <file> --format gherkin|json` writes the specs of the model as Gherkin features or JSON
   fixtures, with no AI. The output is deterministic, so CI can check it for drift.
 
 ## Non-Goals

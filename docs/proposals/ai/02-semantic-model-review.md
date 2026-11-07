@@ -47,26 +47,26 @@ package, `internal/ai/dcb`, gives them the same answers. See [DCB knowledge](#dc
 
 ## Goals
 
-- `emod ai review <file>` reads a model and reports semantic findings that lint cannot report.
-- The same review is available in each surface where people work on the model: the CLI, CI, the MCP prompt
+- **G1:** `emod ai review <file>` reads a model and reports semantic findings that lint cannot report.
+- **G2:** The same review is available in each surface where people work on the model: the CLI, CI, the MCP prompt
   `review-model` of [01](./01-mcp-server.md), the Review button in the AI panel of the desktop app
   ([03](./03-desktop-ai-panel.md)), and an LSP command.
-- Findings go through `internal/diagnostic` as lint findings do: the same `diagnostic.Entry`, the same
+- **G3:** Findings go through `internal/diagnostic` as lint findings do: the same `diagnostic.Entry`, the same
   severities and the same JSON shape, with more fields.
-- Precision is more important than recall. Each finding has a confidence, and emod removes findings below a
+- **G4:** Precision is more important than recall. Each finding has a confidence, and emod removes findings below a
   threshold. A noisy review is worse than no review.
-- Each finding is advisory and anchored to an element of the model. It names the problem, the element and
+- **G5:** Each finding is advisory and anchored to an element of the model. It names the problem, the element and
   a direction. It never edits the file.
-- In CI, the review is stable and advisory. A cache gives the same findings for the same source, and an AI
+- **G6:** In CI, the review is stable and advisory. A cache gives the same findings for the same source, and an AI
   finding never fails a build alone.
-- `internal/ai/dcb` holds the DCB knowledge: a brief, a suggestion schema for `tags` and `decides_on`, and
+- **G7:** `internal/ai/dcb` holds the DCB knowledge: a brief, a suggestion schema for `tags` and `decides_on`, and
   a check. The review, the code actions of [06](./06-rename-and-fix-suggestions.md) and the conversion in
   [03](./03-desktop-ai-panel.md) use it, so they give the same answers.
-- Each `dcb/*` finding gets concrete suggestions with the real field names of the events, and with the tag
+- **G8:** Each `dcb/*` finding gets concrete suggestions with the real field names of the events, and with the tag
   keys that the context declares before new keys. Each suggestion names the invariants that it protects.
-- `oracle.Check` decides if a DCB suggestion is valid. Each suggestion is advisory: nothing changes the file
+- **G9:** `oracle.Check` decides if a DCB suggestion is valid. Each suggestion is advisory: nothing changes the file
   until a person accepts it.
-- Unit tests use `llm.Fake` and need no network. An evaluation corpus measures the precision of the review
+- **G10:** Unit tests use `llm.Fake` and need no network. An evaluation corpus measures the precision of the review
   on the tested tier.
 
 ## Non-Goals

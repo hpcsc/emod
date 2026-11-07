@@ -30,15 +30,15 @@ it.
 
 ## Goals
 
-- `emod references <file> <name>`: the declaration of a name and each reference to it, grouped by role.
-- `emod trace <file> <from> [<to>]`: the paths through the model from one element, or between two
+- **G1:** `emod references <file> <name>`: the declaration of a name and each reference to it, grouped by role.
+- **G2:** `emod trace <file> <from> [<to>]`: the paths through the model from one element, or between two
   elements.
-- One Go package, `internal/query`, that the CLI, the LSP, the MCP server and the AI features all call.
+- **G3:** One Go package, `internal/query`, that the CLI, the LSP, the MCP server and the AI features all call.
   Therefore each surface gives the same answer.
-- In the web viewer and the desktop app: a selection highlights the producers and the consumers of any
+- **G4:** In the web viewer and the desktop app: a selection highlights the producers and the consumers of any
   element. Two actions highlight the chain that follows from an element and the chain that leads to it.
-- The MCP tools `emod_references` and `emod_trace` ([01](./ai/01-mcp-server.md)).
-- `--format json` on each command, for scripts and for the facts of AI answers.
+- **G5:** The MCP tools `emod_references` and `emod_trace` ([01](./ai/01-mcp-server.md)).
+- **G6:** `--format json` on each command, for scripts and for the facts of AI answers.
 
 ## Non-Goals
 

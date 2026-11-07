@@ -19,14 +19,14 @@ configuration, and one repair loop. The deterministic check of emod, not the mod
 
 ## Goals
 
-- One interface, `llm.Model`, that every AI feature depends on.
-- Access to Claude through the Anthropic API, with an API key.
-- Access to any provider that speaks the OpenAI-compatible Chat Completions API: OpenAI, Azure OpenAI,
+- **G1:** One interface, `llm.Model`, that every AI feature depends on.
+- **G2:** Access to Claude through the Anthropic API, with an API key.
+- **G3:** Access to any provider that speaks the OpenAI-compatible Chat Completions API: OpenAI, Azure OpenAI,
   Gemini, OpenRouter, LiteLLM, Ollama, LM Studio and vLLM.
-- No framework and no new heavy dependency.
-- The repair loop lives in emod core and depends only on the interface and on `oracle.Check`.
-- Each AI feature has unit tests against a fake model, with no network.
-- AI stays opt-in. With no provider configured, every command works as it does with no AI.
+- **G4:** No framework and no new heavy dependency.
+- **G5:** The repair loop lives in emod core and depends only on the interface and on `oracle.Check`.
+- **G6:** Each AI feature has unit tests against a fake model, with no network.
+- **G7:** AI stays opt-in. With no provider configured, every command works as it does with no AI.
 
 ## Non-Goals
 

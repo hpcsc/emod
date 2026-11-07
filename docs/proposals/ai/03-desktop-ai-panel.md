@@ -33,7 +33,7 @@ the desktop app, and the web viewer stays free of AI.
 
 ## Goals
 
-- One AI panel in the desktop app, with these parts, in this order of delivery:
+- **G1:** One AI panel in the desktop app, with these parts, in this order of delivery:
   1. The settings dialog for the provider ([00](./00-llm-foundation.md)).
   2. The Review button ([02](./02-semantic-model-review.md)).
   3. The chat, with an edit mode (repair loop, diff, accept, reject, undo) and an ask mode (answers from the
@@ -41,16 +41,16 @@ the desktop app, and the web viewer stays free of AI.
   4. "New model from description" ([04](./04-model-from-conversation.md)).
   5. "Suggest specs" on a slice ([05](./05-spec-suggestions.md)).
   6. "Convert to DCB" on a context ([02](./02-semantic-model-review.md#dcb-knowledge)).
-- The model call, the repair loop and the check run in the Go process of the desktop app. There is no HTTP
+- **G2:** The model call, the repair loop and the check run in the Go process of the desktop app. There is no HTTP
   backend, and no key goes to the page.
-- No AI code ships in the web viewer or in the viewer that the CLI embeds.
-- An accepted change goes into the source panel as an unsaved edit. Save, the marker for unsaved work, the
+- **G3:** No AI code ships in the web viewer or in the viewer that the CLI embeds.
+- **G4:** An accepted change goes into the source panel as an unsaved edit. Save, the marker for unsaved work, the
   questions on close and on quit, and the file watch work as they do for an edit that the user typed. The
   AI never writes the file.
-- Each proposed edit passes the check against the baseline before a person can accept it.
-- With no AI configured, the panel is hidden. Only the menu item AI ▸ Settings… stays.
-- The header of the panel shows the provider, the model and the host of the endpoint.
-- The user can cancel a call that runs.
+- **G5:** Each proposed edit passes the check against the baseline before a person can accept it.
+- **G6:** With no AI configured, the panel is hidden. Only the menu item AI ▸ Settings… stays.
+- **G7:** The header of the panel shows the provider, the model and the host of the endpoint.
+- **G8:** The user can cancel a call that runs.
 
 ## Non-Goals
 

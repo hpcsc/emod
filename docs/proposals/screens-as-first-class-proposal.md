@@ -29,12 +29,12 @@ Three further consequences follow.
 
 ## Goals
 
-- Give a screen an identity: one declaration, referred to by name from every slice it appears in.
-- Separate what belongs to the screen (who uses it, what it looks like) from what belongs to an appearance (which read models feed it here, which commands it fires here).
-- Let one screen consult several read models, and resolve every name it states.
-- Give the mockup asset a home where it is stated once.
-- Make the Bed anti-pattern computable, closing the last gap against the canonical four.
-- Retire `actor`, whose only reference site this change would otherwise have to carry forward.
+- **G1:** Give a screen an identity: one declaration, referred to by name from every slice it appears in.
+- **G2:** Separate what belongs to the screen (who uses it, what it looks like) from what belongs to an appearance (which read models feed it here, which commands it fires here).
+- **G3:** Let one screen consult several read models, and resolve every name it states.
+- **G4:** Give the mockup asset a home where it is stated once.
+- **G5:** Make the Bed anti-pattern computable, closing the last gap against the canonical four.
+- **G6:** Retire `actor`, whose only reference site this change would otherwise have to carry forward.
 
 ## Non-Goals
 

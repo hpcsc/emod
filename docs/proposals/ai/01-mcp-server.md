@@ -21,18 +21,18 @@ needs no provider, no credentials and no cost for this.
 
 ## Goals
 
-- A new `emod mcp` command that speaks the Model Context Protocol over stdio, in the same way as `emod lsp`.
-- An MCP server in `internal/mcp`. Each tool calls the same code as a CLI command. The server adds no
+- **G1:** A new `emod mcp` command that speaks the Model Context Protocol over stdio, in the same way as `emod lsp`.
+- **G2:** An MCP server in `internal/mcp`. Each tool calls the same code as a CLI command. The server adds no
   logic about models and no behaviour that the CLI does not have.
-- Each tool accepts a **file path** or **inline `.emod` text**. An assistant can check a draft before it
+- **G3:** Each tool accepts a **file path** or **inline `.emod` text**. An assistant can check a draft before it
   writes the draft to disk.
-- Structured results: diagnostics as JSON records with `rule`, `severity` and `line`, not columns of text.
-- Exact query tools ([exact model queries](../model-queries-proposal.md)) and spec export ([05](./05-spec-suggestions.md)),
+- **G4:** Structured results: diagnostics as JSON records with `rule`, `severity` and `line`, not columns of text.
+- **G5:** Exact query tools ([exact model queries](../model-queries-proposal.md)) and spec export ([05](./05-spec-suggestions.md)),
   so that the agent answers questions from facts, not from a guess.
-- Resources for the schema, the examples, the rules and the DSL reference, so that a new host knows the
+- **G6:** Resources for the schema, the examples, the rules and the DSL reference, so that a new host knows the
   grammar with no text pasted by the user.
-- Prompts for the workflow steps in the [README](./README.md): capture, challenge, import and specify.
-- **No** LLM code, provider code, credentials or network access in emod. Read-only by default, so that a
+- **G7:** Prompts for the workflow steps in the [README](./README.md): capture, challenge, import and specify.
+- **G8:** **No** LLM code, provider code, credentials or network access in emod. Read-only by default, so that a
   user can register the server for all projects.
 
 ## Non-Goals

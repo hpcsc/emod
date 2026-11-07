@@ -29,12 +29,12 @@ Three further consequences follow from the split.
 
 ## Goals
 
-- One DSL element per canonical Event Modeling pattern: `trigger` is the human entry point, `automation` is the processor.
-- Make `automation` able to express the todo-list shape, and make that shape the path of least resistance.
-- Give schedule-driven work a home in `automation`, where it belongs, and remove it from `trigger`.
-- Retire the `trigger` keyword overload so one token has one meaning.
-- Make the top lane exclusively human-facing across every exporter, and settle one palette.
-- Draw the `view → processor` and `view → trigger` edges the model already carries.
+- **G1:** One DSL element per canonical Event Modeling pattern: `trigger` is the human entry point, `automation` is the processor.
+- **G2:** Make `automation` able to express the todo-list shape, and make that shape the path of least resistance.
+- **G3:** Give schedule-driven work a home in `automation`, where it belongs, and remove it from `trigger`.
+- **G4:** Retire the `trigger` keyword overload so one token has one meaning.
+- **G5:** Make the top lane exclusively human-facing across every exporter, and settle one palette.
+- **G6:** Draw the `view → processor` and `view → trigger` edges the model already carries.
 
 ## Non-Goals
 

@@ -32,16 +32,16 @@ converge against the check in the repair loop of [00](./00-llm-foundation.md).
 
 ## Goals
 
-- `emod ai generate` turns a prose description into a valid, idiomatic `.emod` draft.
-- Before the draft, the command asks up to seven questions about actors, outcomes, boundaries, order,
+- **G1:** `emod ai generate` turns a prose description into a valid, idiomatic `.emod` draft.
+- **G2:** Before the draft, the command asks up to seven questions about actors, outcomes, boundaries, order,
   failures, external systems and consistency. Each question has lettered options, and the user can also
   write a free answer.
-- The draft states each assumption as a comment at the top of the file. `--json` lists the assumptions too.
-- Scripts can run the command with no prompt: `--answers <file>` gives the answers, and `--no-questions`
+- **G3:** The draft states each assumption as a comment at the top of the file. `--json` lists the assumptions too.
+- **G4:** Scripts can run the command with no prompt: `--answers <file>` gives the answers, and `--no-questions`
   skips the questions so that each gap becomes an assumption.
-- The draft passes the full check: no parse, validation or lint finding of any severity.
-- The same generator serves the desktop app and the MCP host, so each surface teaches the same style.
-- The run is honest. When the loop does not converge, the command shows the diagnostics that stay and
+- **G5:** The draft passes the full check: no parse, validation or lint finding of any severity.
+- **G6:** The same generator serves the desktop app and the MCP host, so each surface teaches the same style.
+- **G7:** The run is honest. When the loop does not converge, the command shows the diagnostics that stay and
   never reports success.
 
 ## Non-Goals

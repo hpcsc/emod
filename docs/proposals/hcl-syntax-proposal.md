@@ -19,13 +19,13 @@ tree-sitter grammar and editor support that already exist.
 
 ## Goals
 
-- Delete the lexer, the parser, the formatter and the tree-sitter grammar.
-- Keep the emod schema exactly as it is, so the AST and everything downstream of
+- **G1:** Delete the lexer, the parser, the formatter and the tree-sitter grammar.
+- **G2:** Keep the emod schema exactly as it is, so the AST and everything downstream of
   it stay in place.
-- Keep the file readable. A model must not grow much, and the `flow` block must
+- **G3:** Keep the file readable. A model must not grow much, and the `flow` block must
   keep its arrows.
-- Keep diagnostics precise to the line and column.
-- Keep the `.emod` extension.
+- **G4:** Keep diagnostics precise to the line and column.
+- **G5:** Keep the `.emod` extension.
 
 ## Non-Goals
 

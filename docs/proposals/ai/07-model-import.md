@@ -31,16 +31,16 @@ what the artifact does not say, and the group fills the gaps in the Shape step.
 
 ## Goals
 
-- `emod import <path> --from emlang|eventcatalog|asyncapi` writes a draft `.emod` with no language model
+- **G1:** `emod import <path> --from emlang|eventcatalog|asyncapi` writes a draft `.emod` with no language model
   and no network. `--from auto` detects the family and is the default.
-- The same input always gives the same draft, byte for byte.
-- The draft has no diagnostic of severity error. A converter never writes an element that the validator
+- **G2:** The same input always gives the same draft, byte for byte.
+- **G3:** The draft has no diagnostic of severity error. A converter never writes an element that the validator
   rejects, such as an orphan command, an orphan event or a reference that does not resolve.
-- Each draft starts with a provenance header. Each place where the artifact is silent gets a `# DRAFT:`
+- **G4:** Each draft starts with a provenance header. Each place where the artifact is silent gets a `# DRAFT:`
   comment.
-- After the write, the command runs `oracle.Check` and prints the lint findings. These findings are smells
+- **G5:** After the write, the command runs `oracle.Check` and prints the lint findings. These findings are smells
   that the draft inherits from the artifact, for example a message named `InvoiceStatusUpdated`.
-- The MCP prompt `import-from-code` of [01](./01-mcp-server.md) guides an MCP host through the import of
+- **G6:** The MCP prompt `import-from-code` of [01](./01-mcp-server.md) guides an MCP host through the import of
   code.
 
 ## Non-Goals
