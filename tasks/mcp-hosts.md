@@ -76,11 +76,14 @@ The story's acceptance criteria, numbered for the Summary:
 repository and gets a result from `emod_check` for a path in the repository.
 
 **Acceptance Criteria:**
-- [ ] `.mcp.json` has an `emod` entry with the command `emod` and the arguments `["mcp", "--root", "."]`, and
+- [x] `.mcp.json` has an `emod` entry with the command `emod` and the arguments `["mcp", "--root", "."]`, and
   keeps the `gopls` entry.
-- [ ] Through the built binary, the arguments of that entry, started in the root of the repository, give a
+- [x] Through the built binary, the arguments of that entry, started in the root of the repository, give a
   server that answers `emod_check` for `examples/all_patterns.emod` with no diagnostic.
 - [ ] `claude mcp list` in the repository, with the built binary first on `PATH`, shows `emod` as connected.
+  Not met as written: `claude mcp list` shows `emod: emod mcp --root . - ⏸ Pending approval`, because Claude
+  Code asks a person to approve the servers of a project file once. With `claude -p --mcp-config .mcp.json`,
+  Claude Code started the server from the file and `emod_check` gave `{"diagnostics":[]}`.
 
 **Patterns to follow:**
 - `cmd/emod/main_test.go` (`startServerIn`, the group "read grammar")

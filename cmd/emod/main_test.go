@@ -797,6 +797,29 @@ func TestMCP(t *testing.T) {
 		}
 	})
 
+	t.Run("project file", func(t *testing.T) {
+		t.Run("the emod entry of the .mcp.json of the repository starts a server in the repository that checks a model there", func(t *testing.T) {
+			var registered struct {
+				MCPServers map[string]struct {
+					Command string   `json:"command"`
+					Args    []string `json:"args"`
+				} `json:"mcpServers"`
+			}
+			require.NoError(t, json.Unmarshal([]byte(fileText(t, filepath.Join(repoRoot(t), ".mcp.json"))), &registered))
+			require.Contains(t, registered.MCPServers, "gopls", "the entry of emod must not replace the other servers")
+			entry, ok := registered.MCPServers["emod"]
+			require.True(t, ok, "the .mcp.json of the repository must register emod")
+			require.Equal(t, "emod", entry.Command)
+			require.Equal(t, []string{"mcp", "--root", "."}, entry.Args)
+			session, _ := startServerIn(t, repoRoot(t), entry.Args[1:]...)
+
+			result := callTool(t, session, "emod_check", map[string]any{"path": "examples/all_patterns.emod"})
+
+			require.False(t, result.IsError, "the call must succeed: %v", result.Content)
+			require.Equal(t, map[string]any{"diagnostics": []any{}}, result.StructuredContent)
+		})
+	})
+
 	t.Run("shutdown", func(t *testing.T) {
 		t.Run("the server ends with exit code 0 when the host closes its stdin", func(t *testing.T) {
 			session, server := startServer(t)

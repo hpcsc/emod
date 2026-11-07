@@ -4,7 +4,7 @@
   "tasks": [
     {
       "n": 1,
-      "done": false,
+      "done": true,
       "title": "Register `emod mcp` in the `.mcp.json` of the repository",
       "language": "Go",
       "testable": true,
