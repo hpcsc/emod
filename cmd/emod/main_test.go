@@ -205,7 +205,7 @@ func diagnosticLines(t *testing.T, diagnostics any) string {
 	return strings.Join(lines, "\n")
 }
 
-func callBinaryTool(t *testing.T, session *sdk.ClientSession, name string, arguments map[string]any) *sdk.CallToolResult {
+func callTool(t *testing.T, session *sdk.ClientSession, name string, arguments map[string]any) *sdk.CallToolResult {
 	t.Helper()
 
 	result, err := session.CallTool(context.Background(), &sdk.CallToolParams{Name: name, Arguments: arguments})
@@ -213,7 +213,7 @@ func callBinaryTool(t *testing.T, session *sdk.ClientSession, name string, argum
 	return result
 }
 
-func textOfBinary(t *testing.T, result *sdk.CallToolResult) string {
+func textOf(t *testing.T, result *sdk.CallToolResult) string {
 	t.Helper()
 
 	require.Len(t, result.Content, 1)
@@ -355,17 +355,7 @@ func TestMCP(t *testing.T) {
 			require.Equal(t, `path "../outside.emod" is outside the root `+repoRoot(t), text.Text)
 		})
 
-		root := repoRoot(t)
-		var paths []string
-		for _, pattern := range []string{"examples/*.emod", "internal/parser/testdata/*.emod"} {
-			matches, err := filepath.Glob(filepath.Join(root, pattern))
-			require.NoError(t, err)
-			for _, match := range matches {
-				relative, err := filepath.Rel(root, match)
-				require.NoError(t, err)
-				paths = append(paths, filepath.ToSlash(relative))
-			}
-		}
+		paths := modelPaths(t)
 		require.Contains(t, paths, "examples/error_diagnostics_test.emod", "the files must include one with diagnostics")
 
 		for _, path := range paths {
@@ -387,7 +377,7 @@ func TestMCP(t *testing.T) {
 			})
 
 			t.Run("gives the records of emod validate for the content of "+path, func(t *testing.T) {
-				source, err := os.ReadFile(filepath.Join(root, path))
+				source, err := os.ReadFile(filepath.Join(repoRoot(t), path))
 				require.NoError(t, err)
 				session, _ := startServer(t)
 
@@ -408,17 +398,7 @@ func TestMCP(t *testing.T) {
 	})
 
 	t.Run("list slices", func(t *testing.T) {
-		root := repoRoot(t)
-		var paths []string
-		for _, pattern := range []string{"examples/*.emod", "internal/parser/testdata/*.emod"} {
-			matches, err := filepath.Glob(filepath.Join(root, pattern))
-			require.NoError(t, err)
-			for _, match := range matches {
-				relative, err := filepath.Rel(root, match)
-				require.NoError(t, err)
-				paths = append(paths, filepath.ToSlash(relative))
-			}
-		}
+		paths := modelPaths(t)
 		require.Contains(t, paths, "internal/parser/testdata/invalid.emod", "the files must include one that does not parse")
 
 		for _, path := range paths {
@@ -455,7 +435,7 @@ func TestMCP(t *testing.T) {
 					session, _ := startServer(t)
 					printed, _ := exportCLI(t, path, format)
 
-					result := callBinaryTool(t, session, "emod_export", map[string]any{"path": path, "format": format})
+					result := callTool(t, session, "emod_export", map[string]any{"path": path, "format": format})
 
 					require.False(t, result.IsError, "the call must succeed: %v", result.Content)
 					document, err := json.Marshal(result.StructuredContent)
@@ -468,12 +448,12 @@ func TestMCP(t *testing.T) {
 				session, _ := startServer(t)
 				printed, exitCode := exportCLI(t, path, "cue")
 
-				result := callBinaryTool(t, session, "emod_export", map[string]any{"path": path, "format": "cue"})
+				result := callTool(t, session, "emod_export", map[string]any{"path": path, "format": "cue"})
 
 				require.False(t, result.IsError, "the call must succeed: %v", result.Content)
 				if exitCode == 0 {
 					require.Nil(t, result.StructuredContent)
-					require.Equal(t, printed, textOfBinary(t, result)+"\n")
+					require.Equal(t, printed, textOf(t, result)+"\n")
 					return
 				}
 				require.Empty(t, printed)
@@ -493,7 +473,7 @@ func TestMCP(t *testing.T) {
 					session, _ := startServer(t)
 					printed, parseDiagnostics := glossaryCLI(t, path, format)
 
-					result := callBinaryTool(t, session, "emod_glossary", map[string]any{"path": path, "format": format})
+					result := callTool(t, session, "emod_glossary", map[string]any{"path": path, "format": format})
 
 					require.False(t, result.IsError, "the call must succeed: %v", result.Content)
 					switch {
@@ -507,7 +487,7 @@ func TestMCP(t *testing.T) {
 						require.JSONEq(t, printed, string(document))
 					default:
 						require.Nil(t, result.StructuredContent)
-						require.Equal(t, printed, textOfBinary(t, result))
+						require.Equal(t, printed, textOf(t, result))
 					}
 				})
 			}

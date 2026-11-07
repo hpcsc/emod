@@ -192,14 +192,6 @@ func connectAt(t *testing.T, dir string) *sdk.ClientSession {
 	return session
 }
 
-func callCheck(t *testing.T, session *sdk.ClientSession, arguments map[string]any) *sdk.CallToolResult {
-	t.Helper()
-
-	result, err := session.CallTool(context.Background(), &sdk.CallToolParams{Name: "emod_check", Arguments: arguments})
-	require.NoError(t, err)
-	return result
-}
-
 func recordsOf(t *testing.T, result *sdk.CallToolResult) []diagnostic.Record {
 	t.Helper()
 
@@ -244,7 +236,7 @@ func jsonOf(t *testing.T, value any) string {
 	return string(encoded)
 }
 
-func rulesIn(t *testing.T, diagnostics any) []string {
+func rulesOfRecords(t *testing.T, diagnostics any) []string {
 	t.Helper()
 
 	var records []diagnostic.Record
@@ -256,7 +248,7 @@ func rulesIn(t *testing.T, diagnostics any) []string {
 	return rules
 }
 
-func exportedRules(t *testing.T, diagnostics any) []string {
+func rulesOfExport(t *testing.T, diagnostics any) []string {
 	t.Helper()
 
 	var records []struct {
@@ -286,22 +278,6 @@ func filesUnder(t *testing.T, dir string) map[string]string {
 		return nil
 	}))
 	return files
-}
-
-func callSlicesList(t *testing.T, session *sdk.ClientSession, arguments map[string]any) *sdk.CallToolResult {
-	t.Helper()
-
-	result, err := session.CallTool(context.Background(), &sdk.CallToolParams{Name: "emod_slices_list", Arguments: arguments})
-	require.NoError(t, err)
-	return result
-}
-
-func callExplainRule(t *testing.T, session *sdk.ClientSession, arguments map[string]any) *sdk.CallToolResult {
-	t.Helper()
-
-	result, err := session.CallTool(context.Background(), &sdk.CallToolParams{Name: "emod_explain_rule", Arguments: arguments})
-	require.NoError(t, err)
-	return result
 }
 
 func toolNamed(t *testing.T, session *sdk.ClientSession, name string) *sdk.Tool {
@@ -556,7 +532,7 @@ func TestServer(t *testing.T) {
 		t.Run("a rule name gives the rule and its description", func(t *testing.T) {
 			session := connect(t)
 
-			result := callExplainRule(t, session, map[string]any{"rule": "state-obsession"})
+			result := callTool(t, session, "emod_explain_rule", map[string]any{"rule": "state-obsession"})
 
 			require.False(t, result.IsError)
 			description, err := linter.RuleDescription("state-obsession")
@@ -568,7 +544,7 @@ func TestServer(t *testing.T) {
 		t.Run("the text block holds the same rule and description, with angle brackets as they are", func(t *testing.T) {
 			session := connect(t)
 
-			result := callExplainRule(t, session, map[string]any{"rule": "property-sourcing"})
+			result := callTool(t, session, "emod_explain_rule", map[string]any{"rule": "property-sourcing"})
 
 			description, err := linter.RuleDescription("property-sourcing")
 			require.NoError(t, err)
@@ -581,7 +557,7 @@ func TestServer(t *testing.T) {
 		t.Run("an unknown rule gives an error result that names the rule", func(t *testing.T) {
 			session := connect(t)
 
-			result := callExplainRule(t, session, map[string]any{"rule": "dcb/nonexistent"})
+			result := callTool(t, session, "emod_explain_rule", map[string]any{"rule": "dcb/nonexistent"})
 
 			require.True(t, result.IsError)
 			require.Nil(t, result.StructuredContent)
@@ -591,7 +567,7 @@ func TestServer(t *testing.T) {
 		t.Run("an empty rule name gives an error result", func(t *testing.T) {
 			session := connect(t)
 
-			result := callExplainRule(t, session, map[string]any{"rule": ""})
+			result := callTool(t, session, "emod_explain_rule", map[string]any{"rule": ""})
 
 			require.True(t, result.IsError)
 			require.Equal(t, `unknown rule ""`, textOf(t, result))
@@ -600,7 +576,7 @@ func TestServer(t *testing.T) {
 		t.Run("a call with no rule gives an error result", func(t *testing.T) {
 			session := connect(t)
 
-			result := callExplainRule(t, session, map[string]any{})
+			result := callTool(t, session, "emod_explain_rule", map[string]any{})
 
 			require.True(t, result.IsError)
 			require.Contains(t, textOf(t, result), "rule")
@@ -611,7 +587,7 @@ func TestServer(t *testing.T) {
 		t.Run("gives one record for each slice in source order, for a slice in a dcb context and one under an aggregate", func(t *testing.T) {
 			session := connect(t)
 
-			result := callSlicesList(t, session, map[string]any{"content": slicesSource})
+			result := callTool(t, session, "emod_slices_list", map[string]any{"content": slicesSource})
 
 			require.False(t, result.IsError)
 			require.Equal(t, map[string]any{"slices": []any{
@@ -624,7 +600,7 @@ func TestServer(t *testing.T) {
 		t.Run("the text block holds the same records, with an ampersand as it is", func(t *testing.T) {
 			session := connect(t)
 
-			result := callSlicesList(t, session, map[string]any{"content": strings.Replace(slicesSource, "Show Orders", "Show Orders & Returns", 1)})
+			result := callTool(t, session, "emod_slices_list", map[string]any{"content": strings.Replace(slicesSource, "Show Orders", "Show Orders & Returns", 1)})
 
 			require.JSONEq(t, `{"slices":[`+
 				`{"name":"Place Order","pattern":"command","context":"Orders","keyElements":"PlaceOrder, OrderPlaced"},`+
@@ -637,7 +613,7 @@ func TestServer(t *testing.T) {
 		t.Run("a model with no slice gives an empty list", func(t *testing.T) {
 			session := connect(t)
 
-			result := callSlicesList(t, session, map[string]any{"content": "emod = 1\n\nmodel \"Empty\" {\n}\n"})
+			result := callTool(t, session, "emod_slices_list", map[string]any{"content": "emod = 1\n\nmodel \"Empty\" {\n}\n"})
 
 			require.False(t, result.IsError)
 			require.Equal(t, map[string]any{"slices": []any{}}, result.StructuredContent)
@@ -646,7 +622,7 @@ func TestServer(t *testing.T) {
 		t.Run("a source that does not parse gives its parse diagnostics and no slices, as a normal result", func(t *testing.T) {
 			session := connect(t)
 
-			result := callSlicesList(t, session, map[string]any{"content": "emod = 1\n\nmodel \"Broken\" {\n", "name": "broken.emod"})
+			result := callTool(t, session, "emod_slices_list", map[string]any{"content": "emod = 1\n\nmodel \"Broken\" {\n", "name": "broken.emod"})
 
 			require.False(t, result.IsError)
 			structured, ok := result.StructuredContent.(map[string]any)
@@ -664,11 +640,11 @@ func TestServer(t *testing.T) {
 		})
 
 		t.Run("a source that does not parse gives only its parse diagnostics, not the findings of the validator on what the parser recovered", func(t *testing.T) {
-			require.Contains(t, rulesOf(oracle.Check(brokenSource, "broken.emod")), "orphan-command",
+			require.Contains(t, rulesOfEntries(oracle.Check(brokenSource, "broken.emod")), "orphan-command",
 				"the recovered model must have a validator finding, or the leaf cannot tell the two lists apart")
 			session := connect(t)
 
-			result := callSlicesList(t, session, map[string]any{"content": brokenSource, "name": "broken.emod"})
+			result := callTool(t, session, "emod_slices_list", map[string]any{"content": brokenSource, "name": "broken.emod"})
 
 			require.False(t, result.IsError)
 			require.Equal(t, map[string]any{"diagnostics": []any{
@@ -684,7 +660,7 @@ func TestServer(t *testing.T) {
 		t.Run("a source with a lint warning still gives its slices, because only a parse error stops the list", func(t *testing.T) {
 			session := connect(t)
 
-			result := callSlicesList(t, session, map[string]any{"content": warningSource})
+			result := callTool(t, session, "emod_slices_list", map[string]any{"content": warningSource})
 
 			require.False(t, result.IsError)
 			require.Equal(t, map[string]any{"slices": []any{
@@ -697,7 +673,7 @@ func TestServer(t *testing.T) {
 			writeFile(t, filepath.Join(dir, "models", "orders.emod"), slicesSource)
 			session := connectAt(t, dir)
 
-			result := callSlicesList(t, session, map[string]any{"path": "models/orders.emod"})
+			result := callTool(t, session, "emod_slices_list", map[string]any{"path": "models/orders.emod"})
 
 			require.False(t, result.IsError)
 			structured, ok := result.StructuredContent.(map[string]any)
@@ -712,7 +688,7 @@ func TestServer(t *testing.T) {
 			writeFile(t, filepath.Join(base, "orders.emod"), slicesSource)
 			session := connectAt(t, project)
 
-			result := callSlicesList(t, session, map[string]any{"path": "../orders.emod"})
+			result := callTool(t, session, "emod_slices_list", map[string]any{"path": "../orders.emod"})
 
 			require.True(t, result.IsError)
 			require.Contains(t, textOf(t, result), "is outside the root "+project)
@@ -729,7 +705,7 @@ func TestServer(t *testing.T) {
 			document := objectOf(t, result.StructuredContent)
 			require.ElementsMatch(t, []string{"diagnostics", "model"}, keysOf(document))
 			require.Equal(t, "Test", objectOf(t, document["model"])["name"])
-			require.Equal(t, []string{"state-obsession"}, exportedRules(t, document["diagnostics"]))
+			require.Equal(t, []string{"state-obsession"}, rulesOfExport(t, document["diagnostics"]))
 			require.JSONEq(t, jsonOf(t, result.StructuredContent), textOf(t, result))
 		})
 
@@ -743,7 +719,7 @@ func TestServer(t *testing.T) {
 			require.False(t, result.IsError)
 			document := objectOf(t, result.StructuredContent)
 			require.Contains(t, document, "model")
-			require.Equal(t, []string{"", "orphan-command"}, exportedRules(t, document["diagnostics"]))
+			require.Equal(t, []string{"", "orphan-command"}, rulesOfExport(t, document["diagnostics"]))
 		})
 
 		t.Run("diagram-json gives the diagram document, with the diagnostics in it", func(t *testing.T) {
@@ -754,7 +730,7 @@ func TestServer(t *testing.T) {
 			require.False(t, result.IsError)
 			document := objectOf(t, result.StructuredContent)
 			require.ElementsMatch(t, []string{"diagnostics", "diagram"}, keysOf(document))
-			require.Equal(t, []string{"state-obsession"}, exportedRules(t, document["diagnostics"]))
+			require.Equal(t, []string{"state-obsession"}, rulesOfExport(t, document["diagnostics"]))
 			require.Contains(t, jsonOf(t, document["diagram"]), "OrderUpdated")
 		})
 
@@ -776,7 +752,7 @@ func TestServer(t *testing.T) {
 
 			require.False(t, result.IsError)
 			require.Equal(t, []string{"diagnostics"}, keysOf(objectOf(t, result.StructuredContent)))
-			require.Equal(t, []string{"state-obsession"}, rulesIn(t, objectOf(t, result.StructuredContent)["diagnostics"]))
+			require.Equal(t, []string{"state-obsession"}, rulesOfRecords(t, objectOf(t, result.StructuredContent)["diagnostics"]))
 			require.NotContains(t, textOf(t, result), `name: "Test"`)
 		})
 
@@ -1029,7 +1005,7 @@ func TestServer(t *testing.T) {
 				require.NoError(t, err)
 				require.Len(t, read.Contents, 1)
 
-				result := callCheck(t, session, map[string]any{"content": read.Contents[0].Text, "name": name + ".emod"})
+				result := callTool(t, session, "emod_check", map[string]any{"content": read.Contents[0].Text, "name": name + ".emod"})
 
 				require.False(t, result.IsError)
 				require.Equal(t, map[string]any{"diagnostics": []any{}}, result.StructuredContent)
@@ -1105,7 +1081,7 @@ func TestServer(t *testing.T) {
 		t.Run("a clean source gives an empty list and no error", func(t *testing.T) {
 			session := connect(t)
 
-			result := callCheck(t, session, map[string]any{"content": cleanSource})
+			result := callTool(t, session, "emod_check", map[string]any{"content": cleanSource})
 
 			require.False(t, result.IsError)
 			require.Equal(t, map[string]any{"diagnostics": []any{}}, result.StructuredContent)
@@ -1116,7 +1092,7 @@ func TestServer(t *testing.T) {
 			require.NoError(t, err)
 			session := connect(t)
 
-			result := callCheck(t, session, map[string]any{"content": string(source), "name": "hotel.emod"})
+			result := callTool(t, session, "emod_check", map[string]any{"content": string(source), "name": "hotel.emod"})
 
 			require.False(t, result.IsError)
 			require.Equal(t, []diagnostic.Record{
@@ -1128,7 +1104,7 @@ func TestServer(t *testing.T) {
 		t.Run("a source with only warnings gives each warning as a record, not as an error result", func(t *testing.T) {
 			session := connect(t)
 
-			result := callCheck(t, session, map[string]any{"content": warningSource, "name": "ordering.emod"})
+			result := callTool(t, session, "emod_check", map[string]any{"content": warningSource, "name": "ordering.emod"})
 
 			require.False(t, result.IsError)
 			records := recordsOf(t, result)
@@ -1144,7 +1120,7 @@ func TestServer(t *testing.T) {
 			require.NoError(t, err)
 			session := connect(t)
 
-			result := callCheck(t, session, map[string]any{"content": string(source), "name": "hotel.emod"})
+			result := callTool(t, session, "emod_check", map[string]any{"content": string(source), "name": "hotel.emod"})
 
 			require.JSONEq(t,
 				`{"diagnostics":[{"file":"hotel.emod","line":43,"severity":"error","message":"event \"GuestCheckedOut\" does not exist"},`+
@@ -1155,7 +1131,7 @@ func TestServer(t *testing.T) {
 		t.Run("an empty source is checked like an empty file and gives an empty list", func(t *testing.T) {
 			session := connect(t)
 
-			result := callCheck(t, session, map[string]any{"content": ""})
+			result := callTool(t, session, "emod_check", map[string]any{"content": ""})
 
 			require.False(t, result.IsError)
 			require.Equal(t, map[string]any{"diagnostics": []any{}}, result.StructuredContent)
@@ -1164,7 +1140,7 @@ func TestServer(t *testing.T) {
 		t.Run("a call with neither content nor path gives an error result that names both", func(t *testing.T) {
 			session := connect(t)
 
-			result := callCheck(t, session, map[string]any{"name": "ordering.emod"})
+			result := callTool(t, session, "emod_check", map[string]any{"name": "ordering.emod"})
 
 			require.True(t, result.IsError)
 			require.Nil(t, result.StructuredContent)
@@ -1176,7 +1152,7 @@ func TestServer(t *testing.T) {
 			writeFile(t, filepath.Join(dir, "models", "ordering.emod"), warningSource)
 			session := connectAt(t, dir)
 
-			result := callCheck(t, session, map[string]any{"path": "models/ordering.emod"})
+			result := callTool(t, session, "emod_check", map[string]any{"path": "models/ordering.emod"})
 
 			require.False(t, result.IsError)
 			records := recordsOf(t, result)
@@ -1190,7 +1166,7 @@ func TestServer(t *testing.T) {
 			writeFile(t, filepath.Join(dir, "models", "ordering.emod"), warningSource)
 			session := connectAt(t, dir)
 
-			result := callCheck(t, session, map[string]any{"path": "models/ordering.emod", "name": "draft.emod"})
+			result := callTool(t, session, "emod_check", map[string]any{"path": "models/ordering.emod", "name": "draft.emod"})
 
 			require.Equal(t, []string{"models/ordering.emod"}, filesOf(recordsOf(t, result)))
 		})
@@ -1200,7 +1176,7 @@ func TestServer(t *testing.T) {
 			writeFile(t, filepath.Join(dir, "models", "new.emod"), cleanSource)
 			session := connectAt(t, dir)
 
-			result := callCheck(t, session, map[string]any{"content": warningSource, "path": "models/new.emod"})
+			result := callTool(t, session, "emod_check", map[string]any{"content": warningSource, "path": "models/new.emod"})
 
 			require.False(t, result.IsError)
 			records := recordsOf(t, result)
@@ -1213,7 +1189,7 @@ func TestServer(t *testing.T) {
 			outside := filepath.Join(t.TempDir(), "drafts", "ordering.emod")
 			session := connect(t)
 
-			result := callCheck(t, session, map[string]any{"content": warningSource, "path": outside})
+			result := callTool(t, session, "emod_check", map[string]any{"content": warningSource, "path": outside})
 
 			require.False(t, result.IsError)
 			require.Equal(t, []string{outside}, filesOf(recordsOf(t, result)))
@@ -1222,7 +1198,7 @@ func TestServer(t *testing.T) {
 		t.Run("a call with name, path and content gives the records of content the name", func(t *testing.T) {
 			session := connect(t)
 
-			result := callCheck(t, session, map[string]any{"content": warningSource, "path": "models/new.emod", "name": "draft.emod"})
+			result := callTool(t, session, "emod_check", map[string]any{"content": warningSource, "path": "models/new.emod", "name": "draft.emod"})
 
 			require.Equal(t, []string{"draft.emod"}, filesOf(recordsOf(t, result)))
 		})
@@ -1234,7 +1210,7 @@ func TestServer(t *testing.T) {
 			require.NoError(t, os.WriteFile(filepath.Join(base, "secret.emod"), []byte("SECRET-TEXT"), 0o644))
 			session := connectAt(t, project)
 
-			result := callCheck(t, session, map[string]any{"path": "../secret.emod"})
+			result := callTool(t, session, "emod_check", map[string]any{"path": "../secret.emod"})
 
 			require.True(t, result.IsError)
 			require.Nil(t, result.StructuredContent)
@@ -1245,7 +1221,7 @@ func TestServer(t *testing.T) {
 		t.Run("a path that does not exist gives an error result that names the path and the cause", func(t *testing.T) {
 			session := connect(t)
 
-			result := callCheck(t, session, map[string]any{"path": "missing.emod"})
+			result := callTool(t, session, "emod_check", map[string]any{"path": "missing.emod"})
 
 			require.True(t, result.IsError)
 			require.Equal(t, "reading missing.emod: no such file or directory", textOf(t, result))
@@ -1254,7 +1230,7 @@ func TestServer(t *testing.T) {
 		t.Run("each record carries inline.emod when the call gives no name", func(t *testing.T) {
 			session := connect(t)
 
-			result := callCheck(t, session, map[string]any{"content": warningSource})
+			result := callTool(t, session, "emod_check", map[string]any{"content": warningSource})
 
 			require.Equal(t, []string{"inline.emod"}, filesOf(recordsOf(t, result)))
 		})
@@ -1262,7 +1238,7 @@ func TestServer(t *testing.T) {
 		t.Run("each record carries inline.emod when the name is empty", func(t *testing.T) {
 			session := connect(t)
 
-			result := callCheck(t, session, map[string]any{"content": warningSource, "name": ""})
+			result := callTool(t, session, "emod_check", map[string]any{"content": warningSource, "name": ""})
 
 			require.Equal(t, []string{"inline.emod"}, filesOf(recordsOf(t, result)))
 		})
@@ -1270,7 +1246,7 @@ func TestServer(t *testing.T) {
 		t.Run("a name with characters outside ASCII comes back unchanged", func(t *testing.T) {
 			session := connect(t)
 
-			result := callCheck(t, session, map[string]any{"content": warningSource, "name": "café/commandes.emod"})
+			result := callTool(t, session, "emod_check", map[string]any{"content": warningSource, "name": "café/commandes.emod"})
 
 			require.Equal(t, []string{"café/commandes.emod"}, filesOf(recordsOf(t, result)))
 		})
@@ -1309,7 +1285,7 @@ func readRules(t *testing.T, session *sdk.ClientSession) []listedRule {
 	return decoded.Rules
 }
 
-func rulesOf(entries []*diagnostic.Entry) []string {
+func rulesOfEntries(entries []*diagnostic.Entry) []string {
 	rules := make([]string, 0, len(entries))
 	for _, entry := range entries {
 		rules = append(rules, entry.RuleName)
