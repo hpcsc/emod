@@ -1,0 +1,43 @@
+design: planned
+types:
+  - name: Slice
+    package: internal/ast
+    change: changed
+    does: holds one slice of a model, with what it declares
+    owns:
+      - the pattern of the slice is translation, automation, view, command or unknown, in that order of checks
+      - the key elements are the parts that make the slice its pattern
+    fields: [Name, Trigger, Commands, Events, Flows, Views, Automations, Translations]
+    methods: [Pattern, KeyElements]
+  - name: SliceRecord
+    package: internal/ast
+    change: new
+    does: names one slice of a listing, as emod slices list --format json and emod_slices_list give it
+    owns:
+      - the keys name, pattern, context and keyElements
+    fields: [Name, Pattern, Context, KeyElements]
+  - name: Model
+    package: internal/ast
+    change: changed
+    does: holds a parsed model
+    owns:
+      - SliceRecords gives one record for each slice in the order of SliceRefs, and an empty list for no slice
+    fields: [Contexts]
+    methods: [SliceRefs, SliceRecords]
+  - name: Server
+    package: internal/mcp
+    change: changed
+    does: answers the MCP requests that a host sends over one reader and one writer
+    owns:
+      - emod_slices_list gives the slice records of a source that parses, and the parse diagnostics of one that does not
+    fields: [in, out, root]
+    methods: [Run]
+functions: []
+words:
+  - concept: the shape of a slice that the four slice patterns of the DSL reference name, or unknown
+    word: pattern
+    not: [kind, type, shape]
+  - concept: the parts of a slice that make it its pattern, for example its command and its event
+    word: key elements
+    not: [parts, summary]
+dependencies: []
