@@ -1,0 +1,38 @@
+design: planned
+types:
+  - name: arrangeResult
+    package: internal/mcp
+    change: new
+    does: holds the text that emod slices arrange writes for a source that parses, and the report of the arrange
+    owns:
+      - the keys arranged, changed, moved, backwardBefore, backwardAfter and backward
+      - arranged is the source as it is when no slice moves
+    fields: [Arranged, Changed, Moved, BackwardBefore, BackwardAfter, Backward]
+  - name: backwardReference
+    package: internal/mcp
+    change: new
+    does: names one reference that points backward after the arrange, with the names of its two slices
+    owns:
+      - the keys kind, label, from and to
+    fields: [Kind, Label, From, To]
+  - name: Server
+    package: internal/mcp
+    change: changed
+    does: answers the MCP requests that a host sends over one reader and one writer
+    owns:
+      - emod_slices_arrange gives the arranged text and the report of a source that parses, and the parse diagnostics of one that does not
+    fields: [in, out, root]
+    methods: [Run]
+functions: []
+words:
+  - concept: the text of a model after the arrange, as emod slices arrange writes it
+    word: arranged
+    not: [ordered, sorted, reordered]
+  - concept: a reference between two slices of one container whose from slice comes after its to slice
+    word: backward reference
+    not: [back edge, reverse reference]
+  - concept: whether a slice moves, the answer of the exit code of emod slices arrange --check
+    word: changed
+    not: [dirty, modified]
+dependencies:
+  - internal/mcp -> internal/arrange

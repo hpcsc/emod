@@ -1,0 +1,45 @@
+{
+  "story": "US-009: Arrange the slices of a model from an agent",
+  "tasks_file": "tasks/mcp-arrange.md",
+  "tasks": [
+    {
+      "n": 1,
+      "done": false,
+      "title": "Arrange the slices with `emod_slices_arrange`",
+      "language": "Go",
+      "testable": true,
+      "certainty": "high",
+      "blast_radius": "low",
+      "patterns_to_follow": [
+        "internal/mcp/server.go",
+        "internal/cli/slices_arrange.go"
+      ],
+      "depends_on": [],
+      "affected_files": [
+        "internal/mcp/server.go",
+        "internal/mcp/server_test.go",
+        "cmd/emod/main_test.go"
+      ]
+    },
+    {
+      "n": 2,
+      "done": false,
+      "title": "Document `emod_slices_arrange`",
+      "language": "Go",
+      "testable": false,
+      "certainty": "high",
+      "blast_radius": "low",
+      "patterns_to_follow": [
+        "README.md"
+      ],
+      "depends_on": [
+        1
+      ],
+      "affected_files": [
+        "site/content/docs/mcp.md",
+        "README.md"
+      ]
+    }
+  ],
+  "design_file": "tasks/mcp-arrange.design.yaml"
+}
