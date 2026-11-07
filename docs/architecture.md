@@ -144,12 +144,14 @@ flowchart LR
 - **`ast`** is the shared vocabulary: pure node types plus the traversal
   helpers `Model.SliceRefs`/`AllSlices` and `Context.SliceRefs`/`AllSlices`,
   which return slices in source order paired with the context and aggregate
-  declaring them. A slice hangs off an aggregate *or* directly off a
-  `mode dcb` context — always traverse through these helpers rather than
-  walking `ctx.Slices` and `agg.Slices` by hand. The one exception is
-  `arrange`, which reorders those fields: the helpers flatten the containers
-  and sort by source position, which is precisely what reordering has to
-  change.
+  declaring them. `SliceRecords` gives the record of each slice, with its
+  pattern and its key elements, that `emod slices list` and the MCP tool
+  `emod_slices_list` both print. A slice hangs off an aggregate *or*
+  directly off a `mode dcb` context — always traverse through these helpers
+  rather than walking `ctx.Slices` and `agg.Slices` by hand. The one
+  exception is `arrange`, which reorders those fields: the helpers flatten
+  the containers and sort by source position, which is precisely what
+  reordering has to change.
 - **`diagnostic.Entry`** is the one finding shape every stage emits, so
   frontends render CLI text, LSP diagnostics and viewer JSON from the same
   values.

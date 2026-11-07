@@ -131,9 +131,9 @@ low. The tool is read-only.
 **Behavior:** The MCP page of the docs describes the tool, and the README names it.
 
 **Acceptance Criteria:**
-- [ ] `site/content/docs/mcp.md` has a section on `emod_slices_list`: its input, the record, the patterns,
+- [x] `site/content/docs/mcp.md` has a section on `emod_slices_list`: its input, the record, the patterns,
   and the result of a source that does not parse.
-- [ ] The README section "Check models from an agent (MCP)" names the tool.
+- [x] The README section "Check models from an agent (MCP)" names the tool.
 
 **Patterns to follow:**
 - `site/content/docs/mcp.md`
@@ -141,6 +141,7 @@ low. The tool is read-only.
 **Affected files:**
 - `site/content/docs/mcp.md`
 - `README.md`
+- `docs/architecture.md`
 
 **Certainty:** high. **Blast radius:** low.
 

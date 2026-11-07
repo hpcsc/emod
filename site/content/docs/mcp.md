@@ -85,6 +85,35 @@ working directory, and the agent learns the grammar of the emod version that it 
 Some hosts do not read a resource unless you ask for it. So the tool `emod_schema` gives the schema too. It
 takes no input, and it returns the text of `emod://schema` as one text block.
 
+## The `emod_slices_list` tool
+
+`emod_slices_list` lists the slices of a model, so that the agent answers a question about the structure of
+the model from facts. It takes the same `content`, `path` and `name` as `emod_check`.
+
+The result holds one record for each slice under `slices`, in source order. Each record is the same record
+that `emod slices list --format json` prints for the same model:
+
+```json
+{
+  "slices": [
+    {
+      "name": "Reserve Room",
+      "pattern": "command",
+      "context": "Reservations",
+      "keyElements": "ReserveRoom, RoomReserved"
+    }
+  ]
+}
+```
+
+- `pattern` is `command`, `view`, `automation`, `translation` or `unknown`.
+- `keyElements` names the parts that make the slice its pattern: for example the command and its event, the
+  view, or the activation and the command of an automation.
+- A model with no slice gives an empty list.
+- A source that does not parse gives its parse diagnostics under `diagnostics`, as the records of
+  `emod_check`, and no `slices`. This is a normal result, not an error result. A lint warning or a
+  validation error does not stop the list.
+
 ## The `emod_explain_rule` tool
 
 `emod_explain_rule` tells why a lint rule exists and how to fix a finding of the rule. The call gives the

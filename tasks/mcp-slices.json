@@ -48,7 +48,7 @@
     },
     {
       "n": 3,
-      "done": false,
+      "done": true,
       "title": "Document `emod_slices_list`",
       "language": "Go",
       "testable": false,
@@ -62,7 +62,8 @@
       ],
       "affected_files": [
         "site/content/docs/mcp.md",
-        "README.md"
+        "README.md",
+        "docs/architecture.md"
       ]
     }
   ],
