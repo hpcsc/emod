@@ -1,0 +1,85 @@
+{
+  "story": "US-010: Let a trusted agent write the formatted and arranged model",
+  "tasks_file": "tasks/mcp-write.md",
+  "tasks": [
+    {
+      "n": 1,
+      "done": false,
+      "title": "Replace the text of a file under the root",
+      "language": "Go",
+      "testable": true,
+      "certainty": "low",
+      "blast_radius": "high",
+      "patterns_to_follow": [
+        "internal/mcp/root.go"
+      ],
+      "depends_on": [],
+      "affected_files": [
+        "internal/mcp/root.go",
+        "internal/mcp/root_test.go"
+      ]
+    },
+    {
+      "n": 2,
+      "done": false,
+      "title": "Write the result of `emod_fmt` and `emod_slices_arrange` with `write: true`",
+      "language": "Go",
+      "testable": true,
+      "certainty": "medium",
+      "blast_radius": "high",
+      "patterns_to_follow": [
+        "internal/mcp/server.go"
+      ],
+      "depends_on": [
+        1
+      ],
+      "affected_files": [
+        "internal/mcp/server.go",
+        "internal/mcp/server_test.go",
+        "internal/cli/mcp.go"
+      ]
+    },
+    {
+      "n": 3,
+      "done": false,
+      "title": "Allow the writes with `emod mcp --allow-write`",
+      "language": "Go",
+      "testable": true,
+      "certainty": "high",
+      "blast_radius": "medium",
+      "patterns_to_follow": [
+        "internal/cli/app.go",
+        "internal/cli/mcp_test.go"
+      ],
+      "depends_on": [
+        2
+      ],
+      "affected_files": [
+        "internal/cli/app.go",
+        "internal/cli/mcp.go",
+        "internal/cli/mcp_test.go",
+        "cmd/emod/main_test.go"
+      ]
+    },
+    {
+      "n": 4,
+      "done": false,
+      "title": "Document the write mode",
+      "language": "Go",
+      "testable": false,
+      "certainty": "high",
+      "blast_radius": "low",
+      "patterns_to_follow": [
+        "site/content/docs/mcp.md"
+      ],
+      "depends_on": [
+        3
+      ],
+      "affected_files": [
+        "site/content/docs/mcp.md",
+        "README.md"
+      ]
+    }
+  ],
+  "design_file": "tasks/mcp-write.design.yaml"
+}

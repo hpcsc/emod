@@ -1,0 +1,41 @@
+design: planned
+types:
+  - name: Root
+    package: internal/mcp
+    change: changed
+    does: reads and replaces the files under the one directory that a server may reach
+    owns:
+      - a path is under the root by the rules of os.Root, and an absolute path maps to the root by file identity
+      - a replace writes only an existing regular file, in place, and only when the file still holds the text that the caller read
+    fields: [absolute]
+    methods: [Read, Replace]
+  - name: writeInput
+    package: internal/mcp
+    change: new
+    does: names the model source of a call of emod_fmt or emod_slices_arrange, and whether the call writes the result to the file
+    owns:
+      - the fields of sourceInput, and write
+    fields: [sourceInput, Write]
+  - name: Server
+    package: internal/mcp
+    change: changed
+    does: answers the MCP requests that a host sends over one reader and one writer
+    owns:
+      - a call with write needs a server that allows writes, a path and no content
+      - emod_fmt and emod_slices_arrange write their result to the file only when it differs from the file
+    fields: [in, out, root, allowWrite]
+    methods: [Run]
+functions:
+  - mcp.NewServer(in io.ReadCloser, out io.WriteCloser, root mcp.Root, allowWrite bool) *mcp.Server
+  - cli.RunMCP(ctx context.Context, rootDir string, allowWrite bool) error
+words:
+  - concept: put the result of a tool in the file on disk
+    word: write
+    not: [save, persist, apply]
+  - concept: the setting of the person who starts the server that lets the two tools write
+    word: allow-write
+    not: [write mode flag, unsafe, writable]
+  - concept: put new text in a file that still holds the old text
+    word: replace
+    not: [overwrite, swap, update]
+dependencies: []
