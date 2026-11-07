@@ -1,0 +1,71 @@
+{
+  "story": "US-006: Export a model and its glossary",
+  "tasks_file": "tasks/mcp-export.md",
+  "tasks": [
+    {
+      "n": 1,
+      "done": false,
+      "title": "Export a model with `emod_export`",
+      "language": "Go",
+      "testable": true,
+      "certainty": "high",
+      "blast_radius": "low",
+      "patterns_to_follow": [
+        "internal/mcp/server.go",
+        "internal/mcp/server_test.go",
+        "cmd/emod/main_test.go",
+        "internal/cli/export.go"
+      ],
+      "depends_on": [],
+      "affected_files": [
+        "internal/mcp/server.go",
+        "internal/mcp/server_test.go",
+        "cmd/emod/main_test.go"
+      ]
+    },
+    {
+      "n": 2,
+      "done": false,
+      "title": "Give the glossary with `emod_glossary`",
+      "language": "Go",
+      "testable": true,
+      "certainty": "high",
+      "blast_radius": "low",
+      "patterns_to_follow": [
+        "internal/mcp/server.go",
+        "internal/mcp/server_test.go",
+        "cmd/emod/main_test.go",
+        "internal/cli/glossary.go",
+        "task:1"
+      ],
+      "depends_on": [
+        1
+      ],
+      "affected_files": [
+        "internal/mcp/server.go",
+        "internal/mcp/server_test.go",
+        "cmd/emod/main_test.go"
+      ]
+    },
+    {
+      "n": 3,
+      "done": false,
+      "title": "Document `emod_export` and `emod_glossary`",
+      "language": "Go",
+      "testable": false,
+      "certainty": "high",
+      "blast_radius": "low",
+      "patterns_to_follow": [
+        "site/content/docs/mcp.md"
+      ],
+      "depends_on": [
+        2
+      ],
+      "affected_files": [
+        "site/content/docs/mcp.md",
+        "README.md"
+      ]
+    }
+  ],
+  "design_file": "tasks/mcp-export.design.yaml"
+}

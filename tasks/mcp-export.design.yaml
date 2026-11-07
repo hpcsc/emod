@@ -1,0 +1,29 @@
+design: planned
+types:
+  - name: formatInput
+    package: internal/mcp
+    change: new
+    does: names the model source and the output format that a call of emod_export or emod_glossary gives
+    owns:
+      - the fields of sourceInput, and format
+    fields: [sourceInput, Format]
+  - name: Server
+    package: internal/mcp
+    change: changed
+    does: answers the MCP requests that a host sends over one reader and one writer
+    owns:
+      - emod_export gives the json or diagram-json document with its diagnostics, or the CUE of a clean source, or the diagnostics of a source that is not clean
+      - emod_glossary gives the Markdown or JSON glossary, or the parse diagnostics of a source that does not parse
+    fields: [in, out, root]
+    methods: [Run]
+functions: []
+words:
+  - concept: the shape of the output that a call asks for, json, diagram-json, cue, markdown
+    word: format
+    not: [kind, type, mode]
+  - concept: the terms that a model defines, as emod glossary prints them
+    word: glossary
+    not: [terms, dictionary, vocabulary]
+dependencies:
+  - internal/mcp -> internal/export
+  - internal/mcp -> internal/glossary
