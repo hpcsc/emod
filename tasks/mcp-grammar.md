@@ -159,12 +159,12 @@ description, and `emod://docs/dsl-reference` with `docs.DSLReference`.
 resource of the story. The MCP page of the docs and the README describe the resources and `emod_schema`.
 
 **Acceptance Criteria:**
-- [ ] With its working directory in an empty temporary folder, the binary returns for each example resource
+- [x] With its working directory in an empty temporary folder, the binary returns for each example resource
   the text of its file, for `emod://docs/dsl-reference` the text of `docs/dsl-reference.md`, and for
   `emod://schema` the text of `emod schema`.
-- [ ] `site/content/docs/mcp.md` lists each resource and `emod_schema`, with what each one returns, and says
+- [x] `site/content/docs/mcp.md` lists each resource and `emod_schema`, with what each one returns, and says
   that the text comes from the binary, so it matches the version of emod that the agent calls.
-- [ ] The README section "Check models from an agent (MCP)" names the grammar resources and `emod_schema`.
+- [x] The README section "Check models from an agent (MCP)" names the grammar resources and `emod_schema`.
 
 **Patterns to follow:**
 - `cmd/emod/main_test.go` (`startServer`)

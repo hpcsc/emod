@@ -5,8 +5,8 @@ weight: 7
 
 `emod mcp` starts a server that speaks the Model Context Protocol (MCP) over stdin and stdout. An MCP host,
 such as Claude Code, starts the server and gives its tools and resources to the model that the host runs.
-The agent then checks a draft model with emod before it writes the file, and reads why a lint rule exists
-before it fixes a finding.
+The agent reads the grammar of emod from the server before its first draft, checks the draft with emod
+before it writes the file, and reads why a lint rule exists before it fixes a finding.
 
 The server calls no model. The host brings the model, so the server needs no API key, no `EMOD_AI_*`
 setting and no network access.
@@ -61,6 +61,29 @@ The result holds a list of diagnostics under `diagnostics`. Each record is the s
 
 The agent drafts a model, calls `emod_check`, fixes the cause of each record, and calls the tool again until
 the list is empty. Then the agent writes the file with its own file tool.
+
+## The grammar of emod
+
+The server gives the agent the schema, the examples and the DSL reference of emod, so that the first draft
+of the agent uses valid syntax and you paste no reference:
+
+| Resource | MIME type | What it returns |
+| --- | --- | --- |
+| `emod://schema` | `text/plain` | The CUE schema of emod, the same text that `emod schema` prints |
+| `emod://examples/all_patterns` | `text/plain` | A hotel model that shows the four slice patterns: command, view, automation and translation |
+| `emod://examples/dcb_model` | `text/plain` | An order model in a `dcb` context, with `tags` on events and `decides_on` on commands |
+| `emod://examples/specs_hotel` | `text/plain` | A hotel model with Given-When-Then specs, with example payloads and rejections |
+| `emod://docs/dsl-reference` | `text/markdown` | The DSL reference: each construct, its syntax, the slice patterns and the specs |
+
+Each example is the same text as its file in the `examples/` folder of the emod repository, and each one
+passes `emod_check` with an empty list. The server does not serve `examples/error_diagnostics_test.emod`,
+because that file has errors on purpose.
+
+The text comes from the `emod` binary, not from a file on disk. So the server gives the same text from any
+working directory, and the agent learns the grammar of the emod version that it calls.
+
+Some hosts do not read a resource unless you ask for it. So the tool `emod_schema` gives the schema too. It
+takes no input, and it returns the text of `emod://schema` as one text block.
 
 ## The `emod_explain_rule` tool
 

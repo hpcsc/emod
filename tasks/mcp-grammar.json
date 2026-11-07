@@ -66,7 +66,7 @@
     },
     {
       "n": 4,
-      "done": false,
+      "done": true,
       "title": "Serve each resource from any working directory, and document the resources",
       "language": "Go",
       "testable": true,

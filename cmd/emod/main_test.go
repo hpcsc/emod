@@ -68,8 +68,14 @@ func withoutAISettings(t *testing.T) []string {
 func startServer(t *testing.T) (*sdk.ClientSession, *exec.Cmd) {
 	t.Helper()
 
+	return startServerIn(t, repoRoot(t))
+}
+
+func startServerIn(t *testing.T, dir string) (*sdk.ClientSession, *exec.Cmd) {
+	t.Helper()
+
 	server := exec.Command(emodBinary, "mcp")
-	server.Dir = repoRoot(t)
+	server.Dir = dir
 	server.Env = withoutAISettings(t)
 	server.Stderr = os.Stderr
 
@@ -174,15 +180,29 @@ func TestMCP(t *testing.T) {
 		})
 	})
 
-	t.Run("read schema", func(t *testing.T) {
-		t.Run("the binary gives the text that emod schema prints", func(t *testing.T) {
-			session, _ := startServer(t)
+	t.Run("read grammar", func(t *testing.T) {
+		t.Run("the binary serves the schema, each example and the DSL reference from an empty working directory", func(t *testing.T) {
+			root := repoRoot(t)
+			expected := map[string]string{"emod://schema": printedSchema(t)}
+			for uri, path := range map[string]string{
+				"emod://examples/all_patterns": "examples/all_patterns.emod",
+				"emod://examples/dcb_model":    "examples/dcb_model.emod",
+				"emod://examples/specs_hotel":  "examples/specs_hotel.emod",
+				"emod://docs/dsl-reference":    "docs/dsl-reference.md",
+			} {
+				text, err := os.ReadFile(filepath.Join(root, path))
+				require.NoError(t, err)
+				expected[uri] = string(text)
+			}
+			session, _ := startServerIn(t, t.TempDir())
 
-			read, err := session.ReadResource(context.Background(), &sdk.ReadResourceParams{URI: "emod://schema"})
+			for uri, text := range expected {
+				read, err := session.ReadResource(context.Background(), &sdk.ReadResourceParams{URI: uri})
 
-			require.NoError(t, err)
-			require.Len(t, read.Contents, 1)
-			require.Equal(t, printedSchema(t), read.Contents[0].Text)
+				require.NoError(t, err, "resource %s", uri)
+				require.Len(t, read.Contents, 1, "resource %s", uri)
+				require.Equal(t, text, read.Contents[0].Text, "resource %s", uri)
+			}
 		})
 	})
 
