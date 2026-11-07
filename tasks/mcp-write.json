@@ -21,7 +21,7 @@
     },
     {
       "n": 2,
-      "done": false,
+      "done": true,
       "title": "Write the result of `emod_fmt` and `emod_slices_arrange` with `write: true`",
       "language": "Go",
       "testable": true,

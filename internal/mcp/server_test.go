@@ -11,6 +11,7 @@ import (
 	"slices"
 	"strings"
 	"testing"
+	"time"
 
 	sdk "github.com/modelcontextprotocol/go-sdk/mcp"
 	"github.com/stretchr/testify/require"
@@ -267,6 +268,10 @@ const extendSlice = `    slice "Extend a Copy" {
     }
 `
 
+func unformattedLendingSource() string {
+	return strings.ReplaceAll(lendingSource(borrowSlice, returnSlice, borrowedCopiesSlice), "command -> event:    ", "command -> event: ")
+}
+
 func lendingSource(slices ...string) string {
 	return "emod = 1\n\nmodel \"Library Lending\" {\n}\n\ncontext \"Lending\" {\n  aggregate \"Loan\" {\n" +
 		strings.Join(slices, "\n") +
@@ -282,6 +287,18 @@ func connect(t *testing.T) *sdk.ClientSession {
 func connectAt(t *testing.T, dir string) *sdk.ClientSession {
 	t.Helper()
 
+	return serve(t, dir, false)
+}
+
+func connectWritingAt(t *testing.T, dir string) *sdk.ClientSession {
+	t.Helper()
+
+	return serve(t, dir, true)
+}
+
+func serve(t *testing.T, dir string, allowWrite bool) *sdk.ClientSession {
+	t.Helper()
+
 	root, err := mcp.NewRoot(dir)
 	require.NoError(t, err)
 	clientReads, serverWrites := io.Pipe()
@@ -290,7 +307,7 @@ func connectAt(t *testing.T, dir string) *sdk.ClientSession {
 	ctx, cancel := context.WithCancel(context.Background())
 	served := make(chan error, 1)
 	go func() {
-		served <- mcp.NewServer(serverReads, serverWrites, root).Run(ctx)
+		served <- mcp.NewServer(serverReads, serverWrites, root, allowWrite).Run(ctx)
 	}()
 
 	client := sdk.NewClient(&sdk.Implementation{Name: "test-host", Version: "1"}, nil)
@@ -451,23 +468,6 @@ func TestServer(t *testing.T) {
 			require.ElementsMatch(t, []string{"emod_check", "emod_diagram", "emod_explain_rule", "emod_export", "emod_fmt", "emod_glossary", "emod_schema", "emod_slices_arrange", "emod_slices_list"}, names)
 		})
 
-		t.Run("gives emod_slices_arrange content, path and name as optional strings and no other input", func(t *testing.T) {
-			session := connect(t)
-
-			tool := toolNamed(t, session, "emod_slices_arrange")
-
-			schema, ok := tool.InputSchema.(map[string]any)
-			require.True(t, ok)
-			require.Nil(t, schema["required"])
-			require.Equal(t, false, schema["additionalProperties"])
-			properties, ok := schema["properties"].(map[string]any)
-			require.True(t, ok)
-			require.ElementsMatch(t, []string{"content", "path", "name"}, keysOf(properties))
-			for _, key := range []string{"content", "path", "name"} {
-				require.Equal(t, map[string]any{"type": "string"}, typeOf(properties[key]), "input %s", key)
-			}
-		})
-
 		t.Run("gives emod_slices_arrange an output schema of one of two objects: the arranged text and the report, or the parse diagnostics", func(t *testing.T) {
 			session := connect(t)
 
@@ -488,7 +488,7 @@ func TestServer(t *testing.T) {
 			require.Equal(t, [][]any{{"arranged", "changed", "moved", "backwardBefore", "backwardAfter", "backward"}, {"diagnostics"}}, required)
 		})
 
-		t.Run("the description of emod_slices_arrange names the command with the same text, the answer of --check, why a backward reference stays, that the tool writes no file, and the result of a parse error", func(t *testing.T) {
+		t.Run("the description of emod_slices_arrange names the command with the same text, the answer of --check, why a backward reference stays, when the tool writes the file, and the result of a parse error", func(t *testing.T) {
 			session := connect(t)
 
 			tool := toolNamed(t, session, "emod_slices_arrange")
@@ -496,25 +496,49 @@ func TestServer(t *testing.T) {
 			require.Contains(t, tool.Description, "the same text that `emod slices arrange` writes")
 			require.Contains(t, tool.Description, "`emod slices arrange --check`")
 			require.Contains(t, tool.Description, "Only view slices move, so the arrange cannot fix such a reference")
-			require.Contains(t, tool.Description, "The tool does not write the file")
+			require.Contains(t, tool.Description, "The tool writes the file only for a call with write: true")
 			require.Contains(t, tool.Description, "A source that does not parse gives its parse diagnostics")
 		})
 
-		t.Run("gives emod_fmt content, path and name as optional strings and no other input", func(t *testing.T) {
+		for _, name := range []string{"emod_fmt", "emod_slices_arrange"} {
+			t.Run("gives "+name+" content, path and name as optional strings, write as an optional boolean, and no other input", func(t *testing.T) {
+				session := connect(t)
+
+				tool := toolNamed(t, session, name)
+
+				schema, ok := tool.InputSchema.(map[string]any)
+				require.True(t, ok)
+				require.Nil(t, schema["required"])
+				require.Equal(t, false, schema["additionalProperties"])
+				properties, ok := schema["properties"].(map[string]any)
+				require.True(t, ok)
+				require.ElementsMatch(t, []string{"content", "path", "name", "write"}, keysOf(properties))
+				for _, key := range []string{"content", "path", "name"} {
+					require.Equal(t, map[string]any{"type": "string"}, typeOf(properties[key]), "input %s", key)
+				}
+				write := objectOf(t, properties["write"])
+				require.Equal(t, "boolean", write["type"])
+				require.Equal(t, false, write["default"])
+				require.Contains(t, write["description"], "emod mcp --allow-write")
+				require.Contains(t, write["description"], "path and no content")
+			})
+		}
+
+		t.Run("gives no tool other than emod_fmt and emod_slices_arrange a write input", func(t *testing.T) {
 			session := connect(t)
 
-			tool := toolNamed(t, session, "emod_fmt")
+			listed, err := session.ListTools(context.Background(), nil)
 
-			schema, ok := tool.InputSchema.(map[string]any)
-			require.True(t, ok)
-			require.Nil(t, schema["required"])
-			require.Equal(t, false, schema["additionalProperties"])
-			properties, ok := schema["properties"].(map[string]any)
-			require.True(t, ok)
-			require.ElementsMatch(t, []string{"content", "path", "name"}, keysOf(properties))
-			for _, key := range []string{"content", "path", "name"} {
-				require.Equal(t, map[string]any{"type": "string"}, typeOf(properties[key]), "input %s", key)
+			require.NoError(t, err)
+			var writing []string
+			for _, tool := range listed.Tools {
+				schema := objectOf(t, tool.InputSchema)
+				properties, _ := schema["properties"].(map[string]any)
+				if _, ok := properties["write"]; ok {
+					writing = append(writing, tool.Name)
+				}
 			}
+			require.ElementsMatch(t, []string{"emod_fmt", "emod_slices_arrange"}, writing)
 		})
 
 		t.Run("gives emod_fmt an output schema of one of two objects: the formatted text and changed, or the parse diagnostics", func(t *testing.T) {
@@ -537,14 +561,14 @@ func TestServer(t *testing.T) {
 			require.Equal(t, [][]any{{"formatted", "changed"}, {"diagnostics"}}, required)
 		})
 
-		t.Run("the description of emod_fmt names the command with the same text, the answer of --check, that the tool writes no file, and the result of a parse error", func(t *testing.T) {
+		t.Run("the description of emod_fmt names the command with the same text, the answer of --check, when the tool writes the file, and the result of a parse error", func(t *testing.T) {
 			session := connect(t)
 
 			tool := toolNamed(t, session, "emod_fmt")
 
 			require.Contains(t, tool.Description, "the same text that `emod fmt` writes")
 			require.Contains(t, tool.Description, "`emod fmt --check`")
-			require.Contains(t, tool.Description, "The tool does not write the file")
+			require.Contains(t, tool.Description, "The tool writes the file only for a call with write: true")
 			require.Contains(t, tool.Description, "A source that does not parse gives its parse diagnostics")
 		})
 
@@ -1410,7 +1434,7 @@ func TestServer(t *testing.T) {
 		})
 
 		t.Run("a source in another layout in which a slice moves gives the new order in the canonical layout", func(t *testing.T) {
-			unformatted := strings.ReplaceAll(lendingSource(borrowSlice, returnSlice, borrowedCopiesSlice), "command -> event:    ", "command -> event: ")
+			unformatted := unformattedLendingSource()
 			session := connect(t)
 
 			result := callTool(t, session, "emod_slices_arrange", map[string]any{"content": unformatted})
@@ -1544,6 +1568,218 @@ func TestServer(t *testing.T) {
 
 			require.True(t, result.IsError)
 			require.Contains(t, textOf(t, result), "is outside the root "+project)
+		})
+	})
+
+	t.Run("write", func(t *testing.T) {
+		t.Run("on a server that allows writes, emod_fmt with write writes the formatted text to the file, and gives the result of a call without write", func(t *testing.T) {
+			dir := t.TempDir()
+			path := filepath.Join(dir, "models", "ordering.emod")
+			writeFile(t, path, unformattedSource)
+			session := connectWritingAt(t, dir)
+
+			result := callTool(t, session, "emod_fmt", map[string]any{"path": "models/ordering.emod", "write": true})
+
+			require.False(t, result.IsError, "the call must succeed: %v", result.Content)
+			require.Equal(t, map[string]any{"formatted": cleanSource, "changed": true}, result.StructuredContent)
+			requireText(t, path, cleanSource)
+		})
+
+		t.Run("on a server that allows writes, emod_slices_arrange with write writes the arranged text to the file, and gives the result of a call without write", func(t *testing.T) {
+			dir := t.TempDir()
+			path := filepath.Join(dir, "lending.emod")
+			writeFile(t, path, lendingSource(borrowSlice, returnSlice, borrowedCopiesSlice))
+			session := connectWritingAt(t, dir)
+
+			result := callTool(t, session, "emod_slices_arrange", map[string]any{"path": "lending.emod", "write": true})
+
+			require.False(t, result.IsError, "the call must succeed: %v", result.Content)
+			require.Equal(t, map[string]any{
+				"arranged":       lendingSource(borrowSlice, borrowedCopiesSlice, returnSlice),
+				"changed":        true,
+				"moved":          float64(1),
+				"backwardBefore": float64(1),
+				"backwardAfter":  float64(0),
+				"backward":       []any{},
+			}, result.StructuredContent)
+			requireText(t, path, lendingSource(borrowSlice, borrowedCopiesSlice, returnSlice))
+		})
+
+		for _, name := range []string{"emod_fmt", "emod_slices_arrange"} {
+			t.Run("on a server that does not allow writes, "+name+" with write gives an error result that names --allow-write, and the file does not change", func(t *testing.T) {
+				dir := t.TempDir()
+				writeFile(t, filepath.Join(dir, "lending.emod"), unformattedLendingSource())
+				before := filesUnder(t, dir)
+				session := connectAt(t, dir)
+
+				result := callTool(t, session, name, map[string]any{"path": "lending.emod", "write": true})
+
+				require.True(t, result.IsError)
+				require.Equal(t, "write needs a server that allows writes: start it with emod mcp --allow-write", textOf(t, result))
+				require.Equal(t, before, filesUnder(t, dir))
+				requireText(t, filepath.Join(dir, "lending.emod"), unformattedLendingSource())
+			})
+
+			t.Run("on a server that does not allow writes, "+name+" with write and content gives the error result that names --allow-write, before the rule of path and content", func(t *testing.T) {
+				session := connectAt(t, t.TempDir())
+
+				result := callTool(t, session, name, map[string]any{"content": unformattedSource, "write": true})
+
+				require.True(t, result.IsError)
+				require.Equal(t, "write needs a server that allows writes: start it with emod mcp --allow-write", textOf(t, result))
+			})
+
+			t.Run(name+" with write and content gives an error result that says that a write needs path and no content, and writes nothing", func(t *testing.T) {
+				dir := t.TempDir()
+				writeFile(t, filepath.Join(dir, "lending.emod"), unformattedLendingSource())
+				before := filesUnder(t, dir)
+				session := connectWritingAt(t, dir)
+
+				for _, arguments := range []map[string]any{
+					{"content": unformattedSource, "path": "lending.emod", "write": true},
+					{"content": unformattedSource, "write": true},
+				} {
+					result := callTool(t, session, name, arguments)
+
+					require.True(t, result.IsError, "arguments %v", arguments)
+					require.Equal(t, "write needs path and no content: the tool writes only a new layout of the file on disk", textOf(t, result))
+				}
+				require.Equal(t, before, filesUnder(t, dir))
+				requireText(t, filepath.Join(dir, "lending.emod"), unformattedLendingSource())
+			})
+
+			t.Run(name+" with write and no path gives an error result that says that a write needs path and no content", func(t *testing.T) {
+				session := connectWritingAt(t, t.TempDir())
+
+				result := callTool(t, session, name, map[string]any{"write": true})
+
+				require.True(t, result.IsError)
+				require.Equal(t, "write needs path and no content: the tool writes only a new layout of the file on disk", textOf(t, result))
+			})
+
+			t.Run(name+" with write and a path outside the root gives the error result of the root, and writes nothing", func(t *testing.T) {
+				base := t.TempDir()
+				project := filepath.Join(base, "project")
+				require.NoError(t, os.Mkdir(project, 0o755))
+				outside := filepath.Join(base, "lending.emod")
+				writeFile(t, outside, unformattedLendingSource())
+				session := connectWritingAt(t, project)
+
+				result := callTool(t, session, name, map[string]any{"path": "../lending.emod", "write": true})
+
+				require.True(t, result.IsError)
+				require.Equal(t, `path "../lending.emod" is outside the root `+project, textOf(t, result))
+				requireText(t, outside, unformattedLendingSource())
+			})
+
+			t.Run(name+" with write for a file with no write permission gives an error result that names the path and the cause, and the file keeps its text", func(t *testing.T) {
+				if os.Geteuid() == 0 {
+					t.Skip("root writes a file with no write permission")
+				}
+				dir := t.TempDir()
+				path := filepath.Join(dir, "lending.emod")
+				unformatted := unformattedLendingSource()
+				writeFile(t, path, unformatted)
+				require.NoError(t, os.Chmod(path, 0o444))
+				session := connectWritingAt(t, dir)
+
+				result := callTool(t, session, name, map[string]any{"path": "lending.emod", "write": true})
+
+				require.True(t, result.IsError)
+				require.Equal(t, "writing lending.emod: permission denied", textOf(t, result))
+				requireText(t, path, unformatted)
+			})
+
+			t.Run(name+" with write for a file that does not parse gives the parse diagnostics, and the file does not change", func(t *testing.T) {
+				dir := t.TempDir()
+				writeFile(t, filepath.Join(dir, "broken.emod"), brokenSource)
+				before := filesUnder(t, dir)
+				session := connectWritingAt(t, dir)
+
+				result := callTool(t, session, name, map[string]any{"path": "broken.emod", "write": true})
+
+				require.False(t, result.IsError, "the call must succeed: %v", result.Content)
+				require.Equal(t, map[string]any{"diagnostics": []any{
+					map[string]any{
+						"file":     "broken.emod",
+						"line":     float64(18),
+						"severity": "error",
+						"message":  `unexpected "foobar" block; expected one of: model, actor, context`,
+					},
+				}}, result.StructuredContent)
+				require.Equal(t, before, filesUnder(t, dir))
+				requireText(t, filepath.Join(dir, "broken.emod"), brokenSource)
+			})
+		}
+
+		t.Run("emod_fmt with write for a file in the canonical layout writes nothing, and the modification time of the file does not change", func(t *testing.T) {
+			dir := t.TempDir()
+			path := filepath.Join(dir, "ordering.emod")
+			writeFile(t, path, cleanSource)
+			written := time.Date(2026, 1, 2, 3, 4, 5, 0, time.UTC)
+			require.NoError(t, os.Chtimes(path, written, written))
+			session := connectWritingAt(t, dir)
+
+			result := callTool(t, session, "emod_fmt", map[string]any{"path": "ordering.emod", "write": true})
+
+			require.False(t, result.IsError, "the call must succeed: %v", result.Content)
+			require.Equal(t, map[string]any{"formatted": cleanSource, "changed": false}, result.StructuredContent)
+			info, err := os.Stat(path)
+			require.NoError(t, err)
+			require.True(t, info.ModTime().Equal(written), "the modification time must stay %s, but it is %s", written, info.ModTime())
+		})
+
+		t.Run("emod_slices_arrange with write for a file in which no slice moves writes nothing, also when the file is not in the canonical layout, and the modification time does not change", func(t *testing.T) {
+			dir := t.TempDir()
+			path := filepath.Join(dir, "ordering.emod")
+			writeFile(t, path, unformattedSource)
+			written := time.Date(2026, 1, 2, 3, 4, 5, 0, time.UTC)
+			require.NoError(t, os.Chtimes(path, written, written))
+			session := connectWritingAt(t, dir)
+
+			result := callTool(t, session, "emod_slices_arrange", map[string]any{"path": "ordering.emod", "write": true})
+
+			require.False(t, result.IsError, "the call must succeed: %v", result.Content)
+			require.Equal(t, false, objectOf(t, result.StructuredContent)["changed"])
+			requireText(t, path, unformattedSource)
+			info, err := os.Stat(path)
+			require.NoError(t, err)
+			require.True(t, info.ModTime().Equal(written), "the modification time must stay %s, but it is %s", written, info.ModTime())
+		})
+
+		t.Run("on a server that allows writes, each other tool with a path, and emod_fmt and emod_slices_arrange with no write, change no file under the root", func(t *testing.T) {
+			dir := t.TempDir()
+			unformatted := unformattedLendingSource()
+			writeFile(t, filepath.Join(dir, "lending.emod"), unformatted)
+			written := time.Date(2026, 1, 2, 3, 4, 5, 0, time.UTC)
+			require.NoError(t, os.Chtimes(filepath.Join(dir, "lending.emod"), written, written))
+			before := filesUnder(t, dir)
+			session := connectWritingAt(t, dir)
+
+			for _, call := range []struct {
+				name      string
+				arguments map[string]any
+			}{
+				{"emod_check", map[string]any{"path": "lending.emod"}},
+				{"emod_slices_list", map[string]any{"path": "lending.emod"}},
+				{"emod_export", map[string]any{"path": "lending.emod", "format": "json"}},
+				{"emod_export", map[string]any{"path": "lending.emod", "format": "diagram-json"}},
+				{"emod_export", map[string]any{"path": "lending.emod", "format": "cue"}},
+				{"emod_glossary", map[string]any{"path": "lending.emod", "format": "markdown"}},
+				{"emod_glossary", map[string]any{"path": "lending.emod", "format": "json"}},
+				{"emod_diagram", map[string]any{"path": "lending.emod", "format": "svg"}},
+				{"emod_diagram", map[string]any{"path": "lending.emod", "format": "event-flow"}},
+				{"emod_fmt", map[string]any{"path": "lending.emod"}},
+				{"emod_fmt", map[string]any{"path": "lending.emod", "write": false}},
+				{"emod_slices_arrange", map[string]any{"path": "lending.emod"}},
+				{"emod_slices_arrange", map[string]any{"path": "lending.emod", "write": false}},
+			} {
+				result := callTool(t, session, call.name, call.arguments)
+				require.False(t, result.IsError, "%s %v: %v", call.name, call.arguments, result.Content)
+			}
+
+			require.Equal(t, before, filesUnder(t, dir))
+			requireText(t, filepath.Join(dir, "lending.emod"), unformatted)
 		})
 	})
 

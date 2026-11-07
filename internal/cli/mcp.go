@@ -13,5 +13,5 @@ func RunMCP(ctx context.Context, rootDir string) error {
 	if err != nil {
 		return err
 	}
-	return mcp.NewServer(os.Stdin, os.Stdout, root).Run(ctx)
+	return mcp.NewServer(os.Stdin, os.Stdout, root, false).Run(ctx)
 }

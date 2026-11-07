@@ -63,6 +63,11 @@ type formatInput struct {
 	Format string `json:"format,omitempty"`
 }
 
+type writeInput struct {
+	sourceInput
+	Write bool `json:"write,omitempty"`
+}
+
 type diagramInput struct {
 	sourceInput
 	Format string `json:"format,omitempty"`
@@ -199,9 +204,10 @@ var fmtTool = &sdk.Tool{
 		"Give the source in content, or give the path of an .emod file under the root of the server in path, as for emod_check. " +
 		"formatted is the text in the canonical layout, and changed is true when formatted differs from the source, " +
 		"the same answer as the exit code of `emod fmt --check`. " +
-		"The tool does not write the file: write formatted with the file tool of the host. " +
+		"The tool writes the file only for a call with write: true, path and no content, on a server that runs `emod mcp --allow-write`, and only when changed is true; " +
+		"else write formatted with the file tool of the host. " +
 		"A source that does not parse gives its parse diagnostics in diagnostics, with no formatted text.",
-	InputSchema:  sourceSchema,
+	InputSchema:  writeSchema(),
 	OutputSchema: oneOf[fmtResult, parseDiagnostics](),
 }
 
@@ -229,20 +235,22 @@ var slicesArrangeTool = &sdk.Tool{
 		"changed is true when a slice moves, the same answer as the exit code of `emod slices arrange --check`. " +
 		"moved, backwardBefore and backwardAfter are the counts of the report that the command prints, and backward lists each reference that still points backward, " +
 		"with kind, label, and the names of the slices in from and to. Only view slices move, so the arrange cannot fix such a reference, for example a reference between two slices that are not views. " +
-		"The tool does not write the file: write arranged with the file tool of the host. " +
+		"The tool writes the file only for a call with write: true, path and no content, on a server that runs `emod mcp --allow-write`, and only when changed is true; " +
+		"else write arranged with the file tool of the host. " +
 		"A source that does not parse gives its parse diagnostics in diagnostics, with no report.",
-	InputSchema:  sourceSchema,
+	InputSchema:  writeSchema(),
 	OutputSchema: oneOf[arrangeResult, parseDiagnostics](),
 }
 
 type Server struct {
-	in   io.ReadCloser
-	out  io.WriteCloser
-	root Root
+	in         io.ReadCloser
+	out        io.WriteCloser
+	root       Root
+	allowWrite bool
 }
 
-func NewServer(in io.ReadCloser, out io.WriteCloser, root Root) *Server {
-	return &Server{in: in, out: out, root: root}
+func NewServer(in io.ReadCloser, out io.WriteCloser, root Root, allowWrite bool) *Server {
+	return &Server{in: in, out: out, root: root, allowWrite: allowWrite}
 }
 
 func (s *Server) Run(ctx context.Context) error {
@@ -396,8 +404,11 @@ func (s *Server) drawDiagram(_ context.Context, _ *sdk.CallToolRequest, input di
 	return result, diagramResult{Diagram: string(drawn), Diagnostics: diagnostic.Records(diagnostics)}, nil
 }
 
-func (s *Server) formatModel(_ context.Context, _ *sdk.CallToolRequest, input sourceInput) (*sdk.CallToolResult, any, error) {
-	source, name, err := s.source(input)
+func (s *Server) formatModel(_ context.Context, _ *sdk.CallToolRequest, input writeInput) (*sdk.CallToolResult, any, error) {
+	if err := s.checkWrite(input); err != nil {
+		return nil, nil, err
+	}
+	source, name, err := s.source(input.sourceInput)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -406,11 +417,18 @@ func (s *Server) formatModel(_ context.Context, _ *sdk.CallToolRequest, input so
 		return s.structuredResult(parseDiagnostics{Diagnostics: diagnostic.Records(diagnostics)})
 	}
 	formatted := formatter.Format(model)
-	return s.structuredResult(fmtResult{Formatted: formatted, Changed: formatted != source})
+	changed := formatted != source
+	if err := s.writeChange(input, source, formatted); err != nil {
+		return nil, nil, err
+	}
+	return s.structuredResult(fmtResult{Formatted: formatted, Changed: changed})
 }
 
-func (s *Server) arrangeSlices(_ context.Context, _ *sdk.CallToolRequest, input sourceInput) (*sdk.CallToolResult, any, error) {
-	source, name, err := s.source(input)
+func (s *Server) arrangeSlices(_ context.Context, _ *sdk.CallToolRequest, input writeInput) (*sdk.CallToolResult, any, error) {
+	if err := s.checkWrite(input); err != nil {
+		return nil, nil, err
+	}
+	source, name, err := s.source(input.sourceInput)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -422,6 +440,9 @@ func (s *Server) arrangeSlices(_ context.Context, _ *sdk.CallToolRequest, input 
 	arranged := source
 	if report.Changed() {
 		arranged = formatter.Format(model)
+	}
+	if err := s.writeChange(input, source, arranged); err != nil {
+		return nil, nil, err
 	}
 	backward := make([]backwardReference, 0, len(report.Backward))
 	for _, r := range report.Backward {
@@ -435,6 +456,26 @@ func (s *Server) arrangeSlices(_ context.Context, _ *sdk.CallToolRequest, input 
 		BackwardAfter:  report.BackwardAfter,
 		Backward:       backward,
 	})
+}
+
+func (s *Server) checkWrite(input writeInput) error {
+	if !input.Write {
+		return nil
+	}
+	if !s.allowWrite {
+		return errors.New("write needs a server that allows writes: start it with emod mcp --allow-write")
+	}
+	if input.Content != nil || input.Path == "" {
+		return errors.New("write needs path and no content: the tool writes only a new layout of the file on disk")
+	}
+	return nil
+}
+
+func (s *Server) writeChange(input writeInput, source, text string) error {
+	if !input.Write || text == source {
+		return nil
+	}
+	return s.root.Replace(input.Path, source, text)
 }
 
 func (s *Server) documentResult(document []byte, err error) (*sdk.CallToolResult, any, error) {
@@ -522,6 +563,21 @@ func formatSchema(defaultFormat string, formats []string) *jsonschema.Schema {
 		Description: "The output format. The default is " + defaultFormat + ".",
 		Enum:        enum,
 		Default:     json.RawMessage(`"` + defaultFormat + `"`),
+	}
+	return &jsonschema.Schema{
+		Type:                 "object",
+		Properties:           properties,
+		AdditionalProperties: sourceSchema.AdditionalProperties,
+	}
+}
+
+func writeSchema() *jsonschema.Schema {
+	properties := maps.Clone(sourceSchema.Properties)
+	properties["write"] = &jsonschema.Schema{
+		Type: "boolean",
+		Description: "Write the result to the file in path when changed is true. " +
+			"The server must run `emod mcp --allow-write`, and the call must give path and no content.",
+		Default: json.RawMessage(`false`),
 	}
 	return &jsonschema.Schema{
 		Type:                 "object",

@@ -106,19 +106,19 @@ arranged text with `Root.Replace` when `changed` is true. Every other call with 
 result and writes nothing.
 
 **Acceptance Criteria:**
-- [ ] `tools/list` gives `emod_fmt` and `emod_slices_arrange` a boolean `write`, with a description that names
+- [x] `tools/list` gives `emod_fmt` and `emod_slices_arrange` a boolean `write`, with a description that names
   `--allow-write` and `path`, and the other tools no `write`.
-- [ ] On a server that allows writes, `write: true` with a path writes the text of `formatted` or `arranged`
+- [x] On a server that allows writes, `write: true` with a path writes the text of `formatted` or `arranged`
   to the file when `changed` is true, and gives the same result as a call without `write`.
-- [ ] On a server that does not allow writes, `write: true` gives an error result that names `--allow-write`,
+- [x] On a server that does not allow writes, `write: true` gives an error result that names `--allow-write`,
   and the file does not change.
-- [ ] `write: true` with `content`, or with no `path`, gives an error result that says that a write needs
+- [x] `write: true` with `content`, or with no `path`, gives an error result that says that a write needs
   `path` and no `content`, and writes nothing.
-- [ ] `write: true` with a path outside the root gives the error result of the root, and writes nothing.
-- [ ] `write: true` for a file in the canonical layout, or one in which no slice moves, writes nothing, and the
+- [x] `write: true` with a path outside the root gives the error result of the root, and writes nothing.
+- [x] `write: true` for a file in the canonical layout, or one in which no slice moves, writes nothing, and the
   modification time of the file does not change.
-- [ ] `write: true` for a file that does not parse gives the parse diagnostics, and the file does not change.
-- [ ] On a server that allows writes, a call of each other tool with a path, and a call of `emod_fmt` and
+- [x] `write: true` for a file that does not parse gives the parse diagnostics, and the file does not change.
+- [x] On a server that allows writes, a call of each other tool with a path, and a call of `emod_fmt` and
   `emod_slices_arrange` with no `write`, change no file under the root.
 
 **Patterns to follow:**
