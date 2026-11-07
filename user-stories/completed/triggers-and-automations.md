@@ -1,6 +1,6 @@
 # Triggers and Automations
 
-**Proposal:** `docs/proposals/triggers-and-automations-proposal.md`
+**Proposal:** `docs/proposals/completed/triggers-and-automations-proposal.md`
 
 ## Overview
 
