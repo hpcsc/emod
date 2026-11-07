@@ -11,15 +11,124 @@ before it writes the file, and reads why a lint rule exists before it fixes a fi
 The server calls no model. The host brings the model, so the server needs no API key, no `EMOD_AI_*`
 setting and no network access.
 
-## Register the server with Claude Code
+## Register the server
 
-The `emod` binary must be on your `PATH`. Then run:
+To register the server, you tell the host which command starts it. In each host, the command is `emod`
+with the argument `mcp`, and `--root` names the directory of your models. The server needs no API key and
+no AI settings: no `EMOD_AI_*` setting, no provider and no network access.
+
+When the host shows the server, ask the agent to check a model, for example "check ordering.emod with
+emod_check". The agent gets the list of diagnostics from the tool.
+
+### Claude Code
+
+The `emod` binary must be on your `PATH`. To register the server for yourself, run:
 
 ```sh
 claude mcp add emod -- emod mcp
 ```
 
-`claude mcp list` shows `emod` when Claude Code can start the server.
+The root is the directory in which you start Claude Code. `claude mcp list` shows `emod` as connected when
+Claude Code can start the server.
+
+### A project file for a team
+
+To give the server to each person who opens a project in Claude Code, check in a `.mcp.json` at the root of
+the project:
+
+```json
+{
+  "mcpServers": {
+    "emod": {
+      "type": "stdio",
+      "command": "emod",
+      "args": ["mcp", "--root", "."]
+    }
+  }
+}
+```
+
+- `claude mcp add --scope project emod -- emod mcp --root .` writes the same entry.
+- Claude Code starts the server in the directory in which you start Claude Code, so `--root .` is the root of
+  the project when you start Claude Code there.
+- The first time, Claude Code asks each person to approve the servers of the project file. Until then,
+  `claude mcp list` shows `emod` as pending approval.
+- The emod repository has this file.
+
+### Claude Desktop
+
+Claude Desktop reads the file `claude_desktop_config.json`. **Settings → Developer → Edit Config** opens it:
+
+- macOS: `~/Library/Application Support/Claude/claude_desktop_config.json`
+- Windows: `%APPDATA%\Claude\claude_desktop_config.json`
+
+Add the server under `mcpServers`:
+
+```json
+{
+  "mcpServers": {
+    "emod": {
+      "command": "/usr/local/bin/emod",
+      "args": ["mcp", "--root", "/path/to/project"]
+    }
+  }
+}
+```
+
+- Give the absolute path of `emod`, as `which emod` prints it. Claude Desktop starts the server with a short
+  `PATH`, so the command `emod` alone can fail.
+- Give an absolute `--root`. Claude Desktop has no project, so only `--root` tells the server where your
+  models are.
+- Quit Claude Desktop and start it again after each change to the file. **Settings → Developer** shows the
+  state of the server. On macOS, the log of the server is `~/Library/Logs/Claude/mcp-server-emod.log`.
+
+### Cursor
+
+Cursor reads `.cursor/mcp.json` in a project, and `~/.cursor/mcp.json` for all projects:
+
+```json
+{
+  "mcpServers": {
+    "emod": {
+      "type": "stdio",
+      "command": "emod",
+      "args": ["mcp", "--root", "${workspaceFolder}"]
+    }
+  }
+}
+```
+
+- Cursor replaces `${workspaceFolder}` with the root of the project, so the same file works in a project and
+  in the file for all projects.
+- If Cursor cannot find `emod`, give the absolute path of `emod` in `command`.
+- The MCP section of Cursor Settings lists `emod` with its tools when Cursor can start the server.
+
+### Zed
+
+Zed reads `context_servers` in its settings file. The command `zed: open settings file` opens it:
+
+```json
+{
+  "context_servers": {
+    "emod": {
+      "command": "emod",
+      "args": ["mcp", "--root", "/path/to/project"],
+      "env": {}
+    }
+  }
+}
+```
+
+- Give an absolute `--root`. The settings of Zed do not name a project directory for the server.
+- **Settings → AI → MCP Servers** shows a green dot next to `emod`, with the tooltip "Server is active", when
+  Zed can start the server.
+
+### Check the server
+
+`task check:mcp` in the emod repository checks the server with the
+[MCP Inspector](https://github.com/modelcontextprotocol/inspector): the handshake, the list of tools, a call
+of each tool, and the list and read of each resource. npx downloads the Inspector, so the check needs
+network access.
 
 ## The `emod_check` tool
 

@@ -326,8 +326,23 @@ setting.
 claude mcp add emod -- emod mcp
 ```
 
-The [MCP page](https://emod.saphix.app/docs/mcp/) of the docs tells what each tool and resource takes and
-returns.
+To give the server to each person who opens a project in Claude Code, check in a `.mcp.json` at the root of
+the project. The emod repository has this file:
+
+```json
+{
+  "mcpServers": {
+    "emod": {
+      "type": "stdio",
+      "command": "emod",
+      "args": ["mcp", "--root", "."]
+    }
+  }
+}
+```
+
+The [MCP page](https://emod.saphix.app/docs/mcp/) of the docs tells how to register the server in Claude
+Desktop, Cursor and Zed, and what each tool and resource takes and returns.
 
 ## Editor Setup
 

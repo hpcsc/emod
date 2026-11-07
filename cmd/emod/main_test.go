@@ -310,6 +310,43 @@ func fileText(t *testing.T, path string) string {
 	return string(text)
 }
 
+type registration struct {
+	Type    string   `json:"type,omitempty"`
+	Command string   `json:"command"`
+	Args    []string `json:"args"`
+}
+
+type serverRegistrations struct {
+	MCPServers     map[string]registration `json:"mcpServers"`
+	ContextServers map[string]registration `json:"context_servers"`
+}
+
+func repositoryRegistrations(t *testing.T) serverRegistrations {
+	t.Helper()
+
+	var registered serverRegistrations
+	require.NoError(t, json.Unmarshal([]byte(fileText(t, filepath.Join(repoRoot(t), ".mcp.json"))), &registered))
+	return registered
+}
+
+func documentedRegistrations(t *testing.T, markdown string) []registration {
+	t.Helper()
+
+	var found []registration
+	for _, block := range strings.Split(markdown, "```json\n")[1:] {
+		text, _, closed := strings.Cut(block, "```")
+		require.True(t, closed, "a json block must end with a fence")
+		var registered serverRegistrations
+		require.NoError(t, json.Unmarshal([]byte(text), &registered), "each json block must be JSON:\n%s", text)
+		for _, servers := range []map[string]registration{registered.MCPServers, registered.ContextServers} {
+			if entry, ok := servers["emod"]; ok {
+				found = append(found, entry)
+			}
+		}
+	}
+	return found
+}
+
 func diagnosticLines(t *testing.T, diagnostics any) string {
 	t.Helper()
 
@@ -799,13 +836,7 @@ func TestMCP(t *testing.T) {
 
 	t.Run("project file", func(t *testing.T) {
 		t.Run("the emod entry of the .mcp.json of the repository starts a server in the repository that checks a model there", func(t *testing.T) {
-			var registered struct {
-				MCPServers map[string]struct {
-					Command string   `json:"command"`
-					Args    []string `json:"args"`
-				} `json:"mcpServers"`
-			}
-			require.NoError(t, json.Unmarshal([]byte(fileText(t, filepath.Join(repoRoot(t), ".mcp.json"))), &registered))
+			registered := repositoryRegistrations(t)
 			require.Contains(t, registered.MCPServers, "gopls", "the entry of emod must not replace the other servers")
 			entry, ok := registered.MCPServers["emod"]
 			require.True(t, ok, "the .mcp.json of the repository must register emod")
@@ -817,6 +848,36 @@ func TestMCP(t *testing.T) {
 
 			require.False(t, result.IsError, "the call must succeed: %v", result.Content)
 			require.Equal(t, map[string]any{"diagnostics": []any{}}, result.StructuredContent)
+		})
+
+		for _, path := range []string{"site/content/docs/mcp.md", "README.md"} {
+			t.Run(path+" shows the emod entry of the .mcp.json of the repository", func(t *testing.T) {
+				entry := repositoryRegistrations(t).MCPServers["emod"]
+
+				documented := documentedRegistrations(t, fileText(t, filepath.Join(repoRoot(t), path)))
+
+				require.Contains(t, documented, entry)
+			})
+		}
+
+		t.Run("the docs register emod mcp with a root in Claude Code, Claude Desktop, Cursor and Zed, and say that it needs no API key", func(t *testing.T) {
+			page := fileText(t, filepath.Join(repoRoot(t), "site/content/docs/mcp.md"))
+			_, section, found := strings.Cut(page, "\n## Register the server\n")
+			require.True(t, found, "the docs must have the section on registration")
+			section, _, _ = strings.Cut(section, "\n## ")
+
+			documented := documentedRegistrations(t, section)
+
+			require.Equal(t, []registration{
+				{Type: "stdio", Command: "emod", Args: []string{"mcp", "--root", "."}},
+				{Command: "/usr/local/bin/emod", Args: []string{"mcp", "--root", "/path/to/project"}},
+				{Type: "stdio", Command: "emod", Args: []string{"mcp", "--root", "${workspaceFolder}"}},
+				{Command: "emod", Args: []string{"mcp", "--root", "/path/to/project"}},
+			}, documented)
+			words := strings.Join(strings.Fields(section), " ")
+			for _, text := range []string{"claude mcp add emod -- emod mcp", "claude_desktop_config.json", ".cursor/mcp.json", `"context_servers"`, "needs no API key and no AI settings"} {
+				require.Contains(t, words, text)
+			}
 		})
 	})
 

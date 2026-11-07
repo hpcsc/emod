@@ -131,12 +131,12 @@ Cursor and Zed, shows the project file `.mcp.json` with `--root .`, and says tha
 key and no AI settings. The README points to it.
 
 **Acceptance Criteria:**
-- [ ] `site/content/docs/mcp.md` shows the registration in Claude Code (`claude mcp add`, and the project
+- [x] `site/content/docs/mcp.md` shows the registration in Claude Code (`claude mcp add`, and the project
   scope that writes `.mcp.json`), Claude Desktop, Cursor and Zed, each with the file and the JSON, and how
   to see that the server works.
-- [ ] The page shows the `.mcp.json` of a project with `--root .`, the same entry as the repository has.
-- [ ] The page says that the server needs no API key and no AI settings, in the section on registration.
-- [ ] The README section "Check models from an agent (MCP)" shows the project file and names the other
+- [x] The page shows the `.mcp.json` of a project with `--root .`, the same entry as the repository has.
+- [x] The page says that the server needs no API key and no AI settings, in the section on registration.
+- [x] The README section "Check models from an agent (MCP)" shows the project file and names the other
   hosts.
 
 **Patterns to follow:**
