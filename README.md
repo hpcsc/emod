@@ -300,6 +300,33 @@ named in specs
 
 A name that the model does not declare exits with code 1 and lists the declared names closest to it.
 
+### Trace what follows from an element
+
+`emod trace` lists each element that follows from a command, an event or any other element, as a
+tree. Each element shows one time, under the first element that reaches it. `--upstream` walks the
+other way and lists what leads to the element.
+
+```bash
+emod trace reservation.emod RoomReserved              # what follows from RoomReserved
+emod trace reservation.emod RoomReserved --upstream   # what leads to it
+emod trace reservation.emod RoomReserved --no-views   # only what the system and the people do
+emod trace reservation.emod RoomReserved --format json
+```
+
+By default, the trace follows the `subscribes` and `reads` edges of the views, so it reaches an
+automation that runs on a schedule through the view that it reads. `--no-views` leaves those edges
+out. A name that two kinds declare stops the trace, and `--kind` picks one.
+
+```
+$ emod trace examples/all_patterns.emod RoomReserved --no-views
+3 elements follow from RoomReserved
+
+RoomReserved                                   event       Reservations   "Reserve a Room"           :49
+  -[on, after 15m]-> ConfirmationEmailReactor  automation  Reservations   "Send Confirmation Email"  :170
+    -[command]-> SendConfirmationEmail         command     Notifications  "Send Confirmation"        :325  (Reservations -> Notifications)
+      -[flow]-> ConfirmationEmailSent          event       Notifications  "Send Confirmation"        :335
+```
+
 ### Arrange slices
 
 Reorders each container's slices so the model reads forward — as far as

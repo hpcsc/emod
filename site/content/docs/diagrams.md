@@ -65,6 +65,19 @@ The output groups each reference to the name by its role: what produces an event
 it, what issues a command and what refuses it, and the specs that name it. Your editor finds the
 same references with find-references.
 
+## Trace what follows from an element
+
+```sh
+emod trace reservation.emod RoomReserved              # what follows from RoomReserved
+emod trace reservation.emod RoomReserved --upstream   # what leads to it
+emod trace reservation.emod RoomReserved --no-views   # only what the system and the people do
+emod trace reservation.emod RoomReserved --format json
+```
+
+The trace lists each element one time, as a tree, with the edge that reaches it and the line that
+declares it. It says when a step goes into another context. By default it follows the views too,
+so it reaches an automation that runs on a schedule through the view that it reads.
+
 ## Render a glossary
 
 ```sh

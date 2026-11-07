@@ -8,6 +8,7 @@ import (
 
 	"github.com/hpcsc/emod/internal/diagram"
 	"github.com/hpcsc/emod/internal/llm/config"
+	"github.com/hpcsc/emod/internal/query"
 	"github.com/hpcsc/emod/internal/release"
 	"github.com/hpcsc/emod/internal/version"
 	urfave "github.com/urfave/cli/v3"
@@ -204,6 +205,37 @@ func NewApp() *urfave.Command {
 					path := cmd.Args().Get(0)
 					name := cmd.Args().Get(1)
 					return reportExitError(RunReferences(path, name, cmd.String("kind"), cmd.String("format")))
+				},
+			},
+			{
+				Name:      "trace",
+				Usage:     "List each element that follows from an element, or that leads to it",
+				ArgsUsage: "<file> <from>",
+				Flags: []urfave.Flag{
+					&urfave.BoolFlag{
+						Name:  "upstream",
+						Usage: "Walk the edges backward, to list what leads to the element",
+					},
+					&urfave.BoolFlag{
+						Name:  "no-views",
+						Usage: "Leave out the subscribes and reads edges",
+					},
+					&urfave.StringFlag{
+						Name:  "kind",
+						Usage: "The kind of the element, when the model declares the name as two kinds",
+					},
+					&urfave.StringFlag{
+						Name:  "format",
+						Usage: "Output format (text|json)",
+						Value: "text",
+					},
+				},
+				Action: func(ctx context.Context, cmd *urfave.Command) error {
+					return reportExitError(RunTrace(cmd.Args().Get(0), cmd.Args().Get(1), cmd.String("format"), query.TraceOptions{
+						Kind:     query.Kind(cmd.String("kind")),
+						Upstream: cmd.Bool("upstream"),
+						NoViews:  cmd.Bool("no-views"),
+					}))
 				},
 			},
 			{

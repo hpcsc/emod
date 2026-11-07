@@ -45,7 +45,7 @@ graph TD
         formatter[formatter<br/><i>canonical .emod writer</i>]
         glossary[glossary<br/><i>domain glossary</i>]
         importer[importer<br/><i>diagram JSON → model</i>]
-        query[query<br/><i>names and their references</i>]
+        query[query<br/><i>references and traces</i>]
     end
 
     subgraph Pipeline
@@ -85,6 +85,7 @@ graph TD
     glossary --> ast
     importer --> ast
     query --> ast
+    query --> diagram
 
     parser --> diagnostic
     parser --> ast
@@ -175,6 +176,7 @@ flowchart TD
 
     SE --> SVG["svg renderer"]
     SE --> DJSON["export: diagram JSON<br/><i>the viewer's feed</i>"]
+    SE --> TRACE["query.Trace<br/><i>emod trace</i>"]
     LAY --> SVG
     LAY --> MERMAID
     LAY --> ASCII
@@ -210,6 +212,7 @@ diagram does not carry stay in the source.
 | `emod diagram` | svg / ascii / mermaid; `--serve` starts the embedded viewer; `--specs` draws each slice's specs as a card, svg only |
 | `emod export` | json / diagram-json / cue |
 | `emod references` | The declaration of a name and each reference to it, grouped by role; text or JSON |
+| `emod trace` | What follows from an element, or with `--upstream` what leads to it, over the `diagram.SliceEdges` edges; text or JSON |
 | `emod slices list` | Lists every slice with its detected pattern |
 | `emod slices arrange` | Reorders view slices so references read forward; `--check` for CI |
 | `emod glossary` | Domain glossary as markdown or JSON |
