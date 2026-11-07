@@ -1466,8 +1466,8 @@ in this repo; append only learnings that generalise beyond the task that surface
 ## An MCP tool over the go-sdk typed AddTool is routine, not low certainty
 - Type: convention
 - Recorded: 2026-11-07
-- Observed: mcp-lint-rules
-- Learning: internal/mcp/server.go registers a tool with sdk.AddTool over an input struct and an output struct: the SDK infers the input schema (a field without omitempty is required), returns a schema failure such as a missing argument as an isError result, puts the output in structuredContent and writes the same JSON, with sorted keys, into the text block. A pointer field, which tells an absent input from an empty one, infers the type ["null","string"], so emod_check gives AddTool its own jsonschema.Schema (sourceSchema) with plain string types and additionalProperties false. The SDK writes that text block with json.Marshal, which escapes < > and & as \u003c, so a tool whose text holds them (a rule description, the schema) returns its own TextContent from Server.jsonText, which turns the escape off; the SDK keeps given content and still fills structuredContent. For a resource, the SDK fills an empty URI and MIMEType of each ResourceContents from the request and the Resource, so a handler sets only Text. internal/mcp/server_test.go drives the server through an sdk client over io.Pipe (connect, connectAt with a root). Keep the output an object for hosts on older protocol versions, and pass ServerOptions with an empty Capabilities, because nil options advertise logging; AddResource still adds the resources capability.
+- Observed: mcp-slices
+- Learning: internal/mcp/server.go registers a tool with sdk.AddTool over an input struct and an output struct: the SDK infers the input schema (a field without omitempty is required), returns a schema failure such as a missing argument as an isError result, puts the output in structuredContent and writes the same JSON, with sorted keys, into the text block. A pointer field, which tells an absent input from an empty one, infers the type ["null","string"], so emod_check gives AddTool its own jsonschema.Schema (sourceSchema) with plain string types and additionalProperties false. The SDK writes that text block with json.Marshal, which escapes < > and & as \u003c, so a tool whose text holds them (a rule description, a slice name) returns its own text block through Server.jsonResult, which turns the escape off; the SDK keeps given content and still fills structuredContent. A tool that stops on a parse error (emod_slices_list) has Out any, returns parseDiagnostics or its own result through Server.structuredResult, and sets OutputSchema to oneOf[its result, parseDiagnostics](), because with Out any the SDK advertises and checks no output schema. For a resource, the SDK fills an empty URI and MIMEType of each ResourceContents from the request and the Resource, so a handler sets only Text. internal/mcp/server_test.go drives the server through an sdk client over io.Pipe (connect, connectAt with a root). Keep the output an object for hosts on older protocol versions, and pass ServerOptions with an empty Capabilities, because nil options advertise logging; AddResource still adds the resources capability.
 - Apply when: assessing certainty for a task that adds a tool, a resource or a prompt to internal/mcp, or writing its tests
 
 ## clerk mutants runs only the unit tests, so a CLI entry needs a unit leaf beside its integration test
@@ -1518,3 +1518,24 @@ in this repo; append only learnings that generalise beyond the task that surface
 - Observed: mcp-grammar
 - Learning: //go:embed takes only paths under the folder of its package, so internal/mcp cannot embed ../../examples. examples/example.go embeds the three valid examples (examples.All()) and docs/dsl_reference.go embeds docs/dsl-reference.md (docs.DSLReference), as internal/cue/embed.go embeds schema.cue. A file that another package needs at run time from an installed binary goes into one of these packages, or into a new package in its own folder, never into a read from the disk, which works in the tests only because the repository is on disk.
 - Apply when: serving or printing the text of a file under examples/, docs/ or another folder outside internal/ from emod at run time: an MCP resource or prompt, a CLI command, the LSP, or the desktop app
+
+## A change to internal/ast/traverse.go is refused by type-methods-split, so new AST behaviour goes in a file of its own
+- Type: constraint
+- Recorded: 2026-11-07
+- Observed: task 1 — mcp-slices
+- Learning: traverse.go holds methods of Position, Context and Model, which ast.go declares, and clerk finish lints every staged file, so any edit to traverse.go is refused with type-methods-split, also when the edit only adds next to SliceRefs as docs/proposals/ai/01-mcp-server.md suggests. US-005 put the slice listing in internal/ast/slice_record.go: the type SliceRecord, the function ast.SliceRecords(model) and private functions over the node types, with ast.go left as data only.
+- Apply when: decomposing or building a task that adds behaviour over the AST in internal/ast, such as a new listing, a query or a lifted helper from internal/cli
+
+## Moving private code out of internal/cli is not a pure move: clerk mutants owes it the tests it never had
+- Type: recurring-finding
+- Recorded: 2026-11-07
+- Observed: task 1 — mcp-slices
+- Learning: clerk mutants mutates each changed line, and a moved function is all changed lines, so a task that lifts private CLI code into a shared package owes a test for each branch the old CLI tests never reached. In US-005 the move of detectPattern and keyElementsForPattern left 42 mutants alive and 23 not covered against the unchanged CLI suite; the task needed a table of slice fixtures in internal/ast, two exact-output CLI leaves, and the removal of checks that the pattern already made true.
+- Apply when: assessing certainty or planning the tests of a task that moves or lifts code between packages, especially out of internal/cli for the MCP server
+
+## oracle.Check lints the model that the parser recovers, so parse diagnostics are not what emod validate prints
+- Type: constraint
+- Recorded: 2026-11-07
+- Observed: task 2 — mcp-slices
+- Learning: oracle.RunParsed runs the validator and the linter on the best-effort model also when parsing failed, so for a source that does not parse emod validate --format json can add findings such as orphan-command to the parse errors. A command that stops at the parse step (slices list, glossary, fmt, slices arrange) prints only oracle.Parse diagnostics; a parity test of an MCP tool against it must compare with that command's own stderr, and a fixture must have a validator finding in its recovered part, or both lists look the same.
+- Apply when: building or testing an MCP tool or CLI command that returns the parse diagnostics of a source that does not parse, or choosing the reference output of a parity test
