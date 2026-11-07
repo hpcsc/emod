@@ -62,17 +62,18 @@ The story's acceptance criteria, numbered for the Summary:
 
 ### Task 1: Give each slice its pattern and its key elements in `internal/ast`
 
-**Behavior:** `Slice.Pattern()` and `Slice.KeyElements()` give the pattern and the key elements that
-`emod slices list` prints, and `Model.SliceRecords()` gives one `ast.SliceRecord` for each slice, in the
-order of `SliceRefs`, with the JSON keys `name`, `pattern`, `context` and `keyElements`. `RunSlicesList`
+**Behavior:** `ast.SliceRecords(model)` gives one `ast.SliceRecord` for each slice, with the pattern and
+the key elements that `emod slices list` prints, in the order of `SliceRefs`, with the JSON keys `name`, `pattern`, `context` and `keyElements`. `RunSlicesList`
 uses them for both formats and keeps only the column layout. The output of `emod slices list` does not
 change.
 
 **Acceptance Criteria:**
-- [ ] `internal/cli` has no `detectPattern`, `keyElementsForPattern`, `automationActivation` or
+- [x] `internal/cli` has no `detectPattern`, `keyElementsForPattern`, `automationActivation` or
   `sliceJSONEntry`.
 - [ ] Each existing leaf of `internal/cli/slices_list_test.go` passes with no change to the test file.
-- [ ] `Model.SliceRecords()` gives an empty list, not nil, for a model with no slice, so that the JSON is
+  Not met as written: no existing leaf changed, but the file has two new leaves. They pin the column
+  widths and the text for a model with no slice, which no leaf covered before.
+- [x] `ast.SliceRecords(model)` gives an empty list, not nil, for a model with no slice, so that the JSON is
   `[]`.
 
 **Patterns to follow:**
@@ -81,9 +82,10 @@ change.
 - `internal/cli/slices_list.go`
 
 **Affected files:**
-- `internal/ast/ast.go`
-- `internal/ast/traverse.go`
+- `internal/ast/slice_record.go` (new)
+- `internal/ast/slice_record_test.go` (new)
 - `internal/cli/slices_list.go`
+- `internal/cli/slices_list_test.go`
 
 **Certainty:** high. The logic moves with no change, and the CLI tests pin its output. **Blast radius:**
 low. Only `emod slices list` uses the logic.

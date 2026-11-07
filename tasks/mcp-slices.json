@@ -4,7 +4,7 @@
   "tasks": [
     {
       "n": 1,
-      "done": false,
+      "done": true,
       "title": "Give each slice its pattern and its key elements in `internal/ast`",
       "language": "Go",
       "testable": true,
@@ -17,9 +17,10 @@
       ],
       "depends_on": [],
       "affected_files": [
-        "internal/ast/ast.go",
-        "internal/ast/traverse.go",
-        "internal/cli/slices_list.go"
+        "internal/ast/slice_record.go",
+        "internal/ast/slice_record_test.go",
+        "internal/cli/slices_list.go",
+        "internal/cli/slices_list_test.go"
       ]
     },
     {

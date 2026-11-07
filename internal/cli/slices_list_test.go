@@ -108,6 +108,59 @@ func TestSlicesList(t *testing.T) {
 			require.Contains(t, output, "ImportBooking, BookingImported")
 		})
 
+		t.Run("pads each column to its longest value, the header included", func(t *testing.T) {
+			path := writeTemp(t, "padding.emod", `emod = 1
+
+model "Hotel" {
+}
+
+context "Guest Stays" {
+  aggregate "Room" {
+    slice "Show Rooms" {
+      view "AvailableRoomsView" {
+        fields {
+          roomId = required(string)
+        }
+      }
+    }
+
+    slice "Translate Partner Booking" {
+      translation "PartnerImport" {
+        external_system = "Partner"
+
+        event "BookingImported" {
+          fields {
+            roomId = required(string)
+          }
+        }
+      }
+    }
+  }
+}
+`)
+
+			output := captureStdout(t, func() {
+				err := cli.RunSlicesList(path, "text")
+				require.NoError(t, err)
+			})
+
+			require.Equal(t, ""+
+				"SLICE                      PATTERN      CONTEXT      KEY ELEMENTS\n"+
+				"Show Rooms                 view         Guest Stays  AvailableRoomsView\n"+
+				"Translate Partner Booking  translation  Guest Stays  BookingImported\n", output)
+		})
+
+		t.Run("says that it found no slice for a model with no slice", func(t *testing.T) {
+			path := writeTemp(t, "empty.emod", `model "Empty" {}`)
+
+			output := captureStdout(t, func() {
+				err := cli.RunSlicesList(path, "text")
+				require.NoError(t, err)
+			})
+
+			require.Equal(t, "No slices found.\n", output)
+		})
+
 		t.Run("lists slices in model order grouped by context", func(t *testing.T) {
 			path := writeTemp(t, "valid.emod", validEmod)
 
