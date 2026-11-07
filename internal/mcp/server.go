@@ -18,6 +18,7 @@ import (
 	"github.com/hpcsc/emod/internal/cue"
 	"github.com/hpcsc/emod/internal/diagnostic"
 	"github.com/hpcsc/emod/internal/export"
+	"github.com/hpcsc/emod/internal/glossary"
 	"github.com/hpcsc/emod/internal/linter"
 	"github.com/hpcsc/emod/internal/oracle"
 	"github.com/hpcsc/emod/internal/version"
@@ -149,6 +150,15 @@ var exportTool = &sdk.Tool{
 	InputSchema: formatSchema("json", "diagram-json", "cue"),
 }
 
+var glossaryTool = &sdk.Tool{
+	Name: "emod_glossary",
+	Description: "Give the glossary of an .emod model, the terms that the model defines, the same text as `emod glossary --format <format>`. " +
+		"Give the source in content, or give the path of an .emod file under the root of the server in path, as for emod_check. " +
+		"markdown gives the glossary as one text block, and json gives the same terms as a document. " +
+		"A source that does not parse gives its parse diagnostics in diagnostics, with no glossary.",
+	InputSchema: formatSchema("markdown", "json"),
+}
+
 type Server struct {
 	in   io.ReadCloser
 	out  io.WriteCloser
@@ -181,6 +191,7 @@ func (s *Server) Run(ctx context.Context) error {
 	server.AddResource(dslReferenceResource, s.readText(docs.DSLReference))
 	sdk.AddTool(server, slicesListTool, s.listSlices)
 	sdk.AddTool(server, exportTool, s.exportModel)
+	sdk.AddTool(server, glossaryTool, s.renderGlossary)
 	return server.Run(ctx, &sdk.IOTransport{Reader: s.in, Writer: s.out})
 }
 
@@ -245,10 +256,29 @@ func (s *Server) exportModel(_ context.Context, _ *sdk.CallToolRequest, input fo
 		if err != nil {
 			return nil, nil, err
 		}
-		return &sdk.CallToolResult{Content: []sdk.Content{&sdk.TextContent{Text: string(text)}}}, nil, nil
+		return s.textResult(string(text)), nil, nil
 	default:
 		return s.documentResult(export.ExportJSONDiagnostics(model, diagnostics))
 	}
+}
+
+func (s *Server) renderGlossary(_ context.Context, _ *sdk.CallToolRequest, input formatInput) (*sdk.CallToolResult, any, error) {
+	source, name, err := s.source(input.sourceInput)
+	if err != nil {
+		return nil, nil, err
+	}
+	model, diagnostics := oracle.Parse(source, name)
+	if len(diagnostics) > 0 {
+		return s.structuredResult(parseDiagnostics{Diagnostics: diagnostic.Records(diagnostics)})
+	}
+	if input.Format == "json" {
+		return s.documentResult(glossary.RenderJSON(model))
+	}
+	text, err := glossary.RenderMarkdown(model)
+	if err != nil {
+		return nil, nil, err
+	}
+	return s.textResult(string(text)), nil, nil
 }
 
 func (s *Server) documentResult(document []byte, err error) (*sdk.CallToolResult, any, error) {
@@ -282,7 +312,7 @@ func (s *Server) readRules(_ context.Context, _ *sdk.ReadResourceRequest) (*sdk.
 }
 
 func (s *Server) schema(_ context.Context, _ *sdk.CallToolRequest, _ struct{}) (*sdk.CallToolResult, any, error) {
-	return &sdk.CallToolResult{Content: []sdk.Content{&sdk.TextContent{Text: cue.Schema}}}, nil, nil
+	return s.textResult(cue.Schema), nil, nil
 }
 
 func (s *Server) readText(text string) sdk.ResourceHandler {
@@ -296,7 +326,11 @@ func (s *Server) jsonResult(value any) (*sdk.CallToolResult, error) {
 	if err != nil {
 		return nil, err
 	}
-	return &sdk.CallToolResult{Content: []sdk.Content{&sdk.TextContent{Text: text}}}, nil
+	return s.textResult(text), nil
+}
+
+func (s *Server) textResult(text string) *sdk.CallToolResult {
+	return &sdk.CallToolResult{Content: []sdk.Content{&sdk.TextContent{Text: text}}}
 }
 
 func (s *Server) jsonText(value any) (string, error) {

@@ -112,15 +112,15 @@ radius:** low. The tool is read-only.
 diagnostics.
 
 **Acceptance Criteria:**
-- [ ] `tools/list` lists `emod_glossary`, and its input schema has `content`, `path`, `name` and `format`,
+- [x] `tools/list` lists `emod_glossary`, and its input schema has `content`, `path`, `name` and `format`,
   with the enum `markdown`, `json` and the default `markdown`.
-- [ ] A call with no `format` gives the Markdown glossary as one text block.
-- [ ] `json` gives the glossary document as the structured content and the text block.
-- [ ] A source that does not parse gives only its parse diagnostics, not the findings of the validator on
+- [x] A call with no `format` gives the Markdown glossary as one text block.
+- [x] `json` gives the glossary document as the structured content and the text block.
+- [x] A source that does not parse gives only its parse diagnostics, not the findings of the validator on
   what the parser recovered, and no glossary.
-- [ ] An unknown format gives an error result that names `markdown` and `json`.
-- [ ] A call with a `path` writes no file under the root.
-- [ ] Through the built binary, for each file in `examples/` and `internal/parser/testdata/`, each format
+- [x] An unknown format gives an error result that names `markdown` and `json`.
+- [x] A call with a `path` writes no file under the root.
+- [x] Through the built binary, for each file in `examples/` and `internal/parser/testdata/`, each format
   gives what `emod glossary --format <format>` prints, or the parse diagnostics that it prints.
 
 **Patterns to follow:**

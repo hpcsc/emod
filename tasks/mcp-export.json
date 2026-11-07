@@ -25,7 +25,7 @@
     },
     {
       "n": 2,
-      "done": false,
+      "done": true,
       "title": "Give the glossary with `emod_glossary`",
       "language": "Go",
       "testable": true,

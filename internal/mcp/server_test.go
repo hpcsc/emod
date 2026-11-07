@@ -83,6 +83,27 @@ context "Orders" {
 }
 `
 
+const brokenSource = `emod = 1
+
+model "Broken" {
+}
+
+context "Orders" {
+  aggregate "Order" {
+    slice "Place Order" {
+      command "PlaceOrder" {
+        fields {
+          orderId = required(string)
+        }
+      }
+    }
+  }
+}
+
+foobar "Stray" {
+}
+`
+
 const slicesSource = `emod = 1
 
 model "Ordering" {
@@ -328,7 +349,7 @@ func TestServer(t *testing.T) {
 	})
 
 	t.Run("list tools", func(t *testing.T) {
-		t.Run("lists emod_check, emod_explain_rule, emod_export, emod_schema and emod_slices_list, and no other tool", func(t *testing.T) {
+		t.Run("lists each tool of the server, and no other tool", func(t *testing.T) {
 			session := connect(t)
 
 			listed, err := session.ListTools(context.Background(), nil)
@@ -338,7 +359,32 @@ func TestServer(t *testing.T) {
 			for _, tool := range listed.Tools {
 				names = append(names, tool.Name)
 			}
-			require.ElementsMatch(t, []string{"emod_check", "emod_explain_rule", "emod_export", "emod_schema", "emod_slices_list"}, names)
+			require.ElementsMatch(t, []string{"emod_check", "emod_explain_rule", "emod_export", "emod_glossary", "emod_schema", "emod_slices_list"}, names)
+		})
+
+		t.Run("gives emod_glossary the input of emod_check and a format of markdown or json, with markdown as the default", func(t *testing.T) {
+			session := connect(t)
+
+			tool := toolNamed(t, session, "emod_glossary")
+
+			schema, ok := tool.InputSchema.(map[string]any)
+			require.True(t, ok)
+			properties, ok := schema["properties"].(map[string]any)
+			require.True(t, ok)
+			require.ElementsMatch(t, []string{"content", "path", "name", "format"}, keysOf(properties))
+			format, ok := properties["format"].(map[string]any)
+			require.True(t, ok)
+			require.Equal(t, []any{"markdown", "json"}, format["enum"])
+			require.Equal(t, "markdown", format["default"])
+		})
+
+		t.Run("the description of emod_glossary names the command with the same text and the result of a parse error", func(t *testing.T) {
+			session := connect(t)
+
+			tool := toolNamed(t, session, "emod_glossary")
+
+			require.Contains(t, tool.Description, "emod glossary --format <format>")
+			require.Contains(t, tool.Description, "A source that does not parse gives its parse diagnostics")
 		})
 
 		t.Run("gives emod_export the input of emod_check and a format of json, diagram-json or cue, with json as the default", func(t *testing.T) {
@@ -618,31 +664,11 @@ func TestServer(t *testing.T) {
 		})
 
 		t.Run("a source that does not parse gives only its parse diagnostics, not the findings of the validator on what the parser recovered", func(t *testing.T) {
-			source := `emod = 1
-
-model "Broken" {
-}
-
-context "Orders" {
-  aggregate "Order" {
-    slice "Place Order" {
-      command "PlaceOrder" {
-        fields {
-          orderId = required(string)
-        }
-      }
-    }
-  }
-}
-
-foobar "Stray" {
-}
-`
-			require.Contains(t, rulesOf(oracle.Check(source, "broken.emod")), "orphan-command",
+			require.Contains(t, rulesOf(oracle.Check(brokenSource, "broken.emod")), "orphan-command",
 				"the recovered model must have a validator finding, or the leaf cannot tell the two lists apart")
 			session := connect(t)
 
-			result := callSlicesList(t, session, map[string]any{"content": source, "name": "broken.emod"})
+			result := callSlicesList(t, session, map[string]any{"content": brokenSource, "name": "broken.emod"})
 
 			require.False(t, result.IsError)
 			require.Equal(t, map[string]any{"diagnostics": []any{
@@ -801,6 +827,85 @@ foobar "Stray" {
 
 			for _, format := range []string{"json", "diagram-json", "cue"} {
 				result := callTool(t, session, "emod_export", map[string]any{"path": "ordering.emod", "format": format})
+				require.False(t, result.IsError, "format %s", format)
+			}
+
+			require.Equal(t, before, filesUnder(t, dir))
+		})
+	})
+
+	t.Run("glossary", func(t *testing.T) {
+		t.Run("a call with no format gives the Markdown glossary as one text block, with no structured content", func(t *testing.T) {
+			session := connect(t)
+
+			result := callTool(t, session, "emod_glossary", map[string]any{"content": cleanSource})
+
+			require.False(t, result.IsError)
+			require.Nil(t, result.StructuredContent)
+			require.True(t, strings.HasPrefix(textOf(t, result), "# Ordering\n"), "the glossary must start with the model: %q", textOf(t, result))
+			require.Contains(t, textOf(t, result), "PlaceOrder")
+			require.Contains(t, textOf(t, result), "OrderPlaced")
+		})
+
+		t.Run("json gives the glossary document as the structured content and the text block", func(t *testing.T) {
+			session := connect(t)
+
+			result := callTool(t, session, "emod_glossary", map[string]any{"content": cleanSource, "format": "json"})
+
+			require.False(t, result.IsError)
+			document := objectOf(t, result.StructuredContent)
+			require.Equal(t, "Ordering", document["name"])
+			require.Contains(t, jsonOf(t, document["contexts"]), `"name":"PlaceOrder"`)
+			require.JSONEq(t, jsonOf(t, result.StructuredContent), textOf(t, result))
+		})
+
+		t.Run("a source that does not parse gives only its parse diagnostics and no glossary", func(t *testing.T) {
+			session := connect(t)
+
+			result := callTool(t, session, "emod_glossary", map[string]any{"content": brokenSource, "name": "broken.emod"})
+
+			require.False(t, result.IsError)
+			require.Equal(t, map[string]any{"diagnostics": []any{
+				map[string]any{
+					"file":     "broken.emod",
+					"line":     float64(18),
+					"severity": "error",
+					"message":  `unexpected "foobar" block; expected one of: model, actor, context`,
+				},
+			}}, result.StructuredContent)
+		})
+
+		t.Run("an unknown format gives an error result that names the two formats", func(t *testing.T) {
+			session := connect(t)
+
+			result := callTool(t, session, "emod_glossary", map[string]any{"content": cleanSource, "format": "html"})
+
+			require.True(t, result.IsError)
+			require.Contains(t, textOf(t, result), "markdown")
+			require.Contains(t, textOf(t, result), "json")
+		})
+
+		t.Run("a path outside the root gives an error result that names the root", func(t *testing.T) {
+			base := t.TempDir()
+			project := filepath.Join(base, "project")
+			require.NoError(t, os.Mkdir(project, 0o755))
+			writeFile(t, filepath.Join(base, "ordering.emod"), cleanSource)
+			session := connectAt(t, project)
+
+			result := callTool(t, session, "emod_glossary", map[string]any{"path": "../ordering.emod"})
+
+			require.True(t, result.IsError)
+			require.Contains(t, textOf(t, result), "is outside the root "+project)
+		})
+
+		t.Run("a call with a path writes no file under the root, in any format", func(t *testing.T) {
+			dir := t.TempDir()
+			writeFile(t, filepath.Join(dir, "ordering.emod"), cleanSource)
+			before := filesUnder(t, dir)
+			session := connectAt(t, dir)
+
+			for _, format := range []string{"markdown", "json"} {
+				result := callTool(t, session, "emod_glossary", map[string]any{"path": "ordering.emod", "format": format})
 				require.False(t, result.IsError, "format %s", format)
 			}
 

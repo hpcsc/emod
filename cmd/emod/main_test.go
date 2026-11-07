@@ -166,6 +166,45 @@ func exportCLI(t *testing.T, path, format string) (string, int) {
 	return string(output), 0
 }
 
+func glossaryCLI(t *testing.T, path, format string) (printed string, parseDiagnostics string) {
+	t.Helper()
+
+	command := exec.Command(emodBinary, "glossary", "--format", format, path)
+	command.Dir = repoRoot(t)
+	command.Env = withoutAISettings(t)
+	var stdout, stderr strings.Builder
+	command.Stdout = &stdout
+	command.Stderr = &stderr
+	err := command.Run()
+	var exitErr *exec.ExitError
+	if errors.As(err, &exitErr) {
+		require.Equal(t, 1, exitErr.ExitCode(), "emod glossary failed: %s", stderr.String())
+		require.NotEmpty(t, stderr.String())
+		return "", strings.TrimSpace(stderr.String())
+	}
+	require.NoError(t, err)
+	return stdout.String(), ""
+}
+
+func diagnosticLines(t *testing.T, diagnostics any) string {
+	t.Helper()
+
+	encoded, err := json.Marshal(diagnostics)
+	require.NoError(t, err)
+	var records []struct {
+		File    string `json:"file"`
+		Line    int    `json:"line"`
+		Message string `json:"message"`
+	}
+	require.NoError(t, json.Unmarshal(encoded, &records))
+	require.NotEmpty(t, records)
+	lines := make([]string, 0, len(records))
+	for _, record := range records {
+		lines = append(lines, fmt.Sprintf("%s:%d: %s", record.File, record.Line, record.Message))
+	}
+	return strings.Join(lines, "\n")
+}
+
 func callBinaryTool(t *testing.T, session *sdk.ClientSession, name string, arguments map[string]any) *sdk.CallToolResult {
 	t.Helper()
 
@@ -216,7 +255,7 @@ func TestMCP(t *testing.T) {
 			for _, tool := range listed.Tools {
 				names = append(names, tool.Name)
 			}
-			require.ElementsMatch(t, []string{"emod_check", "emod_explain_rule", "emod_export", "emod_schema", "emod_slices_list"}, names)
+			require.ElementsMatch(t, []string{"emod_check", "emod_explain_rule", "emod_export", "emod_glossary", "emod_schema", "emod_slices_list"}, names)
 		})
 	})
 
@@ -404,19 +443,7 @@ func TestMCP(t *testing.T) {
 					return
 				}
 				require.NotContains(t, structured, "slices")
-				encoded, err := json.Marshal(structured["diagnostics"])
-				require.NoError(t, err)
-				var records []struct {
-					File    string `json:"file"`
-					Line    int    `json:"line"`
-					Message string `json:"message"`
-				}
-				require.NoError(t, json.Unmarshal(encoded, &records))
-				lines := make([]string, 0, len(records))
-				for _, record := range records {
-					lines = append(lines, fmt.Sprintf("%s:%d: %s", record.File, record.Line, record.Message))
-				}
-				require.Equal(t, parseDiagnostics, strings.Join(lines, "\n"))
+				require.Equal(t, parseDiagnostics, diagnosticLines(t, structured["diagnostics"]))
 			})
 		}
 	})
@@ -456,6 +483,34 @@ func TestMCP(t *testing.T) {
 				require.NoError(t, err)
 				require.JSONEq(t, validateJSON(t, path), string(records))
 			})
+		}
+	})
+
+	t.Run("glossary", func(t *testing.T) {
+		for _, path := range modelPaths(t) {
+			for _, format := range []string{"markdown", "json"} {
+				t.Run("gives the "+format+" glossary or the parse diagnostics that emod glossary gives for the path "+path, func(t *testing.T) {
+					session, _ := startServer(t)
+					printed, parseDiagnostics := glossaryCLI(t, path, format)
+
+					result := callBinaryTool(t, session, "emod_glossary", map[string]any{"path": path, "format": format})
+
+					require.False(t, result.IsError, "the call must succeed: %v", result.Content)
+					switch {
+					case parseDiagnostics != "":
+						structured, ok := result.StructuredContent.(map[string]any)
+						require.True(t, ok, "the structured result must be an object, but it is %T", result.StructuredContent)
+						require.Equal(t, parseDiagnostics, diagnosticLines(t, structured["diagnostics"]))
+					case format == "json":
+						document, err := json.Marshal(result.StructuredContent)
+						require.NoError(t, err)
+						require.JSONEq(t, printed, string(document))
+					default:
+						require.Nil(t, result.StructuredContent)
+						require.Equal(t, printed, textOfBinary(t, result))
+					}
+				})
+			}
 		}
 	})
 
