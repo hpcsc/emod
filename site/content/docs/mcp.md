@@ -174,6 +174,28 @@ It takes the same `content`, `path` and `name` as `emod_check`, and these inputs
 - Only `svg` draws the spec cards. `specs: true` with another format gives an error result that says so.
 - The tool starts no server. `emod diagram --serve` has no match in the tool.
 
+## The `emod_fmt` tool
+
+`emod_fmt` gives a model in the canonical layout of `emod fmt`, so that a file that the agent writes passes
+`emod fmt --check` in CI. It takes the same `content`, `path` and `name` as `emod_check`.
+
+The result holds the text under `formatted`, and the answer of the check under `changed`:
+
+```json
+{
+  "formatted": "emod = 1\n\nmodel \"Ordering\" {\n}\n",
+  "changed": true
+}
+```
+
+- `formatted` is the same text that `emod fmt` writes for the source. The text block holds the same JSON.
+- `changed` is true when `formatted` differs from the source, and false when the source is already in the
+  canonical layout. It gives the same answer as the exit code of `emod fmt --check`.
+- The tool does not write the file. The agent writes `formatted` with the file tool of the host.
+- A source that does not parse gives its parse diagnostics under `diagnostics`, as the records of
+  `emod_check`, and no `formatted`. This is a normal result, not an error result. A lint warning or a
+  validation error does not stop the tool.
+
 ## The `emod_explain_rule` tool
 
 `emod_explain_rule` tells why a lint rule exists and how to fix a finding of the rule. The call gives the

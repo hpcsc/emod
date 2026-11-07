@@ -92,9 +92,9 @@ not parse gives only its parse diagnostics. The tool writes no file.
 **Behavior:** The MCP page of the docs describes the tool, and the README names it.
 
 **Acceptance Criteria:**
-- [ ] `site/content/docs/mcp.md` has a section on `emod_fmt`: its result, the result of a parse error, and
+- [x] `site/content/docs/mcp.md` has a section on `emod_fmt`: its result, the result of a parse error, and
   that the host writes `formatted` with its own file tool.
-- [ ] The README section "Check models from an agent (MCP)" names the tool.
+- [x] The README section "Check models from an agent (MCP)" names the tool.
 
 **Patterns to follow:**
 - `site/content/docs/mcp.md`

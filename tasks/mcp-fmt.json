@@ -24,7 +24,7 @@
     },
     {
       "n": 2,
-      "done": false,
+      "done": true,
       "title": "Document `emod_fmt`",
       "language": "Go",
       "testable": false,
