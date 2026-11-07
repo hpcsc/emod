@@ -137,9 +137,9 @@ boundaries above name.
 **Behavior:** The MCP page of the docs describes the tool, and the README names it.
 
 **Acceptance Criteria:**
-- [ ] `site/content/docs/mcp.md` has a section on `emod_diagram`: its formats, `style`, `specs`, the result
+- [x] `site/content/docs/mcp.md` has a section on `emod_diagram`: its formats, `style`, `specs`, the result
   for errors and warnings, and that the host saves an SVG with its own file tool.
-- [ ] The README section "Check models from an agent (MCP)" names the tool.
+- [x] The README section "Check models from an agent (MCP)" names the tool.
 
 **Patterns to follow:**
 - `site/content/docs/mcp.md`

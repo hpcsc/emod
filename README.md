@@ -311,12 +311,12 @@ command sends.
 
 `emod mcp` starts a Model Context Protocol (MCP) server on stdin and stdout. An agent such as Claude Code
 calls its tool `emod_check` to check a draft model before it writes the file, and `emod_slices_list` to
-list the slices of a model with their patterns. `emod_export` gives the model as JSON, diagram JSON or CUE,
-and `emod_glossary` gives the terms of the model. The resources `emod://schema`, `emod://examples/*` and
-`emod://docs/dsl-reference`, and the tool `emod_schema`, give the agent the grammar of emod before its
-first draft. The tool `emod_explain_rule` and the resource `emod://rules` tell the agent why a lint rule
-exists, so the agent fixes the cause of a finding. The agent brings the model, so the server needs no API
-key and no `EMOD_AI_*` setting.
+list the slices of a model with their patterns. `emod_export` gives the model as JSON, diagram JSON or
+CUE, `emod_glossary` gives the terms of the model, and `emod_diagram` draws it as SVG, Mermaid or ASCII.
+The resources `emod://schema`, `emod://examples/*` and `emod://docs/dsl-reference`, and the tool
+`emod_schema`, give the agent the grammar of emod before its first draft. The tool `emod_explain_rule` and
+the resource `emod://rules` tell the agent why a lint rule exists, so the agent fixes the cause of a
+finding. The agent brings the model, so the server needs no API key and no `EMOD_AI_*` setting.
 
 ```bash
 claude mcp add emod -- emod mcp

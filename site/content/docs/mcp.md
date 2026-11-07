@@ -151,6 +151,29 @@ and a `format`:
 
 Neither `emod_export` nor `emod_glossary` writes a file.
 
+## The `emod_diagram` tool
+
+`emod_diagram` draws a model, so that you see the shape of a change in the chat before you open the viewer.
+It takes the same `content`, `path` and `name` as `emod_check`, and these inputs:
+
+| Input | Values | Default |
+| --- | --- | --- |
+| `format` | `svg`, `mermaid`, `ascii`, `event-flow`, `event-flow-mermaid`, `event-flow-mermaid-no-icons` | `svg` |
+| `style` | `auto`, `projected`, `dcb` | `auto` |
+| `specs` | `true` draws the Given-When-Then cards of the specs | `false` |
+
+- Each format gives the same text as `emod diagram --format <format>`, with the same `--style` and `--specs`.
+- The result holds the diagram text under `diagram`, and the first text block holds the same text. A host
+  shows `mermaid` and `ascii` in the chat.
+- For `svg` and `event-flow`, the tool gives the SVG text and writes no file. The host saves it with its own
+  file tool when you want a file.
+- A source with only warnings gives the diagram and the warnings under `diagnostics`. A second text block
+  holds the warnings, one line each, as `emod diagram` prints them.
+- A source with an error gives its diagnostics under `diagnostics`, as the records of `emod_check`, and no
+  diagram.
+- Only `svg` draws the spec cards. `specs: true` with another format gives an error result that says so.
+- The tool starts no server. `emod diagram --serve` has no match in the tool.
+
 ## The `emod_explain_rule` tool
 
 `emod_explain_rule` tells why a lint rule exists and how to fix a finding of the rule. The call gives the

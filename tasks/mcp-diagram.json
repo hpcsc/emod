@@ -46,7 +46,7 @@
     },
     {
       "n": 3,
-      "done": false,
+      "done": true,
       "title": "Document `emod_diagram`",
       "language": "Go",
       "testable": false,
