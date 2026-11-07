@@ -105,11 +105,11 @@ a read of each resource. The script fails on an error of the Inspector, on an `i
 that it has no arguments for, and on an empty read.
 
 **Acceptance Criteria:**
-- [ ] `task check:mcp` passes on the branch, and its output names each tool and each resource that it
+- [x] `task check:mcp` passes on the branch, and its output names each tool and each resource that it
   checked.
-- [ ] The script fails for a tool that `tools/list` gives and the script does not know.
-- [ ] The script fails when a call gives an `isError` result.
-- [ ] `task test` does not run the script.
+- [x] The script fails for a tool that `tools/list` gives and the script does not know.
+- [x] The script fails when a call gives an `isError` result.
+- [x] `task test` does not run the script.
 
 **Patterns to follow:**
 - `Taskfile.yml` (`build`)

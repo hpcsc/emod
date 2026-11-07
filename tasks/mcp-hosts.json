@@ -21,7 +21,7 @@
     },
     {
       "n": 2,
-      "done": false,
+      "done": true,
       "title": "Check the server with the MCP Inspector",
       "language": "Go",
       "testable": false,

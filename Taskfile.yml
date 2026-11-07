@@ -20,6 +20,13 @@ tasks:
     env:
       CGO_ENABLED: '0'
 
+  check:mcp:
+    desc: Check emod mcp with the MCP Inspector (npx downloads the Inspector, so it needs network access)
+    deps:
+      - build
+    cmds:
+      - scripts/mcp-inspector.sh ./bin/emod
+
   build:vscode:
     desc: Compile the VS Code extension (TypeScript → out/)
     dir: editors/vscode
