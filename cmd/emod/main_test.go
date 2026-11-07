@@ -7,6 +7,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"maps"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -205,6 +206,62 @@ func diagnosticLines(t *testing.T, diagnostics any) string {
 	return strings.Join(lines, "\n")
 }
 
+func requireDiagramParity(t *testing.T, path string, options map[string]any) {
+	t.Helper()
+
+	session, _ := startServer(t)
+	written, exitCode := diagramCLI(t, path, options)
+	arguments := map[string]any{"path": path}
+	maps.Copy(arguments, options)
+
+	result := callTool(t, session, "emod_diagram", arguments)
+
+	require.False(t, result.IsError, "the call must succeed: %v", result.Content)
+	structured, ok := result.StructuredContent.(map[string]any)
+	require.True(t, ok, "the structured result must be an object, but it is %T", result.StructuredContent)
+	if exitCode == 2 {
+		require.NotContains(t, structured, "diagram")
+		records, err := json.Marshal(structured["diagnostics"])
+		require.NoError(t, err)
+		require.JSONEq(t, validateJSON(t, path), string(records))
+		return
+	}
+	require.Equal(t, written, structured["diagram"])
+	require.Equal(t, written, textOf(t, &sdk.CallToolResult{Content: result.Content[:1]}))
+}
+
+func diagramCLI(t *testing.T, path string, options map[string]any) (string, int) {
+	t.Helper()
+
+	format, _ := options["format"].(string)
+	file := filepath.Join(t.TempDir(), "diagram")
+	arguments := []string{"diagram", "--format", format, "-o", file}
+	if style, ok := options["style"].(string); ok {
+		arguments = append(arguments, "--style", style)
+	}
+	if specs, _ := options["specs"].(bool); specs {
+		arguments = append(arguments, "--specs")
+	}
+	command := exec.Command(emodBinary, append(arguments, path)...)
+	command.Dir = repoRoot(t)
+	command.Env = withoutAISettings(t)
+	output, err := command.CombinedOutput()
+	exitCode := 0
+	var exitErr *exec.ExitError
+	if errors.As(err, &exitErr) {
+		exitCode = exitErr.ExitCode()
+	} else {
+		require.NoError(t, err)
+	}
+	require.LessOrEqual(t, exitCode, 2, "emod diagram failed: %s", output)
+	if exitCode == 2 {
+		return "", exitCode
+	}
+	drawn, err := os.ReadFile(file)
+	require.NoError(t, err, "emod diagram must write the file: %s", output)
+	return string(drawn), exitCode
+}
+
 func callTool(t *testing.T, session *sdk.ClientSession, name string, arguments map[string]any) *sdk.CallToolResult {
 	t.Helper()
 
@@ -255,7 +312,7 @@ func TestMCP(t *testing.T) {
 			for _, tool := range listed.Tools {
 				names = append(names, tool.Name)
 			}
-			require.ElementsMatch(t, []string{"emod_check", "emod_explain_rule", "emod_export", "emod_glossary", "emod_schema", "emod_slices_list"}, names)
+			require.ElementsMatch(t, []string{"emod_check", "emod_diagram", "emod_explain_rule", "emod_export", "emod_glossary", "emod_schema", "emod_slices_list"}, names)
 		})
 	})
 
@@ -492,6 +549,26 @@ func TestMCP(t *testing.T) {
 				})
 			}
 		}
+	})
+
+	t.Run("diagram", func(t *testing.T) {
+		for _, path := range modelPaths(t) {
+			for _, format := range []string{"svg", "mermaid", "ascii", "event-flow", "event-flow-mermaid", "event-flow-mermaid-no-icons"} {
+				t.Run("gives the "+format+" of emod diagram, or the records of emod validate, for the path "+path, func(t *testing.T) {
+					requireDiagramParity(t, path, map[string]any{"format": format})
+				})
+			}
+		}
+
+		for _, style := range []string{"auto", "projected", "dcb"} {
+			t.Run("gives the mermaid of emod diagram --style "+style+" for a dcb model", func(t *testing.T) {
+				requireDiagramParity(t, "examples/dcb_model.emod", map[string]any{"format": "mermaid", "style": style})
+			})
+		}
+
+		t.Run("gives the svg of emod diagram --specs for a model with specs", func(t *testing.T) {
+			requireDiagramParity(t, "examples/specs_hotel.emod", map[string]any{"format": "svg", "specs": true})
+		})
 	})
 
 	t.Run("shutdown", func(t *testing.T) {

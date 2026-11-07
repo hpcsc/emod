@@ -17,6 +17,7 @@ import (
 	"github.com/hpcsc/emod/examples"
 	"github.com/hpcsc/emod/internal/cue"
 	"github.com/hpcsc/emod/internal/diagnostic"
+	"github.com/hpcsc/emod/internal/diagram"
 	"github.com/hpcsc/emod/internal/linter"
 	"github.com/hpcsc/emod/internal/mcp"
 	"github.com/hpcsc/emod/internal/oracle"
@@ -335,7 +336,58 @@ func TestServer(t *testing.T) {
 			for _, tool := range listed.Tools {
 				names = append(names, tool.Name)
 			}
-			require.ElementsMatch(t, []string{"emod_check", "emod_explain_rule", "emod_export", "emod_glossary", "emod_schema", "emod_slices_list"}, names)
+			require.ElementsMatch(t, []string{"emod_check", "emod_diagram", "emod_explain_rule", "emod_export", "emod_glossary", "emod_schema", "emod_slices_list"}, names)
+		})
+
+		t.Run("gives emod_diagram the formats of the diagram package with svg as the default, the three styles with auto as the default, and specs", func(t *testing.T) {
+			session := connect(t)
+
+			tool := toolNamed(t, session, "emod_diagram")
+
+			schema := objectOf(t, tool.InputSchema)
+			properties := objectOf(t, schema["properties"])
+			require.ElementsMatch(t, []string{"content", "path", "name", "format", "style", "specs"}, keysOf(properties))
+			format := objectOf(t, properties["format"])
+			formats := make([]any, 0, len(diagram.Formats()))
+			for _, f := range diagram.Formats() {
+				formats = append(formats, f)
+			}
+			require.ElementsMatch(t, formats, format["enum"])
+			require.Equal(t, "svg", format["default"])
+			style := objectOf(t, properties["style"])
+			require.Equal(t, []any{"auto", "projected", "dcb"}, style["enum"])
+			require.Equal(t, "string", style["type"])
+			require.Equal(t, "auto", style["default"])
+			require.Contains(t, style["description"], "The default is auto")
+			specs := objectOf(t, properties["specs"])
+			require.Equal(t, "boolean", specs["type"])
+			require.Equal(t, false, specs["default"])
+			require.Contains(t, specs["description"], "Only svg draws them")
+		})
+
+		t.Run("gives emod_diagram an output schema of one of two objects: the diagram with its warnings, or the diagnostics", func(t *testing.T) {
+			session := connect(t)
+
+			tool := toolNamed(t, session, "emod_diagram")
+
+			schema := objectOf(t, tool.OutputSchema)
+			choices, ok := schema["oneOf"].([]any)
+			require.True(t, ok)
+			var required [][]any
+			for _, choice := range choices {
+				keys, _ := objectOf(t, choice)["required"].([]any)
+				required = append(required, keys)
+			}
+			require.Equal(t, [][]any{{"diagram", "diagnostics"}, {"diagnostics"}}, required)
+		})
+
+		t.Run("the description of emod_diagram names the command with the same text and the rule of errors", func(t *testing.T) {
+			session := connect(t)
+
+			tool := toolNamed(t, session, "emod_diagram")
+
+			require.Contains(t, tool.Description, "emod diagram --format <format>")
+			require.Contains(t, tool.Description, "A source with an error gives its diagnostics and no diagram")
 		})
 
 		t.Run("gives emod_glossary the input of emod_check and a format of markdown or json, with markdown as the default", func(t *testing.T) {
@@ -882,6 +934,155 @@ func TestServer(t *testing.T) {
 
 			for _, format := range []string{"markdown", "json"} {
 				result := callTool(t, session, "emod_glossary", map[string]any{"path": "ordering.emod", "format": format})
+				require.False(t, result.IsError, "format %s", format)
+			}
+
+			require.Equal(t, before, filesUnder(t, dir))
+		})
+	})
+
+	t.Run("diagram", func(t *testing.T) {
+		t.Run("a call with no format gives the SVG of the model, with no warning", func(t *testing.T) {
+			session := connect(t)
+
+			result := callTool(t, session, "emod_diagram", map[string]any{"content": cleanSource})
+
+			require.False(t, result.IsError)
+			drawn := objectOf(t, result.StructuredContent)
+			require.Equal(t, []any{}, drawn["diagnostics"])
+			require.True(t, strings.HasPrefix(textOf(t, result), "<svg "), "the diagram must be an SVG: %.40q", textOf(t, result))
+			require.Equal(t, drawn["diagram"], textOf(t, result))
+			require.Contains(t, textOf(t, result), "PlaceOrder")
+		})
+
+		t.Run("a source with an error gives its diagnostics and no diagram", func(t *testing.T) {
+			source, err := os.ReadFile("../../examples/error_diagnostics_test.emod")
+			require.NoError(t, err)
+			session := connect(t)
+
+			result := callTool(t, session, "emod_diagram", map[string]any{"content": string(source), "format": "mermaid"})
+
+			require.False(t, result.IsError)
+			drawn := objectOf(t, result.StructuredContent)
+			require.Equal(t, []string{"diagnostics"}, keysOf(drawn))
+			require.Equal(t, []string{"", "orphan-command"}, rulesOfRecords(t, drawn["diagnostics"]))
+		})
+
+		t.Run("a source with only a warning gives the diagram and the warning, with the warning in a second text block", func(t *testing.T) {
+			session := connect(t)
+
+			result := callTool(t, session, "emod_diagram", map[string]any{"content": warningSource, "format": "mermaid", "name": "ordering.emod"})
+
+			require.False(t, result.IsError)
+			drawn := objectOf(t, result.StructuredContent)
+			require.Equal(t, []string{"state-obsession"}, rulesOfRecords(t, drawn["diagnostics"]))
+			require.Len(t, result.Content, 2)
+			diagramText, ok := result.Content[0].(*sdk.TextContent)
+			require.True(t, ok)
+			require.Equal(t, drawn["diagram"], diagramText.Text)
+			require.Contains(t, diagramText.Text, "OrderUpdated")
+			warnings, ok := result.Content[1].(*sdk.TextContent)
+			require.True(t, ok)
+			require.Contains(t, warnings.Text, "ordering.emod:")
+			require.Contains(t, warnings.Text, "[state-obsession]")
+		})
+
+		t.Run("a source with two warnings gives one line for each in the second text block", func(t *testing.T) {
+			source := strings.ReplaceAll(warningSource, "PlaceOrder", "OrderPlaced")
+			session := connect(t)
+
+			result := callTool(t, session, "emod_diagram", map[string]any{"content": source, "format": "mermaid", "name": "ordering.emod"})
+
+			require.False(t, result.IsError)
+			require.ElementsMatch(t, []string{"command-past-tense", "state-obsession"}, rulesOfRecords(t, objectOf(t, result.StructuredContent)["diagnostics"]))
+			require.Len(t, result.Content, 2)
+			warnings, ok := result.Content[1].(*sdk.TextContent)
+			require.True(t, ok)
+			lines := strings.Split(warnings.Text, "\n")
+			require.Len(t, lines, 2)
+			for _, line := range lines {
+				require.True(t, strings.HasPrefix(line, "ordering.emod:"), "each line must name the file: %q", line)
+			}
+		})
+
+		t.Run("specs draws the spec cards in svg", func(t *testing.T) {
+			source, err := os.ReadFile("../../examples/specs_hotel.emod")
+			require.NoError(t, err)
+			session := connect(t)
+
+			plain := callTool(t, session, "emod_diagram", map[string]any{"content": string(source)})
+			cards := callTool(t, session, "emod_diagram", map[string]any{"content": string(source), "specs": true})
+
+			require.False(t, cards.IsError)
+			require.NotContains(t, textOf(t, plain), "reserves a free room")
+			require.Contains(t, textOf(t, cards), "reserves a free room")
+		})
+
+		t.Run("a source with an error gives its diagnostics before the check of specs, as the CLI does", func(t *testing.T) {
+			source, err := os.ReadFile("../../examples/error_diagnostics_test.emod")
+			require.NoError(t, err)
+			session := connect(t)
+
+			result := callTool(t, session, "emod_diagram", map[string]any{"content": string(source), "format": "mermaid", "specs": true})
+
+			require.False(t, result.IsError)
+			require.Equal(t, []string{"", "orphan-command"}, rulesOfRecords(t, objectOf(t, result.StructuredContent)["diagnostics"]))
+		})
+
+		t.Run("specs with a format other than svg gives an error result that says only svg draws spec cards", func(t *testing.T) {
+			session := connect(t)
+
+			result := callTool(t, session, "emod_diagram", map[string]any{"content": cleanSource, "format": "mermaid", "specs": true})
+
+			require.True(t, result.IsError)
+			require.Equal(t, `specs is not supported for format "mermaid"; only svg draws spec cards`, textOf(t, result))
+		})
+
+		t.Run("style reaches the renderer, so a dcb model draws differently in projected and dcb", func(t *testing.T) {
+			source, err := os.ReadFile("../../examples/dcb_model.emod")
+			require.NoError(t, err)
+			session := connect(t)
+
+			projected := callTool(t, session, "emod_diagram", map[string]any{"content": string(source), "format": "mermaid", "style": "projected"})
+			dcb := callTool(t, session, "emod_diagram", map[string]any{"content": string(source), "format": "mermaid", "style": "dcb"})
+
+			require.False(t, projected.IsError)
+			require.False(t, dcb.IsError)
+			require.NotEqual(t, textOf(t, projected), textOf(t, dcb))
+		})
+
+		t.Run("an unknown style gives an error result that names the three styles", func(t *testing.T) {
+			session := connect(t)
+
+			result := callTool(t, session, "emod_diagram", map[string]any{"content": cleanSource, "style": "grid"})
+
+			require.True(t, result.IsError)
+			for _, style := range []string{"auto", "projected", "dcb"} {
+				require.Contains(t, textOf(t, result), style)
+			}
+		})
+
+		t.Run("a path outside the root gives an error result that names the root", func(t *testing.T) {
+			base := t.TempDir()
+			project := filepath.Join(base, "project")
+			require.NoError(t, os.Mkdir(project, 0o755))
+			writeFile(t, filepath.Join(base, "ordering.emod"), cleanSource)
+			session := connectAt(t, project)
+
+			result := callTool(t, session, "emod_diagram", map[string]any{"path": "../ordering.emod"})
+
+			require.True(t, result.IsError)
+			require.Contains(t, textOf(t, result), "is outside the root "+project)
+		})
+
+		t.Run("a call with a path writes no file under the root, in any format", func(t *testing.T) {
+			dir := t.TempDir()
+			writeFile(t, filepath.Join(dir, "ordering.emod"), cleanSource)
+			before := filesUnder(t, dir)
+			session := connectAt(t, dir)
+
+			for _, format := range diagram.Formats() {
+				result := callTool(t, session, "emod_diagram", map[string]any{"path": "ordering.emod", "format": format})
 				require.False(t, result.IsError, "format %s", format)
 			}
 

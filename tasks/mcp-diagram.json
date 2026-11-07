@@ -23,7 +23,7 @@
     },
     {
       "n": 2,
-      "done": false,
+      "done": true,
       "title": "Draw a diagram with `emod_diagram`",
       "language": "Go",
       "testable": true,

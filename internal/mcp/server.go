@@ -6,8 +6,11 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"io"
 	"maps"
+	"slices"
+	"strings"
 
 	"github.com/google/jsonschema-go/jsonschema"
 	sdk "github.com/modelcontextprotocol/go-sdk/mcp"
@@ -17,6 +20,7 @@ import (
 	"github.com/hpcsc/emod/internal/ast"
 	"github.com/hpcsc/emod/internal/cue"
 	"github.com/hpcsc/emod/internal/diagnostic"
+	"github.com/hpcsc/emod/internal/diagram"
 	"github.com/hpcsc/emod/internal/export"
 	"github.com/hpcsc/emod/internal/glossary"
 	"github.com/hpcsc/emod/internal/linter"
@@ -55,6 +59,13 @@ var sourceSchema = &jsonschema.Schema{
 type formatInput struct {
 	sourceInput
 	Format string `json:"format,omitempty"`
+}
+
+type diagramInput struct {
+	sourceInput
+	Format string `json:"format,omitempty"`
+	Style  string `json:"style,omitempty"`
+	Specs  bool   `json:"specs,omitempty"`
 }
 
 type checkResult struct {
@@ -147,7 +158,7 @@ var exportTool = &sdk.Tool{
 		"json is the document of the model, and diagram-json holds each node and each edge of the diagram; " +
 		"both carry the diagnostics of the check, also for a source with errors. " +
 		"cue gives the CUE text of a source with no diagnostic; a source with any diagnostic, also a warning, gives the diagnostics in diagnostics and no CUE.",
-	InputSchema: formatSchema("json", "diagram-json", "cue"),
+	InputSchema: formatSchema("json", []string{"json", "diagram-json", "cue"}),
 }
 
 var glossaryTool = &sdk.Tool{
@@ -156,7 +167,23 @@ var glossaryTool = &sdk.Tool{
 		"Give the source in content, or give the path of an .emod file under the root of the server in path, as for emod_check. " +
 		"markdown gives the glossary as one text block, and json gives the same terms as a document. " +
 		"A source that does not parse gives its parse diagnostics in diagnostics, with no glossary.",
-	InputSchema: formatSchema("markdown", "json"),
+	InputSchema: formatSchema("markdown", []string{"markdown", "json"}),
+}
+
+type diagramResult struct {
+	Diagram     string              `json:"diagram"`
+	Diagnostics []diagnostic.Record `json:"diagnostics"`
+}
+
+var diagramTool = &sdk.Tool{
+	Name: "emod_diagram",
+	Description: "Draw an .emod model, the same text that `emod diagram --format <format>` gives. " +
+		"Give the source in content, or give the path of an .emod file under the root of the server in path, as for emod_check. " +
+		"mermaid and ascii are text for a chat; svg and event-flow are SVG text, which the tool does not write to a file. " +
+		"A source with an error gives its diagnostics and no diagram. " +
+		"A source with only warnings gives the diagram and the warnings, under diagram and diagnostics.",
+	InputSchema:  diagramSchema(),
+	OutputSchema: oneOf[diagramResult, checkResult](),
 }
 
 type Server struct {
@@ -192,6 +219,7 @@ func (s *Server) Run(ctx context.Context) error {
 	sdk.AddTool(server, slicesListTool, s.listSlices)
 	sdk.AddTool(server, exportTool, s.exportModel)
 	sdk.AddTool(server, glossaryTool, s.renderGlossary)
+	sdk.AddTool(server, diagramTool, s.drawDiagram)
 	return server.Run(ctx, &sdk.IOTransport{Reader: s.in, Writer: s.out})
 }
 
@@ -281,6 +309,42 @@ func (s *Server) renderGlossary(_ context.Context, _ *sdk.CallToolRequest, input
 	return s.textResult(string(text)), nil, nil
 }
 
+func (s *Server) drawDiagram(_ context.Context, _ *sdk.CallToolRequest, input diagramInput) (*sdk.CallToolResult, any, error) {
+	source, name, err := s.source(input.sourceInput)
+	if err != nil {
+		return nil, nil, err
+	}
+	model, diagnostics := oracle.Run(source, name)
+	if slices.ContainsFunc(diagnostics, func(d *diagnostic.Entry) bool { return d.Severity == diagnostic.Error }) {
+		return s.structuredResult(checkResult{Diagnostics: diagnostic.Records(diagnostics)})
+	}
+	if input.Specs && !diagram.DrawsSpecCards(input.Format) {
+		return nil, nil, fmt.Errorf("specs is not supported for format %q; only svg draws spec cards", input.Format)
+	}
+	style, err := diagram.ParseStyle(input.Style)
+	if err != nil {
+		return nil, nil, err
+	}
+	var options []diagram.Option
+	if input.Specs {
+		options = append(options, diagram.WithSpecs())
+	}
+	drawn, err := diagram.Export(model, input.Format, style, options...)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	result := s.textResult(string(drawn))
+	if len(diagnostics) > 0 {
+		lines := make([]string, 0, len(diagnostics))
+		for _, d := range diagnostics {
+			lines = append(lines, d.String())
+		}
+		result.Content = append(result.Content, &sdk.TextContent{Text: strings.Join(lines, "\n")})
+	}
+	return result, diagramResult{Diagram: string(drawn), Diagnostics: diagnostic.Records(diagnostics)}, nil
+}
+
 func (s *Server) documentResult(document []byte, err error) (*sdk.CallToolResult, any, error) {
 	if err != nil {
 		return nil, nil, err
@@ -355,16 +419,16 @@ func oneOf[First, Second any]() *jsonschema.Schema {
 	return &jsonschema.Schema{Type: "object", OneOf: []*jsonschema.Schema{first, second}}
 }
 
-func formatSchema(defaultFormat string, otherFormats ...string) *jsonschema.Schema {
-	formats := []any{defaultFormat}
-	for _, format := range otherFormats {
-		formats = append(formats, format)
+func formatSchema(defaultFormat string, formats []string) *jsonschema.Schema {
+	enum := make([]any, 0, len(formats))
+	for _, format := range formats {
+		enum = append(enum, format)
 	}
 	properties := maps.Clone(sourceSchema.Properties)
 	properties["format"] = &jsonschema.Schema{
 		Type:        "string",
 		Description: "The output format. The default is " + defaultFormat + ".",
-		Enum:        formats,
+		Enum:        enum,
 		Default:     json.RawMessage(`"` + defaultFormat + `"`),
 	}
 	return &jsonschema.Schema{
@@ -372,4 +436,20 @@ func formatSchema(defaultFormat string, otherFormats ...string) *jsonschema.Sche
 		Properties:           properties,
 		AdditionalProperties: sourceSchema.AdditionalProperties,
 	}
+}
+
+func diagramSchema() *jsonschema.Schema {
+	schema := formatSchema("svg", diagram.Formats())
+	schema.Properties["style"] = &jsonschema.Schema{
+		Type:        "string",
+		Description: "The layout style. The default is auto, which picks the style of each context from its mode.",
+		Enum:        []any{"auto", "projected", "dcb"},
+		Default:     json.RawMessage(`"auto"`),
+	}
+	schema.Properties["specs"] = &jsonschema.Schema{
+		Type:        "boolean",
+		Description: "Draw the Given-When-Then cards of the specs. Only svg draws them.",
+		Default:     json.RawMessage(`false`),
+	}
+	return schema
 }

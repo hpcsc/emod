@@ -104,16 +104,16 @@ default `svg`, a `style` enum with the default `auto`, and a boolean `specs`. It
 boundaries above name.
 
 **Acceptance Criteria:**
-- [ ] `tools/list` lists `emod_diagram`, with the two enums, their defaults and `specs`, and an output schema
+- [x] `tools/list` lists `emod_diagram`, with the two enums, their defaults and `specs`, and an output schema
   of one of the diagram result and the diagnostics.
-- [ ] A call with no format gives the SVG of the model.
-- [ ] A source with an error gives `{"diagnostics":[...]}` and no diagram.
-- [ ] A source with only a warning gives the diagram and the warning, with the warning in a second text block.
-- [ ] `specs: true` with `svg` draws the cards, and with `mermaid` gives an error result that says only svg
+- [x] A call with no format gives the SVG of the model.
+- [x] A source with an error gives `{"diagnostics":[...]}` and no diagram.
+- [x] A source with only a warning gives the diagram and the warning, with the warning in a second text block.
+- [x] `specs: true` with `svg` draws the cards, and with `mermaid` gives an error result that says only svg
   draws spec cards.
-- [ ] `style` reaches the renderer: the `mermaid` of a dcb model differs between `projected` and `dcb`.
-- [ ] A call with a path writes no file under the root, also for `svg` and `event-flow`.
-- [ ] Through the built binary, for each file in `examples/` and `internal/parser/testdata/` and each format,
+- [x] `style` reaches the renderer: the `mermaid` of a dcb model differs between `projected` and `dcb`.
+- [x] A call with a path writes no file under the root, also for `svg` and `event-flow`.
+- [x] Through the built binary, for each file in `examples/` and `internal/parser/testdata/` and each format,
   the tool gives the text that `emod diagram` gives, or the records of `emod validate --format json` for a
   source with an error.
 
