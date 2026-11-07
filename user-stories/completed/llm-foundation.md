@@ -184,6 +184,24 @@ this set builds only the shared plumbing plus the smoke check.
 
 **Depends on:** US-004, US-006, US-008, US-009
 
+### US-011: Reach any server with the OpenAI-compatible API
+**Goals:** G3
+
+**Description:** As an emod user with no Claude account, I want to point emod at any server that speaks the OpenAI-compatible Chat Completions API, so that I can use the AI features with OpenAI, Azure OpenAI, Gemini, OpenRouter, LiteLLM, or a local server such as Ollama, LM Studio or vLLM.
+
+**Acceptance Criteria:**
+- [ ] `EMOD_AI_PROVIDER=openai` selects an adapter that implements `llm.Model` with one call to the Chat Completions API, through `net/http` and no SDK.
+- [ ] `EMOD_AI_ENDPOINT` names the server. The default is `https://api.openai.com/v1`.
+- [ ] The key comes from `EMOD_AI_API_KEY`, then from `OPENAI_API_KEY`. The key is optional, because a local server needs none. With no key, the adapter sends no `Authorization` header.
+- [ ] The adapter refuses to start with no model, because no default model fits every server.
+- [ ] `OPENAI_API_KEY` alone does not turn AI on, and emod never sends `ANTHROPIC_API_KEY` to an openai server.
+- [ ] After an HTTP 400 that names `reasoning_effort`, the adapter removes that field and asks one more time. After an HTTP 400 that names `response_format`, it puts the schema in the system prompt and asks one more time.
+- [ ] `emod ai` prints a notice for this provider: emod tests its AI features on Claude through the anthropic provider.
+
+**Context:** The adapter sends no limit on output tokens, because the servers name that field in different ways.
+
+**Depends on:** US-001, US-004, US-007
+
 ## Non-Goals
 
 - Adopting a general agent/LLM framework (`langchaingo` or similar).
