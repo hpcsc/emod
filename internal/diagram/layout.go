@@ -133,7 +133,6 @@ type sliceEntry struct {
 	// for a slice declared directly on a context, that context's — the scope
 	// rule the validator resolves a rejection against.
 	invariants []*ast.Invariant
-	copies     []EventCopy
 }
 
 // invariantStatement returns the prose of the named invariant, or "" when the
@@ -151,8 +150,6 @@ func (e sliceEntry) invariantStatement(name string) string {
 // collectSlices flattens all slices from the model into a list, in source
 // order within each context.
 func collectSlices(model *ast.Model) []sliceEntry {
-	copies := EventCopies(model)
-
 	var entries []sliceEntry
 	for _, ref := range model.SliceRefs() {
 		invariants := ref.Context.Invariants
@@ -165,7 +162,6 @@ func collectSlices(model *ast.Model) []sliceEntry {
 			ctxDescription: ref.Context.Description,
 			fromDCB:        ref.Aggregate == nil,
 			invariants:     invariants,
-			copies:         copies[ref.Slice],
 		})
 	}
 	return entries
@@ -187,18 +183,18 @@ const copyLabelPadding = 16
 
 // columnWidth is how wide a slice is drawn. A slice that draws copies is widened
 // until every box in its events row is as wide as the longest line of a copy.
-func columnWidth(entry sliceEntry) int {
-	if len(entry.copies) == 0 {
+func columnWidth(entry sliceEntry, copies []ElementCopy) int {
+	if len(copies) == 0 {
 		return sliceWidth
 	}
 
 	var longest int
-	for _, c := range entry.copies {
+	for _, c := range copies {
 		for _, line := range c.labelLines() {
 			longest = max(longest, estimatedTextWidth(line, copyMeasureFontSize))
 		}
 	}
-	items := eventRowItems(entry.slice) + len(entry.copies)
+	items := eventRowItems(entry.slice) + len(copies)
 	itemW := min(longest+copyLabelPadding, boxWidth)
 
 	return max(sliceWidth, 20+items*itemW+(items-1)*8)
@@ -212,7 +208,7 @@ type sliceColumn struct {
 
 // sliceColumns returns the column each slice is drawn in, left to right, with a
 // wider gap wherever one context gives way to the next.
-func sliceColumns(entries []sliceEntry) []sliceColumn {
+func sliceColumns(entries []sliceEntry, copies ElementCopies) []sliceColumn {
 	columns := make([]sliceColumn, len(entries))
 	x := marginX
 
@@ -224,7 +220,7 @@ func sliceColumns(entries []sliceEntry) []sliceColumn {
 				x += contextGap
 			}
 		}
-		columns[i] = sliceColumn{x: x, w: columnWidth(entry)}
+		columns[i] = sliceColumn{x: x, w: columnWidth(entry, copies.In(entry.slice))}
 		x += columns[i].w
 	}
 

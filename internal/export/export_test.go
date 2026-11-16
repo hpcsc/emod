@@ -3790,40 +3790,62 @@ func TestExport(t *testing.T) {
 		})
 
 		t.Run("a copy of a subscribed event", func(t *testing.T) {
-			t.Run("is drawn in the slice of each view that subscribes to more than three events from other slices, naming the event it copies", func(t *testing.T) {
+			t.Run("is drawn in the slice of each view that subscribes to it from two or more slices away, naming the event it copies", func(t *testing.T) {
 				doc := diagramDocOf(t, test.SubscribedEventsHotelStaysModel(t))
 
 				require.Equal(t, []string{
 					"RoomReserved in See Stay History copies event RoomReserved in Reserve Room",
 					"GuestCheckedIn in See Stay History copies event GuestCheckedIn in Check In",
 					"BreakfastOrdered in See Stay History copies event BreakfastOrdered in Import Breakfast Orders",
-					"GuestCheckedOut in See Stay History copies event GuestCheckedOut in Check Out",
+					"RoomReserved in See Occupancy copies event RoomReserved in Reserve Room",
+					"GuestCheckedIn in See Occupancy copies event GuestCheckedIn in Check In",
+					"GuestCheckedOut in See Occupancy copies event GuestCheckedOut in Check Out",
 					"RoomReserved in Plan Cleaning copies event RoomReserved in Reserve Room",
 					"GuestCheckedIn in Plan Cleaning copies event GuestCheckedIn in Check In",
 					"GuestCheckedOut in Plan Cleaning copies event GuestCheckedOut in Check Out",
-					"RoomCleaned in Plan Cleaning copies event RoomCleaned in Clean Room",
 				}, eventCopiesIn(doc))
 			})
 
-			t.Run("starts the subscription edges into a view past the threshold", func(t *testing.T) {
+			t.Run("starts a subscription edge at the copy of an event two or more slices away, and at the event in the slice next to it", func(t *testing.T) {
 				doc := diagramDocOf(t, test.SubscribedEventsHotelStaysModel(t))
 
 				require.Equal(t, []string{
 					"event_copy RoomReserved",
 					"event_copy GuestCheckedIn",
 					"event_copy BreakfastOrdered",
-					"event_copy GuestCheckedOut",
-				}, subscriptionSourcesInto(doc, "StayHistoryView"))
+					"event GuestCheckedOut",
+				}, edgeSourcesInto(doc, "subscription", "StayHistoryView"))
 			})
 
-			t.Run("leaves the subscription edges into a view at the threshold starting at the events", func(t *testing.T) {
+			t.Run("starts every subscription edge into a view that subscribes to only three events at copies, when each is two or more slices away", func(t *testing.T) {
 				doc := diagramDocOf(t, test.SubscribedEventsHotelStaysModel(t))
 
 				require.Equal(t, []string{
-					"event RoomReserved",
-					"event GuestCheckedIn",
-					"event GuestCheckedOut",
-				}, subscriptionSourcesInto(doc, "OccupancyView"))
+					"event_copy RoomReserved",
+					"event_copy GuestCheckedIn",
+					"event_copy GuestCheckedOut",
+				}, edgeSourcesInto(doc, "subscription", "OccupancyView"))
+			})
+		})
+
+		t.Run("a copy of an activating event", func(t *testing.T) {
+			t.Run("starts the activation edge into an automation at the copy of an event two or more slices away, and at an event its own slice declares", func(t *testing.T) {
+				doc := diagramDocOf(t, test.AutomationDelayLibraryLendingModel(t))
+
+				require.Equal(t, map[string][]string{
+					"RemindAfterGracePeriod": {"event_copy CopyBorrowed"},
+					"RecallOnSecondReminder": {"event MemberReminded"},
+				}, map[string][]string{
+					"RemindAfterGracePeriod": edgeSourcesInto(doc, "automation_trigger", "RemindAfterGracePeriod"),
+					"RecallOnSecondReminder": edgeSourcesInto(doc, "automation_trigger", "RecallOnSecondReminder"),
+				})
+			})
+
+			t.Run("is drawn in the automation's slice, naming the event it copies", func(t *testing.T) {
+				doc := diagramDocOf(t, test.AutomationDelayLibraryLendingModel(t))
+
+				require.Contains(t, eventCopiesIn(doc),
+					"CopyBorrowed in Chase Overdue Copy copies event CopyBorrowed in Borrow Copy")
 			})
 		})
 	})
@@ -5948,16 +5970,16 @@ func eventCopiesIn(doc map[string]any) []string {
 	return copies
 }
 
-// subscriptionSourcesInto names the node each subscription edge into the view
-// labelled view starts at, by its type and label, in the order the edges were
+// edgeSourcesInto names the node each edge of type edgeType into the node
+// labelled target starts at, by its type and label, in the order the edges were
 // emitted.
-func subscriptionSourcesInto(doc map[string]any, view string) []string {
+func edgeSourcesInto(doc map[string]any, edgeType, target string) []string {
 	labels := nodeLabelsByID(doc)
 	types := nodeTypesByID(doc)
 
 	var sources []string
 	for _, edge := range objectsUnder(doc, "edges") {
-		if edge["type"] == "subscription" && labels[edge["target"].(string)] == view {
+		if edge["type"] == edgeType && labels[edge["target"].(string)] == target {
 			source := edge["source"].(string)
 			sources = append(sources, types[source]+" "+labels[source])
 		}
@@ -6402,6 +6424,9 @@ func descriptionsByConstruct(t *testing.T, doc map[string]any) map[string]any {
 func diagramObjectsByLabel(doc map[string]any) map[string]map[string]any {
 	byLabel := make(map[string]map[string]any)
 	for _, node := range objectsUnder(doc, "nodes") {
+		if _, copies := node["copy_of"]; copies {
+			continue
+		}
 		label := node["label"].(string)
 		byLabel[label] = node
 		if event, nests := node["event"].(map[string]any); nests {

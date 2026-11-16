@@ -147,6 +147,79 @@ func TestExportSVG(t *testing.T) {
 		require.Equal(t, 1, arrowCount(output), "event to view is one arrow")
 	})
 
+	t.Run("draws no arrow into a view from an event no slice declares", func(t *testing.T) {
+		model := &ast.Model{
+			Name: "Test",
+			Contexts: []*ast.Context{{
+				Name: "Ctx",
+				Aggregates: []*ast.Aggregate{{
+					Name: "Agg",
+					Slices: []*ast.Slice{{
+						Name:   "S",
+						Events: []*ast.Event{{Name: "OrderPlaced"}},
+						Views:  []*ast.View{{Name: "OrderList", Subscribes: []string{"OrderPlaced", "OrderLost"}}},
+					}},
+				}},
+			}},
+		}
+
+		raw, err := diagram.ExportSVG(model, diagram.StyleAuto)
+		require.NoError(t, err)
+
+		require.Equal(t, 1, arrowCount(string(raw)), "only the declared event has a box to draw an arrow from")
+	})
+
+	t.Run("draws no arrow into an automation from an event no slice declares", func(t *testing.T) {
+		model := &ast.Model{
+			Name: "Test",
+			Contexts: []*ast.Context{{
+				Name: "Ctx",
+				Aggregates: []*ast.Aggregate{{
+					Name: "Agg",
+					Slices: []*ast.Slice{{
+						Name:   "S",
+						Events: []*ast.Event{{Name: "LoanOverdue"}},
+						Automations: []*ast.Automation{
+							{Name: "Remind", OnEvent: "LoanOverdue"},
+							{Name: "Chase", OnEvent: "LoanLost"},
+						},
+					}},
+				}},
+			}},
+		}
+
+		raw, err := diagram.ExportSVG(model, diagram.StyleAuto)
+		require.NoError(t, err)
+
+		require.Equal(t, 1, arrowCount(string(raw)), "only the declared event has a box to draw an arrow from")
+	})
+
+	t.Run("a translation that nests an event with no name leaves the other events of its slice their full width", func(t *testing.T) {
+		withNested := func(nested *ast.Event) *ast.Model {
+			return &ast.Model{
+				Name: "Test",
+				Contexts: []*ast.Context{{
+					Name: "Ctx",
+					Aggregates: []*ast.Aggregate{{
+						Name: "Agg",
+						Slices: []*ast.Slice{{
+							Name:         "S",
+							Events:       []*ast.Event{{Name: "OrderPaid"}},
+							Translations: []*ast.Translation{{Name: "PaymentImport", ExternalSystem: "Bank", Event: nested}},
+						}},
+					}},
+				}},
+			}
+		}
+		widthOfPaid := func(model *ast.Model) int {
+			raw, err := diagram.ExportSVG(model, diagram.StyleAuto)
+			require.NoError(t, err)
+			return boxNamed(t, svgBoxes(t, string(raw)), "OrderPaid").rect.w
+		}
+
+		require.Equal(t, widthOfPaid(withNested(nil)), widthOfPaid(withNested(&ast.Event{Name: ""})))
+	})
+
 	t.Run("renders automation as the gear with its name under it", func(t *testing.T) {
 		model := &ast.Model{
 			Name: "Test",

@@ -1,8 +1,9 @@
 import { test, expect } from '@playwright/test';
 import { open, render } from './helpers.js';
 
-// PaymentsView subscribes to four events that four other slices declare, which
-// is past the threshold, so the exporter draws a copy of each in its slice.
+// PaymentsView subscribes to four events that the four slices before it
+// declare. Three of them are two or more slices away, so the exporter draws a
+// copy of each in its slice. PaymentSettled is in the slice next to it.
 const VIEW_READING_FAR = `emod = 1
 
 model "Billing" {
@@ -79,11 +80,11 @@ function opacityOf(page, edgeId) {
 }
 
 test.describe('a copy of an event', () => {
-  test('is drawn for each event a view reads from other slices', async ({ page }) => {
+  test('is drawn for each event a view reads from two or more slices away', async ({ page }) => {
     await open(page);
     await render(page, VIEW_READING_FAR);
 
-    await expect(page.locator('.event-copy-block')).toHaveCount(4);
+    await expect(page.locator('.event-copy-block')).toHaveCount(3);
     await expect(block(page, 'event_copy-1')).toContainText('from Take Payment');
   });
 
@@ -113,11 +114,11 @@ test.describe('a copy of an event', () => {
     await open(page);
     await render(page, VIEW_READING_FAR);
 
-    // The fourth copy stands for PaymentSettled, the fourth event declared.
-    await block(page, 'event_copy-4').click();
+    // The third copy stands for PaymentDisputed, the third event declared.
+    await block(page, 'event_copy-3').click();
 
     const canvas = await page.locator('#diagram-canvas').boundingBox();
-    const event = await block(page, 'event-4').locator('rect').first().boundingBox();
+    const event = await block(page, 'event-3').locator('rect').first().boundingBox();
     expect(event.x + event.width / 2).toBeCloseTo(canvas.x + canvas.width / 2, -1);
     expect(event.y + event.height / 2).toBeCloseTo(canvas.y + canvas.height / 2, -1);
   });

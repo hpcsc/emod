@@ -354,7 +354,7 @@ slice "<name>" {
 `subscribes` references event names declared **anywhere in the model** — in any slice, under any aggregate or context, the same scope an automation's `reads` resolves in (see [Cross-References](#11-cross-references)).
 
 - **`view/never-read` asks who acts on it:** the rule reports at warning severity when no `reads` anywhere in the model names the view. A view takes one of two legitimate shapes: a trigger reads it, or a processor reads it as its todo list. The rule fires only once the model states at least one `reads`. Run `emod lint --explain view/never-read` for the full description.
-- **The drawn diagrams copy the events of a view that reads far:** when a view subscribes to more than three events that other slices declare, `emod diagram --format svg` draws each of those events again in the view's own slice, and the view's arrows start at these copies. A copy has a dashed outline in the event's stroke, a white fill, and a second line `from <slice>` that names the slice that declares the event. A slice draws one copy of an event, however many of its views subscribe to it. At three events or fewer, the arrows start at the events themselves. The Mermaid and ASCII formats draw no subscription arrows, so they draw no copies.
+- **The drawn diagrams copy an event from a slice far away:** when a view subscribes to an event that a slice two or more slices away declares, `emod diagram --format svg` and the viewer draw the event again in the view's own slice, and the view's arrow starts at this copy. Slices count in the order the diagram draws them, left to right, and the last slice of one context is next to the first slice of the next. A copy has a dashed outline in the event's stroke, a white fill, and a second line `from <slice>` that names the first slice that declares the event. A slice draws one copy of an event, however many of its views and automations read it, and no copy of an event it declares itself. An arrow from an event in the same slice, or in the slice next to it, starts at the event itself. The Mermaid and ASCII formats draw no subscription arrows, so they draw no copies.
 
 ### Automation Pattern
 
@@ -406,6 +406,7 @@ A schedule is absolute and names no occurrence to count from, while a delay is m
 
 - **The drawn diagrams label the edge, not the gear:** `emod diagram --format svg` writes `after "<duration>"` on the arrow from the `on` event to the automation, and reserve the clock badge under the automation's gear for an `every` schedule.
 - **The text formats state it beside the activation:** `emod diagram --format ascii` prints `(<EventName>) after "<duration>" -> ⚙ <Name> -> [<CommandName>]`, and `--format mermaid` carries the delay inside the automation's own label.
+- **The drawn diagrams copy an `on` event from a slice far away:** when the `on` event is declared two or more slices away, `emod diagram --format svg` and the viewer draw it again in the automation's slice, and the arrow into the automation starts at this copy, as a view's arrow does (see [View Pattern](#view-pattern)).
 
 ### Translation Pattern
 
@@ -857,7 +858,7 @@ The renderers that draw the whole model use one palette for element types. The S
 | Automation  | #16201b   | —         | Dark gear above its name.               |
 | Translation | #f5f5f5   | #666666   | Grey integration.                       |
 
-A copy of an event, drawn in the slice of a view that subscribes to many events from other slices (see [View Pattern](#view-pattern)), is not an element type. It takes the event's stroke #d79b00 with a dashed outline, and a white #ffffff fill.
+A copy of an event, drawn in the slice of a view or an automation that reads the event from two or more slices away (see [View Pattern](#view-pattern)), is not an element type. It takes the event's stroke #d79b00 with a dashed outline, and a white #ffffff fill.
 
 ### Event Flow Palette
 

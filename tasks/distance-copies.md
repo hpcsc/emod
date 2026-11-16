@@ -90,23 +90,23 @@ The tests that pin this behaviour are `internal/frontend/tests/event-copy.test.j
 **Behavior:** An event drawn in the slice at the far end of an arrow that joins two slices 2 or more apart in layout order, for an event's arrow into a view (subscribes) or into an automation (on). The SVG draws the copy, and the diagram JSON writes it as an `event_copy` node, from one rule in `internal/diagram`. The count rule is gone.
 
 **Acceptance Criteria:**
-- [ ] An event's arrow into a view or into an automation that joins two slices 2 or more apart in layout order starts at a copy of the event. The copy is drawn in the slice of the view or the automation. This holds in the SVG and in the diagram JSON, where the `subscription` or `automation_trigger` edge starts at the `event_copy` node in that slice.
-- [ ] The copy shows the event's name and, under it, "from <slice>", where <slice> is the first slice that declares the event, translation-nested events included.
-- [ ] An event's arrow into a view or an automation in the same slice, or in the slice next to it in layout order, starts at the event itself. Two slices next to each other across a context boundary count as next to each other.
-- [ ] A slice draws one copy of an event, however many of its views and automations that event feeds. A slice that declares the event draws no copy of it, and an event that no slice declares draws no arrow and no copy.
-- [ ] The rule no longer counts subscriptions. In the hotel stays fixture (`test.SubscribedEventsHotelStaysModel`):
+- [x] An event's arrow into a view or into an automation that joins two slices 2 or more apart in layout order starts at a copy of the event. The copy is drawn in the slice of the view or the automation. This holds in the SVG and in the diagram JSON, where the `subscription` or `automation_trigger` edge starts at the `event_copy` node in that slice.
+- [x] The copy shows the event's name and, under it, "from <slice>", where <slice> is the first slice that declares the event, translation-nested events included.
+- [x] An event's arrow into a view or an automation in the same slice, or in the slice next to it in layout order, starts at the event itself. Two slices next to each other across a context boundary count as next to each other.
+- [x] A slice draws one copy of an event, however many of its views and automations that event feeds. A slice that declares the event draws no copy of it, and an event that no slice declares draws no arrow and no copy.
+- [x] The rule no longer counts subscriptions. In the hotel stays fixture (`test.SubscribedEventsHotelStaysModel`):
   - "See Stay History" copies RoomReserved, GuestCheckedIn and BreakfastOrdered, and its arrow from GuestCheckedOut (Check Out, the slice next to it) starts at the event.
   - "See Occupancy", whose view subscribes to only three events, copies all three, because each is 2 or more slices away.
   - "Plan Cleaning" draws its arrow from RoomCleaned (Clean Room, next to it) from the event.
-- [ ] An arrow from a copy into a delayed automation still carries that automation's delay.
-- [ ] The distance is a constant of 2 slices. No environment variable or flag changes it.
-- [ ] On the viewer's save path, a diagram that starts an activation arrow at an event copy behaves as one that starts it at the event:
+- [x] An arrow from a copy into a delayed automation still carries that automation's delay.
+- [x] The distance is a constant of 2 slices. No environment variable or flag changes it.
+- [x] On the viewer's save path, a diagram that starts an activation arrow at an event copy behaves as one that starts it at the event:
   - Applied unedited, it leaves the model as written.
   - Renaming the event renames the `on` of the automation it activates through the copy.
   - Deleting the arrow from the copy clears that automation's `on`.
-- [ ] Mermaid and ASCII output is unchanged: their existing tests pass without edits.
-- [ ] `e2e-viewer/tests/copies.spec.js` states the copies the distance rule gives for its fixture.
-- [ ] `docs/dsl-reference.md` describes the distance rule, for subscriptions and activations, in the SVG and the viewer. It no longer describes a count.
+- [x] Mermaid and ASCII output is unchanged: their existing tests pass without edits.
+- [x] `e2e-viewer/tests/copies.spec.js` states the copies the distance rule gives for its fixture.
+- [x] `docs/dsl-reference.md` describes the distance rule, for subscriptions and activations, in the SVG and the viewer. It no longer describes a count.
 
 **Affected Files/Modules:**
 - `internal/diagram/event_copy.go`: replaced by the distance rule, as the `ElementCopies` type of the planned design, holding event copies (file named for the type).

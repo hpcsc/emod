@@ -1341,7 +1341,7 @@ func sourcesOfArrowsInto(connections []diagramConnection, target string) []strin
 }
 
 // labelOfActivationArrow names the text painted on the arrow running from an
-// event to the automation it activates. It fails rather than answering "" when
+// event, or from a copy of it, to the automation it activates. It fails rather than answering "" when
 // the picture draws no such arrow: a reader that quietly finds nothing agrees
 // with every assertion expecting none.
 func labelOfActivationArrow(t *testing.T, connections []diagramConnection, a activation) string {
@@ -1349,7 +1349,7 @@ func labelOfActivationArrow(t *testing.T, connections []diagramConnection, a act
 
 	var found []diagramConnection
 	for _, connection := range connections {
-		if connection.source == a.event && connection.target == a.automation {
+		if cardLines(connection.source)[0] == a.event && connection.target == a.automation {
 			found = append(found, connection)
 		}
 	}
@@ -1937,8 +1937,7 @@ func TestExporterRejectionEdge(t *testing.T) {
 }
 
 // TestExporterEventCopies covers the copy each picture format draws of an event
-// a view subscribes to from another slice, once the view subscribes to more than
-// three such events.
+// that an arrow joins to a view or an automation from two or more slices away.
 func TestExporterEventCopies(t *testing.T) {
 	for _, e := range exporters() {
 		if e.boxes == nil {
@@ -1946,18 +1945,19 @@ func TestExporterEventCopies(t *testing.T) {
 		}
 
 		t.Run(e.name, func(t *testing.T) {
-			t.Run("draws a copy of each event the view subscribes to, naming the slice that declares it", func(t *testing.T) {
+			t.Run("draws a copy of each event a view subscribes to from two or more slices away, naming the slice that declares it", func(t *testing.T) {
 				output := e.run(t, test.SubscribedEventsHotelStaysModel(t), diagram.StyleAuto)
 
 				require.Equal(t, []string{
 					"RoomReserved\nfrom Reserve Room",
 					"GuestCheckedIn\nfrom Check In",
 					"BreakfastOrdered\nfrom Import Breakfast Orders",
+					"RoomReserved\nfrom Reserve Room",
+					"GuestCheckedIn\nfrom Check In",
 					"GuestCheckedOut\nfrom Check Out",
 					"RoomReserved\nfrom Reserve Room",
 					"GuestCheckedIn\nfrom Check In",
 					"GuestCheckedOut\nfrom Check Out",
-					"RoomCleaned\nfrom Clean Room",
 				}, labelsOf(copyBoxesIn(e.boxes(t, output))))
 			})
 
@@ -1965,21 +1965,30 @@ func TestExporterEventCopies(t *testing.T) {
 				boxes := e.boxes(t, e.run(t, test.SubscribedEventsHotelStaysModel(t), diagram.StyleAuto))
 				copies := copyBoxesIn(boxes)
 
-				before := boxNamed(t, boxes, "GuestCheckedOut").rect
-				after := boxNamed(t, boxes, "OccupancyView").rect
-				for _, copied := range copies[:4] {
-					require.Greater(t, copied.rect.x, before.x+before.w, "%q starts before the slice ahead of it ends", copied.label)
-					require.Less(t, copied.rect.x+copied.rect.w, after.x, "%q runs into the slice after it", copied.label)
+				checkOut := boxNamed(t, boxes, "GuestCheckedOut").rect
+				occupancy := boxNamed(t, boxes, "OccupancyView").rect
+				for _, copied := range copies[:3] {
+					require.Greater(t, copied.rect.x, checkOut.x+checkOut.w, "%q starts before the slice ahead of it ends", copied.label)
+					require.Less(t, copied.rect.x+copied.rect.w, occupancy.x, "%q runs into the slice after it", copied.label)
+				}
+
+				stayHistory := boxNamed(t, boxes, "StayHistoryView").rect
+				cleanRoom := boxNamed(t, boxes, "CleanRoom").rect
+				for _, copied := range copies[3:6] {
+					require.Greater(t, copied.rect.x, stayHistory.x+stayHistory.w, "%q starts before the slice ahead of it ends", copied.label)
+					require.Less(t, copied.rect.x+copied.rect.w, cleanRoom.x, "%q runs into the slice after it", copied.label)
 				}
 
 				cleaned := boxNamed(t, boxes, "RoomCleaned").rect
-				for _, copied := range copies[4:] {
+				for _, copied := range copies[6:] {
 					require.Greater(t, copied.rect.x, cleaned.x+cleaned.w, "%q starts before the slice ahead of it ends", copied.label)
 				}
 			})
 
-			t.Run("draws each copy wide enough for its longest line", func(t *testing.T) {
-				boxes := e.boxes(t, e.run(t, test.SubscribedEventsHotelStaysModel(t), diagram.StyleAuto))
+			t.Run("draws each copy wide enough for its longest line, in a slice of one copy as in a slice of several", func(t *testing.T) {
+				boxes := append(
+					e.boxes(t, e.run(t, test.SubscribedEventsHotelStaysModel(t), diagram.StyleAuto)),
+					e.boxes(t, e.run(t, test.AutomationDelayLibraryLendingModel(t), diagram.StyleAuto))...)
 
 				// 6 px a character is about half an em of Helvetica at the 11 px
 				// the SVG draws an event's label at.
@@ -1993,43 +2002,58 @@ func TestExporterEventCopies(t *testing.T) {
 				}
 			})
 
-			t.Run("the arrows into a view past the threshold start at its copies", func(t *testing.T) {
+			t.Run("the arrows into a view start at the copies of the events two or more slices away, and at the event in the slice next to it", func(t *testing.T) {
 				output := e.run(t, test.SubscribedEventsHotelStaysModel(t), diagram.StyleAuto)
 
 				require.Equal(t, []string{
 					"RoomReserved\nfrom Reserve Room",
 					"GuestCheckedIn\nfrom Check In",
 					"BreakfastOrdered\nfrom Import Breakfast Orders",
-					"GuestCheckedOut\nfrom Check Out",
+					"GuestCheckedOut",
 				}, linesOf(sourcesInto(e.connections(t, output), "StayHistoryView")))
 			})
 
-			t.Run("the arrows into a view at the threshold start at the events themselves", func(t *testing.T) {
+			t.Run("the arrows into a view that subscribes to only three events start at copies when the events are two or more slices away", func(t *testing.T) {
 				output := e.run(t, test.SubscribedEventsHotelStaysModel(t), diagram.StyleAuto)
 
-				require.Equal(t, []string{"RoomReserved", "GuestCheckedIn", "GuestCheckedOut"},
-					linesOf(sourcesInto(e.connections(t, output), "OccupancyView")))
+				require.Equal(t, []string{
+					"RoomReserved\nfrom Reserve Room",
+					"GuestCheckedIn\nfrom Check In",
+					"GuestCheckedOut\nfrom Check Out",
+				}, linesOf(sourcesInto(e.connections(t, output), "OccupancyView")))
+			})
+
+			t.Run("the arrow into an automation starts at the copy of an event two or more slices away", func(t *testing.T) {
+				connections := e.connections(t, e.run(t, test.AutomationDelayLibraryLendingModel(t), diagram.StyleAuto))
+
+				require.Equal(t, map[string][]string{
+					"RemindAfterGracePeriod": {"CopyBorrowed\nfrom Borrow Copy", "MemberLoansView"},
+					"ReleaseDeskLeftClaimed": {"DeskClaimed\nfrom Claim Desk", "DeskOccupancyView"},
+				}, map[string][]string{
+					"RemindAfterGracePeriod": linesOf(sourcesOfArrowsInto(connections, "RemindAfterGracePeriod")),
+					"ReleaseDeskLeftClaimed": linesOf(sourcesOfArrowsInto(connections, "ReleaseDeskLeftClaimed")),
+				})
 			})
 
 			t.Run("a copy is outlined in the stroke of the event it copies", func(t *testing.T) {
 				boxes := e.boxes(t, e.run(t, test.SubscribedEventsHotelStaysModel(t), diagram.StyleAuto))
 
 				require.Equal(t,
-					paintOf(t, strokePaint, boxNamed(t, boxes, "RoomCleaned")),
-					paintOf(t, strokePaint, boxNamed(t, boxes, "RoomCleaned\nfrom Clean Room")))
+					paintOf(t, strokePaint, boxNamed(t, boxes, "BreakfastOrdered")),
+					paintOf(t, strokePaint, boxNamed(t, boxes, "BreakfastOrdered\nfrom Import Breakfast Orders")))
 			})
 
 			t.Run("a copy is filled white", func(t *testing.T) {
 				boxes := e.boxes(t, e.run(t, test.SubscribedEventsHotelStaysModel(t), diagram.StyleAuto))
 
-				require.Equal(t, "white", colorFamily(t, paintOf(t, fillPaint, boxNamed(t, boxes, "RoomCleaned\nfrom Clean Room"))))
+				require.Equal(t, "white", colorFamily(t, paintOf(t, fillPaint, boxNamed(t, boxes, "BreakfastOrdered\nfrom Import Breakfast Orders"))))
 			})
 
 			t.Run("a copy is outlined dashed where the event it copies is not", func(t *testing.T) {
 				boxes := e.boxes(t, e.run(t, test.SubscribedEventsHotelStaysModel(t), diagram.StyleAuto))
 
-				require.NotContains(t, boxNamed(t, boxes, "RoomCleaned").appearance, "dash")
-				require.Contains(t, boxNamed(t, boxes, "RoomCleaned\nfrom Clean Room").appearance, "dash")
+				require.NotContains(t, boxNamed(t, boxes, "BreakfastOrdered").appearance, "dash")
+				require.Contains(t, boxNamed(t, boxes, "BreakfastOrdered\nfrom Import Breakfast Orders").appearance, "dash")
 			})
 		})
 	}

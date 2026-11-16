@@ -2999,11 +2999,12 @@ context "Reading Room" {
 }
 `
 
-// SubscribedEventsHotelStays has views that subscribe to events from other
-// slices on either side of the threshold for copies. StayHistoryView, under an
-// aggregate, and CleaningPlanView, in a DCB context, each subscribe to four,
-// and StayHistoryView's four include an event a translation nests.
-// OccupancyView subscribes to three.
+// SubscribedEventsHotelStays has views that subscribe to events two or more
+// slices away, which the drawn diagrams copy, and to an event in the slice next
+// to theirs, which they do not. StayHistoryView, under an aggregate, and
+// CleaningPlanView, in a DCB context, each subscribe to one event next to them,
+// and StayHistoryView's events include one a translation nests. OccupancyView
+// subscribes to three events, each two or more slices away.
 const SubscribedEventsHotelStays = `emod = 1
 
 # A hotel stay, whose history reads every step a stay takes

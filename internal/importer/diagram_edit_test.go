@@ -435,7 +435,35 @@ func (d *viewerDiagram) connect(from, to, typ string) {
 
 func (d *viewerDiagram) disconnect(from, to string) {
 	d.t.Helper()
-	d.disconnectIDs(d.idOf(from), d.idOf(to))
+	d.disconnectIDs(d.drawnEnds(from, to))
+}
+
+// drawnEnds answers the ids at the two ends of the arrow the diagram draws from
+// the node labelled from to the node labelled to. Either end can be a copy of
+// that node, which is where the diagram draws an arrow from a slice far away.
+func (d *viewerDiagram) drawnEnds(from, to string) (string, string) {
+	d.t.Helper()
+	sources, targets := d.idsDrawnFor(from), d.idsDrawnFor(to)
+	for _, e := range d.Edges {
+		if slices.Contains(sources, e["source"]) && slices.Contains(targets, e["target"]) {
+			return e["source"].(string), e["target"].(string)
+		}
+	}
+	require.Failf(d.t, "no arrow", "the diagram has to draw an arrow from %s to %s", from, to)
+	return "", ""
+}
+
+// idsDrawnFor answers the id of the node labelled label and the ids of its copies.
+func (d *viewerDiagram) idsDrawnFor(label string) []any {
+	d.t.Helper()
+	id := d.idOf(label)
+	ids := []any{id}
+	for _, n := range d.Nodes {
+		if n["copy_of"] == id {
+			ids = append(ids, n["id"])
+		}
+	}
+	return ids
 }
 
 func (d *viewerDiagram) disconnectIDs(source, target string) {
@@ -454,7 +482,15 @@ func (d *viewerDiagram) disconnectIDs(source, target string) {
 // handle does: newFrom and newTo name its ends afterwards.
 func (d *viewerDiagram) repoint(from, to, newFrom, newTo string) {
 	d.t.Helper()
-	d.repointIDs(d.idOf(from), d.idOf(to), d.idOf(newFrom), d.idOf(newTo))
+	source, target := d.drawnEnds(from, to)
+	newSource, newTarget := source, target
+	if newFrom != from {
+		newSource = d.idOf(newFrom)
+	}
+	if newTo != to {
+		newTarget = d.idOf(newTo)
+	}
+	d.repointIDs(source, target, newSource, newTarget)
 }
 
 func (d *viewerDiagram) repointIDs(source, target, newSource, newTarget string) {
@@ -2153,6 +2189,30 @@ context "C" {
 				"subscribes = [RoomReserved, GuestCheckedIn, GuestCheckedOut]\n\n        fields {\n          roomNumber",
 				"subscribes = [RoomReserved, GuestCheckedIn, GuestCheckedOut, BreakfastOrdered]\n\n        fields {\n          roomNumber")
 			require.Equal(t, expected, result)
+		})
+	})
+
+	t.Run("copies of activating events", func(t *testing.T) {
+		t.Run("a diagram that draws activations from copies, unedited, leaves the model as it was written", func(t *testing.T) {
+			require.Equal(t, test.AutomationDelayLibraryLending, applied(t, test.AutomationDelayLibraryLending, func(*viewerDiagram) {}))
+		})
+
+		t.Run("renaming an event renames it in the automations that activate on it through a copy", func(t *testing.T) {
+			result := applied(t, test.AutomationDelayLibraryLending, func(d *viewerDiagram) {
+				d.rename("CopyBorrowed", "CopyLent")
+			})
+
+			require.Equal(t, strings.ReplaceAll(test.AutomationDelayLibraryLending, "CopyBorrowed", "CopyLent"), result)
+		})
+
+		t.Run("deleting the arrow from a copy clears the on of the automation it activates", func(t *testing.T) {
+			source := test.AutomationDelayLibraryLending
+
+			result := applied(t, source, func(d *viewerDiagram) {
+				d.disconnectIDs(d.copyID("CopyBorrowed", "Chase Overdue Copy"), d.idOf("RemindAfterGracePeriod"))
+			})
+
+			require.Equal(t, replaced(t, source, "        on      = CopyBorrowed\n", ""), result)
 		})
 	})
 }
