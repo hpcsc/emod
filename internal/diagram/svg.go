@@ -20,10 +20,14 @@ func ExportSVG(model *ast.Model, _ Style, opts ...Option) ([]byte, error) {
 	columns := sliceColumns(entries, copies)
 	ctxBounds := contextBounds(entries, columns)
 
-	triggerLaneY := marginY
-	cmdViewLaneY := triggerLaneY + laneHeight + laneGap
-	eventLaneY := cmdViewLaneY + laneHeight + laneGap
-	extLaneY := eventLaneY + laneHeight + laneGap
+	// The boxes sit at the same x whatever the gaps between the lanes are, so a
+	// first placement tells how many tracks each gap must hold.
+	_, measured := placeBoxes(entries, columns, copies, lanePositions{})
+	lanes := lanesFor(legTracks(measured))
+	boxes, arrows := placeBoxes(entries, columns, copies, lanes)
+	onTracks := legTracks(arrows)
+
+	extLaneY := lanes.top(len(laneNames) - 1)
 	specBandY := specBandTop(entries, extLaneY)
 
 	var cards []specCard
@@ -33,7 +37,7 @@ func ExportSVG(model *ast.Model, _ Style, opts ...Option) ([]byte, error) {
 	bandHeight := specBandHeight(cards)
 
 	diagramW := layoutWidth(columns) + marginX + 120
-	diagramH := 2*marginY + 4*laneHeight + 3*laneGap
+	diagramH := extLaneY + laneHeight + marginY
 	if bandHeight > 0 {
 		diagramH = specBandY + bandHeight + marginY
 	}
@@ -51,20 +55,60 @@ func ExportSVG(model *ast.Model, _ Style, opts ...Option) ([]byte, error) {
 	}
 
 	laneW := diagramW - 2*marginX
-	b.WriteString(svgLane(triggerLaneY, laneW, laneHeight, "Wireframes"))
-	b.WriteString(svgLane(cmdViewLaneY, laneW, laneHeight, "Commands / Views"))
-	b.WriteString(svgLane(eventLaneY, laneW, laneHeight, "Events"))
-	b.WriteString(svgLane(extLaneY, laneW, laneHeight, "External Systems"))
+	for lane, name := range laneNames {
+		b.WriteString(svgLane(lanes.top(lane), laneW, laneHeight, name))
+	}
 
 	for _, cb := range ctxBounds {
 		b.WriteString(svgRect(cb.x, marginY-30, cb.w-20, 22, fillExternal, strokeExternal, 0, cb.description))
 		b.WriteString(svgText(cb.x+(cb.w-20)/2, marginY-19, cb.name, 12, strokeExternal))
 	}
 
-	triggerRowY := laneRowY(triggerLaneY)
+	b.WriteString(boxes)
+	routes := make([]route, len(arrows))
+	for i, arrow := range arrows {
+		routes[i] = arrow.route()
+		if track, onTrack := onTracks[i]; onTrack {
+			routes[i] = routes[i].withLegAt(lanes.trackY(track))
+		}
+	}
+	for i, arrow := range arrows {
+		if arrow.dashed {
+			b.WriteString(svgDashedArrow(routes[i]))
+		} else {
+			b.WriteString(svgArrow(routes[i]))
+		}
+		if arrow.label != "" {
+			b.WriteString(svgArrowLabel(labelAt(routes, i, arrow.label), arrow.label))
+		}
+	}
+
+	// --- Spec cards (a band of their own, below the lowest lane) ---
+	// Written after everything else so a card cannot capture the label of a box
+	// drawn before it: a reader binds each text to the last rect it saw.
+	if len(cards) > 0 {
+		b.WriteString(svgLane(specBandY, laneW, bandHeight, "Specs"))
+		for _, card := range cards {
+			b.WriteString(svgRoundedRect(card.x, card.y, card.w, card.h, fillSpecCard, strokeSpecCard, 5, ""))
+			b.WriteString(svgMultilineText(card.x+card.w/2, card.y+card.h/2, card.label, specCardFontSize, strokeSpecCard))
+		}
+	}
+
+	b.WriteString("</svg>\n")
+	return []byte(b.String()), nil
+}
+
+// placeBoxes writes the box of every element of every slice, with the lanes
+// where lanes says, and returns the arrows between those boxes, in the order the
+// picture draws them.
+func placeBoxes(entries []sliceEntry, columns []sliceColumn, copies ElementCopies, lanes lanePositions) (string, []boxArrow) {
+	var b strings.Builder
+
+	triggerRowY := laneRowY(lanes.top(wireframesLane))
+	cmdViewLaneY := lanes.top(commandsAndViewsLane)
 	cmdViewRowY := laneRowY(cmdViewLaneY)
-	eventRowY := laneRowY(eventLaneY)
-	extRowY := laneRowY(extLaneY)
+	eventRowY := laneRowY(lanes.top(eventsLane))
+	extRowY := laneRowY(lanes.top(externalSystemsLane))
 
 	// Where the box drawn for each name ended up. One map across every slice, so
 	// a connection can reach a box another slice drew.
@@ -110,7 +154,7 @@ func ExportSVG(model *ast.Model, _ Style, opts ...Option) ([]byte, error) {
 			}
 			b.WriteString(svgTriggerRect(x, y, boxWidth, boxHeight, fillTrigger, strokeTrigger, 5, s.Trigger.Description))
 			b.WriteString(svgText(x+boxWidth/2, y+boxHeight/2, label, 12, strokeTrigger))
-			nameToBox[s.Trigger.Name] = svgBox{x: x, y: y, w: boxWidth, h: boxHeight}
+			nameToBox[s.Trigger.Name] = svgBox{x: x, y: y, w: boxWidth, h: boxHeight, lane: wireframesLane}
 		}
 
 		// --- Commands (middle lane) ---
@@ -122,7 +166,7 @@ func ExportSVG(model *ast.Model, _ Style, opts ...Option) ([]byte, error) {
 			itemW, x := itemLayout(usableW, totalMid, ci, sliceX)
 			b.WriteString(svgRoundedRect(x, cmdViewRowY, itemW, boxHeight, fillCommand, strokeCommand, 5, cmd.Description))
 			b.WriteString(svgText(x+itemW/2, cmdViewRowY+boxHeight/2, cmd.Name, 12, strokeCommand))
-			nameToBox[cmd.Name] = svgBox{x: x, y: cmdViewRowY, w: itemW, h: boxHeight}
+			nameToBox[cmd.Name] = svgBox{x: x, y: cmdViewRowY, w: itemW, h: boxHeight, lane: commandsAndViewsLane}
 		}
 
 		// --- Views (middle lane) ---
@@ -131,13 +175,13 @@ func ExportSVG(model *ast.Model, _ Style, opts ...Option) ([]byte, error) {
 			itemW, x := itemLayout(usableW, totalMid, idx, sliceX)
 			b.WriteString(svgRoundedRect(x, cmdViewRowY, itemW, boxHeight, fillView, strokeView, 5, view.Description))
 			b.WriteString(svgText(x+itemW/2, cmdViewRowY+boxHeight/2, view.Name, 12, strokeView))
-			nameToBox[view.Name] = svgBox{x: x, y: cmdViewRowY, w: itemW, h: boxHeight}
+			nameToBox[view.Name] = svgBox{x: x, y: cmdViewRowY, w: itemW, h: boxHeight, lane: commandsAndViewsLane}
 		}
 
 		// --- Copies of views and commands this slice joins from slices far away (middle lane) ---
 		for mi, c := range copiedMiddle {
 			itemW, x := itemLayout(usableW, totalMid, middleRowItems(s)+mi, sliceX)
-			box := svgBox{x: x, y: cmdViewRowY, w: itemW, h: boxHeight}
+			box := svgBox{x: x, y: cmdViewRowY, w: itemW, h: boxHeight, lane: commandsAndViewsLane}
 			b.WriteString(svgCopy(c, box))
 			copyBoxes[i][c] = box
 		}
@@ -154,7 +198,7 @@ func ExportSVG(model *ast.Model, _ Style, opts ...Option) ([]byte, error) {
 			ei++
 			b.WriteString(svgRoundedRect(x, eventRowY, itemW, boxHeight, fillEvent, strokeEvent, 5, evt.Description))
 			b.WriteString(svgMultilineText(x+itemW/2, eventRowY+boxHeight/2, label, 11, strokeEvent))
-			nameToBox[evt.Name] = svgBox{x: x, y: eventRowY, w: itemW, h: boxHeight}
+			nameToBox[evt.Name] = svgBox{x: x, y: eventRowY, w: itemW, h: boxHeight, lane: eventsLane}
 		}
 		for _, tr := range s.Translations {
 			if tr.Event != nil && tr.Event.Name != "" {
@@ -162,7 +206,7 @@ func ExportSVG(model *ast.Model, _ Style, opts ...Option) ([]byte, error) {
 				ei++
 				b.WriteString(svgRoundedRect(x, eventRowY, itemW, boxHeight, fillEvent, strokeEvent, 5, tr.Event.Description))
 				b.WriteString(svgText(x+itemW/2, eventRowY+boxHeight/2, tr.Event.Name, 11, strokeEvent))
-				nameToBox[tr.Event.Name] = svgBox{x: x, y: eventRowY, w: itemW, h: boxHeight}
+				nameToBox[tr.Event.Name] = svgBox{x: x, y: eventRowY, w: itemW, h: boxHeight, lane: eventsLane}
 			}
 		}
 
@@ -173,14 +217,14 @@ func ExportSVG(model *ast.Model, _ Style, opts ...Option) ([]byte, error) {
 			b.WriteString(svgDashedRoundedRect(x, eventRowY, itemW, boxHeight, fillRejection, strokeRejection, 5,
 				entry.invariantStatement(rejection.InvariantName)))
 			b.WriteString(svgText(x+itemW/2, eventRowY+boxHeight/2, rejection.InvariantName, 11, strokeRejection))
-			badges[i] = append(badges[i], svgBox{x: x, y: eventRowY, w: itemW, h: boxHeight})
+			badges[i] = append(badges[i], svgBox{x: x, y: eventRowY, w: itemW, h: boxHeight, lane: eventsLane})
 		}
 
 		// --- Copies of events this slice joins from slices far away (event row) ---
 		for _, c := range copiedEvents {
 			itemW, x := itemLayout(usableW, totalEvts, ei, sliceX)
 			ei++
-			box := svgBox{x: x, y: eventRowY, w: itemW, h: boxHeight}
+			box := svgBox{x: x, y: eventRowY, w: itemW, h: boxHeight, lane: eventsLane}
 			b.WriteString(svgCopy(c, box))
 			copyBoxes[i][c] = box
 		}
@@ -191,11 +235,11 @@ func ExportSVG(model *ast.Model, _ Style, opts ...Option) ([]byte, error) {
 				b.WriteString(svgGear(reactor.x, reactor.y, reactor.w, reactor.description))
 				b.WriteString(svgMultilineText(reactor.x+reactor.w/2, reactor.labelCentreY(),
 					reactor.label, reactorFontSize, fillAutomation))
-				nameToBox[reactor.name] = reactor.gearAndLabelBox()
+				nameToBox[reactor.name] = reactor.gearAndLabelBox(commandsAndViewsLane)
 			} else {
 				b.WriteString(svgRoundedRect(reactor.x, reactor.y, reactor.w, reactor.h, fillTranslation, strokeTranslation, 3, reactor.description))
 				b.WriteString(svgMultilineText(reactor.x+reactor.w/2, reactor.y+reactor.h/2, reactor.label, reactorFontSize, strokeTranslation))
-				nameToBox[reactor.name] = svgBox{x: reactor.x, y: reactor.y, w: reactor.w, h: reactor.h}
+				nameToBox[reactor.name] = svgBox{x: reactor.x, y: reactor.y, w: reactor.w, h: reactor.h, lane: commandsAndViewsLane}
 			}
 		}
 
@@ -210,19 +254,17 @@ func ExportSVG(model *ast.Model, _ Style, opts ...Option) ([]byte, error) {
 			}
 			b.WriteString(svgDashedRoundedRect(extX, extY, extW, extH, fillExternal, strokeExternal, 5, tr.Description))
 			b.WriteString(svgText(extX+extW/2, extY+extH/2, tr.ExternalSystem, 11, strokeExternal))
-			nameToBox[tr.ExternalSystem] = svgBox{x: extX, y: extY, w: extW, h: extH}
+			nameToBox[tr.ExternalSystem] = svgBox{x: extX, y: extY, w: extW, h: extH, lane: externalSystemsLane}
 		}
 	}
 
 	// --- Connections ---
 
-	readsArrow := func(i int, edge Edge, reader svgBox) string {
-		view, declared := sourceBox(i, edge)
-		if !declared {
-			return ""
+	var arrows []boxArrow
+	joinReader := func(i int, edge Edge, reader svgBox) {
+		if view, declared := sourceBox(i, edge); declared {
+			arrows = append(arrows, boxArrow{from: view, to: reader})
 		}
-
-		return svgArrow(svgRoute(view, reader))
 	}
 
 	// A translation's reads arrow is drawn into the external system box
@@ -240,35 +282,33 @@ func ExportSVG(model *ast.Model, _ Style, opts ...Option) ([]byte, error) {
 			switch edge.Kind {
 			case EdgeTriggerReads, EdgeAutomationReads:
 				if reader, drawn := nameToBox[edge.To]; drawn {
-					b.WriteString(readsArrow(i, edge, reader))
+					joinReader(i, edge, reader)
 				}
 
 			case EdgeTranslationReads:
 				if reader, drawn := nameToBox[reactorExternal[edge.To]]; drawn {
-					b.WriteString(readsArrow(i, edge, reader))
+					joinReader(i, edge, reader)
 				}
 
 			case EdgeAutomationCommand, EdgeTranslationCommand:
 				from, fromDrawn := nameToBox[edge.From]
 				to, toDrawn := targetBox(i, edge)
 				if fromDrawn && toDrawn {
-					b.WriteString(svgArrow(svgRoute(from, to)))
+					arrows = append(arrows, boxArrow{from: from, to: to})
 				}
 
 			case EdgeTranslationFlow:
 				from, fromDrawn := sourceBox(i, edge)
 				to, toDrawn := nameToBox[edge.To]
 				if fromDrawn && toDrawn {
-					b.WriteString(svgArrow(svgRoute(from, to)))
+					arrows = append(arrows, boxArrow{from: from, to: to})
 				}
 
 			case EdgeAutomationTrigger:
 				from, fromDrawn := sourceBox(i, edge)
 				to, toDrawn := nameToBox[edge.To]
 				if fromDrawn && toDrawn {
-					route := svgRoute(from, to)
-					b.WriteString(svgArrow(route))
-					b.WriteString(svgArrowLabel(route, edge.Label))
+					arrows = append(arrows, boxArrow{from: from, to: to, label: edge.Label})
 				}
 
 			case EdgeRejection:
@@ -276,7 +316,7 @@ func ExportSVG(model *ast.Model, _ Style, opts ...Option) ([]byte, error) {
 				// nth one this slice states ends at the nth badge it drew.
 				from, fromDrawn := nameToBox[edge.From]
 				if fromDrawn && rejected < len(badges[i]) {
-					b.WriteString(svgDashedArrow(svgRoute(from, badges[i][rejected])))
+					arrows = append(arrows, boxArrow{from: from, to: badges[i][rejected], dashed: true})
 				}
 				rejected++
 
@@ -284,32 +324,20 @@ func ExportSVG(model *ast.Model, _ Style, opts ...Option) ([]byte, error) {
 				from, fromDrawn := sourceBox(i, edge)
 				to, toDrawn := nameToBox[edge.To]
 				if fromDrawn && toDrawn {
-					b.WriteString(svgArrow(svgRoute(from, to)))
+					arrows = append(arrows, boxArrow{from: from, to: to})
 				}
 
 			default:
 				from, fromDrawn := nameToBox[edge.From]
 				to, toDrawn := nameToBox[edge.To]
 				if fromDrawn && toDrawn {
-					b.WriteString(svgArrow(svgRoute(from, to)))
+					arrows = append(arrows, boxArrow{from: from, to: to})
 				}
 			}
 		}
 	}
 
-	// --- Spec cards (a band of their own, below the lowest lane) ---
-	// Written after everything else so a card cannot capture the label of a box
-	// drawn before it: a reader binds each text to the last rect it saw.
-	if len(cards) > 0 {
-		b.WriteString(svgLane(specBandY, laneW, bandHeight, "Specs"))
-		for _, card := range cards {
-			b.WriteString(svgRoundedRect(card.x, card.y, card.w, card.h, fillSpecCard, strokeSpecCard, 5, ""))
-			b.WriteString(svgMultilineText(card.x+card.w/2, card.y+card.h/2, card.label, specCardFontSize, strokeSpecCard))
-		}
-	}
-
-	b.WriteString("</svg>\n")
-	return []byte(b.String()), nil
+	return b.String(), arrows
 }
 
 // --- SVG helpers ---
@@ -455,10 +483,18 @@ func svgMultilineText(x, y int, text string, fontSize int, color string) string 
 	return b.String()
 }
 
-// svgBox is where a shape was drawn: the corner it starts at, and how far it
-// runs from there.
+// svgBox is where a shape was drawn: the corner it starts at, how far it runs
+// from there, and the lane it was drawn in.
 type svgBox struct {
 	x, y, w, h int
+	lane       int
+}
+
+// boxArrow is an arrow the picture draws from one box to another.
+type boxArrow struct {
+	from, to svgBox
+	dashed   bool
+	label    string
 }
 
 // point is a place in the picture, in pixels.
@@ -466,16 +502,10 @@ type point struct {
 	x, y int
 }
 
-// route is the way an arrow runs from one box to another: out of the first box
-// at start, across along its leg at legY, and into the second box at end.
-type route struct {
-	start, end point
-	legY       int
-}
-
-// svgRoute leaves from at the top or the bottom, whichever faces to, and enters
-// to at the side that faces from, with the leg halfway between the two.
-func svgRoute(from, to svgBox) route {
+// route leaves from at the top or the bottom, whichever faces to, and enters to
+// at the side that faces from, with its leg halfway between the two.
+func (a boxArrow) route() route {
+	from, to := a.from, a.to
 	start, end := point{from.x + from.w/2, from.y}, point{to.x + to.w/2, to.y + to.h}
 	if from.y+from.h <= to.y {
 		start, end = point{from.x + from.w/2, from.y + from.h}, point{to.x + to.w/2, to.y}
@@ -484,33 +514,86 @@ func svgRoute(from, to svgBox) route {
 	return route{start: start, end: end, legY: (start.y + end.y) / 2}
 }
 
+// route is the way an arrow runs from one box to another: out of the first box
+// at start, along its leg at legY, and into the second box at end.
+type route struct {
+	start, end point
+	legY       int
+}
+
+// withLegAt returns the same route with its leg at y.
+func (r route) withLegAt(y int) route {
+	r.legY = y
+
+	return r
+}
+
+// legSpan is where the leg runs from left to right, and false for a route that
+// runs straight up or down and so has no leg.
+func (r route) legSpan() (left, right int, ok bool) {
+	if r.start.x == r.end.x {
+		return 0, 0, false
+	}
+
+	return min(r.start.x, r.end.x), max(r.start.x, r.end.x), true
+}
+
 // points are the points the arrow is drawn through, in order.
 func (r route) points() []point {
-	if r.start.x == r.end.x {
+	if _, _, ok := r.legSpan(); !ok {
 		return []point{r.start, r.end}
 	}
 
 	return []point{r.start, {r.start.x, r.legY}, {r.end.x, r.legY}, r.end}
 }
 
-// legMiddle is the middle of the leg across, or of the route itself when it runs
+// legMiddle is the middle of the leg, or of the route itself when it runs
 // straight up or down.
 func (r route) legMiddle() point {
 	return point{(r.start.x + r.end.x) / 2, r.legY}
 }
 
-// svgArrowLabel paints an arrow's text at the middle of its leg, rather than at
-// either bend, and nothing at all for an arrow carrying none, so the picture of
-// a model whose arrows say nothing is byte-identical to what it was.
-// The class is what separates this text from a box's own: a reader binding
-// every <text> to the last rect it saw would otherwise relabel that box.
-func svgArrowLabel(r route, label string) string {
-	if label == "" {
-		return ""
+// labelAt is where the text of arrow i of routes goes: on its leg, as near the
+// middle of the leg as it can be with no other arrow running through the text.
+func labelAt(routes []route, i int, label string) point {
+	r := routes[i]
+	middle := r.legMiddle()
+	left, right, _ := r.legSpan()
+	half := estimatedTextWidth(label, edgeLabelFontSize) / 2
+	for step := 0; step < (right-left)/2; step += labelStep {
+		for _, x := range []int{middle.x - step, middle.x + step} {
+			if !otherArrowCrosses(routes, i, x-half, x+half, r.legY) {
+				return point{x, r.legY}
+			}
+		}
 	}
 
-	at := r.legMiddle()
+	return middle
+}
 
+// otherArrowCrosses reports whether an arrow of routes other than arrow i runs
+// through y between left and right.
+func otherArrowCrosses(routes []route, i, left, right, y int) bool {
+	for j, other := range routes {
+		if j == i {
+			continue
+		}
+		points := other.points()
+		for k := 1; k < len(points); k++ {
+			a, b := points[k-1], points[k]
+			if min(a.x, b.x) <= right && max(a.x, b.x) >= left && min(a.y, b.y) <= y && max(a.y, b.y) >= y {
+				return true
+			}
+		}
+	}
+
+	return false
+}
+
+// svgArrowLabel paints an arrow's text centred on at.
+// The class is what separates this text from a box's own: a reader binding
+// every <text> to the last rect it saw would otherwise relabel that box.
+func svgArrowLabel(at point, label string) string {
 	return fmt.Sprintf(`<text class="edge-label" x="%d" y="%d" text-anchor="middle" dominant-baseline="middle" font-family="sans-serif" font-size="%d" fill="%s">%s</text>`+"\n",
 		at.x, at.y, edgeLabelFontSize, arrowStroke, escapeXML(label))
 }
@@ -532,6 +615,9 @@ const (
 	// so a duration on an arrow reads as part of the same picture rather than
 	// as an annotation over it.
 	edgeLabelFontSize = 10
+	// labelStep is how far along its leg the text of an arrow moves at a time to
+	// get clear of another arrow.
+	labelStep = 4
 )
 
 func svgArrowPath(r route, dash string) string {

@@ -8,6 +8,8 @@ import (
 	"fmt"
 	"io"
 	"maps"
+	"os"
+	"path/filepath"
 	"regexp"
 	"slices"
 	"strconv"
@@ -17,6 +19,7 @@ import (
 
 	"github.com/hpcsc/emod/internal/ast"
 	"github.com/hpcsc/emod/internal/diagram"
+	"github.com/hpcsc/emod/internal/parser"
 	"github.com/hpcsc/emod/internal/test"
 	"github.com/stretchr/testify/require"
 )
@@ -145,6 +148,32 @@ func TestExportSVG(t *testing.T) {
 		require.Contains(t, output, "OrderPlaced")
 		require.Contains(t, output, "OrderList")
 		require.Equal(t, 1, arrowCount(output), "event to view is one arrow")
+	})
+
+	t.Run("draws the arrows into every view of a slice, not only its first", func(t *testing.T) {
+		model := slicesModel(&ast.Slice{
+			Name:   "Watch Orders",
+			Events: []*ast.Event{{Name: "OrderPlaced"}},
+			Views: []*ast.View{
+				{Name: "OrderList", Subscribes: []string{"OrderPlaced"}},
+				{Name: "OrderTotals", Subscribes: []string{"OrderPlaced"}},
+			},
+		})
+
+		require.Equal(t, []string{"OrderPlaced", "OrderPlaced"},
+			append(sourcesReaching(t, svgOf(t, model), "OrderList"), sourcesReaching(t, svgOf(t, model), "OrderTotals")...))
+	})
+
+	t.Run("draws the arrows from the event of every translation of a slice, not only its first", func(t *testing.T) {
+		model := slicesModel(
+			&ast.Slice{Name: "Import", Translations: []*ast.Translation{
+				{Name: "CardFeed", ExternalSystem: "Card API", Event: &ast.Event{Name: "CardPaid"}},
+				{Name: "BankFeed", ExternalSystem: "Bank API", Event: &ast.Event{Name: "BankPaid"}},
+			}},
+			&ast.Slice{Name: "Watch", Views: []*ast.View{{Name: "PaymentsView", Subscribes: []string{"CardPaid", "BankPaid"}}}},
+		)
+
+		require.Equal(t, []string{"CardPaid", "BankPaid"}, linesOf(sourcesReaching(t, svgOf(t, model), "PaymentsView")))
 	})
 
 	t.Run("draws no arrow into a view from an event no slice declares", func(t *testing.T) {
@@ -390,24 +419,127 @@ func TestExportSVG(t *testing.T) {
 			require.Empty(t, crossings)
 		})
 
-		t.Run("writes the text an arrow carries at the middle of that arrow's horizontal leg", func(t *testing.T) {
+		t.Run("writes the text an arrow carries on that arrow's horizontal leg, between its two bends", func(t *testing.T) {
 			output := svgOf(t, test.AutomationDelayLibraryLendingModel(t))
 
-			var legMiddles, labelled [][2]int
+			var labelled, betweenBends int
 			for _, arrow := range svgDrawnArrows(t, output) {
 				if arrow.labelAt == nil {
 					continue
 				}
-				labelled = append(labelled, *arrow.labelAt)
+				labelled++
+				at := *arrow.labelAt
 				for i := 1; i < len(arrow.route); i++ {
-					if from, to := arrow.route[i-1], arrow.route[i]; from[1] == to[1] {
-						legMiddles = append(legMiddles, [2]int{(from[0] + to[0]) / 2, from[1]})
+					from, to := arrow.route[i-1], arrow.route[i]
+					if from[1] == to[1] && at[1] == from[1] && at[0] > min(from[0], to[0]) && at[0] < max(from[0], to[0]) {
+						betweenBends++
 					}
 				}
 			}
 
-			require.Len(t, labelled, 2, "the fixture delays two automations")
-			require.Equal(t, legMiddles, labelled)
+			require.Equal(t, 2, labelled, "the fixture delays two automations")
+			require.Equal(t, labelled, betweenBends)
+		})
+
+		t.Run("writes the text an arrow carries clear of every other arrow, across the width of the text", func(t *testing.T) {
+			output := svgOf(t, test.AutomationDelayLibraryLendingModel(t))
+			arrows := svgDrawnArrows(t, output)
+			texts := svgArrowLabels(t, output)
+
+			// 4 px a character is less than any glyph of the 10 px the SVG writes
+			// an arrow's text at, so the band is narrower than the text.
+			const pxPerCharacter = 4
+			var labelled int
+			var crossed []string
+			for i, arrow := range arrows {
+				if arrow.labelAt == nil {
+					continue
+				}
+				labelled++
+				at, half := *arrow.labelAt, pxPerCharacter*utf8.RuneCountInString(texts[i])/2
+				for j, other := range arrows {
+					if j != i && (routePasses(other.route, [2]int{at[0] - half, at[1]}) ||
+						routePasses(other.route, at) || routePasses(other.route, [2]int{at[0] + half, at[1]}) ||
+						routeCrossesY(other.route, at[0]-half, at[0]+half, at[1])) {
+						crossed = append(crossed, fmt.Sprintf("another arrow runs through the text at %v", at))
+					}
+				}
+			}
+
+			require.Equal(t, 2, labelled, "the fixture delays two automations")
+			require.Empty(t, crossed)
+		})
+	})
+
+	t.Run("legs between lanes", func(t *testing.T) {
+		t.Run("runs the leg of an arrow that joins two lanes in a gap between those two lanes", func(t *testing.T) {
+			var inGaps int
+			for name, model := range legModels(t) {
+				output := svgOf(t, model)
+				lanes := svgLaneRects(t, output)
+
+				var misplaced []string
+				for _, leg := range svgLegsBetweenLanes(t, output, lanes) {
+					if drawnGapOf(lanes, leg.y) < leg.upperLane || drawnGapOf(lanes, leg.y) >= leg.lowerLane {
+						misplaced = append(misplaced, fmt.Sprintf("a leg at y %d joins lanes %d and %d", leg.y, leg.upperLane, leg.lowerLane))
+						continue
+					}
+					inGaps++
+				}
+
+				require.Empty(t, misplaced, name)
+			}
+
+			require.Positive(t, inGaps, "the models have to hold arrows whose legs run between lanes")
+		})
+
+		t.Run("gives two legs that overlap across in one gap different y", func(t *testing.T) {
+			var overlapping int
+			for name, model := range legModels(t) {
+				output := svgOf(t, model)
+				lanes := svgLaneRects(t, output)
+				legs := svgLegsBetweenLanes(t, output, lanes)
+
+				var shared []string
+				for i := range legs {
+					for j := i + 1; j < len(legs); j++ {
+						a, b := legs[i], legs[j]
+						if drawnGapOf(lanes, a.y) != drawnGapOf(lanes, b.y) || a.left > b.right || b.left > a.right {
+							continue
+						}
+						overlapping++
+						if a.y == b.y {
+							shared = append(shared, fmt.Sprintf("two legs share y %d across x %d to %d", a.y, max(a.left, b.left), min(a.right, b.right)))
+						}
+					}
+				}
+				require.Empty(t, shared, name)
+			}
+
+			require.Positive(t, overlapping, "the models have to hold legs that overlap across, or there is nothing to keep apart")
+		})
+
+		t.Run("grows a gap that holds more legs than it fits, and moves the lanes below down with their boxes and the spec cards", func(t *testing.T) {
+			raw, err := diagram.ExportSVG(fanInModel(), diagram.StyleAuto, diagram.WithSpecs())
+			require.NoError(t, err)
+			output := string(raw)
+			boxes := svgBoxes(t, output)
+			lanes := svgLaneRects(t, output)
+
+			gapAbove := lanes[1].y - (lanes[0].y + lanes[0].h)
+			gapWithLegs := lanes[2].y - (lanes[1].y + lanes[1].h)
+			require.Greater(t, gapWithLegs, gapAbove, "the gap the eight legs run in grows past the gap that holds none")
+
+			plain, err := diagram.ExportSVG(fanInModel(), diagram.StyleAuto)
+			require.NoError(t, err)
+			_, canvasH := svgCanvas(t, string(plain))
+			plainLanes := svgLaneRects(t, string(plain))
+			require.Greater(t, canvasH, plainLanes[3].y+plainLanes[3].h, "the picture is tall enough for its lowest lane")
+			require.Equal(t, fanInEvents, labelsWithin(boxes, lanes[2]), "every event stays in the Events lane")
+			require.Contains(t, labelsWithin(boxes, lanes[1]), "BalanceView")
+			card := svgSpecCardRects(t, output)
+			require.Len(t, card, 1)
+			require.Greater(t, card[0].y, lanes[3].y+lanes[3].h, "the spec card stays under the lowest lane")
 		})
 	})
 
@@ -1694,6 +1826,169 @@ func svgDrawnArrows(t *testing.T, output string) []drawnArrow {
 	}
 
 	return arrows
+}
+
+// routeCrossesY reports whether a segment of route that runs up or down crosses
+// y between left and right.
+func routeCrossesY(route [][2]int, left, right, y int) bool {
+	for i := 1; i < len(route); i++ {
+		a, b := route[i-1], route[i]
+		if a[0] == b[0] && a[0] >= left && a[0] <= right && y >= min(a[1], b[1]) && y <= max(a[1], b[1]) {
+			return true
+		}
+	}
+
+	return false
+}
+
+// routePasses reports whether p lies on one of the segments of route.
+func routePasses(route [][2]int, p [2]int) bool {
+	for i := 1; i < len(route); i++ {
+		a, b := route[i-1], route[i]
+		if p[0] >= min(a[0], b[0]) && p[0] <= max(a[0], b[0]) && p[1] >= min(a[1], b[1]) && p[1] <= max(a[1], b[1]) {
+			return true
+		}
+	}
+
+	return false
+}
+
+// svgLaneRects returns the four lanes, from the top.
+func svgLaneRects(t *testing.T, output string) []boxRect {
+	t.Helper()
+
+	boxes := svgBoxes(t, output)
+	var lanes []boxRect
+	for _, name := range []string{"Wireframes", "Commands / Views", "Events", "External Systems"} {
+		lanes = append(lanes, boxNamed(t, boxes, name).rect)
+	}
+
+	return lanes
+}
+
+// drawnLaneOf returns the lane a box starting at y sits in: the lowest lane that
+// starts above it.
+func drawnLaneOf(lanes []boxRect, y int) int {
+	lane := 0
+	for i, l := range lanes {
+		if l.y <= y {
+			lane = i
+		}
+	}
+
+	return lane
+}
+
+// drawnGapOf returns the gap y lies in, gap i being the one under lane i, or -1
+// when y lies in no gap.
+func drawnGapOf(lanes []boxRect, y int) int {
+	for i := 0; i+1 < len(lanes); i++ {
+		if y > lanes[i].y+lanes[i].h && y < lanes[i+1].y {
+			return i
+		}
+	}
+
+	return -1
+}
+
+// legBetweenLanes is the horizontal leg of an arrow whose two ends lie in two
+// different lanes.
+type legBetweenLanes struct {
+	y, left, right       int
+	upperLane, lowerLane int
+}
+
+func svgLegsBetweenLanes(t *testing.T, output string, lanes []boxRect) []legBetweenLanes {
+	t.Helper()
+
+	boxes := svgArrowBoxes(t, output)
+	var legs []legBetweenLanes
+	for _, arrow := range svgDrawnArrows(t, output) {
+		from := drawnLaneOf(lanes, arrowBoxMet(t, boxes, arrow.route[0]).rect.y)
+		to := drawnLaneOf(lanes, arrowBoxMet(t, boxes, arrow.route[len(arrow.route)-1]).rect.y)
+		if from == to {
+			continue
+		}
+		for i := 1; i < len(arrow.route); i++ {
+			a, b := arrow.route[i-1], arrow.route[i]
+			if a[1] == b[1] && a[0] != b[0] {
+				legs = append(legs, legBetweenLanes{
+					y: a[1], left: min(a[0], b[0]), right: max(a[0], b[0]),
+					upperLane: min(from, to), lowerLane: max(from, to),
+				})
+			}
+		}
+	}
+
+	return legs
+}
+
+// legModels are the models the legs between lanes are checked over: every
+// example that parses, forty slices of arrows between neighbours, and one slice
+// whose view eight events feed.
+func legModels(t *testing.T) map[string]*ast.Model {
+	t.Helper()
+
+	paths, err := filepath.Glob("../../examples/*.emod")
+	require.NoError(t, err)
+
+	models := map[string]*ast.Model{"forty slices": fortySliceModel(), "one view fed by eight events": fanInModel()}
+	for _, path := range paths {
+		source, err := os.ReadFile(path)
+		require.NoError(t, err)
+		if model, diagnostics := parser.Parse(string(source), path); len(diagnostics) == 0 {
+			models[filepath.Base(path)] = model
+		}
+	}
+	require.Greater(t, len(models), 2, "the examples have to hold at least one model that parses")
+
+	return models
+}
+
+// fortySliceModel lays out forty slices, each of which reads the view of the
+// slice before it and subscribes to that slice's event beside its own, so arrows
+// run between neighbouring slices in every gap between two lanes.
+func fortySliceModel() *ast.Model {
+	var slices []*ast.Slice
+	for i := 1; i <= 40; i++ {
+		s := &ast.Slice{
+			Name:     fmt.Sprintf("Step %d", i),
+			Trigger:  &ast.Trigger{Name: fmt.Sprintf("Screen %d", i)},
+			Commands: []*ast.Command{{Name: fmt.Sprintf("Take%d", i)}},
+			Events:   []*ast.Event{{Name: fmt.Sprintf("Taken%d", i)}},
+			Views:    []*ast.View{{Name: fmt.Sprintf("Board%d", i), Subscribes: []string{fmt.Sprintf("Taken%d", i)}}},
+			Flows:    []*ast.Flow{{CommandName: fmt.Sprintf("Take%d", i), EventName: fmt.Sprintf("Taken%d", i)}},
+		}
+		if i > 1 {
+			s.Trigger.Reads = fmt.Sprintf("Board%d", i-1)
+			s.Views[0].Subscribes = append(s.Views[0].Subscribes, fmt.Sprintf("Taken%d", i-1))
+		}
+		slices = append(slices, s)
+	}
+
+	return slicesModel(slices...)
+}
+
+// fanInEvents are the events whose arrows all reach BalanceView in fanInModel.
+var fanInEvents = []string{
+	"Deposited", "Withdrawn", "Refunded", "ChargedBack", "FeeTaken", "InterestPaid", "Transferred", "Reversed",
+}
+
+// fanInModel has one slice whose view subscribes to the eight events beside it,
+// so eight legs overlap across in the gap above the Events lane, more than that
+// gap holds; the slice states a scenario so that the picture draws a spec card.
+func fanInModel() *ast.Model {
+	var events []*ast.Event
+	for _, name := range fanInEvents {
+		events = append(events, &ast.Event{Name: name})
+	}
+
+	return slicesModel(&ast.Slice{
+		Name:   "Keep Balance",
+		Events: events,
+		Views:  []*ast.View{{Name: "BalanceView", Subscribes: fanInEvents}},
+		Specs:  []*ast.Spec{{Name: "keeps the balance", When: &ast.SpecElement{Name: "Deposited"}, Then: &ast.ThenEvents{Events: []*ast.SpecElement{{Name: "Deposited"}}}}},
+	})
 }
 
 func svgPoint(t *testing.T, point []string) [2]int {

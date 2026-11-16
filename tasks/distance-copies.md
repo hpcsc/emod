@@ -348,12 +348,12 @@ The tests that pin this behaviour are `internal/frontend/tests/event-copy.test.j
 **Behavior:** Today all arrows between the same two rows put their horizontal leg at the midpoint of the two rows, so they lie on one line. After this task, each arrow that joins two lanes runs its horizontal leg in the lane gap between them, at a y that no other arrow's leg in that gap uses, and each delay label stays on its own arrow's leg.
 
 **Acceptance Criteria:**
-- [ ] An arrow that joins boxes in two different lanes runs its horizontal leg in a lane gap between those two lanes.
-- [ ] Two arrows whose horizontal legs run in the same lane gap run them at different y.
-- [ ] When a lane gap must hold more legs than its height allows, the gap grows. The lanes below it move down together with their boxes and any spec card band, so no box leaves its lane.
-- [ ] An arrow's delay text sits on its own arrow's horizontal leg, and on no other arrow.
-- [ ] These hold for every model in `examples/` that parses, and for a generated model of 40 slices built in the test.
-- [ ] The tests that assert box placement still pass with their relational assertions unchanged.
+- [x] An arrow that joins boxes in two different lanes runs its horizontal leg in a lane gap between those two lanes.
+- [x] Two arrows whose horizontal legs overlap across in the same lane gap run them at different y. Two legs that do not overlap can share a y, so that a gap is only as tall as its most overlapping legs need.
+- [x] When a lane gap must hold more legs than its height allows, the gap grows. The lanes below it move down together with their boxes and any spec card band, so no box leaves its lane.
+- [x] An arrow's delay text sits on its own arrow's horizontal leg, and on no other arrow where the leg leaves room for the text.
+- [x] These hold for every model in `examples/` that parses, and for a generated model of 40 slices built in the test.
+- [x] The tests that assert box placement still pass with their relational assertions unchanged.
 
 **Affected Files/Modules:**
 - `internal/diagram/svg.go`: the arrow route and the place of the arrow's text.

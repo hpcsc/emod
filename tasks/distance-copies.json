@@ -177,7 +177,7 @@
     },
     {
       "n": 6,
-      "done": false,
+      "done": true,
       "title": "Give each SVG arrow a horizontal leg of its own between lanes",
       "language": "Go",
       "testable": true,
