@@ -43,10 +43,15 @@ type diagramNode struct {
 	CopyOf         string            `json:"copy_of,omitempty"`
 }
 
-// isEventCopy reports whether the node draws again an event that another slice
-// declares.
-func (n *diagramNode) isEventCopy() bool {
-	return n.Type == "event_copy"
+// isCopy reports whether the node draws again an event, a view or a command
+// that another slice declares.
+func (n *diagramNode) isCopy() bool {
+	switch n.Type {
+	case "event_copy", "view_copy", "command_copy":
+		return true
+	default:
+		return false
+	}
 }
 
 func (n *diagramNode) asActor() *ast.Actor {
@@ -432,11 +437,12 @@ func (b *builder) foldReads(src, tgt *diagramNode) {
 }
 
 // readsDrawnFromView takes the source node's label only when that node is a
-// view. An edge dragged off the view keeps its "reads" type, so without the
-// check the element would come back reading a command or an event name — which
-// for an automation is a view reference the validator resolves and rejects.
+// view or a copy of one. An edge dragged off the view keeps its "reads" type, so
+// without the check the element would come back reading a command or an event
+// name — which for an automation is a view reference the validator resolves and
+// rejects.
 func readsDrawnFromView(recorded string, src *diagramNode) string {
-	if recorded != "" || src.Type != "view" {
+	if recorded != "" || (src.Type != "view" && src.Type != "view_copy") {
 		return recorded
 	}
 	return src.Label

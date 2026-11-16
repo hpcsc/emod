@@ -73,15 +73,15 @@ func newDiagramEdit(model *ast.Model, diagram []byte) (*diagramEdit, error) {
 	return e, nil
 }
 
-// nameCopiesAfterOriginals gives each copy the name its event has now. The
-// viewer renames the event and never its copies, and a view that subscribes
+// nameCopiesAfterOriginals gives each copy the name its original has now. The
+// viewer renames the original and never its copies, and a reference drawn
 // through a copy reads the name off the copy.
 func (e *diagramEdit) nameCopiesAfterOriginals() {
 	for _, n := range e.edited.Nodes {
-		if !n.isEventCopy() {
+		if !n.isCopy() {
 			continue
 		}
-		if original := e.builder.nodeByID[n.CopyOf]; original != nil && !original.isEventCopy() {
+		if original := e.builder.nodeByID[n.CopyOf]; original != nil && !original.isCopy() {
 			n.Label = original.Label
 		}
 	}
@@ -241,7 +241,7 @@ func (e *diagramEdit) matchDrawnNodes(model *ast.Model) error {
 	e.nestedIn = make(map[string]string)
 	e.nestedEventOf = make(map[*ast.Translation]string)
 	for _, n := range e.drawn.Nodes {
-		if n.isEventCopy() {
+		if n.isCopy() {
 			e.drawnNodes[n.ID] = n
 			continue
 		}
@@ -532,16 +532,16 @@ func (e *diagramEdit) edgeChanges() (removed, kept, added []*diagramEdge) {
 }
 
 // inResult reports whether the node stands in the edited diagram. A copy stands
-// only while the event it copies does: deleting the event takes away every
-// subscription drawn from its copies, as it takes away those drawn from itself.
+// only while what it copies does: deleting an element takes away every arrow
+// drawn at its copies, as it takes away those drawn at itself.
 func (e *diagramEdit) inResult(id string) bool {
 	n := e.builder.nodeByID[id]
 	if n == nil {
 		return false
 	}
-	if n.isEventCopy() {
+	if n.isCopy() {
 		original := e.builder.nodeByID[n.CopyOf]
-		return original != nil && !original.isEventCopy() && e.inResult(original.ID)
+		return original != nil && !original.isCopy() && e.inResult(original.ID)
 	}
 	translation, nested := e.nestedIn[id]
 	return !nested || e.builder.nodeByID[translation] != nil

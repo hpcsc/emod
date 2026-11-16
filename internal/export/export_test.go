@@ -16,6 +16,7 @@ import (
 
 	"github.com/hpcsc/emod/internal/ast"
 	"github.com/hpcsc/emod/internal/diagnostic"
+	"github.com/hpcsc/emod/internal/diagram"
 	"github.com/hpcsc/emod/internal/export"
 	"github.com/hpcsc/emod/internal/oracle"
 	"github.com/hpcsc/emod/internal/test"
@@ -3826,6 +3827,32 @@ func TestExport(t *testing.T) {
 					"event_copy GuestCheckedOut",
 				}, edgeSourcesInto(doc, "subscription", "OccupancyView"))
 			})
+
+			t.Run("points a copy at the element in the slice the SVG names, which comes first in source order though an aggregate slice that declares it again is written first", func(t *testing.T) {
+				at := func(line int) ast.Position { return ast.Position{Filename: "test.emod", Line: line, Column: 1} }
+				model := &ast.Model{
+					Name: "Rooms",
+					Contexts: []*ast.Context{{
+						Name:   "Bookings",
+						Slices: []*ast.Slice{{Name: "Book Direct", NamePos: at(2), Events: []*ast.Event{{Name: "RoomBooked"}}}},
+						Aggregates: []*ast.Aggregate{{
+							Name: "Room",
+							Slices: []*ast.Slice{
+								{Name: "Book Partner", NamePos: at(10), Events: []*ast.Event{{Name: "RoomBooked"}}},
+								{Name: "Between", NamePos: at(20)},
+								{Name: "List Rooms", NamePos: at(30), Views: []*ast.View{{Name: "RoomsView", Subscribes: []string{"RoomBooked"}}}},
+							},
+						}},
+					}},
+				}
+				copies := diagram.NewElementCopies(model)
+				require.Equal(t, []diagram.ElementCopy{{Kind: diagram.CopyOfEvent, Name: "RoomBooked", DeclaredIn: "Book Direct"}},
+					copies.In(model.Contexts[0].Aggregates[0].Slices[2]), "the SVG says the copy is from Book Direct")
+
+				require.Equal(t, []string{
+					"RoomBooked in List Rooms copies event RoomBooked in Book Direct",
+				}, copiesOfTypeIn(diagramDocOf(t, model), "event_copy"))
+			})
 		})
 
 		t.Run("a copy of an activating event", func(t *testing.T) {
@@ -3847,6 +3874,209 @@ func TestExport(t *testing.T) {
 				require.Contains(t, eventCopiesIn(doc),
 					"CopyBorrowed in Chase Overdue Copy copies event CopyBorrowed in Borrow Copy")
 			})
+		})
+
+		t.Run("a copy of a read view or an issued command", func(t *testing.T) {
+			t.Run("is drawn in the slice that reads the view from two or more slices away, naming the view it copies", func(t *testing.T) {
+				doc := diagramDocOf(t, test.TriggerReadsLibraryLendingModel(t))
+
+				require.Equal(t, []string{
+					"DeskOccupancyView in Chase Overdue Copy copies view DeskOccupancyView in Browse Desk Occupancy",
+					"MemberLoansView in Chase Overdue Copy copies view MemberLoansView in Review Member Loans",
+					"DeskOccupancyView in Claim Desk copies view DeskOccupancyView in Browse Desk Occupancy",
+					"MemberLoansView in Close Reading Room copies view MemberLoansView in Review Member Loans",
+				}, copiesOfTypeIn(doc, "view_copy"))
+			})
+
+			t.Run("is drawn in the slice that issues the command from two or more slices away, naming the command it copies", func(t *testing.T) {
+				doc := diagramDocOf(t, test.TriggerReadsLibraryLendingModel(t))
+
+				require.Equal(t, []string{
+					"ReleaseDesk in Close Reading Room copies command ReleaseDesk in Release Desk",
+					"RemindMember in Close Reading Room copies command RemindMember in Chase Overdue Copy",
+				}, copiesOfTypeIn(doc, "command_copy"))
+			})
+
+			t.Run("points a copy at the view it copies when that view is not the first its slice declares", func(t *testing.T) {
+				model := &ast.Model{
+					Name: "Partner Bookings",
+					Contexts: []*ast.Context{{
+						Name: "Bookings",
+						Aggregates: []*ast.Aggregate{{
+							Name: "Booking",
+							Slices: []*ast.Slice{
+								{Name: "Read Bookings", Views: []*ast.View{{Name: "BookingsView"}, {Name: "PartnersView"}}},
+								{Name: "Between"},
+								{Name: "Chase Partners", Automations: []*ast.Automation{{Name: "ChasePartners", Reads: "PartnersView"}}},
+							},
+						}},
+					}},
+				}
+
+				require.Equal(t, []string{
+					"PartnersView in Chase Partners copies view PartnersView in Read Bookings",
+				}, copiesOfTypeIn(diagramDocOf(t, model), "view_copy"))
+			})
+
+			t.Run("starts a reads edge at the copy of a view two or more slices away, and at the view in the slice next to it", func(t *testing.T) {
+				doc := diagramDocOf(t, test.TriggerReadsLibraryLendingModel(t))
+
+				readers := []string{"Lending Desk", "Overdue Report", "Desk Kiosk", "RecallOverdueCopy", "FreeDeskAtClosing", "RemindReaderOfLoans"}
+				read := make(map[string][]string, len(readers))
+				for _, reader := range readers {
+					read[reader] = edgeSourcesInto(doc, "reads", reader)
+				}
+				require.Equal(t, map[string][]string{
+					"Lending Desk":        {"view MemberLoansView"},
+					"Overdue Report":      {"view_copy DeskOccupancyView"},
+					"Desk Kiosk":          {"view_copy DeskOccupancyView"},
+					"RecallOverdueCopy":   {"view_copy MemberLoansView"},
+					"FreeDeskAtClosing":   {"view DeskOccupancyView"},
+					"RemindReaderOfLoans": {"view_copy MemberLoansView"},
+				}, read)
+			})
+
+			t.Run("ends a command edge at the copy of a command two or more slices away, and at the command in the automation's own slice", func(t *testing.T) {
+				doc := diagramDocOf(t, test.TriggerReadsLibraryLendingModel(t))
+
+				automations := []string{"RemindOnDueDate", "RecallOverdueCopy", "FreeDeskAtClosing", "RemindReaderOfLoans"}
+				issued := make(map[string][]string, len(automations))
+				for _, automation := range automations {
+					issued[automation] = edgeTargetsOutOf(doc, "automation_command", automation)
+				}
+				require.Equal(t, map[string][]string{
+					"RemindOnDueDate":     {"command RemindMember"},
+					"RecallOverdueCopy":   {"command RecallCopy"},
+					"FreeDeskAtClosing":   {"command_copy ReleaseDesk"},
+					"RemindReaderOfLoans": {"command_copy RemindMember"},
+				}, issued)
+			})
+
+			t.Run("joins a translation to the copies in its slice, and starts the flow it implies at the copy of its command", func(t *testing.T) {
+				doc := diagramDocOf(t, farTranslationModel())
+
+				require.Equal(t, map[string][]string{
+					"reads into PartnerFeed":             {"view_copy PartnersView"},
+					"translation_command of PartnerFeed": {"command_copy ImportBooking"},
+					"flow into BookingImported":          {"command_copy ImportBooking"},
+				}, map[string][]string{
+					"reads into PartnerFeed":             edgeSourcesInto(doc, "reads", "PartnerFeed"),
+					"translation_command of PartnerFeed": edgeTargetsOutOf(doc, "translation_command", "PartnerFeed"),
+					"flow into BookingImported":          edgeSourcesInto(doc, "flow", "BookingImported"),
+				})
+			})
+		})
+
+		t.Run("an edge with no copy", func(t *testing.T) {
+			t.Run("starts at the first slice that declares its element, which the copy rule measures from, when two slices declare it", func(t *testing.T) {
+				model := &ast.Model{
+					Name: "Rooms",
+					Contexts: []*ast.Context{{
+						Name: "Bookings",
+						Aggregates: []*ast.Aggregate{{
+							Name: "Room",
+							Slices: []*ast.Slice{
+								{Name: "Book Direct", Events: []*ast.Event{{Name: "RoomBooked"}}},
+								{Name: "List Rooms", Views: []*ast.View{{Name: "RoomsView", Subscribes: []string{"RoomBooked"}}}},
+								{Name: "Between"},
+								{Name: "Book Partner", Events: []*ast.Event{{Name: "RoomBooked"}}},
+							},
+						}},
+					}},
+				}
+				doc := diagramDocOf(t, model)
+				byID := make(map[string]map[string]any)
+				for _, node := range objectsUnder(doc, "nodes") {
+					byID[node["id"].(string)] = node
+				}
+
+				var sourceSlices []any
+				for _, edge := range objectsUnder(doc, "edges") {
+					if edge["type"] == "subscription" {
+						source := byID[edge["source"].(string)]
+						sourceSlices = append(sourceSlices, byID[source["parentId"].(string)]["label"])
+					}
+				}
+				require.Equal(t, []any{"Book Direct"}, sourceSlices)
+			})
+
+			t.Run("starts at the element its own slice declares, though an earlier slice declares it too", func(t *testing.T) {
+				model := &ast.Model{
+					Name: "Watch",
+					Contexts: []*ast.Context{{
+						Name: "Watching",
+						Aggregates: []*ast.Aggregate{{
+							Name: "Watch",
+							Slices: []*ast.Slice{
+								{Name: "Declares Own", Events: []*ast.Event{{Name: "Own"}}},
+								{Name: "Declares Far", Events: []*ast.Event{{Name: "Far"}}},
+								{Name: "Between"},
+								{
+									Name:   "Watch",
+									Events: []*ast.Event{{Name: "Own"}},
+									Views:  []*ast.View{{Name: "WatchView", Subscribes: []string{"Own", "Far"}}},
+								},
+							},
+						}},
+					}},
+				}
+				doc := diagramDocOf(t, model)
+				byID := make(map[string]map[string]any)
+				for _, node := range objectsUnder(doc, "nodes") {
+					byID[node["id"].(string)] = node
+				}
+
+				var ownFrom []any
+				for _, edge := range objectsUnder(doc, "edges") {
+					if source := byID[edge["source"].(string)]; edge["type"] == "subscription" && source["label"] == "Own" {
+						ownFrom = append(ownFrom, byID[source["parentId"].(string)]["label"])
+					}
+				}
+				require.Equal(t, []any{"Watch"}, ownFrom)
+			})
+
+			t.Run("joins a command to its event, although a slice declares an event with no name", func(t *testing.T) {
+				model := &ast.Model{
+					Name: "Orders",
+					Contexts: []*ast.Context{{
+						Name: "Ordering",
+						Aggregates: []*ast.Aggregate{{
+							Name: "Order",
+							Slices: []*ast.Slice{
+								{Name: "Unnamed", Events: []*ast.Event{{Name: ""}}},
+								{Name: "Between"},
+								{
+									Name:     "Place Order",
+									Commands: []*ast.Command{{Name: "PlaceOrder"}},
+									Events:   []*ast.Event{{Name: "OrderPlaced"}},
+									Flows:    []*ast.Flow{{CommandName: "PlaceOrder", EventName: "OrderPlaced"}},
+								},
+							},
+						}},
+					}},
+				}
+
+				require.Equal(t, []string{"command PlaceOrder"}, edgeSourcesInto(diagramDocOf(t, model), "flow", "OrderPlaced"))
+			})
+		})
+
+		t.Run("draws the copies the diagram package decides, in every slice of every model", func(t *testing.T) {
+			for name, model := range map[string]*ast.Model{
+				"subscribed events": test.SubscribedEventsHotelStaysModel(t),
+				"automation delays": test.AutomationDelayLibraryLendingModel(t),
+				"trigger reads":     test.TriggerReadsLibraryLendingModel(t),
+				"a far translation": farTranslationModel(),
+			} {
+				decided := make(map[string][]string)
+				copies := diagram.NewElementCopies(model)
+				for _, s := range model.AllSlices() {
+					for _, c := range copies.In(s) {
+						decided[s.Name] = append(decided[s.Name], copyNodeTypes[c.Kind]+" "+c.Name)
+					}
+				}
+
+				require.Equal(t, decided, copyNodesBySlice(diagramDocOf(t, model)), name)
+			}
 		})
 	})
 
@@ -5945,6 +6175,12 @@ func nodeLabelsByID(doc map[string]any) map[string]string {
 // label, the slice it is drawn in, and the type, label and slice of the node its
 // copy_of names, in the order the exporter wrote the copies.
 func eventCopiesIn(doc map[string]any) []string {
+	return copiesOfTypeIn(doc, "event_copy")
+}
+
+// copiesOfTypeIn states each node of type typ the way eventCopiesIn states an
+// event copy.
+func copiesOfTypeIn(doc map[string]any, typ string) []string {
 	byID := make(map[string]map[string]any)
 	for _, node := range objectsUnder(doc, "nodes") {
 		byID[node["id"].(string)] = node
@@ -5959,7 +6195,7 @@ func eventCopiesIn(doc map[string]any) []string {
 
 	var copies []string
 	for _, node := range objectsUnder(doc, "nodes") {
-		if node["type"] != "event_copy" {
+		if node["type"] != typ {
 			continue
 		}
 		copyOf, _ := node["copy_of"].(string)
@@ -5985,6 +6221,72 @@ func edgeSourcesInto(doc map[string]any, edgeType, target string) []string {
 		}
 	}
 	return sources
+}
+
+// edgeTargetsOutOf names the node each edge of type edgeType out of the node
+// labelled source ends at, by its type and label, in the order the edges were
+// emitted.
+func edgeTargetsOutOf(doc map[string]any, edgeType, source string) []string {
+	labels := nodeLabelsByID(doc)
+	types := nodeTypesByID(doc)
+
+	var targets []string
+	for _, edge := range objectsUnder(doc, "edges") {
+		if edge["type"] == edgeType && labels[edge["source"].(string)] == source {
+			target := edge["target"].(string)
+			targets = append(targets, types[target]+" "+labels[target])
+		}
+	}
+	return targets
+}
+
+// copyNodeTypes transcribes the node type the diagram document gives each kind
+// of copy.
+var copyNodeTypes = map[diagram.CopyKind]string{
+	diagram.CopyOfEvent:   "event_copy",
+	diagram.CopyOfView:    "view_copy",
+	diagram.CopyOfCommand: "command_copy",
+}
+
+// copyNodesBySlice names, for each slice that draws a copy, the type and label of
+// each copy node it holds, in the order the exporter wrote them.
+func copyNodesBySlice(doc map[string]any) map[string][]string {
+	labels := nodeLabelsByID(doc)
+	copies := make(map[string][]string)
+	for _, node := range objectsUnder(doc, "nodes") {
+		if _, copied := node["copy_of"]; !copied {
+			continue
+		}
+		slice := labels[node["parentId"].(string)]
+		copies[slice] = append(copies[slice], node["type"].(string)+" "+node["label"].(string))
+	}
+	return copies
+}
+
+// farTranslationModel has a translation that reads a view three slices away and
+// issues a command two slices away.
+func farTranslationModel() *ast.Model {
+	return &ast.Model{
+		Name: "Partner Bookings",
+		Contexts: []*ast.Context{{
+			Name: "Bookings",
+			Aggregates: []*ast.Aggregate{{
+				Name: "Booking",
+				Slices: []*ast.Slice{
+					{Name: "Read Partners", Views: []*ast.View{{Name: "PartnersView"}}},
+					{Name: "Record Booking", Commands: []*ast.Command{{Name: "ImportBooking"}}},
+					{Name: "Between"},
+					{Name: "Import Booking", Translations: []*ast.Translation{{
+						Name:           "PartnerFeed",
+						ExternalSystem: "Partner API",
+						Reads:          "PartnersView",
+						Command:        "ImportBooking",
+						Event:          &ast.Event{Name: "BookingImported"},
+					}}},
+				},
+			}},
+		}},
+	}
 }
 
 func nodeTypesByID(doc map[string]any) map[string]string {

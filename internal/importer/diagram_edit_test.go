@@ -324,13 +324,13 @@ func drawnDiagram(t *testing.T, model *ast.Model) *viewerDiagram {
 	return d
 }
 
-// node finds the node a gesture names by its label. A copy of an event repeats
-// the event's label, and no gesture names a copy, so the copies are passed over.
+// node finds the node a gesture names by its label. A copy repeats the label of
+// what it copies, and no gesture names a copy, so the copies are passed over.
 func (d *viewerDiagram) node(label string) map[string]any {
 	d.t.Helper()
 	var found []map[string]any
 	for _, n := range d.Nodes {
-		if n["label"] == label && n["type"] != "event_copy" {
+		if _, copies := n["copy_of"]; n["label"] == label && !copies {
 			found = append(found, n)
 		}
 	}
@@ -343,16 +343,17 @@ func (d *viewerDiagram) idOf(label string) string {
 	return d.node(label)["id"].(string)
 }
 
-// copyID answers the id of the copy of event that the slice labelled slice draws.
-func (d *viewerDiagram) copyID(event, slice string) string {
+// copyID answers the id of the copy of the element labelled label that the slice
+// labelled slice draws.
+func (d *viewerDiagram) copyID(label, slice string) string {
 	d.t.Helper()
 	sliceID := d.idOf(slice)
 	for _, n := range d.Nodes {
-		if n["type"] == "event_copy" && n["label"] == event && n["parentId"] == sliceID {
+		if _, copies := n["copy_of"]; copies && n["label"] == label && n["parentId"] == sliceID {
 			return n["id"].(string)
 		}
 	}
-	require.Failf(d.t, "no copy", "the diagram has to draw a copy of %s in %s", event, slice)
+	require.Failf(d.t, "no copy", "the diagram has to draw a copy of %s in %s", label, slice)
 	return ""
 }
 
@@ -2188,6 +2189,95 @@ context "C" {
 			expected = replaced(t, expected,
 				"subscribes = [RoomReserved, GuestCheckedIn, GuestCheckedOut]\n\n        fields {\n          roomNumber",
 				"subscribes = [RoomReserved, GuestCheckedIn, GuestCheckedOut, BreakfastOrdered]\n\n        fields {\n          roomNumber")
+			require.Equal(t, expected, result)
+		})
+	})
+
+	t.Run("copies of read views and issued commands", func(t *testing.T) {
+		const deskKioskReading = "    trigger \"Desk Kiosk\" {\n      actor = Member\n      reads = DeskOccupancyView\n    }"
+		const deskKioskReadingNothing = "    trigger \"Desk Kiosk\" {\n      actor = Member\n    }"
+
+		t.Run("a diagram that draws view and command copies, unedited, leaves the model as it was written", func(t *testing.T) {
+			require.Equal(t, test.TriggerReadsLibraryLending, applied(t, test.TriggerReadsLibraryLending, func(*viewerDiagram) {}))
+		})
+
+		t.Run("renaming a view renames it in the readers that read it through a copy", func(t *testing.T) {
+			result := applied(t, test.TriggerReadsLibraryLending, func(d *viewerDiagram) {
+				d.rename("MemberLoansView", "LoansReport")
+			})
+
+			require.Equal(t, strings.ReplaceAll(test.TriggerReadsLibraryLending, "MemberLoansView", "LoansReport"), result)
+		})
+
+		t.Run("renaming a command renames it in the automations that issue it through a copy", func(t *testing.T) {
+			result := applied(t, test.TriggerReadsLibraryLending, func(d *viewerDiagram) {
+				d.rename("RemindMember", "NudgeMember")
+			})
+
+			require.Equal(t, strings.ReplaceAll(test.TriggerReadsLibraryLending, "RemindMember", "NudgeMember"), result)
+		})
+
+		t.Run("deleting a view clears what each reader read through its copies", func(t *testing.T) {
+			source := test.TriggerReadsLibraryLending
+
+			result := applied(t, source, func(d *viewerDiagram) {
+				d.remove("DeskOccupancyView")
+			})
+
+			expected := replaced(t, source, `  slice "Browse Desk Occupancy" {
+    view "DeskOccupancyView" {
+      subscribes = [DeskClaimed, DeskReleased]
+
+      fields {
+        deskId    = required(string)
+        memberId  = required(string)
+        claimedAt = required(timestamp)
+      }
+    }
+  }
+`, `  slice "Browse Desk Occupancy" {
+  }
+`)
+			expected = replaced(t, expected, "        actor = Librarian\n        reads = DeskOccupancyView\n", "        actor = Librarian\n")
+			expected = replaced(t, expected, deskKioskReading, deskKioskReadingNothing)
+			expected = replaced(t, expected, "      on      = DeskClaimed\n      reads   = DeskOccupancyView\n", "      on      = DeskClaimed\n")
+			require.Equal(t, expected, result)
+		})
+
+		t.Run("deleting the arrow from a view copy clears what that one reader reads", func(t *testing.T) {
+			source := test.TriggerReadsLibraryLending
+
+			result := applied(t, source, func(d *viewerDiagram) {
+				d.disconnectIDs(d.copyID("DeskOccupancyView", "Claim Desk"), d.idOf("Desk Kiosk"))
+			})
+
+			require.Equal(t, replaced(t, source, deskKioskReading, deskKioskReadingNothing), result)
+		})
+
+		t.Run("deleting the arrow to a command copy clears the command of that one automation", func(t *testing.T) {
+			source := test.TriggerReadsLibraryLending
+
+			result := applied(t, source, func(d *viewerDiagram) {
+				d.disconnectIDs(d.idOf("RemindReaderOfLoans"), d.copyID("RemindMember", "Close Reading Room"))
+			})
+
+			require.Equal(t, replaced(t, source,
+				"      on      = DeskReleased\n      reads   = MemberLoansView\n      command = RemindMember\n",
+				"      on    = DeskReleased\n      reads = MemberLoansView\n"), result)
+		})
+
+		t.Run("moving the reader end of an arrow from a view copy onto another reader moves the read", func(t *testing.T) {
+			source := test.TriggerReadsLibraryLending
+
+			result := applied(t, source, func(d *viewerDiagram) {
+				copied := d.copyID("DeskOccupancyView", "Claim Desk")
+				d.repointIDs(copied, d.idOf("Desk Kiosk"), copied, d.idOf("Returns Counter"))
+			})
+
+			expected := replaced(t, source, deskKioskReading, deskKioskReadingNothing)
+			expected = replaced(t, expected,
+				"      trigger \"Returns Counter\" {\n        actor = Member\n      }",
+				"      trigger \"Returns Counter\" {\n        actor = Member\n        reads = DeskOccupancyView\n      }")
 			require.Equal(t, expected, result)
 		})
 	})

@@ -147,7 +147,7 @@ test.describe('a conflict between the diagram and the source panel through the r
 
     await expect(page.locator('#conflict-notice')).toBeHidden();
     await expect(page.locator('.diagram-node', { hasText: 'new-command-2' })).toHaveCount(0);
-    await expect(page.locator('.diagram-node', { hasText: 'ReleaseHold' })).toHaveCount(1);
+    await expect(page.locator('.command-block', { hasText: 'ReleaseHold' })).toHaveCount(1);
     await expect(page.locator('#source-input')).toHaveValue(typed);
   });
 });

@@ -259,17 +259,17 @@ The tests that pin this behaviour are `internal/frontend/tests/event-copy.test.j
 **Behavior:** The diagram JSON writes a `view_copy` or `command_copy` node for every view or command copy that the rule in `internal/diagram` decides. `reads` edges start at a view copy, and `automation_command` and `translation_command` edges end at a command copy. After this task, the SVG and the viewer draw the same copies. On the viewer's save path, the importer reads all three copy kinds as stand-ins for their originals and never as declarations.
 
 **Acceptance Criteria:**
-- [ ] For every copy of a view or a command that `ElementCopies` decides, the diagram JSON holds one node of type `view_copy` or `command_copy`. The node sits in the slice that draws the copy, is labelled with the element's name, and its `copy_of` names the node drawn for the first declaration of that view or command.
-- [ ] A `reads` edge whose view is copied starts at that slice's `view_copy` node. An `automation_command` or `translation_command` edge whose command is copied ends at that slice's `command_copy` node, and the command -> event edge that the translation implies starts at that same node. Every other edge joins the original nodes as before.
-- [ ] For each fixture, the diagram JSON and the SVG copy the same elements in the same slices.
-- [ ] On the viewer's save path (`ApplyDiagram`), every behaviour stated for a copy of an event holds for a copy of a view and a copy of a command:
+- [x] For every copy of a view or a command that `ElementCopies` decides, the diagram JSON holds one node of type `view_copy` or `command_copy`. The node sits in the slice that draws the copy, is labelled with the element's name, and its `copy_of` names the node drawn for the first declaration of that view or command.
+- [x] A `reads` edge whose view is copied starts at that slice's `view_copy` node. An `automation_command` or `translation_command` edge whose command is copied ends at that slice's `command_copy` node, and the command -> event edge that the translation implies starts at that same node. Every other edge joins the original nodes as before.
+- [x] For each fixture, the diagram JSON and the SVG copy the same elements in the same slices.
+- [x] On the viewer's save path (`ApplyDiagram`), every behaviour stated for a copy of an event holds for a copy of a view and a copy of a command:
   - Applied unedited, a diagram with copies leaves the model as written.
   - Renaming the original renames the reference made through the copy (a reader's `reads`, a reactor's `command`).
   - Deleting the original clears the references made through its copies.
   - Deleting the arrow at a copy clears that one reference.
-- [ ] `ImportDiagram` of a document holding view and command copies declares each view and each command once.
-- [ ] In a browser, the viewer draws view and command copies and their arrows for a model with a far read and a far command (`e2e-viewer/tests/copies.spec.js`). Look at the rendered page.
-- [ ] `docs/dsl-reference.md` states that the viewer draws copies of views and commands as the SVG does.
+- [x] `ImportDiagram` of a document holding view and command copies declares each view and each command once.
+- [x] In a browser, the viewer draws view and command copies and their arrows for a model with a far read and a far command (`e2e-viewer/tests/copies.spec.js`). Look at the rendered page.
+- [x] `docs/dsl-reference.md` states that the viewer draws copies of views and commands as the SVG does.
 
 **Affected Files/Modules:**
 - `internal/export/diagram.go`: the `view_copy` and `command_copy` nodes, `copy_of` for views and commands, and the reads and command edges at copies.

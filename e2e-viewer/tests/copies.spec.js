@@ -66,6 +66,72 @@ context "Payments" {
 }
 `;
 
+// ChaseLoans reads LoansView three slices away and issues RemindMember two slices
+// away, so the exporter draws a copy of each in its slice.
+const AUTOMATION_READING_AND_ISSUING_FAR = `emod = 1
+
+model "Library" {
+}
+
+context "Lending" {
+  aggregate "Loan" {
+    slice "Review Loans" {
+      view "LoansView" {
+        subscribes = [MemberReminded]
+
+        fields {
+          memberId = required(string)
+        }
+      }
+    }
+
+    slice "Remind Member" {
+      command "RemindMember" {
+        fields {
+          memberId = required(string)
+        }
+      }
+
+      event "MemberReminded" {
+        fields {
+          memberId = required(string)
+        }
+      }
+
+      flow = <<-FLOW
+        command -> event:    RemindMember -> MemberReminded
+      FLOW
+    }
+
+    slice "Close Loan" {
+      command "CloseLoan" {
+        fields {
+          memberId = required(string)
+        }
+      }
+
+      event "LoanClosed" {
+        fields {
+          memberId = required(string)
+        }
+      }
+
+      flow = <<-FLOW
+        command -> event:    CloseLoan -> LoanClosed
+      FLOW
+    }
+
+    slice "Chase Loans" {
+      automation "ChaseLoans" {
+        every   = "0 9 * * *"
+        reads   = LoansView
+        command = RemindMember
+      }
+    }
+  }
+}
+`;
+
 const block = (page, nodeId) => page.locator('.diagram-node[data-node-id="' + nodeId + '"]');
 
 function paintOf(locator) {
@@ -121,6 +187,37 @@ test.describe('a copy of an event', () => {
     const event = await block(page, 'event-3').locator('rect').first().boundingBox();
     expect(event.x + event.width / 2).toBeCloseTo(canvas.x + canvas.width / 2, -1);
     expect(event.y + event.height / 2).toBeCloseTo(canvas.y + canvas.height / 2, -1);
+  });
+});
+
+test.describe('a copy of a view and a copy of a command', () => {
+  test('are drawn in the slice of the automation that reads and issues them from far away', async ({ page }) => {
+    await open(page);
+    await render(page, AUTOMATION_READING_AND_ISSUING_FAR);
+
+    await expect(block(page, 'view_copy-1')).toContainText('from Review Loans');
+    await expect(block(page, 'command_copy-1')).toContainText('in Remind Member');
+  });
+
+  test('take the stroke of a view and of a command, a white fill and a dashed outline', async ({ page }) => {
+    await open(page);
+    await render(page, AUTOMATION_READING_AND_ISSUING_FAR);
+
+    const viewCopy = await paintOf(block(page, 'view_copy-1'));
+    const commandCopy = await paintOf(block(page, 'command_copy-1'));
+
+    expect(viewCopy.stroke).toBe((await paintOf(block(page, 'view-1'))).stroke);
+    expect(commandCopy.stroke).toBe((await paintOf(block(page, 'command-1'))).stroke);
+    expect([viewCopy.fill, commandCopy.fill]).toEqual(['rgb(255, 255, 255)', 'rgb(255, 255, 255)']);
+    expect([viewCopy.dash, commandCopy.dash]).toEqual(['5px, 3px', '5px, 3px']);
+  });
+
+  test('join the automation with its reads arrow and its command arrow', async ({ page }) => {
+    await open(page);
+    await render(page, AUTOMATION_READING_AND_ISSUING_FAR);
+
+    await expect(page.locator('path.arrow[data-edge-id="view_copy-1--auto-1"]')).toHaveCount(1);
+    await expect(page.locator('path.arrow[data-edge-id="auto-1--command_copy-1"]')).toHaveCount(1);
   });
 });
 

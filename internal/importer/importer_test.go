@@ -39,6 +39,21 @@ func importExported(t *testing.T, model *ast.Model) *ast.Model {
 	return importDiagram(t, exportedDiagram(t, model))
 }
 
+// viewsAndCommandsBySlice names the views and the commands each slice declares.
+func viewsAndCommandsBySlice(model *ast.Model) map[string][]string {
+	declared := make(map[string][]string)
+	for _, s := range model.AllSlices() {
+		for _, v := range s.Views {
+			declared[s.Name] = append(declared[s.Name], "view "+v.Name)
+		}
+		for _, c := range s.Commands {
+			declared[s.Name] = append(declared[s.Name], "command "+c.Name)
+		}
+	}
+
+	return declared
+}
+
 func exportedDiagram(t *testing.T, model *ast.Model) string {
 	t.Helper()
 	diagramJSON, err := export.ExportDiagramJSON(model)
@@ -69,6 +84,40 @@ func withoutNodeLabelled(t *testing.T, document, label string) string {
 	edited, err := json.Marshal(doc)
 	require.NoError(t, err)
 	return string(edited)
+}
+
+// withoutReaderMetadata returns document with the reads and the command each
+// trigger, automation and translation node carries taken out, so that only the
+// edges of the document say what each of them reads and issues.
+func withoutReaderMetadata(t *testing.T, document string) string {
+	t.Helper()
+
+	var decoded map[string]any
+	require.NoError(t, json.Unmarshal([]byte(document), &decoded))
+	for _, node := range decoded["nodes"].([]any) {
+		fields := node.(map[string]any)
+		switch fields["type"] {
+		case "trigger", "automation", "translation":
+			delete(fields, "reads")
+			delete(fields, "command")
+		}
+	}
+	stripped, err := json.Marshal(decoded)
+	require.NoError(t, err)
+
+	return string(stripped)
+}
+
+// automationCommands names the command each automation of model issues.
+func automationCommands(model *ast.Model) map[string]string {
+	commands := make(map[string]string)
+	for _, s := range model.AllSlices() {
+		for _, a := range s.Automations {
+			commands[a.Name] = a.Command
+		}
+	}
+
+	return commands
 }
 
 func importDiagram(t *testing.T, document string) *ast.Model {
@@ -790,6 +839,27 @@ context "C" {
 			require.Equal(t,
 				[]string{"RoomReserved", "GuestCheckedIn", "BreakfastOrdered", "GuestCheckedOut"},
 				stayHistory(t).Views[0].Subscribes)
+		})
+	})
+
+	t.Run("copies of read views and issued commands", func(t *testing.T) {
+		t.Run("a copy declares no view and no command in the slice it is drawn in", func(t *testing.T) {
+			source := test.TriggerReadsLibraryLendingModel(t)
+			require.Contains(t, exportedDiagram(t, source), `"type":"view_copy"`,
+				"the diagram has to draw a copy of a view, or the comparison below says nothing")
+			require.Contains(t, exportedDiagram(t, source), `"type":"command_copy"`,
+				"the diagram has to draw a copy of a command, or the comparison below says nothing")
+
+			require.Equal(t, viewsAndCommandsBySlice(source), viewsAndCommandsBySlice(importExported(t, source)))
+		})
+
+		t.Run("a reader and an automation keep the view and the command they join through a copy, from the edges alone", func(t *testing.T) {
+			source := test.TriggerReadsLibraryLendingModel(t)
+			imported := importDiagram(t, withoutReaderMetadata(t, exportedDiagram(t, source)))
+
+			require.Equal(t, test.TriggerReadsLibraryLendingAutomationViewNames, test.DeclaredAutomationReads(imported))
+			require.Equal(t, test.TriggerReadsLibraryLendingTriggerViewNames, test.DeclaredTriggerReads(imported))
+			require.Equal(t, automationCommands(source), automationCommands(imported))
 		})
 	})
 
