@@ -1,0 +1,108 @@
+design: planned
+types:
+  - name: ElementCopies
+    package: internal/diagram   # element_copies.go, in place of event_copy.go
+    change: new
+    does: decides which elements each slice draws again, and which copy an arrow of a slice starts or ends at
+    owns:
+      - a slice draws a copy of an element when one of its arrows joins that element from a slice two or more slices apart in layout order
+      - the arrows it applies to are an event's arrow into a view (subscribes) or into an automation (on), a view's arrow into a trigger, an automation or a translation (reads), and an automation's or a translation's arrow into a command (command)
+      - such an arrow starts or ends at the copy in its own slice instead of at the element
+      - the command -> event arrow a translation implies starts at the copy of the translation's command when its slice draws one
+      - an arrow inside one slice, or between two slices next to each other in layout order, stays an arrow
+      - a slice draws one copy of an element however many of its arrows join it, and no copy of an element it declares itself
+      - a copy stands for the first slice that declares the element, translation-nested events included; an element no slice declares draws no arrow and no copy
+      - two slices apart is a constant; nothing configures it
+    methods: [In, At]
+  - name: ElementCopy
+    package: internal/diagram   # element_copies.go
+    change: new
+    does: names one element that a slice draws again, and the slice that declares it
+    owns:
+      - a copy of an event or of a view says "from <slice>" under the element's name, and a copy of a command says "in <slice>"
+    fields: [Kind, Name, DeclaredIn]
+    methods: [labelLines]
+  - name: CopyKind
+    package: internal/diagram   # element_copies.go
+    change: new
+    does: says which element type a copy draws again   # query.Kind names the same three, but internal/query imports internal/diagram
+    fields: [CopyOfEvent, CopyOfView, CopyOfCommand]
+  - name: diagramBuilder
+    package: internal/export   # diagram.go
+    change: changed
+    does: writes the nodes and edges of one diagram document
+    owns:
+      - each copy is a node of type event_copy, view_copy or command_copy in the slice that draws it, labelled with the element's name, whose copy_of names the node drawn for the first declaration of that element
+      - an edge whose copied end ElementCopies.At names starts or ends at that slice's copy node
+    fields: [copies, copyIDs]
+    methods: [appendCopies, pointCopiesAtOriginals]
+  - name: diagramNode
+    package: internal/importer   # importer.go
+    change: changed
+    does: reads one node of a diagram document
+    owns:
+      - a node of type event_copy, view_copy or command_copy draws again an element another slice declares, so no import declares it
+    methods: [isCopy]
+  - name: diagramEdit
+    package: internal/importer   # diagram_edit.go
+    change: changed
+    does: makes a model say what an edited diagram says
+    owns:
+      - a copy of any type carries no position and stands for no construct of its own
+      - a copy takes the name its original has now, so a rename reaches every reference drawn through the copy
+      - a copy stands in the edited diagram only while its original does
+    methods: [matchDrawnNodes, nameCopiesAfterOriginals, inResult]
+  - name: Model
+    package: internal/frontend/static   # model.js
+    change: changed
+    does: answers what the viewer can do with a node of the diagram document
+    owns:
+      - the viewer never moves, connects or edits a copy of any type; each of those is an edit of its original
+    methods: [isCopy, sliceDeclaring, moveToSlice]
+  - name: Layout
+    package: internal/frontend/static   # layout.js
+    change: changed
+    does: places every block of the viewer's diagram
+    owns:
+      - every copy sits inside the slice that draws it, and the slice is wide enough for its widest copy
+      - the line under a copy's name is "from <slice>" for a copy of an event or a view and "in <slice>" for a copy of a command, naming the slice that holds its original
+    methods: [declaredInLine, computeLayout, getSliceChildNodeIds]
+  - name: Renderer
+    package: internal/frontend/static   # renderer.js
+    change: changed
+    does: draws the viewer's diagram
+    owns:
+      - a copy is a dashed block filled white in the stroke of the element type it copies, with no port
+    methods: [buildCopyBlock]
+functions:
+  - diagram.NewElementCopies(model *ast.Model) ElementCopies   # internal/export calls it; internal/diagram's own SVG calls it through collectSlices
+  - Model.isCopy(node)   # layout.js, renderer.js, ui.js and interaction.js call it
+  - Layout.declaredInLine(store, copy)   # renderer.js calls it
+words:
+  - concept: an element drawn again in the slice at the far end of an arrow, in place of that arrow
+    word: copy
+    not: [duplicate, ghost, mirror, proxy, reference]   # internal/query owns reference (emod references)
+  - concept: the element a copy draws again
+    word: original
+    not: [source, master]   # source is an event's source field and an edge's starting node
+  - concept: how many slices lie between two slices in layout order
+    word: apart
+    not: [distance]   # internal/query/closest.go uses distance for the edit distance between two names
+  - concept: the left-to-right order the lane SVG draws slices in, ast.Model.SliceRefs
+    word: layout order
+    not: [position, index]   # ast.Position is a place in the source text
+  - concept: the stretch of an arrow that runs across, between its two vertical stretches
+    word: horizontal leg
+    not: [track, channel, lane, segment]   # release.Channel owns channel; a lane is a swimlane
+  - concept: the space between two lanes of the lane SVG
+    word: lane gap
+    not: [gutter, corridor, channel]
+  - concept: the line of a box's outline that an arrow starts or ends on
+    word: side
+    not: [edge, border]   # diagram.Edge is an arrow; the viewer's PORT_DIRECTIONS already says side
+  - concept: the node types of the diagram document that stand for a copy
+    word: event_copy, view_copy, command_copy
+    not: [copy, element_copy]   # one type per copied element type, beside the existing event_copy
+dependencies:
+  - internal/export -> internal/diagram   # exists
+  - internal/importer -> internal/export   # exists

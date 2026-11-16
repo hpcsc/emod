@@ -1,0 +1,215 @@
+{
+  "story": "Replace long arrows in the lane diagram with copies, by distance, in the SVG and the viewer, and fix the SVG router",
+  "tasks_file": "tasks/distance-copies.md",
+  "tasks": [
+    {
+      "n": 1,
+      "done": false,
+      "title": "Copy far events by slice distance in the SVG and the diagram JSON",
+      "language": "Go",
+      "testable": true,
+      "certainty": "high",
+      "blast_radius": "high",
+      "patterns_to_follow": [
+        "internal/diagram/event_copy.go:24-100",
+        "internal/diagram/event_copy_test.go:14-149",
+        "internal/diagram/svg.go:154-162",
+        "internal/diagram/svg.go:246-255",
+        "internal/export/diagram.go:272-299",
+        "internal/export/diagram.go:476-481",
+        "internal/diagram/contract_test.go:1942-2096",
+        "internal/export/export_test.go:3792-3829",
+        "internal/export/export_test.go:5922-5948",
+        "internal/importer/diagram_edit_test.go:2090-2160"
+      ],
+      "depends_on": [],
+      "affected_files": [
+        "internal/diagram/event_copy.go",
+        "internal/diagram/event_copy_test.go",
+        "internal/diagram/element_copies.go",
+        "internal/diagram/element_copies_test.go",
+        "internal/diagram/layout.go",
+        "internal/diagram/svg.go",
+        "internal/diagram/contract_test.go",
+        "internal/export/diagram.go",
+        "internal/export/export_test.go",
+        "internal/importer/diagram_edit_test.go",
+        "e2e-viewer/tests/copies.spec.js",
+        "docs/dsl-reference.md"
+      ]
+    },
+    {
+      "n": 2,
+      "done": false,
+      "title": "Copy far views and commands in the SVG",
+      "language": "Go",
+      "testable": true,
+      "certainty": "medium",
+      "blast_radius": "low",
+      "patterns_to_follow": [
+        "internal/diagram/svg.go:154-162",
+        "internal/diagram/svg.go:101-118",
+        "internal/diagram/svg.go:194-204",
+        "internal/diagram/layout.go:188-205",
+        "internal/diagram/layout.go:78-108",
+        "internal/diagram/contract_test.go:2069-2081",
+        "internal/diagram/contract_test.go:796-1040",
+        "task:1"
+      ],
+      "depends_on": [1],
+      "affected_files": [
+        "internal/diagram/element_copies.go",
+        "internal/diagram/element_copies_test.go",
+        "internal/diagram/layout.go",
+        "internal/diagram/svg.go",
+        "internal/diagram/contract_test.go",
+        "internal/diagram/svg_test.go",
+        "internal/export/diagram.go",
+        "internal/test/fixtures.go",
+        "internal/test/models.go",
+        "docs/dsl-reference.md"
+      ]
+    },
+    {
+      "n": 3,
+      "done": false,
+      "title": "Draw copies of views and commands in the viewer",
+      "language": "JavaScript",
+      "testable": true,
+      "certainty": "medium",
+      "blast_radius": "low",
+      "patterns_to_follow": [
+        "internal/frontend/static/model.js:223-235",
+        "internal/frontend/static/model.js:156-170",
+        "internal/frontend/static/layout.js:69-73",
+        "internal/frontend/static/layout.js:100-118",
+        "internal/frontend/static/layout.js:155-161",
+        "internal/frontend/static/layout.js:314-322",
+        "internal/frontend/static/renderer.js:537-558",
+        "internal/frontend/static/renderer.js:645",
+        "internal/frontend/static/ui.js:83-131",
+        "internal/frontend/static/ui.js:1090-1100",
+        "internal/frontend/static/ui.js:1190-1200",
+        "internal/frontend/static/interaction.js:360-370",
+        "internal/frontend/static/config.js:55-57",
+        "internal/frontend/tests/event-copy.test.js:1-175",
+        "internal/frontend/tests/viewer.test.js:2225-2350"
+      ],
+      "depends_on": [],
+      "affected_files": [
+        "internal/frontend/static/model.js",
+        "internal/frontend/static/layout.js",
+        "internal/frontend/static/renderer.js",
+        "internal/frontend/static/ui.js",
+        "internal/frontend/static/interaction.js",
+        "internal/frontend/static/config.js",
+        "internal/frontend/static/viewer.html",
+        "internal/frontend/tests/event-copy.test.js",
+        "internal/frontend/tests/viewer.test.js",
+        "e2e-viewer/tests/copies.spec.js"
+      ]
+    },
+    {
+      "n": 4,
+      "done": false,
+      "title": "Write view and command copies into the diagram JSON and read them back on save",
+      "language": "Go",
+      "testable": true,
+      "certainty": "medium",
+      "blast_radius": "high",
+      "patterns_to_follow": [
+        "internal/export/diagram.go:272-299",
+        "internal/export/diagram.go:476-481",
+        "internal/export/diagram.go:155-163",
+        "internal/export/export_test.go:3792-3829",
+        "internal/export/export_test.go:5922-5948",
+        "internal/importer/importer.go:46-50",
+        "internal/importer/diagram_edit.go:76-88",
+        "internal/importer/diagram_edit.go:243-247",
+        "internal/importer/diagram_edit.go:534-548",
+        "internal/importer/diagram_edit_test.go:2090-2160",
+        "internal/importer/diagram_edit_test.go:327-357",
+        "e2e-viewer/tests/copies.spec.js:1-140",
+        "task:2",
+        "task:3"
+      ],
+      "depends_on": [2, 3],
+      "affected_files": [
+        "internal/export/diagram.go",
+        "internal/export/export_test.go",
+        "internal/importer/importer.go",
+        "internal/importer/diagram_edit.go",
+        "internal/importer/diagram_edit_test.go",
+        "internal/importer/importer_test.go",
+        "e2e-viewer/tests/copies.spec.js",
+        "docs/dsl-reference.md"
+      ]
+    },
+    {
+      "n": 5,
+      "done": false,
+      "title": "Start and end every SVG arrow on the side of the boxes it joins",
+      "language": "Go",
+      "testable": true,
+      "certainty": "medium",
+      "blast_radius": "low",
+      "patterns_to_follow": [
+        "internal/diagram/eventflow_svg.go:101-109",
+        "internal/diagram/eventflow_svg.go:166-185",
+        "internal/diagram/svg_test.go:1278-1314",
+        "internal/diagram/svg_test.go:418-470",
+        "internal/diagram/svg_test.go:941-965",
+        "internal/diagram/svg_test.go:1066-1100"
+      ],
+      "depends_on": [2],
+      "affected_files": [
+        "internal/diagram/svg.go",
+        "internal/diagram/svg_test.go",
+        "internal/diagram/contract_test.go"
+      ]
+    },
+    {
+      "n": 6,
+      "done": false,
+      "title": "Give each SVG arrow a horizontal leg of its own between lanes",
+      "language": "Go",
+      "testable": true,
+      "certainty": "low",
+      "blast_radius": "low",
+      "patterns_to_follow": [
+        "internal/diagram/svg.go:457-472",
+        "internal/diagram/svg.go:417-434",
+        "internal/diagram/svg.go:22-38",
+        "internal/diagram/layout.go:51-76",
+        "task:5"
+      ],
+      "depends_on": [5],
+      "affected_files": [
+        "internal/diagram/svg.go",
+        "internal/diagram/layout.go",
+        "internal/diagram/svg_test.go"
+      ]
+    },
+    {
+      "n": 7,
+      "done": false,
+      "title": "Route every SVG arrow clear of the boxes it does not join",
+      "language": "Go",
+      "testable": true,
+      "certainty": "low",
+      "blast_radius": "low",
+      "patterns_to_follow": [
+        "internal/diagram/svg_test.go:1066-1100",
+        "internal/diagram/layout.go:314-337",
+        "internal/diagram/svg.go:177-189",
+        "task:6"
+      ],
+      "depends_on": [6],
+      "affected_files": [
+        "internal/diagram/svg.go",
+        "internal/diagram/svg_test.go"
+      ]
+    }
+  ],
+  "design_file": "tasks/distance-copies.design.yaml"
+}
