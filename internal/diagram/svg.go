@@ -189,13 +189,14 @@ func ExportSVG(model *ast.Model, _ Style, opts ...Option) ([]byte, error) {
 		for _, reactor := range reactorBoxes(s, cmdViewLaneY, column, "\n") {
 			if reactor.isAutomation {
 				b.WriteString(svgGear(reactor.x, reactor.y, reactor.w, reactor.description))
-				b.WriteString(svgMultilineText(reactor.x+reactor.w/2, svgUnderGear(reactor),
+				b.WriteString(svgMultilineText(reactor.x+reactor.w/2, reactor.labelCentreY(),
 					reactor.label, reactorFontSize, fillAutomation))
+				nameToBox[reactor.name] = reactor.gearAndLabelBox()
 			} else {
 				b.WriteString(svgRoundedRect(reactor.x, reactor.y, reactor.w, reactor.h, fillTranslation, strokeTranslation, 3, reactor.description))
 				b.WriteString(svgMultilineText(reactor.x+reactor.w/2, reactor.y+reactor.h/2, reactor.label, reactorFontSize, strokeTranslation))
+				nameToBox[reactor.name] = svgBox{x: reactor.x, y: reactor.y, w: reactor.w, h: reactor.h}
 			}
-			nameToBox[reactor.name] = svgBox{x: reactor.x, y: reactor.y, w: reactor.w, h: reactor.h}
 		}
 
 		// --- External system boxes (Translations) ---
@@ -221,7 +222,7 @@ func ExportSVG(model *ast.Model, _ Style, opts ...Option) ([]byte, error) {
 			return ""
 		}
 
-		return svgArrowBetween(view, reader)
+		return svgArrow(svgRoute(view, reader))
 	}
 
 	// A translation's reads arrow is drawn into the external system box
@@ -251,22 +252,23 @@ func ExportSVG(model *ast.Model, _ Style, opts ...Option) ([]byte, error) {
 				from, fromDrawn := nameToBox[edge.From]
 				to, toDrawn := targetBox(i, edge)
 				if fromDrawn && toDrawn {
-					b.WriteString(svgArrowBetween(from, to))
+					b.WriteString(svgArrow(svgRoute(from, to)))
 				}
 
 			case EdgeTranslationFlow:
 				from, fromDrawn := sourceBox(i, edge)
 				to, toDrawn := nameToBox[edge.To]
 				if fromDrawn && toDrawn {
-					b.WriteString(svgArrowBetween(from, to))
+					b.WriteString(svgArrow(svgRoute(from, to)))
 				}
 
 			case EdgeAutomationTrigger:
 				from, fromDrawn := sourceBox(i, edge)
 				to, toDrawn := nameToBox[edge.To]
 				if fromDrawn && toDrawn {
-					b.WriteString(svgArrowBetween(from, to))
-					b.WriteString(svgArrowLabel(from, to, edge.Label))
+					route := svgRoute(from, to)
+					b.WriteString(svgArrow(route))
+					b.WriteString(svgArrowLabel(route, edge.Label))
 				}
 
 			case EdgeRejection:
@@ -274,7 +276,7 @@ func ExportSVG(model *ast.Model, _ Style, opts ...Option) ([]byte, error) {
 				// nth one this slice states ends at the nth badge it drew.
 				from, fromDrawn := nameToBox[edge.From]
 				if fromDrawn && rejected < len(badges[i]) {
-					b.WriteString(svgDashedArrowBetween(from, badges[i][rejected]))
+					b.WriteString(svgDashedArrow(svgRoute(from, badges[i][rejected])))
 				}
 				rejected++
 
@@ -282,14 +284,14 @@ func ExportSVG(model *ast.Model, _ Style, opts ...Option) ([]byte, error) {
 				from, fromDrawn := sourceBox(i, edge)
 				to, toDrawn := nameToBox[edge.To]
 				if fromDrawn && toDrawn {
-					b.WriteString(svgArrowBetween(from, to))
+					b.WriteString(svgArrow(svgRoute(from, to)))
 				}
 
 			default:
 				from, fromDrawn := nameToBox[edge.From]
 				to, toDrawn := nameToBox[edge.To]
 				if fromDrawn && toDrawn {
-					b.WriteString(svgArrowBetween(from, to))
+					b.WriteString(svgArrow(svgRoute(from, to)))
 				}
 			}
 		}
@@ -341,13 +343,6 @@ func svgGearDefs() string {
 </symbol>
 </defs>
 `, -gearExtent, -gearExtent, 2*gearExtent, 2*gearExtent, gearPathData)
-}
-
-// svgUnderGear is the y the label of an automation is centred on: its lines are
-// centred together, so the first line starts just under the gear.
-func svgUnderGear(gear reactorBox) int {
-	lines := strings.Count(gear.label, "\n") + 1
-	return gear.y + gear.h + gearLabelGap + reactorFontSize/2 + (lines-1)*(reactorFontSize+4)/2
 }
 
 func svgGear(x, y, size int, description string) string {
@@ -431,6 +426,11 @@ func svgText(x, y int, text string, fontSize int, color string) string {
 		x, y, fontSize, color, escapeXML(text))
 }
 
+// lineHeight is how far apart svgMultilineText writes the lines of a text.
+func lineHeight(fontSize int) int {
+	return fontSize + 4
+}
+
 func svgMultilineText(x, y int, text string, fontSize int, color string) string {
 	lines := strings.Split(text, "\n")
 	if len(lines) <= 1 {
@@ -441,11 +441,11 @@ func svgMultilineText(x, y int, text string, fontSize int, color string) string 
 	b.WriteString(fmt.Sprintf(`<text x="%d" y="%d" text-anchor="middle" dominant-baseline="middle" font-family="sans-serif" font-size="%d" fill="%s">`+"\n",
 		x, y, fontSize, color))
 
-	lineHeight := fontSize + 4
-	totalH := (len(lines) - 1) * lineHeight
+	step := lineHeight(fontSize)
+	totalH := (len(lines) - 1) * step
 
 	for i, line := range lines {
-		dy := lineHeight
+		dy := step
 		if i == 0 {
 			dy = -totalH / 2
 		}
@@ -461,34 +461,67 @@ type svgBox struct {
 	x, y, w, h int
 }
 
-// svgArrowLabel paints an arrow's text midway between the two box centres
-// svgArrowBetween runs between — on the horizontal leg of the orthogonal route
-// it draws, rather than at either bend — and nothing at all for an arrow
-// carrying none, so the picture of a model whose arrows say nothing is
-// byte-identical to what it was.
+// point is a place in the picture, in pixels.
+type point struct {
+	x, y int
+}
+
+// route is the way an arrow runs from one box to another: out of the first box
+// at start, across along its leg at legY, and into the second box at end.
+type route struct {
+	start, end point
+	legY       int
+}
+
+// svgRoute leaves from at the top or the bottom, whichever faces to, and enters
+// to at the side that faces from, with the leg halfway between the two.
+func svgRoute(from, to svgBox) route {
+	start, end := point{from.x + from.w/2, from.y}, point{to.x + to.w/2, to.y + to.h}
+	if from.y+from.h <= to.y {
+		start, end = point{from.x + from.w/2, from.y + from.h}, point{to.x + to.w/2, to.y}
+	}
+
+	return route{start: start, end: end, legY: (start.y + end.y) / 2}
+}
+
+// points are the points the arrow is drawn through, in order.
+func (r route) points() []point {
+	if r.start.x == r.end.x {
+		return []point{r.start, r.end}
+	}
+
+	return []point{r.start, {r.start.x, r.legY}, {r.end.x, r.legY}, r.end}
+}
+
+// legMiddle is the middle of the leg across, or of the route itself when it runs
+// straight up or down.
+func (r route) legMiddle() point {
+	return point{(r.start.x + r.end.x) / 2, r.legY}
+}
+
+// svgArrowLabel paints an arrow's text at the middle of its leg, rather than at
+// either bend, and nothing at all for an arrow carrying none, so the picture of
+// a model whose arrows say nothing is byte-identical to what it was.
 // The class is what separates this text from a box's own: a reader binding
 // every <text> to the last rect it saw would otherwise relabel that box.
-func svgArrowLabel(from, to svgBox, label string) string {
+func svgArrowLabel(r route, label string) string {
 	if label == "" {
 		return ""
 	}
 
-	sx, sy := from.x+from.w/2, from.y+from.h/2
-	tx, ty := to.x+to.w/2, to.y+to.h/2
+	at := r.legMiddle()
 
 	return fmt.Sprintf(`<text class="edge-label" x="%d" y="%d" text-anchor="middle" dominant-baseline="middle" font-family="sans-serif" font-size="%d" fill="%s">%s</text>`+"\n",
-		(sx+tx)/2, (sy+ty)/2, edgeLabelFontSize, arrowStroke, escapeXML(label))
+		at.x, at.y, edgeLabelFontSize, arrowStroke, escapeXML(label))
 }
 
-func svgArrowBetween(from, to svgBox) string {
-	return svgArrowPath(from.x+from.w/2, from.y+from.h/2, to.x+to.w/2, to.y+to.h/2, "")
+func svgArrow(r route) string {
+	return svgArrowPath(r, "")
 }
 
-// svgDashedArrowBetween draws the same route as svgArrowBetween, dashed. Both
-// ends must stay exactly on a box's centre: a reader of the output identifies
-// which boxes an arrow joins by those points and can resolve nothing else.
-func svgDashedArrowBetween(from, to svgBox) string {
-	return svgArrowPath(from.x+from.w/2, from.y+from.h/2, to.x+to.w/2, to.y+to.h/2, ` stroke-dasharray="6,4"`)
+// svgDashedArrow draws the same route as svgArrow, dashed.
+func svgDashedArrow(r route) string {
+	return svgArrowPath(r, ` stroke-dasharray="6,4"`)
 }
 
 const (
@@ -501,21 +534,14 @@ const (
 	edgeLabelFontSize = 10
 )
 
-func svgArrowPath(sx, sy, tx, ty int, dash string) string {
-	if sx == tx && sy == ty {
-		return ""
+func svgArrowPath(r route, dash string) string {
+	var points []string
+	for _, p := range r.points() {
+		points = append(points, fmt.Sprintf("%d,%d", p.x, p.y))
 	}
 
-	if sx == tx || sy == ty {
-		// Vertical or horizontal only
-		return fmt.Sprintf(`<path d="M %d,%d L %d,%d" fill="none" stroke="`+arrowStroke+`" stroke-width="1.5"%s marker-end="url(#arrow)"/>`+"\n",
-			sx, sy, tx, ty, dash)
-	}
-
-	// Vertical-first orthogonal path
-	midY := (sy + ty) / 2
-	return fmt.Sprintf(`<path d="M %d,%d L %d,%d L %d,%d L %d,%d" fill="none" stroke="`+arrowStroke+`" stroke-width="1.5"%s marker-end="url(#arrow)"/>`+"\n",
-		sx, sy, sx, midY, tx, midY, tx, ty, dash)
+	return fmt.Sprintf(`<path d="M %s" fill="none" stroke="`+arrowStroke+`" stroke-width="1.5"%s marker-end="url(#arrow)"/>`+"\n",
+		strings.Join(points, " L "), dash)
 }
 
 func escapeXML(s string) string {

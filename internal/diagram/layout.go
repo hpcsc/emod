@@ -324,6 +324,7 @@ func laneRowY(laneY int) int {
 type reactorBox struct {
 	name         string
 	label        string
+	labelLines   int
 	description  string
 	isAutomation bool
 	x, y, w, h   int
@@ -361,11 +362,31 @@ func (r *reactorBox) placeGear() {
 	r.w, r.h = laneGearSize, laneGearSize
 }
 
+// labelCentreY is the y the lines under an automation's gear are centred on, so
+// that the first line starts just under the gear.
+func (r *reactorBox) labelCentreY() int {
+	return r.y + r.h + gearLabelGap + reactorFontSize/2 + (r.labelLines-1)*lineHeight(reactorFontSize)/2
+}
+
+// labelBottom is the y the last line under an automation's gear ends at.
+func (r *reactorBox) labelBottom() int {
+	return r.labelCentreY() + (r.labelLines-1)*lineHeight(reactorFontSize)/2 + reactorFontSize/2
+}
+
+// gearAndLabelBox is the box an arrow meets an automation at: its gear and the
+// lines under it, so that an arrow from below ends under the name.
+func (r *reactorBox) gearAndLabelBox() svgBox {
+	return svgBox{x: r.x, y: r.y, w: r.w, h: r.labelBottom() - r.y}
+}
+
 // automationBox returns the reactor box for an automation.
 func automationBox(auto *ast.Automation, lineBreak string) reactorBox {
+	lines := automationLabelLines(auto)
+
 	return reactorBox{
 		name:         auto.Name,
-		label:        strings.Join(automationLabelLines(auto), lineBreak),
+		label:        strings.Join(lines, lineBreak),
+		labelLines:   len(lines),
 		description:  auto.Description,
 		isAutomation: true,
 	}

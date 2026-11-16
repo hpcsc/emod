@@ -70,9 +70,30 @@ type boxRect struct {
 	x, y, w, h int
 }
 
-// centre is the point an arrow drawn to or from a box meets it at.
+// centre is the middle of the box.
 func (r boxRect) centre() [2]int {
 	return [2]int{r.x + r.w/2, r.y + r.h/2}
+}
+
+// meets reports whether p lies on the outline of the box.
+func (r boxRect) meets(p [2]int) bool {
+	x, y := p[0], p[1]
+	onLeftOrRight := (x == r.x || x == r.x+r.w) && y >= r.y && y <= r.y+r.h
+	onTopOrBottom := (y == r.y || y == r.y+r.h) && x >= r.x && x <= r.x+r.w
+
+	return onLeftOrRight || onTopOrBottom
+}
+
+// crossedBy reports whether the straight line from a to b, which runs across or
+// up and down, runs through the inside of the box.
+func (r boxRect) crossedBy(a, b [2]int) bool {
+	if a[0] == b[0] {
+		x, top, bottom := a[0], min(a[1], b[1]), max(a[1], b[1])
+		return x > r.x && x < r.x+r.w && top < r.y+r.h && bottom > r.y
+	}
+	y, left, right := a[1], min(a[0], b[0]), max(a[0], b[0])
+
+	return y > r.y && y < r.y+r.h && left < r.x+r.w && right > r.x
 }
 
 func (r boxRect) overlaps(other boxRect) bool {

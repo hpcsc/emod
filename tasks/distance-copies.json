@@ -152,7 +152,7 @@
     },
     {
       "n": 5,
-      "done": false,
+      "done": true,
       "title": "Start and end every SVG arrow on the side of the boxes it joins",
       "language": "Go",
       "testable": true,

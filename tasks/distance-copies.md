@@ -312,12 +312,12 @@ The tests that pin this behaviour are `internal/frontend/tests/event-copy.test.j
 **Behavior:** Today every lane-SVG arrow runs from box centre to box centre and is written after the boxes, so each line crosses the labels of both boxes it joins. After this task, each arrow leaves its source box on a side and ends with the tip of its arrowhead on a side of its target box. The test reader names an arrow by the boxes its ends lie on, not by box centres.
 
 **Acceptance Criteria:**
-- [ ] Every arrow the lane SVG draws, whatever its kind, starts on the outline of its source box and ends with its arrowhead tip on the outline of its target box. No arrow is drawn across the inside of either box it joins. This includes the dashed arrow to a rejection badge, arrows from and to copies, and the arrow into an external system box.
-- [ ] An arrow into or out of an automation does not cross the name written under its gear.
-- [ ] The text that an arrow carries (an automation's delay) sits on that arrow's horizontal leg.
-- [ ] `svgConnections` names each arrow by the boxes whose outline its two ends lie on. It fails loudly when an end lies on no box's outline. The rejection-badge tests find the badge that each dashed arrow reaches by the box its end lies on, not by a centre point.
-- [ ] Every test that reads connections passes with its assertions unchanged, apart from the reader itself.
-- [ ] Mermaid and ASCII output is unchanged.
+- [x] Every arrow the lane SVG draws, whatever its kind, starts on the outline of its source box and ends with its arrowhead tip on the outline of its target box. No arrow is drawn across the inside of either box it joins. This includes the dashed arrow to a rejection badge, arrows from and to copies, and the arrow into an external system box.
+- [x] An arrow into or out of an automation does not cross the name written under its gear.
+- [x] The text that an arrow carries (an automation's delay) sits on that arrow's horizontal leg.
+- [x] `svgConnections` names each arrow by the boxes whose outline its two ends lie on. It fails loudly when an end lies on no box's outline. The rejection-badge tests find the badge that each dashed arrow reaches by the box its end lies on, not by a centre point.
+- [x] Every test that reads connections passes with its assertions unchanged, apart from the reader itself.
+- [x] Mermaid and ASCII output is unchanged.
 
 **Affected Files/Modules:**
 - `internal/diagram/svg.go`: `svgArrowBetween`, `svgDashedArrowBetween` and its centre contract comment, `svgArrowPath`, and `svgArrowLabel`.

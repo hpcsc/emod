@@ -309,6 +309,108 @@ func TestExportSVG(t *testing.T) {
 		require.Equal(t, originals, copied)
 	})
 
+	t.Run("arrow ends", func(t *testing.T) {
+		models := func(t *testing.T) map[string]*ast.Model {
+			return map[string]*ast.Model{
+				"trigger reads":     test.TriggerReadsLibraryLendingModel(t),
+				"automation delays": test.AutomationDelayLibraryLendingModel(t),
+				"subscribed events": test.SubscribedEventsHotelStaysModel(t),
+				"rejections":        test.RejectionLibraryLendingModel(t),
+				"a far translation": farTranslationModel(),
+			}
+		}
+
+		t.Run("draws no arrow across the inside of either box it joins", func(t *testing.T) {
+			for name, model := range models(t) {
+				output := svgOf(t, model)
+				boxes := svgArrowBoxes(t, output)
+
+				var crossings []string
+				for _, arrow := range svgDrawnArrows(t, output) {
+					joined := []svgArrowBox{
+						arrowBoxMet(t, boxes, arrow.route[0]),
+						arrowBoxMet(t, boxes, arrow.route[len(arrow.route)-1]),
+					}
+					for i := 1; i < len(arrow.route); i++ {
+						for _, box := range joined {
+							if box.rect.crossedBy(arrow.route[i-1], arrow.route[i]) {
+								crossings = append(crossings, lineText(joined[0].label)+" -> "+lineText(joined[1].label)+" crosses "+lineText(box.label))
+							}
+						}
+					}
+				}
+				require.Empty(t, crossings, name)
+			}
+		})
+
+		t.Run("meets each box it joins on a side, never at a corner", func(t *testing.T) {
+			for name, model := range models(t) {
+				output := svgOf(t, model)
+				boxes := svgArrowBoxes(t, output)
+
+				var corners []string
+				for _, arrow := range svgDrawnArrows(t, output) {
+					for _, end := range [][2]int{arrow.route[0], arrow.route[len(arrow.route)-1]} {
+						box := arrowBoxMet(t, boxes, end).rect
+						if (end[0] == box.x || end[0] == box.x+box.w) && (end[1] == box.y || end[1] == box.y+box.h) {
+							corners = append(corners, fmt.Sprintf("%v", end))
+						}
+					}
+				}
+				require.Empty(t, corners, name)
+			}
+		})
+
+		t.Run("ends an arrow from below an automation under the name written under its gear, and crosses no line of it", func(t *testing.T) {
+			output := svgOf(t, test.AutomationDelayLibraryLendingModel(t))
+			arrows := svgDrawnArrows(t, output)
+
+			var endingUnderName int
+			var crossings []string
+			for _, gear := range svgBoxes(t, output) {
+				if !svgDrawnAsGear(gear) {
+					continue
+				}
+				name := cardLines(gear.label)[0]
+				label := svgGearLabel(t, output, name)
+				lines := boxRect{x: gear.rect.x, y: label.top, w: gear.rect.w, h: label.bottom - label.top}
+				for _, arrow := range arrows {
+					if end := arrow.route[len(arrow.route)-1]; end[1] == label.bottom && lines.meets(end) {
+						endingUnderName++
+					}
+					for i := 1; i < len(arrow.route); i++ {
+						if lines.crossedBy(arrow.route[i-1], arrow.route[i]) {
+							crossings = append(crossings, "an arrow crosses the name under "+name)
+						}
+					}
+				}
+			}
+
+			require.Equal(t, 4, endingUnderName, "the fixture activates four automations on an event drawn below them")
+			require.Empty(t, crossings)
+		})
+
+		t.Run("writes the text an arrow carries at the middle of that arrow's horizontal leg", func(t *testing.T) {
+			output := svgOf(t, test.AutomationDelayLibraryLendingModel(t))
+
+			var legMiddles, labelled [][2]int
+			for _, arrow := range svgDrawnArrows(t, output) {
+				if arrow.labelAt == nil {
+					continue
+				}
+				labelled = append(labelled, *arrow.labelAt)
+				for i := 1; i < len(arrow.route); i++ {
+					if from, to := arrow.route[i-1], arrow.route[i]; from[1] == to[1] {
+						legMiddles = append(legMiddles, [2]int{(from[0] + to[0]) / 2, from[1]})
+					}
+				}
+			}
+
+			require.Len(t, labelled, 2, "the fixture delays two automations")
+			require.Equal(t, legMiddles, labelled)
+		})
+	})
+
 	t.Run("renders automation as the gear with its name under it", func(t *testing.T) {
 		model := &ast.Model{
 			Name: "Test",
@@ -332,6 +434,24 @@ func TestExportSVG(t *testing.T) {
 		require.NoError(t, err)
 
 		require.True(t, svgDrawnAsGear(boxLabelled(t, svgBoxes(t, string(raw)), "Notifier")))
+	})
+
+	t.Run("writes the lines under a gear one below the other, clear of each other", func(t *testing.T) {
+		output := svgOf(t, test.AutomationDelayLibraryLendingModel(t))
+		label := svgGearLabel(t, output, "SweepOverdueLoans")
+
+		var size int
+		for _, shape := range svgShapes(t, output) {
+			if strings.Contains(shape.attributes, "href=#gear") && cardLines(shape.label)[0] == "SweepOverdueLoans" {
+				parsed, err := strconv.Atoi(shape.labelSize)
+				require.NoError(t, err)
+				size = parsed
+			}
+		}
+
+		require.Len(t, label.lines, 2, "a scheduled automation writes its cadence under its name")
+		require.Positive(t, size)
+		require.GreaterOrEqual(t, label.bottom-label.top, 2*size, "two lines of this size need at least twice its height")
 	})
 
 	t.Run("writes the name and the cadence of an automation centred under its gear", func(t *testing.T) {
@@ -581,25 +701,19 @@ func TestExportSVG(t *testing.T) {
 		t.Run("two slices rejecting one invariant each get their own badge and their own arrow", func(t *testing.T) {
 			output := svgOf(t, test.RejectionLibraryLendingModel(t))
 
-			var badgeCentres [][2]int
+			var badges []boxRect
 			for _, box := range svgBoxes(t, output) {
 				if box.label == "OneCopyPerLoan" {
-					badgeCentres = append(badgeCentres, box.rect.centre())
+					badges = append(badges, box.rect)
 				}
 			}
-			require.Len(t, badgeCentres, 2, "each of the two slices draws its own badge")
+			require.Len(t, badges, 2, "each of the two slices draws its own badge")
 
-			// Comparing endpoints rather than target labels is the whole point:
-			// both arrows resolve to the label "OneCopyPerLoan" even when they
-			// end at the same box, so a label comparison cannot see the collapse.
-			var reached [][2]int
-			for _, end := range dashedArrowEndpoints(t, output) {
-				if slices.Contains(badgeCentres, end) {
-					reached = append(reached, end)
-				}
-			}
-
-			require.ElementsMatch(t, badgeCentres, reached,
+			// Comparing the boxes the ends meet rather than their labels is the
+			// whole point: both arrows resolve to the label "OneCopyPerLoan" even
+			// when they end at the same box, so a label comparison cannot see the
+			// collapse.
+			require.ElementsMatch(t, badges, badgesReached(dashedArrowEndpoints(t, output), badges),
 				"each slice's dashed arrow ends at the badge in its own column; filing a badge under the invariant's name alone points both at whichever slice was drawn last")
 
 			require.Equal(t, []string{"BorrowCopy", "ReturnCopy"}, sourcesReaching(t, output, "OneCopyPerLoan"))
@@ -608,21 +722,20 @@ func TestExportSVG(t *testing.T) {
 		t.Run("one slice rejecting two invariants sends each arrow to its own badge", func(t *testing.T) {
 			output := svgOf(t, twoRejectionsOneSliceModel())
 
-			centreOf := func(label string) [2]int {
+			rectOf := func(label string) boxRect {
 				for _, box := range svgBoxes(t, output) {
 					if box.label == label {
-						return box.rect.centre()
+						return box.rect
 					}
 				}
 				require.FailNowf(t, "no box drawn", "%q", label)
-				return [2]int{}
+				return boxRect{}
 			}
+			badges := []boxRect{rectOf("OneCopyPerLoan"), rectOf("FiveCopiesPerMember")}
 
 			// Pairing the nth edge with badges[i][0] instead of badges[i][n]
 			// orphans the second badge and stacks both arrows on the first.
-			require.ElementsMatch(t,
-				[][2]int{centreOf("OneCopyPerLoan"), centreOf("FiveCopiesPerMember")},
-				dashedArrowEndpoints(t, output))
+			require.ElementsMatch(t, badges, badgesReached(dashedArrowEndpoints(t, output), badges))
 		})
 
 		t.Run("a badge adds one shape to its slice's event row and moves no label the twin drew", func(t *testing.T) {
@@ -1463,20 +1576,15 @@ var (
 )
 
 // svgConnections returns the arrows the diagram draws, each named by the boxes
-// its two ends meet and carrying how it is painted, so a test can say which
-// boxes an arrow runs between instead of restating its coordinates.
+// whose outline its two ends lie on and carrying how it is painted, so a test
+// can say which boxes an arrow runs between instead of restating its
+// coordinates.
 func svgConnections(t *testing.T, output string) []diagramConnection {
 	t.Helper()
 
-	labelled := make(map[[2]int]string)
-	for _, shape := range svgShapes(t, output) {
-		labelled[shape.rect.centre()] = shape.label
-	}
-
+	boxes := svgArrowBoxes(t, output)
 	boxAt := func(point [2]int) string {
-		label, drawn := labelled[point]
-		require.True(t, drawn, "an arrow meets %v, where the diagram draws no box", point)
-		return label
+		return arrowBoxMet(t, boxes, point).label
 	}
 
 	labels := svgArrowLabels(t, output)
@@ -1498,6 +1606,94 @@ func svgConnections(t *testing.T, output string) []diagramConnection {
 	}
 
 	return connections
+}
+
+// svgArrowBox is the box an arrow meets a shape at: the shape itself, or for an
+// automation its gear and the lines written under it.
+type svgArrowBox struct {
+	label string
+	rect  boxRect
+}
+
+func svgArrowBoxes(t *testing.T, output string) []svgArrowBox {
+	t.Helper()
+
+	var boxes []svgArrowBox
+	for _, shape := range svgShapes(t, output) {
+		rect := shape.rect
+		if strings.Contains(shape.attributes, "href=#gear") {
+			rect.h = svgGearLabel(t, output, cardLines(shape.label)[0]).bottom - rect.y
+		}
+		boxes = append(boxes, svgArrowBox{label: shape.label, rect: rect})
+	}
+
+	return boxes
+}
+
+// arrowBoxMet returns the one box whose outline point lies on, and fails loudly
+// on a point that lies on none or on more than one.
+func arrowBoxMet(t *testing.T, boxes []svgArrowBox, point [2]int) svgArrowBox {
+	t.Helper()
+
+	var met []svgArrowBox
+	for _, box := range boxes {
+		if box.rect.meets(point) {
+			met = append(met, box)
+		}
+	}
+	require.Len(t, met, 1, "an arrow ends at %v, which has to lie on the outline of exactly one box", point)
+
+	return met[0]
+}
+
+// badgesReached returns, for each end, the badge whose outline it lies on.
+func badgesReached(ends [][2]int, badges []boxRect) []boxRect {
+	var reached []boxRect
+	for _, end := range ends {
+		for _, badge := range badges {
+			if badge.meets(end) {
+				reached = append(reached, badge)
+			}
+		}
+	}
+
+	return reached
+}
+
+// drawnArrow is an arrow as the SVG draws it: the points of its route, and the
+// point its text is centred on when it carries any.
+type drawnArrow struct {
+	route   [][2]int
+	labelAt *[2]int
+}
+
+var svgTextAt = regexp.MustCompile(`\bx="(-?\d+)" y="(-?\d+)"`)
+
+func svgDrawnArrows(t *testing.T, output string) []drawnArrow {
+	t.Helper()
+
+	lines := strings.Split(output, "\n")
+
+	var arrows []drawnArrow
+	for i, line := range lines {
+		if !strings.Contains(line, "marker-end") {
+			continue
+		}
+		path := svgPathData.FindStringSubmatch(line)
+		require.NotNil(t, path, "an arrow carries no path: %s", line)
+
+		var arrow drawnArrow
+		for _, point := range svgPathPoint.FindAllStringSubmatch(path[1], -1) {
+			arrow.route = append(arrow.route, svgPoint(t, point))
+		}
+		if i+1 < len(lines) && strings.Contains(lines[i+1], `class="`+edgeLabelClass+`"`) {
+			at := svgPoint(t, svgTextAt.FindStringSubmatch(lines[i+1]))
+			arrow.labelAt = &at
+		}
+		arrows = append(arrows, arrow)
+	}
+
+	return arrows
 }
 
 func svgPoint(t *testing.T, point []string) [2]int {
