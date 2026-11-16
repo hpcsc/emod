@@ -80,19 +80,21 @@ function hoveredNode(store, target) {
 function tooltipHtmlFor(store, target) {
   const node = hoveredNode(store, target);
   if (!node) return "";
-  if (Model.isEventCopy(node)) return buildCopyHtml(store, node);
+  if (Model.isCopy(node)) return buildCopyHtml(store, node);
 
   const body = buildBodyHtml(node, target.dataset.marker);
   return body ? buildHeadingHtml(node) + body : "";
 }
 
 function buildCopyHtml(store, copy) {
+  const copiedType = Model.copiedType(copy);
   const slice = Model.sliceDeclaring(store, copy);
   if (!slice) {
-    return buildHeadingHtml(copy) + '<div class="tt-copy">A copy of an event the diagram no longer holds</div>';
+    const article = copiedType === "event" ? "an " : "a ";
+    return buildHeadingHtml(copy) + '<div class="tt-copy">A copy of ' + article + copiedType + ' the diagram no longer holds</div>';
   }
   return buildHeadingHtml(copy) +
-    '<div class="tt-copy">A copy of the event in ' + Renderer.esc(slice.label) + '. Click to show that event.</div>' +
+    '<div class="tt-copy">A copy of the ' + copiedType + ' in ' + Renderer.esc(slice.label) + '. Click to show that ' + copiedType + '.</div>' +
     buildBodyHtml(store.nodeById.get(copy.copy_of));
 }
 
@@ -100,7 +102,7 @@ function markOriginalOf(store, node) {
   store.dom.svg.querySelectorAll(".copy-original").forEach(function(el) {
     el.classList.remove("copy-original");
   });
-  if (!Model.isEventCopy(node)) return;
+  if (!Model.isCopy(node)) return;
   const original = store.dom.svg.querySelector('.diagram-node[data-node-id="' + node.copy_of + '"]');
   if (original) original.classList.add("copy-original");
 }
@@ -115,12 +117,22 @@ function dimArrowsNotTouching(store, viewId) {
     svgEl.classList.remove("dims-arrows");
     return;
   }
-  svgEl.querySelectorAll('.arrow[data-source="' + viewId + '"], .arrow[data-target="' + viewId + '"]').forEach(function(arrow) {
-    svgEl.querySelectorAll('[data-edge-id="' + arrow.getAttribute("data-edge-id") + '"]').forEach(function(el) {
-      el.classList.add("touches-view");
+  viewAndItsCopies(store, viewId).forEach(function(id) {
+    svgEl.querySelectorAll('.arrow[data-source="' + id + '"], .arrow[data-target="' + id + '"]').forEach(function(arrow) {
+      svgEl.querySelectorAll('[data-edge-id="' + arrow.getAttribute("data-edge-id") + '"]').forEach(function(el) {
+        el.classList.add("touches-view");
+      });
     });
   });
   svgEl.classList.add("dims-arrows");
+}
+
+function viewAndItsCopies(store, viewId) {
+  const ids = [viewId];
+  store.nodeById.forEach(function(node, id) {
+    if (node.copy_of === viewId) ids.push(id);
+  });
+  return ids;
 }
 
 function showOriginalOf(store, copy) {
@@ -1094,7 +1106,7 @@ function initDelegation(store) {
     if (!interactive) {
       const block = target.closest(".diagram-node");
       const node = block && store.nodeById.get(block.getAttribute("data-node-id"));
-      if (Model.isEventCopy(node)) {
+      if (Model.isCopy(node)) {
         interactive = true;
         showOriginalOf(store, node);
       }
@@ -1192,7 +1204,7 @@ function initDelegation(store) {
       const nodeId = block.getAttribute("data-node-id");
       if (nodeId) {
         evt.preventDefault();
-        if (!Model.isEventCopy(store.nodeById.get(nodeId))) {
+        if (!Model.isCopy(store.nodeById.get(nodeId))) {
           showContextMenu(store, evt.clientX, evt.clientY, { nodeId: nodeId });
         }
       }

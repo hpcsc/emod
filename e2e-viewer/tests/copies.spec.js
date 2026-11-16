@@ -84,7 +84,7 @@ test.describe('a copy of an event', () => {
     await open(page);
     await render(page, VIEW_READING_FAR);
 
-    await expect(page.locator('.event-copy-block')).toHaveCount(3);
+    await expect(page.locator('.copy-block')).toHaveCount(3);
     await expect(block(page, 'event_copy-1')).toContainText('from Take Payment');
   });
 

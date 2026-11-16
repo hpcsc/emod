@@ -203,10 +203,10 @@ The tests that pin this behaviour are `internal/frontend/tests/event-copy.test.j
 **Behavior:** The viewer draws a `view_copy` or `command_copy` node from a diagram document in the same way it draws an `event_copy`. The copy is a dashed white block in the stroke of the type it copies, with the original's name and the slice line: "from <slice>" for a copy of an event or a view, "in <slice>" for a copy of a command. Each copy behaves as an event copy does: the pointer marks its original, a click shows the original, and the viewer never moves, connects or edits a copy. No writer emits the two new types until Task 4.
 
 **Acceptance Criteria:**
-- [ ] A document node of type `view_copy` or `command_copy` is drawn inside the slice that its `parentId` names, as a dashed block filled white in the stroke of a view or of a command.
-- [ ] A copy shows its original's name and, under it, the slice that holds the node its `copy_of` names. That line is "from <slice>" for a copy of an event or a view, and "in <slice>" for a copy of a command. A copy shows the name alone once the document no longer holds its original.
-- [ ] An arrow whose source or target is a copy is drawn between the copy and the other block: a `reads` arrow from a view copy, and an `automation_command` or `translation_command` arrow into a command copy.
-- [ ] Every behaviour the viewer's tests state for a copy of an event holds for a copy of every kind (`internal/frontend/tests/event-copy.test.js`, and `viewer.test.js` "on a copy of an event"):
+- [x] A document node of type `view_copy` or `command_copy` is drawn inside the slice that its `parentId` names, as a dashed block filled white in the stroke of a view or of a command.
+- [x] A copy shows its original's name and, under it, the slice that holds the node its `copy_of` names. That line is "from <slice>" for a copy of an event or a view, and "in <slice>" for a copy of a command. A copy shows the name alone once the document no longer holds its original.
+- [x] An arrow whose source or target is a copy is drawn between the copy and the other block: a `reads` arrow from a view copy, and an `automation_command` or `translation_command` arrow into a command copy.
+- [x] Every behaviour the viewer's tests state for a copy of an event holds for a copy of every kind (`internal/frontend/tests/event-copy.test.js`, and `viewer.test.js` "on a copy of an event"):
   - its layout and its paint;
   - no port;
   - a connection or a repoint released over it is refused;
@@ -215,9 +215,9 @@ The tests that pin this behaviour are `internal/frontend/tests/event-copy.test.j
   - a click highlights the original and centres it;
   - the pipeline is asked nothing;
   - dropped on another slice, it stays in its own.
-- [ ] Each slice is wide enough for its widest copy, every copy stays inside its slice at rest, and dragging a slice moves its copies with it.
-- [ ] The node type strings are `view_copy` and `command_copy`, as the planned design names them.
-- [ ] `task test:viewer` passes. A page built with `task build:web` and loaded with a document holding all three kinds of copy shows them legibly, with no overlap.
+- [x] Each slice is wide enough for its widest copy, every copy stays inside its slice at rest, and dragging a slice moves its copies with it.
+- [x] The node type strings are `view_copy` and `command_copy`, as the planned design names them.
+- [x] `task test:viewer` passes. A page built with `task build:web` and loaded with a document holding all three kinds of copy shows them legibly, with no overlap.
 
 **Affected Files/Modules:**
 - `internal/frontend/static/model.js`: one predicate for every copy kind, and the move refusal.

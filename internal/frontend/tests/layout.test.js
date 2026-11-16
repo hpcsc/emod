@@ -142,12 +142,15 @@ describe('Layout', () => {
       { id: 'view1', type: 'view', parentId: 'sl1' },
       { id: 'automation1', type: 'automation', parentId: 'sl1' },
       { id: 'trans1', type: 'translation', parentId: 'sl1' },
+      { id: 'evtcopy1', type: 'event_copy', parentId: 'sl1' },
+      { id: 'viewcopy1', type: 'view_copy', parentId: 'sl1' },
+      { id: 'cmdcopy1', type: 'command_copy', parentId: 'sl1' },
       { id: 'not_slice_child', type: 'command', parentId: 'other' },
     ];
 
     it('returns children with allowed types', () => {
       const ids = Layout.getSliceChildNodeIds(nodes, 'sl1');
-      expect(ids.sort()).toEqual(['automation1', 'cmd1', 'evt1', 'trans1', 'trg1', 'view1'].sort());
+      expect(ids.sort()).toEqual(['automation1', 'cmd1', 'cmdcopy1', 'evt1', 'evtcopy1', 'trans1', 'trg1', 'view1', 'viewcopy1'].sort());
     });
 
     it('excludes children whose type is not in the allowed list', () => {

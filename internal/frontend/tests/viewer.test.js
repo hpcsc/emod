@@ -1037,6 +1037,26 @@ describe('the arrows around a view', () => {
     expect(arrowsAtFullStrength()).toEqual(['event-1--view-1']);
   });
 
+  it('keeps the arrows of a copy of a view at full strength while the pointer is over the view', async () => {
+    const diagram = twoViewsDiagram();
+    diagram.nodes.push(
+      { id: 'slice-3', type: 'slice', label: 'Chase Payments', parentId: 'aggregate-1' },
+      { id: 'automation-1', type: 'automation', label: 'ChasePayment', parentId: 'slice-3' },
+      { id: 'view_copy-1', type: 'view_copy', label: 'PaymentsView', parentId: 'slice-3', copy_of: 'view-1' },
+      { id: 'view_copy-2', type: 'view_copy', label: 'RefundsView', parentId: 'slice-3', copy_of: 'view-2' },
+    );
+    diagram.edges.push(
+      { source: 'view_copy-1', target: 'automation-1', type: 'reads' },
+      { source: 'view_copy-2', target: 'automation-1', type: 'reads' },
+    );
+    globalThis.INITIAL_DATA = { diagram };
+    await startViewer();
+
+    fireMouse(blockFor('view-1'), 'pointerover');
+
+    expect(arrowsAtFullStrength()).toEqual(['event-1--view-1', 'view_copy-1--automation-1']);
+  });
+
   it('draws every arrow at full strength again once the pointer moves to a block that is no view', async () => {
     await showTwoViews();
     fireMouse(blockFor('view-1'), 'pointerover');
@@ -2222,32 +2242,65 @@ describe('a diagram edit reaching the source panel', () => {
     });
   });
 
-  describe('on a copy of an event', () => {
-    // PaymentTaken is declared in Take Payment and drawn again in Review
-    // Payments, where PaymentsView subscribes to it through the copy.
+  describe('a copy', () => {
+    it('paints the element it stands for in the stroke a highlighted block is painted in', () => {
+      const css = readFileSync(resolve(__dirname, '../static/viewer.html'), 'utf-8');
+
+      expect(css).toMatch(/#diagram-canvas \.hl rect,\s*#diagram-canvas \.copy-original rect\s*\{[^}]*stroke: #3498db/);
+    });
+  });
+
+  const fixtureByCopiedType = {
+    event: {
+      copy: { id: 'event_copy-1', type: 'event_copy', label: 'PaymentTaken', parentId: 'slice-2', copy_of: 'event-1' },
+      joined: [],
+      arrow: { source: 'event_copy-1', target: 'view-1', type: 'subscription' },
+      tooltip: 'A copy of the event in Take Payment. Click to show that event.',
+      tooltipWithoutOriginal: 'A copy of an event the diagram no longer holds',
+    },
+    view: {
+      copy: { id: 'view_copy-1', type: 'view_copy', label: 'PaymentsView', parentId: 'slice-1', copy_of: 'view-1' },
+      joined: [{ id: 'trigger-1', type: 'trigger', label: 'Till', parentId: 'slice-1' }],
+      arrow: { source: 'view_copy-1', target: 'trigger-1', type: 'reads' },
+      tooltip: 'A copy of the view in Review Payments. Click to show that view.',
+      tooltipWithoutOriginal: 'A copy of a view the diagram no longer holds',
+    },
+    command: {
+      copy: { id: 'command_copy-1', type: 'command_copy', label: 'TakePayment', parentId: 'slice-2', copy_of: 'command-1' },
+      joined: [],
+      arrow: { source: 'auto-1', target: 'command_copy-1', type: 'automation_command' },
+      tooltip: 'A copy of the command in Take Payment. Click to show that command.',
+      tooltipWithoutOriginal: 'A copy of a command the diagram no longer holds',
+    },
+  };
+
+  describe.each([['an event', 'event'], ['a view', 'view'], ['a command', 'command']])('on a copy of %s', (_, copiedType) => {
+    const { copy, joined, arrow, tooltip, tooltipWithoutOriginal } = fixtureByCopiedType[copiedType];
+    const original = copy.copy_of;
+
     function diagramWithCopy() {
       const diagram = editableDiagram();
-      diagram.nodes.push({ id: 'event_copy-1', type: 'event_copy', label: 'PaymentTaken', parentId: 'slice-2', copy_of: 'event-1' });
-      diagram.edges.push({ source: 'event_copy-1', target: 'view-1', type: 'subscription' });
+      diagram.nodes.push(...joined, copy);
+      diagram.edges.push(arrow);
       return diagram;
     }
 
-    async function openWithCopy() {
+    async function openWithCopy(diagram = diagramWithCopy()) {
       globalThis.INITIAL_DATA = null;
-      parseResult = { diagnostics: [], diagram: diagramWithCopy() };
+      parseResult = { diagnostics: [], diagram };
       await startViewer();
       deliverFile({ name: 'billing.emod', path: '/models/billing.emod', content: billingSource });
       await flush();
     }
 
     it.each([
-      ['a double click', () => fireMouse(blockFor('event_copy-1'), 'dblclick')],
+      ['a double click', () => fireMouse(blockFor(copy.id), 'dblclick')],
       ['a connection released over it', () => {
-        releaseOver('event_copy-1');
+        releaseOver(copy.id);
         dragFrom(portOf('command-1'));
       }],
       ['a repoint released over it', () => {
-        releaseOver('event_copy-1');
+        releaseOver(copy.id);
         dragFrom(arrowHandle('command-1--event-1', 'target'));
       }],
     ])('%s asks the pipeline nothing', async (_, gesture) => {
@@ -2264,7 +2317,7 @@ describe('a diagram edit reaching the source panel', () => {
     it('opens no rename box on a double click', async () => {
       await openWithCopy();
 
-      fireMouse(blockFor('event_copy-1'), 'dblclick');
+      fireMouse(blockFor(copy.id), 'dblclick');
 
       expect(document.querySelector('body > input[type="text"]')).toBeNull();
     });
@@ -2272,7 +2325,7 @@ describe('a diagram edit reaching the source panel', () => {
     it('opens no menu when right-clicked', async () => {
       await openWithCopy();
 
-      fireMouse(blockFor('event_copy-1'), 'contextmenu');
+      fireMouse(blockFor(copy.id), 'contextmenu');
 
       expect(document.getElementById('ctx-menu').style.display).not.toBe('block');
       expect(menuItemFor('open-field-editor')).toBeNull();
@@ -2280,57 +2333,61 @@ describe('a diagram edit reaching the source panel', () => {
 
     const markedAsOriginal = (nodeId) => blockFor(nodeId).classList.contains('copy-original');
 
-    it('marks the event it copies while the pointer is over it', async () => {
+    it(`marks the ${copiedType} it copies while the pointer is over it`, async () => {
       await openWithCopy();
 
-      fireMouse(blockFor('event_copy-1'), 'pointerover');
+      fireMouse(blockFor(copy.id), 'pointerover');
 
-      expect(markedAsOriginal('event-1')).toBe(true);
+      expect(markedAsOriginal(original)).toBe(true);
       expect(markedAsOriginal('event-2')).toBe(false);
     });
 
-    it('takes the mark off the event once the pointer moves to another block', async () => {
+    it(`takes the mark off the ${copiedType} once the pointer moves to another block`, async () => {
       await openWithCopy();
-      fireMouse(blockFor('event_copy-1'), 'pointerover');
+      fireMouse(blockFor(copy.id), 'pointerover');
 
-      fireMouse(blockFor('command-1'), 'pointerover');
+      fireMouse(blockFor('event-2'), 'pointerover');
 
-      expect(markedAsOriginal('event-1')).toBe(false);
+      expect(markedAsOriginal(original)).toBe(false);
     });
 
-    it('paints the marked event in the stroke a highlighted block is painted in', () => {
-      const css = readFileSync(resolve(__dirname, '../static/viewer.html'), 'utf-8');
-
-      expect(css).toMatch(/#diagram-canvas \.hl rect,\s*#diagram-canvas \.copy-original rect\s*\{[^}]*stroke: #3498db/);
-    });
-
-    it('names the slice that declares the event in its tooltip', async () => {
+    it(`names the slice that declares the ${copiedType} in its tooltip`, async () => {
       await openWithCopy();
 
-      fireMouse(blockFor('event_copy-1'), 'pointerover');
+      fireMouse(blockFor(copy.id), 'pointerover');
 
-      expect(document.getElementById('tooltip').textContent)
-        .toContain('A copy of the event in Take Payment. Click to show that event.');
+      expect(document.getElementById('tooltip').textContent).toContain(tooltip);
     });
 
-    it('highlights the event it copies when clicked', async () => {
+    it(`says in its tooltip that the diagram no longer holds the ${copiedType} it copies once it is gone`, async () => {
+      const diagram = diagramWithCopy();
+      diagram.nodes = diagram.nodes.filter((n) => n.id !== original);
+      diagram.edges = diagram.edges.filter((e) => e.source !== original && e.target !== original);
+      await openWithCopy(diagram);
+
+      fireMouse(blockFor(copy.id), 'pointerover');
+
+      expect(document.getElementById('tooltip').textContent).toContain(tooltipWithoutOriginal);
+    });
+
+    it(`highlights the ${copiedType} it copies when clicked`, async () => {
       await openWithCopy();
 
-      fireMouse(blockFor('event_copy-1'), 'click');
+      fireMouse(blockFor(copy.id), 'click');
 
-      expect(blockFor('event-1').classList.contains('hl')).toBe(true);
-      expect(blockFor('event_copy-1').classList.contains('hl')).toBe(false);
+      expect(blockFor(original).classList.contains('hl')).toBe(true);
+      expect(blockFor(copy.id).classList.contains('hl')).toBe(false);
     });
 
-    it('moves the canvas until the event it copies sits in the middle of it when clicked', async () => {
+    it(`moves the canvas until the ${copiedType} it copies sits in the middle of it when clicked`, async () => {
       await openWithCopy();
       const canvas = document.getElementById('diagram-canvas');
 
-      fireMouse(blockFor('event_copy-1'), 'click');
+      fireMouse(blockFor(copy.id), 'click');
 
       const [, offsetX, offsetY, scale] = /translate\(([-\d.]+), ([-\d.]+)\) scale\(([-\d.]+)\)/
         .exec(canvas.querySelector('#viewport-group').getAttribute('transform')).map(Number);
-      const box = blockFor('event-1').querySelector('rect');
+      const box = blockFor(original).querySelector('rect');
       const [vx, vy, vw, vh] = canvas.getAttribute('viewBox').split(' ').map(Number);
       const centreX = (Number(box.getAttribute('x')) + Number(box.getAttribute('width')) / 2) * scale + offsetX;
       const centreY = (Number(box.getAttribute('y')) + Number(box.getAttribute('height')) / 2) * scale + offsetY;
@@ -2342,7 +2399,7 @@ describe('a diagram edit reaching the source panel', () => {
       await openWithCopy();
       const before = applies();
 
-      fireMouse(blockFor('event_copy-1'), 'click');
+      fireMouse(blockFor(copy.id), 'click');
       await settle();
 
       expect(applies()).toBe(before);

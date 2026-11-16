@@ -1,5 +1,6 @@
-import { L, nodePalette, eventCopyStyle, edgeConfig, arrowClassMap, PORT_DIRECTIONS, PROSE_KINDS, GEAR_PATH, GEAR_SIZE } from './config.js';
+import { L, nodePalette, copyStyle, edgeConfig, arrowClassMap, PORT_DIRECTIONS, PROSE_KINDS, GEAR_PATH, GEAR_SIZE } from './config.js';
 import { Layout } from './layout.js';
+import { Model } from './model.js';
 
 var NS = "http://www.w3.org/2000/svg";
 var clockMarking = "⏱";
@@ -534,27 +535,27 @@ function buildBlock(node, pos, palette) {
   return blockG;
 }
 
-// A copy stands for an event another slice declares, so it takes no port to
+// A copy stands for an element another slice declares, so it takes no port to
 // draw a connection from and no mark to read prose off: both belong to the
-// event itself.
+// element itself.
 function buildCopyBlock(store, node, pos) {
-  var stroke = nodePalette.event.stroke;
-  var blockG = g("event-copy-block diagram-node");
+  var stroke = nodePalette[Model.copiedType(node)].stroke;
+  var blockG = g("copy-block diagram-node");
   blockG.setAttribute("data-node-id", node.id);
-  blockG.appendChild(svgRect(pos.x, pos.y, pos.w, pos.h, eventCopyStyle.fill, stroke,
-    "rx=\"4\" stroke-width=\"1.5\" stroke-dasharray=\"" + eventCopyStyle.dash + "\""));
+  blockG.appendChild(svgRect(pos.x, pos.y, pos.w, pos.h, copyStyle.fill, stroke,
+    "rx=\"4\" stroke-width=\"1.5\" stroke-dasharray=\"" + copyStyle.dash + "\""));
 
   var midX = pos.x + pos.w / 2;
   var midY = pos.y + pos.h / 2;
-  var fromLine = Layout.copyFromLine(store, node);
-  if (!fromLine) {
+  var sliceLine = Layout.sliceLine(store, node);
+  if (!sliceLine) {
     blockG.appendChild(centeredText(midX, midY, node.label, blockLabelSize, stroke));
     return blockG;
   }
   var lineGap = 3;
-  var top = midY - (blockLabelSize + lineGap + L.copyFromSize) / 2;
+  var top = midY - (blockLabelSize + lineGap + L.copySliceLineSize) / 2;
   blockG.appendChild(centeredText(midX, top + blockLabelSize / 2, node.label, blockLabelSize, stroke));
-  blockG.appendChild(centeredText(midX, top + blockLabelSize + lineGap + L.copyFromSize / 2, fromLine, L.copyFromSize, stroke));
+  blockG.appendChild(centeredText(midX, top + blockLabelSize + lineGap + L.copySliceLineSize / 2, sliceLine, L.copySliceLineSize, stroke));
   return blockG;
 }
 
@@ -642,7 +643,7 @@ function buildSVG(store) {
     var palette = nodePalette[n.type];
     var np = positions[n.id];
     if (!np) return;
-    if (n.type === "event_copy") vg.appendChild(buildCopyBlock(store, n, np));
+    if (Model.isCopy(n)) vg.appendChild(buildCopyBlock(store, n, np));
     else if (palette) vg.appendChild(buildBlock(n, np, palette));
   });
 

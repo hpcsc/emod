@@ -74,7 +74,7 @@
     },
     {
       "n": 3,
-      "done": false,
+      "done": true,
       "title": "Draw copies of views and commands in the viewer",
       "language": "JavaScript",
       "testable": true,
@@ -94,7 +94,7 @@
         "internal/frontend/static/ui.js:1190-1200",
         "internal/frontend/static/interaction.js:360-370",
         "internal/frontend/static/config.js:55-57",
-        "internal/frontend/tests/event-copy.test.js:1-175",
+        "internal/frontend/tests/copy.test.js",
         "internal/frontend/tests/viewer.test.js:2225-2350"
       ],
       "depends_on": [],

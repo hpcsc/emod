@@ -66,11 +66,10 @@ function processorLabel(node) {
   return node.external_system || node.label;
 }
 
-// The line a copy of an event writes under the event's name: the slice that
-// declares the event. Empty when the diagram no longer holds that event.
-function copyFromLine(store, copy) {
+function sliceLine(store, copy) {
   const slice = Model.sliceDeclaring(store, copy);
-  return slice ? "from " + slice.label : "";
+  if (!slice) return "";
+  return (Model.copiedType(copy) === "command" ? "in " : "from ") + slice.label;
 }
 
 function rowSpanWidth(itemWidths) {
@@ -97,10 +96,10 @@ function computeLayout(store) {
     const views = childrenOfType(sl.children, "view");
     const translations = childrenOfType(sl.children, "translation");
     const processors = translations.concat(childrenOfType(sl.children, "automation"));
-    const copies = childrenOfType(sl.children, "event_copy");
+    const copies = sl.children.filter(Model.isCopy);
 
     function copyWidth(copy) {
-      return Math.max(labelWidth(copy.label), labelAdvance(copyFromLine(store, copy), L.copyFromSize));
+      return Math.max(labelWidth(copy.label), labelAdvance(sliceLine(store, copy), L.copySliceLineSize));
     }
 
     const allLabelWidths = sl.children.map(function(c) { return labelWidth(c.label); });
@@ -315,7 +314,7 @@ function getConnectedEdges(edges, nodeId) {
 function getSliceChildNodeIds(nodes, sliceId) {
   const ids = [];
   nodes.forEach(function(n) {
-    if (n.parentId === sliceId && (n.type === "command" || n.type === "event" || n.type === "trigger" || n.type === "view" || n.type === "automation" || n.type === "translation" || n.type === "event_copy")) {
+    if (n.parentId === sliceId && (n.type === "command" || n.type === "event" || n.type === "trigger" || n.type === "view" || n.type === "automation" || n.type === "translation" || Model.isCopy(n))) {
       ids.push(n.id);
     }
   });
@@ -448,7 +447,7 @@ export const Layout = {
   labelWidth,
   textWidth,
   labelAdvance,
-  copyFromLine,
+  sliceLine,
   portAnchor,
   buildTree,
   computeLayout,
