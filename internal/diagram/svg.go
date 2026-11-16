@@ -251,7 +251,7 @@ func placeBoxes(entries []sliceEntry, columns []sliceColumn, copies ElementCopie
 				b.WriteString(svgGear(reactor.x, reactor.y, reactor.w, reactor.description))
 				b.WriteString(svgMultilineText(reactor.x+reactor.w/2, reactor.labelCentreY(),
 					reactor.label, reactorFontSize, fillAutomation))
-				nameToBox[reactor.name] = reactor.gearAndLabelBox(commandsAndViewsLane)
+				nameToBox[reactor.name] = reactor.arrowEndBox(commandsAndViewsLane)
 				obstacles = append(obstacles, reactor.obstacleBox(commandsAndViewsLane))
 			} else {
 				b.WriteString(svgRoundedRect(reactor.x, reactor.y, reactor.w, reactor.h, fillTranslation, strokeTranslation, 3, reactor.description))

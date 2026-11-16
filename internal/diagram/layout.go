@@ -389,9 +389,10 @@ func (r *reactorBox) labelBottom() int {
 	return r.labelCentreY() + (r.labelLines-1)*lineHeight(reactorFontSize)/2 + reactorFontSize/2
 }
 
-// gearAndLabelBox is the box an arrow meets an automation at: its gear and the
-// lines under it, so that an arrow from below ends under the name.
-func (r *reactorBox) gearAndLabelBox(lane int) svgBox {
+// arrowEndBox is the box an arrow meets an automation at: as wide as its gear,
+// and down to the last line under it, so that an arrow from below ends under
+// the name.
+func (r *reactorBox) arrowEndBox(lane int) svgBox {
 	return svgBox{x: r.x, y: r.y, w: r.w, h: r.labelBottom() - r.y, lane: lane}
 }
 
