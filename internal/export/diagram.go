@@ -277,6 +277,9 @@ func (b *diagramBuilder) appendEventCopies(s *ast.Slice, sliceID string) {
 
 	b.copyIDs[s] = make(map[string]string, len(copies))
 	for _, c := range copies {
+		if c.Kind != diagram.CopyOfEvent {
+			continue
+		}
 		node := &jsonDiagramNode{
 			ID:       b.ids.next("event_copy"),
 			Type:     "event_copy",

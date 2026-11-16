@@ -78,12 +78,19 @@ func ExportSVG(model *ast.Model, _ Style, opts ...Option) ([]byte, error) {
 
 	// A copy is filed per slice, by the element it copies: nameToBox keeps the
 	// original, which every slice but this one draws its arrows from.
-	copyBoxes := make([]map[string]svgBox, len(entries))
+	copyBoxes := make([]map[ElementCopy]svgBox, len(entries))
 	sourceBox := func(i int, edge Edge) (svgBox, bool) {
 		if copied, found := copies.At(entries[i].slice, edge); found {
-			return copyBoxes[i][copied.Name], true
+			return copyBoxes[i][copied], true
 		}
 		box, drawn := nameToBox[edge.From]
+		return box, drawn
+	}
+	targetBox := func(i int, edge Edge) (svgBox, bool) {
+		if copied, found := copies.At(entries[i].slice, edge); found {
+			return copyBoxes[i][copied], true
+		}
+		box, drawn := nameToBox[edge.To]
 		return box, drawn
 	}
 
@@ -107,7 +114,9 @@ func ExportSVG(model *ast.Model, _ Style, opts ...Option) ([]byte, error) {
 		}
 
 		// --- Commands (middle lane) ---
-		totalMid := len(s.Commands) + len(s.Views)
+		copiedEvents, copiedMiddle := copiesByRow(copies.In(s))
+		copyBoxes[i] = make(map[ElementCopy]svgBox)
+		totalMid := middleRowItems(s) + len(copiedMiddle)
 		usableW := column.w - 20
 		for ci, cmd := range s.Commands {
 			itemW, x := itemLayout(usableW, totalMid, ci, sliceX)
@@ -125,9 +134,16 @@ func ExportSVG(model *ast.Model, _ Style, opts ...Option) ([]byte, error) {
 			nameToBox[view.Name] = svgBox{x: x, y: cmdViewRowY, w: itemW, h: boxHeight}
 		}
 
+		// --- Copies of views and commands this slice joins from slices far away (middle lane) ---
+		for mi, c := range copiedMiddle {
+			itemW, x := itemLayout(usableW, totalMid, middleRowItems(s)+mi, sliceX)
+			box := svgBox{x: x, y: cmdViewRowY, w: itemW, h: boxHeight}
+			b.WriteString(svgCopy(c, box))
+			copyBoxes[i][c] = box
+		}
+
 		// --- Events (bottom lane, including translation events, rejection badges and copies) ---
-		copied := copies.In(s)
-		totalEvts := eventRowItems(s) + len(copied)
+		totalEvts := eventRowItems(s) + len(copiedEvents)
 		ei := 0
 		for me, evt := range s.Events {
 			itemW, x := itemLayout(usableW, totalEvts, me, sliceX)
@@ -161,13 +177,12 @@ func ExportSVG(model *ast.Model, _ Style, opts ...Option) ([]byte, error) {
 		}
 
 		// --- Copies of events this slice joins from slices far away (event row) ---
-		copyBoxes[i] = make(map[string]svgBox, len(copied))
-		for _, c := range copied {
+		for _, c := range copiedEvents {
 			itemW, x := itemLayout(usableW, totalEvts, ei, sliceX)
 			ei++
-			b.WriteString(svgDashedRoundedRect(x, eventRowY, itemW, boxHeight, fillEventCopy, strokeEvent, 5, ""))
-			b.WriteString(svgMultilineText(x+itemW/2, eventRowY+boxHeight/2, strings.Join(c.labelLines(), "\n"), 11, strokeEvent))
-			copyBoxes[i][c.Name] = svgBox{x: x, y: eventRowY, w: itemW, h: boxHeight}
+			box := svgBox{x: x, y: eventRowY, w: itemW, h: boxHeight}
+			b.WriteString(svgCopy(c, box))
+			copyBoxes[i][c] = box
 		}
 
 		// --- Automations and translation reactors (middle lane) ---
@@ -200,11 +215,8 @@ func ExportSVG(model *ast.Model, _ Style, opts ...Option) ([]byte, error) {
 
 	// --- Connections ---
 
-	readsArrow := func(reads string, reader svgBox) string {
-		if reads == "" {
-			return ""
-		}
-		view, declared := nameToBox[reads]
+	readsArrow := func(i int, edge Edge, reader svgBox) string {
+		view, declared := sourceBox(i, edge)
 		if !declared {
 			return ""
 		}
@@ -227,12 +239,26 @@ func ExportSVG(model *ast.Model, _ Style, opts ...Option) ([]byte, error) {
 			switch edge.Kind {
 			case EdgeTriggerReads, EdgeAutomationReads:
 				if reader, drawn := nameToBox[edge.To]; drawn {
-					b.WriteString(readsArrow(edge.From, reader))
+					b.WriteString(readsArrow(i, edge, reader))
 				}
 
 			case EdgeTranslationReads:
 				if reader, drawn := nameToBox[reactorExternal[edge.To]]; drawn {
-					b.WriteString(readsArrow(edge.From, reader))
+					b.WriteString(readsArrow(i, edge, reader))
+				}
+
+			case EdgeAutomationCommand, EdgeTranslationCommand:
+				from, fromDrawn := nameToBox[edge.From]
+				to, toDrawn := targetBox(i, edge)
+				if fromDrawn && toDrawn {
+					b.WriteString(svgArrowBetween(from, to))
+				}
+
+			case EdgeTranslationFlow:
+				from, fromDrawn := sourceBox(i, edge)
+				to, toDrawn := nameToBox[edge.To]
+				if fromDrawn && toDrawn {
+					b.WriteString(svgArrowBetween(from, to))
 				}
 
 			case EdgeAutomationTrigger:
@@ -348,6 +374,21 @@ func svgTriggerRect(x, y, w, h int, fill, stroke string, rx int, description str
 	header := svgRectElement(svgRectAttributes(x+headerMargin, y+headerTop, w-2*headerMargin, headerHeight, stroke, stroke, 0), "")
 	box := svgRectElement(svgRectAttributes(x, y, w, h, fill, stroke, rx), description)
 	return header + box
+}
+
+// svgCopy draws a copy dashed, filled white and outlined in the stroke of what it
+// copies, with the copied element's name and the slice that declares it on it.
+func svgCopy(c ElementCopy, box svgBox) string {
+	stroke := strokeEvent
+	switch c.Kind {
+	case CopyOfView:
+		stroke = strokeView
+	case CopyOfCommand:
+		stroke = strokeCommand
+	}
+
+	return svgDashedRoundedRect(box.x, box.y, box.w, box.h, fillCopy, stroke, 5, "") +
+		svgMultilineText(box.x+box.w/2, box.y+box.h/2, strings.Join(c.labelLines(), "\n"), 11, stroke)
 }
 
 func svgDashedRoundedRect(x, y, w, h int, fill, stroke string, rx int, description string) string {

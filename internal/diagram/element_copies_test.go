@@ -199,8 +199,8 @@ func TestElementCopies(t *testing.T) {
 					{Kind: diagram.CopyOfEvent, Name: "DeskReleased", DeclaredIn: "Release Desk"},
 				},
 			}, map[string][]diagram.ElementCopy{
-				"Chase Overdue Copy": copies["Chase Overdue Copy"],
-				"Close Reading Room": copies["Close Reading Room"],
+				"Chase Overdue Copy": copiesOfKind(copies["Chase Overdue Copy"], diagram.CopyOfEvent),
+				"Close Reading Room": copiesOfKind(copies["Close Reading Room"], diagram.CopyOfEvent),
 			})
 		})
 
@@ -227,6 +227,77 @@ func TestElementCopies(t *testing.T) {
 			)
 
 			require.Equal(t, map[string][]string{"React": {"Far"}}, namesCopiedBySliceName(model))
+		})
+	})
+
+	t.Run("copy a read view and an issued command", func(t *testing.T) {
+		t.Run("a trigger and an automation copy the view they read from two or more slices away, and none from the slice next to them", func(t *testing.T) {
+			require.Equal(t, map[string][]diagram.ElementCopy{
+				"Chase Overdue Copy": {
+					{Kind: diagram.CopyOfView, Name: "DeskOccupancyView", DeclaredIn: "Browse Desk Occupancy"},
+					{Kind: diagram.CopyOfView, Name: "MemberLoansView", DeclaredIn: "Review Member Loans"},
+				},
+				"Claim Desk": {
+					{Kind: diagram.CopyOfView, Name: "DeskOccupancyView", DeclaredIn: "Browse Desk Occupancy"},
+				},
+				"Close Reading Room": {
+					{Kind: diagram.CopyOfView, Name: "MemberLoansView", DeclaredIn: "Review Member Loans"},
+				},
+			}, copiesOfKindBySliceName(test.TriggerReadsLibraryLendingModel(t), diagram.CopyOfView))
+		})
+
+		t.Run("an automation copies the command it issues from two or more slices away, and none its own slice declares", func(t *testing.T) {
+			require.Equal(t, map[string][]diagram.ElementCopy{
+				"Close Reading Room": {
+					{Kind: diagram.CopyOfCommand, Name: "ReleaseDesk", DeclaredIn: "Release Desk"},
+					{Kind: diagram.CopyOfCommand, Name: "RemindMember", DeclaredIn: "Chase Overdue Copy"},
+				},
+			}, copiesOfKindBySliceName(test.TriggerReadsLibraryLendingModel(t), diagram.CopyOfCommand))
+		})
+
+		t.Run("a translation copies the view it reads and the command it issues from two or more slices away", func(t *testing.T) {
+			require.Equal(t, []diagram.ElementCopy{
+				{Kind: diagram.CopyOfView, Name: "PartnersView", DeclaredIn: "Read Partners"},
+				{Kind: diagram.CopyOfCommand, Name: "ImportBooking", DeclaredIn: "Record Booking"},
+			}, copiesBySliceName(farTranslationModel())["Import Booking"])
+		})
+
+		t.Run("a view or a command in the slice next to the reader's is not copied", func(t *testing.T) {
+			model := slicesModel(
+				&ast.Slice{Name: "Far", Views: []*ast.View{{Name: "FarView"}}},
+				&ast.Slice{Name: "Near", Views: []*ast.View{{Name: "NearView"}}},
+				&ast.Slice{Name: "Automate", Automations: []*ast.Automation{
+					{Name: "ActOnNear", Reads: "NearView", Command: "NearCommand"},
+					{Name: "ActOnFar", Reads: "FarView"},
+				}},
+				&ast.Slice{Name: "Write", Commands: []*ast.Command{{Name: "NearCommand"}}},
+			)
+
+			require.Equal(t, map[string][]string{"Automate": {"FarView"}}, namesCopiedBySliceName(model))
+		})
+
+		t.Run("each view and each command a slice declares is copied from it, not only its first", func(t *testing.T) {
+			model := slicesModel(
+				&ast.Slice{
+					Name:     "Declares Two",
+					Views:    []*ast.View{{Name: "FirstView"}, {Name: "SecondView"}},
+					Commands: []*ast.Command{{Name: "FirstCommand"}, {Name: "SecondCommand"}},
+				},
+				&ast.Slice{Name: "Between"},
+				&ast.Slice{Name: "Automate", Automations: []*ast.Automation{{Name: "Act", Reads: "SecondView", Command: "SecondCommand"}}},
+			)
+
+			require.Equal(t, []diagram.ElementCopy{
+				{Kind: diagram.CopyOfView, Name: "SecondView", DeclaredIn: "Declares Two"},
+				{Kind: diagram.CopyOfCommand, Name: "SecondCommand", DeclaredIn: "Declares Two"},
+			}, copiesBySliceName(model)["Automate"])
+		})
+
+		t.Run("an event and a view of one name are each copied", func(t *testing.T) {
+			require.Equal(t, []diagram.ElementCopy{
+				{Kind: diagram.CopyOfEvent, Name: "Stock", DeclaredIn: "Declare Event"},
+				{Kind: diagram.CopyOfView, Name: "Stock", DeclaredIn: "Declare View"},
+			}, copiesBySliceName(sharedNameModel())["React"])
 		})
 	})
 
@@ -260,11 +331,100 @@ func TestElementCopies(t *testing.T) {
 			require.Equal(t, diagram.ElementCopy{Kind: diagram.CopyOfEvent, Name: "CopyBorrowed", DeclaredIn: "Borrow Copy"}, copied)
 		})
 
+		t.Run("a reads arrow from a copied view starts at the copy in the reader's slice", func(t *testing.T) {
+			model := test.TriggerReadsLibraryLendingModel(t)
+
+			copied, found := diagram.NewElementCopies(model).At(sliceNamed(t, model, "Claim Desk"),
+				diagram.Edge{Kind: diagram.EdgeTriggerReads, From: "DeskOccupancyView", To: "Desk Kiosk"})
+
+			require.True(t, found)
+			require.Equal(t, diagram.ElementCopy{Kind: diagram.CopyOfView, Name: "DeskOccupancyView", DeclaredIn: "Browse Desk Occupancy"}, copied)
+		})
+
+		t.Run("a command arrow into a copied command ends at the copy in the automation's slice", func(t *testing.T) {
+			model := test.TriggerReadsLibraryLendingModel(t)
+
+			copied, found := diagram.NewElementCopies(model).At(sliceNamed(t, model, "Close Reading Room"),
+				diagram.Edge{Kind: diagram.EdgeAutomationCommand, From: "RemindReaderOfLoans", To: "RemindMember"})
+
+			require.True(t, found)
+			require.Equal(t, diagram.ElementCopy{Kind: diagram.CopyOfCommand, Name: "RemindMember", DeclaredIn: "Chase Overdue Copy"}, copied)
+		})
+
+		t.Run("the arrow a translation implies from its copied command starts at the copy", func(t *testing.T) {
+			model := farTranslationModel()
+
+			copied, found := diagram.NewElementCopies(model).At(sliceNamed(t, model, "Import Booking"),
+				diagram.Edge{Kind: diagram.EdgeTranslationFlow, From: "ImportBooking", To: "BookingImported"})
+
+			require.True(t, found)
+			require.Equal(t, diagram.ElementCopy{Kind: diagram.CopyOfCommand, Name: "ImportBooking", DeclaredIn: "Record Booking"}, copied)
+		})
+
+		t.Run("an arrow joins the copy of its own kind when an event and a view share a name", func(t *testing.T) {
+			model := sharedNameModel()
+			copies := diagram.NewElementCopies(model)
+			react := sliceNamed(t, model, "React")
+
+			fromEvent, eventFound := copies.At(react, diagram.Edge{Kind: diagram.EdgeAutomationTrigger, From: "Stock", To: "Restock"})
+			fromView, viewFound := copies.At(react, diagram.Edge{Kind: diagram.EdgeAutomationReads, From: "Stock", To: "Restock"})
+
+			require.Equal(t, []any{
+				diagram.ElementCopy{Kind: diagram.CopyOfEvent, Name: "Stock", DeclaredIn: "Declare Event"}, true,
+				diagram.ElementCopy{Kind: diagram.CopyOfView, Name: "Stock", DeclaredIn: "Declare View"}, true,
+			}, []any{fromEvent, eventFound, fromView, viewFound})
+		})
+
 		t.Run("a flow arrow into a copied event joins no copy", func(t *testing.T) {
 			model := test.AutomationDelayLibraryLendingModel(t)
 
 			_, found := diagram.NewElementCopies(model).At(sliceNamed(t, model, "Chase Overdue Copy"),
 				diagram.Edge{Kind: diagram.EdgeFlow, From: "RemindMember", To: "CopyBorrowed"})
+
+			require.False(t, found)
+		})
+	})
+
+	t.Run("find the element an arrow joins with no copy", func(t *testing.T) {
+		t.Run("an arrow joins the element its own slice declares, though an earlier slice declares it too", func(t *testing.T) {
+			model := slicesModel(
+				declaringSlice("Own"), declaringSlice("Far"), declaringSlice("Between"),
+				&ast.Slice{
+					Name:   "Watch",
+					Events: []*ast.Event{event("Own")},
+					Views:  []*ast.View{{Name: "WatchView", Subscribes: []string{"Own", "Far"}}},
+				},
+			)
+
+			joined, found := diagram.NewElementCopies(model).Joined(sliceNamed(t, model, "Watch"),
+				diagram.Edge{Kind: diagram.EdgeSubscription, From: "Own", To: "WatchView"})
+
+			require.Equal(t, []any{diagram.ElementCopy{Kind: diagram.CopyOfEvent, Name: "Own", DeclaredIn: "Watch"}, true}, []any{joined, found})
+		})
+
+		t.Run("an arrow joins the element the first slice that declares it declares, when its own slice does not", func(t *testing.T) {
+			model := slicesModel(
+				declaringSlice("Booked"),
+				&ast.Slice{Name: "List", Views: []*ast.View{{Name: "RoomsView", Subscribes: []string{"Booked"}}}},
+				&ast.Slice{Name: "Between"},
+				&ast.Slice{Name: "Book Again", Events: []*ast.Event{event("Booked")}},
+			)
+
+			joined, found := diagram.NewElementCopies(model).Joined(sliceNamed(t, model, "List"),
+				diagram.Edge{Kind: diagram.EdgeSubscription, From: "Booked", To: "RoomsView"})
+
+			require.Equal(t, []any{diagram.ElementCopy{Kind: diagram.CopyOfEvent, Name: "Booked", DeclaredIn: "Declares Booked"}, true}, []any{joined, found})
+		})
+
+		t.Run("an arrow that no copy can stand in for joins no element this way", func(t *testing.T) {
+			model := slicesModel(&ast.Slice{
+				Name:     "Place Order",
+				Commands: []*ast.Command{{Name: "PlaceOrder"}},
+				Events:   []*ast.Event{event("OrderPlaced")},
+			})
+
+			_, found := diagram.NewElementCopies(model).Joined(sliceNamed(t, model, "Place Order"),
+				diagram.Edge{Kind: diagram.EdgeFlow, From: "PlaceOrder", To: "OrderPlaced"})
 
 			require.False(t, found)
 		})
@@ -288,6 +448,34 @@ func declaringSlice(eventName string) *ast.Slice {
 	return &ast.Slice{Name: "Declares " + eventName, Events: []*ast.Event{event(eventName)}}
 }
 
+// farTranslationModel has a translation that reads a view three slices away and
+// issues a command two slices away.
+func farTranslationModel() *ast.Model {
+	return slicesModel(
+		&ast.Slice{Name: "Read Partners", Views: []*ast.View{{Name: "PartnersView"}}},
+		&ast.Slice{Name: "Record Booking", Commands: []*ast.Command{{Name: "ImportBooking"}}},
+		&ast.Slice{Name: "Between"},
+		&ast.Slice{Name: "Import Booking", Translations: []*ast.Translation{{
+			Name:           "PartnerFeed",
+			ExternalSystem: "Partner API",
+			Reads:          "PartnersView",
+			Command:        "ImportBooking",
+			Event:          event("BookingImported"),
+		}}},
+	)
+}
+
+// sharedNameModel has an automation that activates on the event Stock and reads
+// the view Stock, each declared two or more slices away.
+func sharedNameModel() *ast.Model {
+	return slicesModel(
+		&ast.Slice{Name: "Declare Event", Events: []*ast.Event{event("Stock")}},
+		&ast.Slice{Name: "Declare View", Views: []*ast.View{{Name: "Stock"}}},
+		&ast.Slice{Name: "Between"},
+		&ast.Slice{Name: "React", Automations: []*ast.Automation{{Name: "Restock", OnEvent: "Stock", Reads: "Stock"}}},
+	)
+}
+
 func sliceNamed(t *testing.T, model *ast.Model, name string) *ast.Slice {
 	t.Helper()
 
@@ -308,6 +496,30 @@ func copiesBySliceName(model *ast.Model) map[string][]diagram.ElementCopy {
 	for _, s := range model.AllSlices() {
 		if in := copies.In(s); len(in) > 0 {
 			byName[s.Name] = in
+		}
+	}
+
+	return byName
+}
+
+func copiesOfKind(copies []diagram.ElementCopy, kind diagram.CopyKind) []diagram.ElementCopy {
+	var ofKind []diagram.ElementCopy
+	for _, c := range copies {
+		if c.Kind == kind {
+			ofKind = append(ofKind, c)
+		}
+	}
+
+	return ofKind
+}
+
+// copiesOfKindBySliceName states the copies of kind of each slice that draws
+// any.
+func copiesOfKindBySliceName(model *ast.Model, kind diagram.CopyKind) map[string][]diagram.ElementCopy {
+	byName := make(map[string][]diagram.ElementCopy)
+	for slice, copies := range copiesBySliceName(model) {
+		if ofKind := copiesOfKind(copies, kind); len(ofKind) > 0 {
+			byName[slice] = ofKind
 		}
 	}
 

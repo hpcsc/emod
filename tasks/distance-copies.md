@@ -151,16 +151,16 @@ The tests that pin this behaviour are `internal/frontend/tests/event-copy.test.j
 **Behavior:** The SVG applies the same distance rule to a view's arrow into a trigger, an automation or a translation (reads), and to an automation's or translation's arrow into a command (command). The reader's slice draws a copy of the far view, with "from <slice>". The automation's or translation's slice draws a copy of the far command, with "in <slice>". Both kinds of copy sit in the Commands / Views lane. The diagram JSON is not changed by this task.
 
 **Acceptance Criteria:**
-- [ ] A view's arrow into a trigger, an automation or a translation that joins two slices 2 or more apart in layout order starts at a copy of the view, drawn in the reader's slice. For a translation, the arrow from the copy runs into the external system box in front of the reactor, as the arrow from the view does today.
-- [ ] An automation's or a translation's arrow into a command 2 or more slices away ends at a copy of the command, drawn in the slice of the automation or the translation.
-- [ ] When a translation's slice draws a copy of its command, the command -> event arrow that the translation implies starts at that copy and ends at the event the translation nests.
-- [ ] A copy of a view shows the view's name and "from <slice>". A copy of a command shows the command's name and "in <slice>". In both, <slice> is the first slice that declares the element.
-- [ ] Arrows inside one slice, or between two slices next to each other in layout order, stay arrows. A slice draws one copy per element, however many of its readers or reactors join it, and no copy of an element it declares itself.
-- [ ] Copies of views and commands sit in the Commands / Views lane, in the column of the slice that draws them, and overlap no other box in that row. The column is widened for them as it is for event copies. Assert the column relationally, by a box the slice owns.
-- [ ] A copy is outlined dashed in the stroke of the element type it copies and filled white. The fill constant is named for copies, not for events.
-- [ ] A test that finds a box by an element's name does not find that element's copy. The spec-card subtest and `TestExporterReadsEdges` state what a reader sees: an arrow from a copy counts as an arrow from the view it copies, and clearing a far read takes away that read's copy along with its arrow.
-- [ ] The diagram JSON does not change: `go test -tags unit ./internal/export/ ./internal/importer/` passes with no edits to those tests.
-- [ ] `docs/dsl-reference.md` states the rule for views and commands in the SVG, and its palette note covers copies of views and commands.
+- [x] A view's arrow into a trigger, an automation or a translation that joins two slices 2 or more apart in layout order starts at a copy of the view, drawn in the reader's slice. For a translation, the arrow from the copy runs into the external system box in front of the reactor, as the arrow from the view does today.
+- [x] An automation's or a translation's arrow into a command 2 or more slices away ends at a copy of the command, drawn in the slice of the automation or the translation.
+- [x] When a translation's slice draws a copy of its command, the command -> event arrow that the translation implies starts at that copy and ends at the event the translation nests.
+- [x] A copy of a view shows the view's name and "from <slice>". A copy of a command shows the command's name and "in <slice>". In both, <slice> is the first slice that declares the element.
+- [x] Arrows inside one slice, or between two slices next to each other in layout order, stay arrows. A slice draws one copy per element, however many of its readers or reactors join it, and no copy of an element it declares itself.
+- [x] Copies of views and commands sit in the Commands / Views lane, in the column of the slice that draws them, and overlap no other box in that row. The column is widened for them as it is for event copies. Assert the column relationally, by a box the slice owns.
+- [x] A copy is outlined dashed in the stroke of the element type it copies and filled white. The fill constant is named for copies, not for events.
+- [x] A test that finds a box by an element's name does not find that element's copy. The spec-card subtest and `TestExporterReadsEdges` state what a reader sees: an arrow from a copy counts as an arrow from the view it copies, and clearing a far read takes away that read's copy along with its arrow.
+- [x] The diagram JSON does not change: `go test -tags unit ./internal/export/ ./internal/importer/` passes with no edits to those tests.
+- [x] `docs/dsl-reference.md` states the rule for views and commands in the SVG, and its palette note covers copies of views and commands.
 
 **Affected Files/Modules:**
 - `internal/diagram/element_copies.go` (from Task 1): adds the view and command kinds, and the copied end of the reads and command arrows.

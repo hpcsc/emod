@@ -40,7 +40,7 @@
     },
     {
       "n": 2,
-      "done": false,
+      "done": true,
       "title": "Copy far views and commands in the SVG",
       "language": "Go",
       "testable": true,

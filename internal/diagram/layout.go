@@ -102,9 +102,9 @@ const (
 	fillSpecCard   = "#fff2cc"
 	strokeSpecCard = "#d6b656"
 
-	// A copy of an event takes the event's stroke, so it reads as that event,
-	// and a fill of its own, so it does not read as a second declaration.
-	fillEventCopy = "#ffffff"
+	// A copy takes the stroke of the element it copies, so it reads as that
+	// element, and a fill of its own, so it does not read as a second declaration.
+	fillCopy = "#ffffff"
 )
 
 // Spec card geometry.
@@ -181,8 +181,29 @@ const copyMeasureFontSize = 12
 // copyLabelPadding keeps the longest line of a copy clear of its outline.
 const copyLabelPadding = 16
 
+// middleRowItems counts the boxes a slice draws in its Commands / Views row other
+// than its copies.
+func middleRowItems(s *ast.Slice) int {
+	return len(s.Commands) + len(s.Views)
+}
+
+// copiesByRow splits the copies of a slice into those drawn in its events row
+// and those drawn in its Commands / Views row.
+func copiesByRow(copies []ElementCopy) (events, middle []ElementCopy) {
+	for _, c := range copies {
+		if c.Kind == CopyOfEvent {
+			events = append(events, c)
+		} else {
+			middle = append(middle, c)
+		}
+	}
+
+	return events, middle
+}
+
 // columnWidth is how wide a slice is drawn. A slice that draws copies is widened
-// until every box in its events row is as wide as the longest line of a copy.
+// until every box in the row that holds the most boxes is as wide as the longest
+// line of a copy.
 func columnWidth(entry sliceEntry, copies []ElementCopy) int {
 	if len(copies) == 0 {
 		return sliceWidth
@@ -194,7 +215,8 @@ func columnWidth(entry sliceEntry, copies []ElementCopy) int {
 			longest = max(longest, estimatedTextWidth(line, copyMeasureFontSize))
 		}
 	}
-	items := eventRowItems(entry.slice) + len(copies)
+	events, middle := copiesByRow(copies)
+	items := max(eventRowItems(entry.slice)+len(events), middleRowItems(entry.slice)+len(middle))
 	itemW := min(longest+copyLabelPadding, boxWidth)
 
 	return max(sliceWidth, 20+items*itemW+(items-1)*8)

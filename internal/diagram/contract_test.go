@@ -880,7 +880,7 @@ func TestExporterReadsEdges(t *testing.T) {
 			})
 
 			for _, twin := range readsTwins() {
-				t.Run("clearing every "+twin.construct+"'s reads draws the same boxes with one arrow fewer per view", func(t *testing.T) {
+				t.Run("clearing every "+twin.construct+"'s reads takes away one arrow per view and the copies of the views it read from far away, and repaints no other box", func(t *testing.T) {
 					reading := test.TriggerReadsLibraryLendingModel(t)
 					unread := twin.strip(reading)
 
@@ -892,8 +892,8 @@ func TestExporterReadsEdges(t *testing.T) {
 
 					full, stripped := e.run(t, reading, diagram.StyleAuto), e.run(t, unread, diagram.StyleAuto)
 
-					require.Equal(t, e.boxes(t, stripped), e.boxes(t, full),
-						"an arrow to a reader must not add, move, resize or repaint a box")
+					require.Equal(t, withoutBoxesLabelled(t, unplaced(e.boxes(t, full)), twin.farViewCopies), unplaced(e.boxes(t, stripped)),
+						"a read takes no box away but the copy it needed, and repaints none")
 					require.Len(t, e.connections(t, stripped), len(e.connections(t, full))-len(twin.declaredViews),
 						"the twin loses one arrow per view it stopped reading and disturbs no other")
 				})
@@ -916,6 +916,9 @@ type readsTwin struct {
 	kept          func(*ast.Model) []string
 	declaredViews []string
 	keptViews     []string
+	// farViewCopies labels the copies test.TriggerReadsLibraryLending draws for
+	// the views this construct reads from two or more slices away.
+	farViewCopies []string
 }
 
 func readsTwins() []readsTwin {
@@ -928,6 +931,10 @@ func readsTwins() []readsTwin {
 			kept:          test.DeclaredAutomationReads,
 			declaredViews: test.TriggerReadsLibraryLendingTriggerViewNames,
 			keptViews:     test.TriggerReadsLibraryLendingAutomationViewNames,
+			farViewCopies: []string{
+				"DeskOccupancyView\nfrom Browse Desk Occupancy",
+				"DeskOccupancyView\nfrom Browse Desk Occupancy",
+			},
 		},
 		{
 			construct:     "automation",
@@ -937,6 +944,10 @@ func readsTwins() []readsTwin {
 			kept:          test.DeclaredTriggerReads,
 			declaredViews: test.TriggerReadsLibraryLendingAutomationViewNames,
 			keptViews:     test.TriggerReadsLibraryLendingTriggerViewNames,
+			farViewCopies: []string{
+				"MemberLoansView\nfrom Review Member Loans",
+				"MemberLoansView\nfrom Review Member Loans",
+			},
 		},
 	}
 }
@@ -1002,6 +1013,82 @@ func mixedReadsModel() *ast.Model {
 	return model
 }
 
+// unplaced reads boxes back as what each one says and how it is painted, without
+// where it is drawn or how large.
+func unplaced(boxes []diagramBox) []diagramBox {
+	placement := []string{"x=", "y=", "width=", "height="}
+	read := make([]diagramBox, len(boxes))
+	for i, box := range boxes {
+		paint := slices.DeleteFunc(strings.Fields(box.appearance), func(attribute string) bool {
+			return slices.ContainsFunc(placement, func(prefix string) bool { return strings.HasPrefix(attribute, prefix) })
+		})
+		read[i] = diagramBox{label: lineText(box.label), appearance: strings.Join(paint, " ")}
+	}
+
+	return read
+}
+
+// withoutBoxesLabelled takes one box away for each label, the first one still
+// there that carries it.
+func withoutBoxesLabelled(t *testing.T, boxes []diagramBox, labels []string) []diagramBox {
+	t.Helper()
+
+	kept := slices.Clone(boxes)
+	for _, label := range labels {
+		at := slices.IndexFunc(kept, func(box diagramBox) bool { return box.label == label })
+		require.GreaterOrEqual(t, at, 0, "the picture has to draw a box labelled %q", label)
+		kept = slices.Delete(kept, at, at+1)
+	}
+
+	return kept
+}
+
+// boxesWithin selects the boxes drawn wholly inside container, other than the
+// container itself.
+func boxesWithin(boxes []diagramBox, container boxRect) []diagramBox {
+	var within []diagramBox
+	for _, box := range boxes {
+		if box.rect != container && box.rect.within(container) {
+			within = append(within, box)
+		}
+	}
+
+	return within
+}
+
+// targetsOutOf names every box the picture draws an arrow into from the box
+// labelled name.
+func targetsOutOf(connections []diagramConnection, name string) []string {
+	var targets []string
+	for _, connection := range connections {
+		if strings.Contains(connection.source, name) {
+			targets = append(targets, connection.target)
+		}
+	}
+
+	return targets
+}
+
+func targetsOutOfEach(connections []diagramConnection, names []string) map[string][]string {
+	targets := make(map[string][]string, len(names))
+	for _, name := range names {
+		targets[name] = targetsOutOf(connections, name)
+	}
+
+	return targets
+}
+
+// linesOfEach reads each label of each list back as its lines joined by one line
+// break.
+func linesOfEach(labels map[string][]string) map[string][]string {
+	read := make(map[string][]string, len(labels))
+	for name, list := range labels {
+		read[name] = linesOf(list)
+	}
+
+	return read
+}
+
 // sourcesInto names every box the picture draws an arrow from into the box
 // labelled name.
 func sourcesInto(connections []diagramConnection, name string) []string {
@@ -1032,8 +1119,8 @@ func viewsRead(connections []diagramConnection, names, views []string) []string 
 	var read []string
 	for _, name := range names {
 		for _, source := range sourcesInto(connections, name) {
-			if slices.Contains(views, source) {
-				read = append(read, source)
+			if view := cardLines(source)[0]; slices.Contains(views, view) {
+				read = append(read, view)
 			}
 		}
 	}
@@ -2059,6 +2146,135 @@ func TestExporterEventCopies(t *testing.T) {
 	}
 }
 
+// TestExporterViewAndCommandCopies covers the copy each picture format draws of
+// a view an arrow joins to the construct that reads it, and of a command an arrow
+// joins to the automation or the translation that issues it, from two or more
+// slices away.
+func TestExporterViewAndCommandCopies(t *testing.T) {
+	for _, e := range exporters() {
+		if e.boxes == nil {
+			continue
+		}
+
+		t.Run(e.name, func(t *testing.T) {
+			t.Run("draws a copy of each view read and each command issued from two or more slices away in the Commands / Views lane, naming the slice that declares it", func(t *testing.T) {
+				boxes := e.boxes(t, e.run(t, test.TriggerReadsLibraryLendingModel(t), diagram.StyleAuto))
+
+				require.Equal(t, []string{
+					"DeskOccupancyView\nfrom Browse Desk Occupancy",
+					"MemberLoansView\nfrom Review Member Loans",
+					"DeskOccupancyView\nfrom Browse Desk Occupancy",
+					"ReleaseDesk\nin Release Desk",
+					"MemberLoansView\nfrom Review Member Loans",
+					"RemindMember\nin Chase Overdue Copy",
+				}, labelsOf(copyBoxesIn(boxesWithin(boxes, boxLabelled(t, boxes, "Commands / Views").rect))))
+			})
+
+			t.Run("draws each copy of a view or a command in the column of its slice, between the slices on either side", func(t *testing.T) {
+				boxes := e.boxes(t, e.run(t, test.TriggerReadsLibraryLendingModel(t), diagram.StyleAuto))
+				copies := copyBoxesIn(boxesWithin(boxes, boxLabelled(t, boxes, "Commands / Views").rect))
+				require.Len(t, copies, 6)
+
+				returnCopy := boxNamed(t, boxes, "ReturnCopy").rect
+				claimDesk := boxNamed(t, boxes, "ClaimDesk").rect
+				for _, copied := range copies[:2] {
+					require.Greater(t, copied.rect.x, returnCopy.x+returnCopy.w, "%q starts before the slice ahead of it ends", copied.label)
+					require.Less(t, copied.rect.x+copied.rect.w, claimDesk.x, "%q runs into the slice after it", copied.label)
+				}
+
+				releaseDesk := boxNamed(t, boxes, "ReleaseDesk").rect
+				for _, copied := range copies[2:3] {
+					require.Greater(t, copied.rect.x, copies[1].rect.x+copies[1].rect.w, "%q starts before the slice ahead of it ends", copied.label)
+					require.Less(t, copied.rect.x+copied.rect.w, releaseDesk.x, "%q runs into the slice after it", copied.label)
+				}
+
+				occupancy := boxNamed(t, boxes, "DeskOccupancyView").rect
+				for _, copied := range copies[3:] {
+					require.Greater(t, copied.rect.x, occupancy.x+occupancy.w, "%q starts before the slice ahead of it ends", copied.label)
+				}
+			})
+
+			t.Run("draws no copy of a view or a command over another box of its lane", func(t *testing.T) {
+				boxes := e.boxes(t, e.run(t, test.TriggerReadsLibraryLendingModel(t), diagram.StyleAuto))
+				inLane := boxesWithin(boxes, boxLabelled(t, boxes, "Commands / Views").rect)
+				copies := copyBoxesIn(inLane)
+				require.Len(t, copies, 6)
+
+				var collisions []string
+				for _, copied := range copies {
+					for _, other := range inLane {
+						if other.rect != copied.rect && copied.rect.overlaps(other.rect) {
+							collisions = append(collisions, copied.label+" over "+lineText(other.label))
+						}
+					}
+				}
+				require.Empty(t, collisions)
+			})
+
+			t.Run("a reads arrow starts at the copy of a view two or more slices away, and at the view in the slice next to it", func(t *testing.T) {
+				connections := e.connections(t, e.run(t, test.TriggerReadsLibraryLendingModel(t), diagram.StyleAuto))
+
+				require.Equal(t, map[string][]string{
+					"Lending Desk":      {"MemberLoansView"},
+					"Overdue Report":    {"DeskOccupancyView\nfrom Browse Desk Occupancy"},
+					"Desk Kiosk":        {"DeskOccupancyView\nfrom Browse Desk Occupancy"},
+					"RecallOverdueCopy": {"CopyBorrowed\nfrom Borrow Copy", "MemberLoansView\nfrom Review Member Loans"},
+					"FreeDeskAtClosing": {"DeskClaimed\nfrom Claim Desk", "DeskOccupancyView"},
+				}, linesOfEach(sourcesIntoEach(connections, []string{
+					"Lending Desk", "Overdue Report", "Desk Kiosk", "RecallOverdueCopy", "FreeDeskAtClosing",
+				})))
+			})
+
+			t.Run("a command arrow ends at the copy of a command two or more slices away, and at the command in the automation's own slice", func(t *testing.T) {
+				connections := e.connections(t, e.run(t, test.TriggerReadsLibraryLendingModel(t), diagram.StyleAuto))
+
+				require.Equal(t, map[string][]string{
+					"RemindReaderOfLoans": {"RemindMember\nin Chase Overdue Copy"},
+					"FreeDeskAtClosing":   {"ReleaseDesk\nin Release Desk"},
+					"RecallOverdueCopy":   {"RecallCopy"},
+				}, linesOfEach(targetsOutOfEach(connections, []string{
+					"RemindReaderOfLoans", "FreeDeskAtClosing", "RecallOverdueCopy",
+				})))
+			})
+
+			t.Run("a translation reads and issues through copies, and the arrow it implies starts at the copy of its command", func(t *testing.T) {
+				connections := e.connections(t, e.run(t, farTranslationModel(), diagram.StyleAuto))
+
+				require.Equal(t, map[string][]string{
+					"into Partner API":     {"PartnersView\nfrom Read Partners"},
+					"out of PartnerFeed":   {"ImportBooking\nin Record Booking"},
+					"into BookingImported": {"ImportBooking\nin Record Booking"},
+				}, map[string][]string{
+					"into Partner API":     linesOf(sourcesInto(connections, "Partner API")),
+					"out of PartnerFeed":   linesOf(targetsOutOf(connections, "PartnerFeed")),
+					"into BookingImported": linesOf(sourcesInto(connections, "BookingImported")),
+				})
+			})
+
+			t.Run("a copy of a view or a command is outlined dashed in the stroke of what it copies, and filled white", func(t *testing.T) {
+				boxes := e.boxes(t, e.run(t, farTranslationModel(), diagram.StyleAuto))
+				viewCopy := boxNamed(t, boxes, "PartnersView\nfrom Read Partners")
+				commandCopy := boxNamed(t, boxes, "ImportBooking\nin Record Booking")
+
+				require.Equal(t, map[string]string{
+					"stroke of the view copy":    paintOf(t, strokePaint, boxNamed(t, boxes, "PartnersView")),
+					"stroke of the command copy": paintOf(t, strokePaint, boxNamed(t, boxes, "ImportBooking")),
+					"fill of the view copy":      "white",
+					"fill of the command copy":   "white",
+				}, map[string]string{
+					"stroke of the view copy":    paintOf(t, strokePaint, viewCopy),
+					"stroke of the command copy": paintOf(t, strokePaint, commandCopy),
+					"fill of the view copy":      colorFamily(t, paintOf(t, fillPaint, viewCopy)),
+					"fill of the command copy":   colorFamily(t, paintOf(t, fillPaint, commandCopy)),
+				})
+				require.NotContains(t, boxNamed(t, boxes, "PartnersView").appearance, "dash")
+				require.Contains(t, viewCopy.appearance, "dash")
+				require.Contains(t, commandCopy.appearance, "dash")
+			})
+		})
+	}
+}
+
 // strokePaint and fillPaint read a colour out of a box's appearance.
 var (
 	strokePaint = regexp.MustCompile(`\bstroke=(#[0-9a-fA-F]{6})`)
@@ -2074,12 +2290,13 @@ func paintOf(t *testing.T, paint *regexp.Regexp, box diagramBox) string {
 	return strings.ToLower(m[1])
 }
 
-// copyBoxesIn selects the copies of events out of the boxes a picture draws:
-// the boxes whose second line names the slice the event is declared in.
+// copyBoxesIn selects the copies out of the boxes a picture draws: the boxes
+// whose second line names the slice that declares what they copy.
 func copyBoxesIn(boxes []diagramBox) []diagramBox {
 	var copies []diagramBox
 	for _, box := range boxes {
-		if lines := cardLines(box.label); len(lines) == 2 && strings.HasPrefix(lines[1], "from ") {
+		lines := cardLines(box.label)
+		if len(lines) == 2 && (strings.HasPrefix(lines[1], "from ") || strings.HasPrefix(lines[1], "in ")) {
 			copies = append(copies, diagramBox{label: lineText(box.label), appearance: box.appearance, rect: box.rect})
 		}
 	}

@@ -220,6 +220,95 @@ func TestExportSVG(t *testing.T) {
 		require.Equal(t, widthOfPaid(withNested(nil)), widthOfPaid(withNested(&ast.Event{Name: ""})))
 	})
 
+	t.Run("draws no arrow from an automation to a command no slice declares", func(t *testing.T) {
+		model := &ast.Model{
+			Name: "Test",
+			Contexts: []*ast.Context{{
+				Name: "Ctx",
+				Aggregates: []*ast.Aggregate{{
+					Name: "Agg",
+					Slices: []*ast.Slice{{
+						Name:     "S",
+						Commands: []*ast.Command{{Name: "NotifyMember"}},
+						Automations: []*ast.Automation{
+							{Name: "Announce", Command: "NotifyMember"},
+							{Name: "Chase", Command: "ChaseMember"},
+						},
+					}},
+				}},
+			}},
+		}
+
+		raw, err := diagram.ExportSVG(model, diagram.StyleAuto)
+		require.NoError(t, err)
+
+		require.Equal(t, 1, arrowCount(string(raw)), "only the declared command has a box to draw an arrow to")
+	})
+
+	t.Run("draws no arrow to the event a translation nests from a command no slice declares", func(t *testing.T) {
+		model := &ast.Model{
+			Name: "Test",
+			Contexts: []*ast.Context{{
+				Name: "Ctx",
+				Aggregates: []*ast.Aggregate{{
+					Name: "Agg",
+					Slices: []*ast.Slice{{
+						Name: "S",
+						Translations: []*ast.Translation{{
+							Name: "PartnerFeed", ExternalSystem: "Partner API", Command: "ImportBooking", Event: &ast.Event{Name: "BookingImported"},
+						}},
+					}},
+				}},
+			}},
+		}
+
+		raw, err := diagram.ExportSVG(model, diagram.StyleAuto)
+		require.NoError(t, err)
+
+		require.Equal(t, 1, arrowCount(string(raw)), "only the external system and the reactor have boxes to draw an arrow between")
+	})
+
+	t.Run("writes the label of each copy at the centre of its box, at the size an event's label is written", func(t *testing.T) {
+		raw, err := diagram.ExportSVG(test.TriggerReadsLibraryLendingModel(t), diagram.StyleAuto)
+		require.NoError(t, err)
+
+		shapes := svgShapes(t, string(raw))
+		copies := svgCopyShapes(shapes)
+		require.Len(t, copies, 10, "the fixture draws four copies of events and six of views and commands")
+
+		var centres, labelled [][2]int
+		var sizes []string
+		for _, copied := range copies {
+			centres = append(centres, copied.rect.centre())
+			labelled = append(labelled, copied.labelAt)
+			sizes = append(sizes, copied.labelSize)
+		}
+		event := slices.IndexFunc(shapes, func(shape svgShape) bool { return lineText(shape.label) == "CopyBorrowed" })
+		require.GreaterOrEqual(t, event, 0, "the fixture has to draw the event CopyBorrowed")
+
+		require.Equal(t, centres, labelled)
+		require.Equal(t, slices.Repeat([]string{shapes[event].labelSize}, len(sizes)), sizes)
+	})
+
+	t.Run("draws each copy as tall as the box of the element it copies, with the same rounded corners", func(t *testing.T) {
+		raw, err := diagram.ExportSVG(test.TriggerReadsLibraryLendingModel(t), diagram.StyleAuto)
+		require.NoError(t, err)
+		output := string(raw)
+		boxes := svgBoxes(t, output)
+		corner := regexp.MustCompile(`\brx=\d+`)
+
+		var originals, copied []string
+		for _, c := range svgCopyShapes(svgShapes(t, output)) {
+			name := cardLines(c.label)[0]
+			original := boxNamed(t, boxes, name)
+			originals = append(originals, fmt.Sprintf("%s: %d tall, %s", name, original.rect.h, corner.FindString(original.appearance)))
+			copied = append(copied, fmt.Sprintf("%s: %d tall, %s", name, c.rect.h, corner.FindString(c.attributes)))
+		}
+
+		require.Len(t, copied, 10, "the fixture draws four copies of events and six of views and commands")
+		require.Equal(t, originals, copied)
+	})
+
 	t.Run("renders automation as the gear with its name under it", func(t *testing.T) {
 		model := &ast.Model{
 			Name: "Test",
@@ -595,7 +684,7 @@ func TestExportSVG(t *testing.T) {
 			require.Len(t, cards, 7,
 				"seven of the fixture's eight slices state a scenario; Desk Occupancy states none")
 
-			column := boxLabelled(t, svgBoxes(t, output), "DeskOccupancyView").rect.centre()[0]
+			column := boxNamed(t, svgBoxes(t, output), "DeskOccupancyView").rect.centre()[0]
 			for _, card := range svgSpecCardRects(t, output) {
 				require.False(t, card.x <= column && column < card.x+card.w,
 					"a card is drawn in the column of the one slice stating no scenario")
@@ -1134,6 +1223,9 @@ type svgShape struct {
 	rect       boxRect
 	label      string
 	tooltip    string
+	// labelAt is the point the label is centred on, and labelSize its font size.
+	labelAt   [2]int
+	labelSize string
 }
 
 // svgShapes returns the diagram's boxes, and the gear an automation is drawn as,
@@ -1171,6 +1263,14 @@ func svgShapes(t *testing.T, output string) []svgShape {
 			case "text":
 				text.Reset()
 				inEdgeLabel = svgAttributeValue(element, "class") == edgeLabelClass
+				if len(shapes) > 0 && !inEdgeLabel {
+					x, err := strconv.Atoi(svgAttributeValue(element, "x"))
+					require.NoError(t, err, "a label's x must be a whole number")
+					y, err := strconv.Atoi(svgAttributeValue(element, "y"))
+					require.NoError(t, err, "a label's y must be a whole number")
+					shapes[len(shapes)-1].labelAt = [2]int{x, y}
+					shapes[len(shapes)-1].labelSize = svgAttributeValue(element, "font-size")
+				}
 			}
 		case xml.CharData:
 			text.Write(element)
@@ -1195,6 +1295,20 @@ func svgShapes(t *testing.T, output string) []svgShape {
 	}
 
 	return shapes
+}
+
+// svgCopyShapes selects the copies: the shapes whose second line names the slice
+// that declares what they copy.
+func svgCopyShapes(shapes []svgShape) []svgShape {
+	var copies []svgShape
+	for _, shape := range shapes {
+		lines := cardLines(shape.label)
+		if len(lines) == 2 && (strings.HasPrefix(lines[1], "from ") || strings.HasPrefix(lines[1], "in ")) {
+			copies = append(copies, shape)
+		}
+	}
+
+	return copies
 }
 
 func svgBoxes(t *testing.T, output string) []diagramBox {

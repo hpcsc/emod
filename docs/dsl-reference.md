@@ -338,6 +338,8 @@ slice "<name>" {
 
 `flow` wires the command to the event (see [Flows](#7-flows)). `trigger` is optional — a slice may define a command directly without a trigger.
 
+- **The drawn diagrams copy a view a trigger reads from a slice far away:** when the view is declared two or more slices away, `emod diagram --format svg` draws it again in the trigger's slice, in the Commands / Views lane, and the `reads` arrow starts at this copy. The copy has a dashed outline in the view's stroke, a white fill, and a second line `from <slice>` that names the first slice that declares the view.
+
 ### View Pattern
 
 A read model projects from subscribed events.
@@ -407,6 +409,7 @@ A schedule is absolute and names no occurrence to count from, while a delay is m
 - **The drawn diagrams label the edge, not the gear:** `emod diagram --format svg` writes `after "<duration>"` on the arrow from the `on` event to the automation, and reserve the clock badge under the automation's gear for an `every` schedule.
 - **The text formats state it beside the activation:** `emod diagram --format ascii` prints `(<EventName>) after "<duration>" -> ⚙ <Name> -> [<CommandName>]`, and `--format mermaid` carries the delay inside the automation's own label.
 - **The drawn diagrams copy an `on` event from a slice far away:** when the `on` event is declared two or more slices away, `emod diagram --format svg` and the viewer draw it again in the automation's slice, and the arrow into the automation starts at this copy, as a view's arrow does (see [View Pattern](#view-pattern)).
+- **The drawn diagrams copy a far view and a far command:** when the view an automation `reads`, or the command it issues, is declared two or more slices away, `emod diagram --format svg` draws it again in the automation's slice, in the Commands / Views lane. The `reads` arrow starts at the copy of the view, and the arrow to the command ends at the copy of the command. A copy of a command has a dashed outline in the command's stroke, a white fill, and a second line `in <slice>` that names the first slice that declares the command.
 
 ### Translation Pattern
 
@@ -431,6 +434,8 @@ slice "<name>" {
 ```
 
 `external_system`, `reads`, `command`, and the nested `event` are required.
+
+- **The drawn diagrams copy a far view and a far command:** when the view a translation `reads`, or the command it issues, is declared two or more slices away, `emod diagram --format svg` draws it again in the translation's slice, as it does for an automation (see [Automation Pattern](#automation-pattern)). The arrow from the copy of the view runs into the external system box, and the arrow from the command to the nested event starts at the copy of the command.
 
 ### `spec`
 
@@ -858,7 +863,7 @@ The renderers that draw the whole model use one palette for element types. The S
 | Automation  | #16201b   | —         | Dark gear above its name.               |
 | Translation | #f5f5f5   | #666666   | Grey integration.                       |
 
-A copy of an event, drawn in the slice of a view or an automation that reads the event from two or more slices away (see [View Pattern](#view-pattern)), is not an element type. It takes the event's stroke #d79b00 with a dashed outline, and a white #ffffff fill.
+A copy of an event, a view or a command, drawn in the slice at the far end of an arrow that joins two slices two or more slices apart (see [View Pattern](#view-pattern)), is not an element type. It takes the stroke of what it copies (#d79b00 for an event, #82b366 for a view, #6c8ebf for a command) with a dashed outline, and a white #ffffff fill.
 
 ### Event Flow Palette
 
