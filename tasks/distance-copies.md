@@ -383,10 +383,10 @@ The tests that pin this behaviour are `internal/frontend/tests/event-copy.test.j
 **Behavior:** Some arrows still go across boxes they do not join: a vertical stretch through a gear under a command, or a reads arrow down through the Events lane to an external system. After this task, the router chooses the point on each side and the x of each vertical stretch so that no arrow crosses any box it does not join, and no two arrows from different boxes run along one vertical line.
 
 **Acceptance Criteria:**
-- [ ] No arrow runs across any box the SVG draws, other than the two it joins. A box here is every shape that `svgShapes` reads back except the lanes, together with the name written under an automation's gear.
-- [ ] No vertical stretch of one arrow lies on another arrow, unless both arrows start at one box or both end at one box.
-- [ ] The guarantees of Tasks 5 and 6 still hold.
-- [ ] These hold for every model in `examples/` that parses, and for the generated 40-slice model of Task 6.
+- [x] No arrow runs across any box the SVG draws, other than the two it joins. A box here is every shape that `svgShapes` reads back except the lanes, together with the name written under an automation's gear.
+- [x] No vertical stretch of one arrow lies on another arrow, unless both arrows start at one box or both end at one box.
+- [x] The guarantees of Tasks 5 and 6 still hold.
+- [x] These hold for every model in `examples/` that parses, and for the generated 40-slice model of Task 6.
 
 **Affected Files/Modules:**
 - `internal/diagram/svg.go`: the route of each arrow (the side point and the vertical stretches).

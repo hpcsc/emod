@@ -1,12 +1,8 @@
 package diagram
 
-import (
-	"slices"
-	"sort"
-)
-
-// legSpacing is how far apart two legs run in one gap between lanes.
-const legSpacing = 6
+// arrowSpacing is how far apart two arrows run side by side: two legs in one gap
+// between lanes, or two stretches up or down.
+const arrowSpacing = 6
 
 // The lanes of the picture, from the top.
 const (
@@ -30,17 +26,16 @@ type lanePositions struct {
 	tracks [len(laneNames) - 1]int
 }
 
-// lanesFor returns lanes whose gaps hold the tracks of onTracks.
-func lanesFor(onTracks map[int]gapTrack) lanePositions {
-	var l lanePositions
-	for _, t := range onTracks {
-		l.tracks[t.gap] = max(l.tracks[t.gap], t.track+1)
+// withTracksOf returns l with each gap tall enough also for the tracks the legs
+// of routes run on.
+func (l lanePositions) withTracksOf(routes []route) lanePositions {
+	for _, lg := range legsOf(routes) {
+		l.tracks[lg.gap] = max(l.tracks[lg.gap], lg.track+1)
 	}
 
 	return l
 }
 
-// top is the y that lane starts at.
 func (l lanePositions) top(lane int) int {
 	y := marginY
 	for gap := range lane {
@@ -50,59 +45,18 @@ func (l lanePositions) top(lane int) int {
 	return y
 }
 
-// gapHeight is how tall a gap is.
 func (l lanePositions) gapHeight(gap int) int {
-	return max(laneGap, (l.tracks[gap]+1)*legSpacing)
+	return max(laneGap, (l.tracks[gap]+1)*arrowSpacing)
 }
 
-// trackY is the y a leg on track t runs at. The tracks of a gap are spread
-// evenly down it.
-func (l lanePositions) trackY(t gapTrack) int {
-	gapTop := l.top(t.gap) + laneHeight
-
-	return gapTop + (t.track+1)*l.gapHeight(t.gap)/(l.tracks[t.gap]+1)
+// gapTop is the y gap starts at, under the lane of the same number.
+func (l lanePositions) gapTop(gap int) int {
+	return l.top(gap) + laneHeight
 }
 
-// gapTrack is a track of one gap between two lanes. The gaps count from the top,
-// so gap 0 lies under the first lane.
-type gapTrack struct {
-	gap, track int
-}
-
-// legTracks gives each arrow whose leg runs between two lanes a track of the gap
-// under the upper of the two lanes, where no other leg in that gap overlaps its
-// span. An arrow inside one lane, or one that runs straight up or down, gets no
-// track.
-func legTracks(arrows []boxArrow) map[int]gapTrack {
-	spans := make([][2]int, len(arrows))
-	inGap := make([][]int, len(laneNames)-1)
-	for i, a := range arrows {
-		left, right, ok := a.route().legSpan()
-		if !ok || a.from.lane == a.to.lane {
-			continue
-		}
-		gap := min(a.from.lane, a.to.lane)
-		spans[i] = [2]int{left, right}
-		inGap[gap] = append(inGap[gap], i)
-	}
-
-	onTracks := make(map[int]gapTrack)
-	for gap, arrowsInGap := range inGap {
-		sort.SliceStable(arrowsInGap, func(a, b int) bool {
-			return spans[arrowsInGap[a]][0] < spans[arrowsInGap[b]][0]
-		})
-		var trackEnds []int
-		for _, i := range arrowsInGap {
-			left, right := spans[i][0], spans[i][1]
-			track := slices.IndexFunc(trackEnds, func(end int) bool { return end < left })
-			if track < 0 {
-				track = len(trackEnds)
-				trackEnds = append(trackEnds, right)
-			}
-			trackEnds[track] = right
-			onTracks[i] = gapTrack{gap: gap, track: track}
-		}
-	}
-
-	return onTracks
+// trackY is the y a leg on track number track of gap runs at. The gaps count
+// from the top, so gap 0 lies under the first lane, and the tracks of a gap are
+// spread evenly down it.
+func (l lanePositions) trackY(gap, track int) int {
+	return l.gapTop(gap) + (track+1)*l.gapHeight(gap)/(l.tracks[gap]+1)
 }

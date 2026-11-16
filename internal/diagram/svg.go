@@ -8,6 +8,8 @@ import (
 	"github.com/hpcsc/emod/internal/ast"
 )
 
+const lanesPastLastSlice = 120
+
 // ExportSVG generates a self-contained SVG diagram from a parsed AST model.
 func ExportSVG(model *ast.Model, _ Style, opts ...Option) ([]byte, error) {
 	if model == nil {
@@ -20,12 +22,23 @@ func ExportSVG(model *ast.Model, _ Style, opts ...Option) ([]byte, error) {
 	columns := sliceColumns(entries, copies)
 	ctxBounds := contextBounds(entries, columns)
 
-	// The boxes sit at the same x whatever the gaps between the lanes are, so a
-	// first placement tells how many tracks each gap must hold.
-	_, measured := placeBoxes(entries, columns, copies, lanePositions{})
-	lanes := lanesFor(legTracks(measured))
-	boxes, arrows := placeBoxes(entries, columns, copies, lanes)
-	onTracks := legTracks(arrows)
+	// A gap grows to hold the tracks of the legs in it, which moves the lanes and
+	// the boxes under it down, so the picture is placed and routed again until
+	// every gap holds its legs.
+	var lanes lanePositions
+	var boxes string
+	var arrows []boxArrow
+	var routes []route
+	for {
+		var obstacles []svgBox
+		boxes, arrows, obstacles = placeBoxes(entries, columns, copies, lanes)
+		routes = routesFor(arrows, obstacles, columns, lanes)
+		grown := lanes.withTracksOf(routes)
+		if grown == lanes {
+			break
+		}
+		lanes = grown
+	}
 
 	extLaneY := lanes.top(len(laneNames) - 1)
 	specBandY := specBandTop(entries, extLaneY)
@@ -36,7 +49,7 @@ func ExportSVG(model *ast.Model, _ Style, opts ...Option) ([]byte, error) {
 	}
 	bandHeight := specBandHeight(cards)
 
-	diagramW := layoutWidth(columns) + marginX + 120
+	diagramW := layoutWidth(columns) + marginX + lanesPastLastSlice
 	diagramH := extLaneY + laneHeight + marginY
 	if bandHeight > 0 {
 		diagramH = specBandY + bandHeight + marginY
@@ -65,13 +78,6 @@ func ExportSVG(model *ast.Model, _ Style, opts ...Option) ([]byte, error) {
 	}
 
 	b.WriteString(boxes)
-	routes := make([]route, len(arrows))
-	for i, arrow := range arrows {
-		routes[i] = arrow.route()
-		if track, onTrack := onTracks[i]; onTrack {
-			routes[i] = routes[i].withLegAt(lanes.trackY(track))
-		}
-	}
 	for i, arrow := range arrows {
 		if arrow.dashed {
 			b.WriteString(svgDashedArrow(routes[i]))
@@ -99,10 +105,16 @@ func ExportSVG(model *ast.Model, _ Style, opts ...Option) ([]byte, error) {
 }
 
 // placeBoxes writes the box of every element of every slice, with the lanes
-// where lanes says, and returns the arrows between those boxes, in the order the
-// picture draws them.
-func placeBoxes(entries []sliceEntry, columns []sliceColumn, copies ElementCopies, lanes lanePositions) (string, []boxArrow) {
+// where lanes says. It returns the arrows between those boxes, in the order the
+// picture draws them, and the boxes an arrow must keep clear of when it does not
+// join them.
+func placeBoxes(entries []sliceEntry, columns []sliceColumn, copies ElementCopies, lanes lanePositions) (string, []boxArrow, []svgBox) {
 	var b strings.Builder
+	var obstacles []svgBox
+	placed := func(box svgBox) svgBox {
+		obstacles = append(obstacles, box)
+		return box
+	}
 
 	triggerRowY := laneRowY(lanes.top(wireframesLane))
 	cmdViewLaneY := lanes.top(commandsAndViewsLane)
@@ -120,21 +132,25 @@ func placeBoxes(entries []sliceEntry, columns []sliceColumn, copies ElementCopie
 	// whichever slice was drawn last.
 	badges := make([][]svgBox, len(entries))
 
-	// A copy is filed per slice, by the element it copies: nameToBox keeps the
-	// original, which every slice but this one draws its arrows from.
+	// A copy is filed per slice, by the element it copies, and every element by
+	// the slice that declares it, so that an arrow joins the copy or the element
+	// that ElementCopies names: nameToBox keeps the last box drawn under a name,
+	// of any kind.
 	copyBoxes := make([]map[ElementCopy]svgBox, len(entries))
-	sourceBox := func(i int, edge Edge) (svgBox, bool) {
-		if copied, found := copies.At(entries[i].slice, edge); found {
-			return copyBoxes[i][copied], true
+	declaredBoxes := make(map[ElementCopy]svgBox)
+	declare := func(kind CopyKind, name string, s *ast.Slice, box svgBox) svgBox {
+		key := ElementCopy{Kind: kind, Name: name, DeclaredIn: s.Name}
+		if _, seen := declaredBoxes[key]; !seen {
+			declaredBoxes[key] = box
 		}
-		box, drawn := nameToBox[edge.From]
-		return box, drawn
+		return box
 	}
-	targetBox := func(i int, edge Edge) (svgBox, bool) {
+	joinedBox := func(i int, edge Edge) (svgBox, bool) {
 		if copied, found := copies.At(entries[i].slice, edge); found {
 			return copyBoxes[i][copied], true
 		}
-		box, drawn := nameToBox[edge.To]
+		element, _ := copies.Joined(entries[i].slice, edge)
+		box, drawn := declaredBoxes[element]
 		return box, drawn
 	}
 
@@ -154,7 +170,7 @@ func placeBoxes(entries []sliceEntry, columns []sliceColumn, copies ElementCopie
 			}
 			b.WriteString(svgTriggerRect(x, y, boxWidth, boxHeight, fillTrigger, strokeTrigger, 5, s.Trigger.Description))
 			b.WriteString(svgText(x+boxWidth/2, y+boxHeight/2, label, 12, strokeTrigger))
-			nameToBox[s.Trigger.Name] = svgBox{x: x, y: y, w: boxWidth, h: boxHeight, lane: wireframesLane}
+			nameToBox[s.Trigger.Name] = placed(svgBox{x: x, y: y, w: boxWidth, h: boxHeight, lane: wireframesLane})
 		}
 
 		// --- Commands (middle lane) ---
@@ -166,7 +182,7 @@ func placeBoxes(entries []sliceEntry, columns []sliceColumn, copies ElementCopie
 			itemW, x := itemLayout(usableW, totalMid, ci, sliceX)
 			b.WriteString(svgRoundedRect(x, cmdViewRowY, itemW, boxHeight, fillCommand, strokeCommand, 5, cmd.Description))
 			b.WriteString(svgText(x+itemW/2, cmdViewRowY+boxHeight/2, cmd.Name, 12, strokeCommand))
-			nameToBox[cmd.Name] = svgBox{x: x, y: cmdViewRowY, w: itemW, h: boxHeight, lane: commandsAndViewsLane}
+			nameToBox[cmd.Name] = declare(CopyOfCommand, cmd.Name, s, placed(svgBox{x: x, y: cmdViewRowY, w: itemW, h: boxHeight, lane: commandsAndViewsLane}))
 		}
 
 		// --- Views (middle lane) ---
@@ -175,13 +191,13 @@ func placeBoxes(entries []sliceEntry, columns []sliceColumn, copies ElementCopie
 			itemW, x := itemLayout(usableW, totalMid, idx, sliceX)
 			b.WriteString(svgRoundedRect(x, cmdViewRowY, itemW, boxHeight, fillView, strokeView, 5, view.Description))
 			b.WriteString(svgText(x+itemW/2, cmdViewRowY+boxHeight/2, view.Name, 12, strokeView))
-			nameToBox[view.Name] = svgBox{x: x, y: cmdViewRowY, w: itemW, h: boxHeight, lane: commandsAndViewsLane}
+			nameToBox[view.Name] = declare(CopyOfView, view.Name, s, placed(svgBox{x: x, y: cmdViewRowY, w: itemW, h: boxHeight, lane: commandsAndViewsLane}))
 		}
 
 		// --- Copies of views and commands this slice joins from slices far away (middle lane) ---
 		for mi, c := range copiedMiddle {
 			itemW, x := itemLayout(usableW, totalMid, middleRowItems(s)+mi, sliceX)
-			box := svgBox{x: x, y: cmdViewRowY, w: itemW, h: boxHeight, lane: commandsAndViewsLane}
+			box := placed(svgBox{x: x, y: cmdViewRowY, w: itemW, h: boxHeight, lane: commandsAndViewsLane})
 			b.WriteString(svgCopy(c, box))
 			copyBoxes[i][c] = box
 		}
@@ -198,7 +214,7 @@ func placeBoxes(entries []sliceEntry, columns []sliceColumn, copies ElementCopie
 			ei++
 			b.WriteString(svgRoundedRect(x, eventRowY, itemW, boxHeight, fillEvent, strokeEvent, 5, evt.Description))
 			b.WriteString(svgMultilineText(x+itemW/2, eventRowY+boxHeight/2, label, 11, strokeEvent))
-			nameToBox[evt.Name] = svgBox{x: x, y: eventRowY, w: itemW, h: boxHeight, lane: eventsLane}
+			nameToBox[evt.Name] = declare(CopyOfEvent, evt.Name, s, placed(svgBox{x: x, y: eventRowY, w: itemW, h: boxHeight, lane: eventsLane}))
 		}
 		for _, tr := range s.Translations {
 			if tr.Event != nil && tr.Event.Name != "" {
@@ -206,7 +222,7 @@ func placeBoxes(entries []sliceEntry, columns []sliceColumn, copies ElementCopie
 				ei++
 				b.WriteString(svgRoundedRect(x, eventRowY, itemW, boxHeight, fillEvent, strokeEvent, 5, tr.Event.Description))
 				b.WriteString(svgText(x+itemW/2, eventRowY+boxHeight/2, tr.Event.Name, 11, strokeEvent))
-				nameToBox[tr.Event.Name] = svgBox{x: x, y: eventRowY, w: itemW, h: boxHeight, lane: eventsLane}
+				nameToBox[tr.Event.Name] = declare(CopyOfEvent, tr.Event.Name, s, placed(svgBox{x: x, y: eventRowY, w: itemW, h: boxHeight, lane: eventsLane}))
 			}
 		}
 
@@ -217,14 +233,14 @@ func placeBoxes(entries []sliceEntry, columns []sliceColumn, copies ElementCopie
 			b.WriteString(svgDashedRoundedRect(x, eventRowY, itemW, boxHeight, fillRejection, strokeRejection, 5,
 				entry.invariantStatement(rejection.InvariantName)))
 			b.WriteString(svgText(x+itemW/2, eventRowY+boxHeight/2, rejection.InvariantName, 11, strokeRejection))
-			badges[i] = append(badges[i], svgBox{x: x, y: eventRowY, w: itemW, h: boxHeight, lane: eventsLane})
+			badges[i] = append(badges[i], placed(svgBox{x: x, y: eventRowY, w: itemW, h: boxHeight, lane: eventsLane}))
 		}
 
 		// --- Copies of events this slice joins from slices far away (event row) ---
 		for _, c := range copiedEvents {
 			itemW, x := itemLayout(usableW, totalEvts, ei, sliceX)
 			ei++
-			box := svgBox{x: x, y: eventRowY, w: itemW, h: boxHeight, lane: eventsLane}
+			box := placed(svgBox{x: x, y: eventRowY, w: itemW, h: boxHeight, lane: eventsLane})
 			b.WriteString(svgCopy(c, box))
 			copyBoxes[i][c] = box
 		}
@@ -236,10 +252,11 @@ func placeBoxes(entries []sliceEntry, columns []sliceColumn, copies ElementCopie
 				b.WriteString(svgMultilineText(reactor.x+reactor.w/2, reactor.labelCentreY(),
 					reactor.label, reactorFontSize, fillAutomation))
 				nameToBox[reactor.name] = reactor.gearAndLabelBox(commandsAndViewsLane)
+				obstacles = append(obstacles, reactor.obstacleBox(commandsAndViewsLane))
 			} else {
 				b.WriteString(svgRoundedRect(reactor.x, reactor.y, reactor.w, reactor.h, fillTranslation, strokeTranslation, 3, reactor.description))
 				b.WriteString(svgMultilineText(reactor.x+reactor.w/2, reactor.y+reactor.h/2, reactor.label, reactorFontSize, strokeTranslation))
-				nameToBox[reactor.name] = svgBox{x: reactor.x, y: reactor.y, w: reactor.w, h: reactor.h, lane: commandsAndViewsLane}
+				nameToBox[reactor.name] = placed(svgBox{x: reactor.x, y: reactor.y, w: reactor.w, h: reactor.h, lane: commandsAndViewsLane})
 			}
 		}
 
@@ -254,7 +271,7 @@ func placeBoxes(entries []sliceEntry, columns []sliceColumn, copies ElementCopie
 			}
 			b.WriteString(svgDashedRoundedRect(extX, extY, extW, extH, fillExternal, strokeExternal, 5, tr.Description))
 			b.WriteString(svgText(extX+extW/2, extY+extH/2, tr.ExternalSystem, 11, strokeExternal))
-			nameToBox[tr.ExternalSystem] = svgBox{x: extX, y: extY, w: extW, h: extH, lane: externalSystemsLane}
+			nameToBox[tr.ExternalSystem] = placed(svgBox{x: extX, y: extY, w: extW, h: extH, lane: externalSystemsLane})
 		}
 	}
 
@@ -262,7 +279,7 @@ func placeBoxes(entries []sliceEntry, columns []sliceColumn, copies ElementCopie
 
 	var arrows []boxArrow
 	joinReader := func(i int, edge Edge, reader svgBox) {
-		if view, declared := sourceBox(i, edge); declared {
+		if view, drawn := joinedBox(i, edge); drawn {
 			arrows = append(arrows, boxArrow{from: view, to: reader})
 		}
 	}
@@ -292,20 +309,20 @@ func placeBoxes(entries []sliceEntry, columns []sliceColumn, copies ElementCopie
 
 			case EdgeAutomationCommand, EdgeTranslationCommand:
 				from, fromDrawn := nameToBox[edge.From]
-				to, toDrawn := targetBox(i, edge)
+				to, toDrawn := joinedBox(i, edge)
 				if fromDrawn && toDrawn {
 					arrows = append(arrows, boxArrow{from: from, to: to})
 				}
 
 			case EdgeTranslationFlow:
-				from, fromDrawn := sourceBox(i, edge)
+				from, fromDrawn := joinedBox(i, edge)
 				to, toDrawn := nameToBox[edge.To]
 				if fromDrawn && toDrawn {
 					arrows = append(arrows, boxArrow{from: from, to: to})
 				}
 
 			case EdgeAutomationTrigger:
-				from, fromDrawn := sourceBox(i, edge)
+				from, fromDrawn := joinedBox(i, edge)
 				to, toDrawn := nameToBox[edge.To]
 				if fromDrawn && toDrawn {
 					arrows = append(arrows, boxArrow{from: from, to: to, label: edge.Label})
@@ -321,7 +338,7 @@ func placeBoxes(entries []sliceEntry, columns []sliceColumn, copies ElementCopie
 				rejected++
 
 			case EdgeSubscription:
-				from, fromDrawn := sourceBox(i, edge)
+				from, fromDrawn := joinedBox(i, edge)
 				to, toDrawn := nameToBox[edge.To]
 				if fromDrawn && toDrawn {
 					arrows = append(arrows, boxArrow{from: from, to: to})
@@ -337,7 +354,7 @@ func placeBoxes(entries []sliceEntry, columns []sliceColumn, copies ElementCopie
 		}
 	}
 
-	return b.String(), arrows
+	return b.String(), arrows, obstacles
 }
 
 // --- SVG helpers ---
@@ -490,80 +507,25 @@ type svgBox struct {
 	lane       int
 }
 
-// boxArrow is an arrow the picture draws from one box to another.
-type boxArrow struct {
-	from, to svgBox
-	dashed   bool
-	label    string
+// across is the x across b at which a stretch can meet b, stretchClearance in
+// from each corner. Its best x is for the caller to set.
+func (b svgBox) across() room {
+	return room{left: b.x + stretchClearance, right: b.x + b.w - stretchClearance}
 }
 
-// point is a place in the picture, in pixels.
-type point struct {
-	x, y int
-}
-
-// route leaves from at the top or the bottom, whichever faces to, and enters to
-// at the side that faces from, with its leg halfway between the two.
-func (a boxArrow) route() route {
-	from, to := a.from, a.to
-	start, end := point{from.x + from.w/2, from.y}, point{to.x + to.w/2, to.y + to.h}
-	if from.y+from.h <= to.y {
-		start, end = point{from.x + from.w/2, from.y + from.h}, point{to.x + to.w/2, to.y}
-	}
-
-	return route{start: start, end: end, legY: (start.y + end.y) / 2}
-}
-
-// route is the way an arrow runs from one box to another: out of the first box
-// at start, along its leg at legY, and into the second box at end.
-type route struct {
-	start, end point
-	legY       int
-}
-
-// withLegAt returns the same route with its leg at y.
-func (r route) withLegAt(y int) route {
-	r.legY = y
-
-	return r
-}
-
-// legSpan is where the leg runs from left to right, and false for a route that
-// runs straight up or down and so has no leg.
-func (r route) legSpan() (left, right int, ok bool) {
-	if r.start.x == r.end.x {
-		return 0, 0, false
-	}
-
-	return min(r.start.x, r.end.x), max(r.start.x, r.end.x), true
-}
-
-// points are the points the arrow is drawn through, in order.
-func (r route) points() []point {
-	if _, _, ok := r.legSpan(); !ok {
-		return []point{r.start, r.end}
-	}
-
-	return []point{r.start, {r.start.x, r.legY}, {r.end.x, r.legY}, r.end}
-}
-
-// legMiddle is the middle of the leg, or of the route itself when it runs
-// straight up or down.
-func (r route) legMiddle() point {
-	return point{(r.start.x + r.end.x) / 2, r.legY}
-}
-
-// labelAt is where the text of arrow i of routes goes: on its leg, as near the
-// middle of the leg as it can be with no other arrow running through the text.
+// labelAt is where the text of arrow i of routes goes: on its first leg, as near
+// the middle of the leg as it can be with no other arrow running through the
+// text. An arrow that carries text always has a leg, since the router never
+// runs it straight.
 func labelAt(routes []route, i int, label string) point {
-	r := routes[i]
-	middle := r.legMiddle()
-	left, right, _ := r.legSpan()
+	first := routes[i].legs[0]
+	left, right := first.span()
+	middle := point{(left + right) / 2, first.y}
 	half := estimatedTextWidth(label, edgeLabelFontSize) / 2
 	for step := 0; step < (right-left)/2; step += labelStep {
 		for _, x := range []int{middle.x - step, middle.x + step} {
-			if !otherArrowCrosses(routes, i, x-half, x+half, r.legY) {
-				return point{x, r.legY}
+			if !otherArrowCrosses(routes, i, x-half, x+half, middle.y) {
+				return point{x, middle.y}
 			}
 		}
 	}
@@ -602,7 +564,6 @@ func svgArrow(r route) string {
 	return svgArrowPath(r, "")
 }
 
-// svgDashedArrow draws the same route as svgArrow, dashed.
 func svgDashedArrow(r route) string {
 	return svgArrowPath(r, ` stroke-dasharray="6,4"`)
 }

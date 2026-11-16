@@ -181,6 +181,10 @@ const copyMeasureFontSize = 12
 // copyLabelPadding keeps the longest line of a copy clear of its outline.
 const copyLabelPadding = 16
 
+// reactorLabelPadding keeps the label of a translation reactor clear of its
+// outline.
+const reactorLabelPadding = 16
+
 // middleRowItems counts the boxes a slice draws in its Commands / Views row other
 // than its copies.
 func middleRowItems(s *ast.Slice) int {
@@ -325,6 +329,7 @@ type reactorBox struct {
 	name         string
 	label        string
 	labelLines   int
+	labelWidth   int
 	description  string
 	isAutomation bool
 	x, y, w, h   int
@@ -349,6 +354,8 @@ func reactorBoxes(s *ast.Slice, cmdViewLaneY int, column sliceColumn, lineBreak 
 		boxes[i].y, boxes[i].h = rowY, reactorHeight
 		if boxes[i].isAutomation {
 			boxes[i].placeGear()
+		} else {
+			boxes[i].fitLabel()
 		}
 	}
 
@@ -360,6 +367,15 @@ func reactorBoxes(s *ast.Slice, cmdViewLaneY int, column sliceColumn, lineBreak 
 func (r *reactorBox) placeGear() {
 	r.x += (r.w - laneGearSize) / 2
 	r.w, r.h = laneGearSize, laneGearSize
+}
+
+// fitLabel shrinks a translation reactor's box to the width its label needs,
+// centred across the room it had, so that an arrow from the command above it can
+// pass it on either side.
+func (r *reactorBox) fitLabel() {
+	w := min(r.w, r.labelWidth+reactorLabelPadding)
+	r.x += (r.w - w) / 2
+	r.w = w
 }
 
 // labelCentreY is the y the lines under an automation's gear are centred on, so
@@ -379,14 +395,28 @@ func (r *reactorBox) gearAndLabelBox(lane int) svgBox {
 	return svgBox{x: r.x, y: r.y, w: r.w, h: r.labelBottom() - r.y, lane: lane}
 }
 
+// obstacleBox is the box every arrow but its own keeps clear of: the gear and
+// the lines under it, as wide as the label, or as the gear when the gear is
+// wider.
+func (r *reactorBox) obstacleBox(lane int) svgBox {
+	half := max(r.w, r.labelWidth) / 2
+
+	return svgBox{x: r.x + r.w/2 - half, y: r.y, w: 2 * half, h: r.labelBottom() - r.y, lane: lane}
+}
+
 // automationBox returns the reactor box for an automation.
 func automationBox(auto *ast.Automation, lineBreak string) reactorBox {
 	lines := automationLabelLines(auto)
+	widest := 0
+	for _, line := range lines {
+		widest = max(widest, estimatedTextWidth(line, reactorFontSize))
+	}
 
 	return reactorBox{
 		name:         auto.Name,
 		label:        strings.Join(lines, lineBreak),
 		labelLines:   len(lines),
+		labelWidth:   widest,
 		description:  auto.Description,
 		isAutomation: true,
 	}
@@ -394,9 +424,12 @@ func automationBox(auto *ast.Automation, lineBreak string) reactorBox {
 
 // translationBox returns the reactor box for a translation reactor.
 func translationBox(tr *ast.Translation) reactorBox {
+	label := reactorLabel(tr.Name)
+
 	return reactorBox{
 		name:        tr.Name,
-		label:       reactorLabel(tr.Name),
+		label:       label,
+		labelWidth:  estimatedTextWidth(label, reactorFontSize),
 		description: tr.Description,
 	}
 }

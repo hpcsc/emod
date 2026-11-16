@@ -201,7 +201,7 @@
     },
     {
       "n": 7,
-      "done": false,
+      "done": true,
       "title": "Route every SVG arrow clear of the boxes it does not join",
       "language": "Go",
       "testable": true,
