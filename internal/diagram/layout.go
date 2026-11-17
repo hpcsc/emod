@@ -116,8 +116,7 @@ const (
 	specBandGap = 12
 )
 
-// External system box geometry. A slice's translations stack downwards from the
-// row they start on, so a slice declaring several reaches below the lane.
+// External system box geometry.
 const (
 	externalBoxWidth  = 100
 	externalBoxHeight = 45
@@ -205,12 +204,14 @@ func copiesByRow(copies []ElementCopy) (events, middle []ElementCopy) {
 	return events, middle
 }
 
-// columnWidth is how wide a slice is drawn. A slice that draws copies is widened
-// until every box in the row that holds the most boxes is as wide as the longest
-// line of a copy.
+// columnWidth is how wide a slice is drawn: wide enough for its external
+// systems side by side, and, for a slice that draws copies, until every box in
+// the row that holds the most boxes is as wide as the longest line of a copy.
 func columnWidth(entry sliceEntry, copies []ElementCopy) int {
+	systems := len(entry.slice.Translations)
+	width := max(sliceWidth, 20+systems*externalBoxWidth+(systems-1)*externalBoxGap)
 	if len(copies) == 0 {
-		return sliceWidth
+		return width
 	}
 
 	var longest int
@@ -223,7 +224,7 @@ func columnWidth(entry sliceEntry, copies []ElementCopy) int {
 	items := max(eventRowItems(entry.slice)+len(events), middleRowItems(entry.slice)+len(middle))
 	itemW := min(longest+copyLabelPadding, boxWidth)
 
-	return max(sliceWidth, 20+items*itemW+(items-1)*8)
+	return max(width, 20+items*itemW+(items-1)*8)
 }
 
 // sliceColumn is the band of the layout a slice is drawn in: the x it starts at,
@@ -465,27 +466,10 @@ func specCards(entries []sliceEntry, columns []sliceColumn, bandY int, lineBreak
 	return cards
 }
 
-// externalBoxesBottom is the lowest edge the external system boxes reach. A
-// slice declaring more than two translations stacks them past the bottom of the
-// lane they start in, so this is not the lane's own edge.
-func externalBoxesBottom(entries []sliceEntry, extRowY int) int {
-	var most int
-	for _, entry := range entries {
-		most = max(most, len(entry.slice.Translations))
-	}
-	if most == 0 {
-		return 0
-	}
-
-	return extRowY - externalBoxHeight/2 + (most-1)*(externalBoxHeight+externalBoxGap) + externalBoxHeight
-}
-
-// specBandTop is where the band holding the cards starts: a lane gap below
-// whichever reaches lower, the lowest lane or a box that overflowed it. Taking
-// the lane's edge alone would draw the band, which is opaque and written last,
-// over any external system box that stacked past it.
-func specBandTop(entries []sliceEntry, extLaneY int) int {
-	return max(extLaneY+laneHeight, externalBoxesBottom(entries, laneRowY(extLaneY))) + laneGap
+// specBandTop is where the band holding the cards starts: a lane gap below the
+// lowest lane.
+func specBandTop(extLaneY int) int {
+	return extLaneY + laneHeight + laneGap
 }
 
 // specBandHeight is how tall the band holding the cards has to be: the tallest

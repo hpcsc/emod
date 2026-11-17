@@ -540,7 +540,7 @@ func TestExportSVG(t *testing.T) {
 		t.Run("draws no arrow across a box it does not join, nor across the name under a gear", func(t *testing.T) {
 			var arrowsChecked int
 			var crossings []string
-			for name, model := range legModels(t) {
+			for name, model := range routeModels(t) {
 				output := svgOf(t, model)
 				ends := svgArrowBoxes(t, output)
 				obstacles := svgObstacles(t, output)
@@ -574,7 +574,7 @@ func TestExportSVG(t *testing.T) {
 			const apart = 5
 			var pairs int
 			var near []string
-			for name, model := range legModels(t) {
+			for name, model := range routeModels(t) {
 				arrows := svgDrawnArrows(t, svgOf(t, model))
 				for i := range arrows {
 					for j := i + 1; j < len(arrows); j++ {
@@ -604,7 +604,7 @@ func TestExportSVG(t *testing.T) {
 		t.Run("draws every arrow in lines that run across or up and down", func(t *testing.T) {
 			var lines int
 			var slanted []string
-			for name, model := range legModels(t) {
+			for name, model := range routeModels(t) {
 				for _, arrow := range svgDrawnArrows(t, svgOf(t, model)) {
 					for i := 1; i < len(arrow.route); i++ {
 						lines++
@@ -703,7 +703,7 @@ func TestExportSVG(t *testing.T) {
 		t.Run("runs the stretch that joins two legs of an arrow between two slices, where no box of the picture sits", func(t *testing.T) {
 			var stretches int
 			var onBoxes []string
-			for name, model := range legModels(t) {
+			for name, model := range routeModels(t) {
 				output := svgOf(t, model)
 				lanes := svgLaneRects(t, output)
 				obstacles := svgObstacles(t, output)
@@ -745,12 +745,30 @@ func TestExportSVG(t *testing.T) {
 			require.Greater(t, reactor.w, pxPerCharacter*utf8.RuneCountInString("⚙ PartnerSync"))
 			require.Less(t, reactor.w, command.w, "the reactor leaves room beside it for an arrow from the command down to the Events lane")
 		})
+
+		t.Run("draws the arrow from an external system up to the reactor of a translation that has the name of that system", func(t *testing.T) {
+			output := svgOf(t, slicesModel(&ast.Slice{
+				Name:     "Import Payment",
+				Commands: []*ast.Command{{Name: "ImportPayment"}},
+				Translations: []*ast.Translation{{
+					Name: "Stripe", ExternalSystem: "Stripe", Command: "ImportPayment", Event: &ast.Event{Name: "PaymentImported"},
+				}},
+			}))
+			ends := svgArrowBoxes(t, output)
+
+			var joined [][2]string
+			for _, arrow := range svgDrawnArrows(t, output) {
+				from, to := arrowBoxMet(t, ends, arrow.route[0]), arrowBoxMet(t, ends, arrow.route[len(arrow.route)-1])
+				joined = append(joined, [2]string{lineText(from.label), lineText(to.label)})
+			}
+			require.Contains(t, joined, [2]string{"Stripe", "⚙ Stripe"})
+		})
 	})
 
 	t.Run("legs between lanes", func(t *testing.T) {
 		t.Run("runs the leg of an arrow that joins two lanes in a gap between those two lanes, and the leg of an arrow inside one lane in the gap under it", func(t *testing.T) {
 			var inGaps, underOneLane int
-			for name, model := range legModels(t) {
+			for name, model := range routeModels(t) {
 				output := svgOf(t, model)
 				lanes := svgLaneRects(t, output)
 
@@ -777,7 +795,7 @@ func TestExportSVG(t *testing.T) {
 
 		t.Run("gives two legs that overlap across in one gap different y", func(t *testing.T) {
 			var overlapping int
-			for name, model := range legModels(t) {
+			for name, model := range routeModels(t) {
 				output := svgOf(t, model)
 				lanes := svgLaneRects(t, output)
 				legs := svgLegs(t, output, lanes)
@@ -827,7 +845,7 @@ func TestExportSVG(t *testing.T) {
 		t.Run("puts the legs of one gap on no more tracks than the most legs that overlap at one x", func(t *testing.T) {
 			mostOverlapping := make(map[string]int)
 			tracksUsed := make(map[string]int)
-			for name, model := range legModels(t) {
+			for name, model := range routeModels(t) {
 				output := svgOf(t, model)
 				lanes := svgLaneRects(t, output)
 				inGap := make(map[int][]drawnLeg)
@@ -858,7 +876,7 @@ func TestExportSVG(t *testing.T) {
 		t.Run("gives an arrow between two lanes next to each other one leg at most", func(t *testing.T) {
 			var arrowsChecked int
 			var bent []string
-			for name, model := range legModels(t) {
+			for name, model := range routeModels(t) {
 				output := svgOf(t, model)
 				lanes := svgLaneRects(t, output)
 				ends := svgArrowBoxes(t, output)
@@ -2295,13 +2313,9 @@ func svgLegs(t *testing.T, output string, lanes []boxRect) []drawnLeg {
 	return legs
 }
 
-// legModels are the models the legs between lanes are checked over: every
-// example that parses, forty slices of arrows between neighbours, one slice
-// whose view eight events feed, a translation whose command another slice
-// declares, an automation whose schedule is wider than its name, two arrows
-// that cross the Events lane beside each of two slices, and two automations
-// whose arrows join two rows of one lane.
-func legModels(t *testing.T) map[string]*ast.Model {
+// routeModels are the models the routes of arrows are checked over: the models
+// below, each built for one way an arrow can run, and every example that parses.
+func routeModels(t *testing.T) map[string]*ast.Model {
 	t.Helper()
 
 	paths, err := filepath.Glob("../../examples/*.emod")
@@ -2313,8 +2327,10 @@ func legModels(t *testing.T) map[string]*ast.Model {
 		"a translation that records through the command of the slice before it":              nextSliceTranslationModel(),
 		"an automation whose schedule is wider than its name":                                wideScheduleModel(),
 		"two automations that read views of the slice before and issue each other's command": crossedAutomationsModel(),
+		"two translations in one slice":                                                      twoTranslationsModel(),
 		"two arrows that cross the Events lane beside each slice":                            sharedRoomTranslationsModel(),
 		"a delayed arrow over commands that flow straight down":                              delayOverStraightArrowsModel(),
+		"more arrows beside one slice than the room beside it holds":                         fullRoomModel(),
 	}
 	var examples int
 	for _, path := range paths {
@@ -2335,7 +2351,7 @@ func legModels(t *testing.T) map[string]*ast.Model {
 func labelledModels(t *testing.T) map[string]*ast.Model {
 	t.Helper()
 
-	models := legModels(t)
+	models := routeModels(t)
 	models["two delayed automations"] = test.AutomationDelayLibraryLendingModel(t)
 
 	return models
@@ -2423,6 +2439,36 @@ func sharedRoomTranslationsModel() *ast.Model {
 			}},
 		},
 	)
+}
+
+// fullRoomModel has a slice whose eight translations each read the view of
+// that slice. More arrows then cross the Events lane beside the slice than the
+// room next to it holds, so some of them run in the next room.
+func fullRoomModel() *ast.Model {
+	var translations []*ast.Translation
+	for i := 1; i <= 8; i++ {
+		translations = append(translations, &ast.Translation{
+			Name:           fmt.Sprintf("Sync%d", i),
+			ExternalSystem: fmt.Sprintf("Partner %d", i),
+			Reads:          "PartnersView",
+			Event:          &ast.Event{Name: fmt.Sprintf("Synced%d", i)},
+		})
+	}
+
+	return slicesModel(
+		&ast.Slice{Name: "Sync", Views: []*ast.View{{Name: "PartnersView"}}, Translations: translations},
+		&ast.Slice{Name: "Pay", Commands: []*ast.Command{{Name: "Pay"}}, Events: []*ast.Event{{Name: "Paid"}}},
+	)
+}
+
+// twoTranslationsModel has one slice with two translations, so it draws two
+// external systems in one row of the External Systems lane, and an arrow from
+// each up to its reactor.
+func twoTranslationsModel() *ast.Model {
+	return slicesModel(&ast.Slice{Name: "Import", Translations: []*ast.Translation{
+		{Name: "PartnerSync", ExternalSystem: "Partner API", Event: &ast.Event{Name: "PartnerBooked"}},
+		{Name: "BankSync", ExternalSystem: "Bank API", Event: &ast.Event{Name: "BankPaid"}},
+	}})
 }
 
 // crossedAutomationsModel has two automations that each read a view the slice

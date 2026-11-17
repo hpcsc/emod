@@ -134,11 +134,11 @@ func requireNonEmptyText(t *testing.T, output string) {
 // against a value written down independently of the code that emits it.
 const laneHeightDrawn = 202
 
-// stackedTranslationsModel gives one slice four translations, which the layout
-// stacks downwards past the bottom of the lane they start in, plus a scenario so
-// the band is drawn. The shared fixtures declare at most one translation per
-// slice, so none of them reaches past the lane.
-func stackedTranslationsModel() *ast.Model {
+// fourTranslationsModel gives one slice four translations, whose external
+// systems are more than one slice of the usual width holds side by side, plus a
+// scenario so the band is drawn. The shared fixtures declare at most one
+// translation per slice.
+func fourTranslationsModel() *ast.Model {
 	slice := &ast.Slice{
 		Name:  "Import Bookings",
 		Views: []*ast.View{{Name: "AvailableView", Subscribes: []string{"Imported0"}}},
@@ -672,21 +672,32 @@ func TestExporterSpecCards(t *testing.T) {
 				}
 			})
 
-			t.Run("the band clears the external system boxes a slice stacks past its lane", func(t *testing.T) {
-				model := stackedTranslationsModel()
+			t.Run("keeps every external system box of a slice with four translations inside its lane, side by side, and the band under them", func(t *testing.T) {
+				model := fourTranslationsModel()
 				output := e.runWithSpecs(t, model, diagram.StyleAuto)
 
 				boxes := e.boxes(t, output)
-				lowest := boxLabelled(t, boxes, "System3").rect
-				require.Greater(t, lowest.y+lowest.h, boxLabelled(t, boxes, "External Systems").rect.y+laneHeightDrawn,
-					"the fixture has to stack a box past its lane, or this asserts nothing about overflow")
+				lane := boxLabelled(t, boxes, "External Systems").rect
+				names := []string{"System0", "System1", "System2", "System3"}
+				require.Equal(t, names, labelsWithin(boxes, lane))
+				systems := rectsLabelled(t, boxes, names)
+				for i := 1; i < len(names); i++ {
+					before, box := systems[names[i-1]], systems[names[i]]
+					require.Equal(t, before.y, box.y, "the boxes stand in one row")
+					require.Less(t, before.x+before.w, box.x, "each box stands right of the one before it")
+				}
+				first, last := boxNamed(t, boxes, "Imported0").rect, boxNamed(t, boxes, "Imported3").rect
+				left, right := first.x, last.x+last.w
+				rowLeft, rowRight := systems["System0"].x, systems["System3"].x+systems["System3"].w
+				require.Equal(t, []bool{true, true}, []bool{rowLeft >= left, rowRight <= right},
+					"the slice is drawn wide enough for the row, whose events span the slice")
+				require.InDelta(t, rowLeft-left, right-rowRight, 1, "the row stands in the middle of the slice")
 
 				cards := specCardBoxesIn(t, boxes)
 				require.Len(t, cards, 1)
 				band := boxLabelled(t, boxes, "Specs").rect
-				require.GreaterOrEqual(t, band.y, lowest.y+lowest.h,
+				require.GreaterOrEqual(t, band.y, lane.y+lane.h,
 					"the band is opaque and written last, so a box it starts above is painted out")
-				require.False(t, cards[0].rect.overlaps(lowest), "a card is drawn over the box below the lane")
 			})
 
 			t.Run("a card names the constructs a scenario refers to and none of the example values it states", func(t *testing.T) {

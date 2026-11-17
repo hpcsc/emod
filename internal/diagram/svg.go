@@ -41,7 +41,7 @@ func ExportSVG(model *ast.Model, _ Style, opts ...Option) ([]byte, error) {
 	}
 
 	extLaneY := lanes.top(len(laneNames) - 1)
-	specBandY := specBandTop(entries, extLaneY)
+	specBandY := specBandTop(extLaneY)
 
 	var cards []specCard
 	if resolveOptions(opts).specs {
@@ -131,6 +131,11 @@ func placeBoxes(entries []sliceEntry, columns []sliceColumn, copies ElementCopie
 	// only the last box drawn for a name, so both dashed arrows would end at
 	// whichever slice was drawn last.
 	badges := make([][]svgBox, len(entries))
+
+	// The box of the external system each translation reads through, by the
+	// name of the translation. A translation can share its name with its
+	// external system, so these boxes stay out of nameToBox.
+	externalBoxes := make(map[string]svgBox)
 
 	// A copy is filed per slice, by the element it copies, and every element by
 	// the slice that declares it, so that an arrow joins the copy or the element
@@ -260,18 +265,15 @@ func placeBoxes(entries []sliceEntry, columns []sliceColumn, copies ElementCopie
 			}
 		}
 
-		// --- External system boxes (Translations) ---
+		// --- External system boxes (Translations), side by side ---
+		systems := len(s.Translations)
+		systemsX := sliceX + (column.w-systems*externalBoxWidth-(systems-1)*externalBoxGap)/2
 		for ti, tr := range s.Translations {
-			extW := externalBoxWidth
-			extH := externalBoxHeight
-			extX := sliceX + (column.w-extW)/2
-			extY := extRowY - extH/2
-			if ti > 0 {
-				extY += ti * (extH + externalBoxGap)
-			}
-			b.WriteString(svgDashedRoundedRect(extX, extY, extW, extH, fillExternal, strokeExternal, 5, tr.Description))
-			b.WriteString(svgText(extX+extW/2, extY+extH/2, tr.ExternalSystem, 11, strokeExternal))
-			nameToBox[tr.ExternalSystem] = placed(svgBox{x: extX, y: extY, w: extW, h: extH, lane: externalSystemsLane})
+			extX := systemsX + ti*(externalBoxWidth+externalBoxGap)
+			extY := extRowY - externalBoxHeight/2
+			b.WriteString(svgDashedRoundedRect(extX, extY, externalBoxWidth, externalBoxHeight, fillExternal, strokeExternal, 5, tr.Description))
+			b.WriteString(svgText(extX+externalBoxWidth/2, extY+externalBoxHeight/2, tr.ExternalSystem, 11, strokeExternal))
+			externalBoxes[tr.Name] = placed(svgBox{x: extX, y: extY, w: externalBoxWidth, h: externalBoxHeight, lane: externalSystemsLane})
 		}
 	}
 
@@ -281,15 +283,6 @@ func placeBoxes(entries []sliceEntry, columns []sliceColumn, copies ElementCopie
 	joinReader := func(i int, edge Edge, reader svgBox) {
 		if view, drawn := joinedBox(i, edge); drawn {
 			arrows = append(arrows, boxArrow{from: view, to: reader})
-		}
-	}
-
-	// A translation's reads arrow is drawn into the external system box
-	// fronting its reactor, not the reactor itself.
-	reactorExternal := make(map[string]string)
-	for _, entry := range entries {
-		for _, tr := range entry.slice.Translations {
-			reactorExternal[tr.Name] = tr.ExternalSystem
 		}
 	}
 
@@ -303,9 +296,12 @@ func placeBoxes(entries []sliceEntry, columns []sliceColumn, copies ElementCopie
 				}
 
 			case EdgeTranslationReads:
-				if reader, drawn := nameToBox[reactorExternal[edge.To]]; drawn {
-					joinReader(i, edge, reader)
-				}
+				// A translation's reads arrow is drawn into the external system box
+				// fronting its reactor, not the reactor itself.
+				joinReader(i, edge, externalBoxes[edge.To])
+
+			case EdgeTranslationExternal:
+				arrows = append(arrows, boxArrow{from: externalBoxes[edge.To], to: nameToBox[edge.To]})
 
 			case EdgeAutomationCommand, EdgeTranslationCommand:
 				from, fromDrawn := nameToBox[edge.From]
