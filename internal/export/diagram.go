@@ -136,16 +136,10 @@ func (g *diagramIDGenerator) next(typ string) string {
 	return fmt.Sprintf("%s-%d", typ, g.counters[typ])
 }
 
-type declaredElement struct {
-	slice string
-	kind  diagram.CopyKind
-	name  string
-}
-
-var copyTypes = map[diagram.CopyKind]string{
-	diagram.CopyOfEvent:   "event_copy",
-	diagram.CopyOfView:    "view_copy",
-	diagram.CopyOfCommand: "command_copy",
+var copyTypes = map[diagram.ElementKind]string{
+	diagram.ElementEvent:   "event_copy",
+	diagram.ElementView:    "view_copy",
+	diagram.ElementCommand: "command_copy",
 }
 
 // diagramBuilder accumulates the nodes and edges of one diagram document. The
@@ -164,14 +158,14 @@ type diagramBuilder struct {
 	automationIDs  map[string]string
 	translationIDs map[string]string
 
-	// declaredIDs keeps the node of each element a copy can stand for, by the
-	// slice that declares it, so that a copy points at the element in the slice
-	// it names; eventIDs, viewIDs and commandIDs keep the last element of a name.
-	declaredIDs   map[declaredElement]string
-	sliceNameByID map[string]string
-	copies        diagram.ElementCopies
-	copyIDs       map[*ast.Slice]map[diagram.ElementCopy]string
-	copyNodes     map[*jsonDiagramNode]diagram.ElementCopy
+	// declaredIDs keeps the node of each event, view and command by the slice
+	// that declares it, so that an edge and a copy find the element that
+	// ElementCopies names; eventIDs, viewIDs and commandIDs keep the last element
+	// of a name.
+	declaredIDs map[diagram.DeclaredElement]string
+	copies      diagram.ElementCopies
+	copyIDs     map[*ast.Slice]map[diagram.DeclaredElement]string
+	copyNodes   map[*jsonDiagramNode]diagram.DeclaredElement
 }
 
 func newDiagramBuilder(modelName, modelDescription string, copies diagram.ElementCopies) *diagramBuilder {
@@ -189,11 +183,10 @@ func newDiagramBuilder(modelName, modelDescription string, copies diagram.Elemen
 		viewIDs:        make(map[string]string),
 		automationIDs:  make(map[string]string),
 		translationIDs: make(map[string]string),
-		declaredIDs:    make(map[declaredElement]string),
-		sliceNameByID:  make(map[string]string),
+		declaredIDs:    make(map[diagram.DeclaredElement]string),
 		copies:         copies,
-		copyIDs:        make(map[*ast.Slice]map[diagram.ElementCopy]string),
-		copyNodes:      make(map[*jsonDiagramNode]diagram.ElementCopy),
+		copyIDs:        make(map[*ast.Slice]map[diagram.DeclaredElement]string),
+		copyNodes:      make(map[*jsonDiagramNode]diagram.DeclaredElement),
 	}
 }
 
@@ -264,7 +257,6 @@ func (b *diagramBuilder) appendSlice(s *ast.Slice, parentID string) {
 		return
 	}
 	sliceID := b.ids.next("slice")
-	b.sliceNameByID[sliceID] = s.Name
 	b.appendNode(&jsonDiagramNode{
 		ID:          sliceID,
 		Type:        "slice",
@@ -275,12 +267,12 @@ func (b *diagramBuilder) appendSlice(s *ast.Slice, parentID string) {
 		Comments:    convertComments(s.Comments),
 	})
 
-	b.appendCommands(s.Commands, sliceID)
-	b.appendEvents(s.Events, sliceID)
+	b.appendCommands(s, sliceID)
+	b.appendEvents(s, sliceID)
 	b.appendTrigger(s.Trigger, sliceID)
-	b.appendViews(s.Views, sliceID)
+	b.appendViews(s, sliceID)
 	b.appendAutomations(s.Automations, sliceID)
-	b.appendTranslations(s.Translations, sliceID)
+	b.appendTranslations(s, sliceID)
 	b.appendCopies(s, sliceID)
 }
 
@@ -290,7 +282,7 @@ func (b *diagramBuilder) appendCopies(s *ast.Slice, sliceID string) {
 		return
 	}
 
-	b.copyIDs[s] = make(map[diagram.ElementCopy]string, len(copies))
+	b.copyIDs[s] = make(map[diagram.DeclaredElement]string, len(copies))
 	for _, c := range copies {
 		typ := copyTypes[c.Kind]
 		node := &jsonDiagramNode{
@@ -311,33 +303,27 @@ func (b *diagramBuilder) appendCopies(s *ast.Slice, sliceID string) {
 // every element has a node.
 func (b *diagramBuilder) pointCopiesAtOriginals() {
 	for node, c := range b.copyNodes {
-		node.CopyOf = b.nodeOf(c)
+		node.CopyOf = b.declaredIDs[c]
 	}
 }
 
-// nodeOf is the id of the node drawn for the element c stands for, in the slice
-// c names.
-func (b *diagramBuilder) nodeOf(c diagram.ElementCopy) string {
-	return b.declaredIDs[declaredElement{slice: c.DeclaredIn, kind: c.Kind, name: c.Name}]
-}
-
 // keepDeclared records id as the node of the element of kind declared under name
-// in the slice whose node is sliceID, unless one came before it there.
-func (b *diagramBuilder) keepDeclared(sliceID string, kind diagram.CopyKind, name, id string) {
-	key := declaredElement{slice: b.sliceNameByID[sliceID], kind: kind, name: name}
+// in slice s, unless one came before it there.
+func (b *diagramBuilder) keepDeclared(s *ast.Slice, kind diagram.ElementKind, name, id string) {
+	key := diagram.DeclaredElement{Kind: kind, Name: name, Slice: s}
 	if _, seen := b.declaredIDs[key]; !seen {
 		b.declaredIDs[key] = id
 	}
 }
 
-func (b *diagramBuilder) appendCommands(commands []*ast.Command, sliceID string) {
-	for _, cmd := range commands {
+func (b *diagramBuilder) appendCommands(s *ast.Slice, sliceID string) {
+	for _, cmd := range s.Commands {
 		if cmd == nil {
 			continue
 		}
 		cmdID := b.ids.next("command")
 		b.commandIDs[cmd.Name] = cmdID
-		b.keepDeclared(sliceID, diagram.CopyOfCommand, cmd.Name, cmdID)
+		b.keepDeclared(s, diagram.ElementCommand, cmd.Name, cmdID)
 		node := &jsonDiagramNode{
 			ID:          cmdID,
 			Type:        "command",
@@ -354,19 +340,19 @@ func (b *diagramBuilder) appendCommands(commands []*ast.Command, sliceID string)
 	}
 }
 
-func (b *diagramBuilder) appendEvents(events []*ast.Event, sliceID string) {
-	for _, evt := range events {
-		b.appendEvent(evt, sliceID)
+func (b *diagramBuilder) appendEvents(s *ast.Slice, sliceID string) {
+	for _, evt := range s.Events {
+		b.appendEvent(s, evt, sliceID)
 	}
 }
 
-func (b *diagramBuilder) appendEvent(evt *ast.Event, sliceID string) {
+func (b *diagramBuilder) appendEvent(s *ast.Slice, evt *ast.Event, sliceID string) {
 	if evt == nil {
 		return
 	}
 	evtID := b.ids.next("event")
 	b.eventIDs[evt.Name] = evtID
-	b.keepDeclared(sliceID, diagram.CopyOfEvent, evt.Name, evtID)
+	b.keepDeclared(s, diagram.ElementEvent, evt.Name, evtID)
 	node := &jsonDiagramNode{
 		ID:           evtID,
 		Type:         "event",
@@ -403,14 +389,14 @@ func (b *diagramBuilder) appendTrigger(t *ast.Trigger, sliceID string) {
 	})
 }
 
-func (b *diagramBuilder) appendViews(views []*ast.View, sliceID string) {
-	for _, v := range views {
+func (b *diagramBuilder) appendViews(s *ast.Slice, sliceID string) {
+	for _, v := range s.Views {
 		if v == nil {
 			continue
 		}
 		vID := b.ids.next("view")
 		b.viewIDs[v.Name] = vID
-		b.keepDeclared(sliceID, diagram.CopyOfView, v.Name, vID)
+		b.keepDeclared(s, diagram.ElementView, v.Name, vID)
 		node := &jsonDiagramNode{
 			ID:          vID,
 			Type:        "view",
@@ -453,8 +439,8 @@ func (b *diagramBuilder) appendAutomations(automations []*ast.Automation, sliceI
 	}
 }
 
-func (b *diagramBuilder) appendTranslations(translations []*ast.Translation, sliceID string) {
-	for _, t := range translations {
+func (b *diagramBuilder) appendTranslations(s *ast.Slice, sliceID string) {
+	for _, t := range s.Translations {
 		if t == nil {
 			continue
 		}
@@ -477,7 +463,7 @@ func (b *diagramBuilder) appendTranslations(translations []*ast.Translation, sli
 
 			// The event a translation nests also gets a node of its own: the
 			// translation_event edge needs an endpoint to point at.
-			b.appendEvent(t.Event, sliceID)
+			b.appendEvent(s, t.Event, sliceID)
 		}
 		b.appendNode(node)
 	}
@@ -533,16 +519,16 @@ func (b *diagramBuilder) appendEdges(m *ast.Model) {
 }
 
 // copiedEndIDs returns the node ids to find an end of edge, an arrow of slice s,
-// in: the copy s draws in place of the element at that end, or else the element
-// in the first slice that declares it, which the copy rule measures from. A name
-// no slice declares is found in ids. Pass it for the end of edge that a copy can
-// stand in for.
+// in: the node of the element that ElementCopies.Joined names, or of the copy of
+// it that s draws. A name no slice declares is found in ids. Pass it for the end
+// of edge that a copy can stand in for.
 func (b *diagramBuilder) copiedEndIDs(s *ast.Slice, edge diagram.Edge, ids map[string]string) map[string]string {
-	if copied, found := b.copies.At(s, edge); found {
-		return map[string]string{copied.Name: b.copyIDs[s][copied]}
-	}
-	if element, declared := b.copies.Joined(s, edge); declared {
-		return map[string]string{element.Name: b.nodeOf(element)}
+	element, copied, found := b.copies.Joined(s, edge)
+	switch {
+	case copied:
+		return map[string]string{element.Name: b.copyIDs[s][element]}
+	case found:
+		return map[string]string{element.Name: b.declaredIDs[element]}
 	}
 
 	return ids

@@ -3846,7 +3846,7 @@ func TestExport(t *testing.T) {
 					}},
 				}
 				copies := diagram.NewElementCopies(model)
-				require.Equal(t, []diagram.ElementCopy{{Kind: diagram.CopyOfEvent, Name: "RoomBooked", DeclaredIn: "Book Direct"}},
+				require.Equal(t, []diagram.DeclaredElement{{Kind: diagram.ElementEvent, Name: "RoomBooked", Slice: model.Contexts[0].Slices[0]}},
 					copies.In(model.Contexts[0].Aggregates[0].Slices[2]), "the SVG says the copy is from Book Direct")
 
 				require.Equal(t, []string{
@@ -4033,6 +4033,43 @@ func TestExport(t *testing.T) {
 					}
 				}
 				require.Equal(t, []any{"Watch"}, ownFrom)
+			})
+
+			t.Run("starts at the element its own slice declares, though an earlier slice of the same name declares it too", func(t *testing.T) {
+				doc := diagramDocOf(t, &ast.Model{
+					Name: "Orders",
+					Contexts: []*ast.Context{
+						{Name: "Ordering", Aggregates: []*ast.Aggregate{{Name: "Order", Slices: []*ast.Slice{
+							{Name: "Cancel", Events: []*ast.Event{{Name: "OrderCancelled"}}},
+							{Name: "Ship"},
+							{Name: "Deliver"},
+						}}}},
+						{Name: "Refunds", Aggregates: []*ast.Aggregate{{Name: "Refund", Slices: []*ast.Slice{{
+							Name:   "Cancel",
+							Events: []*ast.Event{{Name: "OrderCancelled"}},
+							Views:  []*ast.View{{Name: "CancelView", Subscribes: []string{"OrderCancelled"}}},
+						}}}}},
+					},
+				})
+				var cancelSlices []string
+				eventIn := make(map[string]string)
+				for _, node := range objectsUnder(doc, "nodes") {
+					switch {
+					case node["type"] == "slice" && node["label"] == "Cancel":
+						cancelSlices = append(cancelSlices, node["id"].(string))
+					case node["type"] == "event":
+						eventIn[node["parentId"].(string)] = node["id"].(string)
+					}
+				}
+				require.Len(t, cancelSlices, 2)
+
+				var sources []string
+				for _, edge := range objectsUnder(doc, "edges") {
+					if edge["type"] == "subscription" {
+						sources = append(sources, edge["source"].(string))
+					}
+				}
+				require.Equal(t, []string{eventIn[cancelSlices[1]]}, sources, "the edge starts at the event of the Cancel slice of Refunds")
 			})
 
 			t.Run("joins a command to its event, although a slice declares an event with no name", func(t *testing.T) {
@@ -6242,10 +6279,10 @@ func edgeTargetsOutOf(doc map[string]any, edgeType, source string) []string {
 
 // copyNodeTypes transcribes the node type the diagram document gives each kind
 // of copy.
-var copyNodeTypes = map[diagram.CopyKind]string{
-	diagram.CopyOfEvent:   "event_copy",
-	diagram.CopyOfView:    "view_copy",
-	diagram.CopyOfCommand: "command_copy",
+var copyNodeTypes = map[diagram.ElementKind]string{
+	diagram.ElementEvent:   "event_copy",
+	diagram.ElementView:    "view_copy",
+	diagram.ElementCommand: "command_copy",
 }
 
 // copyNodesBySlice names, for each slice that draws a copy, the type and label of

@@ -227,6 +227,41 @@ func TestExportSVG(t *testing.T) {
 		require.Equal(t, []int{max(own[0].x, own[1].x)}, starts, "the arrow starts at the event of Watch, the rightmost of the two")
 	})
 
+	t.Run("draws the arrow into a view from the event its own slice declares, though an earlier slice of the same name declares the event too", func(t *testing.T) {
+		output := svgOf(t, &ast.Model{
+			Name: "Orders",
+			Contexts: []*ast.Context{
+				{Name: "Ordering", Aggregates: []*ast.Aggregate{{Name: "Order", Slices: []*ast.Slice{
+					{Name: "Cancel", Events: []*ast.Event{{Name: "OrderCancelled"}}},
+					{Name: "Ship"},
+					{Name: "Deliver"},
+				}}}},
+				{Name: "Refunds", Aggregates: []*ast.Aggregate{{Name: "Refund", Slices: []*ast.Slice{{
+					Name:   "Cancel",
+					Events: []*ast.Event{{Name: "OrderCancelled"}},
+					Views:  []*ast.View{{Name: "CancelView", Subscribes: []string{"OrderCancelled"}}},
+				}}}}},
+			},
+		})
+		ends := svgArrowBoxes(t, output)
+		var cancelled []boxRect
+		for _, box := range svgBoxes(t, output) {
+			if lineText(box.label) == "OrderCancelled" {
+				cancelled = append(cancelled, box.rect)
+			}
+		}
+		require.Len(t, cancelled, 2, "each slice named Cancel draws an event OrderCancelled, and neither draws a copy of it")
+
+		var starts []int
+		for _, arrow := range svgDrawnArrows(t, output) {
+			if from := arrowBoxMet(t, ends, arrow.route[0]); lineText(from.label) == "OrderCancelled" {
+				starts = append(starts, from.rect.x)
+			}
+		}
+		require.Equal(t, []int{max(cancelled[0].x, cancelled[1].x)}, starts,
+			"the arrow starts at the event of the Cancel slice of Refunds, the rightmost of the two")
+	})
+
 	t.Run("draws no arrow into a view from an event no slice declares", func(t *testing.T) {
 		model := &ast.Model{
 			Name: "Test",

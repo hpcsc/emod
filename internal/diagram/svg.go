@@ -141,20 +141,20 @@ func placeBoxes(entries []sliceEntry, columns []sliceColumn, copies ElementCopie
 	// the slice that declares it, so that an arrow joins the copy or the element
 	// that ElementCopies names: nameToBox keeps the last box drawn under a name,
 	// of any kind.
-	copyBoxes := make([]map[ElementCopy]svgBox, len(entries))
-	declaredBoxes := make(map[ElementCopy]svgBox)
-	declare := func(kind CopyKind, name string, s *ast.Slice, box svgBox) svgBox {
-		key := ElementCopy{Kind: kind, Name: name, DeclaredIn: s.Name}
+	copyBoxes := make([]map[DeclaredElement]svgBox, len(entries))
+	declaredBoxes := make(map[DeclaredElement]svgBox)
+	declare := func(kind ElementKind, name string, s *ast.Slice, box svgBox) svgBox {
+		key := DeclaredElement{Kind: kind, Name: name, Slice: s}
 		if _, seen := declaredBoxes[key]; !seen {
 			declaredBoxes[key] = box
 		}
 		return box
 	}
 	joinedBox := func(i int, edge Edge) (svgBox, bool) {
-		if copied, found := copies.At(entries[i].slice, edge); found {
-			return copyBoxes[i][copied], true
+		element, copied, _ := copies.Joined(entries[i].slice, edge)
+		if copied {
+			return copyBoxes[i][element], true
 		}
-		element, _ := copies.Joined(entries[i].slice, edge)
 		box, drawn := declaredBoxes[element]
 		return box, drawn
 	}
@@ -180,14 +180,14 @@ func placeBoxes(entries []sliceEntry, columns []sliceColumn, copies ElementCopie
 
 		// --- Commands (middle lane) ---
 		copiedEvents, copiedMiddle := copiesByRow(copies.In(s))
-		copyBoxes[i] = make(map[ElementCopy]svgBox)
+		copyBoxes[i] = make(map[DeclaredElement]svgBox)
 		totalMid := middleRowItems(s) + len(copiedMiddle)
 		usableW := column.w - 20
 		for ci, cmd := range s.Commands {
 			itemW, x := itemLayout(usableW, totalMid, ci, sliceX)
 			b.WriteString(svgRoundedRect(x, cmdViewRowY, itemW, boxHeight, fillCommand, strokeCommand, 5, cmd.Description))
 			b.WriteString(svgText(x+itemW/2, cmdViewRowY+boxHeight/2, cmd.Name, 12, strokeCommand))
-			nameToBox[cmd.Name] = declare(CopyOfCommand, cmd.Name, s, placed(svgBox{x: x, y: cmdViewRowY, w: itemW, h: boxHeight, lane: commandsAndViewsLane}))
+			nameToBox[cmd.Name] = declare(ElementCommand, cmd.Name, s, placed(svgBox{x: x, y: cmdViewRowY, w: itemW, h: boxHeight, lane: commandsAndViewsLane}))
 		}
 
 		// --- Views (middle lane) ---
@@ -196,7 +196,7 @@ func placeBoxes(entries []sliceEntry, columns []sliceColumn, copies ElementCopie
 			itemW, x := itemLayout(usableW, totalMid, idx, sliceX)
 			b.WriteString(svgRoundedRect(x, cmdViewRowY, itemW, boxHeight, fillView, strokeView, 5, view.Description))
 			b.WriteString(svgText(x+itemW/2, cmdViewRowY+boxHeight/2, view.Name, 12, strokeView))
-			nameToBox[view.Name] = declare(CopyOfView, view.Name, s, placed(svgBox{x: x, y: cmdViewRowY, w: itemW, h: boxHeight, lane: commandsAndViewsLane}))
+			nameToBox[view.Name] = declare(ElementView, view.Name, s, placed(svgBox{x: x, y: cmdViewRowY, w: itemW, h: boxHeight, lane: commandsAndViewsLane}))
 		}
 
 		// --- Copies of views and commands this slice joins from slices far away (middle lane) ---
@@ -219,7 +219,7 @@ func placeBoxes(entries []sliceEntry, columns []sliceColumn, copies ElementCopie
 			ei++
 			b.WriteString(svgRoundedRect(x, eventRowY, itemW, boxHeight, fillEvent, strokeEvent, 5, evt.Description))
 			b.WriteString(svgMultilineText(x+itemW/2, eventRowY+boxHeight/2, label, 11, strokeEvent))
-			nameToBox[evt.Name] = declare(CopyOfEvent, evt.Name, s, placed(svgBox{x: x, y: eventRowY, w: itemW, h: boxHeight, lane: eventsLane}))
+			nameToBox[evt.Name] = declare(ElementEvent, evt.Name, s, placed(svgBox{x: x, y: eventRowY, w: itemW, h: boxHeight, lane: eventsLane}))
 		}
 		for _, tr := range s.Translations {
 			if tr.Event != nil && tr.Event.Name != "" {
@@ -227,7 +227,7 @@ func placeBoxes(entries []sliceEntry, columns []sliceColumn, copies ElementCopie
 				ei++
 				b.WriteString(svgRoundedRect(x, eventRowY, itemW, boxHeight, fillEvent, strokeEvent, 5, tr.Event.Description))
 				b.WriteString(svgText(x+itemW/2, eventRowY+boxHeight/2, tr.Event.Name, 11, strokeEvent))
-				nameToBox[tr.Event.Name] = declare(CopyOfEvent, tr.Event.Name, s, placed(svgBox{x: x, y: eventRowY, w: itemW, h: boxHeight, lane: eventsLane}))
+				nameToBox[tr.Event.Name] = declare(ElementEvent, tr.Event.Name, s, placed(svgBox{x: x, y: eventRowY, w: itemW, h: boxHeight, lane: eventsLane}))
 			}
 		}
 
@@ -414,17 +414,17 @@ func svgTriggerRect(x, y, w, h int, fill, stroke string, rx int, description str
 
 // svgCopy draws a copy dashed, filled white and outlined in the stroke of what it
 // copies, with the copied element's name and the slice that declares it on it.
-func svgCopy(c ElementCopy, box svgBox) string {
+func svgCopy(c DeclaredElement, box svgBox) string {
 	stroke := strokeEvent
 	switch c.Kind {
-	case CopyOfView:
+	case ElementView:
 		stroke = strokeView
-	case CopyOfCommand:
+	case ElementCommand:
 		stroke = strokeCommand
 	}
 
 	return svgDashedRoundedRect(box.x, box.y, box.w, box.h, fillCopy, stroke, 5, "") +
-		svgMultilineText(box.x+box.w/2, box.y+box.h/2, strings.Join(c.labelLines(), "\n"), 11, stroke)
+		svgMultilineText(box.x+box.w/2, box.y+box.h/2, strings.Join(c.copyLabelLines(), "\n"), 11, stroke)
 }
 
 func svgDashedRoundedRect(x, y, w, h int, fill, stroke string, rx int, description string) string {

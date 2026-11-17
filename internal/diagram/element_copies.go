@@ -11,26 +11,26 @@ import (
 // arrow.
 const slicesApartToCopy = 2
 
-// CopyKind is the element type a copy draws again.
-type CopyKind int
+// ElementKind is whether an element is an event, a view or a command.
+type ElementKind int
 
 const (
-	CopyOfEvent CopyKind = iota
-	CopyOfView
-	CopyOfCommand
+	ElementEvent ElementKind = iota
+	ElementView
+	ElementCommand
 )
 
 // namesDeclaredIn names the elements of this kind that slice s declares.
-func (k CopyKind) namesDeclaredIn(s *ast.Slice) []string {
+func (k ElementKind) namesDeclaredIn(s *ast.Slice) []string {
 	var names []string
 	switch k {
-	case CopyOfView:
+	case ElementView:
 		for _, v := range s.Views {
 			if v != nil {
 				names = append(names, v.Name)
 			}
 		}
-	case CopyOfCommand:
+	case ElementCommand:
 		for _, cmd := range s.Commands {
 			if cmd != nil {
 				names = append(names, cmd.Name)
@@ -43,26 +43,26 @@ func (k CopyKind) namesDeclaredIn(s *ast.Slice) []string {
 	return names
 }
 
-// ElementCopy is an element drawn again in a slice that one of its arrows joins
-// to the element from a slice far away.
-type ElementCopy struct {
-	Kind       CopyKind
-	Name       string
-	DeclaredIn string
+// DeclaredElement is an event, a view or a command, as the slice that declares
+// it declares it.
+type DeclaredElement struct {
+	Kind  ElementKind
+	Name  string
+	Slice *ast.Slice
 }
 
-func (c ElementCopy) labelLines() []string {
-	if c.Kind == CopyOfCommand {
-		return []string{c.Name, "in " + c.DeclaredIn}
+func (e DeclaredElement) copyLabelLines() []string {
+	if e.Kind == ElementCommand {
+		return []string{e.Name, "in " + e.Slice.Name}
 	}
 
-	return []string{c.Name, "from " + c.DeclaredIn}
+	return []string{e.Name, "from " + e.Slice.Name}
 }
 
 // ElementCopies is what each slice of a model draws again.
 type ElementCopies struct {
-	bySlice        map[*ast.Slice][]ElementCopy
-	firstDeclaring map[CopyKind]map[string]*ast.Slice
+	bySlice        map[*ast.Slice][]DeclaredElement
+	firstDeclaring map[ElementKind]map[string]*ast.Slice
 }
 
 // NewElementCopies decides the copies of every slice of model. A slice copies an
@@ -75,13 +75,13 @@ func NewElementCopies(model *ast.Model) ElementCopies {
 	for i, ref := range refs {
 		layoutOrder[ref.Slice] = i
 	}
-	firstDeclaring := map[CopyKind]map[string]*ast.Slice{
-		CopyOfEvent:   firstDeclaringSlices(model, CopyOfEvent),
-		CopyOfView:    firstDeclaringSlices(model, CopyOfView),
-		CopyOfCommand: firstDeclaringSlices(model, CopyOfCommand),
+	firstDeclaring := map[ElementKind]map[string]*ast.Slice{
+		ElementEvent:   firstDeclaringSlices(model, ElementEvent),
+		ElementView:    firstDeclaringSlices(model, ElementView),
+		ElementCommand: firstDeclaringSlices(model, ElementCommand),
 	}
 
-	c := ElementCopies{bySlice: make(map[*ast.Slice][]ElementCopy), firstDeclaring: firstDeclaring}
+	c := ElementCopies{bySlice: make(map[*ast.Slice][]DeclaredElement), firstDeclaring: firstDeclaring}
 	for _, ref := range refs {
 		s := ref.Slice
 		for _, edge := range SliceEdges(s) {
@@ -96,7 +96,7 @@ func NewElementCopies(model *ast.Model) ElementCopies {
 			if abs(layoutOrder[s]-layoutOrder[first]) < slicesApartToCopy {
 				continue
 			}
-			copied := ElementCopy{Kind: kind, Name: name, DeclaredIn: first.Name}
+			copied := DeclaredElement{Kind: kind, Name: name, Slice: first}
 			if !slices.Contains(c.bySlice[s], copied) {
 				c.bySlice[s] = append(c.bySlice[s], copied)
 			}
@@ -106,59 +106,46 @@ func NewElementCopies(model *ast.Model) ElementCopies {
 	return c
 }
 
-// In returns the copies slice s draws, in the order its arrows first join them.
-func (c ElementCopies) In(s *ast.Slice) []ElementCopy {
+// In returns the elements slice s draws a copy of, in the order its arrows first
+// join them.
+func (c ElementCopies) In(s *ast.Slice) []DeclaredElement {
 	return c.bySlice[s]
 }
 
-// At returns the copy that edge, an arrow of slice s, joins in place of the
-// element it names, and whether s draws one.
-func (c ElementCopies) At(s *ast.Slice, edge Edge) (ElementCopy, bool) {
-	kind, name, copyable := copiedEnd(edge)
-	if !copyable {
-		return ElementCopy{}, false
-	}
-	for _, copied := range c.bySlice[s] {
-		if copied.Kind == kind && copied.Name == name {
-			return copied, true
-		}
-	}
-
-	return ElementCopy{}, false
-}
-
-// Joined returns the element that the end of edge, an arrow of slice s, that a
-// copy can stand in for joins when s draws no copy of it: the element s declares
-// itself, or else the element as the first slice that declares it declares it.
-// It reports false when no slice declares the element, and for an edge that no
+// Joined returns the element that the end of edge, an arrow of slice s, joins
+// when a copy can stand in for that end: the element s declares itself, or else
+// the element as the first slice that declares it declares it. copied reports
+// whether s draws a copy of that element, which the arrow joins in its place.
+// found is false when no slice declares the element, and for an edge that no
 // copy can stand in for.
-func (c ElementCopies) Joined(s *ast.Slice, edge Edge) (ElementCopy, bool) {
+func (c ElementCopies) Joined(s *ast.Slice, edge Edge) (element DeclaredElement, copied, found bool) {
 	kind, name, copyable := copiedEnd(edge)
 	if !copyable {
-		return ElementCopy{}, false
+		return DeclaredElement{}, false, false
 	}
 	if slices.Contains(kind.namesDeclaredIn(s), name) {
-		return ElementCopy{Kind: kind, Name: name, DeclaredIn: s.Name}, true
+		return DeclaredElement{Kind: kind, Name: name, Slice: s}, false, true
 	}
 	first, declared := c.firstDeclaring[kind][name]
 	if !declared {
-		return ElementCopy{}, false
+		return DeclaredElement{}, false, false
 	}
+	element = DeclaredElement{Kind: kind, Name: name, Slice: first}
 
-	return ElementCopy{Kind: kind, Name: name, DeclaredIn: first.Name}, true
+	return element, slices.Contains(c.bySlice[s], element), true
 }
 
 // copiedEnd names the end of edge that a copy can stand in for.
-func copiedEnd(edge Edge) (CopyKind, string, bool) {
+func copiedEnd(edge Edge) (ElementKind, string, bool) {
 	switch edge.Kind {
 	case EdgeSubscription, EdgeAutomationTrigger:
-		return CopyOfEvent, edge.From, true
+		return ElementEvent, edge.From, true
 	case EdgeTriggerReads, EdgeAutomationReads, EdgeTranslationReads:
-		return CopyOfView, edge.From, true
+		return ElementView, edge.From, true
 	case EdgeAutomationCommand, EdgeTranslationCommand:
-		return CopyOfCommand, edge.To, true
+		return ElementCommand, edge.To, true
 	case EdgeTranslationFlow:
-		return CopyOfCommand, edge.From, true
+		return ElementCommand, edge.From, true
 	default:
 		return 0, "", false
 	}
@@ -166,7 +153,7 @@ func copiedEnd(edge Edge) (CopyKind, string, bool) {
 
 // firstDeclaringSlices maps each element of kind to the first slice that
 // declares it.
-func firstDeclaringSlices(model *ast.Model, kind CopyKind) map[string]*ast.Slice {
+func firstDeclaringSlices(model *ast.Model, kind ElementKind) map[string]*ast.Slice {
 	first := make(map[string]*ast.Slice)
 	for _, s := range model.AllSlices() {
 		for _, name := range kind.namesDeclaredIn(s) {

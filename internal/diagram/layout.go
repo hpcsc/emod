@@ -192,9 +192,9 @@ func middleRowItems(s *ast.Slice) int {
 
 // copiesByRow splits the copies of a slice into those drawn in its events row
 // and those drawn in its Commands / Views row.
-func copiesByRow(copies []ElementCopy) (events, middle []ElementCopy) {
+func copiesByRow(copies []DeclaredElement) (events, middle []DeclaredElement) {
 	for _, c := range copies {
-		if c.Kind == CopyOfEvent {
+		if c.Kind == ElementEvent {
 			events = append(events, c)
 		} else {
 			middle = append(middle, c)
@@ -207,7 +207,7 @@ func copiesByRow(copies []ElementCopy) (events, middle []ElementCopy) {
 // columnWidth is how wide a slice is drawn: wide enough for its external
 // systems side by side, and, for a slice that draws copies, until every box in
 // the row that holds the most boxes is as wide as the longest line of a copy.
-func columnWidth(entry sliceEntry, copies []ElementCopy) int {
+func columnWidth(entry sliceEntry, copies []DeclaredElement) int {
 	systems := len(entry.slice.Translations)
 	width := max(sliceWidth, 20+systems*externalBoxWidth+(systems-1)*externalBoxGap)
 	if len(copies) == 0 {
@@ -216,7 +216,7 @@ func columnWidth(entry sliceEntry, copies []ElementCopy) int {
 
 	var longest int
 	for _, c := range copies {
-		for _, line := range c.labelLines() {
+		for _, line := range c.copyLabelLines() {
 			longest = max(longest, estimatedTextWidth(line, copyMeasureFontSize))
 		}
 	}
