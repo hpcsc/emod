@@ -2375,6 +2375,53 @@ func TestExport(t *testing.T) {
 			}, drawnFrom)
 		})
 
+		t.Run("two triggers that share a name each get a node in their own slice, joined to the view and the command of that slice, also when the commands share a name", func(t *testing.T) {
+			model := &ast.Model{
+				Name: "Shop",
+				Contexts: []*ast.Context{{
+					Name: "Shop",
+					Slices: []*ast.Slice{
+						{
+							Name:     "Apply Discount",
+							Trigger:  &ast.Trigger{Name: "Checkout Page", Reads: []string{"CartView"}},
+							Commands: []*ast.Command{{Name: "SubmitCart"}},
+							Views:    []*ast.View{{Name: "CartView"}},
+						},
+						{
+							Name:     "Place Order",
+							Trigger:  &ast.Trigger{Name: "Checkout Page", Reads: []string{"OrderView"}},
+							Commands: []*ast.Command{{Name: "SubmitCart"}},
+							Views:    []*ast.View{{Name: "OrderView"}},
+						},
+					},
+				}},
+			}
+
+			doc := diagramDocOf(t, model)
+
+			nodes := make(map[string]map[string]any)
+			for _, node := range objectsUnder(doc, "nodes") {
+				nodes[node["id"].(string)] = node
+			}
+			sliceOf := func(node map[string]any) string {
+				return nodes[node["parentId"].(string)]["label"].(string)
+			}
+			var triggerEdges []string
+			for _, edge := range objectsUnder(doc, "edges") {
+				source, target := nodes[edge["source"].(string)], nodes[edge["target"].(string)]
+				if source["type"] == "trigger" || target["type"] == "trigger" {
+					triggerEdges = append(triggerEdges, fmt.Sprintf("%s %s in %s -> %s %s in %s",
+						source["type"], source["label"], sliceOf(source), target["type"], target["label"], sliceOf(target)))
+				}
+			}
+			require.ElementsMatch(t, []string{
+				"view CartView in Apply Discount -> trigger Checkout Page in Apply Discount",
+				"trigger Checkout Page in Apply Discount -> command SubmitCart in Apply Discount",
+				"view OrderView in Place Order -> trigger Checkout Page in Place Order",
+				"trigger Checkout Page in Place Order -> command SubmitCart in Place Order",
+			}, triggerEdges)
+		})
+
 		t.Run("view node with fields and subscribes", func(t *testing.T) {
 			model := &ast.Model{
 				Name: "Test",

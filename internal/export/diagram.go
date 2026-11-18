@@ -180,7 +180,7 @@ type diagramBuilder struct {
 
 	commandIDs     map[string]string
 	eventIDs       map[string]string
-	triggerIDs     map[string]string
+	triggerIDs     map[*ast.Slice]string
 	viewIDs        map[string]string
 	automationIDs  map[string]string
 	translationIDs map[string]string
@@ -206,7 +206,7 @@ func newDiagramBuilder(modelName, modelDescription string, copies diagram.Elemen
 		ids:            newDiagramIDGenerator(),
 		commandIDs:     make(map[string]string),
 		eventIDs:       make(map[string]string),
-		triggerIDs:     make(map[string]string),
+		triggerIDs:     make(map[*ast.Slice]string),
 		viewIDs:        make(map[string]string),
 		automationIDs:  make(map[string]string),
 		translationIDs: make(map[string]string),
@@ -296,7 +296,7 @@ func (b *diagramBuilder) appendSlice(s *ast.Slice, parentID string) {
 
 	b.appendCommands(s, sliceID)
 	b.appendEvents(s, sliceID)
-	b.appendTrigger(s.Trigger, sliceID)
+	b.appendTrigger(s, sliceID)
 	b.appendViews(s, sliceID)
 	b.appendAutomations(s.Automations, sliceID)
 	b.appendTranslations(s, sliceID)
@@ -397,12 +397,13 @@ func (b *diagramBuilder) appendEvent(s *ast.Slice, evt *ast.Event, sliceID strin
 	b.appendNode(node)
 }
 
-func (b *diagramBuilder) appendTrigger(t *ast.Trigger, sliceID string) {
+func (b *diagramBuilder) appendTrigger(s *ast.Slice, sliceID string) {
+	t := s.Trigger
 	if t == nil {
 		return
 	}
 	tID := b.ids.next("trigger")
-	b.triggerIDs[t.Name] = tID
+	b.triggerIDs[s] = tID
 	b.appendNode(&jsonDiagramNode{
 		ID:          tID,
 		Type:        "trigger",
@@ -507,7 +508,7 @@ func (b *diagramBuilder) appendEdges(m *ast.Model) {
 				b.link(b.copiedEndIDs(ref.Slice, e, b.commandIDs), e.From, b.eventIDs, e.To, "flow")
 
 			case diagram.EdgeTriggerReads:
-				b.link(b.copiedEndIDs(ref.Slice, e, b.viewIDs), e.From, b.triggerIDs, e.To, "reads")
+				b.link(b.copiedEndIDs(ref.Slice, e, b.viewIDs), e.From, b.triggerIDsOf(ref.Slice), e.To, "reads")
 
 			case diagram.EdgeAutomationReads:
 				b.link(b.copiedEndIDs(ref.Slice, e, b.viewIDs), e.From, b.automationIDs, e.To, "reads")
@@ -516,7 +517,8 @@ func (b *diagramBuilder) appendEdges(m *ast.Model) {
 				b.link(b.copiedEndIDs(ref.Slice, e, b.viewIDs), e.From, b.translationIDs, e.To, "reads")
 
 			case diagram.EdgeTriggerCommand:
-				b.link(b.triggerIDs, e.From, b.commandIDs, e.To, "trigger_command")
+				command := diagram.DeclaredElement{Kind: diagram.ElementCommand, Name: e.To, Slice: ref.Slice}
+				b.link(b.triggerIDsOf(ref.Slice), e.From, b.declaredIDsOf(command), e.To, "trigger_command")
 
 			case diagram.EdgeSubscription:
 				b.link(b.copiedEndIDs(ref.Slice, e, b.eventIDs), e.From, b.viewIDs, e.To, "subscription")
@@ -545,6 +547,14 @@ func (b *diagramBuilder) appendEdges(m *ast.Model) {
 	}
 }
 
+func (b *diagramBuilder) triggerIDsOf(s *ast.Slice) map[string]string {
+	return map[string]string{s.Trigger.Name: b.triggerIDs[s]}
+}
+
+func (b *diagramBuilder) declaredIDsOf(element diagram.DeclaredElement) map[string]string {
+	return map[string]string{element.Name: b.declaredIDs[element]}
+}
+
 // copiedEndIDs returns the node ids to find an end of edge, an arrow of slice s,
 // in: the node of the element that ElementCopies.Joined names, or of the copy of
 // it that s draws. A name no slice declares is found in ids. Pass it for the end
@@ -555,7 +565,7 @@ func (b *diagramBuilder) copiedEndIDs(s *ast.Slice, edge diagram.Edge, ids map[s
 	case copied:
 		return map[string]string{element.Name: b.copyIDs[s][element]}
 	case found:
-		return map[string]string{element.Name: b.declaredIDs[element]}
+		return b.declaredIDsOf(element)
 	}
 
 	return ids

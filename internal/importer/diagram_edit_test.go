@@ -1565,6 +1565,49 @@ context "Lending" {
 			require.Equal(t, replaced(t, source, "reads = AvailableCopiesView\n    }", "reads = MemberLoansView\n    }"), result)
 		})
 
+		t.Run("moving an arrow onto a list that does not name its old end saves the new name without an error", func(t *testing.T) {
+			const twoCartViews = `emod = 1
+
+model "Shop" {
+}
+
+context "Shop" {
+  slice "Change Basket" {
+    event "ItemAdded" {
+    }
+
+    event "ItemRemoved" {
+    }
+
+    event "DiscountApplied" {
+    }
+  }
+
+  slice "Show Basket" {
+    view "CartView" {
+      subscribes = [ItemAdded]
+    }
+  }
+
+  slice "Show Order" {
+    view "CartView" {
+      subscribes = [ItemRemoved]
+    }
+  }
+}
+`
+			result := applied(t, twoCartViews, func(d *viewerDiagram) {
+				added, discount := d.idOf("ItemAdded"), d.idOf("DiscountApplied")
+				for _, edge := range d.Edges {
+					if edge["source"] == added && edge["type"] == "subscription" {
+						edge["source"] = discount
+					}
+				}
+			})
+
+			require.Equal(t, 2, strings.Count(result, "DiscountApplied"), "the event is declared and subscribed to once each")
+		})
+
 		t.Run("removing one of two flows that share a command and an event removes only its line", func(t *testing.T) {
 			result := applied(t, wiringModel, func(d *viewerDiagram) {
 				d.disconnect("BorrowCopy", "LoanRenewed")
@@ -1992,49 +2035,6 @@ context "Shop" {
 			require.Equal(t, replaced(t, source, "reads = [CartView, CartView]", "reads = [LoyaltyView, DiscountView]"), result)
 		})
 
-		t.Run("moving a reads arrow that the drawn trigger does not list saves the new view without an error", func(t *testing.T) {
-			const twoCheckoutPages = `emod = 1
-
-model "Shop" {
-}
-
-context "Shop" {
-  slice "Show Basket" {
-    view "CartView" {
-    }
-
-    view "OrderView" {
-    }
-
-    view "LoyaltyView" {
-    }
-  }
-
-  slice "Apply Discount" {
-    trigger "Checkout Page" {
-      reads = CartView
-    }
-  }
-
-  slice "Place Order" {
-    trigger "Checkout Page" {
-      reads = OrderView
-    }
-  }
-}
-`
-			result := applied(t, twoCheckoutPages, func(d *viewerDiagram) {
-				cart, loyalty := d.idOf("CartView"), d.idOf("LoyaltyView")
-				for _, edge := range d.Edges {
-					if edge["source"] == cart && edge["type"] == "reads" {
-						edge["source"] = loyalty
-					}
-				}
-			})
-
-			require.Equal(t, 2, strings.Count(result, "LoyaltyView"), "the view is declared and read once each")
-		})
-
 		t.Run("removing the arrow from the copy of a far view takes out that entry only", func(t *testing.T) {
 			source := replaced(t, checkoutModel, "reads = [CartView, DiscountView]", "reads = [OfferView, CartView]")
 
@@ -2043,6 +2043,69 @@ context "Shop" {
 			})
 
 			require.Equal(t, replaced(t, source, "reads = [OfferView, CartView]", "reads = CartView"), result)
+		})
+	})
+
+	t.Run("two triggers that share a name", func(t *testing.T) {
+		const twoCheckoutPages = `emod = 1
+
+model "Shop" {
+}
+
+context "Shop" {
+  slice "Apply Discount" {
+    trigger "Checkout Page" {
+      reads = CartView
+    }
+
+    view "CartView" {
+    }
+
+    view "LoyaltyView" {
+    }
+  }
+
+  slice "Place Order" {
+    trigger "Checkout Page" {
+      reads = OrderView
+    }
+
+    view "OrderView" {
+    }
+  }
+}
+`
+		triggerOf := func(d *viewerDiagram, slice string) string {
+			sliceID := d.idOf(slice)
+			for _, n := range d.Nodes {
+				if n["type"] == "trigger" && n["parentId"] == sliceID {
+					return n["id"].(string)
+				}
+			}
+			require.Failf(d.t, "no trigger", "the diagram has to draw a trigger in %s", slice)
+			return ""
+		}
+
+		t.Run("a save with no edit keeps both triggers, each in its own slice", func(t *testing.T) {
+			result := applied(t, twoCheckoutPages, func(d *viewerDiagram) {})
+
+			require.Equal(t, twoCheckoutPages, result)
+		})
+
+		t.Run("removing the reads arrow of the trigger of one slice takes the view out of that trigger only", func(t *testing.T) {
+			result := applied(t, twoCheckoutPages, func(d *viewerDiagram) {
+				d.disconnectIDs(d.idOf("CartView"), triggerOf(d, "Apply Discount"))
+			})
+
+			require.Equal(t, replaced(t, twoCheckoutPages, "    trigger \"Checkout Page\" {\n      reads = CartView\n    }", "    trigger \"Checkout Page\" {\n    }"), result)
+		})
+
+		t.Run("a new reads arrow onto the trigger of one slice changes the reads of that trigger only", func(t *testing.T) {
+			result := applied(t, twoCheckoutPages, func(d *viewerDiagram) {
+				d.Edges = append(d.Edges, map[string]any{"source": d.idOf("LoyaltyView"), "target": triggerOf(d, "Apply Discount"), "type": "reads"})
+			})
+
+			require.Equal(t, replaced(t, twoCheckoutPages, "reads = CartView", "reads = [CartView, LoyaltyView]"), result)
 		})
 	})
 

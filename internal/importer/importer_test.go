@@ -849,6 +849,41 @@ context "Shop" {
 			require.Equal(t, source, formatter.Format(importFrom(t, source)))
 		})
 
+		t.Run("two triggers that share a name come back each in its own slice, reading its own view", func(t *testing.T) {
+			source := `emod = 1
+
+model "Shop" {
+}
+
+context "Shop" {
+  slice "Apply Discount" {
+    trigger "Checkout Page" {
+      reads = CartView
+    }
+
+    command "ApplyDiscount" {
+    }
+
+    view "CartView" {
+    }
+  }
+
+  slice "Place Order" {
+    trigger "Checkout Page" {
+      reads = OrderView
+    }
+
+    command "PlaceOrder" {
+    }
+
+    view "OrderView" {
+    }
+  }
+}
+`
+			require.Equal(t, source, formatter.Format(importFrom(t, source)))
+		})
+
 		t.Run("a trigger node that gives its reads as one name imports a list of one", func(t *testing.T) {
 			diagram := `{
               "model_name": "M",

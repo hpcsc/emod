@@ -83,17 +83,17 @@ slice, and a save from the viewer keeps both triggers, each in its own slice, wi
 
 **Acceptance Criteria:**
 
-- [ ] With two slices that each have `trigger "Checkout Page"`, the diagram document has two trigger nodes, each
+- [x] With two slices that each have `trigger "Checkout Page"`, the diagram document has two trigger nodes, each
       a child of its own slice, and each node is the target of the `reads` edge from its own slice's view and
       the source of the `trigger_command` edge to its own slice's command. No edge joins a trigger node to a node
       of the other slice.
-- [ ] `ImportDiagram` on that document, then `formatter.Format`, gives back the source, with both triggers, each
+- [x] `ImportDiagram` on that document, then `formatter.Format`, gives back the source, with both triggers, each
       in its own slice and each reading its own view.
-- [ ] `ApplyDiagram` with no edit leaves that source as it was, and a new `reads` arrow onto the trigger of one
+- [x] `ApplyDiagram` with no edit leaves that source as it was, and a new `reads` arrow onto the trigger of one
       slice changes the reads of that trigger only.
-- [ ] A model where each trigger has a unique name exports the same document as before: the existing diagram
+- [x] A model where each trigger has a unique name exports the same document as before: the existing diagram
       document tests pass with no change to their expected values.
-- [ ] `task test:unit` and `task test:integration` pass.
+- [x] `task test:unit` and `task test:integration` pass.
 
 **Affected Files/Modules:**
 
