@@ -91,7 +91,7 @@
     },
     {
       "n": 4,
-      "done": false,
+      "done": true,
       "title": "Remove the actor from the JSON and CUE exports and from the CUE schema",
       "language": "Go",
       "testable": true,

@@ -81,14 +81,7 @@ func (w *cueWriter) writeModel(m *ast.Model) {
 	w.writeComments(m.Comments)
 	w.line("name: %q", m.Name)
 	w.lineIfSet("description", m.Description)
-	writeCUEList(w, "actors", m.Actors, w.writeActor)
 	writeCUEList(w, "contexts", m.Contexts, w.writeContext)
-}
-
-func (w *cueWriter) writeActor(a *ast.Actor) {
-	w.writeComments(a.Comments)
-	w.line("name: %q", a.Name)
-	w.lineIfSet("description", a.Description)
 }
 
 func (w *cueWriter) writeContext(c *ast.Context) {
@@ -185,7 +178,6 @@ func (w *cueWriter) writeTrigger(t *ast.Trigger) {
 	w.writeComments(t.Comments)
 	w.line("name: %q", t.Name)
 	w.lineIfSet("description", t.Description)
-	w.lineIfSet("actor", t.Actor)
 	w.listIfSet("reads", t.Reads)
 }
 

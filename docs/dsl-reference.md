@@ -855,7 +855,7 @@ context "Reservations" {
 - **`description` is not a reserved word:** `fields { description = string }` still declares an ordinary field named `description`.
 - **Position inside the body is free:** the parser accepts `description` before or after the construct's other entries.
 - **`emod fmt` moves it to the first line of the body**, ahead of the construct's other attributes and its nested blocks.
-- **Exports carry the text:** `emod export --format json` and `emod export --format cue` emit a `description` key on the model, on each actor and on each described construct.
+- **Exports carry the text:** `emod export --format json` and `emod export --format cue` emit a `description` key on the model and on each described construct.
 - **Diagrams surface it on the shape:** `emod diagram --format svg` emits the description as a `<title>` element on the construct's shape.
 - **A construct without a shape stays off the diagrams:** `model`, `actor`, `aggregate` and `slice` own no shape in the SVG. The `mermaid` and `ascii` formats carry no descriptions at all.
 - **The glossary reads it as the definition:** `emod glossary` prints the description beneath the name it defines.

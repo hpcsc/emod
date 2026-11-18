@@ -42,7 +42,7 @@ func TestExport(t *testing.T) {
 			require.False(t, hasContexts, "nil contexts should be omitted")
 		})
 
-		t.Run("serializes actors", func(t *testing.T) {
+		t.Run("serializes no actors, though the model declares two", func(t *testing.T) {
 			model := &ast.Model{
 				Name: "App",
 				Actors: []*ast.Actor{
@@ -58,11 +58,8 @@ func TestExport(t *testing.T) {
 			err = json.Unmarshal(raw, &doc)
 			require.NoError(t, err)
 
-			actors, ok := doc["actors"].([]any)
-			require.True(t, ok)
-			require.Len(t, actors, 2)
-			require.Equal(t, "Guest", actors[0].(map[string]any)["name"])
-			require.Equal(t, "Admin", actors[1].(map[string]any)["name"])
+			require.Equal(t, "App", doc["name"])
+			require.NotContains(t, doc, "actors")
 		})
 
 		t.Run("serializes context with aggregate and slice containing command with typed fields", func(t *testing.T) {
@@ -131,7 +128,7 @@ func TestExport(t *testing.T) {
 			require.Equal(t, "required", f1["modifier"])
 		})
 
-		t.Run("serializes trigger with actor and reads", func(t *testing.T) {
+		t.Run("serializes a trigger with its reads and no actor", func(t *testing.T) {
 			model := &ast.Model{
 				Name: "Test",
 				Contexts: []*ast.Context{
@@ -170,7 +167,7 @@ func TestExport(t *testing.T) {
 			_, hasKindPosition := tr["kind_position"]
 			require.False(t, hasKindPosition, "trigger export must not carry a kind_position")
 			require.Equal(t, "Form", tr["name"])
-			require.Equal(t, "Guest", tr["actor"])
+			require.NotContains(t, tr, "actor")
 			require.Equal(t, []any{"MyView"}, tr["reads"])
 		})
 
@@ -472,7 +469,7 @@ func TestExport(t *testing.T) {
 			require.Equal(t, "optional", f1["modifier"])
 		})
 
-		t.Run("multiple contexts and actors produce full document", func(t *testing.T) {
+		t.Run("multiple contexts produce a full document, and the actors the model declares do not reach it", func(t *testing.T) {
 			model := &ast.Model{
 				Name: "App",
 				Actors: []*ast.Actor{
@@ -503,9 +500,7 @@ func TestExport(t *testing.T) {
 			require.NoError(t, err)
 
 			require.Equal(t, "App", doc["name"])
-
-			actors := doc["actors"].([]any)
-			require.Len(t, actors, 2)
+			require.NotContains(t, doc, "actors")
 
 			contexts := doc["contexts"].([]any)
 			require.Len(t, contexts, 2)
@@ -644,7 +639,7 @@ func TestExport(t *testing.T) {
 			require.NoError(t, err)
 
 			require.Equal(t, "Full", doc["name"])
-			require.Len(t, doc["actors"], 1)
+			require.NotContains(t, doc, "actors")
 			require.Len(t, doc["contexts"], 1)
 
 			c := doc["contexts"].([]any)[0].(map[string]any)
@@ -676,29 +671,6 @@ func TestExport(t *testing.T) {
 			require.Equal(t, "test.cue", pos["filename"])
 			require.Equal(t, float64(1), pos["line"])
 			require.Equal(t, float64(1), pos["column"])
-		})
-
-		t.Run("includes position for actor name", func(t *testing.T) {
-			model := &ast.Model{
-				Name: "App",
-				Actors: []*ast.Actor{
-					{Name: "Guest", NamePos: ast.Position{Filename: "test.cue", Line: 2, Column: 3}},
-				},
-			}
-
-			raw, err := export.ExportJSON(model)
-			require.NoError(t, err)
-
-			var doc map[string]any
-			err = json.Unmarshal(raw, &doc)
-			require.NoError(t, err)
-
-			actors := doc["actors"].([]any)
-			a := actors[0].(map[string]any)
-			pos := a["position"].(map[string]any)
-			require.Equal(t, "test.cue", pos["filename"])
-			require.Equal(t, float64(2), pos["line"])
-			require.Equal(t, float64(3), pos["column"])
 		})
 
 		t.Run("includes positions for context name and braces", func(t *testing.T) {
@@ -993,7 +965,7 @@ func TestExport(t *testing.T) {
 			require.Equal(t, float64(28), f["event_position"].(map[string]any)["column"])
 		})
 
-		t.Run("includes positions for trigger name/actor/reads and braces", func(t *testing.T) {
+		t.Run("includes positions for trigger name, reads and braces, and none for an actor", func(t *testing.T) {
 			model := &ast.Model{
 				Name: "Test",
 				Contexts: []*ast.Context{
@@ -1035,7 +1007,7 @@ func TestExport(t *testing.T) {
 			_, hasKindPosition := tr["kind_position"]
 			require.False(t, hasKindPosition, "trigger export must not carry a kind_position")
 			require.Equal(t, float64(7), tr["position"].(map[string]any)["column"])
-			require.Equal(t, float64(13), tr["actor_position"].(map[string]any)["column"])
+			require.NotContains(t, tr, "actor_position")
 			require.Equal(t, float64(20), tr["reads_position"].([]any)[0].(map[string]any)["column"])
 			require.Equal(t, float64(28), tr["open_position"].(map[string]any)["column"])
 			require.Equal(t, float64(5), tr["close_position"].(map[string]any)["line"])
@@ -1126,7 +1098,7 @@ func TestExport(t *testing.T) {
 			keyOrder := emittedKeyOrder(t, raw)
 			require.Equal(t, []string{
 				"comments", "name", "description", "position",
-				"actor", "actor_position", "reads", "reads_position",
+				"reads", "reads_position",
 				"open_position", "close_position",
 			}, keyOrder["Form"], "trigger key order must stay as today")
 			require.Equal(t, []string{
@@ -1408,12 +1380,7 @@ func TestExport(t *testing.T) {
 		})
 
 		t.Run("zero-value positions are omitted from output", func(t *testing.T) {
-			model := &ast.Model{
-				Name: "NoPos",
-				Actors: []*ast.Actor{
-					{Name: "Guest"},
-				},
-			}
+			model := &ast.Model{Name: "NoPos"}
 
 			raw, err := export.ExportJSON(model)
 			require.NoError(t, err)
@@ -1424,11 +1391,6 @@ func TestExport(t *testing.T) {
 
 			_, hasModelPos := doc["position"]
 			require.False(t, hasModelPos, "zero-value position should be omitted")
-
-			actors := doc["actors"].([]any)
-			a := actors[0].(map[string]any)
-			_, hasActorPos := a["position"]
-			require.False(t, hasActorPos, "zero-value actor position should be omitted")
 		})
 
 		t.Run("carries the description of every construct that accepts one", func(t *testing.T) {
@@ -1440,7 +1402,6 @@ func TestExport(t *testing.T) {
 
 			require.Equal(t, map[string]any{
 				"model":             "How the whole system earns its keep",
-				"actor":             "The person the system serves",
 				"context":           "The language boundary the model lives inside",
 				"aggregate":         "The thing decisions are made about",
 				"slice":             "One decision and everything it needs",
@@ -2052,7 +2013,7 @@ func TestExport(t *testing.T) {
 			modelVal, ok := doc["model"].(map[string]any)
 			require.True(t, ok)
 			require.Equal(t, "Full", modelVal["name"])
-			require.Len(t, modelVal["actors"], 1)
+			require.NotContains(t, modelVal, "actors")
 			require.Len(t, modelVal["contexts"], 1)
 
 			// Verify ExportJSON is unchanged — bare model JSON is still valid
@@ -4530,7 +4491,7 @@ func TestExport(t *testing.T) {
 		// structural assertions below decode it with the real compiler instead of
 		// matching text fragments, which pass wherever a fragment happens to sit.
 		t.Run("decoded structure", func(t *testing.T) {
-			t.Run("carries actors in declaration order", func(t *testing.T) {
+			t.Run("carries no actors, though the model declares two", func(t *testing.T) {
 				cueBin := lookupCue(t)
 				model := &ast.Model{
 					Name:   "App",
@@ -4540,10 +4501,7 @@ func TestExport(t *testing.T) {
 				doc := exportedCUEDoc(t, cueBin, model)
 
 				require.Equal(t, "App", doc["name"])
-				require.Equal(t, []any{
-					map[string]any{"name": "Guest"},
-					map[string]any{"name": "Admin"},
-				}, doc["actors"])
+				require.NotContains(t, doc, "actors")
 			})
 
 			t.Run("nests a command with its typed fields inside slice, aggregate and context", func(t *testing.T) {
@@ -4604,7 +4562,6 @@ func TestExport(t *testing.T) {
 
 				require.Equal(t, map[string]any{
 					"name":  "Form",
-					"actor": "Guest",
 					"reads": []any{"MyView"},
 				}, slice["trigger"])
 			})
@@ -5295,7 +5252,8 @@ func TestExport(t *testing.T) {
 			require.NotNil(t, reserveSlice)
 			trigger := reserveSlice["trigger"].(map[string]any)
 			require.Equal(t, "Reservation Form", trigger["name"])
-			require.Equal(t, "Guest", trigger["actor"])
+			require.NotContains(t, trigger, "actor")
+			require.NotContains(t, trigger, "actor_position")
 			require.Equal(t, []any{"AvailableRoomsView"}, trigger["reads"])
 			_, hasKind := trigger["kind"]
 			require.False(t, hasKind, "exported trigger must not carry kind")
@@ -5310,7 +5268,7 @@ func TestExport(t *testing.T) {
 			require.NotNil(t, reserveSliceCUE)
 			triggerCUE := reserveSliceCUE["trigger"].(map[string]any)
 			require.Equal(t, "Reservation Form", triggerCUE["name"])
-			require.Equal(t, "Guest", triggerCUE["actor"])
+			require.NotContains(t, triggerCUE, "actor")
 			require.Equal(t, []any{"AvailableRoomsView"}, triggerCUE["reads"])
 			require.NotContains(t, string(cueRaw), "kind: ", "exported CUE trigger must not carry kind")
 		})
@@ -6940,7 +6898,6 @@ func descriptionsByConstruct(t *testing.T, doc map[string]any) map[string]any {
 
 	return map[string]any{
 		"model":             doc["description"],
-		"actor":             firstOf(t, doc, "actors")["description"],
 		"context":           context["description"],
 		"aggregate":         aggregate["description"],
 		"slice":             slice["description"],

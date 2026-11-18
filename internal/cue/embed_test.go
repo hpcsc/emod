@@ -74,10 +74,10 @@ func TestSchema(t *testing.T) {
 	t.Run("rejects a model with no name", func(t *testing.T) {
 		cueBin := requireCue(t)
 
-		output, err := vetAgainstModel(t, cueBin, `{"actors":[{"name":"Guest"}]}`)
+		output, err := vetAgainstModel(t, cueBin, `{"contexts":[]}`)
 
 		require.Error(t, err, "schema accepted a nameless model")
-		require.Contains(t, string(output), "name")
+		require.Contains(t, string(output), "name: incomplete value")
 	})
 
 	t.Run("rejects a model whose name is not a string", func(t *testing.T) {
@@ -178,6 +178,30 @@ func TestSchema(t *testing.T) {
 		require.Contains(t, string(output), "schedule")
 	})
 
+	t.Run("rejects a model that carries the retired actors", func(t *testing.T) {
+		cueBin := requireCue(t)
+
+		output, err := vetAgainstModel(t, cueBin, strings.Replace(fullModelJSON,
+			`"contexts": [{`,
+			`"actors": [{"name": "Guest"}],
+  "contexts": [{`, 1))
+
+		require.Error(t, err, "schema accepted a model carrying actors")
+		require.Contains(t, string(output), "actors: field not allowed")
+	})
+
+	t.Run("rejects a trigger that carries the retired actor", func(t *testing.T) {
+		cueBin := requireCue(t)
+
+		output, err := vetAgainstModel(t, cueBin, strings.Replace(fullModelJSON,
+			`"reads": ["RoomsView"]`,
+			`"actor": "Guest",
+          "reads": ["RoomsView"]`, 1))
+
+		require.Error(t, err, "schema accepted a trigger carrying actor")
+		require.Contains(t, string(output), "actor: field not allowed")
+	})
+
 	t.Run("rejects a trigger whose reads is stated as one name rather than a list", func(t *testing.T) {
 		cueBin := requireCue(t)
 
@@ -242,7 +266,6 @@ const fullModelJSON = `{
   "comments": [{"text": "# Full model"}],
   "name": "Full",
   "description": "How the hotel takes and imports bookings",
-  "actors": [{"name": "Guest", "description": "A person booking a room"}],
   "contexts": [{
     "name": "Reservations",
     "description": "What the hotel knows before the guest arrives",
@@ -264,7 +287,6 @@ const fullModelJSON = `{
         "trigger": {
           "name": "Form",
           "description": "The booking form on the public site",
-          "actor": "Guest",
           "reads": ["RoomsView"]
         },
         "commands": [{

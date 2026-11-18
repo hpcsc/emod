@@ -16,7 +16,6 @@
 	comments?:    [...#Comment]
 	name:         string
 	description?: string
-	actor?:       string
 	reads?:       [...string]
 }
 
@@ -143,16 +142,9 @@
 	slices?:      [...#Slice]
 }
 
-#Actor: {
-	comments?:    [...#Comment]
-	name:         string
-	description?: string
-}
-
 #Model: {
 	comments?:    [...#Comment]
 	name:         string
 	description?: string
-	actors?:      [...#Actor]
 	contexts?:    [...#Context]
 }

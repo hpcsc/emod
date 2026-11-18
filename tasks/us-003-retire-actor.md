@@ -365,20 +365,20 @@ export leaves it out.
 
 **Acceptance Criteria:**
 
-- [ ] `emod export --format json` of a model that declares an actor, with a trigger that names it, has no
+- [x] `emod export --format json` of a model that declares an actor, with a trigger that names it, has no
       `actors` key, and the trigger has no `actor` and no `actor_position` key. The same holds for
       `examples/all_patterns.emod`.
-- [ ] `emod export --format cue` of that model has no `actors` field and no `actor` field on the trigger, and
+- [x] `emod export --format cue` of that model has no `actors` field and no `actor` field on the trigger, and
       it passes `cue vet` against the schema.
-- [ ] `internal/cue/schema.cue` declares no `#Actor`, no `actors` on `#Model` and no `actor` on `#Trigger`.
+- [x] `internal/cue/schema.cue` declares no `#Actor`, no `actors` on `#Model` and no `actor` on `#Trigger`.
       `cue vet` rejects a model document that carries `actors`, and one whose trigger carries `actor`. Each
       failure names the key.
-- [ ] `emod schema` prints no `#Actor`.
-- [ ] The schema leaf "rejects a model with no name" fails on the missing name only: its document carries no
+- [x] `emod schema` prints no `#Actor`.
+- [x] The schema leaf "rejects a model with no name" fails on the missing name only: its document carries no
       key that the schema rejects for another reason.
-- [ ] No code in `internal/export/json.go` or `internal/export/cue.go` reads `Model.Actors` or `Trigger.Actor`.
+- [x] No code in `internal/export/json.go` or `internal/export/cue.go` reads `Model.Actors` or `Trigger.Actor`.
       The exports bullet of `docs/dsl-reference.md` (`:858`) names no actor.
-- [ ] `task test:unit` passes.
+- [x] `task test:unit` passes.
 
 **Affected Files/Modules:**
 

@@ -62,7 +62,7 @@ func TestExport(t *testing.T) {
 		require.Equal(t, "Hotel Reservation", modelVal["name"])
 	})
 
-	t.Run("valid file wrapped output includes actors and contexts under model key", func(t *testing.T) {
+	t.Run("valid file wrapped output includes contexts and no actors under model key", func(t *testing.T) {
 		path := writeTemp(t, "valid.emod", validEmod)
 
 		output := captureStdout(t, func() {
@@ -77,10 +77,7 @@ func TestExport(t *testing.T) {
 		modelVal, ok := doc["model"].(map[string]interface{})
 		require.True(t, ok, "expected model key in output")
 
-		actors, ok := modelVal["actors"].([]interface{})
-		require.True(t, ok, "expected actors in model output")
-		require.Len(t, actors, 1)
-		require.Equal(t, "Guest", actors[0].(map[string]interface{})["name"])
+		require.NotContains(t, modelVal, "actors")
 
 		_, ok = modelVal["contexts"].([]interface{})
 		require.True(t, ok, "expected contexts in model output")
@@ -101,7 +98,6 @@ func TestExport(t *testing.T) {
 		require.Empty(t, doc["diagnostics"])
 
 		modelVal := doc["model"].(map[string]interface{})
-		actor := modelVal["actors"].([]interface{})[0].(map[string]interface{})
 		context := modelVal["contexts"].([]interface{})[0].(map[string]interface{})
 		aggregate := context["aggregates"].([]interface{})[0].(map[string]interface{})
 		slice := aggregate["slices"].([]interface{})[0].(map[string]interface{})
@@ -109,14 +105,12 @@ func TestExport(t *testing.T) {
 
 		require.Equal(t, map[string]interface{}{
 			"model":     "How the hotel takes, confirms and imports room bookings",
-			"actor":     "A person booking a room, not necessarily the one staying in it",
 			"context":   "Everything the hotel knows about a stay before the guest arrives",
 			"aggregate": "One guest holding one room over one date range",
 			"slice":     "A guest books a room from the public site",
 			"command":   "Ask the hotel to hold a room for a date range, 10% deposit taken up front",
 		}, map[string]interface{}{
 			"model":     modelVal["description"],
-			"actor":     actor["description"],
 			"context":   context["description"],
 			"aggregate": aggregate["description"],
 			"slice":     slice["description"],
@@ -465,7 +459,7 @@ context "Orders" {
 		})
 
 		require.Contains(t, output, "Hotel Reservation")
-		require.Contains(t, output, "Guest")
+		require.Contains(t, output, "Reservations")
 	})
 
 	t.Run("CUE format with diagnostics writes text to stderr and returns non-zero exit", func(t *testing.T) {
@@ -526,7 +520,7 @@ context "Orders" {
 func TestExportAllPatterns(t *testing.T) {
 	path := "../../examples/all_patterns.emod"
 
-	t.Run("json export includes the trigger under its slice with actor and reads", func(t *testing.T) {
+	t.Run("json export includes the trigger under its slice with its reads and no actor", func(t *testing.T) {
 		output := captureStdout(t, func() {
 			err := cli.RunExport(path, "json")
 			require.NoError(t, err)
@@ -539,7 +533,7 @@ func TestExportAllPatterns(t *testing.T) {
 		reserveSlice := findSliceByName(t, doc["model"].(map[string]any), "Reserve a Room")
 		trigger := reserveSlice["trigger"].(map[string]any)
 		require.Equal(t, "Reservation Form", trigger["name"])
-		require.Equal(t, "Guest", trigger["actor"])
+		require.NotContains(t, trigger, "actor")
 		require.Equal(t, []any{"AvailableRoomsView"}, trigger["reads"])
 		_, hasKind := trigger["kind"]
 		require.False(t, hasKind, "exported trigger must not carry kind")
@@ -547,7 +541,7 @@ func TestExportAllPatterns(t *testing.T) {
 		require.False(t, hasKindPosition, "exported trigger must not carry kind_position")
 	})
 
-	t.Run("cue export includes the trigger under its slice with actor and reads", func(t *testing.T) {
+	t.Run("cue export includes the trigger under its slice with its reads and no actor", func(t *testing.T) {
 		var stderrText string
 		output := captureStdout(t, func() {
 			stderrText = captureStderr(t, func() {
@@ -559,7 +553,7 @@ func TestExportAllPatterns(t *testing.T) {
 		require.Empty(t, stderrText, "a clean file should not write to stderr")
 		require.Contains(t, output, `trigger: {`)
 		require.Contains(t, output, `name: "Reservation Form"`)
-		require.Contains(t, output, `actor: "Guest"`)
+		require.NotRegexp(t, `\bactor:`, output)
 		require.Contains(t, output, `reads: ["AvailableRoomsView"]`)
 		require.NotContains(t, output, "kind: ", "exported CUE trigger must not carry kind")
 	})

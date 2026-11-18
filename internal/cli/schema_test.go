@@ -19,7 +19,7 @@ func TestSchema(t *testing.T) {
 		})
 
 		require.Contains(t, output, "#Model:")
-		require.Contains(t, output, "#Actor:")
+		require.NotContains(t, output, "#Actor")
 		require.Contains(t, output, "#Slice:")
 	})
 

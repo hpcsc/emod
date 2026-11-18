@@ -29,15 +29,7 @@ type jsonModel struct {
 	Description string         `json:"description,omitempty"`
 	Position    *jsonPosition  `json:"position,omitempty"`
 	Comments    []*jsonComment `json:"comments,omitempty"`
-	Actors      []*jsonActor   `json:"actors,omitempty"`
 	Contexts    []*jsonContext `json:"contexts,omitempty"`
-}
-
-type jsonActor struct {
-	Name        string         `json:"name"`
-	Description string         `json:"description,omitempty"`
-	Position    *jsonPosition  `json:"position,omitempty"`
-	Comments    []*jsonComment `json:"comments,omitempty"`
 }
 
 type jsonContext struct {
@@ -147,8 +139,6 @@ type jsonTrigger struct {
 	Name          string          `json:"name"`
 	Description   string          `json:"description,omitempty"`
 	Position      *jsonPosition   `json:"position,omitempty"`
-	Actor         string          `json:"actor,omitempty"`
-	ActorPosition *jsonPosition   `json:"actor_position,omitempty"`
 	Reads         []string        `json:"reads,omitempty"`
 	ReadsPosition []*jsonPosition `json:"reads_position,omitempty"`
 	OpenPosition  *jsonPosition   `json:"open_position,omitempty"`
@@ -335,7 +325,6 @@ func convertModel(m *ast.Model) *jsonModel {
 		Description: m.Description,
 		Position:    convertPosition(m.NamePos),
 		Comments:    convertComments(m.Comments),
-		Actors:      convertActors(m.Actors),
 		Contexts:    convertContexts(m.Contexts),
 	}
 	return out
@@ -349,22 +338,6 @@ func convertComment(c *ast.Comment) *jsonComment {
 	return &jsonComment{
 		Text:     c.Text,
 		Position: convertPosition(c.Position),
-	}
-}
-
-func convertActors(actors []*ast.Actor) []*jsonActor {
-	return convertList(actors, convertActor)
-}
-
-func convertActor(a *ast.Actor) *jsonActor {
-	if a == nil {
-		return nil
-	}
-	return &jsonActor{
-		Name:        a.Name,
-		Description: a.Description,
-		Position:    convertPosition(a.NamePos),
-		Comments:    convertComments(a.Comments),
 	}
 }
 
@@ -662,8 +635,6 @@ func convertTrigger(t *ast.Trigger) *jsonTrigger {
 		Name:          t.Name,
 		Description:   t.Description,
 		Position:      convertPosition(t.NamePos),
-		Actor:         t.Actor,
-		ActorPosition: convertPosition(t.ActorPos),
 		Reads:         t.Reads,
 		ReadsPosition: convertPositions(t.ReadsPos),
 		OpenPosition:  convertPosition(t.OpenPos),
