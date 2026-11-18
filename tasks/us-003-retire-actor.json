@@ -33,7 +33,7 @@
     },
     {
       "n": 2,
-      "done": false,
+      "done": true,
       "title": "Remove the Actors group from `emod glossary`",
       "language": "Go",
       "testable": true,

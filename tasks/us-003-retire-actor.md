@@ -249,13 +249,13 @@ leaves them out.
 
 **Acceptance Criteria:**
 
-- [ ] For a model that declares an actor that no trigger names, and an actor that a trigger names,
+- [x] For a model that declares an actor that no trigger names, and an actor that a trigger names,
       `emod glossary` writes no "Actors" heading at the top level or in any context.
-- [ ] `emod glossary --format json` of that model has no `actors` key at the top level or in any context.
-- [ ] The other groups keep their order and their terms in the CLI expectations.
-- [ ] No code in `internal/glossary` reads `Model.Actors` or `Trigger.Actor`. The doc comments of
+- [x] `emod glossary --format json` of that model has no `actors` key at the top level or in any context.
+- [x] The other groups keep their order and their terms in the CLI expectations.
+- [x] No code in `internal/glossary` reads `Model.Actors` or `Trigger.Actor`. The doc comments of
       `RenderMarkdown` and `RenderJSON` name no actor.
-- [ ] `task test:unit` passes.
+- [x] `task test:unit` passes.
 
 **Affected Files/Modules:**
 

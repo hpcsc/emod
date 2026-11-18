@@ -6,7 +6,6 @@ import "github.com/hpcsc/emod/internal/ast"
 
 type document struct {
 	term
-	Actors   []term           `json:"actors,omitempty"`
 	Contexts []contextSection `json:"contexts,omitempty"`
 }
 
@@ -17,7 +16,6 @@ type contextSection struct {
 	Commands   []term             `json:"commands,omitempty"`
 	Events     []term             `json:"events,omitempty"`
 	Views      []term             `json:"views,omitempty"`
-	Actors     []term             `json:"actors,omitempty"`
 }
 
 type aggregateSection struct {
@@ -36,12 +34,11 @@ type term struct {
 func newDocument(model *ast.Model) document {
 	return document{
 		term:     term{Name: model.Name, Description: model.Description},
-		Actors:   unreferencedActorTerms(model),
-		Contexts: contextSections(model.Contexts, actorDescriptions(model.Actors)),
+		Contexts: contextSections(model.Contexts),
 	}
 }
 
-func contextSections(contexts []*ast.Context, descriptions map[string]string) []contextSection {
+func contextSections(contexts []*ast.Context) []contextSection {
 	var sections []contextSection
 	for _, ctx := range contexts {
 		slices := ctx.AllSlices()
@@ -52,7 +49,6 @@ func contextSections(contexts []*ast.Context, descriptions map[string]string) []
 			Commands:   commandTerms(slices),
 			Events:     eventTerms(slices),
 			Views:      viewTerms(slices),
-			Actors:     actorTerms(triggerActorNames(slices), descriptions),
 		})
 	}
 	return sections
@@ -108,51 +104,6 @@ func viewTerms(slices []*ast.Slice) []term {
 		for _, view := range slice.Views {
 			terms = append(terms, term{Name: view.Name, Description: view.Description})
 		}
-	}
-	return terms
-}
-
-func triggerActorNames(slices []*ast.Slice) []string {
-	var names []string
-	seen := make(map[string]bool)
-	for _, slice := range slices {
-		if slice.Trigger == nil || slice.Trigger.Actor == "" || seen[slice.Trigger.Actor] {
-			continue
-		}
-		seen[slice.Trigger.Actor] = true
-		names = append(names, slice.Trigger.Actor)
-	}
-	return names
-}
-
-func actorTerms(names []string, descriptions map[string]string) []term {
-	var terms []term
-	for _, name := range names {
-		terms = append(terms, term{Name: name, Description: descriptions[name]})
-	}
-	return terms
-}
-
-func actorDescriptions(actors []*ast.Actor) map[string]string {
-	descriptions := make(map[string]string, len(actors))
-	for _, actor := range actors {
-		descriptions[actor.Name] = actor.Description
-	}
-	return descriptions
-}
-
-func unreferencedActorTerms(model *ast.Model) []term {
-	referenced := make(map[string]bool)
-	for _, name := range triggerActorNames(model.AllSlices()) {
-		referenced[name] = true
-	}
-
-	var terms []term
-	for _, actor := range model.Actors {
-		if referenced[actor.Name] {
-			continue
-		}
-		terms = append(terms, term{Name: actor.Name, Description: actor.Description})
 	}
 	return terms
 }

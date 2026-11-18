@@ -172,56 +172,7 @@ Invoices still owed
 `, renderedMarkdown(t, model))
 		})
 
-		t.Run("names an actor once in each context whose triggers reference it, however many of them do", func(t *testing.T) {
-			model := &ast.Model{
-				Name:   "Hotel Operations",
-				Actors: []*ast.Actor{{Name: "Guest", Description: "A person booking a room, not necessarily the one staying in it"}},
-				Contexts: []*ast.Context{
-					{
-						Name: "Reservations",
-						Aggregates: []*ast.Aggregate{{
-							Name: "Booking",
-							Slices: []*ast.Slice{
-								{Name: "Hold a room", Trigger: &ast.Trigger{Name: "Booking Form", Actor: "Guest"}},
-								{Name: "Cancel a hold", Trigger: &ast.Trigger{Name: "Cancellation Form", Actor: "Guest"}},
-							},
-						}},
-					},
-					{
-						Name: "Billing",
-						Aggregates: []*ast.Aggregate{{
-							Name:   "Invoice",
-							Slices: []*ast.Slice{{Name: "Pay an invoice", Trigger: &ast.Trigger{Name: "Payment Form", Actor: "Guest"}}},
-						}},
-					},
-				},
-			}
-
-			require.Equal(t, `# Hotel Operations
-
-## Reservations
-
-### Booking
-
-### Actors
-
-#### Guest
-
-A person booking a room, not necessarily the one staying in it
-
-## Billing
-
-### Invoice
-
-### Actors
-
-#### Guest
-
-A person booking a room, not necessarily the one staying in it
-`, renderedMarkdown(t, model))
-		})
-
-		t.Run("keeps a declared actor no trigger references, with the description declared for it", func(t *testing.T) {
+		t.Run("lists no actor, at the top level or in a context, for a model that declares one and a trigger that names one", func(t *testing.T) {
 			model := &ast.Model{
 				Name: "Hotel Operations",
 				Actors: []*ast.Actor{
@@ -239,75 +190,9 @@ A person booking a room, not necessarily the one staying in it
 
 			require.Equal(t, `# Hotel Operations
 
-## Actors
-
-### Auditor
-
-Reviews the books once a quarter and never touches a screen
-
 ## Reservations
 
 ### Booking
-
-### Actors
-
-#### Guest
-
-A person booking a room
-`, renderedMarkdown(t, model))
-		})
-
-		t.Run("keeps an actor a trigger names though the model never declares it, with an empty definition", func(t *testing.T) {
-			model := &ast.Model{
-				Name: "Hotel Operations",
-				Contexts: []*ast.Context{{
-					Name: "Reservations",
-					Aggregates: []*ast.Aggregate{{
-						Name:   "Booking",
-						Slices: []*ast.Slice{{Name: "Hold a room", Trigger: &ast.Trigger{Name: "Booking Form", Actor: "Concierge"}}},
-					}},
-				}},
-			}
-
-			require.Equal(t, `# Hotel Operations
-
-## Reservations
-
-### Booking
-
-### Actors
-
-#### Concierge
-`, renderedMarkdown(t, model))
-		})
-
-		t.Run("takes no actor from a trigger that names none", func(t *testing.T) {
-			model := &ast.Model{
-				Name: "Hotel Operations",
-				Contexts: []*ast.Context{{
-					Name: "Reservations",
-					Aggregates: []*ast.Aggregate{{
-						Name: "Booking",
-						Slices: []*ast.Slice{{
-							Name:    "Browse availability",
-							Trigger: &ast.Trigger{Name: "Availability Screen", Reads: []string{"AvailableRoomsView"}},
-							Views:   []*ast.View{{Name: "AvailableRoomsView", Description: "Rooms free over a date range"}},
-						}},
-					}},
-				}},
-			}
-
-			require.Equal(t, `# Hotel Operations
-
-## Reservations
-
-### Booking
-
-### Views
-
-#### AvailableRoomsView
-
-Rooms free over a date range
 `, renderedMarkdown(t, model))
 		})
 
@@ -464,7 +349,7 @@ A member holds at most one reservation on a title
 	})
 
 	t.Run("json rendering", func(t *testing.T) {
-		t.Run("carries an actor no trigger references at model level and the referenced one under its context", func(t *testing.T) {
+		t.Run("carries no actors key, at the top level or in a context, for a model that declares one and a trigger that names one", func(t *testing.T) {
 			model := &ast.Model{
 				Name: "Hotel Operations",
 				Actors: []*ast.Actor{
@@ -483,17 +368,11 @@ A member holds at most one reservation on a title
 			require.Equal(t, map[string]any{
 				"name":        "Hotel Operations",
 				"description": "",
-				"actors": []any{
-					map[string]any{"name": "Auditor", "description": "Reviews the books once a quarter and never touches a screen"},
-				},
 				"contexts": []any{map[string]any{
 					"name":        "Reservations",
 					"description": "",
 					"aggregates": []any{
 						map[string]any{"name": "Booking", "description": ""},
-					},
-					"actors": []any{
-						map[string]any{"name": "Guest", "description": "A person booking a room"},
 					},
 				}},
 			}, renderedJSONDoc(t, model))
