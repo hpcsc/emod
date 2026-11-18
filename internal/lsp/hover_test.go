@@ -208,10 +208,10 @@ context "Warehouse" {
 				description: "A guest books a room from the public site",
 			},
 			{
-				construct:   "trigger",
-				container:   `trigger "Reservation Form"`,
-				name:        "Reservation Form",
-				undescribed: "**Trigger** in Reservations > Reservation",
+				construct:   "screen",
+				container:   `screen "ReservationForm"`,
+				name:        "ReservationForm",
+				undescribed: "**Screen**",
 				description: "The booking form on the public site",
 			},
 			{

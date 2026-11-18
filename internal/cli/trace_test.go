@@ -11,15 +11,20 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-const hotelTraceModel = `context "Hotel" {
+const hotelTraceModel = `screen "BookingForm" {
+}
+
+context "Hotel" {
   aggregate "Stay" {
     invariants {
       RoomFree = "A room holds one booking at a time"
     }
 
     slice "Book Room" {
-      trigger "Booking Form" {
-        reads = RoomsView
+      shows {
+        screen  = BookingForm
+        reads   = RoomsView
+        command = BookRoom
       }
 
       command "BookRoom" {
@@ -110,10 +115,10 @@ func TestTrace(t *testing.T) {
 
 			require.Equal(t, `3 elements follow from RoomBooked
 
-RoomBooked                         event       Hotel  "Book Room"          :15
-  -[on, after 15m]-> Confirmer     automation  Hotel  "Confirm Booking"    :31
-    -[command]-> SendConfirmation  command     Mail   "Send Confirmation"  :75  (Hotel -> Mail)
-      -[flow]-> ConfirmationSent   event       Mail   "Send Confirmation"  :78
+RoomBooked                         event       Hotel  "Book Room"          :20
+  -[on, after 15m]-> Confirmer     automation  Hotel  "Confirm Booking"    :36
+    -[command]-> SendConfirmation  command     Mail   "Send Confirmation"  :80  (Hotel -> Mail)
+      -[flow]-> ConfirmationSent   event       Mail   "Send Confirmation"  :83
 `, output)
 		})
 
@@ -126,13 +131,13 @@ RoomBooked                         event       Hotel  "Book Room"          :15
 
 			require.Equal(t, `6 elements lead to SendConfirmation
 
-SendConfirmation                    command          Mail   "Send Confirmation"  :75
-  <-[command]- Confirmer            automation       Hotel  "Confirm Booking"    :31  (Hotel -> Mail)
-    <-[on, after 15m]- RoomBooked   event            Hotel  "Book Room"          :15
-      <-[flow]- BookRoom            command          Hotel  "Book Room"          :12
-        <-[issues]- "Booking Form"  screen           Hotel  "Book Room"          :8
-        <-[command]- PartnerImport  translation      Hotel  "Import Booking"     :61
-          <-[from]- "Partner API"   external_system  Hotel  "Import Booking"     :62
+SendConfirmation                    command          Mail   "Send Confirmation"  :80
+  <-[command]- Confirmer            automation       Hotel  "Confirm Booking"    :36  (Hotel -> Mail)
+    <-[on, after 15m]- RoomBooked   event            Hotel  "Book Room"          :20
+      <-[flow]- BookRoom            command          Hotel  "Book Room"          :17
+        <-[command]- BookingForm    screen                                       :1
+        <-[command]- PartnerImport  translation      Hotel  "Import Booking"     :66
+          <-[from]- "Partner API"   external_system  Hotel  "Import Booking"     :67
 `, output)
 		})
 
@@ -173,7 +178,7 @@ CheckoutPage                  screen                           :1
 
 			require.Equal(t, `nothing follows from ConfirmationSent
 
-ConfirmationSent  event  Mail  "Send Confirmation"  :78
+ConfirmationSent  event  Mail  "Send Confirmation"  :83
 `, output)
 		})
 
@@ -197,18 +202,18 @@ ConfirmationSent  event  Mail  "Send Confirmation"  :78
 			})
 
 			require.JSONEq(t, `{
-				"root": {"kind": "automation", "name": "Confirmer", "context": "Hotel", "aggregate": "Stay", "slice": "Confirm Booking", "line": 31},
+				"root": {"kind": "automation", "name": "Confirmer", "context": "Hotel", "aggregate": "Stay", "slice": "Confirm Booking", "line": 36},
 				"steps": [
 					{
 						"label": "command",
-						"kind": "command", "name": "SendConfirmation", "context": "Mail", "aggregate": "Message", "slice": "Send Confirmation", "line": 75,
+						"kind": "command", "name": "SendConfirmation", "context": "Mail", "aggregate": "Message", "slice": "Send Confirmation", "line": 80,
 						"from": {"kind": "automation", "name": "Confirmer"},
 						"crosses_context": true,
 						"depth": 1
 					},
 					{
 						"label": "flow",
-						"kind": "event", "name": "ConfirmationSent", "context": "Mail", "aggregate": "Message", "slice": "Send Confirmation", "line": 78,
+						"kind": "event", "name": "ConfirmationSent", "context": "Mail", "aggregate": "Message", "slice": "Send Confirmation", "line": 83,
 						"from": {"kind": "command", "name": "SendConfirmation"},
 						"depth": 2
 					}

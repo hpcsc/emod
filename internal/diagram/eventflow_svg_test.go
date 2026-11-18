@@ -66,12 +66,12 @@ func TestExportEventFlow(t *testing.T) {
 			require.Greater(t, cadence.y, flowTextNamed(t, output, "RecallOverdueCopy").y)
 		})
 
-		t.Run("a trigger is drawn as a box captioned as a trigger", func(t *testing.T) {
+		t.Run("a screen is drawn as a box captioned as a screen", func(t *testing.T) {
 			output := eventFlowOf(t, everyConstructModel(t))
 
-			desk := flowShapeLabelled(t, output, "Lending Desk")
+			desk := flowShapeLabelled(t, output, "LendingDesk")
 			require.Equal(t, "store", desk.class)
-			require.Equal(t, "caption", flowTextNamed(t, output, "trigger").class)
+			require.Equal(t, "caption", flowTextNamed(t, output, "screen").class)
 		})
 
 		t.Run("an invariant that refuses a command is drawn as a dashed box, never a pill", func(t *testing.T) {

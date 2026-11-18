@@ -180,6 +180,9 @@ func TestImportDiagram(t *testing.T) {
 model "Library Lending" {
 }
 
+screen "LendingDesk" {
+}
+
 # Everything the library knows about a copy leaving the building
 context "Lending" {
   # One copy held by one member over one date range
@@ -187,8 +190,9 @@ context "Lending" {
     # A member takes a copy off the shelf
     slice "Borrow Copy" {
       # The desk terminal the librarian types into
-      trigger "Lending Desk" {
-        reads = AvailableCopiesView
+      shows {
+        screen = LendingDesk
+        reads  = AvailableCopiesView
       }
 
       # Ask the library to hand a copy over

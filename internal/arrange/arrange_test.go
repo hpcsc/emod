@@ -45,6 +45,9 @@ func TestArrange(t *testing.T) {
 model "Library" {
 }
 
+screen "ReturnDesk" {
+}
+
 context "Lending" {
   aggregate "Loan" {
     slice "Borrow a Copy" {
@@ -66,8 +69,10 @@ context "Lending" {
     }
 
     slice "Return a Copy" {
-      trigger "Return Desk" {
-        reads = BorrowView
+      shows {
+        screen  = ReturnDesk
+        reads   = BorrowView
+        command = ReturnCopy
       }
 
       command "ReturnCopy" {
@@ -214,6 +219,9 @@ context "Lending" {
 model "Library" {
 }
 
+screen "BorrowDesk" {
+}
+
 context "Lending" {
   aggregate "Loan" {
     slice "Open the Shelf" {
@@ -235,8 +243,10 @@ context "Lending" {
     }
 
     slice "Borrow a Copy" {
-      trigger "Borrow Desk" {
-        reads = ShelfView
+      shows {
+        screen  = BorrowDesk
+        reads   = ShelfView
+        command = BorrowCopy
       }
 
       command "BorrowCopy" {
@@ -466,6 +476,9 @@ context "Notifications" {
 model "Library" {
 }
 
+screen "ReturnDesk" {
+}
+
 context "Lending" {
   aggregate "Loan" {
     slice "Borrow a Copy" {
@@ -497,8 +510,10 @@ context "Lending" {
     }
 
     slice "Return a Copy" {
-      trigger "Return Desk" {
-        reads = BorrowView
+      shows {
+        screen  = ReturnDesk
+        reads   = BorrowView
+        command = ReturnCopy
       }
 
       command "ReturnCopy" {

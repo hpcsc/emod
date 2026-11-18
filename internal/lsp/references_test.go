@@ -325,7 +325,7 @@ context "Shop" {
 			mLine, mChar := posIn(t, doc, `view "MemberLoansView"`, "MemberLoansView")
 			require.Equal(t, []lsp.Location{
 				locationOf(t, doc, `view "MemberLoansView"`, "MemberLoansView"),
-				locationOf(t, doc, `trigger "Lending Desk"`, "MemberLoansView"),
+				locationOf(t, doc, "shows {", "MemberLoansView"),
 				locationOf(t, doc, `automation "RecallOverdueCopy`, "MemberLoansView"),
 				locationOf(t, doc, `automation "RemindReaderOfLoans"`, "MemberLoansView"),
 			}, lsp.GetReferences(doc, mLine, mChar, uri))
@@ -732,6 +732,7 @@ context "Shop" {
 		t.Run("a command lists its rejection edges beside its flow entries and spec whens", func(t *testing.T) {
 			expected := []lsp.Location{
 				locationOf(t, doc, `command "BorrowCopy`, "BorrowCopy"),
+				locationOf(t, doc, "shows {", "BorrowCopy"),
 				locationOf(t, doc, "command -> event:    BorrowCopy -> CopyBorrowed", "BorrowCopy"),
 				locationOf(t, doc, "command -> rejected: BorrowCopy -> OneCopyPerLoan", "BorrowCopy"),
 				locationOf(t, doc, `spec "borrows a copy no one holds"`, "BorrowCopy"),

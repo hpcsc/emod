@@ -324,7 +324,7 @@ The result holds the arranged text and the report of the arrange:
   "backward": [
     {
       "kind": "reads",
-      "label": "AvailableRoomsView -> trigger Reservation Form",
+      "label": "AvailableRoomsView -> screen ReservationForm",
       "from": "View Available Rooms",
       "to": "Reserve a Room"
     },

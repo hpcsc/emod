@@ -18,10 +18,15 @@ func TestSliceRecord(t *testing.T) {
 model "Hotel" {
 }
 
+screen "BookingScreen" {
+}
+
 context "Stays" {
   aggregate "Room" {
     slice "Reserve Room" {
-      trigger "Booking Screen" {
+      shows {
+        screen  = BookingScreen
+        command = [HoldRoom, ReserveRoom]
       }
 
       command "HoldRoom" {
@@ -267,10 +272,15 @@ context "Stays" {
 model "Hotel" {
 }
 
+screen "Screen" {
+}
+
 context "Stays" {
   aggregate "Room" {
     slice "Unnamed Event" {
-      trigger "Screen" {
+      shows {
+        screen  = Screen
+        command = HoldRoom
       }
 
       command "HoldRoom" {
@@ -287,7 +297,8 @@ context "Stays" {
     }
 
     slice "Unnamed Command" {
-      trigger "Screen" {
+      shows {
+        screen = Screen
       }
 
       command "" {

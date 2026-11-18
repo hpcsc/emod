@@ -755,21 +755,21 @@ expected values that restate a moved fixture move with it: labels, arrows and li
 
 **Acceptance Criteria:**
 
-- [ ] No example, parser testdata file, fixture source in `internal/test/fixtures.go`, inline test source,
+- [x] No example, parser testdata file, fixture source in `internal/test/fixtures.go`, inline test source,
       e2e-viewer sample or text that a test types into the source panel states a `trigger` block. Only these
       still do: the trigger kit `TriggerReadsLibraryLending` and the tests that read it, the parser and CLI tests
       of the trigger form, and the tests that feed a trigger to a surface to show that it still reads one, which
       Tasks 8 and 9 replace. The Go test literals that build an `ast.Trigger` are not text and stay for Task 9.
-- [ ] Each migrated trigger is one screen declaration, whose label is a bare name and whose description is the
+- [x] Each migrated trigger is one screen declaration, whose label is a bare name and whose description is the
       trigger's, and one `shows` block with the trigger's `reads` and a `command` entry for each command of its
       slice that no automation and no translation of the slice issues. Two triggers with one label in two slices
       become one declaration and two `shows` blocks. Each changed `.emod` file and each e2e-viewer sample is in
       the `emod fmt` layout, and `emod fmt --check` passes on it.
-- [ ] The only expected values that move are those that restate the text of a changed fixture or example: its
+- [x] The only expected values that move are those that restate the text of a changed fixture or example: its
       labels, its arrows and the line numbers below a changed line.
-- [ ] `examples/`, `README.md`, `docs/dsl-reference.md`, `site/content/docs/`, `e2e/` and `e2e-viewer/` contain no
+- [x] `examples/`, `README.md`, `docs/dsl-reference.md`, `site/content/docs/`, `e2e/` and `e2e-viewer/` contain no
       word `trigger` found with a `\b`-bounded search, which does not match `automation_trigger` or `triggers`.
-- [ ] `docs/dsl-reference.md` has a `screen` section under section 3. The slice skeleton, the Command Pattern
+- [x] `docs/dsl-reference.md` has a `screen` section under section 3. The slice skeleton, the Command Pattern
       skeleton and its bullets show `shows` with `screen`, `reads` and `command`, and say that a `shows` block with
       no `command` issues no command. The View Pattern example, the `view/never-read` bullet, the list of
       constructs that take a description (`screen`, not `shows`), its fenced example and the note on constructs
@@ -777,20 +777,20 @@ expected values that restate a moved fixture move with it: labels, arrows and li
       whose reference is `shows { screen }`, the view row names `shows { reads }`, the command row names
       `shows { command }`, and the note on the spellings of `reads` names a `shows` block. Each heading text that
       a link cites stays, and the in-document links resolve.
-- [ ] The quick starts in `README.md` and `site/content/docs/_index.md` and the site copy of the reference use
+- [x] The quick starts in `README.md` and `site/content/docs/_index.md` and the site copy of the reference use
       `screen` and `shows`. The `emod references` output quoted in `README.md` (`:280-292`) and the
       `emod slices arrange` label in `site/content/docs/mcp.md` (`:327`) are what the commands print for the
       migrated example.
-- [ ] The live proposals under `docs/proposals/ai/` and `docs/proposals/model-queries-proposal.md` present no
+- [x] The live proposals under `docs/proposals/ai/` and `docs/proposals/model-queries-proposal.md` present no
       `trigger` construct. A use of the word in English that names no construct stays.
-- [ ] The historical records that the Boundaries section names do not change.
-- [ ] The examples guard, the "documented models" leaf of `internal/oracle`, `TestApplyDiagram` over examples and
+- [x] The historical records that the Boundaries section names do not change.
+- [x] The examples guard, the "documented models" leaf of `internal/oracle`, `TestApplyDiagram` over examples and
       parser testdata, and the save round trips of the shared fixtures still run over each changed file. The
       described fixture describes a screen, the guard over it and `DeclaredDescriptions` read screens, and the
       examples leaf on described kinds asks for a screen.
-- [ ] The e2e-viewer test of the colour of each declared name has a row for the name of a screen in the largest
+- [x] The e2e-viewer test of the colour of each declared name has a row for the name of a screen in the largest
       example, in the colour of `lsp.type.parameter`.
-- [ ] `task test`, `task test:viewer` and `task test:e2e:viewer` pass.
+- [x] `task test`, `task test:viewer` and `task test:e2e:viewer` pass.
 
 **Affected Files/Modules:**
 

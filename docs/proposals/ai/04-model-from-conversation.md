@@ -116,7 +116,7 @@ instead, where the group writes the invariants and the specs with [05](./05-spec
 The system prompt lives in `internal/ai/generate/prompt` and is embedded with `go:embed`. It holds:
 
 - **The grammar.** The text of `cue.Schema`, the CUE schema that `emod schema` prints, and a short summary
-  of `docs/dsl-reference.md`: the four slice patterns, `trigger`, `flow`, `fields`, `source = external(...)`,
+  of `docs/dsl-reference.md`: the four slice patterns, `screen` and `shows`, `flow`, `fields`, `source = external(...)`,
   `type`, `description`, `mode`, `tags` and `decides_on`.
 - **The rules.** emod builds the list of rules at run time from `linter.RuleDescription`, so the prompt
   states each lint rule in the words that the linter uses. A new lint rule reaches the prompt with no edit.

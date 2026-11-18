@@ -97,6 +97,18 @@ model "<name>" {
 
 Exactly one per file. The body carries a [description](#10-descriptions) and nothing else; an empty body is allowed. See [examples/all_patterns.emod](/examples/all_patterns.emod).
 
+### `screen`
+
+Declares a screen: a place where a person reads views and issues commands. A model declares each screen one time, at the top level, and each slice that uses the screen shows it with a `shows` block (see [Command Pattern](#command-pattern)).
+
+```
+screen "<Name>" {
+  description = "<text>"   # optional
+}
+```
+
+The name is a bare name, such as `CheckoutPage`, because a `shows` block names the screen with an unquoted reference. The body carries a [description](#10-descriptions) and nothing else. Two declarations of one name are an error. `emod fmt` writes the screens after the `model` block and before the first context.
+
 ---
 
 ## 4. Bounded Contexts
@@ -279,7 +291,7 @@ slice "<name>" {
   description = "<text>"       # optional
   flow        = <<-FLOW ...    # 0-1 flow heredoc
 
-  trigger     "<name>" { ... } # 0-1 trigger (Command Pattern)
+  shows       { ... }          # 0+ shows blocks (Command Pattern)
   command     "<Name>" { ... } # 0+ commands
   event       "<Name>" { ... } # 0+ events
   view        "<Name>" { ... } # 0+ views (View Pattern)
@@ -297,7 +309,7 @@ Every slice must contain at least one element. See [Slice Patterns](#6-slice-pat
 
 The DSL supports four Event Modeling slice patterns. Each pattern prescribes which blocks appear together.
 
-The two elements that start a chain belong to different chains. A `trigger` is the human entry point of the command chain: something outside the system initiates the slice. An `automation` is the processor of the automation chain: the system initiates the slice itself. Neither stands in for the other, and a slice that needs both declares both.
+The two elements that start a chain belong to different chains. A `shows` block is the human entry point of the command chain: a person at a screen initiates the slice. An `automation` is the processor of the automation chain: the system initiates the slice itself. Neither stands in for the other, and a slice that needs both declares both.
 
 ### Command Pattern
 
@@ -305,8 +317,10 @@ A user or system action drives a command that produces an event.
 
 ```
 slice "<name>" {
-  trigger "<name>" {
-    reads = <ViewName>  # or a list: [<ViewName>, <ViewName>]
+  shows {
+    screen  = <ScreenName>
+    reads   = <ViewName>     # or a list: [<ViewName>, <ViewName>]
+    command = <CommandName>  # or a list: [<CommandName>, <CommandName>]
   }
 
   command "<CommandName>" {
@@ -323,19 +337,23 @@ slice "<name>" {
 }
 ```
 
-`flow` wires the command to the event (see [Flows](#7-flows)). `trigger` is optional — a slice may define a command directly without a trigger.
+`flow` wires the command to the event (see [Flows](#7-flows)). `shows` is optional — a slice may define a command directly without a screen. A slice that a person reaches from more than one screen has one `shows` block for each screen.
 
-- **A trigger reads one view or more:** `reads` takes a bare name, `reads = CartView`, or a list, `reads = [CartView, DiscountView]`, for a page that shows more than one view. An automation and a translation take one name, because a processor reads one view as its todo list.
+- **A `shows` block names one screen:** `screen` names a screen that a top-level [`screen`](#screen) declaration declares. A slice shows each screen one time, and a screen that many slices use is declared one time and shown in each of them.
+- **A screen reads one view or more:** `reads` takes a bare name, `reads = CartView`, or a list, `reads = [CartView, DiscountView]`, for a page that shows more than one view. An automation and a translation take one name, because a processor reads one view as its todo list.
+- **A screen issues the commands that `command` names:** `command` takes a bare name or a list, and each entry names a command that the model declares. A `shows` block with no `command` issues no command: the screen shows what it reads, and a person acts on it somewhere else.
 - **`emod fmt` writes one entry as a bare name** and two or more entries as a list, in the order they are written.
-- **Each entry draws its own arrow:** `emod diagram --format svg` and the viewer draw one `reads` arrow from each view in the list, and a copy of each far view (see the next item). `emod diagram --format ascii` prints one `{View} -> <<Trigger>>` line for each entry.
-- **The exports give the list:** `emod export --format json` and `emod export --format cue` give the `reads` of a trigger as a list, also for one entry. The JSON export gives one `reads_position` for each entry, in the same order.
-- **The drawn diagrams copy a view a trigger reads from a slice far away:** when the first slice that declares the view is two or more slices away, `emod diagram --format svg` and the viewer draw it again in the trigger's slice, and the `reads` arrow starts at this copy. The SVG draws the copy in the Commands / Views lane, and the viewer draws it in the row of copies under the slice's views. The copy has a dashed outline in the view's stroke, a white fill, and a second line `from <slice>` that names the first slice that declares the view.
+- **Each entry draws its own arrow:** `emod diagram --format svg` and the viewer draw one `reads` arrow from each view in the list and one arrow to each command in the list, and a copy of each far view or command (see the next item). `emod diagram --format ascii` prints one `{View} -> <<Screen>>` line for each view and one `<<Screen>> -> [Command]` line for each command.
+- **The exports give the lists:** `emod export --format json` and `emod export --format cue` give the `reads` and the `command` of a `shows` block as lists, also for one entry. The JSON export gives one `reads_position` and one `command_position` for each entry, in the same order.
+- **The drawn diagrams copy a far view and a far command:** when the first slice that declares the view a `shows` block reads, or the command it issues, is two or more slices away, `emod diagram --format svg` and the viewer draw it again in the slice that shows the screen, and the arrow starts or ends at this copy. The SVG draws the copy in the Commands / Views lane, and the viewer draws it in the row of copies under the slice's views. The copy has a dashed outline in the stroke of what it copies, a white fill, and a second line that names the first slice that declares it: `from <slice>` for a view, `in <slice>` for a command.
 
 A checkout page that shows the cart and the discount panel reads both views:
 
 ```emod
 emod = 1
 model "Shop" {}
+
+screen "CheckoutPage" {}
 
 context "Shop" {
   aggregate "Cart" {
@@ -368,8 +386,10 @@ context "Shop" {
     }
 
     slice "Apply Discount" {
-      trigger "Checkout Page" {
-        reads = [CartView, DiscountView]
+      shows {
+        screen  = CheckoutPage
+        reads   = [CartView, DiscountView]
+        command = ApplyDiscount
       }
 
       command "ApplyDiscount" {
@@ -407,7 +427,7 @@ slice "<name>" {
 
 `subscribes` references event names declared **anywhere in the model** — in any slice, under any aggregate or context, the same scope an automation's `reads` resolves in (see [Cross-References](#11-cross-references)).
 
-- **`view/never-read` asks who acts on it:** the rule reports at warning severity when no `reads` anywhere in the model names the view. A view takes one of two legitimate shapes: a trigger reads it, or a processor reads it as its todo list. The rule fires only once the model states at least one `reads`. Run `emod lint --explain view/never-read` for the full description.
+- **`view/never-read` asks who acts on it:** the rule reports at warning severity when no `reads` anywhere in the model names the view. A view takes one of two legitimate shapes: a `shows` block reads it for the screen that opens on it, or a processor reads it as its todo list. The rule fires only once the model states at least one `reads`. Run `emod lint --explain view/never-read` for the full description.
 - **The drawn diagrams copy an event from a slice far away:** when a view subscribes to an event and the first slice that declares the event is two or more slices away, `emod diagram --format svg` and the viewer draw the event again in the view's own slice, and the view's arrow starts at this copy. Slices count in the order the diagram draws them, left to right, and the last slice of one context is next to the first slice of the next. A copy has a dashed outline in the event's stroke, a white fill, and a second line `from <slice>` that names the first slice that declares the event. A slice draws one copy of an event, however many of its views and automations read it, and no copy of an event it declares itself. An arrow from an event that the view's own slice declares, or that the slice next to it declares first, starts at the event itself. The Mermaid and ASCII formats draw no subscription arrows, so they draw no copies.
 
 ### Automation Pattern
@@ -786,12 +806,16 @@ Any construct that has a body may carry a `description`: prose explaining what t
 description = "<text>"
 ```
 
-`model`, `context`, `aggregate`, `slice`, `trigger`, `command`, `event`, `view`, `automation` and `translation` accept it, including the `event` nested inside a `translation`.
+`model`, `screen`, `context`, `aggregate`, `slice`, `command`, `event`, `view`, `automation` and `translation` accept it, including the `event` nested inside a `translation`. A `shows` block takes none: its screen carries the description, in the declaration.
 
 ```emod
 emod = 1
 model "Hotel Reservation" {
   description = "Room inventory, bookings and check-out."
+}
+
+screen "ReservationForm" {
+  description = "The public booking form."
 }
 
 context "Reservations" {
@@ -803,8 +827,9 @@ context "Reservations" {
     slice "Reserve a Room" {
       description = "A guest holds a room for a date range."
 
-      trigger "Reservation Form" {
-        description = "The public booking form."
+      shows {
+        screen  = ReservationForm
+        command = ReserveRoom
       }
 
       command "ReserveRoom" {
@@ -841,7 +866,7 @@ context "Reservations" {
 - **Diagrams surface it on the shape:** `emod diagram --format svg` emits the description as a `<title>` element on the construct's shape.
 - **A construct without a shape stays off the diagrams:** `model`, `aggregate` and `slice` own no shape in the SVG. The `mermaid` and `ascii` formats carry no descriptions at all.
 - **The glossary reads it as the definition:** `emod glossary` prints the description beneath the name it defines.
-- **A construct that defines no term stays out of the glossary:** `slice`, `trigger`, `automation` and `translation` contribute no term of their own.
+- **A construct that defines no term stays out of the glossary:** `slice`, `screen`, `shows`, `automation` and `translation` contribute no term of their own.
 
 ---
 
@@ -851,14 +876,15 @@ All references use unqualified names, written unquoted, and `emod validate` reso
 
 | Declaration | Referenced By | Context |
 |---|---|---|
+| `screen "<Name>"` | `shows { screen }` | [`screen`](#screen), [`command` pattern](#command-pattern) |
 | `context "<name>"` | `automation { target { context = <Name> } }` | [`automation`](#automation-pattern) |
 | `event "<Name>"` | `subscribes`, `flow`, `automation { on }`, `translation { event }`, `spec { given }`, `spec { then }` | [`view`](#view-pattern), [`automation`](#automation-pattern), [`translation`](#translation-pattern), [`spec`](#spec) |
-| `command "<Name>"` | `flow`, `automation { command }`, `translation { command }`, `spec { when }`, `spec { then = command(...) }` | [`flow`](#7-flows), [`automation`](#automation-pattern), [`translation`](#translation-pattern), [`spec`](#spec) |
+| `command "<Name>"` | `flow`, `shows { command }`, `automation { command }`, `translation { command }`, `spec { when }`, `spec { then = command(...) }` | [`flow`](#7-flows), [`command` pattern](#command-pattern), [`automation`](#automation-pattern), [`translation`](#translation-pattern), [`spec`](#spec) |
 | a command's or an event's `fields` | the field name of an [example payload](#spec) | [`spec`](#spec) |
-| `view "<Name>"` | `automation { reads }`, `trigger { reads }`, `translation { reads }`, `spec { then = view(...) }` | [`automation`](#automation-pattern), [`command` pattern](#command-pattern), [`translation`](#translation-pattern), [`spec`](#spec) |
+| `view "<Name>"` | `automation { reads }`, `shows { reads }`, `translation { reads }`, `spec { then = view(...) }` | [`automation`](#automation-pattern), [`command` pattern](#command-pattern), [`translation`](#translation-pattern), [`spec`](#spec) |
 | `invariants` entry | `spec { then = rejected(...) }`, `flow { command -> rejected: }` | [`spec`](#spec), [`flow`](#7-flows) |
 
-All three constructs that spell `reads` resolve alike — a trigger's, an automation's and a translation's. Each is looked up against the views the whole model declares, and a name matching none is reported at the `reads` entry that spells it. Each entry of a trigger's list resolves alone, so an undeclared entry is reported at that entry, and the entries around it resolve as usual:
+All three constructs that spell `reads` resolve alike — a `shows` block's, an automation's and a translation's. Each is looked up against the views the whole model declares, and a name matching none is reported at the `reads` entry that spells it. Each entry of a `shows` block's list resolves alone, so an undeclared entry is reported at that entry, and the entries around it resolve as usual:
 
 ```
 lending.emod:22: view "MemberLoansVeiw" does not exist
@@ -902,7 +928,7 @@ The renderers that draw the whole model use one palette for element types. The S
 
 | Element     | Fill      | Stroke    | Notes                                   |
 |-------------|-----------|-----------|-----------------------------------------|
-| Shows       | #ffffff   | #333333   | A screen in a slice, drawn as a screen. |
+| Shows       | #ffffff   | #333333   | Drawn as a screen/monitor shape.        |
 | Trigger     | #ffffff   | #333333   | Drawn as a screen/monitor shape.        |
 | Command     | #dae8fc   | #6c8ebf   | Blue sticky note.                       |
 | Event       | #ffe6cc   | #d79b00   | Orange sticky note.                     |

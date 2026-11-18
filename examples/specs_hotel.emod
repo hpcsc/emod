@@ -4,6 +4,9 @@ emod = 1
 model "Hotel Reservation" {
 }
 
+screen "ReservationForm" {
+}
+
 context "Reservations" {
   description = "Owns the reservation lifecycle from booking to checkout"
 
@@ -15,8 +18,10 @@ context "Reservations" {
     }
 
     slice "Reserve a Room" {
-      trigger "Reservation Form" {
-        reads = AvailableRoomsView
+      shows {
+        screen  = ReservationForm
+        reads   = AvailableRoomsView
+        command = ReserveRoom
       }
 
       command "ReserveRoom" {

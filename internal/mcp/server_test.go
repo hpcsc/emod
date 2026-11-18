@@ -138,10 +138,15 @@ const slicesSource = `emod = 1
 model "Ordering" {
 }
 
+screen "Checkout" {
+}
+
 context "Orders" {
   aggregate "Order" {
     slice "Place Order" {
-      trigger "Checkout" {
+      shows {
+        screen  = Checkout
+        command = PlaceOrder
       }
 
       command "PlaceOrder" {
@@ -209,8 +214,10 @@ const borrowSlice = `    slice "Borrow a Copy" {
 `
 
 const returnSlice = `    slice "Return a Copy" {
-      trigger "Return Desk" {
-        reads = BorrowView
+      shows {
+        screen  = ReturnDesk
+        reads   = BorrowView
+        command = ReturnCopy
       }
 
       command "ReturnCopy" {
@@ -273,7 +280,7 @@ func unformattedLendingSource() string {
 }
 
 func lendingSource(slices ...string) string {
-	return "emod = 1\n\nmodel \"Library Lending\" {\n}\n\ncontext \"Lending\" {\n  aggregate \"Loan\" {\n" +
+	return "emod = 1\n\nmodel \"Library Lending\" {\n}\n\nscreen \"ReturnDesk\" {\n}\n\ncontext \"Lending\" {\n  aggregate \"Loan\" {\n" +
 		strings.Join(slices, "\n") +
 		"  }\n}\n"
 }

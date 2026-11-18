@@ -168,7 +168,7 @@ families:
 | emlang | emod |
 | --- | --- |
 | A slice | A `slice` |
-| A trigger | A `trigger` with the views that it `reads` |
+| A trigger | A `screen` declaration, and a `shows` block with the views that it `reads` and the commands that it issues under `command` |
 | A command | A `command` |
 | An event | An `event`, and a `flow` line from the command before it in the slice |
 | A view | A `view` that `subscribes` to the events before it in the slice |

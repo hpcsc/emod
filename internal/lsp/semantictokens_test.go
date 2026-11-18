@@ -236,11 +236,11 @@ context "Orders" {
 		result := lsp.GetSemanticTokens(doc)
 		tokens := decodeTokens(result.Data)
 
-		require.Len(t, tokens, 15,
-			"one token per declared context, aggregate, command, event and view — 10 in the aggregate's slices and above, 5 on the dcb context")
+		require.Len(t, tokens, 16,
+			"one token per declared screen, context, aggregate, command, event and view — 11 in the aggregate's slices and above, 5 on the dcb context")
 
 		line, char := posIn(t, doc, `view "DeskOccupancyView"`, "DeskOccupancyView")
-		assertToken(t, tokens, 14, line, char, len("DeskOccupancyView"), legendTokenType(lsp.TokenTypeClass))
+		assertToken(t, tokens, 15, line, char, len("DeskOccupancyView"), legendTokenType(lsp.TokenTypeClass))
 	})
 
 	t.Run("delta-encodes multiple identifiers on same line", func(t *testing.T) {

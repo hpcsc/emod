@@ -63,8 +63,8 @@ diagram shows.
 | --- | --- | --- | --- | --- |
 | `EdgeFlow`, `EdgeTranslationFlow` | command | event | `command -> event` in `flow`; a translation event | `flow` |
 | `EdgeRejection` | command | invariant | `command -> rejected` in `flow` | `rejected` |
-| `EdgeTriggerCommand` | trigger | command | A trigger and a command in one slice | `issues` |
-| `EdgeTriggerReads` | view | trigger | `reads` of a trigger | `reads` |
+| `EdgeScreenCommand` | screen | command | `command` of a `shows` block | `command` |
+| `EdgeScreenReads` | view | screen | `reads` of a `shows` block | `reads` |
 | `EdgeSubscription` | event | view | `subscribes` of a view | `subscribes` |
 | `EdgeAutomationTrigger` | event | automation | `on` of an automation, with `after` | `on` |
 | `EdgeAutomationReads`, `EdgeTranslationReads` | view | automation or translation | `reads` | `reads` |
@@ -88,8 +88,8 @@ The command groups each reference by its role:
 | Kind of name | Groups |
 | --- | --- |
 | Event | Produced by (`flow`, translation); read by (`subscribes`, `on`); named in specs (`given`, `when`, `then`) |
-| Command | Issued by (trigger, automation, translation); produces (`flow`); refused by (`rejected`); named in specs (`when`, `then = command(...)`) |
-| View | Built from (`subscribes`); read by (trigger, automation, translation); named in specs (`then = view(...)`) |
+| Command | Issued by (screen, automation, translation); produces (`flow`); refused by (`rejected`); named in specs (`when`, `then = command(...)`) |
+| View | Built from (`subscribes`); read by (screen, automation, translation); named in specs (`then = view(...)`) |
 | Invariant | Declared in a scope; refused commands (`rejected` in `flow`); named in specs (`then = rejected(...)`) |
 
 ### Trace

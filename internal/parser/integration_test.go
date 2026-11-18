@@ -127,11 +127,13 @@ func TestIntegration(t *testing.T) {
 		commandSlice := agg.Slices[0]
 		require.Equal(t, "Reserve a Room", commandSlice.Name)
 
-		require.NotNil(t, commandSlice.Trigger)
-		test.RequireEqual(t, &ast.Trigger{
-			Name:  "Reservation Form",
-			Reads: []string{"AvailableRoomsView"},
-		}, commandSlice.Trigger, ignorePositions)
+		test.RequireEqual(t, []*ast.Screen{{Name: "ReservationForm"}}, model.Screens, ignorePositions)
+		require.Nil(t, commandSlice.Trigger)
+		test.RequireEqual(t, []*ast.Appearance{{
+			Screen:   "ReservationForm",
+			Reads:    []string{"AvailableRoomsView"},
+			Commands: []string{"ReserveRoom"},
+		}}, commandSlice.Appearances, ignorePositions)
 
 		require.Len(t, commandSlice.Commands, 1)
 		test.RequireEqual(t, &ast.Command{

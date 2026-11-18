@@ -4060,7 +4060,7 @@ func TestExport(t *testing.T) {
 				"the diagram document carries no payload value")
 		})
 
-		t.Run("the view an automation reads reaches its node and draws an edge of its own, beside the one its slice's trigger draws", func(t *testing.T) {
+		t.Run("the view an automation reads reaches its node and draws an edge of its own, beside the one its slice's shows block draws", func(t *testing.T) {
 			reading := test.AutomationReadsLibraryLendingModel(t)
 			unread := test.WithoutAutomationReads(reading)
 
@@ -4077,10 +4077,10 @@ func TestExport(t *testing.T) {
 
 			require.Equal(t, test.AutomationReadsLibraryLendingViewNames, viewsReadBy(readingDoc, "automation"))
 			require.Empty(t, viewsReadBy(unreadDoc, "automation"))
-			require.Equal(t, []string{"MemberLoansView"}, viewsReadBy(readingDoc, "trigger"),
-				"the trigger of this model reads MemberLoansView, the view its own slice declares")
-			require.Equal(t, []string{"MemberLoansView"}, viewsReadBy(unreadDoc, "trigger"),
-				"taking the automations' reads leaves the trigger's own edge standing")
+			require.Equal(t, []string{"MemberLoansView"}, viewsReadBy(readingDoc, "shows"),
+				"the shows block of this model reads MemberLoansView, the view its own slice declares")
+			require.Equal(t, []string{"MemberLoansView"}, viewsReadBy(unreadDoc, "shows"),
+				"taking the automations' reads leaves the shows block's own edge standing")
 		})
 
 		t.Run("every view a trigger or an automation reads draws its edge, across both slice homes and across a context boundary", func(t *testing.T) {
@@ -5415,7 +5415,7 @@ func TestExport(t *testing.T) {
 			}
 		})
 
-		t.Run("an automation reading no view reaches neither export, while its slice's trigger still reads one", func(t *testing.T) {
+		t.Run("an automation reading no view reaches neither export, while its slice's shows block still reads one", func(t *testing.T) {
 			cueBin := lookupCue(t)
 			reading := test.AutomationReadsLibraryLendingModel(t)
 			unread := test.WithoutAutomationReads(reading)
@@ -5428,11 +5428,11 @@ func TestExport(t *testing.T) {
 			requireBothFormatsAgree(t, cueBin, unread)
 
 			readingNoView := automationsReadingNoView(libraryLendingAutomationReads)
-			readingTrigger := map[string][]any{"Borrow Copy": {"MemberLoansView"}}
+			readingShows := map[string][]any{"Borrow Copy": {"MemberLoansView"}}
 			docs := exportedDocs(t, cueBin, unread)
 			for format, doc := range docs {
 				require.Equal(t, readingNoView, automationReadsByOwner(doc), "%s export", format)
-				require.Equal(t, readingTrigger, triggerReadsByOwner(doc), "%s export", format)
+				require.Equal(t, readingShows, showsReadsByOwner(doc), "%s export", format)
 			}
 			require.Empty(t, positionedAutomationReads(docs[jsonFormat]))
 		})
@@ -5487,7 +5487,7 @@ func TestExport(t *testing.T) {
 	})
 
 	t.Run("examples/all_patterns.emod", func(t *testing.T) {
-		t.Run("exports to JSON and CUE with the trigger under its slice", func(t *testing.T) {
+		t.Run("exports to JSON and CUE with the shows block under its slice", func(t *testing.T) {
 			cueBin := lookupCue(t)
 
 			source, err := os.ReadFile("../../examples/all_patterns.emod")
@@ -5496,35 +5496,16 @@ func TestExport(t *testing.T) {
 			model, diagnostics := oracle.Parse(string(source), "examples/all_patterns.emod")
 			require.Empty(t, diagnostics)
 
-			jsonRaw, err := export.ExportJSON(model)
-			require.NoError(t, err)
-
-			var jsonDoc map[string]any
-			require.NoError(t, json.Unmarshal(jsonRaw, &jsonDoc))
-
-			reserveSlice := sliceNamed(t, jsonDoc, "Reserve a Room")
-			require.NotNil(t, reserveSlice)
-			trigger := reserveSlice["trigger"].(map[string]any)
-			require.Equal(t, "Reservation Form", trigger["name"])
-			require.NotContains(t, trigger, "actor")
-			require.NotContains(t, trigger, "actor_position")
-			require.Equal(t, []any{"AvailableRoomsView"}, trigger["reads"])
-			_, hasKind := trigger["kind"]
-			require.False(t, hasKind, "exported trigger must not carry kind")
-			_, hasKindPosition := trigger["kind_position"]
-			require.False(t, hasKindPosition, "exported trigger must not carry kind_position")
-
-			cueRaw, err := export.ExportCUE(model)
-			require.NoError(t, err)
-
-			cueDoc := exportedCUEDoc(t, cueBin, model)
-			reserveSliceCUE := sliceNamed(t, cueDoc, "Reserve a Room")
-			require.NotNil(t, reserveSliceCUE)
-			triggerCUE := reserveSliceCUE["trigger"].(map[string]any)
-			require.Equal(t, "Reservation Form", triggerCUE["name"])
-			require.NotContains(t, triggerCUE, "actor")
-			require.Equal(t, []any{"AvailableRoomsView"}, triggerCUE["reads"])
-			require.NotContains(t, string(cueRaw), "kind: ", "exported CUE trigger must not carry kind")
+			for format, doc := range exportedDocs(t, cueBin, model) {
+				reserveSlice := sliceNamed(t, doc, "Reserve a Room")
+				require.NotNil(t, reserveSlice, "%s export", format)
+				require.Equal(t, []any{map[string]any{
+					"screen":  "ReservationForm",
+					"reads":   []any{"AvailableRoomsView"},
+					"command": []any{"ReserveRoom"},
+				}}, withoutPositions(reserveSlice["shows"]), "%s export", format)
+				require.NotContains(t, reserveSlice, "trigger", "%s export", format)
+			}
 		})
 	})
 }
@@ -6900,6 +6881,22 @@ func triggerReadsByOwner(doc map[string]any) map[string][]any {
 	return byOwner
 }
 
+func showsReadsByOwner(doc map[string]any) map[string][]any {
+	byOwner := make(map[string][]any)
+	eachObject(doc, func(object map[string]any) {
+		owner, named := object["name"].(string)
+		if !named {
+			return
+		}
+		for _, shows := range objectsUnder(object, "shows") {
+			if reads, readsViews := shows["reads"].([]any); readsViews {
+				byOwner[owner] = append(byOwner[owner], reads...)
+			}
+		}
+	})
+	return byOwner
+}
+
 // listsKeyedBy collects every list a decoded document holds under listKey, filed
 // under the ownerKey of the object declaring it. Searching the whole document
 // rather than the paths the list is expected on lets one that surfaces
@@ -7160,7 +7157,9 @@ func descriptionsByConstruct(t *testing.T, doc map[string]any) map[string]any {
 // diagramObjectsByLabel files every node of a decoded diagram document under its
 // label, and the event a translation node nests under the translation's label
 // followed by "event", so the standalone node the exporter draws for that same
-// event keeps an entry of its own rather than overwriting it.
+// event keeps an entry of its own rather than overwriting it. A shows node is
+// filed under its label followed by "shows", so it does not overwrite the
+// screen node of the same label.
 func diagramObjectsByLabel(doc map[string]any) map[string]map[string]any {
 	byLabel := make(map[string]map[string]any)
 	for _, node := range objectsUnder(doc, "nodes") {
@@ -7168,6 +7167,10 @@ func diagramObjectsByLabel(doc map[string]any) map[string]map[string]any {
 			continue
 		}
 		label := node["label"].(string)
+		if node["type"] == "shows" {
+			byLabel[label+" shows"] = node
+			continue
+		}
 		byLabel[label] = node
 		if event, nests := node["event"].(map[string]any); nests {
 			byLabel[label+" event"] = event

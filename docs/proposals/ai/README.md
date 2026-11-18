@@ -85,8 +85,8 @@ Every proposal follows these rules:
    a person accepts it.
 4. **AI goes to the surface of the user.** Agent users get the MCP server. Desktop users get a panel in the
    app. CLI and CI users get commands. The static web viewer stays free of AI.
-5. **The AI knows the whole DSL.** The prompts and the examples cover `spec`, `invariant`, `trigger` and
-   screens, slice descriptions, and the DCB `tags` and `decides_on`. The prompts take the rules from
+5. **The AI knows the whole DSL.** The prompts and the examples cover `spec`, `invariant`, `screen` and
+   `shows`, slice descriptions, and the DCB `tags` and `decides_on`. The prompts take the rules from
    `internal/linter/descriptions.go` and the grammar from `emod schema`, so they stay current.
 6. **The user brings the provider.** emod speaks two protocols: the Anthropic Messages API and the
    OpenAI-compatible Chat Completions API. See [00](completed/00-llm-foundation.md).

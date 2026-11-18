@@ -150,11 +150,16 @@ const keywordFieldFormattedEmod = `emod = 1
 model "Model Search Catalog" {
 }
 
+screen "SearchBuilder" {
+}
+
 context "Discovery" {
   aggregate "Saved Search" {
     slice "Define Saved Search" {
-      trigger "Search Builder" {
-        reads = SavedSearchesView
+      shows {
+        screen  = SearchBuilder
+        reads   = SavedSearchesView
+        command = DefineSavedSearch
       }
 
       command "DefineSavedSearch" {
@@ -260,6 +265,9 @@ const specFormattedEmod = `emod = 1
 model "Library Lending" {
 }
 
+screen "LendingDesk" {
+}
+
 context "Lending" {
   aggregate "Loan" {
     invariants {
@@ -267,8 +275,10 @@ context "Lending" {
     }
 
     slice "Borrow Copy" {
-      trigger "Lending Desk" {
-        reads = MemberLoansView
+      shows {
+        screen  = LendingDesk
+        reads   = MemberLoansView
+        command = BorrowCopy
       }
 
       command "BorrowCopy" {
@@ -882,6 +892,9 @@ const rejectionFormattedEmod = `emod = 1
 model "Library Lending" {
 }
 
+screen "LendingDesk" {
+}
+
 context "Lending" {
   aggregate "Loan" {
     invariants {
@@ -889,8 +902,10 @@ context "Lending" {
     }
 
     slice "Borrow Copy" {
-      trigger "Lending Desk" {
-        reads = MemberLoansView
+      shows {
+        screen  = LendingDesk
+        reads   = MemberLoansView
+        command = BorrowCopy
       }
 
       command "BorrowCopy" {
@@ -1080,6 +1095,10 @@ model "Library Lending" {
   description = "How the library lends its copies and seats its readers"
 }
 
+screen "LendingDesk" {
+  description = "The counter a member borrows from"
+}
+
 context "Lending" {
   description = "Everything the library knows about who holds which copy"
 
@@ -1093,9 +1112,10 @@ context "Lending" {
     slice "Borrow Copy" {
       description = "A member takes a copy off the shelf"
 
-      trigger "Lending Desk" {
-        description = "The counter a member borrows from"
-        reads       = MemberLoansView
+      shows {
+        screen  = LendingDesk
+        reads   = MemberLoansView
+        command = BorrowCopy
       }
 
       command "BorrowCopy" {
@@ -1437,6 +1457,9 @@ const slicePatternFormattedEmod = `emod = 1
 model "Library Lending" {
 }
 
+screen "LendingDesk" {
+}
+
 context "Lending" {
   aggregate "Loan" {
     invariants {
@@ -1444,8 +1467,10 @@ context "Lending" {
     }
 
     slice "Borrow Copy" {
-      trigger "Lending Desk" {
-        reads = MemberLoansView
+      shows {
+        screen  = LendingDesk
+        reads   = MemberLoansView
+        command = BorrowCopy
       }
 
       command "BorrowCopy" {

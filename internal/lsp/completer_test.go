@@ -308,7 +308,7 @@ context "Shelving" {
 				},
 				{
 					block:     "trigger",
-					doc:       test.AutomationReadsLibraryLending,
+					doc:       test.TriggerReadsLibraryLending,
 					container: `trigger "Lending Desk"`,
 					value:     "MemberLoansView",
 					expected:  declaredViews,

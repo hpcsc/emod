@@ -48,11 +48,16 @@ const HotelReservation = `emod = 1
 model "Hotel Reservation" {
 }
 
+screen "ReservationForm" {
+}
+
 context "Reservations" {
   aggregate "Reservation" {
     slice "Make Reservation" {
-      trigger "Reservation Form" {
-        reads = ReservationsView
+      shows {
+        screen  = ReservationForm
+        reads   = ReservationsView
+        command = MakeReservation
       }
 
       command "MakeReservation" {
@@ -149,6 +154,10 @@ model "Hotel Reservation" {
   description = "How the hotel takes, confirms and imports room bookings"
 }
 
+screen "ReservationForm" {
+  description = "The booking form on the public site"
+}
+
 context "Reservations" {
   description = "Everything the hotel knows about a stay before the guest arrives"
 
@@ -158,9 +167,10 @@ context "Reservations" {
     slice "Make Reservation" {
       description = "A guest books a room from the public site"
 
-      trigger "Reservation Form" {
-        description = "The booking form on the public site"
-        reads       = ReservationsView
+      shows {
+        screen  = ReservationForm
+        reads   = ReservationsView
+        command = MakeReservation
       }
 
       command "MakeReservation" {
@@ -277,11 +287,16 @@ const KeywordFieldSearchCatalog = `emod = 1
 model "Model Search Catalog" {
 }
 
+screen "SearchBuilder" {
+}
+
 context "Discovery" {
   aggregate "Saved Search" {
     slice "Define Saved Search" {
-      trigger "Search Builder" {
-        reads = SavedSearchesView
+      shows {
+        screen  = SearchBuilder
+        reads   = SavedSearchesView
+        command = DefineSavedSearch
       }
 
       command "DefineSavedSearch" {
@@ -395,6 +410,9 @@ const InvariantLibraryLending = `emod = 1
 model "Library Lending" {
 }
 
+screen "LendingDesk" {
+}
+
 context "Lending" {
   aggregate "Loan" {
     invariants {
@@ -403,8 +421,10 @@ context "Lending" {
     }
 
     slice "Borrow Copy" {
-      trigger "Lending Desk" {
-        reads = MemberLoansView
+      shows {
+        screen  = LendingDesk
+        reads   = MemberLoansView
+        command = BorrowCopy
       }
 
       command "BorrowCopy" {
@@ -527,6 +547,9 @@ const SpecLibraryLending = `emod = 1
 model "Library Lending" {
 }
 
+screen "LendingDesk" {
+}
+
 context "Lending" {
   aggregate "Loan" {
     invariants {
@@ -534,8 +557,10 @@ context "Lending" {
     }
 
     slice "Borrow Copy" {
-      trigger "Lending Desk" {
-        reads = MemberLoansView
+      shows {
+        screen  = LendingDesk
+        reads   = MemberLoansView
+        command = BorrowCopy
       }
 
       command "BorrowCopy" {
@@ -732,6 +757,9 @@ const RejectionLibraryLending = `emod = 1
 model "Library Lending" {
 }
 
+screen "LendingDesk" {
+}
+
 context "Lending" {
   aggregate "Loan" {
     invariants {
@@ -739,8 +767,10 @@ context "Lending" {
     }
 
     slice "Borrow Copy" {
-      trigger "Lending Desk" {
-        reads = MemberLoansView
+      shows {
+        screen  = LendingDesk
+        reads   = MemberLoansView
+        command = BorrowCopy
       }
 
       command "BorrowCopy" {
@@ -930,6 +960,9 @@ const SlicePatternLibraryLending = `emod = 1
 model "Library Lending" {
 }
 
+screen "LendingDesk" {
+}
+
 context "Lending" {
   aggregate "Loan" {
     invariants {
@@ -937,8 +970,10 @@ context "Lending" {
     }
 
     slice "Borrow Copy" {
-      trigger "Lending Desk" {
-        reads = MemberLoansView
+      shows {
+        screen  = LendingDesk
+        reads   = MemberLoansView
+        command = BorrowCopy
       }
 
       command "BorrowCopy" {
@@ -1250,11 +1285,16 @@ const AutomationReadsLibraryLending = `emod = 1
 model "Library Lending" {
 }
 
+screen "LendingDesk" {
+}
+
 context "Lending" {
   aggregate "Loan" {
     slice "Borrow Copy" {
-      trigger "Lending Desk" {
-        reads = MemberLoansView
+      shows {
+        screen  = LendingDesk
+        reads   = MemberLoansView
+        command = BorrowCopy
       }
 
       command "BorrowCopy" {
@@ -1670,11 +1710,16 @@ const AutomationScheduleLibraryLending = `emod = 1
 model "Library Lending" {
 }
 
+screen "LendingDesk" {
+}
+
 context "Lending" {
   aggregate "Loan" {
     slice "Borrow Copy" {
-      trigger "Lending Desk" {
-        reads = MemberLoansView
+      shows {
+        screen  = LendingDesk
+        reads   = MemberLoansView
+        command = BorrowCopy
       }
 
       command "BorrowCopy" {
@@ -1877,11 +1922,16 @@ const AutomationDelayLibraryLending = `emod = 1
 model "Library Lending" {
 }
 
+screen "LendingDesk" {
+}
+
 context "Lending" {
   aggregate "Loan" {
     slice "Borrow Copy" {
-      trigger "Lending Desk" {
-        reads = MemberLoansView
+      shows {
+        screen  = LendingDesk
+        reads   = MemberLoansView
+        command = BorrowCopy
       }
 
       command "BorrowCopy" {
@@ -2312,11 +2362,16 @@ const WireTypeLibraryLending = `emod = 1
 model "Library Lending" {
 }
 
+screen "LendingDesk" {
+}
+
 context "Lending" {
   aggregate "Loan" {
     slice "Borrow Copy" {
-      trigger "Lending Desk" {
-        reads = MemberLoansView
+      shows {
+        screen  = LendingDesk
+        reads   = MemberLoansView
+        command = BorrowCopy
       }
 
       command "BorrowCopy" {
@@ -2582,6 +2637,10 @@ model "Library Lending" {
   description = "How the library lends its copies and seats its readers"
 }
 
+screen "LendingDesk" {
+  description = "The counter a member borrows from"
+}
+
 context "Lending" {
   description = "Everything the library knows about who holds which copy"
 
@@ -2595,9 +2654,10 @@ context "Lending" {
     slice "Borrow Copy" {
       description = "A member takes a copy off the shelf"
 
-      trigger "Lending Desk" {
-        description = "The counter a member borrows from"
-        reads       = MemberLoansView
+      shows {
+        screen  = LendingDesk
+        reads   = MemberLoansView
+        command = BorrowCopy
       }
 
       command "BorrowCopy" {
@@ -3649,7 +3709,7 @@ var DescribedHotelReservationDescriptions = map[string]string{
 	"Reservations":             "Everything the hotel knows about a stay before the guest arrives",
 	"Reservation":              "One guest holding one room over one date range",
 	"Make Reservation":         "A guest books a room from the public site",
-	"Reservation Form":         "The booking form on the public site",
+	"ReservationForm":          "The booking form on the public site",
 	"MakeReservation":          "Ask the hotel to hold a room for a date range, 10% deposit taken up front",
 	"ReservationMade":          "A room is held for a guest",
 	"View Reservations":        "A guest reviews the stays they have booked",
@@ -3934,6 +3994,9 @@ func DeclaredDescriptions(model *ast.Model) map[string]string {
 		}
 	}
 
+	for _, screen := range model.Screens {
+		describe(screen.Name, screen.Description)
+	}
 	for _, ctx := range model.Contexts {
 		describe(ctx.Name, ctx.Description)
 		for _, agg := range ctx.Aggregates {

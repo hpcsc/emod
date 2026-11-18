@@ -51,7 +51,7 @@ func TestExportEventFlowMermaid(t *testing.T) {
 		t.Run("an origin says under its name what it is", func(t *testing.T) {
 			output := mermaidFlowOf(t, everyConstructModel(t))
 
-			require.Contains(t, output, `    Lending_Desk("Lending Desk<br/>trigger")`)
+			require.Contains(t, output, `    LendingDesk("LendingDesk<br/>screen")`)
 			require.Contains(t, output, `    Room_Booking_API("Room Booking API<br/>external system")`)
 			require.Contains(t, output, `    ReturnCopy("ReturnCopy<br/>command")`)
 		})

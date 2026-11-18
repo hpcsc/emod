@@ -520,7 +520,7 @@ context "Orders" {
 func TestExportAllPatterns(t *testing.T) {
 	path := "../../examples/all_patterns.emod"
 
-	t.Run("json export includes the trigger under its slice with its reads and no actor", func(t *testing.T) {
+	t.Run("json export includes the shows block under its slice with its reads and its command", func(t *testing.T) {
 		output := captureStdout(t, func() {
 			err := cli.RunExport(path, "json")
 			require.NoError(t, err)
@@ -531,17 +531,14 @@ func TestExportAllPatterns(t *testing.T) {
 		require.Empty(t, doc["diagnostics"])
 
 		reserveSlice := findSliceByName(t, doc["model"].(map[string]any), "Reserve a Room")
-		trigger := reserveSlice["trigger"].(map[string]any)
-		require.Equal(t, "Reservation Form", trigger["name"])
-		require.NotContains(t, trigger, "actor")
-		require.Equal(t, []any{"AvailableRoomsView"}, trigger["reads"])
-		_, hasKind := trigger["kind"]
-		require.False(t, hasKind, "exported trigger must not carry kind")
-		_, hasKindPosition := trigger["kind_position"]
-		require.False(t, hasKindPosition, "exported trigger must not carry kind_position")
+		shows := reserveSlice["shows"].([]any)[0].(map[string]any)
+		require.Equal(t, "ReservationForm", shows["screen"])
+		require.Equal(t, []any{"AvailableRoomsView"}, shows["reads"])
+		require.Equal(t, []any{"ReserveRoom"}, shows["command"])
+		require.NotContains(t, reserveSlice, "trigger")
 	})
 
-	t.Run("cue export includes the trigger under its slice with its reads and no actor", func(t *testing.T) {
+	t.Run("cue export includes the shows block under its slice with its reads and its command", func(t *testing.T) {
 		var stderrText string
 		output := captureStdout(t, func() {
 			stderrText = captureStderr(t, func() {
@@ -551,11 +548,11 @@ func TestExportAllPatterns(t *testing.T) {
 		})
 
 		require.Empty(t, stderrText, "a clean file should not write to stderr")
-		require.Contains(t, output, `trigger: {`)
-		require.Contains(t, output, `name: "Reservation Form"`)
-		require.NotRegexp(t, `\bactor:`, output)
+		require.Contains(t, output, `shows: [`)
+		require.Contains(t, output, `screen: "ReservationForm"`)
 		require.Contains(t, output, `reads: ["AvailableRoomsView"]`)
-		require.NotContains(t, output, "kind: ", "exported CUE trigger must not carry kind")
+		require.Contains(t, output, `command: ["ReserveRoom"]`)
+		require.NotContains(t, output, `trigger: {`)
 	})
 }
 

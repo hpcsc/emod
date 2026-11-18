@@ -10,15 +10,20 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-const hotelModel = `context "Hotel" {
+const hotelModel = `screen "BookingForm" {
+}
+
+context "Hotel" {
   aggregate "Stay" {
     invariants {
       RoomFree = "A room holds one booking at a time"
     }
 
     slice "Book Room" {
-      trigger "Booking Form" {
-        reads = RoomsView
+      shows {
+        screen  = BookingForm
+        reads   = RoomsView
+        command = BookRoom
       }
 
       command "BookRoom" {
@@ -123,10 +128,10 @@ func TestTrace(t *testing.T) {
 			require.Equal(t, []walked{
 				{Label: "subscribes", Name: "RoomsView", From: "RoomBooked", Depth: 1},
 				{Label: "on", After: "15m", Name: "Confirmer", From: "RoomBooked", Depth: 1},
-				{Label: "reads", Name: "Booking Form", From: "RoomsView", Depth: 2},
+				{Label: "reads", Name: "BookingForm", From: "RoomsView", Depth: 2},
 				{Label: "reads", Name: "Sweeper", From: "RoomsView", Depth: 2},
 				{Label: "command", Name: "SendConfirmation", From: "Confirmer", Depth: 2},
-				{Label: "issues", Name: "BookRoom", From: "Booking Form", Depth: 3},
+				{Label: "command", Name: "BookRoom", From: "BookingForm", Depth: 3},
 				{Label: "command", Name: "ReleaseRoom", From: "Sweeper", Depth: 3},
 				{Label: "flow", Name: "ConfirmationSent", From: "SendConfirmation", Depth: 3},
 				{Label: "rejected", Name: "RoomFree", From: "BookRoom", Depth: 4},
@@ -145,7 +150,7 @@ func TestTrace(t *testing.T) {
 					Context:   "Hotel",
 					Aggregate: "Stay",
 					Slice:     "Confirm Booking",
-					Line:      31,
+					Line:      36,
 				},
 				Steps: []query.Step{
 					{
@@ -155,7 +160,7 @@ func TestTrace(t *testing.T) {
 							Context:   "Mail",
 							Aggregate: "Message",
 							Slice:     "Send Confirmation",
-							Line:      75,
+							Line:      80,
 						},
 						From:           query.Element{Kind: query.KindAutomation, Name: "Confirmer"},
 						CrossesContext: true,
@@ -168,7 +173,7 @@ func TestTrace(t *testing.T) {
 							Context:   "Mail",
 							Aggregate: "Message",
 							Slice:     "Send Confirmation",
-							Line:      78,
+							Line:      83,
 						},
 						From:  query.Element{Kind: query.KindCommand, Name: "SendConfirmation"},
 						Depth: 2,
@@ -211,9 +216,9 @@ func TestTrace(t *testing.T) {
 				{Label: "command", Name: "Confirmer", From: "SendConfirmation", Depth: 2},
 				{Label: "on", After: "15m", Name: "RoomBooked", From: "Confirmer", Depth: 3},
 				{Label: "flow", Name: "BookRoom", From: "RoomBooked", Depth: 4},
-				{Label: "issues", Name: "Booking Form", From: "BookRoom", Depth: 5},
+				{Label: "command", Name: "BookingForm", From: "BookRoom", Depth: 5},
 				{Label: "command", Name: "PartnerImport", From: "BookRoom", Depth: 5},
-				{Label: "reads", Name: "RoomsView", From: "Booking Form", Depth: 6},
+				{Label: "reads", Name: "RoomsView", From: "BookingForm", Depth: 6},
 				{Label: "from", Name: "Partner API", From: "PartnerImport", Depth: 6},
 			}, walkOf(tree))
 		})

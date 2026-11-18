@@ -82,7 +82,7 @@ inside slices.
 
 ```emod
 slice "Reserve a Room" {
-  trigger     "Reservation Form" { ... }  # 0-1 trigger (Command Pattern)
+  shows       { ... }                      # 0+ screens a person acts on (Command Pattern)
   command     "ReserveRoom" { ... }        # 0+ commands
   event       "RoomReserved" { ... }       # 0+ events
   view        "AvailableRoomsView" { ... } # 0+ views (View Pattern)
@@ -92,7 +92,9 @@ slice "Reserve a Room" {
 }
 ```
 
-- A **trigger** is where a person starts the slice, and names the views it reads.
+- A **shows** block names a screen where a person starts the slice, the views it reads and the
+  commands it issues. The model declares each screen one time, at the top level:
+  `screen "ReservationForm" { ... }`.
 - A **command** states the input fields a use case accepts.
 - An **event** states the facts the use case appends to the stream.
 - A **view** projects events; it declares which events it subscribes to.

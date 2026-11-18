@@ -11,10 +11,15 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-const deskModel = `context "Desk" {
+const deskModel = `screen "ArrivalScreen" {
+}
+
+context "Desk" {
   aggregate "Stay" {
     slice "Check In" {
-      trigger "Arrival Screen" {
+      shows {
+        screen  = ArrivalScreen
+        command = CheckIn
       }
 
       command "CheckIn" {
@@ -94,26 +99,26 @@ named in specs
 				require.NoError(t, cli.RunReferences("../../examples/all_patterns.emod", "RoomReserved", "", "text"))
 			})
 
-			require.Equal(t, `event RoomReserved   Reservations > Reservation, slice "Reserve a Room"   :44
+			require.Equal(t, `event RoomReserved   Reservations > Reservation, slice "Reserve a Room"   :53
 
 produced by
-  :61   flow        ReserveRoom -> RoomReserved          "Reserve a Room"
+  :70   flow        ReserveRoom -> RoomReserved          "Reserve a Room"
 read by
-  :88   subscribes  view AvailableRoomsView              "View Available Rooms"
-  :155  subscribes  view PendingConfirmationsView        "Send Confirmation Email"
-  :166  on          automation ConfirmationEmailReactor  "Send Confirmation Email"
-  :289  subscribes  view UnconfirmedReservationsView     "View Unconfirmed Reservations"
+  :97   subscribes  view AvailableRoomsView              "View Available Rooms"
+  :165  subscribes  view PendingConfirmationsView        "Send Confirmation Email"
+  :176  on          automation ConfirmationEmailReactor  "Send Confirmation Email"
+  :299  subscribes  view UnconfirmedReservationsView     "View Unconfirmed Reservations"
 named in specs
-  :67   then   "holds a room nobody has booked"
-  :71   given  "refuses a room already held over the same nights"
-  :100  given  "lists the rooms a guest can still book"
-  :137  given  "closes a stay that is under way"
-  :143  given  "refuses to close a stay that already ended"
-  :177  when   "asks for a confirmation once a booking has settled"
-  :266  given  "asks for a release on every overnight sweep"
-  :271  given  "releases a room nobody confirmed"
-  :277  given  "refuses to release a stay that already ended"
-  :299  given  "lists the bookings the sweep has left to do"
+  :76   then   "holds a room nobody has booked"
+  :80   given  "refuses a room already held over the same nights"
+  :109  given  "lists the rooms a guest can still book"
+  :147  given  "closes a stay that is under way"
+  :153  given  "refuses to close a stay that already ended"
+  :187  when   "asks for a confirmation once a booking has settled"
+  :276  given  "asks for a release on every overnight sweep"
+  :281  given  "releases a room nobody confirmed"
+  :287  given  "refuses to release a stay that already ended"
+  :309  given  "lists the bookings the sweep has left to do"
 `, output)
 		})
 
@@ -124,18 +129,18 @@ named in specs
 				require.NoError(t, cli.RunReferences(path, "CheckIn", "", "text"))
 			})
 
-			require.Equal(t, `command CheckIn   Desk > Stay, slice "Check In"   :7
+			require.Equal(t, `command CheckIn   Desk > Stay, slice "Check In"   :12
 
 issued by
-  :4   issues  screen "Arrival Screen"  "Check In"
+  :9   command  screen ArrivalScreen  "Check In"
 produces
-  :14  flow    CheckIn -> CheckedIn     "Check In"
+  :19  flow     CheckIn -> CheckedIn  "Check In"
 refused by
   none
 named in specs
   none
 
-event CheckIn   Desk > Stay, slice "Log Check In"   :19
+event CheckIn   Desk > Stay, slice "Log Check In"   :24
 
 produced by
   none
@@ -153,7 +158,7 @@ named in specs
 				require.NoError(t, runCommandLine(t, "emod", "references", path, "CheckIn", "--kind", "event"))
 			})
 
-			require.Equal(t, `event CheckIn   Desk > Stay, slice "Log Check In"   :19
+			require.Equal(t, `event CheckIn   Desk > Stay, slice "Log Check In"   :24
 
 produced by
   none
@@ -198,9 +203,9 @@ named in specs
 				"context": "Desk",
 				"aggregate": "Stay",
 				"slice": "Check In",
-				"line": 10,
+				"line": 15,
 				"references": [
-					{"group": "produced by", "keyword": "flow", "line": 14, "element": {"kind": "command", "name": "CheckIn"}, "slice": "Check In"}
+					{"group": "produced by", "keyword": "flow", "line": 19, "element": {"kind": "command", "name": "CheckIn"}, "slice": "Check In"}
 				]
 			}]`, output)
 		})
@@ -223,7 +228,7 @@ named in specs
 		t.Run("a kind that the command does not answer for is refused", func(t *testing.T) {
 			path := writeTemp(t, "desk.emod", deskModel)
 
-			err := cli.RunReferences(path, "Arrival Screen", "trigger", "text")
+			err := cli.RunReferences(path, "ArrivalScreen", "trigger", "text")
 
 			require.ErrorIs(t, err, cli.ErrUnsupportedKind)
 			require.EqualError(t, err, `unsupported kind "trigger"; supported kinds: command, event, view, invariant`)

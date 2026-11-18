@@ -13,7 +13,7 @@ find a better name. Then the developer must change the definition and every refe
 - the `flow` lines
 - the `subscribes` lists
 - the `on`, `reads` and `command` entries of automations and translations
-- the `reads` of a trigger
+- the `reads` and `command` entries of `shows` blocks
 - the `given`, `when` and `then` of specs
 - the `events` of a `decides_on`
 
@@ -97,9 +97,9 @@ The sites for each kind of name:
 
 | Kind | Definition | References |
 | --- | --- | --- |
-| Command | `command "<Name>"` | `flow` lines, the `command` of an automation or a translation, the `when` of a spec, the `then = command(...)` of a spec, rejection edges |
+| Command | `command "<Name>"` | `flow` lines, the `command` of a `shows` block, an automation or a translation, the `when` of a spec, the `then = command(...)` of a spec, rejection edges |
 | Event | `event "<Name>"` | `flow` lines, `subscribes`, the `on` of an automation, the `given`, `when` and `then` of a spec, the `events` of a `decides_on` |
-| View | `view "<Name>"` | The `reads` of a trigger, an automation or a translation, the `then = view(...)` of a spec |
+| View | `view "<Name>"` | The `reads` of a `shows` block, an automation or a translation, the `then = view(...)` of a spec |
 | Invariant | An entry of `invariants` | `rejected(...)` in a spec, rejection edges, in the scope that declares the invariant |
 
 Comments and descriptions are not references, so the rename does not change text in them.

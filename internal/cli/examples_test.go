@@ -33,7 +33,7 @@ func TestExamples(t *testing.T) {
 			var undescribed []string
 			for _, kind := range []string{
 				"model",
-				"context", "aggregate", "slice", "trigger",
+				"screen", "context", "aggregate", "slice",
 				"command", "event", "view", "automation", "translation",
 			} {
 				if !described[kind] {
@@ -284,6 +284,9 @@ func describedKinds(model *ast.Model) map[string]bool {
 	}
 
 	describe("model", model.Description)
+	for _, screen := range model.Screens {
+		describe("screen", screen.Description)
+	}
 	for _, context := range model.Contexts {
 		describe("context", context.Description)
 		for _, aggregate := range context.Aggregates {
@@ -291,9 +294,6 @@ func describedKinds(model *ast.Model) map[string]bool {
 		}
 		for _, slice := range context.AllSlices() {
 			describe("slice", slice.Description)
-			if slice.Trigger != nil {
-				describe("trigger", slice.Trigger.Description)
-			}
 			for _, command := range slice.Commands {
 				describe("command", command.Description)
 			}

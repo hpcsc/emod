@@ -57,11 +57,16 @@ emod = 1
 model "Hotel Reservation" {
 }
 
+screen "ReservationForm" {
+}
+
 context "Reservations" {
   aggregate "Reservation" {
     slice "Reserve a Room" {
-      trigger "Reservation Form" {
-        reads = AvailableRoomsView
+      shows {
+        screen  = ReservationForm
+        reads   = AvailableRoomsView
+        command = ReserveRoom
       }
 
       command "ReserveRoom" {
@@ -227,8 +232,8 @@ The commands are collapsed away — an automation is joined straight to the even
 its command emits — and the views are left out. What is left is an orange pill
 for each event, a bare gear for each automation and translation reactor, a
 rounded box for whatever issues a command from outside them (a screen whose
-`shows` block names the command, a trigger, an external system, or a command
-nothing issues), each captioned with what it is,
+`shows` block names the command, an external system, or a command nothing
+issues), each captioned with what it is,
 and a dashed red box for an invariant that refuses a command. An event nothing
 reads is drawn dashed, so a reader is not left to assume something reacts to it.
 An event only a view reads carries no mark and no arrow onward, because the
@@ -281,18 +286,18 @@ For `examples/all_patterns.emod`:
 
 ```
 $ emod references examples/all_patterns.emod ReserveRoom
-command ReserveRoom   Reservations > Reservation, slice "Reserve a Room"   :31
+command ReserveRoom   Reservations > Reservation, slice "Reserve a Room"   :40
 
 issued by
-  :26  issues    screen "Reservation Form"           "Reserve a Room"
+  :37  command   screen ReservationForm              "Reserve a Room"
 produces
-  :61  flow      ReserveRoom -> RoomReserved         "Reserve a Room"
+  :70  flow      ReserveRoom -> RoomReserved         "Reserve a Room"
 refused by
-  :62  rejected  ReserveRoom -> RoomNotDoubleBooked  "Reserve a Room"
+  :71  rejected  ReserveRoom -> RoomNotDoubleBooked  "Reserve a Room"
 named in specs
-  :66  when  "holds a room nobody has booked"
-  :72  when  "refuses a room already held over the same nights"
-  :77  when  "refuses a stay that ends before it begins"
+  :75  when  "holds a room nobody has booked"
+  :81  when  "refuses a room already held over the same nights"
+  :86  when  "refuses a stay that ends before it begins"
 ```
 
 A name that the model does not declare exits with code 1 and lists the declared names closest to it.
@@ -318,10 +323,10 @@ out. A name that two kinds declare stops the trace, and `--kind` picks one.
 $ emod trace examples/all_patterns.emod RoomReserved --no-views
 3 elements follow from RoomReserved
 
-RoomReserved                                   event       Reservations   "Reserve a Room"           :44
-  -[on, after 15m]-> ConfirmationEmailReactor  automation  Reservations   "Send Confirmation Email"  :164
-    -[command]-> SendConfirmationEmail         command     Notifications  "Send Confirmation"        :319  (Reservations -> Notifications)
-      -[flow]-> ConfirmationEmailSent          event       Notifications  "Send Confirmation"        :329
+RoomReserved                                   event       Reservations   "Reserve a Room"           :53
+  -[on, after 15m]-> ConfirmationEmailReactor  automation  Reservations   "Send Confirmation Email"  :174
+    -[command]-> SendConfirmationEmail         command     Notifications  "Send Confirmation"        :329  (Reservations -> Notifications)
+      -[flow]-> ConfirmationEmailSent          event       Notifications  "Send Confirmation"        :339
 ```
 
 ### Arrange slices
@@ -529,8 +534,8 @@ change made on the diagram — adding, deleting or renaming an element,
 editing its fields, reordering slices, or drawing, repointing or deleting an
 arrow — is written into the source panel, and Save writes it. Dragging a block
 onto another slice moves it there, in the diagram and in the source; a slice
-takes any number of screens, side by side in its top band, but only one
-trigger, and the event a translation nests moves only with its translation. The change is applied to the source
+takes any number of screens, side by side in its top band, and the event a
+translation nests moves only with its translation. The change is applied to the source
 the diagram was drawn from, so comments, invariants, specs and the other text
 the diagram does not show stay where they are. A file not in the `emod fmt`
 layout takes that layout on its first diagram edit, and the bar along the

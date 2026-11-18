@@ -5,6 +5,14 @@ model "Hotel Reservation" {
   description = "How the hotel takes, confirms and closes a stay"
 }
 
+screen "ReservationForm" {
+  description = "The form a guest fills in to book a room"
+}
+
+screen "CheckOutScreen" {
+  description = "The screen where a guest settles the bill and leaves"
+}
+
 context "Reservations" {
   description = "Everything the hotel knows about who holds which room"
 
@@ -23,9 +31,10 @@ context "Reservations" {
     slice "Reserve a Room" {
       description = "A guest books a room for a stay"
 
-      trigger "Reservation Form" {
-        description = "The form a guest fills in to book a room"
-        reads       = AvailableRoomsView
+      shows {
+        screen  = ReservationForm
+        reads   = AvailableRoomsView
+        command = ReserveRoom
       }
 
       command "ReserveRoom" {
@@ -106,8 +115,9 @@ context "Reservations" {
     slice "Check Out Guest" {
       description = "A guest settles up and leaves"
 
-      trigger "Check Out Screen" {
-        description = "The screen where a guest settles the bill and leaves"
+      shows {
+        screen  = CheckOutScreen
+        command = CheckOutGuest
       }
 
       command "CheckOutGuest" {

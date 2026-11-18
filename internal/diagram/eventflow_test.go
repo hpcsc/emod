@@ -203,7 +203,7 @@ func TestCollapseEventFlow(t *testing.T) {
 
 			require.Equal(t, "A copy left the shelf with a member", nodeByID(t, flow, "CopyBorrowed").Description)
 			require.Equal(t, "Waits out the grace period, then nudges", nodeByID(t, flow, "RemindOnDueDate").Description)
-			require.Equal(t, "The counter a member borrows from", nodeByID(t, flow, "Lending.Lending Desk").Description)
+			require.Equal(t, "The counter a member borrows from", nodeByID(t, flow, "LendingDesk").Description)
 		})
 	})
 
@@ -302,7 +302,7 @@ func TestCollapseEventFlow(t *testing.T) {
 
 			flow := diagram.CollapseEventFlow(model)
 
-			require.Contains(t, flow.Hops, diagram.Hop{From: "Lending.Lending Desk", To: "Lending.OneCopyPerLoan"})
+			require.Contains(t, flow.Hops, diagram.Hop{From: "LendingDesk", To: "Lending.OneCopyPerLoan"})
 		})
 
 		t.Run("an arrow to an event no slice declares is left out", func(t *testing.T) {
@@ -366,7 +366,7 @@ func TestCollapseEventFlow(t *testing.T) {
 			require.Equal(t, []shape{
 				{ID: "CopyBorrowed", Kind: diagram.NodeEvent, Label: "CopyBorrowed"},
 				{ID: "LoanOpened", Kind: diagram.NodeEvent, Label: "LoanOpened", DeadEnd: true},
-				{ID: "Lending.Lending Desk", Kind: diagram.NodeOrigin, Label: "Lending Desk", Caption: "trigger"},
+				{ID: "LendingDesk", Kind: diagram.NodeOrigin, Label: "LendingDesk", Caption: "screen"},
 				{ID: "Lending.OneCopyPerLoan", Kind: diagram.NodeRejection, Label: "OneCopyPerLoan"},
 				{ID: "RemindOnDueDate", Kind: diagram.NodeAutomation, Label: "RemindOnDueDate"},
 				{ID: "MemberReminded", Kind: diagram.NodeEvent, Label: "MemberReminded", DeadEnd: true},
@@ -383,9 +383,9 @@ func TestCollapseEventFlow(t *testing.T) {
 			}, shapes(flow))
 
 			require.Equal(t, []diagram.Hop{
-				{From: "Lending.Lending Desk", To: "CopyBorrowed"},
-				{From: "Lending.Lending Desk", To: "LoanOpened"},
-				{From: "Lending.Lending Desk", To: "Lending.OneCopyPerLoan"},
+				{From: "LendingDesk", To: "CopyBorrowed"},
+				{From: "LendingDesk", To: "LoanOpened"},
+				{From: "LendingDesk", To: "Lending.OneCopyPerLoan"},
 				{From: "CopyBorrowed", To: "RemindOnDueDate", Label: `after "72h"`},
 				{From: "RemindOnDueDate", To: "MemberReminded"},
 				{From: "RecallOverdueCopy", To: "CopyRecalled"},

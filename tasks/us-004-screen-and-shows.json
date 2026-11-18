@@ -291,7 +291,7 @@
     },
     {
       "n": 7,
-      "done": false,
+      "done": true,
       "title": "Move every checked-in model, fixture, sample and document from `trigger` to `screen` and `shows`",
       "language": "Go",
       "testable": false,

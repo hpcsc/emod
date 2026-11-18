@@ -7,10 +7,15 @@ export const SAMPLE = `emod = 1
 model "Billing" {
 }
 
+screen "CheckoutForm" {
+}
+
 context "Payments" {
   aggregate "Payment" {
     slice "Take Payment" {
-      trigger "Checkout Form" {
+      shows {
+        screen  = CheckoutForm
+        command = TakePayment
       }
 
       command "TakePayment" {

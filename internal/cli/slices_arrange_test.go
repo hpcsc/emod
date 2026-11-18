@@ -18,6 +18,9 @@ const unarrangedEmod = `emod = 1
 model "Library Lending" {
 }
 
+screen "ReturnDesk" {
+}
+
 context "Lending" {
   aggregate "Loan" {
     slice "Borrow a Copy" {
@@ -39,8 +42,10 @@ context "Lending" {
     }
 
     slice "Return a Copy" {
-      trigger "Return Desk" {
-        reads = BorrowView
+      shows {
+        screen  = ReturnDesk
+        reads   = BorrowView
+        command = ReturnCopy
       }
 
       command "ReturnCopy" {

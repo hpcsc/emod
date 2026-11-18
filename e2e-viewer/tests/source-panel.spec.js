@@ -707,6 +707,7 @@ test.describe("the source panel's colours", () => {
     const rules = await categoryColours(page);
     const nameOf = (declaration) => source.indexOf(declaration) + declaration.indexOf('"') + 1;
     const kinds = {
+      'lsp.type.parameter': 'screen "ReservationForm"',
       'lsp.type.namespace': 'context "Reservations"',
       'lsp.type.struct': 'aggregate "Reservation"',
       'lsp.type.function': 'command "ReserveRoom"',

@@ -53,11 +53,16 @@ emod = 1
 model "Hotel Reservation" {
 }
 
+screen "ReservationForm" {
+}
+
 context "Reservations" {
   aggregate "Reservation" {
     slice "Reserve a Room" {
-      trigger "Reservation Form" {
-        reads = AvailableRoomsView
+      shows {
+        screen  = ReservationForm
+        reads   = AvailableRoomsView
+        command = ReserveRoom
       }
 
       command "ReserveRoom" {

@@ -192,11 +192,16 @@ context "Guest Stays" {
 model "Orders" {
 }
 
+screen "OrderForm" {
+}
+
 context "Fulfillment" {
   mode = dcb
 
   slice "Place Order" {
-    trigger "Order Form" {
+    shows {
+      screen  = OrderForm
+      command = PlaceOrder
     }
 
     command "PlaceOrder" {
