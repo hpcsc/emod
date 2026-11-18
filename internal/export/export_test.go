@@ -108,46 +108,24 @@ func TestExport(t *testing.T) {
 			require.Equal(t, "required", f1["modifier"])
 		})
 
-		t.Run("serializes a trigger with its reads and no actor", func(t *testing.T) {
+		t.Run("writes no trigger key for a slice whose AST holds a trigger", func(t *testing.T) {
 			model := &ast.Model{
 				Name: "Test",
-				Contexts: []*ast.Context{
-					{
-						Name: "Ctx",
-						Aggregates: []*ast.Aggregate{
-							{
-								Name: "Agg",
-								Slices: []*ast.Slice{
-									{
-										Name: "My Slice",
-										Trigger: &ast.Trigger{
-											Name:  "Form",
-											Reads: []string{"MyView"},
-										},
-									},
-								},
-							},
-						},
-					},
-				},
+				Contexts: []*ast.Context{{
+					Name: "Ctx",
+					Slices: []*ast.Slice{{
+						Name:     "My Slice",
+						Trigger:  &ast.Trigger{Name: "Form", Reads: []string{"MyView"}},
+						Commands: []*ast.Command{{Name: "Submit"}},
+					}},
+				}},
 			}
 
 			raw, err := export.ExportJSON(model)
 			require.NoError(t, err)
 
-			var doc map[string]any
-			err = json.Unmarshal(raw, &doc)
-			require.NoError(t, err)
-
-			s := firstSliceOf(t, doc)
-			tr := s["trigger"].(map[string]any)
-			_, hasKind := tr["kind"]
-			require.False(t, hasKind, "trigger export must not carry a kind")
-			_, hasKindPosition := tr["kind_position"]
-			require.False(t, hasKindPosition, "trigger export must not carry a kind_position")
-			require.Equal(t, "Form", tr["name"])
-			require.NotContains(t, tr, "actor")
-			require.Equal(t, []any{"MyView"}, tr["reads"])
+			require.NotContains(t, string(raw), "trigger")
+			require.Equal(t, "Submit", firstOf(t, exportedSlices(modelDocOf(t, model))[0], "commands")["name"])
 		})
 
 		t.Run("serializes event with source external and ExternalName", func(t *testing.T) {
@@ -571,10 +549,8 @@ func TestExport(t *testing.T) {
 								Name: "Agg",
 								Slices: []*ast.Slice{
 									{
-										Name: "S",
-										Trigger: &ast.Trigger{
-											Name: "Form", Reads: []string{"V"},
-										},
+										Name:        "S",
+										Appearances: []*ast.Appearance{{Screen: "Form", Reads: []string{"V"}}},
 										Commands: []*ast.Command{
 											{Name: "Cmd", Fields: []*ast.Field{{Name: "id", Type: "string"}}},
 										},
@@ -618,7 +594,7 @@ func TestExport(t *testing.T) {
 			agg := c["aggregates"].([]any)[0].(map[string]any)
 			s := agg["slices"].([]any)[0].(map[string]any)
 
-			require.Equal(t, "Form", s["trigger"].(map[string]any)["name"])
+			require.Equal(t, "Form", s["shows"].([]any)[0].(map[string]any)["screen"])
 			require.Len(t, s["commands"], 1)
 			require.Len(t, s["events"], 1)
 			require.Len(t, s["views"], 1)
@@ -937,146 +913,6 @@ func TestExport(t *testing.T) {
 			require.Equal(t, float64(28), f["event_position"].(map[string]any)["column"])
 		})
 
-		t.Run("includes positions for trigger name, reads and braces, and none for an actor", func(t *testing.T) {
-			model := &ast.Model{
-				Name: "Test",
-				Contexts: []*ast.Context{
-					{
-						Name: "Ctx",
-						Aggregates: []*ast.Aggregate{
-							{
-								Name: "Agg",
-								Slices: []*ast.Slice{
-									{
-										Name: "S",
-										Trigger: &ast.Trigger{
-											Name:     "Form",
-											NamePos:  ast.Position{Filename: "test.cue", Line: 3, Column: 7},
-											Reads:    []string{"MyView"},
-											ReadsPos: []ast.Position{{Filename: "test.cue", Line: 3, Column: 20}},
-											OpenPos:  ast.Position{Filename: "test.cue", Line: 3, Column: 28},
-											ClosePos: ast.Position{Filename: "test.cue", Line: 5, Column: 3},
-										},
-									},
-								},
-							},
-						},
-					},
-				},
-			}
-
-			raw, err := export.ExportJSON(model)
-			require.NoError(t, err)
-
-			var doc map[string]any
-			err = json.Unmarshal(raw, &doc)
-			require.NoError(t, err)
-
-			s := firstSliceOf(t, doc)
-			tr := s["trigger"].(map[string]any)
-			_, hasKindPosition := tr["kind_position"]
-			require.False(t, hasKindPosition, "trigger export must not carry a kind_position")
-			require.Equal(t, float64(7), tr["position"].(map[string]any)["column"])
-			require.NotContains(t, tr, "actor_position")
-			require.Equal(t, float64(20), tr["reads_position"].([]any)[0].(map[string]any)["column"])
-			require.Equal(t, float64(28), tr["open_position"].(map[string]any)["column"])
-			require.Equal(t, float64(5), tr["close_position"].(map[string]any)["line"])
-		})
-
-		t.Run("gives one reads position for each entry of a trigger's list, in the order of the list", func(t *testing.T) {
-			model := &ast.Model{
-				Name: "Shop",
-				Contexts: []*ast.Context{{
-					Name: "Shop",
-					Aggregates: []*ast.Aggregate{{
-						Name: "Cart",
-						Slices: []*ast.Slice{{
-							Name: "Apply Discount",
-							Trigger: &ast.Trigger{
-								Name:  "Checkout Page",
-								Reads: []string{"CartView", "DiscountView"},
-								ReadsPos: []ast.Position{
-									{Filename: "shop.emod", Line: 4, Column: 16},
-									{Filename: "shop.emod", Line: 5, Column: 9},
-								},
-							},
-						}},
-					}},
-				}},
-			}
-
-			tr := firstSliceOf(t, modelDocOf(t, model))["trigger"].(map[string]any)
-
-			require.Equal(t, []any{"CartView", "DiscountView"}, tr["reads"])
-			require.Equal(t, []any{
-				map[string]any{"filename": "shop.emod", "line": float64(4), "column": float64(16)},
-				map[string]any{"filename": "shop.emod", "line": float64(5), "column": float64(9)},
-			}, tr["reads_position"])
-		})
-
-		t.Run("keeps trigger key order beside the sibling automation", func(t *testing.T) {
-			model := &ast.Model{
-				Name: "Test",
-				Contexts: []*ast.Context{
-					{
-						Name: "Ctx",
-						Aggregates: []*ast.Aggregate{
-							{
-								Name: "Agg",
-								Slices: []*ast.Slice{
-									{
-										Name: "S",
-										Trigger: &ast.Trigger{
-											Comments:    []*ast.Comment{{Text: "# trigger comment"}},
-											Name:        "Form",
-											NamePos:     ast.Position{Filename: "test.cue", Line: 3, Column: 7},
-											Description: "Where the decision starts",
-											Reads:       []string{"MyView"},
-											ReadsPos:    []ast.Position{{Filename: "test.cue", Line: 5, Column: 7}},
-											OpenPos:     ast.Position{Filename: "test.cue", Line: 3, Column: 28},
-											ClosePos:    ast.Position{Filename: "test.cue", Line: 6, Column: 3},
-										},
-										Automations: []*ast.Automation{
-											{
-												Name:        "Auto",
-												NamePos:     ast.Position{Filename: "test.cue", Line: 8, Column: 5},
-												Description: "The decision nobody has to make by hand",
-												OnEvent:     "Evt",
-												OnEventPos:  ast.Position{Filename: "test.cue", Line: 9, Column: 9},
-												Reads:       "MyView",
-												ReadsPos:    ast.Position{Filename: "test.cue", Line: 10, Column: 11},
-												Command:     "DoIt",
-												CommandPos:  ast.Position{Filename: "test.cue", Line: 11, Column: 13},
-												OpenPos:     ast.Position{Filename: "test.cue", Line: 8, Column: 28},
-												ClosePos:    ast.Position{Filename: "test.cue", Line: 12, Column: 3},
-												Comments:    []*ast.Comment{{Text: "# automation comment"}},
-											},
-										},
-									},
-								},
-							},
-						},
-					},
-				},
-			}
-
-			raw, err := export.ExportJSON(model)
-			require.NoError(t, err)
-
-			keyOrder := emittedKeyOrder(t, raw)
-			require.Equal(t, []string{
-				"comments", "name", "description", "position",
-				"reads", "reads_position",
-				"open_position", "close_position",
-			}, keyOrder["Form"], "trigger key order must stay as today")
-			require.Equal(t, []string{
-				"name", "description", "position",
-				"on_event_position", "reads_position", "command_position",
-				"open_position", "close_position", "comments",
-				"on_event", "reads", "command",
-			}, keyOrder["Auto"], "automation key order must stay as today")
-		})
-
 		t.Run("includes positions for view name and braces", func(t *testing.T) {
 			model := &ast.Model{
 				Name: "Test",
@@ -1373,7 +1209,7 @@ func TestExport(t *testing.T) {
 				"context":           "The language boundary the model lives inside",
 				"aggregate":         "The thing decisions are made about",
 				"slice":             "One decision and everything it needs",
-				"trigger":           "Where the decision starts",
+				"screen":            "Where the decision starts",
 				"command":           "The request the person makes",
 				"event":             "The fact the decision leaves behind",
 				"view":              "What the person reads before deciding",
@@ -1982,7 +1818,10 @@ func TestExport(t *testing.T) {
 			})
 
 			t.Run("a model that declares no screen and no shows block writes neither key", func(t *testing.T) {
-				raw, err := export.ExportJSON(buildFullModel())
+				raw, err := export.ExportJSON(&ast.Model{
+					Name:     "Shop",
+					Contexts: []*ast.Context{{Name: "Shop", Slices: []*ast.Slice{{Name: "Pay", Commands: []*ast.Command{{Name: "Pay"}}}}}},
+				})
 				require.NoError(t, err)
 
 				require.NotContains(t, string(raw), `"screens"`)
@@ -2212,10 +2051,8 @@ func TestExport(t *testing.T) {
 								Name: "Agg",
 								Slices: []*ast.Slice{
 									{
-										Name: "S",
-										Trigger: &ast.Trigger{
-											Name: "Form", Reads: []string{"V"},
-										},
+										Name:        "S",
+										Appearances: []*ast.Appearance{{Screen: "Form", Reads: []string{"V"}}},
 										Commands: []*ast.Command{
 											{Name: "Cmd"},
 										},
@@ -2250,7 +2087,7 @@ func TestExport(t *testing.T) {
 			for _, n := range nodes {
 				types = append(types, n.(map[string]any)["type"].(string))
 			}
-			require.Equal(t, []string{"context", "aggregate", "slice", "command", "event", "trigger", "view", "automation"}, types)
+			require.Equal(t, []string{"context", "aggregate", "slice", "command", "event", "shows", "view", "automation"}, types)
 		})
 
 		t.Run("parentId chains are correct for hierarchical nodes", func(t *testing.T) {
@@ -2313,59 +2150,36 @@ func TestExport(t *testing.T) {
 			require.Equal(t, "slice-1", event["parentId"])
 		})
 
-		t.Run("trigger node carries reads and no actor and no kind", func(t *testing.T) {
-			model := &ast.Model{
-				Name: "Test",
-				Contexts: []*ast.Context{
-					{
-						Name: "Ctx",
-						Aggregates: []*ast.Aggregate{
-							{
-								Name: "Agg",
-								Slices: []*ast.Slice{
-									{
-										Name: "S",
-										Trigger: &ast.Trigger{
-											Name:  "FormSubmit",
-											Reads: []string{"MyView"},
-										},
-									},
-								},
-							},
-						},
-					},
-				},
+		t.Run("a slice whose AST holds a trigger draws no trigger node and no trigger_command edge", func(t *testing.T) {
+			doc := diagramDocOf(t, &ast.Model{
+				Name: "Shop",
+				Contexts: []*ast.Context{{
+					Name: "Shop",
+					Slices: []*ast.Slice{{
+						Name:     "Apply Discount",
+						Trigger:  &ast.Trigger{Name: "Checkout Page", Reads: []string{"CartView"}},
+						Commands: []*ast.Command{{Name: "ApplyDiscount"}},
+						Views:    []*ast.View{{Name: "CartView"}},
+					}},
+				}},
+			})
+
+			var types []string
+			for _, node := range objectsUnder(doc, "nodes") {
+				types = append(types, node["type"].(string))
 			}
-
-			raw, err := export.ExportDiagramJSON(model)
-			require.NoError(t, err)
-
-			var doc map[string]any
-			err = json.Unmarshal(raw, &doc)
-			require.NoError(t, err)
-
-			nodes := doc["nodes"].([]any)
-			// context, aggregate, slice, trigger
-			require.Len(t, nodes, 4)
-
-			trigger := nodes[3].(map[string]any)
-			require.Equal(t, "trigger", trigger["type"])
-			require.Equal(t, "slice-1", trigger["parentId"])
-			require.Equal(t, "FormSubmit", trigger["label"])
-			require.NotContains(t, trigger, "actor")
-			require.Equal(t, []any{"MyView"}, trigger["reads"])
-			_, hasKind := trigger["kind"]
-			require.False(t, hasKind, "diagram trigger node must not carry kind")
+			require.Equal(t, []string{"context", "slice", "command", "view"}, types)
+			require.Empty(t, objectsUnder(doc, "edges"))
 		})
 
-		t.Run("a trigger node gives the views it reads as a list, and an automation and a translation node give one name", func(t *testing.T) {
+		t.Run("a shows node gives the views it reads as a list, and an automation and a translation node give one name", func(t *testing.T) {
 			model := &ast.Model{
 				Name: "Shop",
 				Contexts: []*ast.Context{{
 					Name: "Shop",
 					Slices: []*ast.Slice{{
 						Name:        "Apply Discount",
-						Trigger:     &ast.Trigger{Name: "Checkout Page", Reads: []string{"CartView", "DiscountView"}},
+						Appearances: []*ast.Appearance{{Screen: "CheckoutPage", Reads: []string{"CartView", "DiscountView"}}},
 						Automations: []*ast.Automation{{Name: "ExpireDiscount", Reads: "DiscountView"}},
 						Translations: []*ast.Translation{
 							{Name: "PartnerCart", ExternalSystem: "Partner", Reads: "CartView"},
@@ -2384,21 +2198,21 @@ func TestExport(t *testing.T) {
 				}
 			}
 			require.Equal(t, map[string]any{
-				"Checkout Page":  []any{"CartView", "DiscountView"},
+				"CheckoutPage":   []any{"CartView", "DiscountView"},
 				"ExpireDiscount": "DiscountView",
 				"PartnerCart":    "CartView",
 				"PartnerOffer":   "DiscountView",
 			}, readsByLabel)
 		})
 
-		t.Run("a trigger node that reads no view states no reads", func(t *testing.T) {
+		t.Run("a shows node that reads no view states no reads", func(t *testing.T) {
 			model := &ast.Model{
 				Name: "Shop",
 				Contexts: []*ast.Context{{
 					Name: "Shop",
 					Slices: []*ast.Slice{
-						{Name: "Browse", Trigger: &ast.Trigger{Name: "Front Page"}},
-						{Name: "Apply Discount", Trigger: &ast.Trigger{Name: "Checkout Page", Reads: []string{"CartView"}}},
+						{Name: "Browse", Appearances: []*ast.Appearance{{Screen: "FrontPage"}}},
+						{Name: "Apply Discount", Appearances: []*ast.Appearance{{Screen: "CheckoutPage", Reads: []string{"CartView"}}}},
 					},
 				}},
 			}
@@ -2407,93 +2221,45 @@ func TestExport(t *testing.T) {
 
 			statesReads := make(map[string]bool)
 			for _, node := range objectsUnder(doc, "nodes") {
-				if node["type"] == "trigger" {
+				if node["type"] == "shows" {
 					_, states := node["reads"]
 					statesReads[node["label"].(string)] = states
 				}
 			}
-			require.Equal(t, map[string]bool{"Front Page": false, "Checkout Page": true}, statesReads)
+			require.Equal(t, map[string]bool{"FrontPage": false, "CheckoutPage": true}, statesReads)
 		})
 
-		t.Run("each view of a trigger's list draws a reads edge into the trigger, a far one from its copy in the trigger's slice", func(t *testing.T) {
+		t.Run("each shows node carries the description of the screen it shows, and a screen with no description gives none", func(t *testing.T) {
 			model := &ast.Model{
 				Name: "Shop",
+				Screens: []*ast.Screen{
+					{Name: "CheckoutPage", Description: "Where a guest pays for the cart"},
+					{Name: "FrontPage"},
+				},
 				Contexts: []*ast.Context{{
 					Name: "Shop",
 					Slices: []*ast.Slice{
-						{Name: "Show Offers", Views: []*ast.View{{Name: "OfferView"}}},
-						{Name: "Show Basket", Views: []*ast.View{{Name: "CartView"}}},
-						{Name: "Apply Discount", Trigger: &ast.Trigger{Name: "Checkout Page", Reads: []string{"CartView", "OfferView"}}},
+						{Name: "Browse", Appearances: []*ast.Appearance{{Screen: "FrontPage"}}},
+						{Name: "Apply Discount", Appearances: []*ast.Appearance{{Screen: "CheckoutPage"}}},
+						{Name: "Place Order", Appearances: []*ast.Appearance{{Screen: "CheckoutPage"}}},
 					},
 				}},
 			}
 
 			doc := diagramDocOf(t, model)
 
-			nodes := make(map[string]map[string]any)
+			var described []string
 			for _, node := range objectsUnder(doc, "nodes") {
-				nodes[node["id"].(string)] = node
-			}
-			var drawnFrom []string
-			for _, edge := range objectsUnder(doc, "edges") {
-				if edge["type"] != "reads" {
-					continue
+				if node["type"] == "shows" {
+					description, _ := node["description"].(string)
+					described = append(described, node["label"].(string)+": "+description)
 				}
-				source, target := nodes[edge["source"].(string)], nodes[edge["target"].(string)]
-				require.Equal(t, "Checkout Page", target["label"])
-				drawnFrom = append(drawnFrom, fmt.Sprintf("%s %s in %s", source["type"], source["label"], nodes[source["parentId"].(string)]["label"]))
 			}
 			require.Equal(t, []string{
-				"view CartView in Show Basket",
-				"view_copy OfferView in Apply Discount",
-			}, drawnFrom)
-		})
-
-		t.Run("two triggers that share a name each get a node in their own slice, joined to the view and the command of that slice, also when the commands share a name", func(t *testing.T) {
-			model := &ast.Model{
-				Name: "Shop",
-				Contexts: []*ast.Context{{
-					Name: "Shop",
-					Slices: []*ast.Slice{
-						{
-							Name:     "Apply Discount",
-							Trigger:  &ast.Trigger{Name: "Checkout Page", Reads: []string{"CartView"}},
-							Commands: []*ast.Command{{Name: "SubmitCart"}},
-							Views:    []*ast.View{{Name: "CartView"}},
-						},
-						{
-							Name:     "Place Order",
-							Trigger:  &ast.Trigger{Name: "Checkout Page", Reads: []string{"OrderView"}},
-							Commands: []*ast.Command{{Name: "SubmitCart"}},
-							Views:    []*ast.View{{Name: "OrderView"}},
-						},
-					},
-				}},
-			}
-
-			doc := diagramDocOf(t, model)
-
-			nodes := make(map[string]map[string]any)
-			for _, node := range objectsUnder(doc, "nodes") {
-				nodes[node["id"].(string)] = node
-			}
-			sliceOf := func(node map[string]any) string {
-				return nodes[node["parentId"].(string)]["label"].(string)
-			}
-			var triggerEdges []string
-			for _, edge := range objectsUnder(doc, "edges") {
-				source, target := nodes[edge["source"].(string)], nodes[edge["target"].(string)]
-				if source["type"] == "trigger" || target["type"] == "trigger" {
-					triggerEdges = append(triggerEdges, fmt.Sprintf("%s %s in %s -> %s %s in %s",
-						source["type"], source["label"], sliceOf(source), target["type"], target["label"], sliceOf(target)))
-				}
-			}
-			require.ElementsMatch(t, []string{
-				"view CartView in Apply Discount -> trigger Checkout Page in Apply Discount",
-				"trigger Checkout Page in Apply Discount -> command SubmitCart in Apply Discount",
-				"view OrderView in Place Order -> trigger Checkout Page in Place Order",
-				"trigger Checkout Page in Place Order -> command SubmitCart in Place Order",
-			}, triggerEdges)
+				"FrontPage: ",
+				"CheckoutPage: Where a guest pays for the cart",
+				"CheckoutPage: Where a guest pays for the cart",
+			}, described)
 		})
 
 		t.Run("screens and shows blocks", func(t *testing.T) {
@@ -2818,10 +2584,8 @@ func TestExport(t *testing.T) {
 								Name: "Agg",
 								Slices: []*ast.Slice{
 									{
-										Name: "S",
-										Trigger: &ast.Trigger{
-											Name: "Form", Reads: []string{"V"},
-										},
+										Name:        "S",
+										Appearances: []*ast.Appearance{{Screen: "Form", Reads: []string{"V"}}},
 										Views: []*ast.View{
 											{Name: "RoomsView"},
 										},
@@ -2847,12 +2611,12 @@ func TestExport(t *testing.T) {
 			require.NoError(t, err)
 
 			nodes := doc["nodes"].([]any)
-			// context, aggregate, slice, trigger, view, automation, translation
+			// context, aggregate, slice, shows, view, automation, translation
 			require.Len(t, nodes, 7)
 
-			// trigger should reference slice-1
-			trigger := findNodeByType(nodes, "trigger")
-			require.Equal(t, "slice-1", trigger["parentId"])
+			// shows should reference slice-1
+			shows := findNodeByType(nodes, "shows")
+			require.Equal(t, "slice-1", shows["parentId"])
 
 			// view should reference slice-1
 			view := findNodeByType(nodes, "view")
@@ -2913,60 +2677,6 @@ func TestExport(t *testing.T) {
 			require.Equal(t, "command-1", edge["source"])
 			require.Equal(t, "event-1", edge["target"])
 			require.Equal(t, "flow", edge["type"])
-		})
-
-		t.Run("trigger_command edges from trigger to each command in same slice", func(t *testing.T) {
-			model := &ast.Model{
-				Name: "Test",
-				Contexts: []*ast.Context{
-					{
-						Name: "Ctx",
-						Aggregates: []*ast.Aggregate{
-							{
-								Name: "Agg",
-								Slices: []*ast.Slice{
-									{
-										Name: "S",
-										Trigger: &ast.Trigger{
-											Name: "FormSubmit",
-										},
-										Commands: []*ast.Command{
-											{Name: "MakeReservation"},
-											{Name: "NotifyGuest"},
-										},
-									},
-								},
-							},
-						},
-					},
-				},
-			}
-
-			raw, err := export.ExportDiagramJSON(model)
-			require.NoError(t, err)
-
-			var doc map[string]any
-			err = json.Unmarshal(raw, &doc)
-			require.NoError(t, err)
-
-			edges := doc["edges"].([]any)
-			require.Len(t, edges, 2)
-
-			// Collect edges by target for verification
-			triggerCmdEdges := make([]map[string]any, 0, 2)
-			for _, e := range edges {
-				edge := e.(map[string]any)
-				require.Equal(t, "trigger_command", edge["type"])
-				require.Equal(t, "trigger-1", edge["source"])
-				triggerCmdEdges = append(triggerCmdEdges, edge)
-			}
-
-			targets := make([]string, len(triggerCmdEdges))
-			for i, e := range triggerCmdEdges {
-				targets[i] = e["target"].(string)
-			}
-			require.Contains(t, targets, "command-1")
-			require.Contains(t, targets, "command-2")
 		})
 
 		t.Run("subscription edges from event to subscribing view", func(t *testing.T) {
@@ -3220,7 +2930,7 @@ func TestExport(t *testing.T) {
 				"spelling the flow out must not add a second edge for the same pair")
 		})
 
-		t.Run("draws a reads edge from a view to the trigger and to the automation that read it, and none for a name no slice declares", func(t *testing.T) {
+		t.Run("draws a reads edge from a view to the shows block and to the automation that read it, and none for a name no slice declares", func(t *testing.T) {
 			model := &ast.Model{
 				Name: "Test",
 				Contexts: []*ast.Context{
@@ -3235,22 +2945,22 @@ func TestExport(t *testing.T) {
 										Views: []*ast.View{{Name: "MemberLoansView"}},
 									},
 									{
-										Name:    "Borrow Copy",
-										Trigger: &ast.Trigger{Name: "Lending Desk", Reads: []string{"MemberLoansView"}},
+										Name:        "Borrow Copy",
+										Appearances: []*ast.Appearance{{Screen: "LendingDesk", Reads: []string{"MemberLoansView"}}},
 										Automations: []*ast.Automation{
 											{Name: "RecallOverdueCopy", Reads: "MemberLoansView"},
 										},
 									},
 									{
-										Name:    "Return Copy",
-										Trigger: &ast.Trigger{Name: "Returns Counter", Reads: []string{"AvailableCopiesView"}},
+										Name:        "Return Copy",
+										Appearances: []*ast.Appearance{{Screen: "ReturnsCounter", Reads: []string{"AvailableCopiesView"}}},
 										Automations: []*ast.Automation{
 											{Name: "ChaseOverdueCopy", Reads: "AvailableCopiesView"},
 										},
 									},
 									{
-										Name:    "Renew Loan",
-										Trigger: &ast.Trigger{Name: "Renewal Desk"},
+										Name:        "Renew Loan",
+										Appearances: []*ast.Appearance{{Screen: "RenewalDesk"}},
 										Automations: []*ast.Automation{
 											{Name: "RenewQuietly"},
 										},
@@ -3265,10 +2975,10 @@ func TestExport(t *testing.T) {
 			doc := diagramDocOf(t, model)
 
 			require.ElementsMatch(t, []map[string]any{
-				{"source": "view-1", "target": "trigger-1", "type": "reads"},
+				{"source": "view-1", "target": "shows-1", "type": "reads"},
 				{"source": "view-1", "target": "auto-1", "type": "reads"},
 			}, objectsUnder(doc, "edges"),
-				"MemberLoansView is the only view declared, so the trigger and the automation of Borrow Copy are the only two ends a wire can reach; AvailableCopiesView resolves to no node, and Renew Loan reads nothing")
+				"MemberLoansView is the only view declared, so the shows block and the automation of Borrow Copy are the only two ends a wire can reach; AvailableCopiesView resolves to no node, and Renew Loan reads nothing")
 		})
 
 		t.Run("cross-slice subscription edge resolves across boundaries", func(t *testing.T) {
@@ -3460,10 +3170,8 @@ func TestExport(t *testing.T) {
 								Name: "Agg",
 								Slices: []*ast.Slice{
 									{
-										Name: "S",
-										Trigger: &ast.Trigger{
-											Name: "Form", Reads: []string{"V"},
-										},
+										Name:        "S",
+										Appearances: []*ast.Appearance{{Screen: "Form", Reads: []string{"V"}, Commands: []string{"Cmd"}}},
 										Commands: []*ast.Command{
 											{Name: "Cmd"},
 										},
@@ -3495,7 +3203,7 @@ func TestExport(t *testing.T) {
 			require.NoError(t, err)
 
 			edges := doc["edges"].([]any)
-			// Expected: flow, trigger_command, subscription, automation_trigger, automation_command
+			// Expected: flow, shows_command, subscription, automation_trigger, automation_command
 			require.Len(t, edges, 5)
 
 			edgeTypes := make(map[string]bool)
@@ -3504,7 +3212,7 @@ func TestExport(t *testing.T) {
 				edgeTypes[edge["type"].(string)] = true
 			}
 			require.True(t, edgeTypes["flow"], "flow edge should exist")
-			require.True(t, edgeTypes["trigger_command"], "trigger_command edge should exist")
+			require.True(t, edgeTypes["shows_command"], "shows_command edge should exist")
 			require.True(t, edgeTypes["subscription"], "subscription edge should exist")
 			require.True(t, edgeTypes["automation_trigger"], "automation_trigger edge should exist")
 			require.True(t, edgeTypes["automation_command"], "automation_command edge should exist")
@@ -4083,41 +3791,34 @@ func TestExport(t *testing.T) {
 				"taking the automations' reads leaves the shows block's own edge standing")
 		})
 
-		t.Run("every view a trigger or an automation reads draws its edge, across both slice homes and across a context boundary", func(t *testing.T) {
-			doc := diagramDocOf(t, test.TriggerReadsLibraryLendingModel(t))
-
-			require.Equal(t, test.TriggerReadsLibraryLendingTriggerViewNames, viewsReadBy(doc, "trigger"),
-				`the trigger "Overdue Report" reads a view the other context declares, so a lookup scoped to the slice or the context reads back short`)
-			require.Equal(t, test.TriggerReadsLibraryLendingAutomationViewNames, viewsReadBy(doc, "automation"),
+		t.Run("every view a shows block or an automation reads draws its edge, across both slice homes and across a context boundary", func(t *testing.T) {
+			require.Equal(t, test.ScreenLibraryLendingAppearanceReads, viewsReadBy(diagramDocOf(t, test.ScreenLibraryLendingModel(t)), "shows"),
+				"the shows blocks of the screen fixture read views in both slice homes, and two of them read a view the other context declares")
+			require.Equal(t, test.TriggerReadsLibraryLendingAutomationViewNames, viewsReadBy(diagramDocOf(t, test.TriggerReadsLibraryLendingModel(t)), "automation"),
 				"and the automation RemindReaderOfLoans reads one back across that boundary the other way")
 		})
 
 		t.Run("each twin loses the reads edges of its own construct and keeps every other wire", func(t *testing.T) {
+			showing := test.ScreenLibraryLendingModel(t)
+			unreadScreens := test.WithoutAppearanceReads(test.ScreenLibraryLendingModel(t))
 			reading := test.TriggerReadsLibraryLendingModel(t)
-			unreadTriggers := test.WithoutTriggerReads(reading)
-			unreadAutomations := test.WithoutAutomationReads(reading)
+			unreadAutomations := test.WithoutAutomationReads(test.TriggerReadsLibraryLendingModel(t))
 
-			require.Equal(t, test.TriggerReadsLibraryLendingTriggerViewNames, test.DeclaredTriggerReads(reading),
-				"the model has to keep reading a view from both constructs once the twins are taken, or the comparisons below run over copies of itself")
-			require.Equal(t, test.TriggerReadsLibraryLendingAutomationViewNames, test.DeclaredAutomationReads(reading))
-			require.Empty(t, test.DeclaredTriggerReads(unreadTriggers),
+			require.Empty(t, test.DeclaredAppearanceReads(unreadScreens),
 				"each twin has to lose what its own construct reads in both slice homes, or whichever home it kept answers the comparisons below")
 			require.Empty(t, test.DeclaredAutomationReads(unreadAutomations))
-			require.Equal(t, test.TriggerReadsLibraryLendingAutomationViewNames, test.DeclaredAutomationReads(unreadTriggers),
+			require.Equal(t, test.DeclaredAutomationReads(showing), test.DeclaredAutomationReads(unreadScreens),
 				"and to leave the other construct reading, or the differential says nothing about which field the edge is drawn from")
-			require.Equal(t, test.TriggerReadsLibraryLendingTriggerViewNames, test.DeclaredTriggerReads(unreadAutomations))
 
-			readingDoc := diagramDocOf(t, reading)
-			triggerlessDoc := diagramDocOf(t, unreadTriggers)
-			automationlessDoc := diagramDocOf(t, unreadAutomations)
+			showingDoc, unreadScreensDoc := diagramDocOf(t, showing), diagramDocOf(t, unreadScreens)
+			readingDoc, unreadAutomationsDoc := diagramDocOf(t, reading), diagramDocOf(t, unreadAutomations)
 
-			require.Empty(t, viewsReadBy(triggerlessDoc, "trigger"))
-			require.Equal(t, test.TriggerReadsLibraryLendingAutomationViewNames, viewsReadBy(triggerlessDoc, "automation"))
-			require.Empty(t, viewsReadBy(automationlessDoc, "automation"))
-			require.Equal(t, test.TriggerReadsLibraryLendingTriggerViewNames, viewsReadBy(automationlessDoc, "trigger"))
+			require.Empty(t, viewsReadBy(unreadScreensDoc, "shows"))
+			require.Equal(t, viewsReadBy(showingDoc, "automation"), viewsReadBy(unreadScreensDoc, "automation"))
+			require.Empty(t, viewsReadBy(unreadAutomationsDoc, "automation"))
 
-			require.Equal(t, edgesExcept(readingDoc, "reads"), edgesExcept(triggerlessDoc, "reads"))
-			require.Equal(t, edgesExcept(readingDoc, "reads"), edgesExcept(automationlessDoc, "reads"))
+			require.Equal(t, edgesExcept(showingDoc, "reads"), edgesExcept(unreadScreensDoc, "reads"))
+			require.Equal(t, edgesExcept(readingDoc, "reads"), edgesExcept(unreadAutomationsDoc, "reads"))
 		})
 
 		t.Run("the cadence a scheduled automation runs on reaches its node, beside the event the rest activate on", func(t *testing.T) {
@@ -4273,15 +3974,12 @@ func TestExport(t *testing.T) {
 			t.Run("starts a reads edge at the copy of a view two or more slices away, and at the view in the slice next to it", func(t *testing.T) {
 				doc := diagramDocOf(t, test.TriggerReadsLibraryLendingModel(t))
 
-				readers := []string{"Lending Desk", "Overdue Report", "Desk Kiosk", "RecallOverdueCopy", "FreeDeskAtClosing", "RemindReaderOfLoans"}
+				readers := []string{"RecallOverdueCopy", "FreeDeskAtClosing", "RemindReaderOfLoans"}
 				read := make(map[string][]string, len(readers))
 				for _, reader := range readers {
 					read[reader] = edgeSourcesInto(doc, "reads", reader)
 				}
 				require.Equal(t, map[string][]string{
-					"Lending Desk":        {"view MemberLoansView"},
-					"Overdue Report":      {"view_copy DeskOccupancyView"},
-					"Desk Kiosk":          {"view_copy DeskOccupancyView"},
 					"RecallOverdueCopy":   {"view_copy MemberLoansView"},
 					"FreeDeskAtClosing":   {"view DeskOccupancyView"},
 					"RemindReaderOfLoans": {"view_copy MemberLoansView"},
@@ -4302,6 +4000,25 @@ func TestExport(t *testing.T) {
 					"FreeDeskAtClosing":   {"command_copy ReleaseDesk"},
 					"RemindReaderOfLoans": {"command_copy RemindMember"},
 				}, issued)
+			})
+
+			t.Run("ends a shows_command edge at the copy of a command two or more slices away, and at the command in the slice next to it", func(t *testing.T) {
+				model := &ast.Model{
+					Name: "Shop",
+					Contexts: []*ast.Context{{
+						Name: "Shop",
+						Slices: []*ast.Slice{
+							{Name: "Place Order", Commands: []*ast.Command{{Name: "PlaceOrder"}}},
+							{Name: "Cancel Order", Commands: []*ast.Command{{Name: "CancelOrder"}}},
+							{Name: "Review Orders", Appearances: []*ast.Appearance{{Screen: "OrderHistory", Commands: []string{"PlaceOrder", "CancelOrder"}}}},
+						},
+					}},
+				}
+
+				doc := diagramDocOf(t, model)
+
+				require.Equal(t, []string{"command_copy PlaceOrder", "command CancelOrder"},
+					edgeTargetsOutOf(doc, "shows_command", "OrderHistory"))
 			})
 
 			t.Run("joins a translation to the copies in its slice, and starts the flow it implies at the copy of its command", func(t *testing.T) {
@@ -4747,7 +4464,7 @@ func TestExport(t *testing.T) {
 				}}, slice["commands"])
 			})
 
-			t.Run("nests a trigger under its slice", func(t *testing.T) {
+			t.Run("writes no trigger field for a slice whose AST holds a trigger", func(t *testing.T) {
 				cueBin := lookupCue(t)
 				model := &ast.Model{
 					Name: "Test",
@@ -4766,12 +4483,11 @@ func TestExport(t *testing.T) {
 					}},
 				}
 
-				slice := firstSliceOf(t, exportedCUEDoc(t, cueBin, model))
+				cueOutput, err := export.ExportCUE(model)
+				require.NoError(t, err)
 
-				require.Equal(t, map[string]any{
-					"name":  "Form",
-					"reads": []any{"MyView"},
-				}, slice["trigger"])
+				require.NotContains(t, cueOutput, "trigger")
+				require.Equal(t, map[string]any{"name": "My Slice"}, firstSliceOf(t, exportedCUEDoc(t, cueBin, model)))
 			})
 
 			t.Run("keeps an external event's source and provider name", func(t *testing.T) {
@@ -5024,35 +4740,6 @@ func TestExport(t *testing.T) {
 
 		t.Run("a model whose automations read views conforms to the schema's Model definition", func(t *testing.T) {
 			requireConformsToSchema(t, lookupCue(t), test.AutomationReadsLibraryLendingModel(t))
-		})
-
-		t.Run("triggers that read a list of views, in both slice homes, conform to the schema and read the same in both exports", func(t *testing.T) {
-			cueBin := lookupCue(t)
-			model := &ast.Model{
-				Name: "Shop",
-				Contexts: []*ast.Context{{
-					Name: "Shop",
-					Aggregates: []*ast.Aggregate{{
-						Name: "Cart",
-						Slices: []*ast.Slice{
-							{Name: "Apply Discount", Trigger: &ast.Trigger{Name: "Checkout Page", Reads: []string{"CartView", "DiscountView"}}},
-							{Name: "Browse", Trigger: &ast.Trigger{Name: "Front Page"}},
-						},
-					}},
-					Slices: []*ast.Slice{
-						{Name: "Redeem Points", Trigger: &ast.Trigger{Name: "Loyalty Page", Reads: []string{"LoyaltyView"}}},
-					},
-				}},
-			}
-
-			requireConformsToSchema(t, cueBin, model)
-			requireBothFormatsAgree(t, cueBin, model)
-			for format, doc := range exportedDocs(t, cueBin, model) {
-				require.Equal(t, map[string][]any{
-					"Apply Discount": {"CartView", "DiscountView"},
-					"Redeem Points":  {"LoyaltyView"},
-				}, triggerReadsByOwner(doc), "%s export", format)
-			}
 		})
 
 		t.Run("a model whose automations run on a schedule conforms to the schema's Model definition", func(t *testing.T) {
@@ -5623,6 +5310,7 @@ func buildFullModel() *ast.Model {
 	return &ast.Model{
 		Name:        "Full",
 		Description: "How the whole system earns its keep",
+		Screens:     []*ast.Screen{{Name: "Form", Description: "Where the decision starts"}},
 		Contexts: []*ast.Context{
 			{
 				Name:        "Ctx",
@@ -5635,10 +5323,7 @@ func buildFullModel() *ast.Model {
 							{
 								Name:        "S",
 								Description: "One decision and everything it needs",
-								Trigger: &ast.Trigger{
-									Name: "Form", Reads: []string{"V"},
-									Description: "Where the decision starts",
-								},
+								Appearances: []*ast.Appearance{{Screen: "Form", Reads: []string{"V"}, Commands: []string{"Cmd"}}},
 								Commands: []*ast.Command{
 									{
 										Name:        "Cmd",
@@ -5726,10 +5411,12 @@ func awkwardlyDescribedModel() *ast.Model {
 // test.DescribedHotelReservation files by node label: the description every
 // construct states, plus a second copy of the translation event's, because the
 // exporter draws that event a node of its own beside nesting it in the
-// translation.
+// translation, and a second copy of the screen's on the node of the shows block
+// that shows it.
 func describedHotelReservationNodeDescriptions() map[string]string {
 	byLabel := maps.Clone(test.DescribedHotelReservationDescriptions)
 	byLabel["BookingImported"] = "A partner site reported a booking"
+	byLabel["ReservationForm shows"] = "The booking form on the public site"
 	return byLabel
 }
 
@@ -5740,6 +5427,10 @@ func commentedLibraryLendingModel() *ast.Model {
 	return &ast.Model{
 		Name:     "Library Lending",
 		Comments: []*ast.Comment{{Text: "# The lending side of the library"}},
+		Screens: []*ast.Screen{{
+			Name:     "LendingDesk",
+			Comments: []*ast.Comment{{Text: "# The terminal at the front of the library"}},
+		}},
 		Contexts: []*ast.Context{{
 			Name:     "Lending",
 			Comments: []*ast.Comment{{Text: "# Everything the library knows about a copy leaving the building"}},
@@ -5749,10 +5440,10 @@ func commentedLibraryLendingModel() *ast.Model {
 				Slices: []*ast.Slice{{
 					Name:     "Borrow Copy",
 					Comments: []*ast.Comment{{Text: "# A member takes a copy off the shelf"}},
-					Trigger: &ast.Trigger{
-						Name:     "Lending Desk",
+					Appearances: []*ast.Appearance{{
+						Screen:   "LendingDesk",
 						Comments: []*ast.Comment{{Text: "# The desk terminal the librarian types into"}},
-					},
+					}},
 					Commands: []*ast.Command{{
 						Name: "BorrowCopy",
 						Comments: []*ast.Comment{
@@ -5800,7 +5491,8 @@ func commentedLibraryLendingNodeComments() map[string][]string {
 		"Lending":                 {"# Everything the library knows about a copy leaving the building"},
 		"Loan":                    {"# One copy held by one member over one date range"},
 		"Borrow Copy":             {"# A member takes a copy off the shelf"},
-		"Lending Desk":            {"# The desk terminal the librarian types into"},
+		"LendingDesk":             {"# The terminal at the front of the library"},
+		"LendingDesk shows":       {"# The desk terminal the librarian types into"},
 		"BorrowCopy":              {"# Ask the library to hand a copy over", "# The deposit is taken at the desk, not here"},
 		"CopyBorrowed":            {"# A copy left the building"},
 		"AvailableCopiesView":     {"# Every copy still on the shelf"},
@@ -6866,21 +6558,6 @@ func namesCarrying(byOwner map[string][]map[string]any, key string) []string {
 // the slice. What a trigger reads and what an automation reads are separate keys
 // on separate objects, so a change reaching the wrong one shows up here as a
 // slice that lost what its trigger reads.
-func triggerReadsByOwner(doc map[string]any) map[string][]any {
-	byOwner := make(map[string][]any)
-	eachObject(doc, func(object map[string]any) {
-		trigger, declaresTrigger := object["trigger"].(map[string]any)
-		owner, named := object["name"].(string)
-		if !declaresTrigger || !named {
-			return
-		}
-		if reads, readsViews := trigger["reads"].([]any); readsViews {
-			byOwner[owner] = reads
-		}
-	})
-	return byOwner
-}
-
 func showsReadsByOwner(doc map[string]any) map[string][]any {
 	byOwner := make(map[string][]any)
 	eachObject(doc, func(object map[string]any) {
@@ -7144,7 +6821,7 @@ func descriptionsByConstruct(t *testing.T, doc map[string]any) map[string]any {
 		"context":           context["description"],
 		"aggregate":         aggregate["description"],
 		"slice":             slice["description"],
-		"trigger":           slice["trigger"].(map[string]any)["description"],
+		"screen":            firstOf(t, doc, "screens")["description"],
 		"command":           firstOf(t, slice, "commands")["description"],
 		"event":             firstOf(t, slice, "events")["description"],
 		"view":              firstOf(t, slice, "views")["description"],

@@ -107,7 +107,7 @@ describe('Layout', () => {
     const edges = [
       { id: 'e1', type: 'flow', source: 'a', target: 'b' },
       { id: 'e2', type: 'subscription', source: 'b', target: 'c' },
-      { id: 'e3', type: 'trigger_command', source: 'a', target: 'c' },
+      { id: 'e3', type: 'shows_command', source: 'a', target: 'c' },
       { id: 'e4', type: 'automation_trigger', source: 'd', target: 'e' },
       { id: 'e5', type: 'reads', source: 'f', target: 'g' },
       { id: 'e6', type: 'unknown_type', source: 'a', target: 'b' },
@@ -138,7 +138,7 @@ describe('Layout', () => {
       { id: 'sl1', type: 'slice' },
       { id: 'cmd1', type: 'command', parentId: 'sl1' },
       { id: 'evt1', type: 'event', parentId: 'sl1' },
-      { id: 'trg1', type: 'trigger', parentId: 'sl1' },
+      { id: 'shows1', type: 'shows', parentId: 'sl1' },
       { id: 'view1', type: 'view', parentId: 'sl1' },
       { id: 'automation1', type: 'automation', parentId: 'sl1' },
       { id: 'trans1', type: 'translation', parentId: 'sl1' },
@@ -150,7 +150,7 @@ describe('Layout', () => {
 
     it('returns children with allowed types', () => {
       const ids = Layout.getSliceChildNodeIds(nodes, 'sl1');
-      expect(ids.sort()).toEqual(['automation1', 'cmd1', 'cmdcopy1', 'evt1', 'evtcopy1', 'trans1', 'trg1', 'view1', 'viewcopy1'].sort());
+      expect(ids.sort()).toEqual(['automation1', 'cmd1', 'cmdcopy1', 'evt1', 'evtcopy1', 'shows1', 'trans1', 'view1', 'viewcopy1'].sort());
     });
 
     it('excludes children whose type is not in the allowed list', () => {

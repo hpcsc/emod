@@ -1122,6 +1122,21 @@ describe('the page above the diagram', () => {
     expect(document.body.textContent).not.toContain('Actors');
   });
 
+  it('draws no box for a trigger node that an older document still carries, and still draws the rest', async () => {
+    globalThis.INITIAL_DATA = null;
+    const diagram = billingDiagram();
+    const slice = diagram.nodes.find((n) => n.type === 'slice');
+    diagram.nodes.push({ id: 'trigger-1', type: 'trigger', label: 'Checkout Form', parentId: slice.id, reads: ['PaymentsView'] });
+    parseResult = { diagnostics: [], diagram: diagram };
+    await startViewer();
+    deliverFile({ name: 'billing.emod', path: '/models/billing.emod', content: billingSource });
+    await flush();
+
+    expect(canvasMarkup()).toContain('TakePayment');
+    expect(document.querySelector('[data-node-id="trigger-1"]')).toBeNull();
+    expect(canvasMarkup()).not.toContain('Checkout Form');
+  });
+
   it('holds the diagram canvas and no bar of actors', () => {
     const page = readFileSync(resolve(__dirname, '../static/viewer.html'), 'utf-8');
 
@@ -2282,8 +2297,8 @@ describe('a diagram edit reaching the source panel', () => {
     },
     view: {
       copy: { id: 'view_copy-1', type: 'view_copy', label: 'PaymentsView', parentId: 'slice-1', copy_of: 'view-1' },
-      joined: [{ id: 'trigger-1', type: 'trigger', label: 'Till', parentId: 'slice-1' }],
-      arrow: { source: 'view_copy-1', target: 'trigger-1', type: 'reads' },
+      joined: [{ id: 'shows-1', type: 'shows', label: 'Till', parentId: 'slice-1' }],
+      arrow: { source: 'view_copy-1', target: 'shows-1', type: 'reads' },
       tooltip: 'A copy of the view in Review Payments. Click to show that view.',
       tooltipWithoutOriginal: 'A copy of a view the diagram no longer holds',
     },
@@ -3838,26 +3853,6 @@ describe('a diagram edit reaching the source panel', () => {
       expect(sentNodes().find((n) => n.id === 'command-1').parentId).toBe('slice-2');
       expect(sentNodes().find((n) => n.id === 'event-2').label).toBe('PaymentReversed');
       expect(panelText()).toBe(appliedSource);
-    });
-
-    it('asks the pipeline nothing for a trigger dragged onto a slice that has one', async () => {
-      const diagram = editableDiagram();
-      diagram.nodes.push(
-        { id: 'trigger-1', type: 'trigger', label: 'Checkout Form', parentId: 'slice-1' },
-        { id: 'trigger-2', type: 'trigger', label: 'Refund Form', parentId: 'slice-2' });
-      globalThis.INITIAL_DATA = null;
-      parseResult = { diagnostics: [], diagram: diagram };
-      await startViewer();
-      deliverFile({ name: 'billing.emod', path: '/models/billing.emod', content: billingSource });
-      await flush();
-      const before = applies();
-
-      dragOnto('trigger-1', 'slice-2');
-      await settle();
-
-      expect(applies()).toBe(before);
-      expect(panelText()).toBe(billingSource);
-      expect(blockFor('trigger-1')).not.toBeNull();
     });
 
     it('moves a block on a diagram with no source behind it, and Export writes the move', async () => {

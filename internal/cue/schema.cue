@@ -25,13 +25,6 @@
 	command?:  [...string]
 }
 
-#Trigger: {
-	comments?:    [...#Comment]
-	name:         string
-	description?: string
-	reads?:       [...string]
-}
-
 #Command: {
 	comments?:    [...#Comment]
 	name:         string
@@ -121,7 +114,6 @@
 	name:          string
 	description?:  string
 	shows?:        [...#Appearance]
-	trigger?:      #Trigger
 	commands?:     [...#Command]
 	events?:       [...#Event]
 	fields?:       [...#Field]

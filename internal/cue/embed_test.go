@@ -131,18 +131,18 @@ func TestSchema(t *testing.T) {
 		require.Contains(t, string(output), "delay")
 	})
 
-	t.Run("rejects a trigger that still states the retired kind key", func(t *testing.T) {
+	t.Run("rejects a slice that carries a trigger", func(t *testing.T) {
 		cueBin := requireCue(t)
 
 		output, err := vetAgainstModel(t, cueBin, strings.Replace(fullModelJSON,
-			`"trigger": {
-          "name": "Form"`,
-			`"trigger": {
-          "kind": "UI",
-          "name": "Form"`, 1))
+			`"commands": [{
+          "name": "MakeReservation"`,
+			`"trigger": {"name": "Form", "reads": ["RoomsView"]},
+        "commands": [{
+          "name": "MakeReservation"`, 1))
 
-		require.Error(t, err, "schema accepted a trigger keyed kind")
-		require.Contains(t, string(output), "kind")
+		require.Error(t, err, "schema accepted a slice carrying a trigger")
+		require.Contains(t, string(output), "trigger: field not allowed")
 	})
 
 	t.Run("rejects an event whose wire type is not a string", func(t *testing.T) {
@@ -236,29 +236,6 @@ func TestSchema(t *testing.T) {
 		require.Contains(t, string(output), "actors: field not allowed")
 	})
 
-	t.Run("rejects a trigger that carries the retired actor", func(t *testing.T) {
-		cueBin := requireCue(t)
-
-		output, err := vetAgainstModel(t, cueBin, strings.Replace(fullModelJSON,
-			`"reads": ["RoomsView"]`,
-			`"actor": "Guest",
-          "reads": ["RoomsView"]`, 1))
-
-		require.Error(t, err, "schema accepted a trigger carrying actor")
-		require.Contains(t, string(output), "actor: field not allowed")
-	})
-
-	t.Run("rejects a trigger whose reads is stated as one name rather than a list", func(t *testing.T) {
-		cueBin := requireCue(t)
-
-		output, err := vetAgainstModel(t, cueBin, strings.Replace(fullModelJSON,
-			`"reads": ["RoomsView"]`,
-			`"reads": "RoomsView"`, 1))
-
-		require.Error(t, err, "schema accepted a trigger reading one bare name")
-		require.Contains(t, string(output), "reads")
-	})
-
 	t.Run("rejects a spec whose given is stated in the retired bare-name shape", func(t *testing.T) {
 		cueBin := requireCue(t)
 
@@ -341,11 +318,6 @@ const fullModelJSON = `{
           "reads": ["RoomsView"],
           "command": ["MakeReservation"]
         }],
-        "trigger": {
-          "name": "Form",
-          "description": "The booking form on the public site",
-          "reads": ["RoomsView"]
-        },
         "commands": [{
           "name": "MakeReservation",
           "description": "Ask the hotel to hold a room",

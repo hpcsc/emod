@@ -860,24 +860,24 @@ checked-in model has a trigger.
 
 **Acceptance Criteria:**
 
-- [ ] `emod export --format json` of a model whose AST holds a trigger has no `trigger` key on its slice, and
+- [x] `emod export --format json` of a model whose AST holds a trigger has no `trigger` key on its slice, and
       `emod export --format cue` has no `trigger` field.
-- [ ] `internal/cue/schema.cue` declares no `#Trigger` and no `trigger` on `#Slice`. `cue vet` rejects a slice that
+- [x] `internal/cue/schema.cue` declares no `#Trigger` and no `trigger` on `#Slice`. `cue vet` rejects a slice that
       carries `trigger`, and the cue error text says that the field is not allowed. `emod schema` prints no
       `#Trigger`.
-- [ ] `emod export --format diagram-json` of a model whose AST holds a trigger has no node of the type `trigger`
+- [x] `emod export --format diagram-json` of a model whose AST holds a trigger has no node of the type `trigger`
       and no edge of the type `trigger_command`.
-- [ ] `importer.ImportDiagram` and `importer.ApplyDiagram` of a document with a `trigger` node, a `reads` edge onto
+- [x] `importer.ImportDiagram` and `importer.ApplyDiagram` of a document with a `trigger` node, a `reads` edge onto
       it and a `trigger_command` edge give no error, and the formatted model has no screen and no `shows` block from
       them. Each other node keeps what it carries.
-- [ ] The viewer draws no box for a `trigger` node in an old document and still draws the rest. `nodePalette`,
+- [x] The viewer draws no box for a `trigger` node in an old document and still draws the rest. `nodePalette`,
       `edgeConfig`, `arrowClassMap`, `EDGE_TYPE_BY_ENDS`, the legend, the layout, the renderer, the detail panel
       and `viewer.html` have no trigger type and no `trigger_command`. The palette table of
       `docs/dsl-reference.md` section 13 has no Trigger row, and the Go palette pins count six element types.
-- [ ] No Go code in `internal/export` or `internal/importer` reads `Slice.Trigger` or builds an `ast.Trigger`, and
+- [x] No Go code in `internal/export` or `internal/importer` reads `Slice.Trigger` or builds an `ast.Trigger`, and
       no code in `internal/frontend/static` reads a `trigger` node or a `trigger_command` edge. The viewer tests
       that fed a `trigger` node feed a `shows` node, or go when a `shows` test covers the same behaviour.
-- [ ] `task test:unit`, `task test:viewer` and `task test:e2e:viewer` pass.
+- [x] `task test:unit`, `task test:viewer` and `task test:e2e:viewer` pass.
 
 **Affected Files/Modules:**
 

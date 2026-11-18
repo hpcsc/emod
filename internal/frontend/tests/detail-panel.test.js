@@ -26,13 +26,6 @@ function automationNode(attrs = {}) {
   );
 }
 
-function triggerNode(attrs = {}) {
-  return Object.assign(
-    { id: 'trg1', type: 'trigger', label: 'Reservation Form' },
-    attrs,
-  );
-}
-
 function commandNode(attrs = {}) {
   return Object.assign(
     {
@@ -188,6 +181,29 @@ describe('detail panel for a shows block', () => {
     ]);
   });
 
+  it('shows a list that a node gives as one name', () => {
+    const store = createStore();
+
+    UI.showDetailPanel(store, showsNode({ reads: 'CartView', command: 'ApplyDiscount' }));
+
+    expect(shownRows(store)).toEqual([
+      { label: 'Reads', value: 'CartView' },
+      { label: 'Commands', value: 'ApplyDiscount' },
+    ]);
+  });
+
+  it.each([
+    { label: 'Reads', key: 'reads', value: 'Available<b>&</b>RoomsView' },
+    { label: 'Commands', key: 'command', value: 'Apply<b>&</b>Discount' },
+  ])('shows a $label value containing markup as text', ({ label, key, value }) => {
+    const store = createStore();
+
+    UI.showDetailPanel(store, showsNode({ [key]: [value] }));
+
+    expect(shownRows(store)).toContainEqual({ label, value });
+    expect(store.dom.dpContent.querySelector('b')).toBeNull();
+  });
+
   it('shows an em-dash placeholder for an empty list and for a list the node does not state', () => {
     const store = createStore();
 
@@ -197,74 +213,6 @@ describe('detail panel for a shows block', () => {
       { label: 'Reads', value: '—' },
       { label: 'Commands', value: '—' },
     ]);
-  });
-});
-
-describe('detail panel for a trigger', () => {
-  it('shows the reads the node states, and no Actor row for a node that carries an actor key', () => {
-    const store = createStore();
-
-    UI.showDetailPanel(store, triggerNode({ actor: 'Guest', reads: ['AvailableRoomsView'] }));
-
-    expect(store.dom.dpContent.textContent).toContain('Trigger');
-    expect(shownRows(store)).toEqual([
-      { label: 'Reads', value: 'AvailableRoomsView' },
-    ]);
-  });
-
-  it('lists each view a trigger reads, in the order of its list', () => {
-    const store = createStore();
-
-    UI.showDetailPanel(store, triggerNode({ reads: ['DiscountView', 'CartView'] }));
-
-    expect(shownRows(store)).toContainEqual({ label: 'Reads', value: 'DiscountView, CartView' });
-  });
-
-  it('shows the view of a reads that a node gives as one name', () => {
-    const store = createStore();
-
-    UI.showDetailPanel(store, triggerNode({ reads: 'CartView' }));
-
-    expect(shownRows(store)).toContainEqual({ label: 'Reads', value: 'CartView' });
-  });
-
-  it('shows an em-dash placeholder for a reads list with no view', () => {
-    const store = createStore();
-
-    UI.showDetailPanel(store, triggerNode({ reads: [] }));
-
-    expect(shownRows(store)).toContainEqual({ label: 'Reads', value: '—' });
-  });
-
-  it('shows an em-dash placeholder for reads the node does not state', () => {
-    const store = createStore();
-
-    UI.showDetailPanel(store, triggerNode());
-
-    expect(shownRows(store)).toEqual([
-      { label: 'Reads', value: '—' },
-    ]);
-  });
-
-  it('renders a stale kind the same as a missing kind, with no orphaned Kind row', () => {
-    const withoutKind = createStore();
-    UI.showDetailPanel(withoutKind, triggerNode());
-    const withKind = createStore();
-    UI.showDetailPanel(withKind, triggerNode({ kind: 'UI' }));
-
-    expect(shownRows(withoutKind)).toEqual(shownRows(withKind));
-    expect(shownRows(withKind)).toEqual([
-      { label: 'Reads', value: '—' },
-    ]);
-  });
-
-  it('shows a Reads value containing markup as text', () => {
-    const store = createStore();
-
-    UI.showDetailPanel(store, triggerNode({ reads: 'Available<b>&</b>RoomsView' }));
-
-    expect(shownRows(store)).toContainEqual({ label: 'Reads', value: 'Available<b>&</b>RoomsView' });
-    expect(store.dom.dpContent.querySelector('b')).toBeNull();
   });
 });
 
@@ -291,7 +239,7 @@ describe('detail panel description', () => {
   });
 
   it.each([
-    { type: 'trigger', description: 'A guest submits the reservation form' },
+    { type: 'shows', description: 'The booking form on the public site' },
     { type: 'view', description: 'Rooms still free on the requested dates' },
     { type: 'automation', description: 'Chases an invoice once it falls overdue' },
     { type: 'translation', description: 'Turns a provider webhook into a payment command' },

@@ -150,12 +150,8 @@ func (e *diagramEdit) pairRepoints(removed, added []*diagramEdge) (map[*diagramE
 				continue
 			}
 			sameSource, sameTarget := r.Source == a.Source, r.Target == a.Target
-			entries, namesTarget := e.entriesOf(r)
-			keepsHolder := sameTarget
-			if namesTarget {
-				keepsHolder = sameSource
-			}
-			if (entries != nil && keepsHolder) || (r.Type == "flow" && sameSource != sameTarget) {
+			entries, listed := e.entriesOf(r)
+			if (listed && entries.keepsHolder(sameSource, sameTarget)) || (r.Type == "flow" && sameSource != sameTarget) {
 				repoints[r] = &repoint{removed: r, added: a}
 				repointed[a] = true
 				break
@@ -168,8 +164,8 @@ func (e *diagramEdit) pairRepoints(removed, added []*diagramEdge) (map[*diagramE
 func (e *diagramEdit) reserveEntry(model *ast.Model, r *repoint) {
 	from, to := e.drawnNodes[r.removed.Source].Label, e.drawnNodes[r.removed.Target].Label
 
-	if entries, namesTarget := e.entriesOf(r.removed); entries != nil {
-		r.reserve(entries, listed(namesTarget, from, to))
+	if entries, listed := e.entriesOf(r.removed); listed {
+		r.reserve(entries.names, entries.entry(from, to))
 		return
 	}
 	for _, s := range model.AllSlices() {
@@ -183,38 +179,23 @@ func (e *diagramEdit) reserveEntry(model *ast.Model, r *repoint) {
 	}
 }
 
-// entriesOf answers the list that holds the name one end of the edge stands for,
-// and whether that end is the target. It answers nil when the other end holds
-// that name alone. A view's subscribes and a reader's reads list the source; a
-// shows block's command lists the target.
-func (e *diagramEdit) entriesOf(edge *diagramEdge) (*[]string, bool) {
+// entriesOf answers false when no list holds the edge, because the other end
+// holds the name alone.
+func (e *diagramEdit) entriesOf(edge *diagramEdge) (edgeEntries, bool) {
 	if appearance, ok := e.drawnFrom[edge.Source].(*ast.Appearance); ok && edge.Type == "shows_command" {
-		return &appearance.Commands, true
+		return edgeEntries{names: &appearance.Commands, namesTarget: true}, true
 	}
 	switch target := e.drawnFrom[edge.Target].(type) {
 	case *ast.View:
 		if edge.Type == "subscription" {
-			return &target.Subscribes, false
+			return edgeEntries{names: &target.Subscribes}, true
 		}
 	case *ast.Appearance:
 		if edge.Type == "reads" {
-			return &target.Reads, false
-		}
-	case *ast.Trigger:
-		if edge.Type == "reads" {
-			return &target.Reads, false
+			return edgeEntries{names: &target.Reads}, true
 		}
 	}
-	return nil, false
-}
-
-// listed answers the name of the end that a list holds: the target's when
-// namesTarget, else the source's.
-func listed(namesTarget bool, source, target string) string {
-	if namesTarget {
-		return target
-	}
-	return source
+	return edgeEntries{}, false
 }
 
 func (e *diagramEdit) fillEntry(r *repoint) {
@@ -259,9 +240,6 @@ func (e *diagramEdit) matchDrawnNodes(model *ast.Model) error {
 		constructs[s.NamePos] = s
 		for _, appearance := range s.Appearances {
 			constructs[appearance.ScreenPos] = appearance
-		}
-		if s.Trigger != nil {
-			constructs[s.Trigger.NamePos] = s.Trigger
 		}
 		for _, c := range s.Commands {
 			constructs[c.NamePos] = c
@@ -320,12 +298,8 @@ func (e *diagramEdit) matchDrawnNodes(model *ast.Model) error {
 
 func (e *diagramEdit) placeBlocks() {
 	declaredIn := make(map[string]string)
-	holdsTrigger := make(map[string]bool)
 	place := func(n *diagramNode, sliceID string) {
 		declaredIn[n.ID] = sliceID
-		if n.Type == "trigger" {
-			holdsTrigger[sliceID] = true
-		}
 	}
 
 	var arriving []*diagramNode
@@ -342,7 +316,7 @@ func (e *diagramEdit) placeBlocks() {
 
 	for _, n := range arriving {
 		target := e.parentOf(n)
-		if !e.canHold(target, n, holdsTrigger) {
+		if !e.canHold(target) {
 			target = e.parentOf(e.drawnNodes[n.ID])
 		}
 		place(n, target)
@@ -375,12 +349,9 @@ func (e *diagramEdit) parentOf(n *diagramNode) string {
 	return *n.ParentID
 }
 
-func (e *diagramEdit) canHold(sliceID string, n *diagramNode, holdsTrigger map[string]bool) bool {
+func (e *diagramEdit) canHold(sliceID string) bool {
 	slice := e.builder.nodeByID[sliceID]
-	if slice == nil || slice.Type != "slice" {
-		return false
-	}
-	return n.Type != "trigger" || !holdsTrigger[sliceID]
+	return slice != nil && slice.Type == "slice"
 }
 
 func (e *diagramEdit) blocksIn(sliceID, typ string) []*diagramNode {
@@ -443,12 +414,6 @@ func (e *diagramEdit) sliceFor(n *diagramNode) *ast.Slice {
 		e.builder.register(a.ID, s, appearance)
 	}
 
-	s.Trigger = nil
-	if triggers := e.blocksIn(n.ID, "trigger"); len(triggers) > 0 {
-		s.Trigger = e.triggerFor(triggers[0])
-		e.builder.register(triggers[0].ID, s, s.Trigger)
-	}
-
 	s.Commands = nil
 	for _, c := range e.blocksIn(n.ID, "command") {
 		cmd := e.commandFor(c)
@@ -497,15 +462,6 @@ func (e *diagramEdit) appearanceFor(n *diagramNode) *ast.Appearance {
 	}
 	appearance.Screen = n.Label
 	return appearance
-}
-
-func (e *diagramEdit) triggerFor(n *diagramNode) *ast.Trigger {
-	trigger, kept := e.drawnFrom[n.ID].(*ast.Trigger)
-	if !kept {
-		trigger = n.asTrigger()
-	}
-	trigger.Name = n.Label
-	return trigger
 }
 
 func (e *diagramEdit) commandFor(n *diagramNode) *ast.Command {
@@ -613,9 +569,9 @@ func (e *diagramEdit) inResult(id string) bool {
 
 func (e *diagramEdit) clearRelationship(model *ast.Model, edge *diagramEdge) {
 	from, to := e.drawnNodes[edge.Source].Label, e.drawnNodes[edge.Target].Label
-	if entries, namesTarget := e.entriesOf(edge); entries != nil {
-		name := listed(namesTarget, from, to)
-		*entries = slices.DeleteFunc(*entries, func(entry string) bool { return entry == name })
+	if entries, listed := e.entriesOf(edge); listed {
+		name := entries.entry(from, to)
+		*entries.names = slices.DeleteFunc(*entries.names, func(entry string) bool { return entry == name })
 		return
 	}
 
@@ -667,8 +623,8 @@ func (e *diagramEdit) restoreFlowComments() {
 func (e *diagramEdit) pendingRename(model *ast.Model, edge *diagramEdge) func() {
 	from, to := e.drawnNodes[edge.Source].Label, e.drawnNodes[edge.Target].Label
 	newFrom, newTo := e.builder.nodeByID[edge.Source].Label, e.builder.nodeByID[edge.Target].Label
-	if entries, namesTarget := e.entriesOf(edge); entries != nil {
-		return e.pendingListRename(entries, listed(namesTarget, from, to), listed(namesTarget, newFrom, newTo))
+	if entries, listed := e.entriesOf(edge); listed {
+		return e.pendingListRename(entries.names, entries.entry(from, to), entries.entry(newFrom, newTo))
 	}
 
 	switch edge.Type {
@@ -725,4 +681,28 @@ func (e *diagramEdit) pendingListRename(entries *[]string, from, to string) func
 			(*entries)[i] = to
 		}
 	}
+}
+
+// edgeEntries is the list that holds the name one end of an edge stands for. A
+// view's subscribes and a reader's reads list the source; a shows block's
+// command lists the target.
+type edgeEntries struct {
+	names       *[]string
+	namesTarget bool
+}
+
+func (l edgeEntries) entry(source, target string) string {
+	if l.namesTarget {
+		return target
+	}
+	return source
+}
+
+// keepsHolder answers whether an edge drawn again still ends at the construct
+// that holds the list, so that its entry changes in place.
+func (l edgeEntries) keepsHolder(sameSource, sameTarget bool) bool {
+	if l.namesTarget {
+		return sameSource
+	}
+	return sameTarget
 }

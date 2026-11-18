@@ -1908,7 +1908,7 @@ func viewerNodePalette(t *testing.T) map[string]struct{ fill, stroke string } {
 
 	entryRe := regexp.MustCompile(`(?m)^\s*(\w+):\s*\{\s*fill:\s*['"]?(#[0-9a-fA-F]{6})['"]?(?:\s*,\s*stroke:\s*['"]?(#[0-9a-fA-F]{6})['"]?)?`)
 	matches := entryRe.FindAllStringSubmatch(block, -1)
-	require.Len(t, matches, 7, "nodePalette must list exactly seven element types, got %d", len(matches))
+	require.Len(t, matches, 6, "nodePalette must list exactly six element types, got %d", len(matches))
 
 	palette := make(map[string]struct{ fill, stroke string }, len(matches))
 	for _, m := range matches {
@@ -1925,7 +1925,6 @@ func viewerNodePalette(t *testing.T) map[string]struct{ fill, stroke string } {
 // paletteModel gives each element type.
 var viewerTypeToModelLabel = map[string]string{
 	"shows":       "Kiosk",
-	"trigger":     "Form",
 	"command":     "Cmd",
 	"event":       "Evt",
 	"view":        "Rmo",
@@ -1958,9 +1957,9 @@ func dslReferencePalette(t *testing.T) map[string]struct{ fill, stroke string } 
 	}
 	block = block[:end]
 
-	rowRe := regexp.MustCompile(`\|\s*(Shows|Trigger|Command|Event|View|Automation|Translation)\s*\|\s*(#[0-9a-fA-F]{6})\s*\|\s*(#[0-9a-fA-F]{6}|—)\s*\|`)
+	rowRe := regexp.MustCompile(`\|\s*(Shows|Command|Event|View|Automation|Translation)\s*\|\s*(#[0-9a-fA-F]{6})\s*\|\s*(#[0-9a-fA-F]{6}|—)\s*\|`)
 	matches := rowRe.FindAllStringSubmatch(block, -1)
-	require.Len(t, matches, 7, "palette table must list exactly seven element types, got %d", len(matches))
+	require.Len(t, matches, 6, "palette table must list exactly six element types, got %d", len(matches))
 
 	palette := make(map[string]struct{ fill, stroke string }, len(matches))
 	for _, m := range matches {

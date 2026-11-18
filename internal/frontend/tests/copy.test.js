@@ -14,7 +14,7 @@ function viewReadingThroughCopies() {
       { id: 'ctx1', type: 'context', label: 'Payments' },
       { id: 'agg1', type: 'aggregate', label: 'Payment', parentId: 'ctx1' },
       { id: 'sl1', type: 'slice', label: 'Take Payment', parentId: 'agg1' },
-      { id: 'trg1', type: 'trigger', label: 'Till', parentId: 'sl1' },
+      { id: 'shows1', type: 'shows', label: 'Till', parentId: 'sl1' },
       { id: 'cmd1', type: 'command', label: 'TakePayment', parentId: 'sl1' },
       { id: 'evt1', type: 'event', label: 'PaymentTaken', parentId: 'sl1' },
       { id: 'sl2', type: 'slice', label: 'Refund Payment To The Card It Came From', parentId: 'agg1' },
@@ -43,8 +43,8 @@ const fixtureByCopiedType = {
   view: {
     copyType: 'view_copy',
     original: { id: 'view1', type: 'view', label: 'PaymentsView' },
-    joined: { id: 'trg3', type: 'trigger', label: 'Refund Desk' },
-    arrow: { source: 'copy1', target: 'trg3', type: 'reads' },
+    joined: { id: 'shows3', type: 'shows', label: 'RefundDesk' },
+    arrow: { source: 'copy1', target: 'shows3', type: 'reads' },
     sliceLine: 'from Take Payment At The Front Desk Till',
   },
   command: {
@@ -120,7 +120,7 @@ describe('two copies of events under the view of their slice', () => {
       expect(positions.copy1.y).toBeGreaterThan(positions.view1.y + positions.view1.h);
     });
 
-    it('leave the view of their slice level with the command a trigger stands over beside it', () => {
+    it('leave the view of their slice level with the command a screen stands over beside it', () => {
       const { positions } = render(viewReadingThroughCopies());
 
       expect(positions.view1.y).toBe(positions.cmd1.y);

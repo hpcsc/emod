@@ -141,15 +141,6 @@ func (n *diagramNode) asAppearance() *ast.Appearance {
 	}
 }
 
-func (n *diagramNode) asTrigger() *ast.Trigger {
-	return &ast.Trigger{
-		Name:        n.Label,
-		Description: n.Description,
-		Comments:    convertComments(n.Comments),
-		Reads:       slices.Clone([]string(n.Reads)),
-	}
-}
-
 func (n *diagramNode) asCommand() *ast.Command {
 	return &ast.Command{
 		Name:        n.Label,
@@ -366,7 +357,6 @@ func (b *builder) buildSlice(n *diagramNode) *ast.Slice {
 	slice := n.asSlice()
 
 	b.appendAppearances(slice, n.ID)
-	b.appendTrigger(slice, n.ID)
 	b.appendCommands(slice, n.ID)
 	b.appendEvents(slice, n.ID)
 	b.appendViews(slice, n.ID)
@@ -383,16 +373,6 @@ func (b *builder) appendAppearances(slice *ast.Slice, sliceID string) {
 		slice.Appearances = append(slice.Appearances, appearance)
 		b.register(a.ID, slice, appearance)
 	}
-}
-
-func (b *builder) appendTrigger(slice *ast.Slice, sliceID string) {
-	triggers := b.children(sliceID, "trigger")
-	if len(triggers) == 0 {
-		return
-	}
-	t := triggers[0]
-	slice.Trigger = t.asTrigger()
-	b.register(t.ID, slice, slice.Trigger)
 }
 
 func (b *builder) appendCommands(slice *ast.Slice, sliceID string) {
@@ -514,10 +494,6 @@ func (b *builder) foldEdges(edges []*diagramEdge) {
 func (b *builder) foldReads(src, tgt *diagramNode) {
 	switch reader := b.byNode[tgt.ID].(type) {
 	case *ast.Appearance:
-		if view := src.viewName(); view != "" {
-			reader.Reads = appendMissing(reader.Reads, view)
-		}
-	case *ast.Trigger:
 		if view := src.viewName(); view != "" {
 			reader.Reads = appendMissing(reader.Reads, view)
 		}

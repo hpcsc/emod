@@ -158,7 +158,7 @@ function moveToSlice(nodes, nodeId, sliceId) {
   if (!node) return [];
   const fromSlice = node.parentId;
   const nested = nestedEventNames(nodes, fromSlice);
-  const refused = (node.type === "trigger" && nodes.some(function(n) { return n.type === "trigger" && n.parentId === sliceId; })) ||
+  const refused = (node.type === "shows" && nodes.some(function(n) { return n.type === "shows" && n.parentId === sliceId && n.label === node.label; })) ||
     (node.type === "event" && nested[node.label]) ||
     isCopy(node);
   if (refused) return [];
@@ -264,13 +264,11 @@ function removeEdge(store, source, target) {
 var EDGE_TYPE_BY_ENDS = {
   "command>event": "flow",
   "shows>command": "shows_command",
-  "trigger>command": "trigger_command",
   "event>view": "subscription",
   "event>automation": "automation_trigger",
   "automation>command": "automation_command",
   "view>translation": "reads",
   "view>shows": "reads",
-  "view>trigger": "reads",
   "view>automation": "reads",
   "translation>command": "translation_command",
 };

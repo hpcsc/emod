@@ -79,7 +79,6 @@ type jsonSlice struct {
 	ClosePosition *jsonPosition      `json:"close_position,omitempty"`
 	Comments      []*jsonComment     `json:"comments,omitempty"`
 	Shows         []*jsonAppearance  `json:"shows,omitempty"`
-	Trigger       *jsonTrigger       `json:"trigger,omitempty"`
 	Commands      []*jsonCommand     `json:"commands,omitempty"`
 	Events        []*jsonEvent       `json:"events,omitempty"`
 	Fields        []*jsonField       `json:"fields,omitempty"`
@@ -155,17 +154,6 @@ type jsonAppearance struct {
 	Comments        []*jsonComment  `json:"comments,omitempty"`
 	Reads           []string        `json:"reads,omitempty"`
 	Command         []string        `json:"command,omitempty"`
-}
-
-type jsonTrigger struct {
-	Comments      []*jsonComment  `json:"comments,omitempty"`
-	Name          string          `json:"name"`
-	Description   string          `json:"description,omitempty"`
-	Position      *jsonPosition   `json:"position,omitempty"`
-	Reads         []string        `json:"reads,omitempty"`
-	ReadsPosition []*jsonPosition `json:"reads_position,omitempty"`
-	OpenPosition  *jsonPosition   `json:"open_position,omitempty"`
-	ClosePosition *jsonPosition   `json:"close_position,omitempty"`
 }
 
 type jsonView struct {
@@ -445,7 +433,6 @@ func convertSlice(s *ast.Slice) *jsonSlice {
 		ClosePosition: convertPosition(s.ClosePos),
 		Comments:      convertComments(s.Comments),
 		Shows:         convertList(s.Appearances, convertAppearance),
-		Trigger:       convertTrigger(s.Trigger),
 		Commands:      convertCommands(s.Commands),
 		Events:        convertEvents(s.Events),
 		Fields:        convertFields(s.Fields),
@@ -673,22 +660,6 @@ func convertAppearance(a *ast.Appearance) *jsonAppearance {
 		Comments:        convertComments(a.Comments),
 		Reads:           a.Reads,
 		Command:         a.Commands,
-	}
-}
-
-func convertTrigger(t *ast.Trigger) *jsonTrigger {
-	if t == nil {
-		return nil
-	}
-	return &jsonTrigger{
-		Comments:      convertComments(t.Comments),
-		Name:          t.Name,
-		Description:   t.Description,
-		Position:      convertPosition(t.NamePos),
-		Reads:         t.Reads,
-		ReadsPosition: convertPositions(t.ReadsPos),
-		OpenPosition:  convertPosition(t.OpenPos),
-		ClosePosition: convertPosition(t.ClosePos),
 	}
 }
 

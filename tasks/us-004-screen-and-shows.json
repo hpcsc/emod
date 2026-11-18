@@ -366,7 +366,7 @@
     },
     {
       "n": 8,
-      "done": false,
+      "done": true,
       "title": "Remove the trigger from the exports, the schema, the diagram document, the importer and the viewer",
       "language": "Go",
       "testable": true,

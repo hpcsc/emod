@@ -455,7 +455,7 @@ function updateStats(store, dims) {
 
 // ─── Detail panel ───────────────────────────────────────────────
 function isDeletableNodeType(type) {
-  return type === "command" || type === "event" || type === "shows" || type === "trigger" ||
+  return type === "command" || type === "event" || type === "shows" ||
          type === "view" || type === "automation" || type === "translation";
 }
 
@@ -522,15 +522,6 @@ function showDetailPanel(store, node) {
     html += '<table><tbody>';
     html += '<tr><th>Reads</th><td>' + Renderer.esc([].concat(node.reads || []).join(', ') || '—') + '</td></tr>';
     html += '<tr><th>Commands</th><td>' + Renderer.esc([].concat(node.command || []).join(', ') || '—') + '</td></tr>';
-    html += '</tbody></table>';
-    html += '</div>';
-  }
-
-  if (node.type === 'trigger') {
-    html += '<div class="dp-section">';
-    html += '<div class="dp-section-title">Trigger</div>';
-    html += '<table><tbody>';
-    html += '<tr><th>Reads</th><td>' + Renderer.esc([].concat(node.reads || []).join(', ') || '—') + '</td></tr>';
     html += '</tbody></table>';
     html += '</div>';
   }
@@ -806,7 +797,7 @@ function startInlineEdit(store, nodeId) {
   const svgEl = store.dom.svg;
   let el = null;
   const nType = node.type;
-  if (nType === "command" || nType === "event" || nType === "shows" || nType === "trigger" ||
+  if (nType === "command" || nType === "event" || nType === "shows" ||
       nType === "view" || nType === "automation" || nType === "translation") {
     el = svgEl.querySelector('[data-node-id="' + nodeId + '"]');
   } else if (nType === "context") {
@@ -837,7 +828,7 @@ function startInlineEdit(store, nodeId) {
   input.style.top = Math.max(4, rect.top - 4) + "px";
   input.style.width = Math.max(rect.width + 8, 60) + "px";
 
-  const isBlock = (nType === "command" || nType === "event" || nType === "shows" || nType === "trigger" ||
+  const isBlock = (nType === "command" || nType === "event" || nType === "shows" ||
                    nType === "view" || nType === "automation" || nType === "translation");
   if (isBlock) {
     const bw = Math.max(rect.width * 0.8, 80);

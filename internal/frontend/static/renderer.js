@@ -382,15 +382,9 @@ function sliceMarkingBand(pos) {
   return markingBand(pos, pos.y + L.sliceHdrH / 2);
 }
 
-// A shows block and a trigger are drawn as a screen, with a bar across the top
-// of the box, so their marks drop below the bar rather than into it.
 function blockMarkingBand(node, pos) {
   var belowScreenBar = pos.y + screenBar.top + screenBar.height + screenBar.stroke + markingSize / 2;
-  return markingBand(pos, drawnAsScreen(node) ? belowScreenBar : pos.y + markingInset);
-}
-
-function drawnAsScreen(node) {
-  return node.type === "shows" || node.type === "trigger";
+  return markingBand(pos, node.type === "shows" ? belowScreenBar : pos.y + markingInset);
 }
 
 function buildSlice(slice, sp) {
@@ -521,10 +515,9 @@ function buildBlock(node, pos, palette) {
       "rx=\"4\" stroke-width=\"1.5\""));
   }
 
-  if (drawnAsScreen(node)) {
-    // A screen is drawn with a small header bar inside the top edge
-    // of the box, matching the Go renderers. The main rect stays first so
-    // drawnBoxes(svg) keeps reading the box itself.
+  if (node.type === "shows") {
+    // No test compares this bar with the one svgScreenRect draws in the Go
+    // renderers, so a change to one must be made to the other.
     blockG.appendChild(svgRect(pos.x + screenBar.inset, pos.y + screenBar.top,
       pos.w - screenBar.inset * 2, screenBar.height, ink, ink,
       "rx=\"0\" stroke-width=\"" + screenBar.stroke + "\""));

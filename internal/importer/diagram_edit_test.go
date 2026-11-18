@@ -25,6 +25,9 @@ const lendingModel = `emod = 1
 model "Library Lending" {
 }
 
+screen "LendingDesk" {
+}
+
 context "Lending" {
   aggregate "Loan" {
     invariants {
@@ -34,8 +37,10 @@ context "Lending" {
     # A member takes a copy off the shelf
     slice "Borrow Copy" {
       # The desk terminal the librarian types into
-      trigger "Lending Desk" {
-        reads = AvailableCopiesView
+      shows {
+        screen  = LendingDesk
+        reads   = AvailableCopiesView
+        command = BorrowCopy
       }
 
       # Ask the library to hand a copy over
@@ -124,9 +129,14 @@ const wiringModel = `emod = 1
 model "Library Lending" {
 }
 
+screen "LendingDesk" {
+}
+
 context "Lending" {
   slice "Borrow Copy" {
-    trigger "Lending Desk" {
+    shows {
+      screen  = LendingDesk
+      command = [BorrowCopy, RenewLoan]
     }
 
     command "BorrowCopy" {
@@ -326,6 +336,43 @@ func (d *viewerDiagram) node(label string) map[string]any {
 	}
 	require.Len(d.t, found, 1, "the diagram has to hold one node labelled %s", label)
 	return found[0]
+}
+
+// showsIn finds the shows node of a slice. A screen node carries the label of
+// the screen too, so a gesture on a shows node is named by its slice rather
+// than by its label.
+func (d *viewerDiagram) showsIn(slice string) map[string]any {
+	d.t.Helper()
+	sliceID := d.idOf(slice)
+	var found []map[string]any
+	for _, n := range d.Nodes {
+		if n["type"] == "shows" && n["parentId"] == sliceID {
+			found = append(found, n)
+		}
+	}
+	require.Len(d.t, found, 1, "the diagram has to draw one shows node in %s", slice)
+	return found[0]
+}
+
+// showsNamed finds the shows node of a slice that names screen, for a slice
+// that shows more than one screen.
+func (d *viewerDiagram) showsNamed(slice, screen string) string {
+	d.t.Helper()
+	sliceID := d.idOf(slice)
+	for _, n := range d.Nodes {
+		if n["type"] == "shows" && n["parentId"] == sliceID && n["label"] == screen {
+			return n["id"].(string)
+		}
+	}
+	require.Failf(d.t, "no shows node", "the diagram has to draw a shows node for %s in %s", screen, slice)
+	return ""
+}
+
+// removeID deletes the node of id and every edge that touches it, as the
+// viewer's delete does.
+func (d *viewerDiagram) removeID(id string) {
+	d.Nodes = slices.DeleteFunc(d.Nodes, func(n map[string]any) bool { return n["id"] == id })
+	d.Edges = slices.DeleteFunc(d.Edges, func(e map[string]any) bool { return e["source"] == id || e["target"] == id })
 }
 
 func (d *viewerDiagram) idOf(label string) string {
@@ -828,11 +875,6 @@ func TestApplyDiagram(t *testing.T) {
 			edit     func(d *viewerDiagram)
 			old, new string
 		}{
-			{"a trigger is declared with the view its node names, and with no actor though its node carries one", func(d *viewerDiagram) {
-				d.add("trigger", "Returns Counter", "Available Copies")
-				d.set("Returns Counter", "actor", "Member")
-				d.set("Returns Counter", "reads", "AvailableCopiesView")
-			}, "    slice \"Available Copies\" {\n", "    slice \"Available Copies\" {\n      trigger \"Returns Counter\" {\n        reads = AvailableCopiesView\n      }\n\n"},
 			{"a view is declared with the events its node subscribes to", func(d *viewerDiagram) {
 				d.add("view", "OverdueLoansView", "Recall Overdue Copy")
 				d.set("OverdueLoansView", "subscribes", []string{"CopyBorrowed"})
@@ -854,6 +896,17 @@ func TestApplyDiagram(t *testing.T) {
 				require.Equal(t, replaced(t, lendingModel, addition.old, addition.new), result)
 			})
 		}
+
+		t.Run("a trigger node of an old document, its reads edge and its trigger_command edge change nothing", func(t *testing.T) {
+			result := applied(t, lendingModel, func(d *viewerDiagram) {
+				d.add("trigger", "Returns Counter", "Available Copies")
+				d.set("Returns Counter", "reads", []string{"AvailableCopiesView"})
+				d.connect("AvailableCopiesView", "Returns Counter", "reads")
+				d.connect("Returns Counter", "RecallCopy", "trigger_command")
+			})
+
+			require.Equal(t, lendingModel, result)
+		})
 
 		t.Run("a context is declared after the model's contexts", func(t *testing.T) {
 			result := applied(t, lendingModel, func(d *viewerDiagram) {
@@ -901,12 +954,13 @@ func TestApplyDiagram(t *testing.T) {
 `), result)
 		})
 
-		t.Run("deleting a command removes its flow line, and leaves the rejection and the spec that name it", func(t *testing.T) {
+		t.Run("deleting a command removes its flow line and its entry in a shows block, and leaves the rejection and the spec that name it", func(t *testing.T) {
 			result := applied(t, lendingModel, func(d *viewerDiagram) {
 				d.remove("BorrowCopy")
 			})
 
-			require.Equal(t, replaced(t, lendingModel, `      # Ask the library to hand a copy over
+			expected := replaced(t, lendingModel, "        screen  = LendingDesk\n        reads   = AvailableCopiesView\n        command = BorrowCopy\n", "        screen = LendingDesk\n        reads  = AvailableCopiesView\n")
+			require.Equal(t, replaced(t, expected, `      # Ask the library to hand a copy over
       command "BorrowCopy" {
         fields {
           copyId = required(string)
@@ -973,20 +1027,22 @@ func TestApplyDiagram(t *testing.T) {
 			require.Equal(t, expected, result)
 		})
 
-		t.Run("deleting a trigger removes its declaration and its comments", func(t *testing.T) {
+		t.Run("deleting a shows node removes its block and its comments, and keeps the screen declaration", func(t *testing.T) {
 			result := applied(t, lendingModel, func(d *viewerDiagram) {
-				d.remove("Lending Desk")
+				d.removeID(d.showsIn("Borrow Copy")["id"].(string))
 			})
 
 			require.Equal(t, replaced(t, lendingModel, `      # The desk terminal the librarian types into
-      trigger "Lending Desk" {
-        reads = AvailableCopiesView
+      shows {
+        screen  = LendingDesk
+        reads   = AvailableCopiesView
+        command = BorrowCopy
       }
 
 `, ``), result)
 		})
 
-		t.Run("deleting a view clears what the trigger, the automation and the translation read", func(t *testing.T) {
+		t.Run("deleting a view clears what the shows block, the automation and the translation read", func(t *testing.T) {
 			result := applied(t, lendingModel, func(d *viewerDiagram) {
 				d.remove("AvailableCopiesView")
 			})
@@ -1004,10 +1060,10 @@ func TestApplyDiagram(t *testing.T) {
 `, `    slice "Available Copies" {
     }
 `)
-			expected = replaced(t, expected, `      trigger "Lending Desk" {
-        reads = AvailableCopiesView
-      }`, `      trigger "Lending Desk" {
-      }`)
+			expected = replaced(t, expected, `        screen  = LendingDesk
+        reads   = AvailableCopiesView
+        command = BorrowCopy`, `        screen  = LendingDesk
+        command = BorrowCopy`)
 			expected = replaced(t, expected, `        on      = CopyBorrowed
         reads   = AvailableCopiesView
         command = RecallCopy`, `        on      = CopyBorrowed
@@ -1215,7 +1271,6 @@ func TestApplyDiagram(t *testing.T) {
 			{"context", "Lending", "Circulation", `context "Lending" {`, `context "Circulation" {`},
 			{"aggregate", "Loan", "Lending Record", `aggregate "Loan" {`, `aggregate "Lending Record" {`},
 			{"slice", "Borrow Copy", "Lend Copy", `slice "Borrow Copy" {`, `slice "Lend Copy" {`},
-			{"trigger", "Lending Desk", "Front Desk", `trigger "Lending Desk" {`, `trigger "Front Desk" {`},
 			{"automation", "RecallOverdueCopy", "ChaseOverdueCopy", `automation "RecallOverdueCopy" {`, `automation "ChaseOverdueCopy" {`},
 			{"translation", "PartnerLoanImport", "PartnerNoticeImport", `translation "PartnerLoanImport" {`, `translation "PartnerNoticeImport" {`},
 		} {
@@ -1228,12 +1283,13 @@ func TestApplyDiagram(t *testing.T) {
 			})
 		}
 
-		t.Run("renaming a command renames its flow line, and leaves the rejection and the spec that name it", func(t *testing.T) {
+		t.Run("renaming a command renames its flow line and its entry in a shows block, and leaves the rejection and the spec that name it", func(t *testing.T) {
 			result := applied(t, lendingModel, func(d *viewerDiagram) {
 				d.rename("BorrowCopy", "LendCopy")
 			})
 
 			expected := replaced(t, lendingModel, `command "BorrowCopy" {`, `command "LendCopy" {`)
+			expected = replaced(t, expected, `command = BorrowCopy`, `command = LendCopy`)
 			expected = replaced(t, expected, `command -> event:    BorrowCopy -> CopyBorrowed`, `command -> event:    LendCopy -> CopyBorrowed`)
 			require.Contains(t, expected, `command -> rejected: BorrowCopy -> OneLoanPerCopy`)
 			require.Contains(t, expected, `when = BorrowCopy({ copyId = "C-1" })`)
@@ -1274,6 +1330,7 @@ func TestApplyDiagram(t *testing.T) {
 
 			expected := replaced(t, wiringModel, `command "RenewLoan" {`, `command "ExtendLoan" {`)
 			expected = replaced(t, expected, `command "BorrowCopy" {`, `command "RenewLoan" {`)
+			expected = replaced(t, expected, `command = [BorrowCopy, RenewLoan]`, `command = [RenewLoan, ExtendLoan]`)
 			expected = replaced(t, expected, `      command -> event:    BorrowCopy -> CopyBorrowed
       command -> event:    BorrowCopy -> LoanRenewed
       command -> event:    RenewLoan -> LoanRenewed
@@ -1412,14 +1469,13 @@ context "Lending" {
 			require.Equal(t, replaced(t, lendingModel, `event "PartnerLoanImported" {`, `event "PartnerLoanRecorded" {`), result)
 		})
 
-		t.Run("renaming a view renames it in what the trigger, the automation and the translation read", func(t *testing.T) {
+		t.Run("renaming a view renames it in what the shows block, the automation and the translation read", func(t *testing.T) {
 			result := applied(t, lendingModel, func(d *viewerDiagram) {
 				d.rename("AvailableCopiesView", "ShelfView")
 			})
 
 			expected := replaced(t, lendingModel, `view "AvailableCopiesView" {`, `view "ShelfView" {`)
-			expected = replaced(t, expected, `        reads = AvailableCopiesView`, `        reads = ShelfView`)
-			expected = replaced(t, expected, `        reads   = AvailableCopiesView`, `        reads   = ShelfView`)
+			expected = strings.ReplaceAll(expected, `        reads   = AvailableCopiesView`, `        reads   = ShelfView`)
 			expected = replaced(t, expected, `      reads           = AvailableCopiesView`, `      reads           = ShelfView`)
 			require.Equal(t, expected, result)
 		})
@@ -1516,8 +1572,6 @@ context "Lending" {
 		for _, connection := range []struct {
 			name, from, to, typ, written, folded string
 		}{
-			{"a view's arrow to a trigger makes the trigger read the view", "AvailableCopiesView", "Lending Desk", "reads",
-				"    trigger \"Lending Desk\" {\n    }", "    trigger \"Lending Desk\" {\n      reads = AvailableCopiesView\n    }"},
 			{"a view's arrow to an automation makes the automation read the view", "AvailableCopiesView", "RemindMember", "reads",
 				"    automation \"RemindMember\" {\n    }", "    automation \"RemindMember\" {\n      reads = AvailableCopiesView\n    }"},
 			{"a view's arrow to a translation makes the translation read the view", "AvailableCopiesView", "PartnerLoanImport", "reads",
@@ -1643,14 +1697,6 @@ context "Shop" {
 			require.Equal(t, lendingModel, result)
 		})
 
-		t.Run("an arrow drawn from a trigger to a command changes nothing", func(t *testing.T) {
-			result := applied(t, lendingModel, func(d *viewerDiagram) {
-				d.connect("Lending Desk", "RecallCopy", "trigger_command")
-			})
-
-			require.Equal(t, lendingModel, result)
-		})
-
 		for _, removal := range []struct {
 			name, from, to, written, cleared string
 		}{
@@ -1667,8 +1713,6 @@ context "Shop" {
 			{"removing a translation's command arrow clears its command", "PartnerLoanImport", "ImportPartnerLoan",
 				"      reads           = AvailableCopiesView\n      command         = ImportPartnerLoan\n",
 				"      reads           = AvailableCopiesView\n"},
-			{"removing a trigger's reads arrow clears what it reads", "AvailableCopiesView", "Lending Desk",
-				"      trigger \"Lending Desk\" {\n        reads = AvailableCopiesView\n      }", "      trigger \"Lending Desk\" {\n      }"},
 		} {
 			t.Run(removal.name, func(t *testing.T) {
 				result := applied(t, lendingModel, func(d *viewerDiagram) {
@@ -1797,7 +1841,6 @@ context "Lending" {
 
 		t.Run("removing an arrow no text of its own states changes nothing", func(t *testing.T) {
 			result := applied(t, lendingModel, func(d *viewerDiagram) {
-				d.disconnect("Lending Desk", "BorrowCopy")
 				d.disconnect("ImportPartnerLoan", "PartnerLoanImported")
 			})
 
@@ -1896,10 +1939,10 @@ context "Lending" {
 			source = replaced(t, source, "on      = CopyBorrowed", "on      = PartnerLoanImported")
 
 			result := applied(t, source, func(d *viewerDiagram) {
-				d.rename("Lending Desk", "Front Desk")
+				d.rename("Loan", "Lending Record")
 			})
 
-			require.Equal(t, replaced(t, source, `trigger "Lending Desk" {`, `trigger "Front Desk" {`), result)
+			require.Equal(t, replaced(t, source, `aggregate "Loan" {`, `aggregate "Lending Record" {`), result)
 		})
 
 		t.Run("moving the target end of the arrow from a translation's command to its event states the moved arrow as a flow line", func(t *testing.T) {
@@ -1930,10 +1973,13 @@ context "Lending" {
 		})
 	})
 
-	t.Run("reads of a trigger", func(t *testing.T) {
+	t.Run("reads of a shows block", func(t *testing.T) {
 		const checkoutModel = `emod = 1
 
 model "Shop" {
+}
+
+screen "CheckoutPage" {
 }
 
 context "Shop" {
@@ -1954,8 +2000,9 @@ context "Shop" {
   }
 
   slice "Apply Discount" {
-    trigger "Checkout Page" {
-      reads = [CartView, DiscountView]
+    shows {
+      screen = CheckoutPage
+      reads  = [CartView, DiscountView]
     }
   }
 }
@@ -1963,10 +2010,10 @@ context "Shop" {
 
 		t.Run("removing the arrow from one view keeps the other entry", func(t *testing.T) {
 			result := applied(t, checkoutModel, func(d *viewerDiagram) {
-				d.disconnect("CartView", "Checkout Page")
+				d.disconnectIDs(d.idOf("CartView"), d.showsIn("Apply Discount")["id"].(string))
 			})
 
-			require.Equal(t, replaced(t, checkoutModel, "reads = [CartView, DiscountView]", "reads = DiscountView"), result)
+			require.Equal(t, replaced(t, checkoutModel, "reads  = [CartView, DiscountView]", "reads  = DiscountView"), result)
 		})
 
 		t.Run("deleting a view takes its entry out of the list and keeps the other entry", func(t *testing.T) {
@@ -1975,7 +2022,7 @@ context "Shop" {
 			})
 
 			expected := replaced(t, checkoutModel, "    view \"CartView\" {\n    }\n\n", "")
-			require.Equal(t, replaced(t, expected, "reads = [CartView, DiscountView]", "reads = DiscountView"), result)
+			require.Equal(t, replaced(t, expected, "reads  = [CartView, DiscountView]", "reads  = DiscountView"), result)
 		})
 
 		t.Run("renaming a view renames its entry in place", func(t *testing.T) {
@@ -1984,54 +2031,54 @@ context "Shop" {
 			})
 
 			expected := replaced(t, checkoutModel, `view "CartView"`, `view "BasketView"`)
-			require.Equal(t, replaced(t, expected, "reads = [CartView, DiscountView]", "reads = [BasketView, DiscountView]"), result)
+			require.Equal(t, replaced(t, expected, "reads  = [CartView, DiscountView]", "reads  = [BasketView, DiscountView]"), result)
 		})
 
 		t.Run("an arrow from a third view adds it to the end of the list", func(t *testing.T) {
 			result := applied(t, checkoutModel, func(d *viewerDiagram) {
-				d.connect("LoyaltyView", "Checkout Page", "reads")
+				d.Edges = append(d.Edges, map[string]any{"source": d.idOf("LoyaltyView"), "target": d.showsIn("Apply Discount")["id"].(string), "type": "reads"})
 			})
 
-			require.Equal(t, replaced(t, checkoutModel, "reads = [CartView, DiscountView]", "reads = [CartView, DiscountView, LoyaltyView]"), result)
+			require.Equal(t, replaced(t, checkoutModel, "reads  = [CartView, DiscountView]", "reads  = [CartView, DiscountView, LoyaltyView]"), result)
 		})
 
 		t.Run("moving an arrow to another view puts that view in the place of the one it leaves", func(t *testing.T) {
 			result := applied(t, checkoutModel, func(d *viewerDiagram) {
-				d.repoint("CartView", "Checkout Page", "LoyaltyView", "Checkout Page")
+				d.repointIDs(d.idOf("CartView"), d.showsIn("Apply Discount")["id"].(string), d.idOf("LoyaltyView"), d.showsIn("Apply Discount")["id"].(string))
 			})
 
-			require.Equal(t, replaced(t, checkoutModel, "reads = [CartView, DiscountView]", "reads = [LoyaltyView, DiscountView]"), result)
+			require.Equal(t, replaced(t, checkoutModel, "reads  = [CartView, DiscountView]", "reads  = [LoyaltyView, DiscountView]"), result)
 		})
 
 		t.Run("moving an arrow to a view the list names already takes out the moved entry", func(t *testing.T) {
-			source := replaced(t, checkoutModel, "reads = [CartView, DiscountView]", "reads = [CartView, OfferView]")
+			source := replaced(t, checkoutModel, "reads  = [CartView, DiscountView]", "reads  = [CartView, OfferView]")
 
 			result := applied(t, source, func(d *viewerDiagram) {
-				d.repoint("CartView", "Checkout Page", "OfferView", "Checkout Page")
+				d.repointIDs(d.idOf("CartView"), d.showsIn("Apply Discount")["id"].(string), d.idOf("OfferView"), d.showsIn("Apply Discount")["id"].(string))
 			})
 
-			require.Equal(t, replaced(t, source, "reads = [CartView, OfferView]", "reads = OfferView"), result)
+			require.Equal(t, replaced(t, source, "reads  = [CartView, OfferView]", "reads  = OfferView"), result)
 		})
 
 		t.Run("moving both arrows of a view the list names twice gives each entry its new view", func(t *testing.T) {
-			source := replaced(t, checkoutModel, "reads = [CartView, DiscountView]", "reads = [CartView, CartView]")
+			source := replaced(t, checkoutModel, "reads  = [CartView, DiscountView]", "reads  = [CartView, CartView]")
 
 			result := applied(t, source, func(d *viewerDiagram) {
-				d.repoint("CartView", "Checkout Page", "LoyaltyView", "Checkout Page")
-				d.repoint("CartView", "Checkout Page", "DiscountView", "Checkout Page")
+				d.repointIDs(d.idOf("CartView"), d.showsIn("Apply Discount")["id"].(string), d.idOf("LoyaltyView"), d.showsIn("Apply Discount")["id"].(string))
+				d.repointIDs(d.idOf("CartView"), d.showsIn("Apply Discount")["id"].(string), d.idOf("DiscountView"), d.showsIn("Apply Discount")["id"].(string))
 			})
 
-			require.Equal(t, replaced(t, source, "reads = [CartView, CartView]", "reads = [LoyaltyView, DiscountView]"), result)
+			require.Equal(t, replaced(t, source, "reads  = [CartView, CartView]", "reads  = [LoyaltyView, DiscountView]"), result)
 		})
 
 		t.Run("removing the arrow from the copy of a far view takes out that entry only", func(t *testing.T) {
-			source := replaced(t, checkoutModel, "reads = [CartView, DiscountView]", "reads = [OfferView, CartView]")
+			source := replaced(t, checkoutModel, "reads  = [CartView, DiscountView]", "reads  = [OfferView, CartView]")
 
 			result := applied(t, source, func(d *viewerDiagram) {
-				d.disconnectIDs(d.copyID("OfferView", "Apply Discount"), d.idOf("Checkout Page"))
+				d.disconnectIDs(d.copyID("OfferView", "Apply Discount"), d.showsIn("Apply Discount")["id"].(string))
 			})
 
-			require.Equal(t, replaced(t, source, "reads = [OfferView, CartView]", "reads = CartView"), result)
+			require.Equal(t, replaced(t, source, "reads  = [OfferView, CartView]", "reads  = CartView"), result)
 		})
 	})
 
@@ -2089,25 +2136,7 @@ context "Shop" {
   }
 }
 `
-		// showsIn finds the shows node of a slice. A screen node carries the
-		// label of the screen too, so a gesture on a shows node is named by
-		// its slice rather than by its label.
-		showsIn := func(d *viewerDiagram, slice string) map[string]any {
-			sliceID := d.idOf(slice)
-			var found []map[string]any
-			for _, n := range d.Nodes {
-				if n["type"] == "shows" && n["parentId"] == sliceID {
-					found = append(found, n)
-				}
-			}
-			require.Len(d.t, found, 1, "the diagram has to draw one shows node in %s", slice)
-			return found[0]
-		}
-		removeNode := func(d *viewerDiagram, id string) {
-			d.Nodes = slices.DeleteFunc(d.Nodes, func(n map[string]any) bool { return n["id"] == id })
-			d.Edges = slices.DeleteFunc(d.Edges, func(e map[string]any) bool { return e["source"] == id || e["target"] == id })
-		}
-		checkout := func(d *viewerDiagram) string { return showsIn(d, "Apply Discount")["id"].(string) }
+		checkout := func(d *viewerDiagram) string { return d.showsIn("Apply Discount")["id"].(string) }
 
 		t.Run("a save with no edit keeps each screen declaration, also one that no slice shows, and each shows block as written", func(t *testing.T) {
 			result := applied(t, shopModel, func(d *viewerDiagram) {})
@@ -2117,7 +2146,7 @@ context "Shop" {
 
 		t.Run("a shows node moved into a slice that already shows a screen is written there and out of its old slice, and its declaration stays", func(t *testing.T) {
 			result := applied(t, shopModel, func(d *viewerDiagram) {
-				showsIn(d, "Place Order")["parentId"] = d.idOf("Apply Discount")
+				d.showsIn("Place Order")["parentId"] = d.idOf("Apply Discount")
 			})
 
 			expected := replaced(t, shopModel, "    shows {\n      screen = CartDrawer\n    }\n\n", "")
@@ -2146,6 +2175,66 @@ context "Shop" {
 			})
 
 			require.Equal(t, replaced(t, shopModel, "command = [ApplyDiscount, ClearCart]", "command = [RemoveDiscount, ClearCart]"), result)
+		})
+
+		t.Run("moving the start of the arrow to another shows node takes the command out of the first block and adds it to the second", func(t *testing.T) {
+			result := applied(t, shopModel, func(d *viewerDiagram) {
+				cartDrawer := d.showsIn("Place Order")["id"].(string)
+				d.repointIDs(checkout(d), d.idOf("ApplyDiscount"), cartDrawer, d.idOf("ApplyDiscount"))
+			})
+
+			expected := replaced(t, shopModel, "command = [ApplyDiscount, ClearCart]", "command = ClearCart")
+			require.Equal(t, replaced(t, expected, "      screen = CartDrawer\n", "      screen  = CartDrawer\n      command = ApplyDiscount\n"), result)
+		})
+
+		t.Run("an arrow of one shows node moved to another command keeps its place in the list, also when an arrow of an earlier shows node is removed in the same save", func(t *testing.T) {
+			const twoScreens = `emod = 1
+
+model "Shop" {
+}
+
+screen "CartDrawer" {
+}
+
+screen "CheckoutPage" {
+}
+
+context "Shop" {
+  slice "Clear Cart" {
+    shows {
+      screen  = CartDrawer
+      command = ClearCart
+    }
+
+    command "ClearCart" {
+    }
+  }
+
+  slice "Apply Discount" {
+    shows {
+      screen  = CheckoutPage
+      command = [ApplyDiscount, SaveCart]
+    }
+
+    command "ApplyDiscount" {
+    }
+
+    command "SaveCart" {
+    }
+
+    command "RemoveDiscount" {
+    }
+  }
+}
+`
+			result := applied(t, twoScreens, func(d *viewerDiagram) {
+				checkoutPage := d.showsIn("Apply Discount")["id"].(string)
+				d.disconnectIDs(d.showsIn("Clear Cart")["id"].(string), d.idOf("ClearCart"))
+				d.repointIDs(checkoutPage, d.idOf("ApplyDiscount"), checkoutPage, d.idOf("RemoveDiscount"))
+			})
+
+			expected := replaced(t, twoScreens, "      screen  = CartDrawer\n      command = ClearCart\n", "      screen = CartDrawer\n")
+			require.Equal(t, replaced(t, expected, "command = [ApplyDiscount, SaveCart]", "command = [RemoveDiscount, SaveCart]"), result)
 		})
 
 		t.Run("renaming a command renames its entry in place", func(t *testing.T) {
@@ -2192,7 +2281,7 @@ context "Shop" {
 
 		t.Run("renaming a shows node names the new screen and declares it after the declarations, and the old declaration stays", func(t *testing.T) {
 			result := applied(t, shopModel, func(d *viewerDiagram) {
-				showsIn(d, "Apply Discount")["label"] = "PaymentPage"
+				d.showsIn("Apply Discount")["label"] = "PaymentPage"
 			})
 
 			expected := replaced(t, shopModel, "screen  = CheckoutPage", "screen  = PaymentPage")
@@ -2201,7 +2290,7 @@ context "Shop" {
 
 		t.Run("deleting a shows node removes the block and keeps the declaration", func(t *testing.T) {
 			result := applied(t, shopModel, func(d *viewerDiagram) {
-				removeNode(d, showsIn(d, "Place Order")["id"].(string))
+				d.removeID(d.showsIn("Place Order")["id"].(string))
 			})
 
 			require.Equal(t, replaced(t, shopModel, "    shows {\n      screen = CartDrawer\n    }\n\n", ""), result)
@@ -2236,16 +2325,20 @@ context "Shop" {
 		})
 	})
 
-	t.Run("two triggers that share a name", func(t *testing.T) {
+	t.Run("one screen shown in two slices", func(t *testing.T) {
 		const twoCheckoutPages = `emod = 1
 
 model "Shop" {
 }
 
+screen "CheckoutPage" {
+}
+
 context "Shop" {
   slice "Apply Discount" {
-    trigger "Checkout Page" {
-      reads = CartView
+    shows {
+      screen = CheckoutPage
+      reads  = CartView
     }
 
     view "CartView" {
@@ -2256,8 +2349,9 @@ context "Shop" {
   }
 
   slice "Place Order" {
-    trigger "Checkout Page" {
-      reads = OrderView
+    shows {
+      screen = CheckoutPage
+      reads  = OrderView
     }
 
     view "OrderView" {
@@ -2265,37 +2359,27 @@ context "Shop" {
   }
 }
 `
-		triggerOf := func(d *viewerDiagram, slice string) string {
-			sliceID := d.idOf(slice)
-			for _, n := range d.Nodes {
-				if n["type"] == "trigger" && n["parentId"] == sliceID {
-					return n["id"].(string)
-				}
-			}
-			require.Failf(d.t, "no trigger", "the diagram has to draw a trigger in %s", slice)
-			return ""
-		}
 
-		t.Run("a save with no edit keeps both triggers, each in its own slice", func(t *testing.T) {
+		t.Run("a save with no edit keeps both shows blocks, each in its own slice", func(t *testing.T) {
 			result := applied(t, twoCheckoutPages, func(d *viewerDiagram) {})
 
 			require.Equal(t, twoCheckoutPages, result)
 		})
 
-		t.Run("removing the reads arrow of the trigger of one slice takes the view out of that trigger only", func(t *testing.T) {
+		t.Run("removing the reads arrow of the shows block of one slice takes the view out of that block only", func(t *testing.T) {
 			result := applied(t, twoCheckoutPages, func(d *viewerDiagram) {
-				d.disconnectIDs(d.idOf("CartView"), triggerOf(d, "Apply Discount"))
+				d.disconnectIDs(d.idOf("CartView"), d.showsIn("Apply Discount")["id"].(string))
 			})
 
-			require.Equal(t, replaced(t, twoCheckoutPages, "    trigger \"Checkout Page\" {\n      reads = CartView\n    }", "    trigger \"Checkout Page\" {\n    }"), result)
+			require.Equal(t, replaced(t, twoCheckoutPages, "      screen = CheckoutPage\n      reads  = CartView\n", "      screen = CheckoutPage\n"), result)
 		})
 
-		t.Run("a new reads arrow onto the trigger of one slice changes the reads of that trigger only", func(t *testing.T) {
+		t.Run("a new reads arrow onto the shows block of one slice changes the reads of that block only", func(t *testing.T) {
 			result := applied(t, twoCheckoutPages, func(d *viewerDiagram) {
-				d.Edges = append(d.Edges, map[string]any{"source": d.idOf("LoyaltyView"), "target": triggerOf(d, "Apply Discount"), "type": "reads"})
+				d.Edges = append(d.Edges, map[string]any{"source": d.idOf("LoyaltyView"), "target": d.showsIn("Apply Discount")["id"].(string), "type": "reads"})
 			})
 
-			require.Equal(t, replaced(t, twoCheckoutPages, "reads = CartView", "reads = [CartView, LoyaltyView]"), result)
+			require.Equal(t, replaced(t, twoCheckoutPages, "reads  = CartView", "reads  = [CartView, LoyaltyView]"), result)
 		})
 	})
 
@@ -2412,31 +2496,6 @@ context "Shop" {
 			require.Equal(t, expected, result)
 		})
 
-		t.Run("a trigger moved onto a slice that has one stays where it was", func(t *testing.T) {
-			source := `emod = 1
-
-model "M" {
-}
-
-context "C" {
-  slice "Borrow Copy" {
-    trigger "Lending Desk" {
-    }
-  }
-
-  slice "Return Copy" {
-    trigger "Returns Counter" {
-    }
-  }
-}
-`
-			result := applied(t, source, func(d *viewerDiagram) {
-				d.moveTo("Lending Desk", "Return Copy")
-			})
-
-			require.Equal(t, source, result)
-		})
-
 		t.Run("a block moved onto a node the diagram does not hold stays where it was", func(t *testing.T) {
 			result := applied(t, lendingModel, func(d *viewerDiagram) {
 				d.set("RecallCopy", "parentId", "slice-gone")
@@ -2453,20 +2512,22 @@ context "C" {
 			require.Equal(t, lendingModel, result)
 		})
 
-		t.Run("a trigger moved onto a slice with no trigger is declared there", func(t *testing.T) {
+		t.Run("a shows node moved onto a slice that shows no screen is written there, with its comments", func(t *testing.T) {
 			result := applied(t, lendingModel, func(d *viewerDiagram) {
-				d.moveTo("Lending Desk", "Available Copies")
+				d.showsIn("Borrow Copy")["parentId"] = d.idOf("Available Copies")
 			})
 
-			trigger := `      # The desk terminal the librarian types into
-      trigger "Lending Desk" {
-        reads = AvailableCopiesView
+			shows := `      # The desk terminal the librarian types into
+      shows {
+        screen  = LendingDesk
+        reads   = AvailableCopiesView
+        command = BorrowCopy
       }
 `
-			expected := replaced(t, lendingModel, trigger+"\n", "")
+			expected := replaced(t, lendingModel, shows+"\n", "")
 			expected = replaced(t, expected, `    slice "Available Copies" {
 `, `    slice "Available Copies" {
-`+trigger+"\n")
+`+shows+"\n")
 			require.Equal(t, expected, result)
 		})
 
@@ -2604,19 +2665,29 @@ context "C" {
 	})
 
 	t.Run("copies of read views and issued commands", func(t *testing.T) {
-		const deskKioskReading = "    trigger \"Desk Kiosk\" {\n      reads = DeskOccupancyView\n    }"
-		const deskKioskReadingNothing = "    trigger \"Desk Kiosk\" {\n    }"
+		// The two shows blocks of the slice that reads both views through copies.
+		const chaseScreens = `      shows {
+        screen  = OverdueReport
+        reads   = [MemberLoansView, DeskOccupancyView]
+        command = RecallCopy
+      }
+
+      shows {
+        screen = DeskKiosk
+        reads  = DeskOccupancyView
+      }
+`
 
 		t.Run("a diagram that draws view and command copies, unedited, leaves the model as it was written", func(t *testing.T) {
 			require.Equal(t, test.TriggerReadsLibraryLending, applied(t, test.TriggerReadsLibraryLending, func(*viewerDiagram) {}))
 		})
 
 		t.Run("renaming a view renames it in the readers that read it through a copy", func(t *testing.T) {
-			result := applied(t, test.TriggerReadsLibraryLending, func(d *viewerDiagram) {
+			result := applied(t, test.ScreenLibraryLending, func(d *viewerDiagram) {
 				d.rename("MemberLoansView", "LoansReport")
 			})
 
-			require.Equal(t, strings.ReplaceAll(test.TriggerReadsLibraryLending, "MemberLoansView", "LoansReport"), result)
+			require.Equal(t, strings.ReplaceAll(test.ScreenLibraryLending, "MemberLoansView", "LoansReport"), result)
 		})
 
 		t.Run("renaming a command renames it in the automations that issue it through a copy", func(t *testing.T) {
@@ -2628,7 +2699,7 @@ context "C" {
 		})
 
 		t.Run("deleting a view clears what each reader read through its copies", func(t *testing.T) {
-			source := test.TriggerReadsLibraryLending
+			source := test.ScreenLibraryLending
 
 			result := applied(t, source, func(d *viewerDiagram) {
 				d.remove("DeskOccupancyView")
@@ -2636,32 +2707,48 @@ context "C" {
 
 			expected := replaced(t, source, `  slice "Browse Desk Occupancy" {
     view "DeskOccupancyView" {
-      subscribes = [DeskClaimed, DeskReleased]
+      subscribes = [DeskClaimed]
 
       fields {
-        deskId    = required(string)
-        memberId  = required(string)
-        claimedAt = required(timestamp)
+        deskId   = required(string)
+        memberId = required(string)
       }
     }
   }
 `, `  slice "Browse Desk Occupancy" {
   }
 `)
-			expected = replaced(t, expected, "      trigger \"Overdue Report\" {\n        reads = DeskOccupancyView\n      }", "      trigger \"Overdue Report\" {\n      }")
-			expected = replaced(t, expected, deskKioskReading, deskKioskReadingNothing)
-			expected = replaced(t, expected, "      on      = DeskClaimed\n      reads   = DeskOccupancyView\n", "      on      = DeskClaimed\n")
+			expected = replaced(t, expected, chaseScreens, `      shows {
+        screen  = OverdueReport
+        reads   = MemberLoansView
+        command = RecallCopy
+      }
+
+      shows {
+        screen = DeskKiosk
+      }
+`)
+			expected = replaced(t, expected, "      screen  = DeskKiosk\n      reads   = DeskOccupancyView\n      command = ClaimDesk\n", "      screen  = DeskKiosk\n      command = ClaimDesk\n")
 			require.Equal(t, expected, result)
 		})
 
 		t.Run("deleting the arrow from a view copy clears what that one reader reads", func(t *testing.T) {
-			source := test.TriggerReadsLibraryLending
+			source := test.ScreenLibraryLending
 
 			result := applied(t, source, func(d *viewerDiagram) {
-				d.disconnectIDs(d.copyID("DeskOccupancyView", "Claim Desk"), d.idOf("Desk Kiosk"))
+				d.disconnectIDs(d.copyID("DeskOccupancyView", "Chase Overdue Copy"), d.showsNamed("Chase Overdue Copy", "DeskKiosk"))
 			})
 
-			require.Equal(t, replaced(t, source, deskKioskReading, deskKioskReadingNothing), result)
+			require.Equal(t, replaced(t, source, chaseScreens, `      shows {
+        screen  = OverdueReport
+        reads   = [MemberLoansView, DeskOccupancyView]
+        command = RecallCopy
+      }
+
+      shows {
+        screen = DeskKiosk
+      }
+`), result)
 		})
 
 		t.Run("deleting the arrow to a command copy clears the command of that one automation", func(t *testing.T) {
@@ -2677,18 +2764,24 @@ context "C" {
 		})
 
 		t.Run("moving the reader end of an arrow from a view copy onto another reader moves the read", func(t *testing.T) {
-			source := test.TriggerReadsLibraryLending
+			source := test.ScreenLibraryLending
 
 			result := applied(t, source, func(d *viewerDiagram) {
-				copied := d.copyID("DeskOccupancyView", "Claim Desk")
-				d.repointIDs(copied, d.idOf("Desk Kiosk"), copied, d.idOf("Returns Counter"))
+				copied := d.copyID("MemberLoansView", "Chase Overdue Copy")
+				d.repointIDs(copied, d.showsNamed("Chase Overdue Copy", "OverdueReport"), copied, d.showsNamed("Chase Overdue Copy", "DeskKiosk"))
 			})
 
-			expected := replaced(t, source, deskKioskReading, deskKioskReadingNothing)
-			expected = replaced(t, expected,
-				"      trigger \"Returns Counter\" {\n      }",
-				"      trigger \"Returns Counter\" {\n        reads = DeskOccupancyView\n      }")
-			require.Equal(t, expected, result)
+			require.Equal(t, replaced(t, source, chaseScreens, `      shows {
+        screen  = OverdueReport
+        reads   = DeskOccupancyView
+        command = RecallCopy
+      }
+
+      shows {
+        screen = DeskKiosk
+        reads  = [DeskOccupancyView, MemberLoansView]
+      }
+`), result)
 		})
 	})
 

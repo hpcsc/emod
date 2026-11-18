@@ -107,7 +107,7 @@ describe('Legend', () => {
       Legend.renderLegend(store.dom.legendContent);
 
       expect(namesUnder(store.dom.legendContent, 'Elements')).toEqual([
-        'Screen', 'Trigger', 'Command', 'Event', 'View', 'Automation', 'Translation',
+        'Screen', 'Command', 'Event', 'View', 'Automation', 'Translation',
       ]);
     });
 
@@ -134,19 +134,14 @@ describe('Legend', () => {
       expect(row.querySelector('.lg-swatch path').getAttribute('d')).toBe(GEAR_PATH);
     });
 
-    // A screen is drawn as a trigger is, so the two share one fill and every
-    // other element type has a fill of its own.
-    it('gives each element type a distinct fill, and a screen the fill of a trigger, as the canvas does', () => {
+    it('gives the six element types six distinct fills, as the canvas does', () => {
       Legend.renderLegend(store.dom.legendContent);
 
-      const fillOf = {};
-      rowsUnder(store.dom.legendContent, 'Elements').forEach((row) => {
-        fillOf[row.querySelector('.lg-name').textContent] = swatchShape(row.querySelector('.lg-swatch')).getAttribute('fill');
-      });
-      const ownFills = Object.entries(fillOf).filter(([name]) => name !== 'Screen').map(([, fill]) => fill);
+      const fills = swatchesUnder(store.dom.legendContent, 'Elements')
+        .map((swatch) => swatchShape(swatch).getAttribute('fill'));
 
-      expect(fillOf.Screen).toBe(fillOf.Trigger);
-      expect(new Set(ownFills).size).toBe(ownFills.length);
+      expect(fills.length).toBe(6);
+      expect(new Set(fills).size).toBe(fills.length);
     });
   });
 
@@ -161,8 +156,7 @@ describe('Legend', () => {
         'Event wakes automation',
         'Automation issues command',
         'Screen issues command',
-        'Trigger sends command',
-        'View read by a screen, a trigger or an automation',
+        'View read by a screen or an automation',
         'Translation issues command',
       ]);
       Object.keys(edgeConfig).forEach((key) => expect(names).not.toContain(key));

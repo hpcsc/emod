@@ -929,7 +929,6 @@ The renderers that draw the whole model use one palette for element types. The S
 | Element     | Fill      | Stroke    | Notes                                   |
 |-------------|-----------|-----------|-----------------------------------------|
 | Shows       | #ffffff   | #333333   | Drawn as a screen/monitor shape.        |
-| Trigger     | #ffffff   | #333333   | Drawn as a screen/monitor shape.        |
 | Command     | #dae8fc   | #6c8ebf   | Blue sticky note.                       |
 | Event       | #ffe6cc   | #d79b00   | Orange sticky note.                     |
 | View        | #d5e8d4   | #82b366   | Green sticky note.                      |

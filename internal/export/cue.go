@@ -119,9 +119,6 @@ func (w *cueWriter) writeSlice(s *ast.Slice) {
 	w.line("name: %q", s.Name)
 	w.lineIfSet("description", s.Description)
 	writeCUEList(w, "shows", s.Appearances, w.writeAppearance)
-	if s.Trigger != nil {
-		w.writeObject("trigger", func() { w.writeTrigger(s.Trigger) })
-	}
 	writeCUEList(w, "commands", s.Commands, w.writeCommand)
 	writeCUEList(w, "events", s.Events, w.writeEvent)
 	writeCUEList(w, "fields", s.Fields, w.writeField)
@@ -187,13 +184,6 @@ func (w *cueWriter) writeAppearance(a *ast.Appearance) {
 	w.line("screen: %q", a.Screen)
 	w.listIfSet("reads", a.Reads)
 	w.listIfSet("command", a.Commands)
-}
-
-func (w *cueWriter) writeTrigger(t *ast.Trigger) {
-	w.writeComments(t.Comments)
-	w.line("name: %q", t.Name)
-	w.lineIfSet("description", t.Description)
-	w.listIfSet("reads", t.Reads)
 }
 
 func (w *cueWriter) writeCommand(c *ast.Command) {

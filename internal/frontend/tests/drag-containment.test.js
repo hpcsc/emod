@@ -27,7 +27,7 @@ function slicesAcrossAggregates() {
     { id: 'ctx1', type: 'context', label: 'Collections' },
     { id: 'agg1', type: 'aggregate', label: 'Arrangement', parentId: 'ctx1' },
     { id: 'sl1', type: 'slice', label: 'Propose plan', parentId: 'agg1' },
-    { id: 'trg1', type: 'trigger', label: 'Plan form', parentId: 'sl1' },
+    { id: 'shows1', type: 'shows', label: 'PlanForm', parentId: 'sl1' },
     { id: 'cmd1', type: 'command', label: 'ProposePlan', parentId: 'sl1' },
     { id: 'evt1', type: 'event', label: 'PlanProposed', parentId: 'sl1' },
     { id: 'view1', type: 'view', label: 'PlansView', parentId: 'sl1' },
@@ -35,7 +35,7 @@ function slicesAcrossAggregates() {
     { id: 'trans1', type: 'translation', label: 'PartnerPlanImport', parentId: 'sl1', event: { name: 'PartnerPlanImported' } },
     { id: 'evt2', type: 'event', label: 'PartnerPlanImported', parentId: 'sl1' },
     { id: 'sl2', type: 'slice', label: 'Cancel plan', parentId: 'agg1' },
-    { id: 'trg2', type: 'trigger', label: 'Cancel form', parentId: 'sl2' },
+    { id: 'shows2', type: 'shows', label: 'CancelForm', parentId: 'sl2' },
     { id: 'cmd2', type: 'command', label: 'CancelPlan', parentId: 'sl2' },
     { id: 'agg2', type: 'aggregate', label: 'Schedule', parentId: 'ctx1' },
     { id: 'sl3', type: 'slice', label: 'Book slot', parentId: 'agg2' },
@@ -278,7 +278,7 @@ describe('dragging a block onto another slice', () => {
     useNodes(slicesAcrossAggregates());
   });
 
-  it.each(['cmd1', 'evt1', 'view1', 'auto1', 'trg1'])('moves %s to a slice in another aggregate, drawn at its laid-out place there', (nodeId) => {
+  it.each(['cmd1', 'evt1', 'view1', 'auto1', 'shows1'])('moves %s to a slice in another aggregate, drawn at its laid-out place there', (nodeId) => {
     dropOnto(nodeId, 'sl3');
 
     expect(store.nodeById.get(nodeId).parentId).toBe('sl3');
@@ -339,18 +339,6 @@ describe('dragging a block onto another slice', () => {
     expect(edits).toBe(1);
   });
 
-  it('puts back a trigger released over a slice that has one, as it was before the drag', () => {
-    const before = Object.assign({}, store.layoutPositions.trg1);
-
-    dropOnto('trg1', 'sl2');
-
-    expect(store.dom.svg.querySelector('.diagram-node[data-node-id="trg1"]').getAttribute('transform')).toBeNull();
-    expect(store.nodeById.get('trg1').parentId).toBe('sl1');
-    expect(store.nodeOffsets.trg1).toBeUndefined();
-    expect(store.layoutPositions.trg1).toEqual(before);
-    expect(edits).toBe(0);
-  });
-
   it('puts back the event a translation nests, released over another slice without its translation', () => {
     const before = Object.assign({}, store.layoutPositions.evt2);
 
@@ -391,6 +379,17 @@ describe('dragging a screen onto a slice that shows one already', () => {
     expect(isInside('shows1', 'sl2')).toBe(true);
     expect(moved.x + moved.w <= resident.x || resident.x + resident.w <= moved.x).toBe(true);
     expect(edits).toBe(1);
+  });
+
+  it('puts back a screen released over a slice that shows the same screen, and sends no edit', () => {
+    store.nodeById.get('shows2').label = 'CheckoutPage';
+    const before = Object.assign({}, store.layoutPositions.shows1);
+
+    dropOnto('shows1', 'sl2');
+
+    expect(store.nodeById.get('shows1').parentId).toBe('sl1');
+    expect(store.layoutPositions.shows1).toEqual(before);
+    expect(edits).toBe(0);
   });
 });
 

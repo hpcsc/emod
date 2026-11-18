@@ -262,12 +262,10 @@ describe('Model', () => {
       ['command', 'event', 'flow'],
       ['shows', 'command', 'shows_command'],
       ['view', 'shows', 'reads'],
-      ['trigger', 'command', 'trigger_command'],
       ['event', 'view', 'subscription'],
       ['event', 'automation', 'automation_trigger'],
       ['automation', 'command', 'automation_command'],
       ['view', 'translation', 'reads'],
-      ['view', 'trigger', 'reads'],
       ['view', 'automation', 'reads'],
       ['translation', 'command', 'translation_command'],
     ];
@@ -283,7 +281,6 @@ describe('Model', () => {
       ['view', 'event', 'subscription'],
       ['command', 'shows', 'shows_command'],
       ['shows', 'view', 'reads'],
-      ['trigger', 'view', 'reads'],
       ['automation', 'view', 'reads'],
     ])('does not type a %s to %s arrow as %s, the direction the exporter never writes',
       (from, to, type) => {

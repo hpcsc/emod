@@ -339,23 +339,23 @@ function documentedProcessors() {
   ];
 }
 
-const triggerDescription = 'The screen an agent works the arrears list from';
-const triggerComments = [{ text: '# Replaces the spreadsheet the team used to work from' }];
+const screenDescription = 'The screen an agent works the arrears list from';
+const screenComments = [{ text: '# Replaces the spreadsheet the team used to work from' }];
 
-// A documented trigger: its box is drawn as a screen, with a bar painted across
-// the top — the one thing already standing where a corner mark lands.
-function documentedTrigger() {
+// A documented shows block: its box is drawn as a screen, with a bar painted
+// across the top — the one thing already standing where a corner mark lands.
+function documentedScreen() {
   return [
     { id: 'ctx1', type: 'context', label: 'Collections' },
     { id: 'agg1', type: 'aggregate', label: 'Arrangement', parentId: 'ctx1' },
     { id: 'sl1', type: 'slice', label: 'Chase arrears', parentId: 'agg1' },
-    { id: 'trg1', type: 'trigger', label: 'CollectorScreen', parentId: 'sl1', description: triggerDescription, comments: triggerComments },
+    { id: 'shows1', type: 'shows', label: 'CollectorScreen', parentId: 'sl1', description: screenDescription, comments: screenComments },
   ];
 }
 
 const viewLabel = 'ArrearsView';
 
-// One view read by a trigger, an automation and a translation in the same
+// One view read by a shows block, an automation and a translation in the same
 // slice. Each reader carries the read on itself as well, so a render can tell
 // an arrow drawn from the edge list apart from one drawn off block metadata.
 function viewReadThreeWays() {
@@ -363,34 +363,32 @@ function viewReadThreeWays() {
     { id: 'ctx1', type: 'context', label: 'Collections' },
     { id: 'agg1', type: 'aggregate', label: 'Arrangement', parentId: 'ctx1' },
     { id: 'sl1', type: 'slice', label: 'Chase arrears', parentId: 'agg1' },
-    { id: 'trg1', type: 'trigger', label: 'NightlySweep', parentId: 'sl1', reads: viewLabel },
+    { id: 'shows1', type: 'shows', label: 'ArrearsScreen', parentId: 'sl1', reads: [viewLabel] },
     { id: 'auto1', type: 'automation', label: 'ChaseOverdue', parentId: 'sl1', reads: viewLabel },
     { id: 'trans1', type: 'translation', label: 'PushToDialler', parentId: 'sl1', reads: viewLabel },
     { id: 'view1', type: 'view', label: viewLabel, parentId: 'sl1' },
   ];
 }
 
-// One of each node type, so a single render can show the trigger's screen framing
-// beside the other five shapes.
+// One of each node type, so a single render can show the screen framing of a
+// shows block beside the other five shapes.
 function allElementTypes() {
   return [
     { id: 'ctx1', type: 'context', label: 'Palette' },
     { id: 'agg1', type: 'aggregate', label: 'Agg', parentId: 'ctx1' },
     { id: 'sl1', type: 'slice', label: 'S', parentId: 'agg1' },
-    { id: 'trg1', type: 'trigger', label: 'Form', parentId: 'sl1' },
+    { id: 'shows1', type: 'shows', label: 'Form', parentId: 'sl1' },
     { id: 'cmd1', type: 'command', label: 'Cmd', parentId: 'sl1' },
     { id: 'evt1', type: 'event', label: 'Evt', parentId: 'sl1' },
     { id: 'view1', type: 'view', label: 'Rmo', parentId: 'sl1' },
     { id: 'auto1', type: 'automation', label: 'Auto', parentId: 'sl1' },
     { id: 'trans1', type: 'translation', label: 'Trans', parentId: 'sl1', external_system: 'Stripe' },
-    { id: 'sl2', type: 'slice', label: 'Take Order', parentId: 'agg1' },
-    { id: 'shows1', type: 'shows', label: 'Kiosk', parentId: 'sl2' },
   ];
 }
 
 function readsEdgesOutOfView() {
   return [
-    { source: 'view1', target: 'trg1', type: 'reads' },
+    { source: 'view1', target: 'shows1', type: 'reads' },
     { source: 'view1', target: 'auto1', type: 'reads' },
     { source: 'view1', target: 'trans1', type: 'reads' },
   ];
@@ -891,16 +889,16 @@ describe('Renderer.buildSVG', () => {
     });
   });
 
-  describe('trigger screen framing', () => {
-    it('draws a second rect inside the trigger box and no other node type', () => {
+  describe('screen framing', () => {
+    it('draws a second rect inside the box of a shows node and no other node type', () => {
       const { svg } = render(allElementTypes());
 
-      const trigger = nodeGroup(svg, 'trg1');
-      const triggerRects = trigger.querySelectorAll('rect');
-      expect(triggerRects.length).toBe(2);
+      const screen = nodeGroup(svg, 'shows1');
+      const screenRects = screen.querySelectorAll('rect');
+      expect(screenRects.length).toBe(2);
 
-      const main = triggerRects[0];
-      const framing = triggerRects[1];
+      const main = screenRects[0];
+      const framing = screenRects[1];
       const mainX = Number(main.getAttribute('x'));
       const mainY = Number(main.getAttribute('y'));
       const mainW = Number(main.getAttribute('width'));
@@ -922,21 +920,21 @@ describe('Renderer.buildSVG', () => {
     it('keeps the main rect as the first rect so drawnBoxes still reports the box', () => {
       const { svg } = render(allElementTypes());
 
-      const triggerGroup = nodeGroup(svg, 'trg1');
-      const first = triggerGroup.querySelector('rect');
+      const screenGroup = nodeGroup(svg, 'shows1');
+      const first = screenGroup.querySelector('rect');
       expect(first.getAttribute('width')).not.toBe('0');
       expect(first.getAttribute('height')).not.toBe('0');
 
       const boxes = drawnBoxes(svg);
-      expect(boxes.trg1.width).toBe(first.getAttribute('width'));
-      expect(boxes.trg1.height).toBe(first.getAttribute('height'));
+      expect(boxes.shows1.width).toBe(first.getAttribute('width'));
+      expect(boxes.shows1.height).toBe(first.getAttribute('height'));
     });
 
-    it('leaves the trigger label as the only text in the group', () => {
+    it('leaves the screen name as the only text in the group', () => {
       const { svg } = render(allElementTypes());
 
-      const trigger = nodeGroup(svg, 'trg1');
-      expect(drawnText(trigger)).toEqual(['Form']);
+      const screen = nodeGroup(svg, 'shows1');
+      expect(drawnText(screen)).toEqual(['Form']);
     });
 
     it('is still the only node with a second rect after every fill is normalised', () => {
@@ -946,8 +944,8 @@ describe('Renderer.buildSVG', () => {
         rect.setAttribute('fill', '#888888');
       });
 
-      const trigger = nodeGroup(svgEl, 'trg1');
-      expect(trigger.querySelectorAll('rect').length).toBe(2);
+      const screen = nodeGroup(svgEl, 'shows1');
+      expect(screen.querySelectorAll('rect').length).toBe(2);
 
       for (const id of ['cmd1', 'evt1', 'view1', 'auto1', 'trans1']) {
         const group = nodeGroup(svgEl, id);
@@ -957,31 +955,6 @@ describe('Renderer.buildSVG', () => {
   });
 
   describe('screens shown in slices', () => {
-    // The shape of a screen: its box, and the bar across its top measured from
-    // the box, so a screen in a wider slice still compares with a trigger.
-    function screenShape(group) {
-      const [box, bar] = [...group.querySelectorAll('rect')];
-      const at = (rect, name) => Number(rect.getAttribute(name));
-      return {
-        fill: box.getAttribute('fill'),
-        stroke: box.getAttribute('stroke'),
-        bar: {
-          left: at(bar, 'x') - at(box, 'x'),
-          top: at(bar, 'y') - at(box, 'y'),
-          right: at(box, 'x') + at(box, 'width') - at(bar, 'x') - at(bar, 'width'),
-          height: at(bar, 'height'),
-          fill: bar.getAttribute('fill'),
-        },
-      };
-    }
-
-    it('draws a shows node as a screen, with the bar across its top and the colours of a trigger', () => {
-      const { svg } = render(allElementTypes());
-
-      expect(screenShape(nodeGroup(svg, 'shows1'))).toEqual(screenShape(nodeGroup(svg, 'trg1')));
-      expect(drawnText(nodeGroup(svg, 'shows1'))).toEqual(['Kiosk']);
-    });
-
     it('draws no box for a screen declaration', () => {
       const { svg } = render([
         { id: 'screen1', type: 'screen', label: 'Kiosk', parentId: null },
@@ -1215,17 +1188,17 @@ describe('Renderer.buildSVG', () => {
       }));
     });
 
-    it('keeps both marks on a trigger in the corner and off the screen bar drawn across its top', () => {
-      const { svg, positions } = render(documentedTrigger());
+    it('keeps both marks on a shows block in the corner and off the screen bar drawn across its top', () => {
+      const { svg, positions } = render(documentedScreen());
 
-      const group = nodeGroup(svg, 'trg1');
+      const group = nodeGroup(svg, 'shows1');
       const marks = marksIn(group);
       const screenBar = group.querySelectorAll('rect')[1];
 
       expect(marks.length).toBe(2);
       marks.forEach((mark) => {
         expect(overlapArea(inkOfText(mark), inkOfRect(screenBar))).toBe(0);
-        expect(cornerOf(positions.trg1, mark)).toBe('top-right');
+        expect(cornerOf(positions.shows1, mark)).toBe('top-right');
       });
     });
 
@@ -1404,7 +1377,7 @@ describe('Renderer.buildSVG', () => {
 
   describe('read arrows', () => {
     it.each([
-      { reader: 'trigger', id: 'trg1' },
+      { reader: 'shows block', id: 'shows1' },
       { reader: 'automation', id: 'auto1' },
     ])('draws the arrow onto the $reader the way it draws the one onto the translation beside it', ({ id }) => {
       const { svg } = render(viewReadThreeWays(), readsEdgesOutOfView());
@@ -1424,7 +1397,7 @@ describe('Renderer.buildSVG', () => {
       const connected = render(nodes, readsEdgesOutOfView());
       const unconnected = render(nodes, []);
 
-      expect(drawnArrowEnds(connected.svg)).toEqual(['view1>trg1', 'view1>auto1', 'view1>trans1']);
+      expect(drawnArrowEnds(connected.svg)).toEqual(['view1>shows1', 'view1>auto1', 'view1>trans1']);
       expect(drawnArrowEnds(unconnected.svg)).toEqual([]);
     });
   });
@@ -1555,13 +1528,9 @@ describe('Renderer.buildSVG', () => {
       }
     });
 
-    // A screen is drawn as a trigger is, so the two count as one look here: two
-    // types that differ on the canvas have to differ on hover and when selected.
-    it('keeps hover and highlight fills pairwise distinct across the looks the canvas draws', () => {
-      const looks = new Map(Object.values(nodePalette).map((p) => [p.fill + ' ' + p.stroke, p]));
-      const hoverFills = [...looks.values()].map((p) => p.hoverFill);
-      const highlightFills = [...looks.values()].map((p) => p.highlightFill);
-      expect(looks.size).toBe(Object.keys(nodePalette).length - 1);
+    it('keeps hover and highlight fills pairwise distinct', () => {
+      const hoverFills = Object.values(nodePalette).map((p) => p.hoverFill);
+      const highlightFills = Object.values(nodePalette).map((p) => p.highlightFill);
       expect(new Set(hoverFills).size).toBe(hoverFills.length);
       expect(new Set(highlightFills).size).toBe(highlightFills.length);
     });

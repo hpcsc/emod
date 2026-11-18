@@ -7,7 +7,6 @@ const NS = "http://www.w3.org/2000/svg";
 // connection still reaches the legend — unnamed rather than undrawn.
 const ELEMENT_NAMES = {
   shows: 'Screen',
-  trigger: 'Trigger',
   command: 'Command',
   event: 'Event',
   view: 'View',
@@ -21,8 +20,7 @@ const CONNECTION_NAMES = {
   automation_trigger: 'Event wakes automation',
   automation_command: 'Automation issues command',
   shows_command: 'Screen issues command',
-  trigger_command: 'Trigger sends command',
-  reads: 'View read by a screen, a trigger or an automation',
+  reads: 'View read by a screen or an automation',
   translation_command: 'Translation issues command',
 };
 
