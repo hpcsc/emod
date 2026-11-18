@@ -186,7 +186,7 @@
     },
     {
       "n": 5,
-      "done": false,
+      "done": true,
       "title": "Document the list form in the DSL reference",
       "language": "Markdown",
       "testable": false,

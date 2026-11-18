@@ -103,7 +103,7 @@ slice "Reserve a Room" {
 }
 ```
 
-- A **trigger** names the actor who works the slice, and the view they read.
+- A **trigger** names the actor who works the slice, and the views they read.
 - A **command** states the input fields a use case accepts.
 - An **event** states the facts the use case appends to the stream.
 - A **view** projects events; it declares which events it subscribes to.

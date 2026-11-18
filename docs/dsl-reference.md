@@ -319,7 +319,7 @@ A user or system action drives a command that produces an event.
 slice "<name>" {
   trigger "<name>" {
     actor = <ActorName>
-    reads = <ViewName>
+    reads = <ViewName>  # or a list: [<ViewName>, <ViewName>]
   }
 
   command "<CommandName>" {
@@ -338,7 +338,72 @@ slice "<name>" {
 
 `flow` wires the command to the event (see [Flows](#7-flows)). `trigger` is optional — a slice may define a command directly without a trigger.
 
+- **A trigger reads one view or more:** `reads` takes a bare name, `reads = CartView`, or a list, `reads = [CartView, DiscountView]`, for a page that shows more than one view. An automation and a translation take one name, because a processor reads one view as its todo list.
+- **`emod fmt` writes one entry as a bare name** and two or more entries as a list, in the order they are written.
+- **Each entry draws its own arrow:** `emod diagram --format svg` and the viewer draw one `reads` arrow from each view in the list, and a copy of each far view (see the next item). `emod diagram --format ascii` prints one `{View} -> <<Trigger>>` line for each entry.
+- **The exports give the list:** `emod export --format json` and `emod export --format cue` give the `reads` of a trigger as a list, also for one entry. The JSON export gives one `reads_position` for each entry, in the same order.
 - **The drawn diagrams copy a view a trigger reads from a slice far away:** when the first slice that declares the view is two or more slices away, `emod diagram --format svg` and the viewer draw it again in the trigger's slice, and the `reads` arrow starts at this copy. The SVG draws the copy in the Commands / Views lane, and the viewer draws it in the row of copies under the slice's views. The copy has a dashed outline in the view's stroke, a white fill, and a second line `from <slice>` that names the first slice that declares the view.
+
+A checkout page that shows the cart and the discount panel reads both views:
+
+```emod
+emod = 1
+model "Shop" {}
+
+context "Shop" {
+  aggregate "Cart" {
+    slice "Add Item" {
+      command "AddItem" {
+        fields {
+          sku = string
+        }
+      }
+
+      event "ItemAdded" {
+        fields {
+          sku = string
+        }
+      }
+
+      flow = <<-FLOW
+        command -> event: AddItem -> ItemAdded
+      FLOW
+    }
+
+    slice "Show Basket" {
+      view "CartView" {
+        subscribes = [ItemAdded]
+      }
+
+      view "DiscountView" {
+        subscribes = [ItemAdded]
+      }
+    }
+
+    slice "Apply Discount" {
+      trigger "Checkout Page" {
+        reads = [CartView, DiscountView]
+      }
+
+      command "ApplyDiscount" {
+        fields {
+          code = string
+        }
+      }
+
+      event "DiscountApplied" {
+        fields {
+          code = string
+        }
+      }
+
+      flow = <<-FLOW
+        command -> event: ApplyDiscount -> DiscountApplied
+      FLOW
+    }
+  }
+}
+```
 
 ### View Pattern
 
@@ -812,7 +877,7 @@ All references use unqualified names, written unquoted, and `emod validate` reso
 | `actor "<name>"` | `trigger { actor }` | [`command` pattern](#command-pattern) |
 | `invariants` entry | `spec { then = rejected(...) }`, `flow { command -> rejected: }` | [`spec`](#spec), [`flow`](#7-flows) |
 
-All three constructs that spell `reads` resolve alike — a trigger's, an automation's and a translation's. Each is looked up against the views the whole model declares, and a name matching none is reported at the `reads` entry that spells it:
+All three constructs that spell `reads` resolve alike — a trigger's, an automation's and a translation's. Each is looked up against the views the whole model declares, and a name matching none is reported at the `reads` entry that spells it. Each entry of a trigger's list resolves alone, so an undeclared entry is reported at that entry, and the entries around it resolve as usual:
 
 ```
 lending.emod:22: view "MemberLoansVeiw" does not exist

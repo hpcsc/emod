@@ -438,17 +438,17 @@ says that a trigger names the views that it reads.
 
 **Acceptance Criteria:**
 
-- [ ] The Command Pattern section of `docs/dsl-reference.md` shows the `reads` of a trigger as a bare name or a
+- [x] The Command Pattern section of `docs/dsl-reference.md` shows the `reads` of a trigger as a bare name or a
       list, and says that an automation and a translation take one name.
-- [ ] It says that `emod fmt` writes one entry as a bare name and two or more entries as a list.
-- [ ] It says that the SVG and the viewer draw one arrow from each view in the list, with a copy for each far
+- [x] It says that `emod fmt` writes one entry as a bare name and two or more entries as a list.
+- [x] It says that the SVG and the viewer draw one arrow from each view in the list, with a copy for each far
       view, and that the ASCII diagram prints one line for each entry.
-- [ ] It says that `emod export --format json` and `emod export --format cue` give the `reads` of a trigger as a
+- [x] It says that `emod export --format json` and `emod export --format cue` give the `reads` of a trigger as a
       list, also for one entry.
-- [ ] The Cross-References section says that each entry of a trigger's list resolves alone, and that an
+- [x] The Cross-References section says that each entry of a trigger's list resolves alone, and that an
       undeclared entry is reported at that entry.
-- [ ] `site/content/docs/dsl-reference.md:106` says that a trigger names the views that the actor reads.
-- [ ] Each ```` ```emod ```` fence in `docs/dsl-reference.md` validates: the "documented models" leaf of
+- [x] `site/content/docs/dsl-reference.md:106` says that a trigger names the views that the actor reads.
+- [x] Each ```` ```emod ```` fence in `docs/dsl-reference.md` validates: the "documented models" leaf of
       `internal/oracle/oracle_test.go` passes.
 
 **Affected Files/Modules:**
