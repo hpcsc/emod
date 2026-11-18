@@ -106,7 +106,7 @@
     },
     {
       "n": 3,
-      "done": false,
+      "done": true,
       "title": "Answer references and traces about screens, and count their reads in the slice commands",
       "language": "Go",
       "testable": true,

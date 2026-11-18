@@ -124,6 +124,44 @@ func TestGetDefinition(t *testing.T) {
 		assertDef(t, testDoc, cLine, cChar, dLine, dChar, "OrderView")
 	})
 
+	t.Run("each name that a shows block reads or issues resolves to its declaration", func(t *testing.T) {
+		const doc = `screen "CheckoutPage" {
+}
+
+context "Shop" {
+    slice "Show Cart" {
+        view "CartView" {
+        }
+        view "DiscountView" {
+        }
+    }
+    slice "Apply Discount" {
+        shows {
+            screen  = CheckoutPage
+            reads   = [CartView, DiscountView]
+            command = [ApplyDiscount, ClearCart]
+        }
+        command "ApplyDiscount" {
+        }
+        command "ClearCart" {
+        }
+    }
+}
+`
+
+		t.Run("a view in the second entry of the reads list", func(t *testing.T) {
+			cLine, cChar := posIn(t, doc, "shows {", "DiscountView")
+			dLine, dChar := posIn(t, doc, `view "DiscountView`, "DiscountView")
+			assertDef(t, doc, cLine, cChar, dLine, dChar, "DiscountView")
+		})
+
+		t.Run("a command in the second entry of the command list", func(t *testing.T) {
+			cLine, cChar := posIn(t, doc, "shows {", "ClearCart")
+			dLine, dChar := posIn(t, doc, `command "ClearCart`, "ClearCart")
+			assertDef(t, doc, cLine, cChar, dLine, dChar, "ClearCart")
+		})
+	})
+
 	t.Run("view reference in the second entry of a trigger's reads list", func(t *testing.T) {
 		const doc = `context "Shop" {
     slice "Show Cart" {

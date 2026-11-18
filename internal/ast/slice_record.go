@@ -42,10 +42,11 @@ func classify(s *Slice) (pattern string, keyElements string) {
 	if len(s.Views) > 0 {
 		return "view", s.Views[0].Name
 	}
-	if s.Trigger != nil && len(s.Commands) > 0 && len(s.Flows) > 0 {
+	shown := s.Trigger != nil || len(s.Appearances) > 0
+	if shown && len(s.Commands) > 0 && len(s.Flows) > 0 {
 		return "command", fmt.Sprintf("%s, %s", s.Flows[0].CommandName, s.Flows[0].EventName)
 	}
-	if s.Trigger != nil && len(s.Commands) > 0 && len(s.Events) > 0 {
+	if shown && len(s.Commands) > 0 && len(s.Events) > 0 {
 		return "command", joinNamed(s.Commands[0].Name, s.Events[0].Name)
 	}
 	return "unknown", ""

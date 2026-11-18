@@ -440,23 +440,23 @@ with the keyword `issues`.
 
 **Acceptance Criteria:**
 
-- [ ] `emod references <file> ApplyDiscount`, in text and in JSON, lists under "issued by" one line for each
+- [x] `emod references <file> ApplyDiscount`, in text and in JSON, lists under "issued by" one line for each
       `shows` block whose `command` names `ApplyDiscount`: the keyword `command`, the line of that entry, the
       element `screen CheckoutPage` and the slice of the `shows` block. A command that a slice declares and no
       `shows` block of the slice names lists no screen.
-- [ ] `emod references <file> CartView` lists under "read by" one line for each `shows` block whose `reads`
+- [x] `emod references <file> CartView` lists under "read by" one line for each `shows` block whose `reads`
       names `CartView`, with the keyword `reads` and the line of that entry.
-- [ ] `emod trace <file> CheckoutPage --kind screen` reaches each command that an appearance of the screen
+- [x] `emod trace <file> CheckoutPage --kind screen` reaches each command that an appearance of the screen
       names, with the label `command`, and with `--upstream` reaches each view that an appearance reads, with the
       label `reads`. Its root has the kind `screen`. `--kind trigger` returns the error that lists the supported
       kinds, and the list names `screen` and no `trigger`.
-- [ ] In the editor, go-to-definition on a view name in the `reads` of a `shows` block, and on a command name in
+- [x] In the editor, go-to-definition on a view name in the `reads` of a `shows` block, and on a command name in
       its `command`, goes to the declaration. Find-references on that view or command lists those entries.
-- [ ] `emod slices arrange` counts each `reads` entry of each `shows` block as a reference from the slice that
+- [x] `emod slices arrange` counts each `reads` entry of each `shows` block as a reference from the slice that
       declares the view, labelled `<View> -> screen <Screen>`.
-- [ ] `emod slices list` gives the pattern `command` to a slice with a `shows` block, a command and a flow.
-- [ ] `query.KindTrigger` does not exist, and `query.TraceKinds` lists `screen`.
-- [ ] `task test:unit` passes.
+- [x] `emod slices list` gives the pattern `command` to a slice with a `shows` block, a command and a flow.
+- [x] `query.KindTrigger` does not exist, and `query.TraceKinds` lists `screen`.
+- [x] `task test:unit` passes.
 
 **Affected Files/Modules:**
 

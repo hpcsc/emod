@@ -152,7 +152,7 @@ func TestReferences(t *testing.T) {
 				Slice:     "Book Room",
 				Line:      12,
 				References: []query.Reference{
-					{Group: query.GroupIssuedBy, Keyword: "issues", Line: 8, Element: element(query.KindTrigger, "Booking Form"), Slice: "Book Room"},
+					{Group: query.GroupIssuedBy, Keyword: "issues", Line: 8, Element: element(query.KindScreen, "Booking Form"), Slice: "Book Room"},
 					{Group: query.GroupProduces, Keyword: "flow", Line: 19, Element: element(query.KindEvent, "RoomBooked"), Slice: "Book Room"},
 					{Group: query.GroupRefusedBy, Keyword: "rejected", Line: 20, Element: element(query.KindInvariant, "RoomFree"), Slice: "Book Room"},
 					{Group: query.GroupNamedInSpecs, Keyword: "when", Line: 24, Slice: "Book Room", Spec: "books a free room"},
@@ -179,11 +179,101 @@ func TestReferences(t *testing.T) {
 				Slice:     "Show Rooms",
 				Line:      36,
 				References: []query.Reference{
-					{Group: query.GroupReadBy, Keyword: "reads", Line: 9, Element: element(query.KindTrigger, "Booking Form"), Slice: "Book Room"},
+					{Group: query.GroupReadBy, Keyword: "reads", Line: 9, Element: element(query.KindScreen, "Booking Form"), Slice: "Book Room"},
 					{Group: query.GroupBuiltFrom, Keyword: "subscribes", Line: 37, Element: element(query.KindEvent, "RoomBooked"), Slice: "Show Rooms"},
 					{Group: query.GroupNamedInSpecs, Keyword: "then", Line: 42, Slice: "Show Rooms", Spec: "shows a booked room"},
 					{Group: query.GroupReadBy, Keyword: "reads", Line: 49, Element: element(query.KindAutomation, "Confirmer"), Slice: "Confirm Booking"},
 					{Group: query.GroupReadBy, Keyword: "reads", Line: 62, Element: element(query.KindTranslation, "PartnerImport"), Slice: "Import Booking"},
+				},
+			}}, found)
+		})
+	})
+
+	t.Run("shows", func(t *testing.T) {
+		const checkoutModel = `screen "CheckoutPage" {
+}
+
+screen "CartDrawer" {
+}
+
+context "Shop" {
+  slice "Show Cart" {
+    view "CartView" {
+    }
+  }
+
+  slice "Apply Discount" {
+    shows {
+      screen  = CheckoutPage
+      reads   = CartView
+      command = ApplyDiscount
+    }
+
+    command "ApplyDiscount" {
+    }
+
+    command "ClearCart" {
+    }
+  }
+
+  slice "Reapply Discount" {
+    shows {
+      screen = CartDrawer
+    }
+
+    shows {
+      screen  = CheckoutPage
+      reads   = [OrderView, CartView]
+      command = [RemoveDiscount, ApplyDiscount]
+    }
+  }
+}
+`
+
+		t.Run("a command lists each shows block that names it in its command as an issuer, at the line of that entry", func(t *testing.T) {
+			found, err := query.References(parse(t, checkoutModel), "ApplyDiscount", "")
+
+			require.NoError(t, err)
+			require.Equal(t, []query.NameReferences{{
+				Kind:    query.KindCommand,
+				Name:    "ApplyDiscount",
+				Context: "Shop",
+				Slice:   "Apply Discount",
+				Line:    20,
+				References: []query.Reference{
+					{Group: query.GroupIssuedBy, Keyword: "command", Line: 17, Element: element(query.KindScreen, "CheckoutPage"), Slice: "Apply Discount"},
+					{Group: query.GroupIssuedBy, Keyword: "command", Line: 35, Element: element(query.KindScreen, "CheckoutPage"), Slice: "Reapply Discount"},
+				},
+			}}, found)
+		})
+
+		t.Run("a command that no shows block names lists no screen, also when its slice shows one", func(t *testing.T) {
+			found, err := query.References(parse(t, checkoutModel), "ClearCart", "")
+
+			require.NoError(t, err)
+			require.Equal(t, []query.NameReferences{{
+				Kind:       query.KindCommand,
+				Name:       "ClearCart",
+				Context:    "Shop",
+				Slice:      "Apply Discount",
+				Line:       23,
+				References: []query.Reference{},
+			}}, found)
+		})
+
+		t.Run("a view lists each shows block that names it in its reads as a reader, at the line of that entry", func(t *testing.T) {
+			found, err := query.References(parse(t, checkoutModel), "CartView", "")
+
+			require.NoError(t, err)
+			require.Equal(t, []query.NameReferences{{
+				Kind:    query.KindView,
+				Name:    "CartView",
+				Context: "Shop",
+				Slice:   "Show Cart",
+				Line:    9,
+				References: []query.Reference{
+					{Group: query.GroupReadBy, Keyword: "reads", Line: 16, Element: element(query.KindScreen, "CheckoutPage"), Slice: "Apply Discount"},
+					{Group: query.GroupReadBy, Keyword: "reads", Line: 34, Element: element(query.KindScreen, "CheckoutPage"), Slice: "Reapply Discount"},
 				},
 			}}, found)
 		})
@@ -228,7 +318,7 @@ func TestReferences(t *testing.T) {
 					Slice:   "Show Cart",
 					Line:    tc.line,
 					References: []query.Reference{
-						{Group: query.GroupReadBy, Keyword: "reads", Line: tc.entryLine, Element: element(query.KindTrigger, "Checkout Page"), Slice: "Apply Discount"},
+						{Group: query.GroupReadBy, Keyword: "reads", Line: tc.entryLine, Element: element(query.KindScreen, "Checkout Page"), Slice: "Apply Discount"},
 					},
 				}}, found)
 			})

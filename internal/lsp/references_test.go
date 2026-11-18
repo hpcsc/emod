@@ -257,6 +257,45 @@ func TestGetReferences(t *testing.T) {
 			require.Len(t, locs, 4)
 		})
 
+		t.Run("cursor on a view or a command declaration lists the entry of a shows block that names it", func(t *testing.T) {
+			const doc = `screen "CheckoutPage" {
+}
+
+context "Shop" {
+    slice "Show Cart" {
+        view "CartView" {
+        }
+        view "DiscountView" {
+        }
+    }
+    slice "Apply Discount" {
+        shows {
+            screen  = CheckoutPage
+            reads   = [CartView, DiscountView]
+            command = [ApplyDiscount, ClearCart]
+        }
+        command "ApplyDiscount" {
+        }
+        command "ClearCart" {
+        }
+    }
+}
+`
+
+			vLine, vChar := posIn(t, doc, `view "DiscountView"`, "DiscountView")
+			cLine, cChar := posIn(t, doc, `command "ClearCart"`, "ClearCart")
+			require.Equal(t, [][]lsp.Location{
+				{
+					locationOf(t, doc, `view "DiscountView"`, "DiscountView"),
+					locationOf(t, doc, "shows {", "DiscountView"),
+				},
+				{
+					locationOf(t, doc, `command "ClearCart"`, "ClearCart"),
+					locationOf(t, doc, "shows {", "ClearCart"),
+				},
+			}, [][]lsp.Location{lsp.GetReferences(doc, vLine, vChar, uri), lsp.GetReferences(doc, cLine, cChar, uri)})
+		})
+
 		t.Run("cursor on a view declaration lists the entry of a trigger's reads list that names it", func(t *testing.T) {
 			const doc = `context "Shop" {
     slice "Show Cart" {

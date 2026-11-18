@@ -11,13 +11,14 @@ import (
 
 const KindExternalSystem Kind = "external_system"
 
-var TraceKinds = []Kind{KindCommand, KindEvent, KindView, KindTrigger, KindAutomation, KindTranslation, KindInvariant, KindExternalSystem}
+var TraceKinds = []Kind{KindCommand, KindEvent, KindView, KindScreen, KindAutomation, KindTranslation, KindInvariant, KindExternalSystem}
 
-// An invariant has no slice, because a scope declares it. An external system
-// has the place of the first translation that names it.
+// An invariant has no slice, because a scope declares it. A screen has no
+// context and no slice, because the model declares it and many slices show it.
+// An external system has the place of the first translation that names it.
 type Node struct {
 	Element
-	Context   string `json:"context"`
+	Context   string `json:"context,omitempty"`
 	Aggregate string `json:"aggregate,omitempty"`
 	Slice     string `json:"slice,omitempty"`
 	Line      int    `json:"line"`
@@ -54,6 +55,10 @@ type AmbiguousNameError struct {
 func (e *AmbiguousNameError) Error() string {
 	places := make([]string, len(e.Matches))
 	for i, m := range e.Matches {
+		if m.Context == "" {
+			places[i] = string(m.Kind)
+			continue
+		}
 		places[i] = fmt.Sprintf("%s in %s", m.Kind, ScopeName(m.Context, m.Aggregate))
 	}
 	return fmt.Sprintf("the model declares %q more than one time: as %s", e.Name, strings.Join(places, ", as "))
@@ -104,7 +109,7 @@ func Trace(model *ast.Model, from string, options TraceOptions) (Tree, error) {
 				After:          edge.after,
 				Node:           node,
 				From:           parent.Element,
-				CrossesContext: node.Context != parent.Context,
+				CrossesContext: node.Context != "" && parent.Context != "" && node.Context != parent.Context,
 				Depth:          current.depth + 1,
 			})
 			queue = append(queue, queued{key: next, depth: current.depth + 1})
@@ -147,6 +152,13 @@ func newGraph(model *ast.Model) *graph {
 		in:    map[nodeKey][]graphEdge{},
 	}
 
+	for _, screen := range model.Screens {
+		g.addNode(nodeKey{kind: KindScreen, name: screen.Name}, Node{
+			Element: Element{Kind: KindScreen, Name: screen.Name},
+			Line:    screen.NamePos.Line,
+		})
+	}
+
 	for _, ref := range model.SliceRefs() {
 		slice := ref.Slice
 		add := func(kind Kind, name string, pos ast.Position) {
@@ -163,7 +175,7 @@ func newGraph(model *ast.Model) *graph {
 		}
 
 		if slice.Trigger != nil {
-			add(KindTrigger, slice.Trigger.Name, slice.Trigger.NamePos)
+			add(KindScreen, slice.Trigger.Name, slice.Trigger.NamePos)
 		}
 		for _, cmd := range slice.Commands {
 			add(KindCommand, cmd.Name, cmd.NamePos)
@@ -248,9 +260,13 @@ func traceEdge(slice *ast.Slice, invariantScope string, e diagram.Edge) (graphEd
 			label: "rejected",
 		}, true
 	case diagram.EdgeTriggerCommand:
-		return edge(KindTrigger, KindCommand, "issues")
+		return edge(KindScreen, KindCommand, "issues")
 	case diagram.EdgeTriggerReads:
-		return edge(KindView, KindTrigger, "reads")
+		return edge(KindView, KindScreen, "reads")
+	case diagram.EdgeScreenCommand:
+		return edge(KindScreen, KindCommand, "command")
+	case diagram.EdgeScreenReads:
+		return edge(KindView, KindScreen, "reads")
 	case diagram.EdgeSubscription:
 		return edge(KindEvent, KindView, "subscribes")
 	case diagram.EdgeAutomationTrigger:

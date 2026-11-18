@@ -130,9 +130,37 @@ SendConfirmation                    command          Mail   "Send Confirmation" 
   <-[command]- Confirmer            automation       Hotel  "Confirm Booking"    :31  (Hotel -> Mail)
     <-[on, after 15m]- RoomBooked   event            Hotel  "Book Room"          :15
       <-[flow]- BookRoom            command          Hotel  "Book Room"          :12
-        <-[issues]- "Booking Form"  trigger          Hotel  "Book Room"          :8
+        <-[issues]- "Booking Form"  screen           Hotel  "Book Room"          :8
         <-[command]- PartnerImport  translation      Hotel  "Import Booking"     :61
           <-[from]- "Partner API"   external_system  Hotel  "Import Booking"     :62
+`, output)
+		})
+
+		t.Run("a screen prints with the line of its declaration and no context or slice, and a step out of it crosses no context", func(t *testing.T) {
+			path := writeTemp(t, "checkout.emod", `screen "CheckoutPage" {
+}
+
+context "Shop" {
+  slice "Apply Discount" {
+    shows {
+      screen  = CheckoutPage
+      command = ApplyDiscount
+    }
+
+    command "ApplyDiscount" {
+    }
+  }
+}
+`)
+
+			output := captureStdout(t, func() {
+				require.NoError(t, cli.RunTrace(path, "CheckoutPage", "text", query.TraceOptions{Kind: "screen"}))
+			})
+
+			require.Equal(t, `1 element follows from CheckoutPage
+
+CheckoutPage                  screen                           :1
+  -[command]-> ApplyDiscount  command  Shop  "Apply Discount"  :11
 `, output)
 		})
 
@@ -214,13 +242,13 @@ ConfirmationSent  event  Mail  "Send Confirmation"  :78
 			require.Equal(t, 1, lintErr.ExitCode)
 		})
 
-		t.Run("a kind that no element has is refused", func(t *testing.T) {
+		t.Run("a kind that no element has is refused, and the list of supported kinds names screen and no trigger", func(t *testing.T) {
 			path := writeTemp(t, "hotel.emod", hotelTraceModel)
 
-			err := cli.RunTrace(path, "RoomBooked", "text", query.TraceOptions{Kind: "screen"})
+			err := cli.RunTrace(path, "RoomBooked", "text", query.TraceOptions{Kind: "trigger"})
 
 			require.ErrorIs(t, err, cli.ErrUnsupportedKind)
-			require.EqualError(t, err, `unsupported kind "screen"; supported kinds: command, event, view, trigger, automation, translation, invariant, external_system`)
+			require.EqualError(t, err, `unsupported kind "trigger"; supported kinds: command, event, view, screen, automation, translation, invariant, external_system`)
 		})
 
 		t.Run("a command line with no element is refused", func(t *testing.T) {

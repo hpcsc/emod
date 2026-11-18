@@ -284,7 +284,7 @@ $ emod references examples/all_patterns.emod ReserveRoom
 command ReserveRoom   Reservations > Reservation, slice "Reserve a Room"   :31
 
 issued by
-  :26  issues    trigger "Reservation Form"          "Reserve a Room"
+  :26  issues    screen "Reservation Form"           "Reserve a Room"
 produces
   :61  flow      ReserveRoom -> RoomReserved         "Reserve a Room"
 refused by

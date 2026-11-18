@@ -104,6 +104,52 @@ context "Stays" {
 			}, ast.SliceRecords(model))
 		})
 
+		t.Run("makes a slice that shows a screen and has a command and a flow or an event a command slice", func(t *testing.T) {
+			model := parseModel(t, `emod = 1
+
+model "Hotel" {
+}
+
+screen "FrontDesk" {
+}
+
+context "Stays" {
+  aggregate "Room" {
+    slice "With Flow" {
+      shows {
+        screen  = FrontDesk
+        command = ReleaseRoom
+      }
+
+      command "ReleaseRoom" {
+      }
+
+      flow = <<-FLOW
+        command -> event:    ReleaseRoom -> RoomReleased
+      FLOW
+    }
+
+    slice "With Event" {
+      shows {
+        screen = FrontDesk
+      }
+
+      command "HoldRoom" {
+      }
+
+      event "RoomHeld" {
+      }
+    }
+  }
+}
+`)
+
+			require.Equal(t, []ast.SliceRecord{
+				{Name: "With Flow", Pattern: "command", Context: "Stays", KeyElements: "ReleaseRoom, RoomReleased"},
+				{Name: "With Event", Pattern: "command", Context: "Stays", KeyElements: "HoldRoom, RoomHeld"},
+			}, ast.SliceRecords(model))
+		})
+
 		t.Run("makes a slice a command slice only when it has a trigger, a command, and an event or a flow", func(t *testing.T) {
 			model := parseModel(t, `emod = 1
 

@@ -10,7 +10,7 @@ import (
 
 const (
 	KindInvariant   Kind = "invariant"
-	KindTrigger     Kind = "trigger"
+	KindScreen      Kind = "screen"
 	KindAutomation  Kind = "automation"
 	KindTranslation Kind = "translation"
 )
@@ -255,10 +255,17 @@ func addEventReferences(list *referenceList, slice *ast.Slice, name string) {
 }
 
 func addCommandReferences(list *referenceList, slice *ast.Slice, name string) {
+	for _, appearance := range slice.Appearances {
+		for i, command := range appearance.Commands {
+			if command == name {
+				list.add(GroupIssuedBy, "command", appearance.CommandsPos[i], element(KindScreen, appearance.Screen), slice)
+			}
+		}
+	}
 	if trigger := slice.Trigger; trigger != nil {
 		for _, cmd := range slice.Commands {
 			if cmd.Name == name {
-				list.add(GroupIssuedBy, "issues", trigger.NamePos, element(KindTrigger, trigger.Name), slice)
+				list.add(GroupIssuedBy, "issues", trigger.NamePos, element(KindScreen, trigger.Name), slice)
 			}
 		}
 	}
@@ -307,10 +314,17 @@ func addViewReferences(list *referenceList, slice *ast.Slice, name string) {
 			}
 		}
 	}
+	for _, appearance := range slice.Appearances {
+		for i, view := range appearance.Reads {
+			if view == name {
+				list.add(GroupReadBy, "reads", appearance.ReadsPos[i], element(KindScreen, appearance.Screen), slice)
+			}
+		}
+	}
 	if trigger := slice.Trigger; trigger != nil {
 		for i, view := range trigger.Reads {
 			if view == name {
-				list.add(GroupReadBy, "reads", trigger.ReadsPos[i], element(KindTrigger, trigger.Name), slice)
+				list.add(GroupReadBy, "reads", trigger.ReadsPos[i], element(KindScreen, trigger.Name), slice)
 			}
 		}
 	}

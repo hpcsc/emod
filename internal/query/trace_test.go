@@ -219,6 +219,136 @@ func TestTrace(t *testing.T) {
 		})
 	})
 
+	t.Run("screens", func(t *testing.T) {
+		const checkoutModel = `screen "CartDrawer" {
+}
+
+screen "CheckoutPage" {
+}
+
+context "Shop" {
+  slice "Show Cart" {
+    event "CartUpdated" {
+    }
+
+    view "CartView" {
+      subscribes = [CartUpdated]
+    }
+  }
+
+  slice "Apply Discount" {
+    shows {
+      screen  = CheckoutPage
+      reads   = CartView
+      command = ApplyDiscount
+    }
+
+    command "ApplyDiscount" {
+    }
+  }
+}
+
+context "Billing" {
+  slice "Pay Order" {
+    shows {
+      screen  = CheckoutPage
+      command = PayOrder
+    }
+
+    command "PayOrder" {
+    }
+  }
+}
+`
+
+		t.Run("a screen reaches each command that its shows blocks name, from the line of its declaration, and a step out of it crosses no context", func(t *testing.T) {
+			tree, err := query.Trace(parse(t, checkoutModel), "CheckoutPage", query.TraceOptions{Kind: query.KindScreen})
+
+			require.NoError(t, err)
+			require.Equal(t, query.Tree{
+				Root: query.Node{Element: query.Element{Kind: query.KindScreen, Name: "CheckoutPage"}, Line: 4},
+				Steps: []query.Step{
+					{
+						Label: "command",
+						Node: query.Node{
+							Element: query.Element{Kind: query.KindCommand, Name: "ApplyDiscount"},
+							Context: "Shop",
+							Slice:   "Apply Discount",
+							Line:    24,
+						},
+						From:  query.Element{Kind: query.KindScreen, Name: "CheckoutPage"},
+						Depth: 1,
+					},
+					{
+						Label: "command",
+						Node: query.Node{
+							Element: query.Element{Kind: query.KindCommand, Name: "PayOrder"},
+							Context: "Billing",
+							Slice:   "Pay Order",
+							Line:    36,
+						},
+						From:  query.Element{Kind: query.KindScreen, Name: "CheckoutPage"},
+						Depth: 1,
+					},
+				},
+			}, tree)
+		})
+
+		t.Run("upstream, a screen reaches each view that its shows blocks read", func(t *testing.T) {
+			tree, err := query.Trace(parse(t, checkoutModel), "CheckoutPage", query.TraceOptions{Kind: query.KindScreen, Upstream: true})
+
+			require.NoError(t, err)
+			require.Equal(t, []walked{
+				{Label: "reads", Name: "CartView", From: "CheckoutPage", Depth: 1},
+				{Label: "subscribes", Name: "CartUpdated", From: "CartView", Depth: 2},
+			}, walkOf(tree))
+		})
+
+		t.Run("upstream, a command reaches the screen whose shows block names it, and no step into or out of the screen crosses a context", func(t *testing.T) {
+			tree, err := query.Trace(parse(t, checkoutModel), "ApplyDiscount", query.TraceOptions{Upstream: true})
+
+			require.NoError(t, err)
+			require.Equal(t, query.Tree{
+				Root: query.Node{
+					Element: query.Element{Kind: query.KindCommand, Name: "ApplyDiscount"},
+					Context: "Shop",
+					Slice:   "Apply Discount",
+					Line:    24,
+				},
+				Steps: []query.Step{
+					{
+						Label: "command",
+						Node:  query.Node{Element: query.Element{Kind: query.KindScreen, Name: "CheckoutPage"}, Line: 4},
+						From:  query.Element{Kind: query.KindCommand, Name: "ApplyDiscount"},
+						Depth: 1,
+					},
+					{
+						Label: "reads",
+						Node: query.Node{
+							Element: query.Element{Kind: query.KindView, Name: "CartView"},
+							Context: "Shop",
+							Slice:   "Show Cart",
+							Line:    12,
+						},
+						From:  query.Element{Kind: query.KindScreen, Name: "CheckoutPage"},
+						Depth: 2,
+					},
+					{
+						Label: "subscribes",
+						Node: query.Node{
+							Element: query.Element{Kind: query.KindEvent, Name: "CartUpdated"},
+							Context: "Shop",
+							Slice:   "Show Cart",
+							Line:    9,
+						},
+						From:  query.Element{Kind: query.KindView, Name: "CartView"},
+						Depth: 3,
+					},
+				},
+			}, tree)
+		})
+	})
+
 	t.Run("views", func(t *testing.T) {
 		t.Run("the walk follows the reads of each entry of a trigger's list", func(t *testing.T) {
 			const checkoutModel = `context "Shop" {
@@ -294,6 +424,28 @@ func TestTrace(t *testing.T) {
 			require.True(t, errors.As(err, &ambiguous))
 			require.Equal(t, []query.Kind{query.KindCommand, query.KindEvent}, ambiguous.Kinds())
 			require.EqualError(t, err, `the model declares "CheckIn" more than one time: as command in Desk, as event in Desk`)
+		})
+
+		t.Run("a screen that shares its name with a command is named with no context, as the model declares it", func(t *testing.T) {
+			model := parse(t, `screen "CheckIn" {
+}
+
+context "Desk" {
+  slice "Check In" {
+    shows {
+      screen  = CheckIn
+      command = CheckIn
+    }
+
+    command "CheckIn" {
+    }
+  }
+}
+`)
+
+			_, err := query.Trace(model, "CheckIn", query.TraceOptions{})
+
+			require.EqualError(t, err, `the model declares "CheckIn" more than one time: as screen, as command in Desk`)
 		})
 
 		t.Run("a kind picks the element of that kind", func(t *testing.T) {

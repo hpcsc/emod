@@ -339,6 +339,72 @@ context "Lending" {
 			require.Equal(t, "RenewCopy -> CopyBorrowed", report.Backward[0].Label)
 		})
 
+		t.Run("each view that a shows block reads is a reference from the slice that declares the view, named for the screen", func(t *testing.T) {
+			model := parse(t, `emod = 1
+
+model "Library" {
+}
+
+screen "ReturnDesk" {
+}
+
+screen "LateDesk" {
+}
+
+context "Lending" {
+  aggregate "Loan" {
+    slice "Return a Copy" {
+      shows {
+        screen  = ReturnDesk
+        reads   = ShelfView
+        command = ReturnCopy
+      }
+
+      shows {
+        screen = LateDesk
+        reads  = [ShelfView, LoanView]
+      }
+
+      command "ReturnCopy" {
+      }
+    }
+
+    slice "Borrow a Copy" {
+      command "BorrowCopy" {
+      }
+
+      event "CopyBorrowed" {
+      }
+
+      view "ShelfView" {
+        subscribes = [CopyBorrowed]
+      }
+
+      view "LoanView" {
+        subscribes = [CopyBorrowed]
+      }
+
+      flow = <<-FLOW
+        command -> event:    BorrowCopy -> CopyBorrowed
+      FLOW
+    }
+  }
+}
+`)
+
+			report := arrange.Model(model)
+
+			var backward []string
+			for _, ref := range report.Backward {
+				backward = append(backward, ref.Kind+": "+ref.Label+" ("+ref.From.Name+" -> "+ref.To.Name+")")
+			}
+			require.Equal(t, []string{
+				"reads: ShelfView -> screen ReturnDesk (Borrow a Copy -> Return a Copy)",
+				"reads: ShelfView -> screen LateDesk (Borrow a Copy -> Return a Copy)",
+				"reads: LoanView -> screen LateDesk (Borrow a Copy -> Return a Copy)",
+			}, backward)
+		})
+
 		t.Run("a reference into another context is left out, being unfixable by order", func(t *testing.T) {
 			model := parse(t, `emod = 1
 

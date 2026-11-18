@@ -132,6 +132,14 @@ func NameSites(model *ast.Model) []NameSite {
 			add(KindView, tr.Reads, tr.ReadsPos)
 			add(KindCommand, tr.Command, tr.CommandPos)
 		}
+		for _, appearance := range slice.Appearances {
+			for i, view := range appearance.Reads {
+				add(KindView, view, appearance.ReadsPos[i])
+			}
+			for i, command := range appearance.Commands {
+				add(KindCommand, command, appearance.CommandsPos[i])
+			}
+		}
 		if slice.Trigger != nil {
 			for i, view := range slice.Trigger.Reads {
 				add(KindView, view, slice.Trigger.ReadsPos[i])

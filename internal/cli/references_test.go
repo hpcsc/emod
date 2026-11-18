@@ -36,8 +36,59 @@ const deskModel = `context "Desk" {
 }
 `
 
+const checkoutScreenModel = `screen "CheckoutPage" {
+}
+
+context "Shop" {
+  slice "Show Cart" {
+    view "CartView" {
+    }
+  }
+
+  slice "Apply Discount" {
+    shows {
+      screen  = CheckoutPage
+      reads   = CartView
+      command = ApplyDiscount
+    }
+
+    command "ApplyDiscount" {
+    }
+  }
+}
+`
+
 func TestReferences(t *testing.T) {
 	t.Run("text", func(t *testing.T) {
+		t.Run("a command lists the shows block that names it under issued by, and a view the shows block that reads it under read by", func(t *testing.T) {
+			path := writeTemp(t, "checkout.emod", checkoutScreenModel)
+
+			output := captureStdout(t, func() {
+				require.NoError(t, cli.RunReferences(path, "ApplyDiscount", "", "text"))
+				require.NoError(t, cli.RunReferences(path, "CartView", "", "text"))
+			})
+
+			require.Equal(t, `command ApplyDiscount   Shop, slice "Apply Discount"   :17
+
+issued by
+  :14  command  screen CheckoutPage  "Apply Discount"
+produces
+  none
+refused by
+  none
+named in specs
+  none
+view CartView   Shop, slice "Show Cart"   :6
+
+built from
+  none
+read by
+  :13  reads  screen CheckoutPage  "Apply Discount"
+named in specs
+  none
+`, output)
+		})
+
 		t.Run("prints the declaration, then each reference in the group for its role", func(t *testing.T) {
 			output := captureStdout(t, func() {
 				require.NoError(t, cli.RunReferences("../../examples/all_patterns.emod", "RoomReserved", "", "text"))
@@ -76,9 +127,9 @@ named in specs
 			require.Equal(t, `command CheckIn   Desk > Stay, slice "Check In"   :7
 
 issued by
-  :4   issues  trigger "Arrival Screen"  "Check In"
+  :4   issues  screen "Arrival Screen"  "Check In"
 produces
-  :14  flow    CheckIn -> CheckedIn      "Check In"
+  :14  flow    CheckIn -> CheckedIn     "Check In"
 refused by
   none
 named in specs
@@ -115,6 +166,25 @@ named in specs
 	})
 
 	t.Run("json", func(t *testing.T) {
+		t.Run("gives a shows block that issues the command with the keyword command, the line of the entry and the screen", func(t *testing.T) {
+			path := writeTemp(t, "checkout.emod", checkoutScreenModel)
+
+			output := captureStdout(t, func() {
+				require.NoError(t, cli.RunReferences(path, "ApplyDiscount", "", "json"))
+			})
+
+			require.JSONEq(t, `[{
+				"kind": "command",
+				"name": "ApplyDiscount",
+				"context": "Shop",
+				"slice": "Apply Discount",
+				"line": 17,
+				"references": [
+					{"group": "issued by", "keyword": "command", "line": 14, "element": {"kind": "screen", "name": "CheckoutPage"}, "slice": "Apply Discount"}
+				]
+			}]`, output)
+		})
+
 		t.Run("gives each reference with its group, its keyword, its line, the other element and the slice", func(t *testing.T) {
 			path := writeTemp(t, "desk.emod", deskModel)
 
