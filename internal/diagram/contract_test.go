@@ -1017,7 +1017,7 @@ func readsTwins() []readsTwin {
 // can be compared against the one the translation was already drawn.
 func readsModel() *ast.Model {
 	model := singleSliceModel("Lending", "Borrow Copy",
-		&ast.Trigger{Name: "Lending Desk", Actor: "Member", Reads: []string{"MemberLoansView"}},
+		&ast.Trigger{Name: "Lending Desk", Reads: []string{"MemberLoansView"}},
 		command("BorrowCopy"), event("CopyBorrowed"))
 	aggregate := model.Contexts[0].Aggregates[0]
 	aggregate.Slices[0].Translations = []*ast.Translation{{
@@ -1597,7 +1597,7 @@ func reactiveModel() *ast.Model {
 				Slices: []*ast.Slice{
 					{
 						Name:     "Place Order",
-						Trigger:  &ast.Trigger{Name: "Order Form", Actor: "Customer"},
+						Trigger:  &ast.Trigger{Name: "Order Form"},
 						Commands: []*ast.Command{command("PlaceOrder"), command("ReserveStock")},
 						Events:   []*ast.Event{event("OrderPlaced")},
 						Views:    []*ast.View{{Name: "OrderStatusView", Subscribes: []string{"OrderPlaced"}}},
@@ -2740,9 +2740,6 @@ func describedModel() *ast.Model {
 	return &ast.Model{
 		Name:        "Described",
 		Description: "How the hotel takes and imports room bookings",
-		Actors: []*ast.Actor{
-			{Name: "Guest", Description: "A person booking a room, not always the one staying in it"},
-		},
 		Contexts: []*ast.Context{{
 			Name:        "Bookings",
 			Description: "Everything the hotel knows about a stay before the guest arrives",
@@ -2754,7 +2751,6 @@ func describedModel() *ast.Model {
 					Description: "A guest books a room from the public site",
 					Trigger: &ast.Trigger{
 						Name:        "BookingForm",
-						Actor:       "Guest",
 						Description: "The booking form on the public site",
 					},
 					Commands: []*ast.Command{{
@@ -2837,9 +2833,6 @@ func requireEveryDescriptionShown(t *testing.T, output string, tooltipOf func(t 
 // compare a described model's diagram against the one it draws without prose.
 func withoutDescriptions(model *ast.Model) *ast.Model {
 	model.Description = ""
-	for _, actor := range model.Actors {
-		actor.Description = ""
-	}
 	for _, ctx := range model.Contexts {
 		ctx.Description = ""
 		for _, agg := range ctx.Aggregates {
@@ -2937,8 +2930,7 @@ func fullModel() *ast.Model {
 					{
 						Name: "Create Order",
 						Trigger: &ast.Trigger{
-							Name:  "PlaceOrderForm",
-							Actor: "Customer",
+							Name: "PlaceOrderForm",
 						},
 						Commands: []*ast.Command{
 							{Name: "CreateOrder"},

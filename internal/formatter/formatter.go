@@ -23,13 +23,6 @@ func Format(model *ast.Model) string {
 	block := body.AppendNewBlock("model", []string{model.Name})
 	writeText(block.Body(), "description", model.Description)
 
-	for _, actor := range model.Actors {
-		gap(body)
-		writeComments(body, actor.Comments)
-		actorBlock := body.AppendNewBlock("actor", []string{actor.Name})
-		writeText(actorBlock.Body(), "description", actor.Description)
-	}
-
 	for _, context := range model.Contexts {
 		gap(body)
 		writeComments(body, context.Comments)
@@ -89,7 +82,6 @@ func writeSlice(body *hclwrite.Body, slice *ast.Slice) {
 		writeComments(body, slice.Trigger.Comments)
 		trigger := body.AppendNewBlock("trigger", []string{slice.Trigger.Name}).Body()
 		writeText(trigger, "description", slice.Trigger.Description)
-		writeRef(trigger, "actor", slice.Trigger.Actor)
 		writeRefOrList(trigger, "reads", slice.Trigger.Reads)
 	}
 

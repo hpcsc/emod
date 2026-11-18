@@ -91,9 +91,9 @@ func TestCollapseEventFlow(t *testing.T) {
 			require.Empty(t, nodeByID(t, flow, "RemindOnDueDate").Caption)
 		})
 
-		t.Run("a trigger is an origin captioned as a trigger, also when it names an actor", func(t *testing.T) {
+		t.Run("a trigger is an origin captioned as a trigger", func(t *testing.T) {
 			model := singleSliceModel("Lending", "Borrow Copy",
-				&ast.Trigger{Name: "Lending Desk", Actor: "Member"}, command("BorrowCopy"), event("CopyBorrowed"))
+				&ast.Trigger{Name: "Lending Desk"}, command("BorrowCopy"), event("CopyBorrowed"))
 			model.Contexts[0].Aggregates[0].Slices[0].Flows = []*ast.Flow{
 				{CommandName: "BorrowCopy", EventName: "CopyBorrowed"},
 			}
@@ -106,18 +106,6 @@ func TestCollapseEventFlow(t *testing.T) {
 				Label:   "Lending Desk",
 				Caption: "trigger",
 			}, nodeByID(t, flow, "Ctx.Lending Desk"))
-		})
-
-		t.Run("a trigger naming no actor is captioned as a trigger", func(t *testing.T) {
-			model := singleSliceModel("Lending", "Borrow Copy",
-				&ast.Trigger{Name: "Lending Desk"}, command("BorrowCopy"), event("CopyBorrowed"))
-			model.Contexts[0].Aggregates[0].Slices[0].Flows = []*ast.Flow{
-				{CommandName: "BorrowCopy", EventName: "CopyBorrowed"},
-			}
-
-			flow := diagram.CollapseEventFlow(model)
-
-			require.Equal(t, "trigger", nodeByID(t, flow, "Ctx.Lending Desk").Caption)
 		})
 
 		t.Run("an external system is an origin captioned as one", func(t *testing.T) {

@@ -97,6 +97,25 @@ func TestValidate(t *testing.T) {
 		require.Contains(t, err.Error(), ":1:")
 	})
 
+	t.Run("returns error naming the file, the line of a retired actor block and the advice to delete it", func(t *testing.T) {
+		input := `model "Test" {}
+
+actor "Guest" {
+}
+
+context "Ctx" {
+}
+`
+		path := writeTemp(t, "retired_actor.emod", input)
+
+		err := cli.RunValidate(path, "text")
+
+		require.Error(t, err)
+		require.Contains(t, err.Error(), path+":3:")
+		require.Regexp(t, `\bactor\b`, err.Error())
+		require.Contains(t, err.Error(), "delete this actor block")
+	})
+
 	t.Run("returns error naming retired trigger kind replacement", func(t *testing.T) {
 		input := `model "Test" {}
 

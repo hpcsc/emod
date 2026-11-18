@@ -59,7 +59,7 @@ func TestExportASCII(t *testing.T) {
 		require.Contains(t, output, "Model: Empty")
 	})
 
-	t.Run("renders a trigger with its name only, dropping any actor and any kind", func(t *testing.T) {
+	t.Run("renders a trigger with its name only, dropping any kind", func(t *testing.T) {
 		model := &ast.Model{
 			Name: "Test",
 			Contexts: []*ast.Context{{
@@ -69,8 +69,7 @@ func TestExportASCII(t *testing.T) {
 					Slices: []*ast.Slice{{
 						Name: "S",
 						Trigger: &ast.Trigger{
-							Name:  "SubmitForm",
-							Actor: "User",
+							Name: "SubmitForm",
 						},
 					}},
 				}},
@@ -82,22 +81,8 @@ func TestExportASCII(t *testing.T) {
 
 		output := string(raw)
 		require.Contains(t, output, "\n  <<SubmitForm>>\n")
-		require.NotContains(t, output, "User")
 		require.NotContains(t, output, "UI:")
-	})
-
-	t.Run("renders trigger with name only when actor is empty", func(t *testing.T) {
-		model := singleSliceModel("Test", "S",
-			&ast.Trigger{Name: "NightlyBatch"})
-
-		raw, err := diagram.ExportASCII(model, diagram.StyleAuto)
-		require.NoError(t, err)
-
-		output := string(raw)
-		require.Contains(t, output, "<<NightlyBatch>>")
-		require.NotContains(t, output, "Schedule:")
 		require.NotContains(t, output, "<<:")
-		require.NotContains(t, output, "NightlyBatch (")
 	})
 
 	t.Run("prints one line from each view a trigger reads, in list order, in the place of the trigger's own line", func(t *testing.T) {
@@ -114,7 +99,7 @@ func TestExportASCII(t *testing.T) {
 
 	t.Run("prints the line from the one view a trigger reads with the trigger's name only", func(t *testing.T) {
 		model := singleSliceModel("Shop", "Apply Discount",
-			&ast.Trigger{Name: "Checkout Page", Actor: "Guest", Reads: []string{"CartView"}})
+			&ast.Trigger{Name: "Checkout Page", Reads: []string{"CartView"}})
 
 		raw, err := diagram.ExportASCII(model, diagram.StyleAuto)
 		require.NoError(t, err)
@@ -133,8 +118,7 @@ func TestExportASCII(t *testing.T) {
 						{
 							Name: "S1",
 							Trigger: &ast.Trigger{
-								Name:  "SubmitForm",
-								Actor: "User",
+								Name: "SubmitForm",
 							},
 						},
 						{

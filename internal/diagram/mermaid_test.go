@@ -74,7 +74,7 @@ func timeframeSlotModel() *ast.Model {
 					{
 						Name:     "Borrow Copy",
 						NamePos:  ast.Position{Line: 5, Column: 5},
-						Trigger:  &ast.Trigger{Name: "Lending Desk", Actor: "Member"},
+						Trigger:  &ast.Trigger{Name: "Lending Desk"},
 						Commands: []*ast.Command{command("BorrowCopy")},
 						Events:   []*ast.Event{event("CopyBorrowed")},
 						Views:    []*ast.View{{Name: "MemberLoansView", Subscribes: []string{"CopyBorrowed"}}},
@@ -557,7 +557,7 @@ func TestExportMermaid(t *testing.T) {
 					Name: "Ctx",
 					Slices: []*ast.Slice{{
 						Name:     "S1",
-						Trigger:  &ast.Trigger{Name: "Submit", Actor: "User"},
+						Trigger:  &ast.Trigger{Name: "Submit"},
 						Commands: []*ast.Command{{Name: "ProcessOrder"}},
 						Events: []*ast.Event{
 							{Name: "OrderPlaced", Tags: []ast.TagEntry{{Key: "priority"}}},

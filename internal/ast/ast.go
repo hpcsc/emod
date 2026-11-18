@@ -38,7 +38,6 @@ type Model struct {
 	NamePos         Position
 	Description     string
 	DescriptionPos  Position
-	Actors          []*Actor
 	Contexts        []*Context
 	OpenPos         Position
 	ClosePos        Position
@@ -68,16 +67,6 @@ func (m *Model) AllSlices() []*Slice {
 	}
 
 	return all
-}
-
-type Actor struct {
-	Comments       []*Comment
-	Name           string
-	NamePos        Position
-	Description    string
-	DescriptionPos Position
-	OpenPos        Position
-	ClosePos       Position
 }
 
 type Context struct {
@@ -310,8 +299,6 @@ type Trigger struct {
 	NamePos        Position
 	Description    string
 	DescriptionPos Position
-	Actor          string
-	ActorPos       Position
 	Reads          []string
 	ReadsPos       []Position
 	OpenPos        Position

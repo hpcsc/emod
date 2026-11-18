@@ -216,7 +216,7 @@
     },
     {
       "n": 7,
-      "done": false,
+      "done": true,
       "title": "Reject `actor` in the parser, and remove it from the AST and the formatter",
       "language": "Go",
       "testable": true,

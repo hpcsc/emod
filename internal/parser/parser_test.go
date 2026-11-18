@@ -58,7 +58,7 @@ func TestParseHCL(t *testing.T) {
 		})
 	})
 
-	t.Run("model and actor", func(t *testing.T) {
+	t.Run("model", func(t *testing.T) {
 		for name, value := range map[string]string{
 			"still being typed":             `"a ${}"`,
 			"that is a number":              "1",
@@ -78,19 +78,57 @@ func TestParseHCL(t *testing.T) {
 model "Hotel Reservation" {
   description = "How the hotel takes a stay"
 }
-
-actor "Guest" {
-  description = "Someone booking a room"
-}
 `
 			model, diags := parser.Parse(source, "test.emod")
 
 			require.Empty(t, diags)
 			require.Equal(t, "Hotel Reservation", model.Name)
 			require.Equal(t, "How the hotel takes a stay", model.Description)
-			require.Len(t, model.Actors, 1)
-			require.Equal(t, "Guest", model.Actors[0].Name)
-			require.Equal(t, "Someone booking a room", model.Actors[0].Description)
+		})
+	})
+
+	t.Run("retired actor", func(t *testing.T) {
+		t.Run("an actor block is reported once at its keyword, and the context after it is still read", func(t *testing.T) {
+			source := "actor \"Guest\" {\n  description = \"Someone booking a room\"\n}\n\ncontext \"Reservations\" {\n}\n"
+
+			model, diags := parser.Parse(source, "test.emod")
+
+			require.Len(t, diags, 1)
+			require.Equal(t, 1, diags[0].Line)
+			require.Equal(t, 1, diags[0].Column)
+			require.Regexp(t, `\bactor\b`, diags[0].Message)
+			require.Contains(t, diags[0].Message, "retired")
+			require.Contains(t, diags[0].Message, "delete this actor block")
+			require.Len(t, model.Contexts, 1)
+			require.Equal(t, "Reservations", model.Contexts[0].Name)
+			require.Equal(t, 6, model.Contexts[0].ClosePos.Line)
+		})
+
+		t.Run("an actor attribute in a trigger is reported once at the attribute, and the reads after it is still read", func(t *testing.T) {
+			source := "context \"Shop\" {\n  slice \"Apply Discount\" {\n    trigger \"Checkout Page\" {\n      actor = Guest\n      reads = CartView\n    }\n  }\n}\n"
+
+			model, diags := parser.Parse(source, "test.emod")
+
+			require.Len(t, diags, 1)
+			require.Equal(t, 4, diags[0].Line)
+			require.Equal(t, 7, diags[0].Column)
+			require.Regexp(t, `\bactor\b`, diags[0].Message)
+			require.Contains(t, diags[0].Message, "retired")
+			require.Contains(t, diags[0].Message, "delete this actor attribute")
+			trigger := model.Contexts[0].Slices[0].Trigger
+			require.Equal(t, "Checkout Page", trigger.Name)
+			require.Equal(t, []string{"CartView"}, trigger.Reads)
+		})
+
+		t.Run("a field named actor and a construct named actor still parse with no diagnostic", func(t *testing.T) {
+			source := "context \"Shop\" {\n  slice \"Assign\" {\n    command \"actor\" {\n      fields {\n        actor = string\n      }\n    }\n  }\n}\n"
+
+			model, diags := parser.Parse(source, "test.emod")
+
+			require.Empty(t, diags)
+			command := model.Contexts[0].Slices[0].Commands[0]
+			require.Equal(t, "actor", command.Name)
+			require.Equal(t, "actor", command.Fields[0].Name)
 		})
 	})
 
@@ -432,15 +470,15 @@ context "Reading Room" {
 
 	t.Run("comments", func(t *testing.T) {
 		t.Run("a comment lands on the construct written under it", func(t *testing.T) {
-			source := "# the whole system\nmodel \"Hotel\" {}\n\n# who books\nactor \"Guest\" {}\n"
+			source := "# the whole system\nmodel \"Hotel\" {}\n\n# the bookings\ncontext \"Reservations\" {}\n"
 
 			model, diags := parser.Parse(source, "test.emod")
 
 			require.Empty(t, diags)
 			require.Len(t, model.Comments, 1)
 			require.Equal(t, "# the whole system", model.Comments[0].Text)
-			require.Len(t, model.Actors[0].Comments, 1)
-			require.Equal(t, "# who books", model.Actors[0].Comments[0].Text)
+			require.Len(t, model.Contexts[0].Comments, 1)
+			require.Equal(t, "# the bookings", model.Contexts[0].Comments[0].Text)
 		})
 	})
 
@@ -450,7 +488,8 @@ context "Reading Room" {
 
 			require.Len(t, diags, 1)
 			require.Contains(t, diags[0].Message, `unexpected "process" block`)
-			require.Contains(t, diags[0].Message, "model, actor, context")
+			require.Contains(t, diags[0].Message, "expected one of: model, context")
+			require.NotRegexp(t, `\bactor\b`, diags[0].Message)
 		})
 
 		t.Run("an unknown attribute is reported where it is written", func(t *testing.T) {

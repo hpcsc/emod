@@ -3610,7 +3610,6 @@ func TestLint(t *testing.T) {
 												Line:     10,
 												Column:   7,
 											},
-											Actor: "Librarian",
 										},
 										Views: []*ast.View{
 											{

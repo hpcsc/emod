@@ -42,26 +42,6 @@ func TestExport(t *testing.T) {
 			require.False(t, hasContexts, "nil contexts should be omitted")
 		})
 
-		t.Run("serializes no actors, though the model declares two", func(t *testing.T) {
-			model := &ast.Model{
-				Name: "App",
-				Actors: []*ast.Actor{
-					{Name: "Guest"},
-					{Name: "Admin"},
-				},
-			}
-
-			raw, err := export.ExportJSON(model)
-			require.NoError(t, err)
-
-			var doc map[string]any
-			err = json.Unmarshal(raw, &doc)
-			require.NoError(t, err)
-
-			require.Equal(t, "App", doc["name"])
-			require.NotContains(t, doc, "actors")
-		})
-
 		t.Run("serializes context with aggregate and slice containing command with typed fields", func(t *testing.T) {
 			model := &ast.Model{
 				Name: "Hotel",
@@ -142,7 +122,6 @@ func TestExport(t *testing.T) {
 										Name: "My Slice",
 										Trigger: &ast.Trigger{
 											Name:  "Form",
-											Actor: "Guest",
 											Reads: []string{"MyView"},
 										},
 									},
@@ -469,13 +448,9 @@ func TestExport(t *testing.T) {
 			require.Equal(t, "optional", f1["modifier"])
 		})
 
-		t.Run("multiple contexts produce a full document, and the actors the model declares do not reach it", func(t *testing.T) {
+		t.Run("multiple contexts produce a full document with no actors key", func(t *testing.T) {
 			model := &ast.Model{
 				Name: "App",
-				Actors: []*ast.Actor{
-					{Name: "Guest"},
-					{Name: "Admin"},
-				},
 				Contexts: []*ast.Context{
 					{
 						Name: "Orders",
@@ -588,9 +563,6 @@ func TestExport(t *testing.T) {
 		t.Run("output is valid json with correct key structure", func(t *testing.T) {
 			model := &ast.Model{
 				Name: "Full",
-				Actors: []*ast.Actor{
-					{Name: "User"},
-				},
 				Contexts: []*ast.Context{
 					{
 						Name: "Ctx",
@@ -601,7 +573,7 @@ func TestExport(t *testing.T) {
 									{
 										Name: "S",
 										Trigger: &ast.Trigger{
-											Name: "Form", Actor: "User", Reads: []string{"V"},
+											Name: "Form", Reads: []string{"V"},
 										},
 										Commands: []*ast.Command{
 											{Name: "Cmd", Fields: []*ast.Field{{Name: "id", Type: "string"}}},
@@ -980,8 +952,6 @@ func TestExport(t *testing.T) {
 										Trigger: &ast.Trigger{
 											Name:     "Form",
 											NamePos:  ast.Position{Filename: "test.cue", Line: 3, Column: 7},
-											Actor:    "Guest",
-											ActorPos: ast.Position{Filename: "test.cue", Line: 3, Column: 13},
 											Reads:    []string{"MyView"},
 											ReadsPos: []ast.Position{{Filename: "test.cue", Line: 3, Column: 20}},
 											OpenPos:  ast.Position{Filename: "test.cue", Line: 3, Column: 28},
@@ -1061,8 +1031,6 @@ func TestExport(t *testing.T) {
 											Name:        "Form",
 											NamePos:     ast.Position{Filename: "test.cue", Line: 3, Column: 7},
 											Description: "Where the decision starts",
-											Actor:       "Guest",
-											ActorPos:    ast.Position{Filename: "test.cue", Line: 4, Column: 5},
 											Reads:       []string{"MyView"},
 											ReadsPos:    []ast.Position{{Filename: "test.cue", Line: 5, Column: 7}},
 											OpenPos:     ast.Position{Filename: "test.cue", Line: 3, Column: 28},
@@ -1406,9 +1374,9 @@ func TestExport(t *testing.T) {
 				"aggregate":         "The thing decisions are made about",
 				"slice":             "One decision and everything it needs",
 				"trigger":           "Where the decision starts",
-				"command":           "The request the actor makes",
+				"command":           "The request the person makes",
 				"event":             "The fact the decision leaves behind",
-				"view":              "What the actor reads before deciding",
+				"view":              "What the person reads before deciding",
 				"automation":        "The decision nobody has to make by hand",
 				"translation":       "How a partner's words become ours",
 				"translation event": "The fact a partner reported",
@@ -1904,9 +1872,9 @@ func TestExport(t *testing.T) {
 					Filename: "test.cue",
 					Line:     10,
 					Column:   5,
-					Message:  "unused actor",
+					Message:  "unused view",
 					Severity: diagnostic.Warning,
-					RuleName: "unused-actor",
+					RuleName: "unused-view",
 				},
 			}
 
@@ -1921,9 +1889,9 @@ func TestExport(t *testing.T) {
 			require.Equal(t, "test.cue", d["file"])
 			require.Equal(t, float64(10), d["line"])
 			require.Equal(t, float64(5), d["column"])
-			require.Equal(t, "unused actor", d["message"])
+			require.Equal(t, "unused view", d["message"])
 			require.Equal(t, "warning", d["severity"])
-			require.Equal(t, "unused-actor", d["rule_name"])
+			require.Equal(t, "unused-view", d["rule_name"])
 		})
 
 		t.Run("multiple diagnostics with different severities", func(t *testing.T) {
@@ -1986,9 +1954,6 @@ func TestExport(t *testing.T) {
 		t.Run("full valid model produces diagnostics: [] with complete model", func(t *testing.T) {
 			model := &ast.Model{
 				Name: "Full",
-				Actors: []*ast.Actor{
-					{Name: "User"},
-				},
 				Contexts: []*ast.Context{
 					{
 						Name: "Ctx",
@@ -2079,9 +2044,6 @@ func TestExport(t *testing.T) {
 		t.Run("full model with all node types produces correct nodes", func(t *testing.T) {
 			model := &ast.Model{
 				Name: "Full",
-				Actors: []*ast.Actor{
-					{Name: "User"},
-				},
 				Contexts: []*ast.Context{
 					{
 						Name: "Ctx",
@@ -2092,7 +2054,7 @@ func TestExport(t *testing.T) {
 									{
 										Name: "S",
 										Trigger: &ast.Trigger{
-											Name: "Form", Actor: "User", Reads: []string{"V"},
+											Name: "Form", Reads: []string{"V"},
 										},
 										Commands: []*ast.Command{
 											{Name: "Cmd"},
@@ -2134,9 +2096,6 @@ func TestExport(t *testing.T) {
 		t.Run("parentId chains are correct for hierarchical nodes", func(t *testing.T) {
 			model := &ast.Model{
 				Name: "Test",
-				Actors: []*ast.Actor{
-					{Name: "Guest"},
-				},
 				Contexts: []*ast.Context{
 					{
 						Name: "Ctx",
@@ -2208,7 +2167,6 @@ func TestExport(t *testing.T) {
 										Name: "S",
 										Trigger: &ast.Trigger{
 											Name:  "FormSubmit",
-											Actor: "Guest",
 											Reads: []string{"MyView"},
 										},
 									},
@@ -2564,7 +2522,7 @@ func TestExport(t *testing.T) {
 									{
 										Name: "S",
 										Trigger: &ast.Trigger{
-											Name: "Form", Actor: "User", Reads: []string{"V"},
+											Name: "Form", Reads: []string{"V"},
 										},
 										Views: []*ast.View{
 											{Name: "RoomsView"},
@@ -3206,7 +3164,7 @@ func TestExport(t *testing.T) {
 									{
 										Name: "S",
 										Trigger: &ast.Trigger{
-											Name: "Form", Actor: "User", Reads: []string{"V"},
+											Name: "Form", Reads: []string{"V"},
 										},
 										Commands: []*ast.Command{
 											{Name: "Cmd"},
@@ -3362,24 +3320,6 @@ func TestExport(t *testing.T) {
 
 			edges := doc["edges"].([]any)
 			require.Empty(t, edges)
-		})
-
-		t.Run("draws no node for an actor the model declares", func(t *testing.T) {
-			model := &ast.Model{
-				Name: "Test",
-				Actors: []*ast.Actor{
-					{Name: "Guest", NamePos: ast.Position{Filename: "test.cue", Line: 2, Column: 3}},
-				},
-				Contexts: []*ast.Context{{Name: "Ctx"}},
-			}
-
-			doc := diagramDocOf(t, model)
-
-			var types []string
-			for _, node := range objectsUnder(doc, "nodes") {
-				types = append(types, node["type"].(string))
-			}
-			require.Equal(t, []string{"context"}, types)
 		})
 
 		t.Run("includes position for context node", func(t *testing.T) {
@@ -3578,9 +3518,6 @@ func TestExport(t *testing.T) {
 		t.Run("zero-value position is omitted from diagram nodes", func(t *testing.T) {
 			model := &ast.Model{
 				Name: "Test",
-				Actors: []*ast.Actor{
-					{Name: "Guest"},
-				},
 				Contexts: []*ast.Context{
 					{
 						Name: "Ctx",
@@ -4261,9 +4198,9 @@ func TestExport(t *testing.T) {
 					Filename: "test.cue",
 					Line:     10,
 					Column:   5,
-					Message:  "unused actor",
+					Message:  "unused view",
 					Severity: diagnostic.Warning,
-					RuleName: "unused-actor",
+					RuleName: "unused-view",
 				},
 			}
 
@@ -4278,9 +4215,9 @@ func TestExport(t *testing.T) {
 			require.Equal(t, "test.cue", d["file"])
 			require.Equal(t, float64(10), d["line"])
 			require.Equal(t, float64(5), d["column"])
-			require.Equal(t, "unused actor", d["message"])
+			require.Equal(t, "unused view", d["message"])
 			require.Equal(t, "warning", d["severity"])
-			require.Equal(t, "unused-actor", d["rule_name"])
+			require.Equal(t, "unused-view", d["rule_name"])
 		})
 
 		t.Run("multiple diagnostics with different severities", func(t *testing.T) {
@@ -4478,19 +4415,6 @@ func TestExport(t *testing.T) {
 		// structural assertions below decode it with the real compiler instead of
 		// matching text fragments, which pass wherever a fragment happens to sit.
 		t.Run("decoded structure", func(t *testing.T) {
-			t.Run("carries no actors, though the model declares two", func(t *testing.T) {
-				cueBin := lookupCue(t)
-				model := &ast.Model{
-					Name:   "App",
-					Actors: []*ast.Actor{{Name: "Guest"}, {Name: "Admin"}},
-				}
-
-				doc := exportedCUEDoc(t, cueBin, model)
-
-				require.Equal(t, "App", doc["name"])
-				require.NotContains(t, doc, "actors")
-			})
-
 			t.Run("nests a command with its typed fields inside slice, aggregate and context", func(t *testing.T) {
 				cueBin := lookupCue(t)
 				model := &ast.Model{
@@ -4537,7 +4461,6 @@ func TestExport(t *testing.T) {
 								Name: "My Slice",
 								Trigger: &ast.Trigger{
 									Name:  "Form",
-									Actor: "Guest",
 									Reads: []string{"MyView"},
 								},
 							}},
@@ -5025,7 +4948,7 @@ func TestExport(t *testing.T) {
 						Views: []*ast.View{{
 							Name:        "MyView",
 							NamePos:     at(11),
-							Description: "What the actor reads before deciding",
+							Description: "What the person reads before deciding",
 							OpenPos:     at(11),
 							ClosePos:    at(15),
 							Comments:    []*ast.Comment{{Text: "why it matters"}},
@@ -5375,9 +5298,6 @@ func buildFullModel() *ast.Model {
 	return &ast.Model{
 		Name:        "Full",
 		Description: "How the whole system earns its keep",
-		Actors: []*ast.Actor{
-			{Name: "User", Description: "The person the system serves"},
-		},
 		Contexts: []*ast.Context{
 			{
 				Name:        "Ctx",
@@ -5391,13 +5311,13 @@ func buildFullModel() *ast.Model {
 								Name:        "S",
 								Description: "One decision and everything it needs",
 								Trigger: &ast.Trigger{
-									Name: "Form", Actor: "User", Reads: []string{"V"},
+									Name: "Form", Reads: []string{"V"},
 									Description: "Where the decision starts",
 								},
 								Commands: []*ast.Command{
 									{
 										Name:        "Cmd",
-										Description: "The request the actor makes",
+										Description: "The request the person makes",
 										Fields:      []*ast.Field{{Name: "id", Type: "string"}},
 									},
 								},
@@ -5413,7 +5333,7 @@ func buildFullModel() *ast.Model {
 								Views: []*ast.View{
 									{
 										Name:        "MyView",
-										Description: "What the actor reads before deciding",
+										Description: "What the person reads before deciding",
 										Subscribes:  []string{"Evt"},
 									},
 								},
@@ -5495,10 +5415,6 @@ func commentedLibraryLendingModel() *ast.Model {
 	return &ast.Model{
 		Name:     "Library Lending",
 		Comments: []*ast.Comment{{Text: "# The lending side of the library"}},
-		Actors: []*ast.Actor{{
-			Name:     "Member",
-			Comments: []*ast.Comment{{Text: "# Anyone holding a library card"}},
-		}},
 		Contexts: []*ast.Context{{
 			Name:     "Lending",
 			Comments: []*ast.Comment{{Text: "# Everything the library knows about a copy leaving the building"}},

@@ -172,30 +172,6 @@ Invoices still owed
 `, renderedMarkdown(t, model))
 		})
 
-		t.Run("lists no actor, at the top level or in a context, for a model that declares one and a trigger that names one", func(t *testing.T) {
-			model := &ast.Model{
-				Name: "Hotel Operations",
-				Actors: []*ast.Actor{
-					{Name: "Guest", Description: "A person booking a room"},
-					{Name: "Auditor", Description: "Reviews the books once a quarter and never touches a screen"},
-				},
-				Contexts: []*ast.Context{{
-					Name: "Reservations",
-					Aggregates: []*ast.Aggregate{{
-						Name:   "Booking",
-						Slices: []*ast.Slice{{Name: "Hold a room", Trigger: &ast.Trigger{Name: "Booking Form", Actor: "Guest"}}},
-					}},
-				}},
-			}
-
-			require.Equal(t, `# Hotel Operations
-
-## Reservations
-
-### Booking
-`, renderedMarkdown(t, model))
-		})
-
 		t.Run("lists an aggregate's invariants beneath it, in declaration order, each defined by its statement", func(t *testing.T) {
 			model := &ast.Model{
 				Name: "Library Lending",
@@ -349,35 +325,6 @@ A member holds at most one reservation on a title
 	})
 
 	t.Run("json rendering", func(t *testing.T) {
-		t.Run("carries no actors key, at the top level or in a context, for a model that declares one and a trigger that names one", func(t *testing.T) {
-			model := &ast.Model{
-				Name: "Hotel Operations",
-				Actors: []*ast.Actor{
-					{Name: "Guest", Description: "A person booking a room"},
-					{Name: "Auditor", Description: "Reviews the books once a quarter and never touches a screen"},
-				},
-				Contexts: []*ast.Context{{
-					Name: "Reservations",
-					Aggregates: []*ast.Aggregate{{
-						Name:   "Booking",
-						Slices: []*ast.Slice{{Name: "Hold a room", Trigger: &ast.Trigger{Name: "Booking Form", Actor: "Guest"}}},
-					}},
-				}},
-			}
-
-			require.Equal(t, map[string]any{
-				"name":        "Hotel Operations",
-				"description": "",
-				"contexts": []any{map[string]any{
-					"name":        "Reservations",
-					"description": "",
-					"aggregates": []any{
-						map[string]any{"name": "Booking", "description": ""},
-					},
-				}},
-			}, renderedJSONDoc(t, model))
-		})
-
 		t.Run("carries each invariant under the aggregate or the context that declares it, in declaration order", func(t *testing.T) {
 			model := &ast.Model{
 				Name: "Library Lending",

@@ -205,12 +205,12 @@ func (r *hclReader) model(body *hclsyntax.Body) *ast.Model {
 		case entry.block.Type == "model":
 			r.modelBlock(model, entry.block)
 		case entry.block.Type == "actor":
-			model.Actors = append(model.Actors, r.actor(entry.block))
+			r.fail(entry.block.TypeRange.Start, "the language retired actor: delete this actor block")
 		case entry.block.Type == "context":
 			model.Contexts = append(model.Contexts, r.context(entry.block))
 		default:
 			r.fail(entry.block.TypeRange.Start,
-				"unexpected %q block; expected one of: model, actor, context", entry.block.Type)
+				"unexpected %q block; expected one of: model, context", entry.block.Type)
 		}
 	}
 	return model
@@ -250,26 +250,6 @@ func (r *hclReader) modelBlock(model *ast.Model, b *hclsyntax.Block) {
 		}
 		r.fail(a.NameRange.Start, "unexpected %s in model", a.Name)
 	}
-}
-
-func (r *hclReader) actor(b *hclsyntax.Block) *ast.Actor {
-	actor := &ast.Actor{Comments: r.commentsBefore(b.TypeRange.Start)}
-	actor.Name, actor.NamePos = r.label(b)
-	actor.OpenPos = r.at(b.OpenBraceRange.Start)
-	actor.ClosePos = r.at(b.CloseBraceRange.Start)
-
-	body, ok := r.block(b, 1)
-	if !ok {
-		return actor
-	}
-	for _, a := range hclAttrs(body) {
-		if a.Name == "description" {
-			actor.Description, actor.DescriptionPos = r.text(a)
-			continue
-		}
-		r.fail(a.NameRange.Start, "unexpected %s in actor", a.Name)
-	}
-	return actor
 }
 
 func (r *hclReader) context(b *hclsyntax.Block) *ast.Context {
@@ -432,7 +412,7 @@ func (r *hclReader) trigger(b *hclsyntax.Block) *ast.Trigger {
 		case "description":
 			trigger.Description, trigger.DescriptionPos = r.text(a)
 		case "actor":
-			trigger.Actor, trigger.ActorPos = r.name(a.Expr)
+			r.fail(a.NameRange.Start, "the language retired actor: delete this actor attribute")
 		case "reads":
 			trigger.Reads, trigger.ReadsPos = r.nameOrNames(a.Expr)
 		default:

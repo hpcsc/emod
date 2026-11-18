@@ -363,7 +363,7 @@ No desk stays claimed past the closing hour
 			require.Error(t, err)
 			require.Contains(t, err.Error(), `"foobar"`)
 			require.Contains(t, err.Error(), "model")
-			require.Contains(t, err.Error(), "actor")
+			require.NotRegexp(t, `\bactor\b`, err.Error())
 			require.Contains(t, err.Error(), "context")
 			var lintErr *cli.LintError
 			require.True(t, errors.As(err, &lintErr))

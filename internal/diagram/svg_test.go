@@ -50,15 +50,14 @@ func TestExportSVG(t *testing.T) {
 		require.NotContains(t, output, "UI / Triggers")
 	})
 
-	t.Run("labels a trigger with its name only, also when it names an actor", func(t *testing.T) {
-		model := singleSliceModel("Test", "S", &ast.Trigger{Name: "SubmitForm", Actor: "User"})
+	t.Run("labels a trigger with its name only", func(t *testing.T) {
+		model := singleSliceModel("Test", "S", &ast.Trigger{Name: "SubmitForm"})
 
 		raw, err := diagram.ExportSVG(model, diagram.StyleAuto)
 		require.NoError(t, err)
 
 		output := string(raw)
 		require.Contains(t, output, ">SubmitForm</text>")
-		require.NotContains(t, output, "User")
 	})
 
 	t.Run("renders command, event and view labels", func(t *testing.T) {

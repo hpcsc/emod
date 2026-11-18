@@ -125,14 +125,14 @@ func TestConvertDiagnostics(t *testing.T) {
 					Filename: "test.emod",
 					Line:     1,
 					Column:   1,
-					Message:  `unrecognized keyword "foobar"; expected one of: model, actor, context`,
+					Message:  `unrecognized keyword "foobar"; expected one of: model, context`,
 					Severity: diagnostic.Error,
 				},
 			}
 
 			result := lsp.ConvertDiagnostics("file:///test.emod", entries)
 			require.Len(t, result, 1)
-			require.Equal(t, `unrecognized keyword "foobar"; expected one of: model, actor, context`, result[0].Message)
+			require.Equal(t, `unrecognized keyword "foobar"; expected one of: model, context`, result[0].Message)
 		})
 	})
 

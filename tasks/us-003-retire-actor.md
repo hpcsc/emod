@@ -582,26 +582,26 @@ parser.
 
 **Acceptance Criteria:**
 
-- [ ] A top-level `actor` block gives one diagnostic, at the line and column of the keyword `actor`. The
+- [x] A top-level `actor` block gives one diagnostic, at the line and column of the keyword `actor`. The
       message names `actor` (matched with a `\b`-bounded pattern), says that the language retired it, and says
       to delete the block.
-- [ ] An `actor` attribute in a trigger gives one diagnostic, at the line and column of the attribute name,
+- [x] An `actor` attribute in a trigger gives one diagnostic, at the line and column of the attribute name,
       with the same advice for the attribute.
-- [ ] The text after a rejected block or attribute still parses: the context after a rejected `actor` block is
+- [x] The text after a rejected block or attribute still parses: the context after a rejected `actor` block is
       in the model with its close position, and a trigger keeps its name and the `reads` written after a
       rejected attribute.
-- [ ] A top-level block of an unknown type still gives the list of the allowed blocks. The list names `model`
+- [x] A top-level block of an unknown type still gives the list of the allowed blocks. The list names `model`
       and `context` and does not name `actor`.
-- [ ] A field named `actor` and a construct named `actor` still parse with no diagnostic.
-- [ ] `emod validate` on a file with a top-level `actor` block returns an error that names the file, the line of
+- [x] A field named `actor` and a construct named `actor` still parse with no diagnostic.
+- [x] `emod validate` on a file with a top-level `actor` block returns an error that names the file, the line of
       the keyword and the advice.
-- [ ] `ast.Actor`, `Model.Actors`, `Trigger.Actor` and `Trigger.ActorPos` do not exist, and each package and
+- [x] `ast.Actor`, `Model.Actors`, `Trigger.Actor` and `Trigger.ActorPos` do not exist, and each package and
       each test package compiles.
-- [ ] The test strings that quote the list of top-level blocks name no `actor`.
-- [ ] A `\b`-bounded search of the repository for `actor` finds it only in the historical records that the
+- [x] The test strings that quote the list of top-level blocks name no `actor`.
+- [x] A `\b`-bounded search of the repository for `actor` finds it only in the historical records that the
       Boundaries section names, in the files of this breakdown, and in tests that give `actor` to a surface to
       show that the surface rejects it or shows nothing of it.
-- [ ] `task test` passes.
+- [x] `task test` passes.
 
 **Affected Files/Modules:**
 
