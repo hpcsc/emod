@@ -27,10 +27,32 @@ type blockGroup struct {
 
 type repoint struct {
 	removed, added *diagramEdge
-	view           *ast.View
+	entries        *[]string
 	reserved       string
 	slice          *ast.Slice
 	flow           *ast.Flow
+}
+
+func (r *repoint) reserve(entries *[]string, name string) {
+	at := slices.Index(*entries, name)
+	if at < 0 {
+		return
+	}
+	r.entries, r.reserved = entries, fmt.Sprintf("\x00%p", r)
+	(*entries)[at] = r.reserved
+}
+
+func (r *repoint) fill(b *builder) {
+	entries := r.entries
+	before := len(*entries)
+	b.foldEdges([]*diagramEdge{r.added})
+	at := slices.Index(*entries, r.reserved)
+	if len(*entries) == before+1 {
+		(*entries)[at] = (*entries)[before]
+		*entries = (*entries)[:before]
+		return
+	}
+	*entries = slices.Delete(*entries, at, at+1)
 }
 
 type diagramEdit struct {
@@ -127,7 +149,7 @@ func (e *diagramEdit) pairRepoints(removed, added []*diagramEdge) (map[*diagramE
 				continue
 			}
 			sameSource, sameTarget := r.Source == a.Source, r.Target == a.Target
-			if (r.Type == "subscription" && sameTarget && !sameSource) || (r.Type == "flow" && sameSource != sameTarget) {
+			if (e.entriesOf(r) != nil && sameTarget) || (r.Type == "flow" && sameSource != sameTarget) {
 				repoints[r] = &repoint{removed: r, added: a}
 				repointed[a] = true
 				break
@@ -140,28 +162,35 @@ func (e *diagramEdit) pairRepoints(removed, added []*diagramEdge) (map[*diagramE
 func (e *diagramEdit) reserveEntry(model *ast.Model, r *repoint) {
 	from, to := e.drawnNodes[r.removed.Source].Label, e.drawnNodes[r.removed.Target].Label
 
-	switch r.removed.Type {
-	case "flow":
-		for _, s := range model.AllSlices() {
-			for _, f := range s.Flows {
-				if r.flow == nil && f.CommandName == from && f.EventName == to {
-					r.flow, r.slice = f, s
-					f.CommandName, f.EventName = "", ""
-				}
-			}
-			e.removeFlows(s, from, to)
-		}
-	case "subscription":
-		view, ok := e.drawnFrom[r.removed.Target].(*ast.View)
-		if !ok {
-			return
-		}
-		if at := slices.Index(view.Subscribes, from); at >= 0 {
-			r.view, r.reserved = view, fmt.Sprintf("\x00%p", r)
-			view.Subscribes[at] = r.reserved
-		}
-		view.Subscribes = slices.DeleteFunc(view.Subscribes, func(name string) bool { return name == from })
+	if entries := e.entriesOf(r.removed); entries != nil {
+		r.reserve(entries, from)
+		return
 	}
+	for _, s := range model.AllSlices() {
+		for _, f := range s.Flows {
+			if r.flow == nil && f.CommandName == from && f.EventName == to {
+				r.flow, r.slice = f, s
+				f.CommandName, f.EventName = "", ""
+			}
+		}
+		e.removeFlows(s, from, to)
+	}
+}
+
+// entriesOf answers the list that holds the name the edge's source stands for,
+// or nil when the edge's target holds that name alone.
+func (e *diagramEdit) entriesOf(edge *diagramEdge) *[]string {
+	switch target := e.drawnFrom[edge.Target].(type) {
+	case *ast.View:
+		if edge.Type == "subscription" {
+			return &target.Subscribes
+		}
+	case *ast.Trigger:
+		if edge.Type == "reads" {
+			return &target.Reads
+		}
+	}
+	return nil
 }
 
 func (e *diagramEdit) fillEntry(r *repoint) {
@@ -177,16 +206,8 @@ func (e *diagramEdit) fillEntry(r *repoint) {
 		}
 		r.slice.Flows = slices.DeleteFunc(r.slice.Flows, func(f *ast.Flow) bool { return f == r.flow })
 		e.removedFlowComments[r.slice] = append(e.removedFlowComments[r.slice], r.flow.Comments...)
-	case r.view != nil:
-		before := len(r.view.Subscribes)
-		e.builder.foldEdges([]*diagramEdge{r.added})
-		at := slices.Index(r.view.Subscribes, r.reserved)
-		if len(r.view.Subscribes) == before+1 {
-			r.view.Subscribes[at] = r.view.Subscribes[before]
-			r.view.Subscribes = r.view.Subscribes[:before]
-			return
-		}
-		r.view.Subscribes = slices.Delete(r.view.Subscribes, at, at+1)
+	case r.entries != nil:
+		r.fill(e.builder)
 	default:
 		e.builder.foldEdges([]*diagramEdge{r.added})
 	}
@@ -549,15 +570,15 @@ func (e *diagramEdit) inResult(id string) bool {
 
 func (e *diagramEdit) clearRelationship(model *ast.Model, edge *diagramEdge) {
 	from, to := e.drawnNodes[edge.Source].Label, e.drawnNodes[edge.Target].Label
+	if entries := e.entriesOf(edge); entries != nil {
+		*entries = slices.DeleteFunc(*entries, func(name string) bool { return name == from })
+		return
+	}
 
 	switch edge.Type {
 	case "flow":
 		for _, s := range model.AllSlices() {
 			e.removeFlows(s, from, to)
-		}
-	case "subscription":
-		if view, ok := e.drawnFrom[edge.Target].(*ast.View); ok {
-			view.Subscribes = slices.DeleteFunc(view.Subscribes, func(name string) bool { return name == from })
 		}
 	case "automation_trigger":
 		if auto, ok := e.drawnFrom[edge.Target].(*ast.Automation); ok {
@@ -602,6 +623,9 @@ func (e *diagramEdit) restoreFlowComments() {
 func (e *diagramEdit) pendingRename(model *ast.Model, edge *diagramEdge) func() {
 	from, to := e.drawnNodes[edge.Source].Label, e.drawnNodes[edge.Target].Label
 	newFrom, newTo := e.builder.nodeByID[edge.Source].Label, e.builder.nodeByID[edge.Target].Label
+	if entries := e.entriesOf(edge); entries != nil {
+		return e.pendingListRename(entries, from, newFrom)
+	}
 
 	switch edge.Type {
 	case "flow":
@@ -616,22 +640,6 @@ func (e *diagramEdit) pendingRename(model *ast.Model, edge *diagramEdge) func() 
 		return func() {
 			for _, f := range flows {
 				f.CommandName, f.EventName = newFrom, newTo
-			}
-		}
-	case "subscription":
-		view, ok := e.drawnFrom[edge.Target].(*ast.View)
-		if !ok {
-			return nil
-		}
-		var at []int
-		for i, name := range view.Subscribes {
-			if name == from {
-				at = append(at, i)
-			}
-		}
-		return func() {
-			for _, i := range at {
-				view.Subscribes[i] = newFrom
 			}
 		}
 	case "automation_trigger":
@@ -654,11 +662,23 @@ func (e *diagramEdit) pendingRename(model *ast.Model, edge *diagramEdge) func() 
 
 func (e *diagramEdit) setReads(readerID, view string) {
 	switch reader := e.drawnFrom[readerID].(type) {
-	case *ast.Trigger:
-		reader.Reads = listOfOne(view)
 	case *ast.Automation:
 		reader.Reads = view
 	case *ast.Translation:
 		reader.Reads = view
+	}
+}
+
+func (e *diagramEdit) pendingListRename(entries *[]string, from, to string) func() {
+	var at []int
+	for i, name := range *entries {
+		if name == from {
+			at = append(at, i)
+		}
+	}
+	return func() {
+		for _, i := range at {
+			(*entries)[i] = to
+		}
 	}
 }

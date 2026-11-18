@@ -19,6 +19,32 @@ type diagramDocument struct {
 	Edges            []*diagramEdge `json:"edges"`
 }
 
+type diagramReads []string
+
+func (r *diagramReads) UnmarshalJSON(data []byte) error {
+	var name string
+	if err := json.Unmarshal(data, &name); err == nil {
+		*r = nil
+		if name != "" {
+			*r = diagramReads{name}
+		}
+		return nil
+	}
+	var names []string
+	if err := json.Unmarshal(data, &names); err != nil {
+		return err
+	}
+	*r = names
+	return nil
+}
+
+func (r diagramReads) first() string {
+	if len(r) == 0 {
+		return ""
+	}
+	return r[0]
+}
+
 type diagramNode struct {
 	ID             string            `json:"id"`
 	Type           string            `json:"type"`
@@ -29,7 +55,7 @@ type diagramNode struct {
 	Fields         []*diagramField   `json:"fields,omitempty"`
 	Comments       []*diagramComment `json:"comments,omitempty"`
 	Actor          string            `json:"actor,omitempty"`
-	Reads          string            `json:"reads,omitempty"`
+	Reads          diagramReads      `json:"reads,omitempty"`
 	Subscribes     []string          `json:"subscribes,omitempty"`
 	OnEvent        string            `json:"on_event,omitempty"`
 	Schedule       string            `json:"every,omitempty"`
@@ -41,6 +67,15 @@ type diagramNode struct {
 	ExternalName   string            `json:"external_name,omitempty"`
 	Event          *diagramEvent     `json:"event,omitempty"`
 	CopyOf         string            `json:"copy_of,omitempty"`
+}
+
+// viewName answers nothing for a node that is not a view: an edge dragged off a
+// view keeps its "reads" type, so it can start at a command or an event.
+func (n *diagramNode) viewName() string {
+	if n.Type != "view" && n.Type != "view_copy" {
+		return ""
+	}
+	return n.Label
 }
 
 // isCopy reports whether the node draws again an event, a view or a command
@@ -92,15 +127,8 @@ func (n *diagramNode) asTrigger() *ast.Trigger {
 		Description: n.Description,
 		Comments:    convertComments(n.Comments),
 		Actor:       n.Actor,
-		Reads:       listOfOne(n.Reads),
+		Reads:       slices.Clone([]string(n.Reads)),
 	}
-}
-
-func listOfOne(name string) []string {
-	if name == "" {
-		return nil
-	}
-	return []string{name}
 }
 
 func (n *diagramNode) asCommand() *ast.Command {
@@ -141,7 +169,7 @@ func (n *diagramNode) asAutomation() *ast.Automation {
 		OnEvent:       n.OnEvent,
 		Schedule:      n.Schedule,
 		After:         n.After,
-		Reads:         n.Reads,
+		Reads:         n.Reads.first(),
 		Command:       n.Command,
 		TargetContext: n.TargetContext,
 	}
@@ -153,7 +181,7 @@ func (n *diagramNode) asTranslation() *ast.Translation {
 		Description:    n.Description,
 		Comments:       convertComments(n.Comments),
 		ExternalSystem: n.ExternalSystem,
-		Reads:          n.Reads,
+		Reads:          n.Reads.first(),
 		Command:        n.Command,
 		Event:          n.Event.asEvent(),
 	}
@@ -433,8 +461,8 @@ func (b *builder) foldEdges(edges []*diagramEdge) {
 func (b *builder) foldReads(src, tgt *diagramNode) {
 	switch reader := b.byNode[tgt.ID].(type) {
 	case *ast.Trigger:
-		if len(reader.Reads) == 0 {
-			reader.Reads = listOfOne(readsDrawnFromView("", src))
+		if view := src.viewName(); view != "" {
+			reader.Reads = appendMissing(reader.Reads, view)
 		}
 	case *ast.Automation:
 		reader.Reads = readsDrawnFromView(reader.Reads, src)
@@ -445,16 +473,11 @@ func (b *builder) foldReads(src, tgt *diagramNode) {
 	}
 }
 
-// readsDrawnFromView takes the source node's label only when that node is a
-// view or a copy of one. An edge dragged off the view keeps its "reads" type, so
-// without the check the element would come back reading a command or an event
-// name — which for an automation is a view reference the validator resolves and
-// rejects.
 func readsDrawnFromView(recorded string, src *diagramNode) string {
-	if recorded != "" || (src.Type != "view" && src.Type != "view_copy") {
+	if recorded != "" {
 		return recorded
 	}
-	return src.Label
+	return src.viewName()
 }
 
 func (b *builder) foldFlow(src, tgt *diagramNode) {

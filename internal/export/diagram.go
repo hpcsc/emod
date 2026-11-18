@@ -18,6 +18,33 @@ type jsonDiagramDocument struct {
 	Edges            []*jsonDiagramEdge `json:"edges"`
 }
 
+type jsonDiagramReads struct {
+	views  []string
+	isList bool
+}
+
+func readsList(views []string) jsonDiagramReads {
+	return jsonDiagramReads{views: views, isList: true}
+}
+
+func readsName(view string) jsonDiagramReads {
+	if view == "" {
+		return jsonDiagramReads{}
+	}
+	return jsonDiagramReads{views: []string{view}}
+}
+
+func (r jsonDiagramReads) IsZero() bool {
+	return len(r.views) == 0
+}
+
+func (r jsonDiagramReads) MarshalJSON() ([]byte, error) {
+	if r.isList {
+		return json.Marshal(r.views)
+	}
+	return json.Marshal(r.views[0])
+}
+
 type jsonDiagramNode struct {
 	ID          string              `json:"id"`
 	Type        string              `json:"type"`
@@ -29,7 +56,7 @@ type jsonDiagramNode struct {
 	Comments    []*jsonComment      `json:"comments,omitempty"`
 	// Type-specific metadata for trigger, event, view, automation, translation
 	Actor          string            `json:"actor,omitempty"`
-	Reads          string            `json:"reads,omitempty"`
+	Reads          jsonDiagramReads  `json:"reads,omitzero"`
 	Subscribes     []string          `json:"subscribes,omitempty"`
 	OnEvent        string            `json:"on_event,omitempty"`
 	Schedule       string            `json:"every,omitempty"`
@@ -385,7 +412,7 @@ func (b *diagramBuilder) appendTrigger(t *ast.Trigger, sliceID string) {
 		Position:    convertPosition(t.NamePos),
 		Comments:    convertComments(t.Comments),
 		Actor:       t.Actor,
-		Reads:       firstEntry(t.Reads),
+		Reads:       readsList(t.Reads),
 	})
 }
 
@@ -432,7 +459,7 @@ func (b *diagramBuilder) appendAutomations(automations []*ast.Automation, sliceI
 			OnEvent:       a.OnEvent,
 			Schedule:      a.Schedule,
 			After:         a.After,
-			Reads:         a.Reads,
+			Reads:         readsName(a.Reads),
 			Command:       a.Command,
 			TargetContext: a.TargetContext,
 		})
@@ -455,7 +482,7 @@ func (b *diagramBuilder) appendTranslations(s *ast.Slice, sliceID string) {
 			Position:       convertPosition(t.NamePos),
 			Comments:       convertComments(t.Comments),
 			ExternalSystem: t.ExternalSystem,
-			Reads:          t.Reads,
+			Reads:          readsName(t.Reads),
 			Command:        t.Command,
 		}
 		if t.Event != nil {

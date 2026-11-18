@@ -236,30 +236,30 @@ The detail panel of the viewer lists each view that the trigger reads.
 
 **Acceptance Criteria:**
 
-- [ ] The diagram document of a model whose trigger reads `[CartView, DiscountView]` gives the trigger node
+- [x] The diagram document of a model whose trigger reads `[CartView, DiscountView]` gives the trigger node
       `"reads": ["CartView", "DiscountView"]`. The node of a trigger that reads one view gives
       `"reads": ["CartView"]`. No trigger node gives `reads` as a string. The `reads` of an automation node and
       of a translation node stays one string.
-- [ ] The diagram document has one `reads` edge into the trigger node from each view in the list. For a view
+- [x] The diagram document has one `reads` edge into the trigger node from each view in the list. For a view
       that a slice two or more slices away declares, the edge starts at the `view_copy` node in the trigger's
       slice.
-- [ ] `ImportDiagram` on the diagram document of a model whose trigger reads two views, then `formatter.Format`,
+- [x] `ImportDiagram` on the diagram document of a model whose trigger reads two views, then `formatter.Format`,
       gives back the source, with `reads = [CartView, DiscountView]`.
-- [ ] In `ImportDiagram`, a `reads` edge from a view, or from a copy of a view, onto a trigger adds that view
+- [x] In `ImportDiagram`, a `reads` edge from a view, or from a copy of a view, onto a trigger adds that view
       after the views that the node lists, unless the trigger reads it already. A `reads` edge from a command or
       an event adds nothing. An automation and a translation keep the rule that they have today.
-- [ ] A diagram document whose trigger node gives `"reads": "CartView"` imports a trigger that reads
+- [x] A diagram document whose trigger node gives `"reads": "CartView"` imports a trigger that reads
       `[CartView]`, and the detail panel shows `CartView` for that node.
-- [ ] In `ApplyDiagram`, for a trigger that reads `[CartView, DiscountView]`: removing the `reads` arrow from
+- [x] In `ApplyDiagram`, for a trigger that reads `[CartView, DiscountView]`: removing the `reads` arrow from
       `CartView`, or deleting the view `CartView`, gives `reads = DiscountView`; renaming `CartView` to
       `BasketView` gives `reads = [BasketView, DiscountView]`; a new `reads` arrow from a third view adds that
       view to the end of the list; moving the arrow from `CartView` to another view replaces `CartView` and keeps
       `DiscountView`. Each edit leaves the other entries and the rest of the source as they were.
-- [ ] Removing the `reads` arrow from the copy of a far view removes that entry only.
-- [ ] The detail panel of a trigger lists each view that it reads, in list order, and shows the placeholder
+- [x] Removing the `reads` arrow from the copy of a far view removes that entry only.
+- [x] The detail panel of a trigger lists each view that it reads, in list order, and shows the placeholder
       for a missing value when it reads none. The rows of the automation and translation sections do not
       change.
-- [ ] `task test:unit`, `task test:integration` and `task test:viewer` pass.
+- [x] `task test:unit`, `task test:integration` and `task test:viewer` pass.
 
 **Affected Files/Modules:**
 

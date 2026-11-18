@@ -823,6 +823,50 @@ context "C" {
 		})
 	})
 
+	t.Run("reads of a trigger", func(t *testing.T) {
+		t.Run("a trigger that reads two views comes back reading both, in the order written", func(t *testing.T) {
+			source := `emod = 1
+
+model "Shop" {
+}
+
+context "Shop" {
+  slice "Show Basket" {
+    view "CartView" {
+    }
+
+    view "DiscountView" {
+    }
+  }
+
+  slice "Apply Discount" {
+    trigger "Checkout Page" {
+      reads = [DiscountView, CartView]
+    }
+  }
+}
+`
+			require.Equal(t, source, formatter.Format(importFrom(t, source)))
+		})
+
+		t.Run("a trigger node that gives its reads as one name imports a list of one", func(t *testing.T) {
+			diagram := `{
+              "model_name": "M",
+              "nodes": [
+                {"id": "context-1", "type": "context", "label": "Shop", "parentId": null},
+                {"id": "slice-1", "type": "slice", "label": "Apply Discount", "parentId": "context-1"},
+                {"id": "trigger-1", "type": "trigger", "label": "Checkout Page", "parentId": "slice-1",
+                 "reads": "CartView"}
+              ],
+              "edges": []
+            }`
+
+			model := importDiagram(t, diagram)
+
+			require.Equal(t, []string{"CartView"}, model.Contexts[0].Slices[0].Trigger.Reads)
+		})
+	})
+
 	t.Run("copies of subscribed events", func(t *testing.T) {
 		stayHistory := func(t *testing.T) *ast.Slice {
 			t.Helper()
@@ -967,7 +1011,7 @@ context "C" {
 			require.Equal(t, "MemberLoansView", slice.Translations[0].Reads)
 		})
 
-		t.Run("a reads edge naming another view leaves the trigger and the automation reading the one their node recorded", func(t *testing.T) {
+		t.Run("a reads edge naming another view adds it after the views the trigger's node lists, and leaves the automation reading the one its node recorded", func(t *testing.T) {
 			diagram := `{
               "model_name": "M",
               "nodes": [
@@ -976,7 +1020,7 @@ context "C" {
                 {"id": "view-1", "type": "view", "label": "MemberLoansView", "parentId": "slice-1"},
                 {"id": "view-2", "type": "view", "label": "DeskOccupancyView", "parentId": "slice-1"},
                 {"id": "trigger-1", "type": "trigger", "label": "Overdue Report", "parentId": "slice-1",
-                 "reads": "MemberLoansView"},
+                 "reads": ["MemberLoansView"]},
                 {"id": "auto-1", "type": "automation", "label": "RecallOverdueCopy", "parentId": "slice-1",
                  "reads": "MemberLoansView"}
               ],
@@ -989,8 +1033,30 @@ context "C" {
 			model := importDiagram(t, diagram)
 
 			slice := model.Contexts[0].Slices[0]
-			require.Equal(t, []string{"MemberLoansView"}, slice.Trigger.Reads)
+			require.Equal(t, []string{"MemberLoansView", "DeskOccupancyView"}, slice.Trigger.Reads)
 			require.Equal(t, "MemberLoansView", slice.Automations[0].Reads)
+		})
+
+		t.Run("a reads edge from a view the trigger's node lists already adds no second entry", func(t *testing.T) {
+			diagram := `{
+              "model_name": "M",
+              "nodes": [
+                {"id": "context-1", "type": "context", "label": "Shop", "parentId": null},
+                {"id": "slice-1", "type": "slice", "label": "Apply Discount", "parentId": "context-1"},
+                {"id": "view-1", "type": "view", "label": "CartView", "parentId": "slice-1"},
+                {"id": "view-2", "type": "view", "label": "DiscountView", "parentId": "slice-1"},
+                {"id": "trigger-1", "type": "trigger", "label": "Checkout Page", "parentId": "slice-1",
+                 "reads": ["DiscountView", "CartView"]}
+              ],
+              "edges": [
+                {"source": "view-1", "target": "trigger-1", "type": "reads"},
+                {"source": "view-2", "target": "trigger-1", "type": "reads"}
+              ]
+            }`
+
+			model := importDiagram(t, diagram)
+
+			require.Equal(t, []string{"DiscountView", "CartView"}, model.Contexts[0].Slices[0].Trigger.Reads)
 		})
 
 		t.Run("a reads edge dragged off the view onto a command or an event leaves the trigger and the automation reading nothing", func(t *testing.T) {
@@ -1089,6 +1155,22 @@ context "C" {
 
 			require.Error(t, err)
 			require.Contains(t, err.Error(), "invalid diagram JSON")
+		})
+
+		t.Run("a trigger node whose reads is neither a name nor a list is refused", func(t *testing.T) {
+			diagram := `{
+              "model_name": "M",
+              "nodes": [
+                {"id": "context-1", "type": "context", "label": "C", "parentId": null},
+                {"id": "slice-1", "type": "slice", "label": "S", "parentId": "context-1"},
+                {"id": "trigger-1", "type": "trigger", "label": "Checkout Page", "parentId": "slice-1", "reads": 7}
+              ],
+              "edges": []
+            }`
+
+			_, err := importer.ImportDiagram([]byte(diagram))
+
+			require.ErrorContains(t, err, "invalid diagram JSON")
 		})
 
 		t.Run("a trigger node without kind formats to a parseable kindless header", func(t *testing.T) {

@@ -175,13 +175,37 @@ describe('detail panel for a trigger', () => {
   it('shows the actor and the reads the node states', () => {
     const store = createStore();
 
-    UI.showDetailPanel(store, triggerNode({ actor: 'Guest', reads: 'AvailableRoomsView' }));
+    UI.showDetailPanel(store, triggerNode({ actor: 'Guest', reads: ['AvailableRoomsView'] }));
 
     expect(store.dom.dpContent.textContent).toContain('Trigger');
     expect(shownRows(store)).toEqual([
       { label: 'Actor', value: 'Guest' },
       { label: 'Reads', value: 'AvailableRoomsView' },
     ]);
+  });
+
+  it('lists each view a trigger reads, in the order of its list', () => {
+    const store = createStore();
+
+    UI.showDetailPanel(store, triggerNode({ reads: ['DiscountView', 'CartView'] }));
+
+    expect(shownRows(store)).toContainEqual({ label: 'Reads', value: 'DiscountView, CartView' });
+  });
+
+  it('shows the view of a reads that a node gives as one name', () => {
+    const store = createStore();
+
+    UI.showDetailPanel(store, triggerNode({ reads: 'CartView' }));
+
+    expect(shownRows(store)).toContainEqual({ label: 'Reads', value: 'CartView' });
+  });
+
+  it('shows an em-dash placeholder for a reads list with no view', () => {
+    const store = createStore();
+
+    UI.showDetailPanel(store, triggerNode({ reads: [] }));
+
+    expect(shownRows(store)).toContainEqual({ label: 'Reads', value: '—' });
   });
 
   it('shows an em-dash placeholder for actor and reads the node does not state', () => {

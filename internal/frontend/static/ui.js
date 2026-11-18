@@ -537,7 +537,7 @@ function showDetailPanel(store, node) {
     html += '<div class="dp-section-title">Trigger</div>';
     html += '<table><tbody>';
     html += '<tr><th>Actor</th><td>' + Renderer.esc(node.actor || '—') + '</td></tr>';
-    html += '<tr><th>Reads</th><td>' + Renderer.esc(node.reads || '—') + '</td></tr>';
+    html += '<tr><th>Reads</th><td>' + Renderer.esc([].concat(node.reads || []).join(', ') || '—') + '</td></tr>';
     html += '</tbody></table>';
     html += '</div>';
   }

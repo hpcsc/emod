@@ -78,7 +78,7 @@
     },
     {
       "n": 2,
-      "done": false,
+      "done": true,
       "title": "Carry each entry through the diagram document, both viewer saves and the detail panel",
       "language": "Go",
       "testable": true,

@@ -2248,9 +2248,100 @@ func TestExport(t *testing.T) {
 			require.Equal(t, "slice-1", trigger["parentId"])
 			require.Equal(t, "FormSubmit", trigger["label"])
 			require.Equal(t, "Guest", trigger["actor"])
-			require.Equal(t, "MyView", trigger["reads"])
+			require.Equal(t, []any{"MyView"}, trigger["reads"])
 			_, hasKind := trigger["kind"]
 			require.False(t, hasKind, "diagram trigger node must not carry kind")
+		})
+
+		t.Run("a trigger node gives the views it reads as a list, and an automation and a translation node give one name", func(t *testing.T) {
+			model := &ast.Model{
+				Name: "Shop",
+				Contexts: []*ast.Context{{
+					Name: "Shop",
+					Slices: []*ast.Slice{{
+						Name:        "Apply Discount",
+						Trigger:     &ast.Trigger{Name: "Checkout Page", Reads: []string{"CartView", "DiscountView"}},
+						Automations: []*ast.Automation{{Name: "ExpireDiscount", Reads: "DiscountView"}},
+						Translations: []*ast.Translation{
+							{Name: "PartnerCart", ExternalSystem: "Partner", Reads: "CartView"},
+							{Name: "PartnerOffer", ExternalSystem: "Partner", Reads: "DiscountView"},
+						},
+					}},
+				}},
+			}
+
+			doc := diagramDocOf(t, model)
+
+			readsByLabel := make(map[string]any)
+			for _, node := range objectsUnder(doc, "nodes") {
+				if reads, states := node["reads"]; states {
+					readsByLabel[node["label"].(string)] = reads
+				}
+			}
+			require.Equal(t, map[string]any{
+				"Checkout Page":  []any{"CartView", "DiscountView"},
+				"ExpireDiscount": "DiscountView",
+				"PartnerCart":    "CartView",
+				"PartnerOffer":   "DiscountView",
+			}, readsByLabel)
+		})
+
+		t.Run("a trigger node that reads no view states no reads", func(t *testing.T) {
+			model := &ast.Model{
+				Name: "Shop",
+				Contexts: []*ast.Context{{
+					Name: "Shop",
+					Slices: []*ast.Slice{
+						{Name: "Browse", Trigger: &ast.Trigger{Name: "Front Page"}},
+						{Name: "Apply Discount", Trigger: &ast.Trigger{Name: "Checkout Page", Reads: []string{"CartView"}}},
+					},
+				}},
+			}
+
+			doc := diagramDocOf(t, model)
+
+			statesReads := make(map[string]bool)
+			for _, node := range objectsUnder(doc, "nodes") {
+				if node["type"] == "trigger" {
+					_, states := node["reads"]
+					statesReads[node["label"].(string)] = states
+				}
+			}
+			require.Equal(t, map[string]bool{"Front Page": false, "Checkout Page": true}, statesReads)
+		})
+
+		t.Run("each view of a trigger's list draws a reads edge into the trigger, a far one from its copy in the trigger's slice", func(t *testing.T) {
+			model := &ast.Model{
+				Name: "Shop",
+				Contexts: []*ast.Context{{
+					Name: "Shop",
+					Slices: []*ast.Slice{
+						{Name: "Show Offers", Views: []*ast.View{{Name: "OfferView"}}},
+						{Name: "Show Basket", Views: []*ast.View{{Name: "CartView"}}},
+						{Name: "Apply Discount", Trigger: &ast.Trigger{Name: "Checkout Page", Reads: []string{"CartView", "OfferView"}}},
+					},
+				}},
+			}
+
+			doc := diagramDocOf(t, model)
+
+			nodes := make(map[string]map[string]any)
+			for _, node := range objectsUnder(doc, "nodes") {
+				nodes[node["id"].(string)] = node
+			}
+			var drawnFrom []string
+			for _, edge := range objectsUnder(doc, "edges") {
+				if edge["type"] != "reads" {
+					continue
+				}
+				source, target := nodes[edge["source"].(string)], nodes[edge["target"].(string)]
+				require.Equal(t, "Checkout Page", target["label"])
+				drawnFrom = append(drawnFrom, fmt.Sprintf("%s %s in %s", source["type"], source["label"], nodes[source["parentId"].(string)]["label"]))
+			}
+			require.Equal(t, []string{
+				"view CartView in Show Basket",
+				"view_copy OfferView in Apply Discount",
+			}, drawnFrom)
 		})
 
 		t.Run("view node with fields and subscribes", func(t *testing.T) {

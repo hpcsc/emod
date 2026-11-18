@@ -1555,6 +1555,16 @@ context "Lending" {
 			})
 		}
 
+		t.Run("moving an automation's reads arrow to another view makes it read that view", func(t *testing.T) {
+			source := replaced(t, wiringModel, "    automation \"RemindMember\" {\n    }", "    automation \"RemindMember\" {\n      reads = AvailableCopiesView\n    }")
+
+			result := applied(t, source, func(d *viewerDiagram) {
+				d.repoint("AvailableCopiesView", "RemindMember", "MemberLoansView", "RemindMember")
+			})
+
+			require.Equal(t, replaced(t, source, "reads = AvailableCopiesView\n    }", "reads = MemberLoansView\n    }"), result)
+		})
+
 		t.Run("removing one of two flows that share a command and an event removes only its line", func(t *testing.T) {
 			result := applied(t, wiringModel, func(d *viewerDiagram) {
 				d.disconnect("BorrowCopy", "LoanRenewed")
@@ -1885,6 +1895,154 @@ context "Lending" {
 			})
 
 			require.Equal(t, replaced(t, lendingModel, `command = RecallCopy`, `command = BorrowCopy`), result)
+		})
+	})
+
+	t.Run("reads of a trigger", func(t *testing.T) {
+		const checkoutModel = `emod = 1
+
+model "Shop" {
+}
+
+context "Shop" {
+  slice "Show Offers" {
+    view "OfferView" {
+    }
+  }
+
+  slice "Show Basket" {
+    view "CartView" {
+    }
+
+    view "DiscountView" {
+    }
+
+    view "LoyaltyView" {
+    }
+  }
+
+  slice "Apply Discount" {
+    trigger "Checkout Page" {
+      reads = [CartView, DiscountView]
+    }
+  }
+}
+`
+
+		t.Run("removing the arrow from one view keeps the other entry", func(t *testing.T) {
+			result := applied(t, checkoutModel, func(d *viewerDiagram) {
+				d.disconnect("CartView", "Checkout Page")
+			})
+
+			require.Equal(t, replaced(t, checkoutModel, "reads = [CartView, DiscountView]", "reads = DiscountView"), result)
+		})
+
+		t.Run("deleting a view takes its entry out of the list and keeps the other entry", func(t *testing.T) {
+			result := applied(t, checkoutModel, func(d *viewerDiagram) {
+				d.remove("CartView")
+			})
+
+			expected := replaced(t, checkoutModel, "    view \"CartView\" {\n    }\n\n", "")
+			require.Equal(t, replaced(t, expected, "reads = [CartView, DiscountView]", "reads = DiscountView"), result)
+		})
+
+		t.Run("renaming a view renames its entry in place", func(t *testing.T) {
+			result := applied(t, checkoutModel, func(d *viewerDiagram) {
+				d.rename("CartView", "BasketView")
+			})
+
+			expected := replaced(t, checkoutModel, `view "CartView"`, `view "BasketView"`)
+			require.Equal(t, replaced(t, expected, "reads = [CartView, DiscountView]", "reads = [BasketView, DiscountView]"), result)
+		})
+
+		t.Run("an arrow from a third view adds it to the end of the list", func(t *testing.T) {
+			result := applied(t, checkoutModel, func(d *viewerDiagram) {
+				d.connect("LoyaltyView", "Checkout Page", "reads")
+			})
+
+			require.Equal(t, replaced(t, checkoutModel, "reads = [CartView, DiscountView]", "reads = [CartView, DiscountView, LoyaltyView]"), result)
+		})
+
+		t.Run("moving an arrow to another view puts that view in the place of the one it leaves", func(t *testing.T) {
+			result := applied(t, checkoutModel, func(d *viewerDiagram) {
+				d.repoint("CartView", "Checkout Page", "LoyaltyView", "Checkout Page")
+			})
+
+			require.Equal(t, replaced(t, checkoutModel, "reads = [CartView, DiscountView]", "reads = [LoyaltyView, DiscountView]"), result)
+		})
+
+		t.Run("moving an arrow to a view the list names already takes out the moved entry", func(t *testing.T) {
+			source := replaced(t, checkoutModel, "reads = [CartView, DiscountView]", "reads = [CartView, OfferView]")
+
+			result := applied(t, source, func(d *viewerDiagram) {
+				d.repoint("CartView", "Checkout Page", "OfferView", "Checkout Page")
+			})
+
+			require.Equal(t, replaced(t, source, "reads = [CartView, OfferView]", "reads = OfferView"), result)
+		})
+
+		t.Run("moving both arrows of a view the list names twice gives each entry its new view", func(t *testing.T) {
+			source := replaced(t, checkoutModel, "reads = [CartView, DiscountView]", "reads = [CartView, CartView]")
+
+			result := applied(t, source, func(d *viewerDiagram) {
+				d.repoint("CartView", "Checkout Page", "LoyaltyView", "Checkout Page")
+				d.repoint("CartView", "Checkout Page", "DiscountView", "Checkout Page")
+			})
+
+			require.Equal(t, replaced(t, source, "reads = [CartView, CartView]", "reads = [LoyaltyView, DiscountView]"), result)
+		})
+
+		t.Run("moving a reads arrow that the drawn trigger does not list saves the new view without an error", func(t *testing.T) {
+			const twoCheckoutPages = `emod = 1
+
+model "Shop" {
+}
+
+context "Shop" {
+  slice "Show Basket" {
+    view "CartView" {
+    }
+
+    view "OrderView" {
+    }
+
+    view "LoyaltyView" {
+    }
+  }
+
+  slice "Apply Discount" {
+    trigger "Checkout Page" {
+      reads = CartView
+    }
+  }
+
+  slice "Place Order" {
+    trigger "Checkout Page" {
+      reads = OrderView
+    }
+  }
+}
+`
+			result := applied(t, twoCheckoutPages, func(d *viewerDiagram) {
+				cart, loyalty := d.idOf("CartView"), d.idOf("LoyaltyView")
+				for _, edge := range d.Edges {
+					if edge["source"] == cart && edge["type"] == "reads" {
+						edge["source"] = loyalty
+					}
+				}
+			})
+
+			require.Equal(t, 2, strings.Count(result, "LoyaltyView"), "the view is declared and read once each")
+		})
+
+		t.Run("removing the arrow from the copy of a far view takes out that entry only", func(t *testing.T) {
+			source := replaced(t, checkoutModel, "reads = [CartView, DiscountView]", "reads = [OfferView, CartView]")
+
+			result := applied(t, source, func(d *viewerDiagram) {
+				d.disconnectIDs(d.copyID("OfferView", "Apply Discount"), d.idOf("Checkout Page"))
+			})
+
+			require.Equal(t, replaced(t, source, "reads = [OfferView, CartView]", "reads = CartView"), result)
 		})
 	})
 
