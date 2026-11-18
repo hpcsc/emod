@@ -540,7 +540,7 @@ func TestExportAllPatterns(t *testing.T) {
 		trigger := reserveSlice["trigger"].(map[string]any)
 		require.Equal(t, "Reservation Form", trigger["name"])
 		require.Equal(t, "Guest", trigger["actor"])
-		require.Equal(t, "AvailableRoomsView", trigger["reads"])
+		require.Equal(t, []any{"AvailableRoomsView"}, trigger["reads"])
 		_, hasKind := trigger["kind"]
 		require.False(t, hasKind, "exported trigger must not carry kind")
 		_, hasKindPosition := trigger["kind_position"]
@@ -560,7 +560,7 @@ func TestExportAllPatterns(t *testing.T) {
 		require.Contains(t, output, `trigger: {`)
 		require.Contains(t, output, `name: "Reservation Form"`)
 		require.Contains(t, output, `actor: "Guest"`)
-		require.Contains(t, output, `reads: "AvailableRoomsView"`)
+		require.Contains(t, output, `reads: ["AvailableRoomsView"]`)
 		require.NotContains(t, output, "kind: ", "exported CUE trigger must not carry kind")
 	})
 }

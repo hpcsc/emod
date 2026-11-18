@@ -314,20 +314,20 @@ automation and of a translation stays one string.
 
 **Acceptance Criteria:**
 
-- [ ] The JSON export of a trigger that reads `[CartView, DiscountView]` gives
+- [x] The JSON export of a trigger that reads `[CartView, DiscountView]` gives
       `"reads": ["CartView", "DiscountView"]` and a `reads_position` list with the line and column of each
       entry, in the same order. A trigger that reads one view gives a list of one in both keys. A trigger that
       reads none gives neither key.
-- [ ] The CUE export of the same trigger gives `reads: ["CartView", "DiscountView"]`, and a list of one for one
+- [x] The CUE export of the same trigger gives `reads: ["CartView", "DiscountView"]`, and a list of one for one
       entry.
-- [ ] Both exports carry the list for a trigger in the slice of an aggregate and for a trigger in a slice that
+- [x] Both exports carry the list for a trigger in the slice of an aggregate and for a trigger in a slice that
       a context declares directly.
-- [ ] The JSON and CUE exports of a model whose trigger reads two views describe the same model, and the JSON
+- [x] The JSON and CUE exports of a model whose trigger reads two views describe the same model, and the JSON
       export conforms to `#Model` under `cue vet`.
-- [ ] `cue vet -d '#Model'` rejects a document whose trigger gives `reads` as one string, and its output names
+- [x] `cue vet -d '#Model'` rejects a document whose trigger gives `reads` as one string, and its output names
       `reads`.
-- [ ] Both exports give the `reads` of an automation and of a translation as one string, as they do today.
-- [ ] `task test:unit` and `task test:integration` pass.
+- [x] Both exports give the `reads` of an automation and of a translation as one string, as they do today.
+- [x] `task test:unit` and `task test:integration` pass.
 
 **Affected Files/Modules:**
 

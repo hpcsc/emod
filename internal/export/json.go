@@ -143,16 +143,16 @@ type jsonRejection struct {
 }
 
 type jsonTrigger struct {
-	Comments      []*jsonComment `json:"comments,omitempty"`
-	Name          string         `json:"name"`
-	Description   string         `json:"description,omitempty"`
-	Position      *jsonPosition  `json:"position,omitempty"`
-	Actor         string         `json:"actor,omitempty"`
-	ActorPosition *jsonPosition  `json:"actor_position,omitempty"`
-	Reads         string         `json:"reads,omitempty"`
-	ReadsPosition *jsonPosition  `json:"reads_position,omitempty"`
-	OpenPosition  *jsonPosition  `json:"open_position,omitempty"`
-	ClosePosition *jsonPosition  `json:"close_position,omitempty"`
+	Comments      []*jsonComment  `json:"comments,omitempty"`
+	Name          string          `json:"name"`
+	Description   string          `json:"description,omitempty"`
+	Position      *jsonPosition   `json:"position,omitempty"`
+	Actor         string          `json:"actor,omitempty"`
+	ActorPosition *jsonPosition   `json:"actor_position,omitempty"`
+	Reads         []string        `json:"reads,omitempty"`
+	ReadsPosition []*jsonPosition `json:"reads_position,omitempty"`
+	OpenPosition  *jsonPosition   `json:"open_position,omitempty"`
+	ClosePosition *jsonPosition   `json:"close_position,omitempty"`
 }
 
 type jsonView struct {
@@ -290,6 +290,10 @@ func convertDiagnostic(d *diagnostic.Entry) *jsonDiagnosticEntry {
 		Severity: d.Severity.String(),
 		RuleName: d.RuleName,
 	}
+}
+
+func convertPositions(positions []ast.Position) []*jsonPosition {
+	return convertList(positions, convertPosition)
 }
 
 // convertPosition converts an AST Position to a *jsonPosition for serialization.
@@ -653,28 +657,18 @@ func convertTrigger(t *ast.Trigger) *jsonTrigger {
 	if t == nil {
 		return nil
 	}
-	trigger := &jsonTrigger{
+	return &jsonTrigger{
 		Comments:      convertComments(t.Comments),
 		Name:          t.Name,
 		Description:   t.Description,
 		Position:      convertPosition(t.NamePos),
 		Actor:         t.Actor,
 		ActorPosition: convertPosition(t.ActorPos),
-		Reads:         firstEntry(t.Reads),
+		Reads:         t.Reads,
+		ReadsPosition: convertPositions(t.ReadsPos),
 		OpenPosition:  convertPosition(t.OpenPos),
 		ClosePosition: convertPosition(t.ClosePos),
 	}
-	if len(t.ReadsPos) > 0 {
-		trigger.ReadsPosition = convertPosition(t.ReadsPos[0])
-	}
-	return trigger
-}
-
-func firstEntry(names []string) string {
-	if len(names) == 0 {
-		return ""
-	}
-	return names[0]
 }
 
 func convertViews(views []*ast.View) []*jsonView {

@@ -17,7 +17,7 @@
 	name:         string
 	description?: string
 	actor?:       string
-	reads?:       string
+	reads?:       [...string]
 }
 
 #Command: {

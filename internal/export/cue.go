@@ -186,7 +186,7 @@ func (w *cueWriter) writeTrigger(t *ast.Trigger) {
 	w.line("name: %q", t.Name)
 	w.lineIfSet("description", t.Description)
 	w.lineIfSet("actor", t.Actor)
-	w.lineIfSet("reads", firstEntry(t.Reads))
+	w.listIfSet("reads", t.Reads)
 }
 
 func (w *cueWriter) writeCommand(c *ast.Command) {

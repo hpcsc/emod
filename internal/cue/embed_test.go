@@ -178,6 +178,17 @@ func TestSchema(t *testing.T) {
 		require.Contains(t, string(output), "schedule")
 	})
 
+	t.Run("rejects a trigger whose reads is stated as one name rather than a list", func(t *testing.T) {
+		cueBin := requireCue(t)
+
+		output, err := vetAgainstModel(t, cueBin, strings.Replace(fullModelJSON,
+			`"reads": ["RoomsView"]`,
+			`"reads": "RoomsView"`, 1))
+
+		require.Error(t, err, "schema accepted a trigger reading one bare name")
+		require.Contains(t, string(output), "reads")
+	})
+
 	t.Run("rejects a spec whose given is stated in the retired bare-name shape", func(t *testing.T) {
 		cueBin := requireCue(t)
 
@@ -254,7 +265,7 @@ const fullModelJSON = `{
           "name": "Form",
           "description": "The booking form on the public site",
           "actor": "Guest",
-          "reads": "RoomsView"
+          "reads": ["RoomsView"]
         },
         "commands": [{
           "name": "MakeReservation",

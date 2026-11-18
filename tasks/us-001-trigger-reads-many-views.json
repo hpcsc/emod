@@ -120,7 +120,7 @@
     },
     {
       "n": 3,
-      "done": false,
+      "done": true,
       "title": "Give the reads of a trigger as a list in the JSON and CUE exports and the schema",
       "language": "Go",
       "testable": true,

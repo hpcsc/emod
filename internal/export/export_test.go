@@ -171,7 +171,7 @@ func TestExport(t *testing.T) {
 			require.False(t, hasKindPosition, "trigger export must not carry a kind_position")
 			require.Equal(t, "Form", tr["name"])
 			require.Equal(t, "Guest", tr["actor"])
-			require.Equal(t, "MyView", tr["reads"])
+			require.Equal(t, []any{"MyView"}, tr["reads"])
 		})
 
 		t.Run("serializes event with source external and ExternalName", func(t *testing.T) {
@@ -1036,9 +1036,40 @@ func TestExport(t *testing.T) {
 			require.False(t, hasKindPosition, "trigger export must not carry a kind_position")
 			require.Equal(t, float64(7), tr["position"].(map[string]any)["column"])
 			require.Equal(t, float64(13), tr["actor_position"].(map[string]any)["column"])
-			require.Equal(t, float64(20), tr["reads_position"].(map[string]any)["column"])
+			require.Equal(t, float64(20), tr["reads_position"].([]any)[0].(map[string]any)["column"])
 			require.Equal(t, float64(28), tr["open_position"].(map[string]any)["column"])
 			require.Equal(t, float64(5), tr["close_position"].(map[string]any)["line"])
+		})
+
+		t.Run("gives one reads position for each entry of a trigger's list, in the order of the list", func(t *testing.T) {
+			model := &ast.Model{
+				Name: "Shop",
+				Contexts: []*ast.Context{{
+					Name: "Shop",
+					Aggregates: []*ast.Aggregate{{
+						Name: "Cart",
+						Slices: []*ast.Slice{{
+							Name: "Apply Discount",
+							Trigger: &ast.Trigger{
+								Name:  "Checkout Page",
+								Reads: []string{"CartView", "DiscountView"},
+								ReadsPos: []ast.Position{
+									{Filename: "shop.emod", Line: 4, Column: 16},
+									{Filename: "shop.emod", Line: 5, Column: 9},
+								},
+							},
+						}},
+					}},
+				}},
+			}
+
+			tr := firstSliceOf(t, modelDocOf(t, model))["trigger"].(map[string]any)
+
+			require.Equal(t, []any{"CartView", "DiscountView"}, tr["reads"])
+			require.Equal(t, []any{
+				map[string]any{"filename": "shop.emod", "line": float64(4), "column": float64(16)},
+				map[string]any{"filename": "shop.emod", "line": float64(5), "column": float64(9)},
+			}, tr["reads_position"])
 		})
 
 		t.Run("keeps trigger key order beside the sibling automation", func(t *testing.T) {
@@ -4527,7 +4558,7 @@ func TestExport(t *testing.T) {
 				require.Equal(t, map[string]any{
 					"name":  "Form",
 					"actor": "Guest",
-					"reads": "MyView",
+					"reads": []any{"MyView"},
 				}, slice["trigger"])
 			})
 
@@ -4781,6 +4812,35 @@ func TestExport(t *testing.T) {
 
 		t.Run("a model whose automations read views conforms to the schema's Model definition", func(t *testing.T) {
 			requireConformsToSchema(t, lookupCue(t), test.AutomationReadsLibraryLendingModel(t))
+		})
+
+		t.Run("triggers that read a list of views, in both slice homes, conform to the schema and read the same in both exports", func(t *testing.T) {
+			cueBin := lookupCue(t)
+			model := &ast.Model{
+				Name: "Shop",
+				Contexts: []*ast.Context{{
+					Name: "Shop",
+					Aggregates: []*ast.Aggregate{{
+						Name: "Cart",
+						Slices: []*ast.Slice{
+							{Name: "Apply Discount", Trigger: &ast.Trigger{Name: "Checkout Page", Reads: []string{"CartView", "DiscountView"}}},
+							{Name: "Browse", Trigger: &ast.Trigger{Name: "Front Page"}},
+						},
+					}},
+					Slices: []*ast.Slice{
+						{Name: "Redeem Points", Trigger: &ast.Trigger{Name: "Loyalty Page", Reads: []string{"LoyaltyView"}}},
+					},
+				}},
+			}
+
+			requireConformsToSchema(t, cueBin, model)
+			requireBothFormatsAgree(t, cueBin, model)
+			for format, doc := range exportedDocs(t, cueBin, model) {
+				require.Equal(t, map[string][]any{
+					"Apply Discount": {"CartView", "DiscountView"},
+					"Redeem Points":  {"LoyaltyView"},
+				}, triggerReadsByOwner(doc), "%s export", format)
+			}
 		})
 
 		t.Run("a model whose automations run on a schedule conforms to the schema's Model definition", func(t *testing.T) {
@@ -5110,7 +5170,7 @@ func TestExport(t *testing.T) {
 			requireBothFormatsAgree(t, cueBin, unread)
 
 			readingNoView := automationsReadingNoView(libraryLendingAutomationReads)
-			readingTrigger := map[string]string{"Borrow Copy": "MemberLoansView"}
+			readingTrigger := map[string][]any{"Borrow Copy": {"MemberLoansView"}}
 			docs := exportedDocs(t, cueBin, unread)
 			for format, doc := range docs {
 				require.Equal(t, readingNoView, automationReadsByOwner(doc), "%s export", format)
@@ -5189,7 +5249,7 @@ func TestExport(t *testing.T) {
 			trigger := reserveSlice["trigger"].(map[string]any)
 			require.Equal(t, "Reservation Form", trigger["name"])
 			require.Equal(t, "Guest", trigger["actor"])
-			require.Equal(t, "AvailableRoomsView", trigger["reads"])
+			require.Equal(t, []any{"AvailableRoomsView"}, trigger["reads"])
 			_, hasKind := trigger["kind"]
 			require.False(t, hasKind, "exported trigger must not carry kind")
 			_, hasKindPosition := trigger["kind_position"]
@@ -5204,7 +5264,7 @@ func TestExport(t *testing.T) {
 			triggerCUE := reserveSliceCUE["trigger"].(map[string]any)
 			require.Equal(t, "Reservation Form", triggerCUE["name"])
 			require.Equal(t, "Guest", triggerCUE["actor"])
-			require.Equal(t, "AvailableRoomsView", triggerCUE["reads"])
+			require.Equal(t, []any{"AvailableRoomsView"}, triggerCUE["reads"])
 			require.NotContains(t, string(cueRaw), "kind: ", "exported CUE trigger must not carry kind")
 		})
 	})
@@ -6570,19 +6630,19 @@ func namesCarrying(byOwner map[string][]map[string]any, key string) []string {
 	return named
 }
 
-// triggerReadsByOwner names the view the trigger of each slice reads, filed under
+// triggerReadsByOwner names the views the trigger of each slice reads, filed under
 // the slice. What a trigger reads and what an automation reads are separate keys
 // on separate objects, so a change reaching the wrong one shows up here as a
 // slice that lost what its trigger reads.
-func triggerReadsByOwner(doc map[string]any) map[string]string {
-	byOwner := make(map[string]string)
+func triggerReadsByOwner(doc map[string]any) map[string][]any {
+	byOwner := make(map[string][]any)
 	eachObject(doc, func(object map[string]any) {
 		trigger, declaresTrigger := object["trigger"].(map[string]any)
 		owner, named := object["name"].(string)
 		if !declaresTrigger || !named {
 			return
 		}
-		if reads, readsAView := trigger["reads"].(string); readsAView {
+		if reads, readsViews := trigger["reads"].([]any); readsViews {
 			byOwner[owner] = reads
 		}
 	})
