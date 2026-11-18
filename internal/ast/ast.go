@@ -312,8 +312,8 @@ type Trigger struct {
 	DescriptionPos Position
 	Actor          string
 	ActorPos       Position
-	Reads          string
-	ReadsPos       Position
+	Reads          []string
+	ReadsPos       []Position
 	OpenPos        Position
 	ClosePos       Position
 }

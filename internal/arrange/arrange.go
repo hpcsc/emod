@@ -130,8 +130,10 @@ func references(slices []*ast.Slice) []Reference {
 				add(eventHome[e], s, KindSubscribes, e+" -> "+v.Name)
 			}
 		}
-		if s.Trigger != nil && s.Trigger.Reads != "" {
-			add(viewHome[s.Trigger.Reads], s, KindReads, s.Trigger.Reads+" -> trigger "+s.Trigger.Name)
+		if s.Trigger != nil {
+			for _, view := range s.Trigger.Reads {
+				add(viewHome[view], s, KindReads, view+" -> trigger "+s.Trigger.Name)
+			}
 		}
 		for _, a := range s.Automations {
 			add(viewHome[a.Reads], s, KindReads, a.Reads+" -> "+a.Name)

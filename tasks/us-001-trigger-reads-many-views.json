@@ -1,0 +1,216 @@
+{
+  "story": "Let a trigger read more than one view",
+  "story_id": "screens-as-first-class/US-001",
+  "tasks_file": "tasks/us-001-trigger-reads-many-views.md",
+  "tasks": [
+    {
+      "n": 1,
+      "done": true,
+      "title": "Accept a list of views in the reads of a trigger, and resolve each entry",
+      "language": "Go",
+      "testable": true,
+      "certainty": "medium",
+      "blast_radius": "high",
+      "patterns_to_follow": [
+        "internal/parser/parser.go:114-140",
+        "internal/formatter/formatter.go:161-167",
+        "internal/formatter/formatter.go:310-325",
+        "internal/validator/validator.go:413-417",
+        "internal/validator/validator_test.go:1088-1122",
+        "internal/validator/validator_test.go:1162-1200",
+        "internal/linter/linter.go:65-84",
+        "internal/linter/linter_test.go:3792-3842",
+        "internal/query/names.go:117-122",
+        "internal/query/references.go:299-308",
+        "internal/query/references_test.go:170-191",
+        "internal/query/trace_test.go:223-235",
+        "internal/lsp/definition_test.go:122-126",
+        "internal/lsp/references_test.go:255-278",
+        "internal/arrange/arrange.go:127-131",
+        "internal/arrange/arrange_test.go:38-112",
+        "internal/diagram/graph.go:87-94",
+        "internal/diagram/graph_test.go:14-60",
+        "internal/cli/fmt_test.go:1882-1886",
+        "internal/cli/fmt_test.go:2000",
+        "internal/cli/validate_test.go:37-48",
+        "tasks/learnings.md:191-194",
+        "tasks/learnings.md:121-124",
+        "tasks/learnings.md:41-44",
+        "tasks/learnings.md:6-9",
+        "tasks/learnings.md:406-409",
+        "tasks/learnings.md:1010-1015"
+      ],
+      "depends_on": [],
+      "affected_files": [
+        "internal/ast/ast.go",
+        "internal/parser/parser.go",
+        "internal/parser/parser_test.go",
+        "internal/parser/integration_test.go",
+        "internal/formatter/formatter.go",
+        "internal/formatter/formatter_test.go",
+        "internal/cli/fmt_test.go",
+        "internal/validator/validator.go",
+        "internal/validator/validator_test.go",
+        "internal/linter/linter.go",
+        "internal/linter/linter_test.go",
+        "internal/query/names.go",
+        "internal/query/references.go",
+        "internal/query/references_test.go",
+        "internal/query/trace_test.go",
+        "internal/lsp/definition_test.go",
+        "internal/lsp/references_test.go",
+        "internal/arrange/arrange.go",
+        "internal/arrange/arrange_test.go",
+        "internal/diagram/graph.go",
+        "internal/diagram/graph_test.go",
+        "internal/diagram/contract_test.go",
+        "internal/diagram/svg_test.go",
+        "internal/export/json.go",
+        "internal/export/cue.go",
+        "internal/export/diagram.go",
+        "internal/export/export_test.go",
+        "internal/importer/importer.go",
+        "internal/importer/diagram_edit.go",
+        "internal/importer/importer_test.go",
+        "internal/glossary/glossary_test.go",
+        "internal/test/fixtures.go"
+      ]
+    },
+    {
+      "n": 2,
+      "done": false,
+      "title": "Carry each entry through the diagram document, both viewer saves and the detail panel",
+      "language": "Go",
+      "testable": true,
+      "certainty": "low",
+      "blast_radius": "high",
+      "patterns_to_follow": [
+        "internal/importer/diagram_edit.go:121-165",
+        "internal/importer/diagram_edit.go:558-560",
+        "internal/importer/diagram_edit.go:621-636",
+        "internal/importer/importer.go:401-404",
+        "internal/importer/importer.go:475-482",
+        "internal/importer/diagram_edit_test.go:1000-1030",
+        "internal/importer/diagram_edit_test.go:1426-1450",
+        "internal/importer/diagram_edit_test.go:2247-2280",
+        "internal/importer/importer_test.go:944-1030",
+        "internal/frontend/static/ui.js:545-551",
+        "internal/frontend/tests/detail-panel.test.js:175-196",
+        "internal/export/export_test.go:2065-2070",
+        "tasks/learnings.md:256-259",
+        "tasks/learnings.md:201-204",
+        "tasks/learnings.md:251-254",
+        "tasks/learnings.md:296-299",
+        "tasks/learnings.md:206-209",
+        "tasks/learnings.md:1620-1625"
+      ],
+      "depends_on": [
+        1
+      ],
+      "affected_files": [
+        "internal/export/diagram.go",
+        "internal/export/export_test.go",
+        "internal/importer/importer.go",
+        "internal/importer/importer_test.go",
+        "internal/importer/diagram_edit.go",
+        "internal/importer/diagram_edit_test.go",
+        "internal/frontend/static/ui.js",
+        "internal/frontend/tests/detail-panel.test.js"
+      ]
+    },
+    {
+      "n": 3,
+      "done": false,
+      "title": "Give the reads of a trigger as a list in the JSON and CUE exports and the schema",
+      "language": "Go",
+      "testable": true,
+      "certainty": "medium",
+      "blast_radius": "high",
+      "patterns_to_follow": [
+        "internal/export/json.go:158-167",
+        "internal/export/json.go:674-688",
+        "internal/export/cue.go:36-41",
+        "internal/export/cue.go:232",
+        "internal/cue/schema.cue:52-58",
+        "internal/export/export_test.go:1000-1043",
+        "internal/export/export_test.go:4671-4720",
+        "internal/export/export_test.go:6505-6520",
+        "internal/cue/embed_test.go:181-203",
+        "tasks/learnings.md:46-49",
+        "tasks/learnings.md:141-144",
+        "tasks/learnings.md:251-254"
+      ],
+      "depends_on": [
+        1
+      ],
+      "affected_files": [
+        "internal/export/json.go",
+        "internal/export/cue.go",
+        "internal/cue/schema.cue",
+        "internal/export/export_test.go",
+        "internal/cue/embed_test.go",
+        "internal/cli/export_test.go"
+      ]
+    },
+    {
+      "n": 4,
+      "done": false,
+      "title": "Print each entry in the ASCII diagram, and pin the SVG arrows and copies",
+      "language": "Go",
+      "testable": true,
+      "certainty": "medium",
+      "blast_radius": "low",
+      "patterns_to_follow": [
+        "internal/diagram/ascii.go:79-88",
+        "internal/diagram/ascii.go:119-126",
+        "internal/diagram/ascii_test.go:62-100",
+        "internal/diagram/contract_test.go:827-930",
+        "internal/diagram/contract_test.go:2246-2271",
+        "internal/diagram/contract_test.go:113-120",
+        "internal/diagram/svg_test.go:2110-2140",
+        "internal/diagram/element_copies_test.go:238-265",
+        "tasks/learnings.md:331-334",
+        "tasks/learnings.md:316-319",
+        "tasks/learnings.md:41-44",
+        "tasks/learnings.md:1010-1015"
+      ],
+      "depends_on": [
+        1
+      ],
+      "affected_files": [
+        "internal/diagram/ascii.go",
+        "internal/diagram/ascii_test.go",
+        "internal/diagram/contract_test.go",
+        "internal/diagram/svg_test.go"
+      ]
+    },
+    {
+      "n": 5,
+      "done": false,
+      "title": "Document the list form in the DSL reference",
+      "language": "Markdown",
+      "testable": false,
+      "certainty": "high",
+      "blast_radius": "low",
+      "patterns_to_follow": [
+        "docs/dsl-reference.md:341",
+        "docs/dsl-reference.md:278-281",
+        "docs/dsl-reference.md:811-819",
+        "internal/oracle/oracle_test.go:114-140",
+        "tasks/learnings.md:241-244",
+        "tasks/learnings.md:471-474"
+      ],
+      "depends_on": [
+        1,
+        2,
+        3,
+        4
+      ],
+      "affected_files": [
+        "docs/dsl-reference.md",
+        "site/content/docs/dsl-reference.md"
+      ]
+    }
+  ],
+  "design_file": "tasks/us-001-trigger-reads-many-views.design.yaml"
+}

@@ -227,6 +227,52 @@ context "Reservations" {
 		})
 	})
 
+	t.Run("trigger", func(t *testing.T) {
+		readsOf := func(t *testing.T, reads string) (*ast.Trigger, []*diagnostic.Entry) {
+			t.Helper()
+			source := "context \"Shop\" {\n  slice \"Apply Discount\" {\n    trigger \"Checkout Page\" {\n      reads = " + reads + "\n    }\n  }\n}\n"
+			model, diags := parser.Parse(source, "shop.emod")
+			return model.Contexts[0].Slices[0].Trigger, diags
+		}
+
+		t.Run("a list of views is read in the order it is written, each at its own entry", func(t *testing.T) {
+			trigger, diags := readsOf(t, "[CartView, DiscountView]")
+
+			require.Empty(t, diags)
+			require.Equal(t, []string{"CartView", "DiscountView"}, trigger.Reads)
+			require.Equal(t, []ast.Position{
+				{Filename: "shop.emod", Line: 4, Column: 16},
+				{Filename: "shop.emod", Line: 4, Column: 26},
+			}, trigger.ReadsPos)
+		})
+
+		t.Run("one bare name is read as a list of one, at the name", func(t *testing.T) {
+			trigger, diags := readsOf(t, "CartView")
+
+			require.Empty(t, diags)
+			require.Equal(t, []string{"CartView"}, trigger.Reads)
+			require.Equal(t, []ast.Position{{Filename: "shop.emod", Line: 4, Column: 15}}, trigger.ReadsPos)
+		})
+
+		t.Run("an entry that is not a name is reported at that entry, and the entries around it are still read", func(t *testing.T) {
+			trigger, diags := readsOf(t, `[CartView, "DiscountView", LoyaltyView]`)
+
+			require.Len(t, diags, 1)
+			require.Equal(t, "expected a name", diags[0].Message)
+			require.Equal(t, 4, diags[0].Line)
+			require.Equal(t, 26, diags[0].Column)
+			require.Equal(t, "CartView", trigger.Reads[0])
+			require.Equal(t, "LoyaltyView", trigger.Reads[2])
+		})
+
+		t.Run("an empty list reads no view", func(t *testing.T) {
+			trigger, diags := readsOf(t, "[]")
+
+			require.Empty(t, diags)
+			require.Empty(t, trigger.Reads)
+		})
+	})
+
 	t.Run("flow", func(t *testing.T) {
 		t.Run("an event entry and a rejection entry are told apart", func(t *testing.T) {
 			source := `

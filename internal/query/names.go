@@ -133,7 +133,9 @@ func NameSites(model *ast.Model) []NameSite {
 			add(KindCommand, tr.Command, tr.CommandPos)
 		}
 		if slice.Trigger != nil {
-			add(KindView, slice.Trigger.Reads, slice.Trigger.ReadsPos)
+			for i, view := range slice.Trigger.Reads {
+				add(KindView, view, slice.Trigger.ReadsPos[i])
+			}
 		}
 		for _, f := range slice.Flows {
 			add(KindCommand, f.CommandName, f.CommandPos)

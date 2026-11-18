@@ -290,7 +290,7 @@ A person booking a room
 						Name: "Booking",
 						Slices: []*ast.Slice{{
 							Name:    "Browse availability",
-							Trigger: &ast.Trigger{Name: "Availability Screen", Reads: "AvailableRoomsView"},
+							Trigger: &ast.Trigger{Name: "Availability Screen", Reads: []string{"AvailableRoomsView"}},
 							Views:   []*ast.View{{Name: "AvailableRoomsView", Description: "Rooms free over a date range"}},
 						}},
 					}},

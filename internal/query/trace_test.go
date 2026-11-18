@@ -221,6 +221,40 @@ func TestTrace(t *testing.T) {
 	})
 
 	t.Run("views", func(t *testing.T) {
+		t.Run("the walk follows the reads of each entry of a trigger's list", func(t *testing.T) {
+			const checkoutModel = `context "Shop" {
+  slice "Show Cart" {
+    event "CartUpdated" {
+    }
+
+    event "DiscountApplied" {
+    }
+
+    view "CartView" {
+      subscribes = [CartUpdated]
+    }
+
+    view "DiscountView" {
+      subscribes = [DiscountApplied]
+    }
+  }
+
+  slice "Apply Discount" {
+    trigger "Checkout Page" {
+      reads = [CartView, DiscountView]
+    }
+  }
+}
+`
+			tree, err := query.Trace(parse(t, checkoutModel), "DiscountApplied", query.TraceOptions{})
+
+			require.NoError(t, err)
+			require.Equal(t, []walked{
+				{Label: "subscribes", Name: "DiscountView", From: "DiscountApplied", Depth: 1},
+				{Label: "reads", Name: "Checkout Page", From: "DiscountView", Depth: 2},
+			}, walkOf(tree))
+		})
+
 		t.Run("no views leaves out the subscribes and reads edges, so the walk misses the scheduled automation", func(t *testing.T) {
 			tree, err := query.Trace(parse(t, hotelModel), "RoomBooked", query.TraceOptions{NoViews: true})
 

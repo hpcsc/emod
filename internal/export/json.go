@@ -653,18 +653,28 @@ func convertTrigger(t *ast.Trigger) *jsonTrigger {
 	if t == nil {
 		return nil
 	}
-	return &jsonTrigger{
+	trigger := &jsonTrigger{
 		Comments:      convertComments(t.Comments),
 		Name:          t.Name,
 		Description:   t.Description,
 		Position:      convertPosition(t.NamePos),
 		Actor:         t.Actor,
 		ActorPosition: convertPosition(t.ActorPos),
-		Reads:         t.Reads,
-		ReadsPosition: convertPosition(t.ReadsPos),
+		Reads:         firstEntry(t.Reads),
 		OpenPosition:  convertPosition(t.OpenPos),
 		ClosePosition: convertPosition(t.ClosePos),
 	}
+	if len(t.ReadsPos) > 0 {
+		trigger.ReadsPosition = convertPosition(t.ReadsPos[0])
+	}
+	return trigger
+}
+
+func firstEntry(names []string) string {
+	if len(names) == 0 {
+		return ""
+	}
+	return names[0]
 }
 
 func convertViews(views []*ast.View) []*jsonView {

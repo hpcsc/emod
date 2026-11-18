@@ -110,6 +110,56 @@ context "Lending" {
 			require.Empty(t, report.Backward)
 		})
 
+		t.Run("a view that only the second entry of a trigger's reads list names moves ahead of the slice reading it", func(t *testing.T) {
+			model := parse(t, `emod = 1
+
+model "Library" {
+}
+
+context "Lending" {
+  aggregate "Loan" {
+    slice "Borrow a Copy" {
+      command "BorrowCopy" {
+      }
+
+      event "CopyBorrowed" {
+      }
+
+      view "ShelfView" {
+        subscribes = [CopyBorrowed]
+      }
+
+      flow = <<-FLOW
+        command -> event:    BorrowCopy -> CopyBorrowed
+      FLOW
+    }
+
+    slice "Return a Copy" {
+      trigger "Return Desk" {
+        reads = [ShelfView, BorrowView]
+      }
+
+      command "ReturnCopy" {
+      }
+    }
+
+    slice "Borrowed Copies" {
+      view "BorrowView" {
+        subscribes = [CopyBorrowed]
+      }
+    }
+  }
+}
+`)
+
+			report := arrange.Model(model)
+
+			require.Equal(t, []string{"Borrow a Copy", "Borrowed Copies", "Return a Copy"}, sliceNames(model))
+			require.Equal(t, 1, report.Moved)
+			require.Equal(t, 1, report.BackwardBefore)
+			require.Equal(t, 0, report.BackwardAfter)
+		})
+
 		t.Run("a view read by nothing settles after the events it projects", func(t *testing.T) {
 			model := parse(t, `emod = 1
 

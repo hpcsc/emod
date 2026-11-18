@@ -655,7 +655,7 @@ func (e *diagramEdit) pendingRename(model *ast.Model, edge *diagramEdge) func() 
 func (e *diagramEdit) setReads(readerID, view string) {
 	switch reader := e.drawnFrom[readerID].(type) {
 	case *ast.Trigger:
-		reader.Reads = view
+		reader.Reads = listOfOne(view)
 	case *ast.Automation:
 		reader.Reads = view
 	case *ast.Translation:

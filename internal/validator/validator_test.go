@@ -1100,8 +1100,8 @@ func TestValidate(t *testing.T) {
 										Trigger: &ast.Trigger{
 											Name:     "Reservation Form",
 											NamePos:  ast.Position{Filename: "reservations.emod", Line: 6, Column: 15},
-											Reads:    "AvailableRoomsView",
-											ReadsPos: ast.Position{Filename: "reservations.emod", Line: 8, Column: 15},
+											Reads:    []string{"AvailableRoomsView"},
+											ReadsPos: []ast.Position{{Filename: "reservations.emod", Line: 8, Column: 15}},
 										},
 									},
 								},
@@ -1118,6 +1118,40 @@ func TestValidate(t *testing.T) {
 			require.Equal(t, 15, diags[0].Column)
 			require.Equal(t, diagnostic.Error, diags[0].Severity)
 			require.Empty(t, diags[0].RuleName)
+		})
+
+		t.Run("each entry of a trigger's list that names no view is reported at that entry, and a declared entry is not", func(t *testing.T) {
+			model := &ast.Model{
+				Contexts: []*ast.Context{
+					{
+						Name: "Shop",
+						Slices: []*ast.Slice{
+							{
+								Name:  "Apply Discount",
+								Views: []*ast.View{{Name: "CartView"}},
+								Trigger: &ast.Trigger{
+									Name:  "Checkout Page",
+									Reads: []string{"DiscountView", "CartView", "LoyaltyView"},
+									ReadsPos: []ast.Position{
+										{Filename: "shop.emod", Line: 4, Column: 16},
+										{Filename: "shop.emod", Line: 4, Column: 30},
+										{Filename: "shop.emod", Line: 5, Column: 9},
+									},
+								},
+							},
+						},
+					},
+				},
+			}
+
+			diags := validator.Validate(model)
+
+			require.Equal(t, []string{
+				`shop.emod:4: view "DiscountView" does not exist`,
+				`shop.emod:5: view "LoyaltyView" does not exist`,
+			}, reportedLines(diags))
+			require.Equal(t, 16, diags[0].Column)
+			require.Equal(t, 9, diags[1].Column)
 		})
 
 		t.Run("a view no slice declares is reported on a translation's reads entry, not on the translation name", func(t *testing.T) {
@@ -1173,8 +1207,8 @@ func TestValidate(t *testing.T) {
 										Commands: []*ast.Command{{Name: "ImportBooking"}},
 										Trigger: &ast.Trigger{
 											Name:     "Reservation Form",
-											Reads:    "MissingView",
-											ReadsPos: ast.Position{Filename: "reservations.emod", Line: 8, Column: 15},
+											Reads:    []string{"MissingView"},
+											ReadsPos: []ast.Position{{Filename: "reservations.emod", Line: 8, Column: 15}},
 										},
 										Automations: []*ast.Automation{
 											{
@@ -1222,8 +1256,9 @@ func TestValidate(t *testing.T) {
 							{
 								Name: "Watch Availability",
 								Trigger: &ast.Trigger{
-									Name:  "Availability Board",
-									Reads: "RoomAvailabilityView",
+									Name:     "Availability Board",
+									Reads:    []string{"RoomAvailabilityView"},
+									ReadsPos: []ast.Position{{Filename: "reservations.emod", Line: 9, Column: 15}},
 								},
 							},
 						},
@@ -1242,8 +1277,9 @@ func TestValidate(t *testing.T) {
 										Name:     "Import Booking",
 										Commands: []*ast.Command{{Name: "ImportBooking"}},
 										Trigger: &ast.Trigger{
-											Name:  "Reservation Form",
-											Reads: "RoomAvailabilityView",
+											Name:     "Reservation Form",
+											Reads:    []string{"RoomAvailabilityView"},
+											ReadsPos: []ast.Position{{Filename: "reservations.emod", Line: 21, Column: 15}},
 										},
 										Translations: []*ast.Translation{
 											{Name: "BookingImport", Reads: "ReservationHistoryView", Command: "ImportBooking"},
@@ -1259,8 +1295,9 @@ func TestValidate(t *testing.T) {
 										Views:    []*ast.View{{Name: "PendingConfirmationsView"}},
 										Commands: []*ast.Command{{Name: "ConfirmReservation"}},
 										Trigger: &ast.Trigger{
-											Name:  "Confirmation Desk",
-											Reads: "PendingConfirmationsView",
+											Name:     "Confirmation Desk",
+											Reads:    []string{"PendingConfirmationsView"},
+											ReadsPos: []ast.Position{{Filename: "reservations.emod", Line: 33, Column: 15}},
 										},
 										Translations: []*ast.Translation{
 											{Name: "PartnerConfirm", Reads: "RoomAvailabilityView", Command: "ConfirmReservation"},
@@ -1327,8 +1364,8 @@ func TestValidate(t *testing.T) {
 										Flows:    []*ast.Flow{{CommandName: "ImportBooking", EventName: "BookingImported"}},
 										Trigger: &ast.Trigger{
 											Name:     "Reservation Form",
-											Reads:    "ImportBooking",
-											ReadsPos: ast.Position{Filename: "reservations.emod", Line: 8, Column: 15},
+											Reads:    []string{"ImportBooking"},
+											ReadsPos: []ast.Position{{Filename: "reservations.emod", Line: 8, Column: 15}},
 										},
 										Translations: []*ast.Translation{
 											{

@@ -307,8 +307,12 @@ func addViewReferences(list *referenceList, slice *ast.Slice, name string) {
 			}
 		}
 	}
-	if trigger := slice.Trigger; trigger != nil && trigger.Reads == name {
-		list.add(GroupReadBy, "reads", trigger.ReadsPos, element(KindTrigger, trigger.Name), slice)
+	if trigger := slice.Trigger; trigger != nil {
+		for i, view := range trigger.Reads {
+			if view == name {
+				list.add(GroupReadBy, "reads", trigger.ReadsPos[i], element(KindTrigger, trigger.Name), slice)
+			}
+		}
 	}
 	for _, auto := range slice.Automations {
 		if auto.Reads == name {

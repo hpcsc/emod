@@ -673,7 +673,7 @@ func TestExportSVG(t *testing.T) {
 			output := svgOf(t, slicesModel(
 				&ast.Slice{
 					Name:    "Open",
-					Trigger: &ast.Trigger{Name: "Account Screen", Reads: "AccountsView"},
+					Trigger: &ast.Trigger{Name: "Account Screen", Reads: []string{"AccountsView"}},
 					Events:  []*ast.Event{{Name: "AccountOpened"}, {Name: "AccountRenamed"}},
 				},
 				&ast.Slice{
@@ -2428,7 +2428,7 @@ func fortySliceModel() *ast.Model {
 			Flows:    []*ast.Flow{{CommandName: fmt.Sprintf("Take%d", i), EventName: fmt.Sprintf("Taken%d", i)}},
 		}
 		if i > 1 {
-			s.Trigger.Reads = fmt.Sprintf("Board%d", i-1)
+			s.Trigger.Reads = []string{fmt.Sprintf("Board%d", i-1)}
 			s.Views[0].Subscribes = append(s.Views[0].Subscribes, fmt.Sprintf("Taken%d", i-1))
 		}
 		slices = append(slices, s)

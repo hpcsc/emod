@@ -92,8 +92,15 @@ func (n *diagramNode) asTrigger() *ast.Trigger {
 		Description: n.Description,
 		Comments:    convertComments(n.Comments),
 		Actor:       n.Actor,
-		Reads:       n.Reads,
+		Reads:       listOfOne(n.Reads),
 	}
+}
+
+func listOfOne(name string) []string {
+	if name == "" {
+		return nil
+	}
+	return []string{name}
 }
 
 func (n *diagramNode) asCommand() *ast.Command {
@@ -426,7 +433,9 @@ func (b *builder) foldEdges(edges []*diagramEdge) {
 func (b *builder) foldReads(src, tgt *diagramNode) {
 	switch reader := b.byNode[tgt.ID].(type) {
 	case *ast.Trigger:
-		reader.Reads = readsDrawnFromView(reader.Reads, src)
+		if len(reader.Reads) == 0 {
+			reader.Reads = listOfOne(readsDrawnFromView("", src))
+		}
 	case *ast.Automation:
 		reader.Reads = readsDrawnFromView(reader.Reads, src)
 	case *ast.Translation:

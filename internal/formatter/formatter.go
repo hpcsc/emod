@@ -90,7 +90,7 @@ func writeSlice(body *hclwrite.Body, slice *ast.Slice) {
 		trigger := body.AppendNewBlock("trigger", []string{slice.Trigger.Name}).Body()
 		writeText(trigger, "description", slice.Trigger.Description)
 		writeRef(trigger, "actor", slice.Trigger.Actor)
-		writeRef(trigger, "reads", slice.Trigger.Reads)
+		writeRefOrList(trigger, "reads", slice.Trigger.Reads)
 	}
 
 	for _, command := range slice.Commands {
@@ -272,6 +272,16 @@ func writeRef(body *hclwrite.Body, name, value string) {
 		return
 	}
 	body.SetAttributeTraversal(name, rootOf(value))
+}
+
+func writeRefOrList(body *hclwrite.Body, name string, values []string) {
+	switch len(values) {
+	case 0:
+	case 1:
+		writeRef(body, name, values[0])
+	default:
+		body.SetAttributeRaw(name, refListTokens(values))
+	}
 }
 
 func rootOf(name string) hcl.Traversal {

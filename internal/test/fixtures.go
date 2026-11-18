@@ -3607,8 +3607,8 @@ func WithoutAutomationDelays(model *ast.Model) *ast.Model {
 func WithoutTriggerReads(model *ast.Model) *ast.Model {
 	return copyWithEditedSlices(model, func(s *ast.Slice) {
 		s.Trigger = editedCopy(s.Trigger, func(trigger *ast.Trigger) {
-			trigger.Reads = ""
-			trigger.ReadsPos = ast.Position{}
+			trigger.Reads = nil
+			trigger.ReadsPos = nil
 		})
 	})
 }
@@ -3839,8 +3839,8 @@ func DeclaredAutomationReads(model *ast.Model) []string {
 func DeclaredTriggerReads(model *ast.Model) []string {
 	var reads []string
 	for _, s := range declaredSlices(model) {
-		if s.Trigger != nil && s.Trigger.Reads != "" {
-			reads = append(reads, s.Trigger.Reads)
+		if s.Trigger != nil {
+			reads = append(reads, s.Trigger.Reads...)
 		}
 	}
 	return reads

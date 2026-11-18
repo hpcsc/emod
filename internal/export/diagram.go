@@ -385,7 +385,7 @@ func (b *diagramBuilder) appendTrigger(t *ast.Trigger, sliceID string) {
 		Position:    convertPosition(t.NamePos),
 		Comments:    convertComments(t.Comments),
 		Actor:       t.Actor,
-		Reads:       t.Reads,
+		Reads:       firstEntry(t.Reads),
 	})
 }
 

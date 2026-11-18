@@ -1,0 +1,88 @@
+design: planned
+types:
+  - name: Trigger
+    package: internal/ast   # ast.go
+    change: changed
+    does: is the human entry point of a slice, with its actor and the views it reads
+    owns:
+      - a trigger reads zero or more views, in the order the author wrote them
+      - ReadsPos holds the position of each entry of Reads, in the same order
+    fields: [Reads, ReadsPos]   # Reads []string, ReadsPos []Position; the Appearance of a shows block takes both later, with the same names
+  - name: hclReader
+    package: internal/parser   # parser.go
+    change: changed
+    does: reads the HCL body of a model into the AST
+    owns:
+      - the reads of a trigger is a bare name or a list of names, and a bare name is a list of one
+      - the reads of an automation and of a translation is one bare name
+      - an entry that is not a name is reported at that entry
+    methods: [trigger]
+  - name: jsonTrigger
+    package: internal/export   # json.go
+    change: changed
+    does: writes one trigger in the JSON export
+    owns:
+      - reads is a list of strings, also for one entry
+      - reads_position is a list with one position for each entry, in the order of reads
+    fields: [Reads, ReadsPosition]
+  - name: cueWriter
+    package: internal/export   # cue.go
+    change: changed
+    does: writes the CUE export
+    owns:
+      - the reads of a trigger is a list of strings, also for one entry
+    methods: [writeTrigger]
+  - name: jsonDiagramNode
+    package: internal/export   # diagram.go
+    change: changed
+    does: writes one node of the diagram document
+    owns:
+      - a trigger node gives reads as a list of each entry, also for one entry
+      - an automation node and a translation node give reads as one name
+    fields: [Reads]
+  - name: diagramNode
+    package: internal/importer   # importer.go
+    change: changed
+    does: reads one node of a diagram document
+    owns:
+      - reads on a node is one name or a list of names, and one name is a list of one
+    fields: [Reads]
+    methods: [asTrigger]
+  - name: builder
+    package: internal/importer   # importer.go
+    change: changed
+    does: builds a model from a diagram document
+    owns:
+      - a reads edge from a view, or from a copy of a view, onto a trigger adds that view after the views its node lists, unless the trigger reads it already
+      - a reads edge onto an automation or a translation fills its reads only when its node records none
+    methods: [foldReads]
+  - name: diagramEdit
+    package: internal/importer   # diagram_edit.go
+    change: changed
+    does: makes a model say what an edited diagram says
+    owns:
+      - a reads arrow that the viewer adds, removes, renames or moves changes the entry of that view only, and keeps the other entries of the trigger
+    methods: [clearRelationship, pendingRename, setReads]
+  - name: UI
+    package: internal/frontend/static   # ui.js
+    change: changed
+    does: shows the detail panel and the other overlays of the viewer
+    owns:
+      - the panel of a trigger lists each view it reads, in list order
+    methods: [showDetailPanel]
+functions:
+  - diagram.SliceEdges(s *ast.Slice) []Edge   # exists; gives one reads edge for each entry of a trigger, which the SVG, the copies, the diagram document and emod trace read
+words:
+  - concept: one view name in the reads of a trigger
+    word: entry
+    not: [element, item, member]   # diagram.DeclaredElement and query.element own element
+  - concept: the bracketed form, reads = [CartView, DiscountView]
+    word: list
+    not: [array, tuple, set]   # HCL calls the syntax a tuple
+  - concept: the unbracketed form, reads = CartView
+    word: bare name
+    not: [scalar, single name, plain name]
+  - concept: the views a trigger reads, as the DSL, the AST and each export key spell it
+    word: reads
+    not: [views, readViews, sources]   # source is an event's source field and an edge's starting node
+dependencies: []

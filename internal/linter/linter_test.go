@@ -3766,7 +3766,7 @@ func TestLint(t *testing.T) {
 			model := lendingWith(
 				&ast.Slice{
 					Name:    "Chase Overdue Copy",
-					Trigger: &ast.Trigger{Name: "Lending Desk", Reads: "OverdueLoansView"},
+					Trigger: &ast.Trigger{Name: "Lending Desk", Reads: []string{"OverdueLoansView"}},
 					Views:   []*ast.View{viewAt("OverdueLoansView", 31)},
 				},
 				&ast.Slice{
@@ -3799,7 +3799,7 @@ func TestLint(t *testing.T) {
 					reader: func(view string) *ast.Slice {
 						return &ast.Slice{
 							Name:    "Lending Desk",
-							Trigger: &ast.Trigger{Name: "Lending Desk", Reads: view},
+							Trigger: &ast.Trigger{Name: "Lending Desk", Reads: []string{view}},
 						}
 					},
 				},
@@ -3840,6 +3840,25 @@ func TestLint(t *testing.T) {
 			}
 		})
 
+		t.Run("each entry of a trigger's list counts as a reader, and a view no entry names is still reported", func(t *testing.T) {
+			model := lendingWith(
+				&ast.Slice{
+					Name:    "Lending Desk",
+					Trigger: &ast.Trigger{Name: "Lending Desk", Reads: []string{"MemberLoansView", "OverdueLoansView"}},
+				},
+				&ast.Slice{
+					Name:  "Review Member Loans",
+					Views: []*ast.View{viewAt("MemberLoansView", 47), viewAt("OverdueLoansView", 62), viewAt("ReservedCopiesView", 77)},
+				},
+			)
+
+			diags := linter.Lint(model)
+
+			require.Equal(t, []string{
+				fmt.Sprintf(`lending.emod:77: [view/never-read] `+neverRead, "ReservedCopiesView"),
+			}, reportedLines(diags))
+		})
+
 		t.Run("a view is read from anywhere in the model, not only its own slice's home", func(t *testing.T) {
 			model := &ast.Model{
 				Contexts: []*ast.Context{
@@ -3875,7 +3894,7 @@ func TestLint(t *testing.T) {
 								Name: "Reception",
 								Slices: []*ast.Slice{{
 									Name:    "Seat Reader",
-									Trigger: &ast.Trigger{Name: "Reception Desk", Reads: "DeskOccupancyView"},
+									Trigger: &ast.Trigger{Name: "Reception Desk", Reads: []string{"DeskOccupancyView"}},
 								}},
 							},
 						},
@@ -3942,7 +3961,7 @@ func TestLint(t *testing.T) {
 						Aggregates: []*ast.Aggregate{{Name: "Loan", Slices: []*ast.Slice{
 							{
 								Name:    "Chase Overdue Copy",
-								Trigger: &ast.Trigger{Name: "Lending Desk", Reads: "OverdueLoansView"},
+								Trigger: &ast.Trigger{Name: "Lending Desk", Reads: []string{"OverdueLoansView"}},
 								Views:   []*ast.View{viewAt("OverdueLoansView", 14)},
 							},
 							{Name: "Review Member Loans", Views: []*ast.View{viewAt("MemberLoansView", 20)}},
@@ -3953,7 +3972,7 @@ func TestLint(t *testing.T) {
 						Mode: "dcb",
 						Slices: []*ast.Slice{{
 							Name:    "Seat Reader",
-							Trigger: &ast.Trigger{Name: "Reception Desk", Reads: "MemberLoansView"},
+							Trigger: &ast.Trigger{Name: "Reception Desk", Reads: []string{"MemberLoansView"}},
 						}},
 					},
 				},
@@ -3975,7 +3994,7 @@ func TestLint(t *testing.T) {
 								Slices: []*ast.Slice{
 									{
 										Name:    "Chase Overdue Copy",
-										Trigger: &ast.Trigger{Name: "Lending Desk", Reads: "OverdueLoansView"},
+										Trigger: &ast.Trigger{Name: "Lending Desk", Reads: []string{"OverdueLoansView"}},
 										Views:   []*ast.View{viewAt("OverdueLoansView", 14)},
 									},
 									{Name: "Review Member Loans", Views: []*ast.View{viewAt("MemberLoansView", 20)}},
@@ -4007,7 +4026,7 @@ func TestLint(t *testing.T) {
 				return lendingWith(
 					&ast.Slice{
 						Name:    "Watch Desks",
-						Trigger: &ast.Trigger{Name: "Desk Board", Reads: "DeskOccupancyView"},
+						Trigger: &ast.Trigger{Name: "Desk Board", Reads: []string{"DeskOccupancyView"}},
 						Views:   []*ast.View{viewAt("DeskOccupancyView", 12)},
 					},
 					&ast.Slice{Name: "Review Member Loans", Trigger: reader, Views: []*ast.View{viewAt("MemberLoansView", 20)}},
@@ -4016,13 +4035,13 @@ func TestLint(t *testing.T) {
 			}
 
 			t.Run("read once", func(t *testing.T) {
-				diags := linter.Lint(declaredTwice(&ast.Trigger{Name: "Lending Desk", Reads: "MemberLoansView"}))
+				diags := linter.Lint(declaredTwice(&ast.Trigger{Name: "Lending Desk", Reads: []string{"MemberLoansView"}}))
 
 				require.Empty(t, diags)
 			})
 
 			t.Run("read by nothing, with the model stating a reads elsewhere", func(t *testing.T) {
-				diags := linter.Lint(declaredTwice(&ast.Trigger{Name: "Lending Desk", Reads: "DeskOccupancyView"}))
+				diags := linter.Lint(declaredTwice(&ast.Trigger{Name: "Lending Desk", Reads: []string{"DeskOccupancyView"}}))
 
 				require.Equal(t, []string{
 					fmt.Sprintf(`lending.emod:20: [view/never-read] `+neverRead, "MemberLoansView"),
@@ -4040,7 +4059,7 @@ func TestLint(t *testing.T) {
 				return lendingWith(
 					&ast.Slice{
 						Name:    "Watch Desks",
-						Trigger: &ast.Trigger{Name: "Desk Board", Reads: "DeskOccupancyView"},
+						Trigger: &ast.Trigger{Name: "Desk Board", Reads: []string{"DeskOccupancyView"}},
 						Views:   []*ast.View{viewAt("DeskOccupancyView", 12)},
 					},
 					&ast.Slice{Name: "Review Member Loans", Views: []*ast.View{viewAt("MemberLoansView", 20)}},
@@ -4057,7 +4076,7 @@ func TestLint(t *testing.T) {
 					construct: "a trigger",
 					reading: &ast.Slice{
 						Name:    "Borrow Copy",
-						Trigger: &ast.Trigger{Name: "Lending Desk", Reads: "MemberLoansVeiw"},
+						Trigger: &ast.Trigger{Name: "Lending Desk", Reads: []string{"MemberLoansVeiw"}},
 					},
 					silent: &ast.Slice{
 						Name:    "Borrow Copy",
@@ -4116,7 +4135,7 @@ func TestLint(t *testing.T) {
 								Slices: []*ast.Slice{
 									{
 										Name:    "Claim Desk",
-										Trigger: &ast.Trigger{Name: "Desk Board", Reads: "DeskOccupancyVeiw"},
+										Trigger: &ast.Trigger{Name: "Desk Board", Reads: []string{"DeskOccupancyVeiw"}},
 										Views:   []*ast.View{viewAt("DeskOccupancyView", 12)},
 									},
 								},
@@ -4157,7 +4176,7 @@ func TestLint(t *testing.T) {
 								Slices: []*ast.Slice{
 									{
 										Name:    "Claim Desk",
-										Trigger: &ast.Trigger{Name: "Desk Board", Reads: "DeskOccupancyView"},
+										Trigger: &ast.Trigger{Name: "Desk Board", Reads: []string{"DeskOccupancyView"}},
 									},
 									{Name: "Review Member Loans", Views: []*ast.View{viewAt("MemberLoansView", 20)}},
 								},

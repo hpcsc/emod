@@ -116,6 +116,31 @@ context "Lending" {
 			require.Equal(t, source, formatter.Format(model))
 		})
 
+		t.Run("the reads of a trigger is a bare name for one view and a list for two or more", func(t *testing.T) {
+			for _, tc := range []struct {
+				name    string
+				written string
+				want    string
+			}{
+				{name: "a bare name stays a bare name", written: "CartView", want: "reads = CartView\n"},
+				{name: "a list of one becomes a bare name", written: "[CartView]", want: "reads = CartView\n"},
+				{name: "a list of two stays a list, in the order written", written: "[DiscountView, CartView]", want: "reads = [DiscountView, CartView]\n"},
+			} {
+				t.Run(tc.name, func(t *testing.T) {
+					source := "context \"Shop\" {\n  slice \"Apply Discount\" {\n    trigger \"Checkout Page\" {\n      reads = " + tc.written + "\n    }\n  }\n}\n"
+					model, diags := parser.Parse(source, "shop.emod")
+					require.Empty(t, diags)
+
+					rendered := formatter.Format(model)
+
+					require.Contains(t, rendered, "    trigger \"Checkout Page\" {\n      "+tc.want+"    }\n")
+					again, diags := parser.Parse(rendered, "shop.emod")
+					require.Empty(t, diags)
+					require.Equal(t, rendered, formatter.Format(again))
+				})
+			}
+		})
+
 		t.Run("a model built rather than read is still pinned to the supported version", func(t *testing.T) {
 			rendered := formatter.Format(&ast.Model{Name: "Built"})
 

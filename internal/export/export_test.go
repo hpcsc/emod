@@ -146,7 +146,7 @@ func TestExport(t *testing.T) {
 										Trigger: &ast.Trigger{
 											Name:  "Form",
 											Actor: "Guest",
-											Reads: "MyView",
+											Reads: []string{"MyView"},
 										},
 									},
 								},
@@ -606,7 +606,7 @@ func TestExport(t *testing.T) {
 									{
 										Name: "S",
 										Trigger: &ast.Trigger{
-											Name: "Form", Actor: "User", Reads: "V",
+											Name: "Form", Actor: "User", Reads: []string{"V"},
 										},
 										Commands: []*ast.Command{
 											{Name: "Cmd", Fields: []*ast.Field{{Name: "id", Type: "string"}}},
@@ -1010,8 +1010,8 @@ func TestExport(t *testing.T) {
 											NamePos:  ast.Position{Filename: "test.cue", Line: 3, Column: 7},
 											Actor:    "Guest",
 											ActorPos: ast.Position{Filename: "test.cue", Line: 3, Column: 13},
-											Reads:    "MyView",
-											ReadsPos: ast.Position{Filename: "test.cue", Line: 3, Column: 20},
+											Reads:    []string{"MyView"},
+											ReadsPos: []ast.Position{{Filename: "test.cue", Line: 3, Column: 20}},
 											OpenPos:  ast.Position{Filename: "test.cue", Line: 3, Column: 28},
 											ClosePos: ast.Position{Filename: "test.cue", Line: 5, Column: 3},
 										},
@@ -1060,8 +1060,8 @@ func TestExport(t *testing.T) {
 											Description: "Where the decision starts",
 											Actor:       "Guest",
 											ActorPos:    ast.Position{Filename: "test.cue", Line: 4, Column: 5},
-											Reads:       "MyView",
-											ReadsPos:    ast.Position{Filename: "test.cue", Line: 5, Column: 7},
+											Reads:       []string{"MyView"},
+											ReadsPos:    []ast.Position{{Filename: "test.cue", Line: 5, Column: 7}},
 											OpenPos:     ast.Position{Filename: "test.cue", Line: 3, Column: 28},
 											ClosePos:    ast.Position{Filename: "test.cue", Line: 6, Column: 3},
 										},
@@ -2100,7 +2100,7 @@ func TestExport(t *testing.T) {
 									{
 										Name: "S",
 										Trigger: &ast.Trigger{
-											Name: "Form", Actor: "User", Reads: "V",
+											Name: "Form", Actor: "User", Reads: []string{"V"},
 										},
 										Commands: []*ast.Command{
 											{Name: "Cmd"},
@@ -2222,7 +2222,7 @@ func TestExport(t *testing.T) {
 										Trigger: &ast.Trigger{
 											Name:  "FormSubmit",
 											Actor: "Guest",
-											Reads: "MyView",
+											Reads: []string{"MyView"},
 										},
 									},
 								},
@@ -2439,7 +2439,7 @@ func TestExport(t *testing.T) {
 									{
 										Name: "S",
 										Trigger: &ast.Trigger{
-											Name: "Form", Actor: "User", Reads: "V",
+											Name: "Form", Actor: "User", Reads: []string{"V"},
 										},
 										Views: []*ast.View{
 											{Name: "RoomsView"},
@@ -2855,14 +2855,14 @@ func TestExport(t *testing.T) {
 									},
 									{
 										Name:    "Borrow Copy",
-										Trigger: &ast.Trigger{Name: "Lending Desk", Reads: "MemberLoansView"},
+										Trigger: &ast.Trigger{Name: "Lending Desk", Reads: []string{"MemberLoansView"}},
 										Automations: []*ast.Automation{
 											{Name: "RecallOverdueCopy", Reads: "MemberLoansView"},
 										},
 									},
 									{
 										Name:    "Return Copy",
-										Trigger: &ast.Trigger{Name: "Returns Counter", Reads: "AvailableCopiesView"},
+										Trigger: &ast.Trigger{Name: "Returns Counter", Reads: []string{"AvailableCopiesView"}},
 										Automations: []*ast.Automation{
 											{Name: "ChaseOverdueCopy", Reads: "AvailableCopiesView"},
 										},
@@ -3081,7 +3081,7 @@ func TestExport(t *testing.T) {
 									{
 										Name: "S",
 										Trigger: &ast.Trigger{
-											Name: "Form", Actor: "User", Reads: "V",
+											Name: "Form", Actor: "User", Reads: []string{"V"},
 										},
 										Commands: []*ast.Command{
 											{Name: "Cmd"},
@@ -4424,7 +4424,7 @@ func TestExport(t *testing.T) {
 								Trigger: &ast.Trigger{
 									Name:  "Form",
 									Actor: "Guest",
-									Reads: "MyView",
+									Reads: []string{"MyView"},
 								},
 							}},
 						}},
@@ -5248,7 +5248,7 @@ func buildFullModel() *ast.Model {
 								Name:        "S",
 								Description: "One decision and everything it needs",
 								Trigger: &ast.Trigger{
-									Name: "Form", Actor: "User", Reads: "V",
+									Name: "Form", Actor: "User", Reads: []string{"V"},
 									Description: "Where the decision starts",
 								},
 								Commands: []*ast.Command{

@@ -73,8 +73,8 @@ func SliceEdges(s *ast.Slice) []Edge {
 	}
 
 	if s.Trigger != nil {
-		if s.Trigger.Reads != "" {
-			edges = append(edges, Edge{Kind: EdgeTriggerReads, From: s.Trigger.Reads, To: s.Trigger.Name})
+		for _, view := range s.Trigger.Reads {
+			edges = append(edges, Edge{Kind: EdgeTriggerReads, From: view, To: s.Trigger.Name})
 		}
 		for _, cmd := range s.Commands {
 			if cmd == nil {

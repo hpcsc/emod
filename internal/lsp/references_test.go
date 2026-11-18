@@ -258,6 +258,29 @@ func TestGetReferences(t *testing.T) {
 			require.Len(t, locs, 4)
 		})
 
+		t.Run("cursor on a view declaration lists the entry of a trigger's reads list that names it", func(t *testing.T) {
+			const doc = `context "Shop" {
+    slice "Show Cart" {
+        view "CartView" {
+        }
+        view "DiscountView" {
+        }
+    }
+    slice "Apply Discount" {
+        trigger "Checkout Page" {
+            reads = [CartView, DiscountView]
+        }
+    }
+}
+`
+
+			dLine, dChar := posIn(t, doc, `view "DiscountView"`, "DiscountView")
+			require.Equal(t, []lsp.Location{
+				locationOf(t, doc, `view "DiscountView"`, "DiscountView"),
+				locationOf(t, doc, `trigger "Checkout Page"`, "DiscountView"),
+			}, lsp.GetReferences(doc, dLine, dChar, uri))
+		})
+
 		t.Run("cursor on a view declaration lists every construct reading it across slice and context boundaries", func(t *testing.T) {
 			doc := test.AutomationReadsLibraryLending
 

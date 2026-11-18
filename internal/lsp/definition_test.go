@@ -125,6 +125,27 @@ func TestGetDefinition(t *testing.T) {
 		assertDef(t, testDoc, cLine, cChar, dLine, dChar, "OrderView")
 	})
 
+	t.Run("view reference in the second entry of a trigger's reads list", func(t *testing.T) {
+		const doc = `context "Shop" {
+    slice "Show Cart" {
+        view "CartView" {
+        }
+        view "DiscountView" {
+        }
+    }
+    slice "Apply Discount" {
+        trigger "Checkout Page" {
+            reads = [CartView, DiscountView]
+        }
+    }
+}
+`
+
+		cLine, cChar := posIn(t, doc, `trigger "Checkout Page"`, "DiscountView")
+		dLine, dChar := posIn(t, doc, `view "DiscountView`, "DiscountView")
+		assertDef(t, doc, cLine, cChar, dLine, dChar, "DiscountView")
+	})
+
 	t.Run("command reference in flow command", func(t *testing.T) {
 		flowLine := "command -> event:    SubmitOrder -> OrderSubmitted"
 		cLine, cChar := posIn(t, testDoc, flowLine, "SubmitOrder")

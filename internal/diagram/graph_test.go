@@ -16,7 +16,7 @@ import (
 func wiredSlice() *ast.Slice {
 	return &ast.Slice{
 		Name:     "Borrow Copy",
-		Trigger:  &ast.Trigger{Name: "Lending Desk", Reads: "AvailableCopiesView"},
+		Trigger:  &ast.Trigger{Name: "Lending Desk", Reads: []string{"AvailableCopiesView"}},
 		Commands: []*ast.Command{{Name: "BorrowCopy"}},
 		Events:   []*ast.Event{{Name: "CopyBorrowed"}},
 		Flows:    []*ast.Flow{{CommandName: "BorrowCopy", EventName: "CopyBorrowed"}},
@@ -58,6 +58,18 @@ func TestSliceEdges(t *testing.T) {
 	t.Run("derivation", func(t *testing.T) {
 		t.Run("a slice stating no rejection entry derives exactly the edges it always has", func(t *testing.T) {
 			require.Equal(t, wiredSliceEdges(), diagram.SliceEdges(wiredSlice()))
+		})
+
+		t.Run("a trigger reading two views derives one reads edge from each, in the order of its list", func(t *testing.T) {
+			slice := &ast.Slice{
+				Name:    "Apply Discount",
+				Trigger: &ast.Trigger{Name: "Checkout Page", Reads: []string{"DiscountView", "CartView"}},
+			}
+
+			require.Equal(t, []diagram.Edge{
+				{Kind: diagram.EdgeTriggerReads, From: "DiscountView", To: "Checkout Page"},
+				{Kind: diagram.EdgeTriggerReads, From: "CartView", To: "Checkout Page"},
+			}, diagram.SliceEdges(slice))
 		})
 
 		t.Run("a rejection entry derives one edge naming its command and its invariant", func(t *testing.T) {

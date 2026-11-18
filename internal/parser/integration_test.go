@@ -135,7 +135,7 @@ func TestIntegration(t *testing.T) {
 		test.RequireEqual(t, &ast.Trigger{
 			Name:  "Reservation Form",
 			Actor: "Guest",
-			Reads: "AvailableRoomsView",
+			Reads: []string{"AvailableRoomsView"},
 		}, commandSlice.Trigger, ignorePositions)
 
 		require.Len(t, commandSlice.Commands, 1)

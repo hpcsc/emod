@@ -962,7 +962,7 @@ context "C" {
 			model := importDiagram(t, diagram)
 
 			slice := model.Contexts[0].Slices[0]
-			require.Equal(t, "MemberLoansView", slice.Trigger.Reads)
+			require.Equal(t, []string{"MemberLoansView"}, slice.Trigger.Reads)
 			require.Equal(t, "MemberLoansView", slice.Automations[0].Reads)
 			require.Equal(t, "MemberLoansView", slice.Translations[0].Reads)
 		})
@@ -989,7 +989,7 @@ context "C" {
 			model := importDiagram(t, diagram)
 
 			slice := model.Contexts[0].Slices[0]
-			require.Equal(t, "MemberLoansView", slice.Trigger.Reads)
+			require.Equal(t, []string{"MemberLoansView"}, slice.Trigger.Reads)
 			require.Equal(t, "MemberLoansView", slice.Automations[0].Reads)
 		})
 
@@ -1020,7 +1020,7 @@ context "C" {
 			model := importDiagram(t, diagram)
 
 			repointed, drawnFromTheView := model.Contexts[0].Slices[0], model.Contexts[0].Slices[1]
-			require.Equal(t, "MemberLoansView", drawnFromTheView.Trigger.Reads)
+			require.Equal(t, []string{"MemberLoansView"}, drawnFromTheView.Trigger.Reads)
 			require.Equal(t, "MemberLoansView", drawnFromTheView.Automations[0].Reads)
 			require.Empty(t, repointed.Trigger.Reads)
 			require.Empty(t, repointed.Automations[0].Reads)

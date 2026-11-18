@@ -989,7 +989,7 @@ func readsTwins() []readsTwin {
 // can be compared against the one the translation was already drawn.
 func readsModel() *ast.Model {
 	model := singleSliceModel("Lending", "Borrow Copy",
-		&ast.Trigger{Name: "Lending Desk", Actor: "Member", Reads: "MemberLoansView"},
+		&ast.Trigger{Name: "Lending Desk", Actor: "Member", Reads: []string{"MemberLoansView"}},
 		command("BorrowCopy"), event("CopyBorrowed"))
 	aggregate := model.Contexts[0].Aggregates[0]
 	aggregate.Slices[0].Translations = []*ast.Translation{{
@@ -1028,12 +1028,12 @@ func mixedReadsModel() *ast.Model {
 	aggregate.Slices = append(aggregate.Slices,
 		&ast.Slice{
 			Name:        "Claim Desk",
-			Trigger:     &ast.Trigger{Name: "Desk Kiosk", Reads: "DeskOccupancyView"},
+			Trigger:     &ast.Trigger{Name: "Desk Kiosk", Reads: []string{"DeskOccupancyView"}},
 			Automations: []*ast.Automation{{Name: "FreeDeskAtClosing", Reads: "DeskOccupancyView"}},
 		},
 		&ast.Slice{
 			Name:        "Reserve Desk",
-			Trigger:     &ast.Trigger{Name: "Booking Page", Reads: "DeskWaitlistView"},
+			Trigger:     &ast.Trigger{Name: "Booking Page", Reads: []string{"DeskWaitlistView"}},
 			Automations: []*ast.Automation{{Name: "ExpireReservation", Reads: "DeskWaitlistView"}},
 		},
 		&ast.Slice{

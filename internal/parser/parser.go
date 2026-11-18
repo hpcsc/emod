@@ -139,6 +139,14 @@ func (r *hclReader) names(expr hcl.Expression) ([]string, []ast.Position) {
 	return values, positions
 }
 
+func (r *hclReader) nameOrNames(expr hcl.Expression) ([]string, []ast.Position) {
+	if _, isList := expr.(*hclsyntax.TupleConsExpr); isList {
+		return r.names(expr)
+	}
+	name, position := r.name(expr)
+	return []string{name}, []ast.Position{position}
+}
+
 func hclCall(expr hcl.Expression) (*hclsyntax.FunctionCallExpr, bool) {
 	call, ok := expr.(*hclsyntax.FunctionCallExpr)
 	return call, ok
@@ -426,7 +434,7 @@ func (r *hclReader) trigger(b *hclsyntax.Block) *ast.Trigger {
 		case "actor":
 			trigger.Actor, trigger.ActorPos = r.name(a.Expr)
 		case "reads":
-			trigger.Reads, trigger.ReadsPos = r.name(a.Expr)
+			trigger.Reads, trigger.ReadsPos = r.nameOrNames(a.Expr)
 		default:
 			r.fail(a.NameRange.Start, "unexpected %s in trigger", a.Name)
 		}

@@ -397,8 +397,10 @@ func scopedInvariantDiagnostics(found []scopedInvariant, messageFormat string) [
 
 func referenceDiagnostics(slice *ast.Slice, index *modelIndex) []*diagnostic.Entry {
 	var diags []*diagnostic.Entry
-	if slice.Trigger != nil {
-		diags = appendUndeclaredRef(diags, "view", slice.Trigger.Reads, slice.Trigger.ReadsPos, index.viewNames)
+	if trigger := slice.Trigger; trigger != nil {
+		for i, view := range trigger.Reads {
+			diags = appendUndeclaredRef(diags, "view", view, trigger.ReadsPos[i], index.viewNames)
+		}
 	}
 	for _, auto := range slice.Automations {
 		diags = appendUndeclaredRef(diags, "target context", auto.TargetContext, auto.TargetContextPos, index.contextNames)

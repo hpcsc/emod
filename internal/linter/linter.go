@@ -65,8 +65,12 @@ func Lint(model *ast.Model) []*diagnostic.Entry {
 	readViews := make(map[string]bool)
 	declaredViews := make(map[string]bool)
 	for _, slice := range model.AllSlices() {
-		if slice.Trigger != nil && slice.Trigger.Reads != "" {
-			readViews[slice.Trigger.Reads] = true
+		if slice.Trigger != nil {
+			for _, view := range slice.Trigger.Reads {
+				if view != "" {
+					readViews[view] = true
+				}
+			}
 		}
 		for _, auto := range slice.Automations {
 			if auto.Reads != "" {
