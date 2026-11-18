@@ -18,7 +18,6 @@ const hotelModel = `context "Hotel" {
 
     slice "Book Room" {
       trigger "Booking Form" {
-        actor = Guest
         reads = RoomsView
       }
 
@@ -146,7 +145,7 @@ func TestTrace(t *testing.T) {
 					Context:   "Hotel",
 					Aggregate: "Stay",
 					Slice:     "Confirm Booking",
-					Line:      32,
+					Line:      31,
 				},
 				Steps: []query.Step{
 					{
@@ -156,7 +155,7 @@ func TestTrace(t *testing.T) {
 							Context:   "Mail",
 							Aggregate: "Message",
 							Slice:     "Send Confirmation",
-							Line:      76,
+							Line:      75,
 						},
 						From:           query.Element{Kind: query.KindAutomation, Name: "Confirmer"},
 						CrossesContext: true,
@@ -169,7 +168,7 @@ func TestTrace(t *testing.T) {
 							Context:   "Mail",
 							Aggregate: "Message",
 							Slice:     "Send Confirmation",
-							Line:      79,
+							Line:      78,
 						},
 						From:  query.Element{Kind: query.KindCommand, Name: "SendConfirmation"},
 						Depth: 2,

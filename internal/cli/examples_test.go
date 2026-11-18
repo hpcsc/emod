@@ -32,7 +32,7 @@ func TestExamples(t *testing.T) {
 
 			var undescribed []string
 			for _, kind := range []string{
-				"model", "actor",
+				"model",
 				"context", "aggregate", "slice", "trigger",
 				"command", "event", "view", "automation", "translation",
 			} {
@@ -284,9 +284,6 @@ func describedKinds(model *ast.Model) map[string]bool {
 	}
 
 	describe("model", model.Description)
-	for _, actor := range model.Actors {
-		describe("actor", actor.Description)
-	}
 	for _, context := range model.Contexts {
 		describe("context", context.Description)
 		for _, aggregate := range context.Aggregates {

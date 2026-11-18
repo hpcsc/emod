@@ -53,14 +53,10 @@ emod = 1
 model "Hotel Reservation" {
 }
 
-actor "Guest" {
-}
-
 context "Reservations" {
   aggregate "Reservation" {
     slice "Reserve a Room" {
       trigger "Reservation Form" {
-        actor = Guest
         reads = AvailableRoomsView
       }
 

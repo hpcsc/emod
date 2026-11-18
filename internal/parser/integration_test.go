@@ -22,8 +22,6 @@ func TestIntegration(t *testing.T) {
 		model := parseWithoutDiagnostics(t, "testdata/minimal.emod")
 
 		require.Equal(t, "Hotel Reservation", model.Name)
-		require.Len(t, model.Actors, 1)
-		require.Equal(t, "Guest", model.Actors[0].Name)
 		require.Len(t, model.Contexts, 1)
 
 		ctx := model.Contexts[0]
@@ -100,8 +98,6 @@ func TestIntegration(t *testing.T) {
 		require.Len(t, model.Comments, 1)
 		require.Equal(t, "# Hotel Reservation System — exercises all four slice patterns", model.Comments[0].Text)
 
-		require.Len(t, model.Actors, 1)
-		require.Equal(t, "Guest", model.Actors[0].Name)
 		require.Len(t, model.Contexts, 2)
 
 		ctx := model.Contexts[0]
@@ -134,7 +130,6 @@ func TestIntegration(t *testing.T) {
 		require.NotNil(t, commandSlice.Trigger)
 		test.RequireEqual(t, &ast.Trigger{
 			Name:  "Reservation Form",
-			Actor: "Guest",
 			Reads: []string{"AvailableRoomsView"},
 		}, commandSlice.Trigger, ignorePositions)
 

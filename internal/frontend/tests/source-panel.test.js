@@ -156,10 +156,10 @@ describe('SourcePanel', () => {
       const store = setupSourcePanel('emod = 1\n');
       expect(coloursText()).toBe('emod = 1\n');
 
-      store.dom.sourceInput.value = 'emod = 1\n\nactor "Clerk" {\n}\n';
+      store.dom.sourceInput.value = 'emod = 1\n\ncontext "Clerk" {\n}\n';
 
-      expect(coloursText()).toBe('emod = 1\n\nactor "Clerk" {\n}\n');
-      expect(store.dom.sourceInput.value).toBe('emod = 1\n\nactor "Clerk" {\n}\n');
+      expect(coloursText()).toBe('emod = 1\n\ncontext "Clerk" {\n}\n');
+      expect(store.dom.sourceInput.value).toBe('emod = 1\n\ncontext "Clerk" {\n}\n');
     });
   });
 
@@ -262,7 +262,7 @@ describe('SourcePanel', () => {
     });
 
     it('counts a column in the characters a reader sees, as HCL does, not in code units', () => {
-      const source = 'emod = 1\nactor "Cáfe\u{1F469}‍\u{1F4BB}" { 7 }\n';
+      const source = 'emod = 1\nevent "Cáfe\u{1F469}‍\u{1F4BB}" { 7 }\n';
       const store = setupSourcePanel(source);
 
       SourcePanel.moveCaretTo(store, { line: 2, column: 17 });

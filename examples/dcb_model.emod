@@ -6,9 +6,6 @@ emod = 1
 model "Order Management" {
 }
 
-actor "Customer" {
-}
-
 context "Fulfillment" {
   mode = dcb
 

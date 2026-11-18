@@ -350,9 +350,6 @@ func TestServer(t *testing.T) {
 model "test" {
 }
 
-actor "A" {
-}
-
 context "C" {
   aggregate "Agg" {
     slice "Sl" {
@@ -1068,7 +1065,7 @@ context "Orders" {
 			p.readInitializeResult(t, 1)
 
 			uri := "file:///format.emod"
-			content := "emod = 1\n\nmodel \"test\" {\n}\n\nactor \"Guest\" {\n}\n\ncontext \"Orders\" {\n  aggregate \"Order\" {\n  }\n}\n"
+			content := "emod = 1\n\nmodel \"test\" {\n}\n\ncontext \"Orders\" {\n  aggregate \"Order\" {\n  }\n}\n"
 
 			p.openDocument(t, uri, content)
 
@@ -1097,7 +1094,7 @@ context "Orders" {
 			require.Equal(t, []lsp.TextEdit{{
 				Range: lsp.Range{
 					Start: lsp.Position{Line: 0, Character: 0},
-					End:   lsp.Position{Line: 12, Character: 0},
+					End:   lsp.Position{Line: 9, Character: 0},
 				},
 				NewText: content,
 			}}, edits)

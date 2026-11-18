@@ -2415,8 +2415,8 @@ context "C" {
 	})
 
 	t.Run("copies of read views and issued commands", func(t *testing.T) {
-		const deskKioskReading = "    trigger \"Desk Kiosk\" {\n      actor = Member\n      reads = DeskOccupancyView\n    }"
-		const deskKioskReadingNothing = "    trigger \"Desk Kiosk\" {\n      actor = Member\n    }"
+		const deskKioskReading = "    trigger \"Desk Kiosk\" {\n      reads = DeskOccupancyView\n    }"
+		const deskKioskReadingNothing = "    trigger \"Desk Kiosk\" {\n    }"
 
 		t.Run("a diagram that draws view and command copies, unedited, leaves the model as it was written", func(t *testing.T) {
 			require.Equal(t, test.TriggerReadsLibraryLending, applied(t, test.TriggerReadsLibraryLending, func(*viewerDiagram) {}))
@@ -2459,7 +2459,7 @@ context "C" {
 `, `  slice "Browse Desk Occupancy" {
   }
 `)
-			expected = replaced(t, expected, "        actor = Librarian\n        reads = DeskOccupancyView\n", "        actor = Librarian\n")
+			expected = replaced(t, expected, "      trigger \"Overdue Report\" {\n        reads = DeskOccupancyView\n      }", "      trigger \"Overdue Report\" {\n      }")
 			expected = replaced(t, expected, deskKioskReading, deskKioskReadingNothing)
 			expected = replaced(t, expected, "      on      = DeskClaimed\n      reads   = DeskOccupancyView\n", "      on      = DeskClaimed\n")
 			require.Equal(t, expected, result)
@@ -2497,8 +2497,8 @@ context "C" {
 
 			expected := replaced(t, source, deskKioskReading, deskKioskReadingNothing)
 			expected = replaced(t, expected,
-				"      trigger \"Returns Counter\" {\n        actor = Member\n      }",
-				"      trigger \"Returns Counter\" {\n        actor = Member\n        reads = DeskOccupancyView\n      }")
+				"      trigger \"Returns Counter\" {\n      }",
+				"      trigger \"Returns Counter\" {\n        reads = DeskOccupancyView\n      }")
 			require.Equal(t, expected, result)
 		})
 	})

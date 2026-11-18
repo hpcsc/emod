@@ -197,7 +197,6 @@ context "Fulfillment" {
 
   slice "Place Order" {
     trigger "Order Form" {
-      actor = Customer
     }
 
     command "PlaceOrder" {

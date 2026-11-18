@@ -427,25 +427,25 @@ below it.
 
 **Acceptance Criteria:**
 
-- [ ] No example, parser testdata file, fixture in `internal/test/fixtures.go`, test source or e2e sample
+- [x] No example, parser testdata file, fixture in `internal/test/fixtures.go`, test source or e2e sample
       states an `actor` block or an `actor` attribute. Only these tests still spell one: a test that gives
       `actor` to a surface to show that the surface rejects it or shows nothing of it; the parser tests that
       accept `actor`, which Task 7 replaces; and the importer and viewer tests that carry an actor through the
       diagram document, which Task 6 replaces.
-- [ ] `examples/`, `docs/dsl-reference.md`, `site/content/docs/dsl-reference.md`, `site/content/docs/_index.md`,
+- [x] `examples/`, `docs/dsl-reference.md`, `site/content/docs/dsl-reference.md`, `site/content/docs/_index.md`,
       `README.md`, `e2e/` and `e2e-viewer/` contain no word `actor`, found with a `\b`-bounded search, which
       does not match `reactor`.
-- [ ] `docs/dsl-reference.md` has no `actor` section. The references example, the skeleton of the command
+- [x] `docs/dsl-reference.md` has no `actor` section. The references example, the skeleton of the command
       pattern, the list of constructs that take a description, the fenced example of descriptions and the note
       on constructs that own no shape name no actor. The cross-reference table has no actor row.
-- [ ] The live proposals under `docs/proposals/ai/` present no `actor` block, attribute or construct. A use of
+- [x] The live proposals under `docs/proposals/ai/` present no `actor` block, attribute or construct. A use of
       "actors" that means the people of a domain stays.
-- [ ] The historical records that the Boundaries section names keep the word, unchanged.
-- [ ] The examples guard, the "documented models" leaf of `internal/oracle` and the `TestApplyDiagram` guard
+- [x] The historical records that the Boundaries section names keep the word, unchanged.
+- [x] The examples guard, the "documented models" leaf of `internal/oracle` and the `TestApplyDiagram` guard
       over examples and parser testdata still run over each changed file. The examples leaf "describes at least
       one construct of every kind that accepts a description" does not ask for an actor.
-- [ ] Each e2e-viewer sample stays canonical: `emod fmt --check` passes on it.
-- [ ] `task test` passes.
+- [x] Each e2e-viewer sample stays canonical: `emod fmt --check` passes on it.
+- [x] `task test` passes.
 
 **Affected Files/Modules:**
 

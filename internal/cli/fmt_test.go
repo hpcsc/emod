@@ -16,9 +16,6 @@ import (
 const emodWithoutVersionHeader = `model "Hotel Reservation" {
 }
 
-actor "Guest" {
-}
-
 context "Reservations" {
   aggregate "Reservation" {
     slice "Make Reservation" {
@@ -54,10 +51,6 @@ const describedFormattedEmod = `emod = 1
 
 model "Hotel Reservation" {
   description = "How the hotel takes and confirms room bookings"
-}
-
-actor "Guest" {
-  description = "A person booking a room"
 }
 
 context "Reservations" {
@@ -101,9 +94,6 @@ const unformattedEmod = `emod = 1
 
 
 model "Hotel Reservation" {
-}
-
-actor "Guest" {
 }
 
 context "Reservations" {
@@ -160,14 +150,10 @@ const keywordFieldFormattedEmod = `emod = 1
 model "Model Search Catalog" {
 }
 
-actor "Analyst" {
-}
-
 context "Discovery" {
   aggregate "Saved Search" {
     slice "Define Saved Search" {
       trigger "Search Builder" {
-        actor = Analyst
         reads = SavedSearchesView
       }
 
@@ -274,9 +260,6 @@ const specFormattedEmod = `emod = 1
 model "Library Lending" {
 }
 
-actor "Member" {
-}
-
 context "Lending" {
   aggregate "Loan" {
     invariants {
@@ -285,7 +268,6 @@ context "Lending" {
 
     slice "Borrow Copy" {
       trigger "Lending Desk" {
-        actor = Member
         reads = MemberLoansView
       }
 
@@ -472,9 +454,6 @@ const payloadFormattedEmod = `emod = 1
 
 # Lending a library's copies and seating its readers, with example values on the scenarios each slice must satisfy
 model "Library Lending" {
-}
-
-actor "Member" {
 }
 
 context "Lending" {
@@ -903,9 +882,6 @@ const rejectionFormattedEmod = `emod = 1
 model "Library Lending" {
 }
 
-actor "Member" {
-}
-
 context "Lending" {
   aggregate "Loan" {
     invariants {
@@ -914,7 +890,6 @@ context "Lending" {
 
     slice "Borrow Copy" {
       trigger "Lending Desk" {
-        actor = Member
         reads = MemberLoansView
       }
 
@@ -1105,13 +1080,6 @@ model "Library Lending" {
   description = "How the library lends its copies and seats its readers"
 }
 
-actor "Member" {
-  description = "Someone who holds a library card"
-}
-
-actor "Librarian" {
-}
-
 context "Lending" {
   description = "Everything the library knows about who holds which copy"
 
@@ -1127,7 +1095,6 @@ context "Lending" {
 
       trigger "Lending Desk" {
         description = "The counter a member borrows from"
-        actor       = Member
         reads       = MemberLoansView
       }
 
@@ -1470,9 +1437,6 @@ const slicePatternFormattedEmod = `emod = 1
 model "Library Lending" {
 }
 
-actor "Member" {
-}
-
 context "Lending" {
   aggregate "Loan" {
     invariants {
@@ -1481,7 +1445,6 @@ context "Lending" {
 
     slice "Borrow Copy" {
       trigger "Lending Desk" {
-        actor = Member
         reads = MemberLoansView
       }
 

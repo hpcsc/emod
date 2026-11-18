@@ -36,17 +36,6 @@ model "Hotel Reservation" {
 }
 ```
 
-### `actor`
-
-Declares a persona or external system that interacts with the model. Actors are referenced by
-triggers.
-
-```emod
-actor "Guest" {
-  description = "Someone booking a room"
-}
-```
-
 ## Bounded contexts
 
 ### `context`
@@ -103,7 +92,7 @@ slice "Reserve a Room" {
 }
 ```
 
-- A **trigger** names the actor who works the slice, and the views they read.
+- A **trigger** is where a person starts the slice, and names the views it reads.
 - A **command** states the input fields a use case accepts.
 - An **event** states the facts the use case appends to the stream.
 - A **view** projects events; it declares which events it subscribes to.

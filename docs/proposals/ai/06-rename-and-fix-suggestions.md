@@ -396,9 +396,9 @@ each leaf subtest.
 
 ## Open Questions
 
-- **Rename of other kinds.** Contexts, actors, aggregates, slices, automations and translations are not in
-  the rename. A context is referenced by the `target` of an automation, and an actor by a trigger. They can
-  join when find references covers them.
+- **Rename of other kinds.** Contexts, aggregates, slices, automations and translations are not in the
+  rename. A context is referenced by the `target` of an automation. They can join when find references covers
+  them.
 - **Models in more than one file.** `GetReferences` reads one document. A `WorkspaceEdit` can change many
   files, so the rename can grow when a model spans files.
 - **One rename for every surface.** The inline rename of the web viewer and the desktop app changes one

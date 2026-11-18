@@ -32,7 +32,6 @@ const bookingModel = `context "Booking" {
 
     slice "Book Room" {
       trigger "Booking Form" {
-        actor = Guest
         reads = RoomsView
       }
 
@@ -109,15 +108,15 @@ func TestReferences(t *testing.T) {
 				Context:   "Booking",
 				Aggregate: "Room",
 				Slice:     "Book Room",
-				Line:      16,
+				Line:      15,
 				References: []query.Reference{
-					{Group: query.GroupProducedBy, Keyword: "flow", Line: 20, Element: element(query.KindCommand, "BookRoom"), Slice: "Book Room"},
-					{Group: query.GroupNamedInSpecs, Keyword: "then", Line: 26, Slice: "Book Room", Spec: "books a free room"},
-					{Group: query.GroupNamedInSpecs, Keyword: "given", Line: 30, Slice: "Book Room", Spec: "refuses a booked room"},
-					{Group: query.GroupReadBy, Keyword: "subscribes", Line: 38, Element: element(query.KindView, "RoomsView"), Slice: "Show Rooms"},
-					{Group: query.GroupNamedInSpecs, Keyword: "given", Line: 42, Slice: "Show Rooms", Spec: "shows a booked room"},
-					{Group: query.GroupReadBy, Keyword: "on", Line: 49, Element: element(query.KindAutomation, "Confirmer"), Slice: "Confirm Booking"},
-					{Group: query.GroupNamedInSpecs, Keyword: "when", Line: 55, Slice: "Confirm Booking", Spec: "books again on a booking"},
+					{Group: query.GroupProducedBy, Keyword: "flow", Line: 19, Element: element(query.KindCommand, "BookRoom"), Slice: "Book Room"},
+					{Group: query.GroupNamedInSpecs, Keyword: "then", Line: 25, Slice: "Book Room", Spec: "books a free room"},
+					{Group: query.GroupNamedInSpecs, Keyword: "given", Line: 29, Slice: "Book Room", Spec: "refuses a booked room"},
+					{Group: query.GroupReadBy, Keyword: "subscribes", Line: 37, Element: element(query.KindView, "RoomsView"), Slice: "Show Rooms"},
+					{Group: query.GroupNamedInSpecs, Keyword: "given", Line: 41, Slice: "Show Rooms", Spec: "shows a booked room"},
+					{Group: query.GroupReadBy, Keyword: "on", Line: 48, Element: element(query.KindAutomation, "Confirmer"), Slice: "Confirm Booking"},
+					{Group: query.GroupNamedInSpecs, Keyword: "when", Line: 54, Slice: "Confirm Booking", Spec: "books again on a booking"},
 				},
 			}}, found)
 		})
@@ -132,9 +131,9 @@ func TestReferences(t *testing.T) {
 				Context:   "Booking",
 				Aggregate: "Room",
 				Slice:     "Import Booking",
-				Line:      66,
+				Line:      65,
 				References: []query.Reference{
-					{Group: query.GroupProducedBy, Keyword: "translation", Line: 64, Element: element(query.KindCommand, "BookRoom"), Slice: "Import Booking"},
+					{Group: query.GroupProducedBy, Keyword: "translation", Line: 63, Element: element(query.KindCommand, "BookRoom"), Slice: "Import Booking"},
 				},
 			}}, found)
 		})
@@ -151,17 +150,17 @@ func TestReferences(t *testing.T) {
 				Context:   "Booking",
 				Aggregate: "Room",
 				Slice:     "Book Room",
-				Line:      13,
+				Line:      12,
 				References: []query.Reference{
 					{Group: query.GroupIssuedBy, Keyword: "issues", Line: 8, Element: element(query.KindTrigger, "Booking Form"), Slice: "Book Room"},
-					{Group: query.GroupProduces, Keyword: "flow", Line: 20, Element: element(query.KindEvent, "RoomBooked"), Slice: "Book Room"},
-					{Group: query.GroupRefusedBy, Keyword: "rejected", Line: 21, Element: element(query.KindInvariant, "RoomFree"), Slice: "Book Room"},
-					{Group: query.GroupNamedInSpecs, Keyword: "when", Line: 25, Slice: "Book Room", Spec: "books a free room"},
-					{Group: query.GroupNamedInSpecs, Keyword: "when", Line: 31, Slice: "Book Room", Spec: "refuses a booked room"},
-					{Group: query.GroupIssuedBy, Keyword: "command", Line: 51, Element: element(query.KindAutomation, "Confirmer"), Slice: "Confirm Booking"},
-					{Group: query.GroupNamedInSpecs, Keyword: "then", Line: 56, Slice: "Confirm Booking", Spec: "books again on a booking"},
-					{Group: query.GroupIssuedBy, Keyword: "command", Line: 64, Element: element(query.KindTranslation, "PartnerImport"), Slice: "Import Booking"},
-					{Group: query.GroupProduces, Keyword: "translation", Line: 64, Element: element(query.KindEvent, "BookingImported"), Slice: "Import Booking"},
+					{Group: query.GroupProduces, Keyword: "flow", Line: 19, Element: element(query.KindEvent, "RoomBooked"), Slice: "Book Room"},
+					{Group: query.GroupRefusedBy, Keyword: "rejected", Line: 20, Element: element(query.KindInvariant, "RoomFree"), Slice: "Book Room"},
+					{Group: query.GroupNamedInSpecs, Keyword: "when", Line: 24, Slice: "Book Room", Spec: "books a free room"},
+					{Group: query.GroupNamedInSpecs, Keyword: "when", Line: 30, Slice: "Book Room", Spec: "refuses a booked room"},
+					{Group: query.GroupIssuedBy, Keyword: "command", Line: 50, Element: element(query.KindAutomation, "Confirmer"), Slice: "Confirm Booking"},
+					{Group: query.GroupNamedInSpecs, Keyword: "then", Line: 55, Slice: "Confirm Booking", Spec: "books again on a booking"},
+					{Group: query.GroupIssuedBy, Keyword: "command", Line: 63, Element: element(query.KindTranslation, "PartnerImport"), Slice: "Import Booking"},
+					{Group: query.GroupProduces, Keyword: "translation", Line: 63, Element: element(query.KindEvent, "BookingImported"), Slice: "Import Booking"},
 				},
 			}}, found)
 		})
@@ -178,13 +177,13 @@ func TestReferences(t *testing.T) {
 				Context:   "Booking",
 				Aggregate: "Room",
 				Slice:     "Show Rooms",
-				Line:      37,
+				Line:      36,
 				References: []query.Reference{
-					{Group: query.GroupReadBy, Keyword: "reads", Line: 10, Element: element(query.KindTrigger, "Booking Form"), Slice: "Book Room"},
-					{Group: query.GroupBuiltFrom, Keyword: "subscribes", Line: 38, Element: element(query.KindEvent, "RoomBooked"), Slice: "Show Rooms"},
-					{Group: query.GroupNamedInSpecs, Keyword: "then", Line: 43, Slice: "Show Rooms", Spec: "shows a booked room"},
-					{Group: query.GroupReadBy, Keyword: "reads", Line: 50, Element: element(query.KindAutomation, "Confirmer"), Slice: "Confirm Booking"},
-					{Group: query.GroupReadBy, Keyword: "reads", Line: 63, Element: element(query.KindTranslation, "PartnerImport"), Slice: "Import Booking"},
+					{Group: query.GroupReadBy, Keyword: "reads", Line: 9, Element: element(query.KindTrigger, "Booking Form"), Slice: "Book Room"},
+					{Group: query.GroupBuiltFrom, Keyword: "subscribes", Line: 37, Element: element(query.KindEvent, "RoomBooked"), Slice: "Show Rooms"},
+					{Group: query.GroupNamedInSpecs, Keyword: "then", Line: 42, Slice: "Show Rooms", Spec: "shows a booked room"},
+					{Group: query.GroupReadBy, Keyword: "reads", Line: 49, Element: element(query.KindAutomation, "Confirmer"), Slice: "Confirm Booking"},
+					{Group: query.GroupReadBy, Keyword: "reads", Line: 62, Element: element(query.KindTranslation, "PartnerImport"), Slice: "Import Booking"},
 				},
 			}}, found)
 		})
@@ -248,8 +247,8 @@ func TestReferences(t *testing.T) {
 				Aggregate: "Room",
 				Line:      4,
 				References: []query.Reference{
-					{Group: query.GroupRefusedCommands, Keyword: "rejected", Line: 21, Element: element(query.KindCommand, "BookRoom"), Slice: "Book Room"},
-					{Group: query.GroupNamedInSpecs, Keyword: "then", Line: 32, Slice: "Book Room", Spec: "refuses a booked room"},
+					{Group: query.GroupRefusedCommands, Keyword: "rejected", Line: 20, Element: element(query.KindCommand, "BookRoom"), Slice: "Book Room"},
+					{Group: query.GroupNamedInSpecs, Keyword: "then", Line: 31, Slice: "Book Room", Spec: "refuses a booked room"},
 				},
 			}}, found)
 		})

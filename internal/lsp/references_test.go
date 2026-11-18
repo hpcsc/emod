@@ -35,7 +35,6 @@ func TestGetReferences(t *testing.T) {
                 command = SubmitOrder
             }
             trigger "MyTrigger" {
-                actor = user
                 reads = OrderView
             }
             flow = <<-FLOW

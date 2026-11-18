@@ -5,9 +5,6 @@ emod = 1
 model "Error Diagnostics Test" {
 }
 
-actor "Guest" {
-}
-
 context "Reservations" {
   aggregate "Reservation" {
     # Slice 1: valid, and renders on its own

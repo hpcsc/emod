@@ -133,7 +133,7 @@ model, not a part of it. `internal/ai/review` puts the prompt together in Go:
    answer is a list of findings that conforms to the schema, not prose.
 6. The DCB prompt from `dcb.SystemPrompt`, when the model has a context in `dcb` or `mixed` mode. See
    [DCB knowledge](#dcb-knowledge).
-7. A short glossary of the emod concepts: `model`, `actor`, `context` and `mode`, `aggregate`,
+7. A short glossary of the emod concepts: `model`, `context` and `mode`, `aggregate`,
    `invariants`, `slice`, `description`, `trigger`, `command`, `event`, `view`, `automation`,
    `translation`, `flow`, `spec`, `tags` and `decides_on`.
 

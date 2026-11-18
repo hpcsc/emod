@@ -637,14 +637,10 @@ context "Lending" {
 model "Library Lending" {
 }
 
-actor "Member" {
-}
-
 context "Lending" {
   aggregate "Loan" {
     slice "Review Member Loans" {
       trigger "Loans Board" {
-        actor = Member
         reads = MemberLoansView
       }
 
@@ -659,7 +655,6 @@ context "Lending" {
 
     slice "Borrow Copy" {
       trigger "Lending Desk" {
-        actor = Member
         reads = MemberLoansVeiw
       }
 
@@ -692,7 +687,7 @@ context "Lending" {
 		var lintErr *cli.LintError
 		require.True(t, errors.As(err, &lintErr))
 		require.Equal(t, 1, lintErr.ExitCode)
-		require.Equal(t, path+`:29: view "MemberLoansVeiw" does not exist`, err.Error())
+		require.Equal(t, path+`:24: view "MemberLoansVeiw" does not exist`, err.Error())
 	})
 
 	t.Run("returns error naming the outcome shape and construct kind for a view outcome inside a command slice", func(t *testing.T) {
@@ -1218,8 +1213,8 @@ context "Orders" {
 		})
 
 		require.Equal(t,
-			`[{"file":"../../examples/error_diagnostics_test.emod","line":43,"severity":"error","message":"event \"GuestCheckedOut\" does not exist"},`+
-				`{"file":"../../examples/error_diagnostics_test.emod","line":64,"rule":"orphan-command","severity":"error","message":"command \"SendEmail\" is orphaned (no flow references it)"}]`+"\n",
+			`[{"file":"../../examples/error_diagnostics_test.emod","line":40,"severity":"error","message":"event \"GuestCheckedOut\" does not exist"},`+
+				`{"file":"../../examples/error_diagnostics_test.emod","line":61,"rule":"orphan-command","severity":"error","message":"command \"SendEmail\" is orphaned (no flow references it)"}]`+"\n",
 			output)
 	})
 

@@ -135,7 +135,7 @@ func TestCheck(t *testing.T) {
 			diagnostics := oracle.Check(test.AutomationReadsLibraryLending, "automation-reads.emod")
 
 			require.Equal(t, []string{
-				`automation-reads.emod:83: [automation/missing-todo-list] automation "RemindOnDueDate" reads no view, so nothing in the model shows what work is outstanding; project a view of pending work and read it`,
+				`automation-reads.emod:79: [automation/missing-todo-list] automation "RemindOnDueDate" reads no view, so nothing in the model shows what work is outstanding; project a view of pending work and read it`,
 			}, reportedLines(diagnostics))
 		})
 
@@ -143,7 +143,7 @@ func TestCheck(t *testing.T) {
 			diagnostics := oracle.Check(test.TriggerReadsLibraryLending, "trigger-reads.emod")
 
 			require.Equal(t, []string{
-				`trigger-reads.emod:116: [automation/missing-todo-list] automation "RemindOnDueDate" reads no view, so nothing in the model shows what work is outstanding; project a view of pending work and read it`,
+				`trigger-reads.emod:107: [automation/missing-todo-list] automation "RemindOnDueDate" reads no view, so nothing in the model shows what work is outstanding; project a view of pending work and read it`,
 			}, reportedLines(diagnostics))
 		})
 
@@ -151,9 +151,9 @@ func TestCheck(t *testing.T) {
 			diagnostics := oracle.Check(test.AutomationScheduleLibraryLending, "automation-schedule.emod")
 
 			require.Equal(t, []string{
-				`automation-schedule.emod:89: [automation/missing-todo-list] automation "RecallOnSecondReminder" reads no view, so nothing in the model shows what work is outstanding; project a view of pending work and read it`,
-				`automation-schedule.emod:94: [automation/missing-todo-list] automation "SweepOverdueLoans" reads no view, so the model does not state what the processor acts on; project a view of pending work and read it`,
-				`automation-schedule.emod:193: [automation/missing-todo-list] automation "SweepIdleDesks" reads no view, so the model does not state what the processor acts on; project a view of pending work and read it`,
+				`automation-schedule.emod:85: [automation/missing-todo-list] automation "RecallOnSecondReminder" reads no view, so nothing in the model shows what work is outstanding; project a view of pending work and read it`,
+				`automation-schedule.emod:90: [automation/missing-todo-list] automation "SweepOverdueLoans" reads no view, so the model does not state what the processor acts on; project a view of pending work and read it`,
+				`automation-schedule.emod:189: [automation/missing-todo-list] automation "SweepIdleDesks" reads no view, so the model does not state what the processor acts on; project a view of pending work and read it`,
 			}, reportedLines(diagnostics))
 		})
 	})
@@ -163,11 +163,11 @@ func TestCheck(t *testing.T) {
 			diagnostics := oracle.Check(test.InvariantLibraryLending, "invariants.emod")
 
 			require.Equal(t, []string{
-				`invariants.emod:13: [spec/invariant-never-exercised] invariant "OneCopyPerLoan" in aggregate "Loan" is not referenced by any rejection`,
-				`invariants.emod:14: [spec/invariant-never-exercised] invariant "FiveCopiesPerMember" in aggregate "Loan" is not referenced by any rejection`,
-				`invariants.emod:63: [spec/invariant-never-exercised] invariant "OneReaderPerDesk" in context "Reading Room" is not referenced by any rejection`,
-				`invariants.emod:64: [spec/invariant-never-exercised] invariant "OneDeskPerReader" in context "Reading Room" is not referenced by any rejection`,
-				`invariants.emod:65: [spec/invariant-never-exercised] invariant "DeskFreeAtClosing" in context "Reading Room" is not referenced by any rejection`,
+				`invariants.emod:10: [spec/invariant-never-exercised] invariant "OneCopyPerLoan" in aggregate "Loan" is not referenced by any rejection`,
+				`invariants.emod:11: [spec/invariant-never-exercised] invariant "FiveCopiesPerMember" in aggregate "Loan" is not referenced by any rejection`,
+				`invariants.emod:59: [spec/invariant-never-exercised] invariant "OneReaderPerDesk" in context "Reading Room" is not referenced by any rejection`,
+				`invariants.emod:60: [spec/invariant-never-exercised] invariant "OneDeskPerReader" in context "Reading Room" is not referenced by any rejection`,
+				`invariants.emod:61: [spec/invariant-never-exercised] invariant "DeskFreeAtClosing" in context "Reading Room" is not referenced by any rejection`,
 			}, reportedLines(diagnostics))
 		})
 	})
@@ -182,14 +182,10 @@ func TestCheck(t *testing.T) {
 model "Case Handling" {
 }
 
-actor "Worker" {
-}
-
 context "Cases" {
   aggregate "Case" {
     slice "Review Case" {
       trigger "Case Desk" {
-        actor = Worker
         reads = CaseWorkspacveView
       }
 
@@ -230,7 +226,7 @@ context "Cases" {
 			diagnostics := oracle.Check(source, "cases.emod")
 
 			require.Equal(t, []string{
-				`cases.emod:14: view "CaseWorkspacveView" does not exist`,
+				`cases.emod:10: view "CaseWorkspacveView" does not exist`,
 			}, reportedLines(diagnostics))
 		})
 	})

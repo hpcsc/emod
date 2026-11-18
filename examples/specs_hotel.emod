@@ -4,10 +4,6 @@ emod = 1
 model "Hotel Reservation" {
 }
 
-actor "Guest" {
-  description = "A person booking a room"
-}
-
 context "Reservations" {
   description = "Owns the reservation lifecycle from booking to checkout"
 
@@ -20,7 +16,6 @@ context "Reservations" {
 
     slice "Reserve a Room" {
       trigger "Reservation Form" {
-        actor = Guest
         reads = AvailableRoomsView
       }
 

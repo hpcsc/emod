@@ -57,14 +57,10 @@ emod = 1
 model "Hotel Reservation" {
 }
 
-actor "Guest" {
-}
-
 context "Reservations" {
   aggregate "Reservation" {
     slice "Reserve a Room" {
       trigger "Reservation Form" {
-        actor = Guest
         reads = AvailableRoomsView
       }
 
@@ -284,18 +280,18 @@ For `examples/all_patterns.emod`:
 
 ```
 $ emod references examples/all_patterns.emod ReserveRoom
-command ReserveRoom   Reservations > Reservation, slice "Reserve a Room"   :36
+command ReserveRoom   Reservations > Reservation, slice "Reserve a Room"   :31
 
 issued by
-  :30  issues    trigger "Reservation Form"          "Reserve a Room"
+  :26  issues    trigger "Reservation Form"          "Reserve a Room"
 produces
-  :66  flow      ReserveRoom -> RoomReserved         "Reserve a Room"
+  :61  flow      ReserveRoom -> RoomReserved         "Reserve a Room"
 refused by
-  :67  rejected  ReserveRoom -> RoomNotDoubleBooked  "Reserve a Room"
+  :62  rejected  ReserveRoom -> RoomNotDoubleBooked  "Reserve a Room"
 named in specs
-  :71  when  "holds a room nobody has booked"
-  :77  when  "refuses a room already held over the same nights"
-  :82  when  "refuses a stay that ends before it begins"
+  :66  when  "holds a room nobody has booked"
+  :72  when  "refuses a room already held over the same nights"
+  :77  when  "refuses a stay that ends before it begins"
 ```
 
 A name that the model does not declare exits with code 1 and lists the declared names closest to it.
@@ -321,10 +317,10 @@ out. A name that two kinds declare stops the trace, and `--kind` picks one.
 $ emod trace examples/all_patterns.emod RoomReserved --no-views
 3 elements follow from RoomReserved
 
-RoomReserved                                   event       Reservations   "Reserve a Room"           :49
-  -[on, after 15m]-> ConfirmationEmailReactor  automation  Reservations   "Send Confirmation Email"  :170
-    -[command]-> SendConfirmationEmail         command     Notifications  "Send Confirmation"        :325  (Reservations -> Notifications)
-      -[flow]-> ConfirmationEmailSent          event       Notifications  "Send Confirmation"        :335
+RoomReserved                                   event       Reservations   "Reserve a Room"           :44
+  -[on, after 15m]-> ConfirmationEmailReactor  automation  Reservations   "Send Confirmation Email"  :164
+    -[command]-> SendConfirmationEmail         command     Notifications  "Send Confirmation"        :319  (Reservations -> Notifications)
+      -[flow]-> ConfirmationEmailSent          event       Notifications  "Send Confirmation"        :329
 ```
 
 ### Arrange slices

@@ -492,7 +492,6 @@ context "Warehouse" {
   aggregate "Hold" {
     slice "Place Hold" {
       trigger "Hold Desk" {
-        actor = Member
         reads = AvailableCopiesView
       }
 

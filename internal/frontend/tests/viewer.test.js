@@ -5801,7 +5801,7 @@ describe("the diagnostics of the caret's line", () => {
 
   it("follows a revalidation that changes what the caret's line carries, leaving the caret where it is", async () => {
     await openBillingWithDataPanelOpen([]);
-    const edited = billingSource + 'actor "Clerk"\n';
+    const edited = billingSource + 'context "Clerk"\n';
 
     parseQueue = [Promise.resolve({ parsed: true, diagnostics: [atModel], diagram: billingDiagram() })];
     typeIntoPanel(edited);
@@ -6223,7 +6223,7 @@ describe('revalidating the source panel as it is edited', () => {
   }
 
   const status = () => document.getElementById('render-status').textContent;
-  const editedSource = billingSource + 'actor "Clerk"\n';
+  const editedSource = billingSource + 'context "Clerk"\n';
 
   function answerNext(answer) {
     parseQueue.push(Promise.resolve(Object.assign({ parsed: true, diagnostics: [] }, answer)));
@@ -6463,7 +6463,7 @@ describe('revalidating the source panel as it is edited', () => {
       await flush();
 
       answerNext({ diagnostics: [orderingFinding], diagram: diagramNamed('Orders') });
-      typeIntoPanel('emod = 1\nmodel "Orders"\nactor "Clerk"\n');
+      typeIntoPanel('emod = 1\nmodel "Orders"\ncontext "Clerk"\n');
       await pastPause();
 
       expect(document.getElementById('diagnostics-panel').classList.contains('hidden')).toBe(false);
@@ -6575,14 +6575,14 @@ describe('revalidating the source panel as it is edited', () => {
       deliverFile(ordersFile);
       await flush();
 
-      typeIntoPanel(ordersFile.content + 'actor "Clerk"\n');
+      typeIntoPanel(ordersFile.content + 'context "Clerk"\n');
       await pastPause();
       answerOrders({ diagram: diagramNamed('Orders') });
       await flush();
       await flush();
 
       expect(lastParse())
-        .toEqual([ordersFile.content + 'actor "Clerk"\n', 'orders.emod']);
+        .toEqual([ordersFile.content + 'context "Clerk"\n', 'orders.emod']);
       await expectOrdersOpen();
     });
   });
@@ -6717,11 +6717,11 @@ describe('what a render hands the pipeline', () => {
   it("names the open file when its edited source is rendered again", async () => {
     await openBilling();
 
-    typeIntoPanel(billingSource + 'actor "Clerk"\n');
+    typeIntoPanel(billingSource + 'context "Clerk"\n');
     document.getElementById('render-btn').click();
     await flush();
 
-    expect(lastParse()).toEqual([billingSource + 'actor "Clerk"\n', 'billing.emod']);
+    expect(lastParse()).toEqual([billingSource + 'context "Clerk"\n', 'billing.emod']);
   });
 
   it('names no file for pasted source, which has no file behind it', async () => {

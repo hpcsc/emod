@@ -117,7 +117,7 @@
     },
     {
       "n": 5,
-      "done": false,
+      "done": true,
       "title": "Remove `actor` from every checked-in model and document",
       "language": "Go",
       "testable": false,

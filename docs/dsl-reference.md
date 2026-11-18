@@ -36,7 +36,7 @@ A name is a quoted label, so any text names a construct. `command "source"` and 
 A reference to another construct is written unquoted, and `emod validate` resolves every one of them.
 
 ```
-actor = Guest
+reads = AvailableRoomsView
 subscribes = [RoomReserved, GuestCheckedOut]
 ```
 
@@ -96,18 +96,6 @@ model "<name>" {
 ```
 
 Exactly one per file. The body carries a [description](#10-descriptions) and nothing else; an empty body is allowed. See [examples/all_patterns.emod](/examples/all_patterns.emod).
-
-### `actor`
-
-Declares a persona or external system that interacts with the model.
-
-```
-actor "<name>" {
-  description = "<text>"
-}
-```
-
-Multiple actors are allowed. Actors are referenced by triggers (see [Slice Patterns → Command](#command-pattern)).
 
 ---
 
@@ -318,7 +306,6 @@ A user or system action drives a command that produces an event.
 ```
 slice "<name>" {
   trigger "<name>" {
-    actor = <ActorName>
     reads = <ViewName>  # or a list: [<ViewName>, <ViewName>]
   }
 
@@ -799,16 +786,12 @@ Any construct that has a body may carry a `description`: prose explaining what t
 description = "<text>"
 ```
 
-`model`, `actor`, `context`, `aggregate`, `slice`, `trigger`, `command`, `event`, `view`, `automation` and `translation` accept it, including the `event` nested inside a `translation`.
+`model`, `context`, `aggregate`, `slice`, `trigger`, `command`, `event`, `view`, `automation` and `translation` accept it, including the `event` nested inside a `translation`.
 
 ```emod
 emod = 1
 model "Hotel Reservation" {
   description = "Room inventory, bookings and check-out."
-}
-
-actor "Guest" {
-  description = "A person who books and stays in a room."
 }
 
 context "Reservations" {
@@ -822,7 +805,6 @@ context "Reservations" {
 
       trigger "Reservation Form" {
         description = "The public booking form."
-        actor       = Guest
       }
 
       command "ReserveRoom" {
@@ -857,7 +839,7 @@ context "Reservations" {
 - **`emod fmt` moves it to the first line of the body**, ahead of the construct's other attributes and its nested blocks.
 - **Exports carry the text:** `emod export --format json` and `emod export --format cue` emit a `description` key on the model and on each described construct.
 - **Diagrams surface it on the shape:** `emod diagram --format svg` emits the description as a `<title>` element on the construct's shape.
-- **A construct without a shape stays off the diagrams:** `model`, `actor`, `aggregate` and `slice` own no shape in the SVG. The `mermaid` and `ascii` formats carry no descriptions at all.
+- **A construct without a shape stays off the diagrams:** `model`, `aggregate` and `slice` own no shape in the SVG. The `mermaid` and `ascii` formats carry no descriptions at all.
 - **The glossary reads it as the definition:** `emod glossary` prints the description beneath the name it defines.
 - **A construct that defines no term stays out of the glossary:** `slice`, `trigger`, `automation` and `translation` contribute no term of their own.
 
@@ -874,7 +856,6 @@ All references use unqualified names, written unquoted, and `emod validate` reso
 | `command "<Name>"` | `flow`, `automation { command }`, `translation { command }`, `spec { when }`, `spec { then = command(...) }` | [`flow`](#7-flows), [`automation`](#automation-pattern), [`translation`](#translation-pattern), [`spec`](#spec) |
 | a command's or an event's `fields` | the field name of an [example payload](#spec) | [`spec`](#spec) |
 | `view "<Name>"` | `automation { reads }`, `trigger { reads }`, `translation { reads }`, `spec { then = view(...) }` | [`automation`](#automation-pattern), [`command` pattern](#command-pattern), [`translation`](#translation-pattern), [`spec`](#spec) |
-| `actor "<name>"` | `trigger { actor }` | [`command` pattern](#command-pattern) |
 | `invariants` entry | `spec { then = rejected(...) }`, `flow { command -> rejected: }` | [`spec`](#spec), [`flow`](#7-flows) |
 
 All three constructs that spell `reads` resolve alike — a trigger's, an automation's and a translation's. Each is looked up against the views the whole model declares, and a name matching none is reported at the `reads` entry that spells it. Each entry of a trigger's list resolves alone, so an undeclared entry is reported at that entry, and the entries around it resolve as usual:

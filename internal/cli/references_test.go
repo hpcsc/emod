@@ -15,7 +15,6 @@ const deskModel = `context "Desk" {
   aggregate "Stay" {
     slice "Check In" {
       trigger "Arrival Screen" {
-        actor = Guest
       }
 
       command "CheckIn" {
@@ -44,26 +43,26 @@ func TestReferences(t *testing.T) {
 				require.NoError(t, cli.RunReferences("../../examples/all_patterns.emod", "RoomReserved", "", "text"))
 			})
 
-			require.Equal(t, `event RoomReserved   Reservations > Reservation, slice "Reserve a Room"   :49
+			require.Equal(t, `event RoomReserved   Reservations > Reservation, slice "Reserve a Room"   :44
 
 produced by
-  :66   flow        ReserveRoom -> RoomReserved          "Reserve a Room"
+  :61   flow        ReserveRoom -> RoomReserved          "Reserve a Room"
 read by
-  :93   subscribes  view AvailableRoomsView              "View Available Rooms"
-  :161  subscribes  view PendingConfirmationsView        "Send Confirmation Email"
-  :172  on          automation ConfirmationEmailReactor  "Send Confirmation Email"
-  :295  subscribes  view UnconfirmedReservationsView     "View Unconfirmed Reservations"
+  :88   subscribes  view AvailableRoomsView              "View Available Rooms"
+  :155  subscribes  view PendingConfirmationsView        "Send Confirmation Email"
+  :166  on          automation ConfirmationEmailReactor  "Send Confirmation Email"
+  :289  subscribes  view UnconfirmedReservationsView     "View Unconfirmed Reservations"
 named in specs
-  :72   then   "holds a room nobody has booked"
-  :76   given  "refuses a room already held over the same nights"
-  :105  given  "lists the rooms a guest can still book"
-  :143  given  "closes a stay that is under way"
-  :149  given  "refuses to close a stay that already ended"
-  :183  when   "asks for a confirmation once a booking has settled"
-  :272  given  "asks for a release on every overnight sweep"
-  :277  given  "releases a room nobody confirmed"
-  :283  given  "refuses to release a stay that already ended"
-  :305  given  "lists the bookings the sweep has left to do"
+  :67   then   "holds a room nobody has booked"
+  :71   given  "refuses a room already held over the same nights"
+  :100  given  "lists the rooms a guest can still book"
+  :137  given  "closes a stay that is under way"
+  :143  given  "refuses to close a stay that already ended"
+  :177  when   "asks for a confirmation once a booking has settled"
+  :266  given  "asks for a release on every overnight sweep"
+  :271  given  "releases a room nobody confirmed"
+  :277  given  "refuses to release a stay that already ended"
+  :299  given  "lists the bookings the sweep has left to do"
 `, output)
 		})
 
@@ -74,18 +73,18 @@ named in specs
 				require.NoError(t, cli.RunReferences(path, "CheckIn", "", "text"))
 			})
 
-			require.Equal(t, `command CheckIn   Desk > Stay, slice "Check In"   :8
+			require.Equal(t, `command CheckIn   Desk > Stay, slice "Check In"   :7
 
 issued by
   :4   issues  trigger "Arrival Screen"  "Check In"
 produces
-  :15  flow    CheckIn -> CheckedIn      "Check In"
+  :14  flow    CheckIn -> CheckedIn      "Check In"
 refused by
   none
 named in specs
   none
 
-event CheckIn   Desk > Stay, slice "Log Check In"   :20
+event CheckIn   Desk > Stay, slice "Log Check In"   :19
 
 produced by
   none
@@ -103,7 +102,7 @@ named in specs
 				require.NoError(t, runCommandLine(t, "emod", "references", path, "CheckIn", "--kind", "event"))
 			})
 
-			require.Equal(t, `event CheckIn   Desk > Stay, slice "Log Check In"   :20
+			require.Equal(t, `event CheckIn   Desk > Stay, slice "Log Check In"   :19
 
 produced by
   none
@@ -129,9 +128,9 @@ named in specs
 				"context": "Desk",
 				"aggregate": "Stay",
 				"slice": "Check In",
-				"line": 11,
+				"line": 10,
 				"references": [
-					{"group": "produced by", "keyword": "flow", "line": 15, "element": {"kind": "command", "name": "CheckIn"}, "slice": "Check In"}
+					{"group": "produced by", "keyword": "flow", "line": 14, "element": {"kind": "command", "name": "CheckIn"}, "slice": "Check In"}
 				]
 			}]`, output)
 		})

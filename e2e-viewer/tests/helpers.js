@@ -7,14 +7,10 @@ export const SAMPLE = `emod = 1
 model "Billing" {
 }
 
-actor "Customer" {
-}
-
 context "Payments" {
   aggregate "Payment" {
     slice "Take Payment" {
       trigger "Checkout Form" {
-        actor = Customer
       }
 
       command "TakePayment" {
@@ -61,9 +57,6 @@ export const WIDE = (function () {
 export const SAMPLE_WITH_VIEW = `emod = 1
 
 model "Billing" {
-}
-
-actor "Customer" {
 }
 
 context "Payments" {

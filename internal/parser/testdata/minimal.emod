@@ -4,9 +4,6 @@ emod = 1
 model "Hotel Reservation" {
 }
 
-actor "Guest" {
-}
-
 context "Reservations" {
   aggregate "Reservation" {
     slice "Make Reservation" {

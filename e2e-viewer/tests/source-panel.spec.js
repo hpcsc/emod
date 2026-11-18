@@ -114,7 +114,7 @@ test.describe('the source panel revalidating as it is edited', () => {
       await page.waitForTimeout(REVALIDATE_PAUSE_MS + 200);
     };
     await typePausing('\n# typed while the model revalidates');
-    await typePausing('\nactor "Clerk');
+    await typePausing('\ncontext "Clerk');
     await expect(page.locator('#stale-notice')).toBeVisible();
     await typePausing('" {}');
     await expect(page.locator('#stale-notice')).toBeHidden();
@@ -807,13 +807,13 @@ test.describe("the source panel's colours while it is typed into", () => {
       panel.setSelectionRange(panel.value.indexOf('context "Notifications"'), panel.value.indexOf('context "Notifications"'));
     });
 
-    await page.keyboard.type('actor "Clerk" {\n}\n\n# typed while colouring', { delay: 20 });
+    await page.keyboard.type('context "Clerk" {\n}\n\n# typed while colouring', { delay: 20 });
     await page.waitForTimeout(100);
 
     const shown = await paintedTokens(page);
     const final = await page.locator('#source-input').inputValue();
     const answer = JSON.parse(await parser.evaluate((source) => globalThis.tokenizeEmod(JSON.stringify({ source })), final));
-    expect(final).toContain('actor "Clerk" {\n}\n\n# typed while colouringcontext "Notifications"');
+    expect(final).toContain('context "Clerk" {\n}\n\n# typed while colouringcontext "Notifications"');
     expect(shown).toEqual(answer.tokens);
     expect(await page.evaluate(() => window.longTasks)).toEqual([]);
   });

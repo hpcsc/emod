@@ -1990,8 +1990,8 @@ func TestServer(t *testing.T) {
 
 			require.False(t, result.IsError)
 			require.Equal(t, []diagnostic.Record{
-				{File: "hotel.emod", Line: 43, Severity: "error", Message: `event "GuestCheckedOut" does not exist`},
-				{File: "hotel.emod", Line: 64, Rule: "orphan-command", Severity: "error", Message: `command "SendEmail" is orphaned (no flow references it)`},
+				{File: "hotel.emod", Line: 40, Severity: "error", Message: `event "GuestCheckedOut" does not exist`},
+				{File: "hotel.emod", Line: 61, Rule: "orphan-command", Severity: "error", Message: `command "SendEmail" is orphaned (no flow references it)`},
 			}, recordsOf(t, result))
 		})
 
@@ -2017,8 +2017,8 @@ func TestServer(t *testing.T) {
 			result := callTool(t, session, "emod_check", map[string]any{"content": string(source), "name": "hotel.emod"})
 
 			require.JSONEq(t,
-				`{"diagnostics":[{"file":"hotel.emod","line":43,"severity":"error","message":"event \"GuestCheckedOut\" does not exist"},`+
-					`{"file":"hotel.emod","line":64,"rule":"orphan-command","severity":"error","message":"command \"SendEmail\" is orphaned (no flow references it)"}]}`,
+				`{"diagnostics":[{"file":"hotel.emod","line":40,"severity":"error","message":"event \"GuestCheckedOut\" does not exist"},`+
+					`{"file":"hotel.emod","line":61,"rule":"orphan-command","severity":"error","message":"command \"SendEmail\" is orphaned (no flow references it)"}]}`,
 				textOf(t, result))
 		})
 

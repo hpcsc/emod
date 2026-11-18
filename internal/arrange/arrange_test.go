@@ -67,7 +67,6 @@ context "Lending" {
 
     slice "Return a Copy" {
       trigger "Return Desk" {
-        actor = Member
         reads = BorrowView
       }
 
@@ -237,7 +236,6 @@ context "Lending" {
 
     slice "Borrow a Copy" {
       trigger "Borrow Desk" {
-        actor = Member
         reads = ShelfView
       }
 
@@ -434,7 +432,6 @@ context "Lending" {
 
     slice "Return a Copy" {
       trigger "Return Desk" {
-        actor = Member
         reads = BorrowView
       }
 

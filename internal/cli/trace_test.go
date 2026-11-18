@@ -19,7 +19,6 @@ const hotelTraceModel = `context "Hotel" {
 
     slice "Book Room" {
       trigger "Booking Form" {
-        actor = Guest
         reads = RoomsView
       }
 
@@ -111,10 +110,10 @@ func TestTrace(t *testing.T) {
 
 			require.Equal(t, `3 elements follow from RoomBooked
 
-RoomBooked                         event       Hotel  "Book Room"          :16
-  -[on, after 15m]-> Confirmer     automation  Hotel  "Confirm Booking"    :32
-    -[command]-> SendConfirmation  command     Mail   "Send Confirmation"  :76  (Hotel -> Mail)
-      -[flow]-> ConfirmationSent   event       Mail   "Send Confirmation"  :79
+RoomBooked                         event       Hotel  "Book Room"          :15
+  -[on, after 15m]-> Confirmer     automation  Hotel  "Confirm Booking"    :31
+    -[command]-> SendConfirmation  command     Mail   "Send Confirmation"  :75  (Hotel -> Mail)
+      -[flow]-> ConfirmationSent   event       Mail   "Send Confirmation"  :78
 `, output)
 		})
 
@@ -127,13 +126,13 @@ RoomBooked                         event       Hotel  "Book Room"          :16
 
 			require.Equal(t, `6 elements lead to SendConfirmation
 
-SendConfirmation                    command          Mail   "Send Confirmation"  :76
-  <-[command]- Confirmer            automation       Hotel  "Confirm Booking"    :32  (Hotel -> Mail)
-    <-[on, after 15m]- RoomBooked   event            Hotel  "Book Room"          :16
-      <-[flow]- BookRoom            command          Hotel  "Book Room"          :13
+SendConfirmation                    command          Mail   "Send Confirmation"  :75
+  <-[command]- Confirmer            automation       Hotel  "Confirm Booking"    :31  (Hotel -> Mail)
+    <-[on, after 15m]- RoomBooked   event            Hotel  "Book Room"          :15
+      <-[flow]- BookRoom            command          Hotel  "Book Room"          :12
         <-[issues]- "Booking Form"  trigger          Hotel  "Book Room"          :8
-        <-[command]- PartnerImport  translation      Hotel  "Import Booking"     :62
-          <-[from]- "Partner API"   external_system  Hotel  "Import Booking"     :63
+        <-[command]- PartnerImport  translation      Hotel  "Import Booking"     :61
+          <-[from]- "Partner API"   external_system  Hotel  "Import Booking"     :62
 `, output)
 		})
 
@@ -146,7 +145,7 @@ SendConfirmation                    command          Mail   "Send Confirmation" 
 
 			require.Equal(t, `nothing follows from ConfirmationSent
 
-ConfirmationSent  event  Mail  "Send Confirmation"  :79
+ConfirmationSent  event  Mail  "Send Confirmation"  :78
 `, output)
 		})
 
@@ -170,18 +169,18 @@ ConfirmationSent  event  Mail  "Send Confirmation"  :79
 			})
 
 			require.JSONEq(t, `{
-				"root": {"kind": "automation", "name": "Confirmer", "context": "Hotel", "aggregate": "Stay", "slice": "Confirm Booking", "line": 32},
+				"root": {"kind": "automation", "name": "Confirmer", "context": "Hotel", "aggregate": "Stay", "slice": "Confirm Booking", "line": 31},
 				"steps": [
 					{
 						"label": "command",
-						"kind": "command", "name": "SendConfirmation", "context": "Mail", "aggregate": "Message", "slice": "Send Confirmation", "line": 76,
+						"kind": "command", "name": "SendConfirmation", "context": "Mail", "aggregate": "Message", "slice": "Send Confirmation", "line": 75,
 						"from": {"kind": "automation", "name": "Confirmer"},
 						"crosses_context": true,
 						"depth": 1
 					},
 					{
 						"label": "flow",
-						"kind": "event", "name": "ConfirmationSent", "context": "Mail", "aggregate": "Message", "slice": "Send Confirmation", "line": 79,
+						"kind": "event", "name": "ConfirmationSent", "context": "Mail", "aggregate": "Message", "slice": "Send Confirmation", "line": 78,
 						"from": {"kind": "command", "name": "SendConfirmation"},
 						"depth": 2
 					}

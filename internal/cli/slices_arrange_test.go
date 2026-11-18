@@ -40,7 +40,6 @@ context "Lending" {
 
     slice "Return a Copy" {
       trigger "Return Desk" {
-        actor = Member
         reads = BorrowView
       }
 

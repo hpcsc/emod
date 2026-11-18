@@ -94,10 +94,10 @@ block. `repair.Generate` takes the source from the fenced block, as [00](complet
 
 The draft holds:
 
-- the actors, the contexts and the aggregates, or DCB slices with `tags` and `decides_on` when the answers
+- the contexts and the aggregates, or DCB slices with `tags` and `decides_on` when the answers
   name a rule across entities
 - for each slice, a `description` of one sentence, taken from the description or the answers
-- triggers with their `actor` and the view that they `reads`, when a person starts a step
+- triggers with the views that they `reads`, when a person starts a step
 - commands, events and their `fields`, views with `subscribes`, automations with `on` or `every`, `reads`
   and `target`, and translations for external systems
 - the `flow` of each command slice

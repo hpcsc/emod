@@ -48,14 +48,10 @@ const HotelReservation = `emod = 1
 model "Hotel Reservation" {
 }
 
-actor "Guest" {
-}
-
 context "Reservations" {
   aggregate "Reservation" {
     slice "Make Reservation" {
       trigger "Reservation Form" {
-        actor = Guest
         reads = ReservationsView
       }
 
@@ -153,10 +149,6 @@ model "Hotel Reservation" {
   description = "How the hotel takes, confirms and imports room bookings"
 }
 
-actor "Guest" {
-  description = "A person booking a room, not necessarily the one staying in it"
-}
-
 context "Reservations" {
   description = "Everything the hotel knows about a stay before the guest arrives"
 
@@ -168,7 +160,6 @@ context "Reservations" {
 
       trigger "Reservation Form" {
         description = "The booking form on the public site"
-        actor       = Guest
         reads       = ReservationsView
       }
 
@@ -286,14 +277,10 @@ const KeywordFieldSearchCatalog = `emod = 1
 model "Model Search Catalog" {
 }
 
-actor "Analyst" {
-}
-
 context "Discovery" {
   aggregate "Saved Search" {
     slice "Define Saved Search" {
       trigger "Search Builder" {
-        actor = Analyst
         reads = SavedSearchesView
       }
 
@@ -408,9 +395,6 @@ const InvariantLibraryLending = `emod = 1
 model "Library Lending" {
 }
 
-actor "Member" {
-}
-
 context "Lending" {
   aggregate "Loan" {
     invariants {
@@ -420,7 +404,6 @@ context "Lending" {
 
     slice "Borrow Copy" {
       trigger "Lending Desk" {
-        actor = Member
         reads = MemberLoansView
       }
 
@@ -544,9 +527,6 @@ const SpecLibraryLending = `emod = 1
 model "Library Lending" {
 }
 
-actor "Member" {
-}
-
 context "Lending" {
   aggregate "Loan" {
     invariants {
@@ -555,7 +535,6 @@ context "Lending" {
 
     slice "Borrow Copy" {
       trigger "Lending Desk" {
-        actor = Member
         reads = MemberLoansView
       }
 
@@ -753,9 +732,6 @@ const RejectionLibraryLending = `emod = 1
 model "Library Lending" {
 }
 
-actor "Member" {
-}
-
 context "Lending" {
   aggregate "Loan" {
     invariants {
@@ -764,7 +740,6 @@ context "Lending" {
 
     slice "Borrow Copy" {
       trigger "Lending Desk" {
-        actor = Member
         reads = MemberLoansView
       }
 
@@ -955,9 +930,6 @@ const SlicePatternLibraryLending = `emod = 1
 model "Library Lending" {
 }
 
-actor "Member" {
-}
-
 context "Lending" {
   aggregate "Loan" {
     invariants {
@@ -966,7 +938,6 @@ context "Lending" {
 
     slice "Borrow Copy" {
       trigger "Lending Desk" {
-        actor = Member
         reads = MemberLoansView
       }
 
@@ -1279,14 +1250,10 @@ const AutomationReadsLibraryLending = `emod = 1
 model "Library Lending" {
 }
 
-actor "Member" {
-}
-
 context "Lending" {
   aggregate "Loan" {
     slice "Borrow Copy" {
       trigger "Lending Desk" {
-        actor = Member
         reads = MemberLoansView
       }
 
@@ -1477,17 +1444,10 @@ const TriggerReadsLibraryLending = `emod = 1
 model "Library Lending" {
 }
 
-actor "Member" {
-}
-
-actor "Librarian" {
-}
-
 context "Lending" {
   aggregate "Loan" {
     slice "Borrow Copy" {
       trigger "Lending Desk" {
-        actor = Member
         reads = MemberLoansView
       }
 
@@ -1527,7 +1487,6 @@ context "Lending" {
 
     slice "Return Copy" {
       trigger "Returns Counter" {
-        actor = Member
       }
 
       command "ReturnCopy" {
@@ -1552,7 +1511,6 @@ context "Lending" {
 
     slice "Chase Overdue Copy" {
       trigger "Overdue Report" {
-        actor = Librarian
         reads = DeskOccupancyView
       }
 
@@ -1610,7 +1568,6 @@ context "Reading Room" {
 
   slice "Claim Desk" {
     trigger "Desk Kiosk" {
-      actor = Member
       reads = DeskOccupancyView
     }
 
@@ -1713,14 +1670,10 @@ const AutomationScheduleLibraryLending = `emod = 1
 model "Library Lending" {
 }
 
-actor "Member" {
-}
-
 context "Lending" {
   aggregate "Loan" {
     slice "Borrow Copy" {
       trigger "Lending Desk" {
-        actor = Member
         reads = MemberLoansView
       }
 
@@ -1924,14 +1877,10 @@ const AutomationDelayLibraryLending = `emod = 1
 model "Library Lending" {
 }
 
-actor "Member" {
-}
-
 context "Lending" {
   aggregate "Loan" {
     slice "Borrow Copy" {
       trigger "Lending Desk" {
-        actor = Member
         reads = MemberLoansView
       }
 
@@ -2153,9 +2102,6 @@ const PayloadLibraryLending = `emod = 1
 model "Library Lending" {
 }
 
-actor "Member" {
-}
-
 context "Lending" {
   aggregate "Loan" {
     invariants {
@@ -2366,14 +2312,10 @@ const WireTypeLibraryLending = `emod = 1
 model "Library Lending" {
 }
 
-actor "Member" {
-}
-
 context "Lending" {
   aggregate "Loan" {
     slice "Borrow Copy" {
       trigger "Lending Desk" {
-        actor = Member
         reads = MemberLoansView
       }
 
@@ -2640,13 +2582,6 @@ model "Library Lending" {
   description = "How the library lends its copies and seats its readers"
 }
 
-actor "Member" {
-  description = "Someone who holds a library card"
-}
-
-actor "Librarian" {
-}
-
 context "Lending" {
   description = "Everything the library knows about who holds which copy"
 
@@ -2662,7 +2597,6 @@ context "Lending" {
 
       trigger "Lending Desk" {
         description = "The counter a member borrows from"
-        actor       = Member
         reads       = MemberLoansView
       }
 
@@ -3009,9 +2943,6 @@ const SubscribedEventsHotelStays = `emod = 1
 
 # A hotel stay, whose history reads every step a stay takes
 model "Hotel Stays" {
-}
-
-actor "Guest" {
 }
 
 context "Stays" {
@@ -3489,7 +3420,6 @@ var WireTypeLibraryLendingWireTypes = []string{
 // own description is left out: it belongs to the model rather than to a
 // construct the model declares.
 var DescribedHotelReservationDescriptions = map[string]string{
-	"Guest":                    "A person booking a room, not necessarily the one staying in it",
 	"Reservations":             "Everything the hotel knows about a stay before the guest arrives",
 	"Reservation":              "One guest holding one room over one date range",
 	"Make Reservation":         "A guest books a room from the public site",
@@ -3756,9 +3686,6 @@ func DeclaredDescriptions(model *ast.Model) map[string]string {
 		}
 	}
 
-	for _, a := range model.Actors {
-		describe(a.Name, a.Description)
-	}
 	for _, ctx := range model.Contexts {
 		describe(ctx.Name, ctx.Description)
 		for _, agg := range ctx.Aggregates {
