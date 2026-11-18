@@ -315,8 +315,10 @@ in this repo; append only learnings that generalise beyond the task that surface
 
 ## An arrow between two constructs is drawn by five surfaces, and none of them reads another
 - Type: pattern
-- Learning: a relationship the diagram should show has to be taught to each drawer separately. `convertModelToDiagram` (`internal/export/diagram.go:257`) writes the document edge; `internal/diagram/svg.go` walks the AST itself and never reads that document, so an edge added to it draws nothing in the picture; `internal/diagram/mermaid.go` and `ascii.go` are two more independent walks (both still show `reads` for a translation only, and their unchanged bytes are the receipt that a picture-only change stayed in the picture); `foldEdges` (`internal/importer/importer.go:270`) reads the edge back on the viewer's save path; and the viewer needs *two* entries, `EDGE_TYPE_BY_ENDS` in `static/model.js:141` to type an arrow the user drags and `edgeConfig` plus `arrowClassMap` in `static/config.js:30,40` to paint it. Both viewer misses are silent: `renderer.js:320` does `var cfg = edgeConfig[edge.type]; if (!cfg) return;` and then `if (!srcPos || !tgtPos) return;`, so an unknown edge type and an endpoint id no node carries are each dropped with no error — which is also why every writer guards the name against the declared-view map (`appendReadsEdge`, `export.go:1142`; the `readsArrow` closure at `svg.go:176`) rather than emitting an edge onto an id nothing drew.
-- Apply when: adding a relationship between constructs to the diagram, or extending an existing edge type to a construct that did not have it.
+- Recorded: 2026-11-18
+- Observed: us-001-trigger-reads-many-views
+- Learning: A relationship the diagram shows must reach each drawer. diagram.SliceEdges (internal/diagram/graph.go) is the one source of arrows for the SVG, the element copies, the edges of the diagram document (internal/export/diagram.go appendEdges) and emod trace, so one edge there gives all four an arrow. The ASCII and Mermaid diagrams walk the AST themselves (ascii.go prints a trigger's reads, Mermaid prints none, and TestExporterReadsEdges pins both). The importer reads the edge back on the two viewer save paths: foldEdges for ImportDiagram and diagramEdit for ApplyDiagram. The viewer needs EDGE_TYPE_BY_ENDS in static/model.js and edgeConfig in static/config.js, and renderer.js drops an unknown edge type or an endpoint id that no node carries with no error.
+- Apply when: adding a relationship between constructs to the diagram, or extending an existing edge type to a construct that did not have it
 
 ## `EDGE_TYPE_BY_ENDS` carries only the direction the exporter writes
 - Type: constraint
@@ -1519,13 +1521,6 @@ in this repo; append only learnings that generalise beyond the task that surface
 - Learning: //go:embed takes only paths under the folder of its package, so internal/mcp cannot embed ../../examples. examples/example.go embeds the three valid examples (examples.All()) and docs/dsl_reference.go embeds docs/dsl-reference.md (docs.DSLReference), as internal/cue/embed.go embeds schema.cue. A file that another package needs at run time from an installed binary goes into one of these packages, or into a new package in its own folder, never into a read from the disk, which works in the tests only because the repository is on disk.
 - Apply when: serving or printing the text of a file under examples/, docs/ or another folder outside internal/ from emod at run time: an MCP resource or prompt, a CLI command, the LSP, or the desktop app
 
-## A change to internal/ast/traverse.go is refused by type-methods-split, so new AST behaviour goes in a file of its own
-- Type: constraint
-- Recorded: 2026-11-07
-- Observed: task 1 — mcp-slices
-- Learning: traverse.go holds methods of Position, Context and Model, which ast.go declares, and clerk finish lints every staged file, so any edit to traverse.go is refused with type-methods-split, also when the edit only adds next to SliceRefs as docs/proposals/ai/01-mcp-server.md suggests. US-005 put the slice listing in internal/ast/slice_record.go: the type SliceRecord, the function ast.SliceRecords(model) and private functions over the node types, with ast.go left as data only.
-- Apply when: decomposing or building a task that adds behaviour over the AST in internal/ast, such as a new listing, a query or a lifted helper from internal/cli
-
 ## Moving private code out of internal/cli is not a pure move: clerk mutants owes it the tests it never had
 - Type: recurring-finding
 - Recorded: 2026-11-07
@@ -1644,3 +1639,17 @@ in this repo; append only learnings that generalise beyond the task that surface
 - Observed: task 6 — distance-copies
 - Learning: The distance-copies request said 'give each arrow its own horizontal y in the space between lanes'. The breakdown kept those words, the router built 'two legs that overlap get different y', and the criterion stayed unticked until an audit finding and a question at match-request; the user chose the narrower reading, because no two lines touch and each gap stays only as tall as its overlapping legs need. The literal reading grows a gap by 6 px for each leg in it. Write the reading and its cost in the criterion when the breakdown is written, and put the choice to the user at the plan gate.
 - Apply when: decomposing a request that states a layout outcome for each arrow, box or label (its own y, its own column, no overlap) in the lane SVG or the viewer
+
+## Two triggers with one name share one diagram node, so an ApplyDiagram edit can name a view the drawn trigger does not read
+- Type: constraint
+- Recorded: 2026-11-18
+- Observed: task 2 — us-001-trigger-reads-many-views
+- Learning: The diagram document keys a trigger node by its name (triggerIDs in internal/export/diagram.go), so every reads edge of two same-named triggers ends at the last one, and diagramEdit.drawnFrom maps that id to a trigger that does not list the view. clerk mutants reported the at >= 0 guard in repoint.reserve as dead because every fixture names each trigger once; the audit reproduced the panic with two same-named triggers. Keep a guard on the ApplyDiagram edit path that a name-keyed lookup can reach, and write the fixture with a repeated name to kill its mutant.
+- Apply when: removing or adding a guard in internal/importer/diagram_edit.go, accepting a mutant there as unreachable, or keying a diagram node by a bare name
+
+## Note an IsZero that encoding/json calls when the type is added, not when the last task trips over it
+- Type: convention
+- Recorded: 2026-11-18
+- Observed: task 2 — us-001-trigger-reads-many-views
+- Learning: clerk finish checks exported names that nothing outside the package calls only at the last task of a breakdown. jsonDiagramReads.IsZero, which encoding/json calls for the omitzero tag, came from task 2 and refused the documentation task at the end. Write clerk design note IsZero with the reason in the task that adds a method the standard library calls by name (IsZero, MarshalJSON, UnmarshalJSON, String).
+- Apply when: adding a JSON value type with omitzero or a custom marshaller in internal/export or internal/importer
