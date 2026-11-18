@@ -57,7 +57,7 @@
     },
     {
       "n": 3,
-      "done": false,
+      "done": true,
       "title": "Stop the LSP from offering, describing and painting `actor`",
       "language": "Go",
       "testable": true,

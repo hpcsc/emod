@@ -483,7 +483,7 @@ func completionItems(labels []string, kind CompletionItemKind) []CompletionItem 
 func keywordsFor(block blockContext) []string {
 	switch block {
 	case ctxUnknown:
-		return []string{"model", "actor", "context"}
+		return []string{"model", "context"}
 	case ctxContext:
 		return []string{"aggregate", "slice", "invariants", "mode"}
 	case ctxAggregate:

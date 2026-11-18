@@ -254,12 +254,6 @@ rule first second {
 model "Shop" {
 }
 
-actor "Customer" {
-}
-
-actor "Clerk" {
-}
-
 context "Orders" {
   aggregate "Sales" {
     slice "Place Order" {
@@ -303,8 +297,6 @@ context "Billing" {
 			name      string
 			category  string
 		}{
-			{`actor "Customer"`, "Customer", "lsp.type.parameter"},
-			{`actor "Clerk"`, "Clerk", "lsp.type.parameter"},
 			{`context "Orders"`, "Orders", "lsp.type.namespace"},
 			{`context "Billing"`, "Billing", "lsp.type.namespace"},
 			{`aggregate "Sales"`, "Sales", "lsp.type.struct"},
@@ -323,6 +315,13 @@ context "Billing" {
 				require.Equal(t, "string", categoryOf(t, doc, c.name, `"`))
 			})
 		}
+
+		t.Run("the name of a retired actor block takes no construct colour", func(t *testing.T) {
+			const actorDoc = "actor \"Customer\" {\n}\n\ncontext \"Orders\" {\n}\n"
+
+			require.Equal(t, "string", categoryOf(t, actorDoc, `actor "Customer"`, "Customer"))
+			require.Equal(t, "lsp.type.namespace", categoryOf(t, actorDoc, `context "Orders"`, "Orders"))
+		})
 
 		t.Run("an empty name leaves both quotes string", func(t *testing.T) {
 			require.Equal(t, "string", categoryOf(t, doc, `command ""`, `""`))

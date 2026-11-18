@@ -554,7 +554,7 @@ context "Lending" {
 			require.NotEmpty(t, list.Items)
 			labels := extractLabels(list.Items)
 			require.Contains(t, labels, "model")
-			require.Contains(t, labels, "actor")
+			require.NotContains(t, labels, "actor")
 			require.Contains(t, labels, "context")
 		})
 	})

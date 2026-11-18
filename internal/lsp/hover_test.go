@@ -187,13 +187,6 @@ context "Warehouse" {
 				description: "How the hotel takes, confirms and imports room bookings",
 			},
 			{
-				construct:   "actor",
-				container:   `actor "Guest"`,
-				name:        "Guest",
-				undescribed: "**Actor**",
-				description: "A person booking a room, not necessarily the one staying in it",
-			},
-			{
 				construct:   "context",
 				container:   `context "Reservations"`,
 				name:        "Reservations",
@@ -473,6 +466,22 @@ context "Réservations" {
 		require.Contains(t, content, "reads a view")
 	})
 
+	t.Run("gives no hover for the word actor or the name of an actor block, and keeps the hover of the context beside it", func(t *testing.T) {
+		const doc = `actor "Guest" {
+}
+
+context "Reservations" {
+}
+`
+		keywordLine, keywordChar := posIn(t, doc, `actor "Guest"`, "actor")
+		nameLine, nameChar := posIn(t, doc, `actor "Guest"`, "Guest")
+		contextLine, contextChar := posIn(t, doc, `context "Reservations"`, "Reservations")
+
+		require.Nil(t, lsp.GetHover(doc, keywordLine, keywordChar))
+		require.Nil(t, lsp.GetHover(doc, nameLine, nameChar))
+		require.NotNil(t, lsp.GetHover(doc, contextLine, contextChar))
+	})
+
 	t.Run("trigger names the Command pattern and no kind between the keyword and the name", func(t *testing.T) {
 		doc := `emod = 1
 
@@ -496,7 +505,7 @@ context "Warehouse" {
 		line, char := posIn(t, doc, `trigger "Hold Desk"`, "trigger")
 		content := assertHover(
 			t, doc, line, char,
-			"Defines a trigger, the Command pattern's human entry point into a slice: the actor who acts and the view they read.",
+			"Defines a trigger, the Command pattern's human entry point into a slice, and the views it reads.",
 		)
 
 		require.Contains(t, content, "Command pattern")

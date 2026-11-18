@@ -707,7 +707,6 @@ test.describe("the source panel's colours", () => {
     const rules = await categoryColours(page);
     const nameOf = (declaration) => source.indexOf(declaration) + declaration.indexOf('"') + 1;
     const kinds = {
-      'lsp.type.parameter': 'actor "Guest"',
       'lsp.type.namespace': 'context "Reservations"',
       'lsp.type.struct': 'aggregate "Reservation"',
       'lsp.type.function': 'command "ReserveRoom"',
@@ -720,7 +719,7 @@ test.describe("the source panel's colours", () => {
     const [quote, sliceLabel] = await coloursAt(page, [nameOf(kinds['lsp.type.function']) - 1, slice]);
 
     expect(names).toEqual(Object.keys(kinds).map((kind) => rules[kind]));
-    expect(new Set([...names, rules.string]).size).toBe(7);
+    expect(new Set([...names, rules.string]).size).toBe(Object.keys(kinds).length + 1);
     expect({ quote, sliceLabel }).toEqual({ quote: rules.string, sliceLabel: rules.string });
   });
 

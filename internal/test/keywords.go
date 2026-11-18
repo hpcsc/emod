@@ -8,7 +8,6 @@ func Keywords() []string {
 	return []string{
 		"emod",
 		"model",
-		"actor",
 		"context",
 		"mode",
 		"aggregate",

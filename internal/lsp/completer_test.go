@@ -16,20 +16,20 @@ func TestGetCompletions(t *testing.T) {
 	automationEntries := []string{"on", "every", "after", "reads", "command", "target"}
 
 	t.Run("top level", func(t *testing.T) {
-		t.Run("empty document returns model actor and context", func(t *testing.T) {
+		t.Run("empty document returns model and context", func(t *testing.T) {
 			result := lsp.GetCompletions("", 0, 0)
 			require.False(t, result.IsIncomplete)
-			require.Equal(t, []string{"model", "actor", "context"}, extractLabels(result.Items))
+			require.Equal(t, []string{"model", "context"}, extractLabels(result.Items))
 		})
 
 		t.Run("cursor at beginning of document returns top level keywords", func(t *testing.T) {
 			result := lsp.GetCompletions("context Foo {}", 0, 0)
-			require.Equal(t, []string{"model", "actor", "context"}, extractLabels(result.Items))
+			require.Equal(t, []string{"model", "context"}, extractLabels(result.Items))
 		})
 
 		t.Run("cursor after an unclosed keyword line returns top level context", func(t *testing.T) {
 			result := lsp.GetCompletions("context", 0, 7)
-			require.Equal(t, []string{"model", "actor", "context"}, extractLabels(result.Items))
+			require.Equal(t, []string{"model", "context"}, extractLabels(result.Items))
 		})
 	})
 
@@ -150,7 +150,7 @@ func TestGetCompletions(t *testing.T) {
 	}
 }`
 				result := lsp.GetCompletions(doc, 8, 5)
-				require.Equal(t, []string{"model", "actor", "context"}, extractLabels(result.Items))
+				require.Equal(t, []string{"model", "context"}, extractLabels(result.Items))
 			})
 		}
 	})
@@ -933,7 +933,7 @@ context "Lending" {
 					t.Run(cursor.name, func(t *testing.T) {
 						result := lsp.GetCompletions(doc, line, cursor.character)
 
-						require.Equal(t, []string{"model", "actor", "context"}, extractLabels(result.Items), "entry %q", entry)
+						require.Equal(t, []string{"model", "context"}, extractLabels(result.Items), "entry %q", entry)
 					})
 				}
 			}
@@ -1302,7 +1302,7 @@ context "Lending" {
 }`
 			result := lsp.GetCompletions(braceBelowDoc, 11, 4)
 
-			require.Equal(t, []string{"model", "actor", "context"}, extractLabels(result.Items))
+			require.Equal(t, []string{"model", "context"}, extractLabels(result.Items))
 		})
 
 		// A bracket the author has not closed belongs to the block it was opened
@@ -1335,7 +1335,7 @@ context "Lending" {
 			}{
 				{position: "a later sibling slice's command body", line: 10, expected: []string{"fields", "decides_on"}},
 				{position: "a later sibling aggregate body", line: 14, expected: []string{"slice", "invariants"}},
-				{position: "the top level below everything", line: 17, expected: []string{"model", "actor", "context"}},
+				{position: "the top level below everything", line: 17, expected: []string{"model", "context"}},
 			} {
 				t.Run(tc.position, func(t *testing.T) {
 					result := lsp.GetCompletions(strayDoc, tc.line, 0)

@@ -145,14 +145,17 @@ func TestGetSemanticTokens(t *testing.T) {
 		require.True(t, found, "OrderView token not found in semantic tokens")
 	})
 
-	t.Run("actor name receives TokenTypeParameter", func(t *testing.T) {
-		const actorDoc = `actor "Customer"
+	t.Run("an actor name receives no token", func(t *testing.T) {
+		const actorDoc = `actor "Customer" {
+}
+
+context "Orders" {
+}
 `
-		line, char := posIn(t, actorDoc, "actor \"Customer\"", "Customer")
-		result := lsp.GetSemanticTokens(actorDoc)
-		tokens := decodeTokens(result.Data)
+		line, char := posIn(t, actorDoc, `context "Orders"`, "Orders")
+		tokens := decodeTokens(lsp.GetSemanticTokens(actorDoc).Data)
 		require.Len(t, tokens, 1)
-		assertToken(t, tokens, 0, line, char, len("Customer"), legendTokenType(lsp.TokenTypeParameter))
+		assertToken(t, tokens, 0, line, char, len("Orders"), legendTokenType(lsp.TokenTypeNamespace))
 	})
 
 	t.Run("context name receives TokenTypeNamespace", func(t *testing.T) {
@@ -192,11 +195,11 @@ func TestGetSemanticTokens(t *testing.T) {
 		result := lsp.GetSemanticTokens(doc)
 		tokens := decodeTokens(result.Data)
 
-		require.Len(t, tokens, 16,
-			"one token per declared actor, context, aggregate, command, event and view — 11 in the aggregate's slices and above, 5 on the dcb context")
+		require.Len(t, tokens, 15,
+			"one token per declared context, aggregate, command, event and view — 10 in the aggregate's slices and above, 5 on the dcb context")
 
 		line, char := posIn(t, doc, `view "DeskOccupancyView"`, "DeskOccupancyView")
-		assertToken(t, tokens, 15, line, char, len("DeskOccupancyView"), legendTokenType(lsp.TokenTypeClass))
+		assertToken(t, tokens, 14, line, char, len("DeskOccupancyView"), legendTokenType(lsp.TokenTypeClass))
 	})
 
 	t.Run("delta-encodes multiple identifiers on same line", func(t *testing.T) {
@@ -236,21 +239,21 @@ context "Orders" {
 	})
 
 	t.Run("delta-encodes identifiers across multiple lines", func(t *testing.T) {
-		const doc = `actor "Customer"
-actor "Admin"
+		const doc = `context "Orders" {
+}
+context "Billing" {
+}
 `
 		result := lsp.GetSemanticTokens(doc)
 		tokens := decodeTokens(result.Data)
 		require.Len(t, tokens, 2)
 
-		// First token: "Customer" at line 0.
 		require.Equal(t, 0, tokens[0].line)
-		require.Equal(t, legendTokenType(lsp.TokenTypeParameter), tokens[0].typeIdx)
+		require.Equal(t, legendTokenType(lsp.TokenTypeNamespace), tokens[0].typeIdx)
 
-		// Second token: "Admin" at line 1.
-		require.Equal(t, 1, tokens[1].line)
-		require.Equal(t, legendTokenType(lsp.TokenTypeParameter), tokens[1].typeIdx)
-		require.Equal(t, len("Admin"), tokens[1].length)
+		require.Equal(t, 2, tokens[1].line)
+		require.Equal(t, legendTokenType(lsp.TokenTypeNamespace), tokens[1].typeIdx)
+		require.Equal(t, len("Billing"), tokens[1].length)
 	})
 
 	t.Run("marks no token with a modifier, since the legend declares none", func(t *testing.T) {
@@ -266,13 +269,13 @@ actor "Admin"
 	})
 
 	t.Run("gives an empty name no token", func(t *testing.T) {
-		const doc = "context \"\" {\n}\n\nactor \"Customer\" {\n}\n"
-		line, char := posIn(t, doc, `actor "Customer"`, "Customer")
+		const doc = "context \"\" {\n}\n\ncontext \"Billing\" {\n}\n"
+		line, char := posIn(t, doc, `context "Billing"`, "Billing")
 
 		tokens := decodeTokens(lsp.GetSemanticTokens(doc).Data)
 
 		require.Len(t, tokens, 1)
-		assertToken(t, tokens, 0, line, char, len("Customer"), legendTokenType(lsp.TokenTypeParameter))
+		assertToken(t, tokens, 0, line, char, len("Billing"), legendTokenType(lsp.TokenTypeNamespace))
 	})
 
 	t.Run("answers an empty array, not null, for a document that declares no names", func(t *testing.T) {

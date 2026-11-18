@@ -56,7 +56,6 @@ type semanticDecl struct {
 //   - Commands → TokenTypeFunction
 //   - Events → TokenTypeEvent
 //   - Views → TokenTypeClass
-//   - Actors → TokenTypeParameter
 //   - Contexts → TokenTypeNamespace
 //   - Aggregates → TokenTypeStruct
 //
@@ -118,10 +117,6 @@ func semanticDeclsOf(doc string) []semanticDecl {
 		for _, v := range slice.Views {
 			add(v.NamePos, v.Name, TokenTypeClass)
 		}
-	}
-
-	for _, actor := range model.Actors {
-		add(actor.NamePos, actor.Name, TokenTypeParameter)
 	}
 
 	return decls

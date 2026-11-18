@@ -10,7 +10,6 @@ import (
 
 var keywordDescriptions = map[string]string{
 	"model":           "Declares the domain model name.",
-	"actor":           "Declares an actor in the domain.",
 	"context":         "Defines a bounded context.",
 	"aggregate":       "Defines an aggregate root.",
 	"slice":           "Defines a slice within an aggregate.",
@@ -18,7 +17,7 @@ var keywordDescriptions = map[string]string{
 	"event":           "Defines an event that represents a state change.",
 	"fields":          "Defines the fields of an event.",
 	"flow":            "Defines the flow between commands and events.",
-	"trigger":         "Defines a trigger, the Command pattern's human entry point into a slice: the actor who acts and the view they read.",
+	"trigger":         "Defines a trigger, the Command pattern's human entry point into a slice, and the views it reads.",
 	"view":            "Defines a read model that subscribes to events.",
 	"automation":      "Defines an automation, the reactive processor of the Automation pattern: activated by an on event or an every schedule, optionally reads a view, and sends a command.",
 	"on":              "Names the event whose occurrence activates the automation.",

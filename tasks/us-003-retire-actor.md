@@ -302,18 +302,18 @@ in this task, so a document with an actor block is the input that shows each fea
 
 **Acceptance Criteria:**
 
-- [ ] Completion in an empty document, and at the top level below other blocks, offers `model` and `context`
+- [x] Completion in an empty document, and at the top level below other blocks, offers `model` and `context`
       and no `actor`. The completion labels that the server gives hold no `actor`.
-- [ ] Hover on the word `actor` gives no hover. The hover text of `trigger` names no actor.
-- [ ] Hover on the name of an `actor` block gives no card of the kind Actor.
-- [ ] `lsp.GetSemanticTokens` and `lsp.GetTokens` give the name of an `actor` block no token and no
+- [x] Hover on the word `actor` gives no hover. The hover text of `trigger` names no actor.
+- [x] Hover on the name of an `actor` block gives no card of the kind Actor.
+- [x] `lsp.GetSemanticTokens` and `lsp.GetTokens` give the name of an `actor` block no token and no
       `lsp.type.parameter` category.
-- [ ] `internal/test/keywords.go` lists no `actor`, and `TestKeywordCoverage` passes.
-- [ ] No code in `internal/lsp` reads `Model.Actors`. `README.md` (`:419`, `:524`) and `docs/architecture.md`
+- [x] `internal/test/keywords.go` lists no `actor`, and `TestKeywordCoverage` passes.
+- [x] No code in `internal/lsp` reads `Model.Actors`. `README.md` (`:419`, `:524`) and `docs/architecture.md`
       (`:378`) name no actor among the constructs that the editor and the source panel paint. The e2e-viewer
       test of the colour of each declared name (`e2e-viewer/tests/source-panel.spec.js:704-712`) has no
       `actor` row.
-- [ ] `task test:unit` passes.
+- [x] `task test:unit` passes.
 
 **Affected Files/Modules:**
 
