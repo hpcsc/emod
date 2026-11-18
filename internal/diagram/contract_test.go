@@ -822,31 +822,40 @@ var triggerReadsLibraryLendingAutomations = []string{
 }
 
 // TestExporterReadsEdges covers the arrow a trigger and an automation are drawn
-// from the view they read. Only the formats that draw boxes have an arrow for a
-// reads to become, and the text formats are here to show the picture they draw
-// does not move.
+// from the view they read. The formats that draw boxes draw an arrow for each
+// reads. The ASCII diagram prints a line for each view a trigger reads and none
+// for what an automation reads, and the Mermaid diagram prints neither.
 func TestExporterReadsEdges(t *testing.T) {
 	for _, e := range exporters() {
 		t.Run(e.name, func(t *testing.T) {
 			if e.connections == nil {
-				t.Run("renders a model whose triggers and automations read views exactly as one whose read none", func(t *testing.T) {
+				t.Run("renders a model whose automations read views exactly as one whose automations read none", func(t *testing.T) {
 					reading := test.TriggerReadsLibraryLendingModel(t)
-					unreadTriggers := test.WithoutTriggerReads(reading)
 					unreadAutomations := test.WithoutAutomationReads(reading)
 
-					require.Equal(t, test.TriggerReadsLibraryLendingTriggerViewNames, test.DeclaredTriggerReads(reading))
 					require.Equal(t, test.TriggerReadsLibraryLendingAutomationViewNames, test.DeclaredAutomationReads(reading))
-					require.Empty(t, test.DeclaredTriggerReads(unreadTriggers),
-						"the twin has to lose the reads of both slice homes, or the comparison below is answered by whichever home it kept")
 					require.Empty(t, test.DeclaredAutomationReads(unreadAutomations),
 						"the twin has to lose the reads of both slice homes, or the comparison below is answered by whichever home it kept")
 
-					output := e.run(t, reading, diagram.StyleAuto)
-
-					require.Equal(t, output, e.run(t, unreadTriggers, diagram.StyleAuto),
-						"a format that draws no boxes has no arrow for the view a trigger reads to become")
-					require.Equal(t, output, e.run(t, unreadAutomations, diagram.StyleAuto),
+					require.Equal(t, e.run(t, reading, diagram.StyleAuto), e.run(t, unreadAutomations, diagram.StyleAuto),
 						"a format that draws no boxes has no arrow for the view an automation reads to become")
+				})
+
+				t.Run("a trigger's reads adds one connection for each view it reads, and none where the format counts no connection", func(t *testing.T) {
+					reading := test.TriggerReadsLibraryLendingModel(t)
+					unreadTriggers := test.WithoutTriggerReads(reading)
+
+					require.Equal(t, test.TriggerReadsLibraryLendingTriggerViewNames, test.DeclaredTriggerReads(reading))
+					require.Empty(t, test.DeclaredTriggerReads(unreadTriggers),
+						"the twin has to lose the reads of both slice homes, or the comparison below is answered by whichever home it kept")
+
+					output, unread := e.run(t, reading, diagram.StyleAuto), e.run(t, unreadTriggers, diagram.StyleAuto)
+
+					if e.countConnections == nil {
+						require.Equal(t, output, unread, "a format that draws no connection has no arrow for the view a trigger reads to become")
+						return
+					}
+					require.Equal(t, e.countConnections(unread)+len(test.DeclaredTriggerReads(reading)), e.countConnections(output))
 				})
 
 				return
@@ -875,6 +884,25 @@ func TestExporterReadsEdges(t *testing.T) {
 						"an arrow to a reader is not drawn with the dashed treatment an external system gets")
 				})
 			}
+
+			t.Run("a trigger reading two views of its own slice is drawn one arrow from each, painted as the arrow to a reader, and no other new arrow", func(t *testing.T) {
+				reading := singleSliceModel("Shop", "Apply Discount",
+					view("CartView"), view("DiscountView"),
+					&ast.Trigger{Name: "Checkout Page", Reads: []string{"CartView", "DiscountView"}},
+					&ast.Automation{Name: "ExpireDiscount", Reads: "DiscountView"})
+				unread := test.WithoutTriggerReads(reading)
+
+				full, stripped := e.run(t, reading, diagram.StyleAuto), e.run(t, unread, diagram.StyleAuto)
+				drawn := e.connections(t, full)
+				readerPaint := paintOfArrow(t, drawn, "DiscountView", "ExpireDiscount")
+				trigger := e.boxLabelled(t, full, "Checkout Page").label
+
+				e.requireWellFormed(t, full)
+				require.ElementsMatch(t, append(e.connections(t, stripped),
+					diagramConnection{source: e.boxLabelled(t, full, "CartView").label, target: trigger, paint: readerPaint},
+					diagramConnection{source: e.boxLabelled(t, full, "DiscountView").label, target: trigger, paint: readerPaint},
+				), drawn)
+			})
 
 			t.Run("a reads naming a view no slice declares, and a reads left out, are drawn no arrow", func(t *testing.T) {
 				output := e.run(t, mixedReadsModel(), diagram.StyleAuto)
@@ -2255,6 +2283,25 @@ func TestExporterViewAndCommandCopies(t *testing.T) {
 				}, linesOfEach(sourcesIntoEach(connections, []string{
 					"Lending Desk", "Overdue Report", "Desk Kiosk", "RecallOverdueCopy", "FreeDeskAtClosing",
 				})))
+			})
+
+			t.Run("a trigger reading a list draws a copy of the view two slices away in its own column, and none of the view of the next slice", func(t *testing.T) {
+				model := singleSliceModel("Shop", "Show Offers", view("OfferView"))
+				aggregate := model.Contexts[0].Aggregates[0]
+				aggregate.Slices = append(aggregate.Slices,
+					&ast.Slice{Name: "Show Basket", Views: []*ast.View{view("CartView")}},
+					&ast.Slice{Name: "Apply Discount", Trigger: &ast.Trigger{Name: "Checkout Page", Reads: []string{"CartView", "OfferView"}}},
+				)
+
+				output := e.run(t, model, diagram.StyleAuto)
+				boxes := e.boxes(t, output)
+				copies := copyBoxesIn(boxes)
+
+				require.Equal(t, []string{"OfferView\nfrom Show Offers"}, labelsOf(copies))
+				cart := boxNamed(t, boxes, "CartView").rect
+				require.Greater(t, copies[0].rect.x, cart.x+cart.w, "the copy starts before the slice ahead of it ends")
+				require.ElementsMatch(t, []string{"CartView", "OfferView\nfrom Show Offers"},
+					linesOf(sourcesInto(e.connections(t, output), "Checkout Page")))
 			})
 
 			t.Run("a command arrow ends at the copy of a command two or more slices away, and at the command in the automation's own slice", func(t *testing.T) {

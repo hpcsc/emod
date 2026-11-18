@@ -13,7 +13,7 @@ import (
 //   - Commands as [Name]
 //   - Events as (Name)
 //   - Views as {Name}
-//   - Triggers as <<Name>> or <<Name (Actor)>>
+//   - Triggers as <<Name>> or <<Name (Actor)>>, after an arrow from each view they read
 //   - Automations as ⚙ Name
 //   - Cadences as every "Expression"
 //   - Invariants a command is rejected by as ✗ Name
@@ -49,9 +49,15 @@ func ExportASCII(model *ast.Model, _ Style) ([]byte, error) {
 
 		fmt.Fprintf(&b, "=== Slice: %s ===\n", s.Name)
 
-		// Trigger
+		// Trigger with the views it reads
 		if s.Trigger != nil {
-			fmt.Fprintf(&b, "  %s\n", formatTrigger(s.Trigger))
+			trigger := formatTrigger(s.Trigger)
+			if len(s.Trigger.Reads) == 0 {
+				fmt.Fprintf(&b, "  %s\n", trigger)
+			}
+			for _, view := range s.Trigger.Reads {
+				fmt.Fprintf(&b, "  {%s} -> %s\n", view, trigger)
+			}
 		}
 
 		// Standalone commands (not referenced in any flow)

@@ -99,6 +99,28 @@ func TestExportASCII(t *testing.T) {
 		require.NotContains(t, output, "NightlyBatch (")
 	})
 
+	t.Run("prints one line from each view a trigger reads, in list order, in the place of the trigger's own line", func(t *testing.T) {
+		model := singleSliceModel("Shop", "Apply Discount",
+			&ast.Trigger{Name: "Checkout Page", Reads: []string{"DiscountView", "CartView"}})
+
+		raw, err := diagram.ExportASCII(model, diagram.StyleAuto)
+		require.NoError(t, err)
+
+		output := string(raw)
+		require.Contains(t, output, "=== Slice: Apply Discount ===\n  {DiscountView} -> <<Checkout Page>>\n  {CartView} -> <<Checkout Page>>\n\n")
+		require.NotContains(t, output, "\n  <<Checkout Page>>")
+	})
+
+	t.Run("prints the line from the one view a trigger reads with the actor in the trigger's label", func(t *testing.T) {
+		model := singleSliceModel("Shop", "Apply Discount",
+			&ast.Trigger{Name: "Checkout Page", Actor: "Guest", Reads: []string{"CartView"}})
+
+		raw, err := diagram.ExportASCII(model, diagram.StyleAuto)
+		require.NoError(t, err)
+
+		require.Contains(t, string(raw), "=== Slice: Apply Discount ===\n  {CartView} -> <<Checkout Page (Guest)>>\n\n")
+	})
+
 	t.Run("trigger labels omit kind whether or not one is stated", func(t *testing.T) {
 		model := &ast.Model{
 			Name: "Test",

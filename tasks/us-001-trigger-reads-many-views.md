@@ -375,22 +375,22 @@ SliceEdges (Task 1); this task pins it in the picture.
 
 **Acceptance Criteria:**
 
-- [ ] For a trigger `Checkout Page` that reads `[CartView, DiscountView]`, the ASCII diagram prints
+- [x] For a trigger `Checkout Page` that reads `[CartView, DiscountView]`, the ASCII diagram prints
       `{CartView} -> <<Checkout Page>>` and `{DiscountView} -> <<Checkout Page>>`, in list order, at the place of
       the trigger's own line, and prints no separate `<<Checkout Page>>` line.
-- [ ] A trigger that reads one view prints one such line. A trigger with an actor appears as the ASCII diagram
+- [x] A trigger that reads one view prints one such line. A trigger with an actor appears as the ASCII diagram
       labels it, for example `{CartView} -> <<Checkout Page (Guest)>>`.
-- [ ] A trigger that reads no view prints `<<Checkout Page>>` as today, and the ASCII diagram of a model whose
+- [x] A trigger that reads no view prints `<<Checkout Page>>` as today, and the ASCII diagram of a model whose
       triggers read no view does not change.
-- [ ] The ASCII diagram still prints no line for the `reads` of an automation. The Mermaid diagram of a model
+- [x] The ASCII diagram still prints no line for the `reads` of an automation. The Mermaid diagram of a model
       whose triggers read views is the same as the Mermaid diagram of that model with no trigger `reads`.
-- [ ] The SVG of a model whose trigger reads two views of its own slice draws one arrow from each view box to
+- [x] The SVG of a model whose trigger reads two views of its own slice draws one arrow from each view box to
       the trigger box, with the paint of the arrow from a view to a reader in the same picture, and draws no
       other new arrow.
-- [ ] The SVG of a model whose trigger reads a view that a slice two or more slices away declares draws a copy
+- [x] The SVG of a model whose trigger reads a view that a slice two or more slices away declares draws a copy
       of that view in the trigger's slice, and the arrow starts at the copy. A view of the next slice gets no
       copy.
-- [ ] `task test:unit` passes.
+- [x] `task test:unit` passes.
 
 **Affected Files/Modules:**
 

@@ -154,7 +154,7 @@
     },
     {
       "n": 4,
-      "done": false,
+      "done": true,
       "title": "Print each entry in the ASCII diagram, and pin the SVG arrows and copies",
       "language": "Go",
       "testable": true,
