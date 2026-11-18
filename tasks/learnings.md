@@ -1667,3 +1667,38 @@ in this repo; append only learnings that generalise beyond the task that surface
 - Observed: us-002-trigger-box-per-slice
 - Learning: US-002's breakdown left the command end of a trigger's arrow keyed by name because svgConnections reads boxes by label and cannot tell two SubmitCart boxes apart; the request read found that emod validate accepts one command name in two slices, so the story's words 'No arrow joins a trigger to a command of another slice' failed. svgArrowEnds in internal/diagram/svg_test.go gives both end boxes of each arrow with their rects, and the diagram document test can read node parents, so both writers can be tested for a same-named end.
 - Apply when: decomposing a story whose criterion forbids an arrow between slices, or testing which of two same-named boxes an SVG arrow ends at
+
+## A keyword retired surface by surface leaves tests that feed the AST the field, and the last task deletes them
+- Type: pattern
+- Recorded: 2026-11-18
+- Observed: us-003-retire-actor
+- Learning: US-003 retired actor in seven steps: each surface stopped reading Model.Actors and Trigger.Actor while the AST still had them (diagrams, glossary, LSP, exports), then a sweep removed actor from every model, then the diagram document, importer and viewer, and last the parser rejected it and the AST fields went. The surface steps proved each surface with a test that put an actor in the AST and asserted it was not shown. When the fields went, those tests lost their input and became duplicates with names that no longer held; the last task deleted seven of them and renamed the rest. Plan that deletion into the task that removes the field.
+- Apply when: decomposing a story that retires or renames a DSL keyword or an AST field in steps, such as US-004 retiring trigger for screen and shows
+
+## A sweep that removes lines from shared fixtures moves the line numbers that tests assert below them
+- Type: pattern
+- Recorded: 2026-11-18
+- Observed: us-003-retire-actor
+- Learning: Removing the actor block and attribute lines from internal/test/fixtures.go, examples/ and inline test models broke about 40 tests in internal/cli, internal/query, internal/oracle, internal/mcp and internal/export that assert a line number. Three scripted fixes handled them: for a failing require.Equal on text, replace the expected literal with the actual one when the two differ only in digits and spacing and the literal occurs once in the test file; for require.JSONEq and struct Line: fields, find the removed line in the old model constant with git show HEAD:<file> and subtract one from every line number above it, inside the failing test's block only. Check each result with the suite; never replace a literal that differs in more than numbers.
+- Apply when: sweeping a keyword, an attribute or a block out of examples/, internal/test/fixtures.go or inline test models, as US-004 does for trigger
+
+## cue vet prints the temp folder, which carries the test name, so a key check can match the path
+- Type: recurring-finding
+- Recorded: 2026-11-18
+- Observed: us-003-retire-actor
+- Learning: vetAgainstModel in internal/cue/embed_test.go writes into t.TempDir(), and cue vet prints that path in each error. The folder is named after the test, so require.Contains(output, "actors") in a test named for actors, or "name" in one named for a missing name, passed on the path alone. Assert the cue error text instead: '<key>: field not allowed' for a key the schema refuses, '<key>: incomplete value' for a missing one.
+- Apply when: writing a schema test in internal/cue/embed_test.go that asserts which key cue vet names
+
+## The audit cannot build the web bundle, so run the e2e-viewer suite yourself for a change to its tests
+- Type: constraint
+- Recorded: 2026-11-18
+- Observed: us-003-retire-actor
+- Learning: The US-003 audit could not run npm ci or task build:web, so the Playwright e2e-viewer suite and the vitest suites got no verdict there, and a Go package that embeds the frontend failed with 'pattern generated/*: no matching files found'. One e2e assertion (a colour count of 7 after a row was removed) could not pass, and only a lens reading the diff saw it. Run task test:e2e:viewer before you accept an audit of a change that edits e2e-viewer tests, samples or the static frontend.
+- Apply when: accepting the audit of a change that touches e2e-viewer/ or internal/frontend/static
+
+## Two connect.spec.js tests can time out under the full e2e-viewer run and pass alone
+- Type: constraint
+- Recorded: 2026-11-18
+- Observed: us-003-retire-actor
+- Learning: In the US-003 run, 'connects a command to an event and records the flow' and 'does nothing when the drag ends on empty canvas' in e2e-viewer/tests/connect.spec.js failed once with a 5 s wait for a page function (the page showed no model) while 94 others passed; npx playwright test tests/connect.spec.js passed all 17, and the next full run passed all 96. Run the file alone before you treat such a failure as caused by the change.
+- Apply when: reading a failure of e2e-viewer/tests/connect.spec.js after task test:e2e:viewer
