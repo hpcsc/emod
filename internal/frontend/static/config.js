@@ -42,6 +42,7 @@ export const MINIMAP_H = 120;
 export const MINIMAP_PAD = 2;
 
 export const nodePalette = {
+  shows:       { fill: '#ffffff', stroke: '#333333', hoverFill: '#e0e0e0', highlightFill: '#f0f0f0' },
   trigger:     { fill: '#ffffff', stroke: '#333333', hoverFill: '#e0e0e0', highlightFill: '#f0f0f0' },
   command:     { fill: '#dae8fc', stroke: '#6c8ebf', hoverFill: '#b8cce8', highlightFill: '#d4e4f7' },
   event:       { fill: '#ffe6cc', stroke: '#d79b00', hoverFill: '#f5d0b0', highlightFill: '#ffe5c2' },
@@ -64,6 +65,7 @@ export const edgeConfig = {
   subscription:       { cls: "sub-arrow",       marker: "url(#arrowhead-green)",   stroke: "#82b366", dash: "5,5" },
   automation_trigger: { cls: "auto-trg-arrow",  marker: "url(#arrowhead-red)",     stroke: "#b85450", dash: "5,5" },
   automation_command: { cls: "auto-cmd-arrow",  marker: "url(#arrowhead-red)",     stroke: "#b85450", dash: "" },
+  shows_command:      { cls: "shows-cmd-arrow", marker: "url(#arrowhead-purple)",  stroke: "#9673a6", dash: "" },
   trigger_command:    { cls: "trg-cmd-arrow",   marker: "url(#arrowhead-purple)",  stroke: "#9673a6", dash: "" },
   reads:              { cls: "reads-arrow",     marker: "url(#arrowhead)",         stroke: "#666666", dash: "" },
   translation_command:{ cls: "trans-cmd-arrow", marker: "url(#arrowhead-orange)", stroke: "#d79b00", dash: "" },
@@ -74,6 +76,7 @@ export const arrowClassMap = {
   subscription: "sub-arrow",
   automation_trigger: "auto-trg-arrow",
   automation_command: "auto-cmd-arrow",
+  shows_command: "shows-cmd-arrow",
   trigger_command: "trg-cmd-arrow",
   reads: "reads-arrow",
   translation_command: "trans-cmd-arrow",

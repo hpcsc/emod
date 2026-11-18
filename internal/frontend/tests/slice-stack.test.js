@@ -248,6 +248,44 @@ describe('a slice stacked top to bottom', () => {
     });
   });
 
+  describe('showing two screens', () => {
+    function twoScreensBesideATrigger() {
+      return [
+        { id: 'ctx1', type: 'context', label: 'Shop' },
+        { id: 'agg1', type: 'aggregate', label: 'Cart', parentId: 'ctx1' },
+        { id: 'sl1', type: 'slice', label: 'Apply discount', parentId: 'agg1' },
+        { id: 'shows1', type: 'shows', label: 'CheckoutPage', parentId: 'sl1' },
+        { id: 'shows2', type: 'shows', label: 'CartDrawer', parentId: 'sl1' },
+        { id: 'cmd1', type: 'command', label: 'ApplyDiscount', parentId: 'sl1' },
+        { id: 'evt1', type: 'event', label: 'DiscountApplied', parentId: 'sl1' },
+        { id: 'sl2', type: 'slice', label: 'Place order', parentId: 'agg1' },
+        { id: 'trg1', type: 'trigger', label: 'OrderForm', parentId: 'sl2' },
+        { id: 'cmd2', type: 'command', label: 'PlaceOrder', parentId: 'sl2' },
+        { id: 'evt2', type: 'event', label: 'OrderPlaced', parentId: 'sl2' },
+      ];
+    }
+
+    it('puts the two screens side by side in the top band of the slice, with no overlap', () => {
+      const positions = layOut(twoScreensBesideATrigger());
+      const [first, second] = boxesOf(positions, ['shows1', 'shows2']);
+      const slice = positions.sl1;
+
+      expect(second.y).toBe(first.y);
+      expect(first.y).toBe(positions.trg1.y);
+      expect(overlaps(first, second)).toBe(false);
+      [first, second].forEach((box) => {
+        expect(box.x).toBeGreaterThanOrEqual(slice.x);
+        expect(box.x + box.w).toBeLessThanOrEqual(slice.x + slice.w);
+      });
+    });
+
+    it('keeps the rows under the screens level with the rows of the slice beside it', () => {
+      const positions = layOut(twoScreensBesideATrigger());
+
+      expect([positions.cmd1.y, positions.evt1.y]).toEqual([positions.cmd2.y, positions.evt2.y]);
+    });
+  });
+
   describe('beside another slice', () => {
     it('keeps the command under an automation level with the command under a trigger', () => {
       const positions = layOut(commandsUnderATriggerAndAnAutomation());

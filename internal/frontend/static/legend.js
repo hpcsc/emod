@@ -6,6 +6,7 @@ const NS = "http://www.w3.org/2000/svg";
 // draws. A type missing here falls back to its own key, so a new element or
 // connection still reaches the legend — unnamed rather than undrawn.
 const ELEMENT_NAMES = {
+  shows: 'Screen',
   trigger: 'Trigger',
   command: 'Command',
   event: 'Event',
@@ -19,8 +20,9 @@ const CONNECTION_NAMES = {
   subscription: 'Event updates view',
   automation_trigger: 'Event wakes automation',
   automation_command: 'Automation issues command',
+  shows_command: 'Screen issues command',
   trigger_command: 'Trigger sends command',
-  reads: 'View read by a trigger or automation',
+  reads: 'View read by a screen, a trigger or an automation',
   translation_command: 'Translation issues command',
 };
 

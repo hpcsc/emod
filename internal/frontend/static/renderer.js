@@ -382,11 +382,15 @@ function sliceMarkingBand(pos) {
   return markingBand(pos, pos.y + L.sliceHdrH / 2);
 }
 
-// A trigger is drawn as a screen, with a bar across the top of its box, so its
-// marks drop below the bar rather than into it.
+// A shows block and a trigger are drawn as a screen, with a bar across the top
+// of the box, so their marks drop below the bar rather than into it.
 function blockMarkingBand(node, pos) {
   var belowScreenBar = pos.y + screenBar.top + screenBar.height + screenBar.stroke + markingSize / 2;
-  return markingBand(pos, node.type === "trigger" ? belowScreenBar : pos.y + markingInset);
+  return markingBand(pos, drawnAsScreen(node) ? belowScreenBar : pos.y + markingInset);
+}
+
+function drawnAsScreen(node) {
+  return node.type === "shows" || node.type === "trigger";
 }
 
 function buildSlice(slice, sp) {
@@ -517,8 +521,8 @@ function buildBlock(node, pos, palette) {
       "rx=\"4\" stroke-width=\"1.5\""));
   }
 
-  if (node.type === "trigger") {
-    // A trigger is drawn as a screen: a small header bar inside the top edge
+  if (drawnAsScreen(node)) {
+    // A screen is drawn with a small header bar inside the top edge
     // of the box, matching the Go renderers. The main rect stays first so
     // drawnBoxes(svg) keeps reading the box itself.
     blockG.appendChild(svgRect(pos.x + screenBar.inset, pos.y + screenBar.top,

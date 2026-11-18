@@ -260,6 +260,8 @@ describe('Model', () => {
     // or the importer drops the edge when the diagram is written back out.
     const cases = [
       ['command', 'event', 'flow'],
+      ['shows', 'command', 'shows_command'],
+      ['view', 'shows', 'reads'],
       ['trigger', 'command', 'trigger_command'],
       ['event', 'view', 'subscription'],
       ['event', 'automation', 'automation_trigger'],
@@ -279,6 +281,8 @@ describe('Model', () => {
 
     it.each([
       ['view', 'event', 'subscription'],
+      ['command', 'shows', 'shows_command'],
+      ['shows', 'view', 'reads'],
       ['trigger', 'view', 'reads'],
       ['automation', 'view', 'reads'],
     ])('does not type a %s to %s arrow as %s, the direction the exporter never writes',

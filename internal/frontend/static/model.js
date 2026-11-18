@@ -263,11 +263,13 @@ function removeEdge(store, source, target) {
 // not a subscription and would be dropped on export.
 var EDGE_TYPE_BY_ENDS = {
   "command>event": "flow",
+  "shows>command": "shows_command",
   "trigger>command": "trigger_command",
   "event>view": "subscription",
   "event>automation": "automation_trigger",
   "automation>command": "automation_command",
   "view>translation": "reads",
+  "view>shows": "reads",
   "view>trigger": "reads",
   "view>automation": "reads",
   "translation>command": "translation_command",

@@ -2496,6 +2496,144 @@ func TestExport(t *testing.T) {
 			}, triggerEdges)
 		})
 
+		t.Run("screens and shows blocks", func(t *testing.T) {
+			// edgesAtShows names each edge that starts or ends at a shows node by
+			// the type, the label and the slice of each end.
+			edgesAtShows := func(doc map[string]any) []string {
+				nodes := make(map[string]map[string]any)
+				for _, node := range objectsUnder(doc, "nodes") {
+					nodes[node["id"].(string)] = node
+				}
+				end := func(node map[string]any) string {
+					return fmt.Sprintf("%s %s in %s", node["type"], node["label"], nodes[node["parentId"].(string)]["label"])
+				}
+				var edges []string
+				for _, edge := range objectsUnder(doc, "edges") {
+					source, target := nodes[edge["source"].(string)], nodes[edge["target"].(string)]
+					if source["type"] == "shows" || target["type"] == "shows" {
+						edges = append(edges, fmt.Sprintf("%s: %s -> %s", edge["type"], end(source), end(target)))
+					}
+				}
+				return edges
+			}
+
+			t.Run("gives each screen declaration a node with no parent, in declaration order, before the first context", func(t *testing.T) {
+				model := test.ScreenLibraryLendingModel(t)
+				nodes := objectsUnder(diagramDocOf(t, model), "nodes")
+				positionOf := func(pos ast.Position) map[string]any {
+					return map[string]any{"filename": pos.Filename, "line": float64(pos.Line), "column": float64(pos.Column)}
+				}
+
+				require.Equal(t, []map[string]any{
+					{
+						"id": "screen-1", "type": "screen", "label": "LendingDesk", "parentId": nil,
+						"description": "The terminal a librarian lends and takes back copies at",
+						"position":    positionOf(model.Screens[0].NamePos),
+						"comments": []any{map[string]any{
+							"text":     "# The terminal a librarian lends and takes back copies at",
+							"position": positionOf(model.Screens[0].Comments[0].Position),
+						}},
+					},
+					{"id": "screen-2", "type": "screen", "label": "OverdueReport", "parentId": nil, "position": positionOf(model.Screens[1].NamePos)},
+					{"id": "screen-3", "type": "screen", "label": "DeskKiosk", "parentId": nil, "position": positionOf(model.Screens[2].NamePos)},
+				}, nodes[:3])
+				require.Equal(t, "context", nodes[3]["type"])
+			})
+
+			t.Run("gives each shows block a node in its slice, labelled with its screen, with its reads and its command as lists and no screen key", func(t *testing.T) {
+				doc := diagramDocOf(t, test.ScreenLibraryLendingModel(t))
+				nodes := make(map[string]map[string]any)
+				for _, node := range objectsUnder(doc, "nodes") {
+					nodes[node["id"].(string)] = node
+				}
+
+				var shows []map[string]any
+				for _, node := range objectsUnder(doc, "nodes") {
+					if node["type"] == "shows" {
+						_, keyed := node["screen"]
+						shows = append(shows, map[string]any{
+							"label": node["label"], "slice": nodes[node["parentId"].(string)]["label"],
+							"reads": node["reads"], "command": node["command"], "screen key": keyed,
+						})
+					}
+				}
+
+				require.Equal(t, []map[string]any{
+					{"label": "LendingDesk", "slice": "Borrow Copy", "reads": []any{"MemberLoansView"}, "command": []any{"BorrowCopy"}, "screen key": false},
+					{"label": "LendingDesk", "slice": "Return Copy", "reads": nil, "command": []any{"ReturnCopy", "RenewLoan"}, "screen key": false},
+					{"label": "OverdueReport", "slice": "Chase Overdue Copy", "reads": []any{"MemberLoansView", "DeskOccupancyView"}, "command": []any{"RecallCopy"}, "screen key": false},
+					{"label": "DeskKiosk", "slice": "Chase Overdue Copy", "reads": []any{"DeskOccupancyView"}, "command": nil, "screen key": false},
+					{"label": "DeskKiosk", "slice": "Claim Desk", "reads": []any{"DeskOccupancyView"}, "command": []any{"ClaimDesk"}, "screen key": false},
+				}, shows)
+			})
+
+			t.Run("gives a shows node the position of its screen entry and its comments", func(t *testing.T) {
+				doc := diagramDocOf(t, &ast.Model{
+					Name: "Shop",
+					Contexts: []*ast.Context{{
+						Name: "Shop",
+						Slices: []*ast.Slice{{
+							Name: "Apply Discount",
+							Appearances: []*ast.Appearance{{
+								Comments:  []*ast.Comment{{Text: "# The shopper enters a code"}},
+								Screen:    "CheckoutPage",
+								ScreenPos: ast.Position{Filename: "shop.emod", Line: 9, Column: 17},
+								OpenPos:   ast.Position{Filename: "shop.emod", Line: 8, Column: 11},
+							}},
+						}},
+					}},
+				})
+
+				require.Equal(t, []map[string]any{{
+					"id": "shows-1", "type": "shows", "label": "CheckoutPage", "parentId": "slice-1",
+					"position": map[string]any{"filename": "shop.emod", "line": float64(9), "column": float64(17)},
+					"comments": []any{map[string]any{"text": "# The shopper enters a code"}},
+				}}, nodesOfType(doc["nodes"].([]any), "shows"))
+			})
+
+			t.Run("joins each reads entry from its view or the copy of it, and each command entry to the command it names, both in the slice of the shows block", func(t *testing.T) {
+				doc := diagramDocOf(t, test.ScreenLibraryLendingModel(t))
+
+				require.ElementsMatch(t, []string{
+					"reads: view MemberLoansView in Review Member Loans -> shows LendingDesk in Borrow Copy",
+					"shows_command: shows LendingDesk in Borrow Copy -> command BorrowCopy in Borrow Copy",
+					"shows_command: shows LendingDesk in Return Copy -> command ReturnCopy in Return Copy",
+					"shows_command: shows LendingDesk in Return Copy -> command RenewLoan in Return Copy",
+					"reads: view_copy MemberLoansView in Chase Overdue Copy -> shows OverdueReport in Chase Overdue Copy",
+					"reads: view_copy DeskOccupancyView in Chase Overdue Copy -> shows OverdueReport in Chase Overdue Copy",
+					"shows_command: shows OverdueReport in Chase Overdue Copy -> command RecallCopy in Chase Overdue Copy",
+					"reads: view_copy DeskOccupancyView in Chase Overdue Copy -> shows DeskKiosk in Chase Overdue Copy",
+					"reads: view DeskOccupancyView in Browse Desk Occupancy -> shows DeskKiosk in Claim Desk",
+					"shows_command: shows DeskKiosk in Claim Desk -> command ClaimDesk in Claim Desk",
+				}, edgesAtShows(doc))
+			})
+
+			t.Run("joins a command entry to the command of its own slice or to the copy of a far one, and to no command it does not name", func(t *testing.T) {
+				doc := diagramDocOf(t, &ast.Model{
+					Name: "Shop",
+					Contexts: []*ast.Context{{
+						Name: "Shop",
+						Slices: []*ast.Slice{
+							{Name: "Cancel Order", Appearances: []*ast.Appearance{{Screen: "OrderPage", Commands: []string{"RefundOrder"}}}},
+							{
+								Name:        "Apply Discount",
+								Appearances: []*ast.Appearance{{Screen: "CheckoutPage", Commands: []string{"ApplyDiscount"}}},
+								Commands:    []*ast.Command{{Name: "ApplyDiscount"}, {Name: "ClearCart"}, {Name: "RemoveDiscount"}},
+								Automations: []*ast.Automation{{Name: "ExpireDiscount", Schedule: "0 0 * * *", Command: "RemoveDiscount"}},
+							},
+							{Name: "Refund Order", Commands: []*ast.Command{{Name: "RefundOrder"}}},
+							{Name: "Reapply Discount", Commands: []*ast.Command{{Name: "ApplyDiscount"}}},
+						},
+					}},
+				})
+
+				require.ElementsMatch(t, []string{
+					"shows_command: shows OrderPage in Cancel Order -> command_copy RefundOrder in Cancel Order",
+					"shows_command: shows CheckoutPage in Apply Discount -> command ApplyDiscount in Apply Discount",
+				}, edgesAtShows(doc))
+			})
+		})
+
 		t.Run("view node with fields and subscribes", func(t *testing.T) {
 			model := &ast.Model{
 				Name: "Test",

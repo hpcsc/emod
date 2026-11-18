@@ -369,6 +369,31 @@ describe('dragging a block onto another slice', () => {
   });
 });
 
+describe('dragging a screen onto a slice that shows one already', () => {
+  beforeEach(() => {
+    useNodes([
+      { id: 'ctx1', type: 'context', label: 'Shop' },
+      { id: 'sl1', type: 'slice', label: 'Apply Discount', parentId: 'ctx1' },
+      { id: 'shows1', type: 'shows', label: 'CheckoutPage', parentId: 'sl1' },
+      { id: 'cmd1', type: 'command', label: 'ApplyDiscount', parentId: 'sl1' },
+      { id: 'sl2', type: 'slice', label: 'Place Order', parentId: 'ctx1' },
+      { id: 'shows2', type: 'shows', label: 'CartDrawer', parentId: 'sl2' },
+      { id: 'cmd2', type: 'command', label: 'PlaceOrder', parentId: 'sl2' },
+    ]);
+  });
+
+  it('moves it there, beside the screen the slice shows, with no overlap', () => {
+    dropOnto('shows1', 'sl2');
+
+    const moved = store.layoutPositions.shows1;
+    const resident = store.layoutPositions.shows2;
+    expect(store.nodeById.get('shows1').parentId).toBe('sl2');
+    expect(isInside('shows1', 'sl2')).toBe(true);
+    expect(moved.x + moved.w <= resident.x || resident.x + resident.w <= moved.x).toBe(true);
+    expect(edits).toBe(1);
+  });
+});
+
 describe('dragging a slice over another aggregate', () => {
   beforeEach(() => {
     useNodes(slicesAcrossAggregates());

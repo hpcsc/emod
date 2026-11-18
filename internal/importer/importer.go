@@ -19,14 +19,16 @@ type diagramDocument struct {
 	Edges            []*diagramEdge `json:"edges"`
 }
 
-type diagramReads []string
+// diagramNames reads a key that names other constructs, as one name or as a
+// list.
+type diagramNames []string
 
-func (r *diagramReads) UnmarshalJSON(data []byte) error {
+func (n *diagramNames) UnmarshalJSON(data []byte) error {
 	var name string
 	if err := json.Unmarshal(data, &name); err == nil {
-		*r = nil
+		*n = nil
 		if name != "" {
-			*r = diagramReads{name}
+			*n = diagramNames{name}
 		}
 		return nil
 	}
@@ -34,15 +36,15 @@ func (r *diagramReads) UnmarshalJSON(data []byte) error {
 	if err := json.Unmarshal(data, &names); err != nil {
 		return err
 	}
-	*r = names
+	*n = names
 	return nil
 }
 
-func (r diagramReads) first() string {
-	if len(r) == 0 {
+func (n diagramNames) first() string {
+	if len(n) == 0 {
 		return ""
 	}
-	return r[0]
+	return n[0]
 }
 
 type diagramNode struct {
@@ -54,12 +56,12 @@ type diagramNode struct {
 	Position       *ast.Position     `json:"position,omitempty"`
 	Fields         []*diagramField   `json:"fields,omitempty"`
 	Comments       []*diagramComment `json:"comments,omitempty"`
-	Reads          diagramReads      `json:"reads,omitempty"`
+	Reads          diagramNames      `json:"reads,omitempty"`
 	Subscribes     []string          `json:"subscribes,omitempty"`
 	OnEvent        string            `json:"on_event,omitempty"`
 	Schedule       string            `json:"every,omitempty"`
 	After          string            `json:"after,omitempty"`
-	Command        string            `json:"command,omitempty"`
+	Command        diagramNames      `json:"command,omitempty"`
 	TargetContext  string            `json:"target_context,omitempty"`
 	ExternalSystem string            `json:"external_system,omitempty"`
 	Source         string            `json:"source,omitempty"`
@@ -72,6 +74,16 @@ type diagramNode struct {
 // view keeps its "reads" type, so it can start at a command or an event.
 func (n *diagramNode) viewName() string {
 	if n.Type != "view" && n.Type != "view_copy" {
+		return ""
+	}
+	return n.Label
+}
+
+// commandName answers nothing for a node that is not a command: an edge dragged
+// off a command keeps its "shows_command" type, so it can end at a view or an
+// event.
+func (n *diagramNode) commandName() string {
+	if n.Type != "command" && n.Type != "command_copy" {
 		return ""
 	}
 	return n.Label
@@ -109,6 +121,23 @@ func (n *diagramNode) asSlice() *ast.Slice {
 		Name:        n.Label,
 		Description: n.Description,
 		Comments:    convertComments(n.Comments),
+	}
+}
+
+func (n *diagramNode) asScreen() *ast.Screen {
+	return &ast.Screen{
+		Name:        n.Label,
+		Description: n.Description,
+		Comments:    convertComments(n.Comments),
+	}
+}
+
+func (n *diagramNode) asAppearance() *ast.Appearance {
+	return &ast.Appearance{
+		Screen:   n.Label,
+		Comments: convertComments(n.Comments),
+		Reads:    slices.Clone([]string(n.Reads)),
+		Commands: slices.Clone([]string(n.Command)),
 	}
 }
 
@@ -160,7 +189,7 @@ func (n *diagramNode) asAutomation() *ast.Automation {
 		Schedule:      n.Schedule,
 		After:         n.After,
 		Reads:         n.Reads.first(),
-		Command:       n.Command,
+		Command:       n.Command.first(),
 		TargetContext: n.TargetContext,
 	}
 }
@@ -172,7 +201,7 @@ func (n *diagramNode) asTranslation() *ast.Translation {
 		Comments:       convertComments(n.Comments),
 		ExternalSystem: n.ExternalSystem,
 		Reads:          n.Reads.first(),
-		Command:        n.Command,
+		Command:        n.Command.first(),
 		Event:          n.Event.asEvent(),
 	}
 }
@@ -239,14 +268,36 @@ func ImportDiagram(data []byte) (*ast.Model, error) {
 		if n == nil || n.ParentID != nil {
 			continue
 		}
-		if n.Type == "context" {
+		switch n.Type {
+		case "screen":
+			model.Screens = append(model.Screens, n.asScreen())
+		case "context":
 			model.Contexts = append(model.Contexts, b.buildContext(n))
 		}
 	}
 
 	b.foldEdges(doc.Edges)
+	declareShownScreens(model)
 
 	return model, nil
+}
+
+// declareShownScreens declares each screen that a shows block names and no
+// declaration holds, after the declarations the model has, so that the saved
+// text names no screen it does not declare.
+func declareShownScreens(model *ast.Model) {
+	declared := make(map[string]bool, len(model.Screens))
+	for _, screen := range model.Screens {
+		declared[screen.Name] = true
+	}
+	for _, slice := range model.AllSlices() {
+		for _, appearance := range slice.Appearances {
+			if appearance.Screen != "" && !declared[appearance.Screen] {
+				declared[appearance.Screen] = true
+				model.Screens = append(model.Screens, &ast.Screen{Name: appearance.Screen})
+			}
+		}
+	}
 }
 
 type builder struct {
@@ -314,6 +365,7 @@ func (b *builder) buildAggregate(n *diagramNode) *ast.Aggregate {
 func (b *builder) buildSlice(n *diagramNode) *ast.Slice {
 	slice := n.asSlice()
 
+	b.appendAppearances(slice, n.ID)
 	b.appendTrigger(slice, n.ID)
 	b.appendCommands(slice, n.ID)
 	b.appendEvents(slice, n.ID)
@@ -323,6 +375,14 @@ func (b *builder) buildSlice(n *diagramNode) *ast.Slice {
 
 	b.register(n.ID, slice, slice)
 	return slice
+}
+
+func (b *builder) appendAppearances(slice *ast.Slice, sliceID string) {
+	for _, a := range b.children(sliceID, "shows") {
+		appearance := a.asAppearance()
+		slice.Appearances = append(slice.Appearances, appearance)
+		b.register(a.ID, slice, appearance)
+	}
 }
 
 func (b *builder) appendTrigger(slice *ast.Slice, sliceID string) {
@@ -435,6 +495,12 @@ func (b *builder) foldEdges(edges []*diagramEdge) {
 			if auto, ok := b.byNode[src.ID].(*ast.Automation); ok && auto.Command == "" {
 				auto.Command = tgt.Label
 			}
+		case "shows_command":
+			if appearance, ok := b.byNode[src.ID].(*ast.Appearance); ok {
+				if command := tgt.commandName(); command != "" {
+					appearance.Commands = appendMissing(appearance.Commands, command)
+				}
+			}
 		case "translation_command":
 			if trans, ok := b.byNode[src.ID].(*ast.Translation); ok && trans.Command == "" {
 				trans.Command = tgt.Label
@@ -447,6 +513,10 @@ func (b *builder) foldEdges(edges []*diagramEdge) {
 
 func (b *builder) foldReads(src, tgt *diagramNode) {
 	switch reader := b.byNode[tgt.ID].(type) {
+	case *ast.Appearance:
+		if view := src.viewName(); view != "" {
+			reader.Reads = appendMissing(reader.Reads, view)
+		}
 	case *ast.Trigger:
 		if view := src.viewName(); view != "" {
 			reader.Reads = appendMissing(reader.Reads, view)

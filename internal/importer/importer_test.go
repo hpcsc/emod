@@ -894,6 +894,138 @@ context "Shop" {
 		})
 	})
 
+	t.Run("screens and shows blocks", func(t *testing.T) {
+		t.Run("each screen, also one that no slice shows, and each shows block come back with their reads and commands in order", func(t *testing.T) {
+			source := `emod = 1
+
+model "Shop" {
+}
+
+screen "CheckoutPage" {
+}
+
+screen "CartDrawer" {
+}
+
+screen "OrderHistory" {
+}
+
+context "Shop" {
+  slice "Show Basket" {
+    view "CartView" {
+    }
+
+    view "DiscountView" {
+    }
+
+    view "LoyaltyView" {
+    }
+  }
+
+  slice "Apply Discount" {
+    # The shopper enters a code
+    shows {
+      screen  = CheckoutPage
+      reads   = [CartView, DiscountView]
+      command = [ApplyDiscount, ClearCart]
+    }
+
+    shows {
+      screen = CartDrawer
+    }
+
+    command "ApplyDiscount" {
+    }
+
+    command "ClearCart" {
+    }
+
+    command "RemoveDiscount" {
+    }
+  }
+
+  slice "Place Order" {
+    shows {
+      screen = CartDrawer
+    }
+
+    command "PlaceOrder" {
+    }
+  }
+}
+`
+			require.Equal(t, source, formatter.Format(importFrom(t, source)))
+		})
+
+		t.Run("a save of the shared screen fixture keeps all but what a save loses", func(t *testing.T) {
+			requireSaveKeepsAllButItsLosses(t, test.ScreenLibraryLendingModel)
+		})
+
+		t.Run("a shows node whose screen no screen node declares gets one declaration after those the document has, and a shows node naming no screen gets none", func(t *testing.T) {
+			model := importDiagram(t, `{
+              "model_name": "M",
+              "nodes": [
+                {"id": "screen-1", "type": "screen", "label": "CheckoutPage", "parentId": null},
+                {"id": "context-1", "type": "context", "label": "Shop", "parentId": null},
+                {"id": "slice-1", "type": "slice", "label": "Apply Discount", "parentId": "context-1"},
+                {"id": "shows-1", "type": "shows", "label": "CheckoutPage", "parentId": "slice-1"},
+                {"id": "shows-2", "type": "shows", "label": "CartDrawer", "parentId": "slice-1"},
+                {"id": "slice-2", "type": "slice", "label": "Pay", "parentId": "context-1"},
+                {"id": "shows-3", "type": "shows", "label": "CartDrawer", "parentId": "slice-2"},
+                {"id": "shows-4", "type": "shows", "label": "", "parentId": "slice-2"}
+              ],
+              "edges": []
+            }`)
+
+			var declared []string
+			for _, screen := range model.Screens {
+				declared = append(declared, screen.Name)
+			}
+			require.Equal(t, []string{"CheckoutPage", "CartDrawer"}, declared)
+		})
+
+		t.Run("a shows node that gives its reads and its command as one name imports lists of one", func(t *testing.T) {
+			model := importDiagram(t, `{
+              "model_name": "M",
+              "nodes": [
+                {"id": "context-1", "type": "context", "label": "Shop", "parentId": null},
+                {"id": "slice-1", "type": "slice", "label": "Apply Discount", "parentId": "context-1"},
+                {"id": "shows-1", "type": "shows", "label": "CheckoutPage", "parentId": "slice-1",
+                 "reads": "CartView", "command": "ApplyDiscount"}
+              ],
+              "edges": []
+            }`)
+
+			appearance := model.Contexts[0].Slices[0].Appearances[0]
+			require.Equal(t, [][]string{{"CartView"}, {"ApplyDiscount"}}, [][]string{appearance.Reads, appearance.Commands})
+		})
+
+		t.Run("a reads edge from a view and a shows_command edge to a command or its copy fill a shows node that states neither, and an edge from or to another kind adds nothing", func(t *testing.T) {
+			model := importDiagram(t, `{
+              "model_name": "M",
+              "nodes": [
+                {"id": "context-1", "type": "context", "label": "Shop", "parentId": null},
+                {"id": "slice-1", "type": "slice", "label": "Apply Discount", "parentId": "context-1"},
+                {"id": "shows-1", "type": "shows", "label": "CheckoutPage", "parentId": "slice-1"},
+                {"id": "view-1", "type": "view", "label": "CartView", "parentId": "slice-1"},
+                {"id": "command-1", "type": "command", "label": "ApplyDiscount", "parentId": "slice-1"},
+                {"id": "command_copy-1", "type": "command_copy", "label": "RefundOrder", "parentId": "slice-1"},
+                {"id": "event-1", "type": "event", "label": "DiscountApplied", "parentId": "slice-1"}
+              ],
+              "edges": [
+                {"source": "view-1", "target": "shows-1", "type": "reads"},
+                {"source": "command-1", "target": "shows-1", "type": "reads"},
+                {"source": "shows-1", "target": "command-1", "type": "shows_command"},
+                {"source": "shows-1", "target": "command_copy-1", "type": "shows_command"},
+                {"source": "shows-1", "target": "event-1", "type": "shows_command"}
+              ]
+            }`)
+
+			appearance := model.Contexts[0].Slices[0].Appearances[0]
+			require.Equal(t, [][]string{{"CartView"}, {"ApplyDiscount", "RefundOrder"}}, [][]string{appearance.Reads, appearance.Commands})
+		})
+	})
+
 	t.Run("copies of subscribed events", func(t *testing.T) {
 		stayHistory := func(t *testing.T) *ast.Slice {
 			t.Helper()

@@ -90,7 +90,7 @@ function computeLayout(store) {
   let maxSliceHeight;
 
   function layoutSlice(sl, si, siblings, slY) {
-    const triggers = childrenOfType(sl.children, "trigger");
+    const wireframes = childrenOfType(sl.children, "trigger").concat(childrenOfType(sl.children, "shows"));
     const commands = childrenOfType(sl.children, "command");
     const events = childrenOfType(sl.children, "event");
     const views = childrenOfType(sl.children, "view");
@@ -116,6 +116,9 @@ function computeLayout(store) {
     }
     if (processors.length > 1) {
       allLabelWidths.push(rowSpanWidth(processors.map(function(p) { return labelWidth(processorLabel(p)); })));
+    }
+    if (wireframes.length > 1) {
+      allLabelWidths.push(rowSpanWidth(wireframes.map(function(w) { return labelWidth(w.label); })));
     }
     const sBoxWidth = Math.max(180, ...allLabelWidths);
     const sSliceWidth = sBoxWidth + 40;
@@ -150,10 +153,10 @@ function computeLayout(store) {
       blockY += L.boxHeight + gap;
     }
 
-    const topRowEmpty = sl.children.length > 0 && triggers.length === 0 && processors.length === 0;
+    const topRowEmpty = sl.children.length > 0 && wireframes.length === 0 && processors.length === 0;
     if (topRowEmpty) blockY += L.boxHeight + gap;
 
-    placeColumn(triggers);
+    placeRow(wireframes, L.boxHeight);
     placeRow(processors, childrenOfType(sl.children, "automation").length ? L.automationRowHeight : L.boxHeight);
     placeColumn(commands);
     placeRow(events, L.boxHeight);
@@ -304,7 +307,7 @@ function getDescendantIds(nodes, rootId) {
 function getConnectedEdges(edges, nodeId) {
   const result = [];
   edges.forEach(function(e) {
-    if ((e.type === "flow" || e.type === "trigger_command" || e.type === "subscription" || e.type === "automation_trigger" || e.type === "automation_command" || e.type === "reads" || e.type === "translation_command") && (e.source === nodeId || e.target === nodeId)) {
+    if ((e.type === "flow" || e.type === "shows_command" || e.type === "trigger_command" || e.type === "subscription" || e.type === "automation_trigger" || e.type === "automation_command" || e.type === "reads" || e.type === "translation_command") && (e.source === nodeId || e.target === nodeId)) {
       result.push(e);
     }
   });
@@ -314,7 +317,7 @@ function getConnectedEdges(edges, nodeId) {
 function getSliceChildNodeIds(nodes, sliceId) {
   const ids = [];
   nodes.forEach(function(n) {
-    if (n.parentId === sliceId && (n.type === "command" || n.type === "event" || n.type === "trigger" || n.type === "view" || n.type === "automation" || n.type === "translation" || Model.isCopy(n))) {
+    if (n.parentId === sliceId && (n.type === "command" || n.type === "event" || n.type === "shows" || n.type === "trigger" || n.type === "view" || n.type === "automation" || n.type === "translation" || Model.isCopy(n))) {
       ids.push(n.id);
     }
   });

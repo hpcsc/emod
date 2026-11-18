@@ -171,6 +171,35 @@ describe('detail panel for an automation', () => {
   });
 });
 
+describe('detail panel for a shows block', () => {
+  function showsNode(attrs = {}) {
+    return Object.assign({ id: 'shows1', type: 'shows', label: 'CheckoutPage' }, attrs);
+  }
+
+  it('lists the views and the commands of the shows block in the order of their lists, under the screen', () => {
+    const store = createStore();
+
+    UI.showDetailPanel(store, showsNode({ reads: ['DiscountView', 'CartView'], command: ['ApplyDiscount', 'ClearCart'] }));
+
+    expect(shownSections(store).map((section) => section.title)).toContain('Screen');
+    expect(shownRows(store)).toEqual([
+      { label: 'Reads', value: 'DiscountView, CartView' },
+      { label: 'Commands', value: 'ApplyDiscount, ClearCart' },
+    ]);
+  });
+
+  it('shows an em-dash placeholder for an empty list and for a list the node does not state', () => {
+    const store = createStore();
+
+    UI.showDetailPanel(store, showsNode({ reads: [] }));
+
+    expect(shownRows(store)).toEqual([
+      { label: 'Reads', value: '—' },
+      { label: 'Commands', value: '—' },
+    ]);
+  });
+});
+
 describe('detail panel for a trigger', () => {
   it('shows the reads the node states, and no Actor row for a node that carries an actor key', () => {
     const store = createStore();

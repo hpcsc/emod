@@ -18,31 +18,31 @@ type jsonDiagramDocument struct {
 	Edges            []*jsonDiagramEdge `json:"edges"`
 }
 
-type jsonDiagramReads struct {
-	views  []string
+type jsonDiagramNames struct {
+	names  []string
 	isList bool
 }
 
-func readsList(views []string) jsonDiagramReads {
-	return jsonDiagramReads{views: views, isList: true}
+func nameList(names []string) jsonDiagramNames {
+	return jsonDiagramNames{names: names, isList: true}
 }
 
-func readsName(view string) jsonDiagramReads {
-	if view == "" {
-		return jsonDiagramReads{}
+func oneName(name string) jsonDiagramNames {
+	if name == "" {
+		return jsonDiagramNames{}
 	}
-	return jsonDiagramReads{views: []string{view}}
+	return jsonDiagramNames{names: []string{name}}
 }
 
-func (r jsonDiagramReads) IsZero() bool {
-	return len(r.views) == 0
+func (n jsonDiagramNames) IsZero() bool {
+	return len(n.names) == 0
 }
 
-func (r jsonDiagramReads) MarshalJSON() ([]byte, error) {
-	if r.isList {
-		return json.Marshal(r.views)
+func (n jsonDiagramNames) MarshalJSON() ([]byte, error) {
+	if n.isList || n.IsZero() {
+		return json.Marshal(n.names)
 	}
-	return json.Marshal(r.views[0])
+	return json.Marshal(n.names[0])
 }
 
 type jsonDiagramNode struct {
@@ -54,13 +54,13 @@ type jsonDiagramNode struct {
 	Fields      []*jsonDiagramField `json:"fields,omitempty"`
 	Position    *jsonPosition       `json:"position,omitempty"`
 	Comments    []*jsonComment      `json:"comments,omitempty"`
-	// Type-specific metadata for trigger, event, view, automation, translation
-	Reads          jsonDiagramReads  `json:"reads,omitzero"`
+	// Type-specific metadata for shows, trigger, event, view, automation, translation
+	Reads          jsonDiagramNames  `json:"reads,omitzero"`
 	Subscribes     []string          `json:"subscribes,omitempty"`
 	OnEvent        string            `json:"on_event,omitempty"`
 	Schedule       string            `json:"every,omitempty"`
 	After          string            `json:"after,omitempty"`
-	Command        string            `json:"command,omitempty"`
+	Command        jsonDiagramNames  `json:"command,omitzero"`
 	TargetContext  string            `json:"target_context,omitempty"`
 	ExternalSystem string            `json:"external_system,omitempty"`
 	Source         string            `json:"source,omitempty"`
@@ -180,6 +180,7 @@ type diagramBuilder struct {
 	commandIDs     map[string]string
 	eventIDs       map[string]string
 	triggerIDs     map[*ast.Slice]string
+	showsIDs       map[*ast.Slice]map[string]string
 	viewIDs        map[string]string
 	automationIDs  map[string]string
 	translationIDs map[string]string
@@ -206,6 +207,7 @@ func newDiagramBuilder(modelName, modelDescription string, copies diagram.Elemen
 		commandIDs:     make(map[string]string),
 		eventIDs:       make(map[string]string),
 		triggerIDs:     make(map[*ast.Slice]string),
+		showsIDs:       make(map[*ast.Slice]map[string]string),
 		viewIDs:        make(map[string]string),
 		automationIDs:  make(map[string]string),
 		translationIDs: make(map[string]string),
@@ -218,6 +220,18 @@ func newDiagramBuilder(modelName, modelDescription string, copies diagram.Elemen
 
 func (b *diagramBuilder) appendNode(n *jsonDiagramNode) {
 	b.doc.Nodes = append(b.doc.Nodes, n)
+}
+
+func (b *diagramBuilder) appendScreen(screen *ast.Screen) {
+	b.appendNode(&jsonDiagramNode{
+		ID:          b.ids.next("screen"),
+		Type:        "screen",
+		Label:       screen.Name,
+		Description: screen.Description,
+		ParentID:    nil,
+		Position:    convertPosition(screen.NamePos),
+		Comments:    convertComments(screen.Comments),
+	})
 }
 
 func (b *diagramBuilder) appendContext(c *ast.Context) {
@@ -280,6 +294,7 @@ func (b *diagramBuilder) appendSlice(s *ast.Slice, parentID string) {
 
 	b.appendCommands(s, sliceID)
 	b.appendEvents(s, sliceID)
+	b.appendShows(s, sliceID)
 	b.appendTrigger(s, sliceID)
 	b.appendViews(s, sliceID)
 	b.appendAutomations(s.Automations, sliceID)
@@ -381,6 +396,27 @@ func (b *diagramBuilder) appendEvent(s *ast.Slice, evt *ast.Event, sliceID strin
 	b.appendNode(node)
 }
 
+// appendShows gives each shows block a node of its own in the slice, labelled
+// with the screen it names. The node stands for the block, so two slices that
+// show one screen draw two nodes.
+func (b *diagramBuilder) appendShows(s *ast.Slice, sliceID string) {
+	b.showsIDs[s] = make(map[string]string, len(s.Appearances))
+	for _, appearance := range s.Appearances {
+		id := b.ids.next("shows")
+		b.showsIDs[s][appearance.Screen] = id
+		b.appendNode(&jsonDiagramNode{
+			ID:       id,
+			Type:     "shows",
+			Label:    appearance.Screen,
+			ParentID: &sliceID,
+			Position: convertPosition(appearance.ScreenPos),
+			Comments: convertComments(appearance.Comments),
+			Reads:    nameList(appearance.Reads),
+			Command:  nameList(appearance.Commands),
+		})
+	}
+}
+
 func (b *diagramBuilder) appendTrigger(s *ast.Slice, sliceID string) {
 	t := s.Trigger
 	if t == nil {
@@ -396,7 +432,7 @@ func (b *diagramBuilder) appendTrigger(s *ast.Slice, sliceID string) {
 		ParentID:    &sliceID,
 		Position:    convertPosition(t.NamePos),
 		Comments:    convertComments(t.Comments),
-		Reads:       readsList(t.Reads),
+		Reads:       nameList(t.Reads),
 	})
 }
 
@@ -443,8 +479,8 @@ func (b *diagramBuilder) appendAutomations(automations []*ast.Automation, sliceI
 			OnEvent:       a.OnEvent,
 			Schedule:      a.Schedule,
 			After:         a.After,
-			Reads:         readsName(a.Reads),
-			Command:       a.Command,
+			Reads:         oneName(a.Reads),
+			Command:       oneName(a.Command),
 			TargetContext: a.TargetContext,
 		})
 	}
@@ -466,8 +502,8 @@ func (b *diagramBuilder) appendTranslations(s *ast.Slice, sliceID string) {
 			Position:       convertPosition(t.NamePos),
 			Comments:       convertComments(t.Comments),
 			ExternalSystem: t.ExternalSystem,
-			Reads:          readsName(t.Reads),
-			Command:        t.Command,
+			Reads:          oneName(t.Reads),
+			Command:        oneName(t.Command),
 		}
 		if t.Event != nil {
 			node.Event = convertEventToDiagram(t.Event)
@@ -498,6 +534,12 @@ func (b *diagramBuilder) appendEdges(m *ast.Model) {
 
 			case diagram.EdgeTranslationReads:
 				b.link(b.copiedEndIDs(ref.Slice, e, b.viewIDs), e.From, b.translationIDs, e.To, "reads")
+
+			case diagram.EdgeScreenReads:
+				b.link(b.copiedEndIDs(ref.Slice, e, b.viewIDs), e.From, b.showsIDs[ref.Slice], e.To, "reads")
+
+			case diagram.EdgeScreenCommand:
+				b.link(b.showsIDs[ref.Slice], e.From, b.copiedEndIDs(ref.Slice, e, b.commandIDs), e.To, "shows_command")
 
 			case diagram.EdgeTriggerCommand:
 				command := diagram.DeclaredElement{Kind: diagram.ElementCommand, Name: e.To, Slice: ref.Slice}
@@ -577,6 +619,9 @@ func convertModelToDiagram(m *ast.Model) *jsonDiagramDocument {
 	}
 
 	b := newDiagramBuilder(m.Name, m.Description, diagram.NewElementCopies(m))
+	for _, screen := range m.Screens {
+		b.appendScreen(screen)
+	}
 	for _, c := range m.Contexts {
 		b.appendContext(c)
 	}

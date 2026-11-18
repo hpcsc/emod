@@ -1908,7 +1908,7 @@ func viewerNodePalette(t *testing.T) map[string]struct{ fill, stroke string } {
 
 	entryRe := regexp.MustCompile(`(?m)^\s*(\w+):\s*\{\s*fill:\s*['"]?(#[0-9a-fA-F]{6})['"]?(?:\s*,\s*stroke:\s*['"]?(#[0-9a-fA-F]{6})['"]?)?`)
 	matches := entryRe.FindAllStringSubmatch(block, -1)
-	require.Len(t, matches, 6, "nodePalette must list exactly six element types, got %d", len(matches))
+	require.Len(t, matches, 7, "nodePalette must list exactly seven element types, got %d", len(matches))
 
 	palette := make(map[string]struct{ fill, stroke string }, len(matches))
 	for _, m := range matches {
@@ -1924,6 +1924,7 @@ func viewerNodePalette(t *testing.T) map[string]struct{ fill, stroke string } {
 // viewerTypeToModelLabel maps the viewer's node type names to the labels
 // paletteModel gives each element type.
 var viewerTypeToModelLabel = map[string]string{
+	"shows":       "Kiosk",
 	"trigger":     "Form",
 	"command":     "Cmd",
 	"event":       "Evt",
@@ -1957,9 +1958,9 @@ func dslReferencePalette(t *testing.T) map[string]struct{ fill, stroke string } 
 	}
 	block = block[:end]
 
-	rowRe := regexp.MustCompile(`\|\s*(Trigger|Command|Event|View|Automation|Translation)\s*\|\s*(#[0-9a-fA-F]{6})\s*\|\s*(#[0-9a-fA-F]{6}|—)\s*\|`)
+	rowRe := regexp.MustCompile(`\|\s*(Shows|Trigger|Command|Event|View|Automation|Translation)\s*\|\s*(#[0-9a-fA-F]{6})\s*\|\s*(#[0-9a-fA-F]{6}|—)\s*\|`)
 	matches := rowRe.FindAllStringSubmatch(block, -1)
-	require.Len(t, matches, 6, "palette table must list exactly six element types, got %d", len(matches))
+	require.Len(t, matches, 7, "palette table must list exactly seven element types, got %d", len(matches))
 
 	palette := make(map[string]struct{ fill, stroke string }, len(matches))
 	for _, m := range matches {
@@ -2565,6 +2566,9 @@ func paletteModel() *ast.Model {
 		&ast.View{Name: "Rmo", Description: "Every order placed so far"},
 		&ast.Automation{Name: "Auto", Description: "Reacts to the order being placed", OnEvent: "Evt", Command: "Cmd"},
 	)
+	model.Screens = []*ast.Screen{{Name: "Kiosk", Description: "The screen a clerk takes orders at"}}
+	model.Contexts[0].Aggregates[0].Slices = append(model.Contexts[0].Aggregates[0].Slices,
+		&ast.Slice{Name: "Take Order", Appearances: []*ast.Appearance{{Screen: "Kiosk"}}})
 	model.Contexts[0].Aggregates[0].Slices[0].Translations = []*ast.Translation{{
 		Name:           "Import",
 		Description:    "Restates a payment provider callback in our own language",

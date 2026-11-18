@@ -2035,6 +2035,207 @@ context "Shop" {
 		})
 	})
 
+	t.Run("shows blocks", func(t *testing.T) {
+		const shopModel = `emod = 1
+
+model "Shop" {
+}
+
+screen "CheckoutPage" {
+}
+
+screen "CartDrawer" {
+}
+
+screen "OrderHistory" {
+}
+
+context "Shop" {
+  slice "Show Basket" {
+    view "CartView" {
+    }
+
+    view "DiscountView" {
+    }
+
+    view "LoyaltyView" {
+    }
+  }
+
+  slice "Apply Discount" {
+    shows {
+      screen  = CheckoutPage
+      reads   = [CartView, DiscountView]
+      command = [ApplyDiscount, ClearCart]
+    }
+
+    command "ApplyDiscount" {
+    }
+
+    command "ClearCart" {
+    }
+
+    command "RemoveDiscount" {
+    }
+  }
+
+  slice "Place Order" {
+    shows {
+      screen = CartDrawer
+    }
+
+    command "PlaceOrder" {
+    }
+  }
+}
+`
+		// showsIn finds the shows node of a slice. A screen node carries the
+		// label of the screen too, so a gesture on a shows node is named by
+		// its slice rather than by its label.
+		showsIn := func(d *viewerDiagram, slice string) map[string]any {
+			sliceID := d.idOf(slice)
+			var found []map[string]any
+			for _, n := range d.Nodes {
+				if n["type"] == "shows" && n["parentId"] == sliceID {
+					found = append(found, n)
+				}
+			}
+			require.Len(d.t, found, 1, "the diagram has to draw one shows node in %s", slice)
+			return found[0]
+		}
+		removeNode := func(d *viewerDiagram, id string) {
+			d.Nodes = slices.DeleteFunc(d.Nodes, func(n map[string]any) bool { return n["id"] == id })
+			d.Edges = slices.DeleteFunc(d.Edges, func(e map[string]any) bool { return e["source"] == id || e["target"] == id })
+		}
+		checkout := func(d *viewerDiagram) string { return showsIn(d, "Apply Discount")["id"].(string) }
+
+		t.Run("a save with no edit keeps each screen declaration, also one that no slice shows, and each shows block as written", func(t *testing.T) {
+			result := applied(t, shopModel, func(d *viewerDiagram) {})
+
+			require.Equal(t, shopModel, result)
+		})
+
+		t.Run("a shows node moved into a slice that already shows a screen is written there and out of its old slice, and its declaration stays", func(t *testing.T) {
+			result := applied(t, shopModel, func(d *viewerDiagram) {
+				showsIn(d, "Place Order")["parentId"] = d.idOf("Apply Discount")
+			})
+
+			expected := replaced(t, shopModel, "    shows {\n      screen = CartDrawer\n    }\n\n", "")
+			require.Equal(t, replaced(t, expected, "      command = [ApplyDiscount, ClearCart]\n    }\n", "      command = [ApplyDiscount, ClearCart]\n    }\n\n    shows {\n      screen = CartDrawer\n    }\n"), result)
+		})
+
+		t.Run("an arrow drawn from a shows node to a command adds that command to the end of its command list", func(t *testing.T) {
+			result := applied(t, shopModel, func(d *viewerDiagram) {
+				d.Edges = append(d.Edges, map[string]any{"source": checkout(d), "target": d.idOf("RemoveDiscount"), "type": "shows_command"})
+			})
+
+			require.Equal(t, replaced(t, shopModel, "command = [ApplyDiscount, ClearCart]", "command = [ApplyDiscount, ClearCart, RemoveDiscount]"), result)
+		})
+
+		t.Run("removing the arrow to one command takes that entry out and keeps the other", func(t *testing.T) {
+			result := applied(t, shopModel, func(d *viewerDiagram) {
+				d.disconnectIDs(checkout(d), d.idOf("ApplyDiscount"))
+			})
+
+			require.Equal(t, replaced(t, shopModel, "command = [ApplyDiscount, ClearCart]", "command = ClearCart"), result)
+		})
+
+		t.Run("moving the arrow to another command puts that command in the place of the one it leaves", func(t *testing.T) {
+			result := applied(t, shopModel, func(d *viewerDiagram) {
+				d.repointIDs(checkout(d), d.idOf("ApplyDiscount"), checkout(d), d.idOf("RemoveDiscount"))
+			})
+
+			require.Equal(t, replaced(t, shopModel, "command = [ApplyDiscount, ClearCart]", "command = [RemoveDiscount, ClearCart]"), result)
+		})
+
+		t.Run("renaming a command renames its entry in place", func(t *testing.T) {
+			result := applied(t, shopModel, func(d *viewerDiagram) {
+				d.rename("ApplyDiscount", "TakeDiscount")
+			})
+
+			expected := replaced(t, shopModel, `command "ApplyDiscount"`, `command "TakeDiscount"`)
+			require.Equal(t, replaced(t, expected, "command = [ApplyDiscount, ClearCart]", "command = [TakeDiscount, ClearCart]"), result)
+		})
+
+		t.Run("an arrow from a third view onto a shows node adds it to the end of the reads list", func(t *testing.T) {
+			result := applied(t, shopModel, func(d *viewerDiagram) {
+				d.Edges = append(d.Edges, map[string]any{"source": d.idOf("LoyaltyView"), "target": checkout(d), "type": "reads"})
+			})
+
+			require.Equal(t, replaced(t, shopModel, "reads   = [CartView, DiscountView]", "reads   = [CartView, DiscountView, LoyaltyView]"), result)
+		})
+
+		t.Run("removing the arrow from one view takes that entry out and keeps the other", func(t *testing.T) {
+			result := applied(t, shopModel, func(d *viewerDiagram) {
+				d.disconnectIDs(d.idOf("CartView"), checkout(d))
+			})
+
+			require.Equal(t, replaced(t, shopModel, "reads   = [CartView, DiscountView]", "reads   = DiscountView"), result)
+		})
+
+		t.Run("moving the arrow to another view puts that view in the place of the one it leaves", func(t *testing.T) {
+			result := applied(t, shopModel, func(d *viewerDiagram) {
+				d.repointIDs(d.idOf("CartView"), checkout(d), d.idOf("LoyaltyView"), checkout(d))
+			})
+
+			require.Equal(t, replaced(t, shopModel, "reads   = [CartView, DiscountView]", "reads   = [LoyaltyView, DiscountView]"), result)
+		})
+
+		t.Run("renaming a view renames its entry in place", func(t *testing.T) {
+			result := applied(t, shopModel, func(d *viewerDiagram) {
+				d.rename("CartView", "BasketView")
+			})
+
+			expected := replaced(t, shopModel, `view "CartView"`, `view "BasketView"`)
+			require.Equal(t, replaced(t, expected, "reads   = [CartView, DiscountView]", "reads   = [BasketView, DiscountView]"), result)
+		})
+
+		t.Run("renaming a shows node names the new screen and declares it after the declarations, and the old declaration stays", func(t *testing.T) {
+			result := applied(t, shopModel, func(d *viewerDiagram) {
+				showsIn(d, "Apply Discount")["label"] = "PaymentPage"
+			})
+
+			expected := replaced(t, shopModel, "screen  = CheckoutPage", "screen  = PaymentPage")
+			require.Equal(t, replaced(t, expected, "screen \"OrderHistory\" {\n}\n", "screen \"OrderHistory\" {\n}\n\nscreen \"PaymentPage\" {\n}\n"), result)
+		})
+
+		t.Run("deleting a shows node removes the block and keeps the declaration", func(t *testing.T) {
+			result := applied(t, shopModel, func(d *viewerDiagram) {
+				removeNode(d, showsIn(d, "Place Order")["id"].(string))
+			})
+
+			require.Equal(t, replaced(t, shopModel, "    shows {\n      screen = CartDrawer\n    }\n\n", ""), result)
+		})
+
+		t.Run("a save with no edit keeps two shows blocks of one slice", func(t *testing.T) {
+			source := replaced(t, shopModel, "    command \"ApplyDiscount\" {\n", "    shows {\n      screen = OrderHistory\n    }\n\n    command \"ApplyDiscount\" {\n")
+
+			result := applied(t, source, func(d *viewerDiagram) {})
+
+			require.Equal(t, source, result)
+		})
+
+		t.Run("a shows node added to a slice writes a shows block naming its screen, and declares the screen when no declaration holds it", func(t *testing.T) {
+			result := applied(t, shopModel, func(d *viewerDiagram) {
+				d.add("shows", "LoyaltyCard", "Place Order")
+			})
+
+			expected := replaced(t, shopModel, "    shows {\n      screen = CartDrawer\n    }\n", "    shows {\n      screen = CartDrawer\n    }\n\n    shows {\n      screen = LoyaltyCard\n    }\n")
+			require.Equal(t, replaced(t, expected, "screen \"OrderHistory\" {\n}\n", "screen \"OrderHistory\" {\n}\n\nscreen \"LoyaltyCard\" {\n}\n"), result)
+		})
+
+		t.Run("a reads arrow from a node that is not a view and a shows_command arrow to a node that is not a command add no entry", func(t *testing.T) {
+			result := applied(t, shopModel, func(d *viewerDiagram) {
+				d.Edges = append(d.Edges,
+					map[string]any{"source": d.idOf("RemoveDiscount"), "target": checkout(d), "type": "reads"},
+					map[string]any{"source": checkout(d), "target": d.idOf("LoyaltyView"), "type": "shows_command"},
+				)
+			})
+
+			require.Equal(t, shopModel, result)
+		})
+	})
+
 	t.Run("two triggers that share a name", func(t *testing.T) {
 		const twoCheckoutPages = `emod = 1
 

@@ -641,20 +641,20 @@ nodes and `trigger_command` edges stay until Task 8.
 
 **Acceptance Criteria:**
 
-- [ ] `emod export --format diagram-json` of the shared screen fixture has one node of type `screen` with no
+- [x] `emod export --format diagram-json` of the shared screen fixture has one node of type `screen` with no
       parent for each declaration, in declaration order, before the first context node, with its label,
       description, position and comments. It has one node of type `shows` in its slice for each `shows` block,
       labelled with the screen name, with `reads` and `command` as lists (also for one entry), its position and
       its comments, and with no `screen` key. Two appearances of one screen in two slices are two nodes.
-- [ ] Each `reads` entry gives a `reads` edge from the view, or from its copy, to the `shows` node of its own
+- [x] Each `reads` entry gives a `reads` edge from the view, or from its copy, to the `shows` node of its own
       slice. Each `command` entry gives a `shows_command` edge to the command it names, or to its copy. No
       `shows_command` edge ends at a command that no entry names, at a command that an automation of the slice
       issues, or at a command of the same name in another slice.
-- [ ] `importer.ImportDiagram` of that document gives each screen, also one that no slice shows, and each `shows`
+- [x] `importer.ImportDiagram` of that document gives each screen, also one that no slice shows, and each `shows`
       block with its reads and its commands in order. The export and import round trip of the fixture formats to
       the fixture's text, minus what a save still loses. An appearance whose screen has no `screen` node gets a
       declaration, after the declarations that the document has.
-- [ ] `importer.ApplyDiagram` of an unchanged document keeps each screen declaration, also one that no slice
+- [x] `importer.ApplyDiagram` of an unchanged document keeps each screen declaration, also one that no slice
       shows, and each `shows` block as written. Each of these edits saves as stated:
       - a `shows` node moved into a slice that already holds one is written into that slice and out of the old
         one, and its declaration does not change;
@@ -665,22 +665,22 @@ nodes and `trigger_command` edges stay until Task 8.
         that entry only;
       - a renamed `shows` node names the new screen, and the save declares it when no declaration holds it;
       - a deleted `shows` node removes the block and keeps the declaration.
-- [ ] A `reads` edge onto a `shows` node from a node that is not a view, and a `shows_command` edge to a node that
+- [x] A `reads` edge onto a `shows` node from a node that is not a view, and a `shows_command` edge to a node that
       is not a command, add no entry.
-- [ ] The viewer draws each `shows` node as a screen box with a bar across its top, in the colours that a trigger
+- [x] The viewer draws each `shows` node as a screen box with a bar across its top, in the colours that a trigger
       has, in the top band of its slice. Two `shows` nodes in one slice sit side by side with no overlap, and the
       rows under them stay level with the rows of the slice beside it. The viewer draws no box for a `screen`
       node.
-- [ ] A drag of a `shows` node onto a slice that already holds one moves it there, and the save writes it there.
-- [ ] An arrow that a user draws from a `shows` box to a command gets the type `shows_command`, and one from a view
+- [x] A drag of a `shows` node onto a slice that already holds one moves it there, and the save writes it there.
+- [x] An arrow that a user draws from a `shows` box to a command gets the type `shows_command`, and one from a view
       to a `shows` box gets the type `reads`. An arrow drawn in the other direction gets neither type.
-- [ ] The detail panel of a `shows` node lists the views and the commands of the appearance in list order, with
+- [x] The detail panel of a `shows` node lists the views and the commands of the appearance in list order, with
       the em-dash placeholder for an empty list. The legend names the `shows` box and the `shows_command` arrow
       after a screen.
-- [ ] `nodePalette`, the hover and selection rules of `viewer.html`, the palette table of `docs/dsl-reference.md`
+- [x] `nodePalette`, the hover and selection rules of `viewer.html`, the palette table of `docs/dsl-reference.md`
       section 13 and the Go palette pins carry `shows` with the colours of `trigger`.
-- [ ] The paragraph on the viewer in `README.md` (`:525-535`) says that a slice takes any number of screens.
-- [ ] `task test:unit`, `task test:viewer` and `task test:e2e:viewer` pass.
+- [x] The paragraph on the viewer in `README.md` (`:525-535`) says that a slice takes any number of screens.
+- [x] `task test:unit`, `task test:viewer` and `task test:e2e:viewer` pass.
 
 **Affected Files/Modules:**
 

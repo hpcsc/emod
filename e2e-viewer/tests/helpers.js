@@ -211,7 +211,7 @@ export async function dragBetween(page, from, to, steps = 8) {
 // Anything the mousedown handler treats specially before it falls through to
 // starting a pan.
 const NOT_BACKGROUND = '.diagram-node, .slice-header, [data-port], [data-arrow-handle], ' +
-  '.flow-arrow, .sub-arrow, .auto-trg-arrow, .auto-cmd-arrow, .trg-cmd-arrow, ' +
+  '.flow-arrow, .sub-arrow, .auto-trg-arrow, .auto-cmd-arrow, .shows-cmd-arrow, .trg-cmd-arrow, ' +
   '.reads-arrow, .trans-cmd-arrow, .ctx-label, .agg-label';
 
 // emptyCanvasPoint finds a spot that really does pan the diagram: inside the

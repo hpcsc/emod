@@ -383,6 +383,8 @@ function allElementTypes() {
     { id: 'view1', type: 'view', label: 'Rmo', parentId: 'sl1' },
     { id: 'auto1', type: 'automation', label: 'Auto', parentId: 'sl1' },
     { id: 'trans1', type: 'translation', label: 'Trans', parentId: 'sl1', external_system: 'Stripe' },
+    { id: 'sl2', type: 'slice', label: 'Take Order', parentId: 'agg1' },
+    { id: 'shows1', type: 'shows', label: 'Kiosk', parentId: 'sl2' },
   ];
 }
 
@@ -954,6 +956,43 @@ describe('Renderer.buildSVG', () => {
     });
   });
 
+  describe('screens shown in slices', () => {
+    // The shape of a screen: its box, and the bar across its top measured from
+    // the box, so a screen in a wider slice still compares with a trigger.
+    function screenShape(group) {
+      const [box, bar] = [...group.querySelectorAll('rect')];
+      const at = (rect, name) => Number(rect.getAttribute(name));
+      return {
+        fill: box.getAttribute('fill'),
+        stroke: box.getAttribute('stroke'),
+        bar: {
+          left: at(bar, 'x') - at(box, 'x'),
+          top: at(bar, 'y') - at(box, 'y'),
+          right: at(box, 'x') + at(box, 'width') - at(bar, 'x') - at(bar, 'width'),
+          height: at(bar, 'height'),
+          fill: bar.getAttribute('fill'),
+        },
+      };
+    }
+
+    it('draws a shows node as a screen, with the bar across its top and the colours of a trigger', () => {
+      const { svg } = render(allElementTypes());
+
+      expect(screenShape(nodeGroup(svg, 'shows1'))).toEqual(screenShape(nodeGroup(svg, 'trg1')));
+      expect(drawnText(nodeGroup(svg, 'shows1'))).toEqual(['Kiosk']);
+    });
+
+    it('draws no box for a screen declaration', () => {
+      const { svg } = render([
+        { id: 'screen1', type: 'screen', label: 'Kiosk', parentId: null },
+        ...allElementTypes(),
+      ]);
+
+      expect(svg.querySelector('[data-node-id="screen1"]')).toBeNull();
+      expect(svg.querySelectorAll('.diagram-node').length).toBe(render(allElementTypes()).svg.querySelectorAll('.diagram-node').length);
+    });
+  });
+
   describe('automation cadence', () => {
     it('draws the clock badge and its tooltip on the scheduled automation only', () => {
       const { svg } = render(pairedAutomations(cronExpression));
@@ -1516,9 +1555,13 @@ describe('Renderer.buildSVG', () => {
       }
     });
 
-    it('keeps hover and highlight fills pairwise distinct', () => {
-      const hoverFills = Object.values(nodePalette).map((p) => p.hoverFill);
-      const highlightFills = Object.values(nodePalette).map((p) => p.highlightFill);
+    // A screen is drawn as a trigger is, so the two count as one look here: two
+    // types that differ on the canvas have to differ on hover and when selected.
+    it('keeps hover and highlight fills pairwise distinct across the looks the canvas draws', () => {
+      const looks = new Map(Object.values(nodePalette).map((p) => [p.fill + ' ' + p.stroke, p]));
+      const hoverFills = [...looks.values()].map((p) => p.hoverFill);
+      const highlightFills = [...looks.values()].map((p) => p.highlightFill);
+      expect(looks.size).toBe(Object.keys(nodePalette).length - 1);
       expect(new Set(hoverFills).size).toBe(hoverFills.length);
       expect(new Set(highlightFills).size).toBe(highlightFills.length);
     });

@@ -224,7 +224,7 @@
     },
     {
       "n": 6,
-      "done": false,
+      "done": true,
       "title": "Carry screens and appearances through the diagram document, both viewer saves and the viewer",
       "language": "Go",
       "testable": true,
