@@ -1640,16 +1640,30 @@ in this repo; append only learnings that generalise beyond the task that surface
 - Learning: The distance-copies request said 'give each arrow its own horizontal y in the space between lanes'. The breakdown kept those words, the router built 'two legs that overlap get different y', and the criterion stayed unticked until an audit finding and a question at match-request; the user chose the narrower reading, because no two lines touch and each gap stays only as tall as its overlapping legs need. The literal reading grows a gap by 6 px for each leg in it. Write the reading and its cost in the criterion when the breakdown is written, and put the choice to the user at the plan gate.
 - Apply when: decomposing a request that states a layout outcome for each arrow, box or label (its own y, its own column, no overlap) in the lane SVG or the viewer
 
-## Two triggers with one name share one diagram node, so an ApplyDiagram edit can name a view the drawn trigger does not read
-- Type: constraint
-- Recorded: 2026-11-18
-- Observed: task 2 — us-001-trigger-reads-many-views
-- Learning: The diagram document keys a trigger node by its name (triggerIDs in internal/export/diagram.go), so every reads edge of two same-named triggers ends at the last one, and diagramEdit.drawnFrom maps that id to a trigger that does not list the view. clerk mutants reported the at >= 0 guard in repoint.reserve as dead because every fixture names each trigger once; the audit reproduced the panic with two same-named triggers. Keep a guard on the ApplyDiagram edit path that a name-keyed lookup can reach, and write the fixture with a repeated name to kill its mutant.
-- Apply when: removing or adding a guard in internal/importer/diagram_edit.go, accepting a mutant there as unreachable, or keying a diagram node by a bare name
-
 ## Note an IsZero that encoding/json calls when the type is added, not when the last task trips over it
 - Type: convention
 - Recorded: 2026-11-18
 - Observed: task 2 — us-001-trigger-reads-many-views
 - Learning: clerk finish checks exported names that nothing outside the package calls only at the last task of a breakdown. jsonDiagramReads.IsZero, which encoding/json calls for the omitzero tag, came from task 2 and refused the documentation task at the end. Write clerk design note IsZero with the reason in the task that adds a method the standard library calls by name (IsZero, MarshalJSON, UnmarshalJSON, String).
 - Apply when: adding a JSON value type with omitzero or a custom marshaller in internal/export or internal/importer
+
+## Two views with one name share one diagram node for their subscription edges, so an ApplyDiagram edit can name an event the drawn view does not subscribe to
+- Type: constraint
+- Recorded: 2026-11-18
+- Observed: us-002-trigger-box-per-slice
+- Learning: The diagram document keys the view end of a subscription edge by the view name (viewIDs in internal/export/diagram.go), so the edges of two same-named views end at the last one, and diagramEdit.drawnFrom maps that id to a view that does not list the event. The at >= 0 guard in repoint.reserve is reached only that way: trigger nodes and the command end of trigger_command are keyed by slice since US-002. The test 'moving an arrow onto a list that does not name its old end saves the new name without an error' (internal/importer/diagram_edit_test.go) holds the guard; when the view end is keyed by slice too, the guard turns dead and the test must change with it.
+- Apply when: removing or adding a guard in internal/importer/diagram_edit.go, accepting a mutant there as unreachable, or keying a diagram node or an edge end by a bare name
+
+## A text edit anchored on a func line puts the new function under the doc comment of the next one
+- Type: recurring-finding
+- Recorded: 2026-11-18
+- Observed: us-002-trigger-box-per-slice
+- Learning: Three times in the screens work a new function was inserted by replacing 'func <Next>(' with the new function plus that line, which left the doc comment of <Next> above the new function: convertPositions under convertPosition's comment, triggerIDsOf under copiedEndIDs's and svgArrowEnds under svgConnections's. The commit agent caught each one. Anchor the insertion on the doc comment of the next function, or insert after the closing brace of the previous one.
+- Apply when: adding a Go function with a scripted or string-replace edit next to an existing function that has a doc comment
+
+## A criterion that says no arrow joins X to a Y of another slice covers same-named Ys, and svgArrowEnds can test it
+- Type: convention
+- Recorded: 2026-11-18
+- Observed: us-002-trigger-box-per-slice
+- Learning: US-002's breakdown left the command end of a trigger's arrow keyed by name because svgConnections reads boxes by label and cannot tell two SubmitCart boxes apart; the request read found that emod validate accepts one command name in two slices, so the story's words 'No arrow joins a trigger to a command of another slice' failed. svgArrowEnds in internal/diagram/svg_test.go gives both end boxes of each arrow with their rects, and the diagram document test can read node parents, so both writers can be tested for a same-named end.
+- Apply when: decomposing a story whose criterion forbids an arrow between slices, or testing which of two same-named boxes an SVG arrow ends at
