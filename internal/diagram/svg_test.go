@@ -99,6 +99,34 @@ func TestExportSVG(t *testing.T) {
 		require.Equal(t, 1, arrowCount(output), "trigger to command is one arrow")
 	})
 
+	t.Run("connects each trigger to the command of its own slice when two slices declare a command of one name", func(t *testing.T) {
+		model := &ast.Model{
+			Name: "Shop",
+			Contexts: []*ast.Context{{
+				Name: "Shop",
+				Aggregates: []*ast.Aggregate{{
+					Name: "Cart",
+					Slices: []*ast.Slice{
+						{Name: "Apply Discount", Trigger: &ast.Trigger{Name: "Checkout Page", Actor: "Guest"}, Commands: []*ast.Command{{Name: "SubmitCart"}}},
+						{Name: "Place Order", Trigger: &ast.Trigger{Name: "Checkout Page", Actor: "Clerk"}, Commands: []*ast.Command{{Name: "SubmitCart"}}},
+					},
+				}},
+			}},
+		}
+
+		ends := svgArrowEnds(t, svgOf(t, model))
+
+		require.Len(t, ends, 2)
+		require.ElementsMatch(t, []string{"Checkout Page (Guest)", "Checkout Page (Clerk)"}, []string{ends[0][0].label, ends[1][0].label})
+		for _, end := range ends {
+			trigger, command := end[0].rect, end[1].rect
+			require.Equal(t, "SubmitCart", end[1].label)
+			apart := trigger.centre()[0] - command.centre()[0]
+			require.Less(t, max(apart, -apart), trigger.w,
+				"the arrow from %q ends at the command under it, not at the command of the other slice", end[0].label)
+		}
+	})
+
 	t.Run("connects command to event via flow", func(t *testing.T) {
 		model := &ast.Model{
 			Name: "Test",
@@ -2102,6 +2130,29 @@ var (
 	svgPathData  = regexp.MustCompile(`\sd="([^"]*)"`)
 	svgPathPoint = regexp.MustCompile(`(-?\d+),(-?\d+)`)
 )
+
+// svgArrowEnds answers the boxes at the start and at the end of each arrow, with
+// where each one is drawn, for an arrow whose two ends share a label with
+// another box.
+func svgArrowEnds(t *testing.T, output string) [][2]svgArrowBox {
+	t.Helper()
+
+	boxes := svgArrowBoxes(t, output)
+	var ends [][2]svgArrowBox
+	for _, arrow := range svgArrows(output) {
+		path := svgPathData.FindStringSubmatch(arrow)
+		require.NotNil(t, path, "an arrow carries no path: %s", arrow)
+		points := svgPathPoint.FindAllStringSubmatch(path[1], -1)
+		require.NotEmpty(t, points, "an arrow's path names no point: %s", arrow)
+
+		ends = append(ends, [2]svgArrowBox{
+			arrowBoxMet(t, boxes, svgPoint(t, points[0])),
+			arrowBoxMet(t, boxes, svgPoint(t, points[len(points)-1])),
+		})
+	}
+
+	return ends
+}
 
 // svgConnections returns the arrows the diagram draws, each named by the boxes
 // whose outline its two ends lie on and carrying how it is painted, so a test
