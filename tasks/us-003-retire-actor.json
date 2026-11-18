@@ -1,0 +1,263 @@
+{
+  "story": "Retire actor",
+  "story_id": "screens-as-first-class/US-003",
+  "tasks_file": "tasks/us-003-retire-actor.md",
+  "tasks": [
+    {
+      "n": 1,
+      "done": true,
+      "title": "Label a trigger with its name only in the SVG and ASCII diagrams, and caption it `trigger` in the event flow",
+      "language": "Go",
+      "testable": true,
+      "certainty": "medium",
+      "blast_radius": "low",
+      "patterns_to_follow": [
+        "internal/diagram/svg_test.go:102-128",
+        "internal/diagram/svg_test.go:2137-2155",
+        "internal/diagram/contract_test.go:1157-1197",
+        "internal/diagram/eventflow_test.go:111-123",
+        "internal/diagram/ascii_test.go:88-100",
+        "tasks/learnings.md:1657-1662"
+      ],
+      "depends_on": [],
+      "affected_files": [
+        "internal/diagram/svg.go",
+        "internal/diagram/ascii.go",
+        "internal/diagram/eventflow.go",
+        "internal/diagram/svg_test.go",
+        "internal/diagram/ascii_test.go",
+        "internal/diagram/eventflow_test.go",
+        "internal/diagram/contract_test.go",
+        "README.md"
+      ]
+    },
+    {
+      "n": 2,
+      "done": false,
+      "title": "Remove the Actors group from `emod glossary`",
+      "language": "Go",
+      "testable": true,
+      "certainty": "high",
+      "blast_radius": "high",
+      "patterns_to_follow": [
+        "internal/glossary/markdown.go:55-66",
+        "internal/glossary/glossary.go:13-21",
+        "internal/glossary/glossary_test.go:467-500",
+        "internal/cli/glossary_test.go:24-60",
+        "tasks/learnings.md:111-114"
+      ],
+      "depends_on": [],
+      "affected_files": [
+        "internal/glossary/glossary.go",
+        "internal/glossary/markdown.go",
+        "internal/glossary/json.go",
+        "internal/glossary/glossary_test.go",
+        "internal/cli/glossary_test.go"
+      ]
+    },
+    {
+      "n": 3,
+      "done": false,
+      "title": "Stop the LSP from offering, describing and painting `actor`",
+      "language": "Go",
+      "testable": true,
+      "certainty": "high",
+      "blast_radius": "low",
+      "patterns_to_follow": [
+        "internal/lsp/keywords_test.go:18-75",
+        "internal/lsp/completer.go:483-500",
+        "internal/lsp/hover.go:11-35",
+        "internal/lsp/semantictokens_test.go:148-157",
+        "tasks/learnings.md:408-411",
+        "tasks/learnings.md:413-416",
+        "tasks/learnings.md:1357-1362"
+      ],
+      "depends_on": [],
+      "affected_files": [
+        "internal/lsp/completer.go",
+        "internal/lsp/hover.go",
+        "internal/lsp/semantictokens.go",
+        "internal/lsp/model.go",
+        "internal/test/keywords.go",
+        "internal/lsp/completer_test.go",
+        "internal/lsp/hover_test.go",
+        "internal/lsp/semantictokens_test.go",
+        "internal/lsp/token_test.go",
+        "internal/lsp/server_test.go",
+        "README.md",
+        "docs/architecture.md",
+        "e2e-viewer/tests/source-panel.spec.js"
+      ]
+    },
+    {
+      "n": 4,
+      "done": false,
+      "title": "Remove the actor from the JSON and CUE exports and from the CUE schema",
+      "language": "Go",
+      "testable": true,
+      "certainty": "high",
+      "blast_radius": "high",
+      "patterns_to_follow": [
+        "internal/cue/embed_test.go:112-121",
+        "internal/export/export_test.go:5296-5303",
+        "internal/cli/export_test.go:540-548",
+        "tasks/learnings.md:251-254"
+      ],
+      "depends_on": [],
+      "affected_files": [
+        "internal/export/json.go",
+        "internal/export/cue.go",
+        "internal/cue/schema.cue",
+        "internal/export/export_test.go",
+        "internal/cue/embed_test.go",
+        "internal/cli/export_test.go",
+        "internal/cli/schema_test.go",
+        "docs/dsl-reference.md"
+      ]
+    },
+    {
+      "n": 5,
+      "done": false,
+      "title": "Remove `actor` from every checked-in model and document",
+      "language": "Go",
+      "testable": false,
+      "certainty": "high",
+      "blast_radius": "low",
+      "patterns_to_follow": [
+        "tasks/learnings.md:485-488",
+        "tasks/learnings.md:495-498",
+        "tasks/learnings.md:241-244",
+        "tasks/learnings.md:473-476",
+        "tasks/learnings.md:478-483",
+        "tasks/learnings.md:151-154",
+        "internal/oracle/oracle_test.go:114-130",
+        "internal/cli/validate_test.go:51-87"
+      ],
+      "depends_on": [
+        1,
+        2,
+        3,
+        4
+      ],
+      "affected_files": [
+        "examples/all_patterns.emod",
+        "examples/dcb_model.emod",
+        "examples/specs_hotel.emod",
+        "examples/error_diagnostics_test.emod",
+        "internal/parser/testdata/all_patterns.emod",
+        "internal/parser/testdata/minimal.emod",
+        "internal/parser/integration_test.go",
+        "internal/test/fixtures.go",
+        "internal/cli/examples_test.go",
+        "internal/cli/fmt_test.go",
+        "internal/cli/validate_test.go",
+        "internal/cli/references_test.go",
+        "internal/cli/trace_test.go",
+        "internal/cli/slices_list_test.go",
+        "internal/cli/slices_arrange_test.go",
+        "internal/arrange/arrange_test.go",
+        "internal/query/references_test.go",
+        "internal/query/trace_test.go",
+        "internal/lsp/definition_test.go",
+        "internal/lsp/references_test.go",
+        "internal/lsp/hover_test.go",
+        "internal/oracle/oracle_test.go",
+        "internal/importer/importer_test.go",
+        "internal/importer/diagram_edit_test.go",
+        "internal/frontend/tests/source-panel.test.js",
+        "internal/frontend/tests/viewer.test.js",
+        "e2e-viewer/tests/helpers.js",
+        "e2e-viewer/tests/source-panel.spec.js",
+        "README.md",
+        "docs/dsl-reference.md",
+        "site/content/docs/dsl-reference.md",
+        "site/content/docs/_index.md",
+        "docs/proposals/ai/02-semantic-model-review.md",
+        "docs/proposals/ai/04-model-from-conversation.md",
+        "docs/proposals/ai/06-rename-and-fix-suggestions.md",
+        "docs/proposals/ai/07-model-import.md"
+      ]
+    },
+    {
+      "n": 6,
+      "done": false,
+      "title": "Remove the actor from the diagram document, the importer and the viewer",
+      "language": "Go",
+      "testable": true,
+      "certainty": "medium",
+      "blast_radius": "high",
+      "patterns_to_follow": [
+        "internal/importer/importer_test.go:681-705",
+        "internal/importer/importer_test.go:744-775",
+        "internal/frontend/tests/detail-panel.test.js:222-233",
+        "internal/export/export_test.go:5296-5303",
+        "internal/importer/diagram_edit_test.go:554-575",
+        "tasks/learnings.md:256-259",
+        "tasks/learnings.md:251-254"
+      ],
+      "depends_on": [
+        5
+      ],
+      "affected_files": [
+        "internal/export/diagram.go",
+        "internal/export/export_test.go",
+        "internal/importer/importer.go",
+        "internal/importer/diagram_edit.go",
+        "internal/importer/importer_test.go",
+        "internal/importer/diagram_edit_test.go",
+        "internal/frontend/static/ui.js",
+        "internal/frontend/static/viewer.js",
+        "internal/frontend/static/store.js",
+        "internal/frontend/static/viewer.html",
+        "internal/frontend/tests/detail-panel.test.js",
+        "internal/frontend/tests/viewer.test.js",
+        "internal/frontend/tests/model.test.js"
+      ]
+    },
+    {
+      "n": 7,
+      "done": false,
+      "title": "Reject `actor` in the parser, and remove it from the AST and the formatter",
+      "language": "Go",
+      "testable": true,
+      "certainty": "medium",
+      "blast_radius": "high",
+      "patterns_to_follow": [
+        "internal/parser/parser.go:406-419",
+        "internal/cli/validate_test.go:100-120",
+        "internal/parser/parser_test.go:448-455",
+        "tasks/learnings.md:246-249",
+        "tasks/learnings.md:216-219",
+        "tasks/learnings.md:1657-1662"
+      ],
+      "depends_on": [
+        1,
+        2,
+        3,
+        4,
+        5,
+        6
+      ],
+      "affected_files": [
+        "internal/ast/ast.go",
+        "internal/parser/parser.go",
+        "internal/parser/parser_test.go",
+        "internal/formatter/formatter.go",
+        "internal/cli/validate_test.go",
+        "internal/cli/glossary_test.go",
+        "internal/mcp/server_test.go",
+        "internal/lsp/diagnostics_test.go",
+        "internal/diagnostic/entry_test.go",
+        "internal/diagram/svg_test.go",
+        "internal/diagram/ascii_test.go",
+        "internal/diagram/eventflow_test.go",
+        "internal/diagram/mermaid_test.go",
+        "internal/diagram/contract_test.go",
+        "internal/export/export_test.go",
+        "internal/glossary/glossary_test.go",
+        "internal/linter/linter_test.go"
+      ]
+    }
+  ],
+  "design_file": "tasks/us-003-retire-actor.design.yaml"
+}

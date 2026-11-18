@@ -170,12 +170,8 @@ func placeBoxes(entries []sliceEntry, columns []sliceColumn, copies ElementCopie
 		if s.Trigger != nil {
 			x := sliceX + (column.w-boxWidth)/2
 			y := triggerRowY
-			label := s.Trigger.Name
-			if s.Trigger.Actor != "" {
-				label = fmt.Sprintf("%s (%s)", s.Trigger.Name, s.Trigger.Actor)
-			}
 			b.WriteString(svgTriggerRect(x, y, boxWidth, boxHeight, fillTrigger, strokeTrigger, 5, s.Trigger.Description))
-			b.WriteString(svgText(x+boxWidth/2, y+boxHeight/2, label, 12, strokeTrigger))
+			b.WriteString(svgText(x+boxWidth/2, y+boxHeight/2, s.Trigger.Name, 12, strokeTrigger))
 			triggerBoxes[s] = placed(svgBox{x: x, y: y, w: boxWidth, h: boxHeight, lane: wireframesLane})
 		}
 

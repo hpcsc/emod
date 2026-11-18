@@ -59,7 +59,7 @@ func TestExportASCII(t *testing.T) {
 		require.Contains(t, output, "Model: Empty")
 	})
 
-	t.Run("renders trigger with name and actor, dropping any kind", func(t *testing.T) {
+	t.Run("renders a trigger with its name only, dropping any actor and any kind", func(t *testing.T) {
 		model := &ast.Model{
 			Name: "Test",
 			Contexts: []*ast.Context{{
@@ -81,7 +81,8 @@ func TestExportASCII(t *testing.T) {
 		require.NoError(t, err)
 
 		output := string(raw)
-		require.Contains(t, output, "<<SubmitForm (User)>>")
+		require.Contains(t, output, "\n  <<SubmitForm>>\n")
+		require.NotContains(t, output, "User")
 		require.NotContains(t, output, "UI:")
 	})
 
@@ -111,14 +112,14 @@ func TestExportASCII(t *testing.T) {
 		require.NotContains(t, output, "\n  <<Checkout Page>>")
 	})
 
-	t.Run("prints the line from the one view a trigger reads with the actor in the trigger's label", func(t *testing.T) {
+	t.Run("prints the line from the one view a trigger reads with the trigger's name only", func(t *testing.T) {
 		model := singleSliceModel("Shop", "Apply Discount",
 			&ast.Trigger{Name: "Checkout Page", Actor: "Guest", Reads: []string{"CartView"}})
 
 		raw, err := diagram.ExportASCII(model, diagram.StyleAuto)
 		require.NoError(t, err)
 
-		require.Contains(t, string(raw), "=== Slice: Apply Discount ===\n  {CartView} -> <<Checkout Page (Guest)>>\n\n")
+		require.Contains(t, string(raw), "=== Slice: Apply Discount ===\n  {CartView} -> <<Checkout Page>>\n\n")
 	})
 
 	t.Run("trigger labels omit kind whether or not one is stated", func(t *testing.T) {
@@ -149,7 +150,7 @@ func TestExportASCII(t *testing.T) {
 		require.NoError(t, err)
 
 		output := string(raw)
-		require.Contains(t, output, "<<SubmitForm (User)>>")
+		require.Contains(t, output, "<<SubmitForm>>")
 		require.Contains(t, output, "<<HeadlessBatch>>")
 		require.NotContains(t, output, "UI:")
 		require.NotContains(t, output, "<<:")
@@ -505,7 +506,7 @@ func TestExportASCII(t *testing.T) {
 		require.Contains(t, output, "=== Slice: Ship Order ===")
 
 		// Triggers
-		require.Contains(t, output, "<<PlaceOrderForm (Customer)>>")
+		require.Contains(t, output, "<<PlaceOrderForm>>")
 		require.Contains(t, output, "<<ShipTimer>>")
 
 		// Flow chains

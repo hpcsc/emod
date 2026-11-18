@@ -904,31 +904,6 @@ func TestExporterReadsEdges(t *testing.T) {
 				), drawn)
 			})
 
-			t.Run("two triggers that share a name each get the arrows of their own slice", func(t *testing.T) {
-				model := singleSliceModel("Shop", "Apply Discount",
-					view("CartView"), command("ApplyDiscount"),
-					&ast.Trigger{Name: "Checkout Page", Actor: "Guest", Reads: []string{"CartView"}})
-				aggregate := model.Contexts[0].Aggregates[0]
-				aggregate.Slices = append(aggregate.Slices, &ast.Slice{
-					Name:     "Place Order",
-					Views:    []*ast.View{view("OrderView")},
-					Commands: []*ast.Command{command("PlaceOrder")},
-					Trigger:  &ast.Trigger{Name: "Checkout Page", Actor: "Clerk", Reads: []string{"OrderView"}},
-				})
-
-				drawn := e.connections(t, e.run(t, model, diagram.StyleAuto))
-				triggers := []string{"Checkout Page (Guest)", "Checkout Page (Clerk)"}
-
-				require.Equal(t, map[string][]string{
-					"Checkout Page (Guest)": {"CartView"},
-					"Checkout Page (Clerk)": {"OrderView"},
-				}, linesOfEach(sourcesIntoEach(drawn, triggers)))
-				require.Equal(t, map[string][]string{
-					"Checkout Page (Guest)": {"ApplyDiscount"},
-					"Checkout Page (Clerk)": {"PlaceOrder"},
-				}, linesOfEach(targetsOutOfEach(drawn, triggers)))
-			})
-
 			t.Run("a reads naming a view no slice declares, and a reads left out, are drawn no arrow", func(t *testing.T) {
 				output := e.run(t, mixedReadsModel(), diagram.StyleAuto)
 
@@ -1584,7 +1559,7 @@ var reactiveModelCommands = []string{
 // reactiveModelElements labels every box reactiveModel's own elements are drawn,
 // leaving out the lanes and context bands they sit in.
 var reactiveModelElements = slices.Concat(reactiveModelCommands, reactiveModelReactors, []string{
-	"Order Form (Customer)", "OrderPlaced", "PaymentSettled", "Stripe",
+	"Order Form", "OrderPlaced", "PaymentSettled", "Stripe",
 	"Dispatch Desk", "OrderShipped", "LabelPrinted", "DHL",
 })
 
@@ -1737,7 +1712,7 @@ func TestExporterReactorPlacement(t *testing.T) {
 				e.requireWellFormed(t, output)
 				boxes := e.boxes(t, output)
 
-				require.Equal(t, []string{"Order Form (Customer)", "Dispatch Desk"},
+				require.Equal(t, []string{"Order Form", "Dispatch Desk"},
 					labelsWithin(boxes, boxLabelled(t, boxes, "Wireframes").rect),
 					"the lane holding what a person touches holds the two triggers and nothing else")
 			})

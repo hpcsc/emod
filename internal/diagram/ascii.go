@@ -13,7 +13,7 @@ import (
 //   - Commands as [Name]
 //   - Events as (Name)
 //   - Views as {Name}
-//   - Triggers as <<Name>> or <<Name (Actor)>>, after an arrow from each view they read
+//   - Triggers as <<Name>>, after an arrow from each view they read
 //   - Automations as ⚙ Name
 //   - Cadences as every "Expression"
 //   - Invariants a command is rejected by as ✗ Name
@@ -123,12 +123,7 @@ func ExportASCII(model *ast.Model, _ Style) ([]byte, error) {
 }
 
 func formatTrigger(t *ast.Trigger) string {
-	label := fmt.Sprintf("<<%s", t.Name)
-	if t.Actor != "" {
-		label += fmt.Sprintf(" (%s)", t.Actor)
-	}
-	label += ">>"
-	return label
+	return fmt.Sprintf("<<%s>>", t.Name)
 }
 
 func activationMarking(auto *ast.Automation) string {

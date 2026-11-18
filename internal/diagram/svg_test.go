@@ -50,15 +50,15 @@ func TestExportSVG(t *testing.T) {
 		require.NotContains(t, output, "UI / Triggers")
 	})
 
-	t.Run("renders a trigger with its actor", func(t *testing.T) {
+	t.Run("labels a trigger with its name only, also when it names an actor", func(t *testing.T) {
 		model := singleSliceModel("Test", "S", &ast.Trigger{Name: "SubmitForm", Actor: "User"})
 
 		raw, err := diagram.ExportSVG(model, diagram.StyleAuto)
 		require.NoError(t, err)
 
 		output := string(raw)
-		require.Contains(t, output, "SubmitForm")
-		require.Contains(t, output, "(User)")
+		require.Contains(t, output, ">SubmitForm</text>")
+		require.NotContains(t, output, "User")
 	})
 
 	t.Run("renders command, event and view labels", func(t *testing.T) {
@@ -99,6 +99,46 @@ func TestExportSVG(t *testing.T) {
 		require.Equal(t, 1, arrowCount(output), "trigger to command is one arrow")
 	})
 
+	t.Run("two triggers that share a name each get the arrows of their own slice", func(t *testing.T) {
+		model := &ast.Model{
+			Name: "Shop",
+			Contexts: []*ast.Context{{
+				Name: "Shop",
+				Aggregates: []*ast.Aggregate{{
+					Name: "Cart",
+					Slices: []*ast.Slice{
+						{
+							Name:     "Apply Discount",
+							Trigger:  &ast.Trigger{Name: "Checkout Page", Reads: []string{"CartView"}},
+							Views:    []*ast.View{{Name: "CartView"}},
+							Commands: []*ast.Command{{Name: "ApplyDiscount"}},
+						},
+						{
+							Name:     "Place Order",
+							Trigger:  &ast.Trigger{Name: "Checkout Page", Reads: []string{"OrderView"}},
+							Views:    []*ast.View{{Name: "OrderView"}},
+							Commands: []*ast.Command{{Name: "PlaceOrder"}},
+						},
+					},
+				}},
+			}},
+		}
+
+		joinedAt := make(map[int][]string)
+		for _, end := range svgArrowEnds(t, svgOf(t, model)) {
+			for i, box := range end {
+				if box.label == "Checkout Page" {
+					joinedAt[box.rect.x] = append(joinedAt[box.rect.x], end[1-i].label)
+				}
+			}
+		}
+
+		triggers := slices.Sorted(maps.Keys(joinedAt))
+		require.Len(t, triggers, 2, "the arrows have to touch both trigger boxes")
+		require.ElementsMatch(t, []string{"CartView", "ApplyDiscount"}, joinedAt[triggers[0]], "the trigger of the first slice")
+		require.ElementsMatch(t, []string{"OrderView", "PlaceOrder"}, joinedAt[triggers[1]], "the trigger of the second slice")
+	})
+
 	t.Run("connects each trigger to the command of its own slice when two slices declare a command of one name", func(t *testing.T) {
 		model := &ast.Model{
 			Name: "Shop",
@@ -107,8 +147,8 @@ func TestExportSVG(t *testing.T) {
 				Aggregates: []*ast.Aggregate{{
 					Name: "Cart",
 					Slices: []*ast.Slice{
-						{Name: "Apply Discount", Trigger: &ast.Trigger{Name: "Checkout Page", Actor: "Guest"}, Commands: []*ast.Command{{Name: "SubmitCart"}}},
-						{Name: "Place Order", Trigger: &ast.Trigger{Name: "Checkout Page", Actor: "Clerk"}, Commands: []*ast.Command{{Name: "SubmitCart"}}},
+						{Name: "Apply Discount", Trigger: &ast.Trigger{Name: "Checkout Page"}, Commands: []*ast.Command{{Name: "SubmitCart"}}},
+						{Name: "Place Order", Trigger: &ast.Trigger{Name: "Checkout Page"}, Commands: []*ast.Command{{Name: "SubmitCart"}}},
 					},
 				}},
 			}},
@@ -117,13 +157,13 @@ func TestExportSVG(t *testing.T) {
 		ends := svgArrowEnds(t, svgOf(t, model))
 
 		require.Len(t, ends, 2)
-		require.ElementsMatch(t, []string{"Checkout Page (Guest)", "Checkout Page (Clerk)"}, []string{ends[0][0].label, ends[1][0].label})
+		require.NotEqual(t, ends[0][0].rect, ends[1][0].rect, "the two arrows start at the two trigger boxes")
 		for _, end := range ends {
 			trigger, command := end[0].rect, end[1].rect
 			require.Equal(t, "SubmitCart", end[1].label)
 			apart := trigger.centre()[0] - command.centre()[0]
 			require.Less(t, max(apart, -apart), trigger.w,
-				"the arrow from %q ends at the command under it, not at the command of the other slice", end[0].label)
+				"the arrow from the trigger box at x %d ends at the command under it, not at the command of the other slice", trigger.x)
 		}
 	})
 
@@ -409,6 +449,17 @@ func TestExportSVG(t *testing.T) {
 		require.NoError(t, err)
 
 		require.Equal(t, 1, arrowCount(string(raw)), "only the external system and the reactor have boxes to draw an arrow between")
+	})
+
+	t.Run("writes the name of a trigger at the centre of its box, at the size a command's name is written", func(t *testing.T) {
+		shapes := svgShapes(t, svgOf(t, singleSliceModel("Test", "S", &ast.Trigger{Name: "SubmitForm"}, command("SubmitOrder"))))
+
+		trigger := slices.IndexFunc(shapes, func(shape svgShape) bool { return lineText(shape.label) == "SubmitForm" })
+		command := slices.IndexFunc(shapes, func(shape svgShape) bool { return lineText(shape.label) == "SubmitOrder" })
+		require.GreaterOrEqual(t, trigger, 0, "the picture has to draw the trigger SubmitForm")
+		require.GreaterOrEqual(t, command, 0, "the picture has to draw the command SubmitOrder")
+		require.Equal(t, shapes[trigger].rect.centre(), shapes[trigger].labelAt)
+		require.Equal(t, shapes[command].labelSize, shapes[trigger].labelSize)
 	})
 
 	t.Run("writes the label of each copy at the centre of its box, at the size an event's label is written", func(t *testing.T) {

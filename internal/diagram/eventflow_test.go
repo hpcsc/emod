@@ -91,7 +91,7 @@ func TestCollapseEventFlow(t *testing.T) {
 			require.Empty(t, nodeByID(t, flow, "RemindOnDueDate").Caption)
 		})
 
-		t.Run("a trigger is an origin captioned by the actor who works it", func(t *testing.T) {
+		t.Run("a trigger is an origin captioned as a trigger, also when it names an actor", func(t *testing.T) {
 			model := singleSliceModel("Lending", "Borrow Copy",
 				&ast.Trigger{Name: "Lending Desk", Actor: "Member"}, command("BorrowCopy"), event("CopyBorrowed"))
 			model.Contexts[0].Aggregates[0].Slices[0].Flows = []*ast.Flow{
@@ -104,7 +104,7 @@ func TestCollapseEventFlow(t *testing.T) {
 				ID:      "Ctx.Lending Desk",
 				Kind:    diagram.NodeOrigin,
 				Label:   "Lending Desk",
-				Caption: "Member",
+				Caption: "trigger",
 			}, nodeByID(t, flow, "Ctx.Lending Desk"))
 		})
 
@@ -317,7 +317,7 @@ func TestCollapseEventFlow(t *testing.T) {
 			require.Equal(t, []shape{
 				{ID: "CopyBorrowed", Kind: diagram.NodeEvent, Label: "CopyBorrowed"},
 				{ID: "LoanOpened", Kind: diagram.NodeEvent, Label: "LoanOpened", DeadEnd: true},
-				{ID: "Lending.Lending Desk", Kind: diagram.NodeOrigin, Label: "Lending Desk", Caption: "Member"},
+				{ID: "Lending.Lending Desk", Kind: diagram.NodeOrigin, Label: "Lending Desk", Caption: "trigger"},
 				{ID: "Lending.OneCopyPerLoan", Kind: diagram.NodeRejection, Label: "OneCopyPerLoan"},
 				{ID: "RemindOnDueDate", Kind: diagram.NodeAutomation, Label: "RemindOnDueDate"},
 				{ID: "MemberReminded", Kind: diagram.NodeEvent, Label: "MemberReminded", DeadEnd: true},

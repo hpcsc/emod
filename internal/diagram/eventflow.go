@@ -46,9 +46,6 @@ type EventFlow struct {
 	Hops  []Hop
 }
 
-// Captions naming what an origin box stands for. A trigger states its actor
-// instead, so a reader is told who works it rather than which keyword declared
-// it.
 const (
 	externalCaption = "external system"
 	commandCaption  = "command"
@@ -256,16 +253,11 @@ func commandNode(name string) Node {
 }
 
 func triggerNode(entry sliceEntry, trigger *ast.Trigger) Node {
-	caption := trigger.Actor
-	if caption == "" {
-		caption = triggerCaption
-	}
-
 	return Node{
 		ID:          entry.ctxName + "." + trigger.Name,
 		Kind:        NodeOrigin,
 		Label:       trigger.Name,
-		Caption:     caption,
+		Caption:     triggerCaption,
 		Description: trigger.Description,
 	}
 }

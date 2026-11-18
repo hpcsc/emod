@@ -1,0 +1,101 @@
+design: planned
+# The story adds no type and no exported name. It removes ast.Actor, export.jsonActor and the actor
+# functions of internal/glossary, and the types below lose the fields and the code that carried the actor.
+types:
+  - name: Model
+    package: internal/ast   # ast.go
+    change: changed
+    does: is the root of a parsed model, with its name, its description and its contexts
+    owns:
+      - a model declares no actors; the field Actors and the type Actor do not exist
+    fields: [Contexts]
+  - name: Trigger
+    package: internal/ast   # ast.go
+    change: changed
+    does: is the human entry point of a slice, with its name, its description and the views it reads
+    owns:
+      - a trigger names no person who works it; the fields Actor and ActorPos do not exist
+    fields: [Reads, ReadsPos]
+  - name: hclReader
+    package: internal/parser   # parser.go
+    change: changed
+    does: reads the HCL body of a model into the AST
+    owns:
+      - a top-level actor block is an error at the keyword, which says that the language retired actor and that the author must delete the block
+      - an actor attribute in a trigger is an error at the attribute, with the same advice
+      - the blocks and attributes after a rejected one still parse
+      - the message for an unknown top-level block lists model and context only
+      - actor stays a legal name for a field or a construct
+    methods: [model, trigger]
+  - name: document
+    package: internal/glossary   # glossary.go
+    change: changed
+    does: holds the vocabulary of a model that RenderMarkdown and RenderJSON both write
+    owns:
+      - the vocabulary has no actors group, at the top level or in a context
+  - name: jsonModel
+    package: internal/export   # json.go
+    change: changed
+    does: writes the model in the JSON export
+    owns:
+      - the JSON export has no actors key
+  - name: jsonTrigger
+    package: internal/export   # json.go
+    change: changed
+    does: writes one trigger in the JSON export
+    owns:
+      - a trigger has no actor key and no actor_position key
+  - name: cueWriter
+    package: internal/export   # cue.go
+    change: changed
+    does: writes the CUE export
+    owns:
+      - the CUE export has no actors list and no actor on a trigger
+    methods: [writeTrigger]
+  - name: diagramBuilder
+    package: internal/export   # diagram.go
+    change: changed
+    does: builds the diagram document of a model, with one node for each construct and one edge for each arrow
+    owns:
+      - the diagram document has no node of the type actor
+    methods: [appendTrigger]
+  - name: jsonDiagramNode
+    package: internal/export   # diagram.go
+    change: changed
+    does: writes one node of the diagram document
+    owns:
+      - a trigger node has no actor key
+  - name: diagramNode
+    package: internal/importer   # importer.go
+    change: changed
+    does: reads one node of a diagram document
+    owns:
+      - an actor key on a node is ignored, so an old saved document imports with no error
+    methods: [asTrigger]
+  - name: diagramEdit
+    package: internal/importer   # diagram_edit.go
+    change: changed
+    does: makes a model say what an edited diagram says
+    owns:
+      - a viewer save writes no actor
+    methods: [matchDrawnNodes]
+  - name: UI
+    package: internal/frontend/static   # ui.js
+    change: changed
+    does: shows the detail panel and the other overlays of the viewer
+    owns:
+      - the viewer shows no bar of actors above the diagram
+      - the detail panel of a trigger shows its reads and no actor row
+    methods: [showDetailPanel]
+functions:
+  - diagram.ExportSVG(model *ast.Model, style Style, opts ...Option) ([]byte, error)   # exists; labels a trigger with its name only
+  - diagram.ExportASCII(model *ast.Model, style Style) ([]byte, error)   # exists; writes a trigger as <<Name>>
+  - diagram.CollapseEventFlow(model *ast.Model) EventFlow   # exists; gives each trigger the caption trigger
+words:
+  - concept: a form that the language accepted before and now rejects with an error that names the fix
+    word: retired
+    not: [deprecated, removed, obsolete, legacy, unsupported]   # no period exists where the form is valid with a warning
+  - concept: the text under the label of an origin box in the event flow diagram
+    word: caption
+    not: [subtitle, tag]   # tag is a key of a DCB event
+dependencies: []
