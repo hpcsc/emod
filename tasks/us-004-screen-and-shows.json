@@ -56,7 +56,7 @@
     },
     {
       "n": 2,
-      "done": false,
+      "done": true,
       "title": "Draw each appearance with its own arrows in the SVG, ASCII, Mermaid and event flow diagrams",
       "language": "Go",
       "testable": true,

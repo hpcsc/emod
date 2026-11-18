@@ -76,6 +76,11 @@ func exportMermaidStandard(b *strings.Builder, modelName string, entries []slice
 			b.WriteString(fmt.Sprintf("%% Slice: %s\n", s.Name))
 		}
 
+		for _, appearance := range s.Appearances {
+			b.WriteString(fmt.Sprintf("tf %02d ui %s\n", nextNum, namespaced(ns, appearance.Screen)))
+			nextNum++
+		}
+
 		if s.Trigger != nil {
 			eid := namespaced(ns, s.Trigger.Name)
 			b.WriteString(fmt.Sprintf("tf %02d ui %s\n", nextNum, eid))
@@ -168,6 +173,11 @@ func exportMermaidProjected(b *strings.Builder, modelName string, entries []slic
 
 		if s.Name != "" {
 			b.WriteString(fmt.Sprintf("%% Slice: %s\n", s.Name))
+		}
+
+		for _, appearance := range s.Appearances {
+			b.WriteString(fmt.Sprintf("tf %02d ui %s\n", nextNum, namespaced(ns, appearance.Screen)))
+			nextNum++
 		}
 
 		// Triggers
@@ -297,6 +307,11 @@ func exportMermaidDCB(b *strings.Builder, modelName string, entries []sliceEntry
 
 		if s.Name != "" {
 			b.WriteString(fmt.Sprintf("%% Slice: %s\n", s.Name))
+		}
+
+		for _, appearance := range s.Appearances {
+			b.WriteString(fmt.Sprintf("tf %02d ui %s\n", nextNum, namespaced(ns, appearance.Screen)))
+			nextNum++
 		}
 
 		// Triggers

@@ -350,35 +350,35 @@ caption `screen`. The trigger pictures do not change.
 
 **Acceptance Criteria:**
 
-- [ ] In the SVG of the shared screen fixture, each `shows` block draws one box, labelled with the name of its
+- [x] In the SVG of the shared screen fixture, each `shows` block draws one box, labelled with the name of its
       screen, in the Wireframes lane, inside the column of its slice, with the header bar of a screen. A screen
       shown in two slices draws two boxes.
-- [ ] Each `reads` entry draws one arrow into the box of its own appearance, from the view, or from the copy of
+- [x] Each `reads` entry draws one arrow into the box of its own appearance, from the view, or from the copy of
       a view that a slice two or more slices away declares. Each `command` entry draws one arrow from the box to
       the command that it names. No arrow joins an appearance box to a command that its `command` does not name:
       a command of the same slice that no entry names, a command that an automation of the same slice issues, and
       a command of the same name in another slice all get no arrow from it, checked by the boxes at both ends of
       each arrow. An appearance with no `command` draws no arrow to a command.
-- [ ] A `command` entry that names a command that only a slice two or more slices away declares draws a copy of
+- [x] A `command` entry that names a command that only a slice two or more slices away declares draws a copy of
       that command in the appearance's slice, and the arrow ends at the copy.
-- [ ] Two `shows` blocks in one slice draw two boxes in the Wireframes lane, with no overlap, each inside the
+- [x] Two `shows` blocks in one slice draw two boxes in the Wireframes lane, with no overlap, each inside the
       slice column. The commands, views and events of the slice keep their rows.
-- [ ] The ASCII diagram prints, in the section of the slice that shows the screen: one `{View} -> <<Screen>>`
+- [x] The ASCII diagram prints, in the section of the slice that shows the screen: one `{View} -> <<Screen>>`
       line for each `reads` entry in list order, `<<Screen>>` alone for an appearance with no `reads`, and one
       `<<Screen>> -> [Command]` line for each `command` entry. A screen shown in two slices prints in both
       sections, each with the lines of its own appearance.
-- [ ] The Mermaid output writes one `ui` line for each appearance, in the slice that shows it, in the aggregate
+- [x] The Mermaid output writes one `ui` line for each appearance, in the slice that shows it, in the aggregate
       layout and in the DCB layout. A screen shown in two slices gets two lines.
-- [ ] The event flow gives a command one issuer for each screen whose appearance names it in `command`, captioned
+- [x] The event flow gives a command one issuer for each screen whose appearance names it in `command`, captioned
       `screen`, labelled with the screen name and described with the description of the screen declaration. An
       appearance with no `command` adds no node. A command that an automation of the same slice issues has the
       automation as its only issuer.
-- [ ] A model with no appearance renders byte for byte as before in each format.
-- [ ] In `internal/diagram`, "appearance" names only an appearance of a screen: the test field
+- [x] A model with no appearance renders byte for byte as before in each format.
+- [x] In `internal/diagram`, "appearance" names only an appearance of a screen: the test field
       `diagramBox.appearance` has a name of its own.
-- [ ] The paragraph on the event flow diagram in `README.md` (`:225-236`) names a screen among the origins, and
+- [x] The paragraph on the event flow diagram in `README.md` (`:225-236`) names a screen among the origins, and
       `docs/architecture.md` (`:167`) names the screen arrows.
-- [ ] `task test:unit` passes.
+- [x] `task test:unit` passes.
 
 **Affected Files/Modules:**
 

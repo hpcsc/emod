@@ -226,8 +226,9 @@ emod diagram reservation.emod --format event-flow-mermaid-no-icons  # the Mermai
 The commands are collapsed away — an automation is joined straight to the events
 its command emits — and the views are left out. What is left is an orange pill
 for each event, a bare gear for each automation and translation reactor, a
-rounded box for whatever issues a command from outside them (a trigger, an
-external system, or a command nothing issues), each captioned with what it is,
+rounded box for whatever issues a command from outside them (a screen whose
+`shows` block names the command, a trigger, an external system, or a command
+nothing issues), each captioned with what it is,
 and a dashed red box for an invariant that refuses a command. An event nothing
 reads is drawn dashed, so a reader is not left to assume something reacts to it.
 An event only a view reads carries no mark and no arrow onward, because the

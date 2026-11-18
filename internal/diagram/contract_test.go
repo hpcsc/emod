@@ -58,9 +58,9 @@ type exporter struct {
 
 type diagramBox struct {
 	label string
-	// appearance is where the box sits, how big it is and how it is painted, in
+	// attributes is where the box sits, how big it is and how it is painted, in
 	// the format's own spelling.
-	appearance string
+	attributes string
 	rect       boxRect
 }
 
@@ -270,13 +270,13 @@ func (e exporter) runWithSpecs(t *testing.T, model *ast.Model, style diagram.Sty
 }
 
 // specCardBoxesIn selects the scenario cards out of the boxes a picture draws,
-// by the card's fill in the appearance the SVG reads back.
+// by the card's fill in the attributes the SVG reads back.
 func specCardBoxesIn(t *testing.T, boxes []diagramBox) []diagramBox {
 	t.Helper()
 
 	var cards []diagramBox
 	for _, box := range boxes {
-		if strings.Contains(box.appearance, fillSpecCardHex) {
+		if strings.Contains(box.attributes, fillSpecCardHex) {
 			cards = append(cards, box)
 		}
 	}
@@ -508,7 +508,7 @@ func TestExporterContract(t *testing.T) {
 
 				output := e.run(t, model, diagram.StyleAuto)
 
-				require.Equal(t, []string{"CmdA", "CmdB", "CmdC"}, appearanceOrder(t, output, "CmdA", "CmdB", "CmdC"))
+				require.Equal(t, []string{"CmdA", "CmdB", "CmdC"}, occurrenceOrder(t, output, "CmdA", "CmdB", "CmdC"))
 			})
 
 			t.Run("slices declared directly under a DCB context are rendered", func(t *testing.T) {
@@ -629,7 +629,7 @@ func TestExporterSpecCards(t *testing.T) {
 					"the featured render has to add a box, or the slice below panics instead of failing")
 
 				require.Equal(t, plainBoxes, featuredBoxes[:len(plainBoxes)],
-					"every box the render without the option draws keeps its label, its appearance and its place")
+					"every box the render without the option draws keeps its label, its attributes and its place")
 
 				added := featuredBoxes[len(plainBoxes):]
 				require.Equal(t, "Specs", added[0].label, "the band is the first thing the option adds")
@@ -1079,10 +1079,10 @@ func unplaced(boxes []diagramBox) []diagramBox {
 	placement := []string{"x=", "y=", "width=", "height="}
 	read := make([]diagramBox, len(boxes))
 	for i, box := range boxes {
-		paint := slices.DeleteFunc(strings.Fields(box.appearance), func(attribute string) bool {
+		paint := slices.DeleteFunc(strings.Fields(box.attributes), func(attribute string) bool {
 			return slices.ContainsFunc(placement, func(prefix string) bool { return strings.HasPrefix(attribute, prefix) })
 		})
-		read[i] = diagramBox{label: lineText(box.label), appearance: strings.Join(paint, " ")}
+		read[i] = diagramBox{label: lineText(box.label), attributes: strings.Join(paint, " ")}
 	}
 
 	return read
@@ -1284,7 +1284,7 @@ func TestExporterAutomationSchedule(t *testing.T) {
 				require.Empty(t, scheduleShown(e.boxLabelled(t, plain, sweep).label))
 
 				plainBoxes, scheduledBoxes := e.boxes(t, plain), e.boxes(t, scheduled)
-				require.Equal(t, appearancesOf(plainBoxes), appearancesOf(scheduledBoxes),
+				require.Equal(t, attributesOf(plainBoxes), attributesOf(scheduledBoxes),
 					"a cadence must not move, resize or repaint a box")
 				require.Equal(t, labelsExcept(plainBoxes, sweep), labelsExcept(scheduledBoxes, sweep),
 					"a cadence belongs to the box of the automation running on it and to no other")
@@ -1762,12 +1762,12 @@ func scheduleShown(label string) string {
 	return strings.TrimSpace(cadence)
 }
 
-func appearancesOf(boxes []diagramBox) []string {
-	var appearances []string
+func attributesOf(boxes []diagramBox) []string {
+	var attributes []string
 	for _, box := range boxes {
-		appearances = append(appearances, box.appearance)
+		attributes = append(attributes, box.attributes)
 	}
-	return appearances
+	return attributes
 }
 
 func labelsExcept(boxes []diagramBox, name string) []string {
@@ -2199,8 +2199,8 @@ func TestExporterEventCopies(t *testing.T) {
 			t.Run("a copy is outlined dashed where the event it copies is not", func(t *testing.T) {
 				boxes := e.boxes(t, e.run(t, test.SubscribedEventsHotelStaysModel(t), diagram.StyleAuto))
 
-				require.NotContains(t, boxNamed(t, boxes, "BreakfastOrdered").appearance, "dash")
-				require.Contains(t, boxNamed(t, boxes, "BreakfastOrdered\nfrom Import Breakfast Orders").appearance, "dash")
+				require.NotContains(t, boxNamed(t, boxes, "BreakfastOrdered").attributes, "dash")
+				require.Contains(t, boxNamed(t, boxes, "BreakfastOrdered\nfrom Import Breakfast Orders").attributes, "dash")
 			})
 		})
 	}
@@ -2346,15 +2346,15 @@ func TestExporterViewAndCommandCopies(t *testing.T) {
 					"fill of the view copy":      colorFamily(t, paintOf(t, fillPaint, viewCopy)),
 					"fill of the command copy":   colorFamily(t, paintOf(t, fillPaint, commandCopy)),
 				})
-				require.NotContains(t, boxNamed(t, boxes, "PartnersView").appearance, "dash")
-				require.Contains(t, viewCopy.appearance, "dash")
-				require.Contains(t, commandCopy.appearance, "dash")
+				require.NotContains(t, boxNamed(t, boxes, "PartnersView").attributes, "dash")
+				require.Contains(t, viewCopy.attributes, "dash")
+				require.Contains(t, commandCopy.attributes, "dash")
 			})
 		})
 	}
 }
 
-// strokePaint and fillPaint read a colour out of a box's appearance.
+// strokePaint and fillPaint read a colour out of a box's attributes.
 var (
 	strokePaint = regexp.MustCompile(`\bstroke=(#[0-9a-fA-F]{6})`)
 	fillPaint   = regexp.MustCompile(`\bfill=(#[0-9a-fA-F]{6})`)
@@ -2363,7 +2363,7 @@ var (
 func paintOf(t *testing.T, paint *regexp.Regexp, box diagramBox) string {
 	t.Helper()
 
-	m := paint.FindStringSubmatch(box.appearance)
+	m := paint.FindStringSubmatch(box.attributes)
 	require.NotNil(t, m, "box %q states no %s", box.label, paint)
 
 	return strings.ToLower(m[1])
@@ -2376,7 +2376,7 @@ func copyBoxesIn(boxes []diagramBox) []diagramBox {
 	for _, box := range boxes {
 		lines := cardLines(box.label)
 		if len(lines) == 2 && (strings.HasPrefix(lines[1], "from ") || strings.HasPrefix(lines[1], "in ")) {
-			copies = append(copies, diagramBox{label: lineText(box.label), appearance: box.appearance, rect: box.rect})
+			copies = append(copies, diagramBox{label: lineText(box.label), attributes: box.attributes, rect: box.rect})
 		}
 	}
 
@@ -2547,7 +2547,7 @@ func TestExporterPalette(t *testing.T) {
 				require.Contains(t, output, "dash", "an external system is drawn dashed")
 
 				importBox := e.boxLabelled(t, output, "Import")
-				require.NotContains(t, importBox.appearance, "dash",
+				require.NotContains(t, importBox.attributes, "dash",
 					"the translation reactor is not the external system and keeps a solid outline")
 			})
 		})
@@ -2634,9 +2634,9 @@ func hsv(t *testing.T, hex string) (hue, saturation, value float64) {
 	return hue, saturation, max
 }
 
-// appearanceOrder returns the given substrings sorted by where they first occur
+// occurrenceOrder returns the given substrings sorted by where they first occur
 // in output, failing if any is missing.
-func appearanceOrder(t *testing.T, output string, substrings ...string) []string {
+func occurrenceOrder(t *testing.T, output string, substrings ...string) []string {
 	t.Helper()
 
 	ordered := make([]string, len(substrings))

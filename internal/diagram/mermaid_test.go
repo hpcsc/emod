@@ -680,7 +680,7 @@ func TestExportMermaid(t *testing.T) {
 			output := string(raw)
 			sections := []string{"% Tag: alpha", "% Tag: beta", "% Tag: zeta"}
 
-			require.Equal(t, sections, appearanceOrder(t, output, sections...))
+			require.Equal(t, sections, occurrenceOrder(t, output, sections...))
 		})
 	})
 
@@ -877,6 +877,38 @@ func TestExportMermaid(t *testing.T) {
 					output := renderTimeframeSlotModel(t, style.style, style.events)
 
 					require.Equal(t, timeframeSlotAssignments, nonEventTimeframes(t, output))
+				})
+
+				t.Run("each shows block takes a ui timeframe in the slice that shows it, and a screen shown in two slices takes one in each", func(t *testing.T) {
+					raw, err := diagram.ExportMermaid(test.ScreenLibraryLendingModel(t), style.style)
+					require.NoError(t, err)
+
+					var screens []string
+					slice := ""
+					for _, line := range strings.Split(string(raw), "\n") {
+						if name, found := strings.CutPrefix(line, "% Slice: "); found {
+							slice = name
+						}
+						if strings.HasPrefix(line, "tf ") && strings.Contains(line, " ui ") {
+							screens = append(screens, slice+": "+strings.SplitN(line, " ", 3)[2])
+						}
+					}
+
+					require.Equal(t, []string{
+						"Borrow Copy: ui Lending.LendingDesk",
+						"Return Copy: ui Lending.LendingDesk",
+						"Chase Overdue Copy: ui Lending.OverdueReport",
+						"Chase Overdue Copy: ui Lending.DeskKiosk",
+						"Claim Desk: ui Reading Room.DeskKiosk",
+					}, screens)
+				})
+
+				t.Run("timeframe numbers run unbroken from one when slices show screens", func(t *testing.T) {
+					raw, err := diagram.ExportMermaid(test.ScreenLibraryLendingModel(t), style.style)
+					require.NoError(t, err)
+					output := string(raw)
+
+					require.Equal(t, countingFromOne(len(timeframeEntries(t, output))), timeframeNumbers(t, output))
 				})
 
 				t.Run("timeframe numbers run unbroken from one", func(t *testing.T) {

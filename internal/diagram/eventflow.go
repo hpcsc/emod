@@ -50,6 +50,7 @@ const (
 	externalCaption = "external system"
 	commandCaption  = "command"
 	triggerCaption  = "trigger"
+	screenCaption   = "screen"
 )
 
 // CollapseEventFlow derives the event flow of a model.
@@ -69,7 +70,7 @@ func CollapseEventFlow(model *ast.Model) EventFlow {
 		index:    make(map[string]int),
 		seen:     make(map[Hop]struct{}),
 		emits:    commandEvents(entries),
-		issuers:  commandIssuers(entries),
+		issuers:  commandIssuers(entries, screenDescriptions(model)),
 		consumed: consumedEvents(entries),
 	}
 	for _, entry := range entries {
@@ -252,6 +253,10 @@ func commandNode(name string) Node {
 	return Node{ID: name, Kind: NodeOrigin, Label: name, Caption: commandCaption}
 }
 
+func screenNode(name, description string) Node {
+	return Node{ID: name, Kind: NodeOrigin, Label: name, Caption: screenCaption, Description: description}
+}
+
 func triggerNode(entry sliceEntry, trigger *ast.Trigger) Node {
 	return Node{
 		ID:          entry.ctxName + "." + trigger.Name,
@@ -308,9 +313,10 @@ func commandEvents(entries []sliceEntry) map[string][]string {
 	return emits
 }
 
-// commandIssuers maps each command to what issues it: the trigger of the slice
-// declaring it, an automation, or a translation reactor.
-func commandIssuers(entries []sliceEntry) map[string][]Node {
+// commandIssuers maps each command to what issues it: a screen whose shows
+// block names it, the trigger of the slice declaring it, an automation, or a
+// translation reactor.
+func commandIssuers(entries []sliceEntry, screens map[string]string) map[string][]Node {
 	issuers := make(map[string][]Node)
 	add := func(command string, node Node) {
 		if command == "" {
@@ -326,6 +332,11 @@ func commandIssuers(entries []sliceEntry) map[string][]Node {
 
 	for _, entry := range entries {
 		s := entry.slice
+		for _, appearance := range s.Appearances {
+			for _, command := range appearance.Commands {
+				add(command, screenNode(appearance.Screen, screens[appearance.Screen]))
+			}
+		}
 		if s.Trigger != nil {
 			trigger := triggerNode(entry, s.Trigger)
 			for _, cmd := range s.Commands {

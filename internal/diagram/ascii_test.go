@@ -97,6 +97,51 @@ func TestExportASCII(t *testing.T) {
 		require.NotContains(t, output, "\n  <<Checkout Page>>")
 	})
 
+	t.Run("prints each shows block in the section of its slice: a line from each view it reads, its screen alone when it reads none, and a line to each command it names", func(t *testing.T) {
+		raw, err := diagram.ExportASCII(test.ScreenLibraryLendingModel(t), diagram.StyleAuto)
+		require.NoError(t, err)
+
+		require.Equal(t, `Model: Library Lending
+
+--- Context: Lending ---
+
+=== Slice: Borrow Copy ===
+  {MemberLoansView} -> <<LendingDesk>>
+  <<LendingDesk>> -> [BorrowCopy]
+  [BorrowCopy] -> (CopyBorrowed)
+
+=== Slice: Review Member Loans ===
+  (CopyBorrowed) -> {MemberLoansView}
+
+=== Slice: Return Copy ===
+  <<LendingDesk>>
+  <<LendingDesk>> -> [ReturnCopy]
+  <<LendingDesk>> -> [RenewLoan]
+  [ReturnCopy] -> (CopyReturned)
+  [RenewLoan] -> (LoanRenewed)
+
+=== Slice: Chase Overdue Copy ===
+  {MemberLoansView} -> <<OverdueReport>>
+  {DeskOccupancyView} -> <<OverdueReport>>
+  <<OverdueReport>> -> [RecallCopy]
+  {DeskOccupancyView} -> <<DeskKiosk>>
+  [RemindMember] -> (MemberReminded)
+  [RecallCopy] -> (CopyRecalled)
+  (CopyBorrowed) -> ⚙ RemindOnDueDate -> [RemindMember]
+
+--- Context: Reading Room ---
+
+=== Slice: Claim Desk ===
+  {DeskOccupancyView} -> <<DeskKiosk>>
+  <<DeskKiosk>> -> [ClaimDesk]
+  [ClaimDesk] -> (DeskClaimed)
+
+=== Slice: Browse Desk Occupancy ===
+  (DeskClaimed) -> {DeskOccupancyView}
+
+`, string(raw))
+	})
+
 	t.Run("prints the line from the one view a trigger reads with the trigger's name only", func(t *testing.T) {
 		model := singleSliceModel("Shop", "Apply Discount",
 			&ast.Trigger{Name: "Checkout Page", Reads: []string{"CartView"}})
@@ -450,7 +495,7 @@ func TestExportASCII(t *testing.T) {
 
 		headers := []string{"=== Slice: First ===", "=== Slice: Second ===", "=== Slice: Third ==="}
 
-		require.Equal(t, headers, appearanceOrder(t, string(raw), headers...))
+		require.Equal(t, headers, occurrenceOrder(t, string(raw), headers...))
 	})
 
 	t.Run("model name appears at the top", func(t *testing.T) {

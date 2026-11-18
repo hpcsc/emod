@@ -263,6 +263,31 @@ func TestElementCopies(t *testing.T) {
 			}, copiesOfKindBySliceName(model, diagram.ElementCommand))
 		})
 
+		t.Run("a shows block copies the view it reads from two or more slices away, and none from the slice next to it", func(t *testing.T) {
+			model := test.ScreenLibraryLendingModel(t)
+
+			require.Equal(t, map[string][]diagram.DeclaredElement{
+				"Chase Overdue Copy": {
+					{Kind: diagram.ElementView, Name: "MemberLoansView", Slice: sliceNamed(t, model, "Review Member Loans")},
+					{Kind: diagram.ElementView, Name: "DeskOccupancyView", Slice: sliceNamed(t, model, "Browse Desk Occupancy")},
+				},
+			}, copiesOfKindBySliceName(model, diagram.ElementView))
+		})
+
+		t.Run("a shows block copies the command it names from two or more slices away, and none from the slice next to it", func(t *testing.T) {
+			model := slicesModel(
+				&ast.Slice{Name: "Cancel Order", Appearances: []*ast.Appearance{{Screen: "OrderPage", Commands: []string{"RefundOrder", "TrackOrder"}}}},
+				&ast.Slice{Name: "Track Order", Commands: []*ast.Command{{Name: "TrackOrder"}}},
+				&ast.Slice{Name: "Refund Order", Commands: []*ast.Command{{Name: "RefundOrder"}}},
+			)
+
+			require.Equal(t, map[string][]diagram.DeclaredElement{
+				"Cancel Order": {
+					{Kind: diagram.ElementCommand, Name: "RefundOrder", Slice: sliceNamed(t, model, "Refund Order")},
+				},
+			}, copiesOfKindBySliceName(model, diagram.ElementCommand))
+		})
+
 		t.Run("a translation copies the view it reads and the command it issues from two or more slices away", func(t *testing.T) {
 			model := farTranslationModel()
 
@@ -355,6 +380,28 @@ func TestElementCopies(t *testing.T) {
 
 			require.Equal(t, []any{
 				diagram.DeclaredElement{Kind: diagram.ElementView, Name: "DeskOccupancyView", Slice: sliceNamed(t, model, "Browse Desk Occupancy")}, true, true,
+			}, []any{element, copied, found})
+		})
+
+		t.Run("a reads arrow into a screen from a copied view joins the copy in the slice that shows the screen", func(t *testing.T) {
+			model := test.ScreenLibraryLendingModel(t)
+
+			element, copied, found := diagram.NewElementCopies(model).Joined(sliceNamed(t, model, "Chase Overdue Copy"),
+				diagram.Edge{Kind: diagram.EdgeScreenReads, From: "DeskOccupancyView", To: "DeskKiosk"})
+
+			require.Equal(t, []any{
+				diagram.DeclaredElement{Kind: diagram.ElementView, Name: "DeskOccupancyView", Slice: sliceNamed(t, model, "Browse Desk Occupancy")}, true, true,
+			}, []any{element, copied, found})
+		})
+
+		t.Run("a command arrow out of a screen joins the command that the slice showing the screen declares, not a copy", func(t *testing.T) {
+			model := test.ScreenLibraryLendingModel(t)
+
+			element, copied, found := diagram.NewElementCopies(model).Joined(sliceNamed(t, model, "Return Copy"),
+				diagram.Edge{Kind: diagram.EdgeScreenCommand, From: "LendingDesk", To: "RenewLoan"})
+
+			require.Equal(t, []any{
+				diagram.DeclaredElement{Kind: diagram.ElementCommand, Name: "RenewLoan", Slice: sliceNamed(t, model, "Return Copy")}, false, true,
 			}, []any{element, copied, found})
 		})
 

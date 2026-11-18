@@ -31,7 +31,7 @@ func ExportSVG(model *ast.Model, _ Style, opts ...Option) ([]byte, error) {
 	var routes []route
 	for {
 		var obstacles []svgBox
-		boxes, arrows, obstacles = placeBoxes(entries, columns, copies, lanes)
+		boxes, arrows, obstacles = placeBoxes(entries, columns, copies, lanes, screenDescriptions(model))
 		routes = routesFor(arrows, obstacles, columns, lanes)
 		grown := lanes.withTracksOf(routes)
 		if grown == lanes {
@@ -108,7 +108,7 @@ func ExportSVG(model *ast.Model, _ Style, opts ...Option) ([]byte, error) {
 // where lanes says. It returns the arrows between those boxes, in the order the
 // picture draws them, and the boxes an arrow must keep clear of when it does not
 // join them.
-func placeBoxes(entries []sliceEntry, columns []sliceColumn, copies ElementCopies, lanes lanePositions) (string, []boxArrow, []svgBox) {
+func placeBoxes(entries []sliceEntry, columns []sliceColumn, copies ElementCopies, lanes lanePositions, screens map[string]string) (string, []boxArrow, []svgBox) {
 	var b strings.Builder
 	var obstacles []svgBox
 	placed := func(box svgBox) svgBox {
@@ -126,6 +126,7 @@ func placeBoxes(entries []sliceEntry, columns []sliceColumn, copies ElementCopie
 	// a connection can reach a box another slice drew.
 	nameToBox := make(map[string]svgBox)
 	triggerBoxes := make(map[*ast.Slice]svgBox)
+	appearanceBoxes := make([]map[string]svgBox, len(entries))
 
 	// Badges are filed per slice, in declaration order, rather than by the name
 	// they carry: two slices may reject the same invariant, and nameToBox keeps
@@ -165,21 +166,40 @@ func placeBoxes(entries []sliceEntry, columns []sliceColumn, copies ElementCopie
 		s := entry.slice
 		column := columns[i]
 		sliceX := column.x
+		usableW := column.w - 20
 
-		// --- Trigger (top lane) ---
+		// --- Wireframes (top lane): the trigger and each screen the slice shows ---
+		wireframes := len(s.Appearances)
 		if s.Trigger != nil {
-			x := sliceX + (column.w-boxWidth)/2
-			y := triggerRowY
-			b.WriteString(svgTriggerRect(x, y, boxWidth, boxHeight, fillTrigger, strokeTrigger, 5, s.Trigger.Description))
-			b.WriteString(svgText(x+boxWidth/2, y+boxHeight/2, s.Trigger.Name, 12, strokeTrigger))
-			triggerBoxes[s] = placed(svgBox{x: x, y: y, w: boxWidth, h: boxHeight, lane: wireframesLane})
+			wireframes++
+		}
+		wireframeAt := func(index int) (int, int) {
+			if wireframes == 1 {
+				return boxWidth, sliceX + (column.w-boxWidth)/2
+			}
+			return itemLayout(usableW, wireframes, index, sliceX)
+		}
+		next := 0
+		if s.Trigger != nil {
+			w, x := wireframeAt(next)
+			next++
+			b.WriteString(svgTriggerRect(x, triggerRowY, w, boxHeight, fillTrigger, strokeTrigger, 5, s.Trigger.Description))
+			b.WriteString(svgText(x+w/2, triggerRowY+boxHeight/2, s.Trigger.Name, 12, strokeTrigger))
+			triggerBoxes[s] = placed(svgBox{x: x, y: triggerRowY, w: w, h: boxHeight, lane: wireframesLane})
+		}
+		appearanceBoxes[i] = make(map[string]svgBox, len(s.Appearances))
+		for _, appearance := range s.Appearances {
+			w, x := wireframeAt(next)
+			next++
+			b.WriteString(svgTriggerRect(x, triggerRowY, w, boxHeight, fillTrigger, strokeTrigger, 5, screens[appearance.Screen]))
+			b.WriteString(svgText(x+w/2, triggerRowY+boxHeight/2, appearance.Screen, 12, strokeTrigger))
+			appearanceBoxes[i][appearance.Screen] = placed(svgBox{x: x, y: triggerRowY, w: w, h: boxHeight, lane: wireframesLane})
 		}
 
 		// --- Commands (middle lane) ---
 		copiedEvents, copiedMiddle := copiesByRow(copies.In(s))
 		copyBoxes[i] = make(map[DeclaredElement]svgBox)
 		totalMid := middleRowItems(s) + len(copiedMiddle)
-		usableW := column.w - 20
 		for ci, cmd := range s.Commands {
 			itemW, x := itemLayout(usableW, totalMid, ci, sliceX)
 			b.WriteString(svgRoundedRect(x, cmdViewRowY, itemW, boxHeight, fillCommand, strokeCommand, 5, cmd.Description))
@@ -297,6 +317,17 @@ func placeBoxes(entries []sliceEntry, columns []sliceColumn, copies ElementCopie
 					joinReader(i, edge, reader)
 				}
 
+			case EdgeScreenReads:
+				if reader, drawn := appearanceBoxes[i][edge.To]; drawn {
+					joinReader(i, edge, reader)
+				}
+
+			case EdgeScreenCommand:
+				to, toDrawn := joinedBox(i, edge)
+				if toDrawn {
+					arrows = append(arrows, boxArrow{from: appearanceBoxes[i][edge.From], to: to})
+				}
+
 			case EdgeTriggerCommand:
 				command := DeclaredElement{Kind: ElementCommand, Name: edge.To, Slice: entry.slice}
 				arrows = append(arrows, boxArrow{from: triggerBoxes[entry.slice], to: declaredBoxes[command]})
@@ -357,6 +388,14 @@ func placeBoxes(entries []sliceEntry, columns []sliceColumn, copies ElementCopie
 	}
 
 	return b.String(), arrows, obstacles
+}
+
+func screenDescriptions(model *ast.Model) map[string]string {
+	descriptions := make(map[string]string, len(model.Screens))
+	for _, screen := range model.Screens {
+		descriptions[screen.Name] = screen.Description
+	}
+	return descriptions
 }
 
 // --- SVG helpers ---

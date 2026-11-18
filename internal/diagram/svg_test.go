@@ -138,6 +138,271 @@ func TestExportSVG(t *testing.T) {
 		require.ElementsMatch(t, []string{"OrderView", "PlaceOrder"}, joinedAt[triggers[1]], "the trigger of the second slice")
 	})
 
+	t.Run("screens", func(t *testing.T) {
+		// screenFixtureSlices names the slice of test.ScreenLibraryLending that
+		// draws each box below the Wireframes lane.
+		screenFixtureSlices := map[string]string{
+			"BorrowCopy":      "Borrow Copy",
+			"CopyBorrowed":    "Borrow Copy",
+			"MemberLoansView": "Review Member Loans",
+			"ReturnCopy":      "Return Copy",
+			"RenewLoan":       "Return Copy",
+			"CopyReturned":    "Return Copy",
+			"LoanRenewed":     "Return Copy",
+			"RemindMember":    "Chase Overdue Copy",
+			"RecallCopy":      "Chase Overdue Copy",
+			"MemberReminded":  "Chase Overdue Copy",
+			"CopyRecalled":    "Chase Overdue Copy",
+			"MemberLoansView\nfrom Review Member Loans":     "Chase Overdue Copy",
+			"DeskOccupancyView\nfrom Browse Desk Occupancy": "Chase Overdue Copy",
+			"CopyBorrowed\nfrom Borrow Copy":                "Chase Overdue Copy",
+			"ClaimDesk":                                     "Claim Desk",
+			"DeskClaimed":                                   "Claim Desk",
+			"DeskOccupancyView":                             "Browse Desk Occupancy",
+		}
+		screenNames := []string{"LendingDesk", "OverdueReport", "DeskKiosk"}
+
+		t.Run("draws one box for each shows block, under the header bar of a screen, in the Wireframes lane and in the column of its slice", func(t *testing.T) {
+			shapes := svgShapes(t, svgOf(t, test.ScreenLibraryLendingModel(t)))
+			lane := firstShapeLabelled(t, shapes, "Wireframes")
+
+			var drawn []string
+			for i, shape := range shapes {
+				if !slices.Contains(screenNames, shape.label) {
+					continue
+				}
+				header := shapes[i-1]
+				drawn = append(drawn, fmt.Sprintf("%s in %s, in the Wireframes lane: %t, under a header bar: %t",
+					shape.label, columnsUnder(shapes, shape.rect, screenFixtureSlices),
+					shape.rect.within(lane.rect), header.label == "" && header.rect.within(shape.rect)))
+			}
+
+			require.Equal(t, []string{
+				"LendingDesk in Borrow Copy, in the Wireframes lane: true, under a header bar: true",
+				"LendingDesk in Return Copy, in the Wireframes lane: true, under a header bar: true",
+				"OverdueReport in Chase Overdue Copy, in the Wireframes lane: true, under a header bar: true",
+				"DeskKiosk in Chase Overdue Copy, in the Wireframes lane: true, under a header bar: true",
+				"DeskKiosk in Claim Desk, in the Wireframes lane: true, under a header bar: true",
+			}, drawn)
+		})
+
+		t.Run("two shows blocks in one slice draw two boxes that do not overlap, and the slice's commands and events keep their lanes", func(t *testing.T) {
+			shapes := svgShapes(t, svgOf(t, test.ScreenLibraryLendingModel(t)))
+			overdue := firstShapeLabelled(t, shapes, "OverdueReport")
+			kiosk := firstShapeLabelled(t, shapes, "DeskKiosk")
+
+			lanes := make(map[string]string)
+			for _, name := range []string{"RemindMember", "RecallCopy", "MemberReminded", "CopyRecalled"} {
+				box := firstShapeLabelled(t, shapes, name)
+				for _, lane := range []string{"Wireframes", "Commands / Views", "Events"} {
+					if box.rect.within(firstShapeLabelled(t, shapes, lane).rect) {
+						lanes[name] = lane
+					}
+				}
+			}
+
+			require.False(t, overdue.rect.overlaps(kiosk.rect), "OverdueReport at %+v overlaps DeskKiosk at %+v", overdue.rect, kiosk.rect)
+			require.Equal(t, map[string]string{
+				"RemindMember":   "Commands / Views",
+				"RecallCopy":     "Commands / Views",
+				"MemberReminded": "Events",
+				"CopyRecalled":   "Events",
+			}, lanes)
+		})
+
+		t.Run("two shows blocks in a slice of two commands draw their boxes above the commands, as wide as them", func(t *testing.T) {
+			model := singleSliceModel("Lending", "Chase Overdue Copy", command("RemindMember"), command("RecallCopy"))
+			model.Contexts[0].Aggregates[0].Slices[0].Appearances = []*ast.Appearance{
+				{Screen: "OverdueReport", Commands: []string{"RecallCopy"}},
+				{Screen: "DeskKiosk"},
+			}
+			shapes := svgShapes(t, svgOf(t, model))
+			across := func(labels ...string) []string {
+				var spans []string
+				for _, label := range labels {
+					rect := firstShapeLabelled(t, shapes, label).rect
+					spans = append(spans, fmt.Sprintf("from x %d, %d wide", rect.x, rect.w))
+				}
+				return spans
+			}
+
+			require.Equal(t, across("RemindMember", "RecallCopy"), across("OverdueReport", "DeskKiosk"))
+		})
+
+		t.Run("draws a screen box and its header bar painted as a trigger box and its header bar", func(t *testing.T) {
+			model := &ast.Model{
+				Name: "Shop",
+				Contexts: []*ast.Context{{
+					Name: "Shop",
+					Aggregates: []*ast.Aggregate{{
+						Name: "Cart",
+						Slices: []*ast.Slice{
+							{Name: "Apply Discount", Trigger: &ast.Trigger{Name: "Checkout Page"}},
+							{Name: "Place Order", Appearances: []*ast.Appearance{{Screen: "CheckoutScreen"}}},
+						},
+					}},
+				}},
+			}
+			boxes := svgBoxes(t, svgOf(t, model))
+			paintOf := func(label string) []diagramBox {
+				i := slices.IndexFunc(boxes, func(box diagramBox) bool { return box.label == label })
+				require.Positive(t, i, "the picture draws %s after its header bar", label)
+				return unplaced([]diagramBox{boxes[i-1], {attributes: boxes[i].attributes}})
+			}
+
+			require.Equal(t, paintOf("Checkout Page"), paintOf("CheckoutScreen"))
+		})
+
+		t.Run("writes the name of a screen at the centre of its box, at the size of a trigger's name", func(t *testing.T) {
+			model := &ast.Model{
+				Name: "Shop",
+				Contexts: []*ast.Context{{
+					Name: "Shop",
+					Aggregates: []*ast.Aggregate{{
+						Name: "Cart",
+						Slices: []*ast.Slice{
+							{Name: "Apply Discount", Trigger: &ast.Trigger{Name: "Checkout Page"}},
+							{Name: "Place Order", Appearances: []*ast.Appearance{{Screen: "OrderScreen"}, {Screen: "CheckoutScreen"}}},
+						},
+					}},
+				}},
+			}
+			shapes := svgShapes(t, svgOf(t, model))
+			trigger := firstShapeLabelled(t, shapes, "Checkout Page")
+
+			var written []string
+			for _, label := range []string{"OrderScreen", "CheckoutScreen"} {
+				screen := firstShapeLabelled(t, shapes, label)
+				written = append(written, fmt.Sprintf("%s at the centre: %t, at size %s", label, screen.labelAt == screen.rect.centre(), screen.labelSize))
+			}
+
+			require.Equal(t, []string{
+				"OrderScreen at the centre: true, at size " + trigger.labelSize,
+				"CheckoutScreen at the centre: true, at size " + trigger.labelSize,
+			}, written)
+		})
+
+		t.Run("gives each screen box the description of its screen's declaration", func(t *testing.T) {
+			model := &ast.Model{
+				Name: "Library",
+				Screens: []*ast.Screen{
+					{Name: "LendingDesk", Description: "The terminal a librarian lends copies at"},
+					{Name: "OverdueReport", Description: "The list of loans past their due date"},
+				},
+				Contexts: []*ast.Context{{
+					Name: "Lending",
+					Aggregates: []*ast.Aggregate{{
+						Name: "Loan",
+						Slices: []*ast.Slice{
+							{Name: "Chase Overdue Copy", Appearances: []*ast.Appearance{{Screen: "OverdueReport"}}},
+							{Name: "Borrow Copy", Appearances: []*ast.Appearance{{Screen: "LendingDesk"}}},
+						},
+					}},
+				}},
+			}
+			shapes := svgShapes(t, svgOf(t, model))
+
+			require.Equal(t, []string{
+				"The list of loans past their due date",
+				"The terminal a librarian lends copies at",
+			}, []string{firstShapeLabelled(t, shapes, "OverdueReport").tooltip, firstShapeLabelled(t, shapes, "LendingDesk").tooltip})
+		})
+
+		t.Run("each reads entry draws one arrow into the box of its own shows block, from the view or its far copy, and each command entry one arrow out of it to the command that it names", func(t *testing.T) {
+			output := svgOf(t, test.ScreenLibraryLendingModel(t))
+			shapes := svgShapes(t, output)
+			named := func(box svgArrowBox) string {
+				if slices.Contains(screenNames, box.label) {
+					return box.label + " in " + columnsUnder(shapes, box.rect, screenFixtureSlices)
+				}
+				return strings.ReplaceAll(lineText(box.label), "\n", " ")
+			}
+
+			var joined []string
+			for _, end := range svgArrowEnds(t, output) {
+				if slices.Contains(screenNames, end[0].label) || slices.Contains(screenNames, end[1].label) {
+					joined = append(joined, named(end[0])+" -> "+named(end[1]))
+				}
+			}
+
+			require.ElementsMatch(t, []string{
+				"MemberLoansView -> LendingDesk in Borrow Copy",
+				"LendingDesk in Borrow Copy -> BorrowCopy",
+				"LendingDesk in Return Copy -> ReturnCopy",
+				"LendingDesk in Return Copy -> RenewLoan",
+				"MemberLoansView from Review Member Loans -> OverdueReport in Chase Overdue Copy",
+				"DeskOccupancyView from Browse Desk Occupancy -> OverdueReport in Chase Overdue Copy",
+				"OverdueReport in Chase Overdue Copy -> RecallCopy",
+				"DeskOccupancyView from Browse Desk Occupancy -> DeskKiosk in Chase Overdue Copy",
+				"DeskOccupancyView -> DeskKiosk in Claim Desk",
+				"DeskKiosk in Claim Desk -> ClaimDesk",
+			}, joined)
+		})
+
+		t.Run("a command entry joins the command of its own slice, and no command that it does not name, when another slice declares a command of that name", func(t *testing.T) {
+			model := &ast.Model{
+				Name: "Shop",
+				Contexts: []*ast.Context{{
+					Name: "Shop",
+					Aggregates: []*ast.Aggregate{{
+						Name: "Cart",
+						Slices: []*ast.Slice{
+							{
+								Name:        "Apply Discount",
+								Appearances: []*ast.Appearance{{Screen: "CheckoutPage", Commands: []string{"ApplyDiscount"}}},
+								Commands:    []*ast.Command{{Name: "ApplyDiscount"}, {Name: "ClearCart"}, {Name: "RemoveDiscount"}},
+								Automations: []*ast.Automation{{Name: "ExpireDiscount", Schedule: "0 0 * * *", Command: "RemoveDiscount"}},
+							},
+							{Name: "Reapply Discount", Commands: []*ast.Command{{Name: "ApplyDiscount"}}},
+						},
+					}},
+				}},
+			}
+			output := svgOf(t, model)
+			discounts := slices.DeleteFunc(svgShapes(t, output), func(shape svgShape) bool { return shape.label != "ApplyDiscount" })
+			require.Len(t, discounts, 2, "each slice draws its own ApplyDiscount")
+			ownSlice := slices.MinFunc(discounts, func(a, b svgShape) int { return a.rect.x - b.rect.x }).rect
+
+			var joined []string
+			for _, end := range svgArrowEnds(t, output) {
+				if end[0].label == "CheckoutPage" {
+					joined = append(joined, fmt.Sprintf("%s, in the slice of the screen: %t", end[1].label, end[1].rect == ownSlice))
+				}
+			}
+
+			require.Equal(t, []string{"ApplyDiscount, in the slice of the screen: true"}, joined)
+		})
+
+		t.Run("a command entry naming a command that a slice two or more slices away declares ends at a copy of that command in the slice of the screen", func(t *testing.T) {
+			model := &ast.Model{
+				Name: "Orders",
+				Contexts: []*ast.Context{{
+					Name: "Orders",
+					Aggregates: []*ast.Aggregate{{
+						Name: "Order",
+						Slices: []*ast.Slice{
+							{Name: "Cancel Order", Appearances: []*ast.Appearance{{Screen: "OrderPage", Commands: []string{"RefundOrder"}}}},
+							{Name: "Track Order", Views: []*ast.View{{Name: "OrdersView"}}},
+							{Name: "Refund Order", Commands: []*ast.Command{{Name: "RefundOrder"}}},
+						},
+					}},
+				}},
+			}
+			output := svgOf(t, model)
+			screen := firstShapeLabelled(t, svgShapes(t, output), "OrderPage")
+
+			var joined []string
+			for _, end := range svgArrowEnds(t, output) {
+				if end[0].label == "OrderPage" {
+					below := end[1].rect.x < screen.rect.x+screen.rect.w && screen.rect.x < end[1].rect.x+end[1].rect.w
+					joined = append(joined, fmt.Sprintf("%s, below the screen: %t", strings.ReplaceAll(lineText(end[1].label), "\n", " "), below))
+				}
+			}
+
+			require.Equal(t, []string{"RefundOrder in Refund Order, below the screen: true"}, joined)
+		})
+	})
+
 	t.Run("connects each trigger to the command of its own slice when two slices declare a command of one name", func(t *testing.T) {
 		model := &ast.Model{
 			Name: "Shop",
@@ -494,7 +759,7 @@ func TestExportSVG(t *testing.T) {
 		for _, c := range svgCopyShapes(svgShapes(t, output)) {
 			name := cardLines(c.label)[0]
 			original := boxNamed(t, boxes, name)
-			originals = append(originals, fmt.Sprintf("%s: %d tall, %s", name, original.rect.h, corner.FindString(original.appearance)))
+			originals = append(originals, fmt.Sprintf("%s: %d tall, %s", name, original.rect.h, corner.FindString(original.attributes)))
 			copied = append(copied, fmt.Sprintf("%s: %d tall, %s", name, c.rect.h, corner.FindString(c.attributes)))
 		}
 
@@ -506,6 +771,7 @@ func TestExportSVG(t *testing.T) {
 		models := func(t *testing.T) map[string]*ast.Model {
 			return map[string]*ast.Model{
 				"trigger reads":     test.TriggerReadsLibraryLendingModel(t),
+				"screens":           test.ScreenLibraryLendingModel(t),
 				"automation delays": test.AutomationDelayLibraryLendingModel(t),
 				"subscribed events": test.SubscribedEventsHotelStaysModel(t),
 				"rejections":        test.RejectionLibraryLendingModel(t),
@@ -1239,7 +1505,7 @@ func TestExportSVG(t *testing.T) {
 
 			var badged []string
 			for _, box := range svgBoxes(t, output) {
-				if strings.Contains(box.appearance, fillRejectionHex) {
+				if strings.Contains(box.attributes, fillRejectionHex) {
 					badged = append(badged, box.label)
 				}
 			}
@@ -2035,7 +2301,7 @@ func svgBoxes(t *testing.T, output string) []diagramBox {
 
 	var boxes []diagramBox
 	for _, shape := range svgShapes(t, output) {
-		boxes = append(boxes, diagramBox{label: shape.label, appearance: shape.attributes, rect: shape.rect})
+		boxes = append(boxes, diagramBox{label: shape.label, attributes: shape.attributes, rect: shape.rect})
 	}
 
 	return boxes
@@ -2131,7 +2397,7 @@ func svgGearLabel(t *testing.T, output, name string) svgLabel {
 }
 
 func svgDrawnAsGear(box diagramBox) bool {
-	return strings.Contains(box.appearance, "href=#gear")
+	return strings.Contains(box.attributes, "href=#gear")
 }
 
 // svgLaneLabels names the swimlanes the diagram draws, in the order it draws
@@ -2202,6 +2468,32 @@ func svgArrowEnds(t *testing.T, output string) [][2]svgArrowBox {
 	}
 
 	return ends
+}
+
+// firstShapeLabelled returns the first shape, in document order, whose label
+// is label.
+func firstShapeLabelled(t *testing.T, shapes []svgShape, label string) svgShape {
+	t.Helper()
+
+	i := slices.IndexFunc(shapes, func(shape svgShape) bool { return lineText(shape.label) == label })
+	require.GreaterOrEqual(t, i, 0, "the picture draws no box labelled %q", label)
+
+	return shapes[i]
+}
+
+// columnsUnder names the slices whose boxes, among those that slicesOf files
+// under a slice, run below or above rect, in name order.
+func columnsUnder(shapes []svgShape, rect boxRect, slicesOf map[string]string) string {
+	var names []string
+	for _, shape := range shapes {
+		name, filed := slicesOf[lineText(shape.label)]
+		if filed && shape.rect.x < rect.x+rect.w && rect.x < shape.rect.x+shape.rect.w && !slices.Contains(names, name) {
+			names = append(names, name)
+		}
+	}
+	slices.Sort(names)
+
+	return strings.Join(names, ", ")
 }
 
 // svgConnections returns the arrows the diagram draws, each named by the boxes
@@ -2718,7 +3010,7 @@ func svgPicture(t *testing.T, output string) []string {
 
 	var drawn []string
 	for _, box := range svgBoxes(t, output) {
-		drawn = append(drawn, box.appearance+" "+box.label)
+		drawn = append(drawn, box.attributes+" "+box.label)
 	}
 
 	return append(drawn, svgArrows(output)...)

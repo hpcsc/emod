@@ -140,9 +140,9 @@ func copiedEnd(edge Edge) (ElementKind, string, bool) {
 	switch edge.Kind {
 	case EdgeSubscription, EdgeAutomationTrigger:
 		return ElementEvent, edge.From, true
-	case EdgeTriggerReads, EdgeAutomationReads, EdgeTranslationReads:
+	case EdgeTriggerReads, EdgeAutomationReads, EdgeTranslationReads, EdgeScreenReads:
 		return ElementView, edge.From, true
-	case EdgeAutomationCommand, EdgeTranslationCommand:
+	case EdgeAutomationCommand, EdgeTranslationCommand, EdgeScreenCommand:
 		return ElementCommand, edge.To, true
 	case EdgeTranslationFlow:
 		return ElementCommand, edge.From, true

@@ -49,6 +49,20 @@ func ExportASCII(model *ast.Model, _ Style) ([]byte, error) {
 
 		fmt.Fprintf(&b, "=== Slice: %s ===\n", s.Name)
 
+		// Screens with the views they read and the commands they issue
+		for _, appearance := range s.Appearances {
+			screen := fmt.Sprintf("<<%s>>", appearance.Screen)
+			if len(appearance.Reads) == 0 {
+				fmt.Fprintf(&b, "  %s\n", screen)
+			}
+			for _, view := range appearance.Reads {
+				fmt.Fprintf(&b, "  {%s} -> %s\n", view, screen)
+			}
+			for _, command := range appearance.Commands {
+				fmt.Fprintf(&b, "  %s -> [%s]\n", screen, command)
+			}
+		}
+
 		// Trigger with the views it reads
 		if s.Trigger != nil {
 			trigger := formatTrigger(s.Trigger)

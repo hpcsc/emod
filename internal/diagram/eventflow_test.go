@@ -108,6 +108,32 @@ func TestCollapseEventFlow(t *testing.T) {
 			}, nodeByID(t, flow, "Ctx.Lending Desk"))
 		})
 
+		t.Run("a screen whose shows block names a command is an origin captioned as a screen, with the description of its declaration", func(t *testing.T) {
+			flow := diagram.CollapseEventFlow(test.ScreenLibraryLendingModel(t))
+
+			require.Equal(t, diagram.Node{
+				ID:          "LendingDesk",
+				Kind:        diagram.NodeOrigin,
+				Label:       "LendingDesk",
+				Caption:     "screen",
+				Description: "The terminal a librarian lends and takes back copies at",
+			}, nodeByID(t, flow, "LendingDesk"))
+		})
+
+		t.Run("a shows block that names no command adds no node", func(t *testing.T) {
+			model := singleSliceModel("Lending", "Chase Overdue Copy", command("RecallCopy"), event("CopyRecalled"))
+			slice := model.Contexts[0].Aggregates[0].Slices[0]
+			slice.Flows = []*ast.Flow{{CommandName: "RecallCopy", EventName: "CopyRecalled"}}
+			slice.Appearances = []*ast.Appearance{{Screen: "DeskKiosk", Reads: []string{"DeskOccupancyView"}}}
+
+			flow := diagram.CollapseEventFlow(model)
+
+			require.ElementsMatch(t, []shape{
+				{ID: "RecallCopy", Kind: diagram.NodeOrigin, Label: "RecallCopy", Caption: "command"},
+				{ID: "CopyRecalled", Kind: diagram.NodeEvent, Label: "CopyRecalled", DeadEnd: true},
+			}, shapes(flow))
+		})
+
 		t.Run("an external system is an origin captioned as one", func(t *testing.T) {
 			flow := diagram.CollapseEventFlow(translationModel(false))
 
@@ -196,6 +222,41 @@ func TestCollapseEventFlow(t *testing.T) {
 			}, flow.Hops)
 			require.NotContains(t, shapes(flow), shape{ID: "RemindMember", Kind: diagram.NodeOrigin,
 				Label: "RemindMember", Caption: "command"})
+		})
+
+		t.Run("a screen reaches the events of each command that its shows blocks name, and a command that an automation issues keeps the automation as its only issuer", func(t *testing.T) {
+			flow := diagram.CollapseEventFlow(test.ScreenLibraryLendingModel(t))
+
+			require.ElementsMatch(t, []diagram.Hop{
+				{From: "LendingDesk", To: "CopyBorrowed"},
+				{From: "LendingDesk", To: "CopyReturned"},
+				{From: "LendingDesk", To: "LoanRenewed"},
+				{From: "CopyBorrowed", To: "RemindOnDueDate"},
+				{From: "RemindOnDueDate", To: "MemberReminded"},
+				{From: "OverdueReport", To: "CopyRecalled"},
+				{From: "DeskKiosk", To: "DeskClaimed"},
+			}, flow.Hops)
+		})
+
+		t.Run("each shows block of one slice issues the commands that it names from its own screen", func(t *testing.T) {
+			model := singleSliceModel("Lending", "Chase Overdue Copy",
+				command("RecallCopy"), command("RemindMember"), event("CopyRecalled"), event("MemberReminded"))
+			slice := model.Contexts[0].Aggregates[0].Slices[0]
+			slice.Flows = []*ast.Flow{
+				{CommandName: "RecallCopy", EventName: "CopyRecalled"},
+				{CommandName: "RemindMember", EventName: "MemberReminded"},
+			}
+			slice.Appearances = []*ast.Appearance{
+				{Screen: "OverdueReport", Commands: []string{"RecallCopy"}},
+				{Screen: "DeskKiosk", Commands: []string{"RemindMember"}},
+			}
+
+			flow := diagram.CollapseEventFlow(model)
+
+			require.ElementsMatch(t, []diagram.Hop{
+				{From: "OverdueReport", To: "CopyRecalled"},
+				{From: "DeskKiosk", To: "MemberReminded"},
+			}, flow.Hops)
 		})
 
 		t.Run("the arrow waking an automation carries the delay it waits out", func(t *testing.T) {

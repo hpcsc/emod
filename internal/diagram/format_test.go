@@ -11,6 +11,7 @@ import (
 	"github.com/hpcsc/emod/internal/ast"
 	"github.com/hpcsc/emod/internal/diagram"
 	"github.com/hpcsc/emod/internal/parser"
+	"github.com/hpcsc/emod/internal/test"
 )
 
 func TestFormat(t *testing.T) {
@@ -59,6 +60,28 @@ func TestFormat(t *testing.T) {
 				distinct[output] = true
 			}
 			require.Len(t, distinct, len(outputs), "the fixture must draw a different output in each format, or a swap passes")
+		})
+
+		t.Run("renders a model whose screens no slice shows exactly as the same model with no screen, in each format", func(t *testing.T) {
+			unshown := test.ScreenLibraryLendingModel(t)
+			for _, ref := range unshown.SliceRefs() {
+				ref.Slice.Appearances = nil
+			}
+			screenless := test.ScreenLibraryLendingModel(t)
+			for _, ref := range screenless.SliceRefs() {
+				ref.Slice.Appearances = nil
+			}
+			screenless.Screens = nil
+			require.Len(t, unshown.Screens, 3, "the twin has to keep its screens, or the comparison below says nothing")
+
+			for _, format := range diagram.Formats() {
+				withScreens, err := diagram.Export(unshown, format, diagram.StyleAuto)
+				require.NoError(t, err, "format %s", format)
+				withoutScreens, err := diagram.Export(screenless, format, diagram.StyleAuto)
+				require.NoError(t, err, "format %s", format)
+
+				require.Equal(t, string(withoutScreens), string(withScreens), "format %s", format)
+			}
 		})
 
 		t.Run("gives the style to the renderer", func(t *testing.T) {

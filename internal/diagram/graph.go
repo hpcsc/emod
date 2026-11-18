@@ -38,6 +38,12 @@ const (
 	// entry declares. Its target names an invariant rather than an event: the
 	// command is refused and nothing is appended.
 	EdgeRejection
+	// EdgeScreenReads is a view -> screen arrow from a reads entry of a shows
+	// block.
+	EdgeScreenReads
+	// EdgeScreenCommand is a screen -> command arrow from a command entry of a
+	// shows block.
+	EdgeScreenCommand
 )
 
 // Edge is one semantic arrow a slice declares, named by its endpoints.
@@ -81,6 +87,15 @@ func SliceEdges(s *ast.Slice) []Edge {
 				continue
 			}
 			edges = append(edges, Edge{Kind: EdgeTriggerCommand, From: s.Trigger.Name, To: cmd.Name})
+		}
+	}
+
+	for _, appearance := range s.Appearances {
+		for _, view := range appearance.Reads {
+			edges = append(edges, Edge{Kind: EdgeScreenReads, From: view, To: appearance.Screen})
+		}
+		for _, command := range appearance.Commands {
+			edges = append(edges, Edge{Kind: EdgeScreenCommand, From: appearance.Screen, To: command})
 		}
 	}
 

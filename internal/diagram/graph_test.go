@@ -72,6 +72,43 @@ func TestSliceEdges(t *testing.T) {
 			}, diagram.SliceEdges(slice))
 		})
 
+		t.Run("each shows block derives a reads edge into its screen for each view and a command edge out of it for each command, in the order of its lists", func(t *testing.T) {
+			slice := &ast.Slice{
+				Name: "Chase Overdue Copy",
+				Appearances: []*ast.Appearance{
+					{Screen: "OverdueReport", Reads: []string{"MemberLoansView", "DeskOccupancyView"}, Commands: []string{"RecallCopy", "RemindMember"}},
+					{Screen: "DeskKiosk", Reads: []string{"DeskOccupancyView"}},
+				},
+			}
+
+			require.Equal(t, []diagram.Edge{
+				{Kind: diagram.EdgeScreenReads, From: "MemberLoansView", To: "OverdueReport"},
+				{Kind: diagram.EdgeScreenReads, From: "DeskOccupancyView", To: "OverdueReport"},
+				{Kind: diagram.EdgeScreenCommand, From: "OverdueReport", To: "RecallCopy"},
+				{Kind: diagram.EdgeScreenCommand, From: "OverdueReport", To: "RemindMember"},
+				{Kind: diagram.EdgeScreenReads, From: "DeskOccupancyView", To: "DeskKiosk"},
+			}, diagram.SliceEdges(slice))
+		})
+
+		t.Run("the shared screen fixture derives one edge for each view and each command that its shows blocks name", func(t *testing.T) {
+			model := test.ScreenLibraryLendingModel(t)
+
+			var reads, commands []string
+			for _, ref := range model.SliceRefs() {
+				for _, edge := range diagram.SliceEdges(ref.Slice) {
+					switch edge.Kind {
+					case diagram.EdgeScreenReads:
+						reads = append(reads, edge.From)
+					case diagram.EdgeScreenCommand:
+						commands = append(commands, edge.To)
+					}
+				}
+			}
+
+			require.Equal(t, test.ScreenLibraryLendingAppearanceReads, reads)
+			require.Equal(t, test.ScreenLibraryLendingAppearanceCommands, commands)
+		})
+
 		t.Run("a rejection entry derives one edge naming its command and its invariant", func(t *testing.T) {
 			s := &ast.Slice{
 				Name:     "Borrow Copy",
