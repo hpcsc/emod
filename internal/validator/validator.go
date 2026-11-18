@@ -31,6 +31,7 @@ func Validate(model *ast.Model) []*diagnostic.Entry {
 	}
 	diags = append(diags, scheduleExpressionDiagnostics(index.slices)...)
 	diags = append(diags, activationDelayDiagnostics(index.slices)...)
+	diags = append(diags, redeclaredScreenDiagnostics(model)...)
 	diags = append(diags, redeclaredInvariantDiagnostics(model)...)
 	diags = append(diags, duplicateWireTypeDiagnostics(model)...)
 	diags = append(diags, unresolvedRejectionDiagnostics(model)...)
@@ -44,6 +45,7 @@ func Validate(model *ast.Model) []*diagnostic.Entry {
 
 type modelIndex struct {
 	slices              []*ast.Slice
+	screenNames         map[string]bool
 	contextNames        map[string]bool
 	commandNames        map[string]bool
 	eventNames          map[string]bool
@@ -60,6 +62,7 @@ type modelIndex struct {
 
 func newModelIndex(model *ast.Model) *modelIndex {
 	index := &modelIndex{
+		screenNames:         make(map[string]bool, len(model.Screens)),
 		contextNames:        make(map[string]bool, len(model.Contexts)),
 		commandNames:        make(map[string]bool),
 		eventNames:          make(map[string]bool),
@@ -74,6 +77,9 @@ func newModelIndex(model *ast.Model) *modelIndex {
 		eventFieldsByName:   make(map[string]map[string]*ast.Field),
 	}
 
+	for _, screen := range model.Screens {
+		index.screenNames[screen.Name] = true
+	}
 	for _, ctx := range model.Contexts {
 		index.contextNames[ctx.Name] = true
 	}
@@ -297,6 +303,18 @@ func (s invariantScope) unresolvedRejections() []scopedInvariant {
 	return found
 }
 
+func redeclaredScreenDiagnostics(model *ast.Model) []*diagnostic.Entry {
+	var diags []*diagnostic.Entry
+	declared := make(map[string]bool, len(model.Screens))
+	for _, screen := range model.Screens {
+		if declared[screen.Name] {
+			diags = append(diags, errorAt(screen.NamePos, "screen %q is already declared", screen.Name))
+		}
+		declared[screen.Name] = true
+	}
+	return diags
+}
+
 func redeclaredInvariantDiagnostics(model *ast.Model) []*diagnostic.Entry {
 	var redeclared []scopedInvariant
 	for _, scope := range invariantScopes(model) {
@@ -397,6 +415,20 @@ func scopedInvariantDiagnostics(found []scopedInvariant, messageFormat string) [
 
 func referenceDiagnostics(slice *ast.Slice, index *modelIndex) []*diagnostic.Entry {
 	var diags []*diagnostic.Entry
+	shown := make(map[string]bool, len(slice.Appearances))
+	for _, appearance := range slice.Appearances {
+		diags = appendUndeclaredRef(diags, "screen", appearance.Screen, appearance.ScreenPos, index.screenNames)
+		if appearance.Screen != "" && shown[appearance.Screen] {
+			diags = append(diags, errorAt(appearance.ScreenPos, "screen %q is already shown in slice %q", appearance.Screen, slice.Name))
+		}
+		shown[appearance.Screen] = true
+		for i, view := range appearance.Reads {
+			diags = appendUndeclaredRef(diags, "view", view, appearance.ReadsPos[i], index.viewNames)
+		}
+		for i, command := range appearance.Commands {
+			diags = appendUndeclaredRef(diags, "command", command, appearance.CommandsPos[i], index.commandNames)
+		}
+	}
 	if trigger := slice.Trigger; trigger != nil {
 		for i, view := range trigger.Reads {
 			diags = appendUndeclaredRef(diags, "view", view, trigger.ReadsPos[i], index.viewNames)

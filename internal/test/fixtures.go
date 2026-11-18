@@ -3343,6 +3343,232 @@ var AutomationReadsLibraryLendingActivationEvents = []string{
 	"DeskReleased",
 }
 
+// ScreenLibraryLending declares its screens at the top level and shows them
+// from slices in both slice homes: one screen in two slices with different reads
+// and commands, a slice with two shows blocks of two screens, a shows block with
+// no command between two that have one, a shows block with no reads, a command
+// list of two, a described screen, and a slice where an automation issues one
+// command beside a shows block that issues another.
+const ScreenLibraryLending = `emod = 1
+
+# Lending a library's copies and seating its readers, with the screens its people work at
+model "Library Lending" {
+}
+
+# The terminal a librarian lends and takes back copies at
+screen "LendingDesk" {
+  description = "The terminal a librarian lends and takes back copies at"
+}
+
+screen "OverdueReport" {
+}
+
+screen "DeskKiosk" {
+}
+
+context "Lending" {
+  aggregate "Loan" {
+    slice "Borrow Copy" {
+      shows {
+        screen  = LendingDesk
+        reads   = MemberLoansView
+        command = BorrowCopy
+      }
+
+      command "BorrowCopy" {
+        fields {
+          memberId = required(string)
+          copyId   = required(string)
+        }
+      }
+
+      event "CopyBorrowed" {
+        fields {
+          loanId   = required(string)
+          memberId = required(string)
+          copyId   = required(string)
+        }
+      }
+
+      flow = <<-FLOW
+        command -> event:    BorrowCopy -> CopyBorrowed
+      FLOW
+    }
+
+    slice "Review Member Loans" {
+      view "MemberLoansView" {
+        subscribes = [CopyBorrowed]
+
+        fields {
+          loanId   = required(string)
+          memberId = required(string)
+        }
+      }
+    }
+
+    slice "Return Copy" {
+      shows {
+        screen  = LendingDesk
+        command = [ReturnCopy, RenewLoan]
+      }
+
+      command "ReturnCopy" {
+        fields {
+          loanId = required(string)
+        }
+      }
+
+      command "RenewLoan" {
+        fields {
+          loanId = required(string)
+        }
+      }
+
+      event "CopyReturned" {
+        fields {
+          loanId     = required(string)
+          returnedAt = required(timestamp)
+        }
+      }
+
+      event "LoanRenewed" {
+        fields {
+          loanId    = required(string)
+          renewedAt = required(timestamp)
+        }
+      }
+
+      flow = <<-FLOW
+        command -> event:    ReturnCopy -> CopyReturned
+        command -> event:    RenewLoan -> LoanRenewed
+      FLOW
+    }
+
+    slice "Chase Overdue Copy" {
+      shows {
+        screen  = OverdueReport
+        reads   = [MemberLoansView, DeskOccupancyView]
+        command = RecallCopy
+      }
+
+      shows {
+        screen = DeskKiosk
+        reads  = DeskOccupancyView
+      }
+
+      command "RemindMember" {
+        fields {
+          loanId = required(string)
+        }
+      }
+
+      command "RecallCopy" {
+        fields {
+          loanId = required(string)
+        }
+      }
+
+      event "MemberReminded" {
+        fields {
+          loanId     = required(string)
+          remindedAt = required(timestamp)
+        }
+      }
+
+      event "CopyRecalled" {
+        fields {
+          loanId     = required(string)
+          recalledAt = required(timestamp)
+        }
+      }
+
+      automation "RemindOnDueDate" {
+        on      = CopyBorrowed
+        reads   = MemberLoansView
+        command = RemindMember
+      }
+
+      flow = <<-FLOW
+        command -> event:    RemindMember -> MemberReminded
+        command -> event:    RecallCopy -> CopyRecalled
+      FLOW
+    }
+  }
+}
+
+context "Reading Room" {
+  mode = dcb
+
+  slice "Claim Desk" {
+    shows {
+      screen  = DeskKiosk
+      reads   = DeskOccupancyView
+      command = ClaimDesk
+    }
+
+    command "ClaimDesk" {
+      fields {
+        memberId = required(string)
+        deskId   = required(string)
+      }
+
+      decides_on {
+        events = [DeskClaimed]
+        where  = tag(desk, deskId) && tag(reader, memberId)
+      }
+    }
+
+    event "DeskClaimed" {
+      tags {
+        desk   = deskId
+        reader = memberId
+      }
+
+      fields {
+        deskId   = required(string)
+        memberId = required(string)
+      }
+    }
+
+    flow = <<-FLOW
+      command -> event:    ClaimDesk -> DeskClaimed
+    FLOW
+  }
+
+  slice "Browse Desk Occupancy" {
+    view "DeskOccupancyView" {
+      subscribes = [DeskClaimed]
+
+      fields {
+        deskId   = required(string)
+        memberId = required(string)
+      }
+    }
+  }
+}
+`
+
+// ScreenLibraryLendingAppearanceReads transcribes the views each shows block of
+// ScreenLibraryLending reads, both slice homes together and in declaration order.
+var ScreenLibraryLendingAppearanceReads = []string{
+	"MemberLoansView",
+	"MemberLoansView",
+	"DeskOccupancyView",
+	"DeskOccupancyView",
+	"DeskOccupancyView",
+}
+
+// ScreenLibraryLendingAppearanceCommands transcribes the commands each shows
+// block of ScreenLibraryLending issues, both slice homes together and in
+// declaration order.
+var ScreenLibraryLendingAppearanceCommands = []string{
+	"BorrowCopy",
+	"ReturnCopy",
+	"RenewLoan",
+	"RecallCopy",
+	"ClaimDesk",
+}
+
 // TriggerReadsLibraryLendingTriggerViewNames transcribes the view every trigger
 // of TriggerReadsLibraryLending reads, both slice homes together and in
 // declaration order, so a walk or a strip that reaches only one of the homes
@@ -3524,6 +3750,28 @@ func WithoutAutomationDelays(model *ast.Model) *ast.Model {
 		s.Automations = editedCopies(s.Automations, func(auto *ast.Automation) {
 			auto.After = ""
 			auto.AfterPos = ast.Position{}
+		})
+	})
+}
+
+// WithoutAppearanceReads returns a copy of model whose shows blocks read no view,
+// in both slice homes. What each shows block issues is left alone.
+func WithoutAppearanceReads(model *ast.Model) *ast.Model {
+	return copyWithEditedSlices(model, func(s *ast.Slice) {
+		s.Appearances = editedCopies(s.Appearances, func(appearance *ast.Appearance) {
+			appearance.Reads = nil
+			appearance.ReadsPos = nil
+		})
+	})
+}
+
+// WithoutAppearanceCommands returns a copy of model whose shows blocks issue no
+// command, in both slice homes. What each shows block reads is left alone.
+func WithoutAppearanceCommands(model *ast.Model) *ast.Model {
+	return copyWithEditedSlices(model, func(s *ast.Slice) {
+		s.Appearances = editedCopies(s.Appearances, func(appearance *ast.Appearance) {
+			appearance.Commands = nil
+			appearance.CommandsPos = nil
 		})
 	})
 }
@@ -3755,6 +4003,30 @@ func specOutcomeKind(then ast.ThenClause) string {
 // the homes.
 func DeclaredAutomationReads(model *ast.Model) []string {
 	return declaredAutomationEntries(model, func(auto *ast.Automation) string { return auto.Reads })
+}
+
+// DeclaredAppearanceReads names the views every shows block of model reads, both
+// slice homes together and in declaration order.
+func DeclaredAppearanceReads(model *ast.Model) []string {
+	var reads []string
+	for _, s := range declaredSlices(model) {
+		for _, appearance := range s.Appearances {
+			reads = append(reads, appearance.Reads...)
+		}
+	}
+	return reads
+}
+
+// DeclaredAppearanceCommands names the commands every shows block of model
+// issues, both slice homes together and in declaration order.
+func DeclaredAppearanceCommands(model *ast.Model) []string {
+	var commands []string
+	for _, s := range declaredSlices(model) {
+		for _, appearance := range s.Appearances {
+			commands = append(commands, appearance.Commands...)
+		}
+	}
+	return commands
 }
 
 // DeclaredTriggerReads names the view every trigger of model reads, both slice

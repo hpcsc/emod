@@ -206,11 +206,13 @@ func (r *hclReader) model(body *hclsyntax.Body) *ast.Model {
 			r.modelBlock(model, entry.block)
 		case entry.block.Type == "actor":
 			r.fail(entry.block.TypeRange.Start, "the language retired actor: delete this actor block")
+		case entry.block.Type == "screen":
+			model.Screens = append(model.Screens, r.screen(entry.block))
 		case entry.block.Type == "context":
 			model.Contexts = append(model.Contexts, r.context(entry.block))
 		default:
 			r.fail(entry.block.TypeRange.Start,
-				"unexpected %q block; expected one of: model, context", entry.block.Type)
+				"unexpected %q block; expected one of: model, screen, context", entry.block.Type)
 		}
 	}
 	return model
@@ -362,6 +364,8 @@ func (r *hclReader) slice(b *hclsyntax.Block) *ast.Slice {
 			continue
 		}
 		switch entry.block.Type {
+		case "shows":
+			slice.Appearances = append(slice.Appearances, r.appearance(entry.block))
 		case "trigger":
 			slice.Trigger = r.trigger(entry.block)
 		case "command":
@@ -381,6 +385,60 @@ func (r *hclReader) slice(b *hclsyntax.Block) *ast.Slice {
 		}
 	}
 	return slice
+}
+
+func (r *hclReader) screen(b *hclsyntax.Block) *ast.Screen {
+	screen := &ast.Screen{Comments: r.commentsBefore(b.TypeRange.Start)}
+	screen.Name, screen.NamePos = r.label(b)
+	screen.OpenPos = r.at(b.OpenBraceRange.Start)
+	screen.ClosePos = r.at(b.CloseBraceRange.Start)
+
+	body, ok := r.block(b, 1)
+	if !ok {
+		return screen
+	}
+	for _, entry := range hclEntries(body) {
+		switch {
+		case entry.block != nil:
+			r.fail(entry.block.TypeRange.Start, "unexpected %q block in screen", entry.block.Type)
+		case entry.attr.Name == "description":
+			screen.Description, screen.DescriptionPos = r.text(entry.attr)
+		default:
+			r.fail(entry.attr.NameRange.Start, "unexpected %s in screen", entry.attr.Name)
+		}
+	}
+	return screen
+}
+
+func (r *hclReader) appearance(b *hclsyntax.Block) *ast.Appearance {
+	appearance := &ast.Appearance{Comments: r.commentsBefore(b.TypeRange.Start)}
+	appearance.OpenPos = r.at(b.OpenBraceRange.Start)
+	appearance.ClosePos = r.at(b.CloseBraceRange.Start)
+
+	body, ok := r.block(b, 0)
+	if !ok {
+		return appearance
+	}
+	for _, entry := range hclEntries(body) {
+		if entry.block != nil {
+			r.fail(entry.block.TypeRange.Start, "unexpected %q block in shows", entry.block.Type)
+			continue
+		}
+		switch a := entry.attr; a.Name {
+		case "screen":
+			appearance.Screen, appearance.ScreenPos = r.name(a.Expr)
+		case "reads":
+			appearance.Reads, appearance.ReadsPos = r.nameOrNames(a.Expr)
+		case "command":
+			appearance.Commands, appearance.CommandsPos = r.nameOrNames(a.Expr)
+		default:
+			r.fail(a.NameRange.Start, "unexpected %s in shows", a.Name)
+		}
+	}
+	if appearance.ScreenPos == (ast.Position{}) {
+		r.fail(b.TypeRange.Start, "shows names no screen: add screen = <ScreenName>")
+	}
+	return appearance
 }
 
 // retiredTriggerKind names the kinds a trigger once carried ahead of its name,

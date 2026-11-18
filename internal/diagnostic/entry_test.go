@@ -24,11 +24,11 @@ func TestEntry(t *testing.T) {
 				Filename: "minimal.emod",
 				Line:     3,
 				Column:   1,
-				Message:  `unrecognized keyword "foobar"; expected one of: model, context`,
+				Message:  `unrecognized keyword "foobar"; expected one of: model, screen, context`,
 			}
 
 			require.Equal(t,
-				`minimal.emod:3: unrecognized keyword "foobar"; expected one of: model, context`,
+				`minimal.emod:3: unrecognized keyword "foobar"; expected one of: model, screen, context`,
 				d.String())
 		})
 

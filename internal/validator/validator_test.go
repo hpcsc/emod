@@ -1392,6 +1392,80 @@ func TestValidate(t *testing.T) {
 		})
 	})
 
+	t.Run("screens", func(t *testing.T) {
+		const shop = `emod = 1
+model "Shop" {}
+screen "CheckoutPage" {}
+screen "CheckoutPage" {}
+screen "OrderPage" {}
+context "Shop" {
+  slice "Apply Discount" {
+    command "ApplyDiscount" {}
+    event "DiscountApplied" {}
+    flow = <<-FLOW
+      command -> event: ApplyDiscount -> DiscountApplied
+    FLOW
+    view "CartView" {}
+    shows {
+      screen  = ReceiptPage
+      reads   = [CartView, DiscountVeiw]
+      command = [ApplyDiscount, ApplyDiscont]
+    }
+    shows {
+      screen = OrderPage
+    }
+    shows {
+      screen = OrderPage
+    }
+  }
+  slice "Place Order" {
+    shows {
+      screen  = CheckoutPage
+      reads   = CartView
+      command = ApplyDiscount
+    }
+  }
+}
+`
+		parseShop := func(t *testing.T) *ast.Model {
+			t.Helper()
+			model, parseDiags := parser.Parse(shop, "shop.emod")
+			require.Empty(t, parseDiags)
+			return model
+		}
+
+		t.Run("reports each screen fault at its own position, and a shows block that names what another slice declares is valid", func(t *testing.T) {
+			model := parseShop(t)
+
+			require.Equal(t, []string{
+				`shop.emod:15: screen "ReceiptPage" does not exist`,
+				`shop.emod:16: view "DiscountVeiw" does not exist`,
+				`shop.emod:17: command "ApplyDiscont" does not exist`,
+				`shop.emod:23: screen "OrderPage" is already shown in slice "Apply Discount"`,
+				`shop.emod:4: screen "CheckoutPage" is already declared`,
+			}, reportedLines(validator.Validate(model)))
+		})
+
+		t.Run("two shows blocks that name no screen give no screen diagnostic", func(t *testing.T) {
+			slice := &ast.Slice{Name: "Apply Discount", Appearances: []*ast.Appearance{{}, {}}}
+
+			require.Empty(t, validator.Validate(&ast.Model{Contexts: []*ast.Context{{Name: "Shop", Slices: []*ast.Slice{slice}}}}))
+		})
+
+		t.Run("reports a reads entry and a command entry at the column of that entry", func(t *testing.T) {
+			model := parseShop(t)
+
+			columns := make(map[string]int)
+			for _, d := range validator.Validate(model) {
+				columns[d.Message] = d.Column
+			}
+
+			require.Equal(t, 28, columns[`view "DiscountVeiw" does not exist`])
+			require.Equal(t, 33, columns[`command "ApplyDiscont" does not exist`])
+			require.Equal(t, 17, columns[`screen "ReceiptPage" does not exist`])
+		})
+	})
+
 	t.Run("schedule expressions", func(t *testing.T) {
 		const companionRejected = `reservations.emod:12: schedule expression "nightly" is neither a Go duration nor a five-field cron expression`
 

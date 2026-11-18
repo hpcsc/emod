@@ -65,6 +65,13 @@ func Lint(model *ast.Model) []*diagnostic.Entry {
 	readViews := make(map[string]bool)
 	declaredViews := make(map[string]bool)
 	for _, slice := range model.AllSlices() {
+		for _, appearance := range slice.Appearances {
+			for _, view := range appearance.Reads {
+				if view != "" {
+					readViews[view] = true
+				}
+			}
+		}
 		if slice.Trigger != nil {
 			for _, view := range slice.Trigger.Reads {
 				if view != "" {
@@ -668,7 +675,7 @@ func checkNeverRead(view *ast.View, readViews map[string]bool, readsUnresolved b
 	}
 
 	return warning(view.NamePos, "view/never-read",
-		fmt.Sprintf("view %q is read by no trigger, automation or translation, so nothing in the model says who acts on it; give the trigger that opens on it a reads entry, or name it as a processor's todo list", view.Name))
+		fmt.Sprintf("view %q is read by no screen, automation or translation, so nothing in the model says who acts on it; give the shows block of the screen that opens on it a reads entry, or name it as a processor's todo list", view.Name))
 }
 
 func checkGodView(view *ast.View) *diagnostic.Entry {

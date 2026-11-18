@@ -1,0 +1,203 @@
+design: planned
+# Tasks 1 to 6 add the screen beside the trigger, and Tasks 8 and 9 remove the trigger. This file states the
+# design at the end of the branch: ast.Trigger, Slice.Trigger, query.KindTrigger, diagram.EdgeTriggerReads and
+# diagram.EdgeTriggerCommand do not exist, and no wire format carries a trigger.
+types:
+  - name: Screen
+    package: internal/ast   # ast.go
+    change: new
+    does: is a page of the system, which a model declares one time at the top level
+    owns:
+      - a screen has a name and an optional description, and no image until US-007
+    fields: [Name, NamePos, Description, DescriptionPos, Comments, OpenPos, ClosePos]
+  - name: Appearance
+    package: internal/ast   # ast.go
+    change: new
+    does: is one point on the timeline where a slice shows a screen, as a shows block states it
+    owns:
+      - Reads and ReadsPos are parallel lists in source order, and so are Commands and CommandsPos
+      - an appearance issues only the commands that Commands names, and none when the list is empty
+    fields: [Screen, ScreenPos, Reads, ReadsPos, Commands, CommandsPos, Comments, OpenPos, ClosePos]
+  - name: Model
+    package: internal/ast   # ast.go
+    change: changed
+    does: is the root of a parsed model, with its name, its description, its screens and its contexts
+    owns:
+      - the screens are in declaration order
+    fields: [Screens]
+  - name: Slice
+    package: internal/ast   # ast.go
+    change: changed
+    does: is one step of a process, with what a person sees there and what the system does there
+    owns:
+      - a slice holds any number of appearances, in source order
+      - a slice holds no trigger; the field Trigger and the type Trigger do not exist
+    fields: [Appearances]
+  - name: hclReader
+    package: internal/parser   # parser.go
+    change: changed
+    does: reads the HCL body of a model into the AST
+    owns:
+      - a screen block is a top-level block with one label and an optional description
+      - a shows block is a slice block with no label, and it must state screen
+      - the reads and the command of a shows block are each a bare name or a list, and a bare name is a list of one
+      - a trigger block in a slice is one error at the keyword, which says that the language retired trigger and names screen and shows
+      - the blocks after a rejected trigger still parse
+      - trigger, screen and shows stay legal names for a field or a construct
+    methods: [model, slice, screen, appearance]
+  - name: modelIndex
+    package: internal/validator   # validator.go
+    change: changed
+    does: holds the names a model declares, so each reference can be resolved
+    owns:
+      - a screen name that the model declares two times is an error at the second name
+      - a shows block whose screen names no declared screen is an error at its screen entry
+      - each reads entry and each command entry of a shows block resolves model-wide, and an unresolved one is an error at that entry
+      - a second shows block in one slice that names the same screen is an error at its screen entry
+    fields: [screenNames]
+  - name: EdgeKind
+    package: internal/diagram   # graph.go
+    change: changed
+    does: names the kind of an arrow that a slice declares
+    owns:
+      - EdgeScreenReads runs from each view in the reads of an appearance to the screen
+      - EdgeScreenCommand runs from the screen to each command in the command of an appearance, and to no other command
+      - EdgeTriggerReads and EdgeTriggerCommand do not exist
+  - name: ElementCopies
+    package: internal/diagram   # element_copies.go
+    change: changed
+    does: decides what each slice of a model draws again
+    owns:
+      - the view end of a screen's reads arrow and the command end of a screen's command arrow are copied as the ends of an automation's arrows are
+  - name: jsonScreen
+    package: internal/export   # json.go
+    change: new
+    does: writes one screen declaration in the JSON export
+    owns:
+      - keys name, description, position, open_position, close_position and comments, in the order of a sibling document type
+  - name: jsonAppearance
+    package: internal/export   # json.go
+    change: new
+    does: writes one shows block in the JSON export
+    owns:
+      - reads and command are lists, also for one entry, with one reads_position and one command_position for each entry
+      - the key that names the screen is screen, with screen_position
+  - name: jsonModel
+    package: internal/export   # json.go
+    change: changed
+    does: writes the model in the JSON export
+    owns:
+      - the screens are under the key screens
+    fields: [Screens]
+  - name: jsonSlice
+    package: internal/export   # json.go
+    change: changed
+    does: writes one slice in the JSON export
+    owns:
+      - the appearances are under the key shows; the key trigger does not exist
+    fields: [Shows]
+  - name: cueWriter
+    package: internal/export   # cue.go
+    change: changed
+    does: writes the CUE export
+    owns:
+      - "the CUE export gives screens on the model and shows on each slice, and the schema names them #Screen and #Appearance"
+    methods: [writeScreen, writeAppearance]
+  - name: jsonDiagramNode
+    package: internal/export   # diagram.go
+    change: changed
+    does: writes one node of the diagram document
+    owns:
+      - a screen declaration is a node of type screen with no parent
+      - an appearance is a node of type shows in its slice, labelled with the screen name, with no screen key
+      - the command key of a shows node is a list, also for one entry, and of an automation or a translation one name
+    fields: [Command]
+  - name: diagramBuilder
+    package: internal/export   # diagram.go
+    change: changed
+    does: builds the diagram document of a model, with one node for each construct and one edge for each arrow
+    owns:
+      - each shows node is found by its slice and its screen, and its reads and shows_command edges join the node of its own slice
+      - no node of type trigger and no edge of type trigger_command
+    methods: [appendScreens, appendAppearances, appendEdges]
+  - name: diagramNode
+    package: internal/importer   # importer.go
+    change: changed
+    does: reads one node of a diagram document
+    owns:
+      - command on a node is one name or a list, and one name is a list of one
+      - a trigger node of an old document gives nothing and no error
+    fields: [Command]
+    methods: [asScreen, asAppearance]
+  - name: builder
+    package: internal/importer   # importer.go
+    change: changed
+    does: builds a model from a diagram document
+    owns:
+      - each shows child of a slice becomes an appearance, and each screen node with no parent a declaration
+      - an appearance whose screen no declaration holds gets one, after the declarations the document has
+      - a shows_command edge from a shows node to a command node adds that command to the appearance, and a reads edge from a view adds that view
+    methods: [appendAppearances, foldEdges]
+  - name: diagramEdit
+    package: internal/importer   # diagram_edit.go
+    change: changed
+    does: makes a model say what an edited diagram says
+    owns:
+      - a slice can take a shows node that another slice drew, also when it holds one
+      - a shows_command arrow that the viewer adds, removes, repoints or renames changes the entry of that command only, and keeps the other entries
+      - a renamed shows node names the new screen, and the save declares it when no declaration holds it
+      - each screen declaration stays, also one that no slice shows
+    methods: [sliceFor, canHold, entriesOf, clearRelationship, pendingRename]
+  - name: Kind
+    package: internal/query   # names.go
+    change: changed
+    does: names the kind of an element that a query reports
+    owns:
+      - KindScreen is screen; KindTrigger does not exist
+      - a shows block issues the commands of its command entries with the keyword command, and reads the views of its reads entries with the keyword reads
+  - name: blockContext
+    package: internal/lsp   # completer.go
+    change: changed
+    does: names the kind of block that the completer is inside
+    owns:
+      - a screen block offers description, and a shows block offers screen, reads and command
+      - the top level offers screen, and a slice offers shows and no trigger
+  - name: UI
+    package: internal/frontend/static   # ui.js
+    change: changed
+    does: shows the detail panel and the other overlays of the viewer
+    owns:
+      - the panel of a shows node lists its views and its commands in list order
+    methods: [showDetailPanel]
+  - name: Model
+    package: internal/frontend/static   # model.js
+    change: changed
+    does: holds the nodes and edges of the open diagram and the edits made to them
+    owns:
+      - a shows node moves into a slice that already holds one
+      - an arrow from a shows node to a command is a shows_command arrow, and one from a view to a shows node is a reads arrow
+    methods: [moveToSlice]
+functions:
+  - diagram.SliceEdges(s *ast.Slice) []Edge   # exists; one EdgeScreenReads for each reads entry and one EdgeScreenCommand for each command entry of each appearance
+  - diagram.CollapseEventFlow(model *ast.Model) EventFlow   # exists; the issuer of a command is each screen whose appearance names it, captioned screen
+  - linter.Lint(model *ast.Model) []*diagnostic.Entry   # exists; view/never-read counts each reads entry of each appearance and names a screen
+words:
+  - concept: a page of the system that a model declares one time and refers to by name
+    word: screen
+    not: [trigger, page, wireframe, ui, form]   # wireframe is the label of the lane; ui is the Mermaid element type
+  - concept: one point on the timeline where a slice shows a screen, in Go names and prose
+    word: appearance
+    not: [usage, occurrence, instance, placement]   # contract_test.go diagramBox.appearance is renamed, so the word has one meaning in internal/diagram
+  - concept: an appearance as the DSL, a diagram node type and a serialized list key spell it
+    word: shows
+    not: [appearance, screen_ref, show]
+  - concept: the commands that an appearance issues, as the DSL and each serialized key spell them
+    word: command
+    not: [commands, issues, sends]   # the Go field is Commands; the references keyword issues goes with the trigger
+  - concept: the views that an appearance reads, as the DSL, the AST and each serialized key spell them
+    word: reads
+    not: [views, readViews, sources]
+  - concept: a form that the language accepted before and now rejects with an error that names the replacement
+    word: retired
+    not: [deprecated, removed, obsolete, legacy, unsupported]
+dependencies: []

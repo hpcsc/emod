@@ -3741,7 +3741,7 @@ func TestLint(t *testing.T) {
 	})
 
 	t.Run("view/never-read", func(t *testing.T) {
-		const neverRead = `view %q is read by no trigger, automation or translation, so nothing in the model says who acts on it; give the trigger that opens on it a reads entry, or name it as a processor's todo list`
+		const neverRead = `view %q is read by no screen, automation or translation, so nothing in the model says who acts on it; give the shows block of the screen that opens on it a reads entry, or name it as a processor's todo list`
 
 		viewAt := func(name string, line int) *ast.View {
 			return &ast.View{
@@ -3856,6 +3856,43 @@ func TestLint(t *testing.T) {
 			require.Equal(t, []string{
 				fmt.Sprintf(`lending.emod:77: [view/never-read] `+neverRead, "ReservedCopiesView"),
 			}, reportedLines(diags))
+		})
+
+		t.Run("each reads entry of each shows block of a slice counts as a reader", func(t *testing.T) {
+			model := lendingWith(&ast.Slice{
+				Name: "Review Loans",
+				Appearances: []*ast.Appearance{
+					{Screen: "LendingDesk", Reads: []string{"MemberLoansView", "OverdueLoansView"}},
+					{Screen: "OverdueReport", Reads: []string{"ReservedCopiesView"}},
+				},
+				Views: []*ast.View{viewAt("MemberLoansView", 47), viewAt("OverdueLoansView", 62), viewAt("ReservedCopiesView", 77), viewAt("DeskOccupancyView", 92)},
+			})
+
+			require.Equal(t, []string{
+				fmt.Sprintf(`lending.emod:92: [view/never-read] `+neverRead, "DeskOccupancyView"),
+			}, reportedLines(linter.Lint(model)))
+		})
+
+		t.Run("a view that only shows blocks read is not reported in either slice home, and is reported once they read nothing", func(t *testing.T) {
+			model := test.ScreenLibraryLendingModel(t)
+			require.Equal(t, test.ScreenLibraryLendingAppearanceReads, test.DeclaredAppearanceReads(model))
+			unread := test.WithoutAppearanceReads(model)
+			require.Empty(t, test.DeclaredAppearanceReads(unread))
+			require.Equal(t, test.ScreenLibraryLendingAppearanceCommands, test.DeclaredAppearanceCommands(unread),
+				"the twin has to keep what each shows block issues, or it strips more than its reads")
+
+			neverReadIn := func(diags []*diagnostic.Entry) []string {
+				var messages []string
+				for _, d := range diags {
+					if d.RuleName == "view/never-read" {
+						messages = append(messages, d.Message)
+					}
+				}
+				return messages
+			}
+
+			require.Empty(t, neverReadIn(linter.Lint(model)))
+			require.Equal(t, []string{fmt.Sprintf(neverRead, "DeskOccupancyView")}, neverReadIn(linter.Lint(unread)))
 		})
 
 		t.Run("a view is read from anywhere in the model, not only its own slice's home", func(t *testing.T) {

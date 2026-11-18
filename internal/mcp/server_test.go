@@ -937,7 +937,7 @@ func TestServer(t *testing.T) {
 					"file":     "broken.emod",
 					"line":     float64(18),
 					"severity": "error",
-					"message":  `unexpected "foobar" block; expected one of: model, context`,
+					"message":  `unexpected "foobar" block; expected one of: model, screen, context`,
 				},
 			}}, result.StructuredContent)
 		})
@@ -1131,7 +1131,7 @@ func TestServer(t *testing.T) {
 					"file":     "broken.emod",
 					"line":     float64(18),
 					"severity": "error",
-					"message":  `unexpected "foobar" block; expected one of: model, context`,
+					"message":  `unexpected "foobar" block; expected one of: model, screen, context`,
 				},
 			}}, result.StructuredContent)
 		})
@@ -1364,7 +1364,7 @@ func TestServer(t *testing.T) {
 					"file":     "broken.emod",
 					"line":     float64(18),
 					"severity": "error",
-					"message":  `unexpected "foobar" block; expected one of: model, context`,
+					"message":  `unexpected "foobar" block; expected one of: model, screen, context`,
 				},
 			}}, result.StructuredContent)
 		})
@@ -1511,7 +1511,7 @@ func TestServer(t *testing.T) {
 					"file":     "broken.emod",
 					"line":     float64(18),
 					"severity": "error",
-					"message":  `unexpected "foobar" block; expected one of: model, context`,
+					"message":  `unexpected "foobar" block; expected one of: model, screen, context`,
 				},
 			}}, result.StructuredContent)
 		})
@@ -1704,7 +1704,7 @@ func TestServer(t *testing.T) {
 						"file":     "broken.emod",
 						"line":     float64(18),
 						"severity": "error",
-						"message":  `unexpected "foobar" block; expected one of: model, context`,
+						"message":  `unexpected "foobar" block; expected one of: model, screen, context`,
 					},
 				}}, result.StructuredContent)
 				require.Equal(t, before, filesUnder(t, dir))

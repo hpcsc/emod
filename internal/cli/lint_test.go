@@ -1528,7 +1528,7 @@ context "Orders" {
 			var lintErr *cli.LintError
 			require.True(t, errors.As(err, &lintErr))
 			require.Equal(t, 1, lintErr.ExitCode)
-			require.Equal(t, path+`:66: [view/never-read] view "MemberLoansView" is read by no trigger, automation or translation, so nothing in the model says who acts on it; give the trigger that opens on it a reads entry, or name it as a processor's todo list`, err.Error())
+			require.Equal(t, path+`:66: [view/never-read] view "MemberLoansView" is read by no screen, automation or translation, so nothing in the model says who acts on it; give the shows block of the screen that opens on it a reads entry, or name it as a processor's todo list`, err.Error())
 		})
 	})
 
@@ -1863,6 +1863,17 @@ func TestLintExplain(t *testing.T) {
 
 		require.Contains(t, output, "todo list")
 		require.Regexp(t, `\breads\b`, output)
+	})
+
+	t.Run("view rule names the screen that reads a view, and no trigger", func(t *testing.T) {
+		output := captureStdout(t, func() {
+			err := cli.RunLintExplain("view/never-read")
+			require.NoError(t, err)
+		})
+
+		require.Contains(t, output, "screen")
+		require.Contains(t, output, `"shows" block`)
+		require.NotRegexp(t, `\btrigger\b`, output)
 	})
 
 	t.Run("spec rule prints description and returns no error", func(t *testing.T) {

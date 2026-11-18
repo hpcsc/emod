@@ -8,6 +8,7 @@ import (
 	"github.com/hpcsc/emod/internal/ast"
 	"github.com/hpcsc/emod/internal/diagnostic"
 	"github.com/hpcsc/emod/internal/parser"
+	"github.com/hpcsc/emod/internal/test"
 	"github.com/stretchr/testify/require"
 )
 
@@ -84,6 +85,141 @@ model "Hotel Reservation" {
 			require.Empty(t, diags)
 			require.Equal(t, "Hotel Reservation", model.Name)
 			require.Equal(t, "How the hotel takes a stay", model.Description)
+		})
+	})
+
+	t.Run("screen", func(t *testing.T) {
+		t.Run("is read with its name, its description, its leading comments and its braces", func(t *testing.T) {
+			source := "# where a guest pays\nscreen \"CheckoutPage\" {\n  description = \"Where a guest reviews the cart\"\n}\n"
+
+			model, diags := parser.Parse(source, "shop.emod")
+
+			require.Empty(t, diags)
+			require.Len(t, model.Screens, 1)
+			test.RequireEqual(t, &ast.Screen{
+				Comments:       []*ast.Comment{{Text: "# where a guest pays", Position: ast.Position{Filename: "shop.emod", Line: 1, Column: 1}}},
+				Name:           "CheckoutPage",
+				NamePos:        ast.Position{Filename: "shop.emod", Line: 2, Column: 8},
+				Description:    "Where a guest reviews the cart",
+				DescriptionPos: ast.Position{Filename: "shop.emod", Line: 3, Column: 17},
+				OpenPos:        ast.Position{Filename: "shop.emod", Line: 2, Column: 23},
+				ClosePos:       ast.Position{Filename: "shop.emod", Line: 4, Column: 1},
+			}, model.Screens[0])
+		})
+
+		t.Run("an empty body gives a screen with no description and no diagnostic", func(t *testing.T) {
+			model, diags := parser.Parse(`screen "CheckoutPage" {}`, "shop.emod")
+
+			require.Empty(t, diags)
+			require.Equal(t, "CheckoutPage", model.Screens[0].Name)
+			require.Empty(t, model.Screens[0].Description)
+		})
+
+		t.Run("a screen with no label gives one diagnostic", func(t *testing.T) {
+			model, diags := parser.Parse("screen {}\n", "shop.emod")
+
+			require.Equal(t, []string{"screen takes 1 name(s), not 0"}, messagesOf(diags))
+			require.Len(t, model.Screens, 1)
+			require.Equal(t, 1, model.Screens[0].OpenPos.Line, "the screen stays in the model, with its braces, for the editor")
+		})
+
+		t.Run("an unknown attribute and a nested block each give one diagnostic that names the screen", func(t *testing.T) {
+			_, diags := parser.Parse("screen \"CheckoutPage\" {\n  image = \"./checkout.png\"\n  fields {}\n}\n", "shop.emod")
+
+			require.Equal(t, []string{"unexpected image in screen", `unexpected "fields" block in screen`}, messagesOf(diags))
+		})
+	})
+
+	t.Run("shows", func(t *testing.T) {
+		appearancesOf := func(t *testing.T, body string) ([]*ast.Appearance, []*diagnostic.Entry) {
+			t.Helper()
+			source := "context \"Shop\" {\n  slice \"Apply Discount\" {\n" + body + "  }\n}\n"
+			model, diags := parser.Parse(source, "shop.emod")
+			return model.Contexts[0].Slices[0].Appearances, diags
+		}
+
+		t.Run("reads its screen, each reads entry and each command entry at its own position, in source order", func(t *testing.T) {
+			appearances, diags := appearancesOf(t, "    shows {\n      screen  = CheckoutPage\n      reads   = [CartView, DiscountView]\n      command = [ApplyDiscount, RemoveDiscount]\n    }\n")
+
+			require.Empty(t, diags)
+			require.Len(t, appearances, 1)
+			at := func(line, column int) ast.Position {
+				return ast.Position{Filename: "shop.emod", Line: line, Column: column}
+			}
+			test.RequireEqual(t, &ast.Appearance{
+				Screen:      "CheckoutPage",
+				ScreenPos:   at(4, 17),
+				Reads:       []string{"CartView", "DiscountView"},
+				ReadsPos:    []ast.Position{at(5, 18), at(5, 28)},
+				Commands:    []string{"ApplyDiscount", "RemoveDiscount"},
+				CommandsPos: []ast.Position{at(6, 18), at(6, 33)},
+				OpenPos:     at(3, 11),
+				ClosePos:    at(7, 5),
+			}, appearances[0])
+		})
+
+		t.Run("a comment lands on the appearance written under it", func(t *testing.T) {
+			appearances, diags := appearancesOf(t, "    # what the guest sees\n    shows {\n      screen = CheckoutPage\n    }\n")
+
+			require.Empty(t, diags)
+			require.Len(t, appearances[0].Comments, 1)
+			require.Equal(t, "# what the guest sees", appearances[0].Comments[0].Text)
+		})
+
+		t.Run("a bare reads and a bare command are each a list of one", func(t *testing.T) {
+			appearances, diags := appearancesOf(t, "    shows {\n      screen  = CheckoutPage\n      reads   = CartView\n      command = ApplyDiscount\n    }\n")
+
+			require.Empty(t, diags)
+			require.Equal(t, []string{"CartView"}, appearances[0].Reads)
+			require.Equal(t, []string{"ApplyDiscount"}, appearances[0].Commands)
+		})
+
+		t.Run("a shows block with no reads and no command parses", func(t *testing.T) {
+			appearances, diags := appearancesOf(t, "    shows {\n      screen = CheckoutPage\n    }\n")
+
+			require.Empty(t, diags)
+			require.Empty(t, appearances[0].Reads)
+			require.Empty(t, appearances[0].Commands)
+		})
+
+		t.Run("a slice holds each of three shows blocks in source order, beside a trigger", func(t *testing.T) {
+			appearances, diags := appearancesOf(t, "    trigger \"Checkout Page\" {\n    }\n    shows {\n      screen = CheckoutPage\n    }\n    shows {\n      screen = OrderPage\n    }\n    shows {\n      screen = ReceiptPage\n    }\n")
+
+			require.Empty(t, diags)
+			var screens []string
+			for _, appearance := range appearances {
+				screens = append(screens, appearance.Screen)
+			}
+			require.Equal(t, []string{"CheckoutPage", "OrderPage", "ReceiptPage"}, screens)
+		})
+
+		t.Run("a shows block with no screen gives one diagnostic, at the shows keyword", func(t *testing.T) {
+			_, diags := appearancesOf(t, "    shows {\n      reads = CartView\n    }\n")
+
+			require.Len(t, diags, 1)
+			require.Equal(t, 3, diags[0].Line)
+			require.Equal(t, 5, diags[0].Column)
+			require.Contains(t, diags[0].Message, "shows names no screen")
+		})
+
+		t.Run("a shows block with a label gives one diagnostic", func(t *testing.T) {
+			appearances, diags := appearancesOf(t, "    shows \"Checkout\" {\n      screen = CheckoutPage\n    }\n")
+
+			require.Equal(t, []string{"shows takes 0 name(s), not 1"}, messagesOf(diags))
+			require.Len(t, appearances, 1)
+			require.Equal(t, 3, appearances[0].OpenPos.Line, "the appearance stays in the slice, with its braces, for the editor")
+		})
+
+		t.Run("an unknown attribute and a nested block each give one diagnostic that names the shows block", func(t *testing.T) {
+			_, diags := appearancesOf(t, "    shows {\n      screen = CheckoutPage\n      actor  = Guest\n      fields {}\n    }\n")
+
+			require.Equal(t, []string{"unexpected actor in shows", `unexpected "fields" block in shows`}, messagesOf(diags))
+		})
+
+		t.Run("a field and a command named screen or shows parse with no diagnostic", func(t *testing.T) {
+			_, diags := appearancesOf(t, "    command \"screen\" {\n      fields {\n        screen = string\n        shows  = string\n      }\n    }\n    command \"shows\" {\n    }\n")
+
+			require.Empty(t, diags)
 		})
 	})
 
@@ -488,7 +624,7 @@ context "Reading Room" {
 
 			require.Len(t, diags, 1)
 			require.Contains(t, diags[0].Message, `unexpected "process" block`)
-			require.Contains(t, diags[0].Message, "expected one of: model, context")
+			require.Contains(t, diags[0].Message, "expected one of: model, screen, context")
 			require.NotRegexp(t, `\bactor\b`, diags[0].Message)
 		})
 

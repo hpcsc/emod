@@ -41,6 +41,10 @@ func TestCheck(t *testing.T) {
 			require.Empty(t, diagnostics)
 		})
 
+		t.Run("returns an empty diagnostic list for the model that shows its screens in both slice homes", func(t *testing.T) {
+			require.Empty(t, oracle.Check(test.ScreenLibraryLending, "screens.emod"))
+		})
+
 		t.Run("returns an empty diagnostic list for the minimal command-and-event model", func(t *testing.T) {
 			diagnostics := oracle.Check(test.BillingPayments, "billing.emod")
 

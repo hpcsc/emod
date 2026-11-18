@@ -23,6 +23,12 @@ func Format(model *ast.Model) string {
 	block := body.AppendNewBlock("model", []string{model.Name})
 	writeText(block.Body(), "description", model.Description)
 
+	for _, screen := range model.Screens {
+		gap(body)
+		writeComments(body, screen.Comments)
+		writeText(body.AppendNewBlock("screen", []string{screen.Name}).Body(), "description", screen.Description)
+	}
+
 	for _, context := range model.Contexts {
 		gap(body)
 		writeComments(body, context.Comments)
@@ -76,6 +82,15 @@ func writeInvariants(body *hclwrite.Body, invariants []*ast.Invariant) {
 
 func writeSlice(body *hclwrite.Body, slice *ast.Slice) {
 	writeText(body, "description", slice.Description)
+
+	for _, appearance := range slice.Appearances {
+		gap(body)
+		writeComments(body, appearance.Comments)
+		shows := body.AppendNewBlock("shows", nil).Body()
+		writeRef(shows, "screen", appearance.Screen)
+		writeRefOrList(shows, "reads", appearance.Reads)
+		writeRefOrList(shows, "command", appearance.Commands)
+	}
 
 	if slice.Trigger != nil {
 		gap(body)

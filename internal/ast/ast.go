@@ -38,6 +38,7 @@ type Model struct {
 	NamePos         Position
 	Description     string
 	DescriptionPos  Position
+	Screens         []*Screen
 	Contexts        []*Context
 	OpenPos         Position
 	ClosePos        Position
@@ -155,6 +156,7 @@ type Slice struct {
 	NamePos        Position
 	Description    string
 	DescriptionPos Position
+	Appearances    []*Appearance
 	Trigger        *Trigger
 	Commands       []*Command
 	Events         []*Event
@@ -167,6 +169,28 @@ type Slice struct {
 	Specs          []*Spec
 	OpenPos        Position
 	ClosePos       Position
+}
+
+type Screen struct {
+	Comments       []*Comment
+	Name           string
+	NamePos        Position
+	Description    string
+	DescriptionPos Position
+	OpenPos        Position
+	ClosePos       Position
+}
+
+type Appearance struct {
+	Comments    []*Comment
+	Screen      string
+	ScreenPos   Position
+	Reads       []string
+	ReadsPos    []Position
+	Commands    []string
+	CommandsPos []Position
+	OpenPos     Position
+	ClosePos    Position
 }
 
 type Spec struct {

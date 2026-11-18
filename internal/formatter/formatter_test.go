@@ -28,6 +28,7 @@ func TestFormatHCL(t *testing.T) {
 			"every slice pattern":   test.SlicePatternLibraryLending,
 			"automation reads":      test.AutomationReadsLibraryLending,
 			"trigger reads":         test.TriggerReadsLibraryLending,
+			"screens":               test.ScreenLibraryLending,
 			"automation schedule":   test.AutomationScheduleLibraryLending,
 			"automation delay":      test.AutomationDelayLibraryLending,
 			"payloads":              test.PayloadLibraryLending,
@@ -139,6 +140,64 @@ context "Lending" {
 					require.Equal(t, rendered, formatter.Format(again))
 				})
 			}
+		})
+
+		t.Run("writes each screen after the model block and the shows blocks first in each slice", func(t *testing.T) {
+			source := `emod = 1
+model "Shop" {}
+context "Shop" {
+  slice "Apply Discount" {
+    description = "A guest applies a code"
+    command "ApplyDiscount" {}
+    view "CartView" {}
+    # what the guest sees
+    shows {
+      screen = CheckoutPage
+      reads = [CartView]
+      command = [ApplyDiscount, RemoveDiscount]
+    }
+  }
+}
+# The page a guest checks out on
+screen "CheckoutPage" { description = "Where a guest reviews the cart" }
+`
+			model, diags := parser.Parse(source, "shop.emod")
+			require.Empty(t, diags)
+
+			rendered := formatter.Format(model)
+
+			require.Equal(t, `emod = 1
+
+model "Shop" {
+}
+
+# The page a guest checks out on
+screen "CheckoutPage" {
+  description = "Where a guest reviews the cart"
+}
+
+context "Shop" {
+  slice "Apply Discount" {
+    description = "A guest applies a code"
+
+    # what the guest sees
+    shows {
+      screen  = CheckoutPage
+      reads   = CartView
+      command = [ApplyDiscount, RemoveDiscount]
+    }
+
+    command "ApplyDiscount" {
+    }
+
+    view "CartView" {
+    }
+  }
+}
+`, rendered)
+			again, diags := parser.Parse(rendered, "shop.emod")
+			require.Empty(t, diags)
+			require.Equal(t, rendered, formatter.Format(again))
 		})
 
 		t.Run("a model built rather than read is still pinned to the supported version", func(t *testing.T) {
