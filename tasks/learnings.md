@@ -1009,10 +1009,10 @@ in this repo; append only learnings that generalise beyond the task that surface
 
 ## A story that threads one operation through a shared seam makes every task touch the same files, so fold by mechanism not by file
 - Type: convention
-- Observed: us-004-know-when-there-are-unsaved-changes
-- Learning: US-004 added three operations to internal/frontend's platform seam, and the seam is written three times — the contract, the browser implementation and the desktop one — plus the viewer that consumes it and the two guards that scan them. Every task therefore edited the same four or five files, and five clerk fixup calls came back ambiguous because several commits in range touch each one. Splitting such a story by file is impossible and splitting the fixup by file is misleading; choose the fold target by which commit introduced the mechanism the correction is about, name it with --onto, and expect the cross-cutting design change an audit prompts to want its own commit rather than a fold, because a new seam operation belongs to no single task.
-- Apply when: decomposing a story that adds operations to internal/frontend's platform seam, or folding audit fixes on a branch whose tasks all edit the same modules
-
+- Recorded: 2026-11-17
+- Observed: distance-copies
+- Learning: US-004 added three operations to internal/frontend's platform seam, and the seam is written three times — the contract, the browser implementation and the desktop one — plus the viewer that consumes it and the two guards that scan them. Every task therefore edited the same four or five files, and five clerk fixup calls came back ambiguous because several commits in range touch each one. Splitting such a story by file is impossible and splitting the fixup by file is misleading; choose the fold target by which commit introduced the mechanism the correction is about, name it with --onto, and expect the cross-cutting design change an audit prompts to want its own commit rather than a fold, because a new seam operation belongs to no single task. The lane SVG is such a seam too: in distance-copies the copy rule, the arrow ends, the legs and the router each rewrote placeBoxes in internal/diagram/svg.go and svg_test.go, so 8 fixups came back ambiguous, 4 replays conflicted, and the fix that keyed elements by slice changed code of four task commits and stayed a commit of its own.
+- Apply when: decomposing a story that adds operations to internal/frontend's platform seam or that changes placeBoxes in internal/diagram/svg.go in more than one task, or folding audit fixes on a branch whose tasks all edit the same modules
 ## A criterion naming an entry point a later story delivers is closed by the seam, not by the branch
 - Type: constraint
 - Observed: us-004-know-when-there-are-unsaved-changes
@@ -1616,3 +1616,31 @@ in this repo; append only learnings that generalise beyond the task that surface
 - Observed: task 1 — MCP export
 - Learning: mise.toml pins Go 1.27.3 and go.mod says go 1.25.5. The emod_export leaf for the payload number -007 required the encoding/json text 'cannot parse "-007" as JSON number', which Go 1.27 gives; Go 1.25 gives 'json: invalid number literal "-007"', so the leaf failed in a golang:1.25 container. The leaf now requires only the value, '"-007"'. Assert the part of an error that emod writes, or the value that it names, not the words of the standard library.
 - Apply when: asserting on an error that wraps an error of the Go standard library (encoding/json, os, io/fs, strconv), or running the tests with a Go version other than the one of mise.toml
+
+## A lane-diagram name is not an identity: key per-element lookups by the declaring slice
+- Type: constraint
+- Recorded: 2026-11-17
+- Observed: task 7 — distance-copies
+- Learning: Slice names repeat (the validator accepts one name in two contexts), and nameToBox in internal/diagram/svg.go holds every box under its bare name, of every kind and slice, with the last box drawn winning. A lookup keyed by slice name sent an arrow to a slice far away, and an external system named like its translation gave an arrow from a box to itself that panicked in the router (index out of range in lanePositions). Key a per-element lookup by diagram.DeclaredElement, which holds the *ast.Slice, and give a box that one owner fronts a map of its own, as externalBoxes does.
+- Apply when: adding a box kind or an arrow end to internal/diagram/svg.go, or keying anything in the SVG or the diagram export by a slice name or a bare element name
+
+## clerk mutants leaves diagram-export mutants alive that the importer round trip kills
+- Type: constraint
+- Recorded: 2026-11-17
+- Observed: task 4 — distance-copies
+- Learning: clerk mutants runs only the tests of the changed callers, and for internal/export/diagram.go that set leaves out internal/importer. Its TestApplyDiagram ('leaves a model that declares two of every kind as it was written') kills loop mutants of the diagram builder that the run reports as lived. Before you write a new export test for a lived builder mutant, apply the mutant by hand and run go test -tags unit ./internal/importer/; when it fails there, accept the row with that evidence.
+- Apply when: closing a lived clerk mutants row in internal/export/diagram.go
+
+## clerk mutants stops at its 10 minute limit on a change across several internal/diagram files
+- Type: constraint
+- Recorded: 2026-11-17
+- Observed: distance-copies
+- Learning: A run over the Go files of a lane-diagram story (svg.go, layout.go, router.go, element_copies.go, lane_positions.go and export/diagram.go) holds about 1175 mutants and stops at 10 minutes with no verdict for the rest. The kept run then stays complete:false through later --since-last-run runs, and clerk audit accept refuses until the key 'incomplete run <time>' is accepted with a reason. Run clerk mutants --since-last-run after each task and after each round of fixes, so that each run reads only the files that changed and finishes.
+- Apply when: planning or running the mutation step for a change to several internal/diagram files
+
+## Write in the criterion which reading of a per-arrow layout rule the task builds
+- Type: convention
+- Recorded: 2026-11-17
+- Observed: task 6 — distance-copies
+- Learning: The distance-copies request said 'give each arrow its own horizontal y in the space between lanes'. The breakdown kept those words, the router built 'two legs that overlap get different y', and the criterion stayed unticked until an audit finding and a question at match-request; the user chose the narrower reading, because no two lines touch and each gap stays only as tall as its overlapping legs need. The literal reading grows a gap by 6 px for each leg in it. Write the reading and its cost in the criterion when the breakdown is written, and put the choice to the user at the plan gate.
+- Apply when: decomposing a request that states a layout outcome for each arrow, box or label (its own y, its own column, no overlap) in the lane SVG or the viewer
