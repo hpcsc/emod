@@ -125,6 +125,7 @@ func placeBoxes(entries []sliceEntry, columns []sliceColumn, copies ElementCopie
 	// Where the box drawn for each name ended up. One map across every slice, so
 	// a connection can reach a box another slice drew.
 	nameToBox := make(map[string]svgBox)
+	triggerBoxes := make(map[*ast.Slice]svgBox)
 
 	// Badges are filed per slice, in declaration order, rather than by the name
 	// they carry: two slices may reject the same invariant, and nameToBox keeps
@@ -175,7 +176,7 @@ func placeBoxes(entries []sliceEntry, columns []sliceColumn, copies ElementCopie
 			}
 			b.WriteString(svgTriggerRect(x, y, boxWidth, boxHeight, fillTrigger, strokeTrigger, 5, s.Trigger.Description))
 			b.WriteString(svgText(x+boxWidth/2, y+boxHeight/2, label, 12, strokeTrigger))
-			nameToBox[s.Trigger.Name] = placed(svgBox{x: x, y: y, w: boxWidth, h: boxHeight, lane: wireframesLane})
+			triggerBoxes[s] = placed(svgBox{x: x, y: y, w: boxWidth, h: boxHeight, lane: wireframesLane})
 		}
 
 		// --- Commands (middle lane) ---
@@ -290,10 +291,19 @@ func placeBoxes(entries []sliceEntry, columns []sliceColumn, copies ElementCopie
 		rejected := 0
 		for _, edge := range SliceEdges(entry.slice) {
 			switch edge.Kind {
-			case EdgeTriggerReads, EdgeAutomationReads:
+			case EdgeTriggerReads:
+				if reader, drawn := triggerBoxes[entry.slice]; drawn {
+					joinReader(i, edge, reader)
+				}
+
+			case EdgeAutomationReads:
 				if reader, drawn := nameToBox[edge.To]; drawn {
 					joinReader(i, edge, reader)
 				}
+
+			case EdgeTriggerCommand:
+				command := DeclaredElement{Kind: ElementCommand, Name: edge.To, Slice: entry.slice}
+				arrows = append(arrows, boxArrow{from: triggerBoxes[entry.slice], to: declaredBoxes[command]})
 
 			case EdgeTranslationReads:
 				// A translation's reads arrow is drawn into the external system box

@@ -1,0 +1,47 @@
+{
+  "story_id": "screens-as-first-class/US-002",
+  "story": "Keep each trigger in its own slice when two triggers share a name",
+  "tasks_file": "tasks/us-002-trigger-box-per-slice.md",
+  "design_file": "tasks/us-002-trigger-box-per-slice.design.yaml",
+  "tasks": [
+    {
+      "n": 1,
+      "done": true,
+      "title": "Join each trigger's arrows to the box of its own slice in the SVG",
+      "language": "Go",
+      "testable": true,
+      "certainty": "high",
+      "blast_radius": "low",
+      "depends_on": [],
+      "patterns_to_follow": [
+        "internal/diagram/svg.go:128-133",
+        "internal/diagram/svg.go:142-160",
+        "internal/diagram/contract_test.go:2246-2271"
+      ],
+      "affected_files": [
+        "internal/diagram/svg.go",
+        "internal/diagram/contract_test.go"
+      ]
+    },
+    {
+      "n": 2,
+      "done": false,
+      "title": "Key each trigger node and its edges by its slice in the diagram document",
+      "language": "Go",
+      "testable": true,
+      "certainty": "high",
+      "blast_radius": "medium",
+      "depends_on": [],
+      "patterns_to_follow": [
+        "internal/export/diagram.go:336-345",
+        "internal/export/diagram.go:552-562"
+      ],
+      "affected_files": [
+        "internal/export/diagram.go",
+        "internal/export/export_test.go",
+        "internal/importer/importer_test.go",
+        "internal/importer/diagram_edit_test.go"
+      ]
+    }
+  ]
+}

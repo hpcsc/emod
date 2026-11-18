@@ -1,0 +1,11 @@
+design: planned
+types:
+  - name: diagramBuilder
+    package: internal/export   # diagram.go
+    change: changed
+    does: builds the diagram document of a model, with one node for each construct and one edge for each arrow
+    owns:
+      - each trigger node is keyed by the slice that declares it, not by its name
+      - a trigger's reads and trigger_command edges join the trigger node of its own slice
+    fields: [triggerIDs]
+    methods: [appendTrigger, appendEdges]
