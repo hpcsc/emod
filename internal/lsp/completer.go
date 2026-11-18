@@ -61,6 +61,8 @@ const (
 	ctxSpec
 	ctxInvariants
 	ctxTarget
+	ctxScreen
+	ctxShows
 )
 
 // cursorContext is what the line scan knows about where the caret sits: the
@@ -311,6 +313,10 @@ func blockKeyword(word string) blockContext {
 		return ctxInvariants
 	case "target":
 		return ctxTarget
+	case "screen":
+		return ctxScreen
+	case "shows":
+		return ctxShows
 	}
 	return ctxUnknown
 }
@@ -483,13 +489,13 @@ func completionItems(labels []string, kind CompletionItemKind) []CompletionItem 
 func keywordsFor(block blockContext) []string {
 	switch block {
 	case ctxUnknown:
-		return []string{"model", "context"}
+		return []string{"model", "screen", "context"}
 	case ctxContext:
 		return []string{"aggregate", "slice", "invariants", "mode"}
 	case ctxAggregate:
 		return []string{"slice", "invariants"}
 	case ctxSlice:
-		return []string{"command", "event", "trigger", "view", "automation", "translation", "flow"}
+		return []string{"shows", "command", "event", "view", "automation", "translation", "flow"}
 	case ctxCommand:
 		return []string{"fields", "decides_on"}
 	case ctxEvent:
@@ -500,6 +506,10 @@ func keywordsFor(block blockContext) []string {
 		return []string{"events", "where"}
 	case ctxTarget:
 		return []string{"context"}
+	case ctxScreen:
+		return []string{"description"}
+	case ctxShows:
+		return []string{"screen", "reads", "command"}
 	case ctxInvariants:
 		// An invariant is `Name = "statement"`, and the name is the author's
 		// own, so the block offers no keyword of its own.

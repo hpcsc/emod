@@ -58,6 +58,7 @@ type semanticDecl struct {
 //   - Views → TokenTypeClass
 //   - Contexts → TokenTypeNamespace
 //   - Aggregates → TokenTypeStruct
+//   - Screens → TokenTypeParameter
 //
 // A document that declares no names, including text the parser recovers nothing
 // from, returns empty semantic tokens (zero tokens in the data array).
@@ -101,6 +102,10 @@ func semanticDeclsOf(doc string) []semanticDecl {
 
 	for _, ctx := range model.Contexts {
 		add(ctx.NamePos, ctx.Name, TokenTypeNamespace)
+	}
+
+	for _, screen := range model.Screens {
+		add(screen.NamePos, screen.Name, TokenTypeParameter)
 	}
 
 	for _, agg := range declaredAggregates(model) {

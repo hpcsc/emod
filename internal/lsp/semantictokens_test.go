@@ -145,6 +145,47 @@ func TestGetSemanticTokens(t *testing.T) {
 		require.True(t, found, "OrderView token not found in semantic tokens")
 	})
 
+	t.Run("each screen name receives TokenTypeParameter, and no other name does", func(t *testing.T) {
+		const screenDoc = `screen "LendingDesk" {
+}
+
+screen "OverdueReport" {
+}
+
+context "Lending" {
+  aggregate "Loan" {
+    slice "Borrow Copy" {
+      shows {
+        screen  = LendingDesk
+        reads   = LoansView
+        command = BorrowCopy
+      }
+
+      command "BorrowCopy" {
+      }
+
+      event "CopyBorrowed" {
+      }
+
+      view "LoansView" {
+      }
+    }
+  }
+}
+`
+		deskLine, deskChar := posIn(t, screenDoc, `screen "LendingDesk"`, "LendingDesk")
+		reportLine, reportChar := posIn(t, screenDoc, `screen "OverdueReport"`, "OverdueReport")
+
+		var parameters [][2]int
+		for _, tok := range decodeTokens(lsp.GetSemanticTokens(screenDoc).Data) {
+			if tok.typeIdx == legendTokenType(lsp.TokenTypeParameter) {
+				parameters = append(parameters, [2]int{tok.line, tok.char})
+			}
+		}
+
+		require.Equal(t, [][2]int{{deskLine, deskChar}, {reportLine, reportChar}}, parameters)
+	})
+
 	t.Run("an actor name receives no token", func(t *testing.T) {
 		const actorDoc = `actor "Customer" {
 }

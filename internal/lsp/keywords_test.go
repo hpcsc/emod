@@ -107,6 +107,8 @@ var keywordBlocks = []keywordBlock{
 	{name: "a context body", doc: "context \"C\" {\n\n}", line: 1},
 	{name: "an aggregate body", doc: "context \"C\" {\n  aggregate \"A\" {\n\n  }\n}", line: 2},
 	{name: "a slice body", doc: "context \"C\" {\n  slice \"S\" {\n\n  }\n}", line: 2},
+	{name: "a screen body", doc: "screen \"Desk\" {\n\n}", line: 1},
+	{name: "a shows body", doc: "context \"C\" {\n  slice \"S\" {\n    shows {\n\n    }\n  }\n}", line: 3},
 	{name: "a command body", doc: "context \"C\" {\n  slice \"S\" {\n    command \"Decide\" {\n\n    }\n  }\n}", line: 3},
 	{name: "an event body", doc: "context \"C\" {\n  slice \"S\" {\n    event \"Happened\" {\n\n    }\n  }\n}", line: 3},
 	{name: "an automation body", doc: "context \"C\" {\n  slice \"S\" {\n    automation \"Notify\" {\n\n    }\n  }\n}", line: 3},

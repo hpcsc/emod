@@ -148,7 +148,7 @@
     },
     {
       "n": 4,
-      "done": false,
+      "done": true,
       "title": "Offer, describe and paint `screen` and `shows` in the editor",
       "language": "Go",
       "testable": true,

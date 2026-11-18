@@ -16,20 +16,20 @@ func TestGetCompletions(t *testing.T) {
 	automationEntries := []string{"on", "every", "after", "reads", "command", "target"}
 
 	t.Run("top level", func(t *testing.T) {
-		t.Run("empty document returns model and context", func(t *testing.T) {
+		t.Run("empty document returns model, screen and context", func(t *testing.T) {
 			result := lsp.GetCompletions("", 0, 0)
 			require.False(t, result.IsIncomplete)
-			require.Equal(t, []string{"model", "context"}, extractLabels(result.Items))
+			require.Equal(t, []string{"model", "screen", "context"}, extractLabels(result.Items))
 		})
 
 		t.Run("cursor at beginning of document returns top level keywords", func(t *testing.T) {
 			result := lsp.GetCompletions("context Foo {}", 0, 0)
-			require.Equal(t, []string{"model", "context"}, extractLabels(result.Items))
+			require.Equal(t, []string{"model", "screen", "context"}, extractLabels(result.Items))
 		})
 
 		t.Run("cursor after an unclosed keyword line returns top level context", func(t *testing.T) {
 			result := lsp.GetCompletions("context", 0, 7)
-			require.Equal(t, []string{"model", "context"}, extractLabels(result.Items))
+			require.Equal(t, []string{"model", "screen", "context"}, extractLabels(result.Items))
 		})
 	})
 
@@ -80,8 +80,47 @@ func TestGetCompletions(t *testing.T) {
 	}
 }`
 			result := lsp.GetCompletions(doc, 3, 4)
-			require.Equal(t, []string{"command", "event", "trigger", "view", "automation", "translation", "flow"}, extractLabels(result.Items))
+			require.Equal(t, []string{"shows", "command", "event", "view", "automation", "translation", "flow"}, extractLabels(result.Items))
 		})
+	})
+
+	t.Run("screen and shows blocks", func(t *testing.T) {
+		const doc = `screen "LendingDesk" {
+
+}
+
+context "Lending" {
+  slice "Borrow Copy" {
+    shows {
+      screen  = LendingDesk
+      command = BorrowCopy
+
+    }
+
+    command "BorrowCopy" {
+    }
+  }
+}
+`
+		showsEntries := []string{"screen", "reads", "command"}
+
+		for _, tc := range []struct {
+			name      string
+			line      int
+			character int
+			expected  []string
+		}{
+			{name: "inside a screen block returns description", line: 1, character: 0, expected: []string{"description"}},
+			{name: "inside a shows block returns screen, reads and command", line: 9, character: 6, expected: showsEntries},
+			{name: "after screen in a shows block returns no screen name, only the entries of the block", line: 7, character: 16, expected: showsEntries},
+			{name: "after command in a shows block returns no command name, only the entries of the block", line: 8, character: 16, expected: showsEntries},
+		} {
+			t.Run(tc.name, func(t *testing.T) {
+				result := lsp.GetCompletions(doc, tc.line, tc.character)
+
+				require.Equal(t, tc.expected, extractLabels(result.Items))
+			})
+		}
 	})
 
 	t.Run(`automation "block"`, func(t *testing.T) {
@@ -129,7 +168,7 @@ func TestGetCompletions(t *testing.T) {
 	}
 }`
 			result := lsp.GetCompletions(doc, 7, 4)
-			require.Equal(t, []string{"command", "event", "trigger", "view", "automation", "translation", "flow"}, extractLabels(result.Items))
+			require.Equal(t, []string{"shows", "command", "event", "view", "automation", "translation", "flow"}, extractLabels(result.Items))
 		})
 
 		// Sibling slice blocks own no entry list yet, so they fall through to the top
@@ -150,7 +189,7 @@ func TestGetCompletions(t *testing.T) {
 	}
 }`
 				result := lsp.GetCompletions(doc, 8, 5)
-				require.Equal(t, []string{"model", "context"}, extractLabels(result.Items))
+				require.Equal(t, []string{"model", "screen", "context"}, extractLabels(result.Items))
 			})
 		}
 	})
@@ -280,6 +319,13 @@ context "Shelving" {
 					container: `translation "ShelfImport`,
 					value:     "CatalogView",
 					expected:  []string{"CatalogView"},
+				},
+				{
+					block:     "shows",
+					doc:       test.ScreenLibraryLending,
+					container: "shows {",
+					value:     "MemberLoansView",
+					expected:  declaredViews,
 				},
 			} {
 				t.Run("inside a "+tc.block+" block", func(t *testing.T) {
@@ -521,7 +567,7 @@ context "Lending" {
 `
 			result := lsp.GetCompletions(closedDoc, 11, 6)
 
-			require.Equal(t, []string{"command", "event", "trigger", "view", "automation", "translation", "flow"}, extractLabels(result.Items))
+			require.Equal(t, []string{"shows", "command", "event", "view", "automation", "translation", "flow"}, extractLabels(result.Items))
 		})
 
 		t.Run("a given list offers the event names the model declares in declaration order", func(t *testing.T) {
@@ -933,7 +979,7 @@ context "Lending" {
 					t.Run(cursor.name, func(t *testing.T) {
 						result := lsp.GetCompletions(doc, line, cursor.character)
 
-						require.Equal(t, []string{"model", "context"}, extractLabels(result.Items), "entry %q", entry)
+						require.Equal(t, []string{"model", "screen", "context"}, extractLabels(result.Items), "entry %q", entry)
 					})
 				}
 			}
@@ -1302,7 +1348,7 @@ context "Lending" {
 }`
 			result := lsp.GetCompletions(braceBelowDoc, 11, 4)
 
-			require.Equal(t, []string{"model", "context"}, extractLabels(result.Items))
+			require.Equal(t, []string{"model", "screen", "context"}, extractLabels(result.Items))
 		})
 
 		// A bracket the author has not closed belongs to the block it was opened
@@ -1335,7 +1381,7 @@ context "Lending" {
 			}{
 				{position: "a later sibling slice's command body", line: 10, expected: []string{"fields", "decides_on"}},
 				{position: "a later sibling aggregate body", line: 14, expected: []string{"slice", "invariants"}},
-				{position: "the top level below everything", line: 17, expected: []string{"model", "context"}},
+				{position: "the top level below everything", line: 17, expected: []string{"model", "screen", "context"}},
 			} {
 				t.Run(tc.position, func(t *testing.T) {
 					result := lsp.GetCompletions(strayDoc, tc.line, 0)

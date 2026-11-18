@@ -482,45 +482,61 @@ context "Reservations" {
 		require.NotNil(t, lsp.GetHover(doc, contextLine, contextChar))
 	})
 
-	t.Run("trigger names the Command pattern and no kind between the keyword and the name", func(t *testing.T) {
-		doc := `emod = 1
-
-model "" {
+	t.Run("screen and shows describe themselves, and trigger has no hover", func(t *testing.T) {
+		const doc = `screen "Hold Desk" {
 }
 
 context "Warehouse" {
   aggregate "Hold" {
     slice "Place Hold" {
-      trigger "Hold Desk" {
-        reads = AvailableCopiesView
+      shows {
+        screen = HoldDesk
       }
 
-      command "PlaceHold" {
+      trigger "Hold Desk" {
       }
     }
   }
 }
 `
-		line, char := posIn(t, doc, `trigger "Hold Desk"`, "trigger")
-		content := assertHover(
-			t, doc, line, char,
-			"Defines a trigger, the Command pattern's human entry point into a slice, and the views it reads.",
-		)
+		screenLine, screenChar := posIn(t, doc, "shows {", "screen")
+		showsLine, showsChar := posIn(t, doc, "shows {", "shows")
+		triggerLine, triggerChar := posIn(t, doc, `trigger "Hold Desk"`, "trigger")
 
-		require.Contains(t, content, "Command pattern")
-		for _, retiredKind := range []string{"UI", "Schedule", "Processor"} {
-			require.NotContains(t, content, retiredKind)
-		}
+		assertHover(t, doc, screenLine, screenChar,
+			"Declares a screen, the place where a person reads views and issues commands, one time for the whole model. In a shows block, names the screen that the slice shows.")
+		assertHover(t, doc, showsLine, showsChar,
+			"Shows a declared screen in the slice, the Command pattern's human entry point: the views the screen reads there and the commands it issues there.")
+		require.Nil(t, lsp.GetHover(doc, triggerLine, triggerChar))
+	})
+
+	t.Run("the name of each screen declaration hovers as a screen, with its description", func(t *testing.T) {
+		const doc = `screen "LendingDesk" {
+  description = "The terminal a librarian lends copies at"
+}
+
+screen "OverdueReport" {
+  description = "The list of loans past their due date"
+}
+
+context "Lending" {
+}
+`
+		deskLine, deskChar := posIn(t, doc, `screen "LendingDesk"`, "LendingDesk")
+		reportLine, reportChar := posIn(t, doc, `screen "OverdueReport"`, "OverdueReport")
+
+		assertHover(t, doc, deskLine, deskChar, "**Screen**\n\nThe terminal a librarian lends copies at")
+		assertHover(t, doc, reportLine, reportChar, "**Screen**\n\nThe list of loans past their due date")
 	})
 
 	t.Run("reads names every block that accepts it", func(t *testing.T) {
 		line, char := posIn(t, automationDoc, "reads   = PendingExpiries", "reads")
 		content := assertHover(
 			t, automationDoc, line, char,
-			"Defines the view a trigger, automation or translation reads from.",
+			"Defines the view a shows block, an automation or a translation reads from.",
 		)
 
-		for _, block := range []string{"trigger", "automation", "translation"} {
+		for _, block := range []string{"shows", "automation", "translation"} {
 			require.Regexp(t, `\b`+block+`\b`, content)
 		}
 	})

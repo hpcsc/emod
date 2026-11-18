@@ -73,6 +73,9 @@ func declaredConstructs(model *ast.Model) []constructDecl {
 	if model.Name != "" {
 		addQuoted("Model", model.Name, model.NamePos, "", model.Description)
 	}
+	for _, screen := range model.Screens {
+		addQuoted("Screen", screen.Name, screen.NamePos, "", screen.Description)
+	}
 	for _, ctx := range model.Contexts {
 		addQuoted("Context", ctx.Name, ctx.NamePos, "", ctx.Description)
 		for _, agg := range ctx.Aggregates {

@@ -316,6 +316,15 @@ context "Billing" {
 			})
 		}
 
+		t.Run("the name of a screen declaration is lsp.type.parameter, and the screen a shows block names keeps the category HCL gives it", func(t *testing.T) {
+			const screenDoc = "screen \"LendingDesk\" {\n}\n\ncontext \"Lending\" {\n  slice \"Borrow Copy\" {\n    shows {\n      screen = LendingDesk\n    }\n  }\n}\n"
+
+			require.Equal(t, []string{"lsp.type.parameter", "variable"}, []string{
+				categoryOf(t, screenDoc, `screen "LendingDesk"`, "LendingDesk"),
+				categoryOf(t, screenDoc, "screen = LendingDesk", "LendingDesk"),
+			})
+		})
+
 		t.Run("the name of a retired actor block takes no construct colour", func(t *testing.T) {
 			const actorDoc = "actor \"Customer\" {\n}\n\ncontext \"Orders\" {\n}\n"
 

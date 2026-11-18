@@ -376,7 +376,7 @@ HCL is the syntax, so an editor that knows HCL colours an `.emod` file and
 nothing in this repository spells the grammar a second time. The VS Code
 extension contributes the language, its brackets and comments, and the LSP
 client; the colour of a name comes from the semantic tokens the server sends,
-which paint a context, an aggregate, a command, an event and a view.
+which paint a screen, a context, an aggregate, a command, an event and a view.
 
 `internal/lsp/keywords_test.go` pins that every word in `internal/test`'s
 keyword list has a hover description, and that the completion lists never

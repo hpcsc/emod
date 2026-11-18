@@ -503,21 +503,21 @@ name of a screen declaration gets the `parameter` token, and its hover card has 
 
 **Acceptance Criteria:**
 
-- [ ] Completion in an empty document and at the top level offers `model`, `screen` and `context`. Completion in
+- [x] Completion in an empty document and at the top level offers `model`, `screen` and `context`. Completion in
       a slice offers `shows` and no `trigger`. Completion in a `shows` block offers `screen`, `reads` and
       `command`, and in a `screen` block `description`. Completion after `reads =` in a `shows` block offers the
       declared views, as after `reads =` in an automation. Completion after `screen =` and `command =` offers no
       value.
-- [ ] Hover on the word `screen` and on the word `shows` gives a description of each. The hover text of `reads`
+- [x] Hover on the word `screen` and on the word `shows` gives a description of each. The hover text of `reads`
       names a `shows` block. Hover on the word `trigger` gives no hover.
-- [ ] Hover on the name of a screen declaration gives a card of the kind Screen with its description.
-- [ ] `lsp.GetSemanticTokens` gives the name of each screen declaration the `parameter` token, and
+- [x] Hover on the name of a screen declaration gives a card of the kind Screen with its description.
+- [x] `lsp.GetSemanticTokens` gives the name of each screen declaration the `parameter` token, and
       `lsp.GetTokens` gives it the category `lsp.type.parameter`. No other name gets that token.
-- [ ] `internal/test/keywords.go` lists `screen` and `shows` and no `trigger`, `TestKeywordCoverage` passes, and
+- [x] `internal/test/keywords.go` lists `screen` and `shows` and no `trigger`, `TestKeywordCoverage` passes, and
       the parser leaf that reads the keyword list as field names covers `screen` and `shows`.
-- [ ] `README.md` (`:415`, `:515-520`) and `docs/architecture.md` (`:376-378`) name screens among the constructs that the
+- [x] `README.md` (`:415`, `:515-520`) and `docs/architecture.md` (`:376-378`) name screens among the constructs that the
       editor and the source panel paint.
-- [ ] `task test:unit` passes.
+- [x] `task test:unit` passes.
 
 **Affected Files/Modules:**
 
