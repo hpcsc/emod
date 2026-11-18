@@ -180,7 +180,7 @@
     },
     {
       "n": 6,
-      "done": false,
+      "done": true,
       "title": "Remove the actor from the diagram document, the importer and the viewer",
       "language": "Go",
       "testable": true,

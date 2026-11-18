@@ -511,20 +511,20 @@ actor, and after Task 7 such a file does not parse.
 
 **Acceptance Criteria:**
 
-- [ ] `emod export --format diagram-json` of a model that declares an actor, with a trigger that names it, has
+- [x] `emod export --format diagram-json` of a model that declares an actor, with a trigger that names it, has
       no node of the type `actor`, and the trigger node has no `actor` key.
-- [ ] `importer.ImportDiagram` of a document with a top-level `actor` node and a trigger node that carries an
+- [x] `importer.ImportDiagram` of a document with a top-level `actor` node and a trigger node that carries an
       `actor` key gives no error, and the formatted model states no `actor`. Each other node keeps what it
       carries.
-- [ ] `importer.ApplyDiagram` of an edited document whose new trigger node carries an `actor` key writes that
+- [x] `importer.ApplyDiagram` of an edited document whose new trigger node carries an `actor` key writes that
       trigger with its name and its reads and with no `actor` line.
-- [ ] The viewer shows no bar of actors above the diagram for a document with an `actor` node, and
+- [x] The viewer shows no bar of actors above the diagram for a document with an `actor` node, and
       `viewer.html` has no element for the bar.
-- [ ] The detail panel of a trigger node shows a Reads row and no Actor row, also for a node that carries an
+- [x] The detail panel of a trigger node shows a Reads row and no Actor row, also for a node that carries an
       `actor` key.
-- [ ] No code in `internal/export/diagram.go` or `internal/importer` reads `Model.Actors` or `Trigger.Actor`,
+- [x] No code in `internal/export/diagram.go` or `internal/importer` reads `Model.Actors` or `Trigger.Actor`,
       and no code in `internal/frontend/static` reads an `actor` node or an `actor` key.
-- [ ] `task test:unit` and `task test:viewer` pass.
+- [x] `task test:unit` and `task test:viewer` pass.
 
 **Affected Files/Modules:**
 

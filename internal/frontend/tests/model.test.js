@@ -229,7 +229,7 @@ describe('Model', () => {
     });
 
     it('returns AST JSON directly when source has model key', async () => {
-      const modelData = { name: 'TestModel', actors: [] };
+      const modelData = { name: 'TestModel' };
       const source = JSON.stringify({ model: modelData });
       const result = await Model.sendParse(store, source, statusEl);
       expect(result).toEqual({ diagnostics: [], diagram: { model: modelData } });

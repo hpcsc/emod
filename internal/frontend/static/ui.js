@@ -172,22 +172,6 @@ function positionTooltip(store, cx, cy) {
 // marker has no block around it at all and is only reachable this way.
 const HOVER_TARGETS = "[data-marker], .diagram-node";
 
-// ─── Actor annotations ──────────────────────────────────────────
-function renderActorAnnotations(store) {
-  const container = store.dom.actorAnnotations;
-  if (!container) return;
-  const actors = store.nodes.filter(function(n) { return n.type === "actor"; });
-  if (actors.length === 0) {
-    container.innerHTML = "";
-    return;
-  }
-  let html = '<span class="actor-label">Actors:</span>';
-  actors.forEach(function(a) {
-    html += '<span class="actor-badge">' + Renderer.esc(a.label) + '</span>';
-  });
-  container.innerHTML = html;
-}
-
 // ─── Visibility panel ───────────────────────────────────────────
 const VISIBILITY_TYPES = { context: true, aggregate: true, slice: true };
 
@@ -536,7 +520,6 @@ function showDetailPanel(store, node) {
     html += '<div class="dp-section">';
     html += '<div class="dp-section-title">Trigger</div>';
     html += '<table><tbody>';
-    html += '<tr><th>Actor</th><td>' + Renderer.esc(node.actor || '—') + '</td></tr>';
     html += '<tr><th>Reads</th><td>' + Renderer.esc([].concat(node.reads || []).join(', ') || '—') + '</td></tr>';
     html += '</tbody></table>';
     html += '</div>';
@@ -1266,7 +1249,6 @@ function initKeyboard(store) {
 export const UI = {
   hideTooltip,
   positionTooltip,
-  renderActorAnnotations,
   updateVisibilityTree,
   toggleVisibilityPanel,
   updateDiagnosticsPanel,

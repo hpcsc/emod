@@ -54,7 +54,6 @@ type diagramNode struct {
 	Position       *ast.Position     `json:"position,omitempty"`
 	Fields         []*diagramField   `json:"fields,omitempty"`
 	Comments       []*diagramComment `json:"comments,omitempty"`
-	Actor          string            `json:"actor,omitempty"`
 	Reads          diagramReads      `json:"reads,omitempty"`
 	Subscribes     []string          `json:"subscribes,omitempty"`
 	OnEvent        string            `json:"on_event,omitempty"`
@@ -89,14 +88,6 @@ func (n *diagramNode) isCopy() bool {
 	}
 }
 
-func (n *diagramNode) asActor() *ast.Actor {
-	return &ast.Actor{
-		Name:        n.Label,
-		Description: n.Description,
-		Comments:    convertComments(n.Comments),
-	}
-}
-
 func (n *diagramNode) asContext() *ast.Context {
 	return &ast.Context{
 		Name:        n.Label,
@@ -126,7 +117,6 @@ func (n *diagramNode) asTrigger() *ast.Trigger {
 		Name:        n.Label,
 		Description: n.Description,
 		Comments:    convertComments(n.Comments),
-		Actor:       n.Actor,
 		Reads:       slices.Clone([]string(n.Reads)),
 	}
 }
@@ -249,10 +239,7 @@ func ImportDiagram(data []byte) (*ast.Model, error) {
 		if n == nil || n.ParentID != nil {
 			continue
 		}
-		switch n.Type {
-		case "actor":
-			model.Actors = append(model.Actors, n.asActor())
-		case "context":
+		if n.Type == "context" {
 			model.Contexts = append(model.Contexts, b.buildContext(n))
 		}
 	}

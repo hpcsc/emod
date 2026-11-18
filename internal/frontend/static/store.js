@@ -58,7 +58,6 @@ export function createStore() {
       detailPanel: null,
       dpContent: null,
       ctxMenu: null,
-      actorAnnotations: null,
       resetLayoutBtn: null,
       fitViewBtn: null,
       diagnosticsBadge: null,

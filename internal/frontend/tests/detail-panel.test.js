@@ -172,14 +172,13 @@ describe('detail panel for an automation', () => {
 });
 
 describe('detail panel for a trigger', () => {
-  it('shows the actor and the reads the node states', () => {
+  it('shows the reads the node states, and no Actor row for a node that carries an actor key', () => {
     const store = createStore();
 
     UI.showDetailPanel(store, triggerNode({ actor: 'Guest', reads: ['AvailableRoomsView'] }));
 
     expect(store.dom.dpContent.textContent).toContain('Trigger');
     expect(shownRows(store)).toEqual([
-      { label: 'Actor', value: 'Guest' },
       { label: 'Reads', value: 'AvailableRoomsView' },
     ]);
   });
@@ -208,13 +207,12 @@ describe('detail panel for a trigger', () => {
     expect(shownRows(store)).toContainEqual({ label: 'Reads', value: '—' });
   });
 
-  it('shows an em-dash placeholder for actor and reads the node does not state', () => {
+  it('shows an em-dash placeholder for reads the node does not state', () => {
     const store = createStore();
 
     UI.showDetailPanel(store, triggerNode());
 
     expect(shownRows(store)).toEqual([
-      { label: 'Actor', value: '—' },
       { label: 'Reads', value: '—' },
     ]);
   });
@@ -227,20 +225,16 @@ describe('detail panel for a trigger', () => {
 
     expect(shownRows(withoutKind)).toEqual(shownRows(withKind));
     expect(shownRows(withKind)).toEqual([
-      { label: 'Actor', value: '—' },
       { label: 'Reads', value: '—' },
     ]);
   });
 
-  it.each([
-    { label: 'Actor', key: 'actor', value: 'Guest<b>&</b>Actor' },
-    { label: 'Reads', key: 'reads', value: 'Available<b>&</b>RoomsView' },
-  ])('shows the $label value containing markup as text', ({ label, key, value }) => {
+  it('shows a Reads value containing markup as text', () => {
     const store = createStore();
 
-    UI.showDetailPanel(store, triggerNode({ [key]: value }));
+    UI.showDetailPanel(store, triggerNode({ reads: 'Available<b>&</b>RoomsView' }));
 
-    expect(shownRows(store)).toContainEqual({ label, value });
+    expect(shownRows(store)).toContainEqual({ label: 'Reads', value: 'Available<b>&</b>RoomsView' });
     expect(store.dom.dpContent.querySelector('b')).toBeNull();
   });
 });

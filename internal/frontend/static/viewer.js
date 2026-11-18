@@ -137,7 +137,6 @@ bus.on('diagram:before-render', function({ store: s }) {
 // ─── After-render subscriber ────────────────────────────────────────
 bus.on('diagram:rendered', function({ store: s }) {
   Interaction.applyViewport(s);
-  UI.renderActorAnnotations(s);
 });
 
 bus.on('node:show', function({ store: s, nodeId }) {
@@ -179,7 +178,6 @@ function init() {
   store.dom.detailPanel = document.getElementById("detail-panel");
   store.dom.dpContent = document.getElementById("dp-content");
   store.dom.ctxMenu = document.getElementById("ctx-menu");
-  store.dom.actorAnnotations = document.getElementById("actor-annotations");
   store.dom.resetLayoutBtn = document.getElementById("reset-layout");
   store.dom.fitViewBtn = document.getElementById("fit-view");
   store.dom.exportBtn = document.getElementById("export-emod");

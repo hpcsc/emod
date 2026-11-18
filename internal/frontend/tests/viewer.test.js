@@ -139,7 +139,6 @@ function createRequiredElements() {
     <div id="detail-panel"></div>
     <div id="dp-content"></div>
     <div id="ctx-menu"></div>
-    <div id="actor-annotations"></div>
     <button id="reset-layout"></button>
     <button id="fit-view"></button>
     <button id="export-emod"></button>
@@ -1105,6 +1104,29 @@ describe('the arrows around a view', () => {
     const css = readFileSync(resolve(__dirname, '../static/viewer.html'), 'utf-8');
 
     expect(css).toMatch(/#diagram-canvas\.dims-arrows \.arrow:not\(\.touches-view\)[^{]*\{\s*opacity: 0\.15;/);
+  });
+});
+
+describe('the page above the diagram', () => {
+  it('shows nothing of an actor node that an older document still carries, and still draws the rest', async () => {
+    globalThis.INITIAL_DATA = null;
+    const diagram = billingDiagram();
+    diagram.nodes.unshift({ id: 'actor-1', type: 'actor', label: 'Guest', parentId: null });
+    parseResult = { diagnostics: [], diagram: diagram };
+    await startViewer();
+    deliverFile({ name: 'billing.emod', path: '/models/billing.emod', content: billingSource });
+    await flush();
+
+    expect(canvasMarkup()).toContain('TakePayment');
+    expect(document.body.textContent).not.toContain('Guest');
+    expect(document.body.textContent).not.toContain('Actors');
+  });
+
+  it('holds the diagram canvas and no bar of actors', () => {
+    const page = readFileSync(resolve(__dirname, '../static/viewer.html'), 'utf-8');
+
+    expect(page).toContain('<svg id="diagram-canvas"');
+    expect(page).not.toMatch(/actor-annotations|actor-badge/);
   });
 });
 

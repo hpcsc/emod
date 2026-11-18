@@ -180,10 +180,6 @@ func TestImportDiagram(t *testing.T) {
 model "Library Lending" {
 }
 
-# Anyone holding a library card
-actor "Member" {
-}
-
 # Everything the library knows about a copy leaving the building
 context "Lending" {
   # One copy held by one member over one date range
@@ -192,7 +188,6 @@ context "Lending" {
     slice "Borrow Copy" {
       # The desk terminal the librarian types into
       trigger "Lending Desk" {
-        actor = Member
         reads = AvailableCopiesView
       }
 
@@ -619,7 +614,6 @@ context "C" {
 
     slice "Chase Overdue Copy" {
       trigger "Overdue Report" {
-        actor = Librarian
         reads = MemberLoansView
       }
 
@@ -638,7 +632,6 @@ context "C" {
 
     slice "Return Copy" {
       trigger "Returns Counter" {
-        actor = Member
       }
 
       command "ReturnCopy" {
@@ -658,7 +651,7 @@ context "C" {
 			require.Equal(t, source, formatter.Format(importFrom(t, source)))
 		})
 
-		t.Run("preserves a trigger's name, actor and reads through the viewer save path", func(t *testing.T) {
+		t.Run("preserves a trigger's name and reads through the viewer save path", func(t *testing.T) {
 			source := `emod = 1
 
 model "M" {
@@ -668,7 +661,6 @@ context "C" {
   aggregate "A" {
     slice "S" {
       trigger "Reservation Form" {
-        actor = Guest
         reads = AvailableRoomsView
       }
     }
@@ -1190,6 +1182,36 @@ context "Shop" {
 
 			require.Error(t, err)
 			require.Contains(t, err.Error(), "invalid diagram JSON")
+		})
+
+		t.Run("a document that still carries an actor node and a trigger's actor key imports with no actor", func(t *testing.T) {
+			diagram := `{
+              "model_name": "M",
+              "nodes": [
+                {"id": "actor-1", "type": "actor", "label": "Guest", "parentId": null},
+                {"id": "context-1", "type": "context", "label": "Shop", "parentId": null},
+                {"id": "slice-1", "type": "slice", "label": "Apply Discount", "parentId": "context-1"},
+                {"id": "trigger-1", "type": "trigger", "label": "Checkout Page", "parentId": "slice-1",
+                 "actor": "Guest", "reads": ["CartView"]}
+              ],
+              "edges": []
+            }`
+
+			formatted := formatter.Format(importDiagram(t, diagram))
+
+			require.Equal(t, `emod = 1
+
+model "M" {
+}
+
+context "Shop" {
+  slice "Apply Discount" {
+    trigger "Checkout Page" {
+      reads = CartView
+    }
+  }
+}
+`, formatted)
 		})
 
 		t.Run("a trigger node whose reads is neither a name nor a list is refused", func(t *testing.T) {

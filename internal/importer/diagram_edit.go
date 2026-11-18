@@ -222,9 +222,6 @@ func (e *diagramEdit) matchDrawnNodes(model *ast.Model) error {
 	constructs := make(map[ast.Position]any)
 	nestedIn := make(map[ast.Position]*ast.Translation)
 
-	for _, a := range model.Actors {
-		constructs[a.NamePos] = a
-	}
 	for _, c := range model.Contexts {
 		constructs[c.NamePos] = c
 		for _, agg := range c.Aggregates {

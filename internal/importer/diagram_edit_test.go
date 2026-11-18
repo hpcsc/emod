@@ -25,9 +25,6 @@ const lendingModel = `emod = 1
 model "Library Lending" {
 }
 
-actor "Member" {
-}
-
 context "Lending" {
   aggregate "Loan" {
     invariants {
@@ -38,7 +35,6 @@ context "Lending" {
     slice "Borrow Copy" {
       # The desk terminal the librarian types into
       trigger "Lending Desk" {
-        actor = Member
         reads = AvailableCopiesView
       }
 
@@ -177,12 +173,6 @@ context "Lending" {
 const everyKindTwiceModel = `emod = 1
 
 model "Library Lending" {
-}
-
-actor "Member" {
-}
-
-actor "Librarian" {
 }
 
 context "Lending" {
@@ -838,11 +828,11 @@ func TestApplyDiagram(t *testing.T) {
 			edit     func(d *viewerDiagram)
 			old, new string
 		}{
-			{"a trigger is declared with the actor and the view its node names", func(d *viewerDiagram) {
+			{"a trigger is declared with the view its node names, and with no actor though its node carries one", func(d *viewerDiagram) {
 				d.add("trigger", "Returns Counter", "Available Copies")
 				d.set("Returns Counter", "actor", "Member")
 				d.set("Returns Counter", "reads", "AvailableCopiesView")
-			}, "    slice \"Available Copies\" {\n", "    slice \"Available Copies\" {\n      trigger \"Returns Counter\" {\n        actor = Member\n        reads = AvailableCopiesView\n      }\n\n"},
+			}, "    slice \"Available Copies\" {\n", "    slice \"Available Copies\" {\n      trigger \"Returns Counter\" {\n        reads = AvailableCopiesView\n      }\n\n"},
 			{"a view is declared with the events its node subscribes to", func(d *viewerDiagram) {
 				d.add("view", "OverdueLoansView", "Recall Overdue Copy")
 				d.set("OverdueLoansView", "subscribes", []string{"CopyBorrowed"})
@@ -990,7 +980,6 @@ func TestApplyDiagram(t *testing.T) {
 
 			require.Equal(t, replaced(t, lendingModel, `      # The desk terminal the librarian types into
       trigger "Lending Desk" {
-        actor = Member
         reads = AvailableCopiesView
       }
 
@@ -1015,10 +1004,10 @@ func TestApplyDiagram(t *testing.T) {
 `, `    slice "Available Copies" {
     }
 `)
-			expected = replaced(t, expected, `        actor = Member
+			expected = replaced(t, expected, `      trigger "Lending Desk" {
         reads = AvailableCopiesView
-`, `        actor = Member
-`)
+      }`, `      trigger "Lending Desk" {
+      }`)
 			expected = replaced(t, expected, `        on      = CopyBorrowed
         reads   = AvailableCopiesView
         command = RecallCopy`, `        on      = CopyBorrowed
@@ -1679,7 +1668,7 @@ context "Shop" {
 				"      reads           = AvailableCopiesView\n      command         = ImportPartnerLoan\n",
 				"      reads           = AvailableCopiesView\n"},
 			{"removing a trigger's reads arrow clears what it reads", "AvailableCopiesView", "Lending Desk",
-				"        actor = Member\n        reads = AvailableCopiesView\n", "        actor = Member\n"},
+				"      trigger \"Lending Desk\" {\n        reads = AvailableCopiesView\n      }", "      trigger \"Lending Desk\" {\n      }"},
 		} {
 			t.Run(removal.name, func(t *testing.T) {
 				result := applied(t, lendingModel, func(d *viewerDiagram) {
@@ -2270,7 +2259,6 @@ context "C" {
 
 			trigger := `      # The desk terminal the librarian types into
       trigger "Lending Desk" {
-        actor = Member
         reads = AvailableCopiesView
       }
 `

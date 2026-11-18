@@ -55,7 +55,6 @@ type jsonDiagramNode struct {
 	Position    *jsonPosition       `json:"position,omitempty"`
 	Comments    []*jsonComment      `json:"comments,omitempty"`
 	// Type-specific metadata for trigger, event, view, automation, translation
-	Actor          string            `json:"actor,omitempty"`
 	Reads          jsonDiagramReads  `json:"reads,omitzero"`
 	Subscribes     []string          `json:"subscribes,omitempty"`
 	OnEvent        string            `json:"on_event,omitempty"`
@@ -219,21 +218,6 @@ func newDiagramBuilder(modelName, modelDescription string, copies diagram.Elemen
 
 func (b *diagramBuilder) appendNode(n *jsonDiagramNode) {
 	b.doc.Nodes = append(b.doc.Nodes, n)
-}
-
-func (b *diagramBuilder) appendActor(a *ast.Actor) {
-	if a == nil {
-		return
-	}
-	b.appendNode(&jsonDiagramNode{
-		ID:          b.ids.next("actor"),
-		Type:        "actor",
-		Label:       a.Name,
-		Description: a.Description,
-		ParentID:    nil,
-		Position:    convertPosition(a.NamePos),
-		Comments:    convertComments(a.Comments),
-	})
 }
 
 func (b *diagramBuilder) appendContext(c *ast.Context) {
@@ -412,7 +396,6 @@ func (b *diagramBuilder) appendTrigger(s *ast.Slice, sliceID string) {
 		ParentID:    &sliceID,
 		Position:    convertPosition(t.NamePos),
 		Comments:    convertComments(t.Comments),
-		Actor:       t.Actor,
 		Reads:       readsList(t.Reads),
 	})
 }
@@ -594,9 +577,6 @@ func convertModelToDiagram(m *ast.Model) *jsonDiagramDocument {
 	}
 
 	b := newDiagramBuilder(m.Name, m.Description, diagram.NewElementCopies(m))
-	for _, a := range m.Actors {
-		b.appendActor(a)
-	}
 	for _, c := range m.Contexts {
 		b.appendContext(c)
 	}

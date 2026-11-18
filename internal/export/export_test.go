@@ -2122,13 +2122,13 @@ func TestExport(t *testing.T) {
 			require.NoError(t, err)
 
 			nodes := doc["nodes"].([]any)
-			require.Len(t, nodes, 9)
+			require.Len(t, nodes, 8)
 
 			types := make([]string, 0, len(nodes))
 			for _, n := range nodes {
 				types = append(types, n.(map[string]any)["type"].(string))
 			}
-			require.Equal(t, []string{"actor", "context", "aggregate", "slice", "command", "event", "trigger", "view", "automation"}, types)
+			require.Equal(t, []string{"context", "aggregate", "slice", "command", "event", "trigger", "view", "automation"}, types)
 		})
 
 		t.Run("parentId chains are correct for hierarchical nodes", func(t *testing.T) {
@@ -2169,37 +2169,32 @@ func TestExport(t *testing.T) {
 
 			nodes := doc["nodes"].([]any)
 
-			// actor-1 and context-1 should have nil parentId
-			actor := nodes[0].(map[string]any)
-			require.Equal(t, "actor", actor["type"])
-			require.Nil(t, actor["parentId"])
-
-			contextNode := nodes[1].(map[string]any)
+			contextNode := nodes[0].(map[string]any)
 			require.Equal(t, "context", contextNode["type"])
 			require.Nil(t, contextNode["parentId"])
 
 			// aggregate-1 should reference context-1
-			aggregate := nodes[2].(map[string]any)
+			aggregate := nodes[1].(map[string]any)
 			require.Equal(t, "aggregate", aggregate["type"])
 			require.Equal(t, "context-1", aggregate["parentId"])
 
 			// slice-1 should reference aggregate-1
-			sliceNode := nodes[3].(map[string]any)
+			sliceNode := nodes[2].(map[string]any)
 			require.Equal(t, "slice", sliceNode["type"])
 			require.Equal(t, "aggregate-1", sliceNode["parentId"])
 
 			// command-1 should reference slice-1
-			command := nodes[4].(map[string]any)
+			command := nodes[3].(map[string]any)
 			require.Equal(t, "command", command["type"])
 			require.Equal(t, "slice-1", command["parentId"])
 
 			// event-1 should reference slice-1
-			event := nodes[5].(map[string]any)
+			event := nodes[4].(map[string]any)
 			require.Equal(t, "event", event["type"])
 			require.Equal(t, "slice-1", event["parentId"])
 		})
 
-		t.Run("trigger node carries actor and reads and no kind", func(t *testing.T) {
+		t.Run("trigger node carries reads and no actor and no kind", func(t *testing.T) {
 			model := &ast.Model{
 				Name: "Test",
 				Contexts: []*ast.Context{
@@ -2239,7 +2234,7 @@ func TestExport(t *testing.T) {
 			require.Equal(t, "trigger", trigger["type"])
 			require.Equal(t, "slice-1", trigger["parentId"])
 			require.Equal(t, "FormSubmit", trigger["label"])
-			require.Equal(t, "Guest", trigger["actor"])
+			require.NotContains(t, trigger, "actor")
 			require.Equal(t, []any{"MyView"}, trigger["reads"])
 			_, hasKind := trigger["kind"]
 			require.False(t, hasKind, "diagram trigger node must not carry kind")
@@ -3369,30 +3364,22 @@ func TestExport(t *testing.T) {
 			require.Empty(t, edges)
 		})
 
-		t.Run("includes position for actor node", func(t *testing.T) {
+		t.Run("draws no node for an actor the model declares", func(t *testing.T) {
 			model := &ast.Model{
 				Name: "Test",
 				Actors: []*ast.Actor{
 					{Name: "Guest", NamePos: ast.Position{Filename: "test.cue", Line: 2, Column: 3}},
 				},
+				Contexts: []*ast.Context{{Name: "Ctx"}},
 			}
 
-			raw, err := export.ExportDiagramJSON(model)
-			require.NoError(t, err)
+			doc := diagramDocOf(t, model)
 
-			var doc map[string]any
-			err = json.Unmarshal(raw, &doc)
-			require.NoError(t, err)
-
-			nodes := doc["nodes"].([]any)
-			require.Len(t, nodes, 1)
-			node := nodes[0].(map[string]any)
-			require.Equal(t, "actor", node["type"])
-
-			pos := node["position"].(map[string]any)
-			require.Equal(t, "test.cue", pos["filename"])
-			require.Equal(t, float64(2), pos["line"])
-			require.Equal(t, float64(3), pos["column"])
+			var types []string
+			for _, node := range objectsUnder(doc, "nodes") {
+				types = append(types, node["type"].(string))
+			}
+			require.Equal(t, []string{"context"}, types)
 		})
 
 		t.Run("includes position for context node", func(t *testing.T) {
@@ -5569,7 +5556,6 @@ func commentedLibraryLendingModel() *ast.Model {
 // model's own comment is left out — it belongs to no node.
 func commentedLibraryLendingNodeComments() map[string][]string {
 	return map[string][]string{
-		"Member":                  {"# Anyone holding a library card"},
 		"Lending":                 {"# Everything the library knows about a copy leaving the building"},
 		"Loan":                    {"# One copy held by one member over one date range"},
 		"Borrow Copy":             {"# A member takes a copy off the shelf"},
