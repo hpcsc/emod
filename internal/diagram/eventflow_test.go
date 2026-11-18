@@ -91,33 +91,37 @@ func TestCollapseEventFlow(t *testing.T) {
 			require.Empty(t, nodeByID(t, flow, "RemindOnDueDate").Caption)
 		})
 
-		t.Run("a trigger is an origin captioned as a trigger", func(t *testing.T) {
-			model := singleSliceModel("Lending", "Borrow Copy",
-				&ast.Trigger{Name: "Lending Desk"}, command("BorrowCopy"), event("CopyBorrowed"))
-			model.Contexts[0].Aggregates[0].Slices[0].Flows = []*ast.Flow{
-				{CommandName: "BorrowCopy", EventName: "CopyBorrowed"},
-			}
-
-			flow := diagram.CollapseEventFlow(model)
-
-			require.Equal(t, diagram.Node{
-				ID:      "Ctx.Lending Desk",
-				Kind:    diagram.NodeOrigin,
-				Label:   "Lending Desk",
-				Caption: "trigger",
-			}, nodeByID(t, flow, "Ctx.Lending Desk"))
-		})
-
 		t.Run("a screen whose shows block names a command is an origin captioned as a screen, with the description of its declaration", func(t *testing.T) {
 			flow := diagram.CollapseEventFlow(test.ScreenLibraryLendingModel(t))
 
 			require.Equal(t, diagram.Node{
-				ID:          "LendingDesk",
+				ID:          "screen:LendingDesk",
 				Kind:        diagram.NodeOrigin,
 				Label:       "LendingDesk",
 				Caption:     "screen",
 				Description: "The terminal a librarian lends and takes back copies at",
-			}, nodeByID(t, flow, "LendingDesk"))
+			}, nodeByID(t, flow, "screen:LendingDesk"))
+		})
+
+		t.Run("a screen and an automation of one name stay two nodes", func(t *testing.T) {
+			model := singleSliceModel("Lending", "Return Copy",
+				command("ReturnCopy"), event("CopyReturned"), command("RemindMember"), event("MemberReminded"),
+				&ast.Automation{Name: "ReturnsCounter", OnEvent: "CopyReturned", Command: "RemindMember"})
+			slice := model.Contexts[0].Aggregates[0].Slices[0]
+			slice.Flows = []*ast.Flow{
+				{CommandName: "ReturnCopy", EventName: "CopyReturned"},
+				{CommandName: "RemindMember", EventName: "MemberReminded"},
+			}
+			slice.Appearances = []*ast.Appearance{{Screen: "ReturnsCounter", Commands: []string{"ReturnCopy"}}}
+
+			flow := diagram.CollapseEventFlow(model)
+
+			require.ElementsMatch(t, []shape{
+				{ID: "screen:ReturnsCounter", Kind: diagram.NodeOrigin, Label: "ReturnsCounter", Caption: "screen"},
+				{ID: "CopyReturned", Kind: diagram.NodeEvent, Label: "CopyReturned"},
+				{ID: "ReturnsCounter", Kind: diagram.NodeAutomation, Label: "ReturnsCounter"},
+				{ID: "MemberReminded", Kind: diagram.NodeEvent, Label: "MemberReminded", DeadEnd: true},
+			}, shapes(flow))
 		})
 
 		t.Run("a shows block that names no command adds no node", func(t *testing.T) {
@@ -203,7 +207,7 @@ func TestCollapseEventFlow(t *testing.T) {
 
 			require.Equal(t, "A copy left the shelf with a member", nodeByID(t, flow, "CopyBorrowed").Description)
 			require.Equal(t, "Waits out the grace period, then nudges", nodeByID(t, flow, "RemindOnDueDate").Description)
-			require.Equal(t, "The counter a member borrows from", nodeByID(t, flow, "LendingDesk").Description)
+			require.Equal(t, "The counter a member borrows from", nodeByID(t, flow, "screen:LendingDesk").Description)
 		})
 	})
 
@@ -228,13 +232,13 @@ func TestCollapseEventFlow(t *testing.T) {
 			flow := diagram.CollapseEventFlow(test.ScreenLibraryLendingModel(t))
 
 			require.ElementsMatch(t, []diagram.Hop{
-				{From: "LendingDesk", To: "CopyBorrowed"},
-				{From: "LendingDesk", To: "CopyReturned"},
-				{From: "LendingDesk", To: "LoanRenewed"},
+				{From: "screen:LendingDesk", To: "CopyBorrowed"},
+				{From: "screen:LendingDesk", To: "CopyReturned"},
+				{From: "screen:LendingDesk", To: "LoanRenewed"},
 				{From: "CopyBorrowed", To: "RemindOnDueDate"},
 				{From: "RemindOnDueDate", To: "MemberReminded"},
-				{From: "OverdueReport", To: "CopyRecalled"},
-				{From: "DeskKiosk", To: "DeskClaimed"},
+				{From: "screen:OverdueReport", To: "CopyRecalled"},
+				{From: "screen:DeskKiosk", To: "DeskClaimed"},
 			}, flow.Hops)
 		})
 
@@ -254,8 +258,8 @@ func TestCollapseEventFlow(t *testing.T) {
 			flow := diagram.CollapseEventFlow(model)
 
 			require.ElementsMatch(t, []diagram.Hop{
-				{From: "OverdueReport", To: "CopyRecalled"},
-				{From: "DeskKiosk", To: "MemberReminded"},
+				{From: "screen:OverdueReport", To: "CopyRecalled"},
+				{From: "screen:DeskKiosk", To: "MemberReminded"},
 			}, flow.Hops)
 		})
 
@@ -302,7 +306,7 @@ func TestCollapseEventFlow(t *testing.T) {
 
 			flow := diagram.CollapseEventFlow(model)
 
-			require.Contains(t, flow.Hops, diagram.Hop{From: "LendingDesk", To: "Lending.OneCopyPerLoan"})
+			require.Contains(t, flow.Hops, diagram.Hop{From: "screen:LendingDesk", To: "Lending.OneCopyPerLoan"})
 		})
 
 		t.Run("an arrow to an event no slice declares is left out", func(t *testing.T) {
@@ -366,7 +370,7 @@ func TestCollapseEventFlow(t *testing.T) {
 			require.Equal(t, []shape{
 				{ID: "CopyBorrowed", Kind: diagram.NodeEvent, Label: "CopyBorrowed"},
 				{ID: "LoanOpened", Kind: diagram.NodeEvent, Label: "LoanOpened", DeadEnd: true},
-				{ID: "LendingDesk", Kind: diagram.NodeOrigin, Label: "LendingDesk", Caption: "screen"},
+				{ID: "screen:LendingDesk", Kind: diagram.NodeOrigin, Label: "LendingDesk", Caption: "screen"},
 				{ID: "Lending.OneCopyPerLoan", Kind: diagram.NodeRejection, Label: "OneCopyPerLoan"},
 				{ID: "RemindOnDueDate", Kind: diagram.NodeAutomation, Label: "RemindOnDueDate"},
 				{ID: "MemberReminded", Kind: diagram.NodeEvent, Label: "MemberReminded", DeadEnd: true},
@@ -383,9 +387,9 @@ func TestCollapseEventFlow(t *testing.T) {
 			}, shapes(flow))
 
 			require.Equal(t, []diagram.Hop{
-				{From: "LendingDesk", To: "CopyBorrowed"},
-				{From: "LendingDesk", To: "LoanOpened"},
-				{From: "LendingDesk", To: "Lending.OneCopyPerLoan"},
+				{From: "screen:LendingDesk", To: "CopyBorrowed"},
+				{From: "screen:LendingDesk", To: "LoanOpened"},
+				{From: "screen:LendingDesk", To: "Lending.OneCopyPerLoan"},
 				{From: "CopyBorrowed", To: "RemindOnDueDate", Label: `after "72h"`},
 				{From: "RemindOnDueDate", To: "MemberReminded"},
 				{From: "RecallOverdueCopy", To: "CopyRecalled"},

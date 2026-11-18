@@ -87,7 +87,7 @@ func withoutNodeLabelled(t *testing.T, document, label string) string {
 }
 
 // withoutReaderMetadata returns document with the reads and the command each
-// trigger, automation and translation node carries taken out, so that only the
+// shows, automation and translation node carries taken out, so that only the
 // edges of the document say what each of them reads and issues.
 func withoutReaderMetadata(t *testing.T, document string) string {
 	t.Helper()
@@ -1069,7 +1069,7 @@ context "Shop" {
 
 	t.Run("copies of read views and issued commands", func(t *testing.T) {
 		t.Run("a copy declares no view and no command in the slice it is drawn in", func(t *testing.T) {
-			source := test.TriggerReadsLibraryLendingModel(t)
+			source := test.AppearanceReadsLibraryLendingModel(t)
 			require.Contains(t, exportedDiagram(t, source), `"type":"view_copy"`,
 				"the diagram has to draw a copy of a view, or the comparison below says nothing")
 			require.Contains(t, exportedDiagram(t, source), `"type":"command_copy"`,
@@ -1079,10 +1079,10 @@ context "Shop" {
 		})
 
 		t.Run("an automation keeps the view and the command it joins through a copy, from the edges alone", func(t *testing.T) {
-			source := test.TriggerReadsLibraryLendingModel(t)
+			source := test.AppearanceReadsLibraryLendingModel(t)
 			imported := importDiagram(t, withoutReaderMetadata(t, exportedDiagram(t, source)))
 
-			require.Equal(t, test.TriggerReadsLibraryLendingAutomationViewNames, test.DeclaredAutomationReads(imported))
+			require.Equal(t, test.AppearanceReadsLibraryLendingAutomationViewNames, test.DeclaredAutomationReads(imported))
 			require.Equal(t, automationCommands(source), automationCommands(imported))
 		})
 

@@ -15,11 +15,11 @@ import (
 // comparison against it fails when an edge appears, disappears or moves.
 func wiredSlice() *ast.Slice {
 	return &ast.Slice{
-		Name:     "Borrow Copy",
-		Trigger:  &ast.Trigger{Name: "Lending Desk", Reads: []string{"AvailableCopiesView"}},
-		Commands: []*ast.Command{{Name: "BorrowCopy"}},
-		Events:   []*ast.Event{{Name: "CopyBorrowed"}},
-		Flows:    []*ast.Flow{{CommandName: "BorrowCopy", EventName: "CopyBorrowed"}},
+		Name:        "Borrow Copy",
+		Appearances: []*ast.Appearance{{Screen: "LendingDesk", Reads: []string{"AvailableCopiesView"}, Commands: []string{"BorrowCopy"}}},
+		Commands:    []*ast.Command{{Name: "BorrowCopy"}},
+		Events:      []*ast.Event{{Name: "CopyBorrowed"}},
+		Flows:       []*ast.Flow{{CommandName: "BorrowCopy", EventName: "CopyBorrowed"}},
 		Views: []*ast.View{
 			{Name: "MemberLoansView", Subscribes: []string{"CopyBorrowed"}},
 		},
@@ -41,8 +41,8 @@ func wiredSlice() *ast.Slice {
 func wiredSliceEdges() []diagram.Edge {
 	return []diagram.Edge{
 		{Kind: diagram.EdgeFlow, From: "BorrowCopy", To: "CopyBorrowed"},
-		{Kind: diagram.EdgeTriggerReads, From: "AvailableCopiesView", To: "Lending Desk"},
-		{Kind: diagram.EdgeTriggerCommand, From: "Lending Desk", To: "BorrowCopy"},
+		{Kind: diagram.EdgeScreenReads, From: "AvailableCopiesView", To: "LendingDesk"},
+		{Kind: diagram.EdgeScreenCommand, From: "LendingDesk", To: "BorrowCopy"},
 		{Kind: diagram.EdgeSubscription, From: "CopyBorrowed", To: "MemberLoansView"},
 		{Kind: diagram.EdgeAutomationTrigger, From: "MemberReminded", To: "RecallOnSecondReminder"},
 		{Kind: diagram.EdgeAutomationReads, From: "MemberLoansView", To: "RecallOnSecondReminder"},
@@ -58,18 +58,6 @@ func TestSliceEdges(t *testing.T) {
 	t.Run("derivation", func(t *testing.T) {
 		t.Run("a slice stating no rejection entry derives exactly the edges it always has", func(t *testing.T) {
 			require.Equal(t, wiredSliceEdges(), diagram.SliceEdges(wiredSlice()))
-		})
-
-		t.Run("a trigger reading two views derives one reads edge from each, in the order of its list", func(t *testing.T) {
-			slice := &ast.Slice{
-				Name:    "Apply Discount",
-				Trigger: &ast.Trigger{Name: "Checkout Page", Reads: []string{"DiscountView", "CartView"}},
-			}
-
-			require.Equal(t, []diagram.Edge{
-				{Kind: diagram.EdgeTriggerReads, From: "DiscountView", To: "Checkout Page"},
-				{Kind: diagram.EdgeTriggerReads, From: "CartView", To: "Checkout Page"},
-			}, diagram.SliceEdges(slice))
 		})
 
 		t.Run("each shows block derives a reads edge into its screen for each view and a command edge out of it for each command, in the order of its lists", func(t *testing.T) {

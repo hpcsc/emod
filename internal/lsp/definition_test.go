@@ -15,7 +15,10 @@ func TestGetDefinition(t *testing.T) {
 	// testDoc is a valid emod document with definitions and references.
 	// Context/aggregate/slice names are quoted strings; command/event/view
 	// and other names are identifiers. Indentation uses 4 spaces per level.
-	const testDoc = `context "Orders" {
+	const testDoc = `screen "MyScreen" {
+}
+
+context "Orders" {
     aggregate "Sales" {
         slice "OrderSlice" {
             command "SubmitOrder" {
@@ -38,8 +41,9 @@ func TestGetDefinition(t *testing.T) {
                 reads = OrderView
                 command = SubmitOrder
             }
-            trigger "MyTrigger" {
-                reads = OrderView
+            shows {
+                screen = MyScreen
+                reads  = OrderView
             }
             flow = <<-FLOW
               command -> event:    SubmitOrder -> OrderSubmitted
@@ -118,8 +122,8 @@ func TestGetDefinition(t *testing.T) {
 		assertDef(t, testDoc, cLine, cChar, dLine, dChar, "SubmitOrder")
 	})
 
-	t.Run("view reference in trigger reads", func(t *testing.T) {
-		cLine, cChar := posIn(t, testDoc, "trigger \"MyTrigger\"", "OrderView")
+	t.Run("view reference in shows reads", func(t *testing.T) {
+		cLine, cChar := posIn(t, testDoc, "shows {", "OrderView")
 		dLine, dChar := posIn(t, testDoc, `view "OrderView`, "OrderView")
 		assertDef(t, testDoc, cLine, cChar, dLine, dChar, "OrderView")
 	})
@@ -160,27 +164,6 @@ context "Shop" {
 			dLine, dChar := posIn(t, doc, `command "ClearCart`, "ClearCart")
 			assertDef(t, doc, cLine, cChar, dLine, dChar, "ClearCart")
 		})
-	})
-
-	t.Run("view reference in the second entry of a trigger's reads list", func(t *testing.T) {
-		const doc = `context "Shop" {
-    slice "Show Cart" {
-        view "CartView" {
-        }
-        view "DiscountView" {
-        }
-    }
-    slice "Apply Discount" {
-        trigger "Checkout Page" {
-            reads = [CartView, DiscountView]
-        }
-    }
-}
-`
-
-		cLine, cChar := posIn(t, doc, `trigger "Checkout Page"`, "DiscountView")
-		dLine, dChar := posIn(t, doc, `view "DiscountView`, "DiscountView")
-		assertDef(t, doc, cLine, cChar, dLine, dChar, "DiscountView")
 	})
 
 	t.Run("command reference in flow command", func(t *testing.T) {

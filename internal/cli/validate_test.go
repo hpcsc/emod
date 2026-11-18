@@ -116,27 +116,29 @@ context "Ctx" {
 		require.Contains(t, err.Error(), "delete this actor block")
 	})
 
-	t.Run("returns error naming retired trigger kind replacement", func(t *testing.T) {
+	t.Run("returns error naming the file, the line of a retired trigger block and its replacement", func(t *testing.T) {
 		input := `model "Test" {}
 
 context "Ctx" {
   aggregate "Agg" {
     slice "Slice" {
-      trigger "Schedule" "Nightly Sweep" {
+      trigger "Checkout Page" {
         reads = PendingExpiries
       }
     }
   }
 }
 `
-		path := writeTemp(t, "retired_trigger_kind.emod", input)
+		path := writeTemp(t, "retired_trigger.emod", input)
 
 		err := cli.RunValidate(path, "text")
 
 		require.Error(t, err)
-		require.Contains(t, err.Error(), "Schedule")
-		require.Contains(t, err.Error(), "automation")
-		require.Regexp(t, `\bevery\b`, err.Error())
+		require.Contains(t, err.Error(), path+":6:")
+		require.Contains(t, err.Error(), "retired")
+		for _, word := range []string{"trigger", "screen", "shows"} {
+			require.Regexp(t, `\b`+word+`\b`, err.Error())
+		}
 	})
 
 	t.Run("returns error naming both events and the wire type they share", func(t *testing.T) {
@@ -650,17 +652,24 @@ context "Lending" {
 		require.Contains(t, err.Error(), `view "MissingView" does not exist`)
 	})
 
-	t.Run("returns error naming the view a trigger's reads misspells, at the line the reads is written on", func(t *testing.T) {
+	t.Run("returns error naming the view a shows block's reads misspells, at the line the reads is written on", func(t *testing.T) {
 		input := `emod = 1
 
 model "Library Lending" {
 }
 
+screen "LoansBoard" {
+}
+
+screen "LendingDesk" {
+}
+
 context "Lending" {
   aggregate "Loan" {
     slice "Review Member Loans" {
-      trigger "Loans Board" {
-        reads = MemberLoansView
+      shows {
+        screen = LoansBoard
+        reads  = MemberLoansView
       }
 
       view "MemberLoansView" {
@@ -673,8 +682,10 @@ context "Lending" {
     }
 
     slice "Borrow Copy" {
-      trigger "Lending Desk" {
-        reads = MemberLoansVeiw
+      shows {
+        screen  = LendingDesk
+        reads   = MemberLoansVeiw
+        command = BorrowCopy
       }
 
       command "BorrowCopy" {
@@ -699,14 +710,14 @@ context "Lending" {
   }
 }
 `
-		path := writeTemp(t, "misspelled_trigger_view.emod", input)
+		path := writeTemp(t, "misspelled_shows_view.emod", input)
 
 		err := cli.RunValidate(path, "text")
 
 		var lintErr *cli.LintError
 		require.True(t, errors.As(err, &lintErr))
 		require.Equal(t, 1, lintErr.ExitCode)
-		require.Equal(t, path+`:24: view "MemberLoansVeiw" does not exist`, err.Error())
+		require.Equal(t, path+`:32: view "MemberLoansVeiw" does not exist`, err.Error())
 	})
 
 	t.Run("returns error naming the outcome shape and construct kind for a view outcome inside a command slice", func(t *testing.T) {

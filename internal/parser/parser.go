@@ -367,7 +367,7 @@ func (r *hclReader) slice(b *hclsyntax.Block) *ast.Slice {
 		case "shows":
 			slice.Appearances = append(slice.Appearances, r.appearance(entry.block))
 		case "trigger":
-			slice.Trigger = r.trigger(entry.block)
+			r.fail(entry.block.TypeRange.Start, "the language retired trigger: declare a top-level screen and give the slice a shows block that names it")
 		case "command":
 			slice.Commands = append(slice.Commands, r.command(entry.block))
 		case "event":
@@ -439,45 +439,6 @@ func (r *hclReader) appearance(b *hclsyntax.Block) *ast.Appearance {
 		r.fail(b.TypeRange.Start, "shows names no screen: add screen = <ScreenName>")
 	}
 	return appearance
-}
-
-// retiredTriggerKind names the kinds a trigger once carried ahead of its name,
-// so a model written before they were retired is told what replaced them rather
-// than that a trigger takes one name.
-func retiredTriggerKind(kind string) string {
-	if kind == "Schedule" || kind == "Processor" {
-		return fmt.Sprintf("trigger %s is no longer supported: use an automation with every", kind)
-	}
-	return fmt.Sprintf("trigger %s is no longer supported: drop the word %s", kind, kind)
-}
-
-func (r *hclReader) trigger(b *hclsyntax.Block) *ast.Trigger {
-	if len(b.Labels) == 2 {
-		r.fail(b.LabelRanges[0].Start, "%s", retiredTriggerKind(b.Labels[0]))
-		return &ast.Trigger{}
-	}
-	trigger := &ast.Trigger{Comments: r.commentsBefore(b.TypeRange.Start)}
-	trigger.Name, trigger.NamePos = r.label(b)
-	trigger.OpenPos = r.at(b.OpenBraceRange.Start)
-	trigger.ClosePos = r.at(b.CloseBraceRange.Start)
-
-	body, ok := r.block(b, 1)
-	if !ok {
-		return trigger
-	}
-	for _, a := range hclAttrs(body) {
-		switch a.Name {
-		case "description":
-			trigger.Description, trigger.DescriptionPos = r.text(a)
-		case "actor":
-			r.fail(a.NameRange.Start, "the language retired actor: delete this actor attribute")
-		case "reads":
-			trigger.Reads, trigger.ReadsPos = r.nameOrNames(a.Expr)
-		default:
-			r.fail(a.NameRange.Start, "unexpected %s in trigger", a.Name)
-		}
-	}
-	return trigger
 }
 
 func (r *hclReader) command(b *hclsyntax.Block) *ast.Command {

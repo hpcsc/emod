@@ -27,7 +27,7 @@ func TestFormatHCL(t *testing.T) {
 			"rejections":            test.RejectionLibraryLending,
 			"every slice pattern":   test.SlicePatternLibraryLending,
 			"automation reads":      test.AutomationReadsLibraryLending,
-			"trigger reads":         test.TriggerReadsLibraryLending,
+			"shows reads":           test.AppearanceReadsLibraryLending,
 			"screens":               test.ScreenLibraryLending,
 			"automation schedule":   test.AutomationScheduleLibraryLending,
 			"automation delay":      test.AutomationDelayLibraryLending,
@@ -117,24 +117,24 @@ context "Lending" {
 			require.Equal(t, source, formatter.Format(model))
 		})
 
-		t.Run("the reads of a trigger is a bare name for one view and a list for two or more", func(t *testing.T) {
+		t.Run("the reads of a shows block is a bare name for one view and a list for two or more", func(t *testing.T) {
 			for _, tc := range []struct {
 				name    string
 				written string
 				want    string
 			}{
-				{name: "a bare name stays a bare name", written: "CartView", want: "reads = CartView\n"},
-				{name: "a list of one becomes a bare name", written: "[CartView]", want: "reads = CartView\n"},
-				{name: "a list of two stays a list, in the order written", written: "[DiscountView, CartView]", want: "reads = [DiscountView, CartView]\n"},
+				{name: "a bare name stays a bare name", written: "CartView", want: "reads  = CartView\n"},
+				{name: "a list of one becomes a bare name", written: "[CartView]", want: "reads  = CartView\n"},
+				{name: "a list of two stays a list, in the order written", written: "[DiscountView, CartView]", want: "reads  = [DiscountView, CartView]\n"},
 			} {
 				t.Run(tc.name, func(t *testing.T) {
-					source := "context \"Shop\" {\n  slice \"Apply Discount\" {\n    trigger \"Checkout Page\" {\n      reads = " + tc.written + "\n    }\n  }\n}\n"
+					source := "context \"Shop\" {\n  slice \"Apply Discount\" {\n    shows {\n      screen = CheckoutPage\n      reads = " + tc.written + "\n    }\n  }\n}\n"
 					model, diags := parser.Parse(source, "shop.emod")
 					require.Empty(t, diags)
 
 					rendered := formatter.Format(model)
 
-					require.Contains(t, rendered, "    trigger \"Checkout Page\" {\n      "+tc.want+"    }\n")
+					require.Contains(t, rendered, "    shows {\n      screen = CheckoutPage\n      "+tc.want+"    }\n")
 					again, diags := parser.Parse(rendered, "shop.emod")
 					require.Empty(t, diags)
 					require.Equal(t, rendered, formatter.Format(again))

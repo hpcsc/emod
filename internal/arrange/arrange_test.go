@@ -38,7 +38,7 @@ func TestArrange(t *testing.T) {
 		t.Run("a view trailing the events it projects moves ahead of the slice reading it", func(t *testing.T) {
 			// BorrowView projects CopyBorrowed and is read by "Return a Copy".
 			// Declared last it is read from behind; moved between the two slices
-			// it trails the event it projects and leads the trigger reading it,
+			// it trails the event it projects and leads the shows block reading it,
 			// so neither reference points backward.
 			model := parse(t, `emod = 1
 
@@ -114,10 +114,13 @@ context "Lending" {
 			require.Empty(t, report.Backward)
 		})
 
-		t.Run("a view that only the second entry of a trigger's reads list names moves ahead of the slice reading it", func(t *testing.T) {
+		t.Run("a view that only the second entry of a shows block's reads list names moves ahead of the slice reading it", func(t *testing.T) {
 			model := parse(t, `emod = 1
 
 model "Library" {
+}
+
+screen "ReturnDesk" {
 }
 
 context "Lending" {
@@ -139,8 +142,10 @@ context "Lending" {
     }
 
     slice "Return a Copy" {
-      trigger "Return Desk" {
-        reads = [ShelfView, BorrowView]
+      shows {
+        screen  = ReturnDesk
+        reads   = [ShelfView, BorrowView]
+        command = ReturnCopy
       }
 
       command "ReturnCopy" {

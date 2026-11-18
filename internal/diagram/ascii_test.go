@@ -59,44 +59,6 @@ func TestExportASCII(t *testing.T) {
 		require.Contains(t, output, "Model: Empty")
 	})
 
-	t.Run("renders a trigger with its name only, dropping any kind", func(t *testing.T) {
-		model := &ast.Model{
-			Name: "Test",
-			Contexts: []*ast.Context{{
-				Name: "Ctx",
-				Aggregates: []*ast.Aggregate{{
-					Name: "Agg",
-					Slices: []*ast.Slice{{
-						Name: "S",
-						Trigger: &ast.Trigger{
-							Name: "SubmitForm",
-						},
-					}},
-				}},
-			}},
-		}
-
-		raw, err := diagram.ExportASCII(model, diagram.StyleAuto)
-		require.NoError(t, err)
-
-		output := string(raw)
-		require.Contains(t, output, "\n  <<SubmitForm>>\n")
-		require.NotContains(t, output, "UI:")
-		require.NotContains(t, output, "<<:")
-	})
-
-	t.Run("prints one line from each view a trigger reads, in list order, in the place of the trigger's own line", func(t *testing.T) {
-		model := singleSliceModel("Shop", "Apply Discount",
-			&ast.Trigger{Name: "Checkout Page", Reads: []string{"DiscountView", "CartView"}})
-
-		raw, err := diagram.ExportASCII(model, diagram.StyleAuto)
-		require.NoError(t, err)
-
-		output := string(raw)
-		require.Contains(t, output, "=== Slice: Apply Discount ===\n  {DiscountView} -> <<Checkout Page>>\n  {CartView} -> <<Checkout Page>>\n\n")
-		require.NotContains(t, output, "\n  <<Checkout Page>>")
-	})
-
 	t.Run("prints each shows block in the section of its slice: a line from each view it reads, its screen alone when it reads none, and a line to each command it names", func(t *testing.T) {
 		raw, err := diagram.ExportASCII(test.ScreenLibraryLendingModel(t), diagram.StyleAuto)
 		require.NoError(t, err)
@@ -140,49 +102,6 @@ func TestExportASCII(t *testing.T) {
   (DeskClaimed) -> {DeskOccupancyView}
 
 `, string(raw))
-	})
-
-	t.Run("prints the line from the one view a trigger reads with the trigger's name only", func(t *testing.T) {
-		model := singleSliceModel("Shop", "Apply Discount",
-			&ast.Trigger{Name: "Checkout Page", Reads: []string{"CartView"}})
-
-		raw, err := diagram.ExportASCII(model, diagram.StyleAuto)
-		require.NoError(t, err)
-
-		require.Contains(t, string(raw), "=== Slice: Apply Discount ===\n  {CartView} -> <<Checkout Page>>\n\n")
-	})
-
-	t.Run("trigger labels omit kind whether or not one is stated", func(t *testing.T) {
-		model := &ast.Model{
-			Name: "Test",
-			Contexts: []*ast.Context{{
-				Name: "Ctx",
-				Aggregates: []*ast.Aggregate{{
-					Name: "Agg",
-					Slices: []*ast.Slice{
-						{
-							Name: "S1",
-							Trigger: &ast.Trigger{
-								Name: "SubmitForm",
-							},
-						},
-						{
-							Name:    "S2",
-							Trigger: &ast.Trigger{Name: "HeadlessBatch"},
-						},
-					},
-				}},
-			}},
-		}
-
-		raw, err := diagram.ExportASCII(model, diagram.StyleAuto)
-		require.NoError(t, err)
-
-		output := string(raw)
-		require.Contains(t, output, "<<SubmitForm>>")
-		require.Contains(t, output, "<<HeadlessBatch>>")
-		require.NotContains(t, output, "UI:")
-		require.NotContains(t, output, "<<:")
 	})
 
 	t.Run("renders command as [CommandName]", func(t *testing.T) {
@@ -332,38 +251,6 @@ func TestExportASCII(t *testing.T) {
 
 		require.Contains(t, string(raw), "  [BorrowCopy]\n",
 			"a rejection edge shows no event, so it does not make the command wired")
-	})
-
-	t.Run("renders trigger along with flow chain", func(t *testing.T) {
-		model := &ast.Model{
-			Name: "Test",
-			Contexts: []*ast.Context{{
-				Name: "Ctx",
-				Aggregates: []*ast.Aggregate{{
-					Name: "Agg",
-					Slices: []*ast.Slice{{
-						Name:    "S",
-						Trigger: &ast.Trigger{Name: "Click"},
-						Commands: []*ast.Command{
-							{Name: "DoAction"},
-						},
-						Events: []*ast.Event{
-							{Name: "ActionDone"},
-						},
-						Flows: []*ast.Flow{
-							{CommandName: "DoAction", EventName: "ActionDone"},
-						},
-					}},
-				}},
-			}},
-		}
-
-		raw, err := diagram.ExportASCII(model, diagram.StyleAuto)
-		require.NoError(t, err)
-
-		output := string(raw)
-		require.Contains(t, output, "<<Click>>")
-		require.Contains(t, output, "[DoAction] -> (ActionDone)")
 	})
 
 	t.Run("renders automation as event to gear to command chain", func(t *testing.T) {
@@ -534,7 +421,7 @@ func TestExportASCII(t *testing.T) {
 		require.Contains(t, output, "=== Slice: Create Order ===")
 		require.Contains(t, output, "=== Slice: Ship Order ===")
 
-		// Triggers
+		// Screens
 		require.Contains(t, output, "<<PlaceOrderForm>>")
 		require.Contains(t, output, "<<ShipTimer>>")
 

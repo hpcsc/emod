@@ -482,8 +482,30 @@ context "Reservations" {
 		require.NotNil(t, lsp.GetHover(doc, contextLine, contextChar))
 	})
 
-	t.Run("screen and shows describe themselves, and trigger has no hover", func(t *testing.T) {
-		const doc = `screen "Hold Desk" {
+	t.Run("gives no hover for the word trigger, and keeps the hover of the shows block beside it", func(t *testing.T) {
+		const doc = `screen "CheckoutPage" {
+}
+
+context "Shop" {
+  slice "Apply Discount" {
+    shows {
+      screen = CheckoutPage
+    }
+
+    trigger "Checkout Page" {
+    }
+  }
+}
+`
+		triggerLine, triggerChar := posIn(t, doc, `trigger "Checkout Page"`, "trigger")
+		showsLine, showsChar := posIn(t, doc, "shows {", "shows")
+
+		require.Nil(t, lsp.GetHover(doc, triggerLine, triggerChar))
+		require.NotNil(t, lsp.GetHover(doc, showsLine, showsChar))
+	})
+
+	t.Run("screen and shows describe themselves", func(t *testing.T) {
+		const doc = `screen "HoldDesk" {
 }
 
 context "Warehouse" {
@@ -492,22 +514,17 @@ context "Warehouse" {
       shows {
         screen = HoldDesk
       }
-
-      trigger "Hold Desk" {
-      }
     }
   }
 }
 `
 		screenLine, screenChar := posIn(t, doc, "shows {", "screen")
 		showsLine, showsChar := posIn(t, doc, "shows {", "shows")
-		triggerLine, triggerChar := posIn(t, doc, `trigger "Hold Desk"`, "trigger")
 
 		assertHover(t, doc, screenLine, screenChar,
 			"Declares a screen, the place where a person reads views and issues commands, one time for the whole model. In a shows block, names the screen that the slice shows.")
 		assertHover(t, doc, showsLine, showsChar,
 			"Shows a declared screen in the slice, the Command pattern's human entry point: the views the screen reads there and the commands it issues there.")
-		require.Nil(t, lsp.GetHover(doc, triggerLine, triggerChar))
 	})
 
 	t.Run("the name of each screen declaration hovers as a screen, with its description", func(t *testing.T) {

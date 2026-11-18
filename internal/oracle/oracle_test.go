@@ -143,11 +143,11 @@ func TestCheck(t *testing.T) {
 			}, reportedLines(diagnostics))
 		})
 
-		t.Run("names the one automation a model of reading triggers leaves without a view", func(t *testing.T) {
-			diagnostics := oracle.Check(test.TriggerReadsLibraryLending, "trigger-reads.emod")
+		t.Run("names the one automation a model of shows reads leaves without a view", func(t *testing.T) {
+			diagnostics := oracle.Check(test.AppearanceReadsLibraryLending, "reads.emod")
 
 			require.Equal(t, []string{
-				`trigger-reads.emod:107: [automation/missing-todo-list] automation "RemindOnDueDate" reads no view, so nothing in the model shows what work is outstanding; project a view of pending work and read it`,
+				`reads.emod:124: [automation/missing-todo-list] automation "RemindOnDueDate" reads no view, so nothing in the model shows what work is outstanding; project a view of pending work and read it`,
 			}, reportedLines(diagnostics))
 		})
 

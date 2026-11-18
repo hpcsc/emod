@@ -92,14 +92,6 @@ func writeSlice(body *hclwrite.Body, slice *ast.Slice) {
 		writeRefOrList(shows, "command", appearance.Commands)
 	}
 
-	if slice.Trigger != nil {
-		gap(body)
-		writeComments(body, slice.Trigger.Comments)
-		trigger := body.AppendNewBlock("trigger", []string{slice.Trigger.Name}).Body()
-		writeText(trigger, "description", slice.Trigger.Description)
-		writeRefOrList(trigger, "reads", slice.Trigger.Reads)
-	}
-
 	for _, command := range slice.Commands {
 		gap(body)
 		writeComments(body, command.Comments)

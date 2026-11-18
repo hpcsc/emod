@@ -429,11 +429,6 @@ func referenceDiagnostics(slice *ast.Slice, index *modelIndex) []*diagnostic.Ent
 			diags = appendUndeclaredRef(diags, "command", command, appearance.CommandsPos[i], index.commandNames)
 		}
 	}
-	if trigger := slice.Trigger; trigger != nil {
-		for i, view := range trigger.Reads {
-			diags = appendUndeclaredRef(diags, "view", view, trigger.ReadsPos[i], index.viewNames)
-		}
-	}
 	for _, auto := range slice.Automations {
 		diags = appendUndeclaredRef(diags, "target context", auto.TargetContext, auto.TargetContextPos, index.contextNames)
 		diags = appendUndeclaredRef(diags, "command", auto.Command, auto.CommandPos, index.commandNames)

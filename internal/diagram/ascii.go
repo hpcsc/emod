@@ -13,7 +13,8 @@ import (
 //   - Commands as [Name]
 //   - Events as (Name)
 //   - Views as {Name}
-//   - Triggers as <<Name>>, after an arrow from each view they read
+//   - Screens as <<Name>>, after an arrow from each view they read and before
+//     an arrow to each command they issue
 //   - Automations as ⚙ Name
 //   - Cadences as every "Expression"
 //   - Invariants a command is rejected by as ✗ Name
@@ -60,17 +61,6 @@ func ExportASCII(model *ast.Model, _ Style) ([]byte, error) {
 			}
 			for _, command := range appearance.Commands {
 				fmt.Fprintf(&b, "  %s -> [%s]\n", screen, command)
-			}
-		}
-
-		// Trigger with the views it reads
-		if s.Trigger != nil {
-			trigger := formatTrigger(s.Trigger)
-			if len(s.Trigger.Reads) == 0 {
-				fmt.Fprintf(&b, "  %s\n", trigger)
-			}
-			for _, view := range s.Trigger.Reads {
-				fmt.Fprintf(&b, "  {%s} -> %s\n", view, trigger)
 			}
 		}
 
@@ -134,10 +124,6 @@ func ExportASCII(model *ast.Model, _ Style) ([]byte, error) {
 	}
 
 	return []byte(b.String()), nil
-}
-
-func formatTrigger(t *ast.Trigger) string {
-	return fmt.Sprintf("<<%s>>", t.Name)
 }
 
 func activationMarking(auto *ast.Automation) string {

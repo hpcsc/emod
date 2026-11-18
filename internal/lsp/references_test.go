@@ -11,7 +11,10 @@ import (
 )
 
 func TestGetReferences(t *testing.T) {
-	const testDoc = `context "Orders" {
+	const testDoc = `screen "MyScreen" {
+}
+
+context "Orders" {
     aggregate "Sales" {
         slice "OrderSlice" {
             command "SubmitOrder" {
@@ -34,8 +37,9 @@ func TestGetReferences(t *testing.T) {
                 reads = OrderView
                 command = SubmitOrder
             }
-            trigger "MyTrigger" {
-                reads = OrderView
+            shows {
+                screen = MyScreen
+                reads  = OrderView
             }
             flow = <<-FLOW
               command -> event:    SubmitOrder -> OrderSubmitted
@@ -227,7 +231,7 @@ func TestGetReferences(t *testing.T) {
 				locationOf(t, testDoc, `view "OrderView`, "OrderView"),
 				locationOf(t, testDoc, `automation "AutoSubmit`, "OrderView"),
 				locationOf(t, testDoc, `translation "TransOrder`, "OrderView"),
-				locationOf(t, testDoc, "trigger \"MyTrigger\"", "OrderView"),
+				locationOf(t, testDoc, "shows {", "OrderView"),
 			}
 		}
 
@@ -251,8 +255,8 @@ func TestGetReferences(t *testing.T) {
 			require.Len(t, locs, 4)
 		})
 
-		t.Run("cursor on view in trigger reads returns all view references", func(t *testing.T) {
-			cLine, cChar := posIn(t, testDoc, "trigger \"MyTrigger\"", "OrderView")
+		t.Run("cursor on view in shows reads returns all view references", func(t *testing.T) {
+			cLine, cChar := posIn(t, testDoc, "shows {", "OrderView")
 			locs := lsp.GetReferences(testDoc, cLine, cChar, uri)
 			require.Len(t, locs, 4)
 		})
@@ -294,29 +298,6 @@ context "Shop" {
 					locationOf(t, doc, "shows {", "ClearCart"),
 				},
 			}, [][]lsp.Location{lsp.GetReferences(doc, vLine, vChar, uri), lsp.GetReferences(doc, cLine, cChar, uri)})
-		})
-
-		t.Run("cursor on a view declaration lists the entry of a trigger's reads list that names it", func(t *testing.T) {
-			const doc = `context "Shop" {
-    slice "Show Cart" {
-        view "CartView" {
-        }
-        view "DiscountView" {
-        }
-    }
-    slice "Apply Discount" {
-        trigger "Checkout Page" {
-            reads = [CartView, DiscountView]
-        }
-    }
-}
-`
-
-			dLine, dChar := posIn(t, doc, `view "DiscountView"`, "DiscountView")
-			require.Equal(t, []lsp.Location{
-				locationOf(t, doc, `view "DiscountView"`, "DiscountView"),
-				locationOf(t, doc, `trigger "Checkout Page"`, "DiscountView"),
-			}, lsp.GetReferences(doc, dLine, dChar, uri))
 		})
 
 		t.Run("cursor on a view declaration lists every construct reading it across slice and context boundaries", func(t *testing.T) {

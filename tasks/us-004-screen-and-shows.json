@@ -423,7 +423,7 @@
     },
     {
       "n": 9,
-      "done": false,
+      "done": true,
       "title": "Reject `trigger` in the parser, and remove `ast.Trigger` with every reader",
       "language": "Go",
       "testable": true,

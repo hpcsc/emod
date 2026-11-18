@@ -173,7 +173,7 @@ context "Lending" {
 
 		// Sibling slice blocks own no entry list yet, so they fall through to the top
 		// level keywords rather than borrowing the automation entries.
-		for _, keyword := range []string{"trigger", "view", "translation"} {
+		for _, keyword := range []string{"view", "translation"} {
 			t.Run("inside a "+keyword+" block beside an automation returns the top level keywords", func(t *testing.T) {
 				doc := `context Ctx {
 	aggregate "Agg" {
@@ -303,13 +303,6 @@ context "Shelving" {
 					block:     "automation",
 					doc:       test.AutomationReadsLibraryLending,
 					container: `automation "RecallOverdueCopy`,
-					value:     "MemberLoansView",
-					expected:  declaredViews,
-				},
-				{
-					block:     "trigger",
-					doc:       test.TriggerReadsLibraryLending,
-					container: `trigger "Lending Desk"`,
 					value:     "MemberLoansView",
 					expected:  declaredViews,
 				},

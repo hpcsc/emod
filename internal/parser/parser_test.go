@@ -3,6 +3,7 @@
 package parser_test
 
 import (
+	"strings"
 	"testing"
 
 	"github.com/hpcsc/emod/internal/ast"
@@ -182,8 +183,36 @@ model "Hotel Reservation" {
 			require.Empty(t, appearances[0].Commands)
 		})
 
-		t.Run("a slice holds each of three shows blocks in source order, beside a trigger", func(t *testing.T) {
-			appearances, diags := appearancesOf(t, "    trigger \"Checkout Page\" {\n    }\n    shows {\n      screen = CheckoutPage\n    }\n    shows {\n      screen = OrderPage\n    }\n    shows {\n      screen = ReceiptPage\n    }\n")
+		t.Run("an entry that is not a name is reported at that entry, and the entries around it are still read", func(t *testing.T) {
+			for _, tc := range []struct {
+				key     string
+				column  int
+				entries func(*ast.Appearance) []string
+			}{
+				{key: "reads", column: 26, entries: func(a *ast.Appearance) []string { return a.Reads }},
+				{key: "command", column: 28, entries: func(a *ast.Appearance) []string { return a.Commands }},
+			} {
+				t.Run(tc.key, func(t *testing.T) {
+					appearances, diags := appearancesOf(t, "    shows {\n      screen = CheckoutPage\n      "+tc.key+" = [CartView, \"DiscountView\", LoyaltyView]\n    }\n")
+
+					require.Equal(t, []string{"expected a name"}, messagesOf(diags))
+					require.Equal(t, []int{5, tc.column}, []int{diags[0].Line, diags[0].Column})
+					entries := tc.entries(appearances[0])
+					require.Equal(t, []string{"CartView", "LoyaltyView"}, []string{entries[0], entries[len(entries)-1]})
+				})
+			}
+		})
+
+		t.Run("an empty reads list and an empty command list read nothing", func(t *testing.T) {
+			appearances, diags := appearancesOf(t, "    shows {\n      screen  = CheckoutPage\n      reads   = []\n      command = []\n    }\n")
+
+			require.Empty(t, diags)
+			require.Empty(t, appearances[0].Reads)
+			require.Empty(t, appearances[0].Commands)
+		})
+
+		t.Run("a slice holds each of three shows blocks in source order", func(t *testing.T) {
+			appearances, diags := appearancesOf(t, "    shows {\n      screen = CheckoutPage\n    }\n    shows {\n      screen = OrderPage\n    }\n    shows {\n      screen = ReceiptPage\n    }\n")
 
 			require.Empty(t, diags)
 			var screens []string
@@ -240,22 +269,6 @@ model "Hotel Reservation" {
 			require.Equal(t, 6, model.Contexts[0].ClosePos.Line)
 		})
 
-		t.Run("an actor attribute in a trigger is reported once at the attribute, and the reads after it is still read", func(t *testing.T) {
-			source := "context \"Shop\" {\n  slice \"Apply Discount\" {\n    trigger \"Checkout Page\" {\n      actor = Guest\n      reads = CartView\n    }\n  }\n}\n"
-
-			model, diags := parser.Parse(source, "test.emod")
-
-			require.Len(t, diags, 1)
-			require.Equal(t, 4, diags[0].Line)
-			require.Equal(t, 7, diags[0].Column)
-			require.Regexp(t, `\bactor\b`, diags[0].Message)
-			require.Contains(t, diags[0].Message, "retired")
-			require.Contains(t, diags[0].Message, "delete this actor attribute")
-			trigger := model.Contexts[0].Slices[0].Trigger
-			require.Equal(t, "Checkout Page", trigger.Name)
-			require.Equal(t, []string{"CartView"}, trigger.Reads)
-		})
-
 		t.Run("a field named actor and a construct named actor still parse with no diagnostic", func(t *testing.T) {
 			source := "context \"Shop\" {\n  slice \"Assign\" {\n    command \"actor\" {\n      fields {\n        actor = string\n      }\n    }\n  }\n}\n"
 
@@ -265,6 +278,51 @@ model "Hotel Reservation" {
 			command := model.Contexts[0].Slices[0].Commands[0]
 			require.Equal(t, "actor", command.Name)
 			require.Equal(t, "actor", command.Fields[0].Name)
+		})
+	})
+
+	t.Run("retired trigger", func(t *testing.T) {
+		const triggered = "context \"Shop\" {\n  aggregate \"Cart\" {\n    slice \"Apply Discount\" {\n      trigger \"Checkout Page\" {\n        reads = CartView\n      }\n\n      command \"ApplyDiscount\" {\n      }\n    }\n  }\n}\n"
+
+		t.Run("a trigger block is reported once at its keyword, with a message that names screen and shows", func(t *testing.T) {
+			_, diags := parser.Parse(triggered, "test.emod")
+
+			require.Len(t, diags, 1)
+			require.Equal(t, []int{4, 7}, []int{diags[0].Line, diags[0].Column})
+			for _, word := range []string{"trigger", "screen", "shows"} {
+				require.Regexp(t, `\b`+word+`\b`, diags[0].Message)
+			}
+			require.Contains(t, diags[0].Message, "retired")
+		})
+
+		t.Run("the text after a rejected trigger block is still read, to the closing braces", func(t *testing.T) {
+			model, _ := parser.Parse(triggered, "test.emod")
+
+			context := model.Contexts[0]
+			aggregate := context.Aggregates[0]
+			slice := aggregate.Slices[0]
+			require.Equal(t, "ApplyDiscount", slice.Commands[0].Name)
+			require.Equal(t, []int{10, 11, 12}, []int{slice.ClosePos.Line, aggregate.ClosePos.Line, context.ClosePos.Line})
+		})
+
+		t.Run("a trigger with a kind label gives the same diagnostic, at its keyword", func(t *testing.T) {
+			kindedSource := strings.Replace(triggered, `trigger "Checkout Page"`, `trigger "Schedule" "Nightly Sweep"`, 1)
+			require.NotEqual(t, triggered, kindedSource)
+			_, plain := parser.Parse(triggered, "test.emod")
+			_, kinded := parser.Parse(kindedSource, "test.emod")
+
+			require.Equal(t, messagesOf(plain), messagesOf(kinded))
+			require.Equal(t, []int{4, 7}, []int{kinded[0].Line, kinded[0].Column})
+		})
+
+		t.Run("a field named trigger and a command named trigger still parse with no diagnostic", func(t *testing.T) {
+			source := "context \"Shop\" {\n  slice \"Assign\" {\n    command \"trigger\" {\n      fields {\n        trigger = string\n      }\n    }\n  }\n}\n"
+
+			model, diags := parser.Parse(source, "test.emod")
+
+			require.Empty(t, diags)
+			command := model.Contexts[0].Slices[0].Commands[0]
+			require.Equal(t, []string{"trigger", "trigger"}, []string{command.Name, command.Fields[0].Name})
 		})
 	})
 
@@ -398,52 +456,6 @@ context "Reservations" {
 			require.Equal(t, "PendingConfirmationsView", automation.Reads)
 			require.Equal(t, "SendConfirmationEmail", automation.Command)
 			require.Equal(t, "Notifications", automation.TargetContext)
-		})
-	})
-
-	t.Run("trigger", func(t *testing.T) {
-		readsOf := func(t *testing.T, reads string) (*ast.Trigger, []*diagnostic.Entry) {
-			t.Helper()
-			source := "context \"Shop\" {\n  slice \"Apply Discount\" {\n    trigger \"Checkout Page\" {\n      reads = " + reads + "\n    }\n  }\n}\n"
-			model, diags := parser.Parse(source, "shop.emod")
-			return model.Contexts[0].Slices[0].Trigger, diags
-		}
-
-		t.Run("a list of views is read in the order it is written, each at its own entry", func(t *testing.T) {
-			trigger, diags := readsOf(t, "[CartView, DiscountView]")
-
-			require.Empty(t, diags)
-			require.Equal(t, []string{"CartView", "DiscountView"}, trigger.Reads)
-			require.Equal(t, []ast.Position{
-				{Filename: "shop.emod", Line: 4, Column: 16},
-				{Filename: "shop.emod", Line: 4, Column: 26},
-			}, trigger.ReadsPos)
-		})
-
-		t.Run("one bare name is read as a list of one, at the name", func(t *testing.T) {
-			trigger, diags := readsOf(t, "CartView")
-
-			require.Empty(t, diags)
-			require.Equal(t, []string{"CartView"}, trigger.Reads)
-			require.Equal(t, []ast.Position{{Filename: "shop.emod", Line: 4, Column: 15}}, trigger.ReadsPos)
-		})
-
-		t.Run("an entry that is not a name is reported at that entry, and the entries around it are still read", func(t *testing.T) {
-			trigger, diags := readsOf(t, `[CartView, "DiscountView", LoyaltyView]`)
-
-			require.Len(t, diags, 1)
-			require.Equal(t, "expected a name", diags[0].Message)
-			require.Equal(t, 4, diags[0].Line)
-			require.Equal(t, 26, diags[0].Column)
-			require.Equal(t, "CartView", trigger.Reads[0])
-			require.Equal(t, "LoyaltyView", trigger.Reads[2])
-		})
-
-		t.Run("an empty list reads no view", func(t *testing.T) {
-			trigger, diags := readsOf(t, "[]")
-
-			require.Empty(t, diags)
-			require.Empty(t, trigger.Reads)
 		})
 	})
 

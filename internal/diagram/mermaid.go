@@ -10,7 +10,7 @@ import (
 
 // ExportMermaid converts a parsed AST model into Mermaid event modeling diagram markup.
 // The output uses the eventmodeling diagram type introduced in Mermaid v11.15.0+,
-// with timeframe definitions for triggers, commands, events, views, and automations.
+// with timeframe definitions for screens, commands, events, views, and automations.
 // Contexts are rendered as namespaces using dot notation, which groups entities into
 // swimlanes per bounded context.
 // When StyleProjected is used with DCB contexts that have tagged events, events are
@@ -78,12 +78,6 @@ func exportMermaidStandard(b *strings.Builder, modelName string, entries []slice
 
 		for _, appearance := range s.Appearances {
 			b.WriteString(fmt.Sprintf("tf %02d ui %s\n", nextNum, namespaced(ns, appearance.Screen)))
-			nextNum++
-		}
-
-		if s.Trigger != nil {
-			eid := namespaced(ns, s.Trigger.Name)
-			b.WriteString(fmt.Sprintf("tf %02d ui %s\n", nextNum, eid))
 			nextNum++
 		}
 
@@ -157,7 +151,7 @@ func mermaidAutomationLabel(auto *ast.Automation, ctxName string) string {
 
 // exportMermaidProjected renders the tag-key-based projected layout for DCB contexts.
 // Events are grouped by tag key with one section per unique tag key.
-// Commands, triggers, and untagged events appear in a general cross-cutting section.
+// Screens, commands, and untagged events appear in a general cross-cutting section.
 // Multi-tag events appear in each matching tag section with a connector annotation.
 func exportMermaidProjected(b *strings.Builder, modelName string, entries []sliceEntry, tagKeys []string) {
 	// Sort tag keys for deterministic output
@@ -166,7 +160,7 @@ func exportMermaidProjected(b *strings.Builder, modelName string, entries []slic
 	nextNum := 1
 
 	// --- First pass: non-event elements from all slices ---
-	b.WriteString("%% Commands / Triggers\n")
+	b.WriteString("%% Screens / Commands\n")
 	for _, entry := range entries {
 		s := entry.slice
 		ns := entry.ctxName
@@ -177,13 +171,6 @@ func exportMermaidProjected(b *strings.Builder, modelName string, entries []slic
 
 		for _, appearance := range s.Appearances {
 			b.WriteString(fmt.Sprintf("tf %02d ui %s\n", nextNum, namespaced(ns, appearance.Screen)))
-			nextNum++
-		}
-
-		// Triggers
-		if s.Trigger != nil {
-			eid := namespaced(ns, s.Trigger.Name)
-			b.WriteString(fmt.Sprintf("tf %02d ui %s\n", nextNum, eid))
 			nextNum++
 		}
 
@@ -300,7 +287,7 @@ func eventHasTag(evt *ast.Event, key string) bool {
 func exportMermaidDCB(b *strings.Builder, modelName string, entries []sliceEntry) {
 	nextNum := 1
 
-	b.WriteString("%% Commands / Triggers\n")
+	b.WriteString("%% Screens / Commands\n")
 	for _, entry := range entries {
 		s := entry.slice
 		ns := entry.ctxName
@@ -311,13 +298,6 @@ func exportMermaidDCB(b *strings.Builder, modelName string, entries []sliceEntry
 
 		for _, appearance := range s.Appearances {
 			b.WriteString(fmt.Sprintf("tf %02d ui %s\n", nextNum, namespaced(ns, appearance.Screen)))
-			nextNum++
-		}
-
-		// Triggers
-		if s.Trigger != nil {
-			eid := namespaced(ns, s.Trigger.Name)
-			b.WriteString(fmt.Sprintf("tf %02d ui %s\n", nextNum, eid))
 			nextNum++
 		}
 

@@ -42,10 +42,10 @@ var delayedLibraryLendingProcessorTimeframes = []string{
 
 // timeframeSlotAssignments is the timeframe each of timeframeSlotModel's
 // non-event elements is written into, every style alike, both slice homes
-// together and in declaration order: a trigger belongs to the timeframe a
+// together and in declaration order: a screen belongs to the timeframe a
 // person acts in and an automation or a translation reactor to the processor's.
 var timeframeSlotAssignments = []string{
-	`ui Lending.Lending Desk`,
+	`ui Lending.LendingDesk`,
 	`cmd Lending.BorrowCopy`,
 	`rmo Lending.MemberLoansView`,
 	`pcr Lending.RemindOnDueDate (CopyBorrowed → RemindMember)`,
@@ -57,7 +57,7 @@ var timeframeSlotAssignments = []string{
 	`pcr Lending.SweepOverdueLoans (every "15m" → RecallCopy)`,
 }
 
-// timeframeSlotModel declares a trigger in each home a slice has — one named
+// timeframeSlotModel shows a screen in each home a slice has — one named
 // for the screen it is, one named as a schedule and one named as a background
 // watcher — beside the automation and the translation reactor that share the
 // processor timeframe with each other. Its directly declared slice tags an
@@ -72,12 +72,12 @@ func timeframeSlotModel() *ast.Model {
 				Name: "Loan",
 				Slices: []*ast.Slice{
 					{
-						Name:     "Borrow Copy",
-						NamePos:  ast.Position{Line: 5, Column: 5},
-						Trigger:  &ast.Trigger{Name: "Lending Desk"},
-						Commands: []*ast.Command{command("BorrowCopy")},
-						Events:   []*ast.Event{event("CopyBorrowed")},
-						Views:    []*ast.View{{Name: "MemberLoansView", Subscribes: []string{"CopyBorrowed"}}},
+						Name:        "Borrow Copy",
+						NamePos:     ast.Position{Line: 5, Column: 5},
+						Appearances: []*ast.Appearance{{Screen: "LendingDesk"}},
+						Commands:    []*ast.Command{command("BorrowCopy")},
+						Events:      []*ast.Event{event("CopyBorrowed")},
+						Views:       []*ast.View{{Name: "MemberLoansView", Subscribes: []string{"CopyBorrowed"}}},
 						Automations: []*ast.Automation{{
 							Name:    "RemindOnDueDate",
 							OnEvent: "CopyBorrowed",
@@ -91,18 +91,18 @@ func timeframeSlotModel() *ast.Model {
 						}},
 					},
 					{
-						Name:     "Empty The Returns Bin",
-						NamePos:  ast.Position{Line: 20, Column: 5},
-						Trigger:  &ast.Trigger{Name: "ReturnsBinWatcher"},
-						Commands: []*ast.Command{command("ReturnCopy")},
+						Name:        "Empty The Returns Bin",
+						NamePos:     ast.Position{Line: 20, Column: 5},
+						Appearances: []*ast.Appearance{{Screen: "ReturnsBinWatcher"}},
+						Commands:    []*ast.Command{command("ReturnCopy")},
 					},
 				},
 			}},
 			Slices: []*ast.Slice{{
-				Name:     "Sweep Overdue Loans",
-				NamePos:  ast.Position{Line: 30, Column: 3},
-				Trigger:  &ast.Trigger{Name: "NightlySweep"},
-				Commands: []*ast.Command{command("RecallCopy")},
+				Name:        "Sweep Overdue Loans",
+				NamePos:     ast.Position{Line: 30, Column: 3},
+				Appearances: []*ast.Appearance{{Screen: "NightlySweep"}},
+				Commands:    []*ast.Command{command("RecallCopy")},
 				Events: []*ast.Event{
 					{Name: "CopyRecalled", Tags: []ast.TagEntry{{Key: "loan", FieldRef: "loanId"}}},
 				},
@@ -425,7 +425,7 @@ func TestExportMermaid(t *testing.T) {
 			require.Contains(t, output, "% Slice: Create Order")
 			require.Contains(t, output, "% Slice: Ship Order")
 
-			// First slice: Create Order — UI trigger, commands, events, view, automation
+			// First slice: Create Order — screen, commands, events, view, automation
 			require.Contains(t, output, "tf 01 ui Orders.PlaceOrderForm")
 			require.Contains(t, output, "tf 02 cmd Orders.CreateOrder")
 			require.Contains(t, output, "tf 03 cmd Orders.ValidatePayment")
@@ -435,7 +435,7 @@ func TestExportMermaid(t *testing.T) {
 			require.Contains(t, output, "tf 07 pcr Orders.InventoryUpdater")
 			require.Contains(t, output, "tf 08 pcr Orders.PaymentGW")
 
-			// Second slice: Ship Order — schedule trigger, command, event
+			// Second slice: Ship Order — screen, command, event
 			require.Contains(t, output, "tf 09 ui Orders.ShipTimer")
 			require.Contains(t, output, "tf 10 cmd Orders.ShipOrder")
 			require.Contains(t, output, "tf 11 evt Orders.OrderShipped")
@@ -497,8 +497,8 @@ func TestExportMermaid(t *testing.T) {
 			// Should have tag-key namespace prefixes on events
 			require.Contains(t, output, "tf 01 evt priority.OrderPlaced")
 			require.Contains(t, output, "tf 02 evt region.OrderShipped")
-			// Should have the Commands / Triggers section header
-			require.Contains(t, output, "% Commands / Triggers")
+			// Should have the Screens / Commands section header
+			require.Contains(t, output, "% Screens / Commands")
 		})
 
 		t.Run("single-tag event appears only in that tag's section", func(t *testing.T) {
@@ -550,15 +550,15 @@ func TestExportMermaid(t *testing.T) {
 			require.Contains(t, output, "%   connector: also in")
 		})
 
-		t.Run("commands and triggers appear in Commands / Triggers section", func(t *testing.T) {
+		t.Run("screens and commands appear in the Screens / Commands section", func(t *testing.T) {
 			model := &ast.Model{
 				Name: "CmdTest",
 				Contexts: []*ast.Context{{
 					Name: "Ctx",
 					Slices: []*ast.Slice{{
-						Name:     "S1",
-						Trigger:  &ast.Trigger{Name: "Submit"},
-						Commands: []*ast.Command{{Name: "ProcessOrder"}},
+						Name:        "S1",
+						Appearances: []*ast.Appearance{{Screen: "Submit"}},
+						Commands:    []*ast.Command{{Name: "ProcessOrder"}},
 						Events: []*ast.Event{
 							{Name: "OrderPlaced", Tags: []ast.TagEntry{{Key: "priority"}}},
 						},
@@ -570,8 +570,8 @@ func TestExportMermaid(t *testing.T) {
 			require.NoError(t, err)
 
 			output := string(raw)
-			// Commands and triggers appear in Commands/Triggers section
-			require.Contains(t, output, "% Commands / Triggers")
+			// Screens and commands appear in the Screens / Commands section
+			require.Contains(t, output, "% Screens / Commands")
 			require.Contains(t, output, "tf 01 ui Ctx.Submit")
 			require.Contains(t, output, "tf 02 cmd Ctx.ProcessOrder")
 			// Event appears in tag section (not in commands section)
@@ -716,8 +716,8 @@ func TestExportMermaid(t *testing.T) {
 			// Should NOT have tag section markers
 			require.NotContains(t, output, "% Tag: priority")
 			require.NotContains(t, output, "% Tag: region")
-			// Should have Commands / Triggers section
-			require.Contains(t, output, "% Commands / Triggers")
+			// Should have the Screens / Commands section
+			require.Contains(t, output, "% Screens / Commands")
 			// Events should not have tag-key namespace prefix
 			require.Contains(t, output, "Ctx.EventA")
 			require.Contains(t, output, "Ctx.EventB")
@@ -873,7 +873,7 @@ func TestExportMermaid(t *testing.T) {
 			}},
 		} {
 			t.Run(style.name, func(t *testing.T) {
-				t.Run("a trigger takes the ui timeframe whatever its name reads, and an automation and a translation the pcr timeframe", func(t *testing.T) {
+				t.Run("a screen takes the ui timeframe whatever its name reads, and an automation and a translation the pcr timeframe", func(t *testing.T) {
 					output := renderTimeframeSlotModel(t, style.style, style.events)
 
 					require.Equal(t, timeframeSlotAssignments, nonEventTimeframes(t, output))

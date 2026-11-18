@@ -355,8 +355,11 @@ context "Billing" {
 	})
 
 	t.Run("views", func(t *testing.T) {
-		t.Run("the walk follows the reads of each entry of a trigger's list", func(t *testing.T) {
-			const checkoutModel = `context "Shop" {
+		t.Run("the walk follows the reads of each entry of a shows block's list", func(t *testing.T) {
+			const checkoutModel = `screen "CheckoutPage" {
+}
+
+context "Shop" {
   slice "Show Cart" {
     event "CartUpdated" {
     }
@@ -374,8 +377,9 @@ context "Billing" {
   }
 
   slice "Apply Discount" {
-    trigger "Checkout Page" {
-      reads = [CartView, DiscountView]
+    shows {
+      screen = CheckoutPage
+      reads  = [CartView, DiscountView]
     }
   }
 }
@@ -385,7 +389,7 @@ context "Billing" {
 			require.NoError(t, err)
 			require.Equal(t, []walked{
 				{Label: "subscribes", Name: "DiscountView", From: "DiscountApplied", Depth: 1},
-				{Label: "reads", Name: "Checkout Page", From: "DiscountView", Depth: 2},
+				{Label: "reads", Name: "CheckoutPage", From: "DiscountView", Depth: 2},
 			}, walkOf(tree))
 		})
 

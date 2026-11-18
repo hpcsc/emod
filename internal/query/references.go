@@ -55,8 +55,6 @@ type NameReferences struct {
 	References []Reference `json:"references"`
 }
 
-// A trigger issues the commands of its slice with no DSL word, so that link has
-// the keyword "issues".
 type Reference struct {
 	Group   Group    `json:"group"`
 	Keyword string   `json:"keyword"`
@@ -262,13 +260,6 @@ func addCommandReferences(list *referenceList, slice *ast.Slice, name string) {
 			}
 		}
 	}
-	if trigger := slice.Trigger; trigger != nil {
-		for _, cmd := range slice.Commands {
-			if cmd.Name == name {
-				list.add(GroupIssuedBy, "issues", trigger.NamePos, element(KindScreen, trigger.Name), slice)
-			}
-		}
-	}
 	for _, auto := range slice.Automations {
 		if auto.Command == name {
 			list.add(GroupIssuedBy, "command", auto.CommandPos, element(KindAutomation, auto.Name), slice)
@@ -318,13 +309,6 @@ func addViewReferences(list *referenceList, slice *ast.Slice, name string) {
 		for i, view := range appearance.Reads {
 			if view == name {
 				list.add(GroupReadBy, "reads", appearance.ReadsPos[i], element(KindScreen, appearance.Screen), slice)
-			}
-		}
-	}
-	if trigger := slice.Trigger; trigger != nil {
-		for i, view := range trigger.Reads {
-			if view == name {
-				list.add(GroupReadBy, "reads", trigger.ReadsPos[i], element(KindScreen, trigger.Name), slice)
 			}
 		}
 	}

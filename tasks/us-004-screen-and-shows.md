@@ -932,23 +932,23 @@ MCP tools and the viewer show the new error through the parser.
 
 **Acceptance Criteria:**
 
-- [ ] A `trigger` block in a slice gives one diagnostic, at the line and column of the keyword `trigger`. The
+- [x] A `trigger` block in a slice gives one diagnostic, at the line and column of the keyword `trigger`. The
       message names `trigger`, `screen` and `shows`, each matched with a `\b`-bounded pattern, and says that the
       language retired `trigger`. A trigger with a kind label gives the same diagnostic.
-- [ ] The text after a rejected block still parses: the commands written after it are in the slice, and the
+- [x] The text after a rejected block still parses: the commands written after it are in the slice, and the
       slice, the aggregate and the context have their close positions.
-- [ ] `emod validate` on a file with a `trigger` block returns an error that names the file, the line of the
+- [x] `emod validate` on a file with a `trigger` block returns an error that names the file, the line of the
       keyword and the replacement.
-- [ ] A field named `trigger` and a command named `trigger` still parse with no diagnostic.
-- [ ] `ast.Trigger`, `Slice.Trigger`, `EdgeTriggerReads`, `EdgeTriggerCommand`, the event flow caption `trigger`
+- [x] A field named `trigger` and a command named `trigger` still parse with no diagnostic.
+- [x] `ast.Trigger`, `Slice.Trigger`, `EdgeTriggerReads`, `EdgeTriggerCommand`, the event flow caption `trigger`
       and the advice for kinded triggers do not exist, and each package and each test package compiles.
-- [ ] The trigger kit (`TriggerReadsLibraryLending`, its accessor, its transcriptions, its getter and its twin) and
+- [x] The trigger kit (`TriggerReadsLibraryLending`, its accessor, its transcriptions, its getter and its twin) and
       the tests that only showed that a surface reads a trigger do not exist. A test that covered a behaviour that
       no appearance test covers is an appearance test.
-- [ ] A `\b`-bounded search of the repository for `trigger` finds it only in the historical records that the
+- [x] A `\b`-bounded search of the repository for `trigger` finds it only in the historical records that the
       Boundaries section names, in the files of this breakdown, in the rejection tests of this task, and in the
       tests of Task 8 that feed an old document a `trigger` node or a slice a `trigger` key.
-- [ ] `task test` passes.
+- [x] `task test` passes.
 
 **Affected Files/Modules:**
 

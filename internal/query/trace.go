@@ -174,9 +174,6 @@ func newGraph(model *ast.Model) *graph {
 			})
 		}
 
-		if slice.Trigger != nil {
-			add(KindScreen, slice.Trigger.Name, slice.Trigger.NamePos)
-		}
 		for _, cmd := range slice.Commands {
 			add(KindCommand, cmd.Name, cmd.NamePos)
 		}
@@ -259,10 +256,6 @@ func traceEdge(slice *ast.Slice, invariantScope string, e diagram.Edge) (graphEd
 			to:    nodeKey{kind: KindInvariant, scope: invariantScope, name: e.To},
 			label: "rejected",
 		}, true
-	case diagram.EdgeTriggerCommand:
-		return edge(KindScreen, KindCommand, "issues")
-	case diagram.EdgeTriggerReads:
-		return edge(KindView, KindScreen, "reads")
 	case diagram.EdgeScreenCommand:
 		return edge(KindScreen, KindCommand, "command")
 	case diagram.EdgeScreenReads:

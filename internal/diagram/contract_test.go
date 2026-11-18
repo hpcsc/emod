@@ -794,46 +794,46 @@ func translationModel(declareFlow bool) *ast.Model {
 	return model
 }
 
-// readsLibraryLendingViews names every view test.TriggerReadsLibraryLending
-// declares, so an arrow into a trigger or an automation can be told apart from
+// appearanceReadsLibraryLendingViews names every view
+// test.AppearanceReadsLibraryLending declares, so an arrow into a screen or an automation can be told apart from
 // the one an automation is also drawn from the event that activates it.
-var readsLibraryLendingViews = []string{"MemberLoansView", "DeskOccupancyView"}
+var appearanceReadsLibraryLendingViews = []string{"MemberLoansView", "DeskOccupancyView"}
 
-// triggerReadsLibraryLendingTriggers names every trigger
-// test.TriggerReadsLibraryLending declares, both slice homes together and in
+// appearanceReadsLibraryLendingScreens names the screen of every shows block
+// test.AppearanceReadsLibraryLending declares, both slice homes together and in
 // declaration order, so the views read back off the picture line up with
-// test.TriggerReadsLibraryLendingTriggerViewNames and the trigger that reads
-// nothing contributes nothing.
-var triggerReadsLibraryLendingTriggers = []string{
-	"Lending Desk",
-	"Returns Counter",
-	"Overdue Report",
-	"Desk Kiosk",
+// test.AppearanceReadsLibraryLendingAppearanceViewNames and the shows block that
+// reads nothing contributes nothing.
+var appearanceReadsLibraryLendingScreens = []string{
+	"LendingDesk",
+	"ReturnsCounter",
+	"OverdueReport",
+	"DeskKiosk",
 }
 
-// triggerReadsLibraryLendingAutomations does the same for that fixture's
+// appearanceReadsLibraryLendingAutomations does the same for that fixture's
 // automations, lining up with
-// test.TriggerReadsLibraryLendingAutomationViewNames.
-var triggerReadsLibraryLendingAutomations = []string{
+// test.AppearanceReadsLibraryLendingAutomationViewNames.
+var appearanceReadsLibraryLendingAutomations = []string{
 	"RemindOnDueDate",
 	"RecallOverdueCopy",
 	"FreeDeskAtClosing",
 	"RemindReaderOfLoans",
 }
 
-// TestExporterReadsEdges covers the arrow a trigger and an automation are drawn
+// TestExporterReadsEdges covers the arrow a screen and an automation are drawn
 // from the view they read. The formats that draw boxes draw an arrow for each
-// reads. The ASCII diagram prints a line for each view a trigger reads and none
+// reads. The ASCII diagram prints a line for each view a shows block reads and none
 // for what an automation reads, and the Mermaid diagram prints neither.
 func TestExporterReadsEdges(t *testing.T) {
 	for _, e := range exporters() {
 		t.Run(e.name, func(t *testing.T) {
 			if e.connections == nil {
 				t.Run("renders a model whose automations read views exactly as one whose automations read none", func(t *testing.T) {
-					reading := test.TriggerReadsLibraryLendingModel(t)
+					reading := test.AppearanceReadsLibraryLendingModel(t)
 					unreadAutomations := test.WithoutAutomationReads(reading)
 
-					require.Equal(t, test.TriggerReadsLibraryLendingAutomationViewNames, test.DeclaredAutomationReads(reading))
+					require.Equal(t, test.AppearanceReadsLibraryLendingAutomationViewNames, test.DeclaredAutomationReads(reading))
 					require.Empty(t, test.DeclaredAutomationReads(unreadAutomations),
 						"the twin has to lose the reads of both slice homes, or the comparison below is answered by whichever home it kept")
 
@@ -841,21 +841,21 @@ func TestExporterReadsEdges(t *testing.T) {
 						"a format that draws no boxes has no arrow for the view an automation reads to become")
 				})
 
-				t.Run("a trigger's reads adds one connection for each view it reads, and none where the format counts no connection", func(t *testing.T) {
-					reading := test.TriggerReadsLibraryLendingModel(t)
-					unreadTriggers := test.WithoutTriggerReads(reading)
+				t.Run("a shows block's reads adds one connection for each view it reads, and none where the format counts no connection", func(t *testing.T) {
+					reading := test.AppearanceReadsLibraryLendingModel(t)
+					unreadScreens := test.WithoutAppearanceReads(reading)
 
-					require.Equal(t, test.TriggerReadsLibraryLendingTriggerViewNames, test.DeclaredTriggerReads(reading))
-					require.Empty(t, test.DeclaredTriggerReads(unreadTriggers),
+					require.Equal(t, test.AppearanceReadsLibraryLendingAppearanceViewNames, test.DeclaredAppearanceReads(reading))
+					require.Empty(t, test.DeclaredAppearanceReads(unreadScreens),
 						"the twin has to lose the reads of both slice homes, or the comparison below is answered by whichever home it kept")
 
-					output, unread := e.run(t, reading, diagram.StyleAuto), e.run(t, unreadTriggers, diagram.StyleAuto)
+					output, unread := e.run(t, reading, diagram.StyleAuto), e.run(t, unreadScreens, diagram.StyleAuto)
 
 					if e.countConnections == nil {
-						require.Equal(t, output, unread, "a format that draws no connection has no arrow for the view a trigger reads to become")
+						require.Equal(t, output, unread, "a format that draws no connection has no arrow for the view a shows block reads to become")
 						return
 					}
-					require.Equal(t, e.countConnections(unread)+len(test.DeclaredTriggerReads(reading)), e.countConnections(output))
+					require.Equal(t, e.countConnections(unread)+len(test.DeclaredAppearanceReads(reading)), e.countConnections(output))
 				})
 
 				return
@@ -885,22 +885,22 @@ func TestExporterReadsEdges(t *testing.T) {
 				})
 			}
 
-			t.Run("a trigger reading two views of its own slice is drawn one arrow from each, painted as the arrow to a reader, and no other new arrow", func(t *testing.T) {
+			t.Run("a screen reading two views of its own slice is drawn one arrow from each, painted as the arrow to a reader, and no other new arrow", func(t *testing.T) {
 				reading := singleSliceModel("Shop", "Apply Discount",
 					view("CartView"), view("DiscountView"),
-					&ast.Trigger{Name: "Checkout Page", Reads: []string{"CartView", "DiscountView"}},
+					&ast.Appearance{Screen: "CheckoutPage", Reads: []string{"CartView", "DiscountView"}},
 					&ast.Automation{Name: "ExpireDiscount", Reads: "DiscountView"})
-				unread := test.WithoutTriggerReads(reading)
+				unread := test.WithoutAppearanceReads(reading)
 
 				full, stripped := e.run(t, reading, diagram.StyleAuto), e.run(t, unread, diagram.StyleAuto)
 				drawn := e.connections(t, full)
 				readerPaint := paintOfArrow(t, drawn, "DiscountView", "ExpireDiscount")
-				trigger := e.boxLabelled(t, full, "Checkout Page").label
+				screen := e.boxLabelled(t, full, "CheckoutPage").label
 
 				e.requireWellFormed(t, full)
 				require.ElementsMatch(t, append(e.connections(t, stripped),
-					diagramConnection{source: e.boxLabelled(t, full, "CartView").label, target: trigger, paint: readerPaint},
-					diagramConnection{source: e.boxLabelled(t, full, "DiscountView").label, target: trigger, paint: readerPaint},
+					diagramConnection{source: e.boxLabelled(t, full, "CartView").label, target: screen, paint: readerPaint},
+					diagramConnection{source: e.boxLabelled(t, full, "DiscountView").label, target: screen, paint: readerPaint},
 				), drawn)
 			})
 
@@ -911,37 +911,37 @@ func TestExporterReadsEdges(t *testing.T) {
 				drawn := e.connections(t, output)
 
 				require.Equal(t, map[string][]string{
-					"Desk Kiosk":        {"DeskOccupancyView"},
+					"DeskKiosk":         {"DeskOccupancyView"},
 					"FreeDeskAtClosing": {"DeskOccupancyView"},
-					"Booking Page":      nil,
+					"BookingPage":       nil,
 					"ExpireReservation": nil,
-					"Closing Bell":      nil,
+					"ClosingBell":       nil,
 					"SweepIdleDesks":    nil,
 				}, sourcesIntoEach(drawn, []string{
-					"Desk Kiosk", "FreeDeskAtClosing",
-					"Booking Page", "ExpireReservation",
-					"Closing Bell", "SweepIdleDesks",
+					"DeskKiosk", "FreeDeskAtClosing",
+					"BookingPage", "ExpireReservation",
+					"ClosingBell", "SweepIdleDesks",
 				}))
 				require.Len(t, drawn, 2,
 					"the picture draws an arrow for the two reads that name a declared view and for nothing else")
 			})
 
-			t.Run("draws one arrow per view the fixture's triggers and its automations read", func(t *testing.T) {
-				output := e.run(t, test.TriggerReadsLibraryLendingModel(t), diagram.StyleAuto)
+			t.Run("draws one arrow per view the fixture's shows blocks and its automations read", func(t *testing.T) {
+				output := e.run(t, test.AppearanceReadsLibraryLendingModel(t), diagram.StyleAuto)
 
 				e.requireWellFormed(t, output)
 				drawn := e.connections(t, output)
 
-				require.Equal(t, test.TriggerReadsLibraryLendingTriggerViewNames,
-					viewsRead(drawn, triggerReadsLibraryLendingTriggers, readsLibraryLendingViews))
-				require.Equal(t, test.TriggerReadsLibraryLendingAutomationViewNames,
-					viewsRead(drawn, triggerReadsLibraryLendingAutomations, readsLibraryLendingViews),
+				require.Equal(t, test.AppearanceReadsLibraryLendingAppearanceViewNames,
+					viewsRead(drawn, appearanceReadsLibraryLendingScreens, appearanceReadsLibraryLendingViews))
+				require.Equal(t, test.AppearanceReadsLibraryLendingAutomationViewNames,
+					viewsRead(drawn, appearanceReadsLibraryLendingAutomations, appearanceReadsLibraryLendingViews),
 					"the automation reading a view another context declares is drawn its arrow too")
 			})
 
 			for _, twin := range readsTwins() {
 				t.Run("clearing every "+twin.construct+"'s reads takes away one arrow per view and the copies of the views it read from far away, and repaints no other box", func(t *testing.T) {
-					reading := test.TriggerReadsLibraryLendingModel(t)
+					reading := test.AppearanceReadsLibraryLendingModel(t)
 					unread := twin.strip(reading)
 
 					require.Equal(t, twin.declaredViews, twin.declared(reading))
@@ -965,8 +965,8 @@ func TestExporterReadsEdges(t *testing.T) {
 
 // readsTwin pairs a construct that reads a view with the twin that reads none —
 // of readsModel, where the box it labels is the only one to gain an arrow, and
-// of test.TriggerReadsLibraryLending, where the other construct goes on reading
-// what it read.
+// of test.AppearanceReadsLibraryLending, where the other construct goes on
+// reading what it read.
 type readsTwin struct {
 	construct string
 	// reader labels the box readsModel draws for this construct.
@@ -976,7 +976,7 @@ type readsTwin struct {
 	kept          func(*ast.Model) []string
 	declaredViews []string
 	keptViews     []string
-	// farViewCopies labels the copies test.TriggerReadsLibraryLending draws for
+	// farViewCopies labels the copies test.AppearanceReadsLibraryLending draws for
 	// the views this construct reads from two or more slices away.
 	farViewCopies []string
 }
@@ -984,13 +984,13 @@ type readsTwin struct {
 func readsTwins() []readsTwin {
 	return []readsTwin{
 		{
-			construct:     "trigger",
-			reader:        "Lending Desk",
-			strip:         test.WithoutTriggerReads,
-			declared:      test.DeclaredTriggerReads,
+			construct:     "screen",
+			reader:        "LendingDesk",
+			strip:         test.WithoutAppearanceReads,
+			declared:      test.DeclaredAppearanceReads,
 			kept:          test.DeclaredAutomationReads,
-			declaredViews: test.TriggerReadsLibraryLendingTriggerViewNames,
-			keptViews:     test.TriggerReadsLibraryLendingAutomationViewNames,
+			declaredViews: test.AppearanceReadsLibraryLendingAppearanceViewNames,
+			keptViews:     test.AppearanceReadsLibraryLendingAutomationViewNames,
 			farViewCopies: []string{
 				"DeskOccupancyView\nfrom Browse Desk Occupancy",
 				"DeskOccupancyView\nfrom Browse Desk Occupancy",
@@ -1001,9 +1001,9 @@ func readsTwins() []readsTwin {
 			reader:        "RecallOverdueCopy",
 			strip:         test.WithoutAutomationReads,
 			declared:      test.DeclaredAutomationReads,
-			kept:          test.DeclaredTriggerReads,
-			declaredViews: test.TriggerReadsLibraryLendingAutomationViewNames,
-			keptViews:     test.TriggerReadsLibraryLendingTriggerViewNames,
+			kept:          test.DeclaredAppearanceReads,
+			declaredViews: test.AppearanceReadsLibraryLendingAutomationViewNames,
+			keptViews:     test.AppearanceReadsLibraryLendingAppearanceViewNames,
 			farViewCopies: []string{
 				"MemberLoansView\nfrom Review Member Loans",
 				"MemberLoansView\nfrom Review Member Loans",
@@ -1012,12 +1012,12 @@ func readsTwins() []readsTwin {
 	}
 }
 
-// readsModel gives a trigger and an automation the view another slice declares,
+// readsModel gives a screen and an automation the view another slice declares,
 // beside a translation reading that same view, so the arrow each reader gains
 // can be compared against the one the translation was already drawn.
 func readsModel() *ast.Model {
 	model := singleSliceModel("Lending", "Borrow Copy",
-		&ast.Trigger{Name: "Lending Desk", Reads: []string{"MemberLoansView"}},
+		&ast.Appearance{Screen: "LendingDesk", Reads: []string{"MemberLoansView"}},
 		command("BorrowCopy"), event("CopyBorrowed"))
 	aggregate := model.Contexts[0].Aggregates[0]
 	aggregate.Slices[0].Translations = []*ast.Translation{{
@@ -1045,9 +1045,9 @@ func readsModel() *ast.Model {
 	return model
 }
 
-// mixedReadsModel puts a trigger and an automation reading a declared view
-// beside a trigger and an automation naming a view no slice declares, and a
-// trigger and an automation reading nothing, so one picture shows the arrow and
+// mixedReadsModel puts a screen and an automation reading a declared view
+// beside a screen and an automation naming a view no slice declares, and a
+// screen and an automation reading nothing, so one picture shows the arrow and
 // its absence together. None of the six is drawn any other arrow, so an arrow
 // reaching one of them could only be the view it reads.
 func mixedReadsModel() *ast.Model {
@@ -1056,17 +1056,17 @@ func mixedReadsModel() *ast.Model {
 	aggregate.Slices = append(aggregate.Slices,
 		&ast.Slice{
 			Name:        "Claim Desk",
-			Trigger:     &ast.Trigger{Name: "Desk Kiosk", Reads: []string{"DeskOccupancyView"}},
+			Appearances: []*ast.Appearance{{Screen: "DeskKiosk", Reads: []string{"DeskOccupancyView"}}},
 			Automations: []*ast.Automation{{Name: "FreeDeskAtClosing", Reads: "DeskOccupancyView"}},
 		},
 		&ast.Slice{
 			Name:        "Reserve Desk",
-			Trigger:     &ast.Trigger{Name: "Booking Page", Reads: []string{"DeskWaitlistView"}},
+			Appearances: []*ast.Appearance{{Screen: "BookingPage", Reads: []string{"DeskWaitlistView"}}},
 			Automations: []*ast.Automation{{Name: "ExpireReservation", Reads: "DeskWaitlistView"}},
 		},
 		&ast.Slice{
 			Name:        "Close Reading Room",
-			Trigger:     &ast.Trigger{Name: "Closing Bell"},
+			Appearances: []*ast.Appearance{{Screen: "ClosingBell"}},
 			Automations: []*ast.Automation{{Name: "SweepIdleDesks"}},
 		})
 
@@ -1559,8 +1559,8 @@ var reactiveModelCommands = []string{
 // reactiveModelElements labels every box reactiveModel's own elements are drawn,
 // leaving out the lanes and context bands they sit in.
 var reactiveModelElements = slices.Concat(reactiveModelCommands, reactiveModelReactors, []string{
-	"Order Form", "OrderPlaced", "PaymentSettled", "Stripe",
-	"Dispatch Desk", "OrderShipped", "LabelPrinted", "DHL",
+	"OrderForm", "OrderPlaced", "PaymentSettled", "Stripe",
+	"DispatchDesk", "OrderShipped", "LabelPrinted", "DHL",
 })
 
 // reactiveModelReactorEdges names every arrow reactiveModel's picture draws with
@@ -1584,7 +1584,7 @@ var reactiveModelReactorEdges = []string{
 }
 
 // reactiveModel gives two adjacent slices everything the command and view lane
-// has to hold at once — a trigger, two commands, a view, an event, two
+// has to hold at once — a screen, two commands, a view, an event, two
 // automations and a translation each — so the reactive boxes have to find room
 // beside the commands of their own slice and stay out of the neighbouring one.
 func reactiveModel() *ast.Model {
@@ -1596,12 +1596,12 @@ func reactiveModel() *ast.Model {
 				Name: "Order",
 				Slices: []*ast.Slice{
 					{
-						Name:     "Place Order",
-						Trigger:  &ast.Trigger{Name: "Order Form"},
-						Commands: []*ast.Command{command("PlaceOrder"), command("ReserveStock")},
-						Events:   []*ast.Event{event("OrderPlaced")},
-						Views:    []*ast.View{{Name: "OrderStatusView", Subscribes: []string{"OrderPlaced"}}},
-						Flows:    []*ast.Flow{{CommandName: "PlaceOrder", EventName: "OrderPlaced"}},
+						Name:        "Place Order",
+						Appearances: []*ast.Appearance{{Screen: "OrderForm"}},
+						Commands:    []*ast.Command{command("PlaceOrder"), command("ReserveStock")},
+						Events:      []*ast.Event{event("OrderPlaced")},
+						Views:       []*ast.View{{Name: "OrderStatusView", Subscribes: []string{"OrderPlaced"}}},
+						Flows:       []*ast.Flow{{CommandName: "PlaceOrder", EventName: "OrderPlaced"}},
 						Automations: []*ast.Automation{
 							{Name: "NotifyWarehouse", OnEvent: "OrderPlaced", Command: "ReserveStock"},
 							{Name: "ChargeCard", OnEvent: "OrderPlaced", Reads: "OrderStatusView", Command: "PlaceOrder"},
@@ -1614,12 +1614,12 @@ func reactiveModel() *ast.Model {
 						}},
 					},
 					{
-						Name:     "Ship Order",
-						Trigger:  &ast.Trigger{Name: "Dispatch Desk"},
-						Commands: []*ast.Command{command("ShipOrder"), command("PrintLabel")},
-						Events:   []*ast.Event{event("OrderShipped")},
-						Views:    []*ast.View{{Name: "ShipmentBoardView", Subscribes: []string{"OrderShipped"}}},
-						Flows:    []*ast.Flow{{CommandName: "ShipOrder", EventName: "OrderShipped"}},
+						Name:        "Ship Order",
+						Appearances: []*ast.Appearance{{Screen: "DispatchDesk"}},
+						Commands:    []*ast.Command{command("ShipOrder"), command("PrintLabel")},
+						Events:      []*ast.Event{event("OrderShipped")},
+						Views:       []*ast.View{{Name: "ShipmentBoardView", Subscribes: []string{"OrderShipped"}}},
+						Flows:       []*ast.Flow{{CommandName: "ShipOrder", EventName: "OrderShipped"}},
 						Automations: []*ast.Automation{
 							{Name: "BookPickup", OnEvent: "OrderShipped", Command: "ShipOrder"},
 							{Name: "ArchiveOrder", OnEvent: "OrderShipped", Command: "PrintLabel"},
@@ -1706,15 +1706,15 @@ func TestExporterReactorPlacement(t *testing.T) {
 					"a box drawn under another is a label nobody can read")
 			})
 
-			t.Run("the top lane holds nothing but the triggers", func(t *testing.T) {
+			t.Run("the top lane holds nothing but the screens", func(t *testing.T) {
 				output := e.run(t, reactiveModel(), diagram.StyleAuto)
 
 				e.requireWellFormed(t, output)
 				boxes := e.boxes(t, output)
 
-				require.Equal(t, []string{"Order Form", "Dispatch Desk"},
+				require.Equal(t, []string{"OrderForm", "DispatchDesk"},
 					labelsWithin(boxes, boxLabelled(t, boxes, "Wireframes").rect),
-					"the lane holding what a person touches holds the two triggers and nothing else")
+					"the lane holding what a person touches holds the two screens and nothing else")
 			})
 
 			t.Run("every arrow into and out of a reactor still joins the same two boxes", func(t *testing.T) {
@@ -1795,10 +1795,10 @@ func boxesExcept(boxes []diagramBox, names []string) []diagramBox {
 	return kept
 }
 
-// triggerScreenFraming returns the framing rectangle drawn inside a trigger box,
+// screenFraming returns the framing rectangle drawn inside a screen box,
 // and a boolean that is true only when the box labelled label actually carries a
 // screen framing. The framing is the label-less rect inside the main rect.
-func triggerScreenFraming(t *testing.T, e exporter, output, label string) (boxRect, bool) {
+func screenFraming(t *testing.T, e exporter, output, label string) (boxRect, bool) {
 	t.Helper()
 
 	switch e.name {
@@ -1811,7 +1811,7 @@ func triggerScreenFraming(t *testing.T, e exporter, output, label string) (boxRe
 				break
 			}
 		}
-		require.NotEmpty(t, main.label, "expected a trigger shape labelled %q", label)
+		require.NotEmpty(t, main.label, "expected a screen shape labelled %q", label)
 		for _, shape := range shapes {
 			if shape.label == "" && shape.rect.within(main.rect) {
 				return shape.rect, true
@@ -1820,63 +1820,63 @@ func triggerScreenFraming(t *testing.T, e exporter, output, label string) (boxRe
 		return boxRect{}, false
 
 	default:
-		require.Fail(t, "trigger screen framing not supported for %q", e.name)
+		require.Fail(t, "screen framing not supported for %q", e.name)
 	}
 
 	return boxRect{}, false
 }
 
-// TestExporterTriggerScreen checks that a trigger is drawn as a screen rather
+// TestExporterScreenFraming checks that a screen is drawn with a framing rather
 // than as a plain rounded rectangle, so it can be told from a sticky note without
 // reading its colour.
-func TestExporterTriggerScreen(t *testing.T) {
+func TestExporterScreenFraming(t *testing.T) {
 	for _, e := range exporters() {
 		if e.fillOfLabel == nil {
 			continue
 		}
 
 		t.Run(e.name, func(t *testing.T) {
-			t.Run("draws a screen framing on the trigger and no other element type", func(t *testing.T) {
+			t.Run("draws a framing on the screen and no other element type", func(t *testing.T) {
 				output := e.run(t, paletteModel(), diagram.StyleAuto)
 
-				triggerRect := e.boxLabelled(t, output, "Form").rect
-				framing, ok := triggerScreenFraming(t, e, output, "Form")
-				require.True(t, ok, "expected the trigger to carry a screen framing")
+				screenRect := e.boxLabelled(t, output, "Form").rect
+				framing, ok := screenFraming(t, e, output, "Form")
+				require.True(t, ok, "expected the screen to carry a framing")
 
-				require.True(t, framing.within(triggerRect),
-					"the trigger's framing must lie inside the trigger box")
+				require.True(t, framing.within(screenRect),
+					"the screen's framing must lie inside the screen box")
 				require.NotEmpty(t, framing.h,
-					"the trigger's framing must have a positive height")
+					"the screen's framing must have a positive height")
 
 				for _, other := range []string{"Cmd", "Evt", "Rmo", "Stripe"} {
-					_, ok := triggerScreenFraming(t, e, output, other)
-					require.False(t, ok, "element type %q must not carry trigger screen framing", other)
+					_, ok := screenFraming(t, e, output, other)
+					require.False(t, ok, "element type %q must not carry a screen framing", other)
 				}
 			})
 
-			t.Run("keeps the trigger's box the same position and size", func(t *testing.T) {
+			t.Run("keeps the screen's box the same position and size", func(t *testing.T) {
 				output := e.run(t, paletteModel(), diagram.StyleAuto)
 
-				trigger := e.boxLabelled(t, output, "Form")
-				require.Equal(t, boxRect{x: 60, y: 142, w: 240, h: 55}, trigger.rect,
-					"the trigger box must keep the same position and size as it had without the framing")
+				screen := e.boxLabelled(t, output, "Form")
+				require.Equal(t, boxRect{x: 60, y: 142, w: 240, h: 55}, screen.rect,
+					"the screen box must keep the same position and size as it had without the framing")
 			})
 
 			t.Run("is still distinguishable when every fill is normalised to one colour", func(t *testing.T) {
 				output := e.run(t, paletteModel(), diagram.StyleAuto)
 				output = regexp.MustCompile(`fill="#[0-9a-fA-F]{6}"`).ReplaceAllString(output, `fill="#888888"`)
 
-				// Normalising must not break the structural distinction: the trigger
+				// Normalising must not break the structural distinction: the screen
 				// still has a framing and no other element type does.
-				_, ok := triggerScreenFraming(t, e, output, "Form")
-				require.True(t, ok, "the trigger must still have a framing after colour normalisation")
+				_, ok := screenFraming(t, e, output, "Form")
+				require.True(t, ok, "the screen must still have a framing after colour normalisation")
 				for _, other := range []string{"Cmd", "Evt", "Rmo", "Stripe"} {
-					_, ok := triggerScreenFraming(t, e, output, other)
-					require.False(t, ok, "element type %q must not be mistaken for a trigger by framing", other)
+					_, ok := screenFraming(t, e, output, other)
+					require.False(t, ok, "element type %q must not be mistaken for a screen by framing", other)
 				}
 			})
 
-			t.Run("keeps the trigger tooltip and fill on the trigger's own shape", func(t *testing.T) {
+			t.Run("keeps the screen tooltip and fill on the screen's own shape", func(t *testing.T) {
 				output := e.run(t, paletteModel(), diagram.StyleAuto)
 
 				require.Equal(t, "Where the order is placed", svgTooltipOf(t, output, "Form"))
@@ -1924,7 +1924,7 @@ func viewerNodePalette(t *testing.T) map[string]struct{ fill, stroke string } {
 // viewerTypeToModelLabel maps the viewer's node type names to the labels
 // paletteModel gives each element type.
 var viewerTypeToModelLabel = map[string]string{
-	"shows":       "Kiosk",
+	"shows":       "Form",
 	"command":     "Cmd",
 	"event":       "Evt",
 	"view":        "Rmo",
@@ -2218,7 +2218,7 @@ func TestExporterViewAndCommandCopies(t *testing.T) {
 
 		t.Run(e.name, func(t *testing.T) {
 			t.Run("draws a copy of each view read and each command issued from two or more slices away in the Commands / Views lane, naming the slice that declares it", func(t *testing.T) {
-				boxes := e.boxes(t, e.run(t, test.TriggerReadsLibraryLendingModel(t), diagram.StyleAuto))
+				boxes := e.boxes(t, e.run(t, test.AppearanceReadsLibraryLendingModel(t), diagram.StyleAuto))
 
 				require.Equal(t, []string{
 					"DeskOccupancyView\nfrom Browse Desk Occupancy",
@@ -2231,7 +2231,7 @@ func TestExporterViewAndCommandCopies(t *testing.T) {
 			})
 
 			t.Run("draws each copy of a view or a command in the column of its slice, between the slices on either side", func(t *testing.T) {
-				boxes := e.boxes(t, e.run(t, test.TriggerReadsLibraryLendingModel(t), diagram.StyleAuto))
+				boxes := e.boxes(t, e.run(t, test.AppearanceReadsLibraryLendingModel(t), diagram.StyleAuto))
 				copies := copyBoxesIn(boxesWithin(boxes, boxLabelled(t, boxes, "Commands / Views").rect))
 				require.Len(t, copies, 6)
 
@@ -2255,7 +2255,7 @@ func TestExporterViewAndCommandCopies(t *testing.T) {
 			})
 
 			t.Run("draws no copy of a view or a command over another box of its lane", func(t *testing.T) {
-				boxes := e.boxes(t, e.run(t, test.TriggerReadsLibraryLendingModel(t), diagram.StyleAuto))
+				boxes := e.boxes(t, e.run(t, test.AppearanceReadsLibraryLendingModel(t), diagram.StyleAuto))
 				inLane := boxesWithin(boxes, boxLabelled(t, boxes, "Commands / Views").rect)
 				copies := copyBoxesIn(inLane)
 				require.Len(t, copies, 6)
@@ -2272,25 +2272,25 @@ func TestExporterViewAndCommandCopies(t *testing.T) {
 			})
 
 			t.Run("a reads arrow starts at the copy of a view two or more slices away, and at the view in the slice next to it", func(t *testing.T) {
-				connections := e.connections(t, e.run(t, test.TriggerReadsLibraryLendingModel(t), diagram.StyleAuto))
+				connections := e.connections(t, e.run(t, test.AppearanceReadsLibraryLendingModel(t), diagram.StyleAuto))
 
 				require.Equal(t, map[string][]string{
-					"Lending Desk":      {"MemberLoansView"},
-					"Overdue Report":    {"DeskOccupancyView\nfrom Browse Desk Occupancy"},
-					"Desk Kiosk":        {"DeskOccupancyView\nfrom Browse Desk Occupancy"},
+					"LendingDesk":       {"MemberLoansView"},
+					"OverdueReport":     {"DeskOccupancyView\nfrom Browse Desk Occupancy"},
+					"DeskKiosk":         {"DeskOccupancyView\nfrom Browse Desk Occupancy"},
 					"RecallOverdueCopy": {"CopyBorrowed\nfrom Borrow Copy", "MemberLoansView\nfrom Review Member Loans"},
 					"FreeDeskAtClosing": {"DeskClaimed\nfrom Claim Desk", "DeskOccupancyView"},
 				}, linesOfEach(sourcesIntoEach(connections, []string{
-					"Lending Desk", "Overdue Report", "Desk Kiosk", "RecallOverdueCopy", "FreeDeskAtClosing",
+					"LendingDesk", "OverdueReport", "DeskKiosk", "RecallOverdueCopy", "FreeDeskAtClosing",
 				})))
 			})
 
-			t.Run("a trigger reading a list draws a copy of the view two slices away in its own column, and none of the view of the next slice", func(t *testing.T) {
+			t.Run("a shows block reading a list draws a copy of the view two slices away in its own column, and none of the view of the next slice", func(t *testing.T) {
 				model := singleSliceModel("Shop", "Show Offers", view("OfferView"))
 				aggregate := model.Contexts[0].Aggregates[0]
 				aggregate.Slices = append(aggregate.Slices,
 					&ast.Slice{Name: "Show Basket", Views: []*ast.View{view("CartView")}},
-					&ast.Slice{Name: "Apply Discount", Trigger: &ast.Trigger{Name: "Checkout Page", Reads: []string{"CartView", "OfferView"}}},
+					&ast.Slice{Name: "Apply Discount", Appearances: []*ast.Appearance{{Screen: "CheckoutPage", Reads: []string{"CartView", "OfferView"}}}},
 				)
 
 				output := e.run(t, model, diagram.StyleAuto)
@@ -2301,11 +2301,11 @@ func TestExporterViewAndCommandCopies(t *testing.T) {
 				cart := boxNamed(t, boxes, "CartView").rect
 				require.Greater(t, copies[0].rect.x, cart.x+cart.w, "the copy starts before the slice ahead of it ends")
 				require.ElementsMatch(t, []string{"CartView", "OfferView\nfrom Show Offers"},
-					linesOf(sourcesInto(e.connections(t, output), "Checkout Page")))
+					linesOf(sourcesInto(e.connections(t, output), "CheckoutPage")))
 			})
 
 			t.Run("a command arrow ends at the copy of a command two or more slices away, and at the command in the automation's own slice", func(t *testing.T) {
-				connections := e.connections(t, e.run(t, test.TriggerReadsLibraryLendingModel(t), diagram.StyleAuto))
+				connections := e.connections(t, e.run(t, test.AppearanceReadsLibraryLendingModel(t), diagram.StyleAuto))
 
 				require.Equal(t, map[string][]string{
 					"RemindReaderOfLoans": {"RemindMember\nin Chase Overdue Copy"},
@@ -2446,7 +2446,7 @@ func TestExporterPaletteMatchesReference(t *testing.T) {
 }
 
 // TestExporterPalette pins the event-modeling colour convention — orange events,
-// blue commands, green read models, white triggers, a black gear for each
+// blue commands, green read models, white screens, a black gear for each
 // automation, grey translations — without pinning the exact palette values,
 // which are free to change.
 func TestExporterPalette(t *testing.T) {
@@ -2559,15 +2559,13 @@ func TestExporterPalette(t *testing.T) {
 // for a shape by its label goes through whatever a format does with prose.
 func paletteModel() *ast.Model {
 	model := singleSliceModel("Palette", "S",
-		&ast.Trigger{Name: "Form", Description: "Where the order is placed"},
+		&ast.Appearance{Screen: "Form"},
 		&ast.Command{Name: "Cmd", Description: "Asks for the order to be placed"},
 		&ast.Event{Name: "Evt", Description: "The order was placed"},
 		&ast.View{Name: "Rmo", Description: "Every order placed so far"},
 		&ast.Automation{Name: "Auto", Description: "Reacts to the order being placed", OnEvent: "Evt", Command: "Cmd"},
 	)
-	model.Screens = []*ast.Screen{{Name: "Kiosk", Description: "The screen a clerk takes orders at"}}
-	model.Contexts[0].Aggregates[0].Slices = append(model.Contexts[0].Aggregates[0].Slices,
-		&ast.Slice{Name: "Take Order", Appearances: []*ast.Appearance{{Screen: "Kiosk"}}})
+	model.Screens = []*ast.Screen{{Name: "Form", Description: "Where the order is placed"}}
 	model.Contexts[0].Aggregates[0].Slices[0].Translations = []*ast.Translation{{
 		Name:           "Import",
 		Description:    "Restates a payment provider callback in our own language",
@@ -2698,8 +2696,8 @@ func singleSliceModel(modelName, sliceName string, opts ...any) *ast.Model {
 			s.Events = append(s.Events, v)
 		case *ast.View:
 			s.Views = append(s.Views, v)
-		case *ast.Trigger:
-			s.Trigger = v
+		case *ast.Appearance:
+			s.Appearances = append(s.Appearances, v)
 		case *ast.Automation:
 			s.Automations = append(s.Automations, v)
 		}
@@ -2743,6 +2741,7 @@ func describedModel() *ast.Model {
 	return &ast.Model{
 		Name:        "Described",
 		Description: "How the hotel takes and imports room bookings",
+		Screens:     []*ast.Screen{{Name: "BookingForm", Description: "The booking form on the public site"}},
 		Contexts: []*ast.Context{{
 			Name:        "Bookings",
 			Description: "Everything the hotel knows about a stay before the guest arrives",
@@ -2752,10 +2751,7 @@ func describedModel() *ast.Model {
 				Slices: []*ast.Slice{{
 					Name:        "Hold a room",
 					Description: "A guest books a room from the public site",
-					Trigger: &ast.Trigger{
-						Name:        "BookingForm",
-						Description: "The booking form on the public site",
-					},
+					Appearances: []*ast.Appearance{{Screen: "BookingForm"}},
 					Commands: []*ast.Command{{
 						Name:        "HoldRoom",
 						Description: "Ask the hotel to hold a room over a date range",
@@ -2836,6 +2832,9 @@ func requireEveryDescriptionShown(t *testing.T, output string, tooltipOf func(t 
 // compare a described model's diagram against the one it draws without prose.
 func withoutDescriptions(model *ast.Model) *ast.Model {
 	model.Description = ""
+	for _, screen := range model.Screens {
+		screen.Description = ""
+	}
 	for _, ctx := range model.Contexts {
 		ctx.Description = ""
 		for _, agg := range ctx.Aggregates {
@@ -2849,9 +2848,6 @@ func withoutDescriptions(model *ast.Model) *ast.Model {
 
 func undescribeSlice(s *ast.Slice) {
 	s.Description = ""
-	if s.Trigger != nil {
-		s.Trigger.Description = ""
-	}
 	for _, cmd := range s.Commands {
 		cmd.Description = ""
 	}
@@ -2932,9 +2928,10 @@ func fullModel() *ast.Model {
 				Slices: []*ast.Slice{
 					{
 						Name: "Create Order",
-						Trigger: &ast.Trigger{
-							Name: "PlaceOrderForm",
-						},
+						Appearances: []*ast.Appearance{{
+							Screen:   "PlaceOrderForm",
+							Commands: []string{"CreateOrder", "ValidatePayment"},
+						}},
 						Commands: []*ast.Command{
 							{Name: "CreateOrder"},
 							{Name: "ValidatePayment"},
@@ -2968,9 +2965,10 @@ func fullModel() *ast.Model {
 					},
 					{
 						Name: "Ship Order",
-						Trigger: &ast.Trigger{
-							Name: "ShipTimer",
-						},
+						Appearances: []*ast.Appearance{{
+							Screen:   "ShipTimer",
+							Commands: []string{"ShipOrder"},
+						}},
 						Commands: []*ast.Command{
 							{Name: "ShipOrder"},
 						},

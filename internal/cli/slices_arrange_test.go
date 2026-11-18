@@ -11,7 +11,7 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-// unarrangedEmod trails BorrowView behind the slice whose trigger reads it, so
+// unarrangedEmod trails BorrowView behind the slice whose shows block reads it, so
 // arranging has something to move.
 const unarrangedEmod = `emod = 1
 

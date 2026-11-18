@@ -164,8 +164,8 @@ flowchart LR
 ## Diagram rendering and export
 
 Which *arrows* a model contains is decided once, in `diagram.SliceEdges`: the
-semantic edges of a slice (trigger→command, the view→screen and screen→command
-arrows of each `shows` block, flows, subscriptions, automation and translation
+semantic edges of a slice (the view→screen and screen→command arrows of each
+`shows` block, flows, subscriptions, automation and translation
 wiring), including the rule that a translation's implied
 command→event arrow is derived only when no flow already declares the same
 pair. Renderers keep only their format's drawing concerns.

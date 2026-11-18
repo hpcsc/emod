@@ -86,9 +86,6 @@ func declaredConstructs(model *ast.Model) []constructDecl {
 	for _, scoped := range model.SliceRefs() {
 		scope := scopeOf(scoped)
 		addQuoted("Slice", scoped.Slice.Name, scoped.Slice.NamePos, scope, scoped.Slice.Description)
-		if trigger := scoped.Slice.Trigger; trigger != nil {
-			addQuoted("Trigger", trigger.Name, trigger.NamePos, scope, trigger.Description)
-		}
 		for _, cmd := range scoped.Slice.Commands {
 			decls = append(decls, constructDecl{
 				kind:        "Command",

@@ -172,7 +172,7 @@ func TestReferences(t *testing.T) {
 	})
 
 	t.Run("view", func(t *testing.T) {
-		t.Run("groups the events that build it, the trigger, the automation and the translation that read it, and the specs that name it", func(t *testing.T) {
+		t.Run("groups the events that build it, the shows block, the automation and the translation that read it, and the specs that name it", func(t *testing.T) {
 			found, err := query.References(parse(t, bookingModel), "RoomsView", "")
 
 			require.NoError(t, err)
@@ -282,52 +282,6 @@ context "Shop" {
 				},
 			}}, found)
 		})
-	})
-
-	t.Run("trigger", func(t *testing.T) {
-		const checkoutModel = `context "Shop" {
-  slice "Show Cart" {
-    view "CartView" {
-    }
-
-    view "DiscountView" {
-    }
-  }
-
-  slice "Apply Discount" {
-    trigger "Checkout Page" {
-      reads = [
-        CartView,
-        DiscountView,
-      ]
-    }
-  }
-}
-`
-		for _, tc := range []struct {
-			view      string
-			line      int
-			entryLine int
-		}{
-			{view: "CartView", line: 3, entryLine: 13},
-			{view: "DiscountView", line: 6, entryLine: 14},
-		} {
-			t.Run("each view of a reads list lists the trigger among its readers: "+tc.view, func(t *testing.T) {
-				found, err := query.References(parse(t, checkoutModel), tc.view, "")
-
-				require.NoError(t, err)
-				require.Equal(t, []query.NameReferences{{
-					Kind:    query.KindView,
-					Name:    tc.view,
-					Context: "Shop",
-					Slice:   "Show Cart",
-					Line:    tc.line,
-					References: []query.Reference{
-						{Group: query.GroupReadBy, Keyword: "reads", Line: tc.entryLine, Element: element(query.KindScreen, "Checkout Page"), Slice: "Apply Discount"},
-					},
-				}}, found)
-			})
-		}
 	})
 
 	t.Run("invariant", func(t *testing.T) {

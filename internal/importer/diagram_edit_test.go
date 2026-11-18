@@ -2679,7 +2679,7 @@ context "Shop" {
 `
 
 		t.Run("a diagram that draws view and command copies, unedited, leaves the model as it was written", func(t *testing.T) {
-			require.Equal(t, test.TriggerReadsLibraryLending, applied(t, test.TriggerReadsLibraryLending, func(*viewerDiagram) {}))
+			require.Equal(t, test.AppearanceReadsLibraryLending, applied(t, test.AppearanceReadsLibraryLending, func(*viewerDiagram) {}))
 		})
 
 		t.Run("renaming a view renames it in the readers that read it through a copy", func(t *testing.T) {
@@ -2691,11 +2691,11 @@ context "Shop" {
 		})
 
 		t.Run("renaming a command renames it in the automations that issue it through a copy", func(t *testing.T) {
-			result := applied(t, test.TriggerReadsLibraryLending, func(d *viewerDiagram) {
+			result := applied(t, test.AppearanceReadsLibraryLending, func(d *viewerDiagram) {
 				d.rename("RemindMember", "NudgeMember")
 			})
 
-			require.Equal(t, strings.ReplaceAll(test.TriggerReadsLibraryLending, "RemindMember", "NudgeMember"), result)
+			require.Equal(t, strings.ReplaceAll(test.AppearanceReadsLibraryLending, "RemindMember", "NudgeMember"), result)
 		})
 
 		t.Run("deleting a view clears what each reader read through its copies", func(t *testing.T) {
@@ -2752,7 +2752,7 @@ context "Shop" {
 		})
 
 		t.Run("deleting the arrow to a command copy clears the command of that one automation", func(t *testing.T) {
-			source := test.TriggerReadsLibraryLending
+			source := test.AppearanceReadsLibraryLending
 
 			result := applied(t, source, func(d *viewerDiagram) {
 				d.disconnectIDs(d.idOf("RemindReaderOfLoans"), d.copyID("RemindMember", "Close Reading Room"))

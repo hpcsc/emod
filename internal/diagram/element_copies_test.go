@@ -235,8 +235,8 @@ func TestElementCopies(t *testing.T) {
 	})
 
 	t.Run("copy a read view and an issued command", func(t *testing.T) {
-		t.Run("a trigger and an automation copy the view they read from two or more slices away, and none from the slice next to them", func(t *testing.T) {
-			model := test.TriggerReadsLibraryLendingModel(t)
+		t.Run("a shows block and an automation copy the view they read from two or more slices away, and none from the slice next to them", func(t *testing.T) {
+			model := test.AppearanceReadsLibraryLendingModel(t)
 
 			require.Equal(t, map[string][]diagram.DeclaredElement{
 				"Chase Overdue Copy": {
@@ -253,7 +253,7 @@ func TestElementCopies(t *testing.T) {
 		})
 
 		t.Run("an automation copies the command it issues from two or more slices away, and none its own slice declares", func(t *testing.T) {
-			model := test.TriggerReadsLibraryLendingModel(t)
+			model := test.AppearanceReadsLibraryLendingModel(t)
 
 			require.Equal(t, map[string][]diagram.DeclaredElement{
 				"Close Reading Room": {
@@ -373,10 +373,10 @@ func TestElementCopies(t *testing.T) {
 		})
 
 		t.Run("a reads arrow from a copied view joins the copy in the reader's slice", func(t *testing.T) {
-			model := test.TriggerReadsLibraryLendingModel(t)
+			model := test.AppearanceReadsLibraryLendingModel(t)
 
 			element, copied, found := diagram.NewElementCopies(model).Joined(sliceNamed(t, model, "Claim Desk"),
-				diagram.Edge{Kind: diagram.EdgeTriggerReads, From: "DeskOccupancyView", To: "Desk Kiosk"})
+				diagram.Edge{Kind: diagram.EdgeScreenReads, From: "DeskOccupancyView", To: "DeskKiosk"})
 
 			require.Equal(t, []any{
 				diagram.DeclaredElement{Kind: diagram.ElementView, Name: "DeskOccupancyView", Slice: sliceNamed(t, model, "Browse Desk Occupancy")}, true, true,
@@ -406,7 +406,7 @@ func TestElementCopies(t *testing.T) {
 		})
 
 		t.Run("a command arrow into a copied command joins the copy in the automation's slice", func(t *testing.T) {
-			model := test.TriggerReadsLibraryLendingModel(t)
+			model := test.AppearanceReadsLibraryLendingModel(t)
 
 			element, copied, found := diagram.NewElementCopies(model).Joined(sliceNamed(t, model, "Close Reading Room"),
 				diagram.Edge{Kind: diagram.EdgeAutomationCommand, From: "RemindReaderOfLoans", To: "RemindMember"})

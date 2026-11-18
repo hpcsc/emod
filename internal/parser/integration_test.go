@@ -128,7 +128,6 @@ func TestIntegration(t *testing.T) {
 		require.Equal(t, "Reserve a Room", commandSlice.Name)
 
 		test.RequireEqual(t, []*ast.Screen{{Name: "ReservationForm"}}, model.Screens, ignorePositions)
-		require.Nil(t, commandSlice.Trigger)
 		test.RequireEqual(t, []*ast.Appearance{{
 			Screen:   "ReservationForm",
 			Reads:    []string{"AvailableRoomsView"},

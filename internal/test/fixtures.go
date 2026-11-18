@@ -401,7 +401,7 @@ context "Discovery" {
 // aggregate to hold them — so packages that carry invariants through the
 // pipeline share one model. Each block puts an invariant ahead of a later
 // entry on purpose: write them all last and nothing here would catch a
-// declaration running on into what follows it. Its trigger reads
+// declaration running on into what follows it. Its shows block reads
 // MemberLoansView, the view its own Review Member Loans slice declares, so that
 // view has a reader and the fixture stays clean under view/never-read.
 const InvariantLibraryLending = `emod = 1
@@ -538,7 +538,7 @@ context "Reading Room" {
 // through the pipeline share one model. A spec block sits mid-block ahead of a
 // further entry on purpose, and one spec omits its given history entirely:
 // write them all last and nothing here would catch a block running on into what
-// follows it. Its trigger reads MemberLoansView, the view its own Review Member
+// follows it. Its shows block reads MemberLoansView, the view its own Review Member
 // Loans slice declares, so that view has a reader and the fixture stays clean
 // under view/never-read.
 const SpecLibraryLending = `emod = 1
@@ -748,8 +748,8 @@ context "Reading Room" {
 // "Release Desk" states a flow block and no rejection at all, so a walk assuming
 // every flow block has one reads back wrong. And "Borrow Copy" and "Return Copy"
 // reject the same invariant from two different slices, which is what a badge map
-// keyed by the invariant's name alone collapses into one box. And its trigger
-// reads MemberLoansView, the view its own "Review Member Loans" slice declares,
+// keyed by the invariant's name alone collapses into one box. And its shows
+// block reads MemberLoansView, the view its own "Review Member Loans" slice declares,
 // so that view has a reader and the fixture stays clean under view/never-read.
 const RejectionLibraryLending = `emod = 1
 
@@ -952,7 +952,7 @@ context "Reading Room" {
 // or strip specs share one model. The view, command and no-when outcomes only
 // this fixture has sit in the aggregate home; the DCB home carries command and
 // translation specs so both homes read back short against the transcriptions.
-// Its "Borrow Copy" trigger is there for one reason: it reads MemberLoansView,
+// Its "Borrow Copy" shows block is there for one reason: it reads MemberLoansView,
 // so that view has a reader and the fixture stays clean under view/never-read.
 const SlicePatternLibraryLending = `emod = 1
 
@@ -1470,25 +1470,39 @@ context "Reading Room" {
 }
 `
 
-// TriggerReadsLibraryLending names the view its triggers read in both homes a
-// slice has — nested in an aggregate, and declared directly on a DCB-mode
-// context — and every view named is one the model itself declares, one of them
-// from another slice and one from another context, so packages that resolve a
-// trigger's reads to the view it opens on share one model. A trigger and an
-// automation each leave their reads out ahead of further declarations on
+// AppearanceReadsLibraryLending names the view its shows blocks and its
+// automations read in both homes a slice has — nested in an aggregate, and
+// declared directly on a DCB-mode context — and every view named is one the model itself declares, one
+// of them from another slice and one from another context, so packages that
+// resolve a reads entry to the view it opens on share one model. A shows block
+// and an automation each leave their reads out ahead of further declarations on
 // purpose: write the omission last and nothing here would catch a declaration
 // running on into what follows it.
-const TriggerReadsLibraryLending = `emod = 1
+const AppearanceReadsLibraryLending = `emod = 1
 
-# Lending a library's copies and seating its readers, with the views its triggers open on
+# Lending a library's copies and seating its readers, with the views its screens open on
 model "Library Lending" {
+}
+
+screen "LendingDesk" {
+}
+
+screen "ReturnsCounter" {
+}
+
+screen "OverdueReport" {
+}
+
+screen "DeskKiosk" {
 }
 
 context "Lending" {
   aggregate "Loan" {
     slice "Borrow Copy" {
-      trigger "Lending Desk" {
-        reads = MemberLoansView
+      shows {
+        screen  = LendingDesk
+        reads   = MemberLoansView
+        command = BorrowCopy
       }
 
       command "BorrowCopy" {
@@ -1526,7 +1540,9 @@ context "Lending" {
     }
 
     slice "Return Copy" {
-      trigger "Returns Counter" {
+      shows {
+        screen  = ReturnsCounter
+        command = ReturnCopy
       }
 
       command "ReturnCopy" {
@@ -1550,8 +1566,9 @@ context "Lending" {
     }
 
     slice "Chase Overdue Copy" {
-      trigger "Overdue Report" {
-        reads = DeskOccupancyView
+      shows {
+        screen = OverdueReport
+        reads  = DeskOccupancyView
       }
 
       command "RemindMember" {
@@ -1607,8 +1624,10 @@ context "Reading Room" {
   mode = dcb
 
   slice "Claim Desk" {
-    trigger "Desk Kiosk" {
-      reads = DeskOccupancyView
+    shows {
+      screen  = DeskKiosk
+      reads   = DeskOccupancyView
+      command = ClaimDesk
     }
 
     command "ClaimDesk" {
@@ -2354,7 +2373,7 @@ context "Reading Room" {
 // follows it is only caught when something follows it. Every wire type it
 // states is distinct and reads as reverse-DNS kebab-case, so the fixture stays
 // clean under both the uniqueness error and the wire/type-format lint rule. And
-// its "Borrow Copy" trigger is there for one reason: it reads MemberLoansView,
+// its "Borrow Copy" shows block is there for one reason: it reads MemberLoansView,
 // so that view has a reader and the fixture stays clean under view/never-read.
 const WireTypeLibraryLending = `emod = 1
 
@@ -2623,7 +2642,7 @@ context "Reading Room" {
 // "Lending" context declares no invariant of its own: a rejection inside an
 // aggregate slice must name an invariant that aggregate declares, so a
 // context-level invariant is reachable only where slices hang off the context
-// directly, which is the DCB half. And its trigger reads MemberLoansView so
+// directly, which is the DCB half. And its shows block reads MemberLoansView so
 // that view has a reader, keeping the fixture clean under view/never-read.
 //
 // What it deliberately leaves to other fixtures, so a reader does not take it
@@ -3629,23 +3648,23 @@ var ScreenLibraryLendingAppearanceCommands = []string{
 	"ClaimDesk",
 }
 
-// TriggerReadsLibraryLendingTriggerViewNames transcribes the view every trigger
-// of TriggerReadsLibraryLending reads, both slice homes together and in
-// declaration order, so a walk or a strip that reaches only one of the homes
-// reads back short against it. The trigger that reads no view contributes
-// nothing, and neither does a slice carrying no trigger, so the list is shorter
-// than either count.
-var TriggerReadsLibraryLendingTriggerViewNames = []string{
+// AppearanceReadsLibraryLendingAppearanceViewNames transcribes the view every
+// shows block of AppearanceReadsLibraryLending reads, both slice homes together
+// and in declaration order, so a walk or a strip that reaches only one of the homes reads back
+// short against it. The shows block that reads no view contributes nothing, and
+// neither does a slice that shows no screen, so the list is shorter than either
+// count.
+var AppearanceReadsLibraryLendingAppearanceViewNames = []string{
 	"MemberLoansView",
 	"DeskOccupancyView",
 	"DeskOccupancyView",
 }
 
-// TriggerReadsLibraryLendingAutomationViewNames transcribes the view every
-// automation of TriggerReadsLibraryLending reads, both slice homes together and
-// in declaration order, so the same fixture answers for both constructs that
+// AppearanceReadsLibraryLendingAutomationViewNames transcribes the view every
+// automation of AppearanceReadsLibraryLending reads, both slice homes together
+// and in declaration order, so the same fixture answers for both constructs that
 // name a view they read and a strip reaching the wrong one reads back short.
-var TriggerReadsLibraryLendingAutomationViewNames = []string{
+var AppearanceReadsLibraryLendingAutomationViewNames = []string{
 	"MemberLoansView",
 	"DeskOccupancyView",
 	"MemberLoansView",
@@ -3787,7 +3806,7 @@ func WithoutRejections(model *ast.Model) *ast.Model {
 // they read, in both homes a slice has — nested in an aggregate and declared
 // directly on a context. The original keeps every view it was written reading,
 // so a caller comparing the two is not comparing a model with itself. What a
-// trigger and a translation read is left alone: only an automation's reads is
+// shows block and a translation read is left alone: only an automation's reads is
 // the subject of the comparison.
 func WithoutAutomationReads(model *ast.Model) *ast.Model {
 	return copyWithEditedSlices(model, func(s *ast.Slice) {
@@ -3821,32 +3840,6 @@ func WithoutAppearanceReads(model *ast.Model) *ast.Model {
 		s.Appearances = editedCopies(s.Appearances, func(appearance *ast.Appearance) {
 			appearance.Reads = nil
 			appearance.ReadsPos = nil
-		})
-	})
-}
-
-// WithoutAppearanceCommands returns a copy of model whose shows blocks issue no
-// command, in both slice homes. What each shows block reads is left alone.
-func WithoutAppearanceCommands(model *ast.Model) *ast.Model {
-	return copyWithEditedSlices(model, func(s *ast.Slice) {
-		s.Appearances = editedCopies(s.Appearances, func(appearance *ast.Appearance) {
-			appearance.Commands = nil
-			appearance.CommandsPos = nil
-		})
-	})
-}
-
-// WithoutTriggerReads returns a copy of model whose triggers name no view they
-// read, in both homes a slice has — nested in an aggregate and declared directly
-// on a context. The original keeps every view it was written reading, so a
-// caller comparing the two is not comparing a model with itself. What an
-// automation and a translation read is left alone: only a trigger's reads is the
-// subject of the comparison.
-func WithoutTriggerReads(model *ast.Model) *ast.Model {
-	return copyWithEditedSlices(model, func(s *ast.Slice) {
-		s.Trigger = editedCopy(s.Trigger, func(trigger *ast.Trigger) {
-			trigger.Reads = nil
-			trigger.ReadsPos = nil
 		})
 	})
 }
@@ -3901,9 +3894,8 @@ func editedCopies[T any](items []*T, edit func(*T)) []*T {
 }
 
 // editedCopy edits a copy rather than the item it was handed, because a slice
-// holds its trigger as a single pointer into the model the caller passed:
-// clearing that trigger where it sits leaves the twin and the original reading
-// alike.
+// holds each construct as a pointer into the model the caller passed: clearing
+// one where it sits leaves the twin and the original reading alike.
 func editedCopy[T any](item *T, edit func(*T)) *T {
 	if item == nil {
 		return nil
@@ -4005,9 +3997,6 @@ func DeclaredDescriptions(model *ast.Model) map[string]string {
 	}
 	for _, s := range declaredSlices(model) {
 		describe(s.Name, s.Description)
-		if s.Trigger != nil {
-			describe(s.Trigger.Name, s.Trigger.Description)
-		}
 		for _, cmd := range s.Commands {
 			describe(cmd.Name, cmd.Description)
 		}
@@ -4090,22 +4079,6 @@ func DeclaredAppearanceCommands(model *ast.Model) []string {
 		}
 	}
 	return commands
-}
-
-// DeclaredTriggerReads names the view every trigger of model reads, both slice
-// homes together and in declaration order, so a caller pairing it with a
-// transcribed list reads back short when a strip or a walk reaches only one of
-// the homes. A slice with no trigger and a trigger naming no view contribute
-// nothing, so the list counts what the model says rather than how many slices it
-// declares.
-func DeclaredTriggerReads(model *ast.Model) []string {
-	var reads []string
-	for _, s := range declaredSlices(model) {
-		if s.Trigger != nil {
-			reads = append(reads, s.Trigger.Reads...)
-		}
-	}
-	return reads
 }
 
 // DeclaredActivationEvents names the event every automation of model activates

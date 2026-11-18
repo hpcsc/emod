@@ -8,10 +8,6 @@ type EdgeKind int
 const (
 	// EdgeFlow is a command -> event arrow a flow declares.
 	EdgeFlow EdgeKind = iota
-	// EdgeTriggerReads is a view -> trigger arrow from a trigger's reads entry.
-	EdgeTriggerReads
-	// EdgeTriggerCommand is a trigger -> command arrow within a slice.
-	EdgeTriggerCommand
 	// EdgeSubscription is an event -> view arrow from a view's subscribes list.
 	EdgeSubscription
 	// EdgeAutomationTrigger is an event -> automation arrow from an automation's
@@ -76,18 +72,6 @@ func SliceEdges(s *ast.Slice) []Edge {
 			continue
 		}
 		edges = append(edges, Edge{Kind: EdgeRejection, From: r.CommandName, To: r.InvariantName})
-	}
-
-	if s.Trigger != nil {
-		for _, view := range s.Trigger.Reads {
-			edges = append(edges, Edge{Kind: EdgeTriggerReads, From: view, To: s.Trigger.Name})
-		}
-		for _, cmd := range s.Commands {
-			if cmd == nil {
-				continue
-			}
-			edges = append(edges, Edge{Kind: EdgeTriggerCommand, From: s.Trigger.Name, To: cmd.Name})
-		}
 	}
 
 	for _, appearance := range s.Appearances {

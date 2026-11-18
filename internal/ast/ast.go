@@ -157,7 +157,6 @@ type Slice struct {
 	Description    string
 	DescriptionPos Position
 	Appearances    []*Appearance
-	Trigger        *Trigger
 	Commands       []*Command
 	Events         []*Event
 	Fields         []*Field
@@ -315,18 +314,6 @@ type Rejection struct {
 	CommandPos    Position
 	InvariantName string
 	InvariantPos  Position
-}
-
-type Trigger struct {
-	Comments       []*Comment
-	Name           string
-	NamePos        Position
-	Description    string
-	DescriptionPos Position
-	Reads          []string
-	ReadsPos       []Position
-	OpenPos        Position
-	ClosePos       Position
 }
 
 type View struct {

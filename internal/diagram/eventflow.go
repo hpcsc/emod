@@ -12,7 +12,7 @@ const (
 	// reactor a translation declares.
 	NodeAutomation
 	// NodeOrigin is what issues a command from outside the automations: a
-	// trigger, an external system, or a command nothing in the model issues.
+	// screen, an external system, or a command nothing in the model issues.
 	NodeOrigin
 	// NodeRejection is an invariant that refuses a command, so the events that
 	// command emits are not appended.
@@ -49,7 +49,6 @@ type EventFlow struct {
 const (
 	externalCaption = "external system"
 	commandCaption  = "command"
-	triggerCaption  = "trigger"
 	screenCaption   = "screen"
 )
 
@@ -253,18 +252,10 @@ func commandNode(name string) Node {
 	return Node{ID: name, Kind: NodeOrigin, Label: name, Caption: commandCaption}
 }
 
+// screenNode keys a screen apart from the bare names that commands, events and
+// automations are keyed by, because a screen may share its name with one of them.
 func screenNode(name, description string) Node {
-	return Node{ID: name, Kind: NodeOrigin, Label: name, Caption: screenCaption, Description: description}
-}
-
-func triggerNode(entry sliceEntry, trigger *ast.Trigger) Node {
-	return Node{
-		ID:          entry.ctxName + "." + trigger.Name,
-		Kind:        NodeOrigin,
-		Label:       trigger.Name,
-		Caption:     triggerCaption,
-		Description: trigger.Description,
-	}
+	return Node{ID: "screen:" + name, Kind: NodeOrigin, Label: name, Caption: screenCaption, Description: description}
 }
 
 // rejectionNode keys an invariant by the context declaring it, which is as far
@@ -314,9 +305,8 @@ func commandEvents(entries []sliceEntry) map[string][]string {
 }
 
 // commandIssuers maps each command to what issues it: a screen whose shows
-// block names it, the trigger of the slice declaring it, an automation, or a
-// translation reactor.
-func commandIssuers(entries []sliceEntry, screens map[string]string) map[string][]Node {
+// block names it, an automation, or a translation reactor.
+func commandIssuers(entries []sliceEntry, descriptions map[string]string) map[string][]Node {
 	issuers := make(map[string][]Node)
 	add := func(command string, node Node) {
 		if command == "" {
@@ -334,15 +324,7 @@ func commandIssuers(entries []sliceEntry, screens map[string]string) map[string]
 		s := entry.slice
 		for _, appearance := range s.Appearances {
 			for _, command := range appearance.Commands {
-				add(command, screenNode(appearance.Screen, screens[appearance.Screen]))
-			}
-		}
-		if s.Trigger != nil {
-			trigger := triggerNode(entry, s.Trigger)
-			for _, cmd := range s.Commands {
-				if cmd != nil {
-					add(cmd.Name, trigger)
-				}
+				add(command, screenNode(appearance.Screen, descriptions[appearance.Screen]))
 			}
 		}
 		for _, auto := range s.Automations {

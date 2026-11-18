@@ -50,16 +50,6 @@ func TestExportSVG(t *testing.T) {
 		require.NotContains(t, output, "UI / Triggers")
 	})
 
-	t.Run("labels a trigger with its name only", func(t *testing.T) {
-		model := singleSliceModel("Test", "S", &ast.Trigger{Name: "SubmitForm"})
-
-		raw, err := diagram.ExportSVG(model, diagram.StyleAuto)
-		require.NoError(t, err)
-
-		output := string(raw)
-		require.Contains(t, output, ">SubmitForm</text>")
-	})
-
 	t.Run("renders command, event and view labels", func(t *testing.T) {
 		model := singleSliceModel("Test", "S",
 			command("MakeReservation"), event("ReservationMade"), view("AvailableRooms"))
@@ -71,71 +61,6 @@ func TestExportSVG(t *testing.T) {
 		require.Contains(t, output, "MakeReservation")
 		require.Contains(t, output, "ReservationMade")
 		require.Contains(t, output, "AvailableRooms")
-	})
-
-	t.Run("connects trigger to command", func(t *testing.T) {
-		model := &ast.Model{
-			Name: "Test",
-			Contexts: []*ast.Context{{
-				Name: "Ctx",
-				Aggregates: []*ast.Aggregate{{
-					Name: "Agg",
-					Slices: []*ast.Slice{{
-						Name:     "S",
-						Trigger:  &ast.Trigger{Name: "Click"},
-						Commands: []*ast.Command{{Name: "DoAction"}},
-					}},
-				}},
-			}},
-		}
-
-		raw, err := diagram.ExportSVG(model, diagram.StyleAuto)
-		require.NoError(t, err)
-
-		output := string(raw)
-		require.Contains(t, output, "Click")
-		require.Contains(t, output, "DoAction")
-		require.Equal(t, 1, arrowCount(output), "trigger to command is one arrow")
-	})
-
-	t.Run("two triggers that share a name each get the arrows of their own slice", func(t *testing.T) {
-		model := &ast.Model{
-			Name: "Shop",
-			Contexts: []*ast.Context{{
-				Name: "Shop",
-				Aggregates: []*ast.Aggregate{{
-					Name: "Cart",
-					Slices: []*ast.Slice{
-						{
-							Name:     "Apply Discount",
-							Trigger:  &ast.Trigger{Name: "Checkout Page", Reads: []string{"CartView"}},
-							Views:    []*ast.View{{Name: "CartView"}},
-							Commands: []*ast.Command{{Name: "ApplyDiscount"}},
-						},
-						{
-							Name:     "Place Order",
-							Trigger:  &ast.Trigger{Name: "Checkout Page", Reads: []string{"OrderView"}},
-							Views:    []*ast.View{{Name: "OrderView"}},
-							Commands: []*ast.Command{{Name: "PlaceOrder"}},
-						},
-					},
-				}},
-			}},
-		}
-
-		joinedAt := make(map[int][]string)
-		for _, end := range svgArrowEnds(t, svgOf(t, model)) {
-			for i, box := range end {
-				if box.label == "Checkout Page" {
-					joinedAt[box.rect.x] = append(joinedAt[box.rect.x], end[1-i].label)
-				}
-			}
-		}
-
-		triggers := slices.Sorted(maps.Keys(joinedAt))
-		require.Len(t, triggers, 2, "the arrows have to touch both trigger boxes")
-		require.ElementsMatch(t, []string{"CartView", "ApplyDiscount"}, joinedAt[triggers[0]], "the trigger of the first slice")
-		require.ElementsMatch(t, []string{"OrderView", "PlaceOrder"}, joinedAt[triggers[1]], "the trigger of the second slice")
 	})
 
 	t.Run("screens", func(t *testing.T) {
@@ -229,7 +154,7 @@ func TestExportSVG(t *testing.T) {
 			require.Equal(t, across("RemindMember", "RecallCopy"), across("OverdueReport", "DeskKiosk"))
 		})
 
-		t.Run("draws a screen box and its header bar painted as a trigger box and its header bar", func(t *testing.T) {
+		t.Run("writes the name of a screen at the centre of its box, at the size a command's name is written", func(t *testing.T) {
 			model := &ast.Model{
 				Name: "Shop",
 				Contexts: []*ast.Context{{
@@ -237,38 +162,14 @@ func TestExportSVG(t *testing.T) {
 					Aggregates: []*ast.Aggregate{{
 						Name: "Cart",
 						Slices: []*ast.Slice{
-							{Name: "Apply Discount", Trigger: &ast.Trigger{Name: "Checkout Page"}},
-							{Name: "Place Order", Appearances: []*ast.Appearance{{Screen: "CheckoutScreen"}}},
-						},
-					}},
-				}},
-			}
-			boxes := svgBoxes(t, svgOf(t, model))
-			paintOf := func(label string) []diagramBox {
-				i := slices.IndexFunc(boxes, func(box diagramBox) bool { return box.label == label })
-				require.Positive(t, i, "the picture draws %s after its header bar", label)
-				return unplaced([]diagramBox{boxes[i-1], {attributes: boxes[i].attributes}})
-			}
-
-			require.Equal(t, paintOf("Checkout Page"), paintOf("CheckoutScreen"))
-		})
-
-		t.Run("writes the name of a screen at the centre of its box, at the size of a trigger's name", func(t *testing.T) {
-			model := &ast.Model{
-				Name: "Shop",
-				Contexts: []*ast.Context{{
-					Name: "Shop",
-					Aggregates: []*ast.Aggregate{{
-						Name: "Cart",
-						Slices: []*ast.Slice{
-							{Name: "Apply Discount", Trigger: &ast.Trigger{Name: "Checkout Page"}},
+							{Name: "Apply Discount", Commands: []*ast.Command{{Name: "ApplyDiscount"}}},
 							{Name: "Place Order", Appearances: []*ast.Appearance{{Screen: "OrderScreen"}, {Screen: "CheckoutScreen"}}},
 						},
 					}},
 				}},
 			}
 			shapes := svgShapes(t, svgOf(t, model))
-			trigger := firstShapeLabelled(t, shapes, "Checkout Page")
+			command := firstShapeLabelled(t, shapes, "ApplyDiscount")
 
 			var written []string
 			for _, label := range []string{"OrderScreen", "CheckoutScreen"} {
@@ -277,8 +178,8 @@ func TestExportSVG(t *testing.T) {
 			}
 
 			require.Equal(t, []string{
-				"OrderScreen at the centre: true, at size " + trigger.labelSize,
-				"CheckoutScreen at the centre: true, at size " + trigger.labelSize,
+				"OrderScreen at the centre: true, at size " + command.labelSize,
+				"CheckoutScreen at the centre: true, at size " + command.labelSize,
 			}, written)
 		})
 
@@ -401,34 +302,6 @@ func TestExportSVG(t *testing.T) {
 
 			require.Equal(t, []string{"RefundOrder in Refund Order, below the screen: true"}, joined)
 		})
-	})
-
-	t.Run("connects each trigger to the command of its own slice when two slices declare a command of one name", func(t *testing.T) {
-		model := &ast.Model{
-			Name: "Shop",
-			Contexts: []*ast.Context{{
-				Name: "Shop",
-				Aggregates: []*ast.Aggregate{{
-					Name: "Cart",
-					Slices: []*ast.Slice{
-						{Name: "Apply Discount", Trigger: &ast.Trigger{Name: "Checkout Page"}, Commands: []*ast.Command{{Name: "SubmitCart"}}},
-						{Name: "Place Order", Trigger: &ast.Trigger{Name: "Checkout Page"}, Commands: []*ast.Command{{Name: "SubmitCart"}}},
-					},
-				}},
-			}},
-		}
-
-		ends := svgArrowEnds(t, svgOf(t, model))
-
-		require.Len(t, ends, 2)
-		require.NotEqual(t, ends[0][0].rect, ends[1][0].rect, "the two arrows start at the two trigger boxes")
-		for _, end := range ends {
-			trigger, command := end[0].rect, end[1].rect
-			require.Equal(t, "SubmitCart", end[1].label)
-			apart := trigger.centre()[0] - command.centre()[0]
-			require.Less(t, max(apart, -apart), trigger.w,
-				"the arrow from the trigger box at x %d ends at the command under it, not at the command of the other slice", trigger.x)
-		}
 	})
 
 	t.Run("connects command to event via flow", func(t *testing.T) {
@@ -715,19 +588,8 @@ func TestExportSVG(t *testing.T) {
 		require.Equal(t, 1, arrowCount(string(raw)), "only the external system and the reactor have boxes to draw an arrow between")
 	})
 
-	t.Run("writes the name of a trigger at the centre of its box, at the size a command's name is written", func(t *testing.T) {
-		shapes := svgShapes(t, svgOf(t, singleSliceModel("Test", "S", &ast.Trigger{Name: "SubmitForm"}, command("SubmitOrder"))))
-
-		trigger := slices.IndexFunc(shapes, func(shape svgShape) bool { return lineText(shape.label) == "SubmitForm" })
-		command := slices.IndexFunc(shapes, func(shape svgShape) bool { return lineText(shape.label) == "SubmitOrder" })
-		require.GreaterOrEqual(t, trigger, 0, "the picture has to draw the trigger SubmitForm")
-		require.GreaterOrEqual(t, command, 0, "the picture has to draw the command SubmitOrder")
-		require.Equal(t, shapes[trigger].rect.centre(), shapes[trigger].labelAt)
-		require.Equal(t, shapes[command].labelSize, shapes[trigger].labelSize)
-	})
-
 	t.Run("writes the label of each copy at the centre of its box, at the size an event's label is written", func(t *testing.T) {
-		raw, err := diagram.ExportSVG(test.TriggerReadsLibraryLendingModel(t), diagram.StyleAuto)
+		raw, err := diagram.ExportSVG(test.AppearanceReadsLibraryLendingModel(t), diagram.StyleAuto)
 		require.NoError(t, err)
 
 		shapes := svgShapes(t, string(raw))
@@ -749,7 +611,7 @@ func TestExportSVG(t *testing.T) {
 	})
 
 	t.Run("draws each copy as tall as the box of the element it copies, with the same rounded corners", func(t *testing.T) {
-		raw, err := diagram.ExportSVG(test.TriggerReadsLibraryLendingModel(t), diagram.StyleAuto)
+		raw, err := diagram.ExportSVG(test.AppearanceReadsLibraryLendingModel(t), diagram.StyleAuto)
 		require.NoError(t, err)
 		output := string(raw)
 		boxes := svgBoxes(t, output)
@@ -770,7 +632,7 @@ func TestExportSVG(t *testing.T) {
 	t.Run("arrow ends", func(t *testing.T) {
 		models := func(t *testing.T) map[string]*ast.Model {
 			return map[string]*ast.Model{
-				"trigger reads":     test.TriggerReadsLibraryLendingModel(t),
+				"shows reads":       test.AppearanceReadsLibraryLendingModel(t),
 				"screens":           test.ScreenLibraryLendingModel(t),
 				"automation delays": test.AutomationDelayLibraryLendingModel(t),
 				"subscribed events": test.SubscribedEventsHotelStaysModel(t),
@@ -1016,9 +878,9 @@ func TestExportSVG(t *testing.T) {
 		t.Run("spreads the ends on each side of a box evenly between the arrows that run straight from it, in the order of the boxes at their far ends", func(t *testing.T) {
 			output := svgOf(t, slicesModel(
 				&ast.Slice{
-					Name:    "Open",
-					Trigger: &ast.Trigger{Name: "Account Screen", Reads: []string{"AccountsView"}},
-					Events:  []*ast.Event{{Name: "AccountOpened"}, {Name: "AccountRenamed"}},
+					Name:        "Open",
+					Appearances: []*ast.Appearance{{Screen: "AccountScreen", Reads: []string{"AccountsView"}}},
+					Events:      []*ast.Event{{Name: "AccountOpened"}, {Name: "AccountRenamed"}},
 				},
 				&ast.Slice{
 					Name:   "List",
@@ -1046,7 +908,7 @@ func TestExportSVG(t *testing.T) {
 				"AccountRenamed": {view.x + 2*(middle-view.x)/3, view.y + view.h},
 				"AccountListed":  {middle, view.y + view.h},
 				"AccountClosed":  {middle + (right-middle)/2, view.y + view.h},
-				"Account Screen": {middle, view.y},
+				"AccountScreen":  {middle, view.y},
 			}, atView, "the event under the view runs straight up its middle, and the others spread on each side of it")
 		})
 
@@ -1458,7 +1320,7 @@ func TestExportSVG(t *testing.T) {
 		require.Contains(t, output, "Wireframes")
 		require.Contains(t, output, "Commands / Views")
 		require.Contains(t, output, "Events")
-		require.Equal(t, 11, arrowCount(output), "every flow, subscription, automation and translation edge is drawn")
+		require.Equal(t, 11, arrowCount(output), "every flow, subscription, automation, translation and screen edge is drawn")
 	})
 
 	t.Run("descriptions", func(t *testing.T) {
@@ -2813,15 +2675,15 @@ func fortySliceModel() *ast.Model {
 	var slices []*ast.Slice
 	for i := 1; i <= 40; i++ {
 		s := &ast.Slice{
-			Name:     fmt.Sprintf("Step %d", i),
-			Trigger:  &ast.Trigger{Name: fmt.Sprintf("Screen %d", i)},
-			Commands: []*ast.Command{{Name: fmt.Sprintf("Take%d", i)}},
-			Events:   []*ast.Event{{Name: fmt.Sprintf("Taken%d", i)}},
-			Views:    []*ast.View{{Name: fmt.Sprintf("Board%d", i), Subscribes: []string{fmt.Sprintf("Taken%d", i)}}},
-			Flows:    []*ast.Flow{{CommandName: fmt.Sprintf("Take%d", i), EventName: fmt.Sprintf("Taken%d", i)}},
+			Name:        fmt.Sprintf("Step %d", i),
+			Appearances: []*ast.Appearance{{Screen: fmt.Sprintf("Screen%d", i), Commands: []string{fmt.Sprintf("Take%d", i)}}},
+			Commands:    []*ast.Command{{Name: fmt.Sprintf("Take%d", i)}},
+			Events:      []*ast.Event{{Name: fmt.Sprintf("Taken%d", i)}},
+			Views:       []*ast.View{{Name: fmt.Sprintf("Board%d", i), Subscribes: []string{fmt.Sprintf("Taken%d", i)}}},
+			Flows:       []*ast.Flow{{CommandName: fmt.Sprintf("Take%d", i), EventName: fmt.Sprintf("Taken%d", i)}},
 		}
 		if i > 1 {
-			s.Trigger.Reads = []string{fmt.Sprintf("Board%d", i-1)}
+			s.Appearances[0].Reads = []string{fmt.Sprintf("Board%d", i-1)}
 			s.Views[0].Subscribes = append(s.Views[0].Subscribes, fmt.Sprintf("Taken%d", i-1))
 		}
 		slices = append(slices, s)

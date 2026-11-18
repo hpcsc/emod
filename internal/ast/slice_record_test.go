@@ -155,16 +155,21 @@ context "Stays" {
 			}, ast.SliceRecords(model))
 		})
 
-		t.Run("makes a slice a command slice only when it has a trigger, a command, and an event or a flow", func(t *testing.T) {
+		t.Run("makes a slice a command slice only when it shows a screen and has a command and an event or a flow", func(t *testing.T) {
 			model := parseModel(t, `emod = 1
 
 model "Hotel" {
 }
 
+screen "Screen" {
+}
+
 context "Stays" {
   aggregate "Room" {
     slice "With Event" {
-      trigger "Screen" {
+      shows {
+        screen  = Screen
+        command = HoldRoom
       }
 
       command "HoldRoom" {
@@ -181,7 +186,9 @@ context "Stays" {
     }
 
     slice "With Flow" {
-      trigger "Screen" {
+      shows {
+        screen  = Screen
+        command = ReleaseRoom
       }
 
       command "ReleaseRoom" {
@@ -195,7 +202,7 @@ context "Stays" {
       FLOW
     }
 
-    slice "No Trigger" {
+    slice "No Screen" {
       command "CleanRoom" {
         fields {
           roomId = required(string)
@@ -210,7 +217,8 @@ context "Stays" {
     }
 
     slice "No Command" {
-      trigger "Screen" {
+      shows {
+        screen = Screen
       }
 
       event "RoomInspected" {
@@ -221,7 +229,9 @@ context "Stays" {
     }
 
     slice "No Event Or Flow" {
-      trigger "Screen" {
+      shows {
+        screen  = Screen
+        command = PaintRoom
       }
 
       command "PaintRoom" {
@@ -231,7 +241,7 @@ context "Stays" {
       }
     }
 
-    slice "Flow Without Trigger" {
+    slice "Flow Without Screen" {
       command "LockRoom" {
         fields {
           roomId = required(string)
@@ -244,7 +254,8 @@ context "Stays" {
     }
 
     slice "Flow Without Command" {
-      trigger "Screen" {
+      shows {
+        screen = Screen
       }
 
       flow = <<-FLOW
@@ -258,10 +269,10 @@ context "Stays" {
 			require.Equal(t, []ast.SliceRecord{
 				{Name: "With Event", Pattern: "command", Context: "Stays", KeyElements: "HoldRoom, RoomHeld"},
 				{Name: "With Flow", Pattern: "command", Context: "Stays", KeyElements: "ReleaseRoom, RoomReleased"},
-				{Name: "No Trigger", Pattern: "unknown", Context: "Stays", KeyElements: ""},
+				{Name: "No Screen", Pattern: "unknown", Context: "Stays", KeyElements: ""},
 				{Name: "No Command", Pattern: "unknown", Context: "Stays", KeyElements: ""},
 				{Name: "No Event Or Flow", Pattern: "unknown", Context: "Stays", KeyElements: ""},
-				{Name: "Flow Without Trigger", Pattern: "unknown", Context: "Stays", KeyElements: ""},
+				{Name: "Flow Without Screen", Pattern: "unknown", Context: "Stays", KeyElements: ""},
 				{Name: "Flow Without Command", Pattern: "unknown", Context: "Stays", KeyElements: ""},
 			}, ast.SliceRecords(model))
 		})

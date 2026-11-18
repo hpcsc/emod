@@ -1085,8 +1085,9 @@ func TestValidate(t *testing.T) {
 			require.Equal(t, `reservations.emod:14: view "ReservationMade" does not exist`, diags[0].String())
 		})
 
-		t.Run("a view no slice declares is reported on a trigger's reads entry, not on the trigger name", func(t *testing.T) {
+		t.Run("a view no slice declares is reported on a shows block's reads entry, not on the screen it names", func(t *testing.T) {
 			model := &ast.Model{
+				Screens: []*ast.Screen{{Name: "ReservationForm"}},
 				Contexts: []*ast.Context{
 					{
 						Name: "Reservations",
@@ -1097,12 +1098,12 @@ func TestValidate(t *testing.T) {
 									{
 										Name:  "Make Reservation",
 										Views: []*ast.View{{Name: "ReservationsView"}},
-										Trigger: &ast.Trigger{
-											Name:     "Reservation Form",
-											NamePos:  ast.Position{Filename: "reservations.emod", Line: 6, Column: 15},
-											Reads:    []string{"AvailableRoomsView"},
-											ReadsPos: []ast.Position{{Filename: "reservations.emod", Line: 8, Column: 15}},
-										},
+										Appearances: []*ast.Appearance{{
+											Screen:    "ReservationForm",
+											ScreenPos: ast.Position{Filename: "reservations.emod", Line: 6, Column: 15},
+											Reads:     []string{"AvailableRoomsView"},
+											ReadsPos:  []ast.Position{{Filename: "reservations.emod", Line: 8, Column: 15}},
+										}},
 									},
 								},
 							},
@@ -1120,8 +1121,9 @@ func TestValidate(t *testing.T) {
 			require.Empty(t, diags[0].RuleName)
 		})
 
-		t.Run("each entry of a trigger's list that names no view is reported at that entry, and a declared entry is not", func(t *testing.T) {
+		t.Run("each entry of a shows block's list that names no view is reported at that entry, and a declared entry is not", func(t *testing.T) {
 			model := &ast.Model{
+				Screens: []*ast.Screen{{Name: "CheckoutPage"}},
 				Contexts: []*ast.Context{
 					{
 						Name: "Shop",
@@ -1129,15 +1131,15 @@ func TestValidate(t *testing.T) {
 							{
 								Name:  "Apply Discount",
 								Views: []*ast.View{{Name: "CartView"}},
-								Trigger: &ast.Trigger{
-									Name:  "Checkout Page",
-									Reads: []string{"DiscountView", "CartView", "LoyaltyView"},
+								Appearances: []*ast.Appearance{{
+									Screen: "CheckoutPage",
+									Reads:  []string{"DiscountView", "CartView", "LoyaltyView"},
 									ReadsPos: []ast.Position{
 										{Filename: "shop.emod", Line: 4, Column: 16},
 										{Filename: "shop.emod", Line: 4, Column: 30},
 										{Filename: "shop.emod", Line: 5, Column: 9},
 									},
-								},
+								}},
 							},
 						},
 					},
@@ -1195,6 +1197,7 @@ func TestValidate(t *testing.T) {
 
 		t.Run("the three constructs that spell reads report the same message, each at its own reads entry", func(t *testing.T) {
 			model := &ast.Model{
+				Screens: []*ast.Screen{{Name: "ReservationForm"}},
 				Contexts: []*ast.Context{
 					{
 						Name: "Reservations",
@@ -1205,11 +1208,11 @@ func TestValidate(t *testing.T) {
 									{
 										Name:     "Import Booking",
 										Commands: []*ast.Command{{Name: "ImportBooking"}},
-										Trigger: &ast.Trigger{
-											Name:     "Reservation Form",
+										Appearances: []*ast.Appearance{{
+											Screen:   "ReservationForm",
 											Reads:    []string{"MissingView"},
 											ReadsPos: []ast.Position{{Filename: "reservations.emod", Line: 8, Column: 15}},
-										},
+										}},
 										Automations: []*ast.Automation{
 											{
 												Name:     "AutoConfirm",
@@ -1242,8 +1245,9 @@ func TestValidate(t *testing.T) {
 			}, reportedLines(diags))
 		})
 
-		t.Run("a trigger's and a translation's reads resolve model-wide, against every slice home", func(t *testing.T) {
+		t.Run("a shows block's and a translation's reads resolve model-wide, against every slice home", func(t *testing.T) {
 			model := &ast.Model{
+				Screens: []*ast.Screen{{Name: "AvailabilityBoard"}, {Name: "ReservationForm"}, {Name: "ConfirmationDesk"}},
 				Contexts: []*ast.Context{
 					{
 						Name: "Availability",
@@ -1255,11 +1259,11 @@ func TestValidate(t *testing.T) {
 							},
 							{
 								Name: "Watch Availability",
-								Trigger: &ast.Trigger{
-									Name:     "Availability Board",
+								Appearances: []*ast.Appearance{{
+									Screen:   "AvailabilityBoard",
 									Reads:    []string{"RoomAvailabilityView"},
 									ReadsPos: []ast.Position{{Filename: "reservations.emod", Line: 9, Column: 15}},
-								},
+								}},
 							},
 						},
 					},
@@ -1276,11 +1280,11 @@ func TestValidate(t *testing.T) {
 									{
 										Name:     "Import Booking",
 										Commands: []*ast.Command{{Name: "ImportBooking"}},
-										Trigger: &ast.Trigger{
-											Name:     "Reservation Form",
+										Appearances: []*ast.Appearance{{
+											Screen:   "ReservationForm",
 											Reads:    []string{"RoomAvailabilityView"},
 											ReadsPos: []ast.Position{{Filename: "reservations.emod", Line: 21, Column: 15}},
-										},
+										}},
 										Translations: []*ast.Translation{
 											{Name: "BookingImport", Reads: "ReservationHistoryView", Command: "ImportBooking"},
 										},
@@ -1294,11 +1298,11 @@ func TestValidate(t *testing.T) {
 										Name:     "Confirm Reservation",
 										Views:    []*ast.View{{Name: "PendingConfirmationsView"}},
 										Commands: []*ast.Command{{Name: "ConfirmReservation"}},
-										Trigger: &ast.Trigger{
-											Name:     "Confirmation Desk",
+										Appearances: []*ast.Appearance{{
+											Screen:   "ConfirmationDesk",
 											Reads:    []string{"PendingConfirmationsView"},
 											ReadsPos: []ast.Position{{Filename: "reservations.emod", Line: 33, Column: 15}},
-										},
+										}},
 										Translations: []*ast.Translation{
 											{Name: "PartnerConfirm", Reads: "RoomAvailabilityView", Command: "ConfirmReservation"},
 										},
@@ -1315,8 +1319,9 @@ func TestValidate(t *testing.T) {
 			require.Empty(t, diags)
 		})
 
-		t.Run("a slice with no trigger, a trigger with no reads and a translation with no reads produce no diagnostic", func(t *testing.T) {
+		t.Run("a slice that shows no screen, a shows block with no reads and a translation with no reads produce no diagnostic", func(t *testing.T) {
 			model := &ast.Model{
+				Screens: []*ast.Screen{{Name: "ReservationForm"}},
 				Contexts: []*ast.Context{
 					{
 						Name: "Reservations",
@@ -1329,9 +1334,9 @@ func TestValidate(t *testing.T) {
 										Views: []*ast.View{{Name: "ReservationsView"}},
 									},
 									{
-										Name:     "Import Booking",
-										Commands: []*ast.Command{{Name: "ImportBooking"}},
-										Trigger:  &ast.Trigger{Name: "Reservation Form"},
+										Name:        "Import Booking",
+										Commands:    []*ast.Command{{Name: "ImportBooking"}},
+										Appearances: []*ast.Appearance{{Screen: "ReservationForm"}},
 										Translations: []*ast.Translation{
 											{Name: "BookingImport", Command: "ImportBooking"},
 										},
@@ -1348,8 +1353,9 @@ func TestValidate(t *testing.T) {
 			require.Empty(t, diags)
 		})
 
-		t.Run("a name declared only as a command does not resolve as a view for a trigger or a translation", func(t *testing.T) {
+		t.Run("a name declared only as a command does not resolve as a view for a shows block or a translation", func(t *testing.T) {
 			model := &ast.Model{
+				Screens: []*ast.Screen{{Name: "ReservationForm"}},
 				Contexts: []*ast.Context{
 					{
 						Name: "Reservations",
@@ -1362,11 +1368,11 @@ func TestValidate(t *testing.T) {
 										Commands: []*ast.Command{{Name: "ImportBooking"}},
 										Events:   []*ast.Event{{Name: "BookingImported"}},
 										Flows:    []*ast.Flow{{CommandName: "ImportBooking", EventName: "BookingImported"}},
-										Trigger: &ast.Trigger{
-											Name:     "Reservation Form",
+										Appearances: []*ast.Appearance{{
+											Screen:   "ReservationForm",
 											Reads:    []string{"ImportBooking"},
 											ReadsPos: []ast.Position{{Filename: "reservations.emod", Line: 8, Column: 15}},
-										},
+										}},
 										Translations: []*ast.Translation{
 											{
 												Name:     "BookingImport",

@@ -72,13 +72,6 @@ func Lint(model *ast.Model) []*diagnostic.Entry {
 				}
 			}
 		}
-		if slice.Trigger != nil {
-			for _, view := range slice.Trigger.Reads {
-				if view != "" {
-					readViews[view] = true
-				}
-			}
-		}
 		for _, auto := range slice.Automations {
 			if auto.Reads != "" {
 				readViews[auto.Reads] = true

@@ -3592,7 +3592,7 @@ func TestLint(t *testing.T) {
 			}
 		})
 
-		t.Run("an automation naming a view is silent, and so are a trigger and a translation naming none", func(t *testing.T) {
+		t.Run("an automation naming a view is silent, and so are a shows block and a translation naming none", func(t *testing.T) {
 			model := &ast.Model{
 				Contexts: []*ast.Context{
 					{
@@ -3603,14 +3603,14 @@ func TestLint(t *testing.T) {
 								Slices: []*ast.Slice{
 									{
 										Name: "Chase Overdue Copy",
-										Trigger: &ast.Trigger{
-											Name: "Overdue Report",
-											NamePos: ast.Position{
+										Appearances: []*ast.Appearance{{
+											Screen: "OverdueReport",
+											ScreenPos: ast.Position{
 												Filename: "lending.emod",
 												Line:     10,
 												Column:   7,
 											},
-										},
+										}},
 										Views: []*ast.View{
 											{
 												Name: "PendingRemindersView",
@@ -3764,9 +3764,9 @@ func TestLint(t *testing.T) {
 		t.Run("a view no reads names is reported at its name", func(t *testing.T) {
 			model := lendingWith(
 				&ast.Slice{
-					Name:    "Chase Overdue Copy",
-					Trigger: &ast.Trigger{Name: "Lending Desk", Reads: []string{"OverdueLoansView"}},
-					Views:   []*ast.View{viewAt("OverdueLoansView", 31)},
+					Name:        "Chase Overdue Copy",
+					Appearances: []*ast.Appearance{{Screen: "LendingDesk", Reads: []string{"OverdueLoansView"}}},
+					Views:       []*ast.View{viewAt("OverdueLoansView", 31)},
 				},
 				&ast.Slice{
 					Name:  "Review Member Loans",
@@ -3794,11 +3794,11 @@ func TestLint(t *testing.T) {
 				reader    func(view string) *ast.Slice
 			}{
 				{
-					construct: "a trigger",
+					construct: "a shows block",
 					reader: func(view string) *ast.Slice {
 						return &ast.Slice{
-							Name:    "Lending Desk",
-							Trigger: &ast.Trigger{Name: "Lending Desk", Reads: []string{view}},
+							Name:        "Lending Desk",
+							Appearances: []*ast.Appearance{{Screen: "LendingDesk", Reads: []string{view}}},
 						}
 					},
 				},
@@ -3839,11 +3839,11 @@ func TestLint(t *testing.T) {
 			}
 		})
 
-		t.Run("each entry of a trigger's list counts as a reader, and a view no entry names is still reported", func(t *testing.T) {
+		t.Run("each entry of a shows block's list counts as a reader, and a view no entry names is still reported", func(t *testing.T) {
 			model := lendingWith(
 				&ast.Slice{
-					Name:    "Lending Desk",
-					Trigger: &ast.Trigger{Name: "Lending Desk", Reads: []string{"MemberLoansView", "OverdueLoansView"}},
+					Name:        "Lending Desk",
+					Appearances: []*ast.Appearance{{Screen: "LendingDesk", Reads: []string{"MemberLoansView", "OverdueLoansView"}}},
 				},
 				&ast.Slice{
 					Name:  "Review Member Loans",
@@ -3929,8 +3929,8 @@ func TestLint(t *testing.T) {
 							{
 								Name: "Reception",
 								Slices: []*ast.Slice{{
-									Name:    "Seat Reader",
-									Trigger: &ast.Trigger{Name: "Reception Desk", Reads: []string{"DeskOccupancyView"}},
+									Name:        "Seat Reader",
+									Appearances: []*ast.Appearance{{Screen: "ReceptionDesk", Reads: []string{"DeskOccupancyView"}}},
 								}},
 							},
 						},
@@ -3960,8 +3960,8 @@ func TestLint(t *testing.T) {
 				silent    *ast.Slice
 			}{
 				{
-					construct: "a trigger",
-					silent:    &ast.Slice{Name: "Lending Desk", Trigger: &ast.Trigger{Name: "Lending Desk"}},
+					construct: "a shows block",
+					silent:    &ast.Slice{Name: "Lending Desk", Appearances: []*ast.Appearance{{Screen: "LendingDesk"}}},
 				},
 				{
 					construct: "an automation",
@@ -3996,9 +3996,9 @@ func TestLint(t *testing.T) {
 						Name: "Lending",
 						Aggregates: []*ast.Aggregate{{Name: "Loan", Slices: []*ast.Slice{
 							{
-								Name:    "Chase Overdue Copy",
-								Trigger: &ast.Trigger{Name: "Lending Desk", Reads: []string{"OverdueLoansView"}},
-								Views:   []*ast.View{viewAt("OverdueLoansView", 14)},
+								Name:        "Chase Overdue Copy",
+								Appearances: []*ast.Appearance{{Screen: "LendingDesk", Reads: []string{"OverdueLoansView"}}},
+								Views:       []*ast.View{viewAt("OverdueLoansView", 14)},
 							},
 							{Name: "Review Member Loans", Views: []*ast.View{viewAt("MemberLoansView", 20)}},
 						}}},
@@ -4007,8 +4007,8 @@ func TestLint(t *testing.T) {
 						Name: "Reading Room",
 						Mode: "dcb",
 						Slices: []*ast.Slice{{
-							Name:    "Seat Reader",
-							Trigger: &ast.Trigger{Name: "Reception Desk", Reads: []string{"MemberLoansView"}},
+							Name:        "Seat Reader",
+							Appearances: []*ast.Appearance{{Screen: "ReceptionDesk", Reads: []string{"MemberLoansView"}}},
 						}},
 					},
 				},
@@ -4029,9 +4029,9 @@ func TestLint(t *testing.T) {
 								Name: "Loan",
 								Slices: []*ast.Slice{
 									{
-										Name:    "Chase Overdue Copy",
-										Trigger: &ast.Trigger{Name: "Lending Desk", Reads: []string{"OverdueLoansView"}},
-										Views:   []*ast.View{viewAt("OverdueLoansView", 14)},
+										Name:        "Chase Overdue Copy",
+										Appearances: []*ast.Appearance{{Screen: "LendingDesk", Reads: []string{"OverdueLoansView"}}},
+										Views:       []*ast.View{viewAt("OverdueLoansView", 14)},
 									},
 									{Name: "Review Member Loans", Views: []*ast.View{viewAt("MemberLoansView", 20)}},
 								},
@@ -4055,29 +4055,29 @@ func TestLint(t *testing.T) {
 		})
 
 		t.Run("one reads answers for every declaration of that name, and no reads reports each of them", func(t *testing.T) {
-			// DeskOccupancyView is declared and read by a trigger of its own, so the
+			// DeskOccupancyView is declared and read by a shows block of its own, so the
 			// reader below can name a view that resolves without thereby reading
 			// MemberLoansView, and draws no diagnostic either way.
-			declaredTwice := func(reader *ast.Trigger) *ast.Model {
+			declaredTwice := func(reader *ast.Appearance) *ast.Model {
 				return lendingWith(
 					&ast.Slice{
-						Name:    "Watch Desks",
-						Trigger: &ast.Trigger{Name: "Desk Board", Reads: []string{"DeskOccupancyView"}},
-						Views:   []*ast.View{viewAt("DeskOccupancyView", 12)},
+						Name:        "Watch Desks",
+						Appearances: []*ast.Appearance{{Screen: "DeskBoard", Reads: []string{"DeskOccupancyView"}}},
+						Views:       []*ast.View{viewAt("DeskOccupancyView", 12)},
 					},
-					&ast.Slice{Name: "Review Member Loans", Trigger: reader, Views: []*ast.View{viewAt("MemberLoansView", 20)}},
+					&ast.Slice{Name: "Review Member Loans", Appearances: []*ast.Appearance{reader}, Views: []*ast.View{viewAt("MemberLoansView", 20)}},
 					&ast.Slice{Name: "Review Desk Loans", Views: []*ast.View{viewAt("MemberLoansView", 44)}},
 				)
 			}
 
 			t.Run("read once", func(t *testing.T) {
-				diags := linter.Lint(declaredTwice(&ast.Trigger{Name: "Lending Desk", Reads: []string{"MemberLoansView"}}))
+				diags := linter.Lint(declaredTwice(&ast.Appearance{Screen: "LendingDesk", Reads: []string{"MemberLoansView"}}))
 
 				require.Empty(t, diags)
 			})
 
 			t.Run("read by nothing, with the model stating a reads elsewhere", func(t *testing.T) {
-				diags := linter.Lint(declaredTwice(&ast.Trigger{Name: "Lending Desk", Reads: []string{"DeskOccupancyView"}}))
+				diags := linter.Lint(declaredTwice(&ast.Appearance{Screen: "LendingDesk", Reads: []string{"DeskOccupancyView"}}))
 
 				require.Equal(t, []string{
 					fmt.Sprintf(`lending.emod:20: [view/never-read] `+neverRead, "MemberLoansView"),
@@ -4088,15 +4088,15 @@ func TestLint(t *testing.T) {
 
 		t.Run("a reads naming a view no slice declares silences the rule for the whole model", func(t *testing.T) {
 			// The unread view is MemberLoansView. DeskOccupancyView is read by a
-			// trigger of its own so the model states a resolving reads whatever the
+			// shows block of its own so the model states a resolving reads whatever the
 			// slice under test does, which keeps the adoption guard open and out of
 			// the way — and, being read, it draws no diagnostic of its own.
 			modelReading := func(under *ast.Slice) *ast.Model {
 				return lendingWith(
 					&ast.Slice{
-						Name:    "Watch Desks",
-						Trigger: &ast.Trigger{Name: "Desk Board", Reads: []string{"DeskOccupancyView"}},
-						Views:   []*ast.View{viewAt("DeskOccupancyView", 12)},
+						Name:        "Watch Desks",
+						Appearances: []*ast.Appearance{{Screen: "DeskBoard", Reads: []string{"DeskOccupancyView"}}},
+						Views:       []*ast.View{viewAt("DeskOccupancyView", 12)},
 					},
 					&ast.Slice{Name: "Review Member Loans", Views: []*ast.View{viewAt("MemberLoansView", 20)}},
 					under,
@@ -4109,14 +4109,14 @@ func TestLint(t *testing.T) {
 				silent    *ast.Slice
 			}{
 				{
-					construct: "a trigger",
+					construct: "a shows block",
 					reading: &ast.Slice{
-						Name:    "Borrow Copy",
-						Trigger: &ast.Trigger{Name: "Lending Desk", Reads: []string{"MemberLoansVeiw"}},
+						Name:        "Borrow Copy",
+						Appearances: []*ast.Appearance{{Screen: "LendingDesk", Reads: []string{"MemberLoansVeiw"}}},
 					},
 					silent: &ast.Slice{
-						Name:    "Borrow Copy",
-						Trigger: &ast.Trigger{Name: "Lending Desk"},
+						Name:        "Borrow Copy",
+						Appearances: []*ast.Appearance{{Screen: "LendingDesk"}},
 					},
 				},
 				{
@@ -4170,9 +4170,9 @@ func TestLint(t *testing.T) {
 								Name: "Desk",
 								Slices: []*ast.Slice{
 									{
-										Name:    "Claim Desk",
-										Trigger: &ast.Trigger{Name: "Desk Board", Reads: []string{"DeskOccupancyVeiw"}},
-										Views:   []*ast.View{viewAt("DeskOccupancyView", 12)},
+										Name:        "Claim Desk",
+										Appearances: []*ast.Appearance{{Screen: "DeskBoard", Reads: []string{"DeskOccupancyVeiw"}}},
+										Views:       []*ast.View{viewAt("DeskOccupancyView", 12)},
 									},
 								},
 							},
@@ -4211,8 +4211,8 @@ func TestLint(t *testing.T) {
 								Name: "Loan",
 								Slices: []*ast.Slice{
 									{
-										Name:    "Claim Desk",
-										Trigger: &ast.Trigger{Name: "Desk Board", Reads: []string{"DeskOccupancyView"}},
+										Name:        "Claim Desk",
+										Appearances: []*ast.Appearance{{Screen: "DeskBoard", Reads: []string{"DeskOccupancyView"}}},
 									},
 									{Name: "Review Member Loans", Views: []*ast.View{viewAt("MemberLoansView", 20)}},
 								},
