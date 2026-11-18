@@ -1702,3 +1702,38 @@ in this repo; append only learnings that generalise beyond the task that surface
 - Observed: us-003-retire-actor
 - Learning: In the US-003 run, 'connects a command to an event and records the flow' and 'does nothing when the drag ends on empty canvas' in e2e-viewer/tests/connect.spec.js failed once with a 5 s wait for a page function (the page showed no model) while 94 others passed; npx playwright test tests/connect.spec.js passed all 17, and the next full run passed all 96. Run the file alone before you treat such a failure as caused by the change.
 - Apply when: reading a failure of e2e-viewer/tests/connect.spec.js after task test:e2e:viewer
+
+## A construct split into a declaration and its appearances loses its description in the viewer
+- Type: recurring-finding
+- Recorded: 2026-11-18
+- Observed: task 6 — US-004 declare a screen one time and show it in many slices
+- Learning: When a construct moves its prose to a top-level declaration (screen) and each slice keeps only an appearance (shows), the viewer draws the appearance node and never the declaration node, so the box mark, the tooltip and the detail panel lose the description with no failing test. The exporter must copy the declaration's description onto each appearance node, as the SVG already did for each screen box.
+- Apply when: splitting a construct into a declaration and per-slice uses, or adding a node type to the diagram document that the viewer does not draw
+
+## An event flow node from another name space needs a prefix in its ID
+- Type: convention
+- Recorded: 2026-11-18
+- Observed: task 2 — US-004 declare a screen one time and show it in many slices
+- Learning: CollapseEventFlow keys commands, events and automations by their bare names and keeps the first node for each ID, so an origin whose name can repeat one of them (a screen) must carry a prefix in its ID, as an invariant carries its context. Without it, an automation or a command of the same name merges into that node and its hops are drawn from it.
+- Apply when: adding a node kind or an origin to internal/diagram/eventflow.go
+
+## After a range deletion of tests, list the removed t.Run names
+- Type: pattern
+- Recorded: 2026-11-18
+- Observed: task 8 — US-004 declare a screen one time and show it in many slices
+- Learning: A retirement task that deletes old tests by cutting from one t.Run to another can take a group of another task's tests that sits between them; the US-004 trigger removal deleted the five diagram-document tests of screens and shows blocks this way, and only the run verifier saw it. After the cut, run git diff | rg '^-\s+t\.Run' and check that each removed name is about the retired construct.
+- Apply when: removing the tests of a retired construct or field from a large test file
+
+## Removing an AST field that every package reads is not a high-certainty task because a keyword retirement was
+- Type: recurring-finding
+- Recorded: 2026-11-18
+- Observed: task 9 — US-004 declare a screen one time and show it in many slices
+- Learning: US-004 planned the removal of ast.Trigger as high certainty from the US-003 actor precedent, but actor had few readers and trigger had readers in fifteen packages and a shared test kit, so converting the tests was most of the task and it took the most attempts. Set the certainty of a removal from the number of packages and test kits that read the field, and name the test conversion as work of its own in the task.
+- Apply when: decomposing a story whose last task removes an AST type or field that the diagram, query, lsp, linter or export packages read
+
+## clerk mutants runs only the changed package's tests and takes one --id per call
+- Type: constraint
+- Recorded: 2026-11-18
+- Observed: task 9 — US-004 declare a screen one time and show it in many slices
+- Learning: A mutant in internal/export that only the importer's tests kill reports LIVED, and clerk audit accept refuses while it is open; pin the exporter's output in export_test itself. A repeated --id runs only the last key, so rerun each key in its own call.
+- Apply when: closing lived mutants before clerk finish or clerk audit accept, especially in the exporter or another package whose behaviour a consumer package tests
