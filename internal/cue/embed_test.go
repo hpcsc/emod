@@ -178,6 +178,52 @@ func TestSchema(t *testing.T) {
 		require.Contains(t, string(output), "schedule")
 	})
 
+	t.Run("rejects a shows block that names no screen", func(t *testing.T) {
+		cueBin := requireCue(t)
+
+		output, err := vetAgainstModel(t, cueBin, strings.Replace(fullModelJSON,
+			`"screen": "BookingForm",`, ``, 1))
+
+		require.Error(t, err, "schema accepted a shows block with no screen")
+		require.Contains(t, string(output), "shows.0.screen: incomplete value")
+	})
+
+	t.Run("rejects a shows block whose reads is stated as one name rather than a list", func(t *testing.T) {
+		cueBin := requireCue(t)
+
+		output, err := vetAgainstModel(t, cueBin, strings.Replace(fullModelJSON,
+			`"reads": ["RoomsView"],
+          "command"`,
+			`"reads": "RoomsView",
+          "command"`, 1))
+
+		require.Error(t, err, "schema accepted a shows block reading one bare name")
+		require.Contains(t, string(output), `shows.0.reads: conflicting values "RoomsView" and [...string]`)
+	})
+
+	t.Run("rejects a shows block whose command is stated as one name rather than a list", func(t *testing.T) {
+		cueBin := requireCue(t)
+
+		output, err := vetAgainstModel(t, cueBin, strings.Replace(fullModelJSON,
+			`"command": ["MakeReservation"]`,
+			`"command": "MakeReservation"`, 1))
+
+		require.Error(t, err, "schema accepted a shows block issuing one bare name")
+		require.Contains(t, string(output), `shows.0.command: conflicting values "MakeReservation" and [...string]`)
+	})
+
+	t.Run("rejects a screen that carries a key the schema does not declare", func(t *testing.T) {
+		cueBin := requireCue(t)
+
+		output, err := vetAgainstModel(t, cueBin, strings.Replace(fullModelJSON,
+			`"name": "BookingForm",`,
+			`"name": "BookingForm",
+    "kind": "UI",`, 1))
+
+		require.Error(t, err, "schema accepted a screen keyed kind")
+		require.Contains(t, string(output), "screens.0.kind: field not allowed")
+	})
+
 	t.Run("rejects a model that carries the retired actors", func(t *testing.T) {
 		cueBin := requireCue(t)
 
@@ -266,6 +312,11 @@ const fullModelJSON = `{
   "comments": [{"text": "# Full model"}],
   "name": "Full",
   "description": "How the hotel takes and imports bookings",
+  "screens": [{
+    "comments": [{"text": "# Where a guest books"}],
+    "name": "BookingForm",
+    "description": "The booking form on the public site"
+  }],
   "contexts": [{
     "name": "Reservations",
     "description": "What the hotel knows before the guest arrives",
@@ -284,6 +335,12 @@ const fullModelJSON = `{
       "slices": [{
         "name": "Make Reservation",
         "description": "A guest books a room",
+        "shows": [{
+          "comments": [{"text": "# The guest picks a room"}],
+          "screen": "BookingForm",
+          "reads": ["RoomsView"],
+          "command": ["MakeReservation"]
+        }],
         "trigger": {
           "name": "Form",
           "description": "The booking form on the public site",

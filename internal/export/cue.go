@@ -81,7 +81,14 @@ func (w *cueWriter) writeModel(m *ast.Model) {
 	w.writeComments(m.Comments)
 	w.line("name: %q", m.Name)
 	w.lineIfSet("description", m.Description)
+	writeCUEList(w, "screens", m.Screens, w.writeScreen)
 	writeCUEList(w, "contexts", m.Contexts, w.writeContext)
+}
+
+func (w *cueWriter) writeScreen(s *ast.Screen) {
+	w.writeComments(s.Comments)
+	w.line("name: %q", s.Name)
+	w.lineIfSet("description", s.Description)
 }
 
 func (w *cueWriter) writeContext(c *ast.Context) {
@@ -111,6 +118,7 @@ func (w *cueWriter) writeSlice(s *ast.Slice) {
 	w.writeComments(s.Comments)
 	w.line("name: %q", s.Name)
 	w.lineIfSet("description", s.Description)
+	writeCUEList(w, "shows", s.Appearances, w.writeAppearance)
 	if s.Trigger != nil {
 		w.writeObject("trigger", func() { w.writeTrigger(s.Trigger) })
 	}
@@ -172,6 +180,13 @@ func (w *cueWriter) writeSpecOutcome(then ast.ThenClause) {
 	case *ast.ThenCommand:
 		w.lineIfSet("command", t.CommandName)
 	}
+}
+
+func (w *cueWriter) writeAppearance(a *ast.Appearance) {
+	w.writeComments(a.Comments)
+	w.line("screen: %q", a.Screen)
+	w.listIfSet("reads", a.Reads)
+	w.listIfSet("command", a.Commands)
 }
 
 func (w *cueWriter) writeTrigger(t *ast.Trigger) {

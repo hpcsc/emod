@@ -29,7 +29,17 @@ type jsonModel struct {
 	Description string         `json:"description,omitempty"`
 	Position    *jsonPosition  `json:"position,omitempty"`
 	Comments    []*jsonComment `json:"comments,omitempty"`
+	Screens     []*jsonScreen  `json:"screens,omitempty"`
 	Contexts    []*jsonContext `json:"contexts,omitempty"`
+}
+
+type jsonScreen struct {
+	Name          string         `json:"name"`
+	Description   string         `json:"description,omitempty"`
+	Position      *jsonPosition  `json:"position,omitempty"`
+	OpenPosition  *jsonPosition  `json:"open_position,omitempty"`
+	ClosePosition *jsonPosition  `json:"close_position,omitempty"`
+	Comments      []*jsonComment `json:"comments,omitempty"`
 }
 
 type jsonContext struct {
@@ -68,6 +78,7 @@ type jsonSlice struct {
 	OpenPosition  *jsonPosition      `json:"open_position,omitempty"`
 	ClosePosition *jsonPosition      `json:"close_position,omitempty"`
 	Comments      []*jsonComment     `json:"comments,omitempty"`
+	Shows         []*jsonAppearance  `json:"shows,omitempty"`
 	Trigger       *jsonTrigger       `json:"trigger,omitempty"`
 	Commands      []*jsonCommand     `json:"commands,omitempty"`
 	Events        []*jsonEvent       `json:"events,omitempty"`
@@ -132,6 +143,18 @@ type jsonRejection struct {
 	CommandPosition   *jsonPosition  `json:"command_position,omitempty"`
 	InvariantName     string         `json:"invariant_name"`
 	InvariantPosition *jsonPosition  `json:"invariant_position,omitempty"`
+}
+
+type jsonAppearance struct {
+	Screen          string          `json:"screen"`
+	ScreenPosition  *jsonPosition   `json:"screen_position,omitempty"`
+	ReadsPosition   []*jsonPosition `json:"reads_position,omitempty"`
+	CommandPosition []*jsonPosition `json:"command_position,omitempty"`
+	OpenPosition    *jsonPosition   `json:"open_position,omitempty"`
+	ClosePosition   *jsonPosition   `json:"close_position,omitempty"`
+	Comments        []*jsonComment  `json:"comments,omitempty"`
+	Reads           []string        `json:"reads,omitempty"`
+	Command         []string        `json:"command,omitempty"`
 }
 
 type jsonTrigger struct {
@@ -325,9 +348,21 @@ func convertModel(m *ast.Model) *jsonModel {
 		Description: m.Description,
 		Position:    convertPosition(m.NamePos),
 		Comments:    convertComments(m.Comments),
+		Screens:     convertList(m.Screens, convertScreen),
 		Contexts:    convertContexts(m.Contexts),
 	}
 	return out
+}
+
+func convertScreen(s *ast.Screen) *jsonScreen {
+	return &jsonScreen{
+		Name:          s.Name,
+		Description:   s.Description,
+		Position:      convertPosition(s.NamePos),
+		OpenPosition:  convertPosition(s.OpenPos),
+		ClosePosition: convertPosition(s.ClosePos),
+		Comments:      convertComments(s.Comments),
+	}
 }
 
 func convertComments(comments []*ast.Comment) []*jsonComment {
@@ -409,6 +444,7 @@ func convertSlice(s *ast.Slice) *jsonSlice {
 		OpenPosition:  convertPosition(s.OpenPos),
 		ClosePosition: convertPosition(s.ClosePos),
 		Comments:      convertComments(s.Comments),
+		Shows:         convertList(s.Appearances, convertAppearance),
 		Trigger:       convertTrigger(s.Trigger),
 		Commands:      convertCommands(s.Commands),
 		Events:        convertEvents(s.Events),
@@ -623,6 +659,20 @@ func convertRejection(r *ast.Rejection) *jsonRejection {
 		CommandPosition:   convertPosition(r.CommandPos),
 		InvariantName:     r.InvariantName,
 		InvariantPosition: convertPosition(r.InvariantPos),
+	}
+}
+
+func convertAppearance(a *ast.Appearance) *jsonAppearance {
+	return &jsonAppearance{
+		Screen:          a.Screen,
+		ScreenPosition:  convertPosition(a.ScreenPos),
+		ReadsPosition:   convertPositions(a.ReadsPos),
+		CommandPosition: convertPositions(a.CommandsPos),
+		OpenPosition:    convertPosition(a.OpenPos),
+		ClosePosition:   convertPosition(a.ClosePos),
+		Comments:        convertComments(a.Comments),
+		Reads:           a.Reads,
+		Command:         a.Commands,
 	}
 }
 

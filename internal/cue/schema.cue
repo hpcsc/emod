@@ -12,6 +12,19 @@
 	modifier?: string // "required" or "optional"; omitted when empty
 }
 
+#Screen: {
+	comments?:    [...#Comment]
+	name:         string
+	description?: string
+}
+
+#Appearance: {
+	comments?: [...#Comment]
+	screen:    string
+	reads?:    [...string]
+	command?:  [...string]
+}
+
 #Trigger: {
 	comments?:    [...#Comment]
 	name:         string
@@ -107,6 +120,7 @@
 	comments?:     [...#Comment]
 	name:          string
 	description?:  string
+	shows?:        [...#Appearance]
 	trigger?:      #Trigger
 	commands?:     [...#Command]
 	events?:       [...#Event]
@@ -146,5 +160,6 @@
 	comments?:    [...#Comment]
 	name:         string
 	description?: string
+	screens?:     [...#Screen]
 	contexts?:    [...#Context]
 }

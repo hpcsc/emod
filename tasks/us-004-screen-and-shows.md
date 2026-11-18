@@ -564,24 +564,24 @@ appearance are lists, also for one entry. The `trigger` key stays until Task 8.
 
 **Acceptance Criteria:**
 
-- [ ] The JSON export of the shared screen fixture has a `screens` list on the model, after `comments` and before
+- [x] The JSON export of the shared screen fixture has a `screens` list on the model, after `comments` and before
       `contexts`, with each screen's `name`, `description`, positions and comments, in declaration order. A
       screen that no slice shows is in the list.
-- [ ] Each slice has a `shows` list in the place of `trigger`, with one object for each `shows` block, in source
+- [x] Each slice has a `shows` list in the place of `trigger`, with one object for each `shows` block, in source
       order, carrying `screen`, `reads`, `command`, their position keys, its brace positions and its comments.
       `reads` and `command` are lists, also for one entry. `reads_position` and `command_position` have one
       position for each entry. Each position key holds the position of its own entry, and the keys of each new
       object are in the order of a sibling object, read from the raw bytes.
-- [ ] Read back from the decoded JSON across both slice homes, the reads and the commands of the appearances equal
+- [x] Read back from the decoded JSON across both slice homes, the reads and the commands of the appearances equal
       the transcribed lists of the fixture.
-- [ ] The CUE export gives `screens` and `shows` with the same content, and it passes `cue vet` against
+- [x] The CUE export gives `screens` and `shows` with the same content, and it passes `cue vet` against
       `#Model`. The JSON and CUE exports of the fixture describe the same model.
-- [ ] `internal/cue/schema.cue` declares `#Screen` and `#Appearance`, `screens` on `#Model` and `shows` on
+- [x] `internal/cue/schema.cue` declares `#Screen` and `#Appearance`, `screens` on `#Model` and `shows` on
       `#Slice`. `cue vet` rejects a `shows` entry with no `screen`, and one whose `reads` or `command` is one
       string, and each failure names the key in the cue error text. `emod schema` prints `#Screen` and
       `#Appearance`.
-- [ ] A model with no screen exports byte for byte as before, and the `trigger` key does not change.
-- [ ] `task test:unit` passes, with `cue` on the path.
+- [x] A model with no screen exports byte for byte as before, and the `trigger` key does not change.
+- [x] `task test:unit` passes, with `cue` on the path.
 
 **Affected Files/Modules:**
 

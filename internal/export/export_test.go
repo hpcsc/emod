@@ -1829,6 +1829,166 @@ func TestExport(t *testing.T) {
 					"an invariant is not a diagram-JSON node")
 			})
 		})
+
+		t.Run("screens and shows blocks", func(t *testing.T) {
+			at := func(line, column int) ast.Position {
+				return ast.Position{Filename: "shop.emod", Line: line, Column: column}
+			}
+			position := func(line, column int) map[string]any {
+				return map[string]any{"filename": "shop.emod", "line": float64(line), "column": float64(column)}
+			}
+			// shopModel declares a screen that a slice shows, a screen that no
+			// slice shows, and beside the shows block the command and the
+			// automation whose documents the new ones file their keys like.
+			shopModel := func() *ast.Model {
+				return &ast.Model{
+					Name:     "Shop",
+					NamePos:  at(1, 7),
+					Comments: []*ast.Comment{{Text: "# Shop"}},
+					Screens: []*ast.Screen{
+						{
+							Comments:    []*ast.Comment{{Text: "# Where a shopper pays"}},
+							Name:        "CheckoutPage",
+							NamePos:     at(4, 8),
+							Description: "The page a shopper pays on",
+							OpenPos:     at(4, 23),
+							ClosePos:    at(6, 1),
+						},
+						{Name: "CartDrawer", NamePos: at(8, 8), OpenPos: at(8, 21), ClosePos: at(9, 1)},
+					},
+					Contexts: []*ast.Context{{
+						Name: "Shop",
+						Slices: []*ast.Slice{{
+							Comments: []*ast.Comment{{Text: "# Discounts"}},
+							Name:     "Apply Discount",
+							NamePos:  at(12, 9),
+							OpenPos:  at(12, 26),
+							ClosePos: at(30, 3),
+							Appearances: []*ast.Appearance{{
+								Comments:    []*ast.Comment{{Text: "# The shopper enters a code"}},
+								Screen:      "CheckoutPage",
+								ScreenPos:   at(14, 17),
+								Reads:       []string{"CartView", "DiscountView"},
+								ReadsPos:    []ast.Position{at(15, 18), at(15, 28)},
+								Commands:    []string{"ApplyDiscount", "ClearCart"},
+								CommandsPos: []ast.Position{at(16, 18), at(16, 33)},
+								OpenPos:     at(13, 11),
+								ClosePos:    at(17, 5),
+							}},
+							Commands: []*ast.Command{{
+								Comments:    []*ast.Comment{{Text: "# The code a shopper types"}},
+								Name:        "ApplyDiscount",
+								NamePos:     at(19, 13),
+								Description: "Take a code off the total",
+								OpenPos:     at(19, 29),
+								ClosePos:    at(20, 5),
+							}},
+							Automations: []*ast.Automation{{
+								Comments:    []*ast.Comment{{Text: "# Codes expire"}},
+								Name:        "ExpireCodes",
+								NamePos:     at(22, 16),
+								Description: "Drop a code past its date",
+								OnEvent:     "DiscountApplied",
+								OnEventPos:  at(23, 17),
+								Reads:       "DiscountView",
+								ReadsPos:    at(24, 17),
+								Command:     "ClearCart",
+								CommandPos:  at(25, 17),
+								OpenPos:     at(22, 30),
+								ClosePos:    at(26, 5),
+							}},
+						}},
+					}},
+				}
+			}
+
+			t.Run("files the screens after the comments and before the contexts, the shows list in the place of the trigger, and the keys of each like a sibling", func(t *testing.T) {
+				raw, err := export.ExportJSON(shopModel())
+				require.NoError(t, err)
+
+				keyOrder := emittedKeyOrder(t, raw)
+
+				require.Equal(t, map[string][]string{
+					"model":      {"name", "position", "comments", "screens", "contexts"},
+					"slice":      {"name", "position", "open_position", "close_position", "comments", "shows", "commands", "automations"},
+					"screen":     {"name", "description", "position", "open_position", "close_position", "comments"},
+					"command":    {"name", "description", "position", "open_position", "close_position", "comments"},
+					"shows":      {"screen", "screen_position", "reads_position", "command_position", "open_position", "close_position", "comments", "reads", "command"},
+					"automation": {"name", "description", "position", "on_event_position", "reads_position", "command_position", "open_position", "close_position", "comments", "on_event", "reads", "command"},
+				}, map[string][]string{
+					"model":      keyOrder["Shop"],
+					"slice":      keyOrder["Apply Discount"],
+					"screen":     keyOrder["CheckoutPage"],
+					"command":    keyOrder["ApplyDiscount"],
+					"shows":      keyOrder["shows"],
+					"automation": keyOrder["ExpireCodes"],
+				})
+			})
+
+			t.Run("gives each screen in declaration order, also one that no slice shows, and each position key the position of its own entry", func(t *testing.T) {
+				doc := modelDocOf(t, shopModel())
+
+				require.Equal(t, []any{
+					map[string]any{
+						"name":           "CheckoutPage",
+						"description":    "The page a shopper pays on",
+						"position":       position(4, 8),
+						"open_position":  position(4, 23),
+						"close_position": position(6, 1),
+						"comments":       []any{map[string]any{"text": "# Where a shopper pays"}},
+					},
+					map[string]any{
+						"name":           "CartDrawer",
+						"position":       position(8, 8),
+						"open_position":  position(8, 21),
+						"close_position": position(9, 1),
+					},
+				}, doc["screens"])
+				require.Equal(t, []any{
+					map[string]any{
+						"screen":           "CheckoutPage",
+						"screen_position":  position(14, 17),
+						"reads_position":   []any{position(15, 18), position(15, 28)},
+						"command_position": []any{position(16, 18), position(16, 33)},
+						"open_position":    position(13, 11),
+						"close_position":   position(17, 5),
+						"comments":         []any{map[string]any{"text": "# The shopper enters a code"}},
+						"reads":            []any{"CartView", "DiscountView"},
+						"command":          []any{"ApplyDiscount", "ClearCart"},
+					},
+				}, exportedSlices(doc)[0]["shows"])
+			})
+
+			t.Run("gives the reads and the command of a shows block as lists, also for one entry", func(t *testing.T) {
+				doc := modelDocOf(t, test.ScreenLibraryLendingModel(t))
+				shows := objectsUnder(exportedSlices(doc)[0], "shows")
+
+				require.Equal(t, []map[string]any{{"reads": []any{"MemberLoansView"}, "command": []any{"BorrowCopy"}}},
+					[]map[string]any{{"reads": shows[0]["reads"], "command": shows[0]["command"]}})
+			})
+
+			t.Run("gives the screens of the shared screen fixture in declaration order", func(t *testing.T) {
+				doc := modelDocOf(t, test.ScreenLibraryLendingModel(t))
+
+				require.Equal(t, []any{
+					map[string]any{
+						"name":        "LendingDesk",
+						"description": "The terminal a librarian lends and takes back copies at",
+						"comments":    []any{map[string]any{"text": "# The terminal a librarian lends and takes back copies at"}},
+					},
+					map[string]any{"name": "OverdueReport"},
+					map[string]any{"name": "DeskKiosk"},
+				}, withoutPositions(doc["screens"]))
+			})
+
+			t.Run("a model that declares no screen and no shows block writes neither key", func(t *testing.T) {
+				raw, err := export.ExportJSON(buildFullModel())
+				require.NoError(t, err)
+
+				require.NotContains(t, string(raw), `"screens"`)
+				require.NotContains(t, string(raw), `"shows"`)
+			})
+		})
 	})
 
 	t.Run("model json with diagnostics", func(t *testing.T) {
@@ -4772,6 +4932,52 @@ func TestExport(t *testing.T) {
 
 			doc := exportedCUEDoc(t, cueBin, test.KeywordFieldSearchCatalogModel(t))
 			require.Equal(t, keywordFieldsByOwner, fieldsByOwner(doc))
+		})
+
+		t.Run("CUE and JSON exports agree on the screens and the shows blocks, which conform to the schema and read back as transcribed", func(t *testing.T) {
+			cueBin := lookupCue(t)
+			showing := test.ScreenLibraryLendingModel(t)
+
+			requireBothFormatsAgree(t, cueBin, showing)
+			requireConformsToSchema(t, cueBin, showing)
+
+			for format, doc := range exportedDocs(t, cueBin, showing) {
+				var reads, commands []string
+				for _, slice := range exportedSlices(doc) {
+					for _, appearance := range objectsUnder(slice, "shows") {
+						if read, states := appearance["reads"].([]any); states {
+							for _, view := range read {
+								reads = append(reads, view.(string))
+							}
+						}
+						if issued, issues := appearance["command"].([]any); issues {
+							for _, command := range issued {
+								commands = append(commands, command.(string))
+							}
+						}
+					}
+				}
+
+				require.Equal(t, test.ScreenLibraryLendingAppearanceReads, reads, "%s export", format)
+				require.Equal(t, test.ScreenLibraryLendingAppearanceCommands, commands, "%s export", format)
+			}
+		})
+
+		t.Run("CUE and JSON exports agree on the comments of a screen and of a shows block", func(t *testing.T) {
+			requireBothFormatsAgree(t, lookupCue(t), &ast.Model{
+				Name:    "Shop",
+				Screens: []*ast.Screen{{Comments: []*ast.Comment{{Text: "# Where a shopper pays"}}, Name: "CheckoutPage"}},
+				Contexts: []*ast.Context{{
+					Name: "Shop",
+					Slices: []*ast.Slice{{
+						Name: "Apply Discount",
+						Appearances: []*ast.Appearance{{
+							Comments: []*ast.Comment{{Text: "# The shopper enters a code"}},
+							Screen:   "CheckoutPage",
+						}},
+					}},
+				}},
+			})
 		})
 
 		t.Run("CUE and JSON exports agree on the invariants a model declares", func(t *testing.T) {

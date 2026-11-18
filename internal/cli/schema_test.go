@@ -35,6 +35,18 @@ func TestSchema(t *testing.T) {
 		require.Regexp(t, `value:\s+string \| number \| bool`, output)
 	})
 
+	t.Run("prints a schema declaring the screens of a model and the shows blocks of a slice", func(t *testing.T) {
+		output := captureStdout(t, func() {
+			err := cli.RunSchema("cue")
+			require.NoError(t, err)
+		})
+
+		require.Contains(t, output, "#Screen:")
+		require.Contains(t, output, "#Appearance:")
+		require.Regexp(t, `screens\?:\s+\[\.\.\.#Screen\]`, output)
+		require.Regexp(t, `shows\?:\s+\[\.\.\.#Appearance\]`, output)
+	})
+
 	t.Run("prints a schema declaring the wire type an event may bind", func(t *testing.T) {
 		output := captureStdout(t, func() {
 			err := cli.RunSchema("cue")
