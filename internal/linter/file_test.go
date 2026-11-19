@@ -22,8 +22,9 @@ func modelFileIn(t *testing.T, dir, source string) (*ast.Model, string) {
 	return model, path
 }
 
-func screenWithImage(image string) string {
-	return "screen \"CheckoutPage\" {\n  image = \"" + image + "\"\n}\n"
+func shownScreenWithImage(image string) string {
+	return "screen \"CheckoutPage\" {\n  image = \"" + image + "\"\n}\n\n" +
+		"context \"Shop\" {\n  aggregate \"Cart\" {\n    slice \"Check Out\" {\n      shows {\n        screen = CheckoutPage\n      }\n    }\n  }\n}\n"
 }
 
 func writeFileIn(t *testing.T, dir, name string) string {
@@ -51,7 +52,7 @@ func TestLintFile(t *testing.T) {
 
 	t.Run("screen/missing-image-asset", func(t *testing.T) {
 		t.Run("warns at the image of a screen whose path leads to no file, naming the screen and the path as written", func(t *testing.T) {
-			model, path := modelFileIn(t, t.TempDir(), screenWithImage("./wireframes/checkout.png"))
+			model, path := modelFileIn(t, t.TempDir(), shownScreenWithImage("./wireframes/checkout.png"))
 
 			diags := linter.LintFile(model, path)
 
@@ -68,7 +69,7 @@ func TestLintFile(t *testing.T) {
 		t.Run("reports nothing once a file is at the path", func(t *testing.T) {
 			dir := t.TempDir()
 			writeFileIn(t, dir, "wireframes/checkout.png")
-			model, path := modelFileIn(t, dir, screenWithImage("./wireframes/checkout.png"))
+			model, path := modelFileIn(t, dir, shownScreenWithImage("./wireframes/checkout.png"))
 
 			require.Empty(t, linter.LintFile(model, path))
 		})
@@ -78,7 +79,7 @@ func TestLintFile(t *testing.T) {
 				modelDir, workDir := t.TempDir(), t.TempDir()
 				writeFileIn(t, workDir, "checkout.png")
 				t.Chdir(workDir)
-				model, path := modelFileIn(t, modelDir, screenWithImage("checkout.png"))
+				model, path := modelFileIn(t, modelDir, shownScreenWithImage("checkout.png"))
 
 				require.Len(t, missingImageMessages(linter.LintFile(model, path)), 1)
 			})
@@ -87,7 +88,7 @@ func TestLintFile(t *testing.T) {
 				modelDir := t.TempDir()
 				writeFileIn(t, modelDir, "checkout.png")
 				t.Chdir(t.TempDir())
-				model, path := modelFileIn(t, modelDir, screenWithImage("checkout.png"))
+				model, path := modelFileIn(t, modelDir, shownScreenWithImage("checkout.png"))
 
 				require.Empty(t, linter.LintFile(model, path))
 			})
@@ -98,7 +99,7 @@ func TestLintFile(t *testing.T) {
 			writeFileIn(t, root, "mockups/checkout.png")
 			modelDir := filepath.Join(root, "models")
 			require.NoError(t, os.Mkdir(modelDir, 0o755))
-			model, path := modelFileIn(t, modelDir, screenWithImage("../mockups/checkout.png"))
+			model, path := modelFileIn(t, modelDir, shownScreenWithImage("../mockups/checkout.png"))
 
 			require.Empty(t, linter.LintFile(model, path))
 		})
@@ -108,7 +109,7 @@ func TestLintFile(t *testing.T) {
 			existing := writeFileIn(t, elsewhere, "checkout.png")
 			missing := filepath.Join(elsewhere, "history.png")
 			model, path := modelFileIn(t, t.TempDir(),
-				screenWithImage(existing)+"\nscreen \"OrderHistory\" {\n  image = \""+missing+"\"\n}\n")
+				shownScreenWithImage(existing)+"\nscreen \"OrderHistory\" {\n  image = \""+missing+"\"\n}\n")
 
 			require.Equal(t,
 				[]string{`screen "OrderHistory" names image "` + missing + `", which leads to no file`},
@@ -155,6 +156,10 @@ func TestLintFile(t *testing.T) {
 context "Orders" {
   aggregate "Order" {
     slice "Update Order" {
+      shows {
+        screen = CheckoutPage
+      }
+
       event "OrderUpdated" {
       }
     }

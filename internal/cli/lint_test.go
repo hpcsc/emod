@@ -259,6 +259,16 @@ model "Shop" {
 screen "CheckoutPage" {
   image = "./wireframes/checkout.png"
 }
+
+context "Shop" {
+  aggregate "Cart" {
+    slice "Check Out" {
+      shows {
+        screen = CheckoutPage
+      }
+    }
+  }
+}
 `
 
 // automationWithoutViewEmod wires an automation straight from an event to a
@@ -2028,6 +2038,7 @@ func TestLintExplain(t *testing.T) {
 			"wire/type-format",
 			"screen/missing-image-asset",
 			"bed",
+			"screen/never-shown",
 		}
 		for _, rule := range rules {
 			t.Run(rule, func(t *testing.T) {

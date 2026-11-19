@@ -5763,6 +5763,129 @@ context "Shop" {
 		})
 	})
 
+	t.Run("screen/never-shown", func(t *testing.T) {
+		neverShownReports := func(t *testing.T, model *ast.Model) []*diagnostic.Entry {
+			t.Helper()
+			var reports []*diagnostic.Entry
+			for _, d := range linter.Lint(model) {
+				if d.RuleName == "screen/never-shown" {
+					reports = append(reports, d)
+				}
+			}
+			return reports
+		}
+		parsed := func(t *testing.T, source string) *ast.Model {
+			t.Helper()
+			model, diags := parser.Parse(source, "shop.emod")
+			require.Empty(t, diags)
+			return model
+		}
+
+		t.Run("warns at the declaration of each screen that no shows block names, and at no screen that a slice of either home or of another context shows", func(t *testing.T) {
+			reports := neverShownReports(t, parsed(t, `screen "CheckoutPage" {
+}
+
+screen "OrderHistory" {
+}
+
+screen "CartDrawer" {
+}
+
+screen "Receipt" {
+}
+
+screen "Invoice" {
+}
+
+context "Shop" {
+  aggregate "Cart" {
+    slice "Check Out" {
+      shows {
+        screen = CheckoutPage
+      }
+
+      shows {
+        screen = Invoice
+      }
+    }
+  }
+}
+
+context "Delivery" {
+  mode = dcb
+
+  slice "Open Cart" {
+    shows {
+      screen = CartDrawer
+    }
+  }
+}
+`))
+
+			require.Equal(t, []*diagnostic.Entry{
+				{
+					Filename: "shop.emod", Line: 4, Column: 8, Severity: diagnostic.Warning, RuleName: "screen/never-shown",
+					Message: `screen "OrderHistory" is shown by no slice, so it appears nowhere on the timeline; show it with a shows block, or remove the declaration`,
+				},
+				{
+					Filename: "shop.emod", Line: 10, Column: 8, Severity: diagnostic.Warning, RuleName: "screen/never-shown",
+					Message: `screen "Receipt" is shown by no slice, so it appears nowhere on the timeline; show it with a shows block, or remove the declaration`,
+				},
+			}, reports)
+		})
+
+		t.Run("stays silent while a shows block names a screen that the model does not declare", func(t *testing.T) {
+			reports := neverShownReports(t, parsed(t, `screen "CheckoutPage" {
+}
+
+context "Shop" {
+  slice "Check Out" {
+    shows {
+      screen = CheckoutPag
+    }
+  }
+}
+`))
+
+			require.Empty(t, reports)
+		})
+
+		t.Run("warns at a screen of a model that has no shows block at all", func(t *testing.T) {
+			reports := neverShownReports(t, parsed(t, "screen \"OrderHistory\" {\n}\n"))
+
+			require.Equal(t, []*diagnostic.Entry{{
+				Filename: "shop.emod", Line: 1, Column: 8, Severity: diagnostic.Warning, RuleName: "screen/never-shown",
+				Message: `screen "OrderHistory" is shown by no slice, so it appears nowhere on the timeline; show it with a shows block, or remove the declaration`,
+			}}, reports)
+		})
+
+		t.Run("stays silent while a shows block names no screen yet, also beside a screen with no label", func(t *testing.T) {
+			model, diags := parser.Parse(`screen {
+}
+
+screen "OrderHistory" {
+}
+
+context "Shop" {
+  slice "Check Out" {
+    shows {
+    }
+  }
+}
+`, "shop.emod")
+			require.NotEmpty(t, diags, "a shows block with no screen does not parse")
+
+			require.Empty(t, neverShownReports(t, model))
+		})
+
+		t.Run("does not report a screen with no label, which a model that does not parse holds with an empty name", func(t *testing.T) {
+			model, diags := parser.Parse("screen {\n}\n", "shop.emod")
+			require.NotEmpty(t, diags, "the model has to hold the empty name of a source that does not parse")
+
+			require.Empty(t, neverShownReports(t, model))
+		})
+	})
+
 	t.Run("spec/given-outside-boundary", func(t *testing.T) {
 		t.Run("aggregate arm: reports a given event from another aggregate", func(t *testing.T) {
 			model := &ast.Model{

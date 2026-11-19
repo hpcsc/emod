@@ -1,0 +1,2 @@
+design: none
+reason: The story adds one lint rule to internal/linter over a model-wide set of the screens that shows blocks name, as view/never-read does for reads; it adds and changes no type.

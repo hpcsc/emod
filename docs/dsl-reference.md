@@ -114,6 +114,7 @@ The name is a bare name, such as `CheckoutPage`, because a `shows` block names t
 
 - **`screen/missing-image-asset` warns about a missing mockup:** `emod lint` and `emod validate` report a warning when an `image` path leads to no file. Only these two commands run the rule, because they read the model from a file; the viewer, the desktop app, the editor and the MCP tools do not. Like every warning, it makes `emod validate` exit 1, but the model still parses, exports and draws. Run `emod lint --explain screen/missing-image-asset` for the full description.
 - **`bed` warns about a screen that tries to be several screens:** `emod lint` and `emod validate` report a warning at the screen declaration when the `command` entries of the `shows` blocks of the screen issue 3 or more distinct commands across the model. A command that two appearances both issue counts one time, and a command that a slice declares or an automation issues does not count. Run `emod lint --explain bed` for the full description.
+- **`screen/never-shown` warns about a screen that no slice shows:** `emod lint` and `emod validate` report a warning at a screen declaration that no `shows` block names. A `shows` block with no `command` still shows the screen. Run `emod lint --explain screen/never-shown` for the full description.
 
 ---
 

@@ -149,6 +149,7 @@ func Lint(model *ast.Model) []*diagnostic.Entry {
 	}
 
 	diags = append(diags, checkBed(model)...)
+	diags = append(diags, checkNeverShown(model)...)
 	diags = append(diags, checkInvariantNeverExercised(model)...)
 	diags = append(diags, checkGivenOutsideBoundary(model)...)
 
@@ -647,6 +648,38 @@ func checkBed(model *ast.Model) []*diagnostic.Entry {
 		diags = append(diags, warning(screen.NamePos, "bed", fmt.Sprintf(
 			"screen %q issues %d commands across %s; consider whether it is several screens, or whether the commands express one intent",
 			screen.Name, issued, pluralized(len(issuingSlices[screen.Name]), "slice"))))
+	}
+	return diags
+}
+
+func checkNeverShown(model *ast.Model) []*diagnostic.Entry {
+	declared := make(map[string]bool)
+	for _, screen := range model.Screens {
+		if screen.Name != "" {
+			declared[screen.Name] = true
+		}
+	}
+	shown := make(map[string]bool)
+	for _, slice := range model.AllSlices() {
+		for _, appearance := range slice.Appearances {
+			// A shows block that names no declared screen, or no screen yet, is an
+			// error that the parser or the validator reports where it is written;
+			// it can be the appearance of any declared screen, so none is reported.
+			if !declared[appearance.Screen] {
+				return nil
+			}
+			shown[appearance.Screen] = true
+		}
+	}
+
+	var diags []*diagnostic.Entry
+	for _, screen := range model.Screens {
+		if screen.Name == "" || shown[screen.Name] {
+			continue
+		}
+		diags = append(diags, warning(screen.NamePos, "screen/never-shown", fmt.Sprintf(
+			"screen %q is shown by no slice, so it appears nowhere on the timeline; show it with a shows block, or remove the declaration",
+			screen.Name)))
 	}
 	return diags
 }

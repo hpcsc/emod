@@ -1,0 +1,33 @@
+{
+  "story": "Flag a screen that no slice shows",
+  "story_id": "screens-as-first-class/US-009",
+  "tasks_file": "tasks/us-009-screen-never-shown.md",
+  "tasks": [
+    {
+      "n": 1,
+      "done": true,
+      "title": "Report `screen/never-shown` at a screen declaration that no `shows` block names",
+      "language": "Go",
+      "testable": true,
+      "certainty": "high",
+      "blast_radius": "medium",
+      "patterns_to_follow": [
+        "internal/linter/linter.go:702-724",
+        "internal/linter/descriptions.go:32-61",
+        "internal/cli/lint_test.go:1932-1968",
+        "tasks/learnings.md:428-432"
+      ],
+      "depends_on": [],
+      "affected_files": [
+        "internal/linter/linter.go",
+        "internal/linter/linter_test.go",
+        "internal/linter/descriptions.go",
+        "internal/cli/lint_test.go",
+        "cmd/emod/main_test.go",
+        "docs/dsl-reference.md",
+        "docs/dsl_reference_test.go"
+      ]
+    }
+  ],
+  "design_file": "tasks/us-009-screen-never-shown.design.yaml"
+}

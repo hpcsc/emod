@@ -587,7 +587,8 @@ func TestRunParsed(t *testing.T) {
 }
 
 func TestCheckFile(t *testing.T) {
-	const missingImage = "screen \"CheckoutPage\" {\n  image = \"./checkout.png\"\n}\n"
+	const missingImage = "screen \"CheckoutPage\" {\n  image = \"./checkout.png\"\n}\n\n" +
+		"context \"Shop\" {\n  aggregate \"Cart\" {\n    slice \"Check Out\" {\n      shows {\n        screen = CheckoutPage\n      }\n    }\n  }\n}\n"
 
 	t.Run("screen images", func(t *testing.T) {
 		t.Run("reports a screen whose image leads to no file, which Check does not", func(t *testing.T) {
