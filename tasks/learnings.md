@@ -1813,10 +1813,9 @@ in this repo; append only learnings that generalise beyond the task that surface
 ## The parser keeps an empty name for each unlabelled block and non-name entry, so a rule that joins names must skip the empty name on both sides
 - Type: recurring-finding
 - Recorded: 2026-11-19
-- Observed: task 1 — us-008-bed-rule
-- Learning: The linter runs on the partial model of a source that does not parse. parser.hclReader keeps command {} and screen {} with Name "", gives a shows block with no screen entry Screen "", and appends "" for each list entry that is not a name (command = [1, X]). A map keyed by name then joins unrelated empty names: in US-008, bed counted an empty command entry because an unlabelled command block declared "", after a fix had claimed that no slice declares an empty name. The audit found it in round 2. Skip "" where the map is built and where it is read, and test with the real parser output of a broken model, not a hand-built AST.
-- Apply when: writing or fixing a lint or validator rule that groups or matches constructs by name, such as a map from screen to commands or a set of declared names
-
+- Observed: task 1 — us-009-screen-never-shown
+- Learning: The linter runs on the partial model of a source that does not parse. parser.hclReader keeps command {} and screen {} with Name "", gives a shows block with no screen entry Screen "", and appends "" for each list entry that is not a name (command = [1, X]). A map keyed by name then joins unrelated empty names. It happened twice in a row: bed (US-008) counted an empty command entry because an unlabelled command block declared "", and screen/never-shown (US-009) put the empty name of an unlabelled screen into its own declared set, so a shows block with no screen stopped silencing the rule. Both times the fix was applied to one side only. Skip "" in every map that a rule builds from names (the declared set of the construct itself included) and where it reads them, and test with the real parser output of a broken model: an unlabelled declaration beside an empty reference.
+- Apply when: writing or fixing a lint or validator rule that groups or matches constructs by name, such as a map from screen to commands, a set of declared names, or a set of shown or read names
 ## A rule that counts the names a block references counts only declared names
 - Type: pattern
 - Recorded: 2026-11-19
@@ -1830,3 +1829,10 @@ in this repo; append only learnings that generalise beyond the task that surface
 - Observed: us-008-bed-rule
 - Learning: clerk step done decompose binds a breakdown that is written by hand: tasks/<slug>.md, tasks/<slug>.json with story, story_id, tasks_file, tasks (n, done, title, language, testable, certainty, blast_radius, patterns_to_follow, depends_on, affected_files) and design_file, and tasks/<slug>.design.yaml. A design file of design: none is refused unless it also has a reason: line. US-008 (one lint rule) bound this way in a few minutes, where the decompose agent took 10 to 18 minutes on the other stories of the feature.
 - Apply when: starting an implement run for a story that is one slice, such as one lint rule or one panel row
+
+## A never-used rule copies view/never-read except its empty-set silence
+- Type: pattern
+- Recorded: 2026-11-19
+- Observed: task 1 — us-009-screen-never-shown
+- Learning: view/never-read returns nothing when the model states no reads at all, because such a model has not adopted the concept. screen/never-shown must not copy that guard: a declared screen is the adoption, and a model with screens and no shows block is the main case the rule exists for. Its test therefore needs a model with a screen and no shows block at all, or a copied guard passes every leaf. It does copy the other guard: silence while a reference names an undeclared construct, which the validator reports.
+- Apply when: adding a lint rule that reports a declared construct that nothing references, such as a never-shown, never-issued or never-read rule
