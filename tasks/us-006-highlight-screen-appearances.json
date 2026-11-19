@@ -1,0 +1,74 @@
+{
+  "story": "Highlight each appearance of a screen in the viewer",
+  "story_id": "screens-as-first-class/US-006",
+  "tasks_file": "tasks/us-006-highlight-screen-appearances.md",
+  "tasks": [
+    {
+      "n": 1,
+      "done": true,
+      "title": "Highlight each appearance of a screen while one of them is selected",
+      "language": "JavaScript",
+      "testable": true,
+      "certainty": "medium",
+      "blast_radius": "low",
+      "patterns_to_follow": [
+        "internal/frontend/static/ui.js:138-143",
+        "internal/frontend/static/ui.js:765-786",
+        "internal/frontend/static/ui.js:1045-1053",
+        "internal/frontend/static/model.js:156-174",
+        "internal/frontend/static/model.js:233-240",
+        "internal/frontend/tests/viewer.test.js:929-958",
+        "internal/frontend/tests/viewer.test.js:2410-2417",
+        "internal/frontend/tests/diagnostics-highlight.test.js:123-140",
+        "e2e-viewer/tests/copies.spec.js:141-175",
+        "e2e-viewer/tests/interaction.spec.js:194-212",
+        "tasks/learnings.md:206-210",
+        "tasks/learnings.md:403-407",
+        "tasks/learnings.md:695-700",
+        "tasks/learnings.md:1227-1233",
+        "tasks/learnings.md:1687-1693"
+      ],
+      "depends_on": [],
+      "affected_files": [
+        "internal/frontend/static/model.js",
+        "internal/frontend/static/ui.js",
+        "internal/frontend/tests/viewer.test.js",
+        "internal/frontend/tests/renderer.test.js",
+        "e2e-viewer/tests/interaction.spec.js"
+      ]
+    },
+    {
+      "n": 2,
+      "done": false,
+      "title": "List the slices where the screen appears in the detail panel of an appearance, and select an appearance from the list",
+      "language": "JavaScript",
+      "testable": true,
+      "certainty": "high",
+      "blast_radius": "low",
+      "patterns_to_follow": [
+        "internal/frontend/static/ui.js:519-527",
+        "internal/frontend/static/ui.js:529-536",
+        "internal/frontend/static/ui.js:598-622",
+        "internal/frontend/static/ui.js:138-143",
+        "internal/frontend/static/viewer.js:142-144",
+        "internal/frontend/static/ui.js:89-99",
+        "internal/frontend/tests/detail-panel.test.js:167-217",
+        "internal/frontend/tests/viewer.test.js:2419-2433",
+        "internal/frontend/tests/viewer.test.js:3877-3912",
+        "tasks/learnings.md:881-886",
+        "tasks/learnings.md:1043-1048",
+        "task:1"
+      ],
+      "depends_on": [
+        1
+      ],
+      "affected_files": [
+        "internal/frontend/static/ui.js",
+        "internal/frontend/static/viewer.html",
+        "internal/frontend/tests/detail-panel.test.js",
+        "internal/frontend/tests/viewer.test.js"
+      ]
+    }
+  ],
+  "design_file": "tasks/us-006-highlight-screen-appearances.design.yaml"
+}

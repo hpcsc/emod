@@ -13,6 +13,7 @@ function createStore() {
   document.body.append(panel, svg);
 
   return {
+    nodes: [],
     nodeById: new Map(),
     interaction: { selectedNodeId: null, highlighted: {} },
     dom: { detailPanel: panel, dpContent: content, svg: svg },

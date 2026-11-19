@@ -398,7 +398,7 @@ function arrowBetween(svg, sourceId, targetId) {
   return svg.querySelector('.arrow[data-source="' + sourceId + '"][data-target="' + targetId + '"]');
 }
 
-function appearanceOf(arrow) {
+function paintOf(arrow) {
   return {
     cls: arrow.getAttribute('class'),
     stroke: arrow.getAttribute('stroke'),
@@ -1385,9 +1385,9 @@ describe('Renderer.buildSVG', () => {
       const translation = arrowBetween(svg, 'view1', 'trans1');
       const reader = arrowBetween(svg, 'view1', id);
 
-      const readerAppearance = appearanceOf(reader);
-      expect(readerAppearance).toEqual(appearanceOf(translation));
-      expect(readerAppearance.dash).toBeNull();
+      const readerPaint = paintOf(reader);
+      expect(readerPaint).toEqual(paintOf(translation));
+      expect(readerPaint.dash).toBeNull();
       expect(reader.getAttribute('d')).not.toBe(translation.getAttribute('d'));
     });
 

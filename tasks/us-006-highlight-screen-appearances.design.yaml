@@ -1,0 +1,39 @@
+design: planned
+# No Go change: the diagram document already gives each appearance its own node ID and the name of its
+# screen as its label. Both changes are in the viewer, which every distribution serves from one copy.
+types:
+  - name: Model
+    package: internal/frontend/static   # model.js
+    change: changed
+    does: holds the nodes and edges of the open diagram and answers what one node is to another
+    owns:
+      - two shows nodes are appearances of one screen when their labels are the same
+      - the appearances of a screen come in the order of their slices in the node list
+      - the declaration of a screen, a node of type screen, is not an appearance
+    methods: [appearancesOf]   # ui.js calls it; it sits beside sliceDeclaring, and moveToSlice already holds the same label rule
+  - name: UI
+    package: internal/frontend/static   # ui.js
+    change: changed
+    does: shows the detail panel and the other overlays of the viewer
+    owns:
+      - while a shows node is selected, each appearance of its screen is highlighted, and the selected one is one of them
+      - a selection of a node that is not a shows node highlights no appearance
+      - the panel of a shows node lists under "Shown in" the slice of each appearance of its screen, its own slice included, in the order of the slices
+      - a click on an entry of that list selects the appearance in that slice and centres the canvas on it, and sends no edit
+    methods: [showDetailPanel]
+functions:
+  - Model.appearancesOf(store, screen)   # new; the shows nodes whose label is the name of the screen, in the order of their slices
+words:
+  - concept: one point on the timeline where a slice shows a screen, in JS names and prose
+    word: appearance
+    not: [usage, occurrence, instance, placement, sibling, peer]   # renderer.test.js appearanceOf(arrow) means the paint of an arrow and is renamed
+  - concept: the slices where a screen appears, as the detail panel titles the list
+    word: shown in
+    not: [appears in, appearances, used in, also in]   # the name of the same list in emod references (query.GroupShownIn)
+  - concept: the node whose detail panel is open, from the context menu of its block
+    word: selection
+    not: [focus, active, current]   # the store calls it selectedNodeId
+  - concept: the state that paints a block in the stroke and the fill of its type and dims each other block
+    word: highlight
+    not: [mark, glow, emphasis]   # mark is the outline that hovering a copy puts on its original (markOriginalOf)
+dependencies: []

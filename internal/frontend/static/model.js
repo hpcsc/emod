@@ -239,6 +239,10 @@ function sliceDeclaring(store, copy) {
   return (original && store.nodeById.get(original.parentId)) || null;
 }
 
+function appearancesOf(store, screen) {
+  return store.nodes.filter(function(n) { return n.type === "shows" && n.label === screen; });
+}
+
 function addEdge(store, source, target, type) {
   store.edges.push({ source: source, target: target, type: type });
 }
@@ -295,6 +299,7 @@ export const Model = {
   isCopy,
   copiedType,
   sliceDeclaring,
+  appearancesOf,
   addEdge,
   removeEdge,
   autoDetectEdgeType,

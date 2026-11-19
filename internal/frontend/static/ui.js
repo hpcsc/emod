@@ -468,6 +468,9 @@ function showDetailPanel(store, node) {
 
   store.interaction.selectedNodeId = node.id;
   clearHighlights(store);
+  if (node.type === 'shows') {
+    highlightElements(store, Model.appearancesOf(store, node.label).map(function(n) { return n.id; }));
+  }
   dimArrowsNotTouching(store, node.id);
 
   const deletable = isDeletableNodeType(node.type);

@@ -189,6 +189,81 @@ test.describe('fit to view', () => {
   });
 });
 
+const SCREEN_IN_TWO_SLICES = `emod = 1
+
+model "Shop" {
+}
+
+screen "CheckoutPage" {
+}
+
+context "Shop" {
+  aggregate "Cart" {
+    slice "Apply Discount" {
+      shows {
+        screen  = CheckoutPage
+        command = ApplyDiscount
+      }
+
+      command "ApplyDiscount" {
+      }
+    }
+
+    slice "Reapply Discount" {
+      shows {
+        screen = CheckoutPage
+      }
+    }
+  }
+}
+`;
+
+test.describe('the appearances of a screen', () => {
+  const box = (page, nodeId) => page.locator('.diagram-node[data-node-id="' + nodeId + '"] rect').first();
+  const paintOf = (page, nodeId) => box(page, nodeId).evaluate((rect) => {
+    const style = getComputedStyle(rect);
+    return { stroke: style.stroke, opacity: style.opacity };
+  });
+
+  async function select(page, nodeId) {
+    await page.locator('.diagram-node[data-node-id="' + nodeId + '"]').click({ button: 'right' });
+    await page.locator('.ctx-menu-item[data-action="open-field-editor"]').click();
+  }
+
+  test('paints each appearance of the selected screen as highlighted and dims the other boxes', async ({ page }) => {
+    await open(page);
+    await render(page, SCREEN_IN_TWO_SLICES);
+
+    await select(page, 'shows-1');
+
+    expect({
+      selected: await paintOf(page, 'shows-1'),
+      other: await paintOf(page, 'shows-2'),
+      command: (await paintOf(page, 'command-1')).opacity,
+    }).toEqual({
+      selected: { stroke: 'rgb(52, 152, 219)', opacity: '1' },
+      other: { stroke: 'rgb(52, 152, 219)', opacity: '1' },
+      command: '0.3',
+    });
+  });
+
+  test('paints no box as highlighted once Escape clears the selection', async ({ page }) => {
+    await open(page);
+    await render(page, SCREEN_IN_TWO_SLICES);
+    await select(page, 'shows-1');
+
+    await page.keyboard.press('Escape');
+
+    expect({
+      other: await paintOf(page, 'shows-2'),
+      command: (await paintOf(page, 'command-1')).opacity,
+    }).toEqual({
+      other: { stroke: expect.not.stringMatching(/^rgb\(52, 152, 219\)$/), opacity: '1' },
+      command: '1',
+    });
+  });
+});
+
 test.describe('node selection', () => {
   test('opens the field editor from the node context menu', async ({ page }) => {
     await open(page);

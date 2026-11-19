@@ -977,6 +977,102 @@ describe('viewer field editor', () => {
   });
 });
 
+describe('the appearances of a screen', () => {
+  // CheckoutPage is shown in two slices and CartDrawer in one, and a command
+  // shares the name CartDrawer.
+  function checkoutDiagram() {
+    return {
+      model_name: 'Shop',
+      nodes: [
+        { id: 'context-1', type: 'context', label: 'Shop', parentId: null },
+        { id: 'slice-1', type: 'slice', label: 'Apply Discount', parentId: 'context-1' },
+        { id: 'shows-1', type: 'shows', label: 'CheckoutPage', parentId: 'slice-1', command: ['ApplyDiscount'] },
+        { id: 'command-1', type: 'command', label: 'ApplyDiscount', parentId: 'slice-1' },
+        { id: 'slice-2', type: 'slice', label: 'Open Cart', parentId: 'context-1' },
+        { id: 'shows-2', type: 'shows', label: 'CartDrawer', parentId: 'slice-2' },
+        { id: 'command-2', type: 'command', label: 'CartDrawer', parentId: 'slice-2' },
+        { id: 'slice-3', type: 'slice', label: 'Reapply Discount', parentId: 'context-1' },
+        { id: 'shows-3', type: 'shows', label: 'CheckoutPage', parentId: 'slice-3' },
+      ],
+      edges: [{ source: 'shows-1', target: 'command-1', type: 'shows_command' }],
+    };
+  }
+
+  async function showCheckoutDiagram() {
+    globalThis.INITIAL_DATA = { diagram: checkoutDiagram() };
+    await startViewer();
+  }
+
+  function select(nodeId) {
+    fireMouse(blockFor(nodeId), 'contextmenu');
+    menuItemFor('open-field-editor').click();
+  }
+
+  const highlightedBlocks = () =>
+    [...document.querySelectorAll('.diagram-node.hl')].map((el) => el.dataset.nodeId);
+
+  describe('selecting one', () => {
+    it('highlights each appearance of its screen, the selected one included, and no other box', async () => {
+      await showCheckoutDiagram();
+
+      select('shows-3');
+
+      expect(highlightedBlocks()).toEqual(['shows-1', 'shows-3']);
+    });
+
+    it('highlights no other box when one slice shows the screen', async () => {
+      await showCheckoutDiagram();
+
+      select('shows-2');
+
+      expect(highlightedBlocks()).toEqual(['shows-2']);
+    });
+
+    it('moves the highlight to the appearances of the screen that the next selection shows', async () => {
+      await showCheckoutDiagram();
+      select('shows-1');
+
+      select('shows-2');
+
+      expect(highlightedBlocks()).toEqual(['shows-2']);
+    });
+
+    it('highlights nothing when the selection is a node of another type that shares the name of a screen', async () => {
+      await showCheckoutDiagram();
+
+      select('command-2');
+
+      expect(highlightedBlocks()).toEqual([]);
+    });
+
+    it('leaves no appearance highlighted when the next selection is not an appearance', async () => {
+      await showCheckoutDiagram();
+      select('shows-1');
+
+      select('command-1');
+
+      expect(highlightedBlocks()).toEqual([]);
+    });
+  });
+
+  describe('clearing the selection', () => {
+    const clears = [
+      ['Escape', () => document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }))],
+      ['the close button of the panel', () => document.getElementById('dp-close').click()],
+      ['a click on the canvas', () => fireMouse(document.getElementById('diagram-canvas'), 'click')],
+    ];
+
+    it.each(clears)('removes the highlight of the appearances on %s', async (_, clear) => {
+      await showCheckoutDiagram();
+      select('shows-1');
+
+      clear();
+
+      expect({ open: fieldEditor().open, highlighted: highlightedBlocks() }).toEqual({ open: false, highlighted: [] });
+    });
+  });
+});
+
 describe('the arrows around a view', () => {
   // PaymentsView reads PaymentTaken and RefundsView reads PaymentRefunded. The
   // flow arrow touches neither view.
