@@ -1781,3 +1781,31 @@ in this repo; append only learnings that generalise beyond the task that surface
 - Observed: task 1 — us-006-highlight-screen-appearances
 - Learning: A left click on a block does nothing; the block's context menu item 'Open field editor' calls showDetailPanel, which sets selectedNodeId, and hideDetailPanel clears it. viewer.test.js has one file-scope helper for that gesture, openFieldEditorFor(nodeId), beside blockFor and menuItemFor; an audit found the same body copied three times under two names. Use the helper; do not write a local select().
 - Apply when: writing a viewer.test.js leaf that selects a node, or a story criterion that says the user selects something in the viewer
+
+## descriptions.go and transport.go are not gofmt-clean, so gofmt -w on them rewrites lines no task owns
+- Type: constraint
+- Recorded: 2026-11-19
+- Observed: task 2 — us-007-screen-image-path
+- Learning: internal/linter/descriptions.go (the ruleDescriptions map, in two alignment groups) and internal/lsp/transport.go differ from gofmt output on main. Running gofmt -w on descriptions.go to add one rule realigned 22 unrelated lines. Add the new entry by hand, aligned with the neighbours of its group, and run gofmt -l only on the files the task creates.
+- Apply when: adding a rule description to internal/linter/descriptions.go, or running gofmt -w over internal/linter or internal/lsp
+
+## A new lint rule bumps the rule count that cmd/emod's MCP test pins, which only test:integration runs
+- Type: constraint
+- Recorded: 2026-11-19
+- Observed: task 2 — us-007-screen-image-path
+- Learning: cmd/emod/main_test.go 'read rules' reads the emod://rules resource and asserts require.Len(t, listed.Rules, N). The descriptions guard in internal/linter keeps the map and the reported rules in step, but nothing ties N to them, and the test has the integration build tag, so task test:unit stays green and the miss shows only in task test:integration.
+- Apply when: adding a rule name to internal/linter or internal/validator, or a description to ruleDescriptions
+
+## Only emod lint and emod validate run the rules that read the disk
+- Type: constraint
+- Recorded: 2026-11-19
+- Observed: task 2 — us-007-screen-image-path
+- Learning: linter.LintFile and oracle.CheckFile add the rules that need the location of the .emod file (screen/missing-image-asset) to Lint and Check; only internal/cli/lint.go and validate.go call them. emod export, emod diagram, the LSP, the MCP emod_check tool, the web viewer and the desktop app run Lint, so a model that fails emod validate on such a rule still exports, draws and passes emod_check, and the emod_check description and site/content/docs/mcp.md say so. A new disk rule goes in LintFile, and its description names the surfaces that skip it.
+- Apply when: adding a lint rule that reads the file system, or changing which entry point a CLI command, the LSP or an MCP tool calls in internal/oracle
+
+## ImportDiagram cannot give a full model back byte for byte; a byte-for-byte save receipt uses ApplyDiagram or a source the diagram carries whole
+- Type: constraint
+- Recorded: 2026-11-19
+- Observed: task 4 — us-007-screen-image-path
+- Learning: The diagram document carries no model comment, context mode, decides_on, tags or invariants, so formatter.Format(ImportDiagram(doc)) of a shared fixture such as ScreenImageLibraryLending drops them. ApplyDiagram edits the parsed model and keeps them, which is what the applied helper of diagram_edit_test.go checks. A criterion that asks ImportDiagram for the source byte for byte needs a small canonical source of screens, contexts, aggregates and slices only.
+- Apply when: writing an acceptance criterion or a test that a viewer save gives the source back byte for byte, in internal/importer
