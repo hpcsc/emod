@@ -20,4 +20,12 @@ func TestDSLReference(t *testing.T) {
 			require.Equal(t, string(text), docs.DSLReference)
 		})
 	})
+
+	t.Run("lint rules", func(t *testing.T) {
+		t.Run("names the explain command of each rule about a screen", func(t *testing.T) {
+			for _, rule := range []string{"screen/missing-image-asset", "bed"} {
+				require.Contains(t, docs.DSLReference, "`emod lint --explain "+rule+"`")
+			}
+		})
+	})
 }
