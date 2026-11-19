@@ -1760,3 +1760,24 @@ in this repo; append only learnings that generalise beyond the task that surface
 - Observed: task 1 — us-005-find-screen-appearances
 - Learning: GetDefinition loops over query.NameSites against query.NewDeclaredNames, and GetReferences uses the same two plus referenceTargetKinds (internal/lsp/references.go). A new declared kind needs a query.Declarations entry, a map in NewDeclaredNames (a missing map is a nil-map write), and its sites in NameSites; go-to-definition then needs no code, and find-references needs the kind in referenceTargetKinds. The agreement test in internal/query/references_test.go asks query.References and lsp.GetReferences about every declaration of every example, so all of it lands in one commit. Hover (declaredConstructs in internal/lsp/model.go) and semantic tokens still walk the AST themselves.
 - Apply when: adding a construct that the editor must resolve by name, or a new entry that names a declared construct, to internal/query or internal/lsp
+
+## A viewer test started from INITIAL_DATA cannot see a diagram edit, so its no-edit assertion cannot fail
+- Type: recurring-finding
+- Recorded: 2026-11-19
+- Observed: task 2 — us-006-highlight-screen-appearances
+- Learning: startViewer with globalThis.INITIAL_DATA = { diagram } never parses a source, so drawnSource stays null and countDiagramEdit (internal/frontend/static/viewer.js) drops every diagram:edited and fields:edited before platform.applyDiagram; the source panel stays empty. A test that asserts a gesture sends no edit must open the model as a file: set parseResult, call deliverFile and await flush, as openBilling and openEditable in viewer.test.js do. Check it by making the gesture emit diagram:edited and watching the test fail.
+- Apply when: writing a viewer.test.js leaf that asserts a gesture sends no edit or leaves the source panel unchanged, or reviewing one that starts from INITIAL_DATA
+
+## store.nodes keeps a moved slice's children in place, so the order of nodes is not the canvas order
+- Type: constraint
+- Recorded: 2026-11-19
+- Observed: task 2 — us-006-highlight-screen-appearances
+- Learning: Model.moveSlice swaps the slice nodes in store.nodes and leaves their children where they are, so a list of shows, commands or other children in store.nodes order goes out of canvas order after a slice move. Sort by the index of the parent slice among the slice nodes, as Model.appearancesOf does. The exporter writes the slices of each aggregate before the direct slices of a context, which is the order layout.js draws them in.
+- Apply when: listing or ordering nodes of one type in internal/frontend/static by where they sit on the canvas, such as a panel list of appearances or of the slices that hold a construct
+
+## A selection in the viewer is the open detail panel, and viewer.test.js opens it with one helper
+- Type: convention
+- Recorded: 2026-11-19
+- Observed: task 1 — us-006-highlight-screen-appearances
+- Learning: A left click on a block does nothing; the block's context menu item 'Open field editor' calls showDetailPanel, which sets selectedNodeId, and hideDetailPanel clears it. viewer.test.js has one file-scope helper for that gesture, openFieldEditorFor(nodeId), beside blockFor and menuItemFor; an audit found the same body copied three times under two names. Use the helper; do not write a local select().
+- Apply when: writing a viewer.test.js leaf that selects a node, or a story criterion that says the user selects something in the viewer
