@@ -86,6 +86,7 @@ var checkTool = &sdk.Tool{
 		"When a call gives both, the tool checks content and does not read path. " +
 		"The result is a list of diagnostics, the same records as `emod validate --format json`: " +
 		"file, line, rule (only when a rule name goes with the diagnostic), severity and message. " +
+		"The tool runs no rule that reads the disk, so it does not report screen/missing-image-asset, which `emod validate` reports. " +
 		"An empty list means that the source passes the check. " +
 		"A warning is a finding to fix, not a failure of the tool: fix the source and check it again.",
 	InputSchema: sourceSchema,

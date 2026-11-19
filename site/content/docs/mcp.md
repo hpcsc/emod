@@ -146,7 +146,8 @@ can check the draft of a new file before it writes the file, and the records car
 The records of a `path` carry the path as the call gives it.
 
 The result holds a list of diagnostics under `diagnostics`. Each record is the same record that
-`emod validate --format json` prints for the same model:
+`emod validate --format json` prints for the same model. The tool runs no rule that reads the disk, so it
+does not report `screen/missing-image-asset`, which `emod validate` reports:
 
 ```json
 {
