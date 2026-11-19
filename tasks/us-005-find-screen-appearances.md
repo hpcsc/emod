@@ -219,15 +219,15 @@ declares. Everywhere else, `screen` keeps its meaning: at the top level it opens
 
 **Acceptance Criteria:**
 
-- [ ] In a `shows` block, completion after `screen =` offers each declared screen, in declaration order, as items
+- [x] In a `shows` block, completion after `screen =` offers each declared screen, in declaration order, as items
   of kind `VariableCompletion`. This holds for a `shows` block in a slice of either home, for a `shows` block
   written on one line, and while the `screen` entry has no value yet and the document does not parse.
-- [ ] With the cursor inside a screen name that the author has begun to type, completion still offers the declared
+- [x] With the cursor inside a screen name that the author has begun to type, completion still offers the declared
   screens.
-- [ ] At the top level, completion after `screen` offers the top-level keywords and no screen name. Inside a
+- [x] At the top level, completion after `screen` offers the top-level keywords and no screen name. Inside a
   `screen` block, completion offers `description` only. After `command =` in a `shows` block, completion offers
   the entries of the block (`screen`, `reads`, `command`) and no name, as it does now.
-- [ ] The test that pins no screen name after `screen =` in a `shows` block pins the declared screens.
+- [x] The test that pins no screen name after `screen =` in a `shows` block pins the declared screens.
 
 **Affected Files/Modules:**
 

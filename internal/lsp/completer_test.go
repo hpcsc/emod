@@ -112,7 +112,7 @@ context "Lending" {
 		}{
 			{name: "inside a screen block returns description", line: 1, character: 0, expected: []string{"description"}},
 			{name: "inside a shows block returns screen, reads and command", line: 9, character: 6, expected: showsEntries},
-			{name: "after screen in a shows block returns no screen name, only the entries of the block", line: 7, character: 16, expected: showsEntries},
+			{name: "after screen in a shows block returns the declared screen", line: 7, character: 16, expected: []string{"LendingDesk"}},
 			{name: "after command in a shows block returns no command name, only the entries of the block", line: 8, character: 16, expected: showsEntries},
 		} {
 			t.Run(tc.name, func(t *testing.T) {
@@ -121,6 +121,91 @@ context "Lending" {
 				require.Equal(t, tc.expected, extractLabels(result.Items))
 			})
 		}
+
+		t.Run("the screen of a shows block", func(t *testing.T) {
+			declaredScreens := []string{"LendingDesk", "OverdueReport", "DeskKiosk"}
+
+			t.Run("returns the declared screens in declaration order as variables, from a slice of an aggregate", func(t *testing.T) {
+				doc := test.ScreenLibraryLending
+				line, character := posIn(t, doc, `slice "Borrow Copy"`, "LendingDesk")
+
+				result := lsp.GetCompletions(doc, line, character)
+
+				require.Equal(t, declaredScreens, extractLabels(result.Items))
+				requireItemKinds(t, result.Items, lsp.VariableCompletion)
+			})
+
+			t.Run("returns the declared screens from a slice of a mode dcb context", func(t *testing.T) {
+				doc := test.ScreenLibraryLending
+				line, character := posIn(t, doc, `slice "Claim Desk"`, "DeskKiosk")
+
+				result := lsp.GetCompletions(doc, line, character)
+
+				require.Equal(t, declaredScreens, extractLabels(result.Items))
+			})
+
+			t.Run("returns the declared screens in a shows block written on one line", func(t *testing.T) {
+				doc := `screen "CheckoutPage" {
+}
+
+screen "CartDrawer" {
+}
+
+context "Shop" {
+  slice "Apply Discount" {
+    shows { screen = CheckoutPage }
+  }
+}
+`
+				line, character := posIn(t, doc, "shows {", "CheckoutPage")
+
+				result := lsp.GetCompletions(doc, line, character)
+
+				require.Equal(t, []string{"CheckoutPage", "CartDrawer"}, extractLabels(result.Items))
+			})
+
+			t.Run("a screen entry with no value yet still returns the screens of a document that does not parse cleanly", func(t *testing.T) {
+				doc := `screen "CheckoutPage" {
+}
+
+screen "CartDrawer" {
+}
+
+context "Shop" {
+  slice "Apply Discount" {
+    shows {
+      screen = ` + `
+    }
+  }
+}`
+				_, parseErrs := parser.Parse(doc, "half-written.emod")
+				require.NotEmpty(t, parseErrs, "the document under test is expected to carry parse diagnostics")
+
+				result := lsp.GetCompletions(doc, 9, 15)
+
+				require.Equal(t, []string{"CheckoutPage", "CartDrawer"}, extractLabels(result.Items))
+			})
+
+			t.Run("a screen name already begun stays a value position", func(t *testing.T) {
+				doc := test.ScreenLibraryLending
+				line, nameStart := posIn(t, doc, `slice "Borrow Copy"`, "LendingDesk")
+
+				result := lsp.GetCompletions(doc, line, nameStart+3)
+
+				require.Equal(t, declaredScreens, extractLabels(result.Items))
+			})
+
+			t.Run("at the top level, screen opens a declaration and returns the top-level keywords", func(t *testing.T) {
+				doc := `screen "CheckoutPage" {
+}
+
+screen ` + `
+`
+				result := lsp.GetCompletions(doc, 3, 7)
+
+				require.Equal(t, []string{"model", "screen", "context"}, extractLabels(result.Items))
+			})
+		})
 	})
 
 	t.Run(`automation "block"`, func(t *testing.T) {

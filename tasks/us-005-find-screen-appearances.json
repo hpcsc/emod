@@ -60,7 +60,7 @@
     },
     {
       "n": 2,
-      "done": false,
+      "done": true,
       "title": "Offer the declared screens after `screen =` in a `shows` block",
       "language": "Go",
       "testable": true,

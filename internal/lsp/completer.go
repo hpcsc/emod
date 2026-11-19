@@ -362,13 +362,20 @@ var compoundValueSlots = map[string]valueSlot{
 }
 
 // slotFor reads a word against the block holding it. `context` names a context
-// inside a target block and opens one everywhere else.
+// inside a target block and opens one everywhere else, and `screen` names a
+// screen inside a shows block and declares one everywhere else.
 func slotFor(word string, block blockContext) (valueSlot, bool) {
-	if word == "context" {
+	switch word {
+	case "context":
 		if block != ctxTarget {
 			return valueSlot{}, false
 		}
 		return valueSlot{items: namesOfKind(query.KindContext, ModuleCompletion)}, true
+	case "screen":
+		if block != ctxShows {
+			return valueSlot{}, false
+		}
+		return valueSlot{items: namesOfKind(query.KindScreen, VariableCompletion)}, true
 	}
 	slot, ok := valueSlots[word]
 	return slot, ok
