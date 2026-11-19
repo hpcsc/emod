@@ -405,11 +405,6 @@ in this repo; append only learnings that generalise beyond the task that surface
 - Learning: a leaf asserting over colours its own change does not own fails for the wrong reason — "no two types select alike" pinning the six `.hl.<type>-block rect` rules from inside a task that only framed the trigger, or "gives the trigger the colour of the slice it sits on" comparing the trigger's fill against the *slice background's*, so recolouring the slice fails a leaf named for the trigger. Two shapes fix this. A count-based invariant splits in two, each with one reason to fail: "repaints a selected block" beside "leaves no two node types selecting alike" — a count says neither on its own. And a leaf reads the rule it blames straight out of the stylesheet and compares that one value, the way `internal/viewer/tests/renderer.test.js:551` reads `.hl.<type>-block rect` and requires `palette.highlightFill`, so the failure names the rule that drifted rather than only that two colours differ. Hue-family distinctness across the palette has its owner in Go (`colorFamily`, `internal/diagram/contract_test.go`); a per-type viewer leaf restating it adds no coverage.
 - Apply when: adding a leaf to `internal/viewer/tests/renderer.test.js`, or asserting a colour relation between two elements.
 
-## `internal/lsp` walks the model once now — extend `model.go`, never open a sixth walk
-- Type: pattern
-- Learning: `internal/lsp/model.go` is the package's only AST traversal. `parseModel(text, uri)` replaces the `lexer.Scan` + `parser.New(...).Parse()` opening every feature used to spell; `scopedSlices` yields both slice homes as `scopedSlice{slice, context, aggregate}` with `aggregate == nil` for a `mode dcb` context's own slices (which is what `declaredIn` in `hover.go` renders as a bare context name instead of `Ctx > Agg`); `declarationsIn`/`declaredNamesInOrder`/`newDeclaredNames` carry every command, event, view and context name with its position; and `referencesIn` states every site that *names* one — a view's `subscribes`, an automation's `on`/`reads`/`command`/`target context`, a translation's `reads`/`command`, a trigger's `reads`, a flow's command and event. `internal/lsp/position.go` holds `cursor`/`cursorAt`/`onName` plus `nameRange`/`locationFor`. All five features consume them: `GetDefinition` is a loop over `referencesIn`, `GetReferences` uses the same list for both `targetAt` and the listing (so a new reference site gives jump and listing at once — US-009 Task 5's whole production diff was one `add(viewName, auto.Reads, auto.ReadsPos)` line), `GetHover` and `GetSemanticTokens` range over `scopedSlices`, `GetCompletions` calls `declaredNamesInOrder`. This closes two gaps earlier entries in this file record as open: every LSP walker being blind to `ctx.Slices`, and `isKeyword`'s ordinal range in `hover.go` — hover now gates on `tok.Type.IsKeyword()`. `keywordDescriptions` (`hover.go`) and the lists in `completer.go` remain the hand-maintained keyword surfaces.
-- Apply when: adding or changing any feature in `internal/lsp`, or teaching the editor about a construct or block entry that names another construct.
-
 ## The completer reads raw lines, not the AST, so a new block owes two arms and a value-slot decision
 - Type: constraint
 - Learning: `GetCompletions` never asks the parser where the cursor is. `blockScanner` (`internal/lsp/completer.go:59`) walks the lines up to the cursor keeping a stack of `blockContext`, over `codeOutsideStringsAndComments(line)` so a `#`, `//` or brace inside a quoted description opens and closes nothing. A block needs *both* a `findBlockKeyword` arm (`:124`, spelling → `blockContext`) and a `keywordsFor` arm (`:217`, `blockContext` → labels); one without the other silently falls through to the parent's list, which is exactly how an automation body offered `model, actor, context`. `keywordAwaitingBrace` holds a braceless keyword only until the next line carrying code, so `command Ship` inside an automation stays a reference rather than opening a command block for the rest of the body. Value completions come from `valueSlots` (`:170`), an entry-keyword → `{nameKind, CompletionItemKind}` map holding `on` and `reads` only; it is skipped inside `ctxFields` because keywords stay legal as field names, types and modifiers (`id reads required` names no view), and its item kinds deliberately match the types `GetSemanticTokens` paints the same names with (event → `EventCompletion`, view → `ClassCompletion`). `trigger`, `view`, `translation`, `flow` and `spec` bodies still have no arm and still answer the top-level list.
@@ -1737,3 +1732,31 @@ in this repo; append only learnings that generalise beyond the task that surface
 - Observed: task 9 — US-004 declare a screen one time and show it in many slices
 - Learning: A mutant in internal/export that only the importer's tests kill reports LIVED, and clerk audit accept refuses while it is open; pin the exporter's output in export_test itself. A repeated --id runs only the last key, so rerun each key in its own call.
 - Apply when: closing lived mutants before clerk finish or clerk audit accept, especially in the exporter or another package whose behaviour a consumer package tests
+
+## Packages that embed internal/frontend do not build until task build:wasm runs
+- Type: constraint
+- Recorded: 2026-11-19
+- Observed: us-005-find-screen-appearances
+- Learning: internal/frontend/embed.go embeds generated/*, which git ignores, so on a checkout without it 'go test ./internal/cli' reports '[setup failed]' with 'pattern generated/*: no matching files found' before any test runs. Run 'mise exec -- task build:wasm' once; it is not a defect of the change under test.
+- Apply when: running the tests of internal/cli or another package that imports internal/frontend in a fresh checkout, or reading a [setup failed] line from go test
+
+## query.Declarations holds screens, which have no context, aggregate or slice
+- Type: constraint
+- Recorded: 2026-11-19
+- Observed: task 1 — us-005-find-screen-appearances
+- Learning: A screen is declared at the top level, so its query.Declaration and its query.NameReferences carry empty Context, Aggregate and Slice. NameReferences.Context is omitempty, and the text of emod references leaves out the place of a block that has none; a new consumer that prints or groups by the place must do the same, or it prints an empty scope for each screen.
+- Apply when: consuming query.Declarations, query.References or query.NameReferences in a new surface (an MCP tool, the glossary, a CLI listing), or grouping declared names by context
+
+## A walk over nested lists needs two items at each level in the same fixture
+- Type: pattern
+- Recorded: 2026-11-19
+- Observed: task 1 — us-005-find-screen-appearances
+- Learning: query.NameSites walks slices, then the shows blocks of each slice, then their entries. To kill a mutant that stops after the first slice, the run moved one of two shows blocks into a second slice, and the audit then found that no slice held two shows blocks, so a stop after the first shows block lived. Add the second parent beside the existing items; do not move an item into it.
+- Apply when: adding a fixture or a test to kill a loop mutant in a walk of nested lists, such as query.NameSites, query.Declarations or a validator walk over slices and their blocks
+
+## The editor resolves names through internal/query; a new name kind is three edits there and one in internal/lsp
+- Type: pattern
+- Recorded: 2026-11-19
+- Observed: task 1 — us-005-find-screen-appearances
+- Learning: GetDefinition loops over query.NameSites against query.NewDeclaredNames, and GetReferences uses the same two plus referenceTargetKinds (internal/lsp/references.go). A new declared kind needs a query.Declarations entry, a map in NewDeclaredNames (a missing map is a nil-map write), and its sites in NameSites; go-to-definition then needs no code, and find-references needs the kind in referenceTargetKinds. The agreement test in internal/query/references_test.go asks query.References and lsp.GetReferences about every declaration of every example, so all of it lands in one commit. Hover (declaredConstructs in internal/lsp/model.go) and semantic tokens still walk the AST themselves.
+- Apply when: adding a construct that the editor must resolve by name, or a new entry that names a declared construct, to internal/query or internal/lsp
