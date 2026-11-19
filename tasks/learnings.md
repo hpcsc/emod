@@ -1809,3 +1809,24 @@ in this repo; append only learnings that generalise beyond the task that surface
 - Observed: task 4 — us-007-screen-image-path
 - Learning: The diagram document carries no model comment, context mode, decides_on, tags or invariants, so formatter.Format(ImportDiagram(doc)) of a shared fixture such as ScreenImageLibraryLending drops them. ApplyDiagram edits the parsed model and keeps them, which is what the applied helper of diagram_edit_test.go checks. A criterion that asks ImportDiagram for the source byte for byte needs a small canonical source of screens, contexts, aggregates and slices only.
 - Apply when: writing an acceptance criterion or a test that a viewer save gives the source back byte for byte, in internal/importer
+
+## The parser keeps an empty name for each unlabelled block and non-name entry, so a rule that joins names must skip the empty name on both sides
+- Type: recurring-finding
+- Recorded: 2026-11-19
+- Observed: task 1 — us-008-bed-rule
+- Learning: The linter runs on the partial model of a source that does not parse. parser.hclReader keeps command {} and screen {} with Name "", gives a shows block with no screen entry Screen "", and appends "" for each list entry that is not a name (command = [1, X]). A map keyed by name then joins unrelated empty names: in US-008, bed counted an empty command entry because an unlabelled command block declared "", after a fix had claimed that no slice declares an empty name. The audit found it in round 2. Skip "" where the map is built and where it is read, and test with the real parser output of a broken model, not a hand-built AST.
+- Apply when: writing or fixing a lint or validator rule that groups or matches constructs by name, such as a map from screen to commands or a set of declared names
+
+## A rule that counts the names a block references counts only declared names
+- Type: pattern
+- Recorded: 2026-11-19
+- Observed: task 1 — us-008-bed-rule
+- Learning: A misspelled reference is the validator's error ('command "X" does not exist'). A lint rule that counts the names of shows commands, reads or similar entries must count only the names that the model declares, or the misspelling adds a second, false lint warning on top of the error. bed builds a set of declared command names first; view/never-read goes silent while a reads entry is unresolved. Each test model must then declare the names it counts.
+- Apply when: adding a lint rule that counts or thresholds the names that shows blocks, automations or translations reference
+
+## A one-task story can skip the decompose agent; its hand-written design file needs a reason
+- Type: convention
+- Recorded: 2026-11-19
+- Observed: us-008-bed-rule
+- Learning: clerk step done decompose binds a breakdown that is written by hand: tasks/<slug>.md, tasks/<slug>.json with story, story_id, tasks_file, tasks (n, done, title, language, testable, certainty, blast_radius, patterns_to_follow, depends_on, affected_files) and design_file, and tasks/<slug>.design.yaml. A design file of design: none is refused unless it also has a reason: line. US-008 (one lint rule) bound this way in a few minutes, where the decompose agent took 10 to 18 minutes on the other stories of the feature.
+- Apply when: starting an implement run for a story that is one slice, such as one lint rule or one panel row
