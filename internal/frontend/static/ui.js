@@ -467,10 +467,8 @@ function showDetailPanel(store, node) {
   if (!el || !content) return;
 
   store.interaction.selectedNodeId = node.id;
-  clearHighlights(store);
-  if (node.type === 'shows') {
-    highlightElements(store, Model.appearancesOf(store, node.label).map(function(n) { return n.id; }));
-  }
+  const appearances = node.type === 'shows' ? Model.appearancesOf(store, node.label) : [];
+  highlightElements(store, appearances.map(function(n) { return n.id; }));
   dimArrowsNotTouching(store, node.id);
 
   const deletable = isDeletableNodeType(node.type);
@@ -526,6 +524,17 @@ function showDetailPanel(store, node) {
     html += '<tr><th>Reads</th><td>' + Renderer.esc([].concat(node.reads || []).join(', ') || '—') + '</td></tr>';
     html += '<tr><th>Commands</th><td>' + Renderer.esc([].concat(node.command || []).join(', ') || '—') + '</td></tr>';
     html += '</tbody></table>';
+    html += '</div>';
+
+    html += '<div class="dp-section">';
+    html += '<div class="dp-section-title">Shown in</div>';
+    html += '<ul class="dp-shown-in">';
+    appearances.forEach(function(appearance) {
+      const slice = store.nodeById.get(appearance.parentId);
+      html += '<li><button class="dp-shown-in-slice" data-appearance-id="' + Renderer.esc(appearance.id) + '">' +
+        Renderer.esc(slice ? slice.label : '') + '</button></li>';
+    });
+    html += '</ul>';
     html += '</div>';
   }
 
@@ -624,6 +633,14 @@ function showDetailPanel(store, node) {
       });
     }
   }
+
+  content.querySelectorAll('.dp-shown-in-slice').forEach(function(entry) {
+    entry.addEventListener('click', function() {
+      const appearance = store.nodeById.get(this.dataset.appearanceId);
+      showDetailPanel(store, appearance);
+      bus.emit('node:show', { store, nodeId: appearance.id });
+    });
+  });
 
   const delBtn = content.querySelector('.dp-delete-btn');
   if (delBtn) {

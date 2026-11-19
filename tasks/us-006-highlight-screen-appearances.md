@@ -123,15 +123,15 @@ The boundaries this breakdown adds:
 **Behavior:** The detail panel of an appearance lists, under "Shown in", the slice of each appearance of its screen, its own slice included. A click on an entry selects the appearance in that slice. The panel then describes that appearance, the appearances of the screen stay highlighted, and the canvas moves until the selected appearance is in its middle. A click on a copy does the same for its original.
 
 **Acceptance Criteria:**
-- [ ] The detail panel of an appearance lists each slice where its screen appears, its own slice included, by the name of the slice. The list follows the order of the slices in the diagram, so the slices of one aggregate read left to right, as on the canvas. (story 2, first half)
-- [ ] For a screen that one slice shows, the list has one entry: the slice of the appearance. (story 3, second half)
-- [ ] A click on a slice in the list selects the appearance in that slice. The panel then shows the views, the commands and the source line of that appearance, and the appearances of the screen stay highlighted. (story 2, second half)
-- [ ] The click moves the canvas until the selected appearance is in the middle of it.
-- [ ] When two slices that show the screen have the same name, the list has two entries, and each entry selects the appearance in its own slice.
-- [ ] A slice name that contains markup shows as text.
-- [ ] A click on a slice in the list sends no edit, and the source panel stays as it is.
-- [ ] The detail panel of a node that is not an appearance has no such list.
-- [ ] No file under `internal/frontend/desktop/` changes, and the two guards in `viewer.test.js` that Task 1 names pass with no change. After `task build:desktop`, the copies of `ui.js` and `model.js` under `cmd/emod-desktop/frontend/static` are byte-identical to the files in `internal/frontend/static`. (story 5)
+- [x] The detail panel of an appearance lists each slice where its screen appears, its own slice included, by the name of the slice. The list follows the order of the slices in the diagram, so the slices of one aggregate read left to right, as on the canvas. (story 2, first half)
+- [x] For a screen that one slice shows, the list has one entry: the slice of the appearance. (story 3, second half)
+- [x] A click on a slice in the list selects the appearance in that slice. The panel then shows the views, the commands and the source line of that appearance, and the appearances of the screen stay highlighted. (story 2, second half)
+- [x] The click moves the canvas until the selected appearance is in the middle of it.
+- [x] When two slices that show the screen have the same name, the list has two entries, and each entry selects the appearance in its own slice.
+- [x] A slice name that contains markup shows as text.
+- [x] A click on a slice in the list sends no edit, and the source panel stays as it is.
+- [x] The detail panel of a node that is not an appearance has no such list.
+- [x] No file under `internal/frontend/desktop/` changes, and the two guards in `viewer.test.js` that Task 1 names pass with no change. After `task build:desktop`, the copies of `ui.js` and `model.js` under `cmd/emod-desktop/frontend/static` are byte-identical to the files in `internal/frontend/static`. (story 5)
 
 **Affected Files/Modules:**
 - `internal/frontend/static/ui.js` — the "Shown in" list in the panel of a shows node, and the click on an entry

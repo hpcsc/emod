@@ -215,6 +215,71 @@ describe('detail panel for a shows block', () => {
       { label: 'Commands', value: '—' },
     ]);
   });
+
+  describe('the slices that show the screen', () => {
+    function storeWith(nodes) {
+      const store = createStore();
+      store.nodes = nodes;
+      store.nodeById = new Map(nodes.map((n) => [n.id, n]));
+      return store;
+    }
+
+    function shownIn(store) {
+      const section = [...store.dom.dpContent.querySelectorAll('.dp-section')]
+        .find((el) => el.firstElementChild.textContent === 'Shown in');
+      return section ? [...section.querySelectorAll('li')].map((item) => item.textContent) : null;
+    }
+
+    it('lists the slice of each appearance of the screen, its own included, in the order of the slices', () => {
+      const store = storeWith([
+        { id: 'slice-1', type: 'slice', label: 'Apply Discount', parentId: 'agg-1' },
+        { id: 'slice-2', type: 'slice', label: 'Open Cart', parentId: 'agg-1' },
+        { id: 'slice-3', type: 'slice', label: 'Reapply Discount', parentId: 'agg-1' },
+        { id: 'shows-3', type: 'shows', label: 'CheckoutPage', parentId: 'slice-3' },
+        { id: 'shows-2', type: 'shows', label: 'CartDrawer', parentId: 'slice-2' },
+        { id: 'shows-1', type: 'shows', label: 'CheckoutPage', parentId: 'slice-1' },
+      ]);
+
+      UI.showDetailPanel(store, store.nodeById.get('shows-3'));
+
+      expect(shownIn(store)).toEqual(['Apply Discount', 'Reapply Discount']);
+    });
+
+    it('lists one slice for a screen that one slice shows', () => {
+      const store = storeWith([
+        { id: 'slice-1', type: 'slice', label: 'Open Cart', parentId: 'agg-1' },
+        { id: 'shows-1', type: 'shows', label: 'CartDrawer', parentId: 'slice-1' },
+      ]);
+
+      UI.showDetailPanel(store, store.nodeById.get('shows-1'));
+
+      expect(shownIn(store)).toEqual(['Open Cart']);
+    });
+
+    it('shows a slice name containing markup as text', () => {
+      const store = storeWith([
+        { id: 'slice-1', type: 'slice', label: 'Apply <b>&</b> Discount', parentId: 'agg-1' },
+        { id: 'shows-1', type: 'shows', label: 'CheckoutPage', parentId: 'slice-1' },
+      ]);
+
+      UI.showDetailPanel(store, store.nodeById.get('shows-1'));
+
+      expect(shownIn(store)).toEqual(['Apply <b>&</b> Discount']);
+      expect(store.dom.dpContent.querySelector('b')).toBeNull();
+    });
+
+    it('gives a node that is not an appearance no such list', () => {
+      const store = storeWith([
+        { id: 'slice-1', type: 'slice', label: 'Apply Discount', parentId: 'agg-1' },
+        { id: 'shows-1', type: 'shows', label: 'ApplyDiscount', parentId: 'slice-1' },
+        { id: 'cmd-1', type: 'command', label: 'ApplyDiscount', parentId: 'slice-1' },
+      ]);
+
+      UI.showDetailPanel(store, store.nodeById.get('cmd-1'));
+
+      expect(shownIn(store)).toBeNull();
+    });
+  });
 });
 
 describe('detail panel description', () => {

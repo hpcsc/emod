@@ -39,7 +39,7 @@
     },
     {
       "n": 2,
-      "done": false,
+      "done": true,
       "title": "List the slices where the screen appears in the detail panel of an appearance, and select an appearance from the list",
       "language": "JavaScript",
       "testable": true,

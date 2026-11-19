@@ -240,7 +240,13 @@ function sliceDeclaring(store, copy) {
 }
 
 function appearancesOf(store, screen) {
-  return store.nodes.filter(function(n) { return n.type === "shows" && n.label === screen; });
+  const sliceOrder = new Map();
+  store.nodes.forEach(function(n, i) {
+    if (n.type === "slice") sliceOrder.set(n.id, i);
+  });
+  return store.nodes
+    .filter(function(n) { return n.type === "shows" && n.label === screen; })
+    .sort(function(a, b) { return sliceOrder.get(a.parentId) - sliceOrder.get(b.parentId); });
 }
 
 function addEdge(store, source, target, type) {

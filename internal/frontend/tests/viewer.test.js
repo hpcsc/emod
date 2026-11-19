@@ -213,6 +213,11 @@ function menuItemFor(action) {
   return document.querySelector('#ctx-menu .ctx-menu-item[data-action="' + action + '"]');
 }
 
+function openFieldEditorFor(nodeId) {
+  fireMouse(blockFor(nodeId), 'contextmenu');
+  menuItemFor('open-field-editor').click();
+}
+
 function fieldEditor() {
   return {
     open: document.getElementById('detail-panel').style.display === 'block',
@@ -932,11 +937,6 @@ describe('viewer field editor', () => {
     await startViewer();
   }
 
-  function openFieldEditorFor(nodeId) {
-    fireMouse(blockFor(nodeId), 'contextmenu');
-    menuItemFor('open-field-editor').click();
-  }
-
   it('stays shut when a block is left-clicked', async () => {
     await showBillingDiagram();
 
@@ -986,26 +986,21 @@ describe('the appearances of a screen', () => {
       nodes: [
         { id: 'context-1', type: 'context', label: 'Shop', parentId: null },
         { id: 'slice-1', type: 'slice', label: 'Apply Discount', parentId: 'context-1' },
-        { id: 'shows-1', type: 'shows', label: 'CheckoutPage', parentId: 'slice-1', command: ['ApplyDiscount'] },
+        { id: 'shows-1', type: 'shows', label: 'CheckoutPage', parentId: 'slice-1', command: ['ApplyDiscount'], position: { filename: 'shop.emod', line: 12 } },
         { id: 'command-1', type: 'command', label: 'ApplyDiscount', parentId: 'slice-1' },
         { id: 'slice-2', type: 'slice', label: 'Open Cart', parentId: 'context-1' },
         { id: 'shows-2', type: 'shows', label: 'CartDrawer', parentId: 'slice-2' },
         { id: 'command-2', type: 'command', label: 'CartDrawer', parentId: 'slice-2' },
         { id: 'slice-3', type: 'slice', label: 'Reapply Discount', parentId: 'context-1' },
-        { id: 'shows-3', type: 'shows', label: 'CheckoutPage', parentId: 'slice-3' },
+        { id: 'shows-3', type: 'shows', label: 'CheckoutPage', parentId: 'slice-3', command: ['RemoveDiscount'], position: { filename: 'shop.emod', line: 30 } },
       ],
       edges: [{ source: 'shows-1', target: 'command-1', type: 'shows_command' }],
     };
   }
 
-  async function showCheckoutDiagram() {
-    globalThis.INITIAL_DATA = { diagram: checkoutDiagram() };
+  async function showCheckoutDiagram(diagram = checkoutDiagram()) {
+    globalThis.INITIAL_DATA = { diagram };
     await startViewer();
-  }
-
-  function select(nodeId) {
-    fireMouse(blockFor(nodeId), 'contextmenu');
-    menuItemFor('open-field-editor').click();
   }
 
   const highlightedBlocks = () =>
@@ -1015,7 +1010,7 @@ describe('the appearances of a screen', () => {
     it('highlights each appearance of its screen, the selected one included, and no other box', async () => {
       await showCheckoutDiagram();
 
-      select('shows-3');
+      openFieldEditorFor('shows-3');
 
       expect(highlightedBlocks()).toEqual(['shows-1', 'shows-3']);
     });
@@ -1023,16 +1018,16 @@ describe('the appearances of a screen', () => {
     it('highlights no other box when one slice shows the screen', async () => {
       await showCheckoutDiagram();
 
-      select('shows-2');
+      openFieldEditorFor('shows-2');
 
       expect(highlightedBlocks()).toEqual(['shows-2']);
     });
 
     it('moves the highlight to the appearances of the screen that the next selection shows', async () => {
       await showCheckoutDiagram();
-      select('shows-1');
+      openFieldEditorFor('shows-1');
 
-      select('shows-2');
+      openFieldEditorFor('shows-2');
 
       expect(highlightedBlocks()).toEqual(['shows-2']);
     });
@@ -1040,18 +1035,85 @@ describe('the appearances of a screen', () => {
     it('highlights nothing when the selection is a node of another type that shares the name of a screen', async () => {
       await showCheckoutDiagram();
 
-      select('command-2');
+      openFieldEditorFor('command-2');
 
       expect(highlightedBlocks()).toEqual([]);
     });
 
     it('leaves no appearance highlighted when the next selection is not an appearance', async () => {
       await showCheckoutDiagram();
-      select('shows-1');
+      openFieldEditorFor('shows-1');
 
-      select('command-1');
+      openFieldEditorFor('command-1');
 
       expect(highlightedBlocks()).toEqual([]);
+    });
+  });
+
+  describe('the slices listed in the detail panel', () => {
+    const entries = () => [...document.querySelectorAll('#dp-content li button')];
+    const entryFor = (slice) => entries().find((entry) => entry.textContent === slice);
+    const applies = () => platform.applyDiagram.mock.calls.length;
+    const panelText = () => document.getElementById('source-input').value;
+
+    it('selects the appearance in the slice that a click names, and keeps the appearances highlighted', async () => {
+      await showCheckoutDiagram();
+      openFieldEditorFor('shows-1');
+
+      entryFor('Reapply Discount').click();
+
+      expect({
+        commands: fieldEditor().text.includes('RemoveDiscount'),
+        source: fieldEditor().text.includes('shop.emod:30'),
+        highlighted: highlightedBlocks(),
+      }).toEqual({ commands: true, source: true, highlighted: ['shows-1', 'shows-3'] });
+    });
+
+    it('moves the canvas until the appearance it selects sits in the middle of it', async () => {
+      await showCheckoutDiagram();
+      openFieldEditorFor('shows-1');
+      const canvas = document.getElementById('diagram-canvas');
+
+      entryFor('Reapply Discount').click();
+
+      const [, offsetX, offsetY, scale] = /translate\(([-\d.]+), ([-\d.]+)\) scale\(([-\d.]+)\)/
+        .exec(canvas.querySelector('#viewport-group').getAttribute('transform')).map(Number);
+      const box = blockFor('shows-3').querySelector('rect');
+      const [vx, vy, vw, vh] = canvas.getAttribute('viewBox').split(' ').map(Number);
+      const centreX = (Number(box.getAttribute('x')) + Number(box.getAttribute('width')) / 2) * scale + offsetX;
+      const centreY = (Number(box.getAttribute('y')) + Number(box.getAttribute('height')) / 2) * scale + offsetY;
+      expect(centreX).toBeCloseTo(vx + vw / 2);
+      expect(centreY).toBeCloseTo(vy + vh / 2);
+    });
+
+    it('selects the appearance in its own slice from each entry when two slices have the same name', async () => {
+      const diagram = checkoutDiagram();
+      diagram.nodes.find((n) => n.id === 'slice-3').label = 'Apply Discount';
+      await showCheckoutDiagram(diagram);
+      openFieldEditorFor('shows-1');
+
+      entries()[1].click();
+      const second = fieldEditor().text.includes('shop.emod:30');
+      entries()[0].click();
+      const first = fieldEditor().text.includes('shop.emod:12');
+
+      expect({ entries: entries().map((entry) => entry.textContent), first, second })
+        .toEqual({ entries: ['Apply Discount', 'Apply Discount'], first: true, second: true });
+    });
+
+    it('sends no edit and leaves the source panel as it is', async () => {
+      globalThis.INITIAL_DATA = null;
+      parseResult = { diagnostics: [], diagram: checkoutDiagram() };
+      await startViewer();
+      deliverFile({ name: 'shop.emod', path: '/models/shop.emod', content: billingSource });
+      await flush();
+      openFieldEditorFor('shows-1');
+      const before = applies();
+
+      entryFor('Reapply Discount').click();
+      await flush();
+
+      expect({ applies: applies(), source: panelText() }).toEqual({ applies: before, source: billingSource });
     });
   });
 
@@ -1064,7 +1126,7 @@ describe('the appearances of a screen', () => {
 
     it.each(clears)('removes the highlight of the appearances on %s', async (_, clear) => {
       await showCheckoutDiagram();
-      select('shows-1');
+      openFieldEditorFor('shows-1');
 
       clear();
 
@@ -1103,11 +1165,6 @@ describe('the arrows around a view', () => {
   async function showTwoViews() {
     globalThis.INITIAL_DATA = { diagram: twoViewsDiagram() };
     await startViewer();
-  }
-
-  function openFieldEditorFor(nodeId) {
-    fireMouse(blockFor(nodeId), 'contextmenu');
-    menuItemFor('open-field-editor').click();
   }
 
   // The arrows the canvas draws at full strength, by edge id.
