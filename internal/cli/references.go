@@ -26,7 +26,7 @@ func RunReferences(path, name, kind, format string) error {
 	}
 	if kind != "" && !slices.Contains(query.ReferenceKinds, query.Kind(kind)) {
 		return &LintError{
-			Message:  fmt.Sprintf("unsupported kind %q; supported kinds: command, event, view, invariant", kind),
+			Message:  fmt.Sprintf("unsupported kind %q; supported kinds: %s", kind, kindList(query.ReferenceKinds)),
 			ExitCode: 1,
 			Cause:    ErrUnsupportedKind,
 		}
@@ -73,11 +73,14 @@ func RunReferences(path, name, kind, format string) error {
 func formatNameReferences(f query.NameReferences) string {
 	var b strings.Builder
 
-	place := query.ScopeName(f.Context, f.Aggregate)
-	if f.Slice != "" {
-		place += fmt.Sprintf(", slice %q", f.Slice)
+	fmt.Fprintf(&b, "%s %s   ", f.Kind, f.Name)
+	if place := query.ScopeName(f.Context, f.Aggregate); place != "" {
+		if f.Slice != "" {
+			place += fmt.Sprintf(", slice %q", f.Slice)
+		}
+		fmt.Fprintf(&b, "%s   ", place)
 	}
-	fmt.Fprintf(&b, "%s %s   %s   :%d\n\n", f.Kind, f.Name, place, f.Line)
+	fmt.Fprintf(&b, ":%d\n\n", f.Line)
 
 	lineWidth, keywordWidth, elementWidth, specKeywordWidth := 0, 0, 0, 0
 	for _, ref := range f.References {
@@ -87,7 +90,9 @@ func formatNameReferences(f query.NameReferences) string {
 			continue
 		}
 		keywordWidth = max(keywordWidth, len(ref.Keyword))
-		elementWidth = max(elementWidth, len(referenceElement(f, ref)))
+		if ref.Element != nil {
+			elementWidth = max(elementWidth, len(referenceElement(f, ref)))
+		}
 	}
 
 	for _, group := range query.GroupsOf(f.Kind) {
@@ -101,6 +106,10 @@ func formatNameReferences(f query.NameReferences) string {
 			line := fmt.Sprintf(":%d", ref.Line)
 			if group == query.GroupNamedInSpecs {
 				fmt.Fprintf(&b, "  %-*s  %-*s  %q\n", lineWidth, line, specKeywordWidth, ref.Keyword, ref.Spec)
+				continue
+			}
+			if ref.Element == nil {
+				fmt.Fprintf(&b, "  %-*s  %-*s  %q\n", lineWidth, line, keywordWidth, ref.Keyword, ref.Slice)
 				continue
 			}
 			fmt.Fprintf(&b, "  %-*s  %-*s  %-*s  %q\n", lineWidth, line, keywordWidth, ref.Keyword, elementWidth, referenceElement(f, ref), ref.Slice)

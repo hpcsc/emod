@@ -63,8 +63,90 @@ context "Shop" {
 }
 `
 
+const screensModel = `screen "CheckoutPage" {
+}
+
+screen "OrderHistory" {
+}
+
+context "Shop" {
+  slice "Apply Discount" {
+    shows {
+      screen  = CheckoutPage
+      command = ApplyDiscount
+    }
+
+    command "ApplyDiscount" {
+    }
+  }
+
+  slice "Reapply Discount" {
+    shows {
+      screen = CheckoutPage
+    }
+  }
+}
+`
+
 func TestReferences(t *testing.T) {
 	t.Run("text", func(t *testing.T) {
+		t.Run("a screen gives the line of its declaration with no place, and lists each shows block that names it under shown in", func(t *testing.T) {
+			path := writeTemp(t, "screens.emod", screensModel)
+
+			output := captureStdout(t, func() {
+				require.NoError(t, cli.RunReferences(path, "CheckoutPage", "", "text"))
+			})
+
+			require.Equal(t, `screen CheckoutPage   :1
+
+shown in
+  :10  screen  "Apply Discount"
+  :20  screen  "Reapply Discount"
+`, output)
+		})
+
+		t.Run("a screen that no slice shows says none under shown in", func(t *testing.T) {
+			path := writeTemp(t, "screens.emod", screensModel)
+
+			output := captureStdout(t, func() {
+				require.NoError(t, cli.RunReferences(path, "OrderHistory", "", "text"))
+			})
+
+			require.Equal(t, `screen OrderHistory   :4
+
+shown in
+  none
+`, output)
+		})
+
+		t.Run("the kind screen prints only the screen of a name that a screen and a command share", func(t *testing.T) {
+			path := writeTemp(t, "desk.emod", `screen "CheckIn" {
+}
+
+context "Desk" {
+  slice "Check In" {
+    shows {
+      screen  = CheckIn
+      command = CheckIn
+    }
+
+    command "CheckIn" {
+    }
+  }
+}
+`)
+
+			output := captureStdout(t, func() {
+				require.NoError(t, runCommandLine(t, "emod", "references", path, "CheckIn", "--kind", "screen"))
+			})
+
+			require.Equal(t, `screen CheckIn   :1
+
+shown in
+  :7  screen  "Check In"
+`, output)
+		})
+
 		t.Run("a command lists the shows block that names it under issued by, and a view the shows block that reads it under read by", func(t *testing.T) {
 			path := writeTemp(t, "checkout.emod", checkoutScreenModel)
 
@@ -171,6 +253,34 @@ named in specs
 	})
 
 	t.Run("json", func(t *testing.T) {
+		t.Run("gives a screen with no context, aggregate or slice, and each shows block that names it with no element", func(t *testing.T) {
+			path := writeTemp(t, "screens.emod", screensModel)
+
+			output := captureStdout(t, func() {
+				require.NoError(t, cli.RunReferences(path, "CheckoutPage", "", "json"))
+			})
+
+			require.JSONEq(t, `[{
+				"kind": "screen",
+				"name": "CheckoutPage",
+				"line": 1,
+				"references": [
+					{"group": "shown in", "keyword": "screen", "line": 10, "slice": "Apply Discount"},
+					{"group": "shown in", "keyword": "screen", "line": 20, "slice": "Reapply Discount"}
+				]
+			}]`, output)
+		})
+
+		t.Run("gives a screen that no slice shows an empty list of references", func(t *testing.T) {
+			path := writeTemp(t, "screens.emod", screensModel)
+
+			output := captureStdout(t, func() {
+				require.NoError(t, cli.RunReferences(path, "OrderHistory", "", "json"))
+			})
+
+			require.JSONEq(t, `[{"kind": "screen", "name": "OrderHistory", "line": 4, "references": []}]`, output)
+		})
+
 		t.Run("gives a shows block that issues the command with the keyword command, the line of the entry and the screen", func(t *testing.T) {
 			path := writeTemp(t, "checkout.emod", checkoutScreenModel)
 
@@ -219,19 +329,19 @@ named in specs
 
 			var unknown *query.UnknownNameError
 			require.True(t, errors.As(err, &unknown))
-			require.EqualError(t, err, `the model declares no command, event, view or invariant named "CheckedOn"; the closest names are CheckedIn, CheckIn`)
+			require.EqualError(t, err, `the model declares no command, event, view, screen or invariant named "CheckedOn"; the closest names are CheckedIn, CheckIn`)
 			var lintErr *cli.LintError
 			require.True(t, errors.As(err, &lintErr))
 			require.Equal(t, 1, lintErr.ExitCode)
 		})
 
-		t.Run("a kind that the command does not answer for is refused", func(t *testing.T) {
+		t.Run("a kind that the command does not answer for is refused with the list of kinds that it answers for", func(t *testing.T) {
 			path := writeTemp(t, "desk.emod", deskModel)
 
 			err := cli.RunReferences(path, "ArrivalScreen", "trigger", "text")
 
 			require.ErrorIs(t, err, cli.ErrUnsupportedKind)
-			require.EqualError(t, err, `unsupported kind "trigger"; supported kinds: command, event, view, invariant`)
+			require.EqualError(t, err, `unsupported kind "trigger"; supported kinds: command, event, view, screen, invariant`)
 		})
 
 		t.Run("a format other than text and json is refused", func(t *testing.T) {

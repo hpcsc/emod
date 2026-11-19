@@ -15,7 +15,7 @@ const (
 	KindTranslation Kind = "translation"
 )
 
-var ReferenceKinds = []Kind{KindCommand, KindEvent, KindView, KindInvariant}
+var ReferenceKinds = []Kind{KindCommand, KindEvent, KindView, KindScreen, KindInvariant}
 
 type Group string
 
@@ -28,6 +28,7 @@ const (
 	GroupBuiltFrom       Group = "built from"
 	GroupRefusedCommands Group = "refused commands"
 	GroupNamedInSpecs    Group = "named in specs"
+	GroupShownIn         Group = "shown in"
 )
 
 func GroupsOf(kind Kind) []Group {
@@ -38,17 +39,20 @@ func GroupsOf(kind Kind) []Group {
 		return []Group{GroupIssuedBy, GroupProduces, GroupRefusedBy, GroupNamedInSpecs}
 	case KindView:
 		return []Group{GroupBuiltFrom, GroupReadBy, GroupNamedInSpecs}
+	case KindScreen:
+		return []Group{GroupShownIn}
 	case KindInvariant:
 		return []Group{GroupRefusedCommands, GroupNamedInSpecs}
 	}
 	return nil
 }
 
-// An invariant has no slice: a context or an aggregate declares it.
+// An invariant has no slice: a context or an aggregate declares it. A screen
+// has no context either: the model declares it at the top level.
 type NameReferences struct {
 	Kind       Kind        `json:"kind"`
 	Name       string      `json:"name"`
-	Context    string      `json:"context"`
+	Context    string      `json:"context,omitempty"`
 	Aggregate  string      `json:"aggregate,omitempty"`
 	Slice      string      `json:"slice,omitempty"`
 	Line       int         `json:"line"`
@@ -196,6 +200,8 @@ func declarationReferences(model *ast.Model, decl Declaration) NameReferences {
 			addCommandReferences(&list, slice, decl.Name)
 		case KindView:
 			addViewReferences(&list, slice, decl.Name)
+		case KindScreen:
+			addScreenReferences(&list, slice, decl.Name)
 		}
 	}
 
@@ -325,6 +331,15 @@ func addViewReferences(list *referenceList, slice *ast.Slice, name string) {
 	for _, spec := range slice.Specs {
 		if then, ok := spec.Then.(*ast.ThenView); ok && then.ViewName == name {
 			list.addSpec("then", then.ViewPos, slice, spec)
+		}
+	}
+}
+
+// A shows block has no name, so its reference to a screen has no element.
+func addScreenReferences(list *referenceList, slice *ast.Slice, name string) {
+	for _, appearance := range slice.Appearances {
+		if appearance.Screen == name {
+			list.add(GroupShownIn, "screen", appearance.ScreenPos, nil, slice)
 		}
 	}
 }

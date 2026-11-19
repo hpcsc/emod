@@ -31,6 +31,9 @@ type Declaration struct {
 // invariants and Declarations does not.
 func Declarations(model *ast.Model) []Declaration {
 	var decls []Declaration
+	for _, screen := range model.Screens {
+		decls = append(decls, Declaration{Kind: KindScreen, Name: screen.Name, Pos: afterQuote(screen.NamePos)})
+	}
 	for _, ctx := range model.Contexts {
 		decls = append(decls, Declaration{Kind: KindContext, Name: ctx.Name, Pos: afterQuote(ctx.NamePos), Context: ctx.Name})
 	}
@@ -87,6 +90,7 @@ func NewDeclaredNames(model *ast.Model) DeclaredNames {
 		KindCommand: {},
 		KindEvent:   {},
 		KindView:    {},
+		KindScreen:  {},
 		KindContext: {},
 	}
 
@@ -133,6 +137,7 @@ func NameSites(model *ast.Model) []NameSite {
 			add(KindCommand, tr.Command, tr.CommandPos)
 		}
 		for _, appearance := range slice.Appearances {
+			add(KindScreen, appearance.Screen, appearance.ScreenPos)
 			for i, view := range appearance.Reads {
 				add(KindView, view, appearance.ReadsPos[i])
 			}

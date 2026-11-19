@@ -11,7 +11,7 @@ the HCL grammar and set the file type. Everything else comes from the language s
 - **Diagnostics** — parser and validator errors as squiggly underlines
 - **Completion** — the entries a block accepts, and the names a value slot admits
 - **Go-to-definition** — jump from references to their definition
-- **Find references** — find all usages of a command, event, or view
+- **Find references** — find all usages of a command, event, view, or screen
 - **Hover** — contextual information on names and keywords
 - **Semantic highlighting** — each element painted as what it is
 - **Format on save** — auto-format via `emod fmt`

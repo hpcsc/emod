@@ -1,0 +1,71 @@
+design: planned
+# No new type. A screen becomes a declared name of internal/query, and each surface reads it from there.
+types:
+  - name: Declaration
+    package: internal/query   # names.go
+    change: changed
+    does: is a name that the model resolves across the whole file, with the place that declares it
+    owns:
+      - each screen of the model is a declaration of kind screen, with no context, no aggregate and no slice
+      - the position of a screen declaration is the first character of its name, not its opening quote
+      - the screens are in the order the model declares them
+  - name: DeclaredNames
+    package: internal/query   # names.go
+    change: changed
+    does: maps each kind and name to the position of the last declaration of that name
+    owns:
+      - it holds the screens beside the commands, events, views and contexts, so a screen resolves by kind as they do
+  - name: NameSite
+    package: internal/query   # names.go
+    change: changed
+    does: is one place where the model names a declared construct
+    owns:
+      - the screen entry of each shows block is a site of kind screen at the first character of the name, in a slice of either home
+  - name: Kind
+    package: internal/query   # names.go, references.go
+    change: changed
+    does: names the kind of an element that a query reports
+    owns:
+      - ReferenceKinds is command, event, view, screen, invariant, so screen is a kind that references answers for and that each message lists, after view as in TraceKinds
+  - name: Group
+    package: internal/query   # references.go
+    change: changed
+    does: names the role that a reference plays for the name it refers to
+    owns:
+      - GroupShownIn is "shown in", and it is the one group of a screen
+      - a shows block refers to its screen in GroupShownIn, with the keyword screen, the line of its screen entry, its slice and no element
+  - name: NameReferences
+    package: internal/query   # references.go
+    change: changed
+    does: is the declaration of one name of one kind and each reference to it
+    owns:
+      - the JSON of a declaration with no context, which is a screen, has no context key, as the screen node of a trace has none
+      - a screen that no slice shows has an empty list of references
+    fields: [Context]
+  - name: blockContext
+    package: internal/lsp   # completer.go
+    change: changed
+    does: names the kind of block that the completer is inside
+    owns:
+      - in a shows block the value after screen = is a declared screen, offered as a VariableCompletion item
+      - outside a shows block the word screen is no value slot, so at the top level it still opens a declaration
+functions:
+  - query.Declarations(model *ast.Model) []Declaration   # exists; gives each screen
+  - query.NewDeclaredNames(model *ast.Model) DeclaredNames   # exists; holds the screens
+  - query.NameSites(model *ast.Model) []NameSite   # exists; gives the screen entry of each shows block
+  - query.References(model *ast.Model, name string, kind Kind) ([]NameReferences, error)   # exists; answers for the kind screen, and an empty kind looks in the screens too
+  - query.GroupsOf(kind Kind) []Group   # exists; a screen has the one group shown in
+  - lsp.GetDefinition(text string, line, character int, uri string) *Location   # exists; goes from a shows block's screen entry to the declaration, with no change of its own
+  - lsp.GetReferences(text string, line, character int, uri string) []Location   # exists; answers for a screen
+  - lsp.GetCompletions(text string, line, character int) CompletionList   # exists; offers the screens after screen = in a shows block
+words:
+  - concept: the group of references that lists each shows block naming a screen
+    word: shown in
+    not: [appears in, appearances, used by, shows]
+  - concept: the keyword of a screen reference, the entry of a shows block that holds the screen name
+    word: screen
+    not: [shows]
+  - concept: one point on the timeline where a slice shows a screen, in Go names and prose
+    word: appearance
+    not: [usage, occurrence, instance, placement]
+dependencies: []

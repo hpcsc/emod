@@ -193,7 +193,7 @@ func NewApp() *urfave.Command {
 				Flags: []urfave.Flag{
 					&urfave.StringFlag{
 						Name:  "kind",
-						Usage: "The kind of the name, when the model declares it as two kinds (command|event|view|invariant)",
+						Usage: "The kind of the name, when the model declares it as two kinds (command|event|view|screen|invariant)",
 					},
 					&urfave.StringFlag{
 						Name:  "format",

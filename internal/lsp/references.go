@@ -8,11 +8,11 @@ import (
 )
 
 // referenceTargetKinds omits query.KindContext: of the names resolved model-wide,
-// find-references answers for a command, an event and a view alone. An invariant
-// is resolved per scope instead, by invariantLocations.
-var referenceTargetKinds = []query.Kind{query.KindCommand, query.KindEvent, query.KindView}
+// find-references answers for a command, an event, a view and a screen alone. An
+// invariant is resolved per scope instead, by invariantLocations.
+var referenceTargetKinds = []query.Kind{query.KindCommand, query.KindEvent, query.KindView, query.KindScreen}
 
-// GetReferences finds all references to the command, event or view name at the
+// GetReferences finds all references to the command, event, view or screen name at the
 // given cursor position, or — for an invariant — the declaration and every site
 // naming it within the one scope that declares it. If the cursor is not on a
 // resolvable name (definition or reference), it returns nil.

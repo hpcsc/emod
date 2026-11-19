@@ -166,6 +166,47 @@ context "Shop" {
 		})
 	})
 
+	t.Run("the screen that a shows block names", func(t *testing.T) {
+		const doc = `screen "CheckoutPage" {
+}
+
+context "Delivery" {
+    mode = dcb
+
+    slice "Choose Slot" {
+        shows {
+            screen = CheckoutPage
+        }
+        shows {
+            screen = OrderHistory
+        }
+    }
+}
+`
+
+		t.Run("resolves to the screen declaration from a slice of an aggregate", func(t *testing.T) {
+			cLine, cChar := posIn(t, testDoc, "shows {", "MyScreen")
+			dLine, dChar := posIn(t, testDoc, `screen "MyScreen`, "MyScreen")
+			assertDef(t, testDoc, cLine, cChar, dLine, dChar, "MyScreen")
+		})
+
+		t.Run("resolves to the screen declaration from a slice of a mode dcb context", func(t *testing.T) {
+			cLine, cChar := posIn(t, doc, "shows {", "CheckoutPage")
+			dLine, dChar := posIn(t, doc, `screen "CheckoutPage`, "CheckoutPage")
+			assertDef(t, doc, cLine, cChar, dLine, dChar, "CheckoutPage")
+		})
+
+		t.Run("a screen that the model does not declare goes nowhere", func(t *testing.T) {
+			line, char := posIn(t, doc, "screen = OrderHistory", "OrderHistory")
+			assertNil(t, doc, line, char)
+		})
+
+		t.Run("a cursor on the screen declaration goes nowhere", func(t *testing.T) {
+			line, char := posIn(t, doc, `screen "CheckoutPage`, "CheckoutPage")
+			assertNil(t, doc, line, char)
+		})
+	})
+
 	t.Run("command reference in flow command", func(t *testing.T) {
 		flowLine := "command -> event:    SubmitOrder -> OrderSubmitted"
 		cLine, cChar := posIn(t, testDoc, flowLine, "SubmitOrder")

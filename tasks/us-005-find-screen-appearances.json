@@ -1,0 +1,89 @@
+{
+  "story": "Find each appearance of a screen",
+  "story_id": "screens-as-first-class/US-005",
+  "tasks_file": "tasks/us-005-find-screen-appearances.md",
+  "tasks": [
+    {
+      "n": 1,
+      "done": true,
+      "title": "Answer for a screen in `emod references`, go-to-definition and find-references",
+      "language": "Go",
+      "testable": true,
+      "certainty": "medium",
+      "blast_radius": "high",
+      "patterns_to_follow": [
+        "internal/query/names.go:32-66",
+        "internal/query/names.go:85-98",
+        "internal/query/names.go:135-142",
+        "internal/query/references.go:189-211",
+        "internal/query/references.go:297-330",
+        "internal/query/references.go:33-45",
+        "internal/query/trace.go:155-160",
+        "internal/cli/references.go:73-125",
+        "internal/cli/trace.go:68-74",
+        "internal/cli/trace.go:166-171",
+        "internal/lsp/references.go:10-13",
+        "internal/query/references_test.go:197-285",
+        "internal/query/references_test.go:364-447",
+        "internal/query/names_test.go:13-46",
+        "internal/lsp/definition_test.go:131-167",
+        "internal/lsp/references_test.go:264-310",
+        "internal/cli/references_test.go:66-100",
+        "internal/cli/references_test.go:173-192",
+        "internal/cli/references_test.go:214-238",
+        "internal/test/fixtures.go:3425-3628",
+        "tasks/learnings.md:151-154",
+        "tasks/learnings.md:408-411",
+        "tasks/learnings.md:595-598",
+        "tasks/learnings.md:106-109",
+        "tasks/learnings.md:6-9",
+        "tasks/learnings.md:41-44",
+        "tasks/learnings.md:423-426",
+        "tasks/learnings.md:575-578"
+      ],
+      "depends_on": [],
+      "affected_files": [
+        "internal/query/names.go",
+        "internal/query/references.go",
+        "internal/query/names_test.go",
+        "internal/query/references_test.go",
+        "internal/cli/references.go",
+        "internal/cli/app.go",
+        "internal/cli/references_test.go",
+        "internal/lsp/references.go",
+        "internal/lsp/definition_test.go",
+        "internal/lsp/references_test.go",
+        "README.md",
+        "site/content/docs/diagrams.md",
+        "site/content/docs/editor-setup.md"
+      ]
+    },
+    {
+      "n": 2,
+      "done": false,
+      "title": "Offer the declared screens after `screen =` in a `shows` block",
+      "language": "Go",
+      "testable": true,
+      "certainty": "high",
+      "blast_radius": "low",
+      "patterns_to_follow": [
+        "internal/lsp/completer.go:364-375",
+        "internal/lsp/completer.go:345-352",
+        "internal/lsp/completer.go:379-384",
+        "internal/lsp/completer_test.go:87-124",
+        "internal/lsp/completer_test.go:257-400",
+        "task:1",
+        "tasks/learnings.md:413-416",
+        "tasks/learnings.md:151-154"
+      ],
+      "depends_on": [
+        1
+      ],
+      "affected_files": [
+        "internal/lsp/completer.go",
+        "internal/lsp/completer_test.go"
+      ]
+    }
+  ],
+  "design_file": "tasks/us-005-find-screen-appearances.design.yaml"
+}

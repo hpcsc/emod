@@ -272,13 +272,14 @@ emod slices list reservation.emod
 
 ### Find the references of a name
 
-`emod references` prints the declaration of a command, an event, a view or an invariant, then each
-reference to it in a group for its role: what produces an event and what reads it, what issues a
-command and what refuses it, and the specs that name it.
+`emod references` prints the declaration of a command, an event, a view, a screen or an invariant,
+then each reference to it in a group for its role: what produces an event and what reads it, what
+issues a command and what refuses it, the slices that show a screen, and the specs that name it.
 
 ```bash
 emod references reservation.emod RoomReserved                # text
 emod references reservation.emod RoomReserved --format json  # JSON
+emod references reservation.emod ReservationForm             # each slice that shows the screen
 emod references reservation.emod CheckIn --kind event        # one kind, when two kinds share the name
 ```
 
@@ -416,7 +417,7 @@ from the language server:
 - **Diagnostics** — parser and validator errors as squiggly underlines
 - **Completion** — the entries a block accepts, and the names a value slot admits
 - **Go-to-definition** — jump from references to their definition
-- **Find references** — find all usages of a command, event, or view
+- **Find references** — find all usages of a command, event, view, or screen
 - **Hover** — contextual information on names and keywords
 - **Semantic highlighting** — a screen, a context, an aggregate, a command, an event and a view, each painted as what it is
 - **Format on save** — auto-format via `emod fmt`

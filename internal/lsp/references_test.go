@@ -347,6 +347,69 @@ context "Shop" {
 		})
 	})
 
+	t.Run("screens", func(t *testing.T) {
+		const doc = `screen "CheckoutPage" {
+}
+
+screen "CartDrawer" {
+}
+
+screen "OrderHistory" {
+}
+
+context "Shop" {
+    aggregate "Cart" {
+        slice "Apply Discount" {
+            shows {
+                screen = CartDrawer
+            }
+            shows {
+                screen  = CheckoutPage
+                command = ApplyDiscount
+            }
+            command "ApplyDiscount" {
+            }
+        }
+    }
+}
+
+context "Delivery" {
+    mode = dcb
+
+    slice "Choose Slot" {
+        shows {
+            screen = CheckoutPage
+        }
+    }
+}
+`
+
+		checkoutPageSites := func(t *testing.T) []lsp.Location {
+			return []lsp.Location{
+				locationOf(t, doc, `screen "CheckoutPage"`, "CheckoutPage"),
+				locationOf(t, doc, "screen  = CheckoutPage", "CheckoutPage"),
+				locationOf(t, doc, `slice "Choose Slot"`, "CheckoutPage"),
+			}
+		}
+
+		t.Run("cursor on a screen declaration lists the declaration and the screen entry of each shows block that names it, in both slice homes", func(t *testing.T) {
+			line, char := posIn(t, doc, `screen "CheckoutPage"`, "CheckoutPage")
+			require.Equal(t, checkoutPageSites(t), lsp.GetReferences(doc, line, char, uri))
+		})
+
+		t.Run("cursor on the screen of a shows block lists the same places", func(t *testing.T) {
+			line, char := posIn(t, doc, `slice "Choose Slot"`, "CheckoutPage")
+			require.Equal(t, checkoutPageSites(t), lsp.GetReferences(doc, line, char, uri))
+		})
+
+		t.Run("a screen that no slice shows lists its declaration only", func(t *testing.T) {
+			line, char := posIn(t, doc, `screen "OrderHistory"`, "OrderHistory")
+			require.Equal(t, []lsp.Location{
+				locationOf(t, doc, `screen "OrderHistory"`, "OrderHistory"),
+			}, lsp.GetReferences(doc, line, char, uri))
+		})
+	})
+
 	t.Run("specs", func(t *testing.T) {
 		doc := test.SpecLibraryLending
 

@@ -284,6 +284,73 @@ context "Shop" {
 		})
 	})
 
+	t.Run("screen", func(t *testing.T) {
+		const screensModel = `screen "CheckoutPage" {
+}
+
+screen "CartDrawer" {
+}
+
+screen "OrderHistory" {
+}
+
+context "Shop" {
+  aggregate "Cart" {
+    slice "Apply Discount" {
+      shows {
+        screen = CartDrawer
+      }
+
+      shows {
+        screen  = CheckoutPage
+        command = ApplyDiscount
+      }
+
+      command "ApplyDiscount" {
+      }
+    }
+  }
+}
+
+context "Delivery" {
+  mode = dcb
+
+  slice "Choose Slot" {
+    shows {
+      screen = CheckoutPage
+    }
+  }
+}
+`
+
+		t.Run("lists each shows block that names it, in a slice of an aggregate and of a mode dcb context, at the line of its screen entry, with no place of its own", func(t *testing.T) {
+			found, err := query.References(parse(t, screensModel), "CheckoutPage", "")
+
+			require.NoError(t, err)
+			require.Equal(t, []query.NameReferences{{
+				Kind: query.KindScreen,
+				Name: "CheckoutPage",
+				Line: 1,
+				References: []query.Reference{
+					{Group: query.GroupShownIn, Keyword: "screen", Line: 18, Slice: "Apply Discount"},
+					{Group: query.GroupShownIn, Keyword: "screen", Line: 33, Slice: "Choose Slot"},
+				},
+			}}, found)
+		})
+
+		t.Run("a screen that no slice shows lists no reference", func(t *testing.T) {
+			found, err := query.References(parse(t, screensModel), "OrderHistory", "")
+
+			require.NoError(t, err)
+			require.Equal(t, []query.NameReferences{{
+				Kind:       query.KindScreen,
+				Name:       "OrderHistory",
+				Line:       7,
+				References: []query.Reference{},
+			}}, found)
+		})
+	})
+
 	t.Run("invariant", func(t *testing.T) {
 		t.Run("groups the commands that it refuses and the specs that expect the refusal", func(t *testing.T) {
 			found, err := query.References(parse(t, bookingModel), "RoomFree", "")
@@ -422,28 +489,86 @@ context "Shop" {
 			}}, found)
 		})
 
+		const screenAndCommandModel = `screen "CheckIn" {
+}
+
+context "Desk" {
+  slice "Check In" {
+    shows {
+      screen  = CheckIn
+      command = CheckIn
+    }
+
+    command "CheckIn" {
+    }
+  }
+}
+`
+
+		t.Run("a name that a screen and a command share gives the screen with its shows blocks only, then the command", func(t *testing.T) {
+			found, err := query.References(parse(t, screenAndCommandModel), "CheckIn", "")
+
+			require.NoError(t, err)
+			require.Equal(t, []query.NameReferences{
+				{
+					Kind: query.KindScreen,
+					Name: "CheckIn",
+					Line: 1,
+					References: []query.Reference{
+						{Group: query.GroupShownIn, Keyword: "screen", Line: 7, Slice: "Check In"},
+					},
+				},
+				{
+					Kind:    query.KindCommand,
+					Name:    "CheckIn",
+					Context: "Desk",
+					Slice:   "Check In",
+					Line:    11,
+					References: []query.Reference{
+						{Group: query.GroupIssuedBy, Keyword: "command", Line: 8, Element: element(query.KindScreen, "CheckIn"), Slice: "Check In"},
+					},
+				},
+			}, found)
+		})
+
 		t.Run("a name that the model does not declare lists the declared names closest to it", func(t *testing.T) {
 			_, err := query.References(parse(t, bookingModel), "RoomBoked", "")
 
-			require.EqualError(t, err, `the model declares no command, event, view or invariant named "RoomBoked"; the closest names are RoomBooked`)
+			require.EqualError(t, err, `the model declares no command, event, view, screen or invariant named "RoomBoked"; the closest names are RoomBooked`)
+		})
+
+		t.Run("a misspelt screen name lists the screen among the closest names", func(t *testing.T) {
+			_, err := query.References(parse(t, bookingModel), "BookingFrm", "")
+
+			require.EqualError(t, err, `the model declares no command, event, view, screen or invariant named "BookingFrm"; the closest names are BookingForm`)
 		})
 
 		t.Run("a part of a name lists the names that hold it, nearest first", func(t *testing.T) {
 			_, err := query.References(parse(t, bookingModel), "room", "")
 
-			require.EqualError(t, err, `the model declares no command, event, view or invariant named "room"; the closest names are BookRoom, RoomFree, RoomsView`)
+			require.EqualError(t, err, `the model declares no command, event, view, screen or invariant named "room"; the closest names are BookRoom, RoomFree, RoomsView`)
 		})
 
 		t.Run("a name far from each declared name lists no closest name", func(t *testing.T) {
 			_, err := query.References(parse(t, bookingModel), "SendInvoiceToAccounting", "")
 
-			require.EqualError(t, err, `the model declares no command, event, view or invariant named "SendInvoiceToAccounting"`)
+			require.EqualError(t, err, `the model declares no command, event, view, screen or invariant named "SendInvoiceToAccounting"`)
 		})
 
 		t.Run("a name of another kind than the one asked for names the kind that declares it", func(t *testing.T) {
 			_, err := query.References(parse(t, bookingModel), "RoomBooked", query.KindView)
 
 			require.EqualError(t, err, `the model declares "RoomBooked" as event, not as view`)
+		})
+
+		t.Run("a screen asked for as a view names the kind screen, and an event asked for as a screen names the kind event", func(t *testing.T) {
+			_, screenErr := query.References(parse(t, bookingModel), "BookingForm", query.KindView)
+			_, eventErr := query.References(parse(t, bookingModel), "RoomBooked", query.KindScreen)
+
+			require.Equal(t, []string{
+				`the model declares "BookingForm" as screen, not as view`,
+				`the model declares "RoomBooked" as event, not as screen`,
+			}, []string{screenErr.Error(), eventErr.Error()})
 		})
 	})
 
