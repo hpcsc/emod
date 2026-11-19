@@ -1,0 +1,204 @@
+{
+  "story": "Give a screen the path of its mockup",
+  "story_id": "screens-as-first-class/US-007",
+  "tasks_file": "tasks/us-007-screen-image-path.md",
+  "tasks": [
+    {
+      "n": 1,
+      "done": true,
+      "title": "Accept `image` in a screen declaration and keep it through `emod fmt`",
+      "language": "Go",
+      "testable": true,
+      "certainty": "high",
+      "blast_radius": "high",
+      "patterns_to_follow": [
+        "internal/parser/parser.go:390-410",
+        "internal/parser/parser.go:104-112",
+        "internal/parser/parser.go:489-492",
+        "internal/parser/parser_test.go:92-131",
+        "internal/formatter/formatter.go:26-30",
+        "internal/formatter/formatter.go:262-267",
+        "internal/formatter/formatter_test.go:20-60",
+        "internal/test/fixtures.go:2378",
+        "internal/test/fixtures.go:3712-3719",
+        "internal/test/fixtures.go:3847-3863",
+        "internal/test/fixtures.go:3888-3905",
+        "internal/test/fixtures.go:4110-4131",
+        "internal/test/models.go:96-100",
+        "internal/oracle/oracle_test.go:111-114",
+        "internal/lsp/hover.go:11-50",
+        "internal/lsp/completer.go:515-518",
+        "internal/lsp/completer_test.go:87-123",
+        "docs/dsl-reference.md:100-112",
+        "tasks/learnings.md:21-30",
+        "tasks/learnings.md:31-35",
+        "tasks/learnings.md:41-45",
+        "tasks/learnings.md:136-140",
+        "tasks/learnings.md:196-200"
+      ],
+      "depends_on": [],
+      "affected_files": [
+        "internal/ast/ast.go",
+        "internal/parser/parser.go",
+        "internal/parser/parser_test.go",
+        "internal/formatter/formatter.go",
+        "internal/formatter/formatter_test.go",
+        "internal/test/fixtures.go",
+        "internal/test/models.go",
+        "internal/test/keywords.go",
+        "internal/oracle/oracle_test.go",
+        "internal/lsp/hover.go",
+        "internal/lsp/completer.go",
+        "internal/lsp/completer_test.go",
+        "docs/dsl-reference.md"
+      ]
+    },
+    {
+      "n": 2,
+      "done": false,
+      "title": "Report `screen/missing-image-asset` from `emod lint` and `emod validate`",
+      "language": "Go",
+      "testable": true,
+      "certainty": "low",
+      "blast_radius": "high",
+      "patterns_to_follow": [
+        "internal/linter/linter.go:50-169",
+        "internal/linter/linter.go:694-707",
+        "internal/linter/descriptions.go:32-61",
+        "internal/linter/descriptions_test.go:47-54",
+        "internal/oracle/oracle.go:13-42",
+        "internal/cli/lint.go:80-118",
+        "internal/cli/validate.go:13-38",
+        "internal/cli/lint_test.go:1466-1499",
+        "internal/cli/lint_test.go:1932-1968",
+        "internal/cli/validate_test.go:37-60",
+        "internal/cli/validate_test.go:1316-1323",
+        "internal/pipeline/pipeline_test.go:103-160",
+        "internal/pipeline/pipeline_test.go:205-222",
+        "internal/cli/export.go:28-57",
+        "internal/cli/diagram.go:40-70",
+        "docs/dsl-reference.md:430",
+        "docs/dsl-reference.md:735",
+        "tasks/learnings.md:146-150",
+        "tasks/learnings.md:428-432",
+        "tasks/learnings.md:433-437",
+        "tasks/learnings.md:1491-1497",
+        "task:1"
+      ],
+      "depends_on": [
+        1
+      ],
+      "affected_files": [
+        "internal/linter/linter.go",
+        "internal/linter/descriptions.go",
+        "internal/linter/linter_test.go",
+        "internal/oracle/oracle.go",
+        "internal/oracle/oracle_test.go",
+        "internal/cli/lint.go",
+        "internal/cli/validate.go",
+        "internal/cli/lint_test.go",
+        "internal/cli/validate_test.go",
+        "internal/cli/export_test.go",
+        "internal/cli/diagram_test.go",
+        "internal/pipeline/pipeline_test.go",
+        "docs/dsl-reference.md"
+      ]
+    },
+    {
+      "n": 3,
+      "done": false,
+      "title": "Give `image` in the JSON and CUE exports and the schema, and draw every picture as before",
+      "language": "Go",
+      "testable": true,
+      "certainty": "high",
+      "blast_radius": "high",
+      "patterns_to_follow": [
+        "internal/export/json.go:36-43",
+        "internal/export/json.go:170-189",
+        "internal/export/json.go:345-354",
+        "internal/export/cue.go:88-92",
+        "internal/export/cue.go:237",
+        "internal/cue/schema.cue:15-19",
+        "internal/cue/schema.cue:68-72",
+        "internal/export/export_test.go:4653-4690",
+        "internal/export/export_test.go:4920-4974",
+        "internal/diagram/contract_test.go:1332-1360",
+        "tasks/learnings.md:41-45",
+        "tasks/learnings.md:46-50",
+        "tasks/learnings.md:141-145",
+        "tasks/learnings.md:271-275",
+        "task:1"
+      ],
+      "depends_on": [
+        1
+      ],
+      "affected_files": [
+        "internal/export/json.go",
+        "internal/export/cue.go",
+        "internal/cue/schema.cue",
+        "internal/export/export_test.go",
+        "internal/diagram/contract_test.go"
+      ]
+    },
+    {
+      "n": 4,
+      "done": false,
+      "title": "Carry `image` through the diagram document and both viewer saves",
+      "language": "Go",
+      "testable": true,
+      "certainty": "medium",
+      "blast_radius": "high",
+      "patterns_to_follow": [
+        "internal/export/diagram.go:187-189",
+        "internal/export/diagram.go:228-238",
+        "internal/export/diagram.go:403-422",
+        "internal/export/export_test.go:2190-2219",
+        "internal/importer/importer.go:50-71",
+        "internal/importer/importer.go:127-142",
+        "internal/importer/importer.go:249-291",
+        "internal/importer/diagram_edit.go:113-142",
+        "internal/importer/diagram_edit.go:456-463",
+        "internal/importer/importer_test.go:30-40",
+        "internal/importer/importer_test.go:577-592",
+        "internal/importer/diagram_edit_test.go:589",
+        "tasks/learnings.md:201-205",
+        "tasks/learnings.md:1701-1707",
+        "task:1"
+      ],
+      "depends_on": [
+        1
+      ],
+      "affected_files": [
+        "internal/export/diagram.go",
+        "internal/export/export_test.go",
+        "internal/importer/importer.go",
+        "internal/importer/importer_test.go",
+        "internal/importer/diagram_edit_test.go"
+      ]
+    },
+    {
+      "n": 5,
+      "done": false,
+      "title": "Show the image path of its screen in the detail panel of an appearance",
+      "language": "JavaScript",
+      "testable": true,
+      "certainty": "high",
+      "blast_radius": "low",
+      "patterns_to_follow": [
+        "internal/frontend/static/ui.js:520-526",
+        "internal/frontend/tests/detail-panel.test.js:141-165",
+        "internal/frontend/tests/detail-panel.test.js:168-217",
+        "tasks/learnings.md:271-275",
+        "task:4"
+      ],
+      "depends_on": [
+        4
+      ],
+      "affected_files": [
+        "internal/frontend/static/ui.js",
+        "internal/frontend/tests/detail-panel.test.js"
+      ]
+    }
+  ],
+  "design_file": "tasks/us-007-screen-image-path.design.yaml"
+}

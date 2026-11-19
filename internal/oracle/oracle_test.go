@@ -113,6 +113,12 @@ func TestCheck(t *testing.T) {
 
 			require.Empty(t, reportedLines(diagnostics))
 		})
+
+		t.Run("returns an empty diagnostic list for a model whose screens name images that lead to no file", func(t *testing.T) {
+			diagnostics := oracle.Check(test.ScreenImageLibraryLending, "screen-images.emod")
+
+			require.Empty(t, reportedLines(diagnostics))
+		})
 	})
 
 	t.Run("documented models", func(t *testing.T) {

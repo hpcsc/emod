@@ -176,6 +176,8 @@ type Screen struct {
 	NamePos        Position
 	Description    string
 	DescriptionPos Position
+	Image          string
+	ImagePos       Position
 	OpenPos        Position
 	ClosePos       Position
 }

@@ -103,11 +103,14 @@ Declares a screen: a place where a person reads views and issues commands. A mod
 
 ```
 screen "<Name>" {
-  description = "<text>"   # optional
+  description = "<text>"         # optional
+  image       = "<path>"         # optional
 }
 ```
 
-The name is a bare name, such as `CheckoutPage`, because a `shows` block names the screen with an unquoted reference. The body carries a [description](#10-descriptions) and nothing else. Two declarations of one name are an error. `emod fmt` writes the screens after the `model` block and before the first context.
+The name is a bare name, such as `CheckoutPage`, because a `shows` block names the screen with an unquoted reference. The body carries a [description](#10-descriptions) and an `image`. Two declarations of one name are an error. `emod fmt` writes the screens after the `model` block and before the first context.
+
+`image` is the path of the mockup of the screen, such as `"./wireframes/checkout.png"`. The path is relative to the `.emod` file. The parser does not resolve it, so a model parses before its mockup exists. A screen has one image, and each appearance of the screen shows that image: a `shows` block has no `image` of its own. `emod fmt` writes `image` after `description`.
 
 ---
 

@@ -33,6 +33,7 @@ var keywordDescriptions = map[string]string{
 	"external":        "Declares an external reference.",
 	"emod":            "Declares the emod language version the file is written in.",
 	"description":     "Attaches a human-readable description to the enclosing declaration.",
+	"image":           "Gives a screen the path of its mockup, relative to the .emod file. A screen has one image, and its appearances share it.",
 	"invariants":      "Declares the named business rules the enclosing context or aggregate must uphold.",
 	"spec":            "Defines a given/when/then scenario a slice must satisfy.",
 	"given":           "Lists the events that have already occurred when a spec's scenario starts.",

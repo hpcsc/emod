@@ -1,0 +1,90 @@
+design: planned
+# The image is a fact about the screen, so only the declaration holds it. The diagram document copies it onto each
+# shows node for the viewer, as it copies the description, and no save reads it back from there. The rule that
+# checks the path is the only code in the linter that reads the disk, and only emod lint and emod validate call it.
+types:
+  - name: Screen
+    package: internal/ast   # ast.go
+    change: changed
+    does: is a page of the system, which a model declares one time at the top level
+    owns:
+      - a screen has at most one image, the path as the author wrote it, and an appearance has none
+      - an empty image is the same as no image
+    fields: [Image, ImagePos]
+  - name: hclReader
+    package: internal/parser   # parser.go
+    change: changed
+    does: reads the HCL body of a model into the AST
+    owns:
+      - image in a screen block is a quoted string, kept as written and not resolved
+      - image in a shows block is an unexpected attribute
+    methods: [screen]
+  - name: jsonScreen
+    package: internal/export   # json.go
+    change: changed
+    does: writes one screen declaration in the JSON export
+    owns:
+      - image_position follows position and image follows comments, as every_position and every do on an automation
+      - a screen with no image has neither key
+    fields: [Image, ImagePosition]
+  - name: cueWriter
+    package: internal/export   # cue.go
+    change: changed
+    does: writes the CUE export
+    owns:
+      - "a screen gives image after description, and #Screen in schema.cue declares image as an optional string"
+    methods: [writeScreen]
+  - name: jsonDiagramNode
+    package: internal/export   # diagram.go
+    change: changed
+    does: writes one node of the diagram document
+    owns:
+      - a screen node and each shows node of that screen carry the image of the screen under the key image
+    fields: [Image]
+  - name: diagramBuilder
+    package: internal/export   # diagram.go
+    change: changed
+    does: builds the diagram document of a model, with one node for each construct and one edge for each arrow
+    owns:
+      - each shows node gets the image of the declaration of its screen, as it gets the description
+    methods: [appendScreen, appendShows]
+  - name: diagramNode
+    package: internal/importer   # importer.go
+    change: changed
+    does: reads one node of a diagram document
+    owns:
+      - a screen node gives its image to the declaration
+      - the image on a shows node is a copy for the viewer, and no part of the saved model takes it
+      - a screen that a save declares for an appearance gets no image
+    fields: [Image]
+    methods: [asScreen]
+  - name: UI
+    package: internal/frontend/static   # ui.js
+    change: changed
+    does: shows the detail panel and the other overlays of the viewer
+    owns:
+      - the Screen section of a shows node gives Reads, Commands and Image, and Image is the path as text or an em-dash
+    methods: [showDetailPanel]
+functions:
+  - linter.LintFile(model *ast.Model, path string) []*diagnostic.Entry   # new; every diagnostic of Lint and screen/missing-image-asset, in position order; a relative image resolves against the directory of path, an absolute one as it stands, and a directory or nothing is reported
+  - oracle.CheckFile(source, path string) []*diagnostic.Entry   # new; Check with LintFile in place of Lint; emod lint and emod validate call it, and no other caller
+  - linter.Lint(model *ast.Model) []*diagnostic.Entry   # exists; reads only the model, so it never reports screen/missing-image-asset
+  - formatter.Format(model *ast.Model) string   # exists; writes image after description in a screen block
+  - importer.ImportDiagram(data []byte) (*ast.Model, error)   # exists; takes image from screen nodes only
+  - importer.ApplyDiagram(model *ast.Model, diagram []byte) error   # exists; keeps each parsed declaration and its image
+  - test.ScreenImageLibraryLending   # new const; the featured fixture; internal/oracle, internal/formatter and internal/parser tests read it
+  - test.ScreenImageLibraryLendingModel(t *testing.T) *ast.Model   # new; internal/export, internal/importer, internal/diagram and internal/linter tests call it
+  - test.ScreenImageLibraryLendingImages   # new var; the image paths in declaration order
+  - test.WithoutScreenImages(model *ast.Model) *ast.Model   # new; the twin; leaves the model it is given unchanged
+  - test.DeclaredScreenImages(model *ast.Model) []string   # new; the images of the declared screens, in declaration order, none for a screen with no image
+words:
+  - concept: the path of the file that holds the design of a screen, in the DSL, the AST, every serialized key and the viewer
+    word: image
+    not: [wireframe, mockup, sketch, picture, imagePath, asset]   # wireframe is the lane label and a word for the screen itself; asset is only in the rule name screen/missing-image-asset, which the proposal fixes
+  - concept: the .emod file on disk that a command read the model from, whose directory a relative image path resolves against
+    word: file
+    not: [document, filename, source, dir]   # document is the LSP's buffer, filename the name a diagnostic reports, source the text of the model
+  - concept: the condition that the rule reports, in its message and its description
+    word: leads to no file
+    not: [missing file, not found, broken, unresolved]   # unresolved is the validator's word for a reference that names no declaration
+dependencies: []

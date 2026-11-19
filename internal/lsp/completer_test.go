@@ -110,7 +110,7 @@ context "Lending" {
 			character int
 			expected  []string
 		}{
-			{name: "inside a screen block returns description", line: 1, character: 0, expected: []string{"description"}},
+			{name: "inside a screen block returns description and image", line: 1, character: 0, expected: []string{"description", "image"}},
 			{name: "inside a shows block returns screen, reads and command", line: 9, character: 6, expected: showsEntries},
 			{name: "after screen in a shows block returns the declared screen", line: 7, character: 16, expected: []string{"LendingDesk"}},
 			{name: "after command in a shows block returns no command name, only the entries of the block", line: 8, character: 16, expected: showsEntries},

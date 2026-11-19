@@ -3627,6 +3627,220 @@ context "Reading Room" {
 }
 `
 
+// ScreenImageLibraryLending is ScreenLibraryLending with the path of a mockup on
+// two of its screens. The screen with no image sits between the two that have
+// one, the last screen has an image and no description, and one path starts
+// with ./ and the other with .., so a reader or a writer that drops either case
+// reads back short. No path names a file in the repository.
+const ScreenImageLibraryLending = `emod = 1
+
+# Lending a library's copies and seating its readers, with the screens its people work at and their mockups
+model "Library Lending" {
+}
+
+# The terminal a librarian lends and takes back copies at
+screen "LendingDesk" {
+  description = "The terminal a librarian lends and takes back copies at"
+  image       = "./wireframes/lending-desk.png"
+}
+
+screen "OverdueReport" {
+}
+
+screen "DeskKiosk" {
+  image = "../mockups/desk-kiosk.png"
+}
+
+context "Lending" {
+  aggregate "Loan" {
+    slice "Borrow Copy" {
+      shows {
+        screen  = LendingDesk
+        reads   = MemberLoansView
+        command = BorrowCopy
+      }
+
+      command "BorrowCopy" {
+        fields {
+          memberId = required(string)
+          copyId   = required(string)
+        }
+      }
+
+      event "CopyBorrowed" {
+        fields {
+          loanId   = required(string)
+          memberId = required(string)
+          copyId   = required(string)
+        }
+      }
+
+      flow = <<-FLOW
+        command -> event:    BorrowCopy -> CopyBorrowed
+      FLOW
+    }
+
+    slice "Review Member Loans" {
+      view "MemberLoansView" {
+        subscribes = [CopyBorrowed]
+
+        fields {
+          loanId   = required(string)
+          memberId = required(string)
+        }
+      }
+    }
+
+    slice "Return Copy" {
+      shows {
+        screen  = LendingDesk
+        command = [ReturnCopy, RenewLoan]
+      }
+
+      command "ReturnCopy" {
+        fields {
+          loanId = required(string)
+        }
+      }
+
+      command "RenewLoan" {
+        fields {
+          loanId = required(string)
+        }
+      }
+
+      event "CopyReturned" {
+        fields {
+          loanId     = required(string)
+          returnedAt = required(timestamp)
+        }
+      }
+
+      event "LoanRenewed" {
+        fields {
+          loanId    = required(string)
+          renewedAt = required(timestamp)
+        }
+      }
+
+      flow = <<-FLOW
+        command -> event:    ReturnCopy -> CopyReturned
+        command -> event:    RenewLoan -> LoanRenewed
+      FLOW
+    }
+
+    slice "Chase Overdue Copy" {
+      shows {
+        screen  = OverdueReport
+        reads   = [MemberLoansView, DeskOccupancyView]
+        command = RecallCopy
+      }
+
+      shows {
+        screen = DeskKiosk
+        reads  = DeskOccupancyView
+      }
+
+      command "RemindMember" {
+        fields {
+          loanId = required(string)
+        }
+      }
+
+      command "RecallCopy" {
+        fields {
+          loanId = required(string)
+        }
+      }
+
+      event "MemberReminded" {
+        fields {
+          loanId     = required(string)
+          remindedAt = required(timestamp)
+        }
+      }
+
+      event "CopyRecalled" {
+        fields {
+          loanId     = required(string)
+          recalledAt = required(timestamp)
+        }
+      }
+
+      automation "RemindOnDueDate" {
+        on      = CopyBorrowed
+        reads   = MemberLoansView
+        command = RemindMember
+      }
+
+      flow = <<-FLOW
+        command -> event:    RemindMember -> MemberReminded
+        command -> event:    RecallCopy -> CopyRecalled
+      FLOW
+    }
+  }
+}
+
+context "Reading Room" {
+  mode = dcb
+
+  slice "Claim Desk" {
+    shows {
+      screen  = DeskKiosk
+      reads   = DeskOccupancyView
+      command = ClaimDesk
+    }
+
+    command "ClaimDesk" {
+      fields {
+        memberId = required(string)
+        deskId   = required(string)
+      }
+
+      decides_on {
+        events = [DeskClaimed]
+        where  = tag(desk, deskId) && tag(reader, memberId)
+      }
+    }
+
+    event "DeskClaimed" {
+      tags {
+        desk   = deskId
+        reader = memberId
+      }
+
+      fields {
+        deskId   = required(string)
+        memberId = required(string)
+      }
+    }
+
+    flow = <<-FLOW
+      command -> event:    ClaimDesk -> DeskClaimed
+    FLOW
+  }
+
+  slice "Browse Desk Occupancy" {
+    view "DeskOccupancyView" {
+      subscribes = [DeskClaimed]
+
+      fields {
+        deskId   = required(string)
+        memberId = required(string)
+      }
+    }
+  }
+}
+`
+
+// ScreenImageLibraryLendingImages transcribes the image each screen of
+// ScreenImageLibraryLending states, in declaration order. The screen with no
+// image contributes nothing.
+var ScreenImageLibraryLendingImages = []string{
+	"./wireframes/lending-desk.png",
+	"../mockups/desk-kiosk.png",
+}
+
 // ScreenLibraryLendingAppearanceReads transcribes the views each shows block of
 // ScreenLibraryLending reads, both slice homes together and in declaration order.
 var ScreenLibraryLendingAppearanceReads = []string{
@@ -3860,6 +4074,32 @@ func WithoutWireTypes(model *ast.Model) *ast.Model {
 			translation.Event = editedCopy(translation.Event, clear)
 		})
 	})
+}
+
+// WithoutScreenImages returns a copy of model whose screens state no image. The
+// original keeps each image it was written with.
+func WithoutScreenImages(model *ast.Model) *ast.Model {
+	if model == nil {
+		return nil
+	}
+	copied := *model
+	copied.Screens = editedCopies(model.Screens, func(screen *ast.Screen) {
+		screen.Image = ""
+		screen.ImagePos = ast.Position{}
+	})
+	return &copied
+}
+
+// DeclaredScreenImages names the image each screen of model states, in
+// declaration order. A screen with no image contributes nothing.
+func DeclaredScreenImages(model *ast.Model) []string {
+	var images []string
+	for _, screen := range model.Screens {
+		if screen.Image != "" {
+			images = append(images, screen.Image)
+		}
+	}
+	return images
 }
 
 // copyWithEditedSlices hands edit a copy of every slice in both homes — nested in

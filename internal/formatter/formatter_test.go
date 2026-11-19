@@ -5,6 +5,7 @@ package formatter_test
 import (
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"github.com/google/go-cmp/cmp/cmpopts"
@@ -29,6 +30,7 @@ func TestFormatHCL(t *testing.T) {
 			"automation reads":      test.AutomationReadsLibraryLending,
 			"shows reads":           test.AppearanceReadsLibraryLending,
 			"screens":               test.ScreenLibraryLending,
+			"screen images":         test.ScreenImageLibraryLending,
 			"automation schedule":   test.AutomationScheduleLibraryLending,
 			"automation delay":      test.AutomationDelayLibraryLending,
 			"payloads":              test.PayloadLibraryLending,
@@ -53,6 +55,40 @@ func TestFormatHCL(t *testing.T) {
 					cmpopts.IgnoreFields(ast.Model{}, "VersionDeclared"))
 			})
 		}
+	})
+
+	t.Run("screen image", func(t *testing.T) {
+		t.Run("is read back as the paths the fixture states", func(t *testing.T) {
+			read, diags := parser.Parse(formatter.Format(test.ScreenImageLibraryLendingModel(t)), "test.emod")
+
+			require.Empty(t, diags)
+			require.Equal(t, test.ScreenImageLibraryLendingImages, test.DeclaredScreenImages(read))
+		})
+
+		t.Run("is written after the description, whatever the order of the source", func(t *testing.T) {
+			model, diags := parser.Parse("screen \"CheckoutPage\" {\n  image = \"./checkout.png\"\n  description = \"Where a guest pays\"\n}\n", "test.emod")
+			require.Empty(t, diags)
+
+			rendered := formatter.Format(model)
+
+			require.Contains(t, rendered, "screen \"CheckoutPage\" {\n  description = \"Where a guest pays\"\n  image       = \"./checkout.png\"\n}\n")
+		})
+
+		t.Run("leaves a model with no image formatted as before", func(t *testing.T) {
+			featured := test.ScreenImageLibraryLendingModel(t)
+			plain := test.WithoutScreenImages(featured)
+			require.Equal(t, test.ScreenImageLibraryLendingImages, test.DeclaredScreenImages(featured), "the twin leaves the model it is given unchanged")
+			require.Empty(t, test.DeclaredScreenImages(plain))
+
+			var withoutImageLines []string
+			for _, line := range strings.SplitAfter(formatter.Format(featured), "\n") {
+				if !strings.HasPrefix(strings.TrimSpace(line), "image ") {
+					withoutImageLines = append(withoutImageLines, line)
+				}
+			}
+
+			require.Equal(t, strings.Join(withoutImageLines, ""), formatter.Format(plain))
+		})
 	})
 
 	t.Run("the repository's own examples", func(t *testing.T) {

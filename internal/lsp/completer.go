@@ -514,7 +514,7 @@ func keywordsFor(block blockContext) []string {
 	case ctxTarget:
 		return []string{"context"}
 	case ctxScreen:
-		return []string{"description"}
+		return []string{"description", "image"}
 	case ctxShows:
 		return []string{"screen", "reads", "command"}
 	case ctxInvariants:

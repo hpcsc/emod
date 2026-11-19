@@ -15,6 +15,7 @@ func Keywords() []string {
 		"invariants",
 		"slice",
 		"description",
+		"image",
 		"shows",
 		"command",
 		"event",

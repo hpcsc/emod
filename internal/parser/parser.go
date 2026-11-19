@@ -403,6 +403,8 @@ func (r *hclReader) screen(b *hclsyntax.Block) *ast.Screen {
 			r.fail(entry.block.TypeRange.Start, "unexpected %q block in screen", entry.block.Type)
 		case entry.attr.Name == "description":
 			screen.Description, screen.DescriptionPos = r.text(entry.attr)
+		case entry.attr.Name == "image":
+			screen.Image, screen.ImagePos = r.text(entry.attr)
 		default:
 			r.fail(entry.attr.NameRange.Start, "unexpected %s in screen", entry.attr.Name)
 		}

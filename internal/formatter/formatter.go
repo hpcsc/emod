@@ -26,7 +26,9 @@ func Format(model *ast.Model) string {
 	for _, screen := range model.Screens {
 		gap(body)
 		writeComments(body, screen.Comments)
-		writeText(body.AppendNewBlock("screen", []string{screen.Name}).Body(), "description", screen.Description)
+		screenBody := body.AppendNewBlock("screen", []string{screen.Name}).Body()
+		writeText(screenBody, "description", screen.Description)
+		writeText(screenBody, "image", screen.Image)
 	}
 
 	for _, context := range model.Contexts {

@@ -125,9 +125,41 @@ model "Hotel Reservation" {
 		})
 
 		t.Run("an unknown attribute and a nested block each give one diagnostic that names the screen", func(t *testing.T) {
-			_, diags := parser.Parse("screen \"CheckoutPage\" {\n  image = \"./checkout.png\"\n  fields {}\n}\n", "shop.emod")
+			_, diags := parser.Parse("screen \"CheckoutPage\" {\n  layout = \"two columns\"\n  fields {}\n}\n", "shop.emod")
 
-			require.Equal(t, []string{"unexpected image in screen", `unexpected "fields" block in screen`}, messagesOf(diags))
+			require.Equal(t, []string{"unexpected layout in screen", `unexpected "fields" block in screen`}, messagesOf(diags))
+		})
+
+		t.Run("an image is read as the path written, with the position of its value, beside a description or alone", func(t *testing.T) {
+			source := "screen \"CheckoutPage\" {\n  description = \"Where a guest pays\"\n  image       = \"./wireframes/checkout.png\"\n}\n\n" +
+				"screen \"CartDrawer\" {\n}\n\n" +
+				"screen \"OrderHistory\" {\n  image = \"../mockups/history.png\"\n}\n"
+
+			model, diags := parser.Parse(source, "shop.emod")
+
+			require.Empty(t, diags)
+			type image struct {
+				Path string
+				Pos  ast.Position
+			}
+			var images []image
+			for _, screen := range model.Screens {
+				images = append(images, image{screen.Image, screen.ImagePos})
+			}
+			require.Equal(t, []image{
+				{"./wireframes/checkout.png", ast.Position{Filename: "shop.emod", Line: 3, Column: 17}},
+				{"", ast.Position{}},
+				{"../mockups/history.png", ast.Position{Filename: "shop.emod", Line: 10, Column: 11}},
+			}, images)
+		})
+
+		t.Run("an image that is not a quoted string gives one error at the value, as a description does", func(t *testing.T) {
+			_, diags := parser.Parse("screen \"CheckoutPage\" {\n  image = CheckoutPng\n}\n", "shop.emod")
+
+			require.Len(t, diags, 1)
+			require.Equal(t,
+				[]any{"expected a quoted string after image", 2, 11},
+				[]any{diags[0].Message, diags[0].Line, diags[0].Column})
 		})
 	})
 
@@ -237,6 +269,15 @@ model "Hotel Reservation" {
 			require.Equal(t, []string{"shows takes 0 name(s), not 1"}, messagesOf(diags))
 			require.Len(t, appearances, 1)
 			require.Equal(t, 3, appearances[0].OpenPos.Line, "the appearance stays in the slice, with its braces, for the editor")
+		})
+
+		t.Run("an image gives one diagnostic at the attribute, because an appearance has no image of its own", func(t *testing.T) {
+			_, diags := appearancesOf(t, "    shows {\n      screen = CheckoutPage\n      image  = \"./checkout.png\"\n    }\n")
+
+			require.Len(t, diags, 1)
+			require.Equal(t,
+				[]any{"unexpected image in shows", 5, 7},
+				[]any{diags[0].Message, diags[0].Line, diags[0].Column})
 		})
 
 		t.Run("an unknown attribute and a nested block each give one diagnostic that names the shows block", func(t *testing.T) {

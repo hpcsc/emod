@@ -75,6 +75,12 @@ func ScreenLibraryLendingModel(t *testing.T) *ast.Model {
 	return parseFixture(t, ScreenLibraryLending, "screens.emod")
 }
 
+func ScreenImageLibraryLendingModel(t *testing.T) *ast.Model {
+	t.Helper()
+
+	return parseFixture(t, ScreenImageLibraryLending, "screen-images.emod")
+}
+
 func AppearanceReadsLibraryLendingModel(t *testing.T) *ast.Model {
 	t.Helper()
 
