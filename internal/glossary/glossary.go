@@ -6,6 +6,7 @@ import "github.com/hpcsc/emod/internal/ast"
 
 type document struct {
 	term
+	Screens  []term           `json:"screens,omitempty"`
 	Contexts []contextSection `json:"contexts,omitempty"`
 }
 
@@ -16,6 +17,7 @@ type contextSection struct {
 	Commands   []term             `json:"commands,omitempty"`
 	Events     []term             `json:"events,omitempty"`
 	Views      []term             `json:"views,omitempty"`
+	Screens    []term             `json:"screens,omitempty"`
 }
 
 type aggregateSection struct {
@@ -32,16 +34,19 @@ type term struct {
 }
 
 func newDocument(model *ast.Model) document {
+	shownAnywhere := shownScreens(model.AllSlices())
 	return document{
 		term:     term{Name: model.Name, Description: model.Description},
-		Contexts: contextSections(model.Contexts),
+		Screens:  screenTerms(model.Screens, func(name string) bool { return !shownAnywhere[name] }),
+		Contexts: contextSections(model.Contexts, model.Screens),
 	}
 }
 
-func contextSections(contexts []*ast.Context) []contextSection {
+func contextSections(contexts []*ast.Context, screens []*ast.Screen) []contextSection {
 	var sections []contextSection
 	for _, ctx := range contexts {
 		slices := ctx.AllSlices()
+		shown := shownScreens(slices)
 		sections = append(sections, contextSection{
 			term:       term{Name: ctx.Name, Description: ctx.Description},
 			Invariants: invariantTerms(ctx.Invariants),
@@ -49,9 +54,33 @@ func contextSections(contexts []*ast.Context) []contextSection {
 			Commands:   commandTerms(slices),
 			Events:     eventTerms(slices),
 			Views:      viewTerms(slices),
+			Screens:    screenTerms(screens, func(name string) bool { return shown[name] }),
 		})
 	}
 	return sections
+}
+
+func shownScreens(slices []*ast.Slice) map[string]bool {
+	shown := make(map[string]bool)
+	for _, slice := range slices {
+		for _, appearance := range slice.Appearances {
+			shown[appearance.Screen] = true
+		}
+	}
+	return shown
+}
+
+func screenTerms(screens []*ast.Screen, listed func(name string) bool) []term {
+	var terms []term
+	seen := make(map[string]bool)
+	for _, screen := range screens {
+		if screen.Name == "" || seen[screen.Name] || !listed(screen.Name) {
+			continue
+		}
+		seen[screen.Name] = true
+		terms = append(terms, term{Name: screen.Name, Description: screen.Description})
+	}
+	return terms
 }
 
 func aggregateSections(aggregates []*ast.Aggregate) []aggregateSection {

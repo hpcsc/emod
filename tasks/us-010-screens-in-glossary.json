@@ -1,0 +1,31 @@
+{
+  "story": "List the screens in the glossary",
+  "story_id": "screens-as-first-class/US-010",
+  "tasks_file": "tasks/us-010-screens-in-glossary.md",
+  "tasks": [
+    {
+      "n": 1,
+      "done": true,
+      "title": "List each screen in a Screens group under each context where it appears, and an unshown screen at the top level",
+      "language": "Go",
+      "testable": true,
+      "certainty": "high",
+      "blast_radius": "medium",
+      "patterns_to_follow": [
+        "internal/glossary/glossary.go:40-54",
+        "internal/glossary/markdown.go:51-62",
+        "internal/glossary/glossary_test.go:66-175",
+        "internal/glossary/glossary_test.go:327-410"
+      ],
+      "depends_on": [],
+      "affected_files": [
+        "internal/glossary/glossary.go",
+        "internal/glossary/markdown.go",
+        "internal/glossary/glossary_test.go",
+        "docs/dsl-reference.md",
+        "docs/dsl_reference_test.go"
+      ]
+    }
+  ],
+  "design_file": "tasks/us-010-screens-in-glossary.design.yaml"
+}

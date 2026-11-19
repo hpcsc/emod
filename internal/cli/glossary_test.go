@@ -54,6 +54,10 @@ func TestGlossary(t *testing.T) {
 ### Views
 
 #### ReservationsView
+
+### Screens
+
+#### ReservationForm
 `, output)
 		})
 
@@ -105,6 +109,12 @@ A partner site reported a booking
 #### ReservationsView
 
 Every reservation with the stage it has reached
+
+### Screens
+
+#### ReservationForm
+
+The booking form on the public site
 `, output)
 		})
 
@@ -167,6 +177,10 @@ A member holds at most five copies at one time
 ### Views
 
 #### MemberLoansView
+
+### Screens
+
+#### LendingDesk
 
 ## Reading Room
 
@@ -233,6 +247,9 @@ No desk stays claimed past the closing hour
 					"views": []any{
 						map[string]any{"name": "ReservationsView", "description": "Every reservation with the stage it has reached"},
 					},
+					"screens": []any{
+						map[string]any{"name": "ReservationForm", "description": "The booking form on the public site"},
+					},
 				}},
 			}, doc)
 		})
@@ -267,6 +284,9 @@ No desk stays claimed past the closing hour
 					},
 					"views": []any{
 						map[string]any{"name": "ReservationsView", "description": ""},
+					},
+					"screens": []any{
+						map[string]any{"name": "ReservationForm", "description": ""},
 					},
 				}},
 			}, doc)
@@ -305,6 +325,9 @@ No desk stays claimed past the closing hour
 						},
 						"views": []any{
 							map[string]any{"name": "MemberLoansView", "description": ""},
+						},
+						"screens": []any{
+							map[string]any{"name": "LendingDesk", "description": ""},
 						},
 					},
 					map[string]any{

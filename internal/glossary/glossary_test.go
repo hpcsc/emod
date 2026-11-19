@@ -172,6 +172,85 @@ Invoices still owed
 `, renderedMarkdown(t, model))
 		})
 
+		t.Run("lists each screen under each context where it appears, in declaration order, and a screen that no slice shows after the model", func(t *testing.T) {
+			require.Equal(t, `# Library Lending
+
+## Screens
+
+### StockReport
+
+Copies on the shelves
+
+## Lending
+
+### Loan
+
+### Screens
+
+#### LendingDesk
+
+The terminal a librarian lends at
+
+#### OverdueReport
+
+#### DeskKiosk
+
+The kiosk where a reader claims a desk
+
+## Reading Room
+
+### Screens
+
+#### DeskKiosk
+
+The kiosk where a reader claims a desk
+
+## Billing
+`, renderedMarkdown(t, shownScreensModel()))
+		})
+
+		t.Run("lists a screen that the model declares two times one time, with its first declaration", func(t *testing.T) {
+			model := &ast.Model{
+				Name: "Shop",
+				Screens: []*ast.Screen{
+					{Name: "CheckoutPage", Description: "Where a guest pays"},
+					{Name: "CheckoutPage", Description: "A second declaration"},
+				},
+				Contexts: []*ast.Context{{
+					Name:   "Shop",
+					Slices: []*ast.Slice{{Name: "Check Out", Appearances: []*ast.Appearance{{Screen: "CheckoutPage"}}}},
+				}},
+			}
+
+			require.Equal(t, "# Shop\n\n## Shop\n\n### Screens\n\n#### CheckoutPage\n\nWhere a guest pays\n", renderedMarkdown(t, model))
+		})
+
+		t.Run("lists no screen with no label, and nothing for a shows block with no screen", func(t *testing.T) {
+			model := &ast.Model{
+				Name:    "Shop",
+				Screens: []*ast.Screen{{Name: ""}, {Name: "CheckoutPage"}},
+				Contexts: []*ast.Context{{
+					Name:   "Shop",
+					Slices: []*ast.Slice{{Name: "Check Out", Appearances: []*ast.Appearance{{Screen: ""}, {Screen: "CheckoutPage"}}}},
+				}},
+			}
+
+			require.Equal(t, "# Shop\n\n## Shop\n\n### Screens\n\n#### CheckoutPage\n", renderedMarkdown(t, model))
+		})
+
+		t.Run("adds nothing for a shows block that names a screen the model does not declare", func(t *testing.T) {
+			model := &ast.Model{
+				Name:    "Shop",
+				Screens: []*ast.Screen{{Name: "CheckoutPage"}},
+				Contexts: []*ast.Context{{
+					Name:   "Shop",
+					Slices: []*ast.Slice{{Name: "Check Out", Appearances: []*ast.Appearance{{Screen: "GhostScreen"}, {Screen: "CheckoutPage"}}}},
+				}},
+			}
+
+			require.Equal(t, "# Shop\n\n## Shop\n\n### Screens\n\n#### CheckoutPage\n", renderedMarkdown(t, model))
+		})
+
 		t.Run("lists an aggregate's invariants beneath it, in declaration order, each defined by its statement", func(t *testing.T) {
 			model := &ast.Model{
 				Name: "Library Lending",
@@ -379,6 +458,30 @@ A member holds at most one reservation on a title
 			}, renderedJSONDoc(t, model))
 		})
 
+		t.Run("carries the screens of each context and the screens that no slice shows, each with a description key", func(t *testing.T) {
+			deskKiosk := map[string]any{"name": "DeskKiosk", "description": "The kiosk where a reader claims a desk"}
+
+			require.Equal(t, map[string]any{
+				"name":        "Library Lending",
+				"description": "",
+				"screens":     []any{map[string]any{"name": "StockReport", "description": "Copies on the shelves"}},
+				"contexts": []any{
+					map[string]any{
+						"name":        "Lending",
+						"description": "",
+						"aggregates":  []any{map[string]any{"name": "Loan", "description": ""}},
+						"screens": []any{
+							map[string]any{"name": "LendingDesk", "description": "The terminal a librarian lends at"},
+							map[string]any{"name": "OverdueReport", "description": ""},
+							deskKiosk,
+						},
+					},
+					map[string]any{"name": "Reading Room", "description": "", "screens": []any{deskKiosk}},
+					map[string]any{"name": "Billing", "description": ""},
+				},
+			}, renderedJSONDoc(t, shownScreensModel()))
+		})
+
 		t.Run("keeps a description key on an invariant declared without a statement", func(t *testing.T) {
 			model := &ast.Model{
 				Name: "Library Lending",
@@ -501,4 +604,39 @@ func renderedJSONDoc(t *testing.T, model *ast.Model) map[string]any {
 	require.NoError(t, json.Unmarshal([]byte(renderedJSON(t, model)), &doc))
 
 	return doc
+}
+
+func shownScreensModel() *ast.Model {
+	return &ast.Model{
+		Name: "Library Lending",
+		Screens: []*ast.Screen{
+			{Name: "LendingDesk", Description: "The terminal a librarian lends at"},
+			{Name: "OverdueReport"},
+			{Name: "StockReport", Description: "Copies on the shelves"},
+			{Name: "DeskKiosk", Description: "The kiosk where a reader claims a desk"},
+		},
+		Contexts: []*ast.Context{
+			{
+				Name: "Lending",
+				Aggregates: []*ast.Aggregate{{
+					Name: "Loan",
+					Slices: []*ast.Slice{
+						{Name: "Chase Overdue Copy", Appearances: []*ast.Appearance{{Screen: "DeskKiosk"}, {Screen: "OverdueReport"}}},
+						{Name: "Return Copy", Appearances: []*ast.Appearance{{Screen: "LendingDesk"}}},
+					},
+				}},
+				Slices: []*ast.Slice{
+					{Name: "Borrow Copy", Appearances: []*ast.Appearance{{Screen: "LendingDesk"}}},
+				},
+			},
+			{
+				Name: "Reading Room",
+				Mode: "dcb",
+				Slices: []*ast.Slice{
+					{Name: "Claim Desk", Appearances: []*ast.Appearance{{Screen: "DeskKiosk"}}},
+				},
+			},
+			{Name: "Billing"},
+		},
+	}
 }

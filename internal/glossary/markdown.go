@@ -19,6 +19,7 @@ const (
 	commandsHeading   = "Commands"
 	eventsHeading     = "Events"
 	viewsHeading      = "Views"
+	screensHeading    = "Screens"
 )
 
 type termGroup struct {
@@ -29,8 +30,9 @@ type termGroup struct {
 // RenderMarkdown writes the model's vocabulary as markdown, nesting each
 // context under the model and, under each context, its own invariants, its
 // aggregates each with the invariants it declares, then the commands, events
-// and views its slices declare. A construct without a description keeps its
-// heading and has no definition beneath it.
+// and views its slices declare and the screens its slices show. A screen that no
+// slice shows is listed under the model instead. A construct without a
+// description keeps its heading and has no definition beneath it.
 func RenderMarkdown(model *ast.Model) ([]byte, error) {
 	if model == nil {
 		return []byte{}, nil
@@ -40,6 +42,7 @@ func RenderMarkdown(model *ast.Model) ([]byte, error) {
 
 	var blocks []string
 	blocks = appendTerm(blocks, modelLevel, doc.term)
+	blocks = appendGroups(blocks, contextLevel, termGroup{heading: screensHeading, terms: doc.Screens})
 	for _, ctx := range doc.Contexts {
 		blocks = appendContext(blocks, ctx)
 	}
@@ -57,6 +60,7 @@ func appendContext(blocks []string, ctx contextSection) []string {
 		termGroup{heading: commandsHeading, terms: ctx.Commands},
 		termGroup{heading: eventsHeading, terms: ctx.Events},
 		termGroup{heading: viewsHeading, terms: ctx.Views},
+		termGroup{heading: screensHeading, terms: ctx.Screens},
 	)
 }
 
