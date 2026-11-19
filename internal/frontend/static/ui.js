@@ -523,6 +523,7 @@ function showDetailPanel(store, node) {
     html += '<table><tbody>';
     html += '<tr><th>Reads</th><td>' + Renderer.esc([].concat(node.reads || []).join(', ') || '—') + '</td></tr>';
     html += '<tr><th>Commands</th><td>' + Renderer.esc([].concat(node.command || []).join(', ') || '—') + '</td></tr>';
+    html += '<tr><th>Image</th><td>' + Renderer.esc(node.image || '—') + '</td></tr>';
     html += '</tbody></table>';
     html += '</div>';
 

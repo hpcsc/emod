@@ -496,14 +496,14 @@ document is the output of `emod export --format diagram-json` and of the MCP too
 views and the commands of the appearance. The desktop app shows the same panel.
 
 **Acceptance Criteria:**
-- [ ] The Screen section of the panel of a `shows` node has the rows Reads, Commands and Image, in that order. The
+- [x] The Screen section of the panel of a `shows` node has the rows Reads, Commands and Image, in that order. The
       Image row gives the node's `image` as text (story criterion 6).
-- [ ] A `shows` node with no `image`, or with an empty one, shows the em-dash in the Image row.
-- [ ] A path that contains markup shows as text, and the panel holds no element that the path spells.
-- [ ] A node that states its path under a key that the exporter never writes (for example `wireframe`) shows the
+- [x] A `shows` node with no `image`, or with an empty one, shows the em-dash in the Image row.
+- [x] A path that contains markup shows as text, and the panel holds no element that the path spells.
+- [x] A node that states its path under a key that the exporter never writes (for example `wireframe`) shows the
       em-dash in the Image row.
-- [ ] The panel of a node of any other type has no Image row.
-- [ ] The leaves that compare the whole list of rows of a `shows` node
+- [x] The panel of a node of any other type has no Image row.
+- [x] The leaves that compare the whole list of rows of a `shows` node
       (`internal/frontend/tests/detail-panel.test.js:173-217`) include the Image row.
 
 **Affected Files/Modules:**

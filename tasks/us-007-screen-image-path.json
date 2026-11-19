@@ -178,7 +178,7 @@
     },
     {
       "n": 5,
-      "done": false,
+      "done": true,
       "title": "Show the image path of its screen in the detail panel of an appearance",
       "language": "JavaScript",
       "testable": true,

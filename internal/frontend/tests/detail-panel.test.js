@@ -179,6 +179,7 @@ describe('detail panel for a shows block', () => {
     expect(shownRows(store)).toEqual([
       { label: 'Reads', value: 'DiscountView, CartView' },
       { label: 'Commands', value: 'ApplyDiscount, ClearCart' },
+      { label: 'Image', value: '—' },
     ]);
   });
 
@@ -190,6 +191,7 @@ describe('detail panel for a shows block', () => {
     expect(shownRows(store)).toEqual([
       { label: 'Reads', value: 'CartView' },
       { label: 'Commands', value: 'ApplyDiscount' },
+      { label: 'Image', value: '—' },
     ]);
   });
 
@@ -213,7 +215,49 @@ describe('detail panel for a shows block', () => {
     expect(shownRows(store)).toEqual([
       { label: 'Reads', value: '—' },
       { label: 'Commands', value: '—' },
+      { label: 'Image', value: '—' },
     ]);
+  });
+
+  it('gives the image of the screen after the views and the commands of the appearance', () => {
+    const store = createStore();
+
+    UI.showDetailPanel(store, showsNode({ reads: ['CartView'], command: ['ApplyDiscount'], image: './wireframes/checkout.png' }));
+
+    expect(shownRows(store)).toEqual([
+      { label: 'Reads', value: 'CartView' },
+      { label: 'Commands', value: 'ApplyDiscount' },
+      { label: 'Image', value: './wireframes/checkout.png' },
+    ]);
+  });
+
+  it.each([
+    { name: 'an empty image', attrs: { image: '' } },
+    { name: 'a path under a key that the exporter never writes', attrs: { wireframe: './wireframes/checkout.png' } },
+  ])('shows an em-dash for $name', ({ attrs }) => {
+    const store = createStore();
+
+    UI.showDetailPanel(store, showsNode(attrs));
+
+    expect(shownRows(store)).toContainEqual({ label: 'Image', value: '—' });
+  });
+
+  it('gives a node of another type no Image row', () => {
+    const store = createStore();
+
+    UI.showDetailPanel(store, automationNode({ reads: 'CartView', image: './wireframes/checkout.png' }));
+
+    expect(shownRows(store).map((row) => row.label)).not.toContain('Image');
+    expect(shownRows(store).map((row) => row.label)).toContain('Reads');
+  });
+
+  it('shows an image path containing markup as text', () => {
+    const store = createStore();
+
+    UI.showDetailPanel(store, showsNode({ image: './<b>checkout</b>.png' }));
+
+    expect(shownRows(store)).toContainEqual({ label: 'Image', value: './<b>checkout</b>.png' });
+    expect(store.dom.dpContent.querySelector('b')).toBeNull();
   });
 
   describe('the slices that show the screen', () => {
