@@ -106,7 +106,7 @@
     },
     {
       "n": 3,
-      "done": false,
+      "done": true,
       "title": "Give `image` in the JSON and CUE exports and the schema, and draw every picture as before",
       "language": "Go",
       "testable": true,

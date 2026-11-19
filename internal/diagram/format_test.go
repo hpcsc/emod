@@ -125,6 +125,22 @@ func TestFormat(t *testing.T) {
 			}
 		})
 
+		t.Run("draws a model whose screens name images exactly as the same model with none, in each format", func(t *testing.T) {
+			imaged := test.ScreenImageLibraryLendingModel(t)
+			plain := test.WithoutScreenImages(imaged)
+			require.Equal(t, test.ScreenImageLibraryLendingImages, test.DeclaredScreenImages(imaged))
+			require.Empty(t, test.DeclaredScreenImages(plain))
+
+			for _, format := range diagram.Formats() {
+				withImages, err := diagram.Export(imaged, format, diagram.StyleAuto)
+				require.NoError(t, err, "format %s", format)
+				withoutImages, err := diagram.Export(plain, format, diagram.StyleAuto)
+				require.NoError(t, err, "format %s", format)
+
+				require.Equal(t, string(withoutImages), string(withImages), "format %s", format)
+			}
+		})
+
 		t.Run("gives an error that names the unknown format and each format", func(t *testing.T) {
 			_, err := diagram.Export(fullModel(), "png", diagram.StyleAuto)
 

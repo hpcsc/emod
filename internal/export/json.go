@@ -37,9 +37,11 @@ type jsonScreen struct {
 	Name          string         `json:"name"`
 	Description   string         `json:"description,omitempty"`
 	Position      *jsonPosition  `json:"position,omitempty"`
+	ImagePosition *jsonPosition  `json:"image_position,omitempty"`
 	OpenPosition  *jsonPosition  `json:"open_position,omitempty"`
 	ClosePosition *jsonPosition  `json:"close_position,omitempty"`
 	Comments      []*jsonComment `json:"comments,omitempty"`
+	Image         string         `json:"image,omitempty"`
 }
 
 type jsonContext struct {
@@ -347,9 +349,11 @@ func convertScreen(s *ast.Screen) *jsonScreen {
 		Name:          s.Name,
 		Description:   s.Description,
 		Position:      convertPosition(s.NamePos),
+		ImagePosition: convertPosition(s.ImagePos),
 		OpenPosition:  convertPosition(s.OpenPos),
 		ClosePosition: convertPosition(s.ClosePos),
 		Comments:      convertComments(s.Comments),
+		Image:         s.Image,
 	}
 }
 

@@ -1797,6 +1797,42 @@ func TestExport(t *testing.T) {
 				}, withoutPositions(doc["screens"]))
 			})
 
+			t.Run("gives the image of a screen after the keys that every block shares, its position after the position of the name, and no key for a screen with no image", func(t *testing.T) {
+				raw, err := export.ExportJSON(test.ScreenImageLibraryLendingModel(t))
+				require.NoError(t, err)
+				var doc map[string]any
+				require.NoError(t, json.Unmarshal(raw, &doc))
+				screens := objectsUnder(doc, "screens")
+				imagePosition := func(line, column int) map[string]any {
+					return map[string]any{"filename": "screen-images.emod", "line": float64(line), "column": float64(column)}
+				}
+
+				keyOrder := emittedKeyOrder(t, raw)
+				require.Equal(t, []string{
+					"name", "description", "position", "image_position",
+					"open_position", "close_position", "comments",
+					"image",
+				}, keyOrder["LendingDesk"])
+				require.Equal(t, []string{"name", "position", "open_position", "close_position"}, keyOrder["OverdueReport"])
+				require.Equal(t, []map[string]any{
+					{"image": "./wireframes/lending-desk.png", "image_position": imagePosition(10, 17)},
+					{"image": nil, "image_position": nil},
+					{"image": "../mockups/desk-kiosk.png", "image_position": imagePosition(17, 11)},
+				}, []map[string]any{
+					{"image": screens[0]["image"], "image_position": screens[0]["image_position"]},
+					{"image": screens[1]["image"], "image_position": screens[1]["image_position"]},
+					{"image": screens[2]["image"], "image_position": screens[2]["image_position"]},
+				})
+			})
+
+			t.Run("writes the image of a screen into the CUE export after its description", func(t *testing.T) {
+				cue, err := export.ExportCUE(test.ScreenImageLibraryLendingModel(t))
+				require.NoError(t, err)
+
+				require.Regexp(t, `description: "The terminal a librarian lends and takes back copies at"\n\s*image: +"\./wireframes/lending-desk\.png"\n`, string(cue))
+				require.Regexp(t, `name: +"DeskKiosk"\n\s*image: +"\.\./mockups/desk-kiosk\.png"\n`, string(cue))
+			})
+
 			t.Run("a model that declares no screen and no shows block writes neither key", func(t *testing.T) {
 				raw, err := export.ExportJSON(&ast.Model{
 					Name:     "Shop",
@@ -4674,6 +4710,10 @@ func TestExport(t *testing.T) {
 			requireConformsToSchema(t, lookupCue(t), test.AutomationReadsLibraryLendingModel(t))
 		})
 
+		t.Run("a model whose screens name images conforms to the schema's Model definition", func(t *testing.T) {
+			requireConformsToSchema(t, lookupCue(t), test.ScreenImageLibraryLendingModel(t))
+		})
+
 		t.Run("a model whose automations run on a schedule conforms to the schema's Model definition", func(t *testing.T) {
 			requireConformsToSchema(t, lookupCue(t), test.AutomationScheduleLibraryLendingModel(t))
 		})
@@ -4936,6 +4976,37 @@ func TestExport(t *testing.T) {
 				"fields",
 			}, keyOrder["MyView"],
 				"the wire type joins an event's own values; the prefix it shares with every sibling is unchanged")
+		})
+
+		t.Run("both exports carry the image of each screen that states one, in declaration order", func(t *testing.T) {
+			cueBin := lookupCue(t)
+			imaged := test.ScreenImageLibraryLendingModel(t)
+
+			require.Equal(t, test.ScreenImageLibraryLendingImages, test.DeclaredScreenImages(imaged),
+				"the model has to state images, or the comparisons below say nothing")
+
+			requireBothFormatsAgree(t, cueBin, imaged)
+
+			for format, doc := range exportedDocs(t, cueBin, imaged) {
+				require.Equal(t, test.ScreenImageLibraryLendingImages, statedUnder(objectsUnder(doc, "screens"), "image"), "%s export", format)
+			}
+		})
+
+		t.Run("the image key reaches neither export of a model with no image", func(t *testing.T) {
+			cueBin := lookupCue(t)
+			imaged := test.ScreenImageLibraryLendingModel(t)
+			plain := test.WithoutScreenImages(imaged)
+
+			require.Equal(t, test.ScreenImageLibraryLendingImages, test.DeclaredScreenImages(imaged),
+				"the model has to state images, or finding the key nowhere proves nothing")
+			require.Empty(t, test.DeclaredScreenImages(plain))
+
+			requireBothFormatsAgree(t, cueBin, plain)
+
+			for format, doc := range exportedDocs(t, cueBin, plain) {
+				require.Empty(t, statedUnder(objectsUnder(doc, "screens"), "image"), "%s export", format)
+				require.Empty(t, textAnywhere(doc, test.ScreenImageLibraryLendingImages), "%s export", format)
+			}
 		})
 
 		t.Run("both exports carry every wire type a model binds, including the event a translation nests", func(t *testing.T) {

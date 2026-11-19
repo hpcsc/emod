@@ -387,18 +387,18 @@ directory reports the rule while its mockup is absent and reports nothing once t
 image draws each picture exactly as the same model with no image does.
 
 **Acceptance Criteria:**
-- [ ] The JSON export gives a screen with an image the key `image`, the path as written, and `image_position`, the
+- [x] The JSON export gives a screen with an image the key `image`, the path as written, and `image_position`, the
       position of the value. `image_position` follows `position`, and `image` follows `comments`, as an
       automation's `every_position` and `every` do. A screen with no image has neither key.
-- [ ] The CUE export gives a screen with an image the key `image` after `description`, and a screen with no image
+- [x] The CUE export gives a screen with an image the key `image` after `description`, and a screen with no image
       none.
-- [ ] `#Screen` in `internal/cue/schema.cue` declares `image` as an optional string. The exports of the featured
+- [x] `#Screen` in `internal/cue/schema.cue` declares `image` as an optional string. The exports of the featured
       fixture conform to `#Model`, and the CUE and the JSON export of it describe the same model.
-- [ ] Both exports of the featured fixture carry the images of `ScreenImageLibraryLendingImages`, in declaration
+- [x] Both exports of the featured fixture carry the images of `ScreenImageLibraryLendingImages`, in declaration
       order. Both exports of its twin carry no `image` key and none of those paths.
-- [ ] For a model with no image, each export is byte-identical to before: each existing export expectation passes
+- [x] For a model with no image, each export is byte-identical to before: each existing export expectation passes
       unchanged.
-- [ ] For each format of `diagram.Formats()`, the drawing of the featured fixture is byte-identical to the drawing
+- [x] For each format of `diagram.Formats()`, the drawing of the featured fixture is byte-identical to the drawing
       of its twin: an image draws nothing (story criterion 2).
 
 **Affected Files/Modules:**

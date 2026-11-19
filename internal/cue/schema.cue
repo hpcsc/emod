@@ -16,6 +16,7 @@
 	comments?:    [...#Comment]
 	name:         string
 	description?: string
+	image?:       string
 }
 
 #Appearance: {

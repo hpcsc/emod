@@ -89,6 +89,7 @@ func (w *cueWriter) writeScreen(s *ast.Screen) {
 	w.writeComments(s.Comments)
 	w.line("name: %q", s.Name)
 	w.lineIfSet("description", s.Description)
+	w.lineIfSet("image", s.Image)
 }
 
 func (w *cueWriter) writeContext(c *ast.Context) {
