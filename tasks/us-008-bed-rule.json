@@ -1,0 +1,33 @@
+{
+  "story": "Flag a screen that issues too many commands",
+  "story_id": "screens-as-first-class/US-008",
+  "tasks_file": "tasks/us-008-bed-rule.md",
+  "tasks": [
+    {
+      "n": 1,
+      "done": true,
+      "title": "Report `bed` at a screen whose appearances issue three or more distinct commands",
+      "language": "Go",
+      "testable": true,
+      "certainty": "high",
+      "blast_radius": "medium",
+      "patterns_to_follow": [
+        "internal/linter/linter.go:57-63",
+        "internal/linter/linter.go:606-611",
+        "internal/linter/descriptions.go:32-61",
+        "internal/cli/lint_test.go:1932-1968",
+        "tasks/learnings.md:428-432"
+      ],
+      "depends_on": [],
+      "affected_files": [
+        "internal/linter/linter.go",
+        "internal/linter/linter_test.go",
+        "internal/linter/descriptions.go",
+        "internal/cli/lint_test.go",
+        "cmd/emod/main_test.go",
+        "docs/dsl-reference.md"
+      ]
+    }
+  ],
+  "design_file": "tasks/us-008-bed-rule.design.yaml"
+}

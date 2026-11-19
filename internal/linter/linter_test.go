@@ -9,6 +9,7 @@ import (
 	"github.com/hpcsc/emod/internal/ast"
 	"github.com/hpcsc/emod/internal/diagnostic"
 	"github.com/hpcsc/emod/internal/linter"
+	"github.com/hpcsc/emod/internal/parser"
 	"github.com/hpcsc/emod/internal/test"
 	"github.com/stretchr/testify/require"
 )
@@ -5499,6 +5500,266 @@ func TestLint(t *testing.T) {
 				}, exercised(linter.Lint(model)))
 			})
 
+		})
+	})
+
+	t.Run("bed", func(t *testing.T) {
+		bedReports := func(t *testing.T, source string) []*diagnostic.Entry {
+			t.Helper()
+			model, diags := parser.Parse(source, "shop.emod")
+			require.Empty(t, diags)
+			var reports []*diagnostic.Entry
+			for _, d := range linter.Lint(model) {
+				if d.RuleName == "bed" {
+					reports = append(reports, d)
+				}
+			}
+			return reports
+		}
+		const advice = "; consider whether it is several screens, or whether the commands express one intent"
+		const declaredCommands = `
+  slice "Declare Commands" {
+    command "ApplyDiscount" {}
+    command "RemoveDiscount" {}
+    command "PayOrder" {}
+    command "AddItem" {}
+    command "RemoveItem" {}
+    command "ClearCart" {}
+  }
+`
+
+		t.Run("warns at the screen declaration when its appearances issue 3 distinct commands, in slices of both homes and of two contexts", func(t *testing.T) {
+			reports := bedReports(t, `screen "CheckoutPage" {
+}
+
+context "Shop" {
+  aggregate "Cart" {
+    slice "Apply Discount" {
+      shows {
+        screen  = CheckoutPage
+        command = ApplyDiscount
+      }
+    }
+  }
+
+  slice "Remove Discount" {
+    shows {
+      screen  = CheckoutPage
+      command = RemoveDiscount
+    }
+  }
+`+declaredCommands+`}
+
+context "Payments" {
+  slice "Pay Order" {
+    shows {
+      screen  = CheckoutPage
+      command = PayOrder
+    }
+  }
+}
+`)
+
+			require.Equal(t, []*diagnostic.Entry{{
+				Filename: "shop.emod",
+				Line:     1,
+				Column:   8,
+				Severity: diagnostic.Warning,
+				RuleName: "bed",
+				Message:  `screen "CheckoutPage" issues 3 commands across 3 slices` + advice,
+			}}, reports)
+		})
+
+		t.Run("counts a command that two appearances both issue one time", func(t *testing.T) {
+			reports := bedReports(t, `screen "CheckoutPage" {
+}
+
+context "Shop" {
+  slice "Apply Discount" {
+    shows {
+      screen  = CheckoutPage
+      command = [ApplyDiscount, RemoveDiscount]
+    }
+  }
+
+  slice "Pay Order" {
+    shows {
+      screen  = CheckoutPage
+      command = [ApplyDiscount, PayOrder]
+    }
+  }
+`+declaredCommands+`}
+`)
+
+			require.Len(t, reports, 1)
+			require.Equal(t, `screen "CheckoutPage" issues 3 commands across 2 slices`+advice, reports[0].Message)
+		})
+
+		t.Run("reports nothing for a screen whose appearances issue 2 distinct commands", func(t *testing.T) {
+			reports := bedReports(t, `screen "CheckoutPage" {
+}
+
+context "Shop" {
+  slice "Apply Discount" {
+    shows {
+      screen  = CheckoutPage
+      command = ApplyDiscount
+    }
+  }
+
+  slice "Pay Order" {
+    shows {
+      screen  = CheckoutPage
+      command = PayOrder
+    }
+  }
+`+declaredCommands+`}
+`)
+
+			require.Empty(t, reports)
+		})
+
+		t.Run("counts only the slices whose appearances issue a command, and reads one slice as a slice", func(t *testing.T) {
+			reports := bedReports(t, `screen "CheckoutPage" {
+}
+
+context "Shop" {
+  slice "Check Out" {
+    shows {
+      screen  = CheckoutPage
+      command = [ApplyDiscount, RemoveDiscount, PayOrder]
+    }
+  }
+
+  slice "Review Cart" {
+    shows {
+      screen = CheckoutPage
+    }
+  }
+`+declaredCommands+`}
+`)
+
+			require.Len(t, reports, 1)
+			require.Equal(t, `screen "CheckoutPage" issues 3 commands across 1 slice`+advice, reports[0].Message)
+		})
+
+		t.Run("reports each screen that issues 3 commands at its own declaration, also from the second shows block of a slice", func(t *testing.T) {
+			reports := bedReports(t, `screen "CheckoutPage" {
+}
+
+screen "CartDrawer" {
+}
+
+context "Shop" {
+  slice "Check Out" {
+    shows {
+      screen  = CartDrawer
+      command = [AddItem, RemoveItem, ClearCart]
+    }
+
+    shows {
+      screen  = CheckoutPage
+      command = [ApplyDiscount, RemoveDiscount, PayOrder]
+    }
+  }
+`+declaredCommands+`}
+`)
+
+			var reported []string
+			for _, d := range reports {
+				reported = append(reported, fmt.Sprintf("%d: %s", d.Line, d.Message))
+			}
+			require.Equal(t, []string{
+				`1: screen "CheckoutPage" issues 3 commands across 1 slice` + advice,
+				`4: screen "CartDrawer" issues 3 commands across 1 slice` + advice,
+			}, reported)
+		})
+
+		t.Run("does not count a command entry that names no declared command, which the validator reports", func(t *testing.T) {
+			reports := bedReports(t, `screen "CheckoutPage" {
+}
+
+context "Shop" {
+  slice "Apply Discount" {
+    shows {
+      screen  = CheckoutPage
+      command = [ApplyDiscount, RemoveDiscount]
+    }
+  }
+
+  slice "Reapply Discount" {
+    shows {
+      screen  = CheckoutPage
+      command = ApplyDiscont
+    }
+  }
+`+declaredCommands+`}
+`)
+
+			require.Empty(t, reports)
+		})
+
+		t.Run("does not count the empty names of a model that does not parse: an entry that is not a name, a command or a screen with no label, a shows block with no screen", func(t *testing.T) {
+			model, diags := parser.Parse(`screen "CheckoutPage" {
+}
+
+screen {
+}
+
+context "Shop" {
+  slice "Check Out" {
+    shows {
+      screen  = CheckoutPage
+      command = [ApplyDiscount, "RemoveDiscount", PayOrder]
+    }
+
+    shows {
+      command = [ApplyDiscount, RemoveDiscount, PayOrder]
+    }
+
+    command {
+    }
+  }
+`+declaredCommands+`}
+`, "shop.emod")
+			require.NotEmpty(t, diags, "the model has to hold the empty names of a source that does not parse")
+
+			for _, d := range linter.Lint(model) {
+				require.NotEqual(t, "bed", d.RuleName, d.Message)
+			}
+		})
+
+		t.Run("counts neither the commands of another screen nor those that a slice declares or an automation issues", func(t *testing.T) {
+			reports := bedReports(t, `screen "CheckoutPage" {
+}
+
+screen "CartDrawer" {
+}
+
+context "Shop" {
+  slice "Apply Discount" {
+    shows {
+      screen  = CheckoutPage
+      command = [ApplyDiscount, RemoveDiscount]
+    }
+
+    shows {
+      screen  = CartDrawer
+      command = ClearCart
+    }
+
+    command "ExpireDiscount" {
+    }
+
+    automation "DiscountExpirer" {
+      on      = DiscountApplied
+      command = ExpireDiscount
+    }
+  }
+`+declaredCommands+`}
+`)
+
+			require.Empty(t, reports)
 		})
 	})
 

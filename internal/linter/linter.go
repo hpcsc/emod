@@ -148,6 +148,7 @@ func Lint(model *ast.Model) []*diagnostic.Entry {
 		}
 	}
 
+	diags = append(diags, checkBed(model)...)
 	diags = append(diags, checkInvariantNeverExercised(model)...)
 	diags = append(diags, checkGivenOutsideBoundary(model)...)
 
@@ -604,6 +605,57 @@ func checkViewNaming(view *ast.View) *diagnostic.Entry {
 		return warning(view.NamePos, "view-naming", fmt.Sprintf("view %q should end with \"View\" (e.g. %sView)", view.Name, view.Name))
 	}
 	return nil
+}
+
+func checkBed(model *ast.Model) []*diagnostic.Entry {
+	declared := make(map[string]bool)
+	for _, slice := range model.AllSlices() {
+		for _, command := range slice.Commands {
+			if command.Name != "" {
+				declared[command.Name] = true
+			}
+		}
+	}
+
+	commands := make(map[string]map[string]bool)
+	issuingSlices := make(map[string]map[*ast.Slice]bool)
+	for _, slice := range model.AllSlices() {
+		for _, appearance := range slice.Appearances {
+			if appearance.Screen == "" {
+				continue
+			}
+			for _, command := range appearance.Commands {
+				if !declared[command] {
+					continue
+				}
+				if commands[appearance.Screen] == nil {
+					commands[appearance.Screen] = make(map[string]bool)
+					issuingSlices[appearance.Screen] = make(map[*ast.Slice]bool)
+				}
+				commands[appearance.Screen][command] = true
+				issuingSlices[appearance.Screen][slice] = true
+			}
+		}
+	}
+
+	var diags []*diagnostic.Entry
+	for _, screen := range model.Screens {
+		issued := len(commands[screen.Name])
+		if issued < 3 {
+			continue
+		}
+		diags = append(diags, warning(screen.NamePos, "bed", fmt.Sprintf(
+			"screen %q issues %d commands across %s; consider whether it is several screens, or whether the commands express one intent",
+			screen.Name, issued, pluralized(len(issuingSlices[screen.Name]), "slice"))))
+	}
+	return diags
+}
+
+func pluralized(n int, noun string) string {
+	if n == 1 {
+		return "1 " + noun
+	}
+	return fmt.Sprintf("%d %ss", n, noun)
 }
 
 func checkLeftChair(cmd *ast.Command, flowCount map[string]int) *diagnostic.Entry {

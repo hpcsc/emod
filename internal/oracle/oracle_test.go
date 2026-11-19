@@ -41,10 +41,6 @@ func TestCheck(t *testing.T) {
 			require.Empty(t, diagnostics)
 		})
 
-		t.Run("returns an empty diagnostic list for the model that shows its screens in both slice homes", func(t *testing.T) {
-			require.Empty(t, oracle.Check(test.ScreenLibraryLending, "screens.emod"))
-		})
-
 		t.Run("returns an empty diagnostic list for the minimal command-and-event model", func(t *testing.T) {
 			diagnostics := oracle.Check(test.BillingPayments, "billing.emod")
 
@@ -114,10 +110,17 @@ func TestCheck(t *testing.T) {
 			require.Empty(t, reportedLines(diagnostics))
 		})
 
-		t.Run("returns an empty diagnostic list for a model whose screens name images that lead to no file", func(t *testing.T) {
-			diagnostics := oracle.Check(test.ScreenImageLibraryLending, "screen-images.emod")
+	})
 
-			require.Empty(t, reportedLines(diagnostics))
+	t.Run("screens that issue three commands", func(t *testing.T) {
+		const lendingDeskIsBed = `[bed] screen "LendingDesk" issues 3 commands across 2 slices; consider whether it is several screens, or whether the commands express one intent`
+
+		t.Run("names only the lending desk of the model that shows its screens in both slice homes", func(t *testing.T) {
+			require.Equal(t, []string{"screens.emod:8: " + lendingDeskIsBed}, reportedLines(oracle.Check(test.ScreenLibraryLending, "screens.emod")))
+		})
+
+		t.Run("names only the lending desk of a model whose screens name images that lead to no file, and no image", func(t *testing.T) {
+			require.Equal(t, []string{"screen-images.emod:8: " + lendingDeskIsBed}, reportedLines(oracle.Check(test.ScreenImageLibraryLending, "screen-images.emod")))
 		})
 	})
 

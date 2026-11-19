@@ -115,11 +115,15 @@ func TestPipeline(t *testing.T) {
 				envelope.Diagram.Edges)
 		})
 
-		t.Run("reports no diagnostic for a screen image that leads to no file, because the viewer reads no disk", func(t *testing.T) {
+		t.Run("reports no image that leads to no file, because the viewer reads no disk", func(t *testing.T) {
 			result, err := pipeline.RunPipelineExportDiagram(test.ScreenImageLibraryLending, "screen-images.emod")
 			require.NoError(t, err)
 
-			require.Empty(t, decodeDiagramEnvelope(t, result).Diagnostics)
+			var rules []string
+			for _, d := range decodeDiagramEnvelope(t, result).Diagnostics {
+				rules = append(rules, d.RuleName)
+			}
+			require.Equal(t, []string{"bed"}, rules, "the lending desk of the fixture issues three commands, and nothing else reports")
 		})
 
 		t.Run("reports diagnostics for unparseable source and still returns an envelope", func(t *testing.T) {

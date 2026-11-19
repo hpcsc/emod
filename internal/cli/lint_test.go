@@ -2027,6 +2027,7 @@ func TestLintExplain(t *testing.T) {
 			"spec/given-outside-boundary",
 			"wire/type-format",
 			"screen/missing-image-asset",
+			"bed",
 		}
 		for _, rule := range rules {
 			t.Run(rule, func(t *testing.T) {

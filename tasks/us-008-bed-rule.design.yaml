@@ -1,0 +1,2 @@
+design: none
+reason: The story adds one lint rule to internal/linter over a model-wide map of the shows blocks, as left-chair and view/never-read do; it adds and changes no type.
