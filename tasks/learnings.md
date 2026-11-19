@@ -1836,3 +1836,17 @@ in this repo; append only learnings that generalise beyond the task that surface
 - Observed: task 1 — us-009-screen-never-shown
 - Learning: view/never-read returns nothing when the model states no reads at all, because such a model has not adopted the concept. screen/never-shown must not copy that guard: a declared screen is the adoption, and a model with screens and no shows block is the main case the rule exists for. Its test therefore needs a model with a screen and no shows block at all, or a copied guard passes every leaf. It does copy the other guard: silence while a reference names an undeclared construct, which the validator reports.
 - Apply when: adding a lint rule that reports a declared construct that nothing references, such as a never-shown, never-issued or never-read rule
+
+## docs/dsl-reference.md states which constructs each surface covers in more than one bullet, so a change to one set owes a search of the file
+- Type: constraint
+- Recorded: 2026-11-19
+- Observed: task 1 — us-010-screens-in-glossary
+- Learning: Section 10 (Descriptions) lists which constructs accept a description, which ones the diagrams draw, and which ones 'define no term' and stay out of the glossary. US-010 added screens to the glossary and wrote a new sentence in the screen section, but the older bullet still listed screen among the constructs with no term, so the reference contradicted itself until the audit found it. When a story moves a construct into or out of a surface (the glossary, a diagram, an export), search docs/dsl-reference.md for each list that names the construct, and pin the changed bullet with a test in docs/dsl_reference_test.go.
+- Apply when: changing which constructs the glossary, a diagram format or an export covers, or adding a sentence about a construct's surfaces to docs/dsl-reference.md
+
+## An audit verifier can leave scratch models in /tmp, so read the gaps of each round for files to delete
+- Type: convention
+- Recorded: 2026-11-19
+- Observed: us-010-screens-in-glossary
+- Learning: In US-008 and US-010 a verifier that reproduced a finding wrote models to a folder under /tmp (/tmp/bed-audit-scratch, /tmp/gl-audit) and said so only in coverage_gaps; git status of the checkout stayed clean. After each round, read coverage_gaps for files a verifier says it left, look at them, and delete the ones that the round made.
+- Apply when: recording an audit round with clerk audit round, or cleaning up after audit-implement
