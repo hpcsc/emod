@@ -2682,6 +2682,40 @@ context "Shop" {
 			require.Equal(t, test.AppearanceReadsLibraryLending, applied(t, test.AppearanceReadsLibraryLending, func(*viewerDiagram) {}))
 		})
 
+		t.Run("a diagram of screens with images, unedited, leaves the model as it was written", func(t *testing.T) {
+			require.Equal(t, test.ScreenImageLibraryLending, applied(t, test.ScreenImageLibraryLending, func(*viewerDiagram) {}))
+		})
+
+		t.Run("renaming an appearance to a screen no declaration holds declares that screen with no image, and the screen it left keeps its image", func(t *testing.T) {
+			source := test.ScreenImageLibraryLending
+
+			result := applied(t, source, func(d *viewerDiagram) {
+				id := d.showsNamed("Borrow Copy", "LendingDesk")
+				for _, n := range d.Nodes {
+					if n["id"] == id {
+						n["label"] = "LoanCounter"
+					}
+				}
+			})
+
+			expected := replaced(t, source, `    slice "Borrow Copy" {
+      shows {
+        screen  = LendingDesk`, `    slice "Borrow Copy" {
+      shows {
+        screen  = LoanCounter`)
+			expected = replaced(t, expected, `screen "DeskKiosk" {
+  image = "../mockups/desk-kiosk.png"
+}
+`, `screen "DeskKiosk" {
+  image = "../mockups/desk-kiosk.png"
+}
+
+screen "LoanCounter" {
+}
+`)
+			require.Equal(t, expected, result)
+		})
+
 		t.Run("renaming a view renames it in the readers that read it through a copy", func(t *testing.T) {
 			result := applied(t, test.ScreenLibraryLending, func(d *viewerDiagram) {
 				d.rename("MemberLoansView", "LoansReport")

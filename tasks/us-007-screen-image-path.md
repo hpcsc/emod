@@ -440,21 +440,21 @@ each `shows` node of that screen, as it copies the description. Each save from t
 declaration, and never takes it from a `shows` node.
 
 **Acceptance Criteria:**
-- [ ] The `screen` node of a screen with an image carries the key `image`, the path as written. The `screen` node
+- [x] The `screen` node of a screen with an image carries the key `image`, the path as written. The `screen` node
       of a screen with no image has no `image` key.
-- [ ] Each `shows` node carries the `image` of the declaration of its screen: two appearances of one screen carry
+- [x] Each `shows` node carries the `image` of the declaration of its screen: two appearances of one screen carry
       the same path, and an appearance of a screen with no image has no `image` key.
-- [ ] `importer.ImportDiagram` of the document of the featured fixture gives back each image on its declaration
+- [x] `importer.ImportDiagram` of the document of the featured fixture gives back each image on its declaration
       (`DeclaredScreenImages` equals `ScreenImageLibraryLendingImages`), and the import of its twin gives none.
       For a source in canonical `emod fmt` form with images, formatting the import of its document gives back the
       source byte for byte.
-- [ ] A save takes `image` from `screen` nodes only. When a `shows` node carries an `image` that no `screen` node
+- [x] A save takes `image` from `screen` nodes only. When a `shows` node carries an `image` that no `screen` node
       of that name carries (a renamed appearance, or a document with no `screen` nodes), the declaration that the
       save adds has no image, and the saved text parses with no diagnostic, so no `shows` block holds `image`.
-- [ ] `importer.ApplyDiagram` keeps the image of each screen when the viewer edits the document. When the viewer
+- [x] `importer.ApplyDiagram` keeps the image of each screen when the viewer edits the document. When the viewer
       renames an appearance to a screen that no declaration holds, the saved text declares that screen with no
       image, and the screen that the appearance left keeps its image.
-- [ ] The document of the twin carries no `image` key, and the document of a model with no image is byte-identical
+- [x] The document of the twin carries no `image` key, and the document of a model with no image is byte-identical
       to before: each existing expectation of the diagram document passes unchanged.
 
 **Affected Files/Modules:**

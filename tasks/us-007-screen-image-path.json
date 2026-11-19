@@ -142,7 +142,7 @@
     },
     {
       "n": 4,
-      "done": false,
+      "done": true,
       "title": "Carry `image` through the diagram document and both viewer saves",
       "language": "Go",
       "testable": true,

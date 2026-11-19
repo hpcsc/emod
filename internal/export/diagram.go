@@ -50,6 +50,7 @@ type jsonDiagramNode struct {
 	Type        string              `json:"type"`
 	Label       string              `json:"label"`
 	Description string              `json:"description,omitempty"`
+	Image       string              `json:"image,omitempty"`
 	ParentID    *string             `json:"parentId"`
 	Fields      []*jsonDiagramField `json:"fields,omitempty"`
 	Position    *jsonPosition       `json:"position,omitempty"`
@@ -184,9 +185,9 @@ type diagramBuilder struct {
 	automationIDs  map[string]string
 	translationIDs map[string]string
 
-	// screenDescriptions gives each shows node the description of its screen,
-	// because the viewer draws the shows node and not the screen node.
-	screenDescriptions map[string]string
+	// screens gives each shows node the description and the image of its
+	// screen, because the viewer draws the shows node and not the screen node.
+	screens map[string]*ast.Screen
 
 	// declaredIDs keeps the node of each event, view and command by the slice
 	// that declares it, so that an edge and a copy find the element that
@@ -218,7 +219,7 @@ func newDiagramBuilder(modelName, modelDescription string, copies diagram.Elemen
 		copyIDs:        make(map[*ast.Slice]map[diagram.DeclaredElement]string),
 		copyNodes:      make(map[*jsonDiagramNode]diagram.DeclaredElement),
 
-		screenDescriptions: make(map[string]string),
+		screens: make(map[string]*ast.Screen),
 	}
 }
 
@@ -227,12 +228,13 @@ func (b *diagramBuilder) appendNode(n *jsonDiagramNode) {
 }
 
 func (b *diagramBuilder) appendScreen(screen *ast.Screen) {
-	b.screenDescriptions[screen.Name] = screen.Description
+	b.screens[screen.Name] = screen
 	b.appendNode(&jsonDiagramNode{
 		ID:          b.ids.next("screen"),
 		Type:        "screen",
 		Label:       screen.Name,
 		Description: screen.Description,
+		Image:       screen.Image,
 		ParentID:    nil,
 		Position:    convertPosition(screen.NamePos),
 		Comments:    convertComments(screen.Comments),
@@ -408,17 +410,21 @@ func (b *diagramBuilder) appendShows(s *ast.Slice, sliceID string) {
 	for _, appearance := range s.Appearances {
 		id := b.ids.next("shows")
 		b.showsIDs[s][appearance.Screen] = id
-		b.appendNode(&jsonDiagramNode{
-			ID:          id,
-			Type:        "shows",
-			Label:       appearance.Screen,
-			Description: b.screenDescriptions[appearance.Screen],
-			ParentID:    &sliceID,
-			Position:    convertPosition(appearance.ScreenPos),
-			Comments:    convertComments(appearance.Comments),
-			Reads:       nameList(appearance.Reads),
-			Command:     nameList(appearance.Commands),
-		})
+		node := &jsonDiagramNode{
+			ID:       id,
+			Type:     "shows",
+			Label:    appearance.Screen,
+			ParentID: &sliceID,
+			Position: convertPosition(appearance.ScreenPos),
+			Comments: convertComments(appearance.Comments),
+			Reads:    nameList(appearance.Reads),
+			Command:  nameList(appearance.Commands),
+		}
+		if screen := b.screens[appearance.Screen]; screen != nil {
+			node.Description = screen.Description
+			node.Image = screen.Image
+		}
+		b.appendNode(node)
 	}
 }
 

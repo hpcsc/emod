@@ -52,6 +52,7 @@ type diagramNode struct {
 	Type           string            `json:"type"`
 	Label          string            `json:"label"`
 	Description    string            `json:"description,omitempty"`
+	Image          string            `json:"image,omitempty"`
 	ParentID       *string           `json:"parentId"`
 	Position       *ast.Position     `json:"position,omitempty"`
 	Fields         []*diagramField   `json:"fields,omitempty"`
@@ -128,6 +129,7 @@ func (n *diagramNode) asScreen() *ast.Screen {
 	return &ast.Screen{
 		Name:        n.Label,
 		Description: n.Description,
+		Image:       n.Image,
 		Comments:    convertComments(n.Comments),
 	}
 }

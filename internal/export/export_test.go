@@ -2199,6 +2199,49 @@ func TestExport(t *testing.T) {
 			}, readsByLabel)
 		})
 
+		t.Run("gives a screen node its image, and each shows node the image of its screen", func(t *testing.T) {
+			doc := diagramDocOf(t, test.ScreenImageLibraryLendingModel(t))
+
+			type labelled struct {
+				Label string
+				Image any
+			}
+			nodesOf := func(typ string) []labelled {
+				var nodes []labelled
+				for _, node := range objectsUnder(doc, "nodes") {
+					if node["type"] == typ {
+						nodes = append(nodes, labelled{node["label"].(string), node["image"]})
+					}
+				}
+				return nodes
+			}
+
+			require.Equal(t, []labelled{
+				{"LendingDesk", "./wireframes/lending-desk.png"},
+				{"OverdueReport", nil},
+				{"DeskKiosk", "../mockups/desk-kiosk.png"},
+			}, nodesOf("screen"))
+			require.Equal(t, []labelled{
+				{"LendingDesk", "./wireframes/lending-desk.png"},
+				{"LendingDesk", "./wireframes/lending-desk.png"},
+				{"OverdueReport", nil},
+				{"DeskKiosk", "../mockups/desk-kiosk.png"},
+				{"DeskKiosk", "../mockups/desk-kiosk.png"},
+			}, nodesOf("shows"))
+		})
+
+		t.Run("the document of a model with no image carries no image key", func(t *testing.T) {
+			plain := test.WithoutScreenImages(test.ScreenImageLibraryLendingModel(t))
+			require.Empty(t, test.DeclaredScreenImages(plain))
+
+			doc := diagramDocOf(t, plain)
+
+			require.Empty(t, textAnywhere(doc, test.ScreenImageLibraryLendingImages))
+			for _, node := range objectsUnder(doc, "nodes") {
+				require.NotContains(t, node, "image", "node %s", node["id"])
+			}
+		})
+
 		t.Run("a shows node that reads no view states no reads", func(t *testing.T) {
 			model := &ast.Model{
 				Name: "Shop",

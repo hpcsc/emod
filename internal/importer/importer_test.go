@@ -574,6 +574,76 @@ context "Reservations" {
 			require.Empty(t, test.DeclaredAutomationReads(importExported(t, unread)))
 		})
 
+		t.Run("keeps the image of each screen on its declaration", func(t *testing.T) {
+			imaged := test.ScreenImageLibraryLendingModel(t)
+			plain := test.WithoutScreenImages(test.ScreenImageLibraryLendingModel(t))
+			require.Equal(t, test.ScreenImageLibraryLendingImages, test.DeclaredScreenImages(imaged))
+			require.Empty(t, test.DeclaredScreenImages(plain))
+
+			require.Equal(t, test.ScreenImageLibraryLendingImages, test.DeclaredScreenImages(importExported(t, imaged)))
+			require.Empty(t, test.DeclaredScreenImages(importExported(t, plain)))
+		})
+
+		t.Run("writes a source with images back byte for byte", func(t *testing.T) {
+			const source = `emod = 1
+
+model "Shop" {
+}
+
+screen "CheckoutPage" {
+  description = "Where a guest pays"
+  image       = "./wireframes/checkout.png"
+}
+
+screen "CartDrawer" {
+}
+
+screen "OrderHistory" {
+  image = "../mockups/history.png"
+}
+
+context "Shop" {
+  aggregate "Cart" {
+    slice "Apply Discount" {
+      shows {
+        screen = CheckoutPage
+      }
+
+      shows {
+        screen = CartDrawer
+      }
+    }
+
+    slice "Review Orders" {
+      shows {
+        screen = OrderHistory
+      }
+    }
+  }
+}
+`
+			requireFmtClean(t, source, "the source has to be in the emod fmt layout, or the comparison says nothing about the image")
+
+			require.Equal(t, source, formatter.Format(importFrom(t, source)))
+		})
+
+		t.Run("takes an image from a screen node only, so a screen that only a shows node names is declared with no image", func(t *testing.T) {
+			model := importDiagram(t, `{
+				"model_name": "Shop",
+				"nodes": [
+					{"id": "context-1", "type": "context", "label": "Shop", "parentId": null},
+					{"id": "slice-1", "type": "slice", "label": "Apply Discount", "parentId": "context-1"},
+					{"id": "shows-1", "type": "shows", "label": "CheckoutPage", "image": "./checkout.png", "parentId": "slice-1"}
+				],
+				"edges": []
+			}`)
+
+			require.Equal(t, []string{"CheckoutPage"}, screenNames(model))
+			require.Empty(t, test.DeclaredScreenImages(model))
+			_, diagnostics := parser.Parse(formatter.Format(model), "saved.emod")
+			require.Empty(t, diagnostics)
+		})
+
 		t.Run("keeps the views and the commands of every shows block, from both slice homes and across contexts", func(t *testing.T) {
 			showing := test.ScreenLibraryLendingModel(t)
 			unread := test.WithoutAppearanceReads(test.ScreenLibraryLendingModel(t))
@@ -1551,4 +1621,12 @@ func stripSliceCommentsNoNodeCarries(s *ast.Slice) {
 	for _, spec := range s.Specs {
 		spec.Comments = nil
 	}
+}
+
+func screenNames(model *ast.Model) []string {
+	var names []string
+	for _, screen := range model.Screens {
+		names = append(names, screen.Name)
+	}
+	return names
 }
