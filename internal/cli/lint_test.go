@@ -249,6 +249,18 @@ context "Lending" {
 }
 `
 
+// missingImageEmod trips screen/missing-image-asset and no other rule: its one
+// screen names a mockup that nobody has drawn yet.
+const missingImageEmod = `emod = 1
+
+model "Shop" {
+}
+
+screen "CheckoutPage" {
+  image = "./wireframes/checkout.png"
+}
+`
+
 // automationWithoutViewEmod wires an automation straight from an event to a
 // command, which automation/missing-todo-list reports and no other rule does.
 const automationWithoutViewEmod = `emod = 1
@@ -1463,6 +1475,49 @@ context "Orders" {
 		})
 	})
 
+	t.Run("screen image that leads to no file", func(t *testing.T) {
+		t.Run("json output reports the rule at warning severity, at the image, and exits 1", func(t *testing.T) {
+			path := writeTemp(t, "shop.emod", missingImageEmod)
+
+			var err error
+			output := captureStdout(t, func() {
+				err = cli.RunLint(path, "json")
+			})
+
+			var lintErr *cli.LintError
+			require.True(t, errors.As(err, &lintErr))
+			require.Equal(t, 1, lintErr.ExitCode)
+
+			var entries []map[string]interface{}
+			require.NoError(t, json.Unmarshal([]byte(output), &entries))
+			require.Len(t, entries, 1)
+			require.Equal(t, "warning", entries[0]["severity"])
+			require.Equal(t, "screen/missing-image-asset", entries[0]["rule"])
+			require.Equal(t, path, entries[0]["file"])
+			require.Equal(t, float64(7), entries[0]["line"])
+		})
+
+		t.Run("text output names the rule, the screen and the path as written", func(t *testing.T) {
+			path := writeTemp(t, "shop.emod", missingImageEmod)
+
+			err := cli.RunLint(path, "text")
+
+			var lintErr *cli.LintError
+			require.True(t, errors.As(err, &lintErr))
+			require.Equal(t, 1, lintErr.ExitCode)
+			require.Equal(t, path+`:7: [screen/missing-image-asset] screen "CheckoutPage" names image "./wireframes/checkout.png", which leads to no file`, err.Error())
+		})
+
+		t.Run("reports nothing once the file is at the path", func(t *testing.T) {
+			path := writeTemp(t, "shop.emod", missingImageEmod)
+			mockups := filepath.Join(filepath.Dir(path), "wireframes")
+			require.NoError(t, os.Mkdir(mockups, 0o755))
+			require.NoError(t, os.WriteFile(filepath.Join(mockups, "checkout.png"), []byte("png"), 0o644))
+
+			require.NoError(t, cli.RunLint(path, "text"))
+		})
+	})
+
 	t.Run("automation reading no view", func(t *testing.T) {
 		t.Run("json output reports the rule at warning severity and exits 1", func(t *testing.T) {
 			path := writeTemp(t, "no_todo_list.emod", automationWithoutViewEmod)
@@ -1929,6 +1984,22 @@ func TestLintExplain(t *testing.T) {
 		require.Contains(t, output, "the field the event's own tags block binds the key to")
 	})
 
+	t.Run("screen/missing-image-asset says what it checks, which commands run it, and that the model still works", func(t *testing.T) {
+		output := captureStdout(t, func() {
+			require.NoError(t, cli.RunLintExplain("screen/missing-image-asset"))
+		})
+
+		for _, phrase := range []string{
+			"relative to the .emod file",
+			`Only "emod lint" and "emod validate" run it`,
+			"the viewer, the desktop app, the editor and the MCP tools do not",
+			`"emod validate" exit 1`,
+			"still parses, exports and draws",
+		} {
+			require.Contains(t, output, phrase)
+		}
+	})
+
 	t.Run("all rules have descriptions", func(t *testing.T) {
 		rules := []string{
 			"orphan-command",
@@ -1955,6 +2026,7 @@ func TestLintExplain(t *testing.T) {
 			"spec/invariant-never-exercised",
 			"spec/given-outside-boundary",
 			"wire/type-format",
+			"screen/missing-image-asset",
 		}
 		for _, rule := range rules {
 			t.Run(rule, func(t *testing.T) {

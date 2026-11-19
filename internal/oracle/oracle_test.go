@@ -583,6 +583,41 @@ func TestRunParsed(t *testing.T) {
 	})
 }
 
+func TestCheckFile(t *testing.T) {
+	const missingImage = "screen \"CheckoutPage\" {\n  image = \"./checkout.png\"\n}\n"
+
+	t.Run("screen images", func(t *testing.T) {
+		t.Run("reports a screen whose image leads to no file, which Check does not", func(t *testing.T) {
+			path := filepath.Join(t.TempDir(), "shop.emod")
+
+			require.Equal(t,
+				[]string{path + `:2: [screen/missing-image-asset] screen "CheckoutPage" names image "./checkout.png", which leads to no file`},
+				reportedLines(oracle.CheckFile(missingImage, path)))
+			require.Empty(t, oracle.Check(missingImage, path))
+		})
+
+		t.Run("reports nothing once the image is beside the file", func(t *testing.T) {
+			dir := t.TempDir()
+			require.NoError(t, os.WriteFile(filepath.Join(dir, "checkout.png"), []byte("png"), 0o644))
+
+			require.Empty(t, oracle.CheckFile(missingImage, filepath.Join(dir, "shop.emod")))
+		})
+	})
+
+	t.Run("the rest of the chain", func(t *testing.T) {
+		t.Run("reports what Check reports for the rest of the model, the validator's errors included", func(t *testing.T) {
+			missingEvent := strings.Replace(test.BillingPayments,
+				"TakePayment -> PaymentTaken",
+				"TakePayment -> PaymentRefunded", 1)
+			path := filepath.Join(t.TempDir(), "billing.emod")
+			fromCheck := oracle.Check(missingEvent, path)
+			require.NotEmpty(t, messagesAt(fromCheck, diagnostic.Error), "the model must report a validation error, or this cannot see the validator")
+
+			require.Equal(t, reportedLines(fromCheck), reportedLines(oracle.CheckFile(missingEvent, path)))
+		})
+	})
+}
+
 func messagesAt(diagnostics []*diagnostic.Entry, severity diagnostic.Severity) []string {
 	var messages []string
 	for _, d := range diagnostics {

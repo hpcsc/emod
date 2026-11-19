@@ -48,6 +48,17 @@ func TestValidate(t *testing.T) {
 		}
 	})
 
+	t.Run("reports the warning of a screen image that leads to no file and exits 1", func(t *testing.T) {
+		path := writeTemp(t, "shop.emod", missingImageEmod)
+
+		err := cli.RunValidate(path, "text")
+
+		var lintErr *cli.LintError
+		require.True(t, errors.As(err, &lintErr))
+		require.Equal(t, 1, lintErr.ExitCode)
+		require.Equal(t, path+`:7: [screen/missing-image-asset] screen "CheckoutPage" names image "./wireframes/checkout.png", which leads to no file`, err.Error())
+	})
+
 	t.Run("examples", func(t *testing.T) {
 		authoredToValidate, authoredToFail := examplePaths(t)
 

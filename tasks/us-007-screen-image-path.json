@@ -55,7 +55,7 @@
     },
     {
       "n": 2,
-      "done": false,
+      "done": true,
       "title": "Report `screen/missing-image-asset` from `emod lint` and `emod validate`",
       "language": "Go",
       "testable": true,

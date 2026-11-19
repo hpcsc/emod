@@ -548,7 +548,7 @@ func TestMCP(t *testing.T) {
 				} `json:"rules"`
 			}
 			require.NoError(t, json.Unmarshal([]byte(read.Contents[0].Text), &listed))
-			require.Len(t, listed.Rules, 24)
+			require.Len(t, listed.Rules, 25)
 			for _, rule := range listed.Rules {
 				require.Equal(t, explainRule(t, rule.Rule), rule.Description, "rule %s", rule.Rule)
 			}

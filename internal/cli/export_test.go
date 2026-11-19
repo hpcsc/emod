@@ -291,6 +291,20 @@ context "Orders" {
 		require.True(t, ok, "expected model key in output (partial model)")
 	})
 
+	t.Run("a file whose screen image leads to no file exports in each format with no diagnostic", func(t *testing.T) {
+		path := writeTemp(t, "shop.emod", missingImageEmod)
+
+		for _, format := range []string{"json", "cue", "diagram-json"} {
+			t.Run(format, func(t *testing.T) {
+				output := captureStdout(t, func() {
+					require.NoError(t, cli.RunExport(path, format))
+				})
+
+				require.Contains(t, output, "CheckoutPage")
+			})
+		}
+	})
+
 	t.Run("missing file argument returns error", func(t *testing.T) {
 		err := cli.RunExport("", "json")
 

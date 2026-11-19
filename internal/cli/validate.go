@@ -24,7 +24,7 @@ func RunValidate(path, format string) error {
 		return err
 	}
 
-	diagnostics := oracle.Check(source, path)
+	diagnostics := oracle.CheckFile(source, path)
 
 	if format == "json" {
 		return formatJSON(diagnostics)

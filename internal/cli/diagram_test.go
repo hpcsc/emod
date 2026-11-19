@@ -73,6 +73,18 @@ func TestDiagram(t *testing.T) {
 		require.Contains(t, err.Error(), missing)
 	})
 
+	t.Run("a file whose screen image leads to no file draws in each format with no diagnostic", func(t *testing.T) {
+		path := writeTemp(t, "shop.emod", missingImageEmod)
+
+		for _, format := range diagram.Formats() {
+			t.Run(format, func(t *testing.T) {
+				outputPath := filepath.Join(t.TempDir(), "shop."+format)
+
+				require.NoError(t, cli.RunDiagram(path, outputPath, format, diagram.StyleAuto, false))
+			})
+		}
+	})
+
 	t.Run("mermaid output is printed to stdout and starts with eventmodeling", func(t *testing.T) {
 		path := writeTemp(t, "valid.emod", validEmod)
 

@@ -299,39 +299,39 @@ directory of the `.emod` file, leads to no file. Every other surface, among them
 app, does not run the rule. `emod lint --explain` describes the rule, and the reference lists it.
 
 **Acceptance Criteria:**
-- [ ] `emod lint` of a model whose `image` leads to no file reports one `screen/missing-image-asset` diagnostic at
+- [x] `emod lint` of a model whose `image` leads to no file reports one `screen/missing-image-asset` diagnostic at
       warning severity, at the line of the `image` attribute, with a message that names the screen and the path as
       written. The text format prints it with the `[screen/missing-image-asset]` bracket and exits 1; the JSON
       format gives the rule, the severity, the file and the line, and exits 1.
-- [ ] The same model, with a file at that path, reports nothing; the file is the only difference between the two
+- [x] The same model, with a file at that path, reports nothing; the file is the only difference between the two
       runs.
-- [ ] A relative path resolves against the directory of the `.emod` file, not the working directory: a model whose
+- [x] A relative path resolves against the directory of the `.emod` file, not the working directory: a model whose
       path leads to a file only from the working directory is reported, and a model whose path leads to a file
       from its own directory reports nothing while the working directory is elsewhere. A path that goes up with
       `..` to an existing file reports nothing.
-- [ ] An absolute path is checked as it stands: one that names an existing file reports nothing, and one that names
+- [x] An absolute path is checked as it stands: one that names an existing file reports nothing, and one that names
       nothing is reported.
-- [ ] A path that names a directory is reported. A symbolic link to a file reports nothing, and a link to nothing
+- [x] A path that names a directory is reported. A symbolic link to a file reports nothing, and a link to nothing
       is reported.
-- [ ] Each screen is checked on its own: a model with a screen whose file is missing, a screen whose file exists
+- [x] Each screen is checked on its own: a model with a screen whose file is missing, a screen whose file exists
       and a screen with no `image` reports exactly one diagnostic. `image = ""` reports nothing.
-- [ ] `linter.LintFile` gives each diagnostic that `linter.Lint` gives and the diagnostics of this rule, in position
+- [x] `linter.LintFile` gives each diagnostic that `linter.Lint` gives and the diagnostics of this rule, in position
       order; when every image exists, it gives what `linter.Lint` gives.
-- [ ] `emod validate` reports the same warning for the same model and exits 1. `emod validate` still exits 0 for
+- [x] `emod validate` reports the same warning for the same model and exits 1. `emod validate` still exits 0 for
       each model that the repository ships as valid (`internal/cli/validate_test.go:37-60`), and no checked-in
       `.emod` file or ` ```emod ` fence states `image`.
-- [ ] No other surface runs the rule (story criterion 4): for a model whose `image` leads to no file, `oracle.Check`,
+- [x] No other surface runs the rule (story criterion 4): for a model whose `image` leads to no file, `oracle.Check`,
       `oracle.Run`, `oracle.RunParsed` and `linter.Lint` report nothing, `pipeline.RunPipelineExportDiagram` (the
       entry point of the web viewer and of the desktop app) answers no diagnostic, and `emod export` in each
       format and `emod diagram` exit 0 and print no diagnostic (story criterion 2).
-- [ ] `emod lint --explain screen/missing-image-asset` prints a description that says what the rule checks, that
+- [x] `emod lint --explain screen/missing-image-asset` prints a description that says what the rule checks, that
       the path is relative to the `.emod` file, that only `emod lint` and `emod validate` run the rule and the
       viewer, the desktop app, the editor and the MCP tools do not, that the warning makes `emod validate` exit 1,
       and that the model still parses, exports and draws. `linter.Rules()` lists the rule, the guards in
       `internal/linter/descriptions_test.go` pass, and the list at `internal/cli/lint_test.go:1932-1958` names it.
-- [ ] The model fixture of the CLI leaves trips this rule and no other, says so in its comment, and its leaves
+- [x] The model fixture of the CLI leaves trips this rule and no other, says so in its comment, and its leaves
       assert exactly one entry.
-- [ ] The `### screen` section of `docs/dsl-reference.md` carries a bullet for the rule, in the shape of the bullet
+- [x] The `### screen` section of `docs/dsl-reference.md` carries a bullet for the rule, in the shape of the bullet
       at `:735`: warning severity, the condition, that only `emod lint` and `emod validate` run it, that the warning
       makes `emod validate` exit 1, and the `emod lint --explain` invocation, which succeeds as printed. No
       `## <n>.` heading is added or renumbered, and no ` ```emod ` fence is added or edited.

@@ -115,6 +115,13 @@ func TestPipeline(t *testing.T) {
 				envelope.Diagram.Edges)
 		})
 
+		t.Run("reports no diagnostic for a screen image that leads to no file, because the viewer reads no disk", func(t *testing.T) {
+			result, err := pipeline.RunPipelineExportDiagram(test.ScreenImageLibraryLending, "screen-images.emod")
+			require.NoError(t, err)
+
+			require.Empty(t, decodeDiagramEnvelope(t, result).Diagnostics)
+		})
+
 		t.Run("reports diagnostics for unparseable source and still returns an envelope", func(t *testing.T) {
 			result, err := pipeline.RunPipelineExportDiagram("foobar {\n}\n", "broken.emod")
 			require.NoError(t, err)
